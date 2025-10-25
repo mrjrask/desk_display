@@ -251,6 +251,7 @@ def render_all_screens(
         level=logging.INFO,
         format="%(asctime)s %(levelname)-8s %(message)s",
         datefmt="%H:%M:%S",
+        force=True,
     )
 
     restore_sleep = _suppress_animation_delay()
