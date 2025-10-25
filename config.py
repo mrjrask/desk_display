@@ -161,7 +161,7 @@ SCHEDULE_UPDATE_INTERVAL = 600
 
 # ─── Scoreboard scrolling configuration ───────────────────────────────────────
 SCOREBOARD_SCROLL_STEP         = 1
-SCOREBOARD_SCROLL_DELAY        = 0.020
+SCOREBOARD_SCROLL_DELAY        = 0.016
 SCOREBOARD_SCROLL_PAUSE_TOP    = 0.75
 SCOREBOARD_SCROLL_PAUSE_BOTTOM = 0.5
 
