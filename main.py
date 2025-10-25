@@ -90,6 +90,8 @@ _screen_config_mtime: Optional[float] = None
 screen_scheduler: Optional[ScreenScheduler] = None
 _requested_screen_ids: Set[str] = set()
 
+_shutdown_event = threading.Event()
+
 BUTTON_POLL_INTERVAL = 0.1
 _BUTTON_STATE = {"X": False, "Y": False}
 
@@ -155,6 +157,9 @@ def _check_control_buttons() -> bool:
     Returns True when the caller should skip to the next screen immediately.
     """
 
+    if _shutdown_event.is_set():
+        return False
+
     skip_requested = False
 
     try:
@@ -185,7 +190,7 @@ def _wait_with_button_checks(duration: float) -> bool:
     """
 
     end = time.monotonic() + duration
-    while True:
+    while not _shutdown_event.is_set():
         if _check_control_buttons():
             return True
 
@@ -193,7 +198,10 @@ def _wait_with_button_checks(duration: float) -> bool:
         if remaining <= 0:
             break
 
-        time.sleep(min(BUTTON_POLL_INTERVAL, remaining))
+        sleep_for = min(BUTTON_POLL_INTERVAL, remaining)
+        if sleep_for > 0:
+            if _shutdown_event.wait(sleep_for):
+                return False
 
     return False
 
@@ -342,13 +350,8 @@ def maybe_archive_screenshots():
 
 # ─── SIGTERM handler ─────────────────────────────────────────────────────────
 def _handle_sigterm(signum, frame):
-    logging.info("✋ SIGTERM caught—clearing display & finalizing video…")
-    try:
-        clear_display(display)
-    except Exception:
-        pass
-    _release_video_writer()
-    sys.exit(0)
+    logging.info("✋ SIGTERM caught—requesting shutdown…")
+    _shutdown_event.set()
 
 signal.signal(signal.SIGTERM, _handle_sigterm)
 
@@ -440,9 +443,10 @@ def refresh_all():
 
 def _background_refresh() -> None:
     time.sleep(30)
-    while True:
+    while not _shutdown_event.is_set():
         refresh_all()
-        time.sleep(SCHEDULE_UPDATE_INTERVAL)
+        if _shutdown_event.wait(SCHEDULE_UPDATE_INTERVAL):
+            break
 
 
 threading.Thread(
@@ -461,7 +465,7 @@ def main_loop():
     refresh_schedule_if_needed(force=True)
 
     try:
-        while True:
+        while not _shutdown_event.is_set():
             refresh_schedule_if_needed()
 
             if _check_control_buttons():
@@ -485,10 +489,15 @@ def main_loop():
                 display.image(img)
                 display.show()
 
+                if _shutdown_event.is_set():
+                    break
+
                 if not _wait_with_button_checks(SCREEN_DELAY):
                     for fn in (draw_date, draw_time):
                         img2 = fn(display, transition=True)
                         animate_fade_in(display, img2, steps=8, delay=0.015)
+                        if _shutdown_event.is_set():
+                            break
                         if _wait_with_button_checks(SCREEN_DELAY):
                             break
 
@@ -499,6 +508,8 @@ def main_loop():
                 logging.warning(
                     "No schedule available; sleeping for %s seconds.", SCREEN_DELAY
                 )
+                if _shutdown_event.is_set():
+                    break
                 _wait_with_button_checks(SCREEN_DELAY)
                 gc.collect()
                 continue
@@ -524,6 +535,8 @@ def main_loop():
                     "No eligible screens available; sleeping for %s seconds.",
                     SCREEN_DELAY,
                 )
+                if _shutdown_event.is_set():
+                    break
                 _wait_with_button_checks(SCREEN_DELAY)
                 gc.collect()
                 continue
@@ -537,12 +550,16 @@ def main_loop():
             except Exception as exc:
                 logging.error(f"Error in screen '{sid}': {exc}")
                 gc.collect()
+                if _shutdown_event.is_set():
+                    break
                 _wait_with_button_checks(SCREEN_DELAY)
                 continue
 
             if result is None:
                 logging.info("Screen '%s' returned no image.", sid)
                 gc.collect()
+                if _shutdown_event.is_set():
+                    break
                 _wait_with_button_checks(SCREEN_DELAY)
                 continue
 
@@ -578,19 +595,25 @@ def main_loop():
             else:
                 logging.info("Screen '%s' produced no drawable image.", sid)
 
+            if _shutdown_event.is_set():
+                break
             _wait_with_button_checks(SCREEN_DELAY)
             gc.collect()
 
     finally:
+        try:
+            clear_display(display)
+        except Exception:
+            pass
         if video_out:
             logging.info("🎬 Finalizing video…")
-            _release_video_writer()
+        _release_video_writer()
 
 if __name__ == '__main__':
     try:
         main_loop()
     except KeyboardInterrupt:
-        logging.info("✋ CTRL-C caught—clearing display…")
-        clear_display(display)
-        _release_video_writer()
+        logging.info("✋ CTRL-C caught—requesting shutdown…")
+        _shutdown_event.set()
+    finally:
         sys.exit(0)
