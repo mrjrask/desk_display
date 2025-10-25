@@ -403,6 +403,18 @@ def _draw_tile(
     draw.text((value_x, value_y), value, font=vf, fill=value_color)
 
 # ── Main render ──────────────────────────────────────────────────────────────
+def _clean_metric(value: Optional[float]) -> Optional[float]:
+    if value is None:
+        return None
+    try:
+        numeric = float(value)
+    except Exception:
+        return None
+    if not math.isfinite(numeric):
+        return None
+    return numeric
+
+
 def draw_inside(display, transition: bool=False):
     provider, read_fn = _probe_sensor()
     if not read_fn:
@@ -411,15 +423,16 @@ def draw_inside(display, transition: bool=False):
 
     try:
         data = read_fn()
-        temp_f = float(data["temp_f"])
-        hum_raw = data.get("humidity")
-        hum = float(hum_raw) if hum_raw is not None else None
-        pres_raw = data.get("pressure_inhg")
-        pres = float(pres_raw) if pres_raw is not None else None
-        voc_raw = data.get("voc_ohms", None)
-        voc = float(voc_raw) if voc_raw is not None else None
+        temp_f = _clean_metric(data.get("temp_f"))
+        hum = _clean_metric(data.get("humidity"))
+        pres = _clean_metric(data.get("pressure_inhg"))
+        voc = _clean_metric(data.get("voc_ohms"))
     except Exception as e:
         logging.warning(f"draw_inside: sensor read failed: {e}")
+        return None
+
+    if temp_f is None:
+        logging.warning("draw_inside: temperature missing from sensor data")
         return None
 
     # Title text
@@ -448,8 +461,10 @@ def draw_inside(display, transition: bool=False):
         max_pt=title_max_h + 2,
     )
     tw, th = measure_text(draw, title, t_font)
-    draw.text(((W - tw)//2, 0), title, font=t_font, fill=config.INSIDE_COL_TITLE)
+    title_y = 0
+    draw.text(((W - tw)//2, title_y), title, font=t_font, fill=config.INSIDE_COL_TITLE)
 
+    subtitle_gap = 4
     subtitle_max_h = 10
     if subtitle:
         sub_font = fit_font(
@@ -462,26 +477,25 @@ def draw_inside(display, transition: bool=False):
             max_pt=subtitle_max_h + 1,
         )
         sw, sh = measure_text(draw, subtitle, sub_font)
-        draw.text(((W - sw)//2, th), subtitle, font=sub_font, fill=config.INSIDE_COL_TITLE)
+        draw.text(((W - sw)//2, title_y + th + subtitle_gap), subtitle, font=sub_font, fill=config.INSIDE_COL_TITLE)
     else:
         sub_font = t_font
         sw, sh = 0, 0
 
-    title_block_h = th + (sh if subtitle else 0)
+    title_block_h = th + (subtitle_gap + sh if subtitle else 0)
 
     # --- Metric tiles -------------------------------------------------------
     temp_bg = tuple(min(255, int(c * 0.8 + 40)) for c in temperature_color(temp_f))
-    cards = [
-        dict(
-            label="Temperature",
-            value=f"{temp_f:.1f}°F",
-            bg=temp_bg,
-            value_min_pt=22,
-        )
-    ]
+    temperature_card = dict(
+        label="Temperature",
+        value=f"{temp_f:.1f}°F",
+        bg=temp_bg,
+        value_min_pt=34,
+    )
 
+    metric_cards = []
     if hum is not None:
-        cards.append(
+        metric_cards.append(
             dict(
                 label="Humidity",
                 value=f"{hum:.1f}%",
@@ -489,7 +503,7 @@ def draw_inside(display, transition: bool=False):
             )
         )
     if pres is not None:
-        cards.append(
+        metric_cards.append(
             dict(
                 label="Pressure",
                 value=f"{pres:.2f} inHg",
@@ -497,7 +511,7 @@ def draw_inside(display, transition: bool=False):
             )
         )
     if voc is not None:
-        cards.append(
+        metric_cards.append(
             dict(
                 label="VOC",
                 value=format_voc_ohms(voc),
@@ -505,43 +519,70 @@ def draw_inside(display, transition: bool=False):
             )
         )
 
-    cards = [cards[0]] + [card for card in cards[1:] if card.get("value") != "N/A"]
-
-    tiles_top = title_block_h + 6
-    bottom_margin = 6
-    tiles_gap = 4
-    side_pad = 6
+    tiles_top = title_block_h + 10
+    bottom_margin = 8
+    tiles_gap = 6
+    side_pad = 8
     tiles_h_avail = max(30, H - bottom_margin - tiles_top)
 
-    total_cards = len(cards)
-    cols = total_cards if total_cards <= 2 else 2
-    cols = max(1, cols)
-    rows = max(1, math.ceil(total_cards / cols))
+    # Temperature tile gets priority real estate at the top.
+    extra_gap = tiles_gap if metric_cards else 0
+    temp_height_ratio = 0.58 if metric_cards else 0.9
+    max_temp_height = max(1, tiles_h_avail - extra_gap)
+    temp_tile_h = max(70, int(tiles_h_avail * temp_height_ratio))
+    temp_tile_h = min(temp_tile_h, max_temp_height)
+    min_target = 60 if max_temp_height >= 60 else max_temp_height
+    temp_tile_h = max(temp_tile_h, min_target)
 
-    tile_w = max(60, (W - 2 * side_pad - (cols - 1) * tiles_gap) // cols)
-    tile_h = max(40, (tiles_h_avail - (rows - 1) * tiles_gap) // rows)
+    temp_rect = (
+        side_pad,
+        tiles_top,
+        W - side_pad,
+        tiles_top + temp_tile_h,
+    )
 
-    total_height = rows * tile_h + (rows - 1) * tiles_gap
-    y_offset = tiles_top + max(0, (tiles_h_avail - total_height) // 2)
+    _draw_tile(
+        draw,
+        temp_rect,
+        temperature_card["bg"],
+        temperature_card["label"],
+        temperature_card["value"],
+        label_base,
+        temp_base,
+        value_min_pt=temperature_card["value_min_pt"],
+    )
 
-    for idx, card in enumerate(cards):
-        row = idx // cols
-        col = idx % cols
+    if metric_cards:
+        metrics_top = temp_rect[3] + extra_gap
+        metrics_h_avail = max(30, H - bottom_margin - metrics_top)
+        metric_count = len(metric_cards)
+        cols = 1 if metric_count == 1 else 2
+        rows = math.ceil(metric_count / cols)
 
-        x0 = side_pad + col * (tile_w + tiles_gap)
-        y0 = y_offset + row * (tile_h + tiles_gap)
-        rect = (x0, y0, x0 + tile_w, y0 + tile_h)
+        tile_w = max(80, (W - 2 * side_pad - (cols - 1) * tiles_gap) // cols)
+        tile_h = max(50, (metrics_h_avail - (rows - 1) * tiles_gap) // rows)
 
-        _draw_tile(
-            draw,
-            rect,
-            card["bg"],
-            card["label"],
-            card["value"],
-            label_base,
-            temp_base if card["label"] == "Temperature" else value_base,
-            value_min_pt=card.get("value_min_pt", 12),
-        )
+        total_height = rows * tile_h + (rows - 1) * tiles_gap
+        y_offset = metrics_top + max(0, (metrics_h_avail - total_height) // 2)
+
+        for idx, card in enumerate(metric_cards):
+            row = idx // cols
+            col = idx % cols
+
+            x0 = side_pad + col * (tile_w + tiles_gap)
+            y0 = y_offset + row * (tile_h + tiles_gap)
+            rect = (x0, y0, x0 + tile_w, y0 + tile_h)
+
+            _draw_tile(
+                draw,
+                rect,
+                card["bg"],
+                card["label"],
+                card["value"],
+                label_base,
+                value_base,
+                value_min_pt=card.get("value_min_pt", 12),
+            )
 
     if transition:
         return img
