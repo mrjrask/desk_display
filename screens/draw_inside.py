@@ -13,6 +13,8 @@ from __future__ import annotations
 import time
 import logging
 import math
+import os
+import sys
 from typing import Any, Callable, Dict, Optional, Set, Tuple
 
 from PIL import Image, ImageDraw
@@ -54,6 +56,45 @@ def _extract_field(data: Any, key: str) -> Optional[float]:
         return None
 
 
+
+def _suppress_i2c_error_output():
+    """Context manager that silences noisy stderr output from native drivers."""
+
+    class _Suppressor:
+        def __enter__(self):
+            try:
+                self._fd = sys.stderr.fileno()
+            except (AttributeError, ValueError, OSError):
+                self._fd = None
+                return self
+
+            try:
+                sys.stderr.flush()
+            except Exception:
+                pass
+
+            self._saved = os.dup(self._fd)
+            self._devnull = open(os.devnull, "wb")  # pylint: disable=consider-using-with
+            os.dup2(self._devnull.fileno(), self._fd)
+            return self
+
+        def __exit__(self, exc_type, exc, tb):
+            if getattr(self, "_fd", None) is None:
+                return False
+
+            try:
+                sys.stderr.flush()
+            except Exception:
+                pass
+
+            os.dup2(self._saved, self._fd)
+            os.close(self._saved)
+            self._devnull.close()
+            return False
+
+    return _Suppressor()
+
+
 def _probe_adafruit_bme680(i2c: Any, addresses: Set[int]) -> Optional[SensorProbeResult]:
     if addresses and not addresses.intersection({0x76, 0x77}):
         return None
@@ -93,7 +134,8 @@ def _probe_pimoroni_bme68x(_i2c: Any, addresses: Set[int]) -> Optional[SensorPro
     last_error: Optional[Exception] = None
     for addr in (I2C_ADDR_LOW, I2C_ADDR_HIGH):
         try:
-            sensor = bme68x.BME68X(addr)  # type: ignore
+            with _suppress_i2c_error_output():
+                sensor = bme68x.BME68X(addr)  # type: ignore
             break
         except Exception as exc:  # pragma: no cover - relies on hardware
             last_error = exc
