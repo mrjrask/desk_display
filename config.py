@@ -386,7 +386,7 @@ FONT_EMOJI = _load_emoji_font(30)
 # ─── Screen-specific configuration ─────────────────────────────────────────────
 
 # Weather screen
-WEATHER_ICON_SIZE = 118
+WEATHER_ICON_SIZE = 218
 WEATHER_DESC_GAP  = 8
 
 # Date/time screen

@@ -22,10 +22,10 @@ NFL_LOGO_DIR = os.path.join(config.IMAGES_DIR, "nfl")
 def _desired_logo_height(height: int) -> int:
     """Mirror the Hawks schedule sizing to keep logos consistent across screens."""
     if height >= 128:
-        return 81
+        return 150
     if height >= 96:
-        return 59
-    return 48
+        return 109
+    return 89
 
 def show_bears_next_game(display, transition=False):
     game = next_game_from_schedule(BEARS_SCHEDULE)

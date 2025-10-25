@@ -35,8 +35,11 @@ CONFERENCE_WEST_KEY = "Western"
 CONFERENCE_EAST_KEY = "Eastern"
 
 LOGO_DIR = NHL_IMAGES_DIR
-LOGO_HEIGHT = 37
+LOGO_HEIGHT = 41  # ~10% larger logos for standings rows
 LEFT_MARGIN = 4
+RIGHT_MARGIN = 6
+TEAM_COLUMN_GAP = 6
+TEAM_NAME_MIN_WIDTH = 150
 ROW_PADDING = 2
 ROW_SPACING = 2
 SECTION_GAP = 10
@@ -54,7 +57,7 @@ TITLE_FONT = FONT_TITLE_SPORTS
 DIVISION_FONT = clone_font(FONT_TITLE_SPORTS, 26)
 COLUMN_FONT = clone_font(FONT_STATUS, 24)
 COLUMN_FONT_POINTS = clone_font(FONT_STATUS, 17)
-ROW_FONT = clone_font(FONT_STATUS, 26)
+ROW_FONT = clone_font(FONT_STATUS, 28)
 
 OVERVIEW_TITLE = "NHL Overview"
 OVERVIEW_DIVISIONS = [
@@ -92,15 +95,31 @@ DIVISION_ORDER_WEST = ["Central", "Pacific"]
 DIVISION_ORDER_EAST = ["Metropolitan", "Atlantic"]
 VALID_DIVISIONS = set(DIVISION_ORDER_WEST + DIVISION_ORDER_EAST)
 
-COLUMN_LAYOUT = {
-    "team": LEFT_MARGIN + LOGO_HEIGHT + 4,
-    "wins": 72,
-    "losses": 88,
-    "ot": 104,
-    "points": WIDTH - LEFT_MARGIN,
-}
+STATS_COLUMNS = ("wins", "losses", "ot", "points")
+
+
+def _build_column_layout() -> dict[str, int]:
+    team_x = LEFT_MARGIN + LOGO_HEIGHT + TEAM_COLUMN_GAP
+    stats_left_candidate = max(team_x + TEAM_NAME_MIN_WIDTH, int(round(WIDTH * 0.6)))
+    stats_right = WIDTH - RIGHT_MARGIN
+    if stats_left_candidate > stats_right - 40:
+        stats_left = max(team_x + 80, stats_right - 120)
+    else:
+        stats_left = stats_left_candidate
+    stats_width = max(80, stats_right - stats_left)
+    layout = {"team": team_x}
+    for idx, key in enumerate(STATS_COLUMNS):
+        frac = (idx + 1) / len(STATS_COLUMNS)
+        layout[key] = int(round(stats_left + stats_width * frac))
+    return layout
+
+
+COLUMN_LAYOUT = _build_column_layout()
+STATS_FIRST_COLUMN_X = min(COLUMN_LAYOUT[key] for key in STATS_COLUMNS)
+TEAM_NAME_MAX_WIDTH = max(0, STATS_FIRST_COLUMN_X - TEAM_COLUMN_GAP - COLUMN_LAYOUT["team"])
+
 COLUMN_HEADERS = [
-    ("", "team", "left"),
+    ("TEAM", "team", "left"),
     ("W", "wins", "right"),
     ("L", "losses", "right"),
     ("O", "ot", "right"),
@@ -189,6 +208,18 @@ def _team_abbreviation(team: dict) -> str:
             return value.strip().upper()
     name = (team.get("teamName") or team.get("name") or "").strip()
     return name[:3].upper() if name else ""
+
+
+def _team_display_name(team: dict) -> str:
+    if not isinstance(team, dict):
+        return ""
+    for key in ("teamName", "name", "teamCommonName", "clubName", "nickname"):
+        value = team.get(key)
+        if isinstance(value, str):
+            text = value.strip()
+            if text:
+                return text
+    return ""
 
 
 def _normalize_int(value) -> int:
@@ -337,6 +368,7 @@ def _fetch_standings_statsapi() -> Optional[dict[str, dict[str, list[dict]]]]:
             parsed.append(
                 {
                     "abbr": abbr,
+                    "name": _team_display_name(team_info) or abbr,
                     "wins": _normalize_int(record_info.get("wins")),
                     "losses": _normalize_int(record_info.get("losses")),
                     "ot": _normalize_int(record_info.get("ot")),
@@ -397,6 +429,7 @@ def _parse_grouped_standings(groups: Iterable[dict]) -> dict[str, dict[str, list
 
             team_entry = {
                 "abbr": abbr,
+                "name": _team_display_name(team_info) or abbr,
                 "wins": wins,
                 "losses": losses,
                 "ot": ot,
@@ -457,6 +490,7 @@ def _parse_generic_standings(payload: object) -> dict[str, dict[str, list[dict]]
 
         entry = {
             "abbr": abbr,
+            "name": _team_display_name(team_info) or abbr,
             "wins": wins,
             "losses": losses,
             "ot": ot,
@@ -640,6 +674,18 @@ def _draw_text(draw: ImageDraw.ImageDraw, text: str, font, x: int, top: int, hei
         draw.text((x, y), text, font=font, fill=WHITE)
 
 
+def _truncate_text_to_width(text: str, font, max_width: int) -> str:
+    if max_width <= 0 or not text:
+        return text
+    if _text_size(text, font)[0] <= max_width:
+        return text
+    ellipsis = "…"
+    trimmed = text.strip()
+    while trimmed and _text_size(trimmed + ellipsis, font)[0] > max_width:
+        trimmed = trimmed[:-1].rstrip()
+    return (trimmed + ellipsis) if trimmed else ellipsis
+
+
 def _draw_division(img: Image.Image, draw: ImageDraw.ImageDraw, top: int, title: str, teams: Iterable[dict]) -> int:
     y = top + DIVISION_MARGIN_TOP
     y += _draw_centered_text(draw, title, DIVISION_FONT, y)
@@ -657,7 +703,9 @@ def _draw_division(img: Image.Image, draw: ImageDraw.ImageDraw, top: int, title:
         if logo:
             logo_y = row_top + (ROW_HEIGHT - logo.height) // 2
             img.paste(logo, (LEFT_MARGIN, logo_y), logo)
-        _draw_text(draw, abbr, ROW_FONT, COLUMN_LAYOUT["team"], row_top, ROW_HEIGHT, "left")
+        team_label = team.get("name") or abbr
+        team_label = _truncate_text_to_width(team_label, ROW_FONT, TEAM_NAME_MAX_WIDTH)
+        _draw_text(draw, team_label, ROW_FONT, COLUMN_LAYOUT["team"], row_top, ROW_HEIGHT, "left")
         _draw_text(draw, str(team.get("wins", "")), ROW_FONT, COLUMN_LAYOUT["wins"], row_top, ROW_HEIGHT, "right")
         _draw_text(draw, str(team.get("losses", "")), ROW_FONT, COLUMN_LAYOUT["losses"], row_top, ROW_HEIGHT, "right")
         _draw_text(draw, str(team.get("ot", "")), ROW_FONT, COLUMN_LAYOUT["ot"], row_top, ROW_HEIGHT, "right")
