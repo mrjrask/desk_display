@@ -154,6 +154,12 @@ HEIGHT                   = 240
 SCREEN_DELAY             = 4
 SCHEDULE_UPDATE_INTERVAL = 600
 
+# ─── Scoreboard scrolling configuration ───────────────────────────────────────
+SCOREBOARD_SCROLL_STEP         = 1
+SCOREBOARD_SCROLL_DELAY        = 0.0272
+SCOREBOARD_SCROLL_PAUSE_TOP    = 0.75
+SCOREBOARD_SCROLL_PAUSE_BOTTOM = 0.5
+
 # ─── API endpoints ────────────────────────────────────────────────────────────
 ONE_CALL_URL      = "https://api.openweathermap.org/data/3.0/onecall"
 OPEN_METEO_URL    = "https://api.open-meteo.com/v1/forecast"

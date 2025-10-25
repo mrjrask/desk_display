@@ -29,6 +29,10 @@ from config import (
     FONT_STATUS,
     CENTRAL_TIME,
     IMAGES_DIR,
+    SCOREBOARD_SCROLL_STEP,
+    SCOREBOARD_SCROLL_DELAY,
+    SCOREBOARD_SCROLL_PAUSE_TOP,
+    SCOREBOARD_SCROLL_PAUSE_BOTTOM,
 )
 from utils import (
     ScreenImage,
@@ -45,10 +49,6 @@ TITLE_GAP           = 8
 BLOCK_SPACING       = 10
 SCORE_ROW_H         = 56
 STATUS_ROW_H        = 18
-SCROLL_STEP         = 1
-SCROLL_DELAY        = 0.0272
-SCROLL_PAUSE_TOP    = 0.75
-SCROLL_PAUSE_BOTTOM = 0.5
 REQUEST_TIMEOUT     = 10
 API_WEB_SCOREBOARD_URL = "https://api-web.nhle.com/v1/scoreboard/{date}"
 API_WEB_SCOREBOARD_NOW_URL = "https://api-web.nhle.com/v1/scoreboard/now"
@@ -953,15 +953,17 @@ def _scroll_display(display, full_img: Image.Image):
     frame = full_img.crop((0, 0, WIDTH, HEIGHT))
     display.image(frame)
     display.show()
-    time.sleep(SCROLL_PAUSE_TOP)
+    time.sleep(SCOREBOARD_SCROLL_PAUSE_TOP)
 
-    for offset in range(SCROLL_STEP, max_offset + 1, SCROLL_STEP):
+    for offset in range(
+        SCOREBOARD_SCROLL_STEP, max_offset + 1, SCOREBOARD_SCROLL_STEP
+    ):
         frame = full_img.crop((0, offset, WIDTH, offset + HEIGHT))
         display.image(frame)
         display.show()
-        time.sleep(SCROLL_DELAY)
+        time.sleep(SCOREBOARD_SCROLL_DELAY)
 
-    time.sleep(SCROLL_PAUSE_BOTTOM)
+    time.sleep(SCOREBOARD_SCROLL_PAUSE_BOTTOM)
 
 
 # ─── Public API ───────────────────────────────────────────────────────────────
@@ -994,7 +996,7 @@ def draw_nhl_scoreboard(display, transition: bool = False) -> ScreenImage:
             return ScreenImage(img, displayed=False)
         display.image(img)
         display.show()
-        time.sleep(SCROLL_PAUSE_BOTTOM)
+        time.sleep(SCOREBOARD_SCROLL_PAUSE_BOTTOM)
         return ScreenImage(img, displayed=True)
 
     full_img = _render_scoreboard(games)
@@ -1005,7 +1007,7 @@ def draw_nhl_scoreboard(display, transition: bool = False) -> ScreenImage:
     if full_img.height <= HEIGHT:
         display.image(full_img)
         display.show()
-        time.sleep(SCROLL_PAUSE_BOTTOM)
+        time.sleep(SCOREBOARD_SCROLL_PAUSE_BOTTOM)
     else:
         _scroll_display(display, full_img)
     return ScreenImage(full_img, displayed=True)
