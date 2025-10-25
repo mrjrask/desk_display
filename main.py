@@ -357,7 +357,10 @@ signal.signal(signal.SIGTERM, _handle_sigterm)
 
 # ─── Logos ───────────────────────────────────────────────────────────────────
 IMAGES_DIR = os.path.join(SCRIPT_DIR, "images")
-def load_logo(fn, height=80):
+LOGO_SCREEN_HEIGHT = 148  # 80px base increased by ~85%
+
+
+def load_logo(fn, height=LOGO_SCREEN_HEIGHT):
     path = os.path.join(IMAGES_DIR, fn)
     try:
         with Image.open(path) as img:

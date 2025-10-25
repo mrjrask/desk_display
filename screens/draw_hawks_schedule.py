@@ -854,7 +854,7 @@ def _draw_next_card(display, game: Dict, *, title: str, transition: bool=False, 
     bottom_y      = HEIGHT - (bottom_h + 2) if bottom_text else HEIGHT
 
     # Desired logo height (bigger on 128px; adapt if smaller/other displays)
-    desired_logo_h = 81 if HEIGHT >= 128 else (59 if HEIGHT >= 96 else 48)
+    desired_logo_h = 150 if HEIGHT >= 128 else (109 if HEIGHT >= 96 else 89)
 
     # Compute max logo height to fit between the top content and bottom line
     available_h = max(10, bottom_y - (y_top + 2))  # space for logos row

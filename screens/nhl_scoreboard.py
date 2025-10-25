@@ -297,7 +297,9 @@ def _format_status(game: dict) -> str:
         period_ord = _normalize_period_for_display(linescore.get("currentPeriodOrdinal"))
         time_remaining = (linescore.get("currentPeriodTimeRemaining") or "").upper()
         if in_intermission:
-            return f"INT {period_ord}".strip()
+            if period_ord:
+                return f"{period_ord} INT"
+            return "INT"
         if time_remaining and time_remaining != "END":
             return f"{period_ord} {time_remaining}".strip()
         if time_remaining == "END" and period_ord:

@@ -407,12 +407,12 @@ def _draw_tile(
     radius = max(10, min(18, (y1 - y0) // 3))
     draw.rounded_rectangle(rect, radius=radius, fill=bg, outline=config.INSIDE_COL_STROKE)
 
-    pad_x, pad_y = 10, 8
+    pad_x, pad_y = 10, 6
     inner_w = max(0, (x1 - x0) - 2 * pad_x)
     inner_h = max(0, (y1 - y0) - 2 * pad_y)
 
-    label_max_h = max(12, int(inner_h * 0.35))
-    value_max_h = max(value_min_pt, int(inner_h * 0.78))
+    label_max_h = max(12, int(inner_h * 0.28))
+    value_max_h = max(value_min_pt, int(inner_h * 0.62))
 
     lf = fit_font(
         draw,
@@ -538,7 +538,7 @@ def draw_inside(display, transition: bool=False):
         label="Temperature",
         value=f"{temp_f:.1f}°F",
         bg=temp_bg,
-        value_min_pt=30,
+        value_min_pt=26,
     )
 
     metric_cards = []

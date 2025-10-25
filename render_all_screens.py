@@ -69,7 +69,10 @@ def _sanitize_filename_prefix(name: str) -> str:
     return safe or "screen"
 
 
-def load_logo(filename: str, height: int = 80) -> Optional[Image.Image]:
+LOGO_SCREEN_HEIGHT = 148  # 80px base increased by ~85%
+
+
+def load_logo(filename: str, height: int = LOGO_SCREEN_HEIGHT) -> Optional[Image.Image]:
     path = os.path.join(IMAGES_DIR, filename)
     try:
         with Image.open(path) as img:
