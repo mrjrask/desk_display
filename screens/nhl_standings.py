@@ -18,6 +18,10 @@ from config import (
     FONT_TITLE_SPORTS,
     FONT_STATUS,
     NHL_IMAGES_DIR,
+    SCOREBOARD_SCROLL_STEP,
+    SCOREBOARD_SCROLL_DELAY,
+    SCOREBOARD_SCROLL_PAUSE_TOP,
+    SCOREBOARD_SCROLL_PAUSE_BOTTOM,
 )
 from services.http_client import NHL_HEADERS, get_session
 from utils import ScreenImage, clear_display, clone_font, log_call
@@ -48,10 +52,6 @@ TITLE_MARGIN_BOTTOM = 6
 DIVISION_MARGIN_TOP = 4
 DIVISION_MARGIN_BOTTOM = 4
 COLUMN_GAP_BELOW = 3
-SCROLL_STEP = 1
-SCROLL_DELAY = 0.04
-SCROLL_PAUSE_TOP = 0.75
-SCROLL_PAUSE_BOTTOM = 0.5
 
 TITLE_FONT = FONT_TITLE_SPORTS
 DIVISION_FONT = clone_font(FONT_TITLE_SPORTS, 26)
@@ -74,6 +74,7 @@ OVERVIEW_MAX_LOGO_HEIGHT = 67
 OVERVIEW_LOGO_PADDING = 4
 OVERVIEW_LOGO_OVERLAP = 6
 OVERVIEW_DROP_STEPS = 15
+DROP_FRAME_DELAY = 0.04
 
 
 WHITE = (255, 255, 255)
@@ -890,7 +891,7 @@ def _animate_overview_drop(
             display.image(frame)
             if hasattr(display, "show"):
                 display.show()
-            time.sleep(SCROLL_DELAY)
+            time.sleep(DROP_FRAME_DELAY)
 
         placed.extend(drops)
 
@@ -912,19 +913,21 @@ def _render_empty(title: str) -> Image.Image:
 def _scroll_vertical(display, image: Image.Image) -> None:
     if image.height <= HEIGHT:
         display.image(image)
-        time.sleep(SCROLL_PAUSE_BOTTOM)
+        time.sleep(SCOREBOARD_SCROLL_PAUSE_BOTTOM)
         return
 
     max_offset = image.height - HEIGHT
     display.image(image.crop((0, 0, WIDTH, HEIGHT)))
-    time.sleep(SCROLL_PAUSE_TOP)
+    time.sleep(SCOREBOARD_SCROLL_PAUSE_TOP)
 
-    for offset in range(SCROLL_STEP, max_offset + 1, SCROLL_STEP):
+    for offset in range(
+        SCOREBOARD_SCROLL_STEP, max_offset + 1, SCOREBOARD_SCROLL_STEP
+    ):
         frame = image.crop((0, offset, WIDTH, offset + HEIGHT))
         display.image(frame)
-        time.sleep(SCROLL_DELAY)
+        time.sleep(SCOREBOARD_SCROLL_DELAY)
 
-    time.sleep(SCROLL_PAUSE_BOTTOM)
+    time.sleep(SCOREBOARD_SCROLL_PAUSE_BOTTOM)
 
 
 # ─── Public API ───────────────────────────────────────────────────────────────
