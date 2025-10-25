@@ -82,7 +82,7 @@ def show_bears_next_game(display, transition=False):
         bottom_y = config.HEIGHT - bh - BEARS_BOTTOM_MARGIN  # keep on-screen
 
         # Vertical center of logos/text block between opponent text and bottom label
-        logo_h = 32
+        logo_h = 59
         block_h = logo_h
         y_logo = y_txt + ((bottom_y - y_txt) - block_h)//2
 

@@ -42,7 +42,7 @@ DESIRED_SQUARE_FRACTION = 0.24       # starting point for square width vs total_
 GRID_BG                 = (14, 36, 22)  # dark forest green
 
 # Cubs mini-flag sizing/reservation
-SMALL_RESULT_FLAG_H     = int(os.environ.get("SMALL_RESULT_FLAG_H", "26"))
+SMALL_RESULT_FLAG_H     = int(os.environ.get("SMALL_RESULT_FLAG_H", "48"))
 FLAG_BLOCK_PAD          = 6
 FLAG_BLOCK_H            = SMALL_RESULT_FLAG_H + FLAG_BLOCK_PAD  # reserved area (always)
 

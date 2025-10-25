@@ -47,16 +47,18 @@ SCROLL_PAUSE_TOP    = 0.75
 SCROLL_PAUSE_BOTTOM = 0.5
 REQUEST_TIMEOUT     = 10
 
-COL_WIDTHS = [28, 24, 24, 24, 28]
-COL_X = [0]
+COL_WIDTHS = [70, 60, 60, 60, 70]
+_TOTAL_COL_WIDTH = sum(COL_WIDTHS)
+_COL_LEFT = max(0, (WIDTH - _TOTAL_COL_WIDTH) // 2)
+COL_X = [_COL_LEFT]
 for w in COL_WIDTHS:
     COL_X.append(COL_X[-1] + w)
 
-SCORE_FONT              = clone_font(FONT_TEAM_SPORTS, 18)
-STATUS_FONT             = clone_font(FONT_STATUS, 15)
-CENTER_FONT             = clone_font(FONT_STATUS, 15)
+SCORE_FONT              = clone_font(FONT_TEAM_SPORTS, 33)
+STATUS_FONT             = clone_font(FONT_STATUS, 28)
+CENTER_FONT             = clone_font(FONT_STATUS, 28)
 TITLE_FONT              = FONT_TITLE_SPORTS
-LOGO_HEIGHT             = 22
+LOGO_HEIGHT             = 41
 LOGO_DIR                = os.path.join(IMAGES_DIR, "nfl")
 LEAGUE_LOGO_KEYS        = ("NFL", "nfl")
 LEAGUE_LOGO_GAP         = 4

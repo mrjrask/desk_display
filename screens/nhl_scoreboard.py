@@ -54,16 +54,18 @@ API_WEB_SCOREBOARD_URL = "https://api-web.nhle.com/v1/scoreboard/{date}"
 API_WEB_SCOREBOARD_NOW_URL = "https://api-web.nhle.com/v1/scoreboard/now"
 API_WEB_SCOREBOARD_PARAMS = {"site": "en_nhl"}
 
-COL_WIDTHS = [28, 24, 24, 24, 28]  # total = 128
-COL_X = [0]
+COL_WIDTHS = [70, 60, 60, 60, 70]  # total = 320
+_TOTAL_COL_WIDTH = sum(COL_WIDTHS)
+_COL_LEFT = max(0, (WIDTH - _TOTAL_COL_WIDTH) // 2)
+COL_X = [_COL_LEFT]
 for w in COL_WIDTHS:
     COL_X.append(COL_X[-1] + w)
 
-SCORE_FONT              = clone_font(FONT_TEAM_SPORTS, 18)
-STATUS_FONT             = clone_font(FONT_STATUS, 15)
-CENTER_FONT             = clone_font(FONT_STATUS, 15)
+SCORE_FONT              = clone_font(FONT_TEAM_SPORTS, 33)
+STATUS_FONT             = clone_font(FONT_STATUS, 28)
+CENTER_FONT             = clone_font(FONT_STATUS, 28)
 TITLE_FONT              = FONT_TITLE_SPORTS
-LOGO_HEIGHT             = 22
+LOGO_HEIGHT             = 41
 LOGO_DIR                = os.path.join(IMAGES_DIR, "nhl")
 LEAGUE_LOGO_KEYS        = ("NHL", "nhl")
 LEAGUE_LOGO_GAP         = 4

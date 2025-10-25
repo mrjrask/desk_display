@@ -188,71 +188,71 @@ def _load_font(name, size):
     path = os.path.join(FONTS_DIR, name)
     return ImageFont.truetype(path, size)
 
-FONT_DAY_DATE           = _load_font("DejaVuSans-Bold.ttf", 21)
-FONT_DATE               = _load_font("DejaVuSans.ttf",      12)
-FONT_TIME               = _load_font("DejaVuSans-Bold.ttf", 32)
-FONT_AM_PM              = _load_font("DejaVuSans.ttf",      11)
+FONT_DAY_DATE           = _load_font("DejaVuSans-Bold.ttf", 39)
+FONT_DATE               = _load_font("DejaVuSans.ttf",      22)
+FONT_TIME               = _load_font("DejaVuSans-Bold.ttf", 59)
+FONT_AM_PM              = _load_font("DejaVuSans.ttf",      20)
 
-FONT_TEMP               = _load_font("DejaVuSans-Bold.ttf", 24)
-FONT_CONDITION          = _load_font("DejaVuSans-Bold.ttf", 11)
-FONT_WEATHER_DETAILS    = _load_font("DejaVuSans.ttf",      12)
-FONT_WEATHER_DETAILS_BOLD = _load_font("DejaVuSans-Bold.ttf", 10)
-FONT_WEATHER_LABEL      = _load_font("DejaVuSans.ttf",      10)
+FONT_TEMP               = _load_font("DejaVuSans-Bold.ttf", 44)
+FONT_CONDITION          = _load_font("DejaVuSans-Bold.ttf", 20)
+FONT_WEATHER_DETAILS    = _load_font("DejaVuSans.ttf",      22)
+FONT_WEATHER_DETAILS_BOLD = _load_font("DejaVuSans-Bold.ttf", 18)
+FONT_WEATHER_LABEL      = _load_font("DejaVuSans.ttf",      18)
 
-FONT_TITLE_SPORTS       = _load_font("TimesSquare-m105.ttf", 16)
-FONT_TEAM_SPORTS        = _load_font("TimesSquare-m105.ttf", 20)
-FONT_DATE_SPORTS        = _load_font("TimesSquare-m105.ttf", 16)
-FONT_TEAM_SPORTS_SMALL  = _load_font("TimesSquare-m105.ttf", 18)
-FONT_SCORE              = _load_font("TimesSquare-m105.ttf", 22)
-FONT_STATUS             = _load_font("TimesSquare-m105.ttf", 16)
+FONT_TITLE_SPORTS       = _load_font("TimesSquare-m105.ttf", 30)
+FONT_TEAM_SPORTS        = _load_font("TimesSquare-m105.ttf", 37)
+FONT_DATE_SPORTS        = _load_font("TimesSquare-m105.ttf", 30)
+FONT_TEAM_SPORTS_SMALL  = _load_font("TimesSquare-m105.ttf", 33)
+FONT_SCORE              = _load_font("TimesSquare-m105.ttf", 41)
+FONT_STATUS             = _load_font("TimesSquare-m105.ttf", 30)
 
-FONT_INSIDE_LABEL       = _load_font("DejaVuSans-Bold.ttf", 10)
-FONT_INSIDE_VALUE       = _load_font("DejaVuSans.ttf", 9)
-FONT_TITLE_INSIDE       = _load_font("DejaVuSans-Bold.ttf", 9)
+FONT_INSIDE_LABEL       = _load_font("DejaVuSans-Bold.ttf", 18)
+FONT_INSIDE_VALUE       = _load_font("DejaVuSans.ttf", 17)
+FONT_TITLE_INSIDE       = _load_font("DejaVuSans-Bold.ttf", 17)
 
-FONT_TRAVEL_TITLE       = _load_font("TimesSquare-m105.ttf", 9)
-FONT_TRAVEL_HEADER      = _load_font("TimesSquare-m105.ttf", 9)
-FONT_TRAVEL_VALUE       = _load_font("HWYGNRRW.TTF", 14)
+FONT_TRAVEL_TITLE       = _load_font("TimesSquare-m105.ttf", 17)
+FONT_TRAVEL_HEADER      = _load_font("TimesSquare-m105.ttf", 17)
+FONT_TRAVEL_VALUE       = _load_font("HWYGNRRW.TTF", 26)
 
 FONT_IP_LABEL           = FONT_INSIDE_LABEL
 FONT_IP_VALUE           = FONT_INSIDE_VALUE
 
-FONT_STOCK_TITLE        = _load_font("DejaVuSans-Bold.ttf", 10)
-FONT_STOCK_PRICE        = _load_font("DejaVuSans-Bold.ttf", 24)
-FONT_STOCK_CHANGE       = _load_font("DejaVuSans.ttf",      12)
-FONT_STOCK_TEXT         = _load_font("DejaVuSans.ttf",      9)
+FONT_STOCK_TITLE        = _load_font("DejaVuSans-Bold.ttf", 18)
+FONT_STOCK_PRICE        = _load_font("DejaVuSans-Bold.ttf", 44)
+FONT_STOCK_CHANGE       = _load_font("DejaVuSans.ttf",      22)
+FONT_STOCK_TEXT         = _load_font("DejaVuSans.ttf",      17)
 
 # Standings fonts...
-FONT_STAND1_WL          = _load_font("DejaVuSans-Bold.ttf", 14)
-FONT_STAND1_RANK        = _load_font("DejaVuSans.ttf",      12)
-FONT_STAND1_GB_LABEL    = _load_font("DejaVuSans.ttf",      9)
-FONT_STAND1_WCGB_LABEL  = _load_font("DejaVuSans.ttf",      9)
-FONT_STAND1_GB_VALUE    = _load_font("DejaVuSans.ttf",      9)
-FONT_STAND1_WCGB_VALUE  = _load_font("DejaVuSans.ttf",      9)
+FONT_STAND1_WL          = _load_font("DejaVuSans-Bold.ttf", 26)
+FONT_STAND1_RANK        = _load_font("DejaVuSans.ttf",      22)
+FONT_STAND1_GB_LABEL    = _load_font("DejaVuSans.ttf",      17)
+FONT_STAND1_WCGB_LABEL  = _load_font("DejaVuSans.ttf",      17)
+FONT_STAND1_GB_VALUE    = _load_font("DejaVuSans.ttf",      17)
+FONT_STAND1_WCGB_VALUE  = _load_font("DejaVuSans.ttf",      17)
 
-FONT_STAND2_RECORD      = _load_font("DejaVuSans.ttf",      14)
-FONT_STAND2_LABEL       = _load_font("DejaVuSans.ttf",      12)
-FONT_STAND2_VALUE       = _load_font("DejaVuSans.ttf",      12)
+FONT_STAND2_RECORD      = _load_font("DejaVuSans.ttf",      26)
+FONT_STAND2_LABEL       = _load_font("DejaVuSans.ttf",      22)
+FONT_STAND2_VALUE       = _load_font("DejaVuSans.ttf",      22)
 
-FONT_DIV_HEADER         = _load_font("DejaVuSans-Bold.ttf", 11)
-FONT_DIV_RECORD         = _load_font("DejaVuSans.ttf",      12)
-FONT_DIV_GB             = _load_font("DejaVuSans.ttf",      10)
-FONT_GB_VALUE           = _load_font("DejaVuSans.ttf",      10)
-FONT_GB_LABEL           = _load_font("DejaVuSans.ttf",      8)
+FONT_DIV_HEADER         = _load_font("DejaVuSans-Bold.ttf", 20)
+FONT_DIV_RECORD         = _load_font("DejaVuSans.ttf",      22)
+FONT_DIV_GB             = _load_font("DejaVuSans.ttf",      18)
+FONT_GB_VALUE           = _load_font("DejaVuSans.ttf",      18)
+FONT_GB_LABEL           = _load_font("DejaVuSans.ttf",      15)
 
 _symbola_paths = glob.glob("/usr/share/fonts/**/*.ttf", recursive=True)
 _symbola = next((p for p in _symbola_paths if "symbola" in p.lower()), None)
-FONT_EMOJI = ImageFont.truetype(_symbola, 16) if _symbola else ImageFont.load_default()
+FONT_EMOJI = ImageFont.truetype(_symbola, 30) if _symbola else ImageFont.load_default()
 
 # ─── Screen-specific configuration ─────────────────────────────────────────────
 
 # Weather screen
-WEATHER_ICON_SIZE = 64
+WEATHER_ICON_SIZE = 118
 WEATHER_DESC_GAP  = 8
 
 # Date/time screen
 DATE_TIME_GH_ICON_INVERT = True
-DATE_TIME_GH_ICON_SIZE   = 18
+DATE_TIME_GH_ICON_SIZE   = 33
 DATE_TIME_GH_ICON_PATHS  = [
     os.path.join(IMAGES_DIR, "gh.png"),
     os.path.join(SCRIPT_DIR, "image", "gh.png"),

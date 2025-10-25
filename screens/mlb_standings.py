@@ -28,7 +28,7 @@ FONT_GB_VALUE   = config.FONT_GB_VALUE
 FONT_GB_LABEL   = config.FONT_GB_LABEL
 
 # ─── Tunables ────────────────────────────────────────────────────────────────
-LOGO_SIZE   = 28      # max width/height of a division logo
+LOGO_SIZE   = 52      # max width/height of a division logo
 MARGIN      = 6       # left/right gutter
 ROW_SPACING = 6       # vertical gap between rows
 

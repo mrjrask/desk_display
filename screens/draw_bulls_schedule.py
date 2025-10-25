@@ -45,17 +45,17 @@ def _ts(size: int) -> ImageFont.ImageFont:
             return ImageFont.load_default()
 
 
-FONT_ABBR = _ts(18 if HEIGHT > 64 else 16)
-FONT_SCORE = _ts(26 if HEIGHT > 64 else 20)
-FONT_SMALL = _ts(12 if HEIGHT > 64 else 10)
+FONT_ABBR = _ts(33 if HEIGHT > 64 else 30)
+FONT_SCORE = _ts(48 if HEIGHT > 64 else 37)
+FONT_SMALL = _ts(22 if HEIGHT > 64 else 19)
 
 TITLE_GAP = 6
-ROW_HEIGHT = 40 if HEIGHT >= 96 else 32
+ROW_HEIGHT = 74 if HEIGHT >= 96 else 59
 ROW_GAP = 4
 STATUS_GAP = 6
 FOOTER_MARGIN = 4
-LOGO_HEIGHT = ROW_HEIGHT - 6
-NEXT_LOGO_HEIGHT = 52 if HEIGHT >= 128 else 40
+LOGO_HEIGHT = ROW_HEIGHT - 11
+NEXT_LOGO_HEIGHT = 96 if HEIGHT >= 128 else 74
 MATCHUP_GAP = 6
 BACKGROUND_COLOR = (0, 0, 0)
 HIGHLIGHT_COLOR = (55, 14, 18)
