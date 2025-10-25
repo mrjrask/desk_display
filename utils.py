@@ -54,7 +54,7 @@ _ACTIVE_DISPLAY: Optional["Display"] = None
 _GITHUB_LED_ANIMATOR: Optional["_GithubLedAnimator"] = None
 
 # Project config
-from config import WIDTH, HEIGHT, CENTRAL_TIME
+from config import WIDTH, HEIGHT, CENTRAL_TIME, DISPLAY_ROTATION
 # Color utilities
 from screens.color_palettes import random_color
 # Colored logging
@@ -85,6 +85,13 @@ class Display:
 
         self.width = WIDTH
         self.height = HEIGHT
+        self.rotation = DISPLAY_ROTATION % 360
+        if self.rotation not in (0, 90, 180, 270):
+            logging.warning(
+                "Unsupported display rotation %d°; falling back to 0°.",
+                self.rotation,
+            )
+            self.rotation = 0
         self._buffer = Image.new("RGB", (self.width, self.height), "black")
         self._display = None
         self._button_pins: Dict[str, Optional[int]] = {name: None for name in self._BUTTON_NAMES}
@@ -113,7 +120,12 @@ class Display:
                 )
                 self._display = None
             else:  # pragma: no cover - hardware import
-                logging.info("🖼️  Display HAT Mini initialized (%dx%d).", self.width, self.height)
+                logging.info(
+                    "🖼️  Display HAT Mini initialized (%dx%d, rotation %d°).",
+                    self.width,
+                    self.height,
+                    self.rotation,
+                )
 
         _ACTIVE_DISPLAY = self
 
@@ -121,7 +133,10 @@ class Display:
         if self._display is None:  # pragma: no cover - hardware import
             return
         try:
-            self._display.buffer = self._buffer
+            buffer_to_display = self._buffer
+            if self.rotation:
+                buffer_to_display = self._buffer.rotate(self.rotation, expand=False)
+            self._display.buffer = buffer_to_display
             self._display.display()
         except Exception as exc:  # pragma: no cover - hardware import
             logging.warning("Display refresh failed: %s", exc)
