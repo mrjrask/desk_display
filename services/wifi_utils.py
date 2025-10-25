@@ -15,6 +15,7 @@ SECONDARY_CHECK_URL = "https://www.google.com"
 # Shared state
 wifi_status = "no_wifi"    # one of "no_wifi", "no_internet", "ok"
 current_ssid = None
+_STATE_LOCK = threading.Lock()
 
 
 def _get_wireless_interfaces():
@@ -119,7 +120,7 @@ def _monitor_loop():
         else:
             state = "no_wifi"
 
-        with threading.Lock():
+        with _STATE_LOCK:
             wifi_status = state
             current_ssid = ssid
 
@@ -141,3 +142,9 @@ def start_monitor():
     """
     t = threading.Thread(target=_monitor_loop, daemon=True)
     t.start()
+
+
+def get_wifi_state():
+    """Return a tuple of (wifi_status, current_ssid) while holding the shared lock."""
+    with _STATE_LOCK:
+        return wifi_status, current_ssid
