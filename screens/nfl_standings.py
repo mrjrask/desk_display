@@ -48,7 +48,7 @@ OVERVIEW_LOGO_HEIGHT = 59
 OVERVIEW_VERTICAL_STEP = 41
 OVERVIEW_COLUMN_MARGIN = 2
 OVERVIEW_DROP_MARGIN = 6
-OVERVIEW_DROP_STEPS = 12
+OVERVIEW_DROP_STEPS = 15
 OVERVIEW_FRAME_DELAY = 0.05
 OVERVIEW_PAUSE_END = 0.5
 
@@ -1025,6 +1025,15 @@ def _prepare_overview_columns(
     return columns, max_rows
 
 
+def _ease_out_cubic(t: float) -> float:
+    if t <= 0.0:
+        return 0.0
+    if t >= 1.0:
+        return 1.0
+    inv = 1.0 - t
+    return 1.0 - inv * inv * inv
+
+
 def _render_overview(
     display,
     title: str,
@@ -1063,13 +1072,14 @@ def _render_overview(
 
         steps = max(2, OVERVIEW_DROP_STEPS)
         for step in range(steps):
-            frac = step / (steps - 1)
+            frac = step / (steps - 1) if steps > 1 else 1.0
+            eased = _ease_out_cubic(frac)
             frame = base.copy()
             animated: List[Dict[str, Any]] = []
             for placement in drops:
                 start_y = placement["drop_start"]
                 target_y = placement["y"]
-                y_pos = int(start_y + (target_y - start_y) * frac)
+                y_pos = int(start_y + (target_y - start_y) * eased)
                 if y_pos > target_y:
                     y_pos = target_y
                 animated.append(

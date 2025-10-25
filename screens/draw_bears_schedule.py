@@ -19,6 +19,7 @@ from config import BEARS_BOTTOM_MARGIN, BEARS_SCHEDULE, NFL_TEAM_ABBREVIATIONS
 from utils import load_team_logo, next_game_from_schedule, wrap_text
 
 NFL_LOGO_DIR = os.path.join(config.IMAGES_DIR, "nfl")
+LOGO_HEIGHT = 48
 
 def show_bears_next_game(display, transition=False):
     game = next_game_from_schedule(BEARS_SCHEDULE)
@@ -56,8 +57,8 @@ def show_bears_next_game(display, transition=False):
         else:
             away_ab, home_ab, loc_sym = opp_ab, bears_ab, "@"
 
-        logo_away = load_team_logo(NFL_LOGO_DIR, away_ab)
-        logo_home = load_team_logo(NFL_LOGO_DIR, home_ab)
+        logo_away = load_team_logo(NFL_LOGO_DIR, away_ab, height=LOGO_HEIGHT)
+        logo_home = load_team_logo(NFL_LOGO_DIR, home_ab, height=LOGO_HEIGHT)
 
         elems   = [logo_away, loc_sym, logo_home]
         spacing = 8
@@ -82,8 +83,7 @@ def show_bears_next_game(display, transition=False):
         bottom_y = config.HEIGHT - bh - BEARS_BOTTOM_MARGIN  # keep on-screen
 
         # Vertical center of logos/text block between opponent text and bottom label
-        logo_h = 59
-        block_h = logo_h
+        block_h = LOGO_HEIGHT
         y_logo = y_txt + ((bottom_y - y_txt) - block_h)//2
 
         # Draw logos and '@'
