@@ -49,6 +49,8 @@ except (ImportError, RuntimeError) as _displayhat_exc:  # pragma: no cover - har
 else:  # pragma: no cover - hardware import
     _DISPLAY_HAT_ERROR = None
 
+_ACTIVE_DISPLAY: Optional["Display"] = None
+
 # Project config
 from config import WIDTH, HEIGHT, CENTRAL_TIME
 # Color utilities
@@ -74,11 +76,16 @@ def log_call(func):
 class Display:
     """Wrapper around the Pimoroni Display HAT Mini (320×240 LCD)."""
 
+    _BUTTON_NAMES = ("A", "B", "X", "Y")
+
     def __init__(self):
+        global _ACTIVE_DISPLAY
+
         self.width = WIDTH
         self.height = HEIGHT
         self._buffer = Image.new("RGB", (self.width, self.height), "black")
         self._display = None
+        self._button_pins: Dict[str, Optional[int]] = {name: None for name in self._BUTTON_NAMES}
 
         if DisplayHATMini is None:  # pragma: no cover - hardware import
             if _DISPLAY_HAT_ERROR:
@@ -90,19 +97,23 @@ class Display:
                 logging.warning(
                     "Display HAT Mini driver unavailable; running headless."
                 )
-            return
+        else:
+            try:  # pragma: no cover - hardware import
+                self._display = DisplayHATMini(self._buffer)
+                self._display.set_backlight(1.0)
+                for name in self._BUTTON_NAMES:
+                    pin_name = f"BUTTON_{name}"
+                    self._button_pins[name] = getattr(self._display, pin_name, None)
+            except Exception as exc:  # pragma: no cover - hardware import
+                logging.warning(
+                    "Failed to initialize Display HAT Mini hardware; running headless (%s)",
+                    exc,
+                )
+                self._display = None
+            else:  # pragma: no cover - hardware import
+                logging.info("🖼️  Display HAT Mini initialized (%dx%d).", self.width, self.height)
 
-        try:  # pragma: no cover - hardware import
-            self._display = DisplayHATMini(self._buffer)
-            self._display.set_backlight(1.0)
-        except Exception as exc:  # pragma: no cover - hardware import
-            logging.warning(
-                "Failed to initialize Display HAT Mini hardware; running headless (%s)",
-                exc,
-            )
-            self._display = None
-        else:  # pragma: no cover - hardware import
-            logging.info("🖼️  Display HAT Mini initialized (%dx%d).", self.width, self.height)
+        _ACTIVE_DISPLAY = self
 
     def _update_display(self):
         if self._display is None:  # pragma: no cover - hardware import
@@ -128,6 +139,39 @@ class Display:
     def show(self):
         # No additional action required; display() is triggered during image()
         self._update_display()
+
+    # ----- Hardware helpers -------------------------------------------------
+    def set_led(self, r: float = 0.0, g: float = 0.0, b: float = 0.0) -> None:
+        """Set the onboard RGB LED, if hardware is available."""
+
+        if self._display is None:  # pragma: no cover - hardware import
+            return
+        try:  # pragma: no cover - hardware import
+            self._display.set_led(r=r, g=g, b=b)
+        except Exception as exc:  # pragma: no cover - hardware import
+            logging.debug("Display LED update failed: %s", exc)
+
+    def is_button_pressed(self, name: str) -> bool:
+        """Return True if the named button is currently pressed."""
+
+        if self._display is None:  # pragma: no cover - hardware import
+            return False
+
+        pin = self._button_pins.get(name.upper())
+        if pin is None:  # pragma: no cover - hardware import
+            return False
+
+        try:  # pragma: no cover - hardware import
+            return bool(self._display.read_button(pin))
+        except Exception as exc:  # pragma: no cover - hardware import
+            logging.debug("Display button read failed (%s): %s", name, exc)
+            return False
+
+
+def get_active_display() -> Optional["Display"]:
+    """Return the most recently constructed :class:`Display` instance, if any."""
+
+    return _ACTIVE_DISPLAY
 
 
 @dataclass
@@ -486,6 +530,22 @@ def load_svg(key, url) -> Image.Image | None:
         return None
 
 # ─── GitHub Update Checker ─────────────────────────────────────────────────
+def _update_github_led(state: bool) -> None:
+    """Reflect GitHub update status on the Display HAT Mini LED."""
+
+    display = get_active_display()
+    if display is None:
+        return
+
+    try:
+        if state:
+            display.set_led(r=1.0, g=0.0, b=0.0)
+        else:
+            display.set_led(r=0.0, g=0.0, b=0.0)
+    except Exception as exc:  # pragma: no cover - hardware import
+        logging.debug("Failed to update GitHub LED indicator: %s", exc)
+
+
 def check_github_updates() -> bool:
     """
     Return True if the local branch differs from its upstream tracking branch.
@@ -579,6 +639,7 @@ def check_github_updates() -> bool:
 
     updated = (local_sha != remote_sha)
     logging.info(f"check_github_updates: updates available = {updated}")
+    _update_github_led(updated)
 
     # If updated, log which files changed
     if updated:
