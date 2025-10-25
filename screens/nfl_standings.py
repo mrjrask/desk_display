@@ -41,11 +41,11 @@ CONFERENCE_NFC_KEY = "NFC"
 CONFERENCE_AFC_KEY = "AFC"
 
 LOGO_DIR = os.path.join(IMAGES_DIR, "nfl")
-LOGO_HEIGHT = 41
+LOGO_HEIGHT = 45
 
 # Overview animation geometry
-OVERVIEW_LOGO_HEIGHT = 59
-OVERVIEW_VERTICAL_STEP = 41
+OVERVIEW_LOGO_HEIGHT = 65
+OVERVIEW_VERTICAL_STEP = 45
 OVERVIEW_COLUMN_MARGIN = 2
 OVERVIEW_DROP_MARGIN = 6
 OVERVIEW_DROP_STEPS = 15
@@ -69,9 +69,49 @@ SCROLL_PAUSE_TOP = 0.75
 SCROLL_PAUSE_BOTTOM = 0.5
 
 TITLE_FONT = FONT_TITLE_SPORTS
-DIVISION_FONT = clone_font(FONT_TITLE_SPORTS, 26)
-COLUMN_FONT = clone_font(FONT_STATUS, 24)
-ROW_FONT = clone_font(FONT_STATUS, 28)
+DIVISION_FONT = clone_font(FONT_TITLE_SPORTS, 28)
+COLUMN_FONT = clone_font(FONT_STATUS, 26)
+ROW_FONT = clone_font(FONT_STATUS, 30)
+
+TEAM_NAMES_BY_ABBR: dict[str, str] = {
+    "ARI": "Cardinals",
+    "ATL": "Falcons",
+    "BAL": "Ravens",
+    "BUF": "Bills",
+    "CAR": "Panthers",
+    "CHI": "Bears",
+    "CIN": "Bengals",
+    "CLE": "Browns",
+    "DAL": "Cowboys",
+    "DEN": "Broncos",
+    "DET": "Lions",
+    "GB": "Packers",
+    "HOU": "Texans",
+    "IND": "Colts",
+    "JAX": "Jaguars",
+    "KC": "Chiefs",
+    "LAC": "Chargers",
+    "LAR": "Rams",
+    "LV": "Raiders",
+    "OAK": "Raiders",
+    "MIA": "Dolphins",
+    "MIN": "Vikings",
+    "NE": "Patriots",
+    "NO": "Saints",
+    "NYG": "Giants",
+    "NYJ": "Jets",
+    "PHI": "Eagles",
+    "PIT": "Steelers",
+    "SEA": "Seahawks",
+    "SF": "49ers",
+    "TB": "Buccaneers",
+    "TEN": "Titans",
+    "WAS": "Commanders",
+    "WSH": "Commanders",
+    "JAC": "Jaguars",
+    "SD": "Chargers",
+    "STL": "Rams",
+}
 
 WHITE = (255, 255, 255)
 
@@ -112,7 +152,10 @@ def _text_size(text: str, font) -> tuple[int, int]:
         return _MEASURE_DRAW.textsize(text, font)
 
 
-ROW_TEXT_HEIGHT = _text_size("CHI", ROW_FONT)[1]
+if TEAM_NAMES_BY_ABBR:
+    ROW_TEXT_HEIGHT = max(_text_size(name, ROW_FONT)[1] for name in TEAM_NAMES_BY_ABBR.values())
+else:
+    ROW_TEXT_HEIGHT = _text_size("CHI", ROW_FONT)[1]
 ROW_HEIGHT = max(LOGO_HEIGHT, ROW_TEXT_HEIGHT) + ROW_PADDING * 2
 COLUMN_TEXT_HEIGHT = max(_text_size(label, COLUMN_FONT)[1] for label, _, _ in COLUMN_HEADERS)
 COLUMN_ROW_HEIGHT = COLUMN_TEXT_HEIGHT + 2
@@ -126,7 +169,20 @@ def _record_column_width(label: str, sample: str) -> int:
     return max(label_width, value_width)
 
 
-def _build_column_layout() -> dict[str, int]:
+def _team_name_for_abbr(abbr: str, *, fallback: str = "") -> str:
+    key = (abbr or "").strip().upper()
+    if not key:
+        return fallback
+    if key in TEAM_NAMES_BY_ABBR:
+        return TEAM_NAMES_BY_ABBR[key]
+    if fallback:
+        return fallback
+    if key.isalpha():
+        return key.title()
+    return key
+
+
+def _build_column_layout(team_names: Iterable[str] | None = None) -> dict[str, int]:
     """Compute dynamic column layout based on the configured WIDTH."""
 
     samples = {
@@ -136,7 +192,7 @@ def _build_column_layout() -> dict[str, int]:
     }
 
     record_columns: List[Tuple[str, str, int]] = []
-    for label, key, _ in reversed(COLUMN_HEADERS):
+    for label, key, _ in COLUMN_HEADERS:
         if key == "team":
             continue
 
@@ -144,33 +200,41 @@ def _build_column_layout() -> dict[str, int]:
         width = _record_column_width(label or sample, sample)
         record_columns.append((label, key, width))
 
-    spacing = RECORD_COLUMN_SPACING
-    record_count = len(record_columns)
-    if record_count:
-        total_record_width = sum(width for _, _, width in record_columns)
-        total_spacing = spacing * max(0, record_count - 1)
-
-        team_left = LEFT_MARGIN + LOGO_HEIGHT + TEAM_COLUMN_PADDING
-        team_sample_width = _text_size("WWW", ROW_FONT)[0]
-        min_gap = 4
-        available = WIDTH - RIGHT_MARGIN - (team_left + team_sample_width + min_gap)
-        if available < 0:
-            available = 0
-
-        if total_record_width + total_spacing > available and record_count > 1:
-            needed_reduction = (total_record_width + total_spacing) - available
-            spacing_reduction = (needed_reduction + (record_count - 2)) // (record_count - 1)
-            spacing = max(2, spacing - spacing_reduction)
-            total_spacing = spacing * (record_count - 1)
+    team_left = LEFT_MARGIN + LOGO_HEIGHT + TEAM_COLUMN_PADDING
+    names = list(team_names) if team_names is not None else list(TEAM_NAMES_BY_ABBR.values())
+    if names:
+        team_sample_width = max(_text_size(name, ROW_FONT)[0] for name in names)
+    else:
+        team_sample_width = _text_size("Commanders", ROW_FONT)[0]
+    min_gap = 8
+    record_area_left = team_left + team_sample_width + min_gap
+    record_area_right = WIDTH - RIGHT_MARGIN
+    record_area_width = max(0, record_area_right - record_area_left)
 
     layout: dict[str, int] = {}
 
-    x = WIDTH - RIGHT_MARGIN
-    for label, key, width in record_columns:
-        layout[key] = x
-        x -= width + spacing
+    record_count = len(record_columns)
+    if record_count and record_area_width > 0:
+        max_column_width = max(width for _, _, width in record_columns)
+        slot_width = record_area_width / record_count
+        if slot_width >= max_column_width:
+            for idx, (_, key, _width) in enumerate(record_columns):
+                right_edge = record_area_left + slot_width * (idx + 1)
+                layout[key] = int(round(min(record_area_right, right_edge)))
+        else:
+            spacing = RECORD_COLUMN_SPACING
+            x = WIDTH - RIGHT_MARGIN
+            for _label, key, width in reversed(record_columns):
+                layout[key] = x
+                x -= width + spacing
+    else:
+        spacing = RECORD_COLUMN_SPACING
+        x = WIDTH - RIGHT_MARGIN
+        for _label, key, width in reversed(record_columns):
+            layout[key] = x
+            x -= width + spacing
 
-    layout["team"] = LEFT_MARGIN + LOGO_HEIGHT + TEAM_COLUMN_PADDING
+    layout["team"] = team_left
     return layout
 
 
@@ -298,10 +362,12 @@ def _build_standings_from_rows(rows: Iterable[dict], *, conference_key: str) -> 
         losses = _normalize_int(row.get("losses"))
         ties = _normalize_int(row.get("ties"))
         order = _normalize_int(row.get("div_rank"))
+        name = _team_name_for_abbr(abbr)
 
         bucket = divisions.setdefault(division, [])
         entry = {
             "abbr": abbr,
+            "name": name,
             "wins": wins,
             "losses": losses,
             "ties": ties,
@@ -424,16 +490,31 @@ def _extract_team_info(entry: Any) -> Optional[Dict[str, Any]]:
     if not isinstance(team, dict):
         team = {}
 
+    nickname = ""
+    for key in ("nickname", "name"):
+        value = team.get(key)
+        if isinstance(value, str) and value.strip():
+            nickname = value.strip()
+            break
+    if not nickname:
+        display_name = team.get("displayName")
+        if isinstance(display_name, str) and display_name.strip():
+            parts = display_name.strip().split()
+            if parts:
+                nickname = parts[-1]
+
     abbr = team.get("abbreviation") or team.get("shortDisplayName") or team.get("displayName")
     if isinstance(abbr, str):
         abbr = abbr.strip().upper()
     else:
         abbr = ""
     if not abbr:
-        name = team.get("nickname") or team.get("name") or team.get("displayName") or ""
-        abbr = name[:3].upper() if isinstance(name, str) else ""
+        name_source = nickname or team.get("displayName") or ""
+        abbr = name_source[:3].upper() if isinstance(name_source, str) else ""
     if not abbr:
         return None
+
+    team_name = nickname or _team_name_for_abbr(abbr)
 
     stats = _stat_map(entry.get("stats") or [])
     wins = _normalize_int(stats.get("wins") or stats.get("overallwins"))
@@ -497,6 +578,7 @@ def _extract_team_info(entry: Any) -> Optional[Dict[str, Any]]:
 
     return {
         "abbr": abbr,
+        "name": team_name,
         "wins": wins,
         "losses": losses,
         "ties": ties,
@@ -709,6 +791,7 @@ def _parse_standings(data: Any) -> dict[str, dict[str, List[dict]]]:
                 division_bucket.append(
                     {
                         "abbr": info["abbr"],
+                        "name": info.get("name") or _team_name_for_abbr(info["abbr"]),
                         "wins": info["wins"],
                         "losses": info["losses"],
                         "ties": info["ties"],
@@ -758,6 +841,7 @@ def _parse_standings(data: Any) -> dict[str, dict[str, List[dict]]]:
             division_bucket.append(
                 {
                     "abbr": info["abbr"],
+                    "name": info.get("name") or _team_name_for_abbr(info["abbr"]),
                     "wins": info["wins"],
                     "losses": info["losses"],
                     "ties": info["ties"],
@@ -880,7 +964,14 @@ def _render_conference(title: str, division_order: List[str], standings: Dict[st
 
     y = TITLE_MARGIN_TOP + TITLE_TEXT_HEIGHT + TITLE_MARGIN_BOTTOM
 
-    column_layout = _build_column_layout()
+    team_names: List[str] = []
+    for division in division_order:
+        for team in standings.get(division, []) or []:
+            name = team.get("name") or _team_name_for_abbr(team.get("abbr", ""))
+            if name:
+                team_names.append(name)
+
+    column_layout = _build_column_layout(team_names)
 
     for division, section_height in zip(division_order, sections):
         teams = standings.get(division, [])
@@ -928,22 +1019,24 @@ def _render_conference(title: str, division_order: List[str], standings: Dict[st
         # Team rows
         for team in teams:
             abbr = team.get("abbr", "")
+            team_name = team.get("name") or _team_name_for_abbr(abbr)
+            display_text = team_name or abbr
             wins = str(team.get("wins", 0))
             losses = str(team.get("losses", 0))
             ties = str(team.get("ties", 0))
 
-            # Abbreviation
+            # Team name
             text_top = row_y + ROW_PADDING
             text_center = text_top
             try:
-                l, t, r, b = draw.textbbox((0, 0), abbr, font=ROW_FONT)
+                l, t, r, b = draw.textbbox((0, 0), display_text, font=ROW_FONT)
                 tw, th = r - l, b - t
                 tx = column_layout["team"] - l
                 ty = row_y + ROW_PADDING - t
                 text_top = ty
                 text_center = text_top + th / 2
             except Exception:  # pragma: no cover - PIL fallback
-                tw, th = draw.textsize(abbr, font=ROW_FONT)
+                tw, th = draw.textsize(display_text, font=ROW_FONT)
                 tx = column_layout["team"]
                 ty = row_y + ROW_PADDING
                 text_top = ty
@@ -955,7 +1048,7 @@ def _render_conference(title: str, division_order: List[str], standings: Dict[st
                 logo_y = int(text_center - logo.height / 2)
                 img.paste(logo, (LEFT_MARGIN, logo_y), logo)
 
-            draw.text((tx, ty), abbr, font=ROW_FONT, fill=WHITE)
+            draw.text((tx, ty), display_text, font=ROW_FONT, fill=WHITE)
 
             # Record columns
             for value, key in ((wins, "wins"), (losses, "losses"), (ties, "ties")):

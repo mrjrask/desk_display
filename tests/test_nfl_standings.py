@@ -27,9 +27,11 @@ def test_parse_csv_standings_groups_by_conference():
     nfc_north = standings[CONFERENCE_NFC_KEY]["NFC North"]
 
     assert [team["abbr"] for team in afc_east] == ["BUF", "MIA"]
+    assert afc_east[0]["name"] == "Bills"
     assert afc_east[0]["wins"] == 11
 
     assert [team["abbr"] for team in nfc_north] == ["DET", "GB"]
+    assert nfc_north[1]["name"] == "Packers"
     assert nfc_north[1]["losses"] == 8
 
 
