@@ -70,6 +70,7 @@ logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s %(levelname)-8s %(message)s",
     datefmt="%H:%M:%S",
+    force=True,
 )
 logging.getLogger("requests").setLevel(logging.WARNING)
 logging.info("🖥️  Starting display service…")
