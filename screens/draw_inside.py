@@ -370,7 +370,7 @@ def _draw_tile(
     inner_h = max(0, (y1 - y0) - 2 * pad_y)
 
     label_max_h = max(12, int(inner_h * 0.35))
-    value_max_h = max(value_min_pt, int(inner_h * 0.9))
+    value_max_h = max(value_min_pt, int(inner_h * 0.78))
 
     lf = fit_font(
         draw,
@@ -490,7 +490,7 @@ def draw_inside(display, transition: bool=False):
         label="Temperature",
         value=f"{temp_f:.1f}°F",
         bg=temp_bg,
-        value_min_pt=34,
+        value_min_pt=30,
     )
 
     metric_cards = []
@@ -527,7 +527,10 @@ def draw_inside(display, transition: bool=False):
 
     # Temperature tile gets priority real estate at the top.
     extra_gap = tiles_gap if metric_cards else 0
-    temp_height_ratio = 0.58 if metric_cards else 0.9
+    if metric_cards:
+        temp_height_ratio = 0.5 if len(metric_cards) <= 1 else 0.56
+    else:
+        temp_height_ratio = 0.85
     max_temp_height = max(1, tiles_h_avail - extra_gap)
     temp_tile_h = max(70, int(tiles_h_avail * temp_height_ratio))
     temp_tile_h = min(temp_tile_h, max_temp_height)
