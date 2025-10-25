@@ -307,11 +307,11 @@ Or install the included systemd service (see below).
 
 ## Systemd unit
 
-Create `/etc/systemd/system/displayhatmini-display.service`:
+Create `/etc/systemd/system/desk_display.service`:
 
 ```ini
 [Unit]
-Description=Display HAT Mini Service - main
+Description=Desk Display Service - main
 After=network-online.target
 
 [Service]
@@ -329,9 +329,9 @@ Enable & start:
 
 ```bash
 sudo systemctl daemon-reload
-sudo systemctl enable displayhatmini-display.service
-sudo systemctl start displayhatmini-display.service
-journalctl -u displayhatmini-display.service -f
+sudo systemctl enable desk_display.service
+sudo systemctl start desk_display.service
+journalctl -u desk_display.service -f
 ```
 
 The service definition above assumes the project’s virtual environment lives at `/home/pi/desk_display/venv` and that the
