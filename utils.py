@@ -533,11 +533,11 @@ def load_svg(key, url) -> Image.Image | None:
 
 # ─── GitHub Update Checker ─────────────────────────────────────────────────
 class _GithubLedAnimator:
-    """Cycle the onboard LED through gentle RGB fades."""
+    """Hold the onboard LED at a barely visible red glow."""
 
     # The onboard LED is extremely bright at higher duty cycles; keep the
-    # animation to a very low intensity so it acts as a subtle indicator.
-    _MAX_LEVEL = 2 / 255.0
+    # indicator at the dimmest perceptible red level.
+    _RED_LEVEL = 1 / 255.0
 
     def __init__(self, display: "Display") -> None:
         self._display = display
@@ -555,32 +555,11 @@ class _GithubLedAnimator:
         self._thread.join(timeout=0.5)
         self._display.set_led(r=0.0, g=0.0, b=0.0)
 
-    def _fade(self, start: tuple[float, float, float], end: tuple[float, float, float]) -> None:
-        steps = 30
-        for i in range(steps):
-            if self._stop.is_set():
-                return
-            t = i / (steps - 1)
-            r = start[0] + (end[0] - start[0]) * t
-            g = start[1] + (end[1] - start[1]) * t
-            b = start[2] + (end[2] - start[2]) * t
-            self._display.set_led(r=r, g=g, b=b)
-            if self._stop.wait(0.05):
-                return
-
     def _run(self) -> None:
-        max_level = self._MAX_LEVEL
-        transitions = (
-            ((max_level, 0.0, 0.0), (0.0, max_level, 0.0)),
-            ((0.0, max_level, 0.0), (0.0, 0.0, max_level)),
-            ((0.0, 0.0, max_level), (max_level, 0.0, 0.0)),
-        )
-
-        while not self._stop.is_set():
-            for start, end in transitions:
-                if self._stop.is_set():
-                    break
-                self._fade(start, end)
+        self._display.set_led(r=self._RED_LEVEL, g=0.0, b=0.0)
+        # Keep the LED steady until we're asked to stop.
+        while not self._stop.wait(0.2):
+            continue
         self._display.set_led(r=0.0, g=0.0, b=0.0)
 
 
