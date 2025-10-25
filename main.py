@@ -27,6 +27,7 @@ import threading
 import datetime
 import signal
 import shutil
+import subprocess
 from typing import Optional, Set
 
 gc = __import__('gc')
@@ -88,6 +89,9 @@ _screen_config_mtime: Optional[float] = None
 screen_scheduler: Optional[ScreenScheduler] = None
 _requested_screen_ids: Set[str] = set()
 
+BUTTON_POLL_INTERVAL = 0.1
+_BUTTON_STATE = {"X": False, "Y": False}
+
 
 def _load_scheduler_from_config() -> Optional[ScreenScheduler]:
     try:
@@ -130,6 +134,67 @@ display = Display()
 if ENABLE_WIFI_MONITOR:
     logging.info("🔌 Starting Wi-Fi monitor…")
     wifi_utils.start_monitor()
+
+
+def _restart_desk_display_service() -> None:
+    """Restart the desk_display systemd service."""
+
+    try:
+        subprocess.run(
+            ["sudo", "systemctl", "restart", "desk_display.service"],
+            check=False,
+        )
+    except Exception as exc:
+        logging.error("Failed to restart desk_display.service: %s", exc)
+
+
+def _check_control_buttons() -> bool:
+    """Handle Display HAT Mini control buttons.
+
+    Returns True when the caller should skip to the next screen immediately.
+    """
+
+    skip_requested = False
+
+    try:
+        y_pressed = display.is_button_pressed("Y")
+        x_pressed = display.is_button_pressed("X")
+    except Exception as exc:
+        logging.debug("Button poll failed: %s", exc)
+        y_pressed = False
+        x_pressed = False
+
+    if y_pressed and not _BUTTON_STATE["Y"]:
+        logging.info("⏭️  Y button pressed – skipping to next screen.")
+        skip_requested = True
+    if x_pressed and not _BUTTON_STATE["X"]:
+        logging.info("🔁 X button pressed – restarting desk_display service…")
+        _restart_desk_display_service()
+
+    _BUTTON_STATE["Y"] = y_pressed
+    _BUTTON_STATE["X"] = x_pressed
+
+    return skip_requested
+
+
+def _wait_with_button_checks(duration: float) -> bool:
+    """Sleep for *duration* seconds while checking for control button presses.
+
+    Returns True if the caller should skip the rest of the current screen.
+    """
+
+    end = time.monotonic() + duration
+    while True:
+        if _check_control_buttons():
+            return True
+
+        remaining = end - time.monotonic()
+        if remaining <= 0:
+            break
+
+        time.sleep(min(BUTTON_POLL_INTERVAL, remaining))
+
+    return False
 
 # ─── Screenshot / video outputs ──────────────────────────────────────────────
 SCREENSHOT_DIR = os.path.join(SCRIPT_DIR, "screenshots")
@@ -398,6 +463,9 @@ def main_loop():
         while True:
             refresh_schedule_if_needed()
 
+            if _check_control_buttons():
+                continue
+
             # Wi-Fi outage handling
             if ENABLE_WIFI_MONITOR:
                 wifi_state, wifi_ssid = wifi_utils.get_wifi_state()
@@ -413,11 +481,16 @@ def main_loop():
                     draw_text_centered(d, "Wi-Fi ok.",     FONT_DATE_SPORTS, y_offset=-12, fill=(255,255,0))
                     draw_text_centered(d, wifi_ssid or "", FONT_DATE_SPORTS, fill=(255,255,0))
                     draw_text_centered(d, "No internet.",  FONT_DATE_SPORTS, y_offset=12,  fill=(255,0,0))
-                display.image(img); display.show(); time.sleep(SCREEN_DELAY)
-                for fn in (draw_date, draw_time):
-                    img2 = fn(display, transition=True)
-                    animate_fade_in(display, img2, steps=8, delay=0.015)
-                    time.sleep(SCREEN_DELAY)
+                display.image(img)
+                display.show()
+
+                if not _wait_with_button_checks(SCREEN_DELAY):
+                    for fn in (draw_date, draw_time):
+                        img2 = fn(display, transition=True)
+                        animate_fade_in(display, img2, steps=8, delay=0.015)
+                        if _wait_with_button_checks(SCREEN_DELAY):
+                            break
+
                 gc.collect()
                 continue
 
@@ -425,7 +498,7 @@ def main_loop():
                 logging.warning(
                     "No schedule available; sleeping for %s seconds.", SCREEN_DELAY
                 )
-                time.sleep(SCREEN_DELAY)
+                _wait_with_button_checks(SCREEN_DELAY)
                 gc.collect()
                 continue
 
@@ -450,7 +523,7 @@ def main_loop():
                     "No eligible screens available; sleeping for %s seconds.",
                     SCREEN_DELAY,
                 )
-                time.sleep(SCREEN_DELAY)
+                _wait_with_button_checks(SCREEN_DELAY)
                 gc.collect()
                 continue
 
@@ -463,13 +536,13 @@ def main_loop():
             except Exception as exc:
                 logging.error(f"Error in screen '{sid}': {exc}")
                 gc.collect()
-                time.sleep(SCREEN_DELAY)
+                _wait_with_button_checks(SCREEN_DELAY)
                 continue
 
             if result is None:
                 logging.info("Screen '%s' returned no image.", sid)
                 gc.collect()
-                time.sleep(SCREEN_DELAY)
+                _wait_with_button_checks(SCREEN_DELAY)
                 continue
 
             already_displayed = False
@@ -504,7 +577,7 @@ def main_loop():
             else:
                 logging.info("Screen '%s' produced no drawable image.", sid)
 
-            time.sleep(SCREEN_DELAY)
+            _wait_with_button_checks(SCREEN_DELAY)
             gc.collect()
 
     finally:
