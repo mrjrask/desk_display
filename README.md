@@ -119,7 +119,8 @@ desk_display/
 └─ fonts/
    ├─ TimesSquare-m105.ttf
    ├─ DejaVuSans.ttf
-   └─ DejaVuSans-Bold.ttf
+   ├─ DejaVuSans-Bold.ttf
+   └─ NotoColorEmoji.ttf
 ```
 
 ---
@@ -265,8 +266,8 @@ Or copy `.env.example` to `.env` and load it with your preferred process manager
 - **MLB logos:** put team PNGs into `images/mlb/` named with your abbreviations (e.g., `CUBS.png`, `MIL.png`).
 - **NFL logos:** for the Bears screen, `images/nfl/<abbr>.png` (e.g., `gb.png`, `min.png`).
 - **Cubs W/L flag:** use `images/W_flag.webp` and `images/L_flag.webp` (animated). If missing, the code falls back to `images/W.png` / `images/L.png`.
-- **Fonts:** copy `TimesSquare-m105.ttf`, `DejaVuSans.ttf`, `DejaVuSans-Bold.ttf` into `fonts/`.
-- **Emoji font:** install the Symbola font (package `ttf-ancient-fonts` on Debian/Ubuntu) or place `Symbola.ttf` in your system font directory so precipitation/cloud icons render correctly.
+- **Fonts:** copy `TimesSquare-m105.ttf`, `DejaVuSans.ttf`, `DejaVuSans-Bold.ttf`, and `NotoColorEmoji.ttf` into `fonts/`.
+- **Emoji font:** `NotoColorEmoji.ttf` is used by default; if unavailable, install the Symbola font (package `ttf-ancient-fonts` on Debian/Ubuntu) or place `Symbola.ttf` in your system font directory so precipitation/cloud icons render correctly.
 
 ---
 
