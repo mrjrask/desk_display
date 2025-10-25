@@ -365,9 +365,15 @@ def refresh_all():
         "next_home": soxg.get("next_home_game"),
     })
 
+def _background_refresh() -> None:
+    time.sleep(30)
+    while True:
+        refresh_all()
+        time.sleep(SCHEDULE_UPDATE_INTERVAL)
+
+
 threading.Thread(
-    target=lambda: (time.sleep(30),
-                    [refresh_all() or time.sleep(SCHEDULE_UPDATE_INTERVAL) for _ in iter(int, None)]),
+    target=_background_refresh,
     daemon=True
 ).start()
 refresh_all()
