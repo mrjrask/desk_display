@@ -97,7 +97,12 @@ def _get_required_env_var(*names: str) -> str:
     )
 
 import pytz
-from PIL import ImageFont
+from PIL import Image, ImageDraw, ImageFont
+
+try:
+    _RESAMPLE_LANCZOS = Image.Resampling.LANCZOS  # Pillow >= 9.1
+except AttributeError:  # pragma: no cover - fallback for older Pillow
+    _RESAMPLE_LANCZOS = Image.LANCZOS
 
 # ─── Project paths ────────────────────────────────────────────────────────────
 IMAGES_DIR  = os.path.join(SCRIPT_DIR, "images")
@@ -203,8 +208,87 @@ def _try_load_font(name: str, size: int):
     try:
         return ImageFont.truetype(path, size)
     except OSError as exc:
-        logging.warning("Unable to load font %s: %s", path, exc)
+        message = str(exc).lower()
+        log = logging.debug if "invalid pixel size" in message else logging.warning
+        log("Unable to load font %s: %s", path, exc)
         return None
+
+
+class _BitmapEmojiFont(ImageFont.ImageFont):
+    """Scale bitmap-only emoji fonts to an arbitrary size."""
+
+    def __init__(self, path: str, native_size: int, size: int):
+        super().__init__()
+        self._native_size = native_size
+        self.size = size
+        self._scale = size / native_size
+        self._font = ImageFont.truetype(path, native_size)
+
+    def getbbox(self, text, *args, **kwargs):  # type: ignore[override]
+        bbox = self._font.getbbox(text, *args, **kwargs)
+        if bbox is None:
+            return None
+        left, top, right, bottom = bbox
+        scale = self._scale
+        return (
+            int(round(left * scale)),
+            int(round(top * scale)),
+            int(round(right * scale)),
+            int(round(bottom * scale)),
+        )
+
+    def getmetrics(self):  # type: ignore[override]
+        ascent, descent = self._font.getmetrics()
+        scale = self._scale
+        return int(round(ascent * scale)), int(round(descent * scale))
+
+    def getsize(self, text, *args, **kwargs):  # type: ignore[override]
+        bbox = self.getbbox(text, *args, **kwargs)
+        if bbox:
+            left, top, right, bottom = bbox
+            return right - left, bottom - top
+        width, height = self._font.getsize(text, *args, **kwargs)
+        scale = self._scale
+        return int(round(width * scale)), int(round(height * scale))
+
+    def getlength(self, text, *args, **kwargs):  # type: ignore[override]
+        width, _ = self.getsize(text, *args, **kwargs)
+        return width
+
+    def _render_native(self, text, *args, **kwargs):
+        bbox = self._font.getbbox(text, *args, **kwargs)
+        if bbox:
+            left, top, right, bottom = bbox
+            width = max(1, right - left)
+            height = max(1, bottom - top)
+        else:
+            left = top = 0
+            width, height = self._font.getsize(text, *args, **kwargs)
+
+        image = Image.new("L", (width, height), 0)
+        draw = ImageDraw.Draw(image)
+        draw.text((-left, -top), text, font=self._font, fill=255)
+        return image
+
+    def getmask(self, text, mode="L", *args, **kwargs):  # type: ignore[override]
+        base = self._render_native(text, *args, **kwargs)
+        scaled = base.resize(
+            (
+                max(1, int(round(base.width * self._scale))),
+                max(1, int(round(base.height * self._scale))),
+            ),
+            resample=_RESAMPLE_LANCZOS,
+        )
+
+        if mode == "1":
+            return scaled.convert("1").im
+        if mode == "L":
+            return scaled.im
+        if mode == "RGBA":
+            rgba = Image.new("RGBA", scaled.size, (255, 255, 255, 0))
+            rgba.putalpha(scaled)
+            return rgba.im
+        return scaled.im
 
 FONT_DAY_DATE           = _load_font("DejaVuSans-Bold.ttf", 39)
 FONT_DATE               = _load_font("DejaVuSans.ttf",      22)
@@ -258,10 +342,23 @@ FONT_DIV_GB             = _load_font("DejaVuSans.ttf",      18)
 FONT_GB_VALUE           = _load_font("DejaVuSans.ttf",      18)
 FONT_GB_LABEL           = _load_font("DejaVuSans.ttf",      15)
 
-def _load_emoji_font(size: int) -> ImageFont.FreeTypeFont:
+def _load_emoji_font(size: int) -> ImageFont.ImageFont:
     noto = _try_load_font("NotoColorEmoji.ttf", size)
     if noto:
         return noto
+
+    noto_path = os.path.join(FONTS_DIR, "NotoColorEmoji.ttf")
+    if os.path.isfile(noto_path):
+        for native_size in (109, 128, 160):
+            try:
+                return _BitmapEmojiFont(noto_path, native_size, size)
+            except OSError as exc:
+                logging.debug(
+                    "Unable to load bitmap emoji font %s at native size %s: %s",
+                    noto_path,
+                    native_size,
+                    exc,
+                )
 
     symbola_paths = glob.glob("/usr/share/fonts/**/*.ttf", recursive=True)
     for path in symbola_paths:
