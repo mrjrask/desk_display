@@ -15,6 +15,7 @@ import html
 import os
 import random
 import subprocess
+import threading
 import time
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional
@@ -50,6 +51,7 @@ else:  # pragma: no cover - hardware import
     _DISPLAY_HAT_ERROR = None
 
 _ACTIVE_DISPLAY: Optional["Display"] = None
+_GITHUB_LED_ANIMATOR: Optional["_GithubLedAnimator"] = None
 
 # Project config
 from config import WIDTH, HEIGHT, CENTRAL_TIME
@@ -530,20 +532,90 @@ def load_svg(key, url) -> Image.Image | None:
         return None
 
 # ─── GitHub Update Checker ─────────────────────────────────────────────────
+class _GithubLedAnimator:
+    """Cycle the onboard LED through gentle RGB fades."""
+
+    _MAX_LEVEL = 10 / 255.0
+
+    def __init__(self, display: "Display") -> None:
+        self._display = display
+        self._stop = threading.Event()
+        self._thread = threading.Thread(target=self._run, daemon=True)
+
+    def start(self) -> None:
+        self._thread.start()
+
+    def is_running_for(self, display: "Display") -> bool:
+        return self._display is display and self._thread.is_alive()
+
+    def stop(self) -> None:
+        self._stop.set()
+        self._thread.join(timeout=0.5)
+        self._display.set_led(r=0.0, g=0.0, b=0.0)
+
+    def _fade(self, start: tuple[float, float, float], end: tuple[float, float, float]) -> None:
+        steps = 30
+        for i in range(steps):
+            if self._stop.is_set():
+                return
+            t = i / (steps - 1)
+            r = start[0] + (end[0] - start[0]) * t
+            g = start[1] + (end[1] - start[1]) * t
+            b = start[2] + (end[2] - start[2]) * t
+            self._display.set_led(r=r, g=g, b=b)
+            if self._stop.wait(0.05):
+                return
+
+    def _run(self) -> None:
+        max_level = self._MAX_LEVEL
+        transitions = (
+            ((max_level, 0.0, 0.0), (0.0, max_level, 0.0)),
+            ((0.0, max_level, 0.0), (0.0, 0.0, max_level)),
+            ((0.0, 0.0, max_level), (max_level, 0.0, 0.0)),
+        )
+
+        while not self._stop.is_set():
+            for start, end in transitions:
+                if self._stop.is_set():
+                    break
+                self._fade(start, end)
+        self._display.set_led(r=0.0, g=0.0, b=0.0)
+
+
 def _update_github_led(state: bool) -> None:
     """Reflect GitHub update status on the Display HAT Mini LED."""
+
+    global _GITHUB_LED_ANIMATOR
 
     display = get_active_display()
     if display is None:
         return
 
-    try:
-        if state:
-            display.set_led(r=1.0, g=0.0, b=0.0)
-        else:
-            display.set_led(r=0.0, g=0.0, b=0.0)
-    except Exception as exc:  # pragma: no cover - hardware import
-        logging.debug("Failed to update GitHub LED indicator: %s", exc)
+    if state:
+        if _GITHUB_LED_ANIMATOR is not None:
+            # Animator already running; nothing to change.
+            if _GITHUB_LED_ANIMATOR.is_running_for(display):
+                return
+            # Display changed or thread stopped; ensure previous animator is stopped.
+            try:
+                _GITHUB_LED_ANIMATOR.stop()
+            except Exception as exc:  # pragma: no cover - hardware import
+                logging.debug("Failed to stop previous GitHub LED animator: %s", exc)
+        animator = _GithubLedAnimator(display)
+        _GITHUB_LED_ANIMATOR = animator
+        try:
+            animator.start()
+        except Exception as exc:  # pragma: no cover - hardware import
+            logging.debug("Failed to start GitHub LED animator: %s", exc)
+            _GITHUB_LED_ANIMATOR = None
+    else:
+        if _GITHUB_LED_ANIMATOR is not None:
+            try:
+                _GITHUB_LED_ANIMATOR.stop()
+            except Exception as exc:  # pragma: no cover - hardware import
+                logging.debug("Failed to stop GitHub LED animator: %s", exc)
+            finally:
+                _GITHUB_LED_ANIMATOR = None
 
 
 def check_github_updates() -> bool:
