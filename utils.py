@@ -535,7 +535,9 @@ def load_svg(key, url) -> Image.Image | None:
 class _GithubLedAnimator:
     """Cycle the onboard LED through gentle RGB fades."""
 
-    _MAX_LEVEL = 10 / 255.0
+    # The onboard LED is extremely bright at higher duty cycles; keep the
+    # animation to a very low intensity so it acts as a subtle indicator.
+    _MAX_LEVEL = 2 / 255.0
 
     def __init__(self, display: "Display") -> None:
         self._display = display
