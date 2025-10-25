@@ -45,11 +45,11 @@ from utils import (
 # ─── Constants ────────────────────────────────────────────────────────────────
 TITLE                 = "MLB Scoreboard"
 TITLE_GAP             = 8
-BLOCK_SPACING         = 6
-SCORE_ROW_H           = 26
-STATUS_ROW_H          = 14
+BLOCK_SPACING         = 10
+SCORE_ROW_H           = 56
+STATUS_ROW_H          = 18
 SCROLL_STEP           = 1
-SCROLL_DELAY          = 0.04
+SCROLL_DELAY          = 0.034
 SCROLL_PAUSE_TOP      = 0.75
 SCROLL_PAUSE_BOTTOM   = 0.5
 REQUEST_TIMEOUT       = 10
@@ -65,7 +65,7 @@ SCORE_FONT              = clone_font(FONT_TEAM_SPORTS, 33)
 STATUS_FONT             = clone_font(FONT_STATUS, 28)
 CENTER_FONT             = clone_font(FONT_STATUS, 28)
 TITLE_FONT              = FONT_TITLE_SPORTS
-LOGO_HEIGHT             = 41
+LOGO_HEIGHT             = 52
 LOGO_DIR                = os.path.join(IMAGES_DIR, "mlb")
 LEAGUE_LOGO_KEYS        = ("MLB", "mlb")
 LEAGUE_LOGO_GAP         = 4
