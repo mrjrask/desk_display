@@ -4,14 +4,15 @@ draw_inside.py (RGB, 320x240)
 
 Universal environmental sensor screen with a compact, modern layout:
   • Title (detects and names: Adafruit/Pimoroni BME680, BME688, BME280, SHT41)
-  • Temperature (auto-fit)
-  • Three rounded "chips": Humidity / Pressure (inHg) / VOC (or N/A if missing)
+  • Metric tiles that auto-fit the screen:
+      Temperature / Humidity / Pressure (inHg) / VOC (only if data available)
 Everything is dynamically sized to fit the configured canvas without clipping.
 """
 
 from __future__ import annotations
 import time
 import logging
+import math
 from typing import Any, Callable, Dict, Optional, Set, Tuple
 
 from PIL import Image, ImageDraw
@@ -346,46 +347,60 @@ def _probe_sensor() -> Tuple[Optional[str], Optional[Callable[[], SensorReadings
     logging.warning("No supported indoor environmental sensor detected.")
     return None, None
 
-# ── Chip drawing (LABEL left | VALUE right) ──────────────────────────────────
-def _chip_lr(draw: ImageDraw.ImageDraw, rect: Tuple[int,int,int,int],
-             bg: Tuple[int,int,int], label: str, value: str,
-             label_base, value_base, center_gap_min=10,
-             pad_x=8, pad_y=4):
-    x0,y0,x1,y1 = rect
-    # Slightly smaller radius to suit the shorter chips
-    radius = max(7, min(12, (y1 - y0)//2))
+# ── Tile drawing (LABEL top-left | VALUE centered) ───────────────────────────
+def _draw_tile(
+    draw: ImageDraw.ImageDraw,
+    rect: Tuple[int, int, int, int],
+    bg: Tuple[int, int, int],
+    label: str,
+    value: str,
+    label_base,
+    value_base,
+    *,
+    label_color=config.INSIDE_COL_TEXT,
+    value_color=config.INSIDE_COL_TEXT,
+    value_min_pt: int = 12,
+):
+    x0, y0, x1, y1 = rect
+    radius = max(10, min(18, (y1 - y0) // 3))
     draw.rounded_rectangle(rect, radius=radius, fill=bg, outline=config.INSIDE_COL_STROKE)
 
-    ix0, iy0 = x0 + pad_x, y0 + pad_y
-    ix1, iy1 = x1 - pad_x, y1 - pad_y
-    iw, ih   = max(0, ix1 - ix0), max(0, iy1 - iy0)
+    pad_x, pad_y = 10, 8
+    inner_w = max(0, (x1 - x0) - 2 * pad_x)
+    inner_h = max(0, (y1 - y0) - 2 * pad_y)
 
-    # Split into left/right areas with a guaranteed center gap
-    left_w  = int(iw * 0.46)
-    right_w = int(iw * 0.46)
-    gap = iw - (left_w + right_w)
-    if gap < center_gap_min:
-        shrink = (center_gap_min - gap + 1) // 2
-        left_w  = max(16, left_w  - shrink)
-        right_w = max(16, right_w - shrink)
+    label_max_h = max(12, int(inner_h * 0.35))
+    value_max_h = max(value_min_pt, int(inner_h * 0.9))
 
-    lx0, lx1 = ix0, ix0 + left_w
-    rx1, rx0 = ix1, ix1 - right_w  # (rx0 < rx1)
-
-    lw_max, lh_max = max(8, lx1 - lx0), max(10, ih)
-    vw_max, vh_max = max(8, rx1 - rx0), max(10, ih)
-
-    # Fit fonts tighter to shorter chips
-    lf = fit_font(draw, label, label_base, lw_max, lh_max, min_pt=8,  max_pt=int(ih*0.62))
-    vf = fit_font(draw, value, value_base, vw_max, vh_max, min_pt=9,  max_pt=int(ih*0.68))
+    lf = fit_font(
+        draw,
+        label,
+        label_base,
+        max_width=inner_w,
+        max_height=label_max_h,
+        min_pt=8,
+        max_pt=label_max_h + 2,
+    )
+    vf = fit_font(
+        draw,
+        value,
+        value_base,
+        max_width=inner_w,
+        max_height=value_max_h,
+        min_pt=value_min_pt,
+        max_pt=value_max_h + 4,
+    )
 
     lw, lh = measure_text(draw, label, lf)
     vw, vh = measure_text(draw, value, vf)
 
-    ly = iy0 + (ih - lh)//2
-    vy = iy0 + (ih - vh)//2
-    draw.text((lx0,      ly), label, font=lf, fill=config.INSIDE_COL_TEXT)
-    draw.text((rx1 - vw, vy), value, font=vf, fill=config.INSIDE_COL_TEXT)
+    label_x = x0 + pad_x
+    label_y = y0 + pad_y
+    value_x = x0 + ((x1 - x0) - vw) // 2
+    value_y = y1 - pad_y - vh
+
+    draw.text((label_x, label_y), label, font=lf, fill=label_color)
+    draw.text((value_x, value_y), value, font=vf, fill=value_color)
 
 # ── Main render ──────────────────────────────────────────────────────────────
 def draw_inside(display, transition: bool=False):
@@ -452,52 +467,81 @@ def draw_inside(display, transition: bool=False):
         sub_font = t_font
         sw, sh = 0, 0
 
-    # --- Temperature (auto-fit into a bounded block; slightly smaller)
-    temp_txt     = f"{temp_f:.1f}°F"
-    temp_area_h  = 22  # ↓ was 24; frees more space for shorter chips
-    T_font = fit_font(
-        draw,
-        temp_txt,
-        temp_base,
-        max_width=W - 10,
-        max_height=temp_area_h,
-        min_pt=12,
-        max_pt=temp_area_h + 2,
-    )
-    ttw, tth = measure_text(draw, temp_txt, T_font)
     title_block_h = th + (sh if subtitle else 0)
-    t_y = title_block_h + 2 + max(0, (temp_area_h - tth)//2)
-    draw.text(((W - ttw)//2, t_y), temp_txt, font=T_font, fill=temperature_color(temp_f))
 
-    # --- Chips region (shorter chips, tighter gaps, smaller bottom margin)
-    top_after_temp = title_block_h + 2 + temp_area_h
-    bottom_margin  = 2      # ↓ was 3
-    gap            = 2      # ↓ was 3
-    chips_h_avail  = max(18, H - bottom_margin - top_after_temp)
-    chip_h         = (chips_h_avail - 2*gap) // 3
-    chip_h         = max(18, min(22, chip_h))  # ↓ clamp to 18–22px
-    chips_total    = 3*chip_h + 2*gap
-    chips_top      = H - bottom_margin - chips_total
-
-    # Values
-    hum_val = f"{hum:.1f}%" if hum is not None else "N/A"
-    prs_val = f"{pres:.2f} inHg" if pres is not None else "N/A"
-    voc_val = format_voc_ohms(voc)
-
-    chips = [
-        ("Humidity", hum_val, config.INSIDE_CHIP_BLUE),
-        ("Pressure", prs_val, config.INSIDE_CHIP_AMBER),
-        ("VOC",      voc_val, config.INSIDE_CHIP_PURPLE),
+    # --- Metric tiles -------------------------------------------------------
+    temp_bg = tuple(min(255, int(c * 0.8 + 40)) for c in temperature_color(temp_f))
+    cards = [
+        dict(
+            label="Temperature",
+            value=f"{temp_f:.1f}°F",
+            bg=temp_bg,
+            value_min_pt=22,
+        )
     ]
 
+    if hum is not None:
+        cards.append(
+            dict(
+                label="Humidity",
+                value=f"{hum:.1f}%",
+                bg=config.INSIDE_CHIP_BLUE,
+            )
+        )
+    if pres is not None:
+        cards.append(
+            dict(
+                label="Pressure",
+                value=f"{pres:.2f} inHg",
+                bg=config.INSIDE_CHIP_AMBER,
+            )
+        )
+    if voc is not None:
+        cards.append(
+            dict(
+                label="VOC",
+                value=format_voc_ohms(voc),
+                bg=config.INSIDE_CHIP_PURPLE,
+            )
+        )
+
+    cards = [cards[0]] + [card for card in cards[1:] if card.get("value") != "N/A"]
+
+    tiles_top = title_block_h + 6
+    bottom_margin = 6
+    tiles_gap = 4
     side_pad = 6
-    inner_w  = W - 2*side_pad
-    y = chips_top
-    for label, value, bg in chips:
-        rect = (side_pad, y, side_pad + inner_w, y + chip_h)
-        _chip_lr(draw, rect, bg, label, value, label_base, value_base,
-                 center_gap_min=10, pad_x=8, pad_y=4)
-        y += chip_h + gap
+    tiles_h_avail = max(30, H - bottom_margin - tiles_top)
+
+    total_cards = len(cards)
+    cols = total_cards if total_cards <= 2 else 2
+    cols = max(1, cols)
+    rows = max(1, math.ceil(total_cards / cols))
+
+    tile_w = max(60, (W - 2 * side_pad - (cols - 1) * tiles_gap) // cols)
+    tile_h = max(40, (tiles_h_avail - (rows - 1) * tiles_gap) // rows)
+
+    total_height = rows * tile_h + (rows - 1) * tiles_gap
+    y_offset = tiles_top + max(0, (tiles_h_avail - total_height) // 2)
+
+    for idx, card in enumerate(cards):
+        row = idx // cols
+        col = idx % cols
+
+        x0 = side_pad + col * (tile_w + tiles_gap)
+        y0 = y_offset + row * (tile_h + tiles_gap)
+        rect = (x0, y0, x0 + tile_w, y0 + tile_h)
+
+        _draw_tile(
+            draw,
+            rect,
+            card["bg"],
+            card["label"],
+            card["value"],
+            label_base,
+            temp_base if card["label"] == "Temperature" else value_base,
+            value_min_pt=card.get("value_min_pt", 12),
+        )
 
     if transition:
         return img
