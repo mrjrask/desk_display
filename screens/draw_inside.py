@@ -436,10 +436,16 @@ def _draw_tile(
     lw, lh = measure_text(draw, label, lf)
     vw, vh = measure_text(draw, value, vf)
 
+    # Clamp label/value positions so their rendered text never leaves the tile.
     label_x = x0 + pad_x
     label_y = y0 + pad_y
+    label_x = max(x0 + pad_x, min(x1 - pad_x - lw, label_x))
+    label_y = max(y0 + pad_y, min(y1 - pad_y - lh, label_y))
+
     value_x = x0 + ((x1 - x0) - vw) // 2
     value_y = y1 - pad_y - vh
+    value_x = max(x0 + pad_x, min(x1 - pad_x - vw, value_x))
+    value_y = max(y0 + pad_y, min(y1 - pad_y - vh, value_y))
 
     draw.text((label_x, label_y), label, font=lf, fill=label_color)
     draw.text((value_x, value_y), value, font=vf, fill=value_color)
