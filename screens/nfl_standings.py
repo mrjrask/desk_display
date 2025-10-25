@@ -53,6 +53,7 @@ OVERVIEW_FRAME_DELAY = 0.05
 OVERVIEW_PAUSE_END = 0.5
 
 LEFT_MARGIN = 4
+RIGHT_MARGIN = 6
 ROW_PADDING = 3
 ROW_SPACING = 2
 TITLE_MARGIN_TOP = 4
@@ -60,6 +61,8 @@ TITLE_MARGIN_BOTTOM = 6
 DIVISION_MARGIN_TOP = 2
 DIVISION_MARGIN_BOTTOM = 4
 COLUMN_GAP_BELOW = 3
+RECORD_COLUMN_SPACING = 10
+TEAM_COLUMN_PADDING = 6
 SCROLL_STEP = 1
 SCROLL_DELAY = 0.04
 SCROLL_PAUSE_TOP = 0.75
@@ -92,12 +95,6 @@ _DIVISION_PATTERN = re.compile(r"\b(AFC|NFC)\s+(EAST|WEST|NORTH|SOUTH)\b", re.IG
 DIVISION_ORDER_NFC = ["NFC North", "NFC East", "NFC South", "NFC West"]
 DIVISION_ORDER_AFC = ["AFC North", "AFC East", "AFC South", "AFC West"]
 
-COLUMN_LAYOUT = {
-    "team": LEFT_MARGIN + LOGO_HEIGHT + 6,
-    "wins": 86,
-    "losses": 104,
-    "ties": 120,
-}
 COLUMN_HEADERS: List[tuple[str, str, str]] = [
     ("", "team", "left"),
     ("W", "wins", "right"),
@@ -121,6 +118,60 @@ COLUMN_TEXT_HEIGHT = max(_text_size(label, COLUMN_FONT)[1] for label, _, _ in CO
 COLUMN_ROW_HEIGHT = COLUMN_TEXT_HEIGHT + 2
 DIVISION_TEXT_HEIGHT = _text_size("NFC North", DIVISION_FONT)[1]
 TITLE_TEXT_HEIGHT = _text_size(TITLE_NFC, TITLE_FONT)[1]
+
+
+def _record_column_width(label: str, sample: str) -> int:
+    label_width = _text_size(label, COLUMN_FONT)[0]
+    value_width = _text_size(sample, ROW_FONT)[0]
+    return max(label_width, value_width)
+
+
+def _build_column_layout() -> dict[str, int]:
+    """Compute dynamic column layout based on the configured WIDTH."""
+
+    samples = {
+        "wins": "17",
+        "losses": "17",
+        "ties": "9",
+    }
+
+    record_columns: List[Tuple[str, str, int]] = []
+    for label, key, _ in reversed(COLUMN_HEADERS):
+        if key == "team":
+            continue
+
+        sample = samples.get(key, "17")
+        width = _record_column_width(label or sample, sample)
+        record_columns.append((label, key, width))
+
+    spacing = RECORD_COLUMN_SPACING
+    record_count = len(record_columns)
+    if record_count:
+        total_record_width = sum(width for _, _, width in record_columns)
+        total_spacing = spacing * max(0, record_count - 1)
+
+        team_left = LEFT_MARGIN + LOGO_HEIGHT + TEAM_COLUMN_PADDING
+        team_sample_width = _text_size("WWW", ROW_FONT)[0]
+        min_gap = 4
+        available = WIDTH - RIGHT_MARGIN - (team_left + team_sample_width + min_gap)
+        if available < 0:
+            available = 0
+
+        if total_record_width + total_spacing > available and record_count > 1:
+            needed_reduction = (total_record_width + total_spacing) - available
+            spacing_reduction = (needed_reduction + (record_count - 2)) // (record_count - 1)
+            spacing = max(2, spacing - spacing_reduction)
+            total_spacing = spacing * (record_count - 1)
+
+    layout: dict[str, int] = {}
+
+    x = WIDTH - RIGHT_MARGIN
+    for label, key, width in record_columns:
+        layout[key] = x
+        x -= width + spacing
+
+    layout["team"] = LEFT_MARGIN + LOGO_HEIGHT + TEAM_COLUMN_PADDING
+    return layout
 
 
 def _load_logo_for_height(
@@ -829,6 +880,8 @@ def _render_conference(title: str, division_order: List[str], standings: Dict[st
 
     y = TITLE_MARGIN_TOP + TITLE_TEXT_HEIGHT + TITLE_MARGIN_BOTTOM
 
+    column_layout = _build_column_layout()
+
     for division, section_height in zip(division_order, sections):
         teams = standings.get(division, [])
 
@@ -850,7 +903,7 @@ def _render_conference(title: str, division_order: List[str], standings: Dict[st
         # Column headers
         column_y = row_y
         for label, key, align in COLUMN_HEADERS:
-            x = COLUMN_LAYOUT[key]
+            x = column_layout[key]
             if align == "right":
                 try:
                     l, t, r, b = draw.textbbox((0, 0), label, font=COLUMN_FONT)
@@ -885,13 +938,13 @@ def _render_conference(title: str, division_order: List[str], standings: Dict[st
             try:
                 l, t, r, b = draw.textbbox((0, 0), abbr, font=ROW_FONT)
                 tw, th = r - l, b - t
-                tx = COLUMN_LAYOUT["team"] - l
+                tx = column_layout["team"] - l
                 ty = row_y + ROW_PADDING - t
                 text_top = ty
                 text_center = text_top + th / 2
             except Exception:  # pragma: no cover - PIL fallback
                 tw, th = draw.textsize(abbr, font=ROW_FONT)
-                tx = COLUMN_LAYOUT["team"]
+                tx = column_layout["team"]
                 ty = row_y + ROW_PADDING
                 text_top = ty
                 text_center = text_top + th / 2
@@ -906,7 +959,7 @@ def _render_conference(title: str, division_order: List[str], standings: Dict[st
 
             # Record columns
             for value, key in ((wins, "wins"), (losses, "losses"), (ties, "ties")):
-                x = COLUMN_LAYOUT[key]
+                x = column_layout[key]
                 try:
                     l, t, r, b = draw.textbbox((0, 0), value, font=ROW_FONT)
                     tw, th = r - l, b - t
