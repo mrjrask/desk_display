@@ -1,6 +1,8 @@
 # Consolidating Branches into `main`
 
-Use this checklist to collapse the work from every feature branch into a single, up-to-date `main` branch.
+Use this checklist to collapse the work from every feature branch into a single, up-to-date `main` branch. If you prefer to
+automate the process, the repository now includes `scripts/consolidate_branches.sh`, which wraps every step in this document
+into a single command. See [Automating the process](#automating-the-process) for details.
 
 ## 1. Update local information
 
@@ -125,3 +127,30 @@ git push origin --tags
 ```
 
 These tags act as read-only snapshots that you can revisit even after deleting the branches.
+
+## Automating the process
+
+Run the helper script from the root of the repository to execute the full consolidation workflow end-to-end. By default the
+script merges every remote branch (except the target branch) into `main`, creating local tracking branches as needed. It also
+offers switches that mirror the optional steps above (archiving, cleanup, and pushing).
+
+```bash
+./scripts/consolidate_branches.sh \
+  --archive \
+  --cleanup \
+  --push
+```
+
+### Useful flags
+
+- `--target <branch>` – consolidate into a branch other than `main`.
+- `--squash` – perform squash merges instead of normal merges.
+- `--archive` – create `archive/<branch>` tags before merging.
+- `--cleanup` – delete merged branches locally and remotely (add `--force-cleanup` to force-delete local copies).
+- `--push` – push the updated target branch (and tags if `--archive` is used).
+
+If you need to merge a specific subset of branches, list them at the end of the command:
+
+```bash
+./scripts/consolidate_branches.sh codex/fix-font-size-in-draw_inside.py codex/create-installer-script-for-project
+```
