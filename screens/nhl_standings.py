@@ -70,7 +70,7 @@ OVERVIEW_MIN_LOGO_HEIGHT = 33
 OVERVIEW_MAX_LOGO_HEIGHT = 67
 OVERVIEW_LOGO_PADDING = 4
 OVERVIEW_LOGO_OVERLAP = 6
-OVERVIEW_DROP_STEPS = 11
+OVERVIEW_DROP_STEPS = 15
 
 
 WHITE = (255, 255, 255)
@@ -782,6 +782,15 @@ def _ensure_blackhawks_top_layer(canvas: Image.Image, placements: Sequence[Place
             canvas.paste(logo, (x0, y0), logo)
 
 
+def _ease_out_cubic(t: float) -> float:
+    if t <= 0.0:
+        return 0.0
+    if t >= 1.0:
+        return 1.0
+    inv = 1.0 - t
+    return 1.0 - inv * inv * inv
+
+
 def _compose_overview_image(
     base: Image.Image, row_positions: Sequence[Sequence[Placement]]
 ) -> tuple[Image.Image, List[Placement]]:
@@ -811,17 +820,19 @@ def _animate_overview_drop(
         if not drops:
             continue
 
-        for step in range(OVERVIEW_DROP_STEPS):
+        steps = max(2, OVERVIEW_DROP_STEPS)
+        for step in range(steps):
             frame = base.copy()
             dynamic: List[Placement] = []
 
             for abbr, logo, x0, y0 in placed:
                 frame.paste(logo, (x0, y0), logo)
 
-            frac = step / (OVERVIEW_DROP_STEPS - 1) if OVERVIEW_DROP_STEPS > 1 else 1.0
+            frac = step / (steps - 1) if steps > 1 else 1.0
+            eased = _ease_out_cubic(frac)
             for abbr, logo, x0, y_target in drops:
                 start_y = -logo.height
-                y_pos = int(start_y + (y_target - start_y) * frac)
+                y_pos = int(start_y + (y_target - start_y) * eased)
                 if y_pos > y_target:
                     y_pos = y_target
                 frame.paste(logo, (x0, y_pos), logo)

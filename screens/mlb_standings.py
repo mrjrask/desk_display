@@ -39,6 +39,7 @@ PAUSE_END    = 0.5    # pause after finishing
 
 OV_COLS = 3           # East, Central, West columns on Overview
 OV_ROWS = 5           # max teams to show per division on Overview
+OVERVIEW_DROP_STEPS = 15
 
 LEAGUE_DIVISION_IDS: Dict[int, Dict[str, int]] = {
     104: {"East": 204, "Central": 205, "West": 203},  # National League
@@ -141,6 +142,15 @@ def _header_frame(title: str) -> Tuple[Image.Image, int]:
     return img, th + 6
 
 
+def _ease_out_cubic(t: float) -> float:
+    if t <= 0.0:
+        return 0.0
+    if t >= 1.0:
+        return 1.0
+    inv = 1.0 - t
+    return 1.0 - inv * inv * inv
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # Overview (drop-in animation; last place drops first)
 # ─────────────────────────────────────────────────────────────────────────────
@@ -196,12 +206,13 @@ def draw_overview(display, title: str, league_id: int, transition=False):
             y_target = top_y + rank * cell_h + (cell_h - ic.height)//2
             drops.append((ic, x0, y_target))
 
-        steps = 11
+        steps = max(2, OVERVIEW_DROP_STEPS)
         for s in range(steps):
-            frac = s / (steps - 1)
+            frac = s / (steps - 1) if steps > 1 else 1.0
+            eased = _ease_out_cubic(frac)
             frame = fixed.copy()
             for ic, x0, y_t in drops:
-                y_pos = int(-LOGO_SIZE + (y_t + LOGO_SIZE) * frac)
+                y_pos = int(-LOGO_SIZE + (y_t + LOGO_SIZE) * eased)
                 if y_pos > y_t:
                     y_pos = y_t
                 frame.paste(ic, (x0, y_pos), ic)
