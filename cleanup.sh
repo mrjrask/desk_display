@@ -10,14 +10,9 @@ echo "⏱  Running cleanup at $(date +%Y%m%d_%H%M%S)…"
 dir="$(dirname "$0")"
 cd "$dir"
 
-# 1) Remove __pycache__ (project + waveshare_OLED)
+# 1) Remove __pycache__ directories
 echo "    → Removing __pycache__ directories…"
 find . -type d -name "__pycache__" -prune -exec rm -rf {} +
-
-if [ -d "waveshare_OLED/__pycache__" ]; then
-  echo "    → Removing waveshare_OLED/__pycache__…"
-  rm -rf "waveshare_OLED/__pycache__"
-fi
 
 # 2) Archive any straggler screenshots/videos left behind
 SCREENSHOTS_DIR="screenshots"

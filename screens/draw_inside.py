@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
 """
-draw_inside.py (RGB, 128x128)
+draw_inside.py (RGB, 320x240)
 
 Universal environmental sensor screen with a compact, modern layout:
   • Title (detects and names: Adafruit/Pimoroni BME680, BME688, BME280, SHT41)
   • Temperature (auto-fit)
   • Three rounded "chips": Humidity / Pressure (inHg) / VOC (or N/A if missing)
-Everything is dynamically sized to fit 128×128 without clipping.
+Everything is dynamically sized to fit the configured canvas without clipping.
 """
 
 from __future__ import annotations

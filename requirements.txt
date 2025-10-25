@@ -12,6 +12,7 @@ spidev
 smbus
 lgpio
 gpiozero
+displayhatmini
 cairosvg
 rpi.gpio
 colorama

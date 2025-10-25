@@ -149,9 +149,8 @@ if not OWM_API_KEY:
 GOOGLE_MAPS_API_KEY = os.environ.get("GOOGLE_MAPS_API_KEY")
 
 # ─── Display configuration ─────────────────────────────────────────────────────
-WIDTH                    = 128
-HEIGHT                   = 128
-SPI_FREQUENCY            = 30_000_000
+WIDTH                    = 320
+HEIGHT                   = 240
 SCREEN_DELAY             = 4
 SCHEDULE_UPDATE_INTERVAL = 600
 

@@ -1089,23 +1089,18 @@ def draw_nba_scoreboard(display, transition: bool = False) -> ScreenImage:
 
 @log_call
 def main(argv: Optional[Iterable[str]] = None) -> int:
-    parser = argparse.ArgumentParser(description="Render the NBA scoreboard to the OLED display")
+    parser = argparse.ArgumentParser(description="Render the NBA scoreboard to the Display HAT Mini")
     parser.add_argument("--transition", action="store_true", help="Animate the scoreboard as a transition")
     args = parser.parse_args(list(argv) if argv is not None else None)
 
-    try:
-        from waveshare_OLED import OLED_1in5_rgb
-    except Exception as exc:  # pragma: no cover - hardware import
-        logging.error("Failed to import OLED driver: %s", exc)
-        return 1
+    from utils import Display, clear_display  # local import to avoid circular deps
 
-    display = OLED_1in5_rgb.OLED_1in5_rgb()
-    display.Init()
+    display = Display()
 
     try:
         draw_nba_scoreboard(display, transition=args.transition)
     finally:
-        display.Dev_exit()
+        clear_display(display)
 
     return 0
 
