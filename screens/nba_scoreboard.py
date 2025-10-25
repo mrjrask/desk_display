@@ -182,7 +182,6 @@ def _play_intro_animation(display, *, hold: float = INTRO_ANIM_HOLD) -> Optional
     for idx, scale in enumerate(INTRO_ANIM_SCALES):
         frame = _render_intro_frame(logo, scale)
         display.image(frame)
-        display.show()
         final_frame = frame
         if idx < len(INTRO_ANIM_SCALES) - 1:
             time.sleep(INTRO_ANIM_DELAY)
@@ -1024,13 +1023,11 @@ def _render_scoreboard(games: list[dict]) -> Image.Image:
 def _scroll_display(display, full_img: Image.Image):
     if full_img.height <= HEIGHT:
         display.image(full_img)
-        display.show()
         return
 
     max_offset = full_img.height - HEIGHT
     frame = full_img.crop((0, 0, WIDTH, HEIGHT))
     display.image(frame)
-    display.show()
     time.sleep(SCOREBOARD_SCROLL_PAUSE_TOP)
 
     for offset in range(
@@ -1038,7 +1035,6 @@ def _scroll_display(display, full_img: Image.Image):
     ):
         frame = full_img.crop((0, offset, WIDTH, offset + HEIGHT))
         display.image(frame)
-        display.show()
         time.sleep(SCOREBOARD_SCROLL_DELAY)
 
     time.sleep(SCOREBOARD_SCROLL_PAUSE_BOTTOM)
@@ -1073,7 +1069,6 @@ def draw_nba_scoreboard(display, transition: bool = False) -> ScreenImage:
         if transition:
             return ScreenImage(img, displayed=False)
         display.image(img)
-        display.show()
         time.sleep(SCOREBOARD_SCROLL_PAUSE_BOTTOM)
         return ScreenImage(img, displayed=True)
 
@@ -1084,7 +1079,6 @@ def draw_nba_scoreboard(display, transition: bool = False) -> ScreenImage:
 
     if full_img.height <= HEIGHT:
         display.image(full_img)
-        display.show()
         time.sleep(SCOREBOARD_SCROLL_PAUSE_BOTTOM)
     else:
         _scroll_display(display, full_img)
