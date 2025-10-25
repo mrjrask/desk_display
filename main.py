@@ -54,7 +54,7 @@ from utils import (
     animate_fade_in,
 )
 import data_fetch
-from services import wifi_utils  # for wifi_utils.wifi_status
+from services import wifi_utils
 
 from screens.draw_date_time import draw_date, draw_time
 from screens.draw_travel_time import (
@@ -392,14 +392,19 @@ def main_loop():
             refresh_schedule_if_needed()
 
             # Wi-Fi outage handling
-            if ENABLE_WIFI_MONITOR and wifi_utils.wifi_status != "ok":
+            if ENABLE_WIFI_MONITOR:
+                wifi_state, wifi_ssid = wifi_utils.get_wifi_state()
+            else:
+                wifi_state, wifi_ssid = ("ok", None)
+
+            if ENABLE_WIFI_MONITOR and wifi_state != "ok":
                 img = Image.new("RGB", (WIDTH, HEIGHT), "black")
                 d   = ImageDraw.Draw(img)
-                if wifi_utils.wifi_status == "no_wifi":
+                if wifi_state == "no_wifi":
                     draw_text_centered(d, "No Wi-Fi.", FONT_DATE_SPORTS, fill=(255,0,0))
                 else:
                     draw_text_centered(d, "Wi-Fi ok.",     FONT_DATE_SPORTS, y_offset=-12, fill=(255,255,0))
-                    draw_text_centered(d, wifi_utils.current_ssid or "", FONT_DATE_SPORTS, fill=(255,255,0))
+                    draw_text_centered(d, wifi_ssid or "", FONT_DATE_SPORTS, fill=(255,255,0))
                     draw_text_centered(d, "No internet.",  FONT_DATE_SPORTS, y_offset=12,  fill=(255,0,0))
                 display.image(img); display.show(); time.sleep(SCREEN_DELAY)
                 for fn in (draw_date, draw_time):
