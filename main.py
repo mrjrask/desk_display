@@ -151,6 +151,15 @@ if ENABLE_VIDEO:
 _archive_lock = threading.Lock()
 
 
+def _release_video_writer() -> None:
+    global video_out
+
+    if video_out:
+        video_out.release()
+        logging.info("🎬 Video finalized cleanly.")
+        video_out = None
+
+
 def _sanitize_directory_name(name: str) -> str:
     """Return a filesystem-friendly directory name while keeping spaces."""
 
@@ -272,9 +281,7 @@ def _handle_sigterm(signum, frame):
         clear_display(display)
     except Exception:
         pass
-    if video_out:
-        video_out.release()
-        logging.info("🎬 Video finalized cleanly.")
+    _release_video_writer()
     sys.exit(0)
 
 signal.signal(signal.SIGTERM, _handle_sigterm)
@@ -503,7 +510,7 @@ def main_loop():
     finally:
         if video_out:
             logging.info("🎬 Finalizing video…")
-            video_out.release()
+            _release_video_writer()
 
 if __name__ == '__main__':
     try:
@@ -511,6 +518,5 @@ if __name__ == '__main__':
     except KeyboardInterrupt:
         logging.info("✋ CTRL-C caught—clearing display…")
         clear_display(display)
-        if video_out:
-            video_out.release()
+        _release_video_writer()
         sys.exit(0)
