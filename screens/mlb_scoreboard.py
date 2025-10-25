@@ -10,7 +10,7 @@ Layout:
     • Each game occupies two rows arranged in five conceptual columns:
         [Away Score] [Away Logo] [ @ ] [Home Logo] [Home Score]
       The second row centers the status/time text in the middle column.
-    • When the combined height exceeds the OLED, the list scrolls top → bottom.
+    • When the combined height exceeds the display area, the list scrolls top → bottom.
 """
 
 from __future__ import annotations

@@ -1274,7 +1274,7 @@ def draw_nfl_standings_afc(display, transition: bool = False) -> ScreenImage:
 
 
 if __name__ == "__main__":  # pragma: no cover
-    from waveshare_OLED import Display
+    from utils import Display
 
     disp = Display()
     try:

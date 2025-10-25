@@ -386,7 +386,7 @@ def _compose_travel_image(times: Dict[str, TravelTimeResult]) -> Image.Image:
 
     # When the travel screen has vertical space to spare, expand the route tiles so
     # that they fill the region below the title instead of floating towards the
-    # top. This keeps the layout balanced on taller canvases (e.g. the 128px OLED).
+    # top. This keeps the layout balanced on taller canvases (e.g. the earlier 128px panels).
     row_box_heights: List[int]
     if rows:
         available_height = HEIGHT - outer_margin - y

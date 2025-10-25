@@ -2,7 +2,7 @@
 """
 utils.py
 
-Core utilities for OLED display project:
+Core utilities for the desk display project:
 - Display wrapper
 - Drawing helpers
 - Animations
@@ -23,7 +23,6 @@ import functools
 import logging
 import math
 import requests
-import spidev
 from io import BytesIO
 from PIL import Image, ImageDraw, ImageEnhance, ImageFont, ImageOps
 
@@ -41,10 +40,17 @@ try:
 except AttributeError:
     Image.ANTIALIAS = Image.Resampling.LANCZOS
 
-# OLED driver
-from waveshare_OLED.OLED_1in5_rgb import OLED_1in5_rgb
+# Display HAT Mini driver (optional at import time)
+try:  # pragma: no cover - hardware import
+    from displayhatmini import DisplayHATMini  # type: ignore
+except (ImportError, RuntimeError) as _displayhat_exc:  # pragma: no cover - hardware import
+    DisplayHATMini = None  # type: ignore
+    _DISPLAY_HAT_ERROR = _displayhat_exc
+else:  # pragma: no cover - hardware import
+    _DISPLAY_HAT_ERROR = None
+
 # Project config
-from config import WIDTH, HEIGHT, CENTRAL_TIME, SPI_FREQUENCY
+from config import WIDTH, HEIGHT, CENTRAL_TIME
 # Color utilities
 from screens.color_palettes import random_color
 # Colored logging
@@ -66,26 +72,62 @@ def log_call(func):
 
 # ─── Display wrapper ────────────────────────────────────────────────────────
 class Display:
-    """
-    Wrapper around Waveshare SSD1351 for 1.5" RGB OLED.
-    """
+    """Wrapper around the Pimoroni Display HAT Mini (320×240 LCD)."""
+
     def __init__(self):
-        spi = spidev.SpiDev(0, 0)
-        self.disp = OLED_1in5_rgb(spi=spi, spi_freq=SPI_FREQUENCY)
-        if self.disp.Init() == -1:
-            raise RuntimeError("Failed to initialize SSD1351")
-        self.width, self.height = self.disp.width, self.disp.height
+        self.width = WIDTH
+        self.height = HEIGHT
+        self._buffer = Image.new("RGB", (self.width, self.height), "black")
+        self._display = None
+
+        if DisplayHATMini is None:  # pragma: no cover - hardware import
+            if _DISPLAY_HAT_ERROR:
+                logging.warning(
+                    "Display HAT Mini driver unavailable; running headless (%s)",
+                    _DISPLAY_HAT_ERROR,
+                )
+            else:
+                logging.warning(
+                    "Display HAT Mini driver unavailable; running headless."
+                )
+            return
+
+        try:  # pragma: no cover - hardware import
+            self._display = DisplayHATMini(self._buffer)
+            self._display.set_backlight(1.0)
+        except Exception as exc:  # pragma: no cover - hardware import
+            logging.warning(
+                "Failed to initialize Display HAT Mini hardware; running headless (%s)",
+                exc,
+            )
+            self._display = None
+        else:  # pragma: no cover - hardware import
+            logging.info("🖼️  Display HAT Mini initialized (%dx%d).", self.width, self.height)
+
+    def _update_display(self):
+        if self._display is None:  # pragma: no cover - hardware import
+            return
+        try:
+            self._display.buffer = self._buffer
+            self._display.display()
+        except Exception as exc:  # pragma: no cover - hardware import
+            logging.warning("Display refresh failed: %s", exc)
 
     def clear(self):
-        self.disp.clear()
+        self._buffer = Image.new("RGB", (self.width, self.height), "black")
+        self._update_display()
 
     def image(self, pil_img: Image.Image):
-        buf = self.disp.getbuffer(pil_img)
-        self.disp.ShowImage(buf)
+        if pil_img.size != (self.width, self.height):
+            pil_img = pil_img.resize((self.width, self.height), Image.ANTIALIAS)
+        if pil_img.mode != "RGB":
+            pil_img = pil_img.convert("RGB")
+        self._buffer = pil_img.copy()
+        self._update_display()
 
     def show(self):
-        # No-op: ShowImage pushes the buffer
-        pass
+        # No additional action required; display() is triggered during image()
+        self._update_display()
 
 
 @dataclass
@@ -109,13 +151,14 @@ class ScreenImage:
 @log_call
 def clear_display(display):
     """
-    Clear the OLED display.
+    Clear the connected display, falling back to a blank frame.
     """
     try:
         display.clear()
     except Exception:
         try:
-            display.fill(0)
+            blank = Image.new("RGB", (getattr(display, "width", WIDTH), getattr(display, "height", HEIGHT)), "black")
+            display.image(blank)
             display.show()
         except Exception:
             pass

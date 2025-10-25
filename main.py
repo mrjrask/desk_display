@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-Main display loop driving Waveshare SSD1351 in RGB,
-with optional screenshot, H.264 MP4 video capture, Wi-Fi triage,
+Main display loop driving the Pimoroni Display HAT Mini LCD,
+with optional screenshot capture, H.264 MP4 video capture, Wi-Fi triage,
 screen-config sequencing, and batch screenshot archiving.
 
 Changes:
@@ -141,7 +141,7 @@ video_out = None
 if ENABLE_VIDEO:
     import cv2, numpy as np
     FOURCC     = cv2.VideoWriter_fourcc(*"mp4v")
-    video_path = os.path.join(SCREENSHOT_DIR, "oled_output.mp4")
+    video_path = os.path.join(SCREENSHOT_DIR, "display_output.mp4")
     logging.info(f"🎥 Starting video capture → {video_path} @ {VIDEO_FPS} FPS using mp4v")
     video_out = cv2.VideoWriter(video_path, FOURCC, VIDEO_FPS, (WIDTH, HEIGHT))
     if not video_out.isOpened():

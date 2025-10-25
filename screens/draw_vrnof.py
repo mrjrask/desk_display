@@ -2,7 +2,7 @@
 """
 draw_vrnof.py
 
-Displays VRNOF stock price, change, and all-time P/L on SSD1351 RGB OLED,
+Displays VRNOF stock price, change, and all-time P/L on the Display HAT Mini,
 with a 10-minute freshness requirement. Title and all-time P/L remain fixed; price/change vertically centered on screen.
 Exact cost-basis calculation from individual lots.
 """

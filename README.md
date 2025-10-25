@@ -1,6 +1,6 @@
-# OLED Scoreboard & Info Display (Waveshare 1.5" RGB SSD1351)
+# Desk Scoreboard & Info Display (Pimoroni Display HAT Mini)
 
-A tiny, always‑on scoreboard and info display that runs on a Raspberry Pi and a Waveshare 1.5" RGB OLED (SSD1351). It cycles through date/time, weather, travel time, indoor sensors, stocks, Blackhawks, Bulls & Bears screens, MLB standings, and Cubs/White Sox game views (last/live/next).
+A tiny, always‑on scoreboard and info display that runs on a Raspberry Pi and a Pimoroni Display HAT Mini (320×240 ST7789 LCD). It cycles through date/time, weather, travel time, indoor sensors, stocks, Blackhawks, Bulls & Bears screens, MLB standings, and Cubs/White Sox game views (last/live/next).
 
 > **Highlights**
 > - Smooth animations: scroll and fade‑in
@@ -31,7 +31,7 @@ A tiny, always‑on scoreboard and info display that runs on a Raspberry Pi and 
 ## Requirements
 
 - Raspberry Pi (tested on Pi Zero/Zero 2 W)
-- Waveshare **OLED 1.5\" RGB (SSD1351)** wired to SPI0
+- Pimoroni **Display HAT Mini (320×240 ST7789 LCD)** wired to SPI0
 - Python 3.9+
 - Packages (install via apt / pip):
   ```bash
@@ -56,10 +56,10 @@ A tiny, always‑on scoreboard and info display that runs on a Raspberry Pi and 
 
 ## Install
 
-Clone your repo into (for example) `~/oled_display_waveshare_1in5` and copy your `*.py` files plus the `images/` and `fonts/` folders into place.
+If you've already cloned this repository (for example into `~/desk_display`), switch into that directory to install dependencies and configure the app.
 
 ```bash
-cd ~/oled_display_waveshare_1in5
+cd ~/desk_display
 ```
 
 ---
@@ -67,7 +67,7 @@ cd ~/oled_display_waveshare_1in5
 ## Project layout
 
 ```
-oled_display_waveshare_1in5/
+desk_display/
 ├─ main.py
 ├─ config.py
 ├─ data_fetch.py
@@ -117,7 +117,7 @@ oled_display_waveshare_1in5/
 
 Most runtime behavior is controlled in `config.py`:
 
-- **Display:** `WIDTH=128`, `HEIGHT=128`, `SPI_FREQUENCY=30_000_000`
+- **Display:** `WIDTH=320`, `HEIGHT=240`
 - **Intervals:** `SCREEN_DELAY`, `SCHEDULE_UPDATE_INTERVAL`
 - **Feature flags:** `ENABLE_SCREENSHOTS`, `ENABLE_VIDEO`, `ENABLE_WIFI_MONITOR`
 - **Weather:** `ENABLE_WEATHER`, `LATITUDE/LONGITUDE`
@@ -296,16 +296,16 @@ Or install the included systemd service (see below).
 
 ## Systemd unit
 
-Create `/etc/systemd/system/oled_display-main.service`:
+Create `/etc/systemd/system/displayhatmini-display.service`:
 
 ```ini
 [Unit]
-Description=OLED Display Service -main
+Description=Display HAT Mini Service - main
 After=network-online.target
 
 [Service]
-WorkingDirectory=/home/pi/oled_display_waveshare_1in5
-ExecStart=/usr/bin/python3 /home/pi/oled_display_waveshare_1in5/main.py
+WorkingDirectory=/home/pi/desk_display
+ExecStart=/usr/bin/python3 /home/pi/desk_display/main.py
 Restart=always
 User=pi
 
@@ -317,9 +317,9 @@ Enable & start:
 
 ```bash
 sudo systemctl daemon-reload
-sudo systemctl enable oled_display-main.service
-sudo systemctl start oled_display-main.service
-journalctl -u oled_display-main.service -f
+sudo systemctl enable displayhatmini-display.service
+sudo systemctl start displayhatmini-display.service
+journalctl -u displayhatmini-display.service -f
 ```
 
 ---
@@ -330,7 +330,7 @@ journalctl -u oled_display-main.service -f
 - **Batch archiving:** once the live folder reaches **500** images, the program moves the **entire batch** into `./screenshot_archive/dated_folders/<screen>/YYYYMMDD/HHMMSS/` (images only) so the archive mirrors the folder layout under `./screenshots/`.
 - You will **not** see per‑image pruning logs; instead you’ll see a single archive log like: `🗃️ Archived 500 screenshot(s) → …`
 
-> Tip: videos (if enabled) are written to `screenshots/oled_output.mp4` and aren’t moved by the archiver.
+> Tip: videos (if enabled) are written to `screenshots/display_output.mp4` and aren’t moved by the archiver.
 
 ---
 
@@ -344,7 +344,7 @@ The checker now logs **which files have diverged** when updates exist, for easie
 
 ## Troubleshooting
 
-- **Too‑dark colors on date/time:** this project forces high‑brightness random RGB values to ensure legibility on OLED.
+- **Too‑dark colors on date/time:** this project forces high‑brightness random RGB values to ensure legibility on the LCD.
 - **Missing logos:** you’ll see a warning like `Logo file missing: CUBS.png`. Add the correct file into `images/mlb/`.
 - **No WebP animation:** ensure your Pillow build supports WebP (`pip3 show pillow`). PNG fallback will still work.
 - **Network/API errors:** MLB/OWM requests are time‑bounded; transient timeouts are logged and screens are skipped gracefully.
