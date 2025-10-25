@@ -407,12 +407,12 @@ def _draw_tile(
     radius = max(10, min(18, (y1 - y0) // 3))
     draw.rounded_rectangle(rect, radius=radius, fill=bg, outline=config.INSIDE_COL_STROKE)
 
-    pad_x, pad_y = 10, 6
+    pad_x, pad_y = 8, 6
     inner_w = max(0, (x1 - x0) - 2 * pad_x)
     inner_h = max(0, (y1 - y0) - 2 * pad_y)
 
-    label_max_h = max(12, int(inner_h * 0.28))
-    value_max_h = max(value_min_pt, int(inner_h * 0.62))
+    label_max_h = max(11, int(inner_h * 0.24))
+    value_max_h = max(value_min_pt, int(inner_h * 0.54))
 
     lf = fit_font(
         draw,
@@ -449,6 +449,50 @@ def _draw_tile(
 
     draw.text((label_x, label_y), label, font=lf, fill=label_color)
     draw.text((value_x, value_y), value, font=vf, fill=value_color)
+
+
+def _layout_metric_grid(
+    area_rect: Tuple[int, int, int, int],
+    count: int,
+    gap: int,
+) -> Tuple[Tuple[int, int, int, int], ...]:
+    """Return tile rectangles laid out in a responsive grid."""
+
+    if count <= 0:
+        return tuple()
+
+    x0, y0, x1, y1 = area_rect
+    width = max(0, x1 - x0)
+    height = max(0, y1 - y0)
+
+    if count == 1:
+        cols = 1
+    elif count == 2:
+        cols = 2
+    elif count == 3:
+        cols = 3
+    else:
+        cols = 2
+
+    rows = max(1, math.ceil(count / cols))
+
+    tile_w = max(60, (width - (cols - 1) * gap) // cols) if cols else width
+    tile_h = max(42, (height - (rows - 1) * gap) // rows) if rows else height
+
+    total_w = cols * tile_w + (cols - 1) * gap
+    total_h = rows * tile_h + (rows - 1) * gap
+
+    offset_x = x0 + max(0, (width - total_w) // 2)
+    offset_y = y0 + max(0, (height - total_h) // 2)
+
+    rects = []
+    for idx in range(count):
+        row = idx // cols
+        col = idx % cols
+        left = offset_x + col * (tile_w + gap)
+        top = offset_y + row * (tile_h + gap)
+        rects.append((left, top, left + tile_w, top + tile_h))
+    return tuple(rects)
 
 # ── Main render ──────────────────────────────────────────────────────────────
 def _clean_metric(value: Optional[float]) -> Optional[float]:
@@ -538,7 +582,7 @@ def draw_inside(display, transition: bool=False):
         label="Temperature",
         value=f"{temp_f:.1f}°F",
         bg=temp_bg,
-        value_min_pt=26,
+        value_min_pt=22,
     )
 
     metric_cards = []
@@ -567,29 +611,35 @@ def draw_inside(display, transition: bool=False):
             )
         )
 
-    tiles_top = title_block_h + 10
-    bottom_margin = 8
+    tiles_top = title_block_h + 8
+    bottom_margin = 10
     tiles_gap = 6
     side_pad = 8
-    tiles_h_avail = max(30, H - bottom_margin - tiles_top)
 
-    # Temperature tile gets priority real estate at the top.
-    extra_gap = tiles_gap if metric_cards else 0
+    content_rect = (side_pad, tiles_top, W - side_pad, H - bottom_margin)
+    content_height = max(1, content_rect[3] - content_rect[1])
+
     if metric_cards:
-        temp_height_ratio = 0.5 if len(metric_cards) <= 1 else 0.56
+        temp_ratio = 0.48 if len(metric_cards) > 1 else 0.56
+        min_temp = 68
     else:
-        temp_height_ratio = 0.85
-    max_temp_height = max(1, tiles_h_avail - extra_gap)
-    temp_tile_h = max(70, int(tiles_h_avail * temp_height_ratio))
-    temp_tile_h = min(temp_tile_h, max_temp_height)
-    min_target = 60 if max_temp_height >= 60 else max_temp_height
-    temp_tile_h = max(temp_tile_h, min_target)
+        temp_ratio = 0.8
+        min_temp = 96
 
+    temp_tile_h = min(content_height, max(min_temp, int(content_height * temp_ratio)))
+
+    if metric_cards:
+        metrics_min_height = 58 if len(metric_cards) == 1 else 92
+        available_for_metrics = max(0, content_height - temp_tile_h - tiles_gap)
+        if available_for_metrics < metrics_min_height:
+            reclaim = min(temp_tile_h - 60, metrics_min_height - available_for_metrics)
+            if reclaim > 0:
+                temp_tile_h -= reclaim
     temp_rect = (
-        side_pad,
-        tiles_top,
-        W - side_pad,
-        tiles_top + temp_tile_h,
+        content_rect[0],
+        content_rect[1],
+        content_rect[2],
+        content_rect[1] + temp_tile_h,
     )
 
     _draw_tile(
@@ -604,26 +654,22 @@ def draw_inside(display, transition: bool=False):
     )
 
     if metric_cards:
-        metrics_top = temp_rect[3] + extra_gap
-        metrics_h_avail = max(30, H - bottom_margin - metrics_top)
-        metric_count = len(metric_cards)
-        cols = 1 if metric_count == 1 else 2
-        rows = math.ceil(metric_count / cols)
+        metrics_gap = tiles_gap
+        metrics_top = min(content_rect[3], temp_rect[3] + metrics_gap)
+        metrics_area = (
+            content_rect[0],
+            metrics_top,
+            content_rect[2],
+            content_rect[3],
+        )
 
-        tile_w = max(80, (W - 2 * side_pad - (cols - 1) * tiles_gap) // cols)
-        tile_h = max(50, (metrics_h_avail - (rows - 1) * tiles_gap) // rows)
+        rects = _layout_metric_grid(
+            metrics_area,
+            len(metric_cards),
+            metrics_gap,
+        )
 
-        total_height = rows * tile_h + (rows - 1) * tiles_gap
-        y_offset = metrics_top + max(0, (metrics_h_avail - total_height) // 2)
-
-        for idx, card in enumerate(metric_cards):
-            row = idx // cols
-            col = idx % cols
-
-            x0 = side_pad + col * (tile_w + tiles_gap)
-            y0 = y_offset + row * (tile_h + tiles_gap)
-            rect = (x0, y0, x0 + tile_w, y0 + tile_h)
-
+        for rect, card in zip(rects, metric_cards):
             _draw_tile(
                 draw,
                 rect,
