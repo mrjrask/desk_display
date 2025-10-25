@@ -52,12 +52,16 @@ TITLE_MARGIN_BOTTOM = 6
 DIVISION_MARGIN_TOP = 4
 DIVISION_MARGIN_BOTTOM = 4
 COLUMN_GAP_BELOW = 3
+DIVISION_HEADER_GAP = 6
 
 TITLE_FONT = FONT_TITLE_SPORTS
 DIVISION_FONT = clone_font(FONT_TITLE_SPORTS, 26)
 COLUMN_FONT = clone_font(FONT_STATUS, 24)
-COLUMN_FONT_POINTS = clone_font(FONT_STATUS, 17)
+_COLUMN_POINTS_SIZE = max(8, getattr(COLUMN_FONT, "size", 24) - 6)
+COLUMN_FONT_POINTS = clone_font(COLUMN_FONT, _COLUMN_POINTS_SIZE)
 ROW_FONT = clone_font(FONT_STATUS, 28)
+_ROW_POINTS_SIZE = max(8, getattr(ROW_FONT, "size", 28) - 6)
+ROW_FONT_POINTS = clone_font(ROW_FONT, _ROW_POINTS_SIZE)
 
 OVERVIEW_TITLE = "NHL Overview"
 OVERVIEW_DIVISIONS = [
@@ -216,10 +220,9 @@ def _team_display_name(team: dict) -> str:
         return ""
     for key in ("teamName", "name", "teamCommonName", "clubName", "nickname"):
         value = team.get(key)
-        if isinstance(value, str):
-            text = value.strip()
-            if text:
-                return text
+        text = _coerce_text(value)
+        if text:
+            return text
     return ""
 
 
@@ -690,7 +693,7 @@ def _truncate_text_to_width(text: str, font, max_width: int) -> str:
 def _draw_division(img: Image.Image, draw: ImageDraw.ImageDraw, top: int, title: str, teams: Iterable[dict]) -> int:
     y = top + DIVISION_MARGIN_TOP
     y += _draw_centered_text(draw, title, DIVISION_FONT, y)
-    y += 2
+    y += DIVISION_HEADER_GAP
     header_top = y
     for label, key, align in COLUMN_HEADERS:
         font = COLUMN_HEADER_FONTS.get(key, COLUMN_FONT)
@@ -704,13 +707,13 @@ def _draw_division(img: Image.Image, draw: ImageDraw.ImageDraw, top: int, title:
         if logo:
             logo_y = row_top + (ROW_HEIGHT - logo.height) // 2
             img.paste(logo, (LEFT_MARGIN, logo_y), logo)
-        team_label = team.get("name") or abbr
+        team_label = _coerce_text(team.get("name")) or abbr
         team_label = _truncate_text_to_width(team_label, ROW_FONT, TEAM_NAME_MAX_WIDTH)
         _draw_text(draw, team_label, ROW_FONT, COLUMN_LAYOUT["team"], row_top, ROW_HEIGHT, "left")
         _draw_text(draw, str(team.get("wins", "")), ROW_FONT, COLUMN_LAYOUT["wins"], row_top, ROW_HEIGHT, "right")
         _draw_text(draw, str(team.get("losses", "")), ROW_FONT, COLUMN_LAYOUT["losses"], row_top, ROW_HEIGHT, "right")
         _draw_text(draw, str(team.get("ot", "")), ROW_FONT, COLUMN_LAYOUT["ot"], row_top, ROW_HEIGHT, "right")
-        _draw_text(draw, str(team.get("points", "")), ROW_FONT, COLUMN_LAYOUT["points"], row_top, ROW_HEIGHT, "right")
+        _draw_text(draw, str(team.get("points", "")), ROW_FONT_POINTS, COLUMN_LAYOUT["points"], row_top, ROW_HEIGHT, "right")
         y += ROW_HEIGHT + ROW_SPACING
 
     y -= ROW_SPACING
