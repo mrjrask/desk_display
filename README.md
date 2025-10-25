@@ -316,7 +316,8 @@ After=network-online.target
 
 [Service]
 WorkingDirectory=/home/pi/desk_display
-ExecStart=/usr/bin/python3 /home/pi/desk_display/main.py
+ExecStart=/home/pi/desk_display/venv/bin/python /home/pi/desk_display/main.py
+ExecStop=/bin/bash -lc '/home/pi/desk_display/cleanup.sh'
 Restart=always
 User=pi
 
@@ -331,6 +332,15 @@ sudo systemctl daemon-reload
 sudo systemctl enable displayhatmini-display.service
 sudo systemctl start displayhatmini-display.service
 journalctl -u displayhatmini-display.service -f
+```
+
+The service definition above assumes the project’s virtual environment lives at `/home/pi/desk_display/venv` and that the
+cleanup helper is executable. Make sure to create the venv first and grant execute permissions to the script:
+
+```bash
+python -m venv /home/pi/desk_display/venv
+/home/pi/desk_display/venv/bin/pip install -r /home/pi/desk_display/requirements.txt
+chmod +x /home/pi/desk_display/cleanup.sh
 ```
 
 ---
