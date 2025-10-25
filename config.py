@@ -159,6 +159,14 @@ HEIGHT                   = 240
 SCREEN_DELAY             = 4
 SCHEDULE_UPDATE_INTERVAL = 600
 
+try:
+    DISPLAY_ROTATION = int(os.environ.get("DISPLAY_ROTATION", "180"))
+except (TypeError, ValueError):
+    logging.warning(
+        "Invalid DISPLAY_ROTATION value; defaulting to 180 degrees."
+    )
+    DISPLAY_ROTATION = 180
+
 # ─── Scoreboard scrolling configuration ───────────────────────────────────────
 SCOREBOARD_SCROLL_STEP         = 1
 SCOREBOARD_SCROLL_DELAY        = 0.016
