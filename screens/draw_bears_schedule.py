@@ -7,7 +7,7 @@ Shows the next Chicago Bears game with:
   - Opponent wrapped in up to two lines, prefixed by '@' if the Bears are away,
     or 'vs.' if the Bears are home.
   - Between those and the bottom line, a row of logos: AWAY @ HOME, each logo
-    32 px tall, aspect preserved.
+    auto-sized similarly to the Hawks schedule screen.
   - Bottom line with week/date/time (no spaces around the dash).
 """
 
@@ -19,7 +19,13 @@ from config import BEARS_BOTTOM_MARGIN, BEARS_SCHEDULE, NFL_TEAM_ABBREVIATIONS
 from utils import load_team_logo, next_game_from_schedule, wrap_text
 
 NFL_LOGO_DIR = os.path.join(config.IMAGES_DIR, "nfl")
-LOGO_HEIGHT = 48
+def _desired_logo_height(height: int) -> int:
+    """Mirror the Hawks schedule sizing to keep logos consistent across screens."""
+    if height >= 128:
+        return 81
+    if height >= 96:
+        return 59
+    return 48
 
 def show_bears_next_game(display, transition=False):
     game = next_game_from_schedule(BEARS_SCHEDULE)
@@ -57,19 +63,6 @@ def show_bears_next_game(display, transition=False):
         else:
             away_ab, home_ab, loc_sym = opp_ab, bears_ab, "@"
 
-        logo_away = load_team_logo(NFL_LOGO_DIR, away_ab, height=LOGO_HEIGHT)
-        logo_home = load_team_logo(NFL_LOGO_DIR, home_ab, height=LOGO_HEIGHT)
-
-        elems   = [logo_away, loc_sym, logo_home]
-        spacing = 8
-        widths  = [
-            el.width if isinstance(el, Image.Image)
-            else draw.textsize(el, font=config.FONT_TEAM_SPORTS)[0]
-            for el in elems
-        ]
-        total_w = sum(widths) + spacing*(len(widths)-1)
-        x0      = (config.WIDTH - total_w)//2
-
         # Bottom line text — **no spaces around the dash**
         wk = game["week"]
         try:
@@ -82,8 +75,25 @@ def show_bears_next_game(display, transition=False):
         bw, bh = draw.textsize(bottom, font=config.FONT_DATE_SPORTS)
         bottom_y = config.HEIGHT - bh - BEARS_BOTTOM_MARGIN  # keep on-screen
 
+        desired_logo_h = _desired_logo_height(config.HEIGHT)
+        available_h = max(10, bottom_y - (y_txt + 2))
+        logo_h = min(desired_logo_h, available_h)
+
+        logo_away = load_team_logo(NFL_LOGO_DIR, away_ab, height=logo_h)
+        logo_home = load_team_logo(NFL_LOGO_DIR, home_ab, height=logo_h)
+
+        elems   = [logo_away, loc_sym, logo_home]
+        spacing = 8
+        widths  = [
+            el.width if isinstance(el, Image.Image)
+            else draw.textsize(el, font=config.FONT_TEAM_SPORTS)[0]
+            for el in elems
+        ]
+        total_w = sum(widths) + spacing*(len(widths)-1)
+        x0      = (config.WIDTH - total_w)//2
+
         # Vertical center of logos/text block between opponent text and bottom label
-        block_h = LOGO_HEIGHT
+        block_h = logo_h
         y_logo = y_txt + ((bottom_y - y_txt) - block_h)//2
 
         # Draw logos and '@'
