@@ -86,10 +86,10 @@ FONT_BOTTOM = FONT_DATE_SPORTS
 FONT_NEXT_OPP = FONT_TEAM_SPORTS
 
 # Scoreboard fonts (TimesSquare family as requested for numeric/abbr)
-FONT_ABBR  = _ts(18 if HEIGHT > 64 else 16)
-FONT_SCORE = _ts(22 if HEIGHT > 64 else 18)    # compact
-FONT_SOG   = _ts(16 if HEIGHT > 64 else 14)    # compact
-FONT_SMALL = _ts(12 if HEIGHT > 64 else 10)    # for SOG label / live clock
+FONT_ABBR  = _ts(33 if HEIGHT > 64 else 30)
+FONT_SCORE = _ts(41 if HEIGHT > 64 else 33)    # compact
+FONT_SOG   = _ts(30 if HEIGHT > 64 else 26)    # compact
+FONT_SMALL = _ts(22 if HEIGHT > 64 else 19)    # for SOG label / live clock
 
 # NHL endpoints (prefer api-web; quiet legacy fallback)
 NHL_WEB_TEAM_MONTH_NOW   = NHL_API_ENDPOINTS["team_month_now"]
@@ -543,7 +543,7 @@ def _draw_scoreboard(
         cy = y_top + row_h // 2
 
         # Col 1: logo + abbr
-        logo = _load_logo_png(tri, height=22)
+        logo = _load_logo_png(tri, height=41)
         lx = 3
         tx = lx
         if logo:
@@ -854,7 +854,7 @@ def _draw_next_card(display, game: Dict, *, title: str, transition: bool=False, 
     bottom_y      = HEIGHT - (bottom_h + 2) if bottom_text else HEIGHT
 
     # Desired logo height (bigger on 128px; adapt if smaller/other displays)
-    desired_logo_h = 44 if HEIGHT >= 128 else (32 if HEIGHT >= 96 else 26)
+    desired_logo_h = 81 if HEIGHT >= 128 else (59 if HEIGHT >= 96 else 48)
 
     # Compute max logo height to fit between the top content and bottom line
     available_h = max(10, bottom_y - (y_top + 2))  # space for logos row

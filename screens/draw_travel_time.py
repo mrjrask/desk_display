@@ -243,7 +243,7 @@ def get_travel_times() -> Dict[str, TravelTimeResult]:
 # Drawing helpers for travel route icons
 # ──────────────────────────────────────────────────────────────────────────────
 
-def _load_icon(path: str, height: int = 28) -> Image.Image:
+def _load_icon(path: str, height: int = 52) -> Image.Image:
     try:
         img = Image.open(path).convert("RGBA")
     except Exception:
@@ -258,7 +258,7 @@ def _load_icon(path: str, height: int = 28) -> Image.Image:
     return img
 
 
-def _compose_icons(paths: Sequence[str], height: int = 28, gap: int = 2) -> Image.Image:
+def _compose_icons(paths: Sequence[str], height: int = 52, gap: int = 2) -> Image.Image:
     icons = [_load_icon(path, height=height) for path in paths]
     valid_icons = [icon for icon in icons if icon.width > 0 and icon.height > 0]
 
@@ -280,7 +280,7 @@ TRAVEL_ICON_LSD = os.path.join(IMAGES_DIR, "travel", "lsd.png")
 TRAVEL_ICON_90 = os.path.join(IMAGES_DIR, "travel", "90.png")
 TRAVEL_ICON_94 = os.path.join(IMAGES_DIR, "travel", "94.png")
 TRAVEL_ICON_294 = os.path.join(IMAGES_DIR, "travel", "294.png")
-ROUTE_ICON_HEIGHT = 18
+ROUTE_ICON_HEIGHT = 33
 
 # ──────────────────────────────────────────────────────────────────────────────
 # Composition

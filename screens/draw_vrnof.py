@@ -36,7 +36,7 @@ _cache = {
     "ts":          0.0
 }
 
-LOGO_HEIGHT = 28
+LOGO_HEIGHT = 52
 LOGO_GAP = 4
 LOGO_PATH = os.path.join(IMAGES_DIR, "verano.jpg")
 _LOGO = None
