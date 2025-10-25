@@ -180,13 +180,25 @@ NBA_FALLBACK_LOGO  = os.path.join(NBA_IMAGES_DIR, "NBA.png")
 CENTRAL_TIME = pytz.timezone("America/Chicago")
 
 # ─── Fonts ────────────────────────────────────────────────────────────────────
-# Drop your TimesSquare-m105.ttf, DejaVuSans.ttf and DejaVuSans-Bold.ttf
-# into a new folder named `fonts` alongside this file.
+# Drop your TimesSquare-m105.ttf, DejaVuSans.ttf, DejaVuSans-Bold.ttf and
+# NotoColorEmoji.ttf into a new folder named `fonts` alongside this file.
 FONTS_DIR = os.path.join(SCRIPT_DIR, "fonts")
 
 def _load_font(name, size):
     path = os.path.join(FONTS_DIR, name)
     return ImageFont.truetype(path, size)
+
+
+def _try_load_font(name: str, size: int):
+    path = os.path.join(FONTS_DIR, name)
+    if not os.path.isfile(path):
+        return None
+
+    try:
+        return ImageFont.truetype(path, size)
+    except OSError as exc:
+        logging.warning("Unable to load font %s: %s", path, exc)
+        return None
 
 FONT_DAY_DATE           = _load_font("DejaVuSans-Bold.ttf", 39)
 FONT_DATE               = _load_font("DejaVuSans.ttf",      22)
@@ -240,9 +252,25 @@ FONT_DIV_GB             = _load_font("DejaVuSans.ttf",      18)
 FONT_GB_VALUE           = _load_font("DejaVuSans.ttf",      18)
 FONT_GB_LABEL           = _load_font("DejaVuSans.ttf",      15)
 
-_symbola_paths = glob.glob("/usr/share/fonts/**/*.ttf", recursive=True)
-_symbola = next((p for p in _symbola_paths if "symbola" in p.lower()), None)
-FONT_EMOJI = ImageFont.truetype(_symbola, 30) if _symbola else ImageFont.load_default()
+def _load_emoji_font(size: int) -> ImageFont.FreeTypeFont:
+    noto = _try_load_font("NotoColorEmoji.ttf", size)
+    if noto:
+        return noto
+
+    symbola_paths = glob.glob("/usr/share/fonts/**/*.ttf", recursive=True)
+    for path in symbola_paths:
+        if "symbola" not in path.lower():
+            continue
+        try:
+            return ImageFont.truetype(path, size)
+        except OSError as exc:
+            logging.debug("Unable to load fallback emoji font %s: %s", path, exc)
+
+    logging.warning("Emoji font not found; falling back to PIL default font")
+    return ImageFont.load_default()
+
+
+FONT_EMOJI = _load_emoji_font(30)
 
 # ─── Screen-specific configuration ─────────────────────────────────────────────
 
