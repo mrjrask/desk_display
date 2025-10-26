@@ -15,7 +15,7 @@ import logging
 import math
 import os
 import sys
-from typing import Any, Callable, Dict, Optional, Sequence, Set, Tuple
+from typing import Any, Callable, Dict, List, Optional, Sequence, Set, Tuple
 
 from PIL import Image, ImageDraw
 import config
@@ -458,10 +458,10 @@ def _draw_temperature_panel(
 ) -> None:
     x0, y0, x1, y1 = rect
     color = temperature_color(temp_f)
-    start = _lighten(color, 0.55)
-    end = _darken(color, 0.35)
-    outline = _darken(color, 0.45)
-    radius = max(16, min(28, (y1 - y0) // 3))
+    start = _lighten(color, 0.72)
+    end = _darken(color, 0.22)
+    outline = _mix_color(color, (0, 0, 0), 0.35)
+    radius = max(14, min(26, (y1 - y0) // 4))
     _draw_gradient_panel(img, rect, start, end, radius=radius, outline=outline)
 
     width = max(1, x1 - x0)
@@ -478,7 +478,7 @@ def _draw_temperature_panel(
         max_pt=label_base_size,
     )
     label_w, label_h = measure_text(draw, "Temperature", label_font)
-    label_pos = (x0 + 18, y0 + 16)
+    label_pos = (x0 + 18, y0 + max(10, height // 12))
 
     temp_base_size = getattr(temp_base, "size", 48)
     temp_font = fit_font(
@@ -491,7 +491,10 @@ def _draw_temperature_panel(
         max_pt=temp_base_size,
     )
     temp_w, temp_h = measure_text(draw, temp_text, temp_font)
-    temp_pos = (x0 + (width - temp_w) // 2, y0 + max(label_h + 20, (height - temp_h) // 2))
+    temp_pos = (
+        x0 + (width - temp_w) // 2,
+        y0 + max(label_h + 18, (height - temp_h) // 2),
+    )
 
     desc_font = fit_font(
         draw,
@@ -503,21 +506,25 @@ def _draw_temperature_panel(
         max_pt=label_base_size,
     )
     desc_w, desc_h = measure_text(draw, descriptor, desc_font)
-    desc_pos = (x0 + (width - desc_w) // 2, y1 - desc_h - 18)
+    desc_pos = (x0 + (width - desc_w) // 2, y1 - desc_h - max(14, height // 12))
 
     label_color = _mix_color(start, (0, 0, 0), 0.65)
     temp_color = config.INSIDE_COL_TEXT
-    desc_color = _mix_color(start, (0, 0, 0), 0.5)
+    desc_color = _mix_color(start, (0, 0, 0), 0.45)
 
     draw.text(label_pos, "Temperature", font=label_font, fill=label_color)
     draw.text(temp_pos, temp_text, font=temp_font, fill=temp_color)
     draw.text(desc_pos, descriptor, font=desc_font, fill=desc_color)
 
-    accent_y = desc_pos[1] - 10
+    accent_y = desc_pos[1] - 8
     accent_start = x0 + 18
     accent_end = x1 - 18
-    if accent_end > accent_start and accent_y > y0 + label_h + 10:
-        draw.line((accent_start, accent_y, accent_end, accent_y), fill=_mix_color(start, (255, 255, 255), 0.2), width=1)
+    if accent_end > accent_start and accent_y > y0 + label_h + 8:
+        draw.line(
+            (accent_start, accent_y, accent_end, accent_y),
+            fill=_mix_color(start, (255, 255, 255), 0.25),
+            width=1,
+        )
 
 
 def _draw_metric_row(
@@ -531,15 +538,15 @@ def _draw_metric_row(
 ) -> None:
     x0, y0, x1, y1 = rect
     height = max(1, y1 - y0)
-    radius = max(8, min(16, height // 2))
-    bg = _lighten(accent, 0.75)
+    radius = max(6, min(14, height // 2))
+    bg = _lighten(accent, 0.82)
     draw.rounded_rectangle(rect, radius=radius, fill=bg)
 
-    accent_w = 6
-    draw.rectangle((x0, y0, x0 + accent_w, y1), fill=accent)
+    accent_w = max(4, min(8, int(max(1, x1 - x0) * 0.08)))
+    draw.rectangle((x0, y0, x0 + accent_w, y1), fill=_mix_color(accent, (0, 0, 0), 0.15))
 
     inner_left = x0 + accent_w + 10
-    inner_right = x1 - 12
+    inner_right = x1 - 10
     inner_width = max(1, inner_right - inner_left)
 
     label_base_size = getattr(label_base, "size", 18)
@@ -549,8 +556,8 @@ def _draw_metric_row(
         draw,
         label,
         label_base,
-        max_width=int(inner_width * 0.55),
-        max_height=max(14, int(height * 0.45)),
+        max_width=int(inner_width * 0.6),
+        max_height=max(12, int(height * 0.48)),
         min_pt=min(label_base_size, 10),
         max_pt=label_base_size,
     )
@@ -559,7 +566,7 @@ def _draw_metric_row(
         value,
         value_base,
         max_width=inner_width,
-        max_height=max(16, int(height * 0.6)),
+        max_height=max(16, int(height * 0.62)),
         min_pt=min(value_base_size, 12),
         max_pt=value_base_size,
     )
@@ -574,11 +581,15 @@ def _draw_metric_row(
 
     midpoint = y0 + height // 2
     line_start = label_x + lw + 8
-    line_end = value_x - 10
+    line_end = value_x - 12
     if line_end > line_start:
-        draw.line((line_start, midpoint, line_end, midpoint), fill=_mix_color(accent, (255, 255, 255), 0.6), width=1)
+        draw.line(
+            (line_start, midpoint, line_end, midpoint),
+            fill=_mix_color(accent, (255, 255, 255), 0.55),
+            width=1,
+        )
 
-    label_color = _mix_color(accent, (0, 0, 0), 0.5)
+    label_color = _mix_color(accent, (0, 0, 0), 0.45)
     value_color = config.INSIDE_COL_TEXT
 
     draw.text((label_x, label_y), label, font=label_font, fill=label_color)
@@ -597,24 +608,92 @@ def _draw_metric_rows(
     count = len(metrics)
     if count <= 0 or height <= 0:
         return
-
+    columns = 1 if count <= 3 else 2
     gap = 6
-    total_gap = gap * (count - 1)
-    row_h = max(38, (height - total_gap) // count)
+    column_gap = 10 if columns > 1 else 0
+    rows = int(math.ceil(count / columns))
+    total_vertical_gap = gap * (rows - 1)
+    row_h = 0
+    if rows > 0:
+        available_height = max(1, height - total_vertical_gap)
+        row_h = max(22, available_height // rows)
 
-    top = y0
-    for metric in metrics:
+    available_width = max(1, x1 - x0)
+    total_horizontal_gap = column_gap * (columns - 1)
+    col_w = max(40, (available_width - total_horizontal_gap) // columns)
+
+    for idx, metric in enumerate(metrics):
+        row = idx // columns
+        col = idx % columns
+        left = x0 + col * (col_w + column_gap)
+        top = y0 + row * (row_h + gap)
+        if top >= y1:
+            break
         bottom = min(y1, top + row_h)
+        right = min(x1, left + col_w)
+        if bottom <= top or right <= left:
+            continue
         _draw_metric_row(
             draw,
-            (x0, top, x1, bottom),
+            (left, top, right, bottom),
             metric["label"],
             metric["value"],
             metric["color"],
             label_base,
             value_base,
         )
-        top = bottom + gap
+
+
+def _prettify_metric_label(key: str) -> str:
+    key = key.replace("_", " ").strip()
+    if not key:
+        return "Value"
+    replacements = {
+        "voc": "VOC",
+        "co2": "CO₂",
+        "co": "CO",
+        "pm25": "PM2.5",
+        "pm10": "PM10",
+        "iaq": "IAQ",
+    }
+    parts = []
+    for token in key.split():
+        lower = token.lower()
+        if lower in replacements:
+            parts.append(replacements[lower])
+        elif len(token) <= 2:
+            parts.append(token.upper())
+        else:
+            parts.append(token.capitalize())
+    return " ".join(parts)
+
+
+def _format_generic_metric_value(key: str, value: float) -> str:
+    key_lower = key.lower()
+    if key_lower.endswith("_ohms"):
+        return format_voc_ohms(value)
+    if key_lower.endswith("_f"):
+        return f"{value:.1f}°F"
+    if key_lower.endswith("_c"):
+        return f"{value:.1f}°C"
+    if key_lower.endswith("_ppm"):
+        return f"{value:.0f} ppm"
+    if key_lower.endswith("_ppb"):
+        return f"{value:.0f} ppb"
+    if key_lower.endswith("_percent") or key_lower.endswith("_pct"):
+        return f"{value:.1f}%"
+    if key_lower.endswith("_inhg"):
+        return f"{value:.2f} inHg"
+    if key_lower.endswith("_hpa"):
+        return f"{value:.1f} hPa"
+    magnitude = abs(value)
+    if magnitude >= 1000:
+        return f"{value:,.0f}"
+    if magnitude >= 100:
+        return f"{value:.0f}"
+    if magnitude >= 10:
+        return f"{value:.1f}"
+    return f"{value:.2f}"
 
 # ── Main render ──────────────────────────────────────────────────────────────
 def _clean_metric(value: Optional[float]) -> Optional[float]:
@@ -629,6 +708,68 @@ def _clean_metric(value: Optional[float]) -> Optional[float]:
     return numeric
 
 
+def _build_metric_entries(data: Dict[str, Optional[float]]) -> List[Dict[str, Any]]:
+    metrics: List[Dict[str, Any]] = []
+    used_keys: Set[str] = set()
+    used_groups: Set[str] = set()
+
+    palette: List[Tuple[int, int, int]] = [
+        config.INSIDE_CHIP_BLUE,
+        config.INSIDE_CHIP_AMBER,
+        config.INSIDE_CHIP_PURPLE,
+        _mix_color(config.INSIDE_CHIP_BLUE, config.INSIDE_CHIP_AMBER, 0.45),
+        _mix_color(config.INSIDE_CHIP_PURPLE, config.INSIDE_CHIP_BLUE, 0.4),
+        _mix_color(config.INSIDE_CHIP_PURPLE, config.INSIDE_COL_BG, 0.35),
+    ]
+
+    Spec = Tuple[str, str, Callable[[float], str], Tuple[int, int, int], Optional[str]]
+    known_specs: Sequence[Spec] = (
+        ("humidity", "Humidity", lambda v: f"{v:.1f}%", config.INSIDE_CHIP_BLUE, "humidity"),
+        ("dew_point_f", "Dew Point", lambda v: f"{v:.1f}°F", config.INSIDE_CHIP_BLUE, "dew_point"),
+        ("dew_point_c", "Dew Point", lambda v: f"{v:.1f}°C", config.INSIDE_CHIP_BLUE, "dew_point"),
+        ("pressure_inhg", "Pressure", lambda v: f"{v:.2f} inHg", config.INSIDE_CHIP_AMBER, "pressure"),
+        ("pressure_hpa", "Pressure", lambda v: f"{v:.1f} hPa", config.INSIDE_CHIP_AMBER, "pressure"),
+        ("pressure_pa", "Pressure", lambda v: f"{v:.0f} Pa", config.INSIDE_CHIP_AMBER, "pressure"),
+        ("voc_ohms", "VOC", format_voc_ohms, config.INSIDE_CHIP_PURPLE, "voc"),
+        ("voc_index", "VOC Index", lambda v: f"{v:.0f}", config.INSIDE_CHIP_PURPLE, "voc"),
+        ("iaq", "IAQ", lambda v: f"{v:.0f}", config.INSIDE_CHIP_PURPLE, "iaq"),
+        ("co2_ppm", "CO₂", lambda v: f"{v:.0f} ppm", _mix_color(config.INSIDE_CHIP_BLUE, config.INSIDE_CHIP_AMBER, 0.35), "co2"),
+    )
+
+    for key, label, formatter, color, group in known_specs:
+        if group and group in used_groups:
+            continue
+        value = _clean_metric(data.get(key))
+        if value is None:
+            continue
+        metrics.append(dict(label=label, value=formatter(value), color=color))
+        used_keys.add(key)
+        if group:
+            used_groups.add(group)
+
+    skip_keys = {"temp", "temperature"}
+    extra_palette_index = 0
+    for key in sorted(data.keys()):
+        if key in used_keys or key == "temp_f":
+            continue
+        if any(key.lower().startswith(prefix) for prefix in skip_keys):
+            continue
+        value = _clean_metric(data.get(key))
+        if value is None:
+            continue
+        color = palette[(len(metrics) + extra_palette_index) % len(palette)]
+        extra_palette_index += 1
+        metrics.append(
+            dict(
+                label=_prettify_metric_label(key),
+                value=_format_generic_metric_value(key, value),
+                color=color,
+            )
+        )
+
+    return metrics
+
+
 def draw_inside(display, transition: bool=False):
     provider, read_fn = _probe_sensor()
     if not read_fn:
@@ -637,10 +778,13 @@ def draw_inside(display, transition: bool=False):
 
     try:
         data = read_fn()
-        temp_f = _clean_metric(data.get("temp_f"))
-        hum = _clean_metric(data.get("humidity"))
-        pres = _clean_metric(data.get("pressure_inhg"))
-        voc = _clean_metric(data.get("voc_ohms"))
+        cleaned: Dict[str, Optional[float]] = {}
+        if isinstance(data, dict):
+            cleaned = {key: _clean_metric(value) for key, value in data.items()}
+        else:
+            logging.debug("draw_inside: unexpected data payload type %s", type(data))
+            cleaned = {}
+        temp_f = cleaned.get("temp_f")
     except Exception as e:
         logging.warning(f"draw_inside: sensor read failed: {e}")
         return None
@@ -648,6 +792,8 @@ def draw_inside(display, transition: bool=False):
     if temp_f is None:
         logging.warning("draw_inside: temperature missing from sensor data")
         return None
+
+    metrics = _build_metric_entries(cleaned)
 
     # Title text
     title = "Inside"
@@ -718,26 +864,26 @@ def draw_inside(display, transition: bool=False):
     temp_value = f"{temp_f:.1f}°F"
     descriptor = _describe_temperature(temp_f)
 
-    metrics = []
-    if hum is not None:
-        metrics.append(dict(label="Humidity", value=f"{hum:.1f}%", color=config.INSIDE_CHIP_BLUE))
-    if pres is not None:
-        metrics.append(dict(label="Pressure", value=f"{pres:.2f} inHg", color=config.INSIDE_CHIP_AMBER))
-    if voc is not None:
-        metrics.append(dict(label="VOC", value=format_voc_ohms(voc), color=config.INSIDE_CHIP_PURPLE))
-
     content_top = title_block_h + 12
     bottom_margin = 12
     side_pad = 12
     content_bottom = H - bottom_margin
     content_height = max(1, content_bottom - content_top)
 
-    if metrics:
-        temp_ratio = 0.58
-        min_temp = 112 if len(metrics) == 1 else 96
+    metric_count = len(metrics)
+    if metric_count:
+        if metric_count <= 2:
+            temp_ratio = 0.56
+            min_temp = 104
+        elif metric_count <= 3:
+            temp_ratio = 0.52
+            min_temp = 96
+        else:
+            temp_ratio = 0.48
+            min_temp = 90
     else:
-        temp_ratio = 0.88
-        min_temp = 120
+        temp_ratio = 0.86
+        min_temp = 118
 
     temp_height = min(content_height, max(min_temp, int(content_height * temp_ratio)))
     temp_rect = (
