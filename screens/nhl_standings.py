@@ -177,7 +177,7 @@ def _build_column_layout(max_team_name_width: int) -> tuple[dict[str, int], int]
     return layout, team_name_width
 
 COLUMN_HEADERS = [
-    ("TEAM", "team", "left"),
+    ("", "team", "left"),
     ("W", "wins", "right"),
     ("L", "losses", "right"),
     ("O", "ot", "right"),
