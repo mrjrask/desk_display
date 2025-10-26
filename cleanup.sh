@@ -22,23 +22,45 @@ ARCHIVE_DEFAULT_FOLDER="Screens"
 timestamp="$(date +%Y%m%d_%H%M%S)"
 day="${timestamp%_*}"
 batch="${timestamp#*_}"
-target_dir="${ARCHIVE_DATED_DIR}/${ARCHIVE_DEFAULT_FOLDER}/${day}/cleanup_${batch}"
 
-shopt -s nullglob
-left_png=( "${SCREENSHOTS_DIR}"/*.png "${SCREENSHOTS_DIR}"/*.jpg "${SCREENSHOTS_DIR}"/*.jpeg )
-left_vid=( "${SCREENSHOTS_DIR}"/*.mp4 "${SCREENSHOTS_DIR}"/*.avi )
-shopt -u nullglob
+declare -a leftover_files=()
+if [[ -d "${SCREENSHOTS_DIR}" ]]; then
+  while IFS= read -r -d $'\0' file; do
+    leftover_files+=("$file")
+  done < <(
+    find "${SCREENSHOTS_DIR}" -type f \
+      \( -iname '*.png' -o -iname '*.jpg' -o -iname '*.jpeg' \
+         -o -iname '*.mp4' -o -iname '*.avi' \) -print0 | sort -z
+  )
+fi
 
-if (( ${#left_png[@]} + ${#left_vid[@]} > 0 )); then
-  echo "    → Archiving leftover screenshots/videos to ${target_dir}…"
-  mkdir -p "${target_dir}"
-  # Move images first (primary “screenshots”), then any videos if present
-  for f in "${left_png[@]}"; do
-    mv -f "$f" "${target_dir}/"
+if (( ${#leftover_files[@]} > 0 )); then
+  echo "    → Archiving leftover screenshots/videos to screenshot_archive/dated_folders/<screen>/${day}/cleanup_${batch}…"
+  for src in "${leftover_files[@]}"; do
+    rel_path="${src#${SCREENSHOTS_DIR}/}"
+    screen_folder="${ARCHIVE_DEFAULT_FOLDER}"
+    remainder="${rel_path}"
+
+    if [[ "${rel_path}" != "${src}" ]]; then
+      IFS='/' read -r first rest <<< "${rel_path}"
+      if [[ -n "${rest}" ]]; then
+        screen_folder="${first}"
+        remainder="${rest}"
+      else
+        remainder="${first}"
+      fi
+    else
+      remainder="$(basename "${src}")"
+    fi
+
+    dest_dir="${ARCHIVE_DATED_DIR}/${screen_folder}/${day}/cleanup_${batch}"
+    dest="${dest_dir}/${remainder}"
+    mkdir -p "$(dirname "${dest}")"
+    mv -f "${src}" "${dest}"
   done
-  for f in "${left_vid[@]}"; do
-    mv -f "$f" "${target_dir}/"
-  done
+  if [[ -d "${SCREENSHOTS_DIR}" ]]; then
+    find "${SCREENSHOTS_DIR}" -type d -empty -delete
+  fi
 else
   echo "    → No leftover screenshots/videos to archive."
 fi
