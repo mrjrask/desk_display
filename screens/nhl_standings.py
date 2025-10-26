@@ -61,6 +61,8 @@ COLUMN_FONT = clone_font(FONT_STATUS, 24)
 _COLUMN_POINTS_SIZE = max(8, getattr(COLUMN_FONT, "size", 24) - 6)
 COLUMN_FONT_POINTS = clone_font(COLUMN_FONT, _COLUMN_POINTS_SIZE)
 ROW_FONT = clone_font(FONT_STATUS, 28)
+_TEAM_NAME_FONT_SIZE = max(8, getattr(ROW_FONT, "size", 28) - 3)
+TEAM_NAME_FONT = clone_font(ROW_FONT, _TEAM_NAME_FONT_SIZE)
 
 OVERVIEW_TITLE = "NHL Overview"
 OVERVIEW_DIVISIONS = [
@@ -216,11 +218,11 @@ def _conference_column_layout(
             team_label = _coerce_text(team.get("name")) or team.get("abbr", "")
             if team_label:
                 max_team_name_width = max(
-                    max_team_name_width, _text_size(team_label, ROW_FONT)[0]
+                    max_team_name_width, _text_size(team_label, TEAM_NAME_FONT)[0]
                 )
 
     if max_team_name_width <= 0:
-        max_team_name_width = _text_size("Team", ROW_FONT)[0]
+        max_team_name_width = _text_size("Team", TEAM_NAME_FONT)[0]
 
     return _build_column_layout(max_team_name_width)
 
@@ -827,12 +829,12 @@ def _draw_division(
             img.paste(logo, (LEFT_MARGIN, logo_y), logo)
         team_label = _coerce_text(team.get("name")) or abbr
         team_label = _truncate_text_to_width(
-            team_label, ROW_FONT, team_name_max_width
+            team_label, TEAM_NAME_FONT, team_name_max_width
         )
         _draw_text(
             draw,
             team_label,
-            ROW_FONT,
+            TEAM_NAME_FONT,
             column_layout.get("team", LEFT_MARGIN + LOGO_HEIGHT + TEAM_COLUMN_GAP),
             row_top,
             ROW_HEIGHT,
