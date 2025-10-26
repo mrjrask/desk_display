@@ -24,7 +24,9 @@ from utils import (
     get_team_display_name,
     wrap_text,
     get_mlb_abbreviation,
-    log_call
+    log_call,
+    load_team_logo,
+    standard_next_game_logo_height,
 )
 
 # ── Paths ────────────────────────────────────────────────────────────────────
@@ -468,20 +470,26 @@ def draw_sports_screen(display, game, title, transition=False):
         y_text += lh + 1
 
     # logos + “@” inline
-    def load_logo_for_tm(tm):
-        ab   = get_mlb_abbreviation(get_team_display_name(tm))
-        path = os.path.join(MLB_LOGOS_DIR, f"{ab}.png")
-        try:
-            logo = Image.open(path).convert("RGBA")
-            h0   = 32
-            w0, h1 = logo.size
-            ratio  = h0 / h1
-            return logo.resize((int(w0*ratio), h0), Image.ANTIALIAS)
-        except Exception:
+    def load_logo_for_tm(tm, height: int):
+        ab = get_mlb_abbreviation(get_team_display_name(tm)).upper()
+        if not ab or height <= 0:
             return None
+        return load_team_logo(MLB_LOGOS_DIR, ab, height=height)
 
-    logo_away = load_logo_for_tm(away_tm)
-    logo_home = load_logo_for_tm(home_tm)
+    # Desired logo height mirrors the Hawks "Next Game" layout for consistency.
+    desired_logo_h = standard_next_game_logo_height(HEIGHT)
+
+    raw_date = game.get('officialDate','') or game.get('gameDate','')[:10]
+    raw_time = game.get('startTimeCentral','TBD')
+    bottom   = _format_game_label(raw_date, raw_time)
+    bl_w, bl_h = draw.textsize(bottom, font=FONT_DATE_SPORTS)
+    bottom_y   = HEIGHT - bl_h - BOTTOM_MARGIN
+
+    available_h = max(10, bottom_y - (y_text + 2))
+    logo_h = min(desired_logo_h, available_h)
+
+    logo_away = load_logo_for_tm(away_tm, logo_h)
+    logo_home = load_logo_for_tm(home_tm, logo_h)
 
     elems = []
     if logo_away: elems.append(("img", logo_away))
@@ -496,26 +504,19 @@ def draw_sports_screen(display, game, title, transition=False):
     total_el_w = sum(widths_el) + spacing*(len(widths_el)-1)
     x0 = (WIDTH - total_el_w)//2
 
-    raw_date = game.get('officialDate','') or game.get('gameDate','')[:10]
-    raw_time = game.get('startTimeCentral','TBD')
-    bottom   = _format_game_label(raw_date, raw_time)
-    bl_w, bl_h = draw.textsize(bottom, font=FONT_DATE_SPORTS)
-    bottom_y   = HEIGHT - bl_h - BOTTOM_MARGIN
-
-    block_h = max(
-        (obj.height if tp=="img" else draw.textsize(obj, font=FONT_TEAM_SPORTS)[1])
-        for tp,obj in elems
-    )
-    logo_y = y_text + ((bottom_y - y_text) - block_h)//2
+    block_h = logo_h if elems else draw.textsize("@", font=FONT_TEAM_SPORTS)[1]
+    centered_top = (HEIGHT - block_h) // 2
+    row_y = max(y_text + 1, min(centered_top, bottom_y - block_h - 1))
 
     x = x0
     for tp, obj in elems:
         if tp=="img":
-            img.paste(obj, (x, logo_y), obj)
+            paste_y = row_y + (block_h - obj.height)//2
+            img.paste(obj, (x, paste_y), obj)
             x += obj.width + spacing
         else:
             w_t, h_t = draw.textsize(obj, font=FONT_TEAM_SPORTS)
-            y_o = logo_y + (block_h - h_t)//2
+            y_o = row_y + (block_h - h_t)//2
             draw.text((x, y_o), obj, font=FONT_TEAM_SPORTS, fill=(255,255,255))
             x += w_t + spacing
 
