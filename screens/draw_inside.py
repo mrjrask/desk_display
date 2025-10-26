@@ -508,6 +508,32 @@ def _draw_temperature_panel(
     desc_w, desc_h = measure_text(draw, descriptor, desc_font)
     desc_pos = (x0 + (width - desc_w) // 2, y1 - desc_h - max(14, height // 12))
 
+    # Ensure consistent vertical spacing between the label, value, and descriptor
+    min_gap = max(12, height // 16)
+    bottom_margin = max(6, height // 18)
+    label_bottom = label_pos[1] + label_h
+
+    def _position_temperature(gap: int) -> Tuple[int, int]:
+        min_temp_y = label_bottom + gap
+        max_temp_y = y1 - bottom_margin - desc_h - gap - temp_h
+        if max_temp_y < min_temp_y:
+            max_temp_y = min_temp_y
+        temp_y = max(temp_pos[1], min_temp_y)
+        temp_y = min(temp_y, max_temp_y)
+        return temp_y, temp_y + temp_h
+
+    gap = min_gap
+    temp_y, temp_bottom = _position_temperature(gap)
+    while gap > 4 and temp_bottom + gap > y1 - desc_h:
+        gap -= 2
+        temp_y, temp_bottom = _position_temperature(gap)
+
+    temp_pos = (temp_pos[0], temp_y)
+    desc_base = y1 - bottom_margin - desc_h
+    desc_y = max(temp_bottom + gap, desc_base)
+    desc_y = min(desc_y, y1 - desc_h)
+    desc_pos = (desc_pos[0], desc_y)
+
     label_color = _mix_color(start, (0, 0, 0), 0.65)
     temp_color = config.INSIDE_COL_TEXT
     desc_color = _mix_color(start, (0, 0, 0), 0.45)
@@ -516,7 +542,8 @@ def _draw_temperature_panel(
     draw.text(temp_pos, temp_text, font=temp_font, fill=temp_color)
     draw.text(desc_pos, descriptor, font=desc_font, fill=desc_color)
 
-    accent_y = desc_pos[1] - 8
+    accent_gap = max(6, gap // 2)
+    accent_y = desc_pos[1] - accent_gap
     accent_start = x0 + 18
     accent_end = x1 - 18
     if accent_end > accent_start and accent_y > y0 + label_h + 8:
