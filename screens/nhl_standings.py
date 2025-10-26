@@ -44,6 +44,10 @@ LEFT_MARGIN = 4
 RIGHT_MARGIN = 6
 TEAM_COLUMN_GAP = 6
 TEAM_NAME_MIN_WIDTH = 150
+STATS_FIRST_COLUMN_GAP = 24
+STATS_COLUMN_MIN_STEP = 36
+STATS_COLUMN_MAX_STEP = 68
+STATS_COLUMN_SHIFT_LIMIT = 96
 ROW_PADDING = 2
 ROW_SPACING = 2
 SECTION_GAP = 10
@@ -60,8 +64,6 @@ COLUMN_FONT = clone_font(FONT_STATUS, 24)
 _COLUMN_POINTS_SIZE = max(8, getattr(COLUMN_FONT, "size", 24) - 6)
 COLUMN_FONT_POINTS = clone_font(COLUMN_FONT, _COLUMN_POINTS_SIZE)
 ROW_FONT = clone_font(FONT_STATUS, 28)
-_ROW_POINTS_SIZE = max(8, getattr(ROW_FONT, "size", 28) - 6)
-ROW_FONT_POINTS = clone_font(ROW_FONT, _ROW_POINTS_SIZE)
 
 OVERVIEW_TITLE = "NHL Overview"
 OVERVIEW_DIVISIONS = [
@@ -141,17 +143,45 @@ TEAM_NICKNAMES = {
 
 def _build_column_layout() -> dict[str, int]:
     team_x = LEFT_MARGIN + LOGO_HEIGHT + TEAM_COLUMN_GAP
-    stats_left_candidate = max(team_x + TEAM_NAME_MIN_WIDTH, int(round(WIDTH * 0.6)))
     stats_right = WIDTH - RIGHT_MARGIN
-    if stats_left_candidate > stats_right - 40:
-        stats_left = max(team_x + 80, stats_right - 120)
-    else:
-        stats_left = stats_left_candidate
-    stats_width = max(80, stats_right - stats_left)
+    base_first = team_x + TEAM_NAME_MIN_WIDTH + STATS_FIRST_COLUMN_GAP
+    first_column = max(team_x, min(stats_right, base_first))
+
     layout = {"team": team_x}
+    if not STATS_COLUMNS:
+        return layout
+
+    column_count = len(STATS_COLUMNS)
+    if column_count == 1:
+        layout[STATS_COLUMNS[0]] = first_column
+        return layout
+
+    available_space = max(0, stats_right - first_column)
+    step = STATS_COLUMN_MIN_STEP
+    if available_space > 0:
+        step = max(
+            STATS_COLUMN_MIN_STEP,
+            min(STATS_COLUMN_MAX_STEP, available_space // (column_count - 1)),
+        )
+
+    last_column = first_column + step * (column_count - 1)
+    if last_column > stats_right:
+        fit_step = max(
+            1,
+            max(0, stats_right - team_x) // max(1, column_count - 1),
+        )
+        step = min(STATS_COLUMN_MAX_STEP, fit_step)
+        first_column = max(team_x, stats_right - step * (column_count - 1))
+        last_column = first_column + step * (column_count - 1)
+
+    remaining = stats_right - last_column
+    if remaining > 0:
+        shift = min(int(remaining // 2), STATS_COLUMN_SHIFT_LIMIT)
+        first_column += shift
+        last_column += shift
+
     for idx, key in enumerate(STATS_COLUMNS):
-        frac = (idx + 1) / len(STATS_COLUMNS)
-        layout[key] = int(round(stats_left + stats_width * frac))
+        layout[key] = first_column + step * idx
     return layout
 
 
@@ -785,7 +815,7 @@ def _draw_division(img: Image.Image, draw: ImageDraw.ImageDraw, top: int, title:
         _draw_text(draw, str(team.get("wins", "")), ROW_FONT, COLUMN_LAYOUT["wins"], row_top, ROW_HEIGHT, "right")
         _draw_text(draw, str(team.get("losses", "")), ROW_FONT, COLUMN_LAYOUT["losses"], row_top, ROW_HEIGHT, "right")
         _draw_text(draw, str(team.get("ot", "")), ROW_FONT, COLUMN_LAYOUT["ot"], row_top, ROW_HEIGHT, "right")
-        _draw_text(draw, str(team.get("points", "")), ROW_FONT_POINTS, COLUMN_LAYOUT["points"], row_top, ROW_HEIGHT, "right")
+        _draw_text(draw, str(team.get("points", "")), ROW_FONT, COLUMN_LAYOUT["points"], row_top, ROW_HEIGHT, "right")
         y += ROW_HEIGHT + ROW_SPACING
 
     y -= ROW_SPACING
