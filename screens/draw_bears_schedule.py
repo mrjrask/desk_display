@@ -16,17 +16,14 @@ import os
 from PIL import Image, ImageDraw
 import config
 from config import BEARS_BOTTOM_MARGIN, BEARS_SCHEDULE, NFL_TEAM_ABBREVIATIONS
-from utils import load_team_logo, next_game_from_schedule, wrap_text
+from utils import (
+    load_team_logo,
+    next_game_from_schedule,
+    standard_next_game_logo_height,
+    wrap_text,
+)
 
 NFL_LOGO_DIR = os.path.join(config.IMAGES_DIR, "nfl")
-def _desired_logo_height(height: int) -> int:
-    """Mirror the Hawks schedule sizing to keep logos consistent across screens."""
-    if height >= 128:
-        return 150
-    if height >= 96:
-        return 109
-    return 89
-
 def show_bears_next_game(display, transition=False):
     game = next_game_from_schedule(BEARS_SCHEDULE)
     title = "Next for Da Bears:"
@@ -75,7 +72,7 @@ def show_bears_next_game(display, transition=False):
         bw, bh = draw.textsize(bottom, font=config.FONT_DATE_SPORTS)
         bottom_y = config.HEIGHT - bh - BEARS_BOTTOM_MARGIN  # keep on-screen
 
-        desired_logo_h = _desired_logo_height(config.HEIGHT)
+        desired_logo_h = standard_next_game_logo_height(config.HEIGHT)
         available_h = max(10, bottom_y - (y_txt + 2))
         logo_h = min(desired_logo_h, available_h)
 

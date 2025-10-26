@@ -53,6 +53,7 @@ from config import (
     HEIGHT,
 )
 from services.http_client import NHL_HEADERS, get_session, request_json
+from utils import standard_next_game_logo_height
 
 TS_PATH = TIMES_SQUARE_FONT_PATH
 NHL_DIR = NHL_IMAGES_DIR
@@ -854,7 +855,7 @@ def _draw_next_card(display, game: Dict, *, title: str, transition: bool=False, 
     bottom_y      = HEIGHT - (bottom_h + 2) if bottom_text else HEIGHT
 
     # Desired logo height (bigger on 128px; adapt if smaller/other displays)
-    desired_logo_h = 150 if HEIGHT >= 128 else (109 if HEIGHT >= 96 else 89)
+    desired_logo_h = standard_next_game_logo_height(HEIGHT)
 
     # Compute max logo height to fit between the top content and bottom line
     available_h = max(10, bottom_y - (y_top + 2))  # space for logos row
