@@ -510,8 +510,9 @@ def _draw_scoreboard(
     bottom_reserved_px: int = 0,
 ) -> int:
     """Draw 2 rows x 3 cols table. Returns bottom y."""
-    # Column widths for 128px: wider col 1, equal col 2 & 3
-    col1_w = 70  # wider for logo + team abbr
+    # Column widths for 128px: widen col 1 for bigger logos/abbr, remaining split
+    # evenly for score/SOG columns.
+    col1_w = min(82, max(72, int(WIDTH * 0.58)))
     remaining = WIDTH - col1_w
     col2_w = remaining // 2
     col3_w = remaining - col2_w  # equal or off-by-1
@@ -524,28 +525,50 @@ def _draw_scoreboard(
         sog = "SOG"
         sog_x = x2 + (col3_w - _text_w(d, sog, FONT_SMALL)) // 2
         d.text((sog_x, y), sog, font=FONT_SMALL, fill="white")
-        y += _text_h(d, FONT_SMALL)  # immediately below label starts the table
+        y += _text_h(d, FONT_SMALL) + 2  # tiny gap before table border
+
+    table_top = y
 
     # Row heights — compact
-    usable_h = HEIGHT - bottom_reserved_px - y
-    row_h = max(28, usable_h // 2)
-    row_h = min(row_h, 42)
+    usable_h = max(0, HEIGHT - bottom_reserved_px - table_top)
+    row_h = max(usable_h // 2, 32)
+    row_h = min(row_h, 48)
+    if row_h * 2 > usable_h and usable_h > 0:
+        row_h = max(24, usable_h // 2)
+    if row_h <= 0:
+        row_h = 32
 
-    y0 = y
-    y1 = y0 + row_h
-    y2 = min(y1 + row_h, HEIGHT - bottom_reserved_px)
+    y0 = table_top
+    available = max(0, HEIGHT - bottom_reserved_px - table_top)
+    table_height = row_h * 2
+    if available:
+        table_height = min(table_height, available)
+    if table_height < 2:
+        table_height = 2
+    table_bottom = min(table_top + table_height, HEIGHT - bottom_reserved_px)
+    table_height = max(2, table_bottom - table_top)
+    table_bottom = table_top + table_height
+    row1_h = max(1, table_height // 2)
+    row2_h = max(1, table_height - row1_h)
+    split_y = y0 + row1_h
 
     # Grid lines (light)
-    d.line([(x1, y0), (x1, y2)], fill=(70,70,70))
-    d.line([(x2, y0), (x2, y2)], fill=(70,70,70))
-    d.line([(x0, y1), (x3, y1)], fill=(70,70,70))
+    grid_color = (90, 90, 90)
+    d.rectangle([(x0, table_top), (x3 - 1, table_bottom - 1)], outline=grid_color)
+    d.line([(x1, table_top), (x1, table_bottom)], fill=grid_color)
+    d.line([(x2, table_top), (x2, table_bottom)], fill=grid_color)
+    d.line([(x0, split_y), (x3, split_y)], fill=grid_color)
 
-    def _row(y_top: int, tri: str, score: Optional[int], sog: Optional[int]):
-        cy = y_top + row_h // 2
+    def _row(y_top: int, row_height: int, tri: str, score: Optional[int], sog: Optional[int]):
+        cy = y_top + row_height // 2
 
         # Col 1: logo + abbr
-        logo = _load_logo_png(tri, height=41)
-        lx = 3
+        base_logo_height = max(1, row_height - 4)
+        logo_height = min(56, base_logo_height)
+        if row_height >= 38:
+            logo_height = min(56, max(logo_height, min(row_height - 2, 48)))
+        logo = _load_logo_png(tri, height=logo_height)
+        lx = x0 + 6
         tx = lx
         if logo:
             lw, lh = logo.size
@@ -554,9 +577,13 @@ def _draw_scoreboard(
                 img.paste(logo, (lx, ly), logo)
             except Exception:
                 pass
-            tx = lx + lw + 5
+            tx = lx + lw + 6
         abbr = (tri or "").upper() or "—"
         ah = _text_h(d, FONT_ABBR)
+        aw = _text_w(d, abbr, FONT_ABBR)
+        max_tx = x1 - aw - 4
+        tx = min(tx, max_tx)
+        tx = max(tx, x0 + 4)
         d.text((tx, cy - ah//2), abbr, font=FONT_ABBR, fill="white")
 
         # Col 2: score centered
@@ -575,10 +602,10 @@ def _draw_scoreboard(
         gy = cy - gh//2
         d.text((gx, gy), sog_txt, font=FONT_SOG, fill="white")
 
-    _row(y0, away_tri, away_score, away_sog)
-    _row(y1, home_tri, home_score, home_sog)
+    _row(y0, row1_h, away_tri, away_score, away_sog)
+    _row(split_y, row2_h, home_tri, home_score, home_sog)
 
-    return y2  # bottom of table
+    return table_bottom  # bottom of table
 
 
 def _ordinal(n: int) -> str:
