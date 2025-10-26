@@ -4,6 +4,8 @@ import threading
 import time
 import logging
 import subprocess
+from typing import Optional
+
 import requests
 
 CHECK_INTERVAL   = 15    # seconds between checks
@@ -16,6 +18,8 @@ SECONDARY_CHECK_URL = "https://www.google.com"
 wifi_status = "no_wifi"    # one of "no_wifi", "no_internet", "ok"
 current_ssid = None
 _STATE_LOCK = threading.Lock()
+_STOP_EVENT = threading.Event()
+_MONITOR_THREAD: Optional[threading.Thread] = None
 
 
 def _get_wireless_interfaces():
@@ -107,7 +111,7 @@ def _monitor_loop():
     logging.info("🔌 Wi-Fi monitor thread started")
     last = None
 
-    while True:
+    while not _STOP_EVENT.is_set():
         # see if we can reach the Internet
         internet = _check_internet()
         # then try to detect SSID
@@ -133,18 +137,43 @@ def _monitor_loop():
                 logging.info(f"✅ Wi-Fi '{ssid}' and Internet OK.")
             last = state
 
-        time.sleep(CHECK_INTERVAL)
+        if _STOP_EVENT.wait(CHECK_INTERVAL):
+            break
+
+    logging.info("🔌 Wi-Fi monitor thread exiting")
 
 
 def start_monitor():
     """
     Start the background Wi-Fi monitor.
     """
+    global _MONITOR_THREAD
+
+    if _MONITOR_THREAD and _MONITOR_THREAD.is_alive():
+        return
+
+    _STOP_EVENT.clear()
     t = threading.Thread(target=_monitor_loop, daemon=True)
     t.start()
+    _MONITOR_THREAD = t
 
 
 def get_wifi_state():
     """Return a tuple of (wifi_status, current_ssid) while holding the shared lock."""
     with _STATE_LOCK:
         return wifi_status, current_ssid
+
+
+def stop_monitor(timeout: Optional[float] = 5.0) -> None:
+    """Request the Wi-Fi monitor thread to stop and wait for it to exit."""
+
+    global _MONITOR_THREAD
+
+    if not _MONITOR_THREAD:
+        return
+
+    _STOP_EVENT.set()
+    _MONITOR_THREAD.join(timeout)
+    if _MONITOR_THREAD.is_alive():
+        logging.debug("Wi-Fi monitor thread did not exit before timeout.")
+    _MONITOR_THREAD = None

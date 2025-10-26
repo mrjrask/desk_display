@@ -611,6 +611,8 @@ def main_loop():
         if video_out:
             logging.info("🎬 Finalizing video…")
         _release_video_writer()
+        if ENABLE_WIFI_MONITOR:
+            wifi_utils.stop_monitor()
 
 if __name__ == '__main__':
     try:
