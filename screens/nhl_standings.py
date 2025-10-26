@@ -103,6 +103,42 @@ VALID_DIVISIONS = set(DIVISION_ORDER_WEST + DIVISION_ORDER_EAST)
 STATS_COLUMNS = ("wins", "losses", "ot", "points")
 
 
+TEAM_NICKNAMES = {
+    "ANA": "Ducks",
+    "BOS": "Bruins",
+    "BUF": "Sabres",
+    "CGY": "Flames",
+    "CAR": "Hurricanes",
+    "CHI": "Blackhawks",
+    "COL": "Avalanche",
+    "CBJ": "Blue Jackets",
+    "DAL": "Stars",
+    "DET": "Red Wings",
+    "EDM": "Oilers",
+    "FLA": "Panthers",
+    "LAK": "Kings",
+    "MIN": "Wild",
+    "MTL": "Canadiens",
+    "NJD": "Devils",
+    "NSH": "Predators",
+    "NYI": "Islanders",
+    "NYR": "Rangers",
+    "OTT": "Senators",
+    "PHI": "Flyers",
+    "PIT": "Penguins",
+    "SEA": "Kraken",
+    "SJS": "Sharks",
+    "STL": "Blues",
+    "TBL": "Lightning",
+    "TOR": "Maple Leafs",
+    "VAN": "Canucks",
+    "UTA": "Mammoth",
+    "VGK": "Golden Knights",
+    "WSH": "Capitals",
+    "WPG": "Jets",
+}
+
+
 def _build_column_layout() -> dict[str, int]:
     team_x = LEFT_MARGIN + LOGO_HEIGHT + TEAM_COLUMN_GAP
     stats_left_candidate = max(team_x + TEAM_NAME_MIN_WIDTH, int(round(WIDTH * 0.6)))
@@ -215,14 +251,50 @@ def _team_abbreviation(team: dict) -> str:
     return name[:3].upper() if name else ""
 
 
-def _team_display_name(team: dict) -> str:
-    if not isinstance(team, dict):
+def _resolve_team_nickname(text: str, abbr: str) -> str:
+    cleaned = text.strip() if isinstance(text, str) else ""
+    if not cleaned:
         return ""
-    for key in ("teamName", "name", "teamCommonName", "clubName", "nickname"):
+
+    abbr_key = abbr.strip().upper() if isinstance(abbr, str) else ""
+    if not abbr_key:
+        return cleaned
+
+    nickname = TEAM_NICKNAMES.get(abbr_key)
+    if not nickname:
+        return cleaned
+
+    text_fold = cleaned.casefold()
+    nickname_fold = nickname.casefold()
+    if text_fold == nickname_fold or nickname_fold in text_fold:
+        return nickname
+
+    if cleaned.upper() == abbr_key:
+        return nickname
+
+    return ""
+
+
+def _team_display_name(team: dict, abbr: str = "") -> str:
+    if not isinstance(team, dict):
+        nickname = TEAM_NICKNAMES.get(abbr.strip().upper()) if abbr else ""
+        return nickname or ""
+
+    keys = ("teamName", "teamNickname", "nickname", "teamCommonName", "clubName", "name")
+    for key in keys:
         value = team.get(key)
         text = _coerce_text(value)
-        if text:
-            return text
+        if not text:
+            continue
+        resolved = _resolve_team_nickname(text, abbr)
+        if resolved:
+            return resolved
+
+    if abbr:
+        nickname = TEAM_NICKNAMES.get(abbr.strip().upper())
+        if nickname:
+            return nickname
+
     return ""
 
 
@@ -372,7 +444,7 @@ def _fetch_standings_statsapi() -> Optional[dict[str, dict[str, list[dict]]]]:
             parsed.append(
                 {
                     "abbr": abbr,
-                    "name": _team_display_name(team_info) or abbr,
+                    "name": _team_display_name(team_info, abbr) or abbr,
                     "wins": _normalize_int(record_info.get("wins")),
                     "losses": _normalize_int(record_info.get("losses")),
                     "ot": _normalize_int(record_info.get("ot")),
@@ -433,7 +505,7 @@ def _parse_grouped_standings(groups: Iterable[dict]) -> dict[str, dict[str, list
 
             team_entry = {
                 "abbr": abbr,
-                "name": _team_display_name(team_info) or abbr,
+                "name": _team_display_name(team_info, abbr) or abbr,
                 "wins": wins,
                 "losses": losses,
                 "ot": ot,
@@ -494,7 +566,7 @@ def _parse_generic_standings(payload: object) -> dict[str, dict[str, list[dict]]
 
         entry = {
             "abbr": abbr,
-            "name": _team_display_name(team_info) or abbr,
+            "name": _team_display_name(team_info, abbr) or abbr,
             "wins": wins,
             "losses": losses,
             "ot": ot,
