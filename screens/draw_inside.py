@@ -414,14 +414,17 @@ def _draw_tile(
     label_max_h = max(11, int(inner_h * 0.24))
     value_max_h = max(value_min_pt, int(inner_h * 0.54))
 
+    label_base_size = getattr(label_base, "size", 16)
+    value_base_size = getattr(value_base, "size", 16)
+
     lf = fit_font(
         draw,
         label,
         label_base,
         max_width=inner_w,
         max_height=label_max_h,
-        min_pt=8,
-        max_pt=label_max_h + 2,
+        min_pt=min(label_base_size, 8),
+        max_pt=label_base_size,
     )
     vf = fit_font(
         draw,
@@ -429,8 +432,8 @@ def _draw_tile(
         value_base,
         max_width=inner_w,
         max_height=value_max_h,
-        min_pt=value_min_pt,
-        max_pt=value_max_h + 4,
+        min_pt=min(max(value_min_pt, 8), value_base_size),
+        max_pt=value_base_size,
     )
 
     lw, lh = measure_text(draw, label, lf)
@@ -536,45 +539,61 @@ def draw_inside(display, transition: bool=False):
     draw = ImageDraw.Draw(img)
 
     # Fonts (with fallbacks)
-    title_base = getattr(config, "FONT_TITLE_INSIDE", config.FONT_TITLE_SPORTS)
-    temp_base  = getattr(config, "FONT_TIME",        config.FONT_TITLE_SPORTS)
-    label_base = getattr(config, "FONT_INSIDE_LABEL", getattr(config, "FONT_DATE_SPORTS", config.FONT_TITLE_SPORTS))
-    value_base = getattr(config, "FONT_INSIDE_VALUE", getattr(config, "FONT_DATE_SPORTS", config.FONT_TITLE_SPORTS))
+    default_title_font = config.FONT_TITLE_SPORTS
+    title_base = getattr(config, "FONT_TITLE_INSIDE", None)
+    if title_base is None or getattr(title_base, "size", 0) < getattr(default_title_font, "size", 0):
+        title_base = default_title_font
 
-    # --- Title (auto-fit to width, compact height)
-    title_max_h = 12
+    subtitle_base = getattr(config, "FONT_INSIDE_SUBTITLE", None)
+    default_subtitle_font = getattr(config, "FONT_DATE_SPORTS", default_title_font)
+    if subtitle_base is None or getattr(subtitle_base, "size", 0) < getattr(default_subtitle_font, "size", 0):
+        subtitle_base = default_subtitle_font
+
+    temp_base  = getattr(config, "FONT_TIME",        default_title_font)
+    label_base = getattr(config, "FONT_INSIDE_LABEL", getattr(config, "FONT_DATE_SPORTS", default_title_font))
+    value_base = getattr(config, "FONT_INSIDE_VALUE", getattr(config, "FONT_DATE_SPORTS", default_title_font))
+
+    # --- Title (auto-fit to width without shrinking below the standard size)
+    title_side_pad = 8
+    title_base_size = getattr(title_base, "size", 30)
+    title_sample_h = measure_text(draw, "Hg", title_base)[1]
+    title_max_h = max(1, title_sample_h)
     t_font = fit_font(
         draw,
         title,
         title_base,
-        max_width=W - 8,
+        max_width=W - 2 * title_side_pad,
         max_height=title_max_h,
-        min_pt=9,
-        max_pt=title_max_h + 2,
+        min_pt=min(title_base_size, 12),
+        max_pt=title_base_size,
     )
     tw, th = measure_text(draw, title, t_font)
     title_y = 0
     draw.text(((W - tw)//2, title_y), title, font=t_font, fill=config.INSIDE_COL_TITLE)
 
-    subtitle_gap = 4
-    subtitle_max_h = 10
+    subtitle_gap = 6
     if subtitle:
+        subtitle_base_size = getattr(subtitle_base, "size", getattr(default_subtitle_font, "size", 24))
+        subtitle_sample_h = measure_text(draw, "Hg", subtitle_base)[1]
+        subtitle_max_h = max(1, subtitle_sample_h)
         sub_font = fit_font(
             draw,
             subtitle,
-            title_base,
-            max_width=W - 8,
+            subtitle_base,
+            max_width=W - 2 * title_side_pad,
             max_height=subtitle_max_h,
-            min_pt=8,
-            max_pt=subtitle_max_h + 1,
+            min_pt=min(subtitle_base_size, 12),
+            max_pt=subtitle_base_size,
         )
         sw, sh = measure_text(draw, subtitle, sub_font)
-        draw.text(((W - sw)//2, title_y + th + subtitle_gap), subtitle, font=sub_font, fill=config.INSIDE_COL_TITLE)
+        subtitle_y = title_y + th + subtitle_gap
+        draw.text(((W - sw)//2, subtitle_y), subtitle, font=sub_font, fill=config.INSIDE_COL_TITLE)
     else:
         sub_font = t_font
         sw, sh = 0, 0
+        subtitle_y = title_y + th
 
-    title_block_h = th + (subtitle_gap + sh if subtitle else 0)
+    title_block_h = subtitle_y + (sh if subtitle else 0)
 
     # --- Metric tiles -------------------------------------------------------
     temp_bg = tuple(min(255, int(c * 0.8 + 40)) for c in temperature_color(temp_f))
