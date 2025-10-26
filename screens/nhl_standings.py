@@ -43,11 +43,8 @@ LOGO_HEIGHT = 41  # ~10% larger logos for standings rows
 LEFT_MARGIN = 4
 RIGHT_MARGIN = 6
 TEAM_COLUMN_GAP = 6
-TEAM_NAME_MIN_WIDTH = 150
 STATS_FIRST_COLUMN_GAP = 24
 STATS_COLUMN_MIN_STEP = 36
-STATS_COLUMN_MAX_STEP = 68
-STATS_COLUMN_SHIFT_LIMIT = 96
 ROW_PADDING = 2
 ROW_SPACING = 2
 SECTION_GAP = 10
@@ -141,53 +138,43 @@ TEAM_NICKNAMES = {
 }
 
 
-def _build_column_layout() -> dict[str, int]:
+def _build_column_layout(max_team_name_width: int) -> tuple[dict[str, int], int]:
     team_x = LEFT_MARGIN + LOGO_HEIGHT + TEAM_COLUMN_GAP
     stats_right = WIDTH - RIGHT_MARGIN
-    base_first = team_x + TEAM_NAME_MIN_WIDTH + STATS_FIRST_COLUMN_GAP
-    first_column = max(team_x, min(stats_right, base_first))
 
-    layout = {"team": team_x}
+    layout: dict[str, int] = {"team": team_x}
     if not STATS_COLUMNS:
-        return layout
+        return layout, max(0, max_team_name_width)
 
     column_count = len(STATS_COLUMNS)
+    min_spacing = STATS_COLUMN_MIN_STEP * max(0, column_count - 1)
+    max_team_space = max(0, stats_right - team_x - STATS_FIRST_COLUMN_GAP - min_spacing)
+    allowed_team_space = max(0, min(max_team_name_width, max_team_space))
+
+    first_column = min(stats_right, team_x + allowed_team_space + STATS_FIRST_COLUMN_GAP)
+
     if column_count == 1:
-        layout[STATS_COLUMNS[0]] = first_column
-        return layout
+        layout[STATS_COLUMNS[0]] = stats_right
+    else:
+        available_space = max(0.0, stats_right - first_column)
+        step = available_space / (column_count - 1) if column_count > 1 else 0.0
 
-    available_space = max(0, stats_right - first_column)
-    step = STATS_COLUMN_MIN_STEP
-    if available_space > 0:
-        step = max(
-            STATS_COLUMN_MIN_STEP,
-            min(STATS_COLUMN_MAX_STEP, available_space // (column_count - 1)),
-        )
+        positions: list[int] = []
+        for idx in range(column_count):
+            if idx == column_count - 1:
+                pos = stats_right
+            else:
+                pos = first_column + step * idx
+            positions.append(int(round(pos)))
 
-    last_column = first_column + step * (column_count - 1)
-    if last_column > stats_right:
-        fit_step = max(
-            1,
-            max(0, stats_right - team_x) // max(1, column_count - 1),
-        )
-        step = min(STATS_COLUMN_MAX_STEP, fit_step)
-        first_column = max(team_x, stats_right - step * (column_count - 1))
-        last_column = first_column + step * (column_count - 1)
+        for key, pos in zip(STATS_COLUMNS, positions):
+            layout[key] = pos
 
-    remaining = stats_right - last_column
-    if remaining > 0:
-        shift = min(int(remaining // 2), STATS_COLUMN_SHIFT_LIMIT)
-        first_column += shift
-        last_column += shift
-
-    for idx, key in enumerate(STATS_COLUMNS):
-        layout[key] = first_column + step * idx
-    return layout
-
-
-COLUMN_LAYOUT = _build_column_layout()
-STATS_FIRST_COLUMN_X = min(COLUMN_LAYOUT[key] for key in STATS_COLUMNS)
-TEAM_NAME_MAX_WIDTH = max(0, STATS_FIRST_COLUMN_X - TEAM_COLUMN_GAP - COLUMN_LAYOUT["team"])
+    team_name_width = max(
+        0,
+        min(max_team_name_width, first_column - TEAM_COLUMN_GAP - team_x),
+    )
+    return layout, team_name_width
 
 COLUMN_HEADERS = [
     ("TEAM", "team", "left"),
@@ -217,6 +204,25 @@ COLUMN_TEXT_HEIGHT = max(
 )
 COLUMN_ROW_HEIGHT = COLUMN_TEXT_HEIGHT + 2
 DIVISION_TEXT_HEIGHT = _text_size("Metropolitan", DIVISION_FONT)[1]
+
+
+def _conference_column_layout(
+    standings: Dict[str, List[dict]],
+    divisions: Sequence[str],
+) -> tuple[dict[str, int], int]:
+    max_team_name_width = 0
+    for division in divisions:
+        for team in standings.get(division, []):
+            team_label = _coerce_text(team.get("name")) or team.get("abbr", "")
+            if team_label:
+                max_team_name_width = max(
+                    max_team_name_width, _text_size(team_label, ROW_FONT)[0]
+                )
+
+    if max_team_name_width <= 0:
+        max_team_name_width = _text_size("Team", ROW_FONT)[0]
+
+    return _build_column_layout(max_team_name_width)
 
 
 def _load_logo_cached(abbr: str) -> Optional[Image.Image]:
@@ -792,14 +798,24 @@ def _truncate_text_to_width(text: str, font, max_width: int) -> str:
     return (trimmed + ellipsis) if trimmed else ellipsis
 
 
-def _draw_division(img: Image.Image, draw: ImageDraw.ImageDraw, top: int, title: str, teams: Iterable[dict]) -> int:
+def _draw_division(
+    img: Image.Image,
+    draw: ImageDraw.ImageDraw,
+    top: int,
+    title: str,
+    teams: Iterable[dict],
+    column_layout: dict[str, int],
+    team_name_max_width: int,
+) -> int:
     y = top + DIVISION_MARGIN_TOP
     y += _draw_centered_text(draw, title, DIVISION_FONT, y)
     y += DIVISION_HEADER_GAP
     header_top = y
     for label, key, align in COLUMN_HEADERS:
         font = COLUMN_HEADER_FONTS.get(key, COLUMN_FONT)
-        _draw_text(draw, label, font, COLUMN_LAYOUT[key], header_top, COLUMN_ROW_HEIGHT, align)
+        if key not in column_layout:
+            continue
+        _draw_text(draw, label, font, column_layout[key], header_top, COLUMN_ROW_HEIGHT, align)
     y += COLUMN_ROW_HEIGHT + COLUMN_GAP_BELOW
 
     for team in teams:
@@ -810,12 +826,30 @@ def _draw_division(img: Image.Image, draw: ImageDraw.ImageDraw, top: int, title:
             logo_y = row_top + (ROW_HEIGHT - logo.height) // 2
             img.paste(logo, (LEFT_MARGIN, logo_y), logo)
         team_label = _coerce_text(team.get("name")) or abbr
-        team_label = _truncate_text_to_width(team_label, ROW_FONT, TEAM_NAME_MAX_WIDTH)
-        _draw_text(draw, team_label, ROW_FONT, COLUMN_LAYOUT["team"], row_top, ROW_HEIGHT, "left")
-        _draw_text(draw, str(team.get("wins", "")), ROW_FONT, COLUMN_LAYOUT["wins"], row_top, ROW_HEIGHT, "right")
-        _draw_text(draw, str(team.get("losses", "")), ROW_FONT, COLUMN_LAYOUT["losses"], row_top, ROW_HEIGHT, "right")
-        _draw_text(draw, str(team.get("ot", "")), ROW_FONT, COLUMN_LAYOUT["ot"], row_top, ROW_HEIGHT, "right")
-        _draw_text(draw, str(team.get("points", "")), ROW_FONT, COLUMN_LAYOUT["points"], row_top, ROW_HEIGHT, "right")
+        team_label = _truncate_text_to_width(
+            team_label, ROW_FONT, team_name_max_width
+        )
+        _draw_text(
+            draw,
+            team_label,
+            ROW_FONT,
+            column_layout.get("team", LEFT_MARGIN + LOGO_HEIGHT + TEAM_COLUMN_GAP),
+            row_top,
+            ROW_HEIGHT,
+            "left",
+        )
+        for key in STATS_COLUMNS:
+            if key not in column_layout:
+                continue
+            _draw_text(
+                draw,
+                str(team.get(key, "")),
+                ROW_FONT,
+                column_layout[key],
+                row_top,
+                ROW_HEIGHT,
+                "right",
+            )
         y += ROW_HEIGHT + ROW_SPACING
 
     y -= ROW_SPACING
@@ -823,12 +857,20 @@ def _draw_division(img: Image.Image, draw: ImageDraw.ImageDraw, top: int, title:
     return y
 
 
-def _render_conference(title: str, division_order: List[str], standings: Dict[str, List[dict]]) -> Image.Image:
+def _render_conference(
+    title: str, division_order: List[str], standings: Dict[str, List[dict]]
+) -> Image.Image:
+    divisions = [division for division in division_order if standings.get(division)]
+    if not divisions:
+        divisions = division_order
+
+    column_layout, team_name_max_width = _conference_column_layout(standings, divisions)
+
     total_height = TITLE_MARGIN_TOP + _text_size(title, TITLE_FONT)[1] + TITLE_MARGIN_BOTTOM
-    for idx, division in enumerate(division_order):
+    for idx, division in enumerate(divisions):
         team_count = len(standings.get(division, []))
         total_height += _division_section_height(team_count)
-        if idx < len(division_order) - 1:
+        if idx < len(divisions) - 1:
             total_height += SECTION_GAP
     total_height = max(total_height, HEIGHT)
 
@@ -839,12 +881,20 @@ def _render_conference(title: str, division_order: List[str], standings: Dict[st
     y += _draw_centered_text(draw, title, TITLE_FONT, y)
     y += TITLE_MARGIN_BOTTOM
 
-    for idx, division in enumerate(division_order):
+    for idx, division in enumerate(divisions):
         teams = standings.get(division, [])
         if not teams:
             continue
-        y = _draw_division(img, draw, y, f"{division} Division", teams)
-        if idx < len(division_order) - 1:
+        y = _draw_division(
+            img,
+            draw,
+            y,
+            f"{division} Division",
+            teams,
+            column_layout,
+            team_name_max_width,
+        )
+        if idx < len(divisions) - 1:
             y += SECTION_GAP
 
     return img
