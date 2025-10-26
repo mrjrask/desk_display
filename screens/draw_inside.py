@@ -2,11 +2,11 @@
 """
 draw_inside.py (RGB, 320x240)
 
-Universal environmental sensor screen with a compact, modern layout:
+Universal environmental sensor screen with a streamlined layout:
   • Title (detects and names: Adafruit/Pimoroni BME680, BME688, BME280, SHT41)
-  • Metric tiles that auto-fit the screen:
-      Temperature / Humidity / Pressure (inHg) / VOC (only if data available)
-Everything is dynamically sized to fit the configured canvas without clipping.
+  • Highlighted temperature panel with contextual descriptor
+  • Linear stat strip showing humidity / pressure / VOC (if available)
+Everything is dynamically sized to stay legible on the configured canvas.
 """
 
 from __future__ import annotations
@@ -15,7 +15,7 @@ import logging
 import math
 import os
 import sys
-from typing import Any, Callable, Dict, Optional, Set, Tuple
+from typing import Any, Callable, Dict, Optional, Sequence, Set, Tuple
 
 from PIL import Image, ImageDraw
 import config
@@ -389,113 +389,232 @@ def _probe_sensor() -> Tuple[Optional[str], Optional[Callable[[], SensorReadings
     logging.warning("No supported indoor environmental sensor detected.")
     return None, None
 
-# ── Tile drawing (LABEL top-left | VALUE centered) ───────────────────────────
-def _draw_tile(
+# ── Layout helpers ───────────────────────────────────────────────────────────
+def _mix_color(color: Tuple[int, int, int], target: Tuple[int, int, int], factor: float) -> Tuple[int, int, int]:
+    factor = max(0.0, min(1.0, factor))
+    return tuple(int(round(color[idx] * (1 - factor) + target[idx] * factor)) for idx in range(3))
+
+
+def _lighten(color: Tuple[int, int, int], amount: float) -> Tuple[int, int, int]:
+    return _mix_color(color, (255, 255, 255), amount)
+
+
+def _darken(color: Tuple[int, int, int], amount: float) -> Tuple[int, int, int]:
+    return _mix_color(color, (0, 0, 0), amount)
+
+
+def _draw_gradient_panel(
+    img: Image.Image,
+    rect: Tuple[int, int, int, int],
+    start_color: Tuple[int, int, int],
+    end_color: Tuple[int, int, int],
+    radius: int,
+    outline: Optional[Tuple[int, int, int]] = None,
+) -> None:
+    x0, y0, x1, y1 = rect
+    width = max(1, x1 - x0)
+    height = max(1, y1 - y0)
+
+    gradient = Image.new("RGB", (width, height))
+    grad_draw = ImageDraw.Draw(gradient)
+    for y in range(height):
+        blend = y / (height - 1) if height > 1 else 0
+        color = _mix_color(start_color, end_color, blend)
+        grad_draw.line((0, y, width, y), fill=color)
+
+    mask = Image.new("L", (width, height), 0)
+    mask_draw = ImageDraw.Draw(mask)
+    mask_draw.rounded_rectangle((0, 0, width - 1, height - 1), radius=radius, fill=255)
+    img.paste(gradient, (x0, y0), mask)
+
+    if outline is not None:
+        draw = ImageDraw.Draw(img)
+        draw.rounded_rectangle(rect, radius=radius, outline=outline, width=1)
+
+
+def _describe_temperature(temp_f: float) -> str:
+    if temp_f < 60:
+        return "Chilly"
+    if temp_f < 68:
+        return "Cool"
+    if temp_f < 75:
+        return "Comfortable"
+    if temp_f < 82:
+        return "Warm"
+    if temp_f < 90:
+        return "Toasty"
+    return "Hot"
+
+
+def _draw_temperature_panel(
+    img: Image.Image,
     draw: ImageDraw.ImageDraw,
     rect: Tuple[int, int, int, int],
-    bg: Tuple[int, int, int],
+    temp_f: float,
+    temp_text: str,
+    descriptor: str,
+    temp_base,
+    label_base,
+) -> None:
+    x0, y0, x1, y1 = rect
+    color = temperature_color(temp_f)
+    start = _lighten(color, 0.55)
+    end = _darken(color, 0.35)
+    outline = _darken(color, 0.45)
+    radius = max(16, min(28, (y1 - y0) // 3))
+    _draw_gradient_panel(img, rect, start, end, radius=radius, outline=outline)
+
+    width = max(1, x1 - x0)
+    height = max(1, y1 - y0)
+
+    label_base_size = getattr(label_base, "size", 18)
+    label_font = fit_font(
+        draw,
+        "Temperature",
+        label_base,
+        max_width=width - 32,
+        max_height=max(14, int(height * 0.22)),
+        min_pt=min(label_base_size, 10),
+        max_pt=label_base_size,
+    )
+    label_w, label_h = measure_text(draw, "Temperature", label_font)
+    label_pos = (x0 + 18, y0 + 16)
+
+    temp_base_size = getattr(temp_base, "size", 48)
+    temp_font = fit_font(
+        draw,
+        temp_text,
+        temp_base,
+        max_width=width - 40,
+        max_height=max(32, int(height * 0.6)),
+        min_pt=min(temp_base_size, 20),
+        max_pt=temp_base_size,
+    )
+    temp_w, temp_h = measure_text(draw, temp_text, temp_font)
+    temp_pos = (x0 + (width - temp_w) // 2, y0 + max(label_h + 20, (height - temp_h) // 2))
+
+    desc_font = fit_font(
+        draw,
+        descriptor,
+        label_base,
+        max_width=width - 40,
+        max_height=max(12, int(height * 0.22)),
+        min_pt=min(label_base_size, 12),
+        max_pt=label_base_size,
+    )
+    desc_w, desc_h = measure_text(draw, descriptor, desc_font)
+    desc_pos = (x0 + (width - desc_w) // 2, y1 - desc_h - 18)
+
+    label_color = _mix_color(start, (0, 0, 0), 0.65)
+    temp_color = config.INSIDE_COL_TEXT
+    desc_color = _mix_color(start, (0, 0, 0), 0.5)
+
+    draw.text(label_pos, "Temperature", font=label_font, fill=label_color)
+    draw.text(temp_pos, temp_text, font=temp_font, fill=temp_color)
+    draw.text(desc_pos, descriptor, font=desc_font, fill=desc_color)
+
+    accent_y = desc_pos[1] - 10
+    accent_start = x0 + 18
+    accent_end = x1 - 18
+    if accent_end > accent_start and accent_y > y0 + label_h + 10:
+        draw.line((accent_start, accent_y, accent_end, accent_y), fill=_mix_color(start, (255, 255, 255), 0.2), width=1)
+
+
+def _draw_metric_row(
+    draw: ImageDraw.ImageDraw,
+    rect: Tuple[int, int, int, int],
     label: str,
     value: str,
+    accent: Tuple[int, int, int],
     label_base,
     value_base,
-    *,
-    label_color=config.INSIDE_COL_TEXT,
-    value_color=config.INSIDE_COL_TEXT,
-    value_min_pt: int = 12,
-):
+) -> None:
     x0, y0, x1, y1 = rect
-    radius = max(10, min(18, (y1 - y0) // 3))
-    draw.rounded_rectangle(rect, radius=radius, fill=bg, outline=config.INSIDE_COL_STROKE)
+    height = max(1, y1 - y0)
+    radius = max(8, min(16, height // 2))
+    bg = _lighten(accent, 0.75)
+    draw.rounded_rectangle(rect, radius=radius, fill=bg)
 
-    pad_x, pad_y = 8, 6
-    inner_w = max(0, (x1 - x0) - 2 * pad_x)
-    inner_h = max(0, (y1 - y0) - 2 * pad_y)
+    accent_w = 6
+    draw.rectangle((x0, y0, x0 + accent_w, y1), fill=accent)
 
-    label_max_h = max(11, int(inner_h * 0.24))
-    value_max_h = max(value_min_pt, int(inner_h * 0.54))
+    inner_left = x0 + accent_w + 10
+    inner_right = x1 - 12
+    inner_width = max(1, inner_right - inner_left)
 
-    label_base_size = getattr(label_base, "size", 16)
-    value_base_size = getattr(value_base, "size", 16)
+    label_base_size = getattr(label_base, "size", 18)
+    value_base_size = getattr(value_base, "size", 24)
 
-    lf = fit_font(
+    label_font = fit_font(
         draw,
         label,
         label_base,
-        max_width=inner_w,
-        max_height=label_max_h,
-        min_pt=min(label_base_size, 8),
+        max_width=int(inner_width * 0.55),
+        max_height=max(14, int(height * 0.45)),
+        min_pt=min(label_base_size, 10),
         max_pt=label_base_size,
     )
-    vf = fit_font(
+    value_font = fit_font(
         draw,
         value,
         value_base,
-        max_width=inner_w,
-        max_height=value_max_h,
-        min_pt=min(max(value_min_pt, 8), value_base_size),
+        max_width=inner_width,
+        max_height=max(16, int(height * 0.6)),
+        min_pt=min(value_base_size, 12),
         max_pt=value_base_size,
     )
 
-    lw, lh = measure_text(draw, label, lf)
-    vw, vh = measure_text(draw, value, vf)
+    lw, lh = measure_text(draw, label, label_font)
+    vw, vh = measure_text(draw, value, value_font)
 
-    # Clamp label/value positions so their rendered text never leaves the tile.
-    label_x = x0 + pad_x
-    label_y = y0 + pad_y
-    label_x = max(x0 + pad_x, min(x1 - pad_x - lw, label_x))
-    label_y = max(y0 + pad_y, min(y1 - pad_y - lh, label_y))
+    label_x = inner_left
+    label_y = y0 + (height - lh) // 2
+    value_x = inner_right - vw
+    value_y = y0 + (height - vh) // 2
 
-    value_x = x0 + ((x1 - x0) - vw) // 2
-    value_y = y1 - pad_y - vh
-    value_x = max(x0 + pad_x, min(x1 - pad_x - vw, value_x))
-    value_y = max(y0 + pad_y, min(y1 - pad_y - vh, value_y))
+    midpoint = y0 + height // 2
+    line_start = label_x + lw + 8
+    line_end = value_x - 10
+    if line_end > line_start:
+        draw.line((line_start, midpoint, line_end, midpoint), fill=_mix_color(accent, (255, 255, 255), 0.6), width=1)
 
-    draw.text((label_x, label_y), label, font=lf, fill=label_color)
-    draw.text((value_x, value_y), value, font=vf, fill=value_color)
+    label_color = _mix_color(accent, (0, 0, 0), 0.5)
+    value_color = config.INSIDE_COL_TEXT
+
+    draw.text((label_x, label_y), label, font=label_font, fill=label_color)
+    draw.text((value_x, value_y), value, font=value_font, fill=value_color)
 
 
-def _layout_metric_grid(
-    area_rect: Tuple[int, int, int, int],
-    count: int,
-    gap: int,
-) -> Tuple[Tuple[int, int, int, int], ...]:
-    """Return tile rectangles laid out in a responsive grid."""
-
-    if count <= 0:
-        return tuple()
-
-    x0, y0, x1, y1 = area_rect
-    width = max(0, x1 - x0)
+def _draw_metric_rows(
+    draw: ImageDraw.ImageDraw,
+    rect: Tuple[int, int, int, int],
+    metrics: Sequence[Dict[str, Any]],
+    label_base,
+    value_base,
+) -> None:
+    x0, y0, x1, y1 = rect
     height = max(0, y1 - y0)
+    count = len(metrics)
+    if count <= 0 or height <= 0:
+        return
 
-    if count == 1:
-        cols = 1
-    elif count == 2:
-        cols = 2
-    elif count == 3:
-        cols = 3
-    else:
-        cols = 2
+    gap = 6
+    total_gap = gap * (count - 1)
+    row_h = max(38, (height - total_gap) // count)
 
-    rows = max(1, math.ceil(count / cols))
-
-    tile_w = max(60, (width - (cols - 1) * gap) // cols) if cols else width
-    tile_h = max(42, (height - (rows - 1) * gap) // rows) if rows else height
-
-    total_w = cols * tile_w + (cols - 1) * gap
-    total_h = rows * tile_h + (rows - 1) * gap
-
-    offset_x = x0 + max(0, (width - total_w) // 2)
-    offset_y = y0 + max(0, (height - total_h) // 2)
-
-    rects = []
-    for idx in range(count):
-        row = idx // cols
-        col = idx % cols
-        left = offset_x + col * (tile_w + gap)
-        top = offset_y + row * (tile_h + gap)
-        rects.append((left, top, left + tile_w, top + tile_h))
-    return tuple(rects)
+    top = y0
+    for metric in metrics:
+        bottom = min(y1, top + row_h)
+        _draw_metric_row(
+            draw,
+            (x0, top, x1, bottom),
+            metric["label"],
+            metric["value"],
+            metric["color"],
+            label_base,
+            value_base,
+        )
+        top = bottom + gap
 
 # ── Main render ──────────────────────────────────────────────────────────────
 def _clean_metric(value: Optional[float]) -> Optional[float]:
@@ -595,110 +714,58 @@ def draw_inside(display, transition: bool=False):
 
     title_block_h = subtitle_y + (sh if subtitle else 0)
 
-    # --- Metric tiles -------------------------------------------------------
-    temp_bg = tuple(min(255, int(c * 0.8 + 40)) for c in temperature_color(temp_f))
-    temperature_card = dict(
-        label="Temperature",
-        value=f"{temp_f:.1f}°F",
-        bg=temp_bg,
-        value_min_pt=22,
-    )
+    # --- Temperature panel --------------------------------------------------
+    temp_value = f"{temp_f:.1f}°F"
+    descriptor = _describe_temperature(temp_f)
 
-    metric_cards = []
+    metrics = []
     if hum is not None:
-        metric_cards.append(
-            dict(
-                label="Humidity",
-                value=f"{hum:.1f}%",
-                bg=config.INSIDE_CHIP_BLUE,
-            )
-        )
+        metrics.append(dict(label="Humidity", value=f"{hum:.1f}%", color=config.INSIDE_CHIP_BLUE))
     if pres is not None:
-        metric_cards.append(
-            dict(
-                label="Pressure",
-                value=f"{pres:.2f} inHg",
-                bg=config.INSIDE_CHIP_AMBER,
-            )
-        )
+        metrics.append(dict(label="Pressure", value=f"{pres:.2f} inHg", color=config.INSIDE_CHIP_AMBER))
     if voc is not None:
-        metric_cards.append(
-            dict(
-                label="VOC",
-                value=format_voc_ohms(voc),
-                bg=config.INSIDE_CHIP_PURPLE,
-            )
-        )
+        metrics.append(dict(label="VOC", value=format_voc_ohms(voc), color=config.INSIDE_CHIP_PURPLE))
 
-    tiles_top = title_block_h + 8
-    bottom_margin = 10
-    tiles_gap = 6
-    side_pad = 8
+    content_top = title_block_h + 12
+    bottom_margin = 12
+    side_pad = 12
+    content_bottom = H - bottom_margin
+    content_height = max(1, content_bottom - content_top)
 
-    content_rect = (side_pad, tiles_top, W - side_pad, H - bottom_margin)
-    content_height = max(1, content_rect[3] - content_rect[1])
-
-    if metric_cards:
-        temp_ratio = 0.48 if len(metric_cards) > 1 else 0.56
-        min_temp = 68
+    if metrics:
+        temp_ratio = 0.58
+        min_temp = 112 if len(metrics) == 1 else 96
     else:
-        temp_ratio = 0.8
-        min_temp = 96
+        temp_ratio = 0.88
+        min_temp = 120
 
-    temp_tile_h = min(content_height, max(min_temp, int(content_height * temp_ratio)))
-
-    if metric_cards:
-        metrics_min_height = 58 if len(metric_cards) == 1 else 92
-        available_for_metrics = max(0, content_height - temp_tile_h - tiles_gap)
-        if available_for_metrics < metrics_min_height:
-            reclaim = min(temp_tile_h - 60, metrics_min_height - available_for_metrics)
-            if reclaim > 0:
-                temp_tile_h -= reclaim
+    temp_height = min(content_height, max(min_temp, int(content_height * temp_ratio)))
     temp_rect = (
-        content_rect[0],
-        content_rect[1],
-        content_rect[2],
-        content_rect[1] + temp_tile_h,
+        side_pad,
+        content_top,
+        W - side_pad,
+        min(content_bottom, content_top + temp_height),
     )
 
-    _draw_tile(
+    _draw_temperature_panel(
+        img,
         draw,
         temp_rect,
-        temperature_card["bg"],
-        temperature_card["label"],
-        temperature_card["value"],
-        label_base,
+        temp_f,
+        temp_value,
+        descriptor,
         temp_base,
-        value_min_pt=temperature_card["value_min_pt"],
+        label_base,
     )
 
-    if metric_cards:
-        metrics_gap = tiles_gap
-        metrics_top = min(content_rect[3], temp_rect[3] + metrics_gap)
-        metrics_area = (
-            content_rect[0],
-            metrics_top,
-            content_rect[2],
-            content_rect[3],
+    if metrics:
+        metrics_rect = (
+            side_pad,
+            min(content_bottom, temp_rect[3] + 12),
+            W - side_pad,
+            content_bottom,
         )
-
-        rects = _layout_metric_grid(
-            metrics_area,
-            len(metric_cards),
-            metrics_gap,
-        )
-
-        for rect, card in zip(rects, metric_cards):
-            _draw_tile(
-                draw,
-                rect,
-                card["bg"],
-                card["label"],
-                card["value"],
-                label_base,
-                value_base,
-                value_min_pt=card.get("value_min_pt", 12),
-            )
+        _draw_metric_rows(draw, metrics_rect, metrics, label_base, value_base)
 
     if transition:
         return img
