@@ -2,6 +2,7 @@
 """Render every available screen to PNG and archive them into a dated ZIP."""
 from __future__ import annotations
 
+import argparse
 import datetime as _dt
 import io
 import logging
@@ -248,7 +249,10 @@ def _suppress_animation_delay():
 
 
 def render_all_screens(
-    *, sync_screenshots: bool = False, create_archive: bool = True
+    *,
+    sync_screenshots: bool = False,
+    create_archive: bool = True,
+    ignore_schedule: bool = False,
 ) -> int:
     logging.basicConfig(
         level=logging.INFO,
@@ -265,10 +269,16 @@ def render_all_screens(
         logos = build_logo_map()
         cache = build_cache()
 
-        requested_ids, schedule_error = load_requested_screen_ids()
-        if schedule_error:
-            logging.info("Continuing without schedule data (%s)", schedule_error)
-        travel_requested = "travel" in requested_ids if requested_ids else True
+        schedule_error: Optional[str] = None
+        if ignore_schedule:
+            logging.info("Ignoring schedule configuration (requested by flag)")
+            requested_ids: set[str] = set()
+            travel_requested = True
+        else:
+            requested_ids, schedule_error = load_requested_screen_ids()
+            if schedule_error:
+                logging.info("Continuing without schedule data (%s)", schedule_error)
+            travel_requested = "travel" in requested_ids if requested_ids else True
 
         now = _dt.datetime.now(CENTRAL_TIME)
         context = ScreenContext(
@@ -330,5 +340,37 @@ def render_all_screens(
     return 0
 
 
+def _build_arg_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "-a",
+        "--all",
+        dest="ignore_schedule",
+        action="store_true",
+        help="Ignore screens_config.json and render every available screen.",
+    )
+    parser.add_argument(
+        "--sync-screenshots",
+        action="store_true",
+        help="Write PNG files for each rendered screen to the screenshots directory.",
+    )
+    parser.add_argument(
+        "--no-archive",
+        action="store_true",
+        help="Skip creating the ZIP archive of rendered screens.",
+    )
+    return parser
+
+
+def main(argv: Optional[list[str]] = None) -> int:
+    parser = _build_arg_parser()
+    args = parser.parse_args(argv)
+    return render_all_screens(
+        sync_screenshots=args.sync_screenshots,
+        create_archive=not args.no_archive,
+        ignore_schedule=args.ignore_schedule,
+    )
+
+
 if __name__ == "__main__":
-    sys.exit(render_all_screens())
+    sys.exit(main())
