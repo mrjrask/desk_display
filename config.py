@@ -211,6 +211,11 @@ SCOREBOARD_BACKGROUND_COLOR = (
     _coerce_color_component("SCOREBOARD_BACKGROUND_B", 100),
 )
 
+# Score colors shared across scoreboard implementations.
+SCOREBOARD_IN_PROGRESS_SCORE_COLOR = (255, 210, 66)
+SCOREBOARD_FINAL_WINNING_SCORE_COLOR = (255, 255, 255)
+SCOREBOARD_FINAL_LOSING_SCORE_COLOR = (200, 200, 200)
+
 # ─── Scoreboard scrolling configuration ───────────────────────────────────────
 SCOREBOARD_SCROLL_STEP         = 1
 SCOREBOARD_SCROLL_DELAY        = 0.005
