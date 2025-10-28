@@ -373,13 +373,6 @@ def _compose_travel_image(times: Dict[str, TravelTimeResult]) -> Image.Image:
     img = Image.new("RGB", (WIDTH, canvas_height), "black")
     draw = ImageDraw.Draw(img)
 
-    draw.text(
-        ((WIDTH - title_width) // 2, 0),
-        TRAVEL_TITLE,
-        font=FONT_TITLE_SPORTS,
-        fill=(255, 255, 255),
-    )
-
     y = title_height + header_gap
     row_left = outer_margin
     row_right = WIDTH - outer_margin
@@ -439,6 +432,13 @@ def _compose_travel_image(times: Dict[str, TravelTimeResult]) -> Image.Image:
             font=FONT_TRAVEL_HEADER,
             fill=(200, 200, 200),
         )
+
+    draw.text(
+        ((WIDTH - title_width) // 2, 0),
+        TRAVEL_TITLE,
+        font=FONT_TITLE_SPORTS,
+        fill=(255, 255, 255),
+    )
 
     return img
 
