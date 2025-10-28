@@ -91,6 +91,7 @@ _requested_screen_ids: Set[str] = set()
 
 _shutdown_event = threading.Event()
 _shutdown_complete = threading.Event()
+_display_cleared = threading.Event()
 
 BUTTON_POLL_INTERVAL = 0.1
 _BUTTON_NAMES = ("A", "B", "X", "Y")
@@ -140,9 +141,38 @@ if ENABLE_WIFI_MONITOR:
     wifi_utils.start_monitor()
 
 
+def _clear_display_immediately(reason: Optional[str] = None) -> None:
+    """Clear the LCD exactly once, as soon as a shutdown is requested."""
+
+    if _display_cleared.is_set():
+        return
+
+    _display_cleared.set()
+    if reason:
+        logging.info("🧹 Clearing display (%s)…", reason)
+
+    try:
+        clear_display(display)
+    except Exception:
+        pass
+
+
+def request_shutdown(reason: str) -> None:
+    """Signal the main loop to exit and blank the screen immediately."""
+
+    if _shutdown_event.is_set():
+        _clear_display_immediately(reason)
+        return
+
+    logging.info("✋ Shutdown requested (%s).", reason)
+    _shutdown_event.set()
+    _clear_display_immediately(reason)
+
+
 def _restart_desk_display_service() -> None:
     """Restart the desk_display systemd service."""
 
+    request_shutdown("service restart")
     try:
         subprocess.run(
             ["sudo", "systemctl", "restart", "desk_display.service"],
@@ -244,10 +274,7 @@ def _finalize_shutdown() -> None:
     if _shutdown_complete.is_set():
         return
 
-    try:
-        clear_display(display)
-    except Exception:
-        pass
+    _clear_display_immediately("final cleanup")
 
     if video_out:
         logging.info("🎬 Finalizing video…")
@@ -377,11 +404,7 @@ def maybe_archive_screenshots():
 # ─── SIGTERM handler ─────────────────────────────────────────────────────────
 def _handle_sigterm(signum, frame):
     logging.info("✋ SIGTERM caught—requesting shutdown…")
-    _shutdown_event.set()
-    try:
-        clear_display(display)
-    except Exception:
-        pass
+    request_shutdown("SIGTERM")
 
 signal.signal(signal.SIGTERM, _handle_sigterm)
 
@@ -646,7 +669,7 @@ if __name__ == '__main__':
         main_loop()
     except KeyboardInterrupt:
         logging.info("✋ CTRL-C caught—requesting shutdown…")
-        _shutdown_event.set()
+        request_shutdown("CTRL-C")
     finally:
         _finalize_shutdown()
 
