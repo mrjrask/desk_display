@@ -502,19 +502,97 @@ def _draw_title_line(
 # ─────────────────────────────────────────────────────────────────────────────
 # Scoreboard (Live/Last) — wider col1, equal col2/col3, SOG label tight
 
+def _draw_dotted_line(
+    d: ImageDraw.ImageDraw,
+    start: Tuple[int, int],
+    end: Tuple[int, int],
+    color,
+    *,
+    dash: int = 3,
+    gap: int = 3,
+):
+    """Draw a dotted (dash-gap) line supporting horizontal/vertical segments."""
+    x0, y0 = start
+    x1, y1 = end
+    if x0 == x1:
+        if y0 > y1:
+            y0, y1 = y1, y0
+        y = y0
+        while y <= y1:
+            segment_end = min(y + dash - 1, y1)
+            d.line([(x0, y), (x1, segment_end)], fill=color)
+            y += dash + gap
+        return
+    if y0 == y1:
+        if x0 > x1:
+            x0, x1 = x1, x0
+        x = x0
+        while x <= x1:
+            segment_end = min(x + dash - 1, x1)
+            d.line([(x, y0), (segment_end, y1)], fill=color)
+            x += dash + gap
+        return
+    d.line([start, end], fill=color)
+
+
+def _draw_dotted_rect(
+    d: ImageDraw.ImageDraw,
+    bbox: Tuple[int, int, int, int],
+    color,
+    *,
+    dash: int = 3,
+    gap: int = 3,
+):
+    """Draw a dotted rectangle border."""
+    left, top, right, bottom = bbox
+    _draw_dotted_line(d, (left, top), (right, top), color, dash=dash, gap=gap)
+    _draw_dotted_line(d, (right, top), (right, bottom), color, dash=dash, gap=gap)
+    _draw_dotted_line(d, (right, bottom), (left, bottom), color, dash=dash, gap=gap)
+    _draw_dotted_line(d, (left, bottom), (left, top), color, dash=dash, gap=gap)
+
+
+def _team_scoreboard_label(team_like: Dict, fallback: str = "") -> str:
+    """Prefer short team names ("Kings") for the scoreboard column."""
+    if not isinstance(team_like, dict):
+        return fallback
+    raw = team_like.get("team") if isinstance(team_like.get("team"), dict) else team_like
+
+    def _str_or_dict(val) -> str:
+        if isinstance(val, str) and val.strip():
+            return val.strip()
+        if isinstance(val, dict):
+            for key in ("default", "en", "shortName", "teamName", "fullName"):
+                inner = val.get(key)
+                if isinstance(inner, str) and inner.strip():
+                    return inner.strip()
+        return ""
+
+    for key in ("teamName", "shortName", "commonName", "name", "nickname", "clubName"):
+        label = _str_or_dict(raw.get(key))
+        if label:
+            return label
+    return fallback
+
+
 def _draw_scoreboard(
     img: Image.Image,
     d: ImageDraw.ImageDraw,
     top_y: int,
-    away_tri: str, away_score: Optional[int], away_sog: Optional[int],
-    home_tri: str, home_score: Optional[int], home_sog: Optional[int],
+    away_tri: str,
+    away_score: Optional[int],
+    away_sog: Optional[int],
+    home_tri: str,
+    home_score: Optional[int],
+    home_sog: Optional[int],
     *,
+    away_label: Optional[str] = None,
+    home_label: Optional[str] = None,
     put_sog_label: bool = True,
     bottom_reserved_px: int = 0,
 ) -> int:
-    """Draw 2 rows x 3 cols table. Returns bottom y."""
-    # Column widths for 128px: widen col 1 for bigger logos/abbr, remaining split
-    # evenly for the now slimmer score/SOG columns.
+    """Draw a 2×3 dotted scoreboard. Returns bottom y."""
+    # Column widths for 128px: widen col 1 for bigger logos/names, remaining split
+    # evenly for the slimmer score/SOG columns.
     col1_w = min(96, max(78, int(WIDTH * 0.64)))
     remaining = WIDTH - col1_w
     col2_w = remaining // 2
@@ -523,46 +601,60 @@ def _draw_scoreboard(
 
     y = top_y
 
-    # SOG label: snug to table (no extra gap)
-    if put_sog_label:
-        sog = "SOG"
-        sog_x = x2 + (col3_w - _text_w(d, sog, FONT_SMALL)) // 2
-        d.text((sog_x, y), sog, font=FONT_SMALL, fill="white")
-        y += _text_h(d, FONT_SMALL) + 2  # tiny gap before table border
-
+    header_h = _text_h(d, FONT_SMALL) + 4 if put_sog_label else 0
     table_top = y
 
     # Row heights — compact
-    usable_h = max(0, HEIGHT - bottom_reserved_px - table_top)
-    row_h = max(usable_h // 2, 32)
+    total_available = max(0, HEIGHT - bottom_reserved_px - table_top)
+    available_for_rows = max(0, total_available - header_h)
+    row_h = max(available_for_rows // 2, 32)
     row_h = min(row_h, 48)
-    if row_h * 2 > usable_h and usable_h > 0:
-        row_h = max(24, usable_h // 2)
+    if row_h * 2 > available_for_rows and available_for_rows > 0:
+        row_h = max(24, available_for_rows // 2)
     if row_h <= 0:
         row_h = 32
 
-    y0 = table_top
-    available = max(0, HEIGHT - bottom_reserved_px - table_top)
-    table_height = row_h * 2
-    if available:
-        table_height = min(table_height, available)
-    if table_height < 2:
-        table_height = 2
+    table_height = header_h + (row_h * 2)
+    if total_available:
+        table_height = min(table_height, total_available)
+    if table_height < (header_h + 2):
+        table_height = header_h + 2
     table_bottom = min(table_top + table_height, HEIGHT - bottom_reserved_px)
-    table_height = max(2, table_bottom - table_top)
+    table_height = max(header_h + 2, table_bottom - table_top)
     table_bottom = table_top + table_height
-    row1_h = max(1, table_height // 2)
-    row2_h = max(1, table_height - row1_h)
-    split_y = y0 + row1_h
 
-    # Grid lines (light)
-    grid_color = (90, 90, 90)
-    d.rectangle([(x0, table_top), (x3 - 1, table_bottom - 1)], outline=grid_color)
-    d.line([(x1, table_top), (x1, table_bottom)], fill=grid_color)
-    d.line([(x2, table_top), (x2, table_bottom)], fill=grid_color)
-    d.line([(x0, split_y), (x3, split_y)], fill=grid_color)
+    header_bottom = table_top + header_h
+    row_area_height = max(2, table_height - header_h)
+    row1_h = max(1, row_area_height // 2)
+    row2_h = max(1, row_area_height - row1_h)
+    row1_top = header_bottom
+    split_y = row1_top + row1_h
 
-    def _row(y_top: int, row_height: int, tri: str, score: Optional[int], sog: Optional[int]):
+    # Grid lines (dotted, light)
+    grid_color = (210, 210, 210)
+    _draw_dotted_rect(d, (x0, table_top, x3 - 1, table_bottom - 1), grid_color)
+    _draw_dotted_line(d, (x1, table_top), (x1, table_bottom - 1), grid_color)
+    _draw_dotted_line(d, (x2, table_top), (x2, table_bottom - 1), grid_color)
+    _draw_dotted_line(d, (x0, split_y), (x3 - 1, split_y), grid_color)
+    if header_h:
+        _draw_dotted_line(d, (x0, header_bottom), (x3 - 1, header_bottom), grid_color)
+
+    # Column headers inside the table
+    if header_h:
+        header_y = table_top + (header_h - _text_h(d, FONT_SMALL)) // 2
+        score_lbl = "Score"
+        sog_lbl = "SOG"
+        d.text((x1 + (col2_w - _text_w(d, score_lbl, FONT_SMALL)) // 2, header_y), score_lbl, font=FONT_SMALL, fill="white")
+        d.text((x2 + (col3_w - _text_w(d, sog_lbl, FONT_SMALL)) // 2, header_y), sog_lbl, font=FONT_SMALL, fill="white")
+
+    def _row(
+        y_top: int,
+        row_height: int,
+        tri: str,
+        score: Optional[int],
+        sog: Optional[int],
+        label: Optional[str] = None,
+    ):
         cy = y_top + row_height // 2
 
         # Col 1: logo + abbr
@@ -582,13 +674,23 @@ def _draw_scoreboard(
             except Exception:
                 pass
             tx = lx + lw + 6
-        abbr = (tri or "").upper() or "—"
-        ah = _text_h(d, FONT_ABBR)
-        aw = _text_w(d, abbr, FONT_ABBR)
+        text = (label or "").strip() or (tri or "").upper() or "—"
+        font = FONT_ABBR
+        max_width = max(1, x1 - tx - 4)
+        if _text_w(d, text, font) > max_width:
+            font = FONT_SMALL
+        if _text_w(d, text, font) > max_width:
+            # Last resort: truncate with ellipsis
+            ellipsis = "…"
+            while text and _text_w(d, text + ellipsis, font) > max_width:
+                text = text[:-1]
+            text = (text + ellipsis) if text else ellipsis
+        ah = _text_h(d, font)
+        aw = _text_w(d, text, font)
         max_tx = x1 - aw - 4
         tx = min(tx, max_tx)
         tx = max(tx, x0 + 4)
-        d.text((tx, cy - ah//2), abbr, font=FONT_ABBR, fill="white")
+        d.text((tx, cy - ah//2), text, font=font, fill="white")
 
         # Col 2: score centered
         sc = "-" if score is None else str(score)
@@ -606,8 +708,8 @@ def _draw_scoreboard(
         gy = cy - gh//2
         d.text((gx, gy), sog_txt, font=FONT_SOG, fill="white")
 
-    _row(y0, row1_h, away_tri, away_score, away_sog)
-    _row(split_y, row2_h, home_tri, home_score, home_sog)
+    _row(row1_top, row1_h, away_tri, away_score, away_sog, away_label)
+    _row(split_y, row2_h, home_tri, home_score, home_sog, home_label)
 
     return table_bottom  # bottom of table
 
@@ -977,11 +1079,18 @@ def draw_last_hawks_game(display, game, transition: bool=False):
     bottom_str = _format_last_bottom_line(last_final, feed)
     reserve = (_text_h(d, FONT_BOTTOM) + 2) if bottom_str else 0
 
+    raw_away = last_final.get("awayTeam") or (last_final.get("teams") or {}).get("away") or {}
+    raw_home = last_final.get("homeTeam") or (last_final.get("teams") or {}).get("home") or {}
+    away_label = _team_scoreboard_label(raw_away, feed.get("awayTri", ""))
+    home_label = _team_scoreboard_label(raw_home, feed.get("homeTri", ""))
+
     # Scoreboard
     _draw_scoreboard(
         img, d, y,
         feed["awayTri"], feed["awayScore"], feed["awaySOG"],
         feed["homeTri"], feed["homeScore"], feed["homeSOG"],
+        away_label=away_label,
+        home_label=home_label,
         put_sog_label=True,
         bottom_reserved_px=reserve,
     )
@@ -1033,10 +1142,17 @@ def draw_live_hawks_game(display, game, transition: bool=False):
 
     reserve = (_text_h(d, FONT_BOTTOM) + 2) if dateline else 0
 
+    raw_away = live.get("awayTeam") or (live.get("teams") or {}).get("away") or {}
+    raw_home = live.get("homeTeam") or (live.get("teams") or {}).get("home") or {}
+    away_label = _team_scoreboard_label(raw_away, feed.get("awayTri", ""))
+    home_label = _team_scoreboard_label(raw_home, feed.get("homeTri", ""))
+
     _draw_scoreboard(
         img, d, y,
         feed["awayTri"], feed["awayScore"], feed["awaySOG"],
         feed["homeTri"], feed["homeScore"], feed["homeSOG"],
+        away_label=away_label,
+        home_label=home_label,
         put_sog_label=True,
         bottom_reserved_px=reserve,
     )
