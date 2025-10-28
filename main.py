@@ -20,7 +20,6 @@ warnings.filterwarnings("ignore", category=PinFactoryFallback)
 warnings.filterwarnings("ignore", category=NativePinFactoryFallback)
 
 import os
-import sys
 import time
 import logging
 import threading
@@ -91,6 +90,7 @@ screen_scheduler: Optional[ScreenScheduler] = None
 _requested_screen_ids: Set[str] = set()
 
 _shutdown_event = threading.Event()
+_shutdown_complete = threading.Event()
 
 BUTTON_POLL_INTERVAL = 0.1
 _BUTTON_STATE = {"X": False, "Y": False}
@@ -232,6 +232,28 @@ def _release_video_writer() -> None:
         video_out.release()
         logging.info("🎬 Video finalized cleanly.")
         video_out = None
+
+
+def _finalize_shutdown() -> None:
+    """Run the shutdown cleanup sequence once."""
+
+    if _shutdown_complete.is_set():
+        return
+
+    try:
+        clear_display(display)
+    except Exception:
+        pass
+
+    if video_out:
+        logging.info("🎬 Finalizing video…")
+    _release_video_writer()
+
+    if ENABLE_WIFI_MONITOR:
+        wifi_utils.stop_monitor()
+
+    _shutdown_complete.set()
+    logging.info("👋 Shutdown cleanup finished.")
 
 
 def _sanitize_directory_name(name: str) -> str:
@@ -604,15 +626,7 @@ def main_loop():
             gc.collect()
 
     finally:
-        try:
-            clear_display(display)
-        except Exception:
-            pass
-        if video_out:
-            logging.info("🎬 Finalizing video…")
-        _release_video_writer()
-        if ENABLE_WIFI_MONITOR:
-            wifi_utils.stop_monitor()
+        _finalize_shutdown()
 
 if __name__ == '__main__':
     try:
@@ -621,4 +635,6 @@ if __name__ == '__main__':
         logging.info("✋ CTRL-C caught—requesting shutdown…")
         _shutdown_event.set()
     finally:
-        sys.exit(0)
+        _finalize_shutdown()
+
+    os._exit(0)
