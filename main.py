@@ -27,7 +27,7 @@ import datetime
 import signal
 import shutil
 import subprocess
-from typing import Optional, Set
+from typing import Dict, Optional, Set
 
 gc = __import__('gc')
 
@@ -63,7 +63,7 @@ from screens.draw_travel_time import (
     get_travel_active_window,
     is_travel_screen_active,
 )
-from screens.registry import ScreenContext, build_screen_registry
+from screens.registry import ScreenContext, ScreenDefinition, build_screen_registry
 from schedule import ScreenScheduler, build_scheduler, load_schedule_config
 
 # ─── Logging ─────────────────────────────────────────────────────────────────
@@ -90,6 +90,11 @@ ALLOWED_SCREEN_EXTS      = (".png", ".jpg", ".jpeg")  # images only
 _screen_config_mtime: Optional[float] = None
 screen_scheduler: Optional[ScreenScheduler] = None
 _requested_screen_ids: Set[str] = set()
+
+_skip_request_pending = False
+_last_screen_id: Optional[str] = None
+
+_SKIP_BUTTON_SCREEN_IDS = {"date", "time"}
 
 _shutdown_event = threading.Event()
 _shutdown_complete = threading.Event()
@@ -118,6 +123,7 @@ def _load_scheduler_from_config() -> Optional[ScreenScheduler]:
 
 def refresh_schedule_if_needed(force: bool = False) -> None:
     global _screen_config_mtime, screen_scheduler, _requested_screen_ids
+    global _last_screen_id, _skip_request_pending
 
     try:
         mtime = os.path.getmtime(CONFIG_PATH)
@@ -134,6 +140,8 @@ def refresh_schedule_if_needed(force: bool = False) -> None:
     screen_scheduler = scheduler
     _requested_screen_ids = scheduler.requested_ids
     _screen_config_mtime = mtime
+    _last_screen_id = None
+    _skip_request_pending = False
     logging.info("🔁 Loaded schedule configuration with %d node(s).", scheduler.node_count)
 
 # ─── Display & Wi-Fi monitor ─────────────────────────────────────────────────
@@ -211,6 +219,8 @@ def _check_control_buttons() -> bool:
         if pressed and not _BUTTON_STATE[name]:
             if name == "X":
                 logging.info("⏭️  X button pressed – skipping to next screen.")
+                global _skip_request_pending
+                _skip_request_pending = True
                 skip_requested = True
             elif name == "Y":
                 logging.info("🔁 Y button pressed – restarting desk_display service…")
@@ -246,6 +256,49 @@ def _wait_with_button_checks(duration: float) -> bool:
                 return False
 
     return False
+
+
+def _next_screen_from_registry(
+    registry: Dict[str, ScreenDefinition]
+) -> Optional[ScreenDefinition]:
+    """Return the next screen, honoring any pending skip requests."""
+
+    global _skip_request_pending
+
+    scheduler = screen_scheduler
+    if scheduler is None:
+        _skip_request_pending = False
+        return None
+
+    entry = scheduler.next_available(registry)
+    if entry is None:
+        _skip_request_pending = False
+        return None
+
+    if not _skip_request_pending:
+        return entry
+
+    avoided = set(_SKIP_BUTTON_SCREEN_IDS)
+    if _last_screen_id:
+        avoided.add(_last_screen_id)
+
+    attempts = scheduler.node_count
+    while entry and entry.id in avoided and attempts > 1:
+        logging.debug(
+            "Manual skip dropping '%s' from queue.",
+            entry.id,
+        )
+        entry = scheduler.next_available(registry)
+        attempts -= 1
+
+    if entry and entry.id in avoided:
+        logging.debug(
+            "Manual skip fallback to '%s' (no alternative available).",
+            entry.id,
+        )
+
+    _skip_request_pending = False
+    return entry
 
 # ─── Screenshot / video outputs ──────────────────────────────────────────────
 SCREENSHOT_DIR = os.path.join(SCRIPT_DIR, "screenshots")
@@ -524,7 +577,7 @@ loop_count = 0
 _travel_schedule_state: Optional[str] = None
 
 def main_loop():
-    global loop_count, _travel_schedule_state
+    global loop_count, _travel_schedule_state, _last_screen_id
 
     refresh_schedule_if_needed(force=True)
 
@@ -594,7 +647,7 @@ def main_loop():
             registry, metadata = build_screen_registry(context)
             _travel_schedule_state = metadata.get("travel_state", _travel_schedule_state)
 
-            entry = screen_scheduler.next_available(registry)
+            entry = _next_screen_from_registry(registry)
             if entry is None:
                 logging.info(
                     "No eligible screens available; sleeping for %s seconds.",
@@ -665,6 +718,8 @@ def main_loop():
 
             if _shutdown_event.is_set():
                 break
+
+            _last_screen_id = sid
             if _wait_with_button_checks(SCREEN_DELAY):
                 continue
             gc.collect()
