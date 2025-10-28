@@ -176,6 +176,41 @@ except (TypeError, ValueError):
     )
     DISPLAY_ROTATION = 180
 
+# ─── Scoreboard appearance ────────────────────────────────────────────────────
+
+
+def _coerce_color_component(env_name: str, default: int) -> int:
+    """Return a color channel value from 0-255 with logging on invalid input."""
+
+    raw_value = os.environ.get(env_name)
+    if raw_value is None:
+        return default
+
+    try:
+        value = int(raw_value)
+    except (TypeError, ValueError):
+        logging.warning(
+            "Invalid %s value %r; using default %d", env_name, raw_value, default
+        )
+        return default
+
+    if not 0 <= value <= 255:
+        logging.warning(
+            "%s must be between 0 and 255; clamping %d to valid range", env_name, value
+        )
+        return max(0, min(255, value))
+
+    return value
+
+
+# Default background color for scoreboards and standings screens. Use an RGB
+# tuple so callers can request either RGB or RGBA colors as needed.
+SCOREBOARD_BACKGROUND_COLOR = (
+    _coerce_color_component("SCOREBOARD_BACKGROUND_R", 17),
+    _coerce_color_component("SCOREBOARD_BACKGROUND_G", 24),
+    _coerce_color_component("SCOREBOARD_BACKGROUND_B", 39),
+)
+
 # ─── Scoreboard scrolling configuration ───────────────────────────────────────
 SCOREBOARD_SCROLL_STEP         = 1
 SCOREBOARD_SCROLL_DELAY        = 0.005

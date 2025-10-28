@@ -22,6 +22,7 @@ from config import (
     SCOREBOARD_SCROLL_DELAY,
     SCOREBOARD_SCROLL_PAUSE_TOP,
     SCOREBOARD_SCROLL_PAUSE_BOTTOM,
+    SCOREBOARD_BACKGROUND_COLOR,
 )
 from services.http_client import NHL_HEADERS, get_session
 from utils import ScreenImage, clear_display, clone_font, log_call
@@ -78,6 +79,7 @@ OVERVIEW_MIN_LOGO_HEIGHT = 33
 OVERVIEW_MAX_LOGO_HEIGHT = 67
 OVERVIEW_LOGO_PADDING = 4
 OVERVIEW_LOGO_OVERLAP = 6
+BACKGROUND_COLOR = SCOREBOARD_BACKGROUND_COLOR
 OVERVIEW_DROP_STEPS = 15
 DROP_FRAME_DELAY = 0.04
 
@@ -876,7 +878,7 @@ def _render_conference(
             total_height += SECTION_GAP
     total_height = max(total_height, HEIGHT)
 
-    img = Image.new("RGB", (WIDTH, total_height), "black")
+    img = Image.new("RGB", (WIDTH, total_height), BACKGROUND_COLOR)
     draw = ImageDraw.Draw(img)
 
     y = TITLE_MARGIN_TOP
@@ -908,7 +910,7 @@ Placement = Tuple[str, Image.Image, int, int]
 def _overview_layout(
     divisions: Sequence[tuple[str, List[dict]]]
 ) -> tuple[Image.Image, List[float], float, float, int, int]:
-    base = Image.new("RGB", (WIDTH, HEIGHT), "black")
+    base = Image.new("RGB", (WIDTH, HEIGHT), BACKGROUND_COLOR)
     draw = ImageDraw.Draw(base)
 
     y = TITLE_MARGIN_TOP
@@ -1060,7 +1062,7 @@ def _prepare_overview(divisions: List[tuple[str, List[dict]]]) -> tuple[Image.Im
 
 
 def _render_empty(title: str) -> Image.Image:
-    img = Image.new("RGB", (WIDTH, HEIGHT), "black")
+    img = Image.new("RGB", (WIDTH, HEIGHT), BACKGROUND_COLOR)
     draw = ImageDraw.Draw(img)
     _draw_centered_text(draw, title, TITLE_FONT, 10)
     _draw_centered_text(draw, "No standings", ROW_FONT, HEIGHT // 2 - ROW_TEXT_HEIGHT // 2)

@@ -53,6 +53,7 @@ LEAGUE_DIVISION_IDS: Dict[int, Dict[str, int]] = {
 # ./screens/images/mlb folder.
 LOGOS_DIR = os.path.join(config.IMAGES_DIR, "mlb")
 TIMEOUT   = 10
+BACKGROUND_COLOR = config.SCOREBOARD_BACKGROUND_COLOR
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -136,7 +137,7 @@ def _header_frame(title: str) -> Tuple[Image.Image, int]:
     """
     Create a header-only frame and return (image, header_height).
     """
-    img = Image.new("RGB", (WIDTH, HEIGHT), "black")
+    img = Image.new("RGB", (WIDTH, HEIGHT), BACKGROUND_COLOR)
     d = ImageDraw.Draw(img)
     tw, th = d.textsize(title, font=FONT_DIV_HEADER)
     d.text(((WIDTH - tw)//2, 0), title, font=FONT_DIV_HEADER, fill=(255,255,255))
@@ -254,7 +255,7 @@ def draw_division_screen(display, league_id: int, division_id: int, title: str, 
     # Build the list canvas (all rows)
     row_h  = LOGO_SIZE + ROW_SPACING
     list_h = row_h * len(teams)
-    canvas = Image.new("RGB", (WIDTH, list_h), "black")
+    canvas = Image.new("RGB", (WIDTH, list_h), BACKGROUND_COLOR)
     cd     = ImageDraw.Draw(canvas)
 
     for i, rec in enumerate(teams):
@@ -336,7 +337,7 @@ def draw_wildcard_screen(display, league_id: int, title: str, transition=False):
 
     row_h  = LOGO_SIZE + ROW_SPACING
     list_h = row_h * len(teams)
-    canvas = Image.new("RGB", (WIDTH, list_h), "black")
+    canvas = Image.new("RGB", (WIDTH, list_h), BACKGROUND_COLOR)
     cd     = ImageDraw.Draw(canvas)
 
     for i, rec in enumerate(teams):

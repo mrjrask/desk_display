@@ -35,6 +35,7 @@ from config import (
     SCOREBOARD_SCROLL_DELAY,
     SCOREBOARD_SCROLL_PAUSE_TOP,
     SCOREBOARD_SCROLL_PAUSE_BOTTOM,
+    SCOREBOARD_BACKGROUND_COLOR,
 )
 from utils import (
     ScreenImage,
@@ -78,6 +79,8 @@ INTRO_MAX_HEIGHT  = 100
 INTRO_ANIM_SCALES = (0.45, 0.6, 0.75, 0.9, 1.04, 0.98, 1.0)
 INTRO_ANIM_DELAY  = 0.06
 INTRO_ANIM_HOLD   = 0.4
+BACKGROUND_COLOR  = SCOREBOARD_BACKGROUND_COLOR
+BACKGROUND_COLOR_RGBA = BACKGROUND_COLOR + (255,)
 
 _LOGO_CACHE: dict[str, Optional[Image.Image]] = {}
 _SESSION = get_session()
@@ -166,7 +169,7 @@ def _render_intro_frame(logo: Image.Image, scale: float) -> Image.Image:
     w = max(1, int(round(logo.width * effective_scale)))
     h = max(1, int(round(logo.height * effective_scale)))
     resized = logo.resize((w, h), RESAMPLE)
-    frame = Image.new("RGBA", (WIDTH, HEIGHT), (0, 0, 0, 255))
+    frame = Image.new("RGBA", (WIDTH, HEIGHT), BACKGROUND_COLOR_RGBA)
     x = (WIDTH - resized.width) // 2
     y = (HEIGHT - resized.height) // 2
     frame.paste(resized, (x, y), resized)
@@ -479,12 +482,12 @@ def _draw_game_block(canvas: Image.Image, draw: ImageDraw.ImageDraw, game: dict,
 
 def _compose_canvas(games: list[dict]) -> Image.Image:
     if not games:
-        return Image.new("RGB", (WIDTH, HEIGHT), "black")
+        return Image.new("RGB", (WIDTH, HEIGHT), BACKGROUND_COLOR)
     block_height = SCORE_ROW_H + STATUS_ROW_H
     total_height = block_height * len(games)
     if len(games) > 1:
         total_height += BLOCK_SPACING * (len(games) - 1)
-    canvas = Image.new("RGB", (WIDTH, total_height), "black")
+    canvas = Image.new("RGB", (WIDTH, total_height), BACKGROUND_COLOR)
     draw = ImageDraw.Draw(canvas)
 
     y = 0
@@ -983,7 +986,7 @@ def _fetch_games_for_date(day: datetime.date) -> list[dict]:
 def _render_scoreboard(games: list[dict]) -> Image.Image:
     canvas = _compose_canvas(games)
 
-    dummy = Image.new("RGB", (WIDTH, 10), "black")
+    dummy = Image.new("RGB", (WIDTH, 10), BACKGROUND_COLOR)
     dd = ImageDraw.Draw(dummy)
     try:
         l, t, r, b = dd.textbbox((0, 0), TITLE, font=TITLE_FONT)
@@ -997,7 +1000,7 @@ def _render_scoreboard(games: list[dict]) -> Image.Image:
 
     content_top = logo_height + logo_gap + title_h + TITLE_GAP
     img_height = max(HEIGHT, content_top + canvas.height)
-    img = Image.new("RGB", (WIDTH, img_height), "black")
+    img = Image.new("RGB", (WIDTH, img_height), BACKGROUND_COLOR)
     draw = ImageDraw.Draw(img)
 
     if league_logo:
@@ -1047,7 +1050,7 @@ def draw_nba_scoreboard(display, transition: bool = False) -> ScreenImage:
 
     if not games:
         clear_display(display)
-        img = Image.new("RGB", (WIDTH, HEIGHT), "black")
+        img = Image.new("RGB", (WIDTH, HEIGHT), BACKGROUND_COLOR)
         draw = ImageDraw.Draw(img)
         league_logo = _get_league_logo()
         title_top = 0
