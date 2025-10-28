@@ -27,6 +27,7 @@ import datetime
 import signal
 import shutil
 import subprocess
+from contextlib import nullcontext
 from typing import Dict, Optional, Set
 
 gc = __import__('gc')
@@ -49,11 +50,12 @@ from config import (
 from utils import (
     Display,
     ScreenImage,
+    animate_fade_in,
     clear_display,
     draw_text_centered,
-    animate_fade_in,
     resume_display_updates,
     suspend_display_updates,
+    temporary_display_led,
 )
 import data_fetch
 from services import wifi_utils
@@ -685,42 +687,56 @@ def main_loop():
                 continue
 
             already_displayed = False
+            led_override = None
             img = None
             if isinstance(result, ScreenImage):
                 img = result.image
                 already_displayed = result.displayed
+                led_override = result.led_override
             elif isinstance(result, Image.Image):
                 img = result
 
-            if isinstance(img, Image.Image):
-                if "logo" in sid:
-                    if ENABLE_SCREENSHOTS:
-                        _save_screenshot(sid, img)
-                        maybe_archive_screenshots()
-                    if ENABLE_VIDEO and video_out:
-                        import cv2, numpy as np
+            skip_delay = False
+            led_context = (
+                temporary_display_led(*led_override)
+                if led_override is not None
+                else nullcontext()
+            )
+            with led_context:
+                if isinstance(img, Image.Image):
+                    if "logo" in sid:
+                        if ENABLE_SCREENSHOTS:
+                            _save_screenshot(sid, img)
+                            maybe_archive_screenshots()
+                        if ENABLE_VIDEO and video_out:
+                            import cv2, numpy as np
 
-                        frame = cv2.cvtColor(np.array(img), cv2.COLOR_RGB2BGR)
-                        video_out.write(frame)
+                            frame = cv2.cvtColor(np.array(img), cv2.COLOR_RGB2BGR)
+                            video_out.write(frame)
+                    else:
+                        if not already_displayed:
+                            animate_fade_in(display, img, steps=8, delay=0.015)
+                        if ENABLE_SCREENSHOTS:
+                            _save_screenshot(sid, img)
+                            maybe_archive_screenshots()
+                        if ENABLE_VIDEO and video_out:
+                            import cv2, numpy as np
+
+                            frame = cv2.cvtColor(np.array(img), cv2.COLOR_RGB2BGR)
+                            video_out.write(frame)
                 else:
-                    if not already_displayed:
-                        animate_fade_in(display, img, steps=8, delay=0.015)
-                    if ENABLE_SCREENSHOTS:
-                        _save_screenshot(sid, img)
-                        maybe_archive_screenshots()
-                    if ENABLE_VIDEO and video_out:
-                        import cv2, numpy as np
+                    logging.info("Screen '%s' produced no drawable image.", sid)
 
-                        frame = cv2.cvtColor(np.array(img), cv2.COLOR_RGB2BGR)
-                        video_out.write(frame)
-            else:
-                logging.info("Screen '%s' produced no drawable image.", sid)
+                if _shutdown_event.is_set():
+                    break
+
+                _last_screen_id = sid
+                skip_delay = _wait_with_button_checks(SCREEN_DELAY)
 
             if _shutdown_event.is_set():
                 break
 
-            _last_screen_id = sid
-            if _wait_with_button_checks(SCREEN_DELAY):
+            if skip_delay:
                 continue
             gc.collect()
 
