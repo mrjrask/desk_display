@@ -2,10 +2,10 @@
 """
 draw_inside.py (RGB, 320x240)
 
-Universal environmental sensor screen with a streamlined layout:
-  • Title (detects and names: Adafruit/Pimoroni BME680, BME688, BME280, SHT41)
-  • Highlighted temperature panel with contextual descriptor
-  • Linear stat strip showing humidity / pressure / VOC (if available)
+Universal environmental sensor screen with a calmer, data-forward layout:
+  • Title area with automatic sensor attribution
+  • Soft temperature card with contextual descriptor
+  • Responsive grid of metric cards driven entirely by the available readings
 Everything is dynamically sized to stay legible on the configured canvas.
 """
 
@@ -395,43 +395,6 @@ def _mix_color(color: Tuple[int, int, int], target: Tuple[int, int, int], factor
     return tuple(int(round(color[idx] * (1 - factor) + target[idx] * factor)) for idx in range(3))
 
 
-def _lighten(color: Tuple[int, int, int], amount: float) -> Tuple[int, int, int]:
-    return _mix_color(color, (255, 255, 255), amount)
-
-
-def _darken(color: Tuple[int, int, int], amount: float) -> Tuple[int, int, int]:
-    return _mix_color(color, (0, 0, 0), amount)
-
-
-def _draw_gradient_panel(
-    img: Image.Image,
-    rect: Tuple[int, int, int, int],
-    start_color: Tuple[int, int, int],
-    end_color: Tuple[int, int, int],
-    radius: int,
-    outline: Optional[Tuple[int, int, int]] = None,
-) -> None:
-    x0, y0, x1, y1 = rect
-    width = max(1, x1 - x0)
-    height = max(1, y1 - y0)
-
-    gradient = Image.new("RGB", (width, height))
-    grad_draw = ImageDraw.Draw(gradient)
-    for y in range(height):
-        blend = y / (height - 1) if height > 1 else 0
-        color = _mix_color(start_color, end_color, blend)
-        grad_draw.line((0, y, width, y), fill=color)
-
-    mask = Image.new("L", (width, height), 0)
-    mask_draw = ImageDraw.Draw(mask)
-    mask_draw.rounded_rectangle((0, 0, width - 1, height - 1), radius=radius, fill=255)
-    img.paste(gradient, (x0, y0), mask)
-
-    if outline is not None:
-        draw = ImageDraw.Draw(img)
-        draw.rounded_rectangle(rect, radius=radius, outline=outline, width=1)
-
-
 def _describe_temperature(temp_f: float) -> str:
     if temp_f < 60:
         return "Chilly"
@@ -458,100 +421,69 @@ def _draw_temperature_panel(
 ) -> None:
     x0, y0, x1, y1 = rect
     color = temperature_color(temp_f)
-    start = _lighten(color, 0.72)
-    end = _darken(color, 0.22)
-    outline = _mix_color(color, (0, 0, 0), 0.35)
-    radius = max(14, min(26, (y1 - y0) // 4))
-    _draw_gradient_panel(img, rect, start, end, radius=radius, outline=outline)
-
     width = max(1, x1 - x0)
     height = max(1, y1 - y0)
+
+    radius = max(14, min(26, min(width, height) // 5))
+    bg = _mix_color(color, config.INSIDE_COL_BG, 0.62)
+    outline = _mix_color(color, config.INSIDE_COL_BG, 0.35)
+    draw.rounded_rectangle(rect, radius=radius, fill=bg, outline=outline, width=1)
+
+    padding_x = max(16, width // 12)
+    padding_y = max(12, height // 10)
+    label_text = "Temperature"
 
     label_base_size = getattr(label_base, "size", 18)
     label_font = fit_font(
         draw,
-        "Temperature",
+        label_text,
         label_base,
-        max_width=width - 32,
-        max_height=max(14, int(height * 0.22)),
+        max_width=width - 2 * padding_x,
+        max_height=max(14, int(height * 0.18)),
         min_pt=min(label_base_size, 10),
         max_pt=label_base_size,
     )
-    label_w, label_h = measure_text(draw, "Temperature", label_font)
-    label_pos = (x0 + 18, y0 + max(10, height // 12))
+    _, label_h = measure_text(draw, label_text, label_font)
+    label_x = x0 + padding_x
+    label_y = y0 + padding_y
 
+    descriptor_base_size = getattr(label_base, "size", 18)
+    desc_font = fit_font(
+        draw,
+        descriptor,
+        label_base,
+        max_width=width - 2 * padding_x,
+        max_height=max(14, int(height * 0.2)),
+        min_pt=min(descriptor_base_size, 12),
+        max_pt=descriptor_base_size,
+    )
+    _, desc_h = measure_text(draw, descriptor, desc_font)
+    desc_x = x0 + padding_x
+    desc_y = y1 - padding_y - desc_h
+
+    value_gap = max(10, height // 14)
+    value_top = label_y + label_h + value_gap
+    value_max_height = max(32, desc_y - value_top - value_gap)
     temp_base_size = getattr(temp_base, "size", 48)
     temp_font = fit_font(
         draw,
         temp_text,
         temp_base,
-        max_width=width - 40,
-        max_height=max(32, int(height * 0.6)),
+        max_width=width - 2 * padding_x,
+        max_height=value_max_height,
         min_pt=min(temp_base_size, 20),
         max_pt=temp_base_size,
     )
-    temp_w, temp_h = measure_text(draw, temp_text, temp_font)
-    temp_pos = (
-        x0 + (width - temp_w) // 2,
-        y0 + max(label_h + 18, (height - temp_h) // 2),
-    )
+    _, temp_h = measure_text(draw, temp_text, temp_font)
+    temp_x = x0 + padding_x
+    temp_y = value_top
 
-    desc_font = fit_font(
-        draw,
-        descriptor,
-        label_base,
-        max_width=width - 40,
-        max_height=max(12, int(height * 0.22)),
-        min_pt=min(label_base_size, 12),
-        max_pt=label_base_size,
-    )
-    desc_w, desc_h = measure_text(draw, descriptor, desc_font)
-    desc_pos = (x0 + (width - desc_w) // 2, y1 - desc_h - max(14, height // 12))
+    if temp_y + temp_h > desc_y - value_gap:
+        temp_y = max(label_y + label_h + value_gap, desc_y - value_gap - temp_h)
 
-    # Ensure consistent vertical spacing between the label, value, and descriptor
-    min_gap = max(12, height // 16)
-    bottom_margin = max(6, height // 18)
-    label_bottom = label_pos[1] + label_h
-
-    def _position_temperature(gap: int) -> Tuple[int, int]:
-        min_temp_y = label_bottom + gap
-        max_temp_y = y1 - bottom_margin - desc_h - gap - temp_h
-        if max_temp_y < min_temp_y:
-            max_temp_y = min_temp_y
-        temp_y = max(temp_pos[1], min_temp_y)
-        temp_y = min(temp_y, max_temp_y)
-        return temp_y, temp_y + temp_h
-
-    gap = min_gap
-    temp_y, temp_bottom = _position_temperature(gap)
-    while gap > 4 and temp_bottom + gap > y1 - desc_h:
-        gap -= 2
-        temp_y, temp_bottom = _position_temperature(gap)
-
-    temp_pos = (temp_pos[0], temp_y)
-    desc_base = y1 - bottom_margin - desc_h
-    desc_y = max(temp_bottom + gap, desc_base)
-    desc_y = min(desc_y, y1 - desc_h)
-    desc_pos = (desc_pos[0], desc_y)
-
-    label_color = _mix_color(start, (0, 0, 0), 0.65)
-    temp_color = config.INSIDE_COL_TEXT
-    desc_color = _mix_color(start, (0, 0, 0), 0.45)
-
-    draw.text(label_pos, "Temperature", font=label_font, fill=label_color)
-    draw.text(temp_pos, temp_text, font=temp_font, fill=temp_color)
-    draw.text(desc_pos, descriptor, font=desc_font, fill=desc_color)
-
-    accent_gap = max(6, gap // 2)
-    accent_y = desc_pos[1] - accent_gap
-    accent_start = x0 + 18
-    accent_end = x1 - 18
-    if accent_end > accent_start and accent_y > y0 + label_h + 8:
-        draw.line(
-            (accent_start, accent_y, accent_end, accent_y),
-            fill=_mix_color(start, (255, 255, 255), 0.25),
-            width=1,
-        )
+    draw.text((label_x, label_y), label_text, font=label_font, fill=_mix_color(color, (0, 0, 0), 0.5))
+    draw.text((temp_x, temp_y), temp_text, font=temp_font, fill=config.INSIDE_COL_TEXT)
+    draw.text((desc_x, desc_y), descriptor, font=desc_font, fill=_mix_color(color, (0, 0, 0), 0.4))
 
 
 def _draw_metric_row(
@@ -564,59 +496,51 @@ def _draw_metric_row(
     value_base,
 ) -> None:
     x0, y0, x1, y1 = rect
+    width = max(1, x1 - x0)
     height = max(1, y1 - y0)
-    radius = max(6, min(14, height // 2))
-    bg = _lighten(accent, 0.82)
-    draw.rounded_rectangle(rect, radius=radius, fill=bg)
+    radius = max(8, min(20, min(width, height) // 4))
+    bg = _mix_color(accent, config.INSIDE_COL_BG, 0.7)
+    outline = _mix_color(accent, config.INSIDE_COL_BG, 0.4)
+    draw.rounded_rectangle(rect, radius=radius, fill=bg, outline=outline, width=1)
 
-    accent_w = max(4, min(8, int(max(1, x1 - x0) * 0.08)))
-    draw.rectangle((x0, y0, x0 + accent_w, y1), fill=_mix_color(accent, (0, 0, 0), 0.15))
-
-    inner_left = x0 + accent_w + 10
-    inner_right = x1 - 10
-    inner_width = max(1, inner_right - inner_left)
+    padding_x = max(10, width // 10)
+    padding_y = max(6, height // 8)
 
     label_base_size = getattr(label_base, "size", 18)
-    value_base_size = getattr(value_base, "size", 24)
-
     label_font = fit_font(
         draw,
         label,
         label_base,
-        max_width=int(inner_width * 0.6),
-        max_height=max(12, int(height * 0.48)),
+        max_width=width - 2 * padding_x,
+        max_height=max(12, int(height * 0.35)),
         min_pt=min(label_base_size, 10),
         max_pt=label_base_size,
     )
+    value_base_size = getattr(value_base, "size", 24)
+    label_height = measure_text(draw, label, label_font)[1]
+    value_max_height = max(18, height - padding_y * 2 - label_height - padding_y)
     value_font = fit_font(
         draw,
         value,
         value_base,
-        max_width=inner_width,
-        max_height=max(16, int(height * 0.62)),
+        max_width=width - 2 * padding_x,
+        max_height=value_max_height,
         min_pt=min(value_base_size, 12),
         max_pt=value_base_size,
     )
 
-    lw, lh = measure_text(draw, label, label_font)
-    vw, vh = measure_text(draw, value, value_font)
+    _, lh = measure_text(draw, label, label_font)
+    _, vh = measure_text(draw, value, value_font)
 
-    label_x = inner_left
-    label_y = y0 + (height - lh) // 2
-    value_x = inner_right - vw
-    value_y = y0 + (height - vh) // 2
+    label_x = x0 + padding_x
+    label_y = y0 + padding_y
+    value_x = x0 + padding_x
+    value_y = y1 - padding_y - vh
+    min_gap = max(6, height // 12)
+    if value_y - (label_y + lh) < min_gap:
+        value_y = label_y + lh + min_gap
 
-    midpoint = y0 + height // 2
-    line_start = label_x + lw + 8
-    line_end = value_x - 12
-    if line_end > line_start:
-        draw.line(
-            (line_start, midpoint, line_end, midpoint),
-            fill=_mix_color(accent, (255, 255, 255), 0.55),
-            width=1,
-        )
-
-    label_color = _mix_color(accent, (0, 0, 0), 0.45)
+    label_color = _mix_color(accent, (0, 0, 0), 0.55)
     value_color = config.INSIDE_COL_TEXT
 
     draw.text((label_x, label_y), label, font=label_font, fill=label_color)
@@ -631,34 +555,37 @@ def _draw_metric_rows(
     value_base,
 ) -> None:
     x0, y0, x1, y1 = rect
-    height = max(0, y1 - y0)
     count = len(metrics)
-    if count <= 0 or height <= 0:
+    width = max(0, x1 - x0)
+    height = max(0, y1 - y0)
+    if count <= 0 or width <= 0 or height <= 0:
         return
-    columns = 1 if count <= 3 else 2
-    gap = 6
-    column_gap = 10 if columns > 1 else 0
+
+    if count <= 2:
+        columns = count
+    elif count <= 6:
+        columns = 2
+    else:
+        columns = 3
+    columns = max(1, columns)
     rows = int(math.ceil(count / columns))
-    total_vertical_gap = gap * (rows - 1)
-    row_h = 0
-    if rows > 0:
-        available_height = max(1, height - total_vertical_gap)
-        row_h = max(22, available_height // rows)
 
-    available_width = max(1, x1 - x0)
-    total_horizontal_gap = column_gap * (columns - 1)
-    col_w = max(40, (available_width - total_horizontal_gap) // columns)
+    h_gap = max(8, width // 40) if columns > 1 else 0
+    v_gap = max(8, height // 40) if rows > 1 else 0
 
-    for idx, metric in enumerate(metrics):
-        row = idx // columns
-        col = idx % columns
-        left = x0 + col * (col_w + column_gap)
-        top = y0 + row * (row_h + gap)
-        if top >= y1:
-            break
-        bottom = min(y1, top + row_h)
-        right = min(x1, left + col_w)
-        if bottom <= top or right <= left:
+    total_h_gap = h_gap * (columns - 1)
+    total_v_gap = v_gap * (rows - 1)
+    cell_width = max(48, (width - total_h_gap) // columns)
+    cell_height = max(48, (height - total_v_gap) // rows)
+
+    for index, metric in enumerate(metrics):
+        row = index // columns
+        col = index % columns
+        left = x0 + col * (cell_width + h_gap)
+        top = y0 + row * (cell_height + v_gap)
+        right = min(x1, left + cell_width)
+        bottom = min(y1, top + cell_height)
+        if right <= left or bottom <= top:
             continue
         _draw_metric_row(
             draw,
@@ -899,18 +826,11 @@ def draw_inside(display, transition: bool=False):
 
     metric_count = len(metrics)
     if metric_count:
-        if metric_count <= 2:
-            temp_ratio = 0.56
-            min_temp = 104
-        elif metric_count <= 3:
-            temp_ratio = 0.52
-            min_temp = 96
-        else:
-            temp_ratio = 0.48
-            min_temp = 90
+        temp_ratio = max(0.42, 0.6 - 0.03 * min(metric_count, 6))
+        min_temp = max(96, 112 - 6 * min(metric_count, 6))
     else:
-        temp_ratio = 0.86
-        min_temp = 118
+        temp_ratio = 0.82
+        min_temp = 120
 
     temp_height = min(content_height, max(min_temp, int(content_height * temp_ratio)))
     temp_rect = (
