@@ -93,7 +93,8 @@ _shutdown_event = threading.Event()
 _shutdown_complete = threading.Event()
 
 BUTTON_POLL_INTERVAL = 0.1
-_BUTTON_STATE = {"X": False, "Y": False}
+_BUTTON_NAMES = ("A", "B", "X", "Y")
+_BUTTON_STATE = {name: False for name in _BUTTON_NAMES}
 
 
 def _load_scheduler_from_config() -> Optional[ScreenScheduler]:
@@ -162,23 +163,26 @@ def _check_control_buttons() -> bool:
 
     skip_requested = False
 
-    try:
-        x_pressed = display.is_button_pressed("X")
-        y_pressed = display.is_button_pressed("Y")
-    except Exception as exc:
-        logging.debug("Button poll failed: %s", exc)
-        y_pressed = False
-        x_pressed = False
+    for name in _BUTTON_NAMES:
+        try:
+            pressed = display.is_button_pressed(name)
+        except Exception as exc:
+            logging.debug("Button poll failed for %s: %s", name, exc)
+            pressed = False
 
-    if x_pressed and not _BUTTON_STATE["X"]:
-        logging.info("⏭️  X button pressed – skipping to next screen.")
-        skip_requested = True
-    if y_pressed and not _BUTTON_STATE["Y"]:
-        logging.info("🔁 Y button pressed – restarting desk_display service…")
-        _restart_desk_display_service()
+        if pressed and not _BUTTON_STATE[name]:
+            if name == "X":
+                logging.info("⏭️  X button pressed – skipping to next screen.")
+                skip_requested = True
+            elif name == "Y":
+                logging.info("🔁 Y button pressed – restarting desk_display service…")
+                _restart_desk_display_service()
+            elif name == "A":
+                logging.info("🅰️  A button pressed.")
+            elif name == "B":
+                logging.info("🅱️  B button pressed.")
 
-    _BUTTON_STATE["X"] = x_pressed
-    _BUTTON_STATE["Y"] = y_pressed
+        _BUTTON_STATE[name] = pressed
 
     return skip_requested
 
