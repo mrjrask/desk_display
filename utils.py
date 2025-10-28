@@ -55,6 +55,27 @@ _ACTIVE_DISPLAY: Optional["Display"] = None
 _GITHUB_LED_ANIMATOR: Optional["_GithubLedAnimator"] = None
 _GITHUB_LED_STATE: bool = False
 
+_DISPLAY_UPDATE_GATE = threading.Event()
+_DISPLAY_UPDATE_GATE.set()
+
+
+def suspend_display_updates() -> None:
+    """Prevent subsequent display updates from reaching the hardware."""
+
+    _DISPLAY_UPDATE_GATE.clear()
+
+
+def resume_display_updates() -> None:
+    """Allow display updates to be pushed to the hardware again."""
+
+    _DISPLAY_UPDATE_GATE.set()
+
+
+def display_updates_enabled() -> bool:
+    """Return True when display updates are currently allowed."""
+
+    return _DISPLAY_UPDATE_GATE.is_set()
+
 LED_INDICATOR_LEVEL = 1 / 255.0
 
 # Project config
@@ -134,6 +155,8 @@ class Display:
         _ACTIVE_DISPLAY = self
 
     def _update_display(self):
+        if not display_updates_enabled():
+            return
         if self._display is None:  # pragma: no cover - hardware import
             return
         try:
