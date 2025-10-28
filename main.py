@@ -378,6 +378,10 @@ def maybe_archive_screenshots():
 def _handle_sigterm(signum, frame):
     logging.info("✋ SIGTERM caught—requesting shutdown…")
     _shutdown_event.set()
+    try:
+        clear_display(display)
+    except Exception:
+        pass
 
 signal.signal(signal.SIGTERM, _handle_sigterm)
 
