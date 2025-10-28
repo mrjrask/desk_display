@@ -425,8 +425,8 @@ def _draw_temperature_panel(
     height = max(1, y1 - y0)
 
     radius = max(14, min(26, min(width, height) // 5))
-    bg = _mix_color(color, config.INSIDE_COL_BG, 0.62)
-    outline = _mix_color(color, config.INSIDE_COL_BG, 0.35)
+    bg = _mix_color(color, config.INSIDE_COL_BG, 0.4)
+    outline = _mix_color(color, config.INSIDE_COL_BG, 0.25)
     draw.rounded_rectangle(rect, radius=radius, fill=bg, outline=outline, width=1)
 
     padding_x = max(16, width // 12)
@@ -481,9 +481,19 @@ def _draw_temperature_panel(
     if temp_y + temp_h > desc_y - value_gap:
         temp_y = max(label_y + label_h + value_gap, desc_y - value_gap - temp_h)
 
-    draw.text((label_x, label_y), label_text, font=label_font, fill=_mix_color(color, (0, 0, 0), 0.5))
+    draw.text(
+        (label_x, label_y),
+        label_text,
+        font=label_font,
+        fill=_mix_color(color, config.INSIDE_COL_TEXT, 0.2),
+    )
     draw.text((temp_x, temp_y), temp_text, font=temp_font, fill=config.INSIDE_COL_TEXT)
-    draw.text((desc_x, desc_y), descriptor, font=desc_font, fill=_mix_color(color, (0, 0, 0), 0.4))
+    draw.text(
+        (desc_x, desc_y),
+        descriptor,
+        font=desc_font,
+        fill=_mix_color(color, config.INSIDE_COL_TEXT, 0.35),
+    )
 
 
 def _draw_metric_row(
@@ -499,8 +509,8 @@ def _draw_metric_row(
     width = max(1, x1 - x0)
     height = max(1, y1 - y0)
     radius = max(8, min(20, min(width, height) // 4))
-    bg = _mix_color(accent, config.INSIDE_COL_BG, 0.7)
-    outline = _mix_color(accent, config.INSIDE_COL_BG, 0.4)
+    bg = _mix_color(accent, config.INSIDE_COL_BG, 0.3)
+    outline = _mix_color(accent, config.INSIDE_COL_BG, 0.18)
     draw.rounded_rectangle(rect, radius=radius, fill=bg, outline=outline, width=1)
 
     padding_x = max(10, width // 10)
@@ -538,13 +548,27 @@ def _draw_metric_row(
     value_y = y1 - padding_y - vh
     min_gap = max(6, height // 12)
     if value_y - (label_y + lh) < min_gap:
-        value_y = label_y + lh + min_gap
+        value_y = min(y1 - padding_y - vh, label_y + lh + min_gap)
 
-    label_color = _mix_color(accent, (0, 0, 0), 0.55)
+    label_color = _mix_color(accent, config.INSIDE_COL_TEXT, 0.25)
     value_color = config.INSIDE_COL_TEXT
 
     draw.text((label_x, label_y), label, font=label_font, fill=label_color)
     draw.text((value_x, value_y), value, font=value_font, fill=value_color)
+
+
+def _metric_grid_dimensions(count: int) -> Tuple[int, int]:
+    if count <= 0:
+        return 0, 0
+    if count <= 2:
+        columns = count
+    elif count <= 6:
+        columns = 2
+    else:
+        columns = 3
+    columns = max(1, columns)
+    rows = int(math.ceil(count / columns))
+    return columns, rows
 
 
 def _draw_metric_rows(
@@ -561,28 +585,46 @@ def _draw_metric_rows(
     if count <= 0 or width <= 0 or height <= 0:
         return
 
-    if count <= 2:
-        columns = count
-    elif count <= 6:
-        columns = 2
-    else:
-        columns = 3
-    columns = max(1, columns)
-    rows = int(math.ceil(count / columns))
+    columns, rows = _metric_grid_dimensions(count)
+    if columns <= 0 or rows <= 0:
+        return
 
-    h_gap = max(8, width // 40) if columns > 1 else 0
-    v_gap = max(8, height // 40) if rows > 1 else 0
+    if columns > 1:
+        desired_h_gap = max(8, width // 30)
+        max_h_gap = max(0, (width - columns) // (columns - 1))
+        h_gap = min(desired_h_gap, max_h_gap)
+    else:
+        h_gap = 0
+    if rows > 1:
+        desired_v_gap = max(8, height // 30)
+        max_v_gap = max(0, (height - rows) // (rows - 1))
+        v_gap = min(desired_v_gap, max_v_gap)
+    else:
+        v_gap = 0
 
     total_h_gap = h_gap * (columns - 1)
     total_v_gap = v_gap * (rows - 1)
-    cell_width = max(48, (width - total_h_gap) // columns)
-    cell_height = max(48, (height - total_v_gap) // rows)
+
+    available_width = max(columns, width - total_h_gap)
+    available_height = max(rows, height - total_v_gap)
+
+    cell_width = max(72, available_width // columns)
+    if cell_width * columns + total_h_gap > width:
+        cell_width = max(1, available_width // columns)
+    cell_height = max(44, available_height // rows)
+    if cell_height * rows + total_v_gap > height:
+        cell_height = max(1, available_height // rows)
+
+    grid_width = min(width, cell_width * columns + total_h_gap)
+    grid_height = min(height, cell_height * rows + total_v_gap)
+    start_x = x0 + max(0, (width - grid_width) // 2)
+    start_y = y0 + max(0, (height - grid_height) // 2)
 
     for index, metric in enumerate(metrics):
         row = index // columns
         col = index % columns
-        left = x0 + col * (cell_width + h_gap)
-        top = y0 + row * (cell_height + v_gap)
+        left = start_x + col * (cell_width + h_gap)
+        top = start_y + row * (cell_height + v_gap)
         right = min(x1, left + cell_width)
         bottom = min(y1, top + cell_height)
         if right <= left or bottom <= top:
@@ -825,14 +867,29 @@ def draw_inside(display, transition: bool=False):
     content_height = max(1, content_bottom - content_top)
 
     metric_count = len(metrics)
+    _, grid_rows = _metric_grid_dimensions(metric_count)
     if metric_count:
-        temp_ratio = max(0.42, 0.6 - 0.03 * min(metric_count, 6))
-        min_temp = max(96, 112 - 6 * min(metric_count, 6))
+        temp_ratio = max(0.42, 0.58 - 0.03 * min(metric_count, 6))
+        min_temp = max(84, 118 - 8 * min(metric_count, 6))
     else:
         temp_ratio = 0.82
-        min_temp = 120
+        min_temp = 128
 
     temp_height = min(content_height, max(min_temp, int(content_height * temp_ratio)))
+    metric_block_gap = 12 if metric_count else 0
+    if metric_count:
+        min_metric_row_height = 44
+        min_metric_gap = 10 if grid_rows > 1 else 0
+        target_metrics_height = (
+            grid_rows * min_metric_row_height + max(0, grid_rows - 1) * min_metric_gap
+        )
+        preferred_temp_cap = content_height - (target_metrics_height + metric_block_gap)
+        min_temp_floor = min(54, content_height)
+        preferred_temp_cap = max(min_temp_floor, preferred_temp_cap)
+        temp_height = min(temp_height, preferred_temp_cap)
+        temp_height = max(min_temp_floor, min(temp_height, content_height))
+    else:
+        metric_block_gap = 0
     temp_rect = (
         side_pad,
         content_top,
@@ -854,7 +911,7 @@ def draw_inside(display, transition: bool=False):
     if metrics:
         metrics_rect = (
             side_pad,
-            min(content_bottom, temp_rect[3] + 12),
+            min(content_bottom, temp_rect[3] + metric_block_gap),
             W - side_pad,
             content_bottom,
         )
