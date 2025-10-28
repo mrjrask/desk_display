@@ -16,6 +16,12 @@ from typing import List, Dict, Optional, Tuple
 from PIL import Image, ImageDraw
 
 import config
+from config import (
+    SCOREBOARD_SCROLL_STEP,
+    SCOREBOARD_SCROLL_DELAY,
+    SCOREBOARD_SCROLL_PAUSE_TOP,
+    SCOREBOARD_SCROLL_PAUSE_BOTTOM,
+)
 from utils import clear_display, get_mlb_abbreviation, log_call
 from screens.mlb_team_standings import format_games_back
 
@@ -31,11 +37,6 @@ FONT_GB_LABEL   = config.FONT_GB_LABEL
 LOGO_SIZE   = 52      # max width/height of a division logo
 MARGIN      = 6       # left/right gutter
 ROW_SPACING = 6       # vertical gap between rows
-
-PRE_SCROLL   = 0.75   # pause before any scroll
-SCROLL_SPEED = 2      # pixels per frame for scroll
-SCROLL_DELAY = 0.05   # delay between frames
-PAUSE_END    = 0.5    # pause after finishing
 
 OV_COLS = 3           # East, Central, West columns on Overview
 OV_ROWS = 5           # max teams to show per division on Overview
@@ -294,19 +295,29 @@ def draw_division_screen(display, league_id: int, division_id: int, title: str, 
     frame.paste(slice_first, (0, header_h))
     display.image(frame)
     display.show()
-    time.sleep(PRE_SCROLL)
 
-    # Scroll down
     visible_h = HEIGHT - header_h
-    for off in range(0, max(1, list_h - visible_h + 1), SCROLL_SPEED):
+    max_offset = max(0, list_h - visible_h)
+
+    time.sleep(SCOREBOARD_SCROLL_PAUSE_TOP)
+    if max_offset <= 0:
+        time.sleep(SCOREBOARD_SCROLL_PAUSE_BOTTOM)
+        return None
+
+    for off in range(
+        SCOREBOARD_SCROLL_STEP,
+        max_offset + SCOREBOARD_SCROLL_STEP,
+        SCOREBOARD_SCROLL_STEP,
+    ):
+        offset = min(off, max_offset)
         f2 = header.copy()
-        part = canvas.crop((0, off, WIDTH, off + visible_h))
+        part = canvas.crop((0, offset, WIDTH, offset + visible_h))
         f2.paste(part, (0, header_h))
         display.image(f2)
         display.show()
-        time.sleep(SCROLL_DELAY)
+        time.sleep(SCOREBOARD_SCROLL_DELAY)
 
-    time.sleep(PAUSE_END)
+    time.sleep(SCOREBOARD_SCROLL_PAUSE_BOTTOM)
     return None
 
 
@@ -383,17 +394,26 @@ def draw_wildcard_screen(display, league_id: int, title: str, transition=False):
     first.paste(first_slice, (0, header_h))
     display.image(first)
     display.show()
-    time.sleep(PRE_SCROLL)
 
-    for off in range(start_off, -1, -SCROLL_SPEED):
+    time.sleep(SCOREBOARD_SCROLL_PAUSE_BOTTOM)
+    if start_off <= 0:
+        time.sleep(SCOREBOARD_SCROLL_PAUSE_TOP)
+        return None
+
+    for off in range(
+        start_off - SCOREBOARD_SCROLL_STEP,
+        -SCOREBOARD_SCROLL_STEP,
+        -SCOREBOARD_SCROLL_STEP,
+    ):
+        offset = max(0, off)
         f2 = header.copy()
-        part = canvas.crop((0, off, WIDTH, off + visible_h))
+        part = canvas.crop((0, offset, WIDTH, offset + visible_h))
         f2.paste(part, (0, header_h))
         display.image(f2)
         display.show()
-        time.sleep(SCROLL_DELAY)
+        time.sleep(SCOREBOARD_SCROLL_DELAY)
 
-    time.sleep(PAUSE_END)
+    time.sleep(SCOREBOARD_SCROLL_PAUSE_TOP)
     return None
 
 
