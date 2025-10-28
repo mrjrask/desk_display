@@ -144,21 +144,24 @@ if ENABLE_WIFI_MONITOR:
 
 
 def _clear_display_immediately(reason: Optional[str] = None) -> None:
-    """Clear the LCD exactly once, as soon as a shutdown is requested."""
+    """Clear the LCD as soon as a shutdown is requested."""
 
-    if _display_cleared.is_set():
-        return
+    already_cleared = _display_cleared.is_set()
 
-    _display_cleared.set()
-    if reason:
+    if reason and not already_cleared:
         logging.info("🧹 Clearing display (%s)…", reason)
 
     try:
         resume_display_updates()
         clear_display(display)
+        try:
+            display.show()
+        except Exception:
+            pass
     except Exception:
         pass
     finally:
+        _display_cleared.set()
         suspend_display_updates()
 
 
