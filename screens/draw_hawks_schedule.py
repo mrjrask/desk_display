@@ -90,9 +90,12 @@ FONT_NEXT_OPP = FONT_TEAM_SPORTS
 _ABBR_BASE = 33 if HEIGHT > 64 else 30
 _SOG_BASE = 30 if HEIGHT > 64 else 26
 
-FONT_ABBR  = _ts(int(round(_ABBR_BASE * 1.3)))
-FONT_SOG   = _ts(_SOG_BASE)
-FONT_SCORE = _ts(_SOG_BASE + 6)    # keep score 6pt larger than SOG
+_ABBR_FONT_SIZE = int(round(_ABBR_BASE * 1.3))
+_SOG_FONT_SIZE = _SOG_BASE
+
+FONT_ABBR  = _ts(_ABBR_FONT_SIZE)
+FONT_SOG   = _ts(_SOG_FONT_SIZE)
+FONT_SCORE = _ts(int(round(_SOG_FONT_SIZE * 1.45)))    # make goals column stand out more
 FONT_SMALL = _ts(22 if HEIGHT > 64 else 19)    # for SOG label / live clock
 
 # NHL endpoints (prefer api-web; quiet legacy fallback)
@@ -643,23 +646,69 @@ def _draw_scoreboard(
         d.text((x1 + (col2_w - _text_w(d, score_lbl, FONT_SMALL)) // 2, header_y), score_lbl, font=FONT_SMALL, fill="white")
         d.text((x2 + (col3_w - _text_w(d, sog_lbl, FONT_SMALL)) // 2, header_y), sog_lbl, font=FONT_SMALL, fill="white")
 
-    def _row(
-        y_top: int,
+    def _prepare_row(
+        row_top: int,
         row_height: int,
         tri: str,
         score: Optional[int],
         sog: Optional[int],
-        label: Optional[str] = None,
-    ):
-        cy = y_top + row_height // 2
-
-        # Col 1: logo + abbr
+        label: Optional[str],
+    ) -> Dict:
         base_logo_height = max(1, row_height - 4)
         logo_height = min(56, base_logo_height)
         if row_height >= 38:
             logo_height = min(56, max(logo_height, min(row_height - 2, 48)))
         logo_height = max(1, min(int(round(logo_height * 1.3)), row_height - 2, 64))
         logo = _load_logo_png(tri, height=logo_height)
+        logo_w = logo.size[0] if logo else 0
+        text = (label or "").strip() or (tri or "").upper() or "—"
+        text_start = x0 + 6 + (logo_w + 6 if logo else 0)
+        max_width = max(1, x1 - text_start - 4)
+        return {
+            "top": row_top,
+            "height": row_height,
+            "tri": tri,
+            "score": score,
+            "sog": sog,
+            "base_text": text,
+            "logo": logo,
+            "max_width": max_width,
+        }
+
+    row_specs = [
+        _prepare_row(row1_top, row1_h, away_tri, away_score, away_sog, away_label),
+        _prepare_row(split_y, row2_h, home_tri, home_score, home_sog, home_label),
+    ]
+
+    def _fits(font: ImageFont.ImageFont) -> bool:
+        return all(
+            _text_w(d, spec["base_text"], font) <= spec["max_width"]
+            for spec in row_specs
+            if spec["max_width"] > 0 and spec["base_text"]
+        )
+
+    name_font = FONT_ABBR
+    if not _fits(name_font):
+        size = getattr(FONT_ABBR, "size", None) or _ABBR_FONT_SIZE
+        min_size = max(8, int(round(_ABBR_FONT_SIZE * 0.5)))
+        chosen = None
+        for test_size in range(size - 1, min_size - 1, -1):
+            candidate = _ts(test_size)
+            if _fits(candidate):
+                chosen = candidate
+                break
+        name_font = chosen or _ts(min_size)
+
+    def _draw_row(spec: Dict):
+        y_top = spec["top"]
+        row_height = spec["height"]
+        tri = spec["tri"]
+        score = spec["score"]
+        sog = spec["sog"]
+        text = spec["base_text"]
+        logo = spec["logo"]
+
+        cy = y_top + row_height // 2
         lx = x0 + 6
         tx = lx
         if logo:
@@ -670,17 +719,16 @@ def _draw_scoreboard(
             except Exception:
                 pass
             tx = lx + lw + 6
-        text = (label or "").strip() or (tri or "").upper() or "—"
-        font = FONT_ABBR
-        max_width = max(1, x1 - tx - 4)
+
+        max_width = spec["max_width"]
+        font = name_font
         if _text_w(d, text, font) > max_width:
-            font = FONT_SMALL
-        if _text_w(d, text, font) > max_width:
-            # Last resort: truncate with ellipsis
             ellipsis = "…"
-            while text and _text_w(d, text + ellipsis, font) > max_width:
-                text = text[:-1]
-            text = (text + ellipsis) if text else ellipsis
+            trimmed = text
+            while trimmed and _text_w(d, trimmed + ellipsis, font) > max_width:
+                trimmed = trimmed[:-1]
+            text = (trimmed + ellipsis) if trimmed else ellipsis
+
         ah = _text_h(d, font)
         aw = _text_w(d, text, font)
         max_tx = x1 - aw - 4
@@ -688,7 +736,6 @@ def _draw_scoreboard(
         tx = max(tx, x0 + 4)
         d.text((tx, cy - ah//2), text, font=font, fill="white")
 
-        # Col 2: score centered
         sc = "-" if score is None else str(score)
         sw = _text_w(d, sc, FONT_SCORE)
         sh = _text_h(d, FONT_SCORE)
@@ -696,7 +743,6 @@ def _draw_scoreboard(
         sy = cy - sh//2
         d.text((sx, sy), sc, font=FONT_SCORE, fill="white")
 
-        # Col 3: SOG centered
         sog_txt = "-" if sog is None else str(sog)
         gw = _text_w(d, sog_txt, FONT_SOG)
         gh = _text_h(d, FONT_SOG)
@@ -704,8 +750,8 @@ def _draw_scoreboard(
         gy = cy - gh//2
         d.text((gx, gy), sog_txt, font=FONT_SOG, fill="white")
 
-    _row(row1_top, row1_h, away_tri, away_score, away_sog, away_label)
-    _row(split_y, row2_h, home_tri, home_score, home_sog, home_label)
+    for spec in row_specs:
+        _draw_row(spec)
 
     return table_bottom  # bottom of table
 
