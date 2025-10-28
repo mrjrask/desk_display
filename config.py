@@ -177,7 +177,7 @@ except (TypeError, ValueError):
     DISPLAY_ROTATION = 180
 
 # ─── Scoreboard scrolling configuration ───────────────────────────────────────
-SCOREBOARD_SCROLL_STEP         = 1.5
+SCOREBOARD_SCROLL_STEP         = 2
 SCOREBOARD_SCROLL_DELAY        = 0.01
 SCOREBOARD_SCROLL_PAUSE_TOP    = 0.75
 SCOREBOARD_SCROLL_PAUSE_BOTTOM = 0.5
