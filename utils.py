@@ -19,7 +19,7 @@ import threading
 import time
 from contextlib import contextmanager
 from dataclasses import dataclass
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 import functools
 import logging
@@ -230,10 +230,14 @@ class ScreenImage:
         Whether the image has already been pushed to the display by the
         originating function. This allows callers to skip redundant redraws
         while still accessing the image data (e.g., for screenshots).
+    led_override:
+        Optional RGB tuple describing an LED color override that should remain
+        active while the image is shown.
     """
 
     image: Image.Image
     displayed: bool = False
+    led_override: Optional[Tuple[float, float, float]] = None
 
 # ─── Basic utilities ────────────────────────────────────────────────────────
 @log_call

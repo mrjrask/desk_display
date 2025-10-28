@@ -25,7 +25,13 @@ from config import (
     FONT_STOCK_TEXT,
     IMAGES_DIR,
 )
-from utils import LED_INDICATOR_LEVEL, clear_display, log_call, temporary_display_led
+from utils import (
+    LED_INDICATOR_LEVEL,
+    ScreenImage,
+    clear_display,
+    log_call,
+    temporary_display_led,
+)
 
 # In-memory cache
 _cache = {
@@ -192,8 +198,6 @@ def _build_image(symbol: str = "VRNOF") -> Image.Image:
 
 def draw_vrnof_screen(display, symbol: str = "VRNOF", transition: bool = False):
     img = _build_image(symbol)
-    if transition:
-        return img
     change_val = _cache.get("change_val")
     led_color = None
     if change_val is not None:
@@ -201,6 +205,9 @@ def draw_vrnof_screen(display, symbol: str = "VRNOF", transition: bool = False):
             led_color = (0.0, LED_INDICATOR_LEVEL, 0.0)
         elif change_val < 0:
             led_color = (LED_INDICATOR_LEVEL, 0.0, 0.0)
+
+    if transition:
+        return ScreenImage(img, displayed=False, led_override=led_color)
 
     def _render_screen():
         clear_display(display)
