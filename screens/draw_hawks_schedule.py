@@ -590,13 +590,16 @@ def _draw_scoreboard(
     put_sog_label: bool = True,
     bottom_reserved_px: int = 0,
 ) -> int:
-    """Draw a 2×3 dotted scoreboard. Returns bottom y."""
-    # Column widths for 128px: widen col 1 for bigger logos/names, remaining split
-    # evenly for the slimmer score/SOG columns.
-    col1_w = min(96, max(78, int(WIDTH * 0.64)))
-    remaining = WIDTH - col1_w
-    col2_w = remaining // 2
-    col3_w = remaining - col2_w  # equal or off-by-1
+    """Draw a compact 2×3 scoreboard. Returns bottom y."""
+    # Column widths: first column dominates for logo + name, remaining space split
+    # for score/SOG with the score column slightly wider than SOG.
+    col1_w = min(WIDTH - 32, max(84, int(WIDTH * 0.72)))
+    remaining = max(24, WIDTH - col1_w)
+    col2_w = max(12, int(round(remaining * 0.55)))
+    col3_w = max(8, WIDTH - col1_w - col2_w)
+    # Ensure we account for rounding adjustments.
+    if col1_w + col2_w + col3_w != WIDTH:
+        col3_w = WIDTH - col1_w - col2_w
     x0, x1, x2, x3 = 0, col1_w, col1_w + col2_w, WIDTH
 
     y = top_y
@@ -630,14 +633,7 @@ def _draw_scoreboard(
     row1_top = header_bottom
     split_y = row1_top + row1_h
 
-    # Grid lines (dotted, light)
-    grid_color = (210, 210, 210)
-    _draw_dotted_rect(d, (x0, table_top, x3 - 1, table_bottom - 1), grid_color)
-    _draw_dotted_line(d, (x1, table_top), (x1, table_bottom - 1), grid_color)
-    _draw_dotted_line(d, (x2, table_top), (x2, table_bottom - 1), grid_color)
-    _draw_dotted_line(d, (x0, split_y), (x3 - 1, split_y), grid_color)
-    if header_h:
-        _draw_dotted_line(d, (x0, header_bottom), (x3 - 1, header_bottom), grid_color)
+    # We keep the invisible grid for layout math only—no rendered lines.
 
     # Column headers inside the table
     if header_h:
