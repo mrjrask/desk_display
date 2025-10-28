@@ -36,6 +36,7 @@ from config import (
     SCOREBOARD_SCROLL_DELAY,
     SCOREBOARD_SCROLL_PAUSE_TOP,
     SCOREBOARD_SCROLL_PAUSE_BOTTOM,
+    SCOREBOARD_BACKGROUND_COLOR,
 )
 from utils import (
     ScreenImage,
@@ -74,6 +75,7 @@ IN_PROGRESS_SCORE_COLOR = (255, 210, 66)  # #ffd242
 IN_PROGRESS_STATUS_COLOR = IN_PROGRESS_SCORE_COLOR
 FINAL_WINNING_SCORE_COLOR = (255, 255, 255)
 FINAL_LOSING_SCORE_COLOR = (160, 160, 160)
+BACKGROUND_COLOR = SCOREBOARD_BACKGROUND_COLOR
 
 # Cache for resized logos {abbr: Image}
 _LOGO_CACHE: dict[str, Optional[Image.Image]] = {}
@@ -359,12 +361,12 @@ def _draw_game_block(canvas: Image.Image, draw: ImageDraw.ImageDraw, game: dict,
 
 def _compose_canvas(games: list[dict]) -> Image.Image:
     if not games:
-        return Image.new("RGB", (WIDTH, HEIGHT), "black")
+        return Image.new("RGB", (WIDTH, HEIGHT), BACKGROUND_COLOR)
     block_height = SCORE_ROW_H + STATUS_ROW_H
     total_height = block_height * len(games)
     if len(games) > 1:
         total_height += BLOCK_SPACING * (len(games) - 1)
-    canvas = Image.new("RGB", (WIDTH, total_height), "black")
+    canvas = Image.new("RGB", (WIDTH, total_height), BACKGROUND_COLOR)
     draw = ImageDraw.Draw(canvas)
 
     y = 0
@@ -441,7 +443,7 @@ def _render_scoreboard(games: list[dict]) -> Image.Image:
     canvas = _compose_canvas(games)
 
     # Measure title height on a throwaway canvas to size the final image precisely.
-    dummy = Image.new("RGB", (WIDTH, 10), "black")
+    dummy = Image.new("RGB", (WIDTH, 10), BACKGROUND_COLOR)
     dd = ImageDraw.Draw(dummy)
     try:
         l, t, r, b = dd.textbbox((0, 0), TITLE, font=TITLE_FONT)
@@ -455,7 +457,7 @@ def _render_scoreboard(games: list[dict]) -> Image.Image:
 
     content_top = logo_height + logo_gap + title_h + TITLE_GAP
     img_height = max(HEIGHT, content_top + canvas.height)
-    img = Image.new("RGB", (WIDTH, img_height), "black")
+    img = Image.new("RGB", (WIDTH, img_height), BACKGROUND_COLOR)
     draw = ImageDraw.Draw(img)
 
     if league_logo:
@@ -515,7 +517,7 @@ def draw_mlb_scoreboard(display, transition: bool = False) -> ScreenImage:
 
     if not games:
         clear_display(display)
-        img = Image.new("RGB", (WIDTH, HEIGHT), "black")
+        img = Image.new("RGB", (WIDTH, HEIGHT), BACKGROUND_COLOR)
         draw = ImageDraw.Draw(img)
         league_logo = _get_league_logo()
         title_top = 0

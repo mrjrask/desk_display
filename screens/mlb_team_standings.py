@@ -23,7 +23,8 @@ from config import (
     FONT_STAND1_WCGB_LABEL,
     FONT_STAND1_WCGB_VALUE,
     FONT_STAND2_RECORD,
-    FONT_STAND2_VALUE
+    FONT_STAND2_VALUE,
+    SCOREBOARD_BACKGROUND_COLOR,
 )
 from utils import clear_display, log_call
 
@@ -69,7 +70,7 @@ def draw_standings_screen1(display, rec, logo_path, division_name, transition=Fa
         return None
 
     clear_display(display)
-    img  = Image.new("RGB",(WIDTH,HEIGHT),"black")
+    img  = Image.new("RGB", (WIDTH, HEIGHT), SCOREBOARD_BACKGROUND_COLOR)
     draw = ImageDraw.Draw(img)
 
     # Logo
@@ -161,7 +162,7 @@ def draw_standings_screen2(display, rec, logo_path, transition=False):
         return None
 
     clear_display(display)
-    img  = Image.new("RGB",(WIDTH,HEIGHT),"black")
+    img  = Image.new("RGB", (WIDTH, HEIGHT), SCOREBOARD_BACKGROUND_COLOR)
     draw = ImageDraw.Draw(img)
 
     # Logo

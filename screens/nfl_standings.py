@@ -25,6 +25,7 @@ from config import (
     SCOREBOARD_SCROLL_DELAY,
     SCOREBOARD_SCROLL_PAUSE_TOP,
     SCOREBOARD_SCROLL_PAUSE_BOTTOM,
+    SCOREBOARD_BACKGROUND_COLOR,
 )
 from services.http_client import get_session
 from utils import ScreenImage, clear_display, clone_font, load_team_logo, log_call
@@ -58,6 +59,7 @@ OVERVIEW_PAUSE_END = 0.5
 
 LEFT_MARGIN = 4
 RIGHT_MARGIN = 6
+BACKGROUND_COLOR = SCOREBOARD_BACKGROUND_COLOR
 ROW_PADDING = 3
 ROW_SPACING = 2
 TITLE_MARGIN_TOP = 4
@@ -947,7 +949,7 @@ def _render_conference(title: str, division_order: List[str], standings: Dict[st
         HEIGHT,
         TITLE_MARGIN_TOP + TITLE_TEXT_HEIGHT + TITLE_MARGIN_BOTTOM + content_height,
     )
-    img = Image.new("RGB", (WIDTH, total_height), "black")
+    img = Image.new("RGB", (WIDTH, total_height), BACKGROUND_COLOR)
     draw = ImageDraw.Draw(img)
 
     # Title
@@ -1072,7 +1074,7 @@ def _render_conference(title: str, division_order: List[str], standings: Dict[st
 
 
 def _overview_header_frame(title: str) -> Tuple[Image.Image, int]:
-    img = Image.new("RGB", (WIDTH, HEIGHT), "black")
+    img = Image.new("RGB", (WIDTH, HEIGHT), BACKGROUND_COLOR)
     draw = ImageDraw.Draw(img)
     try:
         l, t, r, b = draw.textbbox((0, 0), title, font=TITLE_FONT)
@@ -1263,7 +1265,7 @@ def _render_overview_fallback(
     transition: bool,
 ) -> ScreenImage:
     clear_display(display)
-    img = Image.new("RGB", (WIDTH, HEIGHT), "black")
+    img = Image.new("RGB", (WIDTH, HEIGHT), BACKGROUND_COLOR)
     draw = ImageDraw.Draw(img)
 
     message = fallback_message or "No standings"
@@ -1333,7 +1335,7 @@ def _render_and_display(
 ) -> ScreenImage:
     if not any(standings.values()):
         clear_display(display)
-        img = Image.new("RGB", (WIDTH, HEIGHT), "black")
+        img = Image.new("RGB", (WIDTH, HEIGHT), BACKGROUND_COLOR)
         draw = ImageDraw.Draw(img)
         message = fallback_message or "No standings"
         try:
