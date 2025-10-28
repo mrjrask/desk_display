@@ -130,7 +130,7 @@ desk_display/
 Most runtime behavior is controlled in `config.py`:
 
 - **Display:** `WIDTH=320`, `HEIGHT=240`
-- **Intervals:** `SCREEN_DELAY`, `SCHEDULE_UPDATE_INTERVAL`
+- **Intervals:** `SCREEN_DELAY`, `TEAM_STANDINGS_DISPLAY_SECONDS`, `SCHEDULE_UPDATE_INTERVAL`
 - **Feature flags:** `ENABLE_SCREENSHOTS`, `ENABLE_VIDEO`, `ENABLE_WIFI_MONITOR`
 - **Weather:** `ENABLE_WEATHER`, `LATITUDE/LONGITUDE`
 - **Travel:** `TRAVEL_MODE` (`to_home` or `to_work`)

@@ -15,6 +15,7 @@ from PIL import Image, ImageDraw
 from config import (
     WIDTH,
     HEIGHT,
+    TEAM_STANDINGS_DISPLAY_SECONDS,
     FONT_STAND1_WL,
     FONT_STAND1_RANK,
     FONT_STAND1_GB_LABEL,
@@ -147,7 +148,7 @@ def draw_standings_screen1(display, rec, logo_path, division_name, transition=Fa
 
     display.image(img)
     display.show()
-    time.sleep(5)
+    time.sleep(TEAM_STANDINGS_DISPLAY_SECONDS)
     return None
 
 
@@ -214,5 +215,5 @@ def draw_standings_screen2(display, rec, logo_path, transition=False):
 
     display.image(img)
     display.show()
-    time.sleep(5)
+    time.sleep(TEAM_STANDINGS_DISPLAY_SECONDS)
     return None

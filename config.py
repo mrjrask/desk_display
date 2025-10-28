@@ -157,6 +157,15 @@ GOOGLE_MAPS_API_KEY = os.environ.get("GOOGLE_MAPS_API_KEY")
 WIDTH                    = 320
 HEIGHT                   = 240
 SCREEN_DELAY             = 4
+try:
+    TEAM_STANDINGS_DISPLAY_SECONDS = int(
+        os.environ.get("TEAM_STANDINGS_DISPLAY_SECONDS", "5")
+    )
+except (TypeError, ValueError):
+    logging.warning(
+        "Invalid TEAM_STANDINGS_DISPLAY_SECONDS value; defaulting to 5 seconds."
+    )
+    TEAM_STANDINGS_DISPLAY_SECONDS = 5
 SCHEDULE_UPDATE_INTERVAL = 600
 
 try:
