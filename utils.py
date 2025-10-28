@@ -17,6 +17,7 @@ import random
 import subprocess
 import threading
 import time
+from contextlib import contextmanager
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional
 
@@ -52,6 +53,9 @@ else:  # pragma: no cover - hardware import
 
 _ACTIVE_DISPLAY: Optional["Display"] = None
 _GITHUB_LED_ANIMATOR: Optional["_GithubLedAnimator"] = None
+_GITHUB_LED_STATE: bool = False
+
+LED_INDICATOR_LEVEL = 1 / 255.0
 
 # Project config
 from config import WIDTH, HEIGHT, CENTRAL_TIME, DISPLAY_ROTATION
@@ -557,11 +561,7 @@ def load_svg(key, url) -> Image.Image | None:
 
 # ─── GitHub Update Checker ─────────────────────────────────────────────────
 class _GithubLedAnimator:
-    """Hold the onboard LED at a barely visible red glow."""
-
-    # The onboard LED is extremely bright at higher duty cycles; keep the
-    # indicator at the dimmest perceptible red level.
-    _RED_LEVEL = 1 / 255.0
+    """Hold the onboard LED at a barely visible blue glow."""
 
     def __init__(self, display: "Display") -> None:
         self._display = display
@@ -580,20 +580,43 @@ class _GithubLedAnimator:
         self._display.set_led(r=0.0, g=0.0, b=0.0)
 
     def _run(self) -> None:
-        self._display.set_led(r=self._RED_LEVEL, g=0.0, b=0.0)
+        self._display.set_led(r=0.0, g=0.0, b=LED_INDICATOR_LEVEL)
         # Keep the LED steady until we're asked to stop.
         while not self._stop.wait(0.2):
             continue
         self._display.set_led(r=0.0, g=0.0, b=0.0)
 
 
-def _update_github_led(state: bool) -> None:
-    """Reflect GitHub update status on the Display HAT Mini LED."""
+def _start_github_led_animator(display: "Display") -> None:
+    """Start the GitHub LED animator for the provided display."""
 
     global _GITHUB_LED_ANIMATOR
 
+    animator = _GithubLedAnimator(display)
+    _GITHUB_LED_ANIMATOR = animator
+    try:  # pragma: no cover - hardware import
+        animator.start()
+    except Exception as exc:
+        logging.debug("Failed to start GitHub LED animator: %s", exc)
+        _GITHUB_LED_ANIMATOR = None
+
+
+def _update_github_led(state: bool) -> None:
+    """Reflect GitHub update status on the Display HAT Mini LED."""
+
+    global _GITHUB_LED_ANIMATOR, _GITHUB_LED_STATE
+
+    _GITHUB_LED_STATE = state
+
     display = get_active_display()
     if display is None:
+        if not state and _GITHUB_LED_ANIMATOR is not None:
+            try:  # pragma: no cover - hardware import
+                _GITHUB_LED_ANIMATOR.stop()
+            except Exception as exc:
+                logging.debug("Failed to stop GitHub LED animator without display: %s", exc)
+            finally:
+                _GITHUB_LED_ANIMATOR = None
         return
 
     if state:
@@ -606,13 +629,7 @@ def _update_github_led(state: bool) -> None:
                 _GITHUB_LED_ANIMATOR.stop()
             except Exception as exc:  # pragma: no cover - hardware import
                 logging.debug("Failed to stop previous GitHub LED animator: %s", exc)
-        animator = _GithubLedAnimator(display)
-        _GITHUB_LED_ANIMATOR = animator
-        try:
-            animator.start()
-        except Exception as exc:  # pragma: no cover - hardware import
-            logging.debug("Failed to start GitHub LED animator: %s", exc)
-            _GITHUB_LED_ANIMATOR = None
+        _start_github_led_animator(display)
     else:
         if _GITHUB_LED_ANIMATOR is not None:
             try:
@@ -622,6 +639,41 @@ def _update_github_led(state: bool) -> None:
             finally:
                 _GITHUB_LED_ANIMATOR = None
 
+
+@contextmanager
+def temporary_display_led(r: float, g: float, b: float):
+    """Temporarily override the display LED, restoring GitHub status after."""
+
+    global _GITHUB_LED_ANIMATOR
+
+    display = get_active_display()
+    if display is None:
+        yield
+        return
+
+    animator = _GITHUB_LED_ANIMATOR
+    if animator is not None and not animator.is_running_for(display):
+        animator = None
+
+    if animator is not None:
+        try:  # pragma: no cover - hardware import
+            animator.stop()
+        except Exception as exc:
+            logging.debug("Failed to stop GitHub LED animator before override: %s", exc)
+        finally:
+            _GITHUB_LED_ANIMATOR = None
+
+    try:
+        display.set_led(r=r, g=g, b=b)
+        yield
+    finally:
+        if _GITHUB_LED_STATE:
+            _start_github_led_animator(display)
+        else:
+            try:
+                display.set_led(r=0.0, g=0.0, b=0.0)
+            except Exception as exc:
+                logging.debug("Failed to reset LED after override: %s", exc)
 
 def check_github_updates() -> bool:
     """
