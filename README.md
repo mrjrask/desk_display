@@ -267,6 +267,8 @@ Or copy `.env.example` to `.env` and load it with your preferred process manager
 - **NFL logos:** for the Bears screen, `images/nfl/<abbr>.png` (e.g., `gb.png`, `min.png`).
 - **Cubs W/L flag:** use `images/W_flag.webp` and `images/L_flag.webp` (animated). If missing, the code falls back to `images/W.png` / `images/L.png`.
 - **Fonts:** copy `TimesSquare-m105.ttf`, `DejaVuSans.ttf`, `DejaVuSans-Bold.ttf`, and `NotoColorEmoji.ttf` into `fonts/`.
+- **Travel font:** the Google Maps travel screen loads `HWYGNRRW.TTF` (Highway Gothic) directly from `fonts/`. Without this
+  file the app will exit on startup, so copy your licensed copy into that folder alongside the other fonts.
 - **Emoji font:** `NotoColorEmoji.ttf` is used by default; if unavailable, install the Symbola font (package `ttf-ancient-fonts` on Debian/Ubuntu) or place `Symbola.ttf` in your system font directory so precipitation/cloud icons render correctly.
 
 ---
@@ -343,6 +345,17 @@ python -m venv /home/pi/desk_display/venv
 /home/pi/desk_display/venv/bin/pip install -r /home/pi/desk_display/requirements.txt
 chmod +x /home/pi/desk_display/cleanup.sh
 ```
+
+`ExecStop` runs `cleanup.sh` on every shutdown so the LCD blanks immediately and any lingering screenshots or videos are swept
+into the archive folders. The service is marked `Restart=always`, so crashes or manual restarts via `systemctl restart` will
+trigger a fresh boot after cleanup completes.
+
+### Display HAT Mini controls
+
+- **X button:** skips the remainder of the current screen and moves on immediately.
+- **Y button:** requests a `systemctl restart desk_display.service`, which stops the service, runs `cleanup.sh`, and starts a
+  fresh process.
+- **A/B buttons:** currently unused but logged when pressed so you can build new shortcuts.
 
 ---
 

@@ -16,7 +16,7 @@ from config import (
 )
 from config import get_current_ssid  # your helper in config.py
 from utils import clear_display, draw_text_centered, split_time_period
-from PIL import Image
+from PIL import Image, ImageDraw
 
 class ConnectivityMonitor:
     """
@@ -78,8 +78,8 @@ def show_no_wifi_screen(display):
     Display a static 'No Wi-Fi' + date/time status.
     """
     clear_display(display)
-    img = Image.new("RGB", (display.width, display.height), (0,0,0))
-    draw = Image.Draw.Draw(img)
+    img = Image.new("RGB", (display.width, display.height), (0, 0, 0))
+    draw = ImageDraw.Draw(img)
 
     # Status line
     draw_text_centered(draw, "No Wi-Fi.", FONT_TITLE_SPORTS, y_offset=-16)
@@ -102,8 +102,8 @@ def show_wifi_no_internet_screen(display, ssid):
     Display 'Wi-Fi connected.' / SSID / 'No Internet.'
     """
     clear_display(display)
-    img = Image.new("RGB", (display.width, display.height), (0,0,0))
-    draw = Image.Draw.Draw(img)
+    img = Image.new("RGB", (display.width, display.height), (0, 0, 0))
+    draw = ImageDraw.Draw(img)
 
     draw_text_centered(draw, "Wi-Fi connected.", FONT_TITLE_SPORTS, y_offset=-24)
     draw_text_centered(draw, ssid,                FONT_DATE_SPORTS,  y_offset=0)
