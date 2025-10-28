@@ -93,6 +93,7 @@ TEAM_NAMES_BY_ABBR: dict[str, str] = {
     "JAX": "Jaguars",
     "KC": "Chiefs",
     "LAC": "Chargers",
+    "LA": "Rams",
     "LAR": "Rams",
     "LV": "Raiders",
     "OAK": "Raiders",
