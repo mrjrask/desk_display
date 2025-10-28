@@ -535,7 +535,8 @@ def main_loop():
                 )
                 if _shutdown_event.is_set():
                     break
-                _wait_with_button_checks(SCREEN_DELAY)
+                if _wait_with_button_checks(SCREEN_DELAY):
+                    continue
                 gc.collect()
                 continue
 
@@ -562,7 +563,8 @@ def main_loop():
                 )
                 if _shutdown_event.is_set():
                     break
-                _wait_with_button_checks(SCREEN_DELAY)
+                if _wait_with_button_checks(SCREEN_DELAY):
+                    continue
                 gc.collect()
                 continue
 
@@ -577,7 +579,8 @@ def main_loop():
                 gc.collect()
                 if _shutdown_event.is_set():
                     break
-                _wait_with_button_checks(SCREEN_DELAY)
+                if _wait_with_button_checks(SCREEN_DELAY):
+                    continue
                 continue
 
             if result is None:
@@ -585,7 +588,8 @@ def main_loop():
                 gc.collect()
                 if _shutdown_event.is_set():
                     break
-                _wait_with_button_checks(SCREEN_DELAY)
+                if _wait_with_button_checks(SCREEN_DELAY):
+                    continue
                 continue
 
             already_displayed = False
@@ -622,7 +626,8 @@ def main_loop():
 
             if _shutdown_event.is_set():
                 break
-            _wait_with_button_checks(SCREEN_DELAY)
+            if _wait_with_button_checks(SCREEN_DELAY):
+                continue
             gc.collect()
 
     finally:
