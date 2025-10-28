@@ -52,6 +52,8 @@ from utils import (
     clear_display,
     draw_text_centered,
     animate_fade_in,
+    resume_display_updates,
+    suspend_display_updates,
 )
 import data_fetch
 from services import wifi_utils
@@ -152,9 +154,12 @@ def _clear_display_immediately(reason: Optional[str] = None) -> None:
         logging.info("🧹 Clearing display (%s)…", reason)
 
     try:
+        resume_display_updates()
         clear_display(display)
     except Exception:
         pass
+    finally:
+        suspend_display_updates()
 
 
 def request_shutdown(reason: str) -> None:
