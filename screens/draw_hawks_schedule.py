@@ -87,9 +87,12 @@ FONT_BOTTOM = FONT_DATE_SPORTS
 FONT_NEXT_OPP = FONT_TEAM_SPORTS
 
 # Scoreboard fonts (TimesSquare family as requested for numeric/abbr)
-FONT_ABBR  = _ts(33 if HEIGHT > 64 else 30)
-FONT_SCORE = _ts(41 if HEIGHT > 64 else 33)    # compact
-FONT_SOG   = _ts(30 if HEIGHT > 64 else 26)    # compact
+_ABBR_BASE = 33 if HEIGHT > 64 else 30
+_SOG_BASE = 30 if HEIGHT > 64 else 26
+
+FONT_ABBR  = _ts(int(round(_ABBR_BASE * 1.3)))
+FONT_SOG   = _ts(_SOG_BASE)
+FONT_SCORE = _ts(_SOG_BASE + 6)    # keep score 6pt larger than SOG
 FONT_SMALL = _ts(22 if HEIGHT > 64 else 19)    # for SOG label / live clock
 
 # NHL endpoints (prefer api-web; quiet legacy fallback)
@@ -511,8 +514,8 @@ def _draw_scoreboard(
 ) -> int:
     """Draw 2 rows x 3 cols table. Returns bottom y."""
     # Column widths for 128px: widen col 1 for bigger logos/abbr, remaining split
-    # evenly for score/SOG columns.
-    col1_w = min(82, max(72, int(WIDTH * 0.58)))
+    # evenly for the now slimmer score/SOG columns.
+    col1_w = min(96, max(78, int(WIDTH * 0.64)))
     remaining = WIDTH - col1_w
     col2_w = remaining // 2
     col3_w = remaining - col2_w  # equal or off-by-1
@@ -567,6 +570,7 @@ def _draw_scoreboard(
         logo_height = min(56, base_logo_height)
         if row_height >= 38:
             logo_height = min(56, max(logo_height, min(row_height - 2, 48)))
+        logo_height = max(1, min(int(round(logo_height * 1.3)), row_height - 2, 64))
         logo = _load_logo_png(tri, height=logo_height)
         lx = x0 + 6
         tx = lx
