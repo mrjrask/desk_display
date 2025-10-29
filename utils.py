@@ -184,6 +184,11 @@ class Display:
         # No additional action required; display() is triggered during image()
         self._update_display()
 
+    def capture(self) -> Image.Image:
+        """Return a copy of the currently buffered frame."""
+
+        return self._buffer.copy()
+
     # ----- Hardware helpers -------------------------------------------------
     def set_led(self, r: float = 0.0, g: float = 0.0, b: float = 0.0) -> None:
         """Set the onboard RGB LED, if hardware is available."""
@@ -367,12 +372,38 @@ def temperature_color(temp_f: float, lo: float = 50.0, hi: float = 80.0) -> tupl
     return (r, g, b)
 
 @log_call
-def animate_fade_in(display: Display, new_image: Image.Image, steps=10, delay=0.02):
+def animate_fade_in(
+    display: Display,
+    new_image: Image.Image,
+    steps: int = 10,
+    delay: float = 0.02,
+    *,
+    from_image: Image.Image | None = None,
+):
     """
-    Fade an image into view over `steps` frames.
+    Fade from the current display buffer (or ``from_image``) into ``new_image``.
     """
-    base = Image.new("RGB", new_image.size, (0,0,0))
+
+    if steps <= 0:
+        display.image(new_image)
+        return
+
+    if from_image is None:
+        try:
+            base = display.capture()
+        except AttributeError:
+            base = None
+        if base is None:
+            base = Image.new("RGB", new_image.size, (0, 0, 0))
+    else:
+        base = from_image
+
+    base = base.convert("RGB")
+    if base.size != new_image.size:
+        base = base.resize(new_image.size, Image.ANTIALIAS)
+
     target = new_image.convert("RGB")
+
     for i in range(steps + 1):
         alpha = i / steps
         frame = Image.blend(base, target, alpha)
