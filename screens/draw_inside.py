@@ -475,8 +475,9 @@ def _draw_temperature_panel(
         min_pt=min(temp_base_size, 20),
         max_pt=temp_base_size,
     )
-    _, temp_h = measure_text(draw, temp_text, temp_font)
-    temp_x = x0 + padding_x
+    temp_w, temp_h = measure_text(draw, temp_text, temp_font)
+    value_region_width = max(1, width - 2 * padding_x)
+    temp_x = x0 + padding_x + max(0, (value_region_width - temp_w) // 2)
     temp_y = value_top
 
     if temp_y + temp_h > desc_y - value_gap:
