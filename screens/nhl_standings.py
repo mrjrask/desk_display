@@ -136,7 +136,7 @@ TEAM_NICKNAMES = {
     "TOR": "Maple Leafs",
     "VAN": "Canucks",
     "UTA": "Mammoth",
-    "VGK": "Golden Knights",
+    "VGK": "Knights",
     "WSH": "Capitals",
     "WPG": "Jets",
 }
