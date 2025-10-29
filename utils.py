@@ -444,7 +444,7 @@ def animate_scroll(display: Display, image: Image.Image, speed=3, y_offset=None)
     background_color = (0, 0, 0, 0) if has_alpha else (0, 0, 0)
     frame_mode = "RGBA" if has_alpha else "RGB"
 
-    for x in range(start, end, step):
+    for x in range(start, end + step, step):
         frame = Image.new(frame_mode, (w, h), background_color)
         if has_alpha:
             frame.paste(image, (x, y), image)
@@ -453,7 +453,11 @@ def animate_scroll(display: Display, image: Image.Image, speed=3, y_offset=None)
             frame.paste(image, (x, y))
             frame_to_show = frame
         display.image(frame_to_show)
-        time.sleep(0.01)
+        time.sleep(0.008)
+
+    # Ensure the display is clear once the image has fully scrolled off-screen.
+    final_frame = Image.new(frame_mode, (w, h), background_color)
+    display.image(final_frame.convert("RGB") if has_alpha else final_frame)
 
 # ─── Date & Time Helpers ─────────────────────────────────────────────────────
 def parse_game_date(iso_date_str: str, time_str: str = "TBD") -> str:
