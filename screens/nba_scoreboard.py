@@ -86,6 +86,9 @@ BACKGROUND_COLOR  = SCOREBOARD_BACKGROUND_COLOR
 BACKGROUND_COLOR_RGBA = BACKGROUND_COLOR + (255,)
 
 _LOGO_CACHE: dict[str, Optional[Image.Image]] = {}
+_LOGO_ABBREVIATION_OVERRIDES: dict[str, str] = {
+    "BKN": "BRK",
+}
 _SESSION = get_session()
 _NBA_HEADERS = {
     "Origin": "https://www.nba.com",
@@ -209,6 +212,7 @@ def _team_logo_abbr(team: Dict[str, Any]) -> str:
         val = team.get(key)
         if isinstance(val, str) and val.strip():
             candidate = val.strip().upper()
+            candidate = _LOGO_ABBREVIATION_OVERRIDES.get(candidate, candidate)
             if os.path.exists(os.path.join(LOGO_DIR, f"{candidate}.png")):
                 return candidate
     city = (team.get("teamCity") or team.get("city") or "").strip()
@@ -216,6 +220,7 @@ def _team_logo_abbr(team: Dict[str, Any]) -> str:
     nickname = " ".join(part for part in (city, name) if part)
     if nickname:
         candidate = nickname[:3].upper()
+        candidate = _LOGO_ABBREVIATION_OVERRIDES.get(candidate, candidate)
         if os.path.exists(os.path.join(LOGO_DIR, f"{candidate}.png")):
             return candidate
     return ""
