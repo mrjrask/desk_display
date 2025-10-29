@@ -21,6 +21,7 @@ from PIL import Image, ImageDraw
 import config
 from utils import (
     clear_display,
+    clone_font,
     fit_font,
     format_voc_ohms,
     measure_text,
@@ -516,39 +517,116 @@ def _draw_metric_row(
     padding_x = max(10, width // 10)
     padding_y = max(6, height // 8)
 
+    available_width = max(1, width - 2 * padding_x)
+    available_height = max(1, height - 2 * padding_y)
+
     label_base_size = getattr(label_base, "size", 18)
+    label_min_pt = min(label_base_size, 8 if width < 120 else 10)
     label_font = fit_font(
         draw,
         label,
         label_base,
-        max_width=width - 2 * padding_x,
-        max_height=max(12, int(height * 0.35)),
-        min_pt=min(label_base_size, 10),
+        max_width=available_width,
+        max_height=max(12, int(height * 0.38)),
+        min_pt=label_min_pt,
         max_pt=label_base_size,
     )
+    label_w, label_h = measure_text(draw, label, label_font)
+
     value_base_size = getattr(value_base, "size", 24)
-    label_height = measure_text(draw, label, label_font)[1]
-    value_max_height = max(18, height - padding_y * 2 - label_height - padding_y)
+    value_min_pt = min(value_base_size, 10 if width < 120 else 12)
+    value_max_height = max(18, available_height - label_h - max(6, height // 12))
     value_font = fit_font(
         draw,
         value,
         value_base,
-        max_width=width - 2 * padding_x,
+        max_width=available_width,
         max_height=value_max_height,
-        min_pt=min(value_base_size, 12),
+        min_pt=value_min_pt,
         max_pt=value_base_size,
     )
+    value_w, value_h = measure_text(draw, value, value_font)
 
-    _, lh = measure_text(draw, label, label_font)
-    _, vh = measure_text(draw, value, value_font)
+    def _shrink_font(
+        text: str,
+        base,
+        current,
+        current_size: int,
+        min_size: int,
+    ) -> Tuple[Any, Tuple[int, int], int]:
+        """Reduce *current* font size until the text fits or *min_size* reached."""
+
+        width_limit = available_width
+        height_limit = available_height
+        width, height = measure_text(draw, text, current)
+        while (width > width_limit or height > height_limit) and current_size > min_size:
+            next_size = current_size - 1
+            new_font = clone_font(base, next_size)
+            new_size = getattr(new_font, "size", current_size)
+            if new_size >= current_size:
+                break
+            current = new_font
+            current_size = new_size
+            width, height = measure_text(draw, text, current)
+        return current, (width, height), current_size
+
+    label_size = getattr(label_font, "size", label_base_size)
+    value_size = getattr(value_font, "size", value_base_size)
+
+    label_font, (label_w, label_h), label_size = _shrink_font(
+        label,
+        label_base,
+        label_font,
+        label_size,
+        label_min_pt,
+    )
+
+    value_font, (value_w, value_h), value_size = _shrink_font(
+        value,
+        value_base,
+        value_font,
+        value_size,
+        value_min_pt,
+    )
+
+    min_gap = max(6, height // 12)
+    total_needed = label_h + min_gap + value_h
+    while total_needed > available_height and (label_size > label_min_pt or value_size > value_min_pt):
+        shrink_label = label_size > label_min_pt and (
+            label_h >= value_h or value_size <= value_min_pt
+        )
+        if shrink_label:
+            next_size = max(label_min_pt, label_size - 1)
+            if next_size == label_size:
+                break
+            label_font = clone_font(label_base, next_size)
+            new_size = getattr(label_font, "size", label_size)
+            if new_size >= label_size:
+                break
+            label_size = new_size
+            label_w, label_h = measure_text(draw, label, label_font)
+        else:
+            next_size = max(value_min_pt, value_size - 1)
+            if next_size == value_size:
+                break
+            value_font = clone_font(value_base, next_size)
+            new_size = getattr(value_font, "size", value_size)
+            if new_size >= value_size:
+                break
+            value_size = new_size
+            value_w, value_h = measure_text(draw, value, value_font)
+        total_needed = label_h + min_gap + value_h
+
+    label_w = min(label_w, available_width)
+    value_w = min(value_w, available_width)
 
     label_x = x0 + padding_x
     label_y = y0 + padding_y
     value_x = x0 + padding_x
-    value_y = y1 - padding_y - vh
+    value_y = y1 - padding_y - value_h
     min_gap = max(6, height // 12)
-    if value_y - (label_y + lh) < min_gap:
-        value_y = min(y1 - padding_y - vh, label_y + lh + min_gap)
+    if value_y - (label_y + label_h) < min_gap:
+        value_y = min(y1 - padding_y - value_h, label_y + label_h + min_gap)
 
     label_color = _mix_color(accent, config.INSIDE_COL_TEXT, 0.25)
     value_color = config.INSIDE_COL_TEXT
