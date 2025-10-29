@@ -41,6 +41,7 @@ ROW_SPACING = 6       # vertical gap between rows
 OV_COLS = 3           # East, Central, West columns on Overview
 OV_ROWS = 5           # max teams to show per division on Overview
 OVERVIEW_DROP_STEPS = 30
+OVERVIEW_DROP_STAGGER = 0.4  # fraction of steps before next rank begins dropping
 OVERVIEW_DROP_FRAME_DELAY = 0.02
 
 LEAGUE_DIVISION_IDS: Dict[int, Dict[str, int]] = {
@@ -187,38 +188,59 @@ def draw_overview(display, title: str, league_id: int, transition=False):
     margin_x = (WIDTH - OV_COLS * col_w) // (OV_COLS + 1)
     x_cols = [margin_x*(i+1) + col_w*i for i in range(OV_COLS)]
 
-    # Drop logos rank = last → first
-    for rank in range(OV_ROWS - 1, -1, -1):
-        # Compose a frame with header + all ranks already placed (below current)
-        fixed = header.copy()
-        for placed in range(rank + 1, OV_ROWS):
-            for ci, div in enumerate(divisions):
-                ic = logos_per_div[div][placed]
-                if ic:
-                    x0 = x_cols[ci] + (col_w - ic.width)//2
-                    y0 = top_y + placed * cell_h + (cell_h - ic.height)//2
-                    fixed.paste(ic, (x0, y0), ic)
-
-        # Current rank drops in across all three divisions
-        drops = []
+    row_positions: List[List[Tuple[Image.Image, int, int]]] = []
+    for rank in range(OV_ROWS):
+        placements: List[Tuple[Image.Image, int, int]] = []
         for ci, div in enumerate(divisions):
             ic = logos_per_div[div][rank]
             if not ic:
                 continue
             x0 = x_cols[ci] + (col_w - ic.width)//2
             y_target = top_y + rank * cell_h + (cell_h - ic.height)//2
-            drops.append((ic, x0, y_target))
+            placements.append((ic, x0, y_target))
+        row_positions.append(placements)
 
-        steps = max(2, OVERVIEW_DROP_STEPS)
-        for s in range(steps):
-            frac = s / (steps - 1) if steps > 1 else 1.0
-            eased = _ease_out_cubic(frac)
-            frame = fixed.copy()
-            for ic, x0, y_t in drops:
-                y_pos = int(-LOGO_SIZE + (y_t + LOGO_SIZE) * eased)
-                if y_pos > y_t:
-                    y_pos = y_t
-                frame.paste(ic, (x0, y_pos), ic)
+    steps = max(2, OVERVIEW_DROP_STEPS)
+    stagger = max(1, int(round(steps * OVERVIEW_DROP_STAGGER)))
+
+    schedule: List[Tuple[int, List[Tuple[Image.Image, int, int]]]] = []
+    start_step = 0
+    for rank in range(len(row_positions) - 1, -1, -1):
+        drops = row_positions[rank]
+        if not drops:
+            continue
+        schedule.append((start_step, drops))
+        start_step += stagger
+
+    if schedule:
+        total_duration = schedule[-1][0] + steps + 1
+        placed: List[Tuple[Image.Image, int, int]] = []
+        completed = [False] * len(schedule)
+
+        for current_step in range(total_duration):
+            for idx, (start, drops) in enumerate(schedule):
+                if current_step >= start + steps and not completed[idx]:
+                    placed.extend(drops)
+                    completed[idx] = True
+
+            frame = header.copy()
+            for ic, x0, y0 in placed:
+                frame.paste(ic, (x0, y0), ic)
+
+            for idx, (start, drops) in enumerate(schedule):
+                progress = current_step - start
+                if progress < 0 or progress >= steps:
+                    continue
+
+                frac = progress / (steps - 1) if steps > 1 else 1.0
+                eased = _ease_out_cubic(frac)
+                for ic, x0, y_target in drops:
+                    start_y = -LOGO_SIZE
+                    y_pos = int(start_y + (y_target - start_y) * eased)
+                    if y_pos > y_target:
+                        y_pos = y_target
+                    frame.paste(ic, (x0, y_pos), ic)
+
             display.image(frame)
             display.show()
             time.sleep(OVERVIEW_DROP_FRAME_DELAY)

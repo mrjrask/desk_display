@@ -54,6 +54,7 @@ OVERVIEW_VERTICAL_STEP = 45
 OVERVIEW_COLUMN_MARGIN = 2
 OVERVIEW_DROP_MARGIN = 6
 OVERVIEW_DROP_STEPS = 30
+OVERVIEW_DROP_STAGGER = 0.4  # fraction of steps before next rank begins dropping
 OVERVIEW_FRAME_DELAY = 0.02
 OVERVIEW_PAUSE_END = 0.5
 
@@ -1200,47 +1201,76 @@ def _render_overview(
     if max_rows == 0:
         return _render_overview_fallback(display, title, fallback_message, transition)
 
-    for rank in range(max_rows - 1, -1, -1):
-        placed: List[Dict[str, Any]] = []
-        for column in columns:
-            for row, placement in column.items():
-                if placement and row > rank:
-                    placed.append(placement)
-
-        base = header.copy()
-        _paste_overview_logos(base, placed)
-
-        drops: List[Dict[str, Any]] = []
+    row_positions: List[List[Dict[str, Any]]] = []
+    for rank in range(max_rows):
+        row: List[Dict[str, Any]] = []
         for column in columns:
             placement = column.get(rank)
             if placement:
-                drops.append(placement)
+                row.append(placement)
+        row_positions.append(row)
 
+    steps = max(2, OVERVIEW_DROP_STEPS)
+    stagger = max(1, int(round(steps * OVERVIEW_DROP_STAGGER)))
+
+    schedule: List[Tuple[int, List[Dict[str, Any]]]] = []
+    start_step = 0
+    for rank in range(len(row_positions) - 1, -1, -1):
+        drops = row_positions[rank]
         if not drops:
             continue
+        schedule.append((start_step, drops))
+        start_step += stagger
 
-        steps = max(2, OVERVIEW_DROP_STEPS)
-        for step in range(steps):
-            frac = step / (steps - 1) if steps > 1 else 1.0
-            eased = _ease_out_cubic(frac)
-            frame = base.copy()
+    if schedule:
+        total_duration = schedule[-1][0] + steps + 1
+        placed: List[Dict[str, Any]] = []
+        completed = [False] * len(schedule)
+
+        for current_step in range(total_duration):
+            for idx, (start, drops) in enumerate(schedule):
+                if current_step >= start + steps and not completed[idx]:
+                    placed.extend(
+                        {
+                            "logo": placement["logo"],
+                            "x": placement["x"],
+                            "y": placement["y"],
+                            "abbr": placement.get("abbr", ""),
+                        }
+                        for placement in drops
+                    )
+                    completed[idx] = True
+
+            frame = header.copy()
+            if placed:
+                _paste_overview_logos(frame, placed)
+
             animated: List[Dict[str, Any]] = []
-            for placement in drops:
-                start_y = placement["drop_start"]
-                target_y = placement["y"]
-                y_pos = int(start_y + (target_y - start_y) * eased)
-                if y_pos > target_y:
-                    y_pos = target_y
-                animated.append(
-                    {
-                        "logo": placement["logo"],
-                        "x": placement["x"],
-                        "y": y_pos,
-                        "abbr": placement.get("abbr", ""),
-                    }
-                )
+            for idx, (start, drops) in enumerate(schedule):
+                progress = current_step - start
+                if progress < 0 or progress >= steps:
+                    continue
 
-            _paste_overview_logos(frame, animated)
+                frac = progress / (steps - 1) if steps > 1 else 1.0
+                eased = _ease_out_cubic(frac)
+                for placement in drops:
+                    start_y = placement["drop_start"]
+                    target_y = placement["y"]
+                    y_pos = int(start_y + (target_y - start_y) * eased)
+                    if y_pos > target_y:
+                        y_pos = target_y
+                    animated.append(
+                        {
+                            "logo": placement["logo"],
+                            "x": placement["x"],
+                            "y": y_pos,
+                            "abbr": placement.get("abbr", ""),
+                        }
+                    )
+
+            if animated:
+                _paste_overview_logos(frame, animated)
+
             display.image(frame)
             display.show()
             time.sleep(OVERVIEW_FRAME_DELAY)

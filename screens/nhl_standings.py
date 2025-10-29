@@ -81,6 +81,7 @@ OVERVIEW_LOGO_PADDING = 4
 OVERVIEW_LOGO_OVERLAP = 6
 BACKGROUND_COLOR = SCOREBOARD_BACKGROUND_COLOR
 OVERVIEW_DROP_STEPS = 30
+OVERVIEW_DROP_STAGGER = 0.4  # fraction of steps before next team starts
 DROP_FRAME_DELAY = 0.02
 
 
@@ -1022,21 +1023,43 @@ def _animate_overview_drop(
     if not has_logos:
         return
 
-    placed: List[Placement] = []
+    steps = max(2, OVERVIEW_DROP_STEPS)
+    stagger = max(1, int(round(steps * OVERVIEW_DROP_STAGGER)))
+
+    schedule: List[tuple[int, Sequence[Placement]]] = []
+    start_step = 0
     for rank in range(len(row_positions) - 1, -1, -1):
         drops = row_positions[rank]
         if not drops:
             continue
+        schedule.append((start_step, drops))
+        start_step += stagger
 
-        steps = max(2, OVERVIEW_DROP_STEPS)
-        for step in range(steps):
-            frame = base.copy()
-            dynamic: List[Placement] = []
+    if not schedule:
+        return
 
-            for abbr, logo, x0, y0 in placed:
-                frame.paste(logo, (x0, y0), logo)
+    total_duration = schedule[-1][0] + steps + 1
+    placed: List[Placement] = []
+    completed = [False] * len(schedule)
 
-            frac = step / (steps - 1) if steps > 1 else 1.0
+    for current_step in range(total_duration):
+        for idx, (start, drops) in enumerate(schedule):
+            if current_step >= start + steps and not completed[idx]:
+                placed.extend(drops)
+                completed[idx] = True
+
+        frame = base.copy()
+        dynamic: List[Placement] = []
+
+        for abbr, logo, x0, y0 in placed:
+            frame.paste(logo, (x0, y0), logo)
+
+        for idx, (start, drops) in enumerate(schedule):
+            progress = current_step - start
+            if progress < 0 or progress >= steps:
+                continue
+
+            frac = progress / (steps - 1) if steps > 1 else 1.0
             eased = _ease_out_cubic(frac)
             for abbr, logo, x0, y_target in drops:
                 start_y = -logo.height
@@ -1046,13 +1069,11 @@ def _animate_overview_drop(
                 frame.paste(logo, (x0, y_pos), logo)
                 dynamic.append((abbr, logo, x0, y_pos))
 
-            _ensure_blackhawks_top_layer(frame, [*placed, *dynamic])
-            display.image(frame)
-            if hasattr(display, "show"):
-                display.show()
-            time.sleep(DROP_FRAME_DELAY)
-
-        placed.extend(drops)
+        _ensure_blackhawks_top_layer(frame, [*placed, *dynamic])
+        display.image(frame)
+        if hasattr(display, "show"):
+            display.show()
+        time.sleep(DROP_FRAME_DELAY)
 
 
 def _prepare_overview(divisions: List[tuple[str, List[dict]]]) -> tuple[Image.Image, List[List[Placement]]]:
