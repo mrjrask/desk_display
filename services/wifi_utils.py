@@ -216,15 +216,36 @@ def _check_internet(iface: str) -> Tuple[bool, List[str]]:
                 ])
                 if proc.returncode == 0:
                     return True, tried
-                needs_fallback = True
-                if proc.stderr:
+
+                stderr = proc.stderr.strip() if proc.stderr else ""
+                if stderr:
                     _LOGGER.debug(
                         "ping via %s to %s failed rc=%s: %s",
                         iface,
                         host,
                         proc.returncode,
-                        proc.stderr.strip(),
+                        stderr,
                     )
+                else:
+                    _LOGGER.debug(
+                        "ping via %s to %s failed rc=%s",
+                        iface,
+                        host,
+                        proc.returncode,
+                    )
+
+                if stderr:
+                    lower_err = stderr.lower()
+                    if any(
+                        keyword in lower_err
+                        for keyword in (
+                            "operation not permitted",
+                            "permission denied",
+                            "must be root",
+                            "requires cap_net_raw",
+                        )
+                    ):
+                        needs_fallback = True
             except Exception as exc:
                 needs_fallback = True
                 _LOGGER.debug("ping via %s to %s raised: %s", iface, host, exc)
