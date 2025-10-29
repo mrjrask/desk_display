@@ -199,21 +199,60 @@ def _check_internet(iface: str) -> Tuple[bool, List[str]]:
     tried: List[str] = []
     for host in PING_HOSTS:
         tried.append(host)
-        try:
-            proc = _run_command([
-                "ping",
-                "-I",
-                iface,
-                "-c",
-                "1",
-                "-W",
-                str(PING_TIMEOUT),
-                host,
-            ])
-            if proc.returncode == 0:
-                return True, tried
-        except Exception as exc:
-            _LOGGER.debug("ping to %s failed: %s", host, exc)
+
+        needs_fallback = False
+
+        if iface:
+            try:
+                proc = _run_command([
+                    "ping",
+                    "-I",
+                    iface,
+                    "-c",
+                    "1",
+                    "-W",
+                    str(PING_TIMEOUT),
+                    host,
+                ])
+                if proc.returncode == 0:
+                    return True, tried
+                needs_fallback = True
+                if proc.stderr:
+                    _LOGGER.debug(
+                        "ping via %s to %s failed rc=%s: %s",
+                        iface,
+                        host,
+                        proc.returncode,
+                        proc.stderr.strip(),
+                    )
+            except Exception as exc:
+                needs_fallback = True
+                _LOGGER.debug("ping via %s to %s raised: %s", iface, host, exc)
+        else:
+            needs_fallback = True
+
+        if needs_fallback:
+            try:
+                proc = _run_command([
+                    "ping",
+                    "-c",
+                    "1",
+                    "-W",
+                    str(PING_TIMEOUT),
+                    host,
+                ])
+                if proc.returncode == 0:
+                    return True, tried
+                if proc.stderr:
+                    _LOGGER.debug(
+                        "ping to %s failed rc=%s: %s",
+                        host,
+                        proc.returncode,
+                        proc.stderr.strip(),
+                    )
+            except Exception as exc:
+                _LOGGER.debug("ping to %s raised: %s", host, exc)
+
     return False, tried
 
 
