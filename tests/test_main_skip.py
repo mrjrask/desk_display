@@ -51,6 +51,7 @@ def main_module(monkeypatch):
     main.screen_scheduler = None
     main._last_screen_id = None
     main._skip_request_pending = False
+    main._manual_skip_event.clear()
 
     yield main
 
@@ -108,3 +109,10 @@ def test_next_screen_returns_none_without_scheduler(main_module):
 
     assert entry is None
     assert main_module._skip_request_pending is False
+
+
+def test_wait_with_button_checks_honors_pending_skip_event(main_module):
+    main_module._manual_skip_event.set()
+
+    assert main_module._wait_with_button_checks(5.0) is True
+    assert main_module._manual_skip_event.is_set() is False

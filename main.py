@@ -105,6 +105,8 @@ _display_cleared = threading.Event()
 BUTTON_POLL_INTERVAL = 0.1
 _BUTTON_NAMES = ("A", "B", "X", "Y")
 _BUTTON_STATE = {name: False for name in _BUTTON_NAMES}
+_manual_skip_event = threading.Event()
+_button_monitor_thread: Optional[threading.Thread] = None
 
 
 def _load_scheduler_from_config() -> Optional[ScreenScheduler]:
@@ -206,6 +208,8 @@ def _check_control_buttons() -> bool:
     Returns True when the caller should skip to the next screen immediately.
     """
 
+    global _skip_request_pending
+
     if _shutdown_event.is_set():
         return False
 
@@ -218,11 +222,14 @@ def _check_control_buttons() -> bool:
             logging.debug("Button poll failed for %s: %s", name, exc)
             pressed = False
 
-        if pressed and not _BUTTON_STATE[name]:
+        previously_pressed = _BUTTON_STATE[name]
+
+        if pressed and not previously_pressed:
             if name == "X":
                 logging.info("⏭️  X button pressed – skipping to next screen.")
                 global _skip_request_pending
                 _skip_request_pending = True
+                _manual_skip_event.set()
                 skip_requested = True
             elif name == "Y":
                 logging.info("🔁 Y button pressed – restarting desk_display service…")
@@ -231,10 +238,15 @@ def _check_control_buttons() -> bool:
                 logging.info("🅰️  A button pressed.")
             elif name == "B":
                 logging.info("🅱️  B button pressed.")
+        elif not pressed and previously_pressed:
+            logging.debug("Button %s released.", name)
 
         _BUTTON_STATE[name] = pressed
 
-    return skip_requested
+    if skip_requested or _manual_skip_event.is_set() or _skip_request_pending:
+        return True
+
+    return False
 
 
 def _wait_with_button_checks(duration: float) -> bool:
@@ -243,9 +255,18 @@ def _wait_with_button_checks(duration: float) -> bool:
     Returns True if the caller should skip the rest of the current screen.
     """
 
+    if _manual_skip_event.is_set() or _skip_request_pending:
+        _manual_skip_event.clear()
+        return True
+
     end = time.monotonic() + duration
     while not _shutdown_event.is_set():
+        if _manual_skip_event.is_set() or _skip_request_pending:
+            _manual_skip_event.clear()
+            return True
+
         if _check_control_buttons():
+            _manual_skip_event.clear()
             return True
 
         remaining = end - time.monotonic()
@@ -254,10 +275,40 @@ def _wait_with_button_checks(duration: float) -> bool:
 
         sleep_for = min(BUTTON_POLL_INTERVAL, remaining)
         if sleep_for > 0:
-            if _shutdown_event.wait(sleep_for):
+            if _manual_skip_event.wait(sleep_for):
+                _manual_skip_event.clear()
+                return True
+
+            if _shutdown_event.is_set():
                 return False
 
     return False
+
+
+def _monitor_control_buttons() -> None:
+    """Background poller to catch brief button presses."""
+
+    logging.debug("Starting control button monitor thread.")
+
+    try:
+        while not _shutdown_event.is_set():
+            try:
+                _check_control_buttons()
+            except Exception as exc:
+                logging.debug("Button monitor loop failed: %s", exc)
+
+            if _shutdown_event.wait(BUTTON_POLL_INTERVAL):
+                break
+    finally:
+        logging.debug("Control button monitor thread exiting.")
+
+
+_button_monitor_thread = threading.Thread(
+    target=_monitor_control_buttons,
+    name="control-button-monitor",
+    daemon=True,
+)
+_button_monitor_thread.start()
 
 
 def _next_screen_from_registry(
@@ -345,6 +396,11 @@ def _finalize_shutdown() -> None:
 
     if ENABLE_WIFI_MONITOR:
         wifi_utils.stop_monitor()
+
+    global _button_monitor_thread
+    if _button_monitor_thread and _button_monitor_thread.is_alive():
+        _button_monitor_thread.join(timeout=1.0)
+        _button_monitor_thread = None
 
     _shutdown_complete.set()
     logging.info("👋 Shutdown cleanup finished.")
@@ -586,6 +642,10 @@ def main_loop():
     try:
         while not _shutdown_event.is_set():
             refresh_schedule_if_needed()
+
+            if _manual_skip_event.is_set():
+                _manual_skip_event.clear()
+                continue
 
             if _check_control_buttons():
                 continue
