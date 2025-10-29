@@ -40,7 +40,8 @@ ROW_SPACING = 6       # vertical gap between rows
 
 OV_COLS = 3           # East, Central, West columns on Overview
 OV_ROWS = 5           # max teams to show per division on Overview
-OVERVIEW_DROP_STEPS = 15
+OVERVIEW_DROP_STEPS = 30
+OVERVIEW_DROP_FRAME_DELAY = 0.02
 
 LEAGUE_DIVISION_IDS: Dict[int, Dict[str, int]] = {
     104: {"East": 204, "Central": 205, "West": 203},  # National League
@@ -220,7 +221,7 @@ def draw_overview(display, title: str, league_id: int, transition=False):
                 frame.paste(ic, (x0, y_pos), ic)
             display.image(frame)
             display.show()
-            time.sleep(SCROLL_DELAY)
+            time.sleep(OVERVIEW_DROP_FRAME_DELAY)
 
     # Final static image
     final = header.copy()
