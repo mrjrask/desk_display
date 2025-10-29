@@ -395,21 +395,6 @@ def _mix_color(color: Tuple[int, int, int], target: Tuple[int, int, int], factor
     factor = max(0.0, min(1.0, factor))
     return tuple(int(round(color[idx] * (1 - factor) + target[idx] * factor)) for idx in range(3))
 
-
-def _describe_temperature(temp_f: float) -> str:
-    if temp_f < 60:
-        return "Chilly"
-    if temp_f < 68:
-        return "Cool"
-    if temp_f < 75:
-        return "Comfortable"
-    if temp_f < 82:
-        return "Warm"
-    if temp_f < 90:
-        return "Toasty"
-    return "Hot"
-
-
 def _draw_temperature_panel(
     img: Image.Image,
     draw: ImageDraw.ImageDraw,
@@ -448,27 +433,36 @@ def _draw_temperature_panel(
     label_x = x0 + padding_x
     label_y = y0 + padding_y
 
-    descriptor_base_size = getattr(label_base, "size", 18)
-    desc_font = fit_font(
-        draw,
-        descriptor,
-        label_base,
-        max_width=width - 2 * padding_x,
-        max_height=max(14, int(height * 0.2)),
-        min_pt=min(descriptor_base_size, 12),
-        max_pt=descriptor_base_size,
-    )
-    _, desc_h = measure_text(draw, descriptor, desc_font)
-    desc_x = x0 + padding_x
-    desc_y = y1 - padding_y - desc_h
+    descriptor = descriptor.strip()
+    has_descriptor = bool(descriptor)
+    if has_descriptor:
+        descriptor_base_size = getattr(label_base, "size", 18)
+        desc_font = fit_font(
+            draw,
+            descriptor,
+            label_base,
+            max_width=width - 2 * padding_x,
+            max_height=max(14, int(height * 0.2)),
+            min_pt=min(descriptor_base_size, 12),
+            max_pt=descriptor_base_size,
+        )
+        _, desc_h = measure_text(draw, descriptor, desc_font)
+        desc_x = x0 + padding_x
+        desc_y = y1 - padding_y - desc_h
+    else:
+        desc_font = None
+        desc_h = 0
+        desc_x = x0 + padding_x
+        desc_y = y1 - padding_y
 
     value_gap = max(10, height // 14)
     value_top = label_y + label_h + value_gap
-    value_max_height = max(32, desc_y - value_top - value_gap)
+    value_bottom = desc_y - value_gap if has_descriptor else y1 - padding_y
+    value_max_height = max(32, value_bottom - value_top)
     temp_base_size = getattr(temp_base, "size", 48)
 
     safe_margin = max(4, width // 28)
-    inner_left = x0 + padding_x + safe_margin
+    inner_left = x0 + padding_x
     inner_right = x1 - padding_x - safe_margin
     if inner_right <= inner_left:
         # Fall back to the widest area available without letting the value escape
@@ -499,11 +493,16 @@ def _draw_temperature_panel(
         temp_w = temp_bbox[2] - temp_bbox[0]
         temp_h = temp_bbox[3] - temp_bbox[1]
 
-    temp_x = inner_left + max(0, (value_region_width - temp_w) // 2)
+    temp_x = inner_left
     temp_y = value_top
 
-    if temp_y + temp_h > desc_y - value_gap:
-        temp_y = max(label_y + label_h + value_gap, desc_y - value_gap - temp_h)
+    if has_descriptor:
+        if temp_y + temp_h > desc_y - value_gap:
+            temp_y = max(label_y + label_h + value_gap, desc_y - value_gap - temp_h)
+    else:
+        max_temp_y = y1 - padding_y - temp_h
+        if temp_y > max_temp_y:
+            temp_y = max_temp_y
 
     draw.text(
         (label_x, label_y),
@@ -512,12 +511,13 @@ def _draw_temperature_panel(
         fill=_mix_color(color, config.INSIDE_COL_TEXT, 0.2),
     )
     draw.text((temp_x, temp_y), temp_text, font=temp_font, fill=config.INSIDE_COL_TEXT)
-    draw.text(
-        (desc_x, desc_y),
-        descriptor,
-        font=desc_font,
-        fill=_mix_color(color, config.INSIDE_COL_TEXT, 0.35),
-    )
+    if has_descriptor:
+        draw.text(
+            (desc_x, desc_y),
+            descriptor,
+            font=desc_font,
+            fill=_mix_color(color, config.INSIDE_COL_TEXT, 0.35),
+        )
 
 
 def _draw_metric_row(
@@ -959,7 +959,7 @@ def draw_inside(display, transition: bool=False):
 
     # --- Temperature panel --------------------------------------------------
     temp_value = f"{temp_f:.1f}°F"
-    descriptor = _describe_temperature(temp_f)
+    descriptor = ""
 
     content_top = title_block_h + 12
     bottom_margin = 12
