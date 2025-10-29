@@ -10,11 +10,28 @@ echo "⏱  Running cleanup at $(date +%Y%m%d_%H%M%S)…"
 dir="$(dirname "$0")"
 cd "$dir"
 
-# 1) Remove __pycache__ directories
+# 1) Clear the display before touching the filesystem
+echo "    → Clearing display…"
+python3 - <<'PY'
+import logging
+
+try:
+    from utils import Display, clear_display
+except Exception as exc:  # pragma: no cover - best effort during shutdown
+    logging.warning("Display cleanup skipped: %s", exc)
+else:
+    try:
+        display = Display()
+        clear_display(display)
+    except Exception as exc:  # pragma: no cover - best effort during shutdown
+        logging.warning("Display cleanup failed: %s", exc)
+PY
+
+# 2) Remove __pycache__ directories
 echo "    → Removing __pycache__ directories…"
 find . -type d -name "__pycache__" -prune -exec rm -rf {} +
 
-# 2) Archive any straggler screenshots/videos left behind
+# 3) Archive any straggler screenshots/videos left behind
 SCREENSHOTS_DIR="screenshots"
 ARCHIVE_BASE="screenshot_archive"   # singular, to match main.py
 ARCHIVE_DATED_DIR="${ARCHIVE_BASE}/dated_folders"
