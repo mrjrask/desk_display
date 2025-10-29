@@ -641,9 +641,10 @@ def _draw_scoreboard(
     # Column headers inside the table
     if header_h:
         header_y = table_top + (header_h - _text_h(d, FONT_SMALL)) // 2
-        score_lbl = "Score"
+        score_lbl = ""
         sog_lbl = "SOG"
-        d.text((x1 + (col2_w - _text_w(d, score_lbl, FONT_SMALL)) // 2, header_y), score_lbl, font=FONT_SMALL, fill="white")
+        if score_lbl:
+            d.text((x1 + (col2_w - _text_w(d, score_lbl, FONT_SMALL)) // 2, header_y), score_lbl, font=FONT_SMALL, fill="white")
         d.text((x2 + (col3_w - _text_w(d, sog_lbl, FONT_SMALL)) // 2, header_y), sog_lbl, font=FONT_SMALL, fill="white")
 
     def _prepare_row(
