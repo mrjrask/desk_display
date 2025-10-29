@@ -211,10 +211,23 @@ class Display:
             return False
 
         try:  # pragma: no cover - hardware import
-            return bool(self._display.read_button(pin))
+            raw_state = self._display.read_button(pin)
         except Exception as exc:  # pragma: no cover - hardware import
             logging.debug("Display button read failed (%s): %s", name, exc)
             return False
+
+        if isinstance(raw_state, bool):  # pragma: no cover - hardware import
+            return raw_state
+
+        if isinstance(raw_state, (int, float)):  # pragma: no cover - hardware import
+            # Buttons are wired active-low; a ``0`` reading means the button is
+            # being held down.  ``read_button`` previously returned ``True``
+            # when pressed but newer firmware returns the raw ``0/1`` GPIO
+            # value.  Treat both styles uniformly so the skip button works
+            # regardless of driver version.
+            return raw_state == 0
+
+        return bool(raw_state)
 
 
 def get_active_display() -> Optional["Display"]:
