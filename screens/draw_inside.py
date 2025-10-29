@@ -466,18 +466,40 @@ def _draw_temperature_panel(
     value_top = label_y + label_h + value_gap
     value_max_height = max(32, desc_y - value_top - value_gap)
     temp_base_size = getattr(temp_base, "size", 48)
+
+    safe_margin = max(4, width // 28)
+    inner_left = x0 + padding_x + safe_margin
+    inner_right = x1 - padding_x - safe_margin
+    if inner_right <= inner_left:
+        # Fall back to the widest area available without letting the value escape
+        safe_margin = max(0, (width - 2 * padding_x - 1) // 2)
+        inner_left = x0 + padding_x + safe_margin
+        inner_right = max(inner_left + 1, x1 - padding_x - safe_margin)
+
+    value_region_width = max(1, inner_right - inner_left)
+
     temp_font = fit_font(
         draw,
         temp_text,
         temp_base,
-        max_width=width - 2 * padding_x,
+        max_width=value_region_width,
         max_height=value_max_height,
         min_pt=min(temp_base_size, 20),
         max_pt=temp_base_size,
     )
-    temp_w, temp_h = measure_text(draw, temp_text, temp_font)
-    value_region_width = max(1, width - 2 * padding_x)
-    temp_x = x0 + padding_x + max(0, (value_region_width - temp_w) // 2)
+
+    # Re-check the rendered bounds to ensure the glyphs stay within the tile
+    temp_bbox = draw.textbbox((0, 0), temp_text, font=temp_font)
+    temp_w = temp_bbox[2] - temp_bbox[0]
+    temp_h = temp_bbox[3] - temp_bbox[1]
+    while temp_w > value_region_width and getattr(temp_font, "size", 0) > 12:
+        next_size = getattr(temp_font, "size", 0) - 1
+        temp_font = clone_font(temp_font, next_size)
+        temp_bbox = draw.textbbox((0, 0), temp_text, font=temp_font)
+        temp_w = temp_bbox[2] - temp_bbox[0]
+        temp_h = temp_bbox[3] - temp_bbox[1]
+
+    temp_x = inner_left + max(0, (value_region_width - temp_w) // 2)
     temp_y = value_top
 
     if temp_y + temp_h > desc_y - value_gap:
