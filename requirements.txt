@@ -16,6 +16,7 @@ displayhatmini
 cairosvg
 rpi.gpio
 colorama
+pygame
 adafruit-circuitpython-bme280
 pimoroni-bme280
 -e ./vendor/bme68x

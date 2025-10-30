@@ -41,8 +41,14 @@ A tiny, always‑on scoreboard and info display that runs on a Raspberry Pi and 
       build-essential libjpeg-dev libopenblas0 libopenblas-dev \
       libopenjp2-7-dev libtiff5-dev libcairo2-dev libpango1.0-dev \
       libgdk-pixbuf2.0-dev libffi-dev network-manager wireless-tools \
-      i2c-tools fonts-dejavu-core libgl1 libx264-dev ffmpeg git
+      i2c-tools fonts-dejavu-core libgl1 libx264-dev ffmpeg git \
+      python3-pygame
   ```
+
+  The windowed CLI preview relies on SDL2 via `pygame`. Installing the
+  `python3-pygame` package (or the `libsdl2-*` runtime libraries when using the
+  pip wheel) ensures both X11/Wayland and console modes have the necessary
+  drivers on Raspberry Pi OS.
 
   Create and activate a virtual environment before installing the Python dependencies:
 
@@ -348,6 +354,37 @@ those features (currently the Display HAT Mini). Other backends simply ignore
 button polling and LED animation requests.
 
 Or install the included systemd service (see below).
+
+### Windowed CLI preview
+
+`cli_display.py` mirrors the hardware playlist inside a pygame window so you can
+debug layouts on a desktop, capture screenshots, or present the loop on an HDMI
+panel.  It reuses the same scheduler and `_shutdown_event` logic as the main
+service, so Ctrl+C/SIGTERM cleanly blank the window just like the physical LCD.
+
+```bash
+# Discover available displays/monitors
+python3 cli_display.py --list-displays
+
+# Fullscreen preview on the primary monitor
+python3 cli_display.py --fullscreen
+
+# Borderless kiosk mode on a secondary display with PNG+MP4 capture
+python3 cli_display.py --display 1 --kiosk \
+    --capture-dir screenshots_cli --video-path captures/loop.mp4
+```
+
+When running on Raspberry Pi OS the CLI works under both LXDE/X11 (`--fullscreen`
+or windowed) and from a bare console without `startx` by forcing SDL's
+KMS/DRM driver:
+
+```bash
+python3 cli_display.py --video-driver kmsdrm --fullscreen
+```
+
+That combination was verified on current Raspberry Pi OS (Bookworm) images on a
+Pi 4B using both the stock LXDE desktop and the text-only console.  If you are
+using the legacy framebuffer stack, pass `--video-driver fbcon` instead.
 
 ---
 
