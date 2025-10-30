@@ -19,6 +19,7 @@ from gpiozero.exc import PinFactoryFallback, NativePinFactoryFallback
 warnings.filterwarnings("ignore", category=PinFactoryFallback)
 warnings.filterwarnings("ignore", category=NativePinFactoryFallback)
 
+import argparse
 import os
 import time
 import logging
@@ -48,14 +49,16 @@ from config import (
     TRAVEL_ACTIVE_WINDOW,
 )
 from utils import (
-    Display,
     ScreenImage,
     animate_fade_in,
     clear_display,
+    create_display,
+    display_supports_buttons,
     draw_text_centered,
     resume_display_updates,
     suspend_display_updates,
     temporary_display_led,
+    available_display_backends,
 )
 import data_fetch
 from services import wifi_utils
@@ -77,6 +80,36 @@ logging.basicConfig(
 )
 logging.getLogger("requests").setLevel(logging.WARNING)
 logging.info("🖥️  Starting display service…")
+
+# ─── Display backend selection ───────────────────────────────────────────────
+DISPLAY_BACKEND_ENV = "DESK_DISPLAY_BACKEND"
+_SELECTED_BACKEND_NAME: Optional[str] = None
+display = None  # Will be initialized by _initialize_display.
+
+
+def _initialize_display(backend_name: Optional[str]) -> None:
+    """Instantiate the configured display backend and store it globally."""
+
+    global display, _SELECTED_BACKEND_NAME
+
+    resolved_name = backend_name or "displayhatmini"
+    try:
+        display = create_display(backend_name)
+        _SELECTED_BACKEND_NAME = resolved_name
+    except ValueError as exc:
+        logging.error(
+            "Unknown display backend '%s': %s. Falling back to 'displayhatmini'.",
+            backend_name,
+            exc,
+        )
+        display = create_display()
+        _SELECTED_BACKEND_NAME = "displayhatmini"
+
+    logging.info(
+        "🖼️  Active display backend: %s (%s)",
+        _SELECTED_BACKEND_NAME,
+        display.__class__.__name__,
+    )
 
 # ─── Paths ───────────────────────────────────────────────────────────────────
 SCRIPT_DIR  = os.path.dirname(os.path.abspath(__file__))
@@ -149,7 +182,7 @@ def refresh_schedule_if_needed(force: bool = False) -> None:
     logging.info("🔁 Loaded schedule configuration with %d node(s).", scheduler.node_count)
 
 # ─── Display & Wi-Fi monitor ─────────────────────────────────────────────────
-display = Display()
+_initialize_display(os.environ.get(DISPLAY_BACKEND_ENV))
 if ENABLE_WIFI_MONITOR:
     logging.info("🔌 Starting Wi-Fi monitor…")
     wifi_utils.start_monitor()
@@ -162,6 +195,10 @@ def _clear_display_immediately(reason: Optional[str] = None) -> None:
 
     if reason and not already_cleared:
         logging.info("🧹 Clearing display (%s)…", reason)
+
+    if display is None:
+        _display_cleared.set()
+        return
 
     try:
         resume_display_updates()
@@ -211,6 +248,12 @@ def _check_control_buttons() -> bool:
     global _skip_request_pending
 
     if _shutdown_event.is_set():
+        return False
+
+    if display is None:
+        return False
+
+    if not display_supports_buttons(display):
         return False
 
     skip_requested = False
@@ -303,12 +346,26 @@ def _monitor_control_buttons() -> None:
         logging.debug("Control button monitor thread exiting.")
 
 
-_button_monitor_thread = threading.Thread(
-    target=_monitor_control_buttons,
-    name="control-button-monitor",
-    daemon=True,
-)
-_button_monitor_thread.start()
+def _ensure_button_monitor_thread() -> None:
+    """Start the button monitor thread when the active backend supports it."""
+
+    global _button_monitor_thread
+
+    if display is None or not display_supports_buttons(display):
+        return
+
+    if _button_monitor_thread and _button_monitor_thread.is_alive():
+        return
+
+    _button_monitor_thread = threading.Thread(
+        target=_monitor_control_buttons,
+        name="control-button-monitor",
+        daemon=True,
+    )
+    _button_monitor_thread.start()
+
+
+_ensure_button_monitor_thread()
 
 
 def _next_screen_from_registry(
@@ -804,6 +861,22 @@ def main_loop():
         _finalize_shutdown()
 
 if __name__ == '__main__':
+    parser = argparse.ArgumentParser(description="Run the desk display service")
+    parser.add_argument(
+        "--display-backend",
+        choices=sorted(available_display_backends().keys()),
+        help=(
+            "Select the display backend to use. Overrides the "
+            f"{DISPLAY_BACKEND_ENV} environment variable."
+        ),
+    )
+    cli_args = parser.parse_args()
+
+    if cli_args.display_backend:
+        os.environ[DISPLAY_BACKEND_ENV] = cli_args.display_backend
+        _initialize_display(cli_args.display_backend)
+        _ensure_button_monitor_thread()
+
     try:
         main_loop()
     except KeyboardInterrupt:
