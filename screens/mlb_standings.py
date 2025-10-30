@@ -21,6 +21,7 @@ from config import (
     SCOREBOARD_SCROLL_DELAY,
     SCOREBOARD_SCROLL_PAUSE_TOP,
     SCOREBOARD_SCROLL_PAUSE_BOTTOM,
+    resolve_dimension,
 )
 from utils import clear_display, get_mlb_abbreviation, log_call
 from screens.mlb_team_standings import format_games_back
@@ -34,9 +35,10 @@ FONT_GB_VALUE   = config.FONT_GB_VALUE
 FONT_GB_LABEL   = config.FONT_GB_LABEL
 
 # ─── Tunables ────────────────────────────────────────────────────────────────
-LOGO_SIZE   = 52      # max width/height of a division logo
-MARGIN      = 6       # left/right gutter
-ROW_SPACING = 6       # vertical gap between rows
+LOGO_SIZE = max(1, resolve_dimension("mlb.standings.logo_size", 52, axis="height"))
+MARGIN = resolve_dimension("mlb.standings.margin", 6, axis="width")
+ROW_SPACING = resolve_dimension("mlb.standings.row_spacing", 6, axis="height")
+HEADER_GAP = resolve_dimension("mlb.standings.header_gap", 6, axis="height")
 
 OV_COLS = 3           # East, Central, West columns on Overview
 OV_ROWS = 5           # max teams to show per division on Overview
@@ -143,7 +145,7 @@ def _header_frame(title: str) -> Tuple[Image.Image, int]:
     d = ImageDraw.Draw(img)
     tw, th = d.textsize(title, font=FONT_DIV_HEADER)
     d.text(((WIDTH - tw)//2, 0), title, font=FONT_DIV_HEADER, fill=(255,255,255))
-    return img, th + 6
+    return img, th + HEADER_GAP
 
 
 def _ease_out_cubic(t: float) -> float:

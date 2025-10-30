@@ -90,6 +90,36 @@
         "metric_row_height": 44,
         "metric_row_gap": 10,
         "min_temp_floor": 54
+      },
+      "mlb": {
+        "schedule": {
+          "bottom_margin": 4,
+          "title_header_gap": 6,
+          "header_gap": 3,
+          "table_side_margin": 4,
+          "min_team_column_width": 40,
+          "min_square_size": 18,
+          "header_padding": 2,
+          "flag_height": 48,
+          "flag_block_padding": 6,
+          "flag_block_spacing": 2,
+          "title_body_gap": 4,
+          "line_gap": 1,
+          "logo_content_gap": 2,
+          "min_logo_block_height": 10,
+          "inline_logo_spacing": 8,
+          "inline_logo_min_gap": 1
+        },
+        "standings": {
+          "logo_size": 52,
+          "margin": 6,
+          "row_spacing": 6,
+          "header_gap": 6
+        },
+        "team_standings": {
+          "logo_size": 59,
+          "margin": 6
+        }
       }
     },
     "hyperpixel_4_0": {
@@ -118,6 +148,36 @@
         "metric_row_gap": 14,
         "min_temp_floor": 72
       },
+      "mlb": {
+        "schedule": {
+          "bottom_margin": 4,
+          "title_header_gap": 6,
+          "header_gap": 3,
+          "table_side_margin": 4,
+          "min_team_column_width": 40,
+          "min_square_size": 18,
+          "header_padding": 2,
+          "flag_height": 48,
+          "flag_block_padding": 6,
+          "flag_block_spacing": 2,
+          "title_body_gap": 4,
+          "line_gap": 1,
+          "logo_content_gap": 2,
+          "min_logo_block_height": 10,
+          "inline_logo_spacing": 8,
+          "inline_logo_min_gap": 1
+        },
+        "standings": {
+          "logo_size": 52,
+          "margin": 6,
+          "row_spacing": 6,
+          "header_gap": 6
+        },
+        "team_standings": {
+          "logo_size": 59,
+          "margin": 6
+        }
+      },
       "scoreboard": {
         "intro_max_height": 160
       }
@@ -144,6 +204,36 @@
         "metric_row_height": 52,
         "metric_row_gap": 12,
         "min_temp_floor": 64
+      },
+      "mlb": {
+        "schedule": {
+          "bottom_margin": 4,
+          "title_header_gap": 6,
+          "header_gap": 3,
+          "table_side_margin": 4,
+          "min_team_column_width": 40,
+          "min_square_size": 18,
+          "header_padding": 2,
+          "flag_height": 48,
+          "flag_block_padding": 6,
+          "flag_block_spacing": 2,
+          "title_body_gap": 4,
+          "line_gap": 1,
+          "logo_content_gap": 2,
+          "min_logo_block_height": 10,
+          "inline_logo_spacing": 8,
+          "inline_logo_min_gap": 1
+        },
+        "standings": {
+          "logo_size": 52,
+          "margin": 6,
+          "row_spacing": 6,
+          "header_gap": 6
+        },
+        "team_standings": {
+          "logo_size": 59,
+          "margin": 6
+        }
       },
       "scoreboard": {
         "intro_max_height": 130

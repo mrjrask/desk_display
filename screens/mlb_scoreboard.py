@@ -40,6 +40,10 @@ from config import (
     SCOREBOARD_IN_PROGRESS_SCORE_COLOR,
     SCOREBOARD_FINAL_WINNING_SCORE_COLOR,
     SCOREBOARD_FINAL_LOSING_SCORE_COLOR,
+    profile_value,
+    resolve_dimension,
+    scale_font_size,
+    scale_to_width,
 )
 from utils import (
     ScreenImage,
@@ -51,34 +55,73 @@ from utils import (
 )
 
 # ─── Constants ────────────────────────────────────────────────────────────────
+
+
+def _profile_has(path: str) -> bool:
+    sentinel = object()
+    return profile_value(path, sentinel) is not sentinel
+
+
+def _resolve_mlb_dimension(key: str, default: int, *, axis: str) -> int:
+    mlb_path = f"mlb.scoreboard.{key}"
+    base_path = f"scoreboard.{key}"
+    if _profile_has(mlb_path):
+        return max(0, resolve_dimension(mlb_path, default, axis=axis))
+    if _profile_has(base_path):
+        return max(0, resolve_dimension(base_path, default, axis=axis))
+    return max(0, resolve_dimension(mlb_path, default, axis=axis))
+
+
 TITLE                 = "MLB Scoreboard"
-TITLE_GAP             = 8
-BLOCK_SPACING         = 10
-SCORE_ROW_H           = 56
-STATUS_ROW_H          = 18
+TITLE_GAP             = _resolve_mlb_dimension("title_gap", 8, axis="height")
+BLOCK_SPACING         = _resolve_mlb_dimension("block_spacing", 10, axis="height")
+SCORE_ROW_H           = max(24, _resolve_mlb_dimension("score_row_height", 56, axis="height"))
+STATUS_ROW_H          = max(12, _resolve_mlb_dimension("status_row_height", 18, axis="height"))
 REQUEST_TIMEOUT       = 10
 
-COL_WIDTHS = [70, 60, 60, 60, 70]  # total = 320 (WIDTH)
+_COLUMN_SOURCE = profile_value("mlb.scoreboard.column_widths", None)
+if _COLUMN_SOURCE is None:
+    _COLUMN_SOURCE = profile_value("scoreboard.column_widths", [70, 60, 60, 60, 70])
+if isinstance(_COLUMN_SOURCE, dict):
+    _COLUMN_SOURCE = (
+        _COLUMN_SOURCE.get("values")
+        or _COLUMN_SOURCE.get("widths")
+        or list(_COLUMN_SOURCE.values())
+    )
+if not isinstance(_COLUMN_SOURCE, (list, tuple)):
+    _COLUMN_SOURCE = [70, 60, 60, 60, 70]
+
+_BASE_COL_WIDTHS: list[float] = []
+for _value in _COLUMN_SOURCE:
+    try:
+        _BASE_COL_WIDTHS.append(float(_value))
+    except (TypeError, ValueError):
+        continue
+if not _BASE_COL_WIDTHS:
+    _BASE_COL_WIDTHS = [70.0, 60.0, 60.0, 60.0, 70.0]
+
+COL_WIDTHS = scale_to_width(_BASE_COL_WIDTHS)
 _TOTAL_COL_WIDTH = sum(COL_WIDTHS)
 _COL_LEFT = max(0, (WIDTH - _TOTAL_COL_WIDTH) // 2)
 COL_X = [_COL_LEFT]
 for w in COL_WIDTHS:
     COL_X.append(COL_X[-1] + w)
 
-SCORE_FONT              = clone_font(FONT_TEAM_SPORTS, 39)
-STATUS_FONT             = clone_font(FONT_STATUS, 28)
-CENTER_FONT             = clone_font(FONT_STATUS, 28)
+SCORE_FONT              = clone_font(FONT_TEAM_SPORTS, scale_font_size(39))
+STATUS_FONT             = clone_font(FONT_STATUS, scale_font_size(28))
+CENTER_FONT             = clone_font(FONT_STATUS, scale_font_size(28))
 TITLE_FONT              = FONT_TITLE_SPORTS
-LOGO_HEIGHT             = 52
+LOGO_HEIGHT             = max(1, _resolve_mlb_dimension("logo_height", 52, axis="height"))
 LOGO_DIR                = os.path.join(IMAGES_DIR, "mlb")
 LEAGUE_LOGO_KEYS        = ("MLB", "mlb")
-LEAGUE_LOGO_GAP         = 4
+LEAGUE_LOGO_GAP         = _resolve_mlb_dimension("league_logo_gap", 4, axis="height")
 LEAGUE_LOGO_HEIGHT      = max(1, int(round(LOGO_HEIGHT * 1.25)))
 IN_PROGRESS_SCORE_COLOR = SCOREBOARD_IN_PROGRESS_SCORE_COLOR
 IN_PROGRESS_STATUS_COLOR = IN_PROGRESS_SCORE_COLOR
 FINAL_WINNING_SCORE_COLOR = SCOREBOARD_FINAL_WINNING_SCORE_COLOR
 FINAL_LOSING_SCORE_COLOR = SCOREBOARD_FINAL_LOSING_SCORE_COLOR
 BACKGROUND_COLOR = SCOREBOARD_BACKGROUND_COLOR
+SEPARATOR_MARGIN = _resolve_mlb_dimension("separator_margin", 10, axis="width")
 
 # Cache for resized logos {abbr: Image}
 _LOGO_CACHE: dict[str, Optional[Image.Image]] = {}
@@ -379,7 +422,10 @@ def _compose_canvas(games: list[dict]) -> Image.Image:
         if idx < len(games) - 1:
             # separator line and spacing
             sep_y = y + BLOCK_SPACING // 2
-            draw.line((10, sep_y, WIDTH - 10, sep_y), fill=(45, 45, 45))
+            draw.line(
+                (SEPARATOR_MARGIN, sep_y, WIDTH - SEPARATOR_MARGIN, sep_y),
+                fill=(45, 45, 45),
+            )
             y += BLOCK_SPACING
     return canvas
 

@@ -17,7 +17,8 @@ from config import (
     FONT_TITLE_SPORTS, FONT_DATE_SPORTS,
     FONT_TEAM_SPORTS, FONT_SCORE,
     MLB_CUBS_TEAM_ID, MLB_SOX_TEAM_ID,
-    CENTRAL_TIME
+    CENTRAL_TIME,
+    resolve_dimension,
 )
 from utils import (
     clear_display,
@@ -35,18 +36,52 @@ IMAGES_DIR    = os.path.join(SCRIPT_DIR, "images")
 MLB_LOGOS_DIR = os.path.join(IMAGES_DIR, "mlb")
 
 # ── Layout constants ─────────────────────────────────────────────────────────
-BOTTOM_MARGIN           = 4          # keep bottom text safely on-screen
-TITLE_TO_HEADER_GAP     = 6          # space between title baseline and header labels
-HEADER_GAP              = 3          # space between R/H/E labels and grid
-TABLE_SIDE_MARGIN       = 4          # left/right inset of table
-MIN_TEAM_COL_WIDTH      = 40         # never let the team column be narrower
+def _resolve_schedule_dimension(key: str, default: int, *, axis: str) -> int:
+    return max(
+        0,
+        resolve_dimension(f"mlb.schedule.{key}", default, axis=axis),
+    )
+
+
+BOTTOM_MARGIN = _resolve_schedule_dimension("bottom_margin", 4, axis="height")
+TITLE_TO_HEADER_GAP = _resolve_schedule_dimension("title_header_gap", 6, axis="height")
+HEADER_GAP = _resolve_schedule_dimension("header_gap", 3, axis="height")
+TABLE_SIDE_MARGIN = _resolve_schedule_dimension("table_side_margin", 4, axis="width")
+MIN_TEAM_COL_WIDTH = max(
+    1,
+    _resolve_schedule_dimension("min_team_column_width", 40, axis="width"),
+)
+MIN_SQUARE_SIZE = max(
+    1,
+    _resolve_schedule_dimension("min_square_size", 18, axis="height"),
+)
+HEADER_LABEL_PADDING = _resolve_schedule_dimension("header_padding", 2, axis="height")
+TITLE_BODY_GAP = _resolve_schedule_dimension("title_body_gap", 4, axis="height")
+LINE_GAP = max(1, _resolve_schedule_dimension("line_gap", 1, axis="height"))
+LOGO_CONTENT_GAP = _resolve_schedule_dimension("logo_content_gap", 2, axis="height")
+MIN_LOGO_BLOCK_HEIGHT = max(
+    1,
+    _resolve_schedule_dimension("min_logo_block_height", 10, axis="height"),
+)
+INLINE_LOGO_SPACING = _resolve_schedule_dimension("inline_logo_spacing", 8, axis="width")
+INLINE_LOGO_MIN_GAP = _resolve_schedule_dimension("inline_logo_min_gap", 1, axis="height")
 DESIRED_SQUARE_FRACTION = 0.24       # starting point for square width vs total_w
-GRID_BG                 = (14, 36, 22)  # dark forest green
+GRID_BG = (14, 36, 22)  # dark forest green
 
 # Cubs mini-flag sizing/reservation
-SMALL_RESULT_FLAG_H     = int(os.environ.get("SMALL_RESULT_FLAG_H", "48"))
-FLAG_BLOCK_PAD          = 6
-FLAG_BLOCK_H            = SMALL_RESULT_FLAG_H + FLAG_BLOCK_PAD  # reserved area (always)
+_DEFAULT_FLAG_HEIGHT = max(
+    1,
+    _resolve_schedule_dimension("flag_height", 48, axis="height"),
+)
+try:
+    SMALL_RESULT_FLAG_H = int(
+        os.environ.get("SMALL_RESULT_FLAG_H", str(_DEFAULT_FLAG_HEIGHT))
+    )
+except (TypeError, ValueError):
+    SMALL_RESULT_FLAG_H = _DEFAULT_FLAG_HEIGHT
+FLAG_BLOCK_PAD = _resolve_schedule_dimension("flag_block_padding", 6, axis="height")
+FLAG_BLOCK_SPACING = _resolve_schedule_dimension("flag_block_spacing", 2, axis="height")
+FLAG_BLOCK_H = SMALL_RESULT_FLAG_H + FLAG_BLOCK_PAD  # reserved area (always)
 
 # ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -206,7 +241,7 @@ def _compute_table_geometry(draw: ImageDraw.ImageDraw,
     grid_bottom_limit = bottom_y - FLAG_BLOCK_H if reserve_flag_block else bottom_y
 
     # Header row height = label text height + small padding
-    hdr_h = draw.textsize("R", font=FONT_DATE_SPORTS)[1] + 2
+    hdr_h = draw.textsize("R", font=FONT_DATE_SPORTS)[1] + HEADER_LABEL_PADDING
 
     # Horizontal extents
     total_w = WIDTH - 2*TABLE_SIDE_MARGIN
@@ -214,19 +249,19 @@ def _compute_table_geometry(draw: ImageDraw.ImageDraw,
     # Start with desired square size; clamp against minimum team width
     desired_sq = int(total_w * DESIRED_SQUARE_FRACTION)
     max_sq_by_width = (total_w - MIN_TEAM_COL_WIDTH) // 3
-    square = max(18, min(desired_sq, max_sq_by_width))
+    square = max(MIN_SQUARE_SIZE, min(desired_sq, max_sq_by_width))
 
     # Ensure grid fits vertically (2 rows of 'square' cells)
     grid_top = top_y + hdr_h + HEADER_GAP
     max_rows_h = grid_bottom_limit - grid_top
     if max_rows_h > 0:
         square = min(square, max_rows_h // 2)
-    square = max(18, square)
+    square = max(MIN_SQUARE_SIZE, square)
 
     # Derive first column width from final square
     team_w = total_w - 3*square
     if team_w < MIN_TEAM_COL_WIDTH:
-        square = max(18, (total_w - MIN_TEAM_COL_WIDTH) // 3)
+        square = max(MIN_SQUARE_SIZE, (total_w - MIN_TEAM_COL_WIDTH) // 3)
         team_w = total_w - 3*square
 
     xs = [
@@ -329,7 +364,7 @@ def _draw_boxscore_table(img: Image.Image, draw: ImageDraw.ImageDraw, title: str
 
     # Optional small W/L flag (Cubs only) – drawn in the reserved block
     if reserve_flag_block and winner_flag in ("W","L"):
-        block_top = grid_top + grid_h + 2
+        block_top = grid_top + grid_h + FLAG_BLOCK_SPACING
         block_h   = FLAG_BLOCK_H
         flag_h    = SMALL_RESULT_FLAG_H
         flag_path = os.path.join(IMAGES_DIR, f"{winner_flag}.png")  # W.png / L.png
@@ -463,11 +498,11 @@ def draw_sports_screen(display, game, title, transition=False):
         prefix, opponent = 'vs.', get_team_display_name(away_tm)
 
     lines = wrap_text(f"{prefix} {opponent}", FONT_TEAM_SPORTS, WIDTH)[:2]
-    y_text = th + 4
+    y_text = th + TITLE_BODY_GAP
     for ln in lines:
         lw, lh = draw.textsize(ln, font=FONT_TEAM_SPORTS)
         draw.text(((WIDTH - lw)//2, y_text), ln, font=FONT_TEAM_SPORTS, fill=(255,255,255))
-        y_text += lh + 1
+        y_text += lh + LINE_GAP
 
     # logos + “@” inline
     def load_logo_for_tm(tm, height: int):
@@ -485,7 +520,7 @@ def draw_sports_screen(display, game, title, transition=False):
     bl_w, bl_h = draw.textsize(bottom, font=FONT_DATE_SPORTS)
     bottom_y   = HEIGHT - bl_h - BOTTOM_MARGIN
 
-    available_h = max(10, bottom_y - (y_text + 2))
+    available_h = max(MIN_LOGO_BLOCK_HEIGHT, bottom_y - (y_text + LOGO_CONTENT_GAP))
     logo_h = min(desired_logo_h, available_h)
 
     logo_away = load_logo_for_tm(away_tm, logo_h)
@@ -496,7 +531,7 @@ def draw_sports_screen(display, game, title, transition=False):
     elems.append(("text", "@"))
     if logo_home: elems.append(("img", logo_home))
 
-    spacing  = 8
+    spacing  = INLINE_LOGO_SPACING
     widths_el = [
         (obj.width if tp=="img" else draw.textsize(obj, font=FONT_TEAM_SPORTS)[0])
         for tp,obj in elems
@@ -506,7 +541,10 @@ def draw_sports_screen(display, game, title, transition=False):
 
     block_h = logo_h if elems else draw.textsize("@", font=FONT_TEAM_SPORTS)[1]
     centered_top = (HEIGHT - block_h) // 2
-    row_y = max(y_text + 1, min(centered_top, bottom_y - block_h - 1))
+    row_y = max(
+        y_text + INLINE_LOGO_MIN_GAP,
+        min(centered_top, bottom_y - block_h - INLINE_LOGO_MIN_GAP),
+    )
 
     x = x0
     for tp, obj in elems:
