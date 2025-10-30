@@ -304,6 +304,29 @@ Run directly:
 python3 main.py
 ```
 
+### Selecting a display backend
+
+The app now supports multiple rendering backends. By default it targets the
+Pimoroni Display HAT Mini, but you can override the backend via an environment
+variable or a CLI flag:
+
+```bash
+DESK_DISPLAY_BACKEND=pillow python3 main.py               # Tkinter window preview
+python3 main.py --display-backend framebuffer              # Write frames to /dev/fb0
+```
+
+Available backends:
+
+| Name (aliases)          | Description |
+| ----------------------- | ----------- |
+| `displayhatmini` (`hat`, `pimoroni`) | Hardware Display HAT Mini driver with buttons + RGB LED support. |
+| `pillow` (`tk`, `tkinter`, `window`) | Pillow/Tkinter window that mirrors the LCD for development on X11/Wayland. |
+| `framebuffer` (`fb`, `fb0`) | Raw RGB writer aimed at `/dev/fb0`-style framebuffers. |
+
+Button and LED helpers are only available when the active backend exposes
+those features (currently the Display HAT Mini). Other backends simply ignore
+button polling and LED animation requests.
+
 Or install the included systemd service (see below).
 
 ---

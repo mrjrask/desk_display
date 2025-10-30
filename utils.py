@@ -19,7 +19,7 @@ import threading
 import time
 from contextlib import contextmanager
 from dataclasses import dataclass
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Callable, Dict, Iterable, List, Optional, Protocol, Tuple, cast, runtime_checkable
 
 import functools
 import logging
@@ -50,10 +50,6 @@ except (ImportError, RuntimeError) as _displayhat_exc:  # pragma: no cover - har
     _DISPLAY_HAT_ERROR = _displayhat_exc
 else:  # pragma: no cover - hardware import
     _DISPLAY_HAT_ERROR = None
-
-_ACTIVE_DISPLAY: Optional["Display"] = None
-_GITHUB_LED_ANIMATOR: Optional["_GithubLedAnimator"] = None
-_GITHUB_LED_STATE: bool = False
 
 _DISPLAY_UPDATE_GATE = threading.Event()
 _DISPLAY_UPDATE_GATE.set()
@@ -99,18 +95,54 @@ def log_call(func):
         return result
     return wrapper
 
-# ─── Display wrapper ────────────────────────────────────────────────────────
-class Display:
-    """Wrapper around the Pimoroni Display HAT Mini (320×240 LCD)."""
+@runtime_checkable
+class BaseDisplay(Protocol):
+    """Common display interface shared by all desk display backends."""
+
+    width: int
+    height: int
+
+    def image(self, pil_img: Image.Image) -> None:
+        """Push a PIL image to the display."""
+
+    def clear(self) -> None:
+        """Blank the display to black."""
+
+    def show(self) -> None:
+        """Flush the current buffer to the display."""
+
+    def capture(self) -> Image.Image:
+        """Return a copy of the currently buffered frame."""
+
+    # Optional helpers -----------------------------------------------------
+    def set_led(self, r: float = 0.0, g: float = 0.0, b: float = 0.0) -> None:
+        """Update any RGB LED associated with the display (if supported)."""
+
+    def is_button_pressed(self, name: str) -> bool:
+        """Return True when the named hardware button is currently pressed."""
+
+
+_ACTIVE_DISPLAY: Optional[BaseDisplay] = None
+_GITHUB_LED_ANIMATOR: Optional["_GithubLedAnimator"] = None
+_GITHUB_LED_STATE: bool = False
+
+
+def set_active_display(display: Optional[BaseDisplay]) -> None:
+    """Track the display instance currently being used by the process."""
+
+    global _ACTIVE_DISPLAY
+    _ACTIVE_DISPLAY = display
+
+
+class _ImageDisplayBackend:
+    """Shared Pillow-backed helpers for display implementations."""
 
     _BUTTON_NAMES = ("A", "B", "X", "Y")
 
-    def __init__(self):
-        global _ACTIVE_DISPLAY
-
-        self.width = WIDTH
-        self.height = HEIGHT
-        self.rotation = DISPLAY_ROTATION % 360
+    def __init__(self, *, width: int = WIDTH, height: int = HEIGHT, rotation: int = DISPLAY_ROTATION) -> None:
+        self.width = width
+        self.height = height
+        self.rotation = rotation % 360
         if self.rotation not in (0, 90, 180, 270):
             logging.warning(
                 "Unsupported display rotation %d°; falling back to 0°.",
@@ -118,6 +150,68 @@ class Display:
             )
             self.rotation = 0
         self._buffer = Image.new("RGB", (self.width, self.height), "black")
+        self._lock = threading.Lock()
+        self.supports_led = False
+        self.supports_buttons = False
+        set_active_display(cast(BaseDisplay, self))
+
+    # --- BaseDisplay contract -------------------------------------------------
+    def capture(self) -> Image.Image:
+        with self._lock:
+            return self._buffer.copy()
+
+    def clear(self) -> None:
+        with self._lock:
+            self._buffer = Image.new("RGB", (self.width, self.height), "black")
+            buffer = self._buffer.copy()
+        self._push(buffer)
+
+    def image(self, pil_img: Image.Image) -> None:
+        if pil_img.size != (self.width, self.height):
+            pil_img = pil_img.resize((self.width, self.height), Image.ANTIALIAS)
+        if pil_img.mode != "RGB":
+            pil_img = pil_img.convert("RGB")
+        with self._lock:
+            self._buffer = pil_img.copy()
+            buffer = self._buffer.copy()
+        self._push(buffer)
+
+    def show(self) -> None:
+        with self._lock:
+            buffer = self._buffer.copy()
+        self._push(buffer)
+
+    # Optional helpers default to safe fallbacks -----------------------------
+    def set_led(self, r: float = 0.0, g: float = 0.0, b: float = 0.0) -> None:  # pragma: no cover - default no-op
+        if logging.getLogger().isEnabledFor(logging.DEBUG):
+            logging.debug("Display backend does not support LEDs; ignoring request.")
+
+    def is_button_pressed(self, name: str) -> bool:
+        return False
+
+    # --- Internal helpers ----------------------------------------------------
+    def _prepare_for_output(self, buffer: Image.Image) -> Image.Image:
+        if self.rotation:
+            return buffer.rotate(self.rotation, expand=False)
+        return buffer
+
+    def _push(self, buffer: Image.Image) -> None:
+        if not display_updates_enabled():
+            return
+        try:
+            self._present(self._prepare_for_output(buffer))
+        except Exception as exc:
+            logging.warning("Display refresh failed: %s", exc)
+
+    def _present(self, frame: Image.Image) -> None:
+        raise NotImplementedError
+
+
+class DisplayHatMiniBackend(_ImageDisplayBackend):
+    """Pimoroni Display HAT Mini hardware backend."""
+
+    def __init__(self, **kwargs: Any) -> None:
+        super().__init__(**kwargs)
         self._display = None
         self._button_pins: Dict[str, Optional[int]] = {name: None for name in self._BUTTON_NAMES}
 
@@ -131,68 +225,38 @@ class Display:
                 logging.warning(
                     "Display HAT Mini driver unavailable; running headless."
                 )
-        else:
-            try:  # pragma: no cover - hardware import
-                self._display = DisplayHATMini(self._buffer)
-                self._display.set_backlight(1.0)
-                for name in self._BUTTON_NAMES:
-                    pin_name = f"BUTTON_{name}"
-                    self._button_pins[name] = getattr(self._display, pin_name, None)
-            except Exception as exc:  # pragma: no cover - hardware import
-                logging.warning(
-                    "Failed to initialize Display HAT Mini hardware; running headless (%s)",
-                    exc,
-                )
-                self._display = None
-            else:  # pragma: no cover - hardware import
-                logging.info(
-                    "🖼️  Display HAT Mini initialized (%dx%d, rotation %d°).",
-                    self.width,
-                    self.height,
-                    self.rotation,
-                )
-
-        _ACTIVE_DISPLAY = self
-
-    def _update_display(self):
-        if not display_updates_enabled():
             return
+
+        try:  # pragma: no cover - hardware import
+            self._display = DisplayHATMini(self._buffer)
+            self._display.set_backlight(1.0)
+            for name in self._BUTTON_NAMES:
+                pin_name = f"BUTTON_{name}"
+                self._button_pins[name] = getattr(self._display, pin_name, None)
+        except Exception as exc:  # pragma: no cover - hardware import
+            logging.warning(
+                "Failed to initialize Display HAT Mini hardware; running headless (%s)",
+                exc,
+            )
+            self._display = None
+        else:  # pragma: no cover - hardware import
+            logging.info(
+                "🖼️  Display HAT Mini initialized (%dx%d, rotation %d°).",
+                self.width,
+                self.height,
+                self.rotation,
+            )
+            self.supports_led = True
+            self.supports_buttons = True
+
+    # --- Overrides -----------------------------------------------------------
+    def _present(self, frame: Image.Image) -> None:
         if self._display is None:  # pragma: no cover - hardware import
             return
-        try:
-            buffer_to_display = self._buffer
-            if self.rotation:
-                buffer_to_display = self._buffer.rotate(self.rotation, expand=False)
-            self._display.buffer = buffer_to_display
-            self._display.display()
-        except Exception as exc:  # pragma: no cover - hardware import
-            logging.warning("Display refresh failed: %s", exc)
+        self._display.buffer = frame  # pragma: no cover - hardware import
+        self._display.display()  # pragma: no cover - hardware import
 
-    def clear(self):
-        self._buffer = Image.new("RGB", (self.width, self.height), "black")
-        self._update_display()
-
-    def image(self, pil_img: Image.Image):
-        if pil_img.size != (self.width, self.height):
-            pil_img = pil_img.resize((self.width, self.height), Image.ANTIALIAS)
-        if pil_img.mode != "RGB":
-            pil_img = pil_img.convert("RGB")
-        self._buffer = pil_img.copy()
-        self._update_display()
-
-    def show(self):
-        # No additional action required; display() is triggered during image()
-        self._update_display()
-
-    def capture(self) -> Image.Image:
-        """Return a copy of the currently buffered frame."""
-
-        return self._buffer.copy()
-
-    # ----- Hardware helpers -------------------------------------------------
     def set_led(self, r: float = 0.0, g: float = 0.0, b: float = 0.0) -> None:
-        """Set the onboard RGB LED, if hardware is available."""
-
         if self._display is None:  # pragma: no cover - hardware import
             return
         try:  # pragma: no cover - hardware import
@@ -201,8 +265,6 @@ class Display:
             logging.debug("Display LED update failed: %s", exc)
 
     def is_button_pressed(self, name: str) -> bool:
-        """Return True if the named button is currently pressed."""
-
         if self._display is None:  # pragma: no cover - hardware import
             return False
 
@@ -220,18 +282,139 @@ class Display:
             return raw_state
 
         if isinstance(raw_state, (int, float)):  # pragma: no cover - hardware import
-            # Buttons are wired active-low; a ``0`` reading means the button is
-            # being held down.  ``read_button`` previously returned ``True``
-            # when pressed but newer firmware returns the raw ``0/1`` GPIO
-            # value.  Treat both styles uniformly so the skip button works
-            # regardless of driver version.
             return raw_state == 0
 
         return bool(raw_state)
 
 
-def get_active_display() -> Optional["Display"]:
-    """Return the most recently constructed :class:`Display` instance, if any."""
+class PillowWindowBackend(_ImageDisplayBackend):
+    """Display backend that renders frames inside a Pillow-backed Tkinter window."""
+
+    def __init__(self, *, fullscreen: bool = False, title: str = "Desk Display", **kwargs: Any) -> None:
+        super().__init__(**kwargs)
+        self._fullscreen = fullscreen
+        self._title = title
+        self._tk_app = None
+        self._tk_image = None
+        self._label = None
+
+        try:
+            import tkinter as tk  # type: ignore
+            from PIL import ImageTk
+        except Exception as exc:  # pragma: no cover - GUI import
+            logging.warning("Tkinter display backend unavailable; running headless (%s)", exc)
+            self._tk = None
+            self._image_tk = None
+            return
+
+        self._tk = tk
+        self._image_tk = ImageTk
+
+        try:  # pragma: no cover - GUI init
+            self._tk_app = tk.Tk()
+            self._tk_app.title(self._title)
+            if self._fullscreen:
+                self._tk_app.attributes("-fullscreen", True)
+            self._label = tk.Label(self._tk_app)
+            self._label.pack()
+            self._tk_app.update_idletasks()
+        except Exception as exc:  # pragma: no cover - GUI init
+            logging.warning("Failed to initialize Tkinter display window; running headless (%s)", exc)
+            self._tk_app = None
+
+    def _present(self, frame: Image.Image) -> None:
+        if self._tk_app is None or self._label is None or self._image_tk is None:  # pragma: no cover - GUI init
+            return
+        try:  # pragma: no cover - GUI update
+            photo = self._image_tk.PhotoImage(frame)
+            self._tk_image = photo
+            self._label.configure(image=photo)
+            self._tk_app.update_idletasks()
+            self._tk_app.update()
+        except Exception as exc:
+            logging.debug("Tkinter display update failed: %s", exc)
+
+
+class FramebufferDisplayBackend(_ImageDisplayBackend):
+    """Display backend that writes raw RGB frames to a Linux framebuffer device."""
+
+    def __init__(self, *, framebuffer_path: str = "/dev/fb0", **kwargs: Any) -> None:
+        super().__init__(**kwargs)
+        self._framebuffer_path = framebuffer_path
+        self._fb = None
+        try:
+            self._fb = open(self._framebuffer_path, "wb", buffering=0)
+        except OSError as exc:
+            logging.warning("Framebuffer display backend unavailable; running headless (%s)", exc)
+            self._fb = None
+
+    def _present(self, frame: Image.Image) -> None:
+        if self._fb is None:
+            return
+        try:
+            rgb_frame = frame.convert("RGB")
+            self._fb.seek(0)
+            self._fb.write(rgb_frame.tobytes())
+        except Exception as exc:
+            logging.debug("Framebuffer update failed: %s", exc)
+
+
+# Backward compatibility alias for legacy imports --------------------------------
+class Display(DisplayHatMiniBackend):
+    """Alias for the original Display class name (Display HAT Mini backend)."""
+
+    pass
+
+
+_DISPLAY_BACKENDS: Dict[str, Callable[..., BaseDisplay]] = {}
+
+
+def _register_display_backend(names: Iterable[str], factory: Callable[..., BaseDisplay]) -> None:
+    for name in names:
+        _DISPLAY_BACKENDS[name.lower()] = factory
+
+
+_register_display_backend(("hat", "displayhatmini", "pimoroni"), DisplayHatMiniBackend)
+_register_display_backend(("pillow", "tk", "tkinter", "window"), PillowWindowBackend)
+_register_display_backend(("framebuffer", "fb", "fb0"), FramebufferDisplayBackend)
+
+
+def available_display_backends() -> Dict[str, Callable[..., BaseDisplay]]:
+    """Return a copy of the registered display backend factories."""
+
+    return dict(_DISPLAY_BACKENDS)
+
+
+def create_display(backend: Optional[str] = None, **kwargs: Any) -> BaseDisplay:
+    """Instantiate a display backend by name and track it as active."""
+
+    if backend is None:
+        backend = "displayhatmini"
+    key = backend.lower()
+    factory = _DISPLAY_BACKENDS.get(key)
+    if factory is None:
+        raise ValueError(
+            f"Unknown display backend '{backend}'. Available options: {', '.join(sorted(_DISPLAY_BACKENDS))}"
+        )
+    display = factory(**kwargs)
+    set_active_display(display)
+    return display
+
+
+def display_supports_led(display: BaseDisplay) -> bool:
+    """Return True if the provided display backend exposes LED controls."""
+
+    return bool(getattr(display, "supports_led", False))
+
+
+def display_supports_buttons(display: BaseDisplay) -> bool:
+    """Return True if the provided display backend exposes hardware buttons."""
+
+    return bool(getattr(display, "supports_buttons", False))
+
+
+def get_active_display() -> Optional[BaseDisplay]:
+    """Return the most recently constructed display instance, if any."""
 
     return _ACTIVE_DISPLAY
 
@@ -259,7 +442,7 @@ class ScreenImage:
 
 # ─── Basic utilities ────────────────────────────────────────────────────────
 @log_call
-def clear_display(display):
+def clear_display(display: BaseDisplay):
     """
     Clear the connected display, falling back to a blank frame.
     """
@@ -386,7 +569,7 @@ def temperature_color(temp_f: float, lo: float = 50.0, hi: float = 80.0) -> tupl
 
 @log_call
 def animate_fade_in(
-    display: Display,
+    display: BaseDisplay,
     new_image: Image.Image,
     steps: int = 10,
     delay: float = 0.02,
@@ -424,7 +607,7 @@ def animate_fade_in(
         time.sleep(delay)
 
 @log_call
-def animate_scroll(display: Display, image: Image.Image, speed=3, y_offset=None):
+def animate_scroll(display: BaseDisplay, image: Image.Image, speed=3, y_offset=None):
     """
     Scroll an image across the display.
     """
@@ -638,7 +821,7 @@ def load_svg(key, url) -> Image.Image | None:
 class _GithubLedAnimator:
     """Hold the onboard LED at a barely visible blue glow."""
 
-    def __init__(self, display: "Display") -> None:
+    def __init__(self, display: BaseDisplay) -> None:
         self._display = display
         self._stop = threading.Event()
         self._thread = threading.Thread(target=self._run, daemon=True)
@@ -646,7 +829,7 @@ class _GithubLedAnimator:
     def start(self) -> None:
         self._thread.start()
 
-    def is_running_for(self, display: "Display") -> bool:
+    def is_running_for(self, display: BaseDisplay) -> bool:
         return self._display is display and self._thread.is_alive()
 
     def stop(self) -> None:
@@ -662,7 +845,7 @@ class _GithubLedAnimator:
         self._display.set_led(r=0.0, g=0.0, b=0.0)
 
 
-def _start_github_led_animator(display: "Display") -> None:
+def _start_github_led_animator(display: BaseDisplay) -> None:
     """Start the GitHub LED animator for the provided display."""
 
     global _GITHUB_LED_ANIMATOR
@@ -694,6 +877,16 @@ def _update_github_led(state: bool) -> None:
                 _GITHUB_LED_ANIMATOR = None
         return
 
+    if not display_supports_led(display):
+        if _GITHUB_LED_ANIMATOR is not None:
+            try:
+                _GITHUB_LED_ANIMATOR.stop()
+            except Exception as exc:
+                logging.debug("Failed to stop GitHub LED animator for unsupported backend: %s", exc)
+            finally:
+                _GITHUB_LED_ANIMATOR = None
+        return
+
     if state:
         if _GITHUB_LED_ANIMATOR is not None:
             # Animator already running; nothing to change.
@@ -704,7 +897,8 @@ def _update_github_led(state: bool) -> None:
                 _GITHUB_LED_ANIMATOR.stop()
             except Exception as exc:  # pragma: no cover - hardware import
                 logging.debug("Failed to stop previous GitHub LED animator: %s", exc)
-        _start_github_led_animator(display)
+        if display_supports_led(display):
+            _start_github_led_animator(display)
     else:
         if _GITHUB_LED_ANIMATOR is not None:
             try:
@@ -722,7 +916,7 @@ def temporary_display_led(r: float, g: float, b: float):
     global _GITHUB_LED_ANIMATOR
 
     display = get_active_display()
-    if display is None:
+    if display is None or not display_supports_led(display):
         yield
         return
 
