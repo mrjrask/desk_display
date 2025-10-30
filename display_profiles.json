@@ -1,0 +1,153 @@
+{
+  "profiles": {
+    "display_hat_mini": {
+      "description": "Pimoroni Display HAT Mini (320×240)",
+      "canvas": {"width": 320, "height": 240},
+      "baseline": {"width": 320, "height": 240},
+      "font_scale": 1.0,
+      "icon_scale": 1.0,
+      "fonts": {
+        "day_date": {"file": "DejaVuSans-Bold.ttf", "size": 39},
+        "date": {"file": "DejaVuSans.ttf", "size": 22},
+        "time": {"file": "DejaVuSans-Bold.ttf", "size": 59},
+        "am_pm": {"file": "DejaVuSans.ttf", "size": 20},
+        "temp": {"file": "DejaVuSans-Bold.ttf", "size": 44},
+        "condition": {"file": "DejaVuSans-Bold.ttf", "size": 20},
+        "weather_details": {"file": "DejaVuSans.ttf", "size": 22},
+        "weather_details_bold": {"file": "DejaVuSans-Bold.ttf", "size": 18},
+        "weather_label": {"file": "DejaVuSans.ttf", "size": 18},
+        "title_sports": {"file": "TimesSquare-m105.ttf", "size": 30},
+        "team_sports": {"file": "TimesSquare-m105.ttf", "size": 37},
+        "date_sports": {"file": "TimesSquare-m105.ttf", "size": 30},
+        "team_sports_small": {"file": "TimesSquare-m105.ttf", "size": 33},
+        "score": {"file": "TimesSquare-m105.ttf", "size": 41},
+        "status": {"file": "TimesSquare-m105.ttf", "size": 30},
+        "inside_label": {"file": "DejaVuSans-Bold.ttf", "size": 18},
+        "inside_value": {"file": "DejaVuSans.ttf", "size": 17},
+        "inside_subtitle": {"file": "DejaVuSans.ttf", "size": 18},
+        "title_inside": {"file": "DejaVuSans-Bold.ttf", "size": 17},
+        "travel_title": {"file": "TimesSquare-m105.ttf", "size": 17},
+        "travel_header": {"file": "TimesSquare-m105.ttf", "size": 17},
+        "travel_value": {"file": "HWYGNRRW.TTF", "size": 26},
+        "stock_title": {"file": "DejaVuSans-Bold.ttf", "size": 18},
+        "stock_price": {"file": "DejaVuSans-Bold.ttf", "size": 44},
+        "stock_change": {"file": "DejaVuSans.ttf", "size": 22},
+        "stock_text": {"file": "DejaVuSans.ttf", "size": 17},
+        "stand1_wl": {"file": "DejaVuSans-Bold.ttf", "size": 26},
+        "stand1_rank": {"file": "DejaVuSans.ttf", "size": 22},
+        "stand1_gb_label": {"file": "DejaVuSans.ttf", "size": 17},
+        "stand1_wcgb_label": {"file": "DejaVuSans.ttf", "size": 17},
+        "stand1_gb_value": {"file": "DejaVuSans.ttf", "size": 17},
+        "stand1_wcgb_value": {"file": "DejaVuSans.ttf", "size": 17},
+        "stand2_record": {"file": "DejaVuSans.ttf", "size": 26},
+        "stand2_label": {"file": "DejaVuSans.ttf", "size": 22},
+        "stand2_value": {"file": "DejaVuSans.ttf", "size": 22},
+        "div_header": {"file": "DejaVuSans-Bold.ttf", "size": 20},
+        "div_record": {"file": "DejaVuSans.ttf", "size": 22},
+        "div_gb": {"file": "DejaVuSans.ttf", "size": 18},
+        "gb_value": {"file": "DejaVuSans.ttf", "size": 18},
+        "gb_label": {"file": "DejaVuSans.ttf", "size": 15},
+        "emoji": {"size": 30}
+      },
+      "icons": {
+        "github": {
+          "size": 33,
+          "padding_x": 2,
+          "padding_y": 2,
+          "baseline_offset": 4,
+          "invert": true
+        },
+        "weather": {"size": 218}
+      },
+      "animation": {
+        "screen_delay": 4.0,
+        "scoreboard": {"intro_delay": 0.06, "intro_hold": 0.4},
+        "inside": {"hold": 5.0}
+      },
+      "scoreboard": {
+        "column_widths": [70, 60, 60, 60, 70],
+        "title_gap": 8,
+        "block_spacing": 10,
+        "score_row_height": 56,
+        "status_row_height": 18,
+        "logo_height": 52,
+        "league_logo_gap": 4,
+        "intro_max_height": 100,
+        "scroll": {
+          "step": 1,
+          "delay": 0.005,
+          "pause_top": 0.75,
+          "pause_bottom": 0.5
+        }
+      },
+      "inside": {
+        "title_padding": 8,
+        "subtitle_gap": 6,
+        "content_gap": 12,
+        "bottom_margin": 12,
+        "side_padding": 12,
+        "metric_block_gap": 12,
+        "metric_row_height": 44,
+        "metric_row_gap": 10,
+        "min_temp_floor": 54
+      }
+    },
+    "hyperpixel_4_0": {
+      "description": "Pimoroni HyperPixel 4.0 (800×480)",
+      "canvas": {"width": 800, "height": 480},
+      "baseline": {"width": 320, "height": 240},
+      "font_scale": 2.1,
+      "icon_scale": 2.0,
+      "animation": {
+        "screen_delay": 6.0,
+        "scoreboard": {"intro_delay": 0.05, "intro_hold": 0.6}
+      },
+      "icons": {
+        "github": {
+          "padding_x": 6,
+          "padding_y": 6,
+          "baseline_offset": 8
+        }
+      },
+      "inside": {
+        "content_gap": 18,
+        "bottom_margin": 18,
+        "side_padding": 18,
+        "metric_block_gap": 18,
+        "metric_row_height": 60,
+        "metric_row_gap": 14,
+        "min_temp_floor": 72
+      },
+      "scoreboard": {
+        "intro_max_height": 160
+      }
+    },
+    "xpt2046_3_5": {
+      "description": "Generic 3.5\" XPT2046 SPI (480×320)",
+      "canvas": {"width": 480, "height": 320},
+      "baseline": {"width": 320, "height": 240},
+      "font_scale": 1.5,
+      "icon_scale": 1.4,
+      "animation": {"screen_delay": 5.0},
+      "icons": {
+        "github": {
+          "padding_x": 4,
+          "padding_y": 4,
+          "baseline_offset": 6
+        }
+      },
+      "inside": {
+        "content_gap": 16,
+        "bottom_margin": 16,
+        "side_padding": 16,
+        "metric_block_gap": 14,
+        "metric_row_height": 52,
+        "metric_row_gap": 12,
+        "min_temp_floor": 64
+      },
+      "scoreboard": {
+        "intro_max_height": 130
+      }
+    }
+  }
+}

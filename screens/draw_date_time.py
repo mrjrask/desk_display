@@ -33,7 +33,11 @@ from config import (
     FONT_AM_PM,
     DATE_TIME_GH_ICON_INVERT,
     DATE_TIME_GH_ICON_SIZE,
+    DATE_TIME_GH_ICON_PADDING_X,
+    DATE_TIME_GH_ICON_PADDING_Y,
+    DATE_TIME_GH_ICON_BASELINE_OFFSET,
     DATE_TIME_GH_ICON_PATHS,
+    scale_height,
 )
 from utils import (
     ScreenImage,
@@ -67,8 +71,8 @@ def _compose_frame(
     time_str, ampm = time_strings(now)
 
     # Top/bottom halves
-    top_box    = (0, 0, WIDTH, HEIGHT//2)
-    bottom_box = (0, HEIGHT//2, WIDTH, HEIGHT)
+    top_box = (0, 0, WIDTH, HEIGHT // 2)
+    bottom_box = (0, HEIGHT // 2, WIDTH, HEIGHT)
 
     # ----- Build content per half
     def draw_date_block(box, color):
@@ -84,7 +88,7 @@ def _compose_frame(
 
         w1, h1 = measure_text(draw, weekday, day_font)
         w2, h2 = measure_text(draw, date_str, FONT_DATE)
-        gap = 2
+        gap = max(1, scale_height(2))
         block_h = h1 + gap + h2
         y_start = y0 + (area_h - block_h)//2
 
@@ -125,10 +129,16 @@ def _compose_frame(
             paths=DATE_TIME_GH_ICON_PATHS,
         )
         if ic:
-            x_pos = WIDTH - ic.width - 2
-            y_pos = HEIGHT - ic.height - 2 + 4
+            x_pos = WIDTH - ic.width - DATE_TIME_GH_ICON_PADDING_X
+            y_pos = (
+                HEIGHT
+                - ic.height
+                - DATE_TIME_GH_ICON_PADDING_Y
+                + DATE_TIME_GH_ICON_BASELINE_OFFSET
+            )
             y_pos = min(HEIGHT - ic.height, y_pos)
             y_pos = max(0, y_pos)
+            x_pos = max(0, x_pos)
             img.paste(ic, (x_pos, y_pos), ic)
 
     return img
