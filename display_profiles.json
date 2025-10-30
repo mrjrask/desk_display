@@ -118,6 +118,16 @@
         "metric_row_gap": 14,
         "min_temp_floor": 72
       },
+      "travel": {
+        "outer_margin": {"absolute": true, "value": 16},
+        "row_padding_x": {"absolute": true, "value": 32},
+        "row_padding_y": {"absolute": true, "value": 12},
+        "row_gap": {"absolute": true, "value": 18},
+        "header_gap": {"absolute": true, "value": 16},
+        "warning_gap": {"absolute": true, "value": 18},
+        "warning_bottom_margin": {"absolute": true, "value": 20},
+        "row_corner_radius": {"absolute": true, "value": 24}
+      },
       "scoreboard": {
         "intro_max_height": 160
       }
