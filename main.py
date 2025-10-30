@@ -59,6 +59,7 @@ from utils import (
 )
 import data_fetch
 from services import wifi_utils
+from runtime_events import shutdown_event as _shutdown_event
 
 from screens.draw_date_time import draw_date, draw_time
 from screens.draw_travel_time import (
@@ -98,7 +99,6 @@ _last_screen_id: Optional[str] = None
 
 _SKIP_BUTTON_SCREEN_IDS = {"date", "time"}
 
-_shutdown_event = threading.Event()
 _shutdown_complete = threading.Event()
 _display_cleared = threading.Event()
 
