@@ -137,6 +137,7 @@ IN_PROGRESS_STATUS_COLOR = IN_PROGRESS_SCORE_COLOR
 FINAL_WINNING_SCORE_COLOR = SCOREBOARD_FINAL_WINNING_SCORE_COLOR
 FINAL_LOSING_SCORE_COLOR = SCOREBOARD_FINAL_LOSING_SCORE_COLOR
 BACKGROUND_COLOR = SCOREBOARD_BACKGROUND_COLOR
+SEPARATOR_MARGIN = _resolve_mlb_dimension("separator_margin", 10, axis="width")
 
 layout_config = {
     "scope": _LAYOUT_SCOPE,
@@ -459,7 +460,10 @@ def _compose_canvas(games: list[dict]) -> Image.Image:
         if idx < len(games) - 1:
             # separator line and spacing
             sep_y = y + BLOCK_SPACING // 2
-            draw.line((10, sep_y, WIDTH - 10, sep_y), fill=(45, 45, 45))
+            draw.line(
+                (SEPARATOR_MARGIN, sep_y, WIDTH - SEPARATOR_MARGIN, sep_y),
+                fill=(45, 45, 45),
+            )
             y += BLOCK_SPACING
     return canvas
 

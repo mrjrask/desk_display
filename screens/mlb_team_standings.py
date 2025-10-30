@@ -25,12 +25,13 @@ from config import (
     FONT_STAND2_RECORD,
     FONT_STAND2_VALUE,
     SCOREBOARD_BACKGROUND_COLOR,
+    resolve_dimension,
 )
 from utils import clear_display, log_call
 
 # Constants
-LOGO_SZ = 59
-MARGIN  = 6
+LOGO_SZ = max(1, resolve_dimension("mlb.team_standings.logo_size", 59, axis="height"))
+MARGIN  = resolve_dimension("mlb.team_standings.margin", 6, axis="height")
 
 # Helpers
 def _ord(n):
