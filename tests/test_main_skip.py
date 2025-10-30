@@ -116,3 +116,21 @@ def test_wait_with_button_checks_honors_pending_skip_event(main_module):
 
     assert main_module._wait_with_button_checks(5.0) is True
     assert main_module._manual_skip_event.is_set() is False
+
+
+def test_check_control_buttons_ignores_existing_skip_flag(main_module):
+    class _StubDisplay:
+        supports_buttons = True
+
+        def __init__(self):
+            self.state = {name: False for name in main_module._BUTTON_NAMES}
+
+        def is_button_pressed(self, name):
+            return self.state.get(name, False)
+
+    main_module.display = _StubDisplay()
+    main_module._skip_request_pending = True
+    main_module._manual_skip_event.clear()
+    main_module._BUTTON_STATE = {name: False for name in main_module._BUTTON_NAMES}
+
+    assert main_module._check_control_buttons() is False
