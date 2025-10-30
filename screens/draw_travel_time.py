@@ -22,11 +22,19 @@ from config import (
     GOOGLE_MAPS_API_KEY,
     HEIGHT,
     IMAGES_DIR,
+    TRAVEL_HEADER_GAP,
     TRAVEL_ACTIVE_WINDOW,
     TRAVEL_DESTINATION,
     TRAVEL_DIRECTIONS_URL,
+    TRAVEL_OUTER_MARGIN,
     TRAVEL_ORIGIN,
+    TRAVEL_ROW_CORNER_RADIUS,
+    TRAVEL_ROW_GAP,
+    TRAVEL_ROW_PADDING_X,
+    TRAVEL_ROW_PADDING_Y,
     TRAVEL_TITLE,
+    TRAVEL_WARNING_BOTTOM_MARGIN,
+    TRAVEL_WARNING_EXTRA_GAP,
     WIDTH,
 )
 from utils import (
@@ -347,11 +355,11 @@ def _compose_travel_image(times: Dict[str, TravelTimeResult]) -> Image.Image:
 
     title_width, title_height = _measure(TRAVEL_TITLE, FONT_TITLE_SPORTS)
 
-    outer_margin = 4
-    row_padding_x = 10
-    row_padding_y = 4
-    row_gap = 4
-    header_gap = 4
+    outer_margin = TRAVEL_OUTER_MARGIN
+    row_padding_x = TRAVEL_ROW_PADDING_X
+    row_padding_y = TRAVEL_ROW_PADDING_Y
+    row_gap = TRAVEL_ROW_GAP
+    header_gap = TRAVEL_HEADER_GAP
     row_height = max(max_sign_height, max_time_height) + 2 * row_padding_y
 
     all_na = all(row["normalized"].upper() == "N/A" for row in rows)
@@ -367,7 +375,7 @@ def _compose_travel_image(times: Dict[str, TravelTimeResult]) -> Image.Image:
         + outer_margin
     )
     if all_na:
-        content_height += warning_height + 6
+        content_height += warning_height + TRAVEL_WARNING_EXTRA_GAP
 
     canvas_height = max(content_height, HEIGHT)
     img = Image.new("RGB", (WIDTH, canvas_height), "black")
@@ -407,7 +415,7 @@ def _compose_travel_image(times: Dict[str, TravelTimeResult]) -> Image.Image:
 
         draw.rounded_rectangle(
             (row_left, row_top, row_right, row_bottom),
-            radius=10,
+            radius=TRAVEL_ROW_CORNER_RADIUS,
             fill=(28, 28, 28),
             outline=(80, 80, 80),
         )
@@ -425,7 +433,10 @@ def _compose_travel_image(times: Dict[str, TravelTimeResult]) -> Image.Image:
         y = row_bottom + row_gap
 
     if all_na:
-        warning_y = min(canvas_height - warning_height - 4, y)
+        warning_y = min(
+            canvas_height - warning_height - TRAVEL_WARNING_BOTTOM_MARGIN,
+            y,
+        )
         draw.text(
             ((WIDTH - warning_width) // 2, warning_y),
             warning_text,

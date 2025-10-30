@@ -303,6 +303,16 @@ def _base_profile_template() -> Dict[str, Any]:
             "metric_row_gap": 10,
             "min_temp_floor": 54,
         },
+        "travel": {
+            "outer_margin": 4,
+            "row_padding_x": 10,
+            "row_padding_y": 4,
+            "row_gap": 4,
+            "header_gap": 4,
+            "warning_gap": 6,
+            "warning_bottom_margin": 4,
+            "row_corner_radius": 10,
+        },
     }
 
 
@@ -981,6 +991,18 @@ TRAVEL_ORIGIN        = _travel_profile["origin"]
 TRAVEL_DESTINATION   = _travel_profile["destination"]
 TRAVEL_TITLE         = _travel_profile["title"]
 TRAVEL_ACTIVE_WINDOW = _travel_profile["active_window"]
+TRAVEL_OUTER_MARGIN = resolve_dimension("travel.outer_margin", 4, axis="width")
+TRAVEL_ROW_PADDING_X = resolve_dimension("travel.row_padding_x", 10, axis="width")
+TRAVEL_ROW_PADDING_Y = resolve_dimension("travel.row_padding_y", 4, axis="height")
+TRAVEL_ROW_GAP = resolve_dimension("travel.row_gap", 4, axis="height")
+TRAVEL_HEADER_GAP = resolve_dimension("travel.header_gap", 4, axis="height")
+TRAVEL_WARNING_EXTRA_GAP = resolve_dimension("travel.warning_gap", 6, axis="height")
+TRAVEL_WARNING_BOTTOM_MARGIN = resolve_dimension(
+    "travel.warning_bottom_margin", 4, axis="height"
+)
+TRAVEL_ROW_CORNER_RADIUS = resolve_dimension(
+    "travel.row_corner_radius", 10, axis="width"
+)
 TRAVEL_DIRECTIONS_URL = "https://maps.googleapis.com/maps/api/directions/json"
 
 # Bears schedule screen
