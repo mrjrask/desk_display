@@ -286,7 +286,10 @@ def _check_control_buttons() -> bool:
 
         _BUTTON_STATE[name] = pressed
 
-    if skip_requested or _manual_skip_event.is_set() or _skip_request_pending:
+    if skip_requested:
+        return True
+
+    if _manual_skip_event.is_set():
         return True
 
     return False
