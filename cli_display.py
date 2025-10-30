@@ -402,7 +402,12 @@ def run_display(args: argparse.Namespace) -> int:
 
             scheduler_driver.refresh()
             scheduler = scheduler_driver.scheduler
-            if scheduler is None:
+
+            requested_ids = scheduler_driver.requested_ids
+            if args.screen:
+                requested_ids = {args.screen}
+
+            if scheduler is None and not args.screen:
                 logging.warning("No schedule available—waiting %.1f seconds.", delay)
                 if _shutdown_event.wait(delay):
                     break
@@ -413,7 +418,7 @@ def run_display(args: argparse.Namespace) -> int:
                 cache=cache_manager.snapshot(),
                 logos=logos,
                 image_dir=str(IMAGES_DIR),
-                travel_requested="travel" in scheduler_driver.requested_ids,
+                travel_requested="travel" in requested_ids,
                 travel_active=is_travel_screen_active(),
                 travel_window=get_travel_active_window(),
                 previous_travel_state=travel_state,
@@ -423,12 +428,25 @@ def run_display(args: argparse.Namespace) -> int:
             registry, metadata = build_screen_registry(context)
             travel_state = metadata.get("travel_state", travel_state)
 
-            entry = scheduler.next_available(registry)
-            if entry is None:
-                logging.info("No eligible screens—waiting %.1f seconds.", delay)
-                if _shutdown_event.wait(delay):
-                    break
-                continue
+            if args.screen:
+                entry = registry.get(args.screen)
+                if entry is None:
+                    logging.error("Unknown screen '%s'", args.screen)
+                    if _shutdown_event.wait(delay):
+                        break
+                    continue
+                if not entry.available:
+                    logging.warning("Screen '%s' is currently unavailable", entry.id)
+                    if _shutdown_event.wait(delay):
+                        break
+                    continue
+            else:
+                entry = scheduler.next_available(registry) if scheduler else None
+                if entry is None:
+                    logging.info("No eligible screens—waiting %.1f seconds.", delay)
+                    if _shutdown_event.wait(delay):
+                        break
+                    continue
 
             logging.info("🎬 Presenting '%s'", entry.id)
 
@@ -468,6 +486,7 @@ def run_display(args: argparse.Namespace) -> int:
 def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--schedule", default=str(CONFIG_PATH), help="Path to screens_config.json")
+    parser.add_argument("--screen", help="Render only the specified screen ID")
     parser.add_argument("--display", type=int, default=None, help="SDL display index to target")
     parser.add_argument("--video-driver", default=None, help="Force a specific SDL video driver (e.g. kmsdrm, x11)")
     parser.add_argument("--fullscreen", action="store_true", help="Launch fullscreen")

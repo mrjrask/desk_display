@@ -19,7 +19,7 @@ import datetime
 import logging
 import os
 import time
-from typing import Iterable, Optional
+from typing import Any, Iterable, Optional
 
 import requests
 from PIL import Image, ImageDraw
@@ -40,6 +40,10 @@ from config import (
     SCOREBOARD_IN_PROGRESS_SCORE_COLOR,
     SCOREBOARD_FINAL_WINNING_SCORE_COLOR,
     SCOREBOARD_FINAL_LOSING_SCORE_COLOR,
+    scale_font_size,
+    scale_to_width,
+    profile_value,
+    resolve_dimension,
 )
 from utils import (
     ScreenImage,
@@ -51,34 +55,110 @@ from utils import (
 )
 
 # ─── Constants ────────────────────────────────────────────────────────────────
-TITLE                 = "MLB Scoreboard"
-TITLE_GAP             = 8
-BLOCK_SPACING         = 10
-SCORE_ROW_H           = 56
-STATUS_ROW_H          = 18
-REQUEST_TIMEOUT       = 10
+TITLE = "MLB Scoreboard"
+_LAYOUT_SCOPE = "scoreboard"
+_LEAGUE_KEY = "mlb"
+_SENTINEL = object()
 
-COL_WIDTHS = [70, 60, 60, 60, 70]  # total = 320 (WIDTH)
+
+def _layout_path(key: str) -> str:
+    return f"{_LAYOUT_SCOPE}.{_LEAGUE_KEY}.{key}" if key else f"{_LAYOUT_SCOPE}.{_LEAGUE_KEY}"
+
+
+def _profile_layout_value(key: str, default: Any) -> Any:
+    value = profile_value(_layout_path(key), _SENTINEL)
+    if value is not _SENTINEL:
+        return value
+    return profile_value(f"{_LAYOUT_SCOPE}.{key}" if key else _LAYOUT_SCOPE, default)
+
+
+def _resolve_layout_dimension(key: str, default: int, *, axis: str) -> int:
+    if profile_value(_layout_path(key), _SENTINEL) is not _SENTINEL:
+        return max(0, resolve_dimension(_layout_path(key), default, axis=axis))
+    return max(0, resolve_dimension(f"{_LAYOUT_SCOPE}.{key}", default, axis=axis))
+
+
+def _resolve_font_size(key: str, default: int) -> int:
+    value = _profile_layout_value(f"fonts.{key}", _SENTINEL)
+    base = default if value is _SENTINEL else value
+    return scale_font_size(base)
+
+
+TITLE_GAP = _resolve_layout_dimension("title_gap", 8, axis="height")
+BLOCK_SPACING = _resolve_layout_dimension("block_spacing", 10, axis="height")
+SCORE_ROW_H = max(24, _resolve_layout_dimension("score_row_height", 56, axis="height"))
+STATUS_ROW_H = max(12, _resolve_layout_dimension("status_row_height", 18, axis="height"))
+REQUEST_TIMEOUT = 10
+
+_RAW_COL_WIDTHS = _profile_layout_value("column_widths", [70, 60, 60, 60, 70])
+if isinstance(_RAW_COL_WIDTHS, dict):
+    _RAW_COL_WIDTHS = (
+        _RAW_COL_WIDTHS.get("values")
+        or _RAW_COL_WIDTHS.get("widths")
+        or list(_RAW_COL_WIDTHS.values())
+    )
+if not isinstance(_RAW_COL_WIDTHS, (list, tuple)):
+    _RAW_COL_WIDTHS = [70, 60, 60, 60, 70]
+_BASE_COL_WIDTHS = []
+for _value in _RAW_COL_WIDTHS:
+    try:
+        _BASE_COL_WIDTHS.append(float(_value))
+    except (TypeError, ValueError):
+        continue
+if not _BASE_COL_WIDTHS:
+    _BASE_COL_WIDTHS = [70.0, 60.0, 60.0, 60.0, 70.0]
+
+_column_total = _profile_layout_value("column_total", WIDTH)
+try:
+    _column_total_int = int(float(_column_total))
+except (TypeError, ValueError):
+    _column_total_int = WIDTH
+if _column_total_int <= 0:
+    _column_total_int = WIDTH
+
+COL_WIDTHS = scale_to_width(_BASE_COL_WIDTHS, total=_column_total_int)
 _TOTAL_COL_WIDTH = sum(COL_WIDTHS)
 _COL_LEFT = max(0, (WIDTH - _TOTAL_COL_WIDTH) // 2)
 COL_X = [_COL_LEFT]
 for w in COL_WIDTHS:
     COL_X.append(COL_X[-1] + w)
 
-SCORE_FONT              = clone_font(FONT_TEAM_SPORTS, 39)
-STATUS_FONT             = clone_font(FONT_STATUS, 28)
-CENTER_FONT             = clone_font(FONT_STATUS, 28)
-TITLE_FONT              = FONT_TITLE_SPORTS
-LOGO_HEIGHT             = 52
-LOGO_DIR                = os.path.join(IMAGES_DIR, "mlb")
-LEAGUE_LOGO_KEYS        = ("MLB", "mlb")
-LEAGUE_LOGO_GAP         = 4
-LEAGUE_LOGO_HEIGHT      = max(1, int(round(LOGO_HEIGHT * 1.25)))
+SCORE_FONT = clone_font(FONT_TEAM_SPORTS, _resolve_font_size("score", 39))
+STATUS_FONT = clone_font(FONT_STATUS, _resolve_font_size("status", 28))
+CENTER_FONT = clone_font(FONT_STATUS, _resolve_font_size("center", 28))
+TITLE_FONT = FONT_TITLE_SPORTS
+LOGO_HEIGHT = max(1, _resolve_layout_dimension("logo_height", 52, axis="height"))
+LOGO_DIR = os.path.join(IMAGES_DIR, "mlb")
+LEAGUE_LOGO_KEYS = ("MLB", "mlb")
+LEAGUE_LOGO_GAP = _resolve_layout_dimension("league_logo_gap", 4, axis="width")
+LEAGUE_LOGO_HEIGHT = max(1, int(round(LOGO_HEIGHT * 1.25)))
 IN_PROGRESS_SCORE_COLOR = SCOREBOARD_IN_PROGRESS_SCORE_COLOR
 IN_PROGRESS_STATUS_COLOR = IN_PROGRESS_SCORE_COLOR
 FINAL_WINNING_SCORE_COLOR = SCOREBOARD_FINAL_WINNING_SCORE_COLOR
 FINAL_LOSING_SCORE_COLOR = SCOREBOARD_FINAL_LOSING_SCORE_COLOR
 BACKGROUND_COLOR = SCOREBOARD_BACKGROUND_COLOR
+
+layout_config = {
+    "scope": _LAYOUT_SCOPE,
+    "league": _LEAGUE_KEY,
+    "column_widths": tuple(COL_WIDTHS),
+    "column_positions": tuple(COL_X),
+    "title_gap": TITLE_GAP,
+    "block_spacing": BLOCK_SPACING,
+    "row_heights": {
+        "score": SCORE_ROW_H,
+        "status": STATUS_ROW_H,
+    },
+    "logo": {
+        "height": LOGO_HEIGHT,
+        "league_gap": LEAGUE_LOGO_GAP,
+    },
+    "fonts": {
+        "score": SCORE_FONT.size,
+        "status": STATUS_FONT.size,
+        "center": CENTER_FONT.size,
+    },
+}
 
 # Cache for resized logos {abbr: Image}
 _LOGO_CACHE: dict[str, Optional[Image.Image]] = {}
