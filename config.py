@@ -1,12 +1,15 @@
 # config.py
 
 #!/usr/bin/env python3
+import copy
 import datetime
 import glob
+import json
 import logging
 import os
 import subprocess
 from pathlib import Path
+from typing import Any, Dict, Iterable, Mapping, MutableMapping, Optional, Sequence
 
 # ─── Environment helpers ───────────────────────────────────────────────────────
 
@@ -96,6 +99,11 @@ def _get_required_env_var(*names: str) -> str:
         f"{joined}"
     )
 
+try:  # Optional YAML support for profile files
+    import yaml  # type: ignore
+except ImportError:  # pragma: no cover - optional dependency
+    yaml = None
+
 import pytz
 from PIL import Image, ImageDraw, ImageFont
 
@@ -103,6 +111,48 @@ try:
     _RESAMPLE_LANCZOS = Image.Resampling.LANCZOS  # Pillow >= 9.1
 except AttributeError:  # pragma: no cover - fallback for older Pillow
     _RESAMPLE_LANCZOS = Image.LANCZOS
+
+
+def _deep_merge(base: Mapping[str, Any], overrides: Mapping[str, Any]) -> Dict[str, Any]:
+    """Return a deep merge of *base* with *overrides* without mutating inputs."""
+
+    result: Dict[str, Any] = copy.deepcopy(base)
+    for key, value in overrides.items():
+        if key in result and isinstance(result[key], Mapping) and isinstance(value, Mapping):
+            result[key] = _deep_merge(result[key], value)
+        elif isinstance(value, list):
+            result[key] = [copy.deepcopy(item) for item in value]
+        else:
+            result[key] = copy.deepcopy(value)
+    return result
+
+
+def _load_profile_file(path: str) -> Dict[str, Any]:
+    """Load an optional JSON/YAML display profile file."""
+
+    if not path:
+        return {}
+    if not os.path.isfile(path):
+        return {}
+
+    try:
+        with open(path, "r", encoding="utf-8") as fh:
+            if path.endswith((".yaml", ".yml")):
+                if yaml is None:
+                    logging.warning("YAML profile file requested but PyYAML is not installed: %s", path)
+                    return {}
+                data = yaml.safe_load(fh)
+            else:
+                data = json.load(fh)
+    except Exception as exc:  # pragma: no cover - defensive logging
+        logging.warning("Failed to load display profile configuration %s: %s", path, exc)
+        return {}
+
+    if not isinstance(data, Mapping):
+        logging.warning("Display profile file %s did not contain an object", path)
+        return {}
+
+    return dict(data)
 
 # ─── Project paths ────────────────────────────────────────────────────────────
 IMAGES_DIR  = os.path.join(SCRIPT_DIR, "images")
@@ -153,10 +203,378 @@ if not OWM_API_KEY:
 
 GOOGLE_MAPS_API_KEY = os.environ.get("GOOGLE_MAPS_API_KEY")
 
+# ─── Display profiles ──────────────────────────────────────────────────────────
+_FONT_LIBRARY: Dict[str, Dict[str, Any]] = {
+    "day_date": {"file": "DejaVuSans-Bold.ttf", "size": 39},
+    "date": {"file": "DejaVuSans.ttf", "size": 22},
+    "time": {"file": "DejaVuSans-Bold.ttf", "size": 59},
+    "am_pm": {"file": "DejaVuSans.ttf", "size": 20},
+    "temp": {"file": "DejaVuSans-Bold.ttf", "size": 44},
+    "condition": {"file": "DejaVuSans-Bold.ttf", "size": 20},
+    "weather_details": {"file": "DejaVuSans.ttf", "size": 22},
+    "weather_details_bold": {"file": "DejaVuSans-Bold.ttf", "size": 18},
+    "weather_label": {"file": "DejaVuSans.ttf", "size": 18},
+    "title_sports": {"file": "TimesSquare-m105.ttf", "size": 30},
+    "team_sports": {"file": "TimesSquare-m105.ttf", "size": 37},
+    "date_sports": {"file": "TimesSquare-m105.ttf", "size": 30},
+    "team_sports_small": {"file": "TimesSquare-m105.ttf", "size": 33},
+    "score": {"file": "TimesSquare-m105.ttf", "size": 41},
+    "status": {"file": "TimesSquare-m105.ttf", "size": 30},
+    "inside_label": {"file": "DejaVuSans-Bold.ttf", "size": 18},
+    "inside_value": {"file": "DejaVuSans.ttf", "size": 17},
+    "inside_subtitle": {"file": "DejaVuSans.ttf", "size": 18},
+    "title_inside": {"file": "DejaVuSans-Bold.ttf", "size": 17},
+    "travel_title": {"file": "TimesSquare-m105.ttf", "size": 17},
+    "travel_header": {"file": "TimesSquare-m105.ttf", "size": 17},
+    "travel_value": {"file": "HWYGNRRW.TTF", "size": 26},
+    "stock_title": {"file": "DejaVuSans-Bold.ttf", "size": 18},
+    "stock_price": {"file": "DejaVuSans-Bold.ttf", "size": 44},
+    "stock_change": {"file": "DejaVuSans.ttf", "size": 22},
+    "stock_text": {"file": "DejaVuSans.ttf", "size": 17},
+    "stand1_wl": {"file": "DejaVuSans-Bold.ttf", "size": 26},
+    "stand1_rank": {"file": "DejaVuSans.ttf", "size": 22},
+    "stand1_gb_label": {"file": "DejaVuSans.ttf", "size": 17},
+    "stand1_wcgb_label": {"file": "DejaVuSans.ttf", "size": 17},
+    "stand1_gb_value": {"file": "DejaVuSans.ttf", "size": 17},
+    "stand1_wcgb_value": {"file": "DejaVuSans.ttf", "size": 17},
+    "stand2_record": {"file": "DejaVuSans.ttf", "size": 26},
+    "stand2_label": {"file": "DejaVuSans.ttf", "size": 22},
+    "stand2_value": {"file": "DejaVuSans.ttf", "size": 22},
+    "div_header": {"file": "DejaVuSans-Bold.ttf", "size": 20},
+    "div_record": {"file": "DejaVuSans.ttf", "size": 22},
+    "div_gb": {"file": "DejaVuSans.ttf", "size": 18},
+    "gb_value": {"file": "DejaVuSans.ttf", "size": 18},
+    "gb_label": {"file": "DejaVuSans.ttf", "size": 15},
+    "emoji": {"size": 30},
+}
+
+
+def _base_profile_template() -> Dict[str, Any]:
+    fonts = {key: dict(spec) for key, spec in _FONT_LIBRARY.items()}
+    return {
+        "description": "Pimoroni Display HAT Mini (320×240)",
+        "canvas": {"width": 320, "height": 240},
+        "baseline": {"width": 320, "height": 240},
+        "font_scale": 1.0,
+        "icon_scale": 1.0,
+        "fonts": fonts,
+        "icons": {
+            "github": {
+                "size": 33,
+                "padding_x": 2,
+                "padding_y": 2,
+                "baseline_offset": 4,
+                "invert": True,
+            },
+            "weather": {"size": 218},
+        },
+        "animation": {
+            "screen_delay": 4.0,
+            "scoreboard": {
+                "intro_delay": 0.06,
+                "intro_hold": 0.4,
+            },
+            "inside": {"hold": 5.0},
+        },
+        "scoreboard": {
+            "column_widths": [70, 60, 60, 60, 70],
+            "title_gap": 8,
+            "block_spacing": 10,
+            "score_row_height": 56,
+            "status_row_height": 18,
+            "logo_height": 52,
+            "league_logo_gap": 4,
+            "intro_max_height": 100,
+            "scroll": {
+                "step": 1,
+                "delay": 0.005,
+                "pause_top": 0.75,
+                "pause_bottom": 0.5,
+            },
+        },
+        "inside": {
+            "title_padding": 8,
+            "subtitle_gap": 6,
+            "content_gap": 12,
+            "bottom_margin": 12,
+            "side_padding": 12,
+            "metric_block_gap": 12,
+            "metric_row_height": 44,
+            "metric_row_gap": 10,
+            "min_temp_floor": 54,
+        },
+    }
+
+
+def _build_default_display_profiles() -> Dict[str, Dict[str, Any]]:
+    base = _base_profile_template()
+    return {
+        "display_hat_mini": base,
+        "hyperpixel_4_0": _deep_merge(
+            base,
+            {
+                "description": "Pimoroni HyperPixel 4.0 (800×480)",
+                "canvas": {"width": 800, "height": 480},
+                "font_scale": 2.1,
+                "icon_scale": 2.0,
+                "icons": {
+                    "github": {
+                        "padding_x": 6,
+                        "padding_y": 6,
+                        "baseline_offset": 8,
+                    }
+                },
+                "animation": {
+                    "screen_delay": 6.0,
+                    "scoreboard": {"intro_hold": 0.6, "intro_delay": 0.05},
+                },
+                "scoreboard": {"intro_max_height": 160},
+                "inside": {
+                    "content_gap": 18,
+                    "bottom_margin": 18,
+                    "metric_block_gap": 18,
+                    "metric_row_height": 60,
+                    "metric_row_gap": 14,
+                    "min_temp_floor": 72,
+                },
+            },
+        ),
+        "xpt2046_3_5": _deep_merge(
+            base,
+            {
+                "description": "3.5″ SPI (XPT2046, 480×320)",
+                "canvas": {"width": 480, "height": 320},
+                "font_scale": 1.5,
+                "icon_scale": 1.4,
+                "icons": {
+                    "github": {
+                        "padding_x": 4,
+                        "padding_y": 4,
+                        "baseline_offset": 6,
+                    }
+                },
+                "animation": {"screen_delay": 5.0},
+                "scoreboard": {"intro_max_height": 130},
+                "inside": {
+                    "content_gap": 16,
+                    "bottom_margin": 16,
+                    "metric_block_gap": 14,
+                    "metric_row_height": 52,
+                    "metric_row_gap": 12,
+                    "min_temp_floor": 64,
+                },
+            },
+        ),
+    }
+
+
+DISPLAY_PROFILES_PATH = os.environ.get(
+    "DISPLAY_PROFILES_PATH", os.path.join(SCRIPT_DIR, "display_profiles.json")
+)
+DEFAULT_DISPLAY_PROFILES = _build_default_display_profiles()
+_profile_file_payload = _load_profile_file(DISPLAY_PROFILES_PATH)
+if isinstance(_profile_file_payload, Mapping) and "profiles" in _profile_file_payload:
+    raw_overrides = _profile_file_payload.get("profiles")
+else:
+    raw_overrides = _profile_file_payload
+
+PROFILE_OVERRIDES: Dict[str, Any]
+if isinstance(raw_overrides, Mapping):
+    PROFILE_OVERRIDES = dict(raw_overrides)
+else:
+    PROFILE_OVERRIDES = {}
+
+DISPLAY_PROFILES: Dict[str, Dict[str, Any]] = {}
+for profile_id, base_profile in DEFAULT_DISPLAY_PROFILES.items():
+    overrides = PROFILE_OVERRIDES.get(profile_id)
+    if isinstance(overrides, Mapping):
+        DISPLAY_PROFILES[profile_id] = _deep_merge(base_profile, overrides)
+    else:
+        DISPLAY_PROFILES[profile_id] = copy.deepcopy(base_profile)
+
+for profile_id, profile_data in PROFILE_OVERRIDES.items():
+    if profile_id in DISPLAY_PROFILES:
+        continue
+    if isinstance(profile_data, Mapping):
+        DISPLAY_PROFILES[profile_id] = _deep_merge(
+            _base_profile_template(), profile_data
+        )
+
+if "display_hat_mini" not in DISPLAY_PROFILES:
+    DISPLAY_PROFILES["display_hat_mini"] = _base_profile_template()
+
+DISPLAY_PROFILE_ID = os.environ.get("DISPLAY_PROFILE", "display_hat_mini")
+if DISPLAY_PROFILE_ID not in DISPLAY_PROFILES:
+    logging.warning(
+        "Unknown display profile %s; defaulting to display_hat_mini",
+        DISPLAY_PROFILE_ID,
+    )
+    DISPLAY_PROFILE_ID = "display_hat_mini"
+
+ACTIVE_DISPLAY_PROFILE = DISPLAY_PROFILES[DISPLAY_PROFILE_ID]
+
+
+def get_available_display_profiles() -> Sequence[str]:
+    return tuple(sorted(DISPLAY_PROFILES.keys()))
+
+
+def get_display_profile_id() -> str:
+    return DISPLAY_PROFILE_ID
+
+
+def get_display_profile() -> Dict[str, Any]:
+    return copy.deepcopy(ACTIVE_DISPLAY_PROFILE)
+
+
+def _coerce_float(value: Any, default: float) -> float:
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return float(default)
+
+
+def _coerce_int(value: Any, default: int) -> int:
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        try:
+            return int(round(float(value)))
+        except (TypeError, ValueError):
+            return int(default)
+
+
+def profile_value(path: str, default: Any = None) -> Any:
+    if not path:
+        return copy.deepcopy(ACTIVE_DISPLAY_PROFILE)
+
+    parts = [part for part in path.split(".") if part]
+    node: Any = ACTIVE_DISPLAY_PROFILE
+    for part in parts:
+        if not isinstance(node, Mapping):
+            return default
+        node = node.get(part)
+        if node is None:
+            return default
+
+    if isinstance(node, Mapping):
+        return copy.deepcopy(node)
+    if isinstance(node, list):
+        return list(node)
+    return node
+
+
+def _resolve_canvas_dimension(key: str, default: int) -> int:
+    canvas = ACTIVE_DISPLAY_PROFILE.get("canvas")
+    value = (canvas or {}).get(key, default)
+    return max(1, _coerce_int(value, default))
+
+
+WIDTH = _resolve_canvas_dimension("width", 320)
+HEIGHT = _resolve_canvas_dimension("height", 240)
+
+baseline = ACTIVE_DISPLAY_PROFILE.get("baseline") or {}
+_BASELINE_WIDTH = max(1, _coerce_int(baseline.get("width", WIDTH), WIDTH))
+_BASELINE_HEIGHT = max(1, _coerce_int(baseline.get("height", HEIGHT), HEIGHT))
+
+_WIDTH_SCALE = WIDTH / _BASELINE_WIDTH if _BASELINE_WIDTH else 1.0
+_HEIGHT_SCALE = HEIGHT / _BASELINE_HEIGHT if _BASELINE_HEIGHT else 1.0
+
+_FONT_SCALE = _coerce_float(
+    ACTIVE_DISPLAY_PROFILE.get("font_scale"), min(_WIDTH_SCALE, _HEIGHT_SCALE)
+)
+if _FONT_SCALE <= 0:
+    _FONT_SCALE = 1.0
+_ICON_SCALE = _coerce_float(ACTIVE_DISPLAY_PROFILE.get("icon_scale"), _FONT_SCALE)
+if _ICON_SCALE <= 0:
+    _ICON_SCALE = _FONT_SCALE
+
+
+def scale_width(value: Any, *, minimum: int = 0) -> int:
+    return max(minimum, int(round(_coerce_float(value, 0.0) * _WIDTH_SCALE)))
+
+
+def scale_height(value: Any, *, minimum: int = 0) -> int:
+    return max(minimum, int(round(_coerce_float(value, 0.0) * _HEIGHT_SCALE)))
+
+
+def scale_font_size(value: Any, *, minimum: int = 1) -> int:
+    return max(minimum, int(round(_coerce_float(value, 0.0) * _FONT_SCALE)))
+
+
+def scale_icon_size(value: Any, *, minimum: int = 1) -> int:
+    return max(minimum, int(round(_coerce_float(value, 0.0) * _ICON_SCALE)))
+
+
+def scale_to_width(values: Sequence[Any], *, total: Optional[int] = None) -> list[int]:
+    if not values:
+        return []
+
+    target_total = int(total if total is not None else WIDTH)
+    floats = [max(0.0, _coerce_float(v, 0.0)) for v in values]
+    base_total = sum(floats)
+    if base_total <= 0:
+        width = max(1, target_total // len(floats))
+        result = [width] * len(floats)
+        diff = target_total - sum(result)
+        if diff:
+            result[-1] = max(1, result[-1] + diff)
+        return result
+
+    scale = target_total / base_total
+    result = [max(1, int(round(v * scale))) for v in floats]
+    diff = target_total - sum(result)
+    if diff:
+        result[-1] = max(1, result[-1] + diff)
+    return result
+
+
+def get_canvas_size() -> tuple[int, int]:
+    return WIDTH, HEIGHT
+
+
+def resolve_icon_size(key: str, default: int) -> int:
+    entry = profile_value(f"icons.{key}", None)
+    if isinstance(entry, Mapping):
+        if entry.get("size") is not None:
+            return max(1, _coerce_int(entry.get("size"), default))
+        if entry.get("scale") is not None:
+            scale = _coerce_float(entry.get("scale"), 1.0)
+            return max(1, int(round(default * scale)))
+    elif isinstance(entry, (int, float)):
+        return max(1, int(round(_coerce_float(entry, default))))
+    return max(1, scale_icon_size(default))
+
+
+def resolve_dimension(path: str, default: int, *, axis: str) -> int:
+    raw = profile_value(path, None)
+    absolute = False
+    if isinstance(raw, Mapping):
+        if raw.get("absolute") is True:
+            absolute = True
+        if raw.get("value") is not None:
+            raw_value = _coerce_float(raw.get("value"), default)
+        elif raw.get("amount") is not None:
+            raw_value = _coerce_float(raw.get("amount"), default)
+        else:
+            raw_value = _coerce_float(raw.get("size", default), default)
+    elif isinstance(raw, (int, float)):
+        raw_value = _coerce_float(raw, default)
+    else:
+        raw_value = float(default)
+
+    if absolute:
+        return max(0, int(round(raw_value)))
+
+    if axis.lower() == "width":
+        return max(0, scale_width(raw_value))
+    if axis.lower() == "height":
+        return max(0, scale_height(raw_value))
+    return max(0, int(round(raw_value)))
+
+
 # ─── Display configuration ─────────────────────────────────────────────────────
-WIDTH                    = 320
-HEIGHT                   = 240
-SCREEN_DELAY             = 4
+SCREEN_DELAY = _coerce_float(profile_value("animation.screen_delay", 4.0), 4.0)
+INSIDE_SCREEN_HOLD = _coerce_float(profile_value("animation.inside.hold", 5.0), 5.0)
 try:
     TEAM_STANDINGS_DISPLAY_SECONDS = int(
         os.environ.get("TEAM_STANDINGS_DISPLAY_SECONDS", "5")
@@ -217,10 +635,18 @@ SCOREBOARD_FINAL_WINNING_SCORE_COLOR = (255, 255, 255)
 SCOREBOARD_FINAL_LOSING_SCORE_COLOR = (200, 200, 200)
 
 # ─── Scoreboard scrolling configuration ───────────────────────────────────────
-SCOREBOARD_SCROLL_STEP         = 1
-SCOREBOARD_SCROLL_DELAY        = 0.005
-SCOREBOARD_SCROLL_PAUSE_TOP    = 0.75
-SCOREBOARD_SCROLL_PAUSE_BOTTOM = 0.5
+SCOREBOARD_SCROLL_STEP = max(
+    1, _coerce_int(profile_value("scoreboard.scroll.step", 1), 1)
+)
+SCOREBOARD_SCROLL_DELAY = max(
+    0.0, _coerce_float(profile_value("scoreboard.scroll.delay", 0.005), 0.005)
+)
+SCOREBOARD_SCROLL_PAUSE_TOP = max(
+    0.0, _coerce_float(profile_value("scoreboard.scroll.pause_top", 0.75), 0.75)
+)
+SCOREBOARD_SCROLL_PAUSE_BOTTOM = max(
+    0.0, _coerce_float(profile_value("scoreboard.scroll.pause_bottom", 0.5), 0.5)
+)
 
 # ─── API endpoints ────────────────────────────────────────────────────────────
 ONE_CALL_URL      = "https://api.openweathermap.org/data/3.0/onecall"
@@ -269,6 +695,42 @@ def _try_load_font(name: str, size: int):
         log = logging.debug if "invalid pixel size" in message else logging.warning
         log("Unable to load font %s: %s", path, exc)
         return None
+
+
+def _load_profile_font(key: str) -> ImageFont.ImageFont:
+    spec = _FONT_LIBRARY.get(key, {})
+    default_file = spec.get("path") or spec.get("file")
+    default_size = spec.get("size", 16)
+
+    override = profile_value(f"fonts.{key}", None)
+    font_path = default_file
+    explicit_size: Optional[float] = None
+
+    if isinstance(override, Mapping):
+        override_path = override.get("path") or override.get("file")
+        if isinstance(override_path, str) and override_path.strip():
+            font_path = override_path.strip()
+        if override.get("size") is not None:
+            explicit_size = _coerce_float(override.get("size"), default_size)
+        elif override.get("scale") is not None:
+            explicit_size = default_size * _coerce_float(override.get("scale"), 1.0)
+    elif isinstance(override, (int, float)):
+        explicit_size = float(override)
+    elif isinstance(override, str) and override.strip():
+        font_path = override.strip()
+
+    if explicit_size is None or explicit_size <= 0:
+        computed_size = scale_font_size(default_size)
+    else:
+        computed_size = max(1, int(round(explicit_size)))
+
+    if not font_path:
+        raise ValueError(f"Font definition '{key}' is missing a file path")
+
+    if os.path.isabs(font_path):
+        return ImageFont.truetype(font_path, computed_size)
+
+    return _load_font(font_path, computed_size)
 
 
 class _BitmapEmojiFont(ImageFont.ImageFont):
@@ -347,57 +809,58 @@ class _BitmapEmojiFont(ImageFont.ImageFont):
             return rgba.im
         return scaled.im
 
-FONT_DAY_DATE           = _load_font("DejaVuSans-Bold.ttf", 39)
-FONT_DATE               = _load_font("DejaVuSans.ttf",      22)
-FONT_TIME               = _load_font("DejaVuSans-Bold.ttf", 59)
-FONT_AM_PM              = _load_font("DejaVuSans.ttf",      20)
+FONT_DAY_DATE = _load_profile_font("day_date")
+FONT_DATE = _load_profile_font("date")
+FONT_TIME = _load_profile_font("time")
+FONT_AM_PM = _load_profile_font("am_pm")
 
-FONT_TEMP               = _load_font("DejaVuSans-Bold.ttf", 44)
-FONT_CONDITION          = _load_font("DejaVuSans-Bold.ttf", 20)
-FONT_WEATHER_DETAILS    = _load_font("DejaVuSans.ttf",      22)
-FONT_WEATHER_DETAILS_BOLD = _load_font("DejaVuSans-Bold.ttf", 18)
-FONT_WEATHER_LABEL      = _load_font("DejaVuSans.ttf",      18)
+FONT_TEMP = _load_profile_font("temp")
+FONT_CONDITION = _load_profile_font("condition")
+FONT_WEATHER_DETAILS = _load_profile_font("weather_details")
+FONT_WEATHER_DETAILS_BOLD = _load_profile_font("weather_details_bold")
+FONT_WEATHER_LABEL = _load_profile_font("weather_label")
 
-FONT_TITLE_SPORTS       = _load_font("TimesSquare-m105.ttf", 30)
-FONT_TEAM_SPORTS        = _load_font("TimesSquare-m105.ttf", 37)
-FONT_DATE_SPORTS        = _load_font("TimesSquare-m105.ttf", 30)
-FONT_TEAM_SPORTS_SMALL  = _load_font("TimesSquare-m105.ttf", 33)
-FONT_SCORE              = _load_font("TimesSquare-m105.ttf", 41)
-FONT_STATUS             = _load_font("TimesSquare-m105.ttf", 30)
+FONT_TITLE_SPORTS = _load_profile_font("title_sports")
+FONT_TEAM_SPORTS = _load_profile_font("team_sports")
+FONT_DATE_SPORTS = _load_profile_font("date_sports")
+FONT_TEAM_SPORTS_SMALL = _load_profile_font("team_sports_small")
+FONT_SCORE = _load_profile_font("score")
+FONT_STATUS = _load_profile_font("status")
 
-FONT_INSIDE_LABEL       = _load_font("DejaVuSans-Bold.ttf", 18)
-FONT_INSIDE_VALUE       = _load_font("DejaVuSans.ttf", 17)
-FONT_TITLE_INSIDE       = _load_font("DejaVuSans-Bold.ttf", 17)
+FONT_INSIDE_LABEL = _load_profile_font("inside_label")
+FONT_INSIDE_VALUE = _load_profile_font("inside_value")
+FONT_INSIDE_SUBTITLE = _load_profile_font("inside_subtitle")
+FONT_TITLE_INSIDE = _load_profile_font("title_inside")
 
-FONT_TRAVEL_TITLE       = _load_font("TimesSquare-m105.ttf", 17)
-FONT_TRAVEL_HEADER      = _load_font("TimesSquare-m105.ttf", 17)
-FONT_TRAVEL_VALUE       = _load_font("HWYGNRRW.TTF", 26)
+FONT_TRAVEL_TITLE = _load_profile_font("travel_title")
+FONT_TRAVEL_HEADER = _load_profile_font("travel_header")
+FONT_TRAVEL_VALUE = _load_profile_font("travel_value")
 
-FONT_IP_LABEL           = FONT_INSIDE_LABEL
-FONT_IP_VALUE           = FONT_INSIDE_VALUE
+FONT_IP_LABEL = FONT_INSIDE_LABEL
+FONT_IP_VALUE = FONT_INSIDE_VALUE
 
-FONT_STOCK_TITLE        = _load_font("DejaVuSans-Bold.ttf", 18)
-FONT_STOCK_PRICE        = _load_font("DejaVuSans-Bold.ttf", 44)
-FONT_STOCK_CHANGE       = _load_font("DejaVuSans.ttf",      22)
-FONT_STOCK_TEXT         = _load_font("DejaVuSans.ttf",      17)
+FONT_STOCK_TITLE = _load_profile_font("stock_title")
+FONT_STOCK_PRICE = _load_profile_font("stock_price")
+FONT_STOCK_CHANGE = _load_profile_font("stock_change")
+FONT_STOCK_TEXT = _load_profile_font("stock_text")
 
 # Standings fonts...
-FONT_STAND1_WL          = _load_font("DejaVuSans-Bold.ttf", 26)
-FONT_STAND1_RANK        = _load_font("DejaVuSans.ttf",      22)
-FONT_STAND1_GB_LABEL    = _load_font("DejaVuSans.ttf",      17)
-FONT_STAND1_WCGB_LABEL  = _load_font("DejaVuSans.ttf",      17)
-FONT_STAND1_GB_VALUE    = _load_font("DejaVuSans.ttf",      17)
-FONT_STAND1_WCGB_VALUE  = _load_font("DejaVuSans.ttf",      17)
+FONT_STAND1_WL = _load_profile_font("stand1_wl")
+FONT_STAND1_RANK = _load_profile_font("stand1_rank")
+FONT_STAND1_GB_LABEL = _load_profile_font("stand1_gb_label")
+FONT_STAND1_WCGB_LABEL = _load_profile_font("stand1_wcgb_label")
+FONT_STAND1_GB_VALUE = _load_profile_font("stand1_gb_value")
+FONT_STAND1_WCGB_VALUE = _load_profile_font("stand1_wcgb_value")
 
-FONT_STAND2_RECORD      = _load_font("DejaVuSans.ttf",      26)
-FONT_STAND2_LABEL       = _load_font("DejaVuSans.ttf",      22)
-FONT_STAND2_VALUE       = _load_font("DejaVuSans.ttf",      22)
+FONT_STAND2_RECORD = _load_profile_font("stand2_record")
+FONT_STAND2_LABEL = _load_profile_font("stand2_label")
+FONT_STAND2_VALUE = _load_profile_font("stand2_value")
 
-FONT_DIV_HEADER         = _load_font("DejaVuSans-Bold.ttf", 20)
-FONT_DIV_RECORD         = _load_font("DejaVuSans.ttf",      22)
-FONT_DIV_GB             = _load_font("DejaVuSans.ttf",      18)
-FONT_GB_VALUE           = _load_font("DejaVuSans.ttf",      18)
-FONT_GB_LABEL           = _load_font("DejaVuSans.ttf",      15)
+FONT_DIV_HEADER = _load_profile_font("div_header")
+FONT_DIV_RECORD = _load_profile_font("div_record")
+FONT_DIV_GB = _load_profile_font("div_gb")
+FONT_GB_VALUE = _load_profile_font("gb_value")
+FONT_GB_LABEL = _load_profile_font("gb_label")
 
 def _load_emoji_font(size: int) -> ImageFont.ImageFont:
     noto = _try_load_font("NotoColorEmoji.ttf", size)
@@ -430,17 +893,39 @@ def _load_emoji_font(size: int) -> ImageFont.ImageFont:
     return ImageFont.load_default()
 
 
-FONT_EMOJI = _load_emoji_font(30)
+_EMOJI_OVERRIDE = profile_value("fonts.emoji", None)
+if isinstance(_EMOJI_OVERRIDE, Mapping):
+    _emoji_size = _EMOJI_OVERRIDE.get("size")
+elif isinstance(_EMOJI_OVERRIDE, (int, float)):
+    _emoji_size = _EMOJI_OVERRIDE
+else:
+    _emoji_size = None
+
+if _emoji_size is None or _coerce_float(_emoji_size, 30) <= 0:
+    emoji_point_size = scale_font_size(_FONT_LIBRARY.get("emoji", {}).get("size", 30))
+else:
+    emoji_point_size = max(1, int(round(_coerce_float(_emoji_size, 30))))
+
+FONT_EMOJI = _load_emoji_font(int(emoji_point_size))
 
 # ─── Screen-specific configuration ─────────────────────────────────────────────
 
 # Weather screen
-WEATHER_ICON_SIZE = 218
-WEATHER_DESC_GAP  = 8
+WEATHER_ICON_SIZE = resolve_icon_size("weather", 218)
+WEATHER_DESC_GAP = resolve_dimension("weather.description_gap", 8, axis="height")
 
 # Date/time screen
-DATE_TIME_GH_ICON_INVERT = True
-DATE_TIME_GH_ICON_SIZE   = 33
+DATE_TIME_GH_ICON_INVERT = bool(profile_value("icons.github.invert", True))
+DATE_TIME_GH_ICON_SIZE = resolve_icon_size("github", 33)
+DATE_TIME_GH_ICON_PADDING_X = resolve_dimension(
+    "icons.github.padding_x", 2, axis="width"
+)
+DATE_TIME_GH_ICON_PADDING_Y = resolve_dimension(
+    "icons.github.padding_y", 2, axis="height"
+)
+DATE_TIME_GH_ICON_BASELINE_OFFSET = resolve_dimension(
+    "icons.github.baseline_offset", 4, axis="height"
+)
 DATE_TIME_GH_ICON_PATHS  = [
     os.path.join(IMAGES_DIR, "gh.png"),
     os.path.join(SCRIPT_DIR, "image", "gh.png"),

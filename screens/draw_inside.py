@@ -410,13 +410,16 @@ def _draw_temperature_panel(
     width = max(1, x1 - x0)
     height = max(1, y1 - y0)
 
-    radius = max(14, min(26, min(width, height) // 5))
+    radius = max(
+        config.scale_width(14),
+        min(config.scale_width(26), min(width, height) // 5),
+    )
     bg = _mix_color(color, config.INSIDE_COL_BG, 0.4)
     outline = _mix_color(color, config.INSIDE_COL_BG, 0.25)
     draw.rounded_rectangle(rect, radius=radius, fill=bg, outline=outline, width=1)
 
-    padding_x = max(16, width // 12)
-    padding_y = max(12, height // 10)
+    padding_x = max(config.scale_width(16), width // 12)
+    padding_y = max(config.scale_height(12), height // 10)
     label_text = "Temperature"
 
     label_base_size = getattr(label_base, "size", 18)
@@ -425,8 +428,8 @@ def _draw_temperature_panel(
         label_text,
         label_base,
         max_width=width - 2 * padding_x,
-        max_height=max(14, int(height * 0.18)),
-        min_pt=min(label_base_size, 10),
+        max_height=max(config.scale_height(14), int(height * 0.18)),
+        min_pt=min(label_base_size, max(8, config.scale_font_size(10))),
         max_pt=label_base_size,
     )
     _, label_h = measure_text(draw, label_text, label_font)
@@ -442,8 +445,8 @@ def _draw_temperature_panel(
             descriptor,
             label_base,
             max_width=width - 2 * padding_x,
-            max_height=max(14, int(height * 0.2)),
-            min_pt=min(descriptor_base_size, 12),
+            max_height=max(config.scale_height(14), int(height * 0.2)),
+            min_pt=min(descriptor_base_size, max(10, config.scale_font_size(12))),
             max_pt=descriptor_base_size,
         )
         _, desc_h = measure_text(draw, descriptor, desc_font)
@@ -455,13 +458,13 @@ def _draw_temperature_panel(
         desc_x = x0 + padding_x
         desc_y = y1 - padding_y
 
-    value_gap = max(10, height // 14)
+    value_gap = max(config.scale_height(10), height // 14)
     value_top = label_y + label_h + value_gap
     value_bottom = desc_y - value_gap if has_descriptor else y1 - padding_y
-    value_max_height = max(32, value_bottom - value_top)
+    value_max_height = max(config.scale_height(32), value_bottom - value_top)
     temp_base_size = getattr(temp_base, "size", 48)
 
-    safe_margin = max(4, width // 28)
+    safe_margin = max(config.scale_width(4), width // 28)
     inner_left = x0 + padding_x
     inner_right = x1 - padding_x - safe_margin
     if inner_right <= inner_left:
@@ -478,7 +481,7 @@ def _draw_temperature_panel(
         temp_base,
         max_width=value_region_width,
         max_height=value_max_height,
-        min_pt=min(temp_base_size, 20),
+        min_pt=min(temp_base_size, max(16, config.scale_font_size(20))),
         max_pt=temp_base_size,
     )
 
@@ -486,7 +489,8 @@ def _draw_temperature_panel(
     temp_bbox = draw.textbbox((0, 0), temp_text, font=temp_font)
     temp_w = temp_bbox[2] - temp_bbox[0]
     temp_h = temp_bbox[3] - temp_bbox[1]
-    while temp_w > value_region_width and getattr(temp_font, "size", 0) > 12:
+    min_temp_size = max(12, config.scale_font_size(14))
+    while temp_w > value_region_width and getattr(temp_font, "size", 0) > min_temp_size:
         next_size = getattr(temp_font, "size", 0) - 1
         temp_font = clone_font(temp_font, next_size)
         temp_bbox = draw.textbbox((0, 0), temp_text, font=temp_font)
@@ -532,33 +536,40 @@ def _draw_metric_row(
     x0, y0, x1, y1 = rect
     width = max(1, x1 - x0)
     height = max(1, y1 - y0)
-    radius = max(8, min(20, min(width, height) // 4))
+    radius = max(
+        config.scale_width(8),
+        min(config.scale_width(20), min(width, height) // 4),
+    )
     bg = _mix_color(accent, config.INSIDE_COL_BG, 0.3)
     outline = _mix_color(accent, config.INSIDE_COL_BG, 0.18)
     draw.rounded_rectangle(rect, radius=radius, fill=bg, outline=outline, width=1)
 
-    padding_x = max(10, width // 10)
-    padding_y = max(6, height // 8)
+    padding_x = max(config.scale_width(10), width // 10)
+    padding_y = max(config.scale_height(6), height // 8)
 
     available_width = max(1, width - 2 * padding_x)
     available_height = max(1, height - 2 * padding_y)
 
     label_base_size = getattr(label_base, "size", 18)
-    label_min_pt = min(label_base_size, 8 if width < 120 else 10)
+    width_threshold = config.scale_width(120)
+    label_min_pt = min(label_base_size, 8 if width < width_threshold else 10)
     label_font = fit_font(
         draw,
         label,
         label_base,
         max_width=available_width,
-        max_height=max(12, int(height * 0.38)),
+        max_height=max(config.scale_height(12), int(height * 0.38)),
         min_pt=label_min_pt,
         max_pt=label_base_size,
     )
     label_w, label_h = measure_text(draw, label, label_font)
 
     value_base_size = getattr(value_base, "size", 24)
-    value_min_pt = min(value_base_size, 10 if width < 120 else 12)
-    value_max_height = max(18, available_height - label_h - max(6, height // 12))
+    value_min_pt = min(value_base_size, 10 if width < width_threshold else 12)
+    value_max_height = max(
+        config.scale_height(18),
+        available_height - label_h - max(config.scale_height(6), height // 12),
+    )
     value_font = fit_font(
         draw,
         value,
@@ -612,7 +623,7 @@ def _draw_metric_row(
         value_min_pt,
     )
 
-    min_gap = max(6, height // 12)
+    min_gap = max(config.scale_height(6), height // 12)
     total_needed = label_h + min_gap + value_h
     while total_needed > available_height and (label_size > label_min_pt or value_size > value_min_pt):
         shrink_label = label_size > label_min_pt and (
@@ -647,7 +658,7 @@ def _draw_metric_row(
     label_y = y0 + padding_y
     value_x = x0 + padding_x
     value_y = y1 - padding_y - value_h
-    min_gap = max(6, height // 12)
+    min_gap = max(config.scale_height(6), height // 12)
     if value_y - (label_y + label_h) < min_gap:
         value_y = min(y1 - padding_y - value_h, label_y + label_h + min_gap)
 
@@ -691,13 +702,13 @@ def _draw_metric_rows(
         return
 
     if columns > 1:
-        desired_h_gap = max(8, width // 30)
+        desired_h_gap = max(config.scale_width(8), width // 30)
         max_h_gap = max(0, (width - columns) // (columns - 1))
         h_gap = min(desired_h_gap, max_h_gap)
     else:
         h_gap = 0
     if rows > 1:
-        desired_v_gap = max(8, height // 30)
+        desired_v_gap = max(config.scale_height(8), height // 30)
         max_v_gap = max(0, (height - rows) // (rows - 1))
         v_gap = min(desired_v_gap, max_v_gap)
     else:
@@ -709,10 +720,10 @@ def _draw_metric_rows(
     available_width = max(columns, width - total_h_gap)
     available_height = max(rows, height - total_v_gap)
 
-    cell_width = max(72, available_width // columns)
+    cell_width = max(config.scale_width(72), available_width // columns)
     if cell_width * columns + total_h_gap > width:
         cell_width = max(1, available_width // columns)
-    cell_height = max(44, available_height // rows)
+    cell_height = max(config.scale_height(44), available_height // rows)
     if cell_height * rows + total_v_gap > height:
         cell_height = max(1, available_height // rows)
 
@@ -916,7 +927,7 @@ def draw_inside(display, transition: bool=False):
     value_base = getattr(config, "FONT_INSIDE_VALUE", getattr(config, "FONT_DATE_SPORTS", default_title_font))
 
     # --- Title (auto-fit to width without shrinking below the standard size)
-    title_side_pad = 8
+    title_side_pad = config.resolve_dimension("inside.title_padding", 8, axis="width")
     title_base_size = getattr(title_base, "size", 30)
     title_sample_h = measure_text(draw, "Hg", title_base)[1]
     title_max_h = max(1, title_sample_h)
@@ -926,14 +937,14 @@ def draw_inside(display, transition: bool=False):
         title_base,
         max_width=W - 2 * title_side_pad,
         max_height=title_max_h,
-        min_pt=min(title_base_size, 12),
+        min_pt=min(title_base_size, max(12, config.scale_font_size(14))),
         max_pt=title_base_size,
     )
     tw, th = measure_text(draw, title, t_font)
     title_y = 0
     draw.text(((W - tw)//2, title_y), title, font=t_font, fill=config.INSIDE_COL_TITLE)
 
-    subtitle_gap = 6
+    subtitle_gap = config.resolve_dimension("inside.subtitle_gap", 6, axis="height")
     if subtitle:
         subtitle_base_size = getattr(subtitle_base, "size", getattr(default_subtitle_font, "size", 24))
         subtitle_sample_h = measure_text(draw, "Hg", subtitle_base)[1]
@@ -944,7 +955,7 @@ def draw_inside(display, transition: bool=False):
             subtitle_base,
             max_width=W - 2 * title_side_pad,
             max_height=subtitle_max_h,
-            min_pt=min(subtitle_base_size, 12),
+            min_pt=min(subtitle_base_size, max(12, config.scale_font_size(12))),
             max_pt=subtitle_base_size,
         )
         sw, sh = measure_text(draw, subtitle, sub_font)
@@ -961,9 +972,9 @@ def draw_inside(display, transition: bool=False):
     temp_value = f"{temp_f:.1f}°F"
     descriptor = ""
 
-    content_top = title_block_h + 12
-    bottom_margin = 12
-    side_pad = 12
+    content_top = title_block_h + config.resolve_dimension("inside.content_gap", 12, axis="height")
+    bottom_margin = config.resolve_dimension("inside.bottom_margin", 12, axis="height")
+    side_pad = config.resolve_dimension("inside.side_padding", 12, axis="width")
     content_bottom = H - bottom_margin
     content_height = max(1, content_bottom - content_top)
 
@@ -971,21 +982,34 @@ def draw_inside(display, transition: bool=False):
     _, grid_rows = _metric_grid_dimensions(metric_count)
     if metric_count:
         temp_ratio = max(0.42, 0.58 - 0.03 * min(metric_count, 6))
-        min_temp = max(84, 118 - 8 * min(metric_count, 6))
+        min_temp = config.scale_height(max(84, 118 - 8 * min(metric_count, 6)))
     else:
         temp_ratio = 0.82
-        min_temp = 128
+        min_temp = config.scale_height(128)
 
     temp_height = min(content_height, max(min_temp, int(content_height * temp_ratio)))
-    metric_block_gap = 12 if metric_count else 0
+    metric_block_gap = (
+        config.resolve_dimension("inside.metric_block_gap", 12, axis="height")
+        if metric_count
+        else 0
+    )
     if metric_count:
-        min_metric_row_height = 44
-        min_metric_gap = 10 if grid_rows > 1 else 0
+        min_metric_row_height = config.resolve_dimension(
+            "inside.metric_row_height", 44, axis="height"
+        )
+        min_metric_gap = (
+            config.resolve_dimension("inside.metric_row_gap", 10, axis="height")
+            if grid_rows > 1
+            else 0
+        )
         target_metrics_height = (
             grid_rows * min_metric_row_height + max(0, grid_rows - 1) * min_metric_gap
         )
         preferred_temp_cap = content_height - (target_metrics_height + metric_block_gap)
-        min_temp_floor = min(54, content_height)
+        min_temp_floor = min(
+            config.resolve_dimension("inside.min_temp_floor", 54, axis="height"),
+            content_height,
+        )
         preferred_temp_cap = max(min_temp_floor, preferred_temp_cap)
         temp_height = min(temp_height, preferred_temp_cap)
         temp_height = max(min_temp_floor, min(temp_height, content_height))
@@ -1024,7 +1048,7 @@ def draw_inside(display, transition: bool=False):
     clear_display(display)
     display.image(img)
     display.show()
-    time.sleep(5)
+    time.sleep(config.INSIDE_SCREEN_HOLD)
     return None
 
 

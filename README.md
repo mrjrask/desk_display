@@ -129,13 +129,33 @@ desk_display/
 
 Most runtime behavior is controlled in `config.py`:
 
-- **Display:** `WIDTH=320`, `HEIGHT=240`
+- **Display:** set the `DISPLAY_PROFILE` environment variable to pick a profile defined in `display_profiles.json` (defaults to `display_hat_mini`)
 - **Intervals:** `SCREEN_DELAY`, `TEAM_STANDINGS_DISPLAY_SECONDS`, `SCHEDULE_UPDATE_INTERVAL`
 - **Feature flags:** `ENABLE_SCREENSHOTS`, `ENABLE_VIDEO`, `ENABLE_WIFI_MONITOR`
 - **Weather:** `ENABLE_WEATHER`, `LATITUDE/LONGITUDE`
 - **Travel:** `TRAVEL_MODE` (`to_home` or `to_work`)
 - **MLB:** constants and timezone `CENTRAL_TIME`
 - **Fonts:** make sure `fonts/` contains the TTFs above
+
+### Display profiles
+
+The application derives canvas geometry, font sizes, and animation timings from **display profiles**. Profiles are defined in `display_profiles.json` (or another file pointed to by `DISPLAY_PROFILES_PATH`) and selected with the `DISPLAY_PROFILE` environment variable.
+
+Each profile entry is keyed by a display identifier and can override:
+
+- `canvas.width` and `canvas.height`
+- Global `font_scale` / `icon_scale` values or per-font overrides in the `fonts` map
+- Icon sizing and padding in the `icons` section (for example the GitHub update badge)
+- Animation timings under `animation`
+- Screen-specific layout hints like `scoreboard.column_widths` or `inside.metric_row_height`
+
+Starter profiles are provided for:
+
+- `display_hat_mini` — Pimoroni Display HAT Mini (320×240)
+- `hyperpixel_4_0` — Pimoroni HyperPixel 4.0 (800×480)
+- `xpt2046_3_5` — Generic 3.5″ SPI panel driven by XPT2046 controllers (480×320)
+
+You can duplicate one of these definitions in `display_profiles.json` and tweak canvas size, font sizes, or layout spacing without changing application code. At runtime the active profile is available via `config.get_display_profile_id()` and `config.get_display_profile()`.
 
 ### Screen sequencing
 

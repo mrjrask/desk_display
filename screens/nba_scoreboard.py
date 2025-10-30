@@ -39,6 +39,10 @@ from config import (
     SCOREBOARD_IN_PROGRESS_SCORE_COLOR,
     SCOREBOARD_FINAL_WINNING_SCORE_COLOR,
     SCOREBOARD_FINAL_LOSING_SCORE_COLOR,
+    scale_to_width,
+    scale_font_size,
+    profile_value,
+    resolve_dimension,
 )
 from utils import (
     ScreenImage,
@@ -50,38 +54,71 @@ from utils import (
 from services.http_client import get_session
 
 # ─── Constants ────────────────────────────────────────────────────────────────
-TITLE               = "NBA Scoreboard"
-TITLE_GAP           = 8
-BLOCK_SPACING       = 10
-SCORE_ROW_H         = 56
-STATUS_ROW_H        = 18
-REQUEST_TIMEOUT     = 10
+TITLE = "NBA Scoreboard"
+TITLE_GAP = max(0, resolve_dimension("scoreboard.title_gap", 8, axis="height"))
+BLOCK_SPACING = max(0, resolve_dimension("scoreboard.block_spacing", 10, axis="height"))
+SCORE_ROW_H = max(24, resolve_dimension("scoreboard.score_row_height", 56, axis="height"))
+STATUS_ROW_H = max(12, resolve_dimension("scoreboard.status_row_height", 18, axis="height"))
+REQUEST_TIMEOUT = 10
 
-COL_WIDTHS = [70, 60, 60, 60, 70]  # total = 320 (WIDTH)
+_RAW_COL_WIDTHS = profile_value("scoreboard.column_widths", [70, 60, 60, 60, 70])
+if isinstance(_RAW_COL_WIDTHS, dict):
+    _RAW_COL_WIDTHS = (
+        _RAW_COL_WIDTHS.get("values")
+        or _RAW_COL_WIDTHS.get("widths")
+        or list(_RAW_COL_WIDTHS.values())
+    )
+if not isinstance(_RAW_COL_WIDTHS, (list, tuple)):
+    _RAW_COL_WIDTHS = [70, 60, 60, 60, 70]
+_BASE_COL_WIDTHS = []
+for _value in _RAW_COL_WIDTHS:
+    try:
+        _BASE_COL_WIDTHS.append(float(_value))
+    except (TypeError, ValueError):
+        continue
+if not _BASE_COL_WIDTHS:
+    _BASE_COL_WIDTHS = [70.0, 60.0, 60.0, 60.0, 70.0]
+COL_WIDTHS = scale_to_width(_BASE_COL_WIDTHS)
 _TOTAL_COL_WIDTH = sum(COL_WIDTHS)
 _COL_LEFT = max(0, (WIDTH - _TOTAL_COL_WIDTH) // 2)
 COL_X = [_COL_LEFT]
 for w in COL_WIDTHS:
     COL_X.append(COL_X[-1] + w)
 
-SCORE_FONT              = clone_font(FONT_TEAM_SPORTS, 39)
-STATUS_FONT             = clone_font(FONT_STATUS, 28)
-CENTER_FONT             = clone_font(FONT_STATUS, 28)
-TITLE_FONT              = FONT_TITLE_SPORTS
-LOGO_HEIGHT             = 52
+SCORE_FONT = clone_font(FONT_TEAM_SPORTS, scale_font_size(39))
+STATUS_FONT = clone_font(FONT_STATUS, scale_font_size(28))
+CENTER_FONT = clone_font(FONT_STATUS, scale_font_size(28))
+TITLE_FONT = FONT_TITLE_SPORTS
+LOGO_HEIGHT = max(1, resolve_dimension("scoreboard.logo_height", 52, axis="height"))
 LOGO_DIR                = os.path.join(IMAGES_DIR, "nba")
 LEAGUE_LOGO_KEYS        = ("NBA", "nba")
-LEAGUE_LOGO_GAP         = 4
-LEAGUE_LOGO_HEIGHT      = max(1, int(round(LOGO_HEIGHT * 1.25)))
+LEAGUE_LOGO_GAP = max(0, resolve_dimension("scoreboard.league_logo_gap", 4, axis="width"))
+LEAGUE_LOGO_HEIGHT = max(1, int(round(LOGO_HEIGHT * 1.25)))
 IN_PROGRESS_SCORE_COLOR = SCOREBOARD_IN_PROGRESS_SCORE_COLOR
 IN_PROGRESS_STATUS_COLOR = IN_PROGRESS_SCORE_COLOR
 FINAL_WINNING_SCORE_COLOR = SCOREBOARD_FINAL_WINNING_SCORE_COLOR
 FINAL_LOSING_SCORE_COLOR = SCOREBOARD_FINAL_LOSING_SCORE_COLOR
 INTRO_LOGO        = "NBA.png"
-INTRO_MAX_HEIGHT  = 100
+INTRO_MAX_HEIGHT = max(1, resolve_dimension("scoreboard.intro_max_height", 100, axis="height"))
 INTRO_ANIM_SCALES = (0.45, 0.6, 0.75, 0.9, 1.04, 0.98, 1.0)
-INTRO_ANIM_DELAY  = 0.06
-INTRO_ANIM_HOLD   = 0.4
+try:
+    INTRO_ANIM_DELAY = float(
+        profile_value(
+            "scoreboard.animation.intro_delay",
+            profile_value("animation.scoreboard_intro_delay", 0.06),
+        )
+    )
+except (TypeError, ValueError):
+    INTRO_ANIM_DELAY = 0.06
+try:
+    INTRO_ANIM_HOLD = float(
+        profile_value(
+            "scoreboard.animation.intro_hold",
+            profile_value("animation.scoreboard_intro_hold", 0.4),
+        )
+    )
+except (TypeError, ValueError):
+    INTRO_ANIM_HOLD = 0.4
 BACKGROUND_COLOR  = SCOREBOARD_BACKGROUND_COLOR
 BACKGROUND_COLOR_RGBA = BACKGROUND_COLOR + (255,)
 
