@@ -19,6 +19,7 @@ import threading
 import time
 from contextlib import contextmanager
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any, Callable, Dict, Iterable, List, Optional, Protocol, Tuple, cast, runtime_checkable
 
 import functools
@@ -336,25 +337,197 @@ class PillowWindowBackend(_ImageDisplayBackend):
 
 
 class FramebufferDisplayBackend(_ImageDisplayBackend):
-    """Display backend that writes raw RGB frames to a Linux framebuffer device."""
+    """Display backend that writes frames to a Linux framebuffer device."""
+
+    _RGB_CHANNELS = ("red", "green", "blue")
 
     def __init__(self, *, framebuffer_path: str = "/dev/fb0", **kwargs: Any) -> None:
         super().__init__(**kwargs)
         self._framebuffer_path = framebuffer_path
         self._fb = None
+        self._bits_per_pixel = 24
+        self._bytes_per_pixel = 3
+        self._stride: Optional[int] = None
+        self._channel_offsets: Dict[str, int] = {name: 0 for name in self._RGB_CHANNELS}
+        self._channel_lengths: Dict[str, int] = {name: 8 for name in self._RGB_CHANNELS}
+        self._channel_maps: Dict[str, List[int]] = {}
+        self._byteorder = "little"
+
         try:
-            self._fb = open(self._framebuffer_path, "wb", buffering=0)
-        except OSError as exc:
+            self._initialize_framebuffer()
+        except Exception as exc:
             logging.warning("Framebuffer display backend unavailable; running headless (%s)", exc)
             self._fb = None
 
+    # --- Internal helpers ----------------------------------------------------
+    def _initialize_framebuffer(self) -> None:
+        self._load_framebuffer_metadata()
+        self._fb = open(self._framebuffer_path, "r+b", buffering=0)
+        logging.info(
+            "🖼️  Framebuffer initialized (%s, %dx%d, %d bpp, stride %s).",
+            self._framebuffer_path,
+            self.width,
+            self.height,
+            self._bits_per_pixel,
+            self._stride if self._stride is not None else f"{self.width * self._bytes_per_pixel} (default)",
+        )
+        self.clear()
+
+    def _load_framebuffer_metadata(self) -> None:
+        fb_name = os.path.basename(self._framebuffer_path.rstrip("/"))
+        sys_base = Path("/sys/class/graphics") / fb_name
+
+        def _read_int(path: Path) -> Optional[int]:
+            try:
+                return int(path.read_text(encoding="utf-8").strip())
+            except (FileNotFoundError, ValueError, OSError):
+                return None
+
+        def _read_text(path: Path) -> Optional[str]:
+            try:
+                return path.read_text(encoding="utf-8").strip()
+            except (FileNotFoundError, OSError):
+                return None
+
+        bits_per_pixel = _read_int(sys_base / "bits_per_pixel")
+        if bits_per_pixel:
+            self._bits_per_pixel = bits_per_pixel
+            self._bytes_per_pixel = max(1, (bits_per_pixel + 7) // 8)
+
+        stride = _read_int(sys_base / "stride") or _read_int(sys_base / "line_length")
+        if stride and stride > 0:
+            self._stride = stride
+        else:
+            self._stride = None
+
+        virtual_size = _read_text(sys_base / "virtual_size")
+        if virtual_size and "," in virtual_size:
+            try:
+                width_str, height_str = [value.strip() for value in virtual_size.split(",", 1)]
+                fb_width = int(width_str)
+                fb_height = int(height_str)
+            except (TypeError, ValueError):
+                fb_width = fb_height = None  # type: ignore[assignment]
+            else:
+                if fb_width and fb_height and (fb_width != self.width or fb_height != self.height):
+                    logging.info(
+                        "Framebuffer virtual size %dx%d does not match configured canvas %dx%d; using canvas size.",
+                        fb_width,
+                        fb_height,
+                        self.width,
+                        self.height,
+                    )
+
+        rgba_info = _read_text(sys_base / "rgba")
+        if rgba_info:
+            if " " in rgba_info:
+                _, rgba_payload = rgba_info.split(" ", 1)
+            else:
+                rgba_payload = rgba_info
+            channel_specs = [chunk.strip() for chunk in rgba_payload.split(",")]
+            for name, chunk in zip(("red", "green", "blue", "alpha"), channel_specs):
+                if "/" not in chunk:
+                    continue
+                length_str, offset_str = chunk.split("/", 1)
+                try:
+                    length = int(length_str, 10)
+                    offset = int(offset_str, 10)
+                except ValueError:
+                    continue
+                if name in self._RGB_CHANNELS:
+                    self._channel_lengths[name] = max(0, length)
+                    self._channel_offsets[name] = max(0, offset)
+
+        self._build_channel_maps()
+
+    def _build_channel_maps(self) -> None:
+        for name in self._RGB_CHANNELS:
+            length = self._channel_lengths.get(name, 0)
+            if length <= 0:
+                self._channel_maps[name] = [0] * 256
+                continue
+            max_value = (1 << length) - 1
+            scale = max_value / 255.0
+            mapping: List[int] = []
+            for level in range(256):
+                value = int(round(level * scale))
+                if value < 0:
+                    value = 0
+                elif value > max_value:
+                    value = max_value
+                mapping.append(value)
+            self._channel_maps[name] = mapping
+
+    def _encode_row(self, rgb_bytes: bytes, pixel_start: int, pixel_count: int) -> bytearray:
+        row_buffer = bytearray(pixel_count * self._bytes_per_pixel)
+        offset = 0
+        if (
+            self._bits_per_pixel in (24, 32)
+            and all(self._channel_lengths[name] == 8 for name in self._RGB_CHANNELS)
+            and all(self._channel_offsets[name] % 8 == 0 for name in self._RGB_CHANNELS)
+            and all((self._channel_offsets[name] // 8) < self._bytes_per_pixel for name in self._RGB_CHANNELS)
+            and len({self._channel_offsets[name] for name in self._RGB_CHANNELS}) == len(self._RGB_CHANNELS)
+        ):
+            ordered_channels = sorted(
+                ((self._channel_offsets[name] // 8, name) for name in self._RGB_CHANNELS),
+                key=lambda item: item[0],
+            )
+            channel_indices = {name: position for position, name in ordered_channels}
+            for index in range(pixel_count):
+                base = (pixel_start + index) * 3
+                r, g, b = rgb_bytes[base : base + 3]
+                pixel_bytes = [0] * self._bytes_per_pixel
+                pixel_bytes[channel_indices["red"]] = r
+                pixel_bytes[channel_indices["green"]] = g
+                pixel_bytes[channel_indices["blue"]] = b
+                row_buffer[offset : offset + self._bytes_per_pixel] = bytes(pixel_bytes[: self._bytes_per_pixel])
+                offset += self._bytes_per_pixel
+            return row_buffer
+
+        red_map = self._channel_maps["red"]
+        green_map = self._channel_maps["green"]
+        blue_map = self._channel_maps["blue"]
+        red_shift = self._channel_offsets["red"]
+        green_shift = self._channel_offsets["green"]
+        blue_shift = self._channel_offsets["blue"]
+        for index in range(pixel_count):
+            base = (pixel_start + index) * 3
+            r, g, b = rgb_bytes[base : base + 3]
+            value = (
+                (red_map[r] << red_shift)
+                | (green_map[g] << green_shift)
+                | (blue_map[b] << blue_shift)
+            )
+            row_buffer[offset : offset + self._bytes_per_pixel] = value.to_bytes(
+                self._bytes_per_pixel,
+                self._byteorder,
+                signed=False,
+            )
+            offset += self._bytes_per_pixel
+        return row_buffer
+
+    # --- Overrides -----------------------------------------------------------
     def _present(self, frame: Image.Image) -> None:
         if self._fb is None:
             return
+
+        rgb_frame = frame.convert("RGB")
+        rgb_bytes = rgb_frame.tobytes()
+        stride = self._stride or (self.width * self._bytes_per_pixel)
+        row_pixels = self.width
+        row_bytes = self.width * self._bytes_per_pixel
+
         try:
-            rgb_frame = frame.convert("RGB")
             self._fb.seek(0)
-            self._fb.write(rgb_frame.tobytes())
+            for row in range(self.height):
+                row_start = row * row_pixels
+                encoded_row = self._encode_row(rgb_bytes, row_start, row_pixels)
+                if len(encoded_row) < stride:
+                    padded_row = bytearray(stride)
+                    padded_row[:row_bytes] = encoded_row
+                    self._fb.write(padded_row)
+                else:
+                    self._fb.write(encoded_row)
         except Exception as exc:
             logging.debug("Framebuffer update failed: %s", exc)
 
