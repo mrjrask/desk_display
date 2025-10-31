@@ -2,6 +2,7 @@
   "profiles": {
     "display_hat_mini": {
       "description": "Pimoroni Display HAT Mini (320×240)",
+      "display_backend": "displayhatmini",
       "canvas": {"width": 320, "height": 240},
       "baseline": {"width": 320, "height": 240},
       "font_scale": 1.0,
@@ -124,6 +125,7 @@
     },
     "hyperpixel_4_0": {
       "description": "Pimoroni HyperPixel 4.0 (800×480)",
+      "display_backend": "framebuffer",
       "canvas": {"width": 800, "height": 480},
       "baseline": {"width": 320, "height": 240},
       "font_scale": 2.1,
@@ -177,6 +179,7 @@
           "logo_size": 59,
           "margin": 6
         }
+      },
       "travel": {
         "outer_margin": {"absolute": true, "value": 16},
         "row_padding_x": {"absolute": true, "value": 32},
@@ -193,6 +196,7 @@
     },
     "hyperpixel_4_0_square": {
       "description": "Pimoroni HyperPixel 4.0 Square (720×720)",
+      "display_backend": "framebuffer",
       "canvas": {"width": 720, "height": 720},
       "baseline": {"width": 320, "height": 320},
       "font_scale": 2.25,

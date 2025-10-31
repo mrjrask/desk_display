@@ -47,6 +47,7 @@ from config import (
     ENABLE_WIFI_MONITOR,
     CENTRAL_TIME,
     TRAVEL_ACTIVE_WINDOW,
+    DEFAULT_DISPLAY_BACKEND,
 )
 from utils import (
     ScreenImage,
@@ -93,14 +94,15 @@ def _initialize_display(backend_name: Optional[str]) -> None:
 
     global display, _SELECTED_BACKEND_NAME
 
-    resolved_name = backend_name or "displayhatmini"
+    requested_name = backend_name
+    resolved_name = requested_name or DEFAULT_DISPLAY_BACKEND or "displayhatmini"
     try:
-        display = create_display(backend_name)
+        display = create_display(resolved_name)
         _SELECTED_BACKEND_NAME = resolved_name
     except ValueError as exc:
         logging.error(
             "Unknown display backend '%s': %s. Falling back to 'displayhatmini'.",
-            backend_name,
+            requested_name or resolved_name,
             exc,
         )
         display = create_display()
