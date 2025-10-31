@@ -349,6 +349,48 @@ def _build_default_display_profiles() -> Dict[str, Dict[str, Any]]:
                 },
             },
         ),
+        "hyperpixel_4_0_square": _deep_merge(
+            base,
+            {
+                "description": "Pimoroni HyperPixel 4.0 Square (720×720)",
+                "canvas": {"width": 720, "height": 720},
+                "baseline": {"width": 320, "height": 320},
+                "font_scale": 2.25,
+                "icon_scale": 2.15,
+                "icons": {
+                    "github": {
+                        "padding_x": 8,
+                        "padding_y": 8,
+                        "baseline_offset": 10,
+                    },
+                    "weather": {"size": 480},
+                },
+                "animation": {
+                    "screen_delay": 6.5,
+                    "scoreboard": {"intro_hold": 0.65, "intro_delay": 0.05},
+                },
+                "scoreboard": {"intro_max_height": 220},
+                "inside": {
+                    "content_gap": 24,
+                    "bottom_margin": 24,
+                    "side_padding": 24,
+                    "metric_block_gap": 24,
+                    "metric_row_height": 90,
+                    "metric_row_gap": 18,
+                    "min_temp_floor": 72,
+                },
+                "travel": {
+                    "outer_margin": {"absolute": True, "value": 24},
+                    "row_padding_x": {"absolute": True, "value": 36},
+                    "row_padding_y": {"absolute": True, "value": 16},
+                    "row_gap": {"absolute": True, "value": 24},
+                    "header_gap": {"absolute": True, "value": 20},
+                    "warning_gap": {"absolute": True, "value": 28},
+                    "warning_bottom_margin": {"absolute": True, "value": 30},
+                    "row_corner_radius": {"absolute": True, "value": 32},
+                },
+            },
+        ),
         "xpt2046_3_5": _deep_merge(
             base,
             {

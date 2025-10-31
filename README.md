@@ -159,7 +159,8 @@ Starter profiles are provided for:
 
 - `display_hat_mini` — Pimoroni Display HAT Mini (320×240)
 - `hyperpixel_4_0` — Pimoroni HyperPixel 4.0 (800×480)
-- `xpt2046_3_5` — Generic 3.5″ SPI panel driven by XPT2046 controllers (480×320)
+- `hyperpixel_4_0_square` — Pimoroni HyperPixel 4.0 Square (720×720)
+- `xpt2046_3_5` — Generic 3.5″ SPI panels driven by the XPT2046 controller (480×320)
 
 You can duplicate one of these definitions in `display_profiles.json` and tweak canvas size, font sizes, or layout spacing without changing application code. At runtime the active profile is available via `config.get_display_profile_id()` and `config.get_display_profile()`.
 
