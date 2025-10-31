@@ -253,6 +253,7 @@ def _base_profile_template() -> Dict[str, Any]:
     fonts = {key: dict(spec) for key, spec in _FONT_LIBRARY.items()}
     return {
         "description": "Pimoroni Display HAT Mini (320×240)",
+        "display_backend": "displayhatmini",
         "canvas": {"width": 320, "height": 240},
         "baseline": {"width": 320, "height": 240},
         "font_scale": 1.0,
@@ -324,6 +325,7 @@ def _build_default_display_profiles() -> Dict[str, Dict[str, Any]]:
             base,
             {
                 "description": "Pimoroni HyperPixel 4.0 (800×480)",
+                "display_backend": "framebuffer",
                 "canvas": {"width": 800, "height": 480},
                 "font_scale": 2.1,
                 "icon_scale": 2.0,
@@ -353,6 +355,7 @@ def _build_default_display_profiles() -> Dict[str, Dict[str, Any]]:
             base,
             {
                 "description": "Pimoroni HyperPixel 4.0 Square (720×720)",
+                "display_backend": "framebuffer",
                 "canvas": {"width": 720, "height": 720},
                 "baseline": {"width": 320, "height": 320},
                 "font_scale": 2.25,
@@ -476,6 +479,16 @@ def get_display_profile_id() -> str:
 
 def get_display_profile() -> Dict[str, Any]:
     return copy.deepcopy(ACTIVE_DISPLAY_PROFILE)
+
+
+def _resolve_default_display_backend() -> str:
+    backend = ACTIVE_DISPLAY_PROFILE.get("display_backend")
+    if isinstance(backend, str) and backend.strip():
+        return backend.strip()
+    return "displayhatmini"
+
+
+DEFAULT_DISPLAY_BACKEND = _resolve_default_display_backend()
 
 
 def _coerce_float(value: Any, default: float) -> float:
