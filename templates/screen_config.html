@@ -770,6 +770,50 @@
       );
     }
 
+    function applyImportedPlaylists(config) {
+      if (!config || typeof config !== "object") return false;
+      const configPlaylists = config.playlists;
+      if (!configPlaylists || typeof configPlaylists !== "object" || Array.isArray(configPlaylists)) {
+        return false;
+      }
+      const sequence = Array.isArray(config.sequence) ? config.sequence : [];
+      const orderedIds = sequence
+        .map((item) => (item && typeof item === "object" ? item.playlist : null))
+        .filter((id) => typeof id === "string");
+      const seen = new Set();
+      const nextPlaylists = [];
+      const nextAssignments = {};
+
+      function addPlaylistById(playlistId) {
+        if (!playlistId || seen.has(playlistId)) return;
+        const playlist = configPlaylists[playlistId];
+        if (!playlist || typeof playlist !== "object") return;
+        seen.add(playlistId);
+        const label =
+          typeof playlist.label === "string" && playlist.label.trim()
+            ? playlist.label.trim()
+            : playlistId;
+        nextPlaylists.push({ id: playlistId, name: label });
+        const steps = Array.isArray(playlist.steps) ? playlist.steps : [];
+        steps.forEach((step) => {
+          if (!step || typeof step !== "object") return;
+          const screenId = step.screen;
+          if (typeof screenId === "string") {
+            nextAssignments[screenId] = playlistId;
+          }
+        });
+      }
+
+      orderedIds.forEach(addPlaylistById);
+      Object.keys(configPlaylists).forEach(addPlaylistById);
+
+      playlists = nextPlaylists;
+      playlistAssignments = nextAssignments;
+      collapsedPlaylists = {};
+      savePlaylistState();
+      return true;
+    }
+
     function addPlaylist(name) {
       const trimmed = name.trim();
       if (!trimmed) return;
@@ -952,6 +996,7 @@
         if (!response.ok) {
           throw new Error(data.error || "Unable to import configuration");
         }
+        applyImportedPlaylists(config);
         renderScreens(data.screens || []);
         markClean();
       } catch (err) {
