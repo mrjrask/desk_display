@@ -1,0 +1,2 @@
+Placeholder for terminal screenshot from the Pimoroni BME680/BME688 driver.
+Binary assets are omitted to comply with repository restrictions.

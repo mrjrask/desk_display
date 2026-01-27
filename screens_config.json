@@ -1,0 +1,131 @@
+{
+  "screens": {
+    "date": 1,
+    "time": 0,
+    "nixie": 0,
+    "weather logo": 0,
+    "weather1": 1,
+    "weather2": 1,
+    "weather hourly": 1,
+    "weather daily": 1,
+    "weather radar": 1,
+    "inside": 1,
+    "sensors": 0,
+    "verano logo": 0,
+    "vrnof": 3,
+    "travel": 2,
+    "travel map": 2,
+    "travel v2": 0,
+    "travel map v2": 0,
+    "cubs logo": 0,
+    "cubs stand1": 0,
+    "cubs stand2": 0,
+    "cubs last": 0,
+    "cubs result": 0,
+    "cubs live": 0,
+    "cubs next": 0,
+    "cubs next home": 0,
+    "sox logo": 0,
+    "sox stand1": 0,
+    "sox stand2": 0,
+    "sox last": 0,
+    "sox live": 0,
+    "sox next": 0,
+    "sox next home": 0,
+    "bears logo": 0,
+    "bears stand1": 0,
+    "bears stand2": 0,
+    "bears next": 0,
+    "bears next season": 0,
+    "hawks logo": 1,
+    "hawks stand1": 1,
+    "hawks stand2": 0,
+    "hawks last": 1,
+    "hawks live": 1,
+    "hawks next": 1,
+    "hawks next home": 1,
+    "wolves logo": 0,
+    "wolves last": 0,
+    "wolves next": 0,
+    "wolves next home": 0,
+    "bulls logo": 3,
+    "bulls stand1": 3,
+    "bulls stand2": 0,
+    "bulls last": 3,
+    "bulls live": 3,
+    "bulls next": 3,
+    "bulls next home": 3,
+    "nfl logo": 0,
+    "NFL Scoreboard": 2,
+    "NFL Scoreboard v2": 0,
+    "NFL Overview NFC": {
+      "frequency": 0,
+      "alt": {
+        "screen": "NFL Standings NFC",
+        "frequency": 1
+      }
+    },
+    "NFL Overview AFC": {
+      "frequency": 0,
+      "alt": {
+        "screen": "NFL Standings AFC",
+        "frequency": 1
+      }
+    },
+    "NFL Standings NFC": 0,
+    "NFL Standings AFC": 0,
+    "nhl logo": 0,
+    "NHL Scoreboard": 2,
+    "NHL Scoreboard v2": 0,
+    "NHL Standings Overview West": {
+      "frequency": 1,
+      "alt": {
+        "screen": ["NHL Standings Overview v3 West"],
+        "frequency": 1
+      }
+    },
+    "NHL Standings Overview East": {
+      "frequency": 1,
+      "alt": {
+        "screen": ["NHL Standings Overview v3 East"],
+        "frequency": 1
+      }
+    },
+    "NHL Standings West": {
+      "frequency": 1,
+      "alt": {
+        "screen": ["NHL Standings West v2"],
+        "frequency": 2
+      }
+    },
+    "NHL Standings East": {
+      "frequency": 1,
+      "alt": {
+        "screen": ["NHL Standings East v2"],
+        "frequency": 2
+      }
+    },
+    "NHL Standings Overview v2 West": 0,
+    "NHL Standings Overview v2 East": 0,
+    "NHL Standings Overview v3 West": 0,
+    "NHL Standings Overview v3 East": 0,
+    "NHL Standings West v2": 0,
+    "NHL Standings East v2": 0,
+    "mlb logo": 0,
+    "MLB Scoreboard": 0,
+    "MLB Scoreboard v2": 0,
+    "NL Overview": 0,
+    "NL East": 0,
+    "NL Central": 0,
+    "NL West": 0,
+    "NL Wild Card": 0,
+    "AL Overview": 0,
+    "AL East": 0,
+    "AL Central": 0,
+    "AL West": 0,
+    "AL Wild Card": 0,
+    "nba logo": 0,
+    "NBA Scoreboard": 5,
+    "NBA Scoreboard v2": 0
+  }
+}

@@ -1,0 +1,277 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Screen Screenshots</title>
+  <style>
+    :root {
+      color-scheme: light dark;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: #0b1120;
+      color: #e2e8f0;
+      --card-bg: rgba(15, 23, 42, 0.85);
+      --card-border: rgba(148, 163, 184, 0.2);
+    }
+    body {
+      margin: 0;
+      padding: 1.5rem;
+      min-height: 100vh;
+      background: radial-gradient(circle at 15% 20%, rgba(94, 234, 212, 0.12), transparent 45%), #0b1120;
+      box-sizing: border-box;
+    }
+    *,
+    *::before,
+    *::after {
+      box-sizing: inherit;
+    }
+    header {
+      text-align: center;
+      margin-bottom: 2rem;
+    }
+    h1 {
+      margin: 0 0 0.4rem;
+      font-size: clamp(1.8rem, 3vw, 2.6rem);
+    }
+    .subtitle {
+      color: #94a3b8;
+      margin: 0;
+      font-size: 0.95rem;
+    }
+    .controls {
+      margin-top: 1rem;
+      display: flex;
+      justify-content: center;
+    }
+    .toggle {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      font-size: 0.9rem;
+      color: #cbd5f5;
+    }
+    .toggle input {
+      width: 1rem;
+      height: 1rem;
+      accent-color: #38bdf8;
+    }
+    .grid {
+      display: grid;
+      gap: 1.25rem;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+    .card {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 18px;
+      padding: 1rem;
+      display: flex;
+      flex-direction: column;
+      gap: 0.75rem;
+      box-shadow: 0 18px 35px rgba(15, 23, 42, 0.45);
+    }
+    .card.is-hidden {
+      display: none;
+    }
+    .card h2 {
+      font-size: 1rem;
+      margin: 0;
+      color: #f8fafc;
+    }
+    .preview {
+      width: 100%;
+      aspect-ratio: 4 / 3;
+      border-radius: 12px;
+      border: 1px solid rgba(148, 163, 184, 0.3);
+      background: rgba(15, 23, 42, 0.65);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+    }
+    .preview img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
+    }
+    .overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(15, 23, 42, 0.82);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 2rem;
+      opacity: 0;
+      visibility: hidden;
+      transition: opacity 0.2s ease, visibility 0.2s ease;
+      z-index: 1000;
+    }
+    .overlay.is-visible {
+      opacity: 1;
+      visibility: visible;
+    }
+    .overlay-content {
+      max-width: min(1200px, 92vw);
+      max-height: 92vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+    }
+    .overlay-content img {
+      max-width: 100%;
+      max-height: 100%;
+      border-radius: 16px;
+      box-shadow: 0 24px 60px rgba(15, 23, 42, 0.6);
+      background: #0b1120;
+    }
+    .overlay-close {
+      position: absolute;
+      top: -2.5rem;
+      right: 0;
+      background: rgba(15, 23, 42, 0.8);
+      color: #e2e8f0;
+      border: 1px solid rgba(148, 163, 184, 0.3);
+      border-radius: 999px;
+      padding: 0.35rem 0.8rem;
+      cursor: pointer;
+      font-size: 0.85rem;
+    }
+    .empty-state {
+      color: #94a3b8;
+      font-size: 0.85rem;
+      text-align: center;
+      padding: 1.25rem;
+    }
+    .timestamp {
+      font-size: 0.85rem;
+      color: #cbd5f5;
+    }
+    .timestamp span {
+      color: #94a3b8;
+      margin-right: 0.35rem;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      font-size: 0.65rem;
+    }
+    a {
+      color: inherit;
+      text-decoration: none;
+    }
+    .preview-button {
+      border: 0;
+      padding: 0;
+      background: transparent;
+      cursor: pointer;
+      width: 100%;
+      height: 100%;
+      display: block;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Latest Screen Captures</h1>
+    <p class="subtitle">Click any preview to view the full-resolution screenshot.</p>
+    <p class="subtitle"><a href="{{ url_for('screen_config') }}">Return to screen configuration</a></p>
+    <div class="controls">
+      <label class="toggle">
+        <input type="checkbox" id="hideMissingScreens">
+        Hide screens without screenshots
+      </label>
+    </div>
+  </header>
+  <section class="grid">
+    {% for screen in screens %}
+    <article class="card" data-has-screenshot="{{ 'true' if screen.filename else 'false' }}">
+      <h2>{{ screen.id }}</h2>
+      <div class="preview">
+        {% if screen.filename %}
+          <button
+            class="preview-button"
+            type="button"
+            data-full-src="{{ url_for('screenshot_current', filename=screen.filename) }}"
+            aria-label="Open full-resolution screenshot for {{ screen.id }}"
+          >
+            <img src="{{ url_for('screenshot_current', filename=screen.filename) }}" alt="Screenshot for {{ screen.id }}">
+          </button>
+        {% else %}
+          <div class="empty-state">No screenshot yet.</div>
+        {% endif %}
+      </div>
+      <div class="timestamp">
+        <span>Updated</span>
+        {{ screen.timestamp if screen.timestamp else "—" }}
+      </div>
+    </article>
+    {% endfor %}
+  </section>
+  <div class="overlay" id="screenshotOverlay" aria-hidden="true">
+    <div class="overlay-content" role="dialog" aria-modal="true" aria-label="Screenshot preview">
+      <button class="overlay-close" type="button">Close</button>
+      <img id="overlayImage" alt="Full-resolution screenshot">
+    </div>
+  </div>
+  <script>
+    const hideMissingToggle = document.getElementById("hideMissingScreens");
+    const screenshotCards = document.querySelectorAll(".card");
+    const overlay = document.getElementById("screenshotOverlay");
+    const overlayImage = document.getElementById("overlayImage");
+    const overlayClose = overlay.querySelector(".overlay-close");
+
+    function openOverlay(source) {
+      overlayImage.src = source;
+      overlay.classList.add("is-visible");
+      overlay.setAttribute("aria-hidden", "false");
+    }
+
+    function closeOverlay() {
+      overlay.classList.remove("is-visible");
+      overlay.setAttribute("aria-hidden", "true");
+      overlayImage.removeAttribute("src");
+    }
+
+    document.querySelectorAll(".preview-button").forEach((button) => {
+      button.addEventListener("click", () => {
+        const source = button.dataset.fullSrc;
+        if (source) {
+          openOverlay(source);
+        }
+      });
+    });
+
+    overlay.addEventListener("click", (event) => {
+      if (event.target === overlay) {
+        closeOverlay();
+      }
+    });
+
+    overlayClose.addEventListener("click", closeOverlay);
+
+    document.addEventListener("keydown", (event) => {
+      if (event.key === "Escape" && overlay.classList.contains("is-visible")) {
+        closeOverlay();
+      }
+    });
+
+    function updateMissingVisibility() {
+      const shouldHide = hideMissingToggle.checked;
+      screenshotCards.forEach((card) => {
+        const hasScreenshot = card.dataset.hasScreenshot === "true";
+        if (!hasScreenshot && shouldHide) {
+          card.classList.add("is-hidden");
+        } else {
+          card.classList.remove("is-hidden");
+        }
+      });
+    }
+
+    hideMissingToggle.addEventListener("change", updateMissingVisibility);
+    updateMissingVisibility();
+  </script>
+</body>
+</html>

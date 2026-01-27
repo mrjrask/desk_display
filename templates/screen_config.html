@@ -1,0 +1,1057 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Screen Rotation Config</title>
+  <style>
+    :root {
+      color-scheme: light dark;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: #0f172a;
+      color: #e2e8f0;
+      --panel-bg: rgba(15, 23, 42, 0.92);
+      --panel-border: rgba(148, 163, 184, 0.2);
+      --panel-shadow: 0 30px 60px rgba(15, 23, 42, 0.5);
+      --field-bg: rgba(15, 23, 42, 0.65);
+      --field-border: rgba(148, 163, 184, 0.3);
+      --field-radius: 12px;
+      --field-padding: 0.55rem 0.65rem;
+    }
+    body {
+      margin: 0;
+      padding: 1.5rem;
+      min-height: 100vh;
+      background: radial-gradient(circle at 15% 20%, rgba(56, 189, 248, 0.1), transparent 35%), #0f172a;
+      box-sizing: border-box;
+    }
+    *,
+    *::before,
+    *::after {
+      box-sizing: inherit;
+    }
+    h1 {
+      text-align: center;
+      margin: 0 0 0.5rem;
+      font-size: clamp(1.8rem, 3vw, 2.6rem);
+    }
+    .subtitle {
+      text-align: center;
+      color: #94a3b8;
+      margin-bottom: 1.5rem;
+      font-size: 0.95rem;
+    }
+    .panel {
+      max-width: 1100px;
+      margin: 0 auto;
+      background: var(--panel-bg);
+      border-radius: 20px;
+      border: 1px solid var(--panel-border);
+      box-shadow: var(--panel-shadow);
+      padding: clamp(1.25rem, 2.5vw, 2rem);
+      backdrop-filter: blur(12px);
+    }
+    .toolbar,
+    .footer-actions {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 1rem;
+      flex-wrap: wrap;
+      margin-bottom: 1rem;
+    }
+    .actions {
+      display: flex;
+      gap: 0.75rem;
+      flex-wrap: wrap;
+    }
+    .toolbar .status {
+      color: #94a3b8;
+      font-size: 0.9rem;
+    }
+    .btn {
+      border: none;
+      border-radius: 999px;
+      padding: 0.6rem 1.4rem;
+      font-weight: 700;
+      cursor: pointer;
+      background: #38bdf8;
+      color: #0f172a;
+      transition: transform 0.2s ease, box-shadow 0.2s ease;
+      box-shadow: 0 12px 30px rgba(56, 189, 248, 0.3);
+    }
+    .btn:hover {
+      transform: translateY(-1px);
+    }
+    .btn:disabled {
+      cursor: not-allowed;
+      opacity: 0.6;
+      box-shadow: none;
+    }
+    .error {
+      display: none;
+      margin-bottom: 1rem;
+      padding: 0.75rem 1rem;
+      border-radius: 12px;
+      border: 1px solid rgba(248, 113, 113, 0.6);
+      background: rgba(248, 113, 113, 0.15);
+      color: #fecaca;
+      font-weight: 600;
+      font-size: 0.9rem;
+    }
+    .playlist-controls {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 1rem;
+      margin-bottom: 1rem;
+      flex-wrap: wrap;
+    }
+    .playlist-controls .field {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      flex-wrap: wrap;
+      flex: 1 1 320px;
+    }
+    .playlist-controls input {
+      padding: var(--field-padding);
+      border-radius: 999px;
+      border: 1px solid var(--field-border);
+      background: var(--field-bg);
+      color: #e2e8f0;
+      font-size: 0.95rem;
+      min-width: 220px;
+      flex: 1 1 240px;
+    }
+    .playlist-controls .hint {
+      color: #94a3b8;
+      font-size: 0.85rem;
+      flex: 1 1 260px;
+    }
+    .playlist-row {
+      grid-column: 1 / -1;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0.6rem 0.85rem;
+      border-radius: 14px;
+      border: 1px dashed rgba(148, 163, 184, 0.35);
+      background: rgba(30, 41, 59, 0.7);
+    }
+    .playlist-row.is-collapsed {
+      border-style: solid;
+      opacity: 0.9;
+    }
+    .playlist-row .meta {
+      display: flex;
+      align-items: baseline;
+      gap: 0.6rem;
+    }
+    .playlist-row .label {
+      font-size: 0.7rem;
+      text-transform: uppercase;
+      letter-spacing: 0.12em;
+      color: #94a3b8;
+      font-weight: 700;
+    }
+    .playlist-row .name {
+      font-weight: 700;
+      font-size: 1rem;
+    }
+    .playlist-row .count {
+      font-size: 0.8rem;
+      color: #94a3b8;
+    }
+    .playlist-actions {
+      display: flex;
+      gap: 0.5rem;
+      flex-wrap: wrap;
+    }
+    .btn-secondary {
+      border: 1px solid rgba(148, 163, 184, 0.4);
+      background: rgba(15, 23, 42, 0.8);
+      color: #e2e8f0;
+      padding: 0.35rem 0.9rem;
+      border-radius: 999px;
+      font-size: 0.8rem;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    .btn-secondary:hover {
+      background: rgba(56, 189, 248, 0.2);
+      border-color: rgba(56, 189, 248, 0.6);
+    }
+    .table-header {
+      display: grid;
+      grid-template-columns:
+        40px
+        minmax(180px, 1.4fr)
+        minmax(140px, 0.9fr)
+        minmax(120px, 0.7fr)
+        minmax(140px, 0.9fr)
+        minmax(200px, 1.3fr)
+        minmax(120px, 0.7fr);
+      gap: 0.75rem;
+      padding: 0 0.5rem 0.25rem;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      font-size: 0.75rem;
+      color: #94a3b8;
+      font-weight: 700;
+    }
+    .freq-header {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 0.25rem;
+    }
+    .zero-toggle {
+      display: flex;
+      align-items: center;
+      gap: 0.4rem;
+      font-size: 0.65rem;
+      font-weight: 600;
+      text-transform: none;
+      color: #cbd5f5;
+      letter-spacing: 0.02em;
+    }
+    .zero-toggle input {
+      margin: 0;
+      accent-color: #38bdf8;
+    }
+    .table {
+      display: grid;
+      gap: 0.75rem;
+    }
+    .row {
+      display: grid;
+      grid-template-columns:
+        40px
+        minmax(180px, 1.4fr)
+        minmax(140px, 0.9fr)
+        minmax(120px, 0.7fr)
+        minmax(140px, 0.9fr)
+        minmax(200px, 1.3fr)
+        minmax(120px, 0.7fr);
+      gap: 0.75rem;
+      align-items: center;
+      padding: 0.9rem 0.85rem;
+      border-radius: 14px;
+      border: 1px solid rgba(148, 163, 184, 0.2);
+      background: rgba(15, 23, 42, 0.8);
+    }
+    .row input {
+      width: 100%;
+      padding: var(--field-padding);
+      border-radius: var(--field-radius);
+      border: 1px solid var(--field-border);
+      background: var(--field-bg);
+      color: #e2e8f0;
+      font-size: 0.95rem;
+    }
+    .row select {
+      width: 100%;
+      padding: var(--field-padding);
+      border-radius: var(--field-radius);
+      border: 1px solid var(--field-border);
+      background: var(--field-bg);
+      color: #e2e8f0;
+      font-size: 0.95rem;
+    }
+    .handle {
+      cursor: grab;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      font-size: 1.2rem;
+      color: #7dd3fc;
+      user-select: none;
+    }
+    .row.dragging {
+      opacity: 0.5;
+      border-style: dashed;
+    }
+    .row .screen-id {
+      font-weight: 700;
+      font-size: 1rem;
+    }
+    .row .hint {
+      font-size: 0.75rem;
+      color: #94a3b8;
+      margin-top: 0.25rem;
+    }
+    .row > div {
+      min-width: 0;
+    }
+    .row input:focus,
+    .row select:focus,
+    .playlist-controls input:focus {
+      outline: 2px solid rgba(56, 189, 248, 0.55);
+      outline-offset: 1px;
+    }
+    @media (max-width: 1100px) {
+      .table-header,
+      .row {
+        grid-template-columns:
+          32px
+          minmax(160px, 1.3fr)
+          minmax(130px, 0.9fr)
+          minmax(110px, 0.7fr)
+          minmax(130px, 0.9fr)
+          minmax(180px, 1.1fr)
+          minmax(110px, 0.7fr);
+      }
+    }
+    @media (max-width: 900px) {
+      .table-header {
+        display: none;
+      }
+      .row {
+        grid-template-columns: 40px 1fr;
+        grid-auto-rows: auto;
+      }
+      .row > div {
+        grid-column: span 2;
+      }
+      .row .handle {
+        grid-column: span 2;
+        justify-content: flex-start;
+      }
+      .playlist-row {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 0.6rem;
+      }
+    }
+  </style>
+</head>
+<body>
+  <h1>Screen Rotation Configuration</h1>
+  <div class="subtitle">Drag to reorder screens, then set frequency and alternates.</div>
+
+  <div class="panel">
+    <div class="toolbar">
+      <div class="status">Editing: {{ config_path }}</div>
+      <div class="actions">
+        <button class="btn" id="saveBtn">Save changes</button>
+        <button class="btn" id="loadDefaultsBtn" type="button">Load defaults</button>
+        <button class="btn" id="exportBtn" type="button">Export configuration</button>
+        <button class="btn" id="importBtn" type="button">Import configuration</button>
+        <a class="btn-secondary" href="{{ url_for('screen_screenshots') }}">View screenshots</a>
+      </div>
+    </div>
+    <div class="error" id="errorBox"></div>
+    <div class="playlist-controls">
+      <div class="field">
+        <input type="text" id="newPlaylistName" placeholder="Create a new playlist">
+        <button class="btn-secondary" id="addPlaylistBtn" type="button">Add playlist</button>
+      </div>
+      <div class="hint">Group screens into playlists, then move the playlists to reorder chunks of screens.</div>
+    </div>
+    <div class="table-header">
+      <div></div>
+      <div>Screen</div>
+      <div>Playlist</div>
+      <div class="freq-header">
+        <label class="zero-toggle">
+          <input type="checkbox" id="hideZeroFreq">
+          Hide 0
+        </label>
+        <div>Freq</div>
+      </div>
+      <div>Background</div>
+      <div>Alt screen(s)</div>
+      <div>Alt freq</div>
+    </div>
+    <div class="table" id="screenTable">
+      {% for screen in screens %}
+      <div class="row screen-row" draggable="true" data-screen-id="{{ screen.id }}">
+        <div class="handle">☰</div>
+        <div>
+          <div class="screen-id">{{ screen.id }}</div>
+        </div>
+        <div>
+          <select class="playlist-select"></select>
+          <div class="hint">Assign to a playlist.</div>
+        </div>
+        <div>
+          <input type="number" min="0" step="1" value="{{ screen.frequency }}" class="freq-input">
+          <div class="hint">0 disables this screen.</div>
+        </div>
+        <div>
+          <input type="text" class="background-input" placeholder="#0F172A" value="{{ screen.background }}">
+          <div class="hint">Hex color (e.g. #000000).</div>
+        </div>
+        <div>
+          <input type="text" list="screenIds" placeholder="Optional alternate screen(s)" value="{{ screen.alt_screen }}" class="alt-screen-input">
+          <div class="hint">Comma-separated list if needed.</div>
+        </div>
+        <div>
+          <input type="number" min="0" step="1" placeholder="1" value="{{ screen.alt_frequency }}" class="alt-frequency-input">
+          <div class="hint">Frequency for alternate.</div>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+    <div class="footer-actions">
+      <div class="actions">
+        <button class="btn" id="saveBtnBottom">Save changes</button>
+        <button class="btn" id="loadDefaultsBtnBottom" type="button">Load defaults</button>
+        <button class="btn" id="exportBtnBottom" type="button">Export configuration</button>
+        <button class="btn" id="importBtnBottom" type="button">Import configuration</button>
+      </div>
+    </div>
+  </div>
+
+  <input type="file" id="importFile" accept="application/json" hidden>
+
+  <datalist id="screenIds">
+    {% for screen_id in screen_ids %}
+    <option value="{{ screen_id }}"></option>
+    {% endfor %}
+  </datalist>
+
+  <script>
+    const screenTable = document.getElementById("screenTable");
+    const saveBtn = document.getElementById("saveBtn");
+    const loadDefaultsBtn = document.getElementById("loadDefaultsBtn");
+    const exportBtn = document.getElementById("exportBtn");
+    const importBtn = document.getElementById("importBtn");
+    const saveBtnBottom = document.getElementById("saveBtnBottom");
+    const loadDefaultsBtnBottom = document.getElementById("loadDefaultsBtnBottom");
+    const exportBtnBottom = document.getElementById("exportBtnBottom");
+    const importBtnBottom = document.getElementById("importBtnBottom");
+    const importFileInput = document.getElementById("importFile");
+    const errorBox = document.getElementById("errorBox");
+    const hideZeroFreqToggle = document.getElementById("hideZeroFreq");
+    const newPlaylistNameInput = document.getElementById("newPlaylistName");
+    const addPlaylistBtn = document.getElementById("addPlaylistBtn");
+    const draftStorageKey = "screen-config-draft";
+    const playlistStorageKey = "screen-config-playlists";
+    let isDirty = false;
+    let playlists = [];
+    let playlistAssignments = {};
+    let collapsedPlaylists = {};
+
+    function getDragAfterElement(container, y) {
+      const draggableElements = [...container.querySelectorAll(".screen-row:not(.dragging)")];
+      return draggableElements.reduce((closest, child) => {
+        const box = child.getBoundingClientRect();
+        const offset = y - box.top - box.height / 2;
+        if (offset < 0 && offset > closest.offset) {
+          return { offset, element: child };
+        }
+        return closest;
+      }, { offset: Number.NEGATIVE_INFINITY }).element;
+    }
+
+    screenTable.addEventListener("dragstart", (event) => {
+      const row = event.target.closest(".screen-row");
+      if (!row) return;
+      row.classList.add("dragging");
+    });
+
+    screenTable.addEventListener("dragend", (event) => {
+      const row = event.target.closest(".screen-row");
+      if (!row) return;
+      row.classList.remove("dragging");
+    });
+
+    screenTable.addEventListener("dragover", (event) => {
+      event.preventDefault();
+      const dragging = document.querySelector(".screen-row.dragging");
+      if (!dragging) return;
+      const afterElement = getDragAfterElement(screenTable, event.clientY);
+      if (!afterElement) {
+        screenTable.appendChild(dragging);
+      } else {
+        screenTable.insertBefore(dragging, afterElement);
+      }
+    });
+
+    function generatePlaylistId() {
+      if (typeof crypto !== "undefined" && crypto.randomUUID) {
+        return crypto.randomUUID();
+      }
+      return `playlist-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+    }
+
+    function loadPlaylistState() {
+      const raw = localStorage.getItem(playlistStorageKey);
+      if (!raw) return;
+      try {
+        const data = JSON.parse(raw);
+        if (Array.isArray(data?.playlists)) {
+          playlists = data.playlists.filter((playlist) => playlist?.id && playlist?.name);
+        }
+        if (data?.assignments && typeof data.assignments === "object") {
+          playlistAssignments = { ...data.assignments };
+        }
+        if (data?.collapsed && typeof data.collapsed === "object") {
+          collapsedPlaylists = { ...data.collapsed };
+        }
+      } catch (error) {
+        playlists = [];
+        playlistAssignments = {};
+        collapsedPlaylists = {};
+      }
+    }
+
+    function savePlaylistState() {
+      try {
+        localStorage.setItem(
+          playlistStorageKey,
+          JSON.stringify({
+            playlists,
+            assignments: playlistAssignments,
+            collapsed: collapsedPlaylists,
+          })
+        );
+      } catch (error) {
+        console.warn("Unable to save playlist state.", error);
+      }
+    }
+
+    function syncPlaylistsToScreens(screens) {
+      const screenIds = new Set((screens || []).map((screen) => screen.id));
+      const playlistIds = new Set(playlists.map((playlist) => playlist.id));
+      Object.keys(playlistAssignments).forEach((screenId) => {
+        if (!screenIds.has(screenId)) {
+          delete playlistAssignments[screenId];
+          return;
+        }
+        const playlistId = playlistAssignments[screenId];
+        if (playlistId && !playlistIds.has(playlistId)) {
+          playlistAssignments[screenId] = "";
+        }
+      });
+      playlists = playlists.filter((playlist) => playlist?.id && playlist?.name);
+      const validGroups = new Set(["ungrouped", ...playlists.map((playlist) => playlist.id)]);
+      Object.keys(collapsedPlaylists).forEach((groupId) => {
+        if (!validGroups.has(groupId)) {
+          delete collapsedPlaylists[groupId];
+        }
+      });
+    }
+
+    function movePlaylistToIndex(playlistId, nextIndex) {
+      const index = playlists.findIndex((playlist) => playlist.id === playlistId);
+      if (index === -1) return;
+      const boundedIndex = Math.max(0, Math.min(nextIndex, playlists.length - 1));
+      if (boundedIndex === index) return;
+      const updated = [...playlists];
+      const [item] = updated.splice(index, 1);
+      updated.splice(boundedIndex, 0, item);
+      playlists = updated;
+      savePlaylistState();
+      renderScreens(getCurrentScreens());
+      markDirty();
+    }
+
+    function movePlaylist(playlistId, direction) {
+      const index = playlists.findIndex((playlist) => playlist.id === playlistId);
+      if (index === -1) return;
+      movePlaylistToIndex(playlistId, index + direction);
+    }
+
+    function renamePlaylist(playlistId) {
+      const playlist = playlists.find((item) => item.id === playlistId);
+      if (!playlist) return;
+      const nextName = window.prompt("Rename playlist:", playlist.name);
+      if (!nextName) return;
+      playlist.name = nextName.trim();
+      savePlaylistState();
+      renderScreens(getCurrentScreens());
+      markDirty();
+    }
+
+    function removePlaylist(playlistId) {
+      const playlist = playlists.find((item) => item.id === playlistId);
+      if (!playlist) return;
+      const confirmed = window.confirm(`Remove playlist "${playlist.name}"? Screens will be ungrouped.`);
+      if (!confirmed) return;
+      playlists = playlists.filter((item) => item.id !== playlistId);
+      Object.keys(playlistAssignments).forEach((screenId) => {
+        if (playlistAssignments[screenId] === playlistId) {
+          playlistAssignments[screenId] = "";
+        }
+      });
+      savePlaylistState();
+      renderScreens(getCurrentScreens());
+      markDirty();
+    }
+
+    function buildPlaylistHeader(playlist, screenCount) {
+      const row = document.createElement("div");
+      row.className = "playlist-row";
+      if (playlist.id) {
+        row.dataset.playlistId = playlist.id;
+      }
+
+      const meta = document.createElement("div");
+      meta.className = "meta";
+
+      const label = document.createElement("span");
+      label.className = "label";
+      label.textContent = playlist.id ? "Playlist" : "Group";
+
+      const name = document.createElement("span");
+      name.className = "name";
+      name.textContent = playlist.name;
+
+      const count = document.createElement("span");
+      count.className = "count";
+      count.textContent = `${screenCount} screen${screenCount === 1 ? "" : "s"}`;
+
+      meta.append(label, name, count);
+
+      const actions = document.createElement("div");
+      actions.className = "playlist-actions";
+
+      const groupKey = playlist.id || "ungrouped";
+      const isCollapsed = Boolean(collapsedPlaylists[groupKey]);
+      if (isCollapsed) {
+        row.classList.add("is-collapsed");
+      }
+      if (playlist.id) {
+        const moveUp = document.createElement("button");
+        moveUp.type = "button";
+        moveUp.className = "btn-secondary";
+        moveUp.textContent = "Move up";
+        moveUp.addEventListener("click", () => movePlaylist(playlist.id, -1));
+
+        const moveDown = document.createElement("button");
+        moveDown.type = "button";
+        moveDown.className = "btn-secondary";
+        moveDown.textContent = "Move down";
+        moveDown.addEventListener("click", () => movePlaylist(playlist.id, 1));
+
+        const moveTop = document.createElement("button");
+        moveTop.type = "button";
+        moveTop.className = "btn-secondary";
+        moveTop.textContent = "Move to top";
+        moveTop.addEventListener("click", () => movePlaylistToIndex(playlist.id, 0));
+
+        const moveBottom = document.createElement("button");
+        moveBottom.type = "button";
+        moveBottom.className = "btn-secondary";
+        moveBottom.textContent = "Move to bottom";
+        moveBottom.addEventListener("click", () => movePlaylistToIndex(playlist.id, playlists.length - 1));
+
+        const rename = document.createElement("button");
+        rename.type = "button";
+        rename.className = "btn-secondary";
+        rename.textContent = "Rename";
+        rename.addEventListener("click", () => renamePlaylist(playlist.id));
+
+        const remove = document.createElement("button");
+        remove.type = "button";
+        remove.className = "btn-secondary";
+        remove.textContent = "Remove";
+        remove.addEventListener("click", () => removePlaylist(playlist.id));
+
+        actions.append(moveUp, moveDown, moveTop, moveBottom, rename, remove);
+      }
+
+      const toggle = document.createElement("button");
+      toggle.type = "button";
+      toggle.className = "btn-secondary";
+      toggle.textContent = isCollapsed ? "Expand" : "Collapse";
+      toggle.setAttribute("aria-expanded", String(!isCollapsed));
+      toggle.addEventListener("click", () => {
+        collapsedPlaylists[groupKey] = !collapsedPlaylists[groupKey];
+        savePlaylistState();
+        renderScreens(getCurrentScreens());
+      });
+      actions.append(toggle);
+
+      row.append(meta, actions);
+      return row;
+    }
+
+    screenTable.addEventListener("input", (event) => {
+      if (event.target.matches(".freq-input")) {
+        updateZeroFrequencyVisibility();
+      }
+    });
+
+    screenTable.addEventListener("change", (event) => {
+      if (event.target.matches(".playlist-select")) {
+        const row = event.target.closest(".screen-row");
+        if (!row) return;
+        playlistAssignments[row.dataset.screenId] = event.target.value || "";
+        savePlaylistState();
+        renderScreens(getCurrentScreens());
+        markDirty();
+      }
+    });
+
+    if (hideZeroFreqToggle) {
+      hideZeroFreqToggle.addEventListener("change", updateZeroFrequencyVisibility);
+    }
+
+    function showError(message) {
+      errorBox.textContent = message;
+      errorBox.style.display = "block";
+    }
+
+    function clearError() {
+      errorBox.textContent = "";
+      errorBox.style.display = "none";
+    }
+
+    function setButtonsDisabled(disabled) {
+      [
+        saveBtn,
+        loadDefaultsBtn,
+        exportBtn,
+        importBtn,
+        saveBtnBottom,
+        loadDefaultsBtnBottom,
+        exportBtnBottom,
+        importBtnBottom,
+      ].forEach((btn) => {
+        if (btn) btn.disabled = disabled;
+      });
+    }
+
+    function getCurrentScreens() {
+      const rows = [...screenTable.querySelectorAll(".screen-row")];
+      return rows
+        .map((row) => {
+          const screenId = row.dataset.screenId;
+          if (!screenId) return null;
+          return {
+            id: screenId,
+            frequency: row.querySelector(".freq-input")?.value ?? "",
+            background: row.querySelector(".background-input")?.value ?? "",
+            alt_screen: row.querySelector(".alt-screen-input")?.value ?? "",
+            alt_frequency: row.querySelector(".alt-frequency-input")?.value ?? "",
+          };
+        })
+        .filter(Boolean);
+    }
+
+    function saveDraft() {
+      const payload = {
+        updatedAt: new Date().toISOString(),
+        screens: getCurrentScreens(),
+        playlists,
+        assignments: playlistAssignments,
+        collapsed: collapsedPlaylists,
+      };
+      try {
+        sessionStorage.setItem(draftStorageKey, JSON.stringify(payload));
+      } catch (error) {
+        console.warn("Unable to save draft state.", error);
+      }
+    }
+
+    function clearDraft() {
+      sessionStorage.removeItem(draftStorageKey);
+    }
+
+    function markDirty() {
+      if (!isDirty) {
+        isDirty = true;
+      }
+      saveDraft();
+    }
+
+    function markClean() {
+      isDirty = false;
+      clearDraft();
+    }
+
+    function normalizeScreens(screens) {
+      return (screens || []).filter(
+        (screen) => screen && screen.id !== undefined && screen.id !== null
+      );
+    }
+
+    function addPlaylist(name) {
+      const trimmed = name.trim();
+      if (!trimmed) return;
+      const playlist = { id: generatePlaylistId(), name: trimmed };
+      playlists = [...playlists, playlist];
+      savePlaylistState();
+      renderScreens(getCurrentScreens());
+      markDirty();
+    }
+
+    function buildRow(screen) {
+      const row = document.createElement("div");
+      row.className = "row screen-row";
+      row.draggable = true;
+      row.dataset.screenId = screen.id;
+      row.innerHTML = `
+        <div class="handle">☰</div>
+        <div>
+          <div class="screen-id">${screen.id}</div>
+        </div>
+        <div>
+          <select class="playlist-select"></select>
+          <div class="hint">Assign to a playlist.</div>
+        </div>
+        <div>
+          <input type="number" min="0" step="1" value="${screen.frequency ?? 0}" class="freq-input">
+          <div class="hint">0 disables this screen.</div>
+        </div>
+        <div>
+          <input type="text" class="background-input" placeholder="#0F172A" value="${screen.background ?? ""}">
+          <div class="hint">Hex color (e.g. #000000).</div>
+        </div>
+        <div>
+          <input type="text" list="screenIds" placeholder="Optional alternate screen(s)" value="${screen.alt_screen ?? ""}" class="alt-screen-input">
+          <div class="hint">Comma-separated list if needed.</div>
+        </div>
+        <div>
+          <input type="number" min="0" step="1" placeholder="1" value="${screen.alt_frequency ?? ""}" class="alt-frequency-input">
+          <div class="hint">Frequency for alternate.</div>
+        </div>
+      `;
+      const select = row.querySelector(".playlist-select");
+      if (!select) {
+        return row;
+      }
+      const ungrouped = new Option("Ungrouped", "");
+      select.appendChild(ungrouped);
+      playlists.forEach((playlist) => {
+        const option = new Option(playlist.name, playlist.id);
+        select.appendChild(option);
+      });
+      const assigned = playlistAssignments[screen.id] || "";
+      select.value = assigned;
+      return row;
+    }
+
+    function updateZeroFrequencyVisibility() {
+      if (!hideZeroFreqToggle) return;
+      const hideZero = hideZeroFreqToggle.checked;
+      const rows = [...screenTable.querySelectorAll(".screen-row")];
+      rows.forEach((row) => {
+        if (row.dataset.collapsed === "true") {
+          row.style.display = "none";
+          return;
+        }
+        if (!hideZero) {
+          row.style.display = "";
+          return;
+        }
+        const freqInput = row.querySelector(".freq-input");
+        const freqValue = Number(freqInput?.value ?? 0);
+        row.style.display = Number.isNaN(freqValue) || freqValue !== 0 ? "" : "none";
+      });
+    }
+
+    function renderScreens(screens) {
+      screenTable.innerHTML = "";
+      const safeScreens = normalizeScreens(screens);
+      syncPlaylistsToScreens(safeScreens);
+      savePlaylistState();
+      const groups = [
+        { id: "", name: "Ungrouped" },
+        ...playlists.map((playlist) => ({ id: playlist.id, name: playlist.name })),
+      ];
+      groups.forEach((group) => {
+        const groupScreens = safeScreens.filter(
+          (screen) => (playlistAssignments[screen.id] || "") === group.id
+        );
+        const header = buildPlaylistHeader(group, groupScreens.length);
+        screenTable.appendChild(header);
+        const groupKey = group.id || "ungrouped";
+        const isCollapsed = Boolean(collapsedPlaylists[groupKey]);
+        groupScreens.forEach((screen) => {
+          const row = buildRow(screen);
+          if (isCollapsed) {
+            row.dataset.collapsed = "true";
+            row.style.display = "none";
+          }
+          screenTable.appendChild(row);
+        });
+      });
+      updateZeroFrequencyVisibility();
+    }
+
+    async function saveConfiguration() {
+      clearError();
+      setButtonsDisabled(true);
+      const screens = getCurrentScreens();
+
+      try {
+        const response = await fetch("/api/screens", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ screens }),
+        });
+        const data = await response.json();
+        if (!response.ok) {
+          throw new Error(data.error || "Unable to save configuration");
+        }
+        markClean();
+      } catch (err) {
+        showError(err.message);
+      } finally {
+        setButtonsDisabled(false);
+      }
+    }
+
+    async function loadDefaults() {
+      clearError();
+      setButtonsDisabled(true);
+      try {
+        const response = await fetch("/api/screens/defaults");
+        const data = await response.json();
+        if (!response.ok) {
+          throw new Error(data.error || "Unable to load defaults");
+        }
+        renderScreens(data.screens || []);
+        markDirty();
+      } catch (err) {
+        showError(err.message);
+      } finally {
+        setButtonsDisabled(false);
+      }
+    }
+
+    async function exportConfiguration() {
+      clearError();
+      setButtonsDisabled(true);
+      try {
+        const response = await fetch("/api/screens/export");
+        if (!response.ok) {
+          throw new Error("Unable to export configuration");
+        }
+        const blob = await response.blob();
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = "screens_config.export.json";
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        URL.revokeObjectURL(url);
+      } catch (err) {
+        showError(err.message);
+      } finally {
+        setButtonsDisabled(false);
+      }
+    }
+
+    async function importConfiguration(config) {
+      clearError();
+      setButtonsDisabled(true);
+      try {
+        const response = await fetch("/api/screens/import", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ config }),
+        });
+        const data = await response.json();
+        if (!response.ok) {
+          throw new Error(data.error || "Unable to import configuration");
+        }
+        renderScreens(data.screens || []);
+        markClean();
+      } catch (err) {
+        showError(err.message);
+      } finally {
+        setButtonsDisabled(false);
+      }
+    }
+
+    saveBtn.addEventListener("click", saveConfiguration);
+    saveBtnBottom.addEventListener("click", saveConfiguration);
+    loadDefaultsBtn.addEventListener("click", loadDefaults);
+    loadDefaultsBtnBottom.addEventListener("click", loadDefaults);
+    exportBtn.addEventListener("click", exportConfiguration);
+    exportBtnBottom.addEventListener("click", exportConfiguration);
+    if (importBtn && importFileInput) {
+      importBtn.addEventListener("click", () => importFileInput.click());
+    }
+    if (importBtnBottom && importFileInput) {
+      importBtnBottom.addEventListener("click", () => importFileInput.click());
+    }
+    if (importFileInput) {
+      importFileInput.addEventListener("change", async (event) => {
+        const file = event.target.files?.[0];
+        event.target.value = "";
+        if (!file) return;
+        try {
+          const text = await file.text();
+          const config = JSON.parse(text);
+          await importConfiguration(config);
+        } catch (error) {
+          showError(error.message || "Unable to import configuration");
+        }
+      });
+    }
+
+    if (addPlaylistBtn) {
+      addPlaylistBtn.addEventListener("click", () => {
+        if (!newPlaylistNameInput) return;
+        addPlaylist(newPlaylistNameInput.value);
+        newPlaylistNameInput.value = "";
+      });
+    }
+
+    if (newPlaylistNameInput) {
+      newPlaylistNameInput.addEventListener("keydown", (event) => {
+        if (event.key === "Enter") {
+          event.preventDefault();
+          addPlaylist(newPlaylistNameInput.value);
+          newPlaylistNameInput.value = "";
+        }
+      });
+    }
+
+    screenTable.addEventListener("input", (event) => {
+      if (event.target.matches("input")) {
+        markDirty();
+      }
+    });
+
+    screenTable.addEventListener("dragend", () => {
+      markDirty();
+    });
+
+    window.addEventListener("beforeunload", (event) => {
+      if (!isDirty) return;
+      event.preventDefault();
+      event.returnValue = "";
+    });
+
+    loadPlaylistState();
+    let initialScreens = getCurrentScreens();
+    const savedDraft = sessionStorage.getItem(draftStorageKey);
+    if (savedDraft) {
+      try {
+        const draft = JSON.parse(savedDraft);
+        if (draft?.screens?.length) {
+          const shouldRestore = window.confirm("Restore unsaved screen rotation edits from your last visit?");
+          if (shouldRestore) {
+            initialScreens = draft.screens;
+            if (Array.isArray(draft.playlists)) {
+              playlists = draft.playlists.filter((playlist) => playlist?.id && playlist?.name);
+            }
+            if (draft.assignments && typeof draft.assignments === "object") {
+              playlistAssignments = { ...draft.assignments };
+            }
+            if (draft.collapsed && typeof draft.collapsed === "object") {
+              collapsedPlaylists = { ...draft.collapsed };
+            }
+            savePlaylistState();
+            isDirty = true;
+          } else {
+            clearDraft();
+          }
+        }
+      } catch (error) {
+        clearDraft();
+      }
+    }
+    renderScreens(initialScreens);
+  </script>
+</body>
+</html>
