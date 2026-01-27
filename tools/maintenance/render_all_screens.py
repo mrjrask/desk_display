@@ -27,14 +27,8 @@ if str(PROJECT_ROOT) not in sys.path:
 # configuration values (API keys, flags, etc.) are available to the renderer.
 os.environ.setdefault("CONFIG_LOAD_DOTENV", "1")
 
+import config
 import data_fetch
-from config import (
-    AHL_TEAM_TRICODE,
-    CENTRAL_TIME,
-    ENABLE_SCREENSHOTS,
-    HEIGHT,
-    WIDTH,
-)
 from screens.draw_travel_time import get_travel_active_window, is_travel_screen_active
 from screens.registry import ScreenContext, ScreenDefinition, build_screen_registry
 from schedule import build_scheduler, load_schedule_config
@@ -60,9 +54,9 @@ ARCHIVE_DIR = str(_storage_paths.archive_base)
 class HeadlessDisplay:
     """Minimal display stub that captures the latest image frame."""
 
-    def __init__(self, width: int = WIDTH, height: int = HEIGHT):
-        self.width = width
-        self.height = height
+    def __init__(self, width: Optional[int] = None, height: Optional[int] = None):
+        self.width = width if width is not None else config.WIDTH
+        self.height = height if height is not None else config.HEIGHT
         self._current = Image.new("RGB", (self.width, self.height), "black")
 
     def clear(self) -> None:
@@ -94,16 +88,97 @@ def _sanitize_filename_prefix(name: str) -> str:
     return safe or "screen"
 
 
-LOGO_SCREEN_HEIGHT = max(1, HEIGHT - 30)
-TEAM_LOGO_HEIGHT   = LOGO_SCREEN_HEIGHT
-LOGO_SCREEN_WIDTH = max(1, min(WIDTH, int(round(LOGO_SCREEN_HEIGHT * 1.5))))
+LOGO_SCREEN_HEIGHT = max(1, config.HEIGHT - 30)
+TEAM_LOGO_HEIGHT = LOGO_SCREEN_HEIGHT
+LOGO_SCREEN_WIDTH = max(
+    1,
+    min(config.WIDTH, int(round(LOGO_SCREEN_HEIGHT * 1.5))),
+)
+
+RESOLUTION_OPTIONS: tuple[tuple[str, str, tuple[int, int]], ...] = (
+    ("hyperpixel4", "Hyperpixel4 - 800x480", (800, 480)),
+    ("hyperpixel4-square", "Hyperpixel4 Square - 720x720", (720, 720)),
+    ("640x480", "640x480", (640, 480)),
+    ("1080p", "1080p - 1920x1080", (1920, 1080)),
+    ("1440p", "1440p - 2560x1440", (2560, 1440)),
+    ("2k", "2K - 2048x1080", (2048, 1080)),
+    ("4k", "4K - 3840x2160", (3840, 2160)),
+)
+
+
+def _refresh_logo_dimensions() -> None:
+    global LOGO_SCREEN_HEIGHT, TEAM_LOGO_HEIGHT, LOGO_SCREEN_WIDTH
+    LOGO_SCREEN_HEIGHT = max(1, config.HEIGHT - 30)
+    TEAM_LOGO_HEIGHT = LOGO_SCREEN_HEIGHT
+    LOGO_SCREEN_WIDTH = max(
+        1,
+        min(config.WIDTH, int(round(LOGO_SCREEN_HEIGHT * 1.5))),
+    )
+
+
+def _apply_resolution_dimensions(width: int, height: int) -> None:
+    os.environ["DISPLAY_WIDTH"] = str(width)
+    os.environ["DISPLAY_HEIGHT"] = str(height)
+    config.WIDTH = width
+    config.HEIGHT = height
+    config.DISPLAY_SCALE = min(
+        config.WIDTH / config.BASE_WIDTH,
+        config.HEIGHT / config.BASE_HEIGHT,
+    )
+    _refresh_logo_dimensions()
+
+
+def _print_resolution_menu() -> None:
+    print(
+        "Select a resolution (content is tuned for 320x240 and scaled for larger panels):"
+    )
+    for index, option in enumerate(RESOLUTION_OPTIONS, start=1):
+        print(f"  {index}) {option[1]}")
+
+
+def _apply_resolution_token(token: str) -> bool:
+    normalized = token.strip().lower()
+    for entry in RESOLUTION_OPTIONS:
+        if entry[0] == normalized:
+            _apply_resolution_dimensions(*entry[2])
+            return True
+    return False
+
+
+def _maybe_prompt_resolution_selection() -> None:
+    if os.environ.get("DISPLAY_WIDTH") and os.environ.get("DISPLAY_HEIGHT"):
+        _refresh_logo_dimensions()
+        return
+
+    if os.environ.get("DISPLAY_RESOLUTION"):
+        if _apply_resolution_token(os.environ["DISPLAY_RESOLUTION"]):
+            return
+
+    if sys.stdin.isatty():
+        _print_resolution_menu()
+        selection = input(
+            "Enter a number [1-7] (or press Enter to keep 320x240): "
+        ).strip()
+        if selection:
+            try:
+                index = int(selection)
+            except ValueError:
+                index = -1
+            if 1 <= index <= len(RESOLUTION_OPTIONS):
+                _apply_resolution_dimensions(*RESOLUTION_OPTIONS[index - 1][2])
+    else:
+        _print_resolution_menu()
 
 
 def load_logo(
     filename: str,
-    height: int = LOGO_SCREEN_HEIGHT,
-    width: int = LOGO_SCREEN_WIDTH,
+    height: Optional[int] = None,
+    width: Optional[int] = None,
 ) -> Optional[Image.Image]:
+    if height is None or width is None:
+        _refresh_logo_dimensions()
+        height = height if height is not None else LOGO_SCREEN_HEIGHT
+        width = width if width is not None else LOGO_SCREEN_WIDTH
     path = IMAGES_DIR / filename
     try:
         with Image.open(path) as img:
@@ -145,7 +220,7 @@ def load_logo(
 
 def build_logo_map() -> Dict[str, Optional[Image.Image]]:
     wolves_logo = None
-    wolves_tri = (AHL_TEAM_TRICODE or "CHI").strip() or "CHI"
+    wolves_tri = (config.AHL_TEAM_TRICODE or "CHI").strip() or "CHI"
     for variant in {wolves_tri.upper(), wolves_tri.lower()}:
         wolves_logo = load_logo(f"ahl/{variant}.png", height=TEAM_LOGO_HEIGHT)
         if wolves_logo:
@@ -378,7 +453,7 @@ def _suppress_image_loading() -> Callable[[], None]:
         return img
 
     def placeholder_open(*args, **kwargs) -> Image.Image:
-        size = (max(1, WIDTH // 2), max(1, HEIGHT // 2))
+        size = (max(1, config.WIDTH // 2), max(1, config.HEIGHT // 2))
         try:
             with original_open(*args, **kwargs) as opened:
                 size = opened.size
@@ -395,7 +470,7 @@ def _suppress_image_loading() -> Callable[[], None]:
 
 def _render_all_screens_impl(
     *,
-    sync_screenshots: bool = ENABLE_SCREENSHOTS,
+    sync_screenshots: Optional[bool] = None,
     create_archive: bool = True,
     ignore_schedule: bool = False,
     suppress_images: bool = False,
@@ -407,10 +482,13 @@ def _render_all_screens_impl(
         force=True,
     )
 
+    if sync_screenshots is None:
+        sync_screenshots = config.ENABLE_SCREENSHOTS
+
     restore_sleep = _suppress_animation_delay()
     restore_images = _suppress_image_loading() if suppress_images else lambda: None
     assets: list[Tuple[str, Image.Image]] = []
-    now = _dt.datetime.now(CENTRAL_TIME)
+    now = _dt.datetime.now(config.CENTRAL_TIME)
     try:
         display = HeadlessDisplay()
         logos = build_logo_map()
@@ -424,7 +502,7 @@ def _render_all_screens_impl(
             if schedule_error:
                 logging.info("Continuing without schedule data (%s)", schedule_error)
 
-        now = _dt.datetime.now(CENTRAL_TIME)
+        now = _dt.datetime.now(config.CENTRAL_TIME)
         context = ScreenContext(
             display=display,
             cache=cache,
@@ -439,7 +517,10 @@ def _render_all_screens_impl(
 
         registry, _metadata = build_screen_registry(context)
 
-        screen_ids = sorted(set(SCREEN_IDS) | set(registry.keys()))
+        if ignore_schedule or not requested_ids:
+            screen_ids = sorted(set(SCREEN_IDS) | set(registry.keys()))
+        else:
+            screen_ids = sorted(requested_ids)
         for screen_id in screen_ids:
             definition: Optional[ScreenDefinition] = registry.get(screen_id)
             if definition is None:
@@ -501,7 +582,7 @@ def _render_all_screens_impl(
 
 def render_all_screens(
     *,
-    sync_screenshots: bool = ENABLE_SCREENSHOTS,
+    sync_screenshots: Optional[bool] = None,
     create_archive: bool = True,
     ignore_schedule: bool = False,
     suppress_images: bool = False,
@@ -516,7 +597,7 @@ def render_all_screens(
 
 def render_all_screens_without_images(
     *,
-    sync_screenshots: bool = ENABLE_SCREENSHOTS,
+    sync_screenshots: Optional[bool] = None,
     create_archive: bool = True,
     ignore_schedule: bool = False,
 ) -> int:
@@ -533,9 +614,10 @@ def _build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "-a",
         "--all",
+        "--todos",
         dest="ignore_schedule",
         action="store_true",
-        help="Ignore screens_config.json and render every available screen.",
+        help="Render every available screen instead of using screens_config.json.",
     )
     parser.add_argument(
         "--sync-screenshots",
@@ -552,7 +634,7 @@ def _build_arg_parser() -> argparse.ArgumentParser:
         action="store_false",
         help="Disable screenshot syncing even if ENABLE_SCREENSHOTS is true.",
     )
-    parser.set_defaults(sync_screenshots=ENABLE_SCREENSHOTS)
+    parser.set_defaults(sync_screenshots=config.ENABLE_SCREENSHOTS)
     parser.add_argument(
         "--no-archive",
         action="store_true",
@@ -567,6 +649,7 @@ def _build_arg_parser() -> argparse.ArgumentParser:
 
 
 def main(argv: Optional[list[str]] = None) -> int:
+    _maybe_prompt_resolution_selection()
     parser = _build_arg_parser()
     args = parser.parse_args(argv)
     return _render_all_screens_impl(
