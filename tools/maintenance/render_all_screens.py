@@ -165,6 +165,22 @@ def _apply_resolution_token(token: str) -> bool:
     return False
 
 
+def _read_resolution_selection_from_stdin() -> Optional[str]:
+    if sys.stdin is None or sys.stdin.closed:
+        return None
+    try:
+        import select
+    except ImportError:
+        return None
+    try:
+        ready, _, _ = select.select([sys.stdin], [], [], 0)
+    except (OSError, ValueError):
+        return None
+    if not ready:
+        return None
+    return sys.stdin.readline().strip()
+
+
 def _maybe_prompt_resolution_selection() -> None:
     if os.environ.get("DISPLAY_WIDTH") and os.environ.get("DISPLAY_HEIGHT"):
         _refresh_logo_dimensions()
@@ -187,7 +203,18 @@ def _maybe_prompt_resolution_selection() -> None:
             if 1 <= index <= len(RESOLUTION_OPTIONS):
                 _apply_resolution_dimensions(*RESOLUTION_OPTIONS[index - 1][2])
     else:
-        _print_resolution_menu()
+        selection = _read_resolution_selection_from_stdin()
+        if not selection:
+            _print_resolution_menu()
+            return
+        try:
+            index = int(selection)
+        except ValueError:
+            index = -1
+        if 1 <= index <= len(RESOLUTION_OPTIONS):
+            _apply_resolution_dimensions(*RESOLUTION_OPTIONS[index - 1][2])
+        else:
+            _apply_resolution_token(selection)
 
 
 def load_logo(
