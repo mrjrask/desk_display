@@ -2,6 +2,24 @@
 set -euo pipefail
 
 SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
+PROJECT_DIR="${PROJECT_DIR:-$(cd -- "$SCRIPT_DIR/.." && pwd)}"
+SERVICE_USER="${SUDO_USER:-$(whoami)}"
+SERVICE_NAME="desk_display.service"
+
+COMMON_SCRIPT="$SCRIPT_DIR/install_common.sh"
+if [[ ! -f "$COMMON_SCRIPT" ]]; then
+  echo "[ERROR] Missing common installer helpers at $COMMON_SCRIPT" >&2
+  exit 1
+fi
+
+# shellcheck source=/dev/null
+source "$COMMON_SCRIPT"
+
+if [[ $EUID -ne 0 ]]; then
+  SUDO="sudo"
+else
+  SUDO=""
+fi
 
 export DESK_DISPLAY_OUTPUT="${DESK_DISPLAY_OUTPUT:-framebuffer}"
 export DISPLAY_FB_DEVICE="${DISPLAY_FB_DEVICE:-/dev/fb0}"
@@ -63,4 +81,6 @@ if [[ -z "${DISPLAY_WIDTH:-}" || -z "${DISPLAY_HEIGHT:-}" ]]; then
   fi
 fi
 
-exec "$SCRIPT_DIR/install_bookworm.sh"
+"$SCRIPT_DIR/install_bookworm.sh"
+
+install_framebuffer_launcher "$PROJECT_DIR" "$SERVICE_NAME" "$SERVICE_USER"
