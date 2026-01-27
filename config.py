@@ -244,8 +244,26 @@ APPLE_MAPS_SNAPSHOT_URL = os.environ.get(
 )
 
 # ─── Display configuration ─────────────────────────────────────────────────────
-WIDTH                    = 320
-HEIGHT                   = 240
+BASE_WIDTH = 320
+BASE_HEIGHT = 240
+
+try:
+    WIDTH = int(os.environ.get("DISPLAY_WIDTH", str(BASE_WIDTH)))
+except (TypeError, ValueError):
+    logging.warning("Invalid DISPLAY_WIDTH value; defaulting to %s.", BASE_WIDTH)
+    WIDTH = BASE_WIDTH
+
+try:
+    HEIGHT = int(os.environ.get("DISPLAY_HEIGHT", str(BASE_HEIGHT)))
+except (TypeError, ValueError):
+    logging.warning("Invalid DISPLAY_HEIGHT value; defaulting to %s.", BASE_HEIGHT)
+    HEIGHT = BASE_HEIGHT
+
+DISPLAY_SCALE = min(WIDTH / BASE_WIDTH, HEIGHT / BASE_HEIGHT)
+
+
+def scale_value(value: float) -> int:
+    return max(1, int(round(value * DISPLAY_SCALE)))
 SCREEN_DELAY             = 4
 try:
     HOURLY_FORECAST_HOURS = int(os.environ.get("HOURLY_FORECAST_HOURS", "5"))
@@ -548,7 +566,7 @@ FONTS_DIR = os.path.join(SCRIPT_DIR, "fonts")
 
 def _load_font(name, size):
     path = os.path.join(FONTS_DIR, name)
-    return ImageFont.truetype(path, size)
+    return ImageFont.truetype(path, scale_value(size))
 
 
 def _try_load_font(name: str, size: int):
@@ -557,7 +575,7 @@ def _try_load_font(name: str, size: int):
         return None
 
     try:
-        return ImageFont.truetype(path, size)
+        return ImageFont.truetype(path, scale_value(size))
     except OSError as exc:
         message = str(exc).lower()
         log = logging.debug if "invalid pixel size" in message else logging.warning
@@ -700,6 +718,7 @@ FONT_GB_VALUE           = _load_font("DejaVuSans.ttf",      18)
 FONT_GB_LABEL           = _load_font("DejaVuSans.ttf",      15)
 
 def _load_emoji_font(size: int) -> ImageFont.ImageFont:
+    scaled_size = scale_value(size)
     noto = _try_load_font("NotoColorEmoji.ttf", size)
     if noto:
         return noto
@@ -708,7 +727,7 @@ def _load_emoji_font(size: int) -> ImageFont.ImageFont:
     if os.path.isfile(noto_path):
         for native_size in (109, 128, 160):
             try:
-                return _BitmapEmojiFont(noto_path, native_size, size)
+                return _BitmapEmojiFont(noto_path, native_size, scaled_size)
             except OSError as exc:
                 logging.debug(
                     "Unable to load bitmap emoji font %s at native size %s: %s",
@@ -722,14 +741,14 @@ def _load_emoji_font(size: int) -> ImageFont.ImageFont:
     )
     for path in noto_system_paths:
         try:
-            return ImageFont.truetype(path, size)
+            return ImageFont.truetype(path, scaled_size)
         except OSError as exc:
             message = str(exc).lower()
             logging.debug("Unable to load system emoji font %s: %s", path, exc)
             if "invalid pixel size" in message:
                 for native_size in (109, 128, 160):
                     try:
-                        return _BitmapEmojiFont(path, native_size, size)
+                        return _BitmapEmojiFont(path, native_size, scaled_size)
                     except OSError as inner_exc:
                         logging.debug(
                             "Unable to load system bitmap emoji font %s at native size %s: %s",
@@ -743,7 +762,7 @@ def _load_emoji_font(size: int) -> ImageFont.ImageFont:
         if "symbola" not in path.lower():
             continue
         try:
-            return ImageFont.truetype(path, size)
+            return ImageFont.truetype(path, scaled_size)
         except OSError as exc:
             logging.debug("Unable to load fallback emoji font %s: %s", path, exc)
 
@@ -935,7 +954,7 @@ def get_screen_font(
     if isinstance(spec, dict):
         size_override = spec.get("size")
         if isinstance(size_override, int) and size_override > 0:
-            target_size = size_override
+            target_size = scale_value(size_override)
         family = spec.get("family")
         if isinstance(family, str) and family.strip():
             override_font = _load_font_from_family(family.strip(), target_size or getattr(base_font, "size", 12))
@@ -961,18 +980,18 @@ def get_screen_image_scale(screen_id: str, image_slot: str, default: float = 1.0
             value = default
         else:
             if value > 0:
-                return value
-    return default
+                return value * DISPLAY_SCALE
+    return default * DISPLAY_SCALE
 
 # ─── Screen-specific configuration ─────────────────────────────────────────────
 
 # Weather screen
-WEATHER_ICON_SIZE = 218
-WEATHER_DESC_GAP  = 8
+WEATHER_ICON_SIZE = scale_value(218)
+WEATHER_DESC_GAP  = scale_value(8)
 
 # Date/time screen
 DATE_TIME_GH_ICON_INVERT = True
-DATE_TIME_GH_ICON_SIZE   = 33
+DATE_TIME_GH_ICON_SIZE   = scale_value(33)
 DATE_TIME_GH_ICON_PATHS  = [
     os.path.join(IMAGES_DIR, "gh.png"),
     os.path.join(SCRIPT_DIR, "image", "gh.png"),

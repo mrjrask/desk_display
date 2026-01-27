@@ -4,6 +4,7 @@ set -euo pipefail
 EXPECTED_CODENAME="trixie"
 SERVICE_NAME="desk_display.service"
 PYTHON_BIN="${PYTHON:-python3}"
+REQUIREMENTS_FILE="${REQUIREMENTS_FILE:-requirements.txt}"
 
 SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 PROJECT_DIR="${PROJECT_DIR:-$(cd -- "$SCRIPT_DIR/.." && pwd)}"
@@ -25,12 +26,22 @@ else
   SUDO=""
 fi
 
-log "Enabling SPI/I2C when raspi-config is available."
-if command -v raspi-config >/dev/null 2>&1; then
-  $SUDO raspi-config nonint do_spi 0 || warn "Failed to enable SPI via raspi-config."
-  $SUDO raspi-config nonint do_i2c 0 || warn "Failed to enable I2C via raspi-config."
+if [[ "${DISABLE_SPI_I2C:-}" == "1" ]]; then
+  log "Disabling SPI/I2C when raspi-config is available (Hyperpixel panels require this)."
+  if command -v raspi-config >/dev/null 2>&1; then
+    $SUDO raspi-config nonint do_spi 1 || warn "Failed to disable SPI via raspi-config."
+    $SUDO raspi-config nonint do_i2c 1 || warn "Failed to disable I2C via raspi-config."
+  else
+    warn "raspi-config not found; skipping SPI/I2C disablement."
+  fi
 else
-  warn "raspi-config not found; skipping SPI/I2C enablement."
+  log "Enabling SPI/I2C when raspi-config is available."
+  if command -v raspi-config >/dev/null 2>&1; then
+    $SUDO raspi-config nonint do_spi 0 || warn "Failed to enable SPI via raspi-config."
+    $SUDO raspi-config nonint do_i2c 0 || warn "Failed to enable I2C via raspi-config."
+  else
+    warn "raspi-config not found; skipping SPI/I2C enablement."
+  fi
 fi
 
 install_apt_packages "${EXPECTED_CODENAME:-}"
@@ -66,13 +77,13 @@ source "$VENV_DIR/bin/activate"
 
 pip install --upgrade pip
 
-if [[ -f "$PROJECT_DIR/requirements.txt" ]]; then
-  log "Installing Python dependencies from requirements.txt"
+if [[ -f "$PROJECT_DIR/$REQUIREMENTS_FILE" ]]; then
+  log "Installing Python dependencies from $REQUIREMENTS_FILE"
   pushd "$PROJECT_DIR" >/dev/null
-  pip install -r "requirements.txt"
+  pip install -r "$REQUIREMENTS_FILE"
   popd >/dev/null
 else
-  warn "requirements.txt not found; skipping pip install."
+  warn "$REQUIREMENTS_FILE not found; skipping pip install."
 fi
 
 ensure_executable "$MAINTENANCE_DIR/cleanup.sh"
@@ -81,6 +92,24 @@ ensure_executable "$MAINTENANCE_DIR/reset_screenshots.sh"
 deactivate
 
 SERVICE_PATH="/etc/systemd/system/$SERVICE_NAME"
+SERVICE_ENV_LINES=()
+
+add_service_env() {
+  local key="$1"
+  local value="$2"
+
+  if [[ -n "$value" ]]; then
+    SERVICE_ENV_LINES+=("Environment=${key}=${value}")
+  fi
+}
+
+add_service_env "DESK_DISPLAY_OUTPUT" "${DESK_DISPLAY_OUTPUT:-}"
+add_service_env "DISPLAY_FB_DEVICE" "${DISPLAY_FB_DEVICE:-}"
+add_service_env "DISPLAY_FB_PIXEL_FORMAT" "${DISPLAY_FB_PIXEL_FORMAT:-}"
+add_service_env "DISPLAY_FB_PIXEL_ORDER" "${DISPLAY_FB_PIXEL_ORDER:-}"
+add_service_env "DISPLAY_WIDTH" "${DISPLAY_WIDTH:-}"
+add_service_env "DISPLAY_HEIGHT" "${DISPLAY_HEIGHT:-}"
+add_service_env "DISPLAY_ROTATION" "${DISPLAY_ROTATION:-}"
 log "Writing systemd service to $SERVICE_PATH"
 $SUDO tee "$SERVICE_PATH" >/dev/null <<SERVICE
 [Unit]
@@ -89,6 +118,7 @@ After=network-online.target
 
 [Service]
 WorkingDirectory=$PROJECT_DIR
+$(printf '%s\n' "${SERVICE_ENV_LINES[@]}")
 ExecStart=$VENV_DIR/bin/python $PROJECT_DIR/main.py
 ExecStop=/bin/bash -lc '$MAINTENANCE_DIR/cleanup.sh'
 Restart=always

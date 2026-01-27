@@ -91,6 +91,36 @@ The `venv` directory is ignored by Git. Re-run `source venv/bin/activate` whenev
 
 Two turnkey installers are provided for Raspberry Pi OS. Run the script that matches your OS release **from the project root**. Each script will enable SPI/I2C (when `raspi-config` is present), install the apt and pip dependencies, create a virtual environment in the project folder, and install+start the `desk_display.service` systemd unit that runs `main.py` under the current user.
 
+**Display HAT Mini installers (SPI):**
+
+```bash
+# Bookworm
+bash ./scripts/install_display_hat_mini_bookworm.sh
+
+# Trixie
+bash ./scripts/install_display_hat_mini_trixie.sh
+```
+
+**Framebuffer installers (kernel displays):**
+
+```bash
+# Bookworm
+bash ./scripts/install_framebuffer_bookworm.sh
+
+# Trixie
+bash ./scripts/install_framebuffer_trixie.sh
+```
+
+The framebuffer installers wire up the `DESK_DISPLAY_OUTPUT=framebuffer` systemd environment and use
+`requirements_framebuffer.txt` (which omits the Display HAT Mini driver). They will prompt you to
+pick a target resolution (Hyperpixel4 800×480, Hyperpixel4 Square 720×720, 640×480, 1080p, 1440p,
+2K, or 4K) and export `DISPLAY_WIDTH`/`DISPLAY_HEIGHT` for the service. You can skip the prompt by
+setting `DISPLAY_RESOLUTION` (for example `DISPLAY_RESOLUTION=hyperpixel4-square`) or by exporting
+`DISPLAY_WIDTH` and `DISPLAY_HEIGHT` yourself. Hyperpixel4 and Hyperpixel4 Square panels require
+SPI and I2C to be disabled on the Pi; the framebuffer installers will do this automatically when
+you select those resolutions, and the panel still exposes its own I2C bus for sensors. Override the
+framebuffer device path by exporting `DISPLAY_FB_DEVICE` before running the installer.
+
 ```bash
 # Bookworm (keeps the transitional libgdk-pixbuf2.0-dev package name)
 bash ./scripts/install_bookworm.sh
@@ -165,7 +195,9 @@ desk_display/
 ├─ scripts/
 │  ├─ check_api_statuses.py
 │  ├─ install_common.sh
-│  └─ install_bookworm.sh / install_trixie.sh
+│  ├─ install_bookworm.sh / install_trixie.sh
+│  ├─ install_display_hat_mini_bookworm.sh / install_display_hat_mini_trixie.sh
+│  └─ install_framebuffer_bookworm.sh / install_framebuffer_trixie.sh
 ├─ tools/
 │  ├─ test_screens.py             # interactive screen renderer harness
 │  └─ maintenance/
@@ -215,7 +247,9 @@ Available flags:
 
 Most runtime behavior is controlled in `config.py`:
 
-- **Display:** `WIDTH=320`, `HEIGHT=240`
+- **Display:** `WIDTH=320`, `HEIGHT=240` (override with `DISPLAY_WIDTH` / `DISPLAY_HEIGHT`), `DISPLAY_ROTATION`,
+  `DESK_DISPLAY_OUTPUT` (`displayhatmini`, `framebuffer`, or `headless`), and framebuffer settings
+  (`DISPLAY_FB_DEVICE`, `DISPLAY_FB_PIXEL_FORMAT`, `DISPLAY_FB_PIXEL_ORDER`).
 - **Intervals:** `SCREEN_DELAY`, `TEAM_STANDINGS_DISPLAY_SECONDS`, `SCHEDULE_UPDATE_INTERVAL`
 - **Feature flags:** `ENABLE_SCREENSHOTS`, `ENABLE_VIDEO`, `ENABLE_WIFI_MONITOR`
 - **Weather:** `ENABLE_WEATHER`, `LATITUDE/LONGITUDE`
@@ -446,6 +480,20 @@ Run directly:
 ```bash
 python3 main.py
 ```
+
+To use a kernel framebuffer display, set the output backend and optionally specify the framebuffer device
+and pixel format:
+
+```bash
+DESK_DISPLAY_OUTPUT=framebuffer \
+DISPLAY_FB_DEVICE=/dev/fb0 \
+DISPLAY_FB_PIXEL_FORMAT=rgb565 \
+python3 main.py
+```
+
+Set `DISPLAY_WIDTH` and `DISPLAY_HEIGHT` when you want the rendering canvas to match a specific panel
+resolution. Framebuffer output scales the 320×240 layout proportionally and letterboxes/pillarboxes
+when the panel aspect ratio differs.
 
 Or install the included systemd service (see below).
 
