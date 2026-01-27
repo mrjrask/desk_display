@@ -12,16 +12,36 @@ import zipfile
 from pathlib import Path
 from typing import Callable, Dict, Iterable, Optional, Tuple
 
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
+
+
+def _maybe_reexec_with_project_venv() -> None:
+    if os.environ.get("VIRTUAL_ENV"):
+        return
+    base_prefix = getattr(sys, "base_prefix", sys.prefix)
+    if sys.prefix != base_prefix:
+        return
+    candidates = (PROJECT_ROOT / ".venv", PROJECT_ROOT / "venv")
+    for candidate in candidates:
+        if os.name == "nt":
+            python_path = candidate / "Scripts" / "python.exe"
+        else:
+            python_path = candidate / "bin" / "python"
+        if python_path.exists():
+            os.execv(str(python_path), [str(python_path), *sys.argv])
+
+
+_maybe_reexec_with_project_venv()
+
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
+
 from PIL import Image, ImageDraw
 
 try:
     RESAMPLE_LANCZOS = Image.Resampling.LANCZOS
 except AttributeError:  # Pillow<9 compatibility
     RESAMPLE_LANCZOS = Image.LANCZOS
-
-PROJECT_ROOT = Path(__file__).resolve().parents[2]
-if str(PROJECT_ROOT) not in sys.path:
-    sys.path.insert(0, str(PROJECT_ROOT))
 
 # Ensure the shared .env file is loaded before importing project modules so that
 # configuration values (API keys, flags, etc.) are available to the renderer.
