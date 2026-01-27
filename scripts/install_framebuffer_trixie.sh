@@ -1,0 +1,66 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
+
+export DESK_DISPLAY_OUTPUT="${DESK_DISPLAY_OUTPUT:-framebuffer}"
+export DISPLAY_FB_DEVICE="${DISPLAY_FB_DEVICE:-/dev/fb0}"
+export REQUIREMENTS_FILE="${REQUIREMENTS_FILE:-requirements_framebuffer.txt}"
+
+declare -A RESOLUTION_MAP=(
+  ["hyperpixel4"]="800x480"
+  ["hyperpixel4-square"]="720x720"
+  ["640x480"]="640x480"
+  ["1080p"]="1920x1080"
+  ["1440p"]="2560x1440"
+  ["2k"]="2048x1080"
+  ["4k"]="3840x2160"
+)
+
+print_resolution_menu() {
+  cat <<'MENU'
+Select a framebuffer resolution (content is tuned for 320x240 and scaled for larger panels):
+  1) Hyperpixel4 - 800x480
+  2) Hyperpixel4 Square - 720x720
+  3) 640x480
+  4) 1080p - 1920x1080
+  5) 1440p - 2560x1440
+  6) 2K - 2048x1080
+  7) 4K - 3840x2160
+MENU
+}
+
+apply_resolution() {
+  local token="$1"
+  local dims="${RESOLUTION_MAP[$token]}"
+  if [[ -n "$dims" ]]; then
+    export DISPLAY_WIDTH="${dims%x*}"
+    export DISPLAY_HEIGHT="${dims#*x}"
+    if [[ "$token" == "hyperpixel4" || "$token" == "hyperpixel4-square" ]]; then
+      export DISABLE_SPI_I2C=1
+    fi
+  fi
+}
+
+if [[ -z "${DISPLAY_WIDTH:-}" || -z "${DISPLAY_HEIGHT:-}" ]]; then
+  if [[ -n "${DISPLAY_RESOLUTION:-}" ]]; then
+    apply_resolution "${DISPLAY_RESOLUTION,,}"
+  elif [[ -t 0 ]]; then
+    print_resolution_menu
+    read -r -p "Enter a number [1-7] (or press Enter to keep 320x240): " selection
+    case "$selection" in
+      1) apply_resolution "hyperpixel4" ;;
+      2) apply_resolution "hyperpixel4-square" ;;
+      3) apply_resolution "640x480" ;;
+      4) apply_resolution "1080p" ;;
+      5) apply_resolution "1440p" ;;
+      6) apply_resolution "2k" ;;
+      7) apply_resolution "4k" ;;
+      *) ;;
+    esac
+  else
+    print_resolution_menu
+  fi
+fi
+
+exec "$SCRIPT_DIR/install_trixie.sh"

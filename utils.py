@@ -59,6 +59,181 @@ _FORCE_HEADLESS = os.environ.get("DESK_DISPLAY_FORCE_HEADLESS", "").strip().lowe
     "on",
 }
 
+_DISPLAY_OUTPUT = os.environ.get("DESK_DISPLAY_OUTPUT", "auto").strip().lower()
+_FRAMEBUFFER_DEVICE = os.environ.get("DISPLAY_FB_DEVICE", "/dev/fb0")
+_FRAMEBUFFER_PIXEL_FORMAT = os.environ.get("DISPLAY_FB_PIXEL_FORMAT", "").strip().lower()
+_FRAMEBUFFER_PIXEL_ORDER = os.environ.get("DISPLAY_FB_PIXEL_ORDER", "").strip().lower()
+
+
+def _read_sysfs_value(path: str) -> Optional[str]:
+    try:
+        return Path(path).read_text(encoding="utf-8").strip()
+    except OSError:
+        return None
+
+
+def _parse_virtual_size(value: Optional[str]) -> Optional[Tuple[int, int]]:
+    if not value:
+        return None
+    try:
+        width_str, height_str = value.split(",", 1)
+        return int(width_str), int(height_str)
+    except (ValueError, AttributeError):
+        return None
+
+
+def _resolve_framebuffer_info(device_path: str) -> Tuple[int, int, int, Optional[int]]:
+    fb_name = Path(device_path).name
+    sysfs_base = Path("/sys/class/graphics") / fb_name
+    size = _parse_virtual_size(_read_sysfs_value(str(sysfs_base / "virtual_size")))
+    bpp_value = _read_sysfs_value(str(sysfs_base / "bits_per_pixel"))
+    stride_value = _read_sysfs_value(str(sysfs_base / "stride"))
+
+    width = size[0] if size else WIDTH
+    height = size[1] if size else HEIGHT
+    bpp = int(bpp_value) if bpp_value and bpp_value.isdigit() else 16
+    stride = int(stride_value) if stride_value and stride_value.isdigit() else None
+    return width, height, bpp, stride
+
+
+def _normalize_display_output(value: str) -> str:
+    value = value.strip().lower()
+    if value in {"displayhatmini", "display-hat-mini", "hatmini", "hat"}:
+        return "displayhatmini"
+    if value in {"framebuffer", "fb", "framebuffer-device"}:
+        return "framebuffer"
+    if value in {"headless", "none", "off"}:
+        return "headless"
+    if value in {"auto", ""}:
+        return "auto"
+    return value
+
+
+def _framebuffer_pixel_format(bpp: int) -> str:
+    if _FRAMEBUFFER_PIXEL_FORMAT:
+        return _FRAMEBUFFER_PIXEL_FORMAT
+    if bpp == 16:
+        return "rgb565"
+    if bpp == 24:
+        return "rgb888"
+    return "xrgb8888"
+
+
+def _framebuffer_pixel_order(fmt: str) -> str:
+    if _FRAMEBUFFER_PIXEL_ORDER in {"rgb", "bgr"}:
+        return _FRAMEBUFFER_PIXEL_ORDER
+    if fmt in {"bgr565", "bgr888", "xbgr8888", "abgr8888"}:
+        return "bgr"
+    return "rgb"
+
+
+def _convert_rgb565(image: Image.Image, *, order: str = "rgb") -> bytes:
+    import numpy as np
+
+    rgb = np.array(image.convert("RGB"), dtype=np.uint8)
+    if order == "bgr":
+        rgb = rgb[..., ::-1]
+    r = rgb[..., 0].astype(np.uint16)
+    g = rgb[..., 1].astype(np.uint16)
+    b = rgb[..., 2].astype(np.uint16)
+    rgb565 = ((r & 0xF8) << 8) | ((g & 0xFC) << 3) | (b >> 3)
+    return rgb565.astype("<u2").tobytes()
+
+
+def _convert_rgb888(image: Image.Image, *, order: str = "rgb") -> bytes:
+    image = image.convert("RGB")
+    raw_mode = "BGR" if order == "bgr" else "RGB"
+    return image.tobytes("raw", raw_mode)
+
+
+def _convert_rgbx8888(image: Image.Image, *, order: str = "rgb") -> bytes:
+    image = image.convert("RGB")
+    raw_mode = "BGRX" if order == "bgr" else "RGBX"
+    return image.tobytes("raw", raw_mode)
+
+
+def _convert_argb8888(image: Image.Image, *, order: str = "rgb") -> bytes:
+    import numpy as np
+
+    rgba = np.array(image.convert("RGBA"), dtype=np.uint8)
+    alpha = np.full(rgba.shape[:2] + (1,), 255, dtype=np.uint8)
+    rgb = rgba[..., :3]
+    if order == "bgr":
+        rgb = rgb[..., ::-1]
+    argb = np.concatenate([alpha, rgb], axis=2)
+    return argb.tobytes()
+
+
+class _FrameBufferDevice:
+    def __init__(self, device_path: str):
+        self.device_path = device_path
+        self.width, self.height, self.bpp, self.stride = _resolve_framebuffer_info(device_path)
+        self.bytes_per_pixel = max(1, self.bpp // 8)
+        self.pixel_format = _framebuffer_pixel_format(self.bpp)
+        self.pixel_order = _framebuffer_pixel_order(self.pixel_format)
+        self._fd: Optional[int] = None
+
+        try:
+            self._fd = os.open(self.device_path, os.O_RDWR)
+        except OSError as exc:
+            logging.warning("Failed to open framebuffer device %s: %s", self.device_path, exc)
+            self._fd = None
+
+    def close(self) -> None:
+        if self._fd is None:
+            return
+        try:
+            os.close(self._fd)
+        except OSError:
+            pass
+        self._fd = None
+
+    def _convert_image(self, image: Image.Image) -> bytes:
+        fmt = self.pixel_format
+        if fmt in {"rgb565", "bgr565"}:
+            return _convert_rgb565(image, order=self.pixel_order)
+        if fmt in {"rgb888", "bgr888"}:
+            return _convert_rgb888(image, order=self.pixel_order)
+        if fmt in {"argb8888", "abgr8888"}:
+            return _convert_argb8888(image, order=self.pixel_order)
+        return _convert_rgbx8888(image, order=self.pixel_order)
+
+    def write_image(self, image: Image.Image) -> None:
+        if self._fd is None:
+            return
+        if image.size != (self.width, self.height):
+            scale = min(
+                self.width / image.width if image.width else 1.0,
+                self.height / image.height if image.height else 1.0,
+            )
+            target_w = max(1, int(round(image.width * scale)))
+            target_h = max(1, int(round(image.height * scale)))
+            resized = image.resize((target_w, target_h), Image.Resampling.LANCZOS)
+            canvas = Image.new("RGB", (self.width, self.height), "black")
+            offset_x = (self.width - target_w) // 2
+            offset_y = (self.height - target_h) // 2
+            canvas.paste(resized, (offset_x, offset_y))
+            image = canvas
+
+        raw = self._convert_image(image)
+        row_bytes = self.width * self.bytes_per_pixel
+        stride = self.stride or row_bytes
+
+        try:
+            os.lseek(self._fd, 0, os.SEEK_SET)
+            if stride <= row_bytes:
+                os.write(self._fd, raw)
+                return
+
+            padded = bytearray(stride * self.height)
+            for row in range(self.height):
+                start_src = row * row_bytes
+                start_dst = row * stride
+                padded[start_dst:start_dst + row_bytes] = raw[start_src:start_src + row_bytes]
+            os.write(self._fd, padded)
+        except OSError as exc:
+            logging.warning("Failed to write framebuffer: %s", exc)
+
 _ACTIVE_DISPLAY: Optional["Display"] = None
 _LED_INDICATOR_ANIMATOR: Optional["_LedAnimator"] = None
 
@@ -154,6 +329,7 @@ class Display:
             self.rotation = 0
         self._buffer = Image.new("RGB", (self.width, self.height), "black")
         self._display = None
+        self._framebuffer: Optional[_FrameBufferDevice] = None
         self._button_pins: Dict[str, Optional[int]] = {name: None for name in self._BUTTON_NAMES}
         self._button_callback: Optional[Callable[[str], None]] = None
         self._backlight_level = 1.0
@@ -162,10 +338,38 @@ class Display:
         self._frame_id = 0
         self._frame_lock = threading.Lock()
 
-        if _FORCE_HEADLESS:
-            logging.info(
-                "Display initialization skipped; running headless via DESK_DISPLAY_FORCE_HEADLESS."
+        output = _normalize_display_output(_DISPLAY_OUTPUT)
+        if _FORCE_HEADLESS or output == "headless":
+            reason = (
+                "DESK_DISPLAY_FORCE_HEADLESS"
+                if _FORCE_HEADLESS
+                else "DESK_DISPLAY_OUTPUT=headless"
             )
+            logging.info("Display initialization skipped; running headless (%s).", reason)
+        elif output == "framebuffer":
+            self._framebuffer = _FrameBufferDevice(_FRAMEBUFFER_DEVICE)
+            if self._framebuffer._fd is None:
+                logging.warning(
+                    "Framebuffer output requested but unavailable; running headless."
+                )
+                self._framebuffer = None
+            else:
+                logging.info(
+                    "🖼️  Framebuffer initialized (%dx%d, %dbpp, %s).",
+                    self._framebuffer.width,
+                    self._framebuffer.height,
+                    self._framebuffer.bpp,
+                    self._framebuffer.device_path,
+                )
+                if (self.width, self.height) != (
+                    self._framebuffer.width,
+                    self._framebuffer.height,
+                ):
+                    logging.info(
+                        "Framebuffer size differs from render size (%dx%d); frames will be scaled.",
+                        self.width,
+                        self.height,
+                    )
         elif DisplayHATMini is None:  # pragma: no cover - hardware import
             if _DISPLAY_HAT_ERROR:
                 logging.warning(
@@ -235,6 +439,12 @@ class Display:
 
     def _update_display(self):
         if not display_updates_enabled():
+            return
+        if self._framebuffer is not None:
+            buffer_to_display = self._buffer
+            if self.rotation:
+                buffer_to_display = self._buffer.rotate(self.rotation, expand=False)
+            self._framebuffer.write_image(buffer_to_display)
             return
         if self._display is None:  # pragma: no cover - hardware import
             return
