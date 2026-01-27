@@ -121,6 +121,12 @@ SPI and I2C to be disabled on the Pi; the framebuffer installers will do this au
 you select those resolutions, and the panel still exposes its own I2C bus for sensors. Override the
 framebuffer device path by exporting `DISPLAY_FB_DEVICE` before running the installer.
 
+On Raspberry Pi Desktop, the desktop session usually takes over `/dev/fb0` after boot, so the
+framebuffer service may only appear briefly. The framebuffer installers now drop a launcher at
+`~/.local/share/applications/desk-display-framebuffer.desktop` (and on the Desktop if the folder
+exists). Use it to stop the desktop display manager and restart the framebuffer service. Run
+`scripts/restore_desktop.sh` afterward if you want the desktop back.
+
 ```bash
 # Bookworm (keeps the transitional libgdk-pixbuf2.0-dev package name)
 bash ./scripts/install_bookworm.sh
@@ -141,7 +147,8 @@ To uninstall the service and remove the virtual environment, run:
 bash ./scripts/uninstall.sh
 ```
 
-Set `KEEP_VENV=1` if you want to keep the virtual environment directory in place.
+The uninstall script will prompt you to keep the virtual environment. Set `KEEP_VENV=1` if you want
+to keep the virtual environment directory in place without being prompted.
 
 ### Screen configuration UI
 
