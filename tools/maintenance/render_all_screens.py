@@ -523,6 +523,8 @@ def _render_all_screens_impl(
                 logging.info("Continuing without schedule data (%s)", schedule_error)
 
         now = _dt.datetime.now(config.CENTRAL_TIME)
+        now_utc = _dt.datetime.now(_dt.timezone.utc)
+        weather_fetched_at = data_fetch.get_weather_cache_timestamp()
         context = ScreenContext(
             display=display,
             cache=cache,
@@ -533,6 +535,10 @@ def _render_all_screens_impl(
             travel_window=get_travel_active_window(),
             previous_travel_state=None,
             now=now,
+            now_utc=now_utc,
+            offline=False,
+            weather_fetched_at=weather_fetched_at,
+            skip_scoreboards=False,
         )
 
         registry, _metadata = build_screen_registry(context)

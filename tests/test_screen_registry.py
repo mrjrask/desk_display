@@ -24,6 +24,10 @@ def _make_context(weather: dict, now: datetime.datetime) -> ScreenContext:
         travel_window=None,
         previous_travel_state=None,
         now=now,
+        now_utc=now.astimezone(datetime.timezone.utc),
+        offline=False,
+        weather_fetched_at=None,
+        skip_scoreboards=False,
     )
 
 
