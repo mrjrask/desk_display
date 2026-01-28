@@ -95,8 +95,6 @@ def _render_emoji_glyph(
     height = max(1, bbox[3] - bbox[1])
     icon = Image.new("RGBA", (width, height), (0, 0, 0, 0))
     icon_draw = ImageDraw.Draw(icon)
-    if len(fill) == 3:
-        fill = (*fill, 255)
     icon_draw.text(
         (-bbox[0], -bbox[1]),
         emoji,
