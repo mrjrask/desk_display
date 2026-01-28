@@ -22,7 +22,7 @@ from io import BytesIO
 from typing import NamedTuple, Optional, Tuple
 
 import requests
-from PIL import Image, ImageDraw
+from PIL import Image, ImageDraw, ImageFont
 
 from config import (
     GOOGLE_MAPS_API_KEY,
@@ -81,6 +81,28 @@ PRESSURE_TREND_SYMBOLS = {
     "steady": ("↔", (255, 255, 255)),
 }
 EMOJI_DRAW_KWARGS = {"embedded_color": True} if EMOJI_EMBEDDED_COLOR else {}
+
+
+def _render_emoji_glyph(
+    emoji: str,
+    font: ImageFont.FreeTypeFont,
+    fill: Tuple[int, int, int],
+) -> Image.Image:
+    scratch = Image.new("RGB", (1, 1))
+    scratch_draw = ImageDraw.Draw(scratch)
+    bbox = scratch_draw.textbbox((0, 0), emoji, font=font)
+    width = max(1, bbox[2] - bbox[0])
+    height = max(1, bbox[3] - bbox[1])
+    icon = Image.new("RGBA", (width, height), (0, 0, 0, 0))
+    icon_draw = ImageDraw.Draw(icon)
+    icon_draw.text(
+        (-bbox[0], -bbox[1]),
+        emoji,
+        font=font,
+        fill=fill,
+        **EMOJI_DRAW_KWARGS,
+    )
+    return icon
 
 
 def _render_stat_text(parts):
@@ -300,14 +322,17 @@ def _detect_weather_alert(weather: object) -> Tuple[Optional[str], Optional[Tupl
     return severity, ALERT_LED_COLORS.get(severity)
 
 
-def _draw_alert_indicator(draw: ImageDraw.ImageDraw, severity: Optional[str]) -> None:
+def _draw_alert_indicator(
+    img: Image.Image, draw: ImageDraw.ImageDraw, severity: Optional[str]
+) -> None:
     if not severity:
         return
     icon_color = ALERT_ICON_COLORS.get(severity, (255, 215, 0))
-    w_icon, h_icon = draw.textsize(ALERT_SYMBOL, font=FONT_EMOJI_SMALL)
+    icon_img = _render_emoji_glyph(ALERT_SYMBOL, FONT_EMOJI_SMALL, icon_color)
+    w_icon, h_icon = icon_img.size
     x_icon = WIDTH - w_icon - 2
     y_icon = HEIGHT - h_icon - 2
-    draw.text((x_icon, y_icon), ALERT_SYMBOL, font=FONT_EMOJI_SMALL, fill=icon_color, **EMOJI_DRAW_KWARGS)
+    img.paste(icon_img, (x_icon, y_icon), icon_img)
 
 # ─── Screen 1: Basic weather + two-line Feels/Hi/Lo ────────────────────────────
 @log_call
@@ -471,7 +496,8 @@ def draw_weather_screen_1(display, weather, transition=False):
 
     if cloud_percent:
         cloud_emoji = "☁"
-        emoji_w, emoji_h = draw.textsize(cloud_emoji, font=FONT_EMOJI)
+        cloud_icon = _render_emoji_glyph(cloud_emoji, FONT_EMOJI, (211, 211, 211))
+        emoji_w, emoji_h = cloud_icon.size
         pct_w, pct_h = draw.textsize(cloud_percent, font=side_font)
         block_w = max(emoji_w, pct_w)
         block_h = emoji_h + stack_gap + pct_h
@@ -482,7 +508,7 @@ def draw_weather_screen_1(display, weather, transition=False):
         block_y = icon_center_y - block_h // 2
         emoji_x = cloud_x + (block_w - emoji_w) // 2
         pct_x = cloud_x + (block_w - pct_w) // 2
-        draw.text((emoji_x, block_y), cloud_emoji, font=FONT_EMOJI, fill=(211, 211, 211), **EMOJI_DRAW_KWARGS)
+        img.paste(cloud_icon, (emoji_x, block_y), cloud_icon)
         draw.text((pct_x, block_y + emoji_h + stack_gap), cloud_percent, font=side_font, fill=(211, 211, 211))
 
     # draw groups
@@ -493,7 +519,7 @@ def draw_weather_screen_1(display, weather, transition=False):
         draw.text((cx - vw//2, y_val), val, font=FONT_WEATHER_DETAILS,     fill=val_colors[idx])
         x += gw + SPACING_X
 
-    _draw_alert_indicator(draw, severity)
+    _draw_alert_indicator(img, draw, severity)
 
     if transition:
         return ScreenImage(img, displayed=False, led_override=led_color)
@@ -1129,7 +1155,7 @@ def draw_weather_screen_2(display, weather, transition=False):
             draw.text((x0 + lw + 4, y_val), val, font=FONT_WEATHER_DETAILS,      fill=color)
         y += row_h + space
 
-    _draw_alert_indicator(draw, severity)
+    _draw_alert_indicator(img, draw, severity)
 
     if transition:
         return ScreenImage(img, displayed=False, led_override=led_color)
