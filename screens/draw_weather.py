@@ -46,6 +46,7 @@ from config import (
     HOURLY_FORECAST_HOURS,
     LATITUDE,
     LONGITUDE,
+    WEATHER_USE_EMOJI_ICONS,
     get_screen_background_color,
 )
 from utils import (
@@ -680,8 +681,11 @@ def draw_weather_hourly(display, weather, transition: bool = False, hours: int =
     gap = 4
     available_width = WIDTH - gap * (hours_to_show + 1)
     col_w = max(1, available_width // hours_to_show)
-    icon_cache: dict[tuple[Optional[str], Optional[str], Optional[bool]], Optional[Image.Image]] = {}
-    icon_size = max(32, min(WEATHER_ICON_SIZE, col_w - 10))
+    icon_cache: dict[tuple[Optional[str], Optional[str], Optional[bool], bool], Optional[Image.Image]] = {}
+    if WEATHER_USE_EMOJI_ICONS:
+        icon_size = max(18, min(WEATHER_ICON_SIZE, col_w - 12))
+    else:
+        icon_size = max(32, min(WEATHER_ICON_SIZE, col_w - 10))
     time_font = FONT_WEATHER_DETAILS_SMALL_BOLD
 
     card_top = title_h + 6
@@ -779,7 +783,7 @@ def draw_weather_hourly(display, weather, transition: bool = False, hours: int =
         condition_code = hour.get("condition_code")
         is_daylight = hour.get("is_daylight")
         icon_img = None
-        icon_key = (icon_code, condition_code, is_daylight)
+        icon_key = (icon_code, condition_code, is_daylight, True)
         if icon_code:
             if icon_key not in icon_cache:
                 icon_cache[icon_key] = fetch_weather_icon(
@@ -787,6 +791,7 @@ def draw_weather_hourly(display, weather, transition: bool = False, hours: int =
                     icon_size,
                     condition_code=condition_code,
                     is_daylight=is_daylight,
+                    stack_emojis=True,
                 )
             icon_img = icon_cache[icon_key]
 
