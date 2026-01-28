@@ -86,7 +86,7 @@ EMOJI_DRAW_KWARGS = {"embedded_color": True} if EMOJI_EMBEDDED_COLOR else {}
 def _render_emoji_glyph(
     emoji: str,
     font: ImageFont.FreeTypeFont,
-    fill: Tuple[int, int, int],
+    fill: Tuple[int, int, int] | Tuple[int, int, int, int],
 ) -> Image.Image:
     scratch = Image.new("RGB", (1, 1))
     scratch_draw = ImageDraw.Draw(scratch)
