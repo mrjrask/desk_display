@@ -247,6 +247,25 @@ APPLE_MAPS_SNAPSHOT_URL = os.environ.get(
 BASE_WIDTH = 320
 BASE_HEIGHT = 240
 
+def _read_framebuffer_virtual_size(device_path: str) -> Optional[Tuple[int, int]]:
+    fb_name = Path(device_path).name
+    sysfs_base = Path("/sys/class/graphics") / fb_name / "virtual_size"
+    try:
+        raw = sysfs_base.read_text(encoding="utf-8").strip()
+    except OSError:
+        return None
+    if not raw:
+        return None
+    try:
+        width_str, height_str = raw.split(",", 1)
+        return int(width_str), int(height_str)
+    except ValueError:
+        return None
+
+
+_display_width_set = "DISPLAY_WIDTH" in os.environ
+_display_height_set = "DISPLAY_HEIGHT" in os.environ
+
 try:
     WIDTH = int(os.environ.get("DISPLAY_WIDTH", str(BASE_WIDTH)))
 except (TypeError, ValueError):
@@ -258,6 +277,21 @@ try:
 except (TypeError, ValueError):
     logging.warning("Invalid DISPLAY_HEIGHT value; defaulting to %s.", BASE_HEIGHT)
     HEIGHT = BASE_HEIGHT
+
+_display_output = os.environ.get("DESK_DISPLAY_OUTPUT", "auto").strip().lower()
+if (_display_width_set, _display_height_set) != (True, True) and _display_output in {
+    "framebuffer",
+    "fb",
+    "framebuffer-device",
+}:
+    fb_device = os.environ.get("DISPLAY_FB_DEVICE", "/dev/fb0")
+    fb_size = _read_framebuffer_virtual_size(fb_device)
+    if fb_size:
+        fb_width, fb_height = fb_size
+        if not _display_width_set:
+            WIDTH = fb_width
+        if not _display_height_set:
+            HEIGHT = fb_height
 
 DISPLAY_SCALE = min(WIDTH / BASE_WIDTH, HEIGHT / BASE_HEIGHT)
 
