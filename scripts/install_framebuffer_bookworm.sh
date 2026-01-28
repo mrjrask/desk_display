@@ -84,3 +84,17 @@ fi
 "$SCRIPT_DIR/install_bookworm.sh"
 
 install_framebuffer_launcher "$PROJECT_DIR" "$SERVICE_NAME" "$SERVICE_USER"
+
+if command -v systemctl >/dev/null 2>&1 && systemctl is-active --quiet display-manager; then
+  if [[ -t 0 ]]; then
+    read -r -p "Desktop display manager is active and may hide the framebuffer. Run the framebuffer launcher now? [y/N]: " launch_reply
+    case "${launch_reply,,}" in
+      y|yes)
+        SERVICE_NAME="$SERVICE_NAME" /bin/bash -lc "$SCRIPT_DIR/launch_framebuffer.sh"
+        ;;
+      *) ;;
+    esac
+  else
+    log "Desktop display manager is active. Run scripts/launch_framebuffer.sh to switch to framebuffer output."
+  fi
+fi
