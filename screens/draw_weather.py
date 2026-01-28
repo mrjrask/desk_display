@@ -422,7 +422,10 @@ def draw_weather_screen_1(display, weather, transition=False):
 
     # paste icon between desc and labels
     top_of_icons = h_temp + h_desc + WEATHER_DESC_GAP * 2
-    icon_code = current.get("weather", [{}])[0].get("icon")
+    current_weather = current.get("weather", [{}])[0]
+    icon_code = current_weather.get("icon")
+    condition_code = current_weather.get("condition_code")
+    is_daylight = current.get("is_daylight")
     # Fit the weather icon into the available gap between the description and
     # the Feels/Hi/Lo labels so it doesn't overlap other content.
     available_icon_height = y_lbl - top_of_icons
@@ -430,7 +433,12 @@ def draw_weather_screen_1(display, weather, transition=False):
         weather_icon_size = max(1, min(WEATHER_ICON_SIZE, available_icon_height))
     else:
         weather_icon_size = min(WEATHER_ICON_SIZE, HEIGHT // 2)
-    icon_img = fetch_weather_icon(icon_code, weather_icon_size)
+    icon_img = fetch_weather_icon(
+        icon_code,
+        weather_icon_size,
+        condition_code=condition_code,
+        is_daylight=is_daylight,
+    )
     y_icon = top_of_icons + ((y_lbl - top_of_icons - weather_icon_size)//2)
     icon_x = (WIDTH - weather_icon_size) // 2
     icon_center_y = top_of_icons + max(0, (y_lbl - top_of_icons) // 2)
@@ -597,15 +605,18 @@ def _gather_hourly_forecast(
             "time": _format_hour_label(hour.get("dt"), index=(idx + 1) * 2),
             "condition": _normalise_condition(hour),
             "icon": None,
+            "condition_code": None,
             "pop": _pop_pct_from(hour),
             "wind_speed": wind_speed,
             "wind_dir": wind_dir,
             "uvi": uvi_val,
             "is_snow": is_snow,
             "feels_like": feels_like_val,
+            "is_daylight": hour.get("is_daylight"),
         }
         if weather_list:
             entry["icon"] = weather_list[0].get("icon")
+            entry["condition_code"] = weather_list[0].get("condition_code")
         forecast.append(entry)
     return forecast
 
@@ -669,7 +680,7 @@ def draw_weather_hourly(display, weather, transition: bool = False, hours: int =
     gap = 4
     available_width = WIDTH - gap * (hours_to_show + 1)
     col_w = max(1, available_width // hours_to_show)
-    icon_cache: dict[str, Optional[Image.Image]] = {}
+    icon_cache: dict[tuple[Optional[str], Optional[str], Optional[bool]], Optional[Image.Image]] = {}
     icon_size = max(32, min(WEATHER_ICON_SIZE, col_w - 10))
     time_font = FONT_WEATHER_DETAILS_SMALL_BOLD
 
@@ -765,11 +776,19 @@ def draw_weather_hourly(display, weather, transition: bool = False, hours: int =
         draw.text((cx - temp_w // 2, temp_text_y), temp_str, font=FONT_CONDITION, fill=(255, 255, 255))
 
         icon_code = hour.get("icon")
+        condition_code = hour.get("condition_code")
+        is_daylight = hour.get("is_daylight")
         icon_img = None
+        icon_key = (icon_code, condition_code, is_daylight)
         if icon_code:
-            if icon_code not in icon_cache:
-                icon_cache[icon_code] = fetch_weather_icon(icon_code, icon_size)
-            icon_img = icon_cache[icon_code]
+            if icon_key not in icon_cache:
+                icon_cache[icon_key] = fetch_weather_icon(
+                    icon_code,
+                    icon_size,
+                    condition_code=condition_code,
+                    is_daylight=is_daylight,
+                )
+            icon_img = icon_cache[icon_key]
 
         if icon_img:
             icon_y = icon_area_top + max(0, (icon_area_bottom - icon_area_top - icon_size) // 2)
