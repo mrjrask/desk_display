@@ -221,7 +221,7 @@ WEATHERKIT_KEY_PATH    = os.environ.get("WEATHERKIT_KEY_PATH")
 WEATHERKIT_PRIVATE_KEY = os.environ.get("WEATHERKIT_PRIVATE_KEY")
 WEATHERKIT_LANGUAGE    = os.environ.get("WEATHERKIT_LANGUAGE", "en")
 WEATHERKIT_TIMEZONE    = os.environ.get("WEATHERKIT_TIMEZONE", "America/Chicago")
-WEATHER_USE_EMOJI_ICONS = _get_bool_env("WEATHER_USE_EMOJI_ICONS", True)
+WEATHER_USE_EMOJI_ICONS = _get_bool_env("WEATHER_USE_EMOJI_ICONS", False)
 
 def _get_owm_api_key(ssid: Optional[str]) -> Optional[str]:
     """Select the OpenWeatherMap API key based on the connected SSID."""
