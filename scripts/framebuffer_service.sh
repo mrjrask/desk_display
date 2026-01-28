@@ -22,6 +22,15 @@ if ! systemctl list-unit-files --no-legend display-manager.service 2>/dev/null |
   exit 0
 fi
 
+disable_framebuffer_cursor() {
+  local path
+  for path in /sys/class/graphics/fbcon/cursor_blink /sys/class/graphics/fbcon/cursor; do
+    if [[ -w "$path" ]]; then
+      echo 0 > "$path" 2>/dev/null || true
+    fi
+  done
+}
+
 case "$action" in
   start)
     if systemctl is-active --quiet display-manager; then
@@ -30,6 +39,7 @@ case "$action" in
     else
       log "display-manager is not active."
     fi
+    disable_framebuffer_cursor
     ;;
   stop)
     log "Starting display-manager to restore the desktop."

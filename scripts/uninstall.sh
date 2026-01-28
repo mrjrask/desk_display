@@ -17,6 +17,13 @@ else
   SUDO=""
 fi
 
+if command -v systemctl >/dev/null 2>&1; then
+  if systemctl list-unit-files | grep -q "^$SERVICE_NAME"; then
+    log "Stopping $SERVICE_NAME"
+    $SUDO systemctl stop "$SERVICE_NAME" || warn "Failed to stop $SERVICE_NAME"
+  fi
+fi
+
 log "Starting uninstall for $PROJECT_DIR"
 
 if [[ -f "$COMMON_SCRIPT" ]]; then
@@ -32,8 +39,6 @@ fi
 
 if command -v systemctl >/dev/null 2>&1; then
   if systemctl list-unit-files | grep -q "^$SERVICE_NAME"; then
-    log "Stopping $SERVICE_NAME"
-    $SUDO systemctl stop "$SERVICE_NAME" || warn "Failed to stop $SERVICE_NAME"
     log "Disabling $SERVICE_NAME"
     $SUDO systemctl disable "$SERVICE_NAME" || warn "Failed to disable $SERVICE_NAME"
   else
