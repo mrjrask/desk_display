@@ -209,6 +209,7 @@ WEATHERKIT_KEY_PATH    = os.environ.get("WEATHERKIT_KEY_PATH")
 WEATHERKIT_PRIVATE_KEY = os.environ.get("WEATHERKIT_PRIVATE_KEY")
 WEATHERKIT_LANGUAGE    = os.environ.get("WEATHERKIT_LANGUAGE", "en")
 WEATHERKIT_TIMEZONE    = os.environ.get("WEATHERKIT_TIMEZONE", "America/Chicago")
+WEATHER_USE_EMOJI_ICONS = _get_bool_env("WEATHER_USE_EMOJI_ICONS", False)
 
 def _get_owm_api_key(ssid: Optional[str]) -> Optional[str]:
     """Select the OpenWeatherMap API key based on the connected SSID."""
@@ -806,6 +807,18 @@ def _load_emoji_font(size: int) -> ImageFont.ImageFont:
 
 FONT_EMOJI = _load_emoji_font(30)
 FONT_EMOJI_SMALL = _load_emoji_font(18)
+
+_EMOJI_FONT_CACHE: Dict[int, ImageFont.ImageFont] = {}
+
+
+def get_emoji_font(size: int) -> ImageFont.ImageFont:
+    size = max(8, int(size))
+    cached = _EMOJI_FONT_CACHE.get(size)
+    if cached is not None:
+        return cached
+    font = _load_emoji_font(size)
+    _EMOJI_FONT_CACHE[size] = font
+    return font
 
 
 def _normalise_hex_color(value: str) -> Optional[str]:

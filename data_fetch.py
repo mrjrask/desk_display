@@ -541,7 +541,9 @@ def _normalise_weatherkit_response(data: dict[str, Any]) -> Optional[dict[str, A
     sunrise = _parse_iso_timestamp(first_day.get("sunrise"))
     sunset = _parse_iso_timestamp(first_day.get("sunset"))
 
-    desc, icon = _condition_mapping(current_raw.get("conditionCode", ""))
+    condition_code = current_raw.get("conditionCode", "")
+    desc, icon = _condition_mapping(condition_code)
+    is_daylight = current_raw.get("isDaylight")
     humidity_raw = current_raw.get("humidity")
     try:
         humidity_pct = int(round(float(humidity_raw) * 100)) if humidity_raw is not None else None
@@ -565,8 +567,10 @@ def _normalise_weatherkit_response(data: dict[str, Any]) -> Optional[dict[str, A
             {
                 "description": desc,
                 "icon": icon,
+                "condition_code": condition_code,
             }
         ],
+        "is_daylight": is_daylight,
         "wind_speed": _measurement_value(current_raw.get("windSpeed")),
         "wind_gust": _measurement_value(current_raw.get("windGust")),
         "wind_deg": current_raw.get("windDirection"),
@@ -582,7 +586,8 @@ def _normalise_weatherkit_response(data: dict[str, Any]) -> Optional[dict[str, A
 
     daily: list[dict[str, Any]] = []
     for day in daily_raw:
-        day_desc, day_icon = _condition_mapping(day.get("conditionCode", ""))
+        day_condition_code = day.get("conditionCode", "")
+        day_desc, day_icon = _condition_mapping(day_condition_code)
         day_dt = _parse_iso_timestamp(day.get("forecastStart"))
         daily.append(
             {
@@ -598,14 +603,18 @@ def _normalise_weatherkit_response(data: dict[str, Any]) -> Optional[dict[str, A
                     {
                         "description": day_desc,
                         "icon": day_icon,
+                        "condition_code": day_condition_code,
                     }
                 ],
+                "is_daylight": True,
             }
         )
 
     hourly: list[dict[str, Any]] = []
     for hour in hourly_raw:
-        hour_desc, hour_icon = _condition_mapping(hour.get("conditionCode", ""))
+        hour_condition_code = hour.get("conditionCode", "")
+        hour_desc, hour_icon = _condition_mapping(hour_condition_code)
+        hour_is_daylight = hour.get("isDaylight")
         hourly.append(
             {
                 "dt": _parse_iso_timestamp(hour.get("forecastStart")),
@@ -620,8 +629,10 @@ def _normalise_weatherkit_response(data: dict[str, Any]) -> Optional[dict[str, A
                     {
                         "description": hour_desc,
                         "icon": hour_icon,
+                        "condition_code": hour_condition_code,
                     }
                 ],
+                "is_daylight": hour_is_daylight,
             }
         )
 
