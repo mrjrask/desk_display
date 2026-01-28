@@ -122,10 +122,12 @@ you select those resolutions, and the panel still exposes its own I2C bus for se
 framebuffer device path by exporting `DISPLAY_FB_DEVICE` before running the installer.
 
 On Raspberry Pi Desktop, the desktop session usually takes over `/dev/fb0` after boot, so the
-framebuffer service may only appear briefly. The framebuffer installers now drop a launcher at
-`~/.local/share/applications/desk-display-framebuffer.desktop` (and on the Desktop if the folder
-exists). Use it to stop the desktop display manager and restart the framebuffer service. Run
-`scripts/restore_desktop.sh` afterward if you want the desktop back.
+framebuffer service may only appear briefly. The framebuffer installers now configure the
+systemd service to stop the desktop display manager when the service starts and to restore it when
+the service stops or restarts, matching the behavior of similar projects like MagicMirror. The
+installers also drop a launcher at `~/.local/share/applications/desk-display-framebuffer.desktop`
+(and on the Desktop if the folder exists). Use it to stop the desktop display manager and restart
+the framebuffer service. Run `scripts/restore_desktop.sh` afterward if you want the desktop back.
 
 ```bash
 # Bookworm (keeps the transitional libgdk-pixbuf2.0-dev package name)
