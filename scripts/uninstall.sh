@@ -18,10 +18,8 @@ else
 fi
 
 if command -v systemctl >/dev/null 2>&1; then
-  if systemctl list-unit-files | grep -q "^$SERVICE_NAME"; then
-    log "Stopping $SERVICE_NAME"
-    $SUDO systemctl stop "$SERVICE_NAME" || warn "Failed to stop $SERVICE_NAME"
-  fi
+  log "Stopping $SERVICE_NAME"
+  $SUDO systemctl stop "$SERVICE_NAME" || warn "Failed to stop $SERVICE_NAME"
 fi
 
 log "Starting uninstall for $PROJECT_DIR"
