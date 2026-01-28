@@ -41,6 +41,7 @@ from config import (
     FONT_WEATHER_DETAILS_SMALL_BOLD,
     FONT_EMOJI,
     FONT_EMOJI_SMALL,
+    EMOJI_EMBEDDED_COLOR,
     WEATHER_ICON_SIZE,
     WEATHER_DESC_GAP,
     HOURLY_FORECAST_HOURS,
@@ -79,6 +80,7 @@ PRESSURE_TREND_SYMBOLS = {
     "falling": ("↓", (255, 0, 0)),
     "steady": ("↔", (255, 255, 255)),
 }
+EMOJI_DRAW_KWARGS = {"embedded_color": True} if EMOJI_EMBEDDED_COLOR else {}
 
 
 def _render_stat_text(parts):
@@ -305,7 +307,7 @@ def _draw_alert_indicator(draw: ImageDraw.ImageDraw, severity: Optional[str]) ->
     w_icon, h_icon = draw.textsize(ALERT_SYMBOL, font=FONT_EMOJI_SMALL)
     x_icon = WIDTH - w_icon - 2
     y_icon = HEIGHT - h_icon - 2
-    draw.text((x_icon, y_icon), ALERT_SYMBOL, font=FONT_EMOJI_SMALL, fill=icon_color)
+    draw.text((x_icon, y_icon), ALERT_SYMBOL, font=FONT_EMOJI_SMALL, fill=icon_color, **EMOJI_DRAW_KWARGS)
 
 # ─── Screen 1: Basic weather + two-line Feels/Hi/Lo ────────────────────────────
 @log_call
@@ -480,7 +482,7 @@ def draw_weather_screen_1(display, weather, transition=False):
         block_y = icon_center_y - block_h // 2
         emoji_x = cloud_x + (block_w - emoji_w) // 2
         pct_x = cloud_x + (block_w - pct_w) // 2
-        draw.text((emoji_x, block_y), cloud_emoji, font=FONT_EMOJI, fill=(211, 211, 211))
+        draw.text((emoji_x, block_y), cloud_emoji, font=FONT_EMOJI, fill=(211, 211, 211), **EMOJI_DRAW_KWARGS)
         draw.text((pct_x, block_y + emoji_h + stack_gap), cloud_percent, font=side_font, fill=(211, 211, 211))
 
     # draw groups
