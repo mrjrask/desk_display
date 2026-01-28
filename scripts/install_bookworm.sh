@@ -111,6 +111,17 @@ add_service_env "DISPLAY_FB_PIXEL_ORDER" "${DISPLAY_FB_PIXEL_ORDER:-}"
 add_service_env "DISPLAY_WIDTH" "${DISPLAY_WIDTH:-}"
 add_service_env "DISPLAY_HEIGHT" "${DISPLAY_HEIGHT:-}"
 add_service_env "DISPLAY_ROTATION" "${DISPLAY_ROTATION:-}"
+FRAMEBUFFER_PRESTART_LINES=()
+FRAMEBUFFER_POSTSTOP_LINES=()
+if [[ "${DESK_DISPLAY_OUTPUT:-}" == "framebuffer" ]]; then
+  FRAMEBUFFER_PRESTART_LINES=(
+    "PermissionsStartOnly=true"
+    "ExecStartPre=/bin/bash -lc '$PROJECT_DIR/scripts/framebuffer_service.sh start'"
+  )
+  FRAMEBUFFER_POSTSTOP_LINES=(
+    "ExecStopPost=/bin/bash -lc '$PROJECT_DIR/scripts/framebuffer_service.sh stop'"
+  )
+fi
 log "Writing systemd service to $SERVICE_PATH"
 $SUDO tee "$SERVICE_PATH" >/dev/null <<SERVICE
 [Unit]
@@ -120,11 +131,10 @@ After=network-online.target
 [Service]
 WorkingDirectory=$PROJECT_DIR
 $(printf '%s\n' "${SERVICE_ENV_LINES[@]}")
-PermissionsStartOnly=true
-ExecStartPre=/bin/bash -lc '$PROJECT_DIR/scripts/framebuffer_service.sh start'
+$(printf '%s\n' "${FRAMEBUFFER_PRESTART_LINES[@]}")
 ExecStart=$VENV_DIR/bin/python $PROJECT_DIR/main.py
 ExecStop=/bin/bash -lc '$MAINTENANCE_DIR/cleanup.sh'
-ExecStopPost=/bin/bash -lc '$PROJECT_DIR/scripts/framebuffer_service.sh stop'
+$(printf '%s\n' "${FRAMEBUFFER_POSTSTOP_LINES[@]}")
 Restart=always
 User=$SERVICE_USER
 
