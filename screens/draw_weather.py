@@ -83,6 +83,42 @@ PRESSURE_TREND_SYMBOLS = {
 EMOJI_DRAW_KWARGS = {"embedded_color": True} if EMOJI_EMBEDDED_COLOR else {}
 
 
+def _safe_textbbox(
+    draw: ImageDraw.ImageDraw,
+    text: str,
+    font: ImageFont.FreeTypeFont,
+) -> tuple[int, int, int, int]:
+    """Return a safe text bounding box for emoji/text rendering."""
+
+    try:
+        return draw.textbbox((0, 0), text, font=font, **EMOJI_DRAW_KWARGS)
+    except Exception:
+        try:
+            return draw.textbbox((0, 0), text, font=font)
+        except Exception:
+            width, height = draw.textsize(text, font=font)
+            return (0, 0, width, height)
+
+
+def _draw_text_with_fallback(
+    draw: ImageDraw.ImageDraw,
+    position: tuple[int, int],
+    text: str,
+    font: ImageFont.FreeTypeFont,
+    fill: Tuple[int, int, int] | Tuple[int, int, int, int],
+) -> None:
+    """Draw text, retrying without embedded color if needed."""
+
+    try:
+        draw.text(position, text, font=font, fill=fill, **EMOJI_DRAW_KWARGS)
+    except Exception as exc:
+        if EMOJI_DRAW_KWARGS:
+            logging.debug("Emoji text draw failed with embedded color: %s", exc)
+            draw.text(position, text, font=font, fill=fill)
+        else:
+            raise
+
+
 def _render_emoji_glyph(
     emoji: str,
     font: ImageFont.FreeTypeFont,
@@ -90,17 +126,17 @@ def _render_emoji_glyph(
 ) -> Image.Image:
     scratch = Image.new("RGB", (1, 1))
     scratch_draw = ImageDraw.Draw(scratch)
-    bbox = scratch_draw.textbbox((0, 0), emoji, font=font)
+    bbox = _safe_textbbox(scratch_draw, emoji, font)
     width = max(1, bbox[2] - bbox[0])
     height = max(1, bbox[3] - bbox[1])
     icon = Image.new("RGBA", (width, height), (0, 0, 0, 0))
     icon_draw = ImageDraw.Draw(icon)
-    icon_draw.text(
+    _draw_text_with_fallback(
+        icon_draw,
         (-bbox[0], -bbox[1]),
         emoji,
-        font=font,
-        fill=fill,
-        **EMOJI_DRAW_KWARGS,
+        font,
+        fill,
     )
     return icon
 
@@ -122,7 +158,7 @@ def _render_stat_text(parts):
     offsets = []
     extents = []
     for text, font, _ in parts:
-        bbox = scratch_draw.textbbox((0, 0), text, font=font)
+        bbox = _safe_textbbox(scratch_draw, text, font)
         w = bbox[2] - bbox[0]
         h = bbox[3] - bbox[1]
         widths.append(w)
