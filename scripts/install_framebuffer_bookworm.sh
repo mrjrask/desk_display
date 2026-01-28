@@ -27,6 +27,7 @@ export REQUIREMENTS_FILE="${REQUIREMENTS_FILE:-requirements_framebuffer.txt}"
 
 declare -A RESOLUTION_MAP=(
   ["hyperpixel4"]="480x800"
+  ["hyperpixel4-rotated"]="480x800"
   ["hyperpixel4-square"]="720x720"
   ["640x480"]="640x480"
   ["1080p"]="1920x1080"
@@ -40,11 +41,12 @@ print_resolution_menu() {
 Select a framebuffer resolution (content is tuned for 320x240 and scaled for larger panels):
   1) Hyperpixel4 - 480x800
   2) Hyperpixel4 Square - 720x720
-  3) 640x480
-  4) 1080p - 1920x1080
-  5) 1440p - 2560x1440
-  6) 2K - 2048x1080
-  7) 4K - 3840x2160
+  3) Hyperpixel4 - vertical - 480x800
+  4) 640x480
+  5) 1080p - 1920x1080
+  6) 1440p - 2560x1440
+  7) 2K - 2048x1080
+  8) 4K - 3840x2160
 MENU
 }
 
@@ -55,8 +57,14 @@ apply_resolution() {
     export DISPLAY_RESOLUTION="$token"
     export DISPLAY_WIDTH="${dims%x*}"
     export DISPLAY_HEIGHT="${dims#*x}"
-    if [[ "$token" == "hyperpixel4" || "$token" == "hyperpixel4-square" ]]; then
+    if [[ "$token" == "hyperpixel4" || "$token" == "hyperpixel4-rotated" || "$token" == "hyperpixel4-square" ]]; then
       export DISABLE_SPI_I2C=1
+      if [[ -z "${DISPLAY_FB_PIXEL_ORDER:-}" ]]; then
+        export DISPLAY_FB_PIXEL_ORDER="bgr"
+      fi
+    fi
+    if [[ "$token" == "hyperpixel4-rotated" ]]; then
+      export DISPLAY_ROTATION=270
     fi
   fi
 }
@@ -66,15 +74,16 @@ if [[ -z "${DISPLAY_WIDTH:-}" || -z "${DISPLAY_HEIGHT:-}" ]]; then
     apply_resolution "${DISPLAY_RESOLUTION,,}"
   elif [[ -t 0 ]]; then
     print_resolution_menu
-    read -r -p "Enter a number [1-7] (or press Enter to keep 320x240): " selection
+    read -r -p "Enter a number [1-8] (or press Enter to keep 320x240): " selection
     case "$selection" in
-      1) apply_resolution "hyperpixel4" ;;
+      1) apply_resolution "hyperpixel4-rotated" ;;
       2) apply_resolution "hyperpixel4-square" ;;
-      3) apply_resolution "640x480" ;;
-      4) apply_resolution "1080p" ;;
-      5) apply_resolution "1440p" ;;
-      6) apply_resolution "2k" ;;
-      7) apply_resolution "4k" ;;
+      3) apply_resolution "hyperpixel4" ;;
+      4) apply_resolution "640x480" ;;
+      5) apply_resolution "1080p" ;;
+      6) apply_resolution "1440p" ;;
+      7) apply_resolution "2k" ;;
+      8) apply_resolution "4k" ;;
       *) ;;
     esac
   else

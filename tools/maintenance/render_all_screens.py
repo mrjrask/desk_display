@@ -113,14 +113,15 @@ LOGO_SCREEN_WIDTH = max(
     min(config.WIDTH, int(round(LOGO_SCREEN_HEIGHT * 1.5))),
 )
 
-RESOLUTION_OPTIONS: tuple[tuple[str, str, tuple[int, int]], ...] = (
-    ("hyperpixel4", "Hyperpixel4 - 480x800", (480, 800)),
-    ("hyperpixel4-square", "Hyperpixel4 Square - 720x720", (720, 720)),
-    ("640x480", "640x480", (640, 480)),
-    ("1080p", "1080p - 1920x1080", (1920, 1080)),
-    ("1440p", "1440p - 2560x1440", (2560, 1440)),
-    ("2k", "2K - 2048x1080", (2048, 1080)),
-    ("4k", "4K - 3840x2160", (3840, 2160)),
+RESOLUTION_OPTIONS: tuple[tuple[str, str, tuple[int, int], Optional[int]], ...] = (
+    ("hyperpixel4-rotated", "Hyperpixel4 - 480x800", (480, 800), 270),
+    ("hyperpixel4-square", "Hyperpixel4 Square - 720x720", (720, 720), None),
+    ("hyperpixel4", "Hyperpixel4 - vertical - 480x800", (480, 800), None),
+    ("640x480", "640x480", (640, 480), None),
+    ("1080p", "1080p - 1920x1080", (1920, 1080), None),
+    ("1440p", "1440p - 2560x1440", (2560, 1440), None),
+    ("2k", "2K - 2048x1080", (2048, 1080), None),
+    ("4k", "4K - 3840x2160", (3840, 2160), None),
 )
 
 
@@ -134,7 +135,9 @@ def _refresh_logo_dimensions() -> None:
     )
 
 
-def _apply_resolution_dimensions(width: int, height: int) -> None:
+def _apply_resolution_dimensions(
+    width: int, height: int, *, rotation: Optional[int] = None
+) -> None:
     os.environ["DISPLAY_WIDTH"] = str(width)
     os.environ["DISPLAY_HEIGHT"] = str(height)
     config.WIDTH = width
@@ -143,6 +146,9 @@ def _apply_resolution_dimensions(width: int, height: int) -> None:
         config.WIDTH / config.BASE_WIDTH,
         config.HEIGHT / config.BASE_HEIGHT,
     )
+    if rotation is not None:
+        os.environ["DISPLAY_ROTATION"] = str(rotation)
+        config.DISPLAY_ROTATION = rotation
     _refresh_logo_dimensions()
 
 
@@ -158,7 +164,7 @@ def _apply_resolution_token(token: str) -> bool:
     normalized = token.strip().lower()
     for entry in RESOLUTION_OPTIONS:
         if entry[0] == normalized:
-            _apply_resolution_dimensions(*entry[2])
+            _apply_resolution_dimensions(*entry[2], rotation=entry[3])
             return True
     return False
 
@@ -191,7 +197,7 @@ def _maybe_prompt_resolution_selection() -> None:
     if sys.stdin.isatty():
         _print_resolution_menu()
         selection = input(
-            "Enter a number [1-7] (or press Enter to keep 320x240): "
+            "Enter a number [1-8] (or press Enter to keep 320x240): "
         ).strip()
         if selection:
             try:
@@ -199,7 +205,8 @@ def _maybe_prompt_resolution_selection() -> None:
             except ValueError:
                 index = -1
             if 1 <= index <= len(RESOLUTION_OPTIONS):
-                _apply_resolution_dimensions(*RESOLUTION_OPTIONS[index - 1][2])
+                entry = RESOLUTION_OPTIONS[index - 1]
+                _apply_resolution_dimensions(*entry[2], rotation=entry[3])
     else:
         selection = _read_resolution_selection_from_stdin()
         if not selection:
@@ -210,7 +217,8 @@ def _maybe_prompt_resolution_selection() -> None:
         except ValueError:
             index = -1
         if 1 <= index <= len(RESOLUTION_OPTIONS):
-            _apply_resolution_dimensions(*RESOLUTION_OPTIONS[index - 1][2])
+            entry = RESOLUTION_OPTIONS[index - 1]
+            _apply_resolution_dimensions(*entry[2], rotation=entry[3])
         else:
             _apply_resolution_token(selection)
 
