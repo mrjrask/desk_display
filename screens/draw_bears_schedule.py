@@ -375,7 +375,6 @@ def show_bears_next_season(display, transition=False):
     if transition:
         return final_img
 
-    _animate_logo_drop(display, img, placements_by_row)
     display.image(final_img)
     display.show()
     return None
