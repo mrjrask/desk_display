@@ -88,6 +88,7 @@ fi
 
 ensure_executable "$MAINTENANCE_DIR/cleanup.sh"
 ensure_executable "$MAINTENANCE_DIR/reset_screenshots.sh"
+ensure_executable "$PROJECT_DIR/scripts/framebuffer_service.sh"
 
 deactivate
 
@@ -119,8 +120,11 @@ After=network-online.target
 [Service]
 WorkingDirectory=$PROJECT_DIR
 $(printf '%s\n' "${SERVICE_ENV_LINES[@]}")
+PermissionsStartOnly=true
+ExecStartPre=/bin/bash -lc '$PROJECT_DIR/scripts/framebuffer_service.sh start'
 ExecStart=$VENV_DIR/bin/python $PROJECT_DIR/main.py
 ExecStop=/bin/bash -lc '$MAINTENANCE_DIR/cleanup.sh'
+ExecStopPost=/bin/bash -lc '$PROJECT_DIR/scripts/framebuffer_service.sh stop'
 Restart=always
 User=$SERVICE_USER
 
