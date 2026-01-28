@@ -3,6 +3,7 @@
 #!/usr/bin/env python3
 import datetime
 import glob
+import inspect
 import logging
 import os
 import re
@@ -137,6 +138,17 @@ def _get_required_env_var(*names: str) -> str:
 
 import pytz
 from PIL import Image, ImageDraw, ImageFont
+
+
+def _supports_embedded_color() -> bool:
+    try:
+        parameters = inspect.signature(ImageDraw.ImageDraw.text).parameters
+    except (TypeError, ValueError):
+        return False
+    return "embedded_color" in parameters
+
+
+EMOJI_EMBEDDED_COLOR = _supports_embedded_color()
 
 from config_store import ConfigStore
 
@@ -659,7 +671,7 @@ class _BitmapEmojiFont(ImageFont.ImageFont):
         width, _ = self.getsize(text, *args, **kwargs)
         return width
 
-    def _render_native(self, text, *args, **kwargs):
+    def _render_native(self, text, mode="L", *args, **kwargs):
         bbox = self._font.getbbox(text, *args, **kwargs)
         if bbox:
             left, top, right, bottom = bbox
@@ -669,13 +681,22 @@ class _BitmapEmojiFont(ImageFont.ImageFont):
             left = top = 0
             width, height = self._font.getsize(text, *args, **kwargs)
 
+        if mode == "RGBA":
+            image = Image.new("RGBA", (width, height), (0, 0, 0, 0))
+            draw = ImageDraw.Draw(image)
+            if EMOJI_EMBEDDED_COLOR:
+                draw.text((-left, -top), text, font=self._font, embedded_color=True)
+            else:
+                draw.text((-left, -top), text, font=self._font, fill=(255, 255, 255, 255))
+            return image
+
         image = Image.new("L", (width, height), 0)
         draw = ImageDraw.Draw(image)
         draw.text((-left, -top), text, font=self._font, fill=255)
         return image
 
     def getmask(self, text, mode="L", *args, **kwargs):  # type: ignore[override]
-        base = self._render_native(text, *args, **kwargs)
+        base = self._render_native(text, mode, *args, **kwargs)
         scaled = base.resize(
             (
                 max(1, int(round(base.width * self._scale))),
@@ -689,9 +710,7 @@ class _BitmapEmojiFont(ImageFont.ImageFont):
         if mode == "L":
             return scaled.im
         if mode == "RGBA":
-            rgba = Image.new("RGBA", scaled.size, (255, 255, 255, 0))
-            rgba.putalpha(scaled)
-            return rgba.im
+            return scaled.im
         return scaled.im
 
 FONT_DAY_DATE           = _load_font("DejaVuSans-Bold.ttf", 39)
