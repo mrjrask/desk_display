@@ -52,6 +52,7 @@ apply_resolution() {
   local token="$1"
   local dims="${RESOLUTION_MAP[$token]}"
   if [[ -n "$dims" ]]; then
+    export DISPLAY_RESOLUTION="$token"
     export DISPLAY_WIDTH="${dims%x*}"
     export DISPLAY_HEIGHT="${dims#*x}"
     if [[ "$token" == "hyperpixel4" || "$token" == "hyperpixel4-square" ]]; then
@@ -80,6 +81,29 @@ if [[ -z "${DISPLAY_WIDTH:-}" || -z "${DISPLAY_HEIGHT:-}" ]]; then
     print_resolution_menu
   fi
 fi
+
+ENV_PATH="$PROJECT_DIR/.env"
+ENV_LINES=()
+
+add_env_line() {
+  local key="$1"
+  local value="$2"
+  if [[ -n "$value" ]]; then
+    ENV_LINES+=("${key}=${value}")
+  fi
+}
+
+add_env_line "DESK_DISPLAY_OUTPUT" "${DESK_DISPLAY_OUTPUT:-}"
+add_env_line "DISPLAY_RESOLUTION" "${DISPLAY_RESOLUTION:-}"
+add_env_line "DISPLAY_WIDTH" "${DISPLAY_WIDTH:-}"
+add_env_line "DISPLAY_HEIGHT" "${DISPLAY_HEIGHT:-}"
+add_env_line "DISPLAY_FB_DEVICE" "${DISPLAY_FB_DEVICE:-}"
+add_env_line "DISPLAY_FB_PIXEL_FORMAT" "${DISPLAY_FB_PIXEL_FORMAT:-}"
+add_env_line "DISPLAY_FB_PIXEL_ORDER" "${DISPLAY_FB_PIXEL_ORDER:-}"
+add_env_line "DISPLAY_ROTATION" "${DISPLAY_ROTATION:-}"
+add_env_line "DISABLE_SPI_I2C" "${DISABLE_SPI_I2C:-}"
+
+prepend_env_vars "$ENV_PATH" "${ENV_LINES[@]}"
 
 "$SCRIPT_DIR/install_trixie.sh"
 

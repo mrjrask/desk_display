@@ -180,3 +180,51 @@ install_apt_packages() {
   log "Installing apt dependencies: ${packages[*]}"
   ${SUDO:-} apt-get install -y "${packages[@]}"
 }
+
+prepend_env_vars() {
+  local env_path="$1"
+  shift
+  local lines=("$@")
+
+  if [[ ${#lines[@]} -eq 0 ]]; then
+    return 0
+  fi
+
+  local tmp_file
+  local filtered_file
+  tmp_file=$(mktemp)
+  filtered_file=$(mktemp)
+
+  local keys=()
+  local line
+  for line in "${lines[@]}"; do
+    keys+=("${line%%=*}")
+  done
+
+  local regex="^($(IFS='|'; echo "${keys[*]}"))="
+
+  if [[ -f "$env_path" ]]; then
+    grep -v -E "$regex" "$env_path" > "$filtered_file" || true
+  else
+    : > "$filtered_file"
+  fi
+
+  {
+    printf '%s\n' "${lines[@]}"
+    if [[ -s "$filtered_file" ]]; then
+      printf '\n'
+      cat "$filtered_file"
+    fi
+  } > "$tmp_file"
+
+  if [[ -n "${SUDO:-}" ]]; then
+    $SUDO mv "$tmp_file" "$env_path"
+    if [[ -n "${SERVICE_USER:-}" ]]; then
+      $SUDO chown "$SERVICE_USER":"$SERVICE_USER" "$env_path" 2>/dev/null || true
+    fi
+  else
+    mv "$tmp_file" "$env_path"
+  fi
+
+  rm -f "$filtered_file"
+}
