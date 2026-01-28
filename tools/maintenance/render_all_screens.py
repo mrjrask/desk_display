@@ -114,7 +114,7 @@ LOGO_SCREEN_WIDTH = max(
 )
 
 RESOLUTION_OPTIONS: tuple[tuple[str, str, tuple[int, int], Optional[int]], ...] = (
-    ("hyperpixel4-rotated", "Hyperpixel4 - 480x800", (480, 800), 270),
+    ("hyperpixel4-rotated", "Hyperpixel4 - 800x480 (landscape)", (800, 480), 270),
     ("hyperpixel4-square", "Hyperpixel4 Square - 720x720", (720, 720), None),
     ("hyperpixel4", "Hyperpixel4 - vertical - 480x800", (480, 800), None),
     ("640x480", "640x480", (640, 480), None),

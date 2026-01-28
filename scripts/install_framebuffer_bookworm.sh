@@ -27,7 +27,7 @@ export REQUIREMENTS_FILE="${REQUIREMENTS_FILE:-requirements_framebuffer.txt}"
 
 declare -A RESOLUTION_MAP=(
   ["hyperpixel4"]="480x800"
-  ["hyperpixel4-rotated"]="480x800"
+  ["hyperpixel4-rotated"]="800x480"
   ["hyperpixel4-square"]="720x720"
   ["640x480"]="640x480"
   ["1080p"]="1920x1080"
@@ -39,7 +39,7 @@ declare -A RESOLUTION_MAP=(
 print_resolution_menu() {
   cat <<'MENU'
 Select a framebuffer resolution (content is tuned for 320x240 and scaled for larger panels):
-  1) Hyperpixel4 - 480x800
+  1) Hyperpixel4 - 800x480 (landscape)
   2) Hyperpixel4 Square - 720x720
   3) Hyperpixel4 - vertical - 480x800
   4) 640x480
