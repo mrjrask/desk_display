@@ -283,6 +283,12 @@ def fetch_game_feed(game_pk: int) -> Optional[Dict]:
             or period_desc.get("number")
             or ""
         )
+        per_type = (
+            period_desc.get("periodType")
+            or period_desc.get("type")
+            or payload.get("periodType")
+            or ""
+        )
 
         clock_payload = payload.get("clock") or {}
         clock_val = (
@@ -302,6 +308,7 @@ def fetch_game_feed(game_pk: int) -> Optional[Dict]:
             "homeSOG": _as_int(home.get("sog") or home.get("shotsOnGoal") or home.get("shots")),
             "awaySOG": _as_int(away.get("sog") or away.get("shotsOnGoal") or away.get("shots")),
             "perOrdinal": per_val,
+            "periodType": per_type,
             "clock": clock_val,
             "clockState": "INTERMISSION" if clock_payload.get("inIntermission") else "",
         }
@@ -920,7 +927,17 @@ def _last_game_result_prefix(game: Dict, feed: Optional[Dict] = None) -> str:
             period_text = _norm(period.get("periodType"))
 
     if not period_text and feed:
-        period_text = _norm(feed.get("perOrdinal"))
+        feed_per = feed.get("perOrdinal")
+        if isinstance(feed_per, (int, float)):
+            period_text = _norm(_ordinal(int(feed_per)))
+        else:
+            period_text = _norm(feed_per)
+
+        if not period_text:
+            period_text = _norm(feed.get("periodType"))
+
+        if not period_text:
+            period_text = _norm(feed.get("lastPeriodType"))
 
     if _is_shootout(period_text):
         return "Final/SO"

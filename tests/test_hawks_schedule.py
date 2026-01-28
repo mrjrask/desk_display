@@ -30,3 +30,15 @@ def test_last_game_result_overtime_from_feed():
     feed = {"perOrdinal": "Overtime"}
 
     assert _last_game_result_prefix({}, feed) == "Final/OT"
+
+
+def test_last_game_result_from_feed_period_type():
+    feed = {"periodType": "Shootout"}
+
+    assert _last_game_result_prefix({}, feed) == "Final/SO"
+
+
+def test_last_game_result_from_feed_numeric_period():
+    feed = {"perOrdinal": 4}
+
+    assert _last_game_result_prefix({}, feed) == "Final/OT"
