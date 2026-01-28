@@ -519,8 +519,12 @@ After=network-online.target
 
 [Service]
 WorkingDirectory=/home/pi/desk_display
+Environment=DESK_DISPLAY_OUTPUT=framebuffer
+PermissionsStartOnly=true
+ExecStartPre=/bin/bash -lc '/home/pi/desk_display/scripts/framebuffer_service.sh start'
 ExecStart=/home/pi/desk_display/venv/bin/python /home/pi/desk_display/main.py
 ExecStop=/bin/bash -lc '/home/pi/desk_display/tools/maintenance/cleanup.sh'
+ExecStopPost=/bin/bash -lc '/home/pi/desk_display/scripts/framebuffer_service.sh stop'
 Restart=always
 User=pi
 
@@ -538,17 +542,19 @@ journalctl -u desk_display.service -f
 ```
 
 The service definition above assumes the project’s virtual environment lives at `/home/pi/desk_display/venv` and that the
-cleanup helper is executable. Make sure to create the venv first and grant execute permissions to the script:
+cleanup and framebuffer helpers are executable. Make sure to create the venv first and grant execute permissions to the scripts:
 
 ```bash
 python -m venv /home/pi/desk_display/venv
 /home/pi/desk_display/venv/bin/pip install -r /home/pi/desk_display/requirements.txt
 chmod +x /home/pi/desk_display/tools/maintenance/cleanup.sh
+chmod +x /home/pi/desk_display/scripts/framebuffer_service.sh
 ```
 
 `ExecStop` runs `tools/maintenance/cleanup.sh` on every shutdown so the LCD blanks immediately and any lingering screenshots or videos are swept
-into the archive folders. The service is marked `Restart=always`, so crashes or manual restarts via `systemctl restart` will
-trigger a fresh boot after cleanup completes.
+into the archive folders. `ExecStartPre`/`ExecStopPost` use `scripts/framebuffer_service.sh` to stop the desktop display manager when
+the service starts and restore it when the service stops (only when `DESK_DISPLAY_OUTPUT=framebuffer`). The service is marked
+`Restart=always`, so crashes or manual restarts via `systemctl restart` will trigger a fresh boot after cleanup completes.
 
 ### Display HAT Mini controls
 
