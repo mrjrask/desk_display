@@ -105,6 +105,12 @@ def _render_emoji_glyph(
     return icon
 
 
+def _ensure_rgba_icon(icon: Image.Image) -> Image.Image:
+    if icon.mode != "RGBA" or "A" not in icon.getbands():
+        return icon.convert("RGBA")
+    return icon
+
+
 def _render_stat_text(parts):
     """Render a left-to-right text image from ``(text, font, color)`` parts."""
 
@@ -328,7 +334,7 @@ def _draw_alert_indicator(
     if not severity:
         return
     icon_color = ALERT_ICON_COLORS.get(severity, (255, 215, 0))
-    icon_img = _render_emoji_glyph(ALERT_SYMBOL, FONT_EMOJI_SMALL, icon_color)
+    icon_img = _ensure_rgba_icon(_render_emoji_glyph(ALERT_SYMBOL, FONT_EMOJI_SMALL, icon_color))
     w_icon, h_icon = icon_img.size
     x_icon = WIDTH - w_icon - 2
     y_icon = HEIGHT - h_icon - 2
@@ -472,6 +478,7 @@ def draw_weather_screen_1(display, weather, transition=False):
     icon_center_y = top_of_icons + max(0, (y_lbl - top_of_icons) // 2)
 
     if icon_img:
+        icon_img = _ensure_rgba_icon(icon_img)
         img.paste(icon_img, (icon_x, y_icon), icon_img)
 
     side_font = FONT_WEATHER_DETAILS
@@ -480,7 +487,7 @@ def draw_weather_screen_1(display, weather, transition=False):
     if precip_percent:
         precip_color = (173, 216, 230) if is_snow else (135, 206, 250)
         precip_icon_size = FONT_EMOJI.size if hasattr(FONT_EMOJI, "size") else 26
-        precip_icon = _render_precip_icon(is_snow, precip_icon_size, precip_color)
+        precip_icon = _ensure_rgba_icon(_render_precip_icon(is_snow, precip_icon_size, precip_color))
         emoji_w, emoji_h = precip_icon.size
         pct_w, pct_h = draw.textsize(precip_percent, font=side_font)
         block_w = max(emoji_w, pct_w)
@@ -496,7 +503,7 @@ def draw_weather_screen_1(display, weather, transition=False):
 
     if cloud_percent:
         cloud_emoji = "☁"
-        cloud_icon = _render_emoji_glyph(cloud_emoji, FONT_EMOJI, (211, 211, 211))
+        cloud_icon = _ensure_rgba_icon(_render_emoji_glyph(cloud_emoji, FONT_EMOJI, (211, 211, 211)))
         emoji_w, emoji_h = cloud_icon.size
         pct_w, pct_h = draw.textsize(cloud_percent, font=side_font)
         block_w = max(emoji_w, pct_w)
