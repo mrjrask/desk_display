@@ -96,6 +96,12 @@ def _resolve_framebuffer_info(device_path: str) -> Tuple[int, int, int, Optional
     return width, height, bpp, stride
 
 
+def _resolve_framebuffer_sysfs_format(device_path: str) -> Optional[str]:
+    fb_name = Path(device_path).name
+    sysfs_base = Path("/sys/class/graphics") / fb_name
+    return _read_sysfs_value(str(sysfs_base / "format"))
+
+
 def _normalize_display_output(value: str) -> str:
     value = value.strip().lower()
     if value in {"displayhatmini", "display-hat-mini", "hatmini", "hat"}:
@@ -125,6 +131,57 @@ def _framebuffer_pixel_order(fmt: str) -> str:
     if fmt in {"bgr565", "bgr888", "xbgr8888", "abgr8888"}:
         return "bgr"
     return "rgb"
+
+
+def _infer_pixel_order(format_value: str) -> Optional[str]:
+    value = format_value.strip().lower().replace(" ", "").replace("_", "")
+    if "bgr" in value or "b8g8r8" in value or "b5g6r5" in value:
+        return "bgr"
+    if "rgb" in value or "r8g8b8" in value or "r5g6b5" in value:
+        return "rgb"
+    return None
+
+
+def _infer_pixel_format(format_value: str, *, order: Optional[str] = None) -> Optional[str]:
+    value = format_value.strip().lower().replace(" ", "").replace("_", "")
+    resolved_order = order if order in {"rgb", "bgr"} else "rgb"
+    if "565" in value:
+        return f"{resolved_order}565"
+    if "8888" in value or "x8" in value or "a8" in value:
+        if "a8" in value:
+            return "abgr8888" if resolved_order == "bgr" else "argb8888"
+        return "xbgr8888" if resolved_order == "bgr" else "xrgb8888"
+    if "888" in value:
+        return "bgr888" if resolved_order == "bgr" else "rgb888"
+    return None
+
+
+def _resolve_framebuffer_pixel_settings(
+    device_path: str, bpp: int
+) -> Tuple[str, str]:
+    fmt = _framebuffer_pixel_format(bpp)
+    order = _framebuffer_pixel_order(fmt)
+    sysfs_format = _resolve_framebuffer_sysfs_format(device_path)
+    if sysfs_format:
+        inferred_order = _infer_pixel_order(sysfs_format)
+        if inferred_order:
+            order = inferred_order
+        inferred_format = _infer_pixel_format(sysfs_format, order=order)
+        if inferred_format:
+            fmt = inferred_format
+    if _FRAMEBUFFER_PIXEL_FORMAT:
+        fmt = _FRAMEBUFFER_PIXEL_FORMAT
+    if _FRAMEBUFFER_PIXEL_ORDER in {"rgb", "bgr"}:
+        order = _FRAMEBUFFER_PIXEL_ORDER
+    return fmt, order
+
+
+def _disable_framebuffer_cursor() -> None:
+    for path in ("/sys/class/graphics/fbcon/cursor_blink", "/sys/class/graphics/fbcon/cursor"):
+        try:
+            Path(path).write_text("0", encoding="utf-8")
+        except OSError:
+            continue
 
 
 def _convert_rgb565(image: Image.Image, *, order: str = "rgb") -> bytes:
@@ -169,8 +226,7 @@ class _FrameBufferDevice:
         self.device_path = device_path
         self.width, self.height, self.bpp, self.stride = _resolve_framebuffer_info(device_path)
         self.bytes_per_pixel = max(1, self.bpp // 8)
-        self.pixel_format = _framebuffer_pixel_format(self.bpp)
-        self.pixel_order = _framebuffer_pixel_order(self.pixel_format)
+        self.pixel_format, self.pixel_order = _resolve_framebuffer_pixel_settings(device_path, self.bpp)
         self._fd: Optional[int] = None
 
         try:
@@ -178,6 +234,8 @@ class _FrameBufferDevice:
         except OSError as exc:
             logging.warning("Failed to open framebuffer device %s: %s", self.device_path, exc)
             self._fd = None
+        else:
+            _disable_framebuffer_cursor()
 
     def close(self) -> None:
         if self._fd is None:
