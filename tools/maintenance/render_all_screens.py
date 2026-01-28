@@ -49,8 +49,6 @@ os.environ.setdefault("CONFIG_LOAD_DOTENV", "1")
 
 import config
 import data_fetch
-from screens.draw_travel_time import get_travel_active_window, is_travel_screen_active
-from screens.registry import ScreenContext, ScreenDefinition, build_screen_registry
 from schedule import build_scheduler, load_schedule_config
 from screens_catalog import SCREEN_IDS
 from utils import ScreenImage
@@ -531,6 +529,12 @@ def _render_all_screens_impl(
 
     if sync_screenshots is None:
         sync_screenshots = config.ENABLE_SCREENSHOTS
+
+    from screens.draw_travel_time import (
+        get_travel_active_window,
+        is_travel_screen_active,
+    )
+    from screens.registry import ScreenContext, ScreenDefinition, build_screen_registry
 
     restore_sleep = _suppress_animation_delay()
     restore_images = _suppress_image_loading() if suppress_images else lambda: None
