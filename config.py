@@ -9,6 +9,8 @@ import os
 import re
 import re
 import subprocess
+import re
+import subprocess
 import threading
 from dataclasses import dataclass
 from pathlib import Path
@@ -288,6 +290,26 @@ def _read_framebuffer_mode_size(device_path: str) -> Optional[Tuple[int, int]]:
     return _parse_mode_size(first_line)
 
 
+def _read_framebuffer_fbset_size(device_path: str) -> Optional[Tuple[int, int]]:
+    try:
+        result = subprocess.run(
+            ["fbset", "-fb", device_path, "-s"],
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+    except OSError:
+        return None
+    output = (result.stdout or "") + "\n" + (result.stderr or "")
+    for line in output.splitlines():
+        if "geometry" not in line:
+            continue
+        match = re.search(r"geometry\s+(\d+)\s+(\d+)", line)
+        if match:
+            return int(match.group(1)), int(match.group(2))
+    return None
+
+
 def _read_framebuffer_virtual_size(device_path: str) -> Optional[Tuple[int, int]]:
     fb_name = Path(device_path).name
     sysfs_base = Path("/sys/class/graphics") / fb_name / "virtual_size"
@@ -326,7 +348,11 @@ if (_display_width_set, _display_height_set) != (True, True) and _display_output
     "framebuffer-device",
 }:
     fb_device = os.environ.get("DISPLAY_FB_DEVICE", "/dev/fb0")
-    fb_size = _read_framebuffer_mode_size(fb_device) or _read_framebuffer_virtual_size(fb_device)
+    fb_size = (
+        _read_framebuffer_mode_size(fb_device)
+        or _read_framebuffer_fbset_size(fb_device)
+        or _read_framebuffer_virtual_size(fb_device)
+    )
     if fb_size:
         fb_width, fb_height = fb_size
         if not _display_width_set:
