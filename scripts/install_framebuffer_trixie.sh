@@ -26,9 +26,9 @@ export DISPLAY_FB_DEVICE="${DISPLAY_FB_DEVICE:-/dev/fb0}"
 export REQUIREMENTS_FILE="${REQUIREMENTS_FILE:-requirements_framebuffer.txt}"
 
 declare -A RESOLUTION_MAP=(
-  ["hyperpixel4"]="480x800"
   ["hyperpixel4-rotated"]="800x480"
   ["hyperpixel4-square"]="720x720"
+  ["hyperpixel4"]="480x800"
   ["640x480"]="640x480"
   ["1080p"]="1920x1080"
   ["1440p"]="2560x1440"
