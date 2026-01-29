@@ -8,6 +8,8 @@ import logging
 import os
 import re
 import subprocess
+import re
+import subprocess
 import threading
 from dataclasses import dataclass
 from pathlib import Path
@@ -260,6 +262,53 @@ APPLE_MAPS_SNAPSHOT_URL = os.environ.get(
 BASE_WIDTH = 320
 BASE_HEIGHT = 240
 
+def _parse_mode_size(raw: Optional[str]) -> Optional[Tuple[int, int]]:
+    if not raw:
+        return None
+    match = re.search(r"(\d+)\s*x\s*(\d+)", raw)
+    if not match:
+        return None
+    return int(match.group(1)), int(match.group(2))
+
+
+def _read_framebuffer_mode_size(device_path: str) -> Optional[Tuple[int, int]]:
+    fb_name = Path(device_path).name
+    sysfs_base = Path("/sys/class/graphics") / fb_name
+    try:
+        raw = (sysfs_base / "mode").read_text(encoding="utf-8").strip()
+    except OSError:
+        raw = ""
+    mode_size = _parse_mode_size(raw)
+    if mode_size:
+        return mode_size
+    try:
+        modes_raw = (sysfs_base / "modes").read_text(encoding="utf-8").strip()
+    except OSError:
+        return None
+    first_line = modes_raw.splitlines()[0] if modes_raw else ""
+    return _parse_mode_size(first_line)
+
+
+def _read_framebuffer_fbset_size(device_path: str) -> Optional[Tuple[int, int]]:
+    try:
+        result = subprocess.run(
+            ["fbset", "-fb", device_path, "-s"],
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+    except OSError:
+        return None
+    output = (result.stdout or "") + "\n" + (result.stderr or "")
+    for line in output.splitlines():
+        if "geometry" not in line:
+            continue
+        match = re.search(r"geometry\s+(\d+)\s+(\d+)", line)
+        if match:
+            return int(match.group(1)), int(match.group(2))
+    return None
+
+
 def _read_framebuffer_virtual_size(device_path: str) -> Optional[Tuple[int, int]]:
     fb_name = Path(device_path).name
     sysfs_base = Path("/sys/class/graphics") / fb_name / "virtual_size"
@@ -298,7 +347,11 @@ if (_display_width_set, _display_height_set) != (True, True) and _display_output
     "framebuffer-device",
 }:
     fb_device = os.environ.get("DISPLAY_FB_DEVICE", "/dev/fb0")
-    fb_size = _read_framebuffer_virtual_size(fb_device)
+    fb_size = (
+        _read_framebuffer_mode_size(fb_device)
+        or _read_framebuffer_fbset_size(fb_device)
+        or _read_framebuffer_virtual_size(fb_device)
+    )
     if fb_size:
         fb_width, fb_height = fb_size
         if not _display_width_set:

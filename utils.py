@@ -14,6 +14,8 @@ import datetime
 import html
 import os
 import random
+import re
+import subprocess
 import subprocess
 import threading
 import time
@@ -82,13 +84,57 @@ def _parse_virtual_size(value: Optional[str]) -> Optional[Tuple[int, int]]:
         return None
 
 
+def _parse_mode_size(value: Optional[str]) -> Optional[Tuple[int, int]]:
+    if not value:
+        return None
+    match = re.search(r"(\d+)\s*x\s*(\d+)", value)
+    if not match:
+        return None
+    return int(match.group(1)), int(match.group(2))
+
+
+def _read_framebuffer_mode_size(device_path: str) -> Optional[Tuple[int, int]]:
+    fb_name = Path(device_path).name
+    sysfs_base = Path("/sys/class/graphics") / fb_name
+    mode_value = _parse_mode_size(_read_sysfs_value(str(sysfs_base / "mode")))
+    if mode_value:
+        return mode_value
+    modes_raw = _read_sysfs_value(str(sysfs_base / "modes"))
+    if not modes_raw:
+        return None
+    first_line = modes_raw.splitlines()[0]
+    return _parse_mode_size(first_line)
+
+
+def _read_framebuffer_fbset_size(device_path: str) -> Optional[Tuple[int, int]]:
+    try:
+        result = subprocess.run(
+            ["fbset", "-fb", device_path, "-s"],
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+    except OSError:
+        return None
+    output = (result.stdout or "") + "\n" + (result.stderr or "")
+    for line in output.splitlines():
+        if "geometry" not in line:
+            continue
+        match = re.search(r"geometry\s+(\d+)\s+(\d+)", line)
+        if match:
+            return int(match.group(1)), int(match.group(2))
+    return None
+
+
 def _resolve_framebuffer_info(device_path: str) -> Tuple[int, int, int, Optional[int]]:
     fb_name = Path(device_path).name
     sysfs_base = Path("/sys/class/graphics") / fb_name
-    size = _parse_virtual_size(_read_sysfs_value(str(sysfs_base / "virtual_size")))
+    mode_size = _read_framebuffer_mode_size(device_path) or _read_framebuffer_fbset_size(device_path)
+    virtual_size = _parse_virtual_size(_read_sysfs_value(str(sysfs_base / "virtual_size")))
     bpp_value = _read_sysfs_value(str(sysfs_base / "bits_per_pixel"))
     stride_value = _read_sysfs_value(str(sysfs_base / "stride"))
 
+    size = mode_size or virtual_size
     width = size[0] if size else WIDTH
     height = size[1] if size else HEIGHT
     bpp = int(bpp_value) if bpp_value and bpp_value.isdigit() else 16
