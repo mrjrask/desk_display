@@ -389,8 +389,8 @@ def defer_clear_display() -> Iterable[None]:
     finally:
         _DEFER_CLEAR_DISPLAY.clear()
 
-# Use the dimmest still-visible LED brightness.
-LED_INDICATOR_LEVEL = 1 / 1024.0
+# Use the dimmest still-visible LED brightness, reduced by 50%.
+LED_INDICATOR_LEVEL = 1 / 2048.0
 
 # Project config
 from config import WIDTH, HEIGHT, CENTRAL_TIME, DISPLAY_ROTATION, WEATHER_USE_EMOJI_ICONS, get_emoji_font
