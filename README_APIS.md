@@ -1,70 +1,104 @@
 # External API Reference
 
-This project pulls game, weather, and travel data from several third-party APIs. This document lists each source, the endpoints we call, and the fields we actually consume in the application.
+This project pulls weather, travel, and sports data from a variety of third-party endpoints. The app normalizes all payloads into internal structures so screens can share logic regardless of the upstream source. This document lists the endpoints we call and the fields we rely on.
+
+> **Tip:** Most API keys can be provided via `.env` (with `CONFIG_LOAD_DOTENV=1`) or the environment.
+
+---
 
 ## Weather
 
 ### Apple WeatherKit (primary)
-* **Endpoint:** `https://weatherkit.apple.com/api/v1/weather/{language}/{lat}/{lon}` with `dataSets=currentWeather,forecastDaily,forecastHourly,weatherAlerts`.
-* **Data we use:**
-  * `currentWeather`: `temperature`, `temperatureApparent`, `windSpeed`, `windGust`, `windDirection`, `humidity`, `pressure`, `uvIndex`, `cloudCover`, `asOf`, plus mapped `conditionCode` → `description/icon`. Stored as `current.temp`, `current.feels_like`, `current.wind_speed`, `current.wind_gust`, `current.wind_deg`, `current.humidity`, `current.pressure`, `current.uvi`, `current.clouds`, `current.dt`, `current.sunrise`, `current.sunset`.
-  * `forecastDaily.days`: `temperatureMax`, `temperatureMin`, `sunrise`, `sunset`, `precipitationChance`, `conditionCode`, `forecastStart` mapped into `daily[].temp.max/min`, `daily[].sunrise`, `daily[].sunset`, `daily[].pop`, `daily[].weather[0].description/icon`, `daily[].dt`.
-  * `forecastHourly.hours`: `temperature`, `temperatureApparent`, `precipitationChance`, `windSpeed`, `windGust`, `windDirection`, `uvIndex`, `conditionCode`, `forecastStart` mapped into `hourly[].temp`, `hourly[].feels_like`, `hourly[].pop`, `hourly[].wind_speed`, `hourly[].wind_gust`, `hourly[].wind_deg`, `hourly[].uvi`, `hourly[].weather[0].description/icon`, `hourly[].dt`.
-  * `weatherAlerts.alerts`: passed through as `alerts`.
-* **Usage:** Primary source for weather screens; values are normalized to Fahrenheit and cached.
+- **Endpoint:** `https://weatherkit.apple.com/api/v1/weather/{language}/{lat}/{lon}`
+- **Data sets:** `currentWeather`, `forecastDaily`, `forecastHourly`, `weatherAlerts`
+- **Fields used:**
+  - `currentWeather`: `temperature`, `temperatureApparent`, `windSpeed`, `windGust`, `windDirection`, `humidity`, `pressure`, `uvIndex`, `cloudCover`, `asOf`, `conditionCode`, `sunrise`, `sunset`
+  - `forecastDaily.days`: `temperatureMax`, `temperatureMin`, `sunrise`, `sunset`, `precipitationChance`, `conditionCode`, `forecastStart`
+  - `forecastHourly.hours`: `temperature`, `temperatureApparent`, `precipitationChance`, `windSpeed`, `windGust`, `windDirection`, `uvIndex`, `conditionCode`, `forecastStart`
+  - `weatherAlerts.alerts`: alert payloads passed through for display
+- **Notes:** JWT auth signed via `WEATHERKIT_TEAM_ID`, `WEATHERKIT_KEY_ID`, `WEATHERKIT_SERVICE_ID`, and `WEATHERKIT_PRIVATE_KEY/WEATHERKIT_KEY_PATH`.
 
 ### OpenWeatherMap OneCall (fallback)
-* **Endpoint:** `https://api.openweathermap.org/data/3.0/onecall` with `lat`, `lon`, `appid`, `units`, `lang`, `exclude=minutely`.
-* **Data we use:**
-  * `current`: `temp`, `feels_like`, `wind_speed`, `wind_gust`, `wind_deg`, `humidity`, `pressure`, `uvi`, `sunrise`, `sunset`, `dt`, `clouds`, plus weather `description/icon` mapping.
-  * `daily[]`: `temp.max`, `temp.min`, `sunrise`, `sunset`, `pop`, and weather `description/icon` mapping.
-  * `hourly[]`: `dt`, `temp`, `feels_like`, `pop`, `wind_speed`, `wind_gust`, `wind_deg`, `uvi`, and weather `description/icon` mapping.
-  * `alerts`: passed through.
-* **Usage:** Used when WeatherKit is unavailable; mapped into the same normalized structure.
+- **Endpoint:** `https://api.openweathermap.org/data/3.0/onecall`
+- **Fields used:**
+  - `current`: `temp`, `feels_like`, `wind_speed`, `wind_gust`, `wind_deg`, `humidity`, `pressure`, `uvi`, `sunrise`, `sunset`, `dt`, `clouds`, `weather[].description/icon`
+  - `daily[]`: `temp.max`, `temp.min`, `sunrise`, `sunset`, `pop`, `weather[].description/icon`
+  - `hourly[]`: `dt`, `temp`, `feels_like`, `pop`, `wind_speed`, `wind_gust`, `wind_deg`, `uvi`, `weather[].description/icon`
+  - `alerts`: passed through for display
+- **Notes:** Used when WeatherKit is unavailable; normalized into the same structure.
 
 ### RainViewer radar + Google Static Maps
-* **Endpoints:**
-  * `https://api.rainviewer.com/public/weather-maps.json` → tile metadata (`host`, `radar.past`, `radar.nowcast` frames with `path` and `time`).
-  * Tile fetches via the returned `host` and `path` for the configured latitude/longitude.
-  * Google Static Maps: `https://maps.googleapis.com/maps/api/staticmap` with `center`, `zoom`, `size`, `maptype`, marker, and `key` parameters for the radar basemap.
-* **Data we use:** Radar frame `path` and `time` values to build tile URLs, plus Static Maps imagery for the background.
+- **RainViewer metadata:** `https://api.rainviewer.com/public/weather-maps.json`
+- **RainViewer tiles:** `https://{host}/{path}/256/{zoom}/{x}/{y}/2/1_1.png`
+- **Google Static Maps:** `https://maps.googleapis.com/maps/api/staticmap`
+- **Fields used:**
+  - RainViewer: `host`, `radar.past`, `radar.nowcast` (`path`, `time`)
+  - Google Static Maps: map tiles for the radar background (with `center`, `zoom`, `size`, `maptype`, `key`)
 
-## Travel time
+---
 
-### Google Maps Directions API
-* **Endpoint:** `https://maps.googleapis.com/maps/api/directions/json` (configurable) with `origin`, `destination`, `alternatives=true`, `departure_time=now`, `traffic_model=best_guess`, `region=us`, optional `avoid=highways`, and `key`.
-* **Data we use:** From each route’s first `leg`: `duration_in_traffic` or `duration` (`text`/`value`), `summary`, and step `html_instructions`. These are stored as `_duration_text`, `_duration_sec`, `_summary`, and `_steps_text`, then converted to travel time strings and minute counts.
+## Travel
+
+### Google Maps Directions API (v1 travel screens)
+- **Endpoint:** `https://maps.googleapis.com/maps/api/directions/json`
+- **Fields used:**
+  - From each route’s first `leg`: `duration` and `duration_in_traffic` (`text`/`value`), `summary`, `steps[].html_instructions`
+- **Notes:** Values are normalized into `_duration_text`, `_duration_sec`, `_summary`, and `_steps_text` for screen rendering.
+
+### Apple Maps Web Services (v2 travel screens)
+- **Directions:** `https://maps-api.apple.com/v1/directions`
+- **Snapshot:** `https://maps-api.apple.com/v1/snapshot`
+- **Fields used (directions):**
+  - Route fields: `expectedTravelTime`, `staticTravelTime` / `typicalTravelTime`, `name` / `summary`, and route step instructions
+- **Fields used (snapshots):**
+  - Map image response bytes for the travel map background
+- **Notes:** Auth uses either `APPLE_MAPS_API_KEY`/`MAPKIT_TOKEN` or a JWT signed with `APPLE_MAPS_TEAM_ID`, `APPLE_MAPS_KEY_ID`, and `APPLE_MAPS_PRIVATE_KEY/APPLE_MAPS_KEY_PATH`.
+
+---
 
 ## Sports
 
-### NHL (Blackhawks focus)
-* **Endpoints:**
-  * Scoreboard/schedule: `https://statsapi.web.nhl.com/api/v1/schedule?date=YYYY-MM-DD&expand=schedule.linescore,schedule.teams` with fallback to `https://api-web.nhle.com/v1/scoreboard/{date}` or `/scoreboard/now`.
-  * Club schedule: `https://api-web.nhle.com/v1/club-schedule-season/CHI/20252026` for upcoming game cards.
-  * Standings: `https://statsapi.web.nhl.com/api/v1/standings` with fallback to `https://api-web.nhle.com/v1/standings/now`.
-* **Data we use:** Game entries (`gamePk/id`, `gameDate`, `gameState`, `teams.home/away` scores/records, `linescore`, `venue`, `startTimeUTC/Central`), plus standings records (`divisionRank`, `leagueRecord.wins/losses/ot`, `gamesBack`, `wildCardGamesBack`, `streak`, split records). DNS checks decide between statsapi and api-web, and payloads are normalized into shared game dictionaries for the NHL screens.
+### NHL (Blackhawks)
+- **Schedule / scoreboard:**
+  - `https://statsapi.web.nhl.com/api/v1/schedule?date=YYYY-MM-DD&expand=schedule.linescore,schedule.teams` (primary when DNS works)
+  - `https://api-web.nhle.com/v1/scoreboard/{date}` and `/scoreboard/now` (fallback)
+- **Standings:**
+  - `https://statsapi.web.nhl.com/api/v1/standings` (primary)
+  - `https://api-web.nhle.com/v1/standings/now` (fallback)
+- **Fields used:** game IDs, dates, game state, team records, scores, linescore info, venue, start times, and standings metrics (`divisionRank`, `leagueRecord`, `gamesBack`, `wildCardGamesBack`, `streak`, split records).
 
-### MLB (Cubs/White Sox)
-* **Endpoint:** `https://statsapi.mlb.com/api/v1/schedule` with team IDs for Cubs (`112`) and White Sox (`145`) and expansions for linescores/teams.
-* **Data we use:** Game `gamePk`, `gameDate`, `status.abstractGameState`, `teams.home/away` scores/records, `venue`, `probablePitchers`, `linescore` info, plus standings via `https://statsapi.mlb.com/api/v1/standings` (divisions, overall, wild card) for win/loss/GB/WCGB and streak data.
+### MLB (Cubs / White Sox)
+- **Schedule:** `https://statsapi.mlb.com/api/v1/schedule` with team IDs `112` (Cubs) and `145` (White Sox)
+- **Standings:** `https://statsapi.mlb.com/api/v1/standings`
+- **Fields used:** game IDs, dates, status, team records/scores, venue, probable pitchers, linescore, division standings (W/L/GB/WCGB/streak).
 
-### NBA (Chicago Bulls)
-* **Endpoints:**
-  * Scoreboard: `https://site.api.espn.com/apis/site/v2/sports/basketball/nba/scoreboard` for upcoming, live, and recent games within a rolling window.
-  * Standings: Prefer `https://cdn.nba.com/static/json/liveData/standings/league.json` with fallback to `https://site.web.api.espn.com/apis/v2/sports/basketball/nba/standings`.
-* **Data we use:** Game `gameDate/officialDate`, `status.abstractGameState/detailedState`, team IDs/triCodes, `score`, `competition` data for venue and broadcasts. Standings fields include `wins`, `losses`, `winPct`, `streakText/streak`, conference/division rank and games-back, plus split records (`home`, `away`, `lastTen`).
+### NBA (Bulls)
+- **Scoreboard:** `https://site.api.espn.com/apis/site/v2/sports/basketball/nba/scoreboard`
+- **Standings (primary):** `https://cdn.nba.com/static/json/liveData/standings/league.json`
+- **Standings (fallback):** `https://site.web.api.espn.com/apis/v2/sports/basketball/nba/standings`
+- **Fields used:** game status, team IDs/triCodes, scores, venue/broadcast info, and standings stats (wins, losses, winPct, streaks, ranks, split records).
 
-### NFL (Chicago Bears)
-* **Endpoint:** `https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard` for standings and schedule context.
-* **Data we use:** `team` IDs, `records` with overall/home/away splits, `playoffSeed`, `streak`, and win/loss counts to power Bears standings displays.
+### NFL (Bears / league scoreboards)
+- **Scoreboard:** `https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard`
+- **Standings:** `https://raw.githubusercontent.com/nflverse/nfldata/master/data/standings.csv`
+- **Fields used:** game status, team records, standings ranks, streaks, and split records.
 
 ### AHL (Chicago Wolves)
-* **Endpoints:**
-  * ICS schedule feed (default Wolves Stanza URL in `config.py`) for future games.
-  * HockeyTech feeds configured via `AHL_TEAM_ID/AHL_TEAM_TRICODE` for recent results and cached scoring detail.
-* **Data we use:** Game dates, opponents, home/away flags, final scores and status for last/next/next-home cards.
+- **Schedule (ICS):** Stanza feed configured via `AHL_SCHEDULE_ICS_URL` (defaults to the Wolves calendar)
+- **HockeyTech feeds:** `https://lscluster.hockeytech.com/feed/` (base) with league/team parameters
+- **Fields used:** game dates, opponents, home/away flags, final scores, and recent scoring details (cached for faster redraws).
+
+---
+
+## Stocks
+
+### Yahoo Finance (yfinance)
+- **API source:** `yfinance` (Yahoo Finance)
+- **Fields used:** `regularMarketPrice`, `previousClose`, or historical close values to compute price + change + all-time percentage.
+
+---
 
 ## Maps & imagery
 
-* **Google Static Maps**: Used in both the weather radar background and the travel map screen for rendered map tiles (controlled by `GOOGLE_MAPS_API_KEY`).
-* **Team/league logos**: Loaded from the repository’s `images/` folder rather than external APIs, but paired with the data above when rendering screens.
+- **Google Static Maps** is used both for the weather radar basemap and the legacy travel map.
+- **Team and league logos** are loaded from the local `images/` folder rather than external CDN endpoints.
