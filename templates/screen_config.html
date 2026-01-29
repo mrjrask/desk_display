@@ -733,6 +733,91 @@
         .filter(Boolean);
     }
 
+    function parseAltScreen(value) {
+      if (!value) return [];
+      return value
+        .split(",")
+        .map((item) => item.trim())
+        .filter((item) => item.length > 0);
+    }
+
+    function buildConfigPayload(screens) {
+      const screensPayload = {};
+      screens.forEach((screen) => {
+        const screenId = String(screen.id || "").trim();
+        if (!screenId) return;
+        const frequency = Number.parseInt(screen.frequency ?? 0, 10);
+        const altScreens = parseAltScreen(String(screen.alt_screen ?? "").trim());
+        if (altScreens.length > 0) {
+          const altFrequencyRaw = screen.alt_frequency;
+          const altFrequency = Number.isNaN(Number.parseInt(altFrequencyRaw, 10))
+            ? 1
+            : Number.parseInt(altFrequencyRaw, 10);
+          screensPayload[screenId] = {
+            frequency: Number.isNaN(frequency) ? 0 : frequency,
+            alt: {
+              screen: altScreens.length === 1 ? altScreens[0] : altScreens,
+              frequency: altFrequency,
+            },
+          };
+        } else {
+          screensPayload[screenId] = Number.isNaN(frequency) ? 0 : frequency;
+        }
+      });
+      return {
+        screens: screensPayload,
+        playlists: buildPlaylistsPayload(screens),
+        sequence: playlists.map((playlist) => ({ playlist: playlist.id })),
+      };
+    }
+
+    function buildPlaylistsPayload(screens) {
+      const playlistPayload = {};
+      playlists.forEach((playlist) => {
+        const steps = screens
+          .filter((screen) => (playlistAssignments[screen.id] || "") === playlist.id)
+          .map((screen) => ({ screen: screen.id }));
+        playlistPayload[playlist.id] = {
+          label: playlist.name,
+          steps,
+        };
+      });
+      return playlistPayload;
+    }
+
+    function buildStylePayload(screens) {
+      const screensPayload = {};
+      screens.forEach((screen) => {
+        const screenId = String(screen.id || "").trim();
+        if (!screenId) return;
+        const background = String(screen.background ?? "").trim();
+        if (!background) return;
+        screensPayload[screenId] = { background };
+      });
+      return { screens: screensPayload };
+    }
+
+    function normalizeImportPayload(payload) {
+      if (payload && typeof payload === "object" && payload.config) {
+        return payload;
+      }
+      return { config: payload };
+    }
+
+    function downloadPayload(payload, filename) {
+      const blob = new Blob([JSON.stringify(payload, null, 2)], {
+        type: "application/json",
+      });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+    }
+
     function saveDraft() {
       const payload = {
         updatedAt: new Date().toISOString(),
@@ -961,25 +1046,15 @@
 
     async function exportConfiguration() {
       clearError();
-      setButtonsDisabled(true);
       try {
-        const response = await fetch("/api/screens/export");
-        if (!response.ok) {
-          throw new Error("Unable to export configuration");
-        }
-        const blob = await response.blob();
-        const url = URL.createObjectURL(blob);
-        const link = document.createElement("a");
-        link.href = url;
-        link.download = "screens_config.export.json";
-        document.body.appendChild(link);
-        link.click();
-        link.remove();
-        URL.revokeObjectURL(url);
+        const screens = getCurrentScreens();
+        const payload = {
+          config: buildConfigPayload(screens),
+          style: buildStylePayload(screens),
+        };
+        downloadPayload(payload, "screens_config.export.json");
       } catch (err) {
         showError(err.message);
-      } finally {
-        setButtonsDisabled(false);
       }
     }
 
@@ -987,16 +1062,17 @@
       clearError();
       setButtonsDisabled(true);
       try {
+        const payload = normalizeImportPayload(config);
         const response = await fetch("/api/screens/import", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ config }),
+          body: JSON.stringify(payload),
         });
         const data = await response.json();
         if (!response.ok) {
           throw new Error(data.error || "Unable to import configuration");
         }
-        applyImportedPlaylists(config);
+        applyImportedPlaylists(payload.config);
         renderScreens(data.screens || []);
         markClean();
       } catch (err) {

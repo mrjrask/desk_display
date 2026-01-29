@@ -79,6 +79,45 @@ def _load_active_style_config() -> Dict[str, Any]:
     return _load_style_config(STYLE_CONFIG_PATH)
 
 
+def _validate_style_payload(data: Any) -> Dict[str, Any]:
+    if data is None:
+        return {"screens": {}}
+    if not isinstance(data, dict):
+        raise ValueError("Style configuration must be a JSON object")
+    screens = data.get("screens")
+    if screens is None:
+        return {"screens": {}}
+    if not isinstance(screens, dict):
+        raise ValueError("Style configuration must include a 'screens' mapping")
+
+    invalid_screens: List[str] = []
+    normalised_screens: Dict[str, Dict[str, str]] = {}
+    for screen_id, spec in screens.items():
+        if not isinstance(screen_id, str):
+            continue
+        background: Optional[str] = None
+        if isinstance(spec, str):
+            background = spec
+        elif isinstance(spec, dict):
+            raw_background = spec.get("background")
+            if isinstance(raw_background, str):
+                background = raw_background
+        if background is None:
+            continue
+        normalised = _normalise_hex_color(background)
+        if not normalised:
+            invalid_screens.append(screen_id)
+            continue
+        normalised_screens[screen_id] = {"background": normalised}
+
+    if invalid_screens:
+        raise ValueError(
+            "Invalid background color for: " + ", ".join(sorted(set(invalid_screens)))
+        )
+
+    return {"screens": normalised_screens}
+
+
 def _parse_alt_screen(value: Optional[str]) -> Optional[List[str]]:
     if not value:
         return None
@@ -200,9 +239,10 @@ def _build_screen_entries(
     if not isinstance(style_screens, dict):
         style_screens = {}
 
-    ordered_screen_ids = list(SCREEN_IDS)
-    for screen_id in screens:
-        if screen_id not in SCREEN_IDS:
+    ordered_screen_ids: List[str] = []
+    ordered_screen_ids.extend(list(screens.keys()))
+    for screen_id in SCREEN_IDS:
+        if screen_id not in ordered_screen_ids:
             ordered_screen_ids.append(screen_id)
 
     entries: List[Dict[str, Any]] = []
@@ -415,7 +455,15 @@ def import_screens() -> Any:
         return jsonify({"error": str(exc)}), 400
 
     _save_config(config)
-    style_config = _load_active_style_config()
+    style_payload = payload.get("style")
+    if style_payload is not None:
+        try:
+            style_config = _validate_style_payload(style_payload)
+        except Exception as exc:
+            return jsonify({"error": str(exc)}), 400
+        _save_style_config(style_config)
+    else:
+        style_config = _load_active_style_config()
     entries = _build_screen_entries(config, style_config)
     return jsonify({"status": "ok", "screens": entries})
 
