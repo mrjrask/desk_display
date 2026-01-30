@@ -1774,9 +1774,18 @@ MLB_ABBREVIATIONS = {
 }
 
 MLB_LOGO_OVERRIDES = {
+    "AZ": "ARI",
     "CHC": "CUBS",
     "CWS": "SOX",
+    "CHW": "SOX",
+    "KCR": "KC",
     "OAK": "ATH",
+    "SDP": "SD",
+    "SFG": "SF",
+    "TAM": "TB",
+    "TBR": "TB",
+    "WAS": "WSH",
+    "WSN": "WSH",
     "ATHLETICS": "ATH",
     "RED SOX": "BOS",
     "REDSOX": "BOS",

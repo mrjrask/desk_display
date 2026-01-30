@@ -526,9 +526,23 @@ def draw_sports_screen(display, game, title, transition=False, screen_id: Option
     home_tm = game['teams']['home']['team']
     away_tm = game['teams']['away']['team']
     cubs_id = int(MLB_CUBS_TEAM_ID)
-    sox_id  = int(MLB_SOX_TEAM_ID)
+    sox_id = int(MLB_SOX_TEAM_ID)
 
-    if away_tm['id'] == cubs_id or away_tm['id'] == sox_id:
+    focus_key = " ".join(filter(None, [screen_id, title])).lower()
+    focus_id = None
+    if "cubs" in focus_key:
+        focus_id = cubs_id
+    elif "sox" in focus_key:
+        focus_id = sox_id
+
+    if focus_id is not None:
+        if away_tm.get('id') == focus_id:
+            prefix, opponent = '@', get_team_display_name(home_tm)
+        elif home_tm.get('id') == focus_id:
+            prefix, opponent = 'vs.', get_team_display_name(away_tm)
+        else:
+            prefix, opponent = 'vs.', get_team_display_name(away_tm)
+    elif away_tm.get('id') in (cubs_id, sox_id):
         prefix, opponent = '@', get_team_display_name(home_tm)
     else:
         prefix, opponent = 'vs.', get_team_display_name(away_tm)
