@@ -547,7 +547,10 @@ class Display:
         if self._framebuffer is not None:
             buffer_to_display = self._buffer
             if self.rotation:
-                buffer_to_display = self._buffer.rotate(self.rotation, expand=False)
+                buffer_to_display = self._buffer.rotate(
+                    self.rotation,
+                    expand=self.rotation in (90, 270),
+                )
             self._framebuffer.write_image(buffer_to_display)
             return
         if self._display is None:  # pragma: no cover - hardware import
