@@ -1200,9 +1200,11 @@ def standard_next_game_logo_height_for_space(
 
 def standard_scoreboard_team_logo_height(panel_height: int, *, compact: bool = False) -> int:
     """Return the shared scoreboard team logo height for the given panel size."""
+    from config import scale_value
+
     if compact:
-        return 26
-    return 52
+        return scale_value(26)
+    return scale_value(52)
 
 
 def standard_scoreboard_league_logo_height(team_logo_height: int) -> int:
