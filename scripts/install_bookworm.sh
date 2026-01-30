@@ -113,6 +113,7 @@ add_service_env "DISPLAY_HEIGHT" "${DISPLAY_HEIGHT:-}"
 add_service_env "DISPLAY_ROTATION" "${DISPLAY_ROTATION:-}"
 FRAMEBUFFER_PRESTART_LINES=()
 FRAMEBUFFER_POSTSTOP_LINES=()
+FRAMEBUFFER_UNIT_LINES=()
 if [[ "${DESK_DISPLAY_OUTPUT:-}" == "framebuffer" ]]; then
   FRAMEBUFFER_PRESTART_LINES=(
     "PermissionsStartOnly=true"
@@ -121,12 +122,17 @@ if [[ "${DESK_DISPLAY_OUTPUT:-}" == "framebuffer" ]]; then
   FRAMEBUFFER_POSTSTOP_LINES=(
     "ExecStopPost=/bin/bash -lc '$PROJECT_DIR/scripts/framebuffer_service.sh stop'"
   )
+  FRAMEBUFFER_UNIT_LINES=(
+    "After=display-manager.service"
+    "Conflicts=display-manager.service"
+  )
 fi
 log "Writing systemd service to $SERVICE_PATH"
 $SUDO tee "$SERVICE_PATH" >/dev/null <<SERVICE
 [Unit]
 Description=Desk Display Service - main
 After=network-online.target
+$(printf '%s\n' "${FRAMEBUFFER_UNIT_LINES[@]}")
 
 [Service]
 WorkingDirectory=$PROJECT_DIR
