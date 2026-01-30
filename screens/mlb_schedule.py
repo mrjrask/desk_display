@@ -18,6 +18,7 @@ from config import (
     FONT_TEAM_SPORTS, FONT_SCORE,
     MLB_CUBS_TEAM_ID, MLB_SOX_TEAM_ID,
     CENTRAL_TIME,
+    IMAGES_DIR,
     get_screen_background_color,
 )
 from utils import (
@@ -43,8 +44,6 @@ def _set_background(screen_id: Optional[str]) -> None:
     global BACKGROUND_COLOR
     if screen_id:
         BACKGROUND_COLOR = get_screen_background_color(screen_id, BACKGROUND_COLOR)
-SCRIPT_DIR    = os.path.dirname(os.path.abspath(__file__))
-IMAGES_DIR    = os.path.join(SCRIPT_DIR, "images")
 MLB_LOGOS_DIR = os.path.join(IMAGES_DIR, "mlb")
 
 # ── Layout constants ─────────────────────────────────────────────────────────
@@ -555,13 +554,13 @@ def draw_sports_screen(display, game, title, transition=False, screen_id: Option
         y_text += lh + 1
 
     # logos + “@” inline
-    def load_logo_for_tm(tm, height: int):
+    def load_logo_for_tm(tm, frame_size: int):
         ab = get_mlb_tricode(tm) or get_mlb_abbreviation(get_team_display_name(tm))
-        if not ab or height <= 0:
+        if not ab or frame_size <= 0:
             return None
-        return load_team_logo(MLB_LOGOS_DIR, ab, height=height)
+        return load_team_logo(MLB_LOGOS_DIR, ab, box_size=frame_size)
 
-    # Desired logo height mirrors the Hawks "Next Game" layout for consistency.
+    # Desired logo frame height mirrors the Hawks "Next Game" layout for consistency.
     desired_logo_h = standard_next_game_logo_height(HEIGHT)
 
     raw_date = game.get('officialDate','') or game.get('gameDate','')[:10]
