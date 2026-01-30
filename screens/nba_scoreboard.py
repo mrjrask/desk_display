@@ -49,7 +49,6 @@ from utils import (
     clear_display,
     load_team_logo,
     log_call,
-    standard_scoreboard_league_logo_height,
     standard_scoreboard_team_logo_height,
 )
 from services.http_client import get_session
@@ -75,7 +74,7 @@ LOGO_DIR = os.path.join(IMAGES_DIR, "nba")
 LEAGUE_LOGO_KEYS = ("NBA", "nba")
 LEAGUE_LOGO_GAP = scale_value(4)
 TEAM_LOGO_BASE_HEIGHT = standard_scoreboard_team_logo_height(HEIGHT)
-LEAGUE_LOGO_BASE_HEIGHT = standard_scoreboard_league_logo_height(TEAM_LOGO_BASE_HEIGHT)
+LEAGUE_LOGO_BASE_HEIGHT = TEAM_LOGO_BASE_HEIGHT
 INTRO_LOGO = "NBA.png"
 INTRO_MAX_BASE_HEIGHT = scale_value(100)
 INTRO_ANIM_SCALES = (0.45, 0.6, 0.75, 0.9, 1.04, 0.98, 1.0)

@@ -42,7 +42,6 @@ from utils import (
     clear_display,
     load_team_logo,
     log_call,
-    standard_scoreboard_league_logo_height,
     standard_scoreboard_team_logo_height,
 )
 
@@ -88,7 +87,7 @@ for w in GAME_COL_WIDTHS:
 SCREEN_ID = "NFL Scoreboard v2"
 TITLE_FONT = FONT_TITLE_SPORTS
 TEAM_LOGO_BASE_HEIGHT = standard_scoreboard_team_logo_height(HEIGHT, compact=True)
-LEAGUE_LOGO_BASE_HEIGHT = standard_scoreboard_league_logo_height(TEAM_LOGO_BASE_HEIGHT)
+LEAGUE_LOGO_BASE_HEIGHT = TEAM_LOGO_BASE_HEIGHT
 LOGO_HEIGHT = TEAM_LOGO_BASE_HEIGHT
 LEAGUE_LOGO_HEIGHT = LEAGUE_LOGO_BASE_HEIGHT
 SCORE_FONT = get_screen_font(

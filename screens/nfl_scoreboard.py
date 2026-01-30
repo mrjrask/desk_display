@@ -46,7 +46,6 @@ from utils import (
     clear_display,
     load_team_logo,
     log_call,
-    standard_scoreboard_league_logo_height,
     standard_scoreboard_team_logo_height,
 )
 
@@ -73,7 +72,7 @@ LOGO_DIR = os.path.join(IMAGES_DIR, "nfl")
 LEAGUE_LOGO_KEYS = ("NFL", "nfl")
 LEAGUE_LOGO_GAP = scale_value(4)
 TEAM_LOGO_BASE_HEIGHT = standard_scoreboard_team_logo_height(HEIGHT)
-LEAGUE_LOGO_BASE_HEIGHT = standard_scoreboard_league_logo_height(TEAM_LOGO_BASE_HEIGHT)
+LEAGUE_LOGO_BASE_HEIGHT = TEAM_LOGO_BASE_HEIGHT
 LOGO_HEIGHT = TEAM_LOGO_BASE_HEIGHT
 LEAGUE_LOGO_HEIGHT = LEAGUE_LOGO_BASE_HEIGHT
 SCORE_FONT = get_screen_font(
