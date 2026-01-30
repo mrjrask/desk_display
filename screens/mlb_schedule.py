@@ -18,6 +18,7 @@ from config import (
     FONT_TEAM_SPORTS, FONT_SCORE,
     MLB_CUBS_TEAM_ID, MLB_SOX_TEAM_ID,
     CENTRAL_TIME,
+    IMAGES_DIR,
     get_screen_background_color,
 )
 from utils import (
@@ -43,8 +44,6 @@ def _set_background(screen_id: Optional[str]) -> None:
     global BACKGROUND_COLOR
     if screen_id:
         BACKGROUND_COLOR = get_screen_background_color(screen_id, BACKGROUND_COLOR)
-SCRIPT_DIR    = os.path.dirname(os.path.abspath(__file__))
-IMAGES_DIR    = os.path.join(SCRIPT_DIR, "images")
 MLB_LOGOS_DIR = os.path.join(IMAGES_DIR, "mlb")
 
 # ── Layout constants ─────────────────────────────────────────────────────────
