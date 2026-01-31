@@ -1,12 +1,12 @@
-# Desk Display (Display HAT Mini + Framebuffer)
+# Desk Display (Display HAT Mini + Kernel Displays)
 
-Desk Display is a Raspberry Pi dashboard for the Pimoroni Display HAT Mini (320×240) or any Linux framebuffer panel. It cycles through weather, commute, sensor, and sports screens with smooth animations, configurable scheduling, and built-in screenshot archiving.
+Desk Display is a Raspberry Pi dashboard for the Pimoroni Display HAT Mini (320×240) or any kernel-driven display. It cycles through weather, commute, sensor, and sports screens with smooth animations, configurable scheduling, and built-in screenshot archiving.
 
 ## Highlights
 
 - **Always-on dashboards** for date/time, weather (current/hourly/daily/radar), travel time/map, indoor sensors, and sports scoreboards/standings.
 - **Screen scheduling** via `screens_config.json` (frequency + alternates) and a drag-and-drop web UI.
-- **Display output choices**: Display HAT Mini, framebuffer devices (Hyperpixel4, HDMI, etc.), or headless rendering.
+- **Display output choices**: Display HAT Mini, kernel-driven fullscreen displays, or headless rendering.
 - **Smart capture pipeline**: per-screen screenshots, batch archiving, and optional H.264 video capture.
 - **Wi-Fi monitoring** with automatic recovery and on-screen outage status.
 - **GitHub update indicator** on date/time screens when upstream commits are available.
@@ -16,7 +16,7 @@ Desk Display is a Raspberry Pi dashboard for the Pimoroni Display HAT Mini (320�
 ## Requirements
 
 - Raspberry Pi (tested on Zero/Zero 2 W) or other Linux SBC
-- Pimoroni Display HAT Mini **or** a framebuffer-backed display
+- Pimoroni Display HAT Mini **or** a kernel-driven display (HDMI, DSI, etc.)
 - Python 3.9+
 
 ### System packages (Raspberry Pi OS)
@@ -46,7 +46,7 @@ pip install --upgrade pip
 pip install -r requirements.txt
 ```
 
-Use `requirements_framebuffer.txt` instead when running in framebuffer mode.
+Use `requirements_kernel.txt` instead when running on a kernel-driven display without the Display HAT Mini driver.
 
 To start the display loop directly:
 
@@ -68,21 +68,21 @@ bash ./scripts/install_display_hat_mini_bookworm.sh
 bash ./scripts/install_display_hat_mini_trixie.sh
 ```
 
-### Framebuffer panels
+### Kernel-driven displays (fullscreen)
 
 ```bash
 # Bookworm
-bash ./scripts/install_framebuffer_bookworm.sh
+bash ./scripts/install_kernel_bookworm.sh
 
 # Trixie
-bash ./scripts/install_framebuffer_trixie.sh
+bash ./scripts/install_kernel_trixie.sh
 ```
 
-The framebuffer installers will:
+The kernel display installers will:
 
-- Configure `DESK_DISPLAY_OUTPUT=framebuffer`.
-- Prompt for a display resolution (or use `DISPLAY_RESOLUTION`, `DISPLAY_WIDTH`, and `DISPLAY_HEIGHT`).
-- Stop the desktop display manager while the service runs, with a launcher to toggle it back on.
+- Configure `DESK_DISPLAY_OUTPUT=kernel`.
+- Detect a connected DRM display for fullscreen output (or prompt for a resolution override).
+- Install a desktop launcher that can run the display loop inside the desktop session.
 
 To uninstall the systemd service and optionally remove the virtualenv:
 
@@ -100,9 +100,9 @@ Desk Display reads configuration from environment variables and (optionally) a `
 
 | Variable | Purpose |
 | --- | --- |
-| `DESK_DISPLAY_OUTPUT` | `auto` (default), `displayhatmini`, `framebuffer`, or `headless`. |
+| `DESK_DISPLAY_OUTPUT` | `auto` (default), `displayhatmini`, `kernel`, `framebuffer`, or `headless`. |
 | `DESK_DISPLAY_FORCE_HEADLESS` | Force headless rendering (no display writes). |
-| `DISPLAY_WIDTH` / `DISPLAY_HEIGHT` | Override target render size (required for larger framebuffer panels). |
+| `DISPLAY_WIDTH` / `DISPLAY_HEIGHT` | Override target render size (required for larger fullscreen panels). |
 | `DISPLAY_FB_DEVICE` | Framebuffer device path (default `/dev/fb0`). |
 | `DISPLAY_FB_PIXEL_FORMAT` | Override framebuffer format (`rgb565`, `rgb888`, `xrgb8888`, etc.). |
 | `DISPLAY_FB_PIXEL_ORDER` | Force pixel order (`rgb` or `bgr`). |
@@ -216,7 +216,7 @@ sudo systemctl restart desk_display.service
 - **Weather data missing**: verify WeatherKit credentials or set an OpenWeatherMap API key.
 - **Radar background missing**: ensure `GOOGLE_MAPS_API_KEY` is set.
 - **Travel screens show N/A**: confirm `TRAVEL_*` addresses and the relevant Maps API key.
-- **Framebuffers not showing**: set `DESK_DISPLAY_OUTPUT=framebuffer` and provide `DISPLAY_WIDTH`/`DISPLAY_HEIGHT`.
+- **Kernel displays not showing**: set `DESK_DISPLAY_OUTPUT=kernel` and provide `DISPLAY_WIDTH`/`DISPLAY_HEIGHT`.
 - **Wi-Fi recovery loops**: check `/var/log/wifi_auto_recover.log` and disable recovery with `ENABLE_WIFI_RECOVERY=0`.
 
 ---

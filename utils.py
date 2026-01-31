@@ -65,6 +65,28 @@ _DISPLAY_OUTPUT = os.environ.get("DESK_DISPLAY_OUTPUT", "auto").strip().lower()
 _FRAMEBUFFER_DEVICE = os.environ.get("DISPLAY_FB_DEVICE", "/dev/fb0")
 _FRAMEBUFFER_PIXEL_FORMAT = os.environ.get("DISPLAY_FB_PIXEL_FORMAT", "").strip().lower()
 _FRAMEBUFFER_PIXEL_ORDER = os.environ.get("DISPLAY_FB_PIXEL_ORDER", "").strip().lower()
+_PYGAME_MODULE = None
+_PYGAME_ERROR: Optional[Exception] = None
+
+
+def _load_pygame():
+    global _PYGAME_MODULE, _PYGAME_ERROR
+
+    if _PYGAME_MODULE is not None or _PYGAME_ERROR is not None:
+        return _PYGAME_MODULE
+
+    if "SDL_VIDEODRIVER" not in os.environ:
+        if not os.environ.get("DISPLAY") and not os.environ.get("WAYLAND_DISPLAY"):
+            os.environ["SDL_VIDEODRIVER"] = "kmsdrm"
+
+    try:
+        import pygame  # type: ignore
+    except Exception as exc:  # pragma: no cover - platform import
+        _PYGAME_ERROR = exc
+        return None
+
+    _PYGAME_MODULE = pygame
+    return _PYGAME_MODULE
 
 
 def _read_sysfs_value(path: str) -> Optional[str]:
@@ -154,6 +176,8 @@ def _normalize_display_output(value: str) -> str:
         return "displayhatmini"
     if value in {"framebuffer", "fb", "framebuffer-device"}:
         return "framebuffer"
+    if value in {"kernel", "kms", "drm", "sdl", "fullscreen"}:
+        return "kernel"
     if value in {"headless", "none", "off"}:
         return "headless"
     if value in {"auto", ""}:
@@ -338,6 +362,43 @@ class _FrameBufferDevice:
         except OSError as exc:
             logging.warning("Failed to write framebuffer: %s", exc)
 
+
+class _KernelDisplay:
+    def __init__(self, width: int, height: int):
+        self.render_width = width
+        self.render_height = height
+        self._pygame = _load_pygame()
+        if self._pygame is None:
+            raise RuntimeError(f"pygame not available: {_PYGAME_ERROR}")
+
+        self._pygame.display.init()
+        flags = self._pygame.FULLSCREEN | self._pygame.SCALED
+        self._screen = self._pygame.display.set_mode((0, 0), flags)
+        self.screen_width, self.screen_height = self._screen.get_size()
+        self._scale_to_screen = (self.screen_width, self.screen_height) != (
+            self.render_width,
+            self.render_height,
+        )
+        self._pygame.display.set_caption("Desk Display")
+        try:
+            self._pygame.mouse.set_visible(False)
+        except Exception:  # pragma: no cover - optional behavior
+            pass
+
+    def write_image(self, image: Image.Image) -> None:
+        if image.mode != "RGB":
+            image = image.convert("RGB")
+        surface = self._pygame.image.frombuffer(
+            image.tobytes(), image.size, "RGB"
+        )
+        if self._scale_to_screen:
+            surface = self._pygame.transform.smoothscale(
+                surface, (self.screen_width, self.screen_height)
+            )
+        self._screen.blit(surface, (0, 0))
+        self._pygame.display.flip()
+        self._pygame.event.pump()
+
 _ACTIVE_DISPLAY: Optional["Display"] = None
 _LED_INDICATOR_ANIMATOR: Optional["_LedAnimator"] = None
 
@@ -434,6 +495,7 @@ class Display:
         self._buffer = Image.new("RGB", (self.width, self.height), "black")
         self._display = None
         self._framebuffer: Optional[_FrameBufferDevice] = None
+        self._kernel_display: Optional[_KernelDisplay] = None
         self._button_pins: Dict[str, Optional[int]] = {name: None for name in self._BUTTON_NAMES}
         self._button_callback: Optional[Callable[[str], None]] = None
         self._backlight_level = 1.0
@@ -471,6 +533,30 @@ class Display:
                 ):
                     logging.info(
                         "Framebuffer size differs from render size (%dx%d); frames will be scaled.",
+                        self.width,
+                        self.height,
+                    )
+        elif output == "kernel":
+            try:
+                self._kernel_display = _KernelDisplay(self.width, self.height)
+            except Exception as exc:
+                logging.warning(
+                    "Kernel display output unavailable; running headless (%s).",
+                    exc,
+                )
+                self._kernel_display = None
+            else:
+                logging.info(
+                    "🖥️  Kernel display initialized (%dx%d fullscreen).",
+                    self._kernel_display.screen_width,
+                    self._kernel_display.screen_height,
+                )
+                if (self.width, self.height) != (
+                    self._kernel_display.screen_width,
+                    self._kernel_display.screen_height,
+                ):
+                    logging.info(
+                        "Kernel display size differs from render size (%dx%d); frames will be scaled.",
                         self.width,
                         self.height,
                     )
@@ -552,6 +638,15 @@ class Display:
                     expand=self.rotation in (90, 270),
                 )
             self._framebuffer.write_image(buffer_to_display)
+            return
+        if self._kernel_display is not None:
+            buffer_to_display = self._buffer
+            if self.rotation:
+                buffer_to_display = self._buffer.rotate(
+                    self.rotation,
+                    expand=self.rotation in (90, 270),
+                )
+            self._kernel_display.write_image(buffer_to_display)
             return
         if self._display is None:  # pragma: no cover - hardware import
             return

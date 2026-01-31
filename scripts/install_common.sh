@@ -83,6 +83,69 @@ EOF
   log "Installed framebuffer launcher for $service_name at $launcher_entry"
 }
 
+install_kernel_launcher() {
+  local project_dir="$1"
+  local service_name="$2"
+  local service_user="$3"
+  local launcher_path="$project_dir/scripts/launch_kernel_display.sh"
+
+  if [[ ! -f "$launcher_path" ]]; then
+    warn "Kernel display launcher not found at $launcher_path"
+    return 1
+  fi
+
+  ensure_executable "$launcher_path"
+
+  local home_dir
+  home_dir=$(getent passwd "$service_user" | cut -d: -f6)
+  if [[ -z "$home_dir" ]]; then
+    home_dir="/home/$service_user"
+  fi
+
+  local app_dir="$home_dir/.local/share/applications"
+  local desktop_dir="$home_dir/Desktop"
+  local launcher_entry="$app_dir/desk-display-kernel.desktop"
+
+  if [[ -n "${SUDO:-}" ]]; then
+    $SUDO mkdir -p "$app_dir"
+  else
+    mkdir -p "$app_dir"
+  fi
+
+  local launcher_contents
+  launcher_contents=$(cat <<EOF
+[Desktop Entry]
+Type=Application
+Name=Desk Display (Kernel Display)
+Comment=Launch the fullscreen kernel display in the desktop session
+Exec=/bin/bash -lc '$launcher_path'
+Terminal=true
+Categories=Utility;
+EOF
+)
+
+  if [[ -n "${SUDO:-}" ]]; then
+    echo "$launcher_contents" | $SUDO tee "$launcher_entry" >/dev/null
+    $SUDO chown "$service_user":"$service_user" "$launcher_entry"
+  else
+    echo "$launcher_contents" > "$launcher_entry"
+  fi
+
+  if [[ -d "$desktop_dir" ]]; then
+    local desktop_launcher="$desktop_dir/Desk Display Kernel.desktop"
+    if [[ -n "${SUDO:-}" ]]; then
+      $SUDO cp "$launcher_entry" "$desktop_launcher"
+      $SUDO chown "$service_user":"$service_user" "$desktop_launcher"
+      $SUDO chmod +x "$desktop_launcher"
+    else
+      cp "$launcher_entry" "$desktop_launcher"
+      chmod +x "$desktop_launcher"
+    fi
+  fi
+
+  log "Installed kernel display launcher for $service_name at $launcher_entry"
+}
+
 detect_existing_venv() {
   local project_dir="$1"
   local candidates=(
