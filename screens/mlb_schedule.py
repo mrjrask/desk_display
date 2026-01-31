@@ -582,8 +582,12 @@ def draw_sports_screen(display, game, title, transition=False, screen_id: Option
     logo_away = load_logo_for_tm(away_tm, logo_h)
     logo_home = load_logo_for_tm(home_tm, logo_h)
 
-    frame_w = standard_next_game_logo_frame_width(logo_h, (logo_away, logo_home))
     gap = 10
+    max_frame_w = max(10, (WIDTH - (gap * 2) - draw.textsize("@", font=FONT_TEAM_SPORTS)[0]) // 2)
+    frame_w = min(
+        standard_next_game_logo_frame_width(logo_h, (logo_away, logo_home)),
+        max_frame_w,
+    )
 
     at_txt = "@"
     at_w, at_h = draw.textsize(at_txt, font=FONT_TEAM_SPORTS)
@@ -599,15 +603,37 @@ def draw_sports_screen(display, game, title, transition=False, screen_id: Option
     at_x = left_x + frame_w + gap
     right_x = at_x + at_w + gap
 
+    def _fit_logo_to_frame(logo: Image.Image | None) -> Image.Image | None:
+        if not logo or frame_w <= 0 or logo_h <= 0:
+            return logo
+        width, height = logo.size
+        if width <= 0 or height <= 0:
+            return logo
+        scale = min(frame_w / float(width), logo_h / float(height), 1.0)
+        if scale >= 1.0:
+            return logo
+        new_width = max(1, int(round(width * scale)))
+        new_height = max(1, int(round(height * scale)))
+        return logo.resize((new_width, new_height), Image.LANCZOS)
+
+    def _draw_logo_box(frame_x: int) -> None:
+        draw.rectangle(
+            (frame_x, row_y, frame_x + frame_w, row_y + logo_h),
+            outline=(64, 64, 64),
+        )
+
     def _paste_logo(logo, frame_x):
+        logo = _fit_logo_to_frame(logo)
         if not logo:
             return
         lx = frame_x + (frame_w - logo.width) // 2
         ly = row_y + (logo_h - logo.height) // 2
         img.paste(logo, (lx, ly), logo)
 
+    _draw_logo_box(left_x)
     _paste_logo(logo_away, left_x)
     draw.text((at_x, row_y + (block_h - at_h)//2), at_txt, font=FONT_TEAM_SPORTS, fill=(255,255,255))
+    _draw_logo_box(right_x)
     _paste_logo(logo_home, right_x)
 
     _center_bottom_text(draw, bottom, FONT_DATE_SPORTS)
