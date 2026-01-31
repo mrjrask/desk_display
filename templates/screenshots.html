@@ -38,6 +38,22 @@
       margin: 0;
       font-size: 0.95rem;
     }
+    .nav-links {
+      display: flex;
+      justify-content: center;
+      gap: 0.75rem;
+      flex-wrap: wrap;
+      margin: 1rem 0 0;
+    }
+    .nav-links a {
+      color: #e2e8f0;
+      text-decoration: none;
+      padding: 0.35rem 0.85rem;
+      border-radius: 999px;
+      border: 1px solid rgba(148, 163, 184, 0.4);
+      background: rgba(15, 23, 42, 0.65);
+      font-size: 0.85rem;
+    }
     .controls {
       margin-top: 1rem;
       display: flex;
@@ -177,7 +193,11 @@
   <header>
     <h1>Latest Screen Captures</h1>
     <p class="subtitle">Click any preview to view the full-resolution screenshot.</p>
-    <p class="subtitle"><a href="{{ url_for('screen_config') }}">Return to screen configuration</a></p>
+    <nav class="nav-links">
+      <a href="/">Rotation Config</a>
+      <a href="/screenshots">Screenshots</a>
+      <a href="/layouts">Layout Editor</a>
+    </nav>
     <div class="controls">
       <label class="toggle">
         <input type="checkbox" id="hideMissingScreens">

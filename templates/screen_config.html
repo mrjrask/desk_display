@@ -41,6 +41,22 @@
       margin-bottom: 1.5rem;
       font-size: 0.95rem;
     }
+    .nav-links {
+      display: flex;
+      justify-content: center;
+      gap: 0.75rem;
+      flex-wrap: wrap;
+      margin: 0 auto 1.5rem;
+    }
+    .nav-links a {
+      color: #e2e8f0;
+      text-decoration: none;
+      padding: 0.35rem 0.85rem;
+      border-radius: 999px;
+      border: 1px solid rgba(148, 163, 184, 0.4);
+      background: rgba(15, 23, 42, 0.65);
+      font-size: 0.85rem;
+    }
     .panel {
       max-width: 1100px;
       margin: 0 auto;
@@ -329,6 +345,11 @@
 <body>
   <h1>Screen Rotation Configuration</h1>
   <div class="subtitle">Drag to reorder screens, then set frequency and alternates.</div>
+  <nav class="nav-links">
+    <a href="/">Rotation Config</a>
+    <a href="/screenshots">Screenshots</a>
+    <a href="/layouts">Layout Editor</a>
+  </nav>
 
   <div class="panel">
     <div class="toolbar">
