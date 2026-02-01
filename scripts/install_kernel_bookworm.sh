@@ -60,9 +60,19 @@ prompt_launch_kernel_display() {
 
   local auto_launch="${AUTO_LAUNCH_KERNEL_DISPLAY:-1}"
   local has_display="false"
+  local launch_env=()
 
-  if [[ -n "${DISPLAY:-}" || -n "${WAYLAND_DISPLAY:-}" ]]; then
+  if detect_desktop_session "$SERVICE_USER"; then
     has_display="true"
+  fi
+  if [[ -n "${DISPLAY:-}" ]]; then
+    launch_env+=("DISPLAY=$DISPLAY")
+  fi
+  if [[ -n "${WAYLAND_DISPLAY:-}" ]]; then
+    launch_env+=("WAYLAND_DISPLAY=$WAYLAND_DISPLAY")
+  fi
+  if [[ -n "${XDG_RUNTIME_DIR:-}" ]]; then
+    launch_env+=("XDG_RUNTIME_DIR=$XDG_RUNTIME_DIR")
   fi
 
   if [[ "$auto_launch" == "0" ]]; then
@@ -86,9 +96,9 @@ prompt_launch_kernel_display() {
     fi
     log "Launching the kernel display in the current desktop session."
     if [[ -n "${SUDO:-}" ]]; then
-      $SUDO -u "$SERVICE_USER" /bin/bash -lc "$launcher"
+      $SUDO -u "$SERVICE_USER" env "${launch_env[@]}" /bin/bash -lc "$launcher"
     else
-      /bin/bash -lc "$launcher"
+      env "${launch_env[@]}" /bin/bash -lc "$launcher"
     fi
     return 0
   fi
@@ -96,9 +106,9 @@ prompt_launch_kernel_display() {
   if [[ "$has_display" == "true" ]]; then
     log "Launching the kernel display in the current desktop session."
     if [[ -n "${SUDO:-}" ]]; then
-      $SUDO -u "$SERVICE_USER" /bin/bash -lc "$launcher"
+      $SUDO -u "$SERVICE_USER" env "${launch_env[@]}" /bin/bash -lc "$launcher"
     else
-      /bin/bash -lc "$launcher"
+      env "${launch_env[@]}" /bin/bash -lc "$launcher"
     fi
   else
     log "Launch manually with: $launcher"

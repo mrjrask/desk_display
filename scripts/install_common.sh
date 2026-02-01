@@ -170,6 +170,55 @@ detect_existing_venv() {
   return 1
 }
 
+detect_desktop_session() {
+  local service_user="$1"
+
+  if [[ -n "${DISPLAY:-}" || -n "${WAYLAND_DISPLAY:-}" ]]; then
+    return 0
+  fi
+
+  local runtime_dir=""
+  local uid=""
+  uid=$(id -u "$service_user" 2>/dev/null || true)
+  if [[ -n "$uid" ]]; then
+    runtime_dir="/run/user/$uid"
+    if [[ -z "${XDG_RUNTIME_DIR:-}" && -d "$runtime_dir" ]]; then
+      export XDG_RUNTIME_DIR="$runtime_dir"
+    fi
+  fi
+
+  if command -v loginctl >/dev/null 2>&1; then
+    local sessions session active type display
+    sessions=$(loginctl show-user "$service_user" -p Sessions --value 2>/dev/null || true)
+    for session in $sessions; do
+      active=$(loginctl show-session "$session" -p Active --value 2>/dev/null || true)
+      type=$(loginctl show-session "$session" -p Type --value 2>/dev/null || true)
+      display=$(loginctl show-session "$session" -p Display --value 2>/dev/null || true)
+      if [[ "$active" == "yes" && ( "$type" == "x11" || "$type" == "wayland" ) ]]; then
+        if [[ -z "${DISPLAY:-}" && "$type" == "x11" && -n "$display" ]]; then
+          export DISPLAY="$display"
+        fi
+        if [[ -z "${WAYLAND_DISPLAY:-}" && "$type" == "wayland" && -n "$runtime_dir" && -S "$runtime_dir/wayland-0" ]]; then
+          export WAYLAND_DISPLAY="wayland-0"
+        fi
+        return 0
+      fi
+    done
+  fi
+
+  if [[ -z "${WAYLAND_DISPLAY:-}" && -n "$runtime_dir" && -S "$runtime_dir/wayland-0" ]]; then
+    export WAYLAND_DISPLAY="wayland-0"
+    return 0
+  fi
+
+  if [[ -z "${DISPLAY:-}" && -S /tmp/.X11-unix/X0 ]]; then
+    export DISPLAY=":0"
+    return 0
+  fi
+
+  return 1
+}
+
 # Return the preferred libtiff development package for the given codename,
 # falling back gracefully when a codename-specific package is unavailable.
 select_libtiff_pkg() {
