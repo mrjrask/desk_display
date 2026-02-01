@@ -83,6 +83,7 @@ The kernel display installers will:
 - Configure `DESK_DISPLAY_OUTPUT=kernel`.
 - Detect a connected DRM display for fullscreen output (or prompt for a resolution override).
 - Install a desktop launcher that can run the display loop inside the desktop session.
+- Attempt to launch the fullscreen display at the end of the installer when a desktop session is available (set `AUTO_LAUNCH_KERNEL_DISPLAY=0` to skip).
 
 To uninstall the systemd service and optionally remove the virtualenv:
 
