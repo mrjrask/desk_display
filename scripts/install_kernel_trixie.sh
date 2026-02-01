@@ -24,6 +24,56 @@ fi
 export DESK_DISPLAY_OUTPUT="${DESK_DISPLAY_OUTPUT:-kernel}"
 export REQUIREMENTS_FILE="${REQUIREMENTS_FILE:-requirements_kernel.txt}"
 
+prompt_spi_i2c() {
+  if [[ -n "${DISABLE_SPI_I2C:-}" ]]; then
+    return 0
+  fi
+
+  local note="Note: Hyperpixel 4 and Hyperpixel 4 Square require SPI and I2C to be disabled."
+  if [[ -t 0 ]]; then
+    printf '%s\n' "$note"
+    read -r -p "Enable SPI and I2C? [Y/n] " spi_choice
+    spi_choice=${spi_choice,,}
+    case "$spi_choice" in
+      ""|y|yes)
+        export DISABLE_SPI_I2C="0"
+        ;;
+      n|no)
+        export DISABLE_SPI_I2C="1"
+        ;;
+      *)
+        warn "Unrecognized input; defaulting to enabling SPI and I2C."
+        export DISABLE_SPI_I2C="0"
+        ;;
+    esac
+  else
+    log "$note"
+    log "Defaulting to enabling SPI and I2C (set DISABLE_SPI_I2C=1 to disable)."
+  fi
+}
+
+prompt_launch_kernel_display() {
+  local launcher="$PROJECT_DIR/scripts/launch_kernel_display.sh"
+  if [[ ! -x "$launcher" ]]; then
+    return 0
+  fi
+
+  if [[ -t 0 ]]; then
+    read -r -p "Launch the kernel display now? [y/N] " launch_choice
+    launch_choice=${launch_choice,,}
+    if [[ "$launch_choice" == "y" || "$launch_choice" == "yes" ]]; then
+      log "Launching the kernel display in the current desktop session."
+      if [[ -n "${SUDO:-}" ]]; then
+        $SUDO -u "$SERVICE_USER" /bin/bash -lc "$launcher"
+      else
+        /bin/bash -lc "$launcher"
+      fi
+    fi
+  else
+    log "Launch manually with: $launcher"
+  fi
+}
+
 declare -A RESOLUTION_MAP=(
   ["640x480"]="640x480"
   ["1080p"]="1920x1080"
@@ -129,6 +179,10 @@ add_env_line "DISPLAY_HEIGHT" "${DISPLAY_HEIGHT:-}"
 
 prepend_env_vars "$ENV_PATH" "${ENV_LINES[@]}"
 
+prompt_spi_i2c
+
 "$SCRIPT_DIR/install_trixie.sh"
 
 install_kernel_launcher "$PROJECT_DIR" "$SERVICE_NAME" "$SERVICE_USER"
+
+prompt_launch_kernel_display
