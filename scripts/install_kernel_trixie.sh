@@ -58,16 +58,47 @@ prompt_launch_kernel_display() {
     return 0
   fi
 
+  local auto_launch="${AUTO_LAUNCH_KERNEL_DISPLAY:-1}"
+  local has_display="false"
+
+  if [[ -n "${DISPLAY:-}" || -n "${WAYLAND_DISPLAY:-}" ]]; then
+    has_display="true"
+  fi
+
+  if [[ "$auto_launch" == "0" ]]; then
+    log "Skipping kernel display launch (AUTO_LAUNCH_KERNEL_DISPLAY=0)."
+    log "Launch manually with: $launcher"
+    return 0
+  fi
+
   if [[ -t 0 ]]; then
-    read -r -p "Launch the kernel display now? [y/N] " launch_choice
+    if [[ "$has_display" == "false" ]]; then
+      log "No active desktop session detected; skipping auto-launch."
+      log "Launch manually with: $launcher"
+      return 0
+    fi
+    read -r -p "Launch the kernel display now? [Y/n] " launch_choice
     launch_choice=${launch_choice,,}
-    if [[ "$launch_choice" == "y" || "$launch_choice" == "yes" ]]; then
-      log "Launching the kernel display in the current desktop session."
-      if [[ -n "${SUDO:-}" ]]; then
-        $SUDO -u "$SERVICE_USER" /bin/bash -lc "$launcher"
-      else
-        /bin/bash -lc "$launcher"
-      fi
+    if [[ "$launch_choice" == "n" || "$launch_choice" == "no" ]]; then
+      log "Skipping kernel display launch."
+      log "Launch manually with: $launcher"
+      return 0
+    fi
+    log "Launching the kernel display in the current desktop session."
+    if [[ -n "${SUDO:-}" ]]; then
+      $SUDO -u "$SERVICE_USER" /bin/bash -lc "$launcher"
+    else
+      /bin/bash -lc "$launcher"
+    fi
+    return 0
+  fi
+
+  if [[ "$has_display" == "true" ]]; then
+    log "Launching the kernel display in the current desktop session."
+    if [[ -n "${SUDO:-}" ]]; then
+      $SUDO -u "$SERVICE_USER" /bin/bash -lc "$launcher"
+    else
+      /bin/bash -lc "$launcher"
     fi
   else
     log "Launch manually with: $launcher"
