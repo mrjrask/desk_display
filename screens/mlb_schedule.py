@@ -54,6 +54,7 @@ TABLE_SIDE_MARGIN       = 4          # left/right inset of table
 MIN_TEAM_COL_WIDTH      = 40         # never let the team column be narrower
 DESIRED_SQUARE_FRACTION = 0.24       # starting point for square width vs total_w
 GRID_BG                 = (14, 36, 22)  # dark forest green
+NEXT_GAME_LOGO_SCALE    = 0.92       # slightly reduce logo size inside frame
 
 # Cubs mini-flag sizing/reservation
 SMALL_RESULT_FLAG_H     = int(os.environ.get("SMALL_RESULT_FLAG_H", "48"))
@@ -610,6 +611,7 @@ def draw_sports_screen(display, game, title, transition=False, screen_id: Option
         if width <= 0 or height <= 0:
             return logo
         scale = min(frame_w / float(width), logo_h / float(height), 1.0)
+        scale *= NEXT_GAME_LOGO_SCALE
         if scale >= 1.0:
             return logo
         new_width = max(1, int(round(width * scale)))
@@ -617,10 +619,7 @@ def draw_sports_screen(display, game, title, transition=False, screen_id: Option
         return logo.resize((new_width, new_height), Image.LANCZOS)
 
     def _draw_logo_box(frame_x: int) -> None:
-        draw.rectangle(
-            (frame_x, row_y, frame_x + frame_w, row_y + logo_h),
-            outline=(64, 64, 64),
-        )
+        return None
 
     def _paste_logo(logo, frame_x):
         logo = _fit_logo_to_frame(logo)
