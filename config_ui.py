@@ -27,6 +27,9 @@ STYLE_CONFIG_PATH = os.environ.get(
 LAYOUT_CONFIG_PATH = os.environ.get(
     "SCREENS_LAYOUT_PATH", os.path.join(SCRIPT_DIR, "screens_layouts.json")
 )
+LAYOUT_CONFIG_GIT_PATH = os.environ.get(
+    "SCREENS_LAYOUT_GIT_PATH", os.path.join(SCRIPT_DIR, "screens_layouts.json")
+)
 
 SCREEN_CONFIG_HOST = os.environ.get("SCREEN_CONFIG_HOST", "0.0.0.0")
 SCREEN_CONFIG_PORT = int(os.environ.get("SCREEN_CONFIG_PORT", "5002"))
@@ -509,11 +512,19 @@ def _save_style_config(config: Dict[str, Any]) -> None:
 
 
 def _save_layout_config(config: Dict[str, Any]) -> None:
-    tmp_path = f"{LAYOUT_CONFIG_PATH}.tmp"
-    with open(tmp_path, "w", encoding="utf-8") as fh:
-        json.dump(config, fh, indent=2)
-        fh.write("\n")
-    os.replace(tmp_path, LAYOUT_CONFIG_PATH)
+    def _write_config(path: str) -> None:
+        directory = os.path.dirname(path)
+        if directory:
+            os.makedirs(directory, exist_ok=True)
+        tmp_path = f"{path}.tmp"
+        with open(tmp_path, "w", encoding="utf-8") as fh:
+            json.dump(config, fh, indent=2)
+            fh.write("\n")
+        os.replace(tmp_path, path)
+
+    _write_config(LAYOUT_CONFIG_PATH)
+    if os.path.abspath(LAYOUT_CONFIG_GIT_PATH) != os.path.abspath(LAYOUT_CONFIG_PATH):
+        _write_config(LAYOUT_CONFIG_GIT_PATH)
 
 
 def run_config_ui(host: str = SCREEN_CONFIG_HOST, port: int = SCREEN_CONFIG_PORT) -> None:
