@@ -146,6 +146,56 @@ EOF
   log "Installed kernel display launcher for $service_name at $launcher_entry"
 }
 
+install_kernel_autostart() {
+  local project_dir="$1"
+  local service_user="$2"
+  local launcher_path="$project_dir/scripts/launch_kernel_display.sh"
+
+  if [[ ! -f "$launcher_path" ]]; then
+    warn "Kernel display launcher not found at $launcher_path"
+    return 1
+  fi
+
+  ensure_executable "$launcher_path"
+
+  local home_dir
+  home_dir=$(getent passwd "$service_user" | cut -d: -f6)
+  if [[ -z "$home_dir" ]]; then
+    home_dir="/home/$service_user"
+  fi
+
+  local autostart_dir="$home_dir/.config/autostart"
+  local autostart_entry="$autostart_dir/desk-display-kernel.desktop"
+
+  if [[ -n "${SUDO:-}" ]]; then
+    $SUDO mkdir -p "$autostart_dir"
+  else
+    mkdir -p "$autostart_dir"
+  fi
+
+  local launcher_contents
+  launcher_contents=$(cat <<EOF
+[Desktop Entry]
+Type=Application
+Name=Desk Display (Kernel Display)
+Comment=Launch the fullscreen kernel display on login
+Exec=/bin/bash -lc '$launcher_path'
+Terminal=false
+Categories=Utility;
+X-GNOME-Autostart-enabled=true
+EOF
+)
+
+  if [[ -n "${SUDO:-}" ]]; then
+    echo "$launcher_contents" | $SUDO tee "$autostart_entry" >/dev/null
+    $SUDO chown "$service_user":"$service_user" "$autostart_entry"
+  else
+    echo "$launcher_contents" > "$autostart_entry"
+  fi
+
+  log "Installed kernel display autostart entry at $autostart_entry"
+}
+
 detect_existing_venv() {
   local project_dir="$1"
   local candidates=(

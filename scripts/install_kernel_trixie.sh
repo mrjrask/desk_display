@@ -225,5 +225,8 @@ prompt_spi_i2c
 "$SCRIPT_DIR/install_trixie.sh"
 
 install_kernel_launcher "$PROJECT_DIR" "$SERVICE_NAME" "$SERVICE_USER"
+if [[ "${AUTO_START_KERNEL_DISPLAY:-}" == "1" ]]; then
+  install_kernel_autostart "$PROJECT_DIR" "$SERVICE_USER"
+fi
 
 prompt_launch_kernel_display
