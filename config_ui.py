@@ -554,11 +554,14 @@ def screen_screenshots() -> str:
 def screen_layouts() -> str:
     layout_config = _load_active_layout_config()
     layouts = _build_layout_matrix(layout_config)
+    screenshots = _build_screenshot_entries()
+    screenshot_map = {entry["id"]: entry for entry in screenshots}
     return render_template(
         "screen_layouts.html",
         screen_ids=sorted(SCREEN_IDS),
         resolutions=_resolution_entries(),
         layouts=layouts,
+        screenshots=screenshot_map,
     )
 
 
