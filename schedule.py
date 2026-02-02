@@ -3,10 +3,12 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass
-from typing import Any, Dict, List, Optional, Sequence, Set
+from typing import Any, Dict, List, Optional, Sequence, Set, TYPE_CHECKING
 
 from screens_catalog import SCREEN_IDS
-from screens.registry import ScreenDefinition
+
+if TYPE_CHECKING:
+    from screens.registry import ScreenDefinition
 
 
 KNOWN_SCREENS: Set[str] = set(SCREEN_IDS)
@@ -62,7 +64,7 @@ class ScreenScheduler:
     def requested_ids(self) -> Set[str]:
         return set(self._requested)
 
-    def next_available(self, registry: Dict[str, ScreenDefinition]) -> Optional[ScreenDefinition]:
+    def next_available(self, registry: Dict[str, "ScreenDefinition"]) -> Optional["ScreenDefinition"]:
         if not self._entries:
             return None
 
