@@ -211,6 +211,15 @@ sudo systemctl status desk_display.service
 sudo systemctl restart desk_display.service
 ```
 
+### Kernel display via user service
+
+For kernel-driven displays inside a desktop session, the kernel installers also install a user service named `desk_display-kernel.service`. Use `systemctl --user` from the logged-in session (or over SSH with the user session available):
+
+```bash
+systemctl --user start desk_display-kernel.service
+systemctl --user status desk_display-kernel.service
+```
+
 ---
 
 ## Troubleshooting

@@ -5,6 +5,8 @@ SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 PROJECT_DIR="${PROJECT_DIR:-$(cd -- "$SCRIPT_DIR/.." && pwd)}"
 SERVICE_USER="${SUDO_USER:-$(whoami)}"
 SERVICE_NAME="desk_display.service"
+USER_SERVICE_NAME="desk_display-kernel.service"
+USER_SERVICE_TEMPLATE="$SCRIPT_DIR/desk_display_kernel_user.service"
 
 COMMON_SCRIPT="$SCRIPT_DIR/install_common.sh"
 if [[ ! -f "$COMMON_SCRIPT" ]]; then
@@ -223,6 +225,12 @@ prepend_env_vars "$ENV_PATH" "${ENV_LINES[@]}"
 prompt_spi_i2c
 
 "$SCRIPT_DIR/install_bookworm.sh"
+
+install_kernel_user_service "$PROJECT_DIR" "$SERVICE_USER" "$USER_SERVICE_TEMPLATE" "$USER_SERVICE_NAME"
+if [[ "${DISABLE_SYSTEM_KERNEL_SERVICE:-}" == "1" ]] && command -v systemctl >/dev/null 2>&1; then
+  log "Disabling $SERVICE_NAME to avoid conflicts with $USER_SERVICE_NAME."
+  $SUDO systemctl disable --now "$SERVICE_NAME" || warn "Failed to disable $SERVICE_NAME."
+fi
 
 install_kernel_launcher "$PROJECT_DIR" "$SERVICE_NAME" "$SERVICE_USER"
 if [[ "${AUTO_START_KERNEL_DISPLAY:-}" == "1" ]]; then

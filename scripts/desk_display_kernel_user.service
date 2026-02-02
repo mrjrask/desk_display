@@ -1,0 +1,16 @@
+[Unit]
+Description=Desk Display Kernel (User Session)
+After=graphical-session.target
+PartOf=graphical-session.target
+
+[Service]
+Type=simple
+WorkingDirectory=@PROJECT_DIR@
+Environment=DESK_DISPLAY_OUTPUT=kernel
+ExecStart=@VENV_DIR@/bin/python @PROJECT_DIR@/main.py
+ExecStop=/bin/bash -lc '@MAINTENANCE_DIR@/cleanup.sh'
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=graphical-session.target
