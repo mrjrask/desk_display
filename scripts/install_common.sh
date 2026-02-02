@@ -196,6 +196,99 @@ EOF
   log "Installed kernel display autostart entry at $autostart_entry"
 }
 
+install_kernel_user_service() {
+  local project_dir="$1"
+  local service_user="$2"
+  local template_path="$3"
+  local service_name="${4:-desk_display-kernel.service}"
+
+  if [[ ! -f "$template_path" ]]; then
+    warn "Kernel user service template not found at $template_path"
+    return 1
+  fi
+
+  local home_dir
+  home_dir=$(getent passwd "$service_user" | cut -d: -f6)
+  if [[ -z "$home_dir" ]]; then
+    home_dir="/home/$service_user"
+  fi
+
+  local user_systemd_dir="$home_dir/.config/systemd/user"
+  local service_path="$user_systemd_dir/$service_name"
+
+  local venv_dir
+  venv_dir=$(detect_existing_venv "$project_dir" || true)
+  if [[ -z "$venv_dir" ]]; then
+    venv_dir="$project_dir/venv"
+  fi
+
+  local maintenance_dir="$project_dir/tools/maintenance"
+  local project_dir_safe="$project_dir"
+  local venv_dir_safe="$venv_dir"
+  local maintenance_dir_safe="$maintenance_dir"
+
+  local service_contents
+  service_contents=$(sed \
+    -e "s|@PROJECT_DIR@|$project_dir_safe|g" \
+    -e "s|@VENV_DIR@|$venv_dir_safe|g" \
+    -e "s|@MAINTENANCE_DIR@|$maintenance_dir_safe|g" \
+    "$template_path")
+
+  if [[ -n "${SUDO:-}" ]]; then
+    $SUDO -u "$service_user" mkdir -p "$user_systemd_dir"
+    echo "$service_contents" | $SUDO -u "$service_user" tee "$service_path" >/dev/null
+  else
+    mkdir -p "$user_systemd_dir"
+    echo "$service_contents" > "$service_path"
+  fi
+
+  log "Installed user systemd service to $service_path"
+
+  if command -v systemctl >/dev/null 2>&1; then
+    local uid runtime_dir
+    uid=$(id -u "$service_user" 2>/dev/null || true)
+    runtime_dir=""
+    if [[ -n "$uid" ]]; then
+      runtime_dir="/run/user/$uid"
+    fi
+    local systemctl_env=()
+    if [[ -n "$runtime_dir" && -d "$runtime_dir" ]]; then
+      systemctl_env=("XDG_RUNTIME_DIR=$runtime_dir")
+      if [[ -S "$runtime_dir/bus" ]]; then
+        systemctl_env+=("DBUS_SESSION_BUS_ADDRESS=unix:path=$runtime_dir/bus")
+      fi
+    fi
+
+    if [[ -n "${SUDO:-}" ]]; then
+      if ! $SUDO -u "$service_user" env "${systemctl_env[@]}" systemctl --user daemon-reload; then
+        warn "Failed to reload user systemd daemon for $service_user."
+        return 0
+      fi
+      if detect_desktop_session "$service_user"; then
+        $SUDO -u "$service_user" env "${systemctl_env[@]}" systemctl --user enable --now "$service_name" \
+          || warn "Failed to enable/start $service_name (user session may be offline)."
+      else
+        $SUDO -u "$service_user" env "${systemctl_env[@]}" systemctl --user enable "$service_name" \
+          || warn "Failed to enable $service_name (user session may be offline)."
+      fi
+    else
+      if ! env "${systemctl_env[@]}" systemctl --user daemon-reload; then
+        warn "Failed to reload user systemd daemon for $service_user."
+        return 0
+      fi
+      if detect_desktop_session "$service_user"; then
+        env "${systemctl_env[@]}" systemctl --user enable --now "$service_name" \
+          || warn "Failed to enable/start $service_name (user session may be offline)."
+      else
+        env "${systemctl_env[@]}" systemctl --user enable "$service_name" \
+          || warn "Failed to enable $service_name (user session may be offline)."
+      fi
+    fi
+  else
+    warn "systemctl not available; skipping user service enablement."
+  fi
+}
+
 detect_existing_venv() {
   local project_dir="$1"
   local candidates=(
