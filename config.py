@@ -391,7 +391,22 @@ if (_display_width_set, _display_height_set) != (True, True):
             if not _display_height_set:
                 HEIGHT = drm_height
 
-DISPLAY_SCALE = min(WIDTH / BASE_WIDTH, HEIGHT / BASE_HEIGHT)
+def _compute_display_scale(
+    base_width: int,
+    base_height: int,
+    target_width: int,
+    target_height: int,
+) -> float:
+    """Return the proportional scale based on percentage resolution differences."""
+    if base_width <= 0 or base_height <= 0:
+        return 1.0
+    width_ratio = target_width / base_width
+    height_ratio = target_height / base_height
+    scale = (width_ratio + height_ratio) / 2.0
+    return max(0.1, scale)
+
+
+DISPLAY_SCALE = _compute_display_scale(BASE_WIDTH, BASE_HEIGHT, WIDTH, HEIGHT)
 
 
 def scale_value(value: float) -> int:
