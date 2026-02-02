@@ -104,6 +104,7 @@ Desk Display reads configuration from environment variables and (optionally) a `
 | --- | --- |
 | `DESK_DISPLAY_OUTPUT` | `auto` (default), `displayhatmini`, `kernel`, `framebuffer`, or `headless`. |
 | `DESK_DISPLAY_FORCE_HEADLESS` | Force headless rendering (no display writes). |
+| `DESK_DISPLAY_SESSION_USER` | Override the desktop session user for `loginctl` lookups and `/run/user/<uid>` resolution. |
 | `DISPLAY_WIDTH` / `DISPLAY_HEIGHT` | Override target render size (required for larger fullscreen panels). |
 | `DISPLAY_FB_DEVICE` | Framebuffer device path (default `/dev/fb0`). |
 | `DISPLAY_FB_PIXEL_FORMAT` | Override framebuffer format (`rgb565`, `rgb888`, `xrgb8888`, etc.). |
