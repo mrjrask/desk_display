@@ -22,6 +22,7 @@ import time
 from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
+import pwd
 from typing import Any, Callable, Dict, Iterable, List, Optional, Tuple
 
 import functools
@@ -69,6 +70,85 @@ _PYGAME_MODULE = None
 _PYGAME_ERROR: Optional[Exception] = None
 
 
+def _maybe_configure_desktop_env() -> None:
+    if os.environ.get("DISPLAY") or os.environ.get("WAYLAND_DISPLAY"):
+        return
+
+    uid = os.getuid()
+    user = os.environ.get("SUDO_USER")
+    if not user:
+        try:
+            user = pwd.getpwuid(uid).pw_name
+        except KeyError:
+            user = None
+
+    runtime_dir = f"/run/user/{uid}"
+    if not os.environ.get("XDG_RUNTIME_DIR") and Path(runtime_dir).is_dir():
+        os.environ["XDG_RUNTIME_DIR"] = runtime_dir
+
+    if user:
+        try:
+            result = subprocess.run(
+                ["loginctl", "show-user", user, "-p", "Sessions", "--value"],
+                check=False,
+                capture_output=True,
+                text=True,
+            )
+        except OSError:
+            result = None
+        if result and result.returncode == 0:
+            sessions = result.stdout.strip().split()
+            for session in sessions:
+                active = subprocess.run(
+                    ["loginctl", "show-session", session, "-p", "Active", "--value"],
+                    check=False,
+                    capture_output=True,
+                    text=True,
+                )
+                if active.stdout.strip() != "yes":
+                    continue
+                session_type = subprocess.run(
+                    ["loginctl", "show-session", session, "-p", "Type", "--value"],
+                    check=False,
+                    capture_output=True,
+                    text=True,
+                ).stdout.strip()
+                display = subprocess.run(
+                    ["loginctl", "show-session", session, "-p", "Display", "--value"],
+                    check=False,
+                    capture_output=True,
+                    text=True,
+                ).stdout.strip()
+                if session_type == "x11" and display and not os.environ.get("DISPLAY"):
+                    os.environ["DISPLAY"] = display
+                if session_type == "wayland":
+                    wayland_socket = Path(runtime_dir) / "wayland-0"
+                    if wayland_socket.is_socket() and not os.environ.get("WAYLAND_DISPLAY"):
+                        os.environ["WAYLAND_DISPLAY"] = "wayland-0"
+                if os.environ.get("DISPLAY") or os.environ.get("WAYLAND_DISPLAY"):
+                    break
+
+    if not os.environ.get("WAYLAND_DISPLAY"):
+        wayland_socket = Path(runtime_dir) / "wayland-0"
+        if wayland_socket.is_socket():
+            os.environ["WAYLAND_DISPLAY"] = "wayland-0"
+
+    if not os.environ.get("DISPLAY"):
+        if Path("/tmp/.X11-unix/X0").is_socket():
+            os.environ["DISPLAY"] = ":0"
+
+    if os.environ.get("DISPLAY") and not os.environ.get("XAUTHORITY"):
+        home = Path(os.path.expanduser("~"))
+        xauthority = home / ".Xauthority"
+        if xauthority.is_file():
+            os.environ["XAUTHORITY"] = str(xauthority)
+
+    if os.environ.get("WAYLAND_DISPLAY") and not os.environ.get("SDL_VIDEODRIVER"):
+        os.environ["SDL_VIDEODRIVER"] = "wayland"
+    elif os.environ.get("DISPLAY") and not os.environ.get("SDL_VIDEODRIVER"):
+        os.environ["SDL_VIDEODRIVER"] = "x11"
+
+
 def _load_pygame():
     global _PYGAME_MODULE, _PYGAME_ERROR
 
@@ -76,6 +156,8 @@ def _load_pygame():
         return _PYGAME_MODULE
 
     if "SDL_VIDEODRIVER" not in os.environ:
+        if not os.environ.get("DISPLAY") and not os.environ.get("WAYLAND_DISPLAY"):
+            _maybe_configure_desktop_env()
         if not os.environ.get("DISPLAY") and not os.environ.get("WAYLAND_DISPLAY"):
             os.environ["SDL_VIDEODRIVER"] = "kmsdrm"
 
