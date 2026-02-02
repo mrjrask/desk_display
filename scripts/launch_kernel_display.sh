@@ -41,6 +41,13 @@ if [[ -z "${DESK_DISPLAY_OUTPUT:-}" ]]; then
   export DESK_DISPLAY_OUTPUT="kernel"
 fi
 
+if declare -F detect_desktop_session >/dev/null 2>&1; then
+  session_user="${DESK_DISPLAY_SESSION_USER:-${SERVICE_USER:-$USER}}"
+  if detect_desktop_session "$session_user"; then
+    log "Detected desktop session for $session_user."
+  fi
+fi
+
 if [[ -z "${SDL_VIDEODRIVER:-}" ]]; then
   if [[ -n "${WAYLAND_DISPLAY:-}" ]]; then
     export SDL_VIDEODRIVER="wayland"
