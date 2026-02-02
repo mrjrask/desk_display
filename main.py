@@ -1346,7 +1346,10 @@ def main_loop():
                 gc.collect()
                 continue
 
-            travel_requested = "travel" in _requested_screen_ids
+            travel_requested = any(
+                screen_id in _requested_screen_ids
+                for screen_id in ("travel", "travel map", "travel v2", "travel map v2")
+            )
             offline = _wifi_outage_active if ENABLE_WIFI_MONITOR else False
             now_utc = datetime.datetime.now(datetime.timezone.utc)
             weather_fetched_at = data_fetch.get_weather_cache_timestamp()
