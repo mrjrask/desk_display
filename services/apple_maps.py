@@ -247,6 +247,19 @@ def _normalize_route(route: dict) -> dict:
     return route
 
 
+def _log_apple_maps_failure(label: str, response: requests.Response) -> None:
+    status = response.status_code
+    if status in (401, 403):
+        logging.warning(
+            "Apple Maps %s request unauthorized (HTTP %s). Check APPLE_MAPS_API_KEY/"
+            "MAPKIT_TOKEN or APPLE_MAPS_TEAM_ID/APPLE_MAPS_KEY_ID and private key settings.",
+            label,
+            status,
+        )
+        return
+    logging.warning("Apple Maps %s request failed with HTTP %s.", label, status)
+
+
 def fetch_apple_maps_routes(
     origin: str,
     destination: str,
@@ -283,10 +296,18 @@ def fetch_apple_maps_routes(
             timeout=10,
             headers={"User-Agent": APPLE_MAPS_USER_AGENT},
         )
-        response.raise_for_status()
-        payload = response.json()
     except Exception as exc:
         logging.warning("Apple Maps directions request failed: %s", exc)
+        return []
+
+    if not response.ok:
+        _log_apple_maps_failure("directions", response)
+        return []
+
+    try:
+        payload = response.json()
+    except Exception as exc:
+        logging.warning("Apple Maps directions response was not JSON: %s", exc)
         return []
 
     routes = payload.get("routes", []) if isinstance(payload, dict) else []
@@ -328,8 +349,12 @@ def fetch_apple_maps_snapshot(
             timeout=10,
             headers={"User-Agent": APPLE_MAPS_USER_AGENT},
         )
-        response.raise_for_status()
-        return response.content
     except Exception as exc:
         logging.warning("Apple Maps snapshot request failed: %s", exc)
         return None
+
+    if not response.ok:
+        _log_apple_maps_failure("snapshot", response)
+        return None
+
+    return response.content
