@@ -75,12 +75,19 @@ def _maybe_configure_desktop_env() -> None:
         return
 
     uid = os.getuid()
-    user = os.environ.get("SUDO_USER")
+    user = os.environ.get("DESK_DISPLAY_SESSION_USER")
+    if not user:
+        user = os.environ.get("SUDO_USER")
     if not user:
         try:
             user = pwd.getpwuid(uid).pw_name
         except KeyError:
             user = None
+    if user:
+        try:
+            uid = pwd.getpwnam(user).pw_uid
+        except KeyError:
+            pass
 
     runtime_dir = f"/run/user/{uid}"
     if not os.environ.get("XDG_RUNTIME_DIR") and Path(runtime_dir).is_dir():
