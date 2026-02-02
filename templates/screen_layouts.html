@@ -224,6 +224,23 @@
       border-radius: 8px;
       background: linear-gradient(135deg, rgba(56, 189, 248, 0.6), rgba(34, 197, 94, 0.5));
       box-shadow: inset 0 0 0 1px rgba(148, 163, 184, 0.4);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+      font-size: calc(9px * var(--font-scale));
+      color: rgba(248, 250, 252, 0.85);
+    }
+    .preview-image img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
+    }
+    .preview-placeholder {
+      padding: calc(4px * var(--spacing-scale));
+      text-align: center;
+      line-height: 1.2;
     }
     .preview-lines {
       display: flex;
@@ -320,6 +337,7 @@
     const screenIds = {{ screen_ids | tojson }};
     const resolutionOptions = {{ resolutions | tojson }};
     const initialLayouts = {{ layouts | tojson }};
+    const screenshots = {{ screenshots | tojson }};
 
     let activeScreenId = screenIds[0] || null;
     let layouts = JSON.parse(JSON.stringify(initialLayouts || {}));
@@ -370,6 +388,17 @@
       preview.style.setProperty('--font-scale', settings.font_scale);
       preview.style.setProperty('--image-scale', settings.image_scale);
       preview.style.setProperty('--spacing-scale', settings.spacing_scale);
+    }
+
+    function getScreenshotEntry(screenId) {
+      return screenshots[screenId] || null;
+    }
+
+    function buildScreenshotUrl(filename) {
+      if (!filename) {
+        return null;
+      }
+      return `/screenshots/current/${encodeURIComponent(filename)}`;
     }
 
     function createScaleControl(label, value, onChange) {
@@ -448,21 +477,58 @@
 
         const previewCanvas = document.createElement('div');
         previewCanvas.className = 'preview-canvas';
-        previewCanvas.innerHTML = `
-          <div class="preview-header">
-            <div class="preview-title">${activeScreenId}</div>
-            <div class="preview-subtitle">Layout preview</div>
-          </div>
-          <div class="preview-body">
-            <div class="preview-image"></div>
-            <div class="preview-lines">
-              <div class="preview-line"></div>
-              <div class="preview-line short"></div>
-              <div class="preview-line"></div>
-            </div>
-          </div>
-          <div class="preview-footer">Spacing + font scaling</div>
-        `;
+        const screenshotEntry = getScreenshotEntry(activeScreenId);
+        const screenshotUrl = buildScreenshotUrl(screenshotEntry?.filename);
+
+        const previewHeader = document.createElement('div');
+        previewHeader.className = 'preview-header';
+        const previewTitle = document.createElement('div');
+        previewTitle.className = 'preview-title';
+        previewTitle.textContent = activeScreenId;
+        const previewSubtitle = document.createElement('div');
+        previewSubtitle.className = 'preview-subtitle';
+        previewSubtitle.textContent = 'Layout preview';
+        previewHeader.appendChild(previewTitle);
+        previewHeader.appendChild(previewSubtitle);
+
+        const previewBody = document.createElement('div');
+        previewBody.className = 'preview-body';
+        const previewImage = document.createElement('div');
+        previewImage.className = 'preview-image';
+        if (screenshotUrl) {
+          const image = document.createElement('img');
+          image.src = screenshotUrl;
+          image.alt = `Current content for ${activeScreenId}`;
+          previewImage.appendChild(image);
+        } else {
+          const placeholder = document.createElement('div');
+          placeholder.className = 'preview-placeholder';
+          placeholder.textContent = 'No screenshot yet';
+          previewImage.appendChild(placeholder);
+        }
+        const previewLines = document.createElement('div');
+        previewLines.className = 'preview-lines';
+        const lineOne = document.createElement('div');
+        lineOne.className = 'preview-line';
+        const lineTwo = document.createElement('div');
+        lineTwo.className = 'preview-line short';
+        const lineThree = document.createElement('div');
+        lineThree.className = 'preview-line';
+        previewLines.appendChild(lineOne);
+        previewLines.appendChild(lineTwo);
+        previewLines.appendChild(lineThree);
+        previewBody.appendChild(previewImage);
+        previewBody.appendChild(previewLines);
+
+        const previewFooter = document.createElement('div');
+        previewFooter.className = 'preview-footer';
+        previewFooter.textContent = screenshotEntry?.timestamp
+          ? `Latest capture: ${screenshotEntry.timestamp}`
+          : 'Awaiting a fresh capture';
+
+        previewCanvas.appendChild(previewHeader);
+        previewCanvas.appendChild(previewBody);
+        previewCanvas.appendChild(previewFooter);
         applyPreviewStyles(previewCanvas, settings);
         previewShell.appendChild(previewCanvas);
 
