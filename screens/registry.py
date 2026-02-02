@@ -145,7 +145,7 @@ class ScreenContext:
 
 
 def _show_logo(display, image: Image.Image) -> Image.Image:
-    animate_scroll(display, image, speed=1.7)
+    animate_scroll(display, image, speed=2.2)
     return image
 
 
