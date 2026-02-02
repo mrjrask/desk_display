@@ -49,6 +49,26 @@ if [[ -z "${SDL_VIDEODRIVER:-}" ]]; then
   fi
 fi
 
+if [[ -n "${WAYLAND_DISPLAY:-}" && -z "${XDG_RUNTIME_DIR:-}" ]]; then
+  runtime_dir="/run/user/$(id -u)"
+  if [[ -d "$runtime_dir" ]]; then
+    export XDG_RUNTIME_DIR="$runtime_dir"
+    log "Set XDG_RUNTIME_DIR to $XDG_RUNTIME_DIR for Wayland session."
+  else
+    warn "Wayland detected but $runtime_dir is missing; SDL may fail to initialize."
+  fi
+fi
+
+if [[ -n "${DISPLAY:-}" && -z "${XAUTHORITY:-}" ]]; then
+  default_xauth="$HOME/.Xauthority"
+  if [[ -f "$default_xauth" ]]; then
+    export XAUTHORITY="$default_xauth"
+    log "Set XAUTHORITY to $XAUTHORITY for X11 session."
+  else
+    warn "X11 display detected but no XAUTHORITY; SDL may fail to initialize."
+  fi
+fi
+
 VENV_DIR=""
 if declare -F detect_existing_venv >/dev/null 2>&1; then
   VENV_DIR=$(detect_existing_venv "$PROJECT_DIR" || true)
