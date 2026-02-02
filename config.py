@@ -326,6 +326,32 @@ def _read_framebuffer_virtual_size(device_path: str) -> Optional[Tuple[int, int]
         return None
 
 
+def _read_drm_mode_size() -> Optional[Tuple[int, int]]:
+    for status_path in Path("/sys/class/drm").glob("card*-*/status"):
+        try:
+            status = status_path.read_text(encoding="utf-8").strip().lower()
+        except OSError:
+            continue
+        if status != "connected":
+            continue
+        modes_path = status_path.parent / "modes"
+        try:
+            modes = modes_path.read_text(encoding="utf-8").splitlines()
+        except OSError:
+            continue
+        if not modes:
+            continue
+        mode = modes[0]
+        if "x" not in mode:
+            continue
+        try:
+            width_str, height_str = mode.split("x", 1)
+            return int(width_str), int(height_str)
+        except ValueError:
+            continue
+    return None
+
+
 _display_width_set = "DISPLAY_WIDTH" in os.environ
 _display_height_set = "DISPLAY_HEIGHT" in os.environ
 
@@ -1059,32 +1085,6 @@ def _load_font_from_family(family: str, size: int) -> Optional[ImageFont.FreeTyp
         except OSError:
             continue
     logging.debug("Unable to load override font '%s'", family)
-    return None
-
-
-def _read_drm_mode_size() -> Optional[Tuple[int, int]]:
-    for status_path in Path("/sys/class/drm").glob("card*-*/status"):
-        try:
-            status = status_path.read_text(encoding="utf-8").strip().lower()
-        except OSError:
-            continue
-        if status != "connected":
-            continue
-        modes_path = status_path.parent / "modes"
-        try:
-            modes = modes_path.read_text(encoding="utf-8").splitlines()
-        except OSError:
-            continue
-        if not modes:
-            continue
-        mode = modes[0]
-        if "x" not in mode:
-            continue
-        try:
-            width_str, height_str = mode.split("x", 1)
-            return int(width_str), int(height_str)
-        except ValueError:
-            continue
     return None
 
 
