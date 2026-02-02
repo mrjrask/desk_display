@@ -1101,7 +1101,7 @@ def animate_fade_in(
             time.sleep(sleep_time)
 
 @log_call
-def animate_scroll(display: Display, image: Image.Image, speed=3, y_offset=None):
+def animate_scroll(display: Display, image: Image.Image, speed=3.0, y_offset=None):
     """
     Scroll an image across the display.
     """
@@ -1116,21 +1116,27 @@ def animate_scroll(display: Display, image: Image.Image, speed=3, y_offset=None)
     img_w, img_h = image.size
     y = y_offset if y_offset is not None else (h - img_h) // 2
     direction = random.choice(("ltr", "rtl"))
-    start, end, step = ((-img_w, w, speed) if direction == "ltr" else (w, -img_w, -speed))
+    speed = float(speed)
+    if speed == 0:
+        return
+    start, end = ((-img_w, w) if direction == "ltr" else (w, -img_w))
+    step = abs(speed) if direction == "ltr" else -abs(speed)
 
     background_color = (0, 0, 0, 0) if has_alpha else (0, 0, 0)
     frame_mode = "RGBA" if has_alpha else "RGB"
 
     target_frame_time = 0.016  # ~60 FPS for smoother animation
-    for x in range(start, end + step, step):
+    x = float(start)
+    while (x <= end if step > 0 else x >= end):
         frame_start = time.time()
 
+        x_pos = int(round(x))
         frame = Image.new(frame_mode, (w, h), background_color)
         if has_alpha:
-            frame.paste(image, (x, y), image)
+            frame.paste(image, (x_pos, y), image)
             frame_to_show = frame.convert("RGB")
         else:
-            frame.paste(image, (x, y))
+            frame.paste(image, (x_pos, y))
             frame_to_show = frame
         display.image(frame_to_show)
 
@@ -1139,6 +1145,7 @@ def animate_scroll(display: Display, image: Image.Image, speed=3, y_offset=None)
         sleep_time = max(0, target_frame_time - elapsed)
         if sleep_time > 0:
             time.sleep(sleep_time)
+        x += step
 
     # Ensure the display is clear once the image has fully scrolled off-screen.
     final_frame = Image.new(frame_mode, (w, h), background_color)
