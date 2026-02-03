@@ -50,7 +50,7 @@ CONFERENCE_NFC_KEY = "NFC"
 CONFERENCE_AFC_KEY = "AFC"
 
 LOGO_DIR = os.path.join(IMAGES_DIR, "nfl")
-LOGO_HEIGHT = 45
+LOGO_HEIGHT = scale_value(45)
 
 # Overview animation geometry
 OVERVIEW_LOGO_HEIGHT = 65
@@ -62,18 +62,18 @@ OVERVIEW_DROP_STAGGER = 0.4  # fraction of steps before next rank begins droppin
 OVERVIEW_FRAME_DELAY = 0.02
 OVERVIEW_PAUSE_END = 0.5
 
-LEFT_MARGIN = 4
-RIGHT_MARGIN = 6
+LEFT_MARGIN = scale_value(4)
+RIGHT_MARGIN = scale_value(6)
 BACKGROUND_COLOR = SCOREBOARD_BACKGROUND_COLOR
-ROW_PADDING = 3
-ROW_SPACING = 2
-TITLE_MARGIN_TOP = 4
-TITLE_MARGIN_BOTTOM = 6
-DIVISION_MARGIN_TOP = 2
-DIVISION_MARGIN_BOTTOM = 4
-COLUMN_GAP_BELOW = 3
-RECORD_COLUMN_SPACING = 10
-TEAM_COLUMN_PADDING = 6
+ROW_PADDING = scale_value(3)
+ROW_SPACING = scale_value(2)
+TITLE_MARGIN_TOP = scale_value(4)
+TITLE_MARGIN_BOTTOM = scale_value(6)
+DIVISION_MARGIN_TOP = scale_value(2)
+DIVISION_MARGIN_BOTTOM = scale_value(4)
+COLUMN_GAP_BELOW = scale_value(3)
+RECORD_COLUMN_SPACING = scale_value(10)
+TEAM_COLUMN_PADDING = scale_value(6)
 
 TITLE_FONT = FONT_TITLE_SPORTS
 _DEFAULT_STYLE_ID = "NFL Standings Default"
@@ -119,6 +119,7 @@ def _apply_style_overrides(screen_id: str) -> None:
         default_size=30,
     )
     BACKGROUND_COLOR = get_screen_background_color(screen_id, SCOREBOARD_BACKGROUND_COLOR)
+    _update_layout_metrics()
 
 TEAM_NAMES_BY_ABBR: dict[str, str] = {
     "ARI": "Cardinals",
@@ -200,15 +201,27 @@ def _text_size(text: str, font) -> tuple[int, int]:
         return _MEASURE_DRAW.textsize(text, font)
 
 
-if TEAM_NAMES_BY_ABBR:
-    ROW_TEXT_HEIGHT = max(_text_size(name, ROW_FONT)[1] for name in TEAM_NAMES_BY_ABBR.values())
-else:
-    ROW_TEXT_HEIGHT = _text_size("CHI", ROW_FONT)[1]
-ROW_HEIGHT = max(LOGO_HEIGHT, ROW_TEXT_HEIGHT) + ROW_PADDING * 2
-COLUMN_TEXT_HEIGHT = max(_text_size(label, COLUMN_FONT)[1] for label, _, _ in COLUMN_HEADERS)
-COLUMN_ROW_HEIGHT = COLUMN_TEXT_HEIGHT + 2
-DIVISION_TEXT_HEIGHT = _text_size("NFC North", DIVISION_FONT)[1]
-TITLE_TEXT_HEIGHT = _text_size(TITLE_NFC, TITLE_FONT)[1]
+def _update_layout_metrics() -> None:
+    global ROW_TEXT_HEIGHT, ROW_HEIGHT, COLUMN_TEXT_HEIGHT, COLUMN_ROW_HEIGHT
+    global DIVISION_TEXT_HEIGHT, TITLE_TEXT_HEIGHT
+
+    if TEAM_NAMES_BY_ABBR:
+        row_text_height = max(
+            _text_size(name, ROW_FONT)[1] for name in TEAM_NAMES_BY_ABBR.values()
+        )
+    else:
+        row_text_height = _text_size("CHI", ROW_FONT)[1]
+    ROW_TEXT_HEIGHT = row_text_height
+    ROW_HEIGHT = max(LOGO_HEIGHT, ROW_TEXT_HEIGHT) + ROW_PADDING * 2
+    COLUMN_TEXT_HEIGHT = max(
+        _text_size(label, COLUMN_FONT)[1] for label, _, _ in COLUMN_HEADERS
+    )
+    COLUMN_ROW_HEIGHT = COLUMN_TEXT_HEIGHT + 2
+    DIVISION_TEXT_HEIGHT = _text_size("NFC North", DIVISION_FONT)[1]
+    TITLE_TEXT_HEIGHT = _text_size(TITLE_NFC, TITLE_FONT)[1]
+
+
+_update_layout_metrics()
 
 
 def _record_column_width(label: str, sample: str) -> int:

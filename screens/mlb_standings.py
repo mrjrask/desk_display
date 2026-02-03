@@ -149,7 +149,8 @@ def _header_frame(title: str) -> Tuple[Image.Image, int]:
     d = ImageDraw.Draw(img)
     tw, th = d.textsize(title, font=FONT_DIV_HEADER)
     d.text(((WIDTH - tw)//2, 0), title, font=FONT_DIV_HEADER, fill=(255,255,255))
-    return img, th + 6
+    header_pad = config.scale_value(6) if config.is_hyperpixel_next_layout() else 6
+    return img, th + header_pad
 
 
 def _ease_out_cubic(t: float) -> float:
@@ -313,10 +314,14 @@ def draw_division_screen(display, league_id: int, division_id: int, title: str, 
         clear_display(display)
         return None
 
+    hyperpixel_layout = config.is_hyperpixel_next_layout()
+    logo_size = config.scale_value(LOGO_SIZE) if hyperpixel_layout else LOGO_SIZE
+    margin = config.scale_value(MARGIN) if hyperpixel_layout else MARGIN
+    row_spacing = config.scale_value(ROW_SPACING) if hyperpixel_layout else ROW_SPACING
     header, header_h = _header_frame(title)
 
     # Build the list canvas (all rows)
-    row_h  = LOGO_SIZE + ROW_SPACING
+    row_h  = logo_size + row_spacing
     list_h = row_h * len(teams)
     canvas = Image.new("RGB", (WIDTH, list_h), BACKGROUND_COLOR)
     cd     = ImageDraw.Draw(canvas)
@@ -326,10 +331,10 @@ def draw_division_screen(display, league_id: int, division_id: int, title: str, 
 
         # Logo
         abbr = get_mlb_tricode(rec.get("team")) or get_mlb_abbreviation(rec["team"]["name"])
-        ic = _load_logo(abbr, LOGO_SIZE)
+        ic = _load_logo(abbr, logo_size)
         if ic:
-            logo_x = MARGIN + (LOGO_SIZE - ic.width)//2
-            logo_y = y + (LOGO_SIZE - ic.height)//2
+            logo_x = margin + (logo_size - ic.width)//2
+            logo_y = y + (logo_size - ic.height)//2
             canvas.paste(ic, (logo_x, logo_y), ic)
 
         # GB column (right-aligned, label "GB")
@@ -337,8 +342,8 @@ def draw_division_screen(display, league_id: int, division_id: int, title: str, 
         gb_val = format_games_back(dgb) if dgb != "-" else "--"
         num_w, num_h = cd.textsize(gb_val, font=FONT_GB_VALUE)
         lab_w, lab_h = cd.textsize("GB",   font=FONT_GB_LABEL)
-        gb_x = WIDTH - MARGIN - (num_w + lab_w)
-        gb_y = y + (LOGO_SIZE - num_h)//2
+        gb_x = WIDTH - margin - (num_w + lab_w)
+        gb_y = y + (logo_size - num_h)//2
         cd.text((gb_x, gb_y), gb_val, font=FONT_GB_VALUE, fill=(255,255,255))
         cd.text((gb_x + num_w, gb_y + (num_h - lab_h)//2), "GB", font=FONT_GB_LABEL, fill=(255,255,255))
 
@@ -347,10 +352,10 @@ def draw_division_screen(display, league_id: int, division_id: int, title: str, 
         loss = rec["leagueRecord"]["losses"]
         rec_txt = f"{wins}-{loss}"
         rw2, rh2 = cd.textsize(rec_txt, font=FONT_DIV_RECORD)
-        left  = MARGIN + LOGO_SIZE + MARGIN
-        right = gb_x - MARGIN
+        left  = margin + logo_size + margin
+        right = gb_x - margin
         rec_x = left + ((right - left) - rw2)//2
-        rec_y = y + (LOGO_SIZE - rh2)//2
+        rec_y = y + (logo_size - rh2)//2
         cd.text((rec_x, rec_y), rec_txt, font=FONT_DIV_RECORD, fill=(255,255,255))
 
     # Show first slice
@@ -404,9 +409,13 @@ def draw_wildcard_screen(display, league_id: int, title: str, transition=False):
         clear_display(display)
         return None
 
+    hyperpixel_layout = config.is_hyperpixel_next_layout()
+    logo_size = config.scale_value(LOGO_SIZE) if hyperpixel_layout else LOGO_SIZE
+    margin = config.scale_value(MARGIN) if hyperpixel_layout else MARGIN
+    row_spacing = config.scale_value(ROW_SPACING) if hyperpixel_layout else ROW_SPACING
     header, header_h = _header_frame(title)
 
-    row_h  = LOGO_SIZE + ROW_SPACING
+    row_h  = logo_size + row_spacing
     list_h = row_h * len(teams)
     canvas = Image.new("RGB", (WIDTH, list_h), BACKGROUND_COLOR)
     cd     = ImageDraw.Draw(canvas)
@@ -416,10 +425,10 @@ def draw_wildcard_screen(display, league_id: int, title: str, transition=False):
 
         # Team logo
         abbr = get_mlb_tricode(rec.get("team")) or get_mlb_abbreviation(rec["team"]["name"])
-        ic = _load_logo(abbr, LOGO_SIZE)
+        ic = _load_logo(abbr, logo_size)
         if ic:
-            canvas.paste(ic, (MARGIN + (LOGO_SIZE - ic.width)//2,
-                              y + (LOGO_SIZE - ic.height)//2), ic)
+            canvas.paste(ic, (margin + (logo_size - ic.width)//2,
+                              y + (logo_size - ic.height)//2), ic)
 
         # WCGB formatting
         raw_wcb = rec.get("wildCardGamesBack")
@@ -439,24 +448,24 @@ def draw_wildcard_screen(display, league_id: int, title: str, transition=False):
         # Right column labeled WCGB
         nw, nh = cd.textsize(s, font=FONT_GB_VALUE)
         lw, lh = cd.textsize("WCGB", font=FONT_GB_LABEL)
-        start_x = WIDTH - MARGIN - (nw + lw)
-        y_text  = y + (LOGO_SIZE - nh)//2
+        start_x = WIDTH - margin - (nw + lw)
+        y_text  = y + (logo_size - nh)//2
         cd.text((start_x, y_text), s, font=FONT_GB_VALUE, fill=(255,255,255))
-        cd.text((start_x + nw, y + (LOGO_SIZE - lh)//2), "WCGB", font=FONT_GB_LABEL, fill=(255,255,255))
+        cd.text((start_x + nw, y + (logo_size - lh)//2), "WCGB", font=FONT_GB_LABEL, fill=(255,255,255))
 
         # W-L centered between logo block and WCGB
         rw, rl = rec["leagueRecord"]["wins"], rec["leagueRecord"]["losses"]
         rt = f"{rw}-{rl}"
         tw2, th2 = cd.textsize(rt, font=FONT_DIV_RECORD)
-        left  = MARGIN + LOGO_SIZE + MARGIN
-        right = start_x - MARGIN
+        left  = margin + logo_size + margin
+        right = start_x - margin
         rec_x = left + ((right - left) - tw2)//2
-        cd.text((rec_x, y + (LOGO_SIZE - th2)//2), rt, font=FONT_DIV_RECORD, fill=(255,255,255))
+        cd.text((rec_x, y + (logo_size - th2)//2), rt, font=FONT_DIV_RECORD, fill=(255,255,255))
 
         # Separator below 3rd team (between #3 and #4): green line
         if i == 2:
-            sep_y = y + row_h - ROW_SPACING // 2
-            cd.line((MARGIN, sep_y, WIDTH - MARGIN, sep_y), fill=(0, 255, 0))
+            sep_y = y + row_h - row_spacing // 2
+            cd.line((margin, sep_y, WIDTH - margin, sep_y), fill=(0, 255, 0))
 
     # Reverse scroll bottom → top
     visible_h = HEIGHT - header_h

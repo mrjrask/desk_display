@@ -43,7 +43,9 @@ from config import (
     get_screen_background_color,
     get_screen_font,
     get_screen_image_scale,
+    is_hyperpixel_next_layout,
     scale_value,
+    scale_value_width,
 )
 from utils import (
     ScreenImage,
@@ -57,6 +59,13 @@ from utils import (
 )
 
 # ─── Constants ────────────────────────────────────────────────────────────────
+HYPERPIXEL_LAYOUT = is_hyperpixel_next_layout()
+
+
+def _scale_width(value: int) -> int:
+    return scale_value_width(value) if HYPERPIXEL_LAYOUT else scale_value(value)
+
+
 TITLE                 = "MLB Scoreboard"
 TITLE_GAP             = scale_value(8)
 BLOCK_SPACING         = scale_value(10)
@@ -64,7 +73,13 @@ SCORE_ROW_H           = scale_value(56)
 STATUS_ROW_H          = scale_value(18)
 REQUEST_TIMEOUT       = 10
 
-COL_WIDTHS = [scale_value(70), scale_value(60), scale_value(60), scale_value(60), scale_value(70)]  # total = 320 (WIDTH)
+COL_WIDTHS = [
+    _scale_width(70),
+    _scale_width(60),
+    _scale_width(60),
+    _scale_width(60),
+    _scale_width(70),
+]  # total = 320 (WIDTH)
 _TOTAL_COL_WIDTH = sum(COL_WIDTHS)
 _COL_LEFT = max(0, (WIDTH - _TOTAL_COL_WIDTH) // 2)
 COL_X = [_COL_LEFT]
