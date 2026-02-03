@@ -39,27 +39,32 @@ from config import (
     get_screen_background_color,
     get_screen_font,
     get_screen_image_scale,
-    scale_value,
+    scale_value_width,
 )
 from utils import (
     ScreenImage,
     clear_display,
     load_team_logo,
     log_call,
-    standard_scoreboard_team_logo_height,
 )
 
 # ─── Constants ────────────────────────────────────────────────────────────────
 TITLE               = "NFL Scoreboard"
-TITLE_GAP           = scale_value(8)
-BLOCK_SPACING       = scale_value(10)
-SCORE_ROW_H         = scale_value(56)
-STATUS_ROW_H        = scale_value(18)
+TITLE_GAP           = scale_value_width(8)
+BLOCK_SPACING       = scale_value_width(10)
+SCORE_ROW_H         = scale_value_width(56)
+STATUS_ROW_H        = scale_value_width(18)
 REQUEST_TIMEOUT     = 10
-SUPER_BOWL_LOGO_GAP = scale_value(6)
+SUPER_BOWL_LOGO_GAP = scale_value_width(6)
 SUPER_BOWL_DATE     = (2, 8)  # Feb 8
 
-COL_WIDTHS = [scale_value(70), scale_value(60), scale_value(60), scale_value(60), scale_value(70)]
+COL_WIDTHS = [
+    scale_value_width(70),
+    scale_value_width(60),
+    scale_value_width(60),
+    scale_value_width(60),
+    scale_value_width(70),
+]
 _TOTAL_COL_WIDTH = sum(COL_WIDTHS)
 _COL_LEFT = max(0, (WIDTH - _TOTAL_COL_WIDTH) // 2)
 COL_X = [_COL_LEFT]
@@ -70,8 +75,8 @@ SCREEN_ID = "NFL Scoreboard"
 TITLE_FONT = FONT_TITLE_SPORTS
 LOGO_DIR = os.path.join(IMAGES_DIR, "nfl")
 LEAGUE_LOGO_KEYS = ("NFL", "nfl")
-LEAGUE_LOGO_GAP = scale_value(4)
-TEAM_LOGO_BASE_HEIGHT = standard_scoreboard_team_logo_height(HEIGHT)
+LEAGUE_LOGO_GAP = scale_value_width(4)
+TEAM_LOGO_BASE_HEIGHT = scale_value_width(52)
 LEAGUE_LOGO_BASE_HEIGHT = TEAM_LOGO_BASE_HEIGHT
 LOGO_HEIGHT = TEAM_LOGO_BASE_HEIGHT
 LEAGUE_LOGO_HEIGHT = LEAGUE_LOGO_BASE_HEIGHT

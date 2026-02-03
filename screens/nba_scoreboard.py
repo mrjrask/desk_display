@@ -42,26 +42,31 @@ from config import (
     get_screen_background_color,
     get_screen_font,
     get_screen_image_scale,
-    scale_value,
+    scale_value_width,
 )
 from utils import (
     ScreenImage,
     clear_display,
     load_team_logo,
     log_call,
-    standard_scoreboard_team_logo_height,
 )
 from services.http_client import get_session
 
 # ─── Constants ────────────────────────────────────────────────────────────────
 TITLE               = "NBA Scoreboard"
-TITLE_GAP           = scale_value(8)
-BLOCK_SPACING       = scale_value(10)
-SCORE_ROW_H         = scale_value(56)
-STATUS_ROW_H        = scale_value(18)
+TITLE_GAP           = scale_value_width(8)
+BLOCK_SPACING       = scale_value_width(10)
+SCORE_ROW_H         = scale_value_width(56)
+STATUS_ROW_H        = scale_value_width(18)
 REQUEST_TIMEOUT     = 10
 
-COL_WIDTHS = [scale_value(70), scale_value(60), scale_value(60), scale_value(60), scale_value(70)]  # total = 320 (WIDTH)
+COL_WIDTHS = [
+    scale_value_width(70),
+    scale_value_width(60),
+    scale_value_width(60),
+    scale_value_width(60),
+    scale_value_width(70),
+]  # total = 320 (WIDTH)
 _TOTAL_COL_WIDTH = sum(COL_WIDTHS)
 _COL_LEFT = max(0, (WIDTH - _TOTAL_COL_WIDTH) // 2)
 COL_X = [_COL_LEFT]
@@ -72,11 +77,11 @@ SCREEN_ID = "NBA Scoreboard"
 TITLE_FONT = FONT_TITLE_SPORTS
 LOGO_DIR = os.path.join(IMAGES_DIR, "nba")
 LEAGUE_LOGO_KEYS = ("NBA", "nba")
-LEAGUE_LOGO_GAP = scale_value(4)
-TEAM_LOGO_BASE_HEIGHT = standard_scoreboard_team_logo_height(HEIGHT)
+LEAGUE_LOGO_GAP = scale_value_width(4)
+TEAM_LOGO_BASE_HEIGHT = scale_value_width(52)
 LEAGUE_LOGO_BASE_HEIGHT = TEAM_LOGO_BASE_HEIGHT
 INTRO_LOGO = "NBA.png"
-INTRO_MAX_BASE_HEIGHT = scale_value(100)
+INTRO_MAX_BASE_HEIGHT = scale_value_width(100)
 INTRO_ANIM_SCALES = (0.45, 0.6, 0.75, 0.9, 1.04, 0.98, 1.0)
 INTRO_ANIM_DELAY = 0.06
 INTRO_ANIM_HOLD = 0.4
