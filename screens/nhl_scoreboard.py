@@ -40,7 +40,7 @@ from config import (
     get_screen_background_color,
     get_screen_font,
     get_screen_image_scale,
-    scale_value,
+    scale_value_width,
 )
 from utils import (
     ScreenImage,
@@ -48,22 +48,27 @@ from utils import (
     load_team_logo,
     log_call,
     standard_scoreboard_league_logo_height,
-    standard_scoreboard_team_logo_height,
 )
 from services.http_client import NHL_HEADERS, get_session
 
 # ─── Constants ────────────────────────────────────────────────────────────────
 TITLE               = "NHL Scoreboard"
-TITLE_GAP           = scale_value(8)
-BLOCK_SPACING       = scale_value(10)
-SCORE_ROW_H         = scale_value(56)
-STATUS_ROW_H        = scale_value(18)
+TITLE_GAP           = scale_value_width(8)
+BLOCK_SPACING       = scale_value_width(10)
+SCORE_ROW_H         = scale_value_width(56)
+STATUS_ROW_H        = scale_value_width(18)
 REQUEST_TIMEOUT     = 10
 API_WEB_SCOREBOARD_URL = "https://api-web.nhle.com/v1/scoreboard/{date}"
 API_WEB_SCOREBOARD_NOW_URL = "https://api-web.nhle.com/v1/scoreboard/now"
 API_WEB_SCOREBOARD_PARAMS = {"site": "en_nhl"}
 
-COL_WIDTHS = [scale_value(70), scale_value(60), scale_value(60), scale_value(60), scale_value(70)]  # total = 320
+COL_WIDTHS = [
+    scale_value_width(70),
+    scale_value_width(60),
+    scale_value_width(60),
+    scale_value_width(60),
+    scale_value_width(70),
+]  # total = 320
 _TOTAL_COL_WIDTH = sum(COL_WIDTHS)
 _COL_LEFT = max(0, (WIDTH - _TOTAL_COL_WIDTH) // 2)
 COL_X = [_COL_LEFT]
@@ -74,8 +79,8 @@ SCREEN_ID = "NHL Scoreboard"
 TITLE_FONT = FONT_TITLE_SPORTS
 LOGO_DIR = os.path.join(IMAGES_DIR, "nhl")
 LEAGUE_LOGO_KEYS = ("NHL", "nhl")
-LEAGUE_LOGO_GAP = scale_value(4)
-TEAM_LOGO_BASE_HEIGHT = standard_scoreboard_team_logo_height(HEIGHT)
+LEAGUE_LOGO_GAP = scale_value_width(4)
+TEAM_LOGO_BASE_HEIGHT = scale_value_width(52)
 LEAGUE_LOGO_BASE_HEIGHT = standard_scoreboard_league_logo_height(TEAM_LOGO_BASE_HEIGHT)
 LOGO_HEIGHT = TEAM_LOGO_BASE_HEIGHT
 LEAGUE_LOGO_HEIGHT = LEAGUE_LOGO_BASE_HEIGHT

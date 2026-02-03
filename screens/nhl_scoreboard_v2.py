@@ -35,7 +35,7 @@ from config import (
     get_screen_background_color,
     get_screen_font,
     get_screen_image_scale,
-    scale_value,
+    scale_value_width,
 )
 from utils import (
     ScreenImage,
@@ -43,7 +43,6 @@ from utils import (
     load_team_logo,
     log_call,
     standard_scoreboard_league_logo_height,
-    standard_scoreboard_team_logo_height,
 )
 
 # Import shared NHL data fetching logic
@@ -64,19 +63,19 @@ from screens.nhl_scoreboard import (
 
 # ─── Constants ────────────────────────────────────────────────────────────────
 TITLE = "NHL Scoreboard v2"
-TITLE_GAP = scale_value(8)
-BLOCK_SPACING = scale_value(8)
-PAIR_SPACING = scale_value(4)
-SCORE_ROW_H = scale_value(30)
-STATUS_ROW_H = scale_value(14)
+TITLE_GAP = scale_value_width(8)
+BLOCK_SPACING = scale_value_width(8)
+PAIR_SPACING = scale_value_width(4)
+SCORE_ROW_H = scale_value_width(30)
+STATUS_ROW_H = scale_value_width(14)
 # Dual-game column layout (per game, 160px wide)
 # [Score 40][Logo 30][@ 20][Logo 30][Score 40] = 160
 GAME_COL_WIDTHS = [
-    scale_value(40),
-    scale_value(30),
-    scale_value(20),
-    scale_value(30),
-    scale_value(40),
+    scale_value_width(40),
+    scale_value_width(30),
+    scale_value_width(20),
+    scale_value_width(30),
+    scale_value_width(40),
 ]
 GAME_WIDTH = sum(GAME_COL_WIDTHS)
 GAME_COL_X = [0]
@@ -85,7 +84,7 @@ for w in GAME_COL_WIDTHS:
 
 SCREEN_ID = "NHL Scoreboard v2"
 TITLE_FONT = FONT_TITLE_SPORTS
-TEAM_LOGO_BASE_HEIGHT = standard_scoreboard_team_logo_height(HEIGHT, compact=True)
+TEAM_LOGO_BASE_HEIGHT = scale_value_width(26)
 LEAGUE_LOGO_BASE_HEIGHT = standard_scoreboard_league_logo_height(TEAM_LOGO_BASE_HEIGHT)
 LOGO_HEIGHT = TEAM_LOGO_BASE_HEIGHT
 LEAGUE_LOGO_HEIGHT = LEAGUE_LOGO_BASE_HEIGHT
@@ -109,7 +108,7 @@ CENTER_FONT = get_screen_font(
 )
 LOGO_DIR = os.path.join(IMAGES_DIR, "nhl")
 LEAGUE_LOGO_KEYS = ("NHL", "nhl")
-LEAGUE_LOGO_GAP = scale_value(4)
+LEAGUE_LOGO_GAP = scale_value_width(4)
 LEAGUE_LOGO_HEIGHT = LEAGUE_LOGO_BASE_HEIGHT
 
 IN_PROGRESS_SCORE_COLOR = SCOREBOARD_IN_PROGRESS_SCORE_COLOR

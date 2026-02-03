@@ -407,10 +407,15 @@ def _compute_display_scale(
 
 
 DISPLAY_SCALE = _compute_display_scale(BASE_WIDTH, BASE_HEIGHT, WIDTH, HEIGHT)
+DISPLAY_SCALE_WIDTH = max(0.1, WIDTH / BASE_WIDTH) if BASE_WIDTH > 0 else 1.0
 
 
 def scale_value(value: float) -> int:
     return max(1, int(round(value * DISPLAY_SCALE)))
+
+
+def scale_value_width(value: float) -> int:
+    return max(1, int(round(value * DISPLAY_SCALE_WIDTH)))
 SCREEN_DELAY             = 4
 try:
     HOURLY_FORECAST_HOURS = int(os.environ.get("HOURLY_FORECAST_HOURS", "5"))
