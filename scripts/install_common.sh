@@ -262,10 +262,18 @@ install_kernel_user_service() {
     if [[ -n "${SUDO:-}" ]]; then
       if ! $SUDO -u "$service_user" env "${systemctl_env[@]}" systemctl --user daemon-reload; then
         warn "Failed to reload user systemd daemon for $service_user."
-        warn "For SSH/headless setups, enable lingering and reload the user daemon:"
+        warn "Attempting to enable lingering for SSH/headless setups."
+        if $SUDO loginctl enable-linger "$service_user"; then
+          if $SUDO -u "$service_user" XDG_RUNTIME_DIR="/run/user/$uid" systemctl --user daemon-reload; then
+            $SUDO -u "$service_user" XDG_RUNTIME_DIR="/run/user/$uid" systemctl --user enable --now "$service_name" \
+              || warn "Failed to enable/start $service_name after enabling linger."
+            return 0
+          fi
+        fi
+        warn "To enable manually, run:"
         warn "  sudo loginctl enable-linger $service_user"
-        warn "  sudo -u $service_user XDG_RUNTIME_DIR=/run/user/$(id -u "$service_user") systemctl --user daemon-reload"
-        warn "  sudo -u $service_user XDG_RUNTIME_DIR=/run/user/$(id -u "$service_user") systemctl --user enable --now $service_name"
+        warn "  sudo -u $service_user XDG_RUNTIME_DIR=/run/user/$uid systemctl --user daemon-reload"
+        warn "  sudo -u $service_user XDG_RUNTIME_DIR=/run/user/$uid systemctl --user enable --now $service_name"
         return 0
       fi
       if detect_desktop_session "$service_user"; then
@@ -278,10 +286,10 @@ install_kernel_user_service() {
     else
       if ! env "${systemctl_env[@]}" systemctl --user daemon-reload; then
         warn "Failed to reload user systemd daemon for $service_user."
-        warn "For SSH/headless setups, enable lingering and reload the user daemon:"
+        warn "To enable manually on SSH/headless setups, run:"
         warn "  sudo loginctl enable-linger $service_user"
-        warn "  sudo -u $service_user XDG_RUNTIME_DIR=/run/user/$(id -u "$service_user") systemctl --user daemon-reload"
-        warn "  sudo -u $service_user XDG_RUNTIME_DIR=/run/user/$(id -u "$service_user") systemctl --user enable --now $service_name"
+        warn "  sudo -u $service_user XDG_RUNTIME_DIR=/run/user/$uid systemctl --user daemon-reload"
+        warn "  sudo -u $service_user XDG_RUNTIME_DIR=/run/user/$uid systemctl --user enable --now $service_name"
         return 0
       fi
       if detect_desktop_session "$service_user"; then
