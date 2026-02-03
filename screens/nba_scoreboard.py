@@ -42,6 +42,8 @@ from config import (
     get_screen_background_color,
     get_screen_font,
     get_screen_image_scale,
+    is_hyperpixel_next_layout,
+    scale_value,
     scale_value_width,
 )
 from utils import (
@@ -53,11 +55,18 @@ from utils import (
 from services.http_client import get_session
 
 # ─── Constants ────────────────────────────────────────────────────────────────
+HYPERPIXEL_LAYOUT = is_hyperpixel_next_layout()
+
+
+def _scale_y(value: int) -> int:
+    return scale_value(value) if HYPERPIXEL_LAYOUT else scale_value_width(value)
+
+
 TITLE               = "NBA Scoreboard"
-TITLE_GAP           = scale_value_width(8)
-BLOCK_SPACING       = scale_value_width(10)
-SCORE_ROW_H         = scale_value_width(56)
-STATUS_ROW_H        = scale_value_width(18)
+TITLE_GAP           = _scale_y(8)
+BLOCK_SPACING       = _scale_y(10)
+SCORE_ROW_H         = _scale_y(56)
+STATUS_ROW_H        = _scale_y(18)
 REQUEST_TIMEOUT     = 10
 
 COL_WIDTHS = [
@@ -77,11 +86,11 @@ SCREEN_ID = "NBA Scoreboard"
 TITLE_FONT = FONT_TITLE_SPORTS
 LOGO_DIR = os.path.join(IMAGES_DIR, "nba")
 LEAGUE_LOGO_KEYS = ("NBA", "nba")
-LEAGUE_LOGO_GAP = scale_value_width(4)
+LEAGUE_LOGO_GAP = _scale_y(4)
 TEAM_LOGO_BASE_HEIGHT = scale_value_width(52)
 LEAGUE_LOGO_BASE_HEIGHT = TEAM_LOGO_BASE_HEIGHT
 INTRO_LOGO = "NBA.png"
-INTRO_MAX_BASE_HEIGHT = scale_value_width(100)
+INTRO_MAX_BASE_HEIGHT = _scale_y(100)
 INTRO_ANIM_SCALES = (0.45, 0.6, 0.75, 0.9, 1.04, 0.98, 1.0)
 INTRO_ANIM_DELAY = 0.06
 INTRO_ANIM_HOLD = 0.4

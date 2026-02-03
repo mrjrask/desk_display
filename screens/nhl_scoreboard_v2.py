@@ -35,6 +35,8 @@ from config import (
     get_screen_background_color,
     get_screen_font,
     get_screen_image_scale,
+    is_hyperpixel_next_layout,
+    scale_value,
     scale_value_width,
 )
 from utils import (
@@ -62,12 +64,19 @@ from screens.nhl_scoreboard import (
 )
 
 # ─── Constants ────────────────────────────────────────────────────────────────
+HYPERPIXEL_LAYOUT = is_hyperpixel_next_layout()
+
+
+def _scale_y(value: int) -> int:
+    return scale_value(value) if HYPERPIXEL_LAYOUT else scale_value_width(value)
+
+
 TITLE = "NHL Scoreboard v2"
-TITLE_GAP = scale_value_width(8)
-BLOCK_SPACING = scale_value_width(8)
+TITLE_GAP = _scale_y(8)
+BLOCK_SPACING = _scale_y(8)
 PAIR_SPACING = scale_value_width(4)
-SCORE_ROW_H = scale_value_width(30)
-STATUS_ROW_H = scale_value_width(14)
+SCORE_ROW_H = _scale_y(30)
+STATUS_ROW_H = _scale_y(14)
 # Dual-game column layout (per game, 160px wide)
 # [Score 40][Logo 30][@ 20][Logo 30][Score 40] = 160
 GAME_COL_WIDTHS = [
@@ -108,7 +117,7 @@ CENTER_FONT = get_screen_font(
 )
 LOGO_DIR = os.path.join(IMAGES_DIR, "nhl")
 LEAGUE_LOGO_KEYS = ("NHL", "nhl")
-LEAGUE_LOGO_GAP = scale_value_width(4)
+LEAGUE_LOGO_GAP = _scale_y(4)
 LEAGUE_LOGO_HEIGHT = LEAGUE_LOGO_BASE_HEIGHT
 
 IN_PROGRESS_SCORE_COLOR = SCOREBOARD_IN_PROGRESS_SCORE_COLOR

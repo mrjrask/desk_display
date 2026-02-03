@@ -35,7 +35,9 @@ from config import (
     get_screen_background_color,
     get_screen_font,
     get_screen_image_scale,
+    is_hyperpixel_next_layout,
     scale_value,
+    scale_value_width,
 )
 from utils import (
     ScreenImage,
@@ -64,6 +66,13 @@ from screens.mlb_scoreboard import (
 )
 
 # ─── Constants ────────────────────────────────────────────────────────────────
+HYPERPIXEL_LAYOUT = is_hyperpixel_next_layout()
+
+
+def _scale_width(value: int) -> int:
+    return scale_value_width(value) if HYPERPIXEL_LAYOUT else scale_value(value)
+
+
 TITLE = "MLB Scoreboard v2"
 TITLE_GAP = scale_value(8)
 BLOCK_SPACING = scale_value(8)
@@ -74,11 +83,11 @@ STATUS_ROW_H = scale_value(14)
 # Dual-game column layout (per game, 160px wide)
 # [Score 40][Logo 30][@ 20][Logo 30][Score 40] = 160
 GAME_COL_WIDTHS = [
-    scale_value(40),
-    scale_value(30),
-    scale_value(20),
-    scale_value(30),
-    scale_value(40),
+    _scale_width(40),
+    _scale_width(30),
+    _scale_width(20),
+    _scale_width(30),
+    _scale_width(40),
 ]
 GAME_WIDTH = sum(GAME_COL_WIDTHS)
 GAME_COL_X = [0]

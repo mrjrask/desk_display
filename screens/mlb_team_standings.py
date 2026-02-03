@@ -25,12 +25,13 @@ from config import (
     FONT_STAND2_RECORD,
     FONT_STAND2_VALUE,
     SCOREBOARD_BACKGROUND_COLOR,
+    scale_value,
 )
 from utils import clear_display, fit_logo_to_box, log_call
 
 # Constants
-LOGO_SZ = 71
-MARGIN  = 6
+LOGO_SZ = scale_value(71)
+MARGIN  = scale_value(6)
 
 # Helpers
 def _ord(n):
