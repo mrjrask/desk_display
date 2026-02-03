@@ -27,6 +27,7 @@ from utils import (
     load_team_logo,
     next_game_from_schedule,
     standard_next_game_logo_frame_width,
+    standard_next_game_logo_height,
     standard_next_game_logo_height_for_space,
     wrap_text,
 )
@@ -140,10 +141,18 @@ def show_bears_next_game(display, transition=False):
     img   = Image.new("RGB", (config.WIDTH, config.HEIGHT), background)
     draw  = ImageDraw.Draw(img)
 
+    hyperpixel_layout = config.is_hyperpixel_next_layout()
+    edge_pad = max(2, config.scale_value(2)) if hyperpixel_layout else 2
+    line_gap = max(2, config.scale_value(2)) if hyperpixel_layout else 2
+
     # Title
     tw, th = draw.textsize(title, font=config.FONT_TITLE_SPORTS)
-    draw.text(((config.WIDTH - tw)//2, 0), title,
-              font=config.FONT_TITLE_SPORTS, fill=(255,255,255))
+    draw.text(
+        ((config.WIDTH - tw) // 2, edge_pad),
+        title,
+        font=config.FONT_TITLE_SPORTS,
+        fill=(255, 255, 255),
+    )
 
     if game:
         opp = game["opponent"]
@@ -152,12 +161,12 @@ def show_bears_next_game(display, transition=False):
 
         # Opponent text (up to 2 lines)
         lines  = wrap_text(f"{prefix} {opp}", config.FONT_TEAM_SPORTS, config.WIDTH)[:2]
-        y_txt  = th + 4
+        y_txt = th + (config.scale_value(4) if hyperpixel_layout else 4)
         for ln in lines:
             w_ln, h_ln = draw.textsize(ln, font=config.FONT_TEAM_SPORTS)
             draw.text(((config.WIDTH - w_ln)//2, y_txt),
                       ln, font=config.FONT_TEAM_SPORTS, fill=(255,255,255))
-            y_txt += h_ln + 2
+            y_txt += h_ln + line_gap
 
         # Logos row: AWAY @ HOME
         bears_ab = "chi"
@@ -185,24 +194,37 @@ def show_bears_next_game(display, transition=False):
         t_txt = game["time"].strip()
         date_time = " ".join(part for part in (date_txt, t_txt) if part).strip()
         bottom_lines = [line for line in (wk, date_time) if line]
-        line_gap = 2
+        bottom_line_gap = line_gap
         if bottom_lines:
             heights = [
                 _text_size(draw, line, font=config.FONT_DATE_SPORTS)[1]
                 for line in bottom_lines
             ]
-            bottom_h = sum(heights) + (line_gap * (len(bottom_lines) - 1))
+            bottom_h = sum(heights) + (bottom_line_gap * (len(bottom_lines) - 1))
         else:
             bottom_h = 0
-        bottom_y = config.HEIGHT - bottom_h - BEARS_BOTTOM_MARGIN  # keep on-screen
+        bottom_margin = (
+            config.scale_value(BEARS_BOTTOM_MARGIN) if hyperpixel_layout else BEARS_BOTTOM_MARGIN
+        )
+        bottom_y = config.HEIGHT - bottom_h - bottom_margin  # keep on-screen
 
         available_h = max(10, bottom_y - (y_txt + 2))
-        logo_h = standard_next_game_logo_height_for_space(config.HEIGHT, available_h)
+        if hyperpixel_layout:
+            desired_logo_h = max(
+                1,
+                int(round(standard_next_game_logo_height(config.HEIGHT) * config.DISPLAY_SCALE)),
+            )
+            logo_h = min(desired_logo_h, available_h)
+        else:
+            logo_h = standard_next_game_logo_height_for_space(config.HEIGHT, available_h)
 
         logo_away = load_team_logo(NFL_LOGO_DIR, away_ab, height=logo_h, box_size=logo_h)
         logo_home = load_team_logo(NFL_LOGO_DIR, home_ab, height=logo_h, box_size=logo_h)
 
-        gap = max(6, min(10, config.WIDTH // 30))
+        if hyperpixel_layout:
+            gap = max(config.scale_value(6), min(config.scale_value(10), config.WIDTH // 30))
+        else:
+            gap = max(6, min(10, config.WIDTH // 30))
         frame_w = standard_next_game_logo_frame_width(logo_h, (logo_away, logo_home))
         at_symbol = "@"
         try:
@@ -272,7 +294,7 @@ def show_bears_next_game(display, transition=False):
                     font=config.FONT_DATE_SPORTS,
                     fill=(255, 255, 255),
                 )
-                y_bottom_text += h_line + line_gap
+                y_bottom_text += h_line + bottom_line_gap
 
     if transition:
         return img
