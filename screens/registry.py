@@ -9,7 +9,7 @@ from typing import Any, Callable, Dict, Optional, Tuple
 
 from PIL import Image
 
-from config import CENTRAL_TIME
+from config import CENTRAL_TIME, NBA_TEAM_TRICODE
 from utils import ScreenImage, animate_scroll, timestamp_to_datetime
 from screens.draw_bears_schedule import show_bears_next_game, show_bears_next_season
 from screens.draw_bulls_schedule import (
@@ -160,6 +160,18 @@ def _extract_team_id(blob):
     return None
 
 
+def _extract_team_tricode(blob):
+    if not isinstance(blob, dict):
+        return None
+    team = blob.get("team") if isinstance(blob.get("team"), dict) else blob
+    if isinstance(team, dict):
+        for key in ("triCode", "abbreviation", "abbrev", "teamAbbrev"):
+            value = team.get(key)
+            if value:
+                return str(value).upper()
+    return None
+
+
 def _games_match(game_a, game_b):
     if not game_a or not game_b:
         return False
@@ -186,6 +198,17 @@ def _games_match(game_a, game_b):
         return home_a and home_a == home_b and away_a and away_a == away_b
 
     return False
+
+
+def _is_bulls_home_game(game: Any) -> bool:
+    if not isinstance(game, dict):
+        return False
+    teams = game.get("teams") or {}
+    home = teams.get("home") or game.get("homeTeam") or game.get("home_team")
+    tricode = _extract_team_tricode(home)
+    if not tricode:
+        return False
+    return tricode == (NBA_TEAM_TRICODE or "CHI").upper()
 
 
 def _format_time(value: Optional[_dt.time]) -> str:
@@ -909,65 +932,65 @@ def build_screen_registry(context: ScreenContext) -> Tuple[Dict[str, ScreenDefin
     register("AL Wild Card", lambda: draw_AL_WildCard(context.display, transition=True))
 
     bulls = context.cache.get("bulls") or {}
-    if any(bulls.values()):
-        register_logo("bulls logo")
-        bulls_next = bulls.get("next")
-        bulls_next_home = bulls.get("next_home")
-        # Always show the Bulls "next home" card, even if the next game is at home.
-        # This avoids dropping the screen when the next home matchup matches the
-        # general "next" game entry.
+    register_logo("bulls logo")
+    bulls_next = bulls.get("next")
+    bulls_next_home = bulls.get("next_home")
+    if not bulls_next_home and _is_bulls_home_game(bulls_next):
+        bulls_next_home = bulls_next
+    # Always show the Bulls "next home" card, even if the next game is at home.
+    # This avoids dropping the screen when the next home matchup matches the
+    # general "next" game entry.
 
-        if bulls.get("stand"):
-            register(
-                "bulls stand1",
-                lambda data=bulls.get("stand"): draw_nba_standings_screen1(
-                    context.display,
-                    data,
-                    os.path.join(context.image_dir, "nba/CHI.png"),
-                    "Western conf.",
-                    transition=True,
-                ),
-                available=True,
-            )
-            register(
-                "bulls stand2",
-                lambda data=bulls.get("stand"): draw_nba_standings_screen2(
-                    context.display,
-                    data,
-                    os.path.join(context.image_dir, "nba/CHI.png"),
-                    transition=True,
-                ),
-                available=True,
-            )
+    if bulls.get("stand"):
+        register(
+            "bulls stand1",
+            lambda data=bulls.get("stand"): draw_nba_standings_screen1(
+                context.display,
+                data,
+                os.path.join(context.image_dir, "nba/CHI.png"),
+                "Western conf.",
+                transition=True,
+            ),
+            available=True,
+        )
+        register(
+            "bulls stand2",
+            lambda data=bulls.get("stand"): draw_nba_standings_screen2(
+                context.display,
+                data,
+                os.path.join(context.image_dir, "nba/CHI.png"),
+                transition=True,
+            ),
+            available=True,
+        )
 
-        register(
-            "bulls last",
-            lambda data=bulls.get("last"): draw_last_bulls_game(
-                context.display, data, transition=True
-            ),
-            available=bool(bulls.get("last")),
-        )
-        register(
-            "bulls live",
-            lambda data=bulls.get("live"): draw_live_bulls_game(
-                context.display, data, transition=True
-            ),
-            available=_is_live_game_today(bulls.get("live")),
-        )
-        register(
-            "bulls next",
-            lambda data=bulls_next: draw_sports_screen_bulls(
-                context.display, data, transition=True
-            ),
-            available=bool(bulls_next),
-        )
-        if bulls_next_home:
-            register(
-                "bulls next home",
-                lambda data=bulls_next_home: draw_bulls_next_home_game(
-                    context.display, data, transition=True
-                ),
-                available=True,
-            )
+    register(
+        "bulls last",
+        lambda data=bulls.get("last"): draw_last_bulls_game(
+            context.display, data, transition=True
+        ),
+        available=True,
+    )
+    register(
+        "bulls live",
+        lambda data=bulls.get("live"): draw_live_bulls_game(
+            context.display, data, transition=True
+        ),
+        available=_is_live_game_today(bulls.get("live")),
+    )
+    register(
+        "bulls next",
+        lambda data=bulls_next: draw_sports_screen_bulls(
+            context.display, data, transition=True
+        ),
+        available=True,
+    )
+    register(
+        "bulls next home",
+        lambda data=bulls_next_home: draw_bulls_next_home_game(
+            context.display, data, transition=True
+        ),
+        available=True,
+    )
 
     return registry, metadata
