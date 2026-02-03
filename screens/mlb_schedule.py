@@ -12,6 +12,7 @@ import datetime
 from typing import Optional, Tuple
 from PIL import Image, ImageDraw, Image, ImageFont
 
+import config
 from config import (
     WIDTH, HEIGHT,
     FONT_TITLE_SPORTS, FONT_DATE_SPORTS,
@@ -177,16 +178,21 @@ def _rel_date_only(official_date: str) -> str:
         return "Yesterday"
     return f"{d.strftime('%a')} {d.month}/{d.day}"
 
-def _draw_title_with_bold_result(draw: ImageDraw.ImageDraw, title: str) -> tuple[int,int]:
+def _draw_title_with_bold_result(
+    draw: ImageDraw.ImageDraw,
+    title: str,
+    *,
+    y_offset: int = 0,
+) -> tuple[int,int]:
     """Center the title. If it ends with ' W' or ' L', faux-bold that letter."""
     tw, th = draw.textsize(title, font=FONT_TITLE_SPORTS)
     x0 = (WIDTH - tw)//2
-    draw.text((x0, 0), title, font=FONT_TITLE_SPORTS, fill=(255,255,255))
+    draw.text((x0, y_offset), title, font=FONT_TITLE_SPORTS, fill=(255,255,255))
     if title.endswith(" W") or title.endswith(" L"):
         ch = title[-1]
         cw, _ = draw.textsize(ch, font=FONT_TITLE_SPORTS)
         cx = x0 + tw - cw
-        cy = 0
+        cy = y_offset
         draw.text((cx, cy), ch, font=FONT_TITLE_SPORTS, fill=(255,255,255))
         draw.text((cx+1, cy), ch, font=FONT_TITLE_SPORTS, fill=(255,255,255))
     return tw, th
@@ -231,10 +237,16 @@ def _bbox_center(draw: ImageDraw.ImageDraw, x: int, y: int, w: int, h: int,
         ty = y + (h - th)//2
     draw.text((tx, ty), text, font=font, fill=fill)
 
-def _compute_table_geometry(draw: ImageDraw.ImageDraw,
-                            top_y: int,
-                            bottom_y: int,
-                            reserve_flag_block: bool) -> dict:
+def _compute_table_geometry(
+    draw: ImageDraw.ImageDraw,
+    top_y: int,
+    bottom_y: int,
+    reserve_flag_block: bool,
+    *,
+    table_side_margin: int = TABLE_SIDE_MARGIN,
+    min_team_col_width: int = MIN_TEAM_COL_WIDTH,
+    header_gap: int = HEADER_GAP,
+) -> dict:
     """
     Decide sizes so that columns 2–4 are true squares (same width as row height),
     and column 1 takes the rest. Ensures header labels sit above the grid with space.
@@ -247,15 +259,15 @@ def _compute_table_geometry(draw: ImageDraw.ImageDraw,
     hdr_h = draw.textsize("R", font=FONT_DATE_SPORTS)[1] + 2
 
     # Horizontal extents
-    total_w = WIDTH - 2*TABLE_SIDE_MARGIN
+    total_w = WIDTH - 2*table_side_margin
 
     # Start with desired square size; clamp against minimum team width
     desired_sq = int(total_w * DESIRED_SQUARE_FRACTION)
-    max_sq_by_width = (total_w - MIN_TEAM_COL_WIDTH) // 3
+    max_sq_by_width = (total_w - min_team_col_width) // 3
     square = max(18, min(desired_sq, max_sq_by_width))
 
     # Ensure grid fits vertically (2 rows of 'square' cells)
-    grid_top = top_y + hdr_h + HEADER_GAP
+    grid_top = top_y + hdr_h + header_gap
     max_rows_h = grid_bottom_limit - grid_top
     if max_rows_h > 0:
         square = min(square, max_rows_h // 2)
@@ -263,16 +275,16 @@ def _compute_table_geometry(draw: ImageDraw.ImageDraw,
 
     # Derive first column width from final square
     team_w = total_w - 3*square
-    if team_w < MIN_TEAM_COL_WIDTH:
-        square = max(18, (total_w - MIN_TEAM_COL_WIDTH) // 3)
+    if team_w < min_team_col_width:
+        square = max(18, (total_w - min_team_col_width) // 3)
         team_w = total_w - 3*square
 
     xs = [
-        TABLE_SIDE_MARGIN,
-        TABLE_SIDE_MARGIN + team_w,
-        TABLE_SIDE_MARGIN + team_w + square,
-        TABLE_SIDE_MARGIN + team_w + 2*square,
-        TABLE_SIDE_MARGIN + team_w + 3*square,
+        table_side_margin,
+        table_side_margin + team_w,
+        table_side_margin + team_w + square,
+        table_side_margin + team_w + 2*square,
+        table_side_margin + team_w + 3*square,
     ]
 
     return {
@@ -293,15 +305,26 @@ def _draw_boxscore_table(img: Image.Image, draw: ImageDraw.ImageDraw, title: str
                          *,
                          reserve_flag_block: bool,
                          live: bool=False,
-                         winner_flag: str|None=None):
+                         winner_flag: str|None=None,
+                         hyperpixel_layout: bool=False):
     """
     Render the whole screen (title + header + table + optional small flag + bottom line).
     - Columns 2–4 are true squares; column 1 stretches.
     - Values are centered both horizontally and vertically in each cell.
     - Optional small W/L flag drawn only if 'winner_flag' is 'W' or 'L' (Cubs only).
     """
+    edge_pad = config.scale_value(2) if hyperpixel_layout else 0
+    title_gap = config.scale_value(TITLE_TO_HEADER_GAP) if hyperpixel_layout else TITLE_TO_HEADER_GAP
+    header_gap = config.scale_value(HEADER_GAP) if hyperpixel_layout else HEADER_GAP
+    table_side_margin = (
+        config.scale_value(TABLE_SIDE_MARGIN) if hyperpixel_layout else TABLE_SIDE_MARGIN
+    )
+    min_team_col_width = (
+        config.scale_value(MIN_TEAM_COL_WIDTH) if hyperpixel_layout else MIN_TEAM_COL_WIDTH
+    )
+
     # Title
-    _, th = _draw_title_with_bold_result(draw, title)
+    _, th = _draw_title_with_bold_result(draw, title, y_offset=edge_pad)
 
     # Bottom line position (reserve space using accurate text metrics)
     if bottom_text:
@@ -312,11 +335,19 @@ def _draw_boxscore_table(img: Image.Image, draw: ImageDraw.ImageDraw, title: str
             bh = draw.textsize(bottom_text, font=FONT_DATE_SPORTS)[1]
     else:
         bh = 0
-    bottom_y = HEIGHT - bh - BOTTOM_MARGIN
+    bottom_margin = config.scale_value(BOTTOM_MARGIN) if hyperpixel_layout else BOTTOM_MARGIN
+    bottom_y = HEIGHT - bh - bottom_margin
 
     # Geometry
-    g = _compute_table_geometry(draw, top_y=th + TITLE_TO_HEADER_GAP, bottom_y=bottom_y,
-                                reserve_flag_block=reserve_flag_block)
+    g = _compute_table_geometry(
+        draw,
+        top_y=edge_pad + th + title_gap,
+        bottom_y=bottom_y,
+        reserve_flag_block=reserve_flag_block,
+        table_side_margin=table_side_margin,
+        min_team_col_width=min_team_col_width,
+        header_gap=header_gap,
+    )
     hdr_h   = g["hdr_h"]
     grid_top= g["grid_top"]
     row_h   = g["row_h"]
@@ -332,7 +363,7 @@ def _draw_boxscore_table(img: Image.Image, draw: ImageDraw.ImageDraw, title: str
         # center exactly using bbox
         _bbox_center(draw,
                      x=xs[i],
-                     y=(grid_top - HEADER_GAP) - hdr_h,
+                     y=(grid_top - header_gap) - hdr_h,
                      w=col_w,
                      h=hdr_h,
                      text=lbl,
@@ -341,20 +372,20 @@ def _draw_boxscore_table(img: Image.Image, draw: ImageDraw.ImageDraw, title: str
 
     # Grid background (forest green) – exactly behind the 2×2 rows area
     draw.rectangle(
-        (TABLE_SIDE_MARGIN, grid_top, TABLE_SIDE_MARGIN + total_w, grid_top + grid_h),
+        (table_side_margin, grid_top, table_side_margin + total_w, grid_top + grid_h),
         fill=GRID_BG
     )
 
     # Grid outline + interior lines
     draw.rectangle(
-        (TABLE_SIDE_MARGIN, grid_top, TABLE_SIDE_MARGIN + total_w, grid_top + grid_h),
+        (table_side_margin, grid_top, table_side_margin + total_w, grid_top + grid_h),
         outline=(255,255,255)
     )
     # Vertical separators
     for x in xs[1:-1]:
         draw.line((x, grid_top, x, grid_top + grid_h), fill=(255,255,255))
     # Middle horizontal line
-    draw.line((TABLE_SIDE_MARGIN, grid_top + row_h, TABLE_SIDE_MARGIN + total_w, grid_top + row_h),
+    draw.line((table_side_margin, grid_top + row_h, table_side_margin + total_w, grid_top + row_h),
               fill=(255,255,255))
 
     # Rows data (centered text in each cell)
@@ -391,7 +422,7 @@ def _draw_boxscore_table(img: Image.Image, draw: ImageDraw.ImageDraw, title: str
                 pass
 
     # Bottom label
-    _center_bottom_text(draw, bottom_text, FONT_DATE_SPORTS)
+    _center_bottom_text(draw, bottom_text, FONT_DATE_SPORTS, margin=bottom_margin)
 
 
 # ── Screens ─────────────────────────────────────────────────────────────────
@@ -402,6 +433,11 @@ def draw_last_game(display, game, title="Last Game...", transition=False, screen
     if not game:
         logging.warning(f"No game data for {title}")
         return None
+
+    hyperpixel_layout = config.is_hyperpixel_next_layout() and screen_id in {
+        "cubs last",
+        "sox last",
+    }
 
     # Determine which team (Cubs vs Sox) to compute W/L and whether to show mini-flag
     tid = int(MLB_CUBS_TEAM_ID) if "Cubs" in title else int(MLB_SOX_TEAM_ID)
@@ -435,7 +471,8 @@ def draw_last_game(display, game, title="Last Game...", transition=False, screen
         bottom,
         reserve_flag_block=True,                      # keep layout identical Cubs/Sox
         live=False,
-        winner_flag=(result_char if "Cubs" in title else None)  # flag only for Cubs
+        winner_flag=(result_char if "Cubs" in title else None),  # flag only for Cubs
+        hyperpixel_layout=hyperpixel_layout,
     )
 
     def _as_int(value):
@@ -489,6 +526,11 @@ def draw_box_score(display, game, title="Live Game...", transition=False, screen
     away_lbl = get_mlb_abbreviation(get_team_display_name(game["teams"]["away"]["team"]))
     home_lbl = get_mlb_abbreviation(get_team_display_name(game["teams"]["home"]["team"]))
 
+    hyperpixel_layout = config.is_hyperpixel_next_layout() and screen_id in {
+        "cubs live",
+        "sox live",
+    }
+
     _draw_boxscore_table(
         img, draw, title,
         away_lbl, game["teams"]["away"].get("score", 0),
@@ -497,7 +539,8 @@ def draw_box_score(display, game, title="Live Game...", transition=False, screen
         home_ls.get("hits", 0), home_ls.get("errors", 0),
         inning,
         reserve_flag_block=False,
-        live=True
+        live=True,
+        hyperpixel_layout=hyperpixel_layout,
     )
 
     if transition:
@@ -517,11 +560,25 @@ def draw_sports_screen(display, game, title, transition=False, screen_id: Option
         logging.warning(f"No data for {title}")
         return None
 
+    hyperpixel_layout = config.is_hyperpixel_next_layout() and screen_id in {
+        "cubs next",
+        "cubs next home",
+        "sox next",
+        "sox next home",
+    }
+    edge_pad = max(2, config.scale_value(2)) if hyperpixel_layout else 0
+    line_gap = max(1, config.scale_value(1)) if hyperpixel_layout else 1
+
     img  = Image.new("RGB", (WIDTH, HEIGHT), BACKGROUND_COLOR)
     draw = ImageDraw.Draw(img)
 
     tw, th = draw.textsize(title, font=FONT_TITLE_SPORTS)
-    draw.text(((WIDTH - tw)//2, 0), title, font=FONT_TITLE_SPORTS, fill=(255,255,255))
+    draw.text(
+        ((WIDTH - tw) // 2, edge_pad),
+        title,
+        font=FONT_TITLE_SPORTS,
+        fill=(255, 255, 255),
+    )
 
     home_tm = game['teams']['home']['team']
     away_tm = game['teams']['away']['team']
@@ -547,12 +604,13 @@ def draw_sports_screen(display, game, title, transition=False, screen_id: Option
     else:
         prefix, opponent = 'vs.', get_team_display_name(away_tm)
 
-    lines = wrap_text(f"{prefix} {opponent}", FONT_TEAM_SPORTS, WIDTH)[:2]
-    y_text = th + 4
+    wrap_width = WIDTH - (edge_pad * 2) if hyperpixel_layout else WIDTH
+    lines = wrap_text(f"{prefix} {opponent}", FONT_TEAM_SPORTS, wrap_width)[:2]
+    y_text = edge_pad + th + (config.scale_value(4) if hyperpixel_layout else 4)
     for ln in lines:
         lw, lh = draw.textsize(ln, font=FONT_TEAM_SPORTS)
         draw.text(((WIDTH - lw)//2, y_text), ln, font=FONT_TEAM_SPORTS, fill=(255,255,255))
-        y_text += lh + 1
+        y_text += lh + line_gap
 
     # logos + “@” inline
     def load_logo_for_tm(tm, frame_size: int):
@@ -563,6 +621,8 @@ def draw_sports_screen(display, game, title, transition=False, screen_id: Option
 
     # Desired logo frame height mirrors the Hawks "Next Game" layout for consistency.
     desired_logo_h = standard_next_game_logo_height(HEIGHT)
+    if hyperpixel_layout:
+        desired_logo_h = max(1, int(round(desired_logo_h * config.DISPLAY_SCALE)))
 
     raw_date = game.get('officialDate','') or game.get('gameDate','')[:10]
     raw_time = game.get('startTimeCentral','TBD')
@@ -575,15 +635,16 @@ def draw_sports_screen(display, game, title, transition=False, screen_id: Option
             bl_h = draw.textsize(bottom, font=FONT_DATE_SPORTS)[1]
     else:
         bl_h = 0
-    bottom_y = HEIGHT - bl_h - BOTTOM_MARGIN
+    bottom_margin = config.scale_value(BOTTOM_MARGIN) if hyperpixel_layout else BOTTOM_MARGIN
+    bottom_y = HEIGHT - bl_h - bottom_margin
 
-    available_h = max(10, bottom_y - (y_text + 2))
+    available_h = max(10, bottom_y - (y_text + (edge_pad if hyperpixel_layout else 2)))
     logo_h = min(desired_logo_h, available_h)
 
     logo_away = load_logo_for_tm(away_tm, logo_h)
     logo_home = load_logo_for_tm(home_tm, logo_h)
 
-    gap = 10
+    gap = config.scale_value(10) if hyperpixel_layout else 10
     max_frame_w = max(10, (WIDTH - (gap * 2) - draw.textsize("@", font=FONT_TEAM_SPORTS)[0]) // 2)
     frame_w = min(
         standard_next_game_logo_frame_width(logo_h, (logo_away, logo_home)),
@@ -595,7 +656,7 @@ def draw_sports_screen(display, game, title, transition=False, screen_id: Option
     block_h = logo_h if (logo_away or logo_home) else at_h
 
     centered_top = (HEIGHT - block_h) // 2
-    row_y = max(y_text + 1, min(centered_top, bottom_y - block_h - 1))
+    row_y = max(y_text + line_gap, min(centered_top, bottom_y - block_h - line_gap))
 
     total_w = frame_w * 2 + (gap * 2) + at_w
     start_x = max(0, (WIDTH - total_w) // 2)

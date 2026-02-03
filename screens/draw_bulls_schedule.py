@@ -42,6 +42,7 @@ from utils import (
     ScreenImage,
     fit_logo_to_box,
     standard_next_game_logo_frame_width,
+    standard_next_game_logo_height,
     standard_next_game_logo_height_for_space,
     temporary_display_led,
 )
@@ -541,6 +542,7 @@ def _draw_scoreboard_table(
     rows: Tuple[Dict[str, object], ...],
     *,
     bottom_reserved_px: int = 0,
+    hyperpixel_layout: bool = False,
 ) -> int:
     """
     2-row compact table: team cell at left, score column at right.
@@ -558,7 +560,8 @@ def _draw_scoreboard_table(
     table_top = top_y
 
     # Reserve space: rows + bottom_reserved_px
-    row_h = max(40, int((HEIGHT - top_y - header_h - bottom_reserved_px) / row_count))
+    min_row_h = config.scale_value(40) if hyperpixel_layout else 40
+    row_h = max(min_row_h, int((HEIGHT - top_y - header_h - bottom_reserved_px) / row_count))
     table_h = header_h + row_h * row_count
     y = table_top + header_h  # header_h = 0
 
@@ -573,17 +576,20 @@ def _draw_scoreboard_table(
         # Background highlight behind Bulls row was removed per request.
 
         # Logo
-        base_h = max(1, h - 6)
-        logo_h = min(64, max(24, base_h))
+        pad_logo = config.scale_value(6) if hyperpixel_layout else 6
+        logo_min = config.scale_value(24) if hyperpixel_layout else 24
+        logo_max = config.scale_value(64) if hyperpixel_layout else 64
+        base_h = max(1, h - pad_logo)
+        logo_h = min(logo_max, max(logo_min, base_h))
         logo   = _load_logo_png(tri, logo_h)
-        px = 6
+        px = config.scale_value(6) if hyperpixel_layout else 6
         if logo:
             ly = top + (h - logo.height) // 2
             img.paste(logo, (px, ly), logo)
-            px += logo.width + 6
+            px += logo.width + (config.scale_value(6) if hyperpixel_layout else 6)
 
         # Team label
-        max_text_w = max(1, x1 - 6 - px)
+        max_text_w = max(1, x1 - (config.scale_value(6) if hyperpixel_layout else 6) - px)
         use_font = FONT_ABBR if _text_w(draw, label, FONT_ABBR) <= max_text_w else FONT_SMALL
         draw.text((px, top + (h - _text_h(draw, use_font)) // 2), label, font=use_font, fill=TEXT_COLOR)
 
@@ -599,41 +605,71 @@ def _draw_scoreboard_table(
 
     return y
 
-def _render_message(title: str, message: str) -> Image.Image:
+def _render_message(title: str, message: str, *, hyperpixel_layout: bool = False) -> Image.Image:
     img = Image.new("RGB", (WIDTH, HEIGHT), BACKGROUND_COLOR)
     draw = ImageDraw.Draw(img)
-    y = 2
+    edge_pad = config.scale_value(2) if hyperpixel_layout else 2
+    line_gap = config.scale_value(4) if hyperpixel_layout else 4
+    y = edge_pad
     y += _draw_title_line(draw, y, title)
-    y += 4
-    _center_wrapped_text(draw, y, message, FONT_TEAM_SPORTS, max_width=WIDTH - 12)
+    y += line_gap
+    _center_wrapped_text(
+        draw,
+        y,
+        message,
+        FONT_TEAM_SPORTS,
+        max_width=WIDTH - (config.scale_value(12) if hyperpixel_layout else 12),
+    )
     return img
 
-def _render_scoreboard(game: Dict, *, title: str, footer: Optional[str] = "", status_line: Optional[str] = "") -> Image.Image:
+def _render_scoreboard(
+    game: Dict,
+    *,
+    title: str,
+    footer: Optional[str] = "",
+    status_line: Optional[str] = "",
+    hyperpixel_layout: bool = False,
+) -> Image.Image:
     img = Image.new("RGB", (WIDTH, HEIGHT), BACKGROUND_COLOR)
     draw = ImageDraw.Draw(img)
 
-    y = 2
+    edge_pad = config.scale_value(2) if hyperpixel_layout else 2
+    line_gap = config.scale_value(2) if hyperpixel_layout else 2
+    y = edge_pad
     y += _draw_title_line(draw, y, title)
     if status_line:
-        y += 2 + _center_text(draw, y, status_line, FONT_SMALL)
-    y += 2
+        y += line_gap + _center_text(draw, y, status_line, FONT_SMALL)
+    y += line_gap
 
     away = _team_entry(game, "away")
     home = _team_entry(game, "home")
 
     bottom_line = footer or ""
     bottom_reserved = (
-        _text_h(draw, FONT_BOTTOM) + BOTTOM_LINE_MARGIN if bottom_line else 0
+        _text_h(draw, FONT_BOTTOM)
+        + (config.scale_value(BOTTOM_LINE_MARGIN) if hyperpixel_layout else BOTTOM_LINE_MARGIN)
+        if bottom_line
+        else 0
     )
 
     rows = (
         {"tri": away["tri"], "label": away["label"], "score": away["score"]},
         {"tri": home["tri"], "label": home["label"], "score": home["score"]},
     )
-    _draw_scoreboard_table(img, draw, y, rows, bottom_reserved_px=bottom_reserved)
+    _draw_scoreboard_table(
+        img,
+        draw,
+        y,
+        rows,
+        bottom_reserved_px=bottom_reserved,
+        hyperpixel_layout=hyperpixel_layout,
+    )
 
     if bottom_line:
-        by = HEIGHT - _text_h(draw, FONT_BOTTOM) - BOTTOM_LINE_MARGIN
+        bottom_margin = (
+            config.scale_value(BOTTOM_LINE_MARGIN) if hyperpixel_layout else BOTTOM_LINE_MARGIN
+        )
+        by = HEIGHT - _text_h(draw, FONT_BOTTOM) - bottom_margin
         _center_text(draw, by, bottom_line, FONT_BOTTOM, fill=TEXT_COLOR)
 
     return img
@@ -645,13 +681,18 @@ def _render_next_game(game: Dict, *, title: str) -> Image.Image:
     img = Image.new("RGB", (WIDTH, HEIGHT), BACKGROUND_COLOR)
     draw = ImageDraw.Draw(img)
 
-    y = 2
+    hyperpixel_layout = config.is_hyperpixel_next_layout()
+    edge_pad = max(2, config.scale_value(2)) if hyperpixel_layout else 2
+    line_gap = max(2, config.scale_value(2)) if hyperpixel_layout else 2
+
+    y = edge_pad
     y += _draw_title_line(draw, y, title)
-    y += 2
+    y += line_gap
 
     matchup = _format_matchup_line(game)
     if matchup:
-        y += _center_wrapped_text(draw, y, matchup, FONT_NEXT_OPP, max_width=WIDTH - 8) + 2
+        wrap_width = WIDTH - (edge_pad * 4)
+        y += _center_wrapped_text(draw, y, matchup, FONT_NEXT_OPP, max_width=wrap_width) + line_gap
 
     away = _team_entry(game, "away")
     home = _team_entry(game, "home")
@@ -659,18 +700,26 @@ def _render_next_game(game: Dict, *, title: str) -> Image.Image:
     footer = _format_footer_next(game)
 
     # Two large logos with '@' between them
-    bottom_reserved = (
-        _text_h(draw, FONT_BOTTOM) + BOTTOM_LINE_MARGIN if footer else 0
+    bottom_margin = (
+        config.scale_value(BOTTOM_LINE_MARGIN) if hyperpixel_layout else BOTTOM_LINE_MARGIN
     )
+    bottom_reserved = _text_h(draw, FONT_BOTTOM) + bottom_margin if footer else 0
     bottom_y = HEIGHT - bottom_reserved
-    y2 = y + 6
+    y2 = y + (config.scale_value(6) if hyperpixel_layout else 6)
     available_h = max(10, bottom_y - y2)
-    logo_h = standard_next_game_logo_height_for_space(HEIGHT, available_h)
+    if hyperpixel_layout:
+        desired_logo_h = max(
+            1,
+            int(round(standard_next_game_logo_height(HEIGHT) * config.DISPLAY_SCALE)),
+        )
+        logo_h = min(desired_logo_h, available_h)
+    else:
+        logo_h = standard_next_game_logo_height_for_space(HEIGHT, available_h)
     logo_left  = _load_logo_png(away["tri"], logo_h) if away else None
     logo_right = _load_logo_png(home["tri"], logo_h) if home else None
 
     frame_w = standard_next_game_logo_frame_width(logo_h, (logo_left, logo_right))
-    gap = 10
+    gap = config.scale_value(10) if hyperpixel_layout else 10
     at_symbol = "@"
     at_font = FONT_ABBR
 
@@ -728,7 +777,7 @@ def _render_next_game(game: Dict, *, title: str) -> Image.Image:
     _paste_logo(logo_right, right_x)
 
     if footer:
-        by = HEIGHT - _text_h(draw, FONT_BOTTOM) - BOTTOM_LINE_MARGIN
+        by = HEIGHT - _text_h(draw, FONT_BOTTOM) - bottom_margin
         _center_text(draw, by, footer, FONT_BOTTOM, fill=TEXT_COLOR)
 
     return img
@@ -764,12 +813,18 @@ def _push(display, img: Optional[Image.Image], *, transition: bool = False, led_
 def draw_last_bulls_game(display, game: Optional[Dict], transition: bool = False):
     global BACKGROUND_COLOR
     BACKGROUND_COLOR = get_screen_background_color("bulls last", (0, 0, 0))
+    hyperpixel_layout = config.is_hyperpixel_next_layout()
     if not game:
-        img = _render_message("Last Bulls game:", "No results")
+        img = _render_message("Last Bulls game:", "No results", hyperpixel_layout=hyperpixel_layout)
         return _push(display, img, transition=transition)
 
     footer = _format_footer_last(game)
-    img = _render_scoreboard(game, title="Last Bulls game:", footer=footer)
+    img = _render_scoreboard(
+        game,
+        title="Last Bulls game:",
+        footer=footer,
+        hyperpixel_layout=hyperpixel_layout,
+    )
 
     # LED: green win, red loss (if both scores present)
     led_override: Optional[Tuple[float, float, float]] = None
@@ -796,13 +851,20 @@ def draw_last_bulls_game(display, game: Optional[Dict], transition: bool = False
 def draw_live_bulls_game(display, game: Optional[Dict], transition: bool = False):
     global BACKGROUND_COLOR
     BACKGROUND_COLOR = get_screen_background_color("bulls live", (0, 0, 0))
+    hyperpixel_layout = config.is_hyperpixel_next_layout()
     if not game or _game_state(game) != "live":
-        img = _render_message("Bulls Live:", "Not in progress")
+        img = _render_message("Bulls Live:", "Not in progress", hyperpixel_layout=hyperpixel_layout)
         return _push(display, img, transition=transition)
 
     footer = _format_footer_live(game)
     status = _status_text(game) or "Live"
-    img = _render_scoreboard(game, title="Bulls Live:", footer=footer, status_line=status)
+    img = _render_scoreboard(
+        game,
+        title="Bulls Live:",
+        footer=footer,
+        status_line=status,
+        hyperpixel_layout=hyperpixel_layout,
+    )
     return _push(display, img, transition=transition)
 
 def draw_sports_screen_bulls(display, game: Optional[Dict], transition: bool = False):
