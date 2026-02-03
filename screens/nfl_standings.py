@@ -28,6 +28,8 @@ from config import (
     SCOREBOARD_BACKGROUND_COLOR,
     get_screen_background_color,
     get_screen_font,
+    is_hyperpixel_next_layout,
+    scale_value,
 )
 from services.http_client import get_session
 from utils import ScreenImage, clear_display, load_team_logo, log_call
@@ -167,8 +169,8 @@ _MEASURE_IMG = Image.new("RGB", (1, 1))
 _MEASURE_DRAW = ImageDraw.Draw(_MEASURE_IMG)
 
 _STANDINGS_CACHE: Dict[str, Any] = {"timestamp": 0.0, "data": None, "message": None}
-_LOGO_CACHE: Dict[str, Optional[Image.Image]] = {}
-_OVERVIEW_LOGO_CACHE: Dict[str, Optional[Image.Image]] = {}
+_LOGO_CACHE: Dict[tuple[str, int], Optional[Image.Image]] = {}
+_OVERVIEW_LOGO_CACHE: Dict[tuple[str, int], Optional[Image.Image]] = {}
 
 _CONFERENCE_ALIASES = {
     "american football conference": CONFERENCE_AFC_KEY,
@@ -308,13 +310,13 @@ def _team_display_name(team: dict) -> str:
 
 
 def _load_logo_for_height(
-    abbr: str, height: int, cache: Dict[str, Optional[Image.Image]]
+    abbr: str, height: int, cache: Dict[tuple[str, int], Optional[Image.Image]]
 ) -> Optional[Image.Image]:
     key = (abbr or "").strip()
     if not key:
         return None
 
-    cache_key = key.upper()
+    cache_key = (key.upper(), int(height))
     if cache_key in cache:
         return cache[cache_key]
 
@@ -338,8 +340,12 @@ def _load_logo_cached(abbr: str) -> Optional[Image.Image]:
     return _load_logo_for_height(abbr, LOGO_HEIGHT, _LOGO_CACHE)
 
 
-def _load_overview_logo(abbr: str) -> Optional[Image.Image]:
-    return _load_logo_for_height(abbr, OVERVIEW_LOGO_HEIGHT, _OVERVIEW_LOGO_CACHE)
+def _load_overview_logo(abbr: str, height: int | None = None) -> Optional[Image.Image]:
+    return _load_logo_for_height(
+        abbr,
+        OVERVIEW_LOGO_HEIGHT if height is None else height,
+        _OVERVIEW_LOGO_CACHE,
+    )
 
 
 def _normalize_int(value: Any) -> int:
@@ -1181,6 +1187,7 @@ def _prepare_overview_columns(
     standings: Dict[str, List[dict]],
     content_top: int,
 ) -> Tuple[List[Dict[int, Optional[Dict[str, Any]]]], int]:
+    hyperpixel_layout = is_hyperpixel_next_layout()
     column_count = max(1, len(division_order))
     column_width = WIDTH / column_count
     available_height = max(0, HEIGHT - content_top)
@@ -1192,23 +1199,33 @@ def _prepare_overview_columns(
         teams = standings.get(division, []) or []
         team_count = len(teams)
         max_rows = max(max_rows, team_count)
-
+        if hyperpixel_layout and team_count:
+            cell_height = available_height / team_count
+            padding = max(2, scale_value(2))
+            logo_height = max(
+                12,
+                int(min(cell_height - padding * 2, column_width - 2 * OVERVIEW_COLUMN_MARGIN)),
+            )
+            vertical_step = max(1, int(cell_height))
+        else:
+            logo_height = OVERVIEW_LOGO_HEIGHT
+            vertical_step = OVERVIEW_VERTICAL_STEP
         stack_height = (
-            OVERVIEW_LOGO_HEIGHT + (team_count - 1) * OVERVIEW_VERTICAL_STEP
+            logo_height + (team_count - 1) * vertical_step
             if team_count
-            else OVERVIEW_LOGO_HEIGHT
+            else logo_height
         )
         top_offset = 0
         if available_height > stack_height:
             top_offset = (available_height - stack_height) // 2
-        start_center = content_top + top_offset + OVERVIEW_LOGO_HEIGHT // 2
+        start_center = content_top + top_offset + logo_height // 2
         col_center = int((idx + 0.5) * column_width)
         width_limit = max(0, int(column_width - 2 * OVERVIEW_COLUMN_MARGIN))
 
         column: Dict[int, Optional[Dict[str, Any]]] = {}
         for rank, team in enumerate(teams):
             abbr = team.get("abbr", "")
-            logo_source = _load_overview_logo(abbr)
+            logo_source = _load_overview_logo(abbr, height=logo_height)
             if not logo_source:
                 column[rank] = None
                 continue
@@ -1222,7 +1239,7 @@ def _prepare_overview_columns(
                 )
                 logo = logo.resize(new_size, Image.LANCZOS)
 
-            center_y = start_center + rank * OVERVIEW_VERTICAL_STEP
+            center_y = start_center + rank * vertical_step
             y_target = int(center_y - logo.height / 2)
             x_target = int(col_center - logo.width / 2)
             drop_start = min(-logo.height, content_top - logo.height - OVERVIEW_DROP_MARGIN)

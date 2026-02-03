@@ -185,6 +185,25 @@ def draw_overview(display, title: str, league_id: int, transition=False):
 
     divisions = ["East", "Central", "West"]
 
+    # Header-only base
+    header, top_y = _header_frame(title)
+    available_height = max(1, HEIGHT - top_y)
+    hyperpixel_layout = config.is_hyperpixel_next_layout()
+    if hyperpixel_layout:
+        overview_margin = max(MARGIN, config.scale_value(MARGIN))
+        available_width = max(1, WIDTH - 2 * overview_margin)
+        cell_h = available_height / OV_ROWS
+        col_width = available_width / OV_COLS
+        padding = max(2, config.scale_value(4))
+        logo_box = max(6, int(min(cell_h - padding * 2, col_width - padding * 2)))
+        col_centers = [overview_margin + col_width * (i + 0.5) for i in range(OV_COLS)]
+    else:
+        cell_h = available_height // OV_ROWS
+        col_w = LOGO_SIZE
+        margin_x = (WIDTH - OV_COLS * col_w) // (OV_COLS + 1)
+        col_centers = [margin_x * (i + 1) + col_w * i + col_w / 2 for i in range(OV_COLS)]
+        logo_box = LOGO_SIZE
+
     # Load logos per division in standings order (1..N), trimmed to OV_ROWS
     logos_per_div: Dict[str, List[Optional[Image.Image]]] = {}
     for div in divisions:
@@ -193,18 +212,11 @@ def draw_overview(display, title: str, league_id: int, transition=False):
         logos: List[Optional[Image.Image]] = []
         for rec in recs:
             abbr = get_mlb_tricode(rec.get("team")) or get_mlb_abbreviation(rec["team"]["name"])
-            logos.append(_load_logo(abbr, LOGO_SIZE))
+            logos.append(_load_logo(abbr, logo_box))
         # ensure length OV_ROWS (pad with None if short)
         while len(logos) < OV_ROWS:
             logos.append(None)
         logos_per_div[div] = logos
-
-    # Header-only base
-    header, top_y = _header_frame(title)
-    cell_h = (HEIGHT - top_y) // OV_ROWS
-    col_w  = LOGO_SIZE
-    margin_x = (WIDTH - OV_COLS * col_w) // (OV_COLS + 1)
-    x_cols = [margin_x*(i+1) + col_w*i for i in range(OV_COLS)]
 
     row_positions: List[List[Tuple[Image.Image, int, int]]] = []
     for rank in range(OV_ROWS):
@@ -213,8 +225,8 @@ def draw_overview(display, title: str, league_id: int, transition=False):
             ic = logos_per_div[div][rank]
             if not ic:
                 continue
-            x0 = x_cols[ci] + (col_w - ic.width)//2
-            y_target = top_y + rank * cell_h + (cell_h - ic.height)//2
+            x0 = int(col_centers[ci] - ic.width / 2)
+            y_target = int(top_y + rank * cell_h + (cell_h - ic.height) / 2)
             placements.append((ic, x0, y_target))
         row_positions.append(placements)
 
@@ -258,7 +270,7 @@ def draw_overview(display, title: str, league_id: int, transition=False):
                 frac = progress / (steps - 1) if steps > 1 else 1.0
                 eased = _ease_out_cubic(frac)
                 for ic, x0, y_target in drops:
-                    start_y = -LOGO_SIZE
+                    start_y = -logo_box
                     y_pos = int(start_y + (y_target - start_y) * eased)
                     if y_pos > y_target:
                         y_pos = y_target
@@ -279,8 +291,8 @@ def draw_overview(display, title: str, league_id: int, transition=False):
         for ci, div in enumerate(divisions):
             ic = logos_per_div[div][ri]
             if ic:
-                x0 = x_cols[ci] + (col_w - ic.width)//2
-                y0 = top_y + ri * cell_h + (cell_h - ic.height)//2
+                x0 = int(col_centers[ci] - ic.width / 2)
+                y0 = int(top_y + ri * cell_h + (cell_h - ic.height) / 2)
                 final.paste(ic, (x0, y0), ic)
 
     display.image(final)
