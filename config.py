@@ -416,6 +416,15 @@ def scale_value(value: float) -> int:
 
 def scale_value_width(value: float) -> int:
     return max(1, int(round(value * DISPLAY_SCALE_WIDTH)))
+HYPERPIXEL_NEXT_LAYOUT_SIZES = {(800, 640), (720, 720)}
+
+
+def is_hyperpixel_next_layout(width: int | None = None, height: int | None = None) -> bool:
+    if width is None:
+        width = WIDTH
+    if height is None:
+        height = HEIGHT
+    return (width, height) in HYPERPIXEL_NEXT_LAYOUT_SIZES
 SCREEN_DELAY             = 4
 try:
     HOURLY_FORECAST_HOURS = int(os.environ.get("HOURLY_FORECAST_HOURS", "5"))

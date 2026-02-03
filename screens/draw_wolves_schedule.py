@@ -503,6 +503,7 @@ def _draw_scoreboard(
     away_label: Optional[str] = None,
     home_label: Optional[str] = None,
     bottom_reserved_px: int = 0,
+    hyperpixel_layout: bool = False,
 ) -> int:
     """Draw a compact 2×2 scoreboard. Returns bottom y."""
     # Column widths: first column dominates for logo + name, second column for score
@@ -518,12 +519,15 @@ def _draw_scoreboard(
     # Row heights — compact
     total_available = max(0, HEIGHT - bottom_reserved_px - table_top)
     available_for_rows = max(0, total_available - header_h)
-    row_h = max(available_for_rows // 2, 32)
-    row_h = min(row_h, 48)
+    min_row_h = config.scale_value(32) if hyperpixel_layout else 32
+    max_row_h = config.scale_value(48) if hyperpixel_layout else 48
+    min_row_compact = config.scale_value(24) if hyperpixel_layout else 24
+    row_h = max(available_for_rows // 2, min_row_h)
+    row_h = min(row_h, max_row_h)
     if row_h * 2 > available_for_rows and available_for_rows > 0:
-        row_h = max(24, available_for_rows // 2)
+        row_h = max(min_row_compact, available_for_rows // 2)
     if row_h <= 0:
-        row_h = 32
+        row_h = min_row_h
 
     table_height = header_h + (row_h * 2)
     if total_available:
@@ -550,16 +554,24 @@ def _draw_scoreboard(
         score: Optional[int],
         label: Optional[str],
     ) -> Dict:
-        base_logo_height = max(1, row_height - 4)
-        logo_height = min(56, base_logo_height)
-        if row_height >= 38:
-            logo_height = min(56, max(logo_height, min(row_height - 2, 48)))
-        logo_height = max(1, min(int(round(logo_height * 1.3)), row_height - 2, 64))
+        pad_logo = config.scale_value(4) if hyperpixel_layout else 4
+        logo_mid = config.scale_value(56) if hyperpixel_layout else 56
+        logo_max = config.scale_value(64) if hyperpixel_layout else 64
+        logo_floor = config.scale_value(48) if hyperpixel_layout else 48
+        row_threshold = config.scale_value(38) if hyperpixel_layout else 38
+
+        base_logo_height = max(1, row_height - pad_logo)
+        logo_height = min(logo_mid, base_logo_height)
+        if row_height >= row_threshold:
+            logo_height = min(logo_mid, max(logo_height, min(row_height - 2, logo_floor)))
+        logo_height = max(1, min(int(round(logo_height * 1.3)), row_height - 2, logo_max))
         logo = _load_logo_png(tri, height=logo_height)
         logo_w = logo.size[0] if logo else 0
         text = (label or "").strip() or (tri or "").upper() or "—"
-        text_start = x0 + 6 + (logo_w + 6 if logo else 0)
-        max_width = max(1, x1 - text_start - 4)
+        pad_outer = config.scale_value(6) if hyperpixel_layout else 6
+        pad_inner = config.scale_value(4) if hyperpixel_layout else 4
+        text_start = x0 + pad_outer + (logo_w + pad_outer if logo else 0)
+        max_width = max(1, x1 - text_start - pad_inner)
         return {
             "top": row_top,
             "height": row_height,
@@ -603,7 +615,9 @@ def _draw_scoreboard(
         logo = spec["logo"]
 
         cy = y_top + row_height // 2
-        lx = x0 + 6
+        pad_outer = config.scale_value(6) if hyperpixel_layout else 6
+        pad_inner = config.scale_value(4) if hyperpixel_layout else 4
+        lx = x0 + pad_outer
         tx = lx
         if logo:
             lw, lh = logo.size
@@ -612,7 +626,7 @@ def _draw_scoreboard(
                 img.paste(logo, (lx, ly), logo)
             except Exception:
                 pass
-            tx = lx + lw + 6
+            tx = lx + lw + pad_outer
 
         max_width = spec["max_width"]
         font = name_font
@@ -625,9 +639,9 @@ def _draw_scoreboard(
 
         ah = _text_h(d, font)
         aw = _text_w(d, text, font)
-        max_tx = x1 - aw - 4
+        max_tx = x1 - aw - pad_inner
         tx = min(tx, max_tx)
-        tx = max(tx, x0 + 4)
+        tx = max(tx, x0 + pad_inner)
         d.text((tx, cy - ah//2), text, font=font, fill="white")
 
         sc = "-" if score is None else str(score)
@@ -869,17 +883,27 @@ def _draw_next_card(
     img = Image.new("RGB", (WIDTH, HEIGHT), BACKGROUND_COLOR)
     d   = ImageDraw.Draw(img)
 
+    hyperpixel_layout = config.is_hyperpixel_next_layout()
+    edge_pad = max(2, config.scale_value(2)) if hyperpixel_layout else 2
+    line_gap = max(1, config.scale_value(1)) if hyperpixel_layout else 1
+
     # Title
-    y_top = 2
+    y_top = edge_pad
     title_h = _draw_title_line(img, d, y_top, title, FONT_TITLE)
-    y_top += title_h + 1
+    y_top += title_h + line_gap
 
     # Opponent-only line (full name) with "@"/"vs."
     opp_full = _team_full_name(raw_home if is_wolves_away else raw_away) or (home_tri if is_wolves_away else away_tri)
     prefix   = "@ " if is_wolves_away else "vs. " if is_wolves_home else ""
     opp_line = f"{prefix}{opp_full or '—'}"
-    wrapped_h = _center_wrapped_text(d, y_top, opp_line, FONT_NEXT_OPP, max_width=WIDTH - 4)
-    y_top += wrapped_h + 1 if wrapped_h else _text_h(d, FONT_NEXT_OPP) + 1
+    wrapped_h = _center_wrapped_text(
+        d,
+        y_top,
+        opp_line,
+        FONT_NEXT_OPP,
+        max_width=WIDTH - (edge_pad * 2),
+    )
+    y_top += wrapped_h + line_gap if wrapped_h else _text_h(d, FONT_NEXT_OPP) + line_gap
 
     # Bottom label text (we need its height to avoid overlap)
     official_date = game.get("official_date") or ""
@@ -887,14 +911,19 @@ def _draw_next_card(
     start_time_central = game.get("start_time_central")
     bottom_text = _format_next_bottom(official_date, game_date_iso, start_time_central)
     bottom_h = _text_h(d, FONT_BOTTOM) if bottom_text else 0
-    bottom_y = HEIGHT - (bottom_h + 2) if bottom_text else HEIGHT
+    bottom_y = HEIGHT - (bottom_h + edge_pad) if bottom_text else HEIGHT
 
     # Desired logo height (bigger on 128px; adapt if smaller/other displays)
     clamped_scale = max(0.5, min(float(logo_scale or 1.0), 1.2))
     desired_logo_h = max(1, int(round(standard_next_game_logo_height(HEIGHT) * clamped_scale)))
+    if hyperpixel_layout:
+        desired_logo_h = max(
+            1,
+            int(round(standard_next_game_logo_height(HEIGHT) * config.DISPLAY_SCALE * clamped_scale)),
+        )
 
     # Compute max logo height to fit between the top content and bottom line
-    available_h = max(10, bottom_y - (y_top + 2))  # space for logos row
+    available_h = max(10, bottom_y - (y_top + edge_pad))  # space for logos row
     logo_h = min(desired_logo_h, available_h)
     # Compute a row top such that the logos row is **centered vertically**.
     # But never allow overlap with top content nor with bottom label.
@@ -965,14 +994,19 @@ def draw_last_wolves_game(display, game, transition: bool=False):
     img = Image.new("RGB", (WIDTH, HEIGHT), BACKGROUND_COLOR)
     d   = ImageDraw.Draw(img)
 
+    hyperpixel_layout = config.is_hyperpixel_next_layout()
+    edge_pad = config.scale_value(2) if hyperpixel_layout else 2
+    line_gap = config.scale_value(2) if hyperpixel_layout else 2
+    bottom_margin = config.scale_value(2) if hyperpixel_layout else 2
+
     # Title (MLB title font)
-    y = 2
+    y = edge_pad
     title_h = _draw_title_line(img, d, y, "Last Wolves game:", FONT_TITLE)
-    y += title_h
+    y += title_h + line_gap
 
     # Reserve bottom for date (in MLB bottom font)
     bottom_str = _format_last_bottom_line(game)
-    reserve = (_text_h(d, FONT_BOTTOM) + 2) if bottom_str else 0
+    reserve = (_text_h(d, FONT_BOTTOM) + bottom_margin) if bottom_str else 0
 
     raw_away = game.get("away") or {}
     raw_home = game.get("home") or {}
@@ -995,6 +1029,7 @@ def draw_last_wolves_game(display, game, transition: bool=False):
         away_label=away_label,
         home_label=home_label,
         bottom_reserved_px=reserve,
+        hyperpixel_layout=hyperpixel_layout,
     )
 
     # LED indicator logic
@@ -1022,7 +1057,7 @@ def draw_last_wolves_game(display, game, transition: bool=False):
 
     # Bottom date (MLB bottom font)
     if bottom_str:
-        _center_bottom_text(d, bottom_str, FONT_BOTTOM)
+        _center_bottom_text(d, bottom_str, FONT_BOTTOM, margin=bottom_margin)
 
     return _push(display, img, transition=transition, led_override=led_override)
 
