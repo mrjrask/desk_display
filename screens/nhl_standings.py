@@ -26,6 +26,7 @@ from config import (
     get_screen_background_color,
     get_screen_font,
     get_screen_image_scale,
+    is_hyperpixel_next_layout,
     scale_value,
 )
 from services.http_client import NHL_HEADERS, get_session
@@ -1435,7 +1436,10 @@ def _overview_layout(
     y += OVERVIEW_TITLE_MARGIN_BOTTOM
 
     logos_top = y
-    available_height = max(1.0, HEIGHT - logos_top - OVERVIEW_BOTTOM_MARGIN)
+    overview_bottom_margin = OVERVIEW_BOTTOM_MARGIN
+    if is_hyperpixel_next_layout():
+        overview_bottom_margin = max(overview_bottom_margin, scale_value(8))
+    available_height = max(1.0, HEIGHT - logos_top - overview_bottom_margin)
 
     max_rows = max((len(teams) for _, teams in divisions), default=0)
     if max_rows <= 0:
@@ -1656,7 +1660,10 @@ def _overview_layout_horizontal(
     y += OVERVIEW_TITLE_MARGIN_BOTTOM
 
     logos_top = y
-    available_height = max(1.0, HEIGHT - logos_top - OVERVIEW_BOTTOM_MARGIN)
+    overview_bottom_margin = OVERVIEW_BOTTOM_MARGIN
+    if is_hyperpixel_next_layout():
+        overview_bottom_margin = max(overview_bottom_margin, scale_value(8))
+    available_height = max(1.0, HEIGHT - logos_top - overview_bottom_margin)
     row_count = max(1, len(rows))
     row_height = available_height / row_count
     return base, logos_top, row_height
