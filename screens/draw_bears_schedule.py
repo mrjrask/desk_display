@@ -304,10 +304,10 @@ def show_bears_next_game(display, transition=False):
     return None
 
 
-def show_bears_next_season(display, transition=False):
+@lru_cache(maxsize=8)
+def _cached_bears_next_season_image(width: int, height: int, background: tuple[int, int, int]) -> Image.Image:
     title = "2026 Bears Opponents"
-    background = get_screen_background_color("bears next season", (0, 0, 0))
-    img = Image.new("RGB", (config.WIDTH, config.HEIGHT), background)
+    img = Image.new("RGB", (width, height), background)
     draw = ImageDraw.Draw(img)
 
     home_opponents = ["det", "gb", "min", "tb", "phi", "jax", "nyj", "ne", "no"]
@@ -315,13 +315,13 @@ def show_bears_next_season(display, transition=False):
 
     title_w, title_h = _text_size(draw, title, font=config.FONT_TITLE_SPORTS)
     draw.text(
-        ((config.WIDTH - title_w) // 2, 0),
+        ((width - title_w) // 2, 0),
         title,
         font=config.FONT_TITLE_SPORTS,
         fill=(255, 255, 255),
     )
 
-    column_width = config.WIDTH // 2
+    column_width = width // 2
     header_y = title_h + 4
     header_font = config.FONT_DATE_SPORTS
     home_label = "Home"
@@ -349,7 +349,7 @@ def show_bears_next_season(display, transition=False):
     home_rows = (len(home_opponents) + columns_per_side - 1) // columns_per_side
     away_rows = (len(away_opponents) + columns_per_side - 1) // columns_per_side
     rows = max(home_rows, away_rows)
-    available_h = config.HEIGHT - logos_top - 2
+    available_h = height - logos_top - 2
     subcolumn_width = max(1, (column_width - col_gap) // columns_per_side)
     logo_size = max(
         1,
@@ -361,7 +361,6 @@ def show_bears_next_season(display, transition=False):
         ly = y + (logo_size - logo.height) // 2
         return lx, ly
 
-    placements_by_row = [[] for _ in range(rows)]
     placements = []
 
     for idx, abbr in enumerate(home_opponents):
@@ -372,7 +371,6 @@ def show_bears_next_season(display, transition=False):
         logo = _cached_team_logo(abbr, logo_size)
         if logo:
             lx, ly = _logo_position(logo, x, y)
-            placements_by_row[row].append((logo, lx, ly))
             placements.append((logo, lx, ly))
 
     for idx, abbr in enumerate(away_opponents):
@@ -387,12 +385,18 @@ def show_bears_next_season(display, transition=False):
         logo = _cached_team_logo(abbr, logo_size)
         if logo:
             lx, ly = _logo_position(logo, x, y)
-            placements_by_row[row].append((logo, lx, ly))
             placements.append((logo, lx, ly))
 
-    final_img = img.copy()
     for logo, lx, ly in placements:
-        final_img.paste(logo, (lx, ly), logo)
+        img.paste(logo, (lx, ly), logo)
+
+    return img
+
+
+def show_bears_next_season(display, transition=False):
+    background = get_screen_background_color("bears next season", (0, 0, 0))
+    background_key = tuple(background)
+    final_img = _cached_bears_next_season_image(config.WIDTH, config.HEIGHT, background_key).copy()
 
     if transition:
         return final_img
