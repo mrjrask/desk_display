@@ -23,6 +23,7 @@ from typing import Dict, List, Optional, Sequence, Tuple
 
 from PIL import Image, ImageDraw, ImageFont
 
+import config
 from config import (
     FONT_DATE_SPORTS,
     FONT_TEAM_SPORTS,
