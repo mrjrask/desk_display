@@ -150,10 +150,10 @@ def _maybe_configure_desktop_env() -> None:
         if xauthority.is_file():
             os.environ["XAUTHORITY"] = str(xauthority)
 
-    if os.environ.get("WAYLAND_DISPLAY") and not os.environ.get("SDL_VIDEODRIVER"):
-        os.environ["SDL_VIDEODRIVER"] = "wayland"
-    elif os.environ.get("DISPLAY") and not os.environ.get("SDL_VIDEODRIVER"):
-        os.environ["SDL_VIDEODRIVER"] = "x11"
+    if os.environ.get("WAYLAND_DISPLAY"):
+        os.environ.setdefault("DESK_DISPLAY_SDL_DRIVERS", "wayland,x11,kmsdrm,fbcon,directfb")
+    elif os.environ.get("DISPLAY"):
+        os.environ.setdefault("DESK_DISPLAY_SDL_DRIVERS", "x11,wayland,kmsdrm,fbcon,directfb")
 
 
 def _load_pygame():
@@ -165,8 +165,6 @@ def _load_pygame():
     if "SDL_VIDEODRIVER" not in os.environ:
         if not os.environ.get("DISPLAY") and not os.environ.get("WAYLAND_DISPLAY"):
             _maybe_configure_desktop_env()
-        if not os.environ.get("DISPLAY") and not os.environ.get("WAYLAND_DISPLAY"):
-            os.environ["SDL_VIDEODRIVER"] = "kmsdrm"
 
     try:
         import pygame  # type: ignore
@@ -176,6 +174,25 @@ def _load_pygame():
 
     _PYGAME_MODULE = pygame
     return _PYGAME_MODULE
+
+
+def _sdl_driver_candidates() -> List[Optional[str]]:
+    if os.environ.get("SDL_VIDEODRIVER"):
+        return [os.environ["SDL_VIDEODRIVER"]]
+
+    drivers_env = os.environ.get("DESK_DISPLAY_SDL_DRIVERS", "")
+    if drivers_env:
+        drivers = [driver.strip() for driver in drivers_env.split(",") if driver.strip()]
+        if drivers:
+            return drivers
+
+    candidates: List[str] = []
+    if os.environ.get("WAYLAND_DISPLAY"):
+        candidates.append("wayland")
+    if os.environ.get("DISPLAY"):
+        candidates.append("x11")
+    candidates.extend(["kmsdrm", "fbcon", "directfb"])
+    return list(dict.fromkeys(candidates)) or [None]
 
 
 def _read_sysfs_value(path: str) -> Optional[str]:
@@ -460,9 +477,11 @@ class _KernelDisplay:
         if self._pygame is None:
             raise RuntimeError(f"pygame not available: {_PYGAME_ERROR}")
 
-        self._pygame.display.init()
-        flags = self._pygame.FULLSCREEN | self._pygame.SCALED
-        self._screen = self._pygame.display.set_mode((0, 0), flags)
+        if not os.environ.get("DISPLAY") and not os.environ.get("WAYLAND_DISPLAY"):
+            _maybe_configure_desktop_env()
+
+        self._sdl_driver: Optional[str] = None
+        self._screen = self._init_display_surface()
         self.screen_width, self.screen_height = self._screen.get_size()
         self._scale_to_screen = (self.screen_width, self.screen_height) != (
             self.render_width,
@@ -473,6 +492,28 @@ class _KernelDisplay:
             self._pygame.mouse.set_visible(False)
         except Exception:  # pragma: no cover - optional behavior
             pass
+
+    def _init_display_surface(self):
+        flags = self._pygame.FULLSCREEN | self._pygame.SCALED
+        errors: List[str] = []
+        for driver in _sdl_driver_candidates():
+            if driver:
+                os.environ["SDL_VIDEODRIVER"] = driver
+            else:
+                os.environ.pop("SDL_VIDEODRIVER", None)
+            try:
+                self._pygame.display.quit()
+            except Exception:
+                pass
+            try:
+                self._pygame.display.init()
+                screen = self._pygame.display.set_mode((0, 0), flags)
+            except Exception as exc:
+                errors.append(f"{driver or 'default'}: {exc}")
+                continue
+            self._sdl_driver = driver
+            return screen
+        raise RuntimeError("Failed to initialize SDL display: " + "; ".join(errors))
 
     def write_image(self, image: Image.Image) -> None:
         if image.mode != "RGB":
@@ -635,10 +676,12 @@ class Display:
                 )
                 self._kernel_display = None
             else:
+                driver_label = self._kernel_display._sdl_driver or "default"
                 logging.info(
-                    "🖥️  Kernel display initialized (%dx%d fullscreen).",
+                    "🖥️  Kernel display initialized (%dx%d fullscreen, SDL driver: %s).",
                     self._kernel_display.screen_width,
                     self._kernel_display.screen_height,
+                    driver_label,
                 )
                 if (self.width, self.height) != (
                     self._kernel_display.screen_width,
