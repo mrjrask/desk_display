@@ -1,7 +1,6 @@
 [Unit]
 Description=Desk Display Kernel (User Session)
 After=graphical-session.target
-PartOf=graphical-session.target
 
 [Service]
 Type=simple
@@ -13,4 +12,4 @@ Restart=always
 RestartSec=5
 
 [Install]
-WantedBy=graphical-session.target
+WantedBy=default.target
