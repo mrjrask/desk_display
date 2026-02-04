@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-EXPECTED_CODENAME="bookworm"
+EXPECTED_CODENAME="${EXPECTED_CODENAME:-bookworm}"
 SERVICE_NAME="desk_display.service"
 PYTHON_BIN="${PYTHON:-python3}"
 REQUIREMENTS_FILE="${REQUIREMENTS_FILE:-requirements.txt}"

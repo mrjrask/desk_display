@@ -61,21 +61,17 @@ python main.py
 ### Display HAT Mini (SPI)
 
 ```bash
-# Bookworm
-bash ./scripts/install_display_hat_mini_bookworm.sh
-
-# Trixie
-bash ./scripts/install_display_hat_mini_trixie.sh
+bash ./scripts/install_display_hat_mini.sh
 ```
 
 ### Kernel-driven displays (fullscreen)
 
 ```bash
-# Bookworm
-bash ./scripts/install_kernel_bookworm.sh
+# HyperPixel 4 / HyperPixel 4 Square
+bash ./scripts/install_hyperpixel.sh
 
-# Trixie
-bash ./scripts/install_kernel_trixie.sh
+# Other kernel-driven displays
+bash ./scripts/install_kernel.sh
 ```
 
 The kernel display installers will:
