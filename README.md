@@ -58,6 +58,8 @@ python main.py
 
 ## Installer scripts (recommended on Raspberry Pi OS)
 
+All installers below are combined for Raspberry Pi OS Bookworm and Trixie.
+
 ### Display HAT Mini (SPI)
 
 ```bash
