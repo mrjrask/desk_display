@@ -23,6 +23,31 @@ else
   SUDO=""
 fi
 
+detect_codename() {
+  if command -v lsb_release >/dev/null 2>&1; then
+    lsb_release -sc
+    return 0
+  fi
+  if [[ -f /etc/os-release ]]; then
+    # shellcheck source=/dev/null
+    source /etc/os-release
+    if [[ -n "${VERSION_CODENAME:-}" ]]; then
+      echo "$VERSION_CODENAME"
+      return 0
+    fi
+  fi
+  return 1
+}
+
+if [[ -z "${EXPECTED_CODENAME:-}" ]]; then
+  EXPECTED_CODENAME=$(detect_codename || true)
+  if [[ -z "$EXPECTED_CODENAME" ]]; then
+    warn "Unable to detect OS codename; defaulting to bookworm."
+    EXPECTED_CODENAME="bookworm"
+  fi
+fi
+
+export EXPECTED_CODENAME
 export DESK_DISPLAY_OUTPUT="${DESK_DISPLAY_OUTPUT:-kernel}"
 export REQUIREMENTS_FILE="${REQUIREMENTS_FILE:-requirements_kernel.txt}"
 
@@ -224,7 +249,7 @@ prepend_env_vars "$ENV_PATH" "${ENV_LINES[@]}"
 
 prompt_spi_i2c
 
-"$SCRIPT_DIR/install_trixie.sh"
+"$SCRIPT_DIR/install_bookworm.sh"
 
 install_kernel_user_service "$PROJECT_DIR" "$SERVICE_USER" "$USER_SERVICE_TEMPLATE" "$USER_SERVICE_NAME"
 if [[ "${DISABLE_SYSTEM_KERNEL_SERVICE:-}" == "1" ]] && command -v systemctl >/dev/null 2>&1; then

@@ -48,11 +48,11 @@ if declare -F detect_desktop_session >/dev/null 2>&1; then
   fi
 fi
 
-if [[ -z "${SDL_VIDEODRIVER:-}" ]]; then
+if [[ -z "${SDL_VIDEODRIVER:-}" && -z "${DESK_DISPLAY_SDL_DRIVERS:-}" ]]; then
   if [[ -n "${WAYLAND_DISPLAY:-}" ]]; then
-    export SDL_VIDEODRIVER="wayland"
+    export DESK_DISPLAY_SDL_DRIVERS="wayland,x11,kmsdrm,fbcon,directfb"
   elif [[ -n "${DISPLAY:-}" ]]; then
-    export SDL_VIDEODRIVER="x11"
+    export DESK_DISPLAY_SDL_DRIVERS="x11,wayland,kmsdrm,fbcon,directfb"
   fi
 fi
 
