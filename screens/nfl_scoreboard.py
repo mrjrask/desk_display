@@ -516,6 +516,18 @@ def _is_super_bowl_game(game: dict) -> bool:
     return False
 
 
+def _is_pro_bowl_game(game: dict) -> bool:
+    if not isinstance(game, dict):
+        return False
+    for key in ("_event_name", "_event_short_name", "name", "shortName"):
+        value = game.get(key)
+        if isinstance(value, str):
+            normalized = value.lower()
+            if "pro bowl" in normalized or "nfc vs. afc" in normalized or "afc vs. nfc" in normalized:
+                return True
+    return False
+
+
 def _fetch_games_for_date(day: datetime.date) -> list[dict]:
     url = (
         "https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard"
@@ -544,7 +556,8 @@ def _fetch_games_for_date(day: datetime.date) -> list[dict]:
         comp["_event_name"] = event.get("name")
         comp["_event_short_name"] = event.get("shortName")
         raw_games.append(comp)
-    return _hydrate_games(raw_games)
+    games = _hydrate_games(raw_games)
+    return [game for game in games if not _is_pro_bowl_game(game)]
 
 
 def _week_cutoff_datetime(week_start: datetime.date, game_count: int) -> datetime.datetime:
