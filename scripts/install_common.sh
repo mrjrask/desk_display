@@ -244,6 +244,21 @@ install_kernel_user_service() {
 
   log "Installed user systemd service to $service_path"
 
+  local enable_target="default.target"
+  local wants_dir="$user_systemd_dir/${enable_target}.wants"
+  local wants_link="$wants_dir/$service_name"
+
+  create_user_wants_link() {
+    if [[ -n "${SUDO:-}" ]]; then
+      $SUDO -u "$service_user" mkdir -p "$wants_dir"
+      $SUDO -u "$service_user" ln -sf "$service_path" "$wants_link"
+    else
+      mkdir -p "$wants_dir"
+      ln -sf "$service_path" "$wants_link"
+    fi
+    log "Linked $service_name into $enable_target (fallback)."
+  }
+
   if command -v systemctl >/dev/null 2>&1; then
     local uid runtime_dir
     uid=$(id -u "$service_user" 2>/dev/null || true)
@@ -266,7 +281,10 @@ install_kernel_user_service() {
         if $SUDO loginctl enable-linger "$service_user"; then
           if $SUDO -u "$service_user" XDG_RUNTIME_DIR="/run/user/$uid" systemctl --user daemon-reload; then
             $SUDO -u "$service_user" XDG_RUNTIME_DIR="/run/user/$uid" systemctl --user enable --now "$service_name" \
-              || warn "Failed to enable/start $service_name after enabling linger."
+              || {
+                warn "Failed to enable/start $service_name after enabling linger."
+                create_user_wants_link
+              }
             return 0
           fi
         fi
@@ -274,14 +292,22 @@ install_kernel_user_service() {
         warn "  sudo loginctl enable-linger $service_user"
         warn "  sudo -u $service_user XDG_RUNTIME_DIR=/run/user/$uid systemctl --user daemon-reload"
         warn "  sudo -u $service_user XDG_RUNTIME_DIR=/run/user/$uid systemctl --user enable --now $service_name"
+        warn "If enable fails, link the unit into the default target:"
+        warn "  sudo -u $service_user ln -sf $service_path $wants_link"
         return 0
       fi
       if detect_desktop_session "$service_user"; then
         $SUDO -u "$service_user" env "${systemctl_env[@]}" systemctl --user enable --now "$service_name" \
-          || warn "Failed to enable/start $service_name (user session may be offline)."
+          || {
+            warn "Failed to enable/start $service_name (user session may be offline)."
+            create_user_wants_link
+          }
       else
         $SUDO -u "$service_user" env "${systemctl_env[@]}" systemctl --user enable "$service_name" \
-          || warn "Failed to enable $service_name (user session may be offline)."
+          || {
+            warn "Failed to enable $service_name (user session may be offline)."
+            create_user_wants_link
+          }
       fi
     else
       if ! env "${systemctl_env[@]}" systemctl --user daemon-reload; then
@@ -290,14 +316,22 @@ install_kernel_user_service() {
         warn "  sudo loginctl enable-linger $service_user"
         warn "  sudo -u $service_user XDG_RUNTIME_DIR=/run/user/$uid systemctl --user daemon-reload"
         warn "  sudo -u $service_user XDG_RUNTIME_DIR=/run/user/$uid systemctl --user enable --now $service_name"
+        warn "If enable fails, link the unit into the default target:"
+        warn "  sudo -u $service_user ln -sf $service_path $wants_link"
         return 0
       fi
       if detect_desktop_session "$service_user"; then
         env "${systemctl_env[@]}" systemctl --user enable --now "$service_name" \
-          || warn "Failed to enable/start $service_name (user session may be offline)."
+          || {
+            warn "Failed to enable/start $service_name (user session may be offline)."
+            create_user_wants_link
+          }
       else
         env "${systemctl_env[@]}" systemctl --user enable "$service_name" \
-          || warn "Failed to enable $service_name (user session may be offline)."
+          || {
+            warn "Failed to enable $service_name (user session may be offline)."
+            create_user_wants_link
+          }
       fi
     fi
   else
