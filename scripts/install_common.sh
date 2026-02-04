@@ -293,6 +293,7 @@ install_kernel_user_service() {
         warn "  sudo -u $service_user XDG_RUNTIME_DIR=/run/user/$uid systemctl --user daemon-reload"
         warn "  sudo -u $service_user XDG_RUNTIME_DIR=/run/user/$uid systemctl --user enable --now $service_name"
         warn "If enable fails, link the unit into the default target:"
+        warn "  sudo -u $service_user mkdir -p $wants_dir"
         warn "  sudo -u $service_user ln -sf $service_path $wants_link"
         return 0
       fi
@@ -317,6 +318,7 @@ install_kernel_user_service() {
         warn "  sudo -u $service_user XDG_RUNTIME_DIR=/run/user/$uid systemctl --user daemon-reload"
         warn "  sudo -u $service_user XDG_RUNTIME_DIR=/run/user/$uid systemctl --user enable --now $service_name"
         warn "If enable fails, link the unit into the default target:"
+        warn "  sudo -u $service_user mkdir -p $wants_dir"
         warn "  sudo -u $service_user ln -sf $service_path $wants_link"
         return 0
       fi
