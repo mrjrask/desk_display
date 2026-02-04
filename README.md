@@ -83,6 +83,7 @@ The kernel display installers will:
 - Install a desktop launcher that can run the display loop inside the desktop session.
 - Attempt to launch the fullscreen display at the end of the installer when a desktop session is available (set `AUTO_LAUNCH_KERNEL_DISPLAY=0` to skip).
 - Install an autostart entry when `AUTO_START_KERNEL_DISPLAY=1` to launch the kernel display automatically on desktop login.
+- Provide an SSH-friendly helper (`scripts/ssh_kernel_display.sh`) to manage the user service without manual environment setup.
 
 To uninstall the systemd service and optionally remove the virtualenv:
 
@@ -217,6 +218,14 @@ For kernel-driven displays inside a desktop session, the kernel installers also 
 ```bash
 systemctl --user start desk_display-kernel.service
 systemctl --user status desk_display-kernel.service
+```
+
+To manage the kernel display service over SSH without manually exporting user session environment variables, use:
+
+```bash
+~/desk_display/scripts/ssh_kernel_display.sh status
+~/desk_display/scripts/ssh_kernel_display.sh restart
+~/desk_display/scripts/ssh_kernel_display.sh stop
 ```
 
 ---

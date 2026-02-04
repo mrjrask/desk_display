@@ -263,3 +263,13 @@ if [[ "${AUTO_START_KERNEL_DISPLAY:-}" == "1" ]]; then
 fi
 
 prompt_launch_kernel_display
+
+if command -v systemctl >/dev/null 2>&1; then
+  host=$(hostname)
+  cat <<EOF
+SSH service control commands:
+  ssh ${SERVICE_USER}@${host} '${PROJECT_DIR}/scripts/ssh_kernel_display.sh status'
+  ssh ${SERVICE_USER}@${host} '${PROJECT_DIR}/scripts/ssh_kernel_display.sh restart'
+  ssh ${SERVICE_USER}@${host} '${PROJECT_DIR}/scripts/ssh_kernel_display.sh stop'
+EOF
+fi

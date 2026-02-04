@@ -254,9 +254,9 @@ if command -v systemctl >/dev/null 2>&1; then
   if [[ -n "$uid" ]]; then
     cat <<EOF
 SSH service control commands:
-  ssh ${SERVICE_USER}@${host} 'XDG_RUNTIME_DIR=/run/user/${uid} systemctl --user status ${USER_SERVICE_NAME}'
-  ssh ${SERVICE_USER}@${host} 'XDG_RUNTIME_DIR=/run/user/${uid} systemctl --user restart ${USER_SERVICE_NAME}'
-  ssh ${SERVICE_USER}@${host} 'XDG_RUNTIME_DIR=/run/user/${uid} systemctl --user stop ${USER_SERVICE_NAME}'
+  ssh ${SERVICE_USER}@${host} '${PROJECT_DIR}/scripts/ssh_kernel_display.sh status'
+  ssh ${SERVICE_USER}@${host} '${PROJECT_DIR}/scripts/ssh_kernel_display.sh restart'
+  ssh ${SERVICE_USER}@${host} '${PROJECT_DIR}/scripts/ssh_kernel_display.sh stop'
 EOF
   else
     warn "Unable to resolve UID for $SERVICE_USER; skipping SSH command hints."
