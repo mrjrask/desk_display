@@ -507,7 +507,16 @@ class _KernelDisplay:
                 pass
             try:
                 self._pygame.display.init()
-                screen = self._pygame.display.set_mode((0, 0), flags)
+                try:
+                    screen = self._pygame.display.set_mode((0, 0), flags)
+                except Exception as exc:
+                    message = str(exc)
+                    if "0 sized" in message or "0-sized" in message:
+                        screen = self._pygame.display.set_mode(
+                            (self.render_width, self.render_height), flags
+                        )
+                    else:
+                        raise
             except Exception as exc:
                 errors.append(f"{driver or 'default'}: {exc}")
                 continue
