@@ -167,6 +167,9 @@
       font-size: 0.85rem;
       color: #cbd5f5;
     }
+    .timestamp.is-stale {
+      color: #ef4444;
+    }
     .timestamp span {
       color: #94a3b8;
       margin-right: 0.35rem;
@@ -223,7 +226,7 @@
           <div class="empty-state">No screenshot yet.</div>
         {% endif %}
       </div>
-      <div class="timestamp">
+      <div class="timestamp{% if screen.is_stale %} is-stale{% endif %}">
         <span>Updated</span>
         {{ screen.timestamp if screen.timestamp else "—" }}
       </div>
