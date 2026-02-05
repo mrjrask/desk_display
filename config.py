@@ -416,7 +416,7 @@ def scale_value(value: float) -> int:
 
 def scale_value_width(value: float) -> int:
     return max(1, int(round(value * DISPLAY_SCALE_WIDTH)))
-HYPERPIXEL_NEXT_LAYOUT_SIZES = {(800, 640), (720, 720)}
+HYPERPIXEL_NEXT_LAYOUT_SIZES = {(800, 480), (480, 800), (720, 720)}
 
 
 def is_hyperpixel_next_layout(width: int | None = None, height: int | None = None) -> bool:
