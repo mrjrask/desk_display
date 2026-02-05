@@ -1130,7 +1130,9 @@ def get_screen_font(
     fonts = style.get("fonts") if isinstance(style.get("fonts"), dict) else {}
     spec = fonts.get(font_slot) if isinstance(fonts, dict) else None
 
-    target_size = default_size or getattr(base_font, "size", None)
+    target_size = getattr(base_font, "size", None)
+    if default_size is not None:
+        target_size = scale_value(default_size)
     if isinstance(spec, dict):
         size_override = spec.get("size")
         if isinstance(size_override, int) and size_override > 0:
