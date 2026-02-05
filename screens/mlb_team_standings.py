@@ -28,12 +28,29 @@ from config import (
     is_hyperpixel_next_layout,
     scale_value,
     scale_value_width,
+    DISPLAY_SCALE,
 )
-from utils import clear_display, fit_logo_to_box, log_call
+from utils import clear_display, fit_logo_to_box, log_call, clone_font
 
 # Constants
-LOGO_SZ = scale_value_width(54) if is_hyperpixel_next_layout() else scale_value(71)
+LOGO_SZ = scale_value_width(27) if is_hyperpixel_next_layout() else scale_value(36)
 MARGIN  = scale_value(6)
+
+
+def _restore_font(font):
+    size = getattr(font, "size", None)
+    if not isinstance(size, int) or size <= 0:
+        return font
+    scale = max(1.0, DISPLAY_SCALE)
+    return clone_font(font, max(1, int(round(size / scale))))
+
+
+FONT_STAND1_WL_RESTORED = _restore_font(FONT_STAND1_WL)
+FONT_STAND1_RANK_RESTORED = _restore_font(FONT_STAND1_RANK)
+FONT_STAND1_GB_VALUE_RESTORED = _restore_font(FONT_STAND1_GB_VALUE)
+FONT_STAND1_WCGB_VALUE_RESTORED = _restore_font(FONT_STAND1_WCGB_VALUE)
+FONT_STAND2_RECORD_RESTORED = _restore_font(FONT_STAND2_RECORD)
+FONT_STAND2_VALUE_RESTORED = _restore_font(FONT_STAND2_VALUE)
 
 # Helpers
 def _ord(n):
@@ -174,8 +191,8 @@ def draw_standings_screen1(
     # W/L
     record_line = _format_record_values(rec.get("leagueRecord", {}), ot_label=ot_label)
 
-    record_font = FONT_STAND1_WL if record_font is None else record_font
-    points_font = FONT_STAND1_GB_VALUE if points_font is None else points_font
+    record_font = FONT_STAND1_WL_RESTORED if record_font is None else record_font
+    points_font = FONT_STAND1_GB_VALUE_RESTORED if points_font is None else points_font
 
     if record_details_fn:
         wl_txt = record_details_fn(rec, record_line)
@@ -236,8 +253,8 @@ def draw_standings_screen1(
     if points_txt:
         lines.append((points_txt, points_font))
     if gb_txt and place_gb_before_rank:
-        lines.append((gb_txt, FONT_STAND1_GB_VALUE))
-    lines.append((rank_txt, FONT_STAND1_RANK))
+        lines.append((gb_txt, FONT_STAND1_GB_VALUE_RESTORED))
+    lines.append((rank_txt, FONT_STAND1_RANK_RESTORED))
     if conference_label and show_conference_rank:
         conf_raw = rec.get("conferenceRank")
         conf_rank = conf_raw if conf_raw not in (None, "") else "-"
@@ -246,14 +263,14 @@ def draw_standings_screen1(
         except Exception:
             conf_lbl = conf_rank
         conf_name = rec.get("conferenceName") or rec.get("conferenceAbbrev") or "conference"
-        lines.append((f"{conf_lbl} in {conf_name}", FONT_STAND1_RANK))
+        lines.append((f"{conf_lbl} in {conf_name}", FONT_STAND1_RANK_RESTORED))
     if gb_txt and not place_gb_before_rank:
-        lines.append((gb_txt, FONT_STAND1_GB_VALUE))
+        lines.append((gb_txt, FONT_STAND1_GB_VALUE_RESTORED))
     if wc_txt:
-        lines.append((wc_txt, FONT_STAND1_WCGB_VALUE))
+        lines.append((wc_txt, FONT_STAND1_WCGB_VALUE_RESTORED))
     if show_streak:
         streak_raw = (rec.get("streak") or {}).get("streakCode", "-")
-        lines.append((f"Streak: {_format_streak(streak_raw)}", FONT_STAND1_RANK))
+        lines.append((f"Streak: {_format_streak(streak_raw)}", FONT_STAND1_RANK_RESTORED))
 
     # Layout text
     heights = [draw.textsize(txt,font)[1] for txt,font in lines]
@@ -367,7 +384,7 @@ def draw_standings_screen2(
         }.get(split, split)
         items.append(f"{label}: {find_split(split)}")
 
-    lines2 = [(rec_txt, FONT_STAND2_RECORD)] + [(it, FONT_STAND2_VALUE) for it in items]
+    lines2 = [(rec_txt, FONT_STAND2_RECORD_RESTORED)] + [(it, FONT_STAND2_VALUE_RESTORED) for it in items]
     heights2 = [draw.textsize(txt,font)[1] for txt,font in lines2]
     total2   = sum(heights2)
     avail2   = bottom_limit - text_top

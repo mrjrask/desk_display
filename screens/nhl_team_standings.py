@@ -5,10 +5,15 @@ from screens.mlb_team_standings import (
     draw_standings_screen2 as _base_screen2,
     _format_int,
 )
-from config import FONT_STAND1_RANK
-from utils import log_call
+from config import FONT_STAND1_RANK, DISPLAY_SCALE
+from utils import log_call, clone_font
 
-NHL_LOGO_SZ = int(round(LOGO_SZ * 1.2))
+NHL_LOGO_SZ = max(1, int(round(LOGO_SZ * 0.5)))
+
+NHL_POINTS_FONT = clone_font(
+    FONT_STAND1_RANK,
+    max(1, int(round(getattr(FONT_STAND1_RANK, "size", 22) / max(1.0, DISPLAY_SCALE)))),
+)
 
 
 def _strip_pct_leading_zero(rec, *, precision=3):
@@ -118,7 +123,7 @@ def draw_nhl_standings_screen1(display, rec, logo_path, division_name, *, transi
         division_display,
         show_games_back=False,
         show_wild_card=False,
-        points_font=FONT_STAND1_RANK,
+        points_font=NHL_POINTS_FONT,
         ot_label="OTL",
         points_label="points",
         conference_label="conference",

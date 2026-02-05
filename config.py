@@ -368,6 +368,7 @@ except (TypeError, ValueError):
     HEIGHT = BASE_HEIGHT
 
 _display_output = os.environ.get("DESK_DISPLAY_OUTPUT", "auto").strip().lower()
+_hyperpixel_panel = os.environ.get("HYPERPIXEL_PANEL", "").strip().lower()
 if (_display_width_set, _display_height_set) != (True, True):
     if _display_output in {"framebuffer", "fb", "framebuffer-device"}:
         fb_device = os.environ.get("DISPLAY_FB_DEVICE", "/dev/fb0")
@@ -390,6 +391,12 @@ if (_display_width_set, _display_height_set) != (True, True):
                 WIDTH = drm_width
             if not _display_height_set:
                 HEIGHT = drm_height
+
+if _hyperpixel_panel == "hyperpixel4" and (WIDTH, HEIGHT) == (480, 800):
+    logging.info(
+        "Detected HyperPixel 4 portrait mode dimensions (480x800); normalizing to 800x480."
+    )
+    WIDTH, HEIGHT = 800, 480
 
 def _compute_display_scale(
     base_width: int,
