@@ -30,6 +30,7 @@ from config import (
     get_screen_font,
     is_hyperpixel_next_layout,
     scale_value,
+    scale_value_width,
 )
 from services.http_client import get_session
 from utils import ScreenImage, clear_display, load_team_logo, log_call
@@ -50,7 +51,7 @@ CONFERENCE_NFC_KEY = "NFC"
 CONFERENCE_AFC_KEY = "AFC"
 
 LOGO_DIR = os.path.join(IMAGES_DIR, "nfl")
-LOGO_HEIGHT = scale_value(45)
+LOGO_HEIGHT = scale_value_width(36) if is_hyperpixel_next_layout() else scale_value(45)
 
 # Overview animation geometry
 OVERVIEW_LOGO_HEIGHT = 65

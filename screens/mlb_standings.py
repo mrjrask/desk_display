@@ -315,7 +315,7 @@ def draw_division_screen(display, league_id: int, division_id: int, title: str, 
         return None
 
     hyperpixel_layout = config.is_hyperpixel_next_layout()
-    logo_size = config.scale_value(LOGO_SIZE) if hyperpixel_layout else LOGO_SIZE
+    logo_size = config.scale_value_width(LOGO_SIZE) if hyperpixel_layout else LOGO_SIZE
     margin = config.scale_value(MARGIN) if hyperpixel_layout else MARGIN
     row_spacing = config.scale_value(ROW_SPACING) if hyperpixel_layout else ROW_SPACING
     header, header_h = _header_frame(title)
@@ -410,7 +410,7 @@ def draw_wildcard_screen(display, league_id: int, title: str, transition=False):
         return None
 
     hyperpixel_layout = config.is_hyperpixel_next_layout()
-    logo_size = config.scale_value(LOGO_SIZE) if hyperpixel_layout else LOGO_SIZE
+    logo_size = config.scale_value_width(LOGO_SIZE) if hyperpixel_layout else LOGO_SIZE
     margin = config.scale_value(MARGIN) if hyperpixel_layout else MARGIN
     row_spacing = config.scale_value(ROW_SPACING) if hyperpixel_layout else ROW_SPACING
     header, header_h = _header_frame(title)
