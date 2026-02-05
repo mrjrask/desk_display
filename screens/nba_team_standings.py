@@ -6,7 +6,7 @@ from screens.mlb_team_standings import (
 )
 from utils import log_call
 
-NBA_LOGO_SZ = int(round(LOGO_SZ * 1.2))
+NBA_LOGO_SZ = max(1, int(round(LOGO_SZ * 0.5)))
 
 
 def _strip_pct_leading_zero(rec, *, precision=3):
