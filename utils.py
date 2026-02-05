@@ -1443,11 +1443,11 @@ def standard_next_game_logo_height_for_space(
 
 def standard_scoreboard_team_logo_height(panel_height: int, *, compact: bool = False) -> int:
     """Return the shared scoreboard team logo height for the given panel size."""
-    from config import scale_value
+    from config import is_hyperpixel_next_layout, scale_value, scale_value_width
 
     if compact:
-        return scale_value(26)
-    return scale_value(52)
+        return scale_value_width(20) if is_hyperpixel_next_layout() else scale_value(26)
+    return scale_value_width(36) if is_hyperpixel_next_layout() else scale_value(52)
 
 
 def standard_scoreboard_league_logo_height(team_logo_height: int) -> int:

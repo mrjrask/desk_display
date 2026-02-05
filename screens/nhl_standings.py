@@ -28,6 +28,7 @@ from config import (
     get_screen_image_scale,
     is_hyperpixel_next_layout,
     scale_value,
+    scale_value_width,
 )
 from services.http_client import NHL_HEADERS, get_session
 from utils import ScreenImage, clear_display, log_call
@@ -46,7 +47,7 @@ CONFERENCE_WEST_KEY = "Western"
 CONFERENCE_EAST_KEY = "Eastern"
 
 LOGO_DIR = NHL_IMAGES_DIR
-_LOGO_BASE_HEIGHT = scale_value(41)
+_LOGO_BASE_HEIGHT = scale_value_width(32) if is_hyperpixel_next_layout() else scale_value(41)
 LOGO_HEIGHT = _LOGO_BASE_HEIGHT  # ~10% larger logos for standings rows
 _CONFERENCE_LOGO_BASE_HEIGHT = _LOGO_BASE_HEIGHT
 CONFERENCE_LOGO_HEIGHT = _CONFERENCE_LOGO_BASE_HEIGHT
@@ -171,8 +172,8 @@ OVERVIEW_DIVISIONS = [
 OVERVIEW_MARGIN_X = scale_value(4)
 OVERVIEW_TITLE_MARGIN_BOTTOM = scale_value(6)
 OVERVIEW_BOTTOM_MARGIN = scale_value(2)
-_OVERVIEW_MIN_LOGO_BASE = scale_value(24)
-_OVERVIEW_MAX_LOGO_BASE = scale_value(54)
+_OVERVIEW_MIN_LOGO_BASE = scale_value_width(18) if is_hyperpixel_next_layout() else scale_value(24)
+_OVERVIEW_MAX_LOGO_BASE = scale_value_width(40) if is_hyperpixel_next_layout() else scale_value(54)
 OVERVIEW_MIN_LOGO_HEIGHT = _OVERVIEW_MIN_LOGO_BASE
 OVERVIEW_MAX_LOGO_HEIGHT = _OVERVIEW_MAX_LOGO_BASE
 OVERVIEW_LOGO_PADDING = scale_value(4)
