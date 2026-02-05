@@ -33,7 +33,16 @@ from config import (
 from utils import clear_display, fit_logo_to_box, log_call, clone_font
 
 # Constants
-LOGO_SZ = scale_value_width(27) if is_hyperpixel_next_layout() else scale_value(36)
+_DISPLAY_OUTPUT = os.environ.get("DESK_DISPLAY_OUTPUT", "auto").strip().lower()
+_IS_DISPLAY_HAT_MINI = _DISPLAY_OUTPUT in {
+    "displayhatmini",
+    "display-hat-mini",
+    "hatmini",
+    "hat",
+}
+
+LOGO_SZ_BASE = scale_value_width(27) if is_hyperpixel_next_layout() else scale_value(36)
+LOGO_SZ = LOGO_SZ_BASE * (3 if _IS_DISPLAY_HAT_MINI else 1)
 MARGIN  = scale_value(6)
 
 
