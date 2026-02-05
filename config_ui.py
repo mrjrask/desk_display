@@ -254,7 +254,11 @@ def _format_timestamp(timestamp: float) -> str:
     return datetime.fromtimestamp(timestamp).strftime("%Y-%m-%d %H:%M:%S")
 
 
-def _build_screenshot_entries() -> List[Dict[str, Optional[str]]]:
+def _is_screenshot_stale(timestamp: float, *, max_age_seconds: int = 2 * 60 * 60) -> bool:
+    return datetime.now().timestamp() - timestamp > max_age_seconds
+
+
+def _build_screenshot_entries() -> List[Dict[str, Any]]:
     current_dir = _current_screenshot_dir()
     config = _load_active_config()
     screens_config = config.get("screens", {})
@@ -264,22 +268,26 @@ def _build_screenshot_entries() -> List[Dict[str, Optional[str]]]:
     for screen_id in SCREEN_IDS:
         if screen_id not in ordered_screen_ids:
             ordered_screen_ids.append(screen_id)
-    entries: List[Dict[str, Optional[str]]] = []
+    entries: List[Dict[str, Any]] = []
     for screen_id in ordered_screen_ids:
         prefix = _sanitize_filename_prefix(screen_id)
         filename = f"{prefix}.png"
         path = current_dir / filename
-        entry: Dict[str, Optional[str]] = {
+        entry: Dict[str, Any] = {
             "id": screen_id,
             "filename": None,
             "timestamp": None,
+            "is_stale": False,
         }
         if path.exists():
             entry["filename"] = filename
             try:
-                entry["timestamp"] = _format_timestamp(path.stat().st_mtime)
+                modified_time = path.stat().st_mtime
+                entry["timestamp"] = _format_timestamp(modified_time)
+                entry["is_stale"] = _is_screenshot_stale(modified_time)
             except OSError:
                 entry["timestamp"] = None
+                entry["is_stale"] = False
         entries.append(entry)
     return entries
 
