@@ -29,6 +29,7 @@ from config import (
     scale_value,
     scale_value_width,
     DISPLAY_SCALE,
+    is_hyperpixel_4_square_layout,
 )
 from utils import clear_display, fit_logo_to_box, log_call, clone_font
 
@@ -42,6 +43,8 @@ _IS_DISPLAY_HAT_MINI = _DISPLAY_OUTPUT in {
 }
 
 LOGO_SZ_BASE = scale_value_width(27) if is_hyperpixel_next_layout() else scale_value(36)
+if is_hyperpixel_4_square_layout():
+    LOGO_SZ_BASE = max(LOGO_SZ_BASE, scale_value_width(80))
 LOGO_SZ = LOGO_SZ_BASE * (3 if _IS_DISPLAY_HAT_MINI else 1)
 MARGIN  = scale_value(6)
 
@@ -203,6 +206,16 @@ def draw_standings_screen1(
     record_font = FONT_STAND1_WL_RESTORED if record_font is None else record_font
     points_font = FONT_STAND1_GB_VALUE_RESTORED if points_font is None else points_font
 
+    rank_font = FONT_STAND1_RANK_RESTORED
+    gb_font = FONT_STAND1_GB_VALUE_RESTORED
+    wc_font = FONT_STAND1_WCGB_VALUE_RESTORED
+    if is_hyperpixel_4_square_layout():
+        record_font = clone_font(record_font, max(1, int(round(getattr(record_font, "size", 24) * 1.55))))
+        points_font = clone_font(points_font, max(1, int(round(getattr(points_font, "size", 20) * 1.45))))
+        rank_font = clone_font(rank_font, max(1, int(round(getattr(rank_font, "size", 20) * 1.45))))
+        gb_font = clone_font(gb_font, max(1, int(round(getattr(gb_font, "size", 20) * 1.35))))
+        wc_font = clone_font(wc_font, max(1, int(round(getattr(wc_font, "size", 20) * 1.35))))
+
     if record_details_fn:
         wl_txt = record_details_fn(rec, record_line)
     elif show_pct:
@@ -262,8 +275,8 @@ def draw_standings_screen1(
     if points_txt:
         lines.append((points_txt, points_font))
     if gb_txt and place_gb_before_rank:
-        lines.append((gb_txt, FONT_STAND1_GB_VALUE_RESTORED))
-    lines.append((rank_txt, FONT_STAND1_RANK_RESTORED))
+        lines.append((gb_txt, gb_font))
+    lines.append((rank_txt, rank_font))
     if conference_label and show_conference_rank:
         conf_raw = rec.get("conferenceRank")
         conf_rank = conf_raw if conf_raw not in (None, "") else "-"
@@ -272,14 +285,14 @@ def draw_standings_screen1(
         except Exception:
             conf_lbl = conf_rank
         conf_name = rec.get("conferenceName") or rec.get("conferenceAbbrev") or "conference"
-        lines.append((f"{conf_lbl} in {conf_name}", FONT_STAND1_RANK_RESTORED))
+        lines.append((f"{conf_lbl} in {conf_name}", rank_font))
     if gb_txt and not place_gb_before_rank:
-        lines.append((gb_txt, FONT_STAND1_GB_VALUE_RESTORED))
+        lines.append((gb_txt, gb_font))
     if wc_txt:
-        lines.append((wc_txt, FONT_STAND1_WCGB_VALUE_RESTORED))
+        lines.append((wc_txt, wc_font))
     if show_streak:
         streak_raw = (rec.get("streak") or {}).get("streakCode", "-")
-        lines.append((f"Streak: {_format_streak(streak_raw)}", FONT_STAND1_RANK_RESTORED))
+        lines.append((f"Streak: {_format_streak(streak_raw)}", rank_font))
 
     # Layout text
     heights = [draw.textsize(txt,font)[1] for txt,font in lines]

@@ -35,6 +35,7 @@ from config import (
     HEIGHT,
     CENTRAL_TIME,
     get_screen_background_color,
+    is_hyperpixel_4_square_layout,
 )
 
 from utils import (
@@ -120,9 +121,10 @@ def _ts(size: int) -> ImageFont.ImageFont:
             return ImageFont.load_default()
 
 # Tuned for 320x240; scales acceptably for larger canvases
-FONT_ABBR   = _ts(33 if HEIGHT >= 240 else 28)  # team abbr in table
-FONT_SCORE  = _ts(48 if HEIGHT >= 240 else 38)  # score digits
-FONT_SMALL  = _ts(22 if HEIGHT >= 240 else 18)  # status / small lines
+_IS_HYPERPIXEL_4_SQUARE = is_hyperpixel_4_square_layout()
+FONT_ABBR   = _ts(40 if _IS_HYPERPIXEL_4_SQUARE else (33 if HEIGHT >= 240 else 28))  # team abbr in table
+FONT_SCORE  = _ts(60 if _IS_HYPERPIXEL_4_SQUARE else (48 if HEIGHT >= 240 else 38))  # score digits
+FONT_SMALL  = _ts(26 if _IS_HYPERPIXEL_4_SQUARE else (22 if HEIGHT >= 240 else 18))  # status / small lines
 
 # Shared sports fonts from config (keeps Hawks look)
 FONT_TITLE    = FONT_TITLE_SPORTS                # title strip
@@ -544,6 +546,7 @@ def _draw_scoreboard_table(
     *,
     bottom_reserved_px: int = 0,
     hyperpixel_layout: bool = False,
+    center_vertically: bool = False,
 ) -> int:
     """
     2-row compact table: team cell at left, score column at right.
@@ -564,6 +567,9 @@ def _draw_scoreboard_table(
     min_row_h = config.scale_value(40) if hyperpixel_layout else 40
     row_h = max(min_row_h, int((HEIGHT - top_y - header_h - bottom_reserved_px) / row_count))
     table_h = header_h + row_h * row_count
+    if center_vertically:
+        free_space = max(0, HEIGHT - bottom_reserved_px - table_h - top_y)
+        table_top = top_y + free_space // 2
     y = table_top + header_h  # header_h = 0
 
     # Rows
@@ -664,6 +670,7 @@ def _render_scoreboard(
         rows,
         bottom_reserved_px=bottom_reserved,
         hyperpixel_layout=hyperpixel_layout,
+        center_vertically=_IS_HYPERPIXEL_4_SQUARE and title in {"Last Bulls game:", "Bulls Live:"},
     )
 
     if bottom_line:

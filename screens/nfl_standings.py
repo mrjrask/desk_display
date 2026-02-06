@@ -31,6 +31,7 @@ from config import (
     is_hyperpixel_next_layout,
     scale_value,
     scale_value_width,
+    is_hyperpixel_4_square_layout,
 )
 from services.http_client import get_session
 from utils import ScreenImage, clear_display, load_team_logo, log_call
@@ -52,6 +53,8 @@ CONFERENCE_AFC_KEY = "AFC"
 
 LOGO_DIR = os.path.join(IMAGES_DIR, "nfl")
 LOGO_HEIGHT = scale_value_width(36) if is_hyperpixel_next_layout() else scale_value(45)
+if is_hyperpixel_4_square_layout():
+    LOGO_HEIGHT = max(1, int(round(LOGO_HEIGHT * 0.75)))
 
 # Overview animation geometry
 OVERVIEW_LOGO_HEIGHT = 65
@@ -78,6 +81,7 @@ TEAM_COLUMN_PADDING = scale_value(6)
 
 TITLE_FONT = FONT_TITLE_SPORTS
 _DEFAULT_STYLE_ID = "NFL Standings Default"
+_NFL_SQUARE_FONT_SCALE = 0.78 if is_hyperpixel_4_square_layout() else 1.0
 DIVISION_FONT = get_screen_font(
     _DEFAULT_STYLE_ID,
     "division",
@@ -105,19 +109,19 @@ def _apply_style_overrides(screen_id: str) -> None:
         screen_id,
         "division",
         base_font=FONT_TITLE_SPORTS,
-        default_size=28,
+        default_size=max(8, int(round(28 * _NFL_SQUARE_FONT_SCALE))),
     )
     COLUMN_FONT = get_screen_font(
         screen_id,
         "column",
         base_font=FONT_STATUS,
-        default_size=26,
+        default_size=max(8, int(round(26 * _NFL_SQUARE_FONT_SCALE))),
     )
     ROW_FONT = get_screen_font(
         screen_id,
         "row",
         base_font=FONT_STATUS,
-        default_size=30,
+        default_size=max(8, int(round(30 * _NFL_SQUARE_FONT_SCALE))),
     )
     BACKGROUND_COLOR = get_screen_background_color(screen_id, SCOREBOARD_BACKGROUND_COLOR)
     _update_layout_metrics()
