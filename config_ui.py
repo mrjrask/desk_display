@@ -454,14 +454,24 @@ def import_screens() -> Any:
         return jsonify({"error": "Invalid payload"}), 400
 
     config_payload = payload.get("config", payload)
+    derived_style_payload: Optional[Dict[str, Any]] = None
     try:
-        config = _validate_config_payload(config_payload)
+        if isinstance(config_payload, dict) and isinstance(config_payload.get("screens"), list):
+            entries = config_payload.get("screens", [])
+            config = _build_config(entries)
+            for key in ("playlists", "sequence"):
+                value = config_payload.get(key)
+                if value is not None:
+                    config[key] = value
+            derived_style_payload = _build_style_config(entries, _load_active_style_config())
+        else:
+            config = _validate_config_payload(config_payload)
         build_scheduler(config)
     except Exception as exc:
         return jsonify({"error": str(exc)}), 400
 
     _save_config(config)
-    style_payload = payload.get("style")
+    style_payload = payload.get("style", derived_style_payload)
     if style_payload is not None:
         try:
             style_config = _validate_style_payload(style_payload)
