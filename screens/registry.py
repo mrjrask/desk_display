@@ -93,6 +93,14 @@ from screens.nfl_standings import (
 )
 from screens.nhl_scoreboard import draw_nhl_scoreboard
 from screens.nhl_scoreboard_v2 import draw_nhl_scoreboard_v2
+from screens.oly_hockey_scoreboard import (
+    draw_olympic_mens_hockey_scoreboard,
+    draw_olympic_womens_hockey_scoreboard,
+)
+from screens.oly_hockey_scoreboard_v2 import (
+    draw_olympic_mens_hockey_scoreboard_v2,
+    draw_olympic_womens_hockey_scoreboard_v2,
+)
 from screens.nhl_standings import (
     draw_nhl_standings_east,
     draw_nhl_standings_overview_east,
@@ -664,6 +672,26 @@ def build_screen_registry(context: ScreenContext) -> Tuple[Dict[str, ScreenDefin
         register(
             "NHL Scoreboard v2",
             lambda: draw_nhl_scoreboard_v2(context.display, transition=True),
+            available=scoreboards_available,
+        )
+        register(
+            "Olympic Hockey Men Scoreboard",
+            lambda: draw_olympic_mens_hockey_scoreboard(context.display, transition=True),
+            available=scoreboards_available,
+        )
+        register(
+            "Olympic Hockey Men Scoreboard v2",
+            lambda: draw_olympic_mens_hockey_scoreboard_v2(context.display, transition=True),
+            available=scoreboards_available,
+        )
+        register(
+            "Olympic Hockey Women Scoreboard",
+            lambda: draw_olympic_womens_hockey_scoreboard(context.display, transition=True),
+            available=scoreboards_available,
+        )
+        register(
+            "Olympic Hockey Women Scoreboard v2",
+            lambda: draw_olympic_womens_hockey_scoreboard_v2(context.display, transition=True),
             available=scoreboards_available,
         )
         register(
