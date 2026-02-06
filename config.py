@@ -90,7 +90,9 @@ def initialise_env_if_requested(force: bool = False) -> None:
     if _ENV_INITIALISED and not force:
         return
 
-    raw_flag = os.environ.get("CONFIG_LOAD_DOTENV", "0").strip().lower()
+    # Default to loading `.env` so direct module/script execution behaves the
+    # same as the main app service. Set CONFIG_LOAD_DOTENV=0 to opt out.
+    raw_flag = os.environ.get("CONFIG_LOAD_DOTENV", "1").strip().lower()
     should_load = raw_flag in {"1", "true", "yes", "on"}
 
     if should_load:
