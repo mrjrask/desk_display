@@ -1,69 +1,164 @@
 #!/usr/bin/env python3
-"""Print the active screen rotation configuration JSON to stdout.
+"""Export the same JSON payload as the Screen Config page export button.
 
-Resolution mirrors the config UI behavior:
-1. Use ``SCREENS_CONFIG_LOCAL_PATH`` when it exists.
-2. Otherwise fall back to ``SCREENS_CONFIG_PATH``.
-3. Defaults are ``screens_config.local.json`` and ``screens_config.json`` at the
-   project root.
+Output shape mirrors the browser's "Export configuration" action:
+{
+  "config": {
+    "screens": ...,
+    "playlists": ...,
+    "sequence": ...
+  },
+  "style": {
+    "screens": {
+      "<screen_id>": {"background": "#RRGGBB"}
+    }
+  }
+}
 """
 from __future__ import annotations
 
 import argparse
 import json
-import os
 import sys
 from pathlib import Path
-from typing import Any, Dict
-
+from typing import Any, Dict, List
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
-DEFAULT_CONFIG_PATH = Path(
-    os.environ.get("SCREENS_CONFIG_PATH", str(REPO_ROOT / "screens_config.json"))
-).expanduser()
-LOCAL_CONFIG_PATH = Path(
-    os.environ.get("SCREENS_CONFIG_LOCAL_PATH", str(REPO_ROOT / "screens_config.local.json"))
-).expanduser()
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
+
+from config_ui import _build_screen_entries, _load_active_config, _load_active_style_config
 
 
-def _load_config(path: Path) -> Dict[str, Any]:
-    try:
-        with path.open("r", encoding="utf-8") as fh:
-            payload = json.load(fh)
-    except FileNotFoundError as exc:
-        raise FileNotFoundError(f"Configuration file not found: {path}") from exc
-    except json.JSONDecodeError as exc:
-        raise ValueError(f"Configuration file is not valid JSON: {path}: {exc}") from exc
-
-    if not isinstance(payload, dict):
-        raise ValueError(f"Configuration at {path} must be a JSON object")
-    screens = payload.get("screens")
-    if not isinstance(screens, dict):
-        raise ValueError(f"Configuration at {path} must include a 'screens' object")
-    return payload
+def _parse_alt_screen(value: str) -> List[str]:
+    if not value:
+        return []
+    return [item.strip() for item in value.split(",") if item.strip()]
 
 
-def resolve_active_config_path() -> Path:
-    return LOCAL_CONFIG_PATH if LOCAL_CONFIG_PATH.exists() else DEFAULT_CONFIG_PATH
+def _build_playlist_assignments(config: Dict[str, Any]) -> tuple[list[dict[str, str]], dict[str, str]]:
+    config_playlists = config.get("playlists")
+    if not isinstance(config_playlists, dict):
+        return [], {}
+
+    sequence = config.get("sequence")
+    ordered_ids: List[str] = []
+    if isinstance(sequence, list):
+        for item in sequence:
+            if isinstance(item, dict):
+                playlist_id = item.get("playlist")
+                if isinstance(playlist_id, str) and playlist_id and playlist_id not in ordered_ids:
+                    ordered_ids.append(playlist_id)
+
+    for playlist_id in config_playlists.keys():
+        if isinstance(playlist_id, str) and playlist_id and playlist_id not in ordered_ids:
+            ordered_ids.append(playlist_id)
+
+    playlists: list[dict[str, str]] = []
+    assignments: dict[str, str] = {}
+    for playlist_id in ordered_ids:
+        playlist = config_playlists.get(playlist_id)
+        if not isinstance(playlist, dict):
+            continue
+        label = playlist.get("label")
+        name = label.strip() if isinstance(label, str) and label.strip() else playlist_id
+        playlists.append({"id": playlist_id, "name": name})
+
+        steps = playlist.get("steps")
+        if not isinstance(steps, list):
+            continue
+        for step in steps:
+            if not isinstance(step, dict):
+                continue
+            screen_id = step.get("screen")
+            if isinstance(screen_id, str) and screen_id and screen_id not in assignments:
+                assignments[screen_id] = playlist_id
+
+    return playlists, assignments
+
+
+def _build_config_payload(screens: List[Dict[str, Any]], config: Dict[str, Any]) -> Dict[str, Any]:
+    screens_payload: Dict[str, Any] = {}
+    for screen in screens:
+        screen_id = str(screen.get("id", "")).strip()
+        if not screen_id:
+            continue
+
+        frequency_raw = screen.get("frequency", 0)
+        try:
+            frequency = int(frequency_raw)
+        except (TypeError, ValueError):
+            frequency = 0
+
+        alt_screens = _parse_alt_screen(str(screen.get("alt_screen", "")).strip())
+        if alt_screens:
+            alt_frequency_raw = screen.get("alt_frequency")
+            try:
+                alt_frequency = int(alt_frequency_raw)
+            except (TypeError, ValueError):
+                alt_frequency = 1
+            screens_payload[screen_id] = {
+                "frequency": frequency,
+                "alt": {
+                    "screen": alt_screens[0] if len(alt_screens) == 1 else alt_screens,
+                    "frequency": alt_frequency,
+                },
+            }
+        else:
+            screens_payload[screen_id] = frequency
+
+    playlists, assignments = _build_playlist_assignments(config)
+    playlists_payload: Dict[str, Any] = {}
+    for playlist in playlists:
+        pid = playlist["id"]
+        steps = [
+            {"screen": screen["id"]}
+            for screen in screens
+            if str(screen.get("id", "")).strip() and assignments.get(screen["id"]) == pid
+        ]
+        playlists_payload[pid] = {
+            "label": playlist["name"],
+            "steps": steps,
+        }
+
+    return {
+        "screens": screens_payload,
+        "playlists": playlists_payload,
+        "sequence": [{"playlist": playlist["id"]} for playlist in playlists],
+    }
+
+
+def _build_style_payload(screens: List[Dict[str, Any]]) -> Dict[str, Any]:
+    screens_payload: Dict[str, Dict[str, str]] = {}
+    for screen in screens:
+        screen_id = str(screen.get("id", "")).strip()
+        if not screen_id:
+            continue
+        background = str(screen.get("background", "")).strip()
+        if not background:
+            continue
+        screens_payload[screen_id] = {"background": background}
+    return {"screens": screens_payload}
 
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument(
-        "--compact",
-        action="store_true",
-        help="Emit minified JSON instead of pretty-printed JSON.",
-    )
+    parser.add_argument("--compact", action="store_true", help="Emit minified JSON output")
     return parser.parse_args()
 
 
 def main() -> int:
     args = parse_args()
-    active_path = resolve_active_config_path()
-
     try:
-        payload = _load_config(active_path)
-    except (FileNotFoundError, ValueError) as exc:
+        config = _load_active_config()
+        style_config = _load_active_style_config()
+        screens = _build_screen_entries(config, style_config)
+
+        payload = {
+            "config": _build_config_payload(screens, config),
+            "style": _build_style_payload(screens),
+        }
+    except Exception as exc:  # surface friendly CLI error
         print(f"error: {exc}", file=sys.stderr)
         return 1
 
