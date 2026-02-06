@@ -10,7 +10,7 @@ KERNEL_USER_SERVICE_NAME="desk_display-kernel.service"
 SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 PROJECT_DIR="${PROJECT_DIR:-$(cd -- "$SCRIPT_DIR/.." && pwd)}"
 SERVICE_PATH="/etc/systemd/system/$SERVICE_NAME"
-COMMON_SCRIPT="$PROJECT_DIR/scripts/install_common.sh"
+COMMON_SCRIPT="$PROJECT_DIR/scripts/helpers/common.sh"
 
 if [[ $EUID -ne 0 ]]; then
   SUDO="sudo"
