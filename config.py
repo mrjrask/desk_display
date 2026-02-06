@@ -354,66 +354,6 @@ def _read_drm_mode_size() -> Optional[Tuple[int, int]]:
     return None
 
 
-def _read_kernel_overlay_rotation() -> Optional[int]:
-    """Read the active display rotation from Raspberry Pi dtoverlay entries."""
-
-    config_paths = (
-        Path("/boot/firmware/config.txt"),
-        Path("/boot/config.txt"),
-    )
-    overlays_of_interest = {"vc4-kms-dpi-hyperpixel4", "vc4-kms-dpi-hyperpixel4sq"}
-    found_rotation: Optional[int] = None
-
-    for config_path in config_paths:
-        try:
-            lines = config_path.read_text(encoding="utf-8").splitlines()
-        except OSError:
-            continue
-
-        for raw_line in lines:
-            line = raw_line.strip()
-            if not line or line.startswith("#"):
-                continue
-            if "#" in line:
-                line = line.split("#", 1)[0].strip()
-            if not line:
-                continue
-            if not line.lower().startswith("dtoverlay="):
-                continue
-
-            overlay_config = line.split("=", 1)[1].strip()
-            if not overlay_config:
-                continue
-
-            parts = [part.strip() for part in overlay_config.split(",") if part.strip()]
-            if not parts:
-                continue
-
-            overlay_name = parts[0].lower()
-            should_check = (
-                overlay_name in overlays_of_interest or "rotate=" in overlay_config.lower()
-            )
-            if not should_check:
-                continue
-
-            for part in parts[1:]:
-                if not part.lower().startswith("rotate="):
-                    continue
-                value = part.split("=", 1)[1].strip()
-                try:
-                    found_rotation = int(value)
-                except ValueError:
-                    logging.warning(
-                        "Ignoring invalid rotate value '%s' in %s.", value, config_path
-                    )
-                break
-
-        if found_rotation is not None:
-            return found_rotation
-
-    return None
-
-
 _display_width_set = "DISPLAY_WIDTH" in os.environ
 _display_height_set = "DISPLAY_HEIGHT" in os.environ
 
@@ -540,21 +480,13 @@ except (TypeError, ValueError):
     TEAM_STANDINGS_DISPLAY_SECONDS = 5
 SCHEDULE_UPDATE_INTERVAL = 600
 
-_use_kernel_rotation_source = (
-    _hyperpixel_panel.startswith("hyperpixel")
-    or _display_output in {"kernel", "kms", "drm", "sdl"}
-)
-_kernel_overlay_rotation = _read_kernel_overlay_rotation() if _use_kernel_rotation_source else None
-if _kernel_overlay_rotation is not None:
-    DISPLAY_ROTATION = _kernel_overlay_rotation
-else:
-    try:
-        DISPLAY_ROTATION = int(os.environ.get("DISPLAY_ROTATION", "0"))
-    except (TypeError, ValueError):
-        logging.warning(
-            "Invalid DISPLAY_ROTATION value; defaulting to 0 degrees."
-        )
-        DISPLAY_ROTATION = 0
+try:
+    DISPLAY_ROTATION = int(os.environ.get("DISPLAY_ROTATION", "0"))
+except (TypeError, ValueError):
+    logging.warning(
+        "Invalid DISPLAY_ROTATION value; defaulting to 0 degrees."
+    )
+    DISPLAY_ROTATION = 0
 
 
 # ─── Dark hours configuration ─────────────────────────────────────────────────
