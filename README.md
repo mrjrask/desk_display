@@ -79,6 +79,8 @@ bash ./scripts/install_kernel.sh
 The kernel display installers will:
 
 - Configure `DESK_DISPLAY_OUTPUT=kernel`.
+- Configure `.env` display sizing for your detected HyperPixel panel and default `DISPLAY_ROTATION=0` (override via env if needed).
+- **Not** modify `/boot/firmware/config.txt` or `/boot/config.txt`; set your HyperPixel `dtoverlay=` line manually (including any `rotate=` value).
 - Detect a connected DRM display for fullscreen output (or prompt for a resolution override).
 - Install a desktop launcher that can run the display loop inside the desktop session.
 - Attempt to launch the fullscreen display at the end of the installer when a desktop session is available (set `AUTO_LAUNCH_KERNEL_DISPLAY=0` to skip).
