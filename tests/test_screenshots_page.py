@@ -43,3 +43,22 @@ def test_screenshots_template_adds_stale_class(monkeypatch):
 
     assert response.status_code == 200
     assert 'class="timestamp is-stale"' in html
+
+
+def test_layout_editor_routes_removed():
+    client = config_ui.app.test_client()
+
+    assert client.get("/layouts").status_code == 404
+    assert client.get("/api/layouts").status_code == 404
+
+
+def test_screenshots_template_removes_layout_editor_nav_link(monkeypatch):
+    monkeypatch.setattr(config_ui, "_build_screenshot_entries", lambda: [])
+
+    client = config_ui.app.test_client()
+    response = client.get("/screenshots")
+
+    html = response.get_data(as_text=True)
+
+    assert response.status_code == 200
+    assert "Layout Editor" not in html

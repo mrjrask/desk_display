@@ -6,7 +6,7 @@ import json
 import os
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, Iterable, List, Optional, Tuple
+from typing import Any, Dict, Iterable, List, Optional
 
 from flask import Flask, abort, jsonify, render_template, request, send_from_directory
 
@@ -24,34 +24,10 @@ LOCAL_CONFIG_PATH = os.environ.get(
 STYLE_CONFIG_PATH = os.environ.get(
     "SCREENS_STYLE_PATH", os.path.join(SCRIPT_DIR, "screens_style.json")
 )
-LAYOUT_CONFIG_PATH = os.environ.get(
-    "SCREENS_LAYOUT_PATH", os.path.join(SCRIPT_DIR, "screens_layouts.json")
-)
-LAYOUT_CONFIG_GIT_PATH = os.environ.get(
-    "SCREENS_LAYOUT_GIT_PATH", os.path.join(SCRIPT_DIR, "screens_layouts.json")
-)
 
 SCREEN_CONFIG_HOST = os.environ.get("SCREEN_CONFIG_HOST", "0.0.0.0")
 SCREEN_CONFIG_PORT = int(os.environ.get("SCREEN_CONFIG_PORT", "5002"))
 ALLOWED_SCREEN_EXTS = (".png", ".jpg", ".jpeg")
-
-RESOLUTION_OPTIONS: Tuple[Tuple[str, str, Tuple[int, int], Optional[int]], ...] = (
-    ("320x240", "Base - 320x240", (320, 240), None),
-    ("hyperpixel4-rotated", "Hyperpixel4 - 800x480 (landscape)", (800, 480), 270),
-    ("hyperpixel4-square", "Hyperpixel4 Square - 720x720", (720, 720), None),
-    ("hyperpixel4", "Hyperpixel4 - vertical - 480x800", (480, 800), None),
-    ("640x480", "640x480", (640, 480), None),
-    ("1080p", "1080p - 1920x1080", (1920, 1080), None),
-    ("1440p", "1440p - 2560x1440", (2560, 1440), None),
-    ("2k", "2K - 2048x1080", (2048, 1080), None),
-    ("4k", "4K - 3840x2160", (3840, 2160), None),
-)
-
-DEFAULT_LAYOUT_SETTINGS = {
-    "font_scale": 1.0,
-    "image_scale": 1.0,
-    "spacing_scale": 1.0,
-}
 
 app = Flask(__name__)
 
@@ -93,20 +69,6 @@ def _load_style_config(path: str) -> Dict[str, Any]:
     return data
 
 
-def _load_layout_config(path: str) -> Dict[str, Any]:
-    try:
-        with open(path, "r", encoding="utf-8") as fh:
-            data = json.load(fh)
-    except FileNotFoundError:
-        return {"screens": {}}
-    if not isinstance(data, dict):
-        raise ValueError("Layout configuration must be a JSON object")
-    screens = data.get("screens")
-    if not isinstance(screens, dict):
-        raise ValueError("Layout configuration must include a 'screens' mapping")
-    return data
-
-
 def _load_active_config() -> Dict[str, Any]:
     if os.path.exists(LOCAL_CONFIG_PATH):
         return _load_config(LOCAL_CONFIG_PATH)
@@ -115,10 +77,6 @@ def _load_active_config() -> Dict[str, Any]:
 
 def _load_active_style_config() -> Dict[str, Any]:
     return _load_style_config(STYLE_CONFIG_PATH)
-
-
-def _load_active_layout_config() -> Dict[str, Any]:
-    return _load_layout_config(LAYOUT_CONFIG_PATH)
 
 
 def _validate_style_payload(data: Any) -> Dict[str, Any]:
@@ -156,66 +114,6 @@ def _validate_style_payload(data: Any) -> Dict[str, Any]:
         raise ValueError(
             "Invalid background color for: " + ", ".join(sorted(set(invalid_screens)))
         )
-
-    return {"screens": normalised_screens}
-
-
-def _clamp_float(value: Any, default: float, *, minimum: float, maximum: float) -> float:
-    try:
-        parsed = float(value)
-    except (TypeError, ValueError):
-        return default
-    return max(minimum, min(maximum, parsed))
-
-
-def _validate_layout_payload(data: Any) -> Dict[str, Any]:
-    if not isinstance(data, dict):
-        raise ValueError("Layout configuration must be a JSON object")
-    screens = data.get("screens")
-    if not isinstance(screens, dict):
-        raise ValueError("Layout configuration must include a 'screens' mapping")
-
-    resolution_ids = {entry[0] for entry in RESOLUTION_OPTIONS}
-    normalised_screens: Dict[str, Dict[str, Any]] = {}
-    for screen_id, spec in screens.items():
-        if not isinstance(screen_id, str):
-            continue
-        if not isinstance(spec, dict):
-            continue
-        resolutions = spec.get("resolutions")
-        if not isinstance(resolutions, dict):
-            resolutions = spec
-        normalised_resolutions: Dict[str, Dict[str, float]] = {}
-        for resolution_id, settings in resolutions.items():
-            if not isinstance(resolution_id, str) or resolution_id not in resolution_ids:
-                continue
-            if not isinstance(settings, dict):
-                settings = {}
-            font_scale = _clamp_float(
-                settings.get("font_scale", DEFAULT_LAYOUT_SETTINGS["font_scale"]),
-                DEFAULT_LAYOUT_SETTINGS["font_scale"],
-                minimum=0.25,
-                maximum=4.0,
-            )
-            image_scale = _clamp_float(
-                settings.get("image_scale", DEFAULT_LAYOUT_SETTINGS["image_scale"]),
-                DEFAULT_LAYOUT_SETTINGS["image_scale"],
-                minimum=0.25,
-                maximum=4.0,
-            )
-            spacing_scale = _clamp_float(
-                settings.get("spacing_scale", DEFAULT_LAYOUT_SETTINGS["spacing_scale"]),
-                DEFAULT_LAYOUT_SETTINGS["spacing_scale"],
-                minimum=0.25,
-                maximum=4.0,
-            )
-            normalised_resolutions[resolution_id] = {
-                "font_scale": font_scale,
-                "image_scale": image_scale,
-                "spacing_scale": spacing_scale,
-            }
-        if normalised_resolutions:
-            normalised_screens[screen_id] = {"resolutions": normalised_resolutions}
 
     return {"screens": normalised_screens}
 
@@ -449,60 +347,6 @@ def _build_style_config(
     return {"screens": screens}
 
 
-def _resolution_entries() -> List[Dict[str, Any]]:
-    return [
-        {
-            "id": entry[0],
-            "label": entry[1],
-            "width": entry[2][0],
-            "height": entry[2][1],
-            "rotation": entry[3],
-        }
-        for entry in RESOLUTION_OPTIONS
-    ]
-
-
-def _build_layout_matrix(layout_config: Dict[str, Any]) -> Dict[str, Dict[str, Dict[str, float]]]:
-    screens = layout_config.get("screens", {})
-    if not isinstance(screens, dict):
-        screens = {}
-    resolution_ids = [entry[0] for entry in RESOLUTION_OPTIONS]
-    matrix: Dict[str, Dict[str, Dict[str, float]]] = {}
-    for screen_id in SCREEN_IDS:
-        screen_layouts: Dict[str, Dict[str, float]] = {}
-        raw_screen = screens.get(screen_id, {})
-        if isinstance(raw_screen, dict):
-            raw_resolutions = raw_screen.get("resolutions")
-            if isinstance(raw_resolutions, dict):
-                raw_screen = raw_resolutions
-        for resolution_id in resolution_ids:
-            defaults = dict(DEFAULT_LAYOUT_SETTINGS)
-            if isinstance(raw_screen, dict):
-                settings = raw_screen.get(resolution_id)
-                if isinstance(settings, dict):
-                    defaults["font_scale"] = _clamp_float(
-                        settings.get("font_scale", defaults["font_scale"]),
-                        defaults["font_scale"],
-                        minimum=0.25,
-                        maximum=4.0,
-                    )
-                    defaults["image_scale"] = _clamp_float(
-                        settings.get("image_scale", defaults["image_scale"]),
-                        defaults["image_scale"],
-                        minimum=0.25,
-                        maximum=4.0,
-                    )
-                    defaults["spacing_scale"] = _clamp_float(
-                        settings.get("spacing_scale", defaults["spacing_scale"]),
-                        defaults["spacing_scale"],
-                        minimum=0.25,
-                        maximum=4.0,
-                    )
-            screen_layouts[resolution_id] = defaults
-        matrix[screen_id] = screen_layouts
-    return matrix
-
-
 def _save_config(config: Dict[str, Any]) -> None:
     tmp_path = f"{LOCAL_CONFIG_PATH}.tmp"
     with open(tmp_path, "w", encoding="utf-8") as fh:
@@ -517,22 +361,6 @@ def _save_style_config(config: Dict[str, Any]) -> None:
         json.dump(config, fh, indent=2)
         fh.write("\n")
     os.replace(tmp_path, STYLE_CONFIG_PATH)
-
-
-def _save_layout_config(config: Dict[str, Any]) -> None:
-    def _write_config(path: str) -> None:
-        directory = os.path.dirname(path)
-        if directory:
-            os.makedirs(directory, exist_ok=True)
-        tmp_path = f"{path}.tmp"
-        with open(tmp_path, "w", encoding="utf-8") as fh:
-            json.dump(config, fh, indent=2)
-            fh.write("\n")
-        os.replace(tmp_path, path)
-
-    _write_config(LAYOUT_CONFIG_PATH)
-    if os.path.abspath(LAYOUT_CONFIG_GIT_PATH) != os.path.abspath(LAYOUT_CONFIG_PATH):
-        _write_config(LAYOUT_CONFIG_GIT_PATH)
 
 
 def run_config_ui(host: str = SCREEN_CONFIG_HOST, port: int = SCREEN_CONFIG_PORT) -> None:
@@ -558,21 +386,6 @@ def screen_screenshots() -> str:
     return render_template("screenshots.html", screens=entries)
 
 
-@app.get("/layouts")
-def screen_layouts() -> str:
-    layout_config = _load_active_layout_config()
-    layouts = _build_layout_matrix(layout_config)
-    screenshots = _build_screenshot_entries()
-    screenshot_map = {entry["id"]: entry for entry in screenshots}
-    return render_template(
-        "screen_layouts.html",
-        screen_ids=sorted(SCREEN_IDS),
-        resolutions=_resolution_entries(),
-        layouts=layouts,
-        screenshots=screenshot_map,
-    )
-
-
 @app.get("/screenshots/current/<path:filename>")
 def screenshot_current(filename: str) -> Any:
     if not filename.lower().endswith(ALLOWED_SCREEN_EXTS):
@@ -589,18 +402,6 @@ def get_screens() -> Any:
         {
             "screens": _build_screen_entries(config, style_config),
             "screen_ids": sorted(SCREEN_IDS),
-        }
-    )
-
-
-@app.get("/api/layouts")
-def get_layouts() -> Any:
-    layout_config = _load_active_layout_config()
-    return jsonify(
-        {
-            "layouts": _build_layout_matrix(layout_config),
-            "screen_ids": sorted(SCREEN_IDS),
-            "resolutions": _resolution_entries(),
         }
     )
 
@@ -626,20 +427,6 @@ def export_screens() -> Any:
     )
 
 
-@app.get("/api/layouts/export")
-def export_layouts() -> Any:
-    config = _load_active_layout_config()
-    payload = json.dumps(config, indent=2)
-    return (
-        payload,
-        200,
-        {
-            "Content-Type": "application/json",
-            "Content-Disposition": "attachment; filename=screens_layouts.export.json",
-        },
-    )
-
-
 @app.post("/api/screens")
 def save_screens() -> Any:
     payload = request.get_json(silent=True)
@@ -660,24 +447,6 @@ def save_screens() -> Any:
     _save_config(config)
     _save_style_config(style_config)
     return jsonify({"status": "ok"})
-
-
-@app.post("/api/layouts")
-def save_layouts() -> Any:
-    payload = request.get_json(silent=True)
-    if not isinstance(payload, dict):
-        return jsonify({"error": "Invalid payload"}), 400
-    raw_layouts = payload.get("layouts", payload.get("screens"))
-    if not isinstance(raw_layouts, dict):
-        return jsonify({"error": "Layouts mapping required"}), 400
-
-    try:
-        layout_config = _validate_layout_payload({"screens": raw_layouts})
-    except Exception as exc:
-        return jsonify({"error": str(exc)}), 400
-
-    _save_layout_config(layout_config)
-    return jsonify({"status": "ok", "layouts": _build_layout_matrix(layout_config)})
 
 
 @app.post("/api/screens/import")
@@ -707,22 +476,6 @@ def import_screens() -> Any:
     return jsonify({"status": "ok", "screens": entries})
 
 
-@app.post("/api/layouts/import")
-def import_layouts() -> Any:
-    payload = request.get_json(silent=True)
-    if not isinstance(payload, dict):
-        return jsonify({"error": "Invalid payload"}), 400
-
-    raw_layouts = payload.get("layouts", payload.get("screens", payload))
-    try:
-        layout_config = _validate_layout_payload({"screens": raw_layouts})
-    except Exception as exc:
-        return jsonify({"error": str(exc)}), 400
-
-    _save_layout_config(layout_config)
-    return jsonify(
-        {"status": "ok", "layouts": _build_layout_matrix(layout_config)}
-    )
 
 
 if __name__ == "__main__":
