@@ -28,6 +28,7 @@ stop_kernel_user_service() {
   local user_uid=""
   local runtime_dir=""
   local -a user_env=()
+  local stopped=0
 
   if [[ -z "$service_user" ]]; then
     return 0
@@ -43,21 +44,30 @@ stop_kernel_user_service() {
 
   log "Stopping $KERNEL_USER_SERVICE_NAME for user $service_user"
   if [[ -n "$SUDO" ]]; then
-    if [[ ${#user_env[@]} -gt 0 ]]; then
-      $SUDO -u "$service_user" env "${user_env[@]}" systemctl --user stop "$KERNEL_USER_SERVICE_NAME" \
-        || warn "Failed to stop $KERNEL_USER_SERVICE_NAME for $service_user"
-    else
-      $SUDO -u "$service_user" systemctl --user stop "$KERNEL_USER_SERVICE_NAME" \
-        || warn "Failed to stop $KERNEL_USER_SERVICE_NAME for $service_user"
+    if [[ ${#user_env[@]} -gt 0 ]] && \
+      $SUDO -u "$service_user" env "${user_env[@]}" systemctl --user stop "$KERNEL_USER_SERVICE_NAME"; then
+      stopped=1
+    elif [[ ${#user_env[@]} -eq 0 ]] && \
+      $SUDO -u "$service_user" systemctl --user stop "$KERNEL_USER_SERVICE_NAME"; then
+      stopped=1
+    fi
+
+    if [[ $stopped -eq 0 ]] && \
+      $SUDO systemctl --quiet --machine="${service_user}@.host" --user status "$KERNEL_USER_SERVICE_NAME" >/dev/null 2>&1; then
+      if $SUDO systemctl --machine="${service_user}@.host" --user stop "$KERNEL_USER_SERVICE_NAME"; then
+        stopped=1
+      fi
     fi
   else
-    if [[ ${#user_env[@]} -gt 0 ]]; then
-      env "${user_env[@]}" systemctl --user stop "$KERNEL_USER_SERVICE_NAME" \
-        || warn "Failed to stop $KERNEL_USER_SERVICE_NAME for $service_user"
-    else
-      systemctl --user stop "$KERNEL_USER_SERVICE_NAME" \
-        || warn "Failed to stop $KERNEL_USER_SERVICE_NAME for $service_user"
+    if [[ ${#user_env[@]} -gt 0 ]] && env "${user_env[@]}" systemctl --user stop "$KERNEL_USER_SERVICE_NAME"; then
+      stopped=1
+    elif [[ ${#user_env[@]} -eq 0 ]] && systemctl --user stop "$KERNEL_USER_SERVICE_NAME"; then
+      stopped=1
     fi
+  fi
+
+  if [[ $stopped -eq 0 ]]; then
+    warn "Failed to stop $KERNEL_USER_SERVICE_NAME for $service_user"
   fi
 }
 
