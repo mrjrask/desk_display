@@ -794,7 +794,15 @@ class Display:
         try:
             buffer_to_display = self._buffer
             if self.rotation:
-                buffer_to_display = self._buffer.rotate(self.rotation, expand=False)
+                buffer_to_display = self._buffer.rotate(
+                    self.rotation,
+                    expand=self.rotation in (90, 270),
+                )
+                if buffer_to_display.size != (self.width, self.height):
+                    buffer_to_display = buffer_to_display.resize(
+                        (self.width, self.height),
+                        Image.ANTIALIAS,
+                    )
             self._display.buffer = buffer_to_display
             self._display.display()
         except Exception as exc:  # pragma: no cover - hardware import
