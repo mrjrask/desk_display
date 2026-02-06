@@ -55,7 +55,7 @@ HYPERPIXEL_PANEL=""
 DISPLAY_WIDTH=""
 DISPLAY_HEIGHT=""
 
-export DISPLAY_ROTATION="${DISPLAY_ROTATION:-180}"
+export DISPLAY_ROTATION="${DISPLAY_ROTATION:-0}"
 
 prompt_panel_type() {
   if [[ -t 0 ]]; then
@@ -150,71 +150,10 @@ detect_hyperpixel_panel() {
   prompt_panel_type
 }
 
-select_boot_config() {
-  if [[ -f /boot/firmware/config.txt ]]; then
-    echo "/boot/firmware/config.txt"
-    return 0
-  fi
-  if [[ -f /boot/config.txt ]]; then
-    echo "/boot/config.txt"
-    return 0
-  fi
-  return 1
-}
-
-update_boot_config() {
-  local panel="$1"
-  local config_path="$2"
-  local overlay=""
-
-  case "$panel" in
-    hyperpixel4)
-      overlay="vc4-kms-dpi-hyperpixel4"
-      ;;
-    hyperpixel4sq)
-      overlay="vc4-kms-dpi-hyperpixel4sq"
-      ;;
-    *)
-      warn "Unknown HyperPixel panel: $panel"
-      return 1
-      ;;
-  esac
-
-  local tmp_file
-  tmp_file=$(mktemp)
-
-  if [[ -f "$config_path" ]]; then
-    if [[ -n "$SUDO" ]]; then
-      $SUDO grep -v -E '^\s*dtoverlay=vc4-kms-dpi-hyperpixel4(sq)?' "$config_path" > "$tmp_file" || true
-    else
-      grep -v -E '^\s*dtoverlay=vc4-kms-dpi-hyperpixel4(sq)?' "$config_path" > "$tmp_file" || true
-    fi
-  fi
-
-  printf '\n# Added by desk_display HyperPixel installer\ndtoverlay=%s\n' "$overlay" >> "$tmp_file"
-
-  if [[ -n "$SUDO" ]]; then
-    $SUDO cp "$tmp_file" "$config_path"
-  else
-    cp "$tmp_file" "$config_path"
-  fi
-  rm -f "$tmp_file"
-
-  log "Configured $config_path with dtoverlay=$overlay"
-}
-
 if ! detect_hyperpixel_panel; then
   warn "Failed to detect HyperPixel panel."
   exit 1
 fi
-
-BOOT_CONFIG=$(select_boot_config || true)
-if [[ -z "$BOOT_CONFIG" ]]; then
-  warn "Could not locate boot config (tried /boot/firmware/config.txt and /boot/config.txt)."
-  exit 1
-fi
-
-update_boot_config "$HYPERPIXEL_PANEL" "$BOOT_CONFIG"
 
 ENV_PATH="$PROJECT_DIR/.env"
 ENV_LINES=()
@@ -222,7 +161,9 @@ ENV_LINES+=("DESK_DISPLAY_OUTPUT=${DESK_DISPLAY_OUTPUT}")
 ENV_LINES+=("HYPERPIXEL_PANEL=${HYPERPIXEL_PANEL}")
 ENV_LINES+=("DISPLAY_WIDTH=${DISPLAY_WIDTH}")
 ENV_LINES+=("DISPLAY_HEIGHT=${DISPLAY_HEIGHT}")
-ENV_LINES+=("DISPLAY_ROTATION=${DISPLAY_ROTATION}")
+if [[ -n "${DISPLAY_ROTATION:-}" ]]; then
+  ENV_LINES+=("DISPLAY_ROTATION=${DISPLAY_ROTATION}")
+fi
 
 prepend_env_vars "$ENV_PATH" "${ENV_LINES[@]}"
 
@@ -243,7 +184,7 @@ fi
 if [[ -e /dev/dri/card0 ]]; then
   log "DRM device detected at /dev/dri/card0"
 else
-  warn "DRM device /dev/dri/card0 not found. Ensure the HyperPixel overlay loaded correctly."
+  warn "DRM device /dev/dri/card0 not found. Ensure your HyperPixel dtoverlay is configured correctly."
 fi
 
 if detect_desktop_session "$SERVICE_USER"; then
