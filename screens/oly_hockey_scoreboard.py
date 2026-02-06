@@ -130,6 +130,19 @@ def _country_code(team: dict) -> str:
     return ""
 
 
+def _team_fallback_text(team: dict) -> str:
+    code = _country_code(team)
+    if code:
+        return code
+    for key in ("shortDisplayName", "displayName", "name"):
+        value = team.get(key)
+        if isinstance(value, str) and value.strip():
+            cleaned = "".join(ch for ch in value.upper() if ch.isalpha())
+            if cleaned:
+                return cleaned[:3]
+    return "?"
+
+
 def _load_logo_cached(code: str) -> Optional[Image.Image]:
     code = (code or "").strip().upper()
     if not code:
@@ -214,6 +227,8 @@ def _draw_game_block(canvas, draw, game, top, *, score_font, status_font, center
         logo = _load_logo_cached(_country_code(team))
         if logo:
             canvas.paste(logo, (COL_X[idx] + (COL_WIDTHS[idx] - logo.width) // 2, top + (SCORE_ROW_H - logo.height) // 2), logo)
+        else:
+            _center_text(draw, _team_fallback_text(team), center_font, COL_X[idx], COL_WIDTHS[idx], top, SCORE_ROW_H)
 
     _center_text(
         draw,
