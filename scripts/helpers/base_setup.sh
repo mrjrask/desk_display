@@ -94,6 +94,7 @@ deactivate
 
 SERVICE_PATH="/etc/systemd/system/$SERVICE_NAME"
 SERVICE_ENV_LINES=()
+SERVICE_ENV_OVERRIDE_LINES=()
 
 add_service_env() {
   local key="$1"
@@ -104,13 +105,16 @@ add_service_env() {
   fi
 }
 
-add_service_env "DESK_DISPLAY_OUTPUT" "${DESK_DISPLAY_OUTPUT:-}"
 add_service_env "DISPLAY_FB_DEVICE" "${DISPLAY_FB_DEVICE:-}"
 add_service_env "DISPLAY_FB_PIXEL_FORMAT" "${DISPLAY_FB_PIXEL_FORMAT:-}"
 add_service_env "DISPLAY_FB_PIXEL_ORDER" "${DISPLAY_FB_PIXEL_ORDER:-}"
 add_service_env "DISPLAY_WIDTH" "${DISPLAY_WIDTH:-}"
 add_service_env "DISPLAY_HEIGHT" "${DISPLAY_HEIGHT:-}"
 add_service_env "DISPLAY_ROTATION" "${DISPLAY_ROTATION:-}"
+
+if [[ -n "${DESK_DISPLAY_OUTPUT:-}" ]]; then
+  SERVICE_ENV_OVERRIDE_LINES+=("Environment=DESK_DISPLAY_OUTPUT=${DESK_DISPLAY_OUTPUT}")
+fi
 FRAMEBUFFER_PRESTART_LINES=()
 FRAMEBUFFER_POSTSTOP_LINES=()
 FRAMEBUFFER_UNIT_LINES=()
@@ -138,6 +142,7 @@ $(printf '%s\n' "${FRAMEBUFFER_UNIT_LINES[@]}")
 WorkingDirectory=$PROJECT_DIR
 $(printf '%s\n' "${SERVICE_ENV_LINES[@]}")
 EnvironmentFile=-$PROJECT_DIR/.env
+$(printf '%s\n' "${SERVICE_ENV_OVERRIDE_LINES[@]}")
 $(printf '%s\n' "${FRAMEBUFFER_PRESTART_LINES[@]}")
 ExecStart=$VENV_DIR/bin/python $PROJECT_DIR/main.py
 ExecStop=/bin/bash -lc '$MAINTENANCE_DIR/cleanup.sh'
