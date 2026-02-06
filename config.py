@@ -392,7 +392,9 @@ if (_display_width_set, _display_height_set) != (True, True):
             if not _display_height_set:
                 HEIGHT = drm_height
 
-if _hyperpixel_panel == "hyperpixel4" and (WIDTH, HEIGHT) == (480, 800):
+if (WIDTH, HEIGHT) == (480, 800) and (
+    _hyperpixel_panel == "hyperpixel4" or _display_output in {"kernel", "kms", "drm", "sdl"}
+):
     logging.info(
         "Detected HyperPixel 4 portrait mode dimensions (480x800); normalizing to 800x480."
     )
