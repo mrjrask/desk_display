@@ -1,3 +1,277 @@
 {
-  "screens": {}
+  "screens": {
+    "date": {
+      "background": "#000000"
+    },
+    "time": {
+      "background": "#000000"
+    },
+    "nixie": {
+      "background": "#000000"
+    },
+    "weather logo": {
+      "background": "#000000"
+    },
+    "weather1": {
+      "background": "#000000"
+    },
+    "weather2": {
+      "background": "#000000"
+    },
+    "weather hourly": {
+      "background": "#000000"
+    },
+    "weather radar": {
+      "background": "#000000"
+    },
+    "weather daily": {
+      "background": "#000000"
+    },
+    "inside": {
+      "background": "#000000"
+    },
+    "sensors": {
+      "background": "#000000"
+    },
+    "verano logo": {
+      "background": "#000000"
+    },
+    "vrnof": {
+      "background": "#000000"
+    },
+    "bears logo": {
+      "background": "#000000"
+    },
+    "bears stand1": {
+      "background": "#7D7D7D"
+    },
+    "bears stand2": {
+      "background": "#7D7D7D"
+    },
+    "bears next": {
+      "background": "#000000"
+    },
+    "bears next season": {
+      "background": "#7D7D7D"
+    },
+    "hawks logo": {
+      "background": "#000000"
+    },
+    "hawks stand1": {
+      "background": "#7D7D7D"
+    },
+    "hawks stand2": {
+      "background": "#7D7D7D"
+    },
+    "hawks last": {
+      "background": "#000000"
+    },
+    "hawks live": {
+      "background": "#000000"
+    },
+    "hawks next": {
+      "background": "#000000"
+    },
+    "hawks next home": {
+      "background": "#000000"
+    },
+    "bulls logo": {
+      "background": "#000000"
+    },
+    "bulls stand1": {
+      "background": "#7D7D7D"
+    },
+    "bulls stand2": {
+      "background": "#7D7D7D"
+    },
+    "bulls last": {
+      "background": "#000000"
+    },
+    "bulls live": {
+      "background": "#000000"
+    },
+    "bulls next": {
+      "background": "#000000"
+    },
+    "bulls next home": {
+      "background": "#000000"
+    },
+    "wolves logo": {
+      "background": "#000000"
+    },
+    "wolves last": {
+      "background": "#000000"
+    },
+    "wolves next": {
+      "background": "#000000"
+    },
+    "wolves next home": {
+      "background": "#000000"
+    },
+    "cubs logo": {
+      "background": "#000000"
+    },
+    "cubs stand1": {
+      "background": "#7D7D7D"
+    },
+    "cubs stand2": {
+      "background": "#7D7D7D"
+    },
+    "cubs last": {
+      "background": "#000000"
+    },
+    "cubs result": {
+      "background": "#000000"
+    },
+    "cubs live": {
+      "background": "#000000"
+    },
+    "cubs next": {
+      "background": "#000000"
+    },
+    "cubs next home": {
+      "background": "#000000"
+    },
+    "sox logo": {
+      "background": "#000000"
+    },
+    "sox stand1": {
+      "background": "#7D7D7D"
+    },
+    "sox stand2": {
+      "background": "#7D7D7D"
+    },
+    "sox last": {
+      "background": "#000000"
+    },
+    "sox live": {
+      "background": "#000000"
+    },
+    "sox next": {
+      "background": "#000000"
+    },
+    "sox next home": {
+      "background": "#000000"
+    },
+    "nhl logo": {
+      "background": "#000000"
+    },
+    "NHL Scoreboard": {
+      "background": "#7D7D7D"
+    },
+    "NHL Scoreboard v2": {
+      "background": "#7D7D7D"
+    },
+    "NHL Standings Overview West": {
+      "background": "#7D7D7D"
+    },
+    "NHL Standings Overview East": {
+      "background": "#7D7D7D"
+    },
+    "NHL Standings Overview v2 West": {
+      "background": "#7D7D7D"
+    },
+    "NHL Standings Overview v2 East": {
+      "background": "#7D7D7D"
+    },
+    "NHL Standings Overview v3 West": {
+      "background": "#7D7D7D"
+    },
+    "NHL Standings Overview v3 East": {
+      "background": "#7D7D7D"
+    },
+    "NHL Standings West": {
+      "background": "#7D7D7D"
+    },
+    "NHL Standings West v2": {
+      "background": "#7D7D7D"
+    },
+    "NHL Standings East": {
+      "background": "#7D7D7D"
+    },
+    "NHL Standings East v2": {
+      "background": "#7D7D7D"
+    },
+    "nfl logo": {
+      "background": "#000000"
+    },
+    "NFL Scoreboard": {
+      "background": "#7D7D7D"
+    },
+    "NFL Scoreboard v2": {
+      "background": "#7D7D7D"
+    },
+    "NFL Overview NFC": {
+      "background": "#7D7D7D"
+    },
+    "NFL Overview AFC": {
+      "background": "#7D7D7D"
+    },
+    "NFL Standings NFC": {
+      "background": "#7D7D7D"
+    },
+    "NFL Standings AFC": {
+      "background": "#7D7D7D"
+    },
+    "nba logo": {
+      "background": "#000000"
+    },
+    "NBA Scoreboard": {
+      "background": "#7D7D7D"
+    },
+    "NBA Scoreboard v2": {
+      "background": "#7D7D7D"
+    },
+    "mlb logo": {
+      "background": "#000000"
+    },
+    "MLB Scoreboard": {
+      "background": "#7D7D7D"
+    },
+    "MLB Scoreboard v2": {
+      "background": "#7D7D7D"
+    },
+    "NL Overview": {
+      "background": "#7D7D7D"
+    },
+    "NL East": {
+      "background": "#000000"
+    },
+    "NL Central": {
+      "background": "#000000"
+    },
+    "NL West": {
+      "background": "#000000"
+    },
+    "NL Wild Card": {
+      "background": "#000000"
+    },
+    "AL Overview": {
+      "background": "#7D7D7D"
+    },
+    "AL East": {
+      "background": "#000000"
+    },
+    "AL Central": {
+      "background": "#000000"
+    },
+    "AL West": {
+      "background": "#000000"
+    },
+    "AL Wild Card": {
+      "background": "#000000"
+    },
+    "Olympic Hockey Men Scoreboard": {
+      "background": "#7D7D7D"
+    },
+    "Olympic Hockey Men Scoreboard v2": {
+      "background": "#7D7D7D"
+    },
+    "Olympic Hockey Women Scoreboard": {
+      "background": "#7D7D7D"
+    },
+    "Olympic Hockey Women Scoreboard v2": {
+      "background": "#7D7D7D"
+    }
+  }
 }

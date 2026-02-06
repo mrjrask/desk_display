@@ -7,19 +7,42 @@
     "weather1": 1,
     "weather2": 1,
     "weather hourly": 1,
-    "weather daily": 1,
     "weather radar": 1,
+    "weather daily": 0,
     "inside": 1,
     "sensors": 0,
     "verano logo": 0,
     "vrnof": 3,
-    "cubs logo": 0,
+    "bears logo": 4,
+    "bears stand1": 0,
+    "bears stand2": 0,
+    "bears next": 0,
+    "bears next season": 4,
+    "hawks logo": 2,
+    "hawks stand1": 2,
+    "hawks stand2": 0,
+    "hawks last": 2,
+    "hawks live": 1,
+    "hawks next": 2,
+    "hawks next home": 1,
+    "bulls logo": 3,
+    "bulls stand1": 3,
+    "bulls stand2": 0,
+    "bulls last": 3,
+    "bulls live": 1,
+    "bulls next": 3,
+    "bulls next home": 3,
+    "wolves logo": 0,
+    "wolves last": 0,
+    "wolves next": 0,
+    "wolves next home": 0,
+    "cubs logo": 5,
     "cubs stand1": 0,
     "cubs stand2": 0,
     "cubs last": 0,
     "cubs result": 0,
     "cubs live": 0,
-    "cubs next": 0,
+    "cubs next": 5,
     "cubs next home": 0,
     "sox logo": 0,
     "sox stand1": 0,
@@ -28,29 +51,31 @@
     "sox live": 0,
     "sox next": 0,
     "sox next home": 0,
-    "bears logo": 0,
-    "bears stand1": 0,
-    "bears stand2": 0,
-    "bears next": 0,
-    "bears next season": 0,
-    "hawks logo": 1,
-    "hawks stand1": 1,
-    "hawks stand2": 0,
-    "hawks last": 1,
-    "hawks live": 1,
-    "hawks next": 1,
-    "hawks next home": 1,
-    "wolves logo": 0,
-    "wolves last": 0,
-    "wolves next": 0,
-    "wolves next home": 0,
-    "bulls logo": 3,
-    "bulls stand1": 3,
-    "bulls stand2": 0,
-    "bulls last": 3,
-    "bulls live": 3,
-    "bulls next": 3,
-    "bulls next home": 3,
+    "nhl logo": 0,
+    "NHL Scoreboard": 1,
+    "NHL Scoreboard v2": 0,
+    "NHL Standings Overview West": 3,
+    "NHL Standings Overview East": 3,
+    "NHL Standings Overview v2 West": 0,
+    "NHL Standings Overview v2 East": 0,
+    "NHL Standings Overview v3 West": 0,
+    "NHL Standings Overview v3 East": 0,
+    "NHL Standings West": {
+      "frequency": 3,
+      "alt": {
+        "screen": "NHL Standings West v2",
+        "frequency": 2
+      }
+    },
+    "NHL Standings West v2": 0,
+    "NHL Standings East": {
+      "frequency": 3,
+      "alt": {
+        "screen": "NHL Standings East v2",
+        "frequency": 2
+      }
+    },
+    "NHL Standings East v2": 0,
     "nfl logo": 0,
     "NFL Scoreboard": 2,
     "NFL Scoreboard v2": 0,
@@ -70,51 +95,9 @@
     },
     "NFL Standings NFC": 0,
     "NFL Standings AFC": 0,
-    "nhl logo": 0,
-    "NHL Scoreboard": 2,
-    "NHL Scoreboard v2": 0,
-    "NHL Standings Overview West": {
-      "frequency": 1,
-      "alt": {
-        "screen": [
-          "NHL Standings Overview v3 West"
-        ],
-        "frequency": 1
-      }
-    },
-    "NHL Standings Overview East": {
-      "frequency": 1,
-      "alt": {
-        "screen": [
-          "NHL Standings Overview v3 East"
-        ],
-        "frequency": 1
-      }
-    },
-    "NHL Standings West": {
-      "frequency": 1,
-      "alt": {
-        "screen": [
-          "NHL Standings West v2"
-        ],
-        "frequency": 2
-      }
-    },
-    "NHL Standings East": {
-      "frequency": 1,
-      "alt": {
-        "screen": [
-          "NHL Standings East v2"
-        ],
-        "frequency": 2
-      }
-    },
-    "NHL Standings Overview v2 West": 0,
-    "NHL Standings Overview v2 East": 0,
-    "NHL Standings Overview v3 West": 0,
-    "NHL Standings Overview v3 East": 0,
-    "NHL Standings West v2": 0,
-    "NHL Standings East v2": 0,
+    "nba logo": 0,
+    "NBA Scoreboard": 4,
+    "NBA Scoreboard v2": 0,
     "mlb logo": 0,
     "MLB Scoreboard": 0,
     "MLB Scoreboard v2": 0,
@@ -128,8 +111,11 @@
     "AL Central": 0,
     "AL West": 0,
     "AL Wild Card": 0,
-    "nba logo": 0,
-    "NBA Scoreboard": 5,
-    "NBA Scoreboard v2": 0
-  }
+    "Olympic Hockey Men Scoreboard": 0,
+    "Olympic Hockey Men Scoreboard v2": 0,
+    "Olympic Hockey Women Scoreboard": 0,
+    "Olympic Hockey Women Scoreboard v2": 0
+  },
+  "playlists": {},
+  "sequence": []
 }
