@@ -29,6 +29,7 @@ from config import (
     is_hyperpixel_next_layout,
     scale_value,
     scale_value_width,
+    is_hyperpixel_4_square_layout,
 )
 from services.http_client import NHL_HEADERS, get_session
 from utils import ScreenImage, clear_display, log_call
@@ -49,8 +50,12 @@ CONFERENCE_EAST_KEY = "Eastern"
 LOGO_DIR = NHL_IMAGES_DIR
 _LOGO_BASE_HEIGHT = scale_value_width(32) if is_hyperpixel_next_layout() else scale_value(41)
 LOGO_HEIGHT = _LOGO_BASE_HEIGHT  # ~10% larger logos for standings rows
+if is_hyperpixel_4_square_layout():
+    LOGO_HEIGHT = max(1, int(round(LOGO_HEIGHT * 0.75)))
 _CONFERENCE_LOGO_BASE_HEIGHT = _LOGO_BASE_HEIGHT
 CONFERENCE_LOGO_HEIGHT = _CONFERENCE_LOGO_BASE_HEIGHT
+if is_hyperpixel_4_square_layout():
+    CONFERENCE_LOGO_HEIGHT = max(1, int(round(CONFERENCE_LOGO_HEIGHT * 0.4)))
 CONFERENCE_LOGO_GAP = scale_value(2)
 LEFT_MARGIN = scale_value(4)
 RIGHT_MARGIN = scale_value(6)
@@ -71,9 +76,10 @@ DIVISION_HEADER_GAP = scale_value(6)
 
 TITLE_FONT = FONT_TITLE_SPORTS
 _DEFAULT_STYLE_ID = "NHL Standings Default"
-_DIVISION_BASE_SIZE = 26
-_COLUMN_BASE_SIZE = 24
-_ROW_BASE_SIZE = 28
+_NHL_SQUARE_FONT_SCALE = 0.78 if is_hyperpixel_4_square_layout() else 1.0
+_DIVISION_BASE_SIZE = max(8, int(round(26 * _NHL_SQUARE_FONT_SCALE)))
+_COLUMN_BASE_SIZE = max(8, int(round(24 * _NHL_SQUARE_FONT_SCALE)))
+_ROW_BASE_SIZE = max(8, int(round(28 * _NHL_SQUARE_FONT_SCALE)))
 _COLUMN_POINTS_DELTA = 6
 _TEAM_NAME_DELTA = 3
 _ROW_STATS_DELTA = 2
@@ -176,6 +182,9 @@ _OVERVIEW_MIN_LOGO_BASE = scale_value_width(18) if is_hyperpixel_next_layout() e
 _OVERVIEW_MAX_LOGO_BASE = scale_value_width(40) if is_hyperpixel_next_layout() else scale_value(54)
 OVERVIEW_MIN_LOGO_HEIGHT = _OVERVIEW_MIN_LOGO_BASE
 OVERVIEW_MAX_LOGO_HEIGHT = _OVERVIEW_MAX_LOGO_BASE
+if is_hyperpixel_4_square_layout():
+    OVERVIEW_MIN_LOGO_HEIGHT = max(1, int(round(OVERVIEW_MIN_LOGO_HEIGHT * 0.75)))
+    OVERVIEW_MAX_LOGO_HEIGHT = max(1, int(round(OVERVIEW_MAX_LOGO_HEIGHT * 0.75)))
 OVERVIEW_LOGO_PADDING = scale_value(4)
 BACKGROUND_COLOR = get_screen_background_color(_DEFAULT_STYLE_ID, SCOREBOARD_BACKGROUND_COLOR)
 OVERVIEW_DROP_STEPS = 30

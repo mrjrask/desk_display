@@ -434,6 +434,14 @@ def is_hyperpixel_next_layout(width: int | None = None, height: int | None = Non
     if height is None:
         height = HEIGHT
     return (width, height) in HYPERPIXEL_NEXT_LAYOUT_SIZES
+
+
+def is_hyperpixel_4_square_layout(width: int | None = None, height: int | None = None) -> bool:
+    if width is None:
+        width = WIDTH
+    if height is None:
+        height = HEIGHT
+    return (width, height) == (720, 720)
 SCREEN_DELAY             = 4
 try:
     HOURLY_FORECAST_HOURS = int(os.environ.get("HOURLY_FORECAST_HOURS", "5"))
@@ -476,6 +484,9 @@ except (TypeError, ValueError):
     logging.warning(
         "Invalid DISPLAY_ROTATION value; defaulting to 180 degrees."
     )
+    DISPLAY_ROTATION = 180
+
+if _hyperpixel_panel == "hyperpixel4sq" and is_hyperpixel_4_square_layout():
     DISPLAY_ROTATION = 180
 
 # ─── Dark hours configuration ─────────────────────────────────────────────────

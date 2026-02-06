@@ -51,6 +51,7 @@ from config import (
     TIMES_SQUARE_FONT_PATH,
     WIDTH,
     HEIGHT,
+    is_hyperpixel_4_square_layout,
 )
 from services.http_client import NHL_HEADERS, get_session, request_json
 from utils import (
@@ -96,16 +97,20 @@ FONT_BOTTOM = FONT_DATE_SPORTS
 FONT_NEXT_OPP = FONT_TEAM_SPORTS
 
 # Scoreboard fonts (TimesSquare family as requested for numeric/abbr)
+_IS_HYPERPIXEL_4_SQUARE = is_hyperpixel_4_square_layout()
 _ABBR_BASE = 33 if HEIGHT > 64 else 30
 _SOG_BASE = 30 if HEIGHT > 64 else 26
+if _IS_HYPERPIXEL_4_SQUARE:
+    _ABBR_BASE = int(round(_ABBR_BASE * 1.2))
+    _SOG_BASE = int(round(_SOG_BASE * 1.15))
 
 _ABBR_FONT_SIZE = int(round(_ABBR_BASE * 1.3))
 _SOG_FONT_SIZE = _SOG_BASE
 
 FONT_ABBR  = _ts(_ABBR_FONT_SIZE)
 FONT_SOG   = _ts(_SOG_FONT_SIZE)
-FONT_SCORE = _ts(int(round(_SOG_FONT_SIZE * 1.45)))    # make goals column stand out more
-FONT_SMALL = _ts(22 if HEIGHT > 64 else 19)    # for SOG label / live clock
+FONT_SCORE = _ts(int(round(_SOG_FONT_SIZE * (1.55 if _IS_HYPERPIXEL_4_SQUARE else 1.45))))    # make goals column stand out more
+FONT_SMALL = _ts(26 if _IS_HYPERPIXEL_4_SQUARE else (22 if HEIGHT > 64 else 19))    # for SOG label / live clock
 
 # NHL endpoints (prefer api-web; quiet legacy fallback)
 NHL_WEB_TEAM_MONTH_NOW   = NHL_API_ENDPOINTS["team_month_now"]
@@ -653,6 +658,7 @@ def _draw_scoreboard(
     put_sog_label: bool = True,
     bottom_reserved_px: int = 0,
     hyperpixel_layout: bool = False,
+    center_vertically: bool = False,
 ) -> int:
     """Draw a compact 2×3 scoreboard. Returns bottom y."""
     # Column widths: first column dominates for logo + name, remaining space split
@@ -694,6 +700,11 @@ def _draw_scoreboard(
     table_bottom = min(table_top + table_height, HEIGHT - bottom_reserved_px)
     table_height = max(header_h + 2, table_bottom - table_top)
     table_bottom = table_top + table_height
+
+    if center_vertically:
+        free_space = max(0, HEIGHT - bottom_reserved_px - table_height - top_y)
+        table_top = top_y + free_space // 2
+        table_bottom = table_top + table_height
 
     header_bottom = table_top + header_h
     row_area_height = max(2, table_height - header_h)
@@ -1311,6 +1322,7 @@ def draw_last_hawks_game(display, game, transition: bool=False):
         put_sog_label=True,
         bottom_reserved_px=reserve,
         hyperpixel_layout=hyperpixel_layout,
+        center_vertically=_IS_HYPERPIXEL_4_SQUARE,
     )
 
     def _as_int(value):
@@ -1457,6 +1469,7 @@ def draw_live_hawks_game(display, game, transition: bool=False):
         put_sog_label=True,
         bottom_reserved_px=reserve,
         hyperpixel_layout=hyperpixel_layout,
+        center_vertically=_IS_HYPERPIXEL_4_SQUARE,
     )
 
     if dateline:
