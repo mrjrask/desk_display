@@ -136,6 +136,7 @@ $(printf '%s\n' "${FRAMEBUFFER_UNIT_LINES[@]}")
 
 [Service]
 WorkingDirectory=$PROJECT_DIR
+EnvironmentFile=-$PROJECT_DIR/.env
 $(printf '%s\n' "${SERVICE_ENV_LINES[@]}")
 $(printf '%s\n' "${FRAMEBUFFER_PRESTART_LINES[@]}")
 ExecStart=$VENV_DIR/bin/python $PROJECT_DIR/main.py
