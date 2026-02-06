@@ -25,7 +25,6 @@ import requests
 from PIL import Image, ImageDraw, ImageFont
 
 from config import (
-    GOOGLE_MAPS_API_KEY,
     WIDTH,
     HEIGHT,
     CENTRAL_TIME,
@@ -1297,17 +1296,8 @@ def _fetch_rainviewer_frames(zoom: int = 7, max_frames: int = 6) -> list[RadarFr
 
 
 def _fetch_base_map(zoom: int = 7) -> Optional[Image.Image]:
-    if not GOOGLE_MAPS_API_KEY:
-        logging.warning("Radar base map: GOOGLE_MAPS_API_KEY not set; skipping base map fetch")
-        return None
-
-    lat = LATITUDE
-    lon = LONGITUDE
-    url = (
-        "https://maps.googleapis.com/maps/api/staticmap?"
-        f"center={lat},{lon}&zoom={zoom}&size={WIDTH}x{HEIGHT}&maptype=roadmap"
-        f"&key={GOOGLE_MAPS_API_KEY}"
-    )
+    x_tile, y_tile, _, _ = _latlon_to_tile(LATITUDE, LONGITUDE, zoom)
+    url = f"https://basemaps.cartocdn.com/dark_all/{zoom}/{x_tile}/{y_tile}.png"
     headers = {
         "User-Agent": "desk-display/weather-radar",
     }
