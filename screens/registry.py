@@ -357,7 +357,9 @@ def build_screen_registry(context: ScreenContext) -> Tuple[Dict[str, ScreenDefin
     register("inside", lambda: draw_inside(context.display, transition=True))
     # Legacy aliases for removed travel screen ids to keep older schedules valid.
     register("travel", lambda: draw_inside(context.display, transition=True))
+    register("travel v2", lambda: draw_inside(context.display, transition=True))
     register("travel map", lambda: draw_inside(context.display, transition=True))
+    register("travel map v2", lambda: draw_inside(context.display, transition=True))
     register("sensors", lambda: draw_sensors(context, transition=True))
 
     verano_logo = context.logos.get("verano logo")

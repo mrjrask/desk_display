@@ -93,6 +93,18 @@ def test_legacy_travel_alias_is_registered():
     assert registry["travel"].available is True
 
 
+
+
+def test_legacy_travel_v2_alias_is_registered():
+    now = CENTRAL_TIME.localize(datetime.datetime(2024, 1, 1, 12, 0))
+    weather = {"hourly": []}
+
+    registry, _ = build_screen_registry(_make_context(weather, now))
+
+    assert "travel v2" in registry
+    assert registry["travel v2"].available is True
+
+
 def test_legacy_travel_map_alias_is_registered():
     now = CENTRAL_TIME.localize(datetime.datetime(2024, 1, 1, 12, 0))
     weather = {"hourly": []}
@@ -101,3 +113,13 @@ def test_legacy_travel_map_alias_is_registered():
 
     assert "travel map" in registry
     assert registry["travel map"].available is True
+
+def test_legacy_travel_map_v2_alias_is_registered():
+    now = CENTRAL_TIME.localize(datetime.datetime(2024, 1, 1, 12, 0))
+    weather = {"hourly": []}
+
+    registry, _ = build_screen_registry(_make_context(weather, now))
+
+    assert "travel map v2" in registry
+    assert registry["travel map v2"].available is True
+
