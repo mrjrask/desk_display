@@ -55,7 +55,7 @@ HYPERPIXEL_PANEL=""
 DISPLAY_WIDTH=""
 DISPLAY_HEIGHT=""
 
-export DISPLAY_ROTATION="${DISPLAY_ROTATION:-180}"
+export DISPLAY_ROTATION="${DISPLAY_ROTATION:-0}"
 
 prompt_panel_type() {
   if [[ -t 0 ]]; then
