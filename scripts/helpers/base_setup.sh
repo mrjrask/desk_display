@@ -7,11 +7,11 @@ PYTHON_BIN="${PYTHON:-python3}"
 REQUIREMENTS_FILE="${REQUIREMENTS_FILE:-requirements.txt}"
 
 SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
-PROJECT_DIR="${PROJECT_DIR:-$(cd -- "$SCRIPT_DIR/.." && pwd)}"
+PROJECT_DIR="${PROJECT_DIR:-$(cd -- "$SCRIPT_DIR/../.." && pwd)}"
 SERVICE_USER="${SUDO_USER:-$(whoami)}"
 MAINTENANCE_DIR="$PROJECT_DIR/tools/maintenance"
 
-COMMON_SCRIPT="$PROJECT_DIR/scripts/install_common.sh"
+COMMON_SCRIPT="$SCRIPT_DIR/common.sh"
 if [[ ! -f "$COMMON_SCRIPT" ]]; then
   echo "[ERROR] Missing common installer helpers at $COMMON_SCRIPT" >&2
   exit 1

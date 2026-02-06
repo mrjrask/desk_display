@@ -8,7 +8,7 @@ SERVICE_NAME="desk_display.service"
 USER_SERVICE_NAME="desk_display-kernel.service"
 USER_SERVICE_TEMPLATE="$SCRIPT_DIR/desk_display_kernel_user.service"
 
-COMMON_SCRIPT="$SCRIPT_DIR/install_common.sh"
+COMMON_SCRIPT="$SCRIPT_DIR/helpers/common.sh"
 if [[ ! -f "$COMMON_SCRIPT" ]]; then
   echo "[ERROR] Missing common installer helpers at $COMMON_SCRIPT" >&2
   exit 1
@@ -249,7 +249,7 @@ prepend_env_vars "$ENV_PATH" "${ENV_LINES[@]}"
 
 prompt_spi_i2c
 
-"$SCRIPT_DIR/install_bookworm.sh"
+"$SCRIPT_DIR/helpers/base_setup.sh"
 
 install_kernel_user_service "$PROJECT_DIR" "$SERVICE_USER" "$USER_SERVICE_TEMPLATE" "$USER_SERVICE_NAME"
 if [[ "${DISABLE_SYSTEM_KERNEL_SERVICE:-}" == "1" ]] && command -v systemctl >/dev/null 2>&1; then

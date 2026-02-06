@@ -5,7 +5,7 @@ SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 PROJECT_DIR="${PROJECT_DIR:-$(cd -- "$SCRIPT_DIR/.." && pwd)}"
 SERVICE_NAME="${SERVICE_NAME:-desk_display.service}"
 
-COMMON_SCRIPT="$SCRIPT_DIR/install_common.sh"
+COMMON_SCRIPT="$SCRIPT_DIR/helpers/common.sh"
 if [[ -f "$COMMON_SCRIPT" ]]; then
   # shellcheck source=/dev/null
   source "$COMMON_SCRIPT"

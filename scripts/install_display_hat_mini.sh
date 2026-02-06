@@ -30,4 +30,4 @@ fi
 export EXPECTED_CODENAME
 export DESK_DISPLAY_OUTPUT="${DESK_DISPLAY_OUTPUT:-displayhatmini}"
 
-exec "$SCRIPT_DIR/install_bookworm.sh"
+exec "$SCRIPT_DIR/helpers/base_setup.sh"
