@@ -55,7 +55,7 @@ HYPERPIXEL_PANEL=""
 DISPLAY_WIDTH=""
 DISPLAY_HEIGHT=""
 
-export DISPLAY_ROTATION="${DISPLAY_ROTATION:-0}"
+export DISPLAY_ROTATION="${DISPLAY_ROTATION:-180}"
 
 prompt_panel_type() {
   if [[ -t 0 ]]; then
@@ -127,7 +127,7 @@ detect_hyperpixel_panel() {
   fi
 
   case "$detected_mode" in
-    800x480*)
+    800x480*|480x800*)
       HYPERPIXEL_PANEL="hyperpixel4"
       DISPLAY_WIDTH="800"
       DISPLAY_HEIGHT="480"

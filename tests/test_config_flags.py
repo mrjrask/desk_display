@@ -30,3 +30,21 @@ def test_other_feature_flags_use_bool_parser(monkeypatch):
     module = _reload_config(monkeypatch, ENABLE_VIDEO=None, ENABLE_WIFI_MONITOR=None)
     assert module.ENABLE_VIDEO is False
     assert module.ENABLE_WIFI_MONITOR is True
+
+
+def test_kernel_portrait_mode_is_normalized_to_landscape(monkeypatch):
+    module = _reload_config(
+        monkeypatch,
+        DISPLAY_WIDTH="480",
+        DISPLAY_HEIGHT="800",
+        DESK_DISPLAY_OUTPUT="kernel",
+        HYPERPIXEL_PANEL=None,
+    )
+
+    assert module.WIDTH == 800
+    assert module.HEIGHT == 480
+
+
+def test_display_rotation_defaults_to_180(monkeypatch):
+    module = _reload_config(monkeypatch, DISPLAY_ROTATION=None)
+    assert module.DISPLAY_ROTATION == 180
