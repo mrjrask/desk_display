@@ -6,7 +6,7 @@ from config_store import ConfigStore
 
 
 def make_config(value: int) -> dict:
-    return {"screens": {"date": value, "travel": value + 1}}
+    return {"screens": {"date": value, "inside": value + 1}}
 
 
 def test_config_store_versioning_and_pruning(tmp_path):

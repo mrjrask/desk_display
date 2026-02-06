@@ -92,10 +92,6 @@ except Exception as exc:
     wifi_utils = _WifiUtilsFallback()
 from paths import resolve_storage_paths
 
-from screens.draw_travel_time import (
-    get_travel_active_window,
-    is_travel_screen_active,
-)
 from screens.registry import ScreenContext, ScreenDefinition, build_screen_registry
 from schedule import ScreenScheduler, build_scheduler, load_schedule_config
 
@@ -1269,10 +1265,9 @@ def init_runtime() -> None:
 
 # ─── Main loop ───────────────────────────────────────────────────────────────
 loop_count = 0
-_travel_schedule_state: Optional[str] = None
 
 def main_loop():
-    global loop_count, _travel_schedule_state, _last_screen_id, _dark_hours_active
+    global loop_count, _last_screen_id, _dark_hours_active
 
     refresh_schedule_if_needed(force=True)
 
@@ -1346,10 +1341,6 @@ def main_loop():
                 gc.collect()
                 continue
 
-            travel_requested = any(
-                screen_id in _requested_screen_ids
-                for screen_id in ("travel", "travel map", "travel v2", "travel map v2")
-            )
             offline = _wifi_outage_active if ENABLE_WIFI_MONITOR else False
             now_utc = datetime.datetime.now(datetime.timezone.utc)
             weather_fetched_at = data_fetch.get_weather_cache_timestamp()
@@ -1358,18 +1349,13 @@ def main_loop():
                 cache=cache,
                 logos=logo_cache,
                 image_dir=IMAGES_DIR,
-                travel_requested=travel_requested,
-                travel_active=is_travel_screen_active(),
-                travel_window=get_travel_active_window(),
-                previous_travel_state=_travel_schedule_state,
                 now=current_time,
                 now_utc=now_utc,
                 offline=offline,
                 weather_fetched_at=weather_fetched_at,
                 skip_scoreboards=offline and _wifi_outage_live_games,
             )
-            registry, metadata = build_screen_registry(context)
-            _travel_schedule_state = metadata.get("travel_state", _travel_schedule_state)
+            registry, _metadata = build_screen_registry(context)
 
             entry = _next_screen_from_registry(registry)
             if entry is None:

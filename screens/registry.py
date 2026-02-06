@@ -32,10 +32,6 @@ from screens.draw_wolves_schedule import (
 )
 from screens.draw_inside import draw_inside
 from screens.draw_sensors import draw_sensors
-from screens.draw_travel_map import draw_travel_map_screen
-from screens.draw_travel_map_v2 import draw_travel_map_v2_screen
-from screens.draw_travel_time import draw_travel_time_screen
-from screens.draw_travel_time_v2 import draw_travel_time_v2_screen
 from screens.draw_vrnof import draw_vrnof_screen
 from screens.draw_weather import (
     _pop_pct_from,
@@ -141,10 +137,6 @@ class ScreenContext:
     cache: Dict[str, Any]
     logos: Any
     image_dir: str
-    travel_requested: bool
-    travel_active: bool
-    travel_window: Optional[Tuple[Optional[_dt.time], Optional[_dt.time]]]
-    previous_travel_state: Optional[str]
     now: _dt.datetime
     now_utc: _dt.datetime
     offline: bool
@@ -373,59 +365,6 @@ def build_screen_registry(context: ScreenContext) -> Tuple[Dict[str, ScreenDefin
             available=True,
         )
     register("vrnof", lambda: draw_vrnof_screen(context.display, "VRNO", transition=True))
-
-    travel_state = context.previous_travel_state
-    travel_available = False
-    if context.travel_requested:
-        window = context.travel_window
-        window_desc = (
-            f"{_format_time(window[0])} – {_format_time(window[1])}" if window else "all day"
-        )
-
-        if context.travel_active:
-            travel_state = "scheduled"
-            travel_available = True
-            if context.previous_travel_state != travel_state:
-                logging.info("🧭 Travel screen enabled (window %s).", window_desc)
-        else:
-            travel_state = "outside_window" if window else "inactive"
-            if context.previous_travel_state != travel_state:
-                if window:
-                    logging.info(
-                        "🧭 Travel screen skipped—outside active window (%s, now %s).",
-                        window_desc,
-                        _format_time(context.now.time()),
-                    )
-                else:
-                    logging.info("🧭 Travel screen enabled (no active window configured).")
-        register(
-            "travel",
-            lambda: draw_travel_time_screen(context.display, transition=True),
-            available=travel_available,
-        )
-        register(
-            "travel map",
-            lambda: draw_travel_map_screen(context.display, transition=True),
-            available=travel_available,
-        )
-        register(
-            "travel v2",
-            lambda: draw_travel_time_v2_screen(context.display, transition=True),
-            available=travel_available,
-        )
-        register(
-            "travel map v2",
-            lambda: draw_travel_map_v2_screen(context.display, transition=True),
-            available=travel_available,
-        )
-    else:
-        if context.travel_active:
-            travel_state = "disabled"
-            if context.previous_travel_state != travel_state:
-                logging.info("🧭 Travel screen disabled via configuration.")
-        else:
-            travel_state = "inactive"
-    metadata["travel_state"] = travel_state
 
     scoreboards_available = not (context.offline and context.skip_scoreboards)
 

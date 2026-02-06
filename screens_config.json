@@ -13,10 +13,6 @@
     "sensors": 0,
     "verano logo": 0,
     "vrnof": 3,
-    "travel": 2,
-    "travel map": 2,
-    "travel v2": 0,
-    "travel map v2": 0,
     "cubs logo": 0,
     "cubs stand1": 0,
     "cubs stand2": 0,
@@ -80,28 +76,36 @@
     "NHL Standings Overview West": {
       "frequency": 1,
       "alt": {
-        "screen": ["NHL Standings Overview v3 West"],
+        "screen": [
+          "NHL Standings Overview v3 West"
+        ],
         "frequency": 1
       }
     },
     "NHL Standings Overview East": {
       "frequency": 1,
       "alt": {
-        "screen": ["NHL Standings Overview v3 East"],
+        "screen": [
+          "NHL Standings Overview v3 East"
+        ],
         "frequency": 1
       }
     },
     "NHL Standings West": {
       "frequency": 1,
       "alt": {
-        "screen": ["NHL Standings West v2"],
+        "screen": [
+          "NHL Standings West v2"
+        ],
         "frequency": 2
       }
     },
     "NHL Standings East": {
       "frequency": 1,
       "alt": {
-        "screen": ["NHL Standings East v2"],
+        "screen": [
+          "NHL Standings East v2"
+        ],
         "frequency": 2
       }
     },
