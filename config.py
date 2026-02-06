@@ -486,7 +486,9 @@ except (TypeError, ValueError):
     )
     DISPLAY_ROTATION = 180
 
-if _hyperpixel_panel == "hyperpixel4sq" and is_hyperpixel_4_square_layout():
+if _hyperpixel_panel in {"hyperpixel4", "hyperpixel4sq"} and (
+    is_hyperpixel_4_layout() or is_hyperpixel_4_square_layout()
+):
     DISPLAY_ROTATION = 180
 
 # ─── Dark hours configuration ─────────────────────────────────────────────────
