@@ -3,9 +3,10 @@
 
 RAW_SCREEN_IDS = [
     "date", "time", "nixie",
-    # Legacy alias retained for older schedules that still reference the
+    # Legacy aliases retained for older schedules that still reference the
     # removed travel screen.
     "travel",
+    "travel map",
     "weather logo", "weather1", "weather2", "weather hourly", "weather radar", "inside", "sensors",
     "verano logo", "vrnof",
     "weather logo", "weather1", "weather2", "weather hourly", "weather daily", "weather radar", "inside", "sensors",
