@@ -45,6 +45,10 @@ def test_sensors_screen_is_known():
     assert "sensors" in KNOWN_SCREENS
 
 
+def test_legacy_travel_screen_is_known():
+    assert "travel" in KNOWN_SCREENS
+
+
 def test_scheduler_with_alternate_screen():
     config = {
         "screens": {
