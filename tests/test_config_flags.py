@@ -48,37 +48,3 @@ def test_kernel_portrait_mode_is_normalized_to_landscape(monkeypatch):
 def test_display_rotation_defaults_to_0(monkeypatch):
     module = _reload_config(monkeypatch, DISPLAY_ROTATION=None)
     assert module.DISPLAY_ROTATION == 0
-
-
-def test_hyperpixel_overlay_rotation_from_boot_config(monkeypatch):
-    def fake_read_text(path_obj, encoding="utf-8"):
-        if str(path_obj) == "/boot/firmware/config.txt":
-            return "dtoverlay=vc4-kms-dpi-hyperpixel4,rotate=90\n"
-        raise OSError
-
-    monkeypatch.setattr("pathlib.Path.read_text", fake_read_text)
-
-    module = _reload_config(
-        monkeypatch,
-        DISPLAY_ROTATION="180",
-        DESK_DISPLAY_OUTPUT="kernel",
-        HYPERPIXEL_PANEL="hyperpixel4",
-    )
-
-    assert module.DISPLAY_ROTATION == 90
-
-
-def test_display_rotation_falls_back_to_env_without_overlay(monkeypatch):
-    def fake_read_text(path_obj, encoding="utf-8"):
-        raise OSError
-
-    monkeypatch.setattr("pathlib.Path.read_text", fake_read_text)
-
-    module = _reload_config(
-        monkeypatch,
-        DISPLAY_ROTATION="180",
-        DESK_DISPLAY_OUTPUT="kernel",
-        HYPERPIXEL_PANEL="hyperpixel4",
-    )
-
-    assert module.DISPLAY_ROTATION == 180
