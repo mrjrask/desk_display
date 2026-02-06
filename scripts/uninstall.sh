@@ -5,6 +5,7 @@ log() { printf '[INFO] %s\n' "$*"; }
 warn() { printf '[WARN] %s\n' "$*"; }
 
 SERVICE_NAME="desk_display.service"
+KERNEL_USER_SERVICE_NAME="desk_display-kernel.service"
 
 SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 PROJECT_DIR="${PROJECT_DIR:-$(cd -- "$SCRIPT_DIR/.." && pwd)}"
@@ -20,6 +21,63 @@ fi
 if command -v systemctl >/dev/null 2>&1; then
   log "Stopping $SERVICE_NAME"
   $SUDO systemctl stop "$SERVICE_NAME" || warn "Failed to stop $SERVICE_NAME"
+fi
+
+stop_kernel_user_service() {
+  local service_user="$1"
+  local user_uid=""
+  local runtime_dir=""
+  local -a user_env=()
+
+  if [[ -z "$service_user" ]]; then
+    return 0
+  fi
+
+  user_uid=$(id -u "$service_user" 2>/dev/null || true)
+  if [[ -n "$user_uid" ]]; then
+    runtime_dir="/run/user/$user_uid"
+    if [[ -d "$runtime_dir" ]]; then
+      user_env+=("XDG_RUNTIME_DIR=$runtime_dir")
+    fi
+  fi
+
+  log "Stopping $KERNEL_USER_SERVICE_NAME for user $service_user"
+  if [[ -n "$SUDO" ]]; then
+    if [[ ${#user_env[@]} -gt 0 ]]; then
+      $SUDO -u "$service_user" env "${user_env[@]}" systemctl --user stop "$KERNEL_USER_SERVICE_NAME" \
+        || warn "Failed to stop $KERNEL_USER_SERVICE_NAME for $service_user"
+    else
+      $SUDO -u "$service_user" systemctl --user stop "$KERNEL_USER_SERVICE_NAME" \
+        || warn "Failed to stop $KERNEL_USER_SERVICE_NAME for $service_user"
+    fi
+  else
+    if [[ ${#user_env[@]} -gt 0 ]]; then
+      env "${user_env[@]}" systemctl --user stop "$KERNEL_USER_SERVICE_NAME" \
+        || warn "Failed to stop $KERNEL_USER_SERVICE_NAME for $service_user"
+    else
+      systemctl --user stop "$KERNEL_USER_SERVICE_NAME" \
+        || warn "Failed to stop $KERNEL_USER_SERVICE_NAME for $service_user"
+    fi
+  fi
+}
+
+if command -v systemctl >/dev/null 2>&1; then
+  declare -a kernel_service_users=()
+  if [[ -n "${DESK_DISPLAY_SESSION_USER:-}" ]]; then
+    kernel_service_users+=("$DESK_DISPLAY_SESSION_USER")
+  fi
+  if [[ -n "${SUDO_USER:-}" ]]; then
+    kernel_service_users+=("$SUDO_USER")
+  fi
+  kernel_service_users+=("$(whoami)")
+
+  declare -A seen_kernel_users=()
+  for service_user in "${kernel_service_users[@]}"; do
+    if [[ -n "$service_user" && -z "${seen_kernel_users[$service_user]:-}" ]]; then
+      seen_kernel_users["$service_user"]=1
+      stop_kernel_user_service "$service_user"
+    fi
+  done
 fi
 
 log "Starting uninstall for $PROJECT_DIR"
