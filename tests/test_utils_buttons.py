@@ -34,3 +34,23 @@ def test_is_button_pressed_handles_inactive_int():
     display = _make_display(1)
 
     assert display.is_button_pressed("X") is False
+
+
+def test_update_display_resizes_rotated_hardware_buffer_to_native_size():
+    display = utils.Display()
+
+    captured = {}
+
+    class _FakeHardwareDisplay:
+        buffer = None
+
+        def display(self):
+            captured["size"] = self.buffer.size
+
+    display._display = _FakeHardwareDisplay()
+    display.rotation = 90
+    display._buffer = utils.Image.new("RGB", (display.width, display.height), "black")
+
+    display._update_display()
+
+    assert captured["size"] == (display.width, display.height)
