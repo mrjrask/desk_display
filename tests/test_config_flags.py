@@ -45,6 +45,6 @@ def test_kernel_portrait_mode_is_normalized_to_landscape(monkeypatch):
     assert module.HEIGHT == 480
 
 
-def test_display_rotation_defaults_to_180(monkeypatch):
+def test_display_rotation_defaults_to_0(monkeypatch):
     module = _reload_config(monkeypatch, DISPLAY_ROTATION=None)
-    assert module.DISPLAY_ROTATION == 180
+    assert module.DISPLAY_ROTATION == 0

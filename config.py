@@ -479,15 +479,13 @@ except (TypeError, ValueError):
 SCHEDULE_UPDATE_INTERVAL = 600
 
 try:
-    DISPLAY_ROTATION = int(os.environ.get("DISPLAY_ROTATION", "180"))
+    DISPLAY_ROTATION = int(os.environ.get("DISPLAY_ROTATION", "0"))
 except (TypeError, ValueError):
     logging.warning(
-        "Invalid DISPLAY_ROTATION value; defaulting to 180 degrees."
+        "Invalid DISPLAY_ROTATION value; defaulting to 0 degrees."
     )
-    DISPLAY_ROTATION = 180
+    DISPLAY_ROTATION = 0
 
-if _hyperpixel_panel == "hyperpixel4sq" and is_hyperpixel_4_square_layout():
-    DISPLAY_ROTATION = 180
 
 # ─── Dark hours configuration ─────────────────────────────────────────────────
 
