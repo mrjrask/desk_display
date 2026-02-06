@@ -32,14 +32,13 @@ def test_build_scheduler_from_config():
     config = {
         "screens": {
             "date": 1,
-            "travel": 2,
-            "inside": 1,
+            "inside": 2,
             "sensors": 1,
         }
     }
     scheduler = build_scheduler(config)
-    assert scheduler.node_count == 5
-    assert scheduler.requested_ids == {"date", "travel", "inside", "sensors"}
+    assert scheduler.node_count == 4
+    assert scheduler.requested_ids == {"date", "inside", "sensors"}
 
 
 def test_sensors_screen_is_known():
@@ -51,22 +50,22 @@ def test_scheduler_with_alternate_screen():
         "screens": {
             "date": {
                 "frequency": 1,
-                "alt": {"screen": "travel", "frequency": 2},
+                "alt": {"screen": "inside", "frequency": 2},
             }
         }
     }
     scheduler = build_scheduler(config)
-    assert scheduler.requested_ids == {"date", "travel"}
+    assert scheduler.requested_ids == {"date", "inside"}
 
-    registry = make_registry({"date": True, "travel": True})
+    registry = make_registry({"date": True, "inside": True})
     sequence = collect_sequence(scheduler, registry, 6)
     assert sequence == [
         "date",
-        "travel",
+        "inside",
         "date",
-        "travel",
+        "inside",
         "date",
-        "travel",
+        "inside",
     ]
 
 
@@ -75,23 +74,23 @@ def test_scheduler_with_multiple_alternates():
         "screens": {
             "date": {
                 "frequency": 1,
-                "alt": {"screen": ["travel", "inside"], "frequency": 2},
+                "alt": {"screen": ["inside", "sensors"], "frequency": 2},
             }
         }
     }
 
     scheduler = build_scheduler(config)
-    assert scheduler.requested_ids == {"date", "travel", "inside"}
+    assert scheduler.requested_ids == {"date", "inside", "sensors"}
 
-    registry = make_registry({"date": True, "travel": True, "inside": True})
+    registry = make_registry({"date": True, "inside": True, "sensors": True})
     sequence = collect_sequence(scheduler, registry, 6)
     assert sequence == [
         "date",
-        "travel",
-        "date",
         "inside",
         "date",
-        "travel",
+        "sensors",
+        "date",
+        "inside",
     ]
 
 
@@ -102,41 +101,41 @@ def test_build_scheduler_rejects_unknown_screen():
 
 
 def test_scheduler_respects_frequency():
-    config = {"screens": {"date": 1, "travel": 2}}
+    config = {"screens": {"date": 1, "inside": 2}}
     scheduler = build_scheduler(config)
-    registry = make_registry({"date": True, "travel": True})
+    registry = make_registry({"date": True, "inside": True})
 
     sequence = collect_sequence(scheduler, registry, 6)
-    assert sequence == ["date", "travel", "travel", "date", "travel", "travel"]
+    assert sequence == ["date", "inside", "inside", "date", "inside", "inside"]
 
 
 def test_scheduler_frequency_interval_matches_configuration():
-    config = {"screens": {"date": 1, "travel": 4}}
+    config = {"screens": {"date": 1, "inside": 4}}
     scheduler = build_scheduler(config)
-    registry = make_registry({"date": True, "travel": True})
+    registry = make_registry({"date": True, "inside": True})
 
     sequence = collect_sequence(scheduler, registry, 12)
-    # ``travel`` should appear four times for every appearance of ``date``.
+    # ``inside`` should appear four times for every appearance of ``date``.
     assert sequence == [
         "date",
-        "travel",
-        "travel",
-        "travel",
-        "travel",
+        "inside",
+        "inside",
+        "inside",
+        "inside",
         "date",
-        "travel",
-        "travel",
-        "travel",
-        "travel",
+        "inside",
+        "inside",
+        "inside",
+        "inside",
         "date",
-        "travel",
+        "inside",
     ]
 
 
 def test_scheduler_skips_unavailable_screen():
-    config = {"screens": {"travel": 1}}
+    config = {"screens": {"inside": 1}}
     scheduler = build_scheduler(config)
-    registry = make_registry({"travel": False})
+    registry = make_registry({"inside": False})
     assert scheduler.next_available(registry) is None
 
 
@@ -151,7 +150,7 @@ def test_invalid_configuration_shapes():
         build_scheduler({"screens": {"date": "oops"}})
     with pytest.raises(ValueError):
         build_scheduler(
-            {"screens": {"date": {"frequency": 1, "alt": {"screen": "travel"}}}}
+            {"screens": {"date": {"frequency": 1, "alt": {"screen": "inside"}}}}
         )
     with pytest.raises(ValueError):
         build_scheduler(
@@ -159,7 +158,7 @@ def test_invalid_configuration_shapes():
                 "screens": {
                     "date": {
                         "frequency": 1,
-                        "alt": {"screen": "travel", "frequency": 0},
+                        "alt": {"screen": "inside", "frequency": 0},
                     }
                 }
             }
@@ -181,7 +180,7 @@ def test_invalid_configuration_shapes():
                 "screens": {
                     "date": {
                         "frequency": 1,
-                        "alt": {"screen": ["travel", 99], "frequency": 2},
+                        "alt": {"screen": ["inside", 99], "frequency": 2},
                     }
                 }
             }

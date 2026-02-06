@@ -43,7 +43,6 @@ from data_fetch import (
     fetch_weather,
     fetch_wolves_games,
 )
-from screens.draw_travel_time import get_travel_times
 from screens.nhl_scoreboard import dns_diagnostics
 
 
@@ -134,12 +133,6 @@ CHECKS: Iterable[ApiCheck] = [
         "nhl_network_diagnostics",
         dns_diagnostics,
         description="DNS and HTTP reachability for NHL endpoints",
-    ),
-    ApiCheck(
-        "google_travel_times",
-        get_travel_times,
-        expect_data=False,
-        description="Google Directions travel times",
     ),
 ]
 

@@ -538,10 +538,6 @@ def _render_all_screens_impl(
     if sync_screenshots is None:
         sync_screenshots = config.ENABLE_SCREENSHOTS
 
-    from screens.draw_travel_time import (
-        get_travel_active_window,
-        is_travel_screen_active,
-    )
     from screens.registry import ScreenContext, ScreenDefinition, build_screen_registry
 
     restore_sleep = _suppress_animation_delay()
@@ -555,7 +551,6 @@ def _render_all_screens_impl(
 
         schedule_error: Optional[str] = None
         requested_ids: set[str] = set()
-        travel_requested = True
         if not ignore_schedule:
             requested_ids, schedule_error = load_requested_screen_ids()
             if schedule_error:
@@ -569,10 +564,6 @@ def _render_all_screens_impl(
             cache=cache,
             logos=logos,
             image_dir=str(IMAGES_DIR),
-            travel_requested=travel_requested,
-            travel_active=is_travel_screen_active(),
-            travel_window=get_travel_active_window(),
-            previous_travel_state=None,
             now=now,
             now_utc=now_utc,
             offline=False,

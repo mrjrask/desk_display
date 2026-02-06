@@ -331,8 +331,6 @@ def _get_scoreboard_background_color() -> Tuple[int, int, int]:
 
 def _default_background_for_screen(screen_id: str) -> Tuple[int, int, int]:
     lowered = screen_id.lower()
-    if lowered == "travel map":
-        return (18, 18, 18)
     if any(token in lowered for token in ("scoreboard", "standings", "overview", "stand1", "stand2")):
         return _get_scoreboard_background_color()
     return (0, 0, 0)

@@ -4,7 +4,7 @@ Desk Display is a Raspberry Pi dashboard for the Pimoroni Display HAT Mini (320Ã
 
 ## Highlights
 
-- **Always-on dashboards** for date/time, weather (current/hourly/daily/radar), travel time/map, indoor sensors, and sports scoreboards/standings.
+- **Always-on dashboards** for date/time, weather (current/hourly/daily/radar), indoor sensors, and sports scoreboards/standings.
 - **Screen scheduling** via `screens_config.json` (frequency + alternates) and a drag-and-drop web UI.
 - **Display output choices**: Display HAT Mini, kernel-driven fullscreen displays, or headless rendering.
 - **Smart capture pipeline**: per-screen screenshots, batch archiving, and optional H.264 video capture.
@@ -122,7 +122,6 @@ Desk Display reads configuration from environment variables and (optionally) a `
 | `OWM_UNITS`, `OWM_LANGUAGE` | OpenWeatherMap units + locale. |
 | `WEATHER_REFRESH_SECONDS` | Minimum refresh interval (clamped to â‰¥600s). |
 | `WEATHER_USE_EMOJI_ICONS` | Use emoji icon set. |
-| `GOOGLE_MAPS_API_KEY` | Google Static Maps key for the radar basemap and travel map screen. |
 
 ### Travel screens
 
@@ -130,12 +129,10 @@ Desk Display reads configuration from environment variables and (optionally) a `
 | --- | --- |
 | `TRAVEL_TO_HOME_ORIGIN`, `TRAVEL_TO_HOME_DESTINATION` | Commute endpoints for the `to_home` profile. |
 | `TRAVEL_TO_WORK_ORIGIN`, `TRAVEL_TO_WORK_DESTINATION` | Commute endpoints for the `to_work` profile. |
-| `APPLE_MAPS_API_KEY` / `MAPKIT_TOKEN` | Apple Maps API key or MapKit token (used by the v2 travel screens). |
 | `APPLE_MAPS_TEAM_ID`, `APPLE_MAPS_KEY_ID` | Apple Maps JWT credentials (can reuse WeatherKit IDs). |
 | `APPLE_MAPS_KEY_PATH` / `APPLE_MAPS_PRIVATE_KEY` | PEM key for Apple Maps JWT signing. |
 | `APPLE_MAPS_DIRECTIONS_URL` / `APPLE_MAPS_SNAPSHOT_URL` | Override Apple Maps service endpoints. |
 
-The active travel profile is selected in `config.py` based on the connected SSID (defaults to `to_home`). Update `TRAVEL_MODE` in `config.py` if you want a different default profile or active window.
 
 ### Wi-Fi monitoring / recovery
 
@@ -169,7 +166,6 @@ The screen scheduler lives in `screens_config.json`. Each entry is either a freq
   "screens": {
     "date": 1,
     "weather1": 1,
-    "travel": { "frequency": 2, "alt": { "screen": "travel map", "frequency": 2 } }
   }
 }
 ```
