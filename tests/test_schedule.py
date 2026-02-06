@@ -49,6 +49,10 @@ def test_legacy_travel_screen_is_known():
     assert "travel" in KNOWN_SCREENS
 
 
+def test_legacy_travel_map_screen_is_known():
+    assert "travel map" in KNOWN_SCREENS
+
+
 def test_scheduler_with_alternate_screen():
     config = {
         "screens": {
