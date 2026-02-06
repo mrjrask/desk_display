@@ -31,7 +31,7 @@ from config import (
 )
 from utils import ScreenImage, clear_display, load_team_logo, log_call, standard_scoreboard_league_logo_height
 
-from screens.oly_hockey_scoreboard import _country_code, _fetch_games
+from screens.oly_hockey_scoreboard import _country_code, _fetch_games, _team_fallback_text
 from screens.oly_hockey_scoreboard import COMPETITIONS, LEAGUE_LOGO_KEYS, LOGO_DIR
 
 HYPERPIXEL_LAYOUT = is_hyperpixel_next_layout()
@@ -133,6 +133,8 @@ def _draw_game(canvas, draw, game, left, top, *, score_font, status_font, center
         logo = _load_logo_cached(_country_code(team))
         if logo:
             canvas.paste(logo, (left + GAME_COL_X[idx] + (GAME_COL_WIDTHS[idx] - logo.width)//2, top + (SCORE_ROW_H-logo.height)//2), logo)
+        else:
+            _center(draw, _team_fallback_text(team), center_font, left + GAME_COL_X[idx], GAME_COL_WIDTHS[idx], top, SCORE_ROW_H)
 
     short = (((game.get("status") or {}).get("type") or {}).get("shortDetail") or "")
     _center(draw, short or ("Final" if final else "Live"), status_font, left, GAME_WIDTH, top + SCORE_ROW_H, STATUS_ROW_H, SCOREBOARD_IN_PROGRESS_SCORE_COLOR if in_progress else (255, 255, 255))
