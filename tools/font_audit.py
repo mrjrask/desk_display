@@ -208,36 +208,53 @@ def build_known_font_sizes(repo_root: Path) -> Dict[str, FontDefinition]:
     int_constants: Dict[str, int] = {}
 
     for node in tree.body:
+        target: Optional[ast.Name] = None
+        value: Optional[ast.AST] = None
         if isinstance(node, ast.Assign) and len(node.targets) == 1 and isinstance(node.targets[0], ast.Name):
-            name = node.targets[0].id
-            as_int = eval_int_expr(node.value, int_constants)
-            if as_int is not None:
-                int_constants[name] = as_int
+            target = node.targets[0]
+            value = node.value
+        elif isinstance(node, ast.AnnAssign) and isinstance(node.target, ast.Name) and node.value is not None:
+            target = node.target
+            value = node.value
 
-            if not name.startswith("FONT_"):
-                continue
+        if target is None or value is None:
+            continue
 
-            size: Optional[int] = None
-            source = expr_to_source(node.value, type(node.value).__name__)
+        name = target.id
+        as_int = eval_int_expr(value, int_constants)
+        if as_int is not None:
+            int_constants[name] = as_int
 
-            if isinstance(node.value, ast.Call):
-                if isinstance(node.value.func, ast.Name) and node.value.func.id == "_load_font":
-                    if len(node.value.args) >= 2:
-                        size = eval_int_expr(node.value.args[1], int_constants)
-                elif looks_like_truetype_call(node.value.func):
-                    if len(node.value.args) >= 2:
-                        size = eval_int_expr(node.value.args[1], int_constants)
-                    for kw in node.value.keywords or []:
-                        if kw.arg == "size" and size is None:
-                            size = eval_int_expr(kw.value, int_constants)
-                elif isinstance(node.value.func, ast.Name) and node.value.func.id == "_load_emoji_font":
-                    if node.value.args:
-                        size = eval_int_expr(node.value.args[0], int_constants)
+        if not name.startswith("FONT_"):
+            continue
 
-            if size is None and isinstance(node.value, ast.Name) and node.value.id in out:
-                size = out[node.value.id].size
+        size: Optional[int] = None
+        source = expr_to_source(value, type(value).__name__)
 
-            out[name] = FontDefinition(name=name, size=size, source=source, lineno=getattr(node, "lineno", 0))
+        if isinstance(value, ast.Call):
+            if isinstance(value.func, ast.Name) and value.func.id == "_load_font":
+                if len(value.args) >= 2:
+                    size = eval_int_expr(value.args[1], int_constants)
+                for kw in value.keywords or []:
+                    if kw.arg == "size" and size is None:
+                        size = eval_int_expr(kw.value, int_constants)
+            elif looks_like_truetype_call(value.func):
+                if len(value.args) >= 2:
+                    size = eval_int_expr(value.args[1], int_constants)
+                for kw in value.keywords or []:
+                    if kw.arg == "size" and size is None:
+                        size = eval_int_expr(kw.value, int_constants)
+            elif isinstance(value.func, ast.Name) and value.func.id == "_load_emoji_font":
+                if value.args:
+                    size = eval_int_expr(value.args[0], int_constants)
+                for kw in value.keywords or []:
+                    if kw.arg == "size" and size is None:
+                        size = eval_int_expr(kw.value, int_constants)
+
+        if size is None and isinstance(value, ast.Name) and value.id in out:
+            size = out[value.id].size
+
+        out[name] = FontDefinition(name=name, size=size, source=source, lineno=getattr(node, "lineno", 0))
 
     return out
 
@@ -269,6 +286,13 @@ class FontCallScanner(ast.NodeVisitor):
             val = eval_int_expr(node.value, self.local_ints)
             if val is not None:
                 self.local_ints[node.targets[0].id] = val
+        self.generic_visit(node)
+
+    def visit_AnnAssign(self, node: ast.AnnAssign) -> Any:  # noqa: ANN401
+        if isinstance(node.target, ast.Name) and node.value is not None:
+            val = eval_int_expr(node.value, self.local_ints)
+            if val is not None:
+                self.local_ints[node.target.id] = val
         self.generic_visit(node)
 
     def visit_Call(self, node: ast.Call) -> Any:  # noqa: ANN401
