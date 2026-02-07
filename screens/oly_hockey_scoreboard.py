@@ -3,10 +3,10 @@
 
 from __future__ import annotations
 
-import datetime
 import logging
 import os
 import time
+import datetime
 from typing import Any, Dict, Optional
 
 from PIL import Image, ImageDraw
@@ -35,7 +35,11 @@ from config import (
     scale_value_width,
 )
 from utils import ScreenImage, clear_display, load_team_logo, log_call, standard_scoreboard_league_logo_height
-from services.http_client import get_session
+from screens.data_sources.olympic_hockey import (
+    fetch_olympic_hockey_games,
+    fetch_olympic_scoreboard_men,
+    fetch_olympic_scoreboard_women,
+)
 
 HYPERPIXEL_LAYOUT = is_hyperpixel_next_layout()
 
@@ -48,7 +52,7 @@ TITLE_GAP = _scale_y(8)
 BLOCK_SPACING = _scale_y(10)
 SCORE_ROW_H = _scale_y(56)
 STATUS_ROW_H = _scale_y(18)
-REQUEST_TIMEOUT = 10
+DEFAULT_ROTATE_DIVISIONS = ("men", "women")
 
 COL_WIDTHS = [
     scale_value_width(70),
@@ -77,9 +81,9 @@ IN_PROGRESS_STATUS_COLOR = IN_PROGRESS_SCORE_COLOR
 FINAL_WINNING_SCORE_COLOR = SCOREBOARD_FINAL_WINNING_SCORE_COLOR
 FINAL_LOSING_SCORE_COLOR = SCOREBOARD_FINAL_LOSING_SCORE_COLOR
 
-_SESSION = get_session()
 _LOGO_CACHE: dict[tuple[str, int], Optional[Image.Image]] = {}
 _LEAGUE_LOGO_CACHE: dict[int, Optional[Image.Image]] = {}
+_ROTATE_INDEX = 0
 
 COUNTRY_NAME_TO_CODE = {
     "canada": "CAN", "united states": "USA", "usa": "USA", "sweden": "SWE", "finland": "FIN",
@@ -179,28 +183,30 @@ def _center_text(draw, text, font, x, width, y, height, *, fill=(255, 255, 255))
 
 
 def _status_text(game: dict) -> str:
-    status = (game.get("status") or {}).get("type") or {}
-    state = (status.get("state") or "").lower()
-    short = (status.get("shortDetail") or status.get("detail") or "")
+    state = (game.get("status") or "").lower()
+    period = (game.get("period") or "").strip()
+    clock = (game.get("clock") or "").strip()
     if state == "pre":
-        dt = game.get("date")
-        if isinstance(dt, str) and dt:
+        dt_value = game.get("startTimeUTC")
+        if isinstance(dt_value, str) and dt_value:
             try:
-                stamp = datetime.datetime.fromisoformat(dt.replace("Z", "+00:00")).astimezone(CENTRAL_TIME)
+                stamp = datetime.datetime.fromisoformat(dt_value.replace("Z", "+00:00")).astimezone(CENTRAL_TIME)
                 return stamp.strftime("%-I:%M %p")
             except Exception:
                 pass
-    return short or ("Final" if state == "post" else "Live")
+        return "Pregame"
+    if state == "live":
+        text = " ".join([p for p in (period, clock) if p]).strip()
+        return text or "Live"
+    return "Final"
 
 
 def _is_in_progress(game: dict) -> bool:
-    state = (((game.get("status") or {}).get("type") or {}).get("state") or "").lower()
-    return state == "in"
+    return (game.get("status") or "").lower() == "live"
 
 
 def _is_final(game: dict) -> bool:
-    state = (((game.get("status") or {}).get("type") or {}).get("state") or "").lower()
-    return state == "post"
+    return (game.get("status") or "").lower() == "final"
 
 
 def _draw_game_block(canvas, draw, game, top, *, score_font, status_font, center_font):
@@ -259,43 +265,16 @@ def _compose_canvas(games, *, score_font, status_font, center_font, background):
     return canvas
 
 
-def _fetch_games(url: str) -> list[dict]:
+def _fetch_games(division: str) -> list[dict]:
     try:
-        response = _SESSION.get(url, timeout=REQUEST_TIMEOUT)
-        response.raise_for_status()
-        data = response.json()
+        if division == "men":
+            return fetch_olympic_scoreboard_men()
+        if division == "women":
+            return fetch_olympic_scoreboard_women()
+        return fetch_olympic_hockey_games(division=division)
     except Exception as exc:
-        logging.error("Failed to fetch Olympic hockey scoreboard: %s", exc)
+        logging.error("Failed to fetch Olympic hockey scoreboard for %s: %s", division, exc)
         return []
-
-    games: list[dict] = []
-    for event in data.get("events", []) or []:
-        competitors = (((event.get("competitions") or [{}])[0]).get("competitors") or [])
-        away = next((c for c in competitors if (c.get("homeAway") or "").lower() == "away"), None)
-        home = next((c for c in competitors if (c.get("homeAway") or "").lower() == "home"), None)
-        if not away or not home:
-            continue
-        away_team = away.get("team") or {}
-        home_team = home.get("team") or {}
-        games.append(
-            {
-                "date": event.get("date"),
-                "status": event.get("status") or {},
-                "away": {
-                    "abbreviation": away_team.get("abbreviation"),
-                    "displayName": away_team.get("displayName"),
-                    "shortDisplayName": away_team.get("shortDisplayName"),
-                    "score": int(away.get("score") or 0),
-                },
-                "home": {
-                    "abbreviation": home_team.get("abbreviation"),
-                    "displayName": home_team.get("displayName"),
-                    "shortDisplayName": home_team.get("shortDisplayName"),
-                    "score": int(home.get("score") or 0),
-                },
-            }
-        )
-    return games
 
 
 def _draw(display, division: str, *, transition: bool = False) -> ScreenImage:
@@ -303,7 +282,7 @@ def _draw(display, division: str, *, transition: bool = False) -> ScreenImage:
     title = meta["title"]
     screen_id = meta["screen_id"]
     score_font, status_font, center_font, background = _apply_style_overrides(screen_id)
-    games = _fetch_games(meta["url"])
+    games = _fetch_games(division)
     canvas = _compose_canvas(games, score_font=score_font, status_font=status_font, center_font=center_font, background=background)
 
     dummy = Image.new("RGB", (WIDTH, 10), background)
@@ -343,3 +322,11 @@ def draw_olympic_mens_hockey_scoreboard(display, transition: bool = False) -> Sc
 @log_call
 def draw_olympic_womens_hockey_scoreboard(display, transition: bool = False) -> ScreenImage:
     return _draw(display, "women", transition=transition)
+
+
+@log_call
+def draw_olympic_hockey_scores(display, transition: bool = False) -> ScreenImage:
+    global _ROTATE_INDEX
+    division = DEFAULT_ROTATE_DIVISIONS[_ROTATE_INDEX % len(DEFAULT_ROTATE_DIVISIONS)]
+    _ROTATE_INDEX += 1
+    return _draw(display, division, transition=transition)

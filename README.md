@@ -135,6 +135,19 @@ Desk Display reads configuration from environment variables and (optionally) a `
 | `APPLE_MAPS_DIRECTIONS_URL` / `APPLE_MAPS_SNAPSHOT_URL` | Override Apple Maps service endpoints. |
 
 
+
+### Olympic hockey scoreboards
+
+| Variable | Purpose |
+| --- | --- |
+| `OLYMPIC_HOCKEY_TIMEZONE` | Timezone used for Olympic hockey scoreboard date resolution (default `America/Chicago`). |
+
+Olympic hockey screens available in `screens_config.json`:
+
+- `Olympic Hockey Scores` (rotates men/women each render)
+- `Olympic Hockey Men Scoreboard` / `Olympic Hockey Men Scoreboard v2`
+- `Olympic Hockey Women Scoreboard` / `Olympic Hockey Women Scoreboard v2`
+
 ### Wi-Fi monitoring / recovery
 
 | Variable | Purpose |
@@ -239,6 +252,21 @@ To manage the kernel display service over SSH without manually exporting user se
 - **Wi-Fi recovery loops**: check `/var/log/wifi_auto_recover.log` and disable recovery with `ENABLE_WIFI_RECOVERY=0`.
 
 ---
+
+
+## Olympic hockey diagnostics
+
+Connectivity checks (includes ESPN men/women plus fallback providers):
+
+```bash
+python scripts/test_api_connections.py
+```
+
+Print normalized Olympic hockey games for a date:
+
+```bash
+python tools/print_olympic_hockey_games.py --date 2026-02-12 --division both
+```
 
 ## API references
 

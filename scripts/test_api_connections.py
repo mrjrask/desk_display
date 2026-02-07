@@ -246,6 +246,63 @@ def check_nfl_standings_csv() -> tuple[str, str]:
     return _fail("CSV did not contain expected headers")
 
 
+
+def check_olympic_hockey_espn_men() -> tuple[str, str]:
+    date_key = dt.datetime.now().strftime("%Y%m%d")
+    status, payload = _http_json(
+        "https://site.api.espn.com/apis/site/v2/sports/hockey/mens-olympics/scoreboard",
+        params={"dates": date_key},
+    )
+    if isinstance(payload, dict) and "events" in payload:
+        return _ok(f"HTTP {status}")
+    return _fail("unexpected men's Olympic hockey payload")
+
+
+def check_olympic_hockey_espn_women() -> tuple[str, str]:
+    date_key = dt.datetime.now().strftime("%Y%m%d")
+    status, payload = _http_json(
+        "https://site.api.espn.com/apis/site/v2/sports/hockey/womens-olympics/scoreboard",
+        params={"dates": date_key},
+    )
+    if isinstance(payload, dict) and "events" in payload:
+        return _ok(f"HTTP {status}")
+    return _fail("unexpected women's Olympic hockey payload")
+
+
+def check_olympic_hockey_iihf_men() -> tuple[str, str]:
+    response = requests.get("https://www.iihf.com/en/events/2026/olympics-m/schedule", timeout=12)
+    if response.status_code < 500:
+        return _ok(f"reachable (HTTP {response.status_code})")
+    return _fail(f"unreachable (HTTP {response.status_code})")
+
+
+def check_olympic_hockey_iihf_women() -> tuple[str, str]:
+    response = requests.get("https://www.iihf.com/en/events/2026/olympics-w/schedule", timeout=12)
+    if response.status_code < 500:
+        return _ok(f"reachable (HTTP {response.status_code})")
+    return _fail(f"unreachable (HTTP {response.status_code})")
+
+
+def check_olympic_hockey_thesportsdb() -> tuple[str, str]:
+    status, payload = _http_json(
+        "https://www.thesportsdb.com/api/v1/json/3/eventsday.php",
+        params={"d": dt.datetime.now().strftime("%Y-%m-%d"), "s": "Ice_Hockey"},
+    )
+    if isinstance(payload, dict) and "events" in payload:
+        return _ok(f"HTTP {status}")
+    return _fail("unexpected TheSportsDB payload")
+
+
+def check_olympic_hockey_wikipedia() -> tuple[str, str]:
+    status, payload = _http_json(
+        "https://en.wikipedia.org/w/api.php",
+        params={"action": "query", "format": "json", "titles": "Ice hockey at the 2026 Winter Olympics", "prop": "extracts", "explaintext": 1},
+    )
+    query = payload.get("query") if isinstance(payload, dict) else None
+    if isinstance(query, dict) and query.get("pages"):
+        return _ok(f"HTTP {status}")
+    return _fail("unexpected Wikipedia API payload")
+
 def check_ahl_ics() -> tuple[str, str]:
     response = requests.get(AHL_SCHEDULE_ICS_URL, timeout=12)
     response.raise_for_status()
@@ -286,6 +343,12 @@ CHECKS = [
     Check("nba standings", check_nba_standings),
     Check("nfl scoreboard", check_nfl_scoreboard),
     Check("nfl standings csv", check_nfl_standings_csv),
+    Check("olympic hockey espn men", check_olympic_hockey_espn_men),
+    Check("olympic hockey espn women", check_olympic_hockey_espn_women),
+    Check("olympic hockey iihf men", check_olympic_hockey_iihf_men),
+    Check("olympic hockey iihf women", check_olympic_hockey_iihf_women),
+    Check("olympic hockey thesportsdb", check_olympic_hockey_thesportsdb),
+    Check("olympic hockey wikipedia api", check_olympic_hockey_wikipedia),
     Check("ahl schedule ics", check_ahl_ics),
     Check("ahl hockeytech feed base", check_hockeytech_feed_base),
     Check("yahoo finance chart api", check_yahoo_chart_api),

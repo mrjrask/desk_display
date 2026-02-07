@@ -90,6 +90,7 @@ from screens.nfl_standings import (
 from screens.nhl_scoreboard import draw_nhl_scoreboard
 from screens.nhl_scoreboard_v2 import draw_nhl_scoreboard_v2
 from screens.oly_hockey_scoreboard import (
+    draw_olympic_hockey_scores,
     draw_olympic_mens_hockey_scoreboard,
     draw_olympic_womens_hockey_scoreboard,
 )
@@ -616,6 +617,11 @@ def build_screen_registry(context: ScreenContext) -> Tuple[Dict[str, ScreenDefin
         register(
             "NHL Scoreboard v2",
             lambda: draw_nhl_scoreboard_v2(context.display, transition=True),
+            available=scoreboards_available,
+        )
+        register(
+            "Olympic Hockey Scores",
+            lambda: draw_olympic_hockey_scores(context.display, transition=True),
             available=scoreboards_available,
         )
         register(

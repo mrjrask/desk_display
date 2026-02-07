@@ -1,0 +1,42 @@
+import datetime as dt
+
+from screens.data_sources.olympic_hockey import normalize_espn_olympic_response, resolve_display_date
+
+
+def test_resolve_display_date_uses_previous_day_before_cutoff():
+    now = dt.datetime(2026, 2, 15, 9, 15, tzinfo=dt.timezone.utc)
+    date_value = resolve_display_date(tz_name="UTC", now=now)
+    assert date_value == dt.date(2026, 2, 14)
+
+
+def test_normalize_espn_olympic_response_shape():
+    payload = {
+        "events": [
+            {
+                "id": "401",
+                "date": "2026-02-15T18:00:00Z",
+                "status": {"type": {"state": "in", "shortDetail": "2nd"}, "displayClock": "10:14"},
+                "competitions": [
+                    {
+                        "venue": {"fullName": "Milano Arena"},
+                        "competitors": [
+                            {"homeAway": "away", "score": "2", "team": {"abbreviation": "USA", "displayName": "United States"}},
+                            {"homeAway": "home", "score": "3", "team": {"abbreviation": "CAN", "displayName": "Canada"}},
+                        ],
+                    }
+                ],
+            }
+        ]
+    }
+
+    games = normalize_espn_olympic_response(payload, league_key="olympic_mhockey")
+
+    assert len(games) == 1
+    game = games[0]
+    assert game["leagueKey"] == "olympic_mhockey"
+    assert game["status"] == "live"
+    assert game["period"] == "2nd"
+    assert game["clock"] == "10:14"
+    assert game["home"]["code3"] == "CAN"
+    assert game["away"]["code3"] == "USA"
+    assert game["source"]["providerName"] == "espn"
