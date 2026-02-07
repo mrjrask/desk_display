@@ -541,16 +541,20 @@ _use_kernel_rotation_source = (
     or _display_output in {"kernel", "kms", "drm", "sdl"}
 )
 _kernel_overlay_rotation = _read_kernel_overlay_rotation() if _use_kernel_rotation_source else None
-if _kernel_overlay_rotation is not None:
-    DISPLAY_ROTATION = _kernel_overlay_rotation
-else:
+_display_rotation_raw = os.environ.get("DISPLAY_ROTATION")
+
+if _display_rotation_raw is not None:
     try:
-        DISPLAY_ROTATION = int(os.environ.get("DISPLAY_ROTATION", "0"))
+        DISPLAY_ROTATION = int(_display_rotation_raw)
     except (TypeError, ValueError):
         logging.warning(
-            "Invalid DISPLAY_ROTATION value; defaulting to 0 degrees."
+            "Invalid DISPLAY_ROTATION value; using kernel/default rotation."
         )
-        DISPLAY_ROTATION = 0
+        DISPLAY_ROTATION = _kernel_overlay_rotation if _kernel_overlay_rotation is not None else 0
+elif _kernel_overlay_rotation is not None:
+    DISPLAY_ROTATION = _kernel_overlay_rotation
+else:
+    DISPLAY_ROTATION = 0
 
 
 # ─── Dark hours configuration ─────────────────────────────────────────────────
