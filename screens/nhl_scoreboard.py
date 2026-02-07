@@ -41,6 +41,7 @@ from config import (
     get_screen_font,
     get_screen_image_scale,
     is_hyperpixel_next_layout,
+    is_hyperpixel_4_square_layout,
     scale_value,
     scale_value_width,
 )
@@ -55,6 +56,7 @@ from services.http_client import NHL_HEADERS, get_session
 
 # ─── Constants ────────────────────────────────────────────────────────────────
 HYPERPIXEL_LAYOUT = is_hyperpixel_next_layout()
+HYPERPIXEL_4_SQUARE = is_hyperpixel_4_square_layout()
 
 
 def _scale_y(value: int) -> int:
@@ -91,6 +93,8 @@ LEAGUE_LOGO_KEYS = ("NHL", "nhl")
 LEAGUE_LOGO_GAP = _scale_y(4)
 TEAM_LOGO_BASE_HEIGHT = scale_value_width(36) if HYPERPIXEL_LAYOUT else scale_value_width(52)
 LEAGUE_LOGO_BASE_HEIGHT = TEAM_LOGO_BASE_HEIGHT if HYPERPIXEL_LAYOUT else standard_scoreboard_league_logo_height(TEAM_LOGO_BASE_HEIGHT)
+if HYPERPIXEL_4_SQUARE:
+    LEAGUE_LOGO_BASE_HEIGHT = min(LEAGUE_LOGO_BASE_HEIGHT, scale_value_width(40))
 LOGO_HEIGHT = TEAM_LOGO_BASE_HEIGHT
 LEAGUE_LOGO_HEIGHT = LEAGUE_LOGO_BASE_HEIGHT
 SCORE_FONT = get_screen_font(
@@ -1104,7 +1108,7 @@ def draw_nhl_scoreboard(display, transition: bool = False) -> ScreenImage:
             tx = (WIDTH - tw) // 2
             ty = title_top
         draw.text((tx, ty), TITLE, font=TITLE_FONT, fill=(255, 255, 255))
-        msg_top = max(ty + th + _scale_y(6), title_top + th + _scale_y(6))
+        msg_top = max(ty + th + _scale_y(8), title_top + th + _scale_y(8))
         _center_text(draw, "No games", STATUS_FONT, 0, WIDTH, msg_top, STATUS_ROW_H)
         if transition:
             return ScreenImage(img, displayed=False)

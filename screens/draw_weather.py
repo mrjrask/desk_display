@@ -48,6 +48,7 @@ from config import (
     LONGITUDE,
     WEATHER_USE_EMOJI_ICONS,
     get_screen_background_color,
+    is_hyperpixel_4_square_layout,
 )
 from utils import (
     LED_INDICATOR_LEVEL,
@@ -749,6 +750,8 @@ def draw_weather_hourly(display, weather, transition: bool = False, hours: int =
     title_w, title_h = draw.textsize(title, font=FONT_WEATHER_LABEL)
     title_x = (WIDTH - title_w) // 2
     title_y = 2
+    if is_hyperpixel_4_square_layout():
+        title_y = 4
     draw.text((title_x, title_y), title, font=FONT_WEATHER_LABEL, fill=(200, 200, 200))
 
     gap = 4
@@ -962,7 +965,9 @@ def draw_weather_hourly(display, weather, transition: bool = False, hours: int =
                     draw.text((cx - text_w // 2, text_y), text, font=font, fill=color)
 
 
-    # Re-draw the title last so it stays above cards/content.
+    # Re-draw title with a small background strip so it always stays readable above cards/content.
+    if is_hyperpixel_4_square_layout():
+        draw.rectangle((0, 0, WIDTH, title_y + title_h + 2), fill=background)
     draw.text((title_x, title_y), title, font=FONT_WEATHER_LABEL, fill=(200, 200, 200))
 
     if transition:

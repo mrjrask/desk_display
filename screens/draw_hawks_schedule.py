@@ -108,8 +108,8 @@ _ABBR_FONT_SIZE = int(round(_ABBR_BASE * 1.3))
 _SOG_FONT_SIZE = _SOG_BASE
 _SCORE_FONT_SIZE = int(round(_SOG_FONT_SIZE * (1.55 if _IS_HYPERPIXEL_4_SQUARE else 1.45)))
 
-if config.is_hyperpixel_next_layout():
-    # Hyperpixel 4 tuning for Hawks last/live readability.
+if _IS_HYPERPIXEL_4_SQUARE:
+    # HyperPixel 4 Square tuning for Hawks last/live readability.
     _ABBR_FONT_SIZE += 4
     _SOG_FONT_SIZE += 6
     _SCORE_FONT_SIZE += 10
