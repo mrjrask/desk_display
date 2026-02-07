@@ -110,9 +110,9 @@ def _center(draw, text, font, x, width, y, height, fill=(255, 255, 255)):
 def _draw_game(canvas, draw, game, left, top, *, score_font, status_font, center_font):
     away = game.get("away", {})
     home = game.get("home", {})
-    state = ((((game.get("status") or {}).get("type") or {}).get("state")) or "").lower()
-    in_progress = state == "in"
-    final = state == "post"
+    state = str(game.get("status") or "").lower()
+    in_progress = state == "live"
+    final = state == "final"
     show_scores = in_progress or final
     away_score = str(away.get("score", "")) if show_scores else ""
     home_score = str(home.get("score", "")) if show_scores else ""
@@ -136,8 +136,15 @@ def _draw_game(canvas, draw, game, left, top, *, score_font, status_font, center
         else:
             _center(draw, _team_fallback_text(team), center_font, left + GAME_COL_X[idx], GAME_COL_WIDTHS[idx], top, SCORE_ROW_H)
 
-    short = (((game.get("status") or {}).get("type") or {}).get("shortDetail") or "")
-    _center(draw, short or ("Final" if final else "Live"), status_font, left, GAME_WIDTH, top + SCORE_ROW_H, STATUS_ROW_H, SCOREBOARD_IN_PROGRESS_SCORE_COLOR if in_progress else (255, 255, 255))
+    period = str(game.get("period") or "").strip()
+    clock = str(game.get("clock") or "").strip()
+    if state == "pre":
+        short = "Pregame"
+    elif final:
+        short = "Final"
+    else:
+        short = " ".join([p for p in (period, clock) if p]).strip() or "Live"
+    _center(draw, short, status_font, left, GAME_WIDTH, top + SCORE_ROW_H, STATUS_ROW_H, SCOREBOARD_IN_PROGRESS_SCORE_COLOR if in_progress else (255, 255, 255))
 
 
 def _render(display, division: str, *, transition=False) -> ScreenImage:
@@ -145,7 +152,7 @@ def _render(display, division: str, *, transition=False) -> ScreenImage:
     title = f"{meta['title']} v2"
     screen_id = f"{meta['screen_id']} v2"
     score_font, status_font, center_font, bg = _apply_style(screen_id)
-    games = _fetch_games(meta["url"])
+    games = _fetch_games(division)
 
     rows = [games[i:i+2] for i in range(0, len(games), 2)] or [[]]
     row_h = SCORE_ROW_H + STATUS_ROW_H
