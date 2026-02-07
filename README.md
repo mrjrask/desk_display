@@ -79,7 +79,7 @@ bash ./scripts/install_kernel.sh
 The kernel display installers will:
 
 - Configure `DESK_DISPLAY_OUTPUT=kernel`.
-- Configure `.env` display sizing for your detected HyperPixel panel and default `DISPLAY_ROTATION=0` (override via env if needed).
+- Configure `.env` display sizing for your detected HyperPixel panel and default `DISPLAY_ROTATION=0` (set `DISPLAY_ROTATION=180` for upside-down mounting).
 - **Not** modify `/boot/firmware/config.txt` or `/boot/config.txt`; set your HyperPixel `dtoverlay=` line manually (including any `rotate=` value).
 - Detect a connected DRM display for fullscreen output (or prompt for a resolution override).
 - Install a desktop launcher that can run the display loop inside the desktop session.
@@ -110,6 +110,7 @@ Desk Display reads configuration from environment variables and (optionally) a `
 | `DISPLAY_FB_DEVICE` | Framebuffer device path (default `/dev/fb0`). |
 | `DISPLAY_FB_PIXEL_FORMAT` | Override framebuffer format (`rgb565`, `rgb888`, `xrgb8888`, etc.). |
 | `DISPLAY_FB_PIXEL_ORDER` | Force pixel order (`rgb` or `bgr`). |
+| `DISPLAY_ROTATION` | Additional app-side rotation in degrees (`0`, `90`, `180`, `270`) or shorthand (`0-3`). Keep `0` when `dtoverlay=...,rotate=` is already set to avoid double-rotation. |
 
 ### Weather + radar
 

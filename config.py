@@ -398,13 +398,17 @@ def _read_kernel_overlay_rotation() -> Optional[int]:
                     continue
                 raw_value = part.split("=", 1)[1].strip()
                 try:
-                    return int(raw_value)
+                    parsed = int(raw_value)
                 except ValueError:
                     logging.warning(
                         "Ignoring invalid rotate value '%s' in %s.",
                         raw_value,
                         config_path,
                     )
+                    break
+                if parsed in (0, 1, 2, 3):
+                    return parsed * 90
+                return parsed
                 break
 
     return None
@@ -545,16 +549,30 @@ _display_rotation_raw = os.environ.get("DISPLAY_ROTATION")
 
 if _display_rotation_raw is not None:
     try:
-        DISPLAY_ROTATION = int(_display_rotation_raw)
+        _parsed_display_rotation = int(_display_rotation_raw)
+        if _parsed_display_rotation in (0, 1, 2, 3):
+            _parsed_display_rotation *= 90
+        DISPLAY_ROTATION = _parsed_display_rotation
     except (TypeError, ValueError):
-        logging.warning(
-            "Invalid DISPLAY_ROTATION value; using kernel/default rotation."
-        )
-        DISPLAY_ROTATION = _kernel_overlay_rotation if _kernel_overlay_rotation is not None else 0
-elif _kernel_overlay_rotation is not None:
-    DISPLAY_ROTATION = _kernel_overlay_rotation
+        logging.warning("Invalid DISPLAY_ROTATION value; defaulting to 0°.")
+        DISPLAY_ROTATION = 0
 else:
     DISPLAY_ROTATION = 0
+
+if _kernel_overlay_rotation is not None:
+    if _display_rotation_raw is not None:
+        logging.info(
+            "Kernel overlay rotate=%d° detected and DISPLAY_ROTATION=%d° is set; "
+            "both transforms will apply.",
+            _kernel_overlay_rotation,
+            DISPLAY_ROTATION,
+        )
+    else:
+        logging.info(
+            "Kernel overlay rotate=%d° detected; DISPLAY_ROTATION defaults to 0° "
+            "to avoid double-rotation.",
+            _kernel_overlay_rotation,
+        )
 
 
 # ─── Dark hours configuration ─────────────────────────────────────────────────
