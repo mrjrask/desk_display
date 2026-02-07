@@ -97,24 +97,42 @@ TEAM_LOGO_BASE_HEIGHT = scale_value_width(26)
 LEAGUE_LOGO_BASE_HEIGHT = standard_scoreboard_league_logo_height(TEAM_LOGO_BASE_HEIGHT)
 LOGO_HEIGHT = TEAM_LOGO_BASE_HEIGHT
 LEAGUE_LOGO_HEIGHT = LEAGUE_LOGO_BASE_HEIGHT
-SCORE_FONT = get_screen_font(
-    SCREEN_ID,
-    "score",
-    base_font=FONT_TEAM_SPORTS,
-    default_size=20,
-)
-STATUS_FONT = get_screen_font(
-    SCREEN_ID,
-    "status",
-    base_font=FONT_STATUS,
-    default_size=18,
-)
-CENTER_FONT = get_screen_font(
-    SCREEN_ID,
-    "center",
-    base_font=FONT_STATUS,
-    default_size=18,
-)
+
+_SCOREBOARD_BASE_FONT_SIZES = {
+    "score": 20,
+    "status": 18,
+    "center": 18,
+}
+
+
+def _scoreboard_font_sizes() -> dict[str, int]:
+    return dict(_SCOREBOARD_BASE_FONT_SIZES)
+
+
+def _scoreboard_fonts() -> tuple:
+    sizes = _scoreboard_font_sizes()
+    score = get_screen_font(
+        SCREEN_ID,
+        "score",
+        base_font=FONT_TEAM_SPORTS,
+        default_size=sizes["score"],
+    )
+    status = get_screen_font(
+        SCREEN_ID,
+        "status",
+        base_font=FONT_STATUS,
+        default_size=sizes["status"],
+    )
+    center = get_screen_font(
+        SCREEN_ID,
+        "center",
+        base_font=FONT_STATUS,
+        default_size=sizes["center"],
+    )
+    return score, status, center
+
+
+SCORE_FONT, STATUS_FONT, CENTER_FONT = _scoreboard_fonts()
 LOGO_DIR = os.path.join(IMAGES_DIR, "nhl")
 LEAGUE_LOGO_KEYS = ("NHL", "nhl")
 LEAGUE_LOGO_GAP = _scale_y(4)
@@ -132,24 +150,7 @@ _LOGO_CACHE: dict[tuple[str, int], Optional[Image.Image]] = {}
 def _apply_style_overrides() -> None:
     global SCORE_FONT, STATUS_FONT, CENTER_FONT, LOGO_HEIGHT, LEAGUE_LOGO_HEIGHT, BACKGROUND_COLOR
 
-    SCORE_FONT = get_screen_font(
-        SCREEN_ID,
-        "score",
-        base_font=FONT_TEAM_SPORTS,
-        default_size=20,
-    )
-    STATUS_FONT = get_screen_font(
-        SCREEN_ID,
-        "status",
-        base_font=FONT_STATUS,
-        default_size=18,
-    )
-    CENTER_FONT = get_screen_font(
-        SCREEN_ID,
-        "center",
-        base_font=FONT_STATUS,
-        default_size=18,
-    )
+    SCORE_FONT, STATUS_FONT, CENTER_FONT = _scoreboard_fonts()
     BACKGROUND_COLOR = get_screen_background_color(SCREEN_ID, SCOREBOARD_BACKGROUND_COLOR)
     team_scale = get_screen_image_scale(SCREEN_ID, "team_logo", 1.0)
     LOGO_HEIGHT = max(1, int(round(TEAM_LOGO_BASE_HEIGHT * team_scale)))

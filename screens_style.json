@@ -157,10 +157,20 @@
       "background": "#000000"
     },
     "NHL Scoreboard": {
-      "background": "#7D7D7D"
+      "background": "#7D7D7D",
+      "fonts": {
+        "score": {"size": 39},
+        "status": {"size": 28},
+        "center": {"size": 28}
+      }
     },
     "NHL Scoreboard v2": {
-      "background": "#7D7D7D"
+      "background": "#7D7D7D",
+      "fonts": {
+        "score": {"size": 20},
+        "status": {"size": 18},
+        "center": {"size": 18}
+      }
     },
     "NHL Standings Overview West": {
       "background": "#7D7D7D"
@@ -181,16 +191,48 @@
       "background": "#7D7D7D"
     },
     "NHL Standings West": {
-      "background": "#7D7D7D"
+      "background": "#7D7D7D",
+      "fonts": {
+        "division": {"size": 26},
+        "column": {"size": 24},
+        "column_points": {"size": 18},
+        "row": {"size": 28},
+        "row_stats": {"size": 24},
+        "team_name": {"size": 25}
+      }
     },
     "NHL Standings West v2": {
-      "background": "#7D7D7D"
+      "background": "#7D7D7D",
+      "fonts": {
+        "division": {"size": 26},
+        "column": {"size": 24},
+        "column_points": {"size": 18},
+        "row": {"size": 28},
+        "row_stats": {"size": 24},
+        "team_name": {"size": 25}
+      }
     },
     "NHL Standings East": {
-      "background": "#7D7D7D"
+      "background": "#7D7D7D",
+      "fonts": {
+        "division": {"size": 26},
+        "column": {"size": 24},
+        "column_points": {"size": 18},
+        "row": {"size": 28},
+        "row_stats": {"size": 24},
+        "team_name": {"size": 25}
+      }
     },
     "NHL Standings East v2": {
-      "background": "#7D7D7D"
+      "background": "#7D7D7D",
+      "fonts": {
+        "division": {"size": 26},
+        "column": {"size": 24},
+        "column_points": {"size": 18},
+        "row": {"size": 28},
+        "row_stats": {"size": 24},
+        "team_name": {"size": 25}
+      }
     },
     "nfl logo": {
       "background": "#000000"
