@@ -54,8 +54,19 @@ if is_hyperpixel_4_square_layout():
     LOGO_HEIGHT = max(1, int(round(LOGO_HEIGHT * 0.75)))
 _CONFERENCE_LOGO_BASE_HEIGHT = _LOGO_BASE_HEIGHT
 CONFERENCE_LOGO_HEIGHT = _CONFERENCE_LOGO_BASE_HEIGHT
-if is_hyperpixel_4_square_layout():
-    CONFERENCE_LOGO_HEIGHT = max(1, int(round(CONFERENCE_LOGO_HEIGHT * 0.4)))
+_HYPERPIXEL_4_TITLE_LOGO_TARGET = scale_value_width(14)
+
+
+def _conference_logo_height_for_layout(base_height: int) -> int:
+    height = max(1, int(round(base_height)))
+    if is_hyperpixel_4_square_layout():
+        return max(1, int(round(height * 0.4)))
+    if is_hyperpixel_next_layout():
+        return min(height, _HYPERPIXEL_4_TITLE_LOGO_TARGET)
+    return height
+
+
+CONFERENCE_LOGO_HEIGHT = _conference_logo_height_for_layout(CONFERENCE_LOGO_HEIGHT)
 CONFERENCE_LOGO_GAP = scale_value(2)
 LEFT_MARGIN = scale_value(4)
 RIGHT_MARGIN = scale_value(6)
@@ -163,7 +174,9 @@ def _apply_style_overrides(screen_id: str) -> None:
     OVERVIEW_MIN_LOGO_HEIGHT = max(1, int(round(_OVERVIEW_MIN_LOGO_BASE * overview_scale)))
     OVERVIEW_MAX_LOGO_HEIGHT = max(1, int(round(_OVERVIEW_MAX_LOGO_BASE * overview_scale)))
     conference_scale = get_screen_image_scale(screen_id, "conference_logo", team_scale)
-    CONFERENCE_LOGO_HEIGHT = max(1, int(round(_CONFERENCE_LOGO_BASE_HEIGHT * conference_scale)))
+    CONFERENCE_LOGO_HEIGHT = _conference_logo_height_for_layout(
+        _CONFERENCE_LOGO_BASE_HEIGHT * conference_scale
+    )
     BACKGROUND_COLOR = get_screen_background_color(screen_id, SCOREBOARD_BACKGROUND_COLOR)
 
 OVERVIEW_TITLE = "NHL Overview"
