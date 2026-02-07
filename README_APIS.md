@@ -6,6 +6,19 @@ This project pulls weather, travel, and sports data from a variety of third-part
 
 ---
 
+
+## Connectivity test script
+
+Run the repository script below to probe all configured third-party API connections:
+
+```bash
+python scripts/test_api_connections.py
+```
+
+The script reports `OK`, `SKIP` (missing credentials), and `FAIL` (network/auth/payload issues) for each API family and returns a non-zero exit code only when at least one check fails.
+
+---
+
 ## Weather
 
 ### Apple WeatherKit (primary)
