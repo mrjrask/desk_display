@@ -89,6 +89,8 @@ LEAGUE_LOGO_KEYS = ("NBA", "nba")
 LEAGUE_LOGO_GAP = _scale_y(4)
 TEAM_LOGO_BASE_HEIGHT = scale_value_width(36) if HYPERPIXEL_LAYOUT else scale_value_width(52)
 LEAGUE_LOGO_BASE_HEIGHT = TEAM_LOGO_BASE_HEIGHT
+if HYPERPIXEL_LAYOUT:
+    LEAGUE_LOGO_BASE_HEIGHT = min(LEAGUE_LOGO_BASE_HEIGHT, scale_value_width(14))
 INTRO_LOGO = "NBA.png"
 INTRO_MAX_BASE_HEIGHT = _scale_y(100)
 INTRO_ANIM_SCALES = (0.45, 0.6, 0.75, 0.9, 1.04, 0.98, 1.0)
@@ -126,7 +128,10 @@ def _scoreboard_fonts():
 
 def _team_logo_height() -> int:
     scale = get_screen_image_scale(SCREEN_ID, "team_logo", 1.0)
-    return max(1, int(round(TEAM_LOGO_BASE_HEIGHT * scale)))
+    height = max(1, int(round(TEAM_LOGO_BASE_HEIGHT * scale)))
+    if HYPERPIXEL_LAYOUT:
+        height = max(1, int(round(height * 0.6)))
+    return height
 
 
 def _league_logo_height() -> int:

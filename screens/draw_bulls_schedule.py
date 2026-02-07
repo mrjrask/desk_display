@@ -122,8 +122,14 @@ def _ts(size: int) -> ImageFont.ImageFont:
 
 # Tuned for 320x240; scales acceptably for larger canvases
 _IS_HYPERPIXEL_4_SQUARE = is_hyperpixel_4_square_layout()
-FONT_ABBR   = _ts(40 if _IS_HYPERPIXEL_4_SQUARE else (33 if HEIGHT >= 240 else 28))  # team abbr in table
-FONT_SCORE  = _ts(60 if _IS_HYPERPIXEL_4_SQUARE else (48 if HEIGHT >= 240 else 38))  # score digits
+_FONT_ABBR_SIZE = 40 if _IS_HYPERPIXEL_4_SQUARE else (33 if HEIGHT >= 240 else 28)
+_FONT_SCORE_SIZE = 60 if _IS_HYPERPIXEL_4_SQUARE else (48 if HEIGHT >= 240 else 38)
+if config.is_hyperpixel_next_layout():
+    # Hyperpixel 4 tuning for Bulls last/live readability.
+    _FONT_ABBR_SIZE += 4
+    _FONT_SCORE_SIZE += 10
+FONT_ABBR   = _ts(_FONT_ABBR_SIZE)  # team abbr in table
+FONT_SCORE  = _ts(_FONT_SCORE_SIZE)  # score digits
 FONT_SMALL  = _ts(26 if _IS_HYPERPIXEL_4_SQUARE else (22 if HEIGHT >= 240 else 18))  # status / small lines
 
 # Shared sports fonts from config (keeps Hawks look)
@@ -682,7 +688,7 @@ def _render_scoreboard(
 
     return img
 
-def _render_next_game(game: Dict, *, title: str) -> Image.Image:
+def _render_next_game(game: Dict, *, title: str, logo_scale: float = 1.0) -> Image.Image:
     """
     Two large logos with an '@' centered between them, plus matchup text and footer.
     """
@@ -720,7 +726,7 @@ def _render_next_game(game: Dict, *, title: str) -> Image.Image:
             1,
             int(round(standard_next_game_logo_height(HEIGHT) * config.DISPLAY_SCALE)),
         )
-        logo_h = min(desired_logo_h, available_h)
+        logo_h = min(int(round(desired_logo_h * logo_scale)), available_h)
     else:
         logo_h = standard_next_game_logo_height_for_space(HEIGHT, available_h)
     logo_left  = _load_logo_png(away["tri"], logo_h) if away else None
@@ -881,7 +887,7 @@ def draw_sports_screen_bulls(display, game: Optional[Dict], transition: bool = F
     if not game:
         img = _render_message("Next Bulls game:", "No upcoming games scheduled")
         return _push(display, img, transition=transition)
-    img = _render_next_game(game, title="Next Bulls game:")
+    img = _render_next_game(game, title="Next Bulls game:", logo_scale=3.0 if config.is_hyperpixel_next_layout() else 1.0)
     return _push(display, img, transition=transition)
 
 def draw_bulls_next_home_game(display, game: Optional[Dict], transition: bool = False):

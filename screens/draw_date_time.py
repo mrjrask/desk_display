@@ -36,6 +36,7 @@ from config import (
     DATE_TIME_GH_ICON_INVERT,
     DATE_TIME_GH_ICON_SIZE,
     DATE_TIME_GH_ICON_PATHS,
+    is_hyperpixel_next_layout,
     get_screen_background_color,
 )
 from utils import (
@@ -152,11 +153,19 @@ def _cycle_colors_after_load(
     """
     # small delay so the initial frame is already visible
     time.sleep(0.6)
-    # a few gentle color swaps (~2.7s extra on screen)
-    for _ in range(6):
+    hyperpixel_layout = is_hyperpixel_next_layout()
+    expected_frame_id = display.frame_id() if hasattr(display, "frame_id") else None
+    # Keep cycling on Hyperpixel so colors continue changing while shown.
+    # Other displays keep the short, subtle cycle.
+    steps = None if hyperpixel_layout else 6
+    count = 0
+    while steps is None or count < steps:
+        if expected_frame_id is not None and hasattr(display, "frame_id") and display.frame_id() != expected_frame_id:
+            break
         img = _compose_frame(base_order, bright_color(), bright_color(), gh_state(), screen_id)
         display.image(img)
         time.sleep(0.45)
+        count += 1
 
 
 def _start_update_checks(

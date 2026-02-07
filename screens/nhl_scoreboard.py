@@ -90,7 +90,7 @@ LOGO_DIR = os.path.join(IMAGES_DIR, "nhl")
 LEAGUE_LOGO_KEYS = ("NHL", "nhl")
 LEAGUE_LOGO_GAP = _scale_y(4)
 TEAM_LOGO_BASE_HEIGHT = scale_value_width(36) if HYPERPIXEL_LAYOUT else scale_value_width(52)
-LEAGUE_LOGO_BASE_HEIGHT = standard_scoreboard_league_logo_height(TEAM_LOGO_BASE_HEIGHT)
+LEAGUE_LOGO_BASE_HEIGHT = TEAM_LOGO_BASE_HEIGHT if HYPERPIXEL_LAYOUT else standard_scoreboard_league_logo_height(TEAM_LOGO_BASE_HEIGHT)
 LOGO_HEIGHT = TEAM_LOGO_BASE_HEIGHT
 LEAGUE_LOGO_HEIGHT = LEAGUE_LOGO_BASE_HEIGHT
 SCORE_FONT = get_screen_font(
@@ -1104,7 +1104,8 @@ def draw_nhl_scoreboard(display, transition: bool = False) -> ScreenImage:
             tx = (WIDTH - tw) // 2
             ty = title_top
         draw.text((tx, ty), TITLE, font=TITLE_FONT, fill=(255, 255, 255))
-        _center_text(draw, "No games", STATUS_FONT, 0, WIDTH, HEIGHT // 2 - STATUS_ROW_H // 2, STATUS_ROW_H)
+        msg_top = max(ty + th + _scale_y(6), title_top + th + _scale_y(6))
+        _center_text(draw, "No games", STATUS_FONT, 0, WIDTH, msg_top, STATUS_ROW_H)
         if transition:
             return ScreenImage(img, displayed=False)
         display.image(img)
