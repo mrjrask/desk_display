@@ -1,13 +1,11 @@
 #!/usr/bin/env python3
-"""
-Font audit for desk_display.
+"""Font audit for desk_display.
 
 Scans:
-- screens/**/*.py for PIL ImageFont.truetype calls and common style/font lookup patterns
+- config.py for declared FONT_* constants and their concrete sizes
+- screens/**/*.py for ImageFont.truetype calls and font usage references
 - screens_style.json for font definitions
 - screens_layouts.json for per-display layout variants
-
-Outputs a readable report + optional JSON export.
 
 Usage:
   python3 tools/font_audit.py
@@ -39,6 +37,7 @@ class TruetypeCall:
     col: int
     font_arg: str
     size_arg: str
+    resolved_size: Optional[int]
 
 
 @dataclass
@@ -49,16 +48,35 @@ class FontLookupHint:
 
 
 @dataclass
+class FontUsageRef:
+    lineno: int
+    col: int
+    font_ref: str
+    resolved_size: Optional[int]
+
+
+@dataclass
+class FontDefinition:
+    name: str
+    size: Optional[int]
+    source: str
+    lineno: int
+
+
+@dataclass
 class ScreenFontReport:
     screen_file: str
     truetype_calls: List[TruetypeCall]
+    font_references: List[FontUsageRef]
     lookup_hints: List[FontLookupHint]
+    resolved_sizes_seen: List[int]
     notes: List[str]
 
 
 @dataclass
 class RepoFontAudit:
     repo_root: str
+    known_font_sizes: Dict[str, FontDefinition]
     screens_style_fonts: Dict[str, Any]
     screens_layouts_summary: Dict[str, Any]
     per_screen: List[ScreenFontReport]
@@ -80,17 +98,8 @@ def load_json_if_exists(path: Path) -> Optional[Any]:
 def expr_to_source(node: ast.AST, fallback: str = "") -> str:
     try:
         return ast.unparse(node)  # type: ignore[attr-defined]
-    except Exception:  # noqa: BLE001 - best-effort unparse
+    except Exception:  # noqa: BLE001
         return fallback
-
-
-def looks_like_truetype_call(func_node: ast.AST) -> bool:
-    """Detect ImageFont.truetype(...) or truetype(...)."""
-    if isinstance(func_node, ast.Attribute):
-        return func_node.attr == "truetype"
-    if isinstance(func_node, ast.Name):
-        return func_node.id == "truetype"
-    return False
 
 
 def node_loc(node: ast.AST) -> Tuple[int, int]:
@@ -111,22 +120,175 @@ def stringify_arg(node: Optional[ast.AST]) -> str:
     return expr_to_source(node, fallback=type(node).__name__)
 
 
+def looks_like_truetype_call(func_node: ast.AST) -> bool:
+    if isinstance(func_node, ast.Attribute):
+        return func_node.attr == "truetype"
+    if isinstance(func_node, ast.Name):
+        return func_node.id == "truetype"
+    return False
+
+
+def _font_ref_from_node(node: ast.AST) -> Optional[str]:
+    if isinstance(node, ast.Name):
+        return node.id
+    if isinstance(node, ast.Attribute):
+        return expr_to_source(node, "")
+    return None
+
+
+def _extract_int(node: ast.AST) -> Optional[int]:
+    if isinstance(node, ast.Constant) and isinstance(node.value, int) and not isinstance(node.value, bool):
+        return int(node.value)
+    return None
+
+
+def eval_int_expr(node: ast.AST, constants: Dict[str, int]) -> Optional[int]:
+    value = _extract_int(node)
+    if value is not None:
+        return value
+
+    if isinstance(node, ast.Name):
+        return constants.get(node.id)
+
+    if isinstance(node, ast.UnaryOp) and isinstance(node.op, (ast.UAdd, ast.USub)):
+        inner = eval_int_expr(node.operand, constants)
+        if inner is None:
+            return None
+        return inner if isinstance(node.op, ast.UAdd) else -inner
+
+    if isinstance(node, ast.BinOp):
+        left = eval_int_expr(node.left, constants)
+        right = eval_int_expr(node.right, constants)
+        if left is None or right is None:
+            return None
+        if isinstance(node.op, ast.Add):
+            return left + right
+        if isinstance(node.op, ast.Sub):
+            return left - right
+        if isinstance(node.op, ast.Mult):
+            return left * right
+        if isinstance(node.op, ast.FloorDiv) and right != 0:
+            return left // right
+        if isinstance(node.op, ast.Mod) and right != 0:
+            return left % right
+        return None
+
+    if isinstance(node, ast.Call) and isinstance(node.func, ast.Name):
+        fn = node.func.id
+        if fn in {"max", "min"}:
+            vals: List[int] = []
+            for arg in node.args:
+                v = eval_int_expr(arg, constants)
+                if v is None:
+                    return None
+                vals.append(v)
+            if not vals:
+                return None
+            return max(vals) if fn == "max" else min(vals)
+
+    if isinstance(node, ast.IfExp):
+        # best-effort: try both branches and keep equal result if deterministic
+        body = eval_int_expr(node.body, constants)
+        orelse = eval_int_expr(node.orelse, constants)
+        if body is not None and body == orelse:
+            return body
+        return body if body is not None else orelse
+
+    return None
+
+
+def build_known_font_sizes(repo_root: Path) -> Dict[str, FontDefinition]:
+    """Extract FONT_* definitions from config.py with concrete sizes when possible."""
+    out: Dict[str, FontDefinition] = {}
+    config_path = repo_root / "config.py"
+    if not config_path.exists():
+        return out
+
+    tree = ast.parse(safe_read_text(config_path))
+    int_constants: Dict[str, int] = {}
+
+    for node in tree.body:
+        if isinstance(node, ast.Assign) and len(node.targets) == 1 and isinstance(node.targets[0], ast.Name):
+            name = node.targets[0].id
+            as_int = eval_int_expr(node.value, int_constants)
+            if as_int is not None:
+                int_constants[name] = as_int
+
+            if not name.startswith("FONT_"):
+                continue
+
+            size: Optional[int] = None
+            source = expr_to_source(node.value, type(node.value).__name__)
+
+            if isinstance(node.value, ast.Call):
+                if isinstance(node.value.func, ast.Name) and node.value.func.id == "_load_font":
+                    if len(node.value.args) >= 2:
+                        size = eval_int_expr(node.value.args[1], int_constants)
+                elif looks_like_truetype_call(node.value.func):
+                    if len(node.value.args) >= 2:
+                        size = eval_int_expr(node.value.args[1], int_constants)
+                    for kw in node.value.keywords or []:
+                        if kw.arg == "size" and size is None:
+                            size = eval_int_expr(kw.value, int_constants)
+                elif isinstance(node.value.func, ast.Name) and node.value.func.id == "_load_emoji_font":
+                    if node.value.args:
+                        size = eval_int_expr(node.value.args[0], int_constants)
+
+            if size is None and isinstance(node.value, ast.Name) and node.value.id in out:
+                size = out[node.value.id].size
+
+            out[name] = FontDefinition(name=name, size=size, source=source, lineno=getattr(node, "lineno", 0))
+
+    return out
+
+
 class FontCallScanner(ast.NodeVisitor):
-    def __init__(self) -> None:
+    def __init__(self, known_font_sizes: Dict[str, FontDefinition]) -> None:
+        self.known_font_sizes = known_font_sizes
+        self.local_ints: Dict[str, int] = {}
         self.truetype_calls: List[TruetypeCall] = []
+        self.font_references: List[FontUsageRef] = []
         self.lookup_hints: List[FontLookupHint] = []
 
-    def visit_Call(self, node: ast.Call) -> Any:  # noqa: ANN401 - AST visitor signature
+    def _record_font_ref(self, node: ast.AST) -> None:
+        ref = _font_ref_from_node(node)
+        if not ref:
+            return
+
+        # Avoid noisy locals like plain "font" unless they are known constants.
+        if ref not in self.known_font_sizes and not re.search(r"(^|\.)FONT_[A-Z0-9_]+$", ref):
+            return
+
+        key = ref.split(".")[-1]
+        size = self.known_font_sizes.get(key).size if key in self.known_font_sizes else None
+        lineno, col = node_loc(node)
+        self.font_references.append(FontUsageRef(lineno, col, ref, size))
+
+    def visit_Assign(self, node: ast.Assign) -> Any:  # noqa: ANN401
+        if len(node.targets) == 1 and isinstance(node.targets[0], ast.Name):
+            val = eval_int_expr(node.value, self.local_ints)
+            if val is not None:
+                self.local_ints[node.targets[0].id] = val
+        self.generic_visit(node)
+
+    def visit_Call(self, node: ast.Call) -> Any:  # noqa: ANN401
         if looks_like_truetype_call(node.func):
             lineno, col = node_loc(node)
-            font_arg = stringify_arg(node.args[0]) if len(node.args) >= 1 else ""
-            size_arg = stringify_arg(node.args[1]) if len(node.args) >= 2 else ""
+            font_arg_node = node.args[0] if len(node.args) >= 1 else None
+            size_arg_node = node.args[1] if len(node.args) >= 2 else None
+
+            font_arg = stringify_arg(font_arg_node)
+            size_arg = stringify_arg(size_arg_node)
+            resolved_size = eval_int_expr(size_arg_node, self.local_ints) if size_arg_node is not None else None
 
             for kw in node.keywords or []:
                 if kw.arg == "font" and not font_arg:
+                    font_arg_node = kw.value
                     font_arg = stringify_arg(kw.value)
                 if kw.arg == "size" and not size_arg:
+                    size_arg_node = kw.value
                     size_arg = stringify_arg(kw.value)
+                    resolved_size = eval_int_expr(kw.value, self.local_ints)
 
             self.truetype_calls.append(
                 TruetypeCall(
@@ -134,8 +296,16 @@ class FontCallScanner(ast.NodeVisitor):
                     col=col,
                     font_arg=font_arg,
                     size_arg=size_arg,
+                    resolved_size=resolved_size,
                 )
             )
+
+            if font_arg_node is not None:
+                self._record_font_ref(font_arg_node)
+
+        for kw in node.keywords or []:
+            if kw.arg == "font":
+                self._record_font_ref(kw.value)
 
         call_src = expr_to_source(node, fallback="")
         if call_src:
@@ -149,16 +319,15 @@ class FontCallScanner(ast.NodeVisitor):
 
         self.generic_visit(node)
 
-    def visit_Subscript(self, node: ast.Subscript) -> Any:  # noqa: ANN401 - AST visitor signature
+    def visit_Subscript(self, node: ast.Subscript) -> Any:  # noqa: ANN401
         src = expr_to_source(node, fallback="")
-        if src and ("font" in src.lower()):
+        if src and "font" in src.lower():
             lineno, col = node_loc(node)
             self.lookup_hints.append(FontLookupHint(lineno, col, src))
         self.generic_visit(node)
 
 
 def extract_fonts_from_screens_style(style_json: Any) -> Dict[str, Any]:
-    """Best-effort: return anything that looks like a 'fonts' block."""
     if not isinstance(style_json, dict):
         return {}
 
@@ -180,7 +349,6 @@ def extract_fonts_from_screens_style(style_json: Any) -> Dict[str, Any]:
 
 
 def summarize_layouts(layout_json: Any) -> Dict[str, Any]:
-    """Best-effort summary of screens_layouts.json and per-display variants."""
     if not isinstance(layout_json, dict):
         return {}
 
@@ -209,23 +377,21 @@ def audit_repo(repo_root: Path) -> RepoFontAudit:
     if not screens_dir.exists():
         raise SystemExit(f"Expected screens/ directory at: {screens_dir}")
 
-    style_path = repo_root / "screens_style.json"
-    layouts_path = repo_root / "screens_layouts.json"
+    style_json = load_json_if_exists(repo_root / "screens_style.json") or {}
+    layouts_json = load_json_if_exists(repo_root / "screens_layouts.json") or {}
 
-    style_json = load_json_if_exists(style_path) or {}
-    layouts_json = load_json_if_exists(layouts_path) or {}
-
+    known_font_sizes = build_known_font_sizes(repo_root)
     screens_style_fonts = extract_fonts_from_screens_style(style_json)
     layouts_summary = summarize_layouts(layouts_json)
 
     per_screen: List[ScreenFontReport] = []
-
     py_files = sorted(path for path in screens_dir.rglob("*.py") if path.is_file())
+
     for path in py_files:
         rel = str(path.relative_to(repo_root))
         txt = safe_read_text(path)
-
         notes: List[str] = []
+
         try:
             tree = ast.parse(txt)
         except SyntaxError as exc:
@@ -233,29 +399,47 @@ def audit_repo(repo_root: Path) -> RepoFontAudit:
                 ScreenFontReport(
                     screen_file=rel,
                     truetype_calls=[],
+                    font_references=[],
                     lookup_hints=[],
+                    resolved_sizes_seen=[],
                     notes=[f"SyntaxError parsing file: {exc}"],
                 )
             )
             continue
 
-        scanner = FontCallScanner()
+        scanner = FontCallScanner(known_font_sizes)
         scanner.visit(tree)
 
-        if not scanner.truetype_calls and not scanner.lookup_hints:
+        resolved_sizes = sorted(
+            {
+                c.resolved_size
+                for c in scanner.truetype_calls
+                if c.resolved_size is not None
+            }
+            | {
+                f.resolved_size
+                for f in scanner.font_references
+                if f.resolved_size is not None
+            }
+        )
+
+        if not scanner.truetype_calls and not scanner.font_references and not scanner.lookup_hints:
             notes.append("No direct font calls detected (may rely on shared helpers/styles).")
 
         per_screen.append(
             ScreenFontReport(
                 screen_file=rel,
                 truetype_calls=scanner.truetype_calls,
+                font_references=scanner.font_references,
                 lookup_hints=scanner.lookup_hints,
+                resolved_sizes_seen=resolved_sizes,
                 notes=notes,
             )
         )
 
     return RepoFontAudit(
         repo_root=str(repo_root),
+        known_font_sizes=known_font_sizes,
         screens_style_fonts=screens_style_fonts,
         screens_layouts_summary=layouts_summary,
         per_screen=per_screen,
@@ -267,6 +451,20 @@ def print_report(audit: RepoFontAudit) -> None:
     print("desk_display font audit")
     print("=" * 80)
     print(f"Repo root: {audit.repo_root}")
+    print()
+
+    print("-" * 80)
+    print("Known FONT_* definitions from config.py")
+    print("-" * 80)
+    if not audit.known_font_sizes:
+        print("No FONT_* definitions discovered in config.py.")
+    else:
+        known = sorted(audit.known_font_sizes.values(), key=lambda item: (item.size is None, item.name))
+        for entry in known[:400]:
+            size_label = str(entry.size) if entry.size is not None else "?"
+            print(f"  - {entry.name}: size={size_label} (L{entry.lineno})")
+        if len(known) > 400:
+            print(f"  ... ({len(known) - 400} more)")
     print()
 
     print("-" * 80)
@@ -307,19 +505,34 @@ def print_report(audit: RepoFontAudit) -> None:
 
     for screen in audit.per_screen:
         print(f"\n## {screen.screen_file}")
+
+        if screen.resolved_sizes_seen:
+            print(f"  resolved font sizes seen: {', '.join(str(s) for s in screen.resolved_sizes_seen)}")
+
         if screen.truetype_calls:
             print("  truetype calls:")
             for call in screen.truetype_calls:
+                size_info = f" -> resolved={call.resolved_size}" if call.resolved_size is not None else ""
                 print(
                     f"    - L{call.lineno}:{call.col}  "
-                    f"ImageFont.truetype(font={call.font_arg}, size={call.size_arg})"
+                    f"ImageFont.truetype(font={call.font_arg}, size={call.size_arg}){size_info}"
                 )
+
+        if screen.font_references:
+            print("  font references:")
+            for ref in screen.font_references[:200]:
+                size_info = f" (size={ref.resolved_size})" if ref.resolved_size is not None else ""
+                print(f"    - L{ref.lineno}:{ref.col}  {ref.font_ref}{size_info}")
+            if len(screen.font_references) > 200:
+                print(f"    ... ({len(screen.font_references) - 200} more)")
+
         if screen.lookup_hints:
             print("  style/font lookup hints:")
             for hint in screen.lookup_hints[:200]:
                 print(f"    - L{hint.lineno}:{hint.col}  {hint.expression}")
             if len(screen.lookup_hints) > 200:
                 print(f"    ... ({len(screen.lookup_hints) - 200} more)")
+
         if screen.notes:
             print("  notes:")
             for note in screen.notes:
@@ -337,8 +550,7 @@ def main() -> None:
     if args.json_out:
         out_path = Path(args.json_out).expanduser().resolve()
         out_path.parent.mkdir(parents=True, exist_ok=True)
-        payload = asdict(audit)
-        out_path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+        out_path.write_text(json.dumps(asdict(audit), indent=2), encoding="utf-8")
         print(f"\nWrote JSON: {out_path}")
 
 
