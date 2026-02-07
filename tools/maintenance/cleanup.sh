@@ -23,7 +23,7 @@ stop_kernel_user_service() {
 
   service_user="$(systemctl show -p User --value "$system_service" 2>/dev/null || true)"
   if [[ -z "$service_user" || "$service_user" == "root" ]]; then
-    service_user="${SUDO_USER:-$USER}"
+    service_user="${SUDO_USER:-${USER:-}}"
   fi
   if [[ -z "$service_user" ]]; then
     return 0
@@ -40,7 +40,10 @@ stop_kernel_user_service() {
     fi
   fi
 
-  if [[ "$USER" == "$service_user" ]]; then
+  local current_user=""
+  current_user="$(id -un 2>/dev/null || true)"
+
+  if [[ -n "$current_user" && "$current_user" == "$service_user" ]]; then
     env "${systemctl_env[@]}" systemctl --user stop "$kernel_service" >/dev/null 2>&1 || true
   elif command -v sudo >/dev/null 2>&1; then
     sudo -u "$service_user" env "${systemctl_env[@]}" systemctl --user stop "$kernel_service" >/dev/null 2>&1 || true
