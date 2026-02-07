@@ -94,22 +94,45 @@ _ROW_BASE_SIZE = max(8, int(round(28 * _NHL_SQUARE_FONT_SCALE)))
 _COLUMN_POINTS_DELTA = 6
 _TEAM_NAME_DELTA = 3
 _ROW_STATS_DELTA = 2
+_HYPERPIXEL_4_STANDINGS_IDS = {
+    "NHL Standings West",
+    "NHL Standings East",
+    "NHL Standings West v2",
+    "NHL Standings East v2",
+}
+_HYPERPIXEL_4_ROW_SCALE = 0.68 if is_hyperpixel_4_square_layout() else 1.0
+_HYPERPIXEL_4_DIVISION_SCALE = 0.72 if is_hyperpixel_4_square_layout() else 1.0
+_HYPERPIXEL_4_COLUMN_SCALE = 0.72 if is_hyperpixel_4_square_layout() else 1.0
+_HYPERPIXEL_4_ROW_SPACING = scale_value(3)
 
 
 def _build_fonts(style_id: str, *, reduce_row_stats: bool = False) -> tuple:
+    is_hyperpixel_4_standings = (
+        is_hyperpixel_4_square_layout() and style_id in _HYPERPIXEL_4_STANDINGS_IDS
+    )
+    division_base_size = _DIVISION_BASE_SIZE
+    column_base_size = _COLUMN_BASE_SIZE
+    row_base_size = _ROW_BASE_SIZE
+    if is_hyperpixel_4_standings:
+        division_base_size = max(8, int(round(division_base_size * _HYPERPIXEL_4_DIVISION_SCALE)))
+        column_base_size = max(8, int(round(column_base_size * _HYPERPIXEL_4_COLUMN_SCALE)))
+        row_base_size = max(8, int(round(row_base_size * _HYPERPIXEL_4_ROW_SCALE)))
+
     division = get_screen_font(
         style_id,
         "division",
         base_font=FONT_TITLE_SPORTS,
-        default_size=_DIVISION_BASE_SIZE,
+        default_size=division_base_size,
     )
     column = get_screen_font(
         style_id,
         "column",
         base_font=FONT_STATUS,
-        default_size=_COLUMN_BASE_SIZE,
+        default_size=column_base_size,
     )
-    column_points_size = max(8, getattr(column, "size", _COLUMN_BASE_SIZE) - _COLUMN_POINTS_DELTA)
+    column_points_size = max(8, column_base_size - _COLUMN_POINTS_DELTA)
+    if not is_hyperpixel_4_standings:
+        column_points_size = max(8, getattr(column, "size", column_base_size) - _COLUMN_POINTS_DELTA)
     column_points = get_screen_font(
         style_id,
         "column_points",
@@ -120,9 +143,11 @@ def _build_fonts(style_id: str, *, reduce_row_stats: bool = False) -> tuple:
         style_id,
         "row",
         base_font=FONT_STATUS,
-        default_size=_ROW_BASE_SIZE,
+        default_size=row_base_size,
     )
-    row_stats_size = getattr(row, "size", _ROW_BASE_SIZE)
+    row_stats_size = row_base_size
+    if not is_hyperpixel_4_standings:
+        row_stats_size = getattr(row, "size", row_base_size)
     if reduce_row_stats:
         row_stats_size = max(8, row_stats_size - _ROW_STATS_DELTA)
     row_stats = get_screen_font(
@@ -131,7 +156,9 @@ def _build_fonts(style_id: str, *, reduce_row_stats: bool = False) -> tuple:
         base_font=row,
         default_size=row_stats_size,
     )
-    team_name_size = max(8, getattr(row, "size", _ROW_BASE_SIZE) - _TEAM_NAME_DELTA)
+    team_name_size = max(8, row_base_size - _TEAM_NAME_DELTA)
+    if not is_hyperpixel_4_standings:
+        team_name_size = max(8, getattr(row, "size", row_base_size) - _TEAM_NAME_DELTA)
     team_name = get_screen_font(
         style_id,
         "team_name",
@@ -157,6 +184,7 @@ def _apply_style_overrides(screen_id: str) -> None:
     global DIVISION_FONT, COLUMN_FONT, COLUMN_FONT_POINTS, ROW_FONT, ROW_STATS_FONT, TEAM_NAME_FONT
     global LOGO_HEIGHT, OVERVIEW_MIN_LOGO_HEIGHT, OVERVIEW_MAX_LOGO_HEIGHT
     global CONFERENCE_LOGO_HEIGHT, BACKGROUND_COLOR
+    global ROW_PADDING, ROW_SPACING
 
     reduce_row_stats = screen_id in {"NHL Standings West", "NHL Standings East"}
     (
@@ -177,6 +205,15 @@ def _apply_style_overrides(screen_id: str) -> None:
     CONFERENCE_LOGO_HEIGHT = _conference_logo_height_for_layout(
         _CONFERENCE_LOGO_BASE_HEIGHT * conference_scale
     )
+
+    if is_hyperpixel_4_square_layout() and screen_id in _HYPERPIXEL_4_STANDINGS_IDS:
+        ROW_PADDING = 1
+        ROW_SPACING = _HYPERPIXEL_4_ROW_SPACING
+    else:
+        ROW_PADDING = scale_value(2)
+        ROW_SPACING = scale_value(2)
+
+    _update_row_metrics()
     BACKGROUND_COLOR = get_screen_background_color(screen_id, SCOREBOARD_BACKGROUND_COLOR)
 
 OVERVIEW_TITLE = "NHL Overview"
@@ -343,6 +380,18 @@ COLUMN_TEXT_HEIGHT = max(
 )
 COLUMN_ROW_HEIGHT = COLUMN_TEXT_HEIGHT + 2
 DIVISION_TEXT_HEIGHT = _text_size("Metropolitan", DIVISION_FONT)[1]
+
+
+def _update_row_metrics() -> None:
+    global ROW_TEXT_HEIGHT, ROW_HEIGHT, COLUMN_TEXT_HEIGHT, COLUMN_ROW_HEIGHT, DIVISION_TEXT_HEIGHT
+    ROW_TEXT_HEIGHT = _text_size("PTS", ROW_FONT)[1]
+    ROW_HEIGHT = max(LOGO_HEIGHT, ROW_TEXT_HEIGHT) + ROW_PADDING * 2
+    COLUMN_TEXT_HEIGHT = max(
+        _text_size(label, COLUMN_HEADER_FONTS.get(key, COLUMN_FONT))[1]
+        for label, key, _ in COLUMN_HEADERS
+    )
+    COLUMN_ROW_HEIGHT = COLUMN_TEXT_HEIGHT + 2
+    DIVISION_TEXT_HEIGHT = _text_size("Metropolitan", DIVISION_FONT)[1]
 
 
 def _conference_column_layout(
