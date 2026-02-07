@@ -126,7 +126,10 @@ def _scoreboard_fonts():
 
 def _team_logo_height() -> int:
     scale = get_screen_image_scale(SCREEN_ID, "team_logo", 1.0)
-    return max(1, int(round(TEAM_LOGO_BASE_HEIGHT * scale)))
+    height = max(1, int(round(TEAM_LOGO_BASE_HEIGHT * scale)))
+    if HYPERPIXEL_LAYOUT:
+        height = max(1, int(round(height * 0.6)))
+    return height
 
 
 def _league_logo_height() -> int:
