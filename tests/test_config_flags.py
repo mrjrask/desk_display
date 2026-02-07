@@ -1,4 +1,5 @@
 import importlib
+from pathlib import Path
 
 
 def _reload_config(monkeypatch, **env):
@@ -48,3 +49,45 @@ def test_kernel_portrait_mode_is_normalized_to_landscape(monkeypatch):
 def test_display_rotation_defaults_to_0(monkeypatch):
     module = _reload_config(monkeypatch, DISPLAY_ROTATION=None)
     assert module.DISPLAY_ROTATION == 0
+
+
+def test_display_rotation_env_overrides_kernel_overlay(monkeypatch):
+    config_text = "dtoverlay=vc4-kms-dpi-hyperpixel4,rotate=270\n"
+
+    original_read_text = Path.read_text
+
+    def fake_read_text(path_obj, *args, **kwargs):
+        if str(path_obj) in {"/boot/firmware/config.txt", "/boot/config.txt"}:
+            return config_text
+        return original_read_text(path_obj, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "read_text", fake_read_text)
+    module = _reload_config(
+        monkeypatch,
+        DESK_DISPLAY_OUTPUT="kernel",
+        HYPERPIXEL_PANEL="hyperpixel4",
+        DISPLAY_ROTATION="180",
+    )
+
+    assert module.DISPLAY_ROTATION == 180
+
+
+def test_display_rotation_uses_kernel_overlay_when_env_missing(monkeypatch):
+    config_text = "dtoverlay=vc4-kms-dpi-hyperpixel4,rotate=270\n"
+
+    original_read_text = Path.read_text
+
+    def fake_read_text(path_obj, *args, **kwargs):
+        if str(path_obj) in {"/boot/firmware/config.txt", "/boot/config.txt"}:
+            return config_text
+        return original_read_text(path_obj, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "read_text", fake_read_text)
+    module = _reload_config(
+        monkeypatch,
+        DESK_DISPLAY_OUTPUT="kernel",
+        HYPERPIXEL_PANEL="hyperpixel4",
+        DISPLAY_ROTATION=None,
+    )
+
+    assert module.DISPLAY_ROTATION == 270

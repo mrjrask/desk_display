@@ -354,6 +354,62 @@ def _read_drm_mode_size() -> Optional[Tuple[int, int]]:
     return None
 
 
+def _read_kernel_overlay_rotation() -> Optional[int]:
+    """Read display rotation from Raspberry Pi dtoverlay configuration."""
+
+    config_paths = (
+        Path("/boot/firmware/config.txt"),
+        Path("/boot/config.txt"),
+    )
+    overlays_of_interest = {"vc4-kms-dpi-hyperpixel4", "vc4-kms-dpi-hyperpixel4sq"}
+
+    for config_path in config_paths:
+        try:
+            lines = config_path.read_text(encoding="utf-8").splitlines()
+        except OSError:
+            continue
+
+        for raw_line in lines:
+            line = raw_line.strip()
+            if not line or line.startswith("#"):
+                continue
+            if "#" in line:
+                line = line.split("#", 1)[0].strip()
+            if not line or not line.lower().startswith("dtoverlay="):
+                continue
+
+            overlay_config = line.split("=", 1)[1].strip()
+            if not overlay_config:
+                continue
+
+            parts = [part.strip() for part in overlay_config.split(",") if part.strip()]
+            if not parts:
+                continue
+
+            overlay_name = parts[0].lower()
+            should_check = (
+                overlay_name in overlays_of_interest or "rotate=" in overlay_config.lower()
+            )
+            if not should_check:
+                continue
+
+            for part in parts[1:]:
+                if not part.lower().startswith("rotate="):
+                    continue
+                raw_value = part.split("=", 1)[1].strip()
+                try:
+                    return int(raw_value)
+                except ValueError:
+                    logging.warning(
+                        "Ignoring invalid rotate value '%s' in %s.",
+                        raw_value,
+                        config_path,
+                    )
+                break
+
+    return None
+
+
 _display_width_set = "DISPLAY_WIDTH" in os.environ
 _display_height_set = "DISPLAY_HEIGHT" in os.environ
 
@@ -480,12 +536,24 @@ except (TypeError, ValueError):
     TEAM_STANDINGS_DISPLAY_SECONDS = 5
 SCHEDULE_UPDATE_INTERVAL = 600
 
-try:
-    DISPLAY_ROTATION = int(os.environ.get("DISPLAY_ROTATION", "0"))
-except (TypeError, ValueError):
-    logging.warning(
-        "Invalid DISPLAY_ROTATION value; defaulting to 0 degrees."
-    )
+_use_kernel_rotation_source = (
+    _hyperpixel_panel.startswith("hyperpixel")
+    or _display_output in {"kernel", "kms", "drm", "sdl"}
+)
+_kernel_overlay_rotation = _read_kernel_overlay_rotation() if _use_kernel_rotation_source else None
+_display_rotation_raw = os.environ.get("DISPLAY_ROTATION")
+
+if _display_rotation_raw is not None:
+    try:
+        DISPLAY_ROTATION = int(_display_rotation_raw)
+    except (TypeError, ValueError):
+        logging.warning(
+            "Invalid DISPLAY_ROTATION value; using kernel/default rotation."
+        )
+        DISPLAY_ROTATION = _kernel_overlay_rotation if _kernel_overlay_rotation is not None else 0
+elif _kernel_overlay_rotation is not None:
+    DISPLAY_ROTATION = _kernel_overlay_rotation
+else:
     DISPLAY_ROTATION = 0
 
 
