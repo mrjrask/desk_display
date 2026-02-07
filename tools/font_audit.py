@@ -16,8 +16,10 @@ from __future__ import annotations
 
 import argparse
 import ast
+import importlib
 import json
 import re
+import sys
 from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
@@ -45,6 +47,7 @@ class FontLookupHint:
     lineno: int
     col: int
     expression: str
+    resolved_size: Optional[int]
 
 
 @dataclass
@@ -260,12 +263,38 @@ def build_known_font_sizes(repo_root: Path) -> Dict[str, FontDefinition]:
 
 
 class FontCallScanner(ast.NodeVisitor):
-    def __init__(self, known_font_sizes: Dict[str, FontDefinition]) -> None:
+    def __init__(
+        self,
+        known_font_sizes: Dict[str, FontDefinition],
+        module_name: str,
+        runtime_module_fonts: Dict[str, Dict[str, int]],
+    ) -> None:
         self.known_font_sizes = known_font_sizes
+        self.module_name = module_name
+        self.runtime_module_fonts = runtime_module_fonts
         self.local_ints: Dict[str, int] = {}
+        self.import_aliases: Dict[str, str] = {}
         self.truetype_calls: List[TruetypeCall] = []
         self.font_references: List[FontUsageRef] = []
         self.lookup_hints: List[FontLookupHint] = []
+
+    def _resolve_font_size(self, node: ast.AST) -> Optional[int]:
+        ref = _font_ref_from_node(node)
+        if not ref:
+            return None
+
+        key = ref.split(".")[-1]
+        if key in self.known_font_sizes:
+            return self.known_font_sizes[key].size
+
+        if "." not in ref:
+            return self.runtime_module_fonts.get(self.module_name, {}).get(ref)
+
+        root, _, attr = ref.partition(".")
+        module_target = self.import_aliases.get(root)
+        if module_target:
+            return self.runtime_module_fonts.get(module_target, {}).get(attr)
+        return None
 
     def _record_font_ref(self, node: ast.AST) -> None:
         ref = _font_ref_from_node(node)
@@ -276,10 +305,23 @@ class FontCallScanner(ast.NodeVisitor):
         if ref not in self.known_font_sizes and not re.search(r"(^|\.)FONT_[A-Z0-9_]+$", ref):
             return
 
-        key = ref.split(".")[-1]
-        size = self.known_font_sizes.get(key).size if key in self.known_font_sizes else None
+        size = self._resolve_font_size(node)
         lineno, col = node_loc(node)
         self.font_references.append(FontUsageRef(lineno, col, ref, size))
+
+    def visit_Import(self, node: ast.Import) -> Any:  # noqa: ANN401
+        for alias in node.names:
+            local = alias.asname or alias.name.split(".")[-1]
+            self.import_aliases[local] = alias.name
+        self.generic_visit(node)
+
+    def visit_ImportFrom(self, node: ast.ImportFrom) -> Any:  # noqa: ANN401
+        if not node.module:
+            return self.generic_visit(node)
+        for alias in node.names:
+            local = alias.asname or alias.name
+            self.import_aliases[local] = f"{node.module}.{alias.name}"
+        self.generic_visit(node)
 
     def visit_Assign(self, node: ast.Assign) -> Any:  # noqa: ANN401
         if len(node.targets) == 1 and isinstance(node.targets[0], ast.Name):
@@ -332,14 +374,21 @@ class FontCallScanner(ast.NodeVisitor):
                 self._record_font_ref(kw.value)
 
         call_src = expr_to_source(node, fallback="")
+        if isinstance(node.func, ast.Name) and node.func.id == "_text_size" and len(node.args) >= 2:
+            lineno, col = node_loc(node)
+            resolved_size = self._resolve_font_size(node.args[1])
+            self.lookup_hints.append(
+                FontLookupHint(lineno, col, call_src or "_text_size(...)", resolved_size)
+            )
+
         if call_src:
             if re.search(r"\bget_font\s*\(", call_src):
                 lineno, col = node_loc(node)
-                self.lookup_hints.append(FontLookupHint(lineno, col, call_src))
+                self.lookup_hints.append(FontLookupHint(lineno, col, call_src, None))
             if re.search(r"\bfonts?\s*\[", call_src) or re.search(r"\bstyle\s*\[", call_src):
                 lineno, col = node_loc(node)
                 if "font" in call_src.lower():
-                    self.lookup_hints.append(FontLookupHint(lineno, col, call_src))
+                    self.lookup_hints.append(FontLookupHint(lineno, col, call_src, None))
 
         self.generic_visit(node)
 
@@ -347,8 +396,35 @@ class FontCallScanner(ast.NodeVisitor):
         src = expr_to_source(node, fallback="")
         if src and "font" in src.lower():
             lineno, col = node_loc(node)
-            self.lookup_hints.append(FontLookupHint(lineno, col, src))
+            self.lookup_hints.append(FontLookupHint(lineno, col, src, None))
         self.generic_visit(node)
+
+
+def collect_runtime_module_fonts(repo_root: Path) -> Dict[str, Dict[str, int]]:
+    modules: Dict[str, Dict[str, int]] = {}
+    root_str = str(repo_root)
+    if root_str not in sys.path:
+        sys.path.insert(0, root_str)
+
+    for path in sorted((repo_root / "screens").rglob("*.py")):
+        rel = str(path.relative_to(repo_root))
+        module_name = rel[:-3].replace("/", ".")
+        try:
+            mod = importlib.import_module(module_name)
+        except Exception:
+            continue
+
+        font_map: Dict[str, int] = {}
+        for name, value in vars(mod).items():
+            if "FONT" not in name.upper():
+                continue
+            size = getattr(value, "size", None)
+            if isinstance(size, int):
+                font_map[name] = size
+        if font_map:
+            modules[module_name] = font_map
+
+    return modules
 
 
 def extract_fonts_from_screens_style(style_json: Any) -> Dict[str, Any]:
@@ -408,6 +484,7 @@ def audit_repo(repo_root: Path) -> RepoFontAudit:
     screens_style_fonts = extract_fonts_from_screens_style(style_json)
     layouts_summary = summarize_layouts(layouts_json)
 
+    runtime_module_fonts = collect_runtime_module_fonts(repo_root)
     per_screen: List[ScreenFontReport] = []
     py_files = sorted(path for path in screens_dir.rglob("*.py") if path.is_file())
 
@@ -431,7 +508,8 @@ def audit_repo(repo_root: Path) -> RepoFontAudit:
             )
             continue
 
-        scanner = FontCallScanner(known_font_sizes)
+        module_name = rel[:-3].replace("/", ".")
+        scanner = FontCallScanner(known_font_sizes, module_name, runtime_module_fonts)
         scanner.visit(tree)
 
         resolved_sizes = sorted(
@@ -553,7 +631,8 @@ def print_report(audit: RepoFontAudit) -> None:
         if screen.lookup_hints:
             print("  style/font lookup hints:")
             for hint in screen.lookup_hints[:200]:
-                print(f"    - L{hint.lineno}:{hint.col}  {hint.expression}")
+                size_info = f" (size={hint.resolved_size})" if hint.resolved_size is not None else ""
+                print(f"    - L{hint.lineno}:{hint.col}  {hint.expression}{size_info}")
             if len(screen.lookup_hints) > 200:
                 print(f"    ... ({len(screen.lookup_hints) - 200} more)")
 

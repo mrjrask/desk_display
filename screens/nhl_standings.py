@@ -90,83 +90,87 @@ DIVISION_HEADER_GAP = scale_value(6)
 
 TITLE_FONT = FONT_TITLE_SPORTS
 _DEFAULT_STYLE_ID = "NHL Standings Default"
-_NHL_SQUARE_FONT_SCALE = 0.62 if is_hyperpixel_4_square_layout() else 1.0
-_DIVISION_BASE_SIZE = max(8, int(round(26 * _NHL_SQUARE_FONT_SCALE)))
-_COLUMN_BASE_SIZE = max(8, int(round(24 * _NHL_SQUARE_FONT_SCALE)))
-_ROW_BASE_SIZE = max(8, int(round(28 * _NHL_SQUARE_FONT_SCALE)))
-_COLUMN_POINTS_DELTA = 6
-_TEAM_NAME_DELTA = 3
-_ROW_STATS_DELTA = 2
 _HYPERPIXEL_4_STANDINGS_IDS = {
     "NHL Standings West",
     "NHL Standings East",
     "NHL Standings West v2",
     "NHL Standings East v2",
 }
-_HYPERPIXEL_4_ROW_SCALE = 0.68 if is_hyperpixel_4_square_layout() else 1.0
-_HYPERPIXEL_4_DIVISION_SCALE = 0.72 if is_hyperpixel_4_square_layout() else 1.0
-_HYPERPIXEL_4_COLUMN_SCALE = 0.72 if is_hyperpixel_4_square_layout() else 1.0
 _HYPERPIXEL_4_ROW_SPACING = scale_value(3)
 
+_BASE_FONT_SIZES = {
+    "division": 26,
+    "column": 24,
+    "column_points": 18,
+    "row": 28,
+    "row_stats": 26,
+    "team_name": 25,
+}
 
-def _build_fonts(style_id: str, *, reduce_row_stats: bool = False) -> tuple:
-    is_hyperpixel_4_standings = (
-        is_hyperpixel_4_square_layout() and style_id in _HYPERPIXEL_4_STANDINGS_IDS
-    )
-    division_base_size = _DIVISION_BASE_SIZE
-    column_base_size = _COLUMN_BASE_SIZE
-    row_base_size = _ROW_BASE_SIZE
-    if is_hyperpixel_4_standings:
-        division_base_size = max(8, int(round(division_base_size * _HYPERPIXEL_4_DIVISION_SCALE)))
-        column_base_size = max(8, int(round(column_base_size * _HYPERPIXEL_4_COLUMN_SCALE)))
-        row_base_size = max(8, int(round(row_base_size * _HYPERPIXEL_4_ROW_SCALE)))
+# Explicit per-screen overrides so each standings screen can be tuned independently.
+# This keeps font tuning simple without touching shared scaling logic.
+_STANDINGS_FONT_SIZE_OVERRIDES = {
+    "NHL Standings West": {"row_stats": 24},
+    "NHL Standings East": {"row_stats": 24},
+    "NHL Standings West v2": {"row_stats": 24},
+    "NHL Standings East v2": {"row_stats": 24},
+}
 
+_HYPERPIXEL_4_FONT_SIZES = {
+    "division": 14,
+    "column": 13,
+    "column_points": 10,
+    "row": 19,
+    "row_stats": 17,
+    "team_name": 16,
+}
+
+
+def _resolve_font_sizes(style_id: str) -> dict[str, int]:
+    base = dict(_BASE_FONT_SIZES)
+    if is_hyperpixel_4_square_layout() and style_id in _HYPERPIXEL_4_STANDINGS_IDS:
+        base.update(_HYPERPIXEL_4_FONT_SIZES)
+    base.update(_STANDINGS_FONT_SIZE_OVERRIDES.get(style_id, {}))
+    return {slot: max(8, int(round(size))) for slot, size in base.items()}
+
+
+def _build_fonts(style_id: str) -> tuple:
+    sizes = _resolve_font_sizes(style_id)
     division = get_screen_font(
         style_id,
         "division",
         base_font=FONT_TITLE_SPORTS,
-        default_size=division_base_size,
+        default_size=sizes["division"],
     )
     column = get_screen_font(
         style_id,
         "column",
         base_font=FONT_STATUS,
-        default_size=column_base_size,
+        default_size=sizes["column"],
     )
-    column_points_size = max(8, column_base_size - _COLUMN_POINTS_DELTA)
-    if not is_hyperpixel_4_standings:
-        column_points_size = max(8, getattr(column, "size", column_base_size) - _COLUMN_POINTS_DELTA)
     column_points = get_screen_font(
         style_id,
         "column_points",
         base_font=column,
-        default_size=column_points_size,
+        default_size=sizes["column_points"],
     )
     row = get_screen_font(
         style_id,
         "row",
         base_font=FONT_STATUS,
-        default_size=row_base_size,
+        default_size=sizes["row"],
     )
-    row_stats_size = row_base_size
-    if not is_hyperpixel_4_standings:
-        row_stats_size = getattr(row, "size", row_base_size)
-    if reduce_row_stats:
-        row_stats_size = max(8, row_stats_size - _ROW_STATS_DELTA)
     row_stats = get_screen_font(
         style_id,
         "row_stats",
         base_font=row,
-        default_size=row_stats_size,
+        default_size=sizes["row_stats"],
     )
-    team_name_size = max(8, row_base_size - _TEAM_NAME_DELTA)
-    if not is_hyperpixel_4_standings:
-        team_name_size = max(8, getattr(row, "size", row_base_size) - _TEAM_NAME_DELTA)
     team_name = get_screen_font(
         style_id,
         "team_name",
         base_font=row,
-        default_size=team_name_size,
+        default_size=sizes["team_name"],
     )
     return division, column, column_points, row, row_stats, team_name
 
@@ -183,13 +187,17 @@ def _build_fonts(style_id: str, *, reduce_row_stats: bool = False) -> tuple:
 )
 
 
+def _refresh_column_header_fonts() -> None:
+    global COLUMN_HEADER_FONTS
+    COLUMN_HEADER_FONTS = {"points": COLUMN_FONT_POINTS}
+
+
 def _apply_style_overrides(screen_id: str) -> None:
     global DIVISION_FONT, COLUMN_FONT, COLUMN_FONT_POINTS, ROW_FONT, ROW_STATS_FONT, TEAM_NAME_FONT
     global LOGO_HEIGHT, OVERVIEW_MIN_LOGO_HEIGHT, OVERVIEW_MAX_LOGO_HEIGHT
     global CONFERENCE_LOGO_HEIGHT, BACKGROUND_COLOR
     global ROW_PADDING, ROW_SPACING
 
-    reduce_row_stats = screen_id in {"NHL Standings West", "NHL Standings East", "NHL Standings West v2", "NHL Standings East v2"}
     (
         DIVISION_FONT,
         COLUMN_FONT,
@@ -197,7 +205,8 @@ def _apply_style_overrides(screen_id: str) -> None:
         ROW_FONT,
         ROW_STATS_FONT,
         TEAM_NAME_FONT,
-    ) = _build_fonts(screen_id, reduce_row_stats=reduce_row_stats)
+    ) = _build_fonts(screen_id)
+    _refresh_column_header_fonts()
 
     team_scale = get_screen_image_scale(screen_id, "team_logo", 1.0)
     LOGO_HEIGHT = max(1, int(round(_LOGO_BASE_HEIGHT * team_scale)))
