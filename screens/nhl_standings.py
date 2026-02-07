@@ -54,7 +54,7 @@ if is_hyperpixel_4_square_layout():
     LOGO_HEIGHT = max(1, int(round(LOGO_HEIGHT * 0.75)))
 _CONFERENCE_LOGO_BASE_HEIGHT = _LOGO_BASE_HEIGHT
 CONFERENCE_LOGO_HEIGHT = _CONFERENCE_LOGO_BASE_HEIGHT
-_HYPERPIXEL_4_TITLE_LOGO_TARGET = scale_value_width(14)
+_HYPERPIXEL_4_TITLE_LOGO_TARGET = scale_value_width(40)
 
 
 def _conference_logo_height_for_layout(base_height: int) -> int:
@@ -76,6 +76,9 @@ STATS_COLUMN_MIN_STEP = scale_value(36)
 STATS_COLUMN_MAX_STEP: int | None = None
 ROW_PADDING = scale_value(2)
 ROW_SPACING = scale_value(2)
+if is_hyperpixel_4_square_layout():
+    ROW_PADDING = max(ROW_PADDING, scale_value(3))
+    ROW_SPACING = max(ROW_SPACING, scale_value(4))
 SECTION_GAP = scale_value(10)
 TITLE_MARGIN_TOP = scale_value(4)
 TITLE_MARGIN_BOTTOM = scale_value(6)
@@ -87,7 +90,7 @@ DIVISION_HEADER_GAP = scale_value(6)
 
 TITLE_FONT = FONT_TITLE_SPORTS
 _DEFAULT_STYLE_ID = "NHL Standings Default"
-_NHL_SQUARE_FONT_SCALE = 0.78 if is_hyperpixel_4_square_layout() else 1.0
+_NHL_SQUARE_FONT_SCALE = 0.62 if is_hyperpixel_4_square_layout() else 1.0
 _DIVISION_BASE_SIZE = max(8, int(round(26 * _NHL_SQUARE_FONT_SCALE)))
 _COLUMN_BASE_SIZE = max(8, int(round(24 * _NHL_SQUARE_FONT_SCALE)))
 _ROW_BASE_SIZE = max(8, int(round(28 * _NHL_SQUARE_FONT_SCALE)))
@@ -158,7 +161,7 @@ def _apply_style_overrides(screen_id: str) -> None:
     global LOGO_HEIGHT, OVERVIEW_MIN_LOGO_HEIGHT, OVERVIEW_MAX_LOGO_HEIGHT
     global CONFERENCE_LOGO_HEIGHT, BACKGROUND_COLOR
 
-    reduce_row_stats = screen_id in {"NHL Standings West", "NHL Standings East"}
+    reduce_row_stats = screen_id in {"NHL Standings West", "NHL Standings East", "NHL Standings West v2", "NHL Standings East v2"}
     (
         DIVISION_FONT,
         COLUMN_FONT,

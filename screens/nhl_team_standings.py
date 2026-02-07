@@ -5,15 +5,20 @@ from screens.mlb_team_standings import (
     draw_standings_screen2 as _base_screen2,
     _format_int,
 )
-from config import FONT_STAND1_RANK, DISPLAY_SCALE
+from config import FONT_STAND1_RANK, DISPLAY_SCALE, is_hyperpixel_4_square_layout
 from utils import log_call, clone_font
 
+_IS_HYPERPIXEL_4_SQUARE = is_hyperpixel_4_square_layout()
+
 NHL_LOGO_SZ = max(1, int(round(LOGO_SZ * 0.5)))
+NHL_STAND1_LOGO_SZ = NHL_LOGO_SZ * 3 if _IS_HYPERPIXEL_4_SQUARE else NHL_LOGO_SZ
 
 NHL_POINTS_FONT = clone_font(
     FONT_STAND1_RANK,
     max(1, int(round(getattr(FONT_STAND1_RANK, "size", 22) / max(1.0, DISPLAY_SCALE)))),
 )
+if _IS_HYPERPIXEL_4_SQUARE:
+    NHL_POINTS_FONT = clone_font(NHL_POINTS_FONT, max(1, getattr(NHL_POINTS_FONT, "size", 20) + 4))
 
 
 def _strip_pct_leading_zero(rec, *, precision=3):
@@ -129,7 +134,7 @@ def draw_nhl_standings_screen1(display, rec, logo_path, division_name, *, transi
         conference_label="conference",
         show_conference_rank=True,
         record_details_fn=_format_nhl_record,
-        logo_size=NHL_LOGO_SZ,
+        logo_size=NHL_STAND1_LOGO_SZ,
         transition=transition,
     )
 

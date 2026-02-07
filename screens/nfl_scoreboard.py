@@ -40,6 +40,7 @@ from config import (
     get_screen_font,
     get_screen_image_scale,
     is_hyperpixel_next_layout,
+    is_hyperpixel_4_square_layout,
     scale_value,
     scale_value_width,
 )
@@ -52,6 +53,7 @@ from utils import (
 
 # ─── Constants ────────────────────────────────────────────────────────────────
 HYPERPIXEL_LAYOUT = is_hyperpixel_next_layout()
+HYPERPIXEL_4_SQUARE = is_hyperpixel_4_square_layout()
 
 
 def _scale_y(value: int) -> int:
@@ -87,6 +89,8 @@ LEAGUE_LOGO_KEYS = ("NFL", "nfl")
 LEAGUE_LOGO_GAP = _scale_y(4)
 TEAM_LOGO_BASE_HEIGHT = scale_value_width(36) if HYPERPIXEL_LAYOUT else scale_value_width(52)
 LEAGUE_LOGO_BASE_HEIGHT = int(round(TEAM_LOGO_BASE_HEIGHT * 0.8)) if HYPERPIXEL_LAYOUT else TEAM_LOGO_BASE_HEIGHT
+if HYPERPIXEL_4_SQUARE:
+    LEAGUE_LOGO_BASE_HEIGHT = min(LEAGUE_LOGO_BASE_HEIGHT, scale_value_width(40))
 LOGO_HEIGHT = TEAM_LOGO_BASE_HEIGHT
 LEAGUE_LOGO_HEIGHT = LEAGUE_LOGO_BASE_HEIGHT
 SCORE_FONT = get_screen_font(

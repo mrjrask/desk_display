@@ -124,8 +124,8 @@ def _ts(size: int) -> ImageFont.ImageFont:
 _IS_HYPERPIXEL_4_SQUARE = is_hyperpixel_4_square_layout()
 _FONT_ABBR_SIZE = 40 if _IS_HYPERPIXEL_4_SQUARE else (33 if HEIGHT >= 240 else 28)
 _FONT_SCORE_SIZE = 60 if _IS_HYPERPIXEL_4_SQUARE else (48 if HEIGHT >= 240 else 38)
-if config.is_hyperpixel_next_layout():
-    # Hyperpixel 4 tuning for Bulls last/live readability.
+if _IS_HYPERPIXEL_4_SQUARE:
+    # HyperPixel 4 Square tuning for Bulls last/live readability.
     _FONT_ABBR_SIZE += 4
     _FONT_SCORE_SIZE += 10
 FONT_ABBR   = _ts(_FONT_ABBR_SIZE)  # team abbr in table
