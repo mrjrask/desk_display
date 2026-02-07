@@ -11,6 +11,47 @@ PROJECT_ROOT="$(cd -- "$SCRIPT_DIR/../.." &>/dev/null && pwd -P)"
 echo "⏱  Running cleanup at $(date +%Y%m%d_%H%M%S)…"
 cd "$PROJECT_ROOT"
 
+stop_kernel_user_service() {
+  local system_service="desk_display.service"
+  local kernel_service="desk_display-kernel.service"
+  local service_user=""
+  local uid=""
+  local runtime_dir=""
+  local -a systemctl_env=()
+
+  command -v systemctl >/dev/null 2>&1 || return 0
+
+  service_user="$(systemctl show -p User --value "$system_service" 2>/dev/null || true)"
+  if [[ -z "$service_user" || "$service_user" == "root" ]]; then
+    service_user="${SUDO_USER:-${USER:-}}"
+  fi
+  if [[ -z "$service_user" ]]; then
+    return 0
+  fi
+
+  uid="$(id -u "$service_user" 2>/dev/null || true)"
+  if [[ -n "$uid" ]]; then
+    runtime_dir="/run/user/$uid"
+  fi
+  if [[ -n "$runtime_dir" && -d "$runtime_dir" ]]; then
+    systemctl_env=("XDG_RUNTIME_DIR=$runtime_dir")
+    if [[ -S "$runtime_dir/bus" ]]; then
+      systemctl_env+=("DBUS_SESSION_BUS_ADDRESS=unix:path=$runtime_dir/bus")
+    fi
+  fi
+
+  local current_user=""
+  current_user="$(id -un 2>/dev/null || true)"
+
+  if [[ -n "$current_user" && "$current_user" == "$service_user" ]]; then
+    env "${systemctl_env[@]}" systemctl --user stop "$kernel_service" >/dev/null 2>&1 || true
+  elif command -v sudo >/dev/null 2>&1; then
+    sudo -u "$service_user" env "${systemctl_env[@]}" systemctl --user stop "$kernel_service" >/dev/null 2>&1 || true
+  fi
+}
+
+stop_kernel_user_service
+
 # Prefer the repo's virtualenv interpreter when available so optional
 # dependencies such as Pillow are on the path even during shutdown.
 python_bin="python3"

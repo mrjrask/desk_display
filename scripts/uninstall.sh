@@ -45,23 +45,23 @@ stop_kernel_user_service() {
   log "Stopping $KERNEL_USER_SERVICE_NAME for user $service_user"
   if [[ -n "$SUDO" ]]; then
     if [[ ${#user_env[@]} -gt 0 ]] && \
-      $SUDO -u "$service_user" env "${user_env[@]}" systemctl --user stop "$KERNEL_USER_SERVICE_NAME"; then
+      $SUDO -u "$service_user" env "${user_env[@]}" systemctl --user stop "$KERNEL_USER_SERVICE_NAME" >/dev/null 2>&1; then
       stopped=1
     elif [[ ${#user_env[@]} -eq 0 ]] && \
-      $SUDO -u "$service_user" systemctl --user stop "$KERNEL_USER_SERVICE_NAME"; then
+      $SUDO -u "$service_user" systemctl --user stop "$KERNEL_USER_SERVICE_NAME" >/dev/null 2>&1; then
       stopped=1
     fi
 
     if [[ $stopped -eq 0 ]] && \
       $SUDO systemctl --quiet --machine="${service_user}@.host" --user status "$KERNEL_USER_SERVICE_NAME" >/dev/null 2>&1; then
-      if $SUDO systemctl --machine="${service_user}@.host" --user stop "$KERNEL_USER_SERVICE_NAME"; then
+      if $SUDO systemctl --machine="${service_user}@.host" --user stop "$KERNEL_USER_SERVICE_NAME" >/dev/null 2>&1; then
         stopped=1
       fi
     fi
   else
-    if [[ ${#user_env[@]} -gt 0 ]] && env "${user_env[@]}" systemctl --user stop "$KERNEL_USER_SERVICE_NAME"; then
+    if [[ ${#user_env[@]} -gt 0 ]] && env "${user_env[@]}" systemctl --user stop "$KERNEL_USER_SERVICE_NAME" >/dev/null 2>&1; then
       stopped=1
-    elif [[ ${#user_env[@]} -eq 0 ]] && systemctl --user stop "$KERNEL_USER_SERVICE_NAME"; then
+    elif [[ ${#user_env[@]} -eq 0 ]] && systemctl --user stop "$KERNEL_USER_SERVICE_NAME" >/dev/null 2>&1; then
       stopped=1
     fi
   fi
@@ -79,13 +79,17 @@ if command -v systemctl >/dev/null 2>&1; then
   if [[ -n "${SUDO_USER:-}" ]]; then
     kernel_service_users+=("$SUDO_USER")
   fi
-  kernel_service_users+=("$(whoami)")
+  if [[ -z "${SUDO_USER:-}" ]]; then
+    kernel_service_users+=("$(whoami)")
+  fi
 
   declare -A seen_kernel_users=()
   for service_user in "${kernel_service_users[@]}"; do
     if [[ -n "$service_user" && -z "${seen_kernel_users[$service_user]:-}" ]]; then
       seen_kernel_users["$service_user"]=1
-      stop_kernel_user_service "$service_user"
+      if [[ "$service_user" != "root" ]]; then
+        stop_kernel_user_service "$service_user"
+      fi
     fi
   done
 fi
