@@ -563,6 +563,7 @@ def draw_weather_screen_1(display, weather, transition=False):
 
     _draw_alert_indicator(img, draw, severity)
 
+
     if transition:
         return ScreenImage(img, displayed=False, led_override=led_color)
 
@@ -746,7 +747,9 @@ def draw_weather_hourly(display, weather, transition: bool = False, hours: int =
     hours_to_show = len(forecast)
     title = "Next 10 hours..."
     title_w, title_h = draw.textsize(title, font=FONT_WEATHER_LABEL)
-    draw.text(((WIDTH - title_w) // 2, 2), title, font=FONT_WEATHER_LABEL, fill=(200, 200, 200))
+    title_x = (WIDTH - title_w) // 2
+    title_y = 2
+    draw.text((title_x, title_y), title, font=FONT_WEATHER_LABEL, fill=(200, 200, 200))
 
     gap = 4
     available_width = WIDTH - gap * (hours_to_show + 1)
@@ -959,6 +962,9 @@ def draw_weather_hourly(display, weather, transition: bool = False, hours: int =
                     draw.text((cx - text_w // 2, text_y), text, font=font, fill=color)
 
 
+    # Re-draw the title last so it stays above cards/content.
+    draw.text((title_x, title_y), title, font=FONT_WEATHER_LABEL, fill=(200, 200, 200))
+
     if transition:
         return ScreenImage(img, displayed=False)
 
@@ -985,7 +991,9 @@ def draw_weather_daily(display, weather, transition: bool = False, days: int = 5
 
     title = "Next 5 days"
     title_w, title_h = draw.textsize(title, font=FONT_WEATHER_LABEL)
-    draw.text(((WIDTH - title_w) // 2, 2), title, font=FONT_WEATHER_LABEL, fill=(200, 200, 200))
+    title_x = (WIDTH - title_w) // 2
+    title_y = 2
+    draw.text((title_x, title_y), title, font=FONT_WEATHER_LABEL, fill=(200, 200, 200))
 
     days_to_show = len(forecast)
     gap = 4

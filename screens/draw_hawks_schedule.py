@@ -106,10 +106,17 @@ if _IS_HYPERPIXEL_4_SQUARE:
 
 _ABBR_FONT_SIZE = int(round(_ABBR_BASE * 1.3))
 _SOG_FONT_SIZE = _SOG_BASE
+_SCORE_FONT_SIZE = int(round(_SOG_FONT_SIZE * (1.55 if _IS_HYPERPIXEL_4_SQUARE else 1.45)))
+
+if config.is_hyperpixel_next_layout():
+    # Hyperpixel 4 tuning for Hawks last/live readability.
+    _ABBR_FONT_SIZE += 4
+    _SOG_FONT_SIZE += 6
+    _SCORE_FONT_SIZE += 10
 
 FONT_ABBR  = _ts(_ABBR_FONT_SIZE)
 FONT_SOG   = _ts(_SOG_FONT_SIZE)
-FONT_SCORE = _ts(int(round(_SOG_FONT_SIZE * (1.55 if _IS_HYPERPIXEL_4_SQUARE else 1.45))))    # make goals column stand out more
+FONT_SCORE = _ts(_SCORE_FONT_SIZE)    # make goals column stand out more
 FONT_SMALL = _ts(26 if _IS_HYPERPIXEL_4_SQUARE else (22 if HEIGHT > 64 else 19))    # for SOG label / live clock
 
 # NHL endpoints (prefer api-web; quiet legacy fallback)
@@ -1484,7 +1491,7 @@ def draw_sports_screen_hawks(display, game, transition: bool=False):
     "Next Hawks game" card with '@ FULLNAME' / 'vs. FULLNAME', logos (local PNGs, centered and larger), and bottom time.
     Uses the provided 'game' payload from your scheduler for the next slot.
     """
-    return _draw_next_card(display, game, title="Next Hawks game:", transition=transition, log_label="hawks next")
+    return _draw_next_card(display, game, title="Next Hawks game:", transition=transition, log_label="hawks next", logo_scale=3.0 if config.is_hyperpixel_next_layout() else 1.0)
 
 
 def draw_hawks_next_home_game(display, game, transition: bool=False):
