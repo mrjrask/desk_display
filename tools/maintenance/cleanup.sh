@@ -44,9 +44,9 @@ stop_kernel_user_service() {
   current_user="$(id -un 2>/dev/null || true)"
 
   if [[ -n "$current_user" && "$current_user" == "$service_user" ]]; then
-    env "${systemctl_env[@]}" systemctl --user stop "$kernel_service" >/dev/null 2>&1 || true
+    env "${systemctl_env[@]}" systemctl --user --no-block stop "$kernel_service" >/dev/null 2>&1 || true
   elif command -v sudo >/dev/null 2>&1; then
-    sudo -u "$service_user" env "${systemctl_env[@]}" systemctl --user stop "$kernel_service" >/dev/null 2>&1 || true
+    sudo -u "$service_user" env "${systemctl_env[@]}" systemctl --user --no-block stop "$kernel_service" >/dev/null 2>&1 || true
   fi
 }
 
