@@ -98,6 +98,7 @@ from screens.oly_hockey_scoreboard_v2 import (
     draw_olympic_mens_hockey_scoreboard_v2,
     draw_olympic_womens_hockey_scoreboard_v2,
 )
+from screens.oly_medal_count import draw_olympic_medal_count
 from screens.nhl_standings import (
     draw_nhl_standings_east,
     draw_nhl_standings_overview_east,
@@ -642,6 +643,11 @@ def build_screen_registry(context: ScreenContext) -> Tuple[Dict[str, ScreenDefin
         register(
             "Olympic Hockey Women Scoreboard v2",
             lambda: draw_olympic_womens_hockey_scoreboard_v2(context.display, transition=True),
+            available=scoreboards_available,
+        )
+        register(
+            "Olympic Medal Count",
+            lambda: draw_olympic_medal_count(context.display, transition=True),
             available=scoreboards_available,
         )
         register(
