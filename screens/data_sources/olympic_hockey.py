@@ -13,6 +13,8 @@ from dataclasses import dataclass
 from typing import Any, Callable, Iterable, Optional
 from zoneinfo import ZoneInfo
 
+from requests import HTTPError
+
 from services.http_client import get_session
 
 SESSION = get_session()
@@ -160,11 +162,27 @@ def _http_json(url: str, *, params: Optional[dict[str, Any]] = None, provider_na
 
 def _espn_provider(date: dt.date, division: str) -> ProviderResult:
     date_key = date.strftime("%Y%m%d")
-    payload = _http_json(
-        ESPN_URLS[division],
-        params={"dates": date_key},
-        provider_name=f"espn_{division}",
-    )
+    provider_name = f"espn_{division}"
+    try:
+        payload = _http_json(
+            ESPN_URLS[division],
+            params={"dates": date_key},
+            provider_name=provider_name,
+        )
+    except HTTPError as exc:
+        status_code = exc.response.status_code if exc.response is not None else None
+        if status_code != 400:
+            raise
+        logging.warning(
+            "Olympic hockey ESPN returned 400; retrying without date filter division=%s date=%s",
+            division,
+            date_key,
+        )
+        payload = _http_json(
+            ESPN_URLS[division],
+            params=None,
+            provider_name=provider_name,
+        )
     games = normalize_espn_olympic_response(payload, league_key=LEAGUE_KEYS[division])
     return ProviderResult("espn", games, f"events={len(games)} for {date_key}")
 
