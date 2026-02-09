@@ -183,7 +183,9 @@ def _handle_button_down(name: str) -> bool:
     if display is None:
         return False
     if name == "X":
-        return _request_previous_screen()
+        logging.info("⬇️  X button pressed – pulling latest desk_display changes and restarting service…")
+        _git_pull_and_restart_desk_display_service()
+        return False
     if name == "A":
         return _request_next_screen()
     if name == "B":
@@ -370,6 +372,27 @@ def _restart_desk_display_service() -> None:
     """Restart the desk_display systemd service."""
 
     request_shutdown("service restart")
+    try:
+        subprocess.run(
+            ["sudo", "systemctl", "restart", "desk_display.service"],
+            check=False,
+        )
+    except Exception as exc:
+        logging.error("Failed to restart desk_display.service: %s", exc)
+
+
+def _git_pull_and_restart_desk_display_service() -> None:
+    """Pull latest code in this repo, then restart the desk_display service."""
+
+    request_shutdown("git pull + service restart")
+    try:
+        subprocess.run(
+            ["git", "-C", SCRIPT_DIR, "pull"],
+            check=False,
+        )
+    except Exception as exc:
+        logging.error("Failed to run git pull in %s: %s", SCRIPT_DIR, exc)
+
     try:
         subprocess.run(
             ["sudo", "systemctl", "restart", "desk_display.service"],
