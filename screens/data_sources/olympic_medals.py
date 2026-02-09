@@ -1,10 +1,12 @@
 #!/usr/bin/env python3
-"""Olympic medal standings provider (live data only, no fallback)."""
+"""Olympic medal standings provider."""
 
 from __future__ import annotations
 
+import json
 import logging
 import os
+import re
 from typing import Any
 
 from services.http_client import get_session
@@ -12,8 +14,9 @@ from services.http_client import get_session
 SESSION = get_session()
 REQUEST_TIMEOUT = 10
 
-# Live source URL (set this to a reliable 2026 Winter Olympics medal feed).
-MEDAL_URL = os.getenv("OLYMPIC_MEDALS_URL", "")
+# Live source URL.
+DEFAULT_MEDAL_URL = "https://www.espn.com/olympics/winter/2026/medals"
+MEDAL_URL = os.getenv("OLYMPIC_MEDALS_URL", DEFAULT_MEDAL_URL)
 
 
 def _normalize_row(row: dict[str, Any]) -> dict[str, int | str] | None:
@@ -42,6 +45,61 @@ def _normalize_row(row: dict[str, Any]) -> dict[str, int | str] | None:
     }
 
 
+def _extract_balanced_json_value(text: str, start_index: int) -> str:
+    if start_index >= len(text):
+        return ""
+    opening = text[start_index]
+    if opening not in "[{":
+        return ""
+    closing = "]" if opening == "[" else "}"
+    depth = 0
+    in_string = False
+    escaped = False
+    for index in range(start_index, len(text)):
+        ch = text[index]
+        if in_string:
+            if escaped:
+                escaped = False
+            elif ch == "\\":
+                escaped = True
+            elif ch == '"':
+                in_string = False
+            continue
+        if ch == '"':
+            in_string = True
+            continue
+        if ch == opening:
+            depth += 1
+        elif ch == closing:
+            depth -= 1
+            if depth == 0:
+                return text[start_index:index + 1]
+    return ""
+
+
+def _extract_espn_medal_table_from_html(html: str) -> list[dict[str, Any]]:
+    best_rows: list[dict[str, Any]] = []
+    for match in re.finditer(r'"medals"\s*:\s*\[', html):
+        start = html.find("[", match.start())
+        if start < 0:
+            continue
+        blob = _extract_balanced_json_value(html, start)
+        if not blob:
+            continue
+        try:
+            parsed = json.loads(blob)
+        except json.JSONDecodeError:
+            continue
+        if not isinstance(parsed, list):
+            continue
+        candidate = [row for row in parsed if isinstance(row, dict)]
+        if not candidate:
+            continue
+        if len(candidate) > len(best_rows):
+            best_rows = candidate
+    return best_rows
+
+
 def _normalize_payload(payload: Any) -> list[dict[str, int | str]]:
     rows: list[dict[str, int | str]] = []
     if isinstance(payload, dict):
@@ -67,14 +125,14 @@ def _normalize_payload(payload: Any) -> list[dict[str, int | str]]:
 
 
 def fetch_olympic_medal_table(*, top_n: int = 20) -> list[dict[str, int | str]]:
-    if not MEDAL_URL:
-        logging.info("OLYMPIC_MEDALS_URL is not configured; skipping Olympic medal table render")
-        return []
-
     try:
         response = SESSION.get(MEDAL_URL, timeout=REQUEST_TIMEOUT)
         response.raise_for_status()
-        rows = _normalize_payload(response.json())
+        try:
+            payload: Any = response.json()
+        except ValueError:
+            payload = _extract_espn_medal_table_from_html(response.text)
+        rows = _normalize_payload(payload)
     except Exception as exc:
         logging.warning("Olympic medal feed failed (%s): %s", MEDAL_URL, exc)
         return []
