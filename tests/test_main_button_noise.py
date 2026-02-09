@@ -114,13 +114,21 @@ def test_a_button_advances_to_next_screen(main_for_buttons):
     assert main_for_buttons._manual_skip_event.is_set()
 
 
-def test_x_button_returns_to_previous_screen(main_for_buttons):
+def test_x_button_pulls_and_restarts_service(main_for_buttons, monkeypatch):
     main_for_buttons.display = object()
-    main_for_buttons._screen_history[:] = ["first", "second", "third"]
+    called = {"count": 0}
 
-    assert main_for_buttons._handle_button_down("X") is True
-    assert main_for_buttons._pending_previous_screen_id == "second"
-    assert main_for_buttons._manual_skip_event.is_set()
+    def fake_git_pull_and_restart():
+        called["count"] += 1
+
+    monkeypatch.setattr(
+        main_for_buttons,
+        "_git_pull_and_restart_desk_display_service",
+        fake_git_pull_and_restart,
+    )
+
+    assert main_for_buttons._handle_button_down("X") is False
+    assert called["count"] == 1
 
 
 def test_b_button_toggles_display(main_for_buttons, monkeypatch):
