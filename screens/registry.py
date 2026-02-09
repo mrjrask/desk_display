@@ -653,6 +653,11 @@ def build_screen_registry(context: ScreenContext) -> Tuple[Dict[str, ScreenDefin
             available=scoreboards_available and olympic_medals_available,
         )
         register(
+            "Olympic Medal Count",
+            lambda: draw_olympic_medal_count(context.display, transition=True),
+            available=scoreboards_available,
+        )
+        register(
             "NHL Standings Overview West",
             lambda: draw_nhl_standings_overview_west(context.display, transition=True),
         )
