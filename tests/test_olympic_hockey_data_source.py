@@ -83,3 +83,62 @@ def test_espn_provider_retries_without_date_filter_on_400(monkeypatch: pytest.Mo
     assert len(result.games) == 1
     assert calls[0]["params"] == {"dates": "20260209"}
     assert calls[1]["params"] is None
+
+
+def test_extract_embedded_events_from_html_parses_balanced_json():
+    html = """
+        <html><script>
+        window.__DATA__ = {"events":[
+          {"id":"1","name":"Men Group A","competitions":[{"competitors":[]}]} ,
+          {"id":"2","name":"Women Group A","competitions":[{"competitors":[]}]}
+        ],"other":1}
+        </script></html>
+    """
+
+    events = olympic_hockey._extract_embedded_events_from_html(html)
+
+    assert [event["id"] for event in events] == ["1", "2"]
+
+
+def test_espn_results_page_provider_filters_women(monkeypatch: pytest.MonkeyPatch):
+    payload = {
+        "events": [
+            {
+                "id": "401",
+                "name": "Men Preliminary Round",
+                "date": "2026-02-15T18:00:00Z",
+                "status": {"type": {"state": "pre", "shortDetail": "Scheduled"}, "displayClock": ""},
+                "competitions": [
+                    {
+                        "competitors": [
+                            {"homeAway": "away", "score": "0", "team": {"abbreviation": "SWE", "displayName": "Sweden"}},
+                            {"homeAway": "home", "score": "0", "team": {"abbreviation": "FIN", "displayName": "Finland"}},
+                        ]
+                    }
+                ],
+            },
+            {
+                "id": "402",
+                "name": "Women Preliminary Round",
+                "date": "2026-02-15T20:00:00Z",
+                "status": {"type": {"state": "in", "shortDetail": "2nd"}, "displayClock": "10:14"},
+                "competitions": [
+                    {
+                        "competitors": [
+                            {"homeAway": "away", "score": "1", "team": {"abbreviation": "USA", "displayName": "United States"}},
+                            {"homeAway": "home", "score": "2", "team": {"abbreviation": "CAN", "displayName": "Canada"}},
+                        ]
+                    }
+                ],
+            },
+        ]
+    }
+    html = f"<script>window.__DATA__ = {payload!r}</script>".replace("'", '"')
+
+    monkeypatch.setattr(olympic_hockey, "_http_text", lambda *args, **kwargs: html)
+
+    result = olympic_hockey._espn_results_page_provider(dt.date(2026, 2, 15), "women")
+
+    assert result.provider_name == "espn_results_page"
+    assert len(result.games) == 1
+    assert result.games[0]["gameId"] == "402"
