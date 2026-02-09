@@ -136,11 +136,12 @@ Desk Display reads configuration from environment variables and (optionally) a `
 
 
 
-### Olympic hockey scoreboards
+### Olympic hockey + medals
 
 | Variable | Purpose |
 | --- | --- |
 | `OLYMPIC_HOCKEY_TIMEZONE` | Timezone used for Olympic hockey scoreboard date resolution (default `America/Chicago`). |
+| `OLYMPIC_MEDALS_URL` | Medal standings feed URL (defaults to ESPN 2026 Winter Olympics medals page). |
 
 Olympic hockey screens available in `screens_config.json`:
 
