@@ -312,8 +312,10 @@ def _cached_bears_next_season_image(width: int, height: int, background: tuple[i
     img = Image.new("RGB", (width, height), background)
     draw = ImageDraw.Draw(img)
 
-    home_opponents = ["det", "gb", "min", "tb", "phi", "jax", "nyj", "ne", "no"]
-    away_opponents = ["det", "gb", "min", "buf", "mia", "atl", "car", "sea"]
+    if home_opponents is None:
+        home_opponents = DEFAULT_BEARS_NEXT_SEASON_HOME_OPPONENTS
+    if away_opponents is None:
+        away_opponents = DEFAULT_BEARS_NEXT_SEASON_AWAY_OPPONENTS
 
     title_w, title_h = _text_size(draw, title, font=config.FONT_TITLE_SPORTS)
     draw.text(
@@ -348,8 +350,8 @@ def _cached_bears_next_season_image(width: int, height: int, background: tuple[i
     row_gap = 2
     col_gap = 4
     columns_per_side = 2
-    home_rows = (len(home_opponents) + columns_per_side - 1) // columns_per_side
-    away_rows = (len(away_opponents) + columns_per_side - 1) // columns_per_side
+    home_rows = max(1, (len(home_opponents) + columns_per_side - 1) // columns_per_side)
+    away_rows = max(1, (len(away_opponents) + columns_per_side - 1) // columns_per_side)
     rows = max(home_rows, away_rows)
     available_h = height - logos_top - 2
     subcolumn_width = max(1, (column_width - col_gap) // columns_per_side)
