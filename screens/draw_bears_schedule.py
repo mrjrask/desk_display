@@ -306,6 +306,8 @@ def show_bears_next_game(display, transition=False):
 
 @lru_cache(maxsize=8)
 def _cached_bears_next_season_image(width: int, height: int, background: tuple[int, int, int]) -> Image.Image:
+    # Legacy dynamic Bears-next-season generator (kept intentionally deactivated).
+    # The active implementation now uses pre-rendered static PNG assets.
     title = "2026 Bears Opponents"
     img = Image.new("RGB", (width, height), background)
     draw = ImageDraw.Draw(img)
@@ -393,10 +395,40 @@ def _cached_bears_next_season_image(width: int, height: int, background: tuple[i
     return img
 
 
+@lru_cache(maxsize=12)
+def _cached_bears_next_season_static_image(width: int, height: int) -> Image.Image | None:
+    if config.is_hyperpixel_4_square_layout(width, height):
+        candidates = ["bears_next_season_h4sq.png", "bears_next_season.png"]
+    elif config.is_hyperpixel_next_layout(width, height):
+        candidates = ["bears_next_season_h4.png", "bears_next_season.png"]
+    else:
+        candidates = ["bears_next_season_dhm.png", "bears_next_season.png"]
+
+    for filename in candidates:
+        image_path = os.path.join(config.IMAGES_DIR, filename)
+        if not os.path.exists(image_path):
+            continue
+        try:
+            return Image.open(image_path).convert("RGB")
+        except Exception:
+            continue
+    return None
+
+
 def show_bears_next_season(display, transition=False):
     background = get_screen_background_color("bears next season", (0, 0, 0))
-    background_key = tuple(background)
-    final_img = _cached_bears_next_season_image(config.WIDTH, config.HEIGHT, background_key).copy()
+    static_img = _cached_bears_next_season_static_image(config.WIDTH, config.HEIGHT)
+
+    if static_img is not None:
+        final_img = static_img.copy().resize((config.WIDTH, config.HEIGHT), Image.LANCZOS)
+    else:
+        # Fallback to dynamic rendering if no static image assets are available.
+        background_key = tuple(background)
+        final_img = _cached_bears_next_season_image(
+            config.WIDTH,
+            config.HEIGHT,
+            background_key,
+        ).copy()
 
     if transition:
         return final_img
