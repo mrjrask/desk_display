@@ -100,6 +100,29 @@ def test_extract_embedded_events_from_html_parses_balanced_json():
     assert [event["id"] for event in events] == ["1", "2"]
 
 
+def test_extract_embedded_events_from_nested_next_data_json():
+    html = """
+        <script id="__NEXT_DATA__" type="application/json">
+        {
+          "props": {
+            "pageProps": {
+              "scoreboard": {
+                "events": [
+                  {"id": "w1", "name": "Women Preliminary", "date": "2026-02-15T20:00:00Z", "competitions": [{"competitors": []}]},
+                  {"id": "w2", "name": "Women Preliminary", "date": "2026-02-15T22:00:00Z", "competitions": [{"competitors": []}]}
+                ]
+              }
+            }
+          }
+        }
+        </script>
+    """
+
+    events = olympic_hockey._extract_embedded_events_from_html(html)
+
+    assert [event["id"] for event in events] == ["w1", "w2"]
+
+
 def test_espn_results_page_provider_filters_women(monkeypatch: pytest.MonkeyPatch):
     payload = {
         "events": [
