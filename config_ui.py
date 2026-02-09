@@ -152,6 +152,14 @@ def _format_timestamp(timestamp: float) -> str:
     return datetime.fromtimestamp(timestamp).strftime("%Y-%m-%d %H:%M:%S")
 
 
+def _format_elapsed_since(timestamp: float) -> str:
+    total_seconds = max(0, int(datetime.now().timestamp() - timestamp))
+    days, remainder = divmod(total_seconds, 24 * 60 * 60)
+    hours, remainder = divmod(remainder, 60 * 60)
+    minutes, seconds = divmod(remainder, 60)
+    return f"{days}d {hours}h {minutes}m {seconds}s ago"
+
+
 def _is_screenshot_stale(timestamp: float, *, max_age_seconds: int = 2 * 60 * 60) -> bool:
     return datetime.now().timestamp() - timestamp > max_age_seconds
 
@@ -175,6 +183,8 @@ def _build_screenshot_entries() -> List[Dict[str, Any]]:
             "id": screen_id,
             "filename": None,
             "timestamp": None,
+            "elapsed": None,
+            "version": None,
             "is_stale": False,
         }
         if path.exists():
@@ -182,9 +192,13 @@ def _build_screenshot_entries() -> List[Dict[str, Any]]:
             try:
                 modified_time = path.stat().st_mtime
                 entry["timestamp"] = _format_timestamp(modified_time)
+                entry["elapsed"] = _format_elapsed_since(modified_time)
+                entry["version"] = int(modified_time)
                 entry["is_stale"] = _is_screenshot_stale(modified_time)
             except OSError:
                 entry["timestamp"] = None
+                entry["elapsed"] = None
+                entry["version"] = None
                 entry["is_stale"] = False
         entries.append(entry)
     return entries
@@ -382,6 +396,11 @@ def screen_config() -> str:
 def screen_screenshots() -> str:
     entries = _build_screenshot_entries()
     return render_template("screenshots.html", screens=entries)
+
+
+@app.get("/api/screenshots")
+def get_screenshots() -> Any:
+    return jsonify({"screens": _build_screenshot_entries()})
 
 
 @app.get("/screenshots/current/<path:filename>")

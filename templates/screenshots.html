@@ -202,7 +202,7 @@
     </nav>
     <div class="controls">
       <label class="toggle">
-        <input type="checkbox" id="hideMissingScreens">
+        <input type="checkbox" id="hideMissingScreens" checked>
         Hide screens without screenshots
       </label>
     </div>
@@ -217,9 +217,11 @@
             class="preview-button"
             type="button"
             data-full-src="{{ url_for('screenshot_current', filename=screen.filename) }}"
+            data-base-src="{{ url_for('screenshot_current', filename=screen.filename) }}"
+            data-version="{{ screen.version if screen.version else '' }}"
             aria-label="Open full-resolution screenshot for {{ screen.id }}"
           >
-            <img src="{{ url_for('screenshot_current', filename=screen.filename) }}" alt="Screenshot for {{ screen.id }}">
+            <img src="{{ url_for('screenshot_current', filename=screen.filename) }}?v={{ screen.version if screen.version else 0 }}" alt="Screenshot for {{ screen.id }}">
           </button>
         {% else %}
           <div class="empty-state">No screenshot yet.</div>
@@ -227,7 +229,7 @@
       </div>
       <div class="timestamp{% if screen.is_stale %} is-stale{% endif %}">
         <span>Updated</span>
-        {{ screen.timestamp if screen.timestamp else "—" }}
+        {{ screen.timestamp if screen.timestamp else "—" }}{% if screen.elapsed %} ({{ screen.elapsed }}){% endif %}
       </div>
     </article>
     {% endfor %}
@@ -244,6 +246,7 @@
     const overlay = document.getElementById("screenshotOverlay");
     const overlayImage = document.getElementById("overlayImage");
     const overlayClose = overlay.querySelector(".overlay-close");
+    const screenshotApiUrl = "{{ url_for('get_screenshots') }}";
 
     function openOverlay(source) {
       overlayImage.src = source;
@@ -265,6 +268,58 @@
         }
       });
     });
+
+    function refreshScreenshots() {
+      fetch(screenshotApiUrl, { cache: "no-store" })
+        .then((response) => {
+          if (!response.ok) {
+            throw new Error("Failed to fetch screenshots");
+          }
+          return response.json();
+        })
+        .then((payload) => {
+          if (!payload || !Array.isArray(payload.screens)) {
+            return;
+          }
+          const byId = new Map(payload.screens.map((entry) => [entry.id, entry]));
+          screenshotCards.forEach((card) => {
+            const id = card.querySelector("h2")?.textContent;
+            if (!id || !byId.has(id)) {
+              return;
+            }
+            const entry = byId.get(id);
+            const previewButton = card.querySelector(".preview-button");
+            const previewImage = card.querySelector(".preview img");
+            const emptyState = card.querySelector(".empty-state");
+            const timestamp = card.querySelector(".timestamp");
+
+            if (timestamp) {
+              const elapsed = entry.elapsed ? ` (${entry.elapsed})` : "";
+              timestamp.innerHTML = `<span>Updated</span>${entry.timestamp || "—"}${elapsed}`;
+              timestamp.classList.toggle("is-stale", Boolean(entry.is_stale));
+            }
+
+            const hasScreenshot = Boolean(entry.filename);
+            card.dataset.hasScreenshot = hasScreenshot ? "true" : "false";
+
+            if (hasScreenshot && previewButton && previewImage) {
+              const baseSrc = `/screenshots/current/${entry.filename}`;
+              const version = entry.version || Date.now();
+              const fullSrc = `${baseSrc}?v=${version}`;
+              previewButton.dataset.fullSrc = fullSrc;
+              previewImage.src = fullSrc;
+            }
+
+            if (!hasScreenshot && emptyState) {
+              emptyState.textContent = "No screenshot yet.";
+            }
+          });
+          updateMissingVisibility();
+        })
+        .catch(() => {
+          // Ignore refresh failures; next polling attempt will retry.
+        });
+    }
 
     overlay.addEventListener("click", (event) => {
       if (event.target === overlay) {
@@ -294,6 +349,7 @@
 
     hideMissingToggle.addEventListener("change", updateMissingVisibility);
     updateMissingVisibility();
+    setInterval(refreshScreenshots, 5000);
   </script>
 </body>
 </html>

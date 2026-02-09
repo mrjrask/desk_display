@@ -24,6 +24,8 @@ def test_build_screenshot_entries_marks_stale(monkeypatch, tmp_path):
 
     assert entry_map["date"]["is_stale"] is True
     assert entry_map["weather"]["is_stale"] is False
+    assert entry_map["date"]["elapsed"] is not None
+    assert entry_map["weather"]["version"] is not None
 
 
 def test_screenshots_template_adds_stale_class(monkeypatch):
@@ -31,8 +33,22 @@ def test_screenshots_template_adds_stale_class(monkeypatch):
         config_ui,
         "_build_screenshot_entries",
         lambda: [
-            {"id": "date", "filename": "date.png", "timestamp": "2025-01-01 00:00:00", "is_stale": True},
-            {"id": "weather", "filename": "weather.png", "timestamp": "2025-01-01 01:30:00", "is_stale": False},
+            {
+                "id": "date",
+                "filename": "date.png",
+                "timestamp": "2025-01-01 00:00:00",
+                "elapsed": "1d 2h 3m 4s ago",
+                "version": 1735689600,
+                "is_stale": True,
+            },
+            {
+                "id": "weather",
+                "filename": "weather.png",
+                "timestamp": "2025-01-01 01:30:00",
+                "elapsed": "0d 0h 10m 0s ago",
+                "version": 1735695000,
+                "is_stale": False,
+            },
         ],
     )
 
@@ -43,6 +59,34 @@ def test_screenshots_template_adds_stale_class(monkeypatch):
 
     assert response.status_code == 200
     assert 'class="timestamp is-stale"' in html
+    assert "1d 2h 3m 4s ago" in html
+    assert 'id="hideMissingScreens" checked' in html
+
+
+def test_screenshots_api_returns_entries(monkeypatch):
+    monkeypatch.setattr(
+        config_ui,
+        "_build_screenshot_entries",
+        lambda: [{"id": "date", "filename": "date.png", "timestamp": "2025-01-01 00:00:00", "elapsed": "0d 0h 0m 5s ago", "version": 1, "is_stale": False}],
+    )
+
+    client = config_ui.app.test_client()
+    response = client.get("/api/screenshots")
+
+    assert response.status_code == 200
+    payload = response.get_json()
+    assert payload == {
+        "screens": [
+            {
+                "id": "date",
+                "filename": "date.png",
+                "timestamp": "2025-01-01 00:00:00",
+                "elapsed": "0d 0h 0m 5s ago",
+                "version": 1,
+                "is_stale": False,
+            }
+        ]
+    }
 
 
 def test_layout_editor_routes_removed():
