@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import os
 import time
+from typing import Optional
 
 from PIL import Image, ImageDraw
 
@@ -26,6 +27,7 @@ from config import (
     is_hyperpixel_next_layout,
     scale_value,
     scale_value_width,
+    get_emoji_font,
 )
 from screens.data_sources.olympic_medals import fetch_olympic_medal_table
 from utils import ScreenImage, clear_display, load_team_logo, log_call, standard_scoreboard_league_logo_height
@@ -65,6 +67,7 @@ for w in COL_WIDTHS:
 
 BASE_ROW_FONT = 16
 BASE_HEADER_FONT = 14
+BASE_MEDAL_EMOJI_FONT = 14
 TEAM_LOGO_BASE_HEIGHT = scale_value_width(18)
 LEAGUE_LOGO_BASE_HEIGHT = standard_scoreboard_league_logo_height(TEAM_LOGO_BASE_HEIGHT)
 LEAGUE_LOGO_GAP = _scale_y(4)
@@ -76,19 +79,26 @@ _LEAGUE_LOGO_CACHE: dict[int, Image.Image | None] = {}
 def _style():
     row_font = get_screen_font(SCREEN_ID, "row", base_font=FONT_TEAM_SPORTS, default_size=BASE_ROW_FONT)
     header_font = get_screen_font(SCREEN_ID, "header", base_font=FONT_STATUS, default_size=BASE_HEADER_FONT)
+    medal_emoji_font = get_emoji_font(BASE_MEDAL_EMOJI_FONT)
     background = get_screen_background_color(SCREEN_ID, SCOREBOARD_BACKGROUND_COLOR)
     logo_scale = get_screen_image_scale(SCREEN_ID, "team_logo", 1.0)
     league_scale = get_screen_image_scale(SCREEN_ID, "league_logo", logo_scale)
     logo_h = max(10, int(round(TEAM_LOGO_BASE_HEIGHT * logo_scale)))
     league_logo_h = max(10, int(round(LEAGUE_LOGO_BASE_HEIGHT * league_scale)))
-    return row_font, header_font, background, logo_h, league_logo_h
+    return row_font, header_font, medal_emoji_font, background, logo_h, league_logo_h
 
 
-def _center_text(draw, text, font, x, width, y, height, fill=(255, 255, 255)):
+def _center_text(draw, text, font, x, width, y, height, fill=(255, 255, 255), *, embedded_color=False):
     if not text:
         return
     l, t, r, b = draw.textbbox((0, 0), text, font=font)
-    draw.text((x + (width - (r - l)) // 2 - l, y + (height - (b - t)) // 2 - t), text, font=font, fill=fill)
+    draw.text(
+        (x + (width - (r - l)) // 2 - l, y + (height - (b - t)) // 2 - t),
+        text,
+        font=font,
+        fill=fill,
+        embedded_color=embedded_color,
+    )
 
 
 def _load_logo(code: str, logo_h: int):
@@ -119,14 +129,25 @@ def _league_logo(league_logo_h: int):
     return None
 
 
-def _render_table(rows, row_font, header_font, background, logo_h):
+def _render_table(rows, row_font, header_font, medal_emoji_font, background, logo_h):
     table_h = HEADER_H + len(rows) * ROW_H
     canvas = Image.new("RGB", (WIDTH, table_h), background)
     draw = ImageDraw.Draw(canvas)
 
-    headers = ("#", "", "CTY", "G", "S", "B", "T")
+    headers = ("#", "", "CTY", "🥇", "🥈", "🥉", "T")
     for idx, label in enumerate(headers):
-        _center_text(draw, label, header_font, COL_X[idx], COL_WIDTHS[idx], 0, HEADER_H, fill=(220, 220, 220))
+        font = medal_emoji_font if label in {"🥇", "🥈", "🥉"} else header_font
+        _center_text(
+            draw,
+            label,
+            font,
+            COL_X[idx],
+            COL_WIDTHS[idx],
+            0,
+            HEADER_H,
+            fill=(220, 220, 220),
+            embedded_color=label in {"🥇", "🥈", "🥉"},
+        )
     draw.line((COL_X[0], HEADER_H, COL_X[-1], HEADER_H), fill=(70, 70, 70))
 
     for i, row in enumerate(rows):
@@ -153,10 +174,12 @@ def _render_table(rows, row_font, header_font, background, logo_h):
 
 
 @log_call
-def draw_olympic_medal_count(display, transition: bool = False) -> ScreenImage:
-    row_font, header_font, background, logo_h, league_logo_h = _style()
+def draw_olympic_medal_count(display, transition: bool = False) -> Optional[ScreenImage]:
+    row_font, header_font, medal_emoji_font, background, logo_h, league_logo_h = _style()
     rows = fetch_olympic_medal_table(top_n=20)
-    table = _render_table(rows, row_font, header_font, background, logo_h)
+    if not rows:
+        return None
+    table = _render_table(rows, row_font, header_font, medal_emoji_font, background, logo_h)
 
     dummy = Image.new("RGB", (WIDTH, 10), background)
     title_h = ImageDraw.Draw(dummy).textbbox((0, 0), TITLE, font=TITLE_FONT)[3]
