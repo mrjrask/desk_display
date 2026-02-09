@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import datetime as dt
+import json
 import logging
 import os
 import re
@@ -31,6 +32,7 @@ ESPN_URLS = {
     "men": "https://site.api.espn.com/apis/site/v2/sports/hockey/mens-olympics/scoreboard",
     "women": "https://site.api.espn.com/apis/site/v2/sports/hockey/womens-olympics/scoreboard",
 }
+ESPN_RESULTS_PAGE_URL = "https://www.espn.com/olympics/winter/2026/results/_/discipline/29"
 IIHF_URLS = {
     "men": "https://www.iihf.com/en/events/2026/olympics-m/schedule",
     "women": "https://www.iihf.com/en/events/2026/olympics-w/schedule",
@@ -158,6 +160,99 @@ def _http_json(url: str, *, params: Optional[dict[str, Any]] = None, provider_na
     if not isinstance(payload, dict):
         raise ValueError("JSON response is not an object")
     return payload
+
+
+def _http_text(url: str, *, params: Optional[dict[str, Any]] = None, provider_name: str) -> str:
+    _rate_limit(provider_name)
+    response = SESSION.get(url, params=params, timeout=REQUEST_TIMEOUT)
+    response.raise_for_status()
+    return response.text
+
+
+def _extract_balanced_json_value(text: str, start_index: int) -> str:
+    if start_index >= len(text):
+        return ""
+    opening = text[start_index]
+    if opening not in "[{":
+        return ""
+    closing = "]" if opening == "[" else "}"
+    depth = 0
+    in_string = False
+    escaped = False
+    for index in range(start_index, len(text)):
+        ch = text[index]
+        if in_string:
+            if escaped:
+                escaped = False
+            elif ch == "\\":
+                escaped = True
+            elif ch == '"':
+                in_string = False
+            continue
+        if ch == '"':
+            in_string = True
+            continue
+        if ch == opening:
+            depth += 1
+        elif ch == closing:
+            depth -= 1
+            if depth == 0:
+                return text[start_index:index + 1]
+    return ""
+
+
+def _extract_embedded_events_from_html(html: str) -> list[dict[str, Any]]:
+    best: list[dict[str, Any]] = []
+    for match in re.finditer(r'"events"\s*:\s*\[', html):
+        start = html.find("[", match.start())
+        if start < 0:
+            continue
+        blob = _extract_balanced_json_value(html, start)
+        if not blob:
+            continue
+        try:
+            parsed = json.loads(blob)
+        except json.JSONDecodeError:
+            continue
+        if not isinstance(parsed, list):
+            continue
+        if not any(isinstance(event, dict) and event.get("competitions") for event in parsed):
+            continue
+        if len(parsed) > len(best):
+            best = parsed
+    return best
+
+
+def _matches_division(event: dict[str, Any], division: str) -> bool:
+    texts = [
+        str(event.get("name") or ""),
+        str(event.get("shortName") or ""),
+        str(event.get("seasonType") or ""),
+    ]
+    competitions = event.get("competitions") or []
+    if competitions and isinstance(competitions[0], dict):
+        competition = competitions[0]
+        texts.extend([
+            str(competition.get("name") or ""),
+            str(competition.get("shortName") or ""),
+            str((competition.get("type") or {}).get("text") or ""),
+        ])
+    haystack = " ".join(texts).lower()
+    is_women = any(token in haystack for token in ("women", "women's"))
+    if division == "women":
+        return is_women
+    return not is_women
+
+
+def _espn_results_page_provider(date: dt.date, division: str) -> ProviderResult:
+    html = _http_text(
+        ESPN_RESULTS_PAGE_URL,
+        provider_name=f"espn_results_page_{division}",
+    )
+    events = _extract_embedded_events_from_html(html)
+    payload = {"events": [event for event in events if _matches_division(event, division)]}
+    games = normalize_espn_olympic_response(payload, league_key=LEAGUE_KEYS[division])
+    return ProviderResult("espn_results_page", games, f"events={len(games)} for {date.isoformat()}")
 
 
 def _espn_provider(date: dt.date, division: str) -> ProviderResult:
@@ -329,6 +424,7 @@ def _wikipedia_provider(date: dt.date, division: str) -> ProviderResult:
 def _provider_chain(date: dt.date, division: str) -> Iterable[Callable[[dt.date, str], ProviderResult]]:
     return (
         _espn_provider,
+        _espn_results_page_provider,
         _iihf_scrape_provider,
         _thesportsdb_provider,
         _wikipedia_provider,
