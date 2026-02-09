@@ -700,9 +700,19 @@
       if (event.target.matches(".playlist-select")) {
         const row = event.target.closest(".screen-row");
         if (!row) return;
-        playlistAssignments[row.dataset.screenId] = event.target.value || "";
+        const screenId = row.dataset.screenId;
+        if (!screenId) return;
+        const screens = getCurrentScreens();
+        playlistAssignments[screenId] = event.target.value || "";
         savePlaylistState();
-        renderScreens(getCurrentScreens());
+        window.requestAnimationFrame(() => {
+          try {
+            renderScreens(screens);
+          } catch (error) {
+            console.error("Failed to render screen rows after playlist update.", error);
+            showError("Unable to redraw playlist groups. Refresh the page and try again.");
+          }
+        });
         markDirty();
       }
     });
