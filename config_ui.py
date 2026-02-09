@@ -143,6 +143,14 @@ def _sanitize_filename_prefix(name: str) -> str:
     return safe or "screen"
 
 
+def _sanitize_directory_name(name: str) -> str:
+    """Return a filesystem-friendly directory name while keeping spaces."""
+
+    safe = name.strip().replace("/", "-").replace("\\", "-")
+    safe = "".join(ch for ch in safe if ch.isalnum() or ch in (" ", "-", "_"))
+    return safe or "Screens"
+
+
 def _current_screenshot_dir() -> Path:
     storage_paths = resolve_storage_paths()
     return storage_paths.current_screenshot_dir
@@ -165,7 +173,9 @@ def _is_screenshot_stale(timestamp: float, *, max_age_seconds: int = 2 * 60 * 60
 
 
 def _build_screenshot_entries() -> List[Dict[str, Any]]:
-    current_dir = _current_screenshot_dir()
+    storage_paths = resolve_storage_paths()
+    screenshot_dir = storage_paths.screenshot_dir
+    current_dir = storage_paths.current_screenshot_dir
     config = _load_active_config()
     screens_config = config.get("screens", {})
     ordered_screen_ids: List[str] = []
@@ -177,18 +187,32 @@ def _build_screenshot_entries() -> List[Dict[str, Any]]:
     entries: List[Dict[str, Any]] = []
     for screen_id in ordered_screen_ids:
         prefix = _sanitize_filename_prefix(screen_id)
-        filename = f"{prefix}.png"
-        path = current_dir / filename
         entry: Dict[str, Any] = {
             "id": screen_id,
-            "filename": None,
+            "path": None,
             "timestamp": None,
             "elapsed": None,
             "version": None,
             "is_stale": False,
         }
-        if path.exists():
-            entry["filename"] = filename
+        candidates: List[Path] = [
+            current_dir / f"{prefix}{ext}" for ext in ALLOWED_SCREEN_EXTS
+        ]
+        screen_dir = screenshot_dir / _sanitize_directory_name(screen_id)
+        if screen_dir.is_dir():
+            candidates.extend(
+                path
+                for path in screen_dir.glob(f"{prefix}_*")
+                if path.is_file() and path.suffix.lower() in ALLOWED_SCREEN_EXTS
+            )
+
+        path: Optional[Path] = None
+        existing_candidates = [candidate for candidate in candidates if candidate.exists()]
+        if existing_candidates:
+            path = max(existing_candidates, key=lambda item: item.stat().st_mtime)
+
+        if path and path.exists():
+            entry["path"] = path.relative_to(screenshot_dir).as_posix()
             try:
                 modified_time = path.stat().st_mtime
                 entry["timestamp"] = _format_timestamp(modified_time)
@@ -409,6 +433,20 @@ def screenshot_current(filename: str) -> Any:
         abort(404)
     current_dir = _current_screenshot_dir()
     return send_from_directory(str(current_dir), filename)
+
+
+@app.get("/screenshots/file/<path:relative_path>")
+def screenshot_file(relative_path: str) -> Any:
+    if not relative_path.lower().endswith(ALLOWED_SCREEN_EXTS):
+        abort(404)
+    storage_paths = resolve_storage_paths()
+    screenshot_dir = storage_paths.screenshot_dir.resolve()
+    target = (screenshot_dir / relative_path).resolve()
+    if screenshot_dir != target and screenshot_dir not in target.parents:
+        abort(404)
+    if not target.exists() or not target.is_file():
+        abort(404)
+    return send_from_directory(str(screenshot_dir), relative_path)
 
 
 @app.get("/api/screens")
