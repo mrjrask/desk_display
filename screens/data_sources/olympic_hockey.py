@@ -220,7 +220,60 @@ def _extract_embedded_events_from_html(html: str) -> list[dict[str, Any]]:
             continue
         if len(parsed) > len(best):
             best = parsed
+
+    if best:
+        return best
+
+    for script_blob in re.findall(r"<script[^>]*>(.*?)</script>", html, flags=re.IGNORECASE | re.DOTALL):
+        for marker in ("window.__DATA__", "__NEXT_DATA__", "initialState", "appState"):
+            marker_index = script_blob.find(marker)
+            if marker_index < 0:
+                continue
+            json_start = script_blob.find("{", marker_index)
+            if json_start < 0:
+                continue
+            json_blob = _extract_balanced_json_value(script_blob, json_start)
+            if not json_blob:
+                continue
+            try:
+                payload = json.loads(json_blob)
+            except json.JSONDecodeError:
+                continue
+            candidate = _find_best_event_list(payload)
+            if len(candidate) > len(best):
+                best = candidate
+
     return best
+
+
+def _find_best_event_list(payload: Any) -> list[dict[str, Any]]:
+    best: list[dict[str, Any]] = []
+    stack: list[Any] = [payload]
+    while stack:
+        node = stack.pop()
+        if isinstance(node, dict):
+            for key, value in node.items():
+                if isinstance(value, list):
+                    if key.lower() in {"events", "eventlist", "competitions"}:
+                        normalized = [item for item in value if isinstance(item, dict)]
+                        if _looks_like_event_list(normalized) and len(normalized) > len(best):
+                            best = normalized
+                    stack.extend(value)
+                elif isinstance(value, dict):
+                    stack.append(value)
+        elif isinstance(node, list):
+            stack.extend(node)
+    return best
+
+
+def _looks_like_event_list(values: list[dict[str, Any]]) -> bool:
+    if not values:
+        return False
+    return any(
+        (item.get("competitions") and isinstance(item.get("competitions"), list))
+        or ("id" in item and "date" in item)
+        for item in values
+    )
 
 
 def _matches_division(event: dict[str, Any], division: str) -> bool:
@@ -238,7 +291,7 @@ def _matches_division(event: dict[str, Any], division: str) -> bool:
             str((competition.get("type") or {}).get("text") or ""),
         ])
     haystack = " ".join(texts).lower()
-    is_women = any(token in haystack for token in ("women", "women's"))
+    is_women = any(token in haystack for token in ("women", "women's", "w ice hockey", "w hockey"))
     if division == "women":
         return is_women
     return not is_women
