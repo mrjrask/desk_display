@@ -209,19 +209,19 @@
   </header>
   <section class="grid">
     {% for screen in screens %}
-    <article class="card" data-has-screenshot="{{ 'true' if screen.filename else 'false' }}">
+    <article class="card" data-has-screenshot="{{ 'true' if screen.path else 'false' }}">
       <h2>{{ screen.id }}</h2>
       <div class="preview">
-        {% if screen.filename %}
+        {% if screen.path %}
           <button
             class="preview-button"
             type="button"
-            data-full-src="{{ url_for('screenshot_current', filename=screen.filename) }}"
-            data-base-src="{{ url_for('screenshot_current', filename=screen.filename) }}"
+            data-full-src="{{ url_for('screenshot_file', relative_path=screen.path) }}"
+            data-base-src="{{ url_for('screenshot_file', relative_path=screen.path) }}"
             data-version="{{ screen.version if screen.version else '' }}"
             aria-label="Open full-resolution screenshot for {{ screen.id }}"
           >
-            <img src="{{ url_for('screenshot_current', filename=screen.filename) }}?v={{ screen.version if screen.version else 0 }}" alt="Screenshot for {{ screen.id }}">
+            <img src="{{ url_for('screenshot_file', relative_path=screen.path) }}?v={{ screen.version if screen.version else 0 }}" alt="Screenshot for {{ screen.id }}">
           </button>
         {% else %}
           <div class="empty-state">No screenshot yet.</div>
@@ -299,11 +299,12 @@
               timestamp.classList.toggle("is-stale", Boolean(entry.is_stale));
             }
 
-            const hasScreenshot = Boolean(entry.filename);
+            const hasScreenshot = Boolean(entry.path);
             card.dataset.hasScreenshot = hasScreenshot ? "true" : "false";
 
             if (hasScreenshot && previewButton && previewImage) {
-              const baseSrc = `/screenshots/current/${entry.filename}`;
+              const encodedPath = entry.path.split("/").map(encodeURIComponent).join("/");
+              const baseSrc = `/screenshots/file/${encodedPath}`;
               const version = entry.version || Date.now();
               const fullSrc = `${baseSrc}?v=${version}`;
               previewButton.dataset.fullSrc = fullSrc;
