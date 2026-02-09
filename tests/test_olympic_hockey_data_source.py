@@ -1,5 +1,10 @@
 import datetime as dt
 
+import pytest
+
+from requests import HTTPError
+
+from screens.data_sources import olympic_hockey
 from screens.data_sources.olympic_hockey import normalize_espn_olympic_response, resolve_display_date
 
 
@@ -40,3 +45,41 @@ def test_normalize_espn_olympic_response_shape():
     assert game["home"]["code3"] == "CAN"
     assert game["away"]["code3"] == "USA"
     assert game["source"]["providerName"] == "espn"
+
+
+def test_espn_provider_retries_without_date_filter_on_400(monkeypatch: pytest.MonkeyPatch):
+    payload = {
+        "events": [
+            {
+                "id": "402",
+                "date": "2026-02-15T18:00:00Z",
+                "status": {"type": {"state": "pre", "shortDetail": "Scheduled"}, "displayClock": ""},
+                "competitions": [
+                    {
+                        "competitors": [
+                            {"homeAway": "away", "score": "0", "team": {"abbreviation": "SWE", "displayName": "Sweden"}},
+                            {"homeAway": "home", "score": "0", "team": {"abbreviation": "FIN", "displayName": "Finland"}},
+                        ],
+                    }
+                ],
+            }
+        ]
+    }
+    calls: list[dict[str, object]] = []
+
+    def fake_http_json(url: str, *, params=None, provider_name: str):
+        calls.append({"url": url, "params": params, "provider_name": provider_name})
+        if len(calls) == 1:
+            err = HTTPError("400")
+            err.response = type("Response", (), {"status_code": 400})()
+            raise err
+        return payload
+
+    monkeypatch.setattr(olympic_hockey, "_http_json", fake_http_json)
+
+    result = olympic_hockey._espn_provider(dt.date(2026, 2, 9), "women")
+
+    assert result.provider_name == "espn"
+    assert len(result.games) == 1
+    assert calls[0]["params"] == {"dates": "20260209"}
+    assert calls[1]["params"] is None
