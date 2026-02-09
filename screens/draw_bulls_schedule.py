@@ -511,9 +511,7 @@ def _format_footer_live(game: Dict) -> str:
     status = _status_text(game).strip()
     if not status:
         status = "Live"
-    date_label = _relative_label(_official_date(game))
-    parts = [part for part in (status, date_label) if part]
-    return " • ".join(parts)
+    return status
 
 def _format_matchup_line(game: Dict) -> str:
     away = _team_entry(game, "away")
@@ -871,12 +869,10 @@ def draw_live_bulls_game(display, game: Optional[Dict], transition: bool = False
         return _push(display, img, transition=transition)
 
     footer = _format_footer_live(game)
-    status = _status_text(game) or "Live"
     img = _render_scoreboard(
         game,
         title="Bulls Live:",
         footer=footer,
-        status_line=status,
         hyperpixel_layout=hyperpixel_layout,
     )
     return _push(display, img, transition=transition)
