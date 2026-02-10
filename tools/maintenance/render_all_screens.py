@@ -210,7 +210,6 @@ def _maybe_prompt_resolution_selection() -> None:
     else:
         selection = _read_resolution_selection_from_stdin()
         if not selection:
-            _print_resolution_menu()
             return
         try:
             index = int(selection)
@@ -668,6 +667,14 @@ def render_all_screens_without_images(
 def _build_arg_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
+        "--resolution",
+        choices=[entry[0] for entry in RESOLUTION_OPTIONS],
+        help=(
+            "Apply a predefined output resolution without an interactive prompt "
+            "(e.g. hyperpixel4, 1080p)."
+        ),
+    )
+    parser.add_argument(
         "-a",
         "--all",
         "--todos",
@@ -705,9 +712,12 @@ def _build_arg_parser() -> argparse.ArgumentParser:
 
 
 def main(argv: Optional[list[str]] = None) -> int:
-    _maybe_prompt_resolution_selection()
     parser = _build_arg_parser()
     args = parser.parse_args(argv)
+    if args.resolution:
+        _apply_resolution_token(args.resolution)
+    else:
+        _maybe_prompt_resolution_selection()
     return _render_all_screens_impl(
         sync_screenshots=args.sync_screenshots,
         create_archive=not args.no_archive,
