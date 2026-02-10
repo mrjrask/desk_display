@@ -1855,16 +1855,25 @@ def _render_empty(
 
 
 def _scroll_vertical(display, image: Image.Image) -> None:
+    wait_for_skip = getattr(display, "wait_for_skip", None)
+
+    def _sleep(duration: float) -> bool:
+        if callable(wait_for_skip):
+            return bool(wait_for_skip(duration))
+        time.sleep(duration)
+        return False
+
     if image.height <= HEIGHT:
         display.image(image)
-        time.sleep(SCOREBOARD_SCROLL_PAUSE_BOTTOM)
+        _sleep(SCOREBOARD_SCROLL_PAUSE_BOTTOM)
         return
 
     max_offset = image.height - HEIGHT
     display.image(image.crop((0, 0, WIDTH, HEIGHT)))
-    time.sleep(SCOREBOARD_SCROLL_PAUSE_TOP)
+    if _sleep(SCOREBOARD_SCROLL_PAUSE_TOP):
+        return
 
-    target_frame_time = 0.016  # ~60 FPS for smoother scrolling
+    target_frame_time = max(0.016, SCOREBOARD_SCROLL_DELAY)
     for offset in range(
         SCOREBOARD_SCROLL_STEP, max_offset + 1, SCOREBOARD_SCROLL_STEP
     ):
@@ -1876,10 +1885,10 @@ def _scroll_vertical(display, image: Image.Image) -> None:
         # Account for rendering time to maintain consistent frame rate
         elapsed = time.time() - frame_start
         sleep_time = max(0, target_frame_time - elapsed)
-        if sleep_time > 0:
-            time.sleep(sleep_time)
+        if sleep_time > 0 and _sleep(sleep_time):
+            return
 
-    time.sleep(SCOREBOARD_SCROLL_PAUSE_BOTTOM)
+    _sleep(SCOREBOARD_SCROLL_PAUSE_BOTTOM)
 
 
 # ─── Public API ───────────────────────────────────────────────────────────────
