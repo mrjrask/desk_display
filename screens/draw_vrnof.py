@@ -46,7 +46,7 @@ _cache = {
 
 LOGO_HEIGHT = 65
 LOGO_GAP = 4
-BOTTOM_TEXT_MARGIN = 14 if is_hyperpixel_4_square_layout() else 6
+BOTTOM_TEXT_MARGIN = 18 if is_hyperpixel_4_square_layout() else 6
 LOGO_PATH = os.path.join(IMAGES_DIR, "verano.jpg")
 _LOGO = None
 

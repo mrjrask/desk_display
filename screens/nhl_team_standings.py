@@ -5,13 +5,14 @@ from screens.mlb_team_standings import (
     draw_standings_screen2 as _base_screen2,
     _format_int,
 )
-from config import FONT_STAND1_RANK, DISPLAY_SCALE, is_hyperpixel_4_square_layout
+from config import FONT_STAND1_RANK, DISPLAY_SCALE, is_hyperpixel_4_square_layout, is_hyperpixel_next_layout
 from utils import log_call, clone_font
 
 _IS_HYPERPIXEL_4_SQUARE = is_hyperpixel_4_square_layout()
+_IS_HYPERPIXEL_LAYOUT = is_hyperpixel_next_layout()
 
 NHL_LOGO_SZ = max(1, int(round(LOGO_SZ * 0.5)))
-NHL_STAND1_LOGO_SZ = NHL_LOGO_SZ * 3 if _IS_HYPERPIXEL_4_SQUARE else NHL_LOGO_SZ
+NHL_STAND1_LOGO_SZ = NHL_LOGO_SZ * 3 if _IS_HYPERPIXEL_LAYOUT else NHL_LOGO_SZ
 
 NHL_POINTS_FONT = clone_font(
     FONT_STAND1_RANK,

@@ -4,13 +4,14 @@ from screens.mlb_team_standings import (
     draw_standings_screen1 as _base_screen1,
     draw_standings_screen2 as _base_screen2,
 )
-from config import is_hyperpixel_4_square_layout
+from config import is_hyperpixel_4_square_layout, is_hyperpixel_next_layout
 from utils import log_call
 
 _IS_HYPERPIXEL_4_SQUARE = is_hyperpixel_4_square_layout()
+_IS_HYPERPIXEL_LAYOUT = is_hyperpixel_next_layout()
 
 NBA_LOGO_SZ = max(1, int(round(LOGO_SZ * 0.5)))
-NBA_STAND1_LOGO_SZ = NBA_LOGO_SZ * 3 if _IS_HYPERPIXEL_4_SQUARE else NBA_LOGO_SZ
+NBA_STAND1_LOGO_SZ = NBA_LOGO_SZ * 3 if _IS_HYPERPIXEL_LAYOUT else NBA_LOGO_SZ
 
 
 def _strip_pct_leading_zero(rec, *, precision=3):
