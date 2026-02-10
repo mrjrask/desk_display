@@ -33,6 +33,9 @@ TARGETS = {
     "h4sq": ((720, 720), Path("images/bears_next_season_h4sq.png")),
 }
 
+DEFAULT_HOME = ["det", "gb", "jax", "min", "ne", "no", "nyj", "phi", "tb"]
+DEFAULT_AWAY = ["atl", "buf", "car", "det", "gb", "mia", "min", "sea"]
+
 
 def _parse_team_list(raw: str | None) -> list[str]:
     if not raw:
@@ -133,18 +136,23 @@ def main() -> int:
     parser = argparse.ArgumentParser(description="Render Bears Next Season images for DHM/H4/H4SQ.")
     parser.add_argument("--home", help="Comma-separated home team abbreviations")
     parser.add_argument("--away", help="Comma-separated away team abbreviations")
+    parser.add_argument(
+        "--interactive",
+        action="store_true",
+        help="Launch interactive selector instead of using defaults",
+    )
     parser.add_argument("--render-target", choices=sorted(TARGETS.keys()), help=argparse.SUPPRESS)
     args = parser.parse_args()
 
-    home = _parse_team_list(args.home)
-    away = _parse_team_list(args.away)
+    home = _parse_team_list(args.home) if args.home is not None else list(DEFAULT_HOME)
+    away = _parse_team_list(args.away) if args.away is not None else list(DEFAULT_AWAY)
 
     if args.render_target:
         output = TARGETS[args.render_target][1]
         _render_one(output, home, away)
         return 0
 
-    if args.home is None and args.away is None:
+    if args.interactive:
         home, away = _interactive_select()
 
     for key in ("dhm", "h4", "h4sq"):

@@ -74,7 +74,10 @@ def _initialise_env() -> None:
         if not path.is_file():
             continue
         if load_dotenv is not None:
-            load_dotenv(path, override=False)
+            try:
+                load_dotenv(path, override=False)
+            except OSError:
+                logging.debug("Could not read .env file at %s", path)
         else:
             _load_env_file(str(path))
 
