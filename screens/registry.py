@@ -120,6 +120,9 @@ RenderCallable = Callable[[], Optional[Image.Image | ScreenImage]]
 RADAR_LOOKAHEAD_HOURS = 8
 WEATHER_CURRENT_TTL = _dt.timedelta(minutes=20)
 WEATHER_HOURLY_TTL = _dt.timedelta(hours=1)
+NHL_BREAK_START = _dt.date(2026, 2, 6)
+NHL_BREAK_END = _dt.date(2026, 2, 24)
+OLYMPIC_SCOREBOARD_HIDE_START = _dt.date(2026, 2, 24)
 
 
 @dataclass
@@ -375,6 +378,13 @@ def build_screen_registry(context: ScreenContext) -> Tuple[Dict[str, ScreenDefin
     register("vrnof", lambda: draw_vrnof_screen(context.display, "VRNO", transition=True))
 
     scoreboards_available = not (context.offline and context.skip_scoreboards)
+    today = context.now.date()
+    nhl_scoreboards_available = scoreboards_available and not (
+        NHL_BREAK_START <= today <= NHL_BREAK_END
+    )
+    olympic_scoreboards_available = scoreboards_available and (
+        today < OLYMPIC_SCOREBOARD_HIDE_START
+    )
 
     def _is_live_game_today(game: Any) -> bool:
         """Return True when *game* appears to be in progress today."""
@@ -615,37 +625,37 @@ def build_screen_registry(context: ScreenContext) -> Tuple[Dict[str, ScreenDefin
         register(
             "NHL Scoreboard",
             lambda: draw_nhl_scoreboard(context.display, transition=True),
-            available=scoreboards_available,
+            available=nhl_scoreboards_available,
         )
         register(
             "NHL Scoreboard v2",
             lambda: draw_nhl_scoreboard_v2(context.display, transition=True),
-            available=scoreboards_available,
+            available=nhl_scoreboards_available,
         )
         register(
             "Olympic Hockey Scores",
             lambda: draw_olympic_hockey_scores(context.display, transition=True),
-            available=scoreboards_available,
+            available=olympic_scoreboards_available,
         )
         register(
             "Olympic Hockey Men Scoreboard",
             lambda: draw_olympic_mens_hockey_scoreboard(context.display, transition=True),
-            available=scoreboards_available,
+            available=olympic_scoreboards_available,
         )
         register(
             "Olympic Hockey Men Scoreboard v2",
             lambda: draw_olympic_mens_hockey_scoreboard_v2(context.display, transition=True),
-            available=scoreboards_available,
+            available=olympic_scoreboards_available,
         )
         register(
             "Olympic Hockey Women Scoreboard",
             lambda: draw_olympic_womens_hockey_scoreboard(context.display, transition=True),
-            available=scoreboards_available,
+            available=olympic_scoreboards_available,
         )
         register(
             "Olympic Hockey Women Scoreboard v2",
             lambda: draw_olympic_womens_hockey_scoreboard_v2(context.display, transition=True),
-            available=scoreboards_available,
+            available=olympic_scoreboards_available,
         )
         olympic_medals_available = bool(fetch_olympic_medal_table(top_n=1))
         register(

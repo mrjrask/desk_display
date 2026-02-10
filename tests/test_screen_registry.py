@@ -13,10 +13,17 @@ class _DummyLogos:
         return None
 
 
-def _make_context(weather: dict, now: datetime.datetime) -> ScreenContext:
+def _make_context(
+    weather: dict,
+    now: datetime.datetime,
+    cache_updates: dict | None = None,
+) -> ScreenContext:
+    cache = {"weather": weather}
+    if cache_updates:
+        cache.update(cache_updates)
     return ScreenContext(
         display=_DummyDisplay(),
-        cache={"weather": weather},
+        cache=cache,
         logos=_DummyLogos(),
         image_dir="",
         now=now,
@@ -32,7 +39,7 @@ def _ts(dt: datetime.datetime) -> int:
 
 
 def test_weather_radar_available_with_precipitation():
-    now = CENTRAL_TIME.localize(datetime.datetime(2024, 1, 1, 12, 0))
+    now = datetime.datetime(2024, 1, 1, 12, 0, tzinfo=CENTRAL_TIME)
     weather = {
         "hourly": [
             {
@@ -48,7 +55,7 @@ def test_weather_radar_available_with_precipitation():
 
 
 def test_weather_radar_unavailable_without_precipitation_window():
-    now = CENTRAL_TIME.localize(datetime.datetime(2024, 1, 1, 12, 0))
+    now = datetime.datetime(2024, 1, 1, 12, 0, tzinfo=CENTRAL_TIME)
     weather = {
         "hourly": [
             {
@@ -68,7 +75,7 @@ def test_weather_radar_unavailable_without_precipitation_window():
 
 
 def test_weather_radar_detects_precipitation_amount_without_pop():
-    now = CENTRAL_TIME.localize(datetime.datetime(2024, 1, 1, 12, 0))
+    now = datetime.datetime(2024, 1, 1, 12, 0, tzinfo=CENTRAL_TIME)
     weather = {
         "hourly": [
             {
@@ -84,7 +91,7 @@ def test_weather_radar_detects_precipitation_amount_without_pop():
 
 
 def test_legacy_travel_alias_is_registered():
-    now = CENTRAL_TIME.localize(datetime.datetime(2024, 1, 1, 12, 0))
+    now = datetime.datetime(2024, 1, 1, 12, 0, tzinfo=CENTRAL_TIME)
     weather = {"hourly": []}
 
     registry, _ = build_screen_registry(_make_context(weather, now))
@@ -93,10 +100,8 @@ def test_legacy_travel_alias_is_registered():
     assert registry["travel"].available is True
 
 
-
-
 def test_legacy_travel_v2_alias_is_registered():
-    now = CENTRAL_TIME.localize(datetime.datetime(2024, 1, 1, 12, 0))
+    now = datetime.datetime(2024, 1, 1, 12, 0, tzinfo=CENTRAL_TIME)
     weather = {"hourly": []}
 
     registry, _ = build_screen_registry(_make_context(weather, now))
@@ -106,7 +111,7 @@ def test_legacy_travel_v2_alias_is_registered():
 
 
 def test_legacy_travel_map_alias_is_registered():
-    now = CENTRAL_TIME.localize(datetime.datetime(2024, 1, 1, 12, 0))
+    now = datetime.datetime(2024, 1, 1, 12, 0, tzinfo=CENTRAL_TIME)
     weather = {"hourly": []}
 
     registry, _ = build_screen_registry(_make_context(weather, now))
@@ -114,8 +119,9 @@ def test_legacy_travel_map_alias_is_registered():
     assert "travel map" in registry
     assert registry["travel map"].available is True
 
+
 def test_legacy_travel_map_v2_alias_is_registered():
-    now = CENTRAL_TIME.localize(datetime.datetime(2024, 1, 1, 12, 0))
+    now = datetime.datetime(2024, 1, 1, 12, 0, tzinfo=CENTRAL_TIME)
     weather = {"hourly": []}
 
     registry, _ = build_screen_registry(_make_context(weather, now))
@@ -123,3 +129,39 @@ def test_legacy_travel_map_v2_alias_is_registered():
     assert "travel map v2" in registry
     assert registry["travel map v2"].available is True
 
+
+def test_nhl_scoreboard_hidden_during_2026_break_window():
+    now = datetime.datetime(2026, 2, 10, 12, 0, tzinfo=CENTRAL_TIME)
+    weather = {"hourly": []}
+
+    registry, _ = build_screen_registry(
+        _make_context(weather, now, cache_updates={"hawks": {"next": {"id": 1}}})
+    )
+
+    assert registry["NHL Scoreboard"].available is False
+    assert registry["NHL Scoreboard v2"].available is False
+    assert registry["Olympic Hockey Scores"].available is True
+
+
+def test_scoreboards_hidden_on_feb_24_2026():
+    now = datetime.datetime(2026, 2, 24, 12, 0, tzinfo=CENTRAL_TIME)
+    weather = {"hourly": []}
+
+    registry, _ = build_screen_registry(
+        _make_context(weather, now, cache_updates={"hawks": {"next": {"id": 1}}})
+    )
+
+    assert registry["NHL Scoreboard"].available is False
+    assert registry["Olympic Hockey Scores"].available is False
+
+
+def test_olympic_scoreboards_hidden_after_feb_24_2026():
+    now = datetime.datetime(2026, 2, 25, 12, 0, tzinfo=CENTRAL_TIME)
+    weather = {"hourly": []}
+
+    registry, _ = build_screen_registry(
+        _make_context(weather, now, cache_updates={"hawks": {"next": {"id": 1}}})
+    )
+
+    assert registry["NHL Scoreboard"].available is True
+    assert registry["Olympic Hockey Scores"].available is False
