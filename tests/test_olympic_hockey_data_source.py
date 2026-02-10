@@ -239,3 +239,25 @@ def test_fetch_olympic_hockey_games_uses_persisted_fallback_when_providers_fail(
     result = olympic_hockey.fetch_olympic_hockey_games(division="men", date=dt.date(2026, 2, 9))
 
     assert result == cached_games
+
+
+def test_fetch_olympic_hockey_games_tries_next_day_for_auto_date(monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.setattr(olympic_hockey, "_cache", {})
+    monkeypatch.setattr(olympic_hockey, "_last_good_by_league", {})
+    monkeypatch.setattr(olympic_hockey, "_disk_cache_loaded", True)
+    monkeypatch.setattr(olympic_hockey, "resolve_display_date", lambda **_: dt.date(2026, 2, 10))
+
+    calls: list[dt.date] = []
+
+    def fake_provider(date: dt.date, division: str):
+        calls.append(date)
+        if date == dt.date(2026, 2, 10):
+            return olympic_hockey.ProviderResult("fake", [], "no events")
+        return olympic_hockey.ProviderResult("fake", [{"gameId": "next-day"}], "next day events")
+
+    monkeypatch.setattr(olympic_hockey, "_provider_chain", lambda *_: (fake_provider,))
+
+    result = olympic_hockey.fetch_olympic_hockey_games(division="men")
+
+    assert result == [{"gameId": "next-day"}]
+    assert calls == [dt.date(2026, 2, 10), dt.date(2026, 2, 11)]

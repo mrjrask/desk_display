@@ -592,38 +592,52 @@ def fetch_olympic_hockey_games(
         raise ValueError(f"Unknown division '{division}'")
     _load_last_good_from_disk_if_needed()
     selected_date = date or resolve_display_date(tz_name=tz_name)
-    cache_key = f"olympic_hockey:{division}:{selected_date.isoformat()}"
-    cached = _cache_get(cache_key)
-    if cached is not None:
-        return cached
+    # Auto-resolved requests can miss upcoming games near UTC boundaries.
+    # Probe the following day before falling back to stale cached data.
+    candidate_dates = [selected_date]
+    if date is None:
+        candidate_dates.append(selected_date + dt.timedelta(days=1))
 
     failures: list[str] = []
-    for provider in _provider_chain(selected_date, division):
-        provider_name = provider.__name__
-        try:
-            result = provider(selected_date, division)
-            if result.games:
-                logging.info(
-                    "Olympic hockey provider selected division=%s provider=%s reason=%s",
+    for candidate_date in candidate_dates:
+        cache_key = f"olympic_hockey:{division}:{candidate_date.isoformat()}"
+        cached = _cache_get(cache_key)
+        if cached is not None:
+            return cached
+
+        for provider in _provider_chain(candidate_date, division):
+            provider_name = provider.__name__
+            try:
+                result = provider(candidate_date, division)
+                if result.games:
+                    logging.info(
+                        "Olympic hockey provider selected division=%s provider=%s reason=%s date=%s",
+                        division,
+                        result.provider_name,
+                        result.reason,
+                        candidate_date.isoformat(),
+                    )
+                    _cache_set(cache_key, result.games)
+                    with _lock:
+                        _last_good_by_league[LEAGUE_KEYS[division]] = result.games
+                    _save_last_good_to_disk()
+                    return result.games
+                failures.append(f"{candidate_date.isoformat()} {result.provider_name}: empty ({result.reason})")
+                logging.warning(
+                    "Olympic hockey provider returned empty division=%s provider=%s reason=%s date=%s",
                     division,
                     result.provider_name,
                     result.reason,
+                    candidate_date.isoformat(),
                 )
-                _cache_set(cache_key, result.games)
-                with _lock:
-                    _last_good_by_league[LEAGUE_KEYS[division]] = result.games
-                _save_last_good_to_disk()
-                return result.games
-            failures.append(f"{result.provider_name}: empty ({result.reason})")
-            logging.warning(
-                "Olympic hockey provider returned empty division=%s provider=%s reason=%s",
-                division,
-                result.provider_name,
-                result.reason,
-            )
-        except Exception as exc:
-            failures.append(f"{provider_name}: {exc}")
-            logging.exception("Olympic hockey provider failed division=%s provider=%s", division, provider_name)
+            except Exception as exc:
+                failures.append(f"{candidate_date.isoformat()} {provider_name}: {exc}")
+                logging.exception(
+                    "Olympic hockey provider failed division=%s provider=%s date=%s",
+                    division,
+                    provider_name,
+                    candidate_date.isoformat(),
+                )
 
     with _lock:
         fallback = _last_good_by_league.get(LEAGUE_KEYS[division], [])
@@ -634,7 +648,7 @@ def fetch_olympic_hockey_games(
         failures,
         len(fallback),
     )
-    _cache_set(cache_key, fallback)
+    _cache_set(f"olympic_hockey:{division}:{selected_date.isoformat()}", fallback)
     return fallback
 
 
