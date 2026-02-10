@@ -202,18 +202,19 @@ def _start_update_checks(
 
     def _worker():
         try:
+            worker_expected_frame_id = expected_frame_id
             gh_on = check_github_updates()
             gh_state["value"] = gh_on
             check_apt_updates()
 
             if display is None:
                 return
-            if expected_frame_id is not None:
+            if worker_expected_frame_id is not None:
                 current_frame_id = display.frame_id()
                 if frame_state is not None:
                     with frame_state["lock"]:
-                        expected_frame_id = frame_state["value"]
-                if current_frame_id != expected_frame_id:
+                        worker_expected_frame_id = frame_state["value"]
+                if current_frame_id != worker_expected_frame_id:
                     logging.info(
                         "Background update checks skipped; display already updated."
                     )
