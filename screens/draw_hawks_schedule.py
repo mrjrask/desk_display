@@ -1140,6 +1140,7 @@ def _draw_next_card(
     hyperpixel_layout = config.is_hyperpixel_next_layout()
     edge_pad = max(2, config.scale_value(2)) if hyperpixel_layout else 2
     line_gap = max(1, config.scale_value(1)) if hyperpixel_layout else 1
+    bottom_margin = edge_pad + 5
 
     # Title
     y_top = edge_pad
@@ -1165,7 +1166,7 @@ def _draw_next_card(
     start_time_central = game.get("startTimeCentral")
     bottom_text = _format_next_bottom(official_date, game_date_iso, start_time_central)
     bottom_h = _text_h(d, FONT_BOTTOM) if bottom_text else 0
-    bottom_y = HEIGHT - (bottom_h + edge_pad) if bottom_text else HEIGHT
+    bottom_y = HEIGHT - (bottom_h + bottom_margin) if bottom_text else HEIGHT
 
     # Compute max logo height to fit between the top content and bottom line
     available_h = max(10, bottom_y - (y_top + edge_pad))  # space for logos row
@@ -1268,7 +1269,7 @@ def _draw_next_card(
 
     # Bottom label (always includes time)
     if bottom_text:
-        _center_bottom_text(d, bottom_text, FONT_BOTTOM)
+        _center_bottom_text(d, bottom_text, FONT_BOTTOM, margin=bottom_margin)
 
     return _push(display, img, transition=transition)
 

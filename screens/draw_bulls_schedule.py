@@ -714,7 +714,7 @@ def _render_next_game(game: Dict, *, title: str, logo_scale: float = 1.0) -> Ima
     # Two large logos with '@' between them
     bottom_margin = (
         config.scale_value(BOTTOM_LINE_MARGIN) if hyperpixel_layout else BOTTOM_LINE_MARGIN
-    )
+    ) + 5
     bottom_reserved = _text_h(draw, FONT_BOTTOM) + bottom_margin if footer else 0
     bottom_y = HEIGHT - bottom_reserved
     y2 = y + (config.scale_value(6) if hyperpixel_layout else 6)
