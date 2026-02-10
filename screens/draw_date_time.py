@@ -162,10 +162,18 @@ def _cycle_colors_after_load(
     steps = None if (hyperpixel_layout or hyperpixel_square) else 6
     count = 0
     while steps is None or count < steps:
-        if expected_frame_id is not None and hasattr(display, "frame_id") and display.frame_id() != expected_frame_id:
+        if (
+            expected_frame_id is not None
+            and hasattr(display, "frame_id")
+            and display.frame_id() != expected_frame_id
+        ):
             break
         img = _compose_frame(base_order, bright_color(), bright_color(), gh_state(), screen_id)
         display.image(img)
+        if expected_frame_id is not None and hasattr(display, "frame_id"):
+            # Track the frame id that *this* loop last rendered so we only stop
+            # when another screen takes over.
+            expected_frame_id = display.frame_id()
         time.sleep(0.45)
         count += 1
 
