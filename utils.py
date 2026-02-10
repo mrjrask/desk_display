@@ -603,6 +603,8 @@ from config import (
     is_hyperpixel_next_layout,
     HYPERPIXEL_LED_INDICATOR_BORDER_ENABLED,
     HYPERPIXEL_LED_INDICATOR_BORDER_WIDTH,
+    DISPLAY_HAT_MINI_LED_INDICATOR_BORDER_ENABLED,
+    DISPLAY_HAT_MINI_LED_ENABLED,
 )
 # Color utilities
 from screens.color_palettes import random_color
@@ -656,6 +658,10 @@ class Display:
         self._hyperpixel_indicator_border = (
             HYPERPIXEL_LED_INDICATOR_BORDER_ENABLED
             and is_hyperpixel_next_layout(self.width, self.height)
+        )
+        self._display_hat_mini_indicator_border = (
+            DISPLAY_HAT_MINI_LED_INDICATOR_BORDER_ENABLED
+            and (self.width, self.height) == (320, 240)
         )
 
         output = _normalize_display_output(_DISPLAY_OUTPUT)
@@ -895,10 +901,10 @@ class Display:
         """Set the onboard RGB LED, if hardware is available."""
 
         self._led_color = (max(0.0, r), max(0.0, g), max(0.0, b))
-        if self._hyperpixel_indicator_border:
+        if self._hyperpixel_indicator_border or self._display_hat_mini_indicator_border:
             self._update_display()
 
-        if self._display is None:  # pragma: no cover - hardware import
+        if self._display is None or not DISPLAY_HAT_MINI_LED_ENABLED:  # pragma: no cover - hardware import
             return
         try:  # pragma: no cover - hardware import
             self._display.set_led(r=r, g=g, b=b)
@@ -906,9 +912,12 @@ class Display:
             logging.debug("Display LED update failed: %s", exc)
 
     def _indicator_buffer(self) -> Image.Image:
-        """Return a frame with the HyperPixel border LED indicator overlay."""
+        """Return a frame with the border LED indicator overlay when enabled."""
 
-        if not self._hyperpixel_indicator_border:
+        if not (
+            self._hyperpixel_indicator_border
+            or self._display_hat_mini_indicator_border
+        ):
             return self._buffer
 
         color = tuple(self._indicator_channel_to_pixel(value) for value in self._led_color)
