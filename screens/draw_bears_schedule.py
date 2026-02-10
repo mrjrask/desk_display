@@ -61,6 +61,9 @@ DROP_STEPS = 18
 DROP_STAGGER = 0.25
 DROP_FRAME_DELAY = 0.01
 
+DEFAULT_BEARS_NEXT_SEASON_HOME_OPPONENTS = ("det", "gb", "jax", "min", "ne", "no", "nyj", "phi", "tb")
+DEFAULT_BEARS_NEXT_SEASON_AWAY_OPPONENTS = ("atl", "buf", "car", "det", "gb", "mia", "min", "sea")
+
 
 @lru_cache(maxsize=96)
 def _cached_team_logo(abbr: str, logo_size: int) -> Image.Image | None:
@@ -305,17 +308,18 @@ def show_bears_next_game(display, transition=False):
 
 
 @lru_cache(maxsize=8)
-def _cached_bears_next_season_image(width: int, height: int, background: tuple[int, int, int]) -> Image.Image:
+def _cached_bears_next_season_image(
+    width: int,
+    height: int,
+    background: tuple[int, int, int],
+    home_opponents: tuple[str, ...],
+    away_opponents: tuple[str, ...],
+) -> Image.Image:
     # Legacy dynamic Bears-next-season generator (kept intentionally deactivated).
     # The active implementation now uses pre-rendered static PNG assets.
     title = "2026 Bears Opponents"
     img = Image.new("RGB", (width, height), background)
     draw = ImageDraw.Draw(img)
-
-    if home_opponents is None:
-        home_opponents = DEFAULT_BEARS_NEXT_SEASON_HOME_OPPONENTS
-    if away_opponents is None:
-        away_opponents = DEFAULT_BEARS_NEXT_SEASON_AWAY_OPPONENTS
 
     title_w, title_h = _text_size(draw, title, font=config.FONT_TITLE_SPORTS)
     draw.text(
@@ -397,6 +401,18 @@ def _cached_bears_next_season_image(width: int, height: int, background: tuple[i
     return img
 
 
+def render_bears_next_season_image(
+    width: int,
+    height: int,
+    background: tuple[int, int, int],
+    home_opponents: list[str] | tuple[str, ...] | None = None,
+    away_opponents: list[str] | tuple[str, ...] | None = None,
+) -> Image.Image:
+    home = tuple(home_opponents or DEFAULT_BEARS_NEXT_SEASON_HOME_OPPONENTS)
+    away = tuple(away_opponents or DEFAULT_BEARS_NEXT_SEASON_AWAY_OPPONENTS)
+    return _cached_bears_next_season_image(width, height, tuple(background), home, away).copy()
+
+
 @lru_cache(maxsize=12)
 def _cached_bears_next_season_static_image(width: int, height: int) -> Image.Image | None:
     if config.is_hyperpixel_4_square_layout(width, height):
@@ -426,11 +442,11 @@ def show_bears_next_season(display, transition=False):
     else:
         # Fallback to dynamic rendering if no static image assets are available.
         background_key = tuple(background)
-        final_img = _cached_bears_next_season_image(
+        final_img = render_bears_next_season_image(
             config.WIDTH,
             config.HEIGHT,
             background_key,
-        ).copy()
+        )
 
     if transition:
         return final_img
