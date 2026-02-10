@@ -63,7 +63,7 @@ def _format_record_with_pct(rec, *, precision=3):
 
 
 @log_call
-def draw_nba_standings_screen1(display, rec, logo_path, division_name, *, transition=False):
+def draw_nba_standings_screen1(display, rec, logo_path, division_name, *, logo_scale: float = 1.0, transition=False):
     """Wrap the generic standings screen for NBA teams (no games-back row)."""
     return _base_screen1(
         display,
@@ -78,7 +78,7 @@ def draw_nba_standings_screen1(display, rec, logo_path, division_name, *, transi
         ),
         show_pct=False,
         show_streak=True,
-        logo_size=NBA_STAND1_LOGO_SZ,
+        logo_size=max(1, int(round(NBA_STAND1_LOGO_SZ * max(0.1, logo_scale)))),
         transition=transition,
     )
 
