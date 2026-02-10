@@ -1873,7 +1873,7 @@ def _scroll_vertical(display, image: Image.Image) -> None:
     if _sleep(SCOREBOARD_SCROLL_PAUSE_TOP):
         return
 
-    target_frame_time = max(0.0, SCOREBOARD_SCROLL_DELAY)
+    target_frame_time = max(0.016, SCOREBOARD_SCROLL_DELAY)
     for offset in range(
         SCOREBOARD_SCROLL_STEP, max_offset + 1, SCOREBOARD_SCROLL_STEP
     ):
