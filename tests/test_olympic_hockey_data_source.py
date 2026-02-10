@@ -1,4 +1,5 @@
 import datetime as dt
+import json
 
 import pytest
 
@@ -210,3 +211,25 @@ def test_espn_provider_filters_division_when_using_generic_olympic_endpoint(monk
     assert len(result.games) == 1
     assert result.games[0]["gameId"] == "w1"
     assert any("/sports/hockey/olympics/scoreboard" in str(call["url"]) for call in calls)
+
+
+def test_fetch_olympic_hockey_games_uses_persisted_fallback_when_providers_fail(
+    monkeypatch: pytest.MonkeyPatch, tmp_path
+):
+    cache_file = tmp_path / "olympic_hockey_last_good.json"
+    cached_games = [{"gameId": "persisted-1", "leagueKey": "olympic_mhockey"}]
+    cache_file.write_text(json.dumps({"olympic_mhockey": cached_games}), encoding="utf-8")
+
+    monkeypatch.setattr(olympic_hockey, "LAST_GOOD_CACHE_PATH", cache_file)
+    monkeypatch.setattr(olympic_hockey, "_disk_cache_loaded", False)
+    monkeypatch.setattr(olympic_hockey, "_cache", {})
+    monkeypatch.setattr(olympic_hockey, "_last_good_by_league", {})
+
+    def always_fail(date: dt.date, division: str):
+        raise RuntimeError("provider down")
+
+    monkeypatch.setattr(olympic_hockey, "_provider_chain", lambda *_: (always_fail,))
+
+    result = olympic_hockey.fetch_olympic_hockey_games(division="men", date=dt.date(2026, 2, 9))
+
+    assert result == cached_games

@@ -7,6 +7,7 @@ import datetime as dt
 import json
 import logging
 import os
+from pathlib import Path
 import re
 import threading
 import time
@@ -23,6 +24,12 @@ REQUEST_TIMEOUT = 12
 CACHE_TTL_SECONDS = 30
 RATE_LIMIT_SECONDS = 2
 DEFAULT_TIMEZONE = os.getenv("OLYMPIC_HOCKEY_TIMEZONE", "America/Chicago")
+LAST_GOOD_CACHE_PATH = Path(
+    os.getenv(
+        "OLYMPIC_HOCKEY_LAST_GOOD_CACHE_PATH",
+        os.path.expanduser("~/.cache/desk_display/olympic_hockey_last_good.json"),
+    )
+)
 
 LEAGUE_KEYS = {
     "men": "olympic_mhockey",
@@ -72,6 +79,7 @@ _cache: dict[str, _CacheEntry] = {}
 _last_fetch_times: dict[str, float] = {}
 _last_good_by_league: dict[str, list[dict[str, Any]]] = {}
 _lock = threading.Lock()
+_disk_cache_loaded = False
 
 
 def _now_utc() -> dt.datetime:
@@ -143,6 +151,48 @@ def _rate_limit(provider_name: str) -> None:
         if wait > 0:
             time.sleep(wait)
         _last_fetch_times[provider_name] = time.time()
+
+
+def _load_last_good_from_disk_if_needed() -> None:
+    global _disk_cache_loaded
+    with _lock:
+        if _disk_cache_loaded:
+            return
+        _disk_cache_loaded = True
+
+    if not LAST_GOOD_CACHE_PATH.exists():
+        return
+
+    try:
+        payload = json.loads(LAST_GOOD_CACHE_PATH.read_text(encoding="utf-8"))
+    except Exception as exc:
+        logging.warning("Failed to read Olympic hockey fallback cache path=%s error=%s", LAST_GOOD_CACHE_PATH, exc)
+        return
+
+    if not isinstance(payload, dict):
+        return
+
+    loaded: dict[str, list[dict[str, Any]]] = {}
+    for league_key, games in payload.items():
+        if league_key not in LEAGUE_KEYS.values() or not isinstance(games, list):
+            continue
+        loaded[league_key] = [game for game in games if isinstance(game, dict)]
+
+    if not loaded:
+        return
+
+    with _lock:
+        _last_good_by_league.update(loaded)
+
+
+def _save_last_good_to_disk() -> None:
+    with _lock:
+        payload = dict(_last_good_by_league)
+    try:
+        LAST_GOOD_CACHE_PATH.parent.mkdir(parents=True, exist_ok=True)
+        LAST_GOOD_CACHE_PATH.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
+    except Exception as exc:
+        logging.warning("Failed to write Olympic hockey fallback cache path=%s error=%s", LAST_GOOD_CACHE_PATH, exc)
 
 
 def resolve_display_date(*, tz_name: str | None = None, now: Optional[dt.datetime] = None) -> dt.date:
@@ -540,6 +590,7 @@ def fetch_olympic_hockey_games(
 ) -> list[dict[str, Any]]:
     if division not in LEAGUE_KEYS:
         raise ValueError(f"Unknown division '{division}'")
+    _load_last_good_from_disk_if_needed()
     selected_date = date or resolve_display_date(tz_name=tz_name)
     cache_key = f"olympic_hockey:{division}:{selected_date.isoformat()}"
     cached = _cache_get(cache_key)
@@ -561,6 +612,7 @@ def fetch_olympic_hockey_games(
                 _cache_set(cache_key, result.games)
                 with _lock:
                     _last_good_by_league[LEAGUE_KEYS[division]] = result.games
+                _save_last_good_to_disk()
                 return result.games
             failures.append(f"{result.provider_name}: empty ({result.reason})")
             logging.warning(
