@@ -626,7 +626,7 @@ class Display:
     """Wrapper around the Pimoroni Display HAT Mini (320×240 LCD)."""
 
     _BUTTON_NAMES = ("A", "B", "X", "Y")
-    _INDICATOR_VERTICAL_SAFE_MARGIN_PX = 8
+    _INDICATOR_BOTTOM_SAFE_BUFFER_PX = 5
 
     def __init__(self):
         global _ACTIVE_DISPLAY
@@ -836,7 +836,7 @@ class Display:
         self._update_display()
 
     def image(self, pil_img: Image.Image):
-        pil_img = self._apply_indicator_safe_area(pil_img)
+        pil_img = self._apply_indicator_bottom_safe_buffer(pil_img)
         if pil_img.size != (self.width, self.height):
             pil_img = pil_img.resize((self.width, self.height), Image.ANTIALIAS)
         if pil_img.mode != "RGB":
@@ -845,18 +845,14 @@ class Display:
         self._bump_frame_id()
         self._update_display()
 
-    def _apply_indicator_safe_area(self, pil_img: Image.Image) -> Image.Image:
-        """Inset content to avoid overlap with the indicator border, when enabled."""
+    def _apply_indicator_bottom_safe_buffer(self, pil_img: Image.Image) -> Image.Image:
+        """Clear a bottom buffer to avoid indicator border overlap, when enabled."""
 
         if not (self._hyperpixel_indicator_border or self._display_hat_mini_indicator_border):
             return pil_img
 
-        margin = max(0, self._INDICATOR_VERTICAL_SAFE_MARGIN_PX)
-        if margin <= 0:
-            return pil_img
-
-        content_height = self.height - (margin * 2)
-        if content_height <= 0:
+        bottom_buffer = max(0, self._INDICATOR_BOTTOM_SAFE_BUFFER_PX)
+        if bottom_buffer <= 0:
             return pil_img
 
         source = pil_img
@@ -865,10 +861,12 @@ class Display:
         if source.size != (self.width, self.height):
             source = source.resize((self.width, self.height), Image.ANTIALIAS)
 
-        fitted = source.resize((self.width, content_height), Image.ANTIALIAS)
-        inset_img = Image.new("RGB", (self.width, self.height), "black")
-        inset_img.paste(fitted, (0, margin))
-        return inset_img
+        buffered_img = source.copy()
+        ImageDraw.Draw(buffered_img).rectangle(
+            [(0, self.height - bottom_buffer), (self.width - 1, self.height - 1)],
+            fill="black",
+        )
+        return buffered_img
 
     def show(self):
         # No additional action required; display() is triggered during image()
