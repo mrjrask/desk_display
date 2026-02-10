@@ -147,6 +147,7 @@ def _cycle_colors_after_load(
     base_order: Literal["date_time", "time_date"],
     gh_state: Callable[[], bool],
     screen_id: str,
+    frame_state: dict | None = None,
 ):
     """
     Optional subtle color-cycle that runs AFTER the first full static frame is already shown.
@@ -157,23 +158,33 @@ def _cycle_colors_after_load(
     hyperpixel_layout = is_hyperpixel_next_layout()
     hyperpixel_square = is_hyperpixel_4_square_layout()
     expected_frame_id = display.frame_id() if hasattr(display, "frame_id") else None
+    if frame_state is not None:
+        with frame_state["lock"]:
+            expected_frame_id = frame_state["value"]
     # Keep cycling on Hyperpixel so colors continue changing while shown.
     # Other displays keep the short, subtle cycle.
     steps = None if (hyperpixel_layout or hyperpixel_square) else 6
     count = 0
     while steps is None or count < steps:
-        if (
-            expected_frame_id is not None
-            and hasattr(display, "frame_id")
-            and display.frame_id() != expected_frame_id
-        ):
-            break
+        if expected_frame_id is not None and hasattr(display, "frame_id"):
+            current_frame_id = display.frame_id()
+            if frame_state is not None:
+                with frame_state["lock"]:
+                    expected_frame_id = frame_state["value"]
+            if current_frame_id != expected_frame_id:
+                break
         img = _compose_frame(base_order, bright_color(), bright_color(), gh_state(), screen_id)
         display.image(img)
-        if expected_frame_id is not None and hasattr(display, "frame_id"):
-            # Track the frame id that *this* loop last rendered so we only stop
+        if hasattr(display, "frame_id"):
+            latest_frame_id = display.frame_id()
+            # Track the frame id that *this* screen last rendered so we only stop
             # when another screen takes over.
-            expected_frame_id = display.frame_id()
+            if frame_state is not None:
+                with frame_state["lock"]:
+                    frame_state["value"] = latest_frame_id
+                    expected_frame_id = latest_frame_id
+            else:
+                expected_frame_id = latest_frame_id
         time.sleep(0.45)
         count += 1
 
@@ -185,6 +196,7 @@ def _start_update_checks(
     display,
     screen_id: str,
     expected_frame_id: int | None = None,
+    frame_state: dict | None = None,
 ):
     """Kick off apt/GitHub checks in the background, updating the screen when ready."""
 
@@ -196,14 +208,22 @@ def _start_update_checks(
 
             if display is None:
                 return
-            if expected_frame_id is not None and display.frame_id() != expected_frame_id:
-                logging.info(
-                    "Background update checks skipped; display already updated."
-                )
-                return
+            if expected_frame_id is not None:
+                current_frame_id = display.frame_id()
+                if frame_state is not None:
+                    with frame_state["lock"]:
+                        expected_frame_id = frame_state["value"]
+                if current_frame_id != expected_frame_id:
+                    logging.info(
+                        "Background update checks skipped; display already updated."
+                    )
+                    return
 
             refreshed = _compose_frame(order, colors[0], colors[1], gh_state["value"], screen_id)
             display.image(refreshed)
+            if frame_state is not None and hasattr(display, "frame_id"):
+                with frame_state["lock"]:
+                    frame_state["value"] = display.frame_id()
             try:
                 display.show()
             except AttributeError:
@@ -243,10 +263,11 @@ def draw_date(display, transition: bool=False):
         # Some display drivers immediately refresh when image() is called.
         pass
     frame_id = display.frame_id()
+    frame_state = {"value": frame_id, "lock": threading.Lock()}
     # run a tiny, delayed cycle in a short thread so we don't block
     t = threading.Thread(
         target=_cycle_colors_after_load,
-        args=(display, "date_time", lambda: gh_state["value"], "date"),
+        args=(display, "date_time", lambda: gh_state["value"], "date", frame_state),
         daemon=True,
     )
     t.start()
@@ -257,6 +278,7 @@ def draw_date(display, transition: bool=False):
         display,
         "date",
         expected_frame_id=frame_id,
+        frame_state=frame_state,
     )
     return ScreenImage(img, displayed=True)
 
@@ -283,9 +305,10 @@ def draw_time(display, transition: bool=False):
     except AttributeError:
         pass
     frame_id = display.frame_id()
+    frame_state = {"value": frame_id, "lock": threading.Lock()}
     t = threading.Thread(
         target=_cycle_colors_after_load,
-        args=(display, "time_date", lambda: gh_state["value"], "time"),
+        args=(display, "time_date", lambda: gh_state["value"], "time", frame_state),
         daemon=True,
     )
     t.start()
@@ -296,5 +319,6 @@ def draw_time(display, transition: bool=False):
         display,
         "time",
         expected_frame_id=frame_id,
+        frame_state=frame_state,
     )
     return ScreenImage(img, displayed=True)
