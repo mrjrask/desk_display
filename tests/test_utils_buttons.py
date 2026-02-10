@@ -126,7 +126,7 @@ def test_display_hat_mini_led_respects_config_disable(monkeypatch):
     assert fake_display.called is False
 
 
-def test_image_applies_bottom_safe_buffer_when_indicator_border_enabled(monkeypatch):
+def test_image_always_applies_bottom_safe_buffer(monkeypatch):
     monkeypatch.setattr(utils, "is_hyperpixel_next_layout", lambda w, h: True)
 
     display = utils.Display()
@@ -139,7 +139,7 @@ def test_image_applies_bottom_safe_buffer_when_indicator_border_enabled(monkeypa
     assert display.capture().getpixel((10, display.height - 1)) == (0, 0, 0)
 
 
-def test_image_keeps_full_height_when_indicator_border_disabled(monkeypatch):
+def test_image_applies_bottom_safe_buffer_when_indicator_border_disabled(monkeypatch):
     monkeypatch.setattr(utils, "is_hyperpixel_next_layout", lambda w, h: False)
     monkeypatch.setattr(utils, "DISPLAY_HAT_MINI_LED_INDICATOR_BORDER_ENABLED", False)
 
@@ -149,4 +149,5 @@ def test_image_keeps_full_height_when_indicator_border_disabled(monkeypatch):
     display.image(source)
 
     assert display.capture().getpixel((10, 0)) == (255, 0, 0)
-    assert display.capture().getpixel((10, display.height - 1)) == (255, 0, 0)
+    assert display.capture().getpixel((10, display.height - 6)) == (255, 0, 0)
+    assert display.capture().getpixel((10, display.height - 1)) == (0, 0, 0)

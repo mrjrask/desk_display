@@ -626,6 +626,7 @@ class Display:
     """Wrapper around the Pimoroni Display HAT Mini (320×240 LCD)."""
 
     _BUTTON_NAMES = ("A", "B", "X", "Y")
+    _BOTTOM_SAFE_BUFFER_PX = 5
     _INDICATOR_BOTTOM_SAFE_BUFFER_PX = 5
 
     def __init__(self):
@@ -836,6 +837,7 @@ class Display:
         self._update_display()
 
     def image(self, pil_img: Image.Image):
+        pil_img = self._apply_bottom_safe_buffer(pil_img)
         pil_img = self._apply_indicator_bottom_safe_buffer(pil_img)
         if pil_img.size != (self.width, self.height):
             pil_img = pil_img.resize((self.width, self.height), Image.ANTIALIAS)
@@ -844,6 +846,26 @@ class Display:
         self._buffer = pil_img.copy()
         self._bump_frame_id()
         self._update_display()
+
+    def _apply_bottom_safe_buffer(self, pil_img: Image.Image) -> Image.Image:
+        """Always clear the bottom safety strip so content never touches the edge."""
+
+        bottom_buffer = max(0, self._BOTTOM_SAFE_BUFFER_PX)
+        if bottom_buffer <= 0:
+            return pil_img
+
+        source = pil_img
+        if source.mode != "RGB":
+            source = source.convert("RGB")
+        if source.size != (self.width, self.height):
+            source = source.resize((self.width, self.height), Image.ANTIALIAS)
+
+        buffered_img = source.copy()
+        ImageDraw.Draw(buffered_img).rectangle(
+            [(0, self.height - bottom_buffer), (self.width - 1, self.height - 1)],
+            fill="black",
+        )
+        return buffered_img
 
     def _apply_indicator_bottom_safe_buffer(self, pil_img: Image.Image) -> Image.Image:
         """Clear a bottom buffer to avoid indicator border overlap, when enabled."""
