@@ -146,6 +146,23 @@ _wifi_outage_active = False
 _wifi_outage_started_at: Optional[datetime.datetime] = None
 _wifi_outage_live_games = False
 
+GC_COLLECT_INTERVAL = max(5.0, float(os.environ.get("DESK_DISPLAY_GC_INTERVAL_SECONDS", "30")))
+_last_gc_collect_monotonic = 0.0
+
+
+def _run_gc_maintenance(*, force: bool = False) -> bool:
+    """Run `gc.collect()` only when needed to reduce per-frame pause time."""
+
+    global _last_gc_collect_monotonic
+
+    now = time.monotonic()
+    if not force and (now - _last_gc_collect_monotonic) < GC_COLLECT_INTERVAL:
+        return False
+
+    gc.collect()
+    _last_gc_collect_monotonic = now
+    return True
+
 
 def _request_next_screen() -> bool:
     """Request that the scheduler advance to the next eligible screen."""
@@ -1324,7 +1341,7 @@ def main_loop():
                 if _wait_with_button_checks(SCREEN_DELAY):
                     continue
 
-                gc.collect()
+                _run_gc_maintenance()
                 continue
 
             if _dark_hours_active:
@@ -1361,7 +1378,7 @@ def main_loop():
                     break
                 if _wait_with_button_checks(SCREEN_DELAY):
                     continue
-                gc.collect()
+                _run_gc_maintenance()
                 continue
 
             offline = _wifi_outage_active if ENABLE_WIFI_MONITOR else False
@@ -1390,7 +1407,7 @@ def main_loop():
                     break
                 if _wait_with_button_checks(SCREEN_DELAY):
                     continue
-                gc.collect()
+                _run_gc_maintenance()
                 continue
 
             sid = entry.id
@@ -1402,7 +1419,7 @@ def main_loop():
                     result = entry.render()
             except Exception as exc:
                 logging.error(f"Error in screen '{sid}': {exc}")
-                gc.collect()
+                _run_gc_maintenance()
                 if _shutdown_event.is_set():
                     break
                 if _wait_with_button_checks(SCREEN_DELAY):
@@ -1431,7 +1448,7 @@ def main_loop():
 
             if img is None:
                 logging.info("Screen '%s' produced no drawable image.", sid)
-                gc.collect()
+                _run_gc_maintenance()
                 if _shutdown_event.is_set():
                     break
                 if _wait_with_button_checks(SCREEN_DELAY):
@@ -1486,7 +1503,7 @@ def main_loop():
 
             if skip_delay:
                 continue
-            gc.collect()
+            _run_gc_maintenance()
 
     finally:
         _finalize_shutdown()
