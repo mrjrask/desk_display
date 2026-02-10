@@ -54,3 +54,39 @@ def test_update_display_resizes_rotated_hardware_buffer_to_native_size():
     display._update_display()
 
     assert captured["size"] == (display.width, display.height)
+
+
+def test_hyperpixel_indicator_border_renders_led_color(monkeypatch):
+    monkeypatch.setattr(utils, "is_hyperpixel_next_layout", lambda w, h: True)
+
+    display = utils.Display()
+    display._buffer = utils.Image.new("RGB", (display.width, display.height), "black")
+
+    display.set_led(r=0.0, g=0.0, b=utils.LED_INDICATOR_LEVEL)
+
+    pixel = display._indicator_buffer().getpixel((0, 0))
+    assert pixel == (0, 0, 255)
+
+
+def test_hyperpixel_indicator_border_clears_when_led_is_off(monkeypatch):
+    monkeypatch.setattr(utils, "is_hyperpixel_next_layout", lambda w, h: True)
+
+    display = utils.Display()
+    display._buffer = utils.Image.new("RGB", (display.width, display.height), "black")
+
+    display.set_led(r=0.0, g=0.0, b=0.0)
+
+    pixel = display._indicator_buffer().getpixel((0, 0))
+    assert pixel == (0, 0, 0)
+
+
+def test_hyperpixel_indicator_border_respects_config_disable(monkeypatch):
+    monkeypatch.setattr(utils, "is_hyperpixel_next_layout", lambda w, h: True)
+    monkeypatch.setattr(utils, "HYPERPIXEL_LED_INDICATOR_BORDER_ENABLED", False)
+
+    display = utils.Display()
+    display._buffer = utils.Image.new("RGB", (display.width, display.height), "black")
+    display.set_led(r=0.0, g=0.0, b=utils.LED_INDICATOR_LEVEL)
+
+    pixel = display._indicator_buffer().getpixel((0, 0))
+    assert pixel == (0, 0, 0)

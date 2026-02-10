@@ -593,7 +593,17 @@ def defer_clear_display() -> Iterable[None]:
 LED_INDICATOR_LEVEL = 1 / 2048.0
 
 # Project config
-from config import WIDTH, HEIGHT, CENTRAL_TIME, DISPLAY_ROTATION, WEATHER_USE_EMOJI_ICONS, get_emoji_font
+from config import (
+    WIDTH,
+    HEIGHT,
+    CENTRAL_TIME,
+    DISPLAY_ROTATION,
+    WEATHER_USE_EMOJI_ICONS,
+    get_emoji_font,
+    is_hyperpixel_next_layout,
+    HYPERPIXEL_LED_INDICATOR_BORDER_ENABLED,
+    HYPERPIXEL_LED_INDICATOR_BORDER_WIDTH,
+)
 # Color utilities
 from screens.color_palettes import random_color
 # Colored logging
@@ -642,6 +652,11 @@ class Display:
         self._skip_event: Optional[threading.Event] = None
         self._frame_id = 0
         self._frame_lock = threading.Lock()
+        self._led_color: Tuple[float, float, float] = (0.0, 0.0, 0.0)
+        self._hyperpixel_indicator_border = (
+            HYPERPIXEL_LED_INDICATOR_BORDER_ENABLED
+            and is_hyperpixel_next_layout(self.width, self.height)
+        )
 
         output = _normalize_display_output(_DISPLAY_OUTPUT)
         if _FORCE_HEADLESS or output == "headless":
@@ -772,18 +787,18 @@ class Display:
         if not display_updates_enabled():
             return
         if self._framebuffer is not None:
-            buffer_to_display = self._buffer
+            buffer_to_display = self._indicator_buffer()
             if self.rotation:
-                buffer_to_display = self._buffer.rotate(
+                buffer_to_display = buffer_to_display.rotate(
                     self.rotation,
                     expand=self.rotation in (90, 270),
                 )
             self._framebuffer.write_image(buffer_to_display)
             return
         if self._kernel_display is not None:
-            buffer_to_display = self._buffer
+            buffer_to_display = self._indicator_buffer()
             if self.rotation:
-                buffer_to_display = self._buffer.rotate(
+                buffer_to_display = buffer_to_display.rotate(
                     self.rotation,
                     expand=self.rotation in (90, 270),
                 )
@@ -792,9 +807,9 @@ class Display:
         if self._display is None:  # pragma: no cover - hardware import
             return
         try:
-            buffer_to_display = self._buffer
+            buffer_to_display = self._indicator_buffer()
             if self.rotation:
-                buffer_to_display = self._buffer.rotate(
+                buffer_to_display = buffer_to_display.rotate(
                     self.rotation,
                     expand=self.rotation in (90, 270),
                 )
@@ -879,12 +894,43 @@ class Display:
     def set_led(self, r: float = 0.0, g: float = 0.0, b: float = 0.0) -> None:
         """Set the onboard RGB LED, if hardware is available."""
 
+        self._led_color = (max(0.0, r), max(0.0, g), max(0.0, b))
+        if self._hyperpixel_indicator_border:
+            self._update_display()
+
         if self._display is None:  # pragma: no cover - hardware import
             return
         try:  # pragma: no cover - hardware import
             self._display.set_led(r=r, g=g, b=b)
         except Exception as exc:  # pragma: no cover - hardware import
             logging.debug("Display LED update failed: %s", exc)
+
+    def _indicator_buffer(self) -> Image.Image:
+        """Return a frame with the HyperPixel border LED indicator overlay."""
+
+        if not self._hyperpixel_indicator_border:
+            return self._buffer
+
+        color = tuple(self._indicator_channel_to_pixel(value) for value in self._led_color)
+        if not any(color):
+            return self._buffer
+
+        img = self._buffer.copy()
+        ImageDraw.Draw(img).rectangle(
+            [(0, 0), (self.width - 1, self.height - 1)],
+            outline=color,
+            width=HYPERPIXEL_LED_INDICATOR_BORDER_WIDTH,
+        )
+        return img
+
+    @staticmethod
+    def _indicator_channel_to_pixel(value: float) -> int:
+        if value <= 0:
+            return 0
+        if LED_INDICATOR_LEVEL <= 0:
+            return min(255, int(round(value * 255)))
+        normalized = value / LED_INDICATOR_LEVEL
+        return max(1, min(255, int(round(normalized * 255))))
 
     def is_button_pressed(self, name: str) -> bool:
         """Return True if the named button is currently pressed."""

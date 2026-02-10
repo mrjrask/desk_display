@@ -462,6 +462,27 @@ if (WIDTH, HEIGHT) == (480, 800) and (
     )
     WIDTH, HEIGHT = 800, 480
 
+HYPERPIXEL_LED_INDICATOR_BORDER_ENABLED = _get_bool_env(
+    "HYPERPIXEL_LED_INDICATOR_BORDER_ENABLED",
+    True,
+)
+
+try:
+    HYPERPIXEL_LED_INDICATOR_BORDER_WIDTH = int(
+        os.environ.get("HYPERPIXEL_LED_INDICATOR_BORDER_WIDTH", "2")
+    )
+except (TypeError, ValueError):
+    logging.warning(
+        "Invalid HYPERPIXEL_LED_INDICATOR_BORDER_WIDTH value; defaulting to 2."
+    )
+    HYPERPIXEL_LED_INDICATOR_BORDER_WIDTH = 2
+
+if HYPERPIXEL_LED_INDICATOR_BORDER_WIDTH < 1:
+    logging.warning(
+        "HYPERPIXEL_LED_INDICATOR_BORDER_WIDTH must be >= 1; clamping to 1."
+    )
+    HYPERPIXEL_LED_INDICATOR_BORDER_WIDTH = 1
+
 def _compute_display_scale(
     base_width: int,
     base_height: int,
