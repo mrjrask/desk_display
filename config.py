@@ -1302,8 +1302,15 @@ def get_screen_image_scale(screen_id: str, image_slot: str, default: float = 1.0
             value = default
         else:
             if value > 0:
-                return value * DISPLAY_SCALE
-    return default * DISPLAY_SCALE
+                resolved = value * DISPLAY_SCALE
+                if image_slot == "league_logo" and is_hyperpixel_next_layout():
+                    return resolved * 0.4
+                return resolved
+
+    resolved_default = default * DISPLAY_SCALE
+    if image_slot == "league_logo" and is_hyperpixel_next_layout():
+        return resolved_default * 0.4
+    return resolved_default
 
 # ─── Screen-specific configuration ─────────────────────────────────────────────
 

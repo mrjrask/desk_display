@@ -26,6 +26,7 @@ from config import (
     get_screen_background_color,
     IMAGES_DIR,
     is_hyperpixel_4_square_layout,
+    is_hyperpixel_next_layout,
 )
 from utils import (
     LED_INDICATOR_LEVEL,
@@ -46,7 +47,7 @@ _cache = {
 
 LOGO_HEIGHT = 65
 LOGO_GAP = 4
-BOTTOM_TEXT_MARGIN = 18 if is_hyperpixel_4_square_layout() else 6
+BOTTOM_TEXT_MARGIN = 18 if is_hyperpixel_4_square_layout() else 10 if is_hyperpixel_next_layout() else 6
 LOGO_PATH = os.path.join(IMAGES_DIR, "verano.jpg")
 _LOGO = None
 

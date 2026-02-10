@@ -97,7 +97,7 @@ def _format_conference_name(rec):
 
 
 @log_call
-def draw_nhl_standings_screen1(display, rec, logo_path, division_name, *, transition=False):
+def draw_nhl_standings_screen1(display, rec, logo_path, division_name, *, logo_scale: float = 1.0, transition=False):
     """Wrap the generic standings screen for NHL teams (no GB/WC columns)."""
 
     rec_clean = _strip_pct_leading_zero(rec)
@@ -135,7 +135,7 @@ def draw_nhl_standings_screen1(display, rec, logo_path, division_name, *, transi
         conference_label="conference",
         show_conference_rank=True,
         record_details_fn=_format_nhl_record,
-        logo_size=NHL_STAND1_LOGO_SZ,
+        logo_size=max(1, int(round(NHL_STAND1_LOGO_SZ * max(0.1, logo_scale)))),
         transition=transition,
     )
 
