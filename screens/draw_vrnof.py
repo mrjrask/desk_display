@@ -48,6 +48,7 @@ _cache = {
 LOGO_HEIGHT = 65
 LOGO_GAP = 4
 BOTTOM_TEXT_MARGIN = 18 if is_hyperpixel_4_square_layout() else 10 if is_hyperpixel_next_layout() else 6
+BOTTOM_ALL_TIME_OFFSET = 10
 LOGO_PATH = os.path.join(IMAGES_DIR, "verano.jpg")
 _LOGO = None
 
@@ -180,7 +181,7 @@ def _build_image(symbol: str = "VRNO") -> Image.Image:
     if all_time:
         w_all, h_all = draw.textsize(all_time, font=FONT_STOCK_TEXT)
         draw.text(
-            ((WIDTH - w_all)//2, HEIGHT - h_all - BOTTOM_TEXT_MARGIN),
+            ((WIDTH - w_all)//2, HEIGHT - h_all - BOTTOM_TEXT_MARGIN - BOTTOM_ALL_TIME_OFFSET),
             all_time,
             font=FONT_STOCK_TEXT,
             fill=(255,255,255),
