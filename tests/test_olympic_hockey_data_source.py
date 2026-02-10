@@ -165,3 +165,48 @@ def test_espn_results_page_provider_filters_women(monkeypatch: pytest.MonkeyPatc
     assert result.provider_name == "espn_results_page"
     assert len(result.games) == 1
     assert result.games[0]["gameId"] == "402"
+
+
+def test_espn_provider_filters_division_when_using_generic_olympic_endpoint(monkeypatch: pytest.MonkeyPatch):
+    payload = {
+        "events": [
+            {
+                "id": "m1",
+                "name": "Men Preliminary Round",
+                "date": "2026-02-15T18:00:00Z",
+                "status": {"type": {"state": "pre", "shortDetail": "Scheduled"}, "displayClock": ""},
+                "competitions": [{"competitors": [
+                    {"homeAway": "away", "score": "0", "team": {"abbreviation": "SWE", "displayName": "Sweden"}},
+                    {"homeAway": "home", "score": "0", "team": {"abbreviation": "FIN", "displayName": "Finland"}},
+                ]}],
+            },
+            {
+                "id": "w1",
+                "name": "Women Preliminary Round",
+                "date": "2026-02-15T20:00:00Z",
+                "status": {"type": {"state": "pre", "shortDetail": "Scheduled"}, "displayClock": ""},
+                "competitions": [{"competitors": [
+                    {"homeAway": "away", "score": "0", "team": {"abbreviation": "USA", "displayName": "United States"}},
+                    {"homeAway": "home", "score": "0", "team": {"abbreviation": "CAN", "displayName": "Canada"}},
+                ]}],
+            },
+        ]
+    }
+
+    calls: list[dict[str, object]] = []
+
+    def fake_http_json(url: str, *, params=None, provider_name: str):
+        calls.append({"url": url, "params": params})
+        if "womens-olympics" in url:
+            err = HTTPError("400")
+            err.response = type("Response", (), {"status_code": 400})()
+            raise err
+        return payload
+
+    monkeypatch.setattr(olympic_hockey, "_http_json", fake_http_json)
+
+    result = olympic_hockey._espn_provider(dt.date(2026, 2, 9), "women")
+
+    assert len(result.games) == 1
+    assert result.games[0]["gameId"] == "w1"
+    assert any("/sports/hockey/olympics/scoreboard" in str(call["url"]) for call in calls)

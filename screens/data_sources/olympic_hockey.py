@@ -28,9 +28,15 @@ LEAGUE_KEYS = {
     "men": "olympic_mhockey",
     "women": "olympic_whockey",
 }
-ESPN_URLS = {
-    "men": "https://site.api.espn.com/apis/site/v2/sports/hockey/mens-olympics/scoreboard",
-    "women": "https://site.api.espn.com/apis/site/v2/sports/hockey/womens-olympics/scoreboard",
+ESPN_URL_CANDIDATES = {
+    "men": (
+        "https://site.api.espn.com/apis/site/v2/sports/hockey/mens-olympics/scoreboard",
+        "https://site.api.espn.com/apis/site/v2/sports/hockey/olympics/scoreboard",
+    ),
+    "women": (
+        "https://site.api.espn.com/apis/site/v2/sports/hockey/womens-olympics/scoreboard",
+        "https://site.api.espn.com/apis/site/v2/sports/hockey/olympics/scoreboard",
+    ),
 }
 ESPN_RESULTS_PAGE_URL = "https://www.espn.com/olympics/winter/2026/results/_/discipline/29"
 IIHF_URLS = {
@@ -311,26 +317,59 @@ def _espn_results_page_provider(date: dt.date, division: str) -> ProviderResult:
 def _espn_provider(date: dt.date, division: str) -> ProviderResult:
     date_key = date.strftime("%Y%m%d")
     provider_name = f"espn_{division}"
-    try:
-        payload = _http_json(
-            ESPN_URLS[division],
-            params={"dates": date_key},
-            provider_name=provider_name,
-        )
-    except HTTPError as exc:
-        status_code = exc.response.status_code if exc.response is not None else None
-        if status_code != 400:
-            raise
-        logging.warning(
-            "Olympic hockey ESPN returned 400; retrying without date filter division=%s date=%s",
-            division,
-            date_key,
-        )
-        payload = _http_json(
-            ESPN_URLS[division],
-            params=None,
-            provider_name=provider_name,
-        )
+    errors: list[str] = []
+    payload: Optional[dict[str, Any]] = None
+    selected_url = ""
+    for url in ESPN_URL_CANDIDATES[division]:
+        try:
+            payload = _http_json(
+                url,
+                params={"dates": date_key},
+                provider_name=provider_name,
+            )
+            selected_url = url
+            break
+        except HTTPError as exc:
+            status_code = exc.response.status_code if exc.response is not None else None
+            if status_code != 400:
+                errors.append(f"{url} ({status_code or 'unknown'}): {exc}")
+                continue
+            logging.warning(
+                "Olympic hockey ESPN returned 400; retrying without date filter division=%s date=%s url=%s",
+                division,
+                date_key,
+                url,
+            )
+            try:
+                payload = _http_json(
+                    url,
+                    params=None,
+                    provider_name=provider_name,
+                )
+                selected_url = url
+                break
+            except HTTPError as retry_exc:
+                retry_code = retry_exc.response.status_code if retry_exc.response is not None else None
+                errors.append(f"{url} ({retry_code or 'unknown'}): {retry_exc}")
+                continue
+            except Exception as retry_exc:
+                errors.append(f"{url}: {retry_exc}")
+                continue
+        except Exception as exc:
+            errors.append(f"{url}: {exc}")
+
+    if payload is None:
+        raise RuntimeError(f"ESPN olympic hockey fetch failed ({'; '.join(errors)})")
+
+    if selected_url.endswith("/sports/hockey/olympics/scoreboard"):
+        payload = {
+            "events": [
+                event
+                for event in (payload.get("events") or [])
+                if isinstance(event, dict) and _matches_division(event, division)
+            ]
+        }
+
     games = normalize_espn_olympic_response(payload, league_key=LEAGUE_KEYS[division])
     return ProviderResult("espn", games, f"events={len(games)} for {date_key}")
 
@@ -426,7 +465,16 @@ def _thesportsdb_provider(date: dt.date, division: str) -> ProviderResult:
 
 def _iihf_scrape_provider(date: dt.date, division: str) -> ProviderResult:
     _rate_limit(f"iihf_{division}")
-    response = SESSION.get(IIHF_URLS[division], timeout=REQUEST_TIMEOUT)
+    response = SESSION.get(
+        IIHF_URLS[division],
+        timeout=REQUEST_TIMEOUT,
+        headers={
+            "User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+            "Accept-Language": "en-US,en;q=0.9",
+            "Referer": "https://www.iihf.com/",
+        },
+    )
     response.raise_for_status()
     html = response.text
     # Lightweight extraction of embedded tricode and score snippets.
