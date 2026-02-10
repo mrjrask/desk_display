@@ -44,3 +44,45 @@ def test_import_screens_accepts_entries_payload(monkeypatch):
     }
     assert saved["config"]["sequence"] == [{"playlist": "default"}]
     assert saved["style"] == {"screens": {"date": {"background": "#112233"}}}
+
+
+def test_import_screens_accepts_export_payload_with_string_frequencies(monkeypatch):
+    saved = {}
+
+    monkeypatch.setattr(config_ui, "_load_active_style_config", lambda: {"screens": {}})
+    monkeypatch.setattr(config_ui, "build_scheduler", lambda config: None)
+    monkeypatch.setattr(config_ui, "_save_config", lambda config: saved.setdefault("config", config))
+    monkeypatch.setattr(config_ui, "_save_style_config", lambda style: saved.setdefault("style", style))
+    monkeypatch.setattr(
+        config_ui,
+        "_build_screen_entries",
+        lambda config, style: [{"id": "date", "frequency": 3, "background": "#112233"}],
+    )
+
+    client = config_ui.app.test_client()
+    response = client.post(
+        "/api/screens/import",
+        json={
+            "config": {
+                "screens": {
+                    "date": "3",
+                    "NHL Standings West": {
+                        "frequency": "3",
+                        "alt": {"screen": "NHL Standings West v2", "frequency": "2"},
+                    },
+                },
+                "playlists": {"default": {"label": "Default", "steps": [{"screen": "date"}]}},
+                "sequence": [{"playlist": "default"}],
+            },
+            "style": {"screens": {"date": {"background": "#112233"}}},
+        },
+    )
+
+    payload = response.get_json()
+
+    assert response.status_code == 200
+    assert payload["status"] == "ok"
+    assert saved["config"]["screens"]["date"] == 3
+    assert saved["config"]["screens"]["NHL Standings West"]["frequency"] == 3
+    assert saved["config"]["screens"]["NHL Standings West"]["alt"]["frequency"] == 2
+    assert saved["style"] == {"screens": {"date": {"background": "#112233"}}}

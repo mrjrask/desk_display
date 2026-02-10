@@ -55,6 +55,48 @@ def _validate_config_payload(data: Any) -> Dict[str, Any]:
     return data
 
 
+def _normalize_import_config_payload(data: Dict[str, Any]) -> Dict[str, Any]:
+    """Normalize imported config values so scheduler validation is predictable."""
+
+    normalized = _validate_config_payload(data)
+    screens = normalized.get("screens", {})
+    normalized_screens: Dict[str, Any] = {}
+
+    for screen_id, raw in screens.items():
+        if isinstance(raw, dict):
+            frequency = raw.get("frequency", 0)
+            try:
+                frequency_int = int(frequency)
+            except (TypeError, ValueError):
+                frequency_int = frequency
+
+            alt_payload: Optional[Dict[str, Any]] = None
+            alt = raw.get("alt")
+            if isinstance(alt, dict):
+                alt_payload = dict(alt)
+                alt_frequency = alt_payload.get("frequency")
+                if alt_frequency is not None:
+                    try:
+                        alt_payload["frequency"] = int(alt_frequency)
+                    except (TypeError, ValueError):
+                        pass
+
+            normalized_spec: Dict[str, Any] = {"frequency": frequency_int}
+            if alt_payload is not None:
+                normalized_spec["alt"] = alt_payload
+            normalized_screens[screen_id] = normalized_spec
+            continue
+
+        try:
+            normalized_screens[screen_id] = int(raw)
+        except (TypeError, ValueError):
+            normalized_screens[screen_id] = raw
+
+    result = dict(normalized)
+    result["screens"] = normalized_screens
+    return result
+
+
 def _load_style_config(path: str) -> Dict[str, Any]:
     try:
         with open(path, "r", encoding="utf-8") as fh:
@@ -522,7 +564,7 @@ def import_screens() -> Any:
                     config[key] = value
             derived_style_payload = _build_style_config(entries, _load_active_style_config())
         else:
-            config = _validate_config_payload(config_payload)
+            config = _normalize_import_config_payload(config_payload)
         build_scheduler(config)
     except Exception as exc:
         return jsonify({"error": str(exc)}), 400
