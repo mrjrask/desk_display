@@ -433,6 +433,11 @@ def normalize_espn_olympic_response(json_payload: dict[str, Any], *, league_key:
         competitors = competition.get("competitors") or []
         away = next((c for c in competitors if (c.get("homeAway") or "").lower() == "away"), None)
         home = next((c for c in competitors if (c.get("homeAway") or "").lower() == "home"), None)
+        if (not away or not home) and len(competitors) >= 2:
+            # ESPN Olympic hockey payloads can omit homeAway during tournaments.
+            # Fall back to source ordering (team1 @ team2) instead of dropping the game.
+            away = away or competitors[0]
+            home = home or competitors[1]
         if not away or not home:
             continue
         away_team = away.get("team") or {}
