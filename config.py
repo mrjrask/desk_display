@@ -15,6 +15,7 @@ import threading
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, Optional, Tuple
+from zoneinfo import ZoneInfo
 
 # ─── Environment helpers ───────────────────────────────────────────────────────
 
@@ -144,7 +145,6 @@ def _get_required_env_var(*names: str) -> str:
         f"{joined}"
     )
 
-import pytz
 from PIL import Image, ImageDraw, ImageFont
 
 
@@ -782,7 +782,7 @@ def is_within_dark_hours(moment: Optional[datetime.datetime] = None) -> bool:
 
     current = moment or datetime.datetime.now(CENTRAL_TIME)
     if current.tzinfo is None:
-        current = CENTRAL_TIME.localize(current)  # type: ignore[attr-defined]
+        current = current.replace(tzinfo=CENTRAL_TIME)
     else:
         current = current.astimezone(CENTRAL_TIME)
 
@@ -856,7 +856,7 @@ NBA_TEAM_TRICODE   = "CHI"
 NBA_IMAGES_DIR     = os.path.join(IMAGES_DIR, "nba")
 NBA_FALLBACK_LOGO  = os.path.join(NBA_IMAGES_DIR, "NBA.png")
 
-CENTRAL_TIME = pytz.timezone("America/Chicago")
+CENTRAL_TIME = ZoneInfo("America/Chicago")
 
 # ─── Fonts ────────────────────────────────────────────────────────────────────
 # Drop your TimesSquare-m105.ttf, DejaVuSans.ttf, and DejaVuSans-Bold.ttf into
