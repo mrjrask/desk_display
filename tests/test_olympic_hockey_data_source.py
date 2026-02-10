@@ -54,6 +54,32 @@ def test_normalize_espn_olympic_response_shape():
     assert game["source"]["providerName"] == "espn"
 
 
+def test_normalize_espn_olympic_response_falls_back_when_homeaway_missing():
+    payload = {
+        "events": [
+            {
+                "id": "999",
+                "date": "2026-02-15T18:00:00Z",
+                "status": {"type": {"state": "pre", "shortDetail": "Scheduled"}, "displayClock": ""},
+                "competitions": [
+                    {
+                        "competitors": [
+                            {"score": "0", "team": {"abbreviation": "USA", "displayName": "United States"}},
+                            {"score": "0", "team": {"abbreviation": "CAN", "displayName": "Canada"}},
+                        ],
+                    }
+                ],
+            }
+        ]
+    }
+
+    games = normalize_espn_olympic_response(payload, league_key="olympic_mhockey")
+
+    assert len(games) == 1
+    assert games[0]["away"]["code3"] == "USA"
+    assert games[0]["home"]["code3"] == "CAN"
+
+
 def test_espn_provider_retries_without_date_filter_on_400(monkeypatch: pytest.MonkeyPatch):
     payload = {
         "events": [
