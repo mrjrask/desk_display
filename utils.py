@@ -608,10 +608,6 @@ from config import (
 )
 # Color utilities
 from screens.color_palettes import random_color
-# Colored logging
-from colorama import init as colorama_init, Fore, Style
-colorama_init(autoreset=True)
-
 # ─── Logging decorator ──────────────────────────────────────────────────────
 def log_call(func):
     """
