@@ -49,6 +49,7 @@ from config import (
     WEATHER_USE_EMOJI_ICONS,
     get_screen_background_color,
     is_hyperpixel_4_square_layout,
+    is_hyperpixel_next_layout,
 )
 from utils import (
     LED_INDICATOR_LEVEL,
@@ -750,7 +751,7 @@ def draw_weather_hourly(display, weather, transition: bool = False, hours: int =
     title_w, title_h = draw.textsize(title, font=FONT_WEATHER_LABEL)
     title_x = (WIDTH - title_w) // 2
     title_y = 2
-    if is_hyperpixel_4_square_layout():
+    if is_hyperpixel_next_layout():
         title_y = 4
     draw.text((title_x, title_y), title, font=FONT_WEATHER_LABEL, fill=(200, 200, 200))
 
@@ -891,6 +892,7 @@ def draw_weather_hourly(display, weather, transition: bool = False, hours: int =
         draw.line((x0 + 6, stat_area_top, x1 - 6, stat_area_top), fill=(50, 50, 80), width=1)
 
         stat_items = []
+        wind_overlay = None
 
         wind_speed = hour.get("wind_speed")
         wind_dir = hour.get("wind_dir", "") or ""
@@ -902,7 +904,9 @@ def draw_weather_hourly(display, weather, transition: bool = False, hours: int =
             if wind_dir:
                 wind_parts.append((f" {wind_dir}", FONT_WEATHER_DETAILS_TINY_LARGE, (180, 225, 255)))
             wind_image = _render_stat_text(wind_parts)
-            stat_items.append({"image": wind_image})
+            # Keep wind text as a top overlay pass so it remains readable.
+            wind_overlay = {"image": wind_image}
+            stat_items.append(wind_overlay)
 
         pop = hour.get("pop")
         if pop is not None:
@@ -960,13 +964,20 @@ def draw_weather_hourly(display, weather, transition: bool = False, hours: int =
                     draw.text((text_x, text_y), text, font=font, fill=color)
                 elif text_image is not None:
                     img.paste(text_image, (cx - text_w // 2, text_y), text_image)
+                    if wind_overlay is not None and text_image is wind_overlay.get("image"):
+                        wind_overlay["pos"] = (cx - text_w // 2, text_y)
                 else:
                     # Just render text centered
                     draw.text((cx - text_w // 2, text_y), text, font=font, fill=color)
 
+            # Re-paste wind on top in case other stat rows are tight and overlap.
+            if wind_overlay and wind_overlay.get("image") is not None and wind_overlay.get("pos"):
+                wx, wy = wind_overlay["pos"]
+                img.paste(wind_overlay["image"], (wx, wy), wind_overlay["image"])
+
 
     # Re-draw title with a small background strip so it always stays readable above cards/content.
-    if is_hyperpixel_4_square_layout():
+    if is_hyperpixel_next_layout():
         draw.rectangle((0, 0, WIDTH, title_y + title_h + 2), fill=background)
     draw.text((title_x, title_y), title, font=FONT_WEATHER_LABEL, fill=(200, 200, 200))
 

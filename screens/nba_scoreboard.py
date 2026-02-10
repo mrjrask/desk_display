@@ -135,7 +135,9 @@ def _team_logo_height() -> int:
     height = max(1, int(round(TEAM_LOGO_BASE_HEIGHT * scale)))
     if HYPERPIXEL_4_SQUARE:
         height = max(1, int(round(height * 0.6)))
-    return height
+    # Keep logos inside each score row on compact HyperPixel layouts.
+    max_row_fit = max(1, SCORE_ROW_H - _scale_y(8))
+    return min(height, max_row_fit)
 
 
 def _league_logo_height() -> int:
