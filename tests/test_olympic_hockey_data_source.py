@@ -10,9 +10,15 @@ from screens.data_sources.olympic_hockey import normalize_espn_olympic_response,
 
 
 def test_resolve_display_date_uses_previous_day_before_cutoff():
-    now = dt.datetime(2026, 2, 15, 9, 15, tzinfo=dt.timezone.utc)
+    now = dt.datetime(2026, 2, 15, 0, 45, tzinfo=dt.timezone.utc)
     date_value = resolve_display_date(tz_name="UTC", now=now)
     assert date_value == dt.date(2026, 2, 14)
+
+
+def test_resolve_display_date_uses_current_day_at_or_after_1am_cutoff():
+    now = dt.datetime(2026, 2, 15, 1, 0, tzinfo=dt.timezone.utc)
+    date_value = resolve_display_date(tz_name="UTC", now=now)
+    assert date_value == dt.date(2026, 2, 15)
 
 
 def test_normalize_espn_olympic_response_shape():

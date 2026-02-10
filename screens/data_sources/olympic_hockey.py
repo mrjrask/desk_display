@@ -202,7 +202,7 @@ def resolve_display_date(*, tz_name: str | None = None, now: Optional[dt.datetim
         local = local.replace(tzinfo=tz)
     else:
         local = local.astimezone(tz)
-    cutoff = local.replace(hour=9, minute=30, second=0, microsecond=0)
+    cutoff = local.replace(hour=1, minute=0, second=0, microsecond=0)
     if local < cutoff:
         return (local - dt.timedelta(days=1)).date()
     return local.date()
