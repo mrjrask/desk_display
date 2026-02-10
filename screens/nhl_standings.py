@@ -50,12 +50,20 @@ CONFERENCE_EAST_KEY = "Eastern"
 LOGO_DIR = NHL_IMAGES_DIR
 _LOGO_BASE_HEIGHT = scale_value_width(32) if is_hyperpixel_next_layout() else scale_value(41)
 LOGO_HEIGHT = _LOGO_BASE_HEIGHT  # ~10% larger logos for standings rows
-if is_hyperpixel_4_square_layout():
-    LOGO_HEIGHT = max(1, int(round(LOGO_HEIGHT * 0.75)))
 _CONFERENCE_LOGO_BASE_HEIGHT = _LOGO_BASE_HEIGHT
 CONFERENCE_LOGO_HEIGHT = _CONFERENCE_LOGO_BASE_HEIGHT
 _HYPERPIXEL_4_TITLE_LOGO_TARGET = scale_value_width(40)
 
+
+def _scale_square_logo_height(height: float) -> int:
+    scaled = max(1, int(round(height)))
+    if is_hyperpixel_4_square_layout():
+        # HyperPixel 4 Square-specific 15% logo reduction for standings rows.
+        scaled = max(1, int(round(scaled * 0.85)))
+    return scaled
+
+
+LOGO_HEIGHT = _scale_square_logo_height(_LOGO_BASE_HEIGHT)
 
 def _conference_logo_height_for_layout(base_height: int) -> int:
     height = max(1, int(round(base_height)))
@@ -74,6 +82,9 @@ TEAM_COLUMN_GAP = scale_value(6)
 STATS_FIRST_COLUMN_GAP = scale_value(26)
 STATS_COLUMN_MIN_STEP = scale_value(36)
 STATS_COLUMN_MAX_STEP: int | None = None
+if is_hyperpixel_4_square_layout():
+    # Keep record columns a bit tighter so the first stat column sits farther from team names.
+    STATS_COLUMN_MIN_STEP = max(1, int(round(STATS_COLUMN_MIN_STEP * 0.85)))
 ROW_PADDING = scale_value(2)
 ROW_SPACING = scale_value(2)
 if is_hyperpixel_4_square_layout():
@@ -117,12 +128,12 @@ _STANDINGS_FONT_SIZE_OVERRIDES = {
 }
 
 _HYPERPIXEL_4_FONT_SIZES = {
-    "division": 14,
-    "column": 13,
-    "column_points": 10,
-    "row": 19,
-    "row_stats": 17,
-    "team_name": 16,
+    "division": 12,
+    "column": 11,
+    "column_points": 9,
+    "row": 16,
+    "row_stats": 14,
+    "team_name": 14,
 }
 
 
@@ -209,7 +220,7 @@ def _apply_style_overrides(screen_id: str) -> None:
     _refresh_column_header_fonts()
 
     team_scale = get_screen_image_scale(screen_id, "team_logo", 1.0)
-    LOGO_HEIGHT = max(1, int(round(_LOGO_BASE_HEIGHT * team_scale)))
+    LOGO_HEIGHT = _scale_square_logo_height(_LOGO_BASE_HEIGHT * team_scale)
     overview_scale = get_screen_image_scale(screen_id, "overview_logo", team_scale)
     OVERVIEW_MIN_LOGO_HEIGHT = max(1, int(round(_OVERVIEW_MIN_LOGO_BASE * overview_scale)))
     OVERVIEW_MAX_LOGO_HEIGHT = max(1, int(round(_OVERVIEW_MAX_LOGO_BASE * overview_scale)))
