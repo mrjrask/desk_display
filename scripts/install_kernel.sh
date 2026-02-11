@@ -202,32 +202,68 @@ apply_resolution() {
   fi
 }
 
-if [[ -z "${DISPLAY_WIDTH:-}" || -z "${DISPLAY_HEIGHT:-}" ]]; then
+configure_resolution() {
+  local detected_mode=""
+  local default_label="320x240"
+  local selection=""
+
+  if [[ -n "${DISPLAY_WIDTH:-}" && -n "${DISPLAY_HEIGHT:-}" ]]; then
+    export DISPLAY_RESOLUTION="${DISPLAY_RESOLUTION:-${DISPLAY_WIDTH}x${DISPLAY_HEIGHT}}"
+    log "Using preconfigured resolution ${DISPLAY_WIDTH}x${DISPLAY_HEIGHT}."
+    return 0
+  fi
+
   if [[ -n "${DISPLAY_RESOLUTION:-}" ]]; then
     apply_resolution "${DISPLAY_RESOLUTION,,}"
-  else
-    detected_mode=$(detect_drm_resolution || true)
-    if [[ -z "$detected_mode" ]]; then
-      detected_mode=$(detect_xrandr_resolution || true)
-    fi
-    if [[ -n "$detected_mode" ]]; then
-      apply_resolution "$detected_mode"
-    elif [[ -t 0 ]]; then
-      print_resolution_menu
-      read -r -p "Enter a number [1-5] (or press Enter to keep 320x240): " selection
-      case "$selection" in
-        1) apply_resolution "640x480" ;;
-        2) apply_resolution "1080p" ;;
-        3) apply_resolution "1440p" ;;
-        4) apply_resolution "2k" ;;
-        5) apply_resolution "4k" ;;
-        *) ;;
-      esac
-    else
-      print_resolution_menu
-    fi
+    log "Using preconfigured resolution ${DISPLAY_WIDTH}x${DISPLAY_HEIGHT}."
+    return 0
   fi
-fi
+
+  detected_mode=$(detect_drm_resolution || true)
+  if [[ -z "$detected_mode" ]]; then
+    detected_mode=$(detect_xrandr_resolution || true)
+  fi
+  if [[ -n "$detected_mode" ]]; then
+    default_label="$detected_mode"
+  fi
+
+  if [[ -t 0 ]]; then
+    print_resolution_menu
+    read -r -p "Select resolution [1-5], press Enter for ${default_label}, or type WxH: " selection
+    selection=${selection,,}
+    case "$selection" in
+      "")
+        if [[ "$default_label" != "320x240" ]]; then
+          apply_resolution "$default_label"
+        fi
+        ;;
+      1) apply_resolution "640x480" ;;
+      2) apply_resolution "1080p" ;;
+      3) apply_resolution "1440p" ;;
+      4) apply_resolution "2k" ;;
+      5) apply_resolution "4k" ;;
+      *x*) apply_resolution "$selection" ;;
+      *)
+        warn "Unrecognized resolution selection '$selection'; keeping ${default_label}."
+        if [[ "$default_label" != "320x240" ]]; then
+          apply_resolution "$default_label"
+        fi
+        ;;
+    esac
+  elif [[ -n "$detected_mode" ]]; then
+    apply_resolution "$detected_mode"
+  else
+    print_resolution_menu
+  fi
+
+  if [[ -n "${DISPLAY_WIDTH:-}" && -n "${DISPLAY_HEIGHT:-}" ]]; then
+    log "Configured kernel resolution ${DISPLAY_WIDTH}x${DISPLAY_HEIGHT}."
+  else
+    log "No resolution override selected; keeping default 320x240 output."
+  fi
+}
+
+configure_resolution
 
 ENV_PATH="$PROJECT_DIR/.env"
 ENV_LINES=()
