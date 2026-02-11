@@ -145,6 +145,7 @@ _manual_backlight_level: Optional[float] = None
 _wifi_outage_active = False
 _wifi_outage_started_at: Optional[datetime.datetime] = None
 _wifi_outage_live_games = False
+_wifi_monitor_enabled = ENABLE_WIFI_MONITOR
 
 GC_COLLECT_INTERVAL = max(5.0, float(os.environ.get("DESK_DISPLAY_GC_INTERVAL_SECONDS", "30")))
 _last_gc_collect_monotonic = 0.0
@@ -643,7 +644,7 @@ def _finalize_shutdown() -> None:
         logging.info("🎬 Finalizing video…")
     _release_video_writer()
 
-    if ENABLE_WIFI_MONITOR and hasattr(wifi_utils, "stop_monitor"):
+    if _wifi_monitor_enabled and hasattr(wifi_utils, "stop_monitor"):
         try:
             wifi_utils.stop_monitor()
         except Exception as exc:
@@ -1234,7 +1235,7 @@ def init_runtime() -> None:
 
     global SCREENSHOT_DIR, CURRENT_SCREENSHOT_DIR, SCREENSHOT_ARCHIVE_BASE
     global SCREENSHOT_ARCHIVE_MIRROR, _storage_paths, display, video_out
-    global _background_refresh_thread, _runtime_initialized
+    global _background_refresh_thread, _runtime_initialized, _wifi_monitor_enabled
 
     if _runtime_initialized:
         return
@@ -1264,12 +1265,22 @@ def init_runtime() -> None:
     except Exception:
         logging.debug("Button callback registration unavailable.")
     clear_update_indicator(display)
-    if ENABLE_WIFI_MONITOR and hasattr(wifi_utils, "start_monitor"):
+
+    _wifi_monitor_enabled = ENABLE_WIFI_MONITOR
+    if _wifi_monitor_enabled and hasattr(wifi_utils, "should_monitor_wifi"):
+        try:
+            _wifi_monitor_enabled = bool(wifi_utils.should_monitor_wifi())
+        except Exception as exc:
+            logging.debug("Wi-Fi monitor eligibility check failed: %s", exc)
+
+    if _wifi_monitor_enabled and hasattr(wifi_utils, "start_monitor"):
         logging.info("🔌 Starting Wi-Fi monitor…")
         try:
             wifi_utils.start_monitor(allow_recovery=ENABLE_WIFI_RECOVERY)
         except Exception as exc:
             logging.warning("Wi-Fi monitor unavailable: %s", exc)
+    elif ENABLE_WIFI_MONITOR:
+        logging.info("🔌 Wi-Fi monitor skipped for current network setup.")
 
     refresh_schedule_if_needed(force=True)
 
@@ -1358,7 +1369,7 @@ def main_loop():
                     resume_display_updates()
 
             # Wi-Fi outage handling
-            if ENABLE_WIFI_MONITOR and hasattr(wifi_utils, "get_wifi_state"):
+            if _wifi_monitor_enabled and hasattr(wifi_utils, "get_wifi_state"):
                 try:
                     wifi_state, wifi_ssid = wifi_utils.get_wifi_state()
                 except Exception as exc:
@@ -1367,7 +1378,7 @@ def main_loop():
             else:
                 wifi_state, wifi_ssid = ("ok", None)
 
-            if ENABLE_WIFI_MONITOR:
+            if _wifi_monitor_enabled:
                 _update_wifi_outage_state(wifi_state)
 
             if screen_scheduler is None:
@@ -1381,7 +1392,7 @@ def main_loop():
                 _run_gc_maintenance()
                 continue
 
-            offline = _wifi_outage_active if ENABLE_WIFI_MONITOR else False
+            offline = _wifi_outage_active if _wifi_monitor_enabled else False
             now_utc = datetime.datetime.now(datetime.timezone.utc)
             weather_fetched_at = data_fetch.get_weather_cache_timestamp()
             context = ScreenContext(
