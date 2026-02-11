@@ -49,6 +49,8 @@ MLB_LOGOS_DIR = os.path.join(IMAGES_DIR, "mlb")
 
 # ── Layout constants ─────────────────────────────────────────────────────────
 BOTTOM_MARGIN           = 4          # keep bottom text safely on-screen
+_IS_1080P_LAYOUT        = sorted((WIDTH, HEIGHT)) == [1080, 1920]
+_BOTTOM_TEXT_1080P_OFFSET = 30
 TITLE_TO_HEADER_GAP     = 6          # space between title baseline and header labels
 HEADER_GAP              = 3          # space between R/H/E labels and grid
 TABLE_SIDE_MARGIN       = 4          # left/right inset of table
@@ -636,6 +638,8 @@ def draw_sports_screen(display, game, title, transition=False, screen_id: Option
     else:
         bl_h = 0
     bottom_margin = config.scale_value(BOTTOM_MARGIN) if hyperpixel_layout else BOTTOM_MARGIN
+    if _IS_1080P_LAYOUT and (screen_id or "").strip().lower() == "cubs next":
+        bottom_margin += _BOTTOM_TEXT_1080P_OFFSET
     bottom_y = HEIGHT - bl_h - bottom_margin
 
     available_h = max(10, bottom_y - (y_text + (edge_pad if hyperpixel_layout else 2)))
@@ -702,7 +706,7 @@ def draw_sports_screen(display, game, title, transition=False, screen_id: Option
     _draw_logo_box(right_x)
     _paste_logo(logo_home, right_x)
 
-    _center_bottom_text(draw, bottom, FONT_DATE_SPORTS)
+    _center_bottom_text(draw, bottom, FONT_DATE_SPORTS, margin=bottom_margin)
 
     if transition:
         return img
