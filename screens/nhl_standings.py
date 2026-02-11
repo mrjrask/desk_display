@@ -188,7 +188,8 @@ def _build_fonts(style_id: str) -> tuple:
         team_name_path = getattr(team_name, "path", None)
         if isinstance(team_name_size, int) and team_name_size > 0 and isinstance(team_name_path, str):
             try:
-                team_name = ImageFont.truetype(team_name_path, max(1, int(round(team_name_size * 2))))
+                # HyperPixel 4 Square-specific 15% team-name reduction for NHL standings.
+                team_name = ImageFont.truetype(team_name_path, max(1, int(round(team_name_size * 0.85))))
             except OSError:
                 logging.debug("Unable to scale NHL standings team-name font for HyperPixel 4 Square")
     return division, column, column_points, row, row_stats, team_name
