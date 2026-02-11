@@ -24,6 +24,7 @@ import time
 import logging
 import threading
 import datetime
+import json
 import signal
 import shutil
 import subprocess
@@ -93,7 +94,7 @@ except Exception as exc:
 from paths import resolve_storage_paths
 
 from screens.registry import ScreenContext, ScreenDefinition, build_screen_registry
-from schedule import ScreenScheduler, build_scheduler, load_schedule_config
+from schedule import ScreenScheduler, build_scheduler, load_schedule_config, sanitize_schedule_config
 
 # ─── Paths ───────────────────────────────────────────────────────────────────
 SCRIPT_DIR  = os.path.dirname(os.path.abspath(__file__))
@@ -305,6 +306,20 @@ def _load_scheduler_from_config() -> Optional[ScreenScheduler]:
     except Exception as exc:
         logging.warning(f"Could not load schedule configuration: {exc}")
         return None
+
+    sanitized_config, removed_ids = sanitize_schedule_config(config_data)
+    if removed_ids:
+        try:
+            with open(CONFIG_PATH, "w", encoding="utf-8") as fh:
+                json.dump(sanitized_config, fh, indent=2)
+                fh.write("\n")
+            logging.warning(
+                "Removed deprecated/unknown screen ids from schedule configuration: %s",
+                ", ".join(removed_ids),
+            )
+            config_data = sanitized_config
+        except OSError as exc:
+            logging.warning("Could not persist cleaned schedule configuration: %s", exc)
 
     try:
         scheduler = build_scheduler(config_data)
