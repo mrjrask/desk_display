@@ -10,7 +10,7 @@ import time
 from collections.abc import Iterable
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
-from PIL import Image, ImageDraw
+from PIL import Image, ImageDraw, ImageFont
 
 from config import (
     WIDTH,
@@ -183,6 +183,14 @@ def _build_fonts(style_id: str) -> tuple:
         base_font=row,
         default_size=sizes["team_name"],
     )
+    if is_hyperpixel_4_square_layout() and style_id in _HYPERPIXEL_4_STANDINGS_IDS:
+        team_name_size = getattr(team_name, "size", None)
+        team_name_path = getattr(team_name, "path", None)
+        if isinstance(team_name_size, int) and team_name_size > 0 and isinstance(team_name_path, str):
+            try:
+                team_name = ImageFont.truetype(team_name_path, max(1, int(round(team_name_size * 2))))
+            except OSError:
+                logging.debug("Unable to scale NHL standings team-name font for HyperPixel 4 Square")
     return division, column, column_points, row, row_stats, team_name
 
 
