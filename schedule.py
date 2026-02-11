@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass
-from typing import Any, Dict, List, Optional, Sequence, Set, TYPE_CHECKING
+from typing import Any, Dict, List, Optional, Sequence, Set, TYPE_CHECKING, Tuple
 
 from screens_catalog import SCREEN_IDS
 
@@ -101,6 +101,57 @@ def load_schedule_config(path: str) -> Dict[str, Any]:
     if not isinstance(data, dict):
         raise ValueError("Schedule configuration must be a JSON object")
     return data
+
+
+def sanitize_schedule_config(config: Dict[str, Any]) -> Tuple[Dict[str, Any], List[str]]:
+    """Return a copy of *config* with unknown screens stripped.
+
+    The display service should continue running even if stale screen IDs are
+    present in persisted JSON from older releases.
+    """
+
+    if not isinstance(config, dict):
+        return config, []
+
+    screens = config.get("screens")
+    if not isinstance(screens, dict):
+        return dict(config), []
+
+    sanitized = dict(config)
+    cleaned_screens: Dict[str, Any] = {}
+    removed: List[str] = []
+
+    for screen_id, raw in screens.items():
+        if not isinstance(screen_id, str) or screen_id not in KNOWN_SCREENS:
+            removed.append(str(screen_id))
+            continue
+
+        if not isinstance(raw, dict):
+            cleaned_screens[screen_id] = raw
+            continue
+
+        cleaned_raw = dict(raw)
+        alt_spec = cleaned_raw.get("alt")
+        if isinstance(alt_spec, dict):
+            alt_screen_value = alt_spec.get("screen")
+            if isinstance(alt_screen_value, str):
+                if alt_screen_value not in KNOWN_SCREENS:
+                    cleaned_raw.pop("alt", None)
+                    removed.append(f"{screen_id}.alt:{alt_screen_value}")
+            elif isinstance(alt_screen_value, list):
+                known_alt_screens = [alt for alt in alt_screen_value if isinstance(alt, str) and alt in KNOWN_SCREENS]
+                if not known_alt_screens:
+                    cleaned_raw.pop("alt", None)
+                    removed.append(f"{screen_id}.alt")
+                else:
+                    cleaned_alt = dict(alt_spec)
+                    cleaned_alt["screen"] = known_alt_screens
+                    cleaned_raw["alt"] = cleaned_alt
+
+        cleaned_screens[screen_id] = cleaned_raw
+
+    sanitized["screens"] = cleaned_screens
+    return sanitized, removed
 
 
 def build_scheduler(config: Dict[str, Any]) -> ScreenScheduler:
