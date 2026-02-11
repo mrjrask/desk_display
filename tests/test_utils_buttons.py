@@ -151,3 +151,31 @@ def test_image_applies_bottom_safe_buffer_when_indicator_border_disabled(monkeyp
     assert display.capture().getpixel((10, 0)) == (255, 0, 0)
     assert display.capture().getpixel((10, display.height - 6)) == (255, 0, 0)
     assert display.capture().getpixel((10, display.height - 1)) == (0, 0, 0)
+
+
+def test_kernel_output_uses_25px_bottom_safe_buffer_without_indicator_border(monkeypatch):
+    monkeypatch.setattr(utils, "is_hyperpixel_next_layout", lambda w, h: False)
+    monkeypatch.setattr(utils, "DISPLAY_HAT_MINI_LED_INDICATOR_BORDER_ENABLED", False)
+
+    display = utils.Display()
+    display._uses_kernel_output = True
+    source = utils.Image.new("RGB", (display.width, display.height), (255, 0, 0))
+
+    display.image(source)
+
+    assert display.capture().getpixel((10, display.height - 26)) == (255, 0, 0)
+    assert display.capture().getpixel((10, display.height - 25)) == (0, 0, 0)
+    assert display.capture().getpixel((10, display.height - 1)) == (0, 0, 0)
+
+
+def test_kernel_output_keeps_indicator_border_exception(monkeypatch):
+    monkeypatch.setattr(utils, "is_hyperpixel_next_layout", lambda w, h: True)
+
+    display = utils.Display()
+    display._uses_kernel_output = True
+    source = utils.Image.new("RGB", (display.width, display.height), (255, 0, 0))
+
+    display.image(source)
+
+    assert display.capture().getpixel((10, display.height - 6)) == (255, 0, 0)
+    assert display.capture().getpixel((10, display.height - 5)) == (0, 0, 0)
