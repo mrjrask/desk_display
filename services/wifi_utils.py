@@ -197,6 +197,59 @@ def _has_default_route(iface: str) -> bool:
         return False
 
 
+def _get_default_route_interfaces() -> List[str]:
+    """Return interfaces carrying default routes."""
+
+    interfaces: List[str] = []
+    try:
+        proc = _run_command(["ip", "route", "show", "default"])
+    except Exception as exc:
+        _LOGGER.debug("ip route show default failed: %s", exc)
+        return interfaces
+
+    for line in proc.stdout.splitlines():
+        parts = line.split()
+        if "dev" not in parts:
+            continue
+        dev_index = parts.index("dev")
+        if dev_index + 1 >= len(parts):
+            continue
+        iface = parts[dev_index + 1].strip()
+        if iface and iface not in interfaces:
+            interfaces.append(iface)
+
+    return interfaces
+
+
+def should_monitor_wifi() -> bool:
+    """Return whether Wi-Fi monitoring should run on this host.
+
+    If Ethernet (or another non-Wi-Fi interface) has the default route while
+    Wi-Fi is not associated, treat that as an intentional wired-only setup and
+    disable Wi-Fi outage monitoring.
+    """
+
+    iface = _detect_interface()
+    if not iface:
+        return False
+
+    default_ifaces = _get_default_route_interfaces()
+    has_non_wifi_default = any(dev != iface for dev in default_ifaces)
+    if not has_non_wifi_default:
+        return True
+
+    link_info = _get_link_info(iface)
+    wifi_associated = "Connected to" in link_info
+    if wifi_associated:
+        return True
+
+    _LOGGER.info(
+        "Wi-Fi monitor disabled: default route is on non-Wi-Fi interface(s): %s",
+        ", ".join(default_ifaces) or "unknown",
+    )
+    return False
+
+
 def _check_dns_resolution() -> bool:
     try:
         proc = _run_command(["getent", "hosts", "dns.google"])
@@ -590,6 +643,10 @@ def start_monitor(allow_recovery: bool = True) -> None:
         return
 
     _RECOVERY_ENABLED = allow_recovery
+
+    if not should_monitor_wifi():
+        return
+
     _IFACE = _detect_interface()
     if not _IFACE:
         _LOGGER.warning("No wireless interface detected; Wi-Fi monitor disabled")
