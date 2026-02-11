@@ -97,17 +97,6 @@ The script reports `OK`, `SKIP` (missing credentials), and `FAIL` (network/auth/
 - **Fields used:** game status, team records, standings ranks, streaks, and split records.
 
 
-### Olympic Ice Hockey (men + women)
-- **Primary scoreboard (free, no auth):**
-  - `https://site.api.espn.com/apis/site/v2/sports/hockey/mens-olympics/scoreboard?dates=YYYYMMDD`
-  - `https://site.api.espn.com/apis/site/v2/sports/hockey/womens-olympics/scoreboard?dates=YYYYMMDD`
-- **Fallback providers (free):**
-  - `https://www.iihf.com/en/events/2026/olympics-m/schedule`
-  - `https://www.iihf.com/en/events/2026/olympics-w/schedule`
-  - `https://www.thesportsdb.com/api/v1/json/3/eventsday.php` (with `d=YYYY-MM-DD&s=Ice_Hockey`)
-  - `https://en.wikipedia.org/w/api.php` (completed-games informational fallback)
-- **Fields used:** game IDs, start time, state/status, period/clock (when available), 3-letter team codes, names, scores, and venue.
-
 ### AHL (Chicago Wolves)
 - **Schedule (ICS):** Stanza feed configured via `AHL_SCHEDULE_ICS_URL` (defaults to the Wolves calendar)
 - **HockeyTech feeds:** `https://lscluster.hockeytech.com/feed/` (base) with league/team parameters
