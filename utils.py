@@ -627,6 +627,7 @@ class Display:
 
     _BUTTON_NAMES = ("A", "B", "X", "Y")
     _BOTTOM_SAFE_BUFFER_PX = 5
+    _KERNEL_BOTTOM_SAFE_BUFFER_PX = 25
     _INDICATOR_BOTTOM_SAFE_BUFFER_PX = 5
 
     def __init__(self):
@@ -661,6 +662,7 @@ class Display:
             DISPLAY_HAT_MINI_LED_INDICATOR_BORDER_ENABLED
             and (self.width, self.height) == (320, 240)
         )
+        self._uses_kernel_output = False
 
         output = _normalize_display_output(_DISPLAY_OUTPUT)
         if _FORCE_HEADLESS or output == "headless":
@@ -695,6 +697,7 @@ class Display:
                         self.height,
                     )
         elif output == "kernel":
+            self._uses_kernel_output = True
             try:
                 self._kernel_display = _KernelDisplay(self.width, self.height)
             except Exception as exc:
@@ -850,7 +853,13 @@ class Display:
     def _apply_bottom_safe_buffer(self, pil_img: Image.Image) -> Image.Image:
         """Always clear the bottom safety strip so content never touches the edge."""
 
-        bottom_buffer = max(0, self._BOTTOM_SAFE_BUFFER_PX)
+        bottom_buffer = self._BOTTOM_SAFE_BUFFER_PX
+        if self._uses_kernel_output and not (
+            self._hyperpixel_indicator_border or self._display_hat_mini_indicator_border
+        ):
+            bottom_buffer = self._KERNEL_BOTTOM_SAFE_BUFFER_PX
+
+        bottom_buffer = max(0, bottom_buffer)
         if bottom_buffer <= 0:
             return pil_img
 
