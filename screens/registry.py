@@ -89,17 +89,6 @@ from screens.nfl_standings import (
 )
 from screens.nhl_scoreboard import draw_nhl_scoreboard
 from screens.nhl_scoreboard_v2 import draw_nhl_scoreboard_v2
-from screens.oly_hockey_scoreboard import (
-    draw_olympic_hockey_scores,
-    draw_olympic_mens_hockey_scoreboard,
-    draw_olympic_womens_hockey_scoreboard,
-)
-from screens.oly_hockey_scoreboard_v2 import (
-    draw_olympic_mens_hockey_scoreboard_v2,
-    draw_olympic_womens_hockey_scoreboard_v2,
-)
-from screens.oly_medal_count import draw_olympic_medal_count
-from screens.data_sources.olympic_medals import fetch_olympic_medal_table
 from screens.nhl_standings import (
     draw_nhl_standings_east,
     draw_nhl_standings_overview_east,
@@ -122,7 +111,6 @@ WEATHER_CURRENT_TTL = _dt.timedelta(minutes=20)
 WEATHER_HOURLY_TTL = _dt.timedelta(hours=1)
 NHL_BREAK_START = _dt.date(2026, 2, 6)
 NHL_BREAK_END = _dt.date(2026, 2, 24)
-OLYMPIC_SCOREBOARD_HIDE_START = _dt.date(2026, 2, 24)
 _IS_1080P_LAYOUT = sorted((WIDTH, HEIGHT)) == [1080, 1920]
 _LOGO_SCROLL_SPEED = 2.2 * (1.5 if _IS_1080P_LAYOUT else 1.0)
 
@@ -384,9 +372,6 @@ def build_screen_registry(context: ScreenContext) -> Tuple[Dict[str, ScreenDefin
     nhl_scoreboards_available = scoreboards_available and not (
         NHL_BREAK_START <= today <= NHL_BREAK_END
     )
-    olympic_scoreboards_available = scoreboards_available and (
-        today < OLYMPIC_SCOREBOARD_HIDE_START
-    )
 
     def _is_live_game_today(game: Any) -> bool:
         """Return True when *game* appears to be in progress today."""
@@ -633,42 +618,6 @@ def build_screen_registry(context: ScreenContext) -> Tuple[Dict[str, ScreenDefin
             "NHL Scoreboard v2",
             lambda: draw_nhl_scoreboard_v2(context.display, transition=True),
             available=nhl_scoreboards_available,
-        )
-        register(
-            "Olympic Hockey Scores",
-            lambda: draw_olympic_hockey_scores(context.display, transition=True),
-            available=olympic_scoreboards_available,
-        )
-        register(
-            "Olympic Hockey Men Scoreboard",
-            lambda: draw_olympic_mens_hockey_scoreboard(context.display, transition=True),
-            available=olympic_scoreboards_available,
-        )
-        register(
-            "Olympic Hockey Men Scoreboard v2",
-            lambda: draw_olympic_mens_hockey_scoreboard_v2(context.display, transition=True),
-            available=olympic_scoreboards_available,
-        )
-        register(
-            "Olympic Hockey Women Scoreboard",
-            lambda: draw_olympic_womens_hockey_scoreboard(context.display, transition=True),
-            available=olympic_scoreboards_available,
-        )
-        register(
-            "Olympic Hockey Women Scoreboard v2",
-            lambda: draw_olympic_womens_hockey_scoreboard_v2(context.display, transition=True),
-            available=olympic_scoreboards_available,
-        )
-        olympic_medals_available = bool(fetch_olympic_medal_table(top_n=1))
-        register(
-            "Olympic Medal Count",
-            lambda: draw_olympic_medal_count(context.display, transition=True),
-            available=scoreboards_available and olympic_medals_available,
-        )
-        register(
-            "Olympic Medal Count",
-            lambda: draw_olympic_medal_count(context.display, transition=True),
-            available=scoreboards_available,
         )
         register(
             "NHL Standings Overview West",

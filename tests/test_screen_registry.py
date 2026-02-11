@@ -140,28 +140,3 @@ def test_nhl_scoreboard_hidden_during_2026_break_window():
 
     assert registry["NHL Scoreboard"].available is False
     assert registry["NHL Scoreboard v2"].available is False
-    assert registry["Olympic Hockey Scores"].available is True
-
-
-def test_scoreboards_hidden_on_feb_24_2026():
-    now = datetime.datetime(2026, 2, 24, 12, 0, tzinfo=CENTRAL_TIME)
-    weather = {"hourly": []}
-
-    registry, _ = build_screen_registry(
-        _make_context(weather, now, cache_updates={"hawks": {"next": {"id": 1}}})
-    )
-
-    assert registry["NHL Scoreboard"].available is False
-    assert registry["Olympic Hockey Scores"].available is False
-
-
-def test_olympic_scoreboards_hidden_after_feb_24_2026():
-    now = datetime.datetime(2026, 2, 25, 12, 0, tzinfo=CENTRAL_TIME)
-    weather = {"hourly": []}
-
-    registry, _ = build_screen_registry(
-        _make_context(weather, now, cache_updates={"hawks": {"next": {"id": 1}}})
-    )
-
-    assert registry["NHL Scoreboard"].available is True
-    assert registry["Olympic Hockey Scores"].available is False
