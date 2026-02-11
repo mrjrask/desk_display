@@ -786,10 +786,13 @@ def _draw_scoreboard(
             if spec["max_width"] > 0 and spec["base_text"]
         )
 
-    name_font = FONT_ABBR
+    # HyperPixel displays run this card at much larger physical dimensions.
+    # Keep team labels/scores 15% smaller there for Last/Live readability.
+    name_font = _ts(int(round(_ABBR_FONT_SIZE * 0.85))) if hyperpixel_layout else FONT_ABBR
+    score_font = _ts(int(round(_SCORE_FONT_SIZE * 0.85))) if hyperpixel_layout else FONT_SCORE
     if not _fits(name_font):
-        size = getattr(FONT_ABBR, "size", None) or _ABBR_FONT_SIZE
-        min_size = max(8, int(round(_ABBR_FONT_SIZE * 0.5)))
+        size = getattr(name_font, "size", None) or int(round(_ABBR_FONT_SIZE * (0.85 if hyperpixel_layout else 1.0)))
+        min_size = max(8, int(round(size * 0.5)))
         chosen = None
         for test_size in range(size - 1, min_size - 1, -1):
             candidate = _ts(test_size)
@@ -838,11 +841,11 @@ def _draw_scoreboard(
         d.text((tx, cy - ah//2), text, font=font, fill="white")
 
         sc = "-" if score is None else str(score)
-        sw = _text_w(d, sc, FONT_SCORE)
-        sh = _text_h(d, FONT_SCORE)
+        sw = _text_w(d, sc, score_font)
+        sh = _text_h(d, score_font)
         sx = x1 + (col2_w - sw)//2
         sy = cy - sh//2
-        d.text((sx, sy), sc, font=FONT_SCORE, fill="white")
+        d.text((sx, sy), sc, font=score_font, fill="white")
 
         sog_txt = "-" if sog is None else str(sog)
         gw = _text_w(d, sog_txt, FONT_SOG)

@@ -561,6 +561,11 @@ def _draw_scoreboard_table(
     if not rows:
         return top_y
 
+    # HyperPixel layouts render larger overall; trim team/score fonts 15%
+    # on Last/Live cards for better balance.
+    team_font = _ts(int(round(_FONT_ABBR_SIZE * 0.85))) if hyperpixel_layout else FONT_ABBR
+    score_font = _ts(int(round(_FONT_SCORE_SIZE * 0.85))) if hyperpixel_layout else FONT_SCORE
+
     row_count = len(rows)
     col1_w = min(WIDTH - 24, max(84, int(WIDTH * 0.72)))
     col2_w = max(20, WIDTH - col1_w)
@@ -603,16 +608,16 @@ def _draw_scoreboard_table(
 
         # Team label
         max_text_w = max(1, x1 - (config.scale_value(6) if hyperpixel_layout else 6) - px)
-        use_font = FONT_ABBR if _text_w(draw, label, FONT_ABBR) <= max_text_w else FONT_SMALL
+        use_font = team_font if _text_w(draw, label, team_font) <= max_text_w else FONT_SMALL
         draw.text((px, top + (h - _text_h(draw, use_font)) // 2), label, font=use_font, fill=TEXT_COLOR)
 
         # Score column (right aligned)
         if score is not None:
             s = str(score)
-            sw = _text_w(draw, s, FONT_SCORE)
+            sw = _text_w(draw, s, score_font)
             sx = x1 + (col2_w - sw) // 2
-            sy = top + (h - _text_h(draw, FONT_SCORE)) // 2
-            draw.text((sx, sy), s, font=FONT_SCORE, fill=TEXT_COLOR)
+            sy = top + (h - _text_h(draw, score_font)) // 2
+            draw.text((sx, sy), s, font=score_font, fill=TEXT_COLOR)
 
         y += h
 
