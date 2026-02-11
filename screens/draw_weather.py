@@ -488,6 +488,8 @@ def draw_weather_screen_1(display, weather, transition=False):
     max_val_h = max(g[5] for g in groups)
     max_lbl_h = max(g[2] for g in groups)
     y_val     = HEIGHT - max_val_h - 9
+    if is_hyperpixel_4_square_layout():
+        y_val -= 5
     LABEL_GAP = 2
     y_lbl     = y_val - max_lbl_h - LABEL_GAP
 
