@@ -59,6 +59,10 @@ def test_legacy_travel_map_v2_screen_is_known():
     assert "travel map v2" in KNOWN_SCREENS
 
 
+def test_legacy_olympic_hockey_women_scoreboard_screen_is_known():
+    assert "Olympic Hockey Women Scoreboard" in KNOWN_SCREENS
+
+
 def test_scheduler_with_alternate_screen():
     config = {
         "screens": {
