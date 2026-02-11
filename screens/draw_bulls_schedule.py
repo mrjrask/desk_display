@@ -125,9 +125,11 @@ _IS_HYPERPIXEL_4_SQUARE = is_hyperpixel_4_square_layout()
 _FONT_ABBR_SIZE = 40 if _IS_HYPERPIXEL_4_SQUARE else (33 if HEIGHT >= 240 else 28)
 _FONT_SCORE_SIZE = 60 if _IS_HYPERPIXEL_4_SQUARE else (48 if HEIGHT >= 240 else 38)
 if _IS_HYPERPIXEL_4_SQUARE:
-    # HyperPixel 4 Square tuning for Bulls last/live readability.
-    _FONT_ABBR_SIZE += 4
-    _FONT_SCORE_SIZE += 10
+    # HyperPixel 4 Square request:
+    # - team names on Last/Live scoreboard are 2× bigger
+    # - scores on Last/Live scoreboard are 3× bigger
+    _FONT_ABBR_SIZE = int(round(_FONT_ABBR_SIZE * 2.0))
+    _FONT_SCORE_SIZE = int(round(_FONT_SCORE_SIZE * 3.0))
 FONT_ABBR   = _ts(_FONT_ABBR_SIZE)  # team abbr in table
 FONT_SCORE  = _ts(_FONT_SCORE_SIZE)  # score digits
 FONT_SMALL  = _ts(26 if _IS_HYPERPIXEL_4_SQUARE else (22 if HEIGHT >= 240 else 18))  # status / small lines

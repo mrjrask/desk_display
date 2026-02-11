@@ -109,10 +109,12 @@ _SOG_FONT_SIZE = _SOG_BASE
 _SCORE_FONT_SIZE = int(round(_SOG_FONT_SIZE * (1.55 if _IS_HYPERPIXEL_4_SQUARE else 1.45)))
 
 if _IS_HYPERPIXEL_4_SQUARE:
-    # HyperPixel 4 Square tuning for Hawks last/live readability.
-    _ABBR_FONT_SIZE += 4
+    # HyperPixel 4 Square request:
+    # - team names on Last/Live scoreboard are 2× bigger
+    # - scores on Last/Live scoreboard are 3× bigger
+    _ABBR_FONT_SIZE = int(round(_ABBR_FONT_SIZE * 2.0))
     _SOG_FONT_SIZE += 6
-    _SCORE_FONT_SIZE += 10
+    _SCORE_FONT_SIZE = int(round(_SCORE_FONT_SIZE * 3.0))
 
 FONT_ABBR  = _ts(_ABBR_FONT_SIZE)
 FONT_SOG   = _ts(_SOG_FONT_SIZE)
