@@ -45,9 +45,10 @@ _cache = {
     "ts":          0.0
 }
 
-LOGO_HEIGHT = 54
-LOGO_GAP = 4
 _IS_1080P_LAYOUT = sorted((WIDTH, HEIGHT)) == [1080, 1920]
+_LOGO_SCALE_1080 = 5 if _IS_1080P_LAYOUT else 1
+LOGO_HEIGHT = 54 * _LOGO_SCALE_1080
+LOGO_GAP = 4
 BOTTOM_TEXT_MARGIN = (
     (18 if is_hyperpixel_4_square_layout() else 10 if is_hyperpixel_next_layout() else 6)
     + (30 if _IS_1080P_LAYOUT else 0)

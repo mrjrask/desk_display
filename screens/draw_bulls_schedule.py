@@ -141,6 +141,7 @@ FONT_NEXT_OPP = FONT_TEAM_SPORTS                 # opponent line in "next" cards
 
 BOTTOM_LINE_MARGIN = 6
 _IS_1080P_LAYOUT = sorted((WIDTH, HEIGHT)) == [1080, 1920]
+_LOGO_SCALE_1080 = 5.0 if _IS_1080P_LAYOUT else 1.0
 
 
 def _bottom_line_margin(*, hyperpixel_layout: bool = False, extra: int = 0) -> int:
@@ -606,7 +607,7 @@ def _draw_scoreboard_table(
         logo_min = config.scale_value(24) if hyperpixel_layout else 24
         logo_max = config.scale_value(64) if hyperpixel_layout else 64
         base_h = max(1, h - pad_logo)
-        logo_h = min(logo_max, max(logo_min, base_h))
+        logo_h = min(logo_max, max(logo_min, int(round(base_h * _LOGO_SCALE_1080))))
         logo   = _load_logo_png(tri, logo_h)
         px = config.scale_value(6) if hyperpixel_layout else 6
         if logo:
@@ -737,7 +738,7 @@ def _render_next_game(game: Dict, *, title: str, logo_scale: float = 1.0) -> Ima
         )
         logo_h = min(int(round(desired_logo_h * logo_scale)), available_h)
     else:
-        logo_h = standard_next_game_logo_height_for_space(HEIGHT, available_h)
+        logo_h = standard_next_game_logo_height_for_space(HEIGHT, available_h, scale=logo_scale)
     logo_left  = _load_logo_png(away["tri"], logo_h) if away else None
     logo_right = _load_logo_png(home["tri"], logo_h) if home else None
 
@@ -894,7 +895,7 @@ def draw_sports_screen_bulls(display, game: Optional[Dict], transition: bool = F
     if not game:
         img = _render_message("Next Bulls game:", "No upcoming games scheduled")
         return _push(display, img, transition=transition)
-    img = _render_next_game(game, title="Next Bulls game:", logo_scale=3.0 if config.is_hyperpixel_next_layout() else 1.0)
+    img = _render_next_game(game, title="Next Bulls game:", logo_scale=3.0 if config.is_hyperpixel_next_layout() else _LOGO_SCALE_1080)
     return _push(display, img, transition=transition)
 
 def draw_bulls_next_home_game(display, game: Optional[Dict], transition: bool = False):
@@ -904,5 +905,5 @@ def draw_bulls_next_home_game(display, game: Optional[Dict], transition: bool = 
         img = _render_message("Following at home...", "No United Center games scheduled")
         return _push(display, img, transition=transition)
     # Uses the same '@' treatment between logos
-    img = _render_next_game(game, title="Following at home...")
+    img = _render_next_game(game, title="Following at home...", logo_scale=3.0 if config.is_hyperpixel_next_layout() else _LOGO_SCALE_1080)
     return _push(display, img, transition=transition)
