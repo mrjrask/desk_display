@@ -46,6 +46,10 @@ LOGO_SZ_BASE = scale_value_width(27) if is_hyperpixel_next_layout() else scale_v
 if is_hyperpixel_4_square_layout():
     LOGO_SZ_BASE = max(LOGO_SZ_BASE, scale_value_width(80))
 LOGO_SZ = LOGO_SZ_BASE * (3 if _IS_DISPLAY_HAT_MINI else 1)
+_IS_1080P_LAYOUT = sorted((WIDTH, HEIGHT)) == [1080, 1920]
+_VRNOF_MATCH_LOGO_HEIGHT_1080 = 54 * 5
+if _IS_1080P_LAYOUT:
+    LOGO_SZ = min(LOGO_SZ, _VRNOF_MATCH_LOGO_HEIGHT_1080)
 MARGIN  = scale_value(6)
 
 
@@ -190,6 +194,8 @@ def draw_standings_screen1(
     try:
         logo_img = Image.open(logo_path).convert("RGBA")
         logo_target = LOGO_SZ if logo_size is None else logo_size
+        if _IS_1080P_LAYOUT:
+            logo_target = min(logo_target, _VRNOF_MATCH_LOGO_HEIGHT_1080)
         logo = fit_logo_to_box(logo_img, logo_target)
     except:
         pass
@@ -345,6 +351,8 @@ def draw_standings_screen2(
     try:
         logo_img = Image.open(logo_path).convert("RGBA")
         logo_target = LOGO_SZ if logo_size is None else logo_size
+        if _IS_1080P_LAYOUT:
+            logo_target = min(logo_target, _VRNOF_MATCH_LOGO_HEIGHT_1080)
         logo = fit_logo_to_box(logo_img, logo_target)
     except:
         pass

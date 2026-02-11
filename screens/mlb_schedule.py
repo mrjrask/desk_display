@@ -51,6 +51,7 @@ MLB_LOGOS_DIR = os.path.join(IMAGES_DIR, "mlb")
 BOTTOM_MARGIN           = 4          # keep bottom text safely on-screen
 _IS_1080P_LAYOUT        = sorted((WIDTH, HEIGHT)) == [1080, 1920]
 _BOTTOM_TEXT_1080P_OFFSET = 30
+_LOGO_SCALE_1080 = 5.0 if _IS_1080P_LAYOUT else 1.0
 TITLE_TO_HEADER_GAP     = 6          # space between title baseline and header labels
 HEADER_GAP              = 3          # space between R/H/E labels and grid
 TABLE_SIDE_MARGIN       = 4          # left/right inset of table
@@ -625,6 +626,8 @@ def draw_sports_screen(display, game, title, transition=False, screen_id: Option
     desired_logo_h = standard_next_game_logo_height(HEIGHT)
     if hyperpixel_layout:
         desired_logo_h = max(1, int(round(desired_logo_h * config.DISPLAY_SCALE)))
+    elif _IS_1080P_LAYOUT:
+        desired_logo_h = max(1, int(round(desired_logo_h * _LOGO_SCALE_1080)))
 
     raw_date = game.get('officialDate','') or game.get('gameDate','')[:10]
     raw_time = game.get('startTimeCentral','TBD')

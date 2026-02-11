@@ -9,7 +9,7 @@ from typing import Any, Callable, Dict, Optional, Tuple
 
 from PIL import Image
 
-from config import CENTRAL_TIME, NBA_TEAM_TRICODE
+from config import CENTRAL_TIME, HEIGHT, NBA_TEAM_TRICODE, WIDTH
 from utils import ScreenImage, animate_scroll, timestamp_to_datetime
 from screens.draw_bears_schedule import show_bears_next_game, show_bears_next_season
 from screens.draw_bulls_schedule import (
@@ -123,6 +123,8 @@ WEATHER_HOURLY_TTL = _dt.timedelta(hours=1)
 NHL_BREAK_START = _dt.date(2026, 2, 6)
 NHL_BREAK_END = _dt.date(2026, 2, 24)
 OLYMPIC_SCOREBOARD_HIDE_START = _dt.date(2026, 2, 24)
+_IS_1080P_LAYOUT = sorted((WIDTH, HEIGHT)) == [1080, 1920]
+_LOGO_SCROLL_SPEED = 2.2 * (1.5 if _IS_1080P_LAYOUT else 1.0)
 
 
 @dataclass
@@ -151,7 +153,7 @@ class ScreenContext:
 
 
 def _show_logo(display, image: Image.Image) -> Image.Image:
-    animate_scroll(display, image, speed=2.2)
+    animate_scroll(display, image, speed=_LOGO_SCROLL_SPEED)
     return image
 
 

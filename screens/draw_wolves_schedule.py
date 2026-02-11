@@ -61,6 +61,8 @@ from utils import (
 TS_PATH = TIMES_SQUARE_FONT_PATH
 AHL_DIR = AHL_IMAGES_DIR
 BACKGROUND_COLOR = (0, 0, 0)
+_IS_1080P_LAYOUT = sorted((WIDTH, HEIGHT)) == [1080, 1920]
+_LOGO_SCALE_1080 = 5.0 if _IS_1080P_LAYOUT else 1.0
 
 def _ts(size: int) -> ImageFont.ImageFont:
     try:
@@ -564,7 +566,7 @@ def _draw_scoreboard(
         logo_height = min(logo_mid, base_logo_height)
         if row_height >= row_threshold:
             logo_height = min(logo_mid, max(logo_height, min(row_height - 2, logo_floor)))
-        logo_height = max(1, min(int(round(logo_height * 1.3)), row_height - 2, logo_max))
+        logo_height = max(1, min(int(round(logo_height * 1.3 * _LOGO_SCALE_1080)), row_height - 2, logo_max))
         logo = _load_logo_png(tri, height=logo_height)
         logo_w = logo.size[0] if logo else 0
         text = (label or "").strip() or (tri or "").upper() or "—"
@@ -914,7 +916,7 @@ def _draw_next_card(
     bottom_y = HEIGHT - (bottom_h + edge_pad) if bottom_text else HEIGHT
 
     # Desired logo height (bigger on 128px; adapt if smaller/other displays)
-    clamped_scale = max(0.5, min(float(logo_scale or 1.0), 1.2))
+    clamped_scale = max(0.5, min(float(logo_scale or 1.0), 1.2 if not _IS_1080P_LAYOUT else 6.0))
     desired_logo_h = max(1, int(round(standard_next_game_logo_height(HEIGHT) * clamped_scale)))
     if hyperpixel_layout:
         desired_logo_h = max(
@@ -1126,11 +1128,11 @@ def draw_sports_screen_wolves(display, game, transition: bool=False):
     "Next Wolves game" card with '@ FULLNAME' / 'vs. FULLNAME', logos (local PNGs, centered and larger), and bottom time.
     Uses the provided 'game' payload from your scheduler for the next slot.
     """
-    return _draw_next_card(display, game, title="Next Wolves game:", transition=transition, log_label="wolves next", logo_scale=0.8)
+    return _draw_next_card(display, game, title="Next Wolves game:", transition=transition, log_label="wolves next", logo_scale=0.8 * _LOGO_SCALE_1080)
 
 
 def draw_wolves_next_home_game(display, game, transition: bool=False):
     global BACKGROUND_COLOR
     BACKGROUND_COLOR = config.get_screen_background_color("wolves next home", (0, 0, 0))
     """Dedicated "Next at home..." card using the same layout as the next-game screen."""
-    return _draw_next_card(display, game, title="Next at home...", transition=transition, log_label="wolves next home", logo_scale=0.8)
+    return _draw_next_card(display, game, title="Next at home...", transition=transition, log_label="wolves next home", logo_scale=0.8 * _LOGO_SCALE_1080)
