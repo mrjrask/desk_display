@@ -45,7 +45,7 @@ _cache = {
     "ts":          0.0
 }
 
-LOGO_HEIGHT = 65
+LOGO_HEIGHT = 54
 LOGO_GAP = 4
 BOTTOM_TEXT_MARGIN = 18 if is_hyperpixel_4_square_layout() else 10 if is_hyperpixel_next_layout() else 6
 BOTTOM_ALL_TIME_OFFSET = 10
