@@ -55,8 +55,22 @@ CONFERENCE_LOGO_HEIGHT = _CONFERENCE_LOGO_BASE_HEIGHT
 _HYPERPIXEL_4_TITLE_LOGO_TARGET = scale_value_width(40)
 
 
-def _scale_square_logo_height(height: float) -> int:
+def _cap_row_logo_height(height: float) -> int:
+    """Prevent oversized NHL standings logos on large displays (e.g., 1080p)."""
     scaled = max(1, int(round(height)))
+    if is_hyperpixel_next_layout() or is_hyperpixel_4_square_layout():
+        return scaled
+
+    if WIDTH >= 1280 or HEIGHT >= 720:
+        short_edge = max(1, min(WIDTH, HEIGHT))
+        max_height = max(72, int(round(short_edge * 0.09)))
+        return min(scaled, max_height)
+
+    return scaled
+
+
+def _scale_square_logo_height(height: float) -> int:
+    scaled = _cap_row_logo_height(height)
     if is_hyperpixel_4_square_layout():
         # HyperPixel 4 Square-specific 15% logo reduction for standings rows.
         scaled = max(1, int(round(scaled * 0.85)))
@@ -233,6 +247,17 @@ def _apply_style_overrides(screen_id: str) -> None:
     overview_scale = get_screen_image_scale(screen_id, "overview_logo", team_scale)
     OVERVIEW_MIN_LOGO_HEIGHT = max(1, int(round(_OVERVIEW_MIN_LOGO_BASE * overview_scale)))
     OVERVIEW_MAX_LOGO_HEIGHT = max(1, int(round(_OVERVIEW_MAX_LOGO_BASE * overview_scale)))
+    if (
+        not is_hyperpixel_next_layout()
+        and not is_hyperpixel_4_square_layout()
+        and (WIDTH >= 1280 or HEIGHT >= 720)
+    ):
+        short_edge = max(1, min(WIDTH, HEIGHT))
+        min_logo_cap = max(32, int(round(short_edge * 0.05)))
+        max_logo_cap = max(56, int(round(short_edge * 0.095)))
+        OVERVIEW_MIN_LOGO_HEIGHT = min(OVERVIEW_MIN_LOGO_HEIGHT, min_logo_cap)
+        OVERVIEW_MAX_LOGO_HEIGHT = min(OVERVIEW_MAX_LOGO_HEIGHT, max_logo_cap)
+        OVERVIEW_MIN_LOGO_HEIGHT = min(OVERVIEW_MIN_LOGO_HEIGHT, OVERVIEW_MAX_LOGO_HEIGHT)
     conference_scale = get_screen_image_scale(screen_id, "conference_logo", team_scale)
     CONFERENCE_LOGO_HEIGHT = _conference_logo_height_for_layout(
         _CONFERENCE_LOGO_BASE_HEIGHT * conference_scale
@@ -264,6 +289,13 @@ _OVERVIEW_MIN_LOGO_BASE = scale_value_width(18) if is_hyperpixel_next_layout() e
 _OVERVIEW_MAX_LOGO_BASE = scale_value_width(40) if is_hyperpixel_next_layout() else scale_value(54)
 OVERVIEW_MIN_LOGO_HEIGHT = _OVERVIEW_MIN_LOGO_BASE
 OVERVIEW_MAX_LOGO_HEIGHT = _OVERVIEW_MAX_LOGO_BASE
+if not is_hyperpixel_next_layout() and not is_hyperpixel_4_square_layout() and (WIDTH >= 1280 or HEIGHT >= 720):
+    short_edge = max(1, min(WIDTH, HEIGHT))
+    min_logo_cap = max(32, int(round(short_edge * 0.05)))
+    max_logo_cap = max(56, int(round(short_edge * 0.095)))
+    OVERVIEW_MIN_LOGO_HEIGHT = min(OVERVIEW_MIN_LOGO_HEIGHT, min_logo_cap)
+    OVERVIEW_MAX_LOGO_HEIGHT = min(OVERVIEW_MAX_LOGO_HEIGHT, max_logo_cap)
+    OVERVIEW_MIN_LOGO_HEIGHT = min(OVERVIEW_MIN_LOGO_HEIGHT, OVERVIEW_MAX_LOGO_HEIGHT)
 if is_hyperpixel_4_square_layout():
     OVERVIEW_MIN_LOGO_HEIGHT = max(1, int(round(OVERVIEW_MIN_LOGO_HEIGHT * 0.75)))
     OVERVIEW_MAX_LOGO_HEIGHT = max(1, int(round(OVERVIEW_MAX_LOGO_HEIGHT * 0.75)))
