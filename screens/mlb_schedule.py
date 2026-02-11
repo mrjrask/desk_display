@@ -655,8 +655,14 @@ def draw_sports_screen(display, game, title, transition=False, screen_id: Option
     at_w, at_h = draw.textsize(at_txt, font=FONT_TEAM_SPORTS)
     block_h = logo_h if (logo_away or logo_home) else at_h
 
-    centered_top = (HEIGHT - block_h) // 2
-    row_y = max(y_text + line_gap, min(centered_top, bottom_y - block_h - line_gap))
+    if hyperpixel_layout:
+        row_top = y_text + line_gap
+        row_bottom = bottom_y
+        row_space = max(0, row_bottom - row_top)
+        row_y = row_top + max(0, (row_space - block_h) // 2)
+    else:
+        centered_top = (HEIGHT - block_h) // 2
+        row_y = max(y_text + line_gap, min(centered_top, bottom_y - block_h - line_gap))
 
     total_w = frame_w * 2 + (gap * 2) + at_w
     start_x = max(0, (WIDTH - total_w) // 2)
