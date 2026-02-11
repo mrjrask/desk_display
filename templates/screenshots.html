@@ -98,7 +98,6 @@
     }
     .preview {
       width: 100%;
-      aspect-ratio: 4 / 3;
       border-radius: 12px;
       border: 1px solid rgba(148, 163, 184, 0.3);
       background: rgba(15, 23, 42, 0.65);
@@ -106,11 +105,11 @@
       align-items: center;
       justify-content: center;
       overflow: hidden;
+      min-height: 120px;
     }
     .preview img {
       width: 100%;
-      height: 100%;
-      object-fit: cover;
+      height: auto;
       display: block;
     }
     .overlay {
@@ -187,8 +186,8 @@
       background: transparent;
       cursor: pointer;
       width: 100%;
-      height: 100%;
       display: block;
+      line-height: 0;
     }
   </style>
 </head>
