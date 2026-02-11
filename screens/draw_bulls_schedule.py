@@ -140,6 +140,14 @@ FONT_BOTTOM   = FONT_DATE_SPORTS                 # footer (date/time)
 FONT_NEXT_OPP = FONT_TEAM_SPORTS                 # opponent line in "next" cards
 
 BOTTOM_LINE_MARGIN = 6
+_IS_1080P_LAYOUT = sorted((WIDTH, HEIGHT)) == [1080, 1920]
+
+
+def _bottom_line_margin(*, hyperpixel_layout: bool = False, extra: int = 0) -> int:
+    margin = config.scale_value(BOTTOM_LINE_MARGIN) if hyperpixel_layout else BOTTOM_LINE_MARGIN
+    if _IS_1080P_LAYOUT:
+        margin += 30
+    return margin + extra
 
 # Colors
 BACKGROUND_COLOR = (0, 0, 0)
@@ -665,7 +673,7 @@ def _render_scoreboard(
     bottom_line = footer or ""
     bottom_reserved = (
         _text_h(draw, FONT_BOTTOM)
-        + (config.scale_value(BOTTOM_LINE_MARGIN) if hyperpixel_layout else BOTTOM_LINE_MARGIN)
+        + _bottom_line_margin(hyperpixel_layout=hyperpixel_layout)
         if bottom_line
         else 0
     )
@@ -685,9 +693,7 @@ def _render_scoreboard(
     )
 
     if bottom_line:
-        bottom_margin = (
-            config.scale_value(BOTTOM_LINE_MARGIN) if hyperpixel_layout else BOTTOM_LINE_MARGIN
-        )
+        bottom_margin = _bottom_line_margin(hyperpixel_layout=hyperpixel_layout)
         by = HEIGHT - _text_h(draw, FONT_BOTTOM) - bottom_margin
         _center_text(draw, by, bottom_line, FONT_BOTTOM, fill=TEXT_COLOR)
 
@@ -719,9 +725,7 @@ def _render_next_game(game: Dict, *, title: str, logo_scale: float = 1.0) -> Ima
     footer = _format_footer_next(game)
 
     # Two large logos with '@' between them
-    bottom_margin = (
-        config.scale_value(BOTTOM_LINE_MARGIN) if hyperpixel_layout else BOTTOM_LINE_MARGIN
-    ) + 5
+    bottom_margin = _bottom_line_margin(hyperpixel_layout=hyperpixel_layout, extra=5)
     bottom_reserved = _text_h(draw, FONT_BOTTOM) + bottom_margin if footer else 0
     bottom_y = HEIGHT - bottom_reserved
     y2 = y + (config.scale_value(6) if hyperpixel_layout else 6)

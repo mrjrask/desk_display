@@ -67,6 +67,12 @@ from utils import (
 TS_PATH = TIMES_SQUARE_FONT_PATH
 NHL_DIR = NHL_IMAGES_DIR
 BACKGROUND_COLOR = (0, 0, 0)
+_IS_1080P_LAYOUT = sorted((WIDTH, HEIGHT)) == [1080, 1920]
+_BOTTOM_TEXT_1080P_OFFSET = 30
+
+
+def _bottom_text_margin(base_margin: int) -> int:
+    return base_margin + (_BOTTOM_TEXT_1080P_OFFSET if _IS_1080P_LAYOUT else 0)
 
 def _ts(size: int) -> ImageFont.ImageFont:
     try:
@@ -1145,7 +1151,7 @@ def _draw_next_card(
     hyperpixel_layout = config.is_hyperpixel_next_layout()
     edge_pad = max(2, config.scale_value(2)) if hyperpixel_layout else 2
     line_gap = max(1, config.scale_value(1)) if hyperpixel_layout else 1
-    bottom_margin = edge_pad + 5
+    bottom_margin = _bottom_text_margin(edge_pad + 5)
 
     # Title
     y_top = edge_pad
@@ -1309,7 +1315,7 @@ def draw_last_hawks_game(display, game, transition: bool=False):
     hyperpixel_layout = config.is_hyperpixel_next_layout()
     edge_pad = config.scale_value(2) if hyperpixel_layout else 2
     line_gap = config.scale_value(2) if hyperpixel_layout else 2
-    bottom_margin = config.scale_value(2) if hyperpixel_layout else 2
+    bottom_margin = _bottom_text_margin(config.scale_value(2) if hyperpixel_layout else 2)
 
     # Title (MLB title font)
     y = edge_pad
@@ -1451,7 +1457,7 @@ def draw_live_hawks_game(display, game, transition: bool=False):
     hyperpixel_layout = config.is_hyperpixel_next_layout()
     edge_pad = config.scale_value(2) if hyperpixel_layout else 2
     line_gap = config.scale_value(2) if hyperpixel_layout else 2
-    bottom_margin = config.scale_value(2) if hyperpixel_layout else 2
+    bottom_margin = _bottom_text_margin(config.scale_value(2) if hyperpixel_layout else 2)
 
     # Title (MLB title font) + fallback live clock (TimesSquare small)
     y = edge_pad
