@@ -313,9 +313,9 @@ def _load_scheduler_from_config() -> Optional[ScreenScheduler]:
             with open(CONFIG_PATH, "w", encoding="utf-8") as fh:
                 json.dump(sanitized_config, fh, indent=2)
                 fh.write("\n")
-            logging.warning(
-                "Removed deprecated/unknown screen ids from schedule configuration: %s",
-                ", ".join(removed_ids),
+            logging.info(
+                "Removed %d deprecated/unknown screen id(s) from schedule configuration.",
+                len(removed_ids),
             )
             config_data = sanitized_config
         except OSError as exc:
