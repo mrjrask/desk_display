@@ -118,3 +118,17 @@ def test_kernel_overlay_rotate_shorthand_is_parsed_for_logging(monkeypatch):
 
     assert module._kernel_overlay_rotation == 180
     assert module.DISPLAY_ROTATION == 0
+
+
+def test_hyperpixel_layout_includes_hd_widescreen_dimensions(monkeypatch):
+    module = _reload_config(monkeypatch, DISPLAY_WIDTH="1920", DISPLAY_HEIGHT="1080")
+
+    assert module.is_hyperpixel_next_layout() is True
+    assert module.is_hyperpixel_next_layout(1280, 720) is True
+
+
+def test_hyperpixel_layout_excludes_non_widescreen_hd_dimensions(monkeypatch):
+    module = _reload_config(monkeypatch, DISPLAY_WIDTH="1024", DISPLAY_HEIGHT="768")
+
+    assert module.is_hyperpixel_next_layout() is False
+    assert module.is_hyperpixel_next_layout(1024, 768) is False
