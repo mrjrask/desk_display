@@ -5,9 +5,9 @@ SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 PROJECT_DIR="${PROJECT_DIR:-$(cd -- "$SCRIPT_DIR/.." && pwd)}"
 SERVICE_USER="${SUDO_USER:-$(whoami)}"
 USER_SERVICE_NAME="desk_display-kernel.service"
-USER_SERVICE_TEMPLATE="$SCRIPT_DIR/desk_display_kernel_user.service"
+USER_SERVICE_TEMPLATE="$PROJECT_DIR/scripts/desk_display_kernel_user.service"
 
-COMMON_SCRIPT="$SCRIPT_DIR/helpers/common.sh"
+COMMON_SCRIPT="$PROJECT_DIR/scripts/helpers/common.sh"
 if [[ ! -f "$COMMON_SCRIPT" ]]; then
   echo "[ERROR] Missing common installer helpers at $COMMON_SCRIPT" >&2
   exit 1
@@ -206,7 +206,7 @@ fi
 
 prepend_env_vars "$ENV_PATH" "${ENV_LINES[@]}"
 
-"$SCRIPT_DIR/helpers/base_setup.sh"
+"$PROJECT_DIR/scripts/helpers/base_setup.sh"
 
 install_kernel_user_service "$PROJECT_DIR" "$SERVICE_USER" "$USER_SERVICE_TEMPLATE" "$USER_SERVICE_NAME"
 

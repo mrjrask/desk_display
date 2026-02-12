@@ -2,6 +2,7 @@
 set -euo pipefail
 
 SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
+PROJECT_DIR="${PROJECT_DIR:-$(cd -- "$SCRIPT_DIR/.." && pwd)}"
 
 detect_codename() {
   if command -v lsb_release >/dev/null 2>&1; then
@@ -30,4 +31,4 @@ fi
 export EXPECTED_CODENAME
 export DESK_DISPLAY_OUTPUT="${DESK_DISPLAY_OUTPUT:-displayhatmini}"
 
-exec "$SCRIPT_DIR/helpers/base_setup.sh"
+exec "$PROJECT_DIR/scripts/helpers/base_setup.sh"
