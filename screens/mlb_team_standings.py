@@ -177,6 +177,7 @@ def draw_standings_screen1(
     record_details_fn=None,
     record_font=None,
     points_font=None,
+    font_size_delta: int = 0,
     transition=False,
 ):
     """
@@ -221,6 +222,13 @@ def draw_standings_screen1(
         rank_font = clone_font(rank_font, max(1, int(round(getattr(rank_font, "size", 20) * 1.45))))
         gb_font = clone_font(gb_font, max(1, int(round(getattr(gb_font, "size", 20) * 1.35))))
         wc_font = clone_font(wc_font, max(1, int(round(getattr(wc_font, "size", 20) * 1.35))))
+
+    if font_size_delta:
+        record_font = clone_font(record_font, max(1, getattr(record_font, "size", 24) + font_size_delta))
+        points_font = clone_font(points_font, max(1, getattr(points_font, "size", 20) + font_size_delta))
+        rank_font = clone_font(rank_font, max(1, getattr(rank_font, "size", 20) + font_size_delta))
+        gb_font = clone_font(gb_font, max(1, getattr(gb_font, "size", 20) + font_size_delta))
+        wc_font = clone_font(wc_font, max(1, getattr(wc_font, "size", 20) + font_size_delta))
 
     if record_details_fn:
         wl_txt = record_details_fn(rec, record_line)
