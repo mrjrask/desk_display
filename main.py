@@ -1445,6 +1445,13 @@ def main_loop():
             loop_count += 1
             logging.info("🎬 Presenting '%s' (iteration %d)", sid, loop_count)
 
+            frame_id_before_render = None
+            if hasattr(display, "frame_id"):
+                try:
+                    frame_id_before_render = display.frame_id()
+                except Exception:
+                    frame_id_before_render = None
+
             try:
                 with defer_clear_display():
                     result = entry.render()
@@ -1505,6 +1512,19 @@ def main_loop():
                             frame = cv2.cvtColor(np.array(img), cv2.COLOR_RGB2BGR)
                             video_out.write(frame)
                     else:
+                        if already_displayed and frame_id_before_render is not None:
+                            try:
+                                frame_id_after_render = display.frame_id()
+                            except Exception:
+                                frame_id_after_render = None
+
+                            if frame_id_after_render == frame_id_before_render:
+                                logging.warning(
+                                    "Screen '%s' reported displayed=True without refreshing the display; forcing frame output.",
+                                    sid,
+                                )
+                                already_displayed = False
+
                         if not already_displayed:
                             animate_fade_in(display, img, steps=8, delay=0.015)
                         if ENABLE_SCREENSHOTS:
