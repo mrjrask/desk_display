@@ -111,6 +111,7 @@ Desk Display reads configuration from environment variables and (optionally) a `
 | `DISPLAY_FB_PIXEL_FORMAT` | Override framebuffer format (`rgb565`, `rgb888`, `xrgb8888`, etc.). |
 | `DISPLAY_FB_PIXEL_ORDER` | Force pixel order (`rgb` or `bgr`). |
 | `DISPLAY_ROTATION` | Additional app-side rotation in degrees (`0`, `90`, `180`, `270`) or shorthand (`0-3`). Keep `0` when `dtoverlay=...,rotate=` is already set to avoid double-rotation. |
+| `DISPLAY_HAT_MINI_REINIT_SECONDS` | Recreate the Display HAT Mini driver on this interval (default `1800`) to recover from long-run panel stalls. Set `0` to disable. |
 
 ### Weather + radar
 

@@ -605,6 +605,7 @@ from config import (
     HYPERPIXEL_LED_INDICATOR_BORDER_WIDTH,
     DISPLAY_HAT_MINI_LED_INDICATOR_BORDER_ENABLED,
     DISPLAY_HAT_MINI_LED_ENABLED,
+    DISPLAY_HAT_MINI_REINIT_SECONDS,
 )
 # Color utilities
 from screens.color_palettes import random_color
@@ -663,6 +664,8 @@ class Display:
             and (self.width, self.height) == (320, 240)
         )
         self._uses_kernel_output = False
+        self._display_reinit_seconds = DISPLAY_HAT_MINI_REINIT_SECONDS
+        self._last_display_reinit = time.monotonic()
 
         output = _normalize_display_output(_DISPLAY_OUTPUT)
         if _FORCE_HEADLESS or output == "headless":
@@ -735,15 +738,7 @@ class Display:
                 )
         else:
             try:  # pragma: no cover - hardware import
-                self._display = DisplayHATMini(self._buffer)
-                for name in self._BUTTON_NAMES:
-                    pin_name = f"BUTTON_{name}"
-                    self._button_pins[name] = getattr(self._display, pin_name, None)
-                if hasattr(self._display, "on_button_pressed"):
-                    try:
-                        self._display.on_button_pressed(self._handle_hw_button_event)
-                    except Exception as exc:  # pragma: no cover - hardware import
-                        logging.debug("Failed to register hardware button callback: %s", exc)
+                self._display = self._create_display_hat_mini(self._buffer)
             except Exception as exc:  # pragma: no cover - hardware import
                 logging.warning(
                     "Failed to initialize Display HAT Mini hardware; running headless (%s)",
@@ -814,6 +809,7 @@ class Display:
         if self._display is None:  # pragma: no cover - hardware import
             return
         try:
+            self._maybe_reinitialize_display_hat_mini()
             buffer_to_display = self._indicator_buffer()
             if self.rotation:
                 buffer_to_display = buffer_to_display.rotate(
@@ -829,6 +825,58 @@ class Display:
             self._display.display()
         except Exception as exc:  # pragma: no cover - hardware import
             logging.warning("Display refresh failed: %s", exc)
+
+    def _create_display_hat_mini(self, initial_buffer: Image.Image):
+        """Create and configure a Display HAT Mini driver instance."""
+
+        display = DisplayHATMini(initial_buffer)
+        for name in self._BUTTON_NAMES:
+            pin_name = f"BUTTON_{name}"
+            self._button_pins[name] = getattr(display, pin_name, None)
+
+        if hasattr(display, "on_button_pressed"):
+            try:
+                display.on_button_pressed(self._handle_hw_button_event)
+            except Exception as exc:  # pragma: no cover - hardware import
+                logging.debug("Failed to register hardware button callback: %s", exc)
+
+        return display
+
+    def _maybe_reinitialize_display_hat_mini(self) -> None:
+        """Periodically recreate the Display HAT Mini driver to avoid long-run stalls."""
+
+        if self._display is None:
+            return
+        if self._display_reinit_seconds <= 0:
+            return
+
+        now = time.monotonic()
+        if now - self._last_display_reinit < self._display_reinit_seconds:
+            return
+
+        new_display = self._create_display_hat_mini(self._buffer)
+        self._display = new_display
+        self._last_display_reinit = now
+
+        try:
+            new_display.set_backlight(self._backlight_level)
+        except Exception as exc:  # pragma: no cover - hardware import
+            logging.debug("Failed to restore backlight after display reinit: %s", exc)
+
+        if DISPLAY_HAT_MINI_LED_ENABLED:
+            try:
+                new_display.set_led(
+                    r=self._led_color[0],
+                    g=self._led_color[1],
+                    b=self._led_color[2],
+                )
+            except Exception as exc:  # pragma: no cover - hardware import
+                logging.debug("Failed to restore LED state after display reinit: %s", exc)
+
+        logging.info(
+            "Display HAT Mini driver reinitialized after %d seconds to keep output active.",
+            self._display_reinit_seconds,
+        )
 
     def _bump_frame_id(self) -> None:
         with self._frame_lock:

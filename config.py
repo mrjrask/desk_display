@@ -481,6 +481,22 @@ DISPLAY_HAT_MINI_LED_ENABLED = _get_bool_env(
 )
 
 try:
+    DISPLAY_HAT_MINI_REINIT_SECONDS = int(
+        os.environ.get("DISPLAY_HAT_MINI_REINIT_SECONDS", "1800")
+    )
+except (TypeError, ValueError):
+    logging.warning(
+        "Invalid DISPLAY_HAT_MINI_REINIT_SECONDS value; defaulting to 1800 seconds."
+    )
+    DISPLAY_HAT_MINI_REINIT_SECONDS = 1800
+
+if DISPLAY_HAT_MINI_REINIT_SECONDS < 0:
+    logging.warning(
+        "DISPLAY_HAT_MINI_REINIT_SECONDS must be >= 0; clamping to 0 (disabled)."
+    )
+    DISPLAY_HAT_MINI_REINIT_SECONDS = 0
+
+try:
     HYPERPIXEL_LED_INDICATOR_BORDER_WIDTH = int(
         os.environ.get("HYPERPIXEL_LED_INDICATOR_BORDER_WIDTH", "2")
     )

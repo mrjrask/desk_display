@@ -118,3 +118,19 @@ def test_kernel_overlay_rotate_shorthand_is_parsed_for_logging(monkeypatch):
 
     assert module._kernel_overlay_rotation == 180
     assert module.DISPLAY_ROTATION == 0
+
+
+def test_display_hat_mini_reinit_seconds_default_and_env(monkeypatch):
+    module = _reload_config(monkeypatch, DISPLAY_HAT_MINI_REINIT_SECONDS=None)
+    assert module.DISPLAY_HAT_MINI_REINIT_SECONDS == 1800
+
+    module = _reload_config(monkeypatch, DISPLAY_HAT_MINI_REINIT_SECONDS="600")
+    assert module.DISPLAY_HAT_MINI_REINIT_SECONDS == 600
+
+
+def test_display_hat_mini_reinit_seconds_invalid_and_negative(monkeypatch):
+    module = _reload_config(monkeypatch, DISPLAY_HAT_MINI_REINIT_SECONDS="bad")
+    assert module.DISPLAY_HAT_MINI_REINIT_SECONDS == 1800
+
+    module = _reload_config(monkeypatch, DISPLAY_HAT_MINI_REINIT_SECONDS="-5")
+    assert module.DISPLAY_HAT_MINI_REINIT_SECONDS == 0
