@@ -541,12 +541,29 @@ HYPERPIXEL_NEXT_LAYOUT_SIZES = {(800, 480), (480, 800), (720, 720)}
 KERNEL_DRIVEN_OUTPUTS = {"kernel", "kms", "drm", "sdl", "fullscreen"}
 
 
+def _is_hd_widescreen_layout(width: int, height: int) -> bool:
+    """Treat 1080p-class displays like HyperPixel 4 for compact layout rules."""
+
+    if width <= 0 or height <= 0:
+        return False
+
+    long_edge = max(width, height)
+    short_edge = min(width, height)
+    if long_edge < 1280 or short_edge < 720:
+        return False
+
+    return (long_edge / short_edge) >= (16 / 10)
+
+
 def is_hyperpixel_next_layout(width: int | None = None, height: int | None = None) -> bool:
     if width is None:
         width = WIDTH
     if height is None:
         height = HEIGHT
-    return (width, height) in HYPERPIXEL_NEXT_LAYOUT_SIZES
+    return (width, height) in HYPERPIXEL_NEXT_LAYOUT_SIZES or _is_hd_widescreen_layout(
+        width,
+        height,
+    )
 
 
 def is_hyperpixel_4_square_layout(width: int | None = None, height: int | None = None) -> bool:

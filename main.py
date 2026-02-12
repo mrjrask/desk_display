@@ -974,7 +974,12 @@ IMAGES_DIR = os.path.join(SCRIPT_DIR, "images")
 # Logos scroll across the screen; keep them just a bit shorter than the display
 # while preserving aspect ratio during resize. Use a fixed width so replacement
 # logos with different aspect ratios render consistently.
-LOGO_SCREEN_HEIGHT = max(1, HEIGHT - 30)
+_logo_height_limit = HEIGHT - 30
+if WIDTH >= 1280 or HEIGHT >= 720:
+    short_edge = max(1, min(WIDTH, HEIGHT))
+    _logo_height_limit = min(_logo_height_limit, int(round(short_edge * 0.55)))
+
+LOGO_SCREEN_HEIGHT = max(1, _logo_height_limit)
 TEAM_LOGO_HEIGHT   = LOGO_SCREEN_HEIGHT
 LOGO_SCREEN_WIDTH = max(1, min(WIDTH, int(round(LOGO_SCREEN_HEIGHT * 1.5))))
 
