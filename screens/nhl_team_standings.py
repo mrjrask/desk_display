@@ -10,9 +10,12 @@ from utils import log_call, clone_font
 
 _IS_HYPERPIXEL_4_SQUARE = is_hyperpixel_4_square_layout()
 _IS_HYPERPIXEL_LAYOUT = is_hyperpixel_next_layout()
+_IS_HYPERPIXEL_4 = _IS_HYPERPIXEL_LAYOUT and not _IS_HYPERPIXEL_4_SQUARE
 
 NHL_LOGO_SZ = max(1, int(round(LOGO_SZ * 0.5)))
 NHL_STAND1_LOGO_SZ = NHL_LOGO_SZ * 3 if _IS_HYPERPIXEL_LAYOUT else NHL_LOGO_SZ
+if _IS_HYPERPIXEL_4:
+    NHL_STAND1_LOGO_SZ = max(1, int(round(NHL_STAND1_LOGO_SZ * 1.5)))
 
 NHL_POINTS_FONT = clone_font(
     FONT_STAND1_RANK,

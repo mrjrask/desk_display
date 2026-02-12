@@ -9,9 +9,12 @@ from utils import log_call
 
 _IS_HYPERPIXEL_4_SQUARE = is_hyperpixel_4_square_layout()
 _IS_HYPERPIXEL_LAYOUT = is_hyperpixel_next_layout()
+_IS_HYPERPIXEL_4 = _IS_HYPERPIXEL_LAYOUT and not _IS_HYPERPIXEL_4_SQUARE
 
 NBA_LOGO_SZ = max(1, int(round(LOGO_SZ * 0.5)))
 NBA_STAND1_LOGO_SZ = NBA_LOGO_SZ * 3 if _IS_HYPERPIXEL_LAYOUT else NBA_LOGO_SZ
+if _IS_HYPERPIXEL_4:
+    NBA_STAND1_LOGO_SZ = max(1, int(round(NBA_STAND1_LOGO_SZ * 1.5)))
 
 
 def _strip_pct_leading_zero(rec, *, precision=3):

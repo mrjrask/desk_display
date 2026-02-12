@@ -105,6 +105,7 @@ FONT_NEXT_OPP = FONT_TEAM_SPORTS
 
 # Scoreboard fonts (TimesSquare family as requested for numeric/abbr)
 _IS_HYPERPIXEL_4_SQUARE = is_hyperpixel_4_square_layout()
+_IS_HYPERPIXEL_4 = config.is_hyperpixel_next_layout() and not _IS_HYPERPIXEL_4_SQUARE
 _ABBR_BASE = 33 if HEIGHT > 64 else 30
 _SOG_BASE = 30 if HEIGHT > 64 else 26
 if _IS_HYPERPIXEL_4_SQUARE:
@@ -698,7 +699,7 @@ def _draw_scoreboard(
     # Row heights — compact
     total_available = max(0, HEIGHT - bottom_reserved_px - table_top)
     available_for_rows = max(0, total_available - header_h)
-    min_row_h = config.scale_value(32) if hyperpixel_layout else 32
+    min_row_h = config.scale_value(40) if _IS_HYPERPIXEL_4 else (config.scale_value(32) if hyperpixel_layout else 32)
     max_row_h = config.scale_value(48) if hyperpixel_layout else 48
     if _IS_HYPERPIXEL_4_SQUARE and hyperpixel_layout:
         # Match the Bulls Last/Live row separation by allowing Hawks rows to
@@ -799,7 +800,10 @@ def _draw_scoreboard(
 
     # HyperPixel displays run this card at much larger physical dimensions.
     # Keep team labels/scores 15% smaller there for Last/Live readability.
-    name_font = _ts(int(round(_ABBR_FONT_SIZE * 0.85))) if hyperpixel_layout else FONT_ABBR
+    if _IS_HYPERPIXEL_4:
+        name_font = _ts(getattr(FONT_TITLE, "size", _ABBR_FONT_SIZE))
+    else:
+        name_font = _ts(int(round(_ABBR_FONT_SIZE * 0.85))) if hyperpixel_layout else FONT_ABBR
     score_font = _ts(int(round(_SCORE_FONT_SIZE * 0.85))) if hyperpixel_layout else FONT_SCORE
     if not _fits(name_font):
         size = getattr(name_font, "size", None) or int(round(_ABBR_FONT_SIZE * (0.85 if hyperpixel_layout else 1.0)))

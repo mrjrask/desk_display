@@ -122,6 +122,7 @@ def _ts(size: int) -> ImageFont.ImageFont:
 
 # Tuned for 320x240; scales acceptably for larger canvases
 _IS_HYPERPIXEL_4_SQUARE = is_hyperpixel_4_square_layout()
+_IS_HYPERPIXEL_4 = config.is_hyperpixel_next_layout() and not _IS_HYPERPIXEL_4_SQUARE
 _FONT_ABBR_SIZE = 40 if _IS_HYPERPIXEL_4_SQUARE else (33 if HEIGHT >= 240 else 28)
 _FONT_SCORE_SIZE = 60 if _IS_HYPERPIXEL_4_SQUARE else (48 if HEIGHT >= 240 else 38)
 if _IS_HYPERPIXEL_4_SQUARE:
@@ -572,7 +573,10 @@ def _draw_scoreboard_table(
 
     # HyperPixel layouts render larger overall; trim team/score fonts 15%
     # on Last/Live cards for better balance.
-    team_font = _ts(int(round(_FONT_ABBR_SIZE * 0.85))) if hyperpixel_layout else FONT_ABBR
+    if _IS_HYPERPIXEL_4:
+        team_font = _ts(getattr(FONT_TITLE, "size", _FONT_ABBR_SIZE))
+    else:
+        team_font = _ts(int(round(_FONT_ABBR_SIZE * 0.85))) if hyperpixel_layout else FONT_ABBR
     score_font = _ts(int(round(_FONT_SCORE_SIZE * 0.85))) if hyperpixel_layout else FONT_SCORE
 
     row_count = len(rows)

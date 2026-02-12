@@ -488,6 +488,8 @@ def draw_weather_screen_1(display, weather, transition=False):
     max_val_h = max(g[5] for g in groups)
     max_lbl_h = max(g[2] for g in groups)
     y_val     = HEIGHT - max_val_h - 9
+    if is_hyperpixel_next_layout() and not is_hyperpixel_4_square_layout():
+        y_val -= 5
     if is_hyperpixel_4_square_layout():
         y_val -= 10
     LABEL_GAP = 2
@@ -979,9 +981,11 @@ def draw_weather_hourly(display, weather, transition: bool = False, hours: int =
                     img.paste(icon, (icon_x, icon_y), icon)
                     draw.text((text_x, text_y), text, font=font, fill=color)
                 elif text_image is not None:
-                    img.paste(text_image, (cx - text_w // 2, text_y), text_image)
+                    text_x = max(x0 + 2, min(cx - text_w // 2, x1 - 2 - text_w))
+                    text_y = max(stat_area_top, min(text_y, stat_area_bottom - text_h))
+                    img.paste(text_image, (text_x, text_y), text_image)
                     if wind_overlay is not None and text_image is wind_overlay.get("image"):
-                        wind_overlay["pos"] = (cx - text_w // 2, text_y)
+                        wind_overlay["pos"] = (text_x, text_y)
                 else:
                     # Just render text centered
                     draw.text((cx - text_w // 2, text_y), text, font=font, fill=color)
