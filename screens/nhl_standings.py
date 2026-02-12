@@ -70,11 +70,19 @@ def _cap_row_logo_height(height: float) -> int:
     return scaled
 
 
+def _nba_scoreboard_logo_height_for_hyperpixel_square() -> int:
+    """Mirror NBA Scoreboard team-logo sizing for HyperPixel 4 Square."""
+    team_logo_base = scale_value_width(36) if is_hyperpixel_next_layout() else scale_value_width(52)
+    score_row_height = scale_value(56) if is_hyperpixel_next_layout() else scale_value_width(56)
+    target = max(1, int(round(team_logo_base * 0.6)))
+    max_row_fit = max(1, score_row_height - (scale_value(8) if is_hyperpixel_next_layout() else scale_value_width(8)))
+    return min(target, max_row_fit)
+
+
 def _scale_square_logo_height(height: float) -> int:
     scaled = _cap_row_logo_height(height)
     if is_hyperpixel_4_square_layout():
-        # HyperPixel 4 Square-specific 15% logo reduction for standings rows.
-        scaled = max(1, int(round(scaled * 0.85)))
+        return _nba_scoreboard_logo_height_for_hyperpixel_square()
     return scaled
 
 

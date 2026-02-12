@@ -82,7 +82,7 @@ def draw_nba_standings_screen1(display, rec, logo_path, division_name, *, logo_s
         show_pct=False,
         show_streak=True,
         logo_size=max(1, int(round(NBA_STAND1_LOGO_SZ * max(0.1, logo_scale)))),
-        font_size_delta=10 if _IS_HYPERPIXEL_4 else 0,
+        font_size_offset=4 if _IS_HYPERPIXEL_4_SQUARE else 0,
         transition=transition,
     )
 
