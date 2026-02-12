@@ -78,9 +78,9 @@ fi
 
 # 1) Clear the display before touching the filesystem
 echo "    → Clearing display…"
-# Force headless mode so cleanup doesn't fight a still-shutting-down service
-# for the Display HAT Mini hardware.
-DESK_DISPLAY_FORCE_HEADLESS=1 "${python_bin}" - <<'PY'
+# Intentionally avoid forcing headless mode here: cleanup should blank the
+# physical Display HAT Mini panel when hardware output is available.
+"${python_bin}" - <<'PY'
 import logging
 import os
 import sys
