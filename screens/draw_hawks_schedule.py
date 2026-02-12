@@ -700,6 +700,10 @@ def _draw_scoreboard(
     available_for_rows = max(0, total_available - header_h)
     min_row_h = config.scale_value(32) if hyperpixel_layout else 32
     max_row_h = config.scale_value(48) if hyperpixel_layout else 48
+    if _IS_HYPERPIXEL_4_SQUARE and hyperpixel_layout:
+        # Match the Bulls Last/Live row separation by allowing Hawks rows to
+        # expand into the full available area instead of capping at 48px.
+        max_row_h = max(max_row_h, available_for_rows // 2)
     min_row_compact = config.scale_value(24) if hyperpixel_layout else 24
     row_h = max(available_for_rows // 2, min_row_h)
     row_h = min(row_h, max_row_h)
