@@ -26,6 +26,7 @@ from config import (
     get_screen_background_color,
     get_screen_font,
     get_screen_image_scale,
+    is_kernel_driven_display,
     is_hyperpixel_next_layout,
     scale_value,
     scale_value_width,
@@ -258,10 +259,13 @@ def _apply_style_overrides(screen_id: str) -> None:
         OVERVIEW_MIN_LOGO_HEIGHT = min(OVERVIEW_MIN_LOGO_HEIGHT, min_logo_cap)
         OVERVIEW_MAX_LOGO_HEIGHT = min(OVERVIEW_MAX_LOGO_HEIGHT, max_logo_cap)
         OVERVIEW_MIN_LOGO_HEIGHT = min(OVERVIEW_MIN_LOGO_HEIGHT, OVERVIEW_MAX_LOGO_HEIGHT)
-    conference_scale = get_screen_image_scale(screen_id, "conference_logo", team_scale)
-    CONFERENCE_LOGO_HEIGHT = _conference_logo_height_for_layout(
-        _CONFERENCE_LOGO_BASE_HEIGHT * conference_scale
-    )
+    if is_kernel_driven_display():
+        CONFERENCE_LOGO_HEIGHT = LOGO_HEIGHT
+    else:
+        conference_scale = get_screen_image_scale(screen_id, "conference_logo", team_scale)
+        CONFERENCE_LOGO_HEIGHT = _conference_logo_height_for_layout(
+            _CONFERENCE_LOGO_BASE_HEIGHT * conference_scale
+        )
 
     if is_hyperpixel_4_square_layout() and screen_id in _HYPERPIXEL_4_STANDINGS_IDS:
         ROW_PADDING = 1

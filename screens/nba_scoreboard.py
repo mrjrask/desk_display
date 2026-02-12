@@ -42,6 +42,7 @@ from config import (
     get_screen_background_color,
     get_screen_font,
     get_screen_image_scale,
+    is_kernel_driven_display,
     is_hyperpixel_next_layout,
     is_hyperpixel_4_square_layout,
     scale_value,
@@ -142,6 +143,8 @@ def _team_logo_height() -> int:
 
 def _league_logo_height() -> int:
     team_scale = get_screen_image_scale(SCREEN_ID, "team_logo", 1.0)
+    if is_kernel_driven_display():
+        return _team_logo_height()
     scale = get_screen_image_scale(SCREEN_ID, "league_logo", team_scale)
     return max(1, int(round(LEAGUE_LOGO_BASE_HEIGHT * scale)))
 

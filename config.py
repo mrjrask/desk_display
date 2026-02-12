@@ -522,6 +522,7 @@ def scale_value(value: float) -> int:
 def scale_value_width(value: float) -> int:
     return max(1, int(round(value * DISPLAY_SCALE_WIDTH)))
 HYPERPIXEL_NEXT_LAYOUT_SIZES = {(800, 480), (480, 800), (720, 720)}
+KERNEL_DRIVEN_OUTPUTS = {"kernel", "kms", "drm", "sdl", "fullscreen"}
 
 
 def is_hyperpixel_next_layout(width: int | None = None, height: int | None = None) -> bool:
@@ -538,6 +539,11 @@ def is_hyperpixel_4_square_layout(width: int | None = None, height: int | None =
     if height is None:
         height = HEIGHT
     return (width, height) == (720, 720)
+
+
+def is_kernel_driven_display() -> bool:
+    """Return True when output is configured for kernel/DRM-backed rendering."""
+    return _display_output in KERNEL_DRIVEN_OUTPUTS
 SCREEN_DELAY             = 4
 try:
     HOURLY_FORECAST_HOURS = int(os.environ.get("HOURLY_FORECAST_HOURS", "5"))
