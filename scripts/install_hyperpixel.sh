@@ -51,9 +51,9 @@ export DESK_DISPLAY_OUTPUT="kernel"
 export REQUIREMENTS_FILE="requirements_kernel.txt"
 export DISABLE_SPI_I2C="1"
 
-HYPERPIXEL_PANEL=""
-DISPLAY_WIDTH=""
-DISPLAY_HEIGHT=""
+HYPERPIXEL_PANEL="${HYPERPIXEL_PANEL:-}"
+DISPLAY_WIDTH="${DISPLAY_WIDTH:-}"
+DISPLAY_HEIGHT="${DISPLAY_HEIGHT:-}"
 
 export DISPLAY_ROTATION="${DISPLAY_ROTATION:-0}"
 
@@ -150,7 +150,34 @@ detect_hyperpixel_panel() {
   prompt_panel_type
 }
 
-if ! detect_hyperpixel_panel; then
+validate_hyperpixel_env_overrides() {
+  case "$HYPERPIXEL_PANEL" in
+    "")
+      return 1
+      ;;
+    hyperpixel4)
+      if [[ -z "$DISPLAY_WIDTH" || -z "$DISPLAY_HEIGHT" ]]; then
+        DISPLAY_WIDTH="800"
+        DISPLAY_HEIGHT="480"
+      fi
+      return 0
+      ;;
+    hyperpixel4sq)
+      if [[ -z "$DISPLAY_WIDTH" || -z "$DISPLAY_HEIGHT" ]]; then
+        DISPLAY_WIDTH="720"
+        DISPLAY_HEIGHT="720"
+      fi
+      return 0
+      ;;
+    *)
+      warn "Invalid HYPERPIXEL_PANEL '$HYPERPIXEL_PANEL'. Falling back to auto-detection/prompt."
+      HYPERPIXEL_PANEL=""
+      return 1
+      ;;
+  esac
+}
+
+if ! validate_hyperpixel_env_overrides && ! detect_hyperpixel_panel; then
   warn "Failed to detect HyperPixel panel."
   exit 1
 fi
