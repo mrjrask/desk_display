@@ -35,6 +35,7 @@ from config import (
     get_screen_background_color,
     get_screen_font,
     get_screen_image_scale,
+    is_kernel_driven_display,
     is_hyperpixel_next_layout,
     scale_value,
     scale_value_width,
@@ -154,8 +155,11 @@ def _apply_style_overrides() -> None:
     BACKGROUND_COLOR = get_screen_background_color(SCREEN_ID, SCOREBOARD_BACKGROUND_COLOR)
     team_scale = get_screen_image_scale(SCREEN_ID, "team_logo", 1.0)
     LOGO_HEIGHT = max(1, int(round(TEAM_LOGO_BASE_HEIGHT * team_scale)))
-    league_scale = get_screen_image_scale(SCREEN_ID, "league_logo", team_scale)
-    LEAGUE_LOGO_HEIGHT = max(1, int(round(LEAGUE_LOGO_BASE_HEIGHT * league_scale)))
+    if is_kernel_driven_display():
+        LEAGUE_LOGO_HEIGHT = LOGO_HEIGHT
+    else:
+        league_scale = get_screen_image_scale(SCREEN_ID, "league_logo", team_scale)
+        LEAGUE_LOGO_HEIGHT = max(1, int(round(LEAGUE_LOGO_BASE_HEIGHT * league_scale)))
 
 
 def _load_logo_cached(abbr: str) -> Optional[Image.Image]:
