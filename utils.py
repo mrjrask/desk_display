@@ -842,6 +842,21 @@ class Display:
 
         return display
 
+    def _release_display_hat_mini(self, display) -> None:
+        """Best-effort cleanup for a Display HAT Mini driver instance."""
+
+        if display is None:
+            return
+
+        for method_name in ("close", "cleanup", "deinit"):
+            method = getattr(display, method_name, None)
+            if callable(method):
+                try:
+                    method()
+                except Exception as exc:  # pragma: no cover - hardware import
+                    logging.debug("Failed to %s Display HAT Mini driver: %s", method_name, exc)
+                return
+
     def _maybe_reinitialize_display_hat_mini(self) -> None:
         """Periodically recreate the Display HAT Mini driver to avoid long-run stalls."""
 
@@ -854,9 +869,11 @@ class Display:
         if now - self._last_display_reinit < self._display_reinit_seconds:
             return
 
+        old_display = self._display
         new_display = self._create_display_hat_mini(self._buffer)
         self._display = new_display
         self._last_display_reinit = now
+        self._release_display_hat_mini(old_display)
 
         try:
             new_display.set_backlight(self._backlight_level)
