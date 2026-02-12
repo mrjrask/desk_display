@@ -179,3 +179,40 @@ def test_kernel_output_keeps_indicator_border_exception(monkeypatch):
 
     assert display.capture().getpixel((10, display.height - 6)) == (255, 0, 0)
     assert display.capture().getpixel((10, display.height - 5)) == (0, 0, 0)
+
+
+def test_release_display_hat_mini_prefers_close():
+    calls = []
+
+    class _FakeDisplay:
+        def close(self):
+            calls.append("close")
+
+        def cleanup(self):
+            calls.append("cleanup")
+
+    display = utils.Display()
+    display._release_display_hat_mini(_FakeDisplay())
+
+    assert calls == ["close"]
+
+
+def test_reinitialize_display_releases_previous_driver(monkeypatch):
+    display = utils.Display()
+    display._display_reinit_seconds = 1
+    display._last_display_reinit = 0
+
+    released = []
+
+    old_display = object()
+    display._display = old_display
+
+    new_display = object()
+    monkeypatch.setattr(display, "_create_display_hat_mini", lambda _: new_display)
+    monkeypatch.setattr(display, "_release_display_hat_mini", lambda driver: released.append(driver))
+    monkeypatch.setattr(utils.time, "monotonic", lambda: 10)
+
+    display._maybe_reinitialize_display_hat_mini()
+
+    assert display._display is new_display
+    assert released == [old_display]
