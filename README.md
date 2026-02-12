@@ -60,6 +60,8 @@ python main.py
 
 All installers below are combined for Raspberry Pi OS Bookworm and Trixie.
 
+Supported/tested codenames: `bookworm`, `trixie`. On other Debian/Raspberry Pi OS codenames, the installer falls back to best-effort dependency package mapping and may require manual package-name adjustments if apt cannot resolve a dependency.
+
 ### Display HAT Mini (SPI)
 
 ```bash
