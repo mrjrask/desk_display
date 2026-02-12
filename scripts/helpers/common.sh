@@ -433,7 +433,7 @@ select_libtiff_pkg() {
     fi
   done
 
-  warn "Could not find a libtiff dev package; defaulting to ${candidates[-1]}"
+  warn "Could not find a libtiff dev package for codename '$codename'; attempted: ${candidates[*]}. Defaulting to ${candidates[-1]}."
   echo "${candidates[-1]}"
 }
 
@@ -457,7 +457,7 @@ select_gdk_pixbuf_pkg() {
     fi
   done
 
-  warn "Could not find a gdk-pixbuf dev package; defaulting to ${candidates[-1]}"
+  warn "Could not find a gdk-pixbuf dev package for codename '$codename'; attempted: ${candidates[*]}. Defaulting to ${candidates[-1]}."
   echo "${candidates[-1]}"
 }
 

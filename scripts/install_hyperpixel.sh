@@ -46,6 +46,18 @@ if [[ -z "${EXPECTED_CODENAME:-}" ]]; then
   fi
 fi
 
+case "$EXPECTED_CODENAME" in
+  bookworm|trixie)
+    ;;
+  *)
+    warn "============================================================"
+    warn "Detected codename '$EXPECTED_CODENAME', which is not explicitly supported."
+    warn "Dependency package mapping is best-effort on this release and may fail."
+    warn "If installation errors occur, use Debian package equivalents for your OS."
+    warn "============================================================"
+    ;;
+esac
+
 export EXPECTED_CODENAME
 export DESK_DISPLAY_OUTPUT="kernel"
 export REQUIREMENTS_FILE="requirements_kernel.txt"
