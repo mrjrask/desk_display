@@ -489,7 +489,7 @@ def draw_weather_screen_1(display, weather, transition=False):
     max_lbl_h = max(g[2] for g in groups)
     y_val     = HEIGHT - max_val_h - 9
     if is_hyperpixel_4_square_layout():
-        y_val -= 5
+        y_val -= 10
     LABEL_GAP = 2
     y_lbl     = y_val - max_lbl_h - LABEL_GAP
 
@@ -799,7 +799,7 @@ def draw_weather_hourly(display, weather, transition: bool = False, hours: int =
         icon_area_bottom = card_top + int(card_height * 0.68)
 
         stat_area_top = icon_area_bottom + 8
-        stat_area_bottom = card_bottom - 8
+        stat_area_bottom = card_bottom - (10 if is_hyperpixel_4_square_layout() else 8)
 
         card_layouts.append(
             {
@@ -965,7 +965,8 @@ def draw_weather_hourly(display, weather, transition: bool = False, hours: int =
 
                 center_y = stat_area_top + segment_height * (idx + 0.5)
                 text_y = int(center_y - text_h / 2)
-                text_y = max(stat_area_top, min(text_y, stat_area_bottom - text_h))
+                bottom_clamp = stat_area_bottom - text_h - (1 if is_hyperpixel_4_square_layout() else 0)
+                text_y = max(stat_area_top, min(text_y, bottom_clamp))
 
                 if icon:
                     # Render icon + text side by side
