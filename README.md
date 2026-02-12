@@ -65,20 +65,20 @@ Supported/tested codenames: `bookworm`, `trixie`. On other Debian/Raspberry Pi O
 ### Display HAT Mini (SPI)
 
 ```bash
-bash ./scripts/install_display_hat_mini.sh
+bash ./Installers/install_display_hat_mini.sh
 ```
 
 ### Kernel-driven displays (fullscreen)
 
 ```bash
 # HyperPixel 4 / HyperPixel 4 Square
-bash ./scripts/install_hyperpixel.sh
+bash ./Installers/install_hyperpixel.sh
 
 # HyperPixel installer (non-interactive)
-HYPERPIXEL_PANEL=hyperpixel4 DISPLAY_WIDTH=800 DISPLAY_HEIGHT=480 bash ./scripts/install_hyperpixel.sh
+HYPERPIXEL_PANEL=hyperpixel4 DISPLAY_WIDTH=800 DISPLAY_HEIGHT=480 bash ./Installers/install_hyperpixel.sh
 
 # Other kernel-driven displays
-bash ./scripts/install_kernel.sh
+bash ./Installers/install_kernel.sh
 ```
 
 The kernel display installers will:
