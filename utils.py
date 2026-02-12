@@ -630,6 +630,7 @@ class Display:
     _BOTTOM_SAFE_BUFFER_PX = 5
     _KERNEL_BOTTOM_SAFE_BUFFER_PX = 25
     _INDICATOR_BOTTOM_SAFE_BUFFER_PX = 5
+    _DISPLAY_REINIT_RETRY_SECONDS = 60
 
     def __init__(self):
         global _ACTIVE_DISPLAY
@@ -666,6 +667,8 @@ class Display:
         self._uses_kernel_output = False
         self._display_reinit_seconds = DISPLAY_HAT_MINI_REINIT_SECONDS
         self._last_display_reinit = time.monotonic()
+        self._next_display_reinit_retry = 0.0
+        self._display_reinit_lock = threading.Lock()
 
         output = _normalize_display_output(_DISPLAY_OUTPUT)
         if _FORCE_HEADLESS or output == "headless":
@@ -868,32 +871,57 @@ class Display:
         now = time.monotonic()
         if now - self._last_display_reinit < self._display_reinit_seconds:
             return
+        if now < self._next_display_reinit_retry:
+            return
 
-        old_display = self._display
-        new_display = self._create_display_hat_mini(self._buffer)
-        self._display = new_display
-        self._last_display_reinit = now
-        self._release_display_hat_mini(old_display)
+        with self._display_reinit_lock:
+            # Another thread may have already reinitialized while we waited.
+            now = time.monotonic()
+            if self._display is None:
+                return
+            if now - self._last_display_reinit < self._display_reinit_seconds:
+                return
+            if now < self._next_display_reinit_retry:
+                return
 
-        try:
-            new_display.set_backlight(self._backlight_level)
-        except Exception as exc:  # pragma: no cover - hardware import
-            logging.debug("Failed to restore backlight after display reinit: %s", exc)
+            old_display = self._display
+            self._display = None
+            self._release_display_hat_mini(old_display)
 
-        if DISPLAY_HAT_MINI_LED_ENABLED:
             try:
-                new_display.set_led(
-                    r=self._led_color[0],
-                    g=self._led_color[1],
-                    b=self._led_color[2],
-                )
+                new_display = self._create_display_hat_mini(self._buffer)
             except Exception as exc:  # pragma: no cover - hardware import
-                logging.debug("Failed to restore LED state after display reinit: %s", exc)
+                self._next_display_reinit_retry = now + self._DISPLAY_REINIT_RETRY_SECONDS
+                logging.warning(
+                    "Display HAT Mini reinit failed; retrying in %ds (%s)",
+                    self._DISPLAY_REINIT_RETRY_SECONDS,
+                    exc,
+                )
+                return
 
-        logging.info(
-            "Display HAT Mini driver reinitialized after %d seconds to keep output active.",
-            self._display_reinit_seconds,
-        )
+            self._display = new_display
+            self._last_display_reinit = now
+            self._next_display_reinit_retry = 0.0
+
+            try:
+                new_display.set_backlight(self._backlight_level)
+            except Exception as exc:  # pragma: no cover - hardware import
+                logging.debug("Failed to restore backlight after display reinit: %s", exc)
+
+            if DISPLAY_HAT_MINI_LED_ENABLED:
+                try:
+                    new_display.set_led(
+                        r=self._led_color[0],
+                        g=self._led_color[1],
+                        b=self._led_color[2],
+                    )
+                except Exception as exc:  # pragma: no cover - hardware import
+                    logging.debug("Failed to restore LED state after display reinit: %s", exc)
+
+            logging.info(
+                "Display HAT Mini driver reinitialized after %d seconds to keep output active.",
+                self._display_reinit_seconds,
+            )
 
     def _bump_frame_id(self) -> None:
         with self._frame_lock:

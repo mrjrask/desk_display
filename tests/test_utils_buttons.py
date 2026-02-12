@@ -216,3 +216,41 @@ def test_reinitialize_display_releases_previous_driver(monkeypatch):
 
     assert display._display is new_display
     assert released == [old_display]
+
+
+def test_reinitialize_display_retries_after_failure(monkeypatch):
+    display = utils.Display()
+    display._display_reinit_seconds = 1
+    display._last_display_reinit = 0
+    display._display = object()
+
+    released = []
+    monkeypatch.setattr(display, "_release_display_hat_mini", lambda driver: released.append(driver))
+    monkeypatch.setattr(
+        display,
+        "_create_display_hat_mini",
+        lambda _: (_ for _ in ()).throw(RuntimeError("busy")),
+    )
+    monkeypatch.setattr(utils.time, "monotonic", lambda: 10)
+
+    display._maybe_reinitialize_display_hat_mini()
+
+    assert display._display is None
+    assert len(released) == 1
+    assert display._next_display_reinit_retry == 10 + display._DISPLAY_REINIT_RETRY_SECONDS
+
+
+def test_reinitialize_display_skips_attempt_during_retry_window(monkeypatch):
+    display = utils.Display()
+    display._display_reinit_seconds = 1
+    display._last_display_reinit = 0
+    display._next_display_reinit_retry = 100
+    display._display = object()
+
+    create_calls = []
+    monkeypatch.setattr(display, "_create_display_hat_mini", lambda _: create_calls.append("called"))
+    monkeypatch.setattr(utils.time, "monotonic", lambda: 50)
+
+    display._maybe_reinitialize_display_hat_mini()
+
+    assert create_calls == []
