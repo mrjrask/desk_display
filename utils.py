@@ -1206,16 +1206,10 @@ def clear_display(display):
     Clear the connected display, falling back to a blank frame.
     """
     if _DEFER_CLEAR_DISPLAY.is_set():
-        try:
-            if hasattr(display, "_buffer"):
-                display._buffer = Image.new(
-                    "RGB",
-                    (getattr(display, "width", WIDTH), getattr(display, "height", HEIGHT)),
-                    "black",
-                )
-            return
-        except Exception:
-            return
+        # When clears are deferred we should leave the current frame buffer
+        # untouched so transitions can blend from the live image. Mutating the
+        # in-memory buffer to black causes a visible blank fade between screens.
+        return
     try:
         display.clear()
     except Exception:
