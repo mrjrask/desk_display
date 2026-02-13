@@ -166,6 +166,20 @@ def _run_gc_maintenance(*, force: bool = False) -> bool:
     return True
 
 
+def _frame_id_changed(display: object, before: Optional[int]) -> bool:
+    """Return whether the display frame counter advanced after rendering."""
+
+    if before is None or not hasattr(display, "frame_id"):
+        return True
+
+    try:
+        after = display.frame_id()
+    except Exception:
+        return True
+
+    return after != before
+
+
 def _request_next_screen() -> bool:
     """Request that the scheduler advance to the next eligible screen."""
 
@@ -1502,6 +1516,12 @@ def main_loop():
             with led_context:
                 if isinstance(img, Image.Image):
                     if "logo" in sid:
+                        if not _frame_id_changed(display, frame_id_before_render):
+                            logging.warning(
+                                "Logo screen '%s' did not refresh the display; forcing frame output.",
+                                sid,
+                            )
+                            animate_fade_in(display, img, steps=4, delay=0.01)
                         if ENABLE_SCREENSHOTS:
                             saved = _save_screenshot(sid, img)
                             if saved and saved[1]:
@@ -1512,18 +1532,12 @@ def main_loop():
                             frame = cv2.cvtColor(np.array(img), cv2.COLOR_RGB2BGR)
                             video_out.write(frame)
                     else:
-                        if already_displayed and frame_id_before_render is not None:
-                            try:
-                                frame_id_after_render = display.frame_id()
-                            except Exception:
-                                frame_id_after_render = None
-
-                            if frame_id_after_render == frame_id_before_render:
-                                logging.warning(
-                                    "Screen '%s' reported displayed=True without refreshing the display; forcing frame output.",
-                                    sid,
-                                )
-                                already_displayed = False
+                        if already_displayed and not _frame_id_changed(display, frame_id_before_render):
+                            logging.warning(
+                                "Screen '%s' reported displayed=True without refreshing the display; forcing frame output.",
+                                sid,
+                            )
+                            already_displayed = False
 
                         if not already_displayed:
                             animate_fade_in(display, img, steps=8, delay=0.015)
