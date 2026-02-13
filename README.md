@@ -257,6 +257,7 @@ To manage the kernel display service over SSH without manually exporting user se
 - **Kernel displays not showing**: set `DESK_DISPLAY_OUTPUT=kernel` and provide `DISPLAY_WIDTH`/`DISPLAY_HEIGHT`.
 - **Kernel displays still blank in desktop mode**: launch with `scripts/launch_kernel_display.sh` from a logged-in desktop session; ensure `WAYLAND_DISPLAY` or `DISPLAY` is set (and `XDG_RUNTIME_DIR`/`XAUTHORITY` are available for SDL).
 - **Wi-Fi recovery loops**: check `/var/log/wifi_auto_recover.log` and disable recovery with `ENABLE_WIFI_RECOVERY=0`.
+- **Passkey button says unavailable in Safari**: make sure you open the config UI on `https://...` (or exactly `http://localhost:5002`) and set `SCREEN_AUTH_ORIGIN`/`SCREEN_AUTH_RP_ID` to match that URL hostname.
 
 ---
 
