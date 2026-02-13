@@ -25,6 +25,7 @@ from config import (
     SCOREBOARD_SCROLL_DELAY,
     SCOREBOARD_SCROLL_PAUSE_TOP,
     SCOREBOARD_SCROLL_PAUSE_BOTTOM,
+    SCOREBOARD_STANDINGS_BOTTOM_PADDING,
     SCOREBOARD_BACKGROUND_COLOR,
     get_screen_background_color,
     get_screen_font,
@@ -1039,7 +1040,11 @@ def _render_conference(title: str, division_order: List[str], standings: Dict[st
     content_height = sum(sections)
     total_height = max(
         HEIGHT,
-        TITLE_MARGIN_TOP + TITLE_TEXT_HEIGHT + TITLE_MARGIN_BOTTOM + content_height,
+        TITLE_MARGIN_TOP
+        + TITLE_TEXT_HEIGHT
+        + TITLE_MARGIN_BOTTOM
+        + content_height
+        + SCOREBOARD_STANDINGS_BOTTOM_PADDING,
     )
     img = Image.new("RGB", (WIDTH, total_height), BACKGROUND_COLOR)
     draw = ImageDraw.Draw(img)

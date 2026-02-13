@@ -22,6 +22,7 @@ from config import (
     SCOREBOARD_SCROLL_DELAY,
     SCOREBOARD_SCROLL_PAUSE_TOP,
     SCOREBOARD_SCROLL_PAUSE_BOTTOM,
+    SCOREBOARD_STANDINGS_BOTTOM_PADDING,
     SCOREBOARD_BACKGROUND_COLOR,
     get_screen_background_color,
     get_screen_font,
@@ -1537,7 +1538,7 @@ def _render_conference(
         total_height += _division_section_height(team_count)
         if idx < len(divisions) - 1:
             total_height += SECTION_GAP
-    total_height = max(total_height, HEIGHT)
+    total_height = max(total_height + SCOREBOARD_STANDINGS_BOTTOM_PADDING, HEIGHT)
 
     img = Image.new("RGB", (WIDTH, total_height), BACKGROUND_COLOR)
     draw = ImageDraw.Draw(img)
