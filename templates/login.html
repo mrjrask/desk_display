@@ -30,7 +30,22 @@
   </div>
   <script>
     const statusEl = document.getElementById('status');
+    const login = document.getElementById('login');
+    const register = document.getElementById('register');
     const nextPath = new URLSearchParams(window.location.search).get('next') || '/';
+    const hasWebAuthnBase = () => typeof window.PublicKeyCredential !== 'undefined' && !!navigator.credentials;
+    const canCreatePasskeys = () => hasWebAuthnBase() && typeof navigator.credentials.create === 'function';
+    const canGetPasskeys = () => hasWebAuthnBase() && typeof navigator.credentials.get === 'function';
+    const unsupportedMessage = (action) => {
+      const missing = [];
+      if (!window.isSecureContext) missing.push('a secure context (HTTPS or localhost)');
+      if (typeof window.PublicKeyCredential === 'undefined') missing.push('WebAuthn (PublicKeyCredential)');
+      if (!navigator.credentials) missing.push('Credentials API');
+      if (action === 'create' && typeof navigator.credentials?.create !== 'function') missing.push('navigator.credentials.create');
+      if (action === 'get' && typeof navigator.credentials?.get !== 'function') missing.push('navigator.credentials.get');
+      const details = missing.length ? `Missing: ${missing.join(', ')}.` : 'Passkey APIs are unavailable for this action.';
+      return `${details} Current origin: ${window.location.origin}.`;
+    };
     const b64ToBuf = (input) => {
       const pad = '='.repeat((4 - (input.length % 4)) % 4);
       const b64 = (input + pad).replace(/-/g, '+').replace(/_/g, '/');
@@ -47,6 +62,9 @@
     };
 
     async function registerPasskey() {
+      if (!canCreatePasskeys()) {
+        throw new Error(unsupportedMessage('create'));
+      }
       statusEl.textContent = 'Requesting registration challenge...';
       const options = await fetch('/api/auth/register/options', { method: 'POST' }).then(r => r.json());
       options.challenge = b64ToBuf(options.challenge);
@@ -75,6 +93,9 @@
     }
 
     async function loginPasskey() {
+      if (!canGetPasskeys()) {
+        throw new Error(unsupportedMessage('get'));
+      }
       statusEl.textContent = 'Requesting sign-in challenge...';
       const options = await fetch('/api/auth/login/options', { method: 'POST' }).then(r => r.json());
       options.challenge = b64ToBuf(options.challenge);
@@ -102,8 +123,14 @@
       window.location.href = result.next || nextPath;
     }
 
-    const login = document.getElementById('login');
-    const register = document.getElementById('register');
+    if (!canCreatePasskeys()) {
+      if (register) register.disabled = true;
+      if (statusEl) statusEl.textContent = unsupportedMessage('create');
+    }
+    if (!canGetPasskeys()) {
+      if (login) login.disabled = true;
+      if (statusEl && canCreatePasskeys()) statusEl.textContent = unsupportedMessage('get');
+    }
     if (login) login.addEventListener('click', () => loginPasskey().catch((e) => statusEl.textContent = e.message));
     if (register) register.addEventListener('click', () => registerPasskey().catch((e) => statusEl.textContent = e.message));
   </script>
