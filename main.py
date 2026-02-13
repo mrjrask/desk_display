@@ -25,6 +25,7 @@ import logging
 import threading
 import datetime
 import json
+import hashlib
 import signal
 import shutil
 import subprocess
@@ -116,6 +117,7 @@ SCREENSHOT_DIR = ""
 CURRENT_SCREENSHOT_DIR = ""
 SCREENSHOT_ARCHIVE_BASE = ""
 SCREENSHOT_ARCHIVE_MIRROR = ""
+DISPLAY_STATUS_PATH = ""
 
 _screen_config_mtime: Optional[float] = None
 screen_scheduler: Optional[ScreenScheduler] = None
@@ -894,6 +896,44 @@ def _save_screenshot(sid: str, img: Image.Image) -> Optional[Tuple[str, bool]]:
         return folder, archive_needed
     return None
 
+
+def _write_display_status(
+    sid: str,
+    img: Image.Image,
+    *,
+    loop_iteration: int,
+    rendered_at: Optional[datetime.datetime] = None,
+) -> None:
+    """Persist a heartbeat of what should currently be on the physical display."""
+
+    if not DISPLAY_STATUS_PATH:
+        return
+
+    timestamp = rendered_at or datetime.datetime.now(datetime.timezone.utc)
+    frame_id = None
+    if hasattr(display, "frame_id"):
+        try:
+            frame_id = display.frame_id()
+        except Exception:
+            frame_id = None
+
+    payload = {
+        "screen_id": sid,
+        "loop_iteration": loop_iteration,
+        "rendered_at": timestamp.isoformat(),
+        "image_digest": hashlib.sha1(img.tobytes()).hexdigest()[:12],
+        "frame_id": frame_id,
+    }
+
+    temp_path = f"{DISPLAY_STATUS_PATH}.tmp"
+    try:
+        with open(temp_path, "w", encoding="utf-8") as handle:
+            json.dump(payload, handle, indent=2)
+            handle.write("\n")
+        os.replace(temp_path, DISPLAY_STATUS_PATH)
+    except Exception as exc:
+        logging.debug("Failed to update display heartbeat file: %s", exc)
+
 def maybe_archive_screenshots(latest_folder: str) -> None:
     """Archive the newest screen's folder once the rolling counter hits the threshold."""
 
@@ -1268,6 +1308,7 @@ def init_runtime() -> None:
     """Configure logging, storage paths, hardware, and background workers."""
 
     global SCREENSHOT_DIR, CURRENT_SCREENSHOT_DIR, SCREENSHOT_ARCHIVE_BASE
+    global DISPLAY_STATUS_PATH
     global SCREENSHOT_ARCHIVE_MIRROR, _storage_paths, display, video_out
     global _background_refresh_thread, _runtime_initialized, _wifi_monitor_enabled
 
@@ -1290,6 +1331,7 @@ def init_runtime() -> None:
     CURRENT_SCREENSHOT_DIR = str(_storage_paths.current_screenshot_dir)
     SCREENSHOT_ARCHIVE_BASE = str(_storage_paths.archive_base)
     SCREENSHOT_ARCHIVE_MIRROR = SCREENSHOT_ARCHIVE_BASE
+    DISPLAY_STATUS_PATH = os.path.join(CURRENT_SCREENSHOT_DIR, "display_status.json")
 
     # Display & Wi-Fi monitor
     display = Display()
@@ -1556,6 +1598,7 @@ def main_loop():
                 if _shutdown_event.is_set():
                     break
 
+                _write_display_status(sid, img, loop_iteration=loop_count)
                 _last_screen_id = sid
                 with _screen_history_lock:
                     _screen_history.append(sid)
