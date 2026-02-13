@@ -838,6 +838,20 @@ def is_within_dark_hours(moment: Optional[datetime.datetime] = None) -> bool:
 # ─── Scoreboard appearance ────────────────────────────────────────────────────
 
 
+def _get_non_negative_int_env(name: str, default: int) -> int:
+    raw = os.environ.get(name)
+    if raw is None:
+        return default
+    try:
+        value = int(raw)
+    except ValueError:
+        logging.warning("Invalid %s value %r; defaulting to %s.", name, raw, default)
+        return default
+    if value < 0:
+        logging.warning("Negative %s value %r; defaulting to %s.", name, raw, default)
+        return default
+    return value
+
 def _coerce_color_component(env_name: str, default: int) -> int:
     """Return a color channel value from 0-255 with logging on invalid input."""
 
@@ -880,6 +894,10 @@ SCOREBOARD_SCROLL_STEP         = 1
 SCOREBOARD_SCROLL_DELAY        = 0.001
 SCOREBOARD_SCROLL_PAUSE_TOP    = 0.75
 SCOREBOARD_SCROLL_PAUSE_BOTTOM = 0.5
+SCOREBOARD_STANDINGS_BOTTOM_PADDING = _get_non_negative_int_env(
+    "SCOREBOARD_STANDINGS_BOTTOM_PADDING",
+    30,
+)
 
 # ─── API endpoints ────────────────────────────────────────────────────────────
 WEATHERKIT_URL_TEMPLATE = (

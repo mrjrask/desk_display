@@ -329,7 +329,7 @@ def draw_division_screen(display, league_id: int, division_id: int, title: str, 
 
     # Build the list canvas (all rows)
     row_h  = logo_size + row_spacing
-    list_h = row_h * len(teams)
+    list_h = row_h * len(teams) + config.SCOREBOARD_STANDINGS_BOTTOM_PADDING
     canvas = Image.new("RGB", (WIDTH, list_h), BACKGROUND_COLOR)
     cd     = ImageDraw.Draw(canvas)
 
@@ -423,7 +423,7 @@ def draw_wildcard_screen(display, league_id: int, title: str, transition=False):
     header, header_h = _header_frame(title)
 
     row_h  = logo_size + row_spacing
-    list_h = row_h * len(teams)
+    list_h = row_h * len(teams) + config.SCOREBOARD_STANDINGS_BOTTOM_PADDING
     canvas = Image.new("RGB", (WIDTH, list_h), BACKGROUND_COLOR)
     cd     = ImageDraw.Draw(canvas)
 

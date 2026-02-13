@@ -36,6 +36,7 @@ from config import (
     SCOREBOARD_SCROLL_DELAY,
     SCOREBOARD_SCROLL_PAUSE_TOP,
     SCOREBOARD_SCROLL_PAUSE_BOTTOM,
+    SCOREBOARD_STANDINGS_BOTTOM_PADDING,
     SCOREBOARD_BACKGROUND_COLOR,
     SCOREBOARD_IN_PROGRESS_SCORE_COLOR,
     SCOREBOARD_FINAL_WINNING_SCORE_COLOR,
@@ -535,7 +536,10 @@ def _render_scoreboard(
     logo_gap = LEAGUE_LOGO_GAP if league_logo else 0
 
     content_top = logo_height + logo_gap + title_h + TITLE_GAP
-    img_height = max(HEIGHT, content_top + canvas.height)
+    img_height = max(
+        HEIGHT,
+        content_top + canvas.height + SCOREBOARD_STANDINGS_BOTTOM_PADDING,
+    )
     img = Image.new("RGB", (WIDTH, img_height), BACKGROUND_COLOR)
     draw = ImageDraw.Draw(img)
 
