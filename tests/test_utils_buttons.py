@@ -1,5 +1,7 @@
 """Tests for Display HAT Mini button handling utilities."""
 
+import threading
+import time
 from types import SimpleNamespace
 
 import utils
@@ -254,3 +256,57 @@ def test_reinitialize_display_skips_attempt_during_retry_window(monkeypatch):
     display._maybe_reinitialize_display_hat_mini()
 
     assert create_calls == []
+
+
+def test_display_lock_serializes_refresh_and_button_reads():
+    display = utils.Display()
+
+    class _FakeHardwareDisplay:
+        def __init__(self):
+            self.buffer = None
+            self._busy = threading.Lock()
+
+        def _enter(self):
+            if not self._busy.acquire(blocking=False):
+                raise RuntimeError("concurrent hardware access")
+
+        def _exit(self):
+            self._busy.release()
+
+        def display(self):
+            self._enter()
+            try:
+                time.sleep(0.002)
+            finally:
+                self._exit()
+
+        def read_button(self, _pin):
+            self._enter()
+            try:
+                time.sleep(0.001)
+                return 0
+            finally:
+                self._exit()
+
+    display._display = _FakeHardwareDisplay()
+    display._button_pins["A"] = 5
+
+    errors = []
+
+    def _poll_buttons():
+        for _ in range(30):
+            try:
+                display.is_button_pressed("A")
+            except Exception as exc:  # pragma: no cover - defensive
+                errors.append(exc)
+
+    reader = threading.Thread(target=_poll_buttons)
+    reader.start()
+
+    for _ in range(30):
+        display._update_display()
+
+    reader.join(timeout=1.0)
+
+    assert reader.is_alive() is False
+    assert errors == []

@@ -669,6 +669,7 @@ class Display:
         self._last_display_reinit = time.monotonic()
         self._next_display_reinit_retry = 0.0
         self._display_reinit_lock = threading.Lock()
+        self._display_io_lock = threading.RLock()
 
         output = _normalize_display_output(_DISPLAY_OUTPUT)
         if _FORCE_HEADLESS or output == "headless":
@@ -811,23 +812,27 @@ class Display:
             return
         if self._display is None:  # pragma: no cover - hardware import
             return
-        try:
-            self._maybe_reinitialize_display_hat_mini()
-            buffer_to_display = self._indicator_buffer()
-            if self.rotation:
-                buffer_to_display = buffer_to_display.rotate(
-                    self.rotation,
-                    expand=self.rotation in (90, 270),
-                )
-                if buffer_to_display.size != (self.width, self.height):
-                    buffer_to_display = buffer_to_display.resize(
-                        (self.width, self.height),
-                        Image.ANTIALIAS,
+        with self._display_io_lock:
+            try:
+                self._maybe_reinitialize_display_hat_mini()
+                if self._display is None:
+                    return
+
+                buffer_to_display = self._indicator_buffer()
+                if self.rotation:
+                    buffer_to_display = buffer_to_display.rotate(
+                        self.rotation,
+                        expand=self.rotation in (90, 270),
                     )
-            self._display.buffer = buffer_to_display
-            self._display.display()
-        except Exception as exc:  # pragma: no cover - hardware import
-            logging.warning("Display refresh failed: %s", exc)
+                    if buffer_to_display.size != (self.width, self.height):
+                        buffer_to_display = buffer_to_display.resize(
+                            (self.width, self.height),
+                            Image.ANTIALIAS,
+                        )
+                self._display.buffer = buffer_to_display
+                self._display.display()
+            except Exception as exc:  # pragma: no cover - hardware import
+                logging.warning("Display refresh failed: %s", exc)
 
     def _create_display_hat_mini(self, initial_buffer: Image.Image):
         """Create and configure a Display HAT Mini driver instance."""
@@ -886,7 +891,9 @@ class Display:
 
             old_display = self._display
             self._display = None
-            self._release_display_hat_mini(old_display)
+
+            with self._display_io_lock:
+                self._release_display_hat_mini(old_display)
 
             try:
                 new_display = self._create_display_hat_mini(self._buffer)
@@ -899,22 +906,25 @@ class Display:
                 )
                 return
 
-            self._display = new_display
+            with self._display_io_lock:
+                self._display = new_display
             self._last_display_reinit = now
             self._next_display_reinit_retry = 0.0
 
             try:
-                new_display.set_backlight(self._backlight_level)
+                with self._display_io_lock:
+                    new_display.set_backlight(self._backlight_level)
             except Exception as exc:  # pragma: no cover - hardware import
                 logging.debug("Failed to restore backlight after display reinit: %s", exc)
 
             if DISPLAY_HAT_MINI_LED_ENABLED:
                 try:
-                    new_display.set_led(
-                        r=self._led_color[0],
-                        g=self._led_color[1],
-                        b=self._led_color[2],
-                    )
+                    with self._display_io_lock:
+                        new_display.set_led(
+                            r=self._led_color[0],
+                            g=self._led_color[1],
+                            b=self._led_color[2],
+                        )
                 except Exception as exc:  # pragma: no cover - hardware import
                     logging.debug("Failed to restore LED state after display reinit: %s", exc)
 
@@ -1022,7 +1032,8 @@ class Display:
                 return self._backlight_level
 
             try:  # pragma: no cover - hardware import
-                self._display.set_backlight(self._backlight_level)
+                with self._display_io_lock:
+                    self._display.set_backlight(self._backlight_level)
             except Exception as exc:  # pragma: no cover - hardware import
                 logging.debug("Failed to set backlight level: %s", exc)
 
@@ -1052,7 +1063,8 @@ class Display:
         if self._display is None or not DISPLAY_HAT_MINI_LED_ENABLED:  # pragma: no cover - hardware import
             return
         try:  # pragma: no cover - hardware import
-            self._display.set_led(r=r, g=g, b=b)
+            with self._display_io_lock:
+                self._display.set_led(r=r, g=g, b=b)
         except Exception as exc:  # pragma: no cover - hardware import
             logging.debug("Display LED update failed: %s", exc)
 
@@ -1097,7 +1109,8 @@ class Display:
             return False
 
         try:  # pragma: no cover - hardware import
-            raw_state = self._display.read_button(pin)
+            with self._display_io_lock:
+                raw_state = self._display.read_button(pin)
         except Exception as exc:  # pragma: no cover - hardware import
             logging.debug("Display button read failed (%s): %s", name, exc)
             return False
@@ -1131,7 +1144,8 @@ class Display:
             return
 
         try:
-            state = self._display.read_button(pin)
+            with self._display_io_lock:
+                state = self._display.read_button(pin)
         except Exception as exc:
             logging.debug("Hardware button callback read failed: %s", exc)
             return
