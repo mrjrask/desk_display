@@ -856,14 +856,14 @@ class Display:
         if display is None:
             return
 
-        for method_name in ("close", "cleanup", "deinit"):
+        for method_name in ("cleanup", "deinit", "close"):
             method = getattr(display, method_name, None)
             if callable(method):
                 try:
                     method()
                 except Exception as exc:  # pragma: no cover - hardware import
                     logging.debug("Failed to %s Display HAT Mini driver: %s", method_name, exc)
-                return
+                
 
     def _maybe_reinitialize_display_hat_mini(self) -> None:
         """Periodically recreate the Display HAT Mini driver to avoid long-run stalls."""
@@ -898,9 +898,11 @@ class Display:
             try:
                 new_display = self._create_display_hat_mini(self._buffer)
             except Exception as exc:  # pragma: no cover - hardware import
+                with self._display_io_lock:
+                    self._display = old_display
                 self._next_display_reinit_retry = now + self._DISPLAY_REINIT_RETRY_SECONDS
                 logging.warning(
-                    "Display HAT Mini reinit failed; retrying in %ds (%s)",
+                    "Display HAT Mini reinit failed; restored previous driver and retrying in %ds (%s)",
                     self._DISPLAY_REINIT_RETRY_SECONDS,
                     exc,
                 )

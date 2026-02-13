@@ -135,6 +135,9 @@ _display_cleared = threading.Event()
 BUTTON_POLL_INTERVAL = 0.1
 _BUTTON_NAMES = ("A", "B", "X", "Y")
 _BUTTON_STATE = {name: False for name in _BUTTON_NAMES}
+_BUTTON_PRESS_STARTED_AT = {name: 0.0 for name in _BUTTON_NAMES}
+_BUTTON_PRESS_HANDLED = {name: False for name in _BUTTON_NAMES}
+_BUTTON_MIN_HOLD_SECONDS = {"B": 0.6}
 _manual_skip_event = threading.Event()
 _button_monitor_thread: Optional[threading.Thread] = None
 _pending_previous_screen_id: Optional[str] = None
@@ -313,7 +316,22 @@ def _button_event_callback(name: str) -> None:
         return
 
     _BUTTON_STATE[upper] = True
-    _handle_button_down(upper)
+    _BUTTON_PRESS_STARTED_AT[upper] = time.monotonic()
+    _BUTTON_PRESS_HANDLED[upper] = False
+
+
+def _button_press_can_fire(name: str, now: float) -> bool:
+    """Return whether a currently pressed button is eligible to trigger."""
+
+    if _BUTTON_PRESS_HANDLED[name]:
+        return False
+
+    hold_seconds = _BUTTON_MIN_HOLD_SECONDS.get(name, 0.0)
+    if hold_seconds <= 0:
+        return True
+
+    pressed_for = now - _BUTTON_PRESS_STARTED_AT[name]
+    return pressed_for >= hold_seconds
 
 
 def _load_scheduler_from_config() -> Optional[ScreenScheduler]:
@@ -502,8 +520,12 @@ def _check_control_buttons() -> bool:
 
         if pressed and not previously_pressed:
             new_presses.append(name)
+            _BUTTON_PRESS_STARTED_AT[name] = time.monotonic()
+            _BUTTON_PRESS_HANDLED[name] = False
         elif not pressed and previously_pressed:
             logging.debug("Button %s released.", name)
+            _BUTTON_PRESS_STARTED_AT[name] = 0.0
+            _BUTTON_PRESS_HANDLED[name] = False
 
         _BUTTON_STATE[name] = pressed
 
@@ -514,9 +536,18 @@ def _check_control_buttons() -> bool:
         )
         for name in new_presses:
             _BUTTON_STATE[name] = False
+            _BUTTON_PRESS_STARTED_AT[name] = 0.0
+            _BUTTON_PRESS_HANDLED[name] = False
         return False
 
-    for name in new_presses:
+    now = time.monotonic()
+    for name in _BUTTON_NAMES:
+        if not _BUTTON_STATE[name]:
+            continue
+        if not _button_press_can_fire(name, now):
+            continue
+
+        _BUTTON_PRESS_HANDLED[name] = True
         if _handle_button_down(name):
             skip_requested = True
 
