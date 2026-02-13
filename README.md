@@ -201,6 +201,18 @@ Defaults:
 - Config path: `SCREENS_CONFIG_PATH`
 - Disable autostart: `SCREEN_CONFIG_AUTOSTART=0`
 
+Authentication (enabled by default):
+
+- `SCREEN_AUTH_ENABLED=1` enables login protection (`0` disables it).
+- `SCREEN_AUTH_ORIGIN` must match the browser origin used to open the UI (for example `http://localhost:5002`).
+- `SCREEN_AUTH_RP_ID` should be the hostname used for the UI (for example `localhost` or your LAN DNS name).
+- `SCREEN_AUTH_SECRET` sets a persistent Flask session secret so logins survive process restarts.
+- `SCREEN_AUTH_CREDENTIALS_PATH` stores passkey credentials (default `auth_credentials.json`).
+
+On first visit to `/login`, click **Create Passkey on this device** to enroll a passkey from Passwords on macOS, then use **Sign in with Passkey**.
+
+> Note: this implementation validates WebAuthn challenge/origin and registered credential ID for local-network protection, but does not perform full attestation/signature verification.
+
 ---
 
 ## Fonts + assets

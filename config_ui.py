@@ -4,11 +4,13 @@ from __future__ import annotations
 
 import json
 import os
+import secrets
+import base64
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional, Tuple
 
-from flask import Flask, abort, jsonify, render_template, request, send_from_directory
+from flask import Flask, abort, jsonify, redirect, render_template, request, send_from_directory, session, url_for
 
 from paths import resolve_storage_paths
 from schedule import build_scheduler
@@ -28,8 +30,109 @@ STYLE_CONFIG_PATH = os.environ.get(
 SCREEN_CONFIG_HOST = os.environ.get("SCREEN_CONFIG_HOST", "0.0.0.0")
 SCREEN_CONFIG_PORT = int(os.environ.get("SCREEN_CONFIG_PORT", "5002"))
 ALLOWED_SCREEN_EXTS = (".png", ".jpg", ".jpeg")
+AUTH_RP_ID = os.environ.get("SCREEN_AUTH_RP_ID", "localhost")
+AUTH_RP_NAME = os.environ.get("SCREEN_AUTH_RP_NAME", "Desk Display")
+AUTH_ORIGIN = os.environ.get("SCREEN_AUTH_ORIGIN", "http://localhost:5002")
+AUTH_CREDENTIALS_PATH = os.environ.get(
+    "SCREEN_AUTH_CREDENTIALS_PATH", os.path.join(SCRIPT_DIR, "auth_credentials.json")
+)
+AUTH_USER_ID = os.environ.get("SCREEN_AUTH_USER_ID", "desk-display-user")
+AUTH_USER_NAME = os.environ.get("SCREEN_AUTH_USER_NAME", "Desk Display Admin")
+AUTH_SESSION_KEY = "screen_auth_verified"
+AUTH_CHALLENGE_KEY = "screen_auth_challenge"
+AUTH_REGISTER_CHALLENGE_KEY = "screen_auth_register_challenge"
+AUTH_SECRET = os.environ.get("SCREEN_AUTH_SECRET")
 
 app = Flask(__name__)
+app.secret_key = AUTH_SECRET or secrets.token_hex(32)
+
+
+def _load_auth_credentials() -> List[Dict[str, str]]:
+    try:
+        with open(AUTH_CREDENTIALS_PATH, "r", encoding="utf-8") as fh:
+            payload = json.load(fh)
+    except FileNotFoundError:
+        return []
+    if not isinstance(payload, dict):
+        return []
+    credentials = payload.get("credentials")
+    if not isinstance(credentials, list):
+        return []
+    filtered: List[Dict[str, str]] = []
+    for entry in credentials:
+        if not isinstance(entry, dict):
+            continue
+        credential_id = entry.get("credential_id")
+        if isinstance(credential_id, str):
+            filtered.append(
+                {
+                    "credential_id": credential_id,
+                }
+            )
+    return filtered
+
+
+def _save_auth_credentials(credentials: List[Dict[str, str]]) -> None:
+    tmp_path = f"{AUTH_CREDENTIALS_PATH}.tmp"
+    with open(tmp_path, "w", encoding="utf-8") as fh:
+        json.dump({"credentials": credentials}, fh, indent=2)
+        fh.write("\n")
+    os.replace(tmp_path, AUTH_CREDENTIALS_PATH)
+
+
+def _auth_is_verified() -> bool:
+    if not _auth_enabled():
+        return True
+    return bool(session.get(AUTH_SESSION_KEY))
+
+
+def _auth_enabled() -> bool:
+    return os.environ.get("SCREEN_AUTH_ENABLED", "1").lower() not in {"0", "false", "off"}
+
+
+def _b64url_encode(raw: bytes) -> str:
+    return base64.urlsafe_b64encode(raw).rstrip(b"=").decode("ascii")
+
+
+def _b64url_decode(value: str) -> bytes:
+    padding = "=" * ((4 - len(value) % 4) % 4)
+    return base64.urlsafe_b64decode(value + padding)
+
+
+def _extract_client_data(payload: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    response = payload.get("response")
+    if not isinstance(response, dict):
+        return None
+    client_data_b64 = response.get("clientDataJSON")
+    if not isinstance(client_data_b64, str):
+        return None
+    try:
+        raw = _b64url_decode(client_data_b64)
+        decoded = json.loads(raw.decode("utf-8"))
+    except (ValueError, TypeError, json.JSONDecodeError):
+        return None
+    return decoded if isinstance(decoded, dict) else None
+
+
+@app.before_request
+def _require_auth() -> Any:
+    if not _auth_enabled():
+        return None
+    if request.endpoint in {
+        "login_page",
+        "logout",
+        "auth_register_options",
+        "auth_register",
+        "auth_login_options",
+        "auth_login",
+        "static",
+    }:
+        return None
+    if _auth_is_verified():
+        return None
+    if request.path.startswith("/api/"):
+        return jsonify({"error": "authentication required"}), 401
+    return redirect(url_for("login_page", next=request.path))
 
 
 def _load_config(path: str) -> Dict[str, Any]:
@@ -496,6 +599,149 @@ def _save_style_config(config: Dict[str, Any]) -> None:
 
 def run_config_ui(host: str = SCREEN_CONFIG_HOST, port: int = SCREEN_CONFIG_PORT) -> None:
     app.run(host=host, port=port, debug=False, use_reloader=False, threaded=True)
+
+
+@app.get("/login")
+def login_page() -> str:
+    return render_template(
+        "login.html",
+        auth_enabled=_auth_enabled(),
+        has_passkey=bool(_load_auth_credentials()),
+        rp_id=AUTH_RP_ID,
+        rp_name=AUTH_RP_NAME,
+        origin=AUTH_ORIGIN,
+    )
+
+
+@app.post("/logout")
+def logout() -> Any:
+    session.pop(AUTH_SESSION_KEY, None)
+    session.pop(AUTH_CHALLENGE_KEY, None)
+    session.pop(AUTH_REGISTER_CHALLENGE_KEY, None)
+    return redirect(url_for("login_page"))
+
+
+@app.post("/api/auth/register/options")
+def auth_register_options() -> Any:
+    if not _auth_enabled():
+        return jsonify({"error": "auth disabled"}), 400
+    credentials = _load_auth_credentials()
+    challenge = _b64url_encode(secrets.token_bytes(32))
+    session[AUTH_REGISTER_CHALLENGE_KEY] = challenge
+    return jsonify(
+        {
+            "challenge": challenge,
+            "rp": {"name": AUTH_RP_NAME, "id": AUTH_RP_ID},
+            "user": {
+                "id": _b64url_encode(AUTH_USER_ID.encode("utf-8")),
+                "name": AUTH_USER_NAME,
+                "displayName": AUTH_USER_NAME,
+            },
+            "pubKeyCredParams": [{"alg": -7, "type": "public-key"}],
+            "timeout": 60000,
+            "authenticatorSelection": {
+                "residentKey": "required",
+                "userVerification": "preferred",
+            },
+            "excludeCredentials": [
+                {"id": item["credential_id"], "type": "public-key"}
+                for item in credentials
+            ],
+            "attestation": "none",
+        }
+    )
+
+
+@app.post("/api/auth/register")
+def auth_register() -> Any:
+    if not _auth_enabled():
+        return jsonify({"error": "auth disabled"}), 400
+    challenge = session.get(AUTH_REGISTER_CHALLENGE_KEY)
+    if not isinstance(challenge, str):
+        return jsonify({"error": "missing registration challenge"}), 400
+    payload = request.get_json(silent=True)
+    if not isinstance(payload, dict):
+        return jsonify({"error": "invalid payload"}), 400
+
+    credential_id = payload.get("id")
+    if not isinstance(credential_id, str):
+        return jsonify({"error": "missing credential id"}), 400
+    client_data = _extract_client_data(payload)
+    if not client_data:
+        return jsonify({"error": "missing clientDataJSON"}), 400
+    if client_data.get("type") != "webauthn.create":
+        return jsonify({"error": "unexpected registration type"}), 400
+    if client_data.get("challenge") != challenge:
+        return jsonify({"error": "registration challenge mismatch"}), 400
+    if client_data.get("origin") != AUTH_ORIGIN:
+        return jsonify({"error": "registration origin mismatch"}), 400
+
+    credentials = _load_auth_credentials()
+    credentials = [
+        item
+        for item in credentials
+        if item["credential_id"] != credential_id
+    ]
+    credentials.append({"credential_id": credential_id})
+    _save_auth_credentials(credentials)
+    session.pop(AUTH_REGISTER_CHALLENGE_KEY, None)
+    session[AUTH_SESSION_KEY] = True
+    return jsonify({"status": "ok"})
+
+
+@app.post("/api/auth/login/options")
+def auth_login_options() -> Any:
+    if not _auth_enabled():
+        return jsonify({"error": "auth disabled"}), 400
+    credentials = _load_auth_credentials()
+    challenge = _b64url_encode(secrets.token_bytes(32))
+    session[AUTH_CHALLENGE_KEY] = challenge
+    return jsonify(
+        {
+            "challenge": challenge,
+            "rpId": AUTH_RP_ID,
+            "timeout": 60000,
+            "userVerification": "preferred",
+            "allowCredentials": [
+                {"id": item["credential_id"], "type": "public-key"}
+                for item in credentials
+            ],
+        }
+    )
+
+
+@app.post("/api/auth/login")
+def auth_login() -> Any:
+    if not _auth_enabled():
+        return jsonify({"error": "auth disabled"}), 400
+    challenge = session.get(AUTH_CHALLENGE_KEY)
+    if not isinstance(challenge, str):
+        return jsonify({"error": "missing authentication challenge"}), 400
+    payload = request.get_json(silent=True)
+    if not isinstance(payload, dict):
+        return jsonify({"error": "invalid payload"}), 400
+
+    credential_id = payload.get("id")
+    if not isinstance(credential_id, str):
+        return jsonify({"error": "missing credential id"}), 400
+    credentials = _load_auth_credentials()
+    registered = next((item for item in credentials if item["credential_id"] == credential_id), None)
+    if registered is None:
+        return jsonify({"error": "credential not registered"}), 400
+
+    client_data = _extract_client_data(payload)
+    if not client_data:
+        return jsonify({"error": "missing clientDataJSON"}), 400
+    if client_data.get("type") != "webauthn.get":
+        return jsonify({"error": "unexpected authentication type"}), 400
+    if client_data.get("challenge") != challenge:
+        return jsonify({"error": "authentication challenge mismatch"}), 400
+    if client_data.get("origin") != AUTH_ORIGIN:
+        return jsonify({"error": "authentication origin mismatch"}), 400
+    session.pop(AUTH_CHALLENGE_KEY, None)
+    session[AUTH_SESSION_KEY] = True
+    next_url = request.args.get("next") or "/"
+    return jsonify({"status": "ok", "next": next_url})
 
 
 @app.route("/", methods=["GET"])
