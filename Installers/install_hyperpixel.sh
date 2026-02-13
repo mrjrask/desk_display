@@ -59,7 +59,8 @@ case "$EXPECTED_CODENAME" in
 esac
 
 export EXPECTED_CODENAME
-export DESK_DISPLAY_OUTPUT="kernel"
+DESK_DISPLAY_OUTPUT="${DESK_DISPLAY_OUTPUT:-kernel}"
+export DESK_DISPLAY_OUTPUT
 export REQUIREMENTS_FILE="requirements_kernel.txt"
 export DISABLE_SPI_I2C="1"
 
@@ -229,7 +230,21 @@ fi
 if detect_desktop_session "$SERVICE_USER"; then
   log "Detected an active Wayland/X11 session."
 else
-  warn "No active Wayland/X11 session detected. The kernel display can still run headless."
+  warn "No active Wayland/X11 session detected."
+
+  if [[ "${DESK_DISPLAY_OUTPUT}" == "kernel" && "${AUTO_FALLBACK_FRAMEBUFFER:-1}" == "1" ]]; then
+    warn "Switching DESK_DISPLAY_OUTPUT from kernel to framebuffer for Lite/headless startup reliability."
+    DESK_DISPLAY_OUTPUT="framebuffer"
+    export DESK_DISPLAY_OUTPUT
+
+    ENV_PATH="$PROJECT_DIR/.env"
+    prepend_env_vars "$ENV_PATH" "DESK_DISPLAY_OUTPUT=${DESK_DISPLAY_OUTPUT}"
+
+    log "Re-running base setup to apply framebuffer service wiring."
+    "$PROJECT_DIR/scripts/helpers/base_setup.sh"
+  else
+    warn "Keeping DESK_DISPLAY_OUTPUT=${DESK_DISPLAY_OUTPUT}. Set AUTO_FALLBACK_FRAMEBUFFER=1 to auto-switch on Lite/headless systems."
+  fi
 fi
 
 if command -v systemctl >/dev/null 2>&1; then

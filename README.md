@@ -91,6 +91,7 @@ The kernel display installers will:
 - Attempt to launch the fullscreen display at the end of the installer when a desktop session is available (set `AUTO_LAUNCH_KERNEL_DISPLAY=0` to skip).
 - Install an autostart entry when `AUTO_START_KERNEL_DISPLAY=1` to launch the kernel display automatically on desktop login.
 - Provide an SSH-friendly helper (`scripts/ssh_kernel_display.sh`) to manage the user service without manual environment setup.
+- On Lite/headless installs with no active desktop session, automatically fall back to `DESK_DISPLAY_OUTPUT=framebuffer` (set `AUTO_FALLBACK_FRAMEBUFFER=0` to keep kernel output).
 
 To uninstall the systemd service and optionally remove the virtualenv:
 
