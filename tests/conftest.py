@@ -7,3 +7,4 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 os.environ.setdefault("GOOGLE_MAPS_API_KEY", "test")
+os.environ["SCREEN_AUTH_ENABLED"] = "0"

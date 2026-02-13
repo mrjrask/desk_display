@@ -1,0 +1,111 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Desk Display Login</title>
+  <style>
+    body { font-family: Arial, sans-serif; background: #0f172a; color: #e2e8f0; margin: 0; }
+    .card { max-width: 480px; margin: 4rem auto; padding: 2rem; background: #1e293b; border-radius: 12px; }
+    button { width: 100%; margin-top: 0.75rem; padding: 0.75rem; border: 0; border-radius: 8px; cursor: pointer; font-weight: 600; }
+    #login { background: #22c55e; color: #052e16; }
+    #register { background: #38bdf8; color: #082f49; }
+    .meta { font-size: 0.9rem; color: #94a3b8; }
+    #status { margin-top: 1rem; min-height: 1.2rem; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h1>Desk Display</h1>
+    {% if not auth_enabled %}
+      <p>Authentication is disabled.</p>
+    {% else %}
+      <p>Use your Mac Passwords passkey to unlock the dashboard.</p>
+      <p class="meta">RP: {{ rp_name }} ({{ rp_id }})</p>
+      <button id="login" {% if not has_passkey %}disabled{% endif %}>Sign in with Passkey</button>
+      <button id="register">Create Passkey on this device</button>
+      {% if not has_passkey %}<p class="meta">No passkey registered yet. Register one first.</p>{% endif %}
+      <div id="status"></div>
+    {% endif %}
+  </div>
+  <script>
+    const statusEl = document.getElementById('status');
+    const nextPath = new URLSearchParams(window.location.search).get('next') || '/';
+    const b64ToBuf = (input) => {
+      const pad = '='.repeat((4 - (input.length % 4)) % 4);
+      const b64 = (input + pad).replace(/-/g, '+').replace(/_/g, '/');
+      const bin = atob(b64);
+      const bytes = new Uint8Array(bin.length);
+      for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+      return bytes.buffer;
+    };
+    const bufToB64 = (buf) => {
+      const bytes = new Uint8Array(buf);
+      let str = '';
+      bytes.forEach((b) => str += String.fromCharCode(b));
+      return btoa(str).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+    };
+
+    async function registerPasskey() {
+      statusEl.textContent = 'Requesting registration challenge...';
+      const options = await fetch('/api/auth/register/options', { method: 'POST' }).then(r => r.json());
+      options.challenge = b64ToBuf(options.challenge);
+      options.user.id = b64ToBuf(options.user.id);
+      if (Array.isArray(options.excludeCredentials)) {
+        options.excludeCredentials = options.excludeCredentials.map((item) => ({ ...item, id: b64ToBuf(item.id) }));
+      }
+      const credential = await navigator.credentials.create({ publicKey: options });
+      const payload = {
+        id: credential.id,
+        rawId: bufToB64(credential.rawId),
+        type: credential.type,
+        response: {
+          attestationObject: bufToB64(credential.response.attestationObject),
+          clientDataJSON: bufToB64(credential.response.clientDataJSON),
+          transports: credential.response.getTransports ? credential.response.getTransports() : [],
+        },
+      };
+      const response = await fetch('/api/auth/register', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload)
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || 'Failed to register passkey');
+      statusEl.textContent = 'Passkey registered. Redirecting...';
+      window.location.href = '/';
+    }
+
+    async function loginPasskey() {
+      statusEl.textContent = 'Requesting sign-in challenge...';
+      const options = await fetch('/api/auth/login/options', { method: 'POST' }).then(r => r.json());
+      options.challenge = b64ToBuf(options.challenge);
+      if (Array.isArray(options.allowCredentials)) {
+        options.allowCredentials = options.allowCredentials.map((item) => ({ ...item, id: b64ToBuf(item.id) }));
+      }
+      const credential = await navigator.credentials.get({ publicKey: options, mediation: 'optional' });
+      const payload = {
+        id: credential.id,
+        rawId: bufToB64(credential.rawId),
+        type: credential.type,
+        response: {
+          authenticatorData: bufToB64(credential.response.authenticatorData),
+          clientDataJSON: bufToB64(credential.response.clientDataJSON),
+          signature: bufToB64(credential.response.signature),
+          userHandle: credential.response.userHandle ? bufToB64(credential.response.userHandle) : null,
+        },
+      };
+      const response = await fetch(`/api/auth/login?next=${encodeURIComponent(nextPath)}`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload)
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || 'Failed to sign in');
+      statusEl.textContent = 'Signed in. Redirecting...';
+      window.location.href = result.next || nextPath;
+    }
+
+    const login = document.getElementById('login');
+    const register = document.getElementById('register');
+    if (login) login.addEventListener('click', () => loginPasskey().catch((e) => statusEl.textContent = e.message));
+    if (register) register.addEventListener('click', () => registerPasskey().catch((e) => statusEl.textContent = e.message));
+  </script>
+</body>
+</html>
