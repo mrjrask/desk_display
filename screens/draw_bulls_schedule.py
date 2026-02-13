@@ -125,6 +125,7 @@ _IS_HYPERPIXEL_4_SQUARE = is_hyperpixel_4_square_layout()
 _IS_HYPERPIXEL_4 = config.is_hyperpixel_next_layout() and not _IS_HYPERPIXEL_4_SQUARE
 _FONT_ABBR_SIZE = 40 if _IS_HYPERPIXEL_4_SQUARE else (33 if HEIGHT >= 240 else 28)
 _FONT_SCORE_SIZE = 60 if _IS_HYPERPIXEL_4_SQUARE else (48 if HEIGHT >= 240 else 38)
+_SCORE_X_SHIFT_PX = 10
 if _IS_HYPERPIXEL_4_SQUARE:
     # HyperPixel 4 Square request:
     # - team names on Last/Live scoreboard are 2× bigger
@@ -628,7 +629,7 @@ def _draw_scoreboard_table(
         if score is not None:
             s = str(score)
             sw = _text_w(draw, s, score_font)
-            sx = x1 + (col2_w - sw) // 2
+            sx = x1 + (col2_w - sw) // 2 - _SCORE_X_SHIFT_PX
             sy = top + (h - _text_h(draw, score_font)) // 2
             draw.text((sx, sy), s, font=score_font, fill=TEXT_COLOR)
 
