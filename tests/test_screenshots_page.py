@@ -1,5 +1,5 @@
 import os
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
 
 import config_ui
@@ -77,6 +77,7 @@ def test_screenshots_api_returns_entries(monkeypatch):
         "_build_screenshot_entries",
         lambda: [{"id": "date", "path": "current/date.png", "timestamp": "2025-01-01 00:00:00", "elapsed": "0d 0h 0m 5s ago", "version": 1, "is_stale": False}],
     )
+    monkeypatch.setattr(config_ui, "_load_display_status", lambda: {"screen_id": "date", "is_stale": False})
 
     client = config_ui.app.test_client()
     response = client.get("/api/screenshots")
@@ -93,7 +94,8 @@ def test_screenshots_api_returns_entries(monkeypatch):
                 "version": 1,
                 "is_stale": False,
             }
-        ]
+        ],
+        "display_status": {"screen_id": "date", "is_stale": False},
     }
 
 
@@ -135,3 +137,33 @@ def test_build_screenshot_entries_falls_back_to_latest_screen_folder(monkeypatch
     entry_map = {entry["id"]: entry for entry in entries}
 
     assert entry_map["travel map"]["path"] == "travel map/travel_map_20260101_120000.png"
+
+
+def test_load_display_status_reads_heartbeat(monkeypatch, tmp_path):
+    current_dir = tmp_path / "current"
+    current_dir.mkdir()
+    rendered_at = datetime.now(timezone.utc) - timedelta(seconds=30)
+    (current_dir / "display_status.json").write_text(
+        """{
+  "screen_id": "bears next season",
+  "loop_iteration": 42,
+  "rendered_at": "%s",
+  "frame_id": 314
+}
+""" % rendered_at.isoformat(),
+        encoding="utf-8",
+    )
+
+    monkeypatch.setattr(
+        config_ui,
+        "resolve_storage_paths",
+        lambda **kwargs: SimpleNamespace(screenshot_dir=tmp_path, current_screenshot_dir=current_dir),
+    )
+
+    status = config_ui._load_display_status()
+
+    assert status["screen_id"] == "bears next season"
+    assert status["loop_iteration"] == 42
+    assert status["frame_id"] == 314
+    assert status["is_stale"] is False
+    assert status["elapsed"] is not None

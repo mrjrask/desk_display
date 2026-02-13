@@ -6,7 +6,7 @@ import json
 import os
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, Iterable, List, Optional
+from typing import Any, Dict, Iterable, List, Optional, Tuple
 
 from flask import Flask, abort, jsonify, render_template, request, send_from_directory
 
@@ -270,6 +270,59 @@ def _build_screenshot_entries() -> List[Dict[str, Any]]:
     return entries
 
 
+
+
+def _load_display_status() -> Dict[str, Any]:
+    storage_paths = resolve_storage_paths()
+    status_path = storage_paths.current_screenshot_dir / "display_status.json"
+
+    status: Dict[str, Any] = {
+        "screen_id": None,
+        "rendered_at": None,
+        "elapsed": None,
+        "loop_iteration": None,
+        "frame_id": None,
+        "is_stale": True,
+    }
+
+    if not status_path.exists():
+        return status
+
+    try:
+        payload = json.loads(status_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError, TypeError, ValueError):
+        return status
+
+    if not isinstance(payload, dict):
+        return status
+
+    screen_id = payload.get("screen_id")
+    if isinstance(screen_id, str) and screen_id.strip():
+        status["screen_id"] = screen_id
+
+    rendered_at_raw = payload.get("rendered_at")
+    if isinstance(rendered_at_raw, str) and rendered_at_raw.strip():
+        try:
+            rendered_dt = datetime.fromisoformat(rendered_at_raw)
+        except ValueError:
+            rendered_dt = None
+
+        if rendered_dt is not None:
+            rendered_ts = rendered_dt.timestamp()
+            status["rendered_at"] = _format_timestamp(rendered_ts)
+            status["elapsed"] = _format_elapsed_since(rendered_ts)
+            status["is_stale"] = _is_screenshot_stale(rendered_ts, max_age_seconds=10 * 60)
+
+    loop_iteration = payload.get("loop_iteration")
+    if isinstance(loop_iteration, int):
+        status["loop_iteration"] = loop_iteration
+
+    frame_id = payload.get("frame_id")
+    if isinstance(frame_id, int):
+        status["frame_id"] = frame_id
+
+    return status
+
 def _normalise_hex_color(value: str) -> Optional[str]:
     cleaned = value.strip()
     if not cleaned:
@@ -461,12 +514,12 @@ def screen_config() -> str:
 @app.get("/screenshots")
 def screen_screenshots() -> str:
     entries = _build_screenshot_entries()
-    return render_template("screenshots.html", screens=entries)
+    return render_template("screenshots.html", screens=entries, display_status=_load_display_status())
 
 
 @app.get("/api/screenshots")
 def get_screenshots() -> Any:
-    return jsonify({"screens": _build_screenshot_entries()})
+    return jsonify({"screens": _build_screenshot_entries(), "display_status": _load_display_status()})
 
 
 @app.get("/screenshots/current/<path:filename>")
