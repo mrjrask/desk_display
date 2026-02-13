@@ -201,18 +201,6 @@ Defaults:
 - Config path: `SCREENS_CONFIG_PATH`
 - Disable autostart: `SCREEN_CONFIG_AUTOSTART=0`
 
-Authentication (enabled by default):
-
-- `SCREEN_AUTH_ENABLED=1` enables login protection (`0` disables it).
-- `SCREEN_AUTH_ORIGIN` must match the browser origin used to open the UI (for example `http://localhost:5002`).
-- `SCREEN_AUTH_RP_ID` should be the hostname used for the UI (for example `localhost` or your LAN DNS name).
-- `SCREEN_AUTH_SECRET` sets a persistent Flask session secret so logins survive process restarts.
-- `SCREEN_AUTH_CREDENTIALS_PATH` stores passkey credentials (default `auth_credentials.json`).
-
-On first visit to `/login`, click **Create Passkey on this device** to enroll a passkey from Passwords on macOS, then use **Sign in with Passkey**.
-
-> Note: this implementation validates WebAuthn challenge/origin and registered credential ID for local-network protection, but does not perform full attestation/signature verification.
-
 ---
 
 ## Fonts + assets
@@ -257,7 +245,6 @@ To manage the kernel display service over SSH without manually exporting user se
 - **Kernel displays not showing**: set `DESK_DISPLAY_OUTPUT=kernel` and provide `DISPLAY_WIDTH`/`DISPLAY_HEIGHT`.
 - **Kernel displays still blank in desktop mode**: launch with `scripts/launch_kernel_display.sh` from a logged-in desktop session; ensure `WAYLAND_DISPLAY` or `DISPLAY` is set (and `XDG_RUNTIME_DIR`/`XAUTHORITY` are available for SDL).
 - **Wi-Fi recovery loops**: check `/var/log/wifi_auto_recover.log` and disable recovery with `ENABLE_WIFI_RECOVERY=0`.
-- **Passkey button says unavailable in Safari**: make sure you open the config UI on `https://...` (or exactly `http://localhost:5002`) and set `SCREEN_AUTH_ORIGIN`/`SCREEN_AUTH_RP_ID` to match that URL hostname.
 
 ---
 
