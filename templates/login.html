@@ -30,7 +30,20 @@
   </div>
   <script>
     const statusEl = document.getElementById('status');
+    const login = document.getElementById('login');
+    const register = document.getElementById('register');
     const nextPath = new URLSearchParams(window.location.search).get('next') || '/';
+    const passkeysSupported = () => {
+      return (
+        window.isSecureContext &&
+        typeof window.PublicKeyCredential !== 'undefined' &&
+        navigator.credentials &&
+        typeof navigator.credentials.create === 'function' &&
+        typeof navigator.credentials.get === 'function'
+      );
+    };
+    const unsupportedMessage =
+      'Passkeys are unavailable in this browser. Use a secure HTTPS context (or localhost) and a browser/device with WebAuthn support.';
     const b64ToBuf = (input) => {
       const pad = '='.repeat((4 - (input.length % 4)) % 4);
       const b64 = (input + pad).replace(/-/g, '+').replace(/_/g, '/');
@@ -47,6 +60,9 @@
     };
 
     async function registerPasskey() {
+      if (!passkeysSupported()) {
+        throw new Error(unsupportedMessage);
+      }
       statusEl.textContent = 'Requesting registration challenge...';
       const options = await fetch('/api/auth/register/options', { method: 'POST' }).then(r => r.json());
       options.challenge = b64ToBuf(options.challenge);
@@ -75,6 +91,9 @@
     }
 
     async function loginPasskey() {
+      if (!passkeysSupported()) {
+        throw new Error(unsupportedMessage);
+      }
       statusEl.textContent = 'Requesting sign-in challenge...';
       const options = await fetch('/api/auth/login/options', { method: 'POST' }).then(r => r.json());
       options.challenge = b64ToBuf(options.challenge);
@@ -102,8 +121,11 @@
       window.location.href = result.next || nextPath;
     }
 
-    const login = document.getElementById('login');
-    const register = document.getElementById('register');
+    if (!passkeysSupported()) {
+      if (login) login.disabled = true;
+      if (register) register.disabled = true;
+      if (statusEl) statusEl.textContent = unsupportedMessage;
+    }
     if (login) login.addEventListener('click', () => loginPasskey().catch((e) => statusEl.textContent = e.message));
     if (register) register.addEventListener('click', () => registerPasskey().catch((e) => statusEl.textContent = e.message));
   </script>
