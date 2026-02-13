@@ -40,6 +40,8 @@ def main_for_buttons(monkeypatch):
     main._manual_skip_event.clear()
     main._skip_request_pending = False
     main._BUTTON_STATE = {name: False for name in main._BUTTON_NAMES}
+    main._BUTTON_PRESS_STARTED_AT = {name: 0.0 for name in main._BUTTON_NAMES}
+    main._BUTTON_PRESS_HANDLED = {name: False for name in main._BUTTON_NAMES}
     main._manual_display_off = False
 
     yield main
@@ -103,6 +105,26 @@ def test_single_press_still_processed(main_for_buttons, monkeypatch):
     assert result is False
     assert handled == []
     assert main_for_buttons._BUTTON_STATE["X"] is False
+
+
+def test_b_button_requires_hold_before_trigger(main_for_buttons, monkeypatch):
+    fake_display = _FakeDisplay({"B"})
+    main_for_buttons.display = fake_display
+
+    handled = []
+
+    def fake_handle(name: str) -> bool:
+        handled.append(name)
+        return False
+
+    monkeypatch.setattr(main_for_buttons, "_handle_button_down", fake_handle)
+
+    assert main_for_buttons._check_control_buttons() is False
+    assert handled == []
+
+    main_for_buttons._BUTTON_PRESS_STARTED_AT["B"] -= 1.0
+    assert main_for_buttons._check_control_buttons() is False
+    assert handled == ["B"]
 
 
 def test_a_button_advances_to_next_screen(main_for_buttons):
