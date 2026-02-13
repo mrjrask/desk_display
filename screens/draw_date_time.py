@@ -38,6 +38,7 @@ from config import (
     DATE_TIME_GH_ICON_PATHS,
     is_hyperpixel_next_layout,
     is_hyperpixel_4_square_layout,
+    is_kernel_driven_display,
     get_screen_background_color,
 )
 from utils import (
@@ -161,9 +162,10 @@ def _cycle_colors_after_load(
     if frame_state is not None:
         with frame_state["lock"]:
             expected_frame_id = frame_state["value"]
-    # Keep cycling on Hyperpixel so colors continue changing while shown.
+    # Keep cycling on Hyperpixel and kernel-driven outputs so colors continue
+    # changing while the screen is visible.
     # Other displays keep the short, subtle cycle.
-    steps = None if (hyperpixel_layout or hyperpixel_square) else 6
+    steps = None if (hyperpixel_layout or hyperpixel_square or is_kernel_driven_display()) else 6
     count = 0
     while steps is None or count < steps:
         if expected_frame_id is not None and hasattr(display, "frame_id"):

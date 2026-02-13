@@ -298,7 +298,7 @@ def build_screen_registry(context: ScreenContext) -> Tuple[Dict[str, ScreenDefin
         )
 
     register("date", lambda: draw_date(context.display, transition=False))
-    register("time", lambda: draw_time(context.display, transition=True))
+    register("time", lambda: draw_time(context.display, transition=False))
     register("nixie", lambda: draw_nixie(context.display, transition=True))
 
     weather_data = context.cache.get("weather")
