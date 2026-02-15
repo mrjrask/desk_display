@@ -6,7 +6,6 @@ and a small W/L flag between the boxscore and date on Cubs 'Last Game'.
 """
 
 import os
-import time
 import logging
 import datetime
 from typing import Optional, Tuple
@@ -25,7 +24,6 @@ from config import (
 from utils import (
     LED_INDICATOR_LEVEL,
     ScreenImage,
-    clear_display,
     get_team_display_name,
     get_mlb_abbreviation,
     get_mlb_tricode,
@@ -33,7 +31,6 @@ from utils import (
     load_team_logo,
     standard_next_game_logo_frame_width,
     standard_next_game_logo_height,
-    temporary_display_led,
     wrap_text,
 )
 
@@ -494,21 +491,7 @@ def draw_last_game(display, game, title="Last Game...", transition=False, screen
             else (LED_INDICATOR_LEVEL, 0.0, 0.0)
         )
 
-    if transition:
-        return ScreenImage(img, displayed=False, led_override=led_color)
-
-    def _render_screen():
-        clear_display(display)
-        display.image(img)
-        display.show()
-        time.sleep(5)
-
-    if led_color is not None:
-        with temporary_display_led(*led_color):
-            _render_screen()
-    else:
-        _render_screen()
-    return None
+    return ScreenImage(img, displayed=False, led_override=led_color)
 
 
 @log_call
@@ -546,14 +529,7 @@ def draw_box_score(display, game, title="Live Game...", transition=False, screen
         hyperpixel_layout=hyperpixel_layout,
     )
 
-    if transition:
-        return img
-
-    clear_display(display)
-    display.image(img)
-    display.show()
-    time.sleep(5)
-    return None
+    return ScreenImage(img, displayed=False)
 
 
 @log_call
@@ -711,14 +687,7 @@ def draw_sports_screen(display, game, title, transition=False, screen_id: Option
 
     _center_bottom_text(draw, bottom, FONT_DATE_SPORTS, margin=bottom_margin)
 
-    if transition:
-        return img
-
-    clear_display(display)
-    display.image(img)
-    display.show()
-    time.sleep(5)
-    return None
+    return ScreenImage(img, displayed=False)
 
 
 @log_call

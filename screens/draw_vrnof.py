@@ -31,9 +31,7 @@ from config import (
 from utils import (
     LED_INDICATOR_LEVEL,
     ScreenImage,
-    clear_display,
     log_call,
-    temporary_display_led,
 )
 
 # In-memory cache
@@ -227,18 +225,4 @@ def draw_vrnof_screen(display, symbol: str = "VRNO", transition: bool = False):
         elif change_val < 0:
             led_color = (LED_INDICATOR_LEVEL, 0.0, 0.0)
 
-    if transition:
-        return ScreenImage(img, displayed=False, led_override=led_color)
-
-    def _render_screen():
-        clear_display(display)
-        display.image(img)
-        display.show()
-        time.sleep(4)
-
-    if led_color is not None:
-        with temporary_display_led(*led_color):
-            _render_screen()
-    else:
-        _render_screen()
-    return None
+    return ScreenImage(img, displayed=False, led_override=led_color)
