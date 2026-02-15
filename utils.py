@@ -914,6 +914,10 @@ class Display:
             self._display = None
 
             with self._display_io_lock:
+                try:  # pragma: no cover - hardware import
+                    old_display.set_led(r=0.0, g=0.0, b=0.0)
+                except Exception as exc:  # pragma: no cover - hardware import
+                    logging.debug("Failed to turn off LED before display reinit cleanup: %s", exc)
                 self._release_display_hat_mini(old_display)
 
             try:
@@ -929,6 +933,12 @@ class Display:
                 )
                 return
 
+            try:  # pragma: no cover - hardware import
+                with self._display_io_lock:
+                    new_display.set_led(r=0.0, g=0.0, b=0.0)
+            except Exception as exc:  # pragma: no cover - hardware import
+                logging.debug("Failed to force LED off after display reinit: %s", exc)
+
             with self._display_io_lock:
                 self._display = new_display
             self._last_display_reinit = now
@@ -940,7 +950,7 @@ class Display:
             except Exception as exc:  # pragma: no cover - hardware import
                 logging.debug("Failed to restore backlight after display reinit: %s", exc)
 
-            if DISPLAY_HAT_MINI_LED_ENABLED:
+            if DISPLAY_HAT_MINI_LED_ENABLED and any(self._led_color):
                 try:
                     with self._display_io_lock:
                         new_display.set_led(
