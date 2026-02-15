@@ -54,6 +54,21 @@ from utils import (
     time_strings,
 )
 
+
+def _color_cycle_profile(
+    *,
+    kernel_driven: bool,
+    hyperpixel_layout: bool,
+    hyperpixel_square: bool,
+) -> tuple[float, float, int | None]:
+    """Return cycle timing: initial delay, frame interval, and max steps."""
+
+    initial_delay = 0.18 if kernel_driven else 0.6
+    interval = 0.2 if kernel_driven else 0.45
+    infinite_cycle = kernel_driven or hyperpixel_layout or hyperpixel_square
+    steps = None if infinite_cycle else 6
+    return initial_delay, interval, steps
+
 # -----------------------------------------------------------------------------
 # Layout helpers
 
@@ -155,9 +170,15 @@ def _cycle_colors_after_load(
     Only used when transition=False (direct rendering).
     """
     # small delay so the initial frame is already visible
-    time.sleep(0.6)
     hyperpixel_layout = is_hyperpixel_next_layout()
     hyperpixel_square = is_hyperpixel_4_square_layout()
+    kernel_driven = is_kernel_driven_display()
+    initial_delay, color_cycle_interval, steps = _color_cycle_profile(
+        kernel_driven=kernel_driven,
+        hyperpixel_layout=hyperpixel_layout,
+        hyperpixel_square=hyperpixel_square,
+    )
+    time.sleep(initial_delay)
     expected_frame_id = display.frame_id() if hasattr(display, "frame_id") else None
     if frame_state is not None:
         with frame_state["lock"]:
@@ -165,7 +186,6 @@ def _cycle_colors_after_load(
     # Keep cycling on Hyperpixel and kernel-driven outputs so colors continue
     # changing while the screen is visible.
     # Other displays keep the short, subtle cycle.
-    steps = None if (hyperpixel_layout or hyperpixel_square or is_kernel_driven_display()) else 6
     count = 0
     while steps is None or count < steps:
         if expected_frame_id is not None and hasattr(display, "frame_id"):
@@ -187,7 +207,7 @@ def _cycle_colors_after_load(
                     expected_frame_id = latest_frame_id
             else:
                 expected_frame_id = latest_frame_id
-        time.sleep(0.45)
+        time.sleep(color_cycle_interval)
         count += 1
 
 
