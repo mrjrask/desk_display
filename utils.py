@@ -589,8 +589,29 @@ def defer_clear_display() -> Iterable[None]:
     finally:
         _DEFER_CLEAR_DISPLAY.clear()
 
-# Use the dimmest still-visible LED brightness, reduced by 50%.
-LED_INDICATOR_LEVEL = 1 / 2048.0
+def _clamp_led_level(value: float) -> float:
+    """Clamp LED channel values to normalized [0.0, 1.0] range."""
+
+    return max(0.0, min(1.0, value))
+
+
+def _get_led_indicator_level() -> float:
+    """Return the normalized indicator LED level from environment config."""
+
+    raw = os.environ.get("DISPLAY_HAT_MINI_LED_LEVEL")
+    if raw is None:
+        return 0.02
+    try:
+        return _clamp_led_level(float(raw))
+    except (TypeError, ValueError):
+        logging.warning(
+            "Invalid DISPLAY_HAT_MINI_LED_LEVEL %r; using default 0.02.",
+            raw,
+        )
+        return 0.02
+
+
+LED_INDICATOR_LEVEL = _get_led_indicator_level()
 
 # Project config
 from config import (
@@ -1058,7 +1079,10 @@ class Display:
     def set_led(self, r: float = 0.0, g: float = 0.0, b: float = 0.0) -> None:
         """Set the onboard RGB LED, if hardware is available."""
 
-        self._led_color = (max(0.0, r), max(0.0, g), max(0.0, b))
+        r = _clamp_led_level(r)
+        g = _clamp_led_level(g)
+        b = _clamp_led_level(b)
+        self._led_color = (r, g, b)
         if self._hyperpixel_indicator_border or self._display_hat_mini_indicator_border:
             self._update_display()
 
@@ -1093,6 +1117,7 @@ class Display:
 
     @staticmethod
     def _indicator_channel_to_pixel(value: float) -> int:
+        value = _clamp_led_level(value)
         if value <= 0:
             return 0
         if LED_INDICATOR_LEVEL <= 0:
