@@ -111,8 +111,18 @@ WEATHER_CURRENT_TTL = _dt.timedelta(minutes=20)
 WEATHER_HOURLY_TTL = _dt.timedelta(hours=1)
 NHL_BREAK_START = _dt.date(2026, 2, 6)
 NHL_BREAK_END = _dt.date(2026, 2, 24)
-_IS_1080P_LAYOUT = sorted((WIDTH, HEIGHT)) == [1080, 1920]
-_LOGO_SCROLL_SPEED = 2.2 * (1.5 if _IS_1080P_LAYOUT else 1.0)
+def _is_1080p_or_higher(width: int, height: int) -> bool:
+    """Return True when layout is 1080p-class (or higher) regardless of orientation."""
+    short_edge = min(int(width), int(height))
+    return short_edge >= 1080
+
+
+def _logo_scroll_speed_for_layout(width: int, height: int) -> float:
+    base_speed = 2.2
+    return base_speed * (2.0 if _is_1080p_or_higher(width, height) else 1.0)
+
+
+_LOGO_SCROLL_SPEED = _logo_scroll_speed_for_layout(WIDTH, HEIGHT)
 
 
 @dataclass
