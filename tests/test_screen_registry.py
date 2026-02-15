@@ -1,7 +1,12 @@
 import datetime
 
 from config import CENTRAL_TIME
-from screens.registry import ScreenContext, build_screen_registry
+from screens.registry import (
+    ScreenContext,
+    _logo_scroll_speed_for_layout,
+    _is_1080p_or_higher,
+    build_screen_registry,
+)
 
 
 class _DummyDisplay:
@@ -140,3 +145,16 @@ def test_nhl_scoreboard_hidden_during_2026_break_window():
 
     assert registry["NHL Scoreboard"].available is False
     assert registry["NHL Scoreboard v2"].available is False
+
+
+def test_logo_scroll_threshold_detects_1080p_and_higher():
+    assert _is_1080p_or_higher(1920, 1080) is True
+    assert _is_1080p_or_higher(1080, 1920) is True
+    assert _is_1080p_or_higher(2560, 1440) is True
+    assert _is_1080p_or_higher(800, 480) is False
+
+
+def test_logo_scroll_speed_is_doubled_for_1080p_layout():
+    assert _logo_scroll_speed_for_layout(1920, 1080) == 4.4
+    assert _logo_scroll_speed_for_layout(1080, 1920) == 4.4
+    assert _logo_scroll_speed_for_layout(800, 480) == 2.2
