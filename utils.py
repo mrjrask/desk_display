@@ -877,14 +877,52 @@ class Display:
         if display is None:
             return
 
-        for method_name in ("cleanup", "deinit", "close"):
+        for pwm_name in ("led_r_pwm", "led_g_pwm", "led_b_pwm", "backlight_pwm"):
+            pwm = getattr(display, pwm_name, None)
+            stop = getattr(pwm, "stop", None)
+            if callable(stop):
+                try:
+                    stop()
+                except Exception as exc:  # pragma: no cover - hardware import
+                    logging.debug("Failed to stop %s during display cleanup: %s", pwm_name, exc)
+
+        module = None
+        gpio = None
+        try:
+            module = __import__(display.__class__.__module__, fromlist=["GPIO"])
+            gpio = getattr(module, "GPIO", None)
+        except Exception:  # pragma: no cover - hardware import
+            gpio = None
+
+        if gpio is not None:
+            for pin_name in ("BUTTON_A", "BUTTON_B", "BUTTON_X", "BUTTON_Y"):
+                pin = getattr(display, pin_name, None)
+                if pin is None:
+                    continue
+                try:
+                    gpio.remove_event_detect(pin)
+                except Exception:
+                    pass
+
+            cleanup_pins = [
+                getattr(display, pin_name, None)
+                for pin_name in ("LED_R", "LED_G", "LED_B", "BACKLIGHT")
+            ]
+            cleanup_pins = [pin for pin in cleanup_pins if pin is not None]
+            if cleanup_pins:
+                try:
+                    gpio.cleanup(cleanup_pins)
+                except Exception as exc:  # pragma: no cover - hardware import
+                    logging.debug("Failed GPIO cleanup for Display HAT Mini pins %s: %s", cleanup_pins, exc)
+
+        for method_name in ("cleanup", "deinit", "close", "__del__"):
             method = getattr(display, method_name, None)
             if callable(method):
                 try:
                     method()
                 except Exception as exc:  # pragma: no cover - hardware import
                     logging.debug("Failed to %s Display HAT Mini driver: %s", method_name, exc)
-                
+
 
     def _maybe_reinitialize_display_hat_mini(self) -> None:
         """Periodically recreate the Display HAT Mini driver to avoid long-run stalls."""
