@@ -311,3 +311,28 @@ def test_display_lock_serializes_refresh_and_button_reads():
 
     assert reader.is_alive() is False
     assert errors == []
+
+
+def test_set_led_clamps_channels_to_normalized_range():
+    display = utils.Display()
+
+    display.set_led(r=2.5, g=-1.0, b=0.5)
+
+    assert display._led_color == (1.0, 0.0, 0.5)
+
+
+def test_indicator_channel_to_pixel_clamps_out_of_range_values():
+    assert utils.Display._indicator_channel_to_pixel(5.0) == 255
+    assert utils.Display._indicator_channel_to_pixel(-0.2) == 0
+
+
+def test_get_led_indicator_level_from_env(monkeypatch):
+    monkeypatch.setenv("DISPLAY_HAT_MINI_LED_LEVEL", "0.05")
+
+    assert utils._get_led_indicator_level() == 0.05
+
+
+def test_get_led_indicator_level_invalid_env_uses_default(monkeypatch):
+    monkeypatch.setenv("DISPLAY_HAT_MINI_LED_LEVEL", "not-a-number")
+
+    assert utils._get_led_indicator_level() == 0.02
