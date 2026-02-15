@@ -871,7 +871,7 @@ class Display:
 
         return display
 
-    def _release_display_hat_mini(self, display) -> None:
+    def _release_display_hat_mini(self, display, *, call_destructor: bool = True) -> None:
         """Best-effort cleanup for a Display HAT Mini driver instance."""
 
         if display is None:
@@ -915,7 +915,11 @@ class Display:
                 except Exception as exc:  # pragma: no cover - hardware import
                     logging.debug("Failed GPIO cleanup for Display HAT Mini pins %s: %s", cleanup_pins, exc)
 
-        for method_name in ("cleanup", "deinit", "close", "__del__"):
+        teardown_methods = ["cleanup", "deinit", "close"]
+        if call_destructor:
+            teardown_methods.append("__del__")
+
+        for method_name in teardown_methods:
             method = getattr(display, method_name, None)
             if callable(method):
                 try:
@@ -956,13 +960,24 @@ class Display:
                     old_display.set_led(r=0.0, g=0.0, b=0.0)
                 except Exception as exc:  # pragma: no cover - hardware import
                     logging.debug("Failed to turn off LED before display reinit cleanup: %s", exc)
-                self._release_display_hat_mini(old_display)
+                self._release_display_hat_mini(old_display, call_destructor=False)
 
             try:
                 new_display = self._create_display_hat_mini(self._buffer)
             except Exception as exc:  # pragma: no cover - hardware import
                 with self._display_io_lock:
                     self._display = old_display
+                try:  # pragma: no cover - hardware import
+                    with self._display_io_lock:
+                        old_display.set_backlight(self._backlight_level)
+                        if DISPLAY_HAT_MINI_LED_ENABLED and any(self._led_color):
+                            old_display.set_led(
+                                r=self._led_color[0],
+                                g=self._led_color[1],
+                                b=self._led_color[2],
+                            )
+                except Exception as restore_exc:  # pragma: no cover - hardware import
+                    logging.debug("Failed to restore previous Display HAT Mini state after reinit failure: %s", restore_exc)
                 self._next_display_reinit_retry = now + self._DISPLAY_REINIT_RETRY_SECONDS
                 logging.warning(
                     "Display HAT Mini reinit failed; restored previous driver and retrying in %ds (%s)",
@@ -979,6 +994,8 @@ class Display:
 
             with self._display_io_lock:
                 self._display = new_display
+
+            self._release_display_hat_mini(old_display, call_destructor=True)
             self._last_display_reinit = now
             self._next_display_reinit_retry = 0.0
 
