@@ -39,14 +39,12 @@ from config import (
 )
 
 from utils import (
-    clear_display,
     LED_INDICATOR_LEVEL,
     ScreenImage,
     fit_logo_to_box,
     standard_next_game_logo_frame_width,
     standard_next_game_logo_height,
     standard_next_game_logo_height_for_space,
-    temporary_display_led,
 )
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -817,24 +815,7 @@ def _render_next_game(game: Dict, *, title: str, logo_scale: float = 1.0) -> Ima
 def _push(display, img: Optional[Image.Image], *, transition: bool = False, led_override: Optional[Tuple[float, float, float]] = None):
     if img is None or display is None:
         return None
-    if transition:
-        return ScreenImage(img, displayed=False, led_override=led_override)
-
-    def _show_image() -> None:
-        try:
-            clear_display(display)
-            if hasattr(display, "image"):
-                display.image(img)
-            elif hasattr(display, "ShowImage"):
-                buf = display.getbuffer(img) if hasattr(display, "getbuffer") else img
-                display.ShowImage(buf)
-            elif hasattr(display, "display"):
-                display.display(img)
-        except Exception as e:
-            logging.exception("Failed to push Bulls screen: %s", e)
-
-    _show_image()
-    return ScreenImage(img, displayed=True, led_override=led_override)
+    return ScreenImage(img, displayed=False, led_override=led_override)
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Public entry points (used by screens/registry.py)

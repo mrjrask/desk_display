@@ -55,7 +55,6 @@ from utils import (
     LED_INDICATOR_LEVEL,
     ScreenImage,
     standard_next_game_logo_height,
-    temporary_display_led,
 )
 
 TS_PATH = TIMES_SQUARE_FONT_PATH
@@ -179,13 +178,6 @@ if _CUSTOM_TEAM_NAME and TEAM_TRICODE:
 # ─────────────────────────────────────────────────────────────────────────────
 # Display helpers
 
-def _clear_display(display):
-    try:
-        from utils import clear_display  # in your repo
-        clear_display(display)
-    except Exception:
-        pass
-
 def _push(
     display,
     img: Optional[Image.Image],
@@ -195,28 +187,7 @@ def _push(
 ):
     if img is None or display is None:
         return None
-    if transition:
-        return ScreenImage(img, displayed=False, led_override=led_override)
-
-    def _show_image() -> None:
-        try:
-            _clear_display(display)
-            if hasattr(display, "image"):
-                display.image(img)
-            elif hasattr(display, "ShowImage"):
-                buf = display.getbuffer(img) if hasattr(display, "getbuffer") else img
-                display.ShowImage(buf)
-            elif hasattr(display, "display"):
-                display.display(img)
-        except Exception as e:
-            logging.exception("Failed to push image to display: %s", e)
-
-    if led_override is not None:
-        with temporary_display_led(*led_override):
-            _show_image()
-    else:
-        _show_image()
-    return None
+    return ScreenImage(img, displayed=False, led_override=led_override)
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Team + logo helpers (local PNGs)

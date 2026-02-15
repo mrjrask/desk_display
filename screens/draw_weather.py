@@ -17,7 +17,6 @@ Screen 2:
 import datetime
 import logging
 import math
-import time
 from io import BytesIO
 from typing import NamedTuple, Optional, Tuple
 
@@ -54,10 +53,8 @@ from config import (
 from utils import (
     LED_INDICATOR_LEVEL,
     ScreenImage,
-    clear_display,
     fetch_weather_icon,
     log_call,
-    temporary_display_led,
     timestamp_to_datetime,
     uv_index_color,
     wind_direction,
@@ -397,7 +394,6 @@ def draw_weather_screen_1(display, weather, transition=False):
     hi    = round(daily.get("temp", {}).get("max", 0))
     lo    = round(daily.get("temp", {}).get("min", 0))
 
-    clear_display(display)
     img  = Image.new("RGB", (WIDTH, HEIGHT), background)
     draw = ImageDraw.Draw(img)
 
@@ -570,19 +566,7 @@ def draw_weather_screen_1(display, weather, transition=False):
     _draw_alert_indicator(img, draw, severity)
 
 
-    if transition:
-        return ScreenImage(img, displayed=False, led_override=led_color)
-
-    def _render_screen() -> None:
-        display.image(img)
-        display.show()
-
-    if led_color is not None:
-        with temporary_display_led(*led_color):
-            _render_screen()
-    else:
-        _render_screen()
-    return None
+    return ScreenImage(img, displayed=False, led_override=led_color)
 
 
 def _format_hour_label(timestamp: Optional[int], *, index: int) -> str:
@@ -746,7 +730,6 @@ def draw_weather_hourly(display, weather, transition: bool = False, hours: int =
         draw.text(((WIDTH - w) // 2, (HEIGHT - h) // 2), msg, font=FONT_WEATHER_DETAILS_BOLD, fill=(255, 255, 255))
         return ScreenImage(img, displayed=False)
 
-    clear_display(display)
     img = Image.new("RGB", (WIDTH, HEIGHT), background)
     draw = ImageDraw.Draw(img)
 
@@ -1001,12 +984,7 @@ def draw_weather_hourly(display, weather, transition: bool = False, hours: int =
         draw.rectangle((0, 0, WIDTH, title_y + title_h + 2), fill=background)
     draw.text((title_x, title_y), title, font=FONT_WEATHER_LABEL, fill=(200, 200, 200))
 
-    if transition:
-        return ScreenImage(img, displayed=False)
-
-    display.image(img)
-    display.show()
-    return None
+    return ScreenImage(img, displayed=False)
 
 
 @log_call
@@ -1021,7 +999,6 @@ def draw_weather_daily(display, weather, transition: bool = False, days: int = 5
         draw.text(((WIDTH - w) // 2, (HEIGHT - h) // 2), msg, font=FONT_WEATHER_DETAILS_BOLD, fill=(255, 255, 255))
         return ScreenImage(img, displayed=False)
 
-    clear_display(display)
     img = Image.new("RGB", (WIDTH, HEIGHT), background)
     draw = ImageDraw.Draw(img)
 
@@ -1139,12 +1116,7 @@ def draw_weather_daily(display, weather, transition: bool = False, days: int = 5
                 draw.text((text_x, text_y), text, font=font, fill=color)
             y += item_h + line_gap
 
-    if transition:
-        return ScreenImage(img, displayed=False)
-
-    display.image(img)
-    display.show()
-    return None
+    return ScreenImage(img, displayed=False)
 
 
 # ─── Screen 2: Detailed (with UV index) ───────────────────────────────────────
@@ -1203,7 +1175,6 @@ def draw_weather_screen_2(display, weather, transition=False):
     uv_col = uv_index_color(uvi)
     items.append(("UV Index:", str(uvi), uv_col))
 
-    clear_display(display)
     img  = Image.new("RGB", (WIDTH, HEIGHT), background)
     draw = ImageDraw.Draw(img)
 
@@ -1243,19 +1214,7 @@ def draw_weather_screen_2(display, weather, transition=False):
 
     _draw_alert_indicator(img, draw, severity)
 
-    if transition:
-        return ScreenImage(img, displayed=False, led_override=led_color)
-
-    def _render_screen() -> None:
-        display.image(img)
-        display.show()
-
-    if led_color is not None:
-        with temporary_display_led(*led_color):
-            _render_screen()
-    else:
-        _render_screen()
-    return None
+    return ScreenImage(img, displayed=False, led_override=led_color)
 
 
 def _latlon_to_tile(lat: float, lon: float, zoom: int) -> tuple[int, int, float, float]:
@@ -1369,9 +1328,6 @@ def draw_weather_radar(display, weather=None, transition: bool = False):
         draw.text(((WIDTH - w) // 2, (HEIGHT - h) // 2), msg, font=FONT_WEATHER_DETAILS_BOLD, fill=(255, 255, 255))
         return ScreenImage(img, displayed=False)
 
-    clear_display(display)
-    loops = 2
-    delay = 0.5
     map_section = None
     if base_map:
         map_section = base_map.resize((WIDTH, HEIGHT), Image.LANCZOS).convert("RGBA")
@@ -1408,20 +1364,8 @@ def draw_weather_radar(display, weather=None, transition: bool = False):
         return result
 
     composed_frames = [_compose_frame(frame) for frame in frames]
-
-    for _ in range(loops):
-        for frame in composed_frames:
-            display.image(frame)
-            display.show()
-            time.sleep(delay)
-
     last_frame = composed_frames[-1]
-    if transition:
-        return ScreenImage(last_frame, displayed=True)
-
-    display.image(last_frame)
-    display.show()
-    return None
+    return ScreenImage(last_frame, displayed=False)
 
 
 def _next_sun_event(daily_entries, now: datetime.datetime | None = None) -> tuple[str | None, datetime.datetime | None]:

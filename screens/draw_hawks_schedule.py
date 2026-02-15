@@ -61,7 +61,6 @@ from utils import (
     standard_next_game_logo_frame_width,
     standard_next_game_logo_height,
     standard_next_game_logo_height_for_space,
-    temporary_display_led,
 )
 
 TS_PATH = TIMES_SQUARE_FONT_PATH
@@ -144,13 +143,6 @@ TEAM_TRICODE = NHL_TEAM_TRICODE
 # ─────────────────────────────────────────────────────────────────────────────
 # Display helpers
 
-def _clear_display(display):
-    try:
-        from utils import clear_display  # in your repo
-        clear_display(display)
-    except Exception:
-        pass
-
 def _push(
     display,
     img: Optional[Image.Image],
@@ -160,24 +152,7 @@ def _push(
 ):
     if img is None or display is None:
         return None
-    if transition:
-        return ScreenImage(img, displayed=False, led_override=led_override)
-
-    def _show_image() -> None:
-        try:
-            _clear_display(display)
-            if hasattr(display, "image"):
-                display.image(img)
-            elif hasattr(display, "ShowImage"):
-                buf = display.getbuffer(img) if hasattr(display, "getbuffer") else img
-                display.ShowImage(buf)
-            elif hasattr(display, "display"):
-                display.display(img)
-        except Exception as e:
-            logging.exception("Failed to push image to display: %s", e)
-
-    _show_image()
-    return ScreenImage(img, displayed=True, led_override=led_override)
+    return ScreenImage(img, displayed=False, led_override=led_override)
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Net helpers
