@@ -490,6 +490,7 @@ class _KernelDisplay:
         self._pygame.display.set_caption("Desk Display")
         try:
             self._pygame.mouse.set_visible(False)
+            _wiggle_mouse_cursor(self._pygame)
         except Exception:  # pragma: no cover - optional behavior
             pass
 
@@ -537,6 +538,22 @@ class _KernelDisplay:
         self._screen.blit(surface, (0, 0))
         self._pygame.display.flip()
         self._pygame.event.pump()
+
+
+def _wiggle_mouse_cursor(pygame_module: Any, *, distance: int = 1) -> None:
+    """Nudge the pointer slightly so desktop cursor-hide daemons can engage."""
+
+    if distance <= 0:
+        return
+
+    try:
+        x, y = pygame_module.mouse.get_pos()
+        pygame_module.mouse.set_pos((x + distance, y))
+        pygame_module.event.pump()
+        pygame_module.mouse.set_pos((x, y))
+        pygame_module.event.pump()
+    except Exception:
+        return
 
 _ACTIVE_DISPLAY: Optional["Display"] = None
 _LED_INDICATOR_ANIMATOR: Optional["_LedAnimator"] = None
