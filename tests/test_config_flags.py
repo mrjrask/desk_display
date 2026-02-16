@@ -134,3 +134,20 @@ def test_display_hat_mini_reinit_seconds_invalid_and_negative(monkeypatch):
 
     module = _reload_config(monkeypatch, DISPLAY_HAT_MINI_REINIT_SECONDS="-5")
     assert module.DISPLAY_HAT_MINI_REINIT_SECONDS == 0
+
+
+def test_scoreboard_scroll_step_doubles_only_on_1080p(monkeypatch):
+    module = _reload_config(monkeypatch, DISPLAY_WIDTH="1920", DISPLAY_HEIGHT="1080")
+    assert module.SCOREBOARD_SCROLL_STEP == 2
+
+    module = _reload_config(monkeypatch, DISPLAY_WIDTH="1080", DISPLAY_HEIGHT="1920")
+    assert module.SCOREBOARD_SCROLL_STEP == 2
+
+    module = _reload_config(monkeypatch, DISPLAY_WIDTH="2560", DISPLAY_HEIGHT="1440")
+    assert module.SCOREBOARD_SCROLL_STEP == 1
+
+    module = _reload_config(monkeypatch, DISPLAY_WIDTH="1280", DISPLAY_HEIGHT="720")
+    assert module.SCOREBOARD_SCROLL_STEP == 1
+
+    module = _reload_config(monkeypatch, DISPLAY_WIDTH="320", DISPLAY_HEIGHT="240")
+    assert module.SCOREBOARD_SCROLL_STEP == 1
