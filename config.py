@@ -890,7 +890,7 @@ SCOREBOARD_FINAL_WINNING_SCORE_COLOR = (255, 255, 255)
 SCOREBOARD_FINAL_LOSING_SCORE_COLOR = (200, 200, 200)
 
 # ─── Scoreboard scrolling configuration ───────────────────────────────────────
-SCOREBOARD_SCROLL_STEP         = 2 if _is_hd_widescreen_layout(WIDTH, HEIGHT) else 1
+SCOREBOARD_SCROLL_STEP         = 2 if sorted((WIDTH, HEIGHT)) == [1080, 1920] else 1
 SCOREBOARD_SCROLL_DELAY        = 0.001
 SCOREBOARD_SCROLL_PAUSE_TOP    = 0.75
 SCOREBOARD_SCROLL_PAUSE_BOTTOM = 0.5
