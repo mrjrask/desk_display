@@ -149,6 +149,7 @@
       display: flex;
       align-items: center;
       justify-content: center;
+      gap: 0.75rem;
       position: relative;
     }
     .overlay-content img {
@@ -169,6 +170,31 @@
       padding: 0.35rem 0.8rem;
       cursor: pointer;
       font-size: 0.85rem;
+    }
+    .overlay-nav {
+      border: 1px solid rgba(148, 163, 184, 0.35);
+      background: rgba(15, 23, 42, 0.85);
+      color: #e2e8f0;
+      width: 2.6rem;
+      height: 2.6rem;
+      border-radius: 999px;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.35rem;
+      line-height: 1;
+      transition: transform 0.15s ease, background 0.15s ease;
+    }
+    .overlay-nav:hover,
+    .overlay-nav:focus-visible {
+      background: rgba(59, 130, 246, 0.85);
+      transform: scale(1.06);
+      outline: none;
+    }
+    .overlay-nav.is-hidden {
+      visibility: hidden;
+      pointer-events: none;
     }
     .empty-state {
       color: #94a3b8;
@@ -267,7 +293,9 @@
   <div class="overlay" id="screenshotOverlay" aria-hidden="true">
     <div class="overlay-content" role="dialog" aria-modal="true" aria-label="Screenshot preview">
       <button class="overlay-close" type="button">Close</button>
+      <button class="overlay-nav overlay-nav-prev" type="button" aria-label="Previous screenshot">&#8249;</button>
       <img id="overlayImage" alt="Full-resolution screenshot">
+      <button class="overlay-nav overlay-nav-next" type="button" aria-label="Next screenshot">&#8250;</button>
     </div>
   </div>
   <script>
@@ -276,11 +304,37 @@
     const overlay = document.getElementById("screenshotOverlay");
     const overlayImage = document.getElementById("overlayImage");
     const overlayClose = overlay.querySelector(".overlay-close");
+    const overlayPrev = overlay.querySelector(".overlay-nav-prev");
+    const overlayNext = overlay.querySelector(".overlay-nav-next");
     const screenshotApiUrl = "{{ url_for('get_screenshots') }}";
     const displayStatusBanner = document.getElementById("displayStatusBanner");
+    let currentOverlayIndex = -1;
 
-    function openOverlay(source) {
+    function getNavigableButtons() {
+      return Array.from(document.querySelectorAll(".preview-button")).filter((button) => Boolean(button.dataset.fullSrc));
+    }
+
+    function showOverlayImage(index) {
+      const buttons = getNavigableButtons();
+      if (!buttons.length) {
+        return;
+      }
+      const normalized = Math.max(0, Math.min(index, buttons.length - 1));
+      const source = buttons[normalized].dataset.fullSrc;
+      if (!source) {
+        return;
+      }
+      currentOverlayIndex = normalized;
       overlayImage.src = source;
+      const singleImage = buttons.length <= 1;
+      overlayPrev.classList.toggle("is-hidden", singleImage);
+      overlayNext.classList.toggle("is-hidden", singleImage);
+      overlayPrev.disabled = singleImage;
+      overlayNext.disabled = singleImage;
+    }
+
+    function openOverlay(index) {
+      showOverlayImage(index);
       overlay.classList.add("is-visible");
       overlay.setAttribute("aria-hidden", "false");
     }
@@ -289,16 +343,53 @@
       overlay.classList.remove("is-visible");
       overlay.setAttribute("aria-hidden", "true");
       overlayImage.removeAttribute("src");
+      currentOverlayIndex = -1;
+    }
+
+    function navigateOverlay(direction) {
+      if (!overlay.classList.contains("is-visible")) {
+        return;
+      }
+      const buttons = getNavigableButtons();
+      if (!buttons.length || buttons.length === 1 || currentOverlayIndex === -1) {
+        return;
+      }
+      const nextIndex = (currentOverlayIndex + direction + buttons.length) % buttons.length;
+      showOverlayImage(nextIndex);
     }
 
     document.querySelectorAll(".preview-button").forEach((button) => {
       button.addEventListener("click", () => {
-        const source = button.dataset.fullSrc;
-        if (source) {
-          openOverlay(source);
+        const buttons = getNavigableButtons();
+        const index = buttons.indexOf(button);
+        if (index !== -1) {
+          openOverlay(index);
         }
       });
     });
+
+    overlayPrev.addEventListener("click", () => {
+      navigateOverlay(-1);
+    });
+
+    overlayNext.addEventListener("click", () => {
+      navigateOverlay(1);
+    });
+
+    function refreshOverlayIfVisible() {
+      if (!overlay.classList.contains("is-visible") || currentOverlayIndex === -1) {
+        return;
+      }
+      const buttons = getNavigableButtons();
+      if (!buttons.length) {
+        closeOverlay();
+        return;
+      }
+      if (currentOverlayIndex > buttons.length - 1) {
+        currentOverlayIndex = buttons.length - 1;
+      }
+      showOverlayImage(currentOverlayIndex);
+    }
 
     function refreshScreenshots() {
       fetch(screenshotApiUrl, { cache: "no-store" })
@@ -367,6 +458,7 @@
             }
           });
           updateMissingVisibility();
+          refreshOverlayIfVisible();
         })
         .catch(() => {
           // Ignore refresh failures; next polling attempt will retry.
@@ -382,8 +474,20 @@
     overlayClose.addEventListener("click", closeOverlay);
 
     document.addEventListener("keydown", (event) => {
-      if (event.key === "Escape" && overlay.classList.contains("is-visible")) {
+      if (!overlay.classList.contains("is-visible")) {
+        return;
+      }
+      if (event.key === "Escape") {
         closeOverlay();
+        return;
+      }
+      if (event.key === "ArrowLeft") {
+        event.preventDefault();
+        navigateOverlay(-1);
+      }
+      if (event.key === "ArrowRight") {
+        event.preventDefault();
+        navigateOverlay(1);
       }
     });
 
