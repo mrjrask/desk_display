@@ -254,15 +254,13 @@ def _apply_style_overrides(screen_id: str) -> None:
     _refresh_column_header_fonts()
 
     team_scale = get_screen_image_scale(screen_id, "team_logo", 1.0)
-    if (
-        _IS_HYPERPIXEL_4
-        and screen_id.startswith("NHL Standings")
-        and "Overview" not in screen_id
-    ):
-        # HyperPixel 4 (non-square) only: align NHL standings logo size with
-        # the NBA scoreboard logo baseline without impacting HyperPixel 4 Square.
-        nba_logo_scale = get_screen_image_scale("NBA Scoreboard", "team_logo", 1.0)
-        team_scale = min(team_scale, nba_logo_scale)
+    if _IS_HYPERPIXEL_4 and screen_id.startswith("NHL Standings"):
+        # HyperPixel 4 (non-square): shrink NHL standings logos by 60%.
+        team_scale *= 0.4
+        if "Overview" not in screen_id:
+            # Keep non-overview standings aligned to NBA-style baseline.
+            nba_logo_scale = get_screen_image_scale("NBA Scoreboard", "team_logo", 1.0)
+            team_scale = min(team_scale, nba_logo_scale * 0.4)
     LOGO_HEIGHT = _scale_square_logo_height(_LOGO_BASE_HEIGHT * team_scale)
     overview_scale = get_screen_image_scale(screen_id, "overview_logo", team_scale)
     OVERVIEW_MIN_LOGO_HEIGHT = max(1, int(round(_OVERVIEW_MIN_LOGO_BASE * overview_scale)))

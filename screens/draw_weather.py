@@ -904,6 +904,11 @@ def draw_weather_hourly(display, weather, transition: bool = False, hours: int =
                     ("mph", FONT_WEATHER_DETAILS_TINY_MICRO, (180, 225, 255)),
                 ]
                 wind_image = _render_stat_text(wind_parts)
+            if wind_image.width > max_wind_width:
+                wind_parts = [
+                    (f"{wind_speed}", FONT_WEATHER_DETAILS_TINY_MICRO, (180, 225, 255)),
+                ]
+                wind_image = _render_stat_text(wind_parts)
             # Keep wind text as a top overlay pass so it remains readable.
             wind_overlay = {"image": wind_image}
             stat_items.append(wind_overlay)

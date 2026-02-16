@@ -115,6 +115,10 @@ _ABBR_FONT_SIZE = int(round(_ABBR_BASE * 1.3))
 _SOG_FONT_SIZE = _SOG_BASE
 _SCORE_FONT_SIZE = int(round(_SOG_FONT_SIZE * (1.55 if _IS_HYPERPIXEL_4_SQUARE else 1.45)))
 
+_H4SQ_SOG_BASE = int(round((30 if HEIGHT > 64 else 26) * 1.15))
+_H4SQ_SOG_FONT_SIZE = _H4SQ_SOG_BASE + 6
+_H4SQ_SCORE_FONT_SIZE = int(round(int(round(_H4SQ_SOG_BASE * 1.55)) * 3.0))
+
 if _IS_HYPERPIXEL_4_SQUARE:
     # HyperPixel 4 Square request:
     # - team names on Last/Live scoreboard are 2× bigger
@@ -122,6 +126,10 @@ if _IS_HYPERPIXEL_4_SQUARE:
     _ABBR_FONT_SIZE = int(round(_ABBR_FONT_SIZE * 2.0))
     _SOG_FONT_SIZE += 6
     _SCORE_FONT_SIZE = int(round(_SCORE_FONT_SIZE * 3.0))
+elif _IS_HYPERPIXEL_4:
+    # HyperPixel 4 request: match H4 Square score/SOG sizing on Last/Live cards.
+    _SOG_FONT_SIZE = _H4SQ_SOG_FONT_SIZE
+    _SCORE_FONT_SIZE = _H4SQ_SCORE_FONT_SIZE
 
 FONT_ABBR  = _ts(_ABBR_FONT_SIZE)
 FONT_SOG   = _ts(_SOG_FONT_SIZE)

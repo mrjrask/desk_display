@@ -123,6 +123,7 @@ _IS_HYPERPIXEL_4_SQUARE = is_hyperpixel_4_square_layout()
 _IS_HYPERPIXEL_4 = config.is_hyperpixel_next_layout() and not _IS_HYPERPIXEL_4_SQUARE
 _FONT_ABBR_SIZE = 40 if _IS_HYPERPIXEL_4_SQUARE else (33 if HEIGHT >= 240 else 28)
 _FONT_SCORE_SIZE = 60 if _IS_HYPERPIXEL_4_SQUARE else (48 if HEIGHT >= 240 else 38)
+_H4SQ_SCORE_FONT_SIZE = int(round(60 * 3.0))
 _SCORE_X_SHIFT_PX = 10
 if _IS_HYPERPIXEL_4_SQUARE:
     # HyperPixel 4 Square request:
@@ -130,6 +131,9 @@ if _IS_HYPERPIXEL_4_SQUARE:
     # - scores on Last/Live scoreboard are 3× bigger
     _FONT_ABBR_SIZE = int(round(_FONT_ABBR_SIZE * 2.0))
     _FONT_SCORE_SIZE = int(round(_FONT_SCORE_SIZE * 3.0))
+elif _IS_HYPERPIXEL_4:
+    # HyperPixel 4 request: match H4 Square score sizing on Last/Live cards.
+    _FONT_SCORE_SIZE = _H4SQ_SCORE_FONT_SIZE
 FONT_ABBR   = _ts(_FONT_ABBR_SIZE)  # team abbr in table
 FONT_SCORE  = _ts(_FONT_SCORE_SIZE)  # score digits
 FONT_SMALL  = _ts(26 if _IS_HYPERPIXEL_4_SQUARE else (22 if HEIGHT >= 240 else 18))  # status / small lines
