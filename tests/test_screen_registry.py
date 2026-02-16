@@ -158,3 +158,26 @@ def test_logo_scroll_speed_is_doubled_for_1080p_layout():
     assert _logo_scroll_speed_for_layout(1920, 1080) == 4.4
     assert _logo_scroll_speed_for_layout(1080, 1920) == 4.4
     assert _logo_scroll_speed_for_layout(800, 480) == 2.2
+
+
+def test_date_time_screens_render_in_transition_mode(monkeypatch):
+    now = datetime.datetime(2024, 1, 1, 12, 0, tzinfo=CENTRAL_TIME)
+    weather = {"hourly": []}
+    context = _make_context(weather, now)
+
+    calls = []
+
+    def _fake_draw_date(_display, transition=False):
+        calls.append(("date", transition))
+
+    def _fake_draw_time(_display, transition=False):
+        calls.append(("time", transition))
+
+    monkeypatch.setattr("screens.registry.draw_date", _fake_draw_date)
+    monkeypatch.setattr("screens.registry.draw_time", _fake_draw_time)
+
+    registry, _ = build_screen_registry(context)
+    registry["date"].render()
+    registry["time"].render()
+
+    assert calls == [("date", True), ("time", True)]
