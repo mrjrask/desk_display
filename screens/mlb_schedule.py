@@ -20,6 +20,8 @@ from config import (
     CENTRAL_TIME,
     IMAGES_DIR,
     get_screen_background_color,
+    is_hyperpixel_4_square_layout,
+    is_hyperpixel_next_layout,
 )
 from utils import (
     LED_INDICATOR_LEVEL,
