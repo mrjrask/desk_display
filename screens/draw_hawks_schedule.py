@@ -52,6 +52,7 @@ from config import (
     WIDTH,
     HEIGHT,
     is_hyperpixel_4_square_layout,
+    is_hyperpixel_next_layout,
 )
 from services.http_client import NHL_HEADERS, get_session, request_json
 from utils import (
@@ -72,7 +73,15 @@ _LOGO_SCALE_1080 = 5.0 if _IS_1080P_LAYOUT else 1.0
 
 
 def _bottom_text_margin(base_margin: int) -> int:
-    return base_margin + (_BOTTOM_TEXT_1080P_OFFSET if _IS_1080P_LAYOUT else 0)
+    if _IS_HYPERPIXEL_4_SQUARE:
+        baseline = 18
+    elif _IS_HYPERPIXEL_4:
+        baseline = 15
+    elif is_hyperpixel_next_layout():
+        baseline = 10
+    else:
+        baseline = base_margin
+    return max(base_margin, baseline) + (_BOTTOM_TEXT_1080P_OFFSET if _IS_1080P_LAYOUT else 0)
 
 def _ts(size: int) -> ImageFont.ImageFont:
     try:
