@@ -188,7 +188,11 @@ def _cycle_colors_after_load(
     # Other displays keep the short, subtle cycle.
     count = 0
     while steps is None or count < steps:
-        if expected_frame_id is not None and hasattr(display, "frame_id"):
+        if (
+            expected_frame_id is not None
+            and hasattr(display, "frame_id")
+            and not (hyperpixel_layout or hyperpixel_square)
+        ):
             current_frame_id = display.frame_id()
             if frame_state is not None:
                 with frame_state["lock"]:

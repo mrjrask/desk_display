@@ -45,7 +45,12 @@ def _set_background(screen_id: Optional[str]) -> None:
 MLB_LOGOS_DIR = os.path.join(IMAGES_DIR, "mlb")
 
 # ── Layout constants ─────────────────────────────────────────────────────────
-BOTTOM_MARGIN           = 4          # keep bottom text safely on-screen
+if is_hyperpixel_4_square_layout():
+    BOTTOM_MARGIN = 18
+elif is_hyperpixel_next_layout():
+    BOTTOM_MARGIN = 15
+else:
+    BOTTOM_MARGIN = 6
 _IS_1080P_LAYOUT        = sorted((WIDTH, HEIGHT)) == [1080, 1920]
 _BOTTOM_TEXT_1080P_OFFSET = 30
 _LOGO_SCALE_1080 = 5.0 if _IS_1080P_LAYOUT else 1.0

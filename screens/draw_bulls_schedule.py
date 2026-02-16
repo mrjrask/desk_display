@@ -149,7 +149,14 @@ _LOGO_SCALE_1080 = 5.0 if _IS_1080P_LAYOUT else 1.0
 
 
 def _bottom_line_margin(*, hyperpixel_layout: bool = False, extra: int = 0) -> int:
-    margin = config.scale_value(BOTTOM_LINE_MARGIN) if hyperpixel_layout else BOTTOM_LINE_MARGIN
+    if _IS_HYPERPIXEL_4_SQUARE:
+        margin = 18
+    elif _IS_HYPERPIXEL_4:
+        margin = 15
+    elif hyperpixel_layout:
+        margin = 10
+    else:
+        margin = BOTTOM_LINE_MARGIN
     if _IS_1080P_LAYOUT:
         margin += 30
     return margin + extra
@@ -631,7 +638,8 @@ def _draw_scoreboard_table(
         if score is not None:
             s = str(score)
             sw = _text_w(draw, s, score_font)
-            sx = x1 + (col2_w - sw) // 2 - _SCORE_X_SHIFT_PX
+            score_shift = _SCORE_X_SHIFT_PX + (20 if _IS_HYPERPIXEL_4_SQUARE else 0)
+            sx = x1 + (col2_w - sw) // 2 - score_shift
             sy = top + (h - _text_h(draw, score_font)) // 2
             draw.text((sx, sy), s, font=score_font, fill=TEXT_COLOR)
 
@@ -733,7 +741,7 @@ def _render_next_game(game: Dict, *, title: str, logo_scale: float = 1.0) -> Ima
     footer = _format_footer_next(game)
 
     # Two large logos with '@' between them
-    bottom_margin = _bottom_line_margin(hyperpixel_layout=hyperpixel_layout, extra=5)
+    bottom_margin = _bottom_line_margin(hyperpixel_layout=hyperpixel_layout)
     bottom_reserved = _text_h(draw, FONT_BOTTOM) + bottom_margin if footer else 0
     bottom_y = HEIGHT - bottom_reserved
     y2 = y + (config.scale_value(6) if hyperpixel_layout else 6)
@@ -753,6 +761,8 @@ def _render_next_game(game: Dict, *, title: str, logo_scale: float = 1.0) -> Ima
     gap = config.scale_value(10) if hyperpixel_layout else 10
     at_symbol = "@"
     at_font = FONT_ABBR
+    if _IS_HYPERPIXEL_4:
+        at_font = _ts(max(getattr(FONT_ABBR, "size", _FONT_ABBR_SIZE), int(round(_FONT_ABBR_SIZE * 1.3))))
 
     at_w, at_h, at_l, at_t = _measure(draw, at_symbol, at_font)
     block_h = logo_h if (logo_left or logo_right) else at_h

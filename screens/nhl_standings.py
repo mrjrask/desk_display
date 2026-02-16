@@ -34,7 +34,7 @@ from config import (
     is_hyperpixel_4_square_layout,
 )
 from services.http_client import NHL_HEADERS, get_session
-from utils import ScreenImage, clear_display, log_call
+from utils import ScreenImage, clear_display, log_call, clone_font
 
 # ─── Constants ────────────────────────────────────────────────────────────────
 TITLE_WEST = "Western Conference"
@@ -133,6 +133,13 @@ _HYPERPIXEL_4_STANDINGS_IDS = {
 }
 _HYPERPIXEL_4_ROW_SPACING = scale_value(3)
 _IS_HYPERPIXEL_4 = is_hyperpixel_next_layout() and not is_hyperpixel_4_square_layout()
+_IS_1080P_LAYOUT = sorted((WIDTH, HEIGHT)) == [1080, 1920]
+_NHL_STANDINGS_TEAM_SIZE_IDS = {
+    "NHL Standings West",
+    "NHL Standings East",
+    "NHL Standings West v2",
+    "NHL Standings East v2",
+}
 
 _BASE_FONT_SIZES = {
     "division": 26,
@@ -166,6 +173,17 @@ def _resolve_font_sizes(style_id: str) -> dict[str, int]:
     base = dict(_BASE_FONT_SIZES)
     if is_hyperpixel_4_square_layout() and style_id in _HYPERPIXEL_4_STANDINGS_IDS:
         base.update(_HYPERPIXEL_4_FONT_SIZES)
+
+    if style_id in _NHL_STANDINGS_TEAM_SIZE_IDS:
+        if is_hyperpixel_4_square_layout():
+            base["team_name"] = max(8, base["team_name"] - 2)
+            for key in ("division", "column", "column_points", "row_stats"):
+                base[key] = max(8, base[key] - 5)
+        elif _IS_1080P_LAYOUT:
+            base["team_name"] = max(8, base["team_name"] - 4)
+            for key in ("division", "column", "column_points", "row_stats"):
+                base[key] = max(8, base[key] - 8)
+
     base.update(_STANDINGS_FONT_SIZE_OVERRIDES.get(style_id, {}))
     return {slot: max(8, int(round(size))) for slot, size in base.items()}
 
@@ -208,15 +226,6 @@ def _build_fonts(style_id: str) -> tuple:
         base_font=row,
         default_size=sizes["team_name"],
     )
-    if is_hyperpixel_4_square_layout() and style_id in _HYPERPIXEL_4_STANDINGS_IDS:
-        team_name_size = getattr(team_name, "size", None)
-        team_name_path = getattr(team_name, "path", None)
-        if isinstance(team_name_size, int) and team_name_size > 0 and isinstance(team_name_path, str):
-            try:
-                # HyperPixel 4 Square-specific 15% team-name reduction for NHL standings.
-                team_name = ImageFont.truetype(team_name_path, max(1, int(round(team_name_size * 0.85))))
-            except OSError:
-                logging.debug("Unable to scale NHL standings team-name font for HyperPixel 4 Square")
     return division, column, column_points, row, row_stats, team_name
 
 
@@ -238,7 +247,7 @@ def _refresh_column_header_fonts() -> None:
 
 
 def _apply_style_overrides(screen_id: str) -> None:
-    global DIVISION_FONT, COLUMN_FONT, COLUMN_FONT_POINTS, ROW_FONT, ROW_STATS_FONT, TEAM_NAME_FONT
+    global TITLE_FONT, DIVISION_FONT, COLUMN_FONT, COLUMN_FONT_POINTS, ROW_FONT, ROW_STATS_FONT, TEAM_NAME_FONT
     global LOGO_HEIGHT, OVERVIEW_MIN_LOGO_HEIGHT, OVERVIEW_MAX_LOGO_HEIGHT
     global CONFERENCE_LOGO_HEIGHT, BACKGROUND_COLOR
     global ROW_PADDING, ROW_SPACING
@@ -253,6 +262,13 @@ def _apply_style_overrides(screen_id: str) -> None:
     ) = _build_fonts(screen_id)
     _refresh_column_header_fonts()
 
+    TITLE_FONT = FONT_TITLE_SPORTS
+    if screen_id in _NHL_STANDINGS_TEAM_SIZE_IDS:
+        if is_hyperpixel_4_square_layout():
+            TITLE_FONT = clone_font(TITLE_FONT, max(8, getattr(TITLE_FONT, "size", 24) - 5))
+        elif _IS_1080P_LAYOUT:
+            TITLE_FONT = clone_font(TITLE_FONT, max(8, getattr(TITLE_FONT, "size", 24) - 8))
+
     team_scale = get_screen_image_scale(screen_id, "team_logo", 1.0)
     if _IS_HYPERPIXEL_4 and screen_id.startswith("NHL Standings"):
         # HyperPixel 4 (non-square): shrink NHL standings logos by 60%.
@@ -262,6 +278,11 @@ def _apply_style_overrides(screen_id: str) -> None:
             nba_logo_scale = get_screen_image_scale("NBA Scoreboard", "team_logo", 1.0)
             team_scale = min(team_scale, nba_logo_scale * 0.4)
     LOGO_HEIGHT = _scale_square_logo_height(_LOGO_BASE_HEIGHT * team_scale)
+    if screen_id in _NHL_STANDINGS_TEAM_SIZE_IDS:
+        if is_hyperpixel_4_square_layout():
+            LOGO_HEIGHT = 76
+        elif _IS_1080P_LAYOUT:
+            LOGO_HEIGHT = 200
     overview_scale = get_screen_image_scale(screen_id, "overview_logo", team_scale)
     OVERVIEW_MIN_LOGO_HEIGHT = max(1, int(round(_OVERVIEW_MIN_LOGO_BASE * overview_scale)))
     OVERVIEW_MAX_LOGO_HEIGHT = max(1, int(round(_OVERVIEW_MAX_LOGO_BASE * overview_scale)))
@@ -286,7 +307,10 @@ def _apply_style_overrides(screen_id: str) -> None:
 
     if is_hyperpixel_4_square_layout() and screen_id in _HYPERPIXEL_4_STANDINGS_IDS:
         ROW_PADDING = 1
-        ROW_SPACING = _HYPERPIXEL_4_ROW_SPACING
+        ROW_SPACING = max(_HYPERPIXEL_4_ROW_SPACING, scale_value(6))
+    elif _IS_1080P_LAYOUT and screen_id in _NHL_STANDINGS_TEAM_SIZE_IDS:
+        ROW_PADDING = scale_value(2)
+        ROW_SPACING = max(scale_value(2), 10)
     else:
         ROW_PADDING = scale_value(2)
         ROW_SPACING = scale_value(2)

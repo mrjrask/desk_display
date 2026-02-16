@@ -5,12 +5,13 @@ from screens.mlb_team_standings import (
     draw_standings_screen2 as _base_screen2,
     _format_int,
 )
-from config import FONT_STAND1_RANK, DISPLAY_SCALE, is_hyperpixel_4_square_layout, is_hyperpixel_next_layout
+from config import FONT_STAND1_RANK, DISPLAY_SCALE, WIDTH, HEIGHT, is_hyperpixel_4_square_layout, is_hyperpixel_next_layout
 from utils import log_call, clone_font
 
 _IS_HYPERPIXEL_4_SQUARE = is_hyperpixel_4_square_layout()
 _IS_HYPERPIXEL_LAYOUT = is_hyperpixel_next_layout()
 _IS_HYPERPIXEL_4 = _IS_HYPERPIXEL_LAYOUT and not _IS_HYPERPIXEL_4_SQUARE
+_IS_1080P_LAYOUT = sorted((WIDTH, HEIGHT)) == [1080, 1920]
 
 NHL_LOGO_SZ = max(1, int(round(LOGO_SZ * 0.5)))
 NHL_STAND1_LOGO_SZ = NHL_LOGO_SZ * 3 if _IS_HYPERPIXEL_LAYOUT else NHL_LOGO_SZ
@@ -137,7 +138,7 @@ def draw_nhl_standings_screen1(display, rec, logo_path, division_name, *, logo_s
         show_conference_rank=True,
         record_details_fn=_format_nhl_record,
         logo_size=max(1, int(round(NHL_STAND1_LOGO_SZ * max(0.1, logo_scale)))),
-        font_size_offset=(8 if _IS_HYPERPIXEL_4 else (4 if _IS_HYPERPIXEL_4_SQUARE else 0)),
+        font_size_offset=(30 if _IS_1080P_LAYOUT else (12 if _IS_HYPERPIXEL_4 else (8 if _IS_HYPERPIXEL_4_SQUARE else 0))),
         transition=transition,
     )
 
