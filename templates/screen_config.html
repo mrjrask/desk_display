@@ -787,8 +787,12 @@
         if (!row) return;
         const screenId = row.dataset.screenId;
         if (!screenId) return;
-        const screens = getCurrentScreens();
-        playlistAssignments[screenId] = event.target.value || "";
+        const selectedPlaylistId = event.target.value || "";
+        let screens = getCurrentScreens();
+        playlistAssignments[screenId] = selectedPlaylistId;
+        if (selectedPlaylistId) {
+          screens = moveScreenToPlaylistEnd(screens, screenId, selectedPlaylistId);
+        }
         savePlaylistState();
         window.requestAnimationFrame(() => {
           try {
@@ -854,6 +858,23 @@
         .split(",")
         .map((item) => item.trim())
         .filter((item) => item.length > 0);
+    }
+
+    function moveScreenToPlaylistEnd(screens, screenId, playlistId) {
+      const fromIndex = screens.findIndex((screen) => screen.id === screenId);
+      if (fromIndex < 0) return screens;
+      const screen = screens[fromIndex];
+      const remaining = [...screens.slice(0, fromIndex), ...screens.slice(fromIndex + 1)];
+      let insertAt = -1;
+      remaining.forEach((item, index) => {
+        if ((playlistAssignments[item.id] || "") === playlistId) {
+          insertAt = index;
+        }
+      });
+      if (insertAt < 0) {
+        return [...remaining, screen];
+      }
+      return [...remaining.slice(0, insertAt + 1), screen, ...remaining.slice(insertAt + 1)];
     }
 
     function buildConfigPayload(screens) {
