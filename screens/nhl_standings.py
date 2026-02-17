@@ -168,9 +168,6 @@ _HYPERPIXEL_4_FONT_SIZES = {
     "team_name": 14,
 }
 
-_HYPERPIXEL_4_TEAM_NAME_DELTA = 2
-_HYPERPIXEL_4_WLOTL_DELTA = 8
-
 
 def _resolve_font_sizes(style_id: str) -> dict[str, int]:
     base = dict(_BASE_FONT_SIZES)
@@ -179,10 +176,9 @@ def _resolve_font_sizes(style_id: str) -> dict[str, int]:
 
     if style_id in _NHL_STANDINGS_TEAM_SIZE_IDS:
         if is_hyperpixel_4_square_layout():
-            base["team_name"] = max(8, base["team_name"] - 2 - _HYPERPIXEL_4_TEAM_NAME_DELTA)
+            base["team_name"] = max(8, base["team_name"] - 2)
             for key in ("division", "column", "column_points", "row_stats"):
                 base[key] = max(8, base[key] - 5)
-            base["column"] = max(8, base["column"] - _HYPERPIXEL_4_WLOTL_DELTA)
         elif _IS_1080P_LAYOUT:
             base["team_name"] = max(8, base["team_name"] - 4)
             for key in ("division", "column", "column_points", "row_stats"):
@@ -243,17 +239,11 @@ def _build_fonts(style_id: str) -> tuple:
 ) = _build_fonts(
     _DEFAULT_STYLE_ID
 )
-ROW_VALUE_FONTS = {"points": ROW_STATS_FONT}
 
 
 def _refresh_column_header_fonts() -> None:
     global COLUMN_HEADER_FONTS
     COLUMN_HEADER_FONTS = {"points": COLUMN_FONT_POINTS}
-
-
-def _refresh_row_value_fonts() -> None:
-    global ROW_VALUE_FONTS
-    ROW_VALUE_FONTS = {"points": ROW_STATS_FONT}
 
 
 def _apply_style_overrides(screen_id: str) -> None:
@@ -271,16 +261,6 @@ def _apply_style_overrides(screen_id: str) -> None:
         TEAM_NAME_FONT,
     ) = _build_fonts(screen_id)
     _refresh_column_header_fonts()
-    _refresh_row_value_fonts()
-
-    if is_hyperpixel_4_square_layout() and screen_id in _NHL_STANDINGS_TEAM_SIZE_IDS:
-        ROW_VALUE_FONTS = {
-            "points": ROW_STATS_FONT,
-            "default": clone_font(
-                ROW_STATS_FONT,
-                max(8, getattr(ROW_STATS_FONT, "size", 12) - _HYPERPIXEL_4_WLOTL_DELTA),
-            ),
-        }
 
     TITLE_FONT = FONT_TITLE_SPORTS
     if screen_id in _NHL_STANDINGS_TEAM_SIZE_IDS:
@@ -1534,11 +1514,10 @@ def _draw_division(
         for key in STATS_COLUMNS:
             if key not in column_layout:
                 continue
-            value_font = ROW_VALUE_FONTS.get(key, ROW_VALUE_FONTS.get("default", ROW_STATS_FONT))
             _draw_text(
                 draw,
                 str(team.get(key, "")),
-                value_font,
+                ROW_STATS_FONT,
                 column_layout[key],
                 row_top,
                 ROW_HEIGHT,
