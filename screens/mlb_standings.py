@@ -335,13 +335,14 @@ def draw_division_screen(display, league_id: int, division_id: int, title: str, 
 
     for i, rec in enumerate(teams):
         y = i * row_h
+        row_center = y + row_h // 2
 
         # Logo
         abbr = get_mlb_tricode(rec.get("team")) or get_mlb_abbreviation(rec["team"]["name"])
         ic = _load_logo(abbr, logo_size)
         if ic:
             logo_x = margin + (logo_size - ic.width)//2
-            logo_y = y + (logo_size - ic.height)//2
+            logo_y = row_center - ic.height // 2
             canvas.paste(ic, (logo_x, logo_y), ic)
 
         # GB column (right-aligned, label "GB")
@@ -350,9 +351,9 @@ def draw_division_screen(display, league_id: int, division_id: int, title: str, 
         num_w, num_h = cd.textsize(gb_val, font=FONT_GB_VALUE)
         lab_w, lab_h = cd.textsize("GB",   font=FONT_GB_LABEL)
         gb_x = WIDTH - margin - (num_w + lab_w)
-        gb_y = y + (logo_size - num_h)//2
+        gb_y = row_center - num_h // 2
         cd.text((gb_x, gb_y), gb_val, font=FONT_GB_VALUE, fill=(255,255,255))
-        cd.text((gb_x + num_w, gb_y + (num_h - lab_h)//2), "GB", font=FONT_GB_LABEL, fill=(255,255,255))
+        cd.text((gb_x + num_w, row_center - lab_h // 2), "GB", font=FONT_GB_LABEL, fill=(255,255,255))
 
         # W-L centered between logo block and GB
         wins = rec["leagueRecord"]["wins"]
@@ -362,7 +363,7 @@ def draw_division_screen(display, league_id: int, division_id: int, title: str, 
         left  = margin + logo_size + margin
         right = gb_x - margin
         rec_x = left + ((right - left) - rw2)//2
-        rec_y = y + (logo_size - rh2)//2
+        rec_y = row_center - rh2 // 2
         cd.text((rec_x, rec_y), rec_txt, font=FONT_DIV_RECORD, fill=(255,255,255))
 
     # Show first slice
@@ -429,13 +430,14 @@ def draw_wildcard_screen(display, league_id: int, title: str, transition=False):
 
     for i, rec in enumerate(teams):
         y = i * row_h
+        row_center = y + row_h // 2
 
         # Team logo
         abbr = get_mlb_tricode(rec.get("team")) or get_mlb_abbreviation(rec["team"]["name"])
         ic = _load_logo(abbr, logo_size)
         if ic:
             canvas.paste(ic, (margin + (logo_size - ic.width)//2,
-                              y + (logo_size - ic.height)//2), ic)
+                              row_center - ic.height // 2), ic)
 
         # WCGB formatting
         raw_wcb = rec.get("wildCardGamesBack")
@@ -456,9 +458,9 @@ def draw_wildcard_screen(display, league_id: int, title: str, transition=False):
         nw, nh = cd.textsize(s, font=FONT_GB_VALUE)
         lw, lh = cd.textsize("WCGB", font=FONT_GB_LABEL)
         start_x = WIDTH - margin - (nw + lw)
-        y_text  = y + (logo_size - nh)//2
+        y_text  = row_center - nh // 2
         cd.text((start_x, y_text), s, font=FONT_GB_VALUE, fill=(255,255,255))
-        cd.text((start_x + nw, y + (logo_size - lh)//2), "WCGB", font=FONT_GB_LABEL, fill=(255,255,255))
+        cd.text((start_x + nw, row_center - lh // 2), "WCGB", font=FONT_GB_LABEL, fill=(255,255,255))
 
         # W-L centered between logo block and WCGB
         rw, rl = rec["leagueRecord"]["wins"], rec["leagueRecord"]["losses"]
@@ -467,7 +469,7 @@ def draw_wildcard_screen(display, league_id: int, title: str, transition=False):
         left  = margin + logo_size + margin
         right = start_x - margin
         rec_x = left + ((right - left) - tw2)//2
-        cd.text((rec_x, y + (logo_size - th2)//2), rt, font=FONT_DIV_RECORD, fill=(255,255,255))
+        cd.text((rec_x, row_center - th2 // 2), rt, font=FONT_DIV_RECORD, fill=(255,255,255))
 
         # Separator below 3rd team (between #3 and #4): green line
         if i == 2:

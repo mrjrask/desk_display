@@ -98,6 +98,7 @@ IN_PROGRESS_SCORE_COLOR = SCOREBOARD_IN_PROGRESS_SCORE_COLOR
 IN_PROGRESS_STATUS_COLOR = IN_PROGRESS_SCORE_COLOR
 FINAL_WINNING_SCORE_COLOR = SCOREBOARD_FINAL_WINNING_SCORE_COLOR
 FINAL_LOSING_SCORE_COLOR = SCOREBOARD_FINAL_LOSING_SCORE_COLOR
+SPRING_TRAINING_OPENING_DAY = datetime.date(2026, 2, 20)
 
 
 def _scoreboard_fonts():
@@ -484,6 +485,9 @@ def _scoreboard_date(now: Optional[datetime.datetime] = None) -> datetime.date:
     """Return the date whose games should be shown on the scoreboard."""
 
     now = now or datetime.datetime.now(CENTRAL_TIME)
+    if now.date() < SPRING_TRAINING_OPENING_DAY:
+        return SPRING_TRAINING_OPENING_DAY
+
     cutoff = now.replace(hour=9, minute=30, second=0, microsecond=0)
     if now < cutoff:
         return (now - datetime.timedelta(days=1)).date()
