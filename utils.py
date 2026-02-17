@@ -68,6 +68,7 @@ _FRAMEBUFFER_PIXEL_FORMAT = os.environ.get("DISPLAY_FB_PIXEL_FORMAT", "").strip(
 _FRAMEBUFFER_PIXEL_ORDER = os.environ.get("DISPLAY_FB_PIXEL_ORDER", "").strip().lower()
 _PYGAME_MODULE = None
 _PYGAME_ERROR: Optional[Exception] = None
+_CURSOR_WIGGLE_DELAY_SECONDS = 30.0
 
 
 def _maybe_configure_desktop_env() -> None:
@@ -491,6 +492,10 @@ class _KernelDisplay:
         try:
             self._pygame.mouse.set_visible(False)
             _wiggle_mouse_cursor(self._pygame)
+            _schedule_mouse_cursor_wiggle(
+                self._pygame,
+                delay_seconds=_CURSOR_WIGGLE_DELAY_SECONDS,
+            )
         except Exception:  # pragma: no cover - optional behavior
             pass
 
@@ -554,6 +559,27 @@ def _wiggle_mouse_cursor(pygame_module: Any, *, distance: int = 1) -> None:
         pygame_module.event.pump()
     except Exception:
         return
+
+
+def _schedule_mouse_cursor_wiggle(
+    pygame_module: Any,
+    *,
+    delay_seconds: float,
+    distance: int = 1,
+) -> Optional[threading.Timer]:
+    """Schedule a one-off cursor wiggle after startup."""
+
+    if delay_seconds <= 0:
+        return None
+
+    timer = threading.Timer(
+        delay_seconds,
+        _wiggle_mouse_cursor,
+        kwargs={"pygame_module": pygame_module, "distance": distance},
+    )
+    timer.daemon = True
+    timer.start()
+    return timer
 
 _ACTIVE_DISPLAY: Optional["Display"] = None
 _LED_INDICATOR_ANIMATOR: Optional["_LedAnimator"] = None
