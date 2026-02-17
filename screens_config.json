@@ -3,7 +3,6 @@
     "date": 1,
     "time": 0,
     "nixie": 0,
-    "quad": 0,
     "weather logo": 0,
     "weather1": 1,
     "weather2": 1,
@@ -12,6 +11,10 @@
     "weather daily": 0,
     "inside": 1,
     "sensors": 0,
+    "travel": 0,
+    "travel map": 0,
+    "travel v2": 0,
+    "travel map v2": 0,
     "verano logo": 0,
     "vrnof": 3,
     "bears logo": 4,
@@ -78,7 +81,7 @@
     },
     "NHL Standings East v2": 0,
     "nfl logo": 0,
-    "NFL Scoreboard": 2,
+    "NFL Scoreboard": 0,
     "NFL Scoreboard v2": 0,
     "NFL Overview NFC": {
       "frequency": 0,
@@ -100,7 +103,13 @@
     "NBA Scoreboard": 4,
     "NBA Scoreboard v2": 0,
     "mlb logo": 0,
-    "MLB Scoreboard": 0,
+    "MLB Scoreboard": {
+      "frequency": 2,
+      "alt": {
+        "screen": "MLB Scoreboard v2",
+        "frequency": 2
+      }
+    },
     "MLB Scoreboard v2": 0,
     "NL Overview": 0,
     "NL East": 0,
@@ -111,8 +120,415 @@
     "AL East": 0,
     "AL Central": 0,
     "AL West": 0,
-    "AL Wild Card": 0
+    "AL Wild Card": 0,
+    "quad": 0
   },
-  "playlists": {},
-  "sequence": []
+  "playlists": {
+    "playlist-1771301244817-427": {
+      "label": "starter",
+      "steps": [
+        {
+          "screen": "date"
+        },
+        {
+          "screen": "time"
+        },
+        {
+          "screen": "nixie"
+        }
+      ]
+    },
+    "playlist-1771301254299-679": {
+      "label": "weather",
+      "steps": [
+        {
+          "screen": "weather logo"
+        },
+        {
+          "screen": "weather1"
+        },
+        {
+          "screen": "weather2"
+        },
+        {
+          "screen": "weather hourly"
+        },
+        {
+          "screen": "weather radar"
+        },
+        {
+          "screen": "weather daily"
+        }
+      ]
+    },
+    "playlist-1771301264049-358": {
+      "label": "sensors",
+      "steps": [
+        {
+          "screen": "inside"
+        },
+        {
+          "screen": "sensors"
+        }
+      ]
+    },
+    "playlist-1771301271114-744": {
+      "label": "travel",
+      "steps": [
+        {
+          "screen": "travel"
+        },
+        {
+          "screen": "travel map"
+        },
+        {
+          "screen": "travel v2"
+        },
+        {
+          "screen": "travel map v2"
+        }
+      ]
+    },
+    "playlist-1771301274262-66": {
+      "label": "stocks",
+      "steps": [
+        {
+          "screen": "verano logo"
+        },
+        {
+          "screen": "vrnof"
+        }
+      ]
+    },
+    "playlist-1771301277697-679": {
+      "label": "bears",
+      "steps": [
+        {
+          "screen": "bears logo"
+        },
+        {
+          "screen": "bears stand1"
+        },
+        {
+          "screen": "bears stand2"
+        },
+        {
+          "screen": "bears next"
+        },
+        {
+          "screen": "bears next season"
+        }
+      ]
+    },
+    "playlist-1771301317973-519": {
+      "label": "hawks",
+      "steps": [
+        {
+          "screen": "hawks logo"
+        },
+        {
+          "screen": "hawks stand1"
+        },
+        {
+          "screen": "hawks stand2"
+        },
+        {
+          "screen": "hawks last"
+        },
+        {
+          "screen": "hawks live"
+        },
+        {
+          "screen": "hawks next"
+        },
+        {
+          "screen": "hawks next home"
+        }
+      ]
+    },
+    "playlist-1771301321201-767": {
+      "label": "bulls",
+      "steps": [
+        {
+          "screen": "bulls logo"
+        },
+        {
+          "screen": "bulls stand1"
+        },
+        {
+          "screen": "bulls stand2"
+        },
+        {
+          "screen": "bulls last"
+        },
+        {
+          "screen": "bulls live"
+        },
+        {
+          "screen": "bulls next"
+        },
+        {
+          "screen": "bulls next home"
+        }
+      ]
+    },
+    "playlist-1771301324557-994": {
+      "label": "wolves",
+      "steps": [
+        {
+          "screen": "wolves logo"
+        },
+        {
+          "screen": "wolves last"
+        },
+        {
+          "screen": "wolves next"
+        },
+        {
+          "screen": "wolves next home"
+        }
+      ]
+    },
+    "playlist-1771301396887-187": {
+      "label": "cubs",
+      "steps": [
+        {
+          "screen": "cubs logo"
+        },
+        {
+          "screen": "cubs stand1"
+        },
+        {
+          "screen": "cubs stand2"
+        },
+        {
+          "screen": "cubs last"
+        },
+        {
+          "screen": "cubs result"
+        },
+        {
+          "screen": "cubs live"
+        },
+        {
+          "screen": "cubs next"
+        },
+        {
+          "screen": "cubs next home"
+        }
+      ]
+    },
+    "playlist-1771301399887-256": {
+      "label": "sox",
+      "steps": [
+        {
+          "screen": "sox logo"
+        },
+        {
+          "screen": "sox stand1"
+        },
+        {
+          "screen": "sox stand2"
+        },
+        {
+          "screen": "sox last"
+        },
+        {
+          "screen": "sox live"
+        },
+        {
+          "screen": "sox next"
+        },
+        {
+          "screen": "sox next home"
+        }
+      ]
+    },
+    "playlist-1771301413206-640": {
+      "label": "nhl",
+      "steps": [
+        {
+          "screen": "nhl logo"
+        },
+        {
+          "screen": "NHL Scoreboard"
+        },
+        {
+          "screen": "NHL Scoreboard v2"
+        },
+        {
+          "screen": "NHL Standings Overview West"
+        },
+        {
+          "screen": "NHL Standings Overview East"
+        },
+        {
+          "screen": "NHL Standings Overview v2 West"
+        },
+        {
+          "screen": "NHL Standings Overview v2 East"
+        },
+        {
+          "screen": "NHL Standings Overview v3 West"
+        },
+        {
+          "screen": "NHL Standings Overview v3 East"
+        },
+        {
+          "screen": "NHL Standings West"
+        },
+        {
+          "screen": "NHL Standings West v2"
+        },
+        {
+          "screen": "NHL Standings East"
+        },
+        {
+          "screen": "NHL Standings East v2"
+        }
+      ]
+    },
+    "playlist-1771301476392-441": {
+      "label": "nfl",
+      "steps": [
+        {
+          "screen": "nfl logo"
+        },
+        {
+          "screen": "NFL Scoreboard"
+        },
+        {
+          "screen": "NFL Scoreboard v2"
+        },
+        {
+          "screen": "NFL Overview NFC"
+        },
+        {
+          "screen": "NFL Overview AFC"
+        },
+        {
+          "screen": "NFL Standings NFC"
+        },
+        {
+          "screen": "NFL Standings AFC"
+        }
+      ]
+    },
+    "playlist-1771301509551-198": {
+      "label": "nba",
+      "steps": [
+        {
+          "screen": "nba logo"
+        },
+        {
+          "screen": "NBA Scoreboard"
+        },
+        {
+          "screen": "NBA Scoreboard v2"
+        }
+      ]
+    },
+    "playlist-1771301520113-753": {
+      "label": "mlb",
+      "steps": [
+        {
+          "screen": "mlb logo"
+        },
+        {
+          "screen": "MLB Scoreboard"
+        },
+        {
+          "screen": "MLB Scoreboard v2"
+        },
+        {
+          "screen": "NL Overview"
+        },
+        {
+          "screen": "NL East"
+        },
+        {
+          "screen": "NL Central"
+        },
+        {
+          "screen": "NL West"
+        },
+        {
+          "screen": "NL Wild Card"
+        },
+        {
+          "screen": "AL Overview"
+        },
+        {
+          "screen": "AL East"
+        },
+        {
+          "screen": "AL Central"
+        },
+        {
+          "screen": "AL West"
+        },
+        {
+          "screen": "AL Wild Card"
+        }
+      ]
+    },
+    "playlist-1771301555724-243": {
+      "label": "quad",
+      "steps": [
+        {
+          "screen": "quad"
+        }
+      ]
+    }
+  },
+  "sequence": [
+    {
+      "playlist": "playlist-1771301244817-427"
+    },
+    {
+      "playlist": "playlist-1771301254299-679"
+    },
+    {
+      "playlist": "playlist-1771301264049-358"
+    },
+    {
+      "playlist": "playlist-1771301271114-744"
+    },
+    {
+      "playlist": "playlist-1771301274262-66"
+    },
+    {
+      "playlist": "playlist-1771301277697-679"
+    },
+    {
+      "playlist": "playlist-1771301317973-519"
+    },
+    {
+      "playlist": "playlist-1771301321201-767"
+    },
+    {
+      "playlist": "playlist-1771301324557-994"
+    },
+    {
+      "playlist": "playlist-1771301396887-187"
+    },
+    {
+      "playlist": "playlist-1771301399887-256"
+    },
+    {
+      "playlist": "playlist-1771301413206-640"
+    },
+    {
+      "playlist": "playlist-1771301476392-441"
+    },
+    {
+      "playlist": "playlist-1771301509551-198"
+    },
+    {
+      "playlist": "playlist-1771301520113-753"
+    },
+    {
+      "playlist": "playlist-1771301555724-243"
+    }
+  ]
 }
