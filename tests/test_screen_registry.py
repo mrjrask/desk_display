@@ -181,3 +181,74 @@ def test_date_time_screens_render_in_transition_mode(monkeypatch):
     registry["time"].render()
 
     assert calls == [("date", True), ("time", True)]
+
+
+def test_quad_screen_is_registered(monkeypatch):
+    now = datetime.datetime(2024, 1, 1, 12, 0, tzinfo=CENTRAL_TIME)
+    weather = {"hourly": []}
+
+    monkeypatch.setattr(
+        "screens.registry._next_quad_page_tiles",
+        lambda: (True, ["date", "weather1", "weather hourly", "inside"]),
+    )
+
+    registry, _ = build_screen_registry(_make_context(weather, now))
+
+    assert "quad" in registry
+    assert registry["quad"].available is True
+
+
+def test_quad_screen_can_be_disabled(monkeypatch):
+    now = datetime.datetime(2024, 1, 1, 12, 0, tzinfo=CENTRAL_TIME)
+    weather = {"hourly": []}
+
+    monkeypatch.setattr(
+        "screens.registry._next_quad_page_tiles",
+        lambda: (False, ["date", "weather1", "weather hourly", "inside"]),
+    )
+
+    registry, _ = build_screen_registry(_make_context(weather, now))
+
+    assert registry["quad"].available is False
+
+
+def test_quad_screen_uses_layout_tile_selection(monkeypatch):
+    now = datetime.datetime(2024, 1, 1, 12, 0, tzinfo=CENTRAL_TIME)
+    weather = {"hourly": []}
+    context = _make_context(weather, now)
+
+    monkeypatch.setattr(
+        "screens.registry._next_quad_page_tiles",
+        lambda: (True, ["time", "time", "inside", "weather1"]),
+    )
+
+    captured = {}
+
+    def _fake_draw_quad_screen(_display, tiles, transition=False):
+        captured["labels"] = [tile.label for tile in tiles]
+        return None
+
+    monkeypatch.setattr("screens.registry.draw_quad_screen", _fake_draw_quad_screen)
+
+    registry, _ = build_screen_registry(context)
+    registry["quad"].render()
+
+    assert captured["labels"] == ["time", "time", "inside", "weather1"]
+
+
+def test_next_quad_page_tiles_rotates_pages(monkeypatch):
+    monkeypatch.setattr(
+        "screens.registry._quad_layout_from_layouts",
+        lambda: (True, [["date", "date", "date", "date"], ["time", "time", "time", "time"]]),
+    )
+    monkeypatch.setattr("screens.registry._quad_page_index", 0)
+
+    from screens import registry as registry_module
+
+    enabled_first, first = registry_module._next_quad_page_tiles()
+    enabled_second, second = registry_module._next_quad_page_tiles()
+
+    assert enabled_first is True
+    assert enabled_second is True
+    assert first == ["date", "date", "date", "date"]
+    assert second == ["time", "time", "time", "time"]

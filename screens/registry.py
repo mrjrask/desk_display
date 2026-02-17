@@ -2,8 +2,10 @@
 from __future__ import annotations
 
 import datetime as _dt
+import json
 import logging
 import os
+import threading
 from dataclasses import dataclass, field
 from typing import Any, Callable, Dict, Optional, Tuple
 
@@ -43,6 +45,7 @@ from screens.draw_weather import (
 )
 from screens.draw_nixie import draw_nixie
 from screens.draw_date_time import draw_date, draw_time
+from screens.draw_quad import _TileSpec, draw_quad_screen
 from screens.mlb_schedule import (
     draw_box_score,
     draw_cubs_result,
@@ -105,6 +108,78 @@ from screens.nhl_standings_v2 import (
 )
 
 RenderCallable = Callable[[], Optional[Image.Image | ScreenImage]]
+
+_LAYOUTS_CONFIG_PATH = os.environ.get(
+    "SCREENS_LAYOUTS_PATH",
+    os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "screens_layouts.json"),
+)
+
+
+_QUAD_DEFAULT_PAGE = ["date", "weather1", "weather hourly", "inside"]
+_quad_page_index = 0
+_quad_page_lock = threading.Lock()
+
+
+def _quad_layout_from_layouts() -> tuple[bool, list[list[str]]]:
+    enabled = False
+    pages: list[list[str]] = []
+
+    try:
+        with open(_LAYOUTS_CONFIG_PATH, "r", encoding="utf-8") as fh:
+            payload = json.load(fh)
+    except Exception:
+        return enabled, [_QUAD_DEFAULT_PAGE.copy()]
+
+    if not isinstance(payload, dict):
+        return enabled, [_QUAD_DEFAULT_PAGE.copy()]
+    screens = payload.get("screens")
+    if not isinstance(screens, dict):
+        return enabled, [_QUAD_DEFAULT_PAGE.copy()]
+    quad = screens.get("quad")
+    if not isinstance(quad, dict):
+        return enabled, [_QUAD_DEFAULT_PAGE.copy()]
+
+    enabled = bool(quad.get("enabled", False))
+
+    raw_pages = quad.get("pages")
+    if not isinstance(raw_pages, list):
+        raw_pages = [{"tiles": quad.get("tiles")}] if isinstance(quad.get("tiles"), list) else []
+
+    for raw_page in raw_pages:
+        if not isinstance(raw_page, dict):
+            continue
+        raw_tiles = raw_page.get("tiles")
+        if not isinstance(raw_tiles, list):
+            continue
+        tiles: list[str] = []
+        for raw_tile in raw_tiles:
+            if not isinstance(raw_tile, str):
+                continue
+            tile = raw_tile.strip()
+            if not tile or tile == "quad":
+                continue
+            tiles.append(tile)
+            if len(tiles) >= 4:
+                break
+        while len(tiles) < 4:
+            tiles.append(_QUAD_DEFAULT_PAGE[len(tiles)])
+        pages.append(tiles)
+
+    if not pages:
+        pages = [_QUAD_DEFAULT_PAGE.copy()]
+
+    return enabled, pages
+
+
+def _next_quad_page_tiles() -> tuple[bool, list[str]]:
+    global _quad_page_index
+
+    enabled, pages = _quad_layout_from_layouts()
+    with _quad_page_lock:
+        page = pages[_quad_page_index % len(pages)]
+        _quad_page_index += 1
+    return enabled, page
+
 
 RADAR_LOOKAHEAD_HOURS = 8
 WEATHER_CURRENT_TTL = _dt.timedelta(minutes=20)
@@ -315,6 +390,46 @@ def build_screen_registry(context: ScreenContext) -> Tuple[Dict[str, ScreenDefin
     register("nixie", lambda: draw_nixie(context.display, transition=True))
 
     weather_data = context.cache.get("weather")
+
+    class _QuadCaptureDisplay:
+        def __init__(self):
+            self.width = WIDTH
+            self.height = HEIGHT
+            self._last: Optional[Image.Image] = None
+            self._frame_id = 0
+
+        def image(self, img: Image.Image):
+            self._last = img.copy()
+            self._frame_id += 1
+
+        def show(self):
+            return None
+
+        def frame_id(self) -> int:
+            return self._frame_id
+
+        @property
+        def last_image(self) -> Optional[Image.Image]:
+            return self._last
+
+    def _render_quad_tile(screen_id: str) -> Optional[Image.Image]:
+        definition = registry.get(screen_id)
+        if definition is None:
+            return None
+
+        capture = _QuadCaptureDisplay()
+        original_display = context.display
+        context.display = capture
+        try:
+            rendered = definition.render()
+        finally:
+            context.display = original_display
+
+        if isinstance(rendered, ScreenImage):
+            return rendered.image
+        if isinstance(rendered, Image.Image):
+            return rendered
+        return capture.last_image
     weather_logo = context.logos.get("weather logo")
     weather_current_available = bool(weather_data)
     weather_hourly_available = bool(weather_data)
@@ -364,6 +479,16 @@ def build_screen_registry(context: ScreenContext) -> Tuple[Dict[str, ScreenDefin
         available=radar_available,
     )
     register("inside", lambda: draw_inside(context.display, transition=True))
+    quad_enabled, quad_tiles = _next_quad_page_tiles()
+    register(
+        "quad",
+        lambda tiles=quad_tiles: draw_quad_screen(
+            context.display,
+            [_TileSpec(tile_id, lambda tile_id=tile_id: _render_quad_tile(tile_id)) for tile_id in tiles],
+            transition=True,
+        ),
+        available=quad_enabled,
+    )
     # Legacy aliases for removed travel screen ids to keep older schedules valid.
     register("travel", lambda: draw_inside(context.display, transition=True))
     register("travel v2", lambda: draw_inside(context.display, transition=True))
