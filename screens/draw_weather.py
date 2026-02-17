@@ -1448,9 +1448,17 @@ def draw_weather_radar(display, weather=None, transition: bool = False):
         return result
 
     composed_frames = [_compose_frame(frame) for frame in frames]
+
+    def _display_frame(frame_image: Image.Image) -> None:
+        if hasattr(display, "image"):
+            display.image(frame_image)
+            return
+        if hasattr(display, "display"):
+            display.display(frame_image)
+
     if transition and len(composed_frames) > 1:
         for frame_image in composed_frames:
-            display.display(frame_image)
+            _display_frame(frame_image)
             time.sleep(RADAR_ANIMATION_FRAME_DELAY_SECONDS)
         return ScreenImage(composed_frames[-1], displayed=True)
 
