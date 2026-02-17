@@ -191,7 +191,7 @@ def _cycle_colors_after_load(
         if (
             expected_frame_id is not None
             and hasattr(display, "frame_id")
-            and not (hyperpixel_layout or hyperpixel_square)
+            and not (kernel_driven or hyperpixel_layout or hyperpixel_square)
         ):
             current_frame_id = display.frame_id()
             if frame_state is not None:
