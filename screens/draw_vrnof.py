@@ -63,9 +63,10 @@ def _get_logo() -> Image.Image | None:
         return _LOGO
     try:
         logo = Image.open(LOGO_PATH).convert("RGBA")
-        ratio = LOGO_HEIGHT / logo.height
+        target_height = max(1, int(round(LOGO_HEIGHT)))
+        ratio = target_height / logo.height
         width = max(1, int(round(logo.width * ratio)))
-        height = LOGO_HEIGHT
+        height = target_height
         _LOGO = logo.resize((width, height), Image.ANTIALIAS)
     except Exception as exc:
         logging.warning("VRNO: failed to load logo at %s: %s", LOGO_PATH, exc)
