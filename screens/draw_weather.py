@@ -1196,13 +1196,31 @@ def draw_weather_screen_2(display, weather, transition=False):
     total_h = 0
     for it in items:
         lbl, val = it[0], it[1]
-        h1 = draw.textsize(lbl, font=FONT_WEATHER_DETAILS_BOLD)[1]
+        lbl_bbox = _safe_textbbox(draw, lbl, FONT_WEATHER_DETAILS_BOLD)
+        lbl_w = lbl_bbox[2] - lbl_bbox[0]
+        lbl_h = lbl_bbox[3] - lbl_bbox[1]
         if isinstance(val, Image.Image):
             val_w, val_h = val.size
+            val_bbox = None
         else:
-            val_w, val_h = draw.textsize(val, font=FONT_WEATHER_DETAILS)
-        row_h = max(h1, val_h)
-        row_metrics.append((lbl, val, row_h, h1, val_h, val_w, it[2] if len(it)==3 else (255,255,255)))
+            val_bbox = _safe_textbbox(draw, val, FONT_WEATHER_DETAILS)
+            val_w = val_bbox[2] - val_bbox[0]
+            val_h = val_bbox[3] - val_bbox[1]
+        row_h = max(lbl_h, val_h)
+        row_metrics.append(
+            (
+                lbl,
+                val,
+                row_h,
+                lbl_h,
+                val_h,
+                lbl_w,
+                val_w,
+                lbl_bbox,
+                val_bbox,
+                it[2] if len(it) == 3 else (255, 255, 255),
+            )
+        )
         total_h += row_h
 
     # vertical spacing
@@ -1210,19 +1228,21 @@ def draw_weather_screen_2(display, weather, transition=False):
     y = space
 
     # render each row, vertically centering label & value
-    for lbl, val, row_h, h_lbl, h_val, v_w, color in row_metrics:
-        lw, _ = draw.textsize(lbl, font=FONT_WEATHER_DETAILS_BOLD)
+    for lbl, val, row_h, h_lbl, h_val, lw, v_w, lbl_bbox, val_bbox, color in row_metrics:
         row_w = lw + 4 + v_w
         x0    = (WIDTH - row_w)//2
 
         y_lbl = y + (row_h - h_lbl)//2
         y_val = y + (row_h - h_val)//2
 
-        draw.text((x0,          y_lbl), lbl, font=FONT_WEATHER_DETAILS_BOLD, fill=(255,255,255))
+        lbl_y_draw = y_lbl - (lbl_bbox[1] if lbl_bbox else 0)
+
+        draw.text((x0, lbl_y_draw), lbl, font=FONT_WEATHER_DETAILS_BOLD, fill=(255,255,255))
         if isinstance(val, Image.Image):
             img.paste(val, (x0 + lw + 4, y_val), val)
         else:
-            draw.text((x0 + lw + 4, y_val), val, font=FONT_WEATHER_DETAILS,      fill=color)
+            val_y_draw = y_val - (val_bbox[1] if val_bbox else 0)
+            draw.text((x0 + lw + 4, val_y_draw), val, font=FONT_WEATHER_DETAILS, fill=color)
         y += row_h + space
 
     _draw_alert_indicator(img, draw, severity)
