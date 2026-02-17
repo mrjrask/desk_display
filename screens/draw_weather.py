@@ -17,6 +17,7 @@ Screen 2:
 import datetime
 import logging
 import math
+import time
 from io import BytesIO
 from typing import NamedTuple, Optional, Tuple
 
@@ -84,6 +85,8 @@ EMOJI_DRAW_KWARGS = {"embedded_color": True} if EMOJI_EMBEDDED_COLOR else {}
 # weather location used for forecast details.
 RADAR_CENTER_LATITUDE = 41.8781
 RADAR_CENTER_LONGITUDE = -87.6298
+RADAR_MAX_FRAME_AGE = datetime.timedelta(hours=2)
+RADAR_ANIMATION_FRAME_DELAY_SECONDS = 0.2
 
 
 _IS_1080P_LAYOUT = sorted((WIDTH, HEIGHT)) == [1080, 1920]
@@ -1115,13 +1118,13 @@ def draw_weather_daily(display, weather, transition: bool = False, days: int = 5
         hi_text = f"Hi {hi_val}°" if hi_val is not None else "Hi —"
         lo_text = f"Lo {lo_val}°" if lo_val is not None else "Lo —"
 
-        pop_text = "PoP —"
+        pop_text = "—"
         precip_icon = None
         precip_color = (135, 206, 250)
         if pop_val is not None:
             clamped_pop = max(0, min(pop_val, 100))
             precip_color = (173, 216, 230) if is_snow else (135, 206, 250)
-            pop_text = f"PoP {clamped_pop}%"
+            pop_text = f"{clamped_pop}%"
             precip_icon = _render_precip_icon(is_snow, 10, precip_color)
 
         stats = [
@@ -1308,6 +1311,17 @@ def _format_radar_timestamp(timestamp: Optional[int]) -> str:
 
 def _fetch_radar_frames(zoom: int = 7, max_frames: int = 6) -> list[RadarFrame]:
     frames = _fetch_rainviewer_frames(zoom=zoom, max_frames=max_frames)
+    if not frames:
+        return []
+
+    now_ts = int(datetime.datetime.now(datetime.timezone.utc).timestamp())
+    fresh_frames = [
+        frame
+        for frame in frames
+        if frame.timestamp is not None and now_ts - frame.timestamp <= int(RADAR_MAX_FRAME_AGE.total_seconds())
+    ]
+    if fresh_frames:
+        return fresh_frames
     return frames
 
 
@@ -1433,6 +1447,12 @@ def draw_weather_radar(display, weather=None, transition: bool = False):
         return result
 
     composed_frames = [_compose_frame(frame) for frame in frames]
+    if transition and len(composed_frames) > 1:
+        for frame_image in composed_frames:
+            display.display(frame_image)
+            time.sleep(RADAR_ANIMATION_FRAME_DELAY_SECONDS)
+        return ScreenImage(composed_frames[-1], displayed=True)
+
     last_frame = composed_frames[-1]
     return ScreenImage(last_frame, displayed=False)
 
