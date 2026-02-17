@@ -192,8 +192,15 @@ def _is_1080p_or_higher(width: int, height: int) -> bool:
     return short_edge >= 1080
 
 
+def _is_display_hat_mini_layout(width: int, height: int) -> bool:
+    """Return True for Display HAT Mini dimensions regardless of orientation."""
+    return sorted((int(width), int(height))) == [240, 320]
+
+
 def _logo_scroll_speed_for_layout(width: int, height: int) -> float:
     base_speed = 2.2
+    if _is_display_hat_mini_layout(width, height):
+        return base_speed * 2.0
     return base_speed * (2.0 if _is_1080p_or_higher(width, height) else 1.0)
 
 
