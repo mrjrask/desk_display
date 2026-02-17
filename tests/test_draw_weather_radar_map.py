@@ -2,7 +2,11 @@ from io import BytesIO
 
 from PIL import Image
 
-from screens.draw_weather import _fetch_base_map
+from screens.draw_weather import (
+    RADAR_CENTER_LATITUDE,
+    RADAR_CENTER_LONGITUDE,
+    _fetch_base_map,
+)
 
 
 class _MockResponse:
@@ -55,3 +59,22 @@ def test_fetch_base_map_falls_back_when_osm_unavailable(monkeypatch):
     assert len(seen_urls) == 2
     assert "openstreetmap" in seen_urls[0]
     assert "cartocdn.com/light_all" in seen_urls[1]
+
+
+def test_fetch_base_map_uses_chicago_center_coordinates(monkeypatch):
+    seen_coords = []
+
+    def _mock_latlon_to_tile(lat, lon, zoom):
+        seen_coords.append((lat, lon, zoom))
+        return (10, 20, 0.0, 0.0)
+
+    def _mock_get(url, timeout, headers):
+        return _MockResponse(_png_bytes())
+
+    monkeypatch.setattr("screens.draw_weather._latlon_to_tile", _mock_latlon_to_tile)
+    monkeypatch.setattr("screens.draw_weather.requests.get", _mock_get)
+
+    result = _fetch_base_map(zoom=7)
+
+    assert result is not None
+    assert seen_coords == [(RADAR_CENTER_LATITUDE, RADAR_CENTER_LONGITUDE, 7)]
