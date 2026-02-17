@@ -492,10 +492,12 @@ class _KernelDisplay:
         self._pygame.display.set_caption("Desk Display")
         try:
             self._pygame.mouse.set_visible(False)
+            _park_mouse_cursor(self._pygame)
             _wiggle_mouse_cursor(self._pygame)
             _schedule_mouse_cursor_wiggle(
                 self._pygame,
                 delay_seconds=_CURSOR_WIGGLE_DELAY_SECONDS,
+                repeat=True,
             )
         except Exception:  # pragma: no cover - optional behavior
             pass
@@ -562,21 +564,54 @@ def _wiggle_mouse_cursor(pygame_module: Any, *, distance: int = 1) -> None:
         return
 
 
+def _park_mouse_cursor(pygame_module: Any) -> None:
+    """Move the pointer to the bottom-right corner of the active display."""
+
+    try:
+        surface = pygame_module.display.get_surface()
+        if surface is None:
+            return
+        width, height = surface.get_size()
+        pygame_module.mouse.set_pos((max(0, width - 1), max(0, height - 1)))
+        pygame_module.event.pump()
+    except Exception:
+        return
+
+
 def _schedule_mouse_cursor_wiggle(
     pygame_module: Any,
     *,
     delay_seconds: float,
     distance: int = 1,
+    repeat: bool = False,
 ) -> Optional[threading.Timer]:
-    """Schedule a one-off cursor wiggle after startup."""
+    """Schedule a cursor wiggle after startup, optionally repeating."""
 
     if delay_seconds <= 0:
         return None
 
+    callback: Callable[[], None]
+    if repeat:
+        def _repeat() -> None:
+            _wiggle_mouse_cursor(pygame_module, distance=distance)
+            _schedule_mouse_cursor_wiggle(
+                pygame_module,
+                delay_seconds=delay_seconds,
+                distance=distance,
+                repeat=True,
+            )
+
+        callback = _repeat
+    else:
+        callback = functools.partial(
+            _wiggle_mouse_cursor,
+            pygame_module=pygame_module,
+            distance=distance,
+        )
+
     timer = threading.Timer(
         delay_seconds,
-        _wiggle_mouse_cursor,
-        kwargs={"pygame_module": pygame_module, "distance": distance},
+        callback,
     )
     timer.daemon = True
     timer.start()
