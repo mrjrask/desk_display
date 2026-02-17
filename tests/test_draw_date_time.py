@@ -1,3 +1,4 @@
+from screens import draw_date_time
 from screens.draw_date_time import _color_cycle_profile
 
 
@@ -33,3 +34,47 @@ def test_color_cycle_profile_hyperpixel_cycles_continuously():
     )
 
     assert steps is None
+
+
+def test_kernel_color_cycle_ignores_frame_id_drift(monkeypatch):
+    calls = {"compose": 0, "images": 0}
+
+    class DriftingDisplay:
+        def __init__(self):
+            self._frame = 0
+
+        def frame_id(self):
+            self._frame += 1
+            return self._frame
+
+        def image(self, _img):
+            calls["images"] += 1
+
+    monkeypatch.setattr(
+        draw_date_time,
+        "_color_cycle_profile",
+        lambda **_kwargs: (0.0, 0.0, 2),
+    )
+    monkeypatch.setattr(draw_date_time, "is_hyperpixel_next_layout", lambda: False)
+    monkeypatch.setattr(draw_date_time, "is_hyperpixel_4_square_layout", lambda: False)
+    monkeypatch.setattr(draw_date_time, "is_kernel_driven_display", lambda: True)
+    monkeypatch.setattr(draw_date_time.time, "sleep", lambda _seconds: None)
+    monkeypatch.setattr(draw_date_time, "bright_color", lambda: (255, 0, 0))
+
+    def _fake_compose(*_args, **_kwargs):
+        calls["compose"] += 1
+        return object()
+
+    monkeypatch.setattr(draw_date_time, "_compose_frame", _fake_compose)
+
+    frame_state = {"value": 1, "lock": draw_date_time.threading.Lock()}
+    draw_date_time._cycle_colors_after_load(
+        DriftingDisplay(),
+        "date_time",
+        lambda: False,
+        "date",
+        frame_state,
+    )
+
+    assert calls["compose"] == 2
+    assert calls["images"] == 2
