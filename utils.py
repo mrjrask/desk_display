@@ -1621,9 +1621,16 @@ def animate_scroll(display: Display, image: Image.Image, speed=3.0, y_offset=Non
             time.sleep(sleep_time)
         x += step
 
-    # Ensure the display is clear once the image has fully scrolled off-screen.
-    final_frame = Image.new(frame_mode, (w, h), background_color)
-    display.image(final_frame.convert("RGB") if has_alpha else final_frame)
+    # End on a visible centered logo frame so the next screen can fade from the
+    # brand card instead of a fully black buffer.
+    centered_frame = Image.new(frame_mode, (w, h), background_color)
+    centered_x = (w - img_w) // 2
+    if has_alpha:
+        centered_frame.paste(image, (centered_x, y), image)
+        display.image(centered_frame.convert("RGB"))
+    else:
+        centered_frame.paste(image, (centered_x, y))
+        display.image(centered_frame)
 
 # ─── Date & Time Helpers ─────────────────────────────────────────────────────
 def parse_game_date(iso_date_str: str, time_str: str = "TBD") -> str:
