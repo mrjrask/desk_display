@@ -382,11 +382,10 @@ def build_screen_registry(context: ScreenContext) -> Tuple[Dict[str, ScreenDefin
             metadata=extra,
         )
 
-    # Use transition mode in the rotation loop so date/time screens render a
-    # single frame and do not leave behind long-lived background repaint
-    # threads that can overwrite later screens.
-    register("date", lambda: draw_date(context.display, transition=True))
-    register("time", lambda: draw_time(context.display, transition=True))
+    # Date/time screens intentionally run outside transition mode so their
+    # color-cycle threads can keep animating while those screens are visible.
+    register("date", lambda: draw_date(context.display, transition=False))
+    register("time", lambda: draw_time(context.display, transition=False))
     register("nixie", lambda: draw_nixie(context.display, transition=True))
 
     weather_data = context.cache.get("weather")
