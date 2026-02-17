@@ -23,6 +23,7 @@ from config import (
     SCOREBOARD_SCROLL_PAUSE_BOTTOM,
 )
 from utils import clear_display, get_mlb_abbreviation, get_mlb_tricode, log_call, clone_font
+from utils import scroll_vertical_content
 from screens.mlb_team_standings import format_games_back
 
 # ─── Fonts / geometry from config ────────────────────────────────────────────
@@ -374,35 +375,24 @@ def draw_division_screen(display, league_id: int, division_id: int, title: str, 
     display.show()
 
     visible_h = HEIGHT - header_h
-    max_offset = max(0, list_h - visible_h)
 
-    time.sleep(SCOREBOARD_SCROLL_PAUSE_TOP)
-    if max_offset <= 0:
-        time.sleep(SCOREBOARD_SCROLL_PAUSE_BOTTOM)
-        return None
-
-    target_frame_time = 0.016  # ~60 FPS for smoother scrolling
-    for off in range(
-        SCOREBOARD_SCROLL_STEP,
-        max_offset + SCOREBOARD_SCROLL_STEP,
-        SCOREBOARD_SCROLL_STEP,
-    ):
-        frame_start = time.time()
-
-        offset = min(off, max_offset)
-        f2 = header.copy()
+    def _render_at_offset(offset: int) -> None:
+        frame = header.copy()
         part = canvas.crop((0, offset, WIDTH, offset + visible_h))
-        f2.paste(part, (0, header_h))
-        display.image(f2)
+        frame.paste(part, (0, header_h))
+        display.image(frame)
         display.show()
 
-        # Account for rendering time to maintain consistent frame rate
-        elapsed = time.time() - frame_start
-        sleep_time = max(0, target_frame_time - elapsed)
-        if sleep_time > 0:
-            time.sleep(sleep_time)
-
-    time.sleep(SCOREBOARD_SCROLL_PAUSE_BOTTOM)
+    scroll_vertical_content(
+        display=display,
+        content_height=list_h,
+        viewport_width=WIDTH,
+        viewport_height=visible_h,
+        render_at_offset=_render_at_offset,
+        base_step=SCOREBOARD_SCROLL_STEP,
+        pause_start=SCOREBOARD_SCROLL_PAUSE_TOP,
+        pause_end=SCOREBOARD_SCROLL_PAUSE_BOTTOM,
+    )
     return None
 
 
@@ -476,42 +466,26 @@ def draw_wildcard_screen(display, league_id: int, title: str, transition=False):
             sep_y = y + row_h - row_spacing // 2
             cd.line((margin, sep_y, WIDTH - margin, sep_y), fill=(0, 255, 0))
 
-    # Reverse scroll bottom → top
     visible_h = HEIGHT - header_h
-    start_off = max(0, list_h - visible_h)
-    first = header.copy()
-    first_slice = canvas.crop((0, start_off, WIDTH, start_off + visible_h))
-    first.paste(first_slice, (0, header_h))
-    display.image(first)
-    display.show()
 
-    time.sleep(SCOREBOARD_SCROLL_PAUSE_BOTTOM)
-    if start_off <= 0:
-        time.sleep(SCOREBOARD_SCROLL_PAUSE_TOP)
-        return None
-
-    target_frame_time = 0.016  # ~60 FPS for smoother scrolling
-    for off in range(
-        start_off - SCOREBOARD_SCROLL_STEP,
-        -SCOREBOARD_SCROLL_STEP,
-        -SCOREBOARD_SCROLL_STEP,
-    ):
-        frame_start = time.time()
-
-        offset = max(0, off)
-        f2 = header.copy()
+    def _render_at_offset(offset: int) -> None:
+        frame = header.copy()
         part = canvas.crop((0, offset, WIDTH, offset + visible_h))
-        f2.paste(part, (0, header_h))
-        display.image(f2)
+        frame.paste(part, (0, header_h))
+        display.image(frame)
         display.show()
 
-        # Account for rendering time to maintain consistent frame rate
-        elapsed = time.time() - frame_start
-        sleep_time = max(0, target_frame_time - elapsed)
-        if sleep_time > 0:
-            time.sleep(sleep_time)
-
-    time.sleep(SCOREBOARD_SCROLL_PAUSE_TOP)
+    scroll_vertical_content(
+        display=display,
+        content_height=list_h,
+        viewport_width=WIDTH,
+        viewport_height=visible_h,
+        render_at_offset=_render_at_offset,
+        base_step=SCOREBOARD_SCROLL_STEP,
+        pause_start=SCOREBOARD_SCROLL_PAUSE_BOTTOM,
+        pause_end=SCOREBOARD_SCROLL_PAUSE_TOP,
+        reverse=True,
+    )
     return None
 
 

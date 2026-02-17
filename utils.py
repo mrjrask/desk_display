@@ -1708,6 +1708,116 @@ def animate_scroll(display: Display, image: Image.Image, speed=3.0, y_offset=Non
         centered_frame.paste(image, (centered_x, y))
         display.image(centered_frame)
 
+
+@dataclass(frozen=True)
+class AdaptiveScrollParams:
+    step: int
+    target_frame_time: float
+    use_page_jump: bool
+
+
+def compute_adaptive_scroll_params(
+    *,
+    content_height: int,
+    viewport_height: int,
+    viewport_width: int,
+    base_step: int,
+    min_frame_time: float = 0.016,
+    page_jump_mode: bool = True,
+    page_jump_threshold_ratio: float = 3.0,
+) -> AdaptiveScrollParams:
+    """Compute resolution-aware scroll step and frame pacing.
+
+    Larger displays can scroll farther per frame, while very tall boards run at
+    a lower FPS target to keep motion readable and reduce frame churn.
+    """
+
+    safe_base_step = max(1, int(base_step))
+    max_dimension = max(int(viewport_width), int(viewport_height), 1)
+    resolution_scale = max(1.0, max_dimension / 320.0)
+    step = max(safe_base_step, int(round(safe_base_step * resolution_scale)))
+
+    overflow = max(0, int(content_height) - int(viewport_height))
+    overflow_ratio = overflow / max(1, int(viewport_height))
+    # For very tall content increase frame time (lower FPS).
+    target_frame_time = min_frame_time * (1.0 + min(2.0, overflow_ratio * 0.6))
+
+    return AdaptiveScrollParams(
+        step=step,
+        target_frame_time=target_frame_time,
+        use_page_jump=bool(page_jump_mode and overflow_ratio >= page_jump_threshold_ratio),
+    )
+
+
+def scroll_vertical_content(
+    *,
+    display,
+    content_height: int,
+    viewport_width: int,
+    viewport_height: int,
+    render_at_offset: Callable[[int], None],
+    base_step: int,
+    pause_start: float,
+    pause_end: float,
+    reverse: bool = False,
+    page_jump_mode: bool = True,
+) -> None:
+    """Shared vertical scroll driver with adaptive timing and skip support."""
+
+    wait_for_skip = getattr(display, "wait_for_skip", None)
+    skip_requested = getattr(display, "skip_requested", None)
+
+    def _should_skip() -> bool:
+        return bool(callable(skip_requested) and skip_requested())
+
+    def _sleep(duration: float) -> bool:
+        if duration <= 0:
+            return _should_skip()
+        if callable(wait_for_skip):
+            return bool(wait_for_skip(duration))
+        time.sleep(duration)
+        return _should_skip()
+
+    max_offset = max(0, int(content_height) - int(viewport_height))
+    params = compute_adaptive_scroll_params(
+        content_height=content_height,
+        viewport_height=viewport_height,
+        viewport_width=viewport_width,
+        base_step=base_step,
+        page_jump_mode=page_jump_mode,
+    )
+
+    stride = params.step
+    if params.use_page_jump:
+        stride = max(stride, int(viewport_height * 0.75))
+
+    start_offset = max_offset if reverse else 0
+    render_at_offset(start_offset)
+
+    if _sleep(pause_start):
+        return
+    if max_offset <= 0:
+        _sleep(pause_end)
+        return
+
+    if reverse:
+        offsets = range(start_offset - stride, -stride, -stride)
+    else:
+        offsets = range(stride, max_offset + stride, stride)
+
+    for raw_offset in offsets:
+        if _should_skip():
+            return
+        frame_start = time.time()
+        offset = max(0, min(max_offset, raw_offset))
+        render_at_offset(offset)
+        elapsed = time.time() - frame_start
+        sleep_time = max(0, params.target_frame_time - elapsed)
+        if _sleep(sleep_time):
+            return
+
+    _sleep(pause_end)
+
 # ─── Date & Time Helpers ─────────────────────────────────────────────────────
 def parse_game_date(iso_date_str: str, time_str: str = "TBD") -> str:
     try:
