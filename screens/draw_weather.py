@@ -929,8 +929,15 @@ def draw_weather_hourly(display, weather, transition: bool = False, hours: int =
             is_snow = hour.get("is_snow", False)
             precip_color = (173, 216, 230) if is_snow else (135, 206, 250)
             precip_emoji = "❄️" if is_snow else "💧"
-            pop_text = f"{precip_emoji} {clamped_pop}%"
-            stat_items.append((pop_text, FONT_WEATHER_DETAILS_TINY_LARGE, precip_color))
+            pop_text = f"{clamped_pop}%"
+            _, pop_text_h = draw.textsize(pop_text, font=FONT_WEATHER_DETAILS_TINY_LARGE)
+            target_icon_size = max(8, pop_text_h)
+            precip_icon = _ensure_rgba_icon(_render_emoji_glyph(precip_emoji, FONT_EMOJI, precip_color))
+            if precip_icon.height != target_icon_size and precip_icon.height > 0:
+                scale = target_icon_size / precip_icon.height
+                resized_w = max(1, int(round(precip_icon.width * scale)))
+                precip_icon = precip_icon.resize((resized_w, target_icon_size), Image.Resampling.LANCZOS)
+            stat_items.append((pop_text, FONT_WEATHER_DETAILS_TINY_LARGE, precip_color, precip_icon))
 
         uvi_val = hour.get("uvi")
         if uvi_val is not None:
