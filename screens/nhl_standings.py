@@ -34,7 +34,7 @@ from config import (
     is_hyperpixel_4_square_layout,
 )
 from services.http_client import NHL_HEADERS, get_session
-from utils import ScreenImage, clear_display, log_call, clone_font
+from utils import ScreenImage, clear_display, log_call, clone_font, scroll_vertical_content
 
 # ─── Constants ────────────────────────────────────────────────────────────────
 TITLE_WEST = "Western Conference"
@@ -1941,40 +1941,18 @@ def _render_empty(
 
 
 def _scroll_vertical(display, image: Image.Image) -> None:
-    wait_for_skip = getattr(display, "wait_for_skip", None)
-
-    def _sleep(duration: float) -> bool:
-        if callable(wait_for_skip):
-            return bool(wait_for_skip(duration))
-        time.sleep(duration)
-        return False
-
-    if image.height <= HEIGHT:
-        display.image(image)
-        _sleep(SCOREBOARD_SCROLL_PAUSE_BOTTOM)
-        return
-
-    max_offset = image.height - HEIGHT
-    display.image(image.crop((0, 0, WIDTH, HEIGHT)))
-    if _sleep(SCOREBOARD_SCROLL_PAUSE_TOP):
-        return
-
-    target_frame_time = max(0.016, SCOREBOARD_SCROLL_DELAY)
-    for offset in range(
-        SCOREBOARD_SCROLL_STEP, max_offset + 1, SCOREBOARD_SCROLL_STEP
-    ):
-        frame_start = time.time()
-
-        frame = image.crop((0, offset, WIDTH, offset + HEIGHT))
-        display.image(frame)
-
-        # Account for rendering time to maintain consistent frame rate
-        elapsed = time.time() - frame_start
-        sleep_time = max(0, target_frame_time - elapsed)
-        if sleep_time > 0 and _sleep(sleep_time):
-            return
-
-    _sleep(SCOREBOARD_SCROLL_PAUSE_BOTTOM)
+    scroll_vertical_content(
+        display=display,
+        content_height=image.height,
+        viewport_width=WIDTH,
+        viewport_height=HEIGHT,
+        render_at_offset=lambda offset: display.image(
+            image.crop((0, offset, WIDTH, offset + HEIGHT))
+        ),
+        base_step=SCOREBOARD_SCROLL_STEP,
+        pause_start=SCOREBOARD_SCROLL_PAUSE_TOP,
+        pause_end=SCOREBOARD_SCROLL_PAUSE_BOTTOM,
+    )
 
 
 # ─── Public API ───────────────────────────────────────────────────────────────

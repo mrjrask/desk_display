@@ -51,6 +51,7 @@ from utils import (
     clear_display,
     load_team_logo,
     log_call,
+    scroll_vertical_content,
 )
 
 # ─── Constants ────────────────────────────────────────────────────────────────
@@ -684,47 +685,18 @@ def _render_scoreboard(games: list[dict], *, show_super_bowl_logo: bool) -> Imag
 
 
 def _scroll_display(display, full_img: Image.Image):
-    if full_img.height <= HEIGHT:
-        display.image(full_img)
-        return
-
-    wait_for_skip = getattr(display, "wait_for_skip", None)
-    skip_requested = getattr(display, "skip_requested", None)
-
-    def _should_skip() -> bool:
-        return bool(skip_requested and skip_requested())
-
-    def _sleep(duration: float) -> bool:
-        if callable(wait_for_skip):
-            return bool(wait_for_skip(duration))
-        time.sleep(duration)
-        return False
-
-    max_offset = full_img.height - HEIGHT
-    frame = full_img.crop((0, 0, WIDTH, HEIGHT))
-    display.image(frame)
-    if _sleep(SCOREBOARD_SCROLL_PAUSE_TOP):
-        return
-
-    target_frame_time = 0.016  # ~60 FPS for smoother scrolling
-    for offset in range(
-        SCOREBOARD_SCROLL_STEP, max_offset + 1, SCOREBOARD_SCROLL_STEP
-    ):
-        if _should_skip():
-            return
-
-        frame_start = time.time()
-
-        frame = full_img.crop((0, offset, WIDTH, offset + HEIGHT))
-        display.image(frame)
-
-        # Account for rendering time to maintain consistent frame rate
-        elapsed = time.time() - frame_start
-        sleep_time = max(0, target_frame_time - elapsed)
-        if sleep_time > 0 and _sleep(sleep_time):
-            return
-
-    _sleep(SCOREBOARD_SCROLL_PAUSE_BOTTOM)
+    scroll_vertical_content(
+        display=display,
+        content_height=full_img.height,
+        viewport_width=WIDTH,
+        viewport_height=HEIGHT,
+        render_at_offset=lambda offset: display.image(
+            full_img.crop((0, offset, WIDTH, offset + HEIGHT))
+        ),
+        base_step=SCOREBOARD_SCROLL_STEP,
+        pause_start=SCOREBOARD_SCROLL_PAUSE_TOP,
+        pause_end=SCOREBOARD_SCROLL_PAUSE_BOTTOM,
+    )
 
 
 # ─── Public API ───────────────────────────────────────────────────────────────
