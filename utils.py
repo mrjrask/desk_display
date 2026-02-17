@@ -701,11 +701,16 @@ from config import (
     WEATHER_USE_EMOJI_ICONS,
     get_emoji_font,
     is_hyperpixel_next_layout,
+    is_hyperpixel_4_square_layout,
     HYPERPIXEL_LED_INDICATOR_BORDER_ENABLED,
     HYPERPIXEL_LED_INDICATOR_BORDER_WIDTH,
     DISPLAY_HAT_MINI_LED_INDICATOR_BORDER_ENABLED,
     DISPLAY_HAT_MINI_LED_ENABLED,
     DISPLAY_HAT_MINI_REINIT_SECONDS,
+    DISPLAY_FADE_IN_ENABLED,
+    DISPLAY_FADE_IN_DISPLAY_HAT_MINI_STEPS,
+    DISPLAY_FADE_IN_HYPERPIXEL_STEPS,
+    DISPLAY_FADE_IN_HDMI_1080P_STEPS,
 )
 # Color utilities
 from screens.color_palettes import random_color
@@ -784,6 +789,11 @@ class Display:
         self._display_reinit_disabled = False
         self._display_reinit_lock = threading.Lock()
         self._display_io_lock = threading.RLock()
+        self._rotation_requires_expand = self.rotation in (90, 270)
+        self._indicator_work_buffer: Optional[Image.Image] = None
+        self._frame_transform: Callable[[Image.Image], Image.Image] = lambda img: img
+        self._frame_writer: Callable[[Image.Image], None] = lambda img: None
+        self._output_strategy = "headless"
 
         output = _normalize_display_output(_DISPLAY_OUTPUT)
         if _FORCE_HEADLESS or output == "headless":
@@ -871,7 +881,59 @@ class Display:
                     self.rotation,
                 )
 
+        self._configure_output_strategy()
+
         _ACTIVE_DISPLAY = self
+
+    def _configure_output_strategy(self) -> None:
+        """Select frame transform/output handlers once during initialization."""
+
+        if self._framebuffer is not None:
+            self._frame_transform = self._build_rotation_transform()
+            self._frame_writer = self._framebuffer.write_image
+            self._output_strategy = "framebuffer"
+            return
+
+        if self._kernel_display is not None:
+            self._frame_transform = self._build_rotation_transform()
+            self._frame_writer = self._kernel_display.write_image
+            self._output_strategy = "kernel"
+            return
+
+        if self._display is not None:
+            self._frame_transform = self._build_rotation_transform(
+                resize_to_display=True,
+            )
+            self._frame_writer = self._write_display_hat_mini_frame
+            self._output_strategy = "display_hat_mini"
+            return
+
+        self._frame_transform = lambda img: img
+        self._frame_writer = lambda img: None
+        self._output_strategy = "headless"
+
+    def _build_rotation_transform(
+        self,
+        *,
+        resize_to_display: bool = False,
+    ) -> Callable[[Image.Image], Image.Image]:
+        """Precompute the image transform strategy used by ``_update_display``."""
+
+        if not self.rotation and not resize_to_display:
+            return lambda img: img
+
+        def _transform(img: Image.Image) -> Image.Image:
+            transformed = img
+            if self.rotation:
+                transformed = transformed.rotate(
+                    self.rotation,
+                    expand=self._rotation_requires_expand,
+                )
+            if resize_to_display and transformed.size != (self.width, self.height):
+                transformed = transformed.resize((self.width, self.height), Image.ANTIALIAS)
+            return transformed
+
+        return _transform
 
     def register_skip_event(self, event: Optional[threading.Event]) -> None:
         """Associate a skip event so long-running screens can bail out early."""
@@ -906,43 +968,22 @@ class Display:
     def _update_display(self):
         if not display_updates_enabled():
             return
-        if self._framebuffer is not None:
-            buffer_to_display = self._indicator_buffer()
-            if self.rotation:
-                buffer_to_display = buffer_to_display.rotate(
-                    self.rotation,
-                    expand=self.rotation in (90, 270),
-                )
-            self._framebuffer.write_image(buffer_to_display)
-            return
-        if self._kernel_display is not None:
-            buffer_to_display = self._indicator_buffer()
-            if self.rotation:
-                buffer_to_display = buffer_to_display.rotate(
-                    self.rotation,
-                    expand=self.rotation in (90, 270),
-                )
-            self._kernel_display.write_image(buffer_to_display)
-            return
+        if self._output_strategy == "headless" and self._display is not None:
+            self._configure_output_strategy()
+        buffer_to_display = self._frame_transform(self._indicator_buffer())
+        self._frame_writer(buffer_to_display)
+
+    def _write_display_hat_mini_frame(self, buffer_to_display: Image.Image) -> None:
+        """Push a frame to Display HAT Mini, including hot reinitialization logic."""
+
         if self._display is None:  # pragma: no cover - hardware import
             return
+
         with self._display_io_lock:
             try:
                 self._maybe_reinitialize_display_hat_mini()
                 if self._display is None:
                     return
-
-                buffer_to_display = self._indicator_buffer()
-                if self.rotation:
-                    buffer_to_display = buffer_to_display.rotate(
-                        self.rotation,
-                        expand=self.rotation in (90, 270),
-                    )
-                    if buffer_to_display.size != (self.width, self.height):
-                        buffer_to_display = buffer_to_display.resize(
-                            (self.width, self.height),
-                            Image.ANTIALIAS,
-                        )
                 self._display.buffer = buffer_to_display
                 self._display.display()
             except Exception as exc:  # pragma: no cover - hardware import
@@ -1279,13 +1320,19 @@ class Display:
         if not any(color):
             return self._buffer
 
-        img = self._buffer.copy()
-        ImageDraw.Draw(img).rectangle(
+        if (
+            self._indicator_work_buffer is None
+            or self._indicator_work_buffer.size != (self.width, self.height)
+        ):
+            self._indicator_work_buffer = Image.new("RGB", (self.width, self.height), "black")
+
+        self._indicator_work_buffer.paste(self._buffer)
+        ImageDraw.Draw(self._indicator_work_buffer).rectangle(
             [(0, 0), (self.width - 1, self.height - 1)],
             outline=color,
             width=HYPERPIXEL_LED_INDICATOR_BORDER_WIDTH,
         )
-        return img
+        return self._indicator_work_buffer
 
     @staticmethod
     def _indicator_channel_to_pixel(value: float) -> int:
@@ -1528,11 +1575,39 @@ def temperature_color(temp_f: float, lo: float = 50.0, hi: float = 80.0) -> tupl
         b = int(180 + (0 - 180) * alpha)
     return (r, g, b)
 
+def _is_1080p_hdmi_layout(width: int, height: int) -> bool:
+    """Return True for 1080p-class HDMI displays (landscape or portrait)."""
+
+    return sorted((width, height)) >= [1080, 1920]
+
+
+def _resolve_fade_steps(display: Display, steps: int | None) -> int:
+    """Resolve fade step count from explicit args, policy defaults, and env/config flags."""
+
+    if steps is not None:
+        return max(0, int(steps))
+
+    if not DISPLAY_FADE_IN_ENABLED:
+        return 0
+
+    if (display.width, display.height) == (320, 240):
+        return DISPLAY_FADE_IN_DISPLAY_HAT_MINI_STEPS
+    if is_hyperpixel_4_square_layout(display.width, display.height) or is_hyperpixel_next_layout(
+        display.width,
+        display.height,
+    ):
+        return DISPLAY_FADE_IN_HYPERPIXEL_STEPS
+    if _is_1080p_hdmi_layout(display.width, display.height):
+        return DISPLAY_FADE_IN_HDMI_1080P_STEPS
+
+    return DISPLAY_FADE_IN_DISPLAY_HAT_MINI_STEPS
+
+
 @log_call
 def animate_fade_in(
     display: Display,
     new_image: Image.Image,
-    steps: int = 10,
+    steps: int | None = None,
     delay: float = 0.02,
     *,
     from_image: Image.Image | None = None,
@@ -1541,7 +1616,8 @@ def animate_fade_in(
     Fade from the current display buffer (or ``from_image``) into ``new_image``.
     """
 
-    if steps <= 0:
+    resolved_steps = _resolve_fade_steps(display, steps)
+    if resolved_steps <= 0:
         display.image(new_image)
         return
 
@@ -1561,10 +1637,10 @@ def animate_fade_in(
 
     target = new_image.convert("RGB")
 
-    for i in range(steps + 1):
+    for i in range(resolved_steps + 1):
         frame_start = time.time()
 
-        alpha = i / steps
+        alpha = i / resolved_steps
         frame = Image.blend(base, target, alpha)
         display.image(frame)
 

@@ -134,6 +134,20 @@ def _get_bool_env(name: str, default: bool) -> bool:
     return default
 
 
+def _get_int_env(name: str, default: int) -> int:
+    """Parse integer config values from environment variables."""
+
+    raw = os.environ.get(name)
+    if raw is None:
+        return default
+
+    try:
+        return int(raw)
+    except (TypeError, ValueError):
+        logging.warning("Invalid %s value %r; defaulting to %d.", name, raw, default)
+        return default
+
+
 def _get_required_env_var(*names: str) -> str:
     value = _get_first_env_var(*names)
     if value:
@@ -577,6 +591,21 @@ def is_hyperpixel_4_square_layout(width: int | None = None, height: int | None =
 def is_kernel_driven_display() -> bool:
     """Return True when output is configured for kernel/DRM-backed rendering."""
     return _display_output in KERNEL_DRIVEN_OUTPUTS
+
+
+DISPLAY_FADE_IN_ENABLED = _get_bool_env("DISPLAY_FADE_IN_ENABLED", True)
+DISPLAY_FADE_IN_DISPLAY_HAT_MINI_STEPS = max(
+    0,
+    _get_int_env("DISPLAY_FADE_IN_DISPLAY_HAT_MINI_STEPS", 10),
+)
+DISPLAY_FADE_IN_HYPERPIXEL_STEPS = max(
+    0,
+    _get_int_env("DISPLAY_FADE_IN_HYPERPIXEL_STEPS", 6),
+)
+DISPLAY_FADE_IN_HDMI_1080P_STEPS = max(
+    0,
+    _get_int_env("DISPLAY_FADE_IN_HDMI_1080P_STEPS", 0),
+)
 SCREEN_DELAY             = 4
 try:
     HOURLY_FORECAST_HOURS = int(os.environ.get("HOURLY_FORECAST_HOURS", "5"))
