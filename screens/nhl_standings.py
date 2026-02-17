@@ -1511,12 +1511,12 @@ def _draw_division(
             cutoff_y = max(y - max(1, ROW_SPACING // 2), top)
             _draw_dotted_line(draw, cutoff_y)
         row_top = y
+        row_center = row_top + ROW_HEIGHT // 2
         abbr = team.get("abbr", "")
         logo = _load_logo_cached(abbr)
         if logo:
-            logo_box_y = row_top + (ROW_HEIGHT - LOGO_HEIGHT) // 2
             logo_x = LEFT_MARGIN + (LOGO_HEIGHT - logo.width) // 2
-            logo_y = logo_box_y + (LOGO_HEIGHT - logo.height) // 2
+            logo_y = row_center - logo.height // 2
             img.paste(logo, (logo_x, logo_y), logo)
         team_label = _coerce_text(team.get("name")) or abbr
         team_label = _truncate_text_to_width(

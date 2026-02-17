@@ -1122,28 +1122,23 @@ def _render_conference(title: str, division_order: List[str], standings: Dict[st
             wins = str(team.get("wins", 0))
             losses = str(team.get("losses", 0))
             ties = str(team.get("ties", 0))
+            row_center = row_y + ROW_HEIGHT / 2
 
             # Team name
-            text_top = row_y + ROW_PADDING
-            text_center = text_top
             try:
                 l, t, r, b = draw.textbbox((0, 0), display_text, font=ROW_FONT)
                 tw, th = r - l, b - t
                 tx = column_layout["team"] - l
-                ty = row_y + ROW_PADDING - t
-                text_top = ty
-                text_center = text_top + th / 2
+                ty = int(row_center - th / 2 - t)
             except Exception:  # pragma: no cover - PIL fallback
                 tw, th = draw.textsize(display_text, font=ROW_FONT)
                 tx = column_layout["team"]
-                ty = row_y + ROW_PADDING
-                text_top = ty
-                text_center = text_top + th / 2
+                ty = int(row_center - th / 2)
 
             # Logo
             logo = _load_logo_cached(abbr)
             if logo:
-                logo_y = int(text_center - logo.height / 2)
+                logo_y = int(row_center - logo.height / 2)
                 img.paste(logo, (LEFT_MARGIN, logo_y), logo)
 
             draw.text((tx, ty), display_text, font=ROW_FONT, fill=WHITE)
@@ -1155,11 +1150,11 @@ def _render_conference(title: str, division_order: List[str], standings: Dict[st
                     l, t, r, b = draw.textbbox((0, 0), value, font=ROW_FONT)
                     tw, th = r - l, b - t
                     tx = x - tw
-                    ty = row_y + ROW_PADDING - t
+                    ty = int(row_center - th / 2 - t)
                 except Exception:  # pragma: no cover - PIL fallback
                     tw, th = draw.textsize(value, font=ROW_FONT)
                     tx = x - tw
-                    ty = row_y + ROW_PADDING
+                    ty = int(row_center - th / 2)
                 draw.text((tx, ty), value, font=ROW_FONT, fill=WHITE)
 
             row_y += ROW_HEIGHT + ROW_SPACING
