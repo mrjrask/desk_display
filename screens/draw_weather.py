@@ -1351,18 +1351,23 @@ def _fetch_rainviewer_frames(zoom: int = 7, max_frames: int = 6) -> list[RadarFr
 
 def _fetch_base_map(zoom: int = 7) -> Optional[Image.Image]:
     x_tile, y_tile, _, _ = _latlon_to_tile(LATITUDE, LONGITUDE, zoom)
-    url = f"https://basemaps.cartocdn.com/dark_all/{zoom}/{x_tile}/{y_tile}.png"
     headers = {
         "User-Agent": "desk-display/weather-radar",
     }
+    urls = [
+        f"https://tile.openstreetmap.org/{zoom}/{x_tile}/{y_tile}.png",
+        f"https://basemaps.cartocdn.com/light_all/{zoom}/{x_tile}/{y_tile}.png",
+    ]
 
-    try:
-        resp = requests.get(url, timeout=6, headers=headers)
-        resp.raise_for_status()
-        return Image.open(BytesIO(resp.content)).convert("RGB")
-    except Exception as exc:  # pragma: no cover - network failures are non-fatal
-        logging.warning("Radar base map fetch failed from %s: %s", url, exc)
-        return None
+    for url in urls:
+        try:
+            resp = requests.get(url, timeout=6, headers=headers)
+            resp.raise_for_status()
+            return Image.open(BytesIO(resp.content)).convert("RGB")
+        except Exception as exc:  # pragma: no cover - network failures are non-fatal
+            logging.warning("Radar base map fetch failed from %s: %s", url, exc)
+
+    return None
 
 
 @log_call
