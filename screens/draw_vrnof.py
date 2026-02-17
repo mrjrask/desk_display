@@ -13,6 +13,7 @@ import time
 from PIL import Image, ImageDraw
 import yfinance as yf
 
+import config
 from config import (
     WIDTH,
     HEIGHT,
@@ -43,8 +44,8 @@ _cache = {
     "ts":          0.0
 }
 
-_IS_1080P_LAYOUT = sorted((WIDTH, HEIGHT)) == [1080, 1920]
-_LOGO_SCALE_1080 = 5 if _IS_1080P_LAYOUT else 1
+_IS_1080P_LAYOUT = config.is_hdmi_1080p_layout()
+_LOGO_SCALE_1080 = config.DISPLAY_PROFILE_LOGO_SCALE_CAP
 LOGO_HEIGHT = 54 * _LOGO_SCALE_1080
 LOGO_GAP = 4
 BOTTOM_TEXT_MARGIN = (

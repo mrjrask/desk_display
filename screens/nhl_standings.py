@@ -12,6 +12,7 @@ from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 from PIL import Image, ImageDraw, ImageFont
 
+import config
 from config import (
     WIDTH,
     HEIGHT,
@@ -133,7 +134,7 @@ _HYPERPIXEL_4_STANDINGS_IDS = {
 }
 _HYPERPIXEL_4_ROW_SPACING = scale_value(3)
 _IS_HYPERPIXEL_4 = is_hyperpixel_next_layout() and not is_hyperpixel_4_square_layout()
-_IS_1080P_LAYOUT = sorted((WIDTH, HEIGHT)) == [1080, 1920]
+_IS_1080P_LAYOUT = config.is_hdmi_1080p_layout()
 _NHL_STANDINGS_TEAM_SIZE_IDS = {
     "NHL Standings West",
     "NHL Standings East",
