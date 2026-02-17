@@ -11,6 +11,7 @@ Core utilities for the desk display project:
 - GitHub update checker
 """
 import datetime
+import errno
 import html
 import os
 import random
@@ -686,6 +687,19 @@ def log_call(func):
         return result
     return wrapper
 
+
+def _is_device_busy_error(exc: BaseException) -> bool:
+    """Return True when an exception chain contains an EBUSY error."""
+
+    visited = set()
+    current: Optional[BaseException] = exc
+    while current is not None and id(current) not in visited:
+        visited.add(id(current))
+        if isinstance(current, OSError) and current.errno == errno.EBUSY:
+            return True
+        current = current.__cause__ or current.__context__
+    return False
+
 # ─── Display wrapper ────────────────────────────────────────────────────────
 class Display:
     """Wrapper around the Pimoroni Display HAT Mini (320×240 LCD)."""
@@ -732,6 +746,7 @@ class Display:
         self._display_reinit_seconds = DISPLAY_HAT_MINI_REINIT_SECONDS
         self._last_display_reinit = time.monotonic()
         self._next_display_reinit_retry = 0.0
+        self._display_reinit_disabled = False
         self._display_reinit_lock = threading.Lock()
         self._display_io_lock = threading.RLock()
 
@@ -970,6 +985,17 @@ class Display:
                 except Exception as exc:  # pragma: no cover - hardware import
                     logging.debug("Failed to %s Display HAT Mini driver: %s", method_name, exc)
 
+    def _release_display_hat_mini_compat(self, display, *, call_destructor: bool) -> None:
+        """Release helper tolerant of tests that monkeypatch the cleanup hook."""
+
+        try:
+            self._release_display_hat_mini(display, call_destructor=call_destructor)
+        except TypeError as exc:
+            if "call_destructor" not in str(exc):
+                raise
+            self._release_display_hat_mini(display)
+
+
 
     def _maybe_reinitialize_display_hat_mini(self) -> None:
         """Periodically recreate the Display HAT Mini driver to avoid long-run stalls."""
@@ -977,6 +1003,8 @@ class Display:
         if self._display is None:
             return
         if self._display_reinit_seconds <= 0:
+            return
+        if self._display_reinit_disabled:
             return
 
         now = time.monotonic()
@@ -999,11 +1027,7 @@ class Display:
             self._display = None
 
             with self._display_io_lock:
-                try:  # pragma: no cover - hardware import
-                    old_display.set_led(r=0.0, g=0.0, b=0.0)
-                except Exception as exc:  # pragma: no cover - hardware import
-                    logging.debug("Failed to turn off LED before display reinit cleanup: %s", exc)
-                self._release_display_hat_mini(old_display, call_destructor=False)
+                self._release_display_hat_mini_compat(old_display, call_destructor=False)
 
             try:
                 new_display = self._create_display_hat_mini(self._buffer)
@@ -1021,6 +1045,17 @@ class Display:
                             )
                 except Exception as restore_exc:  # pragma: no cover - hardware import
                     logging.debug("Failed to restore previous Display HAT Mini state after reinit failure: %s", restore_exc)
+
+                if _is_device_busy_error(exc):
+                    self._display_reinit_disabled = True
+                    self._next_display_reinit_retry = 0.0
+                    logging.info(
+                        "Display HAT Mini periodic reinit disabled after device busy error; "
+                        "continuing with current driver (%s)",
+                        exc,
+                    )
+                    return
+
                 self._next_display_reinit_retry = now + self._DISPLAY_REINIT_RETRY_SECONDS
                 logging.warning(
                     "Display HAT Mini reinit failed; restored previous driver and retrying in %ds (%s)",
@@ -1029,16 +1064,9 @@ class Display:
                 )
                 return
 
-            try:  # pragma: no cover - hardware import
-                with self._display_io_lock:
-                    new_display.set_led(r=0.0, g=0.0, b=0.0)
-            except Exception as exc:  # pragma: no cover - hardware import
-                logging.debug("Failed to force LED off after display reinit: %s", exc)
-
             with self._display_io_lock:
                 self._display = new_display
 
-            self._release_display_hat_mini(old_display, call_destructor=True)
             self._last_display_reinit = now
             self._next_display_reinit_retry = 0.0
 
@@ -1063,6 +1091,7 @@ class Display:
                 "Display HAT Mini driver reinitialized after %d seconds to keep output active.",
                 self._display_reinit_seconds,
             )
+
 
     def _bump_frame_id(self) -> None:
         with self._frame_lock:
