@@ -216,6 +216,14 @@ def _is_snow_condition(entry: object) -> bool:
         return True
     if isinstance(weather_id, int) and 600 <= weather_id < 700:
         return True
+    if isinstance(weather_id, int) and weather_id in {511}:
+        return True
+    frozen_tokens = ("sleet", "freez", "ice", "wintry", "mix")
+    if any(token in weather_main for token in frozen_tokens):
+        return True
+    description = (weather.get("description") or "").strip().lower()
+    if any(token in description for token in frozen_tokens):
+        return True
     if entry.get("snow"):
         return True
 
@@ -528,9 +536,9 @@ def draw_weather_screen_1(display, weather, transition=False):
     stack_gap = 2
     edge_margin = 4
     if precip_percent:
+        precip_emoji = "❄️" if is_snow else "💧"
         precip_color = (173, 216, 230) if is_snow else (135, 206, 250)
-        precip_icon_size = FONT_EMOJI.size if hasattr(FONT_EMOJI, "size") else 26
-        precip_icon = _ensure_rgba_icon(_render_precip_icon(is_snow, precip_icon_size, precip_color))
+        precip_icon = _ensure_rgba_icon(_render_emoji_glyph(precip_emoji, FONT_EMOJI, precip_color))
         emoji_w, emoji_h = precip_icon.size
         pct_w, pct_h = draw.textsize(precip_percent, font=side_font)
         block_w = max(emoji_w, pct_w)
@@ -545,7 +553,7 @@ def draw_weather_screen_1(display, weather, transition=False):
         draw.text((pct_x, block_y + emoji_h + stack_gap), precip_percent, font=side_font, fill=precip_color)
 
     if cloud_percent:
-        cloud_emoji = "☁"
+        cloud_emoji = "☁️"
         cloud_icon = _ensure_rgba_icon(_render_emoji_glyph(cloud_emoji, FONT_EMOJI, (211, 211, 211)))
         emoji_w, emoji_h = cloud_icon.size
         pct_w, pct_h = draw.textsize(cloud_percent, font=side_font)
