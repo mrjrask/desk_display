@@ -707,6 +707,8 @@ def _gather_daily_forecast(weather: object, days: int) -> list[dict]:
     for idx, day in enumerate(entries):
         if not isinstance(day, dict):
             continue
+        weather_list = day.get("weather") if isinstance(day.get("weather"), list) else []
+        daily_weather = (weather_list or [{}])[0]
         temp_data = day.get("temp") if isinstance(day.get("temp"), dict) else {}
         try:
             hi_val = round(float(temp_data.get("max", 0)))
@@ -723,6 +725,9 @@ def _gather_daily_forecast(weather: object, days: int) -> list[dict]:
             "lo": lo_val,
             "pop": _pop_pct_from(day),
             "is_snow": _is_snow_condition(day),
+            "condition": _normalise_condition(day),
+            "icon": daily_weather.get("icon"),
+            "condition_code": daily_weather.get("condition_code"),
         }
         forecast.append(entry)
     return forecast
@@ -1026,6 +1031,8 @@ def draw_weather_daily(display, weather, transition: bool = False, days: int = 5
     title_w, title_h = draw.textsize(title, font=FONT_WEATHER_LABEL)
     title_x = (WIDTH - title_w) // 2
     title_y = 2
+    if is_hyperpixel_next_layout():
+        title_y = 4
     draw.text((title_x, title_y), title, font=FONT_WEATHER_LABEL, fill=(200, 200, 200))
 
     days_to_show = len(forecast)
@@ -1036,8 +1043,12 @@ def draw_weather_daily(display, weather, transition: bool = False, days: int = 5
 
     card_top = title_h + 6
     card_bottom = HEIGHT - 6
-
-    line_gap = 2
+    card_height = card_bottom - card_top
+    icon_cache: dict[tuple[Optional[str], Optional[str], bool], Optional[Image.Image]] = {}
+    icon_size = max(16, min(WEATHER_ICON_SIZE, col_w - 10))
+    day_font = FONT_WEATHER_DETAILS_SMALL_BOLD
+    stat_font = FONT_WEATHER_DETAILS_SMALL
+    pop_font = FONT_WEATHER_DETAILS_TINY_LARGE
 
     for idx, day in enumerate(forecast):
         x0 = x_start + idx * (col_w + gap)
@@ -1056,32 +1067,48 @@ def draw_weather_daily(display, weather, transition: bool = False, days: int = 5
         lo_val = day.get("lo")
         pop_val = day.get("pop")
         is_snow = day.get("is_snow", False)
+        icon_code = day.get("icon")
+        condition_code = day.get("condition_code")
+        condition_label = day.get("condition") or ""
 
-        items = []
-        items.append(
-            {
-                "text": day_label,
-                "font": FONT_WEATHER_DETAILS_SMALL_BOLD,
-                "color": (235, 235, 235),
-            }
-        )
+        day_w, day_h = draw.textsize(day_label, font=day_font)
+        day_y = card_top + 6
+        draw.text((cx - day_w // 2, day_y), day_label, font=day_font, fill=(235, 235, 235))
+
+        icon_area_top = day_y + day_h + 4
+        icon_area_bottom = card_top + int(card_height * 0.64)
+        stat_area_top = icon_area_bottom + 6
+        stat_area_bottom = card_bottom - 6
+
+        icon_img = None
+        icon_key = (icon_code, condition_code, True)
+        if icon_code:
+            if icon_key not in icon_cache:
+                icon_cache[icon_key] = fetch_weather_icon(
+                    icon_code,
+                    icon_size,
+                    condition_code=condition_code,
+                    is_daylight=True,
+                    stack_emojis=True,
+                )
+            icon_img = icon_cache[icon_key]
+
+        if icon_img:
+            icon_y = icon_area_top + max(0, (icon_area_bottom - icon_area_top - icon_size) // 2)
+            img.paste(icon_img, (cx - icon_size // 2, icon_y), icon_img)
+        elif condition_label:
+            display_text = condition_label
+            cond_w, cond_h = draw.textsize(display_text, font=FONT_WEATHER_DETAILS_TINY)
+            while cond_w > col_w - 8 and len(display_text) > 3:
+                display_text = display_text[:-1]
+                cond_w, cond_h = draw.textsize(display_text + "…", font=FONT_WEATHER_DETAILS_TINY)
+            if display_text != condition_label:
+                display_text = f"{display_text}…"
+            cond_y = icon_area_top + max(0, (icon_area_bottom - icon_area_top - cond_h) // 2)
+            draw.text((cx - cond_w // 2, cond_y), display_text, font=FONT_WEATHER_DETAILS_TINY, fill=(190, 190, 190))
 
         hi_text = f"Hi {hi_val}°" if hi_val is not None else "Hi —"
         lo_text = f"Lo {lo_val}°" if lo_val is not None else "Lo —"
-        items.append(
-            {
-                "text": hi_text,
-                "font": FONT_WEATHER_DETAILS_SMALL,
-                "color": (255, 120, 120),
-            }
-        )
-        items.append(
-            {
-                "text": lo_text,
-                "font": FONT_WEATHER_DETAILS_SMALL,
-                "color": (120, 170, 255),
-            }
-        )
 
         pop_text = "PoP —"
         precip_icon = None
@@ -1092,49 +1119,33 @@ def draw_weather_daily(display, weather, transition: bool = False, days: int = 5
             pop_text = f"PoP {clamped_pop}%"
             precip_icon = _render_precip_icon(is_snow, 10, precip_color)
 
-        items.append(
-            {
-                "text": pop_text,
-                "font": FONT_WEATHER_DETAILS_TINY_LARGE,
-                "color": precip_color,
-                "icon": precip_icon,
-            }
-        )
-
-        item_heights = []
-        for item in items:
-            text_w, text_h = draw.textsize(item["text"], font=item["font"])
-            icon = item.get("icon")
-            icon_h = icon.size[1] if icon else 0
-            item_heights.append(max(text_h, icon_h))
-
-        total_h = sum(item_heights) + line_gap * (len(items) - 1)
-        content_top = card_top + 6
-        content_bottom = card_bottom - 6
-        start_y = content_top + max(0, (content_bottom - content_top - total_h) // 2)
-
-        y = start_y
-        for item, item_h in zip(items, item_heights):
-            text = item["text"]
-            font = item["font"]
-            color = item["color"]
+        stats = [
+            (hi_text, stat_font, (255, 120, 120), None),
+            (lo_text, stat_font, (120, 170, 255), None),
+            (pop_text, pop_font, precip_color, precip_icon),
+        ]
+        segment_h = max(1, (stat_area_bottom - stat_area_top) / max(1, len(stats)))
+        for stat_idx, (text, font, color, icon) in enumerate(stats):
             text_w, text_h = draw.textsize(text, font=font)
-            icon = item.get("icon")
+            center_y = stat_area_top + segment_h * (stat_idx + 0.5)
+            text_y = int(center_y - text_h / 2)
+            text_y = max(stat_area_top, min(text_y, stat_area_bottom - text_h))
             if icon:
                 icon_w, icon_h = icon.size
                 gap_icon = 2
                 total_w = icon_w + gap_icon + text_w
                 icon_x = cx - total_w // 2
-                icon_y = y + (item_h - icon_h) // 2
+                icon_y = text_y + (text_h - icon_h) // 2
                 text_x = icon_x + icon_w + gap_icon
-                text_y = y + (item_h - text_h) // 2
                 img.paste(icon, (icon_x, icon_y), icon)
                 draw.text((text_x, text_y), text, font=font, fill=color)
             else:
                 text_x = cx - text_w // 2
-                text_y = y + (item_h - text_h) // 2
                 draw.text((text_x, text_y), text, font=font, fill=color)
-            y += item_h + line_gap
+
+    if is_hyperpixel_next_layout():
+        draw.rectangle((0, 0, WIDTH, title_y + title_h + 2), fill=background)
+    draw.text((title_x, title_y), title, font=FONT_WEATHER_LABEL, fill=(200, 200, 200))
 
     return ScreenImage(img, displayed=False)
 
