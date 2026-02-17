@@ -1096,10 +1096,8 @@ def _scroll_display(display, full_img: Image.Image):
 
 
 # ─── Public API ───────────────────────────────────────────────────────────────
-@log_call
-def draw_nhl_scoreboard(display, transition: bool = False) -> ScreenImage:
+def render_nhl_scoreboard(display, games: list[dict], transition: bool = False) -> ScreenImage:
     _apply_style_overrides()
-    games = _fetch_games_for_date(_scoreboard_date())
 
     if not games:
         clear_display(display)

@@ -56,6 +56,7 @@ from config import (
     is_within_dark_hours,
     AHL_TEAM_TRICODE,
     ENABLE_WIFI_RECOVERY,
+    WEATHER_REFRESH_SECONDS,
 )
 from utils import (
     Display,
@@ -70,6 +71,7 @@ from utils import (
     temporary_display_led,
 )
 import data_fetch
+from services.data_provider import provider as data_provider
 try:
     from services import wifi_utils as _wifi_utils
     wifi_utils = _wifi_utils
@@ -1160,6 +1162,7 @@ cache = {
     "bulls":   {"stand":None, "last":None, "live":None, "next":None, "next_home":None},
     "cubs":    {"stand":None, "last":None, "live":None, "next":None, "next_home":None},
     "sox":     {"stand":None, "last":None, "live":None, "next":None, "next_home":None},
+    "scoreboards": {"nfl": [], "mlb": [], "nba": [], "nhl": []},
 }
 
 _FEED_DEPENDENCIES: Dict[str, Set[str]] = {
@@ -1187,6 +1190,16 @@ _FEED_DEPENDENCIES: Dict[str, Set[str]] = {
         "sox next home",
         "sox logo",
     },
+    "scoreboards": {
+        "NFL Scoreboard",
+        "NFL Scoreboard v2",
+        "NHL Scoreboard",
+        "NHL Scoreboard v2",
+        "MLB Scoreboard",
+        "MLB Scoreboard v2",
+        "NBA Scoreboard",
+        "NBA Scoreboard v2",
+    },
 }
 
 _FEED_REFRESH_INTERVALS: Dict[str, int] = {
@@ -1197,6 +1210,7 @@ _FEED_REFRESH_INTERVALS: Dict[str, int] = {
     "bears": 1800,
     "cubs": 1800,
     "sox": 1800,
+    "scoreboards": 120,
 }
 
 _last_feed_refresh: Dict[str, float] = {}
@@ -1213,7 +1227,12 @@ def _requested_data_feeds() -> Set[str]:
 
 
 def _refresh_weather() -> None:
-    cache["weather"] = data_fetch.fetch_weather(force_refresh=True)
+    cache["weather"] = data_provider.read_weather(ttl_seconds=WEATHER_REFRESH_SECONDS)
+
+
+def _refresh_scoreboards() -> None:
+    sports_payloads = data_provider.read_sports_payloads(ttl_seconds=120) or {}
+    cache["scoreboards"].update(sports_payloads.get("scoreboards") or {})
 
 
 def _refresh_bears() -> None:
@@ -1282,6 +1301,7 @@ _FEED_REFRESHERS: Dict[str, Callable[[], None]] = {
     "bulls": _refresh_bulls,
     "cubs": _refresh_cubs,
     "sox": _refresh_sox,
+    "scoreboards": _refresh_scoreboards,
 }
 
 
