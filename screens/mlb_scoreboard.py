@@ -22,7 +22,6 @@ import os
 import time
 from typing import Iterable, Optional
 
-import requests
 from PIL import Image, ImageDraw
 
 from config import (
@@ -49,6 +48,7 @@ from config import (
     scale_value,
     scale_value_width,
 )
+from services.http_client import get_session
 from utils import (
     ScreenImage,
     clear_display,
@@ -74,6 +74,7 @@ BLOCK_SPACING         = scale_value(10)
 SCORE_ROW_H           = scale_value(56)
 STATUS_ROW_H          = scale_value(18)
 REQUEST_TIMEOUT       = 10
+FETCH_CACHE_TTL_SECONDS = 60
 
 COL_WIDTHS = [
     _scale_width(70),
@@ -138,6 +139,8 @@ BACKGROUND_COLOR = get_screen_background_color(SCREEN_ID, SCOREBOARD_BACKGROUND_
 # Cache for resized logos { (abbr, height): Image }
 _LOGO_CACHE: dict[tuple[str, int], Optional[Image.Image]] = {}
 _LEAGUE_LOGO_CACHE: dict[int, Optional[Image.Image]] = {}
+_GAMES_CACHE: dict[tuple[datetime.date, str], tuple[float, list[dict]]] = {}
+_SESSION = get_session()
 
 
 # ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -496,6 +499,12 @@ def _scoreboard_date(now: Optional[datetime.datetime] = None) -> datetime.date:
 
 
 def _fetch_games_for_date(day: datetime.date) -> list[dict]:
+    cache_key = (day, "mlb_statsapi")
+    now = time.monotonic()
+    cached = _GAMES_CACHE.get(cache_key)
+    if cached and (now - cached[0]) < FETCH_CACHE_TTL_SECONDS:
+        return cached[1]
+
     # Explicitly request postseason game types (Wild Card → World Series)
     # so the API continues to return games once the regular season ends.
     url = (
@@ -504,7 +513,7 @@ def _fetch_games_for_date(day: datetime.date) -> list[dict]:
         "&gameTypes=R,F,D,L,W"
     )
     try:
-        response = requests.get(url, timeout=REQUEST_TIMEOUT)
+        response = _SESSION.get(url, timeout=REQUEST_TIMEOUT)
         response.raise_for_status()
         data = response.json()
     except Exception as exc:
@@ -514,7 +523,9 @@ def _fetch_games_for_date(day: datetime.date) -> list[dict]:
     raw_games: list[dict] = []
     for day in data.get("dates", []):
         raw_games.extend(day.get("games", []) or [])
-    return _hydrate_games(raw_games)
+    games = _hydrate_games(raw_games)
+    _GAMES_CACHE[cache_key] = (now, games)
+    return games
 
 
 def _render_scoreboard(

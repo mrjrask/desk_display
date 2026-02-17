@@ -17,7 +17,6 @@ import os
 import time
 from typing import Iterable, Optional
 
-import requests
 from PIL import Image, ImageDraw
 
 from config import (
@@ -46,6 +45,7 @@ from config import (
     scale_value,
     scale_value_width,
 )
+from services.http_client import get_session
 from utils import (
     ScreenImage,
     clear_display,
@@ -68,6 +68,7 @@ BLOCK_SPACING       = _scale_y(10)
 SCORE_ROW_H         = _scale_y(56)
 STATUS_ROW_H        = _scale_y(18)
 REQUEST_TIMEOUT     = 10
+FETCH_CACHE_TTL_SECONDS = 60
 SUPER_BOWL_LOGO_GAP = _scale_y(6)
 SUPER_BOWL_DATE     = (2, 8)  # Feb 8
 
@@ -130,6 +131,8 @@ IN_GAME_STATUS_OVERRIDES = {
 _LOGO_CACHE: dict[tuple[str, int], Optional[Image.Image]] = {}
 _LEAGUE_LOGO_CACHE: dict[int, Optional[Image.Image]] = {}
 _SUPER_BOWL_LOGO_CACHE: dict[int, Optional[Image.Image]] = {}
+_GAMES_CACHE: dict[tuple[datetime.date, str], tuple[float, list[dict]]] = {}
+_SESSION = get_session()
 
 
 def _apply_style_overrides() -> None:
@@ -538,12 +541,18 @@ def _is_pro_bowl_game(game: dict) -> bool:
 
 
 def _fetch_games_for_date(day: datetime.date) -> list[dict]:
+    cache_key = (day, "espn_nfl_scoreboard")
+    now = time.monotonic()
+    cached = _GAMES_CACHE.get(cache_key)
+    if cached and (now - cached[0]) < FETCH_CACHE_TTL_SECONDS:
+        return cached[1]
+
     url = (
         "https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard"
         f"?dates={day.strftime('%Y%m%d')}"
     )
     try:
-        response = requests.get(url, timeout=REQUEST_TIMEOUT)
+        response = _SESSION.get(url, timeout=REQUEST_TIMEOUT)
         response.raise_for_status()
         data = response.json()
     except Exception as exc:
@@ -566,7 +575,9 @@ def _fetch_games_for_date(day: datetime.date) -> list[dict]:
         comp["_event_short_name"] = event.get("shortName")
         raw_games.append(comp)
     games = _hydrate_games(raw_games)
-    return [game for game in games if not _is_pro_bowl_game(game)]
+    filtered_games = [game for game in games if not _is_pro_bowl_game(game)]
+    _GAMES_CACHE[cache_key] = (now, filtered_games)
+    return filtered_games
 
 
 def _week_cutoff_datetime(week_start: datetime.date, game_count: int) -> datetime.datetime:
