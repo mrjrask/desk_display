@@ -24,6 +24,7 @@ from typing import NamedTuple, Optional, Tuple
 import requests
 from PIL import Image, ImageDraw, ImageFont
 
+import config
 from config import (
     WIDTH,
     HEIGHT,
@@ -89,7 +90,7 @@ RADAR_MAX_FRAME_AGE = datetime.timedelta(hours=2)
 RADAR_ANIMATION_FRAME_DELAY_SECONDS = 0.2
 
 
-_IS_1080P_LAYOUT = sorted((WIDTH, HEIGHT)) == [1080, 1920]
+_IS_1080P_LAYOUT = config.is_hdmi_1080p_layout()
 
 def _safe_textbbox(
     draw: ImageDraw.ImageDraw,

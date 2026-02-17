@@ -151,3 +151,25 @@ def test_scoreboard_scroll_step_doubles_only_on_1080p(monkeypatch):
 
     module = _reload_config(monkeypatch, DISPLAY_WIDTH="320", DISPLAY_HEIGHT="240")
     assert module.SCOREBOARD_SCROLL_STEP == 1
+
+
+def test_display_profile_id_resolution(monkeypatch):
+    module = _reload_config(monkeypatch, DISPLAY_WIDTH="320", DISPLAY_HEIGHT="240")
+    assert module.get_display_profile_id() == "display_hat_mini"
+
+    module = _reload_config(monkeypatch, DISPLAY_WIDTH="800", DISPLAY_HEIGHT="480")
+    assert module.get_display_profile_id() == "hyperpixel4"
+
+    module = _reload_config(monkeypatch, DISPLAY_WIDTH="720", DISPLAY_HEIGHT="720")
+    assert module.get_display_profile_id() == "hyperpixel4_square"
+
+    module = _reload_config(monkeypatch, DISPLAY_WIDTH="1080", DISPLAY_HEIGHT="1920")
+    assert module.get_display_profile_id() == "hdmi_1080p"
+
+
+def test_display_profile_presets_drive_scroll_defaults(monkeypatch):
+    module = _reload_config(monkeypatch, DISPLAY_WIDTH="1920", DISPLAY_HEIGHT="1080")
+    assert module.SCOREBOARD_SCROLL_STEP == module.ACTIVE_DISPLAY_PROFILE.scoreboard_scroll_step
+
+    module = _reload_config(monkeypatch, DISPLAY_WIDTH="1280", DISPLAY_HEIGHT="720")
+    assert module.SCOREBOARD_SCROLL_STEP == module.ACTIVE_DISPLAY_PROFILE.scoreboard_scroll_step

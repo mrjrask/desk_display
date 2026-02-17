@@ -60,8 +60,8 @@ from utils import (
 TS_PATH = TIMES_SQUARE_FONT_PATH
 AHL_DIR = AHL_IMAGES_DIR
 BACKGROUND_COLOR = (0, 0, 0)
-_IS_1080P_LAYOUT = sorted((WIDTH, HEIGHT)) == [1080, 1920]
-_LOGO_SCALE_1080 = 5.0 if _IS_1080P_LAYOUT else 1.0
+_IS_1080P_LAYOUT = config.is_hdmi_1080p_layout()
+_LOGO_SCALE_1080 = config.DISPLAY_PROFILE_LOGO_SCALE_CAP
 
 def _ts(size: int) -> ImageFont.ImageFont:
     try:

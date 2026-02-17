@@ -711,6 +711,8 @@ from config import (
     DISPLAY_FADE_IN_DISPLAY_HAT_MINI_STEPS,
     DISPLAY_FADE_IN_HYPERPIXEL_STEPS,
     DISPLAY_FADE_IN_HDMI_1080P_STEPS,
+    DISPLAY_FADE_IN_STEPS_BY_PROFILE,
+    get_display_profile_id,
 )
 # Color utilities
 from screens.color_palettes import random_color
@@ -1575,12 +1577,6 @@ def temperature_color(temp_f: float, lo: float = 50.0, hi: float = 80.0) -> tupl
         b = int(180 + (0 - 180) * alpha)
     return (r, g, b)
 
-def _is_1080p_hdmi_layout(width: int, height: int) -> bool:
-    """Return True for 1080p-class HDMI displays (landscape or portrait)."""
-
-    return sorted((width, height)) >= [1080, 1920]
-
-
 def _resolve_fade_steps(display: Display, steps: int | None) -> int:
     """Resolve fade step count from explicit args, policy defaults, and env/config flags."""
 
@@ -1590,17 +1586,11 @@ def _resolve_fade_steps(display: Display, steps: int | None) -> int:
     if not DISPLAY_FADE_IN_ENABLED:
         return 0
 
-    if (display.width, display.height) == (320, 240):
-        return DISPLAY_FADE_IN_DISPLAY_HAT_MINI_STEPS
-    if is_hyperpixel_4_square_layout(display.width, display.height) or is_hyperpixel_next_layout(
-        display.width,
-        display.height,
-    ):
-        return DISPLAY_FADE_IN_HYPERPIXEL_STEPS
-    if _is_1080p_hdmi_layout(display.width, display.height):
-        return DISPLAY_FADE_IN_HDMI_1080P_STEPS
-
-    return DISPLAY_FADE_IN_DISPLAY_HAT_MINI_STEPS
+    profile_id = get_display_profile_id(display.width, display.height)
+    return DISPLAY_FADE_IN_STEPS_BY_PROFILE.get(
+        profile_id,
+        DISPLAY_FADE_IN_DISPLAY_HAT_MINI_STEPS,
+    )
 
 
 @log_call

@@ -1,4 +1,5 @@
 """NHL team standings screens."""
+import config
 from screens.mlb_team_standings import (
     LOGO_SZ,
     draw_standings_screen1 as _base_screen1,
@@ -11,7 +12,7 @@ from utils import log_call, clone_font
 _IS_HYPERPIXEL_4_SQUARE = is_hyperpixel_4_square_layout()
 _IS_HYPERPIXEL_LAYOUT = is_hyperpixel_next_layout()
 _IS_HYPERPIXEL_4 = _IS_HYPERPIXEL_LAYOUT and not _IS_HYPERPIXEL_4_SQUARE
-_IS_1080P_LAYOUT = sorted((WIDTH, HEIGHT)) == [1080, 1920]
+_IS_1080P_LAYOUT = config.is_hdmi_1080p_layout()
 
 NHL_LOGO_SZ = max(1, int(round(LOGO_SZ * 0.5)))
 NHL_STAND1_LOGO_SZ = NHL_LOGO_SZ * 3 if _IS_HYPERPIXEL_LAYOUT else NHL_LOGO_SZ

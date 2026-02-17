@@ -12,6 +12,7 @@ Screen 2: logo at top center, then overall record and splits.
 import os
 import time
 from PIL import Image, ImageDraw
+import config
 from config import (
     WIDTH,
     HEIGHT,
@@ -46,7 +47,7 @@ LOGO_SZ_BASE = scale_value_width(27) if is_hyperpixel_next_layout() else scale_v
 if is_hyperpixel_4_square_layout():
     LOGO_SZ_BASE = max(LOGO_SZ_BASE, scale_value_width(80))
 LOGO_SZ = LOGO_SZ_BASE * (3 if _IS_DISPLAY_HAT_MINI else 1)
-_IS_1080P_LAYOUT = sorted((WIDTH, HEIGHT)) == [1080, 1920]
+_IS_1080P_LAYOUT = config.is_hdmi_1080p_layout()
 _VRNOF_MATCH_LOGO_HEIGHT_1080 = 54 * 5
 if _IS_1080P_LAYOUT:
     LOGO_SZ = min(LOGO_SZ, _VRNOF_MATCH_LOGO_HEIGHT_1080)

@@ -173,6 +173,11 @@ def _supports_embedded_color() -> bool:
 EMOJI_EMBEDDED_COLOR = _supports_embedded_color()
 
 from config_store import ConfigStore
+from display_profiles import (
+    DISPLAY_PROFILE_HDMI_1080P,
+    DisplayProfilePreset,
+    resolve_display_profile,
+)
 
 try:
     _RESAMPLE_LANCZOS = Image.Resampling.LANCZOS  # Pillow >= 9.1
@@ -551,41 +556,39 @@ def scale_value(value: float) -> int:
 
 def scale_value_width(value: float) -> int:
     return max(1, int(round(value * DISPLAY_SCALE_WIDTH)))
-HYPERPIXEL_NEXT_LAYOUT_SIZES = {(800, 480), (480, 800), (720, 720)}
 KERNEL_DRIVEN_OUTPUTS = {"kernel", "kms", "drm", "sdl", "fullscreen"}
 
 
-def _is_hd_widescreen_layout(width: int, height: int) -> bool:
-    """Treat 1080p-class displays like HyperPixel 4 for compact layout rules."""
+ACTIVE_DISPLAY_PROFILE: DisplayProfilePreset = resolve_display_profile(WIDTH, HEIGHT)
+DISPLAY_PROFILE_ID = ACTIVE_DISPLAY_PROFILE.profile_id
 
-    if width <= 0 or height <= 0:
-        return False
 
-    long_edge = max(width, height)
-    short_edge = min(width, height)
-    if long_edge < 1280 or short_edge < 720:
-        return False
+def get_display_profile(width: int | None = None, height: int | None = None) -> DisplayProfilePreset:
+    if width is None:
+        width = WIDTH
+    if height is None:
+        height = HEIGHT
+    return resolve_display_profile(width, height)
 
-    return (long_edge / short_edge) >= (16 / 10)
+
+def get_display_profile_id(width: int | None = None, height: int | None = None) -> str:
+    return get_display_profile(width, height).profile_id
 
 
 def is_hyperpixel_next_layout(width: int | None = None, height: int | None = None) -> bool:
-    if width is None:
-        width = WIDTH
-    if height is None:
-        height = HEIGHT
-    return (width, height) in HYPERPIXEL_NEXT_LAYOUT_SIZES or _is_hd_widescreen_layout(
-        width,
-        height,
-    )
+    return get_display_profile(width, height).is_hyperpixel_next_layout
 
 
 def is_hyperpixel_4_square_layout(width: int | None = None, height: int | None = None) -> bool:
-    if width is None:
-        width = WIDTH
-    if height is None:
-        height = HEIGHT
-    return (width, height) == (720, 720)
+    return get_display_profile(width, height).is_hyperpixel_4_square_layout
+
+
+def is_hdmi_1080p_layout(width: int | None = None, height: int | None = None) -> bool:
+    return get_display_profile_id(width, height) == DISPLAY_PROFILE_HDMI_1080P
+
+
+def is_display_profile(profile_id: str, width: int | None = None, height: int | None = None) -> bool:
+    return get_display_profile_id(width, height) == profile_id
 
 
 def is_kernel_driven_display() -> bool:
@@ -606,6 +609,20 @@ DISPLAY_FADE_IN_HDMI_1080P_STEPS = max(
     0,
     _get_int_env("DISPLAY_FADE_IN_HDMI_1080P_STEPS", 0),
 )
+DISPLAY_FADE_IN_STEPS_BY_PROFILE: Dict[str, int] = {
+    "display_hat_mini": DISPLAY_FADE_IN_DISPLAY_HAT_MINI_STEPS,
+    "hyperpixel4": DISPLAY_FADE_IN_HYPERPIXEL_STEPS,
+    "hyperpixel4_square": DISPLAY_FADE_IN_HYPERPIXEL_STEPS,
+    "hdmi_1080p": DISPLAY_FADE_IN_HDMI_1080P_STEPS,
+    "fallback_hd": DISPLAY_FADE_IN_HDMI_1080P_STEPS,
+    "fallback_default": DISPLAY_FADE_IN_DISPLAY_HAT_MINI_STEPS,
+}
+DISPLAY_FADE_IN_DEFAULT_STEPS = DISPLAY_FADE_IN_STEPS_BY_PROFILE.get(
+    DISPLAY_PROFILE_ID,
+    DISPLAY_FADE_IN_DISPLAY_HAT_MINI_STEPS,
+)
+DISPLAY_PROFILE_LOGO_SCALE_CAP = ACTIVE_DISPLAY_PROFILE.logo_scale_cap
+DISPLAY_PROFILE_ANIMATION_DELAY = ACTIVE_DISPLAY_PROFILE.animation_delay
 SCREEN_DELAY             = 4
 try:
     HOURLY_FORECAST_HOURS = int(os.environ.get("HOURLY_FORECAST_HOURS", "5"))
@@ -919,7 +936,7 @@ SCOREBOARD_FINAL_WINNING_SCORE_COLOR = (255, 255, 255)
 SCOREBOARD_FINAL_LOSING_SCORE_COLOR = (200, 200, 200)
 
 # ─── Scoreboard scrolling configuration ───────────────────────────────────────
-SCOREBOARD_SCROLL_STEP         = 2 if sorted((WIDTH, HEIGHT)) == [1080, 1920] else 1
+SCOREBOARD_SCROLL_STEP         = ACTIVE_DISPLAY_PROFILE.scoreboard_scroll_step
 SCOREBOARD_SCROLL_DELAY        = 0.001
 SCOREBOARD_SCROLL_PAUSE_TOP    = 0.75
 SCOREBOARD_SCROLL_PAUSE_BOTTOM = 0.5

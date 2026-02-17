@@ -144,8 +144,8 @@ FONT_BOTTOM   = FONT_DATE_SPORTS                 # footer (date/time)
 FONT_NEXT_OPP = FONT_TEAM_SPORTS                 # opponent line in "next" cards
 
 BOTTOM_LINE_MARGIN = 6
-_IS_1080P_LAYOUT = sorted((WIDTH, HEIGHT)) == [1080, 1920]
-_LOGO_SCALE_1080 = 5.0 if _IS_1080P_LAYOUT else 1.0
+_IS_1080P_LAYOUT = config.is_hdmi_1080p_layout()
+_LOGO_SCALE_1080 = config.DISPLAY_PROFILE_LOGO_SCALE_CAP
 
 
 def _bottom_line_margin(*, hyperpixel_layout: bool = False, extra: int = 0) -> int:
@@ -895,7 +895,7 @@ def draw_sports_screen_bulls(display, game: Optional[Dict], transition: bool = F
     if not game:
         img = _render_message("Next Bulls game:", "No upcoming games scheduled")
         return _push(display, img, transition=transition)
-    img = _render_next_game(game, title="Next Bulls game:", logo_scale=3.0 if config.is_hyperpixel_next_layout() else _LOGO_SCALE_1080)
+    img = _render_next_game(game, title="Next Bulls game:", logo_scale=_LOGO_SCALE_1080)
     return _push(display, img, transition=transition)
 
 def draw_bulls_next_home_game(display, game: Optional[Dict], transition: bool = False):
@@ -905,5 +905,5 @@ def draw_bulls_next_home_game(display, game: Optional[Dict], transition: bool = 
         img = _render_message("Following at home...", "No United Center games scheduled")
         return _push(display, img, transition=transition)
     # Uses the same '@' treatment between logos
-    img = _render_next_game(game, title="Following at home...", logo_scale=3.0 if config.is_hyperpixel_next_layout() else _LOGO_SCALE_1080)
+    img = _render_next_game(game, title="Following at home...", logo_scale=_LOGO_SCALE_1080)
     return _push(display, img, transition=transition)
