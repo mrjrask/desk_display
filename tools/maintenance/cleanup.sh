@@ -82,23 +82,26 @@ echo "    → Clearing display…"
 # physical Display HAT Mini panel when hardware output is available.
 "${python_bin}" - <<'PY'
 import logging
-import os
 import sys
 from pathlib import Path
 
-PROJECT_ROOT = Path(__file__).resolve().parents[2]
+# `python -` runs as <stdin>, so derive the repository root from cwd.
+PROJECT_ROOT = Path.cwd()
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 try:
-    from utils import Display, clear_display
+    from utils import Display, clear_display, clear_update_indicator
 except Exception as exc:  # pragma: no cover - best effort during shutdown
     logging.warning("Display cleanup skipped: %s", exc)
 else:
     try:
         display = Display()
         clear_display(display)
+        clear_update_indicator(display)
         display.set_led(0.0, 0.0, 0.0)
+        # Force one final redraw after LED reset so any border overlay clears.
+        display.clear()
     except Exception as exc:  # pragma: no cover - best effort during shutdown
         logging.warning("Display cleanup failed: %s", exc)
 PY
