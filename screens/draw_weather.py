@@ -154,32 +154,28 @@ def _render_stat_text(parts):
     scratch_draw = ImageDraw.Draw(scratch)
 
     widths = []
-    heights = []
-    offsets = []
-    extents = []
+    min_y = 0
+    max_y = 0
     for text, font, _ in parts:
         bbox = _safe_textbbox(scratch_draw, text, font)
         w = bbox[2] - bbox[0]
-        h = bbox[3] - bbox[1]
         widths.append(w)
-        heights.append(h)
-        offset_y = -bbox[1]
-        offsets.append(offset_y)
-        extents.append(offset_y + h)
+        min_y = min(min_y, bbox[1])
+        max_y = max(max_y, bbox[3])
 
-    # Add a small cushion to avoid clipping wide glyphs (e.g., arrows) and give
-    # slightly more vertical room for taller fonts such as the wind speed value.
+    # Add a cushion to avoid clipping descenders/antialiasing for tall glyphs,
+    # especially on narrow hourly stat rows.
     padding_x = 1
-    padding_y = 2
-    content_h = max(extents) if extents else 0
+    padding_y = 4
+    content_h = max(0, max_y - min_y)
     total_w = sum(widths) + padding_x * 2
     total_h = content_h + padding_y * 2
     result = Image.new("RGBA", (total_w, total_h), (0, 0, 0, 0))
     draw = ImageDraw.Draw(result)
 
     x = padding_x
-    for (text, font, color), w, h, offset_y, extent in zip(parts, widths, heights, offsets, extents):
-        y = padding_y + offset_y + (content_h - extent) // 2
+    for (text, font, color), w in zip(parts, widths):
+        y = padding_y - min_y
         draw.text((x, y), text, font=font, fill=color)
         x += w
 
@@ -932,11 +928,9 @@ def draw_weather_hourly(display, weather, transition: bool = False, hours: int =
             clamped_pop = max(0, min(pop, 100))
             is_snow = hour.get("is_snow", False)
             precip_color = (173, 216, 230) if is_snow else (135, 206, 250)
-            pop_text = f"{clamped_pop}%"
-            # Render small precipitation icon
-            precip_icon_size = 10
-            precip_icon = _render_precip_icon(is_snow, precip_icon_size, precip_color)
-            stat_items.append((pop_text, FONT_WEATHER_DETAILS_TINY_LARGE, precip_color, precip_icon))
+            precip_emoji = "❄️" if is_snow else "💧"
+            pop_text = f"{precip_emoji} {clamped_pop}%"
+            stat_items.append((pop_text, FONT_WEATHER_DETAILS_TINY_LARGE, precip_color))
 
         uvi_val = hour.get("uvi")
         if uvi_val is not None:
