@@ -124,6 +124,8 @@ DISPLAY_STATUS_PATH = ""
 _screen_config_mtime: Optional[float] = None
 screen_scheduler: Optional[ScreenScheduler] = None
 _requested_screen_ids: Set[str] = set()
+_registry_cache_key: Optional[Tuple[Optional[float], bool, bool, Tuple[int, int]]] = None
+_registry_cache_value: Optional[Tuple[Dict[str, ScreenDefinition], Dict[str, object]]] = None
 
 _skip_request_pending = False
 _last_screen_id: Optional[str] = None
@@ -368,6 +370,7 @@ def _load_scheduler_from_config() -> Optional[ScreenScheduler]:
 
 def refresh_schedule_if_needed(force: bool = False) -> None:
     global _screen_config_mtime, screen_scheduler, _requested_screen_ids
+    global _registry_cache_key, _registry_cache_value
     global _last_screen_id, _skip_request_pending, _pending_previous_screen_id
 
     try:
@@ -388,9 +391,33 @@ def refresh_schedule_if_needed(force: bool = False) -> None:
     _last_screen_id = None
     _skip_request_pending = False
     _pending_previous_screen_id = None
+    _registry_cache_key = None
+    _registry_cache_value = None
     with _screen_history_lock:
         _screen_history.clear()
     logging.info("🔁 Loaded schedule configuration with %d node(s).", scheduler.node_count)
+
+
+def _registry_cache_inputs(offline: bool, skip_scoreboards: bool) -> Tuple[Optional[float], bool, bool, Tuple[int, int]]:
+    """Return the cache key that determines whether registry rebuild is required."""
+
+    display_mode = (int(WIDTH), int(HEIGHT))
+    return (_screen_config_mtime, bool(offline), bool(skip_scoreboards), display_mode)
+
+
+def _build_registry_if_needed(context: ScreenContext) -> Tuple[Dict[str, ScreenDefinition], Dict[str, object]]:
+    """Build and cache the screen registry when runtime inputs change."""
+
+    global _registry_cache_key, _registry_cache_value
+
+    cache_key = _registry_cache_inputs(context.offline, context.skip_scoreboards)
+    if _registry_cache_value is not None and _registry_cache_key == cache_key:
+        return _registry_cache_value
+
+    registry, metadata = build_screen_registry(context)
+    _registry_cache_key = cache_key
+    _registry_cache_value = (registry, metadata)
+    return registry, metadata
 
 
 display: Optional[Display] = None
@@ -1533,7 +1560,7 @@ def main_loop():
                 weather_fetched_at=weather_fetched_at,
                 skip_scoreboards=offline and _wifi_outage_live_games,
             )
-            registry, _metadata = build_screen_registry(context)
+            registry, _metadata = _build_registry_if_needed(context)
 
             entry = _next_screen_from_registry(registry)
             if entry is None:

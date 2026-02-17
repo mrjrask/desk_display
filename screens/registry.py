@@ -118,16 +118,17 @@ _LAYOUTS_CONFIG_PATH = os.environ.get(
 _QUAD_DEFAULT_PAGE = ["date", "weather1", "weather hourly", "inside"]
 _quad_page_index = 0
 _quad_page_lock = threading.Lock()
+_layouts_cache_lock = threading.Lock()
+_layouts_payload_cache: Optional[dict[str, Any]] = None
+_layouts_payload_mtime: Optional[float] = None
 
 
 def _quad_layout_from_layouts() -> tuple[bool, list[list[str]]]:
     enabled = False
     pages: list[list[str]] = []
 
-    try:
-        with open(_LAYOUTS_CONFIG_PATH, "r", encoding="utf-8") as fh:
-            payload = json.load(fh)
-    except Exception:
+    payload = _load_layouts_payload()
+    if payload is None:
         return enabled, [_QUAD_DEFAULT_PAGE.copy()]
 
     if not isinstance(payload, dict):
@@ -169,6 +170,38 @@ def _quad_layout_from_layouts() -> tuple[bool, list[list[str]]]:
         pages = [_QUAD_DEFAULT_PAGE.copy()]
 
     return enabled, pages
+
+
+def _load_layouts_payload() -> Optional[dict[str, Any]]:
+    """Return cached quad layouts payload, reloading only when file mtime changes."""
+
+    global _layouts_payload_cache, _layouts_payload_mtime
+
+    try:
+        mtime = os.path.getmtime(_LAYOUTS_CONFIG_PATH)
+    except OSError:
+        mtime = None
+
+    with _layouts_cache_lock:
+        if mtime == _layouts_payload_mtime:
+            return _layouts_payload_cache
+
+        try:
+            with open(_LAYOUTS_CONFIG_PATH, "r", encoding="utf-8") as fh:
+                payload = json.load(fh)
+        except Exception:
+            _layouts_payload_cache = None
+            _layouts_payload_mtime = mtime
+            return None
+
+        if not isinstance(payload, dict):
+            _layouts_payload_cache = None
+            _layouts_payload_mtime = mtime
+            return None
+
+        _layouts_payload_cache = payload
+        _layouts_payload_mtime = mtime
+        return _layouts_payload_cache
 
 
 def _next_quad_page_tiles() -> tuple[bool, list[str]]:
