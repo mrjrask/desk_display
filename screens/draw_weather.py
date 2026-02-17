@@ -80,6 +80,11 @@ PRESSURE_TREND_SYMBOLS = {
 }
 EMOJI_DRAW_KWARGS = {"embedded_color": True} if EMOJI_EMBEDDED_COLOR else {}
 
+# Keep weather radar tiles centered on downtown Chicago regardless of the
+# weather location used for forecast details.
+RADAR_CENTER_LATITUDE = 41.8781
+RADAR_CENTER_LONGITUDE = -87.6298
+
 
 _IS_1080P_LAYOUT = sorted((WIDTH, HEIGHT)) == [1080, 1920]
 
@@ -1322,7 +1327,11 @@ def _fetch_rainviewer_frames(zoom: int = 7, max_frames: int = 6) -> list[RadarFr
     frames = (radar_info.get("past") or []) + (radar_info.get("nowcast") or [])
     frames = frames[-max_frames:]
 
-    x_tile, y_tile, x_offset, y_offset = _latlon_to_tile(LATITUDE, LONGITUDE, zoom)
+    x_tile, y_tile, x_offset, y_offset = _latlon_to_tile(
+        RADAR_CENTER_LATITUDE,
+        RADAR_CENTER_LONGITUDE,
+        zoom,
+    )
     images: list[RadarFrame] = []
 
     for frame in frames:
@@ -1350,7 +1359,11 @@ def _fetch_rainviewer_frames(zoom: int = 7, max_frames: int = 6) -> list[RadarFr
 
 
 def _fetch_base_map(zoom: int = 7) -> Optional[Image.Image]:
-    x_tile, y_tile, _, _ = _latlon_to_tile(LATITUDE, LONGITUDE, zoom)
+    x_tile, y_tile, _, _ = _latlon_to_tile(
+        RADAR_CENTER_LATITUDE,
+        RADAR_CENTER_LONGITUDE,
+        zoom,
+    )
     headers = {
         "User-Agent": "desk-display/weather-radar",
     }
