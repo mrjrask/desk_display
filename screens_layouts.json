@@ -1,3 +1,17 @@
 {
-  "screens": {}
+  "screens": {
+    "quad": {
+      "enabled": false,
+      "pages": [
+        {
+          "tiles": [
+            "date",
+            "weather1",
+            "weather hourly",
+            "inside"
+          ]
+        }
+      ]
+    }
+  }
 }

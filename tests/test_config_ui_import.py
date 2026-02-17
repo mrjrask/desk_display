@@ -5,9 +5,11 @@ def test_import_screens_accepts_entries_payload(monkeypatch):
     saved = {}
 
     monkeypatch.setattr(config_ui, "_load_active_style_config", lambda: {"screens": {}})
+    monkeypatch.setattr(config_ui, "_load_active_layouts_config", lambda: {"screens": {"quad": {"enabled": False, "pages": [{"tiles": ["date", "weather1", "weather hourly", "inside"]}]}}})
     monkeypatch.setattr(config_ui, "build_scheduler", lambda config: None)
     monkeypatch.setattr(config_ui, "_save_config", lambda config: saved.setdefault("config", config))
     monkeypatch.setattr(config_ui, "_save_style_config", lambda style: saved.setdefault("style", style))
+    monkeypatch.setattr(config_ui, "_save_layouts_config", lambda layouts: saved.setdefault("layouts", layouts))
     monkeypatch.setattr(
         config_ui,
         "_build_screen_entries",
@@ -43,16 +45,19 @@ def test_import_screens_accepts_entries_payload(monkeypatch):
         "default": {"label": "Default", "steps": [{"screen": "date"}]}
     }
     assert saved["config"]["sequence"] == [{"playlist": "default"}]
-    assert saved["style"] == {"screens": {"date": {"background": "#112233"}}}
+    assert saved["style"] == {"screens": {"date": {"background": "#112233"}}
+    }
 
 
 def test_import_screens_accepts_export_payload_with_string_frequencies(monkeypatch):
     saved = {}
 
     monkeypatch.setattr(config_ui, "_load_active_style_config", lambda: {"screens": {}})
+    monkeypatch.setattr(config_ui, "_load_active_layouts_config", lambda: {"screens": {"quad": {"enabled": False, "pages": [{"tiles": ["date", "weather1", "weather hourly", "inside"]}]}}})
     monkeypatch.setattr(config_ui, "build_scheduler", lambda config: None)
     monkeypatch.setattr(config_ui, "_save_config", lambda config: saved.setdefault("config", config))
     monkeypatch.setattr(config_ui, "_save_style_config", lambda style: saved.setdefault("style", style))
+    monkeypatch.setattr(config_ui, "_save_layouts_config", lambda layouts: saved.setdefault("layouts", layouts))
     monkeypatch.setattr(
         config_ui,
         "_build_screen_entries",
@@ -75,6 +80,17 @@ def test_import_screens_accepts_export_payload_with_string_frequencies(monkeypat
                 "sequence": [{"playlist": "default"}],
             },
             "style": {"screens": {"date": {"background": "#112233"}}},
+            "layouts": {
+                "screens": {
+                    "quad": {
+                        "enabled": True,
+                        "pages": [
+                            {"tiles": ["date", "date", "weather1", "inside"]},
+                            {"tiles": ["time", "time", "time", "time"]},
+                        ],
+                    }
+                }
+            },
         },
     )
 
@@ -86,3 +102,49 @@ def test_import_screens_accepts_export_payload_with_string_frequencies(monkeypat
     assert saved["config"]["screens"]["NHL Standings West"]["frequency"] == 3
     assert saved["config"]["screens"]["NHL Standings West"]["alt"]["frequency"] == 2
     assert saved["style"] == {"screens": {"date": {"background": "#112233"}}}
+    assert saved["layouts"]["screens"]["quad"]["enabled"] is True
+    assert saved["layouts"]["screens"]["quad"]["pages"][0]["tiles"] == ["date", "date", "weather1", "inside"]
+
+
+def test_save_screens_persists_quad_pages(monkeypatch):
+    saved = {}
+
+    monkeypatch.setattr(config_ui, "_load_active_style_config", lambda: {"screens": {}})
+    monkeypatch.setattr(config_ui, "build_scheduler", lambda config: None)
+    monkeypatch.setattr(config_ui, "_save_config", lambda config: saved.setdefault("config", config))
+    monkeypatch.setattr(config_ui, "_save_style_config", lambda style: saved.setdefault("style", style))
+    monkeypatch.setattr(config_ui, "_save_layouts_config", lambda layouts: saved.setdefault("layouts", layouts))
+
+    client = config_ui.app.test_client()
+    response = client.post(
+        "/api/screens",
+        json={
+            "screens": [
+                {
+                    "id": "date",
+                    "frequency": 1,
+                    "background": "#000000",
+                    "alt_screen": "",
+                    "alt_frequency": "",
+                }
+            ],
+            "quad_enabled": True,
+            "quad_pages": [
+                {"tiles": ["date", "date", "weather1", "inside"]},
+                {"tiles": ["time", "inside", "inside", "weather2"]},
+            ],
+        },
+    )
+
+    assert response.status_code == 200
+    assert saved["layouts"] == {
+        "screens": {
+            "quad": {
+                "enabled": True,
+                "pages": [
+                    {"tiles": ["date", "date", "weather1", "inside"]},
+                    {"tiles": ["time", "inside", "inside", "weather2"]},
+                ],
+            }
+        }
+    }

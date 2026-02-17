@@ -24,6 +24,9 @@ LOCAL_CONFIG_PATH = os.environ.get(
 STYLE_CONFIG_PATH = os.environ.get(
     "SCREENS_STYLE_PATH", os.path.join(SCRIPT_DIR, "screens_style.json")
 )
+LAYOUTS_CONFIG_PATH = os.environ.get(
+    "SCREENS_LAYOUTS_PATH", os.path.join(SCRIPT_DIR, "screens_layouts.json")
+)
 
 SCREEN_CONFIG_HOST = os.environ.get("SCREEN_CONFIG_HOST", "0.0.0.0")
 SCREEN_CONFIG_PORT = int(os.environ.get("SCREEN_CONFIG_PORT", "5002"))
@@ -94,6 +97,122 @@ def _normalize_import_config_payload(data: Dict[str, Any]) -> Dict[str, Any]:
     result = dict(normalized)
     result["screens"] = normalized_screens
     return result
+
+
+
+
+def _default_layouts_config() -> Dict[str, Any]:
+    return {
+        "screens": {
+            "quad": {
+                "enabled": False,
+                "pages": [
+                    {"tiles": ["date", "weather1", "weather hourly", "inside"]},
+                ],
+            }
+        }
+    }
+
+
+def _normalize_quad_page(raw_page: Any, defaults: List[str]) -> Dict[str, Any]:
+    tiles_source = raw_page.get("tiles") if isinstance(raw_page, dict) else raw_page
+    if not isinstance(tiles_source, list):
+        tiles_source = []
+
+    tiles: List[str] = []
+    for item in tiles_source:
+        if not isinstance(item, str):
+            continue
+        tile = item.strip()
+        if not tile or tile == "quad":
+            continue
+        tiles.append(tile)
+        if len(tiles) >= 4:
+            break
+
+    while len(tiles) < 4:
+        tiles.append(defaults[len(tiles)])
+
+    return {"tiles": tiles}
+
+
+def _normalize_layouts_config(data: Any) -> Dict[str, Any]:
+    result = _default_layouts_config()
+    defaults = result["screens"]["quad"]["pages"][0]["tiles"]
+
+    if not isinstance(data, dict):
+        return result
+    screens = data.get("screens")
+    if not isinstance(screens, dict):
+        return result
+    quad = screens.get("quad")
+    if not isinstance(quad, dict):
+        return result
+
+    result["screens"]["quad"]["enabled"] = bool(quad.get("enabled", False))
+
+    pages: List[Dict[str, Any]] = []
+    raw_pages = quad.get("pages")
+    if isinstance(raw_pages, list):
+        pages = [_normalize_quad_page(raw_page, defaults) for raw_page in raw_pages]
+
+    if not pages and isinstance(quad.get("tiles"), list):
+        pages = [_normalize_quad_page({"tiles": quad.get("tiles")}, defaults)]
+
+    if not pages:
+        pages = [result["screens"]["quad"]["pages"][0]]
+
+    result["screens"]["quad"]["pages"] = pages
+    return result
+
+
+def _load_layouts_config(path: str) -> Dict[str, Any]:
+    try:
+        with open(path, "r", encoding="utf-8") as fh:
+            data = json.load(fh)
+    except FileNotFoundError:
+        return _default_layouts_config()
+    return _normalize_layouts_config(data)
+
+
+def _load_active_layouts_config() -> Dict[str, Any]:
+    return _load_layouts_config(LAYOUTS_CONFIG_PATH)
+
+
+def _save_layouts_config(config: Dict[str, Any]) -> None:
+    tmp_path = f"{LAYOUTS_CONFIG_PATH}.tmp"
+    with open(tmp_path, "w", encoding="utf-8") as fh:
+        json.dump(config, fh, indent=2)
+        fh.write("\n")
+    os.replace(tmp_path, LAYOUTS_CONFIG_PATH)
+
+
+def _build_layouts(entries: Dict[str, Any]) -> Dict[str, Any]:
+    if not isinstance(entries, dict):
+        raise ValueError("Invalid layouts payload")
+
+    quad_enabled = bool(entries.get("quad_enabled", False))
+    raw_pages = entries.get("quad_pages")
+    if not isinstance(raw_pages, list):
+        legacy_tiles = entries.get("quad_tiles")
+        if isinstance(legacy_tiles, list):
+            raw_pages = [{"tiles": legacy_tiles}]
+        else:
+            raise ValueError("quad_pages must be a list")
+
+    defaults = _default_layouts_config()["screens"]["quad"]["pages"][0]["tiles"]
+    pages: List[Dict[str, Any]] = []
+
+    for raw_page in raw_pages:
+        if not isinstance(raw_page, dict):
+            continue
+        page = _normalize_quad_page(raw_page, defaults)
+        pages.append(page)
+
+    if not pages:
+        pages = [{"tiles": defaults.copy()}]
+
+    return {"screens": {"quad": {"enabled": quad_enabled, "pages": pages}}}
 
 
 def _load_style_config(path: str) -> Dict[str, Any]:
@@ -501,11 +620,17 @@ def run_config_ui(host: str = SCREEN_CONFIG_HOST, port: int = SCREEN_CONFIG_PORT
 def screen_config() -> str:
     config = _load_active_config()
     style_config = _load_active_style_config()
+    layouts_config = _load_active_layouts_config()
     entries = _build_screen_entries(config, style_config)
+    quad_config = layouts_config.get("screens", {}).get("quad", {})
+    quad_enabled = bool(quad_config.get("enabled", False))
+    quad_pages = quad_config.get("pages", [])
     return render_template(
         "screen_config.html",
         screens=entries,
         screen_ids=sorted(SCREEN_IDS),
+        quad_enabled=quad_enabled,
+        quad_pages=quad_pages,
         config_path=DEFAULT_CONFIG_PATH,
     )
 
@@ -547,10 +672,13 @@ def screenshot_file(relative_path: str) -> Any:
 def get_screens() -> Any:
     config = _load_active_config()
     style_config = _load_active_style_config()
+    layouts_config = _load_active_layouts_config()
     return jsonify(
         {
             "screens": _build_screen_entries(config, style_config),
             "screen_ids": sorted(SCREEN_IDS),
+            "quad_enabled": bool(layouts_config.get("screens", {}).get("quad", {}).get("enabled", False)),
+            "quad_pages": layouts_config.get("screens", {}).get("quad", {}).get("pages", []),
         }
     )
 
@@ -559,7 +687,12 @@ def get_screens() -> Any:
 def get_default_screens() -> Any:
     config = _load_config(DEFAULT_CONFIG_PATH)
     style_config = _load_style_config(STYLE_CONFIG_PATH)
-    return jsonify({"screens": _build_screen_entries(config, style_config)})
+    layouts_config = _load_layouts_config(LAYOUTS_CONFIG_PATH)
+    return jsonify({
+        "screens": _build_screen_entries(config, style_config),
+        "quad_enabled": bool(layouts_config.get("screens", {}).get("quad", {}).get("enabled", False)),
+        "quad_pages": layouts_config.get("screens", {}).get("quad", {}).get("pages", []),
+    })
 
 
 @app.get("/api/screens/export")
@@ -589,12 +722,14 @@ def save_screens() -> Any:
         config = _build_config(entries)
         style_config = _load_active_style_config()
         style_config = _build_style_config(entries, style_config)
+        layouts = _build_layouts(payload)
         build_scheduler(config)
     except Exception as exc:
         return jsonify({"error": str(exc)}), 400
 
     _save_config(config)
     _save_style_config(style_config)
+    _save_layouts_config(layouts)
     return jsonify({"status": "ok"})
 
 
@@ -606,6 +741,7 @@ def import_screens() -> Any:
 
     config_payload = payload.get("config", payload)
     derived_style_payload: Optional[Dict[str, Any]] = None
+    derived_layouts_payload: Optional[Dict[str, Any]] = None
     try:
         if isinstance(config_payload, dict) and isinstance(config_payload.get("screens"), list):
             entries = config_payload.get("screens", [])
@@ -615,24 +751,47 @@ def import_screens() -> Any:
                 if value is not None:
                     config[key] = value
             derived_style_payload = _build_style_config(entries, _load_active_style_config())
+            quad_pages_payload = payload.get("quad_pages") if isinstance(payload, dict) else None
+            quad_enabled_payload = payload.get("quad_enabled") if isinstance(payload, dict) else False
+            if isinstance(quad_pages_payload, list):
+                derived_layouts_payload = _build_layouts({"quad_enabled": quad_enabled_payload, "quad_pages": quad_pages_payload})
         else:
             config = _normalize_import_config_payload(config_payload)
         build_scheduler(config)
     except Exception as exc:
         return jsonify({"error": str(exc)}), 400
 
-    _save_config(config)
-    style_payload = payload.get("style", derived_style_payload)
-    if style_payload is not None:
+    style_payload = payload.get("style")
+    if derived_style_payload is not None:
+        style_config = derived_style_payload
+    elif style_payload is not None:
         try:
             style_config = _validate_style_payload(style_payload)
         except Exception as exc:
             return jsonify({"error": str(exc)}), 400
-        _save_style_config(style_config)
     else:
         style_config = _load_active_style_config()
+
+    layouts_payload = payload.get("layouts")
+    if derived_layouts_payload is not None:
+        layouts_config = derived_layouts_payload
+    elif layouts_payload is not None:
+        layouts_config = _normalize_layouts_config(layouts_payload)
+    else:
+        layouts_config = _load_active_layouts_config()
+
+    _save_config(config)
+    _save_style_config(style_config)
+    _save_layouts_config(layouts_config)
     entries = _build_screen_entries(config, style_config)
-    return jsonify({"status": "ok", "screens": entries})
+    return jsonify(
+        {
+            "status": "ok",
+            "screens": entries,
+            "quad_enabled": bool(layouts_config.get("screens", {}).get("quad", {}).get("enabled", False)),
+            "quad_pages": layouts_config.get("screens", {}).get("quad", {}).get("pages", []),
+        }
+    )
 
 
 
