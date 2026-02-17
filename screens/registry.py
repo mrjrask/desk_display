@@ -53,8 +53,8 @@ from screens.mlb_schedule import (
     draw_next_home_game,
     draw_sports_screen,
 )
-from screens.mlb_scoreboard import draw_mlb_scoreboard
-from screens.mlb_scoreboard_v2 import draw_mlb_scoreboard_v2
+from screens.mlb_scoreboard import render_mlb_scoreboard
+from screens.mlb_scoreboard_v2 import render_mlb_scoreboard_v2
 from screens.mlb_standings import (
     draw_AL_Central,
     draw_AL_East,
@@ -80,18 +80,18 @@ from screens.nhl_team_standings import (
     draw_nhl_standings_screen1,
     draw_nhl_standings_screen2,
 )
-from screens.nba_scoreboard import draw_nba_scoreboard
-from screens.nba_scoreboard_v2 import draw_nba_scoreboard_v2
-from screens.nfl_scoreboard import draw_nfl_scoreboard
-from screens.nfl_scoreboard_v2 import draw_nfl_scoreboard_v2
+from screens.nba_scoreboard import render_nba_scoreboard
+from screens.nba_scoreboard_v2 import render_nba_scoreboard_v2
+from screens.nfl_scoreboard import render_nfl_scoreboard
+from screens.nfl_scoreboard_v2 import render_nfl_scoreboard_v2
 from screens.nfl_standings import (
     draw_nfl_overview_afc,
     draw_nfl_overview_nfc,
     draw_nfl_standings_afc,
     draw_nfl_standings_nfc,
 )
-from screens.nhl_scoreboard import draw_nhl_scoreboard
-from screens.nhl_scoreboard_v2 import draw_nhl_scoreboard_v2
+from screens.nhl_scoreboard import render_nhl_scoreboard
+from screens.nhl_scoreboard_v2 import render_nhl_scoreboard_v2
 from screens.nhl_standings import (
     draw_nhl_standings_east,
     draw_nhl_standings_overview_east,
@@ -679,12 +679,12 @@ def build_screen_registry(context: ScreenContext) -> Tuple[Dict[str, ScreenDefin
     register("bears next season", lambda: show_bears_next_season(context.display, transition=True))
     register(
         "NFL Scoreboard",
-        lambda: draw_nfl_scoreboard(context.display, transition=True),
+        lambda data=(context.cache.get("scoreboards") or {}).get("nfl") or []: render_nfl_scoreboard(context.display, data, transition=True),
         available=scoreboards_available,
     )
     register(
         "NFL Scoreboard v2",
-        lambda: draw_nfl_scoreboard_v2(context.display, transition=True),
+        lambda data=(context.cache.get("scoreboards") or {}).get("nfl") or []: render_nfl_scoreboard_v2(context.display, data, transition=True),
         available=scoreboards_available,
     )
     register("NFL Overview NFC", lambda: draw_nfl_overview_nfc(context.display, transition=True))
@@ -755,12 +755,12 @@ def build_screen_registry(context: ScreenContext) -> Tuple[Dict[str, ScreenDefin
         register_logo("nhl logo")
         register(
             "NHL Scoreboard",
-            lambda: draw_nhl_scoreboard(context.display, transition=True),
+            lambda data=(context.cache.get("scoreboards") or {}).get("nhl") or []: render_nhl_scoreboard(context.display, data, transition=True),
             available=nhl_scoreboards_available,
         )
         register(
             "NHL Scoreboard v2",
-            lambda: draw_nhl_scoreboard_v2(context.display, transition=True),
+            lambda data=(context.cache.get("scoreboards") or {}).get("nhl") or []: render_nhl_scoreboard_v2(context.display, data, transition=True),
             available=nhl_scoreboards_available,
         )
         register(
@@ -998,22 +998,22 @@ def build_screen_registry(context: ScreenContext) -> Tuple[Dict[str, ScreenDefin
 
     register(
         "MLB Scoreboard",
-        lambda: draw_mlb_scoreboard(context.display, transition=True),
+        lambda data=(context.cache.get("scoreboards") or {}).get("mlb") or []: render_mlb_scoreboard(context.display, data, transition=True),
         available=scoreboards_available,
     )
     register(
         "MLB Scoreboard v2",
-        lambda: draw_mlb_scoreboard_v2(context.display, transition=True),
+        lambda data=(context.cache.get("scoreboards") or {}).get("mlb") or []: render_mlb_scoreboard_v2(context.display, data, transition=True),
         available=scoreboards_available,
     )
     register(
         "NBA Scoreboard",
-        lambda: draw_nba_scoreboard(context.display, transition=True),
+        lambda data=(context.cache.get("scoreboards") or {}).get("nba") or []: render_nba_scoreboard(context.display, data, transition=True),
         available=scoreboards_available,
     )
     register(
         "NBA Scoreboard v2",
-        lambda: draw_nba_scoreboard_v2(context.display, transition=True),
+        lambda data=(context.cache.get("scoreboards") or {}).get("nba") or []: render_nba_scoreboard_v2(context.display, data, transition=True),
         available=scoreboards_available,
     )
 

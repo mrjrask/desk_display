@@ -395,10 +395,8 @@ def _scroll_display(display, full_img: Image.Image):
     _sleep(SCOREBOARD_SCROLL_PAUSE_BOTTOM)
 
 
-@log_call
-def draw_mlb_scoreboard_v2(display, transition: bool = False) -> ScreenImage:
+def render_mlb_scoreboard_v2(display, games: list[dict], transition: bool = False) -> ScreenImage:
     _apply_style_overrides()
-    games = _fetch_games_for_date(_scoreboard_date())
 
     if not games:
         clear_display(display)
@@ -440,6 +438,12 @@ def draw_mlb_scoreboard_v2(display, transition: bool = False) -> ScreenImage:
     else:
         _scroll_display(display, full_img)
     return ScreenImage(full_img, displayed=True)
+
+
+@log_call
+def draw_mlb_scoreboard_v2(display, transition: bool = False) -> ScreenImage:
+    games = _fetch_games_for_date(_scoreboard_date())
+    return render_mlb_scoreboard_v2(display, games, transition=transition)
 
 
 if __name__ == "__main__":

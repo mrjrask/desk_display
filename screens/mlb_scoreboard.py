@@ -614,21 +614,10 @@ def _scroll_display(display, full_img: Image.Image):
 
 
 # ─── Public API ───────────────────────────────────────────────────────────────
-@log_call
-def draw_mlb_scoreboard(display, transition: bool = False) -> ScreenImage:
+def render_mlb_scoreboard(display, games: list[dict], transition: bool = False) -> ScreenImage:
     global BACKGROUND_COLOR
     BACKGROUND_COLOR = get_screen_background_color(SCREEN_ID, SCOREBOARD_BACKGROUND_COLOR)
-    now = datetime.datetime.now(CENTRAL_TIME)
-    target_date = _scoreboard_date(now)
-    games = _fetch_games_for_date(target_date)
     score_font, status_font, center_font = _scoreboard_fonts()
-
-    if not games:
-        today = now.date()
-        if today != target_date:
-            today_games = _fetch_games_for_date(today)
-            if today_games:
-                games = today_games
 
     if not games:
         clear_display(display)
@@ -681,6 +670,22 @@ def draw_mlb_scoreboard(display, transition: bool = False) -> ScreenImage:
     else:
         _scroll_display(display, full_img)
     return ScreenImage(full_img, displayed=True)
+
+
+@log_call
+def draw_mlb_scoreboard(display, transition: bool = False) -> ScreenImage:
+    now = datetime.datetime.now(CENTRAL_TIME)
+    target_date = _scoreboard_date(now)
+    games = _fetch_games_for_date(target_date)
+
+    if not games:
+        today = now.date()
+        if today != target_date:
+            today_games = _fetch_games_for_date(today)
+            if today_games:
+                games = today_games
+
+    return render_mlb_scoreboard(display, games, transition=transition)
 
 
 if __name__ == "__main__":  # pragma: no cover

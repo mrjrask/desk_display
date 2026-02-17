@@ -1193,12 +1193,10 @@ def _scroll_display(display, full_img: Image.Image):
 
 
 # ─── Public API ───────────────────────────────────────────────────────────────
-@log_call
-def draw_nba_scoreboard(display, transition: bool = False) -> ScreenImage:
+def render_nba_scoreboard(display, games: list[dict], transition: bool = False) -> ScreenImage:
     global BACKGROUND_COLOR, BACKGROUND_COLOR_RGBA
     BACKGROUND_COLOR = get_screen_background_color(SCREEN_ID, SCOREBOARD_BACKGROUND_COLOR)
     BACKGROUND_COLOR_RGBA = BACKGROUND_COLOR + (255,)
-    games = _fetch_games_for_date(_scoreboard_date())
     score_font, status_font, center_font = _scoreboard_fonts()
 
     if not games:
@@ -1252,6 +1250,12 @@ def draw_nba_scoreboard(display, transition: bool = False) -> ScreenImage:
     else:
         _scroll_display(display, full_img)
     return ScreenImage(full_img, displayed=True)
+
+
+@log_call
+def draw_nba_scoreboard(display, transition: bool = False) -> ScreenImage:
+    games = _fetch_games_for_date(_scoreboard_date())
+    return render_nba_scoreboard(display, games, transition=transition)
 
 
 @log_call
