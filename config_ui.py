@@ -175,6 +175,49 @@ def _serialize_alt_screen(value: Any) -> str:
     return ""
 
 
+def _build_playlist_assignments(config: Dict[str, Any]) -> Tuple[List[Dict[str, str]], Dict[str, str]]:
+    config_playlists = config.get("playlists")
+    if not isinstance(config_playlists, dict):
+        return [], {}
+
+    sequence = config.get("sequence")
+    ordered_ids: List[str] = []
+    if isinstance(sequence, list):
+        for item in sequence:
+            if not isinstance(item, dict):
+                continue
+            playlist_id = item.get("playlist")
+            if isinstance(playlist_id, str) and playlist_id and playlist_id not in ordered_ids:
+                ordered_ids.append(playlist_id)
+
+    for playlist_id in config_playlists.keys():
+        if isinstance(playlist_id, str) and playlist_id and playlist_id not in ordered_ids:
+            ordered_ids.append(playlist_id)
+
+    playlists: List[Dict[str, str]] = []
+    assignments: Dict[str, str] = {}
+    for playlist_id in ordered_ids:
+        playlist = config_playlists.get(playlist_id)
+        if not isinstance(playlist, dict):
+            continue
+
+        label = playlist.get("label")
+        name = label.strip() if isinstance(label, str) and label.strip() else playlist_id
+        playlists.append({"id": playlist_id, "name": name})
+
+        steps = playlist.get("steps")
+        if not isinstance(steps, list):
+            continue
+        for step in steps:
+            if not isinstance(step, dict):
+                continue
+            screen_id = step.get("screen")
+            if isinstance(screen_id, str) and screen_id and screen_id not in assignments:
+                assignments[screen_id] = playlist_id
+
+    return playlists, assignments
+
+
 def _sanitize_filename_prefix(name: str) -> str:
     """Return a filesystem-friendly filename prefix."""
 
@@ -502,11 +545,14 @@ def screen_config() -> str:
     config = _load_active_config()
     style_config = _load_active_style_config()
     entries = _build_screen_entries(config, style_config)
+    playlists, playlist_assignments = _build_playlist_assignments(config)
     return render_template(
         "screen_config.html",
         screens=entries,
         screen_ids=sorted(SCREEN_IDS),
         config_path=DEFAULT_CONFIG_PATH,
+        playlists=playlists,
+        playlist_assignments=playlist_assignments,
     )
 
 

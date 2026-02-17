@@ -449,6 +449,8 @@
     const addPlaylistBtn = document.getElementById("addPlaylistBtn");
     const draftStorageKey = "screen-config-draft";
     const playlistStorageKey = "screen-config-playlists";
+    const serverPlaylists = {{ playlists|tojson }};
+    const serverPlaylistAssignments = {{ playlist_assignments|tojson }};
     let isDirty = false;
     let playlists = [];
     let playlistAssignments = {};
@@ -499,7 +501,17 @@
 
     function loadPlaylistState() {
       const raw = localStorage.getItem(playlistStorageKey);
-      if (!raw) return;
+      if (!raw) {
+        playlists = Array.isArray(serverPlaylists)
+          ? serverPlaylists.filter((playlist) => playlist?.id && playlist?.name)
+          : [];
+        playlistAssignments =
+          serverPlaylistAssignments && typeof serverPlaylistAssignments === "object"
+            ? { ...serverPlaylistAssignments }
+            : {};
+        collapsedPlaylists = {};
+        return;
+      }
       try {
         const data = JSON.parse(raw);
         if (Array.isArray(data?.playlists)) {
