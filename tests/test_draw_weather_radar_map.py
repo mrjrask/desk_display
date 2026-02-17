@@ -1,3 +1,4 @@
+import datetime
 from io import BytesIO
 
 from PIL import Image
@@ -5,7 +6,10 @@ from PIL import Image
 from screens.draw_weather import (
     RADAR_CENTER_LATITUDE,
     RADAR_CENTER_LONGITUDE,
+    RadarFrame,
     _fetch_base_map,
+    _fetch_radar_frames,
+    draw_weather_radar,
 )
 
 
@@ -78,3 +82,48 @@ def test_fetch_base_map_uses_chicago_center_coordinates(monkeypatch):
 
     assert result is not None
     assert seen_coords == [(RADAR_CENTER_LATITUDE, RADAR_CENTER_LONGITUDE, 7)]
+
+
+def test_fetch_radar_frames_prefers_recent_frames(monkeypatch):
+    now_ts = int(datetime.datetime.now(datetime.timezone.utc).timestamp())
+    stale_ts = now_ts - (6 * 60 * 60)
+    fresh_ts = now_ts - (20 * 60)
+    sample = Image.new("RGBA", (8, 8), (255, 255, 255, 255))
+
+    monkeypatch.setattr(
+        "screens.draw_weather._fetch_rainviewer_frames",
+        lambda zoom, max_frames: [
+            RadarFrame(sample, stale_ts),
+            RadarFrame(sample, fresh_ts),
+        ],
+    )
+
+    frames = _fetch_radar_frames(zoom=7, max_frames=6)
+
+    assert len(frames) == 1
+    assert frames[0].timestamp == fresh_ts
+
+
+def test_draw_weather_radar_animates_when_transition_enabled(monkeypatch):
+    sample = Image.new("RGBA", (8, 8), (255, 255, 255, 255))
+    frames = [
+        RadarFrame(sample, 1_700_000_000),
+        RadarFrame(sample, 1_700_000_060),
+    ]
+
+    monkeypatch.setattr("screens.draw_weather._fetch_radar_frames", lambda zoom: frames)
+    monkeypatch.setattr("screens.draw_weather._fetch_base_map", lambda zoom: Image.new("RGB", (8, 8), (0, 0, 0)))
+    monkeypatch.setattr("screens.draw_weather.time.sleep", lambda _: None)
+
+    class _Display:
+        def __init__(self):
+            self.frames = []
+
+        def display(self, image):
+            self.frames.append(image)
+
+    display = _Display()
+    result = draw_weather_radar(display, transition=True)
+
+    assert result.displayed is True
+    assert len(display.frames) == 2
