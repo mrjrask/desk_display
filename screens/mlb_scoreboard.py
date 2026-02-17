@@ -3,8 +3,9 @@
 mlb_scoreboard.py
 
 Render a scrolling MLB scoreboard showing that day's games.
-The previous day's scores are retained until 9:30 AM Central before
-refreshing to the current date.
+Before spring training opens, the scoreboard is pinned to opening day so
+upcoming games are shown early. After opening day, the previous day's scores
+are retained until 9:30 AM Central before refreshing to the current date.
 Layout:
     • Title "MLB Scoreboard" centered at the top.
     • Each game occupies two rows arranged in five conceptual columns:
@@ -485,7 +486,7 @@ def _scoreboard_date(now: Optional[datetime.datetime] = None) -> datetime.date:
     """Return the date whose games should be shown on the scoreboard."""
 
     now = now or datetime.datetime.now(CENTRAL_TIME)
-    if now.date() < SPRING_TRAINING_OPENING_DAY:
+    if now.date() <= SPRING_TRAINING_OPENING_DAY:
         return SPRING_TRAINING_OPENING_DAY
 
     cutoff = now.replace(hour=9, minute=30, second=0, microsecond=0)
