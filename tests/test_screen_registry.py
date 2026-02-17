@@ -160,7 +160,7 @@ def test_logo_scroll_speed_is_doubled_for_1080p_layout():
     assert _logo_scroll_speed_for_layout(800, 480) == 2.2
 
 
-def test_date_time_screens_render_in_transition_mode(monkeypatch):
+def test_date_time_screens_render_with_live_color_cycle_mode(monkeypatch):
     now = datetime.datetime(2024, 1, 1, 12, 0, tzinfo=CENTRAL_TIME)
     weather = {"hourly": []}
     context = _make_context(weather, now)
@@ -180,7 +180,7 @@ def test_date_time_screens_render_in_transition_mode(monkeypatch):
     registry["date"].render()
     registry["time"].render()
 
-    assert calls == [("date", True), ("time", True)]
+    assert calls == [("date", False), ("time", False)]
 
 
 def test_quad_screen_is_registered(monkeypatch):
