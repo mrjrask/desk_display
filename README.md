@@ -201,6 +201,8 @@ Defaults:
 - Port: `SCREEN_CONFIG_PORT` (default `5002`)
 - Config path: `SCREENS_CONFIG_PATH`
 - Disable autostart: `SCREEN_CONFIG_AUTOSTART=0`
+- Set `SCREEN_UI_PASSWORD` to require login for UI pages and API endpoints
+- Optional session key override: `SCREEN_UI_SECRET_KEY`
 
 ---
 

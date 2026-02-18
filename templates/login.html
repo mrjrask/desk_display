@@ -3,9 +3,72 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Desk Display</title>
+    <title>Desk Display Login</title>
+    <style>
+      body {
+        margin: 0;
+        min-height: 100vh;
+        display: grid;
+        place-items: center;
+        font-family: Arial, sans-serif;
+        background: #f3f4f6;
+      }
+
+      .card {
+        width: min(360px, calc(100vw - 2rem));
+        background: #fff;
+        border-radius: 12px;
+        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.12);
+        padding: 1.25rem;
+      }
+
+      h1 {
+        margin: 0 0 1rem;
+        font-size: 1.25rem;
+      }
+
+      label,
+      input,
+      button {
+        display: block;
+        width: 100%;
+      }
+
+      input {
+        box-sizing: border-box;
+        margin-top: 0.4rem;
+        padding: 0.6rem;
+        border-radius: 8px;
+        border: 1px solid #ccc;
+      }
+
+      button {
+        margin-top: 1rem;
+        padding: 0.65rem;
+        border: 0;
+        border-radius: 8px;
+        background: #2563eb;
+        color: #fff;
+        font-weight: 600;
+        cursor: pointer;
+      }
+
+      .error {
+        color: #b91c1c;
+        margin: 0 0 0.75rem;
+      }
+    </style>
   </head>
   <body>
-    <p>This page is no longer used. Visit <a href="/">the configuration UI</a>.</p>
+    <form class="card" method="post" action="{{ url_for('login') }}">
+      <h1>Desk Display</h1>
+      {% if error %}
+      <p class="error">{{ error }}</p>
+      {% endif %}
+      <input type="hidden" name="next" value="{{ next_url }}" />
+      <label for="password">Password</label>
+      <input id="password" name="password" type="password" required autofocus />
+      <button type="submit">Sign in</button>
+    </form>
   </body>
 </html>
