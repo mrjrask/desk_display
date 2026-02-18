@@ -8,7 +8,17 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional, Tuple
 
-from flask import Flask, abort, jsonify, render_template, request, send_from_directory
+from flask import (
+    Flask,
+    abort,
+    jsonify,
+    redirect,
+    render_template,
+    request,
+    send_from_directory,
+    session,
+    url_for,
+)
 
 from paths import resolve_storage_paths
 from schedule import build_scheduler
@@ -30,8 +40,41 @@ LAYOUTS_CONFIG_PATH = os.environ.get(
 
 SCREEN_CONFIG_HOST = os.environ.get("SCREEN_CONFIG_HOST", "0.0.0.0")
 SCREEN_CONFIG_PORT = int(os.environ.get("SCREEN_CONFIG_PORT", "5002"))
+SCREEN_UI_PASSWORD = os.environ.get("SCREEN_UI_PASSWORD", "")
+SCREEN_AUTH_ENABLED = os.environ.get("SCREEN_AUTH_ENABLED", "").strip().lower() in {
+    "1",
+    "true",
+    "yes",
+    "on",
+}
 ALLOWED_SCREEN_EXTS = (".png", ".jpg", ".jpeg")
 app = Flask(__name__)
+app.secret_key = os.environ.get("SCREEN_UI_SECRET_KEY", "desk-display-config-ui")
+
+
+def _is_auth_enabled() -> bool:
+    return bool(SCREEN_UI_PASSWORD) or SCREEN_AUTH_ENABLED
+
+
+def _is_authenticated() -> bool:
+    return bool(session.get("screen_ui_authenticated"))
+
+
+@app.before_request
+def _require_authentication() -> Optional[Any]:
+    if not _is_auth_enabled():
+        return None
+
+    if request.endpoint in {"login", "logout", "static"}:
+        return None
+
+    if _is_authenticated():
+        return None
+
+    if request.path.startswith("/api/"):
+        return jsonify({"error": "Authentication required"}), 401
+
+    return redirect(url_for("login", next=request.full_path if request.query_string else request.path))
 
 
 def _load_config(path: str) -> Dict[str, Any]:
@@ -657,6 +700,30 @@ def _save_style_config(config: Dict[str, Any]) -> None:
 
 def run_config_ui(host: str = SCREEN_CONFIG_HOST, port: int = SCREEN_CONFIG_PORT) -> None:
     app.run(host=host, port=port, debug=False, use_reloader=False, threaded=True)
+
+
+@app.route("/login", methods=["GET", "POST"])
+def login() -> Any:
+    if not _is_auth_enabled():
+        return redirect(url_for("screen_config"))
+
+    error: Optional[str] = None
+    next_url = request.args.get("next") or request.form.get("next") or url_for("screen_config")
+
+    if request.method == "POST":
+        supplied = request.form.get("password", "")
+        if SCREEN_UI_PASSWORD and supplied == SCREEN_UI_PASSWORD:
+            session["screen_ui_authenticated"] = True
+            return redirect(next_url)
+        error = "Incorrect password"
+
+    return render_template("login.html", error=error, next_url=next_url)
+
+
+@app.post("/logout")
+def logout() -> Any:
+    session.pop("screen_ui_authenticated", None)
+    return redirect(url_for("login"))
 
 
 @app.route("/", methods=["GET"])
