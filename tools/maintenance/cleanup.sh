@@ -82,8 +82,11 @@ echo "    → Clearing display…"
 # physical Display HAT Mini panel when hardware output is available.
 "${python_bin}" - <<'PY'
 import logging
+import time
 import sys
 from pathlib import Path
+
+from PIL import Image
 
 # `python -` runs as <stdin>, so derive the repository root from cwd.
 PROJECT_ROOT = Path.cwd()
@@ -97,11 +100,30 @@ except Exception as exc:  # pragma: no cover - best effort during shutdown
 else:
     try:
         display = Display()
-        clear_display(display)
         clear_update_indicator(display)
-        display.set_led(0.0, 0.0, 0.0)
-        # Force one final redraw after LED reset so any border overlay clears.
+
+        # Run a deliberate multi-pass blackout sequence; some panels can show
+        # stale frame fragments if only one clear command is issued during
+        # service shutdown while transitions are still winding down.
+        black = Image.new(
+            "RGB",
+            (getattr(display, "width", 320), getattr(display, "height", 240)),
+            "black",
+        )
+        for _ in range(3):
+            display.image(black)
+            display.set_led(0.0, 0.0, 0.0)
+            display.show()
+            time.sleep(0.06)
+
+        # Keep the legacy clear path as a final fallback redraw.
+        clear_display(display)
         display.clear()
+
+        # Blank the panel backlight at shutdown so any residual LCD ghosting is
+        # not visible once cleanup finishes.
+        if hasattr(display, "set_backlight"):
+            display.set_backlight(0.0)
     except Exception as exc:  # pragma: no cover - best effort during shutdown
         logging.warning("Display cleanup failed: %s", exc)
 PY
