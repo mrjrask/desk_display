@@ -877,7 +877,14 @@ def save_screens() -> Any:
     _save_config(config)
     _save_style_config(style_config)
     _save_layouts_config(layouts)
-    return jsonify({"status": "ok"})
+    return jsonify(
+        {
+            "status": "ok",
+            "screens": _build_screen_entries(config, style_config),
+            "quad_enabled": bool(layouts.get("screens", {}).get("quad", {}).get("enabled", False)),
+            "quad_pages": layouts.get("screens", {}).get("quad", {}).get("pages", []),
+        }
+    )
 
 
 @app.post("/api/screens/import")

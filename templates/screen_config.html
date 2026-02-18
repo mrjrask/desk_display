@@ -329,6 +329,32 @@
       color: #e2e8f0;
       font-size: 0.95rem;
     }
+    .alt-screen-field {
+      display: flex;
+      gap: 0.45rem;
+      align-items: center;
+    }
+    .alt-screen-field .alt-screen-input {
+      flex: 1;
+    }
+    .alt-screen-clear {
+      width: 30px;
+      height: 30px;
+      border-radius: 999px;
+      border: 1px solid rgba(148, 163, 184, 0.45);
+      background: rgba(15, 23, 42, 0.85);
+      color: #cbd5e1;
+      font-weight: 700;
+      line-height: 1;
+      cursor: pointer;
+      padding: 0;
+      flex: 0 0 auto;
+    }
+    .alt-screen-clear:hover {
+      background: rgba(239, 68, 68, 0.18);
+      border-color: rgba(239, 68, 68, 0.55);
+      color: #fecaca;
+    }
     .handle {
       cursor: grab;
       display: flex;
@@ -472,7 +498,10 @@
           <div class="hint">Hex color (e.g. #000000).</div>
         </div>
         <div>
-          <input type="text" list="screenIds" placeholder="Optional alternate screen(s)" value="{{ screen.alt_screen }}" class="alt-screen-input">
+          <div class="alt-screen-field">
+            <input type="text" list="screenIds" placeholder="Optional alternate screen(s)" value="{{ screen.alt_screen }}" class="alt-screen-input">
+            <button type="button" class="alt-screen-clear" aria-label="Clear alternate screens" title="Clear alternate screens">×</button>
+          </div>
           <div class="hint">Comma-separated list if needed.</div>
         </div>
         <div>
@@ -804,6 +833,19 @@
         });
         markDirty();
       }
+    });
+
+    screenTable.addEventListener("click", (event) => {
+      const clearButton = event.target.closest(".alt-screen-clear");
+      if (!clearButton) return;
+      const row = clearButton.closest(".screen-row");
+      if (!row) return;
+      const altInput = row.querySelector(".alt-screen-input");
+      if (!altInput) return;
+      if (altInput.value === "") return;
+      altInput.value = "";
+      altInput.dispatchEvent(new Event("input", { bubbles: true }));
+      altInput.dispatchEvent(new Event("change", { bubbles: true }));
     });
 
     if (hideZeroFreqToggle) {
@@ -1184,7 +1226,10 @@
           <div class="hint">Hex color (e.g. #000000).</div>
         </div>
         <div>
-          <input type="text" list="screenIds" placeholder="Optional alternate screen(s)" value="${screen.alt_screen ?? ""}" class="alt-screen-input">
+          <div class="alt-screen-field">
+            <input type="text" list="screenIds" placeholder="Optional alternate screen(s)" value="${screen.alt_screen ?? ""}" class="alt-screen-input">
+            <button type="button" class="alt-screen-clear" aria-label="Clear alternate screens" title="Clear alternate screens">×</button>
+          </div>
           <div class="hint">Comma-separated list if needed.</div>
         </div>
         <div>
@@ -1270,6 +1315,9 @@
         if (!response.ok) {
           throw new Error(data.error || "Unable to save configuration");
         }
+        renderScreens(data.screens || screens);
+        if (quadEnabledToggle) quadEnabledToggle.checked = Boolean(data.quad_enabled);
+        renderQuadPages(data.quad_pages || getQuadPages());
         markClean();
       } catch (err) {
         showError(err.message);
