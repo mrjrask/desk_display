@@ -63,8 +63,10 @@ def _color_cycle_profile(
 ) -> tuple[float, float, int | None]:
     """Return cycle timing: initial delay, frame interval, and max steps."""
 
-    initial_delay = 0.18 if kernel_driven else 0.6
-    interval = 0.2 if kernel_driven else 0.45
+    # Kernel-driven output can safely animate faster now that frame buffering
+    # is stable; start immediately and keep cycling quickly while visible.
+    initial_delay = 0.0 if kernel_driven else 0.6
+    interval = 0.08 if kernel_driven else 0.45
     infinite_cycle = kernel_driven or hyperpixel_layout or hyperpixel_square
     steps = None if infinite_cycle else 6
     return initial_delay, interval, steps
