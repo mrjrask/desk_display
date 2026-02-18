@@ -49,7 +49,7 @@ SCREEN_AUTH_ENABLED = os.environ.get("SCREEN_AUTH_ENABLED", "").strip().lower() 
 }
 ALLOWED_SCREEN_EXTS = (".png", ".jpg", ".jpeg")
 app = Flask(__name__)
-app.secret_key = os.environ.get("SCREEN_UI_SECRET_KEY", "desk-display-config-ui")
+app.secret_key = SCREEN_UI_PASSWORD or "desk-display-config-ui"
 
 
 def _is_auth_enabled() -> bool:
