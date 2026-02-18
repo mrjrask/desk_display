@@ -432,6 +432,7 @@ def _build_registry_if_needed(context: ScreenContext) -> Tuple[Dict[str, ScreenD
 
 display: Optional[Display] = None
 _background_refresh_thread: Optional[threading.Thread] = None
+_startup_refresh_thread: Optional[threading.Thread] = None
 _config_ui_process: Optional[subprocess.Popen] = None
 _runtime_initialized = False
 
@@ -1392,13 +1393,23 @@ def _background_refresh() -> None:
             break
 
 
+def _startup_refresh() -> None:
+    """Prime cached data asynchronously so the first frame can render quickly."""
+
+    try:
+        refresh_all(force=True)
+    except Exception as exc:
+        logging.error("Startup refresh failed: %s", exc)
+
+
 def init_runtime() -> None:
     """Configure logging, storage paths, hardware, and background workers."""
 
     global SCREENSHOT_DIR, CURRENT_SCREENSHOT_DIR, SCREENSHOT_ARCHIVE_BASE
     global DISPLAY_STATUS_PATH
     global SCREENSHOT_ARCHIVE_MIRROR, _storage_paths, display, video_out
-    global _background_refresh_thread, _runtime_initialized, _wifi_monitor_enabled
+    global _background_refresh_thread, _startup_refresh_thread
+    global _runtime_initialized, _wifi_monitor_enabled
 
     if _runtime_initialized:
         return
@@ -1475,7 +1486,13 @@ def init_runtime() -> None:
         )
         _background_refresh_thread.start()
 
-    refresh_all(force=True)
+    if _startup_refresh_thread is None or not _startup_refresh_thread.is_alive():
+        _startup_refresh_thread = threading.Thread(
+            target=_startup_refresh,
+            daemon=True,
+        )
+        _startup_refresh_thread.start()
+
     _runtime_initialized = True
 
 # ─── Main loop ───────────────────────────────────────────────────────────────
