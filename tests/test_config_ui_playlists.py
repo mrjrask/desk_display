@@ -42,3 +42,29 @@ def test_screen_config_page_bootstraps_server_playlist_state(monkeypatch):
     html = response.get_data(as_text=True)
     assert 'const serverPlaylists = [{"id": "default", "name": "Default"}]' in html
     assert 'const serverPlaylistAssignments = {"date": "default"}' in html
+
+
+def test_screen_config_page_renders_alt_screen_clear_control(monkeypatch):
+    monkeypatch.setattr(config_ui, "_load_active_config", lambda: {"screens": {"date": 1}})
+    monkeypatch.setattr(config_ui, "_load_active_style_config", lambda: {"screens": {}})
+    monkeypatch.setattr(
+        config_ui,
+        "_build_screen_entries",
+        lambda config, style: [
+            {
+                "id": "date",
+                "frequency": 1,
+                "background": "#000000",
+                "alt_screen": "inside",
+                "alt_frequency": "1",
+            }
+        ],
+    )
+
+    client = config_ui.app.test_client()
+    response = client.get("/")
+
+    assert response.status_code == 200
+    html = response.get_data(as_text=True)
+    assert 'class="alt-screen-clear"' in html
+    assert "Clear alternate screens" in html

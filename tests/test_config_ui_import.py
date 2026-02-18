@@ -114,6 +114,19 @@ def test_save_screens_persists_quad_pages(monkeypatch):
     monkeypatch.setattr(config_ui, "_save_config", lambda config: saved.setdefault("config", config))
     monkeypatch.setattr(config_ui, "_save_style_config", lambda style: saved.setdefault("style", style))
     monkeypatch.setattr(config_ui, "_save_layouts_config", lambda layouts: saved.setdefault("layouts", layouts))
+    monkeypatch.setattr(
+        config_ui,
+        "_build_screen_entries",
+        lambda config, style: [
+            {
+                "id": "date",
+                "frequency": 1,
+                "background": "#000000",
+                "alt_screen": "",
+                "alt_frequency": "",
+            }
+        ],
+    )
 
     client = config_ui.app.test_client()
     response = client.post(
@@ -136,7 +149,24 @@ def test_save_screens_persists_quad_pages(monkeypatch):
         },
     )
 
+    payload = response.get_json()
+
     assert response.status_code == 200
+    assert payload["status"] == "ok"
+    assert payload["screens"] == [
+        {
+            "id": "date",
+            "frequency": 1,
+            "background": "#000000",
+            "alt_screen": "",
+            "alt_frequency": "",
+        }
+    ]
+    assert payload["quad_enabled"] is True
+    assert payload["quad_pages"] == [
+        {"tiles": ["date", "date", "weather1", "inside"]},
+        {"tiles": ["time", "inside", "inside", "weather2"]},
+    ]
     assert saved["layouts"] == {
         "screens": {
             "quad": {
