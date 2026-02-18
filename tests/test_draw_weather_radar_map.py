@@ -4,6 +4,7 @@ from io import BytesIO
 from PIL import Image
 
 from screens.draw_weather import (
+    RADAR_ANIMATION_LOOPS,
     RADAR_CENTER_LATITUDE,
     RADAR_CENTER_LONGITUDE,
     RadarFrame,
@@ -126,4 +127,39 @@ def test_draw_weather_radar_animates_when_transition_enabled(monkeypatch):
     result = draw_weather_radar(display, transition=True)
 
     assert result.displayed is True
-    assert len(display.frames) == 2
+    assert len(display.frames) == len(frames) * RADAR_ANIMATION_LOOPS
+
+
+def test_fetch_rainviewer_frames_sorts_to_include_latest(monkeypatch):
+    timestamps_requested = []
+    now_ts = int(datetime.datetime.now(datetime.timezone.utc).timestamp())
+    metadata = {
+        "host": "https://tilecache.rainviewer.com",
+        "radar": {
+            "past": [
+                {"path": "a", "time": now_ts - 600},
+                {"path": "b", "time": now_ts - 60},
+                {"path": "c", "time": now_ts - 300},
+            ]
+        },
+    }
+
+    class _JsonResponse(_MockResponse):
+        def __init__(self, payload):
+            self._payload = payload
+            super().__init__(b"")
+
+        def json(self):
+            return self._payload
+
+    def _mock_get(url, timeout):
+        if "weather-maps.json" in url:
+            return _JsonResponse(metadata)
+        timestamps_requested.append(url.split("/")[3])
+        return _MockResponse(_png_bytes())
+
+    monkeypatch.setattr("screens.draw_weather.requests.get", _mock_get)
+
+    _fetch_radar_frames(zoom=7, max_frames=2)
+
+    assert timestamps_requested == ["c", "b"]
