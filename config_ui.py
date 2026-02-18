@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import json
+import logging
 import os
+import time
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional, Tuple
@@ -18,6 +20,7 @@ from flask import (
     send_from_directory,
     session,
     url_for,
+    g,
 )
 
 from paths import resolve_storage_paths
@@ -50,6 +53,31 @@ SCREEN_AUTH_ENABLED = os.environ.get("SCREEN_AUTH_ENABLED", "").strip().lower() 
 ALLOWED_SCREEN_EXTS = (".png", ".jpg", ".jpeg")
 app = Flask(__name__)
 app.secret_key = SCREEN_UI_PASSWORD or "desk-display-config-ui"
+WEB_LOGGER = logging.getLogger("desk_display.web")
+
+
+@app.before_request
+def _capture_request_start_time() -> None:
+    g.request_started_at = time.perf_counter()
+
+
+@app.after_request
+def _log_web_request(response: Any) -> Any:
+    started = getattr(g, "request_started_at", None)
+    elapsed_ms: Optional[int] = None
+    if isinstance(started, float):
+        elapsed_ms = int((time.perf_counter() - started) * 1000)
+
+    duration = f" {elapsed_ms}ms" if elapsed_ms is not None else ""
+    WEB_LOGGER.info(
+        "🌐 %s %s -> %s%s ip=%s",
+        request.method,
+        request.full_path if request.query_string else request.path,
+        response.status_code,
+        duration,
+        request.remote_addr or "unknown",
+    )
+    return response
 
 
 def _is_auth_enabled() -> bool:
@@ -699,6 +727,12 @@ def _save_style_config(config: Dict[str, Any]) -> None:
 
 
 def run_config_ui(host: str = SCREEN_CONFIG_HOST, port: int = SCREEN_CONFIG_PORT) -> None:
+    if not logging.getLogger().handlers:
+        logging.basicConfig(
+            level=logging.INFO,
+            format="%(asctime)s %(levelname)-8s %(message)s",
+            datefmt="%H:%M:%S",
+        )
     app.run(host=host, port=port, debug=False, use_reloader=False, threaded=True)
 
 
