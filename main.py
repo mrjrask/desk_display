@@ -107,6 +107,12 @@ LOCAL_CONFIG_PATH = os.environ.get(
 )
 CONFIG_PATH = LOCAL_CONFIG_PATH if os.path.exists(LOCAL_CONFIG_PATH) else DEFAULT_CONFIG_PATH
 
+
+def _active_config_path() -> str:
+    """Return the current schedule config path, preferring local overrides."""
+
+    return LOCAL_CONFIG_PATH if os.path.exists(LOCAL_CONFIG_PATH) else DEFAULT_CONFIG_PATH
+
 # ─── Screenshot archiving (batch) ────────────────────────────────────────────
 ARCHIVE_THRESHOLD = 500  # archive when we reach this many images
 ARCHIVE_DEFAULT_FOLDER = "Screens"
@@ -339,8 +345,10 @@ def _button_press_can_fire(name: str, now: float) -> bool:
 
 
 def _load_scheduler_from_config() -> Optional[ScreenScheduler]:
+    config_path = _active_config_path()
+
     try:
-        config_data = load_schedule_config(CONFIG_PATH)
+        config_data = load_schedule_config(config_path)
     except Exception as exc:
         logging.warning(f"Could not load schedule configuration: {exc}")
         return None
@@ -348,7 +356,7 @@ def _load_scheduler_from_config() -> Optional[ScreenScheduler]:
     sanitized_config, removed_ids = sanitize_schedule_config(config_data)
     if removed_ids:
         try:
-            with open(CONFIG_PATH, "w", encoding="utf-8") as fh:
+            with open(config_path, "w", encoding="utf-8") as fh:
                 json.dump(sanitized_config, fh, indent=2)
                 fh.write("\n")
             logging.info(
@@ -373,8 +381,10 @@ def refresh_schedule_if_needed(force: bool = False) -> None:
     global _registry_cache_key, _registry_cache_value
     global _last_screen_id, _skip_request_pending, _pending_previous_screen_id
 
+    config_path = _active_config_path()
+
     try:
-        mtime = os.path.getmtime(CONFIG_PATH)
+        mtime = os.path.getmtime(config_path)
     except OSError:
         mtime = None
 
