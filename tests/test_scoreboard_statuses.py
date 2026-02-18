@@ -61,14 +61,14 @@ def test_nfl_in_game_status_overrides_clock(short_detail: str):
     assert nfl_format_status(game) == short_detail
 
 
-def test_mlb_scoreboard_date_pinned_to_spring_training_before_opening_day():
+def test_mlb_scoreboard_date_uses_temporary_override_window():
     now = datetime.datetime(2026, 2, 19, 12, 0, tzinfo=CENTRAL_TIME)
     assert mlb_scoreboard_date(now) == datetime.date(2026, 2, 20)
 
 
-def test_mlb_scoreboard_date_uses_normal_cutoff_on_opening_day():
-    before_cutoff = datetime.datetime(2026, 2, 20, 8, 0, tzinfo=CENTRAL_TIME)
-    after_cutoff = datetime.datetime(2026, 2, 20, 10, 0, tzinfo=CENTRAL_TIME)
+def test_mlb_scoreboard_date_uses_normal_cutoff_after_override_window():
+    before_cutoff = datetime.datetime(2026, 2, 21, 8, 0, tzinfo=CENTRAL_TIME)
+    after_cutoff = datetime.datetime(2026, 2, 21, 10, 0, tzinfo=CENTRAL_TIME)
 
-    assert mlb_scoreboard_date(before_cutoff) == datetime.date(2026, 2, 19)
-    assert mlb_scoreboard_date(after_cutoff) == datetime.date(2026, 2, 20)
+    assert mlb_scoreboard_date(before_cutoff) == datetime.date(2026, 2, 20)
+    assert mlb_scoreboard_date(after_cutoff) == datetime.date(2026, 2, 21)
