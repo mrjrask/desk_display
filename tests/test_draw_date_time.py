@@ -9,8 +9,8 @@ def test_color_cycle_profile_kernel_is_fast_and_continuous():
         hyperpixel_square=False,
     )
 
-    assert initial_delay == 0.18
-    assert interval == 0.2
+    assert initial_delay == 0.0
+    assert interval == 0.08
     assert steps is None
 
 
