@@ -24,7 +24,7 @@ def test_compute_adaptive_scroll_params_increases_step_for_high_resolution():
 
 def test_compute_adaptive_scroll_params_enables_page_jump_for_very_tall_content():
     params = compute_adaptive_scroll_params(
-        content_height=2500,
+        content_height=3200,
         viewport_height=320,
         viewport_width=320,
         base_step=1,
@@ -38,7 +38,7 @@ def test_scroll_vertical_content_uses_adaptive_stride_when_page_jump_enabled():
 
     scroll_vertical_content(
         display=display,
-        content_height=2200,
+        content_height=2440,
         viewport_width=1080,
         viewport_height=240,
         render_at_offset=lambda offset: display.frames.append(offset),
@@ -48,6 +48,25 @@ def test_scroll_vertical_content_uses_adaptive_stride_when_page_jump_enabled():
     )
 
     assert display.frames[0] == 0
-    assert display.frames[-1] == 1960
-    assert len(display.frames) <= 12
-    assert display.frames[1] - display.frames[0] >= 180
+    assert display.frames[-1] == 2200
+    assert len(display.frames) <= 24
+    assert display.frames[1] - display.frames[0] >= 96
+
+
+def test_scroll_vertical_content_keeps_dense_readable_frames_for_long_content():
+    display = DummyDisplay()
+
+    scroll_vertical_content(
+        display=display,
+        content_height=1200,
+        viewport_width=1080,
+        viewport_height=240,
+        render_at_offset=lambda offset: display.frames.append(offset),
+        base_step=1,
+        pause_start=0,
+        pause_end=0,
+    )
+
+    assert display.frames[0] == 0
+    assert display.frames[-1] == 960
+    assert len(display.frames) > 80

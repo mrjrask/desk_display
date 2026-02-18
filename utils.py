@@ -1714,12 +1714,15 @@ def compute_adaptive_scroll_params(
     base_step: int,
     min_frame_time: float = 0.016,
     page_jump_mode: bool = True,
-    page_jump_threshold_ratio: float = 3.0,
+    page_jump_threshold_ratio: float = 8.0,
 ) -> AdaptiveScrollParams:
     """Compute resolution-aware scroll step and frame pacing.
 
     Larger displays can scroll farther per frame, while very tall boards run at
     a lower FPS target to keep motion readable and reduce frame churn.
+
+    Page-jump mode is intentionally conservative so long scoreboards keep a
+    readable line-by-line cadence instead of skipping most rows.
     """
 
     safe_base_step = max(1, int(base_step))
@@ -1779,7 +1782,7 @@ def scroll_vertical_content(
 
     stride = params.step
     if params.use_page_jump:
-        stride = max(stride, int(viewport_height * 0.75))
+        stride = max(stride, int(viewport_height * 0.4))
 
     start_offset = max_offset if reverse else 0
     render_at_offset(start_offset)
