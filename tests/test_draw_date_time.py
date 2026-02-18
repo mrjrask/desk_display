@@ -36,7 +36,7 @@ def test_color_cycle_profile_hyperpixel_cycles_continuously():
     assert steps is None
 
 
-def test_kernel_color_cycle_ignores_frame_id_drift(monkeypatch):
+def test_kernel_color_cycle_stops_when_frame_id_changes(monkeypatch):
     calls = {"compose": 0, "images": 0}
 
     class DriftingDisplay:
@@ -76,5 +76,5 @@ def test_kernel_color_cycle_ignores_frame_id_drift(monkeypatch):
         frame_state,
     )
 
-    assert calls["compose"] == 2
-    assert calls["images"] == 2
+    assert calls["compose"] == 0
+    assert calls["images"] == 0

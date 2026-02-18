@@ -183,15 +183,13 @@ def _cycle_colors_after_load(
     if frame_state is not None:
         with frame_state["lock"]:
             expected_frame_id = frame_state["value"]
-    # Keep cycling on Hyperpixel and kernel-driven outputs so colors continue
-    # changing while the screen is visible.
-    # Other displays keep the short, subtle cycle.
+    # Keep cycling while this screen remains active, but stop immediately once
+    # another screen has updated the display frame buffer.
     count = 0
     while steps is None or count < steps:
         if (
             expected_frame_id is not None
             and hasattr(display, "frame_id")
-            and not (kernel_driven or hyperpixel_layout or hyperpixel_square)
         ):
             current_frame_id = display.frame_id()
             if frame_state is not None:
