@@ -88,6 +88,7 @@ RADAR_CENTER_LATITUDE = 41.8781
 RADAR_CENTER_LONGITUDE = -87.6298
 RADAR_MAX_FRAME_AGE = datetime.timedelta(hours=2)
 RADAR_ANIMATION_FRAME_DELAY_SECONDS = 0.2
+RADAR_ANIMATION_LOOPS = 3
 
 
 _IS_1080P_LAYOUT = config.is_hdmi_1080p_layout()
@@ -1340,6 +1341,13 @@ def _fetch_rainviewer_frames(zoom: int = 7, max_frames: int = 6) -> list[RadarFr
     host = metadata.get("host", "https://tilecache.rainviewer.com")
     radar_info = metadata.get("radar") or {}
     frames = (radar_info.get("past") or []) + (radar_info.get("nowcast") or [])
+    frames = sorted(
+        frames,
+        key=lambda frame: _normalise_radar_timestamp(
+            frame.get("time") if isinstance(frame, dict) else None
+        )
+        or 0,
+    )
     frames = frames[-max_frames:]
 
     x_tile, y_tile, x_offset, y_offset = _latlon_to_tile(
@@ -1457,9 +1465,10 @@ def draw_weather_radar(display, weather=None, transition: bool = False):
             display.display(frame_image)
 
     if transition and len(composed_frames) > 1:
-        for frame_image in composed_frames:
-            _display_frame(frame_image)
-            time.sleep(RADAR_ANIMATION_FRAME_DELAY_SECONDS)
+        for _ in range(RADAR_ANIMATION_LOOPS):
+            for frame_image in composed_frames:
+                _display_frame(frame_image)
+                time.sleep(RADAR_ANIMATION_FRAME_DELAY_SECONDS)
         return ScreenImage(composed_frames[-1], displayed=True)
 
     last_frame = composed_frames[-1]
