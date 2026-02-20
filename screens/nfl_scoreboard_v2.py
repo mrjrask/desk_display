@@ -37,6 +37,7 @@ from config import (
     get_screen_font,
     get_screen_image_scale,
     is_kernel_driven_display,
+    is_hdmi_1080p_layout,
     is_hyperpixel_next_layout,
     scale_value,
     scale_value_width,
@@ -48,6 +49,7 @@ from utils import (
     log_missing_team_logo,
     log_call,
     scroll_vertical_content,
+    clone_font,
 )
 
 # Import shared NFL data fetching logic
@@ -68,6 +70,8 @@ from screens.nfl_scoreboard import (
 
 # ─── Constants ────────────────────────────────────────────────────────────────
 HYPERPIXEL_LAYOUT = is_hyperpixel_next_layout()
+_IS_1080P_LAYOUT = is_hdmi_1080p_layout()
+_HD_LAYOUT_TEXT_BOOST = 1.25 if _IS_1080P_LAYOUT else 1.0
 
 
 def _scale_y(value: int) -> int:
@@ -78,8 +82,8 @@ TITLE = "NFL Scoreboard v2"
 TITLE_GAP = _scale_y(8)
 BLOCK_SPACING = _scale_y(8)
 PAIR_SPACING = scale_value_width(4)
-SCORE_ROW_H = _scale_y(30)
-STATUS_ROW_H = _scale_y(14)
+SCORE_ROW_H = max(1, int(round(_scale_y(30) * _HD_LAYOUT_TEXT_BOOST)))
+STATUS_ROW_H = max(1, int(round(_scale_y(14) * _HD_LAYOUT_TEXT_BOOST)))
 SUPER_BOWL_LOGO_GAP = _scale_y(6)
 
 # Dual-game column layout (per game, 160px wide)
@@ -156,8 +160,14 @@ def _apply_style_overrides() -> None:
         base_font=FONT_STATUS,
         default_size=18,
     )
+    if _IS_1080P_LAYOUT:
+        SCORE_FONT = clone_font(SCORE_FONT, max(1, int(round(getattr(SCORE_FONT, "size", 20) * _HD_LAYOUT_TEXT_BOOST))))
+        STATUS_FONT = clone_font(STATUS_FONT, max(1, int(round(getattr(STATUS_FONT, "size", 18) * _HD_LAYOUT_TEXT_BOOST))))
+        CENTER_FONT = clone_font(CENTER_FONT, max(1, int(round(getattr(CENTER_FONT, "size", 18) * _HD_LAYOUT_TEXT_BOOST))))
     BACKGROUND_COLOR = get_screen_background_color(SCREEN_ID, SCOREBOARD_BACKGROUND_COLOR)
     team_scale = get_screen_image_scale(SCREEN_ID, "team_logo", 1.0)
+    if _IS_1080P_LAYOUT:
+        team_scale *= 1.2
     LOGO_HEIGHT = max(1, int(round(TEAM_LOGO_BASE_HEIGHT * team_scale)))
     if is_kernel_driven_display():
         LEAGUE_LOGO_HEIGHT = LOGO_HEIGHT

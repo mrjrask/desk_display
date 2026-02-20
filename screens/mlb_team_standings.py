@@ -59,6 +59,8 @@ def _restore_font(font):
     if not isinstance(size, int) or size <= 0:
         return font
     scale = max(1.0, DISPLAY_SCALE)
+    if _IS_1080P_LAYOUT:
+        scale = max(1.0, scale / 1.8)
     return clone_font(font, max(1, int(round(size / scale))))
 
 

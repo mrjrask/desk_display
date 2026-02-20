@@ -36,6 +36,7 @@ from config import (
     get_screen_background_color,
     get_screen_font,
     get_screen_image_scale,
+    is_hdmi_1080p_layout,
     is_kernel_driven_display,
     is_hyperpixel_next_layout,
     scale_value,
@@ -49,6 +50,7 @@ from utils import (
     log_call,
     scroll_vertical_content,
     standard_scoreboard_league_logo_height,
+    clone_font,
 )
 
 # Import shared NHL data fetching logic
@@ -69,6 +71,8 @@ from screens.nhl_scoreboard import (
 
 # ─── Constants ────────────────────────────────────────────────────────────────
 HYPERPIXEL_LAYOUT = is_hyperpixel_next_layout()
+_IS_1080P_LAYOUT = is_hdmi_1080p_layout()
+_HD_LAYOUT_TEXT_BOOST = 1.25 if _IS_1080P_LAYOUT else 1.0
 
 
 def _scale_y(value: int) -> int:
@@ -79,8 +83,8 @@ TITLE = "NHL Scoreboard v2"
 TITLE_GAP = _scale_y(8)
 BLOCK_SPACING = _scale_y(8)
 PAIR_SPACING = scale_value_width(4)
-SCORE_ROW_H = _scale_y(30)
-STATUS_ROW_H = _scale_y(14)
+SCORE_ROW_H = max(1, int(round(_scale_y(30) * _HD_LAYOUT_TEXT_BOOST)))
+STATUS_ROW_H = max(1, int(round(_scale_y(14) * _HD_LAYOUT_TEXT_BOOST)))
 # Dual-game column layout (per game, 160px wide)
 # [Score 40][Logo 30][@ 20][Logo 30][Score 40] = 160
 GAME_COL_WIDTHS = [
@@ -133,6 +137,10 @@ def _scoreboard_fonts() -> tuple:
         base_font=FONT_STATUS,
         default_size=sizes["center"],
     )
+    if _IS_1080P_LAYOUT:
+        score = clone_font(score, max(1, int(round(getattr(score, "size", 20) * _HD_LAYOUT_TEXT_BOOST))))
+        status = clone_font(status, max(1, int(round(getattr(status, "size", 18) * _HD_LAYOUT_TEXT_BOOST))))
+        center = clone_font(center, max(1, int(round(getattr(center, "size", 18) * _HD_LAYOUT_TEXT_BOOST))))
     return score, status, center
 
 
@@ -157,6 +165,8 @@ def _apply_style_overrides() -> None:
     SCORE_FONT, STATUS_FONT, CENTER_FONT = _scoreboard_fonts()
     BACKGROUND_COLOR = get_screen_background_color(SCREEN_ID, SCOREBOARD_BACKGROUND_COLOR)
     team_scale = get_screen_image_scale(SCREEN_ID, "team_logo", 1.0)
+    if _IS_1080P_LAYOUT:
+        team_scale *= 1.2
     LOGO_HEIGHT = max(1, int(round(TEAM_LOGO_BASE_HEIGHT * team_scale)))
     if is_kernel_driven_display():
         LEAGUE_LOGO_HEIGHT = LOGO_HEIGHT
