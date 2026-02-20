@@ -192,13 +192,23 @@ def _build_image(symbol: str = "VRNO") -> Image.Image:
             fill=(255,255,255),
         )
 
-    # Price and change vertically centered on entire screen
+    # Price and change centered in the available area between title/logo and
+    # bottom all-time text to avoid overlap on short displays.
     price_str = f"${price:.3f}"
     w_price, h_price = draw.textsize(price_str, font=FONT_STOCK_PRICE)
     w_chg, h_chg = draw.textsize(chg_str, font=FONT_STOCK_CHANGE)
     pad = 2
     total_mid_h = h_price + pad + h_chg
-    y_mid = (HEIGHT - total_mid_h) // 2
+    top_content_y = title_top + h_title + LOGO_GAP
+    bottom_reserved = BOTTOM_TEXT_MARGIN + BOTTOM_ALL_TIME_OFFSET + (h_all if all_time else 0)
+    bottom_content_y = HEIGHT - bottom_reserved
+
+    available_mid_h = bottom_content_y - top_content_y
+    if available_mid_h >= total_mid_h:
+        y_mid = top_content_y + (available_mid_h - total_mid_h) // 2
+    else:
+        # Degenerate fallback for extremely constrained heights.
+        y_mid = max(top_content_y, min((HEIGHT - total_mid_h) // 2, HEIGHT - total_mid_h))
 
     # Draw price
     draw.text(((WIDTH - w_price)//2, y_mid), price_str, font=FONT_STOCK_PRICE, fill=(255,255,255))
