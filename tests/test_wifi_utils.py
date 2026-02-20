@@ -94,3 +94,30 @@ def test_parse_tcp_probe_targets(monkeypatch):
     monkeypatch.delenv("WIFI_TCP_PROBE_HOSTS")
     targets = wifi_utils._get_tcp_probe_targets()
     assert ("control.local", 8443, "tcp://control.local:8443") in targets
+
+
+def test_start_monitor_resets_state_to_ok_before_thread_start(monkeypatch):
+    class DummyThread:
+        def __init__(self, *args, **kwargs):
+            self.started = False
+
+        def start(self):
+            self.started = True
+
+        def is_alive(self):
+            return self.started
+
+    wifi_utils.wifi_status = "no_wifi"
+    wifi_utils.current_ssid = "test-ssid"
+    wifi_utils._MONITOR_THREAD = None
+
+    monkeypatch.setattr(wifi_utils, "should_monitor_wifi", lambda: True)
+    monkeypatch.setattr(wifi_utils, "_detect_interface", lambda: "wlan0")
+    monkeypatch.setattr(wifi_utils, "_resolve_user_log", lambda: None)
+    monkeypatch.setattr(wifi_utils.threading, "Thread", DummyThread)
+
+    wifi_utils.start_monitor()
+
+    assert wifi_utils.get_wifi_state() == ("ok", None)
+
+    wifi_utils._MONITOR_THREAD = None
