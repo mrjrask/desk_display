@@ -54,6 +54,7 @@ from utils import (
     clear_display,
     load_team_logo,
     log_call,
+    log_missing_team_logo,
     scroll_vertical_content,
 )
 from services.http_client import get_session
@@ -293,16 +294,14 @@ def _team_logo_abbr(team: Dict[str, Any]) -> str:
         if isinstance(val, str) and val.strip():
             candidate = val.strip().upper()
             candidate = _LOGO_ABBREVIATION_OVERRIDES.get(candidate, candidate)
-            if os.path.exists(os.path.join(LOGO_DIR, f"{candidate}.png")):
-                return candidate
+            return candidate
     city = (team.get("teamCity") or team.get("city") or "").strip()
     name = (team.get("teamName") or team.get("name") or "").strip()
     nickname = " ".join(part for part in (city, name) if part)
     if nickname:
         candidate = nickname[:3].upper()
         candidate = _LOGO_ABBREVIATION_OVERRIDES.get(candidate, candidate)
-        if os.path.exists(os.path.join(LOGO_DIR, f"{candidate}.png")):
-            return candidate
+        return candidate
     return ""
 
 
@@ -566,6 +565,15 @@ def _draw_game_block(
         abbr = _team_logo_abbr(team_obj)
         logo = _load_logo_cached(abbr) if abbr else None
         if not logo:
+            team_name = " ".join(
+                part
+                for part in (
+                    (team_obj or {}).get("teamCity") or (team_obj or {}).get("city"),
+                    (team_obj or {}).get("teamName") or (team_obj or {}).get("name"),
+                )
+                if part
+            ) or (team_obj or {}).get("displayName") or "Unknown Team"
+            log_missing_team_logo(SCREEN_ID, team_name, abbr)
             continue
         x0 = COL_X[idx] + (COL_WIDTHS[idx] - logo.width) // 2
         y0 = score_top + (SCORE_ROW_H - logo.height) // 2

@@ -22,7 +22,7 @@ from config import (
     SCOREBOARD_SCROLL_PAUSE_TOP,
     SCOREBOARD_SCROLL_PAUSE_BOTTOM,
 )
-from utils import clear_display, get_mlb_abbreviation, get_mlb_tricode, log_call, clone_font
+from utils import clear_display, get_mlb_abbreviation, get_mlb_tricode, log_call, log_missing_team_logo, clone_font
 from utils import scroll_vertical_content
 from screens.mlb_team_standings import format_games_back
 
@@ -131,14 +131,14 @@ def fetch_wildcard_records(league_id: int) -> List[dict]:
 # Helpers
 # ─────────────────────────────────────────────────────────────────────────────
 
-def _load_logo(abbr: str, target: int) -> Optional[Image.Image]:
+def _load_logo(abbr: str, target: int, team_name: str = "") -> Optional[Image.Image]:
     """
     Load a team logo (PNG) and resize to fit within target×target box.
     """
     fn = f"{abbr.upper()}.png"
     path = os.path.join(LOGOS_DIR, fn)
     if not os.path.exists(path):
-        logging.warning(f"Logo missing: {fn}")
+        log_missing_team_logo("MLB Standings", team_name, abbr)
         return None
     try:
         img = Image.open(path).convert("RGBA")
@@ -221,7 +221,8 @@ def draw_overview(display, title: str, league_id: int, transition=False):
         logos: List[Optional[Image.Image]] = []
         for rec in recs:
             abbr = get_mlb_tricode(rec.get("team")) or get_mlb_abbreviation(rec["team"]["name"])
-            logos.append(_load_logo(abbr, logo_box))
+            team_name = (rec.get("team") or {}).get("name") or "Unknown Team"
+            logos.append(_load_logo(abbr, logo_box, team_name))
         # ensure length OV_ROWS (pad with None if short)
         while len(logos) < OV_ROWS:
             logos.append(None)
@@ -340,7 +341,8 @@ def draw_division_screen(display, league_id: int, division_id: int, title: str, 
 
         # Logo
         abbr = get_mlb_tricode(rec.get("team")) or get_mlb_abbreviation(rec["team"]["name"])
-        ic = _load_logo(abbr, logo_size)
+        team_name = (rec.get("team") or {}).get("name") or "Unknown Team"
+        ic = _load_logo(abbr, logo_size, team_name)
         if ic:
             logo_x = margin + (logo_size - ic.width)//2
             logo_y = row_center - ic.height // 2
@@ -424,7 +426,8 @@ def draw_wildcard_screen(display, league_id: int, title: str, transition=False):
 
         # Team logo
         abbr = get_mlb_tricode(rec.get("team")) or get_mlb_abbreviation(rec["team"]["name"])
-        ic = _load_logo(abbr, logo_size)
+        team_name = (rec.get("team") or {}).get("name") or "Unknown Team"
+        ic = _load_logo(abbr, logo_size, team_name)
         if ic:
             canvas.paste(ic, (margin + (logo_size - ic.width)//2,
                               row_center - ic.height // 2), ic)

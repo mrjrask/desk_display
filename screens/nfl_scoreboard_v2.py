@@ -45,6 +45,7 @@ from utils import (
     ScreenImage,
     clear_display,
     load_team_logo,
+    log_missing_team_logo,
     log_call,
     scroll_vertical_content,
 )
@@ -278,6 +279,13 @@ def _draw_single_game(
         abbr = _team_logo_abbr(team_obj)
         logo = _load_logo_cached(abbr)
         if not logo:
+            team_name = (
+                (team_obj or {}).get("displayName")
+                or (team_obj or {}).get("name")
+                or (team_obj or {}).get("shortDisplayName")
+                or "Unknown Team"
+            )
+            log_missing_team_logo(SCREEN_ID, team_name, abbr)
             continue
         x0 = x_offset + GAME_COL_X[idx] + (GAME_COL_WIDTHS[idx] - logo.width) // 2
         y0 = score_top + (SCORE_ROW_H - logo.height) // 2
