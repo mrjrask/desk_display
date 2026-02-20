@@ -130,7 +130,16 @@ DISPLAY_STATUS_PATH = ""
 _screen_config_mtime: Optional[float] = None
 screen_scheduler: Optional[ScreenScheduler] = None
 _requested_screen_ids: Set[str] = set()
-_registry_cache_key: Optional[Tuple[Optional[float], bool, bool, Tuple[int, int]]] = None
+_registry_cache_key: Optional[
+    Tuple[
+        Optional[float],
+        bool,
+        bool,
+        Tuple[int, int],
+        Optional[datetime.datetime],
+        int,
+    ]
+] = None
 _registry_cache_value: Optional[Tuple[Dict[str, ScreenDefinition], Dict[str, object]]] = None
 
 _skip_request_pending = False
@@ -408,11 +417,30 @@ def refresh_schedule_if_needed(force: bool = False) -> None:
     logging.info("🔁 Loaded schedule configuration with %d node(s).", scheduler.node_count)
 
 
-def _registry_cache_inputs(offline: bool, skip_scoreboards: bool) -> Tuple[Optional[float], bool, bool, Tuple[int, int]]:
+def _registry_cache_inputs(
+    offline: bool,
+    skip_scoreboards: bool,
+    weather_fetched_at: Optional[datetime.datetime],
+    weather_object_id: int,
+) -> Tuple[
+    Optional[float],
+    bool,
+    bool,
+    Tuple[int, int],
+    Optional[datetime.datetime],
+    int,
+]:
     """Return the cache key that determines whether registry rebuild is required."""
 
     display_mode = (int(WIDTH), int(HEIGHT))
-    return (_screen_config_mtime, bool(offline), bool(skip_scoreboards), display_mode)
+    return (
+        _screen_config_mtime,
+        bool(offline),
+        bool(skip_scoreboards),
+        display_mode,
+        weather_fetched_at,
+        weather_object_id,
+    )
 
 
 def _build_registry_if_needed(context: ScreenContext) -> Tuple[Dict[str, ScreenDefinition], Dict[str, object]]:
@@ -420,7 +448,12 @@ def _build_registry_if_needed(context: ScreenContext) -> Tuple[Dict[str, ScreenD
 
     global _registry_cache_key, _registry_cache_value
 
-    cache_key = _registry_cache_inputs(context.offline, context.skip_scoreboards)
+    cache_key = _registry_cache_inputs(
+        context.offline,
+        context.skip_scoreboards,
+        context.weather_fetched_at,
+        id(context.cache.get("weather")),
+    )
     if _registry_cache_value is not None and _registry_cache_key == cache_key:
         return _registry_cache_value
 
