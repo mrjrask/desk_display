@@ -130,7 +130,11 @@ def _scoreboard_fonts():
 
 def _team_logo_height() -> int:
     scale = get_screen_image_scale(SCREEN_ID, "team_logo", 1.0)
-    return max(1, int(round(TEAM_LOGO_BASE_HEIGHT * scale)))
+    height = max(1, int(round(TEAM_LOGO_BASE_HEIGHT * scale)))
+    # Keep logos constrained to the score row so tall marks never overlap
+    # the status line or neighboring game blocks.
+    max_row_fit = max(1, SCORE_ROW_H - scale_value(8))
+    return min(height, max_row_fit)
 
 
 def _league_logo_height() -> int:

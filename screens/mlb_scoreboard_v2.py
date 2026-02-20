@@ -157,7 +157,9 @@ def _apply_style_overrides() -> None:
     )
     BACKGROUND_COLOR = get_screen_background_color(SCREEN_ID, SCOREBOARD_BACKGROUND_COLOR)
     team_scale = get_screen_image_scale(SCREEN_ID, "team_logo", 1.0)
-    LOGO_HEIGHT = max(1, int(round(TEAM_LOGO_BASE_HEIGHT * team_scale)))
+    target_logo_height = max(1, int(round(TEAM_LOGO_BASE_HEIGHT * team_scale)))
+    max_row_fit = max(1, SCORE_ROW_H - scale_value(4))
+    LOGO_HEIGHT = min(target_logo_height, max_row_fit)
     league_scale = get_screen_image_scale(SCREEN_ID, "league_logo", team_scale)
     LEAGUE_LOGO_HEIGHT = max(1, int(round(LEAGUE_LOGO_BASE_HEIGHT * league_scale)))
 
