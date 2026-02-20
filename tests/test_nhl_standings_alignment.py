@@ -114,3 +114,35 @@ def test_draw_division_right_aligns_points_on_hyperpixel_4_square(monkeypatch):
     align_by_text = {text: align for text, align in calls}
     assert align_by_text["4"] == "right"
     assert align_by_text["PTS"] == "right"
+
+
+def test_build_column_layout_keeps_stats_separated_from_team_name():
+    layout, team_name_width = nhl_standings._build_column_layout(max_team_name_width=500)
+
+    team_x = nhl_standings.LEFT_MARGIN + nhl_standings.LOGO_HEIGHT + nhl_standings.TEAM_COLUMN_GAP
+    first_stats_key = nhl_standings.STATS_COLUMNS[0]
+    assert team_x + team_name_width <= layout[first_stats_key] - nhl_standings.TEAM_COLUMN_GAP
+
+    previous_right = None
+    for key in nhl_standings.STATS_COLUMNS:
+        anchor_x = layout[key]
+        header_label = next(label for label, col_key, _ in nhl_standings.COLUMN_HEADERS if col_key == key)
+        header_font = nhl_standings.COLUMN_HEADER_FONTS.get(key, nhl_standings.COLUMN_FONT)
+        header_width = nhl_standings._text_size(header_label, header_font)[0] if header_label else 0
+        sample_value = "999" if key == "points" else "99"
+        value_width = nhl_standings._text_size(sample_value, nhl_standings.ROW_STATS_FONT)[0]
+        width = max(header_width, value_width)
+
+        align = nhl_standings._stat_text_align(key)
+        if align == "right":
+            left, right = anchor_x - width, anchor_x
+        elif align == "center":
+            left, right = anchor_x - width / 2.0, anchor_x + width / 2.0
+        else:
+            left, right = anchor_x, anchor_x + width
+
+        if previous_right is not None:
+            assert left >= previous_right + 2
+        previous_right = right
+
+    assert layout[nhl_standings.STATS_COLUMNS[-1]] <= nhl_standings._table_right_edge()
