@@ -2373,6 +2373,10 @@ def check_github_updates() -> bool:
     """
     repo_dir = os.path.dirname(__file__)
 
+    def _github_check_failed() -> bool:
+        _set_update_status(github=False)
+        return False
+
     # Is this a git repo?
     try:
         subprocess.check_call(
@@ -2384,10 +2388,10 @@ def check_github_updates() -> bool:
         )
     except subprocess.TimeoutExpired:
         logging.warning("check_github_updates: git probe timed out")
-        return False
+        return _github_check_failed()
     except Exception:
         logging.info("check_github_updates: not a git repository, skipping check")
-        return False
+        return _github_check_failed()
 
     # Local branch name (skip detached HEADs)
     try:
@@ -2399,14 +2403,14 @@ def check_github_updates() -> bool:
         ).decode().strip()
     except subprocess.TimeoutExpired:
         logging.warning("check_github_updates: git branch lookup timed out")
-        return False
+        return _github_check_failed()
     except Exception:
         logging.exception("check_github_updates: failed to determine local branch")
-        return False
+        return _github_check_failed()
 
     if local_branch in {"HEAD", ""}:
         logging.info("check_github_updates: detached HEAD, skipping check")
-        return False
+        return _github_check_failed()
 
     # Local SHA
     try:
@@ -2418,10 +2422,10 @@ def check_github_updates() -> bool:
         ).decode().strip()
     except subprocess.TimeoutExpired:
         logging.warning("check_github_updates: git HEAD lookup timed out")
-        return False
+        return _github_check_failed()
     except Exception:
         logging.exception("check_github_updates: failed to read local HEAD")
-        return False
+        return _github_check_failed()
 
     # Upstream branch for the current branch
     try:
@@ -2433,13 +2437,13 @@ def check_github_updates() -> bool:
         ).decode().strip()
     except subprocess.TimeoutExpired:
         logging.warning("check_github_updates: git upstream lookup timed out")
-        return False
+        return _github_check_failed()
     except Exception:
         logging.info(
             "check_github_updates: no upstream tracking branch for %s, skipping check",
             local_branch,
         )
-        return False
+        return _github_check_failed()
 
     # Fetch remote so we can diff against it
     try:
@@ -2452,10 +2456,10 @@ def check_github_updates() -> bool:
         )
     except subprocess.TimeoutExpired:
         logging.warning("check_github_updates: git fetch timed out")
-        return False
+        return _github_check_failed()
     except Exception:
         logging.warning("check_github_updates: failed to fetch from origin")
-        return False
+        return _github_check_failed()
 
     # Remote SHA for the upstream branch
     try:
@@ -2467,14 +2471,14 @@ def check_github_updates() -> bool:
         ).decode().strip()
     except subprocess.TimeoutExpired:
         logging.warning("check_github_updates: git upstream SHA lookup timed out")
-        return False
+        return _github_check_failed()
     except Exception:
         logging.warning(
             "check_github_updates: failed to resolve upstream %s for %s",
             upstream_ref,
             local_branch,
         )
-        return False
+        return _github_check_failed()
 
     updated = (local_sha != remote_sha)
     logging.info(f"check_github_updates: updates available = {updated}")
