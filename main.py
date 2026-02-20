@@ -1237,7 +1237,14 @@ cache = {
 }
 
 _FEED_DEPENDENCIES: Dict[str, Set[str]] = {
-    "weather": {"weather1", "weather2", "weather hourly", "weather radar", "weather logo"},
+    "weather": {
+        "weather1",
+        "weather2",
+        "weather hourly",
+        "weather daily",
+        "weather radar",
+        "weather logo",
+    },
     "bears": {"bears stand1", "bears stand2"},
     "hawks": {"hawks stand1", "hawks stand2", "hawks last", "hawks live", "hawks next", "hawks next home", "hawks logo"},
     "wolves": {"wolves last", "wolves live", "wolves next", "wolves next home", "wolves logo"},
@@ -1299,6 +1306,10 @@ def _requested_data_feeds() -> Set[str]:
 
 def _refresh_weather() -> None:
     cache["weather"] = data_provider.read_weather(ttl_seconds=WEATHER_REFRESH_SECONDS)
+    if not cache["weather"]:
+        logging.warning(
+            "Weather feed returned no data; weather screens will remain hidden until a successful refresh."
+        )
 
 
 def _refresh_scoreboards() -> None:
