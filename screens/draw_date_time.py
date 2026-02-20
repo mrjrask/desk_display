@@ -39,6 +39,7 @@ from config import (
     is_hyperpixel_next_layout,
     is_hyperpixel_4_square_layout,
     is_kernel_driven_display,
+    get_display_profile_id,
     get_screen_background_color,
 )
 from utils import (
@@ -58,15 +59,17 @@ from utils import (
 def _color_cycle_profile(
     *,
     kernel_driven: bool,
+    display_profile_id: str,
     hyperpixel_layout: bool,
     hyperpixel_square: bool,
 ) -> tuple[float, float, int | None]:
     """Return cycle timing: initial delay, frame interval, and max steps."""
 
-    # Kernel-driven output can safely animate faster now that frame buffering
-    # is stable; start immediately and keep cycling quickly while visible.
-    initial_delay = 0.0 if kernel_driven else 0.6
-    interval = 0.08 if kernel_driven else 0.45
+    # Rapid cycling is only for kernel-driven Display HAT Mini deployments.
+    # HyperPixel and HDMI profiles retain slower timing.
+    rapid_kernel_cycle = kernel_driven and display_profile_id == "display_hat_mini"
+    initial_delay = 0.0 if rapid_kernel_cycle else 0.6
+    interval = 0.08 if rapid_kernel_cycle else 0.45
     infinite_cycle = kernel_driven or hyperpixel_layout or hyperpixel_square
     steps = None if infinite_cycle else 6
     return initial_delay, interval, steps
@@ -175,8 +178,10 @@ def _cycle_colors_after_load(
     hyperpixel_layout = is_hyperpixel_next_layout()
     hyperpixel_square = is_hyperpixel_4_square_layout()
     kernel_driven = is_kernel_driven_display()
+    display_profile_id = get_display_profile_id()
     initial_delay, color_cycle_interval, steps = _color_cycle_profile(
         kernel_driven=kernel_driven,
+        display_profile_id=display_profile_id,
         hyperpixel_layout=hyperpixel_layout,
         hyperpixel_square=hyperpixel_square,
     )

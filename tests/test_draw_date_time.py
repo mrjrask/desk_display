@@ -2,9 +2,10 @@ from screens import draw_date_time
 from screens.draw_date_time import _color_cycle_profile
 
 
-def test_color_cycle_profile_kernel_is_fast_and_continuous():
+def test_color_cycle_profile_display_hat_mini_kernel_is_fast_and_continuous():
     initial_delay, interval, steps = _color_cycle_profile(
         kernel_driven=True,
+        display_profile_id="display_hat_mini",
         hyperpixel_layout=False,
         hyperpixel_square=False,
     )
@@ -17,6 +18,7 @@ def test_color_cycle_profile_kernel_is_fast_and_continuous():
 def test_color_cycle_profile_non_kernel_is_short_and_limited():
     initial_delay, interval, steps = _color_cycle_profile(
         kernel_driven=False,
+        display_profile_id="display_hat_mini",
         hyperpixel_layout=False,
         hyperpixel_square=False,
     )
@@ -27,12 +29,28 @@ def test_color_cycle_profile_non_kernel_is_short_and_limited():
 
 
 def test_color_cycle_profile_hyperpixel_cycles_continuously():
-    _, _, steps = _color_cycle_profile(
+    initial_delay, interval, steps = _color_cycle_profile(
         kernel_driven=False,
+        display_profile_id="hyperpixel4",
         hyperpixel_layout=True,
         hyperpixel_square=False,
     )
 
+    assert initial_delay == 0.6
+    assert interval == 0.45
+    assert steps is None
+
+
+def test_color_cycle_profile_kernel_non_display_hat_is_not_rapid():
+    initial_delay, interval, steps = _color_cycle_profile(
+        kernel_driven=True,
+        display_profile_id="hdmi_1080p",
+        hyperpixel_layout=False,
+        hyperpixel_square=False,
+    )
+
+    assert initial_delay == 0.6
+    assert interval == 0.45
     assert steps is None
 
 
