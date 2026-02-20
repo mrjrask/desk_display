@@ -1002,9 +1002,20 @@ class Display:
         """Create and configure a Display HAT Mini driver instance."""
 
         display = DisplayHATMini(initial_buffer)
+        display_module = None
+        try:
+            display_module = __import__(display.__class__.__module__, fromlist=["_"])
+        except Exception:
+            display_module = None
+
         for name in self._BUTTON_NAMES:
             pin_name = f"BUTTON_{name}"
-            self._button_pins[name] = getattr(display, pin_name, None)
+            pin = getattr(display, pin_name, None)
+            if pin is None:
+                pin = getattr(display.__class__, pin_name, None)
+            if pin is None and display_module is not None:
+                pin = getattr(display_module, pin_name, None)
+            self._button_pins[name] = pin
 
         if hasattr(display, "on_button_pressed"):
             try:
@@ -1359,13 +1370,22 @@ class Display:
         if self._display is None:  # pragma: no cover - hardware import
             return False
 
-        pin = self._button_pins.get(name.upper())
-        if pin is None:  # pragma: no cover - hardware import
-            return False
+        normalized_name = name.upper()
+        pin = self._button_pins.get(normalized_name)
 
         try:  # pragma: no cover - hardware import
             with self._display_io_lock:
-                raw_state = self._display.read_button(pin)
+                read_button = getattr(self._display, "read_button", None)
+                if callable(read_button):
+                    try:
+                        if pin is not None:
+                            raw_state = read_button(pin)
+                        else:
+                            raw_state = read_button(normalized_name)
+                    except Exception:
+                        raw_state = read_button(normalized_name)
+                else:
+                    raise AttributeError("Display driver does not expose read_button")
         except Exception as exc:  # pragma: no cover - hardware import
             logging.debug("Display button read failed (%s): %s", name, exc)
             return False
@@ -1390,17 +1410,33 @@ class Display:
 
     def _handle_hw_button_event(self, pin) -> None:  # pragma: no cover - hardware import
         name = None
-        for button_name, button_pin in self._button_pins.items():
-            if button_pin == pin:
-                name = button_name
-                break
+
+        if isinstance(pin, str):
+            candidate = pin.strip().upper()
+            if candidate in self._BUTTON_NAMES:
+                name = candidate
+
+        if name is None and isinstance(pin, int):
+            ordered_buttons = list(self._BUTTON_NAMES)
+            if 0 <= pin < len(ordered_buttons):
+                name = ordered_buttons[pin]
+
+        if name is None:
+            for button_name, button_pin in self._button_pins.items():
+                if button_pin == pin:
+                    name = button_name
+                    break
 
         if not name or self._display is None:
             return
 
+        read_identifier = self._button_pins.get(name, pin)
+        if read_identifier is None:
+            read_identifier = name
+
         try:
             with self._display_io_lock:
-                state = self._display.read_button(pin)
+                state = self._display.read_button(read_identifier)
         except Exception as exc:
             logging.debug("Hardware button callback read failed: %s", exc)
             return
