@@ -161,11 +161,21 @@ def _apply_style_overrides() -> None:
     LEAGUE_LOGO_HEIGHT = max(1, int(round(LEAGUE_LOGO_BASE_HEIGHT * league_scale)))
 
 def _load_logo_cached(abbr: str) -> Optional[Image.Image]:
+    key = (abbr or "").strip()
+    if not key:
+        return None
+    cache_key_abbr = key.upper()
     height = LOGO_HEIGHT
-    cache_key = (abbr, height)
+    cache_key = (cache_key_abbr, height)
     if cache_key in _LOGO_CACHE:
         return _LOGO_CACHE[cache_key]
-    logo = load_team_logo(LOGO_DIR, abbr, height=height)
+    logo = load_team_logo(
+        LOGO_DIR,
+        cache_key_abbr,
+        height=height,
+        box_size=height,
+        trim=True,
+    )
     _LOGO_CACHE[cache_key] = logo
     return logo
 
