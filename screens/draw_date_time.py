@@ -197,7 +197,11 @@ def _cycle_colors_after_load(
             if frame_state is not None:
                 with frame_state["lock"]:
                     expected_frame_id = frame_state["value"]
-            if current_frame_id != expected_frame_id:
+            # Another renderer taking over will advance the frame id beyond
+            # what this screen last wrote. Ignore transient races where the
+            # shared expected id has already advanced but display.frame_id()
+            # has not yet caught up.
+            if current_frame_id > expected_frame_id:
                 break
         img = _compose_frame(base_order, bright_color(), bright_color(), gh_state(), screen_id)
         display.image(img)
@@ -240,7 +244,7 @@ def _start_update_checks(
                 if frame_state is not None:
                     with frame_state["lock"]:
                         worker_expected_frame_id = frame_state["value"]
-                if current_frame_id != worker_expected_frame_id:
+                if current_frame_id > worker_expected_frame_id:
                     logging.info(
                         "Background update checks skipped; display already updated."
                     )
