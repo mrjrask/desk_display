@@ -45,6 +45,49 @@ SensorProbeFn = Callable[[Any, Set[int]], Optional[SensorProbeResult]]
 SensorProbeName = str
 
 
+def _parse_i2c_bus_candidates() -> Tuple[int, ...]:
+    """Return preferred Linux I2C bus numbers for fallback probing."""
+
+    raw = os.environ.get("INSIDE_I2C_BUSES", "10,1,0")
+    buses: List[int] = []
+    seen: Set[int] = set()
+    for token in raw.split(","):
+        token = token.strip()
+        if not token:
+            continue
+        try:
+            bus_num = int(token)
+        except ValueError:
+            logging.debug("draw_inside: ignoring non-numeric INSIDE_I2C_BUSES token %r", token)
+            continue
+        if bus_num < 0 or bus_num in seen:
+            continue
+        seen.add(bus_num)
+        buses.append(bus_num)
+
+    if not buses:
+        return (10, 1, 0)
+    return tuple(buses)
+
+
+def _resolve_i2c_bus_number(i2c: Any) -> Optional[int]:
+    """Best-effort lookup for the Linux bus number behind a Blinka I2C object."""
+
+    for attr in ("busnum", "_busnum", "_i2c_bus"):
+        value = getattr(i2c, attr, None)
+        if isinstance(value, int):
+            return value
+
+    inner_i2c = getattr(i2c, "i2c", None)
+    if inner_i2c is not None:
+        for attr in ("busnum", "_busnum", "_i2c_bus"):
+            value = getattr(inner_i2c, attr, None)
+            if isinstance(value, int):
+                return value
+
+    return None
+
+
 def _prepend_vendor_sensor_drivers():
     """Prefer vendored Pimoroni sensor drivers when available."""
 
@@ -532,11 +575,12 @@ def _probe_pimoroni_bme280(i2c: Any, addresses: Set[int]) -> Optional[SensorProb
     expected_chip_id = 0x60
 
     # Import SMBus for proper sensor initialization
+    bus_num = _resolve_i2c_bus_number(i2c) or 1
     try:
         from smbus2 import SMBus
-        bus = SMBus(1)
+        bus = SMBus(bus_num)
     except Exception as exc:
-        logging.warning("draw_inside: failed to initialize SMBus: %s", exc)
+        logging.warning("draw_inside: failed to initialize SMBus(%s): %s", bus_num, exc)
         raise
 
     # Prefer the addresses we actually saw on the bus so we don't try the
@@ -901,10 +945,39 @@ def _probe_sensor() -> Tuple[Optional[str], Optional[Callable[[], SensorReadings
         logging.warning("BME* libs not available on this host; skipping sensor probe")
         return None, None
 
+    i2c = None
     try:
         i2c = busio.I2C(getattr(board, "SCL"), getattr(board, "SDA"))
     except Exception as exc:
-        logging.warning("draw_inside: failed to initialise I2C bus: %s", exc)
+        logging.warning("draw_inside: failed to initialise default I2C bus: %s", exc)
+
+    if i2c is None:
+        bus_candidates = _parse_i2c_bus_candidates()
+        try:
+            from adafruit_extended_bus import ExtendedI2C  # type: ignore
+        except Exception as exc:
+            logging.warning(
+                "draw_inside: adafruit_extended_bus unavailable; cannot probe fallback I2C buses %s: %s",
+                bus_candidates,
+                exc,
+            )
+            return None, None
+
+        for bus_num in bus_candidates:
+            try:
+                i2c = ExtendedI2C(bus_num)
+                logging.info("draw_inside: using fallback I2C bus %s", bus_num)
+                break
+            except Exception as exc:
+                logging.debug(
+                    "draw_inside: failed to initialise fallback I2C bus %s: %s",
+                    bus_num,
+                    exc,
+                    exc_info=True,
+                )
+
+    if i2c is None:
+        logging.warning("draw_inside: no usable I2C bus available for indoor sensor probe")
         return None, None
 
     addresses = _scan_i2c_addresses(i2c)
