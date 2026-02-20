@@ -151,6 +151,7 @@ _NHL_STANDINGS_WILDCARD_IDS = {
 }
 _NHL_STANDINGS_COLUMN_TIGHTEN_IDS = _NHL_STANDINGS_PRIMARY_IDS | _NHL_STANDINGS_WILDCARD_IDS
 _ACTIVE_STATS_COLUMN_SPACING_SCALE = 1.0
+_CENTER_STATS_VALUES_UNDER_HEADERS = True
 
 _BASE_FONT_SIZES = {
     "division": 26,
@@ -267,7 +268,7 @@ def _apply_style_overrides(screen_id: str) -> None:
     global TITLE_FONT, DIVISION_FONT, COLUMN_FONT, COLUMN_FONT_POINTS, ROW_FONT, ROW_STATS_FONT, TEAM_NAME_FONT
     global LOGO_HEIGHT, OVERVIEW_MIN_LOGO_HEIGHT, OVERVIEW_MAX_LOGO_HEIGHT
     global CONFERENCE_LOGO_HEIGHT, BACKGROUND_COLOR
-    global ROW_PADDING, ROW_SPACING, _ACTIVE_STATS_COLUMN_SPACING_SCALE
+    global ROW_PADDING, ROW_SPACING, _ACTIVE_STATS_COLUMN_SPACING_SCALE, _CENTER_STATS_VALUES_UNDER_HEADERS
 
     (
         DIVISION_FONT,
@@ -333,8 +334,10 @@ def _apply_style_overrides(screen_id: str) -> None:
         ROW_SPACING = scale_value(2)
 
     _ACTIVE_STATS_COLUMN_SPACING_SCALE = 1.0
+    _CENTER_STATS_VALUES_UNDER_HEADERS = False
     if is_hyperpixel_4_square_layout() and screen_id in _NHL_STANDINGS_COLUMN_TIGHTEN_IDS:
         _ACTIVE_STATS_COLUMN_SPACING_SCALE = 0.8
+        _CENTER_STATS_VALUES_UNDER_HEADERS = True
 
     _update_row_metrics()
     BACKGROUND_COLOR = get_screen_background_color(screen_id, SCOREBOARD_BACKGROUND_COLOR)
@@ -1537,6 +1540,7 @@ def _draw_division(
         for key in STATS_COLUMNS:
             if key not in column_layout:
                 continue
+            stat_align = "center" if _CENTER_STATS_VALUES_UNDER_HEADERS else "right"
             _draw_text(
                 draw,
                 str(team.get(key, "")),
@@ -1544,7 +1548,7 @@ def _draw_division(
                 column_layout[key],
                 row_top,
                 ROW_HEIGHT,
-                "right",
+                stat_align,
             )
         y += ROW_HEIGHT + ROW_SPACING
 
