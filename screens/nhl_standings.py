@@ -523,6 +523,14 @@ def _build_column_layout(max_team_name_width: int) -> tuple[dict[str, int], int]
         if positions:
             positions[-1] = stats_right
 
+        if max_step is not None and len(positions) > 1:
+            # Keep non-final wildcard columns visually grouped with the rightmost
+            # points column on constrained displays (for example HyperPixel).
+            for idx in range(len(positions) - 2, -1, -1):
+                target = int(round(positions[idx + 1] - expandable_steps[idx]))
+                if positions[idx] < target:
+                    positions[idx] = target
+
         for key, pos in zip(STATS_COLUMNS, positions):
             layout[key] = pos
 
