@@ -265,6 +265,23 @@ def test_check_github_updates_clears_status_when_fetch_fails(monkeypatch):
     assert utils.get_update_status().github is False
 
 
+def test_led_pattern_is_yellow_only_for_apt_updates():
+    pattern, interval = utils._led_pattern(utils._UpdateStatus(github=False, apt=True))
+
+    assert pattern == ((utils.LED_INDICATOR_LEVEL, utils.LED_INDICATOR_LEVEL, 0.0),)
+    assert interval == 0.8
+
+
+def test_led_pattern_alternates_only_when_apt_and_github_updates():
+    pattern, interval = utils._led_pattern(utils._UpdateStatus(github=True, apt=True))
+
+    assert pattern == (
+        (0.0, 0.0, utils.LED_INDICATOR_LEVEL),
+        (utils.LED_INDICATOR_LEVEL, utils.LED_INDICATOR_LEVEL, 0.0),
+    )
+    assert interval == 0.6
+
+
 def test_reinitialize_display_retries_after_failure(monkeypatch):
     display = utils.Display()
     display._display_reinit_seconds = 1

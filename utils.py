@@ -2218,9 +2218,11 @@ def _led_pattern(status: _UpdateStatus) -> Tuple[Tuple[Tuple[float, float, float
     blue = (0.0, 0.0, LED_INDICATOR_LEVEL)
     yellow = (LED_INDICATOR_LEVEL, LED_INDICATOR_LEVEL, 0.0)
 
-    if status.apt:
-        # Alternate blue/yellow when apt updates are pending.
+    if status.github and status.apt:
+        # Alternate blue/yellow only when both update sources are pending.
         return ((blue, yellow), 0.6)
+    if status.apt:
+        return ((yellow,), 0.8)
     if status.github:
         return ((blue,), 0.8)
     return (None, None)
