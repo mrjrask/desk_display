@@ -2169,6 +2169,27 @@ def load_team_logo(
         logging.warning("Could not load logo '%s': %s", abbr, last_error)
     return None
 
+
+_MISSING_TEAM_LOGO_WARNINGS: set[tuple[str, str, str]] = set()
+
+
+def log_missing_team_logo(screen_id: str, team_name: str, expected_abbr: str) -> None:
+    """Emit a deduplicated warning when a screen cannot find a team logo."""
+    cleaned_abbr = str(expected_abbr or "").strip().upper()
+    if not cleaned_abbr:
+        return
+    cleaned_name = str(team_name or "").strip() or "Unknown Team"
+    cache_key = (str(screen_id or "unknown"), cleaned_name, cleaned_abbr)
+    if cache_key in _MISSING_TEAM_LOGO_WARNINGS:
+        return
+    _MISSING_TEAM_LOGO_WARNINGS.add(cache_key)
+    logging.warning(
+        "Missing team logo on %s: team='%s', expected_abbr='%s'",
+        cache_key[0],
+        cleaned_name,
+        cleaned_abbr,
+    )
+
 @log_call
 def colored_image(mono_img: Image.Image, screen_key: str) -> Image.Image:
     rgb = Image.new("RGB", mono_img.size, (0,0,0))

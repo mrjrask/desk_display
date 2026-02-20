@@ -51,6 +51,7 @@ from utils import (
     clear_display,
     load_team_logo,
     log_call,
+    log_missing_team_logo,
     scroll_vertical_content,
 )
 
@@ -244,9 +245,7 @@ def _team_logo_abbr(team: dict) -> str:
         value = team.get(key)
         if isinstance(value, str) and value.strip():
             candidate = value.strip().upper()
-            for suffix in (candidate, candidate.lower()):
-                if os.path.exists(os.path.join(LOGO_DIR, f"{suffix}.png")):
-                    return candidate
+            return candidate
     nickname = (team.get("nickname") or team.get("name") or "").strip()
     return nickname[:3].upper() if nickname else ""
 
@@ -441,6 +440,13 @@ def _draw_game_block(canvas: Image.Image, draw: ImageDraw.ImageDraw, game: dict,
         abbr = _team_logo_abbr(team_obj)
         logo = _load_logo_cached(abbr)
         if not logo:
+            team_name = (
+                (team_obj or {}).get("displayName")
+                or (team_obj or {}).get("name")
+                or (team_obj or {}).get("shortDisplayName")
+                or "Unknown Team"
+            )
+            log_missing_team_logo(SCREEN_ID, team_name, abbr)
             continue
         x0 = COL_X[idx] + (COL_WIDTHS[idx] - logo.width) // 2
         y0 = score_top + (SCORE_ROW_H - logo.height) // 2

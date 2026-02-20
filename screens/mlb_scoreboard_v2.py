@@ -45,6 +45,7 @@ from utils import (
     clear_display,
     get_mlb_abbreviation,
     load_team_logo,
+    log_missing_team_logo,
     log_call,
     scroll_vertical_content,
     standard_scoreboard_league_logo_height,
@@ -252,6 +253,13 @@ def _draw_single_game(
         abbr = _team_logo_abbr(team_obj)
         logo = _load_logo_cached(abbr) if abbr else None
         if not logo:
+            team_name = (
+                (team_obj or {}).get("name")
+                or (team_obj or {}).get("teamName")
+                or (team_obj or {}).get("displayName")
+                or "Unknown Team"
+            )
+            log_missing_team_logo(SCREEN_ID, team_name, abbr)
             continue
         x0 = x_offset + GAME_COL_X[idx] + (GAME_COL_WIDTHS[idx] - logo.width) // 2
         y0 = score_top + (SCORE_ROW_H - logo.height) // 2

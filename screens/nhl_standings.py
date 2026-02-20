@@ -35,7 +35,7 @@ from config import (
     is_hyperpixel_4_square_layout,
 )
 from services.http_client import NHL_HEADERS, get_session
-from utils import ScreenImage, clear_display, log_call, clone_font, scroll_vertical_content
+from utils import ScreenImage, clear_display, log_call, log_missing_team_logo, clone_font, scroll_vertical_content
 
 # ─── Constants ────────────────────────────────────────────────────────────────
 TITLE_WEST = "Western Conference"
@@ -1521,6 +1521,8 @@ def _draw_division(
             logo_x = LEFT_MARGIN + (LOGO_HEIGHT - logo.width) // 2
             logo_y = row_center - logo.height // 2
             img.paste(logo, (logo_x, logo_y), logo)
+        else:
+            log_missing_team_logo("NHL Standings", _coerce_text(team.get("name")) or "Unknown Team", abbr)
         team_label = _coerce_text(team.get("name")) or abbr
         team_label = _truncate_text_to_width(
             team_label, TEAM_NAME_FONT, team_name_max_width
@@ -1703,6 +1705,7 @@ def _build_overview_rows(
                 continue
             logo = _load_overview_logo(abbr, logo_box_size)
             if not logo:
+                log_missing_team_logo("NHL Standings", _coerce_text(team.get("name")) or "Unknown Team", abbr)
                 continue
             x0, y0 = _overview_logo_position(col_idx, row_idx, col_centers, logos_top, cell_height, logo)
             rows[row_idx].append((abbr, logo, x0, y0))
@@ -1919,6 +1922,7 @@ def _build_overview_rows_horizontal(
                 continue
             logo = _load_overview_logo(abbr, logo_box_size)
             if not logo:
+                log_missing_team_logo("NHL Standings", _coerce_text(team.get("name")) or "Unknown Team", abbr)
                 continue
             x0 = int(col_centers[col_idx] - logo.width / 2)
             y_center = logos_top + row_height * (row_idx + 0.5)

@@ -35,7 +35,7 @@ from config import (
     is_hyperpixel_4_square_layout,
 )
 from services.http_client import get_session
-from utils import ScreenImage, clear_display, load_team_logo, log_call, scroll_vertical_content
+from utils import ScreenImage, clear_display, load_team_logo, log_call, log_missing_team_logo, scroll_vertical_content
 
 # ─── Constants ────────────────────────────────────────────────────────────────
 TITLE_NFC = "NFC Standings"
@@ -1140,6 +1140,8 @@ def _render_conference(title: str, division_order: List[str], standings: Dict[st
             if logo:
                 logo_y = int(row_center - logo.height / 2)
                 img.paste(logo, (LEFT_MARGIN, logo_y), logo)
+            else:
+                log_missing_team_logo("NFL Standings", team.get("name") or display_text, abbr)
 
             draw.text((tx, ty), display_text, font=ROW_FONT, fill=WHITE)
 
