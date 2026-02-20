@@ -194,3 +194,22 @@ def test_build_column_layout_with_max_step_packs_columns_from_right(monkeypatch)
     assert layout["points"] == nhl_standings._table_right_edge()
     assert layout["regulationWins"] == layout["points"] - 36
     assert layout["gamesPlayed"] == layout["regulationWins"] - 36
+
+
+def test_apply_style_overrides_adds_right_inset_for_standings_screen(monkeypatch):
+    monkeypatch.setattr(nhl_standings, "_update_row_metrics", lambda: None)
+    monkeypatch.setattr(nhl_standings, "get_screen_background_color", lambda _sid, default: default)
+
+    nhl_standings._apply_style_overrides("NHL Standings West")
+
+    assert nhl_standings._ACTIVE_TABLE_RIGHT_INSET >= 1
+
+
+def test_apply_style_overrides_wildcard_uses_wider_column_gap_on_hyperpixel(monkeypatch):
+    monkeypatch.setattr(nhl_standings, "_update_row_metrics", lambda: None)
+    monkeypatch.setattr(nhl_standings, "get_screen_background_color", lambda _sid, default: default)
+    monkeypatch.setattr(nhl_standings, "_IS_HYPERPIXEL_4", True)
+
+    nhl_standings._apply_style_overrides("NHL Standings West v2")
+
+    assert nhl_standings._ACTIVE_COLUMN_SEPARATION_GAP == 4.0
