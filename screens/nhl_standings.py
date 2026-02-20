@@ -109,7 +109,7 @@ STATS_COLUMN_MIN_STEP = scale_value(36)
 STATS_COLUMN_MAX_STEP: int | None = None
 if is_hyperpixel_4_square_layout():
     # Keep record columns a bit tighter so the first stat column sits farther from team names.
-    STATS_COLUMN_MIN_STEP = max(1, int(round(STATS_COLUMN_MIN_STEP * 0.85)))
+    STATS_COLUMN_MIN_STEP = max(1, int(round(STATS_COLUMN_MIN_STEP * 0.8)))
 ROW_PADDING = scale_value(2)
 ROW_SPACING = scale_value(2)
 if is_hyperpixel_4_square_layout():
@@ -141,6 +141,17 @@ _NHL_STANDINGS_TEAM_SIZE_IDS = {
     "NHL Standings West v2",
     "NHL Standings East v2",
 }
+_NHL_STANDINGS_PRIMARY_IDS = {
+    "NHL Standings West",
+    "NHL Standings East",
+}
+_NHL_STANDINGS_WILDCARD_IDS = {
+    "NHL Standings West v2",
+    "NHL Standings East v2",
+}
+_NHL_STANDINGS_COLUMN_TIGHTEN_IDS = _NHL_STANDINGS_PRIMARY_IDS | _NHL_STANDINGS_WILDCARD_IDS
+_ACTIVE_STATS_COLUMN_SPACING_SCALE = 1.0
+_CENTER_STATS_VALUES_UNDER_HEADERS = False
 
 _BASE_FONT_SIZES = {
     "division": 26,
@@ -184,6 +195,12 @@ def _resolve_font_sizes(style_id: str) -> dict[str, int]:
             base["team_name"] = max(8, base["team_name"] - 4)
             for key in ("division", "column", "column_points", "row_stats"):
                 base[key] = max(8, base[key] - 8)
+
+    if is_hyperpixel_4_square_layout() and style_id in _NHL_STANDINGS_COLUMN_TIGHTEN_IDS:
+        base["team_name"] += 3
+        base["division"] += 3
+        base["column"] += 2
+        base["column_points"] += 2
 
     base.update(_STANDINGS_FONT_SIZE_OVERRIDES.get(style_id, {}))
     return {slot: max(8, int(round(size))) for slot, size in base.items()}
@@ -251,7 +268,7 @@ def _apply_style_overrides(screen_id: str) -> None:
     global TITLE_FONT, DIVISION_FONT, COLUMN_FONT, COLUMN_FONT_POINTS, ROW_FONT, ROW_STATS_FONT, TEAM_NAME_FONT
     global LOGO_HEIGHT, OVERVIEW_MIN_LOGO_HEIGHT, OVERVIEW_MAX_LOGO_HEIGHT
     global CONFERENCE_LOGO_HEIGHT, BACKGROUND_COLOR
-    global ROW_PADDING, ROW_SPACING
+    global ROW_PADDING, ROW_SPACING, _ACTIVE_STATS_COLUMN_SPACING_SCALE, _CENTER_STATS_VALUES_UNDER_HEADERS
 
     (
         DIVISION_FONT,
@@ -315,6 +332,12 @@ def _apply_style_overrides(screen_id: str) -> None:
     else:
         ROW_PADDING = scale_value(2)
         ROW_SPACING = scale_value(2)
+
+    _ACTIVE_STATS_COLUMN_SPACING_SCALE = 1.0
+    _CENTER_STATS_VALUES_UNDER_HEADERS = False
+    if is_hyperpixel_4_square_layout() and screen_id in _NHL_STANDINGS_COLUMN_TIGHTEN_IDS:
+        _ACTIVE_STATS_COLUMN_SPACING_SCALE = 0.8
+        _CENTER_STATS_VALUES_UNDER_HEADERS = True
 
     _update_row_metrics()
     BACKGROUND_COLOR = get_screen_background_color(screen_id, SCOREBOARD_BACKGROUND_COLOR)
@@ -436,7 +459,9 @@ def _build_column_layout(max_team_name_width: int) -> tuple[dict[str, int], int]
         layout[STATS_COLUMNS[0]] = stats_right
     else:
         available_space = max(0.0, stats_right - first_column)
+        spacing_scale = max(0.0, _ACTIVE_STATS_COLUMN_SPACING_SCALE)
         step = available_space / (column_count - 1) if column_count > 1 else 0.0
+        step *= spacing_scale
         max_step = STATS_COLUMN_MAX_STEP
         if max_step is not None and step > max_step:
             capped_first = stats_right - max_step * (column_count - 1)
@@ -447,10 +472,7 @@ def _build_column_layout(max_team_name_width: int) -> tuple[dict[str, int], int]
 
         positions: list[int] = []
         for idx in range(column_count):
-            if idx == column_count - 1:
-                pos = stats_right
-            else:
-                pos = first_column + step * idx
+            pos = first_column + step * idx
             positions.append(int(round(pos)))
 
         for key, pos in zip(STATS_COLUMNS, positions):
@@ -1440,6 +1462,8 @@ def _draw_text(draw: ImageDraw.ImageDraw, text: str, font, x: int, top: int, hei
     y = top + (height - th) // 2
     if align == "right":
         draw.text((x - tw, y), text, font=font, fill=WHITE)
+    elif align == "center":
+        draw.text((x - (tw // 2), y), text, font=font, fill=WHITE)
     else:
         draw.text((x, y), text, font=font, fill=WHITE)
 
@@ -1484,7 +1508,8 @@ def _draw_division(
         font = COLUMN_HEADER_FONTS.get(key, COLUMN_FONT)
         if key not in column_layout:
             continue
-        _draw_text(draw, label, font, column_layout[key], header_top, COLUMN_ROW_HEIGHT, align)
+        header_align = "center" if key in STATS_COLUMNS else align
+        _draw_text(draw, label, font, column_layout[key], header_top, COLUMN_ROW_HEIGHT, header_align)
     y += COLUMN_ROW_HEIGHT + COLUMN_GAP_BELOW
 
     for team in teams:
@@ -1515,6 +1540,7 @@ def _draw_division(
         for key in STATS_COLUMNS:
             if key not in column_layout:
                 continue
+            stat_align = "center" if _CENTER_STATS_VALUES_UNDER_HEADERS else "right"
             _draw_text(
                 draw,
                 str(team.get(key, "")),
@@ -1522,7 +1548,7 @@ def _draw_division(
                 column_layout[key],
                 row_top,
                 ROW_HEIGHT,
-                "right",
+                stat_align,
             )
         y += ROW_HEIGHT + ROW_SPACING
 
