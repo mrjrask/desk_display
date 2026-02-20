@@ -74,6 +74,13 @@ def _update_column_metrics() -> None:
     nhl_standings.COLUMN_ROW_HEIGHT = nhl_standings.COLUMN_TEXT_HEIGHT + 2
 
 
+def _wildcard_column_max_step() -> int | None:
+    """Apply wildcard spacing cap only on HyperPixel layouts."""
+    if not nhl_standings._is_hyperpixel_standings_layout():
+        return None
+    return nhl_standings.STATS_COLUMN_MIN_STEP + nhl_standings.scale_value(8)
+
+
 @contextmanager
 def _cap_wildcard_column_spacing(max_step: int | None) -> None:
     original_max_step = nhl_standings.STATS_COLUMN_MAX_STEP
@@ -341,7 +348,7 @@ def draw_nhl_overview_east_v3(display, transition: bool = False) -> ScreenImage:
 
 @log_call
 def draw_nhl_standings_west_v2(display, transition: bool = False) -> ScreenImage:
-    with _wildcard_columns(), _cap_wildcard_column_spacing(nhl_standings.STATS_COLUMN_MIN_STEP):
+    with _wildcard_columns(), _cap_wildcard_column_spacing(_wildcard_column_max_step()):
         standings_by_conf = _fetch_standings_data()
         wildcard_order = nhl_standings._fetch_wildcard_order_api_web()
         wildcard_standings = _build_wildcard_standings(standings_by_conf, wildcard_order)
@@ -378,7 +385,7 @@ def draw_nhl_standings_west_v2(display, transition: bool = False) -> ScreenImage
 
 @log_call
 def draw_nhl_standings_east_v2(display, transition: bool = False) -> ScreenImage:
-    with _wildcard_columns(), _cap_wildcard_column_spacing(nhl_standings.STATS_COLUMN_MIN_STEP):
+    with _wildcard_columns(), _cap_wildcard_column_spacing(_wildcard_column_max_step()):
         standings_by_conf = _fetch_standings_data()
         wildcard_order = nhl_standings._fetch_wildcard_order_api_web()
         wildcard_standings = _build_wildcard_standings(standings_by_conf, wildcard_order)

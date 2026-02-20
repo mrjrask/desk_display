@@ -1,6 +1,7 @@
 from PIL import Image, ImageDraw
 
 from screens import nhl_standings
+from screens import nhl_standings_v2
 
 
 def test_draw_division_centers_all_stat_values(monkeypatch):
@@ -172,3 +173,39 @@ def test_build_column_layout_team_width_respects_first_stat_text_extent(monkeypa
     first_left_extent = 15  # half of mocked 30 px text width due center alignment
 
     assert team_x + team_name_width <= first_anchor - first_left_extent - nhl_standings.TEAM_COLUMN_GAP
+
+
+def test_build_column_layout_with_max_step_packs_columns_from_right(monkeypatch):
+    monkeypatch.setattr(nhl_standings, "STATS_COLUMNS", ("gamesPlayed", "regulationWins", "points"))
+    monkeypatch.setattr(
+        nhl_standings,
+        "COLUMN_HEADERS",
+        [
+            ("", "team", "left"),
+            ("GP", "gamesPlayed", "right"),
+            ("RW", "regulationWins", "right"),
+            ("PTS", "points", "right"),
+        ],
+    )
+    monkeypatch.setattr(nhl_standings, "STATS_COLUMN_MIN_STEP", 36)
+    monkeypatch.setattr(nhl_standings, "STATS_COLUMN_MAX_STEP", 36)
+
+    layout, _team_name_width = nhl_standings._build_column_layout(max_team_name_width=500)
+
+    assert layout["points"] == nhl_standings._table_right_edge()
+    assert layout["regulationWins"] == layout["points"] - 36
+    assert layout["gamesPlayed"] == layout["regulationWins"] - 36
+
+
+def test_wildcard_column_max_step_adds_breathing_room_on_hyperpixel(monkeypatch):
+    monkeypatch.setattr(nhl_standings, "STATS_COLUMN_MIN_STEP", 36)
+    monkeypatch.setattr(nhl_standings, "scale_value", lambda value: value)
+    monkeypatch.setattr(nhl_standings, "_is_hyperpixel_standings_layout", lambda: True)
+
+    assert nhl_standings_v2._wildcard_column_max_step() == 44
+
+
+def test_wildcard_column_max_step_disabled_off_hyperpixel(monkeypatch):
+    monkeypatch.setattr(nhl_standings, "_is_hyperpixel_standings_layout", lambda: False)
+
+    assert nhl_standings_v2._wildcard_column_max_step() is None
