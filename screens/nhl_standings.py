@@ -155,6 +155,11 @@ _ACTIVE_STATS_COLUMN_SPACING_SCALE = 1.0
 _ACTIVE_COLUMN_SEPARATION_GAP = 2.0
 _ACTIVE_TABLE_RIGHT_INSET = 0
 
+
+def _is_display_hat_mini_layout() -> bool:
+    """Return True when running on Display HAT Mini dimensions."""
+    return sorted((int(WIDTH), int(HEIGHT))) == [240, 320]
+
 _BASE_FONT_SIZES = {
     "division": 26,
     "column": 24,
@@ -346,6 +351,12 @@ def _apply_style_overrides(screen_id: str) -> None:
         # Reserve a small right-side gutter to prevent the final stats column from
         # clipping on constrained displays such as Display HAT Mini.
         _ACTIVE_TABLE_RIGHT_INSET = max(1, scale_value_width(5))
+        if _is_display_hat_mini_layout():
+            # Keep additional padding on Display HAT Mini so PTS stays fully visible.
+            _ACTIVE_TABLE_RIGHT_INSET = max(
+                _ACTIVE_TABLE_RIGHT_INSET,
+                max(1, scale_value_width(18)),
+            )
 
     if _is_hyperpixel_standings_layout() and screen_id in _NHL_STANDINGS_WILDCARD_IDS:
         # Wild-card screens use compact headers (GP/RW/PTS); increase the minimum
