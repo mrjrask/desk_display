@@ -482,6 +482,8 @@ def _build_column_layout(max_team_name_width: int) -> tuple[dict[str, int], int]
             return half, half
         return 0.0, float(text_width)
 
+    first_column_left_extent = _column_anchor_extents(STATS_COLUMNS[0])[0]
+
     spacing_scale = max(0.0, _ACTIVE_STATS_COLUMN_SPACING_SCALE)
     base_step = float(STATS_COLUMN_MIN_STEP) * (spacing_scale if spacing_scale > 0 else 1.0)
 
@@ -497,7 +499,12 @@ def _build_column_layout(max_team_name_width: int) -> tuple[dict[str, int], int]
 
         required_total = sum(required_steps)
         max_first = stats_right - required_total
-        first_column = max(min_first, min(first_column, max_first))
+        if max_first < min_first:
+            # If the configured first-column gap is too large for the active display,
+            # prioritize keeping stat columns on screen and separated.
+            first_column = max_first
+        else:
+            first_column = max(min_first, min(first_column, max_first))
 
         extra_space = max(0.0, stats_right - (first_column + required_total))
         expandable_steps = [step for step in required_steps]
@@ -519,10 +526,8 @@ def _build_column_layout(max_team_name_width: int) -> tuple[dict[str, int], int]
         for key, pos in zip(STATS_COLUMNS, positions):
             layout[key] = pos
 
-    team_name_width = max(
-        0,
-        min(max_team_name_width, first_column - TEAM_COLUMN_GAP - team_x),
-    )
+    first_stat_left = first_column - first_column_left_extent
+    team_name_width = max(0, min(max_team_name_width, first_stat_left - TEAM_COLUMN_GAP - team_x))
     return layout, team_name_width
 
 COLUMN_HEADERS = [

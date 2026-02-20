@@ -146,3 +146,29 @@ def test_build_column_layout_keeps_stats_separated_from_team_name():
         previous_right = right
 
     assert layout[nhl_standings.STATS_COLUMNS[-1]] <= nhl_standings._table_right_edge()
+
+
+def test_build_column_layout_falls_back_to_max_first_when_gap_is_too_large(monkeypatch):
+    monkeypatch.setattr(nhl_standings, "STATS_COLUMN_MIN_STEP", 120)
+    monkeypatch.setattr(nhl_standings, "STATS_FIRST_COLUMN_GAP", 260)
+
+    layout, team_name_width = nhl_standings._build_column_layout(max_team_name_width=500)
+
+    required_total = nhl_standings.STATS_COLUMN_MIN_STEP * (len(nhl_standings.STATS_COLUMNS) - 1)
+    max_first = nhl_standings._table_right_edge() - required_total
+    assert layout[nhl_standings.STATS_COLUMNS[0]] == max_first
+    assert team_name_width >= 0
+
+
+def test_build_column_layout_team_width_respects_first_stat_text_extent(monkeypatch):
+    monkeypatch.setattr(nhl_standings, "_stat_text_align", lambda _key: "center")
+    monkeypatch.setattr(nhl_standings, "_text_size", lambda _text, _font: (30, 10))
+
+    _layout, team_name_width = nhl_standings._build_column_layout(max_team_name_width=500)
+
+    team_x = nhl_standings.LEFT_MARGIN + nhl_standings.LOGO_HEIGHT + nhl_standings.TEAM_COLUMN_GAP
+    first_key = nhl_standings.STATS_COLUMNS[0]
+    first_anchor = _layout[first_key]
+    first_left_extent = 15  # half of mocked 30 px text width due center alignment
+
+    assert team_x + team_name_width <= first_anchor - first_left_extent - nhl_standings.TEAM_COLUMN_GAP
