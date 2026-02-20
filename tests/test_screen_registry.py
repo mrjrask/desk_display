@@ -22,6 +22,9 @@ def _make_context(
     weather: dict,
     now: datetime.datetime,
     cache_updates: dict | None = None,
+    *,
+    offline: bool = False,
+    weather_fetched_at: datetime.datetime | None = None,
 ) -> ScreenContext:
     cache = {"weather": weather}
     if cache_updates:
@@ -33,8 +36,8 @@ def _make_context(
         image_dir="",
         now=now,
         now_utc=now.astimezone(datetime.timezone.utc),
-        offline=False,
-        weather_fetched_at=None,
+        offline=offline,
+        weather_fetched_at=weather_fetched_at,
         skip_scoreboards=False,
     )
 
@@ -93,6 +96,39 @@ def test_weather_radar_detects_precipitation_amount_without_pop():
     registry, _ = build_screen_registry(_make_context(weather, now))
 
     assert registry["weather radar"].available is True
+
+
+def test_weather_current_screens_stay_available_with_cached_data_offline():
+    now = datetime.datetime(2024, 1, 1, 12, 0, tzinfo=CENTRAL_TIME)
+    stale_fetch = now - datetime.timedelta(hours=12)
+    weather = {
+        "current": {"temp": 65},
+        "daily": [{"temp": {"max": 70, "min": 50}}],
+        "hourly": [{"dt": _ts(now + datetime.timedelta(hours=1)), "pop": 0}],
+    }
+
+    registry, _ = build_screen_registry(
+        _make_context(weather, now, offline=True, weather_fetched_at=stale_fetch)
+    )
+
+    assert registry["weather1"].available is True
+    assert registry["weather2"].available is True
+
+
+def test_weather_hourly_screens_stay_available_with_cached_data_offline():
+    now = datetime.datetime(2024, 1, 1, 12, 0, tzinfo=CENTRAL_TIME)
+    stale_fetch = now - datetime.timedelta(days=1)
+    weather = {
+        "hourly": [{"dt": _ts(now + datetime.timedelta(hours=2)), "pop": 0}],
+        "daily": [{"temp": {"max": 70, "min": 50}}],
+    }
+
+    registry, _ = build_screen_registry(
+        _make_context(weather, now, offline=True, weather_fetched_at=stale_fetch)
+    )
+
+    assert registry["weather hourly"].available is True
+    assert registry["weather daily"].available is True
 
 
 def test_legacy_travel_alias_is_registered():

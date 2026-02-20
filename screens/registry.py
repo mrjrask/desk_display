@@ -347,20 +347,6 @@ def _normalise_reference_time(now: Optional[_dt.datetime]) -> _dt.datetime:
     return current.astimezone(CENTRAL_TIME)
 
 
-def _is_weather_fresh(
-    fetched_at: Optional[_dt.datetime],
-    now: _dt.datetime,
-    max_age: _dt.timedelta,
-) -> bool:
-    if fetched_at is None:
-        return False
-    if fetched_at.tzinfo is None:
-        fetched_at = fetched_at.replace(tzinfo=_dt.timezone.utc)
-    if now.tzinfo is None:
-        now = now.replace(tzinfo=_dt.timezone.utc)
-    return (now - fetched_at) <= max_age
-
-
 def _has_precipitation_amount(hour: dict) -> bool:
     for key in ("rain", "snow"):
         amount = hour.get(key)
@@ -470,19 +456,11 @@ def build_screen_registry(context: ScreenContext) -> Tuple[Dict[str, ScreenDefin
             return rendered
         return capture.last_image
     weather_logo = context.logos.get("weather logo")
+    # Keep weather screens visible whenever cached forecast data exists.
+    # During offline periods we may be unable to refresh for hours, but hiding
+    # weather pages entirely is more disruptive than showing the latest cache.
     weather_current_available = bool(weather_data)
     weather_hourly_available = bool(weather_data)
-    if context.offline:
-        weather_current_available = bool(weather_data) and _is_weather_fresh(
-            context.weather_fetched_at,
-            context.now_utc,
-            WEATHER_CURRENT_TTL,
-        )
-        weather_hourly_available = bool(weather_data) and _is_weather_fresh(
-            context.weather_fetched_at,
-            context.now_utc,
-            WEATHER_HOURLY_TTL,
-        )
     if weather_logo is not None:
         register(
             "weather logo",
