@@ -28,7 +28,7 @@ MAX_FAILS = 3
 
 # ─── Module globals ───────────────────────────────────────────────────────────
 
-wifi_status = "no_wifi"  # one of "no_wifi", "no_internet", "ok"
+wifi_status = "ok"  # one of "no_wifi", "no_internet", "ok"
 current_ssid: Optional[str] = None
 
 _STATE_LOCK = threading.Lock()
@@ -646,6 +646,11 @@ def start_monitor(allow_recovery: bool = True) -> None:
 
     if not should_monitor_wifi():
         return
+
+    # Treat startup as healthy until the monitor loop collects enough failed
+    # checks to mark an outage. This avoids a transient false outage state
+    # during boot while networking services are still settling.
+    _update_state("ok", None)
 
     _IFACE = _detect_interface()
     if not _IFACE:
