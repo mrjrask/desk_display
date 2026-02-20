@@ -5,6 +5,7 @@ import datetime
 import pytest
 
 from screens.mlb_scoreboard import _format_status as mlb_format_status
+from screens.mlb_scoreboard import _fetch_games_for_date as mlb_fetch_games_for_date
 from screens.mlb_scoreboard import _scoreboard_date as mlb_scoreboard_date
 from screens.nfl_scoreboard import _format_status as nfl_format_status
 from config import CENTRAL_TIME
@@ -72,3 +73,27 @@ def test_mlb_scoreboard_date_uses_normal_cutoff_after_override_window():
 
     assert mlb_scoreboard_date(before_cutoff) == datetime.date(2026, 2, 20)
     assert mlb_scoreboard_date(after_cutoff) == datetime.date(2026, 2, 21)
+
+
+def test_mlb_fetch_includes_spring_training_game_types(monkeypatch):
+    captured = {}
+
+    class _DummyResponse:
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            return {"dates": []}
+
+    class _DummySession:
+        def get(self, url, timeout):
+            captured["url"] = url
+            captured["timeout"] = timeout
+            return _DummyResponse()
+
+    monkeypatch.setattr("screens.mlb_scoreboard._SESSION", _DummySession())
+    monkeypatch.setattr("screens.mlb_scoreboard._GAMES_CACHE", {})
+
+    mlb_fetch_games_for_date(datetime.date(2026, 3, 1))
+
+    assert "gameTypes=S,E,R,F,D,L,W" in captured["url"]
