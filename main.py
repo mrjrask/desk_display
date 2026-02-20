@@ -17,6 +17,12 @@ from gpiozero.exc import PinFactoryFallback, NativePinFactoryFallback
 
 warnings.filterwarnings("ignore", category=PinFactoryFallback)
 warnings.filterwarnings("ignore", category=NativePinFactoryFallback)
+warnings.filterwarnings(
+    "ignore",
+    message=r"pkg_resources is deprecated as an API",
+    category=UserWarning,
+    module=r"pygame\.pkgdata",
+)
 
 import glob
 import os

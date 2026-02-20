@@ -20,6 +20,7 @@ import subprocess
 import subprocess
 import threading
 import time
+import warnings
 from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
@@ -169,6 +170,12 @@ def _load_pygame():
             _maybe_configure_desktop_env()
 
     try:
+        warnings.filterwarnings(
+            "ignore",
+            message=r"pkg_resources is deprecated as an API",
+            category=UserWarning,
+            module=r"pygame\.pkgdata",
+        )
         import pygame  # type: ignore
     except Exception as exc:  # pragma: no cover - platform import
         _PYGAME_ERROR = exc
