@@ -1,5 +1,6 @@
 """Tests for Display HAT Mini button handling utilities."""
 
+import subprocess
 import threading
 import time
 from types import SimpleNamespace
@@ -218,6 +219,67 @@ def test_reinitialize_display_releases_previous_driver(monkeypatch):
 
     assert display._display is new_display
     assert released == [old_display]
+
+
+def test_check_github_updates_clears_status_when_not_git_repo(monkeypatch):
+    monkeypatch.setattr(
+        utils,
+        "_UPDATE_STATUS",
+        utils._UpdateStatus(github=True, apt=False),
+    )
+
+    def _raise_not_git(*_args, **_kwargs):
+        raise subprocess.CalledProcessError(returncode=128, cmd="git")
+
+    monkeypatch.setattr(utils.subprocess, "check_call", _raise_not_git)
+
+    assert utils.check_github_updates() is False
+    assert utils.get_update_status().github is False
+
+
+def test_check_github_updates_clears_status_when_fetch_fails(monkeypatch):
+    monkeypatch.setattr(
+        utils,
+        "_UPDATE_STATUS",
+        utils._UpdateStatus(github=True, apt=False),
+    )
+
+    def _fake_check_call(args, **_kwargs):
+        if args[:2] == ["git", "fetch"]:
+            raise subprocess.CalledProcessError(returncode=1, cmd="git fetch")
+        return 0
+
+    def _fake_check_output(args, **_kwargs):
+        if args == ["git", "rev-parse", "--abbrev-ref", "HEAD"]:
+            return b"main\n"
+        if args == ["git", "rev-parse", "HEAD"]:
+            return b"localsha\n"
+        if args == ["git", "rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{u}"]:
+            return b"origin/main\n"
+        raise AssertionError(f"Unexpected git command: {args}")
+
+    monkeypatch.setattr(utils.subprocess, "check_call", _fake_check_call)
+    monkeypatch.setattr(utils.subprocess, "check_output", _fake_check_output)
+
+    assert utils.check_github_updates() is False
+    assert utils.get_update_status().github is False
+
+
+def test_led_pattern_is_yellow_only_for_apt_updates():
+    pattern, interval = utils._led_pattern(utils._UpdateStatus(github=False, apt=True))
+
+    assert pattern == ((utils.LED_INDICATOR_LEVEL, utils.LED_INDICATOR_LEVEL, 0.0),)
+    assert interval == 0.8
+
+
+def test_led_pattern_alternates_only_when_apt_and_github_updates():
+    pattern, interval = utils._led_pattern(utils._UpdateStatus(github=True, apt=True))
+
+    assert pattern == (
+        (0.0, 0.0, utils.LED_INDICATOR_LEVEL),
+        (utils.LED_INDICATOR_LEVEL, utils.LED_INDICATOR_LEVEL, 0.0),
+    )
+    assert interval == 0.6
 
 
 def test_reinitialize_display_retries_after_failure(monkeypatch):
