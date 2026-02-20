@@ -103,6 +103,7 @@ CONFERENCE_LOGO_HEIGHT = _conference_logo_height_for_layout(CONFERENCE_LOGO_HEIG
 CONFERENCE_LOGO_GAP = scale_value(2)
 LEFT_MARGIN = scale_value(4)
 RIGHT_MARGIN = scale_value(6)
+HYPERPIXEL_STATS_RIGHT_GUTTER = scale_value(8)
 TEAM_COLUMN_GAP = scale_value(6)
 STATS_FIRST_COLUMN_GAP = scale_value(26)
 STATS_COLUMN_MIN_STEP = scale_value(36)
@@ -437,9 +438,20 @@ TEAM_NICKNAMES = {
 }
 
 
+def _is_hyperpixel_standings_layout() -> bool:
+    return _IS_HYPERPIXEL_4 or is_hyperpixel_4_square_layout()
+
+
+def _table_right_edge() -> int:
+    right_margin = RIGHT_MARGIN
+    if _is_hyperpixel_standings_layout():
+        right_margin += HYPERPIXEL_STATS_RIGHT_GUTTER
+    return WIDTH - right_margin
+
+
 def _build_column_layout(max_team_name_width: int) -> tuple[dict[str, int], int]:
     team_x = LEFT_MARGIN + LOGO_HEIGHT + TEAM_COLUMN_GAP
-    stats_right = WIDTH - RIGHT_MARGIN
+    stats_right = _table_right_edge()
 
     layout: dict[str, int] = {"team": team_x}
     if not STATS_COLUMNS:
@@ -1469,11 +1481,18 @@ def _draw_dotted_line(draw: ImageDraw.ImageDraw, y: int, dash: int = 6, gap: int
     """Draw a horizontal dotted (dash-gap) line across the standings table."""
 
     x = LEFT_MARGIN
-    right = WIDTH - RIGHT_MARGIN
+    right = _table_right_edge()
     while x < right:
         x_end = min(x + dash, right)
         draw.line((x, y, x_end, y), fill=WHITE)
         x = x_end + gap
+
+
+def _stat_text_align(stat_key: str) -> str:
+    """Return per-column alignment for standings stat text."""
+    if _is_hyperpixel_standings_layout() and stat_key == "points":
+        return "right"
+    return "center"
 
 
 def _truncate_text_to_width(text: str, font, max_width: int) -> str:
@@ -1505,7 +1524,7 @@ def _draw_division(
         font = COLUMN_HEADER_FONTS.get(key, COLUMN_FONT)
         if key not in column_layout:
             continue
-        header_align = "center" if key in STATS_COLUMNS else align
+        header_align = _stat_text_align(key) if key in STATS_COLUMNS else align
         _draw_text(draw, label, font, column_layout[key], header_top, COLUMN_ROW_HEIGHT, header_align)
     y += COLUMN_ROW_HEIGHT + COLUMN_GAP_BELOW
 
@@ -1546,7 +1565,7 @@ def _draw_division(
                 column_layout[key],
                 row_top,
                 ROW_HEIGHT,
-                "center",
+                _stat_text_align(key),
             )
         y += ROW_HEIGHT + ROW_SPACING
 
