@@ -39,6 +39,53 @@ def test_is_button_pressed_handles_inactive_int():
     assert display.is_button_pressed("X") is False
 
 
+def test_is_button_pressed_falls_back_to_named_button_read():
+    calls = []
+
+    def _read_button(value):
+        calls.append(value)
+        if isinstance(value, int):
+            raise RuntimeError("pin lookup unavailable")
+        return 0
+
+    display = utils.Display()
+    display._display = SimpleNamespace(read_button=_read_button)  # type: ignore[attr-defined]
+    display._button_pins["A"] = None
+
+    assert display.is_button_pressed("A") is True
+    assert calls[-1] == "A"
+
+
+def test_create_display_hat_mini_reads_button_pins_from_class(monkeypatch):
+    class _FakeDisplay:
+        BUTTON_A = 17
+        BUTTON_B = 18
+        BUTTON_X = 19
+        BUTTON_Y = 20
+
+        def __init__(self, _buffer):
+            pass
+
+    display = utils.Display()
+    monkeypatch.setattr(utils, "DisplayHATMini", _FakeDisplay)
+
+    created = display._create_display_hat_mini(display._buffer)
+
+    assert isinstance(created, _FakeDisplay)
+    assert display._button_pins == {"A": 17, "B": 18, "X": 19, "Y": 20}
+
+
+def test_hardware_button_callback_accepts_button_name():
+    events = []
+    display = utils.Display()
+    display._display = SimpleNamespace(read_button=lambda _pin: True)  # type: ignore[attr-defined]
+    display.set_button_callback(events.append)
+
+    display._handle_hw_button_event("x")
+
+    assert events == ["X"]
+
+
 def test_update_display_resizes_rotated_hardware_buffer_to_native_size():
     display = utils.Display()
 
