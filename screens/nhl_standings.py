@@ -462,27 +462,59 @@ def _build_column_layout(max_team_name_width: int) -> tuple[dict[str, int], int]
     max_team_space = max(0, stats_right - team_x - STATS_FIRST_COLUMN_GAP - min_spacing)
     allowed_team_space = max(0, min(max_team_name_width, max_team_space))
 
-    first_column = min(stats_right, team_x + allowed_team_space + STATS_FIRST_COLUMN_GAP)
+    min_first = team_x + STATS_FIRST_COLUMN_GAP
+    first_column = min(stats_right, min_first + allowed_team_space)
+
+    def _column_anchor_extents(stat_key: str) -> tuple[float, float]:
+        align = _stat_text_align(stat_key)
+        header_label = next((label for label, key, _ in COLUMN_HEADERS if key == stat_key), "")
+        header_font = COLUMN_HEADER_FONTS.get(stat_key, COLUMN_FONT)
+        header_width = _text_size(header_label, header_font)[0] if header_label else 0
+
+        sample_value = "999" if stat_key == "points" else "99"
+        value_width = _text_size(sample_value, ROW_STATS_FONT)[0]
+        text_width = max(header_width, value_width)
+
+        if align == "right":
+            return float(text_width), 0.0
+        if align == "center":
+            half = text_width / 2.0
+            return half, half
+        return 0.0, float(text_width)
+
+    spacing_scale = max(0.0, _ACTIVE_STATS_COLUMN_SPACING_SCALE)
+    base_step = float(STATS_COLUMN_MIN_STEP) * (spacing_scale if spacing_scale > 0 else 1.0)
 
     if column_count == 1:
         layout[STATS_COLUMNS[0]] = stats_right
     else:
-        available_space = max(0.0, stats_right - first_column)
-        spacing_scale = max(0.0, _ACTIVE_STATS_COLUMN_SPACING_SCALE)
-        step = available_space / (column_count - 1) if column_count > 1 else 0.0
-        step *= spacing_scale
-        max_step = STATS_COLUMN_MAX_STEP
-        if max_step is not None and step > max_step:
-            capped_first = stats_right - max_step * (column_count - 1)
-            min_first = team_x + STATS_FIRST_COLUMN_GAP
-            if capped_first >= min_first:
-                first_column = capped_first
-                step = max_step
+        required_steps: list[float] = []
+        for idx in range(column_count - 1):
+            left_extents = _column_anchor_extents(STATS_COLUMNS[idx])
+            right_extents = _column_anchor_extents(STATS_COLUMNS[idx + 1])
+            min_step = left_extents[1] + right_extents[0] + 2.0
+            required_steps.append(max(base_step, float(min_step)))
 
-        positions: list[int] = []
-        for idx in range(column_count):
-            pos = first_column + step * idx
-            positions.append(int(round(pos)))
+        required_total = sum(required_steps)
+        max_first = stats_right - required_total
+        first_column = max(min_first, min(first_column, max_first))
+
+        extra_space = max(0.0, stats_right - (first_column + required_total))
+        expandable_steps = [step for step in required_steps]
+        if column_count > 1 and extra_space > 0:
+            distribute = extra_space / float(column_count - 1)
+            expandable_steps = [step + distribute for step in required_steps]
+
+        max_step = STATS_COLUMN_MAX_STEP
+        if max_step is not None:
+            expandable_steps = [min(step, float(max_step)) for step in expandable_steps]
+
+        positions: list[int] = [int(round(first_column))]
+        for step in expandable_steps:
+            positions.append(int(round(positions[-1] + step)))
+
+        if positions:
+            positions[-1] = stats_right
 
         for key, pos in zip(STATS_COLUMNS, positions):
             layout[key] = pos
