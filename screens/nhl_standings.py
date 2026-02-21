@@ -152,6 +152,13 @@ _NHL_STANDINGS_WILDCARD_IDS = {
 }
 _NHL_STANDINGS_COLUMN_TIGHTEN_IDS = _NHL_STANDINGS_PRIMARY_IDS | _NHL_STANDINGS_WILDCARD_IDS
 _ACTIVE_STATS_COLUMN_SPACING_SCALE = 1.0
+_ACTIVE_COLUMN_SEPARATION_GAP = 2.0
+_ACTIVE_TABLE_RIGHT_INSET = 0
+
+
+def _is_display_hat_mini_layout() -> bool:
+    """Return True when running on Display HAT Mini dimensions."""
+    return sorted((int(WIDTH), int(HEIGHT))) == [240, 320]
 
 _BASE_FONT_SIZES = {
     "division": 26,
@@ -269,6 +276,7 @@ def _apply_style_overrides(screen_id: str) -> None:
     global LOGO_HEIGHT, OVERVIEW_MIN_LOGO_HEIGHT, OVERVIEW_MAX_LOGO_HEIGHT
     global CONFERENCE_LOGO_HEIGHT, BACKGROUND_COLOR
     global ROW_PADDING, ROW_SPACING, _ACTIVE_STATS_COLUMN_SPACING_SCALE
+    global _ACTIVE_COLUMN_SEPARATION_GAP, _ACTIVE_TABLE_RIGHT_INSET
 
     (
         DIVISION_FONT,
@@ -334,8 +342,26 @@ def _apply_style_overrides(screen_id: str) -> None:
         ROW_SPACING = scale_value(2)
 
     _ACTIVE_STATS_COLUMN_SPACING_SCALE = 1.0
+    _ACTIVE_COLUMN_SEPARATION_GAP = 2.0
+    _ACTIVE_TABLE_RIGHT_INSET = 0
     if is_hyperpixel_4_square_layout() and screen_id in _NHL_STANDINGS_COLUMN_TIGHTEN_IDS:
         _ACTIVE_STATS_COLUMN_SPACING_SCALE = 0.8
+
+    if screen_id in _NHL_STANDINGS_TEAM_SIZE_IDS:
+        # Reserve a small right-side gutter to prevent the final stats column from
+        # clipping on constrained displays such as Display HAT Mini.
+        _ACTIVE_TABLE_RIGHT_INSET = max(1, scale_value_width(5))
+        if _is_display_hat_mini_layout():
+            # Keep additional padding on Display HAT Mini so PTS stays fully visible.
+            _ACTIVE_TABLE_RIGHT_INSET = max(
+                _ACTIVE_TABLE_RIGHT_INSET,
+                max(1, scale_value_width(18)),
+            )
+
+    if _is_hyperpixel_standings_layout() and screen_id in _NHL_STANDINGS_WILDCARD_IDS:
+        # Wild-card screens use compact headers (GP/RW/PTS); increase the minimum
+        # visual gap to keep adjacent headings and values from merging together.
+        _ACTIVE_COLUMN_SEPARATION_GAP = 4.0
 
     _update_row_metrics()
     BACKGROUND_COLOR = get_screen_background_color(screen_id, SCOREBOARD_BACKGROUND_COLOR)
@@ -446,7 +472,7 @@ def _table_right_edge() -> int:
     right_margin = RIGHT_MARGIN
     if _is_hyperpixel_standings_layout():
         right_margin += HYPERPIXEL_STATS_RIGHT_GUTTER
-    return WIDTH - right_margin
+    return WIDTH - right_margin - _ACTIVE_TABLE_RIGHT_INSET
 
 
 def _build_column_layout(max_team_name_width: int) -> tuple[dict[str, int], int]:
@@ -485,6 +511,7 @@ def _build_column_layout(max_team_name_width: int) -> tuple[dict[str, int], int]
     first_column_left_extent = _column_anchor_extents(STATS_COLUMNS[0])[0]
 
     spacing_scale = max(0.0, _ACTIVE_STATS_COLUMN_SPACING_SCALE)
+    min_column_gap = max(0.0, float(_ACTIVE_COLUMN_SEPARATION_GAP))
     base_step = float(STATS_COLUMN_MIN_STEP) * (spacing_scale if spacing_scale > 0 else 1.0)
 
     if column_count == 1:
@@ -494,7 +521,7 @@ def _build_column_layout(max_team_name_width: int) -> tuple[dict[str, int], int]
         for idx in range(column_count - 1):
             left_extents = _column_anchor_extents(STATS_COLUMNS[idx])
             right_extents = _column_anchor_extents(STATS_COLUMNS[idx + 1])
-            min_step = left_extents[1] + right_extents[0] + 2.0
+            min_step = left_extents[1] + right_extents[0] + min_column_gap
             required_steps.append(max(base_step, float(min_step)))
 
         required_total = sum(required_steps)
