@@ -1,6 +1,7 @@
 from PIL import Image, ImageDraw
 
 from screens import nhl_standings
+from screens import nhl_standings_v2
 
 
 def test_draw_division_centers_all_stat_values(monkeypatch):
@@ -196,20 +197,15 @@ def test_build_column_layout_with_max_step_packs_columns_from_right(monkeypatch)
     assert layout["gamesPlayed"] == layout["regulationWins"] - 36
 
 
-def test_apply_style_overrides_adds_right_inset_for_standings_screen(monkeypatch):
-    monkeypatch.setattr(nhl_standings, "_update_row_metrics", lambda: None)
-    monkeypatch.setattr(nhl_standings, "get_screen_background_color", lambda _sid, default: default)
+def test_wildcard_column_max_step_adds_breathing_room_on_hyperpixel(monkeypatch):
+    monkeypatch.setattr(nhl_standings, "STATS_COLUMN_MIN_STEP", 36)
+    monkeypatch.setattr(nhl_standings, "scale_value", lambda value: value)
+    monkeypatch.setattr(nhl_standings, "_is_hyperpixel_standings_layout", lambda: True)
 
-    nhl_standings._apply_style_overrides("NHL Standings West")
-
-    assert nhl_standings._ACTIVE_TABLE_RIGHT_INSET >= 1
+    assert nhl_standings_v2._wildcard_column_max_step() == 44
 
 
-def test_apply_style_overrides_wildcard_uses_wider_column_gap_on_hyperpixel(monkeypatch):
-    monkeypatch.setattr(nhl_standings, "_update_row_metrics", lambda: None)
-    monkeypatch.setattr(nhl_standings, "get_screen_background_color", lambda _sid, default: default)
-    monkeypatch.setattr(nhl_standings, "_IS_HYPERPIXEL_4", True)
+def test_wildcard_column_max_step_disabled_off_hyperpixel(monkeypatch):
+    monkeypatch.setattr(nhl_standings, "_is_hyperpixel_standings_layout", lambda: False)
 
-    nhl_standings._apply_style_overrides("NHL Standings West v2")
-
-    assert nhl_standings._ACTIVE_COLUMN_SEPARATION_GAP == 4.0
+    assert nhl_standings_v2._wildcard_column_max_step() is None
