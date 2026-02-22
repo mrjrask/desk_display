@@ -253,6 +253,7 @@ def _compute_table_geometry(
     table_side_margin: int = TABLE_SIDE_MARGIN,
     min_team_col_width: int = MIN_TEAM_COL_WIDTH,
     header_gap: int = HEADER_GAP,
+    reserve_flag_height: int = FLAG_BLOCK_H,
 ) -> dict:
     """
     Decide sizes so that columns 2–4 are true squares (same width as row height),
@@ -260,7 +261,7 @@ def _compute_table_geometry(
     Returns a geometry dict.
     """
     # reserve space for the small-flag area (always, so Cubs/Sox align)
-    grid_bottom_limit = bottom_y - FLAG_BLOCK_H if reserve_flag_block else bottom_y
+    grid_bottom_limit = bottom_y - reserve_flag_height if reserve_flag_block else bottom_y
 
     # Header row height = label text height + small padding
     hdr_h = draw.textsize("R", font=FONT_DATE_SPORTS)[1] + 2
@@ -313,7 +314,9 @@ def _draw_boxscore_table(img: Image.Image, draw: ImageDraw.ImageDraw, title: str
                          reserve_flag_block: bool,
                          live: bool=False,
                          winner_flag: str|None=None,
-                         hyperpixel_layout: bool=False):
+                         hyperpixel_layout: bool=False,
+                         center_content_vertically: bool=False,
+                         flag_scale: float=1.0):
     """
     Render the whole screen (title + header + table + optional small flag + bottom line).
     - Columns 2–4 are true squares; column 1 stretches.
@@ -345,6 +348,9 @@ def _draw_boxscore_table(img: Image.Image, draw: ImageDraw.ImageDraw, title: str
     bottom_margin = config.scale_value(BOTTOM_MARGIN) if hyperpixel_layout else BOTTOM_MARGIN
     bottom_y = HEIGHT - bh - bottom_margin
 
+    flag_h = max(1, int(round(SMALL_RESULT_FLAG_H * max(0.1, flag_scale))))
+    flag_block_h = flag_h + FLAG_BLOCK_PAD
+
     # Geometry
     g = _compute_table_geometry(
         draw,
@@ -354,6 +360,7 @@ def _draw_boxscore_table(img: Image.Image, draw: ImageDraw.ImageDraw, title: str
         table_side_margin=table_side_margin,
         min_team_col_width=min_team_col_width,
         header_gap=header_gap,
+        reserve_flag_height=flag_block_h,
     )
     hdr_h   = g["hdr_h"]
     grid_top= g["grid_top"]
@@ -363,6 +370,14 @@ def _draw_boxscore_table(img: Image.Image, draw: ImageDraw.ImageDraw, title: str
     xs      = g["xs"]
     total_w = g["grid_w"]
     grid_h  = g["grid_h"]
+
+    if center_content_vertically:
+        content_top = edge_pad + th + title_gap
+        content_bottom = bottom_y
+        if reserve_flag_block:
+            content_bottom -= flag_block_h
+        centered_grid_top = content_top + max(0, (content_bottom - content_top - grid_h) // 2)
+        grid_top = max(grid_top, centered_grid_top)
 
     # Header row (center each label over its column)
     for i, lbl in enumerate(["", "R", "H", "E"]):
@@ -413,8 +428,7 @@ def _draw_boxscore_table(img: Image.Image, draw: ImageDraw.ImageDraw, title: str
     # Optional small W/L flag (Cubs only) – drawn in the reserved block
     if reserve_flag_block and winner_flag in ("W","L"):
         block_top = grid_top + grid_h + 2
-        block_h   = FLAG_BLOCK_H
-        flag_h    = SMALL_RESULT_FLAG_H
+        block_h   = flag_block_h
         flag_path = os.path.join(IMAGES_DIR, "mlb", f"{winner_flag}.png")  # mlb/W.png / mlb/L.png
         if os.path.exists(flag_path):
             try:
@@ -480,6 +494,8 @@ def draw_last_game(display, game, title="Last Game...", transition=False, screen
         live=False,
         winner_flag=(result_char if "Cubs" in title else None),  # flag only for Cubs
         hyperpixel_layout=hyperpixel_layout,
+        center_content_vertically=(screen_id == "cubs last" and is_hyperpixel_4_square_layout()),
+        flag_scale=(2.0 if screen_id == "cubs last" and is_hyperpixel_4_square_layout() else 1.0),
     )
 
     def _as_int(value):
@@ -534,6 +550,7 @@ def draw_box_score(display, game, title="Live Game...", transition=False, screen
         reserve_flag_block=False,
         live=True,
         hyperpixel_layout=hyperpixel_layout,
+        center_content_vertically=(screen_id == "cubs live" and is_hyperpixel_4_square_layout()),
     )
 
     return ScreenImage(img, displayed=False)

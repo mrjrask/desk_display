@@ -744,8 +744,8 @@ def _render_next_game(game: Dict, *, title: str, logo_scale: float = 1.0) -> Ima
     bottom_margin = _bottom_line_margin(hyperpixel_layout=hyperpixel_layout)
     bottom_reserved = _text_h(draw, FONT_BOTTOM) + bottom_margin if footer else 0
     bottom_y = HEIGHT - bottom_reserved
-    y2 = y + (config.scale_value(6) if hyperpixel_layout else 6)
-    available_h = max(10, bottom_y - y2)
+    logo_top_min = y + (config.scale_value(6) if hyperpixel_layout else 6)
+    available_h = max(10, bottom_y - logo_top_min)
     if hyperpixel_layout:
         desired_logo_h = max(
             1,
@@ -798,6 +798,11 @@ def _render_next_game(game: Dict, *, title: str, logo_scale: float = 1.0) -> Ima
             default=at_h if not (logo_left or logo_right) else logo_h,
         )
         total_w = (frame_w * 2) + (gap * 2) + at_w
+
+    if _IS_HYPERPIXEL_4_SQUARE and bottom_y > logo_top_min:
+        y2 = logo_top_min + max(0, (bottom_y - logo_top_min - block_h) // 2)
+    else:
+        y2 = logo_top_min
 
     x = max(0, (WIDTH - total_w) // 2)
     baseline_y = y2 + (block_h - at_h) // 2 - at_t
