@@ -736,6 +736,9 @@ def _draw_scoreboard(
         sog_h = _text_h(d, FONT_SMALL)
         sog_x = x2 + (col3_w - sog_w) // 2
         sog_y = max(table_top, row1_top - sog_h - header_gap)
+        if _IS_HYPERPIXEL_4_SQUARE:
+            # Keep SOG closer to the values row on HyperPixel 4 Square.
+            sog_y = min(row1_top - 1, sog_y + max(1, header_gap + 1))
         if score_lbl:
             d.text((x1 + (col2_w - _text_w(d, score_lbl, FONT_SMALL)) // 2, sog_y), score_lbl, font=FONT_SMALL, fill="white")
         d.text((sog_x, sog_y), sog_lbl, font=FONT_SMALL, fill="white")
