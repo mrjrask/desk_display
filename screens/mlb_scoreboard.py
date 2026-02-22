@@ -58,7 +58,6 @@ from utils import (
     log_call,
     log_missing_team_logo,
     scroll_vertical_content,
-    standard_scoreboard_league_logo_height,
     standard_scoreboard_team_logo_height,
 )
 
@@ -97,7 +96,6 @@ LOGO_DIR = os.path.join(IMAGES_DIR, "mlb")
 LEAGUE_LOGO_KEYS = ("MLB", "mlb")
 LEAGUE_LOGO_GAP = scale_value(4)
 TEAM_LOGO_BASE_HEIGHT = standard_scoreboard_team_logo_height(HEIGHT)
-LEAGUE_LOGO_BASE_HEIGHT = standard_scoreboard_league_logo_height(TEAM_LOGO_BASE_HEIGHT)
 IN_PROGRESS_SCORE_COLOR = SCOREBOARD_IN_PROGRESS_SCORE_COLOR
 IN_PROGRESS_STATUS_COLOR = IN_PROGRESS_SCORE_COLOR
 FINAL_WINNING_SCORE_COLOR = SCOREBOARD_FINAL_WINNING_SCORE_COLOR
@@ -138,9 +136,8 @@ def _team_logo_height() -> int:
 
 
 def _league_logo_height() -> int:
-    team_scale = get_screen_image_scale(SCREEN_ID, "team_logo", 1.0)
-    scale = get_screen_image_scale(SCREEN_ID, "league_logo", team_scale)
-    return max(1, int(round(LEAGUE_LOGO_BASE_HEIGHT * scale)))
+    # Keep the league mark visually consistent with the scoreboard team logos.
+    return _team_logo_height()
 BACKGROUND_COLOR = get_screen_background_color(SCREEN_ID, SCOREBOARD_BACKGROUND_COLOR)
 
 # Cache for resized logos { (abbr, height): Image }
