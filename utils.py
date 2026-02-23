@@ -684,17 +684,19 @@ def _clamp_led_level(value: float) -> float:
 def _get_led_indicator_level() -> float:
     """Return the normalized indicator LED level from environment config."""
 
+    default_level = 0.08
     raw = os.environ.get("DISPLAY_HAT_MINI_LED_LEVEL")
     if raw is None:
-        return 0.02
+        return default_level
     try:
         return _clamp_led_level(float(raw))
     except (TypeError, ValueError):
         logging.warning(
-            "Invalid DISPLAY_HAT_MINI_LED_LEVEL %r; using default 0.02.",
+            "Invalid DISPLAY_HAT_MINI_LED_LEVEL %r; using default %.2f.",
             raw,
+            default_level,
         )
-        return 0.02
+        return default_level
 
 
 LED_INDICATOR_LEVEL = _get_led_indicator_level()

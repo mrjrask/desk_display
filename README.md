@@ -118,7 +118,7 @@ Desk Display reads configuration from environment variables and (optionally) a `
 | `DISPLAY_FB_PIXEL_ORDER` | Force pixel order (`rgb` or `bgr`). |
 | `DISPLAY_ROTATION` | Additional app-side rotation in degrees (`0`, `90`, `180`, `270`) or shorthand (`0-3`). Keep `0` when `dtoverlay=...,rotate=` is already set to avoid double-rotation. |
 | `DISPLAY_HAT_MINI_REINIT_SECONDS` | Recreate the Display HAT Mini driver on this interval (default `1800`) to recover from long-run panel stalls. Set `0` to disable. |
-| `DISPLAY_HAT_MINI_LED_LEVEL` | Normalized indicator LED brightness (`0.0`-`1.0`) for weather alerts, schedule win/loss markers, and update animations. Defaults to `0.02`; recommended starting range is `0.01`-`0.05`. |
+| `DISPLAY_HAT_MINI_LED_LEVEL` | Normalized indicator LED brightness (`0.0`-`1.0`) for weather alerts, schedule win/loss markers, and update animations. Defaults to `0.08`; recommended starting range is `0.05`-`0.20`. |
 
 ### Weather + radar
 
