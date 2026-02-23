@@ -35,6 +35,7 @@ from utils import (
     standard_next_game_logo_height,
     wrap_text,
 )
+from display_profiles import DISPLAY_PROFILE_DISPLAY_HAT_MINI
 
 # ── Paths ────────────────────────────────────────────────────────────────────
 BACKGROUND_COLOR = (0, 0, 0)
@@ -244,6 +245,69 @@ def _bbox_center(draw: ImageDraw.ImageDraw, x: int, y: int, w: int, h: int,
         ty = y + (h - th)//2
     draw.text((tx, ty), text, font=font, fill=fill)
 
+
+def _should_show_team_logo_boxscore(screen_id: Optional[str]) -> bool:
+    if config.get_display_profile_id() != DISPLAY_PROFILE_DISPLAY_HAT_MINI:
+        return False
+    return (screen_id or "").strip().lower() in {
+        "cubs live",
+        "cubs last",
+        "sox live",
+        "sox last",
+    }
+
+
+def _draw_left_team_cell_with_logo(
+    img: Image.Image,
+    draw: ImageDraw.ImageDraw,
+    *,
+    team: dict,
+    abbr: str,
+    x: int,
+    y: int,
+    w: int,
+    h: int,
+    font,
+    fill=(255, 255, 255),
+) -> None:
+    left_pad = max(2, min(6, w // 12))
+    top_pad = max(1, h // 8)
+    logo_size = max(1, min(h - (top_pad * 2), int(h * 0.62)))
+
+    logo_key = get_mlb_tricode(team) or get_mlb_abbreviation(get_team_display_name(team))
+    logo = load_team_logo(MLB_LOGOS_DIR, logo_key, box_size=logo_size)
+
+    text_x = x + left_pad
+    if logo:
+        lx = x + left_pad
+        ly = y + (h - logo.height) // 2
+        img.paste(logo, (lx, ly), logo)
+        text_x = lx + logo.width + max(2, left_pad // 2)
+
+    # Keep abbreviation constrained to the cell width.
+    max_text_w = max(0, (x + w - left_pad) - text_x)
+    display_abbr = str(abbr)
+    if max_text_w <= 0:
+        return
+    try:
+        l, t, r, b = draw.textbbox((0, 0), display_abbr, font=font)
+        tw, th = r - l, b - t
+    except Exception:
+        tw, th = draw.textsize(display_abbr, font=font)
+        l = t = 0
+
+    while display_abbr and tw > max_text_w:
+        display_abbr = display_abbr[:-1]
+        try:
+            l, t, r, b = draw.textbbox((0, 0), display_abbr, font=font)
+            tw, th = r - l, b - t
+        except Exception:
+            tw, th = draw.textsize(display_abbr, font=font)
+            l = t = 0
+
+    ty = y + (h - th) // 2 - t
+    draw.text((text_x - l, ty), display_abbr, font=font, fill=fill)
+
 def _compute_table_geometry(
     draw: ImageDraw.ImageDraw,
     top_y: int,
@@ -311,6 +375,9 @@ def _draw_boxscore_table(img: Image.Image, draw: ImageDraw.ImageDraw, title: str
                          home_lbl, home_r, home_h, home_e,
                          bottom_text: str,
                          *,
+                         away_team: Optional[dict]=None,
+                         home_team: Optional[dict]=None,
+                         screen_id: Optional[str]=None,
                          reserve_flag_block: bool,
                          live: bool=False,
                          winner_flag: str|None=None,
@@ -415,6 +482,8 @@ def _draw_boxscore_table(img: Image.Image, draw: ImageDraw.ImageDraw, title: str
         (away_lbl, away_r, away_h, away_e),
         (home_lbl, home_r, home_h, home_e)
     ]
+    show_team_logo = _should_show_team_logo_boxscore(screen_id)
+    row_teams = [away_team, home_team]
     for ridx, (lbl, r, h, e) in enumerate(rows):
         for cidx, val in enumerate([lbl, r, h, e]):
             txt = str(val)
@@ -423,6 +492,20 @@ def _draw_boxscore_table(img: Image.Image, draw: ImageDraw.ImageDraw, title: str
             col_w    = [team_w, square, square, square][cidx]
             x_left   = xs[cidx]
             y_cell   = grid_top + ridx * row_h
+            if cidx == 0 and show_team_logo and row_teams[ridx]:
+                _draw_left_team_cell_with_logo(
+                    img,
+                    draw,
+                    team=row_teams[ridx],
+                    abbr=txt,
+                    x=x_left,
+                    y=y_cell,
+                    w=col_w,
+                    h=row_h,
+                    font=font_use,
+                    fill=fill_col,
+                )
+                continue
             _bbox_center(draw, x_left, y_cell, col_w, row_h, txt, font_use, fill=fill_col)
 
     # Optional small W/L flag (Cubs only) – drawn in the reserved block
@@ -490,6 +573,9 @@ def draw_last_game(display, game, title="Last Game...", transition=False, screen
         away_lbl, away.get("score", 0), away_ls.get("hits", 0), away_ls.get("errors", 0),
         home_lbl, home.get("score", 0), home_ls.get("hits", 0), home_ls.get("errors", 0),
         bottom,
+        away_team=away["team"],
+        home_team=home["team"],
+        screen_id=screen_id,
         reserve_flag_block=True,                      # keep layout identical Cubs/Sox
         live=False,
         winner_flag=(result_char if "Cubs" in title else None),  # flag only for Cubs
@@ -547,6 +633,9 @@ def draw_box_score(display, game, title="Live Game...", transition=False, screen
         home_lbl, game["teams"]["home"].get("score", 0),
         home_ls.get("hits", 0), home_ls.get("errors", 0),
         inning,
+        away_team=game["teams"]["away"]["team"],
+        home_team=game["teams"]["home"]["team"],
+        screen_id=screen_id,
         reserve_flag_block=False,
         live=True,
         hyperpixel_layout=hyperpixel_layout,
