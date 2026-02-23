@@ -636,10 +636,12 @@ def draw_box_score(display, game, title="Live Game...", transition=False, screen
         away_team=game["teams"]["away"]["team"],
         home_team=game["teams"]["home"]["team"],
         screen_id=screen_id,
-        reserve_flag_block=False,
+        reserve_flag_block=True,
         live=True,
         hyperpixel_layout=hyperpixel_layout,
-        center_content_vertically=(screen_id == "cubs live" and is_hyperpixel_4_square_layout()),
+        center_content_vertically=(
+            screen_id in {"cubs live", "sox live"} and is_hyperpixel_4_square_layout()
+        ),
     )
 
     return ScreenImage(img, displayed=False)

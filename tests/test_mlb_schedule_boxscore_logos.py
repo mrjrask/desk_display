@@ -38,3 +38,64 @@ def test_draw_left_team_cell_with_logo_stays_inside_cell(monkeypatch):
 
     # Ensure helper never paints past the right edge of the target cell.
     assert all(img.getpixel((x, y)) == (0, 0, 0) for x in range(34, 80) for y in range(0, 40))
+
+
+def test_draw_box_score_reserves_flag_block_for_live_layout(monkeypatch):
+    captured = {}
+
+    def _fake_draw_table(*args, **kwargs):
+        captured.update(kwargs)
+
+    monkeypatch.setattr(mlb_schedule, "_draw_boxscore_table", _fake_draw_table)
+
+    game = {
+        "linescore": {
+            "inningState": "Top",
+            "currentInningOrdinal": "3rd",
+            "teams": {
+                "away": {"hits": 1, "errors": 0},
+                "home": {"hits": 2, "errors": 0},
+            },
+        },
+        "teams": {
+            "away": {"score": 2, "team": {"name": "Chicago Cubs"}},
+            "home": {"score": 3, "team": {"name": "St. Louis Cardinals"}},
+        },
+    }
+
+    mlb_schedule.draw_box_score(None, game, title="Cubs Live...", screen_id="cubs live")
+
+    assert captured["reserve_flag_block"] is True
+
+
+
+def test_draw_box_score_centers_content_vertically_on_hyperpixel_4_square(monkeypatch):
+    captured = {}
+
+    def _fake_draw_table(*args, **kwargs):
+        captured.update(kwargs)
+
+    monkeypatch.setattr(mlb_schedule, "_draw_boxscore_table", _fake_draw_table)
+
+    game = {
+        "linescore": {
+            "inningState": "Top",
+            "currentInningOrdinal": "3rd",
+            "teams": {
+                "away": {"hits": 1, "errors": 0},
+                "home": {"hits": 2, "errors": 0},
+            },
+        },
+        "teams": {
+            "away": {"score": 2, "team": {"name": "Chicago Cubs"}},
+            "home": {"score": 3, "team": {"name": "St. Louis Cardinals"}},
+        },
+    }
+
+    monkeypatch.setattr(mlb_schedule, "is_hyperpixel_4_square_layout", lambda: True)
+    mlb_schedule.draw_box_score(None, game, title="Sox Live...", screen_id="sox live")
+    assert captured["center_content_vertically"] is True
+
+    monkeypatch.setattr(mlb_schedule, "is_hyperpixel_4_square_layout", lambda: False)
+    mlb_schedule.draw_box_score(None, game, title="Sox Live...", screen_id="sox live")
+    assert captured["center_content_vertically"] is False
