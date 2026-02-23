@@ -444,4 +444,4 @@ def test_get_led_indicator_level_from_env(monkeypatch):
 def test_get_led_indicator_level_invalid_env_uses_default(monkeypatch):
     monkeypatch.setenv("DISPLAY_HAT_MINI_LED_LEVEL", "not-a-number")
 
-    assert utils._get_led_indicator_level() == 0.02
+    assert utils._get_led_indicator_level() == 0.08
