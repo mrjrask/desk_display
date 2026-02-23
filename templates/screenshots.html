@@ -358,7 +358,11 @@
       showOverlayImage(nextIndex);
     }
 
-    document.querySelectorAll(".preview-button").forEach((button) => {
+    function bindPreviewButton(button) {
+      if (!button || button.dataset.boundClick === "true") {
+        return;
+      }
+      button.dataset.boundClick = "true";
       button.addEventListener("click", () => {
         const buttons = getNavigableButtons();
         const index = buttons.indexOf(button);
@@ -366,6 +370,10 @@
           openOverlay(index);
         }
       });
+    }
+
+    document.querySelectorAll(".preview-button").forEach((button) => {
+      bindPreviewButton(button);
     });
 
     overlayPrev.addEventListener("click", () => {
@@ -444,17 +452,42 @@
             const hasScreenshot = Boolean(entry.path);
             card.dataset.hasScreenshot = hasScreenshot ? "true" : "false";
 
-            if (hasScreenshot && previewButton && previewImage) {
+            if (hasScreenshot) {
               const encodedPath = entry.path.split("/").map(encodeURIComponent).join("/");
               const baseSrc = `/screenshots/file/${encodedPath}`;
               const version = entry.version || Date.now();
               const fullSrc = `${baseSrc}?v=${version}`;
-              previewButton.dataset.fullSrc = fullSrc;
-              previewImage.src = fullSrc;
+
+              let button = previewButton;
+              let image = previewImage;
+
+              if (!button || !image) {
+                const preview = card.querySelector(".preview");
+                if (preview) {
+                  preview.innerHTML = `
+                    <button class="preview-button" type="button" aria-label="Open full-resolution screenshot for ${entry.id}">
+                      <img alt="Screenshot for ${entry.id}">
+                    </button>
+                  `;
+                  button = preview.querySelector(".preview-button");
+                  image = preview.querySelector("img");
+                }
+              }
+
+              if (button && image) {
+                button.dataset.fullSrc = fullSrc;
+                image.src = fullSrc;
+                bindPreviewButton(button);
+              }
             }
 
-            if (!hasScreenshot && emptyState) {
-              emptyState.textContent = "No screenshot yet.";
+            if (!hasScreenshot) {
+              const preview = card.querySelector(".preview");
+              if (preview && !emptyState) {
+                preview.innerHTML = '<div class="empty-state">No screenshot yet.</div>';
+              } else if (emptyState) {
+                emptyState.textContent = "No screenshot yet.";
+              }
             }
           });
           updateMissingVisibility();
