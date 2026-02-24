@@ -109,6 +109,13 @@
       font-size: 1rem;
       margin: 0;
       color: #f8fafc;
+      display: flex;
+      align-items: center;
+      gap: 0.35rem;
+    }
+    .screen-emoji {
+      font-size: 1.05rem;
+      line-height: 1;
     }
     .preview {
       width: 100%;
@@ -265,8 +272,16 @@
   </section>
   <section class="grid">
     {% for screen in screens %}
-    <article class="card" data-has-screenshot="{{ 'true' if screen.path else 'false' }}">
-      <h2>{{ screen.id }}</h2>
+    {% set emoji = '🔵' %}
+    {% if not screen.path %}
+      {% set emoji = '🟠' %}
+    {% elif screen.is_stale %}
+      {% set emoji = '🔴' %}
+    {% elif display_status.screen_id == screen.id %}
+      {% set emoji = '🟢' if not display_status.is_stale else '🟡' %}
+    {% endif %}
+    <article class="card" data-has-screenshot="{{ 'true' if screen.path else 'false' }}" data-screen-id="{{ screen.id }}">
+      <h2><span class="screen-name">{{ screen.id }}</span><span class="screen-emoji" aria-hidden="true">{{ emoji }}</span></h2>
       <div class="preview">
         {% if screen.path %}
           <button
@@ -309,6 +324,19 @@
     const screenshotApiUrl = "{{ url_for('get_screenshots') }}";
     const displayStatusBanner = document.getElementById("displayStatusBanner");
     let currentOverlayIndex = -1;
+
+    function getScreenEmoji(entry, displayStatus) {
+      if (!entry || !entry.path) {
+        return "🟠";
+      }
+      if (entry.is_stale) {
+        return "🔴";
+      }
+      if (displayStatus && displayStatus.screen_id === entry.id) {
+        return displayStatus.is_stale ? "🟡" : "🟢";
+      }
+      return "🔵";
+    }
 
     function getNavigableButtons() {
       return Array.from(document.querySelectorAll(".preview-button")).filter((button) => Boolean(button.dataset.fullSrc));
@@ -433,15 +461,20 @@
             displayStatusBanner.classList.toggle("is-stale", Boolean(status.is_stale));
           }
           screenshotCards.forEach((card) => {
-            const id = card.querySelector("h2")?.textContent;
+            const id = card.dataset.screenId;
             if (!id || !byId.has(id)) {
               return;
             }
             const entry = byId.get(id);
+            const emoji = card.querySelector(".screen-emoji");
             const previewButton = card.querySelector(".preview-button");
             const previewImage = card.querySelector(".preview img");
             const emptyState = card.querySelector(".empty-state");
             const timestamp = card.querySelector(".timestamp");
+
+            if (emoji) {
+              emoji.textContent = getScreenEmoji(entry, payload.display_status || null);
+            }
 
             if (timestamp) {
               const elapsed = entry.elapsed ? ` (${entry.elapsed})` : "";

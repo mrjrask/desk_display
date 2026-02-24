@@ -69,6 +69,7 @@ def test_screenshots_template_adds_stale_class(monkeypatch):
     assert 'class="timestamp is-stale"' in html
     assert "1d 2h 3m 4s ago" in html
     assert 'id="hideMissingScreens" checked' in html
+    assert "weather</span><span class=\"screen-emoji\" aria-hidden=\"true\">🔵</span>" in html
 
 
 def test_screenshots_api_returns_entries(monkeypatch):
