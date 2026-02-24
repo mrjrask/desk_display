@@ -35,7 +35,7 @@ from utils import (
     standard_next_game_logo_height,
     wrap_text,
 )
-from display_profiles import DISPLAY_PROFILE_DISPLAY_HAT_MINI
+from display_profiles import DISPLAY_PROFILE_DISPLAY_HAT_MINI, DISPLAY_PROFILE_HYPERPIXEL4
 
 # ── Paths ────────────────────────────────────────────────────────────────────
 BACKGROUND_COLOR = (0, 0, 0)
@@ -247,7 +247,10 @@ def _bbox_center(draw: ImageDraw.ImageDraw, x: int, y: int, w: int, h: int,
 
 
 def _should_show_team_logo_boxscore(screen_id: Optional[str]) -> bool:
-    if config.get_display_profile_id() != DISPLAY_PROFILE_DISPLAY_HAT_MINI:
+    if config.get_display_profile_id() not in {
+        DISPLAY_PROFILE_HYPERPIXEL4,
+        DISPLAY_PROFILE_DISPLAY_HAT_MINI,
+    }:
         return False
     return (screen_id or "").strip().lower() in {
         "cubs live",
