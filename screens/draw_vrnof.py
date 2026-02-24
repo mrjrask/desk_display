@@ -7,6 +7,7 @@ with a 10-minute freshness requirement. Title and all-time percentage remain fix
 Exact cost-basis calculation from individual lots.
 """
 import logging
+import math
 import os
 import time
 
@@ -79,29 +80,43 @@ def _fetch_price(symbol: str):
     change_val = None
     change_pct = None
 
+    def _derive_change(current: float | None, previous: float | None):
+        if current is None or previous is None:
+            return None, None
+        if previous <= 0:
+            return None, None
+
+        delta = current - previous
+        pct = (delta / previous) * 100
+        if not math.isfinite(pct) or abs(pct) > 500:
+            return None, None
+        return delta, pct
+
     # Try info first
     try:
         tk = yf.Ticker(symbol)
         info = tk.info
         prev = info.get("previousClose")
         cand = info.get("regularMarketPrice") or prev
-        if cand is not None and prev is not None:
+        if cand is not None:
             price = float(cand)
-            change_val = price - float(prev)
-            change_pct = (change_val / float(prev)) * 100
+            change_val, change_pct = _derive_change(price, float(prev) if prev is not None else None)
     except Exception as e:
         logging.warning(f"VRNO: info fetch failed: {e}")
 
-    # Fallback to history
-    if price is None:
+    # Fallback to history when primary source didn't produce a usable change.
+    if price is None or change_val is None:
         try:
             hist = yf.Ticker(symbol).history(period="2d", interval="1d")
             closes = hist.get("Close")
             if closes is not None and len(closes) >= 2:
                 prev = float(closes.iloc[-2])
-                price = float(closes.iloc[-1])
-                change_val = price - prev
-                change_pct = (change_val / prev) * 100
+                hist_price = float(closes.iloc[-1])
+                hist_change_val, hist_change_pct = _derive_change(hist_price, prev)
+                if hist_change_val is not None:
+                    price = hist_price
+                    change_val = hist_change_val
+                    change_pct = hist_change_pct
         except Exception as e:
             logging.warning(f"VRNO: history fetch failed: {e}")
 
