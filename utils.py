@@ -791,7 +791,7 @@ class Display:
         )
         self._display_hat_mini_indicator_border = (
             DISPLAY_HAT_MINI_LED_INDICATOR_BORDER_ENABLED
-            and (self.width, self.height) == (320, 240)
+            and (self.width, self.height) in {(320, 240), (240, 320)}
         )
         self._uses_kernel_output = False
         self._display_reinit_seconds = DISPLAY_HAT_MINI_REINIT_SECONDS
