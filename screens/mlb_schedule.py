@@ -583,7 +583,7 @@ def draw_last_game(display, game, title="Last Game...", transition=False, screen
         live=False,
         winner_flag=(result_char if "Cubs" in title else None),  # flag only for Cubs
         hyperpixel_layout=hyperpixel_layout,
-        center_content_vertically=(screen_id == "cubs last" and is_hyperpixel_4_square_layout()),
+        center_content_vertically=(screen_id == "sox last"),
         flag_scale=(2.0 if screen_id == "cubs last" and is_hyperpixel_4_square_layout() else 1.0),
     )
 
@@ -642,9 +642,7 @@ def draw_box_score(display, game, title="Live Game...", transition=False, screen
         reserve_flag_block=True,
         live=True,
         hyperpixel_layout=hyperpixel_layout,
-        center_content_vertically=(
-            screen_id in {"cubs live", "sox live"} and is_hyperpixel_4_square_layout()
-        ),
+        center_content_vertically=(screen_id in {"cubs live", "sox live"}),
     )
 
     return ScreenImage(img, displayed=False)
