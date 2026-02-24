@@ -1,5 +1,6 @@
 from PIL import Image
 from PIL import ImageDraw
+import pytest
 import time
 
 from screens import draw_vrnof
@@ -53,3 +54,26 @@ def test_build_image_places_price_block_below_title(monkeypatch):
     _, title_h = probe.textsize("VRNO", font=draw_vrnof.FONT_STOCK_TITLE)
 
     assert price_y >= title_y + title_h + draw_vrnof.LOGO_GAP
+
+
+def test_fetch_price_falls_back_when_info_change_is_unrealistic(monkeypatch):
+    class _FakeTicker:
+        def __init__(self, symbol):
+            self.symbol = symbol
+
+        @property
+        def info(self):
+            return {"regularMarketPrice": 0.994, "previousClose": 1e-9}
+
+        def history(self, period, interval):
+            import pandas as pd
+
+            return pd.DataFrame({"Close": [1.055, 0.994]})
+
+    monkeypatch.setattr(draw_vrnof.yf, "Ticker", _FakeTicker)
+
+    draw_vrnof._fetch_price("VRNO")
+
+    assert draw_vrnof._cache["price"] == 0.994
+    assert draw_vrnof._cache["change_val"] == pytest.approx(-0.061)
+    assert draw_vrnof._cache["change_pct"] == pytest.approx(-5.781990521327014)
