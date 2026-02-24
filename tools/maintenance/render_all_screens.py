@@ -393,9 +393,42 @@ def load_requested_screen_ids() -> Tuple[set[str], Optional[str]]:
 
 
 def _extract_image(result: object, display: HeadlessDisplay) -> Optional[Image.Image]:
+    def _indicator_color(led_override: Optional[Tuple[float, float, float]]) -> Optional[Tuple[int, int, int]]:
+        if led_override is None:
+            return None
+
+        def _channel_to_pixel(value: float) -> int:
+            normalized = max(0.0, min(1.0, float(value)))
+            if normalized <= 0.0:
+                return 0
+            if utils is not None and getattr(utils, "LED_INDICATOR_LEVEL", 0.0) > 0:
+                scaled = normalized / float(utils.LED_INDICATOR_LEVEL)
+                return max(1, min(255, int(round(scaled * 255))))
+            return max(1, min(255, int(round(normalized * 255))))
+
+        color = tuple(_channel_to_pixel(channel) for channel in led_override)
+        if not any(color):
+            return None
+        return color
+
+    def _with_indicator_border(
+        image: Image.Image,
+        led_override: Optional[Tuple[float, float, float]],
+    ) -> Image.Image:
+        color = _indicator_color(led_override)
+        if color is None:
+            return image
+        bordered = image.copy()
+        ImageDraw.Draw(bordered).rectangle(
+            [(0, 0), (bordered.width - 1, bordered.height - 1)],
+            outline=color,
+            width=config.HYPERPIXEL_LED_INDICATOR_BORDER_WIDTH,
+        )
+        return bordered
+
     if isinstance(result, ScreenImage):
         if result.image is not None:
-            return result.image
+            return _with_indicator_border(result.image, result.led_override)
         if result.displayed:
             return display.current_image.copy()
         return None

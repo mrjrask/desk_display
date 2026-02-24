@@ -1,4 +1,6 @@
 from tools.maintenance import render_all_screens
+from PIL import Image
+from utils import ScreenImage
 
 
 def test_non_interactive_resolution_prompt_is_silent(monkeypatch):
@@ -36,3 +38,15 @@ def test_resolution_cli_option_applies_dimensions(monkeypatch):
 
     assert exit_code == 0
     assert applied == ["1080p"]
+
+
+def test_extract_image_adds_notification_border_for_led_override(monkeypatch):
+    monkeypatch.setattr(render_all_screens.utils, "LED_INDICATOR_LEVEL", 1.0)
+    base = Image.new("RGB", (6, 6), "black")
+    result = ScreenImage(base, led_override=(0.0, 1.0, 0.0))
+
+    extracted = render_all_screens._extract_image(result, render_all_screens.HeadlessDisplay())
+
+    assert extracted is not None
+    assert extracted.getpixel((0, 0)) == (0, 255, 0)
+    assert extracted.getpixel((3, 3)) == (0, 0, 0)
