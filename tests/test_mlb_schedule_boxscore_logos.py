@@ -3,7 +3,7 @@ from PIL import Image, ImageDraw
 import screens.mlb_schedule as mlb_schedule
 
 
-def test_should_show_team_logo_boxscore_only_for_display_hat_mini(monkeypatch):
+def test_should_show_team_logo_boxscore_for_supported_display_profiles(monkeypatch):
     monkeypatch.setattr(mlb_schedule.config, "get_display_profile_id", lambda: "display_hat_mini")
 
     assert mlb_schedule._should_show_team_logo_boxscore("cubs live")
@@ -11,6 +11,9 @@ def test_should_show_team_logo_boxscore_only_for_display_hat_mini(monkeypatch):
     assert not mlb_schedule._should_show_team_logo_boxscore("cubs next")
 
     monkeypatch.setattr(mlb_schedule.config, "get_display_profile_id", lambda: "hyperpixel4")
+    assert mlb_schedule._should_show_team_logo_boxscore("cubs live")
+
+    monkeypatch.setattr(mlb_schedule.config, "get_display_profile_id", lambda: "other")
     assert not mlb_schedule._should_show_team_logo_boxscore("cubs live")
 
 
@@ -69,7 +72,7 @@ def test_draw_box_score_reserves_flag_block_for_live_layout(monkeypatch):
 
 
 
-def test_draw_box_score_centers_content_vertically_on_hyperpixel_4_square(monkeypatch):
+def test_draw_box_score_centers_content_vertically_for_live_screens(monkeypatch):
     captured = {}
 
     def _fake_draw_table(*args, **kwargs):
@@ -92,10 +95,40 @@ def test_draw_box_score_centers_content_vertically_on_hyperpixel_4_square(monkey
         },
     }
 
-    monkeypatch.setattr(mlb_schedule, "is_hyperpixel_4_square_layout", lambda: True)
     mlb_schedule.draw_box_score(None, game, title="Sox Live...", screen_id="sox live")
     assert captured["center_content_vertically"] is True
 
-    monkeypatch.setattr(mlb_schedule, "is_hyperpixel_4_square_layout", lambda: False)
     mlb_schedule.draw_box_score(None, game, title="Sox Live...", screen_id="sox live")
+    assert captured["center_content_vertically"] is True
+
+    mlb_schedule.draw_box_score(None, game, title="Live Game...", screen_id="cubs next")
+    assert captured["center_content_vertically"] is False
+
+
+def test_draw_last_game_centers_content_vertically_for_sox_last(monkeypatch):
+    captured = {}
+
+    def _fake_draw_table(*args, **kwargs):
+        captured.update(kwargs)
+
+    monkeypatch.setattr(mlb_schedule, "_draw_boxscore_table", _fake_draw_table)
+
+    game = {
+        "officialDate": "2026-05-01",
+        "teams": {
+            "away": {"score": 4, "team": {"id": 145, "name": "Chicago White Sox"}},
+            "home": {"score": 2, "team": {"id": 121, "name": "New York Mets"}},
+        },
+        "linescore": {
+            "teams": {
+                "away": {"hits": 7, "errors": 1},
+                "home": {"hits": 5, "errors": 0},
+            },
+        },
+    }
+
+    mlb_schedule.draw_last_game(None, game, title="Last Sox game...", screen_id="sox last")
+    assert captured["center_content_vertically"] is True
+
+    mlb_schedule.draw_last_game(None, game, title="Last Cubs game...", screen_id="cubs last")
     assert captured["center_content_vertically"] is False
