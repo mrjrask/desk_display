@@ -1711,8 +1711,25 @@ def animate_scroll(display: Display, image: Image.Image, speed=3.0, y_offset=Non
     frame_mode = "RGBA" if has_alpha else "RGB"
 
     target_frame_time = 0.016  # ~60 FPS for smoother animation
+
+    wait_for_skip = getattr(display, "wait_for_skip", None)
+    skip_requested = getattr(display, "skip_requested", None)
+
+    def _should_skip() -> bool:
+        return bool(callable(skip_requested) and skip_requested())
+
+    def _sleep(duration: float) -> bool:
+        if duration <= 0:
+            return _should_skip()
+        if callable(wait_for_skip):
+            return bool(wait_for_skip(duration))
+        time.sleep(duration)
+        return _should_skip()
+
     x = float(start)
     while (x <= end if step > 0 else x >= end):
+        if _should_skip():
+            return
         frame_start = time.time()
 
         x_pos = int(round(x))
@@ -1728,9 +1745,12 @@ def animate_scroll(display: Display, image: Image.Image, speed=3.0, y_offset=Non
         # Account for rendering time to maintain consistent frame rate
         elapsed = time.time() - frame_start
         sleep_time = max(0, target_frame_time - elapsed)
-        if sleep_time > 0:
-            time.sleep(sleep_time)
+        if _sleep(sleep_time):
+            return
         x += step
+
+    if _should_skip():
+        return
 
     # End on a visible centered logo frame so the next screen can fade from the
     # brand card instead of a fully black buffer.
