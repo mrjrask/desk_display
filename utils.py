@@ -1135,7 +1135,10 @@ class Display:
                 try:  # pragma: no cover - hardware import
                     with self._display_io_lock:
                         old_display.set_backlight(self._backlight_level)
-                        if DISPLAY_HAT_MINI_LED_ENABLED and any(self._led_color):
+                        if (
+                            DISPLAY_HAT_MINI_LED_ENABLED
+                            or self._display_hat_mini_indicator_border
+                        ) and any(self._led_color):
                             old_display.set_led(
                                 r=self._led_color[0],
                                 g=self._led_color[1],
@@ -1174,7 +1177,10 @@ class Display:
             except Exception as exc:  # pragma: no cover - hardware import
                 logging.debug("Failed to restore backlight after display reinit: %s", exc)
 
-            if DISPLAY_HAT_MINI_LED_ENABLED and any(self._led_color):
+            if (
+                DISPLAY_HAT_MINI_LED_ENABLED
+                or self._display_hat_mini_indicator_border
+            ) and any(self._led_color):
                 try:
                     with self._display_io_lock:
                         new_display.set_led(
@@ -1321,7 +1327,10 @@ class Display:
         if self._hyperpixel_indicator_border or self._display_hat_mini_indicator_border:
             self._update_display()
 
-        if self._display is None or not DISPLAY_HAT_MINI_LED_ENABLED:  # pragma: no cover - hardware import
+        should_drive_hardware_led = (
+            DISPLAY_HAT_MINI_LED_ENABLED or self._display_hat_mini_indicator_border
+        )
+        if self._display is None or not should_drive_hardware_led:  # pragma: no cover - hardware import
             return
         try:  # pragma: no cover - hardware import
             with self._display_io_lock:

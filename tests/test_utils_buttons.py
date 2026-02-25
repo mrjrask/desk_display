@@ -186,8 +186,9 @@ def test_hyperpixel_indicator_border_renders_led_color_for_hyperpixel_size(monke
     assert pixel == (0, 255, 0)
 
 
-def test_display_hat_mini_led_respects_config_disable(monkeypatch):
+def test_display_hat_mini_led_respects_config_disable_when_border_is_disabled(monkeypatch):
     monkeypatch.setattr(utils, "DISPLAY_HAT_MINI_LED_ENABLED", False)
+    monkeypatch.setattr(utils, "DISPLAY_HAT_MINI_LED_INDICATOR_BORDER_ENABLED", False)
 
     class _FakeHardwareDisplay:
         def __init__(self):
@@ -203,6 +204,31 @@ def test_display_hat_mini_led_respects_config_disable(monkeypatch):
     display.set_led(r=0.1, g=0.2, b=0.3)
 
     assert fake_display.called is False
+
+
+def test_display_hat_mini_led_is_still_updated_when_indicator_border_is_enabled(monkeypatch):
+    monkeypatch.setattr(utils, "WIDTH", 320)
+    monkeypatch.setattr(utils, "HEIGHT", 240)
+    monkeypatch.setattr(utils, "DISPLAY_HAT_MINI_LED_ENABLED", False)
+    monkeypatch.setattr(utils, "DISPLAY_HAT_MINI_LED_INDICATOR_BORDER_ENABLED", True)
+
+    class _FakeHardwareDisplay:
+        def __init__(self):
+            self.called = False
+            self.color = None
+
+        def set_led(self, **kwargs):
+            self.called = True
+            self.color = kwargs
+
+    display = utils.Display()
+    fake_display = _FakeHardwareDisplay()
+    display._display = fake_display
+
+    display.set_led(r=0.1, g=0.2, b=0.3)
+
+    assert fake_display.called is True
+    assert fake_display.color == {"r": 0.1, "g": 0.2, "b": 0.3}
 
 
 def test_image_always_applies_bottom_safe_buffer(monkeypatch):
