@@ -121,3 +121,17 @@ def test_start_monitor_resets_state_to_ok_before_thread_start(monkeypatch):
     assert wifi_utils.get_wifi_state() == ("ok", None)
 
     wifi_utils._MONITOR_THREAD = None
+
+
+def test_get_power_diagnostic_reports_clear_state(monkeypatch):
+    monkeypatch.setattr(wifi_utils.shutil, "which", lambda _: "/usr/bin/vcgencmd")
+    monkeypatch.setattr(wifi_utils, "_run_command", lambda args: DummyResult(stdout="throttled=0x0\n"))
+
+    assert wifi_utils.get_power_diagnostic() == "no throttling detected"
+
+
+def test_get_power_diagnostic_returns_raw_when_throttled(monkeypatch):
+    monkeypatch.setattr(wifi_utils.shutil, "which", lambda _: "/usr/bin/vcgencmd")
+    monkeypatch.setattr(wifi_utils, "_run_command", lambda args: DummyResult(stdout="throttled=0x50005\n"))
+
+    assert wifi_utils.get_power_diagnostic() == "throttled=0x50005"

@@ -36,6 +36,7 @@ import signal
 import shutil
 import subprocess
 import sys
+from collections import deque
 from contextlib import nullcontext
 from typing import Callable, Dict, Optional, Set, Tuple
 
@@ -163,6 +164,9 @@ _BUTTON_STATE = {name: False for name in _BUTTON_NAMES}
 _BUTTON_PRESS_STARTED_AT = {name: 0.0 for name in _BUTTON_NAMES}
 _BUTTON_PRESS_HANDLED = {name: False for name in _BUTTON_NAMES}
 _BUTTON_MIN_HOLD_SECONDS = {"B": 0.6}
+_BUTTON_NOISE_WINDOW_SECONDS = 15.0
+_BUTTON_NOISE_WARNING_THRESHOLD = 5
+_BUTTON_NOISE_TIMESTAMPS = deque(maxlen=32)
 _manual_skip_event = threading.Event()
 _button_monitor_thread: Optional[threading.Thread] = None
 _pending_previous_screen_id: Optional[str] = None
@@ -609,6 +613,7 @@ def _check_control_buttons() -> bool:
         _BUTTON_STATE[name] = pressed
 
     if len(new_presses) > 1:
+        _record_button_noise_event(new_presses)
         logging.warning(
             "Ignoring simultaneous button presses (%s); treating as noise.",
             ", ".join(new_presses),
@@ -634,6 +639,41 @@ def _check_control_buttons() -> bool:
         return True
 
     return False
+
+
+def _record_button_noise_event(new_presses: list[str]) -> None:
+    """Track repeated simultaneous button reads and emit actionable diagnostics."""
+
+    now = time.monotonic()
+    _BUTTON_NOISE_TIMESTAMPS.append(now)
+
+    while _BUTTON_NOISE_TIMESTAMPS:
+        age = now - _BUTTON_NOISE_TIMESTAMPS[0]
+        if age <= _BUTTON_NOISE_WINDOW_SECONDS:
+            break
+        _BUTTON_NOISE_TIMESTAMPS.popleft()
+
+    if len(_BUTTON_NOISE_TIMESTAMPS) < _BUTTON_NOISE_WARNING_THRESHOLD:
+        return
+
+    _BUTTON_NOISE_TIMESTAMPS.clear()
+    diagnostic = None
+    get_power_diagnostic = getattr(wifi_utils, "get_power_diagnostic", None)
+    if callable(get_power_diagnostic):
+        try:
+            diagnostic = get_power_diagnostic()
+        except Exception as exc:
+            logging.debug("Power diagnostic probe failed: %s", exc)
+
+    detail = (
+        f" Power diagnostic: {diagnostic}." if diagnostic else ""
+    )
+    logging.error(
+        "⚠️ Repeated simultaneous button noise detected (%s). "
+        "This can indicate undervoltage or electrical noise that may also impact Wi-Fi.%s",
+        ", ".join(new_presses),
+        detail,
+    )
 
 
 def _wait_with_button_checks(duration: float) -> bool:
