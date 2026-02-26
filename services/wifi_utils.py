@@ -110,6 +110,34 @@ def _run_command(args: Sequence[str], *, check: bool = False) -> subprocess.Comp
     )
 
 
+
+
+def get_power_diagnostic() -> Optional[str]:
+    """Return Raspberry Pi throttle/undervoltage diagnostic text when available."""
+
+    vcgencmd = shutil.which("vcgencmd")
+    if not vcgencmd:
+        return None
+
+    try:
+        proc = _run_command([vcgencmd, "get_throttled"])
+    except Exception as exc:
+        _LOGGER.debug("vcgencmd get_throttled failed: %s", exc)
+        return None
+
+    if proc.returncode != 0:
+        return None
+
+    raw = proc.stdout.strip()
+    if not raw:
+        return None
+
+    if "throttled=0x0" in raw:
+        return "no throttling detected"
+
+    return raw
+
+
 def _get_wireless_interfaces() -> Sequence[str]:
     try:
         proc = _run_command(["iw", "dev"])

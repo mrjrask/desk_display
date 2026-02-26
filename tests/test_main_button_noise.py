@@ -191,3 +191,25 @@ def test_b_button_toggles_display(main_for_buttons, monkeypatch):
     assert main_for_buttons._handle_button_down("B") is True
     assert main_for_buttons._manual_display_off is False
     assert called["resume"] == 2
+
+
+def test_repeated_noise_logs_power_hint(main_for_buttons, monkeypatch):
+    fake_display = _FakeDisplay({"A", "B", "X", "Y"})
+    main_for_buttons.display = fake_display
+
+    monkeypatch.setattr(main_for_buttons.wifi_utils, "get_power_diagnostic", lambda: "throttled=0x50005")
+
+    messages = []
+
+    def fake_error(msg, *args, **kwargs):
+        if args:
+            msg = msg % args
+        messages.append(msg)
+
+    monkeypatch.setattr(main_for_buttons.logging, "error", fake_error)
+
+    for _ in range(main_for_buttons._BUTTON_NOISE_WARNING_THRESHOLD):
+        assert main_for_buttons._check_control_buttons() is False
+
+    assert any("undervoltage" in message.lower() for message in messages)
+    assert any("throttled=0x50005" in message for message in messages)
