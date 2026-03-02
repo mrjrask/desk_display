@@ -1370,68 +1370,77 @@ def _draw_voc_tile(
     padding_x = max(12, width // 12)
     padding_y = max(8, height // 10)
 
+    descriptor = descriptor.strip()
+    has_descriptor = bool(descriptor)
+
+    # Horizontal layout: reserve a left text column for VOC + descriptor,
+    # then draw the metric value on the right so it stays clear of both labels.
+    content_w = max(1, width - 2 * padding_x)
+    side_gap = max(10, width // 18)
+    left_w = max(1, int(content_w * 0.52))
+    right_w = max(1, content_w - left_w - side_gap)
+    if right_w < max(72, width // 4):
+        right_w = max(1, min(content_w, max(72, width // 4)))
+        left_w = max(1, content_w - right_w - side_gap)
+
+    left_x = x0 + padding_x
+    right_x = left_x + left_w + side_gap
+
     label_base_size = getattr(label_base, "size", 18)
     label_font = fit_font(
         draw,
         label,
         label_base,
-        max_width=width - 2 * padding_x,
-        max_height=max(12, int(height * 0.24)),
+        max_width=left_w,
+        max_height=max(12, int(height * 0.26)),
         min_pt=min(label_base_size, 10),
         max_pt=label_base_size,
     )
     label_w, label_h = measure_text(draw, label, label_font)
-    label_x = x0 + padding_x
-    label_y = y0 + padding_y
 
-    descriptor = descriptor.strip()
-    has_descriptor = bool(descriptor)
     if has_descriptor:
         desc_font = fit_font(
             draw,
             descriptor,
             label_base,
-            max_width=width - 2 * padding_x,
-            max_height=max(12, int(height * 0.22)),
+            max_width=left_w,
+            max_height=max(12, int(height * 0.24)),
             min_pt=min(label_base_size, 10),
             max_pt=label_base_size,
         )
         desc_w, desc_h = measure_text(draw, descriptor, desc_font)
-        desc_x = x0 + padding_x
-        desc_y = y1 - padding_y - desc_h
     else:
         desc_font = None
         desc_w, desc_h = 0, 0
-        desc_x = x0 + padding_x
-        desc_y = y1 - padding_y
 
-    available_value_height = max(24, height - (label_h + desc_h + 3 * padding_y))
+    label_desc_gap = max(6, height // 16) if has_descriptor else 0
+    stack_h = label_h + label_desc_gap + desc_h
+    stack_top = y0 + (height - stack_h) // 2
+    min_top = y0 + padding_y
+    max_top = y1 - padding_y - stack_h
+    if max_top < min_top:
+        stack_top = min_top
+    else:
+        stack_top = max(min_top, min(stack_top, max_top))
+
+    label_x = left_x
+    label_y = stack_top
+    desc_x = left_x
+    desc_y = label_y + label_h + label_desc_gap
+
     value_base_size = getattr(value_base, "size", 24)
-    value_indent = max(0, width // 14)
     value_font = fit_font(
         draw,
         value,
         value_base,
-        max_width=max(1, width - (2 * padding_x) - value_indent),
-        max_height=available_value_height,
+        max_width=right_w,
+        max_height=max(18, height - 2 * padding_y),
         min_pt=min(value_base_size, 14),
         max_pt=value_base_size,
     )
     value_w, value_h = measure_text(draw, value, value_font)
-    value_x = x0 + padding_x + value_indent
-    value_gap = max(8, height // 14)
-    desc_gap = max(8, height // 16)
-    top_limit = label_y + label_h + value_gap
-    bottom_limit = desc_y - desc_gap if has_descriptor else y1 - padding_y
-    max_value_y = bottom_limit - value_h
-    if max_value_y >= top_limit:
-        available_space = max_value_y - top_limit
-        value_y = top_limit + (available_space // 2)
-    else:
-        # Tight vertical layouts can leave less room than the glyph height.
-        # Keep the VOC value below the label instead of drifting upward.
-        value_y = top_limit
-
+    value_x = right_x + max(0, right_w - value_w)
+    value_y = y0 + (height - value_h) // 2
     label_color = _mix_color(bg, config.INSIDE_COL_TEXT, 0.3)
     value_color = config.INSIDE_COL_TEXT
     desc_color = _mix_color(bg, config.INSIDE_COL_TEXT, 0.32)
