@@ -43,6 +43,11 @@ class DataProvider:
 
         try:
             value = fetcher()
+            if value is None:
+                if cached is not None:
+                    logging.warning("Using stale %s payload after empty fetch result", key)
+                    return cached.value
+                return None
             self._cache[key] = _Entry(value=value, fetched_at=now)
             return value
         except Exception as exc:
