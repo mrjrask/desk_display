@@ -54,6 +54,7 @@ from utils import (
     log_call,
     log_missing_team_logo,
     scroll_vertical_content,
+    standard_scoreboard_team_logo_height,
     standard_scoreboard_league_logo_height,
 )
 from services.http_client import NHL_HEADERS, get_session
@@ -95,7 +96,7 @@ TITLE_FONT = FONT_TITLE_SPORTS
 LOGO_DIR = os.path.join(IMAGES_DIR, "nhl")
 LEAGUE_LOGO_KEYS = ("NHL", "nhl")
 LEAGUE_LOGO_GAP = _scale_y(4)
-TEAM_LOGO_BASE_HEIGHT = scale_value_width(36) if HYPERPIXEL_LAYOUT else scale_value_width(52)
+TEAM_LOGO_BASE_HEIGHT = standard_scoreboard_team_logo_height(HEIGHT)
 LEAGUE_LOGO_BASE_HEIGHT = (
     TEAM_LOGO_BASE_HEIGHT
     if (HYPERPIXEL_LAYOUT or is_kernel_driven_display())
