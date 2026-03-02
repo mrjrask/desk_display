@@ -69,6 +69,7 @@ def test_draw_box_score_reserves_flag_block_for_live_layout(monkeypatch):
     mlb_schedule.draw_box_score(None, game, title="Cubs Live...", screen_id="cubs live")
 
     assert captured["reserve_flag_block"] is True
+    assert captured["center_ignores_reserved_flag_block"] is True
 
 
 
@@ -97,12 +98,15 @@ def test_draw_box_score_centers_content_vertically_for_live_screens(monkeypatch)
 
     mlb_schedule.draw_box_score(None, game, title="Sox Live...", screen_id="sox live")
     assert captured["center_content_vertically"] is True
+    assert captured["center_ignores_reserved_flag_block"] is True
 
-    mlb_schedule.draw_box_score(None, game, title="Sox Live...", screen_id="sox live")
+    mlb_schedule.draw_box_score(None, game, title="Cubs Live...", screen_id="cubs live")
     assert captured["center_content_vertically"] is True
+    assert captured["center_ignores_reserved_flag_block"] is True
 
     mlb_schedule.draw_box_score(None, game, title="Live Game...", screen_id="cubs next")
     assert captured["center_content_vertically"] is False
+    assert captured["center_ignores_reserved_flag_block"] is False
 
 
 def test_draw_last_game_centers_content_vertically_for_sox_last(monkeypatch):
@@ -129,9 +133,11 @@ def test_draw_last_game_centers_content_vertically_for_sox_last(monkeypatch):
 
     mlb_schedule.draw_last_game(None, game, title="Last Sox game...", screen_id="sox last")
     assert captured["center_content_vertically"] is True
+    assert captured["center_ignores_reserved_flag_block"] is True
 
     mlb_schedule.draw_last_game(None, game, title="Last Cubs game...", screen_id="cubs last")
     assert captured["center_content_vertically"] is False
+    assert captured["center_ignores_reserved_flag_block"] is False
 
 
 def test_centered_boxscore_accounts_for_header_height(monkeypatch):
