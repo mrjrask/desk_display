@@ -132,3 +132,68 @@ def test_draw_last_game_centers_content_vertically_for_sox_last(monkeypatch):
 
     mlb_schedule.draw_last_game(None, game, title="Last Cubs game...", screen_id="cubs last")
     assert captured["center_content_vertically"] is False
+
+
+def test_centered_boxscore_accounts_for_header_height(monkeypatch):
+    img = Image.new("RGB", (mlb_schedule.WIDTH, mlb_schedule.HEIGHT), (0, 0, 0))
+    draw = ImageDraw.Draw(img)
+
+    geometry = {
+        "hdr_h": 10,
+        "grid_top": 20,
+        "row_h": 30,
+        "team_w": 80,
+        "square": 30,
+        "xs": [0, 80, 110, 140, 170],
+        "grid_w": 170,
+        "grid_h": 60,
+    }
+    monkeypatch.setattr(mlb_schedule, "_compute_table_geometry", lambda *args, **kwargs: geometry)
+    monkeypatch.setattr(mlb_schedule, "_draw_title_with_bold_result", lambda *args, **kwargs: (0, 20))
+    monkeypatch.setattr(mlb_schedule, "_should_show_team_logo_boxscore", lambda *args, **kwargs: False)
+
+    header_row_y = {}
+
+    def _capture_bbox_center(_draw, x, y, w, h, text, font, fill=(255, 255, 255)):
+        if text == "R" and "y" not in header_row_y:
+            header_row_y["y"] = y
+
+    monkeypatch.setattr(mlb_schedule, "_bbox_center", _capture_bbox_center)
+
+    bottom_text = "7:10 PM"
+    _, t, _, b = draw.textbbox((0, 0), bottom_text, font=mlb_schedule.FONT_DATE_SPORTS)
+    bh = b - t
+    bottom_y = mlb_schedule.HEIGHT - bh - mlb_schedule.BOTTOM_MARGIN
+    flag_block_h = mlb_schedule.SMALL_RESULT_FLAG_H + mlb_schedule.FLAG_BLOCK_PAD
+    content_top = 20 + mlb_schedule.TITLE_TO_HEADER_GAP
+    content_bottom = bottom_y - flag_block_h
+    scoreboard_block_h = (
+        geometry["hdr_h"] + mlb_schedule.HEADER_GAP + geometry["grid_h"]
+    )
+    expected_grid_top = max(
+        geometry["grid_top"],
+        content_top
+        + max(0, (content_bottom - content_top - scoreboard_block_h) // 2)
+        + geometry["hdr_h"]
+        + mlb_schedule.HEADER_GAP,
+    )
+
+    mlb_schedule._draw_boxscore_table(
+        img,
+        draw,
+        "Sox Live...",
+        "SOX",
+        1,
+        2,
+        0,
+        "DET",
+        0,
+        1,
+        0,
+        bottom_text,
+        reserve_flag_block=True,
+        live=True,
+        center_content_vertically=True,
+    )
+
+    assert header_row_y["y"] + mlb_schedule.HEADER_GAP + geometry["hdr_h"] == expected_grid_top
