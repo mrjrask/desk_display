@@ -1423,11 +1423,14 @@ def _draw_voc_tile(
     desc_gap = max(8, height // 16)
     top_limit = label_y + label_h + value_gap
     bottom_limit = desc_y - desc_gap if has_descriptor else y1 - padding_y
-    available_space = bottom_limit - top_limit
-    if available_space >= value_h:
-        value_y = top_limit + (available_space - value_h) // 2
+    max_value_y = bottom_limit - value_h
+    if max_value_y >= top_limit:
+        available_space = max_value_y - top_limit
+        value_y = top_limit + (available_space // 2)
     else:
-        value_y = min(top_limit, bottom_limit - value_h)
+        # Tight vertical layouts can leave less room than the glyph height.
+        # Keep the VOC value below the label instead of drifting upward.
+        value_y = top_limit
 
     label_color = _mix_color(bg, config.INSIDE_COL_TEXT, 0.3)
     value_color = config.INSIDE_COL_TEXT
