@@ -386,6 +386,7 @@ def _draw_boxscore_table(img: Image.Image, draw: ImageDraw.ImageDraw, title: str
                          winner_flag: str|None=None,
                          hyperpixel_layout: bool=False,
                          center_content_vertically: bool=False,
+                         center_ignores_reserved_flag_block: bool=False,
                          flag_scale: float=1.0):
     """
     Render the whole screen (title + header + table + optional small flag + bottom line).
@@ -444,7 +445,7 @@ def _draw_boxscore_table(img: Image.Image, draw: ImageDraw.ImageDraw, title: str
     if center_content_vertically:
         content_top = edge_pad + th + title_gap
         content_bottom = bottom_y
-        if reserve_flag_block:
+        if reserve_flag_block and not center_ignores_reserved_flag_block:
             content_bottom -= flag_block_h
         scoreboard_block_h = hdr_h + header_gap + grid_h
         centered_block_top = content_top + max(
@@ -453,6 +454,7 @@ def _draw_boxscore_table(img: Image.Image, draw: ImageDraw.ImageDraw, title: str
         )
         centered_grid_top = centered_block_top + hdr_h + header_gap
         grid_top = max(grid_top, centered_grid_top)
+
 
     # Header row (center each label over its column)
     for i, lbl in enumerate(["", "R", "H", "E"]):
@@ -584,11 +586,12 @@ def draw_last_game(display, game, title="Last Game...", transition=False, screen
         away_team=away["team"],
         home_team=home["team"],
         screen_id=screen_id,
-        reserve_flag_block=True,                      # keep layout identical Cubs/Sox
+        reserve_flag_block=True,
         live=False,
         winner_flag=(result_char if "Cubs" in title else None),  # flag only for Cubs
         hyperpixel_layout=hyperpixel_layout,
         center_content_vertically=(screen_id == "sox last"),
+        center_ignores_reserved_flag_block=(screen_id == "sox last"),
         flag_scale=(2.0 if screen_id == "cubs last" and is_hyperpixel_4_square_layout() else 1.0),
     )
 
@@ -648,6 +651,7 @@ def draw_box_score(display, game, title="Live Game...", transition=False, screen
         live=True,
         hyperpixel_layout=hyperpixel_layout,
         center_content_vertically=(screen_id in {"cubs live", "sox live"}),
+        center_ignores_reserved_flag_block=(screen_id in {"cubs live", "sox live"}),
     )
 
     return ScreenImage(img, displayed=False)
