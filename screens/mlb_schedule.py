@@ -446,7 +446,12 @@ def _draw_boxscore_table(img: Image.Image, draw: ImageDraw.ImageDraw, title: str
         content_bottom = bottom_y
         if reserve_flag_block:
             content_bottom -= flag_block_h
-        centered_grid_top = content_top + max(0, (content_bottom - content_top - grid_h) // 2)
+        scoreboard_block_h = hdr_h + header_gap + grid_h
+        centered_block_top = content_top + max(
+            0,
+            (content_bottom - content_top - scoreboard_block_h) // 2,
+        )
+        centered_grid_top = centered_block_top + hdr_h + header_gap
         grid_top = max(grid_top, centered_grid_top)
 
     # Header row (center each label over its column)
