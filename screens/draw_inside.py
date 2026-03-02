@@ -1387,34 +1387,19 @@ def _draw_voc_tile(
     right_x = left_x + left_w + side_gap
 
     label_base_size = getattr(label_base, "size", 18)
+    label_line = f"{label} · {descriptor}" if has_descriptor else label
     label_font = fit_font(
         draw,
-        label,
+        label_line,
         label_base,
         max_width=left_w,
         max_height=max(12, int(height * 0.26)),
         min_pt=min(label_base_size, 10),
         max_pt=label_base_size,
     )
-    label_w, label_h = measure_text(draw, label, label_font)
+    label_w, label_h = measure_text(draw, label_line, label_font)
 
-    if has_descriptor:
-        desc_font = fit_font(
-            draw,
-            descriptor,
-            label_base,
-            max_width=left_w,
-            max_height=max(12, int(height * 0.24)),
-            min_pt=min(label_base_size, 10),
-            max_pt=label_base_size,
-        )
-        desc_w, desc_h = measure_text(draw, descriptor, desc_font)
-    else:
-        desc_font = None
-        desc_w, desc_h = 0, 0
-
-    label_desc_gap = max(6, height // 16) if has_descriptor else 0
-    stack_h = label_h + label_desc_gap + desc_h
+    stack_h = label_h
     stack_top = y0 + (height - stack_h) // 2
     min_top = y0 + padding_y
     max_top = y1 - padding_y - stack_h
@@ -1425,9 +1410,6 @@ def _draw_voc_tile(
 
     label_x = left_x
     label_y = stack_top
-    desc_x = left_x
-    desc_y = label_y + label_h + label_desc_gap
-
     value_base_size = getattr(value_base, "size", 24)
     value_font = fit_font(
         draw,
@@ -1441,14 +1423,11 @@ def _draw_voc_tile(
     value_w, value_h = measure_text(draw, value, value_font)
     value_x = right_x + max(0, right_w - value_w)
     value_y = y0 + (height - value_h) // 2
-    label_color = _mix_color(bg, config.INSIDE_COL_TEXT, 0.3)
+    label_color = _mix_color(bg, config.INSIDE_COL_TEXT, 0.32)
     value_color = config.INSIDE_COL_TEXT
-    desc_color = _mix_color(bg, config.INSIDE_COL_TEXT, 0.32)
 
-    draw.text((label_x, label_y), label, font=label_font, fill=label_color)
+    draw.text((label_x, label_y), label_line, font=label_font, fill=label_color)
     draw.text((value_x, value_y), value, font=value_font, fill=value_color)
-    if has_descriptor and desc_font:
-        draw.text((desc_x, desc_y), descriptor, font=desc_font, fill=desc_color)
 
 
 def _metric_grid_dimensions(count: int) -> Tuple[int, int]:
