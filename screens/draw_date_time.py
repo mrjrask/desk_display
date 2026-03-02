@@ -65,13 +65,15 @@ def _color_cycle_profile(
 ) -> tuple[float, float, int | None]:
     """Return cycle timing: initial delay, frame interval, and max steps."""
 
-    # Rapid cycling is only for kernel-driven Display HAT Mini deployments.
-    # HyperPixel and HDMI profiles retain slower timing.
-    rapid_kernel_cycle = kernel_driven and display_profile_id == "display_hat_mini"
-    initial_delay = 0.0 if rapid_kernel_cycle else 0.6
-    interval = 0.08 if rapid_kernel_cycle else 0.45
+    # Date/time screens should start cycling immediately across all profiles.
+    # Keeping the cadence fast preserves the intended "rapid" effect.
+    _ = display_profile_id
+    initial_delay = 0.0
+    interval = 0.08
     infinite_cycle = kernel_driven or hyperpixel_layout or hyperpixel_square
-    steps = None if infinite_cycle else 6
+    # Non-kernel/non-HyperPixel profiles still cycle for roughly one rotation
+    # window (default SCREEN_DELAY is 4s), then naturally stop.
+    steps = None if infinite_cycle else 60
     return initial_delay, interval, steps
 
 # -----------------------------------------------------------------------------
@@ -190,6 +192,17 @@ def _cycle_colors_after_load(
     if frame_state is not None:
         with frame_state["lock"]:
             expected_frame_id = frame_state["value"]
+    if expected_frame_id is not None and hasattr(display, "frame_id"):
+        current_frame_id = display.frame_id()
+        if current_frame_id > expected_frame_id:
+            # A sibling writer (typically update-check refresh) can advance the
+            # display before its shared frame_state commit is visible.
+            # Reconcile once so that startup races do not cancel animation.
+            if frame_state is not None:
+                with frame_state["lock"]:
+                    expected_frame_id = max(frame_state["value"], current_frame_id)
+            else:
+                expected_frame_id = current_frame_id
     # Keep cycling while this screen remains active, but stop immediately once
     # another screen has updated the display frame buffer.
     count = 0
@@ -201,7 +214,7 @@ def _cycle_colors_after_load(
             current_frame_id = display.frame_id()
             if frame_state is not None:
                 with frame_state["lock"]:
-                    expected_frame_id = frame_state["value"]
+                    expected_frame_id = max(expected_frame_id, frame_state["value"])
             # Another renderer taking over will advance the frame id beyond
             # what this screen last wrote. Ignore transient races where the
             # shared expected id has already advanced but display.frame_id()
