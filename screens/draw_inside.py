@@ -1333,7 +1333,8 @@ def _draw_metric_row(
 
     label_x = x0 + padding_x
     label_y = y0 + padding_y
-    value_x = x0 + padding_x
+    value_indent = max(0, width // 14)
+    value_x = x0 + padding_x + value_indent
     min_gap = max(6, height // 12)
     value_y = label_y + label_h + min_gap
     max_value_y = y1 - padding_y - value_h
@@ -1406,17 +1407,18 @@ def _draw_voc_tile(
 
     available_value_height = max(24, height - (label_h + desc_h + 3 * padding_y))
     value_base_size = getattr(value_base, "size", 24)
+    value_indent = max(0, width // 14)
     value_font = fit_font(
         draw,
         value,
         value_base,
-        max_width=width - 2 * padding_x,
+        max_width=max(1, width - (2 * padding_x) - value_indent),
         max_height=available_value_height,
         min_pt=min(value_base_size, 14),
         max_pt=value_base_size,
     )
     value_w, value_h = measure_text(draw, value, value_font)
-    value_x = x0 + padding_x
+    value_x = x0 + padding_x + value_indent
     value_gap = max(8, height // 14)
     desc_gap = max(8, height // 16)
     top_limit = label_y + label_h + value_gap
