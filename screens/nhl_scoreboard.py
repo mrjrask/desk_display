@@ -158,7 +158,9 @@ def _apply_style_overrides() -> None:
     SCORE_FONT, STATUS_FONT, CENTER_FONT = _scoreboard_fonts()
     BACKGROUND_COLOR = get_screen_background_color(SCREEN_ID, SCOREBOARD_BACKGROUND_COLOR)
     team_scale = get_screen_image_scale(SCREEN_ID, "team_logo", 1.0)
-    LOGO_HEIGHT = max(1, int(round(TEAM_LOGO_BASE_HEIGHT * team_scale)))
+    target_logo_height = max(1, int(round(TEAM_LOGO_BASE_HEIGHT * team_scale)))
+    max_row_fit = max(1, SCORE_ROW_H - scale_value(8))
+    LOGO_HEIGHT = min(target_logo_height, max_row_fit)
     if is_kernel_driven_display():
         LEAGUE_LOGO_HEIGHT = LOGO_HEIGHT
     else:
