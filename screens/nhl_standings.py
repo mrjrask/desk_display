@@ -154,6 +154,7 @@ _NHL_STANDINGS_COLUMN_TIGHTEN_IDS = _NHL_STANDINGS_PRIMARY_IDS | _NHL_STANDINGS_
 _ACTIVE_STATS_COLUMN_SPACING_SCALE = 1.0
 _ACTIVE_COLUMN_SEPARATION_GAP = 2.0
 _ACTIVE_TABLE_RIGHT_INSET = 0
+_ACTIVE_SCREEN_ID = _DEFAULT_STYLE_ID
 
 
 def _is_display_hat_mini_layout() -> bool:
@@ -271,12 +272,22 @@ def _refresh_column_header_fonts() -> None:
     COLUMN_HEADER_FONTS = {"points": COLUMN_FONT_POINTS}
 
 
+def _use_compact_non_points_stats() -> bool:
+    return _ACTIVE_SCREEN_ID in _NHL_STANDINGS_COLUMN_TIGHTEN_IDS
+
+
+def _stat_value_font(stat_key: str):
+    if stat_key == "points" or not _use_compact_non_points_stats():
+        return ROW_STATS_FONT
+    return clone_font(ROW_STATS_FONT, max(8, getattr(ROW_STATS_FONT, "size", 12) - 3))
+
+
 def _apply_style_overrides(screen_id: str) -> None:
     global TITLE_FONT, DIVISION_FONT, COLUMN_FONT, COLUMN_FONT_POINTS, ROW_FONT, ROW_STATS_FONT, TEAM_NAME_FONT
     global LOGO_HEIGHT, OVERVIEW_MIN_LOGO_HEIGHT, OVERVIEW_MAX_LOGO_HEIGHT
     global CONFERENCE_LOGO_HEIGHT, BACKGROUND_COLOR
     global ROW_PADDING, ROW_SPACING, _ACTIVE_STATS_COLUMN_SPACING_SCALE
-    global _ACTIVE_COLUMN_SEPARATION_GAP, _ACTIVE_TABLE_RIGHT_INSET
+    global _ACTIVE_COLUMN_SEPARATION_GAP, _ACTIVE_TABLE_RIGHT_INSET, _ACTIVE_SCREEN_ID
 
     (
         DIVISION_FONT,
@@ -286,6 +297,7 @@ def _apply_style_overrides(screen_id: str) -> None:
         ROW_STATS_FONT,
         TEAM_NAME_FONT,
     ) = _build_fonts(screen_id)
+    _ACTIVE_SCREEN_ID = screen_id
     _refresh_column_header_fonts()
 
     TITLE_FONT = FONT_TITLE_SPORTS
@@ -498,7 +510,7 @@ def _build_column_layout(max_team_name_width: int) -> tuple[dict[str, int], int]
         header_width = _text_size(header_label, header_font)[0] if header_label else 0
 
         sample_value = "999" if stat_key == "points" else "99"
-        value_width = _text_size(sample_value, ROW_STATS_FONT)[0]
+        value_width = _text_size(sample_value, _stat_value_font(stat_key))[0]
         text_width = max(header_width, value_width)
 
         if align == "right":
@@ -523,6 +535,13 @@ def _build_column_layout(max_team_name_width: int) -> tuple[dict[str, int], int]
             right_extents = _column_anchor_extents(STATS_COLUMNS[idx + 1])
             min_step = left_extents[1] + right_extents[0] + min_column_gap
             required_steps.append(max(base_step, float(min_step)))
+
+        if (
+            _ACTIVE_SCREEN_ID in {"NHL Standings East v2", "NHL Standings West v2"}
+            and STATS_COLUMNS == ("gamesPlayed", "regulationWins", "points")
+            and len(required_steps) == 2
+        ):
+            required_steps[1] = required_steps[0]
 
         required_total = sum(required_steps)
         max_first = stats_right - required_total
@@ -1633,7 +1652,7 @@ def _draw_division(
             _draw_text(
                 draw,
                 str(team.get(key, "")),
-                ROW_STATS_FONT,
+                _stat_value_font(key),
                 column_layout[key],
                 row_top,
                 ROW_HEIGHT,
