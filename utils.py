@@ -2160,6 +2160,54 @@ def fit_logo_to_box(logo: Image.Image | None, box_size: int) -> Image.Image | No
     return logo.resize((new_width, new_height), Image.LANCZOS)
 
 
+MLB_LOGO_FILE_ALIASES = {
+    "AUS": "Australia",
+    "BRA": "Brazil",
+    "CAN": "Canada",
+    "COL": "Colombia",
+    "CUB": "Cuba",
+    "CZE": "Czech Republic",
+    "DOM": "Dominican Republic",
+    "GBR": "Great Britain",
+    "ISR": "Israel",
+    "ITA": "Italy",
+    "JPN": "Japan",
+    "KOR": "South Korea",
+    "MEX": "Mexico",
+    "NCA": "Nicaragua",
+    "NED": "Kingdom of the Netherlands",
+    "NLD": "Kingdom of the Netherlands",
+    "PAN": "Panama",
+    "PRI": "Puerto Rico",
+    "TPE": "Chinese Taipei",
+    "TWN": "Chinese Taipei",
+    "USA": "United States",
+    "VEN": "Venezuela",
+}
+
+
+def _logo_filename_candidates(abbr: str) -> list[str]:
+    cleaned = (abbr or "").strip()
+    if not cleaned:
+        return []
+
+    raw_variants = [cleaned, cleaned.replace("_", " "), cleaned.replace("-", " ")]
+    normalized_key = cleaned.upper().replace("_", " ").replace("-", " ")
+    aliased = MLB_LOGO_FILE_ALIASES.get(normalized_key)
+    if aliased:
+        raw_variants.append(aliased)
+
+    candidates: list[str] = []
+    for variant in raw_variants:
+        token = (variant or "").strip()
+        if not token:
+            continue
+        for candidate in (token, token.upper(), token.lower(), token.title()):
+            if candidate and candidate not in candidates:
+                candidates.append(candidate)
+    return candidates
+
+
 def load_team_logo(
     base_dir: str,
     abbr: str,
@@ -2168,13 +2216,9 @@ def load_team_logo(
     box_size: int | None = None,
     trim: bool = False,
 ) -> Image.Image | None:
-    cleaned = (abbr or "").strip()
-    if not cleaned:
+    candidates = _logo_filename_candidates(abbr)
+    if not candidates:
         return None
-    candidates: list[str] = []
-    for candidate in (cleaned, cleaned.upper(), cleaned.lower()):
-        if candidate and candidate not in candidates:
-            candidates.append(candidate)
     last_error: Optional[Exception] = None
     for candidate in candidates:
         filename = f"{candidate}.png"
