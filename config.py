@@ -50,6 +50,8 @@ def _load_env_file(path: str) -> None:
 
         if value and value[0] == value[-1] and value[0] in {'"', "'"}:
             value = value[1:-1]
+        else:
+            value = re.sub(r"\s+#.*$", "", value).strip()
 
         os.environ.setdefault(key, value)
 

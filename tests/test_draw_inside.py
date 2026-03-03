@@ -70,6 +70,14 @@ def test_sensor_env_override_supports_aliases(monkeypatch):
     assert preference == "adafruit_sht41"
 
 
+
+
+def test_sensor_env_override_ignores_inline_comments(monkeypatch):
+    monkeypatch.setenv("INSIDE_SENSOR", "pimoroni_bme68x # Pimoroni breakout")
+    preference, raw = _get_sensor_env_override()
+    assert raw == "pimoroni_bme68x # Pimoroni breakout"
+    assert preference == "pimoroni_bme68x"
+
 def test_probe_order_restricts_to_preference():
     plan = _get_probe_order("pimoroni_bme280")
     assert plan and plan[0][0] == "pimoroni_bme280"
