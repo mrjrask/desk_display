@@ -220,6 +220,14 @@ def _cycle_colors_after_load(
             # shared expected id has already advanced but display.frame_id()
             # has not yet caught up.
             if current_frame_id > expected_frame_id:
+                if frame_state is not None:
+                    # The update-check worker can advance display.frame_id()
+                    # shortly before its shared frame_state write lands.
+                    # Reconcile once more before treating this as takeover.
+                    with frame_state["lock"]:
+                        expected_frame_id = max(expected_frame_id, frame_state["value"])
+                    if current_frame_id <= expected_frame_id:
+                        continue
                 break
         img = _compose_frame(base_order, bright_color(), bright_color(), gh_state(), screen_id)
         display.image(img)
