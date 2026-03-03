@@ -801,7 +801,6 @@ class Display:
         self._display_reinit_lock = threading.Lock()
         self._display_io_lock = threading.RLock()
         self._rotation_requires_expand = self.rotation in (90, 270)
-        self._indicator_work_buffer: Optional[Image.Image] = None
         self._frame_transform: Callable[[Image.Image], Image.Image] = lambda img: img
         self._frame_writer: Callable[[Image.Image], None] = lambda img: None
         self._output_strategy = "headless"
@@ -1351,19 +1350,17 @@ class Display:
         if not any(color):
             return self._buffer
 
-        if (
-            self._indicator_work_buffer is None
-            or self._indicator_work_buffer.size != (self.width, self.height)
-        ):
-            self._indicator_work_buffer = Image.new("RGB", (self.width, self.height), "black")
-
-        self._indicator_work_buffer.paste(self._buffer)
-        ImageDraw.Draw(self._indicator_work_buffer).rectangle(
+        # Compose onto a fresh image each frame so concurrent ``_update_display()``
+        # calls cannot mutate a buffer while a previous frame is still being
+        # transferred to the panel. Reusing a shared work buffer can surface as
+        # partial-frame flicker/tearing near the top edge.
+        indicator_frame = self._buffer.copy()
+        ImageDraw.Draw(indicator_frame).rectangle(
             [(0, 0), (self.width - 1, self.height - 1)],
             outline=color,
             width=HYPERPIXEL_LED_INDICATOR_BORDER_WIDTH,
         )
-        return self._indicator_work_buffer
+        return indicator_frame
 
     @staticmethod
     def _indicator_channel_to_pixel(value: float) -> int:

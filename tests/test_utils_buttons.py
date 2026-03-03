@@ -118,6 +118,18 @@ def test_hyperpixel_indicator_border_renders_led_color(monkeypatch):
     assert pixel == (0, 0, 255)
 
 
+def test_indicator_buffer_returns_fresh_frame_when_border_enabled(monkeypatch):
+    monkeypatch.setattr(utils, "is_hyperpixel_next_layout", lambda w, h: True)
+
+    display = utils.Display()
+    display._buffer = utils.Image.new("RGB", (display.width, display.height), "black")
+    display.set_led(r=utils.LED_INDICATOR_LEVEL, g=0.0, b=0.0)
+
+    frame_a = display._indicator_buffer()
+    frame_b = display._indicator_buffer()
+
+    assert frame_a is not frame_b
+
 def test_hyperpixel_indicator_border_clears_when_led_is_off(monkeypatch):
     monkeypatch.setattr(utils, "is_hyperpixel_next_layout", lambda w, h: True)
 
