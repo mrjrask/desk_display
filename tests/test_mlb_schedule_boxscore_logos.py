@@ -140,6 +140,38 @@ def test_draw_last_game_centers_content_vertically_for_sox_last(monkeypatch):
     assert captured["center_ignores_reserved_flag_block"] is False
 
 
+
+def test_draw_last_game_moves_cubs_result_flag_inline_on_hyperpixel4(monkeypatch):
+    captured = {}
+
+    def _fake_draw_table(*args, **kwargs):
+        captured.update(kwargs)
+
+    monkeypatch.setattr(mlb_schedule, "_draw_boxscore_table", _fake_draw_table)
+    monkeypatch.setattr(mlb_schedule.config, "get_display_profile_id", lambda: "hyperpixel4")
+    monkeypatch.setattr(mlb_schedule, "is_hyperpixel_4_square_layout", lambda: False)
+
+    game = {
+        "officialDate": "2026-05-01",
+        "teams": {
+            "away": {"score": 5, "team": {"id": 121, "name": "New York Mets"}},
+            "home": {"score": 2, "team": {"id": 112, "name": "Chicago Cubs"}},
+        },
+        "linescore": {
+            "teams": {
+                "away": {"hits": 7, "errors": 1},
+                "home": {"hits": 5, "errors": 0},
+            },
+        },
+    }
+
+    mlb_schedule.draw_last_game(None, game, title="Last Cubs game...", screen_id="cubs last")
+
+    assert captured["reserve_flag_block"] is False
+    assert captured["winner_flag"] is None
+    assert captured["inline_team_id"] == int(mlb_schedule.MLB_CUBS_TEAM_ID)
+    assert captured["inline_winner_flag"] == "L"
+
 def test_centered_boxscore_accounts_for_header_height(monkeypatch):
     img = Image.new("RGB", (mlb_schedule.WIDTH, mlb_schedule.HEIGHT), (0, 0, 0))
     draw = ImageDraw.Draw(img)
