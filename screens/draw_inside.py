@@ -14,6 +14,8 @@ import time
 import logging
 import math
 import os
+import json
+import subprocess
 import sys
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Sequence, Set, Tuple
@@ -320,73 +322,113 @@ def _probe_pimoroni_bme68x(_i2c: Any, addresses: Set[int]) -> Optional[SensorPro
     if addresses and not addresses.intersection({0x76, 0x77}):
         return None
 
-    from importlib import import_module
+    def _read_bme68x_via_subprocess() -> Dict[str, Any]:
+        script = """
+import json
+import sys
+from importlib import import_module
 
-    import bme68x  # type: ignore
+import bme68x
 
+try:
+    const = import_module('bme68xConstants')
+except Exception:
+    const = None
+
+addr_low = getattr(bme68x, 'BME68X_I2C_ADDR_LOW', 0x76)
+addr_high = getattr(bme68x, 'BME68X_I2C_ADDR_HIGH', 0x77)
+addresses = (addr_low, addr_high)
+
+sensor = None
+selected_addr = None
+last_error = None
+for addr in addresses:
     try:
-        I2C_ADDR_LOW = getattr(bme68x, "BME68X_I2C_ADDR_LOW")
-        I2C_ADDR_HIGH = getattr(bme68x, "BME68X_I2C_ADDR_HIGH")
-    except AttributeError:
-        const = import_module("bme68xConstants")  # type: ignore
-        I2C_ADDR_LOW = getattr(const, "BME68X_I2C_ADDR_LOW", 0x76)
-        I2C_ADDR_HIGH = getattr(const, "BME68X_I2C_ADDR_HIGH", 0x77)
+        sensor = bme68x.BME68X(addr)
+        selected_addr = addr
+        break
+    except Exception as exc:
+        last_error = exc
 
-    sensor = None
-    last_error: Optional[Exception] = None
-    for addr in (I2C_ADDR_LOW, I2C_ADDR_HIGH):
-        chip_id = _read_chip_id(_i2c, addr)
-        expected_id = getattr(bme68x, "BME68X_CHIP_ID", 0x61)
-        if chip_id is not None and chip_id != expected_id:
-            logging.debug(
-                "draw_inside: skipping BME68X probe at 0x%02X due to chip ID 0x%02X",
-                addr,
-                chip_id,
-            )
-            continue
-        try:
-            with _suppress_i2c_error_output():
-                sensor = bme68x.BME68X(addr)  # type: ignore
-            break
-        except Exception as exc:  # pragma: no cover - relies on hardware
-            last_error = exc
-    if sensor is None:
-        if last_error is not None:
-            raise last_error
-        raise RuntimeError("BME68X sensor not found")
+if sensor is None:
+    if last_error is not None:
+        raise last_error
+    raise RuntimeError('BME68X sensor not found')
 
-    variant_id = getattr(sensor, "variant_id", None)
-    const_module = import_module("bme68xConstants")  # type: ignore
-    gas_low = getattr(const_module, "BME68X_VARIANT_GAS_LOW", None)
-    gas_high = getattr(const_module, "BME68X_VARIANT_GAS_HIGH", None)
-    if variant_id == gas_high:
-        provider = "Pimoroni BME688"
+data = sensor.get_data()
+if isinstance(data, (list, tuple)):
+    data = data[0] if data else None
+if data is None:
+    raise RuntimeError('BME68X returned no data')
+
+def extract_field(payload, key):
+    if hasattr(payload, key):
+        value = getattr(payload, key)
+    elif isinstance(payload, dict):
+        value = payload.get(key)
     else:
-        provider = "Pimoroni BME68X"
+        value = None
+    if value is None:
+        return None
+    try:
+        return float(value)
+    except Exception:
+        return None
+
+bsec_data = getattr(data, 'bsec_data', None)
+if bsec_data is None and isinstance(data, dict):
+    bsec_data = data.get('bsec_data')
+
+voc_index = None
+if isinstance(bsec_data, dict):
+    voc_index = extract_field(bsec_data, 'breath_voc_equivalent')
+if voc_index is None:
+    voc_index = extract_field(data, 'breath_voc_equivalent')
+
+variant_id = getattr(sensor, 'variant_id', None)
+gas_high = getattr(const, 'BME68X_VARIANT_GAS_HIGH', None) if const else None
+provider = 'Pimoroni BME688' if variant_id == gas_high else 'Pimoroni BME68X'
+
+print(json.dumps({
+    'provider': provider,
+    'address': selected_addr,
+    'temperature': extract_field(data, 'temperature'),
+    'humidity': extract_field(data, 'humidity'),
+    'pressure': extract_field(data, 'pressure'),
+    'gas_resistance': extract_field(data, 'gas_resistance'),
+    'voc_index': voc_index,
+}))
+"""
+        result = subprocess.run(
+            [sys.executable, "-c", script],
+            capture_output=True,
+            text=True,
+            timeout=6,
+            check=False,
+        )
+        if result.returncode != 0:
+            if result.returncode < 0:
+                signal_num = -result.returncode
+                raise RuntimeError(f"BME68X helper exited by signal {signal_num}")
+            stderr = (result.stderr or "").strip()
+            raise RuntimeError(stderr or "BME68X helper failed")
+
+        stdout = (result.stdout or "").strip()
+        if not stdout:
+            raise RuntimeError("BME68X helper returned empty output")
+
+        return json.loads(stdout)
+
+    payload = _read_bme68x_via_subprocess()
+    provider = str(payload.get("provider") or "Pimoroni BME68X")
 
     def read() -> SensorReadings:
-        data = sensor.get_data()
-        if isinstance(data, (list, tuple)):
-            data = data[0] if data else None
-        if data is None:
-            raise RuntimeError("BME68X returned no data")
-
-        temp_c = _extract_field(data, "temperature")
-        hum = _extract_field(data, "humidity")
-        pres_raw = _extract_field(data, "pressure")
-
-        voc_index = None
-        bsec_data = getattr(data, "bsec_data", None)
-        if bsec_data is None and isinstance(data, dict):
-            bsec_data = data.get("bsec_data")
-
-        if isinstance(bsec_data, dict):
-            voc_index = _extract_field(bsec_data, "breath_voc_equivalent")
-
-        if voc_index is None:
-            voc_index = _extract_field(data, "breath_voc_equivalent")
-
-        voc_raw = _extract_field(data, "gas_resistance")
+        sample = _read_bme68x_via_subprocess()
+        temp_c = _extract_field(sample, "temperature")
+        hum = _extract_field(sample, "humidity")
+        pres_raw = _extract_field(sample, "pressure")
+        voc_raw = _extract_field(sample, "gas_resistance")
+        voc_index = _extract_field(sample, "voc_index")
 
         temp_f = temp_c * 9 / 5 + 32 if temp_c is not None else None
         pres_hpa, pres = _normalize_pressure(pres_raw)
