@@ -330,3 +330,48 @@ def test_color_cycle_calls_show_when_display_requires_flush(monkeypatch):
 
     assert calls["images"] == 1
     assert calls["shows"] == 1
+
+
+def test_hyperpixel_color_cycle_ignores_frame_id_drift(monkeypatch):
+    calls = {"compose": 0, "images": 0}
+
+    class DriftingHyperpixelDisplay:
+        def __init__(self):
+            self._frame = 1
+
+        def frame_id(self):
+            # Simulate frame-id drift between polling and rendering.
+            self._frame += 1
+            return self._frame
+
+        def image(self, _img):
+            calls["images"] += 1
+
+    monkeypatch.setattr(
+        draw_date_time,
+        "_color_cycle_profile",
+        lambda **_kwargs: (0.0, 0.0, 2),
+    )
+    monkeypatch.setattr(draw_date_time, "is_hyperpixel_next_layout", lambda: True)
+    monkeypatch.setattr(draw_date_time, "is_hyperpixel_4_square_layout", lambda: False)
+    monkeypatch.setattr(draw_date_time, "is_kernel_driven_display", lambda: False)
+    monkeypatch.setattr(draw_date_time.time, "sleep", lambda _seconds: None)
+    monkeypatch.setattr(draw_date_time, "bright_color", lambda: (255, 0, 0))
+
+    def _fake_compose(*_args, **_kwargs):
+        calls["compose"] += 1
+        return object()
+
+    monkeypatch.setattr(draw_date_time, "_compose_frame", _fake_compose)
+
+    frame_state = {"value": 1, "lock": draw_date_time.threading.Lock()}
+    draw_date_time._cycle_colors_after_load(
+        DriftingHyperpixelDisplay(),
+        "date_time",
+        lambda: False,
+        "date",
+        frame_state,
+    )
+
+    assert calls["compose"] == 2
+    assert calls["images"] == 2
