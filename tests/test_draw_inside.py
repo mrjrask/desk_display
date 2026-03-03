@@ -3,6 +3,7 @@ import math
 from screens.draw_inside import (
     _build_metric_entries,
     _build_voc_tile,
+    _iter_board_i2c_pin_pairs,
     _get_probe_order,
     _get_sensor_env_override,
     _normalize_sensor_name,
@@ -72,3 +73,9 @@ def test_probe_order_restricts_to_preference():
     plan = _get_probe_order("pimoroni_bme280")
     assert plan and plan[0][0] == "pimoroni_bme280"
     assert all(name == "pimoroni_bme280" for name, _ in plan)
+
+
+def test_i2c_pin_pairs_include_hyperpixel_bus_10_mapping():
+    pairs = _iter_board_i2c_pin_pairs()
+    assert pairs[0] == ("SCL", "SDA")
+    assert ("D45", "D44") in pairs

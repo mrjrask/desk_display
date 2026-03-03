@@ -938,6 +938,50 @@ def _scan_i2c_addresses(i2c: Any) -> Set[int]:
     return addresses
 
 
+def _iter_board_i2c_pin_pairs() -> Tuple[Tuple[str, str], ...]:
+    """Return candidate ``(scl, sda)`` board pin names for Blinka I2C init."""
+
+    return (
+        ("SCL", "SDA"),
+        ("SCL1", "SDA1"),
+        ("D3", "D2"),
+        ("D45", "D44"),
+        ("GP3", "GP2"),
+        ("GP45", "GP44"),
+    )
+
+
+def _try_init_blinka_i2c() -> Optional[Any]:
+    """Try common Blinka pin aliases before falling back to ExtendedI2C."""
+
+    if board is None or busio is None:
+        return None
+
+    for scl_name, sda_name in _iter_board_i2c_pin_pairs():
+        scl_pin = getattr(board, scl_name, None)
+        sda_pin = getattr(board, sda_name, None)
+        if scl_pin is None or sda_pin is None:
+            continue
+        try:
+            i2c = busio.I2C(scl_pin, sda_pin)
+            if (scl_name, sda_name) != ("SCL", "SDA"):
+                logging.info(
+                    "draw_inside: using alternate I2C pins (%s, %s)",
+                    scl_name,
+                    sda_name,
+                )
+            return i2c
+        except Exception as exc:
+            logging.debug(
+                "draw_inside: failed to initialise I2C on (%s, %s): %s",
+                scl_name,
+                sda_name,
+                exc,
+            )
+
+    return None
+
+
 def _probe_sensor() -> Tuple[Optional[str], Optional[Callable[[], SensorReadings]]]:
     """Try the available sensor drivers and return the first match."""
 
@@ -945,11 +989,9 @@ def _probe_sensor() -> Tuple[Optional[str], Optional[Callable[[], SensorReadings
         logging.warning("BME* libs not available on this host; skipping sensor probe")
         return None, None
 
-    i2c = None
-    try:
-        i2c = busio.I2C(getattr(board, "SCL"), getattr(board, "SDA"))
-    except Exception as exc:
-        logging.warning("draw_inside: failed to initialise default I2C bus: %s", exc)
+    i2c = _try_init_blinka_i2c()
+    if i2c is None:
+        logging.warning("draw_inside: failed to initialise Blinka I2C on known pin mappings")
 
     if i2c is None:
         bus_candidates = _parse_i2c_bus_candidates()
