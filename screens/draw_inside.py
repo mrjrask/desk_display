@@ -994,6 +994,34 @@ def _try_init_blinka_i2c() -> Optional[Any]:
 def _probe_sensor() -> Tuple[Optional[str], Optional[Callable[[], SensorReadings]]]:
     """Try the available sensor drivers and return the first match."""
 
+    preference, raw_preference = _get_sensor_env_override()
+    if preference:
+        logging.info("draw_inside: INSIDE_SENSOR set to %s; restricting probe order", preference)
+    elif raw_preference:
+        logging.warning(
+            "draw_inside: INSIDE_SENSOR value %r not recognized; falling back to auto-detect",
+            raw_preference,
+        )
+
+    # Pimoroni's bme68x Python driver talks to SMBus directly and does not
+    # require Blinka/ExtendedI2C. When this driver is explicitly selected,
+    # probe it first so missing Blinka dependencies do not generate misleading
+    # warnings.
+    if preference == "pimoroni_bme68x":
+        try:
+            result = _probe_pimoroni_bme68x(None, set())
+        except ModuleNotFoundError as exc:
+            logging.debug(
+                "draw_inside: probe %s skipped (module missing): %s", preference, exc
+            )
+        except Exception as exc:  # pragma: no cover - relies on hardware
+            logging.debug("draw_inside: probe %s failed: %s", preference, exc, exc_info=True)
+        else:
+            if result:
+                provider, reader = result
+                logging.info("draw_inside: detected %s", provider)
+                return provider, reader
+
     if board is None or busio is None:
         logging.warning("BME* libs not available on this host; skipping sensor probe")
         return None, None
@@ -1037,15 +1065,6 @@ def _probe_sensor() -> Tuple[Optional[str], Optional[Callable[[], SensorReadings
         logging.debug("draw_inside: detected I2C addresses: %s", formatted)
     else:
         logging.debug("draw_inside: no I2C addresses detected during scan")
-
-    preference, raw_preference = _get_sensor_env_override()
-    if preference:
-        logging.info("draw_inside: INSIDE_SENSOR set to %s; restricting probe order", preference)
-    elif raw_preference:
-        logging.warning(
-            "draw_inside: INSIDE_SENSOR value %r not recognized; falling back to auto-detect",
-            raw_preference,
-        )
 
     # Prefer BME280 variants before BME680/BME68x. Some BME680 drivers can
     # incorrectly initialise against a BME280 at the same address and return
