@@ -867,6 +867,10 @@ def save_screens() -> Any:
 
     try:
         config = _build_config(entries)
+        for key, expected_type in (("playlists", dict), ("sequence", list)):
+            value = payload.get(key)
+            if isinstance(value, expected_type):
+                config[key] = value
         style_config = _load_active_style_config()
         style_config = _build_style_config(entries, style_config)
         layouts = _build_layouts(payload)

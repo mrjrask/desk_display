@@ -162,8 +162,56 @@ def build_scheduler(config: Dict[str, Any]) -> ScreenScheduler:
     if not isinstance(screens, dict) or not screens:
         raise ValueError("Configuration must provide a non-empty 'screens' mapping")
 
-    entries: List[_ScheduleEntry] = []
+    ordered_screens: List[Tuple[str, Any]] = []
+    seen_screen_ids: Set[str] = set()
+
+    playlists = config.get("playlists")
+    sequence = config.get("sequence")
+    if isinstance(playlists, dict):
+        ordered_playlist_ids: List[str] = []
+        if isinstance(sequence, list):
+            for item in sequence:
+                if not isinstance(item, dict):
+                    continue
+                playlist_id = item.get("playlist")
+                if (
+                    isinstance(playlist_id, str)
+                    and playlist_id
+                    and playlist_id in playlists
+                    and playlist_id not in ordered_playlist_ids
+                ):
+                    ordered_playlist_ids.append(playlist_id)
+
+        for playlist_id in playlists.keys():
+            if isinstance(playlist_id, str) and playlist_id and playlist_id not in ordered_playlist_ids:
+                ordered_playlist_ids.append(playlist_id)
+
+        for playlist_id in ordered_playlist_ids:
+            playlist = playlists.get(playlist_id)
+            if not isinstance(playlist, dict):
+                continue
+            steps = playlist.get("steps")
+            if not isinstance(steps, list):
+                continue
+            for step in steps:
+                if not isinstance(step, dict):
+                    continue
+                screen_id = step.get("screen")
+                if (
+                    isinstance(screen_id, str)
+                    and screen_id in screens
+                    and screen_id not in seen_screen_ids
+                ):
+                    ordered_screens.append((screen_id, screens[screen_id]))
+                    seen_screen_ids.add(screen_id)
+
     for screen_id, raw in screens.items():
+        if screen_id in seen_screen_ids:
+            continue
+        ordered_screens.append((screen_id, raw))
+
+    entries: List[_ScheduleEntry] = []
+    for screen_id, raw in ordered_screens:
         if not isinstance(screen_id, str):
             raise ValueError("Screen identifiers must be strings")
         if screen_id not in KNOWN_SCREENS:

@@ -153,6 +153,23 @@ def test_scheduler_skips_unavailable_screen():
     assert scheduler.next_available(registry) is None
 
 
+
+def test_scheduler_respects_playlist_sequence_order():
+    config = {
+        "screens": {"inside": 1, "date": 1, "weather1": 1},
+        "playlists": {
+            "second": {"steps": [{"screen": "inside"}]},
+            "first": {"steps": [{"screen": "date"}]},
+        },
+        "sequence": [{"playlist": "first"}, {"playlist": "second"}],
+    }
+
+    scheduler = build_scheduler(config)
+    registry = make_registry({"date": True, "inside": True, "weather1": True})
+
+    sequence = collect_sequence(scheduler, registry, 6)
+    assert sequence == ["date", "inside", "weather1", "date", "inside", "weather1"]
+
 def test_invalid_configuration_shapes():
     with pytest.raises(ValueError):
         build_scheduler({})
