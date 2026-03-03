@@ -39,7 +39,7 @@ class _AlternateSchedule:
 class _ScheduleEntry:
     screen_id: str
     frequency: int
-    play_count: int = 0
+    cycle_count: int = 0
     alternate: Optional[_AlternateSchedule] = None
 
 
@@ -72,15 +72,15 @@ class ScreenScheduler:
             entry = self._entries[self._cursor]
             self._cursor = (self._cursor + 1) % len(self._entries)
 
-            # A frequency of ``n`` means the screen should appear ``n`` times
-            # per full rotation. The build step expands the schedule in a
-            # round-robin fashion so each entry can be visited sequentially
-            # without additional cooldown tracking.
-            entry.play_count += 1
+            # A frequency of ``n`` means the screen is shown once every
+            # ``n`` scheduler passes for that entry.
+            entry.cycle_count += 1
+            if (entry.cycle_count - 1) % entry.frequency != 0:
+                continue
 
             candidate_id = entry.screen_id
             if entry.alternate and entry.alternate.frequency > 0:
-                if entry.play_count % entry.alternate.frequency == 0:
+                if entry.cycle_count % entry.alternate.frequency == 0:
                     alternate = entry.alternate
                     for _ in range(len(alternate.screen_ids)):
                         alt_id = alternate.next_screen_id()
@@ -297,12 +297,4 @@ def build_scheduler(config: Dict[str, Any]) -> ScreenScheduler:
     if not entries:
         raise ValueError("Configuration must contain at least one enabled screen")
 
-    expanded_entries: List[_ScheduleEntry] = []
-    remaining = [entry.frequency for entry in entries]
-    while any(count > 0 for count in remaining):
-        for idx, entry in enumerate(entries):
-            if remaining[idx] > 0:
-                expanded_entries.append(entry)
-                remaining[idx] -= 1
-
-    return ScreenScheduler(expanded_entries)
+    return ScreenScheduler(entries)
