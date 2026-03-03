@@ -351,12 +351,6 @@ def draw_date(display, transition: bool=False):
         expected_frame_id=frame_id,
         frame_state=frame_state,
     )
-    if is_hyperpixel_next_layout() or is_hyperpixel_4_square_layout():
-        threading.Thread(
-            target=_cycle_colors_after_load,
-            args=(display, "date_time", lambda: gh_state["value"], "date", frame_state),
-            daemon=True,
-        ).start()
     return ScreenImage(img, displayed=True)
 
 
