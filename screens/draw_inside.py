@@ -1174,23 +1174,34 @@ def _probe_sensor() -> Tuple[Optional[str], Optional[Callable[[], SensorReadings
     # BME280-specific probers first keeps the readings aligned with the
     # standalone BME280 CLI script. When INSIDE_SENSOR is set, only the
     # requested probe will run.
-    probe_plan = _get_probe_order(preference)
+    probe_passes: List[Tuple[str, Tuple[Tuple[SensorProbeName, SensorProbeFn], ...]]] = [
+        ("preferred", _get_probe_order(preference)),
+    ]
+    if preference:
+        probe_passes.append(("fallback", _get_probe_order(None)))
 
-    for probe_name, probe in probe_plan:
-        try:
-            result = probe(i2c, addresses)
-        except ModuleNotFoundError as exc:
-            logging.debug(
-                "draw_inside: probe %s skipped (module missing): %s", probe_name, exc
+    for pass_name, probe_plan in probe_passes:
+        for probe_name, probe in probe_plan:
+            try:
+                result = probe(i2c, addresses)
+            except ModuleNotFoundError as exc:
+                logging.debug(
+                    "draw_inside: probe %s skipped (module missing): %s", probe_name, exc
+                )
+                continue
+            except Exception as exc:  # pragma: no cover - relies on hardware
+                logging.debug("draw_inside: probe %s failed: %s", probe_name, exc, exc_info=True)
+                continue
+            if result:
+                provider, reader = result
+                logging.info("draw_inside: detected %s", provider)
+                return provider, reader
+
+        if pass_name == "preferred" and preference:
+            logging.warning(
+                "draw_inside: preferred sensor probe %r failed; falling back to auto-detect",
+                preference,
             )
-            continue
-        except Exception as exc:  # pragma: no cover - relies on hardware
-            logging.debug("draw_inside: probe %s failed: %s", probe_name, exc, exc_info=True)
-            continue
-        if result:
-            provider, reader = result
-            logging.info("draw_inside: detected %s", provider)
-            return provider, reader
 
     logging.warning("No supported indoor environmental sensor detected.")
     return None, None
