@@ -63,3 +63,18 @@ def test_weatherkit_measurements_extract_wind_gust_and_speed():
     hourly = normalized["hourly"][0]
     assert hourly["wind_speed"] == pytest.approx(5.1)
     assert hourly["wind_gust"] == pytest.approx(11.2)
+
+
+def test_save_pressure_history_creates_parent_directory(tmp_path, monkeypatch):
+    import data_fetch
+
+    target = tmp_path / "nested" / "pressure_history.json"
+    monkeypatch.setattr(data_fetch, "_PRESSURE_HISTORY_PATH", str(target))
+    monkeypatch.setattr(data_fetch, "_PRESSURE_HISTORY_LAST_SAVE", 0.0)
+
+    data_fetch._PRESSURE_HISTORY.clear()
+    data_fetch._PRESSURE_HISTORY.append((1700000000.0, 1012.3))
+
+    data_fetch._save_pressure_history(1700000100.0)
+
+    assert target.exists()
