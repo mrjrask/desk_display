@@ -384,6 +384,37 @@ def test_led_pattern_alternates_only_when_apt_and_github_updates():
     assert interval == 0.6
 
 
+def test_refresh_led_indicator_uses_static_color_for_indicator_border(monkeypatch):
+    class _FakeAnimator:
+        def __init__(self):
+            self.stopped = False
+
+        def stop(self):
+            self.stopped = True
+
+    class _FakeDisplay:
+        _hyperpixel_indicator_border = True
+        _display_hat_mini_indicator_border = False
+
+        def __init__(self):
+            self.calls = []
+
+        def set_led(self, *, r, g, b):
+            self.calls.append((r, g, b))
+
+    animator = _FakeAnimator()
+    fake_display = _FakeDisplay()
+
+    monkeypatch.setattr(utils, "_UPDATE_STATUS", utils._UpdateStatus(github=True, apt=True))
+    monkeypatch.setattr(utils, "_LED_INDICATOR_ANIMATOR", animator)
+
+    utils._refresh_led_indicator(fake_display)
+
+    assert animator.stopped is True
+    assert utils._LED_INDICATOR_ANIMATOR is None
+    assert fake_display.calls == [(0.0, 0.0, utils.LED_INDICATOR_LEVEL)]
+
+
 def test_reinitialize_display_retries_after_failure(monkeypatch):
     display = utils.Display()
     display._display_reinit_seconds = 1

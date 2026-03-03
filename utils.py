@@ -2379,6 +2379,11 @@ def _refresh_led_indicator(display: Optional["Display"] = None) -> None:
 
     pattern, interval = _led_pattern(status)
 
+    indicator_border_enabled = bool(
+        getattr(display, "_hyperpixel_indicator_border", False)
+        or getattr(display, "_display_hat_mini_indicator_border", False)
+    )
+
     if pattern is None:
         if _LED_INDICATOR_ANIMATOR is not None:
             try:  # pragma: no cover - hardware import
@@ -2392,6 +2397,25 @@ def _refresh_led_indicator(display: Optional["Display"] = None) -> None:
                 display.set_led(r=0.0, g=0.0, b=0.0)
             except Exception as exc:  # pragma: no cover - hardware import
                 logging.debug("Failed to clear LED: %s", exc)
+        return
+
+    # Border indicators are painted onto the frame buffer via ``set_led()``.
+    # Running a background LED animator in this mode can race with normal
+    # screen rendering and briefly re-present stale buffers.
+    if indicator_border_enabled:
+        if _LED_INDICATOR_ANIMATOR is not None:
+            try:  # pragma: no cover - hardware import
+                _LED_INDICATOR_ANIMATOR.stop()
+            except Exception as exc:
+                logging.debug("Failed to stop LED animator for border indicator mode: %s", exc)
+            finally:
+                _LED_INDICATOR_ANIMATOR = None
+
+        r, g, b = pattern[0]
+        try:
+            display.set_led(r=r, g=g, b=b)
+        except Exception as exc:  # pragma: no cover - hardware import
+            logging.debug("Failed to set static border indicator LED: %s", exc)
         return
 
     if _LED_INDICATOR_ANIMATOR is not None:
