@@ -48,11 +48,12 @@ SensorProbeName = str
 def _parse_i2c_bus_candidates() -> Tuple[int, ...]:
     """Return preferred Linux I2C bus numbers for fallback probing."""
 
-    # HyperPixel panels expose their onboard Qw/ST I2C controller on an
-    # auxiliary Linux bus (commonly 10, sometimes 11). Keep those first so
-    # indoor sensors continue to work even when the Pi's primary I2C/SPI are
-    # intentionally disabled for HyperPixel compatibility.
-    raw = os.environ.get("INSIDE_I2C_BUSES", "10,11,1,0")
+    # HyperPixel 4 can expose the onboard Qwiic/STEMMA controller on
+    # auxiliary Linux buses 13-15 (with some setups still using 10/11).
+    # Keep those buses first so indoor sensors continue to work even when
+    # the Pi's primary I2C/SPI are intentionally disabled for HyperPixel
+    # compatibility.
+    raw = os.environ.get("INSIDE_I2C_BUSES", "13,14,15,10,11,1,0")
     buses: List[int] = []
     seen: Set[int] = set()
     for token in raw.split(","):
@@ -70,7 +71,7 @@ def _parse_i2c_bus_candidates() -> Tuple[int, ...]:
         buses.append(bus_num)
 
     if not buses:
-        return (10, 11, 1, 0)
+        return (13, 14, 15, 10, 11, 1, 0)
     return tuple(buses)
 
 

@@ -92,7 +92,7 @@ def test_i2c_pin_pairs_include_hyperpixel_bus_10_mapping():
 
 def test_parse_i2c_bus_candidates_defaults_include_hyperpixel_buses(monkeypatch):
     monkeypatch.delenv("INSIDE_I2C_BUSES", raising=False)
-    assert _parse_i2c_bus_candidates() == (10, 11, 1, 0)
+    assert _parse_i2c_bus_candidates() == (13, 14, 15, 10, 11, 1, 0)
 
 
 def test_draw_inside_returns_placeholder_image_when_sensor_unavailable(monkeypatch):
