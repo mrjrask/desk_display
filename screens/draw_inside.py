@@ -1120,49 +1120,53 @@ def _probe_sensor() -> Tuple[Optional[str], Optional[Callable[[], SensorReadings
                 logging.info("draw_inside: detected %s", provider)
                 return provider, reader
 
+    i2c = None
     if board is None or busio is None:
-        logging.warning("BME* libs not available on this host; skipping sensor probe")
-        return None, None
-
-    i2c = _try_init_blinka_i2c()
-    if i2c is None:
-        logging.warning("draw_inside: failed to initialise Blinka I2C on known pin mappings")
-
-    if i2c is None:
-        bus_candidates = _parse_i2c_bus_candidates()
-        try:
-            from adafruit_extended_bus import ExtendedI2C  # type: ignore
-        except Exception as exc:
-            logging.warning(
-                "draw_inside: adafruit_extended_bus unavailable; cannot probe fallback I2C buses %s: %s",
-                bus_candidates,
-                exc,
-            )
-            return None, None
-
-        for bus_num in bus_candidates:
-            try:
-                i2c = ExtendedI2C(bus_num)
-                logging.info("draw_inside: using fallback I2C bus %s", bus_num)
-                break
-            except Exception as exc:
-                logging.debug(
-                    "draw_inside: failed to initialise fallback I2C bus %s: %s",
-                    bus_num,
-                    exc,
-                    exc_info=True,
-                )
-
-    if i2c is None:
-        logging.warning("draw_inside: no usable I2C bus available for indoor sensor probe")
-        return None, None
-
-    addresses = _scan_i2c_addresses(i2c)
-    if addresses:
-        formatted = ", ".join(f"0x{addr:02X}" for addr in sorted(addresses))
-        logging.debug("draw_inside: detected I2C addresses: %s", formatted)
+        logging.warning(
+            "draw_inside: Blinka I2C libs unavailable; trying SMBus-capable sensor probes only"
+        )
     else:
-        logging.debug("draw_inside: no I2C addresses detected during scan")
+        i2c = _try_init_blinka_i2c()
+        if i2c is None:
+            logging.warning("draw_inside: failed to initialise Blinka I2C on known pin mappings")
+
+        if i2c is None:
+            bus_candidates = _parse_i2c_bus_candidates()
+            try:
+                from adafruit_extended_bus import ExtendedI2C  # type: ignore
+            except Exception as exc:
+                logging.warning(
+                    "draw_inside: adafruit_extended_bus unavailable; continuing without Blinka I2C on fallback buses %s: %s",
+                    bus_candidates,
+                    exc,
+                )
+            else:
+                for bus_num in bus_candidates:
+                    try:
+                        i2c = ExtendedI2C(bus_num)
+                        logging.info("draw_inside: using fallback I2C bus %s", bus_num)
+                        break
+                    except Exception as exc:
+                        logging.debug(
+                            "draw_inside: failed to initialise fallback I2C bus %s: %s",
+                            bus_num,
+                            exc,
+                            exc_info=True,
+                        )
+
+    if i2c is None:
+        logging.warning(
+            "draw_inside: no usable Blinka I2C bus available; continuing with SMBus-only probes"
+        )
+
+    addresses: Set[int] = set()
+    if i2c is not None:
+        addresses = _scan_i2c_addresses(i2c)
+        if addresses:
+            formatted = ", ".join(f"0x{addr:02X}" for addr in sorted(addresses))
+            logging.debug("draw_inside: detected I2C addresses: %s", formatted)
+        else:
+            logging.debug("draw_inside: no I2C addresses detected during scan")
 
     # Prefer BME280 variants before BME680/BME68x. Some BME680 drivers can
     # incorrectly initialise against a BME280 at the same address and return
