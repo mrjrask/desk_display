@@ -187,6 +187,10 @@ def _cycle_colors_after_load(
         hyperpixel_layout=hyperpixel_layout,
         hyperpixel_square=hyperpixel_square,
     )
+    # HyperPixel frame ids can drift due driver-side refresh behavior. When
+    # that happens we should keep animating instead of treating those bumps as
+    # a screen takeover.
+    enforce_takeover_tracking = not (hyperpixel_layout or hyperpixel_square)
     time.sleep(initial_delay)
     expected_frame_id = display.frame_id() if hasattr(display, "frame_id") else None
     if frame_state is not None:
@@ -209,6 +213,8 @@ def _cycle_colors_after_load(
     takeover_observations = 0
     while steps is None or count < steps:
         if (
+            enforce_takeover_tracking
+            and
             expected_frame_id is not None
             and hasattr(display, "frame_id")
         ):
