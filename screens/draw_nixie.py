@@ -6,6 +6,7 @@ from __future__ import annotations
 import datetime as dt
 import logging
 import os
+import threading
 import time
 from functools import lru_cache
 from pathlib import Path
@@ -381,6 +382,37 @@ def _play_flicker(display, base: Image.Image) -> None:
         time.sleep(0.08)
 
 
+def _start_live_updates(display, *, expected_frame_id: int | None = None) -> None:
+    """Refresh the Nixie display once per second while this screen is active."""
+
+    def _worker() -> None:
+        end_time = time.monotonic() + max(1, SCREEN_DELAY)
+        last_second = None
+
+        while time.monotonic() < end_time:
+            if expected_frame_id is not None and hasattr(display, "frame_id"):
+                try:
+                    if display.frame_id() != expected_frame_id:
+                        return
+                except Exception:
+                    return
+
+            now = dt.datetime.now()
+            if now.second != last_second:
+                last_second = now.second
+                frame = _compose_frame(now)
+                try:
+                    display.image(frame)
+                    if hasattr(display, "show"):
+                        display.show()
+                except Exception:
+                    LOGGER.exception("Failed to render Nixie clock")
+                    return
+            time.sleep(0.2)
+
+    threading.Thread(target=_worker, daemon=True).start()
+
+
 @log_call
 def draw_nixie(display, transition: bool = False):
     global BACKGROUND_COLOR
@@ -392,29 +424,23 @@ def draw_nixie(display, transition: bool = False):
 
     clear_display(display)
 
-    last_frame = frame
-    end_time = time.monotonic() + max(1, SCREEN_DELAY)
-    last_second = None
+    try:
+        display.image(frame)
+        if hasattr(display, "show"):
+            display.show()
+    except Exception:  # pragma: no cover - defensive refresh guard
+        logging.exception("Failed to render Nixie clock")
+        return ScreenImage(frame, displayed=False)
 
-    while True:
-        now = dt.datetime.now()
-        if now.second != last_second:
-            last_second = now.second
-            last_frame = _compose_frame(now)
-            try:
-                display.image(last_frame)
-                if hasattr(display, "show"):
-                    display.show()
-            except Exception:  # pragma: no cover - defensive refresh guard
-                logging.exception("Failed to render Nixie clock")
-                return ScreenImage(last_frame, displayed=False)
+    if not transition:
+        _play_flicker(display, frame)
 
-            if not transition:
-                _play_flicker(display, last_frame)
+    frame_id = None
+    if hasattr(display, "frame_id"):
+        try:
+            frame_id = display.frame_id()
+        except Exception:
+            frame_id = None
+    _start_live_updates(display, expected_frame_id=frame_id)
 
-        remaining = end_time - time.monotonic()
-        if remaining <= 0:
-            break
-        time.sleep(min(0.25, remaining))
-
-    return ScreenImage(last_frame, displayed=True)
+    return ScreenImage(frame, displayed=True)
