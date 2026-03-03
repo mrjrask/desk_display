@@ -140,7 +140,11 @@ def _get_sensor_env_override() -> Tuple[Optional[SensorProbeName], Optional[str]
     if not raw_value:
         return None, None
 
-    normalized = _normalize_sensor_name(raw_value)
+    normalized_input = raw_value.strip()
+    if "#" in normalized_input and not normalized_input.startswith(("'", '"')):
+        normalized_input = normalized_input.split("#", 1)[0].strip()
+
+    normalized = _normalize_sensor_name(normalized_input)
     resolved = aliases.get(normalized)
     return resolved, raw_value
 

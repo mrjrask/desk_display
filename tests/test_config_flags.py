@@ -173,3 +173,22 @@ def test_display_profile_presets_drive_scroll_defaults(monkeypatch):
 
     module = _reload_config(monkeypatch, DISPLAY_WIDTH="1280", DISPLAY_HEIGHT="720")
     assert module.SCOREBOARD_SCROLL_STEP == module.ACTIVE_DISPLAY_PROFILE.scoreboard_scroll_step
+
+
+def test_load_env_file_strips_inline_comments_for_unquoted_values(tmp_path, monkeypatch):
+    env_path = tmp_path / ".env"
+    env_path.write_text(
+        "INSIDE_SENSOR=pimoroni_bme68x # Pimoroni BME688\n"
+        "OTHER_VALUE='abc # not a comment'\n",
+        encoding="utf-8",
+    )
+
+    import config
+
+    monkeypatch.delenv("INSIDE_SENSOR", raising=False)
+    monkeypatch.delenv("OTHER_VALUE", raising=False)
+
+    config._load_env_file(str(env_path))
+
+    assert config.os.environ["INSIDE_SENSOR"] == "pimoroni_bme68x"
+    assert config.os.environ["OTHER_VALUE"] == "abc # not a comment"
