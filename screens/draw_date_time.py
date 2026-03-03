@@ -239,6 +239,13 @@ def _cycle_colors_after_load(
             takeover_observations = 0
         img = _compose_frame(base_order, bright_color(), bright_color(), gh_state(), screen_id)
         display.image(img)
+        try:
+            # Some display drivers (notably HyperPixel/HDMI paths) only flush
+            # framebuffer updates when show() is called.
+            display.show()
+        except AttributeError:
+            # Drivers that auto-refresh on image() do not expose show().
+            pass
         if hasattr(display, "frame_id"):
             latest_frame_id = display.frame_id()
             # Track the frame id that *this* screen last rendered so we only stop
