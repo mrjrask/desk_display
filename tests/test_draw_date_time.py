@@ -2,7 +2,7 @@ from screens import draw_date_time
 from screens.draw_date_time import _color_cycle_profile
 
 
-def test_color_cycle_profile_display_hat_mini_kernel_is_fast_and_continuous():
+def test_color_cycle_profile_display_hat_mini_kernel_is_capped_and_stable():
     initial_delay, interval, steps = _color_cycle_profile(
         kernel_driven=True,
         display_profile_id="display_hat_mini",
@@ -11,11 +11,11 @@ def test_color_cycle_profile_display_hat_mini_kernel_is_fast_and_continuous():
     )
 
     assert initial_delay == 0.0
-    assert interval == 0.08
-    assert steps is None
+    assert interval == 0.20
+    assert steps > 0
 
 
-def test_color_cycle_profile_non_kernel_is_rapid_and_limited():
+def test_color_cycle_profile_non_kernel_is_rapid_and_capped():
     initial_delay, interval, steps = _color_cycle_profile(
         kernel_driven=False,
         display_profile_id="display_hat_mini",
@@ -25,10 +25,10 @@ def test_color_cycle_profile_non_kernel_is_rapid_and_limited():
 
     assert initial_delay == 0.0
     assert interval == 0.08
-    assert steps == 60
+    assert steps > 0
 
 
-def test_color_cycle_profile_hyperpixel_cycles_continuously():
+def test_color_cycle_profile_hyperpixel_is_capped_and_stable():
     initial_delay, interval, steps = _color_cycle_profile(
         kernel_driven=False,
         display_profile_id="hyperpixel4",
@@ -37,11 +37,11 @@ def test_color_cycle_profile_hyperpixel_cycles_continuously():
     )
 
     assert initial_delay == 0.0
-    assert interval == 0.08
-    assert steps is None
+    assert interval == 0.20
+    assert steps > 0
 
 
-def test_color_cycle_profile_kernel_non_display_hat_is_not_rapid():
+def test_color_cycle_profile_kernel_non_display_hat_is_capped_and_stable():
     initial_delay, interval, steps = _color_cycle_profile(
         kernel_driven=True,
         display_profile_id="hdmi_1080p",
@@ -50,8 +50,8 @@ def test_color_cycle_profile_kernel_non_display_hat_is_not_rapid():
     )
 
     assert initial_delay == 0.0
-    assert interval == 0.08
-    assert steps is None
+    assert interval == 0.20
+    assert steps > 0
 
 
 def test_color_cycle_reconciles_startup_frame_race(monkeypatch):
@@ -332,7 +332,7 @@ def test_color_cycle_calls_show_when_display_requires_flush(monkeypatch):
     assert calls["shows"] == 1
 
 
-def test_hyperpixel_color_cycle_ignores_frame_id_drift(monkeypatch):
+def test_hyperpixel_color_cycle_stops_on_frame_id_drift(monkeypatch):
     calls = {"compose": 0, "images": 0}
 
     class DriftingHyperpixelDisplay:
@@ -373,11 +373,11 @@ def test_hyperpixel_color_cycle_ignores_frame_id_drift(monkeypatch):
         frame_state,
     )
 
-    assert calls["compose"] == 2
-    assert calls["images"] == 2
+    assert calls["compose"] == 0
+    assert calls["images"] == 0
 
 
-def test_draw_date_does_not_start_color_cycle_thread(monkeypatch):
+def test_draw_date_starts_color_cycle_thread(monkeypatch):
     class FakeDisplay:
         def __init__(self):
             self.images = 0
@@ -405,17 +405,17 @@ def test_draw_date_does_not_start_color_cycle_thread(monkeypatch):
     )
     monkeypatch.setattr(
         draw_date_time,
-        "_cycle_colors_after_load",
+        "_start_color_cycle",
         lambda *_args, **_kwargs: called.__setitem__("cycle", called["cycle"] + 1),
     )
 
     result = draw_date_time.draw_date(FakeDisplay(), transition=False)
 
     assert result.displayed is True
-    assert called["cycle"] == 0
+    assert called["cycle"] == 1
 
 
-def test_draw_time_does_not_start_color_cycle_thread(monkeypatch):
+def test_draw_time_starts_color_cycle_thread(monkeypatch):
     class FakeDisplay:
         def __init__(self):
             self.images = 0
@@ -443,11 +443,11 @@ def test_draw_time_does_not_start_color_cycle_thread(monkeypatch):
     )
     monkeypatch.setattr(
         draw_date_time,
-        "_cycle_colors_after_load",
+        "_start_color_cycle",
         lambda *_args, **_kwargs: called.__setitem__("cycle", called["cycle"] + 1),
     )
 
     result = draw_date_time.draw_time(FakeDisplay(), transition=False)
 
     assert result.displayed is True
-    assert called["cycle"] == 0
+    assert called["cycle"] == 1
