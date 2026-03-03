@@ -1,0 +1,54 @@
+import datetime as dt
+
+from PIL import Image
+
+from screens import draw_nixie
+from utils import ScreenImage
+
+
+class _FakeDisplay:
+    def __init__(self):
+        self._frame_id = 0
+        self.images = []
+
+    def image(self, img):
+        self.images.append(img)
+        self._frame_id += 1
+
+    def show(self):
+        return None
+
+    def frame_id(self):
+        return self._frame_id
+
+
+def test_nixie_frame_changes_by_second():
+    now = dt.datetime(2025, 1, 1, 10, 11, 12)
+    later = dt.datetime(2025, 1, 1, 10, 11, 13)
+
+    frame_a = draw_nixie.nixie_frame(now)
+    frame_b = draw_nixie.nixie_frame(later)
+
+    assert frame_a.tobytes() != frame_b.tobytes()
+
+
+def test_draw_nixie_starts_live_updates(monkeypatch):
+    display = _FakeDisplay()
+    seen = {"started": False, "frame_id": None}
+
+    monkeypatch.setattr(draw_nixie, "clear_display", lambda d: None)
+    monkeypatch.setattr(draw_nixie, "_play_flicker", lambda d, i: None)
+
+    def _capture(display_obj, *, expected_frame_id=None):
+        seen["started"] = True
+        seen["frame_id"] = expected_frame_id
+
+    monkeypatch.setattr(draw_nixie, "_start_live_updates", _capture)
+
+    result = draw_nixie.draw_nixie(display, transition=False)
+
+    assert isinstance(result, ScreenImage)
+    assert result.displayed is True
+    assert seen["started"] is True
+    assert seen["frame_id"] == display.frame_id()
+    assert isinstance(result.image, Image.Image)
