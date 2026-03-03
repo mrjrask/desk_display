@@ -181,7 +181,7 @@ The screen scheduler lives in `screens_config.json`. Each entry is either a freq
 }
 ```
 
-- `frequency` is the number of times a screen appears in each rotation.
+- `frequency` is an interval: `1` shows every pass, `2` shows every other pass, `8` shows once every eight passes.
 - `frequency: 0` disables a screen without removing it from the list.
 - `alt` can target a single screen or a list of screens to rotate through.
 

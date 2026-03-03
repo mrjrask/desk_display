@@ -37,7 +37,7 @@ def test_build_scheduler_from_config():
         }
     }
     scheduler = build_scheduler(config)
-    assert scheduler.node_count == 4
+    assert scheduler.node_count == 3
     assert scheduler.requested_ids == {"date", "inside", "sensors"}
 
 
@@ -120,7 +120,7 @@ def test_scheduler_respects_frequency():
     registry = make_registry({"date": True, "inside": True})
 
     sequence = collect_sequence(scheduler, registry, 6)
-    assert sequence == ["date", "inside", "inside", "date", "inside", "inside"]
+    assert sequence == ["date", "inside", "date", "date", "inside", "date"]
 
 
 def test_scheduler_frequency_interval_matches_configuration():
@@ -129,18 +129,18 @@ def test_scheduler_frequency_interval_matches_configuration():
     registry = make_registry({"date": True, "inside": True})
 
     sequence = collect_sequence(scheduler, registry, 12)
-    # ``inside`` should appear four times for every appearance of ``date``.
+    # ``inside`` should appear once every four passes.
     assert sequence == [
         "date",
         "inside",
-        "inside",
-        "inside",
-        "inside",
+        "date",
+        "date",
+        "date",
         "date",
         "inside",
-        "inside",
-        "inside",
-        "inside",
+        "date",
+        "date",
+        "date",
         "date",
         "inside",
     ]
