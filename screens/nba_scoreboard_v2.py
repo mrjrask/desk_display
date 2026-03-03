@@ -78,7 +78,7 @@ def _scale_y(value: int) -> int:
     return scale_value(value) if HYPERPIXEL_LAYOUT else scale_value_width(value)
 
 
-TITLE = "NBA Scoreboard v2"
+TITLE = "NBA Scoreboard"
 TITLE_GAP = _scale_y(8)
 BLOCK_SPACING = _scale_y(8)
 PAIR_SPACING = scale_value_width(4)

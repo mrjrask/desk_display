@@ -80,7 +80,7 @@ def _scale_width(value: int) -> int:
     return scale_value_width(value) if HYPERPIXEL_LAYOUT else scale_value(value)
 
 
-TITLE = "MLB Scoreboard v2"
+TITLE = "MLB Scoreboard"
 TITLE_GAP = scale_value(8)
 BLOCK_SPACING = scale_value(8)
 PAIR_SPACING = scale_value(4)
