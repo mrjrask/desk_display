@@ -14,6 +14,7 @@ import logging
 import os
 import re
 import socket
+import tempfile
 import time
 from collections import deque
 from typing import Any, Dict, List, Optional, Tuple
@@ -198,16 +199,30 @@ def _save_pressure_history(now_ts: float) -> None:
         return
 
     path = _expand_path(_PRESSURE_HISTORY_PATH)
+    tmp_path = ""
     try:
-        os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
+        parent_dir = os.path.dirname(path) or "."
+        os.makedirs(parent_dir, exist_ok=True)
         payload = {"history": list(_PRESSURE_HISTORY)}
-        tmp_path = f"{path}.tmp"
-        with open(tmp_path, "w", encoding="utf-8") as fh:
+        with tempfile.NamedTemporaryFile(
+            "w",
+            encoding="utf-8",
+            dir=parent_dir,
+            prefix=f"{os.path.basename(path)}.",
+            suffix=".tmp",
+            delete=False,
+        ) as fh:
+            tmp_path = fh.name
             json.dump(payload, fh)
         os.replace(tmp_path, path)
         _PRESSURE_HISTORY_LAST_SAVE = now_ts
     except Exception as exc:
         logging.warning("Unable to save pressure history to %s: %s", path, exc)
+        if tmp_path:
+            try:
+                os.remove(tmp_path)
+            except OSError:
+                pass
 
 # -----------------------------------------------------------------------------
 # WEATHER — Apple WeatherKit primary, OpenWeatherMap secondary
