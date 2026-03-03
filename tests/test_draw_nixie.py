@@ -52,3 +52,42 @@ def test_draw_nixie_starts_live_updates(monkeypatch):
     assert seen["started"] is True
     assert seen["frame_id"] == display.frame_id()
     assert isinstance(result.image, Image.Image)
+
+
+def test_live_update_worker_keeps_running_after_own_renders(monkeypatch):
+    display = _FakeDisplay()
+
+    monkeypatch.setattr(draw_nixie, "SCREEN_DELAY", 1)
+    monkeypatch.setattr(draw_nixie, "_compose_frame", lambda now=None: Image.new("RGB", (4, 4)))
+    monkeypatch.setattr(draw_nixie.time, "sleep", lambda *_: None)
+
+    monotonic_values = iter([0.0, 0.1, 0.2, 0.3, 1.1])
+    monkeypatch.setattr(draw_nixie.time, "monotonic", lambda: next(monotonic_values))
+
+    now_values = iter(
+        [
+            dt.datetime(2025, 1, 1, 0, 0, 0),
+            dt.datetime(2025, 1, 1, 0, 0, 1),
+            dt.datetime(2025, 1, 1, 0, 0, 1),
+        ]
+    )
+
+    class _FakeDateTime(dt.datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return next(now_values)
+
+    monkeypatch.setattr(draw_nixie.dt, "datetime", _FakeDateTime)
+
+    class _InlineThread:
+        def __init__(self, target, daemon):
+            self._target = target
+
+        def start(self):
+            self._target()
+
+    monkeypatch.setattr(draw_nixie.threading, "Thread", _InlineThread)
+
+    draw_nixie._start_live_updates(display, expected_frame_id=display.frame_id())
+
+    assert len(display.images) == 2

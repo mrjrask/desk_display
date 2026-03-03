@@ -388,11 +388,12 @@ def _start_live_updates(display, *, expected_frame_id: int | None = None) -> Non
     def _worker() -> None:
         end_time = time.monotonic() + max(1, SCREEN_DELAY)
         last_second = None
+        owned_frame_id = expected_frame_id
 
         while time.monotonic() < end_time:
-            if expected_frame_id is not None and hasattr(display, "frame_id"):
+            if owned_frame_id is not None and hasattr(display, "frame_id"):
                 try:
-                    if display.frame_id() != expected_frame_id:
+                    if display.frame_id() > owned_frame_id:
                         return
                 except Exception:
                     return
@@ -405,6 +406,8 @@ def _start_live_updates(display, *, expected_frame_id: int | None = None) -> Non
                     display.image(frame)
                     if hasattr(display, "show"):
                         display.show()
+                    if owned_frame_id is not None and hasattr(display, "frame_id"):
+                        owned_frame_id = display.frame_id()
                 except Exception:
                     LOGGER.exception("Failed to render Nixie clock")
                     return
