@@ -41,6 +41,7 @@ from config import (
     is_kernel_driven_display,
     get_display_profile_id,
     get_screen_background_color,
+    SCREEN_DELAY,
 )
 from utils import (
     ScreenImage,
@@ -65,15 +66,15 @@ def _color_cycle_profile(
 ) -> tuple[float, float, int | None]:
     """Return cycle timing: initial delay, frame interval, and max steps."""
 
-    # Date/time screens should start cycling immediately across all profiles.
-    # Keeping the cadence fast preserves the intended "rapid" effect.
     _ = display_profile_id
     initial_delay = 0.0
-    interval = 0.08
-    infinite_cycle = kernel_driven or hyperpixel_layout or hyperpixel_square
-    # Non-kernel/non-HyperPixel profiles still cycle for roughly one rotation
-    # window (default SCREEN_DELAY is 4s), then naturally stop.
-    steps = None if infinite_cycle else 60
+    # Kernel-driven displays (HyperPixel/HDMI) can visibly tear/flicker if we
+    # push updates too aggressively. Use a calmer cadence that still animates.
+    interval = 0.20 if (kernel_driven or hyperpixel_layout or hyperpixel_square) else 0.08
+    # Always cap cycling to this screen's dwell window so the worker cannot
+    # continue writing into later screens.
+    cycle_window_seconds = max(0.5, float(SCREEN_DELAY) - 0.2)
+    steps = max(1, int(cycle_window_seconds / interval))
     return initial_delay, interval, steps
 
 # -----------------------------------------------------------------------------
@@ -187,10 +188,7 @@ def _cycle_colors_after_load(
         hyperpixel_layout=hyperpixel_layout,
         hyperpixel_square=hyperpixel_square,
     )
-    # HyperPixel frame ids can drift due driver-side refresh behavior. When
-    # that happens we should keep animating instead of treating those bumps as
-    # a screen takeover.
-    enforce_takeover_tracking = not (hyperpixel_layout or hyperpixel_square)
+    enforce_takeover_tracking = True
     time.sleep(initial_delay)
     expected_frame_id = display.frame_id() if hasattr(display, "frame_id") else None
     if frame_state is not None:
@@ -211,7 +209,7 @@ def _cycle_colors_after_load(
     # another screen has updated the display frame buffer.
     count = 0
     takeover_observations = 0
-    while steps is None or count < steps:
+    while count < steps:
         if (
             enforce_takeover_tracking
             and
@@ -312,6 +310,30 @@ def _start_update_checks(
     t = threading.Thread(target=_worker, daemon=True)
     t.start()
 
+
+def _start_color_cycle(
+    display,
+    order: Literal["date_time", "time_date"],
+    gh_state: dict,
+    screen_id: str,
+    frame_state: dict,
+):
+    """Run the date/time color animation in a background worker."""
+
+    def _worker():
+        try:
+            _cycle_colors_after_load(
+                display,
+                order,
+                lambda: gh_state["value"],
+                screen_id,
+                frame_state,
+            )
+        except Exception:
+            logging.exception("Date/time color cycle failed")
+
+    threading.Thread(target=_worker, daemon=True).start()
+
 # -----------------------------------------------------------------------------
 # Public API
 
@@ -351,6 +373,7 @@ def draw_date(display, transition: bool=False):
         expected_frame_id=frame_id,
         frame_state=frame_state,
     )
+    _start_color_cycle(display, "date_time", gh_state, "date", frame_state)
     return ScreenImage(img, displayed=True)
 
 
@@ -386,4 +409,5 @@ def draw_time(display, transition: bool=False):
         expected_frame_id=frame_id,
         frame_state=frame_state,
     )
+    _start_color_cycle(display, "time_date", gh_state, "time", frame_state)
     return ScreenImage(img, displayed=True)
