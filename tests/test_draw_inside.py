@@ -8,6 +8,7 @@ from screens.draw_inside import (
     _get_sensor_env_override,
     _normalize_sensor_name,
     _normalize_pressure,
+    _parse_i2c_bus_candidates,
 )
 
 
@@ -79,3 +80,8 @@ def test_i2c_pin_pairs_include_hyperpixel_bus_10_mapping():
     pairs = _iter_board_i2c_pin_pairs()
     assert pairs[0] == ("SCL", "SDA")
     assert ("D45", "D44") in pairs
+
+
+def test_parse_i2c_bus_candidates_defaults_include_hyperpixel_buses(monkeypatch):
+    monkeypatch.delenv("INSIDE_I2C_BUSES", raising=False)
+    assert _parse_i2c_bus_candidates() == (10, 11, 1, 0)
