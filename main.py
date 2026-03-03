@@ -1758,7 +1758,7 @@ def main_loop():
                                 "Logo screen '%s' did not refresh the display; forcing frame output.",
                                 sid,
                             )
-                            animate_fade_in(display, img, steps=4, delay=0.01)
+                            animate_fade_in(display, img, delay=0.01)
                         if ENABLE_SCREENSHOTS:
                             saved = _save_screenshot(sid, img)
                             if saved and saved[1]:
@@ -1777,7 +1777,7 @@ def main_loop():
                             already_displayed = False
 
                         if not already_displayed:
-                            animate_fade_in(display, img, steps=8, delay=0.015)
+                            animate_fade_in(display, img, delay=0.015)
                         if ENABLE_SCREENSHOTS:
                             saved = _save_screenshot(sid, img)
                             if saved and saved[1]:

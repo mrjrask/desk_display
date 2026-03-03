@@ -175,6 +175,31 @@ def test_display_profile_presets_drive_scroll_defaults(monkeypatch):
     assert module.SCOREBOARD_SCROLL_STEP == module.ACTIVE_DISPLAY_PROFILE.scoreboard_scroll_step
 
 
+def test_hyperpixel_fade_steps_default_to_zero(monkeypatch):
+    module = _reload_config(
+        monkeypatch,
+        DISPLAY_WIDTH="800",
+        DISPLAY_HEIGHT="480",
+        DISPLAY_FADE_IN_HYPERPIXEL_STEPS=None,
+    )
+
+    assert module.get_display_profile_id() == "hyperpixel4"
+    assert module.DISPLAY_FADE_IN_HYPERPIXEL_STEPS == 0
+    assert module.DISPLAY_FADE_IN_STEPS_BY_PROFILE["hyperpixel4"] == 0
+
+
+def test_hyperpixel_fade_steps_can_be_overridden(monkeypatch):
+    module = _reload_config(
+        monkeypatch,
+        DISPLAY_WIDTH="800",
+        DISPLAY_HEIGHT="480",
+        DISPLAY_FADE_IN_HYPERPIXEL_STEPS="4",
+    )
+
+    assert module.DISPLAY_FADE_IN_HYPERPIXEL_STEPS == 4
+    assert module.DISPLAY_FADE_IN_STEPS_BY_PROFILE["hyperpixel4"] == 4
+
+
 def test_load_env_file_strips_inline_comments_for_unquoted_values(tmp_path, monkeypatch):
     env_path = tmp_path / ".env"
     env_path.write_text(
