@@ -1766,30 +1766,35 @@ def _build_voc_tile(data: Dict[str, Optional[float]], provider: Optional[str]) -
 
 def draw_inside(display, transition: bool=False):
     provider, read_fn = _probe_sensor()
+    sensor_error: Optional[str] = None
     if not read_fn:
         logging.warning("draw_inside: sensor not available")
-        return None
+        sensor_error = "Sensor unavailable"
+        cleaned = {}
+        temp_f = None
+    else:
+        try:
+            data = read_fn()
+            cleaned: Dict[str, Optional[float]] = {}
+            if isinstance(data, dict):
+                cleaned = {key: _clean_metric(value) for key, value in data.items()}
+            else:
+                logging.debug("draw_inside: unexpected data payload type %s", type(data))
+                cleaned = {}
+            temp_f = cleaned.get("temp_f")
 
-    try:
-        data = read_fn()
-        cleaned: Dict[str, Optional[float]] = {}
-        if isinstance(data, dict):
-            cleaned = {key: _clean_metric(value) for key, value in data.items()}
-        else:
-            logging.debug("draw_inside: unexpected data payload type %s", type(data))
+            # Log the sensor data to file
+            _log_sensor_data(provider, cleaned)
+
+        except Exception as e:
+            logging.warning(f"draw_inside: sensor read failed: {e}")
             cleaned = {}
-        temp_f = cleaned.get("temp_f")
+            temp_f = None
+            sensor_error = "Read failed"
 
-        # Log the sensor data to file
-        _log_sensor_data(provider, cleaned)
-
-    except Exception as e:
-        logging.warning(f"draw_inside: sensor read failed: {e}")
-        return None
-
-    if temp_f is None:
+    if temp_f is None and sensor_error is None:
         logging.warning("draw_inside: temperature missing from sensor data")
-        return None
+        sensor_error = "No temperature"
 
     metrics = _build_metric_entries(cleaned)
     voc_tile = _build_voc_tile(cleaned, provider)
@@ -1798,7 +1803,7 @@ def draw_inside(display, transition: bool=False):
 
     # Title text
     title = "Inside"
-    subtitle = provider or ""
+    subtitle = provider or sensor_error or ""
 
     # Compose canvas
     img  = Image.new("RGB", (W, H), config.INSIDE_COL_BG)
@@ -1862,7 +1867,7 @@ def draw_inside(display, transition: bool=False):
     title_block_h = subtitle_y + (sh if subtitle else 0)
 
     # --- Temperature panel --------------------------------------------------
-    temp_value = f"{temp_f:.1f}°F"
+    temp_value = f"{temp_f:.1f}°F" if temp_f is not None else "--.-°F"
     descriptor = ""
 
     content_top = title_block_h + 12
@@ -1907,7 +1912,7 @@ def draw_inside(display, transition: bool=False):
         img,
         draw,
         temp_rect,
-        temp_f,
+        temp_f if temp_f is not None else 72.0,
         temp_value,
         descriptor,
         temp_base,
