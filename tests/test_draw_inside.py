@@ -115,6 +115,27 @@ def test_probe_sensor_uses_pimoroni_bme68x_without_blinka(monkeypatch):
     assert probe_reader is reader
 
 
+def test_probe_sensor_attempts_smbus_probes_without_blinka(monkeypatch):
+    import screens.draw_inside as draw_inside_module
+
+    monkeypatch.delenv("INSIDE_SENSOR", raising=False)
+    monkeypatch.setattr(draw_inside_module, "board", None)
+    monkeypatch.setattr(draw_inside_module, "busio", None)
+
+    reader = lambda: {"temp_f": 70.0}
+
+    monkeypatch.setattr(
+        draw_inside_module,
+        "_get_probe_order",
+        lambda _preference: (("pimoroni_bme680", lambda _i2c, _addresses: ("Pimoroni BME680", reader)),),
+    )
+
+    provider, probe_reader = draw_inside_module._probe_sensor()
+
+    assert provider == "Pimoroni BME680"
+    assert probe_reader is reader
+
+
 def test_draw_inside_returns_placeholder_image_when_sensor_unavailable(monkeypatch):
     import screens.draw_inside as draw_inside_module
 
