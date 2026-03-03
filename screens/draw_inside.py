@@ -419,7 +419,21 @@ print(json.dumps({
 
         return json.loads(stdout)
 
-    payload = _read_bme68x_via_subprocess()
+    try:
+        payload = _read_bme68x_via_subprocess()
+    except Exception as exc:
+        if isinstance(exc, RuntimeError) and "exited by signal" in str(exc):
+            raise
+        logging.info(
+            "draw_inside: Pimoroni bme68x helper unavailable (%s); falling back to pimoroni_bme680",
+            exc,
+        )
+        # The vendored bme68x C-extension is hard-wired to /dev/i2c-1.
+        # On HyperPixel 4 STEMMA/QT setups the sensor is often wired on
+        # auxiliary Linux buses (10/11/13/14/15), so reuse the pure-Python
+        # Pimoroni driver that can bind an explicit SMBus instance.
+        return _probe_pimoroni_bme680(_i2c, addresses)
+
     provider = str(payload.get("provider") or "Pimoroni BME68X")
 
     def read() -> SensorReadings:
@@ -485,40 +499,82 @@ def _probe_pimoroni_bme680(_i2c: Any, addresses: Set[int]) -> Optional[SensorPro
             getattr(module, "I2C_ADDR_SECONDARY", 0x77),
         )
 
+    bus_candidates: List[int] = []
+    primary_bus = _resolve_i2c_bus_number(_i2c) if _i2c is not None else None
+    if primary_bus is not None:
+        bus_candidates.append(primary_bus)
+    for bus_num in _parse_i2c_bus_candidates():
+        if bus_num not in bus_candidates:
+            bus_candidates.append(bus_num)
+
     sensor = None
+    sensor_bus: Optional[int] = None
     last_error: Optional[Exception] = None
     provider_label = "Pimoroni BME680"
     expected_chip_id = getattr(module, "CHIP_ID", 0x61)
     variant_high = getattr(module, "VARIANT_HIGH", None)
     variant_low = getattr(module, "VARIANT_LOW", None)
-    for addr in candidate_addresses:
-        chip_id = _read_chip_id(_i2c, addr)
-        if chip_id is not None and chip_id != expected_chip_id:
-            logging.debug(
-                "draw_inside: skipping Pimoroni BME680 probe at 0x%02X due to chip ID 0x%02X",
-                addr,
-                chip_id,
-            )
-            continue
-        try:
-            sensor = module.BME680(addr)  # type: ignore[arg-type]
-            variant = getattr(sensor, "_variant", None)
-            if variant is not None:
-                if variant_high is not None and variant == variant_high:
-                    provider_label = f"Pimoroni BME688 (0x{addr:02X})"
-                elif variant_low is not None and variant == variant_low:
-                    provider_label = f"Pimoroni BME680 (0x{addr:02X})"
-                else:
-                    provider_label = f"Pimoroni BME68x (0x{addr:02X})"
-            else:
-                provider_label = f"Pimoroni BME680 (0x{addr:02X})"
+    try:
+        from smbus2 import SMBus
+    except Exception as exc:
+        last_error = exc
+        SMBus = None  # type: ignore[assignment]
+
+    for bus_num in bus_candidates:
+        if SMBus is None:
             break
-        except Exception as exc:  # pragma: no cover - relies on hardware
+        try:
+            bus = SMBus(bus_num)
+        except Exception as exc:
             last_error = exc
+            continue
+
+        for addr in candidate_addresses:
+            chip_id = _read_chip_id(_i2c, addr)
+            if chip_id is None:
+                try:
+                    chip_id = int(bus.read_byte_data(addr, 0xD0))
+                except Exception:
+                    chip_id = None
+            if chip_id is not None and chip_id != expected_chip_id:
+                logging.debug(
+                    "draw_inside: skipping Pimoroni BME680 probe at bus %s addr 0x%02X due to chip ID 0x%02X",
+                    bus_num,
+                    addr,
+                    chip_id,
+                )
+                continue
+
+            try:
+                sensor = module.BME680(addr, i2c_device=bus)  # type: ignore[arg-type]
+                sensor_bus = bus_num
+                variant = getattr(sensor, "_variant", None)
+                if variant is not None:
+                    if variant_high is not None and variant == variant_high:
+                        provider_label = f"Pimoroni BME688 (bus {bus_num}, 0x{addr:02X})"
+                    elif variant_low is not None and variant == variant_low:
+                        provider_label = f"Pimoroni BME680 (bus {bus_num}, 0x{addr:02X})"
+                    else:
+                        provider_label = f"Pimoroni BME68x (bus {bus_num}, 0x{addr:02X})"
+                else:
+                    provider_label = f"Pimoroni BME680 (bus {bus_num}, 0x{addr:02X})"
+                break
+            except Exception as exc:  # pragma: no cover - relies on hardware
+                last_error = exc
+        if sensor is not None:
+            break
+
     if sensor is None:
         if last_error is not None:
             raise last_error
         raise RuntimeError("BME680 sensor not found")
+
+    if sensor_bus is not None and primary_bus is not None and sensor_bus != primary_bus:
+        logging.info(
+            "draw_inside: selected Pimoroni BME68x on fallback bus %s (Blinka bus was %s)",
+            sensor_bus,
+            primary_bus,
+        )
 
     for method, value in (
         ("set_humidity_oversample", getattr(module, "OS_2X", None)),
