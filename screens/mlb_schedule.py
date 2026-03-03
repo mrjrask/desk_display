@@ -271,6 +271,7 @@ def _draw_left_team_cell_with_logo(
     w: int,
     h: int,
     font,
+    result_flag: Optional[str]=None,
     fill=(255, 255, 255),
 ) -> None:
     left_pad = max(2, min(6, w // 12))
@@ -287,8 +288,26 @@ def _draw_left_team_cell_with_logo(
         img.paste(logo, (lx, ly), logo)
         text_x = lx + logo.width + max(2, left_pad // 2)
 
+    flag_img = None
+    if result_flag in {"W", "L"}:
+        flag_path = os.path.join(IMAGES_DIR, "mlb", f"{result_flag}.png")
+        if os.path.exists(flag_path):
+            try:
+                flag_img = Image.open(flag_path).convert("RGBA")
+                fw, fh = flag_img.size
+                if fh > 0:
+                    flag_img = flag_img.resize(
+                        (max(1, int(round(fw * (logo_size / float(fh))))), logo_size),
+                        Image.ANTIALIAS,
+                    )
+            except Exception:
+                flag_img = None
+
+    flag_gap = max(2, left_pad // 2)
+    reserved_flag_w = (flag_img.width + flag_gap) if flag_img else 0
+
     # Keep abbreviation constrained to the cell width.
-    max_text_w = max(0, (x + w - left_pad) - text_x)
+    max_text_w = max(0, (x + w - left_pad - reserved_flag_w) - text_x)
     display_abbr = str(abbr)
     if max_text_w <= 0:
         return
@@ -310,6 +329,12 @@ def _draw_left_team_cell_with_logo(
 
     ty = y + (h - th) // 2 - t
     draw.text((text_x - l, ty), display_abbr, font=font, fill=fill)
+
+    if flag_img:
+        fx = min(text_x + tw + flag_gap, x + w - left_pad - flag_img.width)
+        fy = y + (h - flag_img.height) // 2
+        if fx >= x:
+            img.paste(flag_img, (fx, fy), flag_img)
 
 def _compute_table_geometry(
     draw: ImageDraw.ImageDraw,
@@ -384,6 +409,8 @@ def _draw_boxscore_table(img: Image.Image, draw: ImageDraw.ImageDraw, title: str
                          reserve_flag_block: bool,
                          live: bool=False,
                          winner_flag: str|None=None,
+                         inline_team_id: Optional[int]=None,
+                         inline_winner_flag: Optional[str]=None,
                          hyperpixel_layout: bool=False,
                          center_content_vertically: bool=False,
                          center_ignores_reserved_flag_block: bool=False,
@@ -503,6 +530,7 @@ def _draw_boxscore_table(img: Image.Image, draw: ImageDraw.ImageDraw, title: str
             x_left   = xs[cidx]
             y_cell   = grid_top + ridx * row_h
             if cidx == 0 and show_team_logo and row_teams[ridx]:
+                team_id = row_teams[ridx].get("id") if isinstance(row_teams[ridx], dict) else None
                 _draw_left_team_cell_with_logo(
                     img,
                     draw,
@@ -513,6 +541,11 @@ def _draw_boxscore_table(img: Image.Image, draw: ImageDraw.ImageDraw, title: str
                     w=col_w,
                     h=row_h,
                     font=font_use,
+                    result_flag=(
+                        inline_winner_flag
+                        if inline_winner_flag in {"W", "L"} and inline_team_id == team_id
+                        else None
+                    ),
                     fill=fill_col,
                 )
                 continue
@@ -563,6 +596,11 @@ def draw_last_game(display, game, title="Last Game...", transition=False, screen
     )
     result_char = "W" if winner else "L"
     result_title = f"{title} {result_char}"
+    inline_cubs_result_flag = (
+        screen_id == "cubs last"
+        and config.get_display_profile_id() == DISPLAY_PROFILE_HYPERPIXEL4
+        and not is_hyperpixel_4_square_layout()
+    )
 
     # Bottom label: date only (Today/Tomorrow/Yesterday or Tue M/D)
     od = game.get("officialDate", "") or game.get("gameDate","")[:10]
@@ -586,9 +624,15 @@ def draw_last_game(display, game, title="Last Game...", transition=False, screen
         away_team=away["team"],
         home_team=home["team"],
         screen_id=screen_id,
-        reserve_flag_block=True,
+        reserve_flag_block=not inline_cubs_result_flag,
         live=False,
-        winner_flag=(result_char if "Cubs" in title else None),  # flag only for Cubs
+        winner_flag=(
+            result_char
+            if "Cubs" in title and not inline_cubs_result_flag
+            else None
+        ),
+        inline_team_id=(int(MLB_CUBS_TEAM_ID) if inline_cubs_result_flag else None),
+        inline_winner_flag=(result_char if inline_cubs_result_flag else None),
         hyperpixel_layout=hyperpixel_layout,
         center_content_vertically=(screen_id == "sox last"),
         center_ignores_reserved_flag_block=(screen_id == "sox last"),
