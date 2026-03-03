@@ -206,6 +206,7 @@ def _cycle_colors_after_load(
     # Keep cycling while this screen remains active, but stop immediately once
     # another screen has updated the display frame buffer.
     count = 0
+    takeover_observations = 0
     while steps is None or count < steps:
         if (
             expected_frame_id is not None
@@ -227,8 +228,15 @@ def _cycle_colors_after_load(
                     with frame_state["lock"]:
                         expected_frame_id = max(expected_frame_id, frame_state["value"])
                     if current_frame_id <= expected_frame_id:
+                        takeover_observations = 0
                         continue
-                break
+                takeover_observations += 1
+                # Treat a single leading frame read as transient. We only stop
+                # once takeover is observed on consecutive checks.
+                if takeover_observations >= 2:
+                    break
+                continue
+            takeover_observations = 0
         img = _compose_frame(base_order, bright_color(), bright_color(), gh_state(), screen_id)
         display.image(img)
         if hasattr(display, "frame_id"):
