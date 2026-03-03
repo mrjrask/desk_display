@@ -124,3 +124,20 @@ def test_draw_inside_returns_placeholder_image_when_sensor_unavailable(monkeypat
 
     assert image is not None
     assert image.size == (draw_inside_module.W, draw_inside_module.H)
+
+
+def test_probe_pimoroni_bme68x_survives_child_segfault(monkeypatch):
+    import subprocess
+    import screens.draw_inside as draw_inside_module
+
+    def fake_run(*_args, **_kwargs):
+        return subprocess.CompletedProcess(args=[], returncode=-11, stdout="", stderr="")
+
+    monkeypatch.setattr(draw_inside_module.subprocess, "run", fake_run)
+
+    try:
+        draw_inside_module._probe_pimoroni_bme68x(None, set())
+    except RuntimeError as exc:
+        assert "signal 11" in str(exc)
+    else:
+        raise AssertionError("Expected RuntimeError when helper process segfaults")
