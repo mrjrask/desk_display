@@ -320,8 +320,8 @@ def draw_date(display, transition: bool=False):
     Screen A: DATE on top, TIME on bottom.
     When transition=True (used by main.py), returns a single static frame
     to avoid any initial flash. No cycling occurs in transition mode.
-    When transition=False, we show the first frame immediately, then (optionally)
-    do a brief, delayed color cycle so it never flashes on load.
+    When transition=False, we show the first frame immediately and keep the
+    colors stable for the rest of the screen's dwell time.
     """
     col_top    = bright_color()
     col_bottom = bright_color()
@@ -342,13 +342,6 @@ def draw_date(display, transition: bool=False):
         pass
     frame_id = display.frame_id()
     frame_state = {"value": frame_id, "lock": threading.Lock()}
-    # run a tiny, delayed cycle in a short thread so we don't block
-    t = threading.Thread(
-        target=_cycle_colors_after_load,
-        args=(display, "date_time", lambda: gh_state["value"], "date", frame_state),
-        daemon=True,
-    )
-    t.start()
     _start_update_checks(
         "date_time",
         (col_top, col_bottom),
@@ -384,12 +377,6 @@ def draw_time(display, transition: bool=False):
         pass
     frame_id = display.frame_id()
     frame_state = {"value": frame_id, "lock": threading.Lock()}
-    t = threading.Thread(
-        target=_cycle_colors_after_load,
-        args=(display, "time_date", lambda: gh_state["value"], "time", frame_state),
-        daemon=True,
-    )
-    t.start()
     _start_update_checks(
         "time_date",
         (col_top, col_bottom),

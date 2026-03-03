@@ -375,3 +375,79 @@ def test_hyperpixel_color_cycle_ignores_frame_id_drift(monkeypatch):
 
     assert calls["compose"] == 2
     assert calls["images"] == 2
+
+
+def test_draw_date_does_not_start_color_cycle_thread(monkeypatch):
+    class FakeDisplay:
+        def __init__(self):
+            self.images = 0
+            self.shows = 0
+
+        def image(self, _img):
+            self.images += 1
+
+        def show(self):
+            self.shows += 1
+
+        def frame_id(self):
+            return 1
+
+    called = {"cycle": 0}
+
+    monkeypatch.setattr(draw_date_time, "clear_display", lambda _display: None)
+    monkeypatch.setattr(draw_date_time, "bright_color", lambda: (255, 255, 255))
+    monkeypatch.setattr(draw_date_time, "get_update_status", lambda: type("S", (), {"github": False})())
+    monkeypatch.setattr(draw_date_time, "_compose_frame", lambda *_args, **_kwargs: object())
+    monkeypatch.setattr(
+        draw_date_time,
+        "_start_update_checks",
+        lambda *_args, **_kwargs: None,
+    )
+    monkeypatch.setattr(
+        draw_date_time,
+        "_cycle_colors_after_load",
+        lambda *_args, **_kwargs: called.__setitem__("cycle", called["cycle"] + 1),
+    )
+
+    result = draw_date_time.draw_date(FakeDisplay(), transition=False)
+
+    assert result.displayed is True
+    assert called["cycle"] == 0
+
+
+def test_draw_time_does_not_start_color_cycle_thread(monkeypatch):
+    class FakeDisplay:
+        def __init__(self):
+            self.images = 0
+            self.shows = 0
+
+        def image(self, _img):
+            self.images += 1
+
+        def show(self):
+            self.shows += 1
+
+        def frame_id(self):
+            return 1
+
+    called = {"cycle": 0}
+
+    monkeypatch.setattr(draw_date_time, "clear_display", lambda _display: None)
+    monkeypatch.setattr(draw_date_time, "bright_color", lambda: (255, 255, 255))
+    monkeypatch.setattr(draw_date_time, "get_update_status", lambda: type("S", (), {"github": False})())
+    monkeypatch.setattr(draw_date_time, "_compose_frame", lambda *_args, **_kwargs: object())
+    monkeypatch.setattr(
+        draw_date_time,
+        "_start_update_checks",
+        lambda *_args, **_kwargs: None,
+    )
+    monkeypatch.setattr(
+        draw_date_time,
+        "_cycle_colors_after_load",
+        lambda *_args, **_kwargs: called.__setitem__("cycle", called["cycle"] + 1),
+    )
+
+    result = draw_date_time.draw_time(FakeDisplay(), transition=False)
+
+    assert result.displayed is True
+    assert called["cycle"] == 0
