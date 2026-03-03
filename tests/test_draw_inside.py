@@ -95,6 +95,26 @@ def test_parse_i2c_bus_candidates_defaults_include_hyperpixel_buses(monkeypatch)
     assert _parse_i2c_bus_candidates() == (13, 14, 15, 10, 11, 1, 0)
 
 
+def test_probe_sensor_uses_pimoroni_bme68x_without_blinka(monkeypatch):
+    import screens.draw_inside as draw_inside_module
+
+    monkeypatch.setenv("INSIDE_SENSOR", "pimoroni_bme68x")
+    monkeypatch.setattr(draw_inside_module, "board", None)
+    monkeypatch.setattr(draw_inside_module, "busio", None)
+
+    reader = lambda: {"temp_f": 70.0}
+    monkeypatch.setattr(
+        draw_inside_module,
+        "_probe_pimoroni_bme68x",
+        lambda _i2c, _addresses: ("Pimoroni BME688", reader),
+    )
+
+    provider, probe_reader = draw_inside_module._probe_sensor()
+
+    assert provider == "Pimoroni BME688"
+    assert probe_reader is reader
+
+
 def test_draw_inside_returns_placeholder_image_when_sensor_unavailable(monkeypatch):
     import screens.draw_inside as draw_inside_module
 
