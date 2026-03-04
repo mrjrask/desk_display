@@ -333,7 +333,9 @@ def _format_status(game: dict) -> str:
 
     if "postponed" in detailed_lower:
         return "Postponed"
-    if detailed_lower == "warmup":
+    normalized_detail = detailed_lower.replace("-", "")
+
+    if "warmup" in normalized_detail:
         return "Warmup"
     if detailed_lower == "delayed":
         return "Delayed"

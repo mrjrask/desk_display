@@ -29,6 +29,8 @@ def _mlb_game(*, detailed: str, abstract: str = "preview", start: bool = True) -
     "detailed, expected",
     [
         ("Warmup", "Warmup"),
+        ("Pre-Game Warmup", "Warmup"),
+        ("Warm-Up", "Warmup"),
         ("Delayed", "Delayed"),
         ("Postponed", "Postponed"),
     ],
