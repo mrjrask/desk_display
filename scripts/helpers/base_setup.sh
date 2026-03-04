@@ -45,6 +45,7 @@ else
 fi
 
 install_apt_packages
+ensure_avahi_daemon_running
 
 if [[ ! -d "$PROJECT_DIR" ]]; then
   log "Creating project directory: $PROJECT_DIR"
