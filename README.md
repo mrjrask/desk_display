@@ -126,6 +126,8 @@ Optional AirPlay settings:
 
 - `DESK_DISPLAY_AIRPLAY_NAME` (default: `Desk Display`)
 - `DESK_DISPLAY_AIRPLAY_ARGS` (extra raw `uxplay` arguments)
+- `DESK_DISPLAY_AIRPLAY_FULLSCREEN` (default: `1`; pass `-fs` so AirPlay runs fullscreen)
+- `DESK_DISPLAY_AIRPLAY_NATIVE_RESOLUTION` (default: `1`; auto-detect native mode and pass it via `uxplay -s`)
 - `DESK_DISPLAY_AIRPLAY_IDLE_RESUME_SECONDS` (default: `8`)
 - `DESK_DISPLAY_AIRPLAY_POLL_SECONDS` (default: `1`)
 

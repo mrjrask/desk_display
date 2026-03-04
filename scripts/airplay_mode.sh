@@ -9,6 +9,8 @@ AIRPLAY_RECEIVER_NAME="${AIRPLAY_RECEIVER_NAME:-Desk Display}"
 AIRPLAY_PASSWORD="${AIRPLAY_PASSWORD:-}"
 AIRPLAY_PIN="${AIRPLAY_PIN:-}"
 AIRPLAY_EXTRA_ARGS="${AIRPLAY_EXTRA_ARGS:-}"
+AIRPLAY_FULLSCREEN="${AIRPLAY_FULLSCREEN:-1}"
+AIRPLAY_NATIVE_RESOLUTION="${AIRPLAY_NATIVE_RESOLUTION:-1}"
 
 if [[ -f "$ENV_PATH" ]]; then
   # shellcheck disable=SC1090
@@ -27,6 +29,28 @@ fi
 if [[ -n "${DESK_DISPLAY_AIRPLAY_ARGS:-}" ]]; then
   AIRPLAY_EXTRA_ARGS="$DESK_DISPLAY_AIRPLAY_ARGS"
 fi
+if [[ -n "${DESK_DISPLAY_AIRPLAY_FULLSCREEN:-}" ]]; then
+  AIRPLAY_FULLSCREEN="$DESK_DISPLAY_AIRPLAY_FULLSCREEN"
+fi
+if [[ -n "${DESK_DISPLAY_AIRPLAY_NATIVE_RESOLUTION:-}" ]]; then
+  AIRPLAY_NATIVE_RESOLUTION="$DESK_DISPLAY_AIRPLAY_NATIVE_RESOLUTION"
+fi
+
+resolve_display_mode() {
+  if command -v xrandr >/dev/null 2>&1 && [[ -n "${DISPLAY:-}" ]]; then
+    xrandr --current 2>/dev/null | awk '/ connected primary / {print $4; exit} / connected / {print $3; exit}' | cut -d+ -f1
+    return 0
+  fi
+
+  local first_modes_file
+  first_modes_file=$(find /sys/class/drm -maxdepth 3 -type f -name modes 2>/dev/null | head -n1 || true)
+  if [[ -n "$first_modes_file" && -s "$first_modes_file" ]]; then
+    head -n1 "$first_modes_file"
+    return 0
+  fi
+
+  return 1
+}
 
 if ! command -v uxplay >/dev/null 2>&1; then
   echo "[ERROR] uxplay is not installed. Run scripts/update_airplay_dependencies.sh first." >&2
@@ -62,6 +86,20 @@ uxplay_args=(
   -n "$AIRPLAY_RECEIVER_NAME"
   -vsync no
 )
+
+if [[ "$AIRPLAY_FULLSCREEN" == "1" ]]; then
+  uxplay_args+=( -fs )
+fi
+
+if [[ "$AIRPLAY_NATIVE_RESOLUTION" == "1" ]]; then
+  detected_mode=$(resolve_display_mode || true)
+  if [[ -n "$detected_mode" ]]; then
+    uxplay_args+=( -s "$detected_mode" )
+    echo "[INFO] Using native display resolution for AirPlay: $detected_mode"
+  else
+    echo "[WARN] Unable to detect native display resolution; uxplay default resolution will be used."
+  fi
+fi
 
 if [[ -n "$AIRPLAY_PASSWORD" ]]; then
   uxplay_args+=( -P "$AIRPLAY_PASSWORD" )

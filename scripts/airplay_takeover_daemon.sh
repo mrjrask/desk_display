@@ -13,6 +13,8 @@ AIRPLAY_EXTRA_ARGS="${AIRPLAY_EXTRA_ARGS:-}"
 AIRPLAY_IDLE_RESUME_SECONDS="${AIRPLAY_IDLE_RESUME_SECONDS:-8}"
 AIRPLAY_LOOP_SLEEP_SECONDS="${AIRPLAY_LOOP_SLEEP_SECONDS:-1}"
 AIRPLAY_PORTS="${AIRPLAY_PORTS:-7000 7001 7002 7100}"
+AIRPLAY_FULLSCREEN="${AIRPLAY_FULLSCREEN:-1}"
+AIRPLAY_NATIVE_RESOLUTION="${AIRPLAY_NATIVE_RESOLUTION:-1}"
 
 if [[ -f "$ENV_PATH" ]]; then
   # shellcheck disable=SC1090
@@ -30,6 +32,24 @@ AIRPLAY_PIN="${DESK_DISPLAY_AIRPLAY_PIN:-$AIRPLAY_PIN}"
 AIRPLAY_EXTRA_ARGS="${DESK_DISPLAY_AIRPLAY_ARGS:-$AIRPLAY_EXTRA_ARGS}"
 AIRPLAY_IDLE_RESUME_SECONDS="${DESK_DISPLAY_AIRPLAY_IDLE_RESUME_SECONDS:-$AIRPLAY_IDLE_RESUME_SECONDS}"
 AIRPLAY_LOOP_SLEEP_SECONDS="${DESK_DISPLAY_AIRPLAY_POLL_SECONDS:-$AIRPLAY_LOOP_SLEEP_SECONDS}"
+AIRPLAY_FULLSCREEN="${DESK_DISPLAY_AIRPLAY_FULLSCREEN:-$AIRPLAY_FULLSCREEN}"
+AIRPLAY_NATIVE_RESOLUTION="${DESK_DISPLAY_AIRPLAY_NATIVE_RESOLUTION:-$AIRPLAY_NATIVE_RESOLUTION}"
+
+resolve_display_mode() {
+  if command -v xrandr >/dev/null 2>&1 && [[ -n "${DISPLAY:-}" ]]; then
+    xrandr --current 2>/dev/null | awk '/ connected primary / {print $4; exit} / connected / {print $3; exit}' | cut -d+ -f1
+    return 0
+  fi
+
+  local first_modes_file
+  first_modes_file=$(find /sys/class/drm -maxdepth 3 -type f -name modes 2>/dev/null | head -n1 || true)
+  if [[ -n "$first_modes_file" && -s "$first_modes_file" ]]; then
+    head -n1 "$first_modes_file"
+    return 0
+  fi
+
+  return 1
+}
 
 prepare_display_session_env() {
   local session_user="${DESK_DISPLAY_SESSION_USER:-$(whoami)}"
@@ -104,10 +124,25 @@ count_clients() {
 
 
 run_uxplay() {
+  local detected_mode=""
   local args=(
     -n "$AIRPLAY_RECEIVER_NAME"
     -vsync no
   )
+
+  if [[ "$AIRPLAY_FULLSCREEN" == "1" ]]; then
+    args+=( -fs )
+  fi
+
+  if [[ "$AIRPLAY_NATIVE_RESOLUTION" == "1" ]]; then
+    detected_mode=$(resolve_display_mode || true)
+    if [[ -n "$detected_mode" ]]; then
+      args+=( -s "$detected_mode" )
+      echo "[INFO] Using native display resolution for AirPlay: $detected_mode"
+    else
+      echo "[WARN] Unable to detect native display resolution; uxplay default resolution will be used."
+    fi
+  fi
 
   if [[ -n "$AIRPLAY_PASSWORD" ]]; then
     args+=( -P "$AIRPLAY_PASSWORD" )
