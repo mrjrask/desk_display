@@ -15,7 +15,7 @@ def test_color_cycle_profile_display_hat_mini_kernel_is_capped_and_stable():
     assert steps > 0
 
 
-def test_color_cycle_profile_non_kernel_is_rapid_and_capped():
+def test_color_cycle_profile_non_kernel_display_hat_mini_is_subtle_and_short():
     initial_delay, interval, steps = _color_cycle_profile(
         kernel_driven=False,
         display_profile_id="display_hat_mini",
@@ -24,7 +24,8 @@ def test_color_cycle_profile_non_kernel_is_rapid_and_capped():
     )
 
     assert initial_delay == 0.0
-    assert interval == 0.08
+    assert interval == 0.12
+    assert steps <= 10
     assert steps > 0
 
 
