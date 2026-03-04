@@ -29,8 +29,9 @@ sudo apt-get install -y \
     python3-venv python3-pip python3-dev python3-opencv \
     build-essential libjpeg-dev libopenblas0 libopenblas-dev swig liblgpio-dev \
     libopenjp2-7-dev libtiff5-dev libcairo2-dev libpango1.0-dev \
-    libgdk-pixbuf-2.0-dev libffi-dev network-manager wireless-tools \
-    i2c-tools fonts-dejavu-core fonts-noto-color-emoji libgl1 libx264-dev ffmpeg git
+    libgdk-pixbuf-2.0-dev libffi-dev network-manager wireless-tools iproute2 \
+    i2c-tools fonts-dejavu-core fonts-noto-color-emoji libgl1 libx264-dev ffmpeg git \
+    avahi-daemon avahi-utils uxplay
 ```
 
 > **Note:** Debian Trixie uses `libgdk-pixbuf-2.0-dev` instead of the legacy `libgdk-pixbuf2.0-dev` package name.
@@ -93,6 +94,46 @@ The kernel display installers will:
 - Install an autostart entry when `AUTO_START_KERNEL_DISPLAY=1` to launch the kernel display automatically on desktop login.
 - Provide an SSH-friendly helper (`scripts/ssh_kernel_display.sh`) to manage the user service without manual environment setup.
 - On Lite/headless installs with no active desktop session, automatically fall back to `DESK_DISPLAY_OUTPUT=framebuffer` (set `AUTO_FALLBACK_FRAMEBUFFER=0` to keep kernel output).
+
+
+### Password-protected AirPlay takeover (always ready)
+
+Desk Display can run an always-on background AirPlay receiver using `uxplay`.
+
+When an AirPlay client connects, `desk_display.service` is stopped so AirPlay takes over the display. When the AirPlay client disconnects, the dashboard service is restarted automatically and normal screen playback resumes.
+
+1. Set one of these in `.env` (required for protection):
+
+```bash
+DESK_DISPLAY_AIRPLAY_PASSWORD=your-password
+# or
+DESK_DISPLAY_AIRPLAY_PIN=1234
+```
+
+2. Install/update dependencies and background service (existing installs):
+
+```bash
+./scripts/update_airplay_dependencies.sh
+```
+
+The installer enables the AirPlay takeover service by default. To disable it, set:
+
+```bash
+DESK_DISPLAY_AIRPLAY_ALWAYS_ON=0
+```
+
+Optional AirPlay settings:
+
+- `DESK_DISPLAY_AIRPLAY_NAME` (default: `Desk Display`)
+- `DESK_DISPLAY_AIRPLAY_ARGS` (extra raw `uxplay` arguments)
+- `DESK_DISPLAY_AIRPLAY_IDLE_RESUME_SECONDS` (default: `8`)
+- `DESK_DISPLAY_AIRPLAY_POLL_SECONDS` (default: `1`)
+
+Manual on-demand mode is still available:
+
+```bash
+./scripts/airplay_mode.sh
+```
 
 To uninstall the systemd service and optionally remove the virtualenv:
 

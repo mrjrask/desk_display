@@ -146,6 +146,131 @@ EOF
   log "Installed kernel display launcher for $service_name at $launcher_entry"
 }
 
+install_airplay_launcher() {
+  local project_dir="$1"
+  local service_user="$2"
+  local launcher_path="$project_dir/scripts/airplay_mode.sh"
+
+  if [[ ! -f "$launcher_path" ]]; then
+    warn "AirPlay launcher script not found at $launcher_path"
+    return 1
+  fi
+
+  ensure_executable "$launcher_path"
+
+  local home_dir
+  home_dir=$(getent passwd "$service_user" | cut -d: -f6)
+  if [[ -z "$home_dir" ]]; then
+    home_dir="/home/$service_user"
+  fi
+
+  local app_dir="$home_dir/.local/share/applications"
+  local desktop_dir="$home_dir/Desktop"
+  local launcher_entry="$app_dir/desk-display-airplay.desktop"
+
+  if [[ -n "${SUDO:-}" ]]; then
+    $SUDO mkdir -p "$app_dir"
+  else
+    mkdir -p "$app_dir"
+  fi
+
+  local launcher_contents
+  launcher_contents=$(cat <<EOF
+[Desktop Entry]
+Type=Application
+Name=Desk Display AirPlay Mode
+Comment=Pause Desk Display and wait for a password-protected AirPlay connection
+Exec=/bin/bash -lc '$launcher_path'
+Terminal=true
+Categories=AudioVideo;Utility;
+EOF
+)
+
+  if [[ -n "${SUDO:-}" ]]; then
+    echo "$launcher_contents" | $SUDO tee "$launcher_entry" >/dev/null
+    $SUDO chown "$service_user":"$service_user" "$launcher_entry"
+  else
+    echo "$launcher_contents" > "$launcher_entry"
+  fi
+
+  if [[ -d "$desktop_dir" ]]; then
+    local desktop_launcher="$desktop_dir/Desk Display AirPlay Mode.desktop"
+    if [[ -n "${SUDO:-}" ]]; then
+      $SUDO cp "$launcher_entry" "$desktop_launcher"
+      $SUDO chown "$service_user":"$service_user" "$desktop_launcher"
+      $SUDO chmod +x "$desktop_launcher"
+    else
+      cp "$launcher_entry" "$desktop_launcher"
+      chmod +x "$desktop_launcher"
+    fi
+  fi
+
+  log "Installed AirPlay mode launcher at $launcher_entry"
+}
+
+
+
+install_airplay_takeover_service() {
+  local project_dir="$1"
+  local service_user="$2"
+  local service_name="${3:-desk_display_airplay.service}"
+  local service_path="/etc/systemd/system/$service_name"
+  local launcher_path="$project_dir/scripts/airplay_takeover_daemon.sh"
+
+  if [[ ! -f "$launcher_path" ]]; then
+    warn "AirPlay takeover daemon script not found at $launcher_path"
+    return 1
+  fi
+
+  ensure_executable "$launcher_path"
+
+  log "Writing AirPlay takeover systemd service to $service_path"
+  if [[ -n "${SUDO:-}" ]]; then
+    $SUDO tee "$service_path" >/dev/null <<SERVICE
+[Unit]
+Description=Desk Display AirPlay takeover service
+After=network-online.target desk_display.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=$project_dir
+EnvironmentFile=-$project_dir/.env
+ExecStart=/bin/bash -lc '$launcher_path'
+Restart=always
+RestartSec=2
+User=$service_user
+
+[Install]
+WantedBy=multi-user.target
+SERVICE
+  else
+    tee "$service_path" >/dev/null <<SERVICE
+[Unit]
+Description=Desk Display AirPlay takeover service
+After=network-online.target desk_display.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=$project_dir
+EnvironmentFile=-$project_dir/.env
+ExecStart=/bin/bash -lc '$launcher_path'
+Restart=always
+RestartSec=2
+User=$service_user
+
+[Install]
+WantedBy=multi-user.target
+SERVICE
+  fi
+
+  log "Reloading systemd and enabling $service_name"
+  ${SUDO:-} systemctl daemon-reload
+  ${SUDO:-} systemctl enable "$service_name"
+  ${SUDO:-} systemctl restart "$service_name"
+}
+
 install_kernel_autostart() {
   local project_dir="$1"
   local service_user="$2"
@@ -476,8 +601,9 @@ install_apt_packages() {
     build-essential libjpeg-dev libopenblas0 libopenblas-dev
     liblgpio-dev
     libopenjp2-7-dev libcairo2-dev libpango1.0-dev
-    libffi-dev network-manager wireless-tools swig
+    libffi-dev network-manager wireless-tools swig iproute2
     i2c-tools fonts-dejavu-core fonts-noto-color-emoji libgl1 libx264-dev ffmpeg git
+    avahi-daemon avahi-utils uxplay
   )
 
   local packages=("${shared_packages[@]}")
