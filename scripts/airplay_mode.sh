@@ -62,21 +62,42 @@ if [[ -z "$AIRPLAY_PASSWORD" && -z "$AIRPLAY_PIN" ]]; then
   exit 1
 fi
 
-SUDO=""
-if [[ $EUID -ne 0 ]]; then
-  SUDO="sudo"
-fi
+run_systemctl_action() {
+  local action="$1"
+  local service="$2"
 
-if command -v systemctl >/dev/null 2>&1; then
-  echo "[INFO] Stopping $SERVICE_NAME while AirPlay mode is active..."
-  ${SUDO:-} systemctl stop "$SERVICE_NAME" || true
+  if ! command -v systemctl >/dev/null 2>&1; then
+    return 1
+  fi
+
+  if systemctl --user show "$service" >/dev/null 2>&1; then
+    systemctl --user "$action" "$service"
+    return $?
+  fi
+
+  if [[ $EUID -eq 0 ]]; then
+    systemctl "$action" "$service"
+    return $?
+  fi
+
+  if sudo -n true >/dev/null 2>&1; then
+    sudo -n systemctl "$action" "$service"
+    return $?
+  fi
+
+  return 1
+}
+
+echo "[INFO] Stopping $SERVICE_NAME while AirPlay mode is active..."
+if ! run_systemctl_action stop "$SERVICE_NAME"; then
+  echo "[WARN] Unable to stop $SERVICE_NAME automatically. AirPlay may overlap with Desk Display output." >&2
 fi
 
 cleanup() {
   local rc=$?
-  if command -v systemctl >/dev/null 2>&1; then
-    echo "[INFO] Restarting $SERVICE_NAME so scheduled screens resume..."
-    ${SUDO:-} systemctl restart "$SERVICE_NAME" || true
+  echo "[INFO] Restarting $SERVICE_NAME so scheduled screens resume..."
+  if ! run_systemctl_action restart "$SERVICE_NAME"; then
+    echo "[WARN] Unable to restart $SERVICE_NAME automatically. Restart it manually after AirPlay exits." >&2
   fi
   exit "$rc"
 }
