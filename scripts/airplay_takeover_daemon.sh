@@ -92,20 +92,41 @@ if [[ -z "$AIRPLAY_PASSWORD" && -z "$AIRPLAY_PIN" ]]; then
   exit 1
 fi
 
-SUDO=""
-if [[ $EUID -ne 0 ]]; then
-  SUDO="sudo"
-fi
+run_systemctl_action() {
+  local action="$1"
+  local service="$2"
+
+  if ! command -v systemctl >/dev/null 2>&1; then
+    return 1
+  fi
+
+  if systemctl --user show "$service" >/dev/null 2>&1; then
+    systemctl --user "$action" "$service"
+    return $?
+  fi
+
+  if [[ $EUID -eq 0 ]]; then
+    systemctl "$action" "$service"
+    return $?
+  fi
+
+  if sudo -n true >/dev/null 2>&1; then
+    sudo -n systemctl "$action" "$service"
+    return $?
+  fi
+
+  return 1
+}
 
 restart_display() {
-  if command -v systemctl >/dev/null 2>&1; then
-    ${SUDO:-} systemctl restart "$DESK_DISPLAY_SERVICE_NAME" || true
+  if ! run_systemctl_action restart "$DESK_DISPLAY_SERVICE_NAME"; then
+    echo "[WARN] Unable to restart $DESK_DISPLAY_SERVICE_NAME automatically." >&2
   fi
 }
 
 stop_display() {
-  if command -v systemctl >/dev/null 2>&1; then
-    ${SUDO:-} systemctl stop "$DESK_DISPLAY_SERVICE_NAME" || true
+  if ! run_systemctl_action stop "$DESK_DISPLAY_SERVICE_NAME"; then
+    echo "[WARN] Unable to stop $DESK_DISPLAY_SERVICE_NAME automatically." >&2
   fi
 }
 
