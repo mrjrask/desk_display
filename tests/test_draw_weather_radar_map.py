@@ -98,6 +98,7 @@ def test_fetch_radar_frames_prefers_recent_frames(monkeypatch):
             RadarFrame(sample, fresh_ts),
         ],
     )
+    monkeypatch.setattr("screens.draw_weather._fetch_iem_radar_fallback_frames", lambda zoom: [])
 
     frames = _fetch_radar_frames(zoom=7, max_frames=6)
 
@@ -163,3 +164,49 @@ def test_fetch_rainviewer_frames_sorts_to_include_latest(monkeypatch):
     _fetch_radar_frames(zoom=7, max_frames=2)
 
     assert timestamps_requested == ["c", "b"]
+
+
+def test_fetch_rainviewer_frames_tries_alternate_metadata_url(monkeypatch):
+    seen_urls = []
+    now_ts = int(datetime.datetime.now(datetime.timezone.utc).timestamp())
+    metadata = {
+        "host": "https://tilecache.rainviewer.com",
+        "radar": {"past": [{"path": "z", "time": now_ts}]},
+    }
+
+    class _JsonResponse(_MockResponse):
+        def __init__(self, payload):
+            self._payload = payload
+            super().__init__(b"")
+
+        def json(self):
+            return self._payload
+
+    def _mock_get(url, timeout):
+        seen_urls.append(url)
+        if "weather-maps.json" in url:
+            raise RuntimeError("404")
+        if "maps.json" in url:
+            return _JsonResponse(metadata)
+        return _MockResponse(_png_bytes())
+
+    monkeypatch.setattr("screens.draw_weather.requests.get", _mock_get)
+
+    frames = _fetch_radar_frames(zoom=7, max_frames=2)
+
+    assert frames
+    assert any("weather-maps.json" in url for url in seen_urls)
+    assert any("maps.json" in url for url in seen_urls)
+
+
+def test_fetch_radar_frames_uses_iem_when_rainviewer_unavailable(monkeypatch):
+    sample = Image.new("RGBA", (8, 8), (255, 255, 255, 255))
+    monkeypatch.setattr("screens.draw_weather._fetch_rainviewer_frames", lambda zoom, max_frames: [])
+    monkeypatch.setattr(
+        "screens.draw_weather._fetch_iem_radar_fallback_frames",
+        lambda zoom: [RadarFrame(sample, None)],
+    )
+
+    frames = _fetch_radar_frames(zoom=7, max_frames=6)
+
+    assert len(frames) == 1
