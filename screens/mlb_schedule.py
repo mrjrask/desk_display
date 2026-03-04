@@ -227,6 +227,32 @@ def _center_bottom_text(
         ty = HEIGHT - th - margin
     draw.text((tx, ty), text, font=font, fill=fill)
 
+
+def _live_boxscore_status(game: dict) -> str:
+    status = (game or {}).get("status", {}) or {}
+    linescore = (game or {}).get("linescore", {}) or {}
+
+    detailed = str(status.get("detailedState") or "").strip()
+    detailed_lower = detailed.lower()
+    normalized_detail = detailed_lower.replace("-", "")
+
+    if "warmup" in normalized_detail:
+        return "Warmup"
+    if "postponed" in detailed_lower:
+        return "Postponed"
+    if detailed_lower == "delayed":
+        return "Delayed"
+
+    inning_state = str(linescore.get("inningState") or "").strip()
+    inning_ord = str(linescore.get("currentInningOrdinal") or "").strip()
+    inning_text = f"{inning_state} {inning_ord}".strip()
+    if inning_text:
+        return inning_text
+
+    if detailed:
+        return detailed
+    return "In Progress"
+
 def _bbox_center(draw: ImageDraw.ImageDraw, x: int, y: int, w: int, h: int,
                  text: str, font, *, fill=(255,255,255)):
     """
@@ -666,7 +692,7 @@ def draw_box_score(display, game, title="Live Game...", transition=False, screen
         return None
 
     ls      = game.get("linescore", {})
-    inning  = f"{ls.get('inningState','')} {ls.get('currentInningOrdinal','')}".strip() or "In Progress"
+    inning  = _live_boxscore_status(game)
     away_ls = ls.get("teams", {}).get("away", {})
     home_ls = ls.get("teams", {}).get("home", {})
 
