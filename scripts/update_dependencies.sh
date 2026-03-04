@@ -66,7 +66,9 @@ cleanup_stale_egg_info() {
 
   while IFS= read -r -d '' egg_info_dir; do
     warn "Removing stale metadata directory: ${egg_info_dir#$PROJECT_DIR/}"
-    rm -rf "$egg_info_dir"
+    if ! rm -rf "$egg_info_dir" 2>/dev/null; then
+      warn "Unable to remove ${egg_info_dir#$PROJECT_DIR/}; continuing anyway. Fix ownership/permissions if this persists."
+    fi
   done < <(find "$vendor_dir" -mindepth 2 -maxdepth 2 -type d -name '*.egg-info' -print0)
 }
 
