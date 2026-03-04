@@ -89,8 +89,16 @@ fi
 ensure_executable "$MAINTENANCE_DIR/cleanup.sh"
 ensure_executable "$MAINTENANCE_DIR/reset_screenshots.sh"
 ensure_executable "$PROJECT_DIR/scripts/framebuffer_service.sh"
+ensure_executable "$PROJECT_DIR/scripts/airplay_mode.sh"
+ensure_executable "$PROJECT_DIR/scripts/airplay_takeover_daemon.sh"
 
 deactivate
+
+install_airplay_launcher "$PROJECT_DIR" "$SERVICE_USER"
+
+if [[ "${DESK_DISPLAY_AIRPLAY_ALWAYS_ON:-1}" == "1" ]]; then
+  install_airplay_takeover_service "$PROJECT_DIR" "$SERVICE_USER"
+fi
 
 SERVICE_PATH="/etc/systemd/system/$SERVICE_NAME"
 SERVICE_ENV_LINES=()
