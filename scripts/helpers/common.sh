@@ -614,6 +614,17 @@ install_apt_packages() {
   ${SUDO:-} apt-get install -y "${packages[@]}"
 }
 
+ensure_avahi_daemon_running() {
+  if ! command -v systemctl >/dev/null 2>&1; then
+    warn "systemctl not available; cannot enable avahi-daemon automatically."
+    return 0
+  fi
+
+  log "Enabling and restarting avahi-daemon for AirPlay mDNS discovery."
+  ${SUDO:-} systemctl enable avahi-daemon || warn "Failed to enable avahi-daemon."
+  ${SUDO:-} systemctl restart avahi-daemon || warn "Failed to restart avahi-daemon."
+}
+
 prepend_env_vars() {
   local env_path="$1"
   shift

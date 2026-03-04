@@ -43,6 +43,7 @@ export EXPECTED_CODENAME
 
 log "Installing/updating all Desk Display apt dependencies (existing + AirPlay support)..."
 install_apt_packages
+ensure_avahi_daemon_running
 
 install_airplay_launcher "$PROJECT_DIR" "$SERVICE_USER"
 ensure_executable "$PROJECT_DIR/scripts/airplay_mode.sh"
