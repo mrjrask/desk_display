@@ -183,6 +183,48 @@ def test_nhl_scoreboard_hidden_during_2026_break_window():
     assert registry["NHL Scoreboard v2"].available is False
 
 
+def test_cubs_live_is_available_when_status_is_warmup():
+    now = datetime.datetime(2024, 7, 1, 12, 0, tzinfo=CENTRAL_TIME)
+    weather = {"hourly": []}
+    registry, _ = build_screen_registry(
+        _make_context(
+            weather,
+            now,
+            cache_updates={
+                "cubs": {
+                    "live": {
+                        "officialDate": "2024-07-01",
+                        "status": {"detailedState": "Warmup"},
+                    }
+                }
+            },
+        )
+    )
+
+    assert registry["cubs live"].available is True
+
+
+def test_sox_live_is_available_when_status_is_pre_game_warmup():
+    now = datetime.datetime(2024, 7, 1, 12, 0, tzinfo=CENTRAL_TIME)
+    weather = {"hourly": []}
+    registry, _ = build_screen_registry(
+        _make_context(
+            weather,
+            now,
+            cache_updates={
+                "sox": {
+                    "live": {
+                        "officialDate": "2024-07-01",
+                        "status": {"detailedState": "Pre-Game Warmup"},
+                    }
+                }
+            },
+        )
+    )
+
+    assert registry["sox live"].available is True
+
+
 def test_logo_scroll_threshold_detects_1080p_and_higher():
     assert _is_1080p_or_higher(1920, 1080) is True
     assert _is_1080p_or_higher(1080, 1920) is True
