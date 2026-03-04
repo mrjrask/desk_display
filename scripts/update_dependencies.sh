@@ -57,6 +57,19 @@ pick_requirements_file() {
 }
 
 REQUIREMENTS_FILE=$(pick_requirements_file)
+cleanup_stale_egg_info() {
+  local vendor_dir="$PROJECT_DIR/vendor"
+
+  if [[ ! -d "$vendor_dir" ]]; then
+    return 0
+  fi
+
+  while IFS= read -r -d '' egg_info_dir; do
+    warn "Removing stale metadata directory: ${egg_info_dir#$PROJECT_DIR/}"
+    rm -rf "$egg_info_dir"
+  done < <(find "$vendor_dir" -mindepth 2 -maxdepth 2 -type d -name '*.egg-info' -print0)
+}
+
 VENV_DIR="$PROJECT_DIR/venv"
 EXISTING_VENV=$(detect_existing_venv "$PROJECT_DIR" || true)
 if [[ -n "$EXISTING_VENV" ]]; then
@@ -82,6 +95,7 @@ pip install --upgrade pip
 
 if [[ -f "$PROJECT_DIR/$REQUIREMENTS_FILE" ]]; then
   log "Installing Python dependencies from $REQUIREMENTS_FILE"
+  cleanup_stale_egg_info
   pushd "$PROJECT_DIR" >/dev/null
   pip install -r "$REQUIREMENTS_FILE"
   popd >/dev/null
