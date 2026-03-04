@@ -569,6 +569,7 @@ def build_screen_registry(context: ScreenContext) -> Tuple[Dict[str, ScreenDefin
         status_text = " ".join(
             part.strip().lower() for part in status_parts if str(part).strip()
         )
+        warmup = "warmup" in status_text
 
         if not status_text and not coded and not status_code:
             return False
@@ -583,7 +584,7 @@ def build_screen_registry(context: ScreenContext) -> Tuple[Dict[str, ScreenDefin
             "schedule",
             "pregame",
         )
-        if any(word in status_text for word in negative_keywords):
+        if any(word in status_text for word in negative_keywords) and not warmup:
             return False
 
         positive = any(
@@ -608,8 +609,12 @@ def build_screen_registry(context: ScreenContext) -> Tuple[Dict[str, ScreenDefin
                 "half",
                 "top",
                 "bottom",
+                "warmup",
             )
         )
+
+        if warmup:
+            positive = True
 
         if not positive:
             if coded == "I":
