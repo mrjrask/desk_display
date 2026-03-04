@@ -66,14 +66,24 @@ def _color_cycle_profile(
 ) -> tuple[float, float, int | None]:
     """Return cycle timing: initial delay, frame interval, and max steps."""
 
-    _ = display_profile_id
     initial_delay = 0.0
     # Kernel-driven displays (HyperPixel/HDMI) can visibly tear/flicker if we
     # push updates too aggressively. Use a calmer cadence that still animates.
-    interval = 0.20 if (kernel_driven or hyperpixel_layout or hyperpixel_square) else 0.08
-    # Always cap cycling to this screen's dwell window so the worker cannot
-    # continue writing into later screens.
-    cycle_window_seconds = max(0.5, float(SCREEN_DELAY) - 0.2)
+    if kernel_driven or hyperpixel_layout or hyperpixel_square:
+        interval = 0.20
+        cycle_window_seconds = max(0.5, float(SCREEN_DELAY) - 0.2)
+    elif display_profile_id == "display_hat_mini":
+        # Display HAT Mini can overrun into subsequent screens if this worker
+        # animates through most of the dwell window. Keep animation subtle and
+        # short so color changes stay scoped to date/time only.
+        interval = 0.12
+        cycle_window_seconds = min(max(0.4, float(SCREEN_DELAY) * 0.35), 1.2)
+    else:
+        interval = 0.08
+        # Always cap cycling to this screen's dwell window so the worker cannot
+        # continue writing into later screens.
+        cycle_window_seconds = max(0.5, float(SCREEN_DELAY) - 0.2)
+
     steps = max(1, int(cycle_window_seconds / interval))
     return initial_delay, interval, steps
 
