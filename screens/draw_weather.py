@@ -89,6 +89,11 @@ RADAR_CENTER_LONGITUDE = -87.6298
 RADAR_MAX_FRAME_AGE = datetime.timedelta(hours=2)
 RADAR_ANIMATION_FRAME_DELAY_SECONDS = 0.2
 RADAR_ANIMATION_LOOPS = 3
+RAINVIEWER_METADATA_URLS = (
+    "https://api.rainviewer.com/public/weather-maps.json",
+    # RainViewer's free metadata endpoint has moved at times; keep a fallback.
+    "https://api.rainviewer.com/public/maps.json",
+)
 
 
 _IS_1080P_LAYOUT = config.is_hdmi_1080p_layout()
@@ -1314,6 +1319,8 @@ def _format_radar_timestamp(timestamp: Optional[int]) -> str:
 def _fetch_radar_frames(zoom: int = 7, max_frames: int = 6) -> list[RadarFrame]:
     frames = _fetch_rainviewer_frames(zoom=zoom, max_frames=max_frames)
     if not frames:
+        frames = _fetch_iem_radar_fallback_frames(zoom=zoom)
+    if not frames:
         return []
 
     now_ts = int(datetime.datetime.now(datetime.timezone.utc).timestamp())
@@ -1328,14 +1335,17 @@ def _fetch_radar_frames(zoom: int = 7, max_frames: int = 6) -> list[RadarFrame]:
 
 
 def _fetch_rainviewer_frames(zoom: int = 7, max_frames: int = 6) -> list[RadarFrame]:
-    try:
-        meta_resp = requests.get(
-            "https://api.rainviewer.com/public/weather-maps.json", timeout=6
-        )
-        meta_resp.raise_for_status()
-        metadata = meta_resp.json()
-    except Exception as exc:
-        logging.warning("Radar metadata fetch failed: %s", exc)
+    metadata = None
+    for metadata_url in RAINVIEWER_METADATA_URLS:
+        try:
+            meta_resp = requests.get(metadata_url, timeout=6)
+            meta_resp.raise_for_status()
+            metadata = meta_resp.json()
+            break
+        except Exception as exc:
+            logging.warning("Radar metadata fetch failed from %s: %s", metadata_url, exc)
+
+    if not isinstance(metadata, dict):
         return []
 
     host = metadata.get("host", "https://tilecache.rainviewer.com")
@@ -1379,6 +1389,26 @@ def _fetch_rainviewer_frames(zoom: int = 7, max_frames: int = 6) -> list[RadarFr
         images.append(RadarFrame(final_frame, timestamp))
 
     return images
+
+
+def _fetch_iem_radar_fallback_frames(zoom: int = 7) -> list[RadarFrame]:
+    """Fetch a free, no-key radar tile from Iowa State Mesonet as a fallback."""
+    x_tile, y_tile, _, _ = _latlon_to_tile(
+        RADAR_CENTER_LATITUDE,
+        RADAR_CENTER_LONGITUDE,
+        zoom,
+    )
+    url = f"https://mesonet.agron.iastate.edu/cache/tile.py/1.0.0/q2-hsr-900913/{zoom}/{x_tile}/{y_tile}.png"
+    try:
+        resp = requests.get(url, timeout=6, headers={"User-Agent": "desk-display/weather-radar"})
+        resp.raise_for_status()
+        tile = Image.open(BytesIO(resp.content)).convert("RGBA")
+    except Exception as exc:  # pragma: no cover - network failures are non-fatal
+        logging.warning("IEM radar fallback fetch failed: %s", exc)
+        return []
+
+    final_frame = tile.resize((WIDTH, HEIGHT), Image.LANCZOS).convert("RGBA")
+    return [RadarFrame(final_frame, int(datetime.datetime.now(datetime.timezone.utc).timestamp()))]
 
 
 def _fetch_base_map(zoom: int = 7) -> Optional[Image.Image]:
