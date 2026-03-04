@@ -72,6 +72,64 @@ def test_draw_box_score_reserves_flag_block_for_live_layout(monkeypatch):
     assert captured["center_ignores_reserved_flag_block"] is True
 
 
+def test_draw_box_score_uses_warmup_status_over_inning_state(monkeypatch):
+    captured = {}
+
+    def _fake_draw_table(*args, **kwargs):
+        captured["bottom"] = args[11]
+
+    monkeypatch.setattr(mlb_schedule, "_draw_boxscore_table", _fake_draw_table)
+
+    game = {
+        "status": {"detailedState": "Warmup"},
+        "linescore": {
+            "inningState": "Top",
+            "currentInningOrdinal": "1st",
+            "teams": {
+                "away": {"hits": 0, "errors": 0},
+                "home": {"hits": 0, "errors": 0},
+            },
+        },
+        "teams": {
+            "away": {"score": 0, "team": {"name": "Chicago Cubs"}},
+            "home": {"score": 0, "team": {"name": "Chicago White Sox"}},
+        },
+    }
+
+    mlb_schedule.draw_box_score(None, game, title="Cubs Live...", screen_id="cubs live")
+
+    assert captured["bottom"] == "Warmup"
+
+
+def test_draw_box_score_normalizes_hyphenated_warmup_status(monkeypatch):
+    captured = {}
+
+    def _fake_draw_table(*args, **kwargs):
+        captured["bottom"] = args[11]
+
+    monkeypatch.setattr(mlb_schedule, "_draw_boxscore_table", _fake_draw_table)
+
+    game = {
+        "status": {"detailedState": "Pre-Game Warmup"},
+        "linescore": {
+            "inningState": "Top",
+            "currentInningOrdinal": "1st",
+            "teams": {
+                "away": {"hits": 0, "errors": 0},
+                "home": {"hits": 0, "errors": 0},
+            },
+        },
+        "teams": {
+            "away": {"score": 0, "team": {"name": "Chicago Cubs"}},
+            "home": {"score": 0, "team": {"name": "Chicago White Sox"}},
+        },
+    }
+
+    mlb_schedule.draw_box_score(None, game, title="Sox Live...", screen_id="sox live")
+
+    assert captured["bottom"] == "Warmup"
+
+
 
 def test_draw_box_score_centers_content_vertically_for_live_screens(monkeypatch):
     captured = {}
