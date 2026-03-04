@@ -4,6 +4,7 @@ set -euo pipefail
 SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 PROJECT_DIR="${PROJECT_DIR:-$(cd -- "$SCRIPT_DIR/.." && pwd)}"
 ENV_PATH="$PROJECT_DIR/.env"
+COMMON_SCRIPT="$SCRIPT_DIR/helpers/common.sh"
 DESK_DISPLAY_SERVICE_NAME="${DESK_DISPLAY_SERVICE_NAME:-desk_display.service}"
 AIRPLAY_RECEIVER_NAME="${AIRPLAY_RECEIVER_NAME:-Desk Display}"
 AIRPLAY_PASSWORD="${AIRPLAY_PASSWORD:-}"
@@ -18,12 +19,48 @@ if [[ -f "$ENV_PATH" ]]; then
   source "$ENV_PATH"
 fi
 
+if [[ -f "$COMMON_SCRIPT" ]]; then
+  # shellcheck disable=SC1090
+  source "$COMMON_SCRIPT"
+fi
+
 AIRPLAY_RECEIVER_NAME="${DESK_DISPLAY_AIRPLAY_NAME:-$AIRPLAY_RECEIVER_NAME}"
 AIRPLAY_PASSWORD="${DESK_DISPLAY_AIRPLAY_PASSWORD:-$AIRPLAY_PASSWORD}"
 AIRPLAY_PIN="${DESK_DISPLAY_AIRPLAY_PIN:-$AIRPLAY_PIN}"
 AIRPLAY_EXTRA_ARGS="${DESK_DISPLAY_AIRPLAY_ARGS:-$AIRPLAY_EXTRA_ARGS}"
 AIRPLAY_IDLE_RESUME_SECONDS="${DESK_DISPLAY_AIRPLAY_IDLE_RESUME_SECONDS:-$AIRPLAY_IDLE_RESUME_SECONDS}"
 AIRPLAY_LOOP_SLEEP_SECONDS="${DESK_DISPLAY_AIRPLAY_POLL_SECONDS:-$AIRPLAY_LOOP_SLEEP_SECONDS}"
+
+prepare_display_session_env() {
+  local session_user="${DESK_DISPLAY_SESSION_USER:-$(whoami)}"
+
+  if declare -F detect_desktop_session >/dev/null 2>&1; then
+    detect_desktop_session "$session_user" || true
+  fi
+
+  if [[ -z "${XDG_RUNTIME_DIR:-}" ]]; then
+    local uid runtime_dir
+    uid=$(id -u "$session_user" 2>/dev/null || id -u)
+    runtime_dir="/run/user/$uid"
+    if [[ -d "$runtime_dir" ]]; then
+      export XDG_RUNTIME_DIR="$runtime_dir"
+    fi
+  fi
+
+  if [[ -n "${DISPLAY:-}" && -z "${XAUTHORITY:-}" ]]; then
+    local home_dir xauth_path
+    home_dir=$(getent passwd "$session_user" | cut -d: -f6)
+    if [[ -z "$home_dir" ]]; then
+      home_dir="$HOME"
+    fi
+    xauth_path="$home_dir/.Xauthority"
+    if [[ -f "$xauth_path" ]]; then
+      export XAUTHORITY="$xauth_path"
+    fi
+  fi
+}
+
+prepare_display_session_env
 
 if ! command -v uxplay >/dev/null 2>&1; then
   echo "[ERROR] uxplay is not installed. Run scripts/update_airplay_dependencies.sh first." >&2
