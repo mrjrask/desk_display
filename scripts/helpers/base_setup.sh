@@ -57,34 +57,14 @@ if [[ ! -d "$PROJECT_DIR/.git" ]]; then
 fi
 
 VENV_DIR="$PROJECT_DIR/venv"
+"$PROJECT_DIR/scripts/update_dependencies.sh" \
+  --python "$PYTHON_BIN" \
+  --requirements "$REQUIREMENTS_FILE" \
+  --output "${DESK_DISPLAY_OUTPUT:-}"
+
 EXISTING_VENV=$(detect_existing_venv "$PROJECT_DIR" || true)
 if [[ -n "$EXISTING_VENV" ]]; then
   VENV_DIR="$EXISTING_VENV"
-  log "Found existing virtual environment at $VENV_DIR"
-fi
-
-if [[ ! -f "$VENV_DIR/pyvenv.cfg" ]]; then
-  if [[ -d "$VENV_DIR" ]]; then
-    warn "$VENV_DIR exists but does not look like a virtual environment. Recreating."
-  fi
-  log "Creating virtual environment with $PYTHON_BIN at $VENV_DIR"
-  "$PYTHON_BIN" -m venv "$VENV_DIR"
-else
-  log "Virtual environment already exists at $VENV_DIR"
-fi
-
-# shellcheck source=/dev/null
-source "$VENV_DIR/bin/activate"
-
-pip install --upgrade pip
-
-if [[ -f "$PROJECT_DIR/$REQUIREMENTS_FILE" ]]; then
-  log "Installing Python dependencies from $REQUIREMENTS_FILE"
-  pushd "$PROJECT_DIR" >/dev/null
-  pip install -r "$REQUIREMENTS_FILE"
-  popd >/dev/null
-else
-  warn "$REQUIREMENTS_FILE not found; skipping pip install."
 fi
 
 ensure_executable "$MAINTENANCE_DIR/cleanup.sh"
@@ -92,8 +72,6 @@ ensure_executable "$MAINTENANCE_DIR/reset_screenshots.sh"
 ensure_executable "$PROJECT_DIR/scripts/framebuffer_service.sh"
 ensure_executable "$PROJECT_DIR/scripts/airplay_mode.sh"
 ensure_executable "$PROJECT_DIR/scripts/airplay_takeover_daemon.sh"
-
-deactivate
 
 install_airplay_launcher "$PROJECT_DIR" "$SERVICE_USER"
 

@@ -49,6 +49,14 @@ pip install -r requirements.txt
 
 Use `requirements_kernel.txt` instead when running on a kernel-driven display without the Display HAT Mini driver.
 
+For existing installs, refresh Python dependencies with:
+
+```bash
+./scripts/update_dependencies.sh
+```
+
+Pass `--requirements requirements_kernel.txt` (or `requirements_framebuffer.txt`) when needed.
+
 To start the display loop directly:
 
 ```bash
@@ -148,6 +156,8 @@ bash ./scripts/uninstall.sh
 ## Configuration
 
 Desk Display reads configuration from environment variables and (optionally) a `.env` file. The main loop sets `CONFIG_LOAD_DOTENV=1` by default so `.env` is picked up automatically; set it yourself when running other tools directly (like `config_ui.py`).
+
+The config UI is a Flask app served by Waitress when you run `python config_ui.py`.
 
 ### Display output
 

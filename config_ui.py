@@ -733,7 +733,9 @@ def run_config_ui(host: str = SCREEN_CONFIG_HOST, port: int = SCREEN_CONFIG_PORT
             format="%(asctime)s %(levelname)-8s %(message)s",
             datefmt="%H:%M:%S",
         )
-    app.run(host=host, port=port, debug=False, use_reloader=False, threaded=True)
+    from waitress import serve
+
+    serve(app, host=host, port=port, threads=8)
 
 
 @app.route("/login", methods=["GET", "POST"])
