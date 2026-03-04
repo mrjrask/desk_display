@@ -1337,6 +1337,17 @@ _FEED_REFRESH_INTERVALS: Dict[str, int] = {
     "scoreboards": 120,
 }
 
+_SCOREBOARD_SCREEN_IDS = {
+    "NFL Scoreboard",
+    "NFL Scoreboard v2",
+    "NHL Scoreboard",
+    "NHL Scoreboard v2",
+    "MLB Scoreboard",
+    "MLB Scoreboard v2",
+    "NBA Scoreboard",
+    "NBA Scoreboard v2",
+}
+
 _last_feed_refresh: Dict[str, float] = {}
 
 
@@ -1361,6 +1372,80 @@ def _refresh_weather() -> None:
 def _refresh_scoreboards() -> None:
     sports_payloads = data_provider.read_sports_payloads(ttl_seconds=120) or {}
     cache["scoreboards"].update(sports_payloads.get("scoreboards") or {})
+
+
+def _refresh_scoreboards_fresh() -> None:
+    sports_payloads = data_provider.read_sports_payloads(ttl_seconds=0) or {}
+    cache["scoreboards"].update(sports_payloads.get("scoreboards") or {})
+
+
+def _is_live_scoreboard_game(game: object) -> bool:
+    if not isinstance(game, dict):
+        return False
+
+    status_fields: list[str] = []
+    status_blob = game.get("status")
+    if isinstance(status_blob, dict):
+        for key in (
+            "detailedState",
+            "abstractGameState",
+            "gameStatus",
+            "gameStatusText",
+            "state",
+            "gameState",
+            "displayClock",
+        ):
+            value = status_blob.get(key)
+            if value:
+                status_fields.append(str(value))
+        coded = str(status_blob.get("codedGameState") or "").upper()
+        status_code = str(status_blob.get("statusCode") or "").upper()
+    else:
+        coded = str(game.get("codedGameState") or "").upper()
+        status_code = str(game.get("statusCode") or game.get("gameStatus") or "").upper()
+
+    for key in (
+        "gameStatusText",
+        "gameStatus",
+        "detailedState",
+        "abstractGameState",
+        "status",
+        "gameState",
+        "displayClock",
+    ):
+        value = game.get(key)
+        if value:
+            status_fields.append(str(value))
+
+    status_text = " ".join(part.strip().lower() for part in status_fields if str(part).strip())
+
+    if any(
+        token in status_text
+        for token in ("final", "postponed", "canceled", "cancelled", "suspend", "scheduled", "preview", "pregame")
+    ):
+        return False
+
+    if any(
+        token in status_text
+        for token in ("live", "in progress", "in-progress", "intermission", "halftime", "quarter", "period", "ot", "top", "bottom")
+    ):
+        return True
+
+    return coded == "I" or status_code in {"I", "2", "3"}
+
+
+def _scoreboards_have_live_games(scoreboards: object) -> bool:
+    if not isinstance(scoreboards, dict):
+        return False
+
+    for games in scoreboards.values():
+        if not isinstance(games, list):
+            continue
+        for game in games:
+            if _is_live_scoreboard_game(game):
+                return True
+
+    return False
 
 
 def _refresh_bears() -> None:
@@ -1693,6 +1778,13 @@ def main_loop():
                 continue
 
             sid = entry.id
+            if sid in _SCOREBOARD_SCREEN_IDS and _scoreboards_have_live_games(cache.get("scoreboards")):
+                try:
+                    _refresh_scoreboards_fresh()
+                    _last_feed_refresh["scoreboards"] = time.monotonic()
+                except Exception as exc:
+                    logging.error("Failed to force-refresh scoreboards for '%s': %s", sid, exc)
+
             loop_count += 1
             logging.info("🎬 Presenting '%s' (iteration %d)", sid, loop_count)
 
