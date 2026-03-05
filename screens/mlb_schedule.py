@@ -397,6 +397,7 @@ def _compute_table_geometry(
     max_rows_h = grid_bottom_limit - grid_top
     if max_rows_h > 0:
         square = min(square, max_rows_h // 2)
+
     square = max(18, square)
 
     # Derive first column width from final square
@@ -440,7 +441,8 @@ def _draw_boxscore_table(img: Image.Image, draw: ImageDraw.ImageDraw, title: str
                          hyperpixel_layout: bool=False,
                          center_content_vertically: bool=False,
                          center_ignores_reserved_flag_block: bool=False,
-                         flag_scale: float=1.0):
+                         flag_scale: float=1.0,
+                         row_height_matches_reserved_flag_block: Optional[bool]=None):
     """
     Render the whole screen (title + header + table + optional small flag + bottom line).
     - Columns 2–4 are true squares; column 1 stretches.
@@ -493,7 +495,21 @@ def _draw_boxscore_table(img: Image.Image, draw: ImageDraw.ImageDraw, title: str
     square  = g["square"]
     xs      = g["xs"]
     total_w = g["grid_w"]
-    grid_h  = g["grid_h"]
+
+    if row_height_matches_reserved_flag_block is not None:
+        g_ref = _compute_table_geometry(
+            draw,
+            top_y=edge_pad + th + title_gap,
+            bottom_y=bottom_y,
+            reserve_flag_block=row_height_matches_reserved_flag_block,
+            table_side_margin=table_side_margin,
+            min_team_col_width=min_team_col_width,
+            header_gap=header_gap,
+            reserve_flag_height=flag_block_h,
+        )
+        row_h = min(row_h, g_ref["row_h"])
+
+    grid_h  = row_h * 2
 
     if center_content_vertically:
         content_top = edge_pad + th + title_gap
@@ -663,6 +679,7 @@ def draw_last_game(display, game, title="Last Game...", transition=False, screen
         center_content_vertically=(screen_id == "sox last"),
         center_ignores_reserved_flag_block=(screen_id == "sox last"),
         flag_scale=(2.0 if screen_id == "cubs last" and is_hyperpixel_4_square_layout() else 1.0),
+        row_height_matches_reserved_flag_block=(True if screen_id == "cubs last" else None),
     )
 
     def _as_int(value):
