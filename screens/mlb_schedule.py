@@ -372,6 +372,7 @@ def _compute_table_geometry(
     min_team_col_width: int = MIN_TEAM_COL_WIDTH,
     header_gap: int = HEADER_GAP,
     reserve_flag_height: int = FLAG_BLOCK_H,
+    square_scale: float = 1.0,
 ) -> dict:
     """
     Decide sizes so that columns 2–4 are true squares (same width as row height),
@@ -397,6 +398,10 @@ def _compute_table_geometry(
     max_rows_h = grid_bottom_limit - grid_top
     if max_rows_h > 0:
         square = min(square, max_rows_h // 2)
+
+    # Allow callers to slightly tighten row heights while keeping all score
+    # columns equally sized squares.
+    square = int(round(square * max(0.5, square_scale)))
     square = max(18, square)
 
     # Derive first column width from final square
@@ -440,7 +445,8 @@ def _draw_boxscore_table(img: Image.Image, draw: ImageDraw.ImageDraw, title: str
                          hyperpixel_layout: bool=False,
                          center_content_vertically: bool=False,
                          center_ignores_reserved_flag_block: bool=False,
-                         flag_scale: float=1.0):
+                         flag_scale: float=1.0,
+                         square_scale: float=1.0):
     """
     Render the whole screen (title + header + table + optional small flag + bottom line).
     - Columns 2–4 are true squares; column 1 stretches.
@@ -485,6 +491,7 @@ def _draw_boxscore_table(img: Image.Image, draw: ImageDraw.ImageDraw, title: str
         min_team_col_width=min_team_col_width,
         header_gap=header_gap,
         reserve_flag_height=flag_block_h,
+        square_scale=square_scale,
     )
     hdr_h   = g["hdr_h"]
     grid_top= g["grid_top"]
@@ -663,6 +670,7 @@ def draw_last_game(display, game, title="Last Game...", transition=False, screen
         center_content_vertically=(screen_id == "sox last"),
         center_ignores_reserved_flag_block=(screen_id == "sox last"),
         flag_scale=(2.0 if screen_id == "cubs last" and is_hyperpixel_4_square_layout() else 1.0),
+        square_scale=(0.9 if screen_id == "cubs last" else 1.0),
     )
 
     def _as_int(value):
