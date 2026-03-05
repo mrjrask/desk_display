@@ -36,15 +36,50 @@ AIRPLAY_FULLSCREEN="${DESK_DISPLAY_AIRPLAY_FULLSCREEN:-$AIRPLAY_FULLSCREEN}"
 AIRPLAY_NATIVE_RESOLUTION="${DESK_DISPLAY_AIRPLAY_NATIVE_RESOLUTION:-$AIRPLAY_NATIVE_RESOLUTION}"
 
 resolve_display_mode() {
+  local mode=""
+
   if command -v xrandr >/dev/null 2>&1 && [[ -n "${DISPLAY:-}" ]]; then
-    xrandr --current 2>/dev/null | awk '/ connected primary / {print $4; exit} / connected / {print $3; exit}' | cut -d+ -f1
-    return 0
+    mode=$(xrandr --current 2>/dev/null | awk '
+      / connected primary / {
+        split($4, parts, "+")
+        print parts[1]
+        exit
+      }
+      / connected / {
+        split($3, parts, "+")
+        if (parts[1] ~ /^[0-9]+x[0-9]+$/) {
+          print parts[1]
+          exit
+        }
+      }
+    ')
+    if [[ -n "$mode" ]]; then
+      echo "$mode"
+      return 0
+    fi
   fi
 
-  local first_modes_file
-  first_modes_file=$(find /sys/class/drm -maxdepth 3 -type f -name modes 2>/dev/null | head -n1 || true)
-  if [[ -n "$first_modes_file" && -s "$first_modes_file" ]]; then
-    head -n1 "$first_modes_file"
+  mode=$(find /sys/class/drm -maxdepth 3 -type f -name modes -print 2>/dev/null \
+    | xargs -r cat 2>/dev/null \
+    | awk -Fx '
+      /^[0-9]+x[0-9]+$/ {
+        width = $1 + 0
+        height = $2 + 0
+        area = width * height
+        if (area > best_area || (area == best_area && width > best_width)) {
+          best_area = area
+          best_width = width
+          best = $0
+        }
+      }
+      END {
+        if (best != "") {
+          print best
+        }
+      }
+    ')
+  if [[ -n "$mode" ]]; then
+    echo "$mode"
     return 0
   fi
 
@@ -131,9 +166,20 @@ stop_display() {
 }
 
 count_clients() {
+  local uxplay_pid="$1"
   local port_pattern
-  port_pattern=$(echo "$AIRPLAY_PORTS" | tr ' ' '|')
+  local with_process_count
 
+  with_process_count=$(ss -Htanp 2>/dev/null | awk -v pid="$uxplay_pid" '
+    $1 == "ESTAB" && index($0, "pid=" pid ",") > 0 { c += 1 }
+    END { print c + 0 }
+  ')
+  if [[ "$with_process_count" -gt 0 ]]; then
+    echo "$with_process_count"
+    return 0
+  fi
+
+  port_pattern=$(echo "$AIRPLAY_PORTS" | tr ' ' '|')
   ss -Htan 2>/dev/null | awk -v port_pattern="$port_pattern" '
     BEGIN {
       pattern = ":(" port_pattern ")$"
@@ -189,7 +235,7 @@ while true; do
   uxplay_pid=$!
 
   while kill -0 "$uxplay_pid" 2>/dev/null; do
-    client_count=$(count_clients || echo 0)
+    client_count=$(count_clients "$uxplay_pid" || echo 0)
     now=$(date +%s)
 
     if [[ "$client_count" -gt 0 ]]; then
