@@ -170,7 +170,8 @@ The config UI is a Flask app served by Waitress when you run `python config_ui.p
 | `DISPLAY_FB_DEVICE` | Framebuffer device path (default `/dev/fb0`). |
 | `DISPLAY_FB_PIXEL_FORMAT` | Override framebuffer format (`rgb565`, `rgb888`, `xrgb8888`, etc.). |
 | `DISPLAY_FB_PIXEL_ORDER` | Force pixel order (`rgb` or `bgr`). |
-| `DISPLAY_ROTATION` | Additional app-side rotation in degrees (`0`, `90`, `180`, `270`) or shorthand (`0-3`). Keep `0` when `dtoverlay=...,rotate=` is already set to avoid double-rotation. |
+| `DISPLAY_ROTATION` | Additional app-side rotation in degrees (`0`, `90`, `180`, `270`) or shorthand (`0-3`). When kernel `dtoverlay=...,rotate=` is active in strict mode, non-zero app rotation is reset to `0` to avoid double-rotation. |
+| `DISPLAY_ROTATION_STRICT` | Rotation guardrail toggle. Defaults to `1` for HyperPixel/kernel outputs (`DESK_DISPLAY_OUTPUT=kernel|kms|drm|sdl` or `HYPERPIXEL_PANEL=hyperpixel*`) and `0` otherwise. Set `0` to preserve legacy stacked kernel+app rotation behavior. |
 | `DISPLAY_HAT_MINI_REINIT_SECONDS` | Recreate the Display HAT Mini driver on this interval (default `1800`) to recover from long-run panel stalls. Set `0` to disable. |
 | `DISPLAY_HAT_MINI_LED_LEVEL` | Normalized indicator LED brightness (`0.0`-`1.0`) for weather alerts, schedule win/loss markers, and update animations. Defaults to `0.08`; recommended starting range is `0.05`-`0.20`. |
 
@@ -300,6 +301,7 @@ To manage the kernel display service over SSH without manually exporting user se
 - **Travel screens show N/A**: confirm `TRAVEL_*` addresses and the relevant Maps API key.
 - **Kernel displays not showing**: set `DESK_DISPLAY_OUTPUT=kernel` and provide `DISPLAY_WIDTH`/`DISPLAY_HEIGHT`.
 - **Kernel displays still blank in desktop mode**: launch with `scripts/launch_kernel_display.sh` from a logged-in desktop session; ensure `WAYLAND_DISPLAY` or `DISPLAY` is set (and `XDG_RUNTIME_DIR`/`XAUTHORITY` are available for SDL).
+- **Display appears over-rotated on HyperPixel/kernel output**: if `dtoverlay=...,rotate=` is configured, strict mode now forces non-zero `DISPLAY_ROTATION` back to `0`. Keep a single rotation source, or set `DISPLAY_ROTATION_STRICT=0` temporarily for backward-compatible stacked rotation.
 - **Wi-Fi recovery loops**: check `/var/log/wifi_auto_recover.log` and disable recovery with `ENABLE_WIFI_RECOVERY=0`.
 
 ---

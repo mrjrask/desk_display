@@ -666,6 +666,10 @@ _use_kernel_rotation_source = (
     or _display_output in {"kernel", "kms", "drm", "sdl"}
 )
 _kernel_overlay_rotation = _read_kernel_overlay_rotation() if _use_kernel_rotation_source else None
+DISPLAY_ROTATION_STRICT = _get_bool_env(
+    "DISPLAY_ROTATION_STRICT",
+    _use_kernel_rotation_source,
+)
 _display_rotation_raw = os.environ.get("DISPLAY_ROTATION")
 
 if _display_rotation_raw is not None:
@@ -681,7 +685,17 @@ else:
     DISPLAY_ROTATION = 0
 
 if _kernel_overlay_rotation is not None:
-    if _display_rotation_raw is not None:
+    if DISPLAY_ROTATION and DISPLAY_ROTATION_STRICT:
+        logging.warning(
+            "Kernel overlay rotate=%d° detected while DISPLAY_ROTATION=%d° is set. "
+            "Strict rotation guardrail is enabled; forcing DISPLAY_ROTATION=0 to "
+            "avoid double-rotation. Set DISPLAY_ROTATION_STRICT=0 to keep legacy "
+            "stacked rotation behavior.",
+            _kernel_overlay_rotation,
+            DISPLAY_ROTATION,
+        )
+        DISPLAY_ROTATION = 0
+    elif _display_rotation_raw is not None:
         logging.info(
             "Kernel overlay rotate=%d° detected and DISPLAY_ROTATION=%d° is set; "
             "both transforms will apply.",
