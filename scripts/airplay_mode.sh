@@ -60,6 +60,21 @@ resolve_display_mode() {
     fi
   fi
 
+  if command -v fbset >/dev/null 2>&1; then
+    mode=$(fbset -s 2>/dev/null | awk '
+      /geometry[[:space:]]+/ {
+        if ($2 ~ /^[0-9]+$/ && $3 ~ /^[0-9]+$/) {
+          print $2 "x" $3
+          exit
+        }
+      }
+    ')
+    if [[ -n "$mode" ]]; then
+      echo "$mode"
+      return 0
+    fi
+  fi
+
   mode=$(find /sys/class/drm -maxdepth 3 -type f -name modes -print 2>/dev/null \
     | xargs -r cat 2>/dev/null \
     | awk -Fx '
