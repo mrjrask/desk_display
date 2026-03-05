@@ -372,7 +372,6 @@ def _compute_table_geometry(
     min_team_col_width: int = MIN_TEAM_COL_WIDTH,
     header_gap: int = HEADER_GAP,
     reserve_flag_height: int = FLAG_BLOCK_H,
-    square_scale: float = 1.0,
 ) -> dict:
     """
     Decide sizes so that columns 2–4 are true squares (same width as row height),
@@ -399,9 +398,6 @@ def _compute_table_geometry(
     if max_rows_h > 0:
         square = min(square, max_rows_h // 2)
 
-    # Allow callers to slightly tighten row heights while keeping all score
-    # columns equally sized squares.
-    square = int(round(square * max(0.5, square_scale)))
     square = max(18, square)
 
     # Derive first column width from final square
@@ -446,7 +442,7 @@ def _draw_boxscore_table(img: Image.Image, draw: ImageDraw.ImageDraw, title: str
                          center_content_vertically: bool=False,
                          center_ignores_reserved_flag_block: bool=False,
                          flag_scale: float=1.0,
-                         square_scale: float=1.0):
+                         row_height_matches_reserved_flag_block: Optional[bool]=None):
     """
     Render the whole screen (title + header + table + optional small flag + bottom line).
     - Columns 2–4 are true squares; column 1 stretches.
@@ -491,7 +487,6 @@ def _draw_boxscore_table(img: Image.Image, draw: ImageDraw.ImageDraw, title: str
         min_team_col_width=min_team_col_width,
         header_gap=header_gap,
         reserve_flag_height=flag_block_h,
-        square_scale=square_scale,
     )
     hdr_h   = g["hdr_h"]
     grid_top= g["grid_top"]
@@ -500,7 +495,21 @@ def _draw_boxscore_table(img: Image.Image, draw: ImageDraw.ImageDraw, title: str
     square  = g["square"]
     xs      = g["xs"]
     total_w = g["grid_w"]
-    grid_h  = g["grid_h"]
+
+    if row_height_matches_reserved_flag_block is not None:
+        g_ref = _compute_table_geometry(
+            draw,
+            top_y=edge_pad + th + title_gap,
+            bottom_y=bottom_y,
+            reserve_flag_block=row_height_matches_reserved_flag_block,
+            table_side_margin=table_side_margin,
+            min_team_col_width=min_team_col_width,
+            header_gap=header_gap,
+            reserve_flag_height=flag_block_h,
+        )
+        row_h = min(row_h, g_ref["row_h"])
+
+    grid_h  = row_h * 2
 
     if center_content_vertically:
         content_top = edge_pad + th + title_gap
@@ -670,7 +679,7 @@ def draw_last_game(display, game, title="Last Game...", transition=False, screen
         center_content_vertically=(screen_id == "sox last"),
         center_ignores_reserved_flag_block=(screen_id == "sox last"),
         flag_scale=(2.0 if screen_id == "cubs last" and is_hyperpixel_4_square_layout() else 1.0),
-        square_scale=(0.9 if screen_id == "cubs last" else 1.0),
+        row_height_matches_reserved_flag_block=(True if screen_id == "cubs last" else None),
     )
 
     def _as_int(value):
