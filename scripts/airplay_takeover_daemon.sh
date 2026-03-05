@@ -74,25 +74,30 @@ resolve_display_mode() {
     fi
   fi
 
-  mode=$(find /sys/class/drm -maxdepth 3 -type f -name modes -print 2>/dev/null \
-    | xargs -r cat 2>/dev/null \
-    | awk -Fx '
-      /^[0-9]+x[0-9]+$/ {
-        width = $1 + 0
-        height = $2 + 0
-        area = width * height
-        if (area > best_area || (area == best_area && width > best_width)) {
-          best_area = area
-          best_width = width
-          best = $0
-        }
+  mode=$(find /sys/class/drm -maxdepth 2 -type f -name status -print 2>/dev/null \
+    | while read -r status_path; do
+        [[ "$(cat "$status_path" 2>/dev/null)" == "connected" ]] || continue
+        connector_dir=$(dirname "$status_path")
+        connector_mode="$connector_dir/mode"
+        if [[ -s "$connector_mode" ]]; then
+          cat "$connector_mode"
+          break
+        fi
+      done \
+    | awk '/^[0-9]+x[0-9]+$/ { print; exit }')
+  if [[ -n "$mode" ]]; then
+    echo "$mode"
+    return 0
+  fi
+
+  if [[ -r /sys/class/graphics/fb0/virtual_size ]]; then
+    mode=$(awk -F, '
+      NF >= 2 && $1 ~ /^[0-9]+$/ && $2 ~ /^[0-9]+$/ {
+        print $1 "x" $2
+        exit
       }
-      END {
-        if (best != "") {
-          print best
-        }
-      }
-    ')
+    ' /sys/class/graphics/fb0/virtual_size 2>/dev/null)
+  fi
   if [[ -n "$mode" ]]; then
     echo "$mode"
     return 0
