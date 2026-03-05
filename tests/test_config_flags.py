@@ -51,7 +51,7 @@ def test_display_rotation_defaults_to_0(monkeypatch):
     assert module.DISPLAY_ROTATION == 0
 
 
-def test_display_rotation_env_is_used_even_when_kernel_overlay_exists(monkeypatch):
+def test_display_rotation_env_is_zeroed_when_strict_and_kernel_overlay_exists(monkeypatch):
     config_text = "dtoverlay=vc4-kms-dpi-hyperpixel4,rotate=270\n"
 
     original_read_text = Path.read_text
@@ -69,7 +69,37 @@ def test_display_rotation_env_is_used_even_when_kernel_overlay_exists(monkeypatc
         DISPLAY_ROTATION="180",
     )
 
+    assert module.DISPLAY_ROTATION == 0
+
+
+def test_display_rotation_env_is_used_when_strict_disabled_and_overlay_exists(monkeypatch):
+    config_text = "dtoverlay=vc4-kms-dpi-hyperpixel4,rotate=270\n"
+
+    original_read_text = Path.read_text
+
+    def fake_read_text(path_obj, *args, **kwargs):
+        if str(path_obj) in {"/boot/firmware/config.txt", "/boot/config.txt"}:
+            return config_text
+        return original_read_text(path_obj, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "read_text", fake_read_text)
+    module = _reload_config(
+        monkeypatch,
+        DESK_DISPLAY_OUTPUT="kernel",
+        HYPERPIXEL_PANEL="hyperpixel4",
+        DISPLAY_ROTATION="180",
+        DISPLAY_ROTATION_STRICT="0",
+    )
+
     assert module.DISPLAY_ROTATION == 180
+
+
+def test_display_rotation_strict_defaults_to_kernel_mode(monkeypatch):
+    module = _reload_config(monkeypatch, DESK_DISPLAY_OUTPUT="kernel", DISPLAY_ROTATION_STRICT=None)
+    assert module.DISPLAY_ROTATION_STRICT is True
+
+    module = _reload_config(monkeypatch, DESK_DISPLAY_OUTPUT="headless", DISPLAY_ROTATION_STRICT=None)
+    assert module.DISPLAY_ROTATION_STRICT is False
 
 
 def test_display_rotation_defaults_to_0_when_env_missing_even_if_overlay_exists(monkeypatch):
