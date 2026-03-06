@@ -76,6 +76,7 @@ SCORE_ROW_H           = scale_value(56)
 STATUS_ROW_H          = scale_value(18)
 REQUEST_TIMEOUT       = 10
 FETCH_CACHE_TTL_SECONDS = 60
+MLB_SPORT_IDS = "1,51"  # MLB + World Baseball Classic
 
 COL_WIDTHS = [
     _scale_width(70),
@@ -529,7 +530,7 @@ def _fetch_games_for_date(day: datetime.date) -> list[dict]:
     # types so the scoreboard still works during preseason and playoffs.
     url = (
         "https://statsapi.mlb.com/api/v1/schedule"
-        f"?sportId=1&date={day.isoformat()}&hydrate=team,linescore"
+        f"?sportId={MLB_SPORT_IDS}&date={day.isoformat()}&hydrate=team,linescore"
         "&gameTypes=S,E,R,F,D,L,W"
     )
     try:
