@@ -263,6 +263,40 @@ def _read_framebuffer_fbset_size(device_path: str) -> Optional[Tuple[int, int]]:
     return None
 
 
+def _detect_framebuffer_device(preferred_device: str, requested_size: Tuple[int, int]) -> str:
+    candidates: List[str] = []
+    if preferred_device:
+        candidates.append(preferred_device)
+
+    for fb_path in sorted(Path('/dev').glob('fb*')):
+        device = str(fb_path)
+        if device not in candidates:
+            candidates.append(device)
+
+    fallback_device: Optional[str] = None
+    for device in candidates:
+        if not Path(device).exists():
+            continue
+
+        if fallback_device is None:
+            fallback_device = device
+
+        mode_size = _read_framebuffer_mode_size(device)
+        if mode_size == requested_size:
+            return device
+
+        fb_name = Path(device).name
+        sysfs_base = Path('/sys/class/graphics') / fb_name
+        virtual_size = _parse_virtual_size(_read_sysfs_value(str(sysfs_base / 'virtual_size')))
+        if virtual_size == requested_size:
+            return device
+
+    if fallback_device is not None:
+        return fallback_device
+
+    return '/dev/fb0'
+
+
 def _resolve_framebuffer_info(device_path: str) -> Tuple[int, int, int, Optional[int]]:
     fb_name = Path(device_path).name
     sysfs_base = Path("/sys/class/graphics") / fb_name
@@ -814,7 +848,25 @@ class Display:
             )
             logging.info("Display initialization skipped; running headless (%s).", reason)
         elif output == "framebuffer":
-            self._framebuffer = _FrameBufferDevice(_FRAMEBUFFER_DEVICE)
+            requested_size = (self.width, self.height)
+            framebuffer_device = _detect_framebuffer_device(_FRAMEBUFFER_DEVICE, requested_size)
+            if framebuffer_device != _FRAMEBUFFER_DEVICE:
+                logging.info(
+                    "Auto-selected framebuffer device %s (requested size %dx%d; configured %s).",
+                    framebuffer_device,
+                    requested_size[0],
+                    requested_size[1],
+                    _FRAMEBUFFER_DEVICE,
+                )
+
+            self._framebuffer = _FrameBufferDevice(framebuffer_device)
+            if self._framebuffer._fd is None and framebuffer_device != "/dev/fb0":
+                logging.warning(
+                    "Failed to open framebuffer %s; retrying with /dev/fb0.",
+                    framebuffer_device,
+                )
+                self._framebuffer = _FrameBufferDevice("/dev/fb0")
+
             if self._framebuffer._fd is None:
                 logging.warning(
                     "Framebuffer output requested but unavailable; running headless."
