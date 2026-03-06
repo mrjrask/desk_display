@@ -46,3 +46,50 @@ def test_nhl_v2_logo_height_is_capped_to_score_row(monkeypatch):
     nhl_scoreboard_v2._apply_style_overrides()
 
     assert nhl_scoreboard_v2.LOGO_HEIGHT == 26
+
+
+def _game(game_pk: int, game_date: str, away_team: dict, home_team: dict) -> dict:
+    return {
+        "gamePk": game_pk,
+        "gameDate": game_date,
+        "teams": {
+            "away": {"team": away_team},
+            "home": {"team": home_team},
+        },
+    }
+
+
+def test_mlb_hydrate_games_sorts_by_team_group_then_start_time():
+    mlb_vs_mlb_late = _game(
+        1,
+        "2026-03-05T21:00:00Z",
+        {"triCode": "NYY"},
+        {"triCode": "BOS"},
+    )
+    mlb_vs_mlb_early = _game(
+        2,
+        "2026-03-05T18:00:00Z",
+        {"triCode": "CUBS"},
+        {"triCode": "LAD"},
+    )
+    mixed_game = _game(
+        3,
+        "2026-03-05T17:00:00Z",
+        {"triCode": "SEA"},
+        {"name": "Japan"},
+    )
+    intl_vs_intl = _game(
+        4,
+        "2026-03-05T16:00:00Z",
+        {"name": "Korea"},
+        {"name": "Japan"},
+    )
+
+    hydrated = mlb_scoreboard._hydrate_games([
+        intl_vs_intl,
+        mlb_vs_mlb_late,
+        mixed_game,
+        mlb_vs_mlb_early,
+    ])
+
+    assert [g["gamePk"] for g in hydrated] == [2, 1, 3, 4]
