@@ -171,6 +171,19 @@ def test_legacy_travel_map_v2_alias_is_registered():
     assert registry["travel map v2"].available is True
 
 
+def test_inside_screen_hidden_when_sensor_unavailable(monkeypatch):
+    import screens.registry as registry_module
+
+    now = datetime.datetime(2024, 1, 1, 12, 0, tzinfo=CENTRAL_TIME)
+    weather = {"hourly": []}
+
+    monkeypatch.setattr(registry_module, "is_inside_sensor_available", lambda: False)
+
+    registry, _ = build_screen_registry(_make_context(weather, now))
+
+    assert registry["inside"].available is False
+
+
 def test_nhl_scoreboard_hidden_during_2026_break_window():
     now = datetime.datetime(2026, 2, 10, 12, 0, tzinfo=CENTRAL_TIME)
     weather = {"hourly": []}

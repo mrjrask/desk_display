@@ -170,6 +170,46 @@ def test_draw_inside_returns_placeholder_image_when_sensor_unavailable(monkeypat
     assert image.size == (draw_inside_module.W, draw_inside_module.H)
 
 
+def test_probe_sensor_cached_reuses_result_until_forced(monkeypatch):
+    import screens.draw_inside as draw_inside_module
+
+    calls = {"count": 0}
+
+    def fake_probe_sensor():
+        calls["count"] += 1
+        return "Fake Sensor", lambda: {"temp_f": 70.0}
+
+    monkeypatch.setattr(draw_inside_module, "_probe_sensor", fake_probe_sensor)
+    monkeypatch.setattr(draw_inside_module, "_sensor_probe_cache", None)
+
+    first = draw_inside_module._probe_sensor_cached()
+    second = draw_inside_module._probe_sensor_cached()
+    refreshed = draw_inside_module._probe_sensor_cached(force_refresh=True)
+
+    assert first[0] == "Fake Sensor"
+    assert second[0] == "Fake Sensor"
+    assert refreshed[0] == "Fake Sensor"
+    assert calls["count"] == 2
+
+
+def test_is_inside_sensor_available_reflects_probe_result(monkeypatch):
+    import screens.draw_inside as draw_inside_module
+
+    monkeypatch.setattr(
+        draw_inside_module,
+        "_probe_sensor_cached",
+        lambda force_refresh=False: ("Pimoroni BME280", lambda: {}),
+    )
+    assert draw_inside_module.is_inside_sensor_available() is True
+
+    monkeypatch.setattr(
+        draw_inside_module,
+        "_probe_sensor_cached",
+        lambda force_refresh=False: (None, None),
+    )
+    assert draw_inside_module.is_inside_sensor_available() is False
+
+
 def test_probe_pimoroni_bme68x_survives_child_segfault(monkeypatch):
     import subprocess
     import screens.draw_inside as draw_inside_module
