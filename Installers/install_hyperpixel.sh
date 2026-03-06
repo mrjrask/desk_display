@@ -292,7 +292,8 @@ else
       prepend_env_vars "$ENV_PATH" "DISPLAY_FB_DEVICE=${framebuffer_device}"
       log "Configured DISPLAY_FB_DEVICE=${framebuffer_device} for framebuffer fallback."
     else
-      warn "Unable to detect framebuffer device automatically; defaulting to DISPLAY_FB_DEVICE=/dev/fb0."
+      prepend_env_vars "$ENV_PATH" "DISPLAY_FB_DEVICE=/dev/fb0"
+      warn "Unable to detect framebuffer device automatically; set DISPLAY_FB_DEVICE=/dev/fb0."
     fi
 
     log "Re-running base setup to apply framebuffer service wiring."
