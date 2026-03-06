@@ -1835,7 +1835,7 @@ def compute_adaptive_scroll_params(
     viewport_height: int,
     viewport_width: int,
     base_step: int,
-    min_frame_time: float,
+    min_frame_time: float = 0.016,
     page_jump_mode: bool = True,
     page_jump_threshold_ratio: float = 8.0,
 ) -> AdaptiveScrollParams:
