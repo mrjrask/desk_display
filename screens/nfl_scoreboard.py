@@ -134,6 +134,7 @@ _LOGO_CACHE: dict[tuple[str, int], Optional[Image.Image]] = {}
 _LEAGUE_LOGO_CACHE: dict[int, Optional[Image.Image]] = {}
 _SUPER_BOWL_LOGO_CACHE: dict[int, Optional[Image.Image]] = {}
 _GAMES_CACHE: dict[tuple[datetime.date, str], tuple[float, list[dict]]] = {}
+_NO_UPCOMING_GAMES_UNTIL_RESTART = False
 _SESSION = get_session()
 
 
@@ -638,11 +639,17 @@ def _fetch_next_games(
     *,
     max_days: int = 370,
 ) -> list[dict]:
+    global _NO_UPCOMING_GAMES_UNTIL_RESTART
+
+    if _NO_UPCOMING_GAMES_UNTIL_RESTART:
+        return []
+
     for offset in range(max_days + 1):
         day = start_date + datetime.timedelta(days=offset)
         games = _fetch_games_for_date(day)
         if games:
             return games
+    _NO_UPCOMING_GAMES_UNTIL_RESTART = True
     logging.warning("NFL scoreboard could not find upcoming games after %s", start_date)
     return []
 
