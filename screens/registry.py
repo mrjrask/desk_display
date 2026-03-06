@@ -32,7 +32,7 @@ from screens.draw_wolves_schedule import (
     draw_sports_screen_wolves,
     draw_wolves_next_home_game,
 )
-from screens.draw_inside import draw_inside
+from screens.draw_inside import draw_inside, is_inside_sensor_available
 from screens.draw_sensors import draw_sensors
 from screens.draw_vrnof import draw_vrnof_screen
 from screens.draw_weather import (
@@ -495,7 +495,11 @@ def build_screen_registry(context: ScreenContext) -> Tuple[Dict[str, ScreenDefin
         lambda: draw_weather_radar(context.display, weather_data, transition=True),
         available=radar_available,
     )
-    register("inside", lambda: draw_inside(context.display, transition=True))
+    register(
+        "inside",
+        lambda: draw_inside(context.display, transition=True),
+        available=is_inside_sensor_available(),
+    )
     quad_enabled, quad_tiles = _next_quad_page_tiles()
     register(
         "quad",

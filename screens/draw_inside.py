@@ -17,6 +17,7 @@ import os
 import json
 import subprocess
 import sys
+import threading
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Sequence, Set, Tuple
 from datetime import datetime
@@ -45,6 +46,9 @@ SensorReadings = Dict[str, Optional[float]]
 SensorProbeResult = Tuple[str, Callable[[], SensorReadings]]
 SensorProbeFn = Callable[[Any, Set[int]], Optional[SensorProbeResult]]
 SensorProbeName = str
+
+_sensor_probe_cache_lock = threading.Lock()
+_sensor_probe_cache: Optional[Tuple[Optional[str], Optional[Callable[[], SensorReadings]]]] = None
 
 
 def _parse_i2c_bus_candidates() -> Tuple[int, ...]:
@@ -1207,6 +1211,37 @@ def _probe_sensor() -> Tuple[Optional[str], Optional[Callable[[], SensorReadings
     return None, None
 
 
+def _probe_sensor_cached(
+    *,
+    force_refresh: bool = False,
+) -> Tuple[Optional[str], Optional[Callable[[], SensorReadings]]]:
+    """Return a cached sensor probe result to avoid repeated full hardware scans."""
+
+    global _sensor_probe_cache
+
+    if force_refresh:
+        with _sensor_probe_cache_lock:
+            _sensor_probe_cache = None
+
+    with _sensor_probe_cache_lock:
+        if _sensor_probe_cache is not None:
+            return _sensor_probe_cache
+
+    result = _probe_sensor()
+
+    with _sensor_probe_cache_lock:
+        _sensor_probe_cache = result
+
+    return result
+
+
+def is_inside_sensor_available(*, force_refresh: bool = False) -> bool:
+    """Return ``True`` when an indoor sensor can be probed successfully."""
+
+    provider, read_fn = _probe_sensor_cached(force_refresh=force_refresh)
+    return bool(provider and read_fn)
+
+
 def _log_sensor_data(provider: Optional[str], data: Dict[str, Optional[float]]) -> None:
     """Log sensor readings to a file in the user's home directory."""
     try:
@@ -1902,7 +1937,7 @@ def _build_voc_tile(data: Dict[str, Optional[float]], provider: Optional[str]) -
 
 
 def draw_inside(display, transition: bool=False):
-    provider, read_fn = _probe_sensor()
+    provider, read_fn = _probe_sensor_cached()
     sensor_error: Optional[str] = None
     if not read_fn:
         logging.warning("draw_inside: sensor not available")
