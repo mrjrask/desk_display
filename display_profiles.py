@@ -16,6 +16,7 @@ class DisplayProfilePreset:
     profile_id: str
     fade_in_steps: int
     scoreboard_scroll_step: int
+    scoreboard_scroll_delay: float
     logo_scale_cap: float
     animation_delay: float
     use_compact_layout: bool = False
@@ -34,6 +35,7 @@ PROFILE_PRESETS: dict[str, DisplayProfilePreset] = {
         profile_id=DISPLAY_PROFILE_DISPLAY_HAT_MINI,
         fade_in_steps=10,
         scoreboard_scroll_step=1,
+        scoreboard_scroll_delay=0.020,
         logo_scale_cap=1.0,
         animation_delay=0.06,
         use_compact_layout=False,
@@ -42,6 +44,7 @@ PROFILE_PRESETS: dict[str, DisplayProfilePreset] = {
         profile_id=DISPLAY_PROFILE_HYPERPIXEL4,
         fade_in_steps=6,
         scoreboard_scroll_step=1,
+        scoreboard_scroll_delay=0.030,
         logo_scale_cap=3.0,
         animation_delay=0.05,
         use_compact_layout=True,
@@ -50,6 +53,7 @@ PROFILE_PRESETS: dict[str, DisplayProfilePreset] = {
         profile_id=DISPLAY_PROFILE_HYPERPIXEL4_SQUARE,
         fade_in_steps=6,
         scoreboard_scroll_step=1,
+        scoreboard_scroll_delay=0.030,
         logo_scale_cap=3.0,
         animation_delay=0.05,
         use_compact_layout=True,
@@ -58,6 +62,7 @@ PROFILE_PRESETS: dict[str, DisplayProfilePreset] = {
         profile_id=DISPLAY_PROFILE_HDMI_1080P,
         fade_in_steps=0,
         scoreboard_scroll_step=2,
+        scoreboard_scroll_delay=0.016,
         logo_scale_cap=5.0,
         animation_delay=0.04,
         use_compact_layout=False,
@@ -66,6 +71,7 @@ PROFILE_PRESETS: dict[str, DisplayProfilePreset] = {
         profile_id=DISPLAY_PROFILE_FALLBACK_HD,
         fade_in_steps=0,
         scoreboard_scroll_step=1,
+        scoreboard_scroll_delay=0.016,
         logo_scale_cap=1.2,
         animation_delay=0.04,
         use_compact_layout=True,
@@ -74,6 +80,7 @@ PROFILE_PRESETS: dict[str, DisplayProfilePreset] = {
         profile_id=DISPLAY_PROFILE_FALLBACK_DEFAULT,
         fade_in_steps=10,
         scoreboard_scroll_step=1,
+        scoreboard_scroll_delay=0.020,
         logo_scale_cap=1.0,
         animation_delay=0.06,
         use_compact_layout=False,

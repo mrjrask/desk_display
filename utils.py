@@ -1877,6 +1877,7 @@ def scroll_vertical_content(
     pause_end: float,
     reverse: bool = False,
     page_jump_mode: bool = True,
+    min_frame_time: float = 0.016,
 ) -> None:
     """Shared vertical scroll driver with adaptive timing and skip support."""
 
@@ -1901,6 +1902,7 @@ def scroll_vertical_content(
         viewport_width=viewport_width,
         base_step=base_step,
         page_jump_mode=page_jump_mode,
+        min_frame_time=min_frame_time,
     )
 
     stride = params.step

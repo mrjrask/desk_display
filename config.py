@@ -953,7 +953,7 @@ SCOREBOARD_FINAL_LOSING_SCORE_COLOR = (200, 200, 200)
 
 # ─── Scoreboard scrolling configuration ───────────────────────────────────────
 SCOREBOARD_SCROLL_STEP         = ACTIVE_DISPLAY_PROFILE.scoreboard_scroll_step
-SCOREBOARD_SCROLL_DELAY        = 0.001
+SCOREBOARD_SCROLL_DELAY        = ACTIVE_DISPLAY_PROFILE.scoreboard_scroll_delay
 SCOREBOARD_SCROLL_PAUSE_TOP    = 0.75
 SCOREBOARD_SCROLL_PAUSE_BOTTOM = 0.5
 SCOREBOARD_STANDINGS_BOTTOM_PADDING = _get_non_negative_int_env(

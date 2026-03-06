@@ -26,6 +26,7 @@ from config import (
     CENTRAL_TIME,
     IMAGES_DIR,
     SCOREBOARD_SCROLL_STEP,
+    SCOREBOARD_SCROLL_DELAY,
     SCOREBOARD_SCROLL_PAUSE_TOP,
     SCOREBOARD_SCROLL_PAUSE_BOTTOM,
     SCOREBOARD_STANDINGS_BOTTOM_PADDING,
@@ -405,6 +406,7 @@ def _scroll_display(display, full_img: Image.Image):
         base_step=SCOREBOARD_SCROLL_STEP,
         pause_start=SCOREBOARD_SCROLL_PAUSE_TOP,
         pause_end=SCOREBOARD_SCROLL_PAUSE_BOTTOM,
+        min_frame_time=SCOREBOARD_SCROLL_DELAY,
     )
 
 
