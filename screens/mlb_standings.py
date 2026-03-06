@@ -394,6 +394,7 @@ def draw_division_screen(display, league_id: int, division_id: int, title: str, 
         base_step=SCOREBOARD_SCROLL_STEP,
         pause_start=SCOREBOARD_SCROLL_PAUSE_TOP,
         pause_end=SCOREBOARD_SCROLL_PAUSE_BOTTOM,
+        min_frame_time=SCOREBOARD_SCROLL_DELAY,
     )
     return None
 
@@ -488,6 +489,7 @@ def draw_wildcard_screen(display, league_id: int, title: str, transition=False):
         pause_start=SCOREBOARD_SCROLL_PAUSE_BOTTOM,
         pause_end=SCOREBOARD_SCROLL_PAUSE_TOP,
         reverse=True,
+        min_frame_time=SCOREBOARD_SCROLL_DELAY,
     )
     return None
 
