@@ -163,6 +163,53 @@ detect_hyperpixel_panel() {
   prompt_panel_type
 }
 
+detect_framebuffer_device() {
+  local requested_size="${DISPLAY_WIDTH}x${DISPLAY_HEIGHT}"
+  local fb_path sysfs_base mode_value virtual_value candidate_size
+  local fallback_device=""
+
+  for fb_path in /dev/fb*; do
+    [[ -c "$fb_path" ]] || continue
+    sysfs_base="/sys/class/graphics/${fb_path##*/}"
+
+    if [[ -z "$fallback_device" ]]; then
+      fallback_device="$fb_path"
+    fi
+
+    mode_value=""
+    if [[ -r "$sysfs_base/mode" ]]; then
+      mode_value=$(tr -d '\r' < "$sysfs_base/mode" | head -n 1)
+      mode_value=${mode_value// /}
+      mode_value=${mode_value#U:}
+    elif [[ -r "$sysfs_base/modes" ]]; then
+      mode_value=$(tr -d '\r' < "$sysfs_base/modes" | head -n 1)
+      mode_value=${mode_value// /}
+      mode_value=${mode_value#U:}
+    fi
+
+    if [[ "$mode_value" == "$requested_size" ]]; then
+      echo "$fb_path"
+      return 0
+    fi
+
+    if [[ -r "$sysfs_base/virtual_size" ]]; then
+      virtual_value=$(tr -d '\r' < "$sysfs_base/virtual_size")
+      candidate_size="${virtual_value/,/x}"
+      if [[ "$candidate_size" == "$requested_size" ]]; then
+        echo "$fb_path"
+        return 0
+      fi
+    fi
+  done
+
+  if [[ -n "$fallback_device" ]]; then
+    echo "$fallback_device"
+    return 0
+  fi
+
+  return 1
+}
+
 validate_hyperpixel_env_overrides() {
   case "$HYPERPIXEL_PANEL" in
     "")
@@ -240,6 +287,14 @@ else
 
     ENV_PATH="$PROJECT_DIR/.env"
     prepend_env_vars "$ENV_PATH" "DESK_DISPLAY_OUTPUT=${DESK_DISPLAY_OUTPUT}"
+
+    if framebuffer_device=$(detect_framebuffer_device); then
+      prepend_env_vars "$ENV_PATH" "DISPLAY_FB_DEVICE=${framebuffer_device}"
+      log "Configured DISPLAY_FB_DEVICE=${framebuffer_device} for framebuffer fallback."
+    else
+      prepend_env_vars "$ENV_PATH" "DISPLAY_FB_DEVICE=/dev/fb0"
+      warn "Unable to detect framebuffer device automatically; set DISPLAY_FB_DEVICE=/dev/fb0."
+    fi
 
     log "Re-running base setup to apply framebuffer service wiring."
     "$PROJECT_DIR/scripts/helpers/base_setup.sh"
