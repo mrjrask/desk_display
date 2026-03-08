@@ -531,6 +531,7 @@ def build_screen_registry(context: ScreenContext) -> Tuple[Dict[str, ScreenDefin
     scoreboards_available = not (context.offline and context.skip_scoreboards)
     scoreboards = (context.cache.get("scoreboards") or {})
     mlb_scoreboard_games = scoreboards.get("mlb") or []
+    wbc_scoreboard_games = scoreboards.get("wbc") or []
     today = context.now.date()
     nhl_scoreboards_available = scoreboards_available and not (
         NHL_BREAK_START <= today <= NHL_BREAK_END
@@ -1058,7 +1059,7 @@ def build_screen_registry(context: ScreenContext) -> Tuple[Dict[str, ScreenDefin
         "WBC Scoreboard",
         lambda: render_wbc_scoreboard(
             context.display,
-            mlb_scoreboard_games,
+            wbc_scoreboard_games,
             transition=True,
         ),
         available=scoreboards_available,
@@ -1067,7 +1068,7 @@ def build_screen_registry(context: ScreenContext) -> Tuple[Dict[str, ScreenDefin
         "WBC Scoreboard v2",
         lambda: render_wbc_scoreboard_v2(
             context.display,
-            mlb_scoreboard_games,
+            wbc_scoreboard_games,
             transition=True,
         ),
         available=scoreboards_available,

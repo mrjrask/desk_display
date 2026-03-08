@@ -16,6 +16,7 @@ from screens.nfl_scoreboard import (
     _fetch_next_games as _fetch_nfl_next_games,
 )
 from screens.nhl_scoreboard import _fetch_games_for_date as _fetch_nhl_games_for_date, _scoreboard_date as _nhl_scoreboard_date
+from screens.wbc_scoreboard import _fetch_games_for_date as _fetch_wbc_games_for_date, _scoreboard_date as _wbc_scoreboard_date
 
 
 @dataclass
@@ -70,6 +71,7 @@ class DataProvider:
                 "scoreboards": {
                     "nfl": _fetch_nfl_games_for_week(now) or _fetch_nfl_next_games(now.date()),
                     "mlb": _fetch_mlb_games_for_date(_mlb_scoreboard_date(now)),
+                    "wbc": _fetch_wbc_games_for_date(_wbc_scoreboard_date(now)),
                     "nba": _fetch_nba_games_for_date(_nba_scoreboard_date(now)),
                     "nhl": _fetch_nhl_games_for_date(_nhl_scoreboard_date(now)),
                 },

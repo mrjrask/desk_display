@@ -345,6 +345,35 @@ def test_next_quad_page_tiles_rotates_pages(monkeypatch):
     assert second == ["time", "time", "time", "time"]
 
 
+
+
+def test_wbc_scoreboards_use_wbc_scoreboard_cache_key(monkeypatch):
+    now = datetime.datetime(2024, 7, 1, 12, 0, tzinfo=CENTRAL_TIME)
+    weather = {"hourly": []}
+    context = _make_context(
+        weather,
+        now,
+        cache_updates={
+            "scoreboards": {
+                "mlb": [{"id": "mlb-game"}],
+                "wbc": [{"id": "wbc-game"}],
+            }
+        },
+    )
+
+    captured = {}
+
+    def _capture_wbc(_display, games, transition=False):
+        captured["games"] = games
+        return None
+
+    monkeypatch.setattr("screens.registry.render_wbc_scoreboard", _capture_wbc)
+
+    registry, _ = build_screen_registry(context)
+    registry["WBC Scoreboard"].render()
+
+    assert captured["games"] == [{"id": "wbc-game"}]
+
 def test_wbc_scoreboards_available_without_international_games():
     now = datetime.datetime(2024, 7, 1, 12, 0, tzinfo=CENTRAL_TIME)
     weather = {"hourly": []}
