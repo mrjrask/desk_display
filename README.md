@@ -95,7 +95,7 @@ The kernel display installers will:
 - Configure `DESK_DISPLAY_OUTPUT=kernel`.
 - Configure `.env` display sizing for your detected HyperPixel panel and default `DISPLAY_ROTATION=0` (set `DISPLAY_ROTATION=180` for upside-down mounting).
 - **Not** modify `/boot/firmware/config.txt` or `/boot/config.txt`; set your HyperPixel `dtoverlay=` line manually (including any `rotate=` value).
-- The HyperPixel installer disables the Pi's primary SPI/I2C interfaces and sets `INSIDE_I2C_BUSES=10,11,1,0` so the Inside screen probes the HyperPixel's onboard I2C controller first.
+- The HyperPixel installer disables the Pi's primary SPI/I2C interfaces and sets `INSIDE_I2C_BUSES=13` so the Inside screen probes the HyperPixel/HyperPixel 4 Square accessory I2C header bus first.
 - Prompt for the target fullscreen resolution at install time (defaulting to the detected DRM/X11 mode when available).
 - Install a desktop launcher that can run the display loop inside the desktop session.
 - Attempt to launch the fullscreen display at the end of the installer when a desktop session is available (set `AUTO_LAUNCH_KERNEL_DISPLAY=0` to skip).
