@@ -21,7 +21,7 @@ RAW_SCREEN_IDS = [
     "cubs last", "cubs result", "cubs live", "cubs next", "cubs next home",
     "sox logo", "sox stand1", "sox stand2",
     "sox last", "sox live", "sox next", "sox next home",
-    "mlb logo", "MLB Scoreboard", "MLB Scoreboard v2",
+    "mlb logo", "MLB Scoreboard", "MLB Scoreboard v2", "WBC Scoreboard", "WBC Scoreboard v2",
     "NL Overview", "NL East", "NL Central", "NL West", "NL Wild Card",
     "AL Overview", "AL East", "AL Central", "AL West", "AL Wild Card",
 ]

@@ -111,6 +111,8 @@
       }
     },
     "MLB Scoreboard v2": 0,
+    "WBC Scoreboard": 0,
+    "WBC Scoreboard v2": 0,
     "NL Overview": 0,
     "NL East": 0,
     "NL Central": 0,
@@ -439,6 +441,12 @@
         },
         {
           "screen": "MLB Scoreboard v2"
+        },
+        {
+          "screen": "WBC Scoreboard"
+        },
+        {
+          "screen": "WBC Scoreboard v2"
         },
         {
           "screen": "NL Overview"

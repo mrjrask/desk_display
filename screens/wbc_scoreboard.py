@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-mlb_scoreboard.py
+wbc_scoreboard.py
 
 Render a scrolling MLB scoreboard showing that day's games.
 For temporary testing, the scoreboard can be pinned to a fixed date. Outside
@@ -69,7 +69,7 @@ def _scale_width(value: int) -> int:
     return scale_value_width(value) if HYPERPIXEL_LAYOUT else scale_value(value)
 
 
-TITLE                 = "MLB Scoreboard"
+TITLE                 = "WBC Scoreboard"
 TITLE_GAP             = scale_value(8)
 BLOCK_SPACING         = scale_value(10)
 SCORE_ROW_H           = scale_value(56)
@@ -107,10 +107,10 @@ COL_X = [_COL_LEFT]
 for w in COL_WIDTHS:
     COL_X.append(COL_X[-1] + w)
 
-SCREEN_ID = "MLB Scoreboard"
+SCREEN_ID = "WBC Scoreboard"
 TITLE_FONT = FONT_TITLE_SPORTS
 LOGO_DIR = os.path.join(IMAGES_DIR, "mlb")
-LEAGUE_LOGO_KEYS = ("MLB", "mlb")
+LEAGUE_LOGO_KEYS = ("WBC", "wbc")
 LEAGUE_LOGO_GAP = scale_value(4)
 TEAM_LOGO_BASE_HEIGHT = standard_scoreboard_team_logo_height(HEIGHT)
 IN_PROGRESS_SCORE_COLOR = SCOREBOARD_IN_PROGRESS_SCORE_COLOR
@@ -507,11 +507,18 @@ def _timestamp_to_local(ts: str) -> Optional[datetime.datetime]:
         return None
 
 
+def has_international_games(games: Iterable[dict]) -> bool:
+    for game in games or []:
+        if _is_international_game(game or {}):
+            return True
+    return False
+
+
 def _hydrate_games(raw_games: Iterable[dict]) -> list[dict]:
     games: list[dict] = []
     for game in raw_games:
         game = game or {}
-        if _is_international_game(game):
+        if not _is_international_game(game):
             continue
         start_local = _timestamp_to_local(game.get("gameDate"))
         if start_local:
@@ -561,7 +568,7 @@ def _fetch_games_for_date(day: datetime.date) -> list[dict]:
         response.raise_for_status()
         data = response.json()
     except Exception as exc:
-        logging.error("Failed to fetch MLB schedule: %s", exc)
+        logging.error("Failed to fetch WBC/MLB schedule: %s", exc)
         return []
 
     raw_games: list[dict] = []
@@ -641,7 +648,7 @@ def _scroll_display(display, full_img: Image.Image):
 
 
 # ─── Public API ───────────────────────────────────────────────────────────────
-def render_mlb_scoreboard(display, games: list[dict], transition: bool = False) -> ScreenImage:
+def render_wbc_scoreboard(display, games: list[dict], transition: bool = False) -> ScreenImage:
     global BACKGROUND_COLOR
     BACKGROUND_COLOR = get_screen_background_color(SCREEN_ID, SCOREBOARD_BACKGROUND_COLOR)
     score_font, status_font, center_font = _scoreboard_fonts()
@@ -700,7 +707,7 @@ def render_mlb_scoreboard(display, games: list[dict], transition: bool = False) 
 
 
 @log_call
-def draw_mlb_scoreboard(display, transition: bool = False) -> ScreenImage:
+def draw_wbc_scoreboard(display, transition: bool = False) -> ScreenImage:
     now = datetime.datetime.now(CENTRAL_TIME)
     target_date = _scoreboard_date(now)
     games = _fetch_games_for_date(target_date)
@@ -712,7 +719,7 @@ def draw_mlb_scoreboard(display, transition: bool = False) -> ScreenImage:
             if today_games:
                 games = today_games
 
-    return render_mlb_scoreboard(display, games, transition=transition)
+    return render_wbc_scoreboard(display, games, transition=transition)
 
 
 if __name__ == "__main__":  # pragma: no cover
@@ -720,6 +727,6 @@ if __name__ == "__main__":  # pragma: no cover
 
     disp = Display()
     try:
-        draw_mlb_scoreboard(disp)
+        draw_wbc_scoreboard(disp)
     finally:
         clear_display(disp)
