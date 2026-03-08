@@ -653,6 +653,8 @@ def render_wbc_scoreboard(display, games: list[dict], transition: bool = False) 
     BACKGROUND_COLOR = get_screen_background_color(SCREEN_ID, SCOREBOARD_BACKGROUND_COLOR)
     score_font, status_font, center_font = _scoreboard_fonts()
 
+    games = _hydrate_games(games)
+
     if not games:
         clear_display(display)
         img = Image.new("RGB", (WIDTH, HEIGHT), BACKGROUND_COLOR)

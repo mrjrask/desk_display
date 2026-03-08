@@ -69,6 +69,7 @@ from screens.wbc_scoreboard import (
     _format_status,
     _team_logo_abbr,
     _get_league_logo,
+    _hydrate_games,
 )
 
 # ─── Constants ────────────────────────────────────────────────────────────────
@@ -406,6 +407,8 @@ def _scroll_display(display, full_img: Image.Image):
 
 def render_wbc_scoreboard_v2(display, games: list[dict], transition: bool = False) -> ScreenImage:
     _apply_style_overrides()
+
+    games = _hydrate_games(games)
 
     if not games:
         clear_display(display)

@@ -511,8 +511,6 @@ def _hydrate_games(raw_games: Iterable[dict]) -> list[dict]:
     games: list[dict] = []
     for game in raw_games:
         game = game or {}
-        if _is_international_game(game):
-            continue
         start_local = _timestamp_to_local(game.get("gameDate"))
         if start_local:
             game["_start_local"] = start_local
@@ -527,6 +525,10 @@ def _hydrate_games(raw_games: Iterable[dict]) -> list[dict]:
         )
     )
     return games
+
+
+def _mlb_only_games(games: Iterable[dict]) -> list[dict]:
+    return [game for game in games if not _is_international_game(game)]
 
 
 def _scoreboard_date(now: Optional[datetime.datetime] = None) -> datetime.date:
@@ -645,6 +647,8 @@ def render_mlb_scoreboard(display, games: list[dict], transition: bool = False) 
     global BACKGROUND_COLOR
     BACKGROUND_COLOR = get_screen_background_color(SCREEN_ID, SCOREBOARD_BACKGROUND_COLOR)
     score_font, status_font, center_font = _scoreboard_fonts()
+
+    games = _mlb_only_games(_hydrate_games(games))
 
     if not games:
         clear_display(display)
