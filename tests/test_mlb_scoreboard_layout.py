@@ -1,5 +1,6 @@
 import screens.mlb_scoreboard as mlb_scoreboard
 import screens.mlb_scoreboard_v2 as mlb_scoreboard_v2
+import screens.wbc_scoreboard as wbc_scoreboard
 import screens.nhl_scoreboard as nhl_scoreboard
 import screens.nhl_scoreboard_v2 as nhl_scoreboard_v2
 
@@ -59,7 +60,7 @@ def _game(game_pk: int, game_date: str, away_team: dict, home_team: dict) -> dic
     }
 
 
-def test_mlb_hydrate_games_sorts_by_team_group_then_start_time():
+def test_mlb_hydrate_games_keeps_only_mlb_matchups_sorted_by_start_time():
     mlb_vs_mlb_late = _game(
         1,
         "2026-03-05T21:00:00Z",
@@ -92,4 +93,40 @@ def test_mlb_hydrate_games_sorts_by_team_group_then_start_time():
         mlb_vs_mlb_early,
     ])
 
-    assert [g["gamePk"] for g in hydrated] == [2, 1, 3, 4]
+    assert [g["gamePk"] for g in hydrated] == [2, 1]
+
+
+def test_wbc_hydrate_games_keeps_only_international_matchups_sorted_by_start_time():
+    mlb_vs_mlb = _game(
+        1,
+        "2026-03-05T21:00:00Z",
+        {"triCode": "NYY"},
+        {"triCode": "BOS"},
+    )
+    mixed_game = _game(
+        2,
+        "2026-03-05T17:00:00Z",
+        {"triCode": "SEA"},
+        {"name": "Japan"},
+    )
+    intl_vs_intl_late = _game(
+        3,
+        "2026-03-05T19:00:00Z",
+        {"name": "Korea"},
+        {"name": "Japan"},
+    )
+    intl_vs_intl_early = _game(
+        4,
+        "2026-03-05T16:00:00Z",
+        {"name": "Italy"},
+        {"name": "Mexico"},
+    )
+
+    hydrated = wbc_scoreboard._hydrate_games([
+        mlb_vs_mlb,
+        intl_vs_intl_late,
+        mixed_game,
+        intl_vs_intl_early,
+    ])
+
+    assert [g["gamePk"] for g in hydrated] == [4, 2, 3]
