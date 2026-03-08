@@ -1279,7 +1279,7 @@ cache = {
     "bulls":   {"stand":None, "last":None, "live":None, "next":None, "next_home":None},
     "cubs":    {"stand":None, "last":None, "live":None, "next":None, "next_home":None},
     "sox":     {"stand":None, "last":None, "live":None, "next":None, "next_home":None},
-    "scoreboards": {"nfl": [], "mlb": [], "nba": [], "nhl": []},
+    "scoreboards": {"nfl": [], "mlb": [], "wbc": [], "nba": [], "nhl": []},
 }
 
 _FEED_DEPENDENCIES: Dict[str, Set[str]] = {
@@ -1321,6 +1321,8 @@ _FEED_DEPENDENCIES: Dict[str, Set[str]] = {
         "NHL Scoreboard v2",
         "MLB Scoreboard",
         "MLB Scoreboard v2",
+        "WBC Scoreboard",
+        "WBC Scoreboard v2",
         "NBA Scoreboard",
         "NBA Scoreboard v2",
     },
@@ -1344,6 +1346,8 @@ _SCOREBOARD_SCREEN_IDS = {
     "NHL Scoreboard v2",
     "MLB Scoreboard",
     "MLB Scoreboard v2",
+    "WBC Scoreboard",
+    "WBC Scoreboard v2",
     "NBA Scoreboard",
     "NBA Scoreboard v2",
 }
