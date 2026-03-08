@@ -40,6 +40,32 @@ def test_draw_left_team_cell_with_logo_stays_inside_cell(monkeypatch):
     assert all(img.getpixel((x, y)) == (0, 0, 0) for x in range(34, 80) for y in range(0, 40))
 
 
+
+
+def test_draw_left_team_cell_logo_is_centered_when_replacing_abbreviation(monkeypatch):
+    img = Image.new("RGB", (80, 40), (0, 0, 0))
+    draw = ImageDraw.Draw(img)
+
+    logo = Image.new("RGBA", (12, 12), (255, 0, 0, 255))
+    monkeypatch.setattr(mlb_schedule, "load_team_logo", lambda *args, **kwargs: logo)
+
+    mlb_schedule._draw_left_team_cell_with_logo(
+        img,
+        draw,
+        team={"name": "Cubs"},
+        abbr="CHICAGO",
+        x=10,
+        y=10,
+        w=24,
+        h=16,
+        font=mlb_schedule.FONT_TEAM_SPORTS,
+        replace_abbreviation_with_logo=True,
+    )
+
+    # With abbreviation replacement enabled, the logo should be centered in the cell.
+    assert img.getpixel((16, 12)) != (0, 0, 0)
+    assert img.getpixel((12, 12)) == (0, 0, 0)
+
 def test_draw_box_score_reserves_flag_block_for_live_layout(monkeypatch):
     captured = {}
 
