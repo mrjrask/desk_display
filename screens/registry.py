@@ -55,7 +55,7 @@ from screens.mlb_schedule import (
 )
 from screens.mlb_scoreboard import render_mlb_scoreboard
 from screens.mlb_scoreboard_v2 import render_mlb_scoreboard_v2
-from screens.wbc_scoreboard import has_international_games, render_wbc_scoreboard
+from screens.wbc_scoreboard import render_wbc_scoreboard
 from screens.wbc_scoreboard_v2 import render_wbc_scoreboard_v2
 from screens.mlb_standings import (
     draw_AL_Central,
@@ -531,7 +531,6 @@ def build_screen_registry(context: ScreenContext) -> Tuple[Dict[str, ScreenDefin
     scoreboards_available = not (context.offline and context.skip_scoreboards)
     scoreboards = (context.cache.get("scoreboards") or {})
     mlb_scoreboard_games = scoreboards.get("mlb") or []
-    wbc_scoreboards_available = scoreboards_available and has_international_games(mlb_scoreboard_games)
     today = context.now.date()
     nhl_scoreboards_available = scoreboards_available and not (
         NHL_BREAK_START <= today <= NHL_BREAK_END
@@ -1062,7 +1061,7 @@ def build_screen_registry(context: ScreenContext) -> Tuple[Dict[str, ScreenDefin
             mlb_scoreboard_games,
             transition=True,
         ),
-        available=wbc_scoreboards_available,
+        available=scoreboards_available,
     )
     register(
         "WBC Scoreboard v2",
@@ -1071,7 +1070,7 @@ def build_screen_registry(context: ScreenContext) -> Tuple[Dict[str, ScreenDefin
             mlb_scoreboard_games,
             transition=True,
         ),
-        available=wbc_scoreboards_available,
+        available=scoreboards_available,
     )
     register(
         "NBA Scoreboard",
