@@ -345,7 +345,7 @@ def test_next_quad_page_tiles_rotates_pages(monkeypatch):
     assert second == ["time", "time", "time", "time"]
 
 
-def test_wbc_scoreboards_hidden_without_international_games():
+def test_wbc_scoreboards_available_without_international_games():
     now = datetime.datetime(2024, 7, 1, 12, 0, tzinfo=CENTRAL_TIME)
     weather = {"hourly": []}
     mlb_only_games = [
@@ -361,8 +361,8 @@ def test_wbc_scoreboards_hidden_without_international_games():
         _make_context(weather, now, cache_updates={"scoreboards": {"mlb": mlb_only_games}})
     )
 
-    assert registry["WBC Scoreboard"].available is False
-    assert registry["WBC Scoreboard v2"].available is False
+    assert registry["WBC Scoreboard"].available is True
+    assert registry["WBC Scoreboard v2"].available is True
 
 
 def test_wbc_scoreboards_visible_with_international_games():
