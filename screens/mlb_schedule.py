@@ -273,17 +273,12 @@ def _bbox_center(draw: ImageDraw.ImageDraw, x: int, y: int, w: int, h: int,
 
 
 def _should_show_team_logo_boxscore(screen_id: Optional[str]) -> bool:
-    if config.get_display_profile_id() not in {
-        DISPLAY_PROFILE_HYPERPIXEL4,
-        DISPLAY_PROFILE_DISPLAY_HAT_MINI,
-    }:
-        return False
     return (screen_id or "").strip().lower() in {
         "cubs live",
         "cubs last",
         "sox live",
         "sox last",
-    }
+    } and is_hyperpixel_4_square_layout()
 
 
 def _draw_left_team_cell_with_logo(
@@ -298,6 +293,7 @@ def _draw_left_team_cell_with_logo(
     h: int,
     font,
     result_flag: Optional[str]=None,
+    replace_abbreviation_with_logo: bool=False,
     fill=(255, 255, 255),
 ) -> None:
     left_pad = max(2, min(6, w // 12))
@@ -353,8 +349,9 @@ def _draw_left_team_cell_with_logo(
             tw, th = draw.textsize(display_abbr, font=font)
             l = t = 0
 
-    ty = y + (h - th) // 2 - t
-    draw.text((text_x - l, ty), display_abbr, font=font, fill=fill)
+    if not (replace_abbreviation_with_logo and logo is not None):
+        ty = y + (h - th) // 2 - t
+        draw.text((text_x - l, ty), display_abbr, font=font, fill=fill)
 
     if flag_img:
         fx = min(text_x + tw + flag_gap, x + w - left_pad - flag_img.width)
@@ -588,6 +585,7 @@ def _draw_boxscore_table(img: Image.Image, draw: ImageDraw.ImageDraw, title: str
                         if inline_winner_flag in {"W", "L"} and inline_team_id == team_id
                         else None
                     ),
+                    replace_abbreviation_with_logo=show_team_logo,
                     fill=fill_col,
                 )
                 continue
