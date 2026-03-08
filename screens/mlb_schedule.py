@@ -305,7 +305,10 @@ def _draw_left_team_cell_with_logo(
 
     text_x = x + left_pad
     if logo:
-        lx = x + left_pad
+        if replace_abbreviation_with_logo:
+            lx = x + (w - logo.width) // 2
+        else:
+            lx = x + left_pad
         ly = y + (h - logo.height) // 2
         img.paste(logo, (lx, ly), logo)
         text_x = lx + logo.width + max(2, left_pad // 2)
