@@ -55,7 +55,7 @@ from screens.mlb_schedule import (
 )
 from screens.mlb_scoreboard import render_mlb_scoreboard
 from screens.mlb_scoreboard_v2 import render_mlb_scoreboard_v2
-from screens.wbc_scoreboard import has_international_games, render_wbc_scoreboard
+from screens.wbc_scoreboard import filter_international_games, render_wbc_scoreboard
 from screens.wbc_scoreboard_v2 import render_wbc_scoreboard_v2
 from screens.mlb_standings import (
     draw_AL_Central,
@@ -1058,19 +1058,19 @@ def build_screen_registry(context: ScreenContext) -> Tuple[Dict[str, ScreenDefin
         "WBC Scoreboard",
         lambda: render_wbc_scoreboard(
             context.display,
-            mlb_scoreboard_games,
+            filter_international_games(mlb_scoreboard_games),
             transition=True,
         ),
-        available=scoreboards_available and has_international_games(mlb_scoreboard_games),
+        available=scoreboards_available,
     )
     register(
         "WBC Scoreboard v2",
         lambda: render_wbc_scoreboard_v2(
             context.display,
-            mlb_scoreboard_games,
+            filter_international_games(mlb_scoreboard_games),
             transition=True,
         ),
-        available=scoreboards_available and has_international_games(mlb_scoreboard_games),
+        available=scoreboards_available,
     )
     register(
         "NBA Scoreboard",

@@ -514,6 +514,12 @@ def has_international_games(games: Iterable[dict]) -> bool:
     return False
 
 
+def filter_international_games(games: Iterable[dict]) -> list[dict]:
+    """Return only international matchups sorted for WBC scoreboard rendering."""
+
+    return _hydrate_games(games or [])
+
+
 def _hydrate_games(raw_games: Iterable[dict]) -> list[dict]:
     games: list[dict] = []
     for game in raw_games:
