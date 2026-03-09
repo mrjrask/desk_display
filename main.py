@@ -148,7 +148,6 @@ _registry_cache_key: Optional[
     ]
 ] = None
 _registry_cache_value: Optional[Tuple[Dict[str, ScreenDefinition], Dict[str, object]]] = None
-_cache_revision = 0
 
 _skip_request_pending = False
 _last_screen_id: Optional[str] = None
@@ -433,14 +432,12 @@ def _registry_cache_inputs(
     skip_scoreboards: bool,
     weather_fetched_at: Optional[datetime.datetime],
     weather_object_id: int,
-    cache_revision: int,
 ) -> Tuple[
     Optional[float],
     bool,
     bool,
     Tuple[int, int],
     Optional[datetime.datetime],
-    int,
     int,
 ]:
     """Return the cache key that determines whether registry rebuild is required."""
@@ -453,7 +450,6 @@ def _registry_cache_inputs(
         display_mode,
         weather_fetched_at,
         weather_object_id,
-        int(cache_revision),
     )
 
 
@@ -467,7 +463,6 @@ def _build_registry_if_needed(context: ScreenContext) -> Tuple[Dict[str, ScreenD
         context.skip_scoreboards,
         context.weather_fetched_at,
         id(context.cache.get("weather")),
-        _cache_revision,
     )
     if _registry_cache_value is not None and _registry_cache_key == cache_key:
         return _registry_cache_value
@@ -1528,8 +1523,6 @@ _FEED_REFRESHERS: Dict[str, Callable[[], None]] = {
 
 
 def refresh_all(force: bool = False) -> None:
-    global _cache_revision
-
     if _wifi_outage_active and not force:
         logging.info("⏸️  Skipping refresh during Wi-Fi outage.")
         return
@@ -1563,7 +1556,6 @@ def refresh_all(force: bool = False) -> None:
         try:
             refresher()
             _last_feed_refresh[feed] = time.monotonic()
-            _cache_revision += 1
         except Exception as exc:
             logging.error("Failed to refresh %s feed: %s", feed, exc)
 
@@ -1581,7 +1573,7 @@ def _background_refresh() -> None:
 
 
 def _startup_refresh() -> None:
-    """Prime cached data before entering the main render loop."""
+    """Prime cached data asynchronously so the first frame can render quickly."""
 
     try:
         refresh_all(force=True)
@@ -1673,7 +1665,12 @@ def init_runtime() -> None:
         )
         _background_refresh_thread.start()
 
-    _startup_refresh()
+    if _startup_refresh_thread is None or not _startup_refresh_thread.is_alive():
+        _startup_refresh_thread = threading.Thread(
+            target=_startup_refresh,
+            daemon=True,
+        )
+        _startup_refresh_thread.start()
 
     _runtime_initialized = True
 
