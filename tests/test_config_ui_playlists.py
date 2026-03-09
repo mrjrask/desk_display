@@ -68,3 +68,31 @@ def test_screen_config_page_renders_alt_screen_clear_control(monkeypatch):
     html = response.get_data(as_text=True)
     assert 'class="alt-screen-clear"' in html
     assert "Clear alternate screens" in html
+
+
+def test_screen_config_page_renders_alt_screen_dropdown(monkeypatch):
+    monkeypatch.setattr(config_ui, "_load_active_config", lambda: {"screens": {"date": 1, "inside": 1}})
+    monkeypatch.setattr(config_ui, "_load_active_style_config", lambda: {"screens": {}})
+    monkeypatch.setattr(
+        config_ui,
+        "_build_screen_entries",
+        lambda config, style: [
+            {
+                "id": "date",
+                "frequency": 1,
+                "background": "#000000",
+                "alt_screen": "inside",
+                "alt_frequency": "1",
+            }
+        ],
+    )
+
+    client = config_ui.app.test_client()
+    response = client.get("/")
+
+    assert response.status_code == 200
+    html = response.get_data(as_text=True)
+    assert '<select class="alt-screen-input">' in html
+    assert '<option value="">No alternate</option>' in html
+    assert '<option value="inside" selected>inside</option>' in html
+    assert '<input type="text" list="screenIds"' not in html

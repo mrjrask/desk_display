@@ -475,7 +475,7 @@
         <div>Freq</div>
       </div>
       <div>Background</div>
-      <div>Alt screen(s)</div>
+      <div>Alt screen</div>
       <div>Alt freq</div>
     </div>
     <div class="table" id="screenTable">
@@ -499,10 +499,17 @@
         </div>
         <div>
           <div class="alt-screen-field">
-            <input type="text" list="screenIds" placeholder="Optional alternate screen(s)" value="{{ screen.alt_screen }}" class="alt-screen-input">
+            <select class="alt-screen-input">
+              <option value="">No alternate</option>
+              {% for screen_id in screen_ids %}
+              {% if screen_id != screen.id %}
+              <option value="{{ screen_id }}" {% if screen.alt_screen == screen_id %}selected{% endif %}>{{ screen_id }}</option>
+              {% endif %}
+              {% endfor %}
+            </select>
             <button type="button" class="alt-screen-clear" aria-label="Clear alternate screens" title="Clear alternate screens">×</button>
           </div>
-          <div class="hint">Comma-separated list if needed.</div>
+          <div class="hint">Select one alternate screen.</div>
         </div>
         <div>
           <input type="number" min="0" step="1" placeholder="1" value="{{ screen.alt_frequency }}" class="alt-frequency-input">
@@ -522,12 +529,6 @@
   </div>
 
   <input type="file" id="importFile" accept="application/json" hidden>
-
-  <datalist id="screenIds">
-    {% for screen_id in screen_ids %}
-    <option value="{{ screen_id }}"></option>
-    {% endfor %}
-  </datalist>
 
   <script>
     const screenTable = document.getElementById("screenTable");
@@ -901,11 +902,20 @@
     }
 
     function parseAltScreen(value) {
-      if (!value) return [];
-      return value
-        .split(",")
-        .map((item) => item.trim())
-        .filter((item) => item.length > 0);
+      const trimmed = String(value ?? "").trim();
+      if (!trimmed) return [];
+      return [trimmed];
+    }
+
+    function buildAltScreenOptions(screenId, selectedValue) {
+      const options = ['<option value="">No alternate</option>'];
+      selectableScreenIds
+        .filter((id) => id !== screenId)
+        .forEach((id) => {
+          const selected = selectedValue === id ? " selected" : "";
+          options.push(`<option value="${id}"${selected}>${id}</option>`);
+        });
+      return options.join("");
     }
 
     function moveScreenToPlaylistEnd(screens, screenId, playlistId) {
@@ -1233,10 +1243,12 @@
         </div>
         <div>
           <div class="alt-screen-field">
-            <input type="text" list="screenIds" placeholder="Optional alternate screen(s)" value="${screen.alt_screen ?? ""}" class="alt-screen-input">
+            <select class="alt-screen-input">
+              ${buildAltScreenOptions(screen.id, screen.alt_screen ?? "")}
+            </select>
             <button type="button" class="alt-screen-clear" aria-label="Clear alternate screens" title="Clear alternate screens">×</button>
           </div>
-          <div class="hint">Comma-separated list if needed.</div>
+          <div class="hint">Select one alternate screen.</div>
         </div>
         <div>
           <input type="number" min="0" step="1" placeholder="1" value="${screen.alt_frequency ?? ""}" class="alt-frequency-input">
