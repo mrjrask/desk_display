@@ -3,15 +3,10 @@ from PIL import Image, ImageDraw
 import screens.mlb_schedule as mlb_schedule
 
 
-def test_should_show_team_logo_boxscore_for_display_hat_mini_only(monkeypatch):
-    monkeypatch.setattr(mlb_schedule.config, "get_display_profile_id", lambda: mlb_schedule.DISPLAY_PROFILE_DISPLAY_HAT_MINI)
-
+def test_should_show_team_logo_boxscore_for_supported_mlb_screens():
     assert mlb_schedule._should_show_team_logo_boxscore("cubs live")
     assert mlb_schedule._should_show_team_logo_boxscore("sox last")
     assert not mlb_schedule._should_show_team_logo_boxscore("cubs next")
-
-    monkeypatch.setattr(mlb_schedule.config, "get_display_profile_id", lambda: "hyperpixel4")
-    assert not mlb_schedule._should_show_team_logo_boxscore("cubs live")
 
 
 def test_draw_left_team_cell_with_logo_stays_inside_cell(monkeypatch):
