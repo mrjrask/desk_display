@@ -4,6 +4,25 @@ set -euo pipefail
 PROJECT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 ENV_PATH="${PROJECT_DIR}/.env"
 
+find_lines() {
+  local pattern="$1"
+  local target="$2"
+  if command -v rg >/dev/null 2>&1; then
+    rg -n "$pattern" "$target"
+  else
+    grep -nE "$pattern" "$target"
+  fi
+}
+
+find_stream() {
+  local pattern="$1"
+  if command -v rg >/dev/null 2>&1; then
+    rg "$pattern"
+  else
+    grep -E "$pattern"
+  fi
+}
+
 section() {
   printf '\n=== %s ===\n' "$1"
 }
@@ -20,16 +39,22 @@ show_cmd() {
 }
 
 section "HyperPixel dtoverlay (cmdline + boot config)"
-tr ' ' '\n' </proc/cmdline | rg '^dtoverlay=' || echo "No dtoverlay in /proc/cmdline"
+tr ' ' '\n' </proc/cmdline | find_stream '^dtoverlay=' || echo "No dtoverlay in /proc/cmdline"
 for cfg in /boot/firmware/config.txt /boot/config.txt; do
   if [[ -f "$cfg" ]]; then
     echo "-- $cfg"
-    rg -n '^(dtoverlay=|dtparam=)' "$cfg" || echo "(no dtoverlay/dtparam lines found)"
+    find_lines '^(dtoverlay=|dtparam=)' "$cfg" || echo "(no dtoverlay/dtparam lines found)"
   fi
 done
 
 show_cmd "DRM/KMS devices" ls -l /dev/dri
-show_cmd "Framebuffer devices" ls -l /dev/fb0 /dev/fb1
+section "Framebuffer devices"
+fb_devices=(/dev/fb*)
+if [[ -e "${fb_devices[0]}" ]]; then
+  ls -l /dev/fb*
+else
+  echo "No framebuffer devices found."
+fi
 
 section "Display mode and connector status"
 if command -v modetest >/dev/null 2>&1; then
@@ -42,7 +67,7 @@ fi
 
 section "Desk Display environment"
 if [[ -f "$ENV_PATH" ]]; then
-  rg -n '^(DESK_DISPLAY_OUTPUT|DISPLAY_WIDTH|DISPLAY_HEIGHT|DISPLAY_ROTATION|DISPLAY_ROTATION_STRICT|DISPLAY_FB_DEVICE|HYPERPIXEL_PANEL)=' "$ENV_PATH" || true
+  find_lines '^(DESK_DISPLAY_OUTPUT|DISPLAY_WIDTH|DISPLAY_HEIGHT|DISPLAY_ROTATION|DISPLAY_ROTATION_STRICT|DISPLAY_FB_DEVICE|HYPERPIXEL_PANEL)=' "$ENV_PATH" || true
 else
   echo "No .env found at $ENV_PATH"
 fi
