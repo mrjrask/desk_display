@@ -301,6 +301,7 @@ To manage the kernel display service over SSH without manually exporting user se
 - **Travel screens show N/A**: confirm `TRAVEL_*` addresses and the relevant Maps API key.
 - **Kernel displays not showing**: set `DESK_DISPLAY_OUTPUT=kernel` and provide `DISPLAY_WIDTH`/`DISPLAY_HEIGHT`.
 - **Kernel displays still blank in desktop mode**: launch with `scripts/launch_kernel_display.sh` from a logged-in desktop session; ensure `WAYLAND_DISPLAY` or `DISPLAY` is set (and `XDG_RUNTIME_DIR`/`XAUTHORITY` are available for SDL).
+- **HyperPixel shows boot logs but Desk Display/desktop stays black**: run `scripts/check_hyperpixel_setup.sh` and verify `dtoverlay=` is present, `/dev/dri/card0` exists, and your output mode matches a real desktop session (`desk_display-kernel.service`) or framebuffer fallback (`DESK_DISPLAY_OUTPUT=framebuffer`).
 - **Display appears over-rotated on HyperPixel/kernel output**: if `dtoverlay=...,rotate=` is configured, strict mode now forces non-zero `DISPLAY_ROTATION` back to `0`. Keep a single rotation source, or set `DISPLAY_ROTATION_STRICT=0` temporarily for backward-compatible stacked rotation.
 - **Wi-Fi recovery loops**: check `/var/log/wifi_auto_recover.log` and disable recovery with `ENABLE_WIFI_RECOVERY=0`.
 
