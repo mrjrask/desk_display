@@ -602,24 +602,30 @@
     }
 
     function loadPlaylistState() {
+      const hasServerPlaylists = Array.isArray(serverPlaylists) && serverPlaylists.length > 0;
+      const normalizedServerPlaylists = Array.isArray(serverPlaylists)
+        ? serverPlaylists.filter((playlist) => playlist?.id && playlist?.name)
+        : [];
+      const normalizedServerAssignments =
+        serverPlaylistAssignments && typeof serverPlaylistAssignments === "object"
+          ? { ...serverPlaylistAssignments }
+          : {};
       const raw = localStorage.getItem(playlistStorageKey);
       if (!raw) {
-        playlists = Array.isArray(serverPlaylists)
-          ? serverPlaylists.filter((playlist) => playlist?.id && playlist?.name)
-          : [];
-        playlistAssignments =
-          serverPlaylistAssignments && typeof serverPlaylistAssignments === "object"
-            ? { ...serverPlaylistAssignments }
-            : {};
+        playlists = normalizedServerPlaylists;
+        playlistAssignments = normalizedServerAssignments;
         collapsedPlaylists = {};
         return;
       }
       try {
+        playlists = normalizedServerPlaylists;
+        playlistAssignments = normalizedServerAssignments;
+        collapsedPlaylists = {};
         const data = JSON.parse(raw);
-        if (Array.isArray(data?.playlists)) {
+        if (!hasServerPlaylists && Array.isArray(data?.playlists)) {
           playlists = data.playlists.filter((playlist) => playlist?.id && playlist?.name);
         }
-        if (data?.assignments && typeof data.assignments === "object") {
+        if (!hasServerPlaylists && data?.assignments && typeof data.assignments === "object") {
           playlistAssignments = { ...data.assignments };
         }
         if (data?.collapsed && typeof data.collapsed === "object") {
