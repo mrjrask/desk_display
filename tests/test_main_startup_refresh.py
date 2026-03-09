@@ -1,4 +1,4 @@
-"""Tests for startup refresh behavior."""
+"""Tests for asynchronous startup refresh behavior."""
 
 import importlib
 import sys
@@ -22,11 +22,10 @@ def _load_main():
     return importlib.import_module("main")
 
 
-def test_init_runtime_runs_startup_refresh_before_main_loop(monkeypatch):
+def test_init_runtime_starts_startup_refresh_thread(monkeypatch):
     main = _load_main()
 
     started_targets = []
-    startup_refresh_calls = []
 
     def _thread_factory(*, target, daemon):
         thread = _FakeThread(target=target, daemon=daemon)
@@ -50,7 +49,6 @@ def test_init_runtime_runs_startup_refresh_before_main_loop(monkeypatch):
         "archive_base": "/tmp",
     })())
     monkeypatch.setattr(main, "refresh_schedule_if_needed", lambda force=False: None)
-    monkeypatch.setattr(main, "_startup_refresh", lambda: startup_refresh_calls.append(True))
     monkeypatch.setattr(main.threading, "Thread", _thread_factory)
 
     main._runtime_initialized = False
@@ -59,6 +57,6 @@ def test_init_runtime_runs_startup_refresh_before_main_loop(monkeypatch):
 
     main.init_runtime()
 
-    assert startup_refresh_calls == [True]
-    assert started_targets == [main._background_refresh]
-    assert main._startup_refresh_thread is None
+    assert main._startup_refresh_thread is not None
+    assert main._startup_refresh_thread.started is True
+    assert main._startup_refresh in started_targets
