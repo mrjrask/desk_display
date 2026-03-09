@@ -40,6 +40,7 @@ from config import (
     is_hdmi_1080p_layout,
     is_kernel_driven_display,
     is_hyperpixel_next_layout,
+    is_display_profile,
     scale_value,
     scale_value_width,
 )
@@ -74,6 +75,7 @@ from screens.nhl_scoreboard import (
 HYPERPIXEL_LAYOUT = is_hyperpixel_next_layout()
 _IS_1080P_LAYOUT = is_hdmi_1080p_layout()
 _HD_LAYOUT_TEXT_BOOST = 1.25 if _IS_1080P_LAYOUT else 1.0
+_IS_HYPERPIXEL_4_PROFILE = is_display_profile("hyperpixel4") or is_display_profile("hyperpixel4_square")
 
 
 def _scale_y(value: int) -> int:
@@ -126,6 +128,8 @@ def _scoreboard_fonts() -> tuple:
         base_font=FONT_TEAM_SPORTS,
         default_size=sizes["score"],
     )
+    if _IS_HYPERPIXEL_4_PROFILE:
+        score = clone_font(score, getattr(score, "size", 20) + 3)
     status = get_screen_font(
         SCREEN_ID,
         "status",
