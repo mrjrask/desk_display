@@ -64,6 +64,65 @@ class ScreenScheduler:
     def requested_ids(self) -> Set[str]:
         return set(self._requested)
 
+    def preview_scheduled_ids(self, limit: int) -> List[str]:
+        """Return upcoming scheduled screen IDs without mutating scheduler state."""
+
+        if limit <= 0 or not self._entries:
+            return []
+
+        cloned_entries: List[_ScheduleEntry] = []
+        for entry in self._entries:
+            cloned_alt: Optional[_AlternateSchedule] = None
+            if entry.alternate is not None:
+                cloned_alt = _AlternateSchedule(
+                    screen_ids=entry.alternate.screen_ids,
+                    frequency=entry.alternate.frequency,
+                    cursor=entry.alternate.cursor,
+                )
+
+            cloned_entries.append(
+                _ScheduleEntry(
+                    screen_id=entry.screen_id,
+                    frequency=entry.frequency,
+                    cycle_count=entry.cycle_count,
+                    alternate=cloned_alt,
+                )
+            )
+
+        preview = ScreenScheduler(cloned_entries)
+        preview._cursor = self._cursor
+
+        scheduled_ids: List[str] = []
+        for _ in range(limit):
+            next_id = preview._next_scheduled_id()
+            if next_id is None:
+                break
+            scheduled_ids.append(next_id)
+
+        return scheduled_ids
+
+    def _next_scheduled_id(self) -> Optional[str]:
+        """Return the next scheduled ID without availability checks."""
+
+        if not self._entries:
+            return None
+
+        for _ in range(len(self._entries)):
+            entry = self._entries[self._cursor]
+            self._cursor = (self._cursor + 1) % len(self._entries)
+
+            entry.cycle_count += 1
+            if (entry.cycle_count - 1) % entry.frequency != 0:
+                continue
+
+            if entry.alternate and entry.alternate.frequency > 0:
+                if entry.cycle_count % entry.alternate.frequency == 0:
+                    return entry.alternate.next_screen_id()
+
+            return entry.screen_id
+
+        return None
+
     def next_available(self, registry: Dict[str, "ScreenDefinition"]) -> Optional["ScreenDefinition"]:
         if not self._entries:
             return None

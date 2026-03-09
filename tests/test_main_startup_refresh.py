@@ -60,3 +60,37 @@ def test_init_runtime_starts_startup_refresh_thread(monkeypatch):
     assert main._startup_refresh_thread is not None
     assert main._startup_refresh_thread.started is True
     assert main._startup_refresh in started_targets
+
+
+def test_scheduled_startup_feed_order_prioritizes_upcoming_screens(monkeypatch):
+    main = _load_main()
+
+    class _Scheduler:
+        def preview_scheduled_ids(self, limit):
+            return ["weather1", "hawks next", "date"]
+
+    monkeypatch.setattr(main, "screen_scheduler", _Scheduler())
+    monkeypatch.setattr(main, "_requested_data_feeds", lambda: {"weather", "hawks", "bears"})
+
+    ordered = main._scheduled_startup_feed_order()
+
+    assert ordered[:2] == ["weather", "hawks"]
+    assert ordered[-1] == "bears"
+
+
+def test_startup_refresh_runs_first_wave_before_background(monkeypatch):
+    main = _load_main()
+
+    monkeypatch.setattr(main, "_scheduled_startup_feed_order", lambda limit=4: ["weather", "hawks", "bears"])
+    monkeypatch.setattr(main._shutdown_event, "is_set", lambda: False)
+
+    calls = []
+
+    def _refresh(feeds):
+        calls.append(list(feeds))
+
+    monkeypatch.setattr(main, "_refresh_feeds_in_order", _refresh)
+
+    main._startup_refresh()
+
+    assert calls == [["weather", "hawks"], ["bears"]]

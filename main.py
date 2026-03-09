@@ -38,7 +38,7 @@ import subprocess
 import sys
 from collections import deque
 from contextlib import nullcontext
-from typing import Callable, Dict, Optional, Set, Tuple
+from typing import Callable, Dict, List, Optional, Set, Tuple
 
 os.environ.setdefault("CONFIG_LOAD_DOTENV", "1")
 
@@ -1572,11 +1572,66 @@ def _background_refresh() -> None:
             break
 
 
+
+
+def _scheduled_startup_feed_order(limit: int = 4) -> List[str]:
+    """Return feed names ordered by first upcoming scheduled appearance."""
+
+    scheduler = screen_scheduler
+    if scheduler is None:
+        return sorted(_requested_data_feeds())
+
+    scheduled_ids = scheduler.preview_scheduled_ids(limit)
+    if not scheduled_ids:
+        return sorted(_requested_data_feeds())
+
+    ordered_feeds: List[str] = []
+    for screen_id in scheduled_ids:
+        for feed, feed_screen_ids in _FEED_DEPENDENCIES.items():
+            if feed == "weather" and not ENABLE_WEATHER:
+                continue
+            if screen_id in feed_screen_ids and feed not in ordered_feeds:
+                ordered_feeds.append(feed)
+
+    for feed in sorted(_requested_data_feeds()):
+        if feed not in ordered_feeds:
+            ordered_feeds.append(feed)
+
+    return ordered_feeds
+
+
+def _refresh_feeds_in_order(feeds: List[str]) -> None:
+    """Refresh feeds in the provided order with force semantics."""
+
+    for feed in feeds:
+        refresher = _FEED_REFRESHERS.get(feed)
+        if not refresher:
+            continue
+        try:
+            refresher()
+            _last_feed_refresh[feed] = time.monotonic()
+        except Exception as exc:
+            logging.error("Failed to refresh %s feed: %s", feed, exc)
+
+
 def _startup_refresh() -> None:
     """Prime cached data asynchronously so the first frame can render quickly."""
 
     try:
-        refresh_all(force=True)
+        ordered_feeds = _scheduled_startup_feed_order()
+        if not ordered_feeds:
+            logging.info("⏭️  Startup refresh idle; no data-driven screens active.")
+            return
+
+        first_wave = ordered_feeds[:2]
+        remaining = ordered_feeds[2:]
+
+        logging.info("🚀 Startup refresh first wave: %s", ", ".join(first_wave))
+        _refresh_feeds_in_order(first_wave)
+
+        if remaining and not _shutdown_event.is_set():
+            logging.info("🧵 Startup refresh background wave: %s", ", ".join(remaining))
+            _refresh_feeds_in_order(remaining)
     except Exception as exc:
         logging.error("Startup refresh failed: %s", exc)
 
