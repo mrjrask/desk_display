@@ -40,6 +40,7 @@ from config import (
     is_kernel_driven_display,
     is_hdmi_1080p_layout,
     is_hyperpixel_next_layout,
+    is_display_profile,
     scale_value,
     scale_value_width,
 )
@@ -73,6 +74,7 @@ from screens.nfl_scoreboard import (
 HYPERPIXEL_LAYOUT = is_hyperpixel_next_layout()
 _IS_1080P_LAYOUT = is_hdmi_1080p_layout()
 _HD_LAYOUT_TEXT_BOOST = 1.25 if _IS_1080P_LAYOUT else 1.0
+_IS_HYPERPIXEL_4_PROFILE = is_display_profile("hyperpixel4") or is_display_profile("hyperpixel4_square")
 
 
 def _scale_y(value: int) -> int:
@@ -113,6 +115,8 @@ SCORE_FONT = get_screen_font(
     base_font=FONT_TEAM_SPORTS,
     default_size=20,
 )
+if _IS_HYPERPIXEL_4_PROFILE:
+    SCORE_FONT = clone_font(SCORE_FONT, getattr(SCORE_FONT, "size", 20) + 3)
 STATUS_FONT = get_screen_font(
     SCREEN_ID,
     "status",
@@ -149,6 +153,8 @@ def _apply_style_overrides() -> None:
         base_font=FONT_TEAM_SPORTS,
         default_size=20,
     )
+    if _IS_HYPERPIXEL_4_PROFILE:
+        SCORE_FONT = clone_font(SCORE_FONT, getattr(SCORE_FONT, "size", 20) + 3)
     STATUS_FONT = get_screen_font(
         SCREEN_ID,
         "status",
