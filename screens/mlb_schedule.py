@@ -278,7 +278,7 @@ def _should_show_team_logo_boxscore(screen_id: Optional[str]) -> bool:
         "cubs last",
         "sox live",
         "sox last",
-    } and config.get_display_profile_id() == DISPLAY_PROFILE_DISPLAY_HAT_MINI
+    }
 
 
 def _draw_left_team_cell_with_logo(
