@@ -233,3 +233,31 @@ def test_all_zero_frequencies_raise_error():
 
     with pytest.raises(ValueError):
         build_scheduler(config)
+
+
+def test_preview_scheduled_ids_matches_next_sequence_without_mutation():
+    config = {"screens": {"date": 1, "inside": 2}}
+    scheduler = build_scheduler(config)
+    registry = make_registry({"date": True, "inside": True})
+
+    preview = scheduler.preview_scheduled_ids(6)
+    actual = collect_sequence(scheduler, registry, 6)
+
+    assert preview == actual
+
+
+def test_preview_scheduled_ids_keeps_scheduler_state():
+    config = {
+        "screens": {
+            "date": {
+                "frequency": 1,
+                "alt": {"screen": ["inside", "sensors"], "frequency": 2},
+            }
+        }
+    }
+    scheduler = build_scheduler(config)
+
+    first_preview = scheduler.preview_scheduled_ids(4)
+    second_preview = scheduler.preview_scheduled_ids(4)
+
+    assert first_preview == second_preview
