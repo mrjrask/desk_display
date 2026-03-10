@@ -730,10 +730,44 @@ def _scroll_display(display, full_img: Image.Image):
 
 
 # ─── Public API ───────────────────────────────────────────────────────────────
-def render_wbc_scoreboard(display, games: list[dict], transition: bool = False) -> ScreenImage:
+def render_wbc_scoreboard(display, games: list[dict] | None, transition: bool = False) -> ScreenImage:
     global BACKGROUND_COLOR
     BACKGROUND_COLOR = get_screen_background_color(SCREEN_ID, SCOREBOARD_BACKGROUND_COLOR)
     score_font, status_font, center_font = _scoreboard_fonts()
+
+    if games is None:
+        clear_display(display)
+        img = Image.new("RGB", (WIDTH, HEIGHT), BACKGROUND_COLOR)
+        draw = ImageDraw.Draw(img)
+        league_logo = _get_league_logo()
+        title_top = 0
+        if league_logo:
+            logo_x = (WIDTH - league_logo.width) // 2
+            img.paste(league_logo, (logo_x, 0), league_logo)
+            title_top = league_logo.height + LEAGUE_LOGO_GAP
+        try:
+            l, t, r, b = draw.textbbox((0, 0), TITLE, font=TITLE_FONT)
+            tw, th = r - l, b - t
+            tx = (WIDTH - tw) // 2 - l
+            ty = title_top - t
+        except Exception:
+            tw, th = draw.textsize(TITLE, font=TITLE_FONT)
+            tx = (WIDTH - tw) // 2
+            ty = title_top
+        draw.text((tx, ty), TITLE, font=TITLE_FONT, fill=(255, 255, 255))
+        _center_text(
+            draw,
+            "Loading games...",
+            status_font,
+            0,
+            WIDTH,
+            HEIGHT // 2 - STATUS_ROW_H // 2,
+            STATUS_ROW_H,
+        )
+        if transition:
+            return ScreenImage(img, displayed=False)
+        display.image(img)
+        return ScreenImage(img, displayed=True)
 
     if not games:
         clear_display(display)

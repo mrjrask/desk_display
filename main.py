@@ -1279,7 +1279,7 @@ cache = {
     "bulls":   {"stand":None, "last":None, "live":None, "next":None, "next_home":None},
     "cubs":    {"stand":None, "last":None, "live":None, "next":None, "next_home":None},
     "sox":     {"stand":None, "last":None, "live":None, "next":None, "next_home":None},
-    "scoreboards": {"nfl": [], "mlb": [], "wbc": [], "nba": [], "nhl": []},
+    "scoreboards": {"nfl": None, "mlb": None, "wbc": None, "nba": None, "nhl": None},
 }
 
 _FEED_DEPENDENCIES: Dict[str, Set[str]] = {

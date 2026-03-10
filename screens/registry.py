@@ -530,8 +530,8 @@ def build_screen_registry(context: ScreenContext) -> Tuple[Dict[str, ScreenDefin
 
     scoreboards_available = not (context.offline and context.skip_scoreboards)
     scoreboards = (context.cache.get("scoreboards") or {})
-    mlb_scoreboard_games = scoreboards.get("mlb") or []
-    wbc_scoreboard_games = scoreboards.get("wbc") or []
+    mlb_scoreboard_games = scoreboards.get("mlb")
+    wbc_scoreboard_games = scoreboards.get("wbc")
     today = context.now.date()
     nhl_scoreboards_available = scoreboards_available and not (
         NHL_BREAK_START <= today <= NHL_BREAK_END

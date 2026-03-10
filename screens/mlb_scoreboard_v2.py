@@ -410,8 +410,36 @@ def _scroll_display(display, full_img: Image.Image):
     )
 
 
-def render_mlb_scoreboard_v2(display, games: list[dict], transition: bool = False) -> ScreenImage:
+def render_mlb_scoreboard_v2(display, games: list[dict] | None, transition: bool = False) -> ScreenImage:
     _apply_style_overrides()
+
+    if games is None:
+        clear_display(display)
+        img = Image.new("RGB", (WIDTH, HEIGHT), BACKGROUND_COLOR)
+        draw = ImageDraw.Draw(img)
+        league_logo = _get_league_logo()
+        title_top = 0
+        if league_logo:
+            logo_x = (WIDTH - league_logo.width) // 2
+            img.paste(league_logo, (logo_x, 0), league_logo)
+            title_top = league_logo.height + LEAGUE_LOGO_GAP
+        try:
+            l, t, r, b = draw.textbbox((0, 0), TITLE, font=TITLE_FONT)
+            tw, th = r - l, b - t
+            tx = (WIDTH - tw) // 2 - l
+            ty = title_top - t
+        except Exception:
+            tw, th = draw.textsize(TITLE, font=TITLE_FONT)
+            tx = (WIDTH - tw) // 2
+            ty = title_top
+        draw.text((tx, ty), TITLE, font=TITLE_FONT, fill=(255, 255, 255))
+        _center_text(
+            draw, "Loading games...", STATUS_FONT, 0, WIDTH, HEIGHT // 2 - STATUS_ROW_H // 2, STATUS_ROW_H
+        )
+        if transition:
+            return ScreenImage(img, displayed=False)
+        display.image(img)
+        return ScreenImage(img, displayed=True)
 
     if not games:
         clear_display(display)
