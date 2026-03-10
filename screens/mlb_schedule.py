@@ -281,6 +281,15 @@ def _should_show_team_logo_boxscore(screen_id: Optional[str]) -> bool:
     }
 
 
+def _should_hide_team_abbreviation_boxscore(screen_id: Optional[str]) -> bool:
+    return is_hyperpixel_4_square_layout() and (screen_id or "").strip().lower() in {
+        "cubs live",
+        "cubs last",
+        "sox live",
+        "sox last",
+    }
+
+
 def _draw_left_team_cell_with_logo(
     img: Image.Image,
     draw: ImageDraw.ImageDraw,
@@ -294,6 +303,7 @@ def _draw_left_team_cell_with_logo(
     font,
     result_flag: Optional[str]=None,
     replace_abbreviation_with_logo: bool=False,
+    show_abbreviation: bool=True,
     fill=(255, 255, 255),
 ) -> None:
     left_pad = max(2, min(6, w // 12))
@@ -330,6 +340,9 @@ def _draw_left_team_cell_with_logo(
 
     flag_gap = max(2, left_pad // 2)
     reserved_flag_w = (flag_img.width + flag_gap) if flag_img else 0
+
+    if not show_abbreviation:
+        return
 
     # Keep abbreviation constrained to the cell width.
     max_text_w = max(0, (x + w - left_pad - reserved_flag_w) - text_x)
@@ -561,6 +574,7 @@ def _draw_boxscore_table(img: Image.Image, draw: ImageDraw.ImageDraw, title: str
         (home_lbl, home_r, home_h, home_e)
     ]
     show_team_logo = _should_show_team_logo_boxscore(screen_id)
+    hide_team_abbreviation = _should_hide_team_abbreviation_boxscore(screen_id)
     row_teams = [away_team, home_team]
     for ridx, (lbl, r, h, e) in enumerate(rows):
         for cidx, val in enumerate([lbl, r, h, e]):
@@ -588,6 +602,7 @@ def _draw_boxscore_table(img: Image.Image, draw: ImageDraw.ImageDraw, title: str
                         else None
                     ),
                     replace_abbreviation_with_logo=False,
+                    show_abbreviation=not hide_team_abbreviation,
                     fill=fill_col,
                 )
                 continue
