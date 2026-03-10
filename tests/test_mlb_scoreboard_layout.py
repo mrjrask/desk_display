@@ -181,3 +181,33 @@ def test_wbc_col_tricode_is_treated_as_colombia_for_international_opponents():
     ])
 
     assert [g["gamePk"] for g in hydrated] == [20]
+
+
+class _DisplayStub:
+    def __init__(self):
+        self.last_image = None
+
+    def image(self, img):
+        self.last_image = img
+
+
+def test_mlb_v2_render_shows_loading_message_when_games_not_hydrated(monkeypatch):
+    display = _DisplayStub()
+    monkeypatch.setattr(mlb_scoreboard_v2, "clear_display", lambda _display: None)
+    monkeypatch.setattr(mlb_scoreboard_v2, "_get_league_logo", lambda: None)
+
+    result = mlb_scoreboard_v2.render_mlb_scoreboard_v2(display, None, transition=False)
+
+    assert result.displayed is True
+    assert display.last_image is not None
+
+
+def test_wbc_render_shows_loading_message_when_games_not_hydrated(monkeypatch):
+    display = _DisplayStub()
+    monkeypatch.setattr(wbc_scoreboard, "clear_display", lambda _display: None)
+    monkeypatch.setattr(wbc_scoreboard, "_get_league_logo", lambda: None)
+
+    result = wbc_scoreboard.render_wbc_scoreboard(display, None, transition=False)
+
+    assert result.displayed is True
+    assert display.last_image is not None
