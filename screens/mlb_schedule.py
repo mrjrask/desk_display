@@ -127,15 +127,14 @@ def _format_game_label(official_date: str, start_time: str) -> str:
     local_dt = None
     if date_obj:
         try:
-            if time_obj:
-                local_dt = CENTRAL_TIME.localize(
-                    datetime.datetime.combine(date_obj, time_obj)
-                )
+            base_dt = datetime.datetime.combine(
+                date_obj,
+                time_obj if time_obj else datetime.time(19, 0),
+            )
+            if hasattr(CENTRAL_TIME, "localize"):
+                local_dt = CENTRAL_TIME.localize(base_dt)
             else:
-                # Default to an evening time purely for relative label purposes.
-                local_dt = CENTRAL_TIME.localize(
-                    datetime.datetime.combine(date_obj, datetime.time(19, 0))
-                )
+                local_dt = base_dt.replace(tzinfo=CENTRAL_TIME)
         except Exception:
             local_dt = None
 
