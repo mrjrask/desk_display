@@ -82,17 +82,97 @@ MLB_TEAM_TRICODES = {
     "KC", "LAA", "LAD", "MIA", "MIL", "MIN", "NYM", "NYY", "ATH", "PHI",
     "PIT", "SD", "SF", "SEA", "SOX", "STL", "TB", "TEX", "TOR", "WSH",
 }
+MLB_TEAM_NAME_MARKERS = (
+    "rockies",
+    "colorado rockies",
+)
+PLACEHOLDER_TEAM_NAMES = {
+    "tbd",
+    "to be determined",
+    "unknown",
+}
 
 
-def _is_mlb_team(team: dict) -> bool:
-    return _team_logo_abbr(team) in MLB_TEAM_TRICODES
+def _team_name(team: dict) -> str:
+    for key in ("name", "teamName", "displayName", "clubName", "locationName"):
+        value = (team or {}).get(key)
+        if isinstance(value, str) and value.strip():
+            return value.strip()
+    return ""
+
+
+def _is_placeholder_team(team: dict) -> bool:
+    name = _team_name(team).lower()
+    if not name:
+        return False
+    if name in PLACEHOLDER_TEAM_NAMES:
+        return True
+    return name.startswith("winner of") or name.startswith("loser of")
+
+
+def _looks_like_colombia(team: dict, opponent: dict) -> bool:
+    tricode = _team_logo_abbr(team)
+    if tricode != "COL":
+        return False
+
+    team_name = _team_name(team).lower()
+    if "colombia" in team_name:
+        return True
+    if any(marker in team_name for marker in MLB_TEAM_NAME_MARKERS):
+        return False
+
+    opponent_name = _team_name(opponent).lower()
+    opponent_tricode = _team_logo_abbr(opponent)
+    if opponent_tricode and opponent_tricode not in MLB_TEAM_TRICODES:
+        return True
+    if "colombia" in opponent_name:
+        return True
+    return False
+
+
+def _is_mlb_team(team: dict, *, opponent: Optional[dict] = None) -> bool:
+    tricode = _team_logo_abbr(team)
+    if tricode not in MLB_TEAM_TRICODES:
+        return False
+    if tricode == "COL" and opponent is not None and _looks_like_colombia(team, opponent):
+        return False
+    return True
 
 
 def _is_international_game(game_obj: dict) -> bool:
     teams = (game_obj or {}).get("teams", {}) or {}
     away_team = (teams.get("away", {}) or {}).get("team", {}) or {}
     home_team = (teams.get("home", {}) or {}).get("team", {}) or {}
-    return not (_is_mlb_team(away_team) and _is_mlb_team(home_team))
+    return not (
+        _is_mlb_team(away_team, opponent=home_team)
+        and _is_mlb_team(home_team, opponent=away_team)
+    )
+
+
+def _is_artifact_game(game_obj: dict) -> bool:
+    teams = (game_obj or {}).get("teams", {}) or {}
+    away_team = (teams.get("away", {}) or {}).get("team", {}) or {}
+    home_team = (teams.get("home", {}) or {}).get("team", {}) or {}
+
+    if _is_placeholder_team(away_team) or _is_placeholder_team(home_team):
+        return True
+
+    away_id = away_team.get("id")
+    home_id = home_team.get("id")
+    if away_id and home_id and away_id == home_id:
+        return True
+
+    away_name = _team_name(away_team).lower()
+    home_name = _team_name(home_team).lower()
+    if away_name and home_name and away_name == home_name:
+        return True
+
+    away_tri = _team_logo_abbr(away_team)
+    home_tri = _team_logo_abbr(home_team)
+    if away_tri and home_tri and away_tri == home_tri:
+        return True
+
+    return False
 
 COL_WIDTHS = [
     _scale_width(70),
@@ -518,6 +598,8 @@ def _hydrate_games(raw_games: Iterable[dict]) -> list[dict]:
     games: list[dict] = []
     for game in raw_games:
         game = game or {}
+        if _is_artifact_game(game):
+            continue
         if not _is_international_game(game):
             continue
         start_local = _timestamp_to_local(game.get("gameDate"))

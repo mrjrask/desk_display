@@ -130,3 +130,54 @@ def test_wbc_hydrate_games_keeps_only_international_matchups_sorted_by_start_tim
     ])
 
     assert [g["gamePk"] for g in hydrated] == [4, 2, 3]
+
+
+def test_wbc_hydrate_games_filters_artifacts_and_keeps_real_international_games():
+    artifact_placeholder = _game(
+        10,
+        "2026-03-05T15:00:00Z",
+        {"name": "TBD", "triCode": "TBD"},
+        {"name": "Japan", "triCode": "JPN"},
+    )
+    artifact_duplicate = _game(
+        11,
+        "2026-03-05T16:00:00Z",
+        {"name": "Mexico", "triCode": "MEX"},
+        {"name": "Mexico", "triCode": "MEX"},
+    )
+    real_game = _game(
+        12,
+        "2026-03-05T17:00:00Z",
+        {"name": "Cuba", "triCode": "CUB"},
+        {"name": "Panama", "triCode": "PAN"},
+    )
+
+    hydrated = wbc_scoreboard._hydrate_games([
+        artifact_placeholder,
+        artifact_duplicate,
+        real_game,
+    ])
+
+    assert [g["gamePk"] for g in hydrated] == [12]
+
+
+def test_wbc_col_tricode_is_treated_as_colombia_for_international_opponents():
+    mixed_colombia_game = _game(
+        20,
+        "2026-03-05T18:00:00Z",
+        {"triCode": "COL", "name": "Colombia"},
+        {"triCode": "JPN", "name": "Japan"},
+    )
+    rockies_game = _game(
+        21,
+        "2026-03-05T19:00:00Z",
+        {"triCode": "COL", "name": "Colorado Rockies"},
+        {"triCode": "LAD", "name": "Los Angeles Dodgers"},
+    )
+
+    hydrated = wbc_scoreboard._hydrate_games([
+        mixed_colombia_game,
+        rockies_game,
+    ])
+
+    assert [g["gamePk"] for g in hydrated] == [20]
