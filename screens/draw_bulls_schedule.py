@@ -522,11 +522,21 @@ def _format_footer_last(game: Dict) -> str:
     return " • ".join(parts)
 
 def _format_footer_next(game: Dict) -> str:
-    # Date + local time (e.g., "Fri, Nov 8 · 7:00 PM")
+    # Date + local time with relative-day labels when applicable.
     start = _get_local_start(game)
     if not isinstance(start, dt.datetime):
         return _relative_label(_official_date(game))
-    return start.strftime("%a, %b %-d · %-I:%M %p")
+
+    today = dt.datetime.now(CENTRAL_TIME).date()
+    start_date = start.date()
+    if start_date == today:
+        day_label = "Tonight" if start.hour >= 18 else "Today"
+    elif start_date == today + dt.timedelta(days=1):
+        day_label = "Tomorrow"
+    else:
+        day_label = start.strftime("%a, %b %-d")
+
+    return f"{day_label} • {start.strftime('%-I:%M %p')}"
 
 
 def _format_footer_live(game: Dict) -> str:

@@ -51,6 +51,7 @@ from config import (
     TIMES_SQUARE_FONT_PATH,
     WIDTH,
     HEIGHT,
+    CENTRAL_TIME,
     is_hyperpixel_4_square_layout,
     is_hyperpixel_next_layout,
 )
@@ -930,11 +931,11 @@ def _format_last_date_bottom(game_date_iso: str) -> str:
     """Return 'Yesterday' or 'Wed Sep 24' (no year)."""
     try:
         dt_utc = dt.datetime.fromisoformat(game_date_iso.replace("Z","+00:00"))
-        local  = dt_utc.astimezone()
+        local  = dt_utc.astimezone(CENTRAL_TIME)
         gdate  = local.date()
     except Exception:
         return ""
-    today = dt.datetime.now().astimezone().date()
+    today = dt.datetime.now(CENTRAL_TIME).date()
     delta = (today - gdate).days
     if delta == 1:
         return "Yesterday"
@@ -1050,7 +1051,7 @@ def _format_next_bottom(
     local = None
     if game_date_iso:
         try:
-            local = dt.datetime.fromisoformat(game_date_iso.replace("Z", "+00:00")).astimezone()
+            local = dt.datetime.fromisoformat(game_date_iso.replace("Z", "+00:00")).astimezone(CENTRAL_TIME)
         except Exception:
             local = None
 
@@ -1070,7 +1071,7 @@ def _format_next_bottom(
     if not start and game_date_iso:
         try:
             dt_utc = dt.datetime.fromisoformat(game_date_iso.replace("Z", "+00:00"))
-            start_local = dt_utc.astimezone()
+            start_local = dt_utc.astimezone(CENTRAL_TIME)
             start = (
                 start_local.strftime("%-I:%M %p")
                 if os.name != "nt"
@@ -1086,14 +1087,18 @@ def _format_next_bottom(
     if local is None and official:
         try:
             d = dt.datetime.strptime(official[:10], "%Y-%m-%d").date()
-            local = dt.datetime.combine(d, dt.time(19, 0)).astimezone()  # default 7pm if time missing
+            fallback_dt = dt.datetime.combine(d, dt.time(19, 0))
+            if hasattr(CENTRAL_TIME, "localize"):
+                local = CENTRAL_TIME.localize(fallback_dt)
+            else:
+                local = fallback_dt.replace(tzinfo=CENTRAL_TIME)  # default 7pm if time missing
         except Exception:
             local = None
 
     if not local:
         return ""
 
-    today = dt.datetime.now().astimezone()
+    today = dt.datetime.now(CENTRAL_TIME)
     today_d = today.date()
     game_d = local.date()
     time_str = (
