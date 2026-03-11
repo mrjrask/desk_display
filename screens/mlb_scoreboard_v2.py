@@ -114,7 +114,7 @@ SCORE_FONT = get_screen_font(
     SCREEN_ID,
     "score",
     base_font=FONT_TEAM_SPORTS,
-    default_size=20,
+    default_size=24,
 )
 if _IS_HYPERPIXEL_4_PROFILE:
     SCORE_FONT = clone_font(SCORE_FONT, getattr(SCORE_FONT, "size", 20) + 3)
@@ -150,7 +150,7 @@ def _apply_style_overrides() -> None:
         SCREEN_ID,
         "score",
         base_font=FONT_TEAM_SPORTS,
-        default_size=20,
+        default_size=24,
     )
     if _IS_HYPERPIXEL_4_PROFILE:
         SCORE_FONT = clone_font(SCORE_FONT, getattr(SCORE_FONT, "size", 20) + 3)
