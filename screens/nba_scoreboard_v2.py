@@ -68,6 +68,7 @@ from screens.nba_scoreboard import (
     _format_status,
     _team_logo_abbr,
     _get_league_logo,
+    render_nba_scoreboard as render_nba_scoreboard_v1,
 )
 
 # ─── Constants ────────────────────────────────────────────────────────────────
@@ -102,6 +103,7 @@ for w in GAME_COL_WIDTHS:
     GAME_COL_X.append(GAME_COL_X[-1] + w)
 
 SCREEN_ID = "NBA Scoreboard v2"
+MIN_GAMES_FOR_V2_LAYOUT = 6
 TITLE_FONT = FONT_TITLE_SPORTS
 TEAM_LOGO_BASE_HEIGHT = scale_value_width(26)
 LEAGUE_LOGO_BASE_HEIGHT = TEAM_LOGO_BASE_HEIGHT
@@ -411,6 +413,9 @@ def _scroll_display(display, full_img: Image.Image):
 
 
 def render_nba_scoreboard_v2(display, games: list[dict], transition: bool = False) -> ScreenImage:
+    if len(games) < MIN_GAMES_FOR_V2_LAYOUT:
+        return render_nba_scoreboard_v1(display, games, transition=transition)
+
     _apply_style_overrides()
 
     if not games:
