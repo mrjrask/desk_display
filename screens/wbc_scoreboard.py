@@ -206,7 +206,7 @@ def _scoreboard_fonts():
         SCREEN_ID,
         "score",
         base_font=FONT_TEAM_SPORTS,
-        default_size=39,
+        default_size=43,
     )
     status = get_screen_font(
         SCREEN_ID,

@@ -109,7 +109,7 @@ LOGO_HEIGHT = TEAM_LOGO_BASE_HEIGHT
 LEAGUE_LOGO_HEIGHT = LEAGUE_LOGO_BASE_HEIGHT
 
 _SCOREBOARD_BASE_FONT_SIZES = {
-    "score": 39,
+    "score": 43,
     "status": 28,
     "center": 28,
 }
