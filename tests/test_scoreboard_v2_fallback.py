@@ -1,0 +1,80 @@
+import screens.mlb_scoreboard_v2 as mlb_scoreboard_v2
+import screens.nba_scoreboard_v2 as nba_scoreboard_v2
+import screens.nfl_scoreboard_v2 as nfl_scoreboard_v2
+import screens.nhl_scoreboard_v2 as nhl_scoreboard_v2
+import screens.wbc_scoreboard_v2 as wbc_scoreboard_v2
+
+
+class _DisplayStub:
+    def image(self, _img):
+        return None
+
+
+def test_nfl_v2_uses_v1_renderer_when_fewer_than_six_games(monkeypatch):
+    sentinel = object()
+
+    monkeypatch.setattr(
+        nfl_scoreboard_v2,
+        "render_nfl_scoreboard_v1",
+        lambda display, games, transition=False: sentinel,
+    )
+
+    result = nfl_scoreboard_v2.render_nfl_scoreboard_v2(_DisplayStub(), [{}] * 5, transition=True)
+
+    assert result is sentinel
+
+
+def test_nhl_v2_uses_v1_renderer_when_fewer_than_six_games(monkeypatch):
+    sentinel = object()
+
+    monkeypatch.setattr(
+        nhl_scoreboard_v2,
+        "render_nhl_scoreboard_v1",
+        lambda display, games, transition=False: sentinel,
+    )
+
+    result = nhl_scoreboard_v2.render_nhl_scoreboard_v2(_DisplayStub(), [{}] * 5, transition=False)
+
+    assert result is sentinel
+
+
+def test_mlb_v2_uses_v1_renderer_when_fewer_than_six_games(monkeypatch):
+    sentinel = object()
+
+    monkeypatch.setattr(
+        mlb_scoreboard_v2,
+        "render_mlb_scoreboard_v1",
+        lambda display, games, transition=False: sentinel,
+    )
+
+    result = mlb_scoreboard_v2.render_mlb_scoreboard_v2(_DisplayStub(), [{}] * 5, transition=False)
+
+    assert result is sentinel
+
+
+def test_nba_v2_uses_v1_renderer_when_fewer_than_six_games(monkeypatch):
+    sentinel = object()
+
+    monkeypatch.setattr(
+        nba_scoreboard_v2,
+        "render_nba_scoreboard_v1",
+        lambda display, games, transition=False: sentinel,
+    )
+
+    result = nba_scoreboard_v2.render_nba_scoreboard_v2(_DisplayStub(), [{}] * 5, transition=False)
+
+    assert result is sentinel
+
+
+def test_wbc_v2_uses_v1_renderer_when_fewer_than_six_games(monkeypatch):
+    sentinel = object()
+
+    monkeypatch.setattr(
+        wbc_scoreboard_v2,
+        "render_wbc_scoreboard_v1",
+        lambda display, games, transition=False: sentinel,
+    )
+
+    result = wbc_scoreboard_v2.render_wbc_scoreboard_v2(_DisplayStub(), [{}] * 5, transition=False)
+
+    assert result is sentinel
