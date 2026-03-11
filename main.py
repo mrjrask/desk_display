@@ -145,9 +145,11 @@ _registry_cache_key: Optional[
         Tuple[int, int],
         Optional[datetime.datetime],
         int,
+        int,
     ]
 ] = None
 _registry_cache_value: Optional[Tuple[Dict[str, ScreenDefinition], Dict[str, object]]] = None
+_registry_cache_nonce = 0
 
 _skip_request_pending = False
 _last_screen_id: Optional[str] = None
@@ -439,6 +441,7 @@ def _registry_cache_inputs(
     Tuple[int, int],
     Optional[datetime.datetime],
     int,
+    int,
 ]:
     """Return the cache key that determines whether registry rebuild is required."""
 
@@ -450,6 +453,7 @@ def _registry_cache_inputs(
         display_mode,
         weather_fetched_at,
         weather_object_id,
+        _registry_cache_nonce,
     )
 
 
@@ -471,6 +475,13 @@ def _build_registry_if_needed(context: ScreenContext) -> Tuple[Dict[str, ScreenD
     _registry_cache_key = cache_key
     _registry_cache_value = (registry, metadata)
     return registry, metadata
+
+
+def _bump_registry_cache_nonce() -> None:
+    """Invalidate cached screen registry after data updates."""
+
+    global _registry_cache_nonce
+    _registry_cache_nonce += 1
 
 
 display: Optional[Display] = None
@@ -1562,6 +1573,7 @@ def refresh_all(force: bool = False) -> None:
         try:
             refresher()
             _last_feed_refresh[feed] = time.monotonic()
+            _bump_registry_cache_nonce()
         except Exception as exc:
             logging.error("Failed to refresh %s feed: %s", feed, exc)
 
@@ -1847,6 +1859,7 @@ def main_loop():
                 try:
                     _refresh_scoreboards_fresh()
                     _last_feed_refresh["scoreboards"] = time.monotonic()
+                    _bump_registry_cache_nonce()
                 except Exception as exc:
                     logging.error("Failed to force-refresh scoreboards for '%s': %s", sid, exc)
 
