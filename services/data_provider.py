@@ -4,6 +4,7 @@ from __future__ import annotations
 import datetime as dt
 import logging
 import time
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from typing import Any, Callable, Dict, Optional
 
@@ -67,13 +68,40 @@ class DataProvider:
     def read_sports_payloads(self, *, ttl_seconds: int = 120) -> Dict[str, Any]:
         def _fetch_payloads() -> Dict[str, Any]:
             now = dt.datetime.now(CENTRAL_TIME)
+            today = now.date()
+
+            def _fetch_nfl() -> Any:
+                return _fetch_nfl_games_for_week(now) or _fetch_nfl_next_games(today)
+
+            tasks: Dict[str, Callable[[], Any]] = {
+                "nfl": _fetch_nfl,
+                "mlb": lambda: _fetch_mlb_games_for_date(_mlb_scoreboard_date(now)),
+                "wbc": lambda: _fetch_wbc_games_for_date(_wbc_scoreboard_date(now)),
+                "nba": lambda: _fetch_nba_games_for_date(_nba_scoreboard_date(now)),
+                "nhl": lambda: _fetch_nhl_games_for_date(_nhl_scoreboard_date(now)),
+            }
+
+            scoreboards: Dict[str, Any] = {league: [] for league in tasks}
+            with ThreadPoolExecutor(max_workers=len(tasks)) as pool:
+                futures = {
+                    league: pool.submit(fetcher)
+                    for league, fetcher in tasks.items()
+                }
+
+                for league, future in futures.items():
+                    try:
+                        result = future.result()
+                        scoreboards[league] = result or []
+                    except Exception as exc:
+                        logging.error("Failed to fetch %s scoreboard payload: %s", league, exc)
+
             return {
                 "scoreboards": {
-                    "nfl": _fetch_nfl_games_for_week(now) or _fetch_nfl_next_games(now.date()),
-                    "mlb": _fetch_mlb_games_for_date(_mlb_scoreboard_date(now)),
-                    "wbc": _fetch_wbc_games_for_date(_wbc_scoreboard_date(now)),
-                    "nba": _fetch_nba_games_for_date(_nba_scoreboard_date(now)),
-                    "nhl": _fetch_nhl_games_for_date(_nhl_scoreboard_date(now)),
+                    "nfl": scoreboards["nfl"],
+                    "mlb": scoreboards["mlb"],
+                    "wbc": scoreboards["wbc"],
+                    "nba": scoreboards["nba"],
+                    "nhl": scoreboards["nhl"],
                 },
             }
 
