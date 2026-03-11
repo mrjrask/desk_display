@@ -14,6 +14,7 @@ import datetime
 import json
 import logging
 import os
+import re
 import socket
 import sys
 import time
@@ -361,6 +362,14 @@ def _normalize_period_for_display(period_ord: str) -> str:
     return text
 
 
+
+
+def _strip_leading_zero_minutes(clock_text: str) -> str:
+    if not isinstance(clock_text, str):
+        return ""
+    return re.sub(r"\b0(\d):([0-5]\d)\b", r"\1:\2", clock_text)
+
+
 def _format_status(game: dict) -> str:
     status = (game or {}).get("status", {}) or {}
     linescore = (game or {}).get("linescore", {}) or {}
@@ -385,7 +394,9 @@ def _format_status(game: dict) -> str:
         intermission = linescore.get("intermissionInfo") or {}
         in_intermission = intermission.get("inIntermission")
         period_ord = _normalize_period_for_display(linescore.get("currentPeriodOrdinal"))
-        time_remaining = (linescore.get("currentPeriodTimeRemaining") or "").upper()
+        time_remaining = _strip_leading_zero_minutes(
+            (linescore.get("currentPeriodTimeRemaining") or "").upper()
+        )
         if in_intermission:
             if period_ord:
                 return f"{period_ord} INT"

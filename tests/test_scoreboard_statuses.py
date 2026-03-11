@@ -8,6 +8,8 @@ from screens.mlb_scoreboard import _format_status as mlb_format_status
 from screens.mlb_scoreboard import _fetch_games_for_date as mlb_fetch_games_for_date
 from screens.mlb_scoreboard import _scoreboard_date as mlb_scoreboard_date
 from screens.nfl_scoreboard import _format_status as nfl_format_status
+from screens.nba_scoreboard import _format_status as nba_format_status
+from screens.nhl_scoreboard import _format_status as nhl_format_status
 from config import CENTRAL_TIME
 
 
@@ -100,3 +102,27 @@ def test_mlb_fetch_includes_spring_training_and_wbc_filters(monkeypatch):
 
     assert "sportId=1,51" in captured["url"]
     assert "gameTypes=S,E,R,F,D,L,W" in captured["url"]
+
+
+def test_nba_live_status_drops_leading_zero_minutes():
+    game = {
+        "status": {"abstractGameState": "live", "detailedState": "In Progress", "statusCode": "2"},
+        "linescore": {"currentPeriodOrdinal": "Q1", "currentPeriodTimeRemaining": "05:00"},
+    }
+    assert nba_format_status(game) == "5:00 Q1"
+
+
+def test_nhl_live_status_drops_leading_zero_minutes():
+    game = {
+        "status": {"abstractGameState": "live", "detailedState": "In Progress", "statusCode": "3"},
+        "linescore": {"currentPeriodOrdinal": "1st", "currentPeriodTimeRemaining": "05:00"},
+    }
+    assert nhl_format_status(game) == "1ST 5:00"
+
+
+def test_mlb_live_detailed_status_drops_leading_zero_minutes():
+    game = {
+        "status": {"abstractGameState": "live", "detailedState": "Rain Delay 05:00", "statusCode": "I"},
+        "linescore": {},
+    }
+    assert mlb_format_status(game) == "Rain Delay 5:00"
