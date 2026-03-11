@@ -19,6 +19,7 @@ from __future__ import annotations
 import datetime
 import logging
 import os
+import re
 import time
 from typing import Iterable, Optional
 
@@ -339,6 +340,14 @@ def _final_inning(linescore: dict) -> Optional[int]:
     return None
 
 
+
+
+def _strip_leading_zero_minutes(clock_text: str) -> str:
+    if not isinstance(clock_text, str):
+        return ""
+    return re.sub(r"\b0(\d):([0-5]\d)\b", r"\1:\2", clock_text)
+
+
 def _format_status(game: dict) -> str:
     status = (game or {}).get("status", {}) or {}
     linescore = (game or {}).get("linescore", {}) or {}
@@ -375,7 +384,7 @@ def _format_status(game: dict) -> str:
         if inning_state and inning_ord:
             return f"{inning_state} {inning_ord}"
         if detailed:
-            return detailed
+            return _strip_leading_zero_minutes(detailed)
         return "In Progress"
 
     if "delay" in detailed_lower:
