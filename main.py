@@ -1452,6 +1452,12 @@ def _scoreboards_have_live_games(scoreboards: object) -> bool:
     return False
 
 
+def _should_force_refresh_scoreboards(screen_id: str, *, offline: bool) -> bool:
+    """Return whether the current screen should trigger a fresh scoreboard pull."""
+
+    return screen_id in _SCOREBOARD_SCREEN_IDS and not offline
+
+
 def _refresh_bears() -> None:
     cache["bears"].update({
         "stand": data_fetch.fetch_bears_standings(),
@@ -1837,7 +1843,7 @@ def main_loop():
                 continue
 
             sid = entry.id
-            if sid in _SCOREBOARD_SCREEN_IDS and _scoreboards_have_live_games(cache.get("scoreboards")):
+            if _should_force_refresh_scoreboards(sid, offline=offline):
                 try:
                     _refresh_scoreboards_fresh()
                     _last_feed_refresh["scoreboards"] = time.monotonic()

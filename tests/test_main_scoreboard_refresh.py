@@ -35,3 +35,17 @@ def test_scoreboards_have_live_games_checks_all_leagues():
     }
 
     assert main._scoreboards_have_live_games(scoreboards)
+
+
+def test_should_force_refresh_scoreboards_for_any_scoreboard_screen_when_online():
+    main = _load_main()
+
+    assert main._should_force_refresh_scoreboards("NFL Scoreboard", offline=False)
+    assert main._should_force_refresh_scoreboards("NBA Scoreboard v2", offline=False)
+
+
+def test_should_force_refresh_scoreboards_skips_non_scoreboard_and_offline():
+    main = _load_main()
+
+    assert not main._should_force_refresh_scoreboards("date", offline=False)
+    assert not main._should_force_refresh_scoreboards("MLB Scoreboard", offline=True)
