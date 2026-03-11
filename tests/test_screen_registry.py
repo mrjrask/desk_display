@@ -347,6 +347,38 @@ def test_next_quad_page_tiles_rotates_pages(monkeypatch):
 
 
 
+
+
+def test_mlb_wbc_scoreboards_render_with_empty_lists_when_cache_is_none(monkeypatch):
+    now = datetime.datetime(2024, 7, 1, 12, 0, tzinfo=CENTRAL_TIME)
+    weather = {"hourly": []}
+    context = _make_context(
+        weather,
+        now,
+        cache_updates={"scoreboards": {"mlb": None, "wbc": None}},
+    )
+
+    captured = {}
+
+    def _capture_mlb(_display, games, transition=False):
+        captured["mlb_games"] = games
+        return None
+
+    def _capture_wbc(_display, games, transition=False):
+        captured["wbc_games"] = games
+        return None
+
+    monkeypatch.setattr("screens.registry.render_mlb_scoreboard", _capture_mlb)
+    monkeypatch.setattr("screens.registry.render_wbc_scoreboard", _capture_wbc)
+
+    registry, _ = build_screen_registry(context)
+    registry["MLB Scoreboard"].render()
+    registry["WBC Scoreboard"].render()
+
+    assert captured["mlb_games"] == []
+    assert captured["wbc_games"] == []
+
+
 def test_wbc_scoreboards_use_wbc_scoreboard_cache_key(monkeypatch):
     now = datetime.datetime(2024, 7, 1, 12, 0, tzinfo=CENTRAL_TIME)
     weather = {"hourly": []}
