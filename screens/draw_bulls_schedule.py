@@ -770,9 +770,8 @@ def _render_next_game(game: Dict, *, title: str, logo_scale: float = 1.0) -> Ima
     frame_w = standard_next_game_logo_frame_width(logo_h, (logo_left, logo_right))
     gap = config.scale_value(10) if hyperpixel_layout else 10
     at_symbol = "@"
-    at_font = FONT_ABBR
-    if _IS_HYPERPIXEL_4:
-        at_font = _ts(max(getattr(FONT_ABBR, "size", _FONT_ABBR_SIZE), int(round(_FONT_ABBR_SIZE * 1.3))))
+    # Match Hawks Next/Hawks Next Home "@" sizing.
+    at_font = FONT_NEXT_OPP
 
     at_w, at_h, at_l, at_t = _measure(draw, at_symbol, at_font)
     block_h = logo_h if (logo_left or logo_right) else at_h
