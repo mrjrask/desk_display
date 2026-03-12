@@ -97,6 +97,15 @@ def _interactive_select() -> tuple[list[str], list[str]]:
     return sorted(home), sorted(away)
 
 
+def _align_shared_opponents(home: list[str], away: list[str]) -> tuple[list[str], list[str]]:
+    """Keep teams selected for both sides in matching grid slots."""
+    home_shared = [abbr for abbr in home if abbr in away]
+    shared = set(home_shared)
+    home_only = [abbr for abbr in home if abbr not in shared]
+    away_only = [abbr for abbr in away if abbr not in shared]
+    return home_shared + home_only, home_shared + away_only
+
+
 def _render_one(output: Path, home: list[str], away: list[str]) -> None:
     import config
     from screens.draw_bears_schedule import render_bears_next_season_image
@@ -147,13 +156,15 @@ def main() -> int:
     home = _parse_team_list(args.home) if args.home is not None else list(DEFAULT_HOME)
     away = _parse_team_list(args.away) if args.away is not None else list(DEFAULT_AWAY)
 
+    if args.interactive:
+        home, away = _interactive_select()
+
+    home, away = _align_shared_opponents(home, away)
+
     if args.render_target:
         output = TARGETS[args.render_target][1]
         _render_one(output, home, away)
         return 0
-
-    if args.interactive:
-        home, away = _interactive_select()
 
     for key in ("dhm", "h4", "h4sq"):
         _run_target(key, home, away)
