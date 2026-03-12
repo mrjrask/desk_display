@@ -1151,12 +1151,17 @@ FONT_GB_LABEL           = _load_font("DejaVuSans.ttf",      15)
 
 def _load_emoji_font(size: int) -> ImageFont.ImageFont:
     scaled_size = scale_value(size)
-    noto = _try_load_font("NotoColorEmoji.ttf", size)
-    if noto:
-        return noto
+    noto_filenames = ("NotoColorEmoji.ttf", "Noto Color Emoji.ttf")
 
-    noto_path = os.path.join(FONTS_DIR, "NotoColorEmoji.ttf")
-    if os.path.isfile(noto_path):
+    for filename in noto_filenames:
+        noto = _try_load_font(filename, size)
+        if noto:
+            return noto
+
+    for filename in noto_filenames:
+        noto_path = os.path.join(FONTS_DIR, filename)
+        if not os.path.isfile(noto_path):
+            continue
         for native_size in (109, 128, 160):
             try:
                 return _BitmapEmojiFont(noto_path, native_size, scaled_size)
@@ -1168,9 +1173,11 @@ def _load_emoji_font(size: int) -> ImageFont.ImageFont:
                     exc,
                 )
 
-    noto_system_paths = glob.glob(
-        "/usr/share/fonts/**/NotoColorEmoji.ttf", recursive=True
-    )
+    noto_system_paths = []
+    for filename in noto_filenames:
+        noto_system_paths.extend(
+            glob.glob(f"/usr/share/fonts/**/{filename}", recursive=True)
+        )
     for path in noto_system_paths:
         try:
             return ImageFont.truetype(path, scaled_size)

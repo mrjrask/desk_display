@@ -266,12 +266,12 @@ class FontCallScanner(ast.NodeVisitor):
     def __init__(
         self,
         known_font_sizes: Dict[str, FontDefinition],
-        module_name: str,
-        runtime_module_fonts: Dict[str, Dict[str, int]],
+        module_name: str = "",
+        runtime_module_fonts: Optional[Dict[str, Dict[str, int]]] = None,
     ) -> None:
         self.known_font_sizes = known_font_sizes
         self.module_name = module_name
-        self.runtime_module_fonts = runtime_module_fonts
+        self.runtime_module_fonts = runtime_module_fonts or {}
         self.local_ints: Dict[str, int] = {}
         self.import_aliases: Dict[str, str] = {}
         self.truetype_calls: List[TruetypeCall] = []
