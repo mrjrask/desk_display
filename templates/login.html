@@ -66,8 +66,18 @@
       <p class="error">{{ error }}</p>
       {% endif %}
       <input type="hidden" name="next" value="{{ next_url }}" />
+      <label for="username">Username</label>
+      <input
+        id="username"
+        name="username"
+        type="text"
+        value="{{ login_username }}"
+        autocomplete="username"
+        required
+        autofocus
+      />
       <label for="password">Password</label>
-      <input id="password" name="password" type="password" required autofocus />
+      <input id="password" name="password" type="password" autocomplete="current-password" required />
       <button type="submit">Sign in</button>
     </form>
   </body>

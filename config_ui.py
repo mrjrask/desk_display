@@ -43,6 +43,7 @@ LAYOUTS_CONFIG_PATH = os.environ.get(
 
 SCREEN_CONFIG_HOST = os.environ.get("SCREEN_CONFIG_HOST", "0.0.0.0")
 SCREEN_CONFIG_PORT = int(os.environ.get("SCREEN_CONFIG_PORT", "5002"))
+SCREEN_UI_USERNAME = os.environ.get("SCREEN_UI_USERNAME", "")
 SCREEN_UI_PASSWORD = os.environ.get("SCREEN_UI_PASSWORD", "")
 SCREEN_AUTH_ENABLED = os.environ.get("SCREEN_AUTH_ENABLED", "").strip().lower() in {
     "1",
@@ -747,13 +748,20 @@ def login() -> Any:
     next_url = request.args.get("next") or request.form.get("next") or url_for("screen_config")
 
     if request.method == "POST":
+        supplied_username = request.form.get("username", "").strip()
         supplied = request.form.get("password", "")
-        if SCREEN_UI_PASSWORD and supplied == SCREEN_UI_PASSWORD:
+        username_matches = not SCREEN_UI_USERNAME or supplied_username == SCREEN_UI_USERNAME
+        if SCREEN_UI_PASSWORD and username_matches and supplied == SCREEN_UI_PASSWORD:
             session["screen_ui_authenticated"] = True
             return redirect(next_url)
-        error = "Incorrect password"
+        error = "Incorrect username or password"
 
-    return render_template("login.html", error=error, next_url=next_url)
+    return render_template(
+        "login.html",
+        error=error,
+        next_url=next_url,
+        login_username=SCREEN_UI_USERNAME,
+    )
 
 
 @app.post("/logout")
