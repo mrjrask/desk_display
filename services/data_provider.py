@@ -12,6 +12,7 @@ import data_fetch
 from config import CENTRAL_TIME
 from screens.mlb_scoreboard import _fetch_games_for_date as _fetch_mlb_games_for_date, _scoreboard_date as _mlb_scoreboard_date
 from screens.nba_scoreboard import _fetch_games_for_date as _fetch_nba_games_for_date, _scoreboard_date as _nba_scoreboard_date
+from screens.ncaam_scoreboard import _fetch_games_for_date as _fetch_ncaam_games_for_date, _scoreboard_date as _ncaam_scoreboard_date
 from screens.nfl_scoreboard import (
     _fetch_games_for_week as _fetch_nfl_games_for_week,
     _fetch_next_games as _fetch_nfl_next_games,
@@ -78,6 +79,7 @@ class DataProvider:
                 "mlb": lambda: _fetch_mlb_games_for_date(_mlb_scoreboard_date(now)),
                 "wbc": lambda: _fetch_wbc_games_for_date(_wbc_scoreboard_date(now)),
                 "nba": lambda: _fetch_nba_games_for_date(_nba_scoreboard_date(now)),
+                "ncaam": lambda: _fetch_ncaam_games_for_date(_ncaam_scoreboard_date(now)),
                 "nhl": lambda: _fetch_nhl_games_for_date(_nhl_scoreboard_date(now)),
             }
 
@@ -101,6 +103,7 @@ class DataProvider:
                     "mlb": scoreboards["mlb"],
                     "wbc": scoreboards["wbc"],
                     "nba": scoreboards["nba"],
+                    "ncaam": scoreboards["ncaam"],
                     "nhl": scoreboards["nhl"],
                 },
             }

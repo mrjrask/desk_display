@@ -84,6 +84,7 @@ from screens.nhl_team_standings import (
 )
 from screens.nba_scoreboard import render_nba_scoreboard
 from screens.nba_scoreboard_v2 import render_nba_scoreboard_v2
+from screens.ncaam_scoreboard import render_ncaam_scoreboard
 from screens.nfl_scoreboard import render_nfl_scoreboard
 from screens.nfl_scoreboard_v2 import render_nfl_scoreboard_v2
 from screens.nfl_standings import (
@@ -1087,6 +1088,15 @@ def build_screen_registry(context: ScreenContext) -> Tuple[Dict[str, ScreenDefin
         lambda: render_nba_scoreboard_v2(
             context.display,
             (context.cache.get("scoreboards") or {}).get("nba") or [],
+            transition=True,
+        ),
+        available=scoreboards_available,
+    )
+    register(
+        "NCAAM Scoreboard",
+        lambda: render_ncaam_scoreboard(
+            context.display,
+            (context.cache.get("scoreboards") or {}).get("ncaam") or [],
             transition=True,
         ),
         available=scoreboards_available,
