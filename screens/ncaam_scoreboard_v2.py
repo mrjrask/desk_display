@@ -36,7 +36,9 @@ from screens.ncaam_scoreboard import (
     _load_remote_logo,
     _team_logo_url,
     _extract_seed,
+    _extract_rank,
     _draw_seed,
+    _draw_rank,
     _is_in_progress,
     _is_final,
     _score_text,
@@ -105,6 +107,7 @@ def _draw_single_game(canvas: Image.Image, draw: ImageDraw.ImageDraw, game: dict
             continue
         x0 = x_offset + GAME_COL_X[idx] + (GAME_COL_WIDTHS[idx] - logo.width) // 2
         y0 = top + (SCORE_ROW_H - logo.height) // 2
+        _draw_rank(draw, _extract_rank(team), x0, y0)
         _draw_seed(draw, _extract_seed(team), x0, y0, logo.height)
         canvas.paste(logo, (x0, y0), logo)
 
