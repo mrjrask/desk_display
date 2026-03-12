@@ -67,8 +67,9 @@ BLOCK_SPACING = scale_value(10)
 SCORE_ROW_H = scale_value(56)
 STATUS_ROW_H = scale_value(18)
 SEED_FONT = get_screen_font(SCREEN_ID, "seed", base_font=FONT_STATUS, default_size=13)
+RANK_FONT = get_screen_font(SCREEN_ID, "rank", base_font=FONT_STATUS, default_size=11)
 SEED_GAP = max(2, scale_value_width(3))
-RANK_GAP = max(1, scale_value_width(2))
+RANK_GAP = max(0, scale_value_width(1))
 
 COL_WIDTHS = [
     scale_value_width(70),
@@ -389,19 +390,19 @@ def _draw_seed(draw: ImageDraw.ImageDraw, seed: str, x_logo: int, y_logo: int, l
     draw.text((x, y), text, font=SEED_FONT, fill=(210, 210, 210))
 
 
-def _draw_rank(draw: ImageDraw.ImageDraw, rank: Optional[int], x_logo: int, y_logo: int):
+def _draw_rank(draw: ImageDraw.ImageDraw, rank: Optional[int], x_logo: int, y_logo: int, logo_w: int, logo_h: int):
     if rank is None:
         return
     text = f"#{rank}"
     try:
-        l, t, r, b = draw.textbbox((0, 0), text, font=SEED_FONT)
-        tw, _ = r - l, b - t
+        l, t, r, b = draw.textbbox((0, 0), text, font=RANK_FONT)
+        tw, th = r - l, b - t
     except Exception:
-        tw, _ = draw.textsize(text, font=SEED_FONT)
+        tw, th = draw.textsize(text, font=RANK_FONT)
         l = t = 0
-    x = x_logo - RANK_GAP - tw - l
-    y = y_logo - t
-    draw.text((x, y), text, font=SEED_FONT, fill=(210, 210, 210))
+    x = x_logo + logo_w - tw - l + RANK_GAP
+    y = y_logo + logo_h - th - t
+    draw.text((x, y), text, font=RANK_FONT, fill=(210, 210, 210))
 
 
 def _get_league_logo(mode: Optional[str] = None) -> Optional[Image.Image]:
@@ -468,7 +469,7 @@ def _render_scoreboard(games: list[dict], *, mode: Optional[str] = None) -> Imag
                 continue
             x0 = COL_X[col_idx] + (COL_WIDTHS[col_idx] - logo.width) // 2
             y0 = y + (SCORE_ROW_H - logo.height) // 2
-            _draw_rank(draw, _extract_rank(team), x0, y0)
+            _draw_rank(draw, _extract_rank(team), x0, y0, logo.width, logo.height)
             _draw_seed(draw, _seed_text_for_display(team), x0, y0, logo.height)
             canvas.paste(logo, (x0, y0), logo)
 

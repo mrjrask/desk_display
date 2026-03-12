@@ -42,3 +42,24 @@ def test_ncaam_v2_logo_height_is_capped_to_score_row(monkeypatch):
     monkeypatch.setattr(ncaam_scoreboard_v2, "_team_logo_height", lambda: 100)
 
     assert ncaam_scoreboard_v2._v2_team_logo_height() == 24
+
+
+def test_draw_rank_places_text_bottom_right_of_logo():
+    class DummyDraw:
+        def __init__(self):
+            self.coords = None
+            self.kwargs = None
+
+        def textbbox(self, *_args, **_kwargs):
+            return (0, 0, 12, 8)
+
+        def text(self, coords, text, **kwargs):
+            self.coords = coords
+            self.kwargs = {"text": text, **kwargs}
+
+    draw = DummyDraw()
+    ncaam_scoreboard._draw_rank(draw, 4, x_logo=10, y_logo=20, logo_w=30, logo_h=40)
+
+    assert draw.coords == (28 + ncaam_scoreboard.RANK_GAP, 52)
+    assert draw.kwargs["text"] == "#4"
+    assert draw.kwargs["font"] == ncaam_scoreboard.RANK_FONT
