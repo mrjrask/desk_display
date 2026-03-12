@@ -63,3 +63,54 @@ def test_draw_rank_places_text_bottom_right_of_logo():
     assert draw.coords == (28 + ncaam_scoreboard.RANK_GAP, 52)
     assert draw.kwargs["text"] == "#4"
     assert draw.kwargs["font"] == ncaam_scoreboard.RANK_FONT
+
+
+def test_v2_draw_single_game_passes_logo_dimensions_to_rank(monkeypatch):
+    from screens import ncaam_scoreboard_v2
+
+    class Logo:
+        width = 18
+        height = 24
+
+    class DummyCanvas:
+        def paste(self, *_args, **_kwargs):
+            return None
+
+    class DummyDraw:
+        def textbbox(self, *_args, **_kwargs):
+            return (0, 0, 0, 0)
+
+        def text(self, *_args, **_kwargs):
+            return None
+
+    rank_calls = []
+
+    monkeypatch.setattr(ncaam_scoreboard_v2, "_should_display_scores", lambda _game: False)
+    monkeypatch.setattr(ncaam_scoreboard_v2, "_score_text", lambda _team, show=False: "")
+    monkeypatch.setattr(ncaam_scoreboard_v2, "_is_in_progress", lambda _game: False)
+    monkeypatch.setattr(ncaam_scoreboard_v2, "_is_final", lambda _game: False)
+    monkeypatch.setattr(ncaam_scoreboard_v2, "_center_text", lambda *args, **kwargs: None)
+    monkeypatch.setattr(ncaam_scoreboard_v2, "_v2_team_logo_height", lambda: 24)
+    monkeypatch.setattr(ncaam_scoreboard_v2, "_load_remote_logo", lambda _url, _h: Logo())
+    monkeypatch.setattr(ncaam_scoreboard_v2, "_team_logo_url", lambda _team: "https://example.com/logo.png")
+    monkeypatch.setattr(ncaam_scoreboard_v2, "_extract_rank", lambda _team: 5)
+    monkeypatch.setattr(
+        ncaam_scoreboard_v2,
+        "_draw_rank",
+        lambda _draw, _rank, _x, _y, logo_w, logo_h: rank_calls.append((logo_w, logo_h)),
+    )
+    monkeypatch.setattr(ncaam_scoreboard_v2, "_draw_seed", lambda *args, **kwargs: None)
+    monkeypatch.setattr(ncaam_scoreboard_v2, "_seed_text_for_display", lambda _team: "")
+    monkeypatch.setattr(ncaam_scoreboard_v2, "_status_text", lambda _game: "Scheduled")
+
+    game = {
+        "teams": {
+            "away": {"team": {"id": "1"}},
+            "home": {"team": {"id": "2"}},
+        },
+        "status": {"type": {"state": "pre"}},
+    }
+
+    ncaam_scoreboard_v2._draw_single_game(DummyCanvas(), DummyDraw(), game, x_offset=0, top=0)
+
+    assert rank_calls == [(18, 24), (18, 24)]
