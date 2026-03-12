@@ -15,7 +15,7 @@ from PIL import Image, ImageDraw
 try:
     RESAMPLE = Image.ANTIALIAS
 except AttributeError:
-    RESAMPLE = RESAMPLE
+    RESAMPLE = Image.Resampling.LANCZOS
 
 from config import (
     WIDTH,
@@ -101,7 +101,7 @@ def _scoreboard_mode() -> str:
 def _mode_title_and_logo() -> tuple[str, str]:
     if _scoreboard_mode() == MODE_TOURNAMENT:
         return "March Madness Scores", "MM"
-    return "Top 25 - NCAAM🏀", "NCAA"
+    return "Top 25 - NCAAM", "NCAA"
 
 
 def _team_logo_height() -> int:
@@ -334,12 +334,27 @@ def _load_remote_logo(url: str, height: int) -> Optional[Image.Image]:
 
 def _team_logo_url(team: dict) -> str:
     team_blob = team.get("team") if isinstance(team.get("team"), dict) else team
-    logos = team_blob.get("logos") if isinstance(team_blob, dict) else None
-    if isinstance(logos, list):
-        for logo in logos:
-            if isinstance(logo, dict) and logo.get("href"):
-                return str(logo["href"])
+    if not isinstance(team_blob, dict):
+        return ""
+
+    for source in (team_blob, team):
+        logos = source.get("logos") if isinstance(source, dict) else None
+        if isinstance(logos, list):
+            for logo in logos:
+                if isinstance(logo, dict) and logo.get("href"):
+                    return str(logo["href"])
+        logo_url = source.get("logo") if isinstance(source, dict) else None
+        if isinstance(logo_url, str) and logo_url.strip():
+            return logo_url.strip()
     return ""
+
+
+def _seed_text_for_display(team: dict[str, Any]) -> str:
+    seed = _extract_seed(team)
+    rank = _extract_rank(team)
+    if seed and rank is not None and seed == str(rank):
+        return ""
+    return seed
 
 
 def _draw_seed(draw: ImageDraw.ImageDraw, seed: str, x_logo: int, y_logo: int, logo_h: int):
@@ -357,10 +372,25 @@ def _draw_seed(draw: ImageDraw.ImageDraw, seed: str, x_logo: int, y_logo: int, l
     draw.text((x, y), text, font=SEED_FONT, fill=(210, 210, 210))
 
 
+def _draw_rank(draw: ImageDraw.ImageDraw, rank: Optional[int], x_logo: int, y_logo: int):
+    if rank is None:
+        return
+    text = f"#{rank}"
+    try:
+        l, t, r, b = draw.textbbox((0, 0), text, font=SEED_FONT)
+        tw, th = r - l, b - t
+    except Exception:
+        tw, th = draw.textsize(text, font=SEED_FONT)
+        l = t = 0
+    x = x_logo - SEED_GAP - tw - l
+    y = y_logo - t
+    draw.text((x, y), text, font=SEED_FONT, fill=(210, 210, 210))
+
+
 def _get_league_logo(mode: Optional[str] = None) -> Optional[Image.Image]:
     selected_mode = (mode or _scoreboard_mode()).strip().lower()
     _, logo_key = _mode_title_and_logo() if selected_mode == _scoreboard_mode() else (
-        ("March Madness Scores", "MM") if selected_mode == MODE_TOURNAMENT else ("Top 25 - NCAAM🏀", "NCAA")
+        ("March Madness Scores", "MM") if selected_mode == MODE_TOURNAMENT else ("Top 25 - NCAAM", "NCAA")
     )
     h = _league_logo_height()
     cache_key = (logo_key, h)
@@ -384,7 +414,7 @@ def _get_league_logo(mode: Optional[str] = None) -> Optional[Image.Image]:
 def _render_scoreboard(games: list[dict], *, mode: Optional[str] = None) -> Image.Image:
     selected_mode = mode or _scoreboard_mode()
     title, _ = _mode_title_and_logo() if selected_mode == _scoreboard_mode() else (
-        ("March Madness Scores", "MM") if selected_mode == MODE_TOURNAMENT else ("Top 25 - NCAAM🏀", "NCAA")
+        ("March Madness Scores", "MM") if selected_mode == MODE_TOURNAMENT else ("Top 25 - NCAAM", "NCAA")
     )
     logo_height = _team_logo_height()
 
@@ -421,7 +451,8 @@ def _render_scoreboard(games: list[dict], *, mode: Optional[str] = None) -> Imag
                 continue
             x0 = COL_X[col_idx] + (COL_WIDTHS[col_idx] - logo.width) // 2
             y0 = y + (SCORE_ROW_H - logo.height) // 2
-            _draw_seed(draw, _extract_seed(team), x0, y0, logo.height)
+            _draw_rank(draw, _extract_rank(team), x0, y0)
+            _draw_seed(draw, _seed_text_for_display(team), x0, y0, logo.height)
             canvas.paste(logo, (x0, y0), logo)
 
         status_fill = IN_PROGRESS_STATUS_COLOR if in_progress else (255, 255, 255)
