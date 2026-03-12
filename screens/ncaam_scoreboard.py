@@ -152,10 +152,12 @@ def _fetch_json(params: dict[str, Any]) -> dict[str, Any]:
 
 
 def _extract_seed(competitor: dict[str, Any]) -> str:
-    for key in ("seed", "tournamentSeed", "curatedRank"):
+    # `curatedRank.current` is frequently 99 for unranked teams, which should
+    # not be shown as a tournament seed.
+    for key in ("seed", "tournamentSeed"):
         val = competitor.get(key)
         if isinstance(val, dict):
-            for kk in ("seed", "current"):  # curatedRank may only contain rank
+            for kk in ("seed", "current"):
                 vv = val.get(kk)
                 if isinstance(vv, (int, str)) and str(vv).strip().isdigit():
                     return str(vv).strip()
