@@ -38,11 +38,21 @@ from config import (
     get_screen_background_color,
     get_screen_font,
     get_screen_image_scale,
+    is_hyperpixel_next_layout,
+    is_hyperpixel_4_square_layout,
     scale_value,
     scale_value_width,
 )
 from services.http_client import get_session
 from utils import ScreenImage, clear_display, log_call, scroll_vertical_content
+
+HYPERPIXEL_LAYOUT = is_hyperpixel_next_layout()
+HYPERPIXEL_4_SQUARE = is_hyperpixel_4_square_layout()
+
+
+def _scale_y(value: int) -> int:
+    return scale_value(value) if HYPERPIXEL_LAYOUT else scale_value_width(value)
+
 
 REQUEST_TIMEOUT = 10
 SCREEN_ID = "NCAAM Scoreboard"
@@ -58,6 +68,7 @@ SCORE_ROW_H = scale_value(56)
 STATUS_ROW_H = scale_value(18)
 SEED_FONT = get_screen_font(SCREEN_ID, "seed", base_font=FONT_STATUS, default_size=13)
 SEED_GAP = max(2, scale_value_width(3))
+RANK_GAP = max(1, scale_value_width(2))
 
 COL_WIDTHS = [
     scale_value_width(70),
@@ -72,7 +83,7 @@ COL_X = [_COL_LEFT]
 for w in COL_WIDTHS:
     COL_X.append(COL_X[-1] + w)
 
-TEAM_LOGO_BASE_HEIGHT = scale_value_width(52)
+TEAM_LOGO_BASE_HEIGHT = scale_value_width(36) if HYPERPIXEL_LAYOUT else scale_value_width(52)
 LEAGUE_LOGO_BASE_HEIGHT = TEAM_LOGO_BASE_HEIGHT
 LEAGUE_LOGO_GAP = scale_value(4)
 
@@ -107,7 +118,9 @@ def _mode_title_and_logo() -> tuple[str, str]:
 def _team_logo_height() -> int:
     scale = get_screen_image_scale(SCREEN_ID, "team_logo", 1.0)
     target = max(1, int(round(TEAM_LOGO_BASE_HEIGHT * scale)))
-    return min(target, max(1, SCORE_ROW_H - scale_value(8)))
+    if HYPERPIXEL_4_SQUARE:
+        target = max(1, int(round(target * 0.6)))
+    return min(target, max(1, SCORE_ROW_H - _scale_y(8)))
 
 
 def _league_logo_height() -> int:
@@ -156,12 +169,14 @@ def _extract_rank(competitor: dict[str, Any]) -> Optional[int]:
     if isinstance(rank, dict):
         value = rank.get("current")
         try:
-            return int(value)
+            parsed = int(value)
+            return parsed if 1 <= parsed <= 25 else None
         except (TypeError, ValueError):
             pass
     for key in ("rank", "curatedRankCurrent"):
         try:
-            return int(competitor.get(key))
+            parsed = int(competitor.get(key))
+            return parsed if 1 <= parsed <= 25 else None
         except (TypeError, ValueError):
             continue
     return None
@@ -378,11 +393,11 @@ def _draw_rank(draw: ImageDraw.ImageDraw, rank: Optional[int], x_logo: int, y_lo
     text = f"#{rank}"
     try:
         l, t, r, b = draw.textbbox((0, 0), text, font=SEED_FONT)
-        tw, th = r - l, b - t
+        tw, _ = r - l, b - t
     except Exception:
-        tw, th = draw.textsize(text, font=SEED_FONT)
+        tw, _ = draw.textsize(text, font=SEED_FONT)
         l = t = 0
-    x = x_logo - SEED_GAP - tw - l
+    x = x_logo - RANK_GAP - tw - l
     y = y_logo - t
     draw.text((x, y), text, font=SEED_FONT, fill=(210, 210, 210))
 
