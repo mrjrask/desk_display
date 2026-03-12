@@ -17,3 +17,13 @@ def test_team_logo_url_supports_logo_fallback():
 def test_extract_rank_from_nested_curated_rank():
     team = {"curatedRank": {"current": "7"}}
     assert ncaam_scoreboard._extract_rank(team) == 7
+
+
+def test_seed_text_for_display_suppresses_duplicate_rank():
+    team = {"curatedRank": {"current": "9"}}
+    assert ncaam_scoreboard._seed_text_for_display(team) == ""
+
+
+def test_seed_text_for_display_keeps_tournament_seed():
+    team = {"seed": "11", "curatedRank": {"current": "7"}}
+    assert ncaam_scoreboard._seed_text_for_display(team) == "11"

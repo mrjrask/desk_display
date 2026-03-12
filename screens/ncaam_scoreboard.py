@@ -349,6 +349,14 @@ def _team_logo_url(team: dict) -> str:
     return ""
 
 
+def _seed_text_for_display(team: dict[str, Any]) -> str:
+    seed = _extract_seed(team)
+    rank = _extract_rank(team)
+    if seed and rank is not None and seed == str(rank):
+        return ""
+    return seed
+
+
 def _draw_seed(draw: ImageDraw.ImageDraw, seed: str, x_logo: int, y_logo: int, logo_h: int):
     if not seed:
         return
@@ -444,7 +452,7 @@ def _render_scoreboard(games: list[dict], *, mode: Optional[str] = None) -> Imag
             x0 = COL_X[col_idx] + (COL_WIDTHS[col_idx] - logo.width) // 2
             y0 = y + (SCORE_ROW_H - logo.height) // 2
             _draw_rank(draw, _extract_rank(team), x0, y0)
-            _draw_seed(draw, _extract_seed(team), x0, y0, logo.height)
+            _draw_seed(draw, _seed_text_for_display(team), x0, y0, logo.height)
             canvas.paste(logo, (x0, y0), logo)
 
         status_fill = IN_PROGRESS_STATUS_COLOR if in_progress else (255, 255, 255)
