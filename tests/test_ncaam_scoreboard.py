@@ -27,3 +27,18 @@ def test_seed_text_for_display_suppresses_duplicate_rank():
 def test_seed_text_for_display_keeps_tournament_seed():
     team = {"seed": "11", "curatedRank": {"current": "7"}}
     assert ncaam_scoreboard._seed_text_for_display(team) == "11"
+
+
+def test_extract_seed_ignores_curated_rank_placeholder():
+    team = {"curatedRank": {"current": "99"}}
+    assert ncaam_scoreboard._extract_seed(team) == ""
+
+
+def test_ncaam_v2_logo_height_is_capped_to_score_row(monkeypatch):
+    from screens import ncaam_scoreboard_v2
+
+    monkeypatch.setattr(ncaam_scoreboard_v2, "SCORE_ROW_H", 28)
+    monkeypatch.setattr(ncaam_scoreboard_v2, "scale_value", lambda value: value)
+    monkeypatch.setattr(ncaam_scoreboard_v2, "_team_logo_height", lambda: 100)
+
+    assert ncaam_scoreboard_v2._v2_team_logo_height() == 24

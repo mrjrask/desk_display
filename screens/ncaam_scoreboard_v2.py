@@ -55,8 +55,8 @@ MIN_GAMES_FOR_V2_LAYOUT = 6
 TITLE_GAP = scale_value(8)
 BLOCK_SPACING = scale_value(8)
 PAIR_SPACING = scale_value_width(4)
-SCORE_ROW_H = scale_value(30)
-STATUS_ROW_H = scale_value(14)
+SCORE_ROW_H = scale_value(28)
+STATUS_ROW_H = scale_value(12)
 GAME_COL_WIDTHS = [
     scale_value_width(40),
     scale_value_width(30),
@@ -80,6 +80,10 @@ FINAL_WINNING_SCORE_COLOR = SCOREBOARD_FINAL_WINNING_SCORE_COLOR
 FINAL_LOSING_SCORE_COLOR = SCOREBOARD_FINAL_LOSING_SCORE_COLOR
 
 
+def _v2_team_logo_height() -> int:
+    return min(_team_logo_height(), max(1, SCORE_ROW_H - scale_value(4)))
+
+
 def _draw_single_game(canvas: Image.Image, draw: ImageDraw.ImageDraw, game: dict, x_offset: int, top: int):
     teams = (game or {}).get("teams", {})
     away = teams.get("away", {})
@@ -100,7 +104,7 @@ def _draw_single_game(canvas: Image.Image, draw: ImageDraw.ImageDraw, game: dict
             fill = _score_fill("home", in_progress=in_progress, final=final, away=away, home=home)
         _center_text(draw, text, font, x_offset + GAME_COL_X[idx], GAME_COL_WIDTHS[idx], top, SCORE_ROW_H, fill=fill)
 
-    logo_h = _team_logo_height()
+    logo_h = _v2_team_logo_height()
     for idx, team in ((1, away), (3, home)):
         logo = _load_remote_logo(_team_logo_url(team), logo_h)
         if not logo:
