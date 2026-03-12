@@ -975,6 +975,11 @@ NBA_TEAM_TRICODE   = "CHI"
 NBA_IMAGES_DIR     = os.path.join(IMAGES_DIR, "nba")
 NBA_FALLBACK_LOGO  = os.path.join(NBA_IMAGES_DIR, "NBA.png")
 
+# Men's NCAA basketball scoreboard mode.
+# top25 (default): AP Top 25 scoreboard
+# tournament: NCAA tournament games
+NCAAM_SCOREBOARD_MODE = os.environ.get("NCAAM_SCOREBOARD_MODE", "top25").strip().lower()
+
 CENTRAL_TIME = ZoneInfo("America/Chicago")
 
 # ─── Fonts ────────────────────────────────────────────────────────────────────
