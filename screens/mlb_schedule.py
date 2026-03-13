@@ -574,6 +574,11 @@ def _draw_boxscore_table(img: Image.Image, draw: ImageDraw.ImageDraw, title: str
     ]
     show_team_logo = _should_show_team_logo_boxscore(screen_id)
     hide_team_abbreviation = _should_hide_team_abbreviation_boxscore(screen_id)
+    screen_key = (screen_id or "").strip().lower()
+    center_logo_in_team_cell = (
+        is_hyperpixel_4_square_layout()
+        and screen_key in {"cubs live", "cubs last", "sox live", "sox last"}
+    )
     row_teams = [away_team, home_team]
     for ridx, (lbl, r, h, e) in enumerate(rows):
         for cidx, val in enumerate([lbl, r, h, e]):
@@ -600,7 +605,7 @@ def _draw_boxscore_table(img: Image.Image, draw: ImageDraw.ImageDraw, title: str
                         if inline_winner_flag in {"W", "L"} and inline_team_id == team_id
                         else None
                     ),
-                    replace_abbreviation_with_logo=False,
+                    replace_abbreviation_with_logo=center_logo_in_team_cell,
                     show_abbreviation=not hide_team_abbreviation,
                     fill=fill_col,
                 )
