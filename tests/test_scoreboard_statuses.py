@@ -35,6 +35,8 @@ def _mlb_game(*, detailed: str, abstract: str = "preview", start: bool = True) -
         ("Warm-Up", "Warmup"),
         ("Delayed", "Delayed"),
         ("Postponed", "Postponed"),
+        ("Canceled", "Canceled"),
+        ("Cancelled", "Canceled"),
     ],
 )
 def test_mlb_status_overrides_start_time(detailed: str, expected: str):
