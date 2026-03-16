@@ -541,11 +541,21 @@ def render_ncaam_scoreboard(display, games: list[dict] | None, transition: bool 
         draw = ImageDraw.Draw(img)
         league_logo = _get_league_logo()
         title_top = 0
+        title_height = 0
         if league_logo:
             img.paste(league_logo, ((WIDTH - league_logo.width) // 2, 0), league_logo)
             title_top = league_logo.height + LEAGUE_LOGO_GAP
-        draw.text((10, title_top), title, font=FONT_TITLE_SPORTS, fill=(255, 255, 255))
-        _center_text(draw, "No games today", STATUS_FONT, 0, WIDTH, HEIGHT // 2 - STATUS_ROW_H, STATUS_ROW_H)
+        try:
+            l, t, r, b = draw.textbbox((0, 0), title, font=FONT_TITLE_SPORTS)
+            title_height = b - t
+            draw.text(((WIDTH - (r - l)) // 2 - l, title_top - t), title, font=FONT_TITLE_SPORTS, fill=(255, 255, 255))
+        except Exception:
+            tw, th = draw.textsize(title, font=FONT_TITLE_SPORTS)
+            title_height = th
+            draw.text(((WIDTH - tw) // 2, title_top), title, font=FONT_TITLE_SPORTS, fill=(255, 255, 255))
+
+        no_games_top = max(title_top + title_height + LEAGUE_LOGO_GAP, HEIGHT // 2 - STATUS_ROW_H // 2)
+        _center_text(draw, "No games today", STATUS_FONT, 0, WIDTH, no_games_top, STATUS_ROW_H)
         if transition:
             return ScreenImage(img, displayed=False)
         display.image(img)
