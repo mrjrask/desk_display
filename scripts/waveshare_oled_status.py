@@ -12,6 +12,7 @@ import os
 import re
 import subprocess
 import time
+from functools import lru_cache
 from datetime import datetime
 
 from PIL import Image, ImageDraw, ImageFont
@@ -38,6 +39,8 @@ TEMP_SOURCE = os.getenv("WAVESHARE_OLED_TEMP_SOURCE", "weather1").strip().lower(
 TEMP_COMMAND = os.getenv("WAVESHARE_OLED_TEMP_COMMAND", "")
 TEMP_UNIT = os.getenv("WAVESHARE_OLED_TEMP_UNIT", "C").strip().upper()
 REFRESH_SECONDS = max(1, _env_int("WAVESHARE_OLED_REFRESH_SECONDS", 5))
+FADE_STEPS = max(1, _env_int("WAVESHARE_OLED_FADE_STEPS", 8))
+FADE_STEP_MS = max(5, _env_int("WAVESHARE_OLED_FADE_STEP_MS", 35))
 
 
 class SSD1306Display:
@@ -90,6 +93,11 @@ class SSD1306Display:
         ]
         for cmd in init_sequence:
             self._cmd(cmd)
+
+    def set_contrast(self, value: int) -> None:
+        contrast = max(0, min(255, int(value)))
+        self._cmd(0x81)
+        self._cmd(contrast)
 
     def clear(self) -> None:
         self.display_image(Image.new("1", (self.width, self.height), 0))
@@ -210,11 +218,28 @@ def current_time_12h() -> str:
     return datetime.now().strftime("%I:%M %p").lstrip("0")
 
 
+@lru_cache(maxsize=96)
+def _load_value_font(size: int) -> ImageFont.FreeTypeFont | ImageFont.ImageFont:
+    candidate_paths = [
+        os.getenv("WAVESHARE_OLED_FONT_PATH"),
+        "/workspace/desk_display/fonts/DejaVuSans-Bold.ttf",
+        "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
+        "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+    ]
+    for path in candidate_paths:
+        if not path:
+            continue
+        try:
+            return ImageFont.truetype(path, size=size)
+        except OSError:
+            continue
+    return ImageFont.load_default()
+
+
 def render_centered_text(width: int, height: int, text: str, *, title: str | None = None) -> Image.Image:
     image = Image.new("1", (width, height), 0)
     draw = ImageDraw.Draw(image)
     title_font = ImageFont.load_default()
-    value_font = ImageFont.load_default()
 
     y_offset = 0
     if title:
@@ -224,11 +249,42 @@ def render_centered_text(width: int, height: int, text: str, *, title: str | Non
         draw.text(((width - title_w) // 2, 2), title, font=title_font, fill=255)
         y_offset = title_h + 6
 
-    value_bbox = draw.textbbox((0, 0), text, font=value_font)
-    value_w = value_bbox[2] - value_bbox[0]
-    value_h = value_bbox[3] - value_bbox[1]
-    draw.text(((width - value_w) // 2, max(y_offset, (height - value_h) // 2)), text, font=value_font, fill=255)
+    top_margin = max(2, y_offset)
+    max_height = height - top_margin - 2
+    best_font: ImageFont.FreeTypeFont | ImageFont.ImageFont = ImageFont.load_default()
+    best_bbox: tuple[int, int, int, int] | None = None
+    for size in range(8, 80):
+        font = _load_value_font(size)
+        bbox = draw.textbbox((0, 0), text, font=font)
+        text_w = bbox[2] - bbox[0]
+        text_h = bbox[3] - bbox[1]
+        if text_w <= width - 4 and text_h <= max_height:
+            best_font = font
+            best_bbox = bbox
+        else:
+            break
+
+    if best_bbox is None:
+        best_bbox = draw.textbbox((0, 0), text, font=best_font)
+
+    value_w = best_bbox[2] - best_bbox[0]
+    value_h = best_bbox[3] - best_bbox[1]
+    value_x = (width - value_w) // 2
+    value_y = top_margin + max(0, (max_height - value_h) // 2)
+    draw.text((value_x, value_y), text, font=best_font, fill=255)
     return image
+
+
+def fade_transition(display: SSD1306Display, new_image: Image.Image) -> None:
+    for step in range(FADE_STEPS, -1, -1):
+        display.set_contrast(int(255 * step / FADE_STEPS))
+        time.sleep(FADE_STEP_MS / 1000)
+
+    display.display_image(new_image)
+
+    for step in range(0, FADE_STEPS + 1):
+        display.set_contrast(int(255 * step / FADE_STEPS))
+        time.sleep(FADE_STEP_MS / 1000)
 
 
 def main() -> int:
@@ -241,6 +297,7 @@ def main() -> int:
     temp_display.clear()
     time_display.clear()
 
+    show_temp_on_left = True
     while True:
         temp_text = read_temperature()
         time_text = current_time_12h()
@@ -248,8 +305,12 @@ def main() -> int:
         temp_image = render_centered_text(OLED_WIDTH, OLED_HEIGHT, temp_text, title="Temp")
         time_image = render_centered_text(OLED_WIDTH, OLED_HEIGHT, time_text, title="Time")
 
-        temp_display.display_image(temp_image)
-        time_display.display_image(time_image)
+        left_image, right_image = (
+            (temp_image, time_image) if show_temp_on_left else (time_image, temp_image)
+        )
+        fade_transition(temp_display, left_image)
+        fade_transition(time_display, right_image)
+        show_temp_on_left = not show_temp_on_left
 
         time.sleep(REFRESH_SECONDS)
 
