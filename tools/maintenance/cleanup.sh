@@ -52,6 +52,12 @@ stop_kernel_user_service() {
 
 stop_kernel_user_service
 
+# If present, stop the Waveshare OLED helper so it doesn't redraw while cleanup
+# is blanking the side OLED panels.
+if command -v systemctl >/dev/null 2>&1; then
+  systemctl --no-block stop desk_display_waveshare_oled.service >/dev/null 2>&1 || true
+fi
+
 # Prefer the repo's virtualenv interpreter when available so optional
 # dependencies such as Pillow are on the path even during shutdown.
 python_bin="python3"
@@ -126,6 +132,31 @@ else:
             display.set_backlight(0.0)
     except Exception as exc:  # pragma: no cover - best effort during shutdown
         logging.warning("Display cleanup failed: %s", exc)
+
+try:
+    from smbus import SMBus
+except Exception as exc:  # pragma: no cover - optional Waveshare dependency
+    logging.info("Waveshare OLED cleanup skipped (smbus unavailable): %s", exc)
+else:
+    try:
+        scripts_dir = PROJECT_ROOT / "scripts"
+        if str(scripts_dir) not in sys.path:
+            sys.path.insert(0, str(scripts_dir))
+
+        import waveshare_oled_status as waveshare_oled
+
+        with SMBus(waveshare_oled.I2C_BUS) as bus:
+            for addr in (waveshare_oled.TEMP_ADDR, waveshare_oled.TIME_ADDR):
+                oled = waveshare_oled.SSD1306Display(
+                    bus,
+                    addr,
+                    waveshare_oled.OLED_WIDTH,
+                    waveshare_oled.OLED_HEIGHT,
+                )
+                oled.initialize()
+                oled.clear()
+    except Exception as exc:  # pragma: no cover - best effort during shutdown
+        logging.warning("Waveshare OLED cleanup failed: %s", exc)
 PY
 
 # 2) Remove __pycache__ directories
