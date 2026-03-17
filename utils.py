@@ -832,10 +832,7 @@ class Display:
             HYPERPIXEL_LED_INDICATOR_BORDER_ENABLED
             and is_hyperpixel_next_layout(self.width, self.height)
         )
-        self._display_hat_mini_indicator_border = (
-            DISPLAY_HAT_MINI_LED_INDICATOR_BORDER_ENABLED
-            and (self.width, self.height) in {(320, 240), (240, 320)}
-        )
+        self._display_hat_mini_indicator_border = False
         self._uses_kernel_output = False
         self._display_reinit_seconds = DISPLAY_HAT_MINI_REINIT_SECONDS
         self._last_display_reinit = time.monotonic()
@@ -960,16 +957,23 @@ class Display:
     def _configure_output_strategy(self) -> None:
         """Select frame transform/output handlers once during initialization."""
 
+        display_hat_indicator_eligible = (
+            DISPLAY_HAT_MINI_LED_INDICATOR_BORDER_ENABLED
+            and (self.width, self.height) in {(320, 240), (240, 320)}
+        )
+
         if self._framebuffer is not None:
             self._frame_transform = self._build_rotation_transform()
             self._frame_writer = self._framebuffer.write_image
             self._output_strategy = "framebuffer"
+            self._display_hat_mini_indicator_border = False
             return
 
         if self._kernel_display is not None:
             self._frame_transform = self._build_rotation_transform()
             self._frame_writer = self._kernel_display.write_image
             self._output_strategy = "kernel"
+            self._display_hat_mini_indicator_border = False
             return
 
         if self._display is not None:
@@ -978,11 +982,13 @@ class Display:
             )
             self._frame_writer = self._write_display_hat_mini_frame
             self._output_strategy = "display_hat_mini"
+            self._display_hat_mini_indicator_border = display_hat_indicator_eligible
             return
 
         self._frame_transform = lambda img: img
         self._frame_writer = lambda img: None
         self._output_strategy = "headless"
+        self._display_hat_mini_indicator_border = False
 
     def _build_rotation_transform(
         self,
