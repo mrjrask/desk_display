@@ -196,7 +196,7 @@ The config UI is a Flask app served by Waitress when you run `python config_ui.p
 | `WAVESHARE_OLED_TEMP_ADDR` | I2C address for the temperature OLED (default `0x3C`). |
 | `WAVESHARE_OLED_TIME_ADDR` | I2C address for the time OLED (default `0x3D`). |
 | `WAVESHARE_OLED_WIDTH` / `WAVESHARE_OLED_HEIGHT` | OLED dimensions for the helper renderer (defaults `128` / `64`). |
-| `WAVESHARE_OLED_TEMP_SOURCE` | Temperature source: `cpu` (default) or `command`. |
+| `WAVESHARE_OLED_TEMP_SOURCE` | Temperature source: `weather1` (default), `weather`, `cpu`, or `command`. |
 | `WAVESHARE_OLED_TEMP_COMMAND` | Shell command used when `WAVESHARE_OLED_TEMP_SOURCE=command`; first numeric value is shown. |
 | `WAVESHARE_OLED_TEMP_UNIT` | Temperature unit for display (`C` default, or `F`). |
 | `WAVESHARE_OLED_REFRESH_SECONDS` | Refresh interval for OLED updates (default `5`). |

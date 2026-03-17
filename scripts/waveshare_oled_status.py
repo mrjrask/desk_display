@@ -2,7 +2,7 @@
 """Render simple status content on the Waveshare OLED/LCD HAT (A) OLED displays.
 
 Default behavior:
-- Left OLED (0x3c): current temperature (CPU temperature by default)
+- Left OLED (0x3c): current Weather 1 temperature (fallback CPU temperature)
 - Right OLED (0x3d): local time in 12-hour format, no leading zero
 """
 
@@ -34,7 +34,7 @@ TEMP_ADDR = _env_int("WAVESHARE_OLED_TEMP_ADDR", 0x3C)
 TIME_ADDR = _env_int("WAVESHARE_OLED_TIME_ADDR", 0x3D)
 OLED_WIDTH = _env_int("WAVESHARE_OLED_WIDTH", 128)
 OLED_HEIGHT = _env_int("WAVESHARE_OLED_HEIGHT", 64)
-TEMP_SOURCE = os.getenv("WAVESHARE_OLED_TEMP_SOURCE", "cpu").strip().lower()
+TEMP_SOURCE = os.getenv("WAVESHARE_OLED_TEMP_SOURCE", "weather1").strip().lower()
 TEMP_COMMAND = os.getenv("WAVESHARE_OLED_TEMP_COMMAND", "")
 TEMP_UNIT = os.getenv("WAVESHARE_OLED_TEMP_UNIT", "C").strip().upper()
 REFRESH_SECONDS = max(1, _env_int("WAVESHARE_OLED_REFRESH_SECONDS", 5))
@@ -149,8 +149,34 @@ def _read_cpu_temp_c() -> float | None:
         return None
 
 
+def _read_weather1_temp_f() -> float | None:
+    try:
+        from data_fetch import get_weather_data
+    except Exception:
+        return None
+
+    try:
+        weather = get_weather_data()
+    except Exception:
+        return None
+
+    if not isinstance(weather, dict):
+        return None
+
+    current = weather.get("current")
+    if not isinstance(current, dict):
+        return None
+
+    temp_f = current.get("temp")
+    try:
+        return float(temp_f)
+    except (TypeError, ValueError):
+        return None
+
+
 def read_temperature() -> str:
     value_c: float | None = None
+    value_f: float | None = None
 
     if TEMP_SOURCE == "command" and TEMP_COMMAND:
         try:
@@ -158,11 +184,21 @@ def read_temperature() -> str:
             value_c = _parse_temperature_value(output)
         except Exception:
             value_c = None
+    elif TEMP_SOURCE in {"weather", "weather1"}:
+        value_f = _read_weather1_temp_f()
+        if value_f is None:
+            value_c = _read_cpu_temp_c()
     else:
         value_c = _read_cpu_temp_c()
 
-    if value_c is None:
+    if value_f is None and value_c is None:
         return "--°"
+
+    if value_f is not None:
+        if TEMP_UNIT == "C":
+            value_c = (value_f - 32) * 5 / 9
+            return f"{value_c:.1f}°C"
+        return f"{round(value_f)}°F"
 
     if TEMP_UNIT == "F":
         return f"{(value_c * 9 / 5) + 32:.1f}°F"
