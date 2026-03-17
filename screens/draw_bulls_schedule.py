@@ -534,7 +534,7 @@ def _format_footer_next(game: Dict) -> str:
     elif start_date == today + dt.timedelta(days=1):
         day_label = "Tomorrow"
     else:
-        day_label = start.strftime("%a, %b %-d")
+        day_label = start.strftime("%a %b %-d")
 
     return f"{day_label} • {start.strftime('%-I:%M %p')}"
 
