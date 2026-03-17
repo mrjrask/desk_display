@@ -41,7 +41,7 @@ def test_draw_division_centers_all_stat_values(monkeypatch):
     assert align_by_text["4"] == "center"
 
 
-def test_draw_division_right_aligns_points_on_hyperpixel_4(monkeypatch):
+def test_draw_division_centers_points_on_hyperpixel_4(monkeypatch):
     calls: list[tuple[str, str]] = []
 
     def fake_draw_text(draw, text, font, x, top, height, align="left"):
@@ -76,11 +76,11 @@ def test_draw_division_right_aligns_points_on_hyperpixel_4(monkeypatch):
     assert align_by_text["1"] == "center"
     assert align_by_text["2"] == "center"
     assert align_by_text["3"] == "center"
-    assert align_by_text["4"] == "right"
-    assert align_by_text["PTS"] == "right"
+    assert align_by_text["4"] == "center"
+    assert align_by_text["PTS"] == "center"
 
 
-def test_draw_division_right_aligns_points_on_hyperpixel_4_square(monkeypatch):
+def test_draw_division_centers_points_on_hyperpixel_4_square(monkeypatch):
     calls: list[tuple[str, str]] = []
 
     def fake_draw_text(draw, text, font, x, top, height, align="left"):
@@ -113,8 +113,8 @@ def test_draw_division_right_aligns_points_on_hyperpixel_4_square(monkeypatch):
     )
 
     align_by_text = {text: align for text, align in calls}
-    assert align_by_text["4"] == "right"
-    assert align_by_text["PTS"] == "right"
+    assert align_by_text["4"] == "center"
+    assert align_by_text["PTS"] == "center"
 
 
 def test_build_column_layout_keeps_stats_separated_from_team_name():

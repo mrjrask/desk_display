@@ -1581,8 +1581,6 @@ def _draw_dotted_line(draw: ImageDraw.ImageDraw, y: int, dash: int = 6, gap: int
 
 def _stat_text_align(stat_key: str) -> str:
     """Return per-column alignment for standings stat text."""
-    if _is_hyperpixel_standings_layout() and stat_key == "points":
-        return "right"
     return "center"
 
 
