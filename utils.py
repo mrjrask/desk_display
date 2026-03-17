@@ -57,6 +57,14 @@ except (ImportError, RuntimeError) as _displayhat_exc:  # pragma: no cover - har
 else:  # pragma: no cover - hardware import
     _DISPLAY_HAT_ERROR = None
 
+try:  # pragma: no cover - hardware import
+    from gpiozero import Button as GpioButton  # type: ignore
+except Exception as _gpio_button_exc:  # pragma: no cover - hardware import
+    GpioButton = None  # type: ignore
+    _GPIO_BUTTON_ERROR = _gpio_button_exc
+else:  # pragma: no cover - hardware import
+    _GPIO_BUTTON_ERROR = None
+
 _FORCE_HEADLESS = os.environ.get("DESK_DISPLAY_FORCE_HEADLESS", "").strip().lower() in {
     "1",
     "true",
@@ -812,6 +820,7 @@ class Display:
         self._framebuffer: Optional[_FrameBufferDevice] = None
         self._kernel_display: Optional[_KernelDisplay] = None
         self._button_pins: Dict[str, Optional[int]] = {name: None for name in self._BUTTON_NAMES}
+        self._gpio_buttons: Dict[str, Any] = {}
         self._button_callback: Optional[Callable[[str], None]] = None
         self._backlight_level = 1.0
         self._backlight_lock = threading.Lock()
@@ -944,6 +953,7 @@ class Display:
                 )
 
         self._configure_output_strategy()
+        self._initialize_gpio_buttons()
 
         _ACTIVE_DISPLAY = self
 
@@ -1050,6 +1060,37 @@ class Display:
                 self._display.display()
             except Exception as exc:  # pragma: no cover - hardware import
                 logging.warning("Display refresh failed: %s", exc)
+
+    def _button_gpio_pin(self, name: str) -> Optional[int]:
+        raw_value = os.environ.get(f"BUTTON_{name}")
+        if raw_value is None:
+            return None
+        raw_value = raw_value.strip()
+        if not raw_value:
+            return None
+        try:
+            return int(raw_value, 0)
+        except ValueError:
+            logging.warning("Invalid BUTTON_%s pin '%s'; ignoring.", name, raw_value)
+            return None
+
+    def _initialize_gpio_buttons(self) -> None:
+        if GpioButton is None:  # pragma: no cover - hardware import
+            return
+
+        for name in self._BUTTON_NAMES:
+            pin = self._button_gpio_pin(name)
+            if pin is None:
+                continue
+            try:  # pragma: no cover - hardware import
+                button = GpioButton(pin, pull_up=True, bounce_time=0.05)
+            except Exception as exc:
+                logging.warning("Failed to initialize BUTTON_%s on GPIO%d: %s", name, pin, exc)
+                continue
+
+            self._gpio_buttons[name] = button
+            self._button_pins[name] = pin
+            logging.info("Configured BUTTON_%s on GPIO%d", name, pin)
 
     def _create_display_hat_mini(self, initial_buffer: Image.Image):
         """Create and configure a Display HAT Mini driver instance."""
@@ -1427,10 +1468,18 @@ class Display:
     def is_button_pressed(self, name: str) -> bool:
         """Return True if the named button is currently pressed."""
 
+        normalized_name = name.upper()
+
+        gpio_button = self._gpio_buttons.get(normalized_name)
+        if gpio_button is not None:
+            try:  # pragma: no cover - hardware import
+                return bool(gpio_button.is_pressed)
+            except Exception as exc:
+                logging.debug("GPIO button read failed (%s): %s", name, exc)
+
         if self._display is None:  # pragma: no cover - hardware import
             return False
 
-        normalized_name = name.upper()
         pin = self._button_pins.get(normalized_name)
 
         try:  # pragma: no cover - hardware import
