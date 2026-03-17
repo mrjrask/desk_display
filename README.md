@@ -77,6 +77,24 @@ Supported/tested codenames: `bookworm`, `trixie`. On other Debian/Raspberry Pi O
 bash ./Installers/install_display_hat_mini.sh
 ```
 
+### Waveshare OLED/LCD HAT (A) (LCD panel)
+
+```bash
+bash ./Installers/install_waveshare_oled_lcd_hat_a.sh
+```
+
+This installer targets the 320×240 LCD panel using framebuffer output.
+
+It also enables a small helper service for the two OLED side displays:
+- OLED #1 shows current temperature (CPU temperature by default).
+- OLED #2 shows local time in 12-hour format with no leading zero in the hour.
+
+Button mapping for Waveshare OLED/LCD HAT (A):
+- `A` → `K4 (D24)`
+- `B` → `K1 (D4)`
+- `X` → `K2 (D17)`
+- `Y` → `K3 (D23)`
+
 ### Kernel-driven displays (fullscreen)
 
 ```bash
@@ -174,6 +192,15 @@ The config UI is a Flask app served by Waitress when you run `python config_ui.p
 | `DISPLAY_ROTATION_STRICT` | Rotation guardrail toggle. Defaults to `1` for HyperPixel/kernel outputs (`DESK_DISPLAY_OUTPUT=kernel|kms|drm|sdl` or `HYPERPIXEL_PANEL=hyperpixel*`) and `0` otherwise. Set `0` to preserve legacy stacked kernel+app rotation behavior. |
 | `DISPLAY_HAT_MINI_REINIT_SECONDS` | Recreate the Display HAT Mini driver on this interval (default `1800`) to recover from long-run panel stalls. Set `0` to disable. |
 | `DISPLAY_HAT_MINI_LED_LEVEL` | Normalized indicator LED brightness (`0.0`-`1.0`) for weather alerts, schedule win/loss markers, and update animations. Defaults to `0.08`; recommended starting range is `0.05`-`0.20`. |
+| `WAVESHARE_OLED_I2C_BUS` | I2C bus for Waveshare OLED helper service (default `1`). |
+| `WAVESHARE_OLED_TEMP_ADDR` | I2C address for the temperature OLED (default `0x3C`). |
+| `WAVESHARE_OLED_TIME_ADDR` | I2C address for the time OLED (default `0x3D`). |
+| `WAVESHARE_OLED_WIDTH` / `WAVESHARE_OLED_HEIGHT` | OLED dimensions for the helper renderer (defaults `128` / `64`). |
+| `WAVESHARE_OLED_TEMP_SOURCE` | Temperature source: `cpu` (default) or `command`. |
+| `WAVESHARE_OLED_TEMP_COMMAND` | Shell command used when `WAVESHARE_OLED_TEMP_SOURCE=command`; first numeric value is shown. |
+| `WAVESHARE_OLED_TEMP_UNIT` | Temperature unit for display (`C` default, or `F`). |
+| `WAVESHARE_OLED_REFRESH_SECONDS` | Refresh interval for OLED updates (default `5`). |
+| `BUTTON_A` / `BUTTON_B` / `BUTTON_X` / `BUTTON_Y` | GPIO BCM pins for control buttons. Waveshare defaults are `24`, `4`, `17`, and `23`. |
 
 ### Weather + radar
 
