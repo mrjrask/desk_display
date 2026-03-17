@@ -86,8 +86,8 @@ bash ./Installers/install_waveshare_oled_lcd_hat_a.sh
 This installer targets the 320×240 LCD panel using framebuffer output.
 
 It also enables a small helper service for the two OLED side displays:
-- OLED #1 shows current temperature (CPU temperature by default).
-- OLED #2 shows local time in 12-hour format with no leading zero in the hour.
+- Temperature and time are auto-fitted to the largest possible font size under each title.
+- The two OLEDs cross-fade and swap temperature/time positions each refresh to reduce burn-in.
 
 Button mapping for Waveshare OLED/LCD HAT (A):
 - `A` → `K4 (D24)`
@@ -199,7 +199,10 @@ The config UI is a Flask app served by Waitress when you run `python config_ui.p
 | `WAVESHARE_OLED_TEMP_SOURCE` | Temperature source: `weather1` (default), `weather`, `cpu`, or `command`. |
 | `WAVESHARE_OLED_TEMP_COMMAND` | Shell command used when `WAVESHARE_OLED_TEMP_SOURCE=command`; first numeric value is shown. |
 | `WAVESHARE_OLED_TEMP_UNIT` | Temperature unit for display (`C` default, or `F`). |
-| `WAVESHARE_OLED_REFRESH_SECONDS` | Refresh interval for OLED updates (default `5`). |
+| `WAVESHARE_OLED_REFRESH_SECONDS` | Refresh interval between OLED fade/swap cycles (default `5`). |
+| `WAVESHARE_OLED_FADE_STEPS` | Number of fade steps for OLED transitions (default `8`). |
+| `WAVESHARE_OLED_FADE_STEP_MS` | Delay per fade step in milliseconds (default `35`). |
+| `WAVESHARE_OLED_FONT_PATH` | Optional TrueType font path for OLED value text auto-sizing. |
 | `BUTTON_A` / `BUTTON_B` / `BUTTON_X` / `BUTTON_Y` | GPIO BCM pins for control buttons. Waveshare defaults are `24`, `4`, `17`, and `23`. |
 
 ### Weather + radar
