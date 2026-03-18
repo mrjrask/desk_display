@@ -42,3 +42,34 @@ def test_cli_defaults_to_rendering_all_screens():
     parser = render_all_screens._build_arg_parser()
     args = parser.parse_args([])
     assert args.ignore_schedule is True
+
+
+def test_build_cache_includes_scoreboards_payload(monkeypatch):
+    monkeypatch.setattr(render_all_screens.data_fetch, "fetch_weather", lambda: None)
+    monkeypatch.setattr(render_all_screens.data_fetch, "fetch_bears_standings", lambda: None)
+    monkeypatch.setattr(render_all_screens.data_fetch, "fetch_blackhawks_last_game", lambda: None)
+    monkeypatch.setattr(render_all_screens.data_fetch, "fetch_blackhawks_live_game", lambda: None)
+    monkeypatch.setattr(render_all_screens.data_fetch, "fetch_blackhawks_next_game", lambda: None)
+    monkeypatch.setattr(render_all_screens.data_fetch, "fetch_blackhawks_next_home_game", lambda: None)
+    monkeypatch.setattr(render_all_screens.data_fetch, "fetch_blackhawks_standings", lambda: None)
+    monkeypatch.setattr(render_all_screens.data_fetch, "fetch_wolves_games", lambda: {})
+    monkeypatch.setattr(render_all_screens.data_fetch, "fetch_bulls_last_game", lambda: None)
+    monkeypatch.setattr(render_all_screens.data_fetch, "fetch_bulls_live_game", lambda: None)
+    monkeypatch.setattr(render_all_screens.data_fetch, "fetch_bulls_next_game", lambda: None)
+    monkeypatch.setattr(render_all_screens.data_fetch, "fetch_bulls_next_home_game", lambda: None)
+    monkeypatch.setattr(render_all_screens.data_fetch, "fetch_bulls_standings", lambda: None)
+    monkeypatch.setattr(render_all_screens.data_fetch, "fetch_cubs_games", lambda: {})
+    monkeypatch.setattr(render_all_screens.data_fetch, "fetch_cubs_standings", lambda: None)
+    monkeypatch.setattr(render_all_screens.data_fetch, "fetch_sox_games", lambda: {})
+    monkeypatch.setattr(render_all_screens.data_fetch, "fetch_sox_standings", lambda: None)
+
+    payload = {"scoreboards": {"nba": [{"id": "game-1"}], "nfl": []}}
+    monkeypatch.setattr(
+        render_all_screens.data_provider,
+        "read_sports_payloads",
+        lambda ttl_seconds=0: payload,
+    )
+
+    cache = render_all_screens.build_cache()
+
+    assert cache["scoreboards"]["nba"] == [{"id": "game-1"}]
