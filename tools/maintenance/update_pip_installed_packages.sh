@@ -52,16 +52,54 @@ fi
 # shellcheck source=/dev/null
 source "$VENV_DIR/bin/activate"
 
+check_venv_permissions() {
+  local dirs_to_check=("$VENV_DIR" "$VENV_DIR/bin")
+  local site_packages
+
+  site_packages=$("$PYTHON_BIN" - <<'PY'
+import site
+for path in site.getsitepackages():
+    if path.endswith('site-packages'):
+        print(path)
+        break
+PY
+)
+
+  if [[ -n "$site_packages" ]]; then
+    dirs_to_check+=("$site_packages")
+  fi
+
+  local non_writable=()
+  local dir
+  for dir in "${dirs_to_check[@]}"; do
+    if [[ -e "$dir" && ! -w "$dir" ]]; then
+      non_writable+=("$dir")
+    fi
+  done
+
+  if [[ ${#non_writable[@]} -gt 0 ]]; then
+    echo "[ERROR] The active user cannot write to required virtualenv paths:" >&2
+    printf '  - %s\n' "${non_writable[@]}" >&2
+    echo "[ERROR] Fix ownership/permissions for the virtualenv before running updates." >&2
+    echo "[ERROR] Example: sudo chown -R \"$(id -un)\":\"$(id -gn)\" \"$VENV_DIR\"" >&2
+    deactivate
+    exit 1
+  fi
+}
+
+check_venv_permissions
+
 log "Upgrading pip"
-pip install --upgrade pip
+"$PYTHON_BIN" -m pip install --upgrade pip
 
 log "Checking for outdated installed packages"
-OUTDATED_PACKAGES=$($PYTHON_BIN - <<'PY'
+OUTDATED_PACKAGES=$("$PYTHON_BIN" - <<'PY'
 import json
 import subprocess
+import sys
 
 result = subprocess.run(
-    ["pip", "list", "--outdated", "--format=json"],
+    [sys.executable, "-m", "pip", "list", "--outdated", "--format=json"],
     check=True,
     capture_output=True,
     text=True,
@@ -90,7 +128,11 @@ if [[ "$DRY_RUN" -eq 1 ]]; then
 fi
 
 log "Upgrading all outdated packages"
-printf '%s\n' "$OUTDATED_PACKAGES" | xargs -r -n 1 pip install --upgrade
+while IFS= read -r package; do
+  [[ -n "$package" ]] || continue
+  log "Upgrading $package"
+  "$PYTHON_BIN" -m pip install --upgrade "$package"
+done <<< "$OUTDATED_PACKAGES"
 
 deactivate
 

@@ -65,6 +65,8 @@ To upgrade every already-installed pip package in the project virtualenv:
 
 Use `--dry-run` to preview which packages would be upgraded.
 
+If upgrades fail with permission errors, fix ownership of the virtualenv first (for example: `sudo chown -R "$USER":"$USER" ./venv`).
+
 To start the display loop directly:
 
 ```bash
