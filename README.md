@@ -57,6 +57,14 @@ For existing installs, refresh Python dependencies with:
 
 Pass `--requirements requirements_kernel.txt` (or `requirements_framebuffer.txt`) when needed.
 
+To upgrade every already-installed pip package in the project virtualenv:
+
+```bash
+./tools/maintenance/update_pip_installed_packages.sh
+```
+
+Use `--dry-run` to preview which packages would be upgraded.
+
 To start the display loop directly:
 
 ```bash
