@@ -64,11 +64,15 @@ def _load_project_root_env_file() -> None:
             continue
         key, value = line.split("=", 1)
         key = key.strip()
+        if key.lower().startswith("export "):
+            key = key[7:].strip()
         value = value.strip()
         if not key:
             continue
         if value and value[0] == value[-1] and value[0] in {'"', "'"}:
             value = value[1:-1]
+        else:
+            value = value.split(" #", 1)[0].strip()
         os.environ.setdefault(key, value)
 
 

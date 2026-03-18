@@ -43,6 +43,8 @@ def _load_env_file(path: str) -> None:
 
         key, value = line.split("=", 1)
         key = key.strip()
+        if key.lower().startswith("export "):
+            key = key[7:].strip()
         value = value.strip()
 
         if not key:

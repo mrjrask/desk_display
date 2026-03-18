@@ -247,3 +247,15 @@ def test_load_env_file_strips_inline_comments_for_unquoted_values(tmp_path, monk
 
     assert config.os.environ["INSIDE_SENSOR"] == "pimoroni_bme68x"
     assert config.os.environ["OTHER_VALUE"] == "abc # not a comment"
+
+
+def test_load_env_file_accepts_export_prefix(tmp_path, monkeypatch):
+    env_path = tmp_path / ".env"
+    env_path.write_text("export WEATHERKIT_TEAM_ID=team_123\n", encoding="utf-8")
+
+    import config
+
+    monkeypatch.delenv("WEATHERKIT_TEAM_ID", raising=False)
+    config._load_env_file(str(env_path))
+
+    assert config.os.environ["WEATHERKIT_TEAM_ID"] == "team_123"
