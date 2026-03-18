@@ -638,6 +638,9 @@ prepend_env_vars() {
   local filtered_file
   tmp_file=$(mktemp)
   filtered_file=$(mktemp)
+  local target_owner=""
+  local target_group=""
+  local target_mode=""
 
   local keys=()
   local line
@@ -661,13 +664,38 @@ prepend_env_vars() {
     fi
   } > "$tmp_file"
 
+  if [[ -f "$env_path" ]]; then
+    target_owner=$(stat -c '%u' "$env_path" 2>/dev/null || true)
+    target_group=$(stat -c '%g' "$env_path" 2>/dev/null || true)
+    target_mode=$(stat -c '%a' "$env_path" 2>/dev/null || true)
+  fi
+
+  if [[ -z "$target_owner" || -z "$target_group" ]]; then
+    if [[ -n "${SERVICE_USER:-}" ]]; then
+      target_owner="$SERVICE_USER"
+      target_group="$SERVICE_USER"
+    elif [[ -n "${SUDO_USER:-}" ]]; then
+      target_owner="$SUDO_USER"
+      target_group="$SUDO_USER"
+    fi
+  fi
+
+  if [[ -z "$target_mode" ]]; then
+    target_mode="644"
+  fi
+
   if [[ -n "${SUDO:-}" ]]; then
     $SUDO mv "$tmp_file" "$env_path"
-    if [[ -n "${SERVICE_USER:-}" ]]; then
-      $SUDO chown "$SERVICE_USER":"$SERVICE_USER" "$env_path" 2>/dev/null || true
+    if [[ -n "$target_owner" && -n "$target_group" ]]; then
+      $SUDO chown "$target_owner":"$target_group" "$env_path" 2>/dev/null || true
     fi
+    $SUDO chmod "$target_mode" "$env_path" 2>/dev/null || true
   else
     mv "$tmp_file" "$env_path"
+    if [[ -n "$target_owner" && -n "$target_group" ]]; then
+      chown "$target_owner":"$target_group" "$env_path" 2>/dev/null || true
+    fi
+    chmod "$target_mode" "$env_path" 2>/dev/null || true
   fi
 
   rm -f "$filtered_file"
