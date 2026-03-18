@@ -107,6 +107,7 @@ for w in GAME_COL_WIDTHS:
 
 SCREEN_ID = "WBC Scoreboard v2"
 MIN_GAMES_FOR_V2_LAYOUT = 6
+V2_DISABLED_RESOLUTIONS = {(320, 240), (240, 320)}
 TITLE_FONT = FONT_TITLE_SPORTS
 TEAM_LOGO_BASE_HEIGHT = standard_scoreboard_team_logo_height(HEIGHT, compact=True)
 LEAGUE_LOGO_BASE_HEIGHT = standard_scoreboard_league_logo_height(TEAM_LOGO_BASE_HEIGHT)
@@ -413,6 +414,9 @@ def _scroll_display(display, full_img: Image.Image):
 
 
 def render_wbc_scoreboard_v2(display, games: list[dict] | None, transition: bool = False) -> ScreenImage:
+    if (WIDTH, HEIGHT) in V2_DISABLED_RESOLUTIONS:
+        return render_wbc_scoreboard_v1(display, games, transition=transition)
+
     if games is not None and len(games) < MIN_GAMES_FOR_V2_LAYOUT:
         return render_wbc_scoreboard_v1(display, games, transition=transition)
 

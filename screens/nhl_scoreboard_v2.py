@@ -105,6 +105,7 @@ for w in GAME_COL_WIDTHS:
 
 SCREEN_ID = "NHL Scoreboard v2"
 MIN_GAMES_FOR_V2_LAYOUT = 6
+V2_DISABLED_RESOLUTIONS = {(320, 240), (240, 320)}
 TITLE_FONT = FONT_TITLE_SPORTS
 TEAM_LOGO_BASE_HEIGHT = scale_value_width(26)
 LEAGUE_LOGO_BASE_HEIGHT = TEAM_LOGO_BASE_HEIGHT if is_kernel_driven_display() else standard_scoreboard_league_logo_height(TEAM_LOGO_BASE_HEIGHT)
@@ -417,6 +418,9 @@ def _scroll_display(display, full_img: Image.Image):
 
 
 def render_nhl_scoreboard_v2(display, games: list[dict], transition: bool = False) -> ScreenImage:
+    if (WIDTH, HEIGHT) in V2_DISABLED_RESOLUTIONS:
+        return render_nhl_scoreboard_v1(display, games, transition=transition)
+
     if len(games) < MIN_GAMES_FOR_V2_LAYOUT:
         return render_nhl_scoreboard_v1(display, games, transition=transition)
 
