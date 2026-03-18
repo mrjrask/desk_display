@@ -11,10 +11,13 @@ from __future__ import annotations
 import os
 import random
 import re
+import signal
 import subprocess
 import time
+import logging
 from functools import lru_cache
 from datetime import datetime
+from threading import Event
 
 from PIL import Image, ImageDraw, ImageFont
 
@@ -47,6 +50,10 @@ SWAP_INTERVAL_MAX_SECONDS = max(
 )
 FADE_STEPS = max(1, _env_int("WAVESHARE_OLED_FADE_STEPS", 8))
 FADE_STEP_MS = max(5, _env_int("WAVESHARE_OLED_FADE_STEP_MS", 35))
+
+
+LOGGER = logging.getLogger("waveshare_oled_status")
+_STOP_EVENT = Event()
 
 
 class SSD1306Display:
@@ -294,7 +301,42 @@ def fade_transition(display: SSD1306Display, new_image: Image.Image) -> None:
         time.sleep(FADE_STEP_MS / 1000)
 
 
+def _request_stop(signum: int, _frame: object) -> None:
+    LOGGER.info("Received signal %s; stopping OLED helper loop.", signum)
+    _STOP_EVENT.set()
+
+
+def _safe_clear_display(display: SSD1306Display, name: str) -> None:
+    try:
+        display.clear()
+    except Exception as exc:
+        LOGGER.warning("Failed to clear %s OLED during shutdown: %s", name, exc)
+
+
+def _safe_render(display: SSD1306Display, image: Image.Image, name: str) -> bool:
+    try:
+        fade_transition(display, image)
+        return True
+    except Exception as exc:
+        LOGGER.warning("Failed to render frame on %s OLED: %s", name, exc)
+        return False
+
+    display.display_image(new_image)
+
+    for step in range(0, FADE_STEPS + 1):
+        display.set_contrast(int(255 * step / FADE_STEPS))
+        time.sleep(FADE_STEP_MS / 1000)
+
+
 def main() -> int:
+    logging.basicConfig(
+        level=os.getenv("WAVESHARE_OLED_LOG_LEVEL", "INFO").upper(),
+        format="%(asctime)s %(levelname)s %(name)s: %(message)s",
+    )
+
+    signal.signal(signal.SIGTERM, _request_stop)
+    signal.signal(signal.SIGINT, _request_stop)
+
     bus = SMBus(I2C_BUS)
     temp_display = SSD1306Display(bus, TEMP_ADDR, OLED_WIDTH, OLED_HEIGHT)
     time_display = SSD1306Display(bus, TIME_ADDR, OLED_WIDTH, OLED_HEIGHT)
@@ -306,28 +348,47 @@ def main() -> int:
 
     show_temp_on_left = True
     next_swap_at = time.monotonic() + random_swap_interval_seconds()
-    while True:
-        temp_text = read_temperature()
-        time_text = current_time_12h()
+    try:
+        while not _STOP_EVENT.is_set():
+            temp_text = read_temperature()
+            time_text = current_time_12h()
 
-        temp_image = render_centered_text(
-            OLED_WIDTH,
-            OLED_HEIGHT,
-            temp_text,
-            title="Outdoor Temp",
-        )
-        time_image = render_centered_text(OLED_WIDTH, OLED_HEIGHT, time_text, title="Time")
+            temp_image = render_centered_text(
+                OLED_WIDTH,
+                OLED_HEIGHT,
+                temp_text,
+                title="Outdoor Temp",
+            )
+            time_image = render_centered_text(OLED_WIDTH, OLED_HEIGHT, time_text, title="Time")
 
-        left_image, right_image = (
-            (temp_image, time_image) if show_temp_on_left else (time_image, temp_image)
-        )
-        fade_transition(temp_display, left_image)
-        fade_transition(time_display, right_image)
-        if time.monotonic() >= next_swap_at:
-            show_temp_on_left = not show_temp_on_left
-            next_swap_at = time.monotonic() + random_swap_interval_seconds()
+            left_image, right_image = (
+                (temp_image, time_image) if show_temp_on_left else (time_image, temp_image)
+            )
+            left_ok = _safe_render(temp_display, left_image, "left")
+            right_ok = _safe_render(time_display, right_image, "right")
 
-        time.sleep(REFRESH_SECONDS)
+            if not left_ok or not right_ok:
+                LOGGER.info("Reinitializing OLED displays after render failure.")
+                try:
+                    temp_display.initialize()
+                    time_display.initialize()
+                except Exception as exc:
+                    LOGGER.warning("OLED reinitialization failed: %s", exc)
+
+            if time.monotonic() >= next_swap_at:
+                show_temp_on_left = not show_temp_on_left
+                next_swap_at = time.monotonic() + random_swap_interval_seconds()
+
+            _STOP_EVENT.wait(REFRESH_SECONDS)
+    finally:
+        _safe_clear_display(temp_display, "left")
+        _safe_clear_display(time_display, "right")
+        try:
+            bus.close()
+        except Exception:
+            pass
+
+    return 0
 
 
 if __name__ == "__main__":
