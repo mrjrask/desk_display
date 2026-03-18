@@ -227,6 +227,7 @@ def _normalize_event(event: dict[str, Any]) -> dict[str, Any]:
 
     return {
         "id": event.get("id"),
+        "date": comp.get("date") or event.get("date"),
         "status": {
             "type": {
                 "state": state,
@@ -286,7 +287,27 @@ def _status_text(game: dict) -> str:
     status = (game or {}).get("status", {}) or {}
     type_info = status.get("type") or {}
     detail = str(type_info.get("shortDetail") or "").strip()
+    state = str(type_info.get("state") or "").lower()
+    if state == "pre":
+        start = _parse_start_time_central(game)
+        if start:
+            return start
+        return "Scheduled"
     return detail or "Scheduled"
+
+
+def _parse_start_time_central(game: dict[str, Any]) -> str:
+    raw = str((game or {}).get("date") or "").strip()
+    if not raw:
+        return ""
+    try:
+        dt = datetime.datetime.fromisoformat(raw.replace("Z", "+00:00"))
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=datetime.timezone.utc)
+        local = dt.astimezone(CENTRAL_TIME)
+        return local.strftime('%-I:%M %p')
+    except Exception:
+        return ""
 
 
 def _is_in_progress(game: dict) -> bool:
@@ -401,8 +422,18 @@ def _draw_rank(draw: ImageDraw.ImageDraw, rank: Optional[int], x_logo: int, y_lo
         tw, th = draw.textsize(text, font=RANK_FONT)
         l = t = 0
     x = x_logo + logo_w - tw - l + RANK_GAP
-    y = y_logo + logo_h - th - t
+    y = max(0, y_logo - th - t)
     draw.text((x, y), text, font=RANK_FONT, fill=(210, 210, 210))
+
+
+def _rank_for_display(team: dict[str, Any], *, mode: Optional[str] = None) -> Optional[int]:
+    selected_mode = (mode or _scoreboard_mode()).strip().lower()
+    if selected_mode == MODE_TOURNAMENT:
+        seed = _extract_seed(team)
+        if seed.isdigit():
+            return int(seed)
+        return None
+    return _extract_rank(team)
 
 
 def _get_league_logo(mode: Optional[str] = None) -> Optional[Image.Image]:
@@ -469,9 +500,10 @@ def _render_scoreboard(games: list[dict], *, mode: Optional[str] = None) -> Imag
                 continue
             x0 = COL_X[col_idx] + (COL_WIDTHS[col_idx] - logo.width) // 2
             y0 = y + (SCORE_ROW_H - logo.height) // 2
-            _draw_rank(draw, _extract_rank(team), x0, y0, logo.width, logo.height)
-            _draw_seed(draw, _seed_text_for_display(team), x0, y0, logo.height)
             canvas.paste(logo, (x0, y0), logo)
+            _draw_rank(draw, _rank_for_display(team, mode=selected_mode), x0, y0, logo.width, logo.height)
+            if selected_mode != MODE_TOURNAMENT:
+                _draw_seed(draw, _seed_text_for_display(team), x0, y0, logo.height)
 
         status_fill = IN_PROGRESS_STATUS_COLOR if in_progress else (255, 255, 255)
         _center_text(draw, _status_text(game), STATUS_FONT, COL_X[0], sum(COL_WIDTHS), y + SCORE_ROW_H, STATUS_ROW_H, fill=status_fill)
