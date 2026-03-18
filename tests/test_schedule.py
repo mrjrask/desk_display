@@ -45,18 +45,18 @@ def test_sensors_screen_is_known():
     assert "sensors" in KNOWN_SCREENS
 
 
-def test_legacy_travel_screen_is_known():
-    assert "travel" in KNOWN_SCREENS
+def test_travel_screen_is_not_known():
+    assert "travel" not in KNOWN_SCREENS
 
 
-def test_legacy_travel_v2_screen_is_known():
-    assert "travel v2" in KNOWN_SCREENS
+def test_travel_v2_screen_is_not_known():
+    assert "travel v2" not in KNOWN_SCREENS
 
-def test_legacy_travel_map_screen_is_known():
-    assert "travel map" in KNOWN_SCREENS
+def test_travel_map_screen_is_not_known():
+    assert "travel map" not in KNOWN_SCREENS
 
-def test_legacy_travel_map_v2_screen_is_known():
-    assert "travel map v2" in KNOWN_SCREENS
+def test_travel_map_v2_screen_is_not_known():
+    assert "travel map v2" not in KNOWN_SCREENS
 
 
 def test_scheduler_with_alternate_screen():

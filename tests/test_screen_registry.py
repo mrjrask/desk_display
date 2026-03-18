@@ -131,44 +131,40 @@ def test_weather_hourly_screens_stay_available_with_cached_data_offline():
     assert registry["weather daily"].available is True
 
 
-def test_legacy_travel_alias_is_registered():
+def test_travel_alias_is_not_registered():
     now = datetime.datetime(2024, 1, 1, 12, 0, tzinfo=CENTRAL_TIME)
     weather = {"hourly": []}
 
     registry, _ = build_screen_registry(_make_context(weather, now))
 
-    assert "travel" in registry
-    assert registry["travel"].available is True
+    assert "travel" not in registry
 
 
-def test_legacy_travel_v2_alias_is_registered():
+def test_travel_v2_alias_is_not_registered():
     now = datetime.datetime(2024, 1, 1, 12, 0, tzinfo=CENTRAL_TIME)
     weather = {"hourly": []}
 
     registry, _ = build_screen_registry(_make_context(weather, now))
 
-    assert "travel v2" in registry
-    assert registry["travel v2"].available is True
+    assert "travel v2" not in registry
 
 
-def test_legacy_travel_map_alias_is_registered():
+def test_travel_map_alias_is_not_registered():
     now = datetime.datetime(2024, 1, 1, 12, 0, tzinfo=CENTRAL_TIME)
     weather = {"hourly": []}
 
     registry, _ = build_screen_registry(_make_context(weather, now))
 
-    assert "travel map" in registry
-    assert registry["travel map"].available is True
+    assert "travel map" not in registry
 
 
-def test_legacy_travel_map_v2_alias_is_registered():
+def test_travel_map_v2_alias_is_not_registered():
     now = datetime.datetime(2024, 1, 1, 12, 0, tzinfo=CENTRAL_TIME)
     weather = {"hourly": []}
 
     registry, _ = build_screen_registry(_make_context(weather, now))
 
-    assert "travel map v2" in registry
-    assert registry["travel map v2"].available is True
+    assert "travel map v2" not in registry
 
 
 def test_inside_screen_hidden_when_sensor_unavailable(monkeypatch):
