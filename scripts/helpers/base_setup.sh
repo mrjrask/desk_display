@@ -108,10 +108,10 @@ FRAMEBUFFER_UNIT_LINES=()
 if [[ "${DESK_DISPLAY_OUTPUT:-}" == "framebuffer" ]]; then
   FRAMEBUFFER_PRESTART_LINES=(
     "PermissionsStartOnly=true"
-    "ExecStartPre=/bin/bash -lc '$PROJECT_DIR/scripts/framebuffer_service.sh start'"
+    "ExecStartPre=/bin/bash -lc 'bash $PROJECT_DIR/scripts/framebuffer_service.sh start'"
   )
   FRAMEBUFFER_POSTSTOP_LINES=(
-    "ExecStopPost=/bin/bash -lc '$PROJECT_DIR/scripts/framebuffer_service.sh stop'"
+    "ExecStopPost=/bin/bash -lc 'bash $PROJECT_DIR/scripts/framebuffer_service.sh stop'"
   )
   FRAMEBUFFER_UNIT_LINES=(
     "After=display-manager.service"
