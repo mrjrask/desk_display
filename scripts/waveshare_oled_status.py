@@ -253,7 +253,41 @@ def _load_value_font(size: int) -> ImageFont.FreeTypeFont | ImageFont.ImageFont:
     return ImageFont.load_default()
 
 
-def render_centered_text(width: int, height: int, text: str, *, title: str | None = None) -> Image.Image:
+def _best_value_font_size(width: int, height: int, text: str, top_margin: int) -> int:
+    image = Image.new("1", (width, height), 0)
+    draw = ImageDraw.Draw(image)
+    max_height = height - top_margin - 2
+    best_size = 8
+    for size in range(8, 80):
+        font = _load_value_font(size)
+        bbox = draw.textbbox((0, 0), text, font=font)
+        text_w = bbox[2] - bbox[0]
+        text_h = bbox[3] - bbox[1]
+        if text_w <= width - 4 and text_h <= max_height:
+            best_size = size
+        else:
+            break
+    return best_size
+
+def _title_top_margin(width: int, title: str | None) -> int:
+    if not title:
+        return 2
+    image = Image.new("1", (width, OLED_HEIGHT), 0)
+    draw = ImageDraw.Draw(image)
+    title_font = ImageFont.load_default()
+    title_bbox = draw.textbbox((0, 0), title, font=title_font)
+    title_h = title_bbox[3] - title_bbox[1]
+    return max(2, title_h + 6)
+
+
+def render_centered_text(
+    width: int,
+    height: int,
+    text: str,
+    *,
+    title: str | None = None,
+    value_font_size: int | None = None,
+) -> Image.Image:
     image = Image.new("1", (width, height), 0)
     draw = ImageDraw.Draw(image)
     title_font = ImageFont.load_default()
@@ -267,25 +301,18 @@ def render_centered_text(width: int, height: int, text: str, *, title: str | Non
         y_offset = title_h + 6
 
     top_margin = max(2, y_offset)
-    max_height = height - top_margin - 2
-    best_font: ImageFont.FreeTypeFont | ImageFont.ImageFont = ImageFont.load_default()
-    best_bbox: tuple[int, int, int, int] | None = None
-    for size in range(8, 80):
-        font = _load_value_font(size)
-        bbox = draw.textbbox((0, 0), text, font=font)
-        text_w = bbox[2] - bbox[0]
-        text_h = bbox[3] - bbox[1]
-        if text_w <= width - 4 and text_h <= max_height:
-            best_font = font
-            best_bbox = bbox
-        else:
-            break
+    if value_font_size is None:
+        value_font_size = _best_value_font_size(width, height, text, top_margin)
+
+    best_font = _load_value_font(value_font_size)
+    best_bbox = draw.textbbox((0, 0), text, font=best_font)
 
     if best_bbox is None:
         best_bbox = draw.textbbox((0, 0), text, font=best_font)
 
     value_w = best_bbox[2] - best_bbox[0]
     value_h = best_bbox[3] - best_bbox[1]
+    max_height = height - top_margin - 2
     value_x = (width - value_w) // 2
     value_y = top_margin + max(0, (max_height - value_h) // 2)
     draw.text((value_x, value_y), text, font=best_font, fill=255)
@@ -349,14 +376,27 @@ def main() -> int:
         while not _STOP_EVENT.is_set():
             temp_text = read_temperature()
             time_text = current_time_12h()
+            time_value_font_size = _best_value_font_size(
+                OLED_WIDTH,
+                OLED_HEIGHT,
+                time_text,
+                _title_top_margin(OLED_WIDTH, "Time"),
+            )
 
             temp_image = render_centered_text(
                 OLED_WIDTH,
                 OLED_HEIGHT,
                 temp_text,
                 title="Outdoor Temp",
+                value_font_size=time_value_font_size,
             )
-            time_image = render_centered_text(OLED_WIDTH, OLED_HEIGHT, time_text, title="Time")
+            time_image = render_centered_text(
+                OLED_WIDTH,
+                OLED_HEIGHT,
+                time_text,
+                title="Time",
+                value_font_size=time_value_font_size,
+            )
 
             left_image, right_image = (
                 (temp_image, time_image) if show_temp_on_left else (time_image, temp_image)
