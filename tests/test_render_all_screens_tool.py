@@ -1,4 +1,5 @@
 from tools.maintenance import render_screens as render_all_screens
+from tools.maintenance import render_all_screens as legacy_render_all_screens
 
 
 def test_non_interactive_resolution_prompt_is_silent(monkeypatch):
@@ -42,6 +43,11 @@ def test_cli_defaults_to_rendering_all_screens():
     parser = render_all_screens._build_arg_parser()
     args = parser.parse_args([])
     assert args.ignore_schedule is True
+
+
+def test_legacy_wrapper_tracks_main_render_module():
+    assert legacy_render_all_screens.main is render_all_screens.main
+    assert legacy_render_all_screens.build_cache is render_all_screens.build_cache
 
 
 def test_build_cache_includes_scoreboards_payload(monkeypatch):
