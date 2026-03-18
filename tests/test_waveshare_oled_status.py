@@ -25,10 +25,19 @@ class _FakeSMBus:
         self.closed = True
 
 
-def _load_module():
-    fake_smbus = types.ModuleType("smbus")
-    fake_smbus.SMBus = _FakeSMBus
-    sys.modules["smbus"] = fake_smbus
+def _load_module(*, use_smbus2: bool = False):
+    sys.modules.pop("waveshare_oled_status", None)
+    sys.modules.pop("smbus", None)
+    sys.modules.pop("smbus2", None)
+
+    if use_smbus2:
+        fake_smbus2 = types.ModuleType("smbus2")
+        fake_smbus2.SMBus = _FakeSMBus
+        sys.modules["smbus2"] = fake_smbus2
+    else:
+        fake_smbus = types.ModuleType("smbus")
+        fake_smbus.SMBus = _FakeSMBus
+        sys.modules["smbus"] = fake_smbus
 
     spec = importlib.util.spec_from_file_location("waveshare_oled_status", SCRIPT_PATH)
     module = importlib.util.module_from_spec(spec)
@@ -92,3 +101,23 @@ def test_main_clears_oleds_and_closes_bus_on_stop(monkeypatch):
     assert created_displays[0].cleared >= 2
     assert created_displays[1].cleared >= 2
     assert bus.closed is True
+
+
+def test_import_uses_smbus2_when_smbus_missing():
+    real_import = __import__
+
+    def _fake_import(name, *args, **kwargs):
+        if name == "smbus":
+            raise ImportError("smbus unavailable")
+        return real_import(name, *args, **kwargs)
+
+    import builtins
+
+    original_import = builtins.__import__
+    builtins.__import__ = _fake_import
+    try:
+        mod = _load_module(use_smbus2=True)
+    finally:
+        builtins.__import__ = original_import
+
+    assert mod.SMBus is _FakeSMBus

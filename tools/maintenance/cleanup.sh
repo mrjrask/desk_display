@@ -135,9 +135,14 @@ else:
 
 try:
     from smbus import SMBus
-except Exception as exc:  # pragma: no cover - optional Waveshare dependency
-    logging.info("Waveshare OLED cleanup skipped (smbus unavailable): %s", exc)
-else:
+except Exception:
+    try:
+        from smbus2 import SMBus
+    except Exception as exc:  # pragma: no cover - optional Waveshare dependency
+        logging.info("Waveshare OLED cleanup skipped (smbus/smbus2 unavailable): %s", exc)
+        SMBus = None
+
+if SMBus is not None:
     try:
         scripts_dir = PROJECT_ROOT / "scripts"
         if str(scripts_dir) not in sys.path:

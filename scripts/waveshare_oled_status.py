@@ -21,7 +21,10 @@ from threading import Event
 
 from PIL import Image, ImageDraw, ImageFont
 
-from smbus import SMBus
+try:
+    from smbus import SMBus
+except ImportError:  # pragma: no cover - environment specific fallback
+    from smbus2 import SMBus
 
 
 def _env_int(name: str, default: int) -> int:
@@ -320,12 +323,6 @@ def _safe_render(display: SSD1306Display, image: Image.Image, name: str) -> bool
     except Exception as exc:
         LOGGER.warning("Failed to render frame on %s OLED: %s", name, exc)
         return False
-
-    display.display_image(new_image)
-
-    for step in range(0, FADE_STEPS + 1):
-        display.set_contrast(int(255 * step / FADE_STEPS))
-        time.sleep(FADE_STEP_MS / 1000)
 
 
 def main() -> int:
