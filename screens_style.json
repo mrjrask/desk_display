@@ -33,18 +33,6 @@
     "sensors": {
       "background": "#000000"
     },
-    "travel": {
-      "background": "#000000"
-    },
-    "travel map": {
-      "background": "#000000"
-    },
-    "travel v2": {
-      "background": "#000000"
-    },
-    "travel map v2": {
-      "background": "#000000"
-    },
     "verano logo": {
       "background": "#000000"
     },
@@ -178,18 +166,6 @@
       "background": "#7D7D7D"
     },
     "NHL Standings Overview East": {
-      "background": "#7D7D7D"
-    },
-    "NHL Standings Overview v2 West": {
-      "background": "#7D7D7D"
-    },
-    "NHL Standings Overview v2 East": {
-      "background": "#7D7D7D"
-    },
-    "NHL Standings Overview v3 West": {
-      "background": "#7D7D7D"
-    },
-    "NHL Standings Overview v3 East": {
       "background": "#7D7D7D"
     },
     "NHL Standings West": {

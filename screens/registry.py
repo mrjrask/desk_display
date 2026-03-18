@@ -102,11 +102,7 @@ from screens.nhl_standings import (
     draw_nhl_standings_west,
 )
 from screens.nhl_standings_v2 import (
-    draw_nhl_overview_east_v3,
-    draw_nhl_overview_west_v3,
     draw_nhl_standings_east_v2,
-    draw_nhl_standings_overview_v2_east,
-    draw_nhl_standings_overview_v2_west,
     draw_nhl_standings_west_v2,
 )
 
@@ -513,11 +509,6 @@ def build_screen_registry(context: ScreenContext) -> Tuple[Dict[str, ScreenDefin
         ),
         available=quad_enabled,
     )
-    # Legacy aliases for removed travel screen ids to keep older schedules valid.
-    register("travel", lambda: draw_inside(context.display, transition=True))
-    register("travel v2", lambda: draw_inside(context.display, transition=True))
-    register("travel map", lambda: draw_inside(context.display, transition=True))
-    register("travel map v2", lambda: draw_inside(context.display, transition=True))
     register("sensors", lambda: draw_sensors(context, transition=True))
 
     verano_logo = context.logos.get("verano logo")
@@ -820,22 +811,6 @@ def build_screen_registry(context: ScreenContext) -> Tuple[Dict[str, ScreenDefin
         register(
             "NHL Standings East",
             lambda: draw_nhl_standings_east(context.display, transition=True),
-        )
-        register(
-            "NHL Standings Overview v2 West",
-            lambda: draw_nhl_standings_overview_v2_west(context.display, transition=True),
-        )
-        register(
-            "NHL Standings Overview v2 East",
-            lambda: draw_nhl_standings_overview_v2_east(context.display, transition=True),
-        )
-        register(
-            "NHL Standings Overview v3 West",
-            lambda: draw_nhl_overview_west_v3(context.display, transition=True),
-        )
-        register(
-            "NHL Standings Overview v3 East",
-            lambda: draw_nhl_overview_east_v3(context.display, transition=True),
         )
         register(
             "NHL Standings West v2",

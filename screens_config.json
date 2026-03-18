@@ -11,10 +11,6 @@
     "weather daily": 0,
     "inside": 1,
     "sensors": 0,
-    "travel": 0,
-    "travel map": 0,
-    "travel v2": 0,
-    "travel map v2": 0,
     "verano logo": 0,
     "vrnof": 3,
     "bears logo": 4,
@@ -60,10 +56,6 @@
     "NHL Scoreboard v2": 0,
     "NHL Standings Overview West": 3,
     "NHL Standings Overview East": 3,
-    "NHL Standings Overview v2 West": 0,
-    "NHL Standings Overview v2 East": 0,
-    "NHL Standings Overview v3 West": 0,
-    "NHL Standings Overview v3 East": 0,
     "NHL Standings West": {
       "frequency": 3,
       "alt": {
@@ -172,23 +164,6 @@
         },
         {
           "screen": "sensors"
-        }
-      ]
-    },
-    "playlist-1771301271114-744": {
-      "label": "travel",
-      "steps": [
-        {
-          "screen": "travel"
-        },
-        {
-          "screen": "travel map"
-        },
-        {
-          "screen": "travel v2"
-        },
-        {
-          "screen": "travel map v2"
         }
       ]
     },
@@ -364,18 +339,6 @@
         },
         {
           "screen": "NHL Standings Overview East"
-        },
-        {
-          "screen": "NHL Standings Overview v2 West"
-        },
-        {
-          "screen": "NHL Standings Overview v2 East"
-        },
-        {
-          "screen": "NHL Standings Overview v3 West"
-        },
-        {
-          "screen": "NHL Standings Overview v3 East"
         },
         {
           "screen": "NHL Standings West"
