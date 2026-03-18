@@ -145,7 +145,8 @@ else:
 
         import waveshare_oled_status as waveshare_oled
 
-        with SMBus(waveshare_oled.I2C_BUS) as bus:
+        bus = SMBus(waveshare_oled.I2C_BUS)
+        try:
             for addr in (waveshare_oled.TEMP_ADDR, waveshare_oled.TIME_ADDR):
                 oled = waveshare_oled.SSD1306Display(
                     bus,
@@ -155,6 +156,10 @@ else:
                 )
                 oled.initialize()
                 oled.clear()
+        finally:
+            close_bus = getattr(bus, "close", None)
+            if callable(close_bus):
+                close_bus()
     except Exception as exc:  # pragma: no cover - best effort during shutdown
         logging.warning("Waveshare OLED cleanup failed: %s", exc)
 PY
