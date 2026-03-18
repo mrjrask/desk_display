@@ -80,6 +80,7 @@ _load_project_root_env_file()
 
 import config
 import data_fetch
+from services.data_provider import provider as data_provider
 from schedule import build_scheduler, load_schedule_config
 from screens_catalog import SCREEN_IDS
 from utils import ScreenImage
@@ -331,6 +332,14 @@ def build_cache() -> Dict[str, object]:
     logging.info("Refreshing data feeds…")
     cache: Dict[str, object] = {
         "weather": None,
+        "scoreboards": {
+            "nfl": [],
+            "mlb": [],
+            "wbc": [],
+            "nba": [],
+            "ncaam": [],
+            "nhl": [],
+        },
         "bears": {"stand": None},
         "hawks": {"last": None, "live": None, "next": None, "next_home": None},
         "wolves": {"last": None, "live": None, "next": None, "next_home": None},
@@ -408,6 +417,9 @@ def build_cache() -> Dict[str, object]:
             "next_home": sox_games.get("next_home_game"),
         }
     )
+
+    sports_payloads = data_provider.read_sports_payloads(ttl_seconds=0) or {}
+    cache["scoreboards"].update(sports_payloads.get("scoreboards") or {})
 
     return cache
 
