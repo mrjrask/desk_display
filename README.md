@@ -1,85 +1,133 @@
-# Desk Display (Display HAT Mini + Kernel Displays)
+# Desk Display
 
-Desk Display is a Raspberry Pi dashboard for the Pimoroni Display HAT Mini (320×240) or any kernel-driven display. It cycles through weather, commute, sensor, and sports screens with smooth animations, configurable scheduling, and built-in screenshot archiving.
+Desk Display is a Raspberry Pi dashboard app that rotates through weather, time/date, sensor, travel, and sports screens on small displays (or fullscreen desktop/kernel displays).
 
-## Highlights
+It supports:
 
-- **Always-on dashboards** for date/time, weather (current/hourly/daily/radar), indoor sensors, and sports scoreboards/standings.
-- **Screen scheduling** via `screens_config.json` (frequency + alternates) and a drag-and-drop web UI.
-- **Display output choices**: Display HAT Mini, kernel-driven fullscreen displays, or headless rendering.
-- **Smart capture pipeline**: per-screen screenshots, batch archiving, and optional H.264 video capture.
-- **Wi-Fi monitoring** with automatic recovery and on-screen outage status.
-- **GitHub update indicator** on date/time screens when upstream commits are available.
+- **Pimoroni Display HAT Mini** (`320x240`) over SPI.
+- **Kernel/desktop fullscreen output** (for HDMI/DSI/HyperPixel-style panels).
+- **Framebuffer output** (headless-style rendering direct to `/dev/fb*`).
+- **Headless mode** for rendering/testing without writing to a display.
+
+---
+
+## Table of Contents
+
+- [What this project includes](#what-this-project-includes)
+- [Requirements](#requirements)
+- [Install](#install)
+- [Run](#run)
+- [Installers (recommended on Raspberry Pi OS)](#installers-recommended-on-raspberry-pi-os)
+- [Configuration](#configuration)
+- [Screen scheduling](#screen-scheduling)
+- [Screen configuration web UI](#screen-configuration-web-ui)
+- [Screenshots and video capture](#screenshots-and-video-capture)
+- [Services](#services)
+- [Developer workflow](#developer-workflow)
+- [Troubleshooting](#troubleshooting)
+- [API references](#api-references)
+
+---
+
+## What this project includes
+
+- A **main display loop** (`main.py`) with screen scheduling, transitions, screenshot capture, and optional video output.
+- A **screen registry/catalog** with weather, sports, sensor, and utility screens.
+- A **Flask + Waitress configuration UI** (`config_ui.py`) for managing screen order/frequency and importing/exporting settings.
+- **Installer scripts** for Display HAT Mini, Waveshare OLED/LCD HAT (A), and kernel-display workflows.
+- Optional **Wi-Fi health monitoring/recovery** and **AirPlay takeover integration**.
 
 ---
 
 ## Requirements
 
-- Raspberry Pi (tested on Zero/Zero 2 W) or other Linux SBC
-- Pimoroni Display HAT Mini **or** a kernel-driven display (HDMI, DSI, etc.)
-- Python 3.9+
+- Raspberry Pi OS / Debian-based Linux (tested paths are oriented around Raspberry Pi).
+- Python **3.9+**.
+- A display target:
+  - Display HAT Mini,
+  - kernel/desktop panel,
+  - framebuffer device,
+  - or headless mode.
 
-### System packages (Raspberry Pi OS)
-
-Install the base dependencies before the Python packages:
+### Base system packages (Raspberry Pi OS)
 
 ```bash
 sudo apt-get update
 sudo apt-get install -y \
-    python3-venv python3-pip python3-dev python3-opencv \
-    build-essential libjpeg-dev libopenblas0 libopenblas-dev swig liblgpio-dev \
-    libopenjp2-7-dev libtiff5-dev libcairo2-dev libpango1.0-dev \
-    libgdk-pixbuf-2.0-dev libffi-dev network-manager wireless-tools iproute2 \
-    i2c-tools fonts-dejavu-core fonts-noto-color-emoji libgl1 libx264-dev ffmpeg git \
-    avahi-daemon avahi-utils uxplay
+  python3-venv python3-pip python3-dev python3-opencv \
+  build-essential libjpeg-dev libopenblas0 libopenblas-dev swig liblgpio-dev \
+  libopenjp2-7-dev libtiff5-dev libcairo2-dev libpango1.0-dev \
+  libgdk-pixbuf-2.0-dev libffi-dev network-manager wireless-tools iproute2 \
+  i2c-tools fonts-dejavu-core fonts-noto-color-emoji libgl1 libx264-dev ffmpeg git \
+  avahi-daemon avahi-utils uxplay
 ```
 
-> **Note:** Debian Trixie uses `libgdk-pixbuf-2.0-dev` instead of the legacy `libgdk-pixbuf2.0-dev` package name.
+> Debian Trixie uses `libgdk-pixbuf-2.0-dev` (not the older `libgdk-pixbuf2.0-dev`).
 
 ---
 
-## Quick start
+## Install
+
+From the project root:
 
 ```bash
-cd ~/desk_display
-python -m venv venv && source venv/bin/activate
+python -m venv venv
+source venv/bin/activate
 pip install --upgrade pip
 pip install -r requirements.txt
 ```
 
-Use `requirements_kernel.txt` instead when running on a kernel-driven display without the Display HAT Mini driver.
+### Alternate requirements files
 
-For existing installs, refresh Python dependencies with:
+- `requirements.txt`: Display HAT Mini + full stack.
+- `requirements_kernel.txt`: kernel/desktop display stack (no Display HAT Mini dependency).
+- `requirements_framebuffer.txt`: framebuffer stack (no Display HAT Mini dependency).
+
+Example:
+
+```bash
+pip install -r requirements_kernel.txt
+```
+
+### Upgrade dependencies later
 
 ```bash
 ./scripts/update_dependencies.sh
 ```
 
-Pass `--requirements requirements_kernel.txt` (or `requirements_framebuffer.txt`) when needed.
+Optional explicit requirements file:
 
-To upgrade every already-installed pip package in the project virtualenv:
+```bash
+./scripts/update_dependencies.sh --requirements requirements_kernel.txt
+```
+
+Upgrade *all installed* pip packages in the venv:
 
 ```bash
 ./tools/maintenance/update_pip_installed_packages.sh
 ```
 
-Use `--dry-run` to preview which packages would be upgraded.
+Dry run:
 
-If upgrades fail with permission errors, fix ownership of the virtualenv first (for example: `sudo chown -R "$USER":"$USER" ./venv`).
+```bash
+./tools/maintenance/update_pip_installed_packages.sh --dry-run
+```
 
-To start the display loop directly:
+---
+
+## Run
+
+Basic run:
 
 ```bash
 python main.py
 ```
 
+The app defaults `CONFIG_LOAD_DOTENV=1`, so `.env` is loaded automatically during normal app startup.
+
 ---
 
-## Installer scripts (recommended on Raspberry Pi OS)
-
-All installers below are combined for Raspberry Pi OS Bookworm and Trixie.
-
-Supported/tested codenames: `bookworm`, `trixie`. On other Debian/Raspberry Pi OS codenames, the installer falls back to best-effort dependency package mapping and may require manual package-name adjustments if apt cannot resolve a dependency.
+## Installers (recommended on Raspberry Pi OS)
 
 ### Display HAT Mini (SPI)
 
@@ -87,203 +135,154 @@ Supported/tested codenames: `bookworm`, `trixie`. On other Debian/Raspberry Pi O
 bash ./Installers/install_display_hat_mini.sh
 ```
 
-### Waveshare OLED/LCD HAT (A) (LCD panel)
+### Waveshare OLED/LCD HAT (A)
 
 ```bash
 bash ./Installers/install_waveshare_oled_lcd_hat_a.sh
 ```
 
-This installer targets the 320×240 LCD panel using framebuffer output.
+Notes:
 
-It also enables a small helper service for the two OLED side displays:
-- Temperature and time are auto-fitted to the largest possible font size under each title.
-- The two OLEDs cross-fade and swap temperature/time positions each refresh to reduce burn-in.
+- Targets a 320×240 LCD framebuffer workflow.
+- Installs an OLED helper for the two side OLEDs (time/temp with auto-fit + anti burn-in swapping/fade behavior).
+- Default button mapping on this board:
+  - `A -> K4 (D24)`
+  - `B -> K1 (D4)`
+  - `X -> K2 (D17)`
+  - `Y -> K3 (D23)`
 
-Button mapping for Waveshare OLED/LCD HAT (A):
-- `A` → `K4 (D24)`
-- `B` → `K1 (D4)`
-- `X` → `K2 (D17)`
-- `Y` → `K3 (D23)`
-
-### Kernel-driven displays (fullscreen)
+### Kernel/fullscreen displays
 
 ```bash
-# HyperPixel 4 / HyperPixel 4 Square
+# HyperPixel 4 / HyperPixel 4 Square flow
 bash ./Installers/install_hyperpixel.sh
 
-# HyperPixel installer (non-interactive)
+# Non-interactive HyperPixel example
 HYPERPIXEL_PANEL=hyperpixel4 DISPLAY_WIDTH=800 DISPLAY_HEIGHT=480 bash ./Installers/install_hyperpixel.sh
 
-# Other kernel-driven displays
+# Generic kernel-display flow
 bash ./Installers/install_kernel.sh
 ```
 
-The kernel display installers will:
+Kernel installer behavior includes:
 
-- Configure `DESK_DISPLAY_OUTPUT=kernel`.
-- Configure `.env` display sizing for your detected HyperPixel panel and default `DISPLAY_ROTATION=0` (set `DISPLAY_ROTATION=180` for upside-down mounting).
-- **Not** modify `/boot/firmware/config.txt` or `/boot/config.txt`; set your HyperPixel `dtoverlay=` line manually (including any `rotate=` value).
-- The HyperPixel installer disables the Pi's primary SPI/I2C interfaces and sets `INSIDE_I2C_BUSES=13` so the Inside screen probes the HyperPixel/HyperPixel 4 Square accessory I2C header bus first.
-- Prompt for the target fullscreen resolution at install time (defaulting to the detected DRM/X11 mode when available).
-- Install a desktop launcher that can run the display loop inside the desktop session.
-- Attempt to launch the fullscreen display at the end of the installer when a desktop session is available (set `AUTO_LAUNCH_KERNEL_DISPLAY=0` to skip).
-- Install an autostart entry when `AUTO_START_KERNEL_DISPLAY=1` to launch the kernel display automatically on desktop login.
-- Provide an SSH-friendly helper (`scripts/ssh_kernel_display.sh`) to manage the user service without manual environment setup.
-- On Lite/headless installs with no active desktop session, automatically fall back to `DESK_DISPLAY_OUTPUT=framebuffer` (set `AUTO_FALLBACK_FRAMEBUFFER=0` to keep kernel output).
+- Sets `DESK_DISPLAY_OUTPUT=kernel`.
+- Configures sizing env vars and a default `DISPLAY_ROTATION=0`.
+- Installs helpers/services for desktop-session launching.
+- Supports fallback to framebuffer on Lite/headless setups.
 
-
-### Password-protected AirPlay takeover (always ready)
-
-Desk Display can run an always-on background AirPlay receiver using `uxplay`.
-
-When an AirPlay client connects, `desk_display.service` is stopped so AirPlay takes over the display. When the AirPlay client disconnects, the dashboard service is restarted automatically and normal screen playback resumes.
-
-1. Set one of these in `.env` (required for protection):
-
-```bash
-DESK_DISPLAY_AIRPLAY_PASSWORD=your-password
-# or
-DESK_DISPLAY_AIRPLAY_PIN=1234
-```
-
-2. Install/update dependencies and background service (existing installs):
-
-```bash
-./scripts/update_airplay_dependencies.sh
-```
-
-The installer enables the AirPlay takeover service by default. To disable it, set:
-
-```bash
-DESK_DISPLAY_AIRPLAY_ALWAYS_ON=0
-```
-
-Optional AirPlay settings:
-
-- `DESK_DISPLAY_AIRPLAY_NAME` (default: `Desk Display`)
-- `DESK_DISPLAY_AIRPLAY_ARGS` (extra raw `uxplay` arguments)
-- `DESK_DISPLAY_AIRPLAY_FULLSCREEN` (default: `1`; pass `-fs` so AirPlay runs fullscreen)
-- `DESK_DISPLAY_AIRPLAY_NATIVE_RESOLUTION` (default: `1`; auto-detect native mode and pass it via `uxplay -s`)
-- `DESK_DISPLAY_AIRPLAY_IDLE_RESUME_SECONDS` (default: `8`)
-- `DESK_DISPLAY_AIRPLAY_POLL_SECONDS` (default: `1`)
-
-Manual on-demand mode is still available:
-
-```bash
-./scripts/airplay_mode.sh
-```
-
-To uninstall the systemd service and optionally remove the virtualenv:
-
-```bash
-bash ./scripts/uninstall.sh
-```
+> `dtoverlay=` lines in `/boot/config.txt` or `/boot/firmware/config.txt` are still your responsibility.
 
 ---
 
 ## Configuration
 
-Desk Display reads configuration from environment variables and (optionally) a `.env` file. The main loop sets `CONFIG_LOAD_DOTENV=1` by default so `.env` is picked up automatically; set it yourself when running other tools directly (like `config_ui.py`).
+Configuration is primarily environment-driven (and may be loaded from `.env`).
 
-The config UI is a Flask app served by Waitress when you run `python config_ui.py`.
+### Core display/output variables
 
-### Display output
-
-| Variable | Purpose |
+| Variable | Meaning |
 | --- | --- |
-| `DESK_DISPLAY_OUTPUT` | `auto` (default), `displayhatmini`, `kernel`, `framebuffer`, or `headless`. |
-| `DESK_DISPLAY_FORCE_HEADLESS` | Force headless rendering (no display writes). |
-| `DESK_DISPLAY_SESSION_USER` | Override the desktop session user for `loginctl` lookups and `/run/user/<uid>` resolution. |
-| `DISPLAY_WIDTH` / `DISPLAY_HEIGHT` | Override target render size (required for larger fullscreen panels). |
-| `DISPLAY_FB_DEVICE` | Framebuffer device path (default `/dev/fb0`). |
-| `DISPLAY_FB_PIXEL_FORMAT` | Override framebuffer format (`rgb565`, `rgb888`, `xrgb8888`, etc.). |
-| `DISPLAY_FB_PIXEL_ORDER` | Force pixel order (`rgb` or `bgr`). |
-| `DISPLAY_ROTATION` | Additional app-side rotation in degrees (`0`, `90`, `180`, `270`) or shorthand (`0-3`). When kernel `dtoverlay=...,rotate=` is active in strict mode, non-zero app rotation is reset to `0` to avoid double-rotation. |
-| `DISPLAY_ROTATION_STRICT` | Rotation guardrail toggle. Defaults to `1` for HyperPixel/kernel outputs (`DESK_DISPLAY_OUTPUT=kernel|kms|drm|sdl` or `HYPERPIXEL_PANEL=hyperpixel*`) and `0` otherwise. Set `0` to preserve legacy stacked kernel+app rotation behavior. |
-| `DISPLAY_HAT_MINI_REINIT_SECONDS` | Recreate the Display HAT Mini driver on this interval (default `1800`) to recover from long-run panel stalls. Set `0` to disable. |
-| `DISPLAY_HAT_MINI_LED_LEVEL` | Normalized indicator LED brightness (`0.0`-`1.0`) for weather alerts, schedule win/loss markers, and update animations. Defaults to `0.08`; recommended starting range is `0.05`-`0.20`. |
-| `WAVESHARE_OLED_I2C_BUS` | I2C bus for Waveshare OLED helper service (default `1`). |
-| `WAVESHARE_OLED_TEMP_ADDR` | I2C address for the temperature OLED (default `0x3C`). |
-| `WAVESHARE_OLED_TIME_ADDR` | I2C address for the time OLED (default `0x3D`). |
-| `WAVESHARE_OLED_WIDTH` / `WAVESHARE_OLED_HEIGHT` | OLED dimensions for the helper renderer (defaults `128` / `64`). |
-| `WAVESHARE_OLED_TEMP_SOURCE` | Temperature source: `weather1` (default), `weather`, `cpu`, or `command`. |
-| `WAVESHARE_OLED_TEMP_COMMAND` | Shell command used when `WAVESHARE_OLED_TEMP_SOURCE=command`; first numeric value is shown. |
-| `WAVESHARE_OLED_TEMP_UNIT` | Temperature unit for display (`C` default, or `F`). |
-| `WAVESHARE_OLED_REFRESH_SECONDS` | Refresh interval between OLED fade/swap cycles (default `5`). |
-| `WAVESHARE_OLED_FADE_STEPS` | Number of fade steps for OLED transitions (default `8`). |
-| `WAVESHARE_OLED_FADE_STEP_MS` | Delay per fade step in milliseconds (default `35`). |
-| `WAVESHARE_OLED_FONT_PATH` | Optional TrueType font path for OLED value text auto-sizing. |
-| `BUTTON_A` / `BUTTON_B` / `BUTTON_X` / `BUTTON_Y` | GPIO BCM pins for control buttons. Waveshare defaults are `24`, `4`, `17`, and `23`. |
+| `DESK_DISPLAY_OUTPUT` | `auto` (default), `displayhatmini`, `kernel`, `framebuffer`, `headless`. |
+| `DESK_DISPLAY_FORCE_HEADLESS` | Force render without writing to hardware. |
+| `DISPLAY_WIDTH` / `DISPLAY_HEIGHT` | Override render resolution. |
+| `DISPLAY_FB_DEVICE` | Framebuffer path (default `/dev/fb0`). |
+| `DISPLAY_FB_PIXEL_FORMAT` | Framebuffer format override (`rgb565`, `rgb888`, `xrgb8888`, etc.). |
+| `DISPLAY_FB_PIXEL_ORDER` | Force color order (`rgb` / `bgr`). |
+| `DISPLAY_ROTATION` | App rotation (`0`,`90`,`180`,`270` or shorthand `0-3`). |
+| `DISPLAY_ROTATION_STRICT` | Rotation conflict guard for kernel overlays. |
+| `DISPLAY_HAT_MINI_REINIT_SECONDS` | Reinit interval for long-run panel recovery. |
+| `DISPLAY_HAT_MINI_LED_LEVEL` | Display HAT Mini LED brightness (`0.0`-`1.0`). |
 
-### Weather + radar
+### Weather variables
 
-| Variable | Purpose |
+| Variable | Meaning |
 | --- | --- |
-| `WEATHERKIT_TEAM_ID`, `WEATHERKIT_KEY_ID`, `WEATHERKIT_SERVICE_ID` | WeatherKit credentials for JWT auth. |
-| `WEATHERKIT_KEY_PATH` / `WEATHERKIT_PRIVATE_KEY` | Location or inline PEM for WeatherKit signing key. |
-| `WEATHERKIT_LANGUAGE` / `WEATHERKIT_TIMEZONE` | Localization settings. |
-| `OWM_API_KEY*` | OpenWeatherMap fallback key(s). Supports `OWM_API_KEY`, `OWM_API_KEY_DEFAULT`, `OWM_API_KEY_WIFFY`, `OWM_API_KEY_VERANO`. |
-| `OWM_UNITS`, `OWM_LANGUAGE` | OpenWeatherMap units + locale. |
-| `WEATHER_REFRESH_SECONDS` | Minimum refresh interval (clamped to ≥600s). |
-| `WEATHER_USE_EMOJI_ICONS` | Use emoji icon set. |
+| `WEATHERKIT_TEAM_ID`, `WEATHERKIT_KEY_ID`, `WEATHERKIT_SERVICE_ID` | Apple WeatherKit credentials. |
+| `WEATHERKIT_KEY_PATH` / `WEATHERKIT_PRIVATE_KEY` | WeatherKit private key source. |
+| `WEATHERKIT_LANGUAGE`, `WEATHERKIT_TIMEZONE` | Weather localization settings. |
+| `OWM_API_KEY*` | OpenWeatherMap fallback API key(s). |
+| `OWM_UNITS`, `OWM_LANGUAGE` | OpenWeatherMap localization options. |
+| `WEATHER_REFRESH_SECONDS` | Refresh interval (minimum clamped in code). |
+| `WEATHER_USE_EMOJI_ICONS` | Enable emoji icons for weather glyphs. |
 
-### Travel screens
+### Travel variables
 
-| Variable | Purpose |
+| Variable | Meaning |
 | --- | --- |
-| `TRAVEL_TO_HOME_ORIGIN`, `TRAVEL_TO_HOME_DESTINATION` | Commute endpoints for the `to_home` profile. |
-| `TRAVEL_TO_WORK_ORIGIN`, `TRAVEL_TO_WORK_DESTINATION` | Commute endpoints for the `to_work` profile. |
-| `APPLE_MAPS_TEAM_ID`, `APPLE_MAPS_KEY_ID` | Apple Maps JWT credentials (can reuse WeatherKit IDs). |
-| `APPLE_MAPS_KEY_PATH` / `APPLE_MAPS_PRIVATE_KEY` | PEM key for Apple Maps JWT signing. |
-| `APPLE_MAPS_DIRECTIONS_URL` / `APPLE_MAPS_SNAPSHOT_URL` | Override Apple Maps service endpoints. |
+| `TRAVEL_TO_HOME_ORIGIN`, `TRAVEL_TO_HOME_DESTINATION` | Home commute route endpoints. |
+| `TRAVEL_TO_WORK_ORIGIN`, `TRAVEL_TO_WORK_DESTINATION` | Work commute route endpoints. |
+| `APPLE_MAPS_TEAM_ID`, `APPLE_MAPS_KEY_ID` | Apple Maps JWT identifiers. |
+| `APPLE_MAPS_KEY_PATH` / `APPLE_MAPS_PRIVATE_KEY` | Apple Maps private key source. |
 
+### Wi-Fi monitor/recovery variables
 
-
-### Wi-Fi monitoring / recovery
-
-| Variable | Purpose |
+| Variable | Meaning |
 | --- | --- |
-| `ENABLE_WIFI_MONITOR` | Enable the Wi-Fi background monitor. |
-| `ENABLE_WIFI_RECOVERY` | Allow automatic recovery attempts. |
-| `WIFI_INTERFACE` | Force a specific wireless interface. |
-| `WIFI_TCP_PROBE_URLS` / `WIFI_TCP_PROBE_HOSTS` / `WIFI_TCP_PROBE_PORT` | Customize connectivity probes. |
-| `WIFI_RECOVERY_LOG` | Override the per-user recovery log path. |
+| `ENABLE_WIFI_MONITOR` | Enable background Wi-Fi monitor thread. |
+| `ENABLE_WIFI_RECOVERY` | Allow automated recovery actions. |
+| `WIFI_INTERFACE` | Force interface name. |
+| `WIFI_TCP_PROBE_URLS`, `WIFI_TCP_PROBE_HOSTS`, `WIFI_TCP_PROBE_PORT` | Connectivity probes. |
+| `WIFI_RECOVERY_LOG` | Recovery log path override. |
 
-### Screenshots + video capture
+### Screenshots/video variables
 
-| Variable | Purpose |
+| Variable | Meaning |
 | --- | --- |
-| `ENABLE_SCREENSHOTS` | Enable per-screen capture (default on). |
-| `ENABLE_VIDEO` | Record a rolling H.264 MP4 in the screenshots folder. |
-| `SCREENSHOT_DIR` | Override the screenshots root folder. |
-| `SCREENSHOT_ARCHIVE_BASE` | Override the archive base folder. |
+| `ENABLE_SCREENSHOTS` | Enable per-screen image capture. |
+| `ENABLE_VIDEO` | Enable rolling H.264 MP4 capture. |
+| `SCREENSHOT_DIR` | Screenshot root path override. |
+| `SCREENSHOT_ARCHIVE_BASE` | Screenshot archive path override. |
 
-Screenshots are saved under `screenshots/<Screen Name>/` with the latest frame mirrored in `screenshots/current/`. Once 500+ screenshots are present, the current batch is archived into `screenshot_archive/<Screen Name>/` and trimmed to the most recent 50 per screen.
+### Waveshare OLED helper variables
+
+| Variable | Meaning |
+| --- | --- |
+| `WAVESHARE_OLED_I2C_BUS` | I2C bus index for helper. |
+| `WAVESHARE_OLED_TEMP_ADDR`, `WAVESHARE_OLED_TIME_ADDR` | OLED I2C addresses. |
+| `WAVESHARE_OLED_WIDTH`, `WAVESHARE_OLED_HEIGHT` | OLED dimensions. |
+| `WAVESHARE_OLED_TEMP_SOURCE` | `weather1` (default), `weather`, `cpu`, or `command`. |
+| `WAVESHARE_OLED_TEMP_COMMAND` | Command source when using `command`. |
+| `WAVESHARE_OLED_TEMP_UNIT` | `C` or `F`. |
+| `WAVESHARE_OLED_REFRESH_SECONDS` | OLED refresh cadence. |
+| `WAVESHARE_OLED_FADE_STEPS` | Fade-step count. |
+| `WAVESHARE_OLED_FADE_STEP_MS` | Delay per fade step. |
+| `WAVESHARE_OLED_FONT_PATH` | Optional custom TTF for OLED values. |
+| `BUTTON_A`, `BUTTON_B`, `BUTTON_X`, `BUTTON_Y` | GPIO BCM pin mapping overrides. |
 
 ---
 
 ## Screen scheduling
 
-The screen scheduler lives in `screens_config.json`. Each entry is either a frequency number or an object with a `frequency` and optional `alt` schedule.
+Screen sequencing is configured in `screens_config.json` with a `screens` mapping.
+
+Simple example:
 
 ```json
 {
   "screens": {
     "date": 1,
     "weather1": 1,
+    "inside": 2,
+    "NFL Scoreboard": 4
   }
 }
 ```
 
-- `frequency` is an interval: `1` shows every pass, `2` shows every other pass, `8` shows once every eight passes.
-- `frequency: 0` disables a screen without removing it from the list.
-- `alt` can target a single screen or a list of screens to rotate through.
+Rules:
+
+- `1` = show every pass.
+- `2` = show every other pass.
+- Higher numbers reduce cadence.
+- `0` disables the screen while keeping its entry.
+
+Advanced entries can use an object with `frequency` and optional `alt` schedule metadata.
 
 ---
 
-## Screen configuration UI
+## Screen configuration web UI
 
-Run the web UI to reorder screens, adjust frequencies, and preview screenshots:
+Run:
 
 ```bash
 python config_ui.py
@@ -292,62 +291,128 @@ python config_ui.py
 Defaults:
 
 - URL: `http://localhost:5002`
-- Host: `SCREEN_CONFIG_HOST` (default `0.0.0.0`)
-- Port: `SCREEN_CONFIG_PORT` (default `5002`)
-- Config path: `SCREENS_CONFIG_PATH`
-- Disable autostart: `SCREEN_CONFIG_AUTOSTART=0`
-- Set `SCREEN_UI_PASSWORD` to require login for UI pages and API endpoints
+- Host env var: `SCREEN_CONFIG_HOST` (default `0.0.0.0`)
+- Port env var: `SCREEN_CONFIG_PORT` (default `5002`)
+
+Authentication:
+
+- Set `SCREEN_UI_PASSWORD` to require login.
+- Optionally set `SCREEN_UI_USERNAME`.
+- `SCREEN_AUTH_ENABLED=1` can force auth mode behavior.
 
 ---
 
-## Fonts + assets
+## Screenshots and video capture
 
-Drop custom fonts in `fonts/` (e.g., `TimesSquare-m105.ttf`, `DejaVuSans.ttf`, `DejaVuSans-Bold.ttf`). Team logos and other assets live in `images/`.
+With screenshots enabled:
+
+- Per-screen captures are written under `screenshots/<Screen Name>/`.
+- Current/latest mirrors are kept under `screenshots/current/`.
+- Archive rollover occurs when screenshot volume reaches the internal threshold (current default: `500`).
+- Archived batches land under `screenshot_archive/<Screen Name>/`.
 
 ---
 
-## Systemd service
+## Services
 
-The installer scripts create a `desk_display.service` that runs `main.py` in the project virtual environment. Use standard systemd commands to manage it:
+Installers can provision service units.
+
+### Main service
 
 ```bash
 sudo systemctl status desk_display.service
 sudo systemctl restart desk_display.service
 ```
 
-### Kernel display via user service
-
-For kernel-driven displays inside a desktop session, the kernel installers also install a user service named `desk_display-kernel.service`. Use `systemctl --user` from the logged-in session (or over SSH with the user session available):
+### Kernel desktop-session user service
 
 ```bash
-systemctl --user start desk_display-kernel.service
 systemctl --user status desk_display-kernel.service
+systemctl --user restart desk_display-kernel.service
 ```
 
-To manage the kernel display service over SSH without manually exporting user session environment variables, use:
+SSH helper:
 
 ```bash
-~/desk_display/scripts/ssh_kernel_display.sh status
-~/desk_display/scripts/ssh_kernel_display.sh restart
-~/desk_display/scripts/ssh_kernel_display.sh stop
+./scripts/ssh_kernel_display.sh status
+./scripts/ssh_kernel_display.sh restart
+./scripts/ssh_kernel_display.sh stop
 ```
+
+### AirPlay takeover (optional)
+
+Configure one of:
+
+```bash
+DESK_DISPLAY_AIRPLAY_PASSWORD=your-password
+# or
+DESK_DISPLAY_AIRPLAY_PIN=1234
+```
+
+Then run dependency/service installer:
+
+```bash
+./scripts/update_airplay_dependencies.sh
+```
+
+Disable always-on mode:
+
+```bash
+DESK_DISPLAY_AIRPLAY_ALWAYS_ON=0
+```
+
+Manual takeover mode:
+
+```bash
+./scripts/airplay_mode.sh
+```
+
+Uninstall helper:
+
+```bash
+./scripts/uninstall.sh
+```
+
+---
+
+## Developer workflow
+
+### Useful commands
+
+```bash
+# Run test suite
+pytest
+
+# Validate required files
+python tools/validate_required_files.py
+
+# Render sample screens to files (maintenance)
+python tools/maintenance/render_all_screens.py
+```
+
+### Project layout (high-level)
+
+- `main.py`: display loop runtime.
+- `config.py`: env parsing + config constants.
+- `config_ui.py`: web UI and config APIs.
+- `screens/`: screen renderers.
+- `services/`: network/data providers and utilities.
+- `tools/`: maintenance/render/testing helper scripts.
+- `tests/`: pytest test suite.
 
 ---
 
 ## Troubleshooting
 
-- **Weather data missing**: verify WeatherKit credentials or set an OpenWeatherMap API key.
-- **Radar background missing**: ensure `GOOGLE_MAPS_API_KEY` is set.
-- **Travel screens show N/A**: confirm `TRAVEL_*` addresses and the relevant Maps API key.
-- **Kernel displays not showing**: set `DESK_DISPLAY_OUTPUT=kernel` and provide `DISPLAY_WIDTH`/`DISPLAY_HEIGHT`.
-- **Kernel displays still blank in desktop mode**: launch with `scripts/launch_kernel_display.sh` from a logged-in desktop session; ensure `WAYLAND_DISPLAY` or `DISPLAY` is set (and `XDG_RUNTIME_DIR`/`XAUTHORITY` are available for SDL).
-- **HyperPixel shows boot logs but Desk Display/desktop stays black**: run `scripts/check_hyperpixel_setup.sh` and verify `dtoverlay=` is present, `/dev/dri/card0` exists, and your output mode matches a real desktop session (`desk_display-kernel.service`) or framebuffer fallback (`DESK_DISPLAY_OUTPUT=framebuffer`).
-- **Display appears over-rotated on HyperPixel/kernel output**: if `dtoverlay=...,rotate=` is configured, strict mode now forces non-zero `DISPLAY_ROTATION` back to `0`. Keep a single rotation source, or set `DISPLAY_ROTATION_STRICT=0` temporarily for backward-compatible stacked rotation.
-- **Wi-Fi recovery loops**: check `/var/log/wifi_auto_recover.log` and disable recovery with `ENABLE_WIFI_RECOVERY=0`.
+- **No weather data:** verify WeatherKit vars or provide an OpenWeatherMap key.
+- **Radar map missing:** verify `GOOGLE_MAPS_API_KEY`.
+- **Travel shows N/A:** verify `TRAVEL_*` endpoints and Apple Maps credentials.
+- **Blank kernel display:** ensure valid desktop session/env or use framebuffer mode.
+- **Rotation looks wrong on HyperPixel/kernel:** avoid double rotation (`dtoverlay rotate` + app rotation).
+- **Wi-Fi monitor loops:** review Wi-Fi recovery logs and consider `ENABLE_WIFI_RECOVERY=0`.
 
 ---
 
-
 ## API references
 
-See [`README_APIS.md`](README_APIS.md) for the full list of third-party endpoints and fields used.
+For third-party endpoint and field details, see [`README_APIS.md`](README_APIS.md).
