@@ -52,6 +52,13 @@ fi
 # shellcheck source=/dev/null
 source "$VENV_DIR/bin/activate"
 
+PYTHON_BIN=$(command -v python || true)
+if [[ -z "$PYTHON_BIN" ]]; then
+  echo "[ERROR] Unable to locate the virtualenv python interpreter after activation." >&2
+  deactivate
+  exit 1
+fi
+
 check_venv_permissions() {
   local dirs_to_check=("$VENV_DIR" "$VENV_DIR/bin")
   local site_packages
