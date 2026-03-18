@@ -1,5 +1,10 @@
 #!/usr/bin/env python3
-"""Backward-compatible wrapper for rendering all screens."""
+"""Backward-compatible wrapper for rendering all screens.
+
+This shim intentionally mirrors ``tools.maintenance.render_screens`` so users
+running the legacy entrypoint still pick up current rendering behavior (such
+as refreshed scoreboard payload hydration).
+"""
 
 from pathlib import Path
 import os
@@ -47,6 +52,12 @@ for _name, _value in _impl.__dict__.items():
     if _name in {"__name__", "__file__", "__package__", "__loader__", "__spec__"}:
         continue
     globals()[_name] = _value
+
+# Keep explicit aliases for the most-used integration points. This makes it
+# clear that the wrapper tracks the underlying implementation and helps static
+# tooling/readers that look for direct attributes on this module.
+main = _impl.main
+build_cache = _impl.build_cache
 
 
 if __name__ == "__main__":
