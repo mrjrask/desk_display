@@ -1,4 +1,4 @@
-from tools.maintenance import render_all_screens
+from tools.maintenance import render_screens as render_all_screens
 
 
 def test_non_interactive_resolution_prompt_is_silent(monkeypatch):
@@ -36,3 +36,9 @@ def test_resolution_cli_option_applies_dimensions(monkeypatch):
 
     assert exit_code == 0
     assert applied == ["1080p"]
+
+
+def test_cli_defaults_to_rendering_all_screens():
+    parser = render_all_screens._build_arg_parser()
+    args = parser.parse_args([])
+    assert args.ignore_schedule is True
