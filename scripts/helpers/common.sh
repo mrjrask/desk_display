@@ -638,6 +638,9 @@ prepend_env_vars() {
   local filtered_file
   tmp_file=$(mktemp)
   filtered_file=$(mktemp)
+  local target_owner=""
+  local target_group=""
+  local target_mode=""
 
   local keys=()
   local line
@@ -661,13 +664,51 @@ prepend_env_vars() {
     fi
   } > "$tmp_file"
 
+  local existing_owner_name=""
+  local existing_owner_id=""
+  if [[ -f "$env_path" ]]; then
+    existing_owner_name=$(stat -c '%U' "$env_path" 2>/dev/null || true)
+    existing_owner_id=$(stat -c '%u' "$env_path" 2>/dev/null || true)
+    target_owner="$existing_owner_name"
+    target_group=$(stat -c '%G' "$env_path" 2>/dev/null || true)
+    target_mode=$(stat -c '%a' "$env_path" 2>/dev/null || true)
+  fi
+
+  # If an existing file is owned by root and we're running with sudo, prefer
+  # SERVICE_USER/SUDO_USER so .env stays editable/readable by the non-root user.
+  if [[ -n "${SUDO:-}" && ( "$existing_owner_name" == "root" || "$existing_owner_id" == "0" ) ]]; then
+    target_owner=""
+    target_group=""
+  fi
+
+  if [[ -z "$target_owner" ]]; then
+    if [[ -n "${SERVICE_USER:-}" ]]; then
+      target_owner="$SERVICE_USER"
+    elif [[ -n "${SUDO_USER:-}" ]]; then
+      target_owner="$SUDO_USER"
+    fi
+  fi
+
+  if [[ -z "$target_group" && -n "$target_owner" ]]; then
+    target_group=$(id -gn "$target_owner" 2>/dev/null || true)
+  fi
+
+  if [[ -z "$target_mode" ]]; then
+    target_mode="644"
+  fi
+
   if [[ -n "${SUDO:-}" ]]; then
     $SUDO mv "$tmp_file" "$env_path"
-    if [[ -n "${SERVICE_USER:-}" ]]; then
-      $SUDO chown "$SERVICE_USER":"$SERVICE_USER" "$env_path" 2>/dev/null || true
+    if [[ -n "$target_owner" && -n "$target_group" ]]; then
+      $SUDO chown "$target_owner":"$target_group" "$env_path" 2>/dev/null || true
     fi
+    $SUDO chmod "$target_mode" "$env_path" 2>/dev/null || true
   else
     mv "$tmp_file" "$env_path"
+    if [[ -n "$target_owner" && -n "$target_group" ]]; then
+      chown "$target_owner":"$target_group" "$env_path" 2>/dev/null || true
+    fi
+    chmod "$target_mode" "$env_path" 2>/dev/null || true
   fi
 
   rm -f "$filtered_file"
