@@ -48,8 +48,12 @@ _load_project_root_env_file()
 
 from tools.maintenance import render_screens as _impl
 
+_LEGACY_EXCLUDED_EXPORTS = {"check_github_updates", "check_apt_updates"}
+
 for _name, _value in _impl.__dict__.items():
     if _name in {"__name__", "__file__", "__package__", "__loader__", "__spec__"}:
+        continue
+    if _name in _LEGACY_EXCLUDED_EXPORTS:
         continue
     globals()[_name] = _value
 
