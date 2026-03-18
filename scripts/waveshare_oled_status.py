@@ -9,6 +9,7 @@ Default behavior:
 from __future__ import annotations
 
 import os
+import random
 import re
 import subprocess
 import time
@@ -39,6 +40,11 @@ TEMP_SOURCE = os.getenv("WAVESHARE_OLED_TEMP_SOURCE", "weather1").strip().lower(
 TEMP_COMMAND = os.getenv("WAVESHARE_OLED_TEMP_COMMAND", "")
 TEMP_UNIT = os.getenv("WAVESHARE_OLED_TEMP_UNIT", "C").strip().upper()
 REFRESH_SECONDS = max(1, _env_int("WAVESHARE_OLED_REFRESH_SECONDS", 5))
+SWAP_INTERVAL_MIN_SECONDS = max(1, _env_int("WAVESHARE_OLED_SWAP_INTERVAL_MIN_SECONDS", 60))
+SWAP_INTERVAL_MAX_SECONDS = max(
+    SWAP_INTERVAL_MIN_SECONDS,
+    _env_int("WAVESHARE_OLED_SWAP_INTERVAL_MAX_SECONDS", 240),
+)
 FADE_STEPS = max(1, _env_int("WAVESHARE_OLED_FADE_STEPS", 8))
 FADE_STEP_MS = max(5, _env_int("WAVESHARE_OLED_FADE_STEP_MS", 35))
 
@@ -195,7 +201,7 @@ def read_temperature() -> str:
     elif TEMP_SOURCE in {"weather", "weather1"}:
         value_f = _read_weather1_temp_f()
         if value_f is None:
-            value_c = _read_cpu_temp_c()
+            return "--°F"
     else:
         value_c = _read_cpu_temp_c()
 
@@ -203,9 +209,6 @@ def read_temperature() -> str:
         return "--°"
 
     if value_f is not None:
-        if TEMP_UNIT == "C":
-            value_c = (value_f - 32) * 5 / 9
-            return f"{value_c:.1f}°C"
         return f"{round(value_f)}°F"
 
     if TEMP_UNIT == "F":
@@ -216,6 +219,10 @@ def read_temperature() -> str:
 
 def current_time_12h() -> str:
     return datetime.now().strftime("%I:%M %p").lstrip("0")
+
+
+def random_swap_interval_seconds() -> int:
+    return random.randint(SWAP_INTERVAL_MIN_SECONDS, SWAP_INTERVAL_MAX_SECONDS)
 
 
 @lru_cache(maxsize=96)
@@ -298,11 +305,17 @@ def main() -> int:
     time_display.clear()
 
     show_temp_on_left = True
+    next_swap_at = time.monotonic() + random_swap_interval_seconds()
     while True:
         temp_text = read_temperature()
         time_text = current_time_12h()
 
-        temp_image = render_centered_text(OLED_WIDTH, OLED_HEIGHT, temp_text, title="Temp")
+        temp_image = render_centered_text(
+            OLED_WIDTH,
+            OLED_HEIGHT,
+            temp_text,
+            title="Outdoor Temp",
+        )
         time_image = render_centered_text(OLED_WIDTH, OLED_HEIGHT, time_text, title="Time")
 
         left_image, right_image = (
@@ -310,7 +323,9 @@ def main() -> int:
         )
         fade_transition(temp_display, left_image)
         fade_transition(time_display, right_image)
-        show_temp_on_left = not show_temp_on_left
+        if time.monotonic() >= next_swap_at:
+            show_temp_on_left = not show_temp_on_left
+            next_swap_at = time.monotonic() + random_swap_interval_seconds()
 
         time.sleep(REFRESH_SECONDS)
 
