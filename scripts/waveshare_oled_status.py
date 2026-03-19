@@ -15,6 +15,7 @@ import signal
 import subprocess
 import time
 import logging
+import json
 import importlib.util
 import importlib
 import sys
@@ -57,11 +58,17 @@ SWAP_INTERVAL_MAX_SECONDS = max(
 )
 FADE_STEPS = max(1, _env_int("WAVESHARE_OLED_FADE_STEPS", 8))
 FADE_STEP_MS = max(5, _env_int("WAVESHARE_OLED_FADE_STEP_MS", 35))
+WAIT_FOR_WEATHER2 = os.getenv("WAVESHARE_OLED_WAIT_FOR_WEATHER2", "1").strip().lower() not in {
+    "0",
+    "false",
+    "no",
+}
 
 
 LOGGER = logging.getLogger("waveshare_oled_status")
 _STOP_EVENT = Event()
 _LAST_WEATHER_TEMP_F: float | None = None
+_WEATHER2_RENDERED = False
 
 
 class SSD1306Display:
@@ -245,6 +252,37 @@ def _read_weather1_temp_f() -> float | None:
         return _LAST_WEATHER_TEMP_F
 
 
+def _display_status_path() -> Path:
+    override = os.getenv("WAVESHARE_OLED_DISPLAY_STATUS_PATH")
+    if override:
+        return Path(override).expanduser()
+
+    repo_root = Path(__file__).resolve().parents[1]
+    screenshot_dir = os.getenv("SCREENSHOT_DIR", str(repo_root / "screenshots"))
+    return Path(screenshot_dir).expanduser() / "current" / "display_status.json"
+
+
+def _weather2_screen_has_rendered() -> bool:
+    global _WEATHER2_RENDERED
+    if _WEATHER2_RENDERED:
+        return True
+    if TEMP_SOURCE not in {"weather", "weather1"}:
+        return True
+    if not WAIT_FOR_WEATHER2:
+        return True
+
+    status_path = _display_status_path()
+    try:
+        payload = json.loads(status_path.read_text(encoding="utf-8"))
+    except Exception:
+        return False
+
+    if str(payload.get("screen_id", "")).strip().lower() == "weather2":
+        _WEATHER2_RENDERED = True
+        return True
+    return False
+
+
 def read_temperature() -> str:
     value_c: float | None = None
     value_f: float | None = None
@@ -419,6 +457,10 @@ def main() -> int:
     next_swap_at = time.monotonic() + random_swap_interval_seconds()
     try:
         while not _STOP_EVENT.is_set():
+            if not _weather2_screen_has_rendered():
+                _STOP_EVENT.wait(REFRESH_SECONDS)
+                continue
+
             temp_text = read_temperature()
             time_text = current_time_12h()
             time_value_font_size = _best_value_font_size(
