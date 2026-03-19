@@ -153,17 +153,30 @@ def _fetch_json(params: dict[str, Any]) -> dict[str, Any]:
 
 
 def _extract_seed(competitor: dict[str, Any]) -> str:
+    def _parse_seed_value(value: Any) -> str:
+        if isinstance(value, bool):
+            return ""
+        if isinstance(value, int):
+            return str(value)
+        if isinstance(value, str):
+            trimmed = value.strip()
+            return trimmed if trimmed.isdigit() else ""
+        if isinstance(value, dict):
+            for nested_key in ("seed", "current", "value", "displayValue", "rank"):
+                parsed = _parse_seed_value(value.get(nested_key))
+                if parsed:
+                    return parsed
+        return ""
+
     # `curatedRank.current` is frequently 99 for unranked teams, which should
     # not be shown as a tournament seed.
-    for key in ("seed", "tournamentSeed"):
-        val = competitor.get(key)
-        if isinstance(val, dict):
-            for kk in ("seed", "current"):
-                vv = val.get(kk)
-                if isinstance(vv, (int, str)) and str(vv).strip().isdigit():
-                    return str(vv).strip()
-        elif isinstance(val, (int, str)) and str(val).strip().isdigit():
-            return str(val).strip()
+    for source in (competitor, competitor.get("team")):
+        if not isinstance(source, dict):
+            continue
+        for key in ("seed", "tournamentSeed", "playoffSeed"):
+            parsed = _parse_seed_value(source.get(key))
+            if parsed:
+                return parsed
     return ""
 
 
@@ -390,6 +403,8 @@ def _team_logo_url(team: dict) -> str:
 
 def _seed_text_for_display(team: dict[str, Any]) -> str:
     seed = _extract_seed(team)
+    if _scoreboard_mode() == MODE_TOURNAMENT:
+        return seed
     rank = _extract_rank(team)
     if seed and rank is not None and seed == str(rank):
         return ""
