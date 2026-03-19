@@ -57,8 +57,8 @@ def _parse_i2c_bus_candidates() -> Tuple[int, ...]:
 
     # Keep a universal default candidate set that covers common Pi setups:
     # - 1/2 for standard headers and legacy overlays
-    # - 13/14/15 for HyperPixel accessory headers.
-    raw = os.environ.get("INSIDE_I2C_BUSES", "1,2,13,14,15")
+    # - 10/11/13/14/15 for HyperPixel accessory headers.
+    raw = os.environ.get("INSIDE_I2C_BUSES", "1,2,10,11,13,14,15")
     buses: List[int] = []
     seen: Set[int] = set()
     for token in raw.split(","):
@@ -76,7 +76,7 @@ def _parse_i2c_bus_candidates() -> Tuple[int, ...]:
         buses.append(bus_num)
 
     if not buses:
-        return (1, 2, 13, 14, 15)
+        return (1, 2, 10, 11, 13, 14, 15)
     return tuple(buses)
 
 
@@ -110,6 +110,17 @@ def _i2cdetect_bus_has_known_sensor(bus_num: int) -> bool:
     return False
 
 
+def _rank_i2c_buses(configured_buses: Sequence[int]) -> Tuple[int, ...]:
+    """Return configured buses ordered by detected supported sensor addresses."""
+
+    detected_sensor_buses = [bus for bus in configured_buses if _i2cdetect_bus_has_known_sensor(bus)]
+    ranked: List[int] = list(detected_sensor_buses)
+    for bus_num in configured_buses:
+        if bus_num not in ranked:
+            ranked.append(bus_num)
+    return tuple(ranked)
+
+
 def _resolve_i2c_bus_number(i2c: Any) -> Optional[int]:
     """Best-effort lookup for the Linux bus number behind a Blinka I2C object."""
 
@@ -135,14 +146,7 @@ def _get_smbus_candidates(i2c: Any) -> Tuple[int, ...]:
     if primary_bus is not None:
         candidates.append(primary_bus)
 
-    configured_buses = _parse_i2c_bus_candidates()
-    detected_sensor_buses = [bus for bus in configured_buses if _i2cdetect_bus_has_known_sensor(bus)]
-
-    for bus_num in detected_sensor_buses:
-        if bus_num not in candidates:
-            candidates.append(bus_num)
-
-    for bus_num in configured_buses:
+    for bus_num in _rank_i2c_buses(_parse_i2c_bus_candidates()):
         if bus_num not in candidates:
             candidates.append(bus_num)
 
@@ -1210,7 +1214,7 @@ def _probe_sensor() -> Tuple[Optional[str], Optional[Callable[[], SensorReadings
             logging.warning("draw_inside: failed to initialise Blinka I2C on known pin mappings")
 
         if i2c is None:
-            bus_candidates = _parse_i2c_bus_candidates()
+            bus_candidates = _rank_i2c_buses(_parse_i2c_bus_candidates())
             try:
                 from adafruit_extended_bus import ExtendedI2C  # type: ignore
             except Exception as exc:

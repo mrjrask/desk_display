@@ -94,7 +94,7 @@ def test_i2c_pin_pairs_include_hyperpixel_bus_10_mapping():
 
 def test_parse_i2c_bus_candidates_defaults_include_hyperpixel_buses(monkeypatch):
     monkeypatch.delenv("INSIDE_I2C_BUSES", raising=False)
-    assert _parse_i2c_bus_candidates() == (1, 2, 13, 14, 15)
+    assert _parse_i2c_bus_candidates() == (1, 2, 10, 11, 13, 14, 15)
 
 
 def test_get_smbus_candidates_prioritizes_i2cdetect_hits(monkeypatch):
@@ -109,6 +109,26 @@ def test_get_smbus_candidates_prioritizes_i2cdetect_hits(monkeypatch):
     )
 
     assert draw_inside_module._get_smbus_candidates(None) == (2, 14, 1, 13, 15)
+
+
+def test_rank_i2c_buses_prioritizes_i2cdetect_hits(monkeypatch):
+    import screens.draw_inside as draw_inside_module
+
+    monkeypatch.setattr(
+        draw_inside_module,
+        "_i2cdetect_bus_has_known_sensor",
+        lambda bus_num: bus_num in (11, 14),
+    )
+
+    assert draw_inside_module._rank_i2c_buses((1, 2, 10, 11, 13, 14, 15)) == (
+        11,
+        14,
+        1,
+        2,
+        10,
+        13,
+        15,
+    )
 
 
 def test_probe_sensor_uses_pimoroni_bme68x_without_blinka(monkeypatch):
