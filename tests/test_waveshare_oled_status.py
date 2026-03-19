@@ -6,6 +6,7 @@ import importlib.util
 import sys
 import types
 from pathlib import Path
+import json
 
 
 SCRIPT_PATH = Path(__file__).resolve().parents[1] / "scripts" / "waveshare_oled_status.py"
@@ -178,3 +179,42 @@ def test_read_temperature_uses_last_known_weather_value(monkeypatch):
     monkeypatch.setattr(mod, "_read_weather1_temp_f", lambda: 70.4)
 
     assert mod.read_temperature() == "70°F"
+
+
+def test_weather2_gate_uses_status_path_override(monkeypatch, tmp_path):
+    mod = _load_module()
+    status_path = tmp_path / "status.json"
+    status_path.write_text(json.dumps({"screen_id": "weather2"}), encoding="utf-8")
+
+    monkeypatch.setattr(mod, "_WEATHER2_RENDERED", False)
+    monkeypatch.setattr(mod, "TEMP_SOURCE", "weather1")
+    monkeypatch.setattr(mod, "WAIT_FOR_WEATHER2", True)
+    monkeypatch.setenv("WAVESHARE_OLED_DISPLAY_STATUS_PATH", str(status_path))
+
+    assert mod._weather2_screen_has_rendered() is True
+    assert mod._WEATHER2_RENDERED is True
+
+
+def test_weather2_gate_waits_until_weather2(monkeypatch, tmp_path):
+    mod = _load_module()
+    screenshot_dir = tmp_path / "shots"
+    status_path = screenshot_dir / "current" / "display_status.json"
+    status_path.parent.mkdir(parents=True, exist_ok=True)
+    status_path.write_text(json.dumps({"screen_id": "weather1"}), encoding="utf-8")
+
+    monkeypatch.setattr(mod, "_WEATHER2_RENDERED", False)
+    monkeypatch.setattr(mod, "TEMP_SOURCE", "weather1")
+    monkeypatch.setattr(mod, "WAIT_FOR_WEATHER2", True)
+    monkeypatch.setenv("SCREENSHOT_DIR", str(screenshot_dir))
+    monkeypatch.delenv("WAVESHARE_OLED_DISPLAY_STATUS_PATH", raising=False)
+
+    assert mod._weather2_screen_has_rendered() is False
+
+
+def test_weather2_gate_disabled_for_non_weather_sources(monkeypatch):
+    mod = _load_module()
+    monkeypatch.setattr(mod, "_WEATHER2_RENDERED", False)
+    monkeypatch.setattr(mod, "TEMP_SOURCE", "cpu")
+    monkeypatch.setattr(mod, "WAIT_FOR_WEATHER2", True)
+
+    assert mod._weather2_screen_has_rendered() is True
