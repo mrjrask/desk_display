@@ -1,4 +1,6 @@
 import math
+import sys
+import types
 
 from screens.draw_inside import (
     _build_metric_entries,
@@ -157,6 +159,49 @@ def test_probe_sensor_attempts_smbus_probes_without_blinka(monkeypatch):
 
     assert provider == "Pimoroni BME680"
     assert probe_reader is reader
+
+
+def test_probe_pimoroni_bme680_reads_chip_id_from_each_bus(monkeypatch):
+    import importlib
+    import screens.draw_inside as draw_inside_module
+
+    class FakeBus:
+        def __init__(self, bus_num):
+            self.bus_num = bus_num
+
+        def read_byte_data(self, _addr, _register):
+            if self.bus_num == 15:
+                return 0x61
+            return 0x58
+
+    class FakeSensor:
+        def __init__(self, _addr, i2c_device):
+            self._i2c_device = i2c_device
+            self._variant = None
+
+        def get_sensor_data(self):
+            return False
+
+    fake_driver = types.SimpleNamespace(
+        CHIP_ID=0x61,
+        I2C_ADDR_PRIMARY=0x76,
+        I2C_ADDR_SECONDARY=0x77,
+        BME680=FakeSensor,
+    )
+
+    monkeypatch.setattr(
+        importlib,
+        "import_module",
+        lambda name: fake_driver if name in ("pimoroni_bme680", "bme680") else None,
+    )
+    monkeypatch.setattr(draw_inside_module, "_resolve_i2c_bus_number", lambda _i2c: 13)
+    monkeypatch.setattr(draw_inside_module, "_parse_i2c_bus_candidates", lambda: (13, 15))
+    monkeypatch.setattr(draw_inside_module, "_read_chip_id", lambda _i2c, _addr: 0x58)
+    monkeypatch.setitem(sys.modules, "smbus2", types.SimpleNamespace(SMBus=FakeBus))
+
+    provider, _reader = draw_inside_module._probe_pimoroni_bme680(object(), {0x76})
+
+    assert provider == "Pimoroni BME680 (bus 15, 0x76)"
 
 
 def test_draw_inside_returns_placeholder_image_when_sensor_unavailable(monkeypatch):
