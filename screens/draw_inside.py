@@ -49,15 +49,16 @@ SensorProbeName = str
 
 _sensor_probe_cache_lock = threading.Lock()
 _sensor_probe_cache: Optional[Tuple[Optional[str], Optional[Callable[[], SensorReadings]]]] = None
+_KNOWN_SENSOR_I2C_ADDRESSES: Set[int] = {0x44, 0x45, 0x76, 0x77}
 
 
 def _parse_i2c_bus_candidates() -> Tuple[int, ...]:
     """Return preferred Linux I2C bus numbers for fallback probing."""
 
-    # HyperPixel 4 / HyperPixel 4 Square accessory headers can surface on
-    # Linux I2C bus 13, 14, or 15 depending on kernel/overlay revisions.
-    # Probe those buses by default unless callers override INSIDE_I2C_BUSES.
-    raw = os.environ.get("INSIDE_I2C_BUSES", "13,14,15")
+    # Keep a universal default candidate set that covers common Pi setups:
+    # - 1/2 for standard headers and legacy overlays
+    # - 13/14/15 for HyperPixel accessory headers.
+    raw = os.environ.get("INSIDE_I2C_BUSES", "1,2,13,14,15")
     buses: List[int] = []
     seen: Set[int] = set()
     for token in raw.split(","):
@@ -75,8 +76,38 @@ def _parse_i2c_bus_candidates() -> Tuple[int, ...]:
         buses.append(bus_num)
 
     if not buses:
-        return (13, 14, 15)
+        return (1, 2, 13, 14, 15)
     return tuple(buses)
+
+
+def _i2cdetect_bus_has_known_sensor(bus_num: int) -> bool:
+    """Return True when `i2cdetect` output indicates a supported sensor address."""
+
+    try:
+        result = subprocess.run(
+            ["i2cdetect", "-y", str(bus_num)],
+            check=False,
+            capture_output=True,
+            text=True,
+            timeout=1.5,
+        )
+    except (FileNotFoundError, subprocess.SubprocessError, OSError):
+        return False
+
+    if result.returncode != 0:
+        return False
+
+    for token in result.stdout.split():
+        token = token.strip().lower()
+        if len(token) != 2:
+            continue
+        try:
+            addr = int(token, 16)
+        except ValueError:
+            continue
+        if addr in _KNOWN_SENSOR_I2C_ADDRESSES:
+            return True
+    return False
 
 
 def _resolve_i2c_bus_number(i2c: Any) -> Optional[int]:
@@ -104,7 +135,14 @@ def _get_smbus_candidates(i2c: Any) -> Tuple[int, ...]:
     if primary_bus is not None:
         candidates.append(primary_bus)
 
-    for bus_num in _parse_i2c_bus_candidates():
+    configured_buses = _parse_i2c_bus_candidates()
+    detected_sensor_buses = [bus for bus in configured_buses if _i2cdetect_bus_has_known_sensor(bus)]
+
+    for bus_num in detected_sensor_buses:
+        if bus_num not in candidates:
+            candidates.append(bus_num)
+
+    for bus_num in configured_buses:
         if bus_num not in candidates:
             candidates.append(bus_num)
 
