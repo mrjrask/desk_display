@@ -723,6 +723,12 @@ def _clamp_led_level(value: float) -> float:
     return max(0.0, min(1.0, value))
 
 
+def _normalized_led_to_driver_channel(value: float) -> int:
+    """Convert a normalized LED value to the Display HAT Mini 8-bit channel range."""
+
+    return int(round(_clamp_led_level(value) * 255))
+
+
 def _get_led_indicator_level() -> float:
     """Return the normalized indicator LED level from environment config."""
 
@@ -1238,9 +1244,9 @@ class Display:
                             or self._display_hat_mini_indicator_border
                         ) and any(self._led_color):
                             old_display.set_led(
-                                r=self._led_color[0],
-                                g=self._led_color[1],
-                                b=self._led_color[2],
+                                r=_normalized_led_to_driver_channel(self._led_color[0]),
+                                g=_normalized_led_to_driver_channel(self._led_color[1]),
+                                b=_normalized_led_to_driver_channel(self._led_color[2]),
                             )
                 except Exception as restore_exc:  # pragma: no cover - hardware import
                     logging.debug("Failed to restore previous Display HAT Mini state after reinit failure: %s", restore_exc)
@@ -1282,9 +1288,9 @@ class Display:
                 try:
                     with self._display_io_lock:
                         new_display.set_led(
-                            r=self._led_color[0],
-                            g=self._led_color[1],
-                            b=self._led_color[2],
+                            r=_normalized_led_to_driver_channel(self._led_color[0]),
+                            g=_normalized_led_to_driver_channel(self._led_color[1]),
+                            b=_normalized_led_to_driver_channel(self._led_color[2]),
                         )
                 except Exception as exc:  # pragma: no cover - hardware import
                     logging.debug("Failed to restore LED state after display reinit: %s", exc)
@@ -1432,7 +1438,11 @@ class Display:
             return
         try:  # pragma: no cover - hardware import
             with self._display_io_lock:
-                self._display.set_led(r=r, g=g, b=b)
+                self._display.set_led(
+                    r=_normalized_led_to_driver_channel(r),
+                    g=_normalized_led_to_driver_channel(g),
+                    b=_normalized_led_to_driver_channel(b),
+                )
         except Exception as exc:  # pragma: no cover - hardware import
             logging.debug("Display LED update failed: %s", exc)
 

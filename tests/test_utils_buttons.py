@@ -162,6 +162,7 @@ def test_display_hat_mini_indicator_border_renders_led_color(monkeypatch):
 
     display = utils.Display()
     display._buffer = utils.Image.new("RGB", (display.width, display.height), "black")
+    display._display_hat_mini_indicator_border = True
 
     display.set_led(r=0.0, g=0.0, b=utils.LED_INDICATOR_LEVEL)
 
@@ -176,6 +177,7 @@ def test_display_hat_mini_indicator_border_renders_led_color_when_rotated(monkey
 
     display = utils.Display()
     display._buffer = utils.Image.new("RGB", (display.width, display.height), "black")
+    display._display_hat_mini_indicator_border = True
 
     display.set_led(r=0.0, g=0.0, b=utils.LED_INDICATOR_LEVEL)
 
@@ -236,11 +238,12 @@ def test_display_hat_mini_led_is_still_updated_when_indicator_border_is_enabled(
     display = utils.Display()
     fake_display = _FakeHardwareDisplay()
     display._display = fake_display
+    display._display_hat_mini_indicator_border = True
 
     display.set_led(r=0.1, g=0.2, b=0.3)
 
     assert fake_display.called is True
-    assert fake_display.color == {"r": 0.1, "g": 0.2, "b": 0.3}
+    assert fake_display.color == {"r": 26, "g": 51, "b": 76}
 
 
 def test_image_always_applies_bottom_safe_buffer(monkeypatch):
@@ -531,6 +534,12 @@ def test_set_led_clamps_channels_to_normalized_range():
 def test_indicator_channel_to_pixel_clamps_out_of_range_values():
     assert utils.Display._indicator_channel_to_pixel(5.0) == 255
     assert utils.Display._indicator_channel_to_pixel(-0.2) == 0
+
+
+def test_normalized_led_to_driver_channel_scales_to_8_bit():
+    assert utils._normalized_led_to_driver_channel(0.0) == 0
+    assert utils._normalized_led_to_driver_channel(0.5) == 128
+    assert utils._normalized_led_to_driver_channel(1.0) == 255
 
 
 def test_get_led_indicator_level_from_env(monkeypatch):
