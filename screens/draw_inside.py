@@ -18,6 +18,7 @@ import json
 import subprocess
 import sys
 import threading
+import re
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Sequence, Set, Tuple
 from datetime import datetime
@@ -50,6 +51,7 @@ SensorProbeName = str
 _sensor_probe_cache_lock = threading.Lock()
 _sensor_probe_cache: Optional[Tuple[Optional[str], Optional[Callable[[], SensorReadings]]]] = None
 _KNOWN_SENSOR_I2C_ADDRESSES: Set[int] = {0x44, 0x45, 0x76, 0x77}
+_MAX_REASONABLE_I2C_HITS = 16
 
 
 def _parse_i2c_bus_candidates() -> Tuple[int, ...]:
@@ -97,17 +99,40 @@ def _i2cdetect_bus_has_known_sensor(bus_num: int) -> bool:
     if result.returncode != 0:
         return False
 
-    for token in result.stdout.split():
-        token = token.strip().lower()
-        if len(token) != 2:
-            continue
-        try:
-            addr = int(token, 16)
-        except ValueError:
-            continue
+    addresses = _parse_i2cdetect_addresses(result.stdout)
+    if len(addresses) > _MAX_REASONABLE_I2C_HITS:
+        logging.debug(
+            "draw_inside: ignoring noisy i2cdetect bus %s (%s responding addresses)",
+            bus_num,
+            len(addresses),
+        )
+        return False
+
+    for addr in addresses:
         if addr in _KNOWN_SENSOR_I2C_ADDRESSES:
             return True
     return False
+
+
+def _parse_i2cdetect_addresses(output: str) -> Set[int]:
+    """Extract responding I2C addresses from `i2cdetect` table output."""
+
+    addresses: Set[int] = set()
+    for line in output.splitlines():
+        match = re.match(r"^\s*([0-7][0-9a-fA-F]):\s+(.*)$", line)
+        if not match:
+            continue
+        row_base = int(match.group(1), 16)
+        cells = match.group(2).split()
+        for idx, cell in enumerate(cells):
+            token = cell.strip().lower()
+            if token in {"--", "uu"}:
+                if token == "uu":
+                    addresses.add(row_base + idx)
+                continue
+            if re.fullmatch(r"[0-9a-f]{2}", token):
+                addresses.add(int(token, 16))
+    return addresses
 
 
 def _rank_i2c_buses(configured_buses: Sequence[int]) -> Tuple[int, ...]:

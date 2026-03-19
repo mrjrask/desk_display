@@ -131,6 +131,44 @@ def test_rank_i2c_buses_prioritizes_i2cdetect_hits(monkeypatch):
     )
 
 
+def test_parse_i2cdetect_addresses_ignores_headers_and_extracts_hits():
+    import screens.draw_inside as draw_inside_module
+
+    output = """
+         0  1  2  3  4  5  6  7  8  9  a  b  c  d  e  f
+    50: -- -- -- -- -- -- -- -- -- -- -- -- -- UU -- --
+    60: -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- --
+    70: -- -- -- -- -- -- 76 --
+    """
+
+    assert draw_inside_module._parse_i2cdetect_addresses(output) == {0x5D, 0x76}
+
+
+def test_i2cdetect_bus_has_known_sensor_ignores_noisy_bus(monkeypatch):
+    import subprocess
+    import screens.draw_inside as draw_inside_module
+
+    noisy_output = """
+         0  1  2  3  4  5  6  7  8  9  a  b  c  d  e  f
+    40: 40 41 42 43 44 45 46 47 48 49 4a 4b 4c 4d 4e 4f
+    50: 50 51 52 53 54 55 56 57 58 59 5a 5b 5c 5d 5e 5f
+    60: 60 61 62 63 64 65 66 67 68 69 6a 6b 6c 6d 6e 6f
+    70: 70 71 72 73 74 75 76 77
+    """
+    monkeypatch.setattr(
+        draw_inside_module.subprocess,
+        "run",
+        lambda *_args, **_kwargs: subprocess.CompletedProcess(
+            args=[],
+            returncode=0,
+            stdout=noisy_output,
+            stderr="",
+        ),
+    )
+
+    assert draw_inside_module._i2cdetect_bus_has_known_sensor(13) is False
+
+
 def test_probe_sensor_uses_pimoroni_bme68x_without_blinka(monkeypatch):
     import screens.draw_inside as draw_inside_module
 
