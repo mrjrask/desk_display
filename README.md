@@ -35,7 +35,7 @@ It supports:
 - A **screen registry/catalog** with weather, sports, sensor, and utility screens.
 - A **Flask + Waitress configuration UI** (`config_ui.py`) for managing screen order/frequency and importing/exporting settings.
 - **Installer scripts** for Display HAT Mini, Waveshare OLED/LCD HAT (A), and kernel-display workflows.
-- Optional **Wi-Fi health monitoring/recovery** and **AirPlay takeover integration**.
+- Optional **Wi-Fi health monitoring/recovery**.
 
 ---
 
@@ -58,8 +58,7 @@ sudo apt-get install -y \
   build-essential libjpeg-dev libopenblas0 libopenblas-dev swig liblgpio-dev \
   libopenjp2-7-dev libtiff5-dev libcairo2-dev libpango1.0-dev \
   libgdk-pixbuf-2.0-dev libffi-dev network-manager wireless-tools iproute2 \
-  i2c-tools fonts-dejavu-core fonts-noto-color-emoji libgl1 libx264-dev ffmpeg git \
-  avahi-daemon avahi-utils uxplay
+  i2c-tools fonts-dejavu-core fonts-noto-color-emoji libgl1 libx264-dev ffmpeg git
 ```
 
 > Debian Trixie uses `libgdk-pixbuf-2.0-dev` (not the older `libgdk-pixbuf2.0-dev`).
@@ -339,38 +338,16 @@ SSH helper:
 ./scripts/ssh_kernel_display.sh stop
 ```
 
-### AirPlay takeover (optional)
-
-Configure one of:
-
-```bash
-DESK_DISPLAY_AIRPLAY_PASSWORD=your-password
-# or
-DESK_DISPLAY_AIRPLAY_PIN=1234
-```
-
-Then run dependency/service installer:
-
-```bash
-./scripts/update_airplay_dependencies.sh
-```
-
-Disable always-on mode:
-
-```bash
-DESK_DISPLAY_AIRPLAY_ALWAYS_ON=0
-```
-
-Manual takeover mode:
-
-```bash
-./scripts/airplay_mode.sh
-```
-
 Uninstall helper:
 
 ```bash
 ./scripts/uninstall.sh
+```
+
+AirPlay cleanup helper (removes legacy AirPlay service/launchers/remnants from existing installs):
+
+```bash
+./scripts/uninstall_airplay.sh
 ```
 
 ---
