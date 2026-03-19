@@ -141,3 +141,40 @@ def test_read_weather1_temp_supports_legacy_get_weather_data(monkeypatch):
     monkeypatch.setitem(sys.modules, "data_fetch", fake)
 
     assert mod._read_weather1_temp_f() == 71.0
+
+
+def test_read_weather1_temp_prefers_force_refresh(monkeypatch):
+    mod = _load_module()
+    calls = []
+
+    fake = types.ModuleType("data_fetch")
+
+    def _fetch_weather(*, force_refresh=False):
+        calls.append(force_refresh)
+        return {"current": {"temp": 67.9}}
+
+    fake.fetch_weather = _fetch_weather
+    monkeypatch.setitem(sys.modules, "data_fetch", fake)
+
+    assert mod._read_weather1_temp_f() == 67.9
+    assert calls == [True]
+
+
+def test_read_weather1_temp_returns_last_known_value_when_fetch_fails(monkeypatch):
+    mod = _load_module()
+    mod._LAST_WEATHER_TEMP_F = 72.2
+
+    fake = types.ModuleType("data_fetch")
+    fake.fetch_weather = lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("boom"))
+    monkeypatch.setitem(sys.modules, "data_fetch", fake)
+
+    assert mod._read_weather1_temp_f() == 72.2
+
+
+def test_read_temperature_uses_last_known_weather_value(monkeypatch):
+    mod = _load_module()
+
+    monkeypatch.setattr(mod, "TEMP_SOURCE", "weather1")
+    monkeypatch.setattr(mod, "_read_weather1_temp_f", lambda: 70.4)
+
+    assert mod.read_temperature() == "70°F"
