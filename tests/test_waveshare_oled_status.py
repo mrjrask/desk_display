@@ -121,3 +121,23 @@ def test_import_uses_smbus2_when_smbus_missing():
         builtins.__import__ = original_import
 
     assert mod.SMBus is _FakeSMBus
+
+
+def test_read_weather1_temp_uses_fetch_weather(monkeypatch):
+    mod = _load_module()
+
+    fake = types.ModuleType("data_fetch")
+    fake.fetch_weather = lambda: {"current": {"temp": 68.4}}
+    monkeypatch.setitem(sys.modules, "data_fetch", fake)
+
+    assert mod._read_weather1_temp_f() == 68.4
+
+
+def test_read_weather1_temp_supports_legacy_get_weather_data(monkeypatch):
+    mod = _load_module()
+
+    fake = types.ModuleType("data_fetch")
+    fake.get_weather_data = lambda: {"current": {"temp": "71"}}
+    monkeypatch.setitem(sys.modules, "data_fetch", fake)
+
+    assert mod._read_weather1_temp_f() == 71.0
