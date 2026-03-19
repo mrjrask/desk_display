@@ -2,7 +2,7 @@
 """Render simple status content on the Waveshare OLED/LCD HAT (A) OLED displays.
 
 Default behavior:
-- Left OLED (0x3c): current Weather 1 temperature (fallback CPU temperature)
+- Left OLED (0x3c): current Weather 1 temperature
 - Right OLED (0x3d): local time in 12-hour format, no leading zero
 """
 
@@ -15,8 +15,12 @@ import signal
 import subprocess
 import time
 import logging
+import importlib.util
+import importlib
+import sys
 from functools import lru_cache
 from datetime import datetime
+from pathlib import Path
 from threading import Event
 
 from PIL import Image, ImageDraw, ImageFont
@@ -57,6 +61,7 @@ FADE_STEP_MS = max(5, _env_int("WAVESHARE_OLED_FADE_STEP_MS", 35))
 
 LOGGER = logging.getLogger("waveshare_oled_status")
 _STOP_EVENT = Event()
+_LAST_WEATHER_TEMP_F: float | None = None
 
 
 class SSD1306Display:
@@ -174,32 +179,70 @@ def _read_cpu_temp_c() -> float | None:
 
 
 def _read_weather1_temp_f() -> float | None:
-    try:
-        from data_fetch import fetch_weather
-    except Exception:
+    global _LAST_WEATHER_TEMP_F
+
+    def _resolve_fetch_weather():
         try:
-            # Backward compatibility for older data_fetch modules.
-            from data_fetch import get_weather_data as fetch_weather
+            module = importlib.import_module("data_fetch")
+            fetch_weather = getattr(module, "fetch_weather", None)
+            if callable(fetch_weather):
+                return fetch_weather
+            legacy = getattr(module, "get_weather_data", None)
+            if callable(legacy):
+                return legacy
+        except Exception:
+            pass
+
+        repo_root = Path(__file__).resolve().parents[1]
+        module_path = repo_root / "data_fetch.py"
+        if not module_path.exists():
+            return None
+
+        spec = importlib.util.spec_from_file_location("data_fetch", module_path)
+        if spec is None or spec.loader is None:
+            return None
+
+        module = importlib.util.module_from_spec(spec)
+        sys.modules.setdefault("data_fetch", module)
+        try:
+            spec.loader.exec_module(module)
         except Exception:
             return None
 
+        fetch_weather = getattr(module, "fetch_weather", None)
+        if callable(fetch_weather):
+            return fetch_weather
+        legacy = getattr(module, "get_weather_data", None)
+        return legacy if callable(legacy) else None
+
+    fetch_weather = _resolve_fetch_weather()
+    if fetch_weather is None:
+        return _LAST_WEATHER_TEMP_F
+
     try:
-        weather = fetch_weather()
+        weather = fetch_weather(force_refresh=True)
+    except TypeError:
+        # Backward compatibility for older data_fetch modules.
+        try:
+            weather = fetch_weather()
+        except Exception:
+            return _LAST_WEATHER_TEMP_F
     except Exception:
-        return None
+        return _LAST_WEATHER_TEMP_F
 
     if not isinstance(weather, dict):
-        return None
+        return _LAST_WEATHER_TEMP_F
 
     current = weather.get("current")
     if not isinstance(current, dict):
-        return None
+        return _LAST_WEATHER_TEMP_F
 
     temp_f = current.get("temp")
     try:
-        return float(temp_f)
+        _LAST_WEATHER_TEMP_F = float(temp_f)
+        return _LAST_WEATHER_TEMP_F
     except (TypeError, ValueError):
-        return None
+        return _LAST_WEATHER_TEMP_F
 
 
 def read_temperature() -> str:
@@ -214,13 +257,11 @@ def read_temperature() -> str:
             value_c = None
     elif TEMP_SOURCE in {"weather", "weather1"}:
         value_f = _read_weather1_temp_f()
-        if value_f is None:
-            return "--°F"
     else:
         value_c = _read_cpu_temp_c()
 
     if value_f is None and value_c is None:
-        return "--°"
+        return ""
 
     if value_f is not None:
         return f"{round(value_f)}°F"
