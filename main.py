@@ -698,6 +698,15 @@ def _wait_with_button_checks(duration: float) -> bool:
         return True
 
     end = time.monotonic() + duration
+    last_frame_id = None
+    can_poll_frame_id = hasattr(display, "frame_id")
+    can_refresh_display = hasattr(display, "show")
+    if can_poll_frame_id:
+        try:
+            last_frame_id = display.frame_id()
+        except Exception:
+            can_poll_frame_id = False
+
     while not _shutdown_event.is_set():
         if _manual_skip_event.is_set() or _skip_request_pending:
             _manual_skip_event.clear()
@@ -706,6 +715,19 @@ def _wait_with_button_checks(duration: float) -> bool:
         if _check_control_buttons():
             _manual_skip_event.clear()
             return True
+
+        if can_poll_frame_id and can_refresh_display:
+            try:
+                current_frame_id = display.frame_id()
+            except Exception:
+                can_poll_frame_id = False
+            else:
+                if current_frame_id != last_frame_id:
+                    try:
+                        display.show()
+                    except Exception:
+                        can_refresh_display = False
+                    last_frame_id = current_frame_id
 
         remaining = end - time.monotonic()
         if remaining <= 0:
