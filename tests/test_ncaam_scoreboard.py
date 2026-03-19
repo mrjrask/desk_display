@@ -30,9 +30,20 @@ def test_seed_text_for_display_keeps_tournament_seed():
     assert ncaam_scoreboard._seed_text_for_display(team) == "11"
 
 
+def test_seed_text_for_display_keeps_tournament_seed_when_rank_matches(monkeypatch):
+    monkeypatch.setattr(ncaam_scoreboard, "_scoreboard_mode", lambda: ncaam_scoreboard.MODE_TOURNAMENT)
+    team = {"seed": "9", "curatedRank": {"current": "9"}}
+    assert ncaam_scoreboard._seed_text_for_display(team) == "9"
+
+
 def test_extract_seed_ignores_curated_rank_placeholder():
     team = {"curatedRank": {"current": "99"}}
     assert ncaam_scoreboard._extract_seed(team) == ""
+
+
+def test_extract_seed_from_nested_team_blob():
+    team = {"team": {"tournamentSeed": {"value": "12"}}}
+    assert ncaam_scoreboard._extract_seed(team) == "12"
 
 
 def test_ncaam_v2_logo_height_is_capped_to_score_row(monkeypatch):
