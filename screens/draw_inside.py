@@ -18,6 +18,7 @@ import json
 import subprocess
 import sys
 import threading
+import re
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Sequence, Set, Tuple
 from datetime import datetime
@@ -50,6 +51,7 @@ SensorProbeName = str
 _sensor_probe_cache_lock = threading.Lock()
 _sensor_probe_cache: Optional[Tuple[Optional[str], Optional[Callable[[], SensorReadings]]]] = None
 _KNOWN_SENSOR_I2C_ADDRESSES: Set[int] = {0x44, 0x45, 0x76, 0x77}
+_MAX_REASONABLE_I2C_HITS = 16
 
 
 def _parse_i2c_bus_candidates() -> Tuple[int, ...]:
@@ -57,8 +59,8 @@ def _parse_i2c_bus_candidates() -> Tuple[int, ...]:
 
     # Keep a universal default candidate set that covers common Pi setups:
     # - 1/2 for standard headers and legacy overlays
-    # - 13/14/15 for HyperPixel accessory headers.
-    raw = os.environ.get("INSIDE_I2C_BUSES", "1,2,13,14,15")
+    # - 10/11/13/14/15 for HyperPixel accessory headers.
+    raw = os.environ.get("INSIDE_I2C_BUSES", "1,2,10,11,13,14,15")
     buses: List[int] = []
     seen: Set[int] = set()
     for token in raw.split(","):
@@ -76,7 +78,7 @@ def _parse_i2c_bus_candidates() -> Tuple[int, ...]:
         buses.append(bus_num)
 
     if not buses:
-        return (1, 2, 13, 14, 15)
+        return (1, 2, 10, 11, 13, 14, 15)
     return tuple(buses)
 
 
@@ -97,17 +99,51 @@ def _i2cdetect_bus_has_known_sensor(bus_num: int) -> bool:
     if result.returncode != 0:
         return False
 
-    for token in result.stdout.split():
-        token = token.strip().lower()
-        if len(token) != 2:
-            continue
-        try:
-            addr = int(token, 16)
-        except ValueError:
-            continue
+    addresses = _parse_i2cdetect_addresses(result.stdout)
+    if len(addresses) > _MAX_REASONABLE_I2C_HITS:
+        logging.debug(
+            "draw_inside: ignoring noisy i2cdetect bus %s (%s responding addresses)",
+            bus_num,
+            len(addresses),
+        )
+        return False
+
+    for addr in addresses:
         if addr in _KNOWN_SENSOR_I2C_ADDRESSES:
             return True
     return False
+
+
+def _parse_i2cdetect_addresses(output: str) -> Set[int]:
+    """Extract responding I2C addresses from `i2cdetect` table output."""
+
+    addresses: Set[int] = set()
+    for line in output.splitlines():
+        match = re.match(r"^\s*([0-7][0-9a-fA-F]):\s+(.*)$", line)
+        if not match:
+            continue
+        row_base = int(match.group(1), 16)
+        cells = match.group(2).split()
+        for idx, cell in enumerate(cells):
+            token = cell.strip().lower()
+            if token in {"--", "uu"}:
+                if token == "uu":
+                    addresses.add(row_base + idx)
+                continue
+            if re.fullmatch(r"[0-9a-f]{2}", token):
+                addresses.add(int(token, 16))
+    return addresses
+
+
+def _rank_i2c_buses(configured_buses: Sequence[int]) -> Tuple[int, ...]:
+    """Return configured buses ordered by detected supported sensor addresses."""
+
+    detected_sensor_buses = [bus for bus in configured_buses if _i2cdetect_bus_has_known_sensor(bus)]
+    ranked: List[int] = list(detected_sensor_buses)
+    for bus_num in configured_buses:
+        if bus_num not in ranked:
+            ranked.append(bus_num)
+    return tuple(ranked)
 
 
 def _resolve_i2c_bus_number(i2c: Any) -> Optional[int]:
@@ -131,20 +167,12 @@ def _get_smbus_candidates(i2c: Any) -> Tuple[int, ...]:
     """Return ordered Linux SMBus numbers to probe for Pimoroni drivers."""
 
     candidates: List[int] = []
+    for bus_num in _rank_i2c_buses(_parse_i2c_bus_candidates()):
+        if bus_num not in candidates:
+            candidates.append(bus_num)
     primary_bus = _resolve_i2c_bus_number(i2c) if i2c is not None else None
-    if primary_bus is not None:
+    if primary_bus is not None and primary_bus not in candidates:
         candidates.append(primary_bus)
-
-    configured_buses = _parse_i2c_bus_candidates()
-    detected_sensor_buses = [bus for bus in configured_buses if _i2cdetect_bus_has_known_sensor(bus)]
-
-    for bus_num in detected_sensor_buses:
-        if bus_num not in candidates:
-            candidates.append(bus_num)
-
-    for bus_num in configured_buses:
-        if bus_num not in candidates:
-            candidates.append(bus_num)
 
     if not candidates:
         return (1,)
@@ -1210,7 +1238,7 @@ def _probe_sensor() -> Tuple[Optional[str], Optional[Callable[[], SensorReadings
             logging.warning("draw_inside: failed to initialise Blinka I2C on known pin mappings")
 
         if i2c is None:
-            bus_candidates = _parse_i2c_bus_candidates()
+            bus_candidates = _rank_i2c_buses(_parse_i2c_bus_candidates())
             try:
                 from adafruit_extended_bus import ExtendedI2C  # type: ignore
             except Exception as exc:
