@@ -54,10 +54,10 @@ _sensor_probe_cache: Optional[Tuple[Optional[str], Optional[Callable[[], SensorR
 def _parse_i2c_bus_candidates() -> Tuple[int, ...]:
     """Return preferred Linux I2C bus numbers for fallback probing."""
 
-    # HyperPixel / HyperPixel 4 Square accessory I2C headers are exposed on
-    # Linux I2C bus 13. Keep that as the default probe target unless callers
-    # explicitly override INSIDE_I2C_BUSES.
-    raw = os.environ.get("INSIDE_I2C_BUSES", "13")
+    # HyperPixel 4 / HyperPixel 4 Square accessory headers can surface on
+    # Linux I2C bus 13, 14, or 15 depending on kernel/overlay revisions.
+    # Probe those buses by default unless callers override INSIDE_I2C_BUSES.
+    raw = os.environ.get("INSIDE_I2C_BUSES", "13,14,15")
     buses: List[int] = []
     seen: Set[int] = set()
     for token in raw.split(","):
@@ -75,7 +75,7 @@ def _parse_i2c_bus_candidates() -> Tuple[int, ...]:
         buses.append(bus_num)
 
     if not buses:
-        return (13,)
+        return (13, 14, 15)
     return tuple(buses)
 
 
