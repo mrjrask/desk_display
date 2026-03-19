@@ -532,7 +532,9 @@ def _probe_pimoroni_bme680(_i2c: Any, addresses: Set[int]) -> Optional[SensorPro
             continue
 
         for addr in candidate_addresses:
-            chip_id = _read_chip_id(_i2c, addr)
+            chip_id = None
+            if _i2c is not None and primary_bus is not None and bus_num == primary_bus:
+                chip_id = _read_chip_id(_i2c, addr)
             if chip_id is None:
                 try:
                     chip_id = int(bus.read_byte_data(addr, 0xD0))
