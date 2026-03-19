@@ -175,12 +175,16 @@ def _read_cpu_temp_c() -> float | None:
 
 def _read_weather1_temp_f() -> float | None:
     try:
-        from data_fetch import get_weather_data
+        from data_fetch import fetch_weather
     except Exception:
-        return None
+        try:
+            # Backward compatibility for older data_fetch modules.
+            from data_fetch import get_weather_data as fetch_weather
+        except Exception:
+            return None
 
     try:
-        weather = get_weather_data()
+        weather = fetch_weather()
     except Exception:
         return None
 
