@@ -96,6 +96,22 @@ def _resolve_i2c_bus_number(i2c: Any) -> Optional[int]:
 
     return None
 
+def _get_smbus_candidates(i2c: Any) -> Tuple[int, ...]:
+    """Return ordered Linux SMBus numbers to probe for Pimoroni drivers."""
+
+    candidates: List[int] = []
+    primary_bus = _resolve_i2c_bus_number(i2c) if i2c is not None else None
+    if primary_bus is not None:
+        candidates.append(primary_bus)
+
+    for bus_num in _parse_i2c_bus_candidates():
+        if bus_num not in candidates:
+            candidates.append(bus_num)
+
+    if not candidates:
+        return (1,)
+    return tuple(candidates)
+
 
 def _prepend_vendor_sensor_drivers():
     """Prefer vendored Pimoroni sensor drivers when available."""
@@ -501,13 +517,8 @@ def _probe_pimoroni_bme680(_i2c: Any, addresses: Set[int]) -> Optional[SensorPro
             getattr(module, "I2C_ADDR_SECONDARY", 0x77),
         )
 
-    bus_candidates: List[int] = []
+    bus_candidates = list(_get_smbus_candidates(_i2c))
     primary_bus = _resolve_i2c_bus_number(_i2c) if _i2c is not None else None
-    if primary_bus is not None:
-        bus_candidates.append(primary_bus)
-    for bus_num in _parse_i2c_bus_candidates():
-        if bus_num not in bus_candidates:
-            bus_candidates.append(bus_num)
 
     sensor = None
     sensor_bus: Optional[int] = None
@@ -685,14 +696,13 @@ def _probe_pimoroni_bme280(i2c: Any, addresses: Set[int]) -> Optional[SensorProb
 
     expected_chip_id = 0x60
 
-    # Import SMBus for proper sensor initialization
-    bus_num = _resolve_i2c_bus_number(i2c) or 1
     try:
         from smbus2 import SMBus
-        bus = SMBus(bus_num)
     except Exception as exc:
-        logging.warning("draw_inside: failed to initialize SMBus(%s): %s", bus_num, exc)
+        logging.warning("draw_inside: failed to import smbus2 SMBus: %s", exc)
         raise
+
+    bus_candidates = _get_smbus_candidates(i2c)
 
     # Prefer the addresses we actually saw on the bus so we don't try the
     # wrong default. Fallback to the library defaults if we could not scan.
@@ -704,34 +714,52 @@ def _probe_pimoroni_bme280(i2c: Any, addresses: Set[int]) -> Optional[SensorProb
 
     dev = None
     successful_addr: Optional[int] = None
+    successful_bus: Optional[int] = None
     last_error: Optional[Exception] = None
-    for addr in candidate_addresses:
-        chip_id = _read_chip_id(i2c, addr)
-        if chip_id is not None and chip_id != expected_chip_id:
-            logging.debug(
-                "draw_inside: skipping Pimoroni BME280 probe at 0x%02X due to chip ID 0x%02X",
-                addr,
-                chip_id,
-            )
-            continue
+    primary_bus = _resolve_i2c_bus_number(i2c) if i2c is not None else None
+    for bus_num in bus_candidates:
         try:
-            candidate = sensor_cls(i2c_addr=addr, i2c_dev=bus)  # type: ignore[call-arg]
+            bus = SMBus(bus_num)
+        except Exception as exc:
+            last_error = exc
+            logging.debug("draw_inside: failed to initialize SMBus(%s): %s", bus_num, exc)
+            continue
+
+        for addr in candidate_addresses:
+            chip_id = None
+            if i2c is not None and primary_bus is not None and bus_num == primary_bus:
+                chip_id = _read_chip_id(i2c, addr)
+            if chip_id is None:
+                try:
+                    chip_id = int(bus.read_byte_data(addr, 0xD0))
+                except Exception:
+                    chip_id = None
+            if chip_id is not None and chip_id != expected_chip_id:
+                logging.debug(
+                    "draw_inside: skipping Pimoroni BME280 probe at bus %s addr 0x%02X due to chip ID 0x%02X",
+                    bus_num,
+                    addr,
+                    chip_id,
+                )
+                continue
+
             try:
+                candidate = sensor_cls(i2c_addr=addr, i2c_dev=bus)  # type: ignore[call-arg]
                 # Force an initial reading to validate connectivity. The Pimoroni
                 # driver raises a RuntimeError with a helpful message if the bus
                 # is not responding.
                 _ = float(candidate.get_temperature())
+                dev = candidate
+                successful_addr = addr
+                successful_bus = bus_num
+                break
             except Exception as exc:  # pragma: no cover - relies on hardware
                 last_error = exc
-                continue
-            dev = candidate
-            successful_addr = addr
+        if dev is not None:
             break
-        except Exception as exc:  # pragma: no cover - relies on hardware
-            last_error = exc
 
-    fallback_dev = None
-    if dev is None:
+    adafruit_dev: Optional[Any] = None
+    if dev is None and i2c is not None:
         try:
             import adafruit_bme280  # type: ignore
         except ModuleNotFoundError as exc:  # pragma: no cover - optional dependency
@@ -745,7 +773,7 @@ def _probe_pimoroni_bme280(i2c: Any, addresses: Set[int]) -> Optional[SensorProb
                 except Exception as exc:  # pragma: no cover - relies on hardware
                     last_error = exc
                     continue
-                fallback_dev = candidate
+                adafruit_dev = candidate
                 successful_addr = addr
                 logging.debug(
                     "draw_inside: falling back to Adafruit BME280 driver for Pimoroni sensor at 0x%02X",
@@ -753,15 +781,18 @@ def _probe_pimoroni_bme280(i2c: Any, addresses: Set[int]) -> Optional[SensorProb
                 )
                 break
 
-    if dev is None and fallback_dev is None:
+    if dev is None and adafruit_dev is None:
         if last_error is not None:
             raise last_error
         raise RuntimeError("Pimoroni BME280 sensor not found")
 
     addr_for_label = successful_addr if successful_addr is not None else candidate_addresses[0]
-    label = f"Pimoroni BME280 (0x{addr_for_label:02X})"
+    if successful_bus is not None:
+        label = f"Pimoroni BME280 (bus {successful_bus}, 0x{addr_for_label:02X})"
+    else:
+        label = f"Pimoroni BME280 (0x{addr_for_label:02X})"
 
-    fallback_dev: Optional[Any] = None
+    fallback_dev: Optional[Any] = adafruit_dev
     fallback_error: Optional[Exception] = None
 
     def read_with_fallback() -> Optional[SensorReadings]:
@@ -816,6 +847,12 @@ def _probe_pimoroni_bme280(i2c: Any, addresses: Set[int]) -> Optional[SensorProb
         )
 
     if dev is not None:
+        if successful_bus is not None and primary_bus is not None and successful_bus != primary_bus:
+            logging.info(
+                "draw_inside: selected Pimoroni BME280 on fallback bus %s (Blinka bus was %s)",
+                successful_bus,
+                primary_bus,
+            )
 
         def read() -> SensorReadings:
             temp_f = float(dev.get_temperature()) * 9 / 5 + 32
