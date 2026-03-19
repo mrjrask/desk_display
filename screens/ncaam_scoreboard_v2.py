@@ -116,7 +116,7 @@ def _draw_single_game(canvas: Image.Image, draw: ImageDraw.ImageDraw, game: dict
         y0 = top + (SCORE_ROW_H - logo.height) // 2
         canvas.paste(logo, (x0, y0), logo)
         _draw_rank(draw, _rank_for_display(team), x0, y0, logo.width, logo.height)
-        if selected_mode != MODE_TOURNAMENT and _seed_text_for_display(team):
+        if selected_mode == MODE_TOURNAMENT and _seed_text_for_display(team):
             _draw_seed(draw, _seed_text_for_display(team), x0, y0, logo.height)
 
     _center_text(

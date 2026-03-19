@@ -502,7 +502,7 @@ def _render_scoreboard(games: list[dict], *, mode: Optional[str] = None) -> Imag
             y0 = y + (SCORE_ROW_H - logo.height) // 2
             canvas.paste(logo, (x0, y0), logo)
             _draw_rank(draw, _rank_for_display(team, mode=selected_mode), x0, y0, logo.width, logo.height)
-            if selected_mode != MODE_TOURNAMENT:
+            if selected_mode == MODE_TOURNAMENT:
                 _draw_seed(draw, _seed_text_for_display(team), x0, y0, logo.height)
 
         status_fill = IN_PROGRESS_STATUS_COLOR if in_progress else (255, 255, 255)
