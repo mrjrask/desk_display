@@ -99,7 +99,7 @@ def test_color_cycle_reconciles_startup_frame_race(monkeypatch):
     assert calls["images"] == 1
 
 
-def test_kernel_color_cycle_stops_when_frame_id_changes(monkeypatch):
+def test_kernel_color_cycle_ignores_frame_id_drift(monkeypatch):
     calls = {"compose": 0, "images": 0}
 
     class DriftingDisplay:
@@ -139,8 +139,8 @@ def test_kernel_color_cycle_stops_when_frame_id_changes(monkeypatch):
         frame_state,
     )
 
-    assert calls["compose"] == 0
-    assert calls["images"] == 0
+    assert calls["compose"] == 2
+    assert calls["images"] == 2
 
 
 def test_kernel_color_cycle_ignores_transient_frame_id_race(monkeypatch):
@@ -333,7 +333,7 @@ def test_color_cycle_calls_show_when_display_requires_flush(monkeypatch):
     assert calls["shows"] == 1
 
 
-def test_hyperpixel_color_cycle_stops_on_frame_id_drift(monkeypatch):
+def test_hyperpixel_color_cycle_ignores_frame_id_drift(monkeypatch):
     calls = {"compose": 0, "images": 0}
 
     class DriftingHyperpixelDisplay:
@@ -374,8 +374,8 @@ def test_hyperpixel_color_cycle_stops_on_frame_id_drift(monkeypatch):
         frame_state,
     )
 
-    assert calls["compose"] == 0
-    assert calls["images"] == 0
+    assert calls["compose"] == 2
+    assert calls["images"] == 2
 
 
 def test_draw_date_starts_color_cycle_thread(monkeypatch):

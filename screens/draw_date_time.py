@@ -198,7 +198,14 @@ def _cycle_colors_after_load(
         hyperpixel_layout=hyperpixel_layout,
         hyperpixel_square=hyperpixel_square,
     )
-    enforce_takeover_tracking = True
+    # Kernel-driven outputs (HyperPixel/HDMI framebuffers) can report frame-id
+    # drift while this same worker is active. That makes "takeover" detection
+    # look like another screen has rendered even when it has not, which can
+    # stop color cycling immediately. For those displays, rely on the bounded
+    # step count instead of frame-id takeover checks.
+    enforce_takeover_tracking = not (
+        kernel_driven or hyperpixel_layout or hyperpixel_square
+    )
     time.sleep(initial_delay)
     expected_frame_id = display.frame_id() if hasattr(display, "frame_id") else None
     if frame_state is not None:
