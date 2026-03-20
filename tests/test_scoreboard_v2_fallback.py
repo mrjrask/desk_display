@@ -1,5 +1,6 @@
 import screens.mlb_scoreboard_v2 as mlb_scoreboard_v2
 import screens.nba_scoreboard_v2 as nba_scoreboard_v2
+import screens.ncaam_scoreboard_v2 as ncaam_scoreboard_v2
 import screens.nfl_scoreboard_v2 as nfl_scoreboard_v2
 import screens.nhl_scoreboard_v2 as nhl_scoreboard_v2
 import screens.wbc_scoreboard_v2 as wbc_scoreboard_v2
@@ -76,5 +77,21 @@ def test_wbc_v2_uses_v1_renderer_when_fewer_than_six_games(monkeypatch):
     )
 
     result = wbc_scoreboard_v2.render_wbc_scoreboard_v2(_DisplayStub(), [{}] * 5, transition=False)
+
+    assert result is sentinel
+
+
+def test_ncaam_v2_uses_v1_renderer_on_320x240(monkeypatch):
+    sentinel = object()
+
+    monkeypatch.setattr(ncaam_scoreboard_v2, "WIDTH", 320)
+    monkeypatch.setattr(ncaam_scoreboard_v2, "HEIGHT", 240)
+    monkeypatch.setattr(
+        ncaam_scoreboard_v2,
+        "render_ncaam_scoreboard_v1",
+        lambda display, games, transition=False: sentinel,
+    )
+
+    result = ncaam_scoreboard_v2.render_ncaam_scoreboard_v2(_DisplayStub(), [{}] * 6, transition=False)
 
     assert result is sentinel
