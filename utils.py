@@ -305,6 +305,49 @@ def _detect_framebuffer_device(preferred_device: str, requested_size: Tuple[int,
     return '/dev/fb0'
 
 
+def _init_framebuffer_output(
+    *,
+    requested_size: Tuple[int, int],
+    configured_device: str,
+) -> Optional["_FrameBufferDevice"]:
+    framebuffer_device = _detect_framebuffer_device(configured_device, requested_size)
+    if framebuffer_device != configured_device:
+        logging.info(
+            "Auto-selected framebuffer device %s (requested size %dx%d; configured %s).",
+            framebuffer_device,
+            requested_size[0],
+            requested_size[1],
+            configured_device,
+        )
+
+    framebuffer = _FrameBufferDevice(framebuffer_device)
+    if framebuffer._fd is None and framebuffer_device != "/dev/fb0":
+        logging.warning(
+            "Failed to open framebuffer %s; retrying with /dev/fb0.",
+            framebuffer_device,
+        )
+        framebuffer = _FrameBufferDevice("/dev/fb0")
+
+    if framebuffer._fd is None:
+        return None
+
+    logging.info(
+        "🖼️  Framebuffer initialized (%dx%d, %dbpp, %s).",
+        framebuffer.width,
+        framebuffer.height,
+        framebuffer.bpp,
+        framebuffer.device_path,
+    )
+    if requested_size != (framebuffer.width, framebuffer.height):
+        logging.info(
+            "Framebuffer size differs from render size (%dx%d); frames will be scaled.",
+            requested_size[0],
+            requested_size[1],
+        )
+
+    return framebuffer
+
+
 def _resolve_framebuffer_info(device_path: str) -> Tuple[int, int, int, Optional[int]]:
     fb_name = Path(device_path).name
     sysfs_base = Path("/sys/class/graphics") / fb_name
@@ -861,55 +904,29 @@ class Display:
             logging.info("Display initialization skipped; running headless (%s).", reason)
         elif output == "framebuffer":
             requested_size = (self.width, self.height)
-            framebuffer_device = _detect_framebuffer_device(_FRAMEBUFFER_DEVICE, requested_size)
-            if framebuffer_device != _FRAMEBUFFER_DEVICE:
-                logging.info(
-                    "Auto-selected framebuffer device %s (requested size %dx%d; configured %s).",
-                    framebuffer_device,
-                    requested_size[0],
-                    requested_size[1],
-                    _FRAMEBUFFER_DEVICE,
-                )
-
-            self._framebuffer = _FrameBufferDevice(framebuffer_device)
-            if self._framebuffer._fd is None and framebuffer_device != "/dev/fb0":
-                logging.warning(
-                    "Failed to open framebuffer %s; retrying with /dev/fb0.",
-                    framebuffer_device,
-                )
-                self._framebuffer = _FrameBufferDevice("/dev/fb0")
-
-            if self._framebuffer._fd is None:
+            self._framebuffer = _init_framebuffer_output(
+                requested_size=requested_size,
+                configured_device=_FRAMEBUFFER_DEVICE,
+            )
+            if self._framebuffer is None:
                 logging.warning(
                     "Framebuffer output requested but unavailable; running headless."
                 )
-                self._framebuffer = None
-            else:
-                logging.info(
-                    "🖼️  Framebuffer initialized (%dx%d, %dbpp, %s).",
-                    self._framebuffer.width,
-                    self._framebuffer.height,
-                    self._framebuffer.bpp,
-                    self._framebuffer.device_path,
-                )
-                if (self.width, self.height) != (
-                    self._framebuffer.width,
-                    self._framebuffer.height,
-                ):
-                    logging.info(
-                        "Framebuffer size differs from render size (%dx%d); frames will be scaled.",
-                        self.width,
-                        self.height,
-                    )
         elif output == "kernel":
             self._uses_kernel_output = True
             try:
                 self._kernel_display = _KernelDisplay(self.width, self.height)
             except Exception as exc:
-                logging.warning(
-                    "Kernel display output unavailable; running headless (%s).",
-                    exc,
+                logging.warning("Kernel display output unavailable (%s).", exc)
+                logging.info("Attempting framebuffer fallback after kernel output failure.")
+                self._framebuffer = _init_framebuffer_output(
+                    requested_size=(self.width, self.height),
+                    configured_device=_FRAMEBUFFER_DEVICE,
                 )
+                if self._framebuffer is None:
+                    logging.warning(
+                        "Framebuffer fallback unavailable; running headless."
+                    )
                 self._kernel_display = None
             else:
                 driver_label = self._kernel_display._sdl_driver or "default"

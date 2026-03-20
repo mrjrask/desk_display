@@ -387,6 +387,7 @@ python tools/maintenance/render_all_screens.py
 - **Blank kernel display:** ensure valid desktop session/env or use framebuffer mode.
 - **Rotation looks wrong on HyperPixel/kernel:** avoid double rotation (`dtoverlay rotate` + app rotation).
 - **Wi-Fi monitor loops:** review Wi-Fi recovery logs and consider `ENABLE_WIFI_RECOVERY=0`.
+- **Waveshare OLED/LCD HAT (A) shows black screen + cursor / OLEDs off:** run `scripts/check_waveshare_setup.sh` and verify `DESK_DISPLAY_OUTPUT=framebuffer`, `DISPLAY_FB_DEVICE`, and I2C addresses `0x3c` + `0x3d`.
 
 ---
 
