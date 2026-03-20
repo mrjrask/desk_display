@@ -250,6 +250,8 @@ def build_scheduler(config: Dict[str, Any]) -> ScreenScheduler:
     if not isinstance(config, dict):
         raise ValueError("Schedule configuration must be a JSON object")
 
+    config, _ = sanitize_schedule_config(config)
+
     screens = config.get("screens")
     if not isinstance(screens, dict) or not screens:
         raise ValueError("Configuration must provide a non-empty 'screens' mapping")

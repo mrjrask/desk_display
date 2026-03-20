@@ -72,6 +72,25 @@ def _canonicalize_screen_reference(value: Any) -> Any:
     return value
 
 
+def _coerce_frequency(value: Any) -> Optional[int]:
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _merge_screen_specs(existing: Any, incoming: Any) -> Any:
+    if existing is None:
+        return incoming
+
+    existing_freq = _coerce_frequency(existing.get("frequency", 0)) if isinstance(existing, dict) else _coerce_frequency(existing)
+    incoming_freq = _coerce_frequency(incoming.get("frequency", 0)) if isinstance(incoming, dict) else _coerce_frequency(incoming)
+
+    if existing_freq is None or incoming_freq is None:
+        return incoming
+    return incoming if incoming_freq > existing_freq else existing
+
+
 def _normalize_legacy_scoreboard_ids(config: Dict[str, Any]) -> tuple[Dict[str, Any], bool]:
     if not isinstance(config, dict):
         return config, False
@@ -254,13 +273,20 @@ def _normalize_import_config_payload(data: Dict[str, Any]) -> Dict[str, Any]:
             normalized_spec: Dict[str, Any] = {"frequency": frequency_int}
             if alt_payload is not None:
                 normalized_spec["alt"] = alt_payload
-            normalized_screens[canonical_id] = normalized_spec
+            normalized_screens[canonical_id] = _merge_screen_specs(
+                normalized_screens.get(canonical_id),
+                normalized_spec,
+            )
             continue
 
         try:
-            normalized_screens[canonical_id] = int(raw)
+            normalized_raw: Any = int(raw)
         except (TypeError, ValueError):
-            normalized_screens[canonical_id] = raw
+            normalized_raw = raw
+        normalized_screens[canonical_id] = _merge_screen_specs(
+            normalized_screens.get(canonical_id),
+            normalized_raw,
+        )
 
     result = dict(normalized)
     result["screens"] = normalized_screens
