@@ -1859,6 +1859,7 @@ def _fetch_mlb_schedule(team_id):
         data   = r.json()
         result = {
             "next_game": None,
+            "next_game_alt": None,
             "next_home_game": None,
             "live_game": None,
             "last_game": None,
@@ -1867,6 +1868,22 @@ def _fetch_mlb_schedule(team_id):
         home_candidates = []
         skipped_home_duplicate = False
         team_id_int = int(team_id)
+        scheduled_today = []
+
+        def _opponent_team_id(game: Dict[str, Any]) -> Optional[int]:
+            teams = game.get("teams") or {}
+            home_id = ((teams.get("home") or {}).get("team") or {}).get("id")
+            away_id = ((teams.get("away") or {}).get("team") or {}).get("id")
+            try:
+                home_id_int = int(home_id)
+                away_id_int = int(away_id)
+            except Exception:
+                return None
+            if home_id_int == team_id_int:
+                return away_id_int
+            if away_id_int == team_id_int:
+                return home_id_int
+            return None
 
         for di in data.get("dates", []):
             day = datetime.datetime.strptime(di["date"], "%Y-%m-%d").date()
@@ -1923,6 +1940,8 @@ def _fetch_mlb_schedule(team_id):
                 # Next game (today scheduled)
                 if day == today and (code == "S" or abstract in ("preview","scheduled")):
                     result["next_game"] = g
+                    if local_dt:
+                        scheduled_today.append((local_dt, g))
 
                 # Finished up to today
                 if day <= today and code not in ("S","I") and abstract not in ("preview","scheduled","live"):
@@ -1942,6 +1961,22 @@ def _fetch_mlb_schedule(team_id):
                             break
                     if result["next_game"]:
                         break
+
+        # Split-squad / doubleheader support: if there are two scheduled games today
+        # against different opponents, expose the second as an alternate next game.
+        if scheduled_today:
+            scheduled_today.sort(key=lambda item: (item[0], item[1].get("gamePk") or 0))
+            if not result["next_game"]:
+                result["next_game"] = scheduled_today[0][1]
+
+            primary_opp_id = _opponent_team_id(result["next_game"] or {})
+            for _, game in scheduled_today:
+                if result["next_game"] and game.get("gamePk") == result["next_game"].get("gamePk"):
+                    continue
+                if primary_opp_id is not None and _opponent_team_id(game) == primary_opp_id:
+                    continue
+                result["next_game_alt"] = game
+                break
 
         # Pick earliest upcoming home game
         if home_candidates:
@@ -1983,6 +2018,7 @@ def _fetch_mlb_schedule(team_id):
         logging.error("Error fetching MLB schedule for %s: %s", team_id, e)
         return {
             "next_game": None,
+            "next_game_alt": None,
             "next_home_game": None,
             "live_game": None,
             "last_game": None,
