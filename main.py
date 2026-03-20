@@ -1310,8 +1310,8 @@ cache = {
     "hawks":   {"stand":None, "last":None, "live":None, "next":None, "next_home":None},
     "wolves":  {"last":None, "live":None, "next":None, "next_home":None},
     "bulls":   {"stand":None, "last":None, "live":None, "next":None, "next_home":None},
-    "cubs":    {"stand":None, "last":None, "live":None, "next":None, "next_home":None},
-    "sox":     {"stand":None, "last":None, "live":None, "next":None, "next_home":None},
+    "cubs":    {"stand":None, "last":None, "live":None, "next":None, "next_alt":None, "next_home":None},
+    "sox":     {"stand":None, "last":None, "live":None, "next":None, "next_alt":None, "next_home":None},
     "scoreboards": {"nfl": None, "mlb": None, "wbc": None, "nba": None, "ncaam": None, "nhl": None},
 }
 
@@ -1335,6 +1335,7 @@ _FEED_DEPENDENCIES: Dict[str, Set[str]] = {
         "cubs result",
         "cubs live",
         "cubs next",
+        "cubs next 2",
         "cubs next home",
         "cubs logo",
     },
@@ -1344,6 +1345,7 @@ _FEED_DEPENDENCIES: Dict[str, Set[str]] = {
         "sox last",
         "sox live",
         "sox next",
+        "sox next 2",
         "sox next home",
         "sox logo",
     },
@@ -1536,6 +1538,7 @@ def _refresh_cubs() -> None:
         "last":  cubg.get("last_game"),
         "live":  cubg.get("live_game"),
         "next":  cubg.get("next_game"),
+        "next_alt": cubg.get("next_game_alt"),
         "next_home": cubg.get("next_home_game"),
     })
 
@@ -1547,6 +1550,7 @@ def _refresh_sox() -> None:
         "last":  soxg.get("last_game"),
         "live":  soxg.get("live_game"),
         "next":  soxg.get("next_game"),
+        "next_alt": soxg.get("next_game_alt"),
         "next_home": soxg.get("next_home_game"),
     })
 

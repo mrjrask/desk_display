@@ -862,6 +862,7 @@ def build_screen_registry(context: ScreenContext) -> Tuple[Dict[str, ScreenDefin
     if any(cubs.values()):
         register_logo("cubs logo")
         cubs_next = cubs.get("next")
+        cubs_next_alt = cubs.get("next_alt")
         cubs_next_home = cubs.get("next_home")
         if _games_match(cubs_next_home, cubs_next):
             cubs_next_home = None
@@ -927,6 +928,17 @@ def build_screen_registry(context: ScreenContext) -> Tuple[Dict[str, ScreenDefin
             ),
             available=bool(cubs_next),
         )
+        register(
+            "cubs next 2",
+            lambda data=cubs_next_alt: draw_sports_screen(
+                context.display,
+                data,
+                "Next Cubs game...",
+                screen_id="cubs next",
+                transition=True,
+            ),
+            available=bool(cubs_next_alt),
+        )
         if cubs_next_home:
             register(
                 "cubs next home",
@@ -943,6 +955,7 @@ def build_screen_registry(context: ScreenContext) -> Tuple[Dict[str, ScreenDefin
     if any(sox.values()):
         register_logo("sox logo")
         sox_next = sox.get("next")
+        sox_next_alt = sox.get("next_alt")
         sox_next_home = sox.get("next_home")
         if _games_match(sox_next_home, sox_next):
             sox_next_home = None
@@ -1000,6 +1013,17 @@ def build_screen_registry(context: ScreenContext) -> Tuple[Dict[str, ScreenDefin
                 transition=True,
             ),
             available=bool(sox_next),
+        )
+        register(
+            "sox next 2",
+            lambda data=sox_next_alt: draw_sports_screen(
+                context.display,
+                data,
+                "Next Sox game...",
+                screen_id="sox next",
+                transition=True,
+            ),
+            available=bool(sox_next_alt),
         )
         if sox_next_home:
             register(

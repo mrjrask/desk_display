@@ -234,6 +234,32 @@ def test_sox_live_is_available_when_status_is_pre_game_warmup():
     assert registry["sox live"].available is True
 
 
+def test_mlb_next_alt_screens_available_when_split_squad_games_present():
+    now = datetime.datetime(2024, 3, 10, 12, 0, tzinfo=CENTRAL_TIME)
+    weather = {"hourly": []}
+    registry, _ = build_screen_registry(
+        _make_context(
+            weather,
+            now,
+            cache_updates={
+                "cubs": {
+                    "next": {"gamePk": 1},
+                    "next_alt": {"gamePk": 2},
+                },
+                "sox": {
+                    "next": {"gamePk": 3},
+                    "next_alt": {"gamePk": 4},
+                },
+            },
+        )
+    )
+
+    assert registry["cubs next"].available is True
+    assert registry["cubs next 2"].available is True
+    assert registry["sox next"].available is True
+    assert registry["sox next 2"].available is True
+
+
 def test_logo_scroll_threshold_detects_1080p_and_higher():
     assert _is_1080p_or_higher(1920, 1080) is True
     assert _is_1080p_or_higher(1080, 1920) is True
