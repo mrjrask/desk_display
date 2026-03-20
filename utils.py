@@ -927,6 +927,8 @@ class Display:
                     logging.warning(
                         "Framebuffer fallback unavailable; running headless."
                     )
+                else:
+                    self._uses_kernel_output = False
                 self._kernel_display = None
             else:
                 driver_label = self._kernel_display._sdl_driver or "default"
