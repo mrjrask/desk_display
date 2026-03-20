@@ -4,6 +4,7 @@ set -euo pipefail
 PROJECT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 ENV_PATH="${PROJECT_DIR}/.env"
 WAVESHARE_OLED_SERVICE_NAME="${WAVESHARE_OLED_SERVICE_NAME:-desk_display_waveshare_oled.service}"
+WAVESHARE_FBCP_SERVICE_NAME="${WAVESHARE_FBCP_SERVICE_NAME:-waveshare-fbcp.service}"
 
 find_lines() {
   local pattern="$1"
@@ -90,11 +91,15 @@ fi
 
 show_cmd "System service: desk_display" systemctl --no-pager --full status desk_display.service
 show_cmd "System service: Waveshare OLED helper" systemctl --no-pager --full status "$WAVESHARE_OLED_SERVICE_NAME"
+show_cmd "System service: Waveshare fbcp bridge" systemctl --no-pager --full status "$WAVESHARE_FBCP_SERVICE_NAME"
 show_cmd "Recent desk_display journal" journalctl -u desk_display.service -n 80 --no-pager
 show_cmd "Recent Waveshare OLED journal" journalctl -u "$WAVESHARE_OLED_SERVICE_NAME" -n 80 --no-pager
+show_cmd "Recent Waveshare fbcp journal" journalctl -u "$WAVESHARE_FBCP_SERVICE_NAME" -n 80 --no-pager
 
 section "Quick hints"
 echo "- White cursor on black screen usually means Linux console is active but app failed to bind framebuffer."
 echo "- For this HAT, DESK_DISPLAY_OUTPUT should usually be framebuffer and DISPLAY_FB_DEVICE should match the 320x240 fb node."
+echo "- On non-Pi5 systems using Bookworm, Waveshare's wiki expects fbcp running and DISPLAY_FB_DEVICE=/dev/fb0."
+echo "- If dtoverlay=vc4-kms-v3d is still enabled, fbcp/LCD rendering can stay black; comment it for this HAT workflow."
 echo "- OLED helper needs I2C bus 1 with addresses 0x3c and 0x3d visible."
 echo "- If /dev/fb1 no longer exists after kernel updates, set DISPLAY_FB_DEVICE=/dev/fb0 then restart desk_display.service."
