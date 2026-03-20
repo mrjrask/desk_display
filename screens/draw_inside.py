@@ -208,6 +208,7 @@ def _get_sensor_env_override() -> Tuple[Optional[SensorProbeName], Optional[str]
     """Return the requested sensor driver from the environment, if provided."""
 
     aliases = {
+        "pim_sensor_stick": "pim_sensor_stick",
         "adafruit_bme680": "adafruit_bme680",
         "pimoroni_bme680": "pimoroni_bme680",
         "pimoroni_bme68x": "pimoroni_bme68x",
@@ -1112,6 +1113,12 @@ def _get_probe_order(preference: Optional[SensorProbeName]) -> Tuple[Tuple[Senso
 
     if not preference:
         return probers
+
+    if preference == "pim_sensor_stick":
+        return (
+            ("pimoroni_bme280", _probe_pimoroni_bme280),
+            ("adafruit_bme280", _probe_adafruit_bme280),
+        )
 
     filtered = tuple((name, fn) for name, fn in probers if name == preference)
     if filtered:

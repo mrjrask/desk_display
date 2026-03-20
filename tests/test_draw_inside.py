@@ -72,6 +72,13 @@ def test_sensor_env_override_supports_aliases(monkeypatch):
     assert preference == "adafruit_sht41"
 
 
+def test_sensor_env_override_supports_pim_sensor_stick(monkeypatch):
+    monkeypatch.setenv("INSIDE_SENSOR", "pim_sensor_stick")
+    preference, raw = _get_sensor_env_override()
+    assert raw == "pim_sensor_stick"
+    assert preference == "pim_sensor_stick"
+
+
 
 
 def test_sensor_env_override_ignores_inline_comments(monkeypatch):

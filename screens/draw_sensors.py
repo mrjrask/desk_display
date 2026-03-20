@@ -14,7 +14,9 @@ from __future__ import annotations
 import math
 import time
 import logging
-from typing import Optional, Tuple
+import os
+import inspect
+from typing import Any, Optional, Sequence, Tuple
 
 from PIL import Image, ImageDraw, ImageFont
 from config import get_screen_background_color
@@ -73,13 +75,78 @@ FONT_CARD_VALUE = _try_font("DejaVuSansMono.ttf", 22)
 FONT_STAMP = _try_font("DejaVuSans.ttf", 11)
 
 # ---------- Sensor wrappers ----------
+def _parse_i2c_bus_candidates() -> Tuple[int, ...]:
+    raw = os.environ.get("PIM_SENSOR_STICK_I2C_BUS") or os.environ.get("INSIDE_I2C_BUSES", "1")
+    buses = []
+    seen = set()
+    for token in raw.split(","):
+        token = token.strip()
+        if not token:
+            continue
+        try:
+            bus_num = int(token)
+        except ValueError:
+            logging.debug("draw_sensors: ignoring non-numeric I2C bus token %r", token)
+            continue
+        if bus_num < 0 or bus_num in seen:
+            continue
+        seen.add(bus_num)
+        buses.append(bus_num)
+    if not buses:
+        return (1,)
+    return tuple(buses)
+
+
+def _build_device(module: Any, ctor_names: Sequence[str], buses: Sequence[int]):
+    ctor = None
+    for name in ctor_names:
+        candidate = getattr(module, name, None)
+        if callable(candidate):
+            ctor = candidate
+            break
+    if ctor is None:
+        return None, None
+
+    sig = None
+    try:
+        sig = inspect.signature(ctor)
+    except Exception:
+        sig = None
+
+    kwargs_by_name = (
+        ("i2c_dev",),
+        ("i2c_bus",),
+        ("bus",),
+    )
+    for bus_num in buses:
+        for kwargs_keys in kwargs_by_name:
+            kwargs = {key: bus_num for key in kwargs_keys}
+            try:
+                if sig is not None:
+                    sig.bind_partial(**kwargs)
+                return ctor(**kwargs), bus_num
+            except TypeError:
+                continue
+            except Exception:
+                continue
+        try:
+            return ctor(), bus_num
+        except Exception:
+            continue
+    return None, None
+
+
 class LTR559Reader:
     def __init__(self):
         self.ok = False
         self.dev = None
+        self.bus_num = None
         if ltr559:
+            buses = _parse_i2c_bus_candidates()
             try:
-                self.dev = ltr559.LTR559()
+                self.dev, self.bus_num = _build_device(ltr559, ("LTR559",), buses)
+                if self.dev is None:
+                    raise RuntimeError("LTR559 class unavailable")
                 _ = self.dev.get_lux()  # wake some units
                 self.ok = True
             except Exception as e:
@@ -105,10 +172,13 @@ class IMUReader:
     def __init__(self):
         self.ok = False
         self.dev = None
+        self.bus_num = None
         if _IMU:
+            buses = _parse_i2c_bus_candidates()
             try:
-                ctor = getattr(_IMU, "LSM6DSOX", None) or getattr(_IMU, "LSM6DS3", None) or getattr(_IMU, "IMU", None)
-                self.dev = ctor() if callable(ctor) else _IMU
+                self.dev, self.bus_num = _build_device(_IMU, ("LSM6DSOX", "LSM6DS3", "IMU"), buses)
+                if self.dev is None:
+                    self.dev = _IMU
                 self.ok = True
             except Exception as e:
                 logging.warning(f"draw_sensors: IMU init failed: {e}")
