@@ -1091,6 +1091,16 @@ def _scroll_display(display, full_img: Image.Image):
 
 # ─── Public API ───────────────────────────────────────────────────────────────
 def render_nhl_scoreboard(display, games: list[dict], transition: bool = False) -> ScreenImage:
+    games = games or []
+    from screens.nhl_scoreboard_v2 import (
+        MIN_GAMES_FOR_V2_LAYOUT,
+        V2_DISABLED_RESOLUTIONS,
+        render_nhl_scoreboard_v2,
+    )
+
+    if (WIDTH, HEIGHT) not in V2_DISABLED_RESOLUTIONS and len(games) >= MIN_GAMES_FOR_V2_LAYOUT:
+        return render_nhl_scoreboard_v2(display, games, transition=transition)
+
     _apply_style_overrides()
 
     if not games:

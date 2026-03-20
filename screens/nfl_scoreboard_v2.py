@@ -105,6 +105,7 @@ for w in GAME_COL_WIDTHS:
     GAME_COL_X.append(GAME_COL_X[-1] + w)
 
 SCREEN_ID = "NFL Scoreboard v2"
+STYLE_SCREEN_ID = "NFL Scoreboard"
 MIN_GAMES_FOR_V2_LAYOUT = 6
 V2_DISABLED_RESOLUTIONS = {(320, 240), (240, 320)}
 TITLE_FONT = FONT_TITLE_SPORTS
@@ -113,7 +114,7 @@ LEAGUE_LOGO_BASE_HEIGHT = TEAM_LOGO_BASE_HEIGHT
 LOGO_HEIGHT = TEAM_LOGO_BASE_HEIGHT
 LEAGUE_LOGO_HEIGHT = LEAGUE_LOGO_BASE_HEIGHT
 SCORE_FONT = get_screen_font(
-    SCREEN_ID,
+    STYLE_SCREEN_ID,
     "score",
     base_font=FONT_TEAM_SPORTS,
     default_size=20,
@@ -121,13 +122,13 @@ SCORE_FONT = get_screen_font(
 if _IS_HYPERPIXEL_4_PROFILE:
     SCORE_FONT = clone_font(SCORE_FONT, getattr(SCORE_FONT, "size", 20) + 3)
 STATUS_FONT = get_screen_font(
-    SCREEN_ID,
+    STYLE_SCREEN_ID,
     "status",
     base_font=FONT_STATUS,
     default_size=18,
 )
 CENTER_FONT = get_screen_font(
-    SCREEN_ID,
+    STYLE_SCREEN_ID,
     "center",
     base_font=FONT_STATUS,
     default_size=18,
@@ -141,7 +142,7 @@ IN_PROGRESS_SCORE_COLOR = SCOREBOARD_IN_PROGRESS_SCORE_COLOR
 IN_PROGRESS_STATUS_COLOR = IN_PROGRESS_SCORE_COLOR
 FINAL_WINNING_SCORE_COLOR = SCOREBOARD_FINAL_WINNING_SCORE_COLOR
 FINAL_LOSING_SCORE_COLOR = SCOREBOARD_FINAL_LOSING_SCORE_COLOR
-BACKGROUND_COLOR = get_screen_background_color(SCREEN_ID, SCOREBOARD_BACKGROUND_COLOR)
+BACKGROUND_COLOR = get_screen_background_color(STYLE_SCREEN_ID, SCOREBOARD_BACKGROUND_COLOR)
 
 _LOGO_CACHE: dict[tuple[str, int], Optional[Image.Image]] = {}
 _SUPER_BOWL_LOGO_CACHE: dict[int, Optional[Image.Image]] = {}
@@ -151,7 +152,7 @@ def _apply_style_overrides() -> None:
     global SCORE_FONT, STATUS_FONT, CENTER_FONT, LOGO_HEIGHT, LEAGUE_LOGO_HEIGHT, BACKGROUND_COLOR
 
     SCORE_FONT = get_screen_font(
-        SCREEN_ID,
+        STYLE_SCREEN_ID,
         "score",
         base_font=FONT_TEAM_SPORTS,
         default_size=20,
@@ -159,13 +160,13 @@ def _apply_style_overrides() -> None:
     if _IS_HYPERPIXEL_4_PROFILE:
         SCORE_FONT = clone_font(SCORE_FONT, getattr(SCORE_FONT, "size", 20) + 3)
     STATUS_FONT = get_screen_font(
-        SCREEN_ID,
+        STYLE_SCREEN_ID,
         "status",
         base_font=FONT_STATUS,
         default_size=18,
     )
     CENTER_FONT = get_screen_font(
-        SCREEN_ID,
+        STYLE_SCREEN_ID,
         "center",
         base_font=FONT_STATUS,
         default_size=18,
@@ -174,15 +175,15 @@ def _apply_style_overrides() -> None:
         SCORE_FONT = clone_font(SCORE_FONT, max(1, int(round(getattr(SCORE_FONT, "size", 20) * _HD_LAYOUT_TEXT_BOOST))))
         STATUS_FONT = clone_font(STATUS_FONT, max(1, int(round(getattr(STATUS_FONT, "size", 18) * _HD_LAYOUT_TEXT_BOOST))))
         CENTER_FONT = clone_font(CENTER_FONT, max(1, int(round(getattr(CENTER_FONT, "size", 18) * _HD_LAYOUT_TEXT_BOOST))))
-    BACKGROUND_COLOR = get_screen_background_color(SCREEN_ID, SCOREBOARD_BACKGROUND_COLOR)
-    team_scale = get_screen_image_scale(SCREEN_ID, "team_logo", 1.0)
+    BACKGROUND_COLOR = get_screen_background_color(STYLE_SCREEN_ID, SCOREBOARD_BACKGROUND_COLOR)
+    team_scale = get_screen_image_scale(STYLE_SCREEN_ID, "team_logo", 1.0)
     if _IS_1080P_LAYOUT:
         team_scale *= 1.2
     LOGO_HEIGHT = max(1, int(round(TEAM_LOGO_BASE_HEIGHT * team_scale)))
     if is_kernel_driven_display():
         LEAGUE_LOGO_HEIGHT = LOGO_HEIGHT
     else:
-        league_scale = get_screen_image_scale(SCREEN_ID, "league_logo", team_scale)
+        league_scale = get_screen_image_scale(STYLE_SCREEN_ID, "league_logo", team_scale)
         LEAGUE_LOGO_HEIGHT = max(1, int(round(LEAGUE_LOGO_BASE_HEIGHT * league_scale)))
 
 

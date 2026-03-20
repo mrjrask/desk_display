@@ -5,7 +5,7 @@ import json
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, Sequence, Set, TYPE_CHECKING, Tuple
 
-from screens_catalog import SCREEN_IDS
+from screens_catalog import SCREEN_IDS, canonical_screen_id
 
 if TYPE_CHECKING:
     from screens.registry import ScreenDefinition
@@ -181,12 +181,22 @@ def sanitize_schedule_config(config: Dict[str, Any]) -> Tuple[Dict[str, Any], Li
     removed: List[str] = []
 
     for screen_id, raw in screens.items():
-        if not isinstance(screen_id, str) or screen_id not in KNOWN_SCREENS:
+        canonical_id = canonical_screen_id(screen_id) if isinstance(screen_id, str) else screen_id
+        if not isinstance(canonical_id, str) or canonical_id not in KNOWN_SCREENS:
             removed.append(str(screen_id))
             continue
 
         if not isinstance(raw, dict):
-            cleaned_screens[screen_id] = raw
+            existing = cleaned_screens.get(canonical_id)
+            if isinstance(existing, dict):
+                continue
+            if isinstance(existing, int):
+                try:
+                    cleaned_screens[canonical_id] = max(existing, int(raw))
+                except Exception:
+                    cleaned_screens[canonical_id] = existing
+            else:
+                cleaned_screens[canonical_id] = raw
             continue
 
         cleaned_raw = dict(raw)
@@ -194,11 +204,22 @@ def sanitize_schedule_config(config: Dict[str, Any]) -> Tuple[Dict[str, Any], Li
         if isinstance(alt_spec, dict):
             alt_screen_value = alt_spec.get("screen")
             if isinstance(alt_screen_value, str):
-                if alt_screen_value not in KNOWN_SCREENS:
+                mapped_alt = canonical_screen_id(alt_screen_value)
+                if mapped_alt not in KNOWN_SCREENS:
                     cleaned_raw.pop("alt", None)
                     removed.append(f"{screen_id}.alt:{alt_screen_value}")
+                else:
+                    cleaned_alt = dict(alt_spec)
+                    cleaned_alt["screen"] = mapped_alt
+                    cleaned_raw["alt"] = cleaned_alt
             elif isinstance(alt_screen_value, list):
-                known_alt_screens = [alt for alt in alt_screen_value if isinstance(alt, str) and alt in KNOWN_SCREENS]
+                known_alt_screens: List[str] = []
+                for alt in alt_screen_value:
+                    if not isinstance(alt, str):
+                        continue
+                    mapped_alt = canonical_screen_id(alt)
+                    if mapped_alt in KNOWN_SCREENS and mapped_alt not in known_alt_screens:
+                        known_alt_screens.append(mapped_alt)
                 if not known_alt_screens:
                     cleaned_raw.pop("alt", None)
                     removed.append(f"{screen_id}.alt")
@@ -207,7 +228,19 @@ def sanitize_schedule_config(config: Dict[str, Any]) -> Tuple[Dict[str, Any], Li
                     cleaned_alt["screen"] = known_alt_screens
                     cleaned_raw["alt"] = cleaned_alt
 
-        cleaned_screens[screen_id] = cleaned_raw
+        existing_raw = cleaned_screens.get(canonical_id)
+        if isinstance(existing_raw, dict):
+            existing_freq = existing_raw.get("frequency")
+            new_freq = cleaned_raw.get("frequency")
+            try:
+                existing_raw["frequency"] = max(int(existing_freq), int(new_freq))
+            except Exception:
+                pass
+            if "alt" not in existing_raw and "alt" in cleaned_raw:
+                existing_raw["alt"] = cleaned_raw["alt"]
+            cleaned_screens[canonical_id] = existing_raw
+        else:
+            cleaned_screens[canonical_id] = cleaned_raw
 
     sanitized["screens"] = cleaned_screens
     return sanitized, removed
@@ -216,6 +249,8 @@ def sanitize_schedule_config(config: Dict[str, Any]) -> Tuple[Dict[str, Any], Li
 def build_scheduler(config: Dict[str, Any]) -> ScreenScheduler:
     if not isinstance(config, dict):
         raise ValueError("Schedule configuration must be a JSON object")
+
+    config, _ = sanitize_schedule_config(config)
 
     screens = config.get("screens")
     if not isinstance(screens, dict) or not screens:
@@ -271,6 +306,7 @@ def build_scheduler(config: Dict[str, Any]) -> ScreenScheduler:
 
     entries: List[_ScheduleEntry] = []
     for screen_id, raw in ordered_screens:
+        screen_id = canonical_screen_id(screen_id)
         if not isinstance(screen_id, str):
             raise ValueError("Screen identifiers must be strings")
         if screen_id not in KNOWN_SCREENS:
@@ -297,7 +333,7 @@ def build_scheduler(config: Dict[str, Any]) -> ScreenScheduler:
                 alt_frequency = alt_spec.get("frequency")
 
                 if isinstance(alt_screen_value, str):
-                    alt_screen_ids = [alt_screen_value]
+                    alt_screen_ids = [canonical_screen_id(alt_screen_value)]
                 elif isinstance(alt_screen_value, (list, tuple)):
                     alt_screen_ids = []
                     for alt_item in alt_screen_value:
@@ -305,7 +341,7 @@ def build_scheduler(config: Dict[str, Any]) -> ScreenScheduler:
                             raise ValueError(
                                 f"Alternate screen ids for '{screen_id}' must be strings"
                             )
-                        alt_screen_ids.append(alt_item)
+                        alt_screen_ids.append(canonical_screen_id(alt_item))
                 else:
                     raise ValueError(
                         f"Alternate screen id for '{screen_id}' must be a string or list of strings"

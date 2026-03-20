@@ -25,7 +25,7 @@ from flask import (
 
 from paths import resolve_storage_paths
 from schedule import build_scheduler
-from screens_catalog import SCREEN_IDS
+from screens_catalog import SCREEN_IDS, canonical_screen_id
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 DEFAULT_CONFIG_PATH = os.environ.get(
@@ -55,6 +55,116 @@ ALLOWED_SCREEN_EXTS = (".png", ".jpg", ".jpeg")
 app = Flask(__name__)
 app.secret_key = SCREEN_UI_PASSWORD or "desk-display-config-ui"
 WEB_LOGGER = logging.getLogger("desk_display.web")
+
+
+def _canonicalize_screen_reference(value: Any) -> Any:
+    if isinstance(value, str):
+        return canonical_screen_id(value)
+    if isinstance(value, list):
+        canonical: List[str] = []
+        for item in value:
+            if not isinstance(item, str):
+                continue
+            mapped = canonical_screen_id(item)
+            if mapped not in canonical:
+                canonical.append(mapped)
+        return canonical
+    return value
+
+
+def _coerce_frequency(value: Any) -> Optional[int]:
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _merge_screen_specs(existing: Any, incoming: Any) -> Any:
+    if existing is None:
+        return incoming
+
+    existing_freq = _coerce_frequency(existing.get("frequency", 0)) if isinstance(existing, dict) else _coerce_frequency(existing)
+    incoming_freq = _coerce_frequency(incoming.get("frequency", 0)) if isinstance(incoming, dict) else _coerce_frequency(incoming)
+
+    if existing_freq is None or incoming_freq is None:
+        return incoming
+    return incoming if incoming_freq > existing_freq else existing
+
+
+def _normalize_legacy_scoreboard_ids(config: Dict[str, Any]) -> tuple[Dict[str, Any], bool]:
+    if not isinstance(config, dict):
+        return config, False
+
+    changed = False
+    normalized = dict(config)
+    screens = normalized.get("screens")
+    if isinstance(screens, dict):
+        cleaned_screens: Dict[str, Any] = {}
+        for raw_screen_id, raw_spec in screens.items():
+            if not isinstance(raw_screen_id, str):
+                continue
+            screen_id = canonical_screen_id(raw_screen_id)
+            if screen_id != raw_screen_id:
+                changed = True
+
+            spec = raw_spec
+            if isinstance(raw_spec, dict):
+                spec_copy = dict(raw_spec)
+                alt = spec_copy.get("alt")
+                if isinstance(alt, dict):
+                    alt_copy = dict(alt)
+                    canonical_alt = _canonicalize_screen_reference(alt_copy.get("screen"))
+                    if canonical_alt != alt_copy.get("screen"):
+                        alt_copy["screen"] = canonical_alt
+                        changed = True
+                    spec_copy["alt"] = alt_copy
+                spec = spec_copy
+
+            existing = cleaned_screens.get(screen_id)
+            if existing is None:
+                cleaned_screens[screen_id] = spec
+                continue
+
+            try:
+                existing_freq = int(existing.get("frequency", 0)) if isinstance(existing, dict) else int(existing)
+                new_freq = int(spec.get("frequency", 0)) if isinstance(spec, dict) else int(spec)
+            except Exception:
+                existing_freq = None
+                new_freq = None
+            if existing_freq is not None and new_freq is not None and new_freq > existing_freq:
+                changed = True
+                cleaned_screens[screen_id] = spec
+
+        normalized["screens"] = cleaned_screens
+
+    playlists = normalized.get("playlists")
+    if isinstance(playlists, dict):
+        cleaned_playlists: Dict[str, Any] = {}
+        for playlist_id, playlist in playlists.items():
+            if not isinstance(playlist, dict):
+                cleaned_playlists[playlist_id] = playlist
+                continue
+            playlist_copy = dict(playlist)
+            steps = playlist_copy.get("steps")
+            if isinstance(steps, list):
+                cleaned_steps: List[Any] = []
+                for step in steps:
+                    if not isinstance(step, dict):
+                        cleaned_steps.append(step)
+                        continue
+                    step_copy = dict(step)
+                    step_screen = step_copy.get("screen")
+                    if isinstance(step_screen, str):
+                        mapped = canonical_screen_id(step_screen)
+                        if mapped != step_screen:
+                            changed = True
+                            step_copy["screen"] = mapped
+                    cleaned_steps.append(step_copy)
+                playlist_copy["steps"] = cleaned_steps
+            cleaned_playlists[playlist_id] = playlist_copy
+        normalized["playlists"] = cleaned_playlists
+
+    return normalized, changed
 
 
 @app.before_request
@@ -117,7 +227,8 @@ def _load_config(path: str) -> Dict[str, Any]:
     screens = data.get("screens")
     if not isinstance(screens, dict):
         raise ValueError("Configuration must include a 'screens' mapping")
-    return data
+    normalized, _ = _normalize_legacy_scoreboard_ids(data)
+    return normalized
 
 
 def _validate_config_payload(data: Any) -> Dict[str, Any]:
@@ -137,6 +248,9 @@ def _normalize_import_config_payload(data: Dict[str, Any]) -> Dict[str, Any]:
     normalized_screens: Dict[str, Any] = {}
 
     for screen_id, raw in screens.items():
+        canonical_id = canonical_screen_id(screen_id) if isinstance(screen_id, str) else screen_id
+        if not isinstance(canonical_id, str):
+            continue
         if isinstance(raw, dict):
             frequency = raw.get("frequency", 0)
             try:
@@ -148,6 +262,7 @@ def _normalize_import_config_payload(data: Dict[str, Any]) -> Dict[str, Any]:
             alt = raw.get("alt")
             if isinstance(alt, dict):
                 alt_payload = dict(alt)
+                alt_payload["screen"] = _canonicalize_screen_reference(alt_payload.get("screen"))
                 alt_frequency = alt_payload.get("frequency")
                 if alt_frequency is not None:
                     try:
@@ -158,17 +273,25 @@ def _normalize_import_config_payload(data: Dict[str, Any]) -> Dict[str, Any]:
             normalized_spec: Dict[str, Any] = {"frequency": frequency_int}
             if alt_payload is not None:
                 normalized_spec["alt"] = alt_payload
-            normalized_screens[screen_id] = normalized_spec
+            normalized_screens[canonical_id] = _merge_screen_specs(
+                normalized_screens.get(canonical_id),
+                normalized_spec,
+            )
             continue
 
         try:
-            normalized_screens[screen_id] = int(raw)
+            normalized_raw: Any = int(raw)
         except (TypeError, ValueError):
-            normalized_screens[screen_id] = raw
+            normalized_raw = raw
+        normalized_screens[canonical_id] = _merge_screen_specs(
+            normalized_screens.get(canonical_id),
+            normalized_raw,
+        )
 
     result = dict(normalized)
     result["screens"] = normalized_screens
-    return result
+    cleaned, _ = _normalize_legacy_scoreboard_ids(result)
+    return cleaned
 
 
 
@@ -303,8 +426,16 @@ def _load_style_config(path: str) -> Dict[str, Any]:
 
 def _load_active_config() -> Dict[str, Any]:
     if os.path.exists(LOCAL_CONFIG_PATH):
-        return _load_config(LOCAL_CONFIG_PATH)
-    return _load_config(DEFAULT_CONFIG_PATH)
+        config = _load_config(LOCAL_CONFIG_PATH)
+        cleaned, changed = _normalize_legacy_scoreboard_ids(config)
+        if changed:
+            _save_config(cleaned)
+        return cleaned
+    config = _load_config(DEFAULT_CONFIG_PATH)
+    cleaned, changed = _normalize_legacy_scoreboard_ids(config)
+    if changed:
+        _save_config(cleaned)
+    return cleaned
 
 
 def _load_active_style_config() -> Dict[str, Any]:
@@ -650,7 +781,7 @@ def _build_screen_entries(
 def _build_config(entries: List[Dict[str, Any]]) -> Dict[str, Any]:
     screens: Dict[str, Any] = {}
     for entry in entries:
-        screen_id = str(entry.get("id", "")).strip()
+        screen_id = canonical_screen_id(str(entry.get("id", "")).strip())
         if not screen_id:
             continue
         frequency = int(entry.get("frequency", 0))
@@ -658,13 +789,15 @@ def _build_config(entries: List[Dict[str, Any]]) -> Dict[str, Any]:
         alt_frequency = entry.get("alt_frequency")
         alt_screen = _parse_alt_screen(str(alt_screen_raw).strip()) if alt_screen_raw is not None else None
         if alt_screen:
+            alt_screen = [canonical_screen_id(item) for item in alt_screen]
             alt_frequency_int = int(alt_frequency) if alt_frequency not in ("", None) else 1
             alt_payload: Dict[str, Any] = {"screen": alt_screen[0] if len(alt_screen) == 1 else alt_screen}
             alt_payload["frequency"] = alt_frequency_int
             screens[screen_id] = {"frequency": frequency, "alt": alt_payload}
         else:
             screens[screen_id] = frequency
-    return {"screens": screens}
+    cleaned, _ = _normalize_legacy_scoreboard_ids({"screens": screens})
+    return cleaned
 
 
 def _build_style_config(
@@ -881,6 +1014,7 @@ def save_screens() -> Any:
             value = payload.get(key)
             if isinstance(value, expected_type):
                 config[key] = value
+        config, _ = _normalize_legacy_scoreboard_ids(config)
         style_config = _load_active_style_config()
         style_config = _build_style_config(entries, style_config)
         layouts = _build_layouts(payload)
@@ -918,6 +1052,7 @@ def import_screens() -> Any:
                 value = config_payload.get(key)
                 if value is not None:
                     config[key] = value
+            config, _ = _normalize_legacy_scoreboard_ids(config)
             derived_style_payload = _build_style_config(entries, _load_active_style_config())
             quad_pages_payload = payload.get("quad_pages") if isinstance(payload, dict) else None
             quad_enabled_payload = payload.get("quad_enabled") if isinstance(payload, dict) else False
@@ -925,6 +1060,7 @@ def import_screens() -> Any:
                 derived_layouts_payload = _build_layouts({"quad_enabled": quad_enabled_payload, "quad_pages": quad_pages_payload})
         else:
             config = _normalize_import_config_payload(config_payload)
+            config, _ = _normalize_legacy_scoreboard_ids(config)
         build_scheduler(config)
     except Exception as exc:
         return jsonify({"error": str(exc)}), 400
