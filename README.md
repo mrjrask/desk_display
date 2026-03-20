@@ -214,6 +214,14 @@ Configuration is primarily environment-driven (and may be loaded from `.env`).
 | `APPLE_MAPS_TEAM_ID`, `APPLE_MAPS_KEY_ID` | Apple Maps JWT identifiers. |
 | `APPLE_MAPS_KEY_PATH` / `APPLE_MAPS_PRIVATE_KEY` | Apple Maps private key source. |
 
+### Indoor sensor variables
+
+| Variable | Meaning |
+| --- | --- |
+| `INSIDE_SENSOR` | Optional indoor sensor override (`pim_sensor_stick`, `pimoroni_bme280`, `adafruit_bme280`, `pimoroni_bme680`, `pimoroni_bme68x`, `adafruit_bme680`, `adafruit_sht41`). |
+| `PIM_SENSOR_STICK_I2C_BUS` | Optional Linux I2C bus for Pimoroni Multi-Sensor Stick (`LTR559` + `LSM6DS3`) reads. |
+| `INSIDE_I2C_BUSES` | Comma-separated fallback I2C buses used for inside/sensor probing. |
+
 ### Wi-Fi monitor/recovery variables
 
 | Variable | Meaning |
