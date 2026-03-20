@@ -54,6 +54,7 @@ from screens.ncaam_scoreboard import (
 
 SCREEN_ID = "NCAAM Scoreboard v2"
 MIN_GAMES_FOR_V2_LAYOUT = 6
+V2_DISABLED_RESOLUTIONS = {(320, 240), (240, 320)}
 TITLE_GAP = scale_value(8)
 BLOCK_SPACING = scale_value(8)
 PAIR_SPACING = scale_value_width(4)
@@ -196,6 +197,8 @@ def _scroll_display(display, full_img: Image.Image):
 
 def render_ncaam_scoreboard_v2(display, games: list[dict] | None, transition: bool = False) -> ScreenImage:
     games = games or []
+    if (WIDTH, HEIGHT) in V2_DISABLED_RESOLUTIONS:
+        return render_ncaam_scoreboard_v1(display, games, transition=transition)
     if len(games) < MIN_GAMES_FOR_V2_LAYOUT:
         return render_ncaam_scoreboard_v1(display, games, transition=transition)
 
