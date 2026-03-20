@@ -37,3 +37,48 @@ def test_detect_framebuffer_device_falls_back_to_fb0_when_no_devices(monkeypatch
     detected = utils._detect_framebuffer_device("/dev/fb7", (800, 480))
 
     assert detected == "/dev/fb0"
+
+
+def test_init_framebuffer_output_retries_fb0_when_preferred_fails(monkeypatch):
+    init_calls = []
+
+    class _FakeFramebuffer:
+        def __init__(self, device_path):
+            init_calls.append(device_path)
+            self.device_path = device_path
+            self._fd = None if device_path == "/dev/fb1" else object()
+            self.width = 320
+            self.height = 240
+            self.bpp = 16
+
+    monkeypatch.setattr(utils, "_detect_framebuffer_device", lambda *_args, **_kwargs: "/dev/fb1")
+    monkeypatch.setattr(utils, "_FrameBufferDevice", _FakeFramebuffer)
+
+    framebuffer = utils._init_framebuffer_output(
+        requested_size=(320, 240),
+        configured_device="/dev/fb1",
+    )
+
+    assert framebuffer is not None
+    assert framebuffer.device_path == "/dev/fb0"
+    assert init_calls == ["/dev/fb1", "/dev/fb0"]
+
+
+def test_init_framebuffer_output_returns_none_when_all_devices_fail(monkeypatch):
+    class _FakeFramebuffer:
+        def __init__(self, device_path):
+            self.device_path = device_path
+            self._fd = None
+            self.width = 320
+            self.height = 240
+            self.bpp = 16
+
+    monkeypatch.setattr(utils, "_detect_framebuffer_device", lambda *_args, **_kwargs: "/dev/fb2")
+    monkeypatch.setattr(utils, "_FrameBufferDevice", _FakeFramebuffer)
+
+    framebuffer = utils._init_framebuffer_output(
+        requested_size=(320, 240),
+        configured_device="/dev/fb2",
+    )
+
+    assert framebuffer is None
