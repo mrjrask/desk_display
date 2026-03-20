@@ -229,6 +229,18 @@ def test_best_time_font_size_accounts_for_meridiem_width():
     assert full_time_size <= base_time_size
 
 
+def test_font_size_respects_configured_maximums(monkeypatch):
+    monkeypatch.setenv("WAVESHARE_OLED_MAX_VALUE_FONT_SIZE", "12")
+    monkeypatch.setenv("WAVESHARE_OLED_MAX_TIME_FONT_SIZE", "10")
+    mod = _load_module()
+
+    value_size = mod._best_value_font_size(128, 64, "11/18/26", 12)
+    time_size = mod._best_time_font_size(128, 64, "10:54 PM", 12)
+
+    assert value_size <= 12
+    assert time_size <= 10
+
+
 def test_main_uses_independent_font_sizes_for_date_and_time(monkeypatch):
     mod = _load_module()
 

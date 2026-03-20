@@ -78,6 +78,66 @@ detect_pi_model_major() {
   echo ""
 }
 
+read_fb_size() {
+  local fb_path="$1"
+  local fb_name mode_path modes_path virtual_size_path mode_line size
+  fb_name="$(basename "$fb_path")"
+  mode_path="/sys/class/graphics/${fb_name}/mode"
+  modes_path="/sys/class/graphics/${fb_name}/modes"
+  virtual_size_path="/sys/class/graphics/${fb_name}/virtual_size"
+
+  if [[ -r "$mode_path" ]]; then
+    mode_line="$(tr -d '\n' <"$mode_path" 2>/dev/null || true)"
+    if [[ "$mode_line" =~ ([0-9]+)x([0-9]+) ]]; then
+      echo "${BASH_REMATCH[1]}x${BASH_REMATCH[2]}"
+      return 0
+    fi
+  fi
+
+  if [[ -r "$modes_path" ]]; then
+    while IFS= read -r mode_line; do
+      if [[ "$mode_line" =~ ([0-9]+)x([0-9]+) ]]; then
+        echo "${BASH_REMATCH[1]}x${BASH_REMATCH[2]}"
+        return 0
+      fi
+    done <"$modes_path"
+  fi
+
+  if [[ -r "$virtual_size_path" ]]; then
+    size="$(tr -d '\n' <"$virtual_size_path" 2>/dev/null || true)"
+    if [[ "$size" =~ ^([0-9]+),([0-9]+)$ ]]; then
+      echo "${BASH_REMATCH[1]}x${BASH_REMATCH[2]}"
+      return 0
+    fi
+  fi
+
+  return 1
+}
+
+detect_framebuffer_by_size() {
+  local width="$1"
+  local height="$2"
+  local fb_path fb_size fallback=""
+  for fb_path in /dev/fb*; do
+    [[ -e "$fb_path" ]] || continue
+    if [[ -z "$fallback" ]]; then
+      fallback="$fb_path"
+    fi
+    fb_size="$(read_fb_size "$fb_path" || true)"
+    if [[ "$fb_size" == "${width}x${height}" ]]; then
+      echo "$fb_path"
+      return 0
+    fi
+  done
+
+  if [[ -n "$fallback" ]]; then
+    echo "$fallback"
+    return 0
+  fi
+
+  return 1
+}
+
 backup_file() {
   local file="$1"
   if [[ -f "$file" ]]; then
@@ -404,10 +464,13 @@ export DISPLAY_WIDTH="${DISPLAY_WIDTH:-320}"
 export DISPLAY_HEIGHT="${DISPLAY_HEIGHT:-240}"
 PI_MODEL_MAJOR="${PI_MODEL_MAJOR:-$(detect_pi_model_major || true)}"
 if [[ -z "${DISPLAY_FB_DEVICE:-}" ]]; then
-  if [[ "$PI_MODEL_MAJOR" == "5" ]]; then
-    DISPLAY_FB_DEVICE="/dev/fb1"
-  else
-    DISPLAY_FB_DEVICE="/dev/fb0"
+  DISPLAY_FB_DEVICE="$(detect_framebuffer_by_size "$DISPLAY_WIDTH" "$DISPLAY_HEIGHT" || true)"
+  if [[ -z "$DISPLAY_FB_DEVICE" ]]; then
+    if [[ "$PI_MODEL_MAJOR" == "5" ]]; then
+      DISPLAY_FB_DEVICE="/dev/fb1"
+    else
+      DISPLAY_FB_DEVICE="/dev/fb0"
+    fi
   fi
 fi
 export DISPLAY_ROTATION="${DISPLAY_ROTATION:-0}"
@@ -415,6 +478,8 @@ export BUTTON_A="${BUTTON_A:-24}"
 export BUTTON_B="${BUTTON_B:-4}"
 export BUTTON_X="${BUTTON_X:-17}"
 export BUTTON_Y="${BUTTON_Y:-23}"
+export WAVESHARE_OLED_MAX_VALUE_FONT_SIZE="${WAVESHARE_OLED_MAX_VALUE_FONT_SIZE:-26}"
+export WAVESHARE_OLED_MAX_TIME_FONT_SIZE="${WAVESHARE_OLED_MAX_TIME_FONT_SIZE:-24}"
 
 ENV_PATH="$PROJECT_DIR/.env"
 ENV_LINES=()
@@ -427,6 +492,8 @@ ENV_LINES+=("BUTTON_A=${BUTTON_A}")
 ENV_LINES+=("BUTTON_B=${BUTTON_B}")
 ENV_LINES+=("BUTTON_X=${BUTTON_X}")
 ENV_LINES+=("BUTTON_Y=${BUTTON_Y}")
+ENV_LINES+=("WAVESHARE_OLED_MAX_VALUE_FONT_SIZE=${WAVESHARE_OLED_MAX_VALUE_FONT_SIZE}")
+ENV_LINES+=("WAVESHARE_OLED_MAX_TIME_FONT_SIZE=${WAVESHARE_OLED_MAX_TIME_FONT_SIZE}")
 prepend_env_vars "$ENV_PATH" "${ENV_LINES[@]}"
 
 log "Desk Display will render to ${DISPLAY_WIDTH}x${DISPLAY_HEIGHT} using ${DISPLAY_FB_DEVICE}."
