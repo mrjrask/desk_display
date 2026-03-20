@@ -249,6 +249,13 @@ install_waveshare_stack() {
   fi
 
   echo
+  echo "==> Attempting optional VideoCore headers package for fbcp"
+  if ! DEBIAN_FRONTEND=noninteractive apt-get install -y libraspberrypi-dev; then
+    echo "Optional package libraspberrypi-dev was not installed."
+    echo "If fbcp build fails with missing bcm_host.h, install userland dev headers and rerun."
+  fi
+
+  echo
   echo "==> Enabling SPI and I2C"
   raspi-config nonint do_spi 0 || true
   raspi-config nonint do_i2c 0 || true
@@ -333,12 +340,20 @@ install_waveshare_stack() {
 
     if [[ -n "$fbcp_root" ]]; then
       echo "==> Building fbcp from $fbcp_root"
-      rm -rf "$fbcp_root/build"
-      mkdir -p "$fbcp_root/build"
-      cd "$fbcp_root/build"
-      cmake ..
-      make -j"$(nproc)"
-      install -m 755 fbcp /usr/local/bin/fbcp
+      if [[ ! -f /opt/vc/include/bcm_host.h && ! -f /usr/include/bcm_host.h && ! -f /usr/include/interface/vmcs_host/linux/bcm_host.h ]]; then
+        echo "WARNING: bcm_host.h not found; skipping fbcp build."
+        echo "Install Raspberry Pi userland development headers (for example: libraspberrypi-dev) and rerun installer."
+      else
+        rm -rf "$fbcp_root/build"
+        mkdir -p "$fbcp_root/build"
+        cd "$fbcp_root/build"
+        cmake ..
+        if make -j"$(nproc)"; then
+          install -m 755 fbcp /usr/local/bin/fbcp
+        else
+          echo "WARNING: fbcp build failed; continuing without fbcp service."
+        fi
+      fi
     else
       echo "WARNING: Could not locate extracted fbcp source tree."
     fi
