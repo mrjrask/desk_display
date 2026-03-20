@@ -335,9 +335,9 @@ def _is_final(game: dict) -> bool:
 
 def _score_text(team: dict, *, show: bool) -> str:
     if not show:
-        return ""
+        return "—"
     score = team.get("score")
-    return str(score) if score not in (None, "") else ""
+    return str(score) if score not in (None, "") else "—"
 
 
 def _should_display_scores(game: dict) -> bool:
@@ -426,7 +426,16 @@ def _draw_seed(draw: ImageDraw.ImageDraw, seed: str, x_logo: int, y_logo: int, l
     draw.text((x, y), text, font=SEED_FONT, fill=(210, 210, 210))
 
 
-def _draw_rank(draw: ImageDraw.ImageDraw, rank: Optional[int], x_logo: int, y_logo: int, logo_w: int, logo_h: int):
+def _draw_rank(
+    draw: ImageDraw.ImageDraw,
+    rank: Optional[int],
+    x_logo: int,
+    y_logo: int,
+    logo_w: int,
+    logo_h: int,
+    *,
+    position: str = "right",
+):
     if rank is None:
         return
     text = f"#{rank}"
@@ -436,8 +445,11 @@ def _draw_rank(draw: ImageDraw.ImageDraw, rank: Optional[int], x_logo: int, y_lo
     except Exception:
         tw, th = draw.textsize(text, font=RANK_FONT)
         l = t = 0
-    x = x_logo + logo_w - tw - l + RANK_GAP
-    y = max(0, y_logo - th - t)
+    if position == "left":
+        x = x_logo - RANK_GAP - tw - l
+    else:
+        x = x_logo + logo_w + RANK_GAP
+    y = y_logo + logo_h - th - t
     draw.text((x, y), text, font=RANK_FONT, fill=(210, 210, 210))
 
 
@@ -516,7 +528,15 @@ def _render_scoreboard(games: list[dict], *, mode: Optional[str] = None) -> Imag
             x0 = COL_X[col_idx] + (COL_WIDTHS[col_idx] - logo.width) // 2
             y0 = y + (SCORE_ROW_H - logo.height) // 2
             canvas.paste(logo, (x0, y0), logo)
-            _draw_rank(draw, _rank_for_display(team, mode=selected_mode), x0, y0, logo.width, logo.height)
+            _draw_rank(
+                draw,
+                _rank_for_display(team, mode=selected_mode),
+                x0,
+                y0,
+                logo.width,
+                logo.height,
+                position="left" if col_idx == 1 else "right",
+            )
             if selected_mode == MODE_TOURNAMENT:
                 _draw_seed(draw, _seed_text_for_display(team), x0, y0, logo.height)
 
