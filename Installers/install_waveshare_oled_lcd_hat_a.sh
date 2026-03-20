@@ -394,8 +394,8 @@ install_waveshare_stack() {
   sed -i '/^hdmi_mode=87$/d' "$config_file"
   sed -i '/^hdmi_cvt 640 480 60 6 0 0 0$/d' "$config_file"
   sed -i '/^hdmi_drive=2$/d' "$config_file"
-  sed -i 's/^dtoverlay=vc4-kms-v3d/#dtoverlay=vc4-kms-v3d/'
-  sed -i 's/^dtoverlay=vc4-kms-v3d-pi4/#dtoverlay=vc4-kms-v3d-pi4/'
+  sed -i 's/^dtoverlay=vc4-kms-v3d/#dtoverlay=vc4-kms-v3d/' "$config_file"
+  sed -i 's/^dtoverlay=vc4-kms-v3d-pi4/#dtoverlay=vc4-kms-v3d-pi4/' "$config_file"
 
   cat >>"$config_file" <<'CFGEOF'
 
