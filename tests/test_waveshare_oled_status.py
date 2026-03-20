@@ -144,7 +144,7 @@ def test_read_weather1_temp_supports_legacy_get_weather_data(monkeypatch):
     assert mod._read_weather1_temp_f() == 71.0
 
 
-def test_read_weather1_temp_prefers_force_refresh(monkeypatch):
+def test_read_weather1_temp_prefers_cached_weather_before_force_refresh(monkeypatch):
     mod = _load_module()
     calls = []
 
@@ -158,7 +158,7 @@ def test_read_weather1_temp_prefers_force_refresh(monkeypatch):
     monkeypatch.setitem(sys.modules, "data_fetch", fake)
 
     assert mod._read_weather1_temp_f() == 67.9
-    assert calls == [True]
+    assert calls == [False]
 
 
 def test_read_weather1_temp_returns_last_known_value_when_fetch_fails(monkeypatch):

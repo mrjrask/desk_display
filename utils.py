@@ -305,6 +305,38 @@ def _detect_framebuffer_device(preferred_device: str, requested_size: Tuple[int,
     return '/dev/fb0'
 
 
+def _detect_exact_framebuffer_device(
+    preferred_device: str,
+    requested_size: Tuple[int, int],
+) -> Optional[str]:
+    """Return a framebuffer device only when it exactly matches *requested_size*."""
+
+    candidates: List[str] = []
+    if preferred_device:
+        candidates.append(preferred_device)
+
+    for fb_path in sorted(Path("/dev").glob("fb*")):
+        device = str(fb_path)
+        if device not in candidates:
+            candidates.append(device)
+
+    for device in candidates:
+        if not Path(device).exists():
+            continue
+
+        mode_size = _read_framebuffer_mode_size(device)
+        if mode_size == requested_size:
+            return device
+
+        fb_name = Path(device).name
+        sysfs_base = Path("/sys/class/graphics") / fb_name
+        virtual_size = _parse_virtual_size(_read_sysfs_value(str(sysfs_base / "virtual_size")))
+        if virtual_size == requested_size:
+            return device
+
+    return None
+
+
 def _init_framebuffer_output(
     *,
     requested_size: Tuple[int, int],
@@ -912,6 +944,61 @@ class Display:
                 logging.warning(
                     "Framebuffer output requested but unavailable; running headless."
                 )
+        elif output == "auto":
+            requested_size = (self.width, self.height)
+            exact_framebuffer_device = _detect_exact_framebuffer_device(
+                _FRAMEBUFFER_DEVICE,
+                requested_size,
+            )
+            if exact_framebuffer_device:
+                logging.info(
+                    "Auto mode detected exact framebuffer match at %s; preferring framebuffer output.",
+                    exact_framebuffer_device,
+                )
+                self._framebuffer = _init_framebuffer_output(
+                    requested_size=requested_size,
+                    configured_device=exact_framebuffer_device,
+                )
+                if self._framebuffer is None:
+                    logging.warning(
+                        "Exact framebuffer device %s was detected but failed to initialize; continuing auto detection.",
+                        exact_framebuffer_device,
+                    )
+            if self._framebuffer is None and output == "auto":
+                if DisplayHATMini is None:  # pragma: no cover - hardware import
+                    if _DISPLAY_HAT_ERROR:
+                        logging.warning(
+                            "Display HAT Mini driver unavailable; running headless (%s)",
+                            _DISPLAY_HAT_ERROR,
+                        )
+                    else:
+                        logging.warning(
+                            "Display HAT Mini driver unavailable; running headless."
+                        )
+                else:
+                    try:  # pragma: no cover - hardware import
+                        self._display = self._create_display_hat_mini(self._buffer)
+                    except Exception as exc:  # pragma: no cover - hardware import
+                        self._display = None
+                        logging.warning(
+                            "Failed to initialize Display HAT Mini hardware in auto mode (%s); trying framebuffer fallback.",
+                            exc,
+                        )
+                        self._framebuffer = _init_framebuffer_output(
+                            requested_size=(self.width, self.height),
+                            configured_device=_FRAMEBUFFER_DEVICE,
+                        )
+                        if self._framebuffer is None:
+                            logging.warning(
+                                "Framebuffer fallback unavailable after Display HAT Mini init failure; running headless."
+                            )
+                    else:  # pragma: no cover - hardware import
+                        logging.info(
+                            "🖼️  Display HAT Mini initialized (%dx%d, rotation %d°).",
+                            self.width,
+                            self.height,
+                            self.rotation,
+                        )
         elif output == "kernel":
             self._uses_kernel_output = True
             try:
@@ -948,24 +1035,26 @@ class Display:
                         self.height,
                     )
         elif DisplayHATMini is None:  # pragma: no cover - hardware import
-            if _DISPLAY_HAT_ERROR:
-                logging.warning(
-                    "Display HAT Mini driver unavailable; running headless (%s)",
-                    _DISPLAY_HAT_ERROR,
-                )
-            else:
-                logging.warning(
-                    "Display HAT Mini driver unavailable; running headless."
-                )
+            if output == "displayhatmini":
+                if _DISPLAY_HAT_ERROR:
+                    logging.warning(
+                        "Display HAT Mini driver unavailable; running headless (%s)",
+                        _DISPLAY_HAT_ERROR,
+                    )
+                else:
+                    logging.warning(
+                        "Display HAT Mini driver unavailable; running headless."
+                    )
         else:
             try:  # pragma: no cover - hardware import
                 self._display = self._create_display_hat_mini(self._buffer)
             except Exception as exc:  # pragma: no cover - hardware import
-                logging.warning(
-                    "Failed to initialize Display HAT Mini hardware; running headless (%s)",
-                    exc,
-                )
                 self._display = None
+                if output == "displayhatmini":
+                    logging.warning(
+                        "Failed to initialize Display HAT Mini hardware; running headless (%s)",
+                        exc,
+                    )
             else:  # pragma: no cover - hardware import
                 logging.info(
                     "🖼️  Display HAT Mini initialized (%dx%d, rotation %d°).",

@@ -226,14 +226,21 @@ def _read_weather1_temp_f() -> float | None:
     if fetch_weather is None:
         return _LAST_WEATHER_TEMP_F
 
-    try:
-        weather = fetch_weather(force_refresh=True)
-    except TypeError:
-        # Backward compatibility for older data_fetch modules.
+    def _fetch_weather_payload(force_refresh: bool):
         try:
-            weather = fetch_weather()
-        except Exception:
-            return _LAST_WEATHER_TEMP_F
+            return fetch_weather(force_refresh=force_refresh)
+        except TypeError:
+            # Backward compatibility for older data_fetch modules.
+            if force_refresh:
+                return None
+            return fetch_weather()
+
+    try:
+        # Prefer cached weather to avoid API rate limits and transient misses on
+        # the OLED loop cadence.
+        weather = _fetch_weather_payload(force_refresh=False)
+        if weather is None:
+            weather = _fetch_weather_payload(force_refresh=True)
     except Exception:
         return _LAST_WEATHER_TEMP_F
 
@@ -244,7 +251,11 @@ def _read_weather1_temp_f() -> float | None:
     if not isinstance(current, dict):
         return _LAST_WEATHER_TEMP_F
 
-    temp_f = current.get("temp")
+    temp_f = (
+        current.get("temp")
+        or current.get("temp_f")
+        or current.get("temperature")
+    )
     try:
         _LAST_WEATHER_TEMP_F = float(temp_f)
         return _LAST_WEATHER_TEMP_F
