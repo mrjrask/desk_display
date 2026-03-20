@@ -653,6 +653,19 @@ def _scroll_display(display, full_img: Image.Image):
 
 # ─── Public API ───────────────────────────────────────────────────────────────
 def render_mlb_scoreboard(display, games: list[dict] | None, transition: bool = False) -> ScreenImage:
+    from screens.mlb_scoreboard_v2 import (
+        MIN_GAMES_FOR_V2_LAYOUT,
+        V2_DISABLED_RESOLUTIONS,
+        render_mlb_scoreboard_v2,
+    )
+
+    if (
+        games is not None
+        and (WIDTH, HEIGHT) not in V2_DISABLED_RESOLUTIONS
+        and len(games) >= MIN_GAMES_FOR_V2_LAYOUT
+    ):
+        return render_mlb_scoreboard_v2(display, games, transition=transition)
+
     global BACKGROUND_COLOR
     BACKGROUND_COLOR = get_screen_background_color(SCREEN_ID, SCOREBOARD_BACKGROUND_COLOR)
     score_font, status_font, center_font = _scoreboard_fonts()

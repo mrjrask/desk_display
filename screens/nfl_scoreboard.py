@@ -715,6 +715,16 @@ def _scroll_display(display, full_img: Image.Image):
 
 # ─── Public API ───────────────────────────────────────────────────────────────
 def render_nfl_scoreboard(display, games: list[dict], transition: bool = False) -> ScreenImage:
+    games = games or []
+    from screens.nfl_scoreboard_v2 import (
+        MIN_GAMES_FOR_V2_LAYOUT,
+        V2_DISABLED_RESOLUTIONS,
+        render_nfl_scoreboard_v2,
+    )
+
+    if (WIDTH, HEIGHT) not in V2_DISABLED_RESOLUTIONS and len(games) >= MIN_GAMES_FOR_V2_LAYOUT:
+        return render_nfl_scoreboard_v2(display, games, transition=transition)
+
     _apply_style_overrides()
     show_super_bowl_logo = len(games) == 1 and _is_super_bowl_game(games[0])
 

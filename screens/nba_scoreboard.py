@@ -1184,6 +1184,16 @@ def _scroll_display(display, full_img: Image.Image):
 
 # ─── Public API ───────────────────────────────────────────────────────────────
 def render_nba_scoreboard(display, games: list[dict], transition: bool = False) -> ScreenImage:
+    games = games or []
+    from screens.nba_scoreboard_v2 import (
+        MIN_GAMES_FOR_V2_LAYOUT,
+        V2_DISABLED_RESOLUTIONS,
+        render_nba_scoreboard_v2,
+    )
+
+    if (WIDTH, HEIGHT) not in V2_DISABLED_RESOLUTIONS and len(games) >= MIN_GAMES_FOR_V2_LAYOUT:
+        return render_nba_scoreboard_v2(display, games, transition=transition)
+
     global BACKGROUND_COLOR, BACKGROUND_COLOR_RGBA
     BACKGROUND_COLOR = get_screen_background_color(SCREEN_ID, SCOREBOARD_BACKGROUND_COLOR)
     BACKGROUND_COLOR_RGBA = BACKGROUND_COLOR + (255,)
