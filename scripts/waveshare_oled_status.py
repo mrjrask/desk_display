@@ -368,6 +368,42 @@ def _best_value_font_size(width: int, height: int, text: str, top_margin: int) -
             break
     return best_size
 
+
+def _best_time_font_size(width: int, height: int, time_text: str, top_margin: int) -> int:
+    image = Image.new("1", (width, height), 0)
+    draw = ImageDraw.Draw(image)
+    max_height = height - top_margin - 2
+    best_size = 8
+    time_match = re.match(r"^(.*?)(?:\s+([AP]M))?$", time_text.strip(), re.IGNORECASE)
+    base_time = time_match.group(1) if time_match else time_text
+    meridiem = (time_match.group(2) or "").upper() if time_match else ""
+
+    for size in range(8, 80):
+        main_font = _load_value_font(size)
+        meridiem_font = _load_value_font(max(8, size // 2))
+
+        main_bbox = draw.textbbox((0, 0), base_time, font=main_font)
+        main_w = main_bbox[2] - main_bbox[0]
+        main_h = main_bbox[3] - main_bbox[1]
+
+        gap = 3 if meridiem else 0
+        meridiem_bbox = (
+            draw.textbbox((0, 0), meridiem, font=meridiem_font)
+            if meridiem
+            else (0, 0, 0, 0)
+        )
+        meridiem_w = meridiem_bbox[2] - meridiem_bbox[0]
+        meridiem_h = meridiem_bbox[3] - meridiem_bbox[1]
+
+        total_w = main_w + gap + meridiem_w
+        total_h = max(main_h, meridiem_h)
+        if total_w <= width - 4 and total_h <= max_height:
+            best_size = size
+        else:
+            break
+    return best_size
+
+
 def _title_top_margin(width: int, title: str | None) -> int:
     if not title:
         return 2
@@ -529,11 +565,19 @@ def main() -> int:
         while not _STOP_EVENT.is_set():
             time_text = current_time_12h()
             date_text = current_date_mdy()
-            time_value_font_size = _best_value_font_size(
+            time_top_margin = _title_top_margin(OLED_WIDTH, "Time")
+            date_top_margin = _title_top_margin(OLED_WIDTH, "Date")
+            time_value_font_size = _best_time_font_size(
                 OLED_WIDTH,
                 OLED_HEIGHT,
-                time_text.split()[0],
-                _title_top_margin(OLED_WIDTH, "Time"),
+                time_text,
+                time_top_margin,
+            )
+            date_value_font_size = _best_value_font_size(
+                OLED_WIDTH,
+                OLED_HEIGHT,
+                date_text,
+                date_top_margin,
             )
 
             date_image = render_centered_text(
@@ -541,7 +585,7 @@ def main() -> int:
                 OLED_HEIGHT,
                 date_text,
                 title="Date",
-                value_font_size=time_value_font_size,
+                value_font_size=date_value_font_size,
             )
             time_image = render_centered_time_text(
                 OLED_WIDTH,

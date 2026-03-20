@@ -218,3 +218,52 @@ def test_weather2_gate_disabled_for_non_weather_sources(monkeypatch):
     monkeypatch.setattr(mod, "WAIT_FOR_WEATHER2", True)
 
     assert mod._weather2_screen_has_rendered() is True
+
+
+def test_best_time_font_size_accounts_for_meridiem_width():
+    mod = _load_module()
+
+    full_time_size = mod._best_time_font_size(128, 64, "12:54 PM", 12)
+    base_time_size = mod._best_value_font_size(128, 64, "12:54", 12)
+
+    assert full_time_size <= base_time_size
+
+
+def test_main_uses_independent_font_sizes_for_date_and_time(monkeypatch):
+    mod = _load_module()
+
+    bus = _FakeSMBus()
+    font_sizes = []
+
+    class _Display:
+        def __init__(self, *_args, **_kwargs):
+            pass
+
+        def initialize(self):
+            return None
+
+        def clear(self):
+            return None
+
+    def _render_centered_text(_w, _h, _text, *, title=None, value_font_size=None):
+        font_sizes.append((title, value_font_size))
+        return object()
+
+    monkeypatch.setattr(mod, "SMBus", lambda *_args, **_kwargs: bus)
+    monkeypatch.setattr(mod, "SSD1306Display", _Display)
+    monkeypatch.setattr(mod, "fade_transition", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(mod, "current_time_12h", lambda: "10:54 PM")
+    monkeypatch.setattr(mod, "current_date_mdy", lambda: "11/18/26")
+    monkeypatch.setattr(mod, "random_swap_interval_seconds", lambda: 60)
+    monkeypatch.setattr(mod, "_best_time_font_size", lambda *_args, **_kwargs: 20)
+    monkeypatch.setattr(mod, "_best_value_font_size", lambda *_args, **_kwargs: 16)
+    monkeypatch.setattr(mod, "render_centered_text", _render_centered_text)
+    monkeypatch.setattr(mod, "render_centered_time_text", _render_centered_text)
+    monkeypatch.setattr(mod._STOP_EVENT, "wait", lambda _seconds: mod._STOP_EVENT.set())
+
+    mod._STOP_EVENT.clear()
+    rc = mod.main()
+
+    assert rc == 0
+    assert ("Date", 16) in font_sizes
+    assert ("Time", 20) in font_sizes
