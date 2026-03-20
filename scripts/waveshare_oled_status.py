@@ -63,6 +63,16 @@ WAIT_FOR_WEATHER2 = os.getenv("WAVESHARE_OLED_WAIT_FOR_WEATHER2", "1").strip().l
     "false",
     "no",
 }
+MIN_VALUE_FONT_SIZE = max(6, _env_int("WAVESHARE_OLED_MIN_VALUE_FONT_SIZE", 8))
+MAX_VALUE_FONT_SIZE = max(
+    MIN_VALUE_FONT_SIZE,
+    _env_int("WAVESHARE_OLED_MAX_VALUE_FONT_SIZE", 26),
+)
+MIN_TIME_FONT_SIZE = max(6, _env_int("WAVESHARE_OLED_MIN_TIME_FONT_SIZE", MIN_VALUE_FONT_SIZE))
+MAX_TIME_FONT_SIZE = max(
+    MIN_TIME_FONT_SIZE,
+    _env_int("WAVESHARE_OLED_MAX_TIME_FONT_SIZE", MAX_VALUE_FONT_SIZE),
+)
 
 
 LOGGER = logging.getLogger("waveshare_oled_status")
@@ -356,8 +366,8 @@ def _best_value_font_size(width: int, height: int, text: str, top_margin: int) -
     image = Image.new("1", (width, height), 0)
     draw = ImageDraw.Draw(image)
     max_height = height - top_margin - 2
-    best_size = 8
-    for size in range(8, 80):
+    best_size = MIN_VALUE_FONT_SIZE
+    for size in range(MIN_VALUE_FONT_SIZE, MAX_VALUE_FONT_SIZE + 1):
         font = _load_value_font(size)
         bbox = draw.textbbox((0, 0), text, font=font)
         text_w = bbox[2] - bbox[0]
@@ -373,12 +383,12 @@ def _best_time_font_size(width: int, height: int, time_text: str, top_margin: in
     image = Image.new("1", (width, height), 0)
     draw = ImageDraw.Draw(image)
     max_height = height - top_margin - 2
-    best_size = 8
+    best_size = MIN_TIME_FONT_SIZE
     time_match = re.match(r"^(.*?)(?:\s+([AP]M))?$", time_text.strip(), re.IGNORECASE)
     base_time = time_match.group(1) if time_match else time_text
     meridiem = (time_match.group(2) or "").upper() if time_match else ""
 
-    for size in range(8, 80):
+    for size in range(MIN_TIME_FONT_SIZE, MAX_TIME_FONT_SIZE + 1):
         main_font = _load_value_font(size)
         meridiem_font = _load_value_font(max(8, size // 2))
 
