@@ -12,6 +12,9 @@ WIKI_PAGE_URL="https://www.waveshare.com/wiki/OLED/LCD_HAT_(A)"
 WIRINGPI_ZIP_URL="https://files.waveshare.com/wiki/OLED-LCD-HAT-A/WiringPi.zip"
 DEMO_ZIP_URL="https://files.waveshare.com/wiki/OLED-LCD-HAT-A/OLED_LCD_HAT_A_Demo.zip"
 OVERLAY_ZIP_URL="https://files.waveshare.com/wiki/OLED-LCD-HAT-A/OLED_LCD_HAT_A.zip"
+FBCP_ZIP_URL="https://files.waveshare.com/wiki/OLED-LCD-HAT-A/Rpi-fbcp.zip"
+FBCP_SERVICE_NAME="waveshare-fbcp.service"
+FBCP_SERVICE_PATH="/etc/systemd/system/${FBCP_SERVICE_NAME}"
 
 LOGFILE="/var/log/waveshare_oled_lcd_hat_a_trixie64_install.log"
 WORKDIR="/usr/local/src/waveshare_oled_lcd_hat_a"
@@ -65,6 +68,16 @@ detect_codename() {
   return 1
 }
 
+detect_pi_model_major() {
+  local model
+  model="$(tr -d '\0' </proc/device-tree/model 2>/dev/null || true)"
+  if [[ "$model" =~ Raspberry\ Pi\ ([0-9]+) ]]; then
+    echo "${BASH_REMATCH[1]}"
+    return 0
+  fi
+  echo ""
+}
+
 backup_file() {
   local file="$1"
   if [[ -f "$file" ]]; then
@@ -107,7 +120,7 @@ install_waveshare_stack() {
     exit 1
   }
 
-  local arch kernel_arch model config_file overlays_dir wiringpi_dir deb_candidate dtbo_file demo_root
+  local arch kernel_arch model config_file overlays_dir wiringpi_dir deb_candidate dtbo_file demo_root fbcp_root
   arch="$(dpkg --print-architecture)"
   kernel_arch="$(uname -m)"
   model="$(tr -d '\0' </proc/device-tree/model 2>/dev/null || echo "Unknown Raspberry Pi")"
@@ -245,6 +258,36 @@ install_waveshare_stack() {
   chmod 644 "$overlays_dir/OLED_LCD_HAT_A.dtbo"
   echo "Installed overlay to $overlays_dir/OLED_LCD_HAT_A.dtbo"
 
+  if [[ "${PI_MODEL_MAJOR:-}" != "5" ]]; then
+    echo
+    echo "==> Downloading Waveshare fbcp source archive (non-Pi5 path)"
+    wget -O "$WORKDIR/Rpi-fbcp.zip" "$FBCP_ZIP_URL"
+
+    echo "==> Extracting fbcp archive"
+    unzip -o "$WORKDIR/Rpi-fbcp.zip" -d "$WORKDIR/fbcp_extract"
+
+    fbcp_root="$(find "$WORKDIR/fbcp_extract" -maxdepth 3 -type d -name 'rpi-fbcp' | head -n 1 || true)"
+    if [[ -z "$fbcp_root" ]]; then
+      fbcp_root="$(find "$WORKDIR/fbcp_extract" -maxdepth 3 -type d -name '*fbcp*' | head -n 1 || true)"
+    fi
+
+    if [[ -n "$fbcp_root" ]]; then
+      echo "==> Building fbcp from $fbcp_root"
+      rm -rf "$fbcp_root/build"
+      mkdir -p "$fbcp_root/build"
+      cd "$fbcp_root/build"
+      cmake ..
+      make -j"$(nproc)"
+      install -m 755 fbcp /usr/local/bin/fbcp
+    else
+      echo "WARNING: Could not locate extracted fbcp source tree."
+    fi
+    cd "$WORKDIR"
+  else
+    echo
+    echo "==> Skipping fbcp build on Raspberry Pi 5 (wiki uses /dev/fb1 path without fbcp)"
+  fi
+
   echo
   echo "==> Downloading Waveshare demo package"
   wget -O "$WORKDIR/OLED_LCD_HAT_A_Demo.zip" "$DEMO_ZIP_URL"
@@ -270,12 +313,26 @@ install_waveshare_stack() {
   sed -i '/^dtoverlay=OLED_LCD_HAT_A$/d' "$config_file"
   sed -i '/^dtoverlay=OLED_LCD_HAT_A:rotate=90$/d' "$config_file"
   sed -i '/^display_rotate=0$/d' "$config_file"
+  sed -i '/^hdmi_force_hotplug=1$/d' "$config_file"
+  sed -i '/^max_usb_current=1$/d' "$config_file"
+  sed -i '/^hdmi_group=2$/d' "$config_file"
+  sed -i '/^hdmi_mode=87$/d' "$config_file"
+  sed -i '/^hdmi_cvt 640 480 60 6 0 0 0$/d' "$config_file"
+  sed -i '/^hdmi_drive=2$/d' "$config_file"
+  sed -i 's/^dtoverlay=vc4-kms-v3d/#dtoverlay=vc4-kms-v3d/'
+  sed -i 's/^dtoverlay=vc4-kms-v3d-pi4/#dtoverlay=vc4-kms-v3d-pi4/'
 
   cat >>"$config_file" <<'CFGEOF'
 
 # Waveshare OLED/LCD HAT (A)
 dtparam=spi=on
 dtoverlay=OLED_LCD_HAT_A:rotate=90
+hdmi_force_hotplug=1
+max_usb_current=1
+hdmi_group=2
+hdmi_mode=87
+hdmi_cvt 640 480 60 6 0 0 0
+hdmi_drive=2
 display_rotate=0
 CFGEOF
 
@@ -345,7 +402,14 @@ export DESK_DISPLAY_OUTPUT="${DESK_DISPLAY_OUTPUT:-framebuffer}"
 export REQUIREMENTS_FILE="${REQUIREMENTS_FILE:-requirements_framebuffer.txt}"
 export DISPLAY_WIDTH="${DISPLAY_WIDTH:-320}"
 export DISPLAY_HEIGHT="${DISPLAY_HEIGHT:-240}"
-export DISPLAY_FB_DEVICE="${DISPLAY_FB_DEVICE:-/dev/fb1}"
+PI_MODEL_MAJOR="${PI_MODEL_MAJOR:-$(detect_pi_model_major || true)}"
+if [[ -z "${DISPLAY_FB_DEVICE:-}" ]]; then
+  if [[ "$PI_MODEL_MAJOR" == "5" ]]; then
+    DISPLAY_FB_DEVICE="/dev/fb1"
+  else
+    DISPLAY_FB_DEVICE="/dev/fb0"
+  fi
+fi
 export DISPLAY_ROTATION="${DISPLAY_ROTATION:-0}"
 export BUTTON_A="${BUTTON_A:-24}"
 export BUTTON_B="${BUTTON_B:-4}"
@@ -409,5 +473,27 @@ SERVICE
 $SUDO systemctl daemon-reload
 $SUDO systemctl enable "$WAVESHARE_OLED_SERVICE_NAME"
 $SUDO systemctl restart "$WAVESHARE_OLED_SERVICE_NAME"
+
+if [[ "$PI_MODEL_MAJOR" != "5" && -x /usr/local/bin/fbcp ]]; then
+  log "Writing Waveshare fbcp bridge service to $FBCP_SERVICE_PATH"
+  $SUDO tee "$FBCP_SERVICE_PATH" >/dev/null <<SERVICE
+[Unit]
+Description=Waveshare framebuffer mirror bridge (fbcp)
+After=multi-user.target
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/fbcp
+Restart=always
+RestartSec=2
+
+[Install]
+WantedBy=multi-user.target
+SERVICE
+
+  $SUDO systemctl daemon-reload
+  $SUDO systemctl enable "$FBCP_SERVICE_NAME"
+  $SUDO systemctl restart "$FBCP_SERVICE_NAME"
+fi
 
 log "Installation complete. Reboot is recommended before running Waveshare demos."
