@@ -2,8 +2,8 @@
 """Render simple status content on the Waveshare OLED/LCD HAT (A) OLED displays.
 
 Default behavior:
-- Left OLED (0x3c): current Weather 1 temperature
-- Right OLED (0x3d): local time in 12-hour format, no leading zero
+- Left OLED (0x3c): current date in M/D/YY format
+- Right OLED (0x3d): local time in 12-hour format, no leading zero (small AM/PM)
 """
 
 from __future__ import annotations
@@ -325,6 +325,11 @@ def current_time_12h() -> str:
     return datetime.now().strftime("%I:%M %p").lstrip("0")
 
 
+def current_date_mdy() -> str:
+    now = datetime.now()
+    return f"{now.month}/{now.day}/{now.strftime('%y')}"
+
+
 def random_swap_interval_seconds() -> int:
     return random.randint(SWAP_INTERVAL_MIN_SECONDS, SWAP_INTERVAL_MAX_SECONDS)
 
@@ -413,6 +418,60 @@ def render_centered_text(
     return image
 
 
+def render_centered_time_text(
+    width: int,
+    height: int,
+    time_text: str,
+    *,
+    title: str | None = None,
+    value_font_size: int | None = None,
+) -> Image.Image:
+    image = Image.new("1", (width, height), 0)
+    draw = ImageDraw.Draw(image)
+    title_font = ImageFont.load_default()
+
+    y_offset = 0
+    if title:
+        title_bbox = draw.textbbox((0, 0), title, font=title_font)
+        title_w = title_bbox[2] - title_bbox[0]
+        title_h = title_bbox[3] - title_bbox[1]
+        draw.text(((width - title_w) // 2, 2), title, font=title_font, fill=255)
+        y_offset = title_h + 6
+
+    top_margin = max(2, y_offset)
+    time_match = re.match(r"^(.*?)(?:\s+([AP]M))?$", time_text.strip(), re.IGNORECASE)
+    base_time = time_match.group(1) if time_match else time_text
+    meridiem = (time_match.group(2) or "").upper() if time_match else ""
+
+    if value_font_size is None:
+        value_font_size = _best_value_font_size(width, height, base_time, top_margin)
+
+    main_font = _load_value_font(value_font_size)
+    meridiem_font = _load_value_font(max(8, value_font_size // 2))
+
+    main_bbox = draw.textbbox((0, 0), base_time, font=main_font)
+    main_w = main_bbox[2] - main_bbox[0]
+    main_h = main_bbox[3] - main_bbox[1]
+
+    gap = 3 if meridiem else 0
+    meridiem_bbox = draw.textbbox((0, 0), meridiem, font=meridiem_font) if meridiem else (0, 0, 0, 0)
+    meridiem_w = meridiem_bbox[2] - meridiem_bbox[0]
+    meridiem_h = meridiem_bbox[3] - meridiem_bbox[1]
+
+    total_w = main_w + gap + meridiem_w
+    total_h = max(main_h, meridiem_h)
+    max_height = height - top_margin - 2
+    start_x = (width - total_w) // 2
+    start_y = top_margin + max(0, (max_height - total_h) // 2)
+
+    draw.text((start_x, start_y), base_time, font=main_font, fill=255)
+    if meridiem:
+        meridiem_y = start_y + max(0, main_h - meridiem_h)
+        draw.text((start_x + main_w + gap, meridiem_y), meridiem, font=meridiem_font, fill=255)
+
+    return image
+
+
 def fade_transition(display: SSD1306Display, new_image: Image.Image) -> None:
     for step in range(FADE_STEPS, -1, -1):
         display.set_contrast(int(255 * step / FADE_STEPS))
@@ -464,31 +523,27 @@ def main() -> int:
     temp_display.clear()
     time_display.clear()
 
-    show_temp_on_left = True
+    show_date_on_left = True
     next_swap_at = time.monotonic() + random_swap_interval_seconds()
     try:
         while not _STOP_EVENT.is_set():
-            if not _weather2_screen_has_rendered():
-                _STOP_EVENT.wait(REFRESH_SECONDS)
-                continue
-
-            temp_text = read_temperature()
             time_text = current_time_12h()
+            date_text = current_date_mdy()
             time_value_font_size = _best_value_font_size(
                 OLED_WIDTH,
                 OLED_HEIGHT,
-                time_text,
+                time_text.split()[0],
                 _title_top_margin(OLED_WIDTH, "Time"),
             )
 
-            temp_image = render_centered_text(
+            date_image = render_centered_text(
                 OLED_WIDTH,
                 OLED_HEIGHT,
-                temp_text,
-                title="Outdoor Temp",
+                date_text,
+                title="Date",
                 value_font_size=time_value_font_size,
             )
-            time_image = render_centered_text(
+            time_image = render_centered_time_text(
                 OLED_WIDTH,
                 OLED_HEIGHT,
                 time_text,
@@ -497,7 +552,7 @@ def main() -> int:
             )
 
             left_image, right_image = (
-                (temp_image, time_image) if show_temp_on_left else (time_image, temp_image)
+                (date_image, time_image) if show_date_on_left else (time_image, date_image)
             )
             left_ok = _safe_render(temp_display, left_image, "left")
             right_ok = _safe_render(time_display, right_image, "right")
@@ -511,7 +566,7 @@ def main() -> int:
                     LOGGER.warning("OLED reinitialization failed: %s", exc)
 
             if time.monotonic() >= next_swap_at:
-                show_temp_on_left = not show_temp_on_left
+                show_date_on_left = not show_date_on_left
                 next_swap_at = time.monotonic() + random_swap_interval_seconds()
 
             _STOP_EVENT.wait(REFRESH_SECONDS)
