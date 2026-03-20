@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import socket
 import time
 from datetime import datetime
 from pathlib import Path
@@ -870,6 +871,11 @@ def run_config_ui(host: str = SCREEN_CONFIG_HOST, port: int = SCREEN_CONFIG_PORT
     from waitress import serve
 
     serve(app, host=host, port=port, threads=8)
+
+
+@app.context_processor
+def inject_machine_hostname() -> Dict[str, str]:
+    return {"machine_hostname": socket.gethostname()}
 
 
 @app.route("/login", methods=["GET", "POST"])
