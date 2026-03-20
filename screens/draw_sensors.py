@@ -76,7 +76,9 @@ FONT_STAMP = _try_font("DejaVuSans.ttf", 11)
 
 # ---------- Sensor wrappers ----------
 def _parse_i2c_bus_candidates() -> Tuple[int, ...]:
-    raw = os.environ.get("PIM_SENSOR_STICK_I2C_BUS") or os.environ.get("INSIDE_I2C_BUSES", "1")
+    raw = os.environ.get("PIM_SENSOR_STICK_I2C_BUS") or os.environ.get(
+        "INSIDE_I2C_BUSES", "1,2,10,11,13,14,15"
+    )
     buses = []
     seen = set()
     for token in raw.split(","):
@@ -146,7 +148,15 @@ class LTR559Reader:
             try:
                 self.dev, self.bus_num = _build_device(ltr559, ("LTR559",), buses)
                 if self.dev is None:
-                    raise RuntimeError("LTR559 class unavailable")
+                    # Pimoroni's Python ltr559 module also supports direct
+                    # module-level reads (get_lux/get_proximity) with implicit
+                    # initialization.
+                    if callable(getattr(ltr559, "get_lux", None)) and callable(
+                        getattr(ltr559, "get_proximity", None)
+                    ):
+                        self.dev = ltr559
+                    else:
+                        raise RuntimeError("LTR559 class/module API unavailable")
                 _ = self.dev.get_lux()  # wake some units
                 self.ok = True
             except Exception as e:
