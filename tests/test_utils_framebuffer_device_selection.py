@@ -77,6 +77,54 @@ def test_detect_exact_framebuffer_device_returns_none_without_match(monkeypatch)
     assert detected is None
 
 
+def test_detect_framebuffer_device_uses_fbset_when_mode_unavailable(monkeypatch):
+    monkeypatch.setattr(
+        utils.Path,
+        "glob",
+        lambda self, pattern: [Path("/dev/fb0"), Path("/dev/fb1")],
+    )
+    monkeypatch.setattr(
+        utils.Path,
+        "exists",
+        lambda self: str(self) in {"/dev/fb0", "/dev/fb1"},
+    )
+    monkeypatch.setattr(utils, "_read_framebuffer_mode_size", lambda _device: None)
+    monkeypatch.setattr(
+        utils,
+        "_read_framebuffer_fbset_size",
+        lambda device: (320, 240) if device == "/dev/fb0" else None,
+    )
+    monkeypatch.setattr(utils, "_read_sysfs_value", lambda _path: None)
+
+    detected = utils._detect_framebuffer_device("/dev/fb1", (320, 240))
+
+    assert detected == "/dev/fb0"
+
+
+def test_detect_exact_framebuffer_device_uses_fbset_when_mode_unavailable(monkeypatch):
+    monkeypatch.setattr(
+        utils.Path,
+        "glob",
+        lambda self, pattern: [Path("/dev/fb0"), Path("/dev/fb1")],
+    )
+    monkeypatch.setattr(
+        utils.Path,
+        "exists",
+        lambda self: str(self) in {"/dev/fb0", "/dev/fb1"},
+    )
+    monkeypatch.setattr(utils, "_read_framebuffer_mode_size", lambda _device: None)
+    monkeypatch.setattr(
+        utils,
+        "_read_framebuffer_fbset_size",
+        lambda device: (320, 240) if device == "/dev/fb0" else None,
+    )
+    monkeypatch.setattr(utils, "_read_sysfs_value", lambda _path: None)
+
+    detected = utils._detect_exact_framebuffer_device("/dev/fb1", (320, 240))
+
+    assert detected == "/dev/fb0"
+
+
 def test_init_framebuffer_output_retries_fb0_when_preferred_fails(monkeypatch):
     init_calls = []
 

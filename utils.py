@@ -289,14 +289,14 @@ def _detect_framebuffer_device(preferred_device: str, requested_size: Tuple[int,
         if fallback_device is None:
             fallback_device = device
 
-        mode_size = _read_framebuffer_mode_size(device)
-        if mode_size == requested_size:
-            return device
-
-        fb_name = Path(device).name
-        sysfs_base = Path('/sys/class/graphics') / fb_name
-        virtual_size = _parse_virtual_size(_read_sysfs_value(str(sysfs_base / 'virtual_size')))
-        if virtual_size == requested_size:
+        detected_size = (
+            _read_framebuffer_mode_size(device)
+            or _read_framebuffer_fbset_size(device)
+            or _parse_virtual_size(
+                _read_sysfs_value(str(Path("/sys/class/graphics") / Path(device).name / "virtual_size"))
+            )
+        )
+        if detected_size == requested_size:
             return device
 
     if fallback_device is not None:
@@ -324,14 +324,14 @@ def _detect_exact_framebuffer_device(
         if not Path(device).exists():
             continue
 
-        mode_size = _read_framebuffer_mode_size(device)
-        if mode_size == requested_size:
-            return device
-
-        fb_name = Path(device).name
-        sysfs_base = Path("/sys/class/graphics") / fb_name
-        virtual_size = _parse_virtual_size(_read_sysfs_value(str(sysfs_base / "virtual_size")))
-        if virtual_size == requested_size:
+        detected_size = (
+            _read_framebuffer_mode_size(device)
+            or _read_framebuffer_fbset_size(device)
+            or _parse_virtual_size(
+                _read_sysfs_value(str(Path("/sys/class/graphics") / Path(device).name / "virtual_size"))
+            )
+        )
+        if detected_size == requested_size:
             return device
 
     return None
