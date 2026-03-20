@@ -35,3 +35,39 @@ def test_ltr559_reader_falls_back_to_module_level_api(monkeypatch):
     reader = draw_sensors.LTR559Reader()
     assert reader.ok is True
     assert reader.sample() == (123.4, 56)
+
+
+def test_ltr559_reader_supports_alternate_method_names(monkeypatch):
+    class FakeLTR:
+        @staticmethod
+        def get_als():
+            return 42.5
+
+        @staticmethod
+        def get_ps():
+            return 9
+
+    monkeypatch.setattr(draw_sensors, "ltr559", FakeLTR)
+    monkeypatch.setattr(draw_sensors, "_build_device", lambda *args, **kwargs: (None, None))
+
+    reader = draw_sensors.LTR559Reader()
+    assert reader.ok is True
+    assert reader.sample() == (42.5, 9)
+
+
+def test_imu_reader_supports_getter_style_api(monkeypatch):
+    class FakeIMUDevice:
+        def get_acceleration(self):
+            return (0.0, 0.0, 1.0)
+
+        def get_gyroscope(self):
+            return (1.0, 2.0, 3.0)
+
+    monkeypatch.setattr(draw_sensors, "_IMU", object())
+    monkeypatch.setattr(draw_sensors, "_build_device", lambda *args, **kwargs: (FakeIMUDevice(), 10))
+
+    reader = draw_sensors.IMUReader()
+    assert reader.ok is True
+    accel_mag, rot_z = reader.sample()
+    assert accel_mag == 1.0
+    assert rot_z == 3.0

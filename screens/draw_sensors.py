@@ -138,6 +138,26 @@ def _build_device(module: Any, ctor_names: Sequence[str], buses: Sequence[int]):
     return None, None
 
 
+
+
+def _read_vector(device: Any, method_names: Sequence[str], attr_names: Sequence[str]):
+    for name in method_names:
+        func = getattr(device, name, None)
+        if callable(func):
+            try:
+                value = func()
+                if isinstance(value, (list, tuple)) and len(value) >= 3:
+                    return value[0], value[1], value[2]
+            except Exception:
+                continue
+
+    for name in attr_names:
+        value = getattr(device, name, None)
+        if isinstance(value, (list, tuple)) and len(value) >= 3:
+            return value[0], value[1], value[2]
+
+    return None, None, None
+
 class LTR559Reader:
     def __init__(self):
         self.ok = False
@@ -151,13 +171,21 @@ class LTR559Reader:
                     # Pimoroni's Python ltr559 module also supports direct
                     # module-level reads (get_lux/get_proximity) with implicit
                     # initialization.
-                    if callable(getattr(ltr559, "get_lux", None)) and callable(
-                        getattr(ltr559, "get_proximity", None)
-                    ):
+                    has_lux = any(
+                        callable(getattr(ltr559, name, None))
+                        for name in ("get_lux", "get_als")
+                    )
+                    has_prox = any(
+                        callable(getattr(ltr559, name, None))
+                        for name in ("get_proximity", "get_ps")
+                    )
+                    if has_lux and has_prox:
                         self.dev = ltr559
                     else:
                         raise RuntimeError("LTR559 class/module API unavailable")
-                _ = self.dev.get_lux()  # wake some units
+                wake_fn = getattr(self.dev, "get_lux", None) or getattr(self.dev, "get_als", None)
+                if callable(wake_fn):
+                    _ = wake_fn()  # wake some units
                 self.ok = True
             except Exception as e:
                 logging.warning(f"draw_sensors: LTR559 init failed: {e}")
@@ -165,15 +193,39 @@ class LTR559Reader:
     def sample(self) -> Tuple[Optional[float], Optional[int]]:
         if not self.ok:
             return None, None
+
         lux = prox = None
-        try:
-            lux = float(self.dev.get_lux())
-        except Exception:
-            lux = None
-        try:
-            prox = int(self.dev.get_proximity())
-        except Exception:
-            prox = None
+
+        for name in ("get_lux", "get_als", "lux"):
+            func = getattr(self.dev, name, None)
+            if callable(func):
+                try:
+                    lux = float(func())
+                    break
+                except Exception:
+                    lux = None
+            elif func is not None:
+                try:
+                    lux = float(func)
+                    break
+                except Exception:
+                    lux = None
+
+        for name in ("get_proximity", "get_ps", "proximity"):
+            func = getattr(self.dev, name, None)
+            if callable(func):
+                try:
+                    prox = int(func())
+                    break
+                except Exception:
+                    prox = None
+            elif func is not None:
+                try:
+                    prox = int(func)
+                    break
+                except Exception:
+                    prox = None
+
         return lux, prox
 
 
@@ -197,22 +249,27 @@ class IMUReader:
         if not self.ok or self.dev is None:
             return None, None
 
-        ax = ay = az = gz = None
-        try:
-            if hasattr(self.dev, "read_accelerometer"):
-                ax, ay, az = self.dev.read_accelerometer()
-            elif hasattr(self.dev, "acceleration"):
-                ax, ay, az = self.dev.acceleration  # type: ignore
-        except Exception:
-            ax = ay = az = None
+        ax, ay, az = _read_vector(
+            self.dev,
+            (
+                "read_accelerometer",
+                "get_accelerometer",
+                "get_acceleration",
+                "acceleration",
+            ),
+            ("acceleration", "accelerometer"),
+        )
 
-        try:
-            if hasattr(self.dev, "read_gyroscope"):
-                gx, gy, gz = self.dev.read_gyroscope()
-            elif hasattr(self.dev, "gyroscope"):
-                gx, gy, gz = self.dev.gyroscope  # type: ignore
-        except Exception:
-            gz = None
+        gx, gy, gz = _read_vector(
+            self.dev,
+            (
+                "read_gyroscope",
+                "get_gyroscope",
+                "get_gyro",
+                "gyroscope",
+            ),
+            ("gyroscope", "gyro"),
+        )
 
         accel_mag = None
         if ax is not None and ay is not None and az is not None:
