@@ -574,13 +574,8 @@ def _scroll_display(display, img: Image.Image):
     )
 
 
-def render_ncaam_scoreboard(display, games: list[dict] | None, transition: bool = False) -> ScreenImage:
-    from screens.ncaam_scoreboard_v2 import render_ncaam_scoreboard_v2
-
+def _render_ncaam_scoreboard_v1(display, games: list[dict] | None, transition: bool = False) -> ScreenImage:
     games = games or []
-    if len(games) >= MIN_GAMES_FOR_V2_LAYOUT:
-        return render_ncaam_scoreboard_v2(display, games, transition=transition)
-
     if not games:
         clear_display(display)
         title, _ = _mode_title_and_logo()
@@ -620,6 +615,15 @@ def render_ncaam_scoreboard(display, games: list[dict] | None, transition: bool 
     else:
         _scroll_display(display, full)
     return ScreenImage(full, displayed=True)
+
+
+def render_ncaam_scoreboard(display, games: list[dict] | None, transition: bool = False) -> ScreenImage:
+    from screens.ncaam_scoreboard_v2 import render_ncaam_scoreboard_v2
+
+    games = games or []
+    if len(games) >= MIN_GAMES_FOR_V2_LAYOUT:
+        return render_ncaam_scoreboard_v2(display, games, transition=transition)
+    return _render_ncaam_scoreboard_v1(display, games, transition=transition)
 
 
 @log_call

@@ -49,7 +49,7 @@ from screens.ncaam_scoreboard import (
     _get_league_logo,
     _scoreboard_mode,
     MODE_TOURNAMENT,
-    render_ncaam_scoreboard as render_ncaam_scoreboard_v1,
+    _render_ncaam_scoreboard_v1,
 )
 
 SCREEN_ID = "NCAAM Scoreboard v2"
@@ -198,9 +198,9 @@ def _scroll_display(display, full_img: Image.Image):
 def render_ncaam_scoreboard_v2(display, games: list[dict] | None, transition: bool = False) -> ScreenImage:
     games = games or []
     if (WIDTH, HEIGHT) in V2_DISABLED_RESOLUTIONS:
-        return render_ncaam_scoreboard_v1(display, games, transition=transition)
+        return _render_ncaam_scoreboard_v1(display, games, transition=transition)
     if len(games) < MIN_GAMES_FOR_V2_LAYOUT:
-        return render_ncaam_scoreboard_v1(display, games, transition=transition)
+        return _render_ncaam_scoreboard_v1(display, games, transition=transition)
 
     if not games:
         clear_display(display)
