@@ -106,7 +106,6 @@ if [[ "${DESK_DISPLAY_OUTPUT:-}" == "framebuffer" ]]; then
   )
   FRAMEBUFFER_UNIT_LINES=(
     "After=display-manager.service"
-    "Conflicts=display-manager.service"
   )
 fi
 log "Writing systemd service to $SERVICE_PATH"
