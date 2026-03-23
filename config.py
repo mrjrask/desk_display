@@ -17,6 +17,8 @@ from pathlib import Path
 from typing import Any, Dict, Optional, Tuple
 from zoneinfo import ZoneInfo
 
+from screens_catalog import canonical_screen_id
+
 # ─── Environment helpers ───────────────────────────────────────────────────────
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -1348,7 +1350,16 @@ def get_screen_style(screen_id: str) -> Dict[str, Any]:
     if not isinstance(screens, dict):
         return {}
     entry = screens.get(screen_id)
-    return entry if isinstance(entry, dict) else {}
+    if isinstance(entry, dict):
+        return entry
+
+    canonical_id = canonical_screen_id(screen_id)
+    if canonical_id != screen_id:
+        canonical_entry = screens.get(canonical_id)
+        if isinstance(canonical_entry, dict):
+            return canonical_entry
+
+    return {}
 
 
 def get_screen_background_color(
