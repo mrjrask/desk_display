@@ -1349,15 +1349,15 @@ def get_screen_style(screen_id: str) -> Dict[str, Any]:
     screens = config.get("screens") or {}
     if not isinstance(screens, dict):
         return {}
-    entry = screens.get(screen_id)
-    if isinstance(entry, dict):
-        return entry
-
     canonical_id = canonical_screen_id(screen_id)
     if canonical_id != screen_id:
         canonical_entry = screens.get(canonical_id)
         if isinstance(canonical_entry, dict):
             return canonical_entry
+
+    entry = screens.get(screen_id)
+    if isinstance(entry, dict):
+        return entry
 
     return {}
 
