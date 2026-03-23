@@ -72,7 +72,16 @@ def _format_record_with_pct(rec, *, precision=3):
 
 
 @log_call
-def draw_nba_standings_screen1(display, rec, logo_path, division_name, *, logo_scale: float = 1.0, transition=False):
+def draw_nba_standings_screen1(
+    display,
+    rec,
+    logo_path,
+    division_name,
+    *,
+    logo_scale: float = 1.0,
+    screen_id=None,
+    transition=False,
+):
     """Wrap the generic standings screen for NBA teams (no games-back row)."""
     return _base_screen1(
         display,
@@ -89,12 +98,13 @@ def draw_nba_standings_screen1(display, rec, logo_path, division_name, *, logo_s
         show_streak=True,
         logo_size=max(1, int(round(NBA_STAND1_LOGO_SZ * max(0.1, logo_scale)))),
         font_size_offset=(30 if _IS_1080P_LAYOUT else (12 if _IS_HYPERPIXEL_4 else (8 if _IS_HYPERPIXEL_4_SQUARE else 0))),
+        screen_id=screen_id,
         transition=transition,
     )
 
 
 @log_call
-def draw_nba_standings_screen2(display, rec, logo_path, *, transition=False):
+def draw_nba_standings_screen2(display, rec, logo_path, *, screen_id=None, transition=False):
     """Customize standings screen 2 for NBA teams."""
 
     return _base_screen2(
@@ -103,6 +113,7 @@ def draw_nba_standings_screen2(display, rec, logo_path, *, transition=False):
         logo_path,
         logo_size=NBA_LOGO_SZ,
         pct_precision=3,
+        screen_id=screen_id,
         transition=transition,
     )
 
