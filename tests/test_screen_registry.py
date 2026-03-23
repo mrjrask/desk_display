@@ -234,9 +234,16 @@ def test_sox_live_is_available_when_status_is_pre_game_warmup():
     assert registry["sox live"].available is True
 
 
-def test_mlb_next_alt_screens_available_when_split_squad_games_present():
+def test_mlb_next_alt_games_rotate_on_primary_next_screen(monkeypatch):
     now = datetime.datetime(2024, 3, 10, 12, 0, tzinfo=CENTRAL_TIME)
     weather = {"hourly": []}
+    rendered_game_ids = []
+
+    def _fake_draw_sports_screen(_display, game, *_args, **_kwargs):
+        rendered_game_ids.append(game.get("gamePk"))
+
+    monkeypatch.setattr("screens.registry.draw_sports_screen", _fake_draw_sports_screen)
+
     registry, _ = build_screen_registry(
         _make_context(
             weather,
@@ -255,9 +262,12 @@ def test_mlb_next_alt_screens_available_when_split_squad_games_present():
     )
 
     assert registry["cubs next"].available is True
-    assert registry["cubs next 2"].available is True
     assert registry["sox next"].available is True
-    assert registry["sox next 2"].available is True
+    registry["cubs next"].render()
+    registry["cubs next"].render()
+    registry["sox next"].render()
+    registry["sox next"].render()
+    assert rendered_game_ids == [1, 2, 3, 4]
 
 
 def test_logo_scroll_threshold_detects_1080p_and_higher():

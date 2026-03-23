@@ -1310,8 +1310,8 @@ cache = {
     "hawks":   {"stand":None, "last":None, "live":None, "next":None, "next_home":None},
     "wolves":  {"last":None, "live":None, "next":None, "next_home":None},
     "bulls":   {"stand":None, "last":None, "live":None, "next":None, "next_home":None},
-    "cubs":    {"stand":None, "last":None, "live":None, "next":None, "next_alt":None, "next_home":None},
-    "sox":     {"stand":None, "last":None, "live":None, "next":None, "next_alt":None, "next_home":None},
+    "cubs":    {"stand":None, "last":None, "last_alt":None, "live":None, "next":None, "next_alt":None, "next_home":None},
+    "sox":     {"stand":None, "last":None, "last_alt":None, "live":None, "next":None, "next_alt":None, "next_home":None},
     "scoreboards": {"nfl": None, "mlb": None, "wbc": None, "nba": None, "ncaam": None, "nhl": None},
 }
 
@@ -1536,6 +1536,7 @@ def _refresh_cubs() -> None:
     cache["cubs"].update({
         "stand": data_fetch.fetch_cubs_standings(),
         "last":  cubg.get("last_game"),
+        "last_alt": cubg.get("last_game_alt"),
         "live":  cubg.get("live_game"),
         "next":  cubg.get("next_game"),
         "next_alt": cubg.get("next_game_alt"),
@@ -1548,6 +1549,7 @@ def _refresh_sox() -> None:
     cache["sox"].update({
         "stand": data_fetch.fetch_sox_standings(),
         "last":  soxg.get("last_game"),
+        "last_alt": soxg.get("last_game_alt"),
         "live":  soxg.get("live_game"),
         "next":  soxg.get("next_game"),
         "next_alt": soxg.get("next_game_alt"),

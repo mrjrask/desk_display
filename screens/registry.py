@@ -407,6 +407,22 @@ def build_screen_registry(context: ScreenContext) -> Tuple[Dict[str, ScreenDefin
             metadata=extra,
         )
 
+    mlb_rotation_cursors: Dict[str, int] = {
+        "cubs last": 0,
+        "cubs next": 0,
+        "sox last": 0,
+        "sox next": 0,
+    }
+
+    def _rotate_games(screen_id: str, primary: Any, alternate: Any) -> Any:
+        if not primary:
+            return alternate
+        if not alternate:
+            return primary
+        cursor = mlb_rotation_cursors.get(screen_id, 0)
+        mlb_rotation_cursors[screen_id] = (cursor + 1) % 2
+        return alternate if cursor else primary
+
     # Date/time screens intentionally run outside transition mode so their
     # color-cycle threads can keep animating while those screens are visible.
     register("date", lambda: draw_date(context.display, transition=False))
@@ -890,14 +906,14 @@ def build_screen_registry(context: ScreenContext) -> Tuple[Dict[str, ScreenDefin
         )
         register(
             "cubs last",
-            lambda data=cubs.get("last"): draw_last_game(
+            lambda primary=cubs.get("last"), alternate=cubs.get("last_alt"): draw_last_game(
                 context.display,
-                data,
+                _rotate_games("cubs last", primary, alternate),
                 "Last Cubs game...",
                 screen_id="cubs last",
                 transition=True,
             ),
-            available=bool(cubs.get("last")),
+            available=bool(cubs.get("last") or cubs.get("last_alt")),
         )
         register(
             "cubs result",
@@ -919,25 +935,14 @@ def build_screen_registry(context: ScreenContext) -> Tuple[Dict[str, ScreenDefin
         )
         register(
             "cubs next",
-            lambda data=cubs_next: draw_sports_screen(
+            lambda primary=cubs_next, alternate=cubs_next_alt: draw_sports_screen(
                 context.display,
-                data,
+                _rotate_games("cubs next", primary, alternate),
                 "Next Cubs game...",
                 screen_id="cubs next",
                 transition=True,
             ),
-            available=bool(cubs_next),
-        )
-        register(
-            "cubs next 2",
-            lambda data=cubs_next_alt: draw_sports_screen(
-                context.display,
-                data,
-                "Next Cubs game...",
-                screen_id="cubs next",
-                transition=True,
-            ),
-            available=bool(cubs_next_alt),
+            available=bool(cubs_next or cubs_next_alt),
         )
         if cubs_next_home:
             register(
@@ -983,14 +988,14 @@ def build_screen_registry(context: ScreenContext) -> Tuple[Dict[str, ScreenDefin
         )
         register(
             "sox last",
-            lambda data=sox.get("last"): draw_last_game(
+            lambda primary=sox.get("last"), alternate=sox.get("last_alt"): draw_last_game(
                 context.display,
-                data,
+                _rotate_games("sox last", primary, alternate),
                 "Last Sox game...",
                 screen_id="sox last",
                 transition=True,
             ),
-            available=bool(sox.get("last")),
+            available=bool(sox.get("last") or sox.get("last_alt")),
         )
         register(
             "sox live",
@@ -1005,25 +1010,14 @@ def build_screen_registry(context: ScreenContext) -> Tuple[Dict[str, ScreenDefin
         )
         register(
             "sox next",
-            lambda data=sox_next: draw_sports_screen(
+            lambda primary=sox_next, alternate=sox_next_alt: draw_sports_screen(
                 context.display,
-                data,
+                _rotate_games("sox next", primary, alternate),
                 "Next Sox game...",
                 screen_id="sox next",
                 transition=True,
             ),
-            available=bool(sox_next),
-        )
-        register(
-            "sox next 2",
-            lambda data=sox_next_alt: draw_sports_screen(
-                context.display,
-                data,
-                "Next Sox game...",
-                screen_id="sox next",
-                transition=True,
-            ),
-            available=bool(sox_next_alt),
+            available=bool(sox_next or sox_next_alt),
         )
         if sox_next_home:
             register(

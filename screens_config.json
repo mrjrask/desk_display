@@ -43,7 +43,6 @@
     "cubs result": 0,
     "cubs live": 0,
     "cubs next": 5,
-    "cubs next 2": 5,
     "cubs next home": 0,
     "sox logo": 0,
     "sox stand1": 0,
@@ -51,7 +50,6 @@
     "sox last": 0,
     "sox live": 0,
     "sox next": 0,
-    "sox next 2": 0,
     "sox next home": 0,
     "nhl logo": 0,
     "NHL Scoreboard": 1,
@@ -294,9 +292,6 @@
           "screen": "cubs next"
         },
         {
-          "screen": "cubs next 2"
-        },
-        {
           "screen": "cubs next home"
         }
       ]
@@ -321,9 +316,6 @@
         },
         {
           "screen": "sox next"
-        },
-        {
-          "screen": "sox next 2"
         },
         {
           "screen": "sox next home"
