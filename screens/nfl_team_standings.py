@@ -51,7 +51,15 @@ def _format_nfl_record(rec, _record_line):
 
 
 @log_call
-def draw_nfl_standings_screen1(display, rec, logo_path, division_name, *, transition=False):
+def draw_nfl_standings_screen1(
+    display,
+    rec,
+    logo_path,
+    division_name,
+    *,
+    screen_id=None,
+    transition=False,
+):
     """Wrap the generic standings screen for NFL teams (no GB/WC columns)."""
     return _base_screen1(
         display,
@@ -63,11 +71,12 @@ def draw_nfl_standings_screen1(display, rec, logo_path, division_name, *, transi
         show_games_back=False,
         show_wild_card=False,
         font_size_offset=(30 if _IS_1080P_LAYOUT else 0),
+        screen_id=screen_id,
         transition=transition,
     )
 
 @log_call
-def draw_nfl_standings_screen2(display, rec, logo_path, *, transition=False):
+def draw_nfl_standings_screen2(display, rec, logo_path, *, screen_id=None, transition=False):
     """Customize standings screen 2 for NFL teams."""
 
     return _base_screen2(
@@ -78,6 +87,7 @@ def draw_nfl_standings_screen2(display, rec, logo_path, *, transition=False):
         split_order=("home", "away", "division", "conference"),
         show_streak=True,
         show_points=True,
+        screen_id=screen_id,
         transition=transition,
     )
 

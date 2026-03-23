@@ -26,6 +26,7 @@ from config import (
     FONT_STAND2_RECORD,
     FONT_STAND2_VALUE,
     SCOREBOARD_BACKGROUND_COLOR,
+    get_screen_background_color,
     is_hyperpixel_next_layout,
     scale_value,
     scale_value_width,
@@ -181,6 +182,7 @@ def draw_standings_screen1(
     record_font=None,
     points_font=None,
     font_size_offset=0,
+    screen_id=None,
     transition=False,
 ):
     """
@@ -190,7 +192,12 @@ def draw_standings_screen1(
         return None
 
     clear_display(display)
-    img  = Image.new("RGB", (WIDTH, HEIGHT), SCOREBOARD_BACKGROUND_COLOR)
+    background_color = (
+        get_screen_background_color(screen_id, SCOREBOARD_BACKGROUND_COLOR)
+        if screen_id
+        else SCOREBOARD_BACKGROUND_COLOR
+    )
+    img  = Image.new("RGB", (WIDTH, HEIGHT), background_color)
     draw = ImageDraw.Draw(img)
 
     # Logo
@@ -346,6 +353,7 @@ def draw_standings_screen2(
     split_overrides=None,
     show_streak=True,
     show_points=True,
+    screen_id=None,
     transition=False,
 ):
     """
@@ -355,7 +363,12 @@ def draw_standings_screen2(
         return None
 
     clear_display(display)
-    img  = Image.new("RGB", (WIDTH, HEIGHT), SCOREBOARD_BACKGROUND_COLOR)
+    background_color = (
+        get_screen_background_color(screen_id, SCOREBOARD_BACKGROUND_COLOR)
+        if screen_id
+        else SCOREBOARD_BACKGROUND_COLOR
+    )
+    img  = Image.new("RGB", (WIDTH, HEIGHT), background_color)
     draw = ImageDraw.Draw(img)
 
     # Logo
