@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import curses
 from pathlib import Path
+import re
 import subprocess
 import sys
 
@@ -35,6 +36,7 @@ TARGETS = {
 
 DEFAULT_HOME = ["det", "gb", "jax", "min", "ne", "no", "nyj", "phi", "tb"]
 DEFAULT_AWAY = ["atl", "buf", "car", "det", "gb", "mia", "min", "sea"]
+DEFAULT_BACKGROUND_HEX = "#000000"
 
 
 def _parse_team_list(raw: str | None) -> list[str]:
@@ -106,11 +108,29 @@ def _align_shared_opponents(home: list[str], away: list[str]) -> tuple[list[str]
     return home_shared + home_only, home_shared + away_only
 
 
-def _render_one(output: Path, home: list[str], away: list[str]) -> None:
+def _parse_background_hex(raw: str) -> tuple[int, int, int]:
+    value = raw.strip()
+    if not re.fullmatch(r"#[0-9a-fA-F]{6}", value):
+        raise ValueError("Background color must be a hex value in the form #RRGGBB.")
+    return tuple(int(value[i:i + 2], 16) for i in (1, 3, 5))
+
+
+def _prompt_background_hex(default: str = DEFAULT_BACKGROUND_HEX) -> str:
+    while True:
+        user_input = input(f"Background color hex [{default}]: ").strip()
+        selected = user_input or default
+        try:
+            _parse_background_hex(selected)
+            return selected
+        except ValueError as exc:
+            print(exc)
+
+
+def _render_one(output: Path, home: list[str], away: list[str], background_hex: str) -> None:
     import config
     from screens.draw_bears_schedule import render_bears_next_season_image
 
-    background = tuple(config.get_screen_background_color("bears next season", (0, 0, 0)))
+    background = _parse_background_hex(background_hex)
     img = render_bears_next_season_image(
         config.WIDTH,
         config.HEIGHT,
@@ -122,7 +142,7 @@ def _render_one(output: Path, home: list[str], away: list[str]) -> None:
     img.save(output, format="PNG")
 
 
-def _run_target(key: str, home: list[str], away: list[str]) -> None:
+def _run_target(key: str, home: list[str], away: list[str], background_hex: str) -> None:
     (width, height), output = TARGETS[key]
     cmd = [
         sys.executable,
@@ -133,6 +153,8 @@ def _run_target(key: str, home: list[str], away: list[str]) -> None:
         ",".join(home),
         "--away",
         ",".join(away),
+        "--background",
+        background_hex,
     ]
     env = dict(**__import__("os").environ)
     env["DISPLAY_WIDTH"] = str(width)
@@ -150,6 +172,10 @@ def main() -> int:
         action="store_true",
         help="Launch interactive selector instead of using defaults",
     )
+    parser.add_argument(
+        "--background",
+        help=f"Background color in #RRGGBB format (default: prompt at launch, fallback {DEFAULT_BACKGROUND_HEX})",
+    )
     parser.add_argument("--render-target", choices=sorted(TARGETS.keys()), help=argparse.SUPPRESS)
     args = parser.parse_args()
 
@@ -159,15 +185,23 @@ def main() -> int:
     if args.interactive:
         home, away = _interactive_select()
 
+    if args.background is not None:
+        background_hex = args.background
+    elif args.render_target:
+        background_hex = DEFAULT_BACKGROUND_HEX
+    else:
+        background_hex = _prompt_background_hex()
+    _parse_background_hex(background_hex)
+
     home, away = _align_shared_opponents(home, away)
 
     if args.render_target:
         output = TARGETS[args.render_target][1]
-        _render_one(output, home, away)
+        _render_one(output, home, away, background_hex)
         return 0
 
     for key in ("dhm", "h4", "h4sq"):
-        _run_target(key, home, away)
+        _run_target(key, home, away, background_hex)
     return 0
 
 
