@@ -1,3 +1,10 @@
+#Project Specific
+pressure_history.json
+screenshot_archive/
+screenshots/
+tools/maintenance/pressure_history.json
+screens_style.json
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
