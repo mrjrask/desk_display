@@ -56,6 +56,12 @@ ALLOWED_SCREEN_EXTS = (".png", ".jpg", ".jpeg")
 app = Flask(__name__)
 app.secret_key = SCREEN_UI_PASSWORD or "desk-display-config-ui"
 WEB_LOGGER = logging.getLogger("desk_display.web")
+HIDDEN_CONFIG_SCREEN_IDS = {
+    "cubs next 2",
+    "sox next 2",
+    "cubs last 2",
+    "sox last 2",
+}
 
 
 def _canonicalize_screen_reference(value: Any) -> Any:
@@ -744,8 +750,12 @@ def _build_screen_entries(
         style_screens = {}
 
     ordered_screen_ids: List[str] = []
-    ordered_screen_ids.extend(list(screens.keys()))
+    ordered_screen_ids.extend(
+        [screen_id for screen_id in screens.keys() if screen_id not in HIDDEN_CONFIG_SCREEN_IDS]
+    )
     for screen_id in SCREEN_IDS:
+        if screen_id in HIDDEN_CONFIG_SCREEN_IDS:
+            continue
         if screen_id not in ordered_screen_ids:
             ordered_screen_ids.append(screen_id)
 
@@ -784,6 +794,8 @@ def _build_config(entries: List[Dict[str, Any]]) -> Dict[str, Any]:
     for entry in entries:
         screen_id = canonical_screen_id(str(entry.get("id", "")).strip())
         if not screen_id:
+            continue
+        if screen_id in HIDDEN_CONFIG_SCREEN_IDS:
             continue
         frequency = int(entry.get("frequency", 0))
         alt_screen_raw = entry.get("alt_screen")

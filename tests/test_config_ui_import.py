@@ -49,6 +49,26 @@ def test_import_screens_accepts_entries_payload(monkeypatch):
     }
 
 
+def test_hidden_doubleheader_screens_are_not_configurable():
+    entries = config_ui._build_screen_entries(
+        {"screens": {"date": 1, "cubs next 2": 5, "sox last 2": 5}},
+        {"screens": {}},
+    )
+    entry_ids = [entry["id"] for entry in entries]
+
+    assert "date" in entry_ids
+    assert "cubs next 2" not in entry_ids
+    assert "sox last 2" not in entry_ids
+
+    config = config_ui._build_config(
+        [
+            {"id": "date", "frequency": 1, "alt_screen": "", "alt_frequency": ""},
+            {"id": "cubs next 2", "frequency": 5, "alt_screen": "", "alt_frequency": ""},
+        ]
+    )
+    assert config["screens"] == {"date": 1}
+
+
 def test_import_screens_accepts_export_payload_with_string_frequencies(monkeypatch):
     saved = {}
 

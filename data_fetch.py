@@ -1863,6 +1863,7 @@ def _fetch_mlb_schedule(team_id):
             "next_home_game": None,
             "live_game": None,
             "last_game": None,
+            "last_game_alt": None,
         }
         finished = []
         home_candidates = []
@@ -2009,8 +2010,18 @@ def _fetch_mlb_schedule(team_id):
 
         # Pick last finished
         if finished:
-            finished.sort(key=lambda x: x.get("officialDate",""))
+            def _finished_sort_key(game: Dict[str, Any]) -> tuple[str, str, int]:
+                game_date = str(game.get("officialDate") or "")
+                game_time = str(game.get("gameDate") or "")
+                game_pk = int(game.get("gamePk") or 0)
+                return (game_date, game_time, game_pk)
+
+            finished.sort(key=_finished_sort_key)
             result["last_game"] = finished[-1]
+            if len(finished) >= 2:
+                previous_finished = finished[-2]
+                if previous_finished.get("officialDate") == result["last_game"].get("officialDate"):
+                    result["last_game_alt"] = previous_finished
 
         return result
 
@@ -2022,6 +2033,7 @@ def _fetch_mlb_schedule(team_id):
             "next_home_game": None,
             "live_game": None,
             "last_game": None,
+            "last_game_alt": None,
         }
 
 
