@@ -108,7 +108,9 @@ from schedule import ScreenScheduler, build_scheduler, load_schedule_config, san
 
 # ─── Paths ───────────────────────────────────────────────────────────────────
 SCRIPT_DIR  = os.path.dirname(os.path.abspath(__file__))
-DEFAULT_CONFIG_PATH = os.path.join(SCRIPT_DIR, "screens_config.json")
+DEFAULT_CONFIG_PATH = os.environ.get(
+    "SCREENS_CONFIG_PATH", os.path.join(SCRIPT_DIR, "screens_config.json")
+)
 LOCAL_CONFIG_PATH = os.environ.get(
     "SCREENS_CONFIG_LOCAL_PATH", os.path.join(SCRIPT_DIR, "screens_config.local.json")
 )

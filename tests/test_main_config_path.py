@@ -59,3 +59,16 @@ def test_refresh_schedule_rechecks_active_config_path(main_module, monkeypatch):
 
     assert len(loader_calls) == 2
     assert main_module._screen_config_mtime == 2.0
+
+
+def test_default_config_path_honors_screens_config_env(monkeypatch):
+    sys.modules.pop("main", None)
+    monkeypatch.setenv("SCREENS_CONFIG_PATH", "/tmp/custom_screens_config.json")
+
+    main = importlib.import_module("main")
+    try:
+        assert main.DEFAULT_CONFIG_PATH == "/tmp/custom_screens_config.json"
+        assert main._active_config_path() == "/tmp/custom_screens_config.json"
+    finally:
+        main.request_shutdown("tests")
+        sys.modules.pop("main", None)
