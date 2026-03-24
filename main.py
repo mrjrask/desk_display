@@ -1913,6 +1913,7 @@ def main_loop():
 
             already_displayed = False
             led_override = None
+            consumed_delay = False
             img = None
 
             if result is None:
@@ -1928,6 +1929,7 @@ def main_loop():
                 img = result.image
                 already_displayed = result.displayed
                 led_override = result.led_override
+                consumed_delay = bool(getattr(result, "consumed_delay", False))
             elif isinstance(result, Image.Image):
                 img = result
 
@@ -1995,7 +1997,8 @@ def main_loop():
                     _screen_history.append(sid)
                     if len(_screen_history) > _SCREEN_HISTORY_LIMIT:
                         _screen_history[:] = _screen_history[-_SCREEN_HISTORY_LIMIT:]
-                skip_delay = _wait_with_button_checks(SCREEN_DELAY)
+                wait_duration = 0.0 if consumed_delay else SCREEN_DELAY
+                skip_delay = _wait_with_button_checks(wait_duration)
 
             if _shutdown_event.is_set():
                 break

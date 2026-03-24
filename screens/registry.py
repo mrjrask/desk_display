@@ -468,7 +468,7 @@ def build_screen_registry(context: ScreenContext) -> Tuple[Dict[str, ScreenDefin
         def frames(self) -> list[Image.Image]:
             return self._frames
 
-    def _render_quad_tile(screen_id: str) -> Optional[Image.Image]:
+    def _render_quad_tile(screen_id: str) -> Optional[Image.Image | list[Image.Image]]:
         definition = registry.get(screen_id)
         if definition is None:
             return None
@@ -503,8 +503,9 @@ def build_screen_registry(context: ScreenContext) -> Tuple[Dict[str, ScreenDefin
                 _quad_tile_scroll_cursor.pop(screen_id, None)
 
         if sampled_count:
-            frame_index = min(cursor, sampled_count - 1)
-            return sampled_frames[frame_index]
+            if sampled_count == 1:
+                return sampled_frames[0]
+            return sampled_frames
         if isinstance(rendered, ScreenImage):
             return rendered.image
         if isinstance(rendered, Image.Image):
