@@ -429,19 +429,37 @@ def build_screen_registry(context: ScreenContext) -> Tuple[Dict[str, ScreenDefin
 
     weather_data = context.cache.get("weather")
 
+    _quad_tile_scroll_cursor: Dict[str, int] = {}
+    _quad_tile_sample_frames = 10
+
     class _QuadCaptureDisplay:
-        def __init__(self):
+        def __init__(self, *, frame_limit: Optional[int] = None):
             self.width = WIDTH
             self.height = HEIGHT
             self._last: Optional[Image.Image] = None
             self._frame_id = 0
+            self._frame_limit = frame_limit
+            self._frames: list[Image.Image] = []
 
         def image(self, img: Image.Image):
-            self._last = img.copy()
+            copied = img.copy()
+            self._last = copied
             self._frame_id += 1
+            if len(self._frames) < _quad_tile_sample_frames:
+                self._frames.append(copied)
 
         def show(self):
             return None
+
+        def wait_for_skip(self, _duration: float) -> bool:
+            # In quad mode we sample frames from animated/scrolling screens and
+            # avoid per-frame sleeps so a single tile cannot stall the page.
+            return False
+
+        def skip_requested(self) -> bool:
+            if self._frame_limit is None:
+                return False
+            return self._frame_id >= self._frame_limit
 
         def frame_id(self) -> int:
             return self._frame_id
@@ -450,12 +468,17 @@ def build_screen_registry(context: ScreenContext) -> Tuple[Dict[str, ScreenDefin
         def last_image(self) -> Optional[Image.Image]:
             return self._last
 
+        @property
+        def frames(self) -> list[Image.Image]:
+            return self._frames
+
     def _render_quad_tile(screen_id: str) -> Optional[Image.Image]:
         definition = registry.get(screen_id)
         if definition is None:
             return None
 
-        capture = _QuadCaptureDisplay()
+        cursor = _quad_tile_scroll_cursor.get(screen_id, 0) % _quad_tile_sample_frames
+        capture = _QuadCaptureDisplay(frame_limit=_quad_tile_sample_frames)
         original_display = context.display
         context.display = capture
         try:
@@ -463,10 +486,22 @@ def build_screen_registry(context: ScreenContext) -> Tuple[Dict[str, ScreenDefin
         finally:
             context.display = original_display
 
+        captured_frames = len(capture.frames)
+        if captured_frames > 1:
+            next_cursor = cursor + 1
+            if next_cursor >= captured_frames:
+                next_cursor = 0
+            _quad_tile_scroll_cursor[screen_id] = next_cursor % _quad_tile_sample_frames
+        else:
+            _quad_tile_scroll_cursor.pop(screen_id, None)
+
         if isinstance(rendered, ScreenImage):
             return rendered.image
         if isinstance(rendered, Image.Image):
             return rendered
+        if captured_frames:
+            frame_index = min(cursor, captured_frames - 1)
+            return capture.frames[frame_index]
         return capture.last_image
     weather_logo = context.logos.get("weather logo")
     # Keep weather screens visible whenever cached forecast data exists.

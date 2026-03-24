@@ -1,5 +1,7 @@
 import datetime
 
+from PIL import Image
+
 from config import CENTRAL_TIME
 from screens.registry import (
     ScreenContext,
@@ -357,6 +359,47 @@ def test_quad_screen_uses_layout_tile_selection(monkeypatch):
     registry["quad"].render()
 
     assert captured["labels"] == ["time", "time", "inside", "weather1"]
+
+
+def test_quad_screen_advances_scrolling_tiles_between_renders(monkeypatch):
+    now = datetime.datetime(2024, 1, 1, 12, 0, tzinfo=CENTRAL_TIME)
+    weather = {"hourly": []}
+    context = _make_context(weather, now)
+
+    monkeypatch.setattr(
+        "screens.registry._next_quad_page_tiles",
+        lambda: (True, ["date", "time", "inside", "weather1"]),
+    )
+
+    def _animated_date(display, transition=False):
+        frames = [(255, 0, 0), (0, 255, 0)]
+        for color in frames:
+            if hasattr(display, "skip_requested") and display.skip_requested():
+                break
+            display.image(Image.new("RGB", (8, 8), color))
+        return None
+
+    def _single_frame(_display, transition=False):
+        return Image.new("RGB", (8, 8), (0, 0, 0))
+
+    sampled_colors = []
+
+    def _fake_draw_quad_screen(_display, tiles, transition=False):
+        sampled_colors.append(tiles[0].render().getpixel((0, 0)))
+        return None
+
+    monkeypatch.setattr("screens.registry.draw_date", _animated_date)
+    monkeypatch.setattr("screens.registry.draw_time", _single_frame)
+    monkeypatch.setattr("screens.registry.draw_inside", _single_frame)
+    monkeypatch.setattr("screens.registry.draw_weather_screen_1", _single_frame)
+    monkeypatch.setattr("screens.registry.draw_quad_screen", _fake_draw_quad_screen)
+
+    registry, _ = build_screen_registry(context)
+    registry["quad"].render()
+    registry["quad"].render()
+    registry["quad"].render()
+
+    assert sampled_colors == [(255, 0, 0), (0, 255, 0), (255, 0, 0)]
 
 
 def test_next_quad_page_tiles_rotates_pages(monkeypatch):
