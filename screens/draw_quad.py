@@ -47,7 +47,6 @@ def draw_quad_screen(display, tiles: list[_TileSpec], *, transition: bool = Fals
     rows = 2
     tile_w = WIDTH // cols
     tile_h = HEIGHT // rows
-    target_frame_time = 1.0 / 60.0
     has_wait_for_skip = callable(getattr(display, "wait_for_skip", None))
 
     tile_sequences: list[list[Image.Image]] = []
@@ -93,6 +92,11 @@ def draw_quad_screen(display, tiles: list[_TileSpec], *, transition: bool = Fals
 
         return frame
 
+    max_frames = max((len(seq) for seq in tile_sequences), default=1)
+    # Pace quad playback to the same overall window as standalone screens.
+    # We sample each tile's animation, then play those sampled frames evenly
+    # across SCREEN_DELAY rather than blasting through them at a fixed 60 FPS.
+    target_frame_time = max(0.016, float(SCREEN_DELAY) / float(max_frames))
     animated = transition and any(len(seq) > 1 for seq in tile_sequences)
     displayed_frame = _render_composite(0)
     display.image(displayed_frame)
