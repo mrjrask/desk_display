@@ -1327,7 +1327,13 @@
         const response = await fetch("/api/screens", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ screens, quad_enabled: Boolean(quadEnabledToggle?.checked), quad_pages: getQuadPages() }),
+          body: JSON.stringify({
+            screens,
+            playlists: buildPlaylistsPayload(screens),
+            sequence: playlists.map((playlist) => ({ playlist: playlist.id })),
+            quad_enabled: Boolean(quadEnabledToggle?.checked),
+            quad_pages: getQuadPages(),
+          }),
         });
         const data = await response.json();
         if (!response.ok) {
