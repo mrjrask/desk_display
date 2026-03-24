@@ -495,13 +495,13 @@ def build_screen_registry(context: ScreenContext) -> Tuple[Dict[str, ScreenDefin
         else:
             _quad_tile_scroll_cursor.pop(screen_id, None)
 
-        if captured_frames:
-            frame_index = min(cursor, captured_frames - 1)
-            return capture.frames[frame_index]
         if isinstance(rendered, ScreenImage):
             return rendered.image
         if isinstance(rendered, Image.Image):
             return rendered
+        if captured_frames:
+            frame_index = min(cursor, captured_frames - 1)
+            return capture.frames[frame_index]
         return capture.last_image
     weather_logo = context.logos.get("weather logo")
     # Keep weather screens visible whenever cached forecast data exists.
@@ -549,77 +549,13 @@ def build_screen_registry(context: ScreenContext) -> Tuple[Dict[str, ScreenDefin
         available=is_inside_sensor_available(),
     )
     quad_enabled, quad_tiles = _next_quad_page_tiles()
-    _quad_prerender_lock = threading.Lock()
-    _quad_prerender_thread: Optional[threading.Thread] = None
-    _quad_prerender_frame: Optional[ScreenImage] = None
-
-    class _QuadPreRenderDisplay:
-        def image(self, _img: Image.Image):
-            return None
-
-        def show(self):
-            return None
-
-    def _render_quad_composite(tiles: list[str], *, target_display) -> ScreenImage:
-        return draw_quad_screen(
-            target_display,
-            [_TileSpec(tile_id, lambda tile_id=tile_id: _render_quad_tile(tile_id)) for tile_id in tiles],
-            transition=True,
-        )
-
-    def _set_quad_prerender_frame(frame: ScreenImage) -> None:
-        nonlocal _quad_prerender_frame
-        with _quad_prerender_lock:
-            _quad_prerender_frame = ScreenImage(frame.image.copy(), displayed=False)
-
-    def _start_quad_prerender(tiles: list[str]) -> None:
-        nonlocal _quad_prerender_thread
-        thread_to_start: Optional[threading.Thread] = None
-        with _quad_prerender_lock:
-            if _quad_prerender_thread is not None and _quad_prerender_thread.is_alive():
-                return
-
-            def _worker() -> None:
-                nonlocal _quad_prerender_thread
-                try:
-                    frame = _render_quad_composite(tiles, target_display=_QuadPreRenderDisplay())
-                    _set_quad_prerender_frame(frame)
-                except Exception:
-                    logging.exception("Failed to pre-render quad frame.")
-                finally:
-                    with _quad_prerender_lock:
-                        _quad_prerender_thread = None
-
-            _quad_prerender_thread = threading.Thread(
-                target=_worker,
-                name="quad-prerender",
-                daemon=True,
-            )
-            thread_to_start = _quad_prerender_thread
-
-        if thread_to_start is not None:
-            thread_to_start.start()
-
-    def _render_quad_screen(tiles: list[str]) -> ScreenImage:
-        nonlocal _quad_prerender_frame
-        with _quad_prerender_lock:
-            prerendered = _quad_prerender_frame
-            _quad_prerender_frame = None
-
-        if prerendered is not None:
-            _start_quad_prerender(tiles)
-            return ScreenImage(prerendered.image.copy(), displayed=False)
-
-        rendered = _render_quad_composite(tiles, target_display=context.display)
-        _start_quad_prerender(tiles)
-        return rendered
-
-    if quad_enabled:
-        _start_quad_prerender(list(quad_tiles))
-
     register(
         "quad",
-        lambda tiles=quad_tiles: _render_quad_screen(tiles),
+        lambda tiles=quad_tiles: draw_quad_screen(
+            context.display,
+            [_TileSpec(tile_id, lambda tile_id=tile_id: _render_quad_tile(tile_id)) for tile_id in tiles],
+            transition=True,
+        ),
         available=quad_enabled,
     )
     register("sensors", lambda: draw_sensors(context, transition=True))
