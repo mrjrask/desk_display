@@ -18,7 +18,6 @@ from screens.nfl_scoreboard import (
     _fetch_next_games as _fetch_nfl_next_games,
 )
 from screens.nhl_scoreboard import _fetch_games_for_date as _fetch_nhl_games_for_date, _scoreboard_date as _nhl_scoreboard_date
-from screens.wbc_scoreboard import _fetch_games_for_date as _fetch_wbc_games_for_date, _scoreboard_date as _wbc_scoreboard_date
 
 
 @dataclass
@@ -77,7 +76,6 @@ class DataProvider:
             tasks: Dict[str, Callable[[], Any]] = {
                 "nfl": _fetch_nfl,
                 "mlb": lambda: _fetch_mlb_games_for_date(_mlb_scoreboard_date(now)),
-                "wbc": lambda: _fetch_wbc_games_for_date(_wbc_scoreboard_date(now)),
                 "nba": lambda: _fetch_nba_games_for_date(_nba_scoreboard_date(now)),
                 "ncaam": lambda: _fetch_ncaam_games_for_date(_ncaam_scoreboard_date(now)),
                 "nhl": lambda: _fetch_nhl_games_for_date(_nhl_scoreboard_date(now)),
@@ -101,7 +99,6 @@ class DataProvider:
                 "scoreboards": {
                     "nfl": scoreboards["nfl"],
                     "mlb": scoreboards["mlb"],
-                    "wbc": scoreboards["wbc"],
                     "nba": scoreboards["nba"],
                     "ncaam": scoreboards["ncaam"],
                     "nhl": scoreboards["nhl"],

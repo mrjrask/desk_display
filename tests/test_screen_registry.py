@@ -381,13 +381,13 @@ def test_next_quad_page_tiles_rotates_pages(monkeypatch):
 
 
 
-def test_mlb_wbc_scoreboards_render_with_empty_lists_when_cache_is_none(monkeypatch):
+def test_mlb_scoreboard_renders_with_empty_list_when_cache_is_none(monkeypatch):
     now = datetime.datetime(2024, 7, 1, 12, 0, tzinfo=CENTRAL_TIME)
     weather = {"hourly": []}
     context = _make_context(
         weather,
         now,
-        cache_updates={"scoreboards": {"mlb": None, "wbc": None}},
+        cache_updates={"scoreboards": {"mlb": None}},
     )
 
     captured = {}
@@ -396,83 +396,19 @@ def test_mlb_wbc_scoreboards_render_with_empty_lists_when_cache_is_none(monkeypa
         captured["mlb_games"] = games
         return None
 
-    def _capture_wbc(_display, games, transition=False):
-        captured["wbc_games"] = games
-        return None
-
     monkeypatch.setattr("screens.registry.render_mlb_scoreboard", _capture_mlb)
-    monkeypatch.setattr("screens.registry.render_wbc_scoreboard", _capture_wbc)
 
     registry, _ = build_screen_registry(context)
     registry["MLB Scoreboard"].render()
-    registry["WBC Scoreboard"].render()
 
     assert captured["mlb_games"] == []
-    assert captured["wbc_games"] == []
 
 
-def test_wbc_scoreboards_use_wbc_scoreboard_cache_key(monkeypatch):
+def test_wbc_scoreboards_are_removed_from_registry():
     now = datetime.datetime(2024, 7, 1, 12, 0, tzinfo=CENTRAL_TIME)
     weather = {"hourly": []}
-    context = _make_context(
-        weather,
-        now,
-        cache_updates={
-            "scoreboards": {
-                "mlb": [{"id": "mlb-game"}],
-                "wbc": [{"id": "wbc-game"}],
-            }
-        },
-    )
 
-    captured = {}
+    registry, _ = build_screen_registry(_make_context(weather, now))
 
-    def _capture_wbc(_display, games, transition=False):
-        captured["games"] = games
-        return None
-
-    monkeypatch.setattr("screens.registry.render_wbc_scoreboard", _capture_wbc)
-
-    registry, _ = build_screen_registry(context)
-    registry["WBC Scoreboard"].render()
-
-    assert captured["games"] == [{"id": "wbc-game"}]
-
-def test_wbc_scoreboards_available_without_international_games():
-    now = datetime.datetime(2024, 7, 1, 12, 0, tzinfo=CENTRAL_TIME)
-    weather = {"hourly": []}
-    mlb_only_games = [
-        {
-            "teams": {
-                "away": {"team": {"triCode": "NYY"}},
-                "home": {"team": {"triCode": "BOS"}},
-            }
-        }
-    ]
-
-    registry, _ = build_screen_registry(
-        _make_context(weather, now, cache_updates={"scoreboards": {"mlb": mlb_only_games}})
-    )
-
-    assert registry["WBC Scoreboard"].available is True
-    assert registry["WBC Scoreboard v2"].available is True
-
-
-def test_wbc_scoreboards_visible_with_international_games():
-    now = datetime.datetime(2024, 7, 1, 12, 0, tzinfo=CENTRAL_TIME)
-    weather = {"hourly": []}
-    international_games = [
-        {
-            "teams": {
-                "away": {"team": {"triCode": "NYY"}},
-                "home": {"team": {"name": "Japan"}},
-            }
-        }
-    ]
-
-    registry, _ = build_screen_registry(
-        _make_context(weather, now, cache_updates={"scoreboards": {"mlb": international_games}})
-    )
-
-    assert registry["WBC Scoreboard"].available is True
-    assert registry["WBC Scoreboard v2"].available is True
+    assert "WBC Scoreboard" not in registry
+    assert "WBC Scoreboard v2" not in registry

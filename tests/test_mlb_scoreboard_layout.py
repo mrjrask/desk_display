@@ -1,6 +1,5 @@
 import screens.mlb_scoreboard as mlb_scoreboard
 import screens.mlb_scoreboard_v2 as mlb_scoreboard_v2
-import screens.wbc_scoreboard as wbc_scoreboard
 import screens.nhl_scoreboard as nhl_scoreboard
 import screens.nhl_scoreboard_v2 as nhl_scoreboard_v2
 
@@ -60,7 +59,7 @@ def _game(game_pk: int, game_date: str, away_team: dict, home_team: dict) -> dic
     }
 
 
-def test_mlb_hydrate_games_keeps_only_mlb_matchups_sorted_by_start_time():
+def test_mlb_hydrate_games_keeps_all_mlb_feed_games_sorted_by_start_time():
     mlb_vs_mlb_late = _game(
         1,
         "2026-03-05T21:00:00Z",
@@ -93,94 +92,7 @@ def test_mlb_hydrate_games_keeps_only_mlb_matchups_sorted_by_start_time():
         mlb_vs_mlb_early,
     ])
 
-    assert [g["gamePk"] for g in hydrated] == [2, 1]
-
-
-def test_wbc_hydrate_games_keeps_only_international_matchups_sorted_by_start_time():
-    mlb_vs_mlb = _game(
-        1,
-        "2026-03-05T21:00:00Z",
-        {"triCode": "NYY"},
-        {"triCode": "BOS"},
-    )
-    mixed_game = _game(
-        2,
-        "2026-03-05T17:00:00Z",
-        {"triCode": "SEA"},
-        {"name": "Japan"},
-    )
-    intl_vs_intl_late = _game(
-        3,
-        "2026-03-05T19:00:00Z",
-        {"name": "Korea"},
-        {"name": "Japan"},
-    )
-    intl_vs_intl_early = _game(
-        4,
-        "2026-03-05T16:00:00Z",
-        {"name": "Italy"},
-        {"name": "Mexico"},
-    )
-
-    hydrated = wbc_scoreboard._hydrate_games([
-        mlb_vs_mlb,
-        intl_vs_intl_late,
-        mixed_game,
-        intl_vs_intl_early,
-    ])
-
-    assert [g["gamePk"] for g in hydrated] == [4, 2, 3]
-
-
-def test_wbc_hydrate_games_filters_artifacts_and_keeps_real_international_games():
-    artifact_placeholder = _game(
-        10,
-        "2026-03-05T15:00:00Z",
-        {"name": "TBD", "triCode": "TBD"},
-        {"name": "Japan", "triCode": "JPN"},
-    )
-    artifact_duplicate = _game(
-        11,
-        "2026-03-05T16:00:00Z",
-        {"name": "Mexico", "triCode": "MEX"},
-        {"name": "Mexico", "triCode": "MEX"},
-    )
-    real_game = _game(
-        12,
-        "2026-03-05T17:00:00Z",
-        {"name": "Cuba", "triCode": "CUB"},
-        {"name": "Panama", "triCode": "PAN"},
-    )
-
-    hydrated = wbc_scoreboard._hydrate_games([
-        artifact_placeholder,
-        artifact_duplicate,
-        real_game,
-    ])
-
-    assert [g["gamePk"] for g in hydrated] == [12]
-
-
-def test_wbc_col_tricode_is_treated_as_colombia_for_international_opponents():
-    mixed_colombia_game = _game(
-        20,
-        "2026-03-05T18:00:00Z",
-        {"triCode": "COL", "name": "Colombia"},
-        {"triCode": "JPN", "name": "Japan"},
-    )
-    rockies_game = _game(
-        21,
-        "2026-03-05T19:00:00Z",
-        {"triCode": "COL", "name": "Colorado Rockies"},
-        {"triCode": "LAD", "name": "Los Angeles Dodgers"},
-    )
-
-    hydrated = wbc_scoreboard._hydrate_games([
-        mixed_colombia_game,
-        rockies_game,
-    ])
-
-    assert [g["gamePk"] for g in hydrated] == [20]
+    assert [g["gamePk"] for g in hydrated] == [4, 3, 2, 1]
 
 
 class _DisplayStub:
@@ -202,12 +114,3 @@ def test_mlb_v2_render_shows_loading_message_when_games_not_hydrated(monkeypatch
     assert display.last_image is not None
 
 
-def test_wbc_render_shows_loading_message_when_games_not_hydrated(monkeypatch):
-    display = _DisplayStub()
-    monkeypatch.setattr(wbc_scoreboard, "clear_display", lambda _display: None)
-    monkeypatch.setattr(wbc_scoreboard, "_get_league_logo", lambda: None)
-
-    result = wbc_scoreboard.render_wbc_scoreboard(display, None, transition=False)
-
-    assert result.displayed is True
-    assert display.last_image is not None

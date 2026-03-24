@@ -4,7 +4,6 @@ import screens.ncaam_scoreboard as ncaam_scoreboard
 import screens.ncaam_scoreboard_v2 as ncaam_scoreboard_v2
 import screens.nfl_scoreboard_v2 as nfl_scoreboard_v2
 import screens.nhl_scoreboard_v2 as nhl_scoreboard_v2
-import screens.wbc_scoreboard_v2 as wbc_scoreboard_v2
 
 
 class _DisplayStub:
@@ -67,19 +66,6 @@ def test_nba_v2_uses_v1_renderer_when_fewer_than_six_games(monkeypatch):
 
     assert result is sentinel
 
-
-def test_wbc_v2_uses_v1_renderer_when_fewer_than_six_games(monkeypatch):
-    sentinel = object()
-
-    monkeypatch.setattr(
-        wbc_scoreboard_v2,
-        "render_wbc_scoreboard_v1",
-        lambda display, games, transition=False: sentinel,
-    )
-
-    result = wbc_scoreboard_v2.render_wbc_scoreboard_v2(_DisplayStub(), [{}] * 5, transition=False)
-
-    assert result is sentinel
 
 
 def test_ncaam_v1_entry_routes_to_non_recursive_v1_fallback_on_320x240(monkeypatch):
