@@ -90,7 +90,7 @@ def fetch_division_records(league_id: int, division_id: int) -> List[dict]:
     """
     url = (
         "https://statsapi.mlb.com/api/v1/standings"
-        f"?season=2025&leagueId={league_id}&divisionId={division_id}"
+        f"?season=2026&leagueId={league_id}&divisionId={division_id}"
     )
     try:
         r = requests.get(url, timeout=TIMEOUT)
@@ -114,7 +114,7 @@ def fetch_wildcard_records(league_id: int) -> List[dict]:
     """
     url = (
         "https://statsapi.mlb.com/api/v1/standings"
-        f"?season=2025&leagueId={league_id}&standingsTypes=wildCard"
+        f"?season=2026&leagueId={league_id}&standingsTypes=wildCard"
     )
     try:
         r = requests.get(url, timeout=TIMEOUT)
