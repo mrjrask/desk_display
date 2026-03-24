@@ -46,7 +46,7 @@ CACHE_TTL = 15 * 60  # seconds
 
 OFFSEASON_START = (2, 15)  # Feb 15
 OFFSEASON_END = (8, 1)  # Aug 1
-FALLBACK_MESSAGE_OFFSEASON = "NFL standings return this fall"
+FALLBACK_MESSAGE_OFFSEASON = "NFL standings\nreturn this fall"
 FALLBACK_MESSAGE_UNAVAILABLE = "NFL standings unavailable"
 
 CONFERENCE_NFC_KEY = "NFC"
@@ -1430,16 +1430,36 @@ def _render_overview_fallback(
         ty = 0
     draw.text((tx, ty), title, font=TITLE_FONT, fill=WHITE)
 
-    try:
-        l, t, r, b = draw.textbbox((0, 0), message, font=ROW_FONT)
-        tw, th = r - l, b - t
-        mx = (WIDTH - tw) // 2 - l
-        my = (HEIGHT - th) // 2 - t
-    except Exception:  # pragma: no cover - PIL fallback
-        tw, th = draw.textsize(message, font=ROW_FONT)
-        mx = (WIDTH - tw) // 2
-        my = (HEIGHT - th) // 2
-    draw.text((mx, my), message, font=ROW_FONT, fill=WHITE)
+    if "\n" in message:
+        try:
+            l, t, r, b = draw.multiline_textbbox((0, 0), message, font=ROW_FONT, spacing=2)
+            tw, th = r - l, b - t
+            mx = (WIDTH - tw) // 2 - l
+            my = (HEIGHT - th) // 2 - t
+            draw.multiline_text((mx, my), message, font=ROW_FONT, fill=WHITE, spacing=2, align="center")
+        except Exception:  # pragma: no cover - PIL fallback
+            lines = message.splitlines()
+            line_sizes = [draw.textsize(line, font=ROW_FONT) for line in lines]
+            max_width = max(size[0] for size in line_sizes)
+            total_height = sum(size[1] for size in line_sizes) + (2 * (len(lines) - 1))
+            mx = (WIDTH - max_width) // 2
+            my = (HEIGHT - total_height) // 2
+            line_y = my
+            for line, (line_w, line_h) in zip(lines, line_sizes):
+                line_x = (WIDTH - line_w) // 2
+                draw.text((line_x, line_y), line, font=ROW_FONT, fill=WHITE)
+                line_y += line_h + 2
+    else:
+        try:
+            l, t, r, b = draw.textbbox((0, 0), message, font=ROW_FONT)
+            tw, th = r - l, b - t
+            mx = (WIDTH - tw) // 2 - l
+            my = (HEIGHT - th) // 2 - t
+        except Exception:  # pragma: no cover - PIL fallback
+            tw, th = draw.textsize(message, font=ROW_FONT)
+            mx = (WIDTH - tw) // 2
+            my = (HEIGHT - th) // 2
+        draw.text((mx, my), message, font=ROW_FONT, fill=WHITE)
 
     if transition:
         return ScreenImage(img, displayed=False)
@@ -1490,16 +1510,36 @@ def _render_and_display(
             ty = 0
         draw.text((tx, ty), title, font=TITLE_FONT, fill=WHITE)
 
-        try:
-            l, t, r, b = draw.textbbox((0, 0), message, font=ROW_FONT)
-            tw, th = r - l, b - t
-            tx = (WIDTH - tw) // 2 - l
-            ty = (HEIGHT - th) // 2 - t
-        except Exception:  # pragma: no cover - PIL fallback
-            tw, th = draw.textsize(message, font=ROW_FONT)
-            tx = (WIDTH - tw) // 2
-            ty = (HEIGHT - th) // 2
-        draw.text((tx, ty), message, font=ROW_FONT, fill=WHITE)
+        if "\n" in message:
+            try:
+                l, t, r, b = draw.multiline_textbbox((0, 0), message, font=ROW_FONT, spacing=2)
+                tw, th = r - l, b - t
+                tx = (WIDTH - tw) // 2 - l
+                ty = (HEIGHT - th) // 2 - t
+                draw.multiline_text((tx, ty), message, font=ROW_FONT, fill=WHITE, spacing=2, align="center")
+            except Exception:  # pragma: no cover - PIL fallback
+                lines = message.splitlines()
+                line_sizes = [draw.textsize(line, font=ROW_FONT) for line in lines]
+                max_width = max(size[0] for size in line_sizes)
+                total_height = sum(size[1] for size in line_sizes) + (2 * (len(lines) - 1))
+                tx = (WIDTH - max_width) // 2
+                ty = (HEIGHT - total_height) // 2
+                line_y = ty
+                for line, (line_w, line_h) in zip(lines, line_sizes):
+                    line_x = (WIDTH - line_w) // 2
+                    draw.text((line_x, line_y), line, font=ROW_FONT, fill=WHITE)
+                    line_y += line_h + 2
+        else:
+            try:
+                l, t, r, b = draw.textbbox((0, 0), message, font=ROW_FONT)
+                tw, th = r - l, b - t
+                tx = (WIDTH - tw) // 2 - l
+                ty = (HEIGHT - th) // 2 - t
+            except Exception:  # pragma: no cover - PIL fallback
+                tw, th = draw.textsize(message, font=ROW_FONT)
+                tx = (WIDTH - tw) // 2
+                ty = (HEIGHT - th) // 2
+            draw.text((tx, ty), message, font=ROW_FONT, fill=WHITE)
 
         if transition:
             return ScreenImage(img, displayed=False)
