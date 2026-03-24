@@ -5,7 +5,7 @@ def test_import_screens_accepts_entries_payload(monkeypatch):
     saved = {}
 
     monkeypatch.setattr(config_ui, "_load_active_style_config", lambda: {"screens": {}})
-    monkeypatch.setattr(config_ui, "_load_active_layouts_config", lambda: {"screens": {"quad": {"enabled": False, "pages": [{"tiles": ["date", "weather1", "weather hourly", "inside"]}]}}})
+    monkeypatch.setattr(config_ui, "_load_active_layouts_config", lambda: {"screens": {"quad": {"enabled": False, "scroll_speed": 1.0, "pages": [{"tiles": ["date", "weather1", "weather hourly", "inside"]}]}}})
     monkeypatch.setattr(config_ui, "build_scheduler", lambda config: None)
     monkeypatch.setattr(config_ui, "_save_config", lambda config: saved.setdefault("config", config))
     monkeypatch.setattr(config_ui, "_save_style_config", lambda style: saved.setdefault("style", style))
@@ -73,7 +73,7 @@ def test_import_screens_accepts_export_payload_with_string_frequencies(monkeypat
     saved = {}
 
     monkeypatch.setattr(config_ui, "_load_active_style_config", lambda: {"screens": {}})
-    monkeypatch.setattr(config_ui, "_load_active_layouts_config", lambda: {"screens": {"quad": {"enabled": False, "pages": [{"tiles": ["date", "weather1", "weather hourly", "inside"]}]}}})
+    monkeypatch.setattr(config_ui, "_load_active_layouts_config", lambda: {"screens": {"quad": {"enabled": False, "scroll_speed": 1.0, "pages": [{"tiles": ["date", "weather1", "weather hourly", "inside"]}]}}})
     monkeypatch.setattr(config_ui, "build_scheduler", lambda config: None)
     monkeypatch.setattr(config_ui, "_save_config", lambda config: saved.setdefault("config", config))
     monkeypatch.setattr(config_ui, "_save_style_config", lambda style: saved.setdefault("style", style))
@@ -104,6 +104,7 @@ def test_import_screens_accepts_export_payload_with_string_frequencies(monkeypat
                 "screens": {
                     "quad": {
                         "enabled": True,
+                        "scroll_speed": 1.5,
                         "pages": [
                             {"tiles": ["date", "date", "weather1", "inside"]},
                             {"tiles": ["time", "time", "time", "time"]},
@@ -123,6 +124,7 @@ def test_import_screens_accepts_export_payload_with_string_frequencies(monkeypat
     assert saved["config"]["screens"]["NHL Standings West"]["alt"]["frequency"] == 2
     assert saved["style"] == {"screens": {"date": {"background": "#112233"}}}
     assert saved["layouts"]["screens"]["quad"]["enabled"] is True
+    assert saved["layouts"]["screens"]["quad"]["scroll_speed"] == 1.5
     assert saved["layouts"]["screens"]["quad"]["pages"][0]["tiles"] == ["date", "date", "weather1", "inside"]
 
 
@@ -162,6 +164,7 @@ def test_save_screens_persists_quad_pages(monkeypatch):
                 }
             ],
             "quad_enabled": True,
+            "quad_scroll_speed": 2.0,
             "quad_pages": [
                 {"tiles": ["date", "date", "weather1", "inside"]},
                 {"tiles": ["time", "inside", "inside", "weather2"]},
@@ -183,6 +186,7 @@ def test_save_screens_persists_quad_pages(monkeypatch):
         }
     ]
     assert payload["quad_enabled"] is True
+    assert payload["quad_scroll_speed"] == 2.0
     assert payload["quad_pages"] == [
         {"tiles": ["date", "date", "weather1", "inside"]},
         {"tiles": ["time", "inside", "inside", "weather2"]},
@@ -191,6 +195,7 @@ def test_save_screens_persists_quad_pages(monkeypatch):
         "screens": {
             "quad": {
                 "enabled": True,
+                "scroll_speed": 2.0,
                 "pages": [
                     {"tiles": ["date", "date", "weather1", "inside"]},
                     {"tiles": ["time", "inside", "inside", "weather2"]},
@@ -250,3 +255,14 @@ def test_save_screens_persists_playlists_and_sequence(monkeypatch):
         "default": {"label": "Default", "steps": [{"screen": "date"}]}
     }
     assert saved["config"]["sequence"] == [{"playlist": "default"}]
+
+
+def test_build_layouts_clamps_quad_scroll_speed():
+    layouts = config_ui._build_layouts(
+        {
+            "quad_enabled": True,
+            "quad_scroll_speed": 99,
+            "quad_pages": [{"tiles": ["date", "time", "inside", "weather1"]}],
+        }
+    )
+    assert layouts["screens"]["quad"]["scroll_speed"] == 3.0

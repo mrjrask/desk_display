@@ -40,7 +40,13 @@ def _error_tile(size: tuple[int, int], label: str) -> Image.Image:
     return img
 
 
-def draw_quad_screen(display, tiles: list[_TileSpec], *, transition: bool = False) -> ScreenImage:
+def draw_quad_screen(
+    display,
+    tiles: list[_TileSpec],
+    *,
+    transition: bool = False,
+    scroll_speed: float = 1.0,
+) -> ScreenImage:
     """Render a four-tile dashboard using the provided tile renderers."""
 
     cols = 2
@@ -100,9 +106,10 @@ def draw_quad_screen(display, tiles: list[_TileSpec], *, transition: bool = Fals
     #   provide a handful of sampled frames.
     min_frame_time = 0.016  # ~60 FPS ceiling
     max_frame_time = 0.100  # ~10 FPS floor for visible smoothness
+    speed_factor = max(0.25, min(3.0, float(scroll_speed)))
     target_frame_time = min(
         max_frame_time,
-        max(min_frame_time, float(SCREEN_DELAY) / float(max_frames)),
+        max(min_frame_time, float(SCREEN_DELAY) / float(max_frames)) / speed_factor,
     )
     animated = transition and any(len(seq) > 1 for seq in tile_sequences)
     displayed_frame = _render_composite(0)

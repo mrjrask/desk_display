@@ -107,6 +107,7 @@ _LAYOUTS_CONFIG_PATH = os.environ.get(
 
 
 _QUAD_DEFAULT_PAGE = ["date", "weather1", "weather hourly", "inside"]
+_QUAD_DEFAULT_SCROLL_SPEED = 1.0
 _quad_page_index = 0
 _quad_page_lock = threading.Lock()
 _layouts_cache_lock = threading.Lock()
@@ -115,28 +116,38 @@ _layouts_payload_mtime: Optional[float] = None
 
 _QUAD_TILE_SAMPLE_FRAMES = 10
 _QUAD_TILE_CAPTURE_FRAME_LIMIT = 120
-_quad_tile_scroll_cursor: Dict[str, int] = {}
+_quad_tile_scroll_cursor: Dict[str, float] = {}
 _quad_tile_scroll_lock = threading.Lock()
 
 
-def _quad_layout_from_layouts() -> tuple[bool, list[list[str]]]:
+def _normalize_quad_scroll_speed(value: Any) -> float:
+    try:
+        speed = float(value)
+    except (TypeError, ValueError):
+        speed = _QUAD_DEFAULT_SCROLL_SPEED
+    return min(3.0, max(0.25, speed))
+
+
+def _quad_layout_from_layouts() -> tuple[bool, float, list[list[str]]]:
     enabled = False
+    scroll_speed = _QUAD_DEFAULT_SCROLL_SPEED
     pages: list[list[str]] = []
 
     payload = _load_layouts_payload()
     if payload is None:
-        return enabled, [_QUAD_DEFAULT_PAGE.copy()]
+        return enabled, scroll_speed, [_QUAD_DEFAULT_PAGE.copy()]
 
     if not isinstance(payload, dict):
-        return enabled, [_QUAD_DEFAULT_PAGE.copy()]
+        return enabled, scroll_speed, [_QUAD_DEFAULT_PAGE.copy()]
     screens = payload.get("screens")
     if not isinstance(screens, dict):
-        return enabled, [_QUAD_DEFAULT_PAGE.copy()]
+        return enabled, scroll_speed, [_QUAD_DEFAULT_PAGE.copy()]
     quad = screens.get("quad")
     if not isinstance(quad, dict):
-        return enabled, [_QUAD_DEFAULT_PAGE.copy()]
+        return enabled, scroll_speed, [_QUAD_DEFAULT_PAGE.copy()]
 
     enabled = bool(quad.get("enabled", False))
+    scroll_speed = _normalize_quad_scroll_speed(quad.get("scroll_speed", _QUAD_DEFAULT_SCROLL_SPEED))
 
     raw_pages = quad.get("pages")
     if not isinstance(raw_pages, list):
@@ -165,7 +176,7 @@ def _quad_layout_from_layouts() -> tuple[bool, list[list[str]]]:
     if not pages:
         pages = [_QUAD_DEFAULT_PAGE.copy()]
 
-    return enabled, pages
+    return enabled, scroll_speed, pages
 
 
 def _load_layouts_payload() -> Optional[dict[str, Any]]:
@@ -200,14 +211,14 @@ def _load_layouts_payload() -> Optional[dict[str, Any]]:
         return _layouts_payload_cache
 
 
-def _next_quad_page_tiles() -> tuple[bool, list[str]]:
+def _next_quad_page_tiles() -> tuple[bool, float, list[str]]:
     global _quad_page_index
 
-    enabled, pages = _quad_layout_from_layouts()
+    enabled, scroll_speed, pages = _quad_layout_from_layouts()
     with _quad_page_lock:
         page = pages[_quad_page_index % len(pages)]
         _quad_page_index += 1
-    return enabled, page
+    return enabled, scroll_speed, page
 
 
 RADAR_LOOKAHEAD_HOURS = 8
@@ -468,13 +479,13 @@ def build_screen_registry(context: ScreenContext) -> Tuple[Dict[str, ScreenDefin
         def frames(self) -> list[Image.Image]:
             return self._frames
 
-    def _render_quad_tile(screen_id: str) -> Optional[Image.Image | list[Image.Image]]:
+    def _render_quad_tile(screen_id: str, *, scroll_speed: float) -> Optional[Image.Image | list[Image.Image]]:
         definition = registry.get(screen_id)
         if definition is None:
             return None
 
         with _quad_tile_scroll_lock:
-            cursor = _quad_tile_scroll_cursor.get(screen_id, 0) % _QUAD_TILE_SAMPLE_FRAMES
+            cursor = float(_quad_tile_scroll_cursor.get(screen_id, 0.0)) % _QUAD_TILE_SAMPLE_FRAMES
         capture = _QuadCaptureDisplay(frame_limit=_QUAD_TILE_CAPTURE_FRAME_LIMIT)
         original_display = context.display
         context.display = capture
@@ -493,9 +504,7 @@ def build_screen_registry(context: ScreenContext) -> Tuple[Dict[str, ScreenDefin
 
         sampled_count = len(sampled_frames)
         if sampled_count > 1:
-            next_cursor = cursor + 1
-            if next_cursor >= sampled_count:
-                next_cursor = 0
+            next_cursor = (cursor + scroll_speed) % sampled_count
             with _quad_tile_scroll_lock:
                 _quad_tile_scroll_cursor[screen_id] = next_cursor
         else:
@@ -503,9 +512,7 @@ def build_screen_registry(context: ScreenContext) -> Tuple[Dict[str, ScreenDefin
                 _quad_tile_scroll_cursor.pop(screen_id, None)
 
         if sampled_count:
-            if sampled_count == 1:
-                return sampled_frames[0]
-            return sampled_frames
+            return sampled_frames[int(cursor) % sampled_count]
         if isinstance(rendered, ScreenImage):
             return rendered.image
         if isinstance(rendered, Image.Image):
@@ -556,13 +563,14 @@ def build_screen_registry(context: ScreenContext) -> Tuple[Dict[str, ScreenDefin
         lambda: draw_inside(context.display, transition=True),
         available=is_inside_sensor_available(),
     )
-    quad_enabled, quad_tiles = _next_quad_page_tiles()
+    quad_enabled, quad_scroll_speed, quad_tiles = _next_quad_page_tiles()
     register(
         "quad",
-        lambda tiles=quad_tiles: draw_quad_screen(
+        lambda tiles=quad_tiles, scroll_speed=quad_scroll_speed: draw_quad_screen(
             context.display,
-            [_TileSpec(tile_id, lambda tile_id=tile_id: _render_quad_tile(tile_id)) for tile_id in tiles],
+            [_TileSpec(tile_id, lambda tile_id=tile_id, speed=scroll_speed: _render_quad_tile(tile_id, scroll_speed=speed)) for tile_id in tiles],
             transition=True,
+            scroll_speed=scroll_speed,
         ),
         available=quad_enabled,
     )

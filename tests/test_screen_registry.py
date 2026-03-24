@@ -327,7 +327,7 @@ def test_quad_screen_is_registered(monkeypatch):
 
     monkeypatch.setattr(
         "screens.registry._next_quad_page_tiles",
-        lambda: (True, ["date", "weather1", "weather hourly", "inside"]),
+        lambda: (True, 1.0, ["date", "weather1", "weather hourly", "inside"]),
     )
 
     registry, _ = build_screen_registry(_make_context(weather, now))
@@ -342,7 +342,7 @@ def test_quad_screen_can_be_disabled(monkeypatch):
 
     monkeypatch.setattr(
         "screens.registry._next_quad_page_tiles",
-        lambda: (False, ["date", "weather1", "weather hourly", "inside"]),
+        lambda: (False, 1.0, ["date", "weather1", "weather hourly", "inside"]),
     )
 
     registry, _ = build_screen_registry(_make_context(weather, now))
@@ -357,12 +357,12 @@ def test_quad_screen_uses_layout_tile_selection(monkeypatch):
 
     monkeypatch.setattr(
         "screens.registry._next_quad_page_tiles",
-        lambda: (True, ["time", "time", "inside", "weather1"]),
+        lambda: (True, 1.0, ["time", "time", "inside", "weather1"]),
     )
 
     captured = {}
 
-    def _fake_draw_quad_screen(_display, tiles, transition=False):
+    def _fake_draw_quad_screen(_display, tiles, transition=False, scroll_speed=1.0):
         captured["labels"] = [tile.label for tile in tiles]
         return None
 
@@ -381,7 +381,7 @@ def test_quad_screen_advances_scrolling_tiles_between_renders(monkeypatch):
 
     monkeypatch.setattr(
         "screens.registry._next_quad_page_tiles",
-        lambda: (True, ["date", "time", "inside", "weather1"]),
+        lambda: (True, 1.0, ["date", "time", "inside", "weather1"]),
     )
 
     def _animated_date(display, transition=False):
@@ -397,8 +397,11 @@ def test_quad_screen_advances_scrolling_tiles_between_renders(monkeypatch):
 
     sampled_colors = []
 
-    def _fake_draw_quad_screen(_display, tiles, transition=False):
-        sampled_colors.append(tiles[0].render().getpixel((0, 0)))
+    def _fake_draw_quad_screen(_display, tiles, transition=False, scroll_speed=1.0):
+        rendered = tiles[0].render()
+        if isinstance(rendered, list):
+            rendered = rendered[0]
+        sampled_colors.append(rendered.getpixel((0, 0)))
         return None
 
     monkeypatch.setattr("screens.registry.draw_date", _animated_date)
@@ -422,7 +425,7 @@ def test_quad_screen_prefers_captured_frames_over_screenimage_return(monkeypatch
 
     monkeypatch.setattr(
         "screens.registry._next_quad_page_tiles",
-        lambda: (True, ["date", "time", "inside", "weather1"]),
+        lambda: (True, 1.0, ["date", "time", "inside", "weather1"]),
     )
 
     def _animated_date(display, transition=False):
@@ -441,8 +444,11 @@ def test_quad_screen_prefers_captured_frames_over_screenimage_return(monkeypatch
 
     sampled_colors = []
 
-    def _fake_draw_quad_screen(_display, tiles, transition=False):
-        sampled_colors.append(tiles[0].render().getpixel((0, 0)))
+    def _fake_draw_quad_screen(_display, tiles, transition=False, scroll_speed=1.0):
+        rendered = tiles[0].render()
+        if isinstance(rendered, list):
+            rendered = rendered[0]
+        sampled_colors.append(rendered.getpixel((0, 0)))
         return None
 
     monkeypatch.setattr("screens.registry.draw_date", _animated_date)
@@ -466,7 +472,7 @@ def test_quad_screen_samples_across_longer_animations(monkeypatch):
 
     monkeypatch.setattr(
         "screens.registry._next_quad_page_tiles",
-        lambda: (True, ["date", "time", "inside", "weather1"]),
+        lambda: (True, 1.0, ["date", "time", "inside", "weather1"]),
     )
 
     def _long_animated_date(display, transition=False):
@@ -481,8 +487,11 @@ def test_quad_screen_samples_across_longer_animations(monkeypatch):
 
     sampled_red = []
 
-    def _fake_draw_quad_screen(_display, tiles, transition=False):
-        sampled_red.append(tiles[0].render().getpixel((0, 0))[0])
+    def _fake_draw_quad_screen(_display, tiles, transition=False, scroll_speed=1.0):
+        rendered = tiles[0].render()
+        if isinstance(rendered, list):
+            rendered = rendered[0]
+        sampled_red.append(rendered.getpixel((0, 0))[0])
         return None
 
     monkeypatch.setattr("screens.registry.draw_date", _long_animated_date)
@@ -506,7 +515,7 @@ def test_quad_screen_preserves_scrolling_cursor_across_registry_rebuilds(monkeyp
 
     monkeypatch.setattr(
         "screens.registry._next_quad_page_tiles",
-        lambda: (True, ["date", "time", "inside", "weather1"]),
+        lambda: (True, 1.0, ["date", "time", "inside", "weather1"]),
     )
 
     def _animated_date(display, transition=False):
@@ -522,8 +531,11 @@ def test_quad_screen_preserves_scrolling_cursor_across_registry_rebuilds(monkeyp
 
     sampled_colors = []
 
-    def _fake_draw_quad_screen(_display, tiles, transition=False):
-        sampled_colors.append(tiles[0].render().getpixel((0, 0)))
+    def _fake_draw_quad_screen(_display, tiles, transition=False, scroll_speed=1.0):
+        rendered = tiles[0].render()
+        if isinstance(rendered, list):
+            rendered = rendered[0]
+        sampled_colors.append(rendered.getpixel((0, 0)))
         return None
 
     monkeypatch.setattr("screens.registry.draw_date", _animated_date)
@@ -543,17 +555,19 @@ def test_quad_screen_preserves_scrolling_cursor_across_registry_rebuilds(monkeyp
 def test_next_quad_page_tiles_rotates_pages(monkeypatch):
     monkeypatch.setattr(
         "screens.registry._quad_layout_from_layouts",
-        lambda: (True, [["date", "date", "date", "date"], ["time", "time", "time", "time"]]),
+        lambda: (True, 1.0, [["date", "date", "date", "date"], ["time", "time", "time", "time"]]),
     )
     monkeypatch.setattr("screens.registry._quad_page_index", 0)
 
     from screens import registry as registry_module
 
-    enabled_first, first = registry_module._next_quad_page_tiles()
-    enabled_second, second = registry_module._next_quad_page_tiles()
+    enabled_first, speed_first, first = registry_module._next_quad_page_tiles()
+    enabled_second, speed_second, second = registry_module._next_quad_page_tiles()
 
     assert enabled_first is True
     assert enabled_second is True
+    assert speed_first == 1.0
+    assert speed_second == 1.0
     assert first == ["date", "date", "date", "date"]
     assert second == ["time", "time", "time", "time"]
 
