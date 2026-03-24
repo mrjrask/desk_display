@@ -1325,9 +1325,9 @@ _FEED_DEPENDENCIES: Dict[str, Set[str]] = {
         "weather logo",
     },
     "bears": {"bears stand1", "bears stand2"},
-    "hawks": {"hawks stand1", "hawks stand2", "hawks last", "hawks live", "hawks next", "hawks next home", "hawks logo"},
+    "hawks": {"hawks stand1", "hawks last", "hawks live", "hawks next", "hawks next home", "hawks logo"},
     "wolves": {"wolves last", "wolves live", "wolves next", "wolves next home", "wolves logo"},
-    "bulls": {"bulls stand1", "bulls stand2", "bulls last", "bulls live", "bulls next", "bulls next home", "bulls logo"},
+    "bulls": {"bulls stand1", "bulls last", "bulls live", "bulls next", "bulls next home", "bulls logo"},
     "cubs": {
         "cubs stand1",
         "cubs stand2",

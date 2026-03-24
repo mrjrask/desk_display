@@ -21,14 +21,12 @@
     "bears next season": 4,
     "hawks logo": 2,
     "hawks stand1": 2,
-    "hawks stand2": 0,
     "hawks last": 2,
     "hawks live": 1,
     "hawks next": 2,
     "hawks next home": 1,
     "bulls logo": 3,
     "bulls stand1": 3,
-    "bulls stand2": 0,
     "bulls last": 3,
     "bulls live": 1,
     "bulls next": 3,
@@ -206,9 +204,6 @@
           "screen": "hawks stand1"
         },
         {
-          "screen": "hawks stand2"
-        },
-        {
           "screen": "hawks last"
         },
         {
@@ -230,9 +225,6 @@
         },
         {
           "screen": "bulls stand1"
-        },
-        {
-          "screen": "bulls stand2"
         },
         {
           "screen": "bulls last"
