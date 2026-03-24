@@ -495,13 +495,13 @@ def build_screen_registry(context: ScreenContext) -> Tuple[Dict[str, ScreenDefin
         else:
             _quad_tile_scroll_cursor.pop(screen_id, None)
 
+        if captured_frames:
+            frame_index = min(cursor, captured_frames - 1)
+            return capture.frames[frame_index]
         if isinstance(rendered, ScreenImage):
             return rendered.image
         if isinstance(rendered, Image.Image):
             return rendered
-        if captured_frames:
-            frame_index = min(cursor, captured_frames - 1)
-            return capture.frames[frame_index]
         return capture.last_image
     weather_logo = context.logos.get("weather logo")
     # Keep weather screens visible whenever cached forecast data exists.
