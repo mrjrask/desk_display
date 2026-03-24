@@ -1715,11 +1715,15 @@ class ScreenImage:
     led_override:
         Optional RGB tuple describing an LED color override that should remain
         active while the image is shown.
+    consumed_delay:
+        True when the screen renderer has already consumed the normal dwell
+        delay internally (for example, by rendering an animation loop).
     """
 
     image: Image.Image
     displayed: bool = False
     led_override: Optional[Tuple[float, float, float]] = None
+    consumed_delay: bool = False
 
 # ─── Basic utilities ────────────────────────────────────────────────────────
 @log_call

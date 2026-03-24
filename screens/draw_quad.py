@@ -2,14 +2,16 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import time
 from typing import Callable, Optional
 
 from PIL import Image, ImageDraw, ImageFont
 
-from config import HEIGHT, WIDTH
+from config import HEIGHT, SCREEN_DELAY, WIDTH
 from utils import ScreenImage
 
-RenderFunc = Callable[[], Optional[Image.Image | ScreenImage]]
+RenderResult = Optional[Image.Image | ScreenImage | list[Image.Image]]
+RenderFunc = Callable[[], RenderResult]
 
 
 @dataclass
@@ -18,12 +20,14 @@ class _TileSpec:
     render: RenderFunc
 
 
-def _extract_image(rendered: Optional[Image.Image | ScreenImage]) -> Optional[Image.Image]:
+def _extract_images(rendered: RenderResult) -> list[Image.Image]:
+    if isinstance(rendered, list):
+        return [frame for frame in rendered if isinstance(frame, Image.Image)]
     if isinstance(rendered, ScreenImage):
-        return rendered.image
+        return [rendered.image]
     if isinstance(rendered, Image.Image):
-        return rendered
-    return None
+        return [rendered]
+    return []
 
 
 def _error_tile(size: tuple[int, int], label: str) -> Image.Image:
@@ -39,13 +43,15 @@ def _error_tile(size: tuple[int, int], label: str) -> Image.Image:
 def draw_quad_screen(display, tiles: list[_TileSpec], *, transition: bool = False) -> ScreenImage:
     """Render a four-tile dashboard using the provided tile renderers."""
 
-    frame = Image.new("RGB", (WIDTH, HEIGHT), "black")
-    draw = ImageDraw.Draw(frame)
-
     cols = 2
     rows = 2
     tile_w = WIDTH // cols
     tile_h = HEIGHT // rows
+    target_frame_time = 1.0 / 60.0
+    has_wait_for_skip = callable(getattr(display, "wait_for_skip", None))
+
+    tile_sequences: list[list[Image.Image]] = []
+    tile_regions: list[tuple[int, int, int, int]] = []
 
     for index in range(cols * rows):
         row = index // cols
@@ -58,22 +64,59 @@ def draw_quad_screen(display, tiles: list[_TileSpec], *, transition: bool = Fals
 
         tile = tiles[index] if index < len(tiles) else None
         if tile is None:
-            tile_img = _error_tile(region_size, "empty")
+            tile_imgs = [_error_tile(region_size, "empty")]
         else:
             try:
-                source = _extract_image(tile.render())
+                sources = _extract_images(tile.render())
             except Exception:
-                source = None
-            tile_img = source.resize(region_size, Image.Resampling.LANCZOS) if source else _error_tile(region_size, tile.label)
+                sources = []
+            if sources:
+                tile_imgs = [source.resize(region_size, Image.Resampling.LANCZOS) for source in sources]
+            else:
+                tile_imgs = [_error_tile(region_size, tile.label)]
 
-        frame.paste(tile_img, (x0, y0))
-        if x0 > 0:
-            draw.line((x0, y0, x0, y1), fill=(70, 70, 70), width=1)
-        if y0 > 0:
-            draw.line((x0, y0, x1, y0), fill=(70, 70, 70), width=1)
+        tile_sequences.append(tile_imgs)
+        tile_regions.append((x0, y0, x1, y1))
 
-    display.image(frame)
+    def _render_composite(frame_number: int) -> Image.Image:
+        frame = Image.new("RGB", (WIDTH, HEIGHT), "black")
+        draw = ImageDraw.Draw(frame)
+
+        for index, seq in enumerate(tile_sequences):
+            x0, y0, x1, y1 = tile_regions[index]
+            tile_img = seq[frame_number % len(seq)]
+            frame.paste(tile_img, (x0, y0))
+            if x0 > 0:
+                draw.line((x0, y0, x0, y1), fill=(70, 70, 70), width=1)
+            if y0 > 0:
+                draw.line((x0, y0, x1, y0), fill=(70, 70, 70), width=1)
+
+        return frame
+
+    animated = transition and any(len(seq) > 1 for seq in tile_sequences)
+    displayed_frame = _render_composite(0)
+    display.image(displayed_frame)
     if transition:
         display.show()
 
-    return ScreenImage(frame, displayed=bool(transition))
+    if animated:
+        end_time = time.monotonic() + float(SCREEN_DELAY)
+        frame_number = 1
+        while time.monotonic() < end_time:
+            frame_start = time.monotonic()
+            displayed_frame = _render_composite(frame_number)
+            display.image(displayed_frame)
+            if transition:
+                display.show()
+            frame_number += 1
+
+            elapsed = time.monotonic() - frame_start
+            sleep_for = max(0.0, target_frame_time - elapsed)
+            if sleep_for <= 0:
+                continue
+            if has_wait_for_skip and display.wait_for_skip(sleep_for):
+                break
+            if not has_wait_for_skip:
+                time.sleep(sleep_for)
+
+    return ScreenImage(displayed_frame, displayed=bool(transition), consumed_delay=animated)
