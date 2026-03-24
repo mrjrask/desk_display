@@ -459,6 +459,45 @@ def test_quad_screen_prefers_captured_frames_over_screenimage_return(monkeypatch
     assert sampled_colors == [(255, 0, 0), (0, 255, 0), (255, 0, 0)]
 
 
+def test_quad_screen_samples_across_longer_animations(monkeypatch):
+    now = datetime.datetime(2024, 1, 1, 12, 0, tzinfo=CENTRAL_TIME)
+    weather = {"hourly": []}
+    context = _make_context(weather, now)
+
+    monkeypatch.setattr(
+        "screens.registry._next_quad_page_tiles",
+        lambda: (True, ["date", "time", "inside", "weather1"]),
+    )
+
+    def _long_animated_date(display, transition=False):
+        for idx in range(40):
+            if hasattr(display, "skip_requested") and display.skip_requested():
+                break
+            display.image(Image.new("RGB", (8, 8), (idx, 0, 0)))
+        return None
+
+    def _single_frame(_display, transition=False):
+        return Image.new("RGB", (8, 8), (0, 0, 0))
+
+    sampled_red = []
+
+    def _fake_draw_quad_screen(_display, tiles, transition=False):
+        sampled_red.append(tiles[0].render().getpixel((0, 0))[0])
+        return None
+
+    monkeypatch.setattr("screens.registry.draw_date", _long_animated_date)
+    monkeypatch.setattr("screens.registry.draw_time", _single_frame)
+    monkeypatch.setattr("screens.registry.draw_inside", _single_frame)
+    monkeypatch.setattr("screens.registry.draw_weather_screen_1", _single_frame)
+    monkeypatch.setattr("screens.registry.draw_quad_screen", _fake_draw_quad_screen)
+
+    registry, _ = build_screen_registry(context)
+    for _ in range(10):
+        registry["quad"].render()
+
+    assert sampled_red == [0, 4, 9, 13, 17, 22, 26, 30, 35, 39]
+
+
 
 
 def test_quad_screen_preserves_scrolling_cursor_across_registry_rebuilds(monkeypatch):
