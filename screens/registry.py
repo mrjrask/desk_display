@@ -68,18 +68,12 @@ from screens.mlb_standings import (
     draw_NL_WildCard,
 )
 from screens.mlb_team_standings import draw_standings_screen1, draw_standings_screen2
-from screens.nba_team_standings import (
-    draw_nba_standings_screen1,
-    draw_nba_standings_screen2,
-)
+from screens.nba_team_standings import draw_nba_standings_screen1
 from screens.nfl_team_standings import (
     draw_nfl_standings_screen1,
     draw_nfl_standings_screen2,
 )
-from screens.nhl_team_standings import (
-    draw_nhl_standings_screen1,
-    draw_nhl_standings_screen2,
-)
+from screens.nhl_team_standings import draw_nhl_standings_screen1
 from screens.nba_scoreboard import render_nba_scoreboard
 from screens.nba_scoreboard_v2 import render_nba_scoreboard_v2
 from screens.ncaam_scoreboard import render_ncaam_scoreboard
@@ -789,17 +783,6 @@ def build_screen_registry(context: ScreenContext) -> Tuple[Dict[str, ScreenDefin
                 available=True,
             )
             register(
-                "hawks stand2",
-                lambda data=hawks.get("stand"): draw_nhl_standings_screen2(
-                    context.display,
-                    data,
-                    os.path.join(context.image_dir, "nhl/CHI.png"),
-                    screen_id="hawks stand2",
-                    transition=True,
-                ),
-                available=True,
-            )
-        register(
             "hawks last",
             lambda data=hawks.get("last"): draw_last_hawks_game(
                 context.display, data, transition=True
@@ -1148,17 +1131,6 @@ def build_screen_registry(context: ScreenContext) -> Tuple[Dict[str, ScreenDefin
                 "Western conf.",
                 logo_scale=1.0,
                 screen_id="bulls stand1",
-                transition=True,
-            ),
-            available=True,
-        )
-        register(
-            "bulls stand2",
-            lambda data=bulls.get("stand"): draw_nba_standings_screen2(
-                context.display,
-                data,
-                os.path.join(context.image_dir, "nba/CHI.png"),
-                screen_id="bulls stand2",
                 transition=True,
             ),
             available=True,
