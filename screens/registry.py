@@ -113,6 +113,10 @@ _layouts_cache_lock = threading.Lock()
 _layouts_payload_cache: Optional[dict[str, Any]] = None
 _layouts_payload_mtime: Optional[float] = None
 
+_QUAD_TILE_SAMPLE_FRAMES = 10
+_quad_tile_scroll_cursor: Dict[str, int] = {}
+_quad_tile_scroll_lock = threading.Lock()
+
 
 def _quad_layout_from_layouts() -> tuple[bool, list[list[str]]]:
     enabled = False
@@ -423,9 +427,6 @@ def build_screen_registry(context: ScreenContext) -> Tuple[Dict[str, ScreenDefin
 
     weather_data = context.cache.get("weather")
 
-    _quad_tile_scroll_cursor: Dict[str, int] = {}
-    _quad_tile_sample_frames = 10
-
     class _QuadCaptureDisplay:
         def __init__(self, *, frame_limit: Optional[int] = None):
             self.width = WIDTH
@@ -439,7 +440,7 @@ def build_screen_registry(context: ScreenContext) -> Tuple[Dict[str, ScreenDefin
             copied = img.copy()
             self._last = copied
             self._frame_id += 1
-            if len(self._frames) < _quad_tile_sample_frames:
+            if len(self._frames) < _QUAD_TILE_SAMPLE_FRAMES:
                 self._frames.append(copied)
 
         def show(self):
@@ -471,8 +472,9 @@ def build_screen_registry(context: ScreenContext) -> Tuple[Dict[str, ScreenDefin
         if definition is None:
             return None
 
-        cursor = _quad_tile_scroll_cursor.get(screen_id, 0) % _quad_tile_sample_frames
-        capture = _QuadCaptureDisplay(frame_limit=_quad_tile_sample_frames)
+        with _quad_tile_scroll_lock:
+            cursor = _quad_tile_scroll_cursor.get(screen_id, 0) % _QUAD_TILE_SAMPLE_FRAMES
+        capture = _QuadCaptureDisplay(frame_limit=_QUAD_TILE_SAMPLE_FRAMES)
         original_display = context.display
         context.display = capture
         try:
@@ -485,9 +487,11 @@ def build_screen_registry(context: ScreenContext) -> Tuple[Dict[str, ScreenDefin
             next_cursor = cursor + 1
             if next_cursor >= captured_frames:
                 next_cursor = 0
-            _quad_tile_scroll_cursor[screen_id] = next_cursor % _quad_tile_sample_frames
+            with _quad_tile_scroll_lock:
+                _quad_tile_scroll_cursor[screen_id] = next_cursor % _QUAD_TILE_SAMPLE_FRAMES
         else:
-            _quad_tile_scroll_cursor.pop(screen_id, None)
+            with _quad_tile_scroll_lock:
+                _quad_tile_scroll_cursor.pop(screen_id, None)
 
         if captured_frames:
             frame_index = min(cursor, captured_frames - 1)

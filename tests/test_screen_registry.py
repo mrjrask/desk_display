@@ -1,5 +1,7 @@
 import datetime
 
+import pytest
+import screens.registry as registry_module
 from PIL import Image
 
 from config import CENTRAL_TIME
@@ -10,6 +12,16 @@ from screens.registry import (
     build_screen_registry,
 )
 from utils import ScreenImage
+
+
+def _reset_quad_scroll_state():
+    registry_module._quad_tile_scroll_cursor.clear()
+
+@pytest.fixture(autouse=True)
+def _clear_quad_scroll_cursor():
+    _reset_quad_scroll_state()
+    yield
+    _reset_quad_scroll_state()
 
 
 class _DummyDisplay:
@@ -447,6 +459,48 @@ def test_quad_screen_prefers_captured_frames_over_screenimage_return(monkeypatch
     assert sampled_colors == [(255, 0, 0), (0, 255, 0), (255, 0, 0)]
 
 
+
+
+def test_quad_screen_preserves_scrolling_cursor_across_registry_rebuilds(monkeypatch):
+    now = datetime.datetime(2024, 1, 1, 12, 0, tzinfo=CENTRAL_TIME)
+    weather = {"hourly": []}
+
+    monkeypatch.setattr(
+        "screens.registry._next_quad_page_tiles",
+        lambda: (True, ["date", "time", "inside", "weather1"]),
+    )
+
+    def _animated_date(display, transition=False):
+        frames = [(255, 0, 0), (0, 255, 0)]
+        for color in frames:
+            if hasattr(display, "skip_requested") and display.skip_requested():
+                break
+            display.image(Image.new("RGB", (8, 8), color))
+        return None
+
+    def _single_frame(_display, transition=False):
+        return Image.new("RGB", (8, 8), (0, 0, 0))
+
+    sampled_colors = []
+
+    def _fake_draw_quad_screen(_display, tiles, transition=False):
+        sampled_colors.append(tiles[0].render().getpixel((0, 0)))
+        return None
+
+    monkeypatch.setattr("screens.registry.draw_date", _animated_date)
+    monkeypatch.setattr("screens.registry.draw_time", _single_frame)
+    monkeypatch.setattr("screens.registry.draw_inside", _single_frame)
+    monkeypatch.setattr("screens.registry.draw_weather_screen_1", _single_frame)
+    monkeypatch.setattr("screens.registry.draw_quad_screen", _fake_draw_quad_screen)
+    monkeypatch.setattr("screens.registry._quad_tile_scroll_cursor", {})
+
+    first_registry, _ = build_screen_registry(_make_context(weather, now))
+    first_registry["quad"].render()
+
+    second_registry, _ = build_screen_registry(_make_context(weather, now))
+    second_registry["quad"].render()
+
+    assert sampled_colors == [(255, 0, 0), (0, 255, 0)]
 def test_next_quad_page_tiles_rotates_pages(monkeypatch):
     monkeypatch.setattr(
         "screens.registry._quad_layout_from_layouts",
