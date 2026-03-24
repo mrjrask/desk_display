@@ -236,6 +236,141 @@ def test_sox_live_is_available_when_status_is_pre_game_warmup():
     assert registry["sox live"].available is True
 
 
+def test_quad_tiles_use_captured_animation_frames_instead_of_returned_final_image(monkeypatch):
+    import screens.registry as registry_module
+    from utils import ScreenImage
+
+    class _ImageDisplay:
+        def __init__(self):
+            self.last = None
+
+        def image(self, img):
+            self.last = img.copy()
+
+        def show(self):
+            return None
+
+    class _NoopThread:
+        def __init__(self, target=None, name=None, daemon=None):  # noqa: ARG002
+            self._alive = False
+
+        def start(self):
+            self._alive = False
+
+        def is_alive(self):
+            return self._alive
+
+    def _fake_draw_date(display, transition=False):  # noqa: ARG001
+        first = Image.new("RGB", (320, 240), "red")
+        second = Image.new("RGB", (320, 240), "green")
+        display.image(first)
+        display.image(second)
+        # Return a different image so we can verify quad mode uses captured frames.
+        return ScreenImage(Image.new("RGB", (320, 240), "blue"), displayed=False)
+
+    def _fake_static_screen(display, *args, **kwargs):  # noqa: ANN002, ANN003
+        img = Image.new("RGB", (320, 240), "black")
+        display.image(img)
+        return ScreenImage(img, displayed=False)
+
+    now = datetime.datetime(2024, 1, 1, 12, 0, tzinfo=CENTRAL_TIME)
+    weather = {"hourly": []}
+
+    monkeypatch.setattr(
+        registry_module,
+        "_next_quad_page_tiles",
+        lambda: (True, ["date", "time", "nixie", "weather1"]),
+    )
+    monkeypatch.setattr(registry_module.threading, "Thread", _NoopThread)
+    monkeypatch.setattr(registry_module, "draw_date", _fake_draw_date)
+    monkeypatch.setattr(registry_module, "draw_time", _fake_static_screen)
+    monkeypatch.setattr(registry_module, "draw_nixie", _fake_static_screen)
+    monkeypatch.setattr(registry_module, "draw_weather_screen_1", _fake_static_screen)
+
+    display = _ImageDisplay()
+    context = _make_context(weather, now)
+    context.display = display
+    registry, _ = build_screen_registry(context)
+
+    registry["quad"].render()
+    first_pixel = display.last.getpixel((10, 10))
+    registry["quad"].render()
+    second_pixel = display.last.getpixel((10, 10))
+
+    assert first_pixel == (255, 0, 0)
+    assert second_pixel == (0, 128, 0)
+
+
+def test_quad_screen_uses_prerendered_frame_when_available(monkeypatch):
+    import screens.registry as registry_module
+    from utils import ScreenImage
+
+    class _ImageDisplay:
+        def image(self, _img):
+            return None
+
+        def show(self):
+            return None
+
+    class _ImmediateThread:
+        def __init__(self, target=None, name=None, daemon=None):  # noqa: ARG002
+            self._target = target
+            self._alive = False
+
+        def start(self):
+            self._alive = True
+            try:
+                if self._target is not None:
+                    self._target()
+            finally:
+                self._alive = False
+
+        def is_alive(self):
+            return self._alive
+
+    call_counts = {"prerender": 0, "live": 0}
+
+    def _fake_quad_screen(display, _tiles, transition=False):  # noqa: ARG001
+        is_prerender = display.__class__.__name__ == "_QuadPreRenderDisplay"
+        if is_prerender:
+            call_counts["prerender"] += 1
+            return ScreenImage(Image.new("RGB", (320, 240), "magenta"), displayed=True)
+        call_counts["live"] += 1
+        return ScreenImage(Image.new("RGB", (320, 240), "cyan"), displayed=True)
+
+    def _fake_static_screen(display, *args, **kwargs):  # noqa: ANN002, ANN003
+        img = Image.new("RGB", (320, 240), "black")
+        display.image(img)
+        return ScreenImage(img, displayed=False)
+
+    now = datetime.datetime(2024, 1, 1, 12, 0, tzinfo=CENTRAL_TIME)
+    weather = {"hourly": []}
+
+    monkeypatch.setattr(registry_module.threading, "Thread", _ImmediateThread)
+    monkeypatch.setattr(
+        registry_module,
+        "_next_quad_page_tiles",
+        lambda: (True, ["date", "time", "nixie", "weather1"]),
+    )
+    monkeypatch.setattr(registry_module, "draw_quad_screen", _fake_quad_screen)
+    monkeypatch.setattr(registry_module, "draw_date", _fake_static_screen)
+    monkeypatch.setattr(registry_module, "draw_time", _fake_static_screen)
+    monkeypatch.setattr(registry_module, "draw_nixie", _fake_static_screen)
+    monkeypatch.setattr(registry_module, "draw_weather_screen_1", _fake_static_screen)
+
+    context = _make_context(weather, now)
+    context.display = _ImageDisplay()
+    registry, _ = build_screen_registry(context)
+
+    result = registry["quad"].render()
+
+    assert call_counts["prerender"] >= 1
+    assert call_counts["live"] == 0
+    assert isinstance(result, ScreenImage)
+    assert result.image.getpixel((0, 0)) == (255, 0, 255)
+    assert result.displayed is False
+
+
 def test_mlb_next_alt_games_rotate_on_primary_next_screen(monkeypatch):
     now = datetime.datetime(2024, 3, 10, 12, 0, tzinfo=CENTRAL_TIME)
     weather = {"hourly": []}
