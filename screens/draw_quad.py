@@ -93,10 +93,17 @@ def draw_quad_screen(display, tiles: list[_TileSpec], *, transition: bool = Fals
         return frame
 
     max_frames = max((len(seq) for seq in tile_sequences), default=1)
-    # Pace quad playback to the same overall window as standalone screens.
-    # We sample each tile's animation, then play those sampled frames evenly
-    # across SCREEN_DELAY rather than blasting through them at a fixed 60 FPS.
-    target_frame_time = max(0.016, float(SCREEN_DELAY) / float(max_frames))
+    # Pace quad playback so animations stay smooth while still respecting
+    # the overall screen window.
+    # - Minimum frame time keeps CPU usage reasonable.
+    # - Maximum frame time avoids very "choppy" updates when tiles only
+    #   provide a handful of sampled frames.
+    min_frame_time = 0.016  # ~60 FPS ceiling
+    max_frame_time = 0.100  # ~10 FPS floor for visible smoothness
+    target_frame_time = min(
+        max_frame_time,
+        max(min_frame_time, float(SCREEN_DELAY) / float(max_frames)),
+    )
     animated = transition and any(len(seq) > 1 for seq in tile_sequences)
     displayed_frame = _render_composite(0)
     display.image(displayed_frame)
