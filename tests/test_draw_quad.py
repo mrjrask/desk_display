@@ -47,3 +47,19 @@ def test_draw_quad_static_tile_does_not_consume_delay(monkeypatch):
     assert result.consumed_delay is False
     assert len(display.frames) == 1
     assert display.show_calls == 1
+
+
+def test_draw_quad_caps_frame_time_to_avoid_choppy_updates(monkeypatch):
+    display = _DisplayStub()
+    # Long delay plus only two source frames used to produce very infrequent
+    # updates. We now cap frame time so playback remains smooth.
+    monkeypatch.setattr("screens.draw_quad.SCREEN_DELAY", 1.0)
+
+    red = Image.new("RGB", (20, 20), "red")
+    blue = Image.new("RGB", (20, 20), "blue")
+    tiles = [_TileSpec("animated", lambda: [red, blue])]
+
+    draw_quad_screen(display, tiles, transition=True)
+
+    # Initial frame plus multiple animated updates (roughly 10 FPS cap).
+    assert len(display.frames) >= 8
