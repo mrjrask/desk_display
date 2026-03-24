@@ -547,8 +547,9 @@ def draw_weather_screen_1(display, weather, transition=False):
     stack_gap = 2
     edge_margin = 4
     if precip_percent:
+        precip_emoji = "❄️" if is_snow else "💧"
         precip_color = (173, 216, 230) if is_snow else (135, 206, 250)
-        precip_icon = _render_precip_icon(is_snow, 12, precip_color)
+        precip_icon = _ensure_rgba_icon(_render_emoji_glyph(precip_emoji, FONT_EMOJI, precip_color))
         emoji_w, emoji_h = precip_icon.size
         pct_w, pct_h = draw.textsize(precip_percent, font=side_font)
         block_w = max(emoji_w, pct_w)
