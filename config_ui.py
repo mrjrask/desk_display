@@ -308,12 +308,21 @@ def _default_layouts_config() -> Dict[str, Any]:
         "screens": {
             "quad": {
                 "enabled": False,
+                "scroll_speed": 1.0,
                 "pages": [
                     {"tiles": ["date", "weather1", "weather hourly", "inside"]},
                 ],
             }
         }
     }
+
+
+def _normalize_quad_scroll_speed(value: Any) -> float:
+    try:
+        speed = float(value)
+    except (TypeError, ValueError):
+        speed = 1.0
+    return min(3.0, max(0.25, speed))
 
 
 def _normalize_quad_page(raw_page: Any, defaults: List[str]) -> Dict[str, Any]:
@@ -352,6 +361,7 @@ def _normalize_layouts_config(data: Any) -> Dict[str, Any]:
         return result
 
     result["screens"]["quad"]["enabled"] = bool(quad.get("enabled", False))
+    result["screens"]["quad"]["scroll_speed"] = _normalize_quad_scroll_speed(quad.get("scroll_speed", 1.0))
 
     pages: List[Dict[str, Any]] = []
     raw_pages = quad.get("pages")
@@ -394,6 +404,7 @@ def _build_layouts(entries: Dict[str, Any]) -> Dict[str, Any]:
         raise ValueError("Invalid layouts payload")
 
     quad_enabled = bool(entries.get("quad_enabled", False))
+    quad_scroll_speed = _normalize_quad_scroll_speed(entries.get("quad_scroll_speed", 1.0))
     raw_pages = entries.get("quad_pages")
     if not isinstance(raw_pages, list):
         legacy_tiles = entries.get("quad_tiles")
@@ -414,7 +425,7 @@ def _build_layouts(entries: Dict[str, Any]) -> Dict[str, Any]:
     if not pages:
         pages = [{"tiles": defaults.copy()}]
 
-    return {"screens": {"quad": {"enabled": quad_enabled, "pages": pages}}}
+    return {"screens": {"quad": {"enabled": quad_enabled, "scroll_speed": quad_scroll_speed, "pages": pages}}}
 
 
 def _load_style_config(path: str) -> Dict[str, Any]:
@@ -929,6 +940,7 @@ def screen_config() -> str:
     entries = _build_screen_entries(config, style_config)
     quad_config = layouts_config.get("screens", {}).get("quad", {})
     quad_enabled = bool(quad_config.get("enabled", False))
+    quad_scroll_speed = _normalize_quad_scroll_speed(quad_config.get("scroll_speed", 1.0))
     quad_pages = quad_config.get("pages", [])
     playlists, playlist_assignments = _build_playlist_assignments(config)
     return render_template(
@@ -936,6 +948,7 @@ def screen_config() -> str:
         screens=entries,
         screen_ids=sorted(SCREEN_IDS),
         quad_enabled=quad_enabled,
+        quad_scroll_speed=quad_scroll_speed,
         quad_pages=quad_pages,
         config_path=DEFAULT_CONFIG_PATH,
         playlists=playlists,
@@ -986,6 +999,7 @@ def get_screens() -> Any:
             "screens": _build_screen_entries(config, style_config),
             "screen_ids": sorted(SCREEN_IDS),
             "quad_enabled": bool(layouts_config.get("screens", {}).get("quad", {}).get("enabled", False)),
+            "quad_scroll_speed": _normalize_quad_scroll_speed(layouts_config.get("screens", {}).get("quad", {}).get("scroll_speed", 1.0)),
             "quad_pages": layouts_config.get("screens", {}).get("quad", {}).get("pages", []),
         }
     )
@@ -999,6 +1013,7 @@ def get_default_screens() -> Any:
     return jsonify({
         "screens": _build_screen_entries(config, style_config),
         "quad_enabled": bool(layouts_config.get("screens", {}).get("quad", {}).get("enabled", False)),
+        "quad_scroll_speed": _normalize_quad_scroll_speed(layouts_config.get("screens", {}).get("quad", {}).get("scroll_speed", 1.0)),
         "quad_pages": layouts_config.get("screens", {}).get("quad", {}).get("pages", []),
     })
 
@@ -1048,6 +1063,7 @@ def save_screens() -> Any:
             "status": "ok",
             "screens": _build_screen_entries(config, style_config),
             "quad_enabled": bool(layouts.get("screens", {}).get("quad", {}).get("enabled", False)),
+            "quad_scroll_speed": _normalize_quad_scroll_speed(layouts.get("screens", {}).get("quad", {}).get("scroll_speed", 1.0)),
             "quad_pages": layouts.get("screens", {}).get("quad", {}).get("pages", []),
         }
     )
@@ -1111,6 +1127,7 @@ def import_screens() -> Any:
             "status": "ok",
             "screens": entries,
             "quad_enabled": bool(layouts_config.get("screens", {}).get("quad", {}).get("enabled", False)),
+            "quad_scroll_speed": _normalize_quad_scroll_speed(layouts_config.get("screens", {}).get("quad", {}).get("scroll_speed", 1.0)),
             "quad_pages": layouts_config.get("screens", {}).get("quad", {}).get("pages", []),
         }
     )

@@ -2,6 +2,7 @@
   "screens": {
     "quad": {
       "enabled": false,
+      "scroll_speed": 1.0,
       "pages": [
         {
           "tiles": [

@@ -454,6 +454,11 @@
         <button class="btn-secondary" id="addQuadPageBtn" type="button">Add quad page</button>
         <div class="hint">Each page has 4 slots and rotates each time quad is shown.</div>
       </div>
+      <div class="field">
+        <label for="quadScrollSpeed">Quad tile scroll speed</label>
+        <input type="range" id="quadScrollSpeed" min="0.25" max="3" step="0.25" value="{{ quad_scroll_speed }}">
+        <div class="hint"><span id="quadScrollSpeedValue">{{ quad_scroll_speed }}</span>x (lower = slower, higher = faster)</div>
+      </div>
       <div id="quadPagesContainer" class="quad-pages"></div>
     </div>
     <div class="playlist-controls">
@@ -546,6 +551,8 @@
     const newPlaylistNameInput = document.getElementById("newPlaylistName");
     const addPlaylistBtn = document.getElementById("addPlaylistBtn");
     const quadEnabledToggle = document.getElementById("quadEnabled");
+    const quadScrollSpeedInput = document.getElementById("quadScrollSpeed");
+    const quadScrollSpeedValue = document.getElementById("quadScrollSpeedValue");
     const addQuadPageBtn = document.getElementById("addQuadPageBtn");
     const quadPagesContainer = document.getElementById("quadPagesContainer");
     const selectableScreenIds = {{ screen_ids | tojson }}.filter((id) => id !== "quad");
@@ -1013,6 +1020,7 @@
     }
 
     function saveDraft() {
+      const quadScrollSpeed = Number.parseFloat(quadScrollSpeedInput?.value ?? "1") || 1;
       const payload = {
         updatedAt: new Date().toISOString(),
         screens: getCurrentScreens(),
@@ -1020,6 +1028,7 @@
         assignments: playlistAssignments,
         collapsed: collapsedPlaylists,
         quad_enabled: Boolean(quadEnabledToggle?.checked),
+        quad_scroll_speed: quadScrollSpeed,
         quad_pages: getQuadPages(),
       };
       try {
@@ -1138,10 +1147,12 @@
     }
 
     function buildLayoutsPayload() {
+      const quadScrollSpeed = Number.parseFloat(quadScrollSpeedInput?.value ?? "1") || 1;
       return {
         screens: {
           quad: {
             enabled: Boolean(quadEnabledToggle?.checked),
+            scroll_speed: quadScrollSpeed,
             pages: getQuadPages(),
           },
         },
@@ -1332,6 +1343,7 @@
             playlists: buildPlaylistsPayload(screens),
             sequence: playlists.map((playlist) => ({ playlist: playlist.id })),
             quad_enabled: Boolean(quadEnabledToggle?.checked),
+            quad_scroll_speed: Number.parseFloat(quadScrollSpeedInput?.value ?? "1") || 1,
             quad_pages: getQuadPages(),
           }),
         });
@@ -1341,6 +1353,8 @@
         }
         renderScreens(data.screens || screens);
         if (quadEnabledToggle) quadEnabledToggle.checked = Boolean(data.quad_enabled);
+        if (quadScrollSpeedInput) quadScrollSpeedInput.value = String(data.quad_scroll_speed ?? 1);
+        if (quadScrollSpeedValue) quadScrollSpeedValue.textContent = String(data.quad_scroll_speed ?? 1);
         renderQuadPages(data.quad_pages || getQuadPages());
         markClean();
       } catch (err) {
@@ -1361,6 +1375,8 @@
         }
         renderScreens(data.screens || []);
         if (quadEnabledToggle) quadEnabledToggle.checked = Boolean(data.quad_enabled);
+        if (quadScrollSpeedInput) quadScrollSpeedInput.value = String(data.quad_scroll_speed ?? 1);
+        if (quadScrollSpeedValue) quadScrollSpeedValue.textContent = String(data.quad_scroll_speed ?? 1);
         renderQuadPages(data.quad_pages || []);
         markDirty();
       } catch (err) {
@@ -1379,6 +1395,7 @@
           style: buildStylePayload(screens),
           layouts: buildLayoutsPayload(),
           quad_enabled: Boolean(quadEnabledToggle?.checked),
+          quad_scroll_speed: Number.parseFloat(quadScrollSpeedInput?.value ?? "1") || 1,
           quad_pages: getQuadPages(),
         };
         downloadPayload(payload, "screens_config.export.json");
@@ -1404,6 +1421,8 @@
         applyImportedPlaylists(payload.config);
         renderScreens(data.screens || []);
         if (quadEnabledToggle) quadEnabledToggle.checked = Boolean(data.quad_enabled);
+        if (quadScrollSpeedInput) quadScrollSpeedInput.value = String(data.quad_scroll_speed ?? 1);
+        if (quadScrollSpeedValue) quadScrollSpeedValue.textContent = String(data.quad_scroll_speed ?? 1);
         renderQuadPages(data.quad_pages || []);
         markClean();
       } catch (err) {
@@ -1471,6 +1490,14 @@
     if (quadEnabledToggle) {
       quadEnabledToggle.addEventListener("change", markDirty);
     }
+    if (quadScrollSpeedInput) {
+      quadScrollSpeedInput.addEventListener("input", () => {
+        if (quadScrollSpeedValue) {
+          quadScrollSpeedValue.textContent = quadScrollSpeedInput.value;
+        }
+      });
+      quadScrollSpeedInput.addEventListener("change", markDirty);
+    }
     if (addQuadPageBtn) {
       addQuadPageBtn.addEventListener("click", () => {
         quadPagesState = [...getQuadPages(), defaultQuadPage()];
@@ -1488,6 +1515,7 @@
     loadPlaylistState();
     let initialScreens = getCurrentScreens();
     let initialQuadEnabled = {{ quad_enabled | tojson }};
+    let initialQuadScrollSpeed = {{ quad_scroll_speed | tojson }};
     let initialQuadPages = {{ quad_pages | tojson }};
     const savedDraft = sessionStorage.getItem(draftStorageKey);
     if (savedDraft) {
@@ -1510,6 +1538,9 @@
             if (typeof draft.quad_enabled === "boolean") {
               initialQuadEnabled = draft.quad_enabled;
             }
+            if (typeof draft.quad_scroll_speed === "number") {
+              initialQuadScrollSpeed = draft.quad_scroll_speed;
+            }
             if (Array.isArray(draft.quad_pages)) {
               initialQuadPages = draft.quad_pages;
             }
@@ -1524,6 +1555,8 @@
     }
     renderScreens(initialScreens);
     if (quadEnabledToggle) quadEnabledToggle.checked = Boolean(initialQuadEnabled);
+    if (quadScrollSpeedInput) quadScrollSpeedInput.value = String(initialQuadScrollSpeed || 1);
+    if (quadScrollSpeedValue) quadScrollSpeedValue.textContent = String(initialQuadScrollSpeed || 1);
     renderQuadPages(initialQuadPages);
   </script>
 </body>
