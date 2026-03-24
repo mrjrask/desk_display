@@ -78,23 +78,6 @@ STATUS_ROW_H          = scale_value(18)
 REQUEST_TIMEOUT       = 10
 FETCH_CACHE_TTL_SECONDS = 60
 MLB_SPORT_IDS = "1,51"  # MLB + World Baseball Classic
-MLB_TEAM_TRICODES = {
-    "ARI", "ATL", "BAL", "BOS", "CIN", "CLE", "COL", "CUBS", "DET", "HOU",
-    "KC", "LAA", "LAD", "MIA", "MIL", "MIN", "NYM", "NYY", "ATH", "PHI",
-    "PIT", "SD", "SF", "SEA", "SOX", "STL", "TB", "TEX", "TOR", "WSH",
-}
-
-
-def _is_mlb_team(team: dict) -> bool:
-    return _team_logo_abbr(team) in MLB_TEAM_TRICODES
-
-
-def _is_international_game(game_obj: dict) -> bool:
-    teams = (game_obj or {}).get("teams", {}) or {}
-    away_team = (teams.get("away", {}) or {}).get("team", {}) or {}
-    home_team = (teams.get("home", {}) or {}).get("team", {}) or {}
-    return not (_is_mlb_team(away_team) and _is_mlb_team(home_team))
-
 COL_WIDTHS = [
     _scale_width(70),
     _scale_width(60),
@@ -522,8 +505,6 @@ def _hydrate_games(raw_games: Iterable[dict]) -> list[dict]:
     games: list[dict] = []
     for game in raw_games:
         game = game or {}
-        if _is_international_game(game):
-            continue
         start_local = _timestamp_to_local(game.get("gameDate"))
         if start_local:
             game["_start_local"] = start_local

@@ -6,7 +6,6 @@ LEGACY_SCOREBOARD_V2_SCREEN_MAP = {
     "NHL Scoreboard v2": "NHL Scoreboard",
     "NBA Scoreboard v2": "NBA Scoreboard",
     "MLB Scoreboard v2": "MLB Scoreboard",
-    "WBC Scoreboard v2": "WBC Scoreboard",
     "NHL Standings Overview v2 West": "NHL Standings Overview West",
     "NHL Standings Overview v2 East": "NHL Standings Overview East",
     "NHL Standings West v2": "NHL Standings West",
@@ -32,7 +31,7 @@ RAW_SCREEN_IDS = [
     "cubs last", "cubs result", "cubs live", "cubs next", "cubs next home",
     "sox logo", "sox stand1", "sox stand2",
     "sox last", "sox live", "sox next", "sox next home",
-    "mlb logo", "MLB Scoreboard", "WBC Scoreboard",
+    "mlb logo", "MLB Scoreboard",
     "NL Overview", "NL East", "NL Central", "NL West", "NL Wild Card",
     "AL Overview", "AL East", "AL Central", "AL West", "AL Wild Card",
 ]

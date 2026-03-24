@@ -335,7 +335,6 @@ def build_cache() -> Dict[str, object]:
         "scoreboards": {
             "nfl": [],
             "mlb": [],
-            "wbc": [],
             "nba": [],
             "ncaam": [],
             "nhl": [],
