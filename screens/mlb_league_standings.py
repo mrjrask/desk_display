@@ -55,10 +55,8 @@ TITLE_MARGIN_TOP = scale_value(2)
 TITLE_GAP = scale_value(3)
 DIVISION_GAP_TOP = scale_value(6)
 DIVISION_GAP_BOTTOM = scale_value(4)
-DIVISION_UNDERLINE_GAP = scale_value(6)
-DIVISION_UNDERLINE_THICKNESS = max(1, scale_value(2))
 DIVISION_CONTENT_GAP = scale_value(10)
-ROW_GAP = scale_value(2)
+ROW_GAP = scale_value(6)
 LEFT_MARGIN = scale_value(5)
 RIGHT_MARGIN = scale_value(8)
 TEAM_GAP = scale_value(6)
@@ -99,7 +97,7 @@ DIVISION_FONT = get_screen_font("MLB AL Standings", "division", base_font=FONT_T
 TEAM_FONT = get_screen_font("MLB AL Standings", "team", base_font=FONT_STATUS, default_size=_font_sizes["team"])
 STATS_FONT = get_screen_font("MLB AL Standings", "stats", base_font=FONT_STATUS, default_size=_font_sizes["stats"])
 GB_HALF_FONT = clone_font(STATS_FONT, max(8, _font_sizes["gb_half"]))
-GB_SUFFIX_FONT = clone_font(STATS_FONT, max(8, _font_sizes["gb_suffix"]))
+GB_SUFFIX_FONT = clone_font(STATS_FONT, max(8, _font_sizes["gb_suffix"] + 4))
 
 SHOW_WIN_PCT = _IS_HYPERPIXEL_4_OR_LARGER
 
@@ -348,12 +346,7 @@ def _draw_league_screen(title: str, league_id: int, screen_id: str) -> Image.Ima
     col = _column_layout(probe, all_rows)
 
     row_h = max(LOGO_SIZE, _text_size(probe, "SEA", TEAM_FONT)[1], _text_size(probe, "999", STATS_FONT)[1]) + scale_value(2)
-    division_title_h = (
-        _text_size(probe, "AL East", DIVISION_FONT)[1]
-        + DIVISION_UNDERLINE_GAP
-        + DIVISION_UNDERLINE_THICKNESS
-        + DIVISION_CONTENT_GAP
-    )
+    division_title_h = _text_size(probe, "AL East", DIVISION_FONT)[1] + DIVISION_CONTENT_GAP
 
     section_h = 0
     for div in DIVISION_ORDER:
@@ -377,15 +370,8 @@ def _draw_league_screen(title: str, league_id: int, screen_id: str) -> Image.Ima
             continue
 
         division_label = f"{title.split()[1]} {div}"
-        draw.text((LEFT_MARGIN, y), division_label, font=DIVISION_FONT, fill=(255, 255, 255), anchor="lt")
-        label_w, label_h = _text_size(draw, division_label, DIVISION_FONT)
-        underline_y = y + label_h + DIVISION_UNDERLINE_GAP
-        draw.line(
-            (LEFT_MARGIN, underline_y, LEFT_MARGIN + label_w, underline_y),
-            fill=(255, 255, 255),
-            width=DIVISION_UNDERLINE_THICKNESS,
-        )
-        y = underline_y + DIVISION_UNDERLINE_THICKNESS + DIVISION_CONTENT_GAP
+        draw.text((WIDTH // 2, y), division_label, font=DIVISION_FONT, fill=(255, 255, 255), anchor="mt")
+        y += _text_size(draw, division_label, DIVISION_FONT)[1] + DIVISION_CONTENT_GAP
 
         for row in rows:
             row_center = y + row_h // 2
