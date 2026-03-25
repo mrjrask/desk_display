@@ -33,7 +33,7 @@ RAW_SCREEN_IDS = [
     "sox last", "sox live", "sox next", "sox next home",
     "mlb logo", "MLB Scoreboard",
     "NL Overview", "NL East", "NL Central", "NL West", "NL Wild Card",
-    "AL Overview", "AL East", "AL Central", "AL West", "AL Wild Card",
+    "AL Overview", "AL East", "AL Central", "AL West", "AL Wild Card", "MLB AL Standings", "MLB NL Standings",
 ]
 
 SCREEN_IDS = list(dict.fromkeys(RAW_SCREEN_IDS))
