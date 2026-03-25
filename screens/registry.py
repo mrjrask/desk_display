@@ -67,6 +67,10 @@ from screens.mlb_standings import (
     draw_NL_West,
     draw_NL_WildCard,
 )
+from screens.mlb_league_standings import (
+    draw_mlb_al_standings,
+    draw_mlb_nl_standings,
+)
 from screens.mlb_team_standings import draw_standings_screen1, draw_standings_screen2
 from screens.nba_team_standings import draw_nba_standings_screen1
 from screens.nfl_team_standings import (
@@ -1132,6 +1136,8 @@ def build_screen_registry(context: ScreenContext) -> Tuple[Dict[str, ScreenDefin
     register("AL Central", lambda: draw_AL_Central(context.display, transition=True))
     register("AL West", lambda: draw_AL_West(context.display, transition=True))
     register("AL Wild Card", lambda: draw_AL_WildCard(context.display, transition=True))
+    register("MLB AL Standings", lambda: draw_mlb_al_standings(context.display, transition=True))
+    register("MLB NL Standings", lambda: draw_mlb_nl_standings(context.display, transition=True))
 
     bulls = context.cache.get("bulls") or {}
     register_logo("bulls logo")
