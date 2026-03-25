@@ -2,78 +2,70 @@
   "version": 2,
   "screens": {
     "date": 1,
-    "time": 0,
     "nixie": 0,
     "weather logo": 0,
     "weather1": 1,
     "weather2": 1,
     "weather hourly": 1,
     "weather radar": 1,
-    "weather daily": 0,
+    "weather daily": 1,
     "inside": 1,
-    "sensors": 0,
     "verano logo": 0,
     "vrnof": 3,
-    "bears logo": 4,
-    "bears stand1": 0,
-    "bears stand2": 0,
-    "bears next": 0,
-    "bears next season": 4,
     "hawks logo": 2,
     "hawks stand1": 2,
     "hawks last": 2,
     "hawks live": 1,
     "hawks next": 2,
-    "hawks next home": 1,
-    "bulls logo": 3,
-    "bulls stand1": 3,
-    "bulls last": 3,
-    "bulls live": 1,
-    "bulls next": 3,
-    "bulls next home": 3,
+    "hawks next home": 2,
+    "NHL Standings West": 0,
+    "NHL Standings East": 0,
+    "nhl logo": 0,
+    "NHL Scoreboard": 1,
+    "NHL Standings Overview West": 3,
+    "NHL Standings Overview East": 3,
+    "NHL Standings West v2": 0,
+    "NHL Standings East v2": 0,
     "wolves logo": 0,
     "wolves last": 0,
     "wolves next": 0,
     "wolves next home": 0,
-    "cubs logo": 5,
+    "cubs logo": 2,
     "cubs stand1": 0,
     "cubs stand2": 0,
     "cubs last": 0,
     "cubs result": 0,
-    "cubs live": 0,
-    "cubs next": 5,
-    "cubs next home": 0,
-    "sox logo": 0,
+    "cubs live": 1,
+    "cubs next": 2,
+    "cubs next home": 2,
+    "sox logo": 5,
     "sox stand1": 0,
     "sox stand2": 0,
-    "sox last": 0,
-    "sox live": 0,
-    "sox next": 0,
-    "sox next home": 0,
-    "nhl logo": 0,
-    "NHL Scoreboard": 1,
-    "NHL Scoreboard v2": 0,
-    "NHL Standings Overview West": 3,
-    "NHL Standings Overview East": 3,
-    "NHL Standings West": {
-      "frequency": 3,
-      "alt": {
-        "screen": "NHL Standings West v2",
-        "frequency": 2
-      }
-    },
-    "NHL Standings West v2": 0,
-    "NHL Standings East": {
-      "frequency": 3,
-      "alt": {
-        "screen": "NHL Standings East v2",
-        "frequency": 2
-      }
-    },
-    "NHL Standings East v2": 0,
+    "sox last": 5,
+    "sox live": 1,
+    "sox next": 5,
+    "sox next home": 5,
+    "mlb logo": 0,
+    "MLB Scoreboard": 2,
+    "NL Overview": 0,
+    "NL East": 0,
+    "NL Central": 0,
+    "NL West": 0,
+    "NL Wild Card": 0,
+    "AL Overview": 0,
+    "AL East": 0,
+    "AL Central": 0,
+    "AL West": 0,
+    "AL Wild Card": 0,
+    "MLB AL Standings": 2,
+    "MLB NL Standings": 2,
+    "bears logo": 7,
+    "bears stand1": 0,
+    "bears stand2": 0,
+    "bears next": 0,
+    "bears next season": 7,
     "nfl logo": 0,
     "NFL Scoreboard": 0,
-    "NFL Scoreboard v2": 0,
     "NFL Overview NFC": {
       "frequency": 0,
       "alt": {
@@ -90,28 +82,15 @@
     },
     "NFL Standings NFC": 0,
     "NFL Standings AFC": 0,
+    "bulls logo": 3,
+    "bulls stand1": 3,
+    "bulls last": 3,
+    "bulls live": 1,
+    "bulls next": 3,
+    "bulls next home": 3,
     "nba logo": 0,
     "NBA Scoreboard": 4,
-    "NBA Scoreboard v2": 0,
-    "mlb logo": 0,
-    "MLB Scoreboard": {
-      "frequency": 2,
-      "alt": {
-        "screen": "MLB Scoreboard v2",
-        "frequency": 2
-      }
-    },
-    "MLB Scoreboard v2": 0,
-    "NL Overview": 0,
-    "NL East": 0,
-    "NL Central": 0,
-    "NL West": 0,
-    "NL Wild Card": 0,
-    "AL Overview": 0,
-    "AL East": 0,
-    "AL Central": 0,
-    "AL West": 0,
-    "AL Wild Card": 0,
+    "NCAAM Scoreboard": 5,
     "quad": 0
   },
   "playlists": {
@@ -120,9 +99,6 @@
       "steps": [
         {
           "screen": "date"
-        },
-        {
-          "screen": "time"
         },
         {
           "screen": "nixie"
@@ -152,17 +128,6 @@
         }
       ]
     },
-    "playlist-1771301264049-358": {
-      "label": "sensors",
-      "steps": [
-        {
-          "screen": "inside"
-        },
-        {
-          "screen": "sensors"
-        }
-      ]
-    },
     "playlist-1771301274262-66": {
       "label": "stocks",
       "steps": [
@@ -171,26 +136,6 @@
         },
         {
           "screen": "vrnof"
-        }
-      ]
-    },
-    "playlist-1771301277697-679": {
-      "label": "bears",
-      "steps": [
-        {
-          "screen": "bears logo"
-        },
-        {
-          "screen": "bears stand1"
-        },
-        {
-          "screen": "bears stand2"
-        },
-        {
-          "screen": "bears next"
-        },
-        {
-          "screen": "bears next season"
         }
       ]
     },
@@ -217,26 +162,32 @@
         }
       ]
     },
-    "playlist-1771301321201-767": {
-      "label": "bulls",
+    "playlist-1771301413206-640": {
+      "label": "nhl",
       "steps": [
         {
-          "screen": "bulls logo"
+          "screen": "NHL Standings West"
         },
         {
-          "screen": "bulls stand1"
+          "screen": "NHL Standings East"
         },
         {
-          "screen": "bulls last"
+          "screen": "nhl logo"
         },
         {
-          "screen": "bulls live"
+          "screen": "NHL Scoreboard"
         },
         {
-          "screen": "bulls next"
+          "screen": "NHL Standings Overview West"
         },
         {
-          "screen": "bulls next home"
+          "screen": "NHL Standings Overview East"
+        },
+        {
+          "screen": "NHL Standings West v2"
+        },
+        {
+          "screen": "NHL Standings East v2"
         }
       ]
     },
@@ -312,78 +263,6 @@
         }
       ]
     },
-    "playlist-1771301413206-640": {
-      "label": "nhl",
-      "steps": [
-        {
-          "screen": "nhl logo"
-        },
-        {
-          "screen": "NHL Scoreboard"
-        },
-        {
-          "screen": "NHL Scoreboard v2"
-        },
-        {
-          "screen": "NHL Standings Overview West"
-        },
-        {
-          "screen": "NHL Standings Overview East"
-        },
-        {
-          "screen": "NHL Standings West"
-        },
-        {
-          "screen": "NHL Standings West v2"
-        },
-        {
-          "screen": "NHL Standings East"
-        },
-        {
-          "screen": "NHL Standings East v2"
-        }
-      ]
-    },
-    "playlist-1771301476392-441": {
-      "label": "nfl",
-      "steps": [
-        {
-          "screen": "nfl logo"
-        },
-        {
-          "screen": "NFL Scoreboard"
-        },
-        {
-          "screen": "NFL Scoreboard v2"
-        },
-        {
-          "screen": "NFL Overview NFC"
-        },
-        {
-          "screen": "NFL Overview AFC"
-        },
-        {
-          "screen": "NFL Standings NFC"
-        },
-        {
-          "screen": "NFL Standings AFC"
-        }
-      ]
-    },
-    "playlist-1771301509551-198": {
-      "label": "nba",
-      "steps": [
-        {
-          "screen": "nba logo"
-        },
-        {
-          "screen": "NBA Scoreboard"
-        },
-        {
-          "screen": "NBA Scoreboard v2"
-        }
-      ]
-    },
     "playlist-1771301520113-753": {
       "label": "mlb",
       "steps": [
@@ -392,9 +271,6 @@
         },
         {
           "screen": "MLB Scoreboard"
-        },
-        {
-          "screen": "MLB Scoreboard v2"
         },
         {
           "screen": "NL Overview"
@@ -425,12 +301,98 @@
         },
         {
           "screen": "AL Wild Card"
+        },
+        {
+          "screen": "MLB AL Standings"
+        },
+        {
+          "screen": "MLB NL Standings"
+        }
+      ]
+    },
+    "playlist-1771301277697-679": {
+      "label": "bears",
+      "steps": [
+        {
+          "screen": "bears logo"
+        },
+        {
+          "screen": "bears stand1"
+        },
+        {
+          "screen": "bears stand2"
+        },
+        {
+          "screen": "bears next"
+        },
+        {
+          "screen": "bears next season"
+        }
+      ]
+    },
+    "playlist-1771301476392-441": {
+      "label": "nfl",
+      "steps": [
+        {
+          "screen": "nfl logo"
+        },
+        {
+          "screen": "NFL Scoreboard"
+        },
+        {
+          "screen": "NFL Overview NFC"
+        },
+        {
+          "screen": "NFL Overview AFC"
+        },
+        {
+          "screen": "NFL Standings NFC"
+        },
+        {
+          "screen": "NFL Standings AFC"
+        }
+      ]
+    },
+    "playlist-1771301321201-767": {
+      "label": "bulls",
+      "steps": [
+        {
+          "screen": "bulls logo"
+        },
+        {
+          "screen": "bulls stand1"
+        },
+        {
+          "screen": "bulls last"
+        },
+        {
+          "screen": "bulls live"
+        },
+        {
+          "screen": "bulls next"
+        },
+        {
+          "screen": "bulls next home"
+        }
+      ]
+    },
+    "playlist-1771301509551-198": {
+      "label": "nba",
+      "steps": [
+        {
+          "screen": "nba logo"
+        },
+        {
+          "screen": "NBA Scoreboard"
         }
       ]
     },
     "playlist-1771301555724-243": {
       "label": "quad",
       "steps": [
+        {
+          "screen": "NCAAM Scoreboard"
+        },
         {
           "screen": "quad"
         }
@@ -445,22 +407,13 @@
       "playlist": "playlist-1771301254299-679"
     },
     {
-      "playlist": "playlist-1771301264049-358"
-    },
-    {
-      "playlist": "playlist-1771301271114-744"
-    },
-    {
       "playlist": "playlist-1771301274262-66"
-    },
-    {
-      "playlist": "playlist-1771301277697-679"
     },
     {
       "playlist": "playlist-1771301317973-519"
     },
     {
-      "playlist": "playlist-1771301321201-767"
+      "playlist": "playlist-1771301413206-640"
     },
     {
       "playlist": "playlist-1771301324557-994"
@@ -472,16 +425,19 @@
       "playlist": "playlist-1771301399887-256"
     },
     {
-      "playlist": "playlist-1771301413206-640"
+      "playlist": "playlist-1771301520113-753"
+    },
+    {
+      "playlist": "playlist-1771301277697-679"
     },
     {
       "playlist": "playlist-1771301476392-441"
     },
     {
-      "playlist": "playlist-1771301509551-198"
+      "playlist": "playlist-1771301321201-767"
     },
     {
-      "playlist": "playlist-1771301520113-753"
+      "playlist": "playlist-1771301509551-198"
     },
     {
       "playlist": "playlist-1771301555724-243"

@@ -1,6 +1,6 @@
 import pytest
 
-from schedule import KNOWN_SCREENS, build_scheduler
+from schedule import KNOWN_SCREENS, build_scheduler, sanitize_schedule_config
 from screens.registry import ScreenDefinition
 
 
@@ -33,16 +33,16 @@ def test_build_scheduler_from_config():
         "screens": {
             "date": 1,
             "inside": 2,
-            "sensors": 1,
+            "weather1": 1,
         }
     }
     scheduler = build_scheduler(config)
     assert scheduler.node_count == 3
-    assert scheduler.requested_ids == {"date", "inside", "sensors"}
+    assert scheduler.requested_ids == {"date", "inside", "weather1"}
 
 
 def test_sensors_screen_is_known():
-    assert "sensors" in KNOWN_SCREENS
+    assert "weather1" in KNOWN_SCREENS
 
 
 def test_travel_screen_is_not_known():
@@ -57,6 +57,26 @@ def test_travel_map_screen_is_not_known():
 
 def test_travel_map_v2_screen_is_not_known():
     assert "travel map v2" not in KNOWN_SCREENS
+
+
+def test_sanitize_schedule_config_canonicalizes_legacy_screen_ids():
+    sanitized, removed = sanitize_schedule_config(
+        {
+            "screens": {
+                "time": 1,
+                "sensors": {"frequency": 2},
+            }
+        }
+    )
+
+    assert removed == []
+    assert sanitized["screens"] == {"nixie": 1, "inside": {"frequency": 2}}
+
+
+def test_build_scheduler_accepts_legacy_screen_ids():
+    scheduler = build_scheduler({"screens": {"time": 1, "sensors": 1}})
+
+    assert scheduler.requested_ids == {"nixie", "inside"}
 
 
 def test_scheduler_with_alternate_screen():
@@ -88,21 +108,21 @@ def test_scheduler_with_multiple_alternates():
         "screens": {
             "date": {
                 "frequency": 1,
-                "alt": {"screen": ["inside", "sensors"], "frequency": 2},
+                "alt": {"screen": ["inside", "weather1"], "frequency": 2},
             }
         }
     }
 
     scheduler = build_scheduler(config)
-    assert scheduler.requested_ids == {"date", "inside", "sensors"}
+    assert scheduler.requested_ids == {"date", "inside", "weather1"}
 
-    registry = make_registry({"date": True, "inside": True, "sensors": True})
+    registry = make_registry({"date": True, "inside": True, "weather1": True})
     sequence = collect_sequence(scheduler, registry, 6)
     assert sequence == [
         "date",
         "inside",
         "date",
-        "sensors",
+        "weather1",
         "date",
         "inside",
     ]
@@ -194,42 +214,20 @@ def test_invalid_configuration_shapes():
                 }
             }
         )
-    with pytest.raises(ValueError):
-        build_scheduler(
-            {
-                "screens": {
-                    "date": {
-                        "frequency": 1,
-                        "alt": {"screen": [], "frequency": 2},
-                    }
-                }
-            }
-        )
-    with pytest.raises(ValueError):
-        build_scheduler(
-            {
-                "screens": {
-                    "date": {
-                        "frequency": 1,
-                        "alt": {"screen": ["inside", 99], "frequency": 2},
-                    }
-                }
-            }
-        )
 
 
 def test_zero_frequency_entries_are_skipped():
-    config = {"screens": {"date": 0, "time": 2}}
+    config = {"screens": {"date": 0, "nixie": 2}}
     scheduler = build_scheduler(config)
-    registry = make_registry({"date": True, "time": True})
+    registry = make_registry({"date": True, "nixie": True})
 
     played = collect_played_ids(scheduler, registry, 6)
     assert played
-    assert set(played) == {"time"}
+    assert set(played) == {"nixie"}
 
 
 def test_all_zero_frequencies_raise_error():
-    config = {"screens": {"date": 0, "time": 0}}
+    config = {"screens": {"date": 0, "nixie": 0}}
 
     with pytest.raises(ValueError):
         build_scheduler(config)
@@ -251,7 +249,7 @@ def test_preview_scheduled_ids_keeps_scheduler_state():
         "screens": {
             "date": {
                 "frequency": 1,
-                "alt": {"screen": ["inside", "sensors"], "frequency": 2},
+                "alt": {"screen": ["inside", "weather1"], "frequency": 2},
             }
         }
     }

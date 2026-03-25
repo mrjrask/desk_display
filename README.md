@@ -1,6 +1,6 @@
 # Desk Display
 
-Desk Display is a Raspberry Pi dashboard app that rotates through weather, time/date, sensor, travel, and sports screens on small displays (or fullscreen desktop/kernel displays).
+Desk Display is a Raspberry Pi dashboard app that rotates through weather, date, inside, travel, and sports screens on small displays (or fullscreen desktop/kernel displays).
 
 It supports:
 
@@ -32,7 +32,7 @@ It supports:
 ## What this project includes
 
 - A **main display loop** (`main.py`) with screen scheduling, transitions, screenshot capture, and optional video output.
-- A **screen registry/catalog** with weather, sports, sensor, and utility screens.
+- A **screen registry/catalog** with weather, sports, inside, and utility screens.
 - A **Flask + Waitress configuration UI** (`config_ui.py`) for managing screen order/frequency and importing/exporting settings.
 - **Installer scripts** for Display HAT Mini, Waveshare OLED/LCD HAT (A), and kernel-display workflows.
 - Optional **Wi-Fi health monitoring/recovery**.

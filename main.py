@@ -156,7 +156,7 @@ _registry_cache_nonce = 0
 _skip_request_pending = False
 _last_screen_id: Optional[str] = None
 
-_SKIP_BUTTON_SCREEN_IDS = {"date", "time"}
+_SKIP_BUTTON_SCREEN_IDS = {"date"}
 
 _shutdown_event = threading.Event()
 _shutdown_complete = threading.Event()

@@ -393,38 +393,3 @@ def draw_date(display, transition: bool=False):
     _start_color_cycle(display, "date_time", gh_state, "date", frame_state)
     return ScreenImage(img, displayed=True)
 
-
-def draw_time(display, transition: bool=False):
-    """
-    Screen B: TIME on top, DATE on bottom.
-    Same transition policy as draw_date().
-    """
-    col_top    = bright_color()
-    col_bottom = bright_color()
-    gh_state   = {"value": get_update_status().github}
-
-    img = _compose_frame("time_date", col_top, col_bottom, gh_state["value"], "time")
-
-    if transition:
-        _start_update_checks("time_date", (col_top, col_bottom), gh_state, None, "time")
-        return img
-
-    clear_display(display)
-    display.image(img)
-    try:
-        display.show()
-    except AttributeError:
-        pass
-    frame_id = display.frame_id()
-    frame_state = {"value": frame_id, "lock": threading.Lock()}
-    _start_update_checks(
-        "time_date",
-        (col_top, col_bottom),
-        gh_state,
-        display,
-        "time",
-        expected_frame_id=frame_id,
-        frame_state=frame_state,
-    )
-    _start_color_cycle(display, "time_date", gh_state, "time", frame_state)
-    return ScreenImage(img, displayed=True)

@@ -107,7 +107,7 @@ def test_import_screens_accepts_export_payload_with_string_frequencies(monkeypat
                         "scroll_speed": 1.5,
                         "pages": [
                             {"tiles": ["date", "date", "weather1", "inside"]},
-                            {"tiles": ["time", "time", "time", "time"]},
+                            {"tiles": ["nixie", "nixie", "nixie", "nixie"]},
                         ],
                     }
                 }
@@ -167,7 +167,7 @@ def test_save_screens_persists_quad_pages(monkeypatch):
             "quad_scroll_speed": 2.0,
             "quad_pages": [
                 {"tiles": ["date", "date", "weather1", "inside"]},
-                {"tiles": ["time", "inside", "inside", "weather2"]},
+                {"tiles": ["nixie", "inside", "inside", "weather2"]},
             ],
         },
     )
@@ -189,7 +189,7 @@ def test_save_screens_persists_quad_pages(monkeypatch):
     assert payload["quad_scroll_speed"] == 2.0
     assert payload["quad_pages"] == [
         {"tiles": ["date", "date", "weather1", "inside"]},
-        {"tiles": ["time", "inside", "inside", "weather2"]},
+        {"tiles": ["nixie", "inside", "inside", "weather2"]},
     ]
     assert saved["layouts"] == {
         "screens": {
@@ -198,7 +198,7 @@ def test_save_screens_persists_quad_pages(monkeypatch):
                 "scroll_speed": 2.0,
                 "pages": [
                     {"tiles": ["date", "date", "weather1", "inside"]},
-                    {"tiles": ["time", "inside", "inside", "weather2"]},
+                    {"tiles": ["nixie", "inside", "inside", "weather2"]},
                 ],
             }
         }
@@ -262,7 +262,7 @@ def test_build_layouts_clamps_quad_scroll_speed():
         {
             "quad_enabled": True,
             "quad_scroll_speed": 99,
-            "quad_pages": [{"tiles": ["date", "time", "inside", "weather1"]}],
+            "quad_pages": [{"tiles": ["date", "nixie", "inside", "weather1"]}],
         }
     )
     assert layouts["screens"]["quad"]["scroll_speed"] == 3.0
