@@ -12,9 +12,17 @@ LEGACY_SCOREBOARD_V2_SCREEN_MAP = {
     "NHL Standings East v2": "NHL Standings East",
 }
 
+LEGACY_SCREEN_ID_MAP = {
+    # Removed legacy IDs are canonicalized to active equivalents so older
+    # persisted configs continue to load after upgrades.
+    "time": "nixie",
+    "sensors": "inside",
+}
+
 
 def canonical_screen_id(screen_id: str) -> str:
-    return LEGACY_SCOREBOARD_V2_SCREEN_MAP.get(screen_id, screen_id)
+    mapped_id = LEGACY_SCOREBOARD_V2_SCREEN_MAP.get(screen_id, screen_id)
+    return LEGACY_SCREEN_ID_MAP.get(mapped_id, mapped_id)
 
 
 RAW_SCREEN_IDS = [

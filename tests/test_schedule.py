@@ -1,6 +1,6 @@
 import pytest
 
-from schedule import KNOWN_SCREENS, build_scheduler
+from schedule import KNOWN_SCREENS, build_scheduler, sanitize_schedule_config
 from screens.registry import ScreenDefinition
 
 
@@ -57,6 +57,26 @@ def test_travel_map_screen_is_not_known():
 
 def test_travel_map_v2_screen_is_not_known():
     assert "travel map v2" not in KNOWN_SCREENS
+
+
+def test_sanitize_schedule_config_canonicalizes_legacy_screen_ids():
+    sanitized, removed = sanitize_schedule_config(
+        {
+            "screens": {
+                "time": 1,
+                "sensors": {"frequency": 2},
+            }
+        }
+    )
+
+    assert removed == []
+    assert sanitized["screens"] == {"nixie": 1, "inside": {"frequency": 2}}
+
+
+def test_build_scheduler_accepts_legacy_screen_ids():
+    scheduler = build_scheduler({"screens": {"time": 1, "sensors": 1}})
+
+    assert scheduler.requested_ids == {"nixie", "inside"}
 
 
 def test_scheduler_with_alternate_screen():
