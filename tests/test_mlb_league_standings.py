@@ -21,3 +21,17 @@ def test_stat_columns_omit_winning_pct_when_disabled(monkeypatch):
 
     assert mlb_league_standings._stat_columns() == ("record", "gb")
 
+
+def test_normalize_row_keeps_red_sox_nickname():
+    record = {
+        "team": {"name": "Boston Red Sox", "abbreviation": "BOS"},
+        "wins": 12,
+        "losses": 8,
+        "winningPercentage": ".600",
+        "gamesBack": "1.0",
+    }
+
+    row = mlb_league_standings._normalize_row(record)
+
+    assert row["abbr"] == "BOS"
+    assert row["team_name"] == "Red Sox"
