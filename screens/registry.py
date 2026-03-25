@@ -33,7 +33,6 @@ from screens.draw_wolves_schedule import (
     draw_wolves_next_home_game,
 )
 from screens.draw_inside import draw_inside, is_inside_sensor_available
-from screens.draw_sensors import draw_sensors
 from screens.draw_vrnof import draw_vrnof_screen
 from screens.draw_weather import (
     _pop_pct_from,
@@ -44,7 +43,7 @@ from screens.draw_weather import (
     draw_weather_screen_2,
 )
 from screens.draw_nixie import draw_nixie
-from screens.draw_date_time import draw_date, draw_time
+from screens.draw_date_time import draw_date
 from screens.draw_quad import _TileSpec, draw_quad_screen
 from screens.mlb_schedule import (
     draw_box_score,
@@ -438,7 +437,6 @@ def build_screen_registry(context: ScreenContext) -> Tuple[Dict[str, ScreenDefin
     # Date/time screens intentionally run outside transition mode so their
     # color-cycle threads can keep animating while those screens are visible.
     register("date", lambda: draw_date(context.display, transition=False))
-    register("time", lambda: draw_time(context.display, transition=False))
     register("nixie", lambda: draw_nixie(context.display, transition=False))
 
     weather_data = context.cache.get("weather")
@@ -578,7 +576,6 @@ def build_screen_registry(context: ScreenContext) -> Tuple[Dict[str, ScreenDefin
         ),
         available=quad_enabled,
     )
-    register("sensors", lambda: draw_sensors(context, transition=True))
 
     verano_logo = context.logos.get("verano logo")
     if verano_logo is not None:

@@ -13,11 +13,6 @@ if TYPE_CHECKING:
 
 KNOWN_SCREENS: Set[str] = set(SCREEN_IDS)
 
-# Backfill any new screens that may have been added out-of-band but not yet
-# reflected in :mod:`screens_catalog`.  This keeps scheduler validation in sync
-# with the screen registry so that deployments pulling the updated screen module
-# before the catalog list do not fail to load the schedule configuration.
-KNOWN_SCREENS.add("sensors")
 
 
 @dataclass

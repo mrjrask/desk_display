@@ -298,7 +298,7 @@ def test_logo_scroll_speed_is_doubled_for_1080p_layout():
     assert _logo_scroll_speed_for_layout(800, 480) == 2.2
 
 
-def test_date_time_screens_render_with_live_color_cycle_mode(monkeypatch):
+def test_date_nixie_screens_render_with_live_color_cycle_mode(monkeypatch):
     now = datetime.datetime(2024, 1, 1, 12, 0, tzinfo=CENTRAL_TIME)
     weather = {"hourly": []}
     context = _make_context(weather, now)
@@ -308,17 +308,17 @@ def test_date_time_screens_render_with_live_color_cycle_mode(monkeypatch):
     def _fake_draw_date(_display, transition=False):
         calls.append(("date", transition))
 
-    def _fake_draw_time(_display, transition=False):
-        calls.append(("time", transition))
+    def _fake_draw_nixie(_display, transition=False):
+        calls.append(("nixie", transition))
 
     monkeypatch.setattr("screens.registry.draw_date", _fake_draw_date)
-    monkeypatch.setattr("screens.registry.draw_time", _fake_draw_time)
+    monkeypatch.setattr("screens.registry.draw_nixie", _fake_draw_nixie)
 
     registry, _ = build_screen_registry(context)
     registry["date"].render()
-    registry["time"].render()
+    registry["nixie"].render()
 
-    assert calls == [("date", False), ("time", False)]
+    assert calls == [("date", False), ("nixie", False)]
 
 
 def test_quad_screen_is_registered(monkeypatch):
@@ -357,7 +357,7 @@ def test_quad_screen_uses_layout_tile_selection(monkeypatch):
 
     monkeypatch.setattr(
         "screens.registry._next_quad_page_tiles",
-        lambda: (True, 1.0, ["time", "time", "inside", "weather1"]),
+        lambda: (True, 1.0, ["nixie", "nixie", "inside", "weather1"]),
     )
 
     captured = {}
@@ -371,7 +371,7 @@ def test_quad_screen_uses_layout_tile_selection(monkeypatch):
     registry, _ = build_screen_registry(context)
     registry["quad"].render()
 
-    assert captured["labels"] == ["time", "time", "inside", "weather1"]
+    assert captured["labels"] == ["nixie", "nixie", "inside", "weather1"]
 
 
 def test_quad_screen_advances_scrolling_tiles_between_renders(monkeypatch):
@@ -381,7 +381,7 @@ def test_quad_screen_advances_scrolling_tiles_between_renders(monkeypatch):
 
     monkeypatch.setattr(
         "screens.registry._next_quad_page_tiles",
-        lambda: (True, 1.0, ["date", "time", "inside", "weather1"]),
+        lambda: (True, 1.0, ["date", "nixie", "inside", "weather1"]),
     )
 
     def _animated_date(display, transition=False):
@@ -405,7 +405,7 @@ def test_quad_screen_advances_scrolling_tiles_between_renders(monkeypatch):
         return None
 
     monkeypatch.setattr("screens.registry.draw_date", _animated_date)
-    monkeypatch.setattr("screens.registry.draw_time", _single_frame)
+    monkeypatch.setattr("screens.registry.draw_nixie", _single_frame)
     monkeypatch.setattr("screens.registry.draw_inside", _single_frame)
     monkeypatch.setattr("screens.registry.draw_weather_screen_1", _single_frame)
     monkeypatch.setattr("screens.registry.draw_quad_screen", _fake_draw_quad_screen)
@@ -425,7 +425,7 @@ def test_quad_screen_prefers_captured_frames_over_screenimage_return(monkeypatch
 
     monkeypatch.setattr(
         "screens.registry._next_quad_page_tiles",
-        lambda: (True, 1.0, ["date", "time", "inside", "weather1"]),
+        lambda: (True, 1.0, ["date", "nixie", "inside", "weather1"]),
     )
 
     def _animated_date(display, transition=False):
@@ -452,7 +452,7 @@ def test_quad_screen_prefers_captured_frames_over_screenimage_return(monkeypatch
         return None
 
     monkeypatch.setattr("screens.registry.draw_date", _animated_date)
-    monkeypatch.setattr("screens.registry.draw_time", _single_frame)
+    monkeypatch.setattr("screens.registry.draw_nixie", _single_frame)
     monkeypatch.setattr("screens.registry.draw_inside", _single_frame)
     monkeypatch.setattr("screens.registry.draw_weather_screen_1", _single_frame)
     monkeypatch.setattr("screens.registry.draw_quad_screen", _fake_draw_quad_screen)
@@ -472,7 +472,7 @@ def test_quad_screen_samples_across_longer_animations(monkeypatch):
 
     monkeypatch.setattr(
         "screens.registry._next_quad_page_tiles",
-        lambda: (True, 1.0, ["date", "time", "inside", "weather1"]),
+        lambda: (True, 1.0, ["date", "nixie", "inside", "weather1"]),
     )
 
     def _long_animated_date(display, transition=False):
@@ -495,7 +495,7 @@ def test_quad_screen_samples_across_longer_animations(monkeypatch):
         return None
 
     monkeypatch.setattr("screens.registry.draw_date", _long_animated_date)
-    monkeypatch.setattr("screens.registry.draw_time", _single_frame)
+    monkeypatch.setattr("screens.registry.draw_nixie", _single_frame)
     monkeypatch.setattr("screens.registry.draw_inside", _single_frame)
     monkeypatch.setattr("screens.registry.draw_weather_screen_1", _single_frame)
     monkeypatch.setattr("screens.registry.draw_quad_screen", _fake_draw_quad_screen)
@@ -515,7 +515,7 @@ def test_quad_screen_preserves_scrolling_cursor_across_registry_rebuilds(monkeyp
 
     monkeypatch.setattr(
         "screens.registry._next_quad_page_tiles",
-        lambda: (True, 1.0, ["date", "time", "inside", "weather1"]),
+        lambda: (True, 1.0, ["date", "nixie", "inside", "weather1"]),
     )
 
     def _animated_date(display, transition=False):
@@ -539,7 +539,7 @@ def test_quad_screen_preserves_scrolling_cursor_across_registry_rebuilds(monkeyp
         return None
 
     monkeypatch.setattr("screens.registry.draw_date", _animated_date)
-    monkeypatch.setattr("screens.registry.draw_time", _single_frame)
+    monkeypatch.setattr("screens.registry.draw_nixie", _single_frame)
     monkeypatch.setattr("screens.registry.draw_inside", _single_frame)
     monkeypatch.setattr("screens.registry.draw_weather_screen_1", _single_frame)
     monkeypatch.setattr("screens.registry.draw_quad_screen", _fake_draw_quad_screen)
@@ -555,7 +555,7 @@ def test_quad_screen_preserves_scrolling_cursor_across_registry_rebuilds(monkeyp
 def test_next_quad_page_tiles_rotates_pages(monkeypatch):
     monkeypatch.setattr(
         "screens.registry._quad_layout_from_layouts",
-        lambda: (True, 1.0, [["date", "date", "date", "date"], ["time", "time", "time", "time"]]),
+        lambda: (True, 1.0, [["date", "date", "date", "date"], ["nixie", "nixie", "nixie", "nixie"]]),
     )
     monkeypatch.setattr("screens.registry._quad_page_index", 0)
 
@@ -569,7 +569,7 @@ def test_next_quad_page_tiles_rotates_pages(monkeypatch):
     assert speed_first == 1.0
     assert speed_second == 1.0
     assert first == ["date", "date", "date", "date"]
-    assert second == ["time", "time", "time", "time"]
+    assert second == ["nixie", "nixie", "nixie", "nixie"]
 
 
 
