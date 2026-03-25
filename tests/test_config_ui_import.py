@@ -257,6 +257,79 @@ def test_save_screens_persists_playlists_and_sequence(monkeypatch):
     assert saved["config"]["sequence"] == [{"playlist": "default"}]
 
 
+def test_save_screens_preserves_nhl_standings_v2_playlist_assignments(monkeypatch):
+    saved = {}
+
+    monkeypatch.setattr(config_ui, "_load_active_style_config", lambda: {"screens": {}})
+    monkeypatch.setattr(config_ui, "build_scheduler", lambda config: None)
+    monkeypatch.setattr(config_ui, "_save_config", lambda config: saved.setdefault("config", config))
+    monkeypatch.setattr(config_ui, "_save_style_config", lambda style: saved.setdefault("style", style))
+    monkeypatch.setattr(config_ui, "_save_layouts_config", lambda layouts: saved.setdefault("layouts", layouts))
+    monkeypatch.setattr(
+        config_ui,
+        "_build_screen_entries",
+        lambda config, style: [
+            {
+                "id": "NHL Standings West v2",
+                "frequency": 1,
+                "background": "#000000",
+                "alt_screen": "",
+                "alt_frequency": "",
+            },
+            {
+                "id": "NHL Standings East v2",
+                "frequency": 1,
+                "background": "#000000",
+                "alt_screen": "",
+                "alt_frequency": "",
+            },
+        ],
+    )
+
+    client = config_ui.app.test_client()
+    response = client.post(
+        "/api/screens",
+        json={
+            "screens": [
+                {
+                    "id": "NHL Standings West v2",
+                    "frequency": 1,
+                    "background": "#000000",
+                    "alt_screen": "",
+                    "alt_frequency": "",
+                },
+                {
+                    "id": "NHL Standings East v2",
+                    "frequency": 1,
+                    "background": "#000000",
+                    "alt_screen": "",
+                    "alt_frequency": "",
+                },
+            ],
+            "playlists": {
+                "nhl": {
+                    "label": "NHL",
+                    "steps": [
+                        {"screen": "NHL Standings West v2"},
+                        {"screen": "NHL Standings East v2"},
+                    ],
+                }
+            },
+            "sequence": [{"playlist": "nhl"}],
+            "quad_enabled": False,
+            "quad_pages": [],
+        },
+    )
+
+    assert response.status_code == 200
+    assert saved["config"]["screens"]["NHL Standings West v2"] == 1
+    assert saved["config"]["screens"]["NHL Standings East v2"] == 1
+    assert saved["config"]["playlists"]["nhl"]["steps"] == [
+        {"screen": "NHL Standings West v2"},
+        {"screen": "NHL Standings East v2"},
+    ]
+
+
 def test_build_layouts_clamps_quad_scroll_speed():
     layouts = config_ui._build_layouts(
         {
