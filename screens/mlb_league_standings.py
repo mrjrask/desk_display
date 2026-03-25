@@ -55,6 +55,7 @@ TITLE_MARGIN_TOP = scale_value(2)
 TITLE_GAP = scale_value(3)
 DIVISION_GAP_TOP = scale_value(6)
 DIVISION_GAP_BOTTOM = scale_value(4)
+DIVISION_SECTION_GAP = scale_value(8)
 DIVISION_CONTENT_GAP = scale_value(10)
 ROW_GAP = scale_value(6)
 LEFT_MARGIN = scale_value(5)
@@ -348,14 +349,16 @@ def _draw_league_screen(title: str, league_id: int, screen_id: str) -> Image.Ima
     row_h = max(LOGO_SIZE, _text_size(probe, "SEA", TEAM_FONT)[1], _text_size(probe, "999", STATS_FONT)[1]) + scale_value(2)
     division_title_h = _text_size(probe, "AL East", DIVISION_FONT)[1] + DIVISION_CONTENT_GAP
 
+    visible_divisions = [div for div in DIVISION_ORDER if standings.get(div)]
+
     section_h = 0
-    for div in DIVISION_ORDER:
+    for idx, div in enumerate(visible_divisions):
         rows = standings.get(div) or []
-        if not rows:
-            continue
         section_h += division_title_h
         section_h += len(rows) * (row_h + ROW_GAP)
         section_h += DIVISION_GAP_BOTTOM
+        if idx < len(visible_divisions) - 1:
+            section_h += DIVISION_SECTION_GAP
 
     canvas_h = max(HEIGHT, scale_value(80) + section_h + SCOREBOARD_STANDINGS_BOTTOM_PADDING)
 
@@ -364,10 +367,8 @@ def _draw_league_screen(title: str, league_id: int, screen_id: str) -> Image.Ima
 
     y = _draw_table_title(img, draw, title)
 
-    for div in DIVISION_ORDER:
+    for idx, div in enumerate(visible_divisions):
         rows = standings.get(div) or []
-        if not rows:
-            continue
 
         division_label = f"{title.split()[1]} {div}"
         draw.text((WIDTH // 2, y), division_label, font=DIVISION_FONT, fill=(255, 255, 255), anchor="mt")
@@ -394,6 +395,8 @@ def _draw_league_screen(title: str, league_id: int, screen_id: str) -> Image.Ima
             y += row_h + ROW_GAP
 
         y += DIVISION_GAP_BOTTOM
+        if idx < len(visible_divisions) - 1:
+            y += DIVISION_SECTION_GAP
 
     return img
 
