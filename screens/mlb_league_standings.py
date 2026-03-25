@@ -328,12 +328,18 @@ def _draw_league_screen(title: str, league_id: int, screen_id: str) -> Image.Ima
     col = _column_layout(probe, all_rows)
 
     row_h = max(LOGO_SIZE, _text_size(probe, "SEA", TEAM_FONT)[1], _text_size(probe, "999", STATS_FONT)[1]) + scale_value(2)
-    section_h = (
-        _text_size(probe, "AL East", DIVISION_FONT)[1]
-        + _text_size(probe, "W", HEADER_FONT)[1]
-        + DIVISION_GAP_BOTTOM
-        + len(all_rows) * row_h
-    )
+    division_title_h = _text_size(probe, "AL East", DIVISION_FONT)[1] + scale_value(2)
+    header_h = _text_size(probe, "W", HEADER_FONT)[1] + scale_value(1) if _IS_HYPERPIXEL_4_OR_LARGER else 0
+
+    section_h = 0
+    for div in DIVISION_ORDER:
+        rows = standings.get(div) or []
+        if not rows:
+            continue
+        section_h += division_title_h + header_h
+        section_h += len(rows) * (row_h + ROW_GAP)
+        section_h += DIVISION_GAP_BOTTOM
+
     canvas_h = max(HEIGHT, scale_value(80) + section_h + SCOREBOARD_STANDINGS_BOTTOM_PADDING)
 
     img = Image.new("RGB", (WIDTH, canvas_h), bg)
