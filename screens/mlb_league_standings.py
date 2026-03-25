@@ -62,6 +62,7 @@ LEFT_MARGIN = scale_value(5)
 RIGHT_MARGIN = scale_value(8)
 TEAM_GAP = scale_value(6)
 STAT_COLUMN_GAP = scale_value(30)
+PCT_TO_GB_EXTRA_GAP = scale_value(10)
 LOGO_SIZE = scale_value(24)
 
 _IS_HYPERPIXEL_4_OR_LARGER = (
@@ -288,15 +289,17 @@ def _column_layout(draw: ImageDraw.ImageDraw, rows: list[dict[str, Any]]) -> dic
                 width = max(width, _text_size(draw, str(row.get(key, "-")), STATS_FONT)[0])
         stat_widths[key] = width
 
-    gap = STAT_COLUMN_GAP
     layout = {"team": team_x}
     cursor = right_edge
     for key in reversed(columns):
         layout[key] = cursor
+        gap = STAT_COLUMN_GAP
+        if key == "gb" and "pct" in columns:
+            gap += PCT_TO_GB_EXTRA_GAP
         cursor -= stat_widths[key] + gap
 
     first_col = columns[0]
-    layout["team_max"] = max(scale_value(70), layout[first_col] - team_x - gap)
+    layout["team_max"] = max(scale_value(70), layout[first_col] - team_x - STAT_COLUMN_GAP)
     return layout
 
 
