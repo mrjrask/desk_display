@@ -8,8 +8,6 @@ LEGACY_SCOREBOARD_V2_SCREEN_MAP = {
     "MLB Scoreboard v2": "MLB Scoreboard",
     "NHL Standings Overview v2 West": "NHL Standings Overview West",
     "NHL Standings Overview v2 East": "NHL Standings Overview East",
-    "NHL Standings West v2": "NHL Standings West",
-    "NHL Standings East v2": "NHL Standings East",
 }
 
 LEGACY_SCREEN_ID_MAP = {
