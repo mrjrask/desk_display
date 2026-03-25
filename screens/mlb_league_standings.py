@@ -55,13 +55,14 @@ TITLE_MARGIN_TOP = scale_value(2)
 TITLE_GAP = scale_value(3)
 DIVISION_GAP_TOP = scale_value(6)
 DIVISION_GAP_BOTTOM = scale_value(4)
-DIVISION_UNDERLINE_GAP = scale_value(3)
+DIVISION_UNDERLINE_GAP = scale_value(6)
 DIVISION_UNDERLINE_THICKNESS = max(1, scale_value(2))
 DIVISION_CONTENT_GAP = scale_value(10)
 ROW_GAP = scale_value(2)
 LEFT_MARGIN = scale_value(5)
 RIGHT_MARGIN = scale_value(8)
 TEAM_GAP = scale_value(6)
+STAT_COLUMN_GAP = scale_value(30)
 LOGO_SIZE = scale_value(24)
 
 _IS_HYPERPIXEL_4_OR_LARGER = (
@@ -288,7 +289,7 @@ def _column_layout(draw: ImageDraw.ImageDraw, rows: list[dict[str, Any]]) -> dic
                 width = max(width, _text_size(draw, str(row.get(key, "-")), STATS_FONT)[0])
         stat_widths[key] = width
 
-    gap = scale_value(22)
+    gap = STAT_COLUMN_GAP
     layout = {"team": team_x}
     cursor = right_edge
     for key in reversed(columns):
@@ -376,7 +377,7 @@ def _draw_league_screen(title: str, league_id: int, screen_id: str) -> Image.Ima
             continue
 
         division_label = f"{title.split()[1]} {div}"
-        draw.text((LEFT_MARGIN, y), division_label, font=DIVISION_FONT, fill=(255, 255, 255), anchor="la")
+        draw.text((LEFT_MARGIN, y), division_label, font=DIVISION_FONT, fill=(255, 255, 255), anchor="lt")
         label_w, label_h = _text_size(draw, division_label, DIVISION_FONT)
         underline_y = y + label_h + DIVISION_UNDERLINE_GAP
         draw.line(
