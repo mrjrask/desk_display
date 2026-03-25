@@ -32,6 +32,9 @@ from utils import (
     ScreenImage,
     clear_display,
     clone_font,
+    get_mlb_abbreviation,
+    get_mlb_tricode,
+    load_team_logo,
     log_call,
     log_missing_team_logo,
     scroll_vertical_content,
@@ -65,21 +68,21 @@ _IS_HYPERPIXEL_4_OR_LARGER = (
 )
 
 _BASE_FONTS = {
-    "title": 24,
-    "division": 22,
-    "header": 19,
-    "team": 21,
-    "stats": 20,
-    "gb_half": 14,
+    "title": 48,
+    "division": 44,
+    "team": 42,
+    "stats": 40,
+    "gb_half": 28,
+    "gb_suffix": 24,
 }
 
 _HYPERPIXEL_FONTS = {
-    "title": 17,
-    "division": 14,
-    "header": 12,
-    "team": 14,
-    "stats": 13,
-    "gb_half": 9,
+    "title": 34,
+    "division": 28,
+    "team": 28,
+    "stats": 26,
+    "gb_half": 18,
+    "gb_suffix": 16,
 }
 
 if _IS_HYPERPIXEL_4_OR_LARGER:
@@ -89,12 +92,12 @@ else:
 
 TITLE_FONT = get_screen_font("MLB AL Standings", "title", base_font=FONT_TITLE_SPORTS, default_size=_font_sizes["title"])
 DIVISION_FONT = get_screen_font("MLB AL Standings", "division", base_font=FONT_TITLE_SPORTS, default_size=_font_sizes["division"])
-HEADER_FONT = get_screen_font("MLB AL Standings", "header", base_font=FONT_STATUS, default_size=_font_sizes["header"])
 TEAM_FONT = get_screen_font("MLB AL Standings", "team", base_font=FONT_STATUS, default_size=_font_sizes["team"])
 STATS_FONT = get_screen_font("MLB AL Standings", "stats", base_font=FONT_STATUS, default_size=_font_sizes["stats"])
 GB_HALF_FONT = clone_font(STATS_FONT, max(8, _font_sizes["gb_half"]))
+GB_SUFFIX_FONT = clone_font(STATS_FONT, max(8, _font_sizes["gb_suffix"]))
 
-COLUMN_HEADERS = (("W", "wins"), ("L", "losses"), ("W%", "pct"), ("GB", "gb"))
+SHOW_WIN_PCT = _IS_HYPERPIXEL_4_OR_LARGER
 
 _SESSION = get_session()
 _STANDINGS_CACHE: dict[str, Any] = {"timestamp": 0.0, "data": None}
@@ -121,17 +124,16 @@ def _load_logo(abbr: str, *, team_name: str = "") -> Image.Image | None:
     cache_key = (key, LOGO_SIZE)
     if cache_key in _LOGO_CACHE:
         return _LOGO_CACHE[cache_key]
-
-    candidates = (key, key.lower(), key.title())
-    for candidate in candidates:
-        path = os.path.join(IMAGES_DIR, "mlb", f"{candidate}.png")
-        if os.path.exists(path):
-            try:
-                logo = _fit_logo(Image.open(path).convert("RGBA"), LOGO_SIZE)
-            except Exception:
-                logo = None
-            _LOGO_CACHE[cache_key] = logo
-            return logo
+    logo = load_team_logo(
+        os.path.join(IMAGES_DIR, "mlb"),
+        key,
+        box_size=LOGO_SIZE,
+        height=LOGO_SIZE,
+        trim=True,
+    )
+    if logo is not None:
+        _LOGO_CACHE[cache_key] = logo
+        return logo
 
     if team_name:
         log_missing_team_logo("MLB League Standings", team_name, key)
@@ -194,13 +196,11 @@ def _team_nickname(record: dict[str, Any]) -> str:
 
 def _normalize_row(record: dict[str, Any]) -> dict[str, Any]:
     team = record.get("team") if isinstance(record, dict) else {}
-    abbr = ""
-    if isinstance(team, dict):
-        for key in ("abbreviation", "abbrev", "triCode", "teamCode", "fileCode"):
-            val = team.get(key)
-            if isinstance(val, str) and val.strip():
-                abbr = val.strip().upper()
-                break
+    abbr = get_mlb_tricode(team)
+    if not abbr and isinstance(team, dict):
+        team_name = team.get("name")
+        if isinstance(team_name, str):
+            abbr = get_mlb_abbreviation(team_name).upper()
 
     return {
         "team_name": _team_nickname(record) or abbr,
@@ -210,6 +210,13 @@ def _normalize_row(record: dict[str, Any]) -> dict[str, Any]:
         "pct": _pct_text(record.get("winningPercentage")),
         "gb": record.get("gamesBack", "-"),
     }
+
+
+def _stat_columns() -> tuple[str, ...]:
+    cols = ("record", "gb")
+    if SHOW_WIN_PCT:
+        cols = ("record", "pct", "gb")
+    return cols
 
 
 def _fetch_league_standings() -> dict[int, dict[str, list[dict[str, Any]]]]:
@@ -261,15 +268,19 @@ def _fetch_league_standings() -> dict[int, dict[str, list[dict[str, Any]]]]:
 def _column_layout(draw: ImageDraw.ImageDraw, rows: list[dict[str, Any]]) -> dict[str, int]:
     team_x = LEFT_MARGIN + LOGO_SIZE + TEAM_GAP
     right_edge = WIDTH - RIGHT_MARGIN
+    columns = _stat_columns()
 
     stat_widths: dict[str, int] = {}
-    for label, key in COLUMN_HEADERS:
-        width = _text_size(draw, label, HEADER_FONT)[0]
+    for key in columns:
+        width = 0
         for row in rows:
             if key == "gb":
                 main, half = _split_gb_text(row.get("gb", "-"))
                 gb_text = main + (half if half else "")
                 width = max(width, _text_size(draw, gb_text, STATS_FONT)[0])
+                width = max(width, _text_size(draw, "GB", GB_SUFFIX_FONT)[0])
+            elif key == "record":
+                width = max(width, _text_size(draw, f"{row.get('wins', '-')}-{row.get('losses', '-')}", STATS_FONT)[0])
             else:
                 width = max(width, _text_size(draw, str(row.get(key, "-")), STATS_FONT)[0])
         stat_widths[key] = width
@@ -277,11 +288,12 @@ def _column_layout(draw: ImageDraw.ImageDraw, rows: list[dict[str, Any]]) -> dic
     gap = scale_value(9)
     layout = {"team": team_x}
     cursor = right_edge
-    for _label, key in reversed(COLUMN_HEADERS):
+    for key in reversed(columns):
         layout[key] = cursor
         cursor -= stat_widths[key] + gap
 
-    layout["team_max"] = max(scale_value(70), layout["wins"] - team_x - gap)
+    first_col = columns[0]
+    layout["team_max"] = max(scale_value(70), layout[first_col] - team_x - gap)
     return layout
 
 
@@ -291,20 +303,24 @@ def _draw_stat(draw: ImageDraw.ImageDraw, value: str, x: int, y: int) -> None:
 
 def _draw_gb(draw: ImageDraw.ImageDraw, gb_value: Any, x: int, y: int) -> None:
     main, half = _split_gb_text(gb_value)
-    if not half:
-        _draw_stat(draw, main, x, y)
-        return
-
     main_w, _ = _text_size(draw, main, STATS_FONT) if main else (0, 0)
     half_w, _ = _text_size(draw, half, GB_HALF_FONT)
-    total_w = main_w + half_w
+    suffix_gap = max(1, scale_value(2))
+    suffix_text = "GB"
+    suffix_w, _ = _text_size(draw, suffix_text, GB_SUFFIX_FONT)
+    total_w = main_w + half_w + suffix_gap + suffix_w
     left = x - total_w
 
     if main:
         draw.text((left, y), main, font=STATS_FONT, fill=(255, 255, 255), anchor="la")
-    half_x = left + main_w
-    half_y = y - max(1, int(round(getattr(STATS_FONT, "size", 12) * 0.25)))
-    draw.text((half_x, half_y), half, font=GB_HALF_FONT, fill=(255, 255, 255), anchor="la")
+    cursor = left + main_w
+    if half:
+        half_y = y - max(1, int(round(getattr(STATS_FONT, "size", 12) * 0.25)))
+        draw.text((cursor, half_y), half, font=GB_HALF_FONT, fill=(255, 255, 255), anchor="la")
+        cursor += half_w
+    cursor += suffix_gap
+    suffix_y = y + max(1, int(round(getattr(STATS_FONT, "size", 12) * 0.12)))
+    draw.text((cursor, suffix_y), suffix_text, font=GB_SUFFIX_FONT, fill=(190, 190, 190), anchor="la")
 
 
 def _draw_table_title(img: Image.Image, draw: ImageDraw.ImageDraw, title: str) -> int:
@@ -329,14 +345,13 @@ def _draw_league_screen(title: str, league_id: int, screen_id: str) -> Image.Ima
 
     row_h = max(LOGO_SIZE, _text_size(probe, "SEA", TEAM_FONT)[1], _text_size(probe, "999", STATS_FONT)[1]) + scale_value(2)
     division_title_h = _text_size(probe, "AL East", DIVISION_FONT)[1] + scale_value(2)
-    header_h = _text_size(probe, "W", HEADER_FONT)[1] + scale_value(1) if _IS_HYPERPIXEL_4_OR_LARGER else 0
 
     section_h = 0
     for div in DIVISION_ORDER:
         rows = standings.get(div) or []
         if not rows:
             continue
-        section_h += division_title_h + header_h
+        section_h += division_title_h
         section_h += len(rows) * (row_h + ROW_GAP)
         section_h += DIVISION_GAP_BOTTOM
 
@@ -355,11 +370,6 @@ def _draw_league_screen(title: str, league_id: int, screen_id: str) -> Image.Ima
         draw.text((LEFT_MARGIN, y), f"{title.split()[1]} {div}", font=DIVISION_FONT, fill=(255, 255, 255), anchor="la")
         y += _text_size(draw, "AL East", DIVISION_FONT)[1] + scale_value(2)
 
-        if _IS_HYPERPIXEL_4_OR_LARGER:
-            for header, key in COLUMN_HEADERS:
-                draw.text((col[key], y), header, font=HEADER_FONT, fill=(190, 190, 190), anchor="ra")
-            y += _text_size(draw, "W%", HEADER_FONT)[1] + scale_value(1)
-
         for row in rows:
             row_center = y + row_h // 2
             logo = _load_logo(row.get("abbr", ""), team_name=row.get("team_name", ""))
@@ -374,9 +384,9 @@ def _draw_league_screen(title: str, league_id: int, screen_id: str) -> Image.Ima
                 team_name = f"{team_name.rstrip()}…"
 
             draw.text((col["team"], row_center), team_name, font=TEAM_FONT, fill=(255, 255, 255), anchor="lm")
-            _draw_stat(draw, row.get("wins", "-"), col["wins"], row_center)
-            _draw_stat(draw, row.get("losses", "-"), col["losses"], row_center)
-            _draw_stat(draw, row.get("pct", "-"), col["pct"], row_center)
+            _draw_stat(draw, f"{row.get('wins', '-')}-{row.get('losses', '-')}", col["record"], row_center)
+            if SHOW_WIN_PCT:
+                _draw_stat(draw, row.get("pct", "-"), col["pct"], row_center)
             _draw_gb(draw, row.get("gb", "-"), col["gb"], row_center)
             y += row_h + ROW_GAP
 
