@@ -53,6 +53,7 @@ _VRNOF_MATCH_LOGO_HEIGHT_1080 = 54 * 5
 if _IS_1080P_LAYOUT:
     LOGO_SZ = min(LOGO_SZ, _VRNOF_MATCH_LOGO_HEIGHT_1080)
 MARGIN  = scale_value(6)
+FRACTION_FONT_SCALE = 0.6
 
 
 def _restore_font(font):
@@ -90,7 +91,7 @@ def format_games_back(gb):
     """
     Convert raw games-back (float) into display string:
      - integer -> "5"
-     - half games -> "½" or "3½"
+     - half games -> "1/2" or "3 1/2"
     """
     try:
         v = float(gb)
@@ -98,7 +99,7 @@ def format_games_back(gb):
         if v_abs.is_integer():
             return f"{int(v_abs)}"
         if abs(v_abs - int(v_abs) - 0.5) < 1e-3:
-            return f"{int(v_abs)}½" if int(v_abs)>0 else "½"
+            return f"{int(v_abs)} 1/2" if int(v_abs) > 0 else "1/2"
     except:
         pass
     return str(gb)
@@ -158,6 +159,45 @@ def _format_streak(streak) -> str:
         return number_txt
     except Exception:
         return str(streak)
+
+
+def _fraction_font(font):
+    base_size = max(1, int(getattr(font, "size", 20)))
+    return clone_font(font, max(1, int(round(base_size * FRACTION_FONT_SCALE))))
+
+
+def _measure_fraction_text(draw, text: str, font) -> tuple[int, int]:
+    if "1/2" not in text:
+        return draw.textsize(text, font)
+    pre, frac, post = text.partition("1/2")
+    frac_font = _fraction_font(font)
+    pre_w, pre_h = draw.textsize(pre, font)
+    frac_w, frac_h = draw.textsize(frac, frac_font)
+    post_w, post_h = draw.textsize(post, font)
+    return pre_w + frac_w + post_w, max(pre_h, frac_h, post_h)
+
+
+def _draw_fraction_text_centered(draw, y: int, text: str, font, *, fill=(255, 255, 255)) -> None:
+    if "1/2" not in text:
+        w, _ = draw.textsize(text, font)
+        draw.text(((WIDTH - w) // 2, int(y)), text, font=font, fill=fill)
+        return
+
+    pre, frac, post = text.partition("1/2")
+    frac_font = _fraction_font(font)
+    pre_w, pre_h = draw.textsize(pre, font)
+    frac_w, frac_h = draw.textsize(frac, frac_font)
+    post_w, post_h = draw.textsize(post, font)
+    total_w = pre_w + frac_w + post_w
+    x = (WIDTH - total_w) // 2
+    base_h = max(pre_h, post_h)
+    frac_y = int(y + max(0, base_h - frac_h))
+
+    if pre:
+        draw.text((x, int(y)), pre, font=font, fill=fill)
+    draw.text((x + pre_w, frac_y), frac, font=frac_font, fill=fill)
+    if post:
+        draw.text((x + pre_w + frac_w, int(y)), post, font=font, fill=fill)
 
 
 @log_call
@@ -320,15 +360,15 @@ def draw_standings_screen1(
         lines.append((f"Streak: {_format_streak(streak_raw)}", rank_font))
 
     # Layout text
-    heights = [draw.textsize(txt,font)[1] for txt,font in lines]
+    heights = [_measure_fraction_text(draw, txt, font)[1] for txt, font in lines]
     total_h = sum(heights)
     avail_h = bottom_limit - text_top
     spacing = (avail_h - total_h) / (len(lines)+1)
 
     y = text_top + spacing
     for txt,font in lines:
-        w0,h0 = draw.textsize(txt,font)
-        draw.text(((WIDTH-w0)//2,int(y)),txt,font=font,fill=(255,255,255))
+        _, h0 = _measure_fraction_text(draw, txt, font)
+        _draw_fraction_text_centered(draw, int(y), txt, font, fill=(255, 255, 255))
         y += h0 + spacing
 
     if transition:
