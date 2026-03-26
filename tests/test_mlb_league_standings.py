@@ -63,3 +63,19 @@ def test_draw_gb_renders_without_name_error():
     draw = ImageDraw.Draw(image)
 
     mlb_league_standings._draw_gb(draw, "1.5", x=180, y=40)
+
+
+def test_draw_stat_uses_vertical_middle_anchor():
+    class _DrawProbe:
+        def __init__(self):
+            self.anchor = None
+
+        def text(self, _xy, _value, font=None, fill=None, anchor=None):
+            _ = font, fill
+            self.anchor = anchor
+
+    probe = _DrawProbe()
+
+    mlb_league_standings._draw_stat(probe, ".600", x=150, y=30)
+
+    assert probe.anchor == "rm"
