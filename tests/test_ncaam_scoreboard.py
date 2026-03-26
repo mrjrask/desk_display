@@ -15,6 +15,18 @@ def test_team_logo_url_supports_logo_fallback():
     assert ncaam_scoreboard._team_logo_url(team) == "https://example.com/logo.png"
 
 
+def test_team_logo_url_uses_iowa_override():
+    team = {
+        "team": {
+            "abbreviation": "IOWA",
+            "logo": "https://example.com/original.png",
+        },
+    }
+    assert ncaam_scoreboard._team_logo_url(team) == (
+        "https://brand.uiowa.edu/sites/brand.uiowa.edu/files/styles/widescreen__1920_x_1080/public/2020-05/Tigerhawk-gold%20on%20black%402x.png?h=e39f7b2b&itok=TdYKif5p"
+    )
+
+
 def test_extract_rank_from_nested_curated_rank():
     team = {"curatedRank": {"current": "7"}}
     assert ncaam_scoreboard._extract_rank(team) == 7
