@@ -215,6 +215,8 @@ def draw_standings_screen1(
     points_label=None,
     conference_label=None,
     show_conference_rank=True,
+    division_last_rank=5,
+    conference_last_rank=16,
     place_gb_before_rank=False,
     show_pct=False,
     pct_precision=None,
@@ -303,7 +305,7 @@ def draw_standings_screen1(
     dr_raw = rec.get('divisionRank')
     dr = dr_raw if dr_raw not in (None, "") else "-"
     try:
-        dr_lbl = "Last" if int(dr)==5 else _ord(dr)
+        dr_lbl = "Last" if int(dr) == int(division_last_rank) else _ord(dr)
     except:
         dr_lbl = dr
     rank_txt = f"{dr_lbl} in {division_name}"
@@ -346,7 +348,7 @@ def draw_standings_screen1(
         conf_raw = rec.get("conferenceRank")
         conf_rank = conf_raw if conf_raw not in (None, "") else "-"
         try:
-            conf_lbl = "Last" if int(conf_rank) == 16 else _ord(conf_rank)
+            conf_lbl = "Last" if int(conf_rank) == int(conference_last_rank) else _ord(conf_rank)
         except Exception:
             conf_lbl = conf_rank
         conf_name = rec.get("conferenceName") or rec.get("conferenceAbbrev") or "conference"
