@@ -7,6 +7,7 @@ import datetime
 import io
 import logging
 import os
+import re
 import time
 from typing import Any, Optional
 
@@ -163,7 +164,10 @@ def _extract_seed(competitor: dict[str, Any]) -> str:
             return str(value)
         if isinstance(value, str):
             trimmed = value.strip()
-            return trimmed if trimmed.isdigit() else ""
+            if trimmed.isdigit():
+                return trimmed
+            match = re.search(r"\d+", trimmed)
+            return match.group(0) if match else ""
         if isinstance(value, dict):
             for nested_key in ("seed", "current", "value", "displayValue", "rank"):
                 parsed = _parse_seed_value(value.get(nested_key))

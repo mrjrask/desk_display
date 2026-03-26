@@ -58,6 +58,11 @@ def test_extract_seed_from_nested_team_blob():
     assert ncaam_scoreboard._extract_seed(team) == "12"
 
 
+def test_extract_seed_parses_embedded_numeric_seed():
+    team = {"team": {"tournamentSeed": {"displayValue": "No. 11"}}}
+    assert ncaam_scoreboard._extract_seed(team) == "11"
+
+
 def test_score_text_uses_dash_for_scheduled_games():
     assert ncaam_scoreboard._score_text({"score": None}, show=False) == "—"
     assert ncaam_scoreboard._score_text({"score": ""}, show=True) == "—"
