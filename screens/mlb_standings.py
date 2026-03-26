@@ -34,15 +34,16 @@ FONT_DIV_RECORD = config.FONT_DIV_RECORD
 FONT_GB_VALUE   = config.FONT_GB_VALUE
 FONT_GB_LABEL   = config.FONT_GB_LABEL
 if config.is_hyperpixel_4_square_layout():
-    FONT_DIV_HEADER = clone_font(FONT_DIV_HEADER, max(8, int(round(getattr(FONT_DIV_HEADER, "size", 24) * 0.78))))
-    FONT_DIV_RECORD = clone_font(FONT_DIV_RECORD, max(8, int(round(getattr(FONT_DIV_RECORD, "size", 22) * 0.78))))
-    FONT_GB_VALUE = clone_font(FONT_GB_VALUE, max(8, int(round(getattr(FONT_GB_VALUE, "size", 20) * 0.78))))
-    FONT_GB_LABEL = clone_font(FONT_GB_LABEL, max(8, int(round(getattr(FONT_GB_LABEL, "size", 20) * 0.78))))
+    _SQUARE_SCALE = 0.88  # Hyperpixel 4 Square: reduce fonts by 12% vs Hyperpixel 4 baseline.
+    FONT_DIV_HEADER = clone_font(FONT_DIV_HEADER, max(8, int(round(getattr(FONT_DIV_HEADER, "size", 24) * _SQUARE_SCALE))))
+    FONT_DIV_RECORD = clone_font(FONT_DIV_RECORD, max(8, int(round(getattr(FONT_DIV_RECORD, "size", 22) * _SQUARE_SCALE))))
+    FONT_GB_VALUE = clone_font(FONT_GB_VALUE, max(8, int(round(getattr(FONT_GB_VALUE, "size", 20) * _SQUARE_SCALE))))
+    FONT_GB_LABEL = clone_font(FONT_GB_LABEL, max(8, int(round(getattr(FONT_GB_LABEL, "size", 20) * _SQUARE_SCALE))))
 
 # ─── Tunables ────────────────────────────────────────────────────────────────
 LOGO_SIZE   = 52      # max width/height of a division logo
 if config.is_hyperpixel_4_square_layout():
-    LOGO_SIZE = max(1, int(round(LOGO_SIZE * 0.75)))
+    LOGO_SIZE = max(1, int(round(LOGO_SIZE * 0.88)))
 MARGIN      = 6       # left/right gutter
 ROW_SPACING = 6       # vertical gap between rows
 
