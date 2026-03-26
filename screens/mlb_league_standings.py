@@ -106,6 +106,7 @@ if config.is_hyperpixel_4_square_layout():
 _COLUMN_GAP_MULTIPLIER = 0.75 if config.is_hyperpixel_4_square_layout() else 1.0
 _STAT_COLUMN_GAP = max(1, int(round(STAT_COLUMN_GAP * _COLUMN_GAP_MULTIPLIER)))
 _PCT_TO_GB_EXTRA_GAP = max(0, int(round(PCT_TO_GB_EXTRA_GAP * _COLUMN_GAP_MULTIPLIER)))
+_RECORD_TO_GB_EXTRA_GAP = scale_value(12) if int(WIDTH) <= 320 else 0
 
 TITLE_FONT = get_screen_font("MLB AL Standings", "title", base_font=FONT_TITLE_SPORTS, default_size=_font_sizes["title"])
 DIVISION_FONT = get_screen_font("MLB AL Standings", "division", base_font=FONT_TITLE_SPORTS, default_size=_font_sizes["division"])
@@ -357,6 +358,8 @@ def _column_layout(draw: ImageDraw.ImageDraw, rows: list[dict[str, Any]]) -> dic
         gap = _STAT_COLUMN_GAP
         if key == "gb" and "pct" in columns:
             gap += _PCT_TO_GB_EXTRA_GAP
+        if key == "gb" and "record" in columns:
+            gap += _RECORD_TO_GB_EXTRA_GAP
         cursor -= stat_widths[key] + gap
 
     first_col = columns[0]
