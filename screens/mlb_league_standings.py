@@ -93,11 +93,13 @@ else:
     _font_sizes = _BASE_FONTS
 
 if config.is_hyperpixel_4_square_layout():
-    # Hyperpixel 4 Square: reduce AL/NL league standings fonts an additional
-    # 10% to prevent team-name truncation and preserve stat-column alignment.
+    # HyperPixel 4 Square explicit league-standings font tuning.
     _font_sizes = {
-        key: max(8, int(round(size * 0.9)))
-        for key, size in _font_sizes.items()
+        "title": 30,
+        "division": 24,
+        "team": 20,
+        "stats": 20,
+        "gb_suffix": 14,
     }
 
 TITLE_FONT = get_screen_font("MLB AL Standings", "title", base_font=FONT_TITLE_SPORTS, default_size=_font_sizes["title"])
