@@ -72,11 +72,12 @@ _IS_HYPERPIXEL_4_OR_LARGER = (
 )
 
 _BASE_FONTS = {
-    "title": 48,
-    "division": 44,
-    "team": 42,
-    "stats": 40,
-    "gb_suffix": 24,
+    "title": 42,
+    "division": 38,
+    "team": 36,
+    "stats": 36,
+    "gb_suffix": 20,
+    "gb_fraction": 20,
 }
 
 _HYPERPIXEL_FONTS = {
@@ -111,7 +112,18 @@ DIVISION_FONT = get_screen_font("MLB AL Standings", "division", base_font=FONT_T
 TEAM_FONT = get_screen_font("MLB AL Standings", "team", base_font=FONT_STATUS, default_size=_font_sizes["team"])
 STATS_FONT = get_screen_font("MLB AL Standings", "stats", base_font=FONT_STATUS, default_size=_font_sizes["stats"])
 GB_SUFFIX_FONT = clone_font(STATS_FONT, max(8, _font_sizes["gb_suffix"] + 4))
-GB_FRACTION_FONT = clone_font(STATS_FONT, max(8, int(round(getattr(STATS_FONT, "size", _font_sizes["stats"]) * 0.6))))
+GB_FRACTION_FONT = clone_font(
+    STATS_FONT,
+    max(
+        8,
+        int(
+            _font_sizes.get(
+                "gb_fraction",
+                round(getattr(STATS_FONT, "size", _font_sizes["stats"]) * 0.6),
+            )
+        ),
+    ),
+)
 
 SHOW_WIN_PCT = _IS_HYPERPIXEL_4_OR_LARGER
 
