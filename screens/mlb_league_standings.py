@@ -349,7 +349,7 @@ def _column_layout(draw: ImageDraw.ImageDraw, rows: list[dict[str, Any]]) -> dic
 
 
 def _draw_stat(draw: ImageDraw.ImageDraw, value: str, x: int, y: int) -> None:
-    draw.text((x, y), value, font=STATS_FONT, fill=(255, 255, 255), anchor="ra")
+    draw.text((x, y), value, font=STATS_FONT, fill=(255, 255, 255), anchor="rm")
 
 
 def _draw_gb(draw: ImageDraw.ImageDraw, gb_value: Any, x: int, y: int) -> None:
