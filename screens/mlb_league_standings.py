@@ -76,7 +76,6 @@ _BASE_FONTS = {
     "division": 44,
     "team": 42,
     "stats": 40,
-    "gb_half": 28,
     "gb_suffix": 24,
 }
 
@@ -85,7 +84,6 @@ _HYPERPIXEL_FONTS = {
     "division": 28,
     "team": 28,
     "stats": 26,
-    "gb_half": 18,
     "gb_suffix": 16,
 }
 
@@ -98,7 +96,6 @@ TITLE_FONT = get_screen_font("MLB AL Standings", "title", base_font=FONT_TITLE_S
 DIVISION_FONT = get_screen_font("MLB AL Standings", "division", base_font=FONT_TITLE_SPORTS, default_size=_font_sizes["division"])
 TEAM_FONT = get_screen_font("MLB AL Standings", "team", base_font=FONT_STATUS, default_size=_font_sizes["team"])
 STATS_FONT = get_screen_font("MLB AL Standings", "stats", base_font=FONT_STATUS, default_size=_font_sizes["stats"])
-GB_HALF_FONT = clone_font(STATS_FONT, max(8, _font_sizes["gb_half"]))
 GB_SUFFIX_FONT = clone_font(STATS_FONT, max(8, _font_sizes["gb_suffix"] + 4))
 
 SHOW_WIN_PCT = _IS_HYPERPIXEL_4_OR_LARGER
@@ -181,22 +178,20 @@ def _gb_text(value: Any) -> str:
         numeric = float(text)
     except Exception:
         return text
-    if numeric < 0:
-        numeric = 0.0
     if abs(numeric) < 0.05:
-        return "0"
+        return "-"
+    if abs(numeric - 0.5) < 0.01:
+        return "½"
     if abs(numeric - round(numeric)) < 0.01:
         return str(int(round(numeric)))
+    if abs((numeric * 2) - round(numeric * 2)) < 0.01:
+        whole = int(numeric)
+        return f"{whole}½" if whole else "½"
     return f"{numeric:.1f}"
 
 
 def _split_gb_text(value: Any) -> tuple[str, str]:
     text = _gb_text(value)
-    if text.endswith(".5"):
-        whole = text[:-2]
-        if whole in ("", "0"):
-            return "", ".5"
-        return whole, ".5"
     return text, ""
 
 
@@ -304,8 +299,7 @@ def _column_layout(draw: ImageDraw.ImageDraw, rows: list[dict[str, Any]]) -> dic
         width = 0
         for row in rows:
             if key == "gb":
-                main, half = _split_gb_text(row.get("gb", "-"))
-                gb_text = main + (half if half else "")
+                gb_text, _ = _split_gb_text(row.get("gb", "-"))
                 width = max(width, _text_size(draw, gb_text, STATS_FONT)[0])
                 width = max(width, _text_size(draw, "GB", GB_SUFFIX_FONT)[0])
             elif key == "record":
@@ -333,25 +327,16 @@ def _draw_stat(draw: ImageDraw.ImageDraw, value: str, x: int, y: int) -> None:
 
 
 def _draw_gb(draw: ImageDraw.ImageDraw, gb_value: Any, x: int, y: int) -> None:
-    main, half = _split_gb_text(gb_value)
-    main_w, _ = _text_size(draw, main, STATS_FONT) if main else (0, 0)
-    half_w, _ = _text_size(draw, half, GB_HALF_FONT)
+    gb_text, _ = _split_gb_text(gb_value)
+    gb_w, _ = _text_size(draw, gb_text, STATS_FONT)
     suffix_gap = max(1, scale_value(2))
     suffix_text = "GB"
     suffix_w, _ = _text_size(draw, suffix_text, GB_SUFFIX_FONT)
-    total_w = main_w + half_w + suffix_gap + suffix_w
+    total_w = gb_w + suffix_gap + suffix_w
     left = x - total_w
 
-    if main:
-        draw.text((left, y), main, font=STATS_FONT, fill=(255, 255, 255), anchor="la")
-    cursor = left + main_w
-    if half:
-        half_y = y - max(1, int(round(getattr(STATS_FONT, "size", 12) * 0.25)))
-        draw.text((cursor, half_y), half, font=GB_HALF_FONT, fill=(255, 255, 255), anchor="la")
-        cursor += half_w
-    cursor += suffix_gap
-    suffix_y = y + max(1, int(round(getattr(STATS_FONT, "size", 12) * 0.12)))
-    draw.text((cursor, suffix_y), suffix_text, font=GB_SUFFIX_FONT, fill=(190, 190, 190), anchor="la")
+    draw.text((left, y), gb_text, font=STATS_FONT, fill=(255, 255, 255), anchor="la")
+    draw.text((left + gb_w + suffix_gap, y), suffix_text, font=GB_SUFFIX_FONT, fill=(190, 190, 190), anchor="la")
 
 
 def _draw_table_title(img: Image.Image, draw: ImageDraw.ImageDraw, title: str) -> int:
