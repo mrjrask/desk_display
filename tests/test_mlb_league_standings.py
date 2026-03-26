@@ -37,7 +37,7 @@ def test_normalize_row_keeps_red_sox_nickname():
     assert row["team_name"] == "Red Sox"
 
 
-def test_normalize_row_clamps_negative_zero_games_back():
+def test_normalize_row_formats_zero_games_back_as_dash():
     record = {
         "team": {"name": "New York Mets", "abbreviation": "NYM"},
         "wins": 15,
@@ -48,9 +48,9 @@ def test_normalize_row_clamps_negative_zero_games_back():
 
     row = mlb_league_standings._normalize_row(record)
 
-    assert row["gb"] == "0"
+    assert row["gb"] == "-"
 
 
-def test_split_gb_text_uses_decimal_half_not_unicode_fraction():
-    assert mlb_league_standings._split_gb_text("1.5") == ("1", ".5")
-    assert mlb_league_standings._split_gb_text("0.5") == ("", ".5")
+def test_split_gb_text_uses_inline_fraction_text():
+    assert mlb_league_standings._split_gb_text("1.5") == ("1½", "")
+    assert mlb_league_standings._split_gb_text("0.5") == ("½", "")
