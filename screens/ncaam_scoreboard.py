@@ -101,6 +101,9 @@ BACKGROUND_COLOR = get_screen_background_color(SCREEN_ID, SCOREBOARD_BACKGROUND_
 _SESSION = get_session()
 _REMOTE_LOGO_CACHE: dict[tuple[str, int], Optional[Image.Image]] = {}
 _LEAGUE_LOGO_CACHE: dict[tuple[str, int], Optional[Image.Image]] = {}
+_TEAM_LOGO_URL_OVERRIDES: dict[str, str] = {
+    "iowa": "https://brand.uiowa.edu/sites/brand.uiowa.edu/files/styles/widescreen__1920_x_1080/public/2020-05/Tigerhawk-gold%20on%20black%402x.png?h=e39f7b2b&itok=TdYKif5p",
+}
 
 
 def _scoreboard_mode() -> str:
@@ -388,6 +391,16 @@ def _team_logo_url(team: dict) -> str:
     team_blob = team.get("team") if isinstance(team.get("team"), dict) else team
     if not isinstance(team_blob, dict):
         return ""
+
+    for source in (team_blob, team):
+        if not isinstance(source, dict):
+            continue
+        for key in ("abbreviation", "shortDisplayName", "displayName", "name", "location"):
+            value = source.get(key)
+            if isinstance(value, str):
+                override = _TEAM_LOGO_URL_OVERRIDES.get(value.strip().lower())
+                if override:
+                    return override
 
     for source in (team_blob, team):
         logos = source.get("logos") if isinstance(source, dict) else None
