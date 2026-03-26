@@ -51,6 +51,6 @@ def test_normalize_row_formats_zero_games_back_as_dash():
     assert row["gb"] == "-"
 
 
-def test_split_gb_text_uses_inline_fraction_text():
-    assert mlb_league_standings._split_gb_text("1.5") == ("1½", "")
-    assert mlb_league_standings._split_gb_text("0.5") == ("½", "")
+def test_split_gb_text_uses_superscript_fraction_suffix():
+    assert mlb_league_standings._split_gb_text("1.5") == ("1", "1/2")
+    assert mlb_league_standings._split_gb_text("0.5") == ("", "1/2")
