@@ -200,6 +200,10 @@ def _gb_text(value: Any) -> str:
 
 def _split_gb_text(value: Any) -> tuple[str, str]:
     text = _gb_text(value)
+    if text == "½":
+        return "", "1/2"
+    if text.endswith("½"):
+        return text[:-1], "1/2"
     return text, ""
 
 
@@ -307,8 +311,10 @@ def _column_layout(draw: ImageDraw.ImageDraw, rows: list[dict[str, Any]]) -> dic
         width = 0
         for row in rows:
             if key == "gb":
-                gb_text, _ = _split_gb_text(row.get("gb", "-"))
-                width = max(width, _text_size(draw, gb_text, STATS_FONT)[0])
+                gb_text, gb_suffix = _split_gb_text(row.get("gb", "-"))
+                gb_w = _text_size(draw, gb_text, STATS_FONT)[0] if gb_text else 0
+                frac_w = _text_size(draw, gb_suffix, GB_SUFFIX_FONT)[0] if gb_suffix else 0
+                width = max(width, gb_w + frac_w)
                 width = max(width, _text_size(draw, "GB", GB_SUFFIX_FONT)[0])
             elif key == "record":
                 width = max(width, _text_size(draw, f"{row.get('wins', '-')}-{row.get('losses', '-')}", STATS_FONT)[0])
@@ -335,16 +341,21 @@ def _draw_stat(draw: ImageDraw.ImageDraw, value: str, x: int, y: int) -> None:
 
 
 def _draw_gb(draw: ImageDraw.ImageDraw, gb_value: Any, x: int, y: int) -> None:
-    gb_text, _ = _split_gb_text(gb_value)
-    gb_w, _ = _text_size(draw, gb_text, STATS_FONT)
+    gb_text, gb_fraction = _split_gb_text(gb_value)
+    gb_w = _text_size(draw, gb_text, STATS_FONT)[0] if gb_text else 0
+    frac_w = _text_size(draw, gb_fraction, GB_SUFFIX_FONT)[0] if gb_fraction else 0
     suffix_gap = max(1, scale_value(2))
     suffix_text = "GB"
     suffix_w, _ = _text_size(draw, suffix_text, GB_SUFFIX_FONT)
-    total_w = gb_w + suffix_gap + suffix_w
+    total_w = gb_w + frac_w + suffix_gap + suffix_w
     left = x - total_w
 
-    draw.text((left, y), gb_text, font=STATS_FONT, fill=(255, 255, 255), anchor="la")
-    draw.text((left + gb_w + suffix_gap, y), suffix_text, font=GB_SUFFIX_FONT, fill=(190, 190, 190), anchor="la")
+    if gb_text:
+        draw.text((left, y), gb_text, font=STATS_FONT, fill=(255, 255, 255), anchor="la")
+    if gb_fraction:
+        superscript_y = y - max(2, scale_value(6))
+        draw.text((left + gb_w, superscript_y), gb_fraction, font=GB_SUFFIX_FONT, fill=(255, 255, 255), anchor="la")
+    draw.text((left + gb_w + frac_w + suffix_gap, y), suffix_text, font=GB_SUFFIX_FONT, fill=(190, 190, 190), anchor="la")
 
 
 def _draw_table_title(img: Image.Image, draw: ImageDraw.ImageDraw, title: str) -> int:
