@@ -173,13 +173,30 @@ def _pct_text(value: Any) -> str:
         return text
 
 
-def _split_gb_text(value: Any) -> tuple[str, str]:
+def _gb_text(value: Any) -> str:
     text = str(value if value not in (None, "") else "-").strip()
+    if not text or text == "-":
+        return "-"
+    try:
+        numeric = float(text)
+    except Exception:
+        return text
+    if numeric < 0:
+        numeric = 0.0
+    if abs(numeric) < 0.05:
+        return "0"
+    if abs(numeric - round(numeric)) < 0.01:
+        return str(int(round(numeric)))
+    return f"{numeric:.1f}"
+
+
+def _split_gb_text(value: Any) -> tuple[str, str]:
+    text = _gb_text(value)
     if text.endswith(".5"):
         whole = text[:-2]
         if whole in ("", "0"):
-            return "", "½"
-        return whole, "½"
+            return "", ".5"
+        return whole, ".5"
     return text, ""
 
 
@@ -220,7 +237,7 @@ def _normalize_row(record: dict[str, Any]) -> dict[str, Any]:
         "wins": _int_text(record.get("wins")),
         "losses": _int_text(record.get("losses")),
         "pct": _pct_text(record.get("winningPercentage")),
-        "gb": record.get("gamesBack", "-"),
+        "gb": _gb_text(record.get("gamesBack", "-")),
     }
 
 
