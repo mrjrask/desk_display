@@ -150,6 +150,8 @@ def draw_nhl_standings_screen1(
         points_label="points",
         conference_label="conference",
         show_conference_rank=True,
+        division_last_rank=8,
+        conference_last_rank=16,
         record_details_fn=_format_nhl_record,
         logo_size=max(1, int(round(NHL_STAND1_LOGO_SZ * max(0.1, logo_scale)))),
         font_size_offset=(30 if _IS_1080P_LAYOUT else (12 if _IS_HYPERPIXEL_4 else (8 if _IS_HYPERPIXEL_4_SQUARE else 0))),
