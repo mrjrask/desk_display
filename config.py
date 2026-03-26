@@ -231,21 +231,58 @@ def get_current_ssid():
 
 CURRENT_SSID = get_current_ssid()
 
-if CURRENT_SSID == "Verano":
-    ENABLE_WEATHER = True
-    LATITUDE       = 41.9103
-    LONGITUDE      = -87.6340
-    TRAVEL_MODE    = "to_home"
-elif CURRENT_SSID == "wiffy":
-    ENABLE_WEATHER = True
-    LATITUDE       = 42.13444
-    LONGITUDE      = -87.876389
-    TRAVEL_MODE    = "to_work"
-else:
-    ENABLE_WEATHER = True
-    LATITUDE       = 41.9103
-    LONGITUDE      = -87.6340
-    TRAVEL_MODE    = "to_home"
+def _parse_lat_lon(value: Optional[str]) -> Optional[Tuple[float, float]]:
+    if not value:
+        return None
+    text = str(value).strip()
+    if text.lower().startswith("geo:"):
+        text = text[4:].strip()
+    parts = [part.strip() for part in text.split(",", 1)]
+    if len(parts) != 2:
+        return None
+    try:
+        lat = float(parts[0])
+        lon = float(parts[1])
+    except (TypeError, ValueError):
+        return None
+    if not (-90.0 <= lat <= 90.0 and -180.0 <= lon <= 180.0):
+        return None
+    return lat, lon
+
+
+def _weather_profile_for_ssid(ssid: Optional[str]) -> Tuple[float, float, str]:
+    """
+    Resolve weather location and travel mode from SSID.
+
+    - wiffy / wiffyToo -> TRAVEL_TO_HOME_DESTINATION + to_work
+    - Verano* (substring, case-insensitive) -> TRAVEL_TO_WORK_DESTINATION + to_home
+    """
+
+    travel_to_home_destination = os.environ.get("TRAVEL_TO_HOME_DESTINATION", "")
+    travel_to_work_destination = os.environ.get("TRAVEL_TO_WORK_DESTINATION", "")
+
+    default_lat = 41.9103
+    default_lon = -87.6340
+    default_mode = "to_home"
+
+    normalized_ssid = (ssid or "").strip().lower()
+    if normalized_ssid in {"wiffy", "wiffytoo"}:
+        parsed = _parse_lat_lon(travel_to_home_destination)
+        if parsed:
+            return parsed[0], parsed[1], "to_work"
+        return 42.13444, -87.876389, "to_work"
+
+    if "verano" in normalized_ssid:
+        parsed = _parse_lat_lon(travel_to_work_destination)
+        if parsed:
+            return parsed[0], parsed[1], "to_home"
+        return default_lat, default_lon, default_mode
+
+    return default_lat, default_lon, default_mode
+
+
+ENABLE_WEATHER = True
+LATITUDE, LONGITUDE, TRAVEL_MODE = _weather_profile_for_ssid(CURRENT_SSID)
 
 WEATHERKIT_TEAM_ID     = os.environ.get("WEATHERKIT_TEAM_ID")
 WEATHERKIT_KEY_ID      = os.environ.get("WEATHERKIT_KEY_ID")
@@ -259,10 +296,12 @@ WEATHER_USE_EMOJI_ICONS = _get_bool_env("WEATHER_USE_EMOJI_ICONS", False)
 def _get_owm_api_key(ssid: Optional[str]) -> Optional[str]:
     """Select the OpenWeatherMap API key based on the connected SSID."""
 
-    if ssid in {"wiffy", "wiffyToo"}:
+    normalized_ssid = (ssid or "").strip().lower()
+
+    if normalized_ssid in {"wiffy", "wiffytoo"}:
         return _get_first_env_var("OWM_API_KEY_WIFFY", "OWM_API_KEY")
 
-    if ssid == "Verano":
+    if "verano" in normalized_ssid:
         return _get_first_env_var("OWM_API_KEY_VERANO", "OWM_API_KEY_DEFAULT")
 
     return _get_first_env_var("OWM_API_KEY_DEFAULT", "OWM_API_KEY")
