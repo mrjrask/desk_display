@@ -48,15 +48,7 @@
     "mlb logo": 0,
     "MLB Scoreboard": 2,
     "NL Overview": 0,
-    "NL East": 0,
-    "NL Central": 0,
-    "NL West": 0,
-    "NL Wild Card": 0,
     "AL Overview": 0,
-    "AL East": 0,
-    "AL Central": 0,
-    "AL West": 0,
-    "AL Wild Card": 0,
     "MLB AL Standings": 2,
     "MLB NL Standings": 2,
     "bears logo": 7,
@@ -276,31 +268,7 @@
           "screen": "NL Overview"
         },
         {
-          "screen": "NL East"
-        },
-        {
-          "screen": "NL Central"
-        },
-        {
-          "screen": "NL West"
-        },
-        {
-          "screen": "NL Wild Card"
-        },
-        {
           "screen": "AL Overview"
-        },
-        {
-          "screen": "AL East"
-        },
-        {
-          "screen": "AL Central"
-        },
-        {
-          "screen": "AL West"
-        },
-        {
-          "screen": "AL Wild Card"
         },
         {
           "screen": "MLB AL Standings"
