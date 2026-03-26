@@ -72,12 +72,12 @@ _IS_HYPERPIXEL_4_OR_LARGER = (
 )
 
 _BASE_FONTS = {
-    "title": 42,
-    "division": 38,
-    "team": 36,
-    "stats": 36,
-    "gb_suffix": 20,
-    "gb_fraction": 20,
+    "title": 39,
+    "division": 35,
+    "team": 28,
+    "stats": 28,
+    "gb_suffix": 21,
+    "gb_fraction": 18,
 }
 
 _HYPERPIXEL_FONTS = {
@@ -111,7 +111,7 @@ TITLE_FONT = get_screen_font("MLB AL Standings", "title", base_font=FONT_TITLE_S
 DIVISION_FONT = get_screen_font("MLB AL Standings", "division", base_font=FONT_TITLE_SPORTS, default_size=_font_sizes["division"])
 TEAM_FONT = get_screen_font("MLB AL Standings", "team", base_font=FONT_STATUS, default_size=_font_sizes["team"])
 STATS_FONT = get_screen_font("MLB AL Standings", "stats", base_font=FONT_STATUS, default_size=_font_sizes["stats"])
-GB_SUFFIX_FONT = clone_font(STATS_FONT, max(8, _font_sizes["gb_suffix"] + 4))
+GB_SUFFIX_FONT = clone_font(STATS_FONT, max(8, _font_sizes["gb_suffix"]))
 GB_FRACTION_FONT = clone_font(
     STATS_FONT,
     max(
