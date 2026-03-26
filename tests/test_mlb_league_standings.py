@@ -1,3 +1,5 @@
+from PIL import Image, ImageDraw
+
 import screens.mlb_league_standings as mlb_league_standings
 
 
@@ -54,3 +56,10 @@ def test_normalize_row_formats_zero_games_back_as_dash():
 def test_split_gb_text_uses_superscript_fraction_suffix():
     assert mlb_league_standings._split_gb_text("1.5") == ("1", "1/2")
     assert mlb_league_standings._split_gb_text("0.5") == ("", "1/2")
+
+
+def test_draw_gb_renders_without_name_error():
+    image = Image.new("RGB", (200, 100), (0, 0, 0))
+    draw = ImageDraw.Draw(image)
+
+    mlb_league_standings._draw_gb(draw, "1.5", x=180, y=40)

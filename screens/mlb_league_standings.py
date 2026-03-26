@@ -358,7 +358,7 @@ def _draw_gb(draw: ImageDraw.ImageDraw, gb_value: Any, x: int, y: int) -> None:
     suffix_gap = max(1, scale_value(2))
     suffix_text = "GB"
     suffix_w, _ = _text_size(draw, suffix_text, GB_SUFFIX_FONT)
-    total_w = gb_w + frac_w + suffix_gap + suffix_w
+    total_w = gb_w + suffix_gap + suffix_w
     left = x - total_w
 
     cursor_x = left
