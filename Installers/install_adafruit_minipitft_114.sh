@@ -29,10 +29,9 @@ if [[ -z "${EXPECTED_CODENAME:-}" ]]; then
 fi
 
 export EXPECTED_CODENAME
-export DESK_DISPLAY_OUTPUT="${DESK_DISPLAY_OUTPUT:-framebuffer}"
-export REQUIREMENTS_FILE="${REQUIREMENTS_FILE:-requirements_kernel.txt}"
+export DESK_DISPLAY_OUTPUT="${DESK_DISPLAY_OUTPUT:-minipitft}"
+export REQUIREMENTS_FILE="${REQUIREMENTS_FILE:-requirements_minipitft.txt}"
 export DISPLAY_WIDTH="${DISPLAY_WIDTH:-240}"
 export DISPLAY_HEIGHT="${DISPLAY_HEIGHT:-135}"
-export DISPLAY_FB_DEVICE="${DISPLAY_FB_DEVICE:-/dev/fb1}"
 
 exec "$PROJECT_DIR/scripts/helpers/base_setup.sh"

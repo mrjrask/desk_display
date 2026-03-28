@@ -21,6 +21,12 @@ def test_is_button_pressed_true_from_bool():
     assert display.is_button_pressed("X") is True
 
 
+def test_normalize_display_output_supports_minipitft_aliases():
+    assert utils._normalize_display_output("minipitft") == "minipitft"
+    assert utils._normalize_display_output("mini-pitft") == "minipitft"
+    assert utils._normalize_display_output("pitft") == "minipitft"
+
+
 def test_is_button_pressed_false_from_bool():
     display = _make_display(False)
 
@@ -73,6 +79,46 @@ def test_create_display_hat_mini_reads_button_pins_from_class(monkeypatch):
 
     assert isinstance(created, _FakeDisplay)
     assert display._button_pins == {"A": 17, "B": 18, "X": 19, "Y": 20}
+
+
+def test_minipitft_output_uses_script_writer(monkeypatch):
+    class _FakeBoard:
+        CE0 = object()
+        D25 = object()
+        D27 = object()
+        D22 = object()
+
+        @staticmethod
+        def SPI():
+            return object()
+
+    class _FakePin:
+        def __init__(self, _pin):
+            self.value = None
+
+        def switch_to_output(self, value):
+            self.value = value
+
+    writes = []
+
+    class _FakeST7789:
+        def __init__(self, *_args, **_kwargs):
+            pass
+
+        def image(self, image):
+            writes.append(image.size)
+
+    monkeypatch.setattr(utils, "_DISPLAY_OUTPUT", "minipitft")
+    monkeypatch.setattr(utils, "board", _FakeBoard)
+    monkeypatch.setattr(utils, "digitalio", SimpleNamespace(DigitalInOut=_FakePin))
+    monkeypatch.setattr(utils, "st7789", SimpleNamespace(ST7789=_FakeST7789))
+
+    display = utils.Display()
+    display._buffer = utils.Image.new("RGB", (display.width, display.height), "black")
+    display._update_display()
+
+    assert display._output_strategy == "minipitft"
+    assert writes[-1] == (display.width, display.height)
 
 
 def test_hardware_button_callback_accepts_button_name():

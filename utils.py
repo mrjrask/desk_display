@@ -65,6 +65,18 @@ except Exception as _gpio_button_exc:  # pragma: no cover - hardware import
 else:  # pragma: no cover - hardware import
     _GPIO_BUTTON_ERROR = None
 
+try:  # pragma: no cover - hardware import
+    import board  # type: ignore
+    import digitalio  # type: ignore
+    from adafruit_rgb_display import st7789  # type: ignore
+except Exception as _minipitft_exc:  # pragma: no cover - hardware import
+    board = None  # type: ignore
+    digitalio = None  # type: ignore
+    st7789 = None  # type: ignore
+    _MINIPITFT_ERROR = _minipitft_exc
+else:  # pragma: no cover - hardware import
+    _MINIPITFT_ERROR = None
+
 _FORCE_HEADLESS = os.environ.get("DESK_DISPLAY_FORCE_HEADLESS", "").strip().lower() in {
     "1",
     "true",
@@ -406,6 +418,8 @@ def _normalize_display_output(value: str) -> str:
     value = value.strip().lower()
     if value in {"displayhatmini", "display-hat-mini", "hatmini", "hat"}:
         return "displayhatmini"
+    if value in {"minipitft", "mini-pitft", "adafruit-minipitft", "pitft"}:
+        return "minipitft"
     if value in {"framebuffer", "fb", "framebuffer-device"}:
         return "framebuffer"
     if value in {"kernel", "kms", "drm", "sdl", "fullscreen"}:
@@ -925,6 +939,8 @@ class Display:
         self._frame_transform: Callable[[Image.Image], Image.Image] = lambda img: img
         self._frame_writer: Callable[[Image.Image], None] = lambda img: None
         self._output_strategy = "headless"
+        self._display_driver = "none"
+        self._minipitft_backlight = None
 
         output = _normalize_display_output(_DISPLAY_OUTPUT)
         if _FORCE_HEADLESS or output == "headless":
@@ -993,6 +1009,7 @@ class Display:
                                 "Framebuffer fallback unavailable after Display HAT Mini init failure; running headless."
                             )
                     else:  # pragma: no cover - hardware import
+                        self._display_driver = "displayhatmini"
                         logging.info(
                             "🖼️  Display HAT Mini initialized (%dx%d, rotation %d°).",
                             self.width,
@@ -1034,6 +1051,34 @@ class Display:
                         self.width,
                         self.height,
                     )
+        elif output == "minipitft":
+            if st7789 is None or board is None or digitalio is None:  # pragma: no cover - hardware import
+                if _MINIPITFT_ERROR:
+                    logging.warning(
+                        "Adafruit miniPiTFT driver unavailable; running headless (%s)",
+                        _MINIPITFT_ERROR,
+                    )
+                else:
+                    logging.warning(
+                        "Adafruit miniPiTFT driver unavailable; running headless."
+                    )
+            else:
+                try:  # pragma: no cover - hardware import
+                    self._display = self._create_adafruit_minipitft(self._buffer)
+                except Exception as exc:  # pragma: no cover - hardware import
+                    self._display = None
+                    logging.warning(
+                        "Failed to initialize Adafruit miniPiTFT hardware; running headless (%s)",
+                        exc,
+                    )
+                else:  # pragma: no cover - hardware import
+                    self._display_driver = "minipitft"
+                    logging.info(
+                        "🖼️  Adafruit miniPiTFT initialized (%dx%d, rotation %d°).",
+                        self.width,
+                        self.height,
+                        self.rotation,
+                    )
         elif DisplayHATMini is None:  # pragma: no cover - hardware import
             if output == "displayhatmini":
                 if _DISPLAY_HAT_ERROR:
@@ -1056,6 +1101,7 @@ class Display:
                         exc,
                     )
             else:  # pragma: no cover - hardware import
+                self._display_driver = "displayhatmini"
                 logging.info(
                     "🖼️  Display HAT Mini initialized (%dx%d, rotation %d°).",
                     self.width,
@@ -1094,9 +1140,14 @@ class Display:
             self._frame_transform = self._build_rotation_transform(
                 resize_to_display=True,
             )
-            self._frame_writer = self._write_display_hat_mini_frame
-            self._output_strategy = "display_hat_mini"
-            self._display_hat_mini_indicator_border = display_hat_indicator_eligible
+            if self._display_driver == "minipitft":
+                self._frame_writer = self._write_adafruit_minipitft_frame
+                self._output_strategy = "minipitft"
+                self._display_hat_mini_indicator_border = False
+            else:
+                self._frame_writer = self._write_display_hat_mini_frame
+                self._output_strategy = "display_hat_mini"
+                self._display_hat_mini_indicator_border = display_hat_indicator_eligible
             return
 
         self._frame_transform = lambda img: img
@@ -1181,6 +1232,18 @@ class Display:
             except Exception as exc:  # pragma: no cover - hardware import
                 logging.warning("Display refresh failed: %s", exc)
 
+    def _write_adafruit_minipitft_frame(self, buffer_to_display: Image.Image) -> None:
+        """Push a frame to Adafruit miniPiTFT."""
+
+        if self._display is None:  # pragma: no cover - hardware import
+            return
+
+        with self._display_io_lock:
+            try:
+                self._display.image(buffer_to_display)
+            except Exception as exc:  # pragma: no cover - hardware import
+                logging.warning("miniPiTFT refresh failed: %s", exc)
+
     def _button_gpio_pin(self, name: str) -> Optional[int]:
         raw_value = os.environ.get(f"BUTTON_{name}")
         if raw_value is None:
@@ -1237,6 +1300,38 @@ class Display:
             except Exception as exc:  # pragma: no cover - hardware import
                 logging.debug("Failed to register hardware button callback: %s", exc)
 
+        return display
+
+    def _create_adafruit_minipitft(self, _initial_buffer: Image.Image):
+        """Create and configure an Adafruit miniPiTFT 1.14 display driver instance."""
+
+        spi = board.SPI()
+        cs = digitalio.DigitalInOut(getattr(board, "CE0"))
+        dc = digitalio.DigitalInOut(getattr(board, "D25"))
+        rst = digitalio.DigitalInOut(getattr(board, "D27"))
+        backlight = digitalio.DigitalInOut(getattr(board, "D22"))
+        backlight.switch_to_output(value=True)
+
+        baudrate = int(os.environ.get("MINIPITFT_BAUDRATE", "64000000"))
+        rotation = int(os.environ.get("MINIPITFT_DRIVER_ROTATION", "90"))
+        width = int(os.environ.get("MINIPITFT_DRIVER_WIDTH", "135"))
+        height = int(os.environ.get("MINIPITFT_DRIVER_HEIGHT", "240"))
+        x_offset = int(os.environ.get("MINIPITFT_X_OFFSET", "53"))
+        y_offset = int(os.environ.get("MINIPITFT_Y_OFFSET", "40"))
+
+        display = st7789.ST7789(
+            spi,
+            cs=cs,
+            dc=dc,
+            rst=rst,
+            baudrate=baudrate,
+            width=width,
+            height=height,
+            x_offset=x_offset,
+            y_offset=y_offset,
+            rotation=rotation,
+        )
+        self._minipitft_backlight = backlight
         return display
 
     def _release_display_hat_mini(self, display, *, call_destructor: bool = True) -> None:
