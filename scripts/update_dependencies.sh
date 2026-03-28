@@ -31,7 +31,7 @@ while [[ $# -gt 0 ]]; do
       shift 2
       ;;
     *)
-      echo "Usage: $0 [--requirements <file>] [--output <displayhatmini|kernel|framebuffer>] [--python <python-bin>]" >&2
+      echo "Usage: $0 [--requirements <file>] [--output <displayhatmini|minipitft|kernel|framebuffer>] [--python <python-bin>]" >&2
       exit 1
       ;;
   esac
@@ -49,6 +49,9 @@ pick_requirements_file() {
       ;;
     framebuffer)
       echo "requirements_framebuffer.txt"
+      ;;
+    minipitft)
+      echo "requirements_minipitft.txt"
       ;;
     *)
       echo "requirements.txt"

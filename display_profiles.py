@@ -4,6 +4,7 @@ from dataclasses import dataclass
 
 
 DISPLAY_PROFILE_DISPLAY_HAT_MINI = "display_hat_mini"
+DISPLAY_PROFILE_ADAFRUIT_MINIPITFT_114 = "adafruit_minipitft_114"
 DISPLAY_PROFILE_HYPERPIXEL4 = "hyperpixel4"
 DISPLAY_PROFILE_HYPERPIXEL4_SQUARE = "hyperpixel4_square"
 DISPLAY_PROFILE_HDMI_1080P = "hdmi_1080p"
@@ -39,6 +40,15 @@ PROFILE_PRESETS: dict[str, DisplayProfilePreset] = {
         logo_scale_cap=1.0,
         animation_delay=0.06,
         use_compact_layout=False,
+    ),
+    DISPLAY_PROFILE_ADAFRUIT_MINIPITFT_114: DisplayProfilePreset(
+        profile_id=DISPLAY_PROFILE_ADAFRUIT_MINIPITFT_114,
+        fade_in_steps=6,
+        scoreboard_scroll_step=1,
+        scoreboard_scroll_delay=0.028,
+        logo_scale_cap=1.1,
+        animation_delay=0.06,
+        use_compact_layout=True,
     ),
     DISPLAY_PROFILE_HYPERPIXEL4: DisplayProfilePreset(
         profile_id=DISPLAY_PROFILE_HYPERPIXEL4,
@@ -101,6 +111,8 @@ def _is_hd_widescreen_layout(width: int, height: int) -> bool:
 def resolve_display_profile(width: int, height: int) -> DisplayProfilePreset:
     if (width, height) in {(320, 240), (240, 320)}:
         return PROFILE_PRESETS[DISPLAY_PROFILE_DISPLAY_HAT_MINI]
+    if (width, height) in {(240, 135), (135, 240)}:
+        return PROFILE_PRESETS[DISPLAY_PROFILE_ADAFRUIT_MINIPITFT_114]
     if (width, height) == (720, 720):
         return PROFILE_PRESETS[DISPLAY_PROFILE_HYPERPIXEL4_SQUARE]
     if (width, height) in {(800, 480), (480, 800)}:

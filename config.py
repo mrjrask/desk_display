@@ -180,6 +180,7 @@ EMOJI_EMBEDDED_COLOR = _supports_embedded_color()
 
 from config_store import ConfigStore
 from display_profiles import (
+    DISPLAY_PROFILE_ADAFRUIT_MINIPITFT_114,
     DISPLAY_PROFILE_HDMI_1080P,
     DisplayProfilePreset,
     resolve_display_profile,
@@ -656,6 +657,7 @@ DISPLAY_FADE_IN_HDMI_1080P_STEPS = max(
 )
 DISPLAY_FADE_IN_STEPS_BY_PROFILE: Dict[str, int] = {
     "display_hat_mini": DISPLAY_FADE_IN_DISPLAY_HAT_MINI_STEPS,
+    DISPLAY_PROFILE_ADAFRUIT_MINIPITFT_114: DISPLAY_FADE_IN_HYPERPIXEL_STEPS,
     "hyperpixel4": DISPLAY_FADE_IN_HYPERPIXEL_STEPS,
     "hyperpixel4_square": DISPLAY_FADE_IN_HYPERPIXEL_STEPS,
     "hdmi_1080p": DISPLAY_FADE_IN_HDMI_1080P_STEPS,

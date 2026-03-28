@@ -5,6 +5,7 @@ Desk Display is a Raspberry Pi dashboard app that rotates through weather, date,
 It supports:
 
 - **Pimoroni Display HAT Mini** (`320x240`) over SPI.
+- **Adafruit miniPiTFT 1.14"** (`240x135`) via Python script-driven SPI output.
 - **Kernel/desktop fullscreen output** (for HDMI/DSI/HyperPixel-style panels).
 - **Framebuffer output** (headless-style rendering direct to `/dev/fb*`).
 - **Headless mode** for rendering/testing without writing to a display.
@@ -81,6 +82,7 @@ pip install -r requirements.txt
 - `requirements.txt`: Display HAT Mini + full stack.
 - `requirements_kernel.txt`: kernel/desktop display stack (no Display HAT Mini dependency).
 - `requirements_framebuffer.txt`: framebuffer stack (no Display HAT Mini dependency).
+- `requirements_minipitft.txt`: miniPiTFT SPI Python-driver stack.
 
 Example:
 
@@ -134,6 +136,18 @@ The app defaults `CONFIG_LOAD_DOTENV=1`, so `.env` is loaded automatically durin
 bash ./Installers/install_display_hat_mini.sh
 ```
 
+### Adafruit miniPiTFT 1.14" (240×135)
+
+```bash
+bash ./Installers/install_adafruit_minipitft_114.sh
+```
+
+Notes:
+
+- Defaults to `DESK_DISPLAY_OUTPUT=minipitft` with `DISPLAY_WIDTH=240` and `DISPLAY_HEIGHT=135`.
+- Uses `requirements_minipitft.txt` (includes the Adafruit RGB display driver).
+- Uses SPI script output (ST7789), not kernel/DRM output.
+
 ### Waveshare OLED/LCD HAT (A)
 
 ```bash
@@ -182,7 +196,7 @@ Configuration is primarily environment-driven (and may be loaded from `.env`).
 
 | Variable | Meaning |
 | --- | --- |
-| `DESK_DISPLAY_OUTPUT` | `auto` (default), `displayhatmini`, `kernel`, `framebuffer`, `headless`. |
+| `DESK_DISPLAY_OUTPUT` | `auto` (default), `displayhatmini`, `minipitft`, `kernel`, `framebuffer`, `headless`. |
 | `DESK_DISPLAY_FORCE_HEADLESS` | Force render without writing to hardware. |
 | `DISPLAY_WIDTH` / `DISPLAY_HEIGHT` | Override render resolution. |
 | `DISPLAY_FB_DEVICE` | Framebuffer path (default `/dev/fb0`). |
