@@ -187,6 +187,9 @@ def test_display_profile_id_resolution(monkeypatch):
     module = _reload_config(monkeypatch, DISPLAY_WIDTH="320", DISPLAY_HEIGHT="240")
     assert module.get_display_profile_id() == "display_hat_mini"
 
+    module = _reload_config(monkeypatch, DISPLAY_WIDTH="240", DISPLAY_HEIGHT="135")
+    assert module.get_display_profile_id() == "adafruit_minipitft_114"
+
     module = _reload_config(monkeypatch, DISPLAY_WIDTH="800", DISPLAY_HEIGHT="480")
     assert module.get_display_profile_id() == "hyperpixel4"
 

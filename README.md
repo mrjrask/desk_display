@@ -5,6 +5,7 @@ Desk Display is a Raspberry Pi dashboard app that rotates through weather, date,
 It supports:
 
 - **Pimoroni Display HAT Mini** (`320x240`) over SPI.
+- **Adafruit miniPiTFT 1.14"** (`240x135`) via framebuffer/kms overlays.
 - **Kernel/desktop fullscreen output** (for HDMI/DSI/HyperPixel-style panels).
 - **Framebuffer output** (headless-style rendering direct to `/dev/fb*`).
 - **Headless mode** for rendering/testing without writing to a display.
@@ -133,6 +134,18 @@ The app defaults `CONFIG_LOAD_DOTENV=1`, so `.env` is loaded automatically durin
 ```bash
 bash ./Installers/install_display_hat_mini.sh
 ```
+
+### Adafruit miniPiTFT 1.14" (240×135)
+
+```bash
+bash ./Installers/install_adafruit_minipitft_114.sh
+```
+
+Notes:
+
+- Defaults to `DESK_DISPLAY_OUTPUT=framebuffer` with `DISPLAY_FB_DEVICE=/dev/fb1`.
+- Uses `requirements_kernel.txt` (no Display HAT Mini dependency).
+- If your overlay exposes a different framebuffer, set `DISPLAY_FB_DEVICE` before running.
 
 ### Waveshare OLED/LCD HAT (A)
 
