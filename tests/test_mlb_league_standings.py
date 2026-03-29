@@ -24,6 +24,11 @@ def test_stat_columns_omit_winning_pct_when_disabled(monkeypatch):
     assert mlb_league_standings._stat_columns() == ("record", "gb")
 
 
+def test_show_win_pct_for_layout_matches_display_hat_mini_behavior():
+    assert mlb_league_standings._show_win_pct_for_layout(320, 240) is False
+    assert mlb_league_standings._show_win_pct_for_layout(240, 135) is False
+
+
 def test_normalize_row_keeps_red_sox_nickname():
     record = {
         "team": {"name": "Boston Red Sox", "abbreviation": "BOS"},
