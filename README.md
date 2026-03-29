@@ -343,7 +343,12 @@ Installers can provision service units.
 ```bash
 sudo systemctl status desk_display.service
 sudo systemctl restart desk_display.service
+./scripts/restart_services.sh
 ```
+
+If `systemctl restart ...` returns `Job for <service>.service canceled`, use
+`./scripts/restart_services.sh` to perform a stop/start fallback for
+`desk_display.service` and (when installed) `desk_display_waveshare_oled.service`.
 
 ### Kernel desktop-session user service
 
