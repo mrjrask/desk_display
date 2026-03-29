@@ -115,6 +115,8 @@ FONT_NEXT_OPP = FONT_TEAM_SPORTS
 # Scoreboard fonts (TimesSquare family as requested for numeric/abbr)
 _IS_HYPERPIXEL_4_SQUARE = is_hyperpixel_4_square_layout()
 _IS_HYPERPIXEL_4 = config.is_hyperpixel_next_layout() and not _IS_HYPERPIXEL_4_SQUARE
+_IS_ADAFRUIT_MINIPITFT = sorted((WIDTH, HEIGHT)) == [135, 240]
+_MINIPITFT_FONT_SCALE = 0.56 if _IS_ADAFRUIT_MINIPITFT else 1.0
 _ABBR_BASE = 33 if HEIGHT > 64 else 30
 _SOG_BASE = 30 if HEIGHT > 64 else 26
 if _IS_HYPERPIXEL_4_SQUARE:
@@ -140,11 +142,18 @@ elif _IS_HYPERPIXEL_4:
     # HyperPixel 4 request: match H4 Square score/SOG sizing on Last/Live cards.
     _SOG_FONT_SIZE = _H4SQ_SOG_FONT_SIZE
     _SCORE_FONT_SIZE = _H4SQ_SCORE_FONT_SIZE
+if _IS_ADAFRUIT_MINIPITFT:
+    _ABBR_FONT_SIZE = max(14, int(round(_ABBR_FONT_SIZE * _MINIPITFT_FONT_SCALE)))
+    _SOG_FONT_SIZE = max(13, int(round(_SOG_FONT_SIZE * _MINIPITFT_FONT_SCALE)))
+    _SCORE_FONT_SIZE = max(20, int(round(_SCORE_FONT_SIZE * _MINIPITFT_FONT_SCALE)))
 
 FONT_ABBR  = _ts(_ABBR_FONT_SIZE)
 FONT_SOG   = _ts(_SOG_FONT_SIZE)
 FONT_SCORE = _ts(_SCORE_FONT_SIZE)    # make goals column stand out more
-FONT_SMALL = _ts(26 if _IS_HYPERPIXEL_4_SQUARE else (22 if HEIGHT > 64 else 19))    # for SOG label / live clock
+_font_small_size = 26 if _IS_HYPERPIXEL_4_SQUARE else (22 if HEIGHT > 64 else 19)
+if _IS_ADAFRUIT_MINIPITFT:
+    _font_small_size = max(12, int(round(_font_small_size * _MINIPITFT_FONT_SCALE)))
+FONT_SMALL = _ts(_font_small_size)    # for SOG label / live clock
 
 # NHL endpoints (prefer api-web; quiet legacy fallback)
 NHL_WEB_TEAM_MONTH_NOW   = NHL_API_ENDPOINTS["team_month_now"]

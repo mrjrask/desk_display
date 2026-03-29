@@ -207,6 +207,48 @@ def test_nhl_scoreboard_hidden_during_2026_break_window():
     assert registry["NHL Scoreboard v2"].available is False
 
 
+def test_adafruit_minipitft_routes_scoreboard_v2_ids_to_v1_renderers(monkeypatch):
+    now = datetime.datetime(2024, 7, 1, 12, 0, tzinfo=CENTRAL_TIME)
+    weather = {"hourly": []}
+    calls: list[str] = []
+
+    def _mark(name: str):
+        def _renderer(*_args, **_kwargs):
+            calls.append(name)
+            return None
+
+        return _renderer
+
+    monkeypatch.setattr(registry_module, "WIDTH", 240)
+    monkeypatch.setattr(registry_module, "HEIGHT", 135)
+    monkeypatch.setattr(registry_module, "render_nfl_scoreboard", _mark("nfl_v1"))
+    monkeypatch.setattr(registry_module, "render_nfl_scoreboard_v2", _mark("nfl_v2"))
+    monkeypatch.setattr(registry_module, "render_nhl_scoreboard", _mark("nhl_v1"))
+    monkeypatch.setattr(registry_module, "render_nhl_scoreboard_v2", _mark("nhl_v2"))
+    monkeypatch.setattr(registry_module, "render_mlb_scoreboard", _mark("mlb_v1"))
+    monkeypatch.setattr(registry_module, "render_mlb_scoreboard_v2", _mark("mlb_v2"))
+    monkeypatch.setattr(registry_module, "render_nba_scoreboard", _mark("nba_v1"))
+    monkeypatch.setattr(registry_module, "render_nba_scoreboard_v2", _mark("nba_v2"))
+
+    registry, _ = build_screen_registry(
+        _make_context(
+            weather,
+            now,
+            cache_updates={
+                "hawks": {"next": {"id": 1}},
+                "scoreboards": {"nfl": [{}], "nhl": [{}], "mlb": [{}], "nba": [{}]},
+            },
+        )
+    )
+
+    registry["NFL Scoreboard v2"].render()
+    registry["NHL Scoreboard v2"].render()
+    registry["MLB Scoreboard v2"].render()
+    registry["NBA Scoreboard v2"].render()
+
+    assert calls == ["nfl_v1", "nhl_v1", "mlb_v1", "nba_v1"]
+
+
 def test_cubs_live_is_available_when_status_is_warmup():
     now = datetime.datetime(2024, 7, 1, 12, 0, tzinfo=CENTRAL_TIME)
     weather = {"hourly": []}
