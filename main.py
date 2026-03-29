@@ -536,10 +536,15 @@ def _restart_desk_display_service() -> None:
 
     request_shutdown("service restart")
     try:
-        subprocess.run(
-            ["sudo", "systemctl", "restart", "desk_display.service"],
+        result = subprocess.run(
+            ["sudo", "systemctl", "--no-block", "restart", "desk_display.service"],
             check=False,
         )
+        if result.returncode != 0:
+            logging.error(
+                "desk_display.service restart returned non-zero exit code: %s",
+                result.returncode,
+            )
     except Exception as exc:
         logging.error("Failed to restart desk_display.service: %s", exc)
 
@@ -557,10 +562,15 @@ def _git_pull_and_restart_desk_display_service() -> None:
         logging.error("Failed to run git pull in %s: %s", SCRIPT_DIR, exc)
 
     try:
-        subprocess.run(
-            ["sudo", "systemctl", "restart", "desk_display.service"],
+        result = subprocess.run(
+            ["sudo", "systemctl", "--no-block", "restart", "desk_display.service"],
             check=False,
         )
+        if result.returncode != 0:
+            logging.error(
+                "desk_display.service restart returned non-zero exit code: %s",
+                result.returncode,
+            )
     except Exception as exc:
         logging.error("Failed to restart desk_display.service: %s", exc)
 
