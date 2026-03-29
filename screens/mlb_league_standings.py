@@ -11,6 +11,7 @@ from typing import Any
 from PIL import Image, ImageDraw
 
 import config
+from display_profiles import DISPLAY_PROFILE_ADAFRUIT_MINIPITFT_114
 from config import (
     WIDTH,
     HEIGHT,
@@ -65,11 +66,22 @@ STAT_COLUMN_GAP = scale_value(30)
 PCT_TO_GB_EXTRA_GAP = scale_value(10)
 LOGO_SIZE = scale_value(24)
 
-_IS_HYPERPIXEL_4_OR_LARGER = (
-    config.is_hyperpixel_next_layout()
-    or config.is_hyperpixel_4_square_layout()
-    or min(int(WIDTH), int(HEIGHT)) >= 480
-)
+def _show_win_pct_for_layout(width: int, height: int) -> bool:
+    """Return True when there is enough space for the extra PCT standings column."""
+
+    profile_id = config.get_display_profile_id(width, height)
+    if profile_id in {"display_hat_mini", DISPLAY_PROFILE_ADAFRUIT_MINIPITFT_114}:
+        # Keep miniPiTFT standings aligned with 320x240 compact tables.
+        return False
+
+    return (
+        config.is_hyperpixel_next_layout(width, height)
+        or config.is_hyperpixel_4_square_layout(width, height)
+        or min(int(width), int(height)) >= 480
+    )
+
+
+_IS_HYPERPIXEL_4_OR_LARGER = _show_win_pct_for_layout(int(WIDTH), int(HEIGHT))
 
 _BASE_FONTS = {
     "title": 39,
