@@ -241,6 +241,61 @@ def test_font_size_respects_configured_maximums(monkeypatch):
     assert time_size <= 10
 
 
+def test_github_updates_available_returns_false_when_not_git_repo(monkeypatch):
+    mod = _load_module()
+    monkeypatch.setattr(mod, "_LAST_GITHUB_UPDATE_CHECK_AT", 0.0)
+    monkeypatch.setattr(mod, "_LAST_GITHUB_UPDATE_AVAILABLE", True)
+    monkeypatch.setattr(mod.Path, "exists", lambda _self: False)
+
+    assert mod._github_updates_available(force=True) is False
+
+
+def test_main_inverts_frames_when_github_update_available(monkeypatch):
+    mod = _load_module()
+
+    bus = _FakeSMBus()
+    rendered = []
+
+    class _Display:
+        def __init__(self, *_args, **_kwargs):
+            pass
+
+        def initialize(self):
+            return None
+
+        def clear(self):
+            return None
+
+    def _capture_render(_display, image, _name):
+        rendered.append(image)
+        return True
+
+    monkeypatch.setattr(mod, "SMBus", lambda *_args, **_kwargs: bus)
+    monkeypatch.setattr(mod, "SSD1306Display", _Display)
+    monkeypatch.setattr(mod, "_safe_render", _capture_render)
+    monkeypatch.setattr(mod, "current_time_12h", lambda: "10:54 PM")
+    monkeypatch.setattr(mod, "current_date_mdy", lambda: "11/18/26")
+    monkeypatch.setattr(mod, "random_swap_interval_seconds", lambda: 60)
+    monkeypatch.setattr(mod, "_best_time_font_size", lambda *_args, **_kwargs: 20)
+    monkeypatch.setattr(mod, "_best_value_font_size", lambda *_args, **_kwargs: 16)
+    monkeypatch.setattr(mod, "_github_updates_available", lambda: True)
+    monkeypatch.setattr(mod._STOP_EVENT, "wait", lambda _seconds: mod._STOP_EVENT.set())
+
+    def _solid_white(*_args, **_kwargs):
+        return mod.Image.new("1", (mod.OLED_WIDTH, mod.OLED_HEIGHT), 1)
+
+    monkeypatch.setattr(mod, "render_centered_text", _solid_white)
+    monkeypatch.setattr(mod, "render_centered_time_text", _solid_white)
+
+    mod._STOP_EVENT.clear()
+    rc = mod.main()
+
+    assert rc == 0
+    assert len(rendered) >= 2
+    assert rendered[0].getpixel((0, 0)) == 0
+    assert rendered[1].getpixel((0, 0)) == 0
+
+
 def test_main_uses_independent_font_sizes_for_date_and_time(monkeypatch):
     mod = _load_module()
 

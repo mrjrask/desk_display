@@ -79,6 +79,8 @@ LOGGER = logging.getLogger("waveshare_oled_status")
 _STOP_EVENT = Event()
 _LAST_WEATHER_TEMP_F: float | None = None
 _WEATHER2_RENDERED = False
+_LAST_GITHUB_UPDATE_CHECK_AT = 0.0
+_LAST_GITHUB_UPDATE_AVAILABLE = False
 
 
 class SSD1306Display:
@@ -342,6 +344,65 @@ def current_date_mdy() -> str:
 
 def random_swap_interval_seconds() -> int:
     return random.randint(SWAP_INTERVAL_MIN_SECONDS, SWAP_INTERVAL_MAX_SECONDS)
+
+
+def _github_updates_available(*, force: bool = False) -> bool:
+    global _LAST_GITHUB_UPDATE_CHECK_AT, _LAST_GITHUB_UPDATE_AVAILABLE
+
+    now = time.monotonic()
+    if not force and now - _LAST_GITHUB_UPDATE_CHECK_AT < 60:
+        return _LAST_GITHUB_UPDATE_AVAILABLE
+
+    repo_root = Path(__file__).resolve().parents[1]
+    git_dir = repo_root / ".git"
+    if not git_dir.exists():
+        _LAST_GITHUB_UPDATE_CHECK_AT = now
+        _LAST_GITHUB_UPDATE_AVAILABLE = False
+        return False
+
+    try:
+        branch = subprocess.check_output(
+            ["git", "rev-parse", "--abbrev-ref", "HEAD"],
+            cwd=repo_root,
+            text=True,
+            timeout=5,
+        ).strip()
+        if not branch or branch == "HEAD":
+            _LAST_GITHUB_UPDATE_AVAILABLE = False
+            return False
+
+        subprocess.run(
+            ["git", "fetch", "--quiet", "origin", branch],
+            cwd=repo_root,
+            check=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            timeout=15,
+        )
+        local_sha = subprocess.check_output(
+            ["git", "rev-parse", "HEAD"],
+            cwd=repo_root,
+            text=True,
+            timeout=5,
+        ).strip()
+        remote_sha = subprocess.check_output(
+            ["git", "rev-parse", f"origin/{branch}"],
+            cwd=repo_root,
+            text=True,
+            timeout=5,
+        ).strip()
+        _LAST_GITHUB_UPDATE_AVAILABLE = bool(local_sha and remote_sha and local_sha != remote_sha)
+    except Exception:
+        _LAST_GITHUB_UPDATE_AVAILABLE = False
+    finally:
+        _LAST_GITHUB_UPDATE_CHECK_AT = now
+
+    return _LAST_GITHUB_UPDATE_AVAILABLE
+
+
+def _invert_for_update(image: Image.Image) -> Image.Image:
+    return image.convert("L").point(lambda pixel: 255 - pixel).convert("1")
 
 
 @lru_cache(maxsize=96)
@@ -608,6 +669,9 @@ def main() -> int:
             left_image, right_image = (
                 (date_image, time_image) if show_date_on_left else (time_image, date_image)
             )
+            if _github_updates_available():
+                left_image = _invert_for_update(left_image)
+                right_image = _invert_for_update(right_image)
             left_ok = _safe_render(temp_display, left_image, "left")
             right_ok = _safe_render(time_display, right_image, "right")
 
