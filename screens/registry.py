@@ -232,6 +232,11 @@ def _is_display_hat_mini_layout(width: int, height: int) -> bool:
     return sorted((int(width), int(height))) == [240, 320]
 
 
+def _is_adafruit_minipitft_layout(width: int, height: int) -> bool:
+    """Return True for Adafruit miniPiTFT 1.14" dimensions regardless of orientation."""
+    return sorted((int(width), int(height))) == [135, 240]
+
+
 def _logo_scroll_speed_for_layout(width: int, height: int) -> float:
     base_speed = 2.2
     if _is_display_hat_mini_layout(width, height):
@@ -401,6 +406,7 @@ def build_screen_registry(context: ScreenContext) -> Tuple[Dict[str, ScreenDefin
 
     registry: Dict[str, ScreenDefinition] = {}
     metadata: Dict[str, Any] = {}
+    adafruit_minipitft_layout = _is_adafruit_minipitft_layout(WIDTH, HEIGHT)
 
     def register(screen_id: str, func: RenderCallable, available: bool = True, **extra):
         registry[screen_id] = ScreenDefinition(
@@ -764,10 +770,18 @@ def build_screen_registry(context: ScreenContext) -> Tuple[Dict[str, ScreenDefin
     )
     register(
         "NFL Scoreboard v2",
-        lambda: render_nfl_scoreboard_v2(
-            context.display,
-            (context.cache.get("scoreboards") or {}).get("nfl") or [],
-            transition=True,
+        (
+            lambda: render_nfl_scoreboard(
+                context.display,
+                (context.cache.get("scoreboards") or {}).get("nfl") or [],
+                transition=True,
+            )
+            if adafruit_minipitft_layout
+            else render_nfl_scoreboard_v2(
+                context.display,
+                (context.cache.get("scoreboards") or {}).get("nfl") or [],
+                transition=True,
+            )
         ),
         available=scoreboards_available,
     )
@@ -839,10 +853,18 @@ def build_screen_registry(context: ScreenContext) -> Tuple[Dict[str, ScreenDefin
         )
         register(
             "NHL Scoreboard v2",
-            lambda: render_nhl_scoreboard_v2(
-                context.display,
-                (context.cache.get("scoreboards") or {}).get("nhl") or [],
-                transition=True,
+            (
+                lambda: render_nhl_scoreboard(
+                    context.display,
+                    (context.cache.get("scoreboards") or {}).get("nhl") or [],
+                    transition=True,
+                )
+                if adafruit_minipitft_layout
+                else render_nhl_scoreboard_v2(
+                    context.display,
+                    (context.cache.get("scoreboards") or {}).get("nhl") or [],
+                    transition=True,
+                )
             ),
             available=nhl_scoreboards_available,
         )
@@ -1080,10 +1102,18 @@ def build_screen_registry(context: ScreenContext) -> Tuple[Dict[str, ScreenDefin
     )
     register(
         "MLB Scoreboard v2",
-        lambda: render_mlb_scoreboard_v2(
-            context.display,
-            mlb_scoreboard_games,
-            transition=True,
+        (
+            lambda: render_mlb_scoreboard(
+                context.display,
+                mlb_scoreboard_games,
+                transition=True,
+            )
+            if adafruit_minipitft_layout
+            else render_mlb_scoreboard_v2(
+                context.display,
+                mlb_scoreboard_games,
+                transition=True,
+            )
         ),
         available=scoreboards_available,
     )
@@ -1098,10 +1128,18 @@ def build_screen_registry(context: ScreenContext) -> Tuple[Dict[str, ScreenDefin
     )
     register(
         "NBA Scoreboard v2",
-        lambda: render_nba_scoreboard_v2(
-            context.display,
-            (context.cache.get("scoreboards") or {}).get("nba") or [],
-            transition=True,
+        (
+            lambda: render_nba_scoreboard(
+                context.display,
+                (context.cache.get("scoreboards") or {}).get("nba") or [],
+                transition=True,
+            )
+            if adafruit_minipitft_layout
+            else render_nba_scoreboard_v2(
+                context.display,
+                (context.cache.get("scoreboards") or {}).get("nba") or [],
+                transition=True,
+            )
         ),
         available=scoreboards_available,
     )
