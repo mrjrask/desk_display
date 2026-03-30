@@ -58,6 +58,7 @@ from utils import (
     standard_scoreboard_team_logo_height,
     standard_scoreboard_league_logo_height,
 )
+from services.sports.nhl import fetch_scoreboard
 from services.http_client import NHL_HEADERS, get_session
 
 # ─── Constants ────────────────────────────────────────────────────────────────
@@ -151,6 +152,11 @@ BACKGROUND_COLOR = get_screen_background_color(SCREEN_ID, SCOREBOARD_BACKGROUND_
 
 _LOGO_CACHE: dict[tuple[str, int], Optional[Image.Image]] = {}
 _LEAGUE_LOGO_CACHE: dict[int, Optional[Image.Image]] = {}
+_SESSION = get_session()
+STATSAPI_HOST = "statsapi.web.nhl.com"
+API_WEB_HOST = "api-web.nhle.com"
+_DNS_RETRY_INTERVAL = 600  # seconds
+_dns_block_until = 0.0
 
 
 def _apply_style_overrides() -> None:
@@ -167,14 +173,6 @@ def _apply_style_overrides() -> None:
     else:
         league_scale = get_screen_image_scale(SCREEN_ID, "league_logo", team_scale)
         LEAGUE_LOGO_HEIGHT = max(1, int(round(LEAGUE_LOGO_BASE_HEIGHT * league_scale)))
-
-_SESSION = get_session()
-
-STATSAPI_HOST = "statsapi.web.nhl.com"
-API_WEB_HOST = "api-web.nhle.com"
-_DNS_RETRY_INTERVAL = 600  # seconds
-_dns_block_until = 0.0
-
 
 # ─── Helpers ──────────────────────────────────────────────────────────────────
 def _scoreboard_date(now: Optional[datetime.datetime] = None) -> datetime.date:
@@ -1146,8 +1144,6 @@ def render_nhl_scoreboard(display, games: list[dict], transition: bool = False) 
 
 @log_call
 def draw_nhl_scoreboard(display, transition: bool = False) -> ScreenImage:
-    from services.sports.nhl import fetch_scoreboard
-
     games = fetch_scoreboard()
     return render_nhl_scoreboard(display, games, transition=transition)
 

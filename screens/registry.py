@@ -98,6 +98,7 @@ from screens.nhl_standings_v2 import (
     draw_nhl_standings_east_v2,
     draw_nhl_standings_west_v2,
 )
+from services.sports.nhl import prepare_scoreboard_data as prepare_nhl_scoreboard_data
 
 RenderCallable = Callable[[], Optional[Image.Image | ScreenImage]]
 
@@ -721,6 +722,7 @@ def build_screen_registry(context: ScreenContext) -> Tuple[Dict[str, ScreenDefin
     scoreboards_available = not (context.offline and context.skip_scoreboards)
     scoreboards = (context.cache.get("scoreboards") or {})
     mlb_scoreboard_games = scoreboards.get("mlb") or []
+    nhl_scoreboard_games = prepare_nhl_scoreboard_data(scoreboards.get("nhl"))
     today = context.now.date()
     nhl_scoreboards_available = scoreboards_available and not _is_nhl_break_day(today)
 
@@ -978,7 +980,7 @@ def build_screen_registry(context: ScreenContext) -> Tuple[Dict[str, ScreenDefin
             "NHL Scoreboard",
             lambda: render_nhl_scoreboard(
                 context.display,
-                (context.cache.get("scoreboards") or {}).get("nhl") or [],
+                nhl_scoreboard_games,
                 transition=True,
             ),
             available=nhl_scoreboards_available,
@@ -988,13 +990,13 @@ def build_screen_registry(context: ScreenContext) -> Tuple[Dict[str, ScreenDefin
             (
                 lambda: render_nhl_scoreboard(
                     context.display,
-                    (context.cache.get("scoreboards") or {}).get("nhl") or [],
+                    nhl_scoreboard_games,
                     transition=True,
                 )
                 if adafruit_minipitft_layout or waveshare_oled_lcd_hat
                 else render_nhl_scoreboard_v2(
                     context.display,
-                    (context.cache.get("scoreboards") or {}).get("nhl") or [],
+                    nhl_scoreboard_games,
                     transition=True,
                 )
             ),
@@ -1004,7 +1006,7 @@ def build_screen_registry(context: ScreenContext) -> Tuple[Dict[str, ScreenDefin
             "NHL Playoffs",
             lambda: render_nhl_playoffs(
                 context.display,
-                (context.cache.get("scoreboards") or {}).get("nhl") or [],
+                nhl_scoreboard_games,
                 transition=True,
             ),
             available=nhl_scoreboards_available,

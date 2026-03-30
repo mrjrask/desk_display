@@ -235,6 +235,37 @@ def test_invalid_nhl_break_config_falls_back_to_showing_nhl_scoreboards(monkeypa
     assert registry["NHL Scoreboard v2"].available is True
 
 
+def test_nhl_registry_uses_prepared_service_payload(monkeypatch):
+    now = datetime.datetime(2024, 1, 1, 12, 0, tzinfo=CENTRAL_TIME)
+    weather = {"hourly": []}
+    raw_nhl_payload = {"games": [{"gamePk": 1}]}
+    prepared_games = [{"gamePk": 99}]
+    captured = {}
+
+    monkeypatch.setattr(
+        registry_module,
+        "prepare_nhl_scoreboard_data",
+        lambda payload: prepared_games if payload == raw_nhl_payload else [],
+    )
+
+    def _capture_nhl(_display, games, transition=False):
+        captured["games"] = games
+        return Image.new("RGB", (10, 10))
+
+    monkeypatch.setattr(registry_module, "render_nhl_scoreboard", _capture_nhl)
+
+    registry, _ = build_screen_registry(
+        _make_context(
+            weather,
+            now,
+            cache_updates={"scoreboards": {"nhl": raw_nhl_payload}, "hawks": {"next": {"id": 1}}},
+        )
+    )
+    registry["NHL Scoreboard"].render()
+
+    assert captured["games"] == prepared_games
+
+
 def test_adafruit_minipitft_routes_scoreboard_v2_ids_to_v1_renderers(monkeypatch):
     now = datetime.datetime(2024, 7, 1, 12, 0, tzinfo=CENTRAL_TIME)
     weather = {"hourly": []}
