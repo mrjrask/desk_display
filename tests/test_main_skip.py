@@ -129,3 +129,51 @@ def test_wait_with_button_checks_honors_pending_skip_event(main_module):
 
     assert main_module._wait_with_button_checks(5.0) is True
     assert main_module._manual_skip_event.is_set() is False
+
+
+def test_touch_double_tap_on_right_third_requests_next_screen(main_module):
+    class _FakeEvent:
+        def __init__(self, event_type, x):
+            self.type = event_type
+            self.x = x
+
+    class _FakePygame:
+        FINGERDOWN = 1
+        MOUSEBUTTONDOWN = 2
+
+        class event:  # noqa: N801 - mirror pygame namespace
+            @staticmethod
+            def get(_event_types):
+                return [_FakeEvent(1, 0.9), _FakeEvent(1, 0.9)]
+
+    main_module.display = type("D", (), {"width": 320})()
+    main_module.pygame = _FakePygame()
+    main_module._skip_request_pending = False
+    main_module._last_touch_tap_monotonic = 0.0
+
+    assert main_module._check_touch_skip_request() is True
+    assert main_module._skip_request_pending is True
+
+
+def test_touch_double_tap_ignores_left_side_taps(main_module):
+    class _FakeEvent:
+        def __init__(self, event_type, x):
+            self.type = event_type
+            self.x = x
+
+    class _FakePygame:
+        FINGERDOWN = 1
+        MOUSEBUTTONDOWN = 2
+
+        class event:  # noqa: N801 - mirror pygame namespace
+            @staticmethod
+            def get(_event_types):
+                return [_FakeEvent(1, 0.2), _FakeEvent(1, 0.2)]
+
+    main_module.display = type("D", (), {"width": 320})()
+    main_module.pygame = _FakePygame()
+    main_module._skip_request_pending = False
+    main_module._last_touch_tap_monotonic = 0.0
+
+    assert main_module._check_touch_skip_request() is False
+    assert main_module._skip_request_pending is False
