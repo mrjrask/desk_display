@@ -277,6 +277,13 @@ Configuration is primarily environment-driven (and may be loaded from `.env`).
 
 Screen sequencing is configured in `screens_config.json` with a `screens` mapping.
 
+Supported runtime config entry points are:
+
+- `screens_config.json` (primary shared config file).
+- `screens_config.local.json` (optional machine-local overrides/edits when `SCREENS_CONFIG_LOCAL_PATH` is set or defaults are used).
+
+`archive/config_snapshots/screens_config.playlists.json` is a migration snapshot and is **not** loaded by runtime.
+
 Simple example:
 
 ```json
