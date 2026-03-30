@@ -78,3 +78,43 @@ def test_save_pressure_history_creates_parent_directory(tmp_path, monkeypatch):
     data_fetch._save_pressure_history(1700000100.0)
 
     assert target.exists()
+
+
+def test_weatherkit_hourly_daylight_does_not_force_night_icon():
+    data = {
+        "currentWeather": {
+            "temperature": 10,
+            "conditionCode": "Clear",
+            "asOf": _iso("12:00:00"),
+        },
+        "forecastDaily": {
+            "days": [
+                {
+                    "sunrise": _iso("06:00:00"),
+                    "sunset": _iso("13:00:00"),
+                    "temperatureMax": 20,
+                    "temperatureMin": 5,
+                    "precipitationChance": 0,
+                    "conditionCode": "Clear",
+                    "forecastStart": _iso("00:00:00"),
+                }
+            ]
+        },
+        "forecastHourly": {
+            "hours": [
+                {
+                    "forecastStart": _iso("14:00:00"),
+                    "temperature": 10,
+                    "precipitationChance": 0,
+                    "conditionCode": "Clear",
+                    "isDaylight": True,
+                }
+            ]
+        },
+        "weatherAlerts": {"alerts": []},
+    }
+
+    normalized = _normalise_weatherkit_response(data)
+
+    assert normalized is not None
+    assert normalized["hourly"][0]["weather"][0]["icon"] == "Clear"

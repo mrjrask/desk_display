@@ -439,13 +439,20 @@ def _apply_nighttime_icons(weather: dict[str, Any]) -> dict[str, Any]:
     def _apply(entry: dict[str, Any], sunrise_val: Any, sunset_val: Any) -> None:
         if not isinstance(entry, dict):
             return
+        is_daylight = entry.get("is_daylight")
+        if isinstance(is_daylight, bool):
+            if is_daylight:
+                return
+            is_night = True
+        else:
+            is_night = _is_night_time(entry.get("dt"), sunrise_val, sunset_val)
         weather_list = entry.get("weather") if isinstance(entry.get("weather"), list) else []
         if not weather_list:
             return
         icon = weather_list[0].get("icon")
         if not icon:
             return
-        if _is_night_time(entry.get("dt"), sunrise_val, sunset_val):
+        if is_night:
             night_icon = _night_icon_name(icon)
             if night_icon != icon:
                 weather_list[0]["icon"] = night_icon
