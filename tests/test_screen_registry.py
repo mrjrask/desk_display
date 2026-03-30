@@ -266,6 +266,27 @@ def test_nhl_registry_uses_prepared_service_payload(monkeypatch):
     assert captured["games"] == prepared_games
 
 
+def test_active_screens_config_path_uses_local_override_when_present(tmp_path, monkeypatch):
+    default_path = tmp_path / "screens_config.json"
+    local_path = tmp_path / "screens_config.local.json"
+    default_path.write_text('{"screens": {"date": 1}}', encoding="utf-8")
+    local_path.write_text('{"screens": {"date": 2}}', encoding="utf-8")
+    monkeypatch.setenv("SCREENS_CONFIG_PATH", str(default_path))
+    monkeypatch.setenv("SCREENS_CONFIG_LOCAL_PATH", str(local_path))
+
+    assert registry_module._active_screens_config_path() == str(local_path)
+
+
+def test_active_screens_config_path_falls_back_to_default_when_local_missing(tmp_path, monkeypatch):
+    default_path = tmp_path / "screens_config.json"
+    local_path = tmp_path / "screens_config.local.json"
+    default_path.write_text('{"screens": {"date": 1}}', encoding="utf-8")
+    monkeypatch.setenv("SCREENS_CONFIG_PATH", str(default_path))
+    monkeypatch.setenv("SCREENS_CONFIG_LOCAL_PATH", str(local_path))
+
+    assert registry_module._active_screens_config_path() == str(default_path)
+
+
 def test_adafruit_minipitft_routes_scoreboard_v2_ids_to_v1_renderers(monkeypatch):
     now = datetime.datetime(2024, 7, 1, 12, 0, tzinfo=CENTRAL_TIME)
     weather = {"hourly": []}

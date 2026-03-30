@@ -12,6 +12,7 @@ from typing import Any, Callable, Dict, Optional, Tuple
 from PIL import Image
 
 from config import CENTRAL_TIME, HEIGHT, NBA_TEAM_TRICODE, WIDTH
+from paths import resolve_layouts_config_path, resolve_screens_config_paths
 from utils import ScreenImage, animate_scroll, timestamp_to_datetime
 from screens.draw_bears_schedule import show_bears_next_game, show_bears_next_season
 from screens.draw_bulls_schedule import (
@@ -102,10 +103,7 @@ from services.sports.nhl import prepare_scoreboard_data as prepare_nhl_scoreboar
 
 RenderCallable = Callable[[], Optional[Image.Image | ScreenImage]]
 
-_LAYOUTS_CONFIG_PATH = os.environ.get(
-    "SCREENS_LAYOUTS_PATH",
-    os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "screens_layouts.json"),
-)
+_LAYOUTS_CONFIG_PATH = str(resolve_layouts_config_path())
 
 
 _QUAD_DEFAULT_PAGE = ["date", "weather1", "weather hourly", "inside"]
@@ -226,14 +224,9 @@ def _next_quad_page_tiles() -> tuple[bool, float, list[str]]:
 RADAR_LOOKAHEAD_HOURS = 8
 WEATHER_CURRENT_TTL = _dt.timedelta(minutes=20)
 WEATHER_HOURLY_TTL = _dt.timedelta(hours=1)
-_SCREENS_CONFIG_DEFAULT_PATH = os.environ.get(
-    "SCREENS_CONFIG_PATH",
-    os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "screens_config.json"),
-)
-_SCREENS_CONFIG_LOCAL_PATH = os.environ.get(
-    "SCREENS_CONFIG_LOCAL_PATH",
-    os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "screens_config.local.json"),
-)
+_screens_config_paths = resolve_screens_config_paths()
+_SCREENS_CONFIG_DEFAULT_PATH = str(_screens_config_paths.default_path)
+_SCREENS_CONFIG_LOCAL_PATH = str(_screens_config_paths.local_override_path)
 _nhl_break_windows_cache_lock = threading.Lock()
 _nhl_break_windows_cache_source: Optional[str] = None
 _nhl_break_windows_cache_mtime: Optional[float] = None
@@ -241,7 +234,7 @@ _nhl_break_windows_cache: tuple[tuple[_dt.date, _dt.date], ...] = ()
 
 
 def _active_screens_config_path() -> str:
-    return _SCREENS_CONFIG_LOCAL_PATH if os.path.exists(_SCREENS_CONFIG_LOCAL_PATH) else _SCREENS_CONFIG_DEFAULT_PATH
+    return str(resolve_screens_config_paths().active_path)
 
 
 def _normalize_nhl_break_windows(raw: Any) -> tuple[tuple[_dt.date, _dt.date], ...]:

@@ -72,3 +72,23 @@ def test_default_config_path_honors_screens_config_env(monkeypatch):
     finally:
         main.request_shutdown("tests")
         sys.modules.pop("main", None)
+
+
+def test_active_config_path_prefers_local_file_when_present(tmp_path, monkeypatch):
+    sys.modules.pop("main", None)
+    default_path = tmp_path / "screens_config.json"
+    local_path = tmp_path / "screens_config.local.json"
+    default_path.write_text('{"screens":{"date":1}}', encoding="utf-8")
+    local_path.write_text('{"screens":{"date":2}}', encoding="utf-8")
+
+    monkeypatch.setenv("SCREENS_CONFIG_PATH", str(default_path))
+    monkeypatch.setenv("SCREENS_CONFIG_LOCAL_PATH", str(local_path))
+
+    main = importlib.import_module("main")
+    try:
+        assert main.DEFAULT_CONFIG_PATH == str(default_path)
+        assert main.LOCAL_CONFIG_PATH == str(local_path)
+        assert main._active_config_path() == str(local_path)
+    finally:
+        main.request_shutdown("tests")
+        sys.modules.pop("main", None)

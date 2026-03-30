@@ -25,23 +25,21 @@ from flask import (
     g,
 )
 
-from paths import resolve_storage_paths
+from paths import (
+    resolve_layouts_config_path,
+    resolve_screens_config_paths,
+    resolve_storage_paths,
+    resolve_style_config_path,
+)
 from schedule import build_scheduler
 from screens_catalog import SCREEN_IDS, canonical_screen_id
 
-SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
-DEFAULT_CONFIG_PATH = os.environ.get(
-    "SCREENS_CONFIG_PATH", os.path.join(SCRIPT_DIR, "screens_config.json")
-)
-LOCAL_CONFIG_PATH = os.environ.get(
-    "SCREENS_CONFIG_LOCAL_PATH", os.path.join(SCRIPT_DIR, "screens_config.local.json")
-)
-STYLE_CONFIG_PATH = os.environ.get(
-    "SCREENS_STYLE_PATH", os.path.join(SCRIPT_DIR, "screens_style.json")
-)
-LAYOUTS_CONFIG_PATH = os.environ.get(
-    "SCREENS_LAYOUTS_PATH", os.path.join(SCRIPT_DIR, "screens_layouts.json")
-)
+# Config path precedence/fallback rules are centralized in paths.py.
+_screens_config_paths = resolve_screens_config_paths()
+DEFAULT_CONFIG_PATH = str(_screens_config_paths.default_path)
+LOCAL_CONFIG_PATH = str(_screens_config_paths.local_override_path)
+STYLE_CONFIG_PATH = str(resolve_style_config_path())
+LAYOUTS_CONFIG_PATH = str(resolve_layouts_config_path())
 
 SCREEN_CONFIG_HOST = os.environ.get("SCREEN_CONFIG_HOST", "0.0.0.0")
 SCREEN_CONFIG_PORT = int(os.environ.get("SCREEN_CONFIG_PORT", "5002"))

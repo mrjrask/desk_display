@@ -1,6 +1,11 @@
 from __future__ import annotations
 
-"""Shared helpers for locating writable storage directories."""
+"""Shared helpers for locating project runtime/config paths.
+
+Centralizing path resolution here keeps environment variable precedence and
+fallback behavior consistent across CLI code, background services, and the web
+configuration UI.
+"""
 
 from dataclasses import dataclass
 import os
@@ -20,6 +25,15 @@ class StoragePaths:
     archive_base: Path
 
 
+@dataclass(frozen=True)
+class ScreensConfigPaths:
+    """Resolved screen config paths with local override semantics."""
+
+    default_path: Path
+    local_override_path: Path
+    active_path: Path
+
+
 def _project_root() -> Path:
     return Path(__file__).resolve().parent
 
@@ -32,6 +46,45 @@ def _resolve_env_path(name: str, base_dir: Path) -> Optional[Path]:
     if not resolved.is_absolute():
         resolved = base_dir / resolved
     return resolved
+
+
+def resolve_screens_config_paths() -> ScreensConfigPaths:
+    """Resolve default/local screen config paths and active path selection.
+
+    Precedence:
+    1. ``SCREENS_CONFIG_PATH`` and ``SCREENS_CONFIG_LOCAL_PATH`` env overrides.
+    2. Project-root defaults: ``screens_config.json`` and
+       ``screens_config.local.json``.
+    3. Active path prefers local override only when that file exists.
+    """
+
+    base_dir = _project_root()
+    default_path = _resolve_env_path("SCREENS_CONFIG_PATH", base_dir) or (
+        base_dir / "screens_config.json"
+    )
+    local_override_path = _resolve_env_path("SCREENS_CONFIG_LOCAL_PATH", base_dir) or (
+        base_dir / "screens_config.local.json"
+    )
+    active_path = local_override_path if local_override_path.exists() else default_path
+    return ScreensConfigPaths(
+        default_path=default_path,
+        local_override_path=local_override_path,
+        active_path=active_path,
+    )
+
+
+def resolve_style_config_path() -> Path:
+    """Resolve the style config path from env or project default."""
+
+    base_dir = _project_root()
+    return _resolve_env_path("SCREENS_STYLE_PATH", base_dir) or (base_dir / "screens_style.json")
+
+
+def resolve_layouts_config_path() -> Path:
+    """Resolve the layouts config path from env or project default."""
+
+    base_dir = _project_root()
+    return _resolve_env_path("SCREENS_LAYOUTS_PATH", base_dir) or (base_dir / "screens_layouts.json")
 
 
 def resolve_storage_paths(*, logger: Optional[object] = None) -> StoragePaths:
