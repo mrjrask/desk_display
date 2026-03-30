@@ -115,7 +115,7 @@ User=$SERVICE_USER
 WorkingDirectory=$PROJECT_DIR
 Environment=CONFIG_LOAD_DOTENV=1
 Environment=AIRPLAY_RESOLUTION_DEFAULT=$default_resolution
-ExecStart=/bin/bash -lc '$PROJECT_DIR/scripts/airplay_takeover_daemon.sh'
+ExecStart=/bin/bash -lc '/bin/bash "$PROJECT_DIR/scripts/airplay_takeover_daemon.sh"'
 Restart=always
 RestartSec=2
 
@@ -147,7 +147,7 @@ install_airplay_launcher() {
 Type=Application
 Name=Desk Display AirPlay Mode
 Comment=Start AirPlay takeover mode for Desk Display
-Exec=/bin/bash -lc '$PROJECT_DIR/scripts/airplay_mode.sh'
+Exec=/bin/bash -lc '/bin/bash "$PROJECT_DIR/scripts/airplay_mode.sh"'
 Terminal=true
 Categories=Utility;
 EOF_LAUNCHER
