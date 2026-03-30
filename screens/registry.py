@@ -62,7 +62,11 @@ from screens.mlb_league_standings import (
     draw_mlb_al_standings,
     draw_mlb_nl_standings,
 )
-from screens.mlb_team_standings import draw_standings_screen1, draw_standings_screen2
+from screens.mlb_team_standings import (
+    draw_standings_screen1,
+    draw_standings_screen2,
+    draw_standings_screen3,
+)
 from screens.nba_team_standings import draw_nba_standings_screen1
 from screens.nfl_team_standings import (
     draw_nfl_standings_screen1,
@@ -993,6 +997,18 @@ def build_screen_registry(context: ScreenContext) -> Tuple[Dict[str, ScreenDefin
             available=bool(cubs.get("stand")),
         )
         register(
+            "cubs stand3",
+            lambda data=cubs.get("stand"): draw_standings_screen3(
+                context.display,
+                data,
+                os.path.join(context.image_dir, "mlb/CUBS.png"),
+                "NL Central",
+                screen_id="cubs stand3",
+                transition=True,
+            ),
+            available=bool(cubs.get("stand")),
+        )
+        register(
             "cubs last",
             lambda primary=cubs.get("last"), alternate=cubs.get("last_alt"): draw_last_game(
                 context.display,
@@ -1072,6 +1088,18 @@ def build_screen_registry(context: ScreenContext) -> Tuple[Dict[str, ScreenDefin
                 data,
                 os.path.join(context.image_dir, "mlb/SOX.png"),
                 screen_id="sox stand2",
+                transition=True,
+            ),
+            available=bool(sox.get("stand")),
+        )
+        register(
+            "sox stand3",
+            lambda data=sox.get("stand"): draw_standings_screen3(
+                context.display,
+                data,
+                os.path.join(context.image_dir, "mlb/SOX.png"),
+                "AL Central",
+                screen_id="sox stand3",
                 transition=True,
             ),
             available=bool(sox.get("stand")),

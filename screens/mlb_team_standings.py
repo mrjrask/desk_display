@@ -54,7 +54,14 @@ if _IS_1080P_LAYOUT:
     LOGO_SZ = min(LOGO_SZ, _VRNOF_MATCH_LOGO_HEIGHT_1080)
 MARGIN  = scale_value(6)
 FRACTION_FONT_SCALE = 0.6
-_HAWKS_STAND1_MATCH_SCREEN_IDS = {"cubs stand1", "cubs stand2", "sox stand1", "sox stand2"}
+_HAWKS_STAND1_MATCH_SCREEN_IDS = {
+    "cubs stand1",
+    "cubs stand2",
+    "cubs stand3",
+    "sox stand1",
+    "sox stand2",
+    "sox stand3",
+}
 
 
 def _restore_font(font):
@@ -521,6 +528,171 @@ def draw_standings_screen2(
         w0,h0 = draw.textsize(txt,font)
         draw.text(((WIDTH-w0)//2,int(y)),txt,font=font,fill=(255,255,255))
         y += h0+spacing2
+
+    if transition:
+        return img
+
+    display.image(img)
+    display.show()
+    time.sleep(TEAM_STANDINGS_DISPLAY_SECONDS)
+    return None
+
+
+@log_call
+def draw_standings_screen3(
+    display,
+    rec,
+    logo_path,
+    division_name,
+    *,
+    logo_size=None,
+    screen_id=None,
+    transition=False,
+):
+    """
+    Screen 3: same logo placement as Screen 1, then two columns.
+      - Left column: Stand 1 data (record, rank, GB, WCGB)
+      - Right column: Stand 2 data (record+pct, streak, L10, home, away)
+    """
+    if not rec:
+        return None
+
+    clear_display(display)
+    background_color = (
+        get_screen_background_color(screen_id, SCOREBOARD_BACKGROUND_COLOR)
+        if screen_id
+        else SCOREBOARD_BACKGROUND_COLOR
+    )
+    img = Image.new("RGB", (WIDTH, HEIGHT), background_color)
+    draw = ImageDraw.Draw(img)
+
+    hawks_logo_size, hawks_font_offset = _hawks_stand1_match_metrics(screen_id)
+
+    logo = None
+    try:
+        logo_img = Image.open(logo_path).convert("RGBA")
+        logo_target = LOGO_SZ if logo_size is None else logo_size
+        if hawks_logo_size is not None and logo_size is None:
+            logo_target = hawks_logo_size
+        if _IS_1080P_LAYOUT:
+            logo_target = min(logo_target, _VRNOF_MATCH_LOGO_HEIGHT_1080)
+        logo = fit_logo_to_box(logo_img, logo_target)
+    except Exception:
+        pass
+    if logo:
+        x0 = (WIDTH - logo.width) // 2
+        img.paste(logo, (x0, 0), logo)
+
+    text_top = (logo.height if logo else 0) + MARGIN
+    bottom_limit = HEIGHT - MARGIN
+
+    left_header_font = FONT_STAND1_RANK_RESTORED
+    left_value_font = FONT_STAND1_GB_VALUE_RESTORED
+    right_header_font = FONT_STAND2_RECORD_RESTORED
+    right_value_font = FONT_STAND2_VALUE_RESTORED
+
+    if hawks_font_offset:
+        left_header_font = clone_font(
+            left_header_font, max(1, getattr(left_header_font, "size", 20) + hawks_font_offset)
+        )
+        left_value_font = clone_font(
+            left_value_font, max(1, getattr(left_value_font, "size", 20) + hawks_font_offset)
+        )
+        right_header_font = clone_font(
+            right_header_font, max(1, getattr(right_header_font, "size", 24) + hawks_font_offset)
+        )
+        right_value_font = clone_font(
+            right_value_font, max(1, getattr(right_value_font, "size", 20) + hawks_font_offset)
+        )
+
+    # Left column = Stand 1 data
+    record_line = _format_record_values(rec.get("leagueRecord", {}), ot_label="OT")
+    dr_raw = rec.get("divisionRank")
+    dr = dr_raw if dr_raw not in (None, "") else "-"
+    try:
+        dr_lbl = "Last" if int(dr) == 5 else _ord(dr)
+    except Exception:
+        dr_lbl = dr
+    rank_txt = f"{dr_lbl} in {division_name}"
+
+    gb_raw = rec.get("divisionGamesBack", "-")
+    gb_txt = f"{format_games_back(gb_raw)} GB" if gb_raw != "-" else "- GB"
+
+    wc_txt = None
+    wc_raw = rec.get("wildCardGamesBack")
+    wc_rank = rec.get("wildCardRank")
+    if wc_raw is not None:
+        base = format_games_back(wc_raw)
+        try:
+            rank_int = int(wc_rank)
+        except Exception:
+            rank_int = None
+        if wc_raw == 0:
+            wc_txt = "-- WCGB"
+        elif rank_int and rank_int <= 3:
+            wc_txt = f"+{base} WCGB"
+        else:
+            wc_txt = f"{base} WCGB"
+
+    left_lines = [
+        (record_line, left_header_font),
+        (rank_txt, left_value_font),
+        (gb_txt, left_value_font),
+    ]
+    if wc_txt:
+        left_lines.append((wc_txt, left_value_font))
+
+    # Right column = Stand 2 data
+    record = rec.get("leagueRecord", {})
+    w = record.get("wins", "-")
+    l = record.get("losses", "-")
+    pct_raw = record.get("pct", "-")
+    try:
+        pct = f"{float(pct_raw):.3f}".lstrip("0")
+    except Exception:
+        pct = str(pct_raw).lstrip("0")
+    rec_txt = f"{w}-{l} ({pct})"
+
+    def _find_split(split_type):
+        for sp in rec.get("records", {}).get("splitRecords", []):
+            if sp.get("type", "").lower() == split_type.lower():
+                return f"{sp.get('wins', '-')}-{sp.get('losses', '-')}"
+        return "-"
+
+    streak_raw = rec.get("streak", {}).get("streakCode", "-")
+    right_lines = [
+        (rec_txt, right_header_font),
+        (f"Streak: {_format_streak(streak_raw)}", right_value_font),
+        (f"L10: {_find_split('lastTen')}", right_value_font),
+        (f"Home: {_find_split('home')}", right_value_font),
+        (f"Away: {_find_split('away')}", right_value_font),
+    ]
+
+    col_gap = max(scale_value_width(10), WIDTH // 24)
+    col_width = (WIDTH - (2 * MARGIN) - col_gap) // 2
+    left_x = MARGIN
+    right_x = left_x + col_width + col_gap
+    avail_h = max(1, bottom_limit - text_top)
+
+    def draw_column(lines, x, width):
+        heights = [_measure_fraction_text(draw, txt, font)[1] for txt, font in lines]
+        total_h = sum(heights)
+        spacing = (avail_h - total_h) / (len(lines) + 1)
+        y = text_top + spacing
+        for txt, font in lines:
+            w0, h0 = _measure_fraction_text(draw, txt, font)
+            tx = int(x + max(0, (width - w0) / 2))
+            _draw_fraction_text_centered(
+                draw,
+                int(y),
+                txt,
+                font,
+                fill=(255, 255, 255),
+            ) if width >= WIDTH - (2 * MARGIN) else draw.text((tx, int(y)), txt, font=font, fill=(255, 255, 255))
+            y += h0 + spacing
+
+    draw_column(left_lines, left_x, col_width)
+    draw_column(right_lines, right_x, col_width)
 
     if transition:
         return img
