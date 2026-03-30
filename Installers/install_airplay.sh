@@ -69,6 +69,10 @@ validate_airplay_scripts() {
     printf '[ERROR] PROJECT_DIR=%s\n' "$PROJECT_DIR" >&2
     printf '[ERROR] SCRIPT_DIR=%s\n' "$SCRIPT_DIR" >&2
     printf '[ERROR] Re-sync the repository and re-run this installer.\n' >&2
+    if command -v git >/dev/null 2>&1; then
+      printf '[ERROR] If these files were deleted locally, run:\n' >&2
+      printf '[ERROR]   git -C %s restore scripts/airplay_mode.sh scripts/airplay_takeover_daemon.sh\n' "$PROJECT_DIR" >&2
+    fi
     exit 1
   fi
 
