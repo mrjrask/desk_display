@@ -16,14 +16,14 @@ from typing import Any, Callable, Dict, Optional
 
 import data_fetch
 from config import CENTRAL_TIME
-from screens.mlb_scoreboard import _fetch_games_for_date as _fetch_mlb_games_for_date, _scoreboard_date as _mlb_scoreboard_date
-from screens.nba_scoreboard import _fetch_games_for_date as _fetch_nba_games_for_date, _scoreboard_date as _nba_scoreboard_date
-from screens.ncaam_scoreboard import _fetch_games_for_date as _fetch_ncaam_games_for_date, _scoreboard_date as _ncaam_scoreboard_date
-from screens.nfl_scoreboard import (
-    _fetch_games_for_week as _fetch_nfl_games_for_week,
-    _fetch_next_games as _fetch_nfl_next_games,
+from services.sports.mlb import fetch_scoreboard as fetch_mlb_scoreboard
+from services.sports.nba import fetch_scoreboard as fetch_nba_scoreboard
+from services.sports.ncaam import fetch_scoreboard as fetch_ncaam_scoreboard
+from services.sports.nfl import (
+    fetch_next_scoreboard as fetch_nfl_next_scoreboard,
+    fetch_week_scoreboard as fetch_nfl_week_scoreboard,
 )
-from screens.nhl_scoreboard import _fetch_games_for_date as _fetch_nhl_games_for_date, _scoreboard_date as _nhl_scoreboard_date
+from services.sports.nhl import fetch_scoreboard as fetch_nhl_scoreboard
 
 
 @dataclass
@@ -84,14 +84,14 @@ class DataProvider:
             today = now.date()
 
             def _fetch_nfl() -> Any:
-                return _fetch_nfl_games_for_week(now) or _fetch_nfl_next_games(today)
+                return fetch_nfl_week_scoreboard(now=now) or fetch_nfl_next_scoreboard(start_date=today)
 
             tasks: Dict[str, Callable[[], Any]] = {
                 "nfl": _fetch_nfl,
-                "mlb": lambda: _fetch_mlb_games_for_date(_mlb_scoreboard_date(now)),
-                "nba": lambda: _fetch_nba_games_for_date(_nba_scoreboard_date(now)),
-                "ncaam": lambda: _fetch_ncaam_games_for_date(_ncaam_scoreboard_date(now)),
-                "nhl": lambda: _fetch_nhl_games_for_date(_nhl_scoreboard_date(now)),
+                "mlb": lambda: fetch_mlb_scoreboard(now=now),
+                "nba": lambda: fetch_nba_scoreboard(now=now),
+                "ncaam": lambda: fetch_ncaam_scoreboard(now=now),
+                "nhl": lambda: fetch_nhl_scoreboard(now=now),
             }
 
             scoreboards: Dict[str, Any] = {league: [] for league in tasks}

@@ -1144,6 +1144,14 @@ def render_nhl_scoreboard(display, games: list[dict], transition: bool = False) 
     return ScreenImage(full_img, displayed=True)
 
 
+@log_call
+def draw_nhl_scoreboard(display, transition: bool = False) -> ScreenImage:
+    from services.sports.nhl import fetch_scoreboard
+
+    games = fetch_scoreboard()
+    return render_nhl_scoreboard(display, games, transition=transition)
+
+
 if __name__ == "__main__":  # pragma: no cover
     parser = argparse.ArgumentParser(description="NHL scoreboard renderer")
     parser.add_argument(

@@ -665,7 +665,9 @@ def render_ncaam_scoreboard(display, games: list[dict] | None, transition: bool 
 
 @log_call
 def draw_ncaam_scoreboard(display, transition: bool = False) -> ScreenImage:
-    games = _fetch_games_for_date(_scoreboard_date())
+    from services.sports.ncaam import fetch_scoreboard
+
+    games = fetch_scoreboard()
     return render_ncaam_scoreboard(display, games, transition=transition)
 
 

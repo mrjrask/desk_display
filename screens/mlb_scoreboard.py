@@ -740,17 +740,9 @@ def render_mlb_scoreboard(display, games: list[dict] | None, transition: bool = 
 
 @log_call
 def draw_mlb_scoreboard(display, transition: bool = False) -> ScreenImage:
-    now = datetime.datetime.now(CENTRAL_TIME)
-    target_date = _scoreboard_date(now)
-    games = _fetch_games_for_date(target_date)
+    from services.sports.mlb import fetch_scoreboard
 
-    if not games:
-        today = now.date()
-        if today != target_date:
-            today_games = _fetch_games_for_date(today)
-            if today_games:
-                games = today_games
-
+    games = fetch_scoreboard()
     return render_mlb_scoreboard(display, games, transition=transition)
 
 
