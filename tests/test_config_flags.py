@@ -68,6 +68,7 @@ def test_display_rotation_env_is_zeroed_when_strict_and_kernel_overlay_exists(mo
         HYPERPIXEL_PANEL="hyperpixel4",
         DISPLAY_ROTATION="180",
     )
+    module.initialise_runtime_probes()
 
     assert module.DISPLAY_ROTATION == 0
 
@@ -145,6 +146,7 @@ def test_kernel_overlay_rotate_shorthand_is_parsed_for_logging(monkeypatch):
         HYPERPIXEL_PANEL="hyperpixel4",
         DISPLAY_ROTATION=None,
     )
+    module.initialise_runtime_probes()
 
     assert module._kernel_overlay_rotation == 180
     assert module.DISPLAY_ROTATION == 0

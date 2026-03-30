@@ -68,6 +68,7 @@ from config import (
     AHL_TEAM_TRICODE,
     ENABLE_WIFI_RECOVERY,
     WEATHER_REFRESH_SECONDS,
+    initialise_runtime_probes,
 )
 from utils import (
     Display,
@@ -1790,6 +1791,7 @@ def init_runtime() -> None:
     )
     logging.getLogger("requests").setLevel(logging.WARNING)
     logging.info("🖥️  Starting display service…")
+    initialise_runtime_probes()
 
     _start_config_ui()
 

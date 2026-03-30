@@ -7,9 +7,6 @@ import inspect
 import logging
 import os
 import re
-import re
-import subprocess
-import re
 import subprocess
 import threading
 from dataclasses import dataclass
@@ -109,9 +106,6 @@ def initialise_env_if_requested(force: bool = False) -> None:
         _initialise_env()
 
     _ENV_INITIALISED = True
-
-
-initialise_env_if_requested()
 
 
 def _get_first_env_var(*names: str):
@@ -230,7 +224,8 @@ def get_current_ssid():
     except Exception:
         return None
 
-CURRENT_SSID = get_current_ssid()
+
+CURRENT_SSID: Optional[str] = None
 
 def _parse_lat_lon(value: Optional[str]) -> Optional[Tuple[float, float]]:
     if not value:
@@ -283,7 +278,7 @@ def _weather_profile_for_ssid(ssid: Optional[str]) -> Tuple[float, float, str]:
 
 
 ENABLE_WEATHER = True
-LATITUDE, LONGITUDE, TRAVEL_MODE = _weather_profile_for_ssid(CURRENT_SSID)
+LATITUDE, LONGITUDE, TRAVEL_MODE = _weather_profile_for_ssid(None)
 
 WEATHERKIT_TEAM_ID     = os.environ.get("WEATHERKIT_TEAM_ID")
 WEATHERKIT_KEY_ID      = os.environ.get("WEATHERKIT_KEY_ID")
@@ -308,7 +303,7 @@ def _get_owm_api_key(ssid: Optional[str]) -> Optional[str]:
     return _get_first_env_var("OWM_API_KEY_DEFAULT", "OWM_API_KEY")
 
 
-OWM_API_KEY = _get_owm_api_key(CURRENT_SSID)
+OWM_API_KEY = _get_owm_api_key(None)
 OWM_API_URL   = "https://api.openweathermap.org/data/3.0/onecall"
 OWM_UNITS     = os.environ.get("OWM_UNITS", "imperial")
 OWM_LANGUAGE  = os.environ.get("OWM_LANGUAGE", "en")
@@ -499,28 +494,6 @@ except (TypeError, ValueError):
 
 _display_output = os.environ.get("DESK_DISPLAY_OUTPUT", "auto").strip().lower()
 _hyperpixel_panel = os.environ.get("HYPERPIXEL_PANEL", "").strip().lower()
-if (_display_width_set, _display_height_set) != (True, True):
-    if _display_output in {"framebuffer", "fb", "framebuffer-device"}:
-        fb_device = os.environ.get("DISPLAY_FB_DEVICE", "/dev/fb0")
-        fb_size = (
-            _read_framebuffer_mode_size(fb_device)
-            or _read_framebuffer_fbset_size(fb_device)
-            or _read_framebuffer_virtual_size(fb_device)
-        )
-        if fb_size:
-            fb_width, fb_height = fb_size
-            if not _display_width_set:
-                WIDTH = fb_width
-            if not _display_height_set:
-                HEIGHT = fb_height
-    elif _display_output in {"kernel", "kms", "drm", "sdl"}:
-        drm_size = _read_drm_mode_size()
-        if drm_size:
-            drm_width, drm_height = drm_size
-            if not _display_width_set:
-                WIDTH = drm_width
-            if not _display_height_set:
-                HEIGHT = drm_height
 
 if (WIDTH, HEIGHT) == (480, 800) and (
     _hyperpixel_panel == "hyperpixel4" or _display_output in {"kernel", "kms", "drm", "sdl"}
@@ -710,7 +683,7 @@ _use_kernel_rotation_source = (
     _hyperpixel_panel.startswith("hyperpixel")
     or _display_output in {"kernel", "kms", "drm", "sdl"}
 )
-_kernel_overlay_rotation = _read_kernel_overlay_rotation() if _use_kernel_rotation_source else None
+_kernel_overlay_rotation = None
 DISPLAY_ROTATION_STRICT = _get_bool_env(
     "DISPLAY_ROTATION_STRICT",
     _use_kernel_rotation_source,
@@ -753,6 +726,88 @@ if _kernel_overlay_rotation is not None:
             "to avoid double-rotation.",
             _kernel_overlay_rotation,
         )
+
+
+def initialise_runtime_probes() -> None:
+    """
+    Execute optional runtime probes that are intentionally skipped at import time.
+
+    This keeps module imports side-effect free for tests/tools while preserving
+    a single explicit hook for startup paths that need dynamic environment
+    detection.
+    """
+
+    global CURRENT_SSID, LATITUDE, LONGITUDE, TRAVEL_MODE, OWM_API_KEY
+    global WIDTH, HEIGHT, DISPLAY_SCALE, DISPLAY_SCALE_WIDTH
+    global ACTIVE_DISPLAY_PROFILE, DISPLAY_PROFILE_ID
+    global DISPLAY_FADE_IN_DEFAULT_STEPS
+    global DISPLAY_PROFILE_LOGO_SCALE_CAP, DISPLAY_PROFILE_ANIMATION_DELAY
+    global _kernel_overlay_rotation, DISPLAY_ROTATION
+
+    initialise_env_if_requested()
+
+    CURRENT_SSID = get_current_ssid()
+    LATITUDE, LONGITUDE, TRAVEL_MODE = _weather_profile_for_ssid(CURRENT_SSID)
+    OWM_API_KEY = _get_owm_api_key(CURRENT_SSID)
+
+    runtime_width = WIDTH
+    runtime_height = HEIGHT
+    if (_display_width_set, _display_height_set) != (True, True):
+        if _display_output in {"framebuffer", "fb", "framebuffer-device"}:
+            fb_device = os.environ.get("DISPLAY_FB_DEVICE", "/dev/fb0")
+            fb_size = (
+                _read_framebuffer_mode_size(fb_device)
+                or _read_framebuffer_fbset_size(fb_device)
+                or _read_framebuffer_virtual_size(fb_device)
+            )
+            if fb_size:
+                fb_width, fb_height = fb_size
+                if not _display_width_set:
+                    runtime_width = fb_width
+                if not _display_height_set:
+                    runtime_height = fb_height
+        elif _display_output in {"kernel", "kms", "drm", "sdl"}:
+            drm_size = _read_drm_mode_size()
+            if drm_size:
+                drm_width, drm_height = drm_size
+                if not _display_width_set:
+                    runtime_width = drm_width
+                if not _display_height_set:
+                    runtime_height = drm_height
+
+    if (runtime_width, runtime_height) == (480, 800) and (
+        _hyperpixel_panel == "hyperpixel4" or _display_output in {"kernel", "kms", "drm", "sdl"}
+    ):
+        runtime_width, runtime_height = 800, 480
+
+    WIDTH = runtime_width
+    HEIGHT = runtime_height
+    DISPLAY_SCALE = _compute_display_scale(BASE_WIDTH, BASE_HEIGHT, WIDTH, HEIGHT)
+    DISPLAY_SCALE_WIDTH = max(0.1, WIDTH / BASE_WIDTH) if BASE_WIDTH > 0 else 1.0
+    ACTIVE_DISPLAY_PROFILE = resolve_display_profile(WIDTH, HEIGHT)
+    DISPLAY_PROFILE_ID = ACTIVE_DISPLAY_PROFILE.profile_id
+    DISPLAY_FADE_IN_DEFAULT_STEPS = DISPLAY_FADE_IN_STEPS_BY_PROFILE.get(
+        DISPLAY_PROFILE_ID,
+        DISPLAY_FADE_IN_DISPLAY_HAT_MINI_STEPS,
+    )
+    DISPLAY_PROFILE_LOGO_SCALE_CAP = ACTIVE_DISPLAY_PROFILE.logo_scale_cap
+    DISPLAY_PROFILE_ANIMATION_DELAY = ACTIVE_DISPLAY_PROFILE.animation_delay
+    _kernel_overlay_rotation = (
+        _read_kernel_overlay_rotation() if _use_kernel_rotation_source else None
+    )
+    if _kernel_overlay_rotation is None:
+        return
+
+    if DISPLAY_ROTATION and DISPLAY_ROTATION_STRICT:
+        logging.warning(
+            "Kernel overlay rotate=%d° detected while DISPLAY_ROTATION=%d° is set. "
+            "Strict rotation guardrail is enabled; forcing DISPLAY_ROTATION=0 to "
+            "avoid double-rotation. Set DISPLAY_ROTATION_STRICT=0 to keep legacy "
+            "stacked rotation behavior.",
+            _kernel_overlay_rotation,
+            DISPLAY_ROTATION,
+        )
+        DISPLAY_ROTATION = 0
 
 
 # ─── Dark hours configuration ─────────────────────────────────────────────────
