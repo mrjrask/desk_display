@@ -156,6 +156,7 @@ build_uxplay_command() {
 run_uxplay_session() {
   local connected=0
   local kms_renderer_failed=0
+  local name_conflict_detected=0
   local should_abort_for_fallback=0
   local uxplay_status=0
   local -a uxplay_cmd=()
@@ -195,6 +196,10 @@ run_uxplay_session() {
         break
       fi
     fi
+
+    if [[ "$lower" == *"kdnsserviceerr_nameconflict"* ]]; then
+      name_conflict_detected=1
+    fi
   done
 
   if [[ "$should_abort_for_fallback" -eq 1 ]]; then
@@ -213,6 +218,10 @@ run_uxplay_session() {
     return 1
   fi
 
+  if [[ "$name_conflict_detected" -eq 1 ]]; then
+    return 2
+  fi
+
   if [[ "$uxplay_status" -ne 0 && "$kms_renderer_failed" -eq 0 ]]; then
     return "$uxplay_status"
   fi
@@ -221,23 +230,41 @@ run_uxplay_session() {
 }
 
 main() {
+  local attempt
+  local status
+
   ensure_runtime_dir
   trap resume_desk_display_on_exit EXIT INT TERM
 
   if run_uxplay_session; then
     return 0
   fi
+  status=$?
 
-  if [[ "$AIRPLAY_VIDEO_SINK_AUTO_FORCED" -eq 1 && "$AIRPLAY_VIDEO_SINK" == "kmssink" ]]; then
+  if [[ "$status" -eq 1 && "$AIRPLAY_VIDEO_SINK_AUTO_FORCED" -eq 1 && "$AIRPLAY_VIDEO_SINK" == "kmssink" ]]; then
     warn "Auto-selected kmssink failed to initialize. Retrying with uxplay default video sink."
     AIRPLAY_AUTO_KMSSINK_ALLOWED=0
     AIRPLAY_VIDEO_SINK=""
     AIRPLAY_VIDEO_SINK_AUTO_FORCED=0
-    run_uxplay_session
-    return $?
+    for attempt in 1 2; do
+      if run_uxplay_session; then
+        return 0
+      fi
+
+      status=$?
+      if [[ "$status" -ne 2 ]]; then
+        return "$status"
+      fi
+
+      warn "UxPlay reported mDNS name conflict after fallback restart. Waiting before retry ${attempt}/2."
+      sleep 2
+    done
+
+    warn "UxPlay is still reporting an mDNS name conflict after fallback retries."
+    return 2
   fi
 
-  return 1
+  return "$status"
 }
 
 main "$@"
