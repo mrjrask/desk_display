@@ -339,3 +339,21 @@ def test_build_layouts_clamps_quad_scroll_speed():
         }
     )
     assert layouts["screens"]["quad"]["scroll_speed"] == 3.0
+
+
+def test_default_background_for_stand3_uses_scoreboard_color(monkeypatch):
+    monkeypatch.setattr(config_ui, "_get_scoreboard_background_color", lambda: (125, 125, 125))
+
+    assert config_ui._default_background_for_screen("cubs stand3") == (125, 125, 125)
+    assert config_ui._default_background_for_screen("sox stand3") == (125, 125, 125)
+
+
+def test_build_style_config_omits_default_stand3_background(monkeypatch):
+    monkeypatch.setattr(config_ui, "_get_scoreboard_background_color", lambda: (125, 125, 125))
+
+    style = config_ui._build_style_config(
+        [{"id": "cubs stand3", "background": "#7D7D7D"}],
+        {"screens": {}},
+    )
+
+    assert style == {"screens": {}}
