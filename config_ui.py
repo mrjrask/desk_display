@@ -7,6 +7,7 @@ import logging
 import os
 import socket
 import time
+from urllib.parse import urlsplit, urlunsplit
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional, Tuple
@@ -901,13 +902,33 @@ def inject_machine_hostname() -> Dict[str, str]:
     return {"machine_hostname": socket.gethostname()}
 
 
+def _safe_next_target(target: Optional[str]) -> str:
+    fallback = url_for("screen_config")
+    if not target:
+        return fallback
+
+    candidate = target.strip()
+    if not candidate:
+        return fallback
+
+    if candidate.startswith("/") and not candidate.startswith("//"):
+        return candidate
+
+    parsed = urlsplit(candidate)
+    if parsed.scheme and parsed.netloc and parsed.netloc == request.host:
+        path = parsed.path or "/"
+        return urlunsplit(("", "", path, parsed.query, ""))
+
+    return fallback
+
+
 @app.route("/login", methods=["GET", "POST"])
 def login() -> Any:
     if not _is_auth_enabled():
         return redirect(url_for("screen_config"))
 
     error: Optional[str] = None
-    next_url = request.args.get("next") or request.form.get("next") or url_for("screen_config")
+    next_url = _safe_next_target(request.args.get("next") or request.form.get("next"))
 
     if request.method == "POST":
         supplied_username = request.form.get("username", "").strip()

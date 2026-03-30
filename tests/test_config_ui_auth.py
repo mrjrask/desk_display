@@ -72,3 +72,63 @@ def test_login_rejects_incorrect_username(monkeypatch):
 
     assert login_response.status_code == 200
     assert b"Incorrect username or password" in login_response.data
+
+
+def test_login_accepts_valid_internal_next_path(monkeypatch):
+    monkeypatch.setenv("SCREEN_UI_USERNAME", "desk")
+    monkeypatch.setenv("SCREEN_UI_PASSWORD", "secret")
+    monkeypatch.delenv("SCREEN_AUTH_ENABLED", raising=False)
+    config_ui = _reload_config_ui(monkeypatch)
+
+    client = config_ui.app.test_client()
+    get_response = client.get("/login?next=/screenshots")
+    assert get_response.status_code == 200
+    assert b'name="next" value="/screenshots"' in get_response.data
+
+    post_response = client.post(
+        "/login",
+        data={"username": "desk", "password": "secret", "next": "/screenshots"},
+        follow_redirects=False,
+    )
+    assert post_response.status_code == 302
+    assert post_response.headers["Location"].endswith("/screenshots")
+
+
+def test_login_rejects_external_absolute_next_url(monkeypatch):
+    monkeypatch.setenv("SCREEN_UI_USERNAME", "desk")
+    monkeypatch.setenv("SCREEN_UI_PASSWORD", "secret")
+    monkeypatch.delenv("SCREEN_AUTH_ENABLED", raising=False)
+    config_ui = _reload_config_ui(monkeypatch)
+
+    client = config_ui.app.test_client()
+    get_response = client.get("/login?next=https://example.com/evil")
+    assert get_response.status_code == 200
+    assert b'name="next" value="/"' in get_response.data
+
+    post_response = client.post(
+        "/login",
+        data={"username": "desk", "password": "secret", "next": "https://example.com/evil"},
+        follow_redirects=False,
+    )
+    assert post_response.status_code == 302
+    assert post_response.headers["Location"].endswith("/")
+
+
+def test_login_rejects_scheme_relative_next_url(monkeypatch):
+    monkeypatch.setenv("SCREEN_UI_USERNAME", "desk")
+    monkeypatch.setenv("SCREEN_UI_PASSWORD", "secret")
+    monkeypatch.delenv("SCREEN_AUTH_ENABLED", raising=False)
+    config_ui = _reload_config_ui(monkeypatch)
+
+    client = config_ui.app.test_client()
+    get_response = client.get("/login?next=//example.com/evil")
+    assert get_response.status_code == 200
+    assert b'name="next" value="/"' in get_response.data
+
+    post_response = client.post(
+        "/login",
+        data={"username": "desk", "password": "secret", "next": "//example.com/evil"},
+        follow_redirects=False,
+    )
+    assert post_response.status_code == 302
+    assert post_response.headers["Location"].endswith("/")
