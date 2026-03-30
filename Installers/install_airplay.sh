@@ -10,6 +10,8 @@ SERVICE_USER="${SUDO_USER:-$(whoami)}"
 AIRPLAY_SERVICE_NAME="${AIRPLAY_SERVICE_NAME:-airplay_desk_display.service}"
 AIRPLAY_SERVICE_PATH="/etc/systemd/system/$AIRPLAY_SERVICE_NAME"
 MANIFEST_PATH="/var/lib/desk-display-airplay/packages.txt"
+AIRPLAY_MODE_SCRIPT=""
+AIRPLAY_DAEMON_SCRIPT=""
 
 if [[ $EUID -ne 0 ]]; then
   SUDO="sudo"
@@ -24,6 +26,54 @@ ensure_executable() {
   else
     warn "Missing expected file: $file_path"
   fi
+}
+
+resolve_project_script() {
+  local script_name="$1"
+  local -a candidates=(
+    "$PROJECT_DIR/scripts/$script_name"
+    "$PROJECT_DIR/Installers/scripts/$script_name"
+    "$SCRIPT_DIR/../scripts/$script_name"
+    "$SCRIPT_DIR/scripts/$script_name"
+  )
+
+  local candidate
+  for candidate in "${candidates[@]}"; do
+    if [[ -f "$candidate" ]]; then
+      printf '%s\n' "$candidate"
+      return 0
+    fi
+  done
+
+  return 1
+}
+
+validate_airplay_scripts() {
+  local missing=0
+
+  AIRPLAY_MODE_SCRIPT=$(resolve_project_script "airplay_mode.sh" || true)
+  AIRPLAY_DAEMON_SCRIPT=$(resolve_project_script "airplay_takeover_daemon.sh" || true)
+
+  if [[ -z "$AIRPLAY_MODE_SCRIPT" ]]; then
+    warn "Missing expected file: $PROJECT_DIR/scripts/airplay_mode.sh"
+    missing=1
+  fi
+
+  if [[ -z "$AIRPLAY_DAEMON_SCRIPT" ]]; then
+    warn "Missing expected file: $PROJECT_DIR/scripts/airplay_takeover_daemon.sh"
+    missing=1
+  fi
+
+  if [[ "$missing" -ne 0 ]]; then
+    printf '[ERROR] AirPlay scripts are missing. Expected to find airplay_mode.sh and airplay_takeover_daemon.sh in this checkout.\n' >&2
+    printf '[ERROR] PROJECT_DIR=%s\n' "$PROJECT_DIR" >&2
+    printf '[ERROR] SCRIPT_DIR=%s\n' "$SCRIPT_DIR" >&2
+    printf '[ERROR] Re-sync the repository and re-run this installer.\n' >&2
+    exit 1
+  fi
+
+  ensure_executable "$AIRPLAY_MODE_SCRIPT"
+  ensure_executable "$AIRPLAY_DAEMON_SCRIPT"
 }
 
 get_connected_mode() {
@@ -127,7 +177,7 @@ User=$SERVICE_USER
 WorkingDirectory=$PROJECT_DIR
 Environment=CONFIG_LOAD_DOTENV=1
 Environment=AIRPLAY_RESOLUTION_DEFAULT=$default_resolution
-ExecStart=/bin/bash -lc '/bin/bash "$PROJECT_DIR/scripts/airplay_takeover_daemon.sh"'
+ExecStart=/bin/bash -lc '/bin/bash "$AIRPLAY_DAEMON_SCRIPT"'
 Restart=always
 RestartSec=2
 
@@ -159,7 +209,7 @@ install_airplay_launcher() {
 Type=Application
 Name=Desk Display AirPlay Mode
 Comment=Start AirPlay takeover mode for Desk Display
-Exec=/bin/bash -lc '/bin/bash "$PROJECT_DIR/scripts/airplay_mode.sh"'
+Exec=/bin/bash -lc '/bin/bash "$AIRPLAY_MODE_SCRIPT"'
 Terminal=true
 Categories=Utility;
 EOF_LAUNCHER
@@ -191,8 +241,7 @@ EOF_LAUNCHER
 
 main() {
   log "Installing AirPlay support for Desk Display from $PROJECT_DIR"
-  ensure_executable "$PROJECT_DIR/scripts/airplay_mode.sh"
-  ensure_executable "$PROJECT_DIR/scripts/airplay_takeover_daemon.sh"
+  validate_airplay_scripts
 
   install_airplay_packages
   write_airplay_service
