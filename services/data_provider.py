@@ -1,8 +1,14 @@
-"""Canonical cached read APIs for weather and sports payloads."""
+"""Canonical cached read APIs for weather and sports payloads.
+
+Thread-safety: ``DataProvider`` may be shared by multiple threads. Cache
+lookups/updates and stale fallback decisions are guarded by an instance-level
+re-entrant lock so concurrent readers do not race on ``_cache``.
+"""
 from __future__ import annotations
 
 import datetime as dt
 import logging
+import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
@@ -31,6 +37,7 @@ class DataProvider:
 
     def __init__(self) -> None:
         self._cache: Dict[str, _Entry] = {}
+        self._cache_lock = threading.RLock()
 
     def _read_cached(
         self,
@@ -39,23 +46,29 @@ class DataProvider:
         ttl_seconds: int,
     ) -> Any:
         now = time.monotonic()
-        cached = self._cache.get(key)
+        with self._cache_lock:
+            cached = self._cache.get(key)
         if cached and now - cached.fetched_at < ttl_seconds:
             return cached.value
 
         try:
             value = fetcher()
             if value is None:
-                if cached is not None:
+                with self._cache_lock:
+                    stale = self._cache.get(key)
+                if stale is not None:
                     logging.warning("Using stale %s payload after empty fetch result", key)
-                    return cached.value
+                    return stale.value
                 return None
-            self._cache[key] = _Entry(value=value, fetched_at=now)
+            with self._cache_lock:
+                self._cache[key] = _Entry(value=value, fetched_at=now)
             return value
         except Exception as exc:
-            if cached is not None:
+            with self._cache_lock:
+                stale = self._cache.get(key)
+            if stale is not None:
                 logging.warning("Using stale %s payload after fetch failure: %s", key, exc)
-                return cached.value
+                return stale.value
             raise
 
     def read_weather(self, *, ttl_seconds: int = 300) -> Any:

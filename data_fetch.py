@@ -4,6 +4,10 @@ data_fetch.py
 
 All remote data fetchers for weather, Blackhawks, MLB, etc.,
 with resilient retries via a shared requests.Session.
+
+Thread-safety: this module is imported by screen renderers that can execute
+concurrently. Global mutable caches are protected with per-cache locks so
+read/refresh paths are safe under concurrent access.
 """
 
 import csv
@@ -15,6 +19,7 @@ import os
 import re
 import socket
 import tempfile
+import threading
 import time
 from collections import deque
 from typing import Any, Dict, List, Optional, Tuple
@@ -70,31 +75,38 @@ _session = get_session()
 # Weather caching to limit API usage across devices
 _weather_cache: Optional[dict[str, Any]] = None
 _weather_cache_fetched_at: Optional[datetime.datetime] = None
+_weather_cache_lock = threading.Lock()
 _weatherkit_token: Optional[str] = None
 _weatherkit_token_exp: Optional[datetime.datetime] = None
 _weatherkit_key_cache: Optional[Any] = None
+_weatherkit_auth_lock = threading.Lock()
 _owm_backoff_until: Optional[datetime.datetime] = None
+_owm_backoff_lock = threading.Lock()
 _PRESSURE_TREND_WINDOW_SECONDS = 3 * 60 * 60
 _PRESSURE_TREND_PRUNE_SECONDS = 6 * 60 * 60
 _PRESSURE_TREND_THRESHOLD_HPA = 0.5
 _PRESSURE_HISTORY: deque[tuple[float, float]] = deque()
 _PRESSURE_HISTORY_LOADED = False
 _PRESSURE_HISTORY_LAST_SAVE = 0.0
+_pressure_history_lock = threading.RLock()
 _PRESSURE_HISTORY_SAVE_INTERVAL_SECONDS = 60.0
 _PRESSURE_HISTORY_PATH = os.environ.get("PRESSURE_HISTORY_PATH", "pressure_history.json")
 # Cache statsapi DNS availability to avoid repeated slow lookups
 _statsapi_dns_available: Optional[bool] = None
 _statsapi_dns_checked_at: Optional[float] = None
+_statsapi_dns_lock = threading.Lock()
 _STATSAPI_DNS_RECHECK_SECONDS = 600
 # Cache team standings to avoid repeated slow API calls.
 _TEAM_STANDINGS_CACHE: dict[str, dict[str, Any]] = {}
+_team_standings_cache_lock = threading.Lock()
 _TEAM_STANDINGS_CACHE_SUCCESS_SECONDS = 300
 _TEAM_STANDINGS_CACHE_FAILURE_SECONDS = 60
 _TEAM_STANDINGS_TIMEOUT = (3.05, 5.0)
 
 
 def _get_cached_team_standings(cache_key: str) -> tuple[Optional[dict], bool]:
-    entry = _TEAM_STANDINGS_CACHE.get(cache_key)
+    with _team_standings_cache_lock:
+        entry = _TEAM_STANDINGS_CACHE.get(cache_key)
     if not entry:
         return None, False
 
@@ -109,120 +121,124 @@ def _get_cached_team_standings(cache_key: str) -> tuple[Optional[dict], bool]:
 
 
 def _store_team_standings_cache(cache_key: str, data: Optional[dict], *, success: bool) -> None:
-    _TEAM_STANDINGS_CACHE[cache_key] = {
-        "data": data,
-        "success": success,
-        "fetched_at": time.time(),
-    }
+    with _team_standings_cache_lock:
+        _TEAM_STANDINGS_CACHE[cache_key] = {
+            "data": data,
+            "success": success,
+            "fetched_at": time.time(),
+        }
 
 
 def _update_pressure_trend(timestamp: Optional[float], pressure_hpa: Optional[float]) -> Optional[str]:
-    _load_pressure_history()
-    if pressure_hpa is None:
-        return None
+    with _pressure_history_lock:
+        _load_pressure_history()
+        if pressure_hpa is None:
+            return None
 
-    try:
-        pressure_val = float(pressure_hpa)
-    except (TypeError, ValueError):
-        return None
+        try:
+            pressure_val = float(pressure_hpa)
+        except (TypeError, ValueError):
+            return None
 
-    now_ts = float(timestamp) if timestamp is not None else time.time()
-    if _PRESSURE_HISTORY and now_ts < _PRESSURE_HISTORY[-1][0]:
-        now_ts = _PRESSURE_HISTORY[-1][0] + 0.001
+        now_ts = float(timestamp) if timestamp is not None else time.time()
+        if _PRESSURE_HISTORY and now_ts < _PRESSURE_HISTORY[-1][0]:
+            now_ts = _PRESSURE_HISTORY[-1][0] + 0.001
 
-    history_changed = False
-    if not _PRESSURE_HISTORY or _PRESSURE_HISTORY[-1] != (now_ts, pressure_val):
-        _PRESSURE_HISTORY.append((now_ts, pressure_val))
-        history_changed = True
+        history_changed = False
+        if not _PRESSURE_HISTORY or _PRESSURE_HISTORY[-1] != (now_ts, pressure_val):
+            _PRESSURE_HISTORY.append((now_ts, pressure_val))
+            history_changed = True
 
-    while _PRESSURE_HISTORY and now_ts - _PRESSURE_HISTORY[0][0] > _PRESSURE_TREND_PRUNE_SECONDS:
-        _PRESSURE_HISTORY.popleft()
-        history_changed = True
+        while _PRESSURE_HISTORY and now_ts - _PRESSURE_HISTORY[0][0] > _PRESSURE_TREND_PRUNE_SECONDS:
+            _PRESSURE_HISTORY.popleft()
+            history_changed = True
 
-    if history_changed:
-        _save_pressure_history(now_ts)
+        if history_changed:
+            _save_pressure_history(now_ts)
 
-    target_time = now_ts - _PRESSURE_TREND_WINDOW_SECONDS
-    baseline = None
-    for ts, val in _PRESSURE_HISTORY:
-        if ts <= target_time:
-            baseline = val
-        else:
-            break
+        target_time = now_ts - _PRESSURE_TREND_WINDOW_SECONDS
+        baseline = None
+        for ts, val in _PRESSURE_HISTORY:
+            if ts <= target_time:
+                baseline = val
+            else:
+                break
 
-    if baseline is None:
-        return None
+        if baseline is None:
+            return None
 
-    delta = pressure_val - baseline
-    if delta > _PRESSURE_TREND_THRESHOLD_HPA:
-        return "rising"
-    if delta < -_PRESSURE_TREND_THRESHOLD_HPA:
-        return "falling"
-    return "steady"
+        delta = pressure_val - baseline
+        if delta > _PRESSURE_TREND_THRESHOLD_HPA:
+            return "rising"
+        if delta < -_PRESSURE_TREND_THRESHOLD_HPA:
+            return "falling"
+        return "steady"
 
 
 def _load_pressure_history() -> None:
     global _PRESSURE_HISTORY_LOADED
-    if _PRESSURE_HISTORY_LOADED:
-        return
+    with _pressure_history_lock:
+        if _PRESSURE_HISTORY_LOADED:
+            return
 
-    _PRESSURE_HISTORY_LOADED = True
-    path = _expand_path(_PRESSURE_HISTORY_PATH)
-    try:
-        with open(path, "r", encoding="utf-8") as fh:
-            payload = json.load(fh)
-        history = payload.get("history", payload)
-        if not isinstance(history, list):
-            raise ValueError("Invalid pressure history payload")
+        _PRESSURE_HISTORY_LOADED = True
+        path = _expand_path(_PRESSURE_HISTORY_PATH)
+        try:
+            with open(path, "r", encoding="utf-8") as fh:
+                payload = json.load(fh)
+            history = payload.get("history", payload)
+            if not isinstance(history, list):
+                raise ValueError("Invalid pressure history payload")
 
-        for entry in history:
-            if (
-                isinstance(entry, (list, tuple))
-                and len(entry) == 2
-                and isinstance(entry[0], (int, float))
-                and isinstance(entry[1], (int, float))
-            ):
-                _PRESSURE_HISTORY.append((float(entry[0]), float(entry[1])))
-        if _PRESSURE_HISTORY:
-            now_ts = time.time()
-            while _PRESSURE_HISTORY and now_ts - _PRESSURE_HISTORY[0][0] > _PRESSURE_TREND_PRUNE_SECONDS:
-                _PRESSURE_HISTORY.popleft()
-    except FileNotFoundError:
-        return
-    except Exception as exc:
-        logging.warning("Unable to load pressure history from %s: %s", path, exc)
+            for entry in history:
+                if (
+                    isinstance(entry, (list, tuple))
+                    and len(entry) == 2
+                    and isinstance(entry[0], (int, float))
+                    and isinstance(entry[1], (int, float))
+                ):
+                    _PRESSURE_HISTORY.append((float(entry[0]), float(entry[1])))
+            if _PRESSURE_HISTORY:
+                now_ts = time.time()
+                while _PRESSURE_HISTORY and now_ts - _PRESSURE_HISTORY[0][0] > _PRESSURE_TREND_PRUNE_SECONDS:
+                    _PRESSURE_HISTORY.popleft()
+        except FileNotFoundError:
+            return
+        except Exception as exc:
+            logging.warning("Unable to load pressure history from %s: %s", path, exc)
 
 
 def _save_pressure_history(now_ts: float) -> None:
     global _PRESSURE_HISTORY_LAST_SAVE
-    if now_ts - _PRESSURE_HISTORY_LAST_SAVE < _PRESSURE_HISTORY_SAVE_INTERVAL_SECONDS:
-        return
+    with _pressure_history_lock:
+        if now_ts - _PRESSURE_HISTORY_LAST_SAVE < _PRESSURE_HISTORY_SAVE_INTERVAL_SECONDS:
+            return
 
-    path = _expand_path(_PRESSURE_HISTORY_PATH)
-    tmp_path = ""
-    try:
-        parent_dir = os.path.dirname(path) or "."
-        os.makedirs(parent_dir, exist_ok=True)
-        payload = {"history": list(_PRESSURE_HISTORY)}
-        with tempfile.NamedTemporaryFile(
-            "w",
-            encoding="utf-8",
-            dir=parent_dir,
-            prefix=f"{os.path.basename(path)}.",
-            suffix=".tmp",
-            delete=False,
-        ) as fh:
-            tmp_path = fh.name
-            json.dump(payload, fh)
-        os.replace(tmp_path, path)
-        _PRESSURE_HISTORY_LAST_SAVE = now_ts
-    except Exception as exc:
-        logging.warning("Unable to save pressure history to %s: %s", path, exc)
-        if tmp_path:
-            try:
-                os.remove(tmp_path)
-            except OSError:
-                pass
+        path = _expand_path(_PRESSURE_HISTORY_PATH)
+        tmp_path = ""
+        try:
+            parent_dir = os.path.dirname(path) or "."
+            os.makedirs(parent_dir, exist_ok=True)
+            payload = {"history": list(_PRESSURE_HISTORY)}
+            with tempfile.NamedTemporaryFile(
+                "w",
+                encoding="utf-8",
+                dir=parent_dir,
+                prefix=f"{os.path.basename(path)}.",
+                suffix=".tmp",
+                delete=False,
+            ) as fh:
+                tmp_path = fh.name
+                json.dump(payload, fh)
+            os.replace(tmp_path, path)
+            _PRESSURE_HISTORY_LAST_SAVE = now_ts
+        except Exception as exc:
+            logging.warning("Unable to save pressure history to %s: %s", path, exc)
+            if tmp_path:
+                try:
+                    os.remove(tmp_path)
+                except OSError:
+                    pass
 
 # -----------------------------------------------------------------------------
 # WEATHER — Apple WeatherKit primary, OpenWeatherMap secondary
@@ -249,8 +265,9 @@ def load_weatherkit_private_key(key_path: str):
 
 def _load_weatherkit_private_key() -> Optional[Any]:
     global _weatherkit_key_cache
-    if _weatherkit_key_cache:
-        return _weatherkit_key_cache
+    with _weatherkit_auth_lock:
+        if _weatherkit_key_cache:
+            return _weatherkit_key_cache
 
     if WEATHERKIT_PRIVATE_KEY:
         raw_key = WEATHERKIT_PRIVATE_KEY.strip()
@@ -286,8 +303,9 @@ def _load_weatherkit_private_key() -> Optional[Any]:
                 and os.path.isfile(normalized_path)
             ):
                 try:
-                    _weatherkit_key_cache = load_weatherkit_private_key(normalized_path)
-                    return _weatherkit_key_cache
+                    with _weatherkit_auth_lock:
+                        _weatherkit_key_cache = load_weatherkit_private_key(normalized_path)
+                        return _weatherkit_key_cache
                 except Exception as exc:
                     logging.error(
                         "Unable to read WEATHERKIT_PRIVATE_KEY path %s: %s",
@@ -301,11 +319,12 @@ def _load_weatherkit_private_key() -> Optional[Any]:
                 if not pem_bytes.endswith(b"\n"):
                     pem_bytes += b"\n"
 
-                _weatherkit_key_cache = serialization.load_pem_private_key(
-                    pem_bytes,
-                    password=None,
-                    backend=default_backend(),
-                )
+                with _weatherkit_auth_lock:
+                    _weatherkit_key_cache = serialization.load_pem_private_key(
+                        pem_bytes,
+                        password=None,
+                        backend=default_backend(),
+                    )
             except Exception as exc:
                 logging.error("Unable to parse WEATHERKIT_PRIVATE_KEY: %s", exc)
                 return None
@@ -314,9 +333,11 @@ def _load_weatherkit_private_key() -> Optional[Any]:
 
     if WEATHERKIT_KEY_PATH:
         try:
-            _weatherkit_key_cache = load_weatherkit_private_key(WEATHERKIT_KEY_PATH)
-            if _weatherkit_key_cache:
-                return _weatherkit_key_cache
+            key = load_weatherkit_private_key(WEATHERKIT_KEY_PATH)
+            with _weatherkit_auth_lock:
+                _weatherkit_key_cache = key
+                if _weatherkit_key_cache:
+                    return _weatherkit_key_cache
         except Exception as exc:
             logging.error("Unable to read WEATHERKIT_KEY_PATH %s: %s", WEATHERKIT_KEY_PATH, exc)
 
@@ -340,9 +361,10 @@ def _build_weatherkit_token(now: datetime.datetime) -> Optional[str]:
         logging.error("Missing WeatherKit configuration: %s", ", ".join(missing))
         return None
 
-    if _weatherkit_token and _weatherkit_token_exp:
-        if (_weatherkit_token_exp - now).total_seconds() > 300:
-            return _weatherkit_token
+    with _weatherkit_auth_lock:
+        if _weatherkit_token and _weatherkit_token_exp:
+            if (_weatherkit_token_exp - now).total_seconds() > 300:
+                return _weatherkit_token
 
     key = _load_weatherkit_private_key()
     if not key:
@@ -351,7 +373,7 @@ def _build_weatherkit_token(now: datetime.datetime) -> Optional[str]:
     iat = int(now.timestamp())
     exp = int((now + datetime.timedelta(minutes=30)).timestamp())
     try:
-        _weatherkit_token = jwt.encode(
+        token = jwt.encode(
             {
                 "iss": WEATHERKIT_TEAM_ID,
                 "iat": iat,
@@ -362,8 +384,10 @@ def _build_weatherkit_token(now: datetime.datetime) -> Optional[str]:
             algorithm="ES256",
             headers={"kid": WEATHERKIT_KEY_ID},
         )
-        _weatherkit_token_exp = datetime.datetime.fromtimestamp(exp, datetime.timezone.utc)
-        return _weatherkit_token
+        with _weatherkit_auth_lock:
+            _weatherkit_token = token
+            _weatherkit_token_exp = datetime.datetime.fromtimestamp(exp, datetime.timezone.utc)
+            return _weatherkit_token
     except Exception as exc:
         logging.error("Unable to sign WeatherKit token: %s", exc)
         return None
@@ -839,8 +863,10 @@ def _fetch_openweathermap(now: datetime.datetime) -> Optional[dict[str, Any]]:
         logging.debug("OpenWeatherMap API key not configured; skipping secondary source")
         return None
 
-    if _owm_backoff_until and now < _owm_backoff_until:
-        remaining = int((_owm_backoff_until - now).total_seconds())
+    with _owm_backoff_lock:
+        backoff_until = _owm_backoff_until
+    if backoff_until and now < backoff_until:
+        remaining = int((backoff_until - now).total_seconds())
         logging.info(
             "Skipping OpenWeatherMap fetch; still backing off for %ds after rate limit",
             remaining,
@@ -864,7 +890,8 @@ def _fetch_openweathermap(now: datetime.datetime) -> Optional[dict[str, Any]]:
     except requests.HTTPError as exc:
         status = exc.response.status_code if exc.response is not None else None
         if status == 429:
-            _owm_backoff_until = now + datetime.timedelta(minutes=15)
+            with _owm_backoff_lock:
+                _owm_backoff_until = now + datetime.timedelta(minutes=15)
             logging.warning(
                 "OpenWeatherMap rate limited (429); backing off until %s",
                 _owm_backoff_until.isoformat(),
@@ -888,31 +915,38 @@ def fetch_weather(force_refresh: bool = False):
     now = datetime.datetime.now(datetime.timezone.utc)
 
     cache_age = None
-    if _weather_cache and _weather_cache_fetched_at:
-        cache_age = (now - _weather_cache_fetched_at).total_seconds()
+    with _weather_cache_lock:
+        cached = _weather_cache
+        cached_at = _weather_cache_fetched_at
+    if cached and cached_at:
+        cache_age = (now - cached_at).total_seconds()
         if not force_refresh and cache_age < WEATHER_REFRESH_SECONDS:
             logging.debug(
                 "Returning cached weather data (age: %.0fs, TTL: %ds)", cache_age, WEATHER_REFRESH_SECONDS
             )
-            return _weather_cache
+            return cached
 
     normalized = _fetch_weatherkit(now)
     if normalized is None:
         normalized = _fetch_openweathermap(now)
 
     if normalized is not None:
-        _weather_cache = normalized
-        _weather_cache_fetched_at = now
-        return _weather_cache
+        with _weather_cache_lock:
+            _weather_cache = normalized
+            _weather_cache_fetched_at = now
+            return _weather_cache
 
     # If both sources fail, fall back to stale cached data instead of returning
     # nothing (and hammering the APIs on the next attempt).
-    if _weather_cache and _weather_cache_fetched_at:
-        cache_age = cache_age if cache_age is not None else (now - _weather_cache_fetched_at).total_seconds()
+    with _weather_cache_lock:
+        cached = _weather_cache
+        cached_at = _weather_cache_fetched_at
+    if cached and cached_at:
+        cache_age = cache_age if cache_age is not None else (now - cached_at).total_seconds()
         logging.info(
             "Returning stale weather cache after fetch errors (age: %.0fs)", cache_age
         )
-        return _weather_cache
+        return cached
 
     return None
 
@@ -920,7 +954,8 @@ def fetch_weather(force_refresh: bool = False):
 def get_weather_cache_timestamp() -> Optional[datetime.datetime]:
     """Return the UTC timestamp for the most recent successful weather fetch."""
 
-    return _weather_cache_fetched_at
+    with _weather_cache_lock:
+        return _weather_cache_fetched_at
 
 
 # -----------------------------------------------------------------------------
@@ -1285,22 +1320,25 @@ def _statsapi_available() -> bool:
     global _statsapi_dns_available, _statsapi_dns_checked_at
 
     now = time.time()
-    if _statsapi_dns_checked_at and (now - _statsapi_dns_checked_at) < _STATSAPI_DNS_RECHECK_SECONDS:
-        return bool(_statsapi_dns_available)
+    with _statsapi_dns_lock:
+        if _statsapi_dns_checked_at and (now - _statsapi_dns_checked_at) < _STATSAPI_DNS_RECHECK_SECONDS:
+            return bool(_statsapi_dns_available)
 
     try:
         socket.getaddrinfo("statsapi.web.nhl.com", 443, proto=socket.IPPROTO_TCP)
     except socket.gaierror as exc:
         logging.debug("NHL statsapi DNS lookup failed: %s", exc)
-        _statsapi_dns_available = False
+        available = False
     except Exception as exc:
         logging.debug("Unexpected error checking NHL statsapi DNS: %s", exc)
-        _statsapi_dns_available = False
+        available = False
     else:
-        _statsapi_dns_available = True
+        available = True
 
-    _statsapi_dns_checked_at = now
-    return bool(_statsapi_dns_available)
+    with _statsapi_dns_lock:
+        _statsapi_dns_available = available
+        _statsapi_dns_checked_at = now
+        return bool(_statsapi_dns_available)
 
 
 def _fetch_nfl_team_standings(team_abbr: str):
@@ -2090,6 +2128,7 @@ def fetch_sox_standings():
 # AHL — Chicago Wolves schedule + scores (HockeyTech / AHL stats feed)
 # -----------------------------------------------------------------------------
 _AHL_SEASON_CACHE: Optional[str] = None
+_ahl_season_cache_lock = threading.Lock()
 _AHL_DEFAULT_BASE = "https://lscluster.hockeytech.com/feed/index.php"
 
 
@@ -2288,8 +2327,9 @@ def _current_ahl_season_id() -> Optional[str]:
         return str(AHL_SEASON_ID)
 
     global _AHL_SEASON_CACHE
-    if _AHL_SEASON_CACHE:
-        return _AHL_SEASON_CACHE
+    with _ahl_season_cache_lock:
+        if _AHL_SEASON_CACHE:
+            return _AHL_SEASON_CACHE
 
     data = _ahl_request("season")
     rows = _extract_rows(data, "Seasons", "Season")
@@ -2301,14 +2341,16 @@ def _current_ahl_season_id() -> Optional[str]:
         if str(flag).lower() in {"1", "true", "yes"}:
             season_id = row.get("season_id") or row.get("seasonId") or row.get("id")
             if season_id:
-                _AHL_SEASON_CACHE = str(season_id)
-                return _AHL_SEASON_CACHE
+                with _ahl_season_cache_lock:
+                    _AHL_SEASON_CACHE = str(season_id)
+                    return _AHL_SEASON_CACHE
 
     if rows:
         season_id = rows[0].get("season_id") or rows[0].get("seasonId") or rows[0].get("id")
         if season_id:
-            _AHL_SEASON_CACHE = str(season_id)
-            return _AHL_SEASON_CACHE
+            with _ahl_season_cache_lock:
+                _AHL_SEASON_CACHE = str(season_id)
+                return _AHL_SEASON_CACHE
 
     logging.warning("Unable to determine current AHL season id from feed")
     return None
@@ -3002,12 +3044,14 @@ def _classify_wolves_ics_games(games: List[Dict[str, Any]]) -> Dict[str, Optiona
 
 _WOLVES_CACHE_TTL = 15 * 60  # seconds
 _wolves_cache: Dict[str, Any] = {"expires": 0.0, "data": None}
+_wolves_cache_lock = threading.Lock()
 
 
 def fetch_wolves_games(force_refresh: bool = False) -> Dict[str, Optional[Dict]]:
     now = time.time()
-    cached = _wolves_cache.get("data")
-    expires = _wolves_cache.get("expires", 0.0)
+    with _wolves_cache_lock:
+        cached = _wolves_cache.get("data")
+        expires = _wolves_cache.get("expires", 0.0)
     if (
         not force_refresh
         and isinstance(expires, (int, float))
@@ -3038,6 +3082,7 @@ def fetch_wolves_games(force_refresh: bool = False) -> Dict[str, Optional[Dict]]
         "next_game": next_game,
         "next_home_game": next_home,
     }
-    _wolves_cache["data"] = payload
-    _wolves_cache["expires"] = now + _WOLVES_CACHE_TTL
+    with _wolves_cache_lock:
+        _wolves_cache["data"] = payload
+        _wolves_cache["expires"] = now + _WOLVES_CACHE_TTL
     return payload
