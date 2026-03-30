@@ -75,12 +75,6 @@ remove_airplay_launchers() {
   done
 }
 
-remove_airplay_scripts() {
-  remove_file_if_exists "$PROJECT_DIR/scripts/airplay_mode.sh"
-  remove_file_if_exists "$PROJECT_DIR/scripts/airplay_takeover_daemon.sh"
-  remove_file_if_exists "$PROJECT_DIR/scripts/update_airplay_dependencies.sh"
-}
-
 uninstall_manifest_packages() {
   if [[ ! -f "$MANIFEST_PATH" ]]; then
     warn "No AirPlay package manifest found at $MANIFEST_PATH"
@@ -152,7 +146,6 @@ main() {
   log "Uninstalling AirPlay components for Desk Display from $PROJECT_DIR"
   stop_disable_service_if_exists
   remove_airplay_launchers
-  remove_airplay_scripts
   uninstall_manifest_packages
   remove_shared_packages_if_requested
   log "AirPlay uninstall complete."
