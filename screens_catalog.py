@@ -30,7 +30,7 @@ RAW_SCREEN_IDS = [
     "verano logo", "vrnof",
     "weather logo", "weather1", "weather2", "weather hourly", "weather daily", "weather radar", "inside",
     "verano logo", "vrnof",
-    "bears logo", "bears stand1", "bears stand2", "bears next", "bears next season", "nfl logo", "NFL Scoreboard", "NFL Overview NFC", "NFL Overview AFC", "NFL Standings NFC", "NFL Standings AFC", "nba logo", "NBA Scoreboard", "NCAAM Scoreboard", "bulls logo", "bulls stand1", "bulls last", "bulls live", "bulls next", "bulls next home",
+    "bears logo", "bears stand1", "bears stand2", "bears next", "bears next season", "nfl logo", "NFL Scoreboard", "NFL Overview NFC", "NFL Overview AFC", "NFL Standings NFC", "NFL Standings AFC", "nba logo", "NBA Scoreboard", "NBA Playoffs", "NCAAM Scoreboard", "bulls logo", "bulls stand1", "bulls last", "bulls live", "bulls next", "bulls next home",
     "hawks logo", "hawks stand1", "hawks last", "hawks live", "hawks next", "hawks next home", "nhl logo", "NHL Scoreboard", "NHL Playoffs", "NHL Standings Overview West", "NHL Standings Overview East", "NHL Standings West", "NHL Standings West v2", "NHL Standings East", "NHL Standings East v2",
     "wolves logo", "wolves last", "wolves next", "wolves next home",
     "cubs logo", "cubs stand1", "cubs stand2",
