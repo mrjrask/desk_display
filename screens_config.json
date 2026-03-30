@@ -17,8 +17,20 @@
     "hawks live": 1,
     "hawks next": 2,
     "hawks next home": 2,
-    "NHL Standings West": 0,
-    "NHL Standings East": 0,
+    "NHL Standings West": {
+      "frequency": 5,
+      "alt": {
+        "screen": "NHL Standings West v2",
+        "frequency": 2
+      }
+    },
+    "NHL Standings East": {
+      "frequency": 5,
+      "alt": {
+        "screen": "NHL Standings East v2",
+        "frequency": 2
+      }
+    },
     "nhl logo": 0,
     "NHL Scoreboard": 1,
     "NHL Standings Overview West": 3,
@@ -32,8 +44,8 @@
     "cubs logo": 2,
     "cubs stand1": 0,
     "cubs stand2": 0,
-    "cubs stand3": 0,
-    "cubs last": 0,
+    "cubs stand3": 2,
+    "cubs last": 2,
     "cubs result": 0,
     "cubs live": 1,
     "cubs next": 2,
@@ -41,7 +53,7 @@
     "sox logo": 5,
     "sox stand1": 0,
     "sox stand2": 0,
-    "sox stand3": 0,
+    "sox stand3": 5,
     "sox last": 5,
     "sox live": 1,
     "sox next": 5,
@@ -84,7 +96,8 @@
     "nba logo": 0,
     "NBA Scoreboard": 4,
     "NCAAM Scoreboard": 5,
-    "quad": 0
+    "quad": 0,
+    "NHL Playoffs": 0
   },
   "playlists": {
     "playlist-1771301244817-427": {
@@ -118,6 +131,14 @@
         },
         {
           "screen": "weather daily"
+        }
+      ]
+    },
+    "playlist-1771301264049-358": {
+      "label": "sensors",
+      "steps": [
+        {
+          "screen": "inside"
         }
       ]
     },
@@ -181,6 +202,9 @@
         },
         {
           "screen": "NHL Standings East v2"
+        },
+        {
+          "screen": "NHL Playoffs"
         }
       ]
     },
@@ -380,6 +404,9 @@
     },
     {
       "playlist": "playlist-1771301254299-679"
+    },
+    {
+      "playlist": "playlist-1771301264049-358"
     },
     {
       "playlist": "playlist-1771301274262-66"
