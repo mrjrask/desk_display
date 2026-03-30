@@ -210,6 +210,22 @@ sudo systemctl status airplay_desk_display.service
 
 Both devices must be on the same LAN/VLAN and permit mDNS (UDP 5353 multicast).
 
+If logs show `Failed to initialize GStreamer video renderer` with `-vs kmssink`, also verify:
+
+- `gstreamer1.0-plugins-bad` is installed (contains `kmssink`).
+- DRM devices are present and accessible (`/dev/dri/card0`, `/dev/dri/renderD128`).
+- The AirPlay service user is in the `video` (and sometimes `render`) group.
+- No other process has an exclusive DRM lock on the target connector.
+
+Useful checks:
+
+```bash
+dpkg -s gstreamer1.0-plugins-bad
+id "$USER"
+ls -l /dev/dri
+sudo -u "$(systemctl show -p User --value airplay_desk_display.service)" bash -lc 'gst-inspect-1.0 kmssink'
+```
+
 ---
 
 ## Configuration
