@@ -7,10 +7,32 @@ warn() { printf '[AIRPLAY][WARN] %s\n' "$*"; }
 load_env_file() {
   local env_file="$1"
   [[ -f "$env_file" ]] || return 0
-  set -a
-  # shellcheck disable=SC1090
-  source "$env_file"
-  set +a
+  local raw_line line key value
+
+  while IFS= read -r raw_line || [[ -n "$raw_line" ]]; do
+    line="${raw_line#"${raw_line%%[![:space:]]*}"}"
+    [[ -z "$line" ]] && continue
+    [[ "${line:0:1}" == "#" ]] && continue
+    [[ "$line" == *"="* ]] || continue
+
+    key="${line%%=*}"
+    value="${line#*=}"
+
+    key="${key%"${key##*[![:space:]]}"}"
+    value="${value#"${value%%[![:space:]]*}"}"
+
+    [[ "$key" =~ ^[A-Za-z_][A-Za-z0-9_]*$ ]] || continue
+
+    if [[ ${#value} -ge 2 ]]; then
+      if [[ "${value:0:1}" == "\"" && "${value: -1}" == "\"" ]]; then
+        value="${value:1:${#value}-2}"
+      elif [[ "${value:0:1}" == "'" && "${value: -1}" == "'" ]]; then
+        value="${value:1:${#value}-2}"
+      fi
+    fi
+
+    export "$key=$value"
+  done < "$env_file"
 }
 
 SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
