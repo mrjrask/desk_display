@@ -105,6 +105,7 @@ start_desk_display() {
 }
 
 desk_display_paused=0
+AIRPLAY_VIDEO_SINK_AUTO_FORCED=0
 
 resume_desk_display_on_exit() {
   if [[ "$desk_display_paused" -eq 1 ]]; then
@@ -125,6 +126,7 @@ build_uxplay_command() {
     if [[ -r /proc/device-tree/model ]] && tr -d '\0' </proc/device-tree/model | grep -qi 'raspberry pi'; then
       if [[ -z "${DISPLAY:-}" && -z "${WAYLAND_DISPLAY:-}" ]]; then
         AIRPLAY_VIDEO_SINK="kmssink"
+        AIRPLAY_VIDEO_SINK_AUTO_FORCED=1
       fi
     fi
   fi
@@ -150,17 +152,15 @@ build_uxplay_command() {
   cmd_ref=( "$AIRPLAY_BIN" "${args[@]}" )
 }
 
-main() {
-  ensure_runtime_dir
-  trap resume_desk_display_on_exit EXIT INT TERM
-
+run_uxplay_session() {
+  local connected=0
+  local kms_renderer_failed=0
   local -a uxplay_cmd=()
   build_uxplay_command uxplay_cmd
 
   log "Starting AirPlay takeover receiver at ${AIRPLAY_RESOLUTION}"
   log "Command: $(printf '%q ' "${uxplay_cmd[@]}")"
 
-  local connected=0
   while IFS= read -r line; do
     printf '%s\n' "$line"
 
@@ -180,7 +180,32 @@ main() {
       start_desk_display
       desk_display_paused=0
     fi
+
+    if [[ "$lower" == *"failed to initialize gstreamer video renderer"* || "$lower" == *"could not get allowed gstcaps of device"* ]]; then
+      kms_renderer_failed=1
+    fi
   done < <(stdbuf -oL -eL "${uxplay_cmd[@]}" 2>&1)
+
+  return $kms_renderer_failed
+}
+
+main() {
+  ensure_runtime_dir
+  trap resume_desk_display_on_exit EXIT INT TERM
+
+  if run_uxplay_session; then
+    return 0
+  fi
+
+  if [[ "$AIRPLAY_VIDEO_SINK_AUTO_FORCED" -eq 1 && "$AIRPLAY_VIDEO_SINK" == "kmssink" ]]; then
+    warn "Auto-selected kmssink failed to initialize. Retrying with uxplay default video sink."
+    AIRPLAY_VIDEO_SINK=""
+    AIRPLAY_VIDEO_SINK_AUTO_FORCED=0
+    run_uxplay_session
+    return $?
+  fi
+
+  return 1
 }
 
 main "$@"
