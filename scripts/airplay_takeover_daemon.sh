@@ -52,6 +52,26 @@ DESK_DISPLAY_SERVICE_NAME="${DESK_DISPLAY_SERVICE_NAME:-desk_display.service}"
 DESK_DISPLAY_USER_SERVICE_NAME="${DESK_DISPLAY_USER_SERVICE_NAME:-desk_display-kernel.service}"
 DESK_DISPLAY_SESSION_USER="${DESK_DISPLAY_SESSION_USER:-${SUDO_USER:-$(whoami)}}"
 
+ensure_runtime_dir() {
+  if [[ -n "${XDG_RUNTIME_DIR:-}" && -d "${XDG_RUNTIME_DIR:-}" ]]; then
+    return 0
+  fi
+
+  local uid runtime_dir fallback_runtime_dir
+  uid=$(id -u 2>/dev/null || true)
+  runtime_dir="/run/user/$uid"
+  if [[ -d "$runtime_dir" ]]; then
+    export XDG_RUNTIME_DIR="$runtime_dir"
+    return 0
+  fi
+
+  fallback_runtime_dir="/tmp/desk-display-xdg-runtime-$uid"
+  mkdir -p "$fallback_runtime_dir"
+  chmod 700 "$fallback_runtime_dir" >/dev/null 2>&1 || true
+  export XDG_RUNTIME_DIR="$fallback_runtime_dir"
+  warn "XDG runtime dir /run/user/$uid is unavailable; using $XDG_RUNTIME_DIR"
+}
+
 if ! command -v "$AIRPLAY_BIN" >/dev/null 2>&1; then
   warn "AirPlay binary '$AIRPLAY_BIN' is not installed."
   exit 1
@@ -105,6 +125,8 @@ build_uxplay_command() {
 }
 
 main() {
+  ensure_runtime_dir
+
   local -a uxplay_cmd=()
   build_uxplay_command uxplay_cmd
 
@@ -118,13 +140,13 @@ main() {
     local lower
     lower=$(printf '%s' "$line" | tr '[:upper:]' '[:lower:]')
 
-    if [[ "$lower" == *"connected"* ]] && [[ $connected -eq 0 ]]; then
+    if [[ "$lower" == *"begin streaming to gstreamer video pipeline"* || "$lower" == *"starting mirroring"* ]] && [[ $connected -eq 0 ]]; then
       connected=1
       log "AirPlay client connected. Stopping desk_display services."
       stop_desk_display
     fi
 
-    if [[ "$lower" == *"disconnected"* || "$lower" == *"connection closed"* ]] && [[ $connected -eq 1 ]]; then
+    if [[ "$lower" == *"disconnected"* || "$lower" == *"teardown"* || "$lower" == *"stopped"* ]] && [[ $connected -eq 1 ]]; then
       connected=0
       log "AirPlay client disconnected. Starting desk_display services."
       start_desk_display
