@@ -55,10 +55,8 @@ from utils import (
     clone_font,
 )
 
-# Import shared NHL data fetching logic
+# Import shared NHL render helpers from v1 module.
 from screens.nhl_scoreboard import (
-    _fetch_games_for_date,
-    _scoreboard_date,
     _is_game_in_progress,
     _is_game_final,
     _should_display_scores,
@@ -71,6 +69,7 @@ from screens.nhl_scoreboard import (
     _get_league_logo,
     render_nhl_scoreboard as render_nhl_scoreboard_v1,
 )
+from services.sports.nhl import fetch_scoreboard
 
 # ─── Constants ────────────────────────────────────────────────────────────────
 HYPERPIXEL_LAYOUT = is_hyperpixel_next_layout()
@@ -470,7 +469,7 @@ def render_nhl_scoreboard_v2(display, games: list[dict], transition: bool = Fals
 
 @log_call
 def draw_nhl_scoreboard_v2(display, transition: bool = False) -> ScreenImage:
-    games = _fetch_games_for_date(_scoreboard_date())
+    games = fetch_scoreboard()
     return render_nhl_scoreboard_v2(display, games, transition=transition)
 
 
