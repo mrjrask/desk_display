@@ -237,6 +237,19 @@ def _is_adafruit_minipitft_layout(width: int, height: int) -> bool:
     return sorted((int(width), int(height))) == [135, 240]
 
 
+def _is_waveshare_oled_lcd_hat() -> bool:
+    """Return True when running on the Waveshare OLED/LCD HAT (A) install profile."""
+    marker = os.environ.get("WAVESHARE_OLED_LCD_HAT_A_INSTALLED", "").strip().lower()
+    if marker in {"1", "true", "yes", "on"}:
+        return True
+    # The Waveshare installer writes these env vars for the main service.
+    if os.environ.get("WAVESHARE_OLED_MAX_VALUE_FONT_SIZE") is not None:
+        return True
+    if os.environ.get("WAVESHARE_OLED_MAX_TIME_FONT_SIZE") is not None:
+        return True
+    return False
+
+
 def _logo_scroll_speed_for_layout(width: int, height: int) -> float:
     base_speed = 2.2
     if _is_display_hat_mini_layout(width, height):
@@ -407,6 +420,7 @@ def build_screen_registry(context: ScreenContext) -> Tuple[Dict[str, ScreenDefin
     registry: Dict[str, ScreenDefinition] = {}
     metadata: Dict[str, Any] = {}
     adafruit_minipitft_layout = _is_adafruit_minipitft_layout(WIDTH, HEIGHT)
+    waveshare_oled_lcd_hat = _is_waveshare_oled_lcd_hat()
 
     def register(screen_id: str, func: RenderCallable, available: bool = True, **extra):
         registry[screen_id] = ScreenDefinition(
@@ -782,7 +796,7 @@ def build_screen_registry(context: ScreenContext) -> Tuple[Dict[str, ScreenDefin
                 (context.cache.get("scoreboards") or {}).get("nfl") or [],
                 transition=True,
             )
-            if adafruit_minipitft_layout
+            if adafruit_minipitft_layout or waveshare_oled_lcd_hat
             else render_nfl_scoreboard_v2(
                 context.display,
                 (context.cache.get("scoreboards") or {}).get("nfl") or [],
@@ -865,7 +879,7 @@ def build_screen_registry(context: ScreenContext) -> Tuple[Dict[str, ScreenDefin
                     (context.cache.get("scoreboards") or {}).get("nhl") or [],
                     transition=True,
                 )
-                if adafruit_minipitft_layout
+                if adafruit_minipitft_layout or waveshare_oled_lcd_hat
                 else render_nhl_scoreboard_v2(
                     context.display,
                     (context.cache.get("scoreboards") or {}).get("nhl") or [],
@@ -1114,7 +1128,7 @@ def build_screen_registry(context: ScreenContext) -> Tuple[Dict[str, ScreenDefin
                 mlb_scoreboard_games,
                 transition=True,
             )
-            if adafruit_minipitft_layout
+            if adafruit_minipitft_layout or waveshare_oled_lcd_hat
             else render_mlb_scoreboard_v2(
                 context.display,
                 mlb_scoreboard_games,
@@ -1140,7 +1154,7 @@ def build_screen_registry(context: ScreenContext) -> Tuple[Dict[str, ScreenDefin
                 (context.cache.get("scoreboards") or {}).get("nba") or [],
                 transition=True,
             )
-            if adafruit_minipitft_layout
+            if adafruit_minipitft_layout or waveshare_oled_lcd_hat
             else render_nba_scoreboard_v2(
                 context.display,
                 (context.cache.get("scoreboards") or {}).get("nba") or [],
