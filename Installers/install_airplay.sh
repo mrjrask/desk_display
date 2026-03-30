@@ -59,6 +59,7 @@ install_airplay_packages() {
   local -a required_packages=(
     uxplay
     avahi-daemon
+    libnss-mdns
     gstreamer1.0-tools
     gstreamer1.0-libav
     gstreamer1.0-plugins-base
@@ -92,6 +93,17 @@ install_airplay_packages() {
   else
     : | ${SUDO:-} tee "$MANIFEST_PATH" >/dev/null
     log "No new packages recorded in manifest"
+  fi
+
+  if command -v systemctl >/dev/null 2>&1; then
+    log "Ensuring avahi-daemon is enabled and running for AirPlay discovery"
+    ${SUDO:-} systemctl enable --now avahi-daemon || warn "Could not enable/start avahi-daemon"
+
+    if ! ${SUDO:-} systemctl is-active --quiet avahi-daemon; then
+      warn "avahi-daemon is not active; AirPlay receiver may not appear in device lists."
+    fi
+  else
+    warn "systemctl not found; cannot auto-start avahi-daemon for AirPlay discovery."
   fi
 }
 

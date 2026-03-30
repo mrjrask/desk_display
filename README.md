@@ -196,9 +196,19 @@ AirPlay installer behavior includes:
 
 - Installs `uxplay` + streaming dependencies.
 - Creates `airplay_desk_display.service`.
+- Ensures `avahi-daemon` is enabled/running so the receiver is discoverable over mDNS.
 - Runs AirPlay in fullscreen mode and requests native display resolution.
 - Stops Desk Display services when an AirPlay client connects and starts them again when disconnected.
 - Supports `AIRPLAY_PAIRING_CODE` from `.env` for pairing PIN protection.
+
+If AirPlay service is running but the receiver does not appear in your device list, verify:
+
+```bash
+sudo systemctl status avahi-daemon
+sudo systemctl status airplay_desk_display.service
+```
+
+Both devices must be on the same LAN/VLAN and permit mDNS (UDP 5353 multicast).
 
 ---
 
