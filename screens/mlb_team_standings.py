@@ -54,6 +54,7 @@ if _IS_1080P_LAYOUT:
     LOGO_SZ = min(LOGO_SZ, _VRNOF_MATCH_LOGO_HEIGHT_1080)
 MARGIN  = scale_value(6)
 FRACTION_FONT_SCALE = 0.6
+_HAWKS_STAND1_MATCH_SCREEN_IDS = {"cubs stand1", "cubs stand2", "sox stand1", "sox stand2"}
 
 
 def _restore_font(font):
@@ -130,6 +131,19 @@ def _format_record_values(record, *, ot_label="OT"):
         parts.append(f"{tie_label}: {tie_val}")
 
     return " ".join(parts)
+
+
+def _hawks_stand1_match_metrics(screen_id: str | None) -> tuple[int | None, int]:
+    """Return logo/font overrides that match the Hawks Stand 1 Hyperpixel sizing."""
+
+    if not screen_id or str(screen_id).lower() not in _HAWKS_STAND1_MATCH_SCREEN_IDS:
+        return None, 0
+
+    if is_hyperpixel_4_square_layout():
+        return max(1, int(round(LOGO_SZ * 1.5))), 8
+    if is_hyperpixel_next_layout():
+        return max(1, int(round(LOGO_SZ * 2.25))), 12
+    return None, 0
 
 
 def _format_streak(streak) -> str:
@@ -242,11 +256,15 @@ def draw_standings_screen1(
     img  = Image.new("RGB", (WIDTH, HEIGHT), background_color)
     draw = ImageDraw.Draw(img)
 
+    hawks_logo_size, hawks_font_offset = _hawks_stand1_match_metrics(screen_id)
+
     # Logo
     logo = None
     try:
         logo_img = Image.open(logo_path).convert("RGBA")
         logo_target = LOGO_SZ if logo_size is None else logo_size
+        if hawks_logo_size is not None and logo_size is None:
+            logo_target = hawks_logo_size
         if _IS_1080P_LAYOUT:
             logo_target = min(logo_target, _VRNOF_MATCH_LOGO_HEIGHT_1080)
         logo = fit_logo_to_box(logo_img, logo_target)
@@ -275,8 +293,9 @@ def draw_standings_screen1(
         gb_font = clone_font(gb_font, max(1, int(round(getattr(gb_font, "size", 20) * 1.35))))
         wc_font = clone_font(wc_font, max(1, int(round(getattr(wc_font, "size", 20) * 1.35))))
 
-    if font_size_offset:
-        offset = int(round(font_size_offset))
+    total_font_offset = int(round(font_size_offset)) + hawks_font_offset
+    if total_font_offset:
+        offset = total_font_offset
         record_font = clone_font(record_font, max(1, getattr(record_font, "size", 24) + offset))
         points_font = clone_font(points_font, max(1, getattr(points_font, "size", 20) + offset))
         rank_font = clone_font(rank_font, max(1, getattr(rank_font, "size", 20) + offset))
@@ -413,11 +432,15 @@ def draw_standings_screen2(
     img  = Image.new("RGB", (WIDTH, HEIGHT), background_color)
     draw = ImageDraw.Draw(img)
 
+    hawks_logo_size, hawks_font_offset = _hawks_stand1_match_metrics(screen_id)
+
     # Logo
     logo = None
     try:
         logo_img = Image.open(logo_path).convert("RGBA")
         logo_target = LOGO_SZ if logo_size is None else logo_size
+        if hawks_logo_size is not None and logo_size is None:
+            logo_target = hawks_logo_size
         if _IS_1080P_LAYOUT:
             logo_target = min(logo_target, _VRNOF_MATCH_LOGO_HEIGHT_1080)
         logo = fit_logo_to_box(logo_img, logo_target)
@@ -481,7 +504,13 @@ def draw_standings_screen2(
         }.get(split, split)
         items.append(f"{label}: {find_split(split)}")
 
-    lines2 = [(rec_txt, FONT_STAND2_RECORD_RESTORED)] + [(it, FONT_STAND2_VALUE_RESTORED) for it in items]
+    record_font = FONT_STAND2_RECORD_RESTORED
+    value_font = FONT_STAND2_VALUE_RESTORED
+    if hawks_font_offset:
+        record_font = clone_font(record_font, max(1, getattr(record_font, "size", 24) + hawks_font_offset))
+        value_font = clone_font(value_font, max(1, getattr(value_font, "size", 20) + hawks_font_offset))
+
+    lines2 = [(rec_txt, record_font)] + [(it, value_font) for it in items]
     heights2 = [draw.textsize(txt,font)[1] for txt,font in lines2]
     total2   = sum(heights2)
     avail2   = bottom_limit - text_top
