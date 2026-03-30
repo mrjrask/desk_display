@@ -94,10 +94,10 @@ _BASE_FONTS = {
 
 _HYPERPIXEL_FONTS = {
     "title": 34,
-    "division": 28,
-    "team": 28,
-    "stats": 26,
-    "gb_suffix": 16,
+    "division": 24,
+    "team": 26,
+    "stats": 24,
+    "gb_suffix": 19,
 }
 
 if _IS_HYPERPIXEL_4_OR_LARGER:
