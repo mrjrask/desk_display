@@ -237,8 +237,12 @@ def _save_pressure_history(now_ts: float) -> None:
             if tmp_path:
                 try:
                     os.remove(tmp_path)
-                except OSError:
-                    pass
+                except OSError as cleanup_exc:
+                    logging.debug(
+                        "pressure_history cleanup skipped tmp_path=%s err=%s",
+                        tmp_path,
+                        cleanup_exc,
+                    )
 
 # -----------------------------------------------------------------------------
 # WEATHER — Apple WeatherKit primary, OpenWeatherMap secondary
@@ -1062,13 +1066,13 @@ def _parse_nba_datetime(value):
     for fmt in ("%Y-%m-%dT%H:%M:%SZ", "%Y-%m-%dT%H:%M:%S.%fZ"):
         try:
             parsed = datetime.datetime.strptime(text, fmt)
-        except Exception:
+        except ValueError:
             continue
         parsed = parsed.replace(tzinfo=datetime.timezone.utc)
         return parsed.astimezone(CENTRAL_TIME)
     try:
         parsed = datetime.datetime.fromisoformat(text.replace("Z", "+00:00"))
-    except Exception:
+    except ValueError:
         return None
     if parsed.tzinfo is None:
         parsed = parsed.replace(tzinfo=datetime.timezone.utc)
@@ -1518,8 +1522,8 @@ def _fetch_nhl_team_standings_espn(team_abbr: str):
             pct = _stat(stats, "winPercent")
             try:
                 pct = float(pct)
-            except Exception:
-                pass
+            except (TypeError, ValueError):
+                logging.debug("NHL standings pct fallback team=%s raw_pct=%r", team_abbr, pct)
 
             logging.info("Using ESPN NHL standings fallback for %s", team_abbr)
 
@@ -1765,8 +1769,8 @@ def _fetch_nba_team_standings_espn() -> Optional[dict]:
             pct = _stat(stats, "winPercent")
             try:
                 pct = float(pct)
-            except Exception:
-                pass
+            except (TypeError, ValueError):
+                logging.debug("NBA standings pct fallback team=%s raw_pct=%r", NBA_TEAM_TRICODE, pct)
 
             logging.debug("Using ESPN NBA standings fallback for %s", NBA_TEAM_TRICODE)
 
@@ -2449,6 +2453,11 @@ def _extract_team_info(row: Dict, prefix: str) -> Optional[Dict]:
 
 
 def _parse_datetime_candidates(row: Dict) -> Optional[datetime.datetime]:
+    def _to_central(naive_dt: datetime.datetime) -> datetime.datetime:
+        if hasattr(CENTRAL_TIME, "localize"):
+            return CENTRAL_TIME.localize(naive_dt)
+        return naive_dt.replace(tzinfo=CENTRAL_TIME)
+
     candidates = [
         row.get("game_date_time"),
         row.get("game_date_time_local"),
@@ -2473,8 +2482,10 @@ def _parse_datetime_candidates(row: Dict) -> Optional[datetime.datetime]:
             if dt_obj.tzinfo is None:
                 return pytz.UTC.localize(dt_obj)
             return dt_obj
-        except Exception:
-            pass
+        except (TypeError, ValueError):
+            # Intentionally continue: inputs arrive in several formats, and we
+            # try multiple fallbacks before returning None.
+            continue
 
     date_only = row.get("game_date") or row.get("date")
     time_only = row.get("game_time") or row.get("time")
@@ -2482,14 +2493,14 @@ def _parse_datetime_candidates(row: Dict) -> Optional[datetime.datetime]:
         for fmt in ("%Y-%m-%d %I:%M %p", "%Y-%m-%d %H:%M"):
             try:
                 naive = datetime.datetime.strptime(f"{date_only} {time_only}", fmt)
-                return CENTRAL_TIME.localize(naive)
-            except Exception:
+                return _to_central(naive)
+            except ValueError:
                 continue
     if isinstance(date_only, str):
         try:
             naive = datetime.datetime.strptime(date_only, "%Y-%m-%d")
-            return CENTRAL_TIME.localize(naive)
-        except Exception:
+            return _to_central(naive)
+        except ValueError:
             return None
     return None
 

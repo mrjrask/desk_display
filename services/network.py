@@ -42,7 +42,8 @@ class ConnectivityMonitor:
             sock = socket.create_connection(("weatherkit.apple.com", 443), timeout=3)
             sock.close()
             return True
-        except:
+        except OSError as exc:
+            logging.debug("connectivity_check failed (weatherkit.apple.com:443): %s", exc)
             return False
 
     def _loop(self):

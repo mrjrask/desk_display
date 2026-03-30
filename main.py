@@ -358,8 +358,12 @@ def _toggle_display_updates() -> bool:
         if _manual_backlight_level is not None and hasattr(display, "set_backlight"):
             try:
                 display.set_backlight(_manual_backlight_level)
-            except Exception:
-                pass
+            except (AttributeError, OSError, RuntimeError) as exc:
+                logging.debug(
+                    "toggle_display_updates backlight-restore fallback level=%s err=%s",
+                    _manual_backlight_level,
+                    exc,
+                )
         _manual_backlight_level = None
         if not _dark_hours_active:
             resume_display_updates()
@@ -371,14 +375,15 @@ def _toggle_display_updates() -> bool:
         try:
             _manual_backlight_level = display.backlight_level()
             display.set_backlight(0.0)
-        except Exception:
+        except (AttributeError, OSError, RuntimeError) as exc:
+            logging.debug("toggle_display_updates backlight-off fallback err=%s", exc)
             _manual_backlight_level = None
     try:
         resume_display_updates()
         clear_display(display)
         display.show()
-    except Exception:
-        pass
+    except (AttributeError, OSError, RuntimeError) as exc:
+        logging.debug("toggle_display_updates clear fallback err=%s", exc)
     suspend_display_updates()
     return True
 
@@ -586,10 +591,10 @@ def _clear_display_immediately(reason: Optional[str] = None) -> None:
         clear_display(display)
         try:
             display.show()
-        except Exception:
-            pass
-    except Exception:
-        pass
+        except (AttributeError, OSError, RuntimeError) as exc:
+            logging.debug("clear_display_immediately display.show fallback err=%s", exc)
+    except (AttributeError, OSError, RuntimeError) as exc:
+        logging.warning("clear_display_immediately fallback reason=%s err=%s", reason, exc)
     finally:
         _display_cleared.set()
         suspend_display_updates()
@@ -1265,8 +1270,8 @@ def maybe_archive_screenshots(latest_folder: str) -> None:
                 if os.path.isdir(archive_dir) and not os.listdir(archive_dir):
                     try:
                         shutil.rmtree(archive_dir)
-                    except Exception:
-                        pass
+                    except OSError as exc:
+                        logging.debug("archive cleanup skipped dir=%s err=%s", archive_dir, exc)
 
         _register_screenshots_removed(moved)
 
@@ -1892,8 +1897,8 @@ def main_loop():
                         resume_display_updates()
                         clear_display(display)
                         display.show()
-                    except Exception:
-                        pass
+                    except (AttributeError, OSError, RuntimeError) as exc:
+                        logging.warning("dark-hours clear fallback screen_id=dark-hours err=%s", exc)
                     suspend_display_updates()
                 _dark_hours_active = True
 

@@ -11,6 +11,7 @@ Screen 2: logo at top center, then overall record and splits.
 """
 import os
 import time
+import logging
 from PIL import Image, ImageDraw
 import config
 from config import (
@@ -85,7 +86,7 @@ FONT_STAND2_VALUE_RESTORED = _restore_font(FONT_STAND2_VALUE)
 def _ord(n):
     try:
         i = int(n)
-    except:
+    except (TypeError, ValueError):
         return f"{n}th"
     if i <= 0:
         return "-"
@@ -108,8 +109,8 @@ def format_games_back(gb):
             return f"{int(v_abs)}"
         if abs(v_abs - int(v_abs) - 0.5) < 1e-3:
             return f"{int(v_abs)} 1/2" if int(v_abs) > 0 else "1/2"
-    except:
-        pass
+    except (TypeError, ValueError):
+        logging.debug("format_games_back fallback for value=%r", gb)
     return str(gb)
 
 
@@ -275,8 +276,13 @@ def draw_standings_screen1(
         if _IS_1080P_LAYOUT:
             logo_target = min(logo_target, _VRNOF_MATCH_LOGO_HEIGHT_1080)
         logo = fit_logo_to_box(logo_img, logo_target)
-    except:
-        pass
+    except (FileNotFoundError, OSError) as exc:
+        logging.warning(
+            "draw_standings_screen1 logo fallback screen_id=%s logo_path=%s err=%s",
+            screen_id,
+            logo_path,
+            exc,
+        )
     if logo:
         x0 = (WIDTH - logo.width)//2
         img.paste(logo,(x0,0),logo)
@@ -332,7 +338,7 @@ def draw_standings_screen1(
     dr = dr_raw if dr_raw not in (None, "") else "-"
     try:
         dr_lbl = "Last" if int(dr) == int(division_last_rank) else _ord(dr)
-    except:
+    except (TypeError, ValueError):
         dr_lbl = dr
     rank_txt = f"{dr_lbl} in {division_name}"
 
@@ -351,7 +357,7 @@ def draw_standings_screen1(
             base = format_games_back(wc_raw)
             try:
                 rank_int = int(wc_rank)
-            except:
+            except (TypeError, ValueError):
                 rank_int = None
 
             if wc_raw == 0:
@@ -451,8 +457,13 @@ def draw_standings_screen2(
         if _IS_1080P_LAYOUT:
             logo_target = min(logo_target, _VRNOF_MATCH_LOGO_HEIGHT_1080)
         logo = fit_logo_to_box(logo_img, logo_target)
-    except:
-        pass
+    except (FileNotFoundError, OSError) as exc:
+        logging.warning(
+            "draw_standings_screen2 logo fallback screen_id=%s logo_path=%s err=%s",
+            screen_id,
+            logo_path,
+            exc,
+        )
     if logo:
         x0 = (WIDTH - logo.width) // 2
         img.paste(logo, (x0, 0), logo)
