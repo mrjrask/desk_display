@@ -225,8 +225,116 @@ def _next_quad_page_tiles() -> tuple[bool, float, list[str]]:
 RADAR_LOOKAHEAD_HOURS = 8
 WEATHER_CURRENT_TTL = _dt.timedelta(minutes=20)
 WEATHER_HOURLY_TTL = _dt.timedelta(hours=1)
-NHL_BREAK_START = _dt.date(2026, 2, 6)
-NHL_BREAK_END = _dt.date(2026, 2, 24)
+_SCREENS_CONFIG_DEFAULT_PATH = os.environ.get(
+    "SCREENS_CONFIG_PATH",
+    os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "screens_config.json"),
+)
+_SCREENS_CONFIG_LOCAL_PATH = os.environ.get(
+    "SCREENS_CONFIG_LOCAL_PATH",
+    os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "screens_config.local.json"),
+)
+_nhl_break_windows_cache_lock = threading.Lock()
+_nhl_break_windows_cache_source: Optional[str] = None
+_nhl_break_windows_cache_mtime: Optional[float] = None
+_nhl_break_windows_cache: tuple[tuple[_dt.date, _dt.date], ...] = ()
+
+
+def _active_screens_config_path() -> str:
+    return _SCREENS_CONFIG_LOCAL_PATH if os.path.exists(_SCREENS_CONFIG_LOCAL_PATH) else _SCREENS_CONFIG_DEFAULT_PATH
+
+
+def _normalize_nhl_break_windows(raw: Any) -> tuple[tuple[_dt.date, _dt.date], ...]:
+    windows: list[tuple[_dt.date, _dt.date]] = []
+
+    if isinstance(raw, dict):
+        iterable = raw.values()
+    elif isinstance(raw, list):
+        iterable = raw
+    else:
+        iterable = []
+
+    for item in iterable:
+        if not isinstance(item, dict):
+            continue
+        start_raw = item.get("start")
+        end_raw = item.get("end")
+        if not isinstance(start_raw, str) or not isinstance(end_raw, str):
+            continue
+        try:
+            start = _dt.date.fromisoformat(start_raw)
+            end = _dt.date.fromisoformat(end_raw)
+        except ValueError:
+            continue
+        if start > end:
+            start, end = end, start
+        windows.append((start, end))
+
+    windows.sort(key=lambda window: window[0])
+    return tuple(windows)
+
+
+def _load_nhl_break_windows() -> tuple[tuple[_dt.date, _dt.date], ...]:
+    """Load NHL break windows from env or screens config, caching by source and mtime."""
+
+    global _nhl_break_windows_cache_source, _nhl_break_windows_cache_mtime, _nhl_break_windows_cache
+
+    env_payload = os.environ.get("NHL_BREAK_WINDOWS_JSON")
+    if env_payload is not None:
+        with _nhl_break_windows_cache_lock:
+            if _nhl_break_windows_cache_source == f"env:{env_payload}":
+                return _nhl_break_windows_cache
+            try:
+                payload = json.loads(env_payload)
+            except Exception:
+                logging.warning("Invalid NHL_BREAK_WINDOWS_JSON payload; NHL scoreboards will remain enabled.")
+                payload = {}
+            windows = _normalize_nhl_break_windows(payload)
+            _nhl_break_windows_cache_source = f"env:{env_payload}"
+            _nhl_break_windows_cache_mtime = None
+            _nhl_break_windows_cache = windows
+            return windows
+
+    config_path = _active_screens_config_path()
+    try:
+        mtime = os.path.getmtime(config_path)
+    except OSError:
+        mtime = None
+
+    with _nhl_break_windows_cache_lock:
+        if (
+            _nhl_break_windows_cache_source == config_path
+            and _nhl_break_windows_cache_mtime == mtime
+        ):
+            return _nhl_break_windows_cache
+
+        payload: Any = {}
+        try:
+            with open(config_path, "r", encoding="utf-8") as fh:
+                payload = json.load(fh)
+        except Exception:
+            payload = {}
+
+        if isinstance(payload, dict):
+            sports = payload.get("sports")
+            nhl = sports.get("nhl") if isinstance(sports, dict) else payload.get("nhl")
+            break_windows = nhl.get("break_windows") if isinstance(nhl, dict) else {}
+        else:
+            break_windows = {}
+
+        windows = _normalize_nhl_break_windows(break_windows)
+        _nhl_break_windows_cache_source = config_path
+        _nhl_break_windows_cache_mtime = mtime
+        _nhl_break_windows_cache = windows
+        return windows
+
+
+def _is_nhl_break_day(today: _dt.date) -> bool:
+    for start, end in _load_nhl_break_windows():
+        if start <= today <= end:
+            return True
+    return False
+
+
 def _is_1080p_or_higher(width: int, height: int) -> bool:
     """Return True when layout is 1080p-class (or higher) regardless of orientation."""
     short_edge = min(int(width), int(height))
@@ -614,9 +722,7 @@ def build_screen_registry(context: ScreenContext) -> Tuple[Dict[str, ScreenDefin
     scoreboards = (context.cache.get("scoreboards") or {})
     mlb_scoreboard_games = scoreboards.get("mlb") or []
     today = context.now.date()
-    nhl_scoreboards_available = scoreboards_available and not (
-        NHL_BREAK_START <= today <= NHL_BREAK_END
-    )
+    nhl_scoreboards_available = scoreboards_available and not _is_nhl_break_day(today)
 
     def _is_live_game_today(game: Any) -> bool:
         """Return True when *game* appears to be in progress today."""
