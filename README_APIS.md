@@ -9,13 +9,29 @@ This project pulls weather, travel, and sports data from a variety of third-part
 
 ## Connectivity test script
 
-Run the repository script below to probe all configured third-party API connections:
+Use the single supported diagnostics script below to probe third-party API
+reachability and app-level fetch helper behavior:
 
 ```bash
 python scripts/test_api_connections.py
 ```
 
-The script reports `OK`, `SKIP` (missing credentials), and `FAIL` (network/auth/payload issues) for each API family and returns a non-zero exit code only when at least one check fails.
+Common CLI usage:
+
+```bash
+# Human-readable output
+python scripts/test_api_connections.py
+
+# JSON output for automation/CI parsing
+python scripts/test_api_connections.py --json
+```
+
+Expected statuses and exit-code behavior:
+- `OK`: check passed.
+- `SKIP`: check intentionally skipped (usually due to missing optional credentials).
+- `FAIL`: connectivity, authentication, parsing, or payload-shape validation failed.
+- Exit code `0`: all checks are `OK` or `SKIP`.
+- Exit code `1`: one or more checks are `FAIL`.
 
 ---
 
