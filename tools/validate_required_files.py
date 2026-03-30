@@ -19,7 +19,7 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 IMAGE_EXTS = {".png", ".jpg", ".jpeg", ".webp", ".gif", ".bmp", ".tif", ".tiff"}
 PYTHON_EXT = ".py"
 EXEMPT_PATH_PREFIXES = ("tests/", "vendor/")
-OPTIONAL_MODULES = {"services.network"}
+OPTIONAL_MODULES: set[str] = set()
 
 
 @dataclass

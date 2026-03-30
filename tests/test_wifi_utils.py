@@ -135,3 +135,16 @@ def test_get_power_diagnostic_returns_raw_when_throttled(monkeypatch):
     monkeypatch.setattr(wifi_utils, "_run_command", lambda args: DummyResult(stdout="throttled=0x50005\n"))
 
     assert wifi_utils.get_power_diagnostic() == "throttled=0x50005"
+
+
+def test_wifi_state_source_of_truth_is_wifi_utils_state():
+    wifi_utils._update_state("no_internet", "OfficeWiFi")
+
+    assert wifi_utils.get_wifi_state() == ("no_internet", "OfficeWiFi")
+
+
+def test_services_package_exports_wifi_utils_only_for_wifi_monitoring():
+    import services
+
+    assert "wifi_utils" in services.__all__
+    assert "network" not in services.__all__
