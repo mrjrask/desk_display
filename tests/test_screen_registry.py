@@ -195,16 +195,44 @@ def test_inside_screen_hidden_when_sensor_unavailable(monkeypatch):
     assert registry["inside"].available is False
 
 
-def test_nhl_scoreboard_hidden_during_2026_break_window():
-    now = datetime.datetime(2026, 2, 10, 12, 0, tzinfo=CENTRAL_TIME)
+@pytest.mark.parametrize(
+    ("date_parts", "expected_available"),
+    [
+        ((2031, 2, 3), True),
+        ((2031, 2, 10), False),
+        ((2031, 2, 17), False),
+        ((2031, 2, 25), True),
+    ],
+)
+def test_nhl_scoreboard_availability_respects_configured_break_windows(
+    monkeypatch, date_parts, expected_available
+):
+    monkeypatch.setenv(
+        "NHL_BREAK_WINDOWS_JSON",
+        '{"2030-2031":{"start":"2031-02-10","end":"2031-02-17"}}',
+    )
+    now = datetime.datetime(*date_parts, 12, 0, tzinfo=CENTRAL_TIME)
     weather = {"hourly": []}
 
     registry, _ = build_screen_registry(
         _make_context(weather, now, cache_updates={"hawks": {"next": {"id": 1}}})
     )
 
-    assert registry["NHL Scoreboard"].available is False
-    assert registry["NHL Scoreboard v2"].available is False
+    assert registry["NHL Scoreboard"].available is expected_available
+    assert registry["NHL Scoreboard v2"].available is expected_available
+
+
+def test_invalid_nhl_break_config_falls_back_to_showing_nhl_scoreboards(monkeypatch):
+    monkeypatch.setenv("NHL_BREAK_WINDOWS_JSON", "{this-is-not-json")
+    now = datetime.datetime(2031, 2, 12, 12, 0, tzinfo=CENTRAL_TIME)
+    weather = {"hourly": []}
+
+    registry, _ = build_screen_registry(
+        _make_context(weather, now, cache_updates={"hawks": {"next": {"id": 1}}})
+    )
+
+    assert registry["NHL Scoreboard"].available is True
+    assert registry["NHL Scoreboard v2"].available is True
 
 
 def test_adafruit_minipitft_routes_scoreboard_v2_ids_to_v1_renderers(monkeypatch):
