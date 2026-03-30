@@ -771,10 +771,9 @@ def render_nfl_scoreboard(display, games: list[dict], transition: bool = False) 
 
 @log_call
 def draw_nfl_scoreboard(display, transition: bool = False) -> ScreenImage:
-    now = datetime.datetime.now(CENTRAL_TIME)
-    games = _fetch_games_for_week(now)
-    if not games:
-        games = _fetch_next_games(now.date())
+    from services.sports.nfl import fetch_scoreboard
+
+    games = fetch_scoreboard()
     return render_nfl_scoreboard(display, games, transition=transition)
 
 

@@ -1254,7 +1254,9 @@ def render_nba_scoreboard(display, games: list[dict], transition: bool = False) 
 
 @log_call
 def draw_nba_scoreboard(display, transition: bool = False) -> ScreenImage:
-    games = _fetch_games_for_date(_scoreboard_date())
+    from services.sports.nba import fetch_scoreboard
+
+    games = fetch_scoreboard()
     return render_nba_scoreboard(display, games, transition=transition)
 
 
