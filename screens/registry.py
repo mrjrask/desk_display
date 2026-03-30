@@ -82,6 +82,7 @@ from screens.nfl_standings import (
 )
 from screens.nhl_scoreboard import render_nhl_scoreboard
 from screens.nhl_scoreboard_v2 import render_nhl_scoreboard_v2
+from screens.nhl_playoffs import render_nhl_playoffs
 from screens.nhl_standings import (
     draw_nhl_standings_east,
     draw_nhl_standings_overview_east,
@@ -885,6 +886,15 @@ def build_screen_registry(context: ScreenContext) -> Tuple[Dict[str, ScreenDefin
                     (context.cache.get("scoreboards") or {}).get("nhl") or [],
                     transition=True,
                 )
+            ),
+            available=nhl_scoreboards_available,
+        )
+        register(
+            "NHL Playoffs",
+            lambda: render_nhl_playoffs(
+                context.display,
+                (context.cache.get("scoreboards") or {}).get("nhl") or [],
+                transition=True,
             ),
             available=nhl_scoreboards_available,
         )
