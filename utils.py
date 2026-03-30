@@ -13,30 +13,29 @@ Core utilities for the desk display project:
 import datetime
 import errno
 import html
+import logging
+import math
 import os
+import pwd
 import random
 import re
-import subprocess
 import subprocess
 import threading
 import time
 import warnings
 from contextlib import contextmanager
 from dataclasses import dataclass
+from io import BytesIO
 from pathlib import Path
-import pwd
 from typing import Any, Callable, Dict, Iterable, List, Optional, Tuple
 
 import functools
-import logging
-import math
+import PIL.ImageDraw as _ID
 import requests
-from io import BytesIO
 from PIL import Image, ImageDraw, ImageEnhance, ImageFont, ImageOps
 
 # ─── Pillow compatibility shim ─────────────────────────────────────────────
 # Re-add ImageDraw.textsize if missing (Pillow ≥10 compatibility)
-import PIL.ImageDraw as _ID
 if not hasattr(_ID.ImageDraw, "textsize"):
     def _textsize(self, text, font=None, *args, **kwargs):
         bbox = self.textbbox((0, 0), text, font=font)
