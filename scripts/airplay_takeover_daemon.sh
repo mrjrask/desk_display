@@ -106,6 +106,7 @@ start_desk_display() {
 
 desk_display_paused=0
 AIRPLAY_VIDEO_SINK_AUTO_FORCED=0
+AIRPLAY_AUTO_KMSSINK_ALLOWED=1
 
 resume_desk_display_on_exit() {
   if [[ "$desk_display_paused" -eq 1 ]]; then
@@ -122,7 +123,7 @@ build_uxplay_command() {
   # On Raspberry Pi systems without a desktop session, autovideosink can pick a
   # sink that renders in a small window. Force kmssink in that case so AirPlay
   # content fills the screen.
-  if [[ -z "$AIRPLAY_VIDEO_SINK" ]]; then
+  if [[ "$AIRPLAY_AUTO_KMSSINK_ALLOWED" -eq 1 && -z "$AIRPLAY_VIDEO_SINK" ]]; then
     if [[ -r /proc/device-tree/model ]] && tr -d '\0' </proc/device-tree/model | grep -qi 'raspberry pi'; then
       if [[ -z "${DISPLAY:-}" && -z "${WAYLAND_DISPLAY:-}" ]]; then
         AIRPLAY_VIDEO_SINK="kmssink"
@@ -209,6 +210,7 @@ main() {
 
   if [[ "$AIRPLAY_VIDEO_SINK_AUTO_FORCED" -eq 1 && "$AIRPLAY_VIDEO_SINK" == "kmssink" ]]; then
     warn "Auto-selected kmssink failed to initialize. Retrying with uxplay default video sink."
+    AIRPLAY_AUTO_KMSSINK_ALLOWED=0
     AIRPLAY_VIDEO_SINK=""
     AIRPLAY_VIDEO_SINK_AUTO_FORCED=0
     run_uxplay_session
