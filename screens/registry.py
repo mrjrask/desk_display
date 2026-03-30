@@ -504,15 +504,21 @@ def build_screen_registry(context: ScreenContext) -> Tuple[Dict[str, ScreenDefin
 
         sampled_count = len(sampled_frames)
         if sampled_count > 1:
+            start_index = int(cursor) % sampled_count
+            ordered_frames = [
+                sampled_frames[(start_index + offset) % sampled_count]
+                for offset in range(sampled_count)
+            ]
             next_cursor = (cursor + scroll_speed) % sampled_count
             with _quad_tile_scroll_lock:
                 _quad_tile_scroll_cursor[screen_id] = next_cursor
-        else:
-            with _quad_tile_scroll_lock:
-                _quad_tile_scroll_cursor.pop(screen_id, None)
+            return ordered_frames
+
+        with _quad_tile_scroll_lock:
+            _quad_tile_scroll_cursor.pop(screen_id, None)
 
         if sampled_count:
-            return sampled_frames[int(cursor) % sampled_count]
+            return sampled_frames[0]
         if isinstance(rendered, ScreenImage):
             return rendered.image
         if isinstance(rendered, Image.Image):
