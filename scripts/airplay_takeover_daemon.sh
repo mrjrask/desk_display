@@ -155,6 +155,7 @@ build_uxplay_command() {
 run_uxplay_session() {
   local connected=0
   local kms_renderer_failed=0
+  local should_abort_for_fallback=0
   local -a uxplay_cmd=()
   build_uxplay_command uxplay_cmd
 
@@ -183,10 +184,19 @@ run_uxplay_session() {
 
     if [[ "$lower" == *"failed to initialize gstreamer video renderer"* || "$lower" == *"could not get allowed gstcaps of device"* ]]; then
       kms_renderer_failed=1
+      if [[ "$AIRPLAY_VIDEO_SINK_AUTO_FORCED" -eq 1 && "$AIRPLAY_VIDEO_SINK" == "kmssink" ]]; then
+        should_abort_for_fallback=1
+        warn "Detected kmssink renderer failure. Restarting uxplay with default video sink."
+        break
+      fi
     fi
   done < <(stdbuf -oL -eL "${uxplay_cmd[@]}" 2>&1)
 
-  return $kms_renderer_failed
+  if [[ "$should_abort_for_fallback" -eq 1 ]]; then
+    return 1
+  fi
+
+  return "$kms_renderer_failed"
 }
 
 main() {
