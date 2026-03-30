@@ -392,6 +392,10 @@ python tools/validate_required_files.py
 
 # Render sample screens to files (maintenance)
 python tools/maintenance/render_all_screens.py
+
+# Screen validation workflow
+# 1) Render every screen artifact via maintenance tool
+# 2) Run pytest to exercise existing screen/layout validation tests
 ```
 
 ### Project layout (high-level)
