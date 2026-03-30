@@ -1,6 +1,6 @@
 # External API Reference
 
-This project pulls weather, travel, and sports data from a variety of third-party endpoints. The app normalizes all payloads into internal structures so screens can share logic regardless of the upstream source. This document lists the endpoints we call and the fields we rely on.
+This project pulls weather and sports data from a variety of third-party endpoints. The app normalizes all payloads into internal structures so screens can share logic regardless of the upstream source. This document lists the active endpoints we call and the fields we rely on.
 
 > **Tip:** Most API keys can be provided via `.env` (with `CONFIG_LOAD_DOTENV=1`) or the environment.
 
@@ -50,25 +50,6 @@ The script reports `OK`, `SKIP` (missing credentials), and `FAIL` (network/auth/
 
 ---
 
-## Travel
-
-### Google Maps Directions API (v1 travel screens)
-- **Endpoint:** `https://maps.googleapis.com/maps/api/directions/json`
-- **Fields used:**
-  - From each route’s first `leg`: `duration` and `duration_in_traffic` (`text`/`value`), `summary`, `steps[].html_instructions`
-- **Notes:** Values are normalized into `_duration_text`, `_duration_sec`, `_summary`, and `_steps_text` for screen rendering.
-
-### Apple Maps Web Services (v2 travel screens)
-- **Directions:** `https://maps-api.apple.com/v1/directions`
-- **Snapshot:** `https://maps-api.apple.com/v1/snapshot`
-- **Fields used (directions):**
-  - Route fields: `expectedTravelTime`, `staticTravelTime` / `typicalTravelTime`, `name` / `summary`, and route step instructions
-- **Fields used (snapshots):**
-  - Map image response bytes for the travel map background
-- **Notes:** Auth uses either `APPLE_MAPS_API_KEY`/`MAPKIT_TOKEN` or a JWT signed with `APPLE_MAPS_TEAM_ID`, `APPLE_MAPS_KEY_ID`, and `APPLE_MAPS_PRIVATE_KEY/APPLE_MAPS_KEY_PATH`.
-
----
-
 ## Sports
 
 ### NHL (Blackhawks)
@@ -114,5 +95,5 @@ The script reports `OK`, `SKIP` (missing credentials), and `FAIL` (network/auth/
 
 ## Maps & imagery
 
-- **Google Static Maps** is used both for the weather radar basemap and the legacy travel map.
+- **Google Static Maps** is used for the weather radar basemap.
 - **Team and league logos** are loaded from the local `images/` folder rather than external CDN endpoints.
