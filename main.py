@@ -39,6 +39,10 @@ import sys
 from collections import deque
 from contextlib import nullcontext
 from typing import Callable, Dict, List, Optional, Set, Tuple
+try:
+    import pygame
+except Exception:
+    pygame = None
 
 os.environ.setdefault("CONFIG_LOAD_DOTENV", "1")
 
@@ -188,6 +192,10 @@ _wifi_monitor_enabled = ENABLE_WIFI_MONITOR
 
 GC_COLLECT_INTERVAL = max(5.0, float(os.environ.get("DESK_DISPLAY_GC_INTERVAL_SECONDS", "30")))
 _last_gc_collect_monotonic = 0.0
+_TOUCH_DOUBLE_TAP_MAX_INTERVAL_SECONDS = max(
+    0.1, float(os.environ.get("TOUCH_DOUBLE_TAP_MAX_INTERVAL_SECONDS", "0.45"))
+)
+_last_touch_tap_monotonic = 0.0
 
 
 def _run_gc_maintenance(*, force: bool = False) -> bool:
@@ -245,6 +253,73 @@ def _request_previous_screen() -> bool:
     _pending_previous_screen_id = previous_id
     _manual_skip_event.set()
     return True
+
+
+def _check_touch_skip_request() -> bool:
+    """Handle touchscreen double-tap gestures that request a screen skip."""
+
+    global _last_touch_tap_monotonic
+
+    if display is None or pygame is None:
+        return False
+
+    if _shutdown_event.is_set():
+        return False
+
+    fingerdown = getattr(pygame, "FINGERDOWN", None)
+    mousebuttondown = getattr(pygame, "MOUSEBUTTONDOWN", None)
+    if fingerdown is None and mousebuttondown is None:
+        return False
+
+    event_types = [event_type for event_type in (fingerdown, mousebuttondown) if event_type is not None]
+    try:
+        events = pygame.event.get(event_types)
+    except Exception:
+        return False
+
+    if not events:
+        return False
+
+    finger_taps: list[float] = []
+    mouse_taps: list[float] = []
+    right_third_start = (2.0 * float(getattr(display, "width", WIDTH))) / 3.0
+
+    for event in events:
+        event_type = getattr(event, "type", None)
+        x_pos = None
+
+        if fingerdown is not None and event_type == fingerdown:
+            x_pos = float(getattr(event, "x", 0.0)) * float(getattr(display, "width", WIDTH))
+            if x_pos >= right_third_start:
+                finger_taps.append(time.monotonic())
+            continue
+
+        if mousebuttondown is not None and event_type == mousebuttondown:
+            button = getattr(event, "button", 1)
+            if button not in (1,):
+                continue
+            pos = getattr(event, "pos", None)
+            if isinstance(pos, tuple) and len(pos) >= 1:
+                x_pos = float(pos[0])
+            if x_pos is not None and x_pos >= right_third_start:
+                mouse_taps.append(time.monotonic())
+
+    tap_times = finger_taps if finger_taps else mouse_taps
+    if not tap_times:
+        return False
+
+    for tap_time in tap_times:
+        if (
+            _last_touch_tap_monotonic > 0
+            and (tap_time - _last_touch_tap_monotonic) <= _TOUCH_DOUBLE_TAP_MAX_INTERVAL_SECONDS
+        ):
+            _last_touch_tap_monotonic = 0.0
+            logging.info("👆 Double tap detected on right-third touch zone; advancing screen.")
+            return _request_next_screen()
+
+        _last_touch_tap_monotonic = tap_time
+
+    return False
 
 
 def _handle_button_down(name: str) -> bool:
@@ -611,6 +686,9 @@ def _check_control_buttons() -> bool:
 
     if _shutdown_event.is_set():
         return False
+
+    if _check_touch_skip_request():
+        return True
 
     new_presses = []
     skip_requested = False
