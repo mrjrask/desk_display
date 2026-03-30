@@ -8,18 +8,22 @@ in README_APIS.md. It is safe to run locally and in CI:
 - Endpoints that are expected to reject empty params (e.g., HockeyTech base)
   are treated as reachable when they return any non-5xx HTTP status.
 
-Exit code is non-zero only when one or more checks fail.
+Exit code behavior:
+- 0: all checks are OK or SKIP
+- 1: one or more checks FAIL
 """
 
 from __future__ import annotations
 
+import argparse
 import datetime as dt
+import json
 import os
 import pathlib
 import sys
 import time
 from dataclasses import dataclass
-from typing import Callable, Optional
+from typing import Any, Callable, Optional
 
 import requests
 
@@ -41,6 +45,25 @@ from config import (
     LONGITUDE,
 )
 from data_fetch import fetch_weather
+from data_fetch import (
+    fetch_bears_standings,
+    fetch_blackhawks_last_game,
+    fetch_blackhawks_live_game,
+    fetch_blackhawks_next_game,
+    fetch_blackhawks_next_home_game,
+    fetch_blackhawks_standings,
+    fetch_bulls_last_game,
+    fetch_bulls_live_game,
+    fetch_bulls_next_game,
+    fetch_bulls_next_home_game,
+    fetch_bulls_standings,
+    fetch_cubs_games,
+    fetch_cubs_standings,
+    fetch_sox_games,
+    fetch_sox_standings,
+    fetch_wolves_games,
+)
+from screens.nhl_scoreboard import dns_diagnostics
 from screens.draw_weather import _fetch_rainviewer_frames
 from services.apple_maps import fetch_apple_maps_routes, fetch_apple_maps_snapshot
 from utils import fetch_directions_routes
@@ -80,6 +103,14 @@ def _skip(detail: str) -> tuple[str, str]:
 
 def _fail(detail: str) -> tuple[str, str]:
     return "fail", detail
+
+
+def _has_data(payload: Any) -> bool:
+    if payload is None:
+        return False
+    if isinstance(payload, (list, tuple, set, dict)):
+        return len(payload) > 0
+    return True
 
 
 def _http_json(url: str, *, params: Optional[dict] = None, timeout: int = 12) -> tuple[int, object]:
@@ -271,6 +302,89 @@ def check_yahoo_chart_api() -> tuple[str, str]:
     return _fail("unexpected Yahoo chart payload")
 
 
+def _check_app_fetch(name: str, func: Callable[[], Any], *, expect_data: bool) -> tuple[str, str]:
+    payload = func()
+    has_data = _has_data(payload)
+    if has_data:
+        return _ok(f"{name} returned data")
+    if expect_data:
+        return _fail(f"{name} returned no data")
+    return _ok(f"{name} returned no data (allowed)")
+
+
+def check_nhl_next_game_helper() -> tuple[str, str]:
+    return _check_app_fetch("fetch_blackhawks_next_game", fetch_blackhawks_next_game, expect_data=False)
+
+
+def check_nhl_next_home_game_helper() -> tuple[str, str]:
+    return _check_app_fetch("fetch_blackhawks_next_home_game", fetch_blackhawks_next_home_game, expect_data=False)
+
+
+def check_nhl_last_game_helper() -> tuple[str, str]:
+    return _check_app_fetch("fetch_blackhawks_last_game", fetch_blackhawks_last_game, expect_data=False)
+
+
+def check_nhl_live_game_helper() -> tuple[str, str]:
+    return _check_app_fetch("fetch_blackhawks_live_game", fetch_blackhawks_live_game, expect_data=False)
+
+
+def check_nhl_standings_helper() -> tuple[str, str]:
+    return _check_app_fetch("fetch_blackhawks_standings", fetch_blackhawks_standings, expect_data=True)
+
+
+def check_nba_next_game_helper() -> tuple[str, str]:
+    return _check_app_fetch("fetch_bulls_next_game", fetch_bulls_next_game, expect_data=False)
+
+
+def check_nba_next_home_game_helper() -> tuple[str, str]:
+    return _check_app_fetch("fetch_bulls_next_home_game", fetch_bulls_next_home_game, expect_data=False)
+
+
+def check_nba_last_game_helper() -> tuple[str, str]:
+    return _check_app_fetch("fetch_bulls_last_game", fetch_bulls_last_game, expect_data=False)
+
+
+def check_nba_live_game_helper() -> tuple[str, str]:
+    return _check_app_fetch("fetch_bulls_live_game", fetch_bulls_live_game, expect_data=False)
+
+
+def check_nba_standings_helper() -> tuple[str, str]:
+    return _check_app_fetch("fetch_bulls_standings", fetch_bulls_standings, expect_data=True)
+
+
+def check_nfl_standings_helper() -> tuple[str, str]:
+    return _check_app_fetch("fetch_bears_standings", fetch_bears_standings, expect_data=True)
+
+
+def check_mlb_cubs_games_helper() -> tuple[str, str]:
+    return _check_app_fetch("fetch_cubs_games", fetch_cubs_games, expect_data=False)
+
+
+def check_mlb_sox_games_helper() -> tuple[str, str]:
+    return _check_app_fetch("fetch_sox_games", fetch_sox_games, expect_data=False)
+
+
+def check_mlb_cubs_standings_helper() -> tuple[str, str]:
+    return _check_app_fetch("fetch_cubs_standings", fetch_cubs_standings, expect_data=True)
+
+
+def check_mlb_sox_standings_helper() -> tuple[str, str]:
+    return _check_app_fetch("fetch_sox_standings", fetch_sox_standings, expect_data=True)
+
+
+def check_ahl_wolves_games_helper() -> tuple[str, str]:
+    return _check_app_fetch("fetch_wolves_games", fetch_wolves_games, expect_data=False)
+
+
+def check_nhl_network_diagnostics() -> tuple[str, str]:
+    report = dns_diagnostics()
+    host_errors = [h for h in report.get("hosts", []) if h.get("status") == "error"]
+    http_errors = [h for h in report.get("http_checks", []) if h.get("status") == "error"]
+    if host_errors or http_errors:
+        return _fail(f"dns/http errors: hosts={len(host_errors)} http={len(http_errors)}")
+    return _ok("dns + endpoint diagnostics passed")
+
+
 CHECKS = [
     Check("weather (weatherkit/owm via app helper)", check_weatherkit_or_owm),
     Check("openweathermap onecall", check_openweathermap_direct),
@@ -290,20 +404,58 @@ CHECKS = [
     Check("ahl schedule ics", check_ahl_ics),
     Check("ahl hockeytech feed base", check_hockeytech_feed_base),
     Check("yahoo finance chart api", check_yahoo_chart_api),
+    Check("app helper nhl next game", check_nhl_next_game_helper),
+    Check("app helper nhl next home game", check_nhl_next_home_game_helper),
+    Check("app helper nhl last game", check_nhl_last_game_helper),
+    Check("app helper nhl live game", check_nhl_live_game_helper),
+    Check("app helper nhl standings", check_nhl_standings_helper),
+    Check("app helper nba next game", check_nba_next_game_helper),
+    Check("app helper nba next home game", check_nba_next_home_game_helper),
+    Check("app helper nba last game", check_nba_last_game_helper),
+    Check("app helper nba live game", check_nba_live_game_helper),
+    Check("app helper nba standings", check_nba_standings_helper),
+    Check("app helper nfl standings", check_nfl_standings_helper),
+    Check("app helper mlb cubs games", check_mlb_cubs_games_helper),
+    Check("app helper mlb sox games", check_mlb_sox_games_helper),
+    Check("app helper mlb cubs standings", check_mlb_cubs_standings_helper),
+    Check("app helper mlb sox standings", check_mlb_sox_standings_helper),
+    Check("app helper ahl wolves games", check_ahl_wolves_games_helper),
+    Check("nhl network diagnostics", check_nhl_network_diagnostics),
 ]
 
 
 def main() -> int:
-    results = [_run_check(check) for check in CHECKS]
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--json", dest="json_output", action="store_true", help="Emit JSON output.")
+    args = parser.parse_args()
 
-    width = max(len(r.name) for r in results) + 2
-    for res in results:
-        print(f"{res.name:<{width}} {res.status.upper():<5} {res.duration_ms:>8.2f} ms  {res.detail}")
+    results = [_run_check(check) for check in CHECKS]
 
     failed = [r for r in results if r.status == "fail"]
     skipped = [r for r in results if r.status == "skip"]
-    print("\nSummary:")
-    print(f"  total={len(results)} ok={len(results)-len(failed)-len(skipped)} skip={len(skipped)} fail={len(failed)}")
+    ok_count = len(results) - len(failed) - len(skipped)
+
+    if args.json_output:
+        print(
+            json.dumps(
+                {
+                    "summary": {
+                        "total": len(results),
+                        "ok": ok_count,
+                        "skip": len(skipped),
+                        "fail": len(failed),
+                    },
+                    "checks": [r.__dict__ for r in results],
+                },
+                indent=2,
+            )
+        )
+    else:
+        width = max(len(r.name) for r in results) + 2
+        for res in results:
+            print(f"{res.name:<{width}} {res.status.upper():<5} {res.duration_ms:>8.2f} ms  {res.detail}")
+        print("\nSummary:")
+        print(f"  total={len(results)} ok={ok_count} skip={len(skipped)} fail={len(failed)}")
 
     return 1 if failed else 0
 
