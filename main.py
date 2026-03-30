@@ -106,26 +106,23 @@ except Exception as exc:
             return "ok", None
 
     wifi_utils = _WifiUtilsFallback()
-from paths import resolve_storage_paths
+from paths import resolve_screens_config_paths, resolve_storage_paths
 
 from screens.registry import ScreenContext, ScreenDefinition, build_screen_registry
 from schedule import ScreenScheduler, build_scheduler, load_schedule_config, sanitize_schedule_config
 
 # ─── Paths ───────────────────────────────────────────────────────────────────
-SCRIPT_DIR  = os.path.dirname(os.path.abspath(__file__))
-DEFAULT_CONFIG_PATH = os.environ.get(
-    "SCREENS_CONFIG_PATH", os.path.join(SCRIPT_DIR, "screens_config.json")
-)
-LOCAL_CONFIG_PATH = os.environ.get(
-    "SCREENS_CONFIG_LOCAL_PATH", os.path.join(SCRIPT_DIR, "screens_config.local.json")
-)
-CONFIG_PATH = LOCAL_CONFIG_PATH if os.path.exists(LOCAL_CONFIG_PATH) else DEFAULT_CONFIG_PATH
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+# Config path precedence/fallback rules are centralized in paths.py.
+_screens_config_paths = resolve_screens_config_paths()
+DEFAULT_CONFIG_PATH = str(_screens_config_paths.default_path)
+LOCAL_CONFIG_PATH = str(_screens_config_paths.local_override_path)
+CONFIG_PATH = str(_screens_config_paths.active_path)
 
 
 def _active_config_path() -> str:
     """Return the current schedule config path, preferring local overrides."""
-
-    return LOCAL_CONFIG_PATH if os.path.exists(LOCAL_CONFIG_PATH) else DEFAULT_CONFIG_PATH
+    return str(resolve_screens_config_paths().active_path)
 
 # ─── Screenshot archiving (batch) ────────────────────────────────────────────
 ARCHIVE_THRESHOLD = 500  # archive when we reach this many images
