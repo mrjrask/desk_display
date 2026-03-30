@@ -186,6 +186,20 @@ Kernel installer behavior includes:
 
 > `dtoverlay=` lines in `/boot/config.txt` or `/boot/firmware/config.txt` are still your responsibility.
 
+### AirPlay takeover receiver
+
+```bash
+bash ./Installers/install_airplay.sh
+```
+
+AirPlay installer behavior includes:
+
+- Installs `uxplay` + streaming dependencies.
+- Creates `airplay_desk_display.service`.
+- Runs AirPlay in fullscreen mode and requests native display resolution.
+- Stops Desk Display services when an AirPlay client connects and starts them again when disconnected.
+- Supports `AIRPLAY_PAIRING_CODE` from `.env` for pairing PIN protection.
+
 ---
 
 ## Configuration
@@ -206,6 +220,16 @@ Configuration is primarily environment-driven (and may be loaded from `.env`).
 | `DISPLAY_ROTATION_STRICT` | Rotation conflict guard for kernel overlays. |
 | `DISPLAY_HAT_MINI_REINIT_SECONDS` | Reinit interval for long-run panel recovery. |
 | `DISPLAY_HAT_MINI_LED_LEVEL` | Display HAT Mini LED brightness (`0.0`-`1.0`). |
+
+### AirPlay variables
+
+| Variable | Meaning |
+| --- | --- |
+| `AIRPLAY_PAIRING_CODE` | PIN required for AirPlay pairing (optional, recommended). |
+| `AIRPLAY_NAME` | Name advertised to AirPlay clients (default `Desk Display AirPlay`). |
+| `AIRPLAY_RESOLUTION` | Force AirPlay resolution (`WIDTHxHEIGHT`), else auto-detected. |
+| `AIRPLAY_DISPLAY` | Optional display target override for uxplay. |
+| `AIRPLAY_EXTRA_ARGS` | Additional raw arguments forwarded to uxplay. |
 
 ### Weather variables
 
@@ -378,10 +402,16 @@ Uninstall helper:
 ./scripts/uninstall.sh
 ```
 
-AirPlay cleanup helper (removes legacy AirPlay service/launchers/remnants from existing installs):
+AirPlay cleanup helper (removes service, launchers, scripts, and package dependencies recorded by the AirPlay installer):
 
 ```bash
 ./scripts/uninstall_airplay.sh
+```
+
+Optional full dependency purge (including shared packages like `avahi-daemon` and gstreamer plugins):
+
+```bash
+REMOVE_AIRPLAY_SHARED_PACKAGES=1 ./scripts/uninstall_airplay.sh
 ```
 
 ---
