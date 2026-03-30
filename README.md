@@ -1,6 +1,6 @@
 # Desk Display
 
-Desk Display is a Raspberry Pi dashboard app that rotates through weather, date, inside, travel, and sports screens on small displays (or fullscreen desktop/kernel displays).
+Desk Display is a Raspberry Pi dashboard app that rotates through weather, date, inside, and sports screens on small displays (or fullscreen desktop/kernel displays).
 
 It supports:
 
