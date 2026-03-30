@@ -50,6 +50,7 @@ resolve_project_script() {
 
 validate_airplay_scripts() {
   local missing=0
+  local restored=0
 
   AIRPLAY_MODE_SCRIPT=$(resolve_project_script "airplay_mode.sh" || true)
   AIRPLAY_DAEMON_SCRIPT=$(resolve_project_script "airplay_takeover_daemon.sh" || true)
@@ -62,6 +63,24 @@ validate_airplay_scripts() {
   if [[ -z "$AIRPLAY_DAEMON_SCRIPT" ]]; then
     warn "Missing expected file: $PROJECT_DIR/scripts/airplay_takeover_daemon.sh"
     missing=1
+  fi
+
+  if [[ "$missing" -ne 0 ]] && command -v git >/dev/null 2>&1 && [[ -d "$PROJECT_DIR/.git" ]]; then
+    warn "Attempting to restore missing AirPlay scripts from git checkout at $PROJECT_DIR"
+    if git -C "$PROJECT_DIR" restore scripts/airplay_mode.sh scripts/airplay_takeover_daemon.sh >/dev/null 2>&1; then
+      restored=1
+    else
+      warn "Automatic git restore failed; continuing with explicit error details"
+    fi
+
+    if [[ "$restored" -eq 1 ]]; then
+      AIRPLAY_MODE_SCRIPT=$(resolve_project_script "airplay_mode.sh" || true)
+      AIRPLAY_DAEMON_SCRIPT=$(resolve_project_script "airplay_takeover_daemon.sh" || true)
+      if [[ -n "$AIRPLAY_MODE_SCRIPT" && -n "$AIRPLAY_DAEMON_SCRIPT" ]]; then
+        log "Recovered missing AirPlay scripts via git restore"
+        missing=0
+      fi
+    fi
   fi
 
   if [[ "$missing" -ne 0 ]]; then
