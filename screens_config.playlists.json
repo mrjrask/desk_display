@@ -33,6 +33,7 @@
     "cubs logo": 2,
     "cubs stand1": 0,
     "cubs stand2": 0,
+    "cubs stand3": 0,
     "cubs last": 0,
     "cubs result": 0,
     "cubs live": 1,
@@ -41,6 +42,7 @@
     "sox logo": 5,
     "sox stand1": 0,
     "sox stand2": 0,
+    "sox stand3": 0,
     "sox last": 5,
     "sox live": 1,
     "sox next": 5,
@@ -213,6 +215,9 @@
           "screen": "cubs stand2"
         },
         {
+          "screen": "cubs stand3"
+        },
+        {
           "screen": "cubs last"
         },
         {
@@ -240,6 +245,9 @@
         },
         {
           "screen": "sox stand2"
+        },
+        {
+          "screen": "sox stand3"
         },
         {
           "screen": "sox last"
