@@ -157,13 +157,17 @@ run_uxplay_session() {
   local connected=0
   local kms_renderer_failed=0
   local should_abort_for_fallback=0
+  local uxplay_status=0
   local -a uxplay_cmd=()
   build_uxplay_command uxplay_cmd
 
   log "Starting AirPlay takeover receiver at ${AIRPLAY_RESOLUTION}"
   log "Command: $(printf '%q ' "${uxplay_cmd[@]}")"
 
-  while IFS= read -r line; do
+  coproc UXPLAY_PROC { stdbuf -oL -eL "${uxplay_cmd[@]}" 2>&1; }
+  local uxplay_pid=$UXPLAY_PROC_PID
+
+  while IFS= read -r line <&"${UXPLAY_PROC[0]}"; do
     printf '%s\n' "$line"
 
     local lower
@@ -191,10 +195,26 @@ run_uxplay_session() {
         break
       fi
     fi
-  done < <(stdbuf -oL -eL "${uxplay_cmd[@]}" 2>&1)
+  done
+
+  if [[ "$should_abort_for_fallback" -eq 1 ]]; then
+    if kill -0 "$uxplay_pid" >/dev/null 2>&1; then
+      kill "$uxplay_pid" >/dev/null 2>&1 || true
+    fi
+  fi
+
+  if wait "$uxplay_pid"; then
+    uxplay_status=0
+  else
+    uxplay_status=$?
+  fi
 
   if [[ "$should_abort_for_fallback" -eq 1 ]]; then
     return 1
+  fi
+
+  if [[ "$uxplay_status" -ne 0 && "$kms_renderer_failed" -eq 0 ]]; then
+    return "$uxplay_status"
   fi
 
   return "$kms_renderer_failed"
