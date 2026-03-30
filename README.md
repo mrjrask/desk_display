@@ -239,6 +239,7 @@ Configuration is primarily environment-driven (and may be loaded from `.env`).
 | `AIRPLAY_NAME` | Name advertised to AirPlay clients (default `Desk Display AirPlay`). |
 | `AIRPLAY_RESOLUTION` | Force AirPlay resolution (`WIDTHxHEIGHT`), else auto-detected. |
 | `AIRPLAY_DISPLAY` | Optional display target override for uxplay. |
+| `AIRPLAY_VIDEO_SINK` | Optional GStreamer videosink override for uxplay (for example `kmssink` on Raspberry Pi fullscreen/kiosk setups). |
 | `AIRPLAY_EXTRA_ARGS` | Additional raw arguments forwarded to uxplay. |
 
 ### Weather variables

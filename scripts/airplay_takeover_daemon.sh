@@ -47,6 +47,7 @@ AIRPLAY_NAME="${AIRPLAY_NAME:-Desk Display AirPlay}"
 AIRPLAY_PIN="${AIRPLAY_PAIRING_CODE:-}"
 AIRPLAY_RESOLUTION="${AIRPLAY_RESOLUTION:-${AIRPLAY_RESOLUTION_DEFAULT:-1920x1080}}"
 AIRPLAY_DISPLAY="${AIRPLAY_DISPLAY:-}"
+AIRPLAY_VIDEO_SINK="${AIRPLAY_VIDEO_SINK:-}"
 AIRPLAY_EXTRA_ARGS="${AIRPLAY_EXTRA_ARGS:-}"
 DESK_DISPLAY_SERVICE_NAME="${DESK_DISPLAY_SERVICE_NAME:-desk_display.service}"
 DESK_DISPLAY_USER_SERVICE_NAME="${DESK_DISPLAY_USER_SERVICE_NAME:-desk_display-kernel.service}"
@@ -103,9 +104,30 @@ start_desk_display() {
   fi
 }
 
+desk_display_paused=0
+
+resume_desk_display_on_exit() {
+  if [[ "$desk_display_paused" -eq 1 ]]; then
+    log "AirPlay session ended unexpectedly. Resuming desk_display services."
+    start_desk_display
+    desk_display_paused=0
+  fi
+}
+
 build_uxplay_command() {
   local -n cmd_ref=$1
   local -a args=(-fs -nh -n "$AIRPLAY_NAME" -s "$AIRPLAY_RESOLUTION")
+
+  # On Raspberry Pi systems without a desktop session, autovideosink can pick a
+  # sink that renders in a small window. Force kmssink in that case so AirPlay
+  # content fills the screen.
+  if [[ -z "$AIRPLAY_VIDEO_SINK" ]]; then
+    if [[ -r /proc/device-tree/model ]] && tr -d '\0' </proc/device-tree/model | grep -qi 'raspberry pi'; then
+      if [[ -z "${DISPLAY:-}" && -z "${WAYLAND_DISPLAY:-}" ]]; then
+        AIRPLAY_VIDEO_SINK="kmssink"
+      fi
+    fi
+  fi
 
   if [[ -n "$AIRPLAY_PIN" ]]; then
     args+=( -pin "$AIRPLAY_PIN" )
@@ -113,6 +135,10 @@ build_uxplay_command() {
 
   if [[ -n "$AIRPLAY_DISPLAY" ]]; then
     args+=( -display "$AIRPLAY_DISPLAY" )
+  fi
+
+  if [[ -n "$AIRPLAY_VIDEO_SINK" ]]; then
+    args+=( -vs "$AIRPLAY_VIDEO_SINK" )
   fi
 
   if [[ -n "$AIRPLAY_EXTRA_ARGS" ]]; then
@@ -126,6 +152,7 @@ build_uxplay_command() {
 
 main() {
   ensure_runtime_dir
+  trap resume_desk_display_on_exit EXIT INT TERM
 
   local -a uxplay_cmd=()
   build_uxplay_command uxplay_cmd
@@ -134,7 +161,7 @@ main() {
   log "Command: $(printf '%q ' "${uxplay_cmd[@]}")"
 
   local connected=0
-  stdbuf -oL -eL "${uxplay_cmd[@]}" 2>&1 | while IFS= read -r line; do
+  while IFS= read -r line; do
     printf '%s\n' "$line"
 
     local lower
@@ -144,14 +171,16 @@ main() {
       connected=1
       log "AirPlay client connected. Stopping desk_display services."
       stop_desk_display
+      desk_display_paused=1
     fi
 
     if [[ "$lower" == *"disconnected"* || "$lower" == *"teardown"* || "$lower" == *"stopped"* ]] && [[ $connected -eq 1 ]]; then
       connected=0
       log "AirPlay client disconnected. Starting desk_display services."
       start_desk_display
+      desk_display_paused=0
     fi
-  done
+  done < <(stdbuf -oL -eL "${uxplay_cmd[@]}" 2>&1)
 }
 
 main "$@"
