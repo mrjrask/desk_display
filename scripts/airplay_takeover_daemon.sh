@@ -84,6 +84,7 @@ start_desk_display() {
 }
 
 build_uxplay_command() {
+  local -n cmd_ref=$1
   local -a args=(-fs -nh -n "$AIRPLAY_NAME" -s "$AIRPLAY_RESOLUTION")
 
   if [[ -n "$AIRPLAY_PIN" ]]; then
@@ -100,19 +101,18 @@ build_uxplay_command() {
     args+=("${extra[@]}")
   fi
 
-  printf '%q ' "$AIRPLAY_BIN" "${args[@]}"
+  cmd_ref=( "$AIRPLAY_BIN" "${args[@]}" )
 }
 
 main() {
-  local uxplay_cmd
-  uxplay_cmd=$(build_uxplay_command)
+  local -a uxplay_cmd=()
+  build_uxplay_command uxplay_cmd
 
   log "Starting AirPlay takeover receiver at ${AIRPLAY_RESOLUTION}"
-  log "Command: $uxplay_cmd"
+  log "Command: $(printf '%q ' "${uxplay_cmd[@]}")"
 
   local connected=0
-  # shellcheck disable=SC2086
-  stdbuf -oL -eL $uxplay_cmd 2>&1 | while IFS= read -r line; do
+  stdbuf -oL -eL "${uxplay_cmd[@]}" 2>&1 | while IFS= read -r line; do
     printf '%s\n' "$line"
 
     local lower
