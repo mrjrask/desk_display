@@ -1016,7 +1016,8 @@ def draw_series_screen(display, games, title, transition=False, screen_id: Optio
     gap = config.scale_value(10) if hyperpixel_layout else 10
     at_w, at_h = draw.textsize("@", font=FONT_TEAM_SPORTS)
     frame_w = min(standard_next_game_logo_frame_width(logo_h, (logo_away, logo_home)), max(10, (WIDTH - (gap * 2) - at_w) // 2))
-    row_y = y_text + line_gap
+    logo_top_pad = config.scale_value(2) if hyperpixel_layout else 2
+    row_y = y_text + line_gap + logo_top_pad
     total_w = frame_w * 2 + (gap * 2) + at_w
     start_x = max(0, (WIDTH - total_w) // 2)
     left_x = start_x
