@@ -33,12 +33,14 @@ FONT_DIV_HEADER = config.FONT_DIV_HEADER
 FONT_DIV_RECORD = config.FONT_DIV_RECORD
 FONT_GB_VALUE   = config.FONT_GB_VALUE
 FONT_GB_LABEL   = config.FONT_GB_LABEL
+FONT_OVERVIEW_TITLE = config.FONT_TITLE_SPORTS
 if config.is_hyperpixel_4_square_layout():
     _SQUARE_SCALE = 0.88  # Hyperpixel 4 Square: reduce fonts by 12% vs Hyperpixel 4 baseline.
     FONT_DIV_HEADER = clone_font(FONT_DIV_HEADER, max(8, int(round(getattr(FONT_DIV_HEADER, "size", 24) * _SQUARE_SCALE))))
     FONT_DIV_RECORD = clone_font(FONT_DIV_RECORD, max(8, int(round(getattr(FONT_DIV_RECORD, "size", 22) * _SQUARE_SCALE))))
     FONT_GB_VALUE = clone_font(FONT_GB_VALUE, max(8, int(round(getattr(FONT_GB_VALUE, "size", 20) * _SQUARE_SCALE))))
     FONT_GB_LABEL = clone_font(FONT_GB_LABEL, max(8, int(round(getattr(FONT_GB_LABEL, "size", 20) * _SQUARE_SCALE))))
+    FONT_OVERVIEW_TITLE = clone_font(FONT_OVERVIEW_TITLE, max(8, int(round(getattr(FONT_OVERVIEW_TITLE, "size", 30) * _SQUARE_SCALE))))
 
 # ─── Tunables ────────────────────────────────────────────────────────────────
 LOGO_SIZE   = 52      # max width/height of a division logo
@@ -156,8 +158,8 @@ def _header_frame(title: str) -> Tuple[Image.Image, int]:
     """
     img = Image.new("RGB", (WIDTH, HEIGHT), BACKGROUND_COLOR)
     d = ImageDraw.Draw(img)
-    tw, th = d.textsize(title, font=FONT_DIV_HEADER)
-    d.text(((WIDTH - tw)//2, 0), title, font=FONT_DIV_HEADER, fill=(255,255,255))
+    tw, th = d.textsize(title, font=FONT_OVERVIEW_TITLE)
+    d.text(((WIDTH - tw)//2, 0), title, font=FONT_OVERVIEW_TITLE, fill=(255,255,255))
     header_pad = config.scale_value(6) if config.is_hyperpixel_next_layout() else 6
     return img, th + header_pad
 
