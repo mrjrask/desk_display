@@ -32,6 +32,15 @@ DESK_DISPLAY_SESSION_USER="${DESK_DISPLAY_SESSION_USER:-${SUDO_USER:-$(whoami)}}
 
 SESSION_ACTIVE=0
 CURRENT_SINK=""
+LOCK_FILE="${AIRPLAY_LOCK_FILE:-/tmp/desk-display-airplay-daemon.lock}"
+
+acquire_single_instance_lock() {
+  exec 9>"$LOCK_FILE"
+  if ! flock -n 9; then
+    log_warn "Another AirPlay takeover daemon instance is already running; exiting duplicate process"
+    exit 0
+  fi
+}
 
 ensure_runtime_dir() {
   if [[ -n "${XDG_RUNTIME_DIR:-}" && -d "${XDG_RUNTIME_DIR:-}" ]]; then
@@ -147,6 +156,7 @@ run_once() {
   local -a cmd=()
   local connected=0
   local sink_failed=0
+  local name_conflict=0
 
   build_uxplay_cmd "$sink" cmd
   CURRENT_SINK="$sink"
@@ -186,9 +196,20 @@ run_once() {
       kill "$ux_pid" >/dev/null 2>&1 || true
       break
     fi
+
+    if [[ "$lower" == *"dnsserviceregister call returned kdnsserviceerr_nameconflict"* ]]; then
+      name_conflict=1
+      log_warn "Detected AirPlay service name conflict; another uxplay instance may already be active"
+      kill "$ux_pid" >/dev/null 2>&1 || true
+      break
+    fi
   done
 
   wait "$ux_pid" >/dev/null 2>&1 || true
+
+  if [[ $name_conflict -eq 1 ]]; then
+    return 3
+  fi
 
   if [[ $sink_failed -eq 1 ]]; then
     return 2
@@ -199,6 +220,7 @@ run_once() {
 
 main() {
   ensure_runtime_dir
+  acquire_single_instance_lock
 
   if ! command -v "$AIRPLAY_BIN" >/dev/null 2>&1; then
     log_error "AirPlay binary '$AIRPLAY_BIN' is not installed"
@@ -210,13 +232,35 @@ main() {
   while true; do
     local used_fallback=0
     while IFS= read -r sink_candidate; do
+      local rc=0
       if run_once "$sink_candidate"; then
-        used_fallback=1
-        break
+        rc=0
+      else
+        rc=$?
       fi
 
-      log_warn "Retrying uxplay with next sink candidate"
-      sleep 1
+      case "$rc" in
+        0)
+          used_fallback=1
+          break
+          ;;
+        2)
+          log_warn "Retrying uxplay with next sink candidate"
+          sleep 1
+          ;;
+        3)
+          log_warn "Name conflict persists; pausing before retry"
+          used_fallback=1
+          sleep 5
+          break
+          ;;
+        *)
+          log_warn "uxplay exited with status $rc; retrying"
+          used_fallback=1
+          sleep 2
+          break
+          ;;
+      esac
     done < <(build_sink_candidates)
 
     if [[ $used_fallback -eq 0 ]]; then
