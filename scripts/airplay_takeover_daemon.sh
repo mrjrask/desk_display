@@ -235,8 +235,12 @@ main() {
   while true; do
     local used_fallback=0
     while IFS= read -r sink_candidate; do
-      run_once "$sink_candidate"
-      local rc=$?
+      local rc=0
+      if run_once "$sink_candidate"; then
+        rc=0
+      else
+        rc=$?
+      fi
 
       case "$rc" in
         0)
