@@ -47,22 +47,20 @@ terminate_conflicting_uxplay_instances() {
     [[ "$pid" == "$$" ]] && continue
     local killed_this_pid=0
 
-    if ! [[ -r "/proc/$pid/cmdline" ]]; then
-      continue
+    if [[ -r "/proc/$pid/cmdline" ]]; then
+      local -a argv=()
+      mapfile -d '' -t argv < "/proc/$pid/cmdline"
+
+      local i
+      for ((i = 0; i < ${#argv[@]}; i++)); do
+        if [[ "${argv[$i]}" == "-n" && "${argv[$((i + 1))]:-}" == "$AIRPLAY_NAME" ]]; then
+          kill "$pid" >/dev/null 2>&1 || true
+          matched=1
+          killed_this_pid=1
+          break
+        fi
+      done
     fi
-
-    local -a argv=()
-    mapfile -d '' -t argv < "/proc/$pid/cmdline"
-
-    local i
-    for ((i = 0; i < ${#argv[@]}; i++)); do
-      if [[ "${argv[$i]}" == "-n" && "${argv[$((i + 1))]:-}" == "$AIRPLAY_NAME" ]]; then
-        kill "$pid" >/dev/null 2>&1 || true
-        matched=1
-        killed_this_pid=1
-        break
-      fi
-    done
 
     # fallback for older procfs parsing edge-cases where argv is unavailable
     if [[ "$killed_this_pid" -eq 0 && "$args" == *"uxplay"* && "$args" == *"$AIRPLAY_NAME"* ]]; then
