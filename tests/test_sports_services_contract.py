@@ -84,3 +84,22 @@ def test_services_normalize_non_list_to_empty_list(monkeypatch):
     assert nba.fetch_scoreboard(day=day) == []
     assert nhl.fetch_scoreboard(day=day) == []
     assert ncaam.fetch_scoreboard(day=day) == []
+
+
+def test_ncaam_tournament_mode_advances_to_next_day_with_games(monkeypatch):
+    day = dt.date(2026, 3, 30)
+
+    monkeypatch.setattr(ncaam, "scoreboard_date", lambda current_now=None: day)
+
+    def _fake_fetch(requested_day, mode=None):
+        if requested_day == day:
+            return []
+        if requested_day == day + dt.timedelta(days=1):
+            return [{"id": "ncaam-2", "date": requested_day.isoformat(), "mode": mode}]
+        return []
+
+    monkeypatch.setattr(ncaam, "_fetch_games_for_date", _fake_fetch)
+
+    payload = ncaam.fetch_scoreboard(now=dt.datetime(2026, 3, 30, 8, 30), mode="tournament")
+
+    assert payload == [{"id": "ncaam-2", "date": "2026-03-31", "mode": "tournament"}]
