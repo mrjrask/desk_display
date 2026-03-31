@@ -34,6 +34,28 @@ SESSION_ACTIVE=0
 CURRENT_SINK=""
 LOCK_FILE="${AIRPLAY_LOCK_FILE:-/tmp/desk-display-airplay-daemon.lock}"
 
+terminate_conflicting_uxplay_instances() {
+  local self_pid="${1:-}"
+  local matched=0
+  local pid args
+
+  while IFS= read -r pid args; do
+    [[ -z "${pid:-}" ]] && continue
+    [[ -n "$self_pid" && "$pid" == "$self_pid" ]] && continue
+    [[ "$pid" == "$$" ]] && continue
+
+    if [[ "$args" == *" -n $AIRPLAY_NAME"* ]]; then
+      kill "$pid" >/dev/null 2>&1 || true
+      matched=1
+    fi
+  done < <(ps -eo pid=,args= | awk '/[u]xplay/ {print}')
+
+  if [[ "$matched" -eq 1 ]]; then
+    log_warn "Terminated stale uxplay process(es) advertising AirPlay name '$AIRPLAY_NAME'"
+    sleep 1
+  fi
+}
+
 acquire_single_instance_lock() {
   exec 9>"$LOCK_FILE"
   if ! flock -n 9; then
@@ -230,6 +252,8 @@ main() {
     exit 1
   fi
 
+  terminate_conflicting_uxplay_instances
+
   trap resume_on_exit EXIT INT TERM
 
   while true; do
@@ -253,6 +277,7 @@ main() {
           ;;
         3)
           log_warn "Name conflict persists; pausing before retry"
+          terminate_conflicting_uxplay_instances
           used_fallback=1
           sleep 5
           break
