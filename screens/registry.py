@@ -50,6 +50,7 @@ from screens.mlb_schedule import (
     draw_box_score,
     draw_cubs_result,
     draw_last_game,
+    draw_series_screen,
     draw_next_home_game,
     draw_sports_screen,
 )
@@ -1069,6 +1070,8 @@ def build_screen_registry(context: ScreenContext) -> Tuple[Dict[str, ScreenDefin
         register_logo("cubs logo")
         cubs_next = cubs.get("next")
         cubs_next_alt = cubs.get("next_alt")
+        cubs_next_series = cubs.get("next_series")
+        cubs_next_home_series = cubs.get("next_home_series")
         cubs_next_home = cubs.get("next_home")
         if _games_match(cubs_next_home, cubs_next):
             cubs_next_home = None
@@ -1159,12 +1162,36 @@ def build_screen_registry(context: ScreenContext) -> Tuple[Dict[str, ScreenDefin
                 ),
                 available=True,
             )
+        register(
+            "cubs next series",
+            lambda data=cubs_next_series: draw_series_screen(
+                context.display,
+                data,
+                "Cubs Next Series",
+                screen_id="cubs next series",
+                transition=True,
+            ),
+            available=bool(cubs_next_series),
+        )
+        register(
+            "cubs next home series",
+            lambda data=cubs_next_home_series: draw_series_screen(
+                context.display,
+                data,
+                "Cubs Next Home Series",
+                screen_id="cubs next home series",
+                transition=True,
+            ),
+            available=bool(cubs_next_home_series),
+        )
 
     sox = context.cache.get("sox") or {}
     if any(sox.values()):
         register_logo("sox logo")
         sox_next = sox.get("next")
         sox_next_alt = sox.get("next_alt")
+        sox_next_series = sox.get("next_series")
+        sox_next_home_series = sox.get("next_home_series")
         sox_next_home = sox.get("next_home")
         if _games_match(sox_next_home, sox_next):
             sox_next_home = None
@@ -1248,6 +1275,28 @@ def build_screen_registry(context: ScreenContext) -> Tuple[Dict[str, ScreenDefin
                 ),
                 available=True,
             )
+        register(
+            "sox next series",
+            lambda data=sox_next_series: draw_series_screen(
+                context.display,
+                data,
+                "Sox Next Series",
+                screen_id="sox next series",
+                transition=True,
+            ),
+            available=bool(sox_next_series),
+        )
+        register(
+            "sox next home series",
+            lambda data=sox_next_home_series: draw_series_screen(
+                context.display,
+                data,
+                "Sox Next Home Series",
+                screen_id="sox next home series",
+                transition=True,
+            ),
+            available=bool(sox_next_home_series),
+        )
 
     register(
         "MLB Scoreboard",

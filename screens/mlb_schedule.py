@@ -921,6 +921,130 @@ def draw_sports_screen(display, game, title, transition=False, screen_id: Option
     return ScreenImage(img, displayed=False)
 
 
+def _is_final_game(game: dict) -> bool:
+    status = (game or {}).get("status") or {}
+    detailed = str(status.get("detailedState") or "").lower()
+    abstract = str(status.get("abstractGameState") or "").lower()
+    code = str(status.get("statusCode") or "").upper()
+    return (
+        "final" in detailed
+        or abstract == "final"
+        or code == "F"
+    )
+
+
+def _series_line(game: dict, focus_id: Optional[int]) -> str:
+    raw_date = game.get("officialDate", "") or game.get("gameDate", "")[:10]
+    away = ((game.get("teams") or {}).get("away") or {})
+    home = ((game.get("teams") or {}).get("home") or {})
+
+    if _is_final_game(game):
+        date_label = _rel_date_only(raw_date)
+        away_score = away.get("score")
+        home_score = home.get("score")
+        if focus_id is not None:
+            team_is_home = ((home.get("team") or {}).get("id") == focus_id)
+            team_is_away = ((away.get("team") or {}).get("id") == focus_id)
+            if team_is_home and isinstance(home_score, int) and isinstance(away_score, int):
+                result = "W" if home_score > away_score else "L"
+                return f"{date_label} • {result} {home_score}-{away_score}"
+            if team_is_away and isinstance(away_score, int) and isinstance(home_score, int):
+                result = "W" if away_score > home_score else "L"
+                return f"{date_label} • {result} {away_score}-{home_score}"
+        if isinstance(away_score, int) and isinstance(home_score, int):
+            return f"{date_label} • Final {away_score}-{home_score}"
+        return f"{date_label} • Final"
+
+    raw_time = game.get("startTimeCentral", "TBD")
+    return _format_game_label(raw_date, raw_time)
+
+
+@log_call
+def draw_series_screen(display, games, title, transition=False, screen_id: Optional[str] = None):
+    _set_background(screen_id)
+    if not games:
+        logging.warning(f"No series data for {title}")
+        return None
+
+    series_games = [g for g in games if isinstance(g, dict)]
+    if not series_games:
+        return None
+    game = series_games[0]
+
+    hyperpixel_layout = config.is_hyperpixel_next_layout() and screen_id in {
+        "cubs next series",
+        "cubs next home series",
+        "sox next series",
+        "sox next home series",
+    }
+    edge_pad = max(2, config.scale_value(2)) if hyperpixel_layout else 0
+    line_gap = max(1, config.scale_value(1)) if hyperpixel_layout else 1
+
+    img = Image.new("RGB", (WIDTH, HEIGHT), BACKGROUND_COLOR)
+    draw = ImageDraw.Draw(img)
+
+    tw, th = draw.textsize(title, font=FONT_TITLE_SPORTS)
+    draw.text(((WIDTH - tw) // 2, edge_pad), title, font=FONT_TITLE_SPORTS, fill=(255, 255, 255))
+
+    home_tm = game["teams"]["home"]["team"]
+    away_tm = game["teams"]["away"]["team"]
+    cubs_id = int(MLB_CUBS_TEAM_ID)
+    sox_id = int(MLB_SOX_TEAM_ID)
+    focus_key = " ".join(filter(None, [screen_id, title])).lower()
+    focus_id = cubs_id if "cubs" in focus_key else (sox_id if "sox" in focus_key else None)
+
+    if focus_id is not None and away_tm.get("id") == focus_id:
+        prefix, opponent = "@", get_team_display_name(home_tm)
+    elif focus_id is not None and home_tm.get("id") == focus_id:
+        prefix, opponent = "vs.", get_team_display_name(away_tm)
+    elif away_tm.get("id") in (cubs_id, sox_id):
+        prefix, opponent = "@", get_team_display_name(home_tm)
+    else:
+        prefix, opponent = "vs.", get_team_display_name(away_tm)
+
+    wrap_width = WIDTH - (edge_pad * 2) if hyperpixel_layout else WIDTH
+    lines = wrap_text(f"{prefix} {opponent}", FONT_TEAM_SPORTS, wrap_width)[:2]
+    y_text = edge_pad + th + (config.scale_value(4) if hyperpixel_layout else 4)
+    for ln in lines:
+        lw, lh = draw.textsize(ln, font=FONT_TEAM_SPORTS)
+        draw.text(((WIDTH - lw) // 2, y_text), ln, font=FONT_TEAM_SPORTS, fill=(255, 255, 255))
+        y_text += lh + line_gap
+
+    logo_h = min(standard_next_game_logo_height(HEIGHT), max(16, HEIGHT // 5))
+    logo_away = load_team_logo(MLB_LOGOS_DIR, get_mlb_tricode(away_tm) or get_mlb_abbreviation(get_team_display_name(away_tm)), box_size=logo_h)
+    logo_home = load_team_logo(MLB_LOGOS_DIR, get_mlb_tricode(home_tm) or get_mlb_abbreviation(get_team_display_name(home_tm)), box_size=logo_h)
+    gap = config.scale_value(10) if hyperpixel_layout else 10
+    at_w, at_h = draw.textsize("@", font=FONT_TEAM_SPORTS)
+    frame_w = min(standard_next_game_logo_frame_width(logo_h, (logo_away, logo_home)), max(10, (WIDTH - (gap * 2) - at_w) // 2))
+    row_y = y_text + line_gap
+    total_w = frame_w * 2 + (gap * 2) + at_w
+    start_x = max(0, (WIDTH - total_w) // 2)
+    left_x = start_x
+    at_x = left_x + frame_w + gap
+    right_x = at_x + at_w + gap
+    if logo_away:
+        img.paste(logo_away, (left_x + (frame_w - logo_away.width) // 2, row_y + (logo_h - logo_away.height) // 2), logo_away)
+    draw.text((at_x, row_y + (logo_h - at_h) // 2), "@", font=FONT_TEAM_SPORTS, fill=(255, 255, 255))
+    if logo_home:
+        img.paste(logo_home, (right_x + (frame_w - logo_home.width) // 2, row_y + (logo_h - logo_home.height) // 2), logo_home)
+
+    rows_top = row_y + logo_h + (config.scale_value(8) if hyperpixel_layout else 8)
+    bottom_margin = config.scale_value(BOTTOM_MARGIN) if hyperpixel_layout else BOTTOM_MARGIN
+    max_rows = 4
+    row_font = FONT_DATE_SPORTS
+    row_h = draw.textsize("Tonight • 7 PM", font=row_font)[1] + line_gap
+    available_rows = max(1, (HEIGHT - bottom_margin - rows_top) // max(1, row_h))
+    display_rows = min(max_rows, available_rows, len(series_games))
+
+    for idx in range(display_rows):
+        line = _series_line(series_games[idx], focus_id)
+        lw, lh = draw.textsize(line, font=row_font)
+        y = rows_top + (idx * row_h)
+        draw.text(((WIDTH - lw) // 2, y), line, font=row_font, fill=(255, 255, 255))
+
+    return ScreenImage(img, displayed=False)
+
+
 @log_call
 def draw_next_home_game(display, game, transition=False, screen_id: Optional[str] = None):
     """Wrapper to render the 'Next at home...' screen using sports layout."""

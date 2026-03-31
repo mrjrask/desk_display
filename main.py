@@ -1403,8 +1403,8 @@ cache = {
     "hawks":   {"stand":None, "last":None, "live":None, "next":None, "next_home":None},
     "wolves":  {"last":None, "live":None, "next":None, "next_home":None},
     "bulls":   {"stand":None, "last":None, "live":None, "next":None, "next_home":None},
-    "cubs":    {"stand":None, "last":None, "last_alt":None, "live":None, "next":None, "next_alt":None, "next_home":None},
-    "sox":     {"stand":None, "last":None, "last_alt":None, "live":None, "next":None, "next_alt":None, "next_home":None},
+    "cubs":    {"stand":None, "last":None, "last_alt":None, "live":None, "next":None, "next_alt":None, "next_series":None, "next_home_series":None, "next_home":None},
+    "sox":     {"stand":None, "last":None, "last_alt":None, "live":None, "next":None, "next_alt":None, "next_series":None, "next_home_series":None, "next_home":None},
     "scoreboards": {"nfl": None, "mlb": None, "nba": None, "ncaam": None, "nhl": None},
 }
 
@@ -1428,6 +1428,8 @@ _FEED_DEPENDENCIES: Dict[str, Set[str]] = {
         "cubs result",
         "cubs live",
         "cubs next",
+        "cubs next series",
+        "cubs next home series",
         "cubs next 2",
         "cubs next home",
         "cubs logo",
@@ -1438,6 +1440,8 @@ _FEED_DEPENDENCIES: Dict[str, Set[str]] = {
         "sox last",
         "sox live",
         "sox next",
+        "sox next series",
+        "sox next home series",
         "sox next 2",
         "sox next home",
         "sox logo",
@@ -1629,6 +1633,8 @@ def _refresh_cubs() -> None:
         "live":  cubg.get("live_game"),
         "next":  cubg.get("next_game"),
         "next_alt": cubg.get("next_game_alt"),
+        "next_series": cubg.get("next_series_games"),
+        "next_home_series": cubg.get("next_home_series_games"),
         "next_home": cubg.get("next_home_game"),
     })
 
@@ -1642,6 +1648,8 @@ def _refresh_sox() -> None:
         "live":  soxg.get("live_game"),
         "next":  soxg.get("next_game"),
         "next_alt": soxg.get("next_game_alt"),
+        "next_series": soxg.get("next_series_games"),
+        "next_home_series": soxg.get("next_home_series_games"),
         "next_home": soxg.get("next_home_game"),
     })
 
