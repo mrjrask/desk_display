@@ -119,14 +119,11 @@ build_sink_candidates() {
 
   # de-dup while preserving order
   local -A seen=()
-  local item
+  local item seen_key
   for item in "${sinks[@]}"; do
-    local key="$item"
-    if [[ -z "$key" ]]; then
-      key="__DEFAULT_SINK__"
-    fi
-    if [[ -z "${seen[$key]+x}" ]]; then
-      seen[$key]=1
+    seen_key="${item:-__DEFAULT_SINK__}"
+    if [[ -z "${seen[$seen_key]+x}" ]]; then
+      seen[$seen_key]=1
       printf '%s\n' "$item"
     fi
   done
