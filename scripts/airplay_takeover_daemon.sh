@@ -34,6 +34,26 @@ SESSION_ACTIVE=0
 CURRENT_SINK=""
 LOCK_FILE="${AIRPLAY_LOCK_FILE:-/tmp/desk-display-airplay-daemon.lock}"
 
+build_service_name_candidates() {
+  local base_name="$AIRPLAY_NAME"
+  local host_suffix="${AIRPLAY_NAME_SUFFIX:-$(hostname -s 2>/dev/null || true)}"
+  local -a candidates=()
+
+  candidates+=("$base_name")
+  if [[ -n "$host_suffix" ]]; then
+    candidates+=("${base_name} (${host_suffix})")
+  fi
+
+  local -A seen=()
+  local name
+  for name in "${candidates[@]}"; do
+    if [[ -z "${seen[$name]+x}" ]]; then
+      seen[$name]=1
+      printf '%s\n' "$name"
+    fi
+  done
+}
+
 terminate_conflicting_uxplay_instances() {
   local self_pid="${1:-}"
   local exclude_pid="${2:-}"
@@ -172,9 +192,10 @@ build_sink_candidates() {
 
 build_uxplay_cmd() {
   local sink="$1"
-  local -n cmd_ref=$2
+  local service_name="$2"
+  local -n cmd_ref=$3
 
-  cmd_ref=("$AIRPLAY_BIN" -fs -nh -n "$AIRPLAY_NAME" -s "$AIRPLAY_RESOLUTION")
+  cmd_ref=("$AIRPLAY_BIN" -fs -nh -n "$service_name" -s "$AIRPLAY_RESOLUTION")
 
   if [[ -n "$AIRPLAY_PIN" ]]; then
     cmd_ref+=(-pin "$AIRPLAY_PIN")
@@ -194,18 +215,19 @@ build_uxplay_cmd() {
 
 run_once() {
   local sink="$1"
+  local service_name="$2"
   local -a cmd=()
   local connected=0
   local sink_failed=0
   local name_conflict=0
 
-  build_uxplay_cmd "$sink" cmd
+  build_uxplay_cmd "$sink" "$service_name" cmd
   CURRENT_SINK="$sink"
 
   if [[ -n "$sink" ]]; then
-    log_info "Starting uxplay with sink '$sink' at ${AIRPLAY_RESOLUTION}"
+    log_info "Starting uxplay as '$service_name' with sink '$sink' at ${AIRPLAY_RESOLUTION}"
   else
-    log_info "Starting uxplay with uxplay default sink at ${AIRPLAY_RESOLUTION}"
+    log_info "Starting uxplay as '$service_name' with uxplay default sink at ${AIRPLAY_RESOLUTION}"
   fi
   log_info "Command: $(printf '%q ' "${cmd[@]}")"
 
@@ -240,7 +262,7 @@ run_once() {
 
     if [[ "$lower" == *"dnsserviceregister call returned kdnsserviceerr_nameconflict"* ]]; then
       name_conflict=1
-      log_warn "Detected AirPlay service name conflict; another uxplay instance may already be active"
+      log_warn "Detected AirPlay service name conflict for '$service_name'; another uxplay instance or device may already be using that name"
       terminate_conflicting_uxplay_instances "$$" "$ux_pid"
       kill "$ux_pid" >/dev/null 2>&1 || true
       break
@@ -275,44 +297,44 @@ main() {
 
   while true; do
     local used_fallback=0
-    while IFS= read -r sink_candidate; do
-      local rc=0
-      if run_once "$sink_candidate"; then
-        rc=0
-      else
-        rc=$?
-      fi
+    while IFS= read -r service_name; do
+      while IFS= read -r sink_candidate; do
+        local rc=0
+        if run_once "$sink_candidate" "$service_name"; then
+          rc=0
+        else
+          rc=$?
+        fi
 
-      case "$rc" in
-        0)
-          used_fallback=1
-          break
-          ;;
-        2)
-          log_warn "Retrying uxplay with next sink candidate"
-          sleep 1
-          ;;
-        3)
-          log_warn "Name conflict persists; pausing before retry"
-          terminate_conflicting_uxplay_instances
-          used_fallback=1
-          sleep 5
-          break
-          ;;
-        *)
-          log_warn "uxplay exited with status $rc; retrying"
-          used_fallback=1
-          sleep 2
-          break
-          ;;
-      esac
-    done < <(build_sink_candidates)
+        case "$rc" in
+          0)
+            used_fallback=1
+            break 2
+            ;;
+          2)
+            log_warn "Retrying uxplay with next sink candidate"
+            sleep 1
+            ;;
+          3)
+            log_warn "Name conflict persists for '$service_name'"
+            terminate_conflicting_uxplay_instances
+            break
+            ;;
+          *)
+            log_warn "uxplay exited with status $rc; retrying"
+            used_fallback=1
+            sleep 2
+            break 2
+            ;;
+        esac
+      done < <(build_sink_candidates)
+    done < <(build_service_name_candidates)
 
     if [[ $used_fallback -eq 0 ]]; then
-      log_warn "No working sink candidate succeeded; waiting before full retry"
+      log_warn "No sink/name candidate succeeded; waiting before full retry"
     fi
 
-    sleep 2
+    sleep 5
   done
 }
 
