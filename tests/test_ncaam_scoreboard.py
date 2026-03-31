@@ -68,6 +68,11 @@ def test_score_text_uses_dash_for_scheduled_games():
     assert ncaam_scoreboard._score_text({"score": ""}, show=True) == "—"
 
 
+def test_parse_start_time_central_includes_day_and_date():
+    game = {"date": "2026-03-31T23:00:00Z"}
+    assert ncaam_scoreboard._parse_start_time_central(game) == "Tue 3/31 6:00 PM"
+
+
 def test_ncaam_v2_logo_height_is_capped_to_score_row(monkeypatch):
     from screens import ncaam_scoreboard_v2
 
