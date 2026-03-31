@@ -1,19 +1,34 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-AIRPLAY_SERVICE_NAME="${AIRPLAY_SERVICE_NAME:-airplay_desk_display.service}"
+SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
+PROJECT_DIR="${PROJECT_DIR:-$(cd -- "$SCRIPT_DIR/.." && pwd)}"
+HELPER_PATH="$PROJECT_DIR/scripts/helpers/airplay_common.sh"
 
-if command -v systemctl >/dev/null 2>&1; then
-  if [[ $EUID -ne 0 ]]; then
-    sudo systemctl enable --now "$AIRPLAY_SERVICE_NAME"
-    sudo systemctl restart "$AIRPLAY_SERVICE_NAME"
-    sudo systemctl status --no-pager "$AIRPLAY_SERVICE_NAME"
-  else
-    systemctl enable --now "$AIRPLAY_SERVICE_NAME"
-    systemctl restart "$AIRPLAY_SERVICE_NAME"
-    systemctl status --no-pager "$AIRPLAY_SERVICE_NAME"
-  fi
-else
-  echo "systemctl is required for AirPlay mode." >&2
+if [[ ! -f "$HELPER_PATH" ]]; then
+  echo "[AIRPLAY][ERROR] Missing helper library at $HELPER_PATH" >&2
   exit 1
 fi
+
+# shellcheck source=/dev/null
+source "$HELPER_PATH"
+init_sudo
+
+AIRPLAY_SERVICE_NAME="${AIRPLAY_SERVICE_NAME:-airplay_desk_display.service}"
+
+main() {
+  log_info "Enabling and restarting $AIRPLAY_SERVICE_NAME"
+  if ! systemctl_safe enable --now "$AIRPLAY_SERVICE_NAME"; then
+    log_error "Failed to enable/start $AIRPLAY_SERVICE_NAME"
+    exit 1
+  fi
+
+  if ! systemctl_safe restart "$AIRPLAY_SERVICE_NAME"; then
+    log_error "Failed to restart $AIRPLAY_SERVICE_NAME"
+    exit 1
+  fi
+
+  systemctl_safe status --no-pager "$AIRPLAY_SERVICE_NAME" || true
+}
+
+main "$@"
