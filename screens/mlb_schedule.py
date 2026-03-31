@@ -959,6 +959,31 @@ def _series_line(game: dict, focus_id: Optional[int]) -> str:
     return _format_game_label(raw_date, raw_time)
 
 
+def _series_final_result_parts(game: dict, focus_id: Optional[int]) -> Optional[tuple[str, str, str]]:
+    """Return (date_label, W/L result, score) for a final game from the focus team's view."""
+    if not _is_final_game(game):
+        return None
+
+    raw_date = game.get("officialDate", "") or game.get("gameDate", "")[:10]
+    away = ((game.get("teams") or {}).get("away") or {})
+    home = ((game.get("teams") or {}).get("home") or {})
+    away_score = away.get("score")
+    home_score = home.get("score")
+
+    if focus_id is None or not isinstance(away_score, int) or not isinstance(home_score, int):
+        return None
+
+    team_is_home = ((home.get("team") or {}).get("id") == focus_id)
+    team_is_away = ((away.get("team") or {}).get("id") == focus_id)
+    if team_is_home:
+        result = "W" if home_score > away_score else "L"
+        return (_rel_date_only(raw_date), result, f"{home_score}-{away_score}")
+    if team_is_away:
+        result = "W" if away_score > home_score else "L"
+        return (_rel_date_only(raw_date), result, f"{away_score}-{home_score}")
+    return None
+
+
 @log_call
 def draw_series_screen(display, games, title, transition=False, screen_id: Optional[str] = None):
     _set_background(screen_id)
@@ -1036,11 +1061,44 @@ def draw_series_screen(display, games, title, transition=False, screen_id: Optio
     row_h = draw.textsize("Tonight • 7 PM", font=row_font)[1] + line_gap
     available_rows = max(1, (HEIGHT - bottom_margin - rows_top) // max(1, row_h))
     display_rows = min(max_rows, available_rows, len(series_games))
+    use_cubs_result_icon = (screen_id or "").strip().lower() == "cubs next series"
 
     for idx in range(display_rows):
-        line = _series_line(series_games[idx], focus_id)
-        lw, lh = draw.textsize(line, font=row_font)
         y = rows_top + (idx * row_h)
+        game_row = series_games[idx]
+        final_parts = _series_final_result_parts(game_row, focus_id) if use_cubs_result_icon else None
+
+        if final_parts:
+            date_label, result_flag, score_text = final_parts
+            text_before = f"{date_label} • "
+            text_after = f" {score_text}"
+            icon_path = os.path.join(IMAGES_DIR, "mlb", f"{result_flag}.png")
+            icon = None
+            if os.path.exists(icon_path):
+                try:
+                    icon = Image.open(icon_path).convert("RGBA")
+                    if icon.height > 0:
+                        scale = min(1.0, row_h / float(icon.height))
+                        icon = icon.resize(
+                            (max(1, int(round(icon.width * scale))), max(1, int(round(icon.height * scale)))),
+                            Image.LANCZOS,
+                        )
+                except Exception:
+                    icon = None
+            if icon:
+                before_w, before_h = draw.textsize(text_before, font=row_font)
+                after_w, after_h = draw.textsize(text_after, font=row_font)
+                total_w = before_w + icon.width + after_w
+                x = (WIDTH - total_w) // 2
+                text_h = max(before_h, after_h)
+                draw.text((x, y), text_before, font=row_font, fill=(255, 255, 255))
+                icon_y = y + max(0, (text_h - icon.height) // 2)
+                img.paste(icon, (x + before_w, icon_y), icon)
+                draw.text((x + before_w + icon.width, y), text_after, font=row_font, fill=(255, 255, 255))
+                continue
+
+        line = _series_line(game_row, focus_id)
+        lw, lh = draw.textsize(line, font=row_font)
         draw.text(((WIDTH - lw) // 2, y), line, font=row_font, fill=(255, 255, 255))
 
     return ScreenImage(img, displayed=False)

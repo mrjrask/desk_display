@@ -248,6 +248,64 @@ def test_draw_last_game_moves_cubs_result_flag_inline_on_hyperpixel4(monkeypatch
     assert captured["inline_team_id"] == int(mlb_schedule.MLB_CUBS_TEAM_ID)
     assert captured["inline_winner_flag"] == "L"
 
+
+def test_draw_series_screen_uses_result_icon_on_cubs_next_series(monkeypatch):
+    opened_paths = []
+
+    def _fake_open(path):
+        opened_paths.append(path)
+        return Image.new("RGBA", (10, 10), (255, 255, 255, 255))
+
+    monkeypatch.setattr(mlb_schedule.Image, "open", _fake_open)
+    monkeypatch.setattr(mlb_schedule.os.path, "exists", lambda _path: True)
+
+    game = {
+        "officialDate": "2026-05-01",
+        "status": {"detailedState": "Final"},
+        "teams": {
+            "away": {"score": 1, "team": {"id": 121, "name": "New York Mets"}},
+            "home": {"score": 4, "team": {"id": 112, "name": "Chicago Cubs"}},
+        },
+    }
+
+    mlb_schedule.draw_series_screen(
+        None,
+        [game],
+        title="Cubs Next Series",
+        screen_id="cubs next series",
+    )
+
+    assert any(path.endswith("mlb/W.png") for path in opened_paths)
+
+
+def test_draw_series_screen_does_not_use_result_icon_on_sox_next_series(monkeypatch):
+    opened_paths = []
+
+    def _fake_open(path):
+        opened_paths.append(path)
+        return Image.new("RGBA", (10, 10), (255, 255, 255, 255))
+
+    monkeypatch.setattr(mlb_schedule.Image, "open", _fake_open)
+    monkeypatch.setattr(mlb_schedule.os.path, "exists", lambda _path: True)
+
+    game = {
+        "officialDate": "2026-05-01",
+        "status": {"detailedState": "Final"},
+        "teams": {
+            "away": {"score": 1, "team": {"id": 121, "name": "New York Mets"}},
+            "home": {"score": 4, "team": {"id": 145, "name": "Chicago White Sox"}},
+        },
+    }
+
+    mlb_schedule.draw_series_screen(
+        None,
+        [game],
+        title="Sox Next Series",
+        screen_id="sox next series",
+    )
+
+    assert not any(path.endswith("/mlb/W.png") or path.endswith("/mlb/L.png") for path in opened_paths)
+
 def test_centered_boxscore_accounts_for_header_height(monkeypatch):
     img = Image.new("RGB", (mlb_schedule.WIDTH, mlb_schedule.HEIGHT), (0, 0, 0))
     draw = ImageDraw.Draw(img)
