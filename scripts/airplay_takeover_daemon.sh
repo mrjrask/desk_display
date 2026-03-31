@@ -36,15 +36,36 @@ LOCK_FILE="${AIRPLAY_LOCK_FILE:-/tmp/desk-display-airplay-daemon.lock}"
 
 terminate_conflicting_uxplay_instances() {
   local self_pid="${1:-}"
+  local exclude_pid="${2:-}"
   local matched=0
   local pid args
 
   while IFS= read -r pid args; do
     [[ -z "${pid:-}" ]] && continue
     [[ -n "$self_pid" && "$pid" == "$self_pid" ]] && continue
+    [[ -n "$exclude_pid" && "$pid" == "$exclude_pid" ]] && continue
     [[ "$pid" == "$$" ]] && continue
+    local killed_this_pid=0
 
-    if [[ "$args" == *" -n $AIRPLAY_NAME"* ]]; then
+    if ! [[ -r "/proc/$pid/cmdline" ]]; then
+      continue
+    fi
+
+    local -a argv=()
+    mapfile -d '' -t argv < "/proc/$pid/cmdline"
+
+    local i
+    for ((i = 0; i < ${#argv[@]}; i++)); do
+      if [[ "${argv[$i]}" == "-n" && "${argv[$((i + 1))]:-}" == "$AIRPLAY_NAME" ]]; then
+        kill "$pid" >/dev/null 2>&1 || true
+        matched=1
+        killed_this_pid=1
+        break
+      fi
+    done
+
+    # fallback for older procfs parsing edge-cases where argv is unavailable
+    if [[ "$killed_this_pid" -eq 0 && "$args" == *"uxplay"* && "$args" == *"$AIRPLAY_NAME"* ]]; then
       kill "$pid" >/dev/null 2>&1 || true
       matched=1
     fi
@@ -222,6 +243,7 @@ run_once() {
     if [[ "$lower" == *"dnsserviceregister call returned kdnsserviceerr_nameconflict"* ]]; then
       name_conflict=1
       log_warn "Detected AirPlay service name conflict; another uxplay instance may already be active"
+      terminate_conflicting_uxplay_instances "$$" "$ux_pid"
       kill "$ux_pid" >/dev/null 2>&1 || true
       break
     fi
