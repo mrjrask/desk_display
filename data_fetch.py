@@ -1909,6 +1909,8 @@ def _fetch_mlb_schedule(team_id):
         result = {
             "next_game": None,
             "next_game_alt": None,
+            "next_series_games": None,
+            "next_home_series_games": None,
             "next_home_game": None,
             "live_game": None,
             "last_game": None,
@@ -1919,6 +1921,7 @@ def _fetch_mlb_schedule(team_id):
         skipped_home_duplicate = False
         team_id_int = int(team_id)
         scheduled_today = []
+        schedule_rows: List[Dict[str, Any]] = []
 
         def _opponent_team_id(game: Dict[str, Any]) -> Optional[int]:
             teams = game.get("teams") or {}
@@ -1997,6 +2000,15 @@ def _fetch_mlb_schedule(team_id):
                 if day <= today and code not in ("S","I") and abstract not in ("preview","scheduled","live"):
                     finished.append(g)
 
+                schedule_rows.append(
+                    {
+                        "game": g,
+                        "local_dt": local_dt,
+                        "opponent_id": _opponent_team_id(g),
+                        "is_home": is_home_game,
+                    }
+                )
+
         # Fallback next future
         if not result["next_game"]:
             for di in data.get("dates", []):
@@ -2057,6 +2069,73 @@ def _fetch_mlb_schedule(team_id):
                 team_id,
             )
 
+        anchor_game = result.get("live_game") or result.get("next_game")
+        anchor_pk = (anchor_game or {}).get("gamePk")
+        if anchor_pk and schedule_rows:
+            ordered_rows = sorted(
+                schedule_rows,
+                key=lambda row: (
+                    row.get("local_dt") or datetime.datetime.min.replace(tzinfo=CENTRAL_TIME),
+                    int((row.get("game") or {}).get("gamePk") or 0),
+                ),
+            )
+            series_blocks: List[Dict[str, Any]] = []
+            for row in ordered_rows:
+                opponent_id = row.get("opponent_id")
+                if opponent_id is None:
+                    continue
+                if series_blocks and series_blocks[-1].get("opponent_id") == opponent_id:
+                    series_blocks[-1]["rows"].append(row)
+                else:
+                    series_blocks.append(
+                        {
+                            "opponent_id": opponent_id,
+                            "rows": [row],
+                        }
+                    )
+
+            anchor_block_idx: Optional[int] = None
+            for idx, block in enumerate(series_blocks):
+                rows = block.get("rows") or []
+                if any(((row.get("game") or {}).get("gamePk") == anchor_pk) for row in rows):
+                    anchor_block_idx = idx
+                    break
+
+            if anchor_block_idx is not None:
+                anchor_rows = (series_blocks[anchor_block_idx].get("rows") or [])
+                anchor_games = [
+                    (row.get("game") or {})
+                    for row in anchor_rows
+                    if row.get("game")
+                ]
+                if anchor_games:
+                    result["next_series_games"] = anchor_games
+
+                anchor_pks = {
+                    (row.get("game") or {}).get("gamePk")
+                    for row in anchor_rows
+                    if (row.get("game") or {}).get("gamePk") is not None
+                }
+                for idx in range(anchor_block_idx, len(series_blocks)):
+                    block_rows = (series_blocks[idx].get("rows") or [])
+                    if not any(bool(row.get("is_home")) for row in block_rows):
+                        continue
+                    block_pks = {
+                        (row.get("game") or {}).get("gamePk")
+                        for row in block_rows
+                        if (row.get("game") or {}).get("gamePk") is not None
+                    }
+                    if anchor_pks and block_pks and block_pks == anchor_pks:
+                        continue
+                    home_series_games = [
+                        (row.get("game") or {})
+                        for row in block_rows
+                        if row.get("game")
+                    ]
+                    if home_series_games:
+                        result["next_home_series_games"] = home_series_games
+                        break
+
         # Pick last finished
         if finished:
             def _finished_sort_key(game: Dict[str, Any]) -> tuple[str, str, int]:
@@ -2079,6 +2158,8 @@ def _fetch_mlb_schedule(team_id):
         return {
             "next_game": None,
             "next_game_alt": None,
+            "next_series_games": None,
+            "next_home_series_games": None,
             "next_home_game": None,
             "live_game": None,
             "last_game": None,

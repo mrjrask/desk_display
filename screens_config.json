@@ -97,7 +97,11 @@
     "NBA Scoreboard": 4,
     "NCAAM Scoreboard": 5,
     "quad": 0,
-    "NHL Playoffs": 0
+    "NHL Playoffs": 0,
+    "cubs next series": 2,
+    "sox next series": 5,
+    "cubs next home series": 2,
+    "sox next home series": 5
   },
   "playlists": {
     "playlist-1771301244817-427": {
@@ -254,6 +258,12 @@
         },
         {
           "screen": "cubs next home"
+        },
+        {
+          "screen": "cubs next series"
+        },
+        {
+          "screen": "cubs next home series"
         }
       ]
     },
@@ -283,6 +293,12 @@
         },
         {
           "screen": "sox next home"
+        },
+        {
+          "screen": "sox next series"
+        },
+        {
+          "screen": "sox next home series"
         }
       ]
     },
