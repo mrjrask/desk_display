@@ -55,11 +55,9 @@ from screens.mlb_schedule import (
 )
 from screens.mlb_scoreboard import render_mlb_scoreboard
 from screens.mlb_scoreboard_v2 import render_mlb_scoreboard_v2
-from screens.mlb_standings import (
+from screens.mlb_league_standings import (
     draw_AL_Overview,
     draw_NL_Overview,
-)
-from screens.mlb_league_standings import (
     draw_mlb_al_standings,
     draw_mlb_nl_standings,
 )

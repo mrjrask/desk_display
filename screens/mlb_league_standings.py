@@ -65,6 +65,12 @@ TEAM_GAP = scale_value(6)
 STAT_COLUMN_GAP = scale_value(30)
 PCT_TO_GB_EXTRA_GAP = scale_value(10)
 LOGO_SIZE = scale_value(24)
+OV_COLS = 3
+OV_ROWS = 5
+OVERVIEW_DROP_STEPS = 30
+OVERVIEW_DROP_STAGGER = 0.4
+OVERVIEW_DROP_FRAME_DELAY = 0.02
+OVERVIEW_PAUSE_END = 0.5
 
 def _show_win_pct_for_layout(width: int, height: int) -> bool:
     """Return True when there is enough space for the extra PCT standings column."""
@@ -416,6 +422,153 @@ def _draw_table_title(img: Image.Image, draw: ImageDraw.ImageDraw, title: str) -
     return y + _text_size(draw, title, TITLE_FONT)[1] + DIVISION_GAP_TOP
 
 
+def _overview_header_frame(title: str, bg: tuple[int, int, int]) -> tuple[Image.Image, int]:
+    img = Image.new("RGB", (WIDTH, HEIGHT), bg)
+    draw = ImageDraw.Draw(img)
+    title_width, title_height = _text_size(draw, title, TITLE_FONT)
+    draw.text(((WIDTH - title_width) // 2, 0), title, font=TITLE_FONT, fill=(255, 255, 255))
+    header_pad = scale_value(6) if config.is_hyperpixel_next_layout() else 6
+    return img, title_height + header_pad
+
+
+def _ease_out_cubic(t: float) -> float:
+    if t <= 0.0:
+        return 0.0
+    if t >= 1.0:
+        return 1.0
+    inv = 1.0 - t
+    return 1.0 - inv * inv * inv
+
+
+@log_call
+def draw_overview(display, title: str, league_id: int, transition: bool = False):
+    wait_for_skip = getattr(display, "wait_for_skip", None)
+    skip_requested = getattr(display, "skip_requested", None)
+
+    def _should_skip() -> bool:
+        return bool(skip_requested and skip_requested())
+
+    def _sleep(duration: float) -> bool:
+        if callable(wait_for_skip):
+            return bool(wait_for_skip(duration))
+        time.sleep(duration)
+        return False
+
+    bg = get_screen_background_color(title, SCOREBOARD_BACKGROUND_COLOR)
+    divisions = ["East", "Central", "West"]
+    header, top_y = _overview_header_frame(title, bg)
+    available_height = max(1, HEIGHT - top_y)
+
+    hyperpixel_layout = config.is_hyperpixel_next_layout()
+    if hyperpixel_layout:
+        overview_margin = max(LEFT_MARGIN, scale_value(6))
+        available_width = max(1, WIDTH - 2 * overview_margin)
+        cell_h = available_height / OV_ROWS
+        col_width = available_width / OV_COLS
+        padding = max(2, scale_value(4))
+        logo_box = max(6, int(min(cell_h - padding * 2, col_width - padding * 2)))
+        col_centers = [overview_margin + col_width * (i + 0.5) for i in range(OV_COLS)]
+    else:
+        cell_h = available_height // OV_ROWS
+        col_w = max(scale_value(44), LOGO_SIZE)
+        margin_x = (WIDTH - OV_COLS * col_w) // (OV_COLS + 1)
+        col_centers = [margin_x * (i + 1) + col_w * i + col_w / 2 for i in range(OV_COLS)]
+        logo_box = col_w
+
+    standings = _fetch_league_standings().get(league_id, {})
+    logos_per_div: dict[str, list[Image.Image | None]] = {}
+    for div in divisions:
+        rows = standings.get(div, [])[:OV_ROWS]
+        logos: list[Image.Image | None] = []
+        for row in rows:
+            abbr = str(row.get("abbr", "") or "")
+            team_name = str(row.get("team_name", "") or "")
+            logos.append(_load_logo(abbr, team_name=team_name))
+        while len(logos) < OV_ROWS:
+            logos.append(None)
+        logos_per_div[div] = logos
+
+    row_positions: list[list[tuple[Image.Image, int, int]]] = []
+    for rank in range(OV_ROWS):
+        placements: list[tuple[Image.Image, int, int]] = []
+        for ci, div in enumerate(divisions):
+            icon = logos_per_div[div][rank]
+            if not icon:
+                continue
+            x0 = int(col_centers[ci] - icon.width / 2)
+            y_target = int(top_y + rank * cell_h + (cell_h - icon.height) / 2)
+            placements.append((icon, x0, y_target))
+        row_positions.append(placements)
+
+    steps = max(2, OVERVIEW_DROP_STEPS)
+    stagger = max(1, int(round(steps * OVERVIEW_DROP_STAGGER)))
+
+    schedule: list[tuple[int, list[tuple[Image.Image, int, int]]]] = []
+    start_step = 0
+    for rank in range(len(row_positions) - 1, -1, -1):
+        drops = row_positions[rank]
+        if not drops:
+            continue
+        schedule.append((start_step, drops))
+        start_step += stagger
+
+    if schedule:
+        total_duration = schedule[-1][0] + steps + 1
+        placed: list[tuple[Image.Image, int, int]] = []
+        completed = [False] * len(schedule)
+
+        for current_step in range(total_duration):
+            if _should_skip():
+                return header.copy() if transition else None
+
+            frame_start = time.time()
+
+            for idx, (start, drops) in enumerate(schedule):
+                if current_step >= start + steps and not completed[idx]:
+                    placed.extend(drops)
+                    completed[idx] = True
+
+            frame = header.copy()
+            for icon, x0, y0 in placed:
+                frame.paste(icon, (x0, y0), icon)
+
+            for start, drops in schedule:
+                progress = current_step - start
+                if progress < 0 or progress >= steps:
+                    continue
+                frac = progress / (steps - 1) if steps > 1 else 1.0
+                eased = _ease_out_cubic(frac)
+                for icon, x0, y_target in drops:
+                    start_y = -logo_box
+                    y_pos = int(start_y + (y_target - start_y) * eased)
+                    if y_pos > y_target:
+                        y_pos = y_target
+                    frame.paste(icon, (x0, y_pos), icon)
+
+            display.image(frame)
+            display.show()
+
+            elapsed = time.time() - frame_start
+            sleep_time = max(0, OVERVIEW_DROP_FRAME_DELAY - elapsed)
+            if sleep_time > 0 and _sleep(sleep_time):
+                return header.copy() if transition else None
+
+    final = header.copy()
+    for rank in range(OV_ROWS):
+        for ci, div in enumerate(divisions):
+            icon = logos_per_div[div][rank]
+            if not icon:
+                continue
+            x0 = int(col_centers[ci] - icon.width / 2)
+            y0 = int(top_y + rank * cell_h + (cell_h - icon.height) / 2)
+            final.paste(icon, (x0, y0), icon)
+
+    display.image(final)
+    display.show()
+    _sleep(OVERVIEW_PAUSE_END)
+    return final if transition else None
+
+
 def _draw_league_screen(title: str, league_id: int, screen_id: str) -> Image.Image:
     bg = get_screen_background_color(screen_id, SCOREBOARD_BACKGROUND_COLOR)
     standings = _fetch_league_standings().get(league_id, {})
@@ -509,4 +662,19 @@ def draw_mlb_nl_standings(display, transition: bool = False) -> ScreenImage:
     return _render_screen(display, "MLB NL Standings", NL_LEAGUE_ID, "MLB NL Standings")
 
 
-__all__ = ["draw_mlb_al_standings", "draw_mlb_nl_standings"]
+@log_call
+def draw_NL_Overview(display, transition: bool = False):
+    return draw_overview(display, "NL Overview", NL_LEAGUE_ID, transition)
+
+
+@log_call
+def draw_AL_Overview(display, transition: bool = False):
+    return draw_overview(display, "AL Overview", AL_LEAGUE_ID, transition)
+
+
+__all__ = [
+    "draw_mlb_al_standings",
+    "draw_mlb_nl_standings",
+    "draw_NL_Overview",
+    "draw_AL_Overview",
+]
