@@ -1,42 +1,18 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-log() { printf '[AIRPLAY] %s\n' "$*"; }
-warn() { printf '[AIRPLAY][WARN] %s\n' "$*"; }
-
-load_env_file() {
-  local env_file="$1"
-  [[ -f "$env_file" ]] || return 0
-  local raw_line line key value
-
-  while IFS= read -r raw_line || [[ -n "$raw_line" ]]; do
-    line="${raw_line#"${raw_line%%[![:space:]]*}"}"
-    [[ -z "$line" ]] && continue
-    [[ "${line:0:1}" == "#" ]] && continue
-    [[ "$line" == *"="* ]] || continue
-
-    key="${line%%=*}"
-    value="${line#*=}"
-
-    key="${key%"${key##*[![:space:]]}"}"
-    value="${value#"${value%%[![:space:]]*}"}"
-
-    [[ "$key" =~ ^[A-Za-z_][A-Za-z0-9_]*$ ]] || continue
-
-    if [[ ${#value} -ge 2 ]]; then
-      if [[ "${value:0:1}" == "\"" && "${value: -1}" == "\"" ]]; then
-        value="${value:1:${#value}-2}"
-      elif [[ "${value:0:1}" == "'" && "${value: -1}" == "'" ]]; then
-        value="${value:1:${#value}-2}"
-      fi
-    fi
-
-    export "$key=$value"
-  done < "$env_file"
-}
-
 SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 PROJECT_DIR="${PROJECT_DIR:-$(cd -- "$SCRIPT_DIR/.." && pwd)}"
+HELPER_PATH="$PROJECT_DIR/scripts/helpers/airplay_common.sh"
+
+if [[ ! -f "$HELPER_PATH" ]]; then
+  echo "[AIRPLAY][ERROR] Missing helper library at $HELPER_PATH" >&2
+  exit 1
+fi
+
+# shellcheck source=/dev/null
+source "$HELPER_PATH"
+init_sudo
 
 if [[ "${CONFIG_LOAD_DOTENV:-1}" != "0" ]]; then
   load_env_file "$PROJECT_DIR/.env"
@@ -45,226 +21,209 @@ fi
 AIRPLAY_BIN="${AIRPLAY_BIN:-uxplay}"
 AIRPLAY_NAME="${AIRPLAY_NAME:-Desk Display AirPlay}"
 AIRPLAY_PIN="${AIRPLAY_PAIRING_CODE:-}"
-AIRPLAY_RESOLUTION="${AIRPLAY_RESOLUTION:-${AIRPLAY_RESOLUTION_DEFAULT:-1920x1080}}"
+AIRPLAY_RESOLUTION="${AIRPLAY_RESOLUTION:-${AIRPLAY_RESOLUTION_DEFAULT:-800x480}}"
 AIRPLAY_DISPLAY="${AIRPLAY_DISPLAY:-}"
-AIRPLAY_VIDEO_SINK="${AIRPLAY_VIDEO_SINK:-}"
 AIRPLAY_EXTRA_ARGS="${AIRPLAY_EXTRA_ARGS:-}"
+AIRPLAY_VIDEO_SINK="${AIRPLAY_VIDEO_SINK:-}"
+
 DESK_DISPLAY_SERVICE_NAME="${DESK_DISPLAY_SERVICE_NAME:-desk_display.service}"
 DESK_DISPLAY_USER_SERVICE_NAME="${DESK_DISPLAY_USER_SERVICE_NAME:-desk_display-kernel.service}"
 DESK_DISPLAY_SESSION_USER="${DESK_DISPLAY_SESSION_USER:-${SUDO_USER:-$(whoami)}}"
+
+SESSION_ACTIVE=0
+CURRENT_SINK=""
 
 ensure_runtime_dir() {
   if [[ -n "${XDG_RUNTIME_DIR:-}" && -d "${XDG_RUNTIME_DIR:-}" ]]; then
     return 0
   fi
 
-  local uid runtime_dir fallback_runtime_dir
-  uid=$(id -u 2>/dev/null || true)
+  local uid runtime_dir fallback
+  uid=$(id -u)
   runtime_dir="/run/user/$uid"
   if [[ -d "$runtime_dir" ]]; then
     export XDG_RUNTIME_DIR="$runtime_dir"
     return 0
   fi
 
-  fallback_runtime_dir="/tmp/desk-display-xdg-runtime-$uid"
-  mkdir -p "$fallback_runtime_dir"
-  chmod 700 "$fallback_runtime_dir" >/dev/null 2>&1 || true
-  export XDG_RUNTIME_DIR="$fallback_runtime_dir"
-  warn "XDG runtime dir /run/user/$uid is unavailable; using $XDG_RUNTIME_DIR"
+  fallback="/tmp/desk-display-airplay-runtime-$uid"
+  mkdir -p "$fallback"
+  chmod 700 "$fallback" >/dev/null 2>&1 || true
+  export XDG_RUNTIME_DIR="$fallback"
+  log_warn "XDG runtime dir unavailable; using $XDG_RUNTIME_DIR"
 }
 
-if ! command -v "$AIRPLAY_BIN" >/dev/null 2>&1; then
-  warn "AirPlay binary '$AIRPLAY_BIN' is not installed."
-  exit 1
-fi
-
 stop_desk_display() {
-  if command -v systemctl >/dev/null 2>&1; then
-    sudo systemctl stop "$DESK_DISPLAY_SERVICE_NAME" >/dev/null 2>&1 || true
-
-    local uid
-    uid=$(id -u "$DESK_DISPLAY_SESSION_USER" 2>/dev/null || true)
-    if [[ -n "$uid" ]]; then
-      sudo -u "$DESK_DISPLAY_SESSION_USER" XDG_RUNTIME_DIR="/run/user/$uid" \
-        systemctl --user stop "$DESK_DISPLAY_USER_SERVICE_NAME" >/dev/null 2>&1 || true
-    fi
-  fi
+  systemctl_safe stop "$DESK_DISPLAY_SERVICE_NAME" >/dev/null 2>&1 || true
+  user_systemctl_safe "$DESK_DISPLAY_SESSION_USER" stop "$DESK_DISPLAY_USER_SERVICE_NAME" >/dev/null 2>&1 || true
 }
 
 start_desk_display() {
-  if command -v systemctl >/dev/null 2>&1; then
-    sudo systemctl start "$DESK_DISPLAY_SERVICE_NAME" >/dev/null 2>&1 || true
-
-    local uid
-    uid=$(id -u "$DESK_DISPLAY_SESSION_USER" 2>/dev/null || true)
-    if [[ -n "$uid" ]]; then
-      sudo -u "$DESK_DISPLAY_SESSION_USER" XDG_RUNTIME_DIR="/run/user/$uid" \
-        systemctl --user start "$DESK_DISPLAY_USER_SERVICE_NAME" >/dev/null 2>&1 || true
-    fi
-  fi
+  systemctl_safe start "$DESK_DISPLAY_SERVICE_NAME" >/dev/null 2>&1 || true
+  user_systemctl_safe "$DESK_DISPLAY_SESSION_USER" start "$DESK_DISPLAY_USER_SERVICE_NAME" >/dev/null 2>&1 || true
 }
 
-desk_display_paused=0
-AIRPLAY_VIDEO_SINK_AUTO_FORCED=0
-AIRPLAY_AUTO_KMSSINK_ALLOWED=1
-
-resume_desk_display_on_exit() {
-  if [[ "$desk_display_paused" -eq 1 ]]; then
-    log "AirPlay session ended unexpectedly. Resuming desk_display services."
+resume_on_exit() {
+  if [[ "$SESSION_ACTIVE" -eq 1 ]]; then
+    log_info "Resuming Desk Display services after AirPlay session exit"
     start_desk_display
-    desk_display_paused=0
+    SESSION_ACTIVE=0
   fi
 }
 
-build_uxplay_command() {
-  local -n cmd_ref=$1
-  local -a args=(-fs -nh -n "$AIRPLAY_NAME" -s "$AIRPLAY_RESOLUTION")
+sink_available() {
+  local sink="$1"
+  [[ -z "$sink" ]] && return 0
+  command -v gst-inspect-1.0 >/dev/null 2>&1 || return 0
+  gst-inspect-1.0 "$sink" >/dev/null 2>&1
+}
 
-  # On Raspberry Pi systems without a desktop session, autovideosink can pick a
-  # sink that renders in a small window. Force kmssink in that case so AirPlay
-  # content fills the screen.
-  if [[ "$AIRPLAY_AUTO_KMSSINK_ALLOWED" -eq 1 && -z "$AIRPLAY_VIDEO_SINK" ]]; then
-    if [[ -r /proc/device-tree/model ]] && tr -d '\0' </proc/device-tree/model | grep -qi 'raspberry pi'; then
-      if [[ -z "${DISPLAY:-}" && -z "${WAYLAND_DISPLAY:-}" ]]; then
-        AIRPLAY_VIDEO_SINK="kmssink"
-        AIRPLAY_VIDEO_SINK_AUTO_FORCED=1
-      fi
-    fi
+is_pi_headless() {
+  if [[ -r /proc/device-tree/model ]] && tr -d '\0' </proc/device-tree/model | grep -qi 'raspberry pi'; then
+    [[ -z "${DISPLAY:-}" && -z "${WAYLAND_DISPLAY:-}" ]]
+    return
   fi
+  return 1
+}
 
-  if [[ -n "$AIRPLAY_PIN" ]]; then
-    args+=( -pin "$AIRPLAY_PIN" )
-  fi
-
-  if [[ -n "$AIRPLAY_DISPLAY" ]]; then
-    args+=( -display "$AIRPLAY_DISPLAY" )
-  fi
+build_sink_candidates() {
+  local -a sinks=()
 
   if [[ -n "$AIRPLAY_VIDEO_SINK" ]]; then
-    args+=( -vs "$AIRPLAY_VIDEO_SINK" )
+    sinks+=("$AIRPLAY_VIDEO_SINK")
+  else
+    if is_pi_headless && sink_available kmssink; then
+      sinks+=("kmssink")
+    fi
+    sinks+=("autovideosink")
+    if sink_available glimagesink; then
+      sinks+=("glimagesink")
+    fi
+    if sink_available waylandsink; then
+      sinks+=("waylandsink")
+    fi
+    if sink_available ximagesink; then
+      sinks+=("ximagesink")
+    fi
+    sinks+=("")
   fi
 
+  # de-dup while preserving order
+  local -A seen=()
+  local item
+  for item in "${sinks[@]}"; do
+    if [[ -z "${seen[$item]+x}" ]]; then
+      seen[$item]=1
+      printf '%s\n' "$item"
+    fi
+  done
+}
+
+build_uxplay_cmd() {
+  local sink="$1"
+  local -n cmd_ref=$2
+
+  cmd_ref=("$AIRPLAY_BIN" -fs -nh -n "$AIRPLAY_NAME" -s "$AIRPLAY_RESOLUTION")
+
+  if [[ -n "$AIRPLAY_PIN" ]]; then
+    cmd_ref+=(-pin "$AIRPLAY_PIN")
+  fi
+  if [[ -n "$AIRPLAY_DISPLAY" ]]; then
+    cmd_ref+=(-display "$AIRPLAY_DISPLAY")
+  fi
+  if [[ -n "$sink" ]]; then
+    cmd_ref+=(-vs "$sink")
+  fi
   if [[ -n "$AIRPLAY_EXTRA_ARGS" ]]; then
     # shellcheck disable=SC2206
     local extra=( $AIRPLAY_EXTRA_ARGS )
-    args+=("${extra[@]}")
+    cmd_ref+=("${extra[@]}")
   fi
-
-  cmd_ref=( "$AIRPLAY_BIN" "${args[@]}" )
 }
 
-run_uxplay_session() {
+run_once() {
+  local sink="$1"
+  local -a cmd=()
   local connected=0
-  local kms_renderer_failed=0
-  local name_conflict_detected=0
-  local should_abort_for_fallback=0
-  local uxplay_status=0
-  local -a uxplay_cmd=()
-  build_uxplay_command uxplay_cmd
+  local sink_failed=0
 
-  log "Starting AirPlay takeover receiver at ${AIRPLAY_RESOLUTION}"
-  log "Command: $(printf '%q ' "${uxplay_cmd[@]}")"
+  build_uxplay_cmd "$sink" cmd
+  CURRENT_SINK="$sink"
 
-  coproc UXPLAY_PROC { stdbuf -oL -eL "${uxplay_cmd[@]}" 2>&1; }
-  local uxplay_pid=$UXPLAY_PROC_PID
+  if [[ -n "$sink" ]]; then
+    log_info "Starting uxplay with sink '$sink' at ${AIRPLAY_RESOLUTION}"
+  else
+    log_info "Starting uxplay with uxplay default sink at ${AIRPLAY_RESOLUTION}"
+  fi
+  log_info "Command: $(printf '%q ' "${cmd[@]}")"
 
-  while IFS= read -r line <&"${UXPLAY_PROC[0]}"; do
+  coproc UXP { stdbuf -oL -eL "${cmd[@]}" 2>&1; }
+  local ux_pid=$UXP_PID
+
+  while IFS= read -r line <&"${UXP[0]}"; do
     printf '%s\n' "$line"
-
     local lower
     lower=$(printf '%s' "$line" | tr '[:upper:]' '[:lower:]')
 
     if [[ "$lower" == *"begin streaming to gstreamer video pipeline"* || "$lower" == *"starting mirroring"* ]] && [[ $connected -eq 0 ]]; then
       connected=1
-      log "AirPlay client connected. Stopping desk_display services."
       stop_desk_display
-      desk_display_paused=1
+      SESSION_ACTIVE=1
+      log_info "AirPlay client connected; Desk Display services paused"
     fi
 
     if [[ "$lower" == *"disconnected"* || "$lower" == *"teardown"* || "$lower" == *"stopped"* ]] && [[ $connected -eq 1 ]]; then
       connected=0
-      log "AirPlay client disconnected. Starting desk_display services."
       start_desk_display
-      desk_display_paused=0
+      SESSION_ACTIVE=0
+      log_info "AirPlay client disconnected; Desk Display services resumed"
     fi
 
     if [[ "$lower" == *"failed to initialize gstreamer video renderer"* || "$lower" == *"could not get allowed gstcaps of device"* ]]; then
-      kms_renderer_failed=1
-      if [[ "$AIRPLAY_VIDEO_SINK_AUTO_FORCED" -eq 1 && "$AIRPLAY_VIDEO_SINK" == "kmssink" ]]; then
-        should_abort_for_fallback=1
-        warn "Detected kmssink renderer failure. Restarting uxplay with default video sink."
-        break
-      fi
-    fi
-
-    if [[ "$lower" == *"kdnsserviceerr_nameconflict"* ]]; then
-      name_conflict_detected=1
+      sink_failed=1
+      log_warn "Detected renderer initialization failure for sink '${sink:-default}'"
+      kill "$ux_pid" >/dev/null 2>&1 || true
+      break
     fi
   done
 
-  if [[ "$should_abort_for_fallback" -eq 1 ]]; then
-    if kill -0 "$uxplay_pid" >/dev/null 2>&1; then
-      kill "$uxplay_pid" >/dev/null 2>&1 || true
-    fi
-  fi
+  wait "$ux_pid" >/dev/null 2>&1 || true
 
-  if wait "$uxplay_pid"; then
-    uxplay_status=0
-  else
-    uxplay_status=$?
-  fi
-
-  if [[ "$should_abort_for_fallback" -eq 1 ]]; then
-    return 1
-  fi
-
-  if [[ "$name_conflict_detected" -eq 1 ]]; then
+  if [[ $sink_failed -eq 1 ]]; then
     return 2
   fi
 
-  if [[ "$uxplay_status" -ne 0 && "$kms_renderer_failed" -eq 0 ]]; then
-    return "$uxplay_status"
-  fi
-
-  return "$kms_renderer_failed"
+  return 0
 }
 
 main() {
-  local attempt
-  local status
-
   ensure_runtime_dir
-  trap resume_desk_display_on_exit EXIT INT TERM
 
-  if run_uxplay_session; then
-    return 0
-  fi
-  status=$?
-
-  if [[ "$status" -eq 1 && "$AIRPLAY_VIDEO_SINK_AUTO_FORCED" -eq 1 && "$AIRPLAY_VIDEO_SINK" == "kmssink" ]]; then
-    warn "Auto-selected kmssink failed to initialize. Retrying with uxplay default video sink."
-    AIRPLAY_AUTO_KMSSINK_ALLOWED=0
-    AIRPLAY_VIDEO_SINK=""
-    AIRPLAY_VIDEO_SINK_AUTO_FORCED=0
-    for attempt in 1 2; do
-      if run_uxplay_session; then
-        return 0
-      fi
-
-      status=$?
-      if [[ "$status" -ne 2 ]]; then
-        return "$status"
-      fi
-
-      warn "UxPlay reported mDNS name conflict after fallback restart. Waiting before retry ${attempt}/2."
-      sleep 2
-    done
-
-    warn "UxPlay is still reporting an mDNS name conflict after fallback retries."
-    return 2
+  if ! command -v "$AIRPLAY_BIN" >/dev/null 2>&1; then
+    log_error "AirPlay binary '$AIRPLAY_BIN' is not installed"
+    exit 1
   fi
 
-  return "$status"
+  trap resume_on_exit EXIT INT TERM
+
+  while true; do
+    local used_fallback=0
+    while IFS= read -r sink_candidate; do
+      if run_once "$sink_candidate"; then
+        used_fallback=1
+        break
+      fi
+
+      log_warn "Retrying uxplay with next sink candidate"
+      sleep 1
+    done < <(build_sink_candidates)
+
+    if [[ $used_fallback -eq 0 ]]; then
+      log_warn "No working sink candidate succeeded; waiting before full retry"
+    fi
+
+    sleep 2
+  done
 }
 
 main "$@"
