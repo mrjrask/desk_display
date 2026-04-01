@@ -996,7 +996,7 @@ def draw_series_screen(display, games, title, transition=False, screen_id: Optio
         return None
     game = series_games[0]
 
-    hyperpixel_layout = config.is_hyperpixel_next_layout() and screen_id in {
+    series_screen_ids = {
         "cubs current series",
         "cubs next series",
         "cubs next home series",
@@ -1004,6 +1004,8 @@ def draw_series_screen(display, games, title, transition=False, screen_id: Optio
         "sox next series",
         "sox next home series",
     }
+    hyperpixel_layout = config.is_hyperpixel_next_layout() and screen_id in series_screen_ids
+    content_drop_px = 15 if (screen_id or "").strip().lower() in series_screen_ids else 0
     edge_pad = max(2, config.scale_value(2)) if hyperpixel_layout else 0
     line_gap = max(1, config.scale_value(1)) if hyperpixel_layout else 1
 
@@ -1044,7 +1046,7 @@ def draw_series_screen(display, games, title, transition=False, screen_id: Optio
     at_w, at_h = draw.textsize("@", font=FONT_TEAM_SPORTS)
     frame_w = min(standard_next_game_logo_frame_width(logo_h, (logo_away, logo_home)), max(10, (WIDTH - (gap * 2) - at_w) // 2))
     logo_top_pad = config.scale_value(2) if hyperpixel_layout else 2
-    row_y = y_text + line_gap + logo_top_pad
+    row_y = y_text + line_gap + logo_top_pad + content_drop_px
     total_w = frame_w * 2 + (gap * 2) + at_w
     start_x = max(0, (WIDTH - total_w) // 2)
     left_x = start_x
@@ -1060,7 +1062,9 @@ def draw_series_screen(display, games, title, transition=False, screen_id: Optio
     bottom_margin = config.scale_value(BOTTOM_MARGIN) if hyperpixel_layout else BOTTOM_MARGIN
     max_rows = 4
     row_font = FONT_DATE_SPORTS
-    row_h = draw.textsize("Tonight • 7 PM", font=row_font)[1] + line_gap
+    row_text_h = draw.textsize("Tonight • 7 PM", font=row_font)[1]
+    row_spacing_extra = int(round(row_text_h * 0.25)) if (screen_id or "").strip().lower() in series_screen_ids else 0
+    row_h = row_text_h + line_gap + row_spacing_extra
     available_rows = max(1, (HEIGHT - bottom_margin - rows_top) // max(1, row_h))
     display_rows = min(max_rows, available_rows, len(series_games))
     use_cubs_result_icon = (screen_id or "").strip().lower() in {
@@ -1095,9 +1099,13 @@ def draw_series_screen(display, games, title, transition=False, screen_id: Optio
                 after_w, after_h = draw.textsize(text_after, font=row_font)
                 total_w = before_w + icon.width + after_w
                 x = (WIDTH - total_w) // 2
-                text_h = max(before_h, after_h)
                 draw.text((x, y), text_before, font=row_font, fill=(255, 255, 255))
-                icon_y = y + max(0, (text_h - icon.height) // 2)
+                try:
+                    _, text_top, _, text_bottom = draw.textbbox((x, y), text_before + text_after, font=row_font)
+                    text_center_y = (text_top + text_bottom) / 2.0
+                except Exception:
+                    text_center_y = y + (max(before_h, after_h) / 2.0)
+                icon_y = int(round(text_center_y - (icon.height / 2.0)))
                 img.paste(icon, (x + before_w, icon_y), icon)
                 draw.text((x + before_w + icon.width, y), text_after, font=row_font, fill=(255, 255, 255))
                 continue
