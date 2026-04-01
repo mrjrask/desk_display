@@ -3,16 +3,15 @@ set -euo pipefail
 
 SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 PROJECT_DIR="${PROJECT_DIR:-$(cd -- "$SCRIPT_DIR/.." && pwd)}"
-HELPER_PATH="$PROJECT_DIR/scripts/helpers/airplay_common.sh"
 
-if [[ ! -f "$HELPER_PATH" ]]; then
-  echo "[AIRPLAY][ERROR] Missing helper library at $HELPER_PATH" >&2
-  exit 1
+log_info() { printf '[AIRPLAY][INFO] %s\n' "$*"; }
+log_warn() { printf '[AIRPLAY][WARN] %s\n' "$*"; }
+
+if [[ ${EUID:-$(id -u)} -ne 0 ]]; then
+  SUDO="sudo"
+else
+  SUDO=""
 fi
-
-# shellcheck source=/dev/null
-source "$HELPER_PATH"
-init_sudo
 
 AIRPLAY_SERVICE_NAME="${AIRPLAY_SERVICE_NAME:-airplay_desk_display.service}"
 AIRPLAY_SERVICE_PATH="/etc/systemd/system/$AIRPLAY_SERVICE_NAME"
@@ -40,14 +39,29 @@ remove_path_if_exists() {
 }
 
 remove_service() {
-  if systemctl_safe list-unit-files | grep -q "^${AIRPLAY_SERVICE_NAME}"; then
-    systemctl_safe stop "$AIRPLAY_SERVICE_NAME" || log_warn "Unable to stop $AIRPLAY_SERVICE_NAME"
-    systemctl_safe disable "$AIRPLAY_SERVICE_NAME" || log_warn "Unable to disable $AIRPLAY_SERVICE_NAME"
+  if command -v systemctl >/dev/null 2>&1; then
+    if systemctl list-unit-files | grep -q "^${AIRPLAY_SERVICE_NAME}"; then
+      ${SUDO:-} systemctl stop "$AIRPLAY_SERVICE_NAME" || log_warn "Unable to stop $AIRPLAY_SERVICE_NAME"
+      ${SUDO:-} systemctl disable "$AIRPLAY_SERVICE_NAME" || log_warn "Unable to disable $AIRPLAY_SERVICE_NAME"
+    fi
   fi
 
   if [[ -f "$AIRPLAY_SERVICE_PATH" ]]; then
     remove_path_if_exists "$AIRPLAY_SERVICE_PATH"
-    systemctl_safe daemon-reload || log_warn "systemctl daemon-reload failed"
+    if command -v systemctl >/dev/null 2>&1; then
+      ${SUDO:-} systemctl daemon-reload || log_warn "systemctl daemon-reload failed"
+    fi
+  fi
+}
+
+service_user_home() {
+  local user_name="$1"
+  local resolved
+  resolved=$(getent passwd "$user_name" | cut -d: -f6)
+  if [[ -n "$resolved" ]]; then
+    printf '%s\n' "$resolved"
+  else
+    printf '/home/%s\n' "$user_name"
   fi
 }
 

@@ -172,14 +172,6 @@ bash ./Installers/install_hyperpixel.sh
 bash ./Installers/install_kernel.sh
 ```
 
-### AirPlay takeover mode
-
-```bash
-bash ./Installers/install_airplay.sh
-```
-
----
-
 ## Configuration
 
 Configuration is environment-driven. Most values can be placed in `.env`.
@@ -335,7 +327,6 @@ python -m py_compile main.py data_fetch.py screens/registry.py screens/mlb_sched
 - Wrong rotation: avoid double-rotation between overlay and app rotation.
 - Blank framebuffer/kernel output: verify `DESK_DISPLAY_OUTPUT`, dimensions, and target device path.
 - Waveshare OLED/LCD issues: run `scripts/check_waveshare_setup.sh` and verify I2C addresses and framebuffer settings.
-- AirPlay not visible: verify `avahi-daemon` and local-network mDNS support.
 
 ---
 
