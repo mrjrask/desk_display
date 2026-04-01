@@ -59,6 +59,11 @@ def test_screenshots_template_adds_stale_class(monkeypatch):
             },
         ],
     )
+    monkeypatch.setattr(
+        config_ui,
+        "_load_display_status",
+        lambda: {"screen_id": "date", "loop_iteration": 7, "is_stale": False},
+    )
 
     client = config_ui.app.test_client()
     response = client.get("/screenshots")
@@ -69,6 +74,7 @@ def test_screenshots_template_adds_stale_class(monkeypatch):
     assert 'class="timestamp is-stale"' in html
     assert "1d 2h 3m 4s ago" in html
     assert 'id="hideMissingScreens" checked' in html
+    assert 'id="playCounterValue">7<' in html
 
 
 def test_screenshots_api_returns_entries(monkeypatch):
