@@ -7,6 +7,7 @@ COMMON_SCRIPT="$PROJECT_DIR/scripts/helpers/common.sh"
 PYTHON_BIN="${PYTHON:-python3}"
 REQUIREMENTS_FILE_OVERRIDE="${REQUIREMENTS_FILE:-}"
 OUTPUT_MODE="${DESK_DISPLAY_OUTPUT:-}"
+INCLUDE_VENDOR_REQUIREMENTS="${INCLUDE_VENDOR_REQUIREMENTS:-0}"
 
 if [[ ! -f "$COMMON_SCRIPT" ]]; then
   echo "[ERROR] Missing helper script: $COMMON_SCRIPT" >&2
@@ -30,8 +31,12 @@ while [[ $# -gt 0 ]]; do
       PYTHON_BIN="${2:-}"
       shift 2
       ;;
+    --include-vendor)
+      INCLUDE_VENDOR_REQUIREMENTS=1
+      shift
+      ;;
     *)
-      echo "Usage: $0 [--requirements <file>] [--output <displayhatmini|minipitft|kernel|framebuffer>] [--python <python-bin>]" >&2
+      echo "Usage: $0 [--requirements <file>] [--output <displayhatmini|minipitft|kernel|framebuffer>] [--python <python-bin>] [--include-vendor]" >&2
       exit 1
       ;;
   esac
@@ -62,6 +67,7 @@ pick_requirements_file() {
 REQUIREMENTS_FILE=$(pick_requirements_file)
 cleanup_stale_egg_info() {
   local vendor_dir="$PROJECT_DIR/vendor"
+  local had_permission_errors=0
 
   if [[ ! -d "$vendor_dir" ]]; then
     return 0
@@ -70,9 +76,17 @@ cleanup_stale_egg_info() {
   while IFS= read -r -d '' egg_info_dir; do
     warn "Removing stale metadata directory: ${egg_info_dir#$PROJECT_DIR/}"
     if ! rm -rf "$egg_info_dir" 2>/dev/null; then
-      warn "Unable to remove ${egg_info_dir#$PROJECT_DIR/}; continuing anyway. Fix ownership/permissions if this persists."
+      had_permission_errors=1
+      warn "Unable to remove ${egg_info_dir#$PROJECT_DIR/}; this usually means ownership/permissions are incorrect."
     fi
   done < <(find "$vendor_dir" -mindepth 2 -maxdepth 2 -type d -name '*.egg-info' -print0)
+
+  if [[ "$had_permission_errors" -ne 0 ]]; then
+    echo "[ERROR] One or more *.egg-info directories under vendor/ could not be removed." >&2
+    echo "[ERROR] Editable installs will fail until permissions are fixed." >&2
+    echo "[ERROR] Try: sudo chown -R \"$(id -un):$(id -gn)\" \"$PROJECT_DIR/vendor\" && rerun this script." >&2
+    return 1
+  fi
 }
 
 VENV_DIR="$PROJECT_DIR/venv"
@@ -98,11 +112,37 @@ source "$VENV_DIR/bin/activate"
 log "Upgrading pip"
 pip install --upgrade pip
 
+build_install_requirements_file() {
+  local source_requirements="$1"
+  local install_requirements="$2"
+
+  if [[ "$INCLUDE_VENDOR_REQUIREMENTS" == "1" ]]; then
+    cp "$source_requirements" "$install_requirements"
+    return 0
+  fi
+
+  log "Skipping local vendor requirements (use --include-vendor to include them)"
+  awk '
+    /^[[:space:]]*#/ { print; next }
+    /^[[:space:]]*$/ { print; next }
+    /^[[:space:]]*-e[[:space:]]+\.\/vendor\// { next }
+    /^[[:space:]]*\.\/vendor\// { next }
+    /^[[:space:]]*-e[[:space:]]+file:\/\/.*\/vendor\// { next }
+    /^[[:space:]]*file:\/\/.*\/vendor\// { next }
+    { print }
+  ' "$source_requirements" > "$install_requirements"
+}
+
 if [[ -f "$PROJECT_DIR/$REQUIREMENTS_FILE" ]]; then
   log "Installing Python dependencies from $REQUIREMENTS_FILE"
-  cleanup_stale_egg_info
+  if [[ "$INCLUDE_VENDOR_REQUIREMENTS" == "1" ]]; then
+    cleanup_stale_egg_info
+  fi
+  INSTALL_REQUIREMENTS_FILE=$(mktemp)
+  trap 'rm -f "$INSTALL_REQUIREMENTS_FILE"' EXIT
+  build_install_requirements_file "$PROJECT_DIR/$REQUIREMENTS_FILE" "$INSTALL_REQUIREMENTS_FILE"
   pushd "$PROJECT_DIR" >/dev/null
-  pip install -r "$REQUIREMENTS_FILE"
+  pip install -r "$INSTALL_REQUIREMENTS_FILE"
   popd >/dev/null
 else
   warn "$REQUIREMENTS_FILE not found; skipping pip install."
