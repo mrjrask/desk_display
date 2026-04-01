@@ -663,6 +663,7 @@ def _load_display_status() -> Dict[str, Any]:
         "elapsed": None,
         "loop_iteration": None,
         "frame_id": None,
+        "screen_play_counts": {},
         "is_stale": True,
     }
 
@@ -701,6 +702,14 @@ def _load_display_status() -> Dict[str, Any]:
     frame_id = payload.get("frame_id")
     if isinstance(frame_id, int):
         status["frame_id"] = frame_id
+
+    raw_play_counts = payload.get("screen_play_counts")
+    if isinstance(raw_play_counts, dict):
+        parsed_counts: Dict[str, int] = {}
+        for screen_name, count in raw_play_counts.items():
+            if isinstance(screen_name, str) and isinstance(count, int):
+                parsed_counts[screen_name] = count
+        status["screen_play_counts"] = parsed_counts
 
     return status
 

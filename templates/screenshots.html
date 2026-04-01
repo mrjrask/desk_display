@@ -110,6 +110,22 @@
       margin: 0;
       color: #f8fafc;
     }
+    .card-heading {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.5rem;
+    }
+    .card-play-counter {
+      border: 1px solid rgba(148, 163, 184, 0.35);
+      border-radius: 999px;
+      padding: 0.2rem 0.55rem;
+      font-size: 0.72rem;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: #cbd5f5;
+      white-space: nowrap;
+    }
     .preview {
       width: 100%;
       border-radius: 12px;
@@ -266,7 +282,10 @@
   <section class="grid">
     {% for screen in screens %}
     <article class="card" data-has-screenshot="{{ 'true' if screen.path else 'false' }}">
-      <h2>{{ screen.id }}</h2>
+      <div class="card-heading">
+        <h2>{{ screen.id }}</h2>
+        <span class="card-play-counter" data-screen-play-counter="{{ screen.id }}">Plays {{ display_status.screen_play_counts.get(screen.id, 0) }}</span>
+      </div>
       <div class="preview">
         {% if screen.path %}
           <button
@@ -412,6 +431,9 @@
             return;
           }
           const byId = new Map(payload.screens.map((entry) => [entry.id, entry]));
+          const playCounts = (payload.display_status && typeof payload.display_status === "object" && payload.display_status.screen_play_counts && typeof payload.display_status.screen_play_counts === "object")
+            ? payload.display_status.screen_play_counts
+            : {};
           if (displayStatusBanner && payload.display_status) {
             const status = payload.display_status;
             if (status.screen_id) {
@@ -442,11 +464,16 @@
             const previewImage = card.querySelector(".preview img");
             const emptyState = card.querySelector(".empty-state");
             const timestamp = card.querySelector(".timestamp");
+            const perScreenPlayCounter = card.querySelector(".card-play-counter");
 
             if (timestamp) {
               const elapsed = entry.elapsed ? ` (${entry.elapsed})` : "";
               timestamp.innerHTML = `<span>Updated</span>${entry.timestamp || "—"}${elapsed}`;
               timestamp.classList.toggle("is-stale", Boolean(entry.is_stale));
+            }
+            if (perScreenPlayCounter) {
+              const nextCount = Number.isInteger(playCounts[id]) ? playCounts[id] : 0;
+              perScreenPlayCounter.textContent = `Plays ${nextCount}`;
             }
 
             const hasScreenshot = Boolean(entry.path);
