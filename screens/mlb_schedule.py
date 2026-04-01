@@ -933,6 +933,18 @@ def _is_final_game(game: dict) -> bool:
     )
 
 
+def _is_in_progress_game(game: dict) -> bool:
+    status = (game or {}).get("status") or {}
+    detailed = str(status.get("detailedState") or "").lower()
+    abstract = str(status.get("abstractGameState") or "").lower()
+    code = str(status.get("statusCode") or "").upper()
+    return (
+        abstract == "live"
+        or code == "I"
+        or "progress" in detailed
+    )
+
+
 def _series_line(game: dict, focus_id: Optional[int]) -> str:
     raw_date = game.get("officialDate", "") or game.get("gameDate", "")[:10]
     away = ((game.get("teams") or {}).get("away") or {})
@@ -957,6 +969,12 @@ def _series_line(game: dict, focus_id: Optional[int]) -> str:
 
     raw_time = game.get("startTimeCentral", "TBD")
     return _format_game_label(raw_date, raw_time)
+
+
+def _series_line_fill(game: dict) -> tuple[int, int, int]:
+    if _is_in_progress_game(game):
+        return config.SCOREBOARD_IN_PROGRESS_SCORE_COLOR
+    return (255, 255, 255)
 
 
 def _series_final_result_parts(game: dict, focus_id: Optional[int]) -> Optional[tuple[str, str, str]]:
@@ -1111,8 +1129,9 @@ def draw_series_screen(display, games, title, transition=False, screen_id: Optio
                 continue
 
         line = _series_line(game_row, focus_id)
+        line_fill = _series_line_fill(game_row)
         lw, lh = draw.textsize(line, font=row_font)
-        draw.text(((WIDTH - lw) // 2, y), line, font=row_font, fill=(255, 255, 255))
+        draw.text(((WIDTH - lw) // 2, y), line, font=row_font, fill=line_fill)
 
     return ScreenImage(img, displayed=False)
 

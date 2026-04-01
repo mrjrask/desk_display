@@ -306,6 +306,30 @@ def test_draw_series_screen_does_not_use_result_icon_on_sox_next_series(monkeypa
 
     assert not any(path.endswith("/mlb/W.png") or path.endswith("/mlb/L.png") for path in opened_paths)
 
+
+def test_series_line_fill_uses_live_scoreboard_color_for_in_progress_game():
+    game = {
+        "status": {
+            "abstractGameState": "Live",
+            "detailedState": "In Progress",
+            "statusCode": "I",
+        }
+    }
+
+    assert mlb_schedule._series_line_fill(game) == mlb_schedule.config.SCOREBOARD_IN_PROGRESS_SCORE_COLOR
+
+
+def test_series_line_fill_uses_white_for_non_live_game():
+    game = {
+        "status": {
+            "abstractGameState": "Final",
+            "detailedState": "Final",
+            "statusCode": "F",
+        }
+    }
+
+    assert mlb_schedule._series_line_fill(game) == (255, 255, 255)
+
 def test_centered_boxscore_accounts_for_header_height(monkeypatch):
     img = Image.new("RGB", (mlb_schedule.WIDTH, mlb_schedule.HEIGHT), (0, 0, 0))
     draw = ImageDraw.Draw(img)
