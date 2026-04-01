@@ -7,6 +7,7 @@ COMMON_SCRIPT="$PROJECT_DIR/scripts/helpers/common.sh"
 PYTHON_BIN="${PYTHON:-python3}"
 REQUIREMENTS_FILE_OVERRIDE="${REQUIREMENTS_FILE:-}"
 OUTPUT_MODE="${DESK_DISPLAY_OUTPUT:-}"
+INCLUDE_VENDOR_REQUIREMENTS="${INCLUDE_VENDOR_REQUIREMENTS:-0}"
 
 if [[ ! -f "$COMMON_SCRIPT" ]]; then
   echo "[ERROR] Missing helper script: $COMMON_SCRIPT" >&2
@@ -30,8 +31,12 @@ while [[ $# -gt 0 ]]; do
       PYTHON_BIN="${2:-}"
       shift 2
       ;;
+    --include-vendor)
+      INCLUDE_VENDOR_REQUIREMENTS=1
+      shift
+      ;;
     *)
-      echo "Usage: $0 [--requirements <file>] [--output <displayhatmini|minipitft|kernel|framebuffer>] [--python <python-bin>]" >&2
+      echo "Usage: $0 [--requirements <file>] [--output <displayhatmini|minipitft|kernel|framebuffer>] [--python <python-bin>] [--include-vendor]" >&2
       exit 1
       ;;
   esac
@@ -107,11 +112,37 @@ source "$VENV_DIR/bin/activate"
 log "Upgrading pip"
 pip install --upgrade pip
 
+build_install_requirements_file() {
+  local source_requirements="$1"
+  local install_requirements="$2"
+
+  if [[ "$INCLUDE_VENDOR_REQUIREMENTS" == "1" ]]; then
+    cp "$source_requirements" "$install_requirements"
+    return 0
+  fi
+
+  log "Skipping local vendor requirements (use --include-vendor to include them)"
+  awk '
+    /^[[:space:]]*#/ { print; next }
+    /^[[:space:]]*$/ { print; next }
+    /^[[:space:]]*-e[[:space:]]+\.\/vendor\// { next }
+    /^[[:space:]]*\.\/vendor\// { next }
+    /^[[:space:]]*-e[[:space:]]+file:\/\/.*\/vendor\// { next }
+    /^[[:space:]]*file:\/\/.*\/vendor\// { next }
+    { print }
+  ' "$source_requirements" > "$install_requirements"
+}
+
 if [[ -f "$PROJECT_DIR/$REQUIREMENTS_FILE" ]]; then
   log "Installing Python dependencies from $REQUIREMENTS_FILE"
-  cleanup_stale_egg_info
+  if [[ "$INCLUDE_VENDOR_REQUIREMENTS" == "1" ]]; then
+    cleanup_stale_egg_info
+  fi
+  INSTALL_REQUIREMENTS_FILE=$(mktemp)
+  trap 'rm -f "$INSTALL_REQUIREMENTS_FILE"' EXIT
+  build_install_requirements_file "$PROJECT_DIR/$REQUIREMENTS_FILE" "$INSTALL_REQUIREMENTS_FILE"
   pushd "$PROJECT_DIR" >/dev/null
-  pip install -r "$REQUIREMENTS_FILE"
+  pip install -r "$INSTALL_REQUIREMENTS_FILE"
   popd >/dev/null
 else
   warn "$REQUIREMENTS_FILE not found; skipping pip install."
