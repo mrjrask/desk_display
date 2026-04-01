@@ -1,0 +1,110 @@
+import datetime
+
+import data_fetch
+
+
+class _FrozenDateTime(datetime.datetime):
+    @classmethod
+    def now(cls, tz=None):
+        base = cls(2026, 4, 1, 12, 0, 0)
+        return base.replace(tzinfo=tz) if tz is not None else base
+
+
+class _DummyResponse:
+    def __init__(self, payload):
+        self._payload = payload
+
+    def raise_for_status(self):
+        return None
+
+    def json(self):
+        return self._payload
+
+
+def _game(game_pk, date, state, home_id, away_id):
+    return {
+        "gamePk": game_pk,
+        "gameDate": f"{date}T19:05:00Z",
+        "officialDate": date,
+        "status": {
+            "statusCode": state,
+            "abstractGameState": (
+                "Live" if state == "I" else "Preview" if state == "S" else "Final"
+            ),
+            "detailedState": "In Progress" if state == "I" else "Scheduled",
+        },
+        "teams": {
+            "home": {"team": {"id": home_id}},
+            "away": {"team": {"id": away_id}},
+        },
+    }
+
+
+def test_next_series_skips_current_live_series(monkeypatch):
+    monkeypatch.setattr(data_fetch.datetime, "datetime", _FrozenDateTime)
+
+    payload = {
+        "dates": [
+            {
+                "date": "2026-04-01",
+                "games": [
+                    _game(1, "2026-04-01", "I", 112, 121),
+                ],
+            },
+            {
+                "date": "2026-04-02",
+                "games": [
+                    _game(2, "2026-04-02", "S", 112, 121),
+                ],
+            },
+            {
+                "date": "2026-04-05",
+                "games": [
+                    _game(3, "2026-04-05", "S", 140, 112),
+                ],
+            },
+            {
+                "date": "2026-04-08",
+                "games": [
+                    _game(4, "2026-04-08", "S", 112, 118),
+                ],
+            },
+        ]
+    }
+
+    monkeypatch.setattr(data_fetch._session, "get", lambda *args, **kwargs: _DummyResponse(payload))
+
+    result = data_fetch._fetch_mlb_schedule(112)
+
+    assert [g["gamePk"] for g in (result["current_series_games"] or [])] == [1, 2]
+    assert [g["gamePk"] for g in (result["next_series_games"] or [])] == [3]
+    assert [g["gamePk"] for g in (result["next_home_series_games"] or [])] == [4]
+
+
+def test_next_home_series_skips_when_next_series_is_home(monkeypatch):
+    monkeypatch.setattr(data_fetch.datetime, "datetime", _FrozenDateTime)
+
+    payload = {
+        "dates": [
+            {
+                "date": "2026-04-03",
+                "games": [_game(10, "2026-04-03", "S", 112, 121)],
+            },
+            {
+                "date": "2026-04-04",
+                "games": [_game(11, "2026-04-04", "S", 112, 121)],
+            },
+            {
+                "date": "2026-04-07",
+                "games": [_game(12, "2026-04-07", "S", 112, 118)],
+            },
+        ]
+    }
+
+    monkeypatch.setattr(data_fetch._session, "get", lambda *args, **kwargs: _DummyResponse(payload))
+
+    result = data_fetch._fetch_mlb_schedule(112)
+
+    assert [g["gamePk"] for g in (result["current_series_games"] or [])] == [10, 11]
+    assert [g["gamePk"] for g in (result["next_series_games"] or [])] == [10, 11]
+    assert [g["gamePk"] for g in (result["next_home_series_games"] or [])] == [12]

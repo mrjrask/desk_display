@@ -1907,6 +1907,7 @@ def _fetch_mlb_schedule(team_id):
         r.raise_for_status()
         data   = r.json()
         result = {
+            "current_series_games": None,
             "next_game": None,
             "next_game_alt": None,
             "next_series_games": None,
@@ -2069,9 +2070,9 @@ def _fetch_mlb_schedule(team_id):
                 team_id,
             )
 
-        anchor_game = result.get("live_game") or result.get("next_game")
-        anchor_pk = (anchor_game or {}).get("gamePk")
-        if anchor_pk and schedule_rows:
+        live_anchor_pk = (result.get("live_game") or {}).get("gamePk")
+        next_anchor_pk = (result.get("next_game") or {}).get("gamePk")
+        if (live_anchor_pk or next_anchor_pk) and schedule_rows:
             ordered_rows = sorted(
                 schedule_rows,
                 key=lambda row: (
@@ -2094,29 +2095,56 @@ def _fetch_mlb_schedule(team_id):
                         }
                     )
 
-            anchor_block_idx: Optional[int] = None
+            live_block_idx: Optional[int] = None
+            next_block_idx: Optional[int] = None
             for idx, block in enumerate(series_blocks):
                 rows = block.get("rows") or []
-                if any(((row.get("game") or {}).get("gamePk") == anchor_pk) for row in rows):
-                    anchor_block_idx = idx
-                    break
+                if live_anchor_pk and any(
+                    ((row.get("game") or {}).get("gamePk") == live_anchor_pk) for row in rows
+                ):
+                    live_block_idx = idx
+                if next_anchor_pk and any(
+                    ((row.get("game") or {}).get("gamePk") == next_anchor_pk) for row in rows
+                ):
+                    next_block_idx = idx
 
-            if anchor_block_idx is not None:
-                anchor_rows = (series_blocks[anchor_block_idx].get("rows") or [])
-                anchor_games = [
+            current_series_block_idx: Optional[int] = live_block_idx if live_block_idx is not None else next_block_idx
+            if (
+                current_series_block_idx is not None
+                and current_series_block_idx < len(series_blocks)
+            ):
+                current_rows = (series_blocks[current_series_block_idx].get("rows") or [])
+                current_games = [
                     (row.get("game") or {})
-                    for row in anchor_rows
+                    for row in current_rows
                     if row.get("game")
                 ]
-                if anchor_games:
-                    result["next_series_games"] = anchor_games
+                if current_games:
+                    result["current_series_games"] = current_games
 
-                anchor_pks = {
+            next_series_block_idx: Optional[int] = next_block_idx
+            if live_block_idx is not None and next_block_idx is not None and next_block_idx <= live_block_idx:
+                next_series_block_idx = live_block_idx + 1
+
+            if (
+                next_series_block_idx is not None
+                and next_series_block_idx < len(series_blocks)
+            ):
+                next_rows = (series_blocks[next_series_block_idx].get("rows") or [])
+                next_games = [
+                    (row.get("game") or {})
+                    for row in next_rows
+                    if row.get("game")
+                ]
+                if next_games:
+                    result["next_series_games"] = next_games
+
+                next_series_pks = {
                     (row.get("game") or {}).get("gamePk")
-                    for row in anchor_rows
+                    for row in next_rows
                     if (row.get("game") or {}).get("gamePk") is not None
                 }
-                for idx in range(anchor_block_idx, len(series_blocks)):
+                for idx in range(next_series_block_idx, len(series_blocks)):
                     block_rows = (series_blocks[idx].get("rows") or [])
                     if not any(bool(row.get("is_home")) for row in block_rows):
                         continue
@@ -2125,7 +2153,43 @@ def _fetch_mlb_schedule(team_id):
                         for row in block_rows
                         if (row.get("game") or {}).get("gamePk") is not None
                     }
-                    if anchor_pks and block_pks and block_pks == anchor_pks:
+                    if next_series_pks and block_pks and block_pks == next_series_pks:
+                        continue
+                    home_series_games = [
+                        (row.get("game") or {})
+                        for row in block_rows
+                        if row.get("game")
+                    ]
+                    if home_series_games:
+                        result["next_home_series_games"] = home_series_games
+                        break
+            elif next_block_idx is not None:
+                # Fallback when all games in the fetched window belong to the same
+                # in-progress series: retain the upcoming block for continuity.
+                fallback_rows = (series_blocks[next_block_idx].get("rows") or [])
+                fallback_games = [
+                    (row.get("game") or {})
+                    for row in fallback_rows
+                    if row.get("game")
+                ]
+                if fallback_games:
+                    result["next_series_games"] = fallback_games
+
+                fallback_pks = {
+                    (row.get("game") or {}).get("gamePk")
+                    for row in fallback_rows
+                    if (row.get("game") or {}).get("gamePk") is not None
+                }
+                for idx in range(next_block_idx, len(series_blocks)):
+                    block_rows = (series_blocks[idx].get("rows") or [])
+                    if not any(bool(row.get("is_home")) for row in block_rows):
+                        continue
+                    block_pks = {
+                        (row.get("game") or {}).get("gamePk")
+                        for row in block_rows
+                        if (row.get("game") or {}).get("gamePk") is not None
+                    }
+                    if fallback_pks and block_pks and block_pks == fallback_pks:
                         continue
                     home_series_games = [
                         (row.get("game") or {})
@@ -2156,6 +2220,7 @@ def _fetch_mlb_schedule(team_id):
     except Exception as e:
         logging.error("Error fetching MLB schedule for %s: %s", team_id, e)
         return {
+            "current_series_games": None,
             "next_game": None,
             "next_game_alt": None,
             "next_series_games": None,

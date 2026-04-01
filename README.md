@@ -29,8 +29,10 @@ Desk Display is a Python dashboard application for Raspberry Pi and Linux displa
 - Sports screens for NFL/NHL/NBA/MLB/NCAAM (including scoreboards and standings).
 - Team-specific screens for Chicago teams (Bears, Blackhawks, Wolves, Bulls, Cubs, Sox).
 - Cubs/Sox **series screens**:
+  - `cubs current series`
   - `cubs next series`
   - `cubs next home series`
+  - `sox current series`
   - `sox next series`
   - `sox next home series`
 - Optional screenshots and rolling video capture.
@@ -250,8 +252,8 @@ The series screens display all games in an upcoming or in-progress series:
 
 Default playlist order is:
 
-- Cubs: `cubs next` → `cubs next home` → `cubs next series` → `cubs next home series`
-- Sox: `sox next` → `sox next home` → `sox next series` → `sox next home series`
+- Cubs: `cubs next` → `cubs next home` → `cubs current series` → `cubs next series` → `cubs next home series`
+- Sox: `sox next` → `sox next home` → `sox current series` → `sox next series` → `sox next home series`
 
 ---
 
