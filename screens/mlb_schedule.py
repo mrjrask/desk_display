@@ -997,8 +997,10 @@ def draw_series_screen(display, games, title, transition=False, screen_id: Optio
     game = series_games[0]
 
     hyperpixel_layout = config.is_hyperpixel_next_layout() and screen_id in {
+        "cubs current series",
         "cubs next series",
         "cubs next home series",
+        "sox current series",
         "sox next series",
         "sox next home series",
     }
@@ -1061,7 +1063,10 @@ def draw_series_screen(display, games, title, transition=False, screen_id: Optio
     row_h = draw.textsize("Tonight • 7 PM", font=row_font)[1] + line_gap
     available_rows = max(1, (HEIGHT - bottom_margin - rows_top) // max(1, row_h))
     display_rows = min(max_rows, available_rows, len(series_games))
-    use_cubs_result_icon = (screen_id or "").strip().lower() == "cubs next series"
+    use_cubs_result_icon = (screen_id or "").strip().lower() in {
+        "cubs current series",
+        "cubs next series",
+    }
 
     for idx in range(display_rows):
         y = rows_top + (idx * row_h)

@@ -182,6 +182,22 @@ def test_travel_map_v2_alias_is_not_registered():
     assert "travel map v2" not in registry
 
 
+def test_mlb_current_series_screens_are_registered_and_available():
+    now = datetime.datetime(2024, 1, 1, 12, 0, tzinfo=CENTRAL_TIME)
+    weather = {"hourly": []}
+    cache_updates = {
+        "cubs": {"current_series": [{"gamePk": 1}]},
+        "sox": {"current_series": [{"gamePk": 2}]},
+    }
+
+    registry, _ = build_screen_registry(_make_context(weather, now, cache_updates=cache_updates))
+
+    assert "cubs current series" in registry
+    assert "sox current series" in registry
+    assert registry["cubs current series"].available is True
+    assert registry["sox current series"].available is True
+
+
 def test_inside_screen_hidden_when_sensor_unavailable(monkeypatch):
     import screens.registry as registry_module
 

@@ -1070,6 +1070,7 @@ def build_screen_registry(context: ScreenContext) -> Tuple[Dict[str, ScreenDefin
         register_logo("cubs logo")
         cubs_next = cubs.get("next")
         cubs_next_alt = cubs.get("next_alt")
+        cubs_current_series = cubs.get("current_series")
         cubs_next_series = cubs.get("next_series")
         cubs_next_home_series = cubs.get("next_home_series")
         cubs_next_home = cubs.get("next_home")
@@ -1163,11 +1164,22 @@ def build_screen_registry(context: ScreenContext) -> Tuple[Dict[str, ScreenDefin
                 available=True,
             )
         register(
+            "cubs current series",
+            lambda data=cubs_current_series: draw_series_screen(
+                context.display,
+                data,
+                "Cubs Current Series",
+                screen_id="cubs current series",
+                transition=True,
+            ),
+            available=bool(cubs_current_series),
+        )
+        register(
             "cubs next series",
             lambda data=cubs_next_series: draw_series_screen(
                 context.display,
                 data,
-                "Current Cubs Series",
+                "Cubs Next Series",
                 screen_id="cubs next series",
                 transition=True,
             ),
@@ -1190,6 +1202,7 @@ def build_screen_registry(context: ScreenContext) -> Tuple[Dict[str, ScreenDefin
         register_logo("sox logo")
         sox_next = sox.get("next")
         sox_next_alt = sox.get("next_alt")
+        sox_current_series = sox.get("current_series")
         sox_next_series = sox.get("next_series")
         sox_next_home_series = sox.get("next_home_series")
         sox_next_home = sox.get("next_home")
@@ -1275,6 +1288,17 @@ def build_screen_registry(context: ScreenContext) -> Tuple[Dict[str, ScreenDefin
                 ),
                 available=True,
             )
+        register(
+            "sox current series",
+            lambda data=sox_current_series: draw_series_screen(
+                context.display,
+                data,
+                "Sox Current Series",
+                screen_id="sox current series",
+                transition=True,
+            ),
+            available=bool(sox_current_series),
+        )
         register(
             "sox next series",
             lambda data=sox_next_series: draw_series_screen(

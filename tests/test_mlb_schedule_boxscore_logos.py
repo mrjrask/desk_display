@@ -271,7 +271,7 @@ def test_draw_series_screen_uses_result_icon_on_cubs_next_series(monkeypatch):
     mlb_schedule.draw_series_screen(
         None,
         [game],
-        title="Current Cubs Series",
+        title="Cubs Next Series",
         screen_id="cubs next series",
     )
 
