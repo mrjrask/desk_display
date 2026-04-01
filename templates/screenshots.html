@@ -71,7 +71,26 @@
     .controls {
       margin-top: 1rem;
       display: flex;
-      justify-content: center;
+      justify-content: flex-end;
+      gap: 0.75rem;
+      max-width: 1200px;
+      margin-left: auto;
+      margin-right: auto;
+    }
+    .play-counter {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.4rem;
+      padding: 0.35rem 0.75rem;
+      border-radius: 999px;
+      border: 1px solid rgba(148, 163, 184, 0.35);
+      background: rgba(15, 23, 42, 0.65);
+      color: #cbd5f5;
+      font-size: 0.9rem;
+    }
+    .play-counter strong {
+      color: #f8fafc;
+      font-variant-numeric: tabular-nums;
     }
     .toggle {
       display: inline-flex;
@@ -256,6 +275,9 @@
       <a href="/screenshots">Screenshots</a>
     </nav>
     <div class="controls">
+      <div class="play-counter" aria-live="polite">
+        Plays: <strong id="playCounterValue">{{ display_status.loop_iteration if display_status.loop_iteration is not none else 0 }}</strong>
+      </div>
       <label class="toggle">
         <input type="checkbox" id="hideMissingScreens" checked>
         Hide screens without screenshots
@@ -327,6 +349,7 @@
     const overlayNext = overlay.querySelector(".overlay-nav-next");
     const screenshotApiUrl = "{{ url_for('get_screenshots') }}";
     const displayStatusBanner = document.getElementById("displayStatusBanner");
+    const playCounterValue = document.getElementById("playCounterValue");
     let currentOverlayIndex = -1;
 
     function getNavigableButtons() {
@@ -436,6 +459,9 @@
             : {};
           if (displayStatusBanner && payload.display_status) {
             const status = payload.display_status;
+            if (playCounterValue) {
+              playCounterValue.textContent = typeof status.loop_iteration === "number" ? String(status.loop_iteration) : "0";
+            }
             if (status.screen_id) {
               let summary = `Display heartbeat: <strong>${status.screen_id}</strong>`;
               if (status.rendered_at) {
