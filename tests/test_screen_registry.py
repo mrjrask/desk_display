@@ -198,6 +198,29 @@ def test_mlb_current_series_screens_are_registered_and_available():
     assert registry["sox current series"].available is True
 
 
+def test_mlb_next_home_series_uses_following_home_series_title(monkeypatch):
+    now = datetime.datetime(2024, 1, 1, 12, 0, tzinfo=CENTRAL_TIME)
+    weather = {"hourly": []}
+    titles = []
+
+    def _fake_draw_series_screen(display, games, title, **kwargs):
+        titles.append(title)
+
+    monkeypatch.setattr("screens.registry.draw_series_screen", _fake_draw_series_screen)
+
+    cache_updates = {
+        "cubs": {"next_home_series": [{"gamePk": 5001}]},
+        "sox": {"next_home_series": [{"gamePk": 6001}]},
+    }
+    registry, _ = build_screen_registry(_make_context(weather, now, cache_updates=cache_updates))
+
+    registry["cubs next home series"].render()
+    registry["sox next home series"].render()
+
+    assert "Cubs Following Home Series" in titles
+    assert "Sox Following Home Series" in titles
+
+
 def test_inside_screen_hidden_when_sensor_unavailable(monkeypatch):
     import screens.registry as registry_module
 
