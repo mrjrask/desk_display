@@ -1,21 +1,17 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
-PROJECT_DIR="${PROJECT_DIR:-$(cd -- "$SCRIPT_DIR/.." && pwd)}"
-HELPER_PATH="$PROJECT_DIR/scripts/helpers/airplay_common.sh"
+log_info() { printf '[INFO] %s\n' "$*"; }
+log_warn() { printf '[WARN] %s\n' "$*"; }
 
-if [[ ! -f "$HELPER_PATH" ]]; then
-  echo "[AIRPLAY][ERROR] Missing helper library at $HELPER_PATH" >&2
-  exit 1
+if [[ ${EUID:-$(id -u)} -ne 0 ]]; then
+  SUDO="sudo"
+else
+  SUDO=""
 fi
 
-# shellcheck source=/dev/null
-source "$HELPER_PATH"
-init_sudo
-
 main() {
-  if systemctl_safe start display-manager; then
+  if command -v systemctl >/dev/null 2>&1 && ${SUDO:-} systemctl start display-manager; then
     log_info "display-manager started"
   else
     log_warn "Unable to start display-manager"
