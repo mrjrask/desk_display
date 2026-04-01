@@ -62,6 +62,7 @@ pick_requirements_file() {
 REQUIREMENTS_FILE=$(pick_requirements_file)
 cleanup_stale_egg_info() {
   local vendor_dir="$PROJECT_DIR/vendor"
+  local had_permission_errors=0
 
   if [[ ! -d "$vendor_dir" ]]; then
     return 0
@@ -70,9 +71,17 @@ cleanup_stale_egg_info() {
   while IFS= read -r -d '' egg_info_dir; do
     warn "Removing stale metadata directory: ${egg_info_dir#$PROJECT_DIR/}"
     if ! rm -rf "$egg_info_dir" 2>/dev/null; then
-      warn "Unable to remove ${egg_info_dir#$PROJECT_DIR/}; continuing anyway. Fix ownership/permissions if this persists."
+      had_permission_errors=1
+      warn "Unable to remove ${egg_info_dir#$PROJECT_DIR/}; this usually means ownership/permissions are incorrect."
     fi
   done < <(find "$vendor_dir" -mindepth 2 -maxdepth 2 -type d -name '*.egg-info' -print0)
+
+  if [[ "$had_permission_errors" -ne 0 ]]; then
+    echo "[ERROR] One or more *.egg-info directories under vendor/ could not be removed." >&2
+    echo "[ERROR] Editable installs will fail until permissions are fixed." >&2
+    echo "[ERROR] Try: sudo chown -R \"$(id -un):$(id -gn)\" \"$PROJECT_DIR/vendor\" && rerun this script." >&2
+    return 1
+  fi
 }
 
 VENV_DIR="$PROJECT_DIR/venv"
