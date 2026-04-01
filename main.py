@@ -1178,6 +1178,7 @@ def _write_display_status(
     img: Image.Image,
     *,
     loop_iteration: int,
+    screen_play_counts: Optional[Dict[str, int]] = None,
     rendered_at: Optional[datetime.datetime] = None,
 ) -> None:
     """Persist a heartbeat of what should currently be on the physical display."""
@@ -1200,6 +1201,12 @@ def _write_display_status(
         "image_digest": hashlib.sha1(img.tobytes()).hexdigest()[:12],
         "frame_id": frame_id,
     }
+    if isinstance(screen_play_counts, dict):
+        payload["screen_play_counts"] = {
+            str(screen_name): int(count)
+            for screen_name, count in screen_play_counts.items()
+            if isinstance(screen_name, str) and isinstance(count, int)
+        }
 
     temp_path = f"{DISPLAY_STATUS_PATH}.tmp"
     try:
@@ -1886,6 +1893,7 @@ def main_loop():
     global loop_count, _last_screen_id, _dark_hours_active
 
     refresh_schedule_if_needed(force=True)
+    screen_play_counts: Dict[str, int] = {}
 
     try:
         while not _shutdown_event.is_set():
@@ -2097,7 +2105,13 @@ def main_loop():
                 if _shutdown_event.is_set():
                     break
 
-                _write_display_status(sid, img, loop_iteration=loop_count)
+                screen_play_counts[sid] = screen_play_counts.get(sid, 0) + 1
+                _write_display_status(
+                    sid,
+                    img,
+                    loop_iteration=loop_count,
+                    screen_play_counts=screen_play_counts,
+                )
                 _last_screen_id = sid
                 with _screen_history_lock:
                     _screen_history.append(sid)

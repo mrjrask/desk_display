@@ -62,7 +62,7 @@ def test_screenshots_template_adds_stale_class(monkeypatch):
     monkeypatch.setattr(
         config_ui,
         "_load_display_status",
-        lambda: {"screen_id": "date", "loop_iteration": 7, "is_stale": False},
+        lambda: {"screen_id": "date", "loop_iteration": 7, "screen_play_counts": {"date": 5}, "is_stale": False},
     )
 
     client = config_ui.app.test_client()
@@ -74,7 +74,7 @@ def test_screenshots_template_adds_stale_class(monkeypatch):
     assert 'class="timestamp is-stale"' in html
     assert "1d 2h 3m 4s ago" in html
     assert 'id="hideMissingScreens" checked' in html
-    assert 'id="playCounterValue">7<' in html
+    assert 'data-screen-play-counter="date">Plays 5<' in html
 
 
 def test_screenshots_api_returns_entries(monkeypatch):
@@ -154,7 +154,8 @@ def test_load_display_status_reads_heartbeat(monkeypatch, tmp_path):
   "screen_id": "bears next season",
   "loop_iteration": 42,
   "rendered_at": "%s",
-  "frame_id": 314
+  "frame_id": 314,
+  "screen_play_counts": {"bears next season": 12}
 }
 """ % rendered_at.isoformat(),
         encoding="utf-8",
@@ -171,5 +172,6 @@ def test_load_display_status_reads_heartbeat(monkeypatch, tmp_path):
     assert status["screen_id"] == "bears next season"
     assert status["loop_iteration"] == 42
     assert status["frame_id"] == 314
+    assert status["screen_play_counts"] == {"bears next season": 12}
     assert status["is_stale"] is False
     assert status["elapsed"] is not None
