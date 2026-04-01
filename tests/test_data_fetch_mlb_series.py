@@ -81,7 +81,7 @@ def test_next_series_skips_current_live_series(monkeypatch):
     assert [g["gamePk"] for g in (result["next_home_series_games"] or [])] == [4]
 
 
-def test_next_home_series_skips_when_next_series_is_home(monkeypatch):
+def test_next_series_advances_when_current_series_uses_next_block(monkeypatch):
     monkeypatch.setattr(data_fetch.datetime, "datetime", _FrozenDateTime)
 
     payload = {
@@ -106,5 +106,42 @@ def test_next_home_series_skips_when_next_series_is_home(monkeypatch):
     result = data_fetch._fetch_mlb_schedule(112)
 
     assert [g["gamePk"] for g in (result["current_series_games"] or [])] == [10, 11]
-    assert [g["gamePk"] for g in (result["next_series_games"] or [])] == [10, 11]
-    assert [g["gamePk"] for g in (result["next_home_series_games"] or [])] == [12]
+    assert [g["gamePk"] for g in (result["next_series_games"] or [])] == [12]
+    assert result["next_home_series_games"] is None
+
+
+def test_next_home_series_advances_when_matching_next_series(monkeypatch):
+    monkeypatch.setattr(data_fetch.datetime, "datetime", _FrozenDateTime)
+
+    payload = {
+        "dates": [
+            {
+                "date": "2026-04-01",
+                "games": [_game(20, "2026-04-01", "I", 112, 121)],
+            },
+            {
+                "date": "2026-04-02",
+                "games": [_game(21, "2026-04-02", "S", 112, 121)],
+            },
+            {
+                "date": "2026-04-05",
+                "games": [_game(22, "2026-04-05", "S", 112, 118)],
+            },
+            {
+                "date": "2026-04-07",
+                "games": [_game(23, "2026-04-07", "S", 140, 112)],
+            },
+            {
+                "date": "2026-04-09",
+                "games": [_game(24, "2026-04-09", "S", 112, 147)],
+            },
+        ]
+    }
+
+    monkeypatch.setattr(data_fetch._session, "get", lambda *args, **kwargs: _DummyResponse(payload))
+
+    result = data_fetch._fetch_mlb_schedule(112)
+
+    assert [g["gamePk"] for g in (result["current_series_games"] or [])] == [20, 21]
+    assert [g["gamePk"] for g in (result["next_series_games"] or [])] == [22]
+    assert [g["gamePk"] for g in (result["next_home_series_games"] or [])] == [24]

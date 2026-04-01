@@ -1190,7 +1190,7 @@ def build_screen_registry(context: ScreenContext) -> Tuple[Dict[str, ScreenDefin
             lambda data=cubs_next_home_series: draw_series_screen(
                 context.display,
                 data,
-                "Cubs Next Home Series",
+                "Cubs Following Home Series",
                 screen_id="cubs next home series",
                 transition=True,
             ),
@@ -1315,7 +1315,7 @@ def build_screen_registry(context: ScreenContext) -> Tuple[Dict[str, ScreenDefin
             lambda data=sox_next_home_series: draw_series_screen(
                 context.display,
                 data,
-                "Sox Next Home Series",
+                "Sox Following Home Series",
                 screen_id="sox next home series",
                 transition=True,
             ),

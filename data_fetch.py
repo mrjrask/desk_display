@@ -2122,9 +2122,16 @@ def _fetch_mlb_schedule(team_id):
                 if current_games:
                     result["current_series_games"] = current_games
 
-            next_series_block_idx: Optional[int] = next_block_idx
-            if live_block_idx is not None and next_block_idx is not None and next_block_idx <= live_block_idx:
-                next_series_block_idx = live_block_idx + 1
+            next_series_block_idx: Optional[int] = None
+            if live_block_idx is not None:
+                if next_block_idx is not None and next_block_idx > live_block_idx:
+                    next_series_block_idx = next_block_idx
+                else:
+                    next_series_block_idx = live_block_idx + 1
+            elif next_block_idx is not None:
+                # When no live game exists, "current series" uses the next scheduled
+                # series block, so "next series" should advance to n+1.
+                next_series_block_idx = next_block_idx + 1
 
             if (
                 next_series_block_idx is not None
@@ -2154,42 +2161,6 @@ def _fetch_mlb_schedule(team_id):
                         if (row.get("game") or {}).get("gamePk") is not None
                     }
                     if next_series_pks and block_pks and block_pks == next_series_pks:
-                        continue
-                    home_series_games = [
-                        (row.get("game") or {})
-                        for row in block_rows
-                        if row.get("game")
-                    ]
-                    if home_series_games:
-                        result["next_home_series_games"] = home_series_games
-                        break
-            elif next_block_idx is not None:
-                # Fallback when all games in the fetched window belong to the same
-                # in-progress series: retain the upcoming block for continuity.
-                fallback_rows = (series_blocks[next_block_idx].get("rows") or [])
-                fallback_games = [
-                    (row.get("game") or {})
-                    for row in fallback_rows
-                    if row.get("game")
-                ]
-                if fallback_games:
-                    result["next_series_games"] = fallback_games
-
-                fallback_pks = {
-                    (row.get("game") or {}).get("gamePk")
-                    for row in fallback_rows
-                    if (row.get("game") or {}).get("gamePk") is not None
-                }
-                for idx in range(next_block_idx, len(series_blocks)):
-                    block_rows = (series_blocks[idx].get("rows") or [])
-                    if not any(bool(row.get("is_home")) for row in block_rows):
-                        continue
-                    block_pks = {
-                        (row.get("game") or {}).get("gamePk")
-                        for row in block_rows
-                        if (row.get("game") or {}).get("gamePk") is not None
-                    }
-                    if fallback_pks and block_pks and block_pks == fallback_pks:
                         continue
                     home_series_games = [
                         (row.get("game") or {})
