@@ -347,7 +347,7 @@ def _is_adafruit_minipitft_layout(width: int, height: int) -> bool:
 def _is_waveshare_oled_lcd_hat() -> bool:
     """Return True when running on the Waveshare OLED/LCD HAT (A) install profile."""
     marker = os.environ.get("WAVESHARE_OLED_LCD_HAT_A_INSTALLED", "").strip().lower()
-    if marker in {"1", "true", "yes", "on"}:
+    if marker and marker not in {"0", "false", "no", "off"}:
         return True
     # The Waveshare installer writes these env vars for the main service.
     if os.environ.get("WAVESHARE_OLED_MAX_VALUE_FONT_SIZE") is not None:
