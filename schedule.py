@@ -107,7 +107,7 @@ class ScreenScheduler:
             self._cursor = (self._cursor + 1) % len(self._entries)
 
             entry.cycle_count += 1
-            if (entry.cycle_count - 1) % entry.frequency != 0:
+            if entry.cycle_count % entry.frequency != 0:
                 continue
 
             if entry.alternate and entry.alternate.frequency > 0:
@@ -126,10 +126,10 @@ class ScreenScheduler:
             entry = self._entries[self._cursor]
             self._cursor = (self._cursor + 1) % len(self._entries)
 
-            # A frequency of ``n`` means the screen is shown once every
-            # ``n`` scheduler passes for that entry.
+            # A frequency of ``n`` means the screen is shown on every
+            # ``n``th scheduler pass for that entry.
             entry.cycle_count += 1
-            if (entry.cycle_count - 1) % entry.frequency != 0:
+            if entry.cycle_count % entry.frequency != 0:
                 continue
 
             candidate_id = entry.screen_id
