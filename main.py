@@ -1542,6 +1542,7 @@ _FEED_DEPENDENCIES: Dict[str, Set[str]] = {
         "weather daily",
         "weather radar",
         "weather logo",
+        "weather quad",
     },
     "bears": {"bears stand1", "bears stand2"},
     "hawks": {"hawks stand1", "hawks last", "hawks live", "hawks next", "hawks next home", "hawks logo"},

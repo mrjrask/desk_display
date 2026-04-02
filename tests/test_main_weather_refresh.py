@@ -19,6 +19,16 @@ def test_requested_data_feeds_includes_weather_daily(monkeypatch):
     assert "weather" in feeds
 
 
+def test_requested_data_feeds_includes_weather_quad(monkeypatch):
+    main = _load_main()
+    main._requested_screen_ids = {"weather quad"}
+    monkeypatch.setattr(main, "ENABLE_WEATHER", True)
+
+    feeds = main._requested_data_feeds()
+
+    assert "weather" in feeds
+
+
 def test_refresh_weather_logs_warning_when_payload_missing(monkeypatch):
     main = _load_main()
     main.cache["weather"] = {"current": {}}
