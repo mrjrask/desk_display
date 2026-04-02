@@ -1491,6 +1491,11 @@ _SCOREBOARD_SCREEN_IDS = {
     "NCAAM Scoreboard",
 }
 
+_LIVE_TEAM_SCREEN_TO_FEED: Dict[str, str] = {
+    "cubs live": "cubs",
+    "sox live": "sox",
+}
+
 _last_feed_refresh: Dict[str, float] = {}
 
 
@@ -1595,6 +1600,18 @@ def _should_force_refresh_scoreboards(screen_id: str, *, offline: bool) -> bool:
     """Return whether the current screen should trigger a fresh scoreboard pull."""
 
     return screen_id in _SCOREBOARD_SCREEN_IDS and not offline
+
+
+def _feed_to_force_refresh_for_screen(screen_id: str, *, offline: bool) -> Optional[str]:
+    """Return a feed name that should be fetched fresh before rendering a screen."""
+
+    if offline:
+        return None
+
+    if screen_id in _SCOREBOARD_SCREEN_IDS:
+        return "scoreboards"
+
+    return _LIVE_TEAM_SCREEN_TO_FEED.get(screen_id)
 
 
 def _refresh_bears() -> None:
@@ -1995,13 +2012,28 @@ def main_loop():
                 continue
 
             sid = entry.id
-            if _should_force_refresh_scoreboards(sid, offline=offline):
+            force_refresh_feed = _feed_to_force_refresh_for_screen(sid, offline=offline)
+            if force_refresh_feed == "scoreboards":
                 try:
                     _refresh_scoreboards_fresh()
                     _last_feed_refresh["scoreboards"] = time.monotonic()
                     _bump_registry_cache_nonce()
                 except Exception as exc:
                     logging.error("Failed to force-refresh scoreboards for '%s': %s", sid, exc)
+            elif force_refresh_feed:
+                refresher = _FEED_REFRESHERS.get(force_refresh_feed)
+                if refresher:
+                    try:
+                        refresher()
+                        _last_feed_refresh[force_refresh_feed] = time.monotonic()
+                        _bump_registry_cache_nonce()
+                    except Exception as exc:
+                        logging.error(
+                            "Failed to force-refresh %s feed for '%s': %s",
+                            force_refresh_feed,
+                            sid,
+                            exc,
+                        )
 
             loop_count += 1
             logging.info("🎬 Presenting '%s' (iteration %d)", sid, loop_count)

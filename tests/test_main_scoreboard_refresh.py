@@ -49,3 +49,18 @@ def test_should_force_refresh_scoreboards_skips_non_scoreboard_and_offline():
 
     assert not main._should_force_refresh_scoreboards("date", offline=False)
     assert not main._should_force_refresh_scoreboards("MLB Scoreboard", offline=True)
+
+
+def test_feed_to_force_refresh_for_screen_handles_scoreboards_and_live_team_screens():
+    main = _load_main()
+
+    assert main._feed_to_force_refresh_for_screen("MLB Scoreboard", offline=False) == "scoreboards"
+    assert main._feed_to_force_refresh_for_screen("cubs live", offline=False) == "cubs"
+    assert main._feed_to_force_refresh_for_screen("sox live", offline=False) == "sox"
+
+
+def test_feed_to_force_refresh_for_screen_skips_offline_and_non_live_screens():
+    main = _load_main()
+
+    assert main._feed_to_force_refresh_for_screen("cubs live", offline=True) is None
+    assert main._feed_to_force_refresh_for_screen("date", offline=False) is None
