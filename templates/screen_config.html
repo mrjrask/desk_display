@@ -445,25 +445,6 @@
       </div>
     </div>
     <div class="error" id="errorBox"></div>
-    <div class="quad-controls" id="quadControls">
-      <div class="field quad-toggle-field">
-        <label class="zero-toggle" for="quadEnabled">
-          <input type="checkbox" id="quadEnabled" {% if quad_enabled %}checked{% endif %}>
-          Enable quad mode
-        </label>
-        <div class="hint">When off, the <code>quad</code> screen is skipped even if frequency &gt; 0.</div>
-      </div>
-      <div class="field quad-pages-actions">
-        <button class="btn-secondary" id="addQuadPageBtn" type="button">Add quad page</button>
-        <div class="hint">Each page has 4 slots and rotates each time quad is shown.</div>
-      </div>
-      <div class="field">
-        <label for="quadScrollSpeed">Quad tile scroll speed</label>
-        <input type="range" id="quadScrollSpeed" min="0.25" max="3" step="0.25" value="{{ quad_scroll_speed }}">
-        <div class="hint"><span id="quadScrollSpeedValue">{{ quad_scroll_speed }}</span>x (lower = slower, higher = faster)</div>
-      </div>
-      <div id="quadPagesContainer" class="quad-pages"></div>
-    </div>
     <div class="playlist-controls">
       <div class="field">
         <input type="text" id="newPlaylistName" placeholder="Create a new playlist">
@@ -558,13 +539,6 @@
     const hideZeroFreqToggle = document.getElementById("hideZeroFreq");
     const newPlaylistNameInput = document.getElementById("newPlaylistName");
     const addPlaylistBtn = document.getElementById("addPlaylistBtn");
-    const quadEnabledToggle = document.getElementById("quadEnabled");
-    const quadScrollSpeedInput = document.getElementById("quadScrollSpeed");
-    const quadScrollSpeedValue = document.getElementById("quadScrollSpeedValue");
-    const addQuadPageBtn = document.getElementById("addQuadPageBtn");
-    const quadPagesContainer = document.getElementById("quadPagesContainer");
-    const selectableScreenIds = {{ screen_ids | tojson }}.filter((id) => id !== "quad");
-    let quadPagesState = {{ quad_pages | tojson }};
     const draftStorageKey = "screen-config-draft";
     const playlistStorageKey = "screen-config-playlists";
     const serverPlaylists = {{ playlists|tojson }};
@@ -1038,16 +1012,12 @@
     }
 
     function saveDraft() {
-      const quadScrollSpeed = Number.parseFloat(quadScrollSpeedInput?.value ?? "1") || 1;
       const payload = {
         updatedAt: new Date().toISOString(),
         screens: getCurrentScreens(),
         playlists,
         assignments: playlistAssignments,
         collapsed: collapsedPlaylists,
-        quad_enabled: Boolean(quadEnabledToggle?.checked),
-        quad_scroll_speed: quadScrollSpeed,
-        quad_pages: getQuadPages(),
       };
       try {
         sessionStorage.setItem(draftStorageKey, JSON.stringify(payload));
@@ -1060,122 +1030,6 @@
       sessionStorage.removeItem(draftStorageKey);
     }
 
-
-
-    function defaultQuadPage() {
-      return { tiles: ["date", "weather1", "weather hourly", "inside"] };
-    }
-
-    function normalizeQuadPages(pages) {
-      const rawPages = Array.isArray(pages) ? pages : [];
-      const defaults = defaultQuadPage().tiles;
-      const normalized = rawPages
-        .filter((page) => page && typeof page === "object")
-        .map((page) => {
-          const tiles = Array.isArray(page.tiles) ? page.tiles : [];
-          const next = [];
-          for (let index = 0; index < 4; index += 1) {
-            const rawTile = String(tiles[index] ?? "").trim();
-            next.push(rawTile || defaults[index]);
-          }
-          return { tiles: next };
-        });
-
-      if (!normalized.length) {
-        normalized.push(defaultQuadPage());
-      }
-
-      return normalized;
-    }
-
-    function renderQuadPages(pages) {
-      if (!quadPagesContainer) return;
-      quadPagesState = normalizeQuadPages(pages);
-      quadPagesContainer.innerHTML = "";
-
-      quadPagesState.forEach((page, pageIndex) => {
-        const wrapper = document.createElement("div");
-        wrapper.className = "quad-page";
-        wrapper.dataset.pageIndex = String(pageIndex);
-
-        const header = document.createElement("div");
-        header.className = "quad-page-header";
-
-        const title = document.createElement("span");
-        title.textContent = `Quad page ${pageIndex + 1}`;
-
-        const removeBtn = document.createElement("button");
-        removeBtn.type = "button";
-        removeBtn.className = "btn-secondary";
-        removeBtn.textContent = "Remove";
-        removeBtn.disabled = quadPagesState.length <= 1;
-        removeBtn.addEventListener("click", () => {
-          quadPagesState = quadPagesState.filter((_, idx) => idx !== pageIndex);
-          renderQuadPages(quadPagesState);
-          markDirty();
-        });
-
-        header.append(title, removeBtn);
-
-        const grid = document.createElement("div");
-        grid.className = "quad-page-grid";
-
-        ["Top-left", "Top-right", "Bottom-left", "Bottom-right"].forEach((slotLabel, tileIndex) => {
-          const field = document.createElement("div");
-          field.className = "field";
-
-          const label = document.createElement("label");
-          label.textContent = slotLabel;
-
-          const select = document.createElement("select");
-          select.className = "quad-page-tile-select";
-          select.dataset.pageIndex = String(pageIndex);
-          select.dataset.tileIndex = String(tileIndex);
-
-          selectableScreenIds.forEach((screenId) => {
-            select.appendChild(new Option(screenId, screenId));
-          });
-
-          const selected = String(page.tiles[tileIndex] || "").trim();
-          select.value = selectableScreenIds.includes(selected) ? selected : defaultQuadPage().tiles[tileIndex];
-          select.addEventListener("change", markDirty);
-
-          field.append(label, select);
-          grid.appendChild(field);
-        });
-
-        wrapper.append(header, grid);
-        quadPagesContainer.appendChild(wrapper);
-      });
-    }
-
-    function getQuadPages() {
-      if (!quadPagesContainer) {
-        return normalizeQuadPages(quadPagesState);
-      }
-      const pages = [...quadPagesContainer.querySelectorAll(".quad-page")].map((page) => {
-        const selects = [...page.querySelectorAll(".quad-page-tile-select")];
-        const tiles = ["date", "weather1", "weather hourly", "inside"];
-        selects.forEach((select, index) => {
-          tiles[index] = String(select.value || "").trim() || tiles[index];
-        });
-        return { tiles };
-      });
-      return normalizeQuadPages(pages);
-    }
-
-    function buildLayoutsPayload() {
-      const quadScrollSpeed = Number.parseFloat(quadScrollSpeedInput?.value ?? "1") || 1;
-      return {
-        screens: {
-          quad: {
-            enabled: Boolean(quadEnabledToggle?.checked),
-            scroll_speed: quadScrollSpeed,
-            pages: getQuadPages(),
-          },
-        },
-      };
-    }
     function markDirty() {
       if (!isDirty) {
         isDirty = true;
@@ -1364,9 +1218,6 @@
             screens,
             playlists: buildPlaylistsPayload(screens),
             sequence: playlists.map((playlist) => ({ playlist: playlist.id })),
-            quad_enabled: Boolean(quadEnabledToggle?.checked),
-            quad_scroll_speed: Number.parseFloat(quadScrollSpeedInput?.value ?? "1") || 1,
-            quad_pages: getQuadPages(),
           }),
         });
         const data = await response.json();
@@ -1374,10 +1225,6 @@
           throw new Error(data.error || "Unable to save configuration");
         }
         renderScreens(data.screens || screens);
-        if (quadEnabledToggle) quadEnabledToggle.checked = Boolean(data.quad_enabled);
-        if (quadScrollSpeedInput) quadScrollSpeedInput.value = String(data.quad_scroll_speed ?? 1);
-        if (quadScrollSpeedValue) quadScrollSpeedValue.textContent = String(data.quad_scroll_speed ?? 1);
-        renderQuadPages(data.quad_pages || getQuadPages());
         markClean();
       } catch (err) {
         showError(err.message);
@@ -1396,10 +1243,6 @@
           throw new Error(data.error || "Unable to load defaults");
         }
         renderScreens(data.screens || []);
-        if (quadEnabledToggle) quadEnabledToggle.checked = Boolean(data.quad_enabled);
-        if (quadScrollSpeedInput) quadScrollSpeedInput.value = String(data.quad_scroll_speed ?? 1);
-        if (quadScrollSpeedValue) quadScrollSpeedValue.textContent = String(data.quad_scroll_speed ?? 1);
-        renderQuadPages(data.quad_pages || []);
         markDirty();
       } catch (err) {
         showError(err.message);
@@ -1415,10 +1258,6 @@
         const payload = {
           config: buildConfigPayload(screens),
           style: buildStylePayload(screens),
-          layouts: buildLayoutsPayload(),
-          quad_enabled: Boolean(quadEnabledToggle?.checked),
-          quad_scroll_speed: Number.parseFloat(quadScrollSpeedInput?.value ?? "1") || 1,
-          quad_pages: getQuadPages(),
         };
         downloadPayload(payload, "screens_config.export.json");
       } catch (err) {
@@ -1442,10 +1281,6 @@
         }
         applyImportedPlaylists(payload.config);
         renderScreens(data.screens || []);
-        if (quadEnabledToggle) quadEnabledToggle.checked = Boolean(data.quad_enabled);
-        if (quadScrollSpeedInput) quadScrollSpeedInput.value = String(data.quad_scroll_speed ?? 1);
-        if (quadScrollSpeedValue) quadScrollSpeedValue.textContent = String(data.quad_scroll_speed ?? 1);
-        renderQuadPages(data.quad_pages || []);
         markClean();
       } catch (err) {
         showError(err.message);
@@ -1509,24 +1344,6 @@
       markDirty();
     });
 
-    if (quadEnabledToggle) {
-      quadEnabledToggle.addEventListener("change", markDirty);
-    }
-    if (quadScrollSpeedInput) {
-      quadScrollSpeedInput.addEventListener("input", () => {
-        if (quadScrollSpeedValue) {
-          quadScrollSpeedValue.textContent = quadScrollSpeedInput.value;
-        }
-      });
-      quadScrollSpeedInput.addEventListener("change", markDirty);
-    }
-    if (addQuadPageBtn) {
-      addQuadPageBtn.addEventListener("click", () => {
-        quadPagesState = [...getQuadPages(), defaultQuadPage()];
-        renderQuadPages(quadPagesState);
-        markDirty();
-      });
-    }
 
     window.addEventListener("beforeunload", (event) => {
       if (!isDirty) return;
@@ -1536,9 +1353,6 @@
 
     loadPlaylistState();
     let initialScreens = getCurrentScreens();
-    let initialQuadEnabled = {{ quad_enabled | tojson }};
-    let initialQuadScrollSpeed = {{ quad_scroll_speed | tojson }};
-    let initialQuadPages = {{ quad_pages | tojson }};
     const savedDraft = sessionStorage.getItem(draftStorageKey);
     if (savedDraft) {
       try {
@@ -1557,15 +1371,6 @@
               collapsedPlaylists = { ...draft.collapsed };
             }
             savePlaylistState();
-            if (typeof draft.quad_enabled === "boolean") {
-              initialQuadEnabled = draft.quad_enabled;
-            }
-            if (typeof draft.quad_scroll_speed === "number") {
-              initialQuadScrollSpeed = draft.quad_scroll_speed;
-            }
-            if (Array.isArray(draft.quad_pages)) {
-              initialQuadPages = draft.quad_pages;
-            }
             isDirty = true;
           } else {
             clearDraft();
@@ -1576,10 +1381,6 @@
       }
     }
     renderScreens(initialScreens);
-    if (quadEnabledToggle) quadEnabledToggle.checked = Boolean(initialQuadEnabled);
-    if (quadScrollSpeedInput) quadScrollSpeedInput.value = String(initialQuadScrollSpeed || 1);
-    if (quadScrollSpeedValue) quadScrollSpeedValue.textContent = String(initialQuadScrollSpeed || 1);
-    renderQuadPages(initialQuadPages);
   </script>
 </body>
 </html>
