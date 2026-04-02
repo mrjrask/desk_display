@@ -26,6 +26,7 @@ Desk Display is a Python dashboard application for Raspberry Pi and Linux displa
 ## Features
 
 - Rotating screen engine with per-screen frequency control.
+- Per-screen playback extension via optional `extra_seconds` in schedule config.
 - Sports screens for NFL/NHL/NBA/MLB/NCAAM (including scoreboards and standings).
 - Team-specific screens for Chicago teams (Bears, Blackhawks, Wolves, Bulls, Cubs, Sox).
 - Cubs/Sox **series screens**:
@@ -232,7 +233,24 @@ Frequency behavior:
 - `1` = every pass
 - `2` = every other pass
 - `0` = disabled
-- object form supports `frequency` + optional `alt` schedule
+- object form supports:
+  - `frequency` (required)
+  - optional `extra_seconds` (adds hold time after normal screen duration)
+  - optional `alt` schedule
+
+Example object form:
+
+```json
+{
+  "screens": {
+    "weather1": { "frequency": 1, "extra_seconds": 5 },
+    "date": {
+      "frequency": 1,
+      "alt": { "screen": "inside", "frequency": 2 }
+    }
+  }
+}
+```
 
 ### MLB series screens (Cubs/Sox)
 
@@ -265,8 +283,18 @@ The UI allows:
 
 - enabling/disabling screens,
 - editing frequencies,
+- editing per-screen additional playback seconds (`extra_seconds`),
 - managing playlists,
 - import/export of config payloads.
+
+### Quad touch behavior (HyperPixel 4 / HyperPixel 4 Square)
+
+When `quad` or `weather quad` is currently displayed on a touch-capable HyperPixel setup:
+
+- Tapping one of the 4 tiles opens that tile as fullscreen.
+- The fullscreen tile uses the normal screen display duration (ignores `extra_seconds` for that touch-initiated play).
+- After fullscreen playback ends, the app returns to the quad screen.
+- The return-to-quad interval also uses the normal duration (again ignoring `extra_seconds` once), then normal rotation resumes.
 
 ---
 

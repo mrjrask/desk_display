@@ -177,3 +177,34 @@ def test_touch_double_tap_ignores_left_side_taps(main_module):
 
     assert main_module._check_touch_skip_request() is False
     assert main_module._skip_request_pending is False
+
+
+def test_touch_tap_on_quad_tile_requests_fullscreen(main_module):
+    class _FakeEvent:
+        def __init__(self, event_type, x, y):
+            self.type = event_type
+            self.x = x
+            self.y = y
+
+    class _FakePygame:
+        FINGERDOWN = 1
+        MOUSEBUTTONDOWN = 2
+
+        class event:  # noqa: N801 - mirror pygame namespace
+            @staticmethod
+            def get(_event_types):
+                return [_FakeEvent(1, 0.8, 0.2)]
+
+    main_module.display = type("D", (), {"width": 320, "height": 240})()
+    main_module.pygame = _FakePygame()
+    main_module._pending_touch_focus_screen_id = None
+    main_module._pending_touch_return_screen_id = None
+
+    handled = main_module._check_touch_skip_request(
+        current_screen_id="quad",
+        current_quad_tiles=["date", "inside", "weather1", "weather2"],
+    )
+
+    assert handled is True
+    assert main_module._pending_touch_focus_screen_id == "inside"
+    assert main_module._pending_touch_return_screen_id == "quad"

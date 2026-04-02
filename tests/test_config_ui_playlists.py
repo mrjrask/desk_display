@@ -96,3 +96,29 @@ def test_screen_config_page_renders_alt_screen_dropdown(monkeypatch):
     assert '<option value="">No alternate</option>' in html
     assert '<option value="inside" selected>inside</option>' in html
     assert '<input type="text" list="screenIds"' not in html
+
+
+def test_build_screen_entries_includes_extra_seconds():
+    entries = config_ui._build_screen_entries(
+        {"screens": {"date": {"frequency": 1, "extra_seconds": 3}}},
+        {"screens": {}},
+    )
+
+    date_entry = next(entry for entry in entries if entry["id"] == "date")
+    assert date_entry["extra_seconds"] == 3
+
+
+def test_build_config_persists_extra_seconds():
+    config = config_ui._build_config(
+        [
+            {
+                "id": "date",
+                "frequency": 1,
+                "extra_seconds": 5,
+                "alt_screen": "",
+                "alt_frequency": "",
+            }
+        ]
+    )
+
+    assert config["screens"]["date"] == {"frequency": 1, "extra_seconds": 5}
