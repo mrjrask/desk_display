@@ -1896,7 +1896,9 @@ def _fetch_mlb_schedule(team_id):
     try:
         today = datetime.datetime.now(CENTRAL_TIME).date()
         start = today - datetime.timedelta(days=3)
-        end   = today + datetime.timedelta(days=30)
+        # Use a longer look-ahead window so "next home series" is less likely to
+        # be truncated when a multi-game set starts near the end of the range.
+        end   = today + datetime.timedelta(days=45)
 
         url = (
             f"{MLB_API_URL}"
