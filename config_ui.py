@@ -263,6 +263,11 @@ def _normalize_import_config_payload(data: Dict[str, Any]) -> Dict[str, Any]:
                 frequency_int = int(frequency)
             except (TypeError, ValueError):
                 frequency_int = frequency
+            extra_seconds_raw = raw.get("extra_seconds", 0)
+            try:
+                extra_seconds = int(extra_seconds_raw)
+            except (TypeError, ValueError):
+                extra_seconds = extra_seconds_raw
 
             alt_payload: Optional[Dict[str, Any]] = None
             alt = raw.get("alt")
@@ -277,6 +282,8 @@ def _normalize_import_config_payload(data: Dict[str, Any]) -> Dict[str, Any]:
                         pass
 
             normalized_spec: Dict[str, Any] = {"frequency": frequency_int}
+            if isinstance(extra_seconds, int) and extra_seconds > 0:
+                normalized_spec["extra_seconds"] = extra_seconds
             if alt_payload is not None:
                 normalized_spec["alt"] = alt_payload
             normalized_screens[canonical_id] = _merge_screen_specs(
@@ -784,12 +791,14 @@ def _build_screen_entries(
         entry: Dict[str, Any] = {
             "id": screen_id,
             "frequency": 0,
+            "extra_seconds": 0,
             "alt_screen": "",
             "alt_frequency": "",
             "background": _rgb_to_hex(_default_background_for_screen(screen_id)),
         }
         if isinstance(raw, dict):
             entry["frequency"] = raw.get("frequency", 0)
+            entry["extra_seconds"] = raw.get("extra_seconds", 0)
             alt = raw.get("alt") if isinstance(raw.get("alt"), dict) else None
             if alt:
                 entry["alt_screen"] = _serialize_alt_screen(alt.get("screen"))
@@ -817,6 +826,9 @@ def _build_config(entries: List[Dict[str, Any]]) -> Dict[str, Any]:
         if screen_id in HIDDEN_CONFIG_SCREEN_IDS:
             continue
         frequency = int(entry.get("frequency", 0))
+        extra_seconds = int(entry.get("extra_seconds", 0))
+        if extra_seconds < 0:
+            raise ValueError(f"Additional seconds for '{screen_id}' cannot be negative")
         alt_screen_raw = entry.get("alt_screen")
         alt_frequency = entry.get("alt_frequency")
         alt_screen = _parse_alt_screen(str(alt_screen_raw).strip()) if alt_screen_raw is not None else None
@@ -825,9 +837,15 @@ def _build_config(entries: List[Dict[str, Any]]) -> Dict[str, Any]:
             alt_frequency_int = int(alt_frequency) if alt_frequency not in ("", None) else 1
             alt_payload: Dict[str, Any] = {"screen": alt_screen[0] if len(alt_screen) == 1 else alt_screen}
             alt_payload["frequency"] = alt_frequency_int
-            screens[screen_id] = {"frequency": frequency, "alt": alt_payload}
+            spec: Dict[str, Any] = {"frequency": frequency, "alt": alt_payload}
+            if extra_seconds > 0:
+                spec["extra_seconds"] = extra_seconds
+            screens[screen_id] = spec
         else:
-            screens[screen_id] = frequency
+            if extra_seconds > 0:
+                screens[screen_id] = {"frequency": frequency, "extra_seconds": extra_seconds}
+            else:
+                screens[screen_id] = frequency
     cleaned, _ = _normalize_legacy_scoreboard_ids({"screens": screens})
     return cleaned
 

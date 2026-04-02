@@ -35,6 +35,7 @@ class _ScheduleEntry:
     screen_id: str
     frequency: int
     cycle_count: int = 0
+    extra_seconds: int = 0
     alternate: Optional[_AlternateSchedule] = None
 
 
@@ -44,9 +45,14 @@ class ScreenScheduler:
     def __init__(self, entries: Sequence[_ScheduleEntry]):
         self._entries: List[_ScheduleEntry] = list(entries)
         self._cursor: int = 0
+        self._extra_seconds_by_id: Dict[str, int] = {}
         requested: Set[str] = set()
         for entry in self._entries:
             requested.add(entry.screen_id)
+            self._extra_seconds_by_id[entry.screen_id] = max(
+                self._extra_seconds_by_id.get(entry.screen_id, 0),
+                int(entry.extra_seconds),
+            )
             if entry.alternate is not None:
                 requested.update(entry.alternate.screen_ids)
         self._requested = requested
@@ -58,6 +64,9 @@ class ScreenScheduler:
     @property
     def requested_ids(self) -> Set[str]:
         return set(self._requested)
+
+    def extra_seconds_for(self, screen_id: str) -> int:
+        return max(0, int(self._extra_seconds_by_id.get(screen_id, 0)))
 
     def preview_scheduled_ids(self, limit: int) -> List[str]:
         """Return upcoming scheduled screen IDs without mutating scheduler state."""
@@ -80,6 +89,7 @@ class ScreenScheduler:
                     screen_id=entry.screen_id,
                     frequency=entry.frequency,
                     cycle_count=entry.cycle_count,
+                    extra_seconds=entry.extra_seconds,
                     alternate=cloned_alt,
                 )
             )
@@ -231,6 +241,12 @@ def sanitize_schedule_config(config: Dict[str, Any]) -> Tuple[Dict[str, Any], Li
                 existing_raw["frequency"] = max(int(existing_freq), int(new_freq))
             except Exception:
                 pass
+            existing_extra = existing_raw.get("extra_seconds")
+            new_extra = cleaned_raw.get("extra_seconds")
+            try:
+                existing_raw["extra_seconds"] = max(int(existing_extra or 0), int(new_extra or 0))
+            except Exception:
+                pass
             if "alt" not in existing_raw and "alt" in cleaned_raw:
                 existing_raw["alt"] = cleaned_raw["alt"]
             cleaned_screens[canonical_id] = existing_raw
@@ -317,6 +333,14 @@ def build_scheduler(config: Dict[str, Any]) -> ScreenScheduler:
                 raise ValueError(
                     f"Frequency for '{screen_id}' must be an integer"
                 ) from exc
+            try:
+                extra_seconds = int(raw.get("extra_seconds", 0))
+            except (TypeError, ValueError) as exc:
+                raise ValueError(
+                    f"Additional seconds for '{screen_id}' must be an integer"
+                ) from exc
+            if extra_seconds < 0:
+                raise ValueError(f"Additional seconds for '{screen_id}' cannot be negative")
 
             alt_spec = raw.get("alt")
             if alt_spec is not None:
@@ -371,6 +395,7 @@ def build_scheduler(config: Dict[str, Any]) -> ScreenScheduler:
                 frequency = int(raw)
             except (TypeError, ValueError) as exc:
                 raise ValueError(f"Frequency for '{screen_id}' must be an integer") from exc
+            extra_seconds = 0
 
         if frequency < 0:
             raise ValueError(f"Frequency for '{screen_id}' cannot be negative")
@@ -382,7 +407,14 @@ def build_scheduler(config: Dict[str, Any]) -> ScreenScheduler:
             # rotation.
             continue
 
-        entries.append(_ScheduleEntry(screen_id, frequency, alternate=alternate))
+        entries.append(
+            _ScheduleEntry(
+                screen_id,
+                frequency,
+                extra_seconds=extra_seconds,
+                alternate=alternate,
+            )
+        )
 
     if not entries:
         raise ValueError("Configuration must contain at least one enabled screen")

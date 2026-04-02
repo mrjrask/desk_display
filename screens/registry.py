@@ -691,6 +691,7 @@ def build_screen_registry(context: ScreenContext) -> Tuple[Dict[str, ScreenDefin
             scroll_speed=scroll_speed,
         ),
         available=weather_current_available and weather_hourly_available,
+        quad_tiles=["weather1", "weather2", "weather hourly", "weather daily"],
     )
     radar_available = weather_hourly_available and _precip_within_hours(
         weather_data, RADAR_LOOKAHEAD_HOURS, now=context.now
@@ -715,6 +716,7 @@ def build_screen_registry(context: ScreenContext) -> Tuple[Dict[str, ScreenDefin
             scroll_speed=scroll_speed,
         ),
         available=quad_enabled,
+        quad_tiles=list(quad_tiles),
     )
 
     verano_logo = context.logos.get("verano logo")

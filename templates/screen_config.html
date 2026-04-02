@@ -261,6 +261,7 @@
         minmax(120px, 0.7fr)
         minmax(140px, 0.9fr)
         minmax(200px, 1.3fr)
+        minmax(140px, 0.9fr)
         minmax(120px, 0.7fr);
       gap: 0.75rem;
       padding: 0 0.5rem 0.25rem;
@@ -303,6 +304,7 @@
         minmax(120px, 0.7fr)
         minmax(140px, 0.9fr)
         minmax(200px, 1.3fr)
+        minmax(140px, 0.9fr)
         minmax(120px, 0.7fr);
       gap: 0.75rem;
       align-items: center;
@@ -396,6 +398,7 @@
           minmax(110px, 0.7fr)
           minmax(130px, 0.9fr)
           minmax(180px, 1.1fr)
+          minmax(130px, 0.9fr)
           minmax(110px, 0.7fr);
       }
     }
@@ -481,6 +484,7 @@
       </div>
       <div>Background</div>
       <div>Alt screen</div>
+      <div>Extra sec</div>
       <div>Alt freq</div>
     </div>
     <div class="table" id="screenTable">
@@ -515,6 +519,10 @@
             <button type="button" class="alt-screen-clear" aria-label="Clear alternate screens" title="Clear alternate screens">×</button>
           </div>
           <div class="hint">Select one alternate screen.</div>
+        </div>
+        <div>
+          <input type="number" min="0" step="1" value="{{ screen.extra_seconds }}" class="extra-seconds-input">
+          <div class="hint">Add seconds to this screen's display time.</div>
         </div>
         <div>
           <input type="number" min="0" step="1" placeholder="1" value="{{ screen.alt_frequency }}" class="alt-frequency-input">
@@ -902,6 +910,7 @@
             frequency: row.querySelector(".freq-input")?.value ?? "",
             background: row.querySelector(".background-input")?.value ?? "",
             alt_screen: row.querySelector(".alt-screen-input")?.value ?? "",
+            extra_seconds: row.querySelector(".extra-seconds-input")?.value ?? "",
             alt_frequency: row.querySelector(".alt-frequency-input")?.value ?? "",
           };
         })
@@ -948,6 +957,7 @@
         const screenId = String(screen.id || "").trim();
         if (!screenId) return;
         const frequency = Number.parseInt(screen.frequency ?? 0, 10);
+        const extraSeconds = Number.parseInt(screen.extra_seconds ?? 0, 10);
         const altScreens = parseAltScreen(String(screen.alt_screen ?? "").trim());
         if (altScreens.length > 0) {
           const altFrequencyRaw = screen.alt_frequency;
@@ -956,13 +966,21 @@
             : Number.parseInt(altFrequencyRaw, 10);
           screensPayload[screenId] = {
             frequency: Number.isNaN(frequency) ? 0 : frequency,
+            extra_seconds: Number.isNaN(extraSeconds) ? 0 : Math.max(0, extraSeconds),
             alt: {
               screen: altScreens.length === 1 ? altScreens[0] : altScreens,
               frequency: altFrequency,
             },
           };
         } else {
-          screensPayload[screenId] = Number.isNaN(frequency) ? 0 : frequency;
+          if (Number.isNaN(extraSeconds) || extraSeconds <= 0) {
+            screensPayload[screenId] = Number.isNaN(frequency) ? 0 : frequency;
+          } else {
+            screensPayload[screenId] = {
+              frequency: Number.isNaN(frequency) ? 0 : frequency,
+              extra_seconds: Math.max(0, extraSeconds),
+            };
+          }
         }
       });
       return {
@@ -1260,6 +1278,10 @@
             <button type="button" class="alt-screen-clear" aria-label="Clear alternate screens" title="Clear alternate screens">×</button>
           </div>
           <div class="hint">Select one alternate screen.</div>
+        </div>
+        <div>
+          <input type="number" min="0" step="1" value="${screen.extra_seconds ?? 0}" class="extra-seconds-input">
+          <div class="hint">Add seconds to this screen's display time.</div>
         </div>
         <div>
           <input type="number" min="0" step="1" placeholder="1" value="${screen.alt_frequency ?? ""}" class="alt-frequency-input">

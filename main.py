@@ -194,6 +194,9 @@ _TOUCH_DOUBLE_TAP_MAX_INTERVAL_SECONDS = max(
     0.1, float(os.environ.get("TOUCH_DOUBLE_TAP_MAX_INTERVAL_SECONDS", "0.45"))
 )
 _last_touch_tap_monotonic = 0.0
+_pending_touch_focus_screen_id: Optional[str] = None
+_pending_touch_return_screen_id: Optional[str] = None
+_temporary_normal_duration_overrides: Dict[str, int] = {}
 
 
 def _run_gc_maintenance(*, force: bool = False) -> bool:
@@ -253,8 +256,39 @@ def _request_previous_screen() -> bool:
     return True
 
 
-def _check_touch_skip_request() -> bool:
-    """Handle touchscreen double-tap gestures that request a screen skip."""
+def _request_touch_focus(screen_id: str, *, return_screen_id: Optional[str]) -> bool:
+    """Request fullscreen playback for a tapped quad tile, then return to quad."""
+
+    global _pending_touch_focus_screen_id, _pending_touch_return_screen_id
+
+    if not isinstance(screen_id, str) or not screen_id.strip():
+        return False
+
+    target_screen_id = screen_id.strip()
+    _pending_touch_focus_screen_id = target_screen_id
+    _pending_touch_return_screen_id = return_screen_id.strip() if isinstance(return_screen_id, str) else None
+    _temporary_normal_duration_overrides[target_screen_id] = (
+        _temporary_normal_duration_overrides.get(target_screen_id, 0) + 1
+    )
+    if _pending_touch_return_screen_id:
+        _temporary_normal_duration_overrides[_pending_touch_return_screen_id] = (
+            _temporary_normal_duration_overrides.get(_pending_touch_return_screen_id, 0) + 1
+        )
+    _manual_skip_event.set()
+    logging.info(
+        "👆 Quad tap requested fullscreen '%s'%s.",
+        target_screen_id,
+        f", then return to '{_pending_touch_return_screen_id}'" if _pending_touch_return_screen_id else "",
+    )
+    return True
+
+
+def _check_touch_skip_request(
+    *,
+    current_screen_id: Optional[str] = None,
+    current_quad_tiles: Optional[List[str]] = None,
+) -> bool:
+    """Handle touchscreen gestures for skip and quad tile fullscreen focus."""
 
     global _last_touch_tap_monotonic
 
@@ -278,18 +312,20 @@ def _check_touch_skip_request() -> bool:
     if not events:
         return False
 
-    finger_taps: list[float] = []
-    mouse_taps: list[float] = []
+    touch_taps: list[tuple[float, float, float]] = []
     right_third_start = (2.0 * float(getattr(display, "width", WIDTH))) / 3.0
+    display_width = float(getattr(display, "width", WIDTH))
+    display_height = float(getattr(display, "height", HEIGHT))
 
     for event in events:
         event_type = getattr(event, "type", None)
-        x_pos = None
+        x_pos: Optional[float] = None
+        y_pos: Optional[float] = None
 
         if fingerdown is not None and event_type == fingerdown:
             x_pos = float(getattr(event, "x", 0.0)) * float(getattr(display, "width", WIDTH))
-            if x_pos >= right_third_start:
-                finger_taps.append(time.monotonic())
+            y_pos = float(getattr(event, "y", 0.0)) * float(getattr(display, "height", HEIGHT))
+            touch_taps.append((x_pos, y_pos, time.monotonic()))
             continue
 
         if mousebuttondown is not None and event_type == mousebuttondown:
@@ -297,16 +333,34 @@ def _check_touch_skip_request() -> bool:
             if button not in (1,):
                 continue
             pos = getattr(event, "pos", None)
-            if isinstance(pos, tuple) and len(pos) >= 1:
+            if isinstance(pos, tuple) and len(pos) >= 2:
                 x_pos = float(pos[0])
-            if x_pos is not None and x_pos >= right_third_start:
-                mouse_taps.append(time.monotonic())
+                y_pos = float(pos[1])
+            if x_pos is not None and y_pos is not None:
+                touch_taps.append((x_pos, y_pos, time.monotonic()))
 
-    tap_times = finger_taps if finger_taps else mouse_taps
-    if not tap_times:
+    if not touch_taps:
         return False
 
-    for tap_time in tap_times:
+    quad_tiles = list(current_quad_tiles) if isinstance(current_quad_tiles, list) else []
+    quad_mode_active = current_screen_id in {"quad", "weather quad"} and len(quad_tiles) >= 4
+    if quad_mode_active:
+        for tap_x, tap_y, _tap_time in touch_taps:
+            if tap_x < 0 or tap_y < 0 or tap_x > display_width or tap_y > display_height:
+                continue
+            col = 0 if tap_x < (display_width / 2.0) else 1
+            row = 0 if tap_y < (display_height / 2.0) else 1
+            tile_index = (row * 2) + col
+            if tile_index < 0 or tile_index >= len(quad_tiles):
+                continue
+            selected = str(quad_tiles[tile_index]).strip()
+            if not selected or selected == "quad":
+                continue
+            return _request_touch_focus(selected, return_screen_id=current_screen_id)
+
+    for tap_x, _tap_y, tap_time in touch_taps:
+        if tap_x < right_third_start:
+            continue
         if (
             _last_touch_tap_monotonic > 0
             and (tap_time - _last_touch_tap_monotonic) <= _TOUCH_DOUBLE_TAP_MAX_INTERVAL_SECONDS
@@ -481,6 +535,7 @@ def refresh_schedule_if_needed(force: bool = False) -> None:
     global _screen_config_mtime, screen_scheduler, _requested_screen_ids
     global _registry_cache_key, _registry_cache_value
     global _last_screen_id, _skip_request_pending, _pending_previous_screen_id
+    global _pending_touch_focus_screen_id, _pending_touch_return_screen_id
 
     config_path = _active_config_path()
 
@@ -502,6 +557,9 @@ def refresh_schedule_if_needed(force: bool = False) -> None:
     _last_screen_id = None
     _skip_request_pending = False
     _pending_previous_screen_id = None
+    _pending_touch_focus_screen_id = None
+    _pending_touch_return_screen_id = None
+    _temporary_normal_duration_overrides.clear()
     _registry_cache_key = None
     _registry_cache_value = None
     with _screen_history_lock:
@@ -676,7 +734,12 @@ def _start_config_ui() -> None:
     )
 
 
-def _check_control_buttons() -> bool:
+def _check_control_buttons(
+    *,
+    current_screen_id: Optional[str] = None,
+    current_quad_tiles: Optional[List[str]] = None,
+    enable_touch: bool = True,
+) -> bool:
     """Handle Display HAT Mini control buttons.
 
     Returns True when the caller should skip to the next screen immediately.
@@ -690,7 +753,10 @@ def _check_control_buttons() -> bool:
     if _shutdown_event.is_set():
         return False
 
-    if _check_touch_skip_request():
+    if enable_touch and _check_touch_skip_request(
+        current_screen_id=current_screen_id,
+        current_quad_tiles=current_quad_tiles,
+    ):
         return True
 
     new_presses = []
@@ -780,7 +846,12 @@ def _record_button_noise_event(new_presses: list[str]) -> None:
     )
 
 
-def _wait_with_button_checks(duration: float) -> bool:
+def _wait_with_button_checks(
+    duration: float,
+    *,
+    current_screen_id: Optional[str] = None,
+    current_quad_tiles: Optional[List[str]] = None,
+) -> bool:
     """Sleep for *duration* seconds while checking for control button presses.
 
     Returns True if the caller should skip the rest of the current screen.
@@ -805,7 +876,11 @@ def _wait_with_button_checks(duration: float) -> bool:
             _manual_skip_event.clear()
             return True
 
-        if _check_control_buttons():
+        if _check_control_buttons(
+            current_screen_id=current_screen_id,
+            current_quad_tiles=current_quad_tiles,
+            enable_touch=True,
+        ):
             _manual_skip_event.clear()
             return True
 
@@ -846,7 +921,7 @@ def _monitor_control_buttons() -> None:
     try:
         while not _shutdown_event.is_set():
             try:
-                _check_control_buttons()
+                _check_control_buttons(enable_touch=False)
             except Exception as exc:
                 logging.debug("Button monitor loop failed: %s", exc)
 
@@ -870,6 +945,27 @@ def _next_screen_from_registry(
     """Return the next screen, honoring any pending skip requests."""
 
     global _skip_request_pending, _pending_previous_screen_id
+    global _pending_touch_focus_screen_id, _pending_touch_return_screen_id
+
+    if _pending_touch_focus_screen_id:
+        focus_id = _pending_touch_focus_screen_id
+        _pending_touch_focus_screen_id = None
+        focus_entry = registry.get(focus_id)
+        if focus_entry and focus_entry.available:
+            logging.info("👆 Showing tapped quad tile '%s' in fullscreen.", focus_id)
+            _skip_request_pending = False
+            return focus_entry
+        logging.info("👆 Tapped quad tile '%s' unavailable; resuming scheduled rotation.", focus_id)
+
+    if _pending_touch_return_screen_id:
+        return_id = _pending_touch_return_screen_id
+        _pending_touch_return_screen_id = None
+        return_entry = registry.get(return_id)
+        if return_entry and return_entry.available:
+            logging.info("👆 Returning to quad screen '%s' after fullscreen tile.", return_id)
+            _skip_request_pending = False
+            return return_entry
+        logging.info("👆 Return quad screen '%s' unavailable; resuming scheduled rotation.", return_id)
 
     if _pending_previous_screen_id:
         previous_id = _pending_previous_screen_id
@@ -920,6 +1016,29 @@ def _next_screen_from_registry(
 
     _skip_request_pending = False
     return entry
+
+
+def _consume_normal_duration_override(screen_id: str) -> bool:
+    """Return True when *screen_id* should ignore additional seconds once."""
+
+    remaining = int(_temporary_normal_duration_overrides.get(screen_id, 0))
+    if remaining <= 0:
+        return False
+    if remaining == 1:
+        _temporary_normal_duration_overrides.pop(screen_id, None)
+    else:
+        _temporary_normal_duration_overrides[screen_id] = remaining - 1
+    return True
+
+
+def _extra_seconds_for_screen(screen_id: str) -> int:
+    scheduler = screen_scheduler
+    if scheduler is None:
+        return 0
+    try:
+        return max(0, int(scheduler.extra_seconds_for(screen_id)))
+    except Exception:
+        return 0
 
 # ─── Screenshot / video outputs ──────────────────────────────────────────────
 video_out = None
@@ -1920,7 +2039,7 @@ def main_loop():
             # currently visible screen (or the very next one) can react
             # immediately instead of idling on the previous frame for another
             # full iteration.
-            _check_control_buttons()
+            _check_control_buttons(enable_touch=True)
 
             current_time = datetime.datetime.now(CENTRAL_TIME)
 
@@ -2149,8 +2268,14 @@ def main_loop():
                     _screen_history.append(sid)
                     if len(_screen_history) > _SCREEN_HISTORY_LIMIT:
                         _screen_history[:] = _screen_history[-_SCREEN_HISTORY_LIMIT:]
-                wait_duration = 0.0 if consumed_delay else SCREEN_DELAY
-                skip_delay = _wait_with_button_checks(wait_duration)
+                extra_seconds = 0 if _consume_normal_duration_override(sid) else _extra_seconds_for_screen(sid)
+                wait_duration = (0.0 if consumed_delay else SCREEN_DELAY) + float(extra_seconds)
+                quad_tiles = entry.metadata.get("quad_tiles") if isinstance(entry.metadata, dict) else None
+                skip_delay = _wait_with_button_checks(
+                    wait_duration,
+                    current_screen_id=sid,
+                    current_quad_tiles=quad_tiles if isinstance(quad_tiles, list) else None,
+                )
 
             if _shutdown_event.is_set():
                 break

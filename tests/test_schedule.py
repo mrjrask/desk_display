@@ -259,3 +259,22 @@ def test_preview_scheduled_ids_keeps_scheduler_state():
     second_preview = scheduler.preview_scheduled_ids(4)
 
     assert first_preview == second_preview
+
+
+def test_scheduler_tracks_extra_seconds_per_screen():
+    scheduler = build_scheduler(
+        {
+            "screens": {
+                "date": {"frequency": 1, "extra_seconds": 4},
+                "inside": 2,
+            }
+        }
+    )
+
+    assert scheduler.extra_seconds_for("date") == 4
+    assert scheduler.extra_seconds_for("inside") == 0
+
+
+def test_scheduler_rejects_negative_extra_seconds():
+    with pytest.raises(ValueError):
+        build_scheduler({"screens": {"date": {"frequency": 1, "extra_seconds": -1}}})
