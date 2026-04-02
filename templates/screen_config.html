@@ -541,6 +541,7 @@
     const addPlaylistBtn = document.getElementById("addPlaylistBtn");
     const draftStorageKey = "screen-config-draft";
     const playlistStorageKey = "screen-config-playlists";
+    const selectableScreenIds = {{ screen_ids|tojson }};
     const serverPlaylists = {{ playlists|tojson }};
     const serverPlaylistAssignments = {{ playlist_assignments|tojson }};
     let isDirty = false;

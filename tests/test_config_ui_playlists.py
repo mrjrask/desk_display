@@ -40,6 +40,8 @@ def test_screen_config_page_bootstraps_server_playlist_state(monkeypatch):
 
     assert response.status_code == 200
     html = response.get_data(as_text=True)
+    assert "const selectableScreenIds = " in html
+    assert '"date"' in html
     assert 'const serverPlaylists = [{"id": "default", "name": "Default"}]' in html
     assert 'const serverPlaylistAssignments = {"date": "default"}' in html
 
