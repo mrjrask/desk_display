@@ -196,6 +196,7 @@ _TOUCH_DOUBLE_TAP_MAX_INTERVAL_SECONDS = max(
 _last_touch_tap_monotonic = 0.0
 _pending_touch_focus_screen_id: Optional[str] = None
 _pending_touch_return_screen_id: Optional[str] = None
+_pending_touch_focus_screenshot_skip_ids: set[str] = set()
 _temporary_normal_duration_overrides: Dict[str, int] = {}
 
 
@@ -266,6 +267,7 @@ def _request_touch_focus(screen_id: str, *, return_screen_id: Optional[str]) -> 
 
     target_screen_id = screen_id.strip()
     _pending_touch_focus_screen_id = target_screen_id
+    _pending_touch_focus_screenshot_skip_ids.add(target_screen_id)
     _pending_touch_return_screen_id = return_screen_id.strip() if isinstance(return_screen_id, str) else None
     _temporary_normal_duration_overrides[target_screen_id] = (
         _temporary_normal_duration_overrides.get(target_screen_id, 0) + 1
@@ -280,6 +282,53 @@ def _request_touch_focus(screen_id: str, *, return_screen_id: Optional[str]) -> 
         target_screen_id,
         f", then return to '{_pending_touch_return_screen_id}'" if _pending_touch_return_screen_id else "",
     )
+    return True
+
+
+def _touch_to_render_coords(
+    x_pos: float,
+    y_pos: float,
+    *,
+    display_width: float,
+    display_height: float,
+    rotation_degrees: int,
+) -> tuple[float, float]:
+    """Map touch coordinates into the unrotated render coordinate space."""
+
+    if display_width <= 0 or display_height <= 0:
+        return x_pos, y_pos
+
+    x_norm = max(0.0, min(1.0, x_pos / display_width))
+    y_norm = max(0.0, min(1.0, y_pos / display_height))
+    rotation = rotation_degrees % 360
+
+    if rotation == 90:
+        mapped_x_norm = 1.0 - y_norm
+        mapped_y_norm = x_norm
+    elif rotation == 180:
+        mapped_x_norm = 1.0 - x_norm
+        mapped_y_norm = 1.0 - y_norm
+    elif rotation == 270:
+        mapped_x_norm = y_norm
+        mapped_y_norm = 1.0 - x_norm
+    else:
+        mapped_x_norm = x_norm
+        mapped_y_norm = y_norm
+
+    return mapped_x_norm * display_width, mapped_y_norm * display_height
+
+
+def _consume_touch_focus_screenshot_skip(screen_id: str) -> bool:
+    """Return True once for screens shown due to a quad-tile touch focus."""
+
+    if not isinstance(screen_id, str):
+        return False
+    normalized = screen_id.strip()
+    if not normalized:
+        return False
+    if normalized not in _pending_touch_focus_screenshot_skip_ids:
+        return False
+    _pending_touch_focus_screenshot_skip_ids.remove(normalized)
     return True
 
 
@@ -345,11 +394,19 @@ def _check_touch_skip_request(
     quad_tiles = list(current_quad_tiles) if isinstance(current_quad_tiles, list) else []
     quad_mode_active = current_screen_id in {"quad", "weather quad"} and len(quad_tiles) >= 4
     if quad_mode_active:
-        for tap_x, tap_y, _tap_time in touch_taps:
+        rotation = int(getattr(display, "rotation", 0) or 0)
+        for tap_x, tap_y, _tap_time in reversed(touch_taps):
             if tap_x < 0 or tap_y < 0 or tap_x > display_width or tap_y > display_height:
                 continue
-            col = 0 if tap_x < (display_width / 2.0) else 1
-            row = 0 if tap_y < (display_height / 2.0) else 1
+            mapped_x, mapped_y = _touch_to_render_coords(
+                tap_x,
+                tap_y,
+                display_width=display_width,
+                display_height=display_height,
+                rotation_degrees=rotation,
+            )
+            col = 0 if mapped_x < (display_width / 2.0) else 1
+            row = 0 if mapped_y < (display_height / 2.0) else 1
             tile_index = (row * 2) + col
             if tile_index < 0 or tile_index >= len(quad_tiles):
                 continue
@@ -559,6 +616,7 @@ def refresh_schedule_if_needed(force: bool = False) -> None:
     _pending_previous_screen_id = None
     _pending_touch_focus_screen_id = None
     _pending_touch_return_screen_id = None
+    _pending_touch_focus_screenshot_skip_ids.clear()
     _temporary_normal_duration_overrides.clear()
     _registry_cache_key = None
     _registry_cache_value = None
@@ -2216,6 +2274,7 @@ def main_loop():
             )
             with led_context:
                 if isinstance(img, Image.Image):
+                    capture_screenshot = ENABLE_SCREENSHOTS and not _consume_touch_focus_screenshot_skip(sid)
                     if "logo" in sid:
                         if not _frame_id_changed(display, frame_id_before_render):
                             logging.warning(
@@ -2223,7 +2282,7 @@ def main_loop():
                                 sid,
                             )
                             animate_fade_in(display, img, steps=1, delay=0.01)
-                        if ENABLE_SCREENSHOTS:
+                        if capture_screenshot:
                             saved = _save_screenshot(sid, img)
                             if saved and saved[1]:
                                 maybe_archive_screenshots(saved[0])
@@ -2242,7 +2301,7 @@ def main_loop():
 
                         if not already_displayed:
                             animate_fade_in(display, img, steps=1, delay=0.015)
-                        if ENABLE_SCREENSHOTS:
+                        if capture_screenshot:
                             saved = _save_screenshot(sid, img)
                             if saved and saved[1]:
                                 maybe_archive_screenshots(saved[0])
