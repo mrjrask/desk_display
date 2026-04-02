@@ -2085,12 +2085,18 @@ def _fetch_mlb_schedule(team_id):
                 opponent_id = row.get("opponent_id")
                 if opponent_id is None:
                     continue
-                if series_blocks and series_blocks[-1].get("opponent_id") == opponent_id:
+                row_is_home = bool(row.get("is_home"))
+                if (
+                    series_blocks
+                    and series_blocks[-1].get("opponent_id") == opponent_id
+                    and bool(series_blocks[-1].get("is_home")) == row_is_home
+                ):
                     series_blocks[-1]["rows"].append(row)
                 else:
                     series_blocks.append(
                         {
                             "opponent_id": opponent_id,
+                            "is_home": row_is_home,
                             "rows": [row],
                         }
                     )

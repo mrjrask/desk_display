@@ -145,3 +145,53 @@ def test_next_home_series_advances_when_matching_next_series(monkeypatch):
     assert [g["gamePk"] for g in (result["current_series_games"] or [])] == [20, 21]
     assert [g["gamePk"] for g in (result["next_series_games"] or [])] == [22]
     assert [g["gamePk"] for g in (result["next_home_series_games"] or [])] == [24]
+
+
+def test_next_home_series_keeps_all_games_when_opponent_stays_same_but_venue_changes(monkeypatch):
+    monkeypatch.setattr(data_fetch.datetime, "datetime", _FrozenDateTime)
+
+    payload = {
+        "dates": [
+            {
+                "date": "2026-04-01",
+                "games": [_game(30, "2026-04-01", "I", 112, 121)],
+            },
+            {
+                "date": "2026-04-02",
+                "games": [_game(31, "2026-04-02", "S", 112, 121)],
+            },
+            # Next series is away vs STL
+            {
+                "date": "2026-04-05",
+                "games": [_game(32, "2026-04-05", "S", 138, 112)],
+            },
+            {
+                "date": "2026-04-06",
+                "games": [_game(33, "2026-04-06", "S", 138, 112)],
+            },
+            {
+                "date": "2026-04-07",
+                "games": [_game(34, "2026-04-07", "S", 138, 112)],
+            },
+            # Following home series is also vs STL and should remain a distinct block
+            {
+                "date": "2026-04-09",
+                "games": [_game(35, "2026-04-09", "S", 112, 138)],
+            },
+            {
+                "date": "2026-04-10",
+                "games": [_game(36, "2026-04-10", "S", 112, 138)],
+            },
+            {
+                "date": "2026-04-11",
+                "games": [_game(37, "2026-04-11", "S", 112, 138)],
+            },
+        ]
+    }
+
+    monkeypatch.setattr(data_fetch._session, "get", lambda *args, **kwargs: _DummyResponse(payload))
+
+    result = data_fetch._fetch_mlb_schedule(112)
+
+    assert [g["gamePk"] for g in (result["next_series_games"] or [])] == [32, 33, 34]
+    assert [g["gamePk"] for g in (result["next_home_series_games"] or [])] == [35, 36, 37]
