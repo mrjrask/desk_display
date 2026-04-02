@@ -146,6 +146,19 @@ def test_weather_hourly_screens_stay_available_with_cached_data_offline():
     assert registry["weather daily"].available is True
 
 
+def test_weather_quad_screen_available_with_cached_weather_offline():
+    now = datetime.datetime(2024, 1, 1, 12, 0, tzinfo=CENTRAL_TIME)
+    weather = {
+        "current": {"temp": 65},
+        "hourly": [{"dt": _ts(now + datetime.timedelta(hours=2)), "pop": 0}],
+        "daily": [{"temp": {"max": 70, "min": 50}}],
+    }
+
+    registry, _ = build_screen_registry(_make_context(weather, now, offline=True))
+
+    assert registry["weather quad"].available is True
+
+
 def test_travel_alias_is_not_registered():
     now = datetime.datetime(2024, 1, 1, 12, 0, tzinfo=CENTRAL_TIME)
     weather = {"hourly": []}
@@ -574,6 +587,29 @@ def test_quad_screen_uses_layout_tile_selection(monkeypatch):
     registry["quad"].render()
 
     assert captured["labels"] == ["nixie", "nixie", "inside", "weather1"]
+
+
+def test_weather_quad_screen_uses_weather_tile_selection(monkeypatch):
+    now = datetime.datetime(2024, 1, 1, 12, 0, tzinfo=CENTRAL_TIME)
+    weather = {
+        "current": {"temp": 65},
+        "hourly": [{"dt": _ts(now + datetime.timedelta(hours=2)), "pop": 0}],
+        "daily": [{"temp": {"max": 70, "min": 50}}],
+    }
+    context = _make_context(weather, now)
+
+    captured = {}
+
+    def _fake_draw_quad_screen(_display, tiles, transition=False, scroll_speed=1.0):
+        captured["labels"] = [tile.label for tile in tiles]
+        return None
+
+    monkeypatch.setattr("screens.registry.draw_quad_screen", _fake_draw_quad_screen)
+
+    registry, _ = build_screen_registry(context)
+    registry["weather quad"].render()
+
+    assert captured["labels"] == ["weather1", "weather2", "weather hourly", "weather daily"]
 
 
 def test_quad_screen_advances_scrolling_tiles_between_renders(monkeypatch):
