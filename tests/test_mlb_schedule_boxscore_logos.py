@@ -393,3 +393,34 @@ def test_centered_boxscore_accounts_for_header_height(monkeypatch):
     )
 
     assert header_row_y["y"] + mlb_schedule.HEADER_GAP + geometry["hdr_h"] == expected_grid_top
+
+
+def test_draw_sports_screen_uses_postponed_bottom_label(monkeypatch):
+    captured = {}
+
+    def _fake_center_bottom_text(_draw, text, _font, *, margin, fill=(255, 255, 255)):
+        captured["bottom"] = text
+
+    monkeypatch.setattr(mlb_schedule, "_center_bottom_text", _fake_center_bottom_text)
+    monkeypatch.setattr(mlb_schedule, "load_team_logo", lambda *args, **kwargs: None)
+
+    game = {
+        "officialDate": "2026-05-01",
+        "startTimeCentral": "6:40 PM",
+        "status": {"detailedState": "Postponed", "abstractGameState": "Postponed", "statusCode": "P"},
+        "teams": {
+            "away": {"team": {"id": 112, "name": "Chicago Cubs"}},
+            "home": {"team": {"id": 111, "name": "Boston Red Sox"}},
+        },
+    }
+
+    mlb_schedule.draw_sports_screen(None, game, "Next Game...", screen_id="cubs next")
+
+    assert captured["bottom"] == "Postponed"
+
+
+def test_is_postponed_game_detects_common_status_shapes():
+    assert mlb_schedule._is_postponed_game({"status": {"detailedState": "Postponed"}})
+    assert mlb_schedule._is_postponed_game({"status": {"abstractGameState": "Postponed"}})
+    assert mlb_schedule._is_postponed_game({"status": {"statusCode": "PPD"}})
+    assert not mlb_schedule._is_postponed_game({"status": {"detailedState": "Final"}})
