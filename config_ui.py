@@ -1096,7 +1096,10 @@ def save_screens() -> Any:
         config, _ = _normalize_legacy_scoreboard_ids(config)
         style_config = _load_active_style_config()
         style_config = _build_style_config(entries, style_config)
-        layouts = _build_layouts(payload)
+        if any(key in payload for key in ("quad_enabled", "quad_pages", "quad_tiles", "quad_scroll_speed")):
+            layouts = _build_layouts(payload)
+        else:
+            layouts = _load_active_layouts_config()
         build_scheduler(config)
     except Exception as exc:
         return jsonify({"error": str(exc)}), 400

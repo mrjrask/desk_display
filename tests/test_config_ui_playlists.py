@@ -98,6 +98,35 @@ def test_screen_config_page_renders_alt_screen_dropdown(monkeypatch):
     assert '<input type="text" list="screenIds"' not in html
 
 
+def test_screen_config_page_no_longer_renders_quad_mode_controls(monkeypatch):
+    monkeypatch.setattr(config_ui, "_load_active_config", lambda: {"screens": {"date": 1}})
+    monkeypatch.setattr(config_ui, "_load_active_style_config", lambda: {"screens": {}})
+    monkeypatch.setattr(
+        config_ui,
+        "_build_screen_entries",
+        lambda config, style: [
+            {
+                "id": "date",
+                "frequency": 1,
+                "background": "#000000",
+                "alt_screen": "",
+                "alt_frequency": "",
+            }
+        ],
+    )
+
+    client = config_ui.app.test_client()
+    response = client.get("/")
+
+    assert response.status_code == 200
+    html = response.get_data(as_text=True)
+    assert "Enable quad mode" not in html
+    assert 'id="quadEnabled"' not in html
+    assert 'id="quadScrollSpeed"' not in html
+    assert 'id="addQuadPageBtn"' not in html
+    assert 'id="quadPagesContainer"' not in html
+
+
 def test_build_screen_entries_includes_extra_seconds():
     entries = config_ui._build_screen_entries(
         {"screens": {"date": {"frequency": 1, "extra_seconds": 3}}},
