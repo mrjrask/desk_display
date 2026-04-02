@@ -651,21 +651,29 @@ def draw_last_game(display, game, title="Last Game...", transition=False, screen
     tid = int(MLB_CUBS_TEAM_ID) if "Cubs" in title else int(MLB_SOX_TEAM_ID)
     away = game["teams"]["away"]
     home = game["teams"]["home"]
-    winner = (
-        (away["team"]["id"] == tid and away.get("score",0) > home.get("score",0)) or
-        (home["team"]["id"] == tid and home.get("score",0) > away.get("score",0))
-    )
-    result_char = "W" if winner else "L"
-    result_title = f"{title} {result_char}"
+    postponed = _is_postponed_game(game)
+
+    winner = False
+    result_char = None
+    result_title = title
+    if not postponed:
+        winner = (
+            (away["team"]["id"] == tid and away.get("score",0) > home.get("score",0)) or
+            (home["team"]["id"] == tid and home.get("score",0) > away.get("score",0))
+        )
+        result_char = "W" if winner else "L"
+        result_title = f"{title} {result_char}"
+
     inline_cubs_result_flag = (
-        screen_id == "cubs last"
+        not postponed
+        and screen_id == "cubs last"
         and config.get_display_profile_id() == DISPLAY_PROFILE_HYPERPIXEL4
         and not is_hyperpixel_4_square_layout()
     )
 
-    # Bottom label: date only (Today/Tomorrow/Yesterday or Tue M/D)
+    # Bottom label: date only (Today/Tomorrow/Yesterday or Tue M/D), unless postponed
     od = game.get("officialDate", "") or game.get("gameDate","")[:10]
-    bottom = _rel_date_only(od)
+    bottom = "Postponed" if postponed else _rel_date_only(od)
 
     ls      = game.get("linescore", {}).get("teams", {})
     away_ls = ls.get("away", {})
@@ -677,10 +685,12 @@ def draw_last_game(display, game, title="Last Game...", transition=False, screen
     away_lbl = get_mlb_abbreviation(get_team_display_name(away["team"]))
     home_lbl = get_mlb_abbreviation(get_team_display_name(home["team"]))
 
+    score_dash = "-" if postponed else None
+
     _draw_boxscore_table(
         img, draw, result_title,
-        away_lbl, away.get("score", 0), away_ls.get("hits", 0), away_ls.get("errors", 0),
-        home_lbl, home.get("score", 0), home_ls.get("hits", 0), home_ls.get("errors", 0),
+        away_lbl, (score_dash if score_dash is not None else away.get("score", 0)), (score_dash if score_dash is not None else away_ls.get("hits", 0)), (score_dash if score_dash is not None else away_ls.get("errors", 0)),
+        home_lbl, (score_dash if score_dash is not None else home.get("score", 0)), (score_dash if score_dash is not None else home_ls.get("hits", 0)), (score_dash if score_dash is not None else home_ls.get("errors", 0)),
         bottom,
         away_team=away["team"],
         home_team=home["team"],
@@ -689,11 +699,11 @@ def draw_last_game(display, game, title="Last Game...", transition=False, screen
         live=False,
         winner_flag=(
             result_char
-            if "Cubs" in title and not inline_cubs_result_flag
+            if (not postponed) and "Cubs" in title and not inline_cubs_result_flag
             else None
         ),
         inline_team_id=(int(MLB_CUBS_TEAM_ID) if inline_cubs_result_flag else None),
-        inline_winner_flag=(result_char if inline_cubs_result_flag else None),
+        inline_winner_flag=(result_char if (inline_cubs_result_flag and not postponed) else None),
         hyperpixel_layout=hyperpixel_layout,
         center_content_vertically=(screen_id == "sox last"),
         center_ignores_reserved_flag_block=(screen_id == "sox last"),
@@ -710,7 +720,7 @@ def draw_last_game(display, game, title="Last Game...", transition=False, screen
     away_score = _as_int(away.get("score"))
     home_score = _as_int(home.get("score"))
     led_color = None
-    if away_score is not None and home_score is not None and away_score != home_score:
+    if (not postponed) and away_score is not None and home_score is not None and away_score != home_score:
         led_color = (
             (0.0, LED_INDICATOR_LEVEL, 0.0)
             if winner
@@ -838,7 +848,8 @@ def draw_sports_screen(display, game, title, transition=False, screen_id: Option
 
     raw_date = game.get('officialDate','') or game.get('gameDate','')[:10]
     raw_time = game.get('startTimeCentral','TBD')
-    bottom = _format_game_label(raw_date, raw_time)
+    postponed = _is_postponed_game(game)
+    bottom = "Postponed" if postponed else _format_game_label(raw_date, raw_time)
     if bottom:
         try:
             _, t, _, b = draw.textbbox((0, 0), bottom, font=FONT_DATE_SPORTS)
@@ -919,6 +930,20 @@ def draw_sports_screen(display, game, title, transition=False, screen_id: Option
     _center_bottom_text(draw, bottom, FONT_DATE_SPORTS, margin=bottom_margin)
 
     return ScreenImage(img, displayed=False)
+
+
+
+
+def _is_postponed_game(game: dict) -> bool:
+    status = (game or {}).get("status") or {}
+    detailed = str(status.get("detailedState") or "").lower()
+    abstract = str(status.get("abstractGameState") or "").lower()
+    code = str(status.get("statusCode") or "").upper()
+    return (
+        "postponed" in detailed
+        or abstract == "postponed"
+        or code in {"P", "PPD"}
+    )
 
 
 def _is_final_game(game: dict) -> bool:
