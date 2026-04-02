@@ -1125,6 +1125,8 @@ def draw_series_screen(display, games, title, transition=False, screen_id: Optio
     if target_rows > 4 and hasattr(row_font, "font_variant"):
         base_size = int(getattr(row_font, "size", 30) or 30)
         min_size = max(10, int(round(base_size * 0.6)))
+        best_font = row_font
+        best_text_h, best_row_h, best_available_rows = row_text_h, row_h, available_rows
         for font_size in range(base_size, min_size - 1, -1):
             candidate_font = row_font.font_variant(size=font_size)
             cand_text_h, cand_row_h, cand_available_rows = _row_metrics(candidate_font)
@@ -1132,6 +1134,12 @@ def draw_series_screen(display, games, title, transition=False, screen_id: Optio
                 row_font = candidate_font
                 row_text_h, row_h, available_rows = cand_text_h, cand_row_h, cand_available_rows
                 break
+            if cand_available_rows > best_available_rows:
+                best_font = candidate_font
+                best_text_h, best_row_h, best_available_rows = cand_text_h, cand_row_h, cand_available_rows
+        else:
+            row_font = best_font
+            row_text_h, row_h, available_rows = best_text_h, best_row_h, best_available_rows
 
     display_rows = min(target_rows, available_rows)
     use_cubs_result_icon = (screen_id or "").strip().lower() in {
