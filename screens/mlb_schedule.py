@@ -1048,7 +1048,7 @@ def draw_series_screen(display, games, title, transition=False, screen_id: Optio
         "sox next home series",
     }
     hyperpixel_layout = config.is_hyperpixel_next_layout() and screen_id in series_screen_ids
-    content_drop_px = 15 if (screen_id or "").strip().lower() in series_screen_ids else 0
+    content_drop_px = 25 if (screen_id or "").strip().lower() in series_screen_ids else 0
     edge_pad = max(2, config.scale_value(2)) if hyperpixel_layout else 0
     line_gap = max(1, config.scale_value(1)) if hyperpixel_layout else 1
 
@@ -1097,7 +1097,14 @@ def draw_series_screen(display, games, title, transition=False, screen_id: Optio
     right_x = at_x + at_w + gap
     if logo_away:
         img.paste(logo_away, (left_x + (frame_w - logo_away.width) // 2, row_y + (logo_h - logo_away.height) // 2), logo_away)
-    draw.text((at_x, row_y + (logo_h - at_h) // 2), "@", font=FONT_TEAM_SPORTS, fill=(255, 255, 255))
+    logo_center_y = row_y + (logo_h / 2.0)
+    try:
+        at_bbox = draw.textbbox((0, 0), "@", font=FONT_TEAM_SPORTS)
+        at_text_h = at_bbox[3] - at_bbox[1]
+        at_text_y = int(round(logo_center_y - (at_text_h / 2.0) - at_bbox[1]))
+    except Exception:
+        at_text_y = int(round(logo_center_y - (at_h / 2.0)))
+    draw.text((at_x, at_text_y), "@", font=FONT_TEAM_SPORTS, fill=(255, 255, 255))
     if logo_home:
         img.paste(logo_home, (right_x + (frame_w - logo_home.width) // 2, row_y + (logo_h - logo_home.height) // 2), logo_home)
 
