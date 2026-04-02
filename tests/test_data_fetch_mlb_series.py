@@ -195,3 +195,19 @@ def test_next_home_series_keeps_all_games_when_opponent_stays_same_but_venue_cha
 
     assert [g["gamePk"] for g in (result["next_series_games"] or [])] == [32, 33, 34]
     assert [g["gamePk"] for g in (result["next_home_series_games"] or [])] == [35, 36, 37]
+
+
+def test_fetch_mlb_schedule_uses_45_day_window(monkeypatch):
+    monkeypatch.setattr(data_fetch.datetime, "datetime", _FrozenDateTime)
+    captured = {"url": None}
+
+    def _fake_get(url, *args, **kwargs):
+        captured["url"] = url
+        return _DummyResponse({"dates": []})
+
+    monkeypatch.setattr(data_fetch._session, "get", _fake_get)
+
+    data_fetch._fetch_mlb_schedule(112)
+
+    assert "startDate=2026-03-29" in captured["url"]
+    assert "endDate=2026-05-16" in captured["url"]
