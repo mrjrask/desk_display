@@ -838,7 +838,8 @@ def draw_sports_screen(display, game, title, transition=False, screen_id: Option
 
     raw_date = game.get('officialDate','') or game.get('gameDate','')[:10]
     raw_time = game.get('startTimeCentral','TBD')
-    bottom = _format_game_label(raw_date, raw_time)
+    postponed = _is_postponed_game(game)
+    bottom = "Postponed" if postponed else _format_game_label(raw_date, raw_time)
     if bottom:
         try:
             _, t, _, b = draw.textbbox((0, 0), bottom, font=FONT_DATE_SPORTS)
@@ -919,6 +920,20 @@ def draw_sports_screen(display, game, title, transition=False, screen_id: Option
     _center_bottom_text(draw, bottom, FONT_DATE_SPORTS, margin=bottom_margin)
 
     return ScreenImage(img, displayed=False)
+
+
+
+
+def _is_postponed_game(game: dict) -> bool:
+    status = (game or {}).get("status") or {}
+    detailed = str(status.get("detailedState") or "").lower()
+    abstract = str(status.get("abstractGameState") or "").lower()
+    code = str(status.get("statusCode") or "").upper()
+    return (
+        "postponed" in detailed
+        or abstract == "postponed"
+        or code in {"P", "PPD"}
+    )
 
 
 def _is_final_game(game: dict) -> bool:
