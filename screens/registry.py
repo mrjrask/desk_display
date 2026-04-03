@@ -11,7 +11,7 @@ from typing import Any, Callable, Dict, Optional, Tuple
 
 from PIL import Image
 
-from config import CENTRAL_TIME, HEIGHT, NBA_TEAM_TRICODE, WIDTH
+from config import CENTRAL_TIME, HEIGHT, NBA_TEAM_TRICODE, WIDTH, is_display_profile
 from paths import resolve_layouts_config_path, resolve_screens_config_paths
 from utils import ScreenImage, animate_scroll, timestamp_to_datetime
 from screens.draw_bears_schedule import show_bears_next_game, show_bears_next_season
@@ -528,6 +528,12 @@ def build_screen_registry(context: ScreenContext) -> Tuple[Dict[str, ScreenDefin
     metadata: Dict[str, Any] = {}
     adafruit_minipitft_layout = _is_adafruit_minipitft_layout(WIDTH, HEIGHT)
     waveshare_oled_lcd_hat = _is_waveshare_oled_lcd_hat()
+    hyperpixel4_layout = is_display_profile("hyperpixel4", WIDTH, HEIGHT)
+
+    def _mlb_series_title(team_name: str, short_title: str) -> str:
+        if hyperpixel4_layout:
+            return f"{team_name} {short_title}"
+        return short_title
 
     def register(screen_id: str, func: RenderCallable, available: bool = True, **extra):
         registry[screen_id] = ScreenDefinition(
@@ -1185,7 +1191,7 @@ def build_screen_registry(context: ScreenContext) -> Tuple[Dict[str, ScreenDefin
             lambda data=cubs_current_series: draw_series_screen(
                 context.display,
                 data,
-                "Cubs Current Series",
+                _mlb_series_title("Cubs", "Current Series"),
                 screen_id="cubs current series",
                 transition=True,
             ),
@@ -1196,7 +1202,7 @@ def build_screen_registry(context: ScreenContext) -> Tuple[Dict[str, ScreenDefin
             lambda data=cubs_next_series: draw_series_screen(
                 context.display,
                 data,
-                "Cubs Next Series",
+                _mlb_series_title("Cubs", "Next Series"),
                 screen_id="cubs next series",
                 transition=True,
             ),
@@ -1207,7 +1213,7 @@ def build_screen_registry(context: ScreenContext) -> Tuple[Dict[str, ScreenDefin
             lambda data=cubs_next_home_series: draw_series_screen(
                 context.display,
                 data,
-                "Cubs Following Home Series",
+                _mlb_series_title("Cubs", "Following Home Series"),
                 screen_id="cubs next home series",
                 transition=True,
             ),
@@ -1310,7 +1316,7 @@ def build_screen_registry(context: ScreenContext) -> Tuple[Dict[str, ScreenDefin
             lambda data=sox_current_series: draw_series_screen(
                 context.display,
                 data,
-                "Sox Current Series",
+                _mlb_series_title("Sox", "Current Series"),
                 screen_id="sox current series",
                 transition=True,
             ),
@@ -1321,7 +1327,7 @@ def build_screen_registry(context: ScreenContext) -> Tuple[Dict[str, ScreenDefin
             lambda data=sox_next_series: draw_series_screen(
                 context.display,
                 data,
-                "Sox Next Series",
+                _mlb_series_title("Sox", "Next Series"),
                 screen_id="sox next series",
                 transition=True,
             ),
@@ -1332,7 +1338,7 @@ def build_screen_registry(context: ScreenContext) -> Tuple[Dict[str, ScreenDefin
             lambda data=sox_next_home_series: draw_series_screen(
                 context.display,
                 data,
-                "Sox Following Home Series",
+                _mlb_series_title("Sox", "Following Home Series"),
                 screen_id="sox next home series",
                 transition=True,
             ),

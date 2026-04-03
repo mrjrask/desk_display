@@ -220,6 +220,7 @@ def test_mlb_next_home_series_uses_following_home_series_title(monkeypatch):
         titles.append(title)
 
     monkeypatch.setattr("screens.registry.draw_series_screen", _fake_draw_series_screen)
+    monkeypatch.setattr(registry_module, "is_display_profile", lambda *args, **kwargs: False)
 
     cache_updates = {
         "cubs": {"next_home_series": [{"gamePk": 5001}]},
@@ -230,8 +231,37 @@ def test_mlb_next_home_series_uses_following_home_series_title(monkeypatch):
     registry["cubs next home series"].render()
     registry["sox next home series"].render()
 
-    assert "Cubs Following Home Series" in titles
-    assert "Sox Following Home Series" in titles
+    assert "Following Home Series" in titles
+    assert "Cubs Following Home Series" not in titles
+    assert "Sox Following Home Series" not in titles
+
+
+def test_mlb_series_titles_keep_team_name_on_hyperpixel4(monkeypatch):
+    now = datetime.datetime(2024, 1, 1, 12, 0, tzinfo=CENTRAL_TIME)
+    weather = {"hourly": []}
+    titles = []
+
+    def _fake_draw_series_screen(display, games, title, **kwargs):
+        titles.append(title)
+
+    monkeypatch.setattr("screens.registry.draw_series_screen", _fake_draw_series_screen)
+    monkeypatch.setattr(
+        registry_module,
+        "is_display_profile",
+        lambda profile_id, *_args, **_kwargs: profile_id == "hyperpixel4",
+    )
+
+    cache_updates = {
+        "cubs": {"next_series": [{"gamePk": 5001}]},
+        "sox": {"next_series": [{"gamePk": 6001}]},
+    }
+    registry, _ = build_screen_registry(_make_context(weather, now, cache_updates=cache_updates))
+
+    registry["cubs next series"].render()
+    registry["sox next series"].render()
+
+    assert "Cubs Next Series" in titles
+    assert "Sox Next Series" in titles
 
 
 def test_inside_screen_hidden_when_sensor_unavailable(monkeypatch):
