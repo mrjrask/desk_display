@@ -74,8 +74,8 @@ def test_mlb_scoreboard_date_uses_temporary_override_window():
 
 
 def test_mlb_scoreboard_date_uses_normal_cutoff_after_override_window():
-    before_cutoff = datetime.datetime(2026, 2, 21, 8, 0, tzinfo=CENTRAL_TIME)
-    after_cutoff = datetime.datetime(2026, 2, 21, 10, 0, tzinfo=CENTRAL_TIME)
+    before_cutoff = datetime.datetime(2026, 2, 21, 10, 9, tzinfo=CENTRAL_TIME)
+    after_cutoff = datetime.datetime(2026, 2, 21, 10, 11, tzinfo=CENTRAL_TIME)
 
     assert mlb_scoreboard_date(before_cutoff) == datetime.date(2026, 2, 20)
     assert mlb_scoreboard_date(after_cutoff) == datetime.date(2026, 2, 21)

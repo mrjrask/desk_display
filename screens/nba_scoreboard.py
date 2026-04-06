@@ -3,7 +3,7 @@
 nba_scoreboard.py
 
 Render a scrolling NBA scoreboard using the same layout as the NHL version.
-Maintains the previous day's games until 9:30 AM Central before switching to
+Maintains the previous day's games until 10:10 AM Central before switching to
 the current day's slate.
 """
 
@@ -189,7 +189,7 @@ _LEAGUE_LOGO_CACHE: dict[int, Optional[Image.Image]] = {}
 # ─── Helpers ──────────────────────────────────────────────────────────────────
 def _scoreboard_date(now: Optional[datetime.datetime] = None) -> datetime.date:
     now = now or datetime.datetime.now(CENTRAL_TIME)
-    cutoff = now.replace(hour=9, minute=30, second=0, microsecond=0)
+    cutoff = now.replace(hour=10, minute=10, second=0, microsecond=0)
     if now < cutoff:
         return (now - datetime.timedelta(days=1)).date()
     return now.date()
