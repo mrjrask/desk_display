@@ -125,6 +125,30 @@ def _format_int(value, *, default="-") -> str:
         return str(value) if value not in (None, "") else default
 
 
+def _format_wcgb_text(wc_raw, wc_rank) -> str | None:
+    """Format WCGB display text with correct sign handling."""
+
+    if wc_raw is None:
+        return None
+
+    base = format_games_back(wc_raw)
+    try:
+        rank_int = int(wc_rank)
+    except (TypeError, ValueError):
+        rank_int = None
+
+    try:
+        wc_value = float(wc_raw)
+    except (TypeError, ValueError):
+        wc_value = None
+
+    if wc_value == 0:
+        return "-- WCGB"
+    if rank_int and rank_int <= 3 and wc_value is not None and wc_value > 0:
+        return f"+{base} WCGB"
+    return f"{base} WCGB"
+
+
 def _format_record_values(record, *, ot_label="OT"):
     w = record.get("wins", "-")
     l = record.get("losses", "-")
@@ -351,21 +375,7 @@ def draw_standings_screen1(
     # WCGB
     wc_txt  = None
     if show_wild_card:
-        wc_raw  = rec.get('wildCardGamesBack')
-        wc_rank = rec.get('wildCardRank')
-        if wc_raw is not None:
-            base = format_games_back(wc_raw)
-            try:
-                rank_int = int(wc_rank)
-            except (TypeError, ValueError):
-                rank_int = None
-
-            if wc_raw == 0:
-                wc_txt = "-- WCGB"
-            elif rank_int and rank_int <= 3:
-                wc_txt = f"+{base} WCGB"
-            else:
-                wc_txt = f"{base} WCGB"
+        wc_txt = _format_wcgb_text(rec.get('wildCardGamesBack'), rec.get('wildCardRank'))
 
     # Lines to draw
     lines = [
