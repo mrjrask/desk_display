@@ -90,22 +90,37 @@ def _build_config_payload(screens: List[Dict[str, Any]], config: Dict[str, Any])
         except (TypeError, ValueError):
             frequency = 0
 
+        extra_seconds_raw = screen.get("extra_seconds", 0)
+        try:
+            extra_seconds = int(extra_seconds_raw)
+        except (TypeError, ValueError):
+            extra_seconds = 0
+        hide_after_at = str(screen.get("hide_after_at", "")).strip()
+        hide_after_enabled = bool(screen.get("hide_after_enabled", False)) and bool(hide_after_at)
+
         alt_screens = _parse_alt_screen(str(screen.get("alt_screen", "")).strip())
+        base_spec: Dict[str, Any] = {"frequency": frequency}
+        if extra_seconds > 0:
+            base_spec["extra_seconds"] = extra_seconds
+        if hide_after_enabled:
+            base_spec["hide_after_enabled"] = True
+            base_spec["hide_after_at"] = hide_after_at
+
         if alt_screens:
             alt_frequency_raw = screen.get("alt_frequency")
             try:
                 alt_frequency = int(alt_frequency_raw)
             except (TypeError, ValueError):
                 alt_frequency = 1
-            screens_payload[screen_id] = {
-                "frequency": frequency,
-                "alt": {
-                    "screen": alt_screens[0] if len(alt_screens) == 1 else alt_screens,
-                    "frequency": alt_frequency,
-                },
+            base_spec["alt"] = {
+                "screen": alt_screens[0] if len(alt_screens) == 1 else alt_screens,
+                "frequency": alt_frequency,
             }
-        else:
+            screens_payload[screen_id] = base_spec
+        elif len(base_spec) == 1:
             screens_payload[screen_id] = frequency
+        else:
+            screens_payload[screen_id] = base_spec
 
     playlists, assignments = _build_playlist_assignments(config)
     playlists_payload: Dict[str, Any] = {}
