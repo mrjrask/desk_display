@@ -26,6 +26,8 @@ import logging
 
 from PIL import Image, ImageDraw, ImageFont
 
+_IP_OVERLAY_FONT: ImageFont.ImageFont | None = None
+
 from config import (
     WIDTH,
     HEIGHT,
@@ -90,6 +92,20 @@ def _color_cycle_profile(
     steps = max(1, int(cycle_window_seconds / interval))
     return initial_delay, interval, steps
 
+def _ip_overlay_font() -> ImageFont.ImageFont:
+    """Return a compact, legible font for the assigned IP overlay text."""
+
+    global _IP_OVERLAY_FONT
+    if _IP_OVERLAY_FONT is not None:
+        return _IP_OVERLAY_FONT
+
+    target_size = max(8, int(round(FONT_AM_PM.size * 0.45)))
+    try:
+        _IP_OVERLAY_FONT = ImageFont.truetype(FONT_AM_PM.path, target_size)
+    except Exception:
+        _IP_OVERLAY_FONT = FONT_AM_PM
+
+    return _IP_OVERLAY_FONT
 
 def _assigned_ip_overlay_text() -> str:
     """Return the bottom-left IP overlay label for the date/time screen."""
@@ -176,10 +192,11 @@ def _compose_frame(
     # Assigned IPv4 indicator (bottom-left)
     if IP_WITH_TIME:
         ip_text = _assigned_ip_overlay_text()
-        _, ip_h = measure_text(draw, ip_text, FONT_AM_PM)
+        ip_font = _ip_overlay_font()
+        _, ip_h = measure_text(draw, ip_text, ip_font)
         ip_x = 2
         ip_y = max(0, HEIGHT - ip_h - 2)
-        draw.text((ip_x, ip_y), ip_text, font=FONT_AM_PM, fill=(200, 200, 200))
+        draw.text((ip_x, ip_y), ip_text, font=ip_font, fill=(200, 200, 200))
 
     # GitHub update indicator (tiny GitHub logo, bottom-right)
     if gh_on:
