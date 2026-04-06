@@ -27,6 +27,7 @@ import logging
 from PIL import Image, ImageDraw, ImageFont
 
 _IP_OVERLAY_FONT: ImageFont.ImageFont | None = None
+_IP_OVERLAY_BOTTOM_PADDING = 6
 
 from config import (
     WIDTH,
@@ -195,7 +196,7 @@ def _compose_frame(
         ip_font = _ip_overlay_font()
         left, top, right, bottom = draw.textbbox((0, 0), ip_text, font=ip_font)
         ip_x = 2 - left
-        ip_y = max(0, HEIGHT - 2 - bottom)
+        ip_y = max(0, HEIGHT - _IP_OVERLAY_BOTTOM_PADDING - bottom)
         draw.text((ip_x, ip_y), ip_text, font=ip_font, fill=(200, 200, 200))
 
     # GitHub update indicator (tiny GitHub logo, bottom-right)
