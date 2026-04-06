@@ -1559,6 +1559,7 @@ WEATHER_ICON_SIZE = scale_value(218)
 WEATHER_DESC_GAP  = scale_value(8)
 
 # Date/time screen
+IP_WITH_TIME = _get_bool_env("IP_WITH_TIME", True)
 DATE_TIME_GH_ICON_INVERT = True
 DATE_TIME_GH_ICON_SIZE   = scale_value(33)
 DATE_TIME_GH_ICON_PATHS  = [

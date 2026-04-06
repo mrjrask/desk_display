@@ -699,6 +699,41 @@ def start_monitor(allow_recovery: bool = True) -> None:
     _MONITOR_THREAD = thread
 
 
+
+def get_assigned_ipv4() -> Optional[str]:
+    """Return the device IPv4 address used for local network access."""
+
+    preferred_interfaces: List[str] = []
+
+    if _IFACE:
+        preferred_interfaces.append(_IFACE)
+
+    detected_iface = _detect_interface()
+    if detected_iface and detected_iface not in preferred_interfaces:
+        preferred_interfaces.append(detected_iface)
+
+    for iface in _get_default_route_interfaces():
+        if iface not in preferred_interfaces:
+            preferred_interfaces.append(iface)
+
+    for iface in preferred_interfaces:
+        ipv4 = _get_ipv4_address(iface)
+        if ipv4:
+            return ipv4
+
+    # Last-resort fallback: infer outbound local address without sending traffic.
+    try:
+        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
+            sock.connect(("8.8.8.8", 80))
+            ipv4 = sock.getsockname()[0]
+            if ipv4 and not ipv4.startswith("127."):
+                return ipv4
+    except Exception as exc:
+        _LOGGER.debug("Unable to infer local IPv4 via UDP socket: %s", exc)
+
+    return None
+
+
 def get_wifi_state() -> Tuple[str, Optional[str]]:
     """Return the current Wi-Fi state and SSID."""
 

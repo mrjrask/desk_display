@@ -264,3 +264,14 @@ def test_load_env_file_accepts_export_prefix(tmp_path, monkeypatch):
     config._load_env_file(str(env_path))
 
     assert config.os.environ["WEATHERKIT_TEAM_ID"] == "team_123"
+
+
+def test_ip_with_time_flag_obeys_env(monkeypatch):
+    module = _reload_config(monkeypatch, IP_WITH_TIME="false")
+    assert module.IP_WITH_TIME is False
+
+    module = _reload_config(monkeypatch, IP_WITH_TIME="true")
+    assert module.IP_WITH_TIME is True
+
+    module = _reload_config(monkeypatch, IP_WITH_TIME=None)
+    assert module.IP_WITH_TIME is True

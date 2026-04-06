@@ -42,7 +42,10 @@ from config import (
     get_display_profile_id,
     get_screen_background_color,
     SCREEN_DELAY,
+    IP_WITH_TIME,
 )
+from services.wifi_utils import get_assigned_ipv4
+
 from utils import (
     ScreenImage,
     bright_color,
@@ -86,6 +89,16 @@ def _color_cycle_profile(
 
     steps = max(1, int(cycle_window_seconds / interval))
     return initial_delay, interval, steps
+
+
+def _assigned_ip_overlay_text() -> str:
+    """Return the bottom-left IP overlay label for the date/time screen."""
+
+    ip_address = get_assigned_ipv4()
+    if ip_address:
+        return f"IP: {ip_address}"
+    return "IP: --"
+
 
 # -----------------------------------------------------------------------------
 # Layout helpers
@@ -159,6 +172,14 @@ def _compose_frame(
     else:
         draw_time_block(top_box,    col_top)
         draw_date_block(bottom_box, col_bottom)
+
+    # Assigned IPv4 indicator (bottom-left)
+    if IP_WITH_TIME:
+        ip_text = _assigned_ip_overlay_text()
+        _, ip_h = measure_text(draw, ip_text, FONT_AM_PM)
+        ip_x = 2
+        ip_y = max(0, HEIGHT - ip_h - 2)
+        draw.text((ip_x, ip_y), ip_text, font=FONT_AM_PM, fill=(200, 200, 200))
 
     # GitHub update indicator (tiny GitHub logo, bottom-right)
     if gh_on:
