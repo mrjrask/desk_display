@@ -64,6 +64,11 @@ def test_screenshots_template_adds_stale_class(monkeypatch):
         "_load_display_status",
         lambda: {"screen_id": "date", "loop_iteration": 7, "screen_play_counts": {"date": 5}, "is_stale": False},
     )
+    monkeypatch.setattr(
+        config_ui,
+        "_load_service_status",
+        lambda: {"unit": "desk_display.service", "summary": "active (running), enabled", "is_active": True, "error": None},
+    )
 
     client = config_ui.app.test_client()
     response = client.get("/screenshots")
@@ -84,6 +89,11 @@ def test_screenshots_api_returns_entries(monkeypatch):
         lambda: [{"id": "date", "path": "current/date.png", "timestamp": "2025-01-01 00:00:00", "elapsed": "0d 0h 0m 5s ago", "version": 1, "is_stale": False}],
     )
     monkeypatch.setattr(config_ui, "_load_display_status", lambda: {"screen_id": "date", "is_stale": False})
+    monkeypatch.setattr(
+        config_ui,
+        "_load_service_status",
+        lambda: {"unit": "desk_display.service", "summary": "active (running), enabled", "is_active": True, "error": None},
+    )
 
     client = config_ui.app.test_client()
     response = client.get("/api/screenshots")
@@ -102,6 +112,12 @@ def test_screenshots_api_returns_entries(monkeypatch):
             }
         ],
         "display_status": {"screen_id": "date", "is_stale": False},
+        "service_status": {
+            "unit": "desk_display.service",
+            "summary": "active (running), enabled",
+            "is_active": True,
+            "error": None,
+        },
     }
 
 
@@ -114,6 +130,11 @@ def test_layout_editor_routes_removed():
 
 def test_screenshots_template_removes_layout_editor_nav_link(monkeypatch):
     monkeypatch.setattr(config_ui, "_build_screenshot_entries", lambda: [])
+    monkeypatch.setattr(
+        config_ui,
+        "_load_service_status",
+        lambda: {"unit": "desk_display.service", "summary": "active (running), enabled", "is_active": True, "error": None},
+    )
 
     client = config_ui.app.test_client()
     response = client.get("/screenshots")
@@ -122,6 +143,32 @@ def test_screenshots_template_removes_layout_editor_nav_link(monkeypatch):
 
     assert response.status_code == 200
     assert "Layout Editor" not in html
+
+
+def test_screen_config_page_renders_service_indicator(monkeypatch):
+    monkeypatch.setattr(config_ui, "_load_active_config", lambda: {"screens": {"date": 1}})
+    monkeypatch.setattr(config_ui, "_load_active_style_config", lambda: {"screens": {}})
+    monkeypatch.setattr(config_ui, "_load_active_layouts_config", lambda: {"screens": {"quad": {}}})
+    monkeypatch.setattr(
+        config_ui,
+        "_build_screen_entries",
+        lambda config, style: [{"id": "date", "frequency": 1, "background": "", "alt_screen": "", "alt_frequency": ""}],
+    )
+    monkeypatch.setattr(config_ui, "_build_playlist_assignments", lambda config: ([], {}))
+    monkeypatch.setattr(
+        config_ui,
+        "_load_service_status",
+        lambda: {"unit": "desk_display.service", "summary": "active (running), enabled", "is_active": True, "error": None},
+    )
+
+    client = config_ui.app.test_client()
+    response = client.get("/")
+
+    html = response.get_data(as_text=True)
+
+    assert response.status_code == 200
+    assert "Service <strong>desk_display.service</strong>:" in html
+    assert "active (running), enabled" in html
 
 
 def test_build_screenshot_entries_falls_back_to_latest_screen_folder(monkeypatch, tmp_path):

@@ -6,6 +6,7 @@ import json
 import logging
 import os
 import socket
+import subprocess
 import time
 from urllib.parse import urlsplit, urlunsplit
 from datetime import datetime
@@ -720,6 +721,62 @@ def _load_display_status() -> Dict[str, Any]:
 
     return status
 
+
+def _load_service_status(unit_name: str = "desk_display.service") -> Dict[str, Any]:
+    status: Dict[str, Any] = {
+        "unit": unit_name,
+        "active_state": "unknown",
+        "sub_state": "unknown",
+        "unit_file_state": "unknown",
+        "is_active": False,
+        "summary": "Unknown",
+        "error": None,
+    }
+
+    try:
+        result = subprocess.run(
+            [
+                "systemctl",
+                "show",
+                "--no-pager",
+                "--property=ActiveState,SubState,UnitFileState",
+                unit_name,
+            ],
+            capture_output=True,
+            text=True,
+            check=False,
+            timeout=2,
+        )
+    except (subprocess.TimeoutExpired, OSError) as exc:
+        status["error"] = str(exc)
+        status["summary"] = "Unavailable"
+        return status
+
+    if result.returncode != 0:
+        stderr = result.stderr.strip()
+        status["error"] = stderr or f"systemctl exited with {result.returncode}"
+        status["summary"] = "Unavailable"
+        return status
+
+    for raw_line in result.stdout.splitlines():
+        line = raw_line.strip()
+        if not line or "=" not in line:
+            continue
+        key, value = line.split("=", 1)
+        if key == "ActiveState":
+            status["active_state"] = value or "unknown"
+        elif key == "SubState":
+            status["sub_state"] = value or "unknown"
+        elif key == "UnitFileState":
+            status["unit_file_state"] = value or "unknown"
+
+    status["is_active"] = status["active_state"] == "active"
+    active = status["active_state"]
+    sub = status["sub_state"]
+    enabled = status["unit_file_state"]
+    status["summary"] = f"{active} ({sub}), {enabled}"
+    return status
+
 def _normalise_hex_color(value: str) -> Optional[str]:
     cleaned = value.strip()
     if not cleaned:
@@ -999,18 +1056,30 @@ def screen_config() -> str:
         config_path=DEFAULT_CONFIG_PATH,
         playlists=playlists,
         playlist_assignments=playlist_assignments,
+        service_status=_load_service_status(),
     )
 
 
 @app.get("/screenshots")
 def screen_screenshots() -> str:
     entries = _build_screenshot_entries()
-    return render_template("screenshots.html", screens=entries, display_status=_load_display_status())
+    return render_template(
+        "screenshots.html",
+        screens=entries,
+        display_status=_load_display_status(),
+        service_status=_load_service_status(),
+    )
 
 
 @app.get("/api/screenshots")
 def get_screenshots() -> Any:
-    return jsonify({"screens": _build_screenshot_entries(), "display_status": _load_display_status()})
+    return jsonify(
+        {
+            "screens": _build_screenshot_entries(),
+            "display_status": _load_display_status(),
+            "service_status": _load_service_status(),
+        }
+    )
 
 
 @app.get("/screenshots/current/<path:filename>")
