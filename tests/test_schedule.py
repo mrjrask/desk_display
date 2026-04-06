@@ -1,4 +1,5 @@
 import pytest
+from datetime import datetime, timezone
 
 from schedule import KNOWN_SCREENS, build_scheduler, sanitize_schedule_config
 from screens.registry import ScreenDefinition
@@ -278,3 +279,42 @@ def test_scheduler_tracks_extra_seconds_per_screen():
 def test_scheduler_rejects_negative_extra_seconds():
     with pytest.raises(ValueError):
         build_scheduler({"screens": {"date": {"frequency": 1, "extra_seconds": -1}}})
+
+
+def test_scheduler_skips_screen_after_hide_after_datetime(monkeypatch):
+    scheduler = build_scheduler(
+        {
+            "screens": {
+                "date": {
+                    "frequency": 1,
+                    "hide_after_enabled": True,
+                    "hide_after_at": "2020-01-01T00:00",
+                },
+                "inside": 1,
+            }
+        }
+    )
+    registry = make_registry({"date": True, "inside": True})
+
+    class _FutureDateTime:
+        @staticmethod
+        def now(tz=None):
+            return datetime(2026, 4, 6, 0, 0, tzinfo=timezone.utc)
+
+    monkeypatch.setattr("schedule.datetime", _FutureDateTime)
+    sequence = collect_sequence(scheduler, registry, 4)
+    assert sequence == ["inside", "inside", "inside", "inside"]
+
+
+def test_scheduler_rejects_hide_after_when_enabled_without_datetime():
+    with pytest.raises(ValueError):
+        build_scheduler(
+            {
+                "screens": {
+                    "date": {
+                        "frequency": 1,
+                        "hide_after_enabled": True,
+                    }
+                }
+            }
+        )

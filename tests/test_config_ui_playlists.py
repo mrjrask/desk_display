@@ -153,3 +153,25 @@ def test_build_config_persists_extra_seconds():
     )
 
     assert config["screens"]["date"] == {"frequency": 1, "extra_seconds": 5}
+
+
+def test_build_config_persists_hide_after_fields():
+    config = config_ui._build_config(
+        [
+            {
+                "id": "date",
+                "frequency": 1,
+                "extra_seconds": 0,
+                "alt_screen": "",
+                "alt_frequency": "",
+                "hide_after_enabled": True,
+                "hide_after_at": "2026-04-06T12:00",
+            }
+        ]
+    )
+
+    assert config["screens"]["date"] == {
+        "frequency": 1,
+        "hide_after_enabled": True,
+        "hide_after_at": "2026-04-06T12:00",
+    }
