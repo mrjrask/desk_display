@@ -7,8 +7,8 @@ from services.sports import nhl
 
 
 def test_scoreboard_date_rolls_before_central_cutoff():
-    before_cutoff = dt.datetime(2026, 3, 30, 9, 29, tzinfo=CENTRAL_TIME)
-    at_cutoff = dt.datetime(2026, 3, 30, 9, 30, tzinfo=CENTRAL_TIME)
+    before_cutoff = dt.datetime(2026, 3, 30, 10, 9, tzinfo=CENTRAL_TIME)
+    at_cutoff = dt.datetime(2026, 3, 30, 10, 10, tzinfo=CENTRAL_TIME)
 
     assert nhl.scoreboard_date(before_cutoff) == dt.date(2026, 3, 29)
     assert nhl.scoreboard_date(at_cutoff) == dt.date(2026, 3, 30)

@@ -4,7 +4,7 @@ mlb_scoreboard.py
 
 Render a scrolling MLB scoreboard showing that day's games.
 For temporary testing, the scoreboard can be pinned to a fixed date. Outside
-that override window, the previous day's scores are retained until 9:30 AM
+that override window, the previous day's scores are retained until 10:10 AM
 Central before refreshing to the current date.
 Layout:
     • Title "MLB Scoreboard" centered at the top.
@@ -528,7 +528,7 @@ def _scoreboard_date(now: Optional[datetime.datetime] = None) -> datetime.date:
     if now <= TEMP_SCHEDULE_OVERRIDE_UNTIL:
         return TEMP_SCHEDULE_OVERRIDE_DATE
 
-    cutoff = now.replace(hour=9, minute=30, second=0, microsecond=0)
+    cutoff = now.replace(hour=10, minute=10, second=0, microsecond=0)
     if now < cutoff:
         return (now - datetime.timedelta(days=1)).date()
     return now.date()

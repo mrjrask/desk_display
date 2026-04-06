@@ -678,5 +678,5 @@ def draw_ncaam_scoreboard(display, transition: bool = False) -> ScreenImage:
 def _scoreboard_date(now: Optional[datetime.datetime] = None) -> datetime.date:
     if now is None:
         now = datetime.datetime.now(CENTRAL_TIME)
-    cutoff = now.replace(hour=9, minute=30, second=0, microsecond=0)
+    cutoff = now.replace(hour=10, minute=10, second=0, microsecond=0)
     return (now.date() - datetime.timedelta(days=1)) if now < cutoff else now.date()

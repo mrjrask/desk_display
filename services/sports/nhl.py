@@ -25,7 +25,7 @@ _dns_block_until = 0.0
 
 def scoreboard_date(now: dt.datetime | None = None) -> dt.date:
     now = now or dt.datetime.now(CENTRAL_TIME)
-    cutoff = now.replace(hour=9, minute=30, second=0, microsecond=0)
+    cutoff = now.replace(hour=10, minute=10, second=0, microsecond=0)
     if now < cutoff:
         return (now - dt.timedelta(days=1)).date()
     return now.date()
