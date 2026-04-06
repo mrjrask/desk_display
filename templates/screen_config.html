@@ -279,6 +279,7 @@
         minmax(120px, 0.7fr)
         minmax(140px, 0.9fr)
         minmax(200px, 1.3fr)
+        minmax(190px, 1fr)
         minmax(140px, 0.9fr)
         minmax(120px, 0.7fr);
       gap: 0.75rem;
@@ -322,6 +323,7 @@
         minmax(120px, 0.7fr)
         minmax(140px, 0.9fr)
         minmax(200px, 1.3fr)
+        minmax(190px, 1fr)
         minmax(140px, 0.9fr)
         minmax(120px, 0.7fr);
       gap: 0.75rem;
@@ -356,6 +358,20 @@
     }
     .alt-screen-field .alt-screen-input {
       flex: 1;
+    }
+    .hide-after-field {
+      display: flex;
+      align-items: center;
+      gap: 0.4rem;
+    }
+    .hide-after-field input[type="checkbox"] {
+      margin: 0;
+      accent-color: #38bdf8;
+      width: auto;
+    }
+    .hide-after-field .hide-after-input {
+      flex: 1;
+      min-width: 0;
     }
     .alt-screen-clear {
       width: 30px;
@@ -416,6 +432,7 @@
           minmax(110px, 0.7fr)
           minmax(130px, 0.9fr)
           minmax(180px, 1.1fr)
+          minmax(170px, 1fr)
           minmax(130px, 0.9fr)
           minmax(110px, 0.7fr);
       }
@@ -491,6 +508,7 @@
       </div>
       <div>Background</div>
       <div>Alt screen</div>
+      <div>Hide after</div>
       <div>Extra sec</div>
       <div>Alt freq</div>
     </div>
@@ -526,6 +544,13 @@
             <button type="button" class="alt-screen-clear" aria-label="Clear alternate screens" title="Clear alternate screens">×</button>
           </div>
           <div class="hint">Select one alternate screen.</div>
+        </div>
+        <div>
+          <div class="hide-after-field">
+            <input type="checkbox" class="hide-after-enabled-input" {% if screen.hide_after_enabled %}checked{% endif %} aria-label="Enable hide-after date for {{ screen.id }}">
+            <input type="datetime-local" class="hide-after-input" value="{{ screen.hide_after_at }}">
+          </div>
+          <div class="hint">When checked, hide after this date/time.</div>
         </div>
         <div>
           <input type="number" min="0" step="1" value="{{ screen.extra_seconds }}" class="extra-seconds-input">
@@ -911,6 +936,8 @@
             frequency: row.querySelector(".freq-input")?.value ?? "",
             background: row.querySelector(".background-input")?.value ?? "",
             alt_screen: row.querySelector(".alt-screen-input")?.value ?? "",
+            hide_after_at: row.querySelector(".hide-after-input")?.value ?? "",
+            hide_after_enabled: row.querySelector(".hide-after-enabled-input")?.checked ?? false,
             extra_seconds: row.querySelector(".extra-seconds-input")?.value ?? "",
             alt_frequency: row.querySelector(".alt-frequency-input")?.value ?? "",
           };
@@ -959,6 +986,8 @@
         if (!screenId) return;
         const frequency = Number.parseInt(screen.frequency ?? 0, 10);
         const extraSeconds = Number.parseInt(screen.extra_seconds ?? 0, 10);
+        const hideAfterAt = String(screen.hide_after_at ?? "").trim();
+        const hideAfterEnabled = Boolean(screen.hide_after_enabled) && hideAfterAt.length > 0;
         const altScreens = parseAltScreen(String(screen.alt_screen ?? "").trim());
         if (altScreens.length > 0) {
           const altFrequencyRaw = screen.alt_frequency;
@@ -973,14 +1002,30 @@
               frequency: altFrequency,
             },
           };
+          if (hideAfterEnabled) {
+            screensPayload[screenId].hide_after_enabled = true;
+            screensPayload[screenId].hide_after_at = hideAfterAt;
+          }
         } else {
           if (Number.isNaN(extraSeconds) || extraSeconds <= 0) {
-            screensPayload[screenId] = Number.isNaN(frequency) ? 0 : frequency;
+            if (hideAfterEnabled) {
+              screensPayload[screenId] = {
+                frequency: Number.isNaN(frequency) ? 0 : frequency,
+                hide_after_enabled: true,
+                hide_after_at: hideAfterAt,
+              };
+            } else {
+              screensPayload[screenId] = Number.isNaN(frequency) ? 0 : frequency;
+            }
           } else {
             screensPayload[screenId] = {
               frequency: Number.isNaN(frequency) ? 0 : frequency,
               extra_seconds: Math.max(0, extraSeconds),
             };
+            if (hideAfterEnabled) {
+              screensPayload[screenId].hide_after_enabled = true;
+              screensPayload[screenId].hide_after_at = hideAfterAt;
+            }
           }
         }
       });
@@ -1159,6 +1204,13 @@
             <button type="button" class="alt-screen-clear" aria-label="Clear alternate screens" title="Clear alternate screens">×</button>
           </div>
           <div class="hint">Select one alternate screen.</div>
+        </div>
+        <div>
+          <div class="hide-after-field">
+            <input type="checkbox" class="hide-after-enabled-input" ${screen.hide_after_enabled ? "checked" : ""} aria-label="Enable hide-after date for ${screen.id}">
+            <input type="datetime-local" class="hide-after-input" value="${screen.hide_after_at ?? ""}">
+          </div>
+          <div class="hint">When checked, hide after this date/time.</div>
         </div>
         <div>
           <input type="number" min="0" step="1" value="${screen.extra_seconds ?? 0}" class="extra-seconds-input">

@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+from datetime import datetime, timezone
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, Sequence, Set, TYPE_CHECKING, Tuple
 
@@ -36,6 +37,7 @@ class _ScheduleEntry:
     frequency: int
     cycle_count: int = 0
     extra_seconds: int = 0
+    hide_after: Optional[datetime] = None
     alternate: Optional[_AlternateSchedule] = None
 
 
@@ -90,6 +92,7 @@ class ScreenScheduler:
                     frequency=entry.frequency,
                     cycle_count=entry.cycle_count,
                     extra_seconds=entry.extra_seconds,
+                    hide_after=entry.hide_after,
                     alternate=cloned_alt,
                 )
             )
@@ -112,9 +115,12 @@ class ScreenScheduler:
         if not self._entries:
             return None
 
+        now_utc = datetime.now(timezone.utc)
         for _ in range(len(self._entries)):
             entry = self._entries[self._cursor]
             self._cursor = (self._cursor + 1) % len(self._entries)
+            if entry.hide_after is not None and now_utc >= entry.hide_after:
+                continue
 
             entry.cycle_count += 1
             if entry.cycle_count % entry.frequency != 0:
@@ -132,9 +138,12 @@ class ScreenScheduler:
         if not self._entries:
             return None
 
+        now_utc = datetime.now(timezone.utc)
         for _ in range(len(self._entries)):
             entry = self._entries[self._cursor]
             self._cursor = (self._cursor + 1) % len(self._entries)
+            if entry.hide_after is not None and now_utc >= entry.hide_after:
+                continue
 
             # A frequency of ``n`` means the screen is shown on every
             # ``n``th scheduler pass for that entry.
@@ -323,6 +332,7 @@ def build_scheduler(config: Dict[str, Any]) -> ScreenScheduler:
         if screen_id not in KNOWN_SCREENS:
             raise ValueError(f"Unknown screen id '{screen_id}'")
         alternate: Optional[_AlternateSchedule] = None
+        hide_after: Optional[datetime] = None
 
         if isinstance(raw, dict):
             if "frequency" not in raw:
@@ -341,6 +351,20 @@ def build_scheduler(config: Dict[str, Any]) -> ScreenScheduler:
                 ) from exc
             if extra_seconds < 0:
                 raise ValueError(f"Additional seconds for '{screen_id}' cannot be negative")
+            hide_after_enabled = bool(raw.get("hide_after_enabled", False))
+            hide_after_raw = raw.get("hide_after_at")
+            if hide_after_enabled:
+                if not isinstance(hide_after_raw, str) or not hide_after_raw.strip():
+                    raise ValueError(f"Hide-after date/time for '{screen_id}' must be provided when enabled")
+                try:
+                    hide_after_value = datetime.fromisoformat(hide_after_raw.strip())
+                except ValueError as exc:
+                    raise ValueError(
+                        f"Hide-after date/time for '{screen_id}' must be a valid ISO date/time string"
+                    ) from exc
+                if hide_after_value.tzinfo is None:
+                    hide_after_value = hide_after_value.astimezone()
+                hide_after = hide_after_value.astimezone(timezone.utc)
 
             alt_spec = raw.get("alt")
             if alt_spec is not None:
@@ -412,6 +436,7 @@ def build_scheduler(config: Dict[str, Any]) -> ScreenScheduler:
                 screen_id,
                 frequency,
                 extra_seconds=extra_seconds,
+                hide_after=hide_after,
                 alternate=alternate,
             )
         )

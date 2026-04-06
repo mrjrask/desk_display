@@ -851,11 +851,23 @@ def _build_screen_entries(
             "extra_seconds": 0,
             "alt_screen": "",
             "alt_frequency": "",
+            "hide_after_at": "",
+            "hide_after_enabled": False,
             "background": _rgb_to_hex(_default_background_for_screen(screen_id)),
         }
         if isinstance(raw, dict):
             entry["frequency"] = raw.get("frequency", 0)
             entry["extra_seconds"] = raw.get("extra_seconds", 0)
+            hide_after_at = raw.get("hide_after_at")
+            if isinstance(hide_after_at, str):
+                try:
+                    parsed_hide_after = datetime.fromisoformat(hide_after_at.strip())
+                    entry["hide_after_at"] = parsed_hide_after.strftime("%Y-%m-%dT%H:%M")
+                except ValueError:
+                    entry["hide_after_at"] = hide_after_at
+            else:
+                entry["hide_after_at"] = ""
+            entry["hide_after_enabled"] = bool(raw.get("hide_after_enabled", False))
             alt = raw.get("alt") if isinstance(raw.get("alt"), dict) else None
             if alt:
                 entry["alt_screen"] = _serialize_alt_screen(alt.get("screen"))
@@ -888,6 +900,11 @@ def _build_config(entries: List[Dict[str, Any]]) -> Dict[str, Any]:
             raise ValueError(f"Additional seconds for '{screen_id}' cannot be negative")
         alt_screen_raw = entry.get("alt_screen")
         alt_frequency = entry.get("alt_frequency")
+        hide_after_at_raw = entry.get("hide_after_at")
+        hide_after_at = str(hide_after_at_raw).strip() if hide_after_at_raw is not None else ""
+        hide_after_enabled = bool(entry.get("hide_after_enabled", False))
+        if hide_after_enabled and not hide_after_at:
+            raise ValueError(f"Hide-after date/time for '{screen_id}' must be provided when enabled")
         alt_screen = _parse_alt_screen(str(alt_screen_raw).strip()) if alt_screen_raw is not None else None
         if alt_screen:
             alt_screen = [canonical_screen_id(item) for item in alt_screen]
@@ -897,10 +914,23 @@ def _build_config(entries: List[Dict[str, Any]]) -> Dict[str, Any]:
             spec: Dict[str, Any] = {"frequency": frequency, "alt": alt_payload}
             if extra_seconds > 0:
                 spec["extra_seconds"] = extra_seconds
+            if hide_after_enabled and hide_after_at:
+                spec["hide_after_enabled"] = True
+                spec["hide_after_at"] = hide_after_at
             screens[screen_id] = spec
         else:
             if extra_seconds > 0:
-                screens[screen_id] = {"frequency": frequency, "extra_seconds": extra_seconds}
+                spec = {"frequency": frequency, "extra_seconds": extra_seconds}
+                if hide_after_enabled and hide_after_at:
+                    spec["hide_after_enabled"] = True
+                    spec["hide_after_at"] = hide_after_at
+                screens[screen_id] = spec
+            elif hide_after_enabled and hide_after_at:
+                screens[screen_id] = {
+                    "frequency": frequency,
+                    "hide_after_enabled": True,
+                    "hide_after_at": hide_after_at,
+                }
             else:
                 screens[screen_id] = frequency
     cleaned, _ = _normalize_legacy_scoreboard_ids({"screens": screens})
