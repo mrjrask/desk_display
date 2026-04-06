@@ -3,6 +3,9 @@ set -euo pipefail
 
 SUDO="${SUDO:-}"
 SERVICES=("desk_display.service")
+if systemctl list-unit-files --type=service --no-legend 2>/dev/null | awk '{print $1}' | grep -qx "config_ui_desk_display.service"; then
+  SERVICES+=("config_ui_desk_display.service")
+fi
 
 if systemctl list-unit-files --type=service --no-legend 2>/dev/null | awk '{print $1}' | grep -qx "desk_display_waveshare_oled.service"; then
   SERVICES+=("desk_display_waveshare_oled.service")

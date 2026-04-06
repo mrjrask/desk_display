@@ -5,11 +5,13 @@ log() { printf '[INFO] %s\n' "$*"; }
 warn() { printf '[WARN] %s\n' "$*"; }
 
 SERVICE_NAME="desk_display.service"
+CONFIG_UI_SERVICE_NAME="config_ui_desk_display.service"
 KERNEL_USER_SERVICE_NAME="desk_display-kernel.service"
 
 SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 PROJECT_DIR="${PROJECT_DIR:-$(cd -- "$SCRIPT_DIR/.." && pwd)}"
 SERVICE_PATH="/etc/systemd/system/$SERVICE_NAME"
+CONFIG_UI_SERVICE_PATH="/etc/systemd/system/$CONFIG_UI_SERVICE_NAME"
 COMMON_SCRIPT="$PROJECT_DIR/scripts/helpers/common.sh"
 
 if [[ $EUID -ne 0 ]]; then
@@ -21,6 +23,8 @@ fi
 if command -v systemctl >/dev/null 2>&1; then
   log "Stopping $SERVICE_NAME"
   $SUDO systemctl stop "$SERVICE_NAME" || warn "Failed to stop $SERVICE_NAME"
+  log "Stopping $CONFIG_UI_SERVICE_NAME"
+  $SUDO systemctl stop "$CONFIG_UI_SERVICE_NAME" || warn "Failed to stop $CONFIG_UI_SERVICE_NAME"
 fi
 
 stop_kernel_user_service() {
@@ -114,15 +118,29 @@ if command -v systemctl >/dev/null 2>&1; then
   else
     warn "$SERVICE_NAME not registered with systemd"
   fi
+  if systemctl list-unit-files | grep -q "^$CONFIG_UI_SERVICE_NAME"; then
+    log "Disabling $CONFIG_UI_SERVICE_NAME"
+    $SUDO systemctl disable "$CONFIG_UI_SERVICE_NAME" || warn "Failed to disable $CONFIG_UI_SERVICE_NAME"
+  else
+    warn "$CONFIG_UI_SERVICE_NAME not registered with systemd"
+  fi
 
   if [[ -f "$SERVICE_PATH" ]]; then
     log "Removing systemd unit at $SERVICE_PATH"
     $SUDO rm -f "$SERVICE_PATH"
-    log "Reloading systemd daemon"
-    $SUDO systemctl daemon-reload || warn "Failed to reload systemd daemon"
   else
     warn "No systemd unit found at $SERVICE_PATH"
   fi
+
+  if [[ -f "$CONFIG_UI_SERVICE_PATH" ]]; then
+    log "Removing systemd unit at $CONFIG_UI_SERVICE_PATH"
+    $SUDO rm -f "$CONFIG_UI_SERVICE_PATH"
+  else
+    warn "No systemd unit found at $CONFIG_UI_SERVICE_PATH"
+  fi
+
+  log "Reloading systemd daemon"
+  $SUDO systemctl daemon-reload || warn "Failed to reload systemd daemon"
 else
   warn "systemctl not found; skipping service removal"
 fi

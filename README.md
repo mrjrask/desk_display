@@ -148,6 +148,14 @@ Notes:
 
 ## Installers (recommended on Raspberry Pi)
 
+### Single entrypoint (fresh installs)
+
+```bash
+bash ./Installers/install.sh
+```
+
+Pass an optional profile (`display_hat_mini`, `adafruit_minipitft`, `hyperpixel`, `kernel`, `waveshare_oled_lcd_hat_a`) to skip prompts.
+
 ### Display HAT Mini
 
 ```bash
@@ -171,6 +179,12 @@ bash ./Installers/install_waveshare_oled_lcd_hat_a.sh
 ```bash
 bash ./Installers/install_hyperpixel.sh
 bash ./Installers/install_kernel.sh
+```
+
+### Config UI service only (for existing installs)
+
+```bash
+bash ./Installers/install_config_ui_service.sh
 ```
 
 ## Configuration
@@ -304,7 +318,9 @@ Common service operations:
 
 ```bash
 sudo systemctl status desk_display.service
+sudo systemctl status config_ui_desk_display.service
 sudo systemctl restart desk_display.service
+sudo systemctl restart config_ui_desk_display.service
 ./scripts/restart_services.sh
 ```
 
