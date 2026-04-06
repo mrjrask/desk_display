@@ -175,3 +175,23 @@ def test_build_config_persists_hide_after_fields():
         "hide_after_enabled": True,
         "hide_after_at": "2026-04-06T12:00",
     }
+
+
+def test_normalize_import_config_payload_preserves_hide_after_fields():
+    normalized = config_ui._normalize_import_config_payload(
+        {
+            "screens": {
+                "date": {
+                    "frequency": 1,
+                    "hide_after_enabled": True,
+                    "hide_after_at": "2026-04-06T12:00",
+                }
+            }
+        }
+    )
+
+    assert normalized["screens"]["date"] == {
+        "frequency": 1,
+        "hide_after_enabled": True,
+        "hide_after_at": "2026-04-06T12:00",
+    }
