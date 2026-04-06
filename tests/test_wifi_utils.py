@@ -148,3 +148,38 @@ def test_services_package_exports_wifi_utils_only_for_wifi_monitoring():
 
     assert "wifi_utils" in services.__all__
     assert "network" not in services.__all__
+
+
+def test_get_assigned_ipv4_prefers_detected_wireless_interface(monkeypatch):
+    monkeypatch.setattr(wifi_utils, "_IFACE", None)
+    monkeypatch.setattr(wifi_utils, "_detect_interface", lambda: "wlan0")
+    monkeypatch.setattr(wifi_utils, "_get_default_route_interfaces", lambda: ["eth0"])
+
+    def fake_get_ipv4(iface):
+        return {"wlan0": "192.168.1.20", "eth0": "10.0.0.5"}.get(iface)
+
+    monkeypatch.setattr(wifi_utils, "_get_ipv4_address", fake_get_ipv4)
+
+    assert wifi_utils.get_assigned_ipv4() == "192.168.1.20"
+
+
+def test_get_assigned_ipv4_falls_back_to_socket_when_interfaces_missing(monkeypatch):
+    class FakeSocket:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb):
+            return False
+
+        def connect(self, _endpoint):
+            return None
+
+        def getsockname(self):
+            return ("10.1.2.3", 12345)
+
+    monkeypatch.setattr(wifi_utils, "_IFACE", None)
+    monkeypatch.setattr(wifi_utils, "_detect_interface", lambda: None)
+    monkeypatch.setattr(wifi_utils, "_get_default_route_interfaces", lambda: [])
+    monkeypatch.setattr(wifi_utils.socket, "socket", lambda *_args, **_kwargs: FakeSocket())
+
+    assert wifi_utils.get_assigned_ipv4() == "10.1.2.3"

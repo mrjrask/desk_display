@@ -415,3 +415,32 @@ def test_draw_date_starts_color_cycle_thread(monkeypatch):
     assert result.displayed is True
     assert called["cycle"] == 1
 
+
+
+def test_assigned_ip_overlay_text_uses_discovered_address(monkeypatch):
+    monkeypatch.setattr(draw_date_time, "get_assigned_ipv4", lambda: "192.168.0.44")
+
+    assert draw_date_time._assigned_ip_overlay_text() == "IP: 192.168.0.44"
+
+
+def test_assigned_ip_overlay_text_handles_missing_address(monkeypatch):
+    monkeypatch.setattr(draw_date_time, "get_assigned_ipv4", lambda: None)
+
+    assert draw_date_time._assigned_ip_overlay_text() == "IP: --"
+
+
+def test_compose_frame_hides_ip_when_ip_with_time_disabled(monkeypatch):
+    monkeypatch.setattr(draw_date_time, "IP_WITH_TIME", False)
+    monkeypatch.setattr(draw_date_time, "date_strings", lambda _now: ("Monday", "Apr 06"))
+    monkeypatch.setattr(draw_date_time, "time_strings", lambda _now: ("10:00", "AM"))
+    monkeypatch.setattr(draw_date_time, "_assigned_ip_overlay_text", lambda: (_ for _ in ()).throw(AssertionError("should not be called")))
+
+    img = draw_date_time._compose_frame(
+        "date_time",
+        (255, 255, 255),
+        (255, 255, 255),
+        False,
+        "date",
+    )
+
+    assert img.size == (draw_date_time.WIDTH, draw_date_time.HEIGHT)
