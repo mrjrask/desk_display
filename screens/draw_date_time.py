@@ -193,9 +193,9 @@ def _compose_frame(
     if IP_WITH_TIME:
         ip_text = _assigned_ip_overlay_text()
         ip_font = _ip_overlay_font()
-        _, ip_h = measure_text(draw, ip_text, ip_font)
-        ip_x = 2
-        ip_y = max(0, HEIGHT - ip_h - 2)
+        left, top, right, bottom = draw.textbbox((0, 0), ip_text, font=ip_font)
+        ip_x = 2 - left
+        ip_y = max(0, HEIGHT - 2 - bottom)
         draw.text((ip_x, ip_y), ip_text, font=ip_font, fill=(200, 200, 200))
 
     # GitHub update indicator (tiny GitHub logo, bottom-right)
