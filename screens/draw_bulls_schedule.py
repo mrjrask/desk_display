@@ -58,7 +58,7 @@ TEAM_TRICODE = (NBA_TEAM_TRICODE or "CHI").upper()
 LOGO_ABBREVIATION_OVERRIDES = {
     "BKN": "BRK",  # Brooklyn Nets
     "NOP": "NO",   # New Orleans Pelicans
-    "WSH": "WAS",  # Washington Wizards
+    "WAS": "WSH",  # Washington Wizards
     "GSW": "GS",   # Golden State Warriors
     "NYK": "NY",   # New York Knicks
     "SAS": "SA",   # San Antonio Spurs
