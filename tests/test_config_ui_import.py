@@ -128,6 +128,45 @@ def test_import_screens_accepts_export_payload_with_string_frequencies(monkeypat
     assert saved["layouts"]["screens"]["quad"]["pages"][0]["tiles"] == ["date", "date", "weather1", "inside"]
 
 
+def test_import_screens_preserves_hide_after_fields(monkeypatch):
+    saved = {}
+
+    monkeypatch.setattr(config_ui, "_load_active_style_config", lambda: {"screens": {}})
+    monkeypatch.setattr(config_ui, "_load_active_layouts_config", lambda: {"screens": {"quad": {"enabled": False, "scroll_speed": 1.0, "pages": [{"tiles": ["date", "weather1", "weather hourly", "inside"]}]}}})
+    monkeypatch.setattr(config_ui, "build_scheduler", lambda config: None)
+    monkeypatch.setattr(config_ui, "_save_config", lambda config: saved.setdefault("config", config))
+    monkeypatch.setattr(config_ui, "_save_style_config", lambda style: saved.setdefault("style", style))
+    monkeypatch.setattr(config_ui, "_save_layouts_config", lambda layouts: saved.setdefault("layouts", layouts))
+    monkeypatch.setattr(
+        config_ui,
+        "_build_screen_entries",
+        lambda config, style: [{"id": "date", "frequency": 3, "background": "#112233"}],
+    )
+
+    client = config_ui.app.test_client()
+    response = client.post(
+        "/api/screens/import",
+        json={
+            "config": {
+                "screens": {
+                    "date": {
+                        "frequency": "3",
+                        "hide_after_enabled": True,
+                        "hide_after_at": "2026-05-15T08:30",
+                    }
+                }
+            }
+        },
+    )
+
+    payload = response.get_json()
+    assert response.status_code == 200
+    assert payload["status"] == "ok"
+    assert saved["config"]["screens"]["date"]["frequency"] == 3
+    assert saved["config"]["screens"]["date"]["hide_after_enabled"] is True
+    assert saved["config"]["screens"]["date"]["hide_after_at"] == "2026-05-15T08:30"
+
+
 def test_save_screens_persists_quad_pages(monkeypatch):
     saved = {}
 

@@ -269,6 +269,13 @@ def _normalize_import_config_payload(data: Dict[str, Any]) -> Dict[str, Any]:
                 extra_seconds = int(extra_seconds_raw)
             except (TypeError, ValueError):
                 extra_seconds = extra_seconds_raw
+            hide_after_enabled = bool(raw.get("hide_after_enabled", False))
+            hide_after_at_raw = raw.get("hide_after_at")
+            hide_after_at = (
+                str(hide_after_at_raw).strip()
+                if hide_after_at_raw is not None
+                else ""
+            )
 
             alt_payload: Optional[Dict[str, Any]] = None
             alt = raw.get("alt")
@@ -287,6 +294,9 @@ def _normalize_import_config_payload(data: Dict[str, Any]) -> Dict[str, Any]:
                 normalized_spec["extra_seconds"] = extra_seconds
             if alt_payload is not None:
                 normalized_spec["alt"] = alt_payload
+            if hide_after_enabled and hide_after_at:
+                normalized_spec["hide_after_enabled"] = True
+                normalized_spec["hide_after_at"] = hide_after_at
             normalized_screens[canonical_id] = _merge_screen_specs(
                 normalized_screens.get(canonical_id),
                 normalized_spec,
