@@ -446,7 +446,7 @@ def test_draw_sports_screen_uses_postponed_bottom_label(monkeypatch):
     game = {
         "officialDate": "2026-05-01",
         "startTimeCentral": "6:40 PM",
-        "status": {"detailedState": "Postponed", "abstractGameState": "Postponed", "statusCode": "P"},
+        "status": {"detailedState": "Postponed", "abstractGameState": "Postponed", "statusCode": "PPD"},
         "teams": {
             "away": {"team": {"id": 112, "name": "Chicago Cubs"}},
             "home": {"team": {"id": 111, "name": "Boston Red Sox"}},
@@ -462,6 +462,7 @@ def test_is_postponed_game_detects_common_status_shapes():
     assert mlb_schedule._is_postponed_game({"status": {"detailedState": "Postponed"}})
     assert mlb_schedule._is_postponed_game({"status": {"abstractGameState": "Postponed"}})
     assert mlb_schedule._is_postponed_game({"status": {"statusCode": "PPD"}})
+    assert not mlb_schedule._is_postponed_game({"status": {"statusCode": "P"}})
     assert not mlb_schedule._is_postponed_game({"status": {"detailedState": "Final"}})
 
 
@@ -476,7 +477,7 @@ def test_draw_last_game_postponed_uses_dashes_and_no_result_flags(monkeypatch):
 
     game = {
         "officialDate": "2026-05-01",
-        "status": {"detailedState": "Postponed", "statusCode": "P"},
+        "status": {"detailedState": "Postponed", "statusCode": "PPD"},
         "teams": {
             "away": {"score": 4, "team": {"id": 145, "name": "Chicago White Sox"}},
             "home": {"score": 2, "team": {"id": 121, "name": "New York Mets"}},

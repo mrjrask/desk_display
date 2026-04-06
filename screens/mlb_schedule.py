@@ -942,7 +942,7 @@ def _is_postponed_game(game: dict) -> bool:
     return (
         "postponed" in detailed
         or abstract == "postponed"
-        or code in {"P", "PPD"}
+        or code == "PPD"
     )
 
 
