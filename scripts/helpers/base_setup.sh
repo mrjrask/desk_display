@@ -3,6 +3,7 @@ set -euo pipefail
 
 EXPECTED_CODENAME="${EXPECTED_CODENAME:-bookworm}"
 SERVICE_NAME="desk_display.service"
+CONFIG_UI_SERVICE_NAME="config_ui_desk_display.service"
 PYTHON_BIN="${PYTHON:-python3}"
 REQUIREMENTS_FILE="${REQUIREMENTS_FILE:-requirements.txt}"
 
@@ -71,6 +72,7 @@ ensure_executable "$MAINTENANCE_DIR/reset_screenshots.sh"
 ensure_executable "$PROJECT_DIR/scripts/framebuffer_service.sh"
 
 SERVICE_PATH="/etc/systemd/system/$SERVICE_NAME"
+CONFIG_UI_SERVICE_PATH="/etc/systemd/system/$CONFIG_UI_SERVICE_NAME"
 SERVICE_ENV_LINES=()
 SERVICE_ENV_OVERRIDE_LINES=()
 
@@ -131,10 +133,30 @@ User=$SERVICE_USER
 WantedBy=multi-user.target
 SERVICE
 
-log "Reloading systemd, enabling and starting $SERVICE_NAME"
+log "Writing systemd service to $CONFIG_UI_SERVICE_PATH"
+$SUDO tee "$CONFIG_UI_SERVICE_PATH" >/dev/null <<SERVICE
+[Unit]
+Description=Desk Display Service - config UI
+After=network-online.target
+
+[Service]
+WorkingDirectory=$PROJECT_DIR
+EnvironmentFile=-$PROJECT_DIR/.env
+ExecStart=$VENV_DIR/bin/python $PROJECT_DIR/config_ui.py
+Restart=always
+User=$SERVICE_USER
+
+[Install]
+WantedBy=multi-user.target
+SERVICE
+
+log "Reloading systemd, enabling and starting $SERVICE_NAME + $CONFIG_UI_SERVICE_NAME"
 $SUDO systemctl daemon-reload
 $SUDO systemctl enable "$SERVICE_NAME"
+$SUDO systemctl enable "$CONFIG_UI_SERVICE_NAME"
 $SUDO systemctl restart "$SERVICE_NAME"
+$SUDO systemctl restart "$CONFIG_UI_SERVICE_NAME"
 
 log "Installation complete. Service status:"
 $SUDO systemctl status --no-pager "$SERVICE_NAME"
+$SUDO systemctl status --no-pager "$CONFIG_UI_SERVICE_NAME"
