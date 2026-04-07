@@ -619,6 +619,24 @@ class _KernelDisplay:
         if not os.environ.get("DISPLAY") and not os.environ.get("WAYLAND_DISPLAY"):
             _maybe_configure_desktop_env()
 
+        self._fullscreen = os.environ.get("DESK_DISPLAY_SDL_FULLSCREEN", "1").strip().lower() not in {
+            "0",
+            "false",
+            "no",
+            "off",
+        }
+        try:
+            self._window_scale = max(
+                1.0,
+                float(os.environ.get("DESK_DISPLAY_WINDOW_SCALE", "1.0")),
+            )
+        except (TypeError, ValueError):
+            self._window_scale = 1.0
+        self._window_resizable = os.environ.get(
+            "DESK_DISPLAY_WINDOW_RESIZABLE",
+            "1",
+        ).strip().lower() not in {"0", "false", "no", "off"}
+
         self._sdl_driver: Optional[str] = None
         self._screen = self._init_display_surface()
         self.screen_width, self.screen_height = self._screen.get_size()
@@ -640,7 +658,17 @@ class _KernelDisplay:
             pass
 
     def _init_display_surface(self):
-        flags = self._pygame.FULLSCREEN | self._pygame.SCALED
+        if self._fullscreen:
+            flags = self._pygame.FULLSCREEN | self._pygame.SCALED
+            requested_size = (0, 0)
+        else:
+            flags = self._pygame.SCALED
+            if self._window_resizable:
+                flags |= self._pygame.RESIZABLE
+            requested_size = (
+                max(1, int(round(self.render_width * self._window_scale))),
+                max(1, int(round(self.render_height * self._window_scale))),
+            )
         errors: List[str] = []
         for driver in _sdl_driver_candidates():
             if driver:
@@ -654,12 +682,13 @@ class _KernelDisplay:
             try:
                 self._pygame.display.init()
                 try:
-                    screen = self._pygame.display.set_mode((0, 0), flags)
+                    screen = self._pygame.display.set_mode(requested_size, flags)
                 except Exception as exc:
                     message = str(exc)
                     if "0 sized" in message or "0-sized" in message:
                         screen = self._pygame.display.set_mode(
-                            (self.render_width, self.render_height), flags
+                            (self.render_width, self.render_height),
+                            flags,
                         )
                     else:
                         raise

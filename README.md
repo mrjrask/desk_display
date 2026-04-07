@@ -154,7 +154,7 @@ Notes:
 bash ./Installers/install.sh
 ```
 
-Pass an optional profile (`display_hat_mini`, `adafruit_minipitft`, `hyperpixel`, `kernel`, `waveshare_oled_lcd_hat_a`) to skip prompts.
+Pass an optional profile (`display_hat_mini`, `adafruit_minipitft`, `hyperpixel`, `kernel`, `macos_window`, `waveshare_oled_lcd_hat_a`) to skip prompts.
 
 ### Display HAT Mini
 
@@ -179,6 +179,14 @@ bash ./Installers/install_waveshare_oled_lcd_hat_a.sh
 ```bash
 bash ./Installers/install_hyperpixel.sh
 bash ./Installers/install_kernel.sh
+```
+
+### macOS scalable HyperPixel 4 window (800×480 render)
+
+```bash
+bash ./Installers/install_macos_window.sh
+./scripts/update_dependencies.sh
+./scripts/launch_macos_window.sh
 ```
 
 ### Config UI service only (for existing installs)
