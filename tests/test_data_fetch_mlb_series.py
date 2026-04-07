@@ -277,6 +277,57 @@ def test_next_series_expands_to_declared_games_in_series(monkeypatch):
     assert [g["gamePk"] for g in (result["next_home_series_games"] or [])] == [45, 46, 47]
 
 
+def test_next_series_expands_when_anchor_game_omits_games_in_series(monkeypatch):
+    monkeypatch.setattr(data_fetch.datetime, "datetime", _FrozenDateTime)
+
+    payload = {
+        "dates": [
+            {
+                "date": "2026-04-01",
+                "games": [
+                    _game(50, "2026-04-01", "I", 145, 121, series_game_number=1, games_in_series=2, series_description="Regular Season"),
+                ],
+            },
+            {
+                "date": "2026-04-03",
+                "games": [
+                    _game(51, "2026-04-03", "S", 140, 145, series_game_number=1, games_in_series=None, series_description="Regular Season"),
+                ],
+            },
+            {
+                "date": "2026-04-04",
+                "games": [
+                    _game(199, "2026-04-04", "S", 118, 145),
+                ],
+            },
+            {
+                "date": "2026-04-05",
+                "games": [
+                    _game(52, "2026-04-05", "S", 140, 145, series_game_number=2, games_in_series=4, series_description="Regular Season"),
+                ],
+            },
+            {
+                "date": "2026-04-06",
+                "games": [
+                    _game(53, "2026-04-06", "S", 140, 145, series_game_number=3, games_in_series=4, series_description="Regular Season"),
+                ],
+            },
+            {
+                "date": "2026-04-07",
+                "games": [
+                    _game(54, "2026-04-07", "S", 140, 145, series_game_number=4, games_in_series=4, series_description="Regular Season"),
+                ],
+            },
+        ]
+    }
+
+    monkeypatch.setattr(data_fetch._session, "get", lambda *args, **kwargs: _DummyResponse(payload))
+
+    result = data_fetch._fetch_mlb_schedule(145)
+
+    assert [g["gamePk"] for g in (result["next_series_games"] or [])] == [51, 52, 53, 54]
+
+
 def test_fetch_mlb_schedule_uses_45_day_window(monkeypatch):
     monkeypatch.setattr(data_fetch.datetime, "datetime", _FrozenDateTime)
     captured = {"url": None}

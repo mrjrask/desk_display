@@ -2116,15 +2116,57 @@ def _fetch_mlb_schedule(team_id):
 
                 anchor_game = (base_rows[0].get("game") or {})
                 target_total = _to_int(anchor_game.get("gamesInSeries"))
+                anchor_opp = base_rows[0].get("opponent_id")
+                anchor_home = bool(base_rows[0].get("is_home"))
+                anchor_desc = str(anchor_game.get("seriesDescription") or "").strip().casefold()
+                if not target_total:
+                    # MLB's schedule feed can omit gamesInSeries on the first listed
+                    # game for a block while still populating it for subsequent games.
+                    # Fall back to any declared series length in the base block before
+                    # giving up on expansion.
+                    for base_row in base_rows[1:]:
+                        declared_total = _to_int(((base_row.get("game") or {}).get("gamesInSeries")))
+                        if declared_total:
+                            target_total = declared_total
+                            break
+
+                if not target_total and anchor_opp is not None:
+                    # Some feeds only publish gamesInSeries for nearby games outside
+                    # the initial block (for example when makeup games split dates).
+                    # Use the nearest compatible row with a declared series length.
+                    anchor_dt = base_rows[0].get("local_dt")
+                    nearest_distance: Optional[float] = None
+                    for candidate in ordered_rows:
+                        if candidate.get("opponent_id") != anchor_opp:
+                            continue
+                        if bool(candidate.get("is_home")) != anchor_home:
+                            continue
+
+                        candidate_game = (candidate.get("game") or {})
+                        candidate_total = _to_int(candidate_game.get("gamesInSeries"))
+                        if not candidate_total:
+                            continue
+
+                        if anchor_desc:
+                            candidate_desc = str(candidate_game.get("seriesDescription") or "").strip().casefold()
+                            if candidate_desc and candidate_desc != anchor_desc:
+                                continue
+
+                        candidate_dt = candidate.get("local_dt")
+                        if anchor_dt and candidate_dt:
+                            distance = abs((candidate_dt - anchor_dt).total_seconds())
+                        else:
+                            distance = float("inf")
+
+                        if nearest_distance is None or distance < nearest_distance:
+                            nearest_distance = distance
+                            target_total = candidate_total
+
                 if not target_total or target_total <= len(base_rows):
                     return base_rows
 
-                anchor_opp = base_rows[0].get("opponent_id")
-                anchor_home = bool(base_rows[0].get("is_home"))
                 if anchor_opp is None:
                     return base_rows
-
-                anchor_desc = str(anchor_game.get("seriesDescription") or "").strip().casefold()
 
                 matching_rows: List[Dict[str, Any]] = []
                 for candidate in ordered_rows:
