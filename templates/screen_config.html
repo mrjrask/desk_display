@@ -274,15 +274,15 @@
       display: grid;
       grid-template-columns:
         40px
-        minmax(180px, 1.4fr)
-        minmax(140px, 0.9fr)
+        minmax(165px, 1.25fr)
+        minmax(130px, 0.85fr)
         minmax(120px, 0.7fr)
         minmax(140px, 0.9fr)
         minmax(200px, 1.3fr)
-        minmax(190px, 1fr)
+        minmax(235px, 1.15fr)
         minmax(140px, 0.9fr)
         minmax(120px, 0.7fr);
-      gap: 0.75rem;
+      gap: 0.55rem;
       padding: 0 0.5rem 0.25rem;
       text-transform: uppercase;
       letter-spacing: 0.08em;
@@ -318,15 +318,15 @@
       display: grid;
       grid-template-columns:
         40px
-        minmax(180px, 1.4fr)
-        minmax(140px, 0.9fr)
+        minmax(165px, 1.25fr)
+        minmax(130px, 0.85fr)
         minmax(120px, 0.7fr)
         minmax(140px, 0.9fr)
         minmax(200px, 1.3fr)
-        minmax(190px, 1fr)
+        minmax(235px, 1.15fr)
         minmax(140px, 0.9fr)
         minmax(120px, 0.7fr);
-      gap: 0.75rem;
+      gap: 0.55rem;
       align-items: center;
       padding: 0.9rem 0.85rem;
       border-radius: 14px;
@@ -372,6 +372,14 @@
     .hide-after-field .hide-after-input {
       flex: 1;
       min-width: 0;
+    }
+    .compact-number-input {
+      width: 6ch !important;
+      min-width: 6ch;
+    }
+    .background-input {
+      width: 11ch !important;
+      min-width: 11ch;
     }
     .alt-screen-clear {
       width: 30px;
@@ -524,7 +532,7 @@
           <div class="hint">Assign to a playlist.</div>
         </div>
         <div>
-          <input type="number" min="0" step="1" value="{{ screen.frequency }}" class="freq-input">
+          <input type="number" min="0" step="1" value="{{ screen.frequency }}" class="freq-input compact-number-input">
           <div class="hint">0 disables. 1=every pass, 2=every other pass.</div>
         </div>
         <div>
@@ -553,11 +561,11 @@
           <div class="hint">When checked, hide after this date/time.</div>
         </div>
         <div>
-          <input type="number" min="0" step="1" value="{{ screen.extra_seconds }}" class="extra-seconds-input">
+          <input type="number" min="0" step="1" value="{{ screen.extra_seconds }}" class="extra-seconds-input compact-number-input">
           <div class="hint">Add seconds to this screen's display time.</div>
         </div>
         <div>
-          <input type="number" min="0" step="1" placeholder="1" value="{{ screen.alt_frequency }}" class="alt-frequency-input">
+          <input type="number" min="0" step="1" placeholder="1" value="{{ screen.alt_frequency }}" class="alt-frequency-input compact-number-input">
           <div class="hint">Frequency for alternate.</div>
         </div>
       </div>
@@ -1192,7 +1200,7 @@
           <div class="hint">Assign to a playlist.</div>
         </div>
         <div>
-          <input type="number" min="0" step="1" value="${screen.frequency ?? 0}" class="freq-input">
+          <input type="number" min="0" step="1" value="${screen.frequency ?? 0}" class="freq-input compact-number-input">
           <div class="hint">0 disables. 1=every pass, 2=every other pass.</div>
         </div>
         <div>
@@ -1216,11 +1224,11 @@
           <div class="hint">When checked, hide after this date/time.</div>
         </div>
         <div>
-          <input type="number" min="0" step="1" value="${screen.extra_seconds ?? 0}" class="extra-seconds-input">
+          <input type="number" min="0" step="1" value="${screen.extra_seconds ?? 0}" class="extra-seconds-input compact-number-input">
           <div class="hint">Add seconds to this screen's display time.</div>
         </div>
         <div>
-          <input type="number" min="0" step="1" placeholder="1" value="${screen.alt_frequency ?? ""}" class="alt-frequency-input">
+          <input type="number" min="0" step="1" placeholder="1" value="${screen.alt_frequency ?? ""}" class="alt-frequency-input compact-number-input">
           <div class="hint">Frequency for alternate.</div>
         </div>
       `;
