@@ -386,6 +386,72 @@ def test_draw_series_screen_renders_more_than_four_games(monkeypatch):
     assert drawn_rows == ["ROW 1", "ROW 2", "ROW 3", "ROW 4", "ROW 5"]
 
 
+def test_draw_series_screen_shrinks_row_font_to_fit_three_game_sox_series(monkeypatch):
+    drawn_rows = []
+    original_text = ImageDraw.ImageDraw.text
+    original_textsize = ImageDraw.ImageDraw.textsize
+
+    class _FakeFont:
+        def __init__(self, size):
+            self.size = size
+
+        def font_variant(self, size):
+            return _FakeFont(size)
+
+    def _capture_text(self, xy, text, *args, **kwargs):
+        if isinstance(text, str) and text.startswith("FITROW "):
+            drawn_rows.append(text)
+        if isinstance(kwargs.get("font"), _FakeFont):
+            return None
+        return original_text(self, xy, text, *args, **kwargs)
+
+    def _fake_textsize(self, text, font=None, *args, **kwargs):
+        if isinstance(font, _FakeFont):
+            size = int(getattr(font, "size", 30) or 30)
+            if isinstance(text, str) and text == "Tonight • 7 PM":
+                # Keep row text too tall until the font gets small enough.
+                text_h = 40 if size >= 30 else 32 if size >= 24 else 24
+                return (120, text_h)
+            return (max(20, int(len(str(text)) * (size * 0.55))), max(12, int(size * 0.9)))
+        if isinstance(text, str) and text == "Tonight • 7 PM":
+            size = int(getattr(font, "size", 30) or 30)
+            return (120, max(12, int(size * 0.9)))
+        return original_textsize(self, text, font=font, *args, **kwargs)
+
+    monkeypatch.setattr(ImageDraw.ImageDraw, "text", _capture_text)
+    monkeypatch.setattr(ImageDraw.ImageDraw, "textsize", _fake_textsize)
+    monkeypatch.setattr(mlb_schedule, "FONT_DATE_SPORTS", _FakeFont(30))
+    monkeypatch.setattr(mlb_schedule, "load_team_logo", lambda *args, **kwargs: None)
+    monkeypatch.setattr(mlb_schedule, "_series_final_result_parts", lambda *args, **kwargs: None)
+    monkeypatch.setattr(mlb_schedule.config, "is_hyperpixel_next_layout", lambda: False)
+    monkeypatch.setattr(mlb_schedule, "HEIGHT", 265)
+    monkeypatch.setattr(
+        mlb_schedule,
+        "_series_line",
+        lambda game, _focus_id: f"FITROW {game.get('gamePk')}",
+    )
+
+    def _game(game_pk: int):
+        return {
+            "gamePk": game_pk,
+            "status": {"detailedState": "Scheduled"},
+            "teams": {
+                "away": {"team": {"id": 121, "name": "Boston Red Sox"}},
+                "home": {"team": {"id": 145, "name": "Chicago White Sox"}},
+            },
+        }
+
+    games = [_game(idx) for idx in range(1, 4)]
+    mlb_schedule.draw_series_screen(
+        None,
+        games,
+        title="Sox Next Home Series",
+        screen_id="sox next home series",
+    )
+
+    assert drawn_rows == ["FITROW 1", "FITROW 2", "FITROW 3"]
+
+
 def test_series_line_fill_uses_live_scoreboard_color_for_in_progress_game():
     game = {
         "status": {

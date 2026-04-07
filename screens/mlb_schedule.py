@@ -1122,7 +1122,7 @@ def draw_series_screen(display, games, title, transition=False, screen_id: Optio
         return text_h, row_height, rows_fit
 
     row_text_h, row_h, available_rows = _row_metrics(row_font)
-    if target_rows > 4 and hasattr(row_font, "font_variant"):
+    if target_rows > available_rows and hasattr(row_font, "font_variant"):
         base_size = int(getattr(row_font, "size", 30) or 30)
         min_size = max(10, int(round(base_size * 0.6)))
         for font_size in range(base_size, min_size - 1, -1):
