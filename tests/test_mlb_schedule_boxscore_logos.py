@@ -307,6 +307,46 @@ def test_draw_series_screen_does_not_use_result_icon_on_sox_next_series(monkeypa
     assert not any(path.endswith("/mlb/W.png") or path.endswith("/mlb/L.png") for path in opened_paths)
 
 
+
+
+def test_draw_series_screen_renders_all_games_for_sox_series(monkeypatch):
+    drawn_rows = []
+    original_text = ImageDraw.ImageDraw.text
+
+    def _capture_text(self, xy, text, *args, **kwargs):
+        if isinstance(text, str) and text.startswith("SOXROW "):
+            drawn_rows.append(text)
+        return original_text(self, xy, text, *args, **kwargs)
+
+    monkeypatch.setattr(ImageDraw.ImageDraw, "text", _capture_text)
+    monkeypatch.setattr(mlb_schedule, "load_team_logo", lambda *args, **kwargs: None)
+    monkeypatch.setattr(mlb_schedule, "_series_final_result_parts", lambda *args, **kwargs: None)
+    monkeypatch.setattr(mlb_schedule.config, "is_hyperpixel_next_layout", lambda: False)
+    monkeypatch.setattr(
+        mlb_schedule,
+        "_series_line",
+        lambda game, _focus_id: f"SOXROW {game.get('gamePk')}",
+    )
+
+    def _game(game_pk: int):
+        return {
+            "gamePk": game_pk,
+            "status": {"detailedState": "Scheduled"},
+            "teams": {
+                "away": {"team": {"id": 121, "name": "New York Mets"}},
+                "home": {"team": {"id": 145, "name": "Chicago White Sox"}},
+            },
+        }
+
+    games = [_game(idx) for idx in range(1, 5)]
+    mlb_schedule.draw_series_screen(
+        None,
+        games,
+        title="Sox Next Series",
+        screen_id="sox next series",
+    )
+
+    assert drawn_rows == ["SOXROW 1", "SOXROW 2", "SOXROW 3", "SOXROW 4"]
 def test_draw_series_screen_renders_more_than_four_games(monkeypatch):
     drawn_rows = []
     original_text = ImageDraw.ImageDraw.text

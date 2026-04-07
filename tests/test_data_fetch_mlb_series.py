@@ -21,8 +21,8 @@ class _DummyResponse:
         return self._payload
 
 
-def _game(game_pk, date, state, home_id, away_id):
-    return {
+def _game(game_pk, date, state, home_id, away_id, series_game_number=None, games_in_series=None, series_description=None):
+    game = {
         "gamePk": game_pk,
         "gameDate": f"{date}T19:05:00Z",
         "officialDate": date,
@@ -38,6 +38,13 @@ def _game(game_pk, date, state, home_id, away_id):
             "away": {"team": {"id": away_id}},
         },
     }
+    if series_game_number is not None:
+        game["seriesGameNumber"] = series_game_number
+    if games_in_series is not None:
+        game["gamesInSeries"] = games_in_series
+    if series_description is not None:
+        game["seriesDescription"] = series_description
+    return game
 
 
 def test_next_series_skips_current_live_series(monkeypatch):
@@ -195,6 +202,79 @@ def test_next_home_series_keeps_all_games_when_opponent_stays_same_but_venue_cha
 
     assert [g["gamePk"] for g in (result["next_series_games"] or [])] == [32, 33, 34]
     assert [g["gamePk"] for g in (result["next_home_series_games"] or [])] == [35, 36, 37]
+
+
+def test_next_series_expands_to_declared_games_in_series(monkeypatch):
+    monkeypatch.setattr(data_fetch.datetime, "datetime", _FrozenDateTime)
+
+    payload = {
+        "dates": [
+            {
+                "date": "2026-04-01",
+                "games": [
+                    _game(40, "2026-04-01", "I", 145, 121, series_game_number=1, games_in_series=2, series_description="Regular Season"),
+                ],
+            },
+            # First game of next series
+            {
+                "date": "2026-04-03",
+                "games": [
+                    _game(41, "2026-04-03", "S", 140, 145, series_game_number=1, games_in_series=4, series_description="Regular Season"),
+                ],
+            },
+            # Makeup game vs other opponent splits the block
+            {
+                "date": "2026-04-04",
+                "games": [
+                    _game(99, "2026-04-04", "S", 118, 145),
+                ],
+            },
+            # Remaining games in the same declared 4-game series
+            {
+                "date": "2026-04-05",
+                "games": [
+                    _game(42, "2026-04-05", "S", 140, 145, series_game_number=2, games_in_series=4, series_description="Regular Season"),
+                ],
+            },
+            {
+                "date": "2026-04-06",
+                "games": [
+                    _game(43, "2026-04-06", "S", 140, 145, series_game_number=3, games_in_series=4, series_description="Regular Season"),
+                ],
+            },
+            {
+                "date": "2026-04-07",
+                "games": [
+                    _game(44, "2026-04-07", "S", 140, 145, series_game_number=4, games_in_series=4, series_description="Regular Season"),
+                ],
+            },
+            {
+                "date": "2026-04-09",
+                "games": [
+                    _game(45, "2026-04-09", "S", 145, 147, series_game_number=1, games_in_series=3, series_description="Regular Season"),
+                ],
+            },
+            {
+                "date": "2026-04-10",
+                "games": [
+                    _game(46, "2026-04-10", "S", 145, 147, series_game_number=2, games_in_series=3, series_description="Regular Season"),
+                ],
+            },
+            {
+                "date": "2026-04-11",
+                "games": [
+                    _game(47, "2026-04-11", "S", 145, 147, series_game_number=3, games_in_series=3, series_description="Regular Season"),
+                ],
+            },
+        ]
+    }
+
+    monkeypatch.setattr(data_fetch._session, "get", lambda *args, **kwargs: _DummyResponse(payload))
+
+    result = data_fetch._fetch_mlb_schedule(145)
+
+    assert [g["gamePk"] for g in (result["next_series_games"] or [])] == [41, 42, 43, 44]
+    assert [g["gamePk"] for g in (result["next_home_series_games"] or [])] == [45, 46, 47]
 
 
 def test_fetch_mlb_schedule_uses_45_day_window(monkeypatch):
