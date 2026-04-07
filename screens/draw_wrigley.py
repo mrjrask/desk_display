@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Render the Wrigley Field webcam from sportsworldchicago.com."""
+"""Render the Wrigley Field webcam feed."""
 
 from __future__ import annotations
 
@@ -17,10 +17,15 @@ from PIL import Image, ImageDraw, ImageOps
 from config import HEIGHT, WIDTH, FONT_STOCK_TEXT, FONT_STOCK_TITLE, get_screen_background_color
 from utils import clear_display, log_call
 
-WRIGLEY_PAGE_URL = "https://www.sportsworldchicago.com/Wrigley-Field-Cam/"
+WRIGLEY_PAGE_URL = "https://www.earthcam.com/usa/illinois/chicago/wrigleyfield/?cam=wrigleyfield_hd"
 _REQUEST_TIMEOUT = 8
 _SNAPSHOT_TTL_SECONDS = 20
-_USER_AGENT = "desk-display/wrigley-cam"
+_REQUEST_HEADERS = {
+    "User-Agent": "Mozilla/5.0 (compatible; desk-display/1.0; +https://www.earthcam.com)",
+    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
+    "Accept-Language": "en-US,en;q=0.8",
+    "Referer": WRIGLEY_PAGE_URL,
+}
 
 _SESSION = requests.Session()
 
@@ -95,7 +100,7 @@ def _candidate_urls_from_html(html: str, base_url: str) -> list[str]:
 
 def _fetch_image(url: str) -> Optional[Image.Image]:
     try:
-        response = _SESSION.get(url, timeout=_REQUEST_TIMEOUT, headers={"User-Agent": _USER_AGENT})
+        response = _SESSION.get(url, timeout=_REQUEST_TIMEOUT, headers=_REQUEST_HEADERS)
         response.raise_for_status()
         content_type = response.headers.get("content-type", "").lower()
         if "text/html" in content_type:
@@ -107,7 +112,7 @@ def _fetch_image(url: str) -> Optional[Image.Image]:
 
 
 def _download_wrigley_frame() -> tuple[Optional[Image.Image], Optional[str]]:
-    response = _SESSION.get(WRIGLEY_PAGE_URL, timeout=_REQUEST_TIMEOUT, headers={"User-Agent": _USER_AGENT})
+    response = _SESSION.get(WRIGLEY_PAGE_URL, timeout=_REQUEST_TIMEOUT, headers=_REQUEST_HEADERS)
     response.raise_for_status()
     candidates = _candidate_urls_from_html(response.text, WRIGLEY_PAGE_URL)
 
@@ -131,7 +136,7 @@ def _fallback_image(message: str) -> Image.Image:
     sw, sh = draw.textsize(subtitle, font=FONT_STOCK_TEXT)
     draw.text(((WIDTH - sw) // 2, max(40, HEIGHT // 2 - 20)), subtitle, fill=(220, 220, 220), font=FONT_STOCK_TEXT)
 
-    for idx, line in enumerate((message, "sportsworldchicago.com")):
+    for idx, line in enumerate((message, "earthcam.com")):
         lw, lh = draw.textsize(line, font=FONT_STOCK_TEXT)
         draw.text(((WIDTH - lw) // 2, HEIGHT - (2 - idx) * (lh + 6) - 8), line, fill=(180, 180, 180), font=FONT_STOCK_TEXT)
 
@@ -163,5 +168,5 @@ def _wrigley_image() -> Image.Image:
 @log_call
 def draw_wrigley_cam(display, transition: bool = False) -> Image.Image:
     img = _wrigley_image()
-    clear_display(display, img, transition=transition)
+    clear_display(display)
     return img
