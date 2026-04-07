@@ -79,6 +79,7 @@ RAW_SCREEN_IDS = [
     "wolves last",
     "wolves next",
     "wolves next home",
+    "Wrigley",
     "cubs logo",
     "cubs stand1",
     "cubs stand2",
