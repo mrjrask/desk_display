@@ -35,6 +35,6 @@ prepend_env_vars "$ENV_PATH" "${ENV_LINES[@]}"
 
 log "Updated $ENV_PATH with a macOS windowed HyperPixel 4 profile."
 log "Install Python dependencies with:"
-log "  ./scripts/update_dependencies.sh"
+log "  ./scripts/update_dependencies.sh --output kernel"
 log "Run the app with:"
 log "  ./scripts/launch_macos_window.sh"
