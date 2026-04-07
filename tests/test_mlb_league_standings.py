@@ -44,6 +44,34 @@ def test_normalize_row_keeps_red_sox_nickname():
     assert row["team_name"] == "Red Sox"
 
 
+def test_normalize_row_expands_boston_sox_short_name():
+    record = {
+        "team": {"name": "Boston", "abbreviation": "BOS", "teamName": "Sox"},
+        "wins": 12,
+        "losses": 8,
+        "winningPercentage": ".600",
+        "gamesBack": "1.0",
+    }
+
+    row = mlb_league_standings._normalize_row(record)
+
+    assert row["team_name"] == "Red Sox"
+
+
+def test_normalize_row_keeps_white_sox_short_name():
+    record = {
+        "team": {"name": "Chicago", "abbreviation": "CWS", "teamName": "Sox"},
+        "wins": 12,
+        "losses": 8,
+        "winningPercentage": ".600",
+        "gamesBack": "1.0",
+    }
+
+    row = mlb_league_standings._normalize_row(record)
+
+    assert row["team_name"] == "Sox"
+
+
 def test_normalize_row_formats_zero_games_back_as_dash():
     record = {
         "team": {"name": "New York Mets", "abbreviation": "NYM"},

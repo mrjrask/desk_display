@@ -280,7 +280,9 @@ def _normalize_row(record: dict[str, Any]) -> dict[str, Any]:
             abbr = get_mlb_abbreviation(team_name).upper()
     raw_name = team.get("name") if isinstance(team, dict) else ""
     nickname = _team_nickname(record) or abbr
-    if (
+    if abbr == "BOS" and isinstance(nickname, str) and nickname.strip().lower() == "sox":
+        nickname = "Red Sox"
+    elif (
         abbr == "BOS"
         and isinstance(raw_name, str)
         and raw_name.strip().lower() == "boston red sox"
