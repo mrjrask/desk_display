@@ -34,7 +34,6 @@ from screens.draw_wolves_schedule import (
     draw_wolves_next_home_game,
 )
 from screens.draw_inside import draw_inside, is_inside_sensor_available
-from screens.draw_wrigley import draw_wrigley_cam
 from screens.draw_vrnof import draw_vrnof_screen
 from screens.draw_weather import (
     _pop_pct_from,
@@ -713,7 +712,6 @@ def build_screen_registry(context: ScreenContext) -> Tuple[Dict[str, ScreenDefin
         lambda: draw_inside(context.display, transition=True),
         available=is_inside_sensor_available(),
     )
-    register("Wrigley", lambda: draw_wrigley_cam(context.display, transition=True), available=True)
     quad_enabled, quad_scroll_speed, quad_tiles = _next_quad_page_tiles()
     register(
         "quad",
