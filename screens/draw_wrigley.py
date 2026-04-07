@@ -30,6 +30,7 @@ _REQUEST_HEADERS = {
 _SESSION = requests.Session()
 
 _snapshot_cache: dict[str, object] = {"image": None, "ts": 0.0, "source": None}
+_DISALLOWED_URL_TOKENS = ("square", "logo", "icon", "avatar", "sprite", "thumb", "thumbnail", "adservice")
 
 
 class _MediaCollector(HTMLParser):
@@ -76,6 +77,28 @@ def _looks_like_image_url(url: str) -> bool:
     )
 
 
+def _should_skip_candidate_url(url: str) -> bool:
+    lowered = url.lower()
+    return any(token in lowered for token in _DISALLOWED_URL_TOKENS)
+
+
+def _candidate_priority(url: str) -> int:
+    lowered = url.lower()
+    score = 0
+    for token, weight in (
+        ("wrigley", 8),
+        ("snapshot", 6),
+        ("live", 4),
+        ("camera", 3),
+        ("cam", 3),
+        ("stream", 2),
+        ("hd", 2),
+    ):
+        if token in lowered:
+            score += weight
+    return score
+
+
 def _candidate_urls_from_html(html: str, base_url: str) -> list[str]:
     collector = _MediaCollector()
     collector.feed(html)
@@ -95,7 +118,10 @@ def _candidate_urls_from_html(html: str, base_url: str) -> list[str]:
         ordered.append(absolute)
 
     image_like = [url for url in ordered if _looks_like_image_url(url)]
-    return image_like + [url for url in ordered if url not in image_like]
+    image_like.sort(key=_candidate_priority, reverse=True)
+    remaining = [url for url in ordered if url not in image_like]
+    remaining.sort(key=_candidate_priority, reverse=True)
+    return image_like + remaining
 
 
 def _fetch_image(url: str) -> Optional[Image.Image]:
@@ -111,14 +137,24 @@ def _fetch_image(url: str) -> Optional[Image.Image]:
         return None
 
 
+def _is_plausible_webcam_frame(image: Image.Image) -> bool:
+    width, height = image.size
+    if width < 240 or height < 140:
+        return False
+    ratio = width / max(height, 1)
+    return ratio >= 1.2
+
+
 def _download_wrigley_frame() -> tuple[Optional[Image.Image], Optional[str]]:
     response = _SESSION.get(WRIGLEY_PAGE_URL, timeout=_REQUEST_TIMEOUT, headers=_REQUEST_HEADERS)
     response.raise_for_status()
     candidates = _candidate_urls_from_html(response.text, WRIGLEY_PAGE_URL)
 
     for candidate in candidates[:30]:
+        if _should_skip_candidate_url(candidate):
+            continue
         image = _fetch_image(candidate)
-        if image is not None:
+        if image is not None and _is_plausible_webcam_frame(image):
             return image, candidate
     return None, None
 
