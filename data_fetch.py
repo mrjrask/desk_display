@@ -2103,6 +2103,71 @@ def _fetch_mlb_schedule(team_id):
                         }
                     )
 
+            def _to_int(value: Any) -> Optional[int]:
+                try:
+                    return int(value)
+                except Exception:
+                    return None
+
+            def _expand_rows_to_declared_series_length(base_rows: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+                """Use MLB series metadata to include all games in the same series when available."""
+                if not base_rows:
+                    return base_rows
+
+                anchor_game = (base_rows[0].get("game") or {})
+                target_total = _to_int(anchor_game.get("gamesInSeries"))
+                if not target_total or target_total <= len(base_rows):
+                    return base_rows
+
+                anchor_opp = base_rows[0].get("opponent_id")
+                anchor_home = bool(base_rows[0].get("is_home"))
+                if anchor_opp is None:
+                    return base_rows
+
+                anchor_desc = str(anchor_game.get("seriesDescription") or "").strip().casefold()
+
+                matching_rows: List[Dict[str, Any]] = []
+                for candidate in ordered_rows:
+                    if candidate.get("opponent_id") != anchor_opp:
+                        continue
+                    if bool(candidate.get("is_home")) != anchor_home:
+                        continue
+
+                    candidate_game = (candidate.get("game") or {})
+                    candidate_total = _to_int(candidate_game.get("gamesInSeries"))
+                    if candidate_total and candidate_total != target_total:
+                        continue
+
+                    if anchor_desc:
+                        candidate_desc = str(candidate_game.get("seriesDescription") or "").strip().casefold()
+                        if candidate_desc and candidate_desc != anchor_desc:
+                            continue
+
+                    matching_rows.append(candidate)
+
+                if len(matching_rows) < target_total:
+                    return base_rows
+
+                base_pks = {
+                    (row.get("game") or {}).get("gamePk")
+                    for row in base_rows
+                    if (row.get("game") or {}).get("gamePk") is not None
+                }
+                if not base_pks:
+                    return base_rows
+
+                for start_idx in range(0, len(matching_rows) - target_total + 1):
+                    window = matching_rows[start_idx : start_idx + target_total]
+                    window_pks = {
+                        (row.get("game") or {}).get("gamePk")
+                        for row in window
+                        if (row.get("game") or {}).get("gamePk") is not None
+                    }
+                    if base_pks.issubset(window_pks):
+                        return window
+
+                return base_rows
+
             live_block_idx: Optional[int] = None
             next_block_idx: Optional[int] = None
             for idx, block in enumerate(series_blocks):
@@ -2121,7 +2186,7 @@ def _fetch_mlb_schedule(team_id):
                 current_series_block_idx is not None
                 and current_series_block_idx < len(series_blocks)
             ):
-                current_rows = (series_blocks[current_series_block_idx].get("rows") or [])
+                current_rows = _expand_rows_to_declared_series_length((series_blocks[current_series_block_idx].get("rows") or []))
                 current_games = [
                     (row.get("game") or {})
                     for row in current_rows
@@ -2145,7 +2210,7 @@ def _fetch_mlb_schedule(team_id):
                 next_series_block_idx is not None
                 and next_series_block_idx < len(series_blocks)
             ):
-                next_rows = (series_blocks[next_series_block_idx].get("rows") or [])
+                next_rows = _expand_rows_to_declared_series_length((series_blocks[next_series_block_idx].get("rows") or []))
                 next_games = [
                     (row.get("game") or {})
                     for row in next_rows
@@ -2160,7 +2225,7 @@ def _fetch_mlb_schedule(team_id):
                     if (row.get("game") or {}).get("gamePk") is not None
                 }
                 for idx in range(next_series_block_idx, len(series_blocks)):
-                    block_rows = (series_blocks[idx].get("rows") or [])
+                    block_rows = _expand_rows_to_declared_series_length((series_blocks[idx].get("rows") or []))
                     if not any(bool(row.get("is_home")) for row in block_rows):
                         continue
                     block_pks = {

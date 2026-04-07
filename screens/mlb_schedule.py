@@ -1048,7 +1048,7 @@ def draw_series_screen(display, games, title, transition=False, screen_id: Optio
         "sox next home series",
     }
     hyperpixel_layout = config.is_hyperpixel_next_layout() and screen_id in series_screen_ids
-    content_drop_px = 25 if (screen_id or "").strip().lower() in series_screen_ids else 0
+    content_drop_px = 25 if (hyperpixel_layout and (screen_id or "").strip().lower() in series_screen_ids) else 0
     edge_pad = max(2, config.scale_value(2)) if hyperpixel_layout else 0
     line_gap = max(1, config.scale_value(1)) if hyperpixel_layout else 1
 
