@@ -2133,7 +2133,10 @@ def _fetch_mlb_schedule(team_id):
                 if not target_total and anchor_opp is not None:
                     # Some feeds only publish gamesInSeries for nearby games outside
                     # the initial block (for example when makeup games split dates).
-                    # Use the nearest compatible row with a declared series length.
+                    # Use the nearest compatible *upcoming* row with a declared
+                    # series length. Avoid looking backward, since prior completed
+                    # series against the same opponent/venue can otherwise leak
+                    # historical games into the next-series window.
                     anchor_dt = base_rows[0].get("local_dt")
                     nearest_distance: Optional[float] = None
                     for candidate in ordered_rows:
@@ -2153,6 +2156,8 @@ def _fetch_mlb_schedule(team_id):
                                 continue
 
                         candidate_dt = candidate.get("local_dt")
+                        if anchor_dt and candidate_dt and candidate_dt < anchor_dt:
+                            continue
                         if anchor_dt and candidate_dt:
                             distance = abs((candidate_dt - anchor_dt).total_seconds())
                         else:

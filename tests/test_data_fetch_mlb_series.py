@@ -342,3 +342,50 @@ def test_fetch_mlb_schedule_uses_45_day_window(monkeypatch):
 
     assert "startDate=2026-03-29" in captured["url"]
     assert "endDate=2026-05-16" in captured["url"]
+
+
+def test_next_series_does_not_backfill_from_prior_series_when_anchor_omits_declared_total(monkeypatch):
+    monkeypatch.setattr(data_fetch.datetime, "datetime", _FrozenDateTime)
+
+    payload = {
+        "dates": [
+            {
+                "date": "2026-04-01",
+                "games": [
+                    _game(60, "2026-04-01", "I", 145, 121, series_game_number=1, games_in_series=2, series_description="Regular Season"),
+                ],
+            },
+            # Prior completed away series vs the same opponent/venue with declared totals
+            {
+                "date": "2026-03-29",
+                "games": [
+                    _game(61, "2026-03-29", "F", 140, 145, series_game_number=1, games_in_series=2, series_description="Regular Season"),
+                ],
+            },
+            {
+                "date": "2026-03-30",
+                "games": [
+                    _game(62, "2026-03-30", "F", 140, 145, series_game_number=2, games_in_series=2, series_description="Regular Season"),
+                ],
+            },
+            # Resumed block later in the month; anchor omits gamesInSeries
+            {
+                "date": "2026-04-10",
+                "games": [
+                    _game(63, "2026-04-10", "S", 140, 145, series_game_number=2, games_in_series=None, series_description="Regular Season"),
+                ],
+            },
+            {
+                "date": "2026-04-12",
+                "games": [
+                    _game(64, "2026-04-12", "S", 145, 118, series_game_number=1, games_in_series=3, series_description="Regular Season"),
+                ],
+            },
+        ]
+    }
+
+    monkeypatch.setattr(data_fetch._session, "get", lambda *args, **kwargs: _DummyResponse(payload))
+
+    result = data_fetch._fetch_mlb_schedule(145)
+
+    assert [g["gamePk"] for g in (result["next_series_games"] or [])] == [63]
