@@ -1,5 +1,7 @@
 """Tests for macOS-friendly window behavior in utils."""
 
+from types import SimpleNamespace
+
 import utils
 
 
@@ -51,3 +53,96 @@ def test_window_output_failure_does_not_fallback_to_framebuffer(monkeypatch):
 
     assert fallback_called["called"] is False
     assert display._output_strategy == "headless"
+
+
+class _FakeSurface:
+    def __init__(self, size):
+        self._size = size
+
+    def get_size(self):
+        return self._size
+
+    def blit(self, _surface, _coords):
+        return None
+
+
+class _FakePygameDisplay:
+    def __init__(self):
+        self.last_set_mode = None
+
+    def quit(self):
+        return None
+
+    def init(self):
+        return None
+
+    def set_mode(self, size, flags):
+        self.last_set_mode = (size, flags)
+        return _FakeSurface(size)
+
+    def set_caption(self, _caption):
+        return None
+
+    def get_driver(self):
+        return "fake"
+
+    def flip(self):
+        return None
+
+
+class _FakePygame:
+    FULLSCREEN = 1
+    SCALED = 2
+    RESIZABLE = 4
+
+    def __init__(self):
+        self.display = _FakePygameDisplay()
+        self.mouse = SimpleNamespace(set_visible=lambda _visible: None)
+        self.event = SimpleNamespace(pump=lambda: None)
+        self.transform = SimpleNamespace(smoothscale=lambda surface, _size: surface)
+        self.image = SimpleNamespace(frombuffer=lambda _bytes, size, _mode: _FakeSurface(size))
+
+
+def test_window_mode_defaults_to_unscaled_render_size(monkeypatch):
+    fake_pygame = _FakePygame()
+    monkeypatch.setattr(utils, "_load_pygame", lambda: fake_pygame)
+    monkeypatch.setattr(utils, "_sdl_driver_candidates", lambda: [None])
+    monkeypatch.setattr(utils, "_maybe_configure_desktop_env", lambda: None)
+    monkeypatch.setattr(utils, "_park_mouse_cursor", lambda _pygame: None)
+    monkeypatch.setattr(utils, "_wiggle_mouse_cursor", lambda _pygame: None)
+    monkeypatch.setattr(utils, "_schedule_mouse_cursor_wiggle", lambda *_args, **_kwargs: None)
+    monkeypatch.delenv("DESK_DISPLAY_WINDOW_SCALE", raising=False)
+    monkeypatch.delenv("DESK_DISPLAY_SDL_FULLSCREEN", raising=False)
+
+    utils._KernelDisplay(800, 480, window_mode=True)
+
+    assert fake_pygame.display.last_set_mode[0] == (800, 480)
+
+
+def test_window_mode_scales_to_resized_display_surface(monkeypatch):
+    fake_pygame = _FakePygame()
+    monkeypatch.setattr(utils, "_load_pygame", lambda: fake_pygame)
+    monkeypatch.setattr(utils, "_sdl_driver_candidates", lambda: [None])
+    monkeypatch.setattr(utils, "_maybe_configure_desktop_env", lambda: None)
+    monkeypatch.setattr(utils, "_park_mouse_cursor", lambda _pygame: None)
+    monkeypatch.setattr(utils, "_wiggle_mouse_cursor", lambda _pygame: None)
+    monkeypatch.setattr(utils, "_schedule_mouse_cursor_wiggle", lambda *_args, **_kwargs: None)
+    monkeypatch.setenv("DESK_DISPLAY_WINDOW_SCALE", "1")
+    monkeypatch.setenv("DESK_DISPLAY_SDL_FULLSCREEN", "0")
+
+    display = utils._KernelDisplay(800, 480, window_mode=True)
+    display._screen = _FakeSurface((1440, 900))
+    display.screen_width, display.screen_height = display._screen.get_size()
+    display._scale_to_screen = True
+
+    called = {"size": None}
+
+    def _smoothscale(_surface, size):
+        called["size"] = size
+        return _FakeSurface(size)
+
+    fake_pygame.transform = SimpleNamespace(smoothscale=_smoothscale)
+
+    display.write_image(utils.Image.new("RGB", (800, 480), "black"))
+
+    assert called["size"] == (1440, 900)
