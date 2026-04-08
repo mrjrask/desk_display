@@ -146,3 +146,34 @@ def test_window_mode_scales_to_resized_display_surface(monkeypatch):
     display.write_image(utils.Image.new("RGB", (800, 480), "black"))
 
     assert called["size"] == (1440, 900)
+
+
+def test_kernel_display_skips_worker_thread_render_on_macos(monkeypatch):
+    fake_pygame = _FakePygame()
+    monkeypatch.setattr(utils, "_load_pygame", lambda: fake_pygame)
+    monkeypatch.setattr(utils, "_sdl_driver_candidates", lambda: [None])
+    monkeypatch.setattr(utils, "_maybe_configure_desktop_env", lambda: None)
+    monkeypatch.setattr(utils, "_park_mouse_cursor", lambda _pygame: None)
+    monkeypatch.setattr(utils, "_wiggle_mouse_cursor", lambda _pygame: None)
+    monkeypatch.setattr(utils, "_schedule_mouse_cursor_wiggle", lambda *_args, **_kwargs: None)
+    monkeypatch.setenv("DESK_DISPLAY_SDL_FULLSCREEN", "0")
+    monkeypatch.setattr(utils.sys, "platform", "darwin")
+
+    display = utils._KernelDisplay(800, 480, window_mode=True)
+
+    main_thread = object()
+    worker_thread = object()
+    monkeypatch.setattr(utils.threading, "main_thread", lambda: main_thread)
+    monkeypatch.setattr(utils.threading, "current_thread", lambda: worker_thread)
+
+    called = {"frombuffer": False, "flip": False, "pump": False}
+
+    fake_pygame.image = SimpleNamespace(
+        frombuffer=lambda *_args, **_kwargs: called.__setitem__("frombuffer", True)
+    )
+    fake_pygame.display.flip = lambda: called.__setitem__("flip", True)
+    fake_pygame.event.pump = lambda: called.__setitem__("pump", True)
+
+    display.write_image(utils.Image.new("RGB", (800, 480), "black"))
+
+    assert called == {"frombuffer": False, "flip": False, "pump": False}
