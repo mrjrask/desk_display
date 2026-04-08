@@ -240,6 +240,17 @@ def test_probe_sensor_attempts_smbus_probes_without_blinka(monkeypatch):
     assert probe_reader is reader
 
 
+def test_probe_sensor_skips_non_linux_platform(monkeypatch):
+    import screens.draw_inside as draw_inside_module
+
+    monkeypatch.setattr(draw_inside_module.platform, "system", lambda: "Darwin")
+
+    provider, probe_reader = draw_inside_module._probe_sensor()
+
+    assert provider is None
+    assert probe_reader is None
+
+
 def test_probe_pimoroni_bme680_reads_chip_id_from_each_bus(monkeypatch):
     import importlib
     import screens.draw_inside as draw_inside_module

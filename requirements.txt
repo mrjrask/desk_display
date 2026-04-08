@@ -18,6 +18,7 @@ displayhatmini
 cairosvg
 rpi.gpio
 colorama
+pygame
 adafruit-circuitpython-bme280
 i2cdevice>=1.0.0
 -e ./vendor/pimoroni-bme280

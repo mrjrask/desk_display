@@ -1252,6 +1252,10 @@ FONT_GB_LABEL           = _load_font("DejaVuSans.ttf",      15)
 def _load_emoji_font(size: int) -> ImageFont.ImageFont:
     scaled_size = scale_value(size)
     noto_filenames = ("NotoColorEmoji.ttf", "Noto Color Emoji.ttf")
+    macos_emoji_paths = (
+        "/System/Library/Fonts/Apple Color Emoji.ttc",
+        "/Library/Fonts/Apple Color Emoji.ttc",
+    )
 
     for filename in noto_filenames:
         noto = _try_load_font(filename, size)
@@ -1296,6 +1300,14 @@ def _load_emoji_font(size: int) -> ImageFont.ImageFont:
                             inner_exc,
                         )
 
+    for path in macos_emoji_paths:
+        if not os.path.isfile(path):
+            continue
+        try:
+            return ImageFont.truetype(path, scaled_size)
+        except OSError as exc:
+            logging.debug("Unable to load macOS emoji font %s: %s", path, exc)
+
     symbola_paths = glob.glob("/usr/share/fonts/**/*.ttf", recursive=True)
     for path in symbola_paths:
         if "symbola" not in path.lower():
@@ -1305,7 +1317,9 @@ def _load_emoji_font(size: int) -> ImageFont.ImageFont:
         except OSError as exc:
             logging.debug("Unable to load fallback emoji font %s: %s", path, exc)
 
-    logging.warning("Emoji font not found; falling back to PIL default font")
+    if not getattr(_load_emoji_font, "_warned_fallback", False):
+        logging.warning("Emoji font not found; falling back to PIL default font")
+        setattr(_load_emoji_font, "_warned_fallback", True)
     return ImageFont.load_default()
 
 
