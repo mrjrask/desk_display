@@ -1,4 +1,5 @@
 import importlib
+import platform
 from pathlib import Path
 
 
@@ -21,6 +22,43 @@ def test_enable_screenshots_obeys_env(monkeypatch):
 
     module = _reload_config(monkeypatch, ENABLE_SCREENSHOTS=None)
     assert module.ENABLE_SCREENSHOTS is True
+
+
+def test_enable_screenshots_defaults_off_for_macos_window_output(monkeypatch):
+    monkeypatch.setattr(platform, "system", lambda: "Darwin")
+    module = _reload_config(
+        monkeypatch,
+        ENABLE_SCREENSHOTS=None,
+        DESK_DISPLAY_OUTPUT="window",
+    )
+    assert module.ENABLE_SCREENSHOTS is False
+
+
+def test_enable_screenshots_default_unchanged_for_non_macos(monkeypatch):
+    monkeypatch.setattr(platform, "system", lambda: "Linux")
+    module = _reload_config(
+        monkeypatch,
+        ENABLE_SCREENSHOTS=None,
+        DESK_DISPLAY_OUTPUT="window",
+    )
+    assert module.ENABLE_SCREENSHOTS is True
+
+
+def test_enable_screenshots_explicit_env_override_wins_for_macos_window(monkeypatch):
+    monkeypatch.setattr(platform, "system", lambda: "Darwin")
+    module = _reload_config(
+        monkeypatch,
+        ENABLE_SCREENSHOTS="1",
+        DESK_DISPLAY_OUTPUT="window",
+    )
+    assert module.ENABLE_SCREENSHOTS is True
+
+    module = _reload_config(
+        monkeypatch,
+        ENABLE_SCREENSHOTS="0",
+        DESK_DISPLAY_OUTPUT="window",
+    )
+    assert module.ENABLE_SCREENSHOTS is False
 
 
 def test_other_feature_flags_use_bool_parser(monkeypatch):
