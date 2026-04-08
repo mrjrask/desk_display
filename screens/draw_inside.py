@@ -15,6 +15,7 @@ import logging
 import math
 import os
 import json
+import platform
 import subprocess
 import sys
 import threading
@@ -1206,6 +1207,13 @@ def _try_init_blinka_i2c() -> Optional[Any]:
 
 def _probe_sensor() -> Tuple[Optional[str], Optional[Callable[[], SensorReadings]]]:
     """Try the available sensor drivers and return the first match."""
+
+    if platform.system() != "Linux":
+        logging.info(
+            "draw_inside: skipping indoor sensor probe on unsupported platform %s",
+            platform.system(),
+        )
+        return None, None
 
     preference, raw_preference = _get_sensor_env_override()
     if preference:
