@@ -1553,7 +1553,7 @@ _LOGO_LOADERS: Dict[str, Callable[[], Optional[Image.Image]]] = {
     "bears logo": lambda: load_logo("nfl/chi.png"),
     "nfl logo": lambda: load_logo("nfl/nfl.png"),
     "hawks logo": lambda: load_logo("nhl/CHI.png", height=TEAM_LOGO_HEIGHT),
-    "nhl logo": lambda: load_logo("nhl/nhl.png") or load_logo("nhl/NHL.png"),
+    "nhl logo": lambda: load_logo("nhl/nhl.png"),
     "wolves logo": _load_wolves_logo,
     "cubs logo": lambda: load_logo("mlb/CUBS.png", height=TEAM_LOGO_HEIGHT),
     "sox logo": lambda: load_logo("mlb/SOX.png", height=TEAM_LOGO_HEIGHT),
