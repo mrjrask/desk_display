@@ -1260,6 +1260,20 @@ def _load_emoji_font(size: int) -> ImageFont.ImageFont:
         "/System/Library/Fonts/Apple Color Emoji.ttc",
         "/Library/Fonts/Apple Color Emoji.ttc",
     )
+    bitmap_native_sizes = (20, 32, 40, 64, 96, 109, 128, 137, 160)
+
+    def _try_bitmap_font(path: str) -> Optional[ImageFont.ImageFont]:
+        for native_size in bitmap_native_sizes:
+            try:
+                return _BitmapEmojiFont(path, native_size, scaled_size)
+            except OSError as exc:
+                logging.debug(
+                    "Unable to load bitmap emoji font %s at native size %s: %s",
+                    path,
+                    native_size,
+                    exc,
+                )
+        return None
 
     for filename in noto_filenames:
         noto = _try_load_font(filename, size)
@@ -1270,16 +1284,9 @@ def _load_emoji_font(size: int) -> ImageFont.ImageFont:
         noto_path = os.path.join(FONTS_DIR, filename)
         if not os.path.isfile(noto_path):
             continue
-        for native_size in (109, 128, 160):
-            try:
-                return _BitmapEmojiFont(noto_path, native_size, scaled_size)
-            except OSError as exc:
-                logging.debug(
-                    "Unable to load bitmap emoji font %s at native size %s: %s",
-                    noto_path,
-                    native_size,
-                    exc,
-                )
+        bitmap_font = _try_bitmap_font(noto_path)
+        if bitmap_font:
+            return bitmap_font
 
     noto_system_paths = []
     for filename in noto_filenames:
@@ -1293,16 +1300,9 @@ def _load_emoji_font(size: int) -> ImageFont.ImageFont:
             message = str(exc).lower()
             logging.debug("Unable to load system emoji font %s: %s", path, exc)
             if "invalid pixel size" in message:
-                for native_size in (109, 128, 160):
-                    try:
-                        return _BitmapEmojiFont(path, native_size, scaled_size)
-                    except OSError as inner_exc:
-                        logging.debug(
-                            "Unable to load system bitmap emoji font %s at native size %s: %s",
-                            path,
-                            native_size,
-                            inner_exc,
-                        )
+                bitmap_font = _try_bitmap_font(path)
+                if bitmap_font:
+                    return bitmap_font
 
     for path in macos_emoji_paths:
         if not os.path.isfile(path):
@@ -1310,7 +1310,12 @@ def _load_emoji_font(size: int) -> ImageFont.ImageFont:
         try:
             return ImageFont.truetype(path, scaled_size)
         except OSError as exc:
+            message = str(exc).lower()
             logging.debug("Unable to load macOS emoji font %s: %s", path, exc)
+            if "invalid pixel size" in message:
+                bitmap_font = _try_bitmap_font(path)
+                if bitmap_font:
+                    return bitmap_font
 
     symbola_paths = glob.glob("/usr/share/fonts/**/*.ttf", recursive=True)
     for path in symbola_paths:

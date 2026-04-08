@@ -972,6 +972,7 @@ from config import (
     HEIGHT,
     CENTRAL_TIME,
     DISPLAY_ROTATION,
+    EMOJI_EMBEDDED_COLOR,
     WEATHER_USE_EMOJI_ICONS,
     get_emoji_font,
     is_hyperpixel_next_layout,
@@ -988,6 +989,8 @@ from config import (
     DISPLAY_FADE_IN_STEPS_BY_PROFILE,
     get_display_profile_id,
 )
+
+EMOJI_DRAW_KWARGS = {"embedded_color": True} if EMOJI_EMBEDDED_COLOR else {}
 # Color utilities
 from screens.color_palettes import random_color
 # ─── Logging decorator ──────────────────────────────────────────────────────
@@ -3543,7 +3546,10 @@ def _render_emoji_icon(emoji: str, size: int, *, stack_emojis: bool = False) -> 
             slot_top = idx * slot_height
             x = (size - text_w) // 2 - bbox[0]
             y = slot_top + (slot_height - text_h) // 2 - bbox[1]
-            draw.text((x, y), token, font=font, fill=(255, 255, 255, 255))
+            try:
+                draw.text((x, y), token, font=font, fill=(255, 255, 255, 255), **EMOJI_DRAW_KWARGS)
+            except TypeError:
+                draw.text((x, y), token, font=font, fill=(255, 255, 255, 255))
         return icon
 
     font = get_emoji_font(size)
@@ -3552,7 +3558,10 @@ def _render_emoji_icon(emoji: str, size: int, *, stack_emojis: bool = False) -> 
     text_h = bbox[3] - bbox[1]
     x = (size - text_w) // 2 - bbox[0]
     y = (size - text_h) // 2 - bbox[1]
-    draw.text((x, y), emoji, font=font, fill=(255, 255, 255, 255))
+    try:
+        draw.text((x, y), emoji, font=font, fill=(255, 255, 255, 255), **EMOJI_DRAW_KWARGS)
+    except TypeError:
+        draw.text((x, y), emoji, font=font, fill=(255, 255, 255, 255))
     return icon
 
 
