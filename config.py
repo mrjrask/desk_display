@@ -6,6 +6,7 @@ import glob
 import inspect
 import logging
 import os
+import platform
 import re
 import subprocess
 import threading
@@ -197,7 +198,11 @@ _STYLE_CONFIG_MTIME: Optional[float] = None
 _STYLE_CONFIG_LOCK = threading.Lock()
 
 # ─── Feature flags ────────────────────────────────────────────────────────────
-ENABLE_SCREENSHOTS   = _get_bool_env("ENABLE_SCREENSHOTS", True)
+_display_output = os.environ.get("DESK_DISPLAY_OUTPUT", "auto").strip().lower()
+_is_macos_window_output = _display_output == "window" and platform.system() == "Darwin"
+_default_enable_screenshots = not _is_macos_window_output
+
+ENABLE_SCREENSHOTS   = _get_bool_env("ENABLE_SCREENSHOTS", _default_enable_screenshots)
 ENABLE_VIDEO         = _get_bool_env("ENABLE_VIDEO", False)
 VIDEO_FPS            = 30
 ENABLE_WIFI_MONITOR  = _get_bool_env("ENABLE_WIFI_MONITOR", True)
@@ -492,7 +497,6 @@ except (TypeError, ValueError):
     logging.warning("Invalid DISPLAY_HEIGHT value; defaulting to %s.", BASE_HEIGHT)
     HEIGHT = BASE_HEIGHT
 
-_display_output = os.environ.get("DESK_DISPLAY_OUTPUT", "auto").strip().lower()
 _hyperpixel_panel = os.environ.get("HYPERPIXEL_PANEL", "").strip().lower()
 
 if (WIDTH, HEIGHT) == (480, 800) and (

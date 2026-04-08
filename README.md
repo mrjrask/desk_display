@@ -236,10 +236,12 @@ Configuration is environment-driven. Most values can be placed in `.env`.
 
 | Variable | Description |
 | --- | --- |
-| `ENABLE_SCREENSHOTS` | Enable screenshot capture |
+| `ENABLE_SCREENSHOTS` | Enable screenshot capture (default: `0` on macOS when `DESK_DISPLAY_OUTPUT=window`; otherwise `1`) |
 | `ENABLE_VIDEO` | Enable rolling MP4 capture |
 | `SCREENSHOT_DIR` | Screenshot output location |
 | `SCREENSHOT_ARCHIVE_BASE` | Archive location |
+
+On macOS desktop/window setups (`DESK_DISPLAY_OUTPUT=window`), screenshot capture now defaults to disabled to avoid extra capture load unless explicitly enabled. Set `ENABLE_SCREENSHOTS=1` to force-enable, or `ENABLE_SCREENSHOTS=0` to force-disable regardless of platform/output mode.
 
 For API-specific keys/fields, see [README_APIS.md](README_APIS.md).
 
