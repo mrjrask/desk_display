@@ -318,7 +318,7 @@ def build_logo_map() -> Dict[str, Optional[Image.Image]]:
         "bears logo": load_logo("nfl/chi.png"),
         "nfl logo": load_logo("nfl/nfl.png"),
         "hawks logo": load_logo("nhl/CHI.png", height=TEAM_LOGO_HEIGHT),
-        "nhl logo": load_logo("nhl/nhl.png") or load_logo("nhl/NHL.png"),
+        "nhl logo": load_logo("nhl/nhl.png"),
         "wolves logo": wolves_logo,
         "cubs logo": load_logo("mlb/CUBS.png", height=TEAM_LOGO_HEIGHT),
         "sox logo": load_logo("mlb/SOX.png", height=TEAM_LOGO_HEIGHT),
