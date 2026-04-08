@@ -640,12 +640,12 @@ class _KernelDisplay:
                 float(
                     os.environ.get(
                         "DESK_DISPLAY_WINDOW_SCALE",
-                        "2.0" if self.window_mode else "1.0",
+                        "1.0" if self.window_mode else "1.0",
                     )
                 ),
             )
         except (TypeError, ValueError):
-            self._window_scale = 2.0 if self.window_mode else 1.0
+            self._window_scale = 1.0 if self.window_mode else 1.0
         self._window_resizable = os.environ.get(
             "DESK_DISPLAY_WINDOW_RESIZABLE",
             "1",
