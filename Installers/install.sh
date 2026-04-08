@@ -15,6 +15,8 @@ Profiles:
   hyperpixel
   kernel
   macos_window
+  pi_window
+  win_window
   waveshare_oled_lcd_hat_a
 USAGE
 }
@@ -36,6 +38,12 @@ resolve_installer() {
     macos_window|macos|mac)
       echo "$PROJECT_DIR/Installers/install_macos_window.sh"
       ;;
+    pi_window|pi_desktop|raspberry_pi_window)
+      echo "$PROJECT_DIR/Installers/install_pi_window.sh"
+      ;;
+    win_window|windows_window|windows11_window)
+      echo "$PROJECT_DIR/Installers/install_win_window.sh"
+      ;;
     waveshare|waveshare_oled_lcd_hat_a)
       echo "$PROJECT_DIR/Installers/install_waveshare_oled_lcd_hat_a.sh"
       ;;
@@ -53,16 +61,20 @@ Select an install profile:
   3) hyperpixel
   4) kernel
   5) macos_window
-  6) waveshare_oled_lcd_hat_a
+  6) pi_window
+  7) win_window
+  8) waveshare_oled_lcd_hat_a
 MENU
-  read -r -p "Enter choice [1-6]: " choice
+  read -r -p "Enter choice [1-8]: " choice
   case "$choice" in
     ""|1) echo "display_hat_mini" ;;
     2) echo "adafruit_minipitft" ;;
     3) echo "hyperpixel" ;;
     4) echo "kernel" ;;
     5) echo "macos_window" ;;
-    6) echo "waveshare_oled_lcd_hat_a" ;;
+    6) echo "pi_window" ;;
+    7) echo "win_window" ;;
+    8) echo "waveshare_oled_lcd_hat_a" ;;
     *) return 1 ;;
   esac
 }
