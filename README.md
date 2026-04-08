@@ -1,6 +1,6 @@
 # Desk Display
 
-Desk Display is a Python dashboard application for Raspberry Pi and Linux displays. It rotates through configurable screens (weather, date/time, indoor sensors, sports, standings, scoreboards, and more) and supports multiple output targets including SPI TFTs, framebuffer devices, kernel/fullscreen displays, and headless rendering.
+Desk Display is a Python dashboard application for Raspberry Pi and Linux displays. It rotates through configurable screens (weather, date/time, indoor sensors, sports, standings, scoreboards, and more) and supports multiple output targets including SPI TFTs, framebuffer devices, kernel/fullscreen displays, scalable SDL windows, and headless rendering.
 
 ---
 
@@ -51,6 +51,7 @@ Set with `DESK_DISPLAY_OUTPUT`:
 - `displayhatmini`
 - `minipitft`
 - `kernel`
+- `window` (SDL windowed mode; useful on macOS/desktop)
 - `framebuffer`
 - `headless`
 
@@ -59,6 +60,7 @@ Hardware/workflows currently supported in this repo:
 - Pimoroni Display HAT Mini (320×240)
 - Adafruit miniPiTFT 1.14" (240×135)
 - HyperPixel/kernel fullscreen displays
+- Windowed SDL rendering on desktop/macOS
 - Framebuffer rendering (`/dev/fb*`)
 - Headless render/test mode
 
@@ -154,7 +156,7 @@ Notes:
 bash ./Installers/install.sh
 ```
 
-Pass an optional profile (`display_hat_mini`, `adafruit_minipitft`, `hyperpixel`, `kernel`, `waveshare_oled_lcd_hat_a`) to skip prompts.
+Pass an optional profile (`display_hat_mini`, `adafruit_minipitft`, `hyperpixel`, `kernel`, `macos_window`, `waveshare_oled_lcd_hat_a`) to skip prompts.
 
 ### Display HAT Mini
 
@@ -181,6 +183,14 @@ bash ./Installers/install_hyperpixel.sh
 bash ./Installers/install_kernel.sh
 ```
 
+### macOS scalable HyperPixel 4 window (800×480 render)
+
+```bash
+bash ./Installers/install_macos_window.sh
+./scripts/update_dependencies.sh
+./scripts/launch_macos_window.sh
+```
+
 ### Config UI service only (for existing installs)
 
 ```bash
@@ -195,7 +205,7 @@ Configuration is environment-driven. Most values can be placed in `.env`.
 
 | Variable | Description |
 | --- | --- |
-| `DESK_DISPLAY_OUTPUT` | Output mode (`auto`, `displayhatmini`, `minipitft`, `kernel`, `framebuffer`, `headless`) |
+| `DESK_DISPLAY_OUTPUT` | Output mode (`auto`, `displayhatmini`, `minipitft`, `kernel`, `window`, `framebuffer`, `headless`) |
 | `DESK_DISPLAY_FORCE_HEADLESS` | Force headless behavior |
 | `DISPLAY_WIDTH` / `DISPLAY_HEIGHT` | Render size override |
 | `DISPLAY_ROTATION` | App rotation (`0`,`90`,`180`,`270` or `0-3`) |

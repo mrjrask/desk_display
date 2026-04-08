@@ -14,6 +14,7 @@ Profiles:
   adafruit_minipitft
   hyperpixel
   kernel
+  macos_window
   waveshare_oled_lcd_hat_a
 USAGE
 }
@@ -32,6 +33,9 @@ resolve_installer() {
     kernel)
       echo "$PROJECT_DIR/Installers/install_kernel.sh"
       ;;
+    macos_window|macos|mac)
+      echo "$PROJECT_DIR/Installers/install_macos_window.sh"
+      ;;
     waveshare|waveshare_oled_lcd_hat_a)
       echo "$PROJECT_DIR/Installers/install_waveshare_oled_lcd_hat_a.sh"
       ;;
@@ -48,15 +52,17 @@ Select an install profile:
   2) adafruit_minipitft
   3) hyperpixel
   4) kernel
-  5) waveshare_oled_lcd_hat_a
+  5) macos_window
+  6) waveshare_oled_lcd_hat_a
 MENU
-  read -r -p "Enter choice [1-5]: " choice
+  read -r -p "Enter choice [1-6]: " choice
   case "$choice" in
     ""|1) echo "display_hat_mini" ;;
     2) echo "adafruit_minipitft" ;;
     3) echo "hyperpixel" ;;
     4) echo "kernel" ;;
-    5) echo "waveshare_oled_lcd_hat_a" ;;
+    5) echo "macos_window" ;;
+    6) echo "waveshare_oled_lcd_hat_a" ;;
     *) return 1 ;;
   esac
 }

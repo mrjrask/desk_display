@@ -423,6 +423,8 @@ def _normalize_display_output(value: str) -> str:
         return "framebuffer"
     if value in {"kernel", "kms", "drm", "sdl", "fullscreen"}:
         return "kernel"
+    if value in {"window", "windowed", "macos_window", "mac-window", "sdl-window"}:
+        return "window"
     if value in {"headless", "none", "off"}:
         return "headless"
     if value in {"auto", ""}:
@@ -609,15 +611,43 @@ class _FrameBufferDevice:
 
 
 class _KernelDisplay:
-    def __init__(self, width: int, height: int):
+    def __init__(self, width: int, height: int, *, window_mode: bool = False):
         self.render_width = width
         self.render_height = height
+        self.window_mode = bool(window_mode)
         self._pygame = _load_pygame()
         if self._pygame is None:
             raise RuntimeError(f"pygame not available: {_PYGAME_ERROR}")
 
         if not os.environ.get("DISPLAY") and not os.environ.get("WAYLAND_DISPLAY"):
             _maybe_configure_desktop_env()
+
+        fullscreen_default = "0" if self.window_mode else "1"
+        self._fullscreen = os.environ.get(
+            "DESK_DISPLAY_SDL_FULLSCREEN",
+            fullscreen_default,
+        ).strip().lower() not in {
+            "0",
+            "false",
+            "no",
+            "off",
+        }
+        try:
+            self._window_scale = max(
+                1.0,
+                float(
+                    os.environ.get(
+                        "DESK_DISPLAY_WINDOW_SCALE",
+                        "2.0" if self.window_mode else "1.0",
+                    )
+                ),
+            )
+        except (TypeError, ValueError):
+            self._window_scale = 2.0 if self.window_mode else 1.0
+        self._window_resizable = os.environ.get(
+            "DESK_DISPLAY_WINDOW_RESIZABLE",
+            "1",
+        ).strip().lower() not in {"0", "false", "no", "off"}
 
         self._sdl_driver: Optional[str] = None
         self._screen = self._init_display_surface()
@@ -640,7 +670,17 @@ class _KernelDisplay:
             pass
 
     def _init_display_surface(self):
-        flags = self._pygame.FULLSCREEN | self._pygame.SCALED
+        if self._fullscreen:
+            flags = self._pygame.FULLSCREEN | self._pygame.SCALED
+            requested_size = (0, 0)
+        else:
+            flags = self._pygame.SCALED
+            if self._window_resizable:
+                flags |= self._pygame.RESIZABLE
+            requested_size = (
+                max(1, int(round(self.render_width * self._window_scale))),
+                max(1, int(round(self.render_height * self._window_scale))),
+            )
         errors: List[str] = []
         for driver in _sdl_driver_candidates():
             if driver:
@@ -654,12 +694,13 @@ class _KernelDisplay:
             try:
                 self._pygame.display.init()
                 try:
-                    screen = self._pygame.display.set_mode((0, 0), flags)
+                    screen = self._pygame.display.set_mode(requested_size, flags)
                 except Exception as exc:
                     message = str(exc)
                     if "0 sized" in message or "0-sized" in message:
                         screen = self._pygame.display.set_mode(
-                            (self.render_width, self.render_height), flags
+                            (self.render_width, self.render_height),
+                            flags,
                         )
                     else:
                         raise
@@ -1015,13 +1056,22 @@ class Display:
                             self.height,
                             self.rotation,
                         )
-        elif output == "kernel":
+        elif output in {"kernel", "window"}:
             self._uses_kernel_output = True
+            window_mode = output == "window"
             try:
-                self._kernel_display = _KernelDisplay(self.width, self.height)
+                self._kernel_display = _KernelDisplay(
+                    self.width,
+                    self.height,
+                    window_mode=window_mode,
+                )
             except Exception as exc:
-                logging.warning("Kernel display output unavailable (%s).", exc)
-                logging.info("Attempting framebuffer fallback after kernel output failure.")
+                mode_label = "Windowed SDL" if window_mode else "Kernel display"
+                logging.warning("%s output unavailable (%s).", mode_label, exc)
+                logging.info(
+                    "Attempting framebuffer fallback after %s output failure.",
+                    mode_label.lower(),
+                )
                 self._framebuffer = _init_framebuffer_output(
                     requested_size=(self.width, self.height),
                     configured_device=_FRAMEBUFFER_DEVICE,
@@ -1035,12 +1085,20 @@ class Display:
                 self._kernel_display = None
             else:
                 driver_label = self._kernel_display._sdl_driver or "default"
-                logging.info(
-                    "🖥️  Kernel display initialized (%dx%d fullscreen, SDL driver: %s).",
-                    self._kernel_display.screen_width,
-                    self._kernel_display.screen_height,
-                    driver_label,
-                )
+                if window_mode:
+                    logging.info(
+                        "🪟 Window display initialized (%dx%d window, SDL driver: %s).",
+                        self._kernel_display.screen_width,
+                        self._kernel_display.screen_height,
+                        driver_label,
+                    )
+                else:
+                    logging.info(
+                        "🖥️  Kernel display initialized (%dx%d fullscreen, SDL driver: %s).",
+                        self._kernel_display.screen_width,
+                        self._kernel_display.screen_height,
+                        driver_label,
+                    )
                 if (self.width, self.height) != (
                     self._kernel_display.screen_width,
                     self._kernel_display.screen_height,

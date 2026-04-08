@@ -496,7 +496,7 @@ _display_output = os.environ.get("DESK_DISPLAY_OUTPUT", "auto").strip().lower()
 _hyperpixel_panel = os.environ.get("HYPERPIXEL_PANEL", "").strip().lower()
 
 if (WIDTH, HEIGHT) == (480, 800) and (
-    _hyperpixel_panel == "hyperpixel4" or _display_output in {"kernel", "kms", "drm", "sdl"}
+    _hyperpixel_panel == "hyperpixel4" or _display_output in {"kernel", "kms", "drm", "sdl", "window"}
 ):
     logging.info(
         "Detected HyperPixel 4 portrait mode dimensions (480x800); normalizing to 800x480."
@@ -575,7 +575,7 @@ def scale_value(value: float) -> int:
 
 def scale_value_width(value: float) -> int:
     return max(1, int(round(value * DISPLAY_SCALE_WIDTH)))
-KERNEL_DRIVEN_OUTPUTS = {"kernel", "kms", "drm", "sdl", "fullscreen"}
+KERNEL_DRIVEN_OUTPUTS = {"kernel", "kms", "drm", "sdl", "fullscreen", "window"}
 
 
 ACTIVE_DISPLAY_PROFILE: DisplayProfilePreset = resolve_display_profile(WIDTH, HEIGHT)
@@ -681,7 +681,7 @@ SCHEDULE_UPDATE_INTERVAL = 600
 
 _use_kernel_rotation_source = (
     _hyperpixel_panel.startswith("hyperpixel")
-    or _display_output in {"kernel", "kms", "drm", "sdl"}
+    or _display_output in {"kernel", "kms", "drm", "sdl", "window"}
 )
 _kernel_overlay_rotation = None
 DISPLAY_ROTATION_STRICT = _get_bool_env(
@@ -766,7 +766,7 @@ def initialise_runtime_probes() -> None:
                     runtime_width = fb_width
                 if not _display_height_set:
                     runtime_height = fb_height
-        elif _display_output in {"kernel", "kms", "drm", "sdl"}:
+        elif _display_output in {"kernel", "kms", "drm", "sdl", "window"}:
             drm_size = _read_drm_mode_size()
             if drm_size:
                 drm_width, drm_height = drm_size
@@ -776,7 +776,7 @@ def initialise_runtime_probes() -> None:
                     runtime_height = drm_height
 
     if (runtime_width, runtime_height) == (480, 800) and (
-        _hyperpixel_panel == "hyperpixel4" or _display_output in {"kernel", "kms", "drm", "sdl"}
+        _hyperpixel_panel == "hyperpixel4" or _display_output in {"kernel", "kms", "drm", "sdl", "window"}
     ):
         runtime_width, runtime_height = 800, 480
 
