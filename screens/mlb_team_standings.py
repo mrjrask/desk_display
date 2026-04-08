@@ -55,6 +55,7 @@ if _IS_1080P_LAYOUT:
     LOGO_SZ = min(LOGO_SZ, _VRNOF_MATCH_LOGO_HEIGHT_1080)
 MARGIN  = scale_value(6)
 FRACTION_FONT_SCALE = 0.6
+_CUBS_STAND3_MARKER_SCALE = 1.4
 _HAWKS_STAND1_MATCH_SCREEN_IDS = {
     "cubs stand1",
     "cubs stand2",
@@ -738,7 +739,7 @@ def draw_standings_screen3(
                 loss_text = f"{l_val}"
                 w_w, w_h = draw.textsize(win_text, font)
                 l_w, l_h = draw.textsize(loss_text, font)
-                icon_h = max(w_h, l_h, 1)
+                icon_h = max(1, int(round(max(w_h, l_h, 1) * _CUBS_STAND3_MARKER_SCALE)))
                 w_icon = _load_marker_icon("W", icon_h)
                 l_icon = _load_marker_icon("L", icon_h)
                 icon_gap = max(2, scale_value_width(2))
