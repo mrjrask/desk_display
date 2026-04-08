@@ -101,6 +101,16 @@ def test_schedule_mouse_cursor_wiggle_noops_for_nonpositive_delay(monkeypatch):
     assert utils._schedule_mouse_cursor_wiggle(_FakePygame(), delay_seconds=0) is None
 
 
+def test_schedule_mouse_cursor_wiggle_noops_on_macos(monkeypatch):
+    def _raise_if_called(*_args, **_kwargs):
+        raise AssertionError("Timer should not be constructed on macOS")
+
+    monkeypatch.setattr(utils.threading, "Timer", _raise_if_called)
+    monkeypatch.setattr(utils.sys, "platform", "darwin")
+
+    assert utils._schedule_mouse_cursor_wiggle(_FakePygame(), delay_seconds=30) is None
+
+
 def test_park_mouse_cursor_moves_pointer_to_bottom_right():
     fake_pygame = _FakePygame()
 
