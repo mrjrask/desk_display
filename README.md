@@ -188,8 +188,14 @@ bash ./Installers/install_kernel.sh
 ```bash
 bash ./Installers/install_macos_window.sh
 ./scripts/update_dependencies.sh
+# Normal desktop window launcher
 ./scripts/launch_macos_window.sh
+
+# Lower CPU / smoother UI profile (opt-in)
+./scripts/launch_macos_window_perf.sh
 ```
+
+Use `launch_macos_window.sh` for the standard desktop profile. Use `launch_macos_window_perf.sh` when you want conservative defaults that reduce CPU load on macOS (window scale `1`, screenshots/video disabled, and Wi-Fi monitor/recovery disabled by default).
 
 ### Config UI service only (for existing installs)
 
@@ -381,6 +387,7 @@ python -m py_compile main.py data_fetch.py screens/registry.py screens/mlb_sched
 - Wrong rotation: avoid double-rotation between overlay and app rotation.
 - Blank framebuffer/kernel output: verify `DESK_DISPLAY_OUTPUT`, dimensions, and target device path.
 - Waveshare OLED/LCD issues: run `scripts/check_waveshare_setup.sh` and verify I2C addresses and framebuffer settings.
+- High CPU on Mac: use `./scripts/launch_macos_window_perf.sh` or set `DESK_DISPLAY_WINDOW_SCALE=1`, `ENABLE_SCREENSHOTS=0`, and `ENABLE_VIDEO=0` (and optionally `ENABLE_WIFI_MONITOR=0` / `ENABLE_WIFI_RECOVERY=0` for desktop setups).
 
 ---
 
