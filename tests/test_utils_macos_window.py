@@ -58,11 +58,18 @@ def test_window_output_failure_does_not_fallback_to_framebuffer(monkeypatch):
 class _FakeSurface:
     def __init__(self, size):
         self._size = size
+        self.last_blit_coords = None
+        self.last_fill = None
 
     def get_size(self):
         return self._size
 
-    def blit(self, _surface, _coords):
+    def fill(self, color):
+        self.last_fill = color
+        return None
+
+    def blit(self, _surface, coords):
+        self.last_blit_coords = coords
         return None
 
 
@@ -145,7 +152,9 @@ def test_window_mode_scales_to_resized_display_surface(monkeypatch):
 
     display.write_image(utils.Image.new("RGB", (800, 480), "black"))
 
-    assert called["size"] == (1440, 900)
+    assert called["size"] == (1440, 864)
+    assert display._screen.last_fill == (0, 0, 0)
+    assert display._screen.last_blit_coords == (0, 18)
 
 
 def test_window_mode_scales_down_to_smaller_resized_surface(monkeypatch):
