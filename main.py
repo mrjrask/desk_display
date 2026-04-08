@@ -13,7 +13,14 @@ Changes:
   the live screenshots/ folder structure.
 """
 import warnings
-from gpiozero.exc import PinFactoryFallback, NativePinFactoryFallback
+try:
+    from gpiozero.exc import PinFactoryFallback, NativePinFactoryFallback
+except Exception:
+    class PinFactoryFallback(Warning):
+        """Fallback warning class when gpiozero is unavailable."""
+
+    class NativePinFactoryFallback(Warning):
+        """Fallback warning class when gpiozero is unavailable."""
 
 warnings.filterwarnings("ignore", category=PinFactoryFallback)
 warnings.filterwarnings("ignore", category=NativePinFactoryFallback)
