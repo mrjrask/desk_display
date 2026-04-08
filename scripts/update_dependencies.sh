@@ -48,7 +48,10 @@ pick_requirements_file() {
     return 0
   fi
 
-  case "${OUTPUT_MODE,,}" in
+  local normalized_output_mode
+  normalized_output_mode=$(printf '%s' "$OUTPUT_MODE" | tr '[:upper:]' '[:lower:]')
+
+  case "$normalized_output_mode" in
     kernel)
       echo "requirements_kernel.txt"
       ;;
