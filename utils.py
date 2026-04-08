@@ -423,6 +423,8 @@ def _normalize_display_output(value: str) -> str:
         return "framebuffer"
     if value in {"kernel", "kms", "drm", "sdl", "fullscreen"}:
         return "kernel"
+    if value in {"window", "windowed", "macos_window", "mac-window", "sdl-window"}:
+        return "window"
     if value in {"headless", "none", "off"}:
         return "headless"
     if value in {"auto", ""}:
@@ -609,9 +611,10 @@ class _FrameBufferDevice:
 
 
 class _KernelDisplay:
-    def __init__(self, width: int, height: int):
+    def __init__(self, width: int, height: int, *, window_mode: bool = False):
         self.render_width = width
         self.render_height = height
+        self.window_mode = bool(window_mode)
         self._pygame = _load_pygame()
         if self._pygame is None:
             raise RuntimeError(f"pygame not available: {_PYGAME_ERROR}")
@@ -619,7 +622,11 @@ class _KernelDisplay:
         if not os.environ.get("DISPLAY") and not os.environ.get("WAYLAND_DISPLAY"):
             _maybe_configure_desktop_env()
 
-        self._fullscreen = os.environ.get("DESK_DISPLAY_SDL_FULLSCREEN", "1").strip().lower() not in {
+        fullscreen_default = "0" if self.window_mode else "1"
+        self._fullscreen = os.environ.get(
+            "DESK_DISPLAY_SDL_FULLSCREEN",
+            fullscreen_default,
+        ).strip().lower() not in {
             "0",
             "false",
             "no",
@@ -628,10 +635,15 @@ class _KernelDisplay:
         try:
             self._window_scale = max(
                 1.0,
-                float(os.environ.get("DESK_DISPLAY_WINDOW_SCALE", "1.0")),
+                float(
+                    os.environ.get(
+                        "DESK_DISPLAY_WINDOW_SCALE",
+                        "2.0" if self.window_mode else "1.0",
+                    )
+                ),
             )
         except (TypeError, ValueError):
-            self._window_scale = 1.0
+            self._window_scale = 2.0 if self.window_mode else 1.0
         self._window_resizable = os.environ.get(
             "DESK_DISPLAY_WINDOW_RESIZABLE",
             "1",
@@ -1044,13 +1056,22 @@ class Display:
                             self.height,
                             self.rotation,
                         )
-        elif output == "kernel":
+        elif output in {"kernel", "window"}:
             self._uses_kernel_output = True
+            window_mode = output == "window"
             try:
-                self._kernel_display = _KernelDisplay(self.width, self.height)
+                self._kernel_display = _KernelDisplay(
+                    self.width,
+                    self.height,
+                    window_mode=window_mode,
+                )
             except Exception as exc:
-                logging.warning("Kernel display output unavailable (%s).", exc)
-                logging.info("Attempting framebuffer fallback after kernel output failure.")
+                mode_label = "Windowed SDL" if window_mode else "Kernel display"
+                logging.warning("%s output unavailable (%s).", mode_label, exc)
+                logging.info(
+                    "Attempting framebuffer fallback after %s output failure.",
+                    mode_label.lower(),
+                )
                 self._framebuffer = _init_framebuffer_output(
                     requested_size=(self.width, self.height),
                     configured_device=_FRAMEBUFFER_DEVICE,
@@ -1064,12 +1085,20 @@ class Display:
                 self._kernel_display = None
             else:
                 driver_label = self._kernel_display._sdl_driver or "default"
-                logging.info(
-                    "🖥️  Kernel display initialized (%dx%d fullscreen, SDL driver: %s).",
-                    self._kernel_display.screen_width,
-                    self._kernel_display.screen_height,
-                    driver_label,
-                )
+                if window_mode:
+                    logging.info(
+                        "🪟 Window display initialized (%dx%d window, SDL driver: %s).",
+                        self._kernel_display.screen_width,
+                        self._kernel_display.screen_height,
+                        driver_label,
+                    )
+                else:
+                    logging.info(
+                        "🖥️  Kernel display initialized (%dx%d fullscreen, SDL driver: %s).",
+                        self._kernel_display.screen_width,
+                        self._kernel_display.screen_height,
+                        driver_label,
+                    )
                 if (self.width, self.height) != (
                     self._kernel_display.screen_width,
                     self._kernel_display.screen_height,
