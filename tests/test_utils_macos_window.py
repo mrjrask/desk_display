@@ -105,8 +105,11 @@ class _FakePygame:
     def __init__(self):
         self.display = _FakePygameDisplay()
         self.mouse = SimpleNamespace(set_visible=lambda _visible: None)
-        self.event = SimpleNamespace(pump=lambda: None)
-        self.transform = SimpleNamespace(smoothscale=lambda surface, _size: surface)
+        self.event = SimpleNamespace(pump=lambda: None, get=lambda *_args, **_kwargs: [])
+        self.transform = SimpleNamespace(
+            smoothscale=lambda surface, _size: surface,
+            scale=lambda surface, _size: surface,
+        )
         self.image = SimpleNamespace(frombuffer=lambda _bytes, size, _mode: _FakeSurface(size))
 
 
@@ -244,3 +247,45 @@ def test_kernel_display_skips_worker_thread_render_on_macos(monkeypatch):
     display.write_image(utils.Image.new("RGB", (800, 480), "black"))
 
     assert called == {"frombuffer": False, "flip": False, "pump": False}
+
+
+def test_window_mode_uses_fast_scale_and_drains_resize_events_on_macos(monkeypatch):
+    fake_pygame = _FakePygame()
+    monkeypatch.setattr(utils, "_load_pygame", lambda: fake_pygame)
+    monkeypatch.setattr(utils, "_sdl_driver_candidates", lambda: [None])
+    monkeypatch.setattr(utils, "_maybe_configure_desktop_env", lambda: None)
+    monkeypatch.setattr(utils, "_park_mouse_cursor", lambda _pygame: None)
+    monkeypatch.setattr(utils, "_wiggle_mouse_cursor", lambda _pygame: None)
+    monkeypatch.setattr(utils, "_schedule_mouse_cursor_wiggle", lambda *_args, **_kwargs: None)
+    monkeypatch.setenv("DESK_DISPLAY_WINDOW_SCALE", "1")
+    monkeypatch.setenv("DESK_DISPLAY_SDL_FULLSCREEN", "0")
+    monkeypatch.setattr(utils.sys, "platform", "darwin")
+
+    fake_pygame.WINDOWRESIZED = 10
+    fake_pygame.WINDOWSIZECHANGED = 11
+    fake_pygame.VIDEORESIZE = 12
+    fake_pygame.WINDOWEVENT = 13
+
+    display = utils._KernelDisplay(800, 480, window_mode=True)
+    display._screen = _FakeSurface((1440, 900))
+    display.screen_width, display.screen_height = display._screen.get_size()
+    display._scale_to_screen = True
+
+    called = {"scale_size": None, "smooth_size": None, "event_types": None}
+
+    def _scale(_surface, size):
+        called["scale_size"] = size
+        return _FakeSurface(size)
+
+    def _smoothscale(_surface, size):
+        called["smooth_size"] = size
+        return _FakeSurface(size)
+
+    fake_pygame.transform = SimpleNamespace(scale=_scale, smoothscale=_smoothscale)
+    fake_pygame.event.get = lambda types: called.__setitem__("event_types", list(types)) or []
+
+    display.write_image(utils.Image.new("RGB", (800, 480), "black"))
+
+    assert called["scale_size"] == (1440, 864)
+    assert called["smooth_size"] is None
+    assert called["event_types"] == [10, 11, 12, 13]

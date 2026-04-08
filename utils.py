@@ -671,6 +671,55 @@ class _KernelDisplay:
         except Exception:  # pragma: no cover - optional behavior
             pass
 
+    def _drain_window_resize_events(self) -> None:
+        """Drop queued resize/window events to avoid backlog while dragging."""
+
+        event_get = getattr(self._pygame.event, "get", None)
+        if event_get is None:
+            return
+
+        resize_event_types: list[int] = []
+        for event_name in (
+            "WINDOWRESIZED",
+            "WINDOWSIZECHANGED",
+            "VIDEORESIZE",
+            "WINDOWEVENT",
+        ):
+            event_type = getattr(self._pygame, event_name, None)
+            if isinstance(event_type, int):
+                resize_event_types.append(event_type)
+        if not resize_event_types:
+            return
+
+        try:
+            event_get(resize_event_types)
+        except Exception:
+            return
+
+    def _scale_surface_to_target(self, surface: Any, target_size: tuple[int, int]) -> Any:
+        """Choose the lowest-latency scaler for the current platform/mode."""
+
+        transform = getattr(self._pygame, "transform", None)
+        if transform is None:
+            return surface
+
+        # AppKit can emit dense resize traffic while dragging macOS windows.
+        # Prefer the faster nearest-neighbor path during windowed rendering to
+        # keep resize interactions responsive.
+        if self.window_mode and sys.platform == "darwin":
+            fast_scale = getattr(transform, "scale", None)
+            if callable(fast_scale):
+                return fast_scale(surface, target_size)
+
+        smoothscale = getattr(transform, "smoothscale", None)
+        if callable(smoothscale):
+            return smoothscale(surface, target_size)
+
+        fast_scale = getattr(transform, "scale", None)
+        if callable(fast_scale):
+            return fast_scale(surface, target_size)
+        return surface
+
     def _init_display_surface(self):
         if self._fullscreen:
             flags = self._pygame.FULLSCREEN | self._pygame.SCALED
@@ -746,7 +795,7 @@ class _KernelDisplay:
                 max(1, int(round(self.render_width * scale_factor))),
                 max(1, int(round(self.render_height * scale_factor))),
             )
-            surface = self._pygame.transform.smoothscale(surface, target_size)
+            surface = self._scale_surface_to_target(surface, target_size)
             self._screen.fill((0, 0, 0))
             offset = (
                 (self.screen_width - target_size[0]) // 2,
@@ -756,6 +805,7 @@ class _KernelDisplay:
         else:
             self._screen.blit(surface, (0, 0))
         self._pygame.display.flip()
+        self._drain_window_resize_events()
         self._pygame.event.pump()
 
 
