@@ -156,7 +156,7 @@ Notes:
 bash ./Installers/install.sh
 ```
 
-Pass an optional profile (`display_hat_mini`, `adafruit_minipitft`, `hyperpixel`, `kernel`, `macos_window`, `waveshare_oled_lcd_hat_a`) to skip prompts.
+Pass an optional profile (`display_hat_mini`, `adafruit_minipitft`, `hyperpixel`, `kernel`, `macos_window`, `pi_window`, `win_window`, `waveshare_oled_lcd_hat_a`) to skip prompts.
 
 ### Display HAT Mini
 
@@ -196,6 +196,22 @@ bash ./Installers/install_macos_window.sh
 ```
 
 Use `launch_macos_window.sh` for the standard desktop profile. Use `launch_macos_window_perf.sh` when you want conservative defaults that reduce CPU load on macOS (window scale `1`, screenshots/video disabled, and Wi-Fi monitor/recovery disabled by default).
+
+### Raspberry Pi Desktop window mode (800×480 render)
+
+```bash
+bash ./Installers/install_pi_window.sh
+./scripts/update_dependencies.sh
+./launch_pi_window.sh
+```
+
+### Windows 11 window mode (800×480 render)
+
+```bash
+bash ./Installers/install_win_window.sh
+# Activate/install dependencies in your preferred shell first, then:
+./launch_win_window.sh
+```
 
 ### Config UI service only (for existing installs)
 
