@@ -714,6 +714,14 @@ class _KernelDisplay:
         raise RuntimeError("Failed to initialize SDL display: " + "; ".join(errors))
 
     def write_image(self, image: Image.Image) -> None:
+        if (
+            sys.platform == "darwin"
+            and threading.current_thread() is not threading.main_thread()
+        ):
+            # Cocoa-backed SDL must only be touched from the process main
+            # thread on macOS. Background render workers can still prepare PIL
+            # frames, but they must not blit/flip/pump pygame events.
+            return
         if image.mode != "RGB":
             image = image.convert("RGB")
         surface = self._pygame.image.frombuffer(
