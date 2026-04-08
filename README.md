@@ -189,7 +189,7 @@ bash ./Installers/install_kernel.sh
 bash ./Installers/install_macos_window.sh
 ./scripts/update_dependencies.sh
 # Normal desktop window launcher
-./scripts/launch_macos_window.sh
+./launch_macos_window.sh
 
 # Lower CPU / smoother UI profile (opt-in)
 ./scripts/launch_macos_window_perf.sh
