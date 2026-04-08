@@ -148,6 +148,22 @@ def test_window_mode_scales_to_resized_display_surface(monkeypatch):
     assert called["size"] == (1440, 900)
 
 
+def test_window_mode_scale_env_expands_requested_window_size(monkeypatch):
+    fake_pygame = _FakePygame()
+    monkeypatch.setattr(utils, "_load_pygame", lambda: fake_pygame)
+    monkeypatch.setattr(utils, "_sdl_driver_candidates", lambda: [None])
+    monkeypatch.setattr(utils, "_maybe_configure_desktop_env", lambda: None)
+    monkeypatch.setattr(utils, "_park_mouse_cursor", lambda _pygame: None)
+    monkeypatch.setattr(utils, "_wiggle_mouse_cursor", lambda _pygame: None)
+    monkeypatch.setattr(utils, "_schedule_mouse_cursor_wiggle", lambda *_args, **_kwargs: None)
+    monkeypatch.setenv("DESK_DISPLAY_WINDOW_SCALE", "2")
+    monkeypatch.setenv("DESK_DISPLAY_SDL_FULLSCREEN", "0")
+
+    utils._KernelDisplay(800, 480, window_mode=True)
+
+    assert fake_pygame.display.last_set_mode[0] == (1600, 960)
+
+
 def test_kernel_display_skips_worker_thread_render_on_macos(monkeypatch):
     fake_pygame = _FakePygame()
     monkeypatch.setattr(utils, "_load_pygame", lambda: fake_pygame)

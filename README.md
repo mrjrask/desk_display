@@ -191,6 +191,11 @@ bash ./Installers/install_macos_window.sh
 ./scripts/launch_macos_window.sh
 ```
 
+For macOS window performance tuning:
+
+- Start with `DESK_DISPLAY_WINDOW_SCALE=1` to avoid extra per-frame smooth scaling work.
+- Only use `DESK_DISPLAY_WINDOW_SCALE=2` if larger on-screen size is more important than performance.
+
 ### Config UI service only (for existing installs)
 
 ```bash
