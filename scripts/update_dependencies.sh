@@ -8,6 +8,7 @@ PYTHON_BIN="${PYTHON:-python3}"
 REQUIREMENTS_FILE_OVERRIDE="${REQUIREMENTS_FILE:-}"
 OUTPUT_MODE="${DESK_DISPLAY_OUTPUT:-}"
 INCLUDE_VENDOR_REQUIREMENTS="${INCLUDE_VENDOR_REQUIREMENTS:-0}"
+INCLUDE_PLATFORM_SPECIFIC_REQUIREMENTS="${INCLUDE_PLATFORM_SPECIFIC_REQUIREMENTS:-0}"
 
 if [[ ! -f "$COMMON_SCRIPT" ]]; then
   echo "[ERROR] Missing helper script: $COMMON_SCRIPT" >&2
@@ -35,8 +36,12 @@ while [[ $# -gt 0 ]]; do
       INCLUDE_VENDOR_REQUIREMENTS=1
       shift
       ;;
+    --include-platform-specific)
+      INCLUDE_PLATFORM_SPECIFIC_REQUIREMENTS=1
+      shift
+      ;;
     *)
-      echo "Usage: $0 [--requirements <file>] [--output <displayhatmini|minipitft|kernel|framebuffer>] [--python <python-bin>] [--include-vendor]" >&2
+      echo "Usage: $0 [--requirements <file>] [--output <displayhatmini|minipitft|kernel|framebuffer>] [--python <python-bin>] [--include-vendor] [--include-platform-specific]" >&2
       exit 1
       ;;
   esac
@@ -118,6 +123,8 @@ pip install --upgrade pip
 build_install_requirements_file() {
   local source_requirements="$1"
   local install_requirements="$2"
+  local host_os
+  host_os=$(uname -s)
 
   if [[ "$INCLUDE_VENDOR_REQUIREMENTS" == "1" ]]; then
     cp "$source_requirements" "$install_requirements"
@@ -134,6 +141,17 @@ build_install_requirements_file() {
     /^[[:space:]]*file:\/\/.*\/vendor\// { next }
     { print }
   ' "$source_requirements" > "$install_requirements"
+
+  if [[ "$host_os" == "Darwin" && "$INCLUDE_PLATFORM_SPECIFIC_REQUIREMENTS" != "1" ]]; then
+    log "macOS detected; skipping Linux-only hardware dependencies (use --include-platform-specific to include them)"
+    awk '
+      /^[[:space:]]*#/ { print; next }
+      /^[[:space:]]*$/ { print; next }
+      /^[[:space:]]*(spidev|smbus|lgpio|rpi\.gpio|gpiozero|displayhatmini)[[:space:]]*([<>=!~].*)?$/ { next }
+      { print }
+    ' "$install_requirements" > "${install_requirements}.macos"
+    mv "${install_requirements}.macos" "$install_requirements"
+  fi
 }
 
 if [[ -f "$PROJECT_DIR/$REQUIREMENTS_FILE" ]]; then
