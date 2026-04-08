@@ -676,7 +676,10 @@ class _KernelDisplay:
             flags = self._pygame.FULLSCREEN | self._pygame.SCALED
             requested_size = (0, 0)
         else:
-            flags = self._pygame.SCALED
+            # Keep windowed mode fully user-resizable (including below the
+            # native render size). SDL's SCALED flag can enforce a minimum
+            # window size that blocks shrinking on desktop platforms.
+            flags = 0
             if self._window_resizable:
                 flags |= self._pygame.RESIZABLE
             requested_size = (
@@ -727,6 +730,13 @@ class _KernelDisplay:
         surface = self._pygame.image.frombuffer(
             image.tobytes(), image.size, "RGB"
         )
+        current_size = self._screen.get_size()
+        if current_size != (self.screen_width, self.screen_height):
+            self.screen_width, self.screen_height = current_size
+            self._scale_to_screen = current_size != (
+                self.render_width,
+                self.render_height,
+            )
         if self._scale_to_screen:
             surface = self._pygame.transform.smoothscale(
                 surface, (self.screen_width, self.screen_height)
