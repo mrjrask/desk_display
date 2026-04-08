@@ -738,10 +738,23 @@ class _KernelDisplay:
                 self.render_height,
             )
         if self._scale_to_screen:
-            surface = self._pygame.transform.smoothscale(
-                surface, (self.screen_width, self.screen_height)
+            scale_factor = min(
+                self.screen_width / self.render_width,
+                self.screen_height / self.render_height,
             )
-        self._screen.blit(surface, (0, 0))
+            target_size = (
+                max(1, int(round(self.render_width * scale_factor))),
+                max(1, int(round(self.render_height * scale_factor))),
+            )
+            surface = self._pygame.transform.smoothscale(surface, target_size)
+            self._screen.fill((0, 0, 0))
+            offset = (
+                (self.screen_width - target_size[0]) // 2,
+                (self.screen_height - target_size[1]) // 2,
+            )
+            self._screen.blit(surface, offset)
+        else:
+            self._screen.blit(surface, (0, 0))
         self._pygame.display.flip()
         self._pygame.event.pump()
 
