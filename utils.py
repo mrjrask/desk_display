@@ -19,6 +19,7 @@ import os
 import pwd
 import random
 import re
+import shutil
 import subprocess
 import threading
 import time
@@ -214,13 +215,13 @@ def _sdl_driver_candidates() -> List[Optional[str]]:
         if drivers:
             return drivers
 
-    candidates: List[str] = []
+    candidates: List[Optional[str]] = [None]
     if os.environ.get("WAYLAND_DISPLAY"):
         candidates.append("wayland")
     if os.environ.get("DISPLAY"):
         candidates.append("x11")
     candidates.extend(["kmsdrm", "fbcon", "directfb"])
-    return list(dict.fromkeys(candidates)) or [None]
+    return list(dict.fromkeys(candidates))
 
 
 def _read_sysfs_value(path: str) -> Optional[str]:
@@ -1068,20 +1069,27 @@ class Display:
             except Exception as exc:
                 mode_label = "Windowed SDL" if window_mode else "Kernel display"
                 logging.warning("%s output unavailable (%s).", mode_label, exc)
-                logging.info(
-                    "Attempting framebuffer fallback after %s output failure.",
-                    mode_label.lower(),
-                )
-                self._framebuffer = _init_framebuffer_output(
-                    requested_size=(self.width, self.height),
-                    configured_device=_FRAMEBUFFER_DEVICE,
-                )
-                if self._framebuffer is None:
+                if window_mode:
                     logging.warning(
-                        "Framebuffer fallback unavailable; running headless."
+                        "Window mode requested but SDL window initialization failed; running headless instead of framebuffer fallback."
                     )
-                else:
+                    self._kernel_display = None
                     self._uses_kernel_output = False
+                else:
+                    logging.info(
+                        "Attempting framebuffer fallback after %s output failure.",
+                        mode_label.lower(),
+                    )
+                    self._framebuffer = _init_framebuffer_output(
+                        requested_size=(self.width, self.height),
+                        configured_device=_FRAMEBUFFER_DEVICE,
+                    )
+                    if self._framebuffer is None:
+                        logging.warning(
+                            "Framebuffer fallback unavailable; running headless."
+                        )
+                    else:
+                        self._uses_kernel_output = False
                 self._kernel_display = None
             else:
                 driver_label = self._kernel_display._sdl_driver or "default"
@@ -3070,6 +3078,11 @@ def check_apt_updates() -> bool:
         )
         _set_update_status(apt=_APT_CACHE_RESULT)
         return _APT_CACHE_RESULT
+
+    if shutil.which("apt-get") is None:
+        logging.info("check_apt_updates: apt-get unavailable on this platform; skipping")
+        _set_update_status(apt=False)
+        return False
 
     try:
         proc = subprocess.run(
