@@ -18,7 +18,7 @@ if [[ "$(uname -s)" != "Darwin" ]]; then
 fi
 
 ENV_PATH="$PROJECT_DIR/.env"
-WINDOW_SCALE="${DESK_DISPLAY_WINDOW_SCALE:-2}"
+WINDOW_SCALE="${DESK_DISPLAY_WINDOW_SCALE:-1}"
 
 ENV_LINES=(
   "DESK_DISPLAY_OUTPUT=window"
