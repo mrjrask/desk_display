@@ -55,6 +55,7 @@ if _IS_1080P_LAYOUT:
     LOGO_SZ = min(LOGO_SZ, _VRNOF_MATCH_LOGO_HEIGHT_1080)
 MARGIN  = scale_value(6)
 FRACTION_FONT_SCALE = 0.6
+_CUBS_STAND3_MARKER_SCALE = 1.4
 _HAWKS_STAND1_MATCH_SCREEN_IDS = {
     "cubs stand1",
     "cubs stand2",
@@ -210,6 +211,23 @@ def _format_streak(streak) -> str:
 def _fraction_font(font):
     base_size = max(1, int(getattr(font, "size", 20)))
     return clone_font(font, max(1, int(round(base_size * FRACTION_FONT_SCALE))))
+
+
+def _load_marker_icon(letter: str, target_height: int):
+    """Load/scale a small MLB marker icon (e.g., W/L) for standings rows."""
+
+    icon_path = os.path.join("images", "mlb", f"{letter}.png")
+    if not os.path.exists(icon_path):
+        return None
+    try:
+        icon = Image.open(icon_path).convert("RGBA")
+        iw, ih = icon.size
+        if ih <= 0:
+            return None
+        scale = max(1, int(round(target_height))) / float(ih)
+        return icon.resize((max(1, int(round(iw * scale))), max(1, int(round(ih * scale)))), Image.ANTIALIAS)
+    except Exception:
+        return None
 
 
 def _measure_fraction_text(draw, text: str, font) -> tuple[int, int]:
@@ -626,6 +644,9 @@ def draw_standings_screen3(
             right_value_font, max(1, getattr(right_value_font, "size", 20) + hawks_font_offset)
         )
 
+    screen_key = str(screen_id).lower() if screen_id else ""
+    use_cubs_record_markers = screen_key == "cubs stand3"
+
     # Left column = Stand 1 data
     record_line = _format_record_values(rec.get("leagueRecord", {}), ot_label="OT")
     dr_raw = rec.get("divisionRank")
@@ -656,7 +677,7 @@ def draw_standings_screen3(
             wc_txt = f"{base} WCGB"
 
     left_lines = [
-        (record_line, left_header_font),
+        (record_line, left_header_font, "record"),
         (rank_txt, left_value_font),
         (gb_txt, left_value_font),
     ]
@@ -696,20 +717,69 @@ def draw_standings_screen3(
     avail_h = max(1, bottom_limit - text_top)
 
     def draw_column(lines, x, width):
-        heights = [_measure_fraction_text(draw, txt, font)[1] for txt, font in lines]
+        heights = []
+        for line in lines:
+            txt, font = line[0], line[1]
+            if len(line) > 2 and line[2] == "record" and use_cubs_record_markers:
+                _, h0 = draw.textsize("00", font)
+                heights.append(h0)
+            else:
+                heights.append(_measure_fraction_text(draw, txt, font)[1])
         total_h = sum(heights)
         spacing = (avail_h - total_h) / (len(lines) + 1)
         y = text_top + spacing
-        for txt, font in lines:
-            w0, h0 = _measure_fraction_text(draw, txt, font)
-            tx = int(x + max(0, (width - w0) / 2))
-            _draw_fraction_text_centered(
-                draw,
-                int(y),
-                txt,
-                font,
-                fill=(255, 255, 255),
-            ) if width >= WIDTH - (2 * MARGIN) else draw.text((tx, int(y)), txt, font=font, fill=(255, 255, 255))
+        for idx, line in enumerate(lines):
+            txt, font = line[0], line[1]
+            h0 = heights[idx]
+            if len(line) > 2 and line[2] == "record" and use_cubs_record_markers:
+                record = rec.get("leagueRecord", {})
+                w_val = str(record.get("wins", "-"))
+                l_val = str(record.get("losses", "-"))
+                win_text = f"{w_val}"
+                loss_text = f"{l_val}"
+                w_w, w_h = draw.textsize(win_text, font)
+                l_w, l_h = draw.textsize(loss_text, font)
+                icon_h = max(1, int(round(max(w_h, l_h, 1) * _CUBS_STAND3_MARKER_SCALE)))
+                w_icon = _load_marker_icon("W", icon_h)
+                l_icon = _load_marker_icon("L", icon_h)
+                icon_gap = max(2, scale_value_width(2))
+                group_gap = max(6, scale_value_width(6))
+                first_w = (w_icon.width if w_icon else 0) + (icon_gap if w_icon else 0) + w_w
+                second_w = (l_icon.width if l_icon else 0) + (icon_gap if l_icon else 0) + l_w
+                total_w = first_w + group_gap + second_w
+                cursor_x = int(x + max(0, (width - total_w) / 2))
+                row_h = max(
+                    w_h,
+                    l_h,
+                    (w_icon.height if w_icon else 0),
+                    (l_icon.height if l_icon else 0),
+                    1,
+                )
+                row_top = int(y + max(0, (h0 - row_h) / 2))
+                win_text_y = row_top + max(0, (row_h - w_h) // 2)
+                loss_text_y = row_top + max(0, (row_h - l_h) // 2)
+
+                if w_icon:
+                    icon_y = row_top + max(0, (row_h - w_icon.height) // 2)
+                    img.paste(w_icon, (cursor_x, icon_y), w_icon)
+                    cursor_x += w_icon.width + icon_gap
+                draw.text((cursor_x, win_text_y), win_text, font=font, fill=(255, 255, 255))
+                cursor_x += w_w + group_gap
+                if l_icon:
+                    icon_y = row_top + max(0, (row_h - l_icon.height) // 2)
+                    img.paste(l_icon, (cursor_x, icon_y), l_icon)
+                    cursor_x += l_icon.width + icon_gap
+                draw.text((cursor_x, loss_text_y), loss_text, font=font, fill=(255, 255, 255))
+            else:
+                w0, _ = _measure_fraction_text(draw, txt, font)
+                tx = int(x + max(0, (width - w0) / 2))
+                _draw_fraction_text_centered(
+                    draw,
+                    int(y),
+                    txt,
+                    font,
+                    fill=(255, 255, 255),
+                ) if width >= WIDTH - (2 * MARGIN) else draw.text((tx, int(y)), txt, font=font, fill=(255, 255, 255))
             y += h0 + spacing
 
     draw_column(left_lines, left_x, col_width)
