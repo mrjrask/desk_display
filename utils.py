@@ -21,6 +21,7 @@ import random
 import re
 import shutil
 import subprocess
+import sys
 import threading
 import time
 import warnings
@@ -767,6 +768,11 @@ def _schedule_mouse_cursor_wiggle(
     """Schedule a cursor wiggle after startup, optionally repeating."""
 
     if delay_seconds <= 0:
+        return None
+    if sys.platform == "darwin":
+        # AppKit event processing must run on the main thread on macOS.
+        # threading.Timer callbacks can invoke pygame event pumping from a
+        # worker thread, which triggers NSInternalInconsistencyException.
         return None
 
     callback: Callable[[], None]
