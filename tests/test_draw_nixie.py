@@ -38,6 +38,7 @@ def test_draw_nixie_starts_live_updates(monkeypatch):
 
     monkeypatch.setattr(draw_nixie, "clear_display", lambda d: None)
     monkeypatch.setattr(draw_nixie, "_play_flicker", lambda d, i: None)
+    monkeypatch.setattr(draw_nixie, "_start_update_checks", lambda *args, **kwargs: None)
 
     def _capture(display_obj, *, expected_frame_id=None):
         seen["started"] = True
@@ -74,7 +75,7 @@ def test_live_updates_keep_running_after_self_render(monkeypatch):
             return next(now_values)
 
     monkeypatch.setattr(draw_nixie.dt, "datetime", _FakeDateTime)
-    monkeypatch.setattr(draw_nixie, "_compose_frame", lambda now=None: Image.new("RGB", (4, 4), "black"))
+    monkeypatch.setattr(draw_nixie, "_compose_frame", lambda now=None, **kwargs: Image.new("RGB", (4, 4), "black"))
 
     class _ImmediateThread:
         def __init__(self, *, target, daemon):
