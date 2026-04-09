@@ -123,8 +123,10 @@ if config.is_hyperpixel_4_square_layout():
 
 _COLUMN_GAP_MULTIPLIER = 0.75 if config.is_hyperpixel_4_square_layout() else 1.0
 _STAT_COLUMN_GAP = max(1, int(round(STAT_COLUMN_GAP * _COLUMN_GAP_MULTIPLIER)))
+_WIDE_STAT_COLUMN_GAP = max(1, int(round(scale_value(22) * _COLUMN_GAP_MULTIPLIER)))
 _PCT_TO_GB_EXTRA_GAP = max(0, int(round(PCT_TO_GB_EXTRA_GAP * _COLUMN_GAP_MULTIPLIER)))
 _RECORD_TO_GB_EXTRA_GAP = scale_value(22) if int(WIDTH) <= 320 else 0
+_TEAM_TO_RECORD_GAP_WIDE = max(1, int(round(scale_value(16) * _COLUMN_GAP_MULTIPLIER)))
 
 TITLE_FONT = get_screen_font("MLB AL Standings", "title", base_font=FONT_TITLE_SPORTS, default_size=_font_sizes["title"])
 DIVISION_FONT = get_screen_font("MLB AL Standings", "division", base_font=FONT_TITLE_SPORTS, default_size=_font_sizes["division"])
@@ -143,8 +145,10 @@ GB_FRACTION_FONT = clone_font(
         ),
     ),
 )
+RECORD_PCT_FONT = clone_font(STATS_FONT, max(8, int(round(getattr(STATS_FONT, "size", 16) * 0.5))))
 
 SHOW_WIN_PCT = _IS_HYPERPIXEL_4_OR_LARGER
+SHOW_LAST_10 = int(WIDTH) > 400
 
 _SESSION = get_session()
 _STANDINGS_CACHE: dict[str, Any] = {"timestamp": 0.0, "data": None}
@@ -289,21 +293,39 @@ def _normalize_row(record: dict[str, Any]) -> dict[str, Any]:
     ):
         nickname = "Red Sox"
 
+    split_records = (record.get("records") or {}).get("splitRecords", [])
+    last_10 = "-"
+    for split in split_records:
+        if not isinstance(split, dict):
+            continue
+        if str(split.get("type", "")).lower() == "lastten":
+            last_10 = f"{_int_text(split.get('wins'))}-{_int_text(split.get('losses'))}"
+            break
+
     return {
         "team_name": nickname,
         "abbr": abbr,
         "wins": _int_text(record.get("wins")),
         "losses": _int_text(record.get("losses")),
         "pct": _pct_text(record.get("winningPercentage")),
+        "last10": last_10,
         "gb": _gb_text(record.get("gamesBack", "-")),
     }
 
 
 def _stat_columns() -> tuple[str, ...]:
+    if SHOW_LAST_10:
+        return ("record", "last10", "gb")
     cols = ("record", "gb")
     if SHOW_WIN_PCT:
         cols = ("record", "pct", "gb")
     return cols
+
+
+def _record_with_pct_width(draw: ImageDraw.ImageDraw, record_text: str, pct_text: str) -> int:
+    record_w = _text_size(draw, record_text, STATS_FONT)[0]
+    pct_w = _text_size(draw, f"({pct_text})", RECORD_PCT_FONT)[0]
+    return record_w + scale_value(4) + pct_w
 
 
 def _fetch_league_standings() -> dict[int, dict[str, list[dict[str, Any]]]]:
@@ -366,7 +388,11 @@ def _column_layout(draw: ImageDraw.ImageDraw, rows: list[dict[str, Any]]) -> dic
                 width = max(width, _gb_value_width(draw, gb_text, gb_frac))
                 width = max(width, _text_size(draw, "GB", GB_SUFFIX_FONT)[0])
             elif key == "record":
-                width = max(width, _text_size(draw, f"{row.get('wins', '-')}-{row.get('losses', '-')}", STATS_FONT)[0])
+                record_text = f"{row.get('wins', '-')}-{row.get('losses', '-')}"
+                if SHOW_LAST_10:
+                    width = max(width, _record_with_pct_width(draw, record_text, str(row.get("pct", "-"))))
+                else:
+                    width = max(width, _text_size(draw, record_text, STATS_FONT)[0])
             else:
                 width = max(width, _text_size(draw, str(row.get(key, "-")), STATS_FONT)[0])
         stat_widths[key] = width
@@ -375,7 +401,7 @@ def _column_layout(draw: ImageDraw.ImageDraw, rows: list[dict[str, Any]]) -> dic
     cursor = right_edge
     for key in reversed(columns):
         layout[key] = cursor
-        gap = _STAT_COLUMN_GAP
+        gap = _WIDE_STAT_COLUMN_GAP if SHOW_LAST_10 else _STAT_COLUMN_GAP
         if key == "gb" and "pct" in columns:
             gap += _PCT_TO_GB_EXTRA_GAP
         if key == "gb" and "record" in columns:
@@ -383,12 +409,29 @@ def _column_layout(draw: ImageDraw.ImageDraw, rows: list[dict[str, Any]]) -> dic
         cursor -= stat_widths[key] + gap
 
     first_col = columns[0]
-    layout["team_max"] = max(scale_value(70), layout[first_col] - team_x - _STAT_COLUMN_GAP)
+    team_gap = _TEAM_TO_RECORD_GAP_WIDE if SHOW_LAST_10 else _STAT_COLUMN_GAP
+    layout["team_max"] = max(scale_value(70), layout[first_col] - team_x - team_gap)
     return layout
 
 
 def _draw_stat(draw: ImageDraw.ImageDraw, value: str, x: int, y: int) -> None:
     draw.text((x, y), value, font=STATS_FONT, fill=(255, 255, 255), anchor="rm")
+
+
+def _draw_record_with_pct(draw: ImageDraw.ImageDraw, record_value: str, pct_value: str, x: int, y: int) -> None:
+    pct_text = f"({pct_value})"
+    record_w = _text_size(draw, record_value, STATS_FONT)[0]
+    pct_w = _text_size(draw, pct_text, RECORD_PCT_FONT)[0]
+    total_w = record_w + scale_value(4) + pct_w
+    left = x - total_w
+    draw.text((left, y), record_value, font=STATS_FONT, fill=(255, 255, 255), anchor="lm")
+    draw.text(
+        (left + record_w + scale_value(4), y),
+        pct_text,
+        font=RECORD_PCT_FONT,
+        fill=(200, 200, 200),
+        anchor="lm",
+    )
 
 
 def _draw_gb(draw: ImageDraw.ImageDraw, gb_value: Any, x: int, y: int) -> None:
@@ -397,10 +440,9 @@ def _draw_gb(draw: ImageDraw.ImageDraw, gb_value: Any, x: int, y: int) -> None:
     suffix_gap = max(1, scale_value(2))
     suffix_text = "GB"
     suffix_w, _ = _text_size(draw, suffix_text, GB_SUFFIX_FONT)
-    total_w = gb_w + suffix_gap + suffix_w
-    left = x - total_w
+    value_right = x - suffix_w - suffix_gap
 
-    cursor_x = left
+    cursor_x = value_right - gb_w
     if gb_text:
         draw.text((cursor_x, y), gb_text, font=STATS_FONT, fill=(255, 255, 255), anchor="lm")
         cursor_x += _text_size(draw, gb_text, STATS_FONT)[0]
@@ -409,7 +451,7 @@ def _draw_gb(draw: ImageDraw.ImageDraw, gb_value: Any, x: int, y: int) -> None:
             cursor_x += scale_value(2)
         draw.text((cursor_x, y), gb_frac, font=GB_FRACTION_FONT, fill=(255, 255, 255), anchor="lm")
         cursor_x += _text_size(draw, gb_frac, GB_FRACTION_FONT)[0]
-    draw.text((left + gb_w + suffix_gap, y), suffix_text, font=GB_SUFFIX_FONT, fill=(190, 190, 190), anchor="lm")
+    draw.text((x, y), suffix_text, font=GB_SUFFIX_FONT, fill=(190, 190, 190), anchor="rm")
 
 
 def _draw_table_title(img: Image.Image, draw: ImageDraw.ImageDraw, title: str) -> int:
@@ -621,8 +663,13 @@ def _draw_league_screen(title: str, league_id: int, screen_id: str) -> Image.Ima
                 team_name = f"{team_name.rstrip()}…"
 
             draw.text((col["team"], row_center), team_name, font=TEAM_FONT, fill=(255, 255, 255), anchor="lm")
-            _draw_stat(draw, f"{row.get('wins', '-')}-{row.get('losses', '-')}", col["record"], row_center)
-            if SHOW_WIN_PCT:
+            record_value = f"{row.get('wins', '-')}-{row.get('losses', '-')}"
+            if SHOW_LAST_10:
+                _draw_record_with_pct(draw, record_value, str(row.get("pct", "-")), col["record"], row_center)
+                _draw_stat(draw, str(row.get("last10", "-")), col["last10"], row_center)
+            else:
+                _draw_stat(draw, record_value, col["record"], row_center)
+            if SHOW_WIN_PCT and not SHOW_LAST_10:
                 _draw_stat(draw, row.get("pct", "-"), col["pct"], row_center)
             _draw_gb(draw, row.get("gb", "-"), col["gb"], row_center)
             y += row_h + ROW_GAP
