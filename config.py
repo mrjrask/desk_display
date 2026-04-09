@@ -7,6 +7,7 @@ import inspect
 import logging
 import os
 import platform
+import random
 import re
 import subprocess
 import threading
@@ -251,39 +252,44 @@ def _parse_lat_lon(value: Optional[str]) -> Optional[Tuple[float, float]]:
     return lat, lon
 
 
-def _weather_profile_for_ssid(ssid: Optional[str]) -> Tuple[float, float, str]:
-    """
-    Resolve weather location and travel mode from SSID.
+def _resolve_weather_coordinates() -> Tuple[Optional[float], Optional[float], list[str]]:
+    """Resolve weather coordinates from WEATHER_LATITUDE / WEATHER_LONGITUDE."""
 
-    - wiffy / wiffyToo -> TRAVEL_TO_HOME_DESTINATION + to_work
-    - Verano* (substring, case-insensitive) -> TRAVEL_TO_WORK_DESTINATION + to_home
-    """
+    errors: list[str] = []
+    latitude_raw = os.environ.get("WEATHER_LATITUDE")
+    longitude_raw = os.environ.get("WEATHER_LONGITUDE")
 
-    travel_to_home_destination = os.environ.get("TRAVEL_TO_HOME_DESTINATION", "")
-    travel_to_work_destination = os.environ.get("TRAVEL_TO_WORK_DESTINATION", "")
+    if not latitude_raw:
+        errors.append("WEATHER_LATITUDE is missing")
+    if not longitude_raw:
+        errors.append("WEATHER_LONGITUDE is missing")
+    if errors:
+        return None, None, errors
 
-    default_lat = 41.9103
-    default_lon = -87.6340
-    default_mode = "to_home"
+    try:
+        latitude = float(latitude_raw)
+    except (TypeError, ValueError):
+        errors.append(f"WEATHER_LATITUDE must be numeric (got {latitude_raw!r})")
+        latitude = None
+    try:
+        longitude = float(longitude_raw)
+    except (TypeError, ValueError):
+        errors.append(f"WEATHER_LONGITUDE must be numeric (got {longitude_raw!r})")
+        longitude = None
 
-    normalized_ssid = (ssid or "").strip().lower()
-    if normalized_ssid in {"wiffy", "wiffytoo"}:
-        parsed = _parse_lat_lon(travel_to_home_destination)
-        if parsed:
-            return parsed[0], parsed[1], "to_work"
-        return 42.13444, -87.876389, "to_work"
+    if latitude is not None and not (-90.0 <= latitude <= 90.0):
+        errors.append(f"WEATHER_LATITUDE out of range [-90, 90] (got {latitude})")
+    if longitude is not None and not (-180.0 <= longitude <= 180.0):
+        errors.append(f"WEATHER_LONGITUDE out of range [-180, 180] (got {longitude})")
 
-    if "verano" in normalized_ssid:
-        parsed = _parse_lat_lon(travel_to_work_destination)
-        if parsed:
-            return parsed[0], parsed[1], "to_home"
-        return default_lat, default_lon, default_mode
-
-    return default_lat, default_lon, default_mode
+    if errors:
+        return None, None, errors
+    return latitude, longitude, []
 
 
-ENABLE_WEATHER = True
-LATITUDE, LONGITUDE, TRAVEL_MODE = _weather_profile_for_ssid(None)
+TRAVEL_MODE = os.environ.get("TRAVEL_MODE", "to_home")
+
+LATITUDE, LONGITUDE, _weather_coordinate_errors = _resolve_weather_coordinates()
 
 WEATHERKIT_TEAM_ID     = os.environ.get("WEATHERKIT_TEAM_ID")
 WEATHERKIT_KEY_ID      = os.environ.get("WEATHERKIT_KEY_ID")
@@ -294,24 +300,47 @@ WEATHERKIT_LANGUAGE    = os.environ.get("WEATHERKIT_LANGUAGE", "en")
 WEATHERKIT_TIMEZONE    = os.environ.get("WEATHERKIT_TIMEZONE", "America/Chicago")
 WEATHER_USE_EMOJI_ICONS = _get_bool_env("WEATHER_USE_EMOJI_ICONS", False)
 
-def _get_owm_api_key(ssid: Optional[str]) -> Optional[str]:
-    """Select the OpenWeatherMap API key based on the connected SSID."""
+def _get_owm_api_key() -> Optional[str]:
+    """Choose a random OpenWeatherMap API key from configured key slots."""
 
-    normalized_ssid = (ssid or "").strip().lower()
+    key_names = (
+        "OWM_API_KEY",
+        "OWM_API_KEY_DEFAULT",
+        "OWM_API_KEY_WIFFY",
+        "OWM_API_KEY_VERANO",
+    )
+    candidates = [value for value in (_get_first_env_var(name) for name in key_names) if value]
+    if not candidates:
+        return None
+    return random.choice(candidates)
 
-    if normalized_ssid in {"wiffy", "wiffytoo"}:
-        return _get_first_env_var("OWM_API_KEY_WIFFY", "OWM_API_KEY")
 
-    if "verano" in normalized_ssid:
-        return _get_first_env_var("OWM_API_KEY_VERANO", "OWM_API_KEY_DEFAULT")
-
-    return _get_first_env_var("OWM_API_KEY_DEFAULT", "OWM_API_KEY")
-
-
-OWM_API_KEY = _get_owm_api_key(None)
+OWM_API_KEY = _get_owm_api_key()
 OWM_API_URL   = "https://api.openweathermap.org/data/3.0/onecall"
 OWM_UNITS     = os.environ.get("OWM_UNITS", "imperial")
 OWM_LANGUAGE  = os.environ.get("OWM_LANGUAGE", "en")
+
+_weather_errors: list[str] = []
+_weather_errors.extend(_weather_coordinate_errors)
+
+_owm_required_keys = (
+    "OWM_API_KEY",
+    "OWM_API_KEY_DEFAULT",
+    "OWM_API_KEY_WIFFY",
+    "OWM_API_KEY_VERANO",
+)
+for key_name in _owm_required_keys:
+    if not os.environ.get(key_name):
+        _weather_errors.append(f"{key_name} is missing")
+
+if _weather_errors:
+    ENABLE_WEATHER = False
+    logging.warning(
+        "Weather disabled due to missing/invalid configuration: %s",
+        "; ".join(_weather_errors),
+    )
+else:
+    ENABLE_WEATHER = True
 
 GOOGLE_MAPS_API_KEY = os.environ.get("GOOGLE_MAPS_API_KEY")
 MAPKIT_TOKEN = os.environ.get("MAPKIT_TOKEN")
@@ -741,7 +770,7 @@ def initialise_runtime_probes() -> None:
     detection.
     """
 
-    global CURRENT_SSID, LATITUDE, LONGITUDE, TRAVEL_MODE, OWM_API_KEY
+    global CURRENT_SSID, LATITUDE, LONGITUDE, TRAVEL_MODE, OWM_API_KEY, ENABLE_WEATHER
     global WIDTH, HEIGHT, DISPLAY_SCALE, DISPLAY_SCALE_WIDTH
     global ACTIVE_DISPLAY_PROFILE, DISPLAY_PROFILE_ID
     global DISPLAY_FADE_IN_DEFAULT_STEPS
@@ -751,8 +780,23 @@ def initialise_runtime_probes() -> None:
     initialise_env_if_requested()
 
     CURRENT_SSID = get_current_ssid()
-    LATITUDE, LONGITUDE, TRAVEL_MODE = _weather_profile_for_ssid(CURRENT_SSID)
-    OWM_API_KEY = _get_owm_api_key(CURRENT_SSID)
+    TRAVEL_MODE = os.environ.get("TRAVEL_MODE", "to_home")
+    LATITUDE, LONGITUDE, weather_coordinate_errors = _resolve_weather_coordinates()
+    OWM_API_KEY = _get_owm_api_key()
+
+    runtime_weather_errors: list[str] = []
+    runtime_weather_errors.extend(weather_coordinate_errors)
+    for key_name in ("OWM_API_KEY", "OWM_API_KEY_DEFAULT", "OWM_API_KEY_WIFFY", "OWM_API_KEY_VERANO"):
+        if not os.environ.get(key_name):
+            runtime_weather_errors.append(f"{key_name} is missing")
+    if runtime_weather_errors:
+        ENABLE_WEATHER = False
+        logging.warning(
+            "Weather disabled due to missing/invalid configuration: %s",
+            "; ".join(runtime_weather_errors),
+        )
+    else:
+        ENABLE_WEATHER = True
 
     runtime_width = WIDTH
     runtime_height = HEIGHT
