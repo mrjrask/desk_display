@@ -81,7 +81,7 @@ def _ip_overlay_font() -> ImageFont.FreeTypeFont | ImageFont.ImageFont:
 
 
 def _assigned_ip_overlay_text() -> str:
-    """Return the bottom-right IP overlay label for the Nixie screen."""
+    """Return the bottom-left IP overlay label for the Nixie screen."""
 
     ip_address = get_assigned_ipv4()
     if ip_address:
@@ -403,10 +403,8 @@ def _compose_frame(now: dt.datetime | None = None, *, gh_on: bool = False) -> Im
         x += width_px + spacing
 
     draw = ImageDraw.Draw(frame)
-    right_edge = WIDTH - _IP_OVERLAY_RIGHT_PADDING
-    baseline_y = HEIGHT - _IP_OVERLAY_BOTTOM_PADDING
 
-    # GitHub update indicator (bottom-right) + IP label (to its left).
+    # GitHub update indicator (bottom-right), matching date screen placement.
     if gh_on:
         icon = load_github_icon(
             size=DATE_TIME_GH_ICON_SIZE,
@@ -414,17 +412,19 @@ def _compose_frame(now: dt.datetime | None = None, *, gh_on: bool = False) -> Im
             paths=DATE_TIME_GH_ICON_PATHS,
         )
         if icon is not None:
-            icon_x = max(0, right_edge - icon.width)
-            icon_y = max(0, baseline_y - icon.height)
+            icon_x = WIDTH - icon.width - 2
+            icon_y = HEIGHT - icon.height - 2 + 4
+            icon_y = min(HEIGHT - icon.height, icon_y)
+            icon_y = max(0, icon_y)
             frame.paste(icon, (icon_x, icon_y), icon)
-            right_edge = max(0, icon_x - _IP_OVERLAY_ICON_GAP)
 
+    # Assigned IPv4 indicator (bottom-left), matching date screen behavior.
     if IP_WITH_TIME:
         ip_text = _assigned_ip_overlay_text()
         ip_font = _ip_overlay_font()
-        text_w, text_h = measure_text(draw, ip_text, ip_font)
-        ip_x = max(0, right_edge - text_w)
-        ip_y = max(0, baseline_y - text_h)
+        left, _top, _right, bottom = draw.textbbox((0, 0), ip_text, font=ip_font)
+        ip_x = 2 - left
+        ip_y = max(0, HEIGHT - _IP_OVERLAY_BOTTOM_PADDING - bottom)
         draw.text((ip_x, ip_y), ip_text, font=ip_font, fill=(200, 200, 200))
 
     return frame
