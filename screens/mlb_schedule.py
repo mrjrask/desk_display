@@ -1047,8 +1047,10 @@ def draw_series_screen(display, games, title, transition=False, screen_id: Optio
         "sox next series",
         "sox next home series",
     }
-    hyperpixel_layout = config.is_hyperpixel_next_layout() and screen_id in series_screen_ids
-    content_drop_px = 25 if (hyperpixel_layout and (screen_id or "").strip().lower() in series_screen_ids) else 0
+    normalized_screen_id = (screen_id or "").strip().lower()
+    hyperpixel_layout = config.is_hyperpixel_next_layout() and normalized_screen_id in series_screen_ids
+    hyperpixel_square_series_layout = is_hyperpixel_4_square_layout() and normalized_screen_id in series_screen_ids
+    content_drop_px = 25 if (hyperpixel_layout and normalized_screen_id in series_screen_ids) else 0
     edge_pad = max(2, config.scale_value(2)) if hyperpixel_layout else 0
     line_gap = max(1, config.scale_value(1)) if hyperpixel_layout else 1
 
@@ -1056,7 +1058,6 @@ def draw_series_screen(display, games, title, transition=False, screen_id: Optio
     draw = ImageDraw.Draw(img)
 
     tw, th = draw.textsize(title, font=FONT_TITLE_SPORTS)
-    draw.text(((WIDTH - tw) // 2, edge_pad), title, font=FONT_TITLE_SPORTS, fill=(255, 255, 255))
 
     home_tm = game["teams"]["home"]["team"]
     away_tm = game["teams"]["away"]["team"]
@@ -1076,11 +1077,10 @@ def draw_series_screen(display, games, title, transition=False, screen_id: Optio
 
     wrap_width = WIDTH - (edge_pad * 2) if hyperpixel_layout else WIDTH
     lines = wrap_text(f"{prefix} {opponent}", FONT_TEAM_SPORTS, wrap_width)[:2]
-    y_text = edge_pad + th + (config.scale_value(4) if hyperpixel_layout else 4)
-    for ln in lines:
-        lw, lh = draw.textsize(ln, font=FONT_TEAM_SPORTS)
-        draw.text(((WIDTH - lw) // 2, y_text), ln, font=FONT_TEAM_SPORTS, fill=(255, 255, 255))
-        y_text += lh + line_gap
+    title_to_opponent_gap = config.scale_value(4) if hyperpixel_layout else 4
+    opponent_line_heights = [draw.textsize(ln, font=FONT_TEAM_SPORTS)[1] for ln in lines]
+    opponent_lines_h = sum(opponent_line_heights) + (line_gap * max(0, len(lines) - 1))
+    y_text = edge_pad + th + title_to_opponent_gap
 
     logo_h = min(standard_next_game_logo_height(HEIGHT), max(16, HEIGHT // 5))
     logo_away = load_team_logo(MLB_LOGOS_DIR, get_mlb_tricode(away_tm) or get_mlb_abbreviation(get_team_display_name(away_tm)), box_size=logo_h)
@@ -1089,25 +1089,12 @@ def draw_series_screen(display, games, title, transition=False, screen_id: Optio
     at_w, at_h = draw.textsize("@", font=FONT_TEAM_SPORTS)
     frame_w = min(standard_next_game_logo_frame_width(logo_h, (logo_away, logo_home)), max(10, (WIDTH - (gap * 2) - at_w) // 2))
     logo_top_pad = config.scale_value(2) if hyperpixel_layout else 2
-    row_y = y_text + line_gap + logo_top_pad + content_drop_px
+    row_y = y_text + opponent_lines_h + line_gap + logo_top_pad + content_drop_px
     total_w = frame_w * 2 + (gap * 2) + at_w
     start_x = max(0, (WIDTH - total_w) // 2)
     left_x = start_x
     at_x = left_x + frame_w + gap
     right_x = at_x + at_w + gap
-    if logo_away:
-        img.paste(logo_away, (left_x + (frame_w - logo_away.width) // 2, row_y + (logo_h - logo_away.height) // 2), logo_away)
-    logo_center_y = row_y + (logo_h / 2.0)
-    try:
-        at_bbox = draw.textbbox((0, 0), "@", font=FONT_TEAM_SPORTS)
-        at_text_h = at_bbox[3] - at_bbox[1]
-        at_text_y = int(round(logo_center_y - (at_text_h / 2.0) - at_bbox[1]))
-    except Exception:
-        at_text_y = int(round(logo_center_y - (at_h / 2.0)))
-    draw.text((at_x, at_text_y), "@", font=FONT_TEAM_SPORTS, fill=(255, 255, 255))
-    if logo_home:
-        img.paste(logo_home, (right_x + (frame_w - logo_home.width) // 2, row_y + (logo_h - logo_home.height) // 2), logo_home)
-
     rows_top = row_y + logo_h + (config.scale_value(8) if hyperpixel_layout else 8)
     bottom_margin = config.scale_value(BOTTOM_MARGIN) if hyperpixel_layout else BOTTOM_MARGIN
     max_rows = 7
@@ -1116,7 +1103,7 @@ def draw_series_screen(display, games, title, transition=False, screen_id: Optio
 
     def _row_metrics(font):
         text_h = draw.textsize("Tonight • 7 PM", font=font)[1]
-        spacing_extra = int(round(text_h * 0.25)) if (screen_id or "").strip().lower() in series_screen_ids else 0
+        spacing_extra = 0 if hyperpixel_square_series_layout else (int(round(text_h * 0.25)) if normalized_screen_id in series_screen_ids else 0)
         row_height = text_h + line_gap + spacing_extra
         rows_fit = max(1, (HEIGHT - bottom_margin - rows_top) // max(1, row_height))
         return text_h, row_height, rows_fit
@@ -1141,6 +1128,39 @@ def draw_series_screen(display, games, title, transition=False, screen_id: Optio
         content_height = display_rows * row_h
         remaining_space = max(0, rows_bottom - rows_top - content_height)
         extra_row_gap = remaining_space // (display_rows - 1)
+
+    if hyperpixel_square_series_layout:
+        block_h_title = th + title_to_opponent_gap + opponent_lines_h
+        block_h_logos = logo_h
+        block_h_games = display_rows * row_h
+        usable_top = edge_pad
+        usable_bottom = HEIGHT - bottom_margin
+        used_h = block_h_title + block_h_logos + block_h_games
+        between_block_gap = max(0, (usable_bottom - usable_top - used_h) // 2)
+        y_text = usable_top + th + title_to_opponent_gap
+        row_y = y_text + opponent_lines_h + between_block_gap
+        rows_top = row_y + logo_h + between_block_gap
+        extra_row_gap = 0
+
+    draw.text(((WIDTH - tw) // 2, edge_pad), title, font=FONT_TITLE_SPORTS, fill=(255, 255, 255))
+    text_line_y = y_text
+    for ln in lines:
+        lw, lh = draw.textsize(ln, font=FONT_TEAM_SPORTS)
+        draw.text(((WIDTH - lw) // 2, text_line_y), ln, font=FONT_TEAM_SPORTS, fill=(255, 255, 255))
+        text_line_y += lh + line_gap
+
+    if logo_away:
+        img.paste(logo_away, (left_x + (frame_w - logo_away.width) // 2, row_y + (logo_h - logo_away.height) // 2), logo_away)
+    logo_center_y = row_y + (logo_h / 2.0)
+    try:
+        at_bbox = draw.textbbox((0, 0), "@", font=FONT_TEAM_SPORTS)
+        at_text_h = at_bbox[3] - at_bbox[1]
+        at_text_y = int(round(logo_center_y - (at_text_h / 2.0) - at_bbox[1]))
+    except Exception:
+        at_text_y = int(round(logo_center_y - (at_h / 2.0)))
+    draw.text((at_x, at_text_y), "@", font=FONT_TEAM_SPORTS, fill=(255, 255, 255))
+    if logo_home:
+        img.paste(logo_home, (right_x + (frame_w - logo_home.width) // 2, row_y + (logo_h - logo_home.height) // 2), logo_home)
     use_cubs_result_icon = (screen_id or "").strip().lower() in {
         "cubs current series",
         "cubs next series",
