@@ -167,18 +167,19 @@ def _fit_logo(img: Image.Image, target: int) -> Image.Image:
     return img.resize((max(1, int(round(w * scale))), max(1, int(round(h * scale)))), Image.LANCZOS)
 
 
-def _load_logo(abbr: str, *, team_name: str = "") -> Image.Image | None:
+def _load_logo(abbr: str, *, team_name: str = "", box_size: int = LOGO_SIZE) -> Image.Image | None:
     key = (abbr or "").strip().upper()
     if not key:
         return None
-    cache_key = (key, LOGO_SIZE)
+    size = max(1, int(box_size))
+    cache_key = (key, size)
     if cache_key in _LOGO_CACHE:
         return _LOGO_CACHE[cache_key]
     logo = load_team_logo(
         os.path.join(IMAGES_DIR, "mlb"),
         key,
-        box_size=LOGO_SIZE,
-        height=LOGO_SIZE,
+        box_size=size,
+        height=size,
         trim=True,
     )
     if logo is not None:
@@ -504,6 +505,11 @@ def draw_overview(display, title: str, league_id: int, transition: bool = False)
     available_height = max(1, HEIGHT - top_y)
 
     hyperpixel_layout = config.is_hyperpixel_next_layout()
+    hyperpixel4_layout = hyperpixel_layout or config.is_hyperpixel_4_square_layout()
+    overview_logo_size = LOGO_SIZE
+    if hyperpixel4_layout:
+        overview_logo_size = max(1, int(round(LOGO_SIZE * 1.25)))
+
     if hyperpixel_layout:
         overview_margin = max(LEFT_MARGIN, scale_value(6))
         available_width = max(1, WIDTH - 2 * overview_margin)
@@ -511,6 +517,7 @@ def draw_overview(display, title: str, league_id: int, transition: bool = False)
         col_width = available_width / OV_COLS
         padding = max(2, scale_value(4))
         logo_box = max(6, int(min(cell_h - padding * 2, col_width - padding * 2)))
+        overview_logo_size = min(overview_logo_size, logo_box)
         col_centers = [overview_margin + col_width * (i + 0.5) for i in range(OV_COLS)]
     else:
         cell_h = available_height // OV_ROWS
@@ -527,7 +534,7 @@ def draw_overview(display, title: str, league_id: int, transition: bool = False)
         for row in rows:
             abbr = str(row.get("abbr", "") or "")
             team_name = str(row.get("team_name", "") or "")
-            logos.append(_load_logo(abbr, team_name=team_name))
+            logos.append(_load_logo(abbr, team_name=team_name, box_size=overview_logo_size))
         while len(logos) < OV_ROWS:
             logos.append(None)
         logos_per_div[div] = logos
