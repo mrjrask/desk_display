@@ -107,7 +107,7 @@ for w in GAME_COL_WIDTHS:
 
 SCREEN_ID = "MLB Scoreboard v2"
 MIN_GAMES_FOR_V2_LAYOUT = 6
-V2_DISABLED_RESOLUTIONS = {(320, 240), (240, 320)}
+V2_DISABLED_RESOLUTIONS = {(320, 240), (240, 320), (135, 240)}
 TITLE_FONT = FONT_TITLE_SPORTS
 TEAM_LOGO_BASE_HEIGHT = standard_scoreboard_team_logo_height(HEIGHT, compact=True)
 LEAGUE_LOGO_BASE_HEIGHT = standard_scoreboard_league_logo_height(TEAM_LOGO_BASE_HEIGHT)
