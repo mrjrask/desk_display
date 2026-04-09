@@ -381,6 +381,9 @@ def _apply_style_overrides(screen_id: str) -> None:
 OVERVIEW_TITLE = "NHL Overview"
 OVERVIEW_TITLE_WEST = "NHL Western Conference"
 OVERVIEW_TITLE_EAST = "NHL Eastern Conference"
+if is_hyperpixel_4_square_layout():
+    OVERVIEW_TITLE_WEST = "NHL West"
+    OVERVIEW_TITLE_EAST = "NHL East"
 OVERVIEW_DIVISIONS = [
     (CONFERENCE_EAST_KEY, "Metropolitan", "Metro"),
     (CONFERENCE_EAST_KEY, "Atlantic", "Atlantic"),
