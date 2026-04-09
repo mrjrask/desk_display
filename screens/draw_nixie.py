@@ -18,11 +18,12 @@ from config import (
     DATE_TIME_GH_ICON_INVERT,
     DATE_TIME_GH_ICON_PATHS,
     DATE_TIME_GH_ICON_SIZE,
+    FONT_AM_PM,
     HEIGHT,
     IP_WITH_TIME,
     SCREEN_DELAY,
-    TIMES_SQUARE_FONT_PATH,
     WIDTH,
+    TIMES_SQUARE_FONT_PATH,
     get_screen_background_color,
 )
 from services.wifi_utils import get_assigned_ipv4
@@ -71,11 +72,11 @@ def _ip_overlay_font() -> ImageFont.FreeTypeFont | ImageFont.ImageFont:
     if _IP_OVERLAY_FONT is not None:
         return _IP_OVERLAY_FONT
 
-    target_size = max(10, int(round(max(HEIGHT, WIDTH) * 0.03)))
+    target_size = max(8, int(round(FONT_AM_PM.size * 0.45)))
     try:
-        _IP_OVERLAY_FONT = ImageFont.truetype(TIMES_SQUARE_FONT_PATH, target_size)
+        _IP_OVERLAY_FONT = ImageFont.truetype(FONT_AM_PM.path, target_size)
     except Exception:
-        _IP_OVERLAY_FONT = ImageFont.load_default()
+        _IP_OVERLAY_FONT = FONT_AM_PM
     return _IP_OVERLAY_FONT
 
 
