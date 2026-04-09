@@ -989,6 +989,30 @@ def build_screen_registry(context: ScreenContext) -> Tuple[Dict[str, ScreenDefin
                 ),
                 available=True,
             )
+        register(
+            "hawks schedule quad",
+            lambda scroll_speed=_QUAD_DEFAULT_SCROLL_SPEED: draw_quad_screen(
+                context.display,
+                [
+                    _TileSpec("hawks stand1", lambda speed=scroll_speed: _render_quad_tile("hawks stand1", scroll_speed=speed)),
+                    _TileSpec("hawks last", lambda speed=scroll_speed: _render_quad_tile("hawks last", scroll_speed=speed)),
+                    _TileSpec("hawks next", lambda speed=scroll_speed: _render_quad_tile("hawks next", scroll_speed=speed)),
+                    _TileSpec("hawks next home", lambda speed=scroll_speed: _render_quad_tile("hawks next home", scroll_speed=speed)),
+                ],
+                transition=True,
+                scroll_speed=scroll_speed,
+            ),
+            available=bool(hawks.get("stand"))
+            and bool(hawks.get("last"))
+            and bool(hawks_next)
+            and bool(hawks_next_home),
+            quad_tiles=[
+                "hawks stand1",
+                "hawks last",
+                "hawks next",
+                "hawks next home",
+            ],
+        )
 
         register_logo("nhl logo")
         register(
@@ -1521,6 +1545,30 @@ def build_screen_registry(context: ScreenContext) -> Tuple[Dict[str, ScreenDefin
             context.display, data, transition=True
         ),
         available=True,
+    )
+    register(
+        "bulls schedule quad",
+        lambda scroll_speed=_QUAD_DEFAULT_SCROLL_SPEED: draw_quad_screen(
+            context.display,
+            [
+                _TileSpec("bulls stand1", lambda speed=scroll_speed: _render_quad_tile("bulls stand1", scroll_speed=speed)),
+                _TileSpec("bulls last", lambda speed=scroll_speed: _render_quad_tile("bulls last", scroll_speed=speed)),
+                _TileSpec("bulls next", lambda speed=scroll_speed: _render_quad_tile("bulls next", scroll_speed=speed)),
+                _TileSpec("bulls next home", lambda speed=scroll_speed: _render_quad_tile("bulls next home", scroll_speed=speed)),
+            ],
+            transition=True,
+            scroll_speed=scroll_speed,
+        ),
+        available=bool(bulls.get("stand"))
+        and bool(bulls.get("last"))
+        and bool(bulls_next)
+        and bool(bulls_next_home),
+        quad_tiles=[
+            "bulls stand1",
+            "bulls last",
+            "bulls next",
+            "bulls next home",
+        ],
     )
 
     return registry, metadata

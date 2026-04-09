@@ -12,3 +12,8 @@ def test_weather_quad_screen_id_is_listed():
 def test_mlb_schedule_quad_screen_ids_are_listed():
     assert "cubs schedule quad" in RAW_SCREEN_IDS
     assert "sox schedule quad" in RAW_SCREEN_IDS
+
+
+def test_nba_nhl_schedule_quad_screen_ids_are_listed():
+    assert "bulls schedule quad" in RAW_SCREEN_IDS
+    assert "hawks schedule quad" in RAW_SCREEN_IDS
