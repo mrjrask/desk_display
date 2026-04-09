@@ -17,6 +17,7 @@
     "hawks live": 1,
     "hawks next": 2,
     "hawks next home": 2,
+    "hawks schedule quad": 2,
     "NHL Standings West": {
       "frequency": 5,
       "alt": {
@@ -93,6 +94,7 @@
     "bulls live": 1,
     "bulls next": 3,
     "bulls next home": 3,
+    "bulls schedule quad": 3,
     "nba logo": 0,
     "NBA Scoreboard": 4,
     "NCAAM Scoreboard": 5,
@@ -103,7 +105,9 @@
     "cubs next home series": 2,
     "sox next home series": 5,
     "cubs current series": 2,
-    "sox current series": 5
+    "sox current series": 5,
+    "cubs schedule quad": 2,
+    "sox schedule quad": 5
   },
   "playlists": {
     "playlist-1771301244817-427": {
@@ -179,6 +183,9 @@
         },
         {
           "screen": "hawks next home"
+        },
+        {
+          "screen": "hawks schedule quad"
         }
       ]
     },
@@ -269,6 +276,9 @@
         },
         {
           "screen": "cubs next home series"
+        },
+        {
+          "screen": "cubs schedule quad"
         }
       ]
     },
@@ -307,6 +317,9 @@
         },
         {
           "screen": "sox next home series"
+        },
+        {
+          "screen": "sox schedule quad"
         }
       ]
     },
@@ -396,6 +409,9 @@
         },
         {
           "screen": "bulls next home"
+        },
+        {
+          "screen": "bulls schedule quad"
         }
       ]
     },

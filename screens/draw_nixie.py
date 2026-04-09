@@ -34,6 +34,7 @@ from utils import (
     get_update_status,
     load_github_icon,
     log_call,
+    measure_text,
 )
 
 BACKGROUND_COLOR = get_screen_background_color("nixie", (0, 0, 0))
@@ -51,6 +52,8 @@ COLON_SIZE_RATIO = 0.35
 LOGGER = logging.getLogger(__name__)
 _IP_OVERLAY_FONT: ImageFont.FreeTypeFont | ImageFont.ImageFont | None = None
 _IP_OVERLAY_BOTTOM_PADDING = 6
+_IP_OVERLAY_RIGHT_PADDING = 4
+_IP_OVERLAY_ICON_GAP = 6
 
 
 def _get_time_format() -> str:

@@ -642,6 +642,146 @@ def test_weather_quad_screen_uses_weather_tile_selection(monkeypatch):
     assert captured["labels"] == ["weather1", "weather2", "weather hourly", "weather daily"]
 
 
+def test_cubs_schedule_quad_uses_expected_tile_selection(monkeypatch):
+    now = datetime.datetime(2024, 1, 1, 12, 0, tzinfo=CENTRAL_TIME)
+    weather = {"hourly": []}
+    context = _make_context(
+        weather,
+        now,
+        cache_updates={
+            "cubs": {
+                "next": {"gamePk": 1},
+                "current_series": [{"gamePk": 2}],
+                "next_series": [{"gamePk": 3}],
+                "next_home_series": [{"gamePk": 4}],
+            }
+        },
+    )
+    captured = {}
+
+    def _fake_draw_quad_screen(_display, tiles, transition=False, scroll_speed=1.0):
+        captured["labels"] = [tile.label for tile in tiles]
+        return None
+
+    monkeypatch.setattr("screens.registry.draw_quad_screen", _fake_draw_quad_screen)
+
+    registry, _ = build_screen_registry(context)
+    assert registry["cubs schedule quad"].available is True
+    registry["cubs schedule quad"].render()
+
+    assert captured["labels"] == [
+        "cubs next",
+        "cubs current series",
+        "cubs next series",
+        "cubs next home series",
+    ]
+
+
+def test_sox_schedule_quad_uses_expected_tile_selection(monkeypatch):
+    now = datetime.datetime(2024, 1, 1, 12, 0, tzinfo=CENTRAL_TIME)
+    weather = {"hourly": []}
+    context = _make_context(
+        weather,
+        now,
+        cache_updates={
+            "sox": {
+                "next": {"gamePk": 10},
+                "current_series": [{"gamePk": 20}],
+                "next_series": [{"gamePk": 30}],
+                "next_home_series": [{"gamePk": 40}],
+            }
+        },
+    )
+    captured = {}
+
+    def _fake_draw_quad_screen(_display, tiles, transition=False, scroll_speed=1.0):
+        captured["labels"] = [tile.label for tile in tiles]
+        return None
+
+    monkeypatch.setattr("screens.registry.draw_quad_screen", _fake_draw_quad_screen)
+
+    registry, _ = build_screen_registry(context)
+    assert registry["sox schedule quad"].available is True
+    registry["sox schedule quad"].render()
+
+    assert captured["labels"] == [
+        "sox next",
+        "sox current series",
+        "sox next series",
+        "sox next home series",
+    ]
+
+
+def test_hawks_schedule_quad_uses_expected_tile_selection(monkeypatch):
+    now = datetime.datetime(2024, 1, 1, 12, 0, tzinfo=CENTRAL_TIME)
+    weather = {"hourly": []}
+    context = _make_context(
+        weather,
+        now,
+        cache_updates={
+            "hawks": {
+                "stand": [{"team": {"id": 16}}],
+                "last": {"id": 10},
+                "next": {"id": 20},
+                "next_home": {"id": 30},
+            }
+        },
+    )
+    captured = {}
+
+    def _fake_draw_quad_screen(_display, tiles, transition=False, scroll_speed=1.0):
+        captured["labels"] = [tile.label for tile in tiles]
+        return None
+
+    monkeypatch.setattr("screens.registry.draw_quad_screen", _fake_draw_quad_screen)
+
+    registry, _ = build_screen_registry(context)
+    assert registry["hawks schedule quad"].available is True
+    registry["hawks schedule quad"].render()
+
+    assert captured["labels"] == [
+        "hawks stand1",
+        "hawks last",
+        "hawks next",
+        "hawks next home",
+    ]
+
+
+def test_bulls_schedule_quad_uses_expected_tile_selection(monkeypatch):
+    now = datetime.datetime(2024, 1, 1, 12, 0, tzinfo=CENTRAL_TIME)
+    weather = {"hourly": []}
+    context = _make_context(
+        weather,
+        now,
+        cache_updates={
+            "bulls": {
+                "stand": [{"team": {"id": 5}}],
+                "last": {"id": 11},
+                "next": {"id": 21},
+                "next_home": {"id": 31},
+            }
+        },
+    )
+    captured = {}
+
+    def _fake_draw_quad_screen(_display, tiles, transition=False, scroll_speed=1.0):
+        captured["labels"] = [tile.label for tile in tiles]
+        return None
+
+    monkeypatch.setattr("screens.registry.draw_quad_screen", _fake_draw_quad_screen)
+
+    registry, _ = build_screen_registry(context)
+    assert registry["bulls schedule quad"].available is True
+    registry["bulls schedule quad"].render()
+
+    assert captured["labels"] == [
+        "bulls stand1",
+        "bulls last",
+        "bulls next",
+        "bulls next home",
+    ]
+
+
 def test_quad_screen_advances_scrolling_tiles_between_renders(monkeypatch):
     now = datetime.datetime(2024, 1, 1, 12, 0, tzinfo=CENTRAL_TIME)
     weather = {"hourly": []}
