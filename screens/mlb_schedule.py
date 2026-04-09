@@ -1134,13 +1134,20 @@ def draw_series_screen(display, games, title, transition=False, screen_id: Optio
                 break
 
     display_rows = min(target_rows, available_rows)
+
+    extra_row_gap = 0
+    if hyperpixel_layout and display_rows > 1:
+        rows_bottom = HEIGHT - bottom_margin
+        content_height = display_rows * row_h
+        remaining_space = max(0, rows_bottom - rows_top - content_height)
+        extra_row_gap = remaining_space // (display_rows - 1)
     use_cubs_result_icon = (screen_id or "").strip().lower() in {
         "cubs current series",
         "cubs next series",
     }
 
     for idx in range(display_rows):
-        y = rows_top + (idx * row_h)
+        y = rows_top + (idx * (row_h + extra_row_gap))
         game_row = series_games[idx]
         final_parts = _series_final_result_parts(game_row, focus_id) if use_cubs_result_icon else None
 
