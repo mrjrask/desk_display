@@ -17,11 +17,25 @@ from PIL import Image, ImageDraw, ImageEnhance, ImageFilter, ImageFont
 from config import (
     HEIGHT,
     WIDTH,
+    DATE_TIME_GH_ICON_INVERT,
+    DATE_TIME_GH_ICON_PATHS,
+    DATE_TIME_GH_ICON_SIZE,
+    IP_WITH_TIME,
     SCREEN_DELAY,
     TIMES_SQUARE_FONT_PATH,
     get_screen_background_color,
 )
-from utils import ScreenImage, clear_display, log_call
+from services.wifi_utils import get_assigned_ipv4
+from utils import (
+    ScreenImage,
+    check_apt_updates,
+    check_github_updates,
+    clear_display,
+    get_update_status,
+    load_github_icon,
+    log_call,
+    measure_text,
+)
 
 BACKGROUND_COLOR = get_screen_background_color("nixie", (0, 0, 0))
 TUBE_HIGHLIGHT = (255, 214, 170, 90)
@@ -36,6 +50,10 @@ COLON_RATIO = 0.28
 COLON_SIZE_RATIO = 0.35
 
 LOGGER = logging.getLogger(__name__)
+_IP_OVERLAY_FONT: ImageFont.FreeTypeFont | ImageFont.ImageFont | None = None
+_IP_OVERLAY_BOTTOM_PADDING = 6
+_IP_OVERLAY_RIGHT_PADDING = 4
+_IP_OVERLAY_ICON_GAP = 6
 
 
 def _get_time_format() -> str:
@@ -45,6 +63,30 @@ def _get_time_format() -> str:
     if value in ("12", "24"):
         return value
     return "12"
+
+
+def _ip_overlay_font() -> ImageFont.FreeTypeFont | ImageFont.ImageFont:
+    """Return a compact, legible font for the assigned IP overlay text."""
+
+    global _IP_OVERLAY_FONT
+    if _IP_OVERLAY_FONT is not None:
+        return _IP_OVERLAY_FONT
+
+    target_size = max(10, int(round(max(HEIGHT, WIDTH) * 0.03)))
+    try:
+        _IP_OVERLAY_FONT = ImageFont.truetype(TIMES_SQUARE_FONT_PATH, target_size)
+    except Exception:
+        _IP_OVERLAY_FONT = ImageFont.load_default()
+    return _IP_OVERLAY_FONT
+
+
+def _assigned_ip_overlay_text() -> str:
+    """Return the bottom-right IP overlay label for the Nixie screen."""
+
+    ip_address = get_assigned_ipv4()
+    if ip_address:
+        return f"IP: {ip_address}"
+    return "IP: --"
 
 
 def _candidate_asset_directories() -> Iterable[Path]:
@@ -309,7 +351,7 @@ def _colon_image(height: int) -> Image.Image:
     return combined
 
 
-def _compose_frame(now: dt.datetime | None = None) -> Image.Image:
+def _compose_frame(now: dt.datetime | None = None, *, gh_on: bool = False) -> Image.Image:
     now = now or dt.datetime.now()
 
     # Format time according to user preference (12 or 24 hour)
@@ -360,6 +402,31 @@ def _compose_frame(now: dt.datetime | None = None) -> Image.Image:
             frame.paste(digit_img, (x, y), digit_img)
         x += width_px + spacing
 
+    draw = ImageDraw.Draw(frame)
+    right_edge = WIDTH - _IP_OVERLAY_RIGHT_PADDING
+    baseline_y = HEIGHT - _IP_OVERLAY_BOTTOM_PADDING
+
+    # GitHub update indicator (bottom-right) + IP label (to its left).
+    if gh_on:
+        icon = load_github_icon(
+            size=DATE_TIME_GH_ICON_SIZE,
+            invert=DATE_TIME_GH_ICON_INVERT,
+            paths=DATE_TIME_GH_ICON_PATHS,
+        )
+        if icon is not None:
+            icon_x = max(0, right_edge - icon.width)
+            icon_y = max(0, baseline_y - icon.height)
+            frame.paste(icon, (icon_x, icon_y), icon)
+            right_edge = max(0, icon_x - _IP_OVERLAY_ICON_GAP)
+
+    if IP_WITH_TIME:
+        ip_text = _assigned_ip_overlay_text()
+        ip_font = _ip_overlay_font()
+        text_w, text_h = measure_text(draw, ip_text, ip_font)
+        ip_x = max(0, right_edge - text_w)
+        ip_y = max(0, baseline_y - text_h)
+        draw.text((ip_x, ip_y), ip_text, font=ip_font, fill=(200, 200, 200))
+
     return frame
 
 
@@ -389,6 +456,7 @@ def _start_live_updates(display, *, expected_frame_id: int | None = None) -> Non
         end_time = time.monotonic() + max(1, SCREEN_DELAY)
         last_second = None
         active_frame_id = expected_frame_id
+        gh_on = bool(get_update_status().github)
 
         while time.monotonic() < end_time:
             if active_frame_id is not None and hasattr(display, "frame_id"):
@@ -401,7 +469,7 @@ def _start_live_updates(display, *, expected_frame_id: int | None = None) -> Non
             now = dt.datetime.now()
             if now.second != last_second:
                 last_second = now.second
-                frame = _compose_frame(now)
+                frame = _compose_frame(now, gh_on=gh_on)
                 try:
                     display.image(frame)
                     if hasattr(display, "show"):
@@ -416,11 +484,37 @@ def _start_live_updates(display, *, expected_frame_id: int | None = None) -> Non
     threading.Thread(target=_worker, daemon=True).start()
 
 
+def _start_update_checks(display, *, expected_frame_id: int | None = None) -> None:
+    """Run GitHub/apt checks and refresh the frame when update status is known."""
+
+    def _worker() -> None:
+        try:
+            active_frame_id = expected_frame_id
+            gh_on = check_github_updates()
+            check_apt_updates()
+
+            if active_frame_id is not None and hasattr(display, "frame_id"):
+                try:
+                    if display.frame_id() > active_frame_id:
+                        return
+                except Exception:
+                    return
+
+            refreshed = _compose_frame(gh_on=gh_on)
+            display.image(refreshed)
+            if hasattr(display, "show"):
+                display.show()
+        except Exception:
+            LOGGER.exception("Background Nixie update checks failed")
+
+    threading.Thread(target=_worker, daemon=True).start()
+
+
 @log_call
 def draw_nixie(display, transition: bool = False):
     global BACKGROUND_COLOR
     BACKGROUND_COLOR = get_screen_background_color("nixie", (0, 0, 0))
-    frame = _compose_frame()
+    frame = _compose_frame(gh_on=bool(get_update_status().github))
 
     if transition and not hasattr(display, "image"):
         return frame
@@ -445,5 +539,6 @@ def draw_nixie(display, transition: bool = False):
         except Exception:
             frame_id = None
     _start_live_updates(display, expected_frame_id=frame_id)
+    _start_update_checks(display, expected_frame_id=frame_id)
 
     return ScreenImage(frame, displayed=True)
