@@ -19,9 +19,16 @@ def test_normalize_row_uses_scoreboard_logo_code_mapping():
 
 
 def test_stat_columns_omit_winning_pct_when_disabled(monkeypatch):
+    monkeypatch.setattr(mlb_league_standings, "SHOW_LAST_10", False)
     monkeypatch.setattr(mlb_league_standings, "SHOW_WIN_PCT", False)
 
     assert mlb_league_standings._stat_columns() == ("record", "gb")
+
+def test_stat_columns_show_last_10_for_wide_layout(monkeypatch):
+    monkeypatch.setattr(mlb_league_standings, "SHOW_LAST_10", True)
+    monkeypatch.setattr(mlb_league_standings, "SHOW_WIN_PCT", True)
+
+    assert mlb_league_standings._stat_columns() == ("record", "last10", "gb")
 
 
 def test_show_win_pct_for_layout_matches_display_hat_mini_behavior():
@@ -42,6 +49,26 @@ def test_normalize_row_keeps_red_sox_nickname():
 
     assert row["abbr"] == "BOS"
     assert row["team_name"] == "Red Sox"
+
+
+def test_normalize_row_extracts_last_ten_record():
+    record = {
+        "team": {"name": "Boston Red Sox", "abbreviation": "BOS"},
+        "wins": 12,
+        "losses": 8,
+        "winningPercentage": ".600",
+        "gamesBack": "1.0",
+        "records": {
+            "splitRecords": [
+                {"type": "home", "wins": 7, "losses": 3},
+                {"type": "lastTen", "wins": 6, "losses": 4},
+            ]
+        },
+    }
+
+    row = mlb_league_standings._normalize_row(record)
+
+    assert row["last10"] == "6-4"
 
 
 def test_normalize_row_expands_boston_sox_short_name():
