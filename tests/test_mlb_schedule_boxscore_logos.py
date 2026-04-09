@@ -452,6 +452,51 @@ def test_draw_series_screen_shrinks_row_font_to_fit_three_game_sox_series(monkey
     assert drawn_rows == ["FITROW 1", "FITROW 2", "FITROW 3"]
 
 
+def test_draw_series_screen_distributes_rows_vertically_on_hyperpixel(monkeypatch):
+    row_positions = []
+    original_text = ImageDraw.ImageDraw.text
+
+    def _capture_text(self, xy, text, *args, **kwargs):
+        if isinstance(text, str) and text.startswith("SPREADROW "):
+            row_positions.append(xy[1])
+        return original_text(self, xy, text, *args, **kwargs)
+
+    monkeypatch.setattr(ImageDraw.ImageDraw, "text", _capture_text)
+    monkeypatch.setattr(mlb_schedule.config, "is_hyperpixel_next_layout", lambda: True)
+    monkeypatch.setattr(mlb_schedule.config, "scale_value", lambda value: value)
+    monkeypatch.setattr(mlb_schedule, "load_team_logo", lambda *args, **kwargs: None)
+    monkeypatch.setattr(mlb_schedule, "_series_final_result_parts", lambda *args, **kwargs: None)
+    monkeypatch.setattr(
+        mlb_schedule,
+        "_series_line",
+        lambda game, _focus_id: f"SPREADROW {game.get('gamePk')}",
+    )
+
+    def _game(game_pk: int):
+        return {
+            "gamePk": game_pk,
+            "status": {"detailedState": "Scheduled"},
+            "teams": {
+                "away": {"team": {"id": 121, "name": "Boston Red Sox"}},
+                "home": {"team": {"id": 145, "name": "Chicago White Sox"}},
+            },
+        }
+
+    games = [_game(idx) for idx in range(1, 4)]
+    mlb_schedule.draw_series_screen(
+        None,
+        games,
+        title="Sox Next Series",
+        screen_id="sox next series",
+    )
+
+    assert len(row_positions) == 3
+    first_gap = row_positions[1] - row_positions[0]
+    second_gap = row_positions[2] - row_positions[1]
+    assert first_gap == second_gap
+    assert first_gap > 30
+
+
 def test_series_line_fill_uses_live_scoreboard_color_for_in_progress_game():
     game = {
         "status": {
