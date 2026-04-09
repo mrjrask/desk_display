@@ -123,6 +123,7 @@ if config.is_hyperpixel_4_square_layout():
 
 _COLUMN_GAP_MULTIPLIER = 0.75 if config.is_hyperpixel_4_square_layout() else 1.0
 _STAT_COLUMN_GAP = max(1, int(round(STAT_COLUMN_GAP * _COLUMN_GAP_MULTIPLIER)))
+_WIDE_STAT_COLUMN_GAP = max(1, int(round(scale_value(22) * _COLUMN_GAP_MULTIPLIER)))
 _PCT_TO_GB_EXTRA_GAP = max(0, int(round(PCT_TO_GB_EXTRA_GAP * _COLUMN_GAP_MULTIPLIER)))
 _RECORD_TO_GB_EXTRA_GAP = scale_value(22) if int(WIDTH) <= 320 else 0
 _TEAM_TO_RECORD_GAP_WIDE = max(1, int(round(scale_value(16) * _COLUMN_GAP_MULTIPLIER)))
@@ -401,7 +402,7 @@ def _column_layout(draw: ImageDraw.ImageDraw, rows: list[dict[str, Any]]) -> dic
     cursor = right_edge
     for key in reversed(columns):
         layout[key] = cursor
-        gap = _STAT_COLUMN_GAP
+        gap = _WIDE_STAT_COLUMN_GAP if SHOW_LAST_10 else _STAT_COLUMN_GAP
         if key == "gb" and "pct" in columns:
             gap += _PCT_TO_GB_EXTRA_GAP
         if key == "gb" and "record" in columns:
@@ -440,10 +441,9 @@ def _draw_gb(draw: ImageDraw.ImageDraw, gb_value: Any, x: int, y: int) -> None:
     suffix_gap = max(1, scale_value(2))
     suffix_text = "GB"
     suffix_w, _ = _text_size(draw, suffix_text, GB_SUFFIX_FONT)
-    total_w = gb_w + suffix_gap + suffix_w
-    left = x - total_w
+    value_right = x - suffix_w - suffix_gap
 
-    cursor_x = left
+    cursor_x = value_right - gb_w
     if gb_text:
         draw.text((cursor_x, y), gb_text, font=STATS_FONT, fill=(255, 255, 255), anchor="lm")
         cursor_x += _text_size(draw, gb_text, STATS_FONT)[0]
@@ -452,7 +452,7 @@ def _draw_gb(draw: ImageDraw.ImageDraw, gb_value: Any, x: int, y: int) -> None:
             cursor_x += scale_value(2)
         draw.text((cursor_x, y), gb_frac, font=GB_FRACTION_FONT, fill=(255, 255, 255), anchor="lm")
         cursor_x += _text_size(draw, gb_frac, GB_FRACTION_FONT)[0]
-    draw.text((left + gb_w + suffix_gap, y), suffix_text, font=GB_SUFFIX_FONT, fill=(190, 190, 190), anchor="lm")
+    draw.text((x, y), suffix_text, font=GB_SUFFIX_FONT, fill=(190, 190, 190), anchor="rm")
 
 
 def _draw_table_title(img: Image.Image, draw: ImageDraw.ImageDraw, title: str) -> int:
