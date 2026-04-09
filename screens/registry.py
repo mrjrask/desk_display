@@ -1219,6 +1219,30 @@ def build_screen_registry(context: ScreenContext) -> Tuple[Dict[str, ScreenDefin
             ),
             available=bool(cubs_next_home_series),
         )
+        register(
+            "cubs schedule quad",
+            lambda scroll_speed=_QUAD_DEFAULT_SCROLL_SPEED: draw_quad_screen(
+                context.display,
+                [
+                    _TileSpec("cubs next", lambda speed=scroll_speed: _render_quad_tile("cubs next", scroll_speed=speed)),
+                    _TileSpec("cubs current series", lambda speed=scroll_speed: _render_quad_tile("cubs current series", scroll_speed=speed)),
+                    _TileSpec("cubs next series", lambda speed=scroll_speed: _render_quad_tile("cubs next series", scroll_speed=speed)),
+                    _TileSpec("cubs next home series", lambda speed=scroll_speed: _render_quad_tile("cubs next home series", scroll_speed=speed)),
+                ],
+                transition=True,
+                scroll_speed=scroll_speed,
+            ),
+            available=bool(cubs_next or cubs_next_alt)
+            and bool(cubs_current_series)
+            and bool(cubs_next_series)
+            and bool(cubs_next_home_series),
+            quad_tiles=[
+                "cubs next",
+                "cubs current series",
+                "cubs next series",
+                "cubs next home series",
+            ],
+        )
 
     sox = context.cache.get("sox") or {}
     if any(sox.values()):
@@ -1343,6 +1367,30 @@ def build_screen_registry(context: ScreenContext) -> Tuple[Dict[str, ScreenDefin
                 transition=True,
             ),
             available=bool(sox_next_home_series),
+        )
+        register(
+            "sox schedule quad",
+            lambda scroll_speed=_QUAD_DEFAULT_SCROLL_SPEED: draw_quad_screen(
+                context.display,
+                [
+                    _TileSpec("sox next", lambda speed=scroll_speed: _render_quad_tile("sox next", scroll_speed=speed)),
+                    _TileSpec("sox current series", lambda speed=scroll_speed: _render_quad_tile("sox current series", scroll_speed=speed)),
+                    _TileSpec("sox next series", lambda speed=scroll_speed: _render_quad_tile("sox next series", scroll_speed=speed)),
+                    _TileSpec("sox next home series", lambda speed=scroll_speed: _render_quad_tile("sox next home series", scroll_speed=speed)),
+                ],
+                transition=True,
+                scroll_speed=scroll_speed,
+            ),
+            available=bool(sox_next or sox_next_alt)
+            and bool(sox_current_series)
+            and bool(sox_next_series)
+            and bool(sox_next_home_series),
+            quad_tiles=[
+                "sox next",
+                "sox current series",
+                "sox next series",
+                "sox next home series",
+            ],
         )
 
     register(

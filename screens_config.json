@@ -103,7 +103,9 @@
     "cubs next home series": 2,
     "sox next home series": 5,
     "cubs current series": 2,
-    "sox current series": 5
+    "sox current series": 5,
+    "cubs schedule quad": 2,
+    "sox schedule quad": 5
   },
   "playlists": {
     "playlist-1771301244817-427": {
@@ -269,6 +271,9 @@
         },
         {
           "screen": "cubs next home series"
+        },
+        {
+          "screen": "cubs schedule quad"
         }
       ]
     },
@@ -307,6 +312,9 @@
         },
         {
           "screen": "sox next home series"
+        },
+        {
+          "screen": "sox schedule quad"
         }
       ]
     },
