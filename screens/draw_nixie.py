@@ -449,14 +449,21 @@ def _play_flicker(display, base: Image.Image) -> None:
         time.sleep(0.08)
 
 
-def _start_live_updates(display, *, expected_frame_id: int | None = None) -> None:
+def _start_live_updates(
+    display,
+    *,
+    expected_frame_id: int | None = None,
+    frame_state: dict | None = None,
+) -> None:
     """Refresh the Nixie display once per second while this screen is active."""
 
     def _worker() -> None:
         end_time = time.monotonic() + max(1, SCREEN_DELAY)
         last_second = None
         active_frame_id = expected_frame_id
-        gh_on = bool(get_update_status().github)
+        if frame_state is not None:
+            with frame_state["lock"]:
+                active_frame_id = frame_state["value"]
 
         while time.monotonic() < end_time:
             if active_frame_id is not None and hasattr(display, "frame_id"):
@@ -469,6 +476,7 @@ def _start_live_updates(display, *, expected_frame_id: int | None = None) -> Non
             now = dt.datetime.now()
             if now.second != last_second:
                 last_second = now.second
+                gh_on = bool(get_update_status().github)
                 frame = _compose_frame(now, gh_on=gh_on)
                 try:
                     display.image(frame)
@@ -476,6 +484,9 @@ def _start_live_updates(display, *, expected_frame_id: int | None = None) -> Non
                         display.show()
                     if hasattr(display, "frame_id"):
                         active_frame_id = display.frame_id()
+                        if frame_state is not None:
+                            with frame_state["lock"]:
+                                frame_state["value"] = active_frame_id
                 except Exception:
                     LOGGER.exception("Failed to render Nixie clock")
                     return
@@ -484,7 +495,12 @@ def _start_live_updates(display, *, expected_frame_id: int | None = None) -> Non
     threading.Thread(target=_worker, daemon=True).start()
 
 
-def _start_update_checks(display, *, expected_frame_id: int | None = None) -> None:
+def _start_update_checks(
+    display,
+    *,
+    expected_frame_id: int | None = None,
+    frame_state: dict | None = None,
+) -> None:
     """Run GitHub/apt checks and refresh the frame when update status is known."""
 
     def _worker() -> None:
@@ -495,6 +511,9 @@ def _start_update_checks(display, *, expected_frame_id: int | None = None) -> No
 
             if active_frame_id is not None and hasattr(display, "frame_id"):
                 try:
+                    if frame_state is not None:
+                        with frame_state["lock"]:
+                            active_frame_id = max(active_frame_id, frame_state["value"])
                     if display.frame_id() > active_frame_id:
                         return
                 except Exception:
@@ -502,6 +521,9 @@ def _start_update_checks(display, *, expected_frame_id: int | None = None) -> No
 
             refreshed = _compose_frame(gh_on=gh_on)
             display.image(refreshed)
+            if frame_state is not None and hasattr(display, "frame_id"):
+                with frame_state["lock"]:
+                    frame_state["value"] = display.frame_id()
             if hasattr(display, "show"):
                 display.show()
         except Exception:
@@ -538,7 +560,8 @@ def draw_nixie(display, transition: bool = False):
             frame_id = display.frame_id()
         except Exception:
             frame_id = None
-    _start_live_updates(display, expected_frame_id=frame_id)
-    _start_update_checks(display, expected_frame_id=frame_id)
+    frame_state = {"lock": threading.Lock(), "value": frame_id}
+    _start_live_updates(display, expected_frame_id=frame_id, frame_state=frame_state)
+    _start_update_checks(display, expected_frame_id=frame_id, frame_state=frame_state)
 
     return ScreenImage(frame, displayed=True)
