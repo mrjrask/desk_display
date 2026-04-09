@@ -508,7 +508,7 @@ def draw_overview(display, title: str, league_id: int, transition: bool = False)
     hyperpixel4_layout = hyperpixel_layout or config.is_hyperpixel_4_square_layout()
     overview_logo_size = LOGO_SIZE
     if hyperpixel4_layout:
-        overview_logo_size = max(1, int(round(LOGO_SIZE * 1.15)))
+        overview_logo_size = max(1, int(round(LOGO_SIZE * 1.25)))
 
     if hyperpixel_layout:
         overview_margin = max(LEFT_MARGIN, scale_value(6))
