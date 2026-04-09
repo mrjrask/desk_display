@@ -15,14 +15,14 @@ from typing import Dict, Iterable, Optional, Sequence
 from PIL import Image, ImageDraw, ImageEnhance, ImageFilter, ImageFont
 
 from config import (
-    HEIGHT,
-    WIDTH,
     DATE_TIME_GH_ICON_INVERT,
     DATE_TIME_GH_ICON_PATHS,
     DATE_TIME_GH_ICON_SIZE,
+    HEIGHT,
     IP_WITH_TIME,
     SCREEN_DELAY,
     TIMES_SQUARE_FONT_PATH,
+    WIDTH,
     get_screen_background_color,
 )
 from services.wifi_utils import get_assigned_ipv4
@@ -34,7 +34,6 @@ from utils import (
     get_update_status,
     load_github_icon,
     log_call,
-    measure_text,
 )
 
 BACKGROUND_COLOR = get_screen_background_color("nixie", (0, 0, 0))
@@ -232,7 +231,9 @@ def _generate_digit_image(height: int, value: str) -> Image.Image:
     glow_layer = Image.new("RGBA", img.size, (0, 0, 0, 0))
     glow_draw = ImageDraw.Draw(glow_layer)
     glow_draw.text(text_position, value, fill=GLOW_COLOR, font=font)
-    glow_layer = glow_layer.filter(ImageFilter.GaussianBlur(radius=max(3, int(round(height * 0.12)))))
+    glow_layer = glow_layer.filter(
+        ImageFilter.GaussianBlur(radius=max(3, int(round(height * 0.12))))
+    )
 
     digit_layer = Image.new("RGBA", img.size, (0, 0, 0, 0))
     digit_draw = ImageDraw.Draw(digit_layer)
@@ -361,7 +362,16 @@ def _compose_frame(now: dt.datetime | None = None, *, gh_on: bool = False) -> Im
     else:
         time_digits = now.strftime("%H%M%S")
 
-    elements = [time_digits[0], time_digits[1], ":", time_digits[2], time_digits[3], ":", time_digits[4], time_digits[5]]
+    elements = [
+        time_digits[0],
+        time_digits[1],
+        ":",
+        time_digits[2],
+        time_digits[3],
+        ":",
+        time_digits[4],
+        time_digits[5],
+    ]
 
     available_height = max(1, HEIGHT - V_MARGIN * 2)
     available_width = max(1, WIDTH - H_MARGIN * 2)
