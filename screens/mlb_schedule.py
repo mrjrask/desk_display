@@ -1050,6 +1050,10 @@ def draw_series_screen(display, games, title, transition=False, screen_id: Optio
     normalized_screen_id = (screen_id or "").strip().lower()
     hyperpixel_layout = config.is_hyperpixel_next_layout() and normalized_screen_id in series_screen_ids
     hyperpixel_square_series_layout = is_hyperpixel_4_square_layout() and normalized_screen_id in series_screen_ids
+    display_hat_mini_series_layout = (
+        config.get_display_profile_id() == DISPLAY_PROFILE_DISPLAY_HAT_MINI
+        and normalized_screen_id in series_screen_ids
+    )
     content_drop_px = 25 if (hyperpixel_layout and normalized_screen_id in series_screen_ids) else 0
     edge_pad = max(2, config.scale_value(2)) if hyperpixel_layout else 0
     line_gap = max(1, config.scale_value(1)) if hyperpixel_layout else 1
@@ -1129,7 +1133,7 @@ def draw_series_screen(display, games, title, transition=False, screen_id: Optio
         remaining_space = max(0, rows_bottom - rows_top - content_height)
         extra_row_gap = remaining_space // (display_rows - 1)
 
-    if hyperpixel_square_series_layout:
+    if hyperpixel_square_series_layout or display_hat_mini_series_layout:
         block_h_title = th + title_to_opponent_gap + opponent_lines_h
         block_h_logos = logo_h
         block_h_games = display_rows * row_h
