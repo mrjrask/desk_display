@@ -67,6 +67,14 @@ else:  # pragma: no cover - hardware import
     _GPIO_BUTTON_ERROR = None
 
 try:  # pragma: no cover - hardware import
+    import RPi.GPIO as RPiGPIO  # type: ignore
+except Exception as _rpi_gpio_exc:  # pragma: no cover - hardware import
+    RPiGPIO = None  # type: ignore
+    _RPI_GPIO_ERROR = _rpi_gpio_exc
+else:  # pragma: no cover - hardware import
+    _RPI_GPIO_ERROR = None
+
+try:  # pragma: no cover - hardware import
     import board  # type: ignore
     import digitalio  # type: ignore
     from adafruit_rgb_display import st7789  # type: ignore
@@ -92,6 +100,23 @@ _FRAMEBUFFER_PIXEL_ORDER = os.environ.get("DISPLAY_FB_PIXEL_ORDER", "").strip().
 _PYGAME_MODULE = None
 _PYGAME_ERROR: Optional[Exception] = None
 _CURSOR_WIGGLE_DELAY_SECONDS = 30.0
+
+
+class _RPiGPIOButton:
+    """Minimal gpiozero.Button-compatible wrapper backed by RPi.GPIO."""
+
+    def __init__(self, gpio_module, pin: int):
+        self._gpio = gpio_module
+        self._pin = pin
+        self._gpio.setmode(self._gpio.BCM)
+        self._gpio.setup(self._pin, self._gpio.IN, pull_up_down=self._gpio.PUD_UP)
+
+    @property
+    def is_pressed(self) -> bool:
+        return self._gpio.input(self._pin) == self._gpio.LOW
+
+    def close(self) -> None:
+        self._gpio.cleanup(self._pin)
 
 
 def _maybe_configure_desktop_env() -> None:
@@ -1413,15 +1438,38 @@ class Display:
             return None
 
     def _initialize_gpio_buttons(self) -> None:
-        if GpioButton is None:  # pragma: no cover - hardware import
-            return
+        button_class = GpioButton
+        using_rpi_gpio_fallback = False
+        if button_class is None:  # pragma: no cover - hardware import
+            if RPiGPIO is not None:
+                button_class = functools.partial(_RPiGPIOButton, RPiGPIO)
+                using_rpi_gpio_fallback = True
+                logging.warning(
+                    "gpiozero unavailable (%s); using RPi.GPIO fallback for hardware buttons.",
+                    _GPIO_BUTTON_ERROR,
+                )
+            else:
+                if any(os.environ.get(f"BUTTON_{name}") for name in self._BUTTON_NAMES):
+                    logging.warning(
+                        "Hardware button pins configured but no GPIO input backend is available "
+                        "(gpiozero error: %s; RPi.GPIO error: %s).",
+                        _GPIO_BUTTON_ERROR,
+                        _RPI_GPIO_ERROR,
+                    )
+                return
+
+        if using_rpi_gpio_fallback and hasattr(RPiGPIO, "setwarnings"):  # pragma: no cover - hardware import
+            RPiGPIO.setwarnings(False)
 
         for name in self._BUTTON_NAMES:
             pin = self._button_gpio_pin(name)
             if pin is None:
                 continue
             try:  # pragma: no cover - hardware import
-                button = GpioButton(pin, pull_up=True, bounce_time=0.05)
+                if using_rpi_gpio_fallback:
+                    button = button_class(pin)
+                else:
+                    button = button_class(pin, pull_up=True, bounce_time=0.05)
             except Exception as exc:
                 logging.warning("Failed to initialize BUTTON_%s on GPIO%d: %s", name, pin, exc)
                 continue

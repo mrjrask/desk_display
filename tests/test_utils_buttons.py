@@ -132,6 +132,59 @@ def test_hardware_button_callback_accepts_button_name():
     assert events == ["X"]
 
 
+def test_initialize_gpio_buttons_uses_rpi_gpio_fallback(monkeypatch):
+    class _FakeGPIO:
+        BCM = "BCM"
+        IN = "IN"
+        PUD_UP = "PUD_UP"
+        LOW = 0
+
+        def __init__(self):
+            self.setup_calls = []
+            self.mode = None
+
+        def setmode(self, mode):
+            self.mode = mode
+
+        def setup(self, pin, mode, pull_up_down=None):
+            self.setup_calls.append((pin, mode, pull_up_down))
+
+        def input(self, _pin):
+            return self.LOW
+
+        def cleanup(self, _pin):
+            return None
+
+        def setwarnings(self, _enabled):
+            return None
+
+    fake_gpio = _FakeGPIO()
+    monkeypatch.setattr(utils, "GpioButton", None)
+    monkeypatch.setattr(utils, "RPiGPIO", fake_gpio)
+    monkeypatch.setenv("BUTTON_A", "24")
+
+    display = utils.Display()
+
+    assert "A" in display._gpio_buttons
+    assert display.is_button_pressed("A") is True
+    assert fake_gpio.setup_calls == [(24, fake_gpio.IN, fake_gpio.PUD_UP)]
+
+
+def test_initialize_gpio_buttons_warns_when_backend_unavailable(monkeypatch):
+    monkeypatch.setattr(utils, "GpioButton", None)
+    monkeypatch.setattr(utils, "RPiGPIO", None)
+    monkeypatch.setattr(utils, "_GPIO_BUTTON_ERROR", RuntimeError("no gpiozero"))
+    monkeypatch.setattr(utils, "_RPI_GPIO_ERROR", RuntimeError("no rpi gpio"))
+    monkeypatch.setenv("BUTTON_A", "24")
+
+    warnings = []
+    monkeypatch.setattr(utils.logging, "warning", lambda msg, *args: warnings.append(msg % args))
+
+    utils.Display()
+
+    assert any("no GPIO input backend is available" in warning for warning in warnings)
+
+
 def test_update_display_resizes_rotated_hardware_buffer_to_native_size():
     display = utils.Display()
 
