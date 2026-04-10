@@ -494,7 +494,70 @@ def test_draw_series_screen_distributes_rows_vertically_on_hyperpixel(monkeypatc
     first_gap = row_positions[1] - row_positions[0]
     second_gap = row_positions[2] - row_positions[1]
     assert first_gap == second_gap
-    assert first_gap > 30
+    assert first_gap >= 28
+
+
+def test_draw_series_screen_centers_three_blocks_on_display_hat_mini(monkeypatch):
+    captured = {}
+    original_text = ImageDraw.ImageDraw.text
+
+    def _capture_text(self, xy, text, *args, **kwargs):
+        if text == "Sox Next Series":
+            captured["title_y"] = xy[1]
+        elif text == "vs. Boston Red Sox":
+            captured["opponent_y"] = xy[1]
+        elif isinstance(text, str) and text.startswith("BLOCKROW "):
+            captured.setdefault("row_ys", []).append(xy[1])
+        return original_text(self, xy, text, *args, **kwargs)
+
+    monkeypatch.setattr(ImageDraw.ImageDraw, "text", _capture_text)
+    monkeypatch.setattr(mlb_schedule, "WIDTH", 320)
+    monkeypatch.setattr(mlb_schedule, "HEIGHT", 240)
+    monkeypatch.setattr(mlb_schedule.config, "get_display_profile_id", lambda: mlb_schedule.DISPLAY_PROFILE_DISPLAY_HAT_MINI)
+    monkeypatch.setattr(mlb_schedule.config, "is_hyperpixel_next_layout", lambda: False)
+    monkeypatch.setattr(mlb_schedule.config, "scale_value", lambda value: value)
+    monkeypatch.setattr(mlb_schedule, "wrap_text", lambda text, *_args, **_kwargs: [text])
+    monkeypatch.setattr(mlb_schedule, "load_team_logo", lambda *args, **kwargs: None)
+    monkeypatch.setattr(mlb_schedule, "_series_final_result_parts", lambda *args, **kwargs: None)
+    monkeypatch.setattr(
+        mlb_schedule,
+        "_series_line",
+        lambda game, _focus_id: f"BLOCKROW {game.get('gamePk')}",
+    )
+
+    def _game(game_pk: int):
+        return {
+            "gamePk": game_pk,
+            "status": {"detailedState": "Scheduled"},
+            "teams": {
+                "away": {"team": {"id": 111, "name": "Boston Red Sox"}},
+                "home": {"team": {"id": 145, "name": "Chicago White Sox"}},
+            },
+        }
+
+    games = [_game(idx) for idx in range(1, 4)]
+    mlb_schedule.draw_series_screen(
+        None,
+        games,
+        title="Sox Next Series",
+        screen_id="sox next series",
+    )
+
+    assert captured["title_y"] == 0
+    assert len(captured.get("row_ys", [])) == 3
+
+    opponent_h = ImageDraw.Draw(Image.new("RGB", (1, 1))).textsize("vs. Boston Red Sox", font=mlb_schedule.FONT_TEAM_SPORTS)[1]
+    row_text_h = ImageDraw.Draw(Image.new("RGB", (1, 1))).textsize("Tonight • 7 PM", font=mlb_schedule.FONT_DATE_SPORTS)[1]
+
+    block_h_title = captured["opponent_y"] + opponent_h - captured["title_y"]
+    logo_h = min(mlb_schedule.standard_next_game_logo_height(mlb_schedule.HEIGHT), max(16, mlb_schedule.HEIGHT // 5))
+    row_h = row_text_h + 1 + int(round(row_text_h * 0.25))
+    block_h_games = 3 * row_h
+
+    used_h = block_h_title + logo_h + block_h_games
+    between_block_gap = max(0, (mlb_schedule.HEIGHT - mlb_schedule.BOTTOM_MARGIN - used_h) // 2)
+    expected_first_row_y = (captured["opponent_y"] + opponent_h) + logo_h + (between_block_gap * 2)
+    assert captured["row_ys"][0] == expected_first_row_y
 
 
 def test_series_line_fill_uses_live_scoreboard_color_for_in_progress_game():

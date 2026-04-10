@@ -70,6 +70,14 @@ RPiGPIO = None  # type: ignore
 _RPI_GPIO_ERROR: Optional[Exception] = None
 
 try:  # pragma: no cover - hardware import
+    import RPi.GPIO as RPiGPIO  # type: ignore
+except Exception as _rpi_gpio_exc:  # pragma: no cover - hardware import
+    RPiGPIO = None  # type: ignore
+    _RPI_GPIO_ERROR = _rpi_gpio_exc
+else:  # pragma: no cover - hardware import
+    _RPI_GPIO_ERROR = None
+
+try:  # pragma: no cover - hardware import
     import board  # type: ignore
     import digitalio  # type: ignore
     from adafruit_rgb_display import st7789  # type: ignore
