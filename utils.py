@@ -1460,11 +1460,6 @@ class Display:
         if not configured_button_names:
             return
 
-        # Pimoroni Display HAT Mini has a native button API; avoid configuring a
-        # second GPIO backend for the same controls.
-        if self._display_driver == "displayhatmini" and self._display is not None:
-            return
-
         button_class = GpioButton
         using_rpi_gpio_fallback = False
         if button_class is None:  # pragma: no cover - hardware import
