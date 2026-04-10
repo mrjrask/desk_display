@@ -186,7 +186,7 @@ def test_initialize_gpio_buttons_warns_when_backend_unavailable(monkeypatch):
     assert any("no GPIO input backend is available" in warning for warning in warnings)
 
 
-def test_initialize_gpio_buttons_skips_when_displayhatmini_driver_active(monkeypatch):
+def test_initialize_gpio_buttons_respects_explicit_overrides_with_displayhatmini(monkeypatch):
     calls = []
 
     def _button(*_args, **_kwargs):
@@ -204,8 +204,8 @@ def test_initialize_gpio_buttons_skips_when_displayhatmini_driver_active(monkeyp
 
     display._initialize_gpio_buttons()
 
-    assert calls == []
-    assert display._gpio_buttons == {}
+    assert calls == [1]
+    assert "A" in display._gpio_buttons
 
 
 def test_update_display_resizes_rotated_hardware_buffer_to_native_size():
