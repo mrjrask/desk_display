@@ -66,6 +66,9 @@ except Exception as _gpio_button_exc:  # pragma: no cover - hardware import
 else:  # pragma: no cover - hardware import
     _GPIO_BUTTON_ERROR = None
 
+RPiGPIO = None  # type: ignore
+_RPI_GPIO_ERROR: Optional[Exception] = None
+
 try:  # pragma: no cover - hardware import
     import board  # type: ignore
     import digitalio  # type: ignore
@@ -92,6 +95,36 @@ _FRAMEBUFFER_PIXEL_ORDER = os.environ.get("DISPLAY_FB_PIXEL_ORDER", "").strip().
 _PYGAME_MODULE = None
 _PYGAME_ERROR: Optional[Exception] = None
 _CURSOR_WIGGLE_DELAY_SECONDS = 30.0
+
+
+class _RPiGPIOButton:
+    """Minimal gpiozero.Button-compatible wrapper backed by RPi.GPIO."""
+
+    def __init__(self, gpio_module, pin: int):
+        self._gpio = gpio_module
+        self._pin = pin
+        self._gpio.setmode(self._gpio.BCM)
+        self._gpio.setup(self._pin, self._gpio.IN, pull_up_down=self._gpio.PUD_UP)
+
+    @property
+    def is_pressed(self) -> bool:
+        return self._gpio.input(self._pin) == self._gpio.LOW
+
+    def close(self) -> None:
+        self._gpio.cleanup(self._pin)
+
+
+def _load_rpi_gpio():
+    global RPiGPIO, _RPI_GPIO_ERROR
+    if RPiGPIO is not None or _RPI_GPIO_ERROR is not None:  # pragma: no cover - hardware import
+        return RPiGPIO
+    try:  # pragma: no cover - hardware import
+        import RPi.GPIO as _RPiGPIO  # type: ignore
+    except Exception as exc:  # pragma: no cover - hardware import
+        _RPI_GPIO_ERROR = exc
+        return None
+    RPiGPIO = _RPiGPIO  # type: ignore
+    return RPiGPIO
 
 
 def _maybe_configure_desktop_env() -> None:
@@ -1413,15 +1446,53 @@ class Display:
             return None
 
     def _initialize_gpio_buttons(self) -> None:
-        if GpioButton is None:  # pragma: no cover - hardware import
+        configured_button_names = [
+            name for name in self._BUTTON_NAMES if os.environ.get(f"BUTTON_{name}")
+        ]
+        if not configured_button_names:
             return
+
+        # Pimoroni Display HAT Mini has a native button API; avoid configuring a
+        # second GPIO backend for the same controls.
+        if self._display_driver == "displayhatmini" and self._display is not None:
+            return
+
+        button_class = GpioButton
+        using_rpi_gpio_fallback = False
+        if button_class is None:  # pragma: no cover - hardware import
+            fallback_enabled = os.environ.get(
+                "DESK_DISPLAY_RPI_GPIO_FALLBACK",
+                "1",
+            ).strip().lower() not in {"0", "false", "no", "off"}
+            rpi_gpio = _load_rpi_gpio() if fallback_enabled else None
+            if rpi_gpio is not None:
+                button_class = functools.partial(_RPiGPIOButton, rpi_gpio)
+                using_rpi_gpio_fallback = True
+                logging.warning(
+                    "gpiozero unavailable (%s); using RPi.GPIO fallback for hardware buttons.",
+                    _GPIO_BUTTON_ERROR,
+                )
+            else:
+                logging.warning(
+                    "Hardware button pins configured but no GPIO input backend is available "
+                    "(gpiozero error: %s; RPi.GPIO error: %s).",
+                    _GPIO_BUTTON_ERROR,
+                    _RPI_GPIO_ERROR,
+                )
+                return
+
+        if using_rpi_gpio_fallback and hasattr(RPiGPIO, "setwarnings"):  # pragma: no cover - hardware import
+            RPiGPIO.setwarnings(False)
 
         for name in self._BUTTON_NAMES:
             pin = self._button_gpio_pin(name)
             if pin is None:
                 continue
             try:  # pragma: no cover - hardware import
-                button = GpioButton(pin, pull_up=True, bounce_time=0.05)
+                if using_rpi_gpio_fallback:
+                    button = button_class(pin)
+                else:
+                    button = button_class(pin, pull_up=True, bounce_time=0.05)
             except Exception as exc:
                 logging.warning("Failed to initialize BUTTON_%s on GPIO%d: %s", name, pin, exc)
                 continue
