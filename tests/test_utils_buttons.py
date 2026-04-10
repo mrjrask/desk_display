@@ -173,6 +173,7 @@ def test_initialize_gpio_buttons_uses_rpi_gpio_fallback(monkeypatch):
 def test_initialize_gpio_buttons_warns_when_backend_unavailable(monkeypatch):
     monkeypatch.setattr(utils, "GpioButton", None)
     monkeypatch.setattr(utils, "RPiGPIO", None)
+    monkeypatch.setattr(utils, "_load_rpi_gpio", lambda: None)
     monkeypatch.setattr(utils, "_GPIO_BUTTON_ERROR", RuntimeError("no gpiozero"))
     monkeypatch.setattr(utils, "_RPI_GPIO_ERROR", RuntimeError("no rpi gpio"))
     monkeypatch.setenv("BUTTON_A", "24")
@@ -183,6 +184,28 @@ def test_initialize_gpio_buttons_warns_when_backend_unavailable(monkeypatch):
     utils.Display()
 
     assert any("no GPIO input backend is available" in warning for warning in warnings)
+
+
+def test_initialize_gpio_buttons_skips_when_displayhatmini_driver_active(monkeypatch):
+    calls = []
+
+    def _button(*_args, **_kwargs):
+        calls.append(1)
+        return object()
+
+    monkeypatch.setattr(utils, "GpioButton", _button)
+    monkeypatch.setenv("BUTTON_A", "24")
+
+    display = utils.Display()
+    display._display_driver = "displayhatmini"
+    display._display = object()
+    display._gpio_buttons.clear()
+    calls.clear()
+
+    display._initialize_gpio_buttons()
+
+    assert calls == []
+    assert display._gpio_buttons == {}
 
 
 def test_update_display_resizes_rotated_hardware_buffer_to_native_size():

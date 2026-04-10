@@ -66,6 +66,9 @@ except Exception as _gpio_button_exc:  # pragma: no cover - hardware import
 else:  # pragma: no cover - hardware import
     _GPIO_BUTTON_ERROR = None
 
+RPiGPIO = None  # type: ignore
+_RPI_GPIO_ERROR: Optional[Exception] = None
+
 try:  # pragma: no cover - hardware import
     import RPi.GPIO as RPiGPIO  # type: ignore
 except Exception as _rpi_gpio_exc:  # pragma: no cover - hardware import
@@ -117,6 +120,19 @@ class _RPiGPIOButton:
 
     def close(self) -> None:
         self._gpio.cleanup(self._pin)
+
+
+def _load_rpi_gpio():
+    global RPiGPIO, _RPI_GPIO_ERROR
+    if RPiGPIO is not None or _RPI_GPIO_ERROR is not None:  # pragma: no cover - hardware import
+        return RPiGPIO
+    try:  # pragma: no cover - hardware import
+        import RPi.GPIO as _RPiGPIO  # type: ignore
+    except Exception as exc:  # pragma: no cover - hardware import
+        _RPI_GPIO_ERROR = exc
+        return None
+    RPiGPIO = _RPiGPIO  # type: ignore
+    return RPiGPIO
 
 
 def _maybe_configure_desktop_env() -> None:
@@ -1438,24 +1454,39 @@ class Display:
             return None
 
     def _initialize_gpio_buttons(self) -> None:
+        configured_button_names = [
+            name for name in self._BUTTON_NAMES if os.environ.get(f"BUTTON_{name}")
+        ]
+        if not configured_button_names:
+            return
+
+        # Pimoroni Display HAT Mini has a native button API; avoid configuring a
+        # second GPIO backend for the same controls.
+        if self._display_driver == "displayhatmini" and self._display is not None:
+            return
+
         button_class = GpioButton
         using_rpi_gpio_fallback = False
         if button_class is None:  # pragma: no cover - hardware import
-            if RPiGPIO is not None:
-                button_class = functools.partial(_RPiGPIOButton, RPiGPIO)
+            fallback_enabled = os.environ.get(
+                "DESK_DISPLAY_RPI_GPIO_FALLBACK",
+                "1",
+            ).strip().lower() not in {"0", "false", "no", "off"}
+            rpi_gpio = _load_rpi_gpio() if fallback_enabled else None
+            if rpi_gpio is not None:
+                button_class = functools.partial(_RPiGPIOButton, rpi_gpio)
                 using_rpi_gpio_fallback = True
                 logging.warning(
                     "gpiozero unavailable (%s); using RPi.GPIO fallback for hardware buttons.",
                     _GPIO_BUTTON_ERROR,
                 )
             else:
-                if any(os.environ.get(f"BUTTON_{name}") for name in self._BUTTON_NAMES):
-                    logging.warning(
-                        "Hardware button pins configured but no GPIO input backend is available "
-                        "(gpiozero error: %s; RPi.GPIO error: %s).",
-                        _GPIO_BUTTON_ERROR,
-                        _RPI_GPIO_ERROR,
-                    )
+                logging.warning(
+                    "Hardware button pins configured but no GPIO input backend is available "
+                    "(gpiozero error: %s; RPi.GPIO error: %s).",
+                    _GPIO_BUTTON_ERROR,
+                    _RPI_GPIO_ERROR,
+                )
                 return
 
         if using_rpi_gpio_fallback and hasattr(RPiGPIO, "setwarnings"):  # pragma: no cover - hardware import
