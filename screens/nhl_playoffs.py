@@ -260,6 +260,156 @@ def _fetch_playoff_matchups() -> list[dict]:
     return []
 
 
+def _team_abbr_from_standings_row(row: dict) -> str:
+    value = row.get("teamAbbrev")
+    if isinstance(value, dict):
+        value = value.get("default") or value.get("fr") or value.get("es")
+    if isinstance(value, str) and value.strip():
+        return value.strip().upper()
+    return ""
+
+
+def _team_name_from_standings_row(row: dict) -> str:
+    for key in ("teamName", "teamCommonName", "teamPlaceName"):
+        value = row.get(key)
+        if isinstance(value, dict):
+            value = value.get("default") or value.get("fr") or value.get("es")
+        if isinstance(value, str) and value.strip():
+            return value.strip()
+    return _team_abbr_from_standings_row(row)
+
+
+def _normalize_conference(value: str) -> str:
+    text = (value or "").strip().lower()
+    if text.startswith("e"):
+        return "east"
+    if text.startswith("w"):
+        return "west"
+    return text
+
+
+def _normalize_division(value: str) -> str:
+    text = (value or "").strip().lower()
+    mapping = {
+        "a": "atlantic",
+        "atl": "atlantic",
+        "atlantic": "atlantic",
+        "m": "metropolitan",
+        "met": "metropolitan",
+        "metro": "metropolitan",
+        "metropolitan": "metropolitan",
+        "c": "central",
+        "cen": "central",
+        "central": "central",
+        "p": "pacific",
+        "pac": "pacific",
+        "pacific": "pacific",
+    }
+    return mapping.get(text, text)
+
+
+def _ranking_tuple(row: dict) -> tuple[int, int, int]:
+    return (
+        _as_int(row.get("points")) or 0,
+        _as_int(row.get("regulationPlusOtWins")) or _as_int(row.get("wins")) or 0,
+        _as_int(row.get("goalDifferential")) or 0,
+    )
+
+
+def _standings_team_obj(row: dict) -> dict:
+    return {
+        "abbreviation": _team_abbr_from_standings_row(row),
+        "name": _team_name_from_standings_row(row),
+    }
+
+
+def _projected_series(higher_seed: dict, lower_seed: dict) -> dict:
+    return {
+        "teams": {
+            "away": {"team": _standings_team_obj(lower_seed), "score": _as_int(lower_seed.get("points")) or 0},
+            "home": {"team": _standings_team_obj(higher_seed), "score": _as_int(higher_seed.get("points")) or 0},
+        },
+        "status_text": "Projected",
+    }
+
+
+def _projected_matchups_from_standings(standings: list[dict]) -> list[dict]:
+    conference_rows: dict[str, list[dict]] = {"east": [], "west": []}
+    by_conference_division: dict[str, dict[str, list[dict]]] = {"east": {}, "west": {}}
+
+    for row in standings:
+        if not isinstance(row, dict):
+            continue
+        conference = _normalize_conference(str(row.get("conferenceAbbrev") or row.get("conferenceName") or ""))
+        division = _normalize_division(str(row.get("divisionAbbrev") or row.get("divisionName") or ""))
+        if conference not in {"east", "west"}:
+            continue
+        if not division:
+            continue
+        if not _team_abbr_from_standings_row(row):
+            continue
+        conference_rows[conference].append(row)
+        by_conference_division[conference].setdefault(division, []).append(row)
+
+    matchups: list[dict] = []
+
+    for conference, expected_divisions in (
+        ("east", ("atlantic", "metropolitan")),
+        ("west", ("central", "pacific")),
+    ):
+        divisions = by_conference_division[conference]
+        if any(div not in divisions for div in expected_divisions):
+            continue
+
+        top_three_by_div: dict[str, list[dict]] = {}
+        division_qualifiers: set[str] = set()
+        for division in expected_divisions:
+            ranked = sorted(divisions.get(division, []), key=_ranking_tuple, reverse=True)
+            if len(ranked) < 3:
+                top_three_by_div = {}
+                break
+            top_three_by_div[division] = ranked[:3]
+            division_qualifiers.update(_team_abbr_from_standings_row(team) for team in ranked[:3])
+        if not top_three_by_div:
+            continue
+
+        wildcard_pool = [
+            row
+            for row in conference_rows[conference]
+            if _team_abbr_from_standings_row(row) and _team_abbr_from_standings_row(row) not in division_qualifiers
+        ]
+        wildcards = sorted(wildcard_pool, key=_ranking_tuple, reverse=True)[:2]
+        if len(wildcards) < 2:
+            continue
+        wc1, wc2 = wildcards[0], wildcards[1]
+
+        first_division, second_division = expected_divisions
+        first_top = top_three_by_div[first_division]
+        second_top = top_three_by_div[second_division]
+
+        matchups.extend(
+            [
+                _projected_series(first_top[0], wc1),
+                _projected_series(first_top[1], first_top[2]),
+                _projected_series(second_top[0], wc2),
+                _projected_series(second_top[1], second_top[2]),
+            ]
+        )
+
+    return matchups
+
+
+def _fetch_projected_matchups_from_standings() -> list[dict]:
+    try:
+        response = _SESSION.get("https://api-web.nhle.com/v1/standings/now", timeout=REQUEST_TIMEOUT, headers=NHL_HEADERS)
+        response.raise_for_status()
+        standings = (response.json() or {}).get("standings") or []
+        return _projected_matchups_from_standings(standings)
+    except Exception as exc:
+        logging.debug("NHL standings endpoint failed for projected playoffs: %s", exc)
+        return []
+
+
 def _derive_playoff_matchups_from_games(games: list[dict]) -> list[dict]:
     results: list[dict] = []
     seen: set[tuple[str, str]] = set()
@@ -394,6 +544,8 @@ def render_nhl_playoffs(display, games: list[dict], transition: bool = False) ->
     _apply_style_overrides()
 
     series = _fetch_playoff_matchups()
+    if not series:
+        series = _fetch_projected_matchups_from_standings()
     if not series:
         series = _derive_playoff_matchups_from_games(games)
 
