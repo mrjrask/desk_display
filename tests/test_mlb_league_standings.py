@@ -161,3 +161,43 @@ def test_compact_layout_increases_record_to_gb_gap(monkeypatch):
     inter_column_gap = layout["gb"] - layout["record"] - gb_w
 
     assert inter_column_gap >= 52
+
+
+def test_stat_header_labels_include_record_l10_and_gb():
+    labels = mlb_league_standings._stat_header_labels()
+
+    assert labels["record"] == "Record"
+    assert labels["last10"] == "L10"
+    assert labels["gb"] == "GB"
+
+
+def test_draw_stat_headers_centers_labels_in_column(monkeypatch):
+    monkeypatch.setattr(mlb_league_standings, "_stat_columns", lambda: ("record", "last10", "gb"))
+
+    class _DrawProbe:
+        def __init__(self):
+            self.calls = []
+
+        def text(self, xy, value, font=None, fill=None, anchor=None):
+            _ = font, fill
+            self.calls.append((xy, value, anchor))
+
+        def textbbox(self, xy, value, font=None):
+            _ = xy, font
+            return (0, 0, len(value) * 6, 10)
+
+    probe = _DrawProbe()
+    layout = {
+        "record": 210,
+        "record_width": 60,
+        "last10": 300,
+        "last10_width": 40,
+        "gb": 380,
+        "gb_width": 30,
+    }
+
+    mlb_league_standings._draw_stat_headers(probe, layout, y=50)
+
+    assert probe.calls[0] == ((180, 50), "Record", "mm")
+    assert probe.calls[1] == ((280, 50), "L10", "mm")
+    assert probe.calls[2] == ((365, 50), "GB", "mm")
