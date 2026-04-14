@@ -1,6 +1,6 @@
 # External API Reference
 
-This project pulls weather and sports data from a variety of third-party endpoints. The app normalizes all payloads into internal structures so screens can share logic regardless of the upstream source. This document lists the active endpoints we call and the fields we rely on.
+This project pulls weather, travel, finance, and sports data from third-party endpoints. The app normalizes most payloads into internal structures so screens can share logic regardless of upstream provider shape. This document lists the active endpoints in code and in `scripts/test_api_connections.py`, plus the key fields relied on by renderers.
 
 > **Tip:** Most API keys can be provided via `.env` (with `CONFIG_LOAD_DOTENV=1`) or the environment.
 
@@ -33,6 +33,13 @@ Expected statuses and exit-code behavior:
 - Exit code `0`: all checks are `OK` or `SKIP`.
 - Exit code `1`: one or more checks are `FAIL`.
 
+### Endpoint families covered by the diagnostic script
+- Weather: WeatherKit, OpenWeatherMap, RainViewer
+- Travel/maps: Google Directions + Static Maps, Apple Maps Directions + Snapshot
+- Sports: NHL/NBA/NFL/MLB scoreboards + standings, AHL ICS + HockeyTech
+- Finance: Yahoo chart API (used by stock screen helpers)
+- App-level helper probes for Bears/Bulls/Blackhawks/Cubs/Sox/Wolves fetch functions
+
 ---
 
 ## Weather
@@ -57,7 +64,8 @@ Expected statuses and exit-code behavior:
 - **Notes:** Used when WeatherKit is unavailable; normalized into the same structure.
 
 ### RainViewer radar + Google Static Maps
-- **RainViewer metadata:** `https://api.rainviewer.com/public/weather-maps.json`
+- **RainViewer metadata (primary):** `https://api.rainviewer.com/public/weather-maps.json`
+- **RainViewer metadata (fallback):** `https://api.rainviewer.com/public/maps.json`
 - **RainViewer tiles:** `https://{host}/{path}/256/{zoom}/{x}/{y}/2/1_1.png`
 - **Google Static Maps:** `https://maps.googleapis.com/maps/api/staticmap`
 - **Fields used:**
@@ -66,12 +74,31 @@ Expected statuses and exit-code behavior:
 
 ---
 
+## Travel & map services
+
+### Google Directions (travel routes)
+- **Endpoint:** `https://maps.googleapis.com/maps/api/directions/json`
+- **Fields used:** `routes[].summary`, `legs[].duration` / `duration_in_traffic`, `legs[].steps[].html_instructions`
+- **Notes:** Enabled when `GOOGLE_MAPS_API_KEY` is configured. Route filtering is performed in-app on normalized summary/step text.
+
+### Apple Maps Directions
+- **Endpoint:** `https://maps-api.apple.com/v1/directions`
+- **Fields used:** route travel times (`expectedTravelTime`, `staticTravelTime`, `typicalTravelTime`), summary/name fields, and route steps/polyline data when present
+- **Notes:** Auth supports either `APPLE_MAPS_API_KEY`/`MAPKIT_TOKEN` or JWT signing via `APPLE_MAPS_TEAM_ID`, `APPLE_MAPS_KEY_ID`, and private key (`APPLE_MAPS_PRIVATE_KEY` or `APPLE_MAPS_KEY_PATH`). WeatherKit signing keys can be reused as fallback.
+
+### Apple Maps Snapshot
+- **Endpoint:** `https://maps-api.apple.com/v1/snapshot`
+- **Fields used:** binary map image payload for travel/weather map imagery integrations
+
+
+---
+
 ## Sports
 
 ### NHL (Blackhawks)
-- **Schedule / scoreboard:**
-  - `https://statsapi.web.nhl.com/api/v1/schedule?date=YYYY-MM-DD&expand=schedule.linescore,schedule.teams` (primary when DNS works)
-  - `https://api-web.nhle.com/v1/scoreboard/{date}` and `/scoreboard/now` (fallback)
+- **Team schedule helper:** `https://api-web.nhle.com/v1/club-schedule-season/CHI/20252026` (configured team-season feed used by Blackhawks helper screens)
+- **League scoreboard:** `https://api-web.nhle.com/v1/scoreboard/{date}` and `/scoreboard/now`
+- **Legacy fallback endpoint still supported by some paths:** `https://statsapi.web.nhl.com/api/v1/schedule?date=YYYY-MM-DD&expand=schedule.linescore,schedule.teams`
 - **Standings:**
   - `https://statsapi.web.nhl.com/api/v1/standings` (primary)
   - `https://api-web.nhle.com/v1/standings/now` (fallback)
@@ -103,9 +130,10 @@ Expected statuses and exit-code behavior:
 
 ## Stocks
 
-### Yahoo Finance (yfinance)
-- **API source:** `yfinance` (Yahoo Finance)
-- **Fields used:** `regularMarketPrice`, `previousClose`, or historical close values to compute price + change + all-time percentage.
+### Yahoo Finance (yfinance + chart API)
+- **Library source:** `yfinance` (Yahoo Finance wrappers)
+- **Direct diagnostic endpoint:** `https://query1.finance.yahoo.com/v8/finance/chart/SPY`
+- **Fields used:** `regularMarketPrice`, `previousClose`, or historical close values (plus chart payload availability checks in diagnostics).
 
 ---
 
