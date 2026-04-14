@@ -1128,7 +1128,38 @@ NBA_FALLBACK_LOGO  = os.path.join(NBA_IMAGES_DIR, "NBA.png")
 # tournament: NCAA tournament games
 NCAAM_SCOREBOARD_MODE = os.environ.get("NCAAM_SCOREBOARD_MODE", "top25").strip().lower()
 
-CENTRAL_TIME = ZoneInfo("America/Chicago")
+class LocalizableZoneInfo(datetime.tzinfo):
+    """ZoneInfo wrapper that provides a pytz-compatible ``localize`` helper."""
+
+    def __init__(self, key: str) -> None:
+        self._zone = ZoneInfo(key)
+
+    def _coerce(self, dt: Optional[datetime.datetime]) -> Optional[datetime.datetime]:
+        if dt is None:
+            return None
+        return dt.replace(tzinfo=self._zone)
+
+    def utcoffset(self, dt: Optional[datetime.datetime]) -> Optional[datetime.timedelta]:
+        return self._zone.utcoffset(self._coerce(dt))
+
+    def dst(self, dt: Optional[datetime.datetime]) -> Optional[datetime.timedelta]:
+        return self._zone.dst(self._coerce(dt))
+
+    def tzname(self, dt: Optional[datetime.datetime]) -> Optional[str]:
+        return self._zone.tzname(self._coerce(dt))
+
+    def fromutc(self, dt: datetime.datetime) -> datetime.datetime:
+        coerced = dt.replace(tzinfo=self._zone)
+        converted = self._zone.fromutc(coerced)
+        return converted.replace(tzinfo=self)
+
+    def localize(self, dt: datetime.datetime) -> datetime.datetime:
+        if dt.tzinfo is not None:
+            return dt.astimezone(self)
+        return dt.replace(tzinfo=self)
+
+
+CENTRAL_TIME = LocalizableZoneInfo("America/Chicago")
 
 # ─── Fonts ────────────────────────────────────────────────────────────────────
 # Drop your TimesSquare-m105.ttf, DejaVuSans.ttf, and DejaVuSans-Bold.ttf into

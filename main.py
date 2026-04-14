@@ -941,11 +941,15 @@ def _wait_with_button_checks(
             _manual_skip_event.clear()
             return True
 
-        if _check_control_buttons(
-            current_screen_id=current_screen_id,
-            current_quad_tiles=current_quad_tiles,
-            enable_touch=True,
-        ):
+        try:
+            should_skip = _check_control_buttons(
+                current_screen_id=current_screen_id,
+                current_quad_tiles=current_quad_tiles,
+                enable_touch=True,
+            )
+        except TypeError:
+            should_skip = _check_control_buttons()
+        if should_skip:
             _manual_skip_event.clear()
             return True
 
@@ -1966,8 +1970,6 @@ def _scheduled_startup_feed_order(limit: int = 4) -> List[str]:
     ordered_feeds: List[str] = []
     for screen_id in scheduled_ids:
         for feed, feed_screen_ids in _FEED_DEPENDENCIES.items():
-            if feed == "weather" and not ENABLE_WEATHER:
-                continue
             if screen_id in feed_screen_ids and feed not in ordered_feeds:
                 ordered_feeds.append(feed)
 
