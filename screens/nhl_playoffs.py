@@ -24,8 +24,6 @@ from config import (
     SCOREBOARD_SCROLL_PAUSE_TOP,
     SCOREBOARD_SCROLL_PAUSE_BOTTOM,
     SCOREBOARD_STANDINGS_BOTTOM_PADDING,
-    SCOREBOARD_BACKGROUND_COLOR,
-    get_screen_background_color,
     get_screen_font,
     get_screen_image_scale,
     is_kernel_driven_display,
@@ -61,19 +59,22 @@ BLOCK_SPACING = _scale_y(10)
 SCORE_ROW_H = _scale_y(56)
 STATUS_ROW_H = _scale_y(18)
 REQUEST_TIMEOUT = 8
-
-COL_WIDTHS = [
-    scale_value_width(70),
-    scale_value_width(60),
-    scale_value_width(60),
-    scale_value_width(60),
-    scale_value_width(70),
+PAIR_SPACING = max(8, scale_value_width(16))
+SERIES_COL_WIDTHS = [
+    scale_value_width(42),
+    scale_value_width(32),
+    scale_value_width(16),
+    scale_value_width(32),
+    scale_value_width(42),
 ]
-_TOTAL_COL_WIDTH = sum(COL_WIDTHS)
-_COL_LEFT = max(0, (WIDTH - _TOTAL_COL_WIDTH) // 2)
-COL_X = [_COL_LEFT]
-for w in COL_WIDTHS:
-    COL_X.append(COL_X[-1] + w)
+SERIES_WIDTH = sum(SERIES_COL_WIDTHS)
+CONTENT_WIDTH = SERIES_WIDTH * 2 + PAIR_SPACING
+CONTENT_LEFT = max(0, (WIDTH - CONTENT_WIDTH) // 2)
+WEST_X = CONTENT_LEFT
+EAST_X = CONTENT_LEFT + SERIES_WIDTH + PAIR_SPACING
+SERIES_COL_X = [0]
+for w in SERIES_COL_WIDTHS:
+    SERIES_COL_X.append(SERIES_COL_X[-1] + w)
 
 TITLE_FONT = FONT_TITLE_SPORTS
 LOGO_DIR = os.path.join(IMAGES_DIR, "nhl")
@@ -94,20 +95,21 @@ _SESSION = get_session()
 def _scoreboard_fonts() -> tuple:
     score = get_screen_font(SCREEN_ID, "score", base_font=FONT_TEAM_SPORTS, default_size=43)
     status = get_screen_font(SCREEN_ID, "status", base_font=FONT_STATUS, default_size=28)
+    status_small = get_screen_font(SCREEN_ID, "status_small", base_font=FONT_STATUS, default_size=20)
     center = get_screen_font(SCREEN_ID, "center", base_font=FONT_STATUS, default_size=28)
-    return score, status, center
+    return score, status, status_small, center
 
 
-SCORE_FONT, STATUS_FONT, CENTER_FONT = _scoreboard_fonts()
-BACKGROUND_COLOR = get_screen_background_color(SCREEN_ID, SCOREBOARD_BACKGROUND_COLOR)
+SCORE_FONT, STATUS_FONT, STATUS_SMALL_FONT, CENTER_FONT = _scoreboard_fonts()
+BACKGROUND_COLOR = (0, 0, 0)
 _LOGO_CACHE: dict[tuple[str, int], Optional[Image.Image]] = {}
 
 
 def _apply_style_overrides() -> None:
-    global SCORE_FONT, STATUS_FONT, CENTER_FONT, LOGO_HEIGHT, BACKGROUND_COLOR
+    global SCORE_FONT, STATUS_FONT, STATUS_SMALL_FONT, CENTER_FONT, LOGO_HEIGHT, BACKGROUND_COLOR
 
-    SCORE_FONT, STATUS_FONT, CENTER_FONT = _scoreboard_fonts()
-    BACKGROUND_COLOR = get_screen_background_color(SCREEN_ID, SCOREBOARD_BACKGROUND_COLOR)
+    SCORE_FONT, STATUS_FONT, STATUS_SMALL_FONT, CENTER_FONT = _scoreboard_fonts()
+    BACKGROUND_COLOR = (0, 0, 0)
     team_scale = get_screen_image_scale(SCREEN_ID, "team_logo", 1.0)
     target_logo_height = max(1, int(round(TEAM_LOGO_BASE_HEIGHT * team_scale)))
     max_row_fit = max(1, SCORE_ROW_H - scale_value(8))
@@ -158,6 +160,75 @@ def _team_from_series(series: dict, *keys: str) -> dict:
     return {}
 
 
+def _normalize_conference_label(value: Any) -> str:
+    text = str(value or "").strip().lower()
+    if text.startswith("w"):
+        return "west"
+    if text.startswith("e"):
+        return "east"
+    return ""
+
+
+def _first_int(values: list[Any]) -> Optional[int]:
+    for value in values:
+        parsed = _as_int(value)
+        if parsed is not None:
+            return parsed
+    return None
+
+
+def _parse_datetime(value: Any) -> Optional[datetime.datetime]:
+    if not value:
+        return None
+    if isinstance(value, datetime.datetime):
+        dt = value
+    else:
+        text = str(value).strip()
+        if not text:
+            return None
+        if text.endswith("Z"):
+            text = f"{text[:-1]}+00:00"
+        try:
+            dt = datetime.datetime.fromisoformat(text)
+        except Exception:
+            return None
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=CENTRAL_TIME)
+    return dt.astimezone(CENTRAL_TIME)
+
+
+def _extract_next_game_dt(series: dict) -> Optional[datetime.datetime]:
+    candidate_keys = (
+        "nextGameStartTimeUTC",
+        "nextGameStartTime",
+        "nextGameDateTime",
+        "nextGameDate",
+        "startTimeUTC",
+        "gameDate",
+    )
+    for key in candidate_keys:
+        dt = _parse_datetime(series.get(key))
+        if dt:
+            return dt
+    next_game = series.get("nextGame")
+    if isinstance(next_game, dict):
+        for key in ("startTimeUTC", "startTime", "gameDate", "date"):
+            dt = _parse_datetime(next_game.get(key))
+            if dt:
+                return dt
+    return None
+
+
+def _format_next_text(series: dict) -> str:
+    dt = _extract_next_game_dt(series)
+    if not dt:
+        return "Next: TBD"
+    month = dt.month
+    day = dt.day
+    time_text = dt.strftime("%-I:%M %p")
+    return f"Next: {month}/{day} {time_text} CDT"
+
+
 def _normalize_series_item(series: dict) -> Optional[dict]:
     if not isinstance(series, dict):
         return None
@@ -190,6 +261,27 @@ def _normalize_series_item(series: dict) -> Optional[dict]:
         or series.get("roundLabel")
         or "Series"
     )
+    conference = _normalize_conference_label(
+        series.get("conferenceAbbrev")
+        or series.get("conferenceName")
+        or (away_team.get("conferenceAbbrev") if isinstance(away_team, dict) else None)
+        or (home_team.get("conferenceAbbrev") if isinstance(home_team, dict) else None)
+    )
+    higher_seed = _first_int(
+        [
+            series.get("topSeedRank"),
+            series.get("higherSeedRank"),
+            away_team.get("seed") if isinstance(away_team, dict) else None,
+            home_team.get("seed") if isinstance(home_team, dict) else None,
+        ]
+    )
+    lower_seed = _first_int(
+        [
+            series.get("bottomSeedRank"),
+            series.get("lowerSeedRank"),
+            series.get("wildcardSeed"),
+        ]
+    )
 
     return {
         "teams": {
@@ -197,6 +289,10 @@ def _normalize_series_item(series: dict) -> Optional[dict]:
             "home": {"team": home_team, "score": home_wins},
         },
         "status_text": str(status),
+        "conference": conference,
+        "higher_seed": higher_seed,
+        "lower_seed": lower_seed,
+        "next_text": _format_next_text(series),
     }
 
 
@@ -323,13 +419,17 @@ def _standings_team_obj(row: dict) -> dict:
     }
 
 
-def _projected_series(higher_seed: dict, lower_seed: dict) -> dict:
+def _projected_series(higher_seed: dict, lower_seed: dict, *, conference: str, higher_seed_rank: int, lower_seed_rank: int) -> dict:
     return {
         "teams": {
-            "away": {"team": _standings_team_obj(lower_seed), "score": _as_int(lower_seed.get("points")) or 0},
-            "home": {"team": _standings_team_obj(higher_seed), "score": _as_int(higher_seed.get("points")) or 0},
+            "away": {"team": _standings_team_obj(lower_seed), "score": 0},
+            "home": {"team": _standings_team_obj(higher_seed), "score": 0},
         },
         "status_text": "Projected",
+        "conference": conference,
+        "higher_seed": higher_seed_rank,
+        "lower_seed": lower_seed_rank,
+        "next_text": "Next: TBD",
     }
 
 
@@ -389,10 +489,34 @@ def _projected_matchups_from_standings(standings: list[dict]) -> list[dict]:
 
         matchups.extend(
             [
-                _projected_series(first_top[0], wc1),
-                _projected_series(first_top[1], first_top[2]),
-                _projected_series(second_top[0], wc2),
-                _projected_series(second_top[1], second_top[2]),
+                _projected_series(
+                    first_top[0],
+                    wc1,
+                    conference=conference,
+                    higher_seed_rank=1,
+                    lower_seed_rank=8,
+                ),
+                _projected_series(
+                    second_top[0],
+                    wc2,
+                    conference=conference,
+                    higher_seed_rank=2,
+                    lower_seed_rank=7,
+                ),
+                _projected_series(
+                    first_top[1],
+                    first_top[2],
+                    conference=conference,
+                    higher_seed_rank=3,
+                    lower_seed_rank=6,
+                ),
+                _projected_series(
+                    second_top[1],
+                    second_top[2],
+                    conference=conference,
+                    higher_seed_rank=4,
+                    lower_seed_rank=5,
+                ),
             ]
         )
 
@@ -430,23 +554,64 @@ def _derive_playoff_matchups_from_games(games: list[dict]) -> list[dict]:
                     "home": {"team": home_team, "score": _as_int(home.get("leagueRecord", {}).get("wins")) or 0},
                 },
                 "status_text": "Series",
+                "conference": _normalize_conference_label(
+                    game.get("conference")
+                    or away_team.get("conferenceAbbrev")
+                    or home_team.get("conferenceAbbrev")
+                ),
+                "higher_seed": None,
+                "lower_seed": None,
+                "next_text": "Next: TBD",
             }
         )
     return results
 
 
-def _draw_game_block(canvas: Image.Image, draw: ImageDraw.ImageDraw, game: dict, top: int):
-    teams = (game or {}).get("teams", {})
+def _series_order_key(series: dict) -> tuple[int, int, str, str]:
+    higher_seed = _as_int(series.get("higher_seed"))
+    lower_seed = _as_int(series.get("lower_seed"))
+    teams = series.get("teams") or {}
+    away_team = ((teams.get("away") or {}).get("team") or {})
+    home_team = ((teams.get("home") or {}).get("team") or {})
+    fallback_high = min(
+        _first_int([away_team.get("seed"), away_team.get("playoffSeed"), 99]) or 99,
+        _first_int([home_team.get("seed"), home_team.get("playoffSeed"), 99]) or 99,
+    )
+    high = higher_seed if higher_seed is not None else fallback_high
+    low = lower_seed if lower_seed is not None else 99
+    return (high, low, _team_logo_abbr(home_team), _team_logo_abbr(away_team))
+
+
+def _conference_buckets(series: list[dict]) -> tuple[list[dict], list[dict]]:
+    west = [item for item in series if _normalize_conference_label(item.get("conference")) == "west"]
+    east = [item for item in series if _normalize_conference_label(item.get("conference")) == "east"]
+    unknown = [item for item in series if item not in west and item not in east]
+    for idx, item in enumerate(unknown):
+        (west if idx % 2 == 0 else east).append(item)
+    west.sort(key=_series_order_key)
+    east.sort(key=_series_order_key)
+    return west, east
+
+
+def _draw_series_block(canvas: Image.Image, draw: ImageDraw.ImageDraw, series: dict, *, left: int, top: int):
+    teams = (series or {}).get("teams", {})
     away = teams.get("away", {})
     home = teams.get("home", {})
-
-    away_text = str(away.get("score", 0))
-    home_text = str(home.get("score", 0))
-
+    score_text = f"{away.get('score', 0)}-{home.get('score', 0)}"
     score_top = top
-    for idx, text in ((0, away_text), (2, "@"), (4, home_text)):
+
+    for idx, text in ((0, str(away.get("score", 0))), (2, "-"), (4, str(home.get("score", 0)))):
         font = SCORE_FONT if idx != 2 else CENTER_FONT
-        _center_text(draw, text, font, COL_X[idx], COL_WIDTHS[idx], score_top, SCORE_ROW_H, fill=(255, 255, 255))
+        _center_text(
+            draw,
+            text,
+            font,
+            left + SERIES_COL_X[idx],
+            SERIES_COL_WIDTHS[idx],
+            score_top,
+            SCORE_ROW_H,
+            fill=(255, 255, 255),
+        )
 
     for idx, team_side in ((1, away), (3, home)):
         team_obj = (team_side or {}).get("team", {})
@@ -456,30 +621,44 @@ def _draw_game_block(canvas: Image.Image, draw: ImageDraw.ImageDraw, game: dict,
             team_name = (team_obj or {}).get("name") or (team_obj or {}).get("teamName") or "Unknown Team"
             log_missing_team_logo(SCREEN_ID, team_name, abbr)
             continue
-        x0 = COL_X[idx] + (COL_WIDTHS[idx] - logo.width) // 2
+        x0 = left + SERIES_COL_X[idx] + (SERIES_COL_WIDTHS[idx] - logo.width) // 2
         y0 = score_top + (SCORE_ROW_H - logo.height) // 2
         canvas.paste(logo, (x0, y0), logo)
 
     status_top = score_top + SCORE_ROW_H
-    status_text = game.get("status_text") or "Series"
-    _center_text(draw, status_text, STATUS_FONT, COL_X[2], COL_WIDTHS[2], status_top, STATUS_ROW_H, fill=(255, 255, 255))
+    _center_text(draw, score_text, STATUS_FONT, left, SERIES_WIDTH, status_top, STATUS_ROW_H, fill=(220, 220, 220))
+    _center_text(
+        draw,
+        series.get("next_text") or "Next: TBD",
+        STATUS_SMALL_FONT,
+        left,
+        SERIES_WIDTH,
+        status_top + STATUS_ROW_H,
+        STATUS_ROW_H,
+        fill=(255, 255, 255),
+    )
 
 
-def _compose_canvas(games: list[dict]) -> Image.Image:
-    if not games:
+def _compose_canvas(series: list[dict]) -> Image.Image:
+    if not series:
         return Image.new("RGB", (WIDTH, HEIGHT), BACKGROUND_COLOR)
-    block_height = SCORE_ROW_H + STATUS_ROW_H
-    total_height = block_height * len(games)
-    if len(games) > 1:
-        total_height += BLOCK_SPACING * (len(games) - 1)
+    west_series, east_series = _conference_buckets(series)
+    rows = max(len(west_series), len(east_series))
+    block_height = SCORE_ROW_H + (STATUS_ROW_H * 2)
+    total_height = block_height * rows
+    if rows > 1:
+        total_height += BLOCK_SPACING * (rows - 1)
     canvas = Image.new("RGB", (WIDTH, total_height), BACKGROUND_COLOR)
     draw = ImageDraw.Draw(canvas)
 
     y = 0
-    for idx, game in enumerate(games):
-        _draw_game_block(canvas, draw, game, y)
-        y += SCORE_ROW_H + STATUS_ROW_H
-        if idx < len(games) - 1:
+    for idx in range(rows):
+        if idx < len(west_series):
+            _draw_series_block(canvas, draw, west_series[idx], left=WEST_X, top=y)
+        if idx < len(east_series):
+            _draw_series_block(canvas, draw, east_series[idx], left=EAST_X, top=y)
+        y += block_height
+        if idx < rows - 1:
             sep_y = y + BLOCK_SPACING // 2
             draw.line((10, sep_y, WIDTH - 10, sep_y), fill=(45, 45, 45))
             y += BLOCK_SPACING

@@ -44,9 +44,31 @@ def test_projected_matchups_from_standings_builds_first_round_bracket():
     assert east_atlantic_top_vs_wc1["teams"]["home"]["team"]["abbreviation"] == "TOR"
     assert east_atlantic_top_vs_wc1["teams"]["away"]["team"]["abbreviation"] == "OTT"
 
-    east_metro_top_vs_wc2 = projected[2]
+    east_metro_top_vs_wc2 = projected[1]
     assert east_metro_top_vs_wc2["teams"]["home"]["team"]["abbreviation"] == "CAR"
     assert east_metro_top_vs_wc2["teams"]["away"]["team"]["abbreviation"] == "DET"
+
+    assert projected[0]["higher_seed"] == 1
+    assert projected[1]["higher_seed"] == 2
+    assert projected[2]["higher_seed"] == 3
+    assert projected[3]["higher_seed"] == 4
+
+
+def test_format_next_text_uses_cdt():
+    text = nhl_playoffs._format_next_text({"nextGameStartTimeUTC": "2026-04-20T00:30:00Z"})
+    assert text == "Next: 4/19 7:30 PM CDT"
+
+
+def test_conference_buckets_order_by_seed():
+    series = [
+        {"conference": "west", "higher_seed": 3, "lower_seed": 6, "teams": {"away": {"team": {"abbreviation": "AAA"}}, "home": {"team": {"abbreviation": "BBB"}}}},
+        {"conference": "west", "higher_seed": 1, "lower_seed": 8, "teams": {"away": {"team": {"abbreviation": "CCC"}}, "home": {"team": {"abbreviation": "DDD"}}}},
+        {"conference": "east", "higher_seed": 2, "lower_seed": 7, "teams": {"away": {"team": {"abbreviation": "EEE"}}, "home": {"team": {"abbreviation": "FFF"}}}},
+        {"conference": "east", "higher_seed": 1, "lower_seed": 8, "teams": {"away": {"team": {"abbreviation": "GGG"}}, "home": {"team": {"abbreviation": "HHH"}}}},
+    ]
+    west, east = nhl_playoffs._conference_buckets(series)
+    assert [item["higher_seed"] for item in west] == [1, 3]
+    assert [item["higher_seed"] for item in east] == [1, 2]
 
 
 def test_render_uses_projected_standings_when_no_live_playoff_series(monkeypatch):
