@@ -2216,7 +2216,16 @@ def main_loop():
                         )
 
             loop_count += 1
-            logging.info("🎬 Presenting '%s' (iteration %d)", sid, loop_count)
+            presentation_extra_seconds = _extra_seconds_for_screen(sid)
+            if presentation_extra_seconds > 0:
+                logging.info(
+                    "🎬 Presenting '%s' with %d sec delay (iteration %d)",
+                    sid,
+                    presentation_extra_seconds,
+                    loop_count,
+                )
+            else:
+                logging.info("🎬 Presenting '%s' (iteration %d)", sid, loop_count)
 
             frame_id_before_render = None
             if hasattr(display, "frame_id"):
