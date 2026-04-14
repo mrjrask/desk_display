@@ -12,7 +12,7 @@ import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
-from typing import Any, Callable, Dict, Optional
+from typing import Any, Callable, Dict, Optional, Set
 
 import data_fetch
 from config import CENTRAL_TIME
@@ -78,7 +78,12 @@ class DataProvider:
             ttl_seconds,
         )
 
-    def read_sports_payloads(self, *, ttl_seconds: int = 120) -> Dict[str, Any]:
+    def read_sports_payloads(
+        self,
+        *,
+        ttl_seconds: int = 120,
+        leagues: Optional[Set[str]] = None,
+    ) -> Dict[str, Any]:
         def _fetch_payloads() -> Dict[str, Any]:
             now = dt.datetime.now(CENTRAL_TIME)
             today = now.date()
@@ -86,7 +91,7 @@ class DataProvider:
             def _fetch_nfl() -> Any:
                 return fetch_nfl_week_scoreboard(now=now) or fetch_nfl_next_scoreboard(start_date=today)
 
-            tasks: Dict[str, Callable[[], Any]] = {
+            all_tasks: Dict[str, Callable[[], Any]] = {
                 "nfl": _fetch_nfl,
                 "mlb": lambda: fetch_mlb_scoreboard(now=now),
                 "nba": lambda: fetch_nba_scoreboard(now=now),
@@ -94,7 +99,15 @@ class DataProvider:
                 "nhl": lambda: fetch_nhl_scoreboard(now=now),
             }
 
-            scoreboards: Dict[str, Any] = {league: [] for league in tasks}
+            selected_leagues = {
+                league for league in (leagues or set(all_tasks.keys())) if league in all_tasks
+            }
+            tasks = {league: fetcher for league, fetcher in all_tasks.items() if league in selected_leagues}
+
+            scoreboards: Dict[str, Any] = {league: [] for league in all_tasks}
+            if not tasks:
+                return {"scoreboards": scoreboards}
+
             with ThreadPoolExecutor(max_workers=len(tasks)) as pool:
                 futures = {
                     league: pool.submit(fetcher)

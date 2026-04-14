@@ -1671,6 +1671,18 @@ _SCOREBOARD_SCREEN_IDS = {
     "NCAAM Scoreboard",
 }
 
+_SCOREBOARD_SCREEN_TO_LEAGUES: Dict[str, Set[str]] = {
+    "NFL Scoreboard": {"nfl"},
+    "NFL Scoreboard v2": {"nfl"},
+    "NHL Scoreboard": {"nhl"},
+    "NHL Scoreboard v2": {"nhl"},
+    "MLB Scoreboard": {"mlb"},
+    "MLB Scoreboard v2": {"mlb"},
+    "NBA Scoreboard": {"nba"},
+    "NBA Scoreboard v2": {"nba"},
+    "NCAAM Scoreboard": {"ncaam"},
+}
+
 _LIVE_TEAM_SCREEN_TO_FEED: Dict[str, str] = {
     "cubs live": "cubs",
     "sox live": "sox",
@@ -1697,13 +1709,26 @@ def _refresh_weather() -> None:
         )
 
 
+def _requested_scoreboard_leagues() -> Set[str]:
+    requested: Set[str] = set()
+    for screen_id in _requested_screen_ids:
+        requested.update(_SCOREBOARD_SCREEN_TO_LEAGUES.get(screen_id, set()))
+    return requested
+
+
 def _refresh_scoreboards() -> None:
-    sports_payloads = data_provider.read_sports_payloads(ttl_seconds=120) or {}
+    sports_payloads = data_provider.read_sports_payloads(
+        ttl_seconds=120,
+        leagues=_requested_scoreboard_leagues(),
+    ) or {}
     cache["scoreboards"].update(sports_payloads.get("scoreboards") or {})
 
 
 def _refresh_scoreboards_fresh() -> None:
-    sports_payloads = data_provider.read_sports_payloads(ttl_seconds=0) or {}
+    sports_payloads = data_provider.read_sports_payloads(
+        ttl_seconds=0,
+        leagues=_requested_scoreboard_leagues(),
+    ) or {}
     cache["scoreboards"].update(sports_payloads.get("scoreboards") or {})
 
 
