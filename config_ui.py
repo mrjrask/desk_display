@@ -46,12 +46,6 @@ SCREEN_CONFIG_HOST = os.environ.get("SCREEN_CONFIG_HOST", "0.0.0.0")
 SCREEN_CONFIG_PORT = int(os.environ.get("SCREEN_CONFIG_PORT", "5002"))
 SCREEN_UI_USERNAME = os.environ.get("SCREEN_UI_USERNAME", "")
 SCREEN_UI_PASSWORD = os.environ.get("SCREEN_UI_PASSWORD", "")
-SCREEN_AUTH_ENABLED = os.environ.get("SCREEN_AUTH_ENABLED", "").strip().lower() in {
-    "1",
-    "true",
-    "yes",
-    "on",
-}
 ALLOWED_SCREEN_EXTS = (".png", ".jpg", ".jpeg")
 app = Flask(__name__)
 app.secret_key = SCREEN_UI_PASSWORD or "desk-display-config-ui"
@@ -199,7 +193,21 @@ def _log_web_request(response: Any) -> Any:
 
 
 def _is_auth_enabled() -> bool:
-    return bool(SCREEN_UI_PASSWORD) or SCREEN_AUTH_ENABLED
+    screen_auth_enabled = os.environ.get("SCREEN_AUTH_ENABLED", "").strip().lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }
+    return bool(os.environ.get("SCREEN_UI_PASSWORD", "")) or screen_auth_enabled
+
+
+def _get_auth_username() -> str:
+    return os.environ.get("SCREEN_UI_USERNAME", SCREEN_UI_USERNAME)
+
+
+def _get_auth_password() -> str:
+    return os.environ.get("SCREEN_UI_PASSWORD", SCREEN_UI_PASSWORD)
 
 
 def _is_authenticated() -> bool:
@@ -1055,8 +1063,10 @@ def login() -> Any:
     if request.method == "POST":
         supplied_username = request.form.get("username", "").strip()
         supplied = request.form.get("password", "")
-        username_matches = not SCREEN_UI_USERNAME or supplied_username == SCREEN_UI_USERNAME
-        if SCREEN_UI_PASSWORD and username_matches and supplied == SCREEN_UI_PASSWORD:
+        auth_username = _get_auth_username()
+        auth_password = _get_auth_password()
+        username_matches = not auth_username or supplied_username == auth_username
+        if auth_password and username_matches and supplied == auth_password:
             session["screen_ui_authenticated"] = True
             return redirect(next_url)
         error = "Incorrect username or password"
@@ -1065,7 +1075,7 @@ def login() -> Any:
         "login.html",
         error=error,
         next_url=next_url,
-        login_username=SCREEN_UI_USERNAME,
+        login_username=_get_auth_username(),
     )
 
 
