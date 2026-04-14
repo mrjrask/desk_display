@@ -1345,12 +1345,6 @@ def _save_screenshot(sid: str, img: Image.Image) -> Optional[Tuple[str, bool]]:
         removed = _prune_screenshots_in_dir(target_dir, MAX_SCREENSHOTS_PER_SCREEN)
         if removed:
             _register_screenshots_removed(removed)
-            logging.info(
-                "🧹 Pruned %d screenshot(s) from %s (limit %d).",
-                removed,
-                target_dir,
-                MAX_SCREENSHOTS_PER_SCREEN,
-            )
 
     if saved:
         return folder, archive_needed
