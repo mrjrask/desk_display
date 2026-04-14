@@ -747,6 +747,42 @@ def test_hawks_schedule_quad_uses_expected_tile_selection(monkeypatch):
     ]
 
 
+def test_hawks_schedule_quad_uses_blank_tile_when_next_home_missing(monkeypatch):
+    now = datetime.datetime(2024, 1, 1, 12, 0, tzinfo=CENTRAL_TIME)
+    weather = {"hourly": []}
+    context = _make_context(
+        weather,
+        now,
+        cache_updates={
+            "hawks": {
+                "stand": [{"team": {"id": 16}}],
+                "last": {"id": 10},
+                "next": {"id": 20},
+                "next_home": {"id": 20},
+            }
+        },
+    )
+    captured = {}
+
+    def _fake_draw_quad_screen(_display, tiles, transition=False, scroll_speed=1.0):
+        captured["labels"] = [tile.label for tile in tiles]
+        return None
+
+    monkeypatch.setattr("screens.registry.draw_quad_screen", _fake_draw_quad_screen)
+
+    registry, _ = build_screen_registry(context)
+    assert "hawks next home" not in registry
+    assert registry["hawks schedule quad"].available is True
+    registry["hawks schedule quad"].render()
+
+    assert captured["labels"] == [
+        "hawks stand1",
+        "hawks last",
+        "hawks next",
+        "blank",
+    ]
+
+
 def test_bulls_schedule_quad_uses_expected_tile_selection(monkeypatch):
     now = datetime.datetime(2024, 1, 1, 12, 0, tzinfo=CENTRAL_TIME)
     weather = {"hourly": []}

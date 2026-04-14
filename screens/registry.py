@@ -651,6 +651,10 @@ def build_screen_registry(context: ScreenContext) -> Tuple[Dict[str, ScreenDefin
         if isinstance(rendered, Image.Image):
             return rendered
         return capture.last_image
+
+    def _render_black_quad_tile() -> Image.Image:
+        return Image.new("RGB", (WIDTH, HEIGHT), "black")
+
     weather_logo = context.logos.get("weather logo")
     # Keep weather screens visible whenever cached forecast data exists.
     # During offline periods we may be unable to refresh for hours, but hiding
@@ -997,20 +1001,23 @@ def build_screen_registry(context: ScreenContext) -> Tuple[Dict[str, ScreenDefin
                     _TileSpec("hawks stand1", lambda speed=scroll_speed: _render_quad_tile("hawks stand1", scroll_speed=speed)),
                     _TileSpec("hawks last", lambda speed=scroll_speed: _render_quad_tile("hawks last", scroll_speed=speed)),
                     _TileSpec("hawks next", lambda speed=scroll_speed: _render_quad_tile("hawks next", scroll_speed=speed)),
-                    _TileSpec("hawks next home", lambda speed=scroll_speed: _render_quad_tile("hawks next home", scroll_speed=speed)),
+                    (
+                        _TileSpec("hawks next home", lambda speed=scroll_speed: _render_quad_tile("hawks next home", scroll_speed=speed))
+                        if hawks_next_home
+                        else _TileSpec("blank", _render_black_quad_tile)
+                    ),
                 ],
                 transition=True,
                 scroll_speed=scroll_speed,
             ),
             available=bool(hawks.get("stand"))
             and bool(hawks.get("last"))
-            and bool(hawks_next)
-            and bool(hawks_next_home),
+            and bool(hawks_next),
             quad_tiles=[
                 "hawks stand1",
                 "hawks last",
                 "hawks next",
-                "hawks next home",
+                "hawks next home" if hawks_next_home else "blank",
             ],
         )
 
