@@ -78,7 +78,8 @@ for w in SERIES_COL_WIDTHS:
 
 TITLE_FONT = FONT_TITLE_SPORTS
 LOGO_DIR = os.path.join(IMAGES_DIR, "nhl")
-TEAM_LOGO_BASE_HEIGHT = standard_scoreboard_team_logo_height(HEIGHT)
+# Match NHL Scoreboard v2 logo baseline sizing.
+TEAM_LOGO_BASE_HEIGHT = scale_value_width(26)
 LEAGUE_LOGO_BASE_HEIGHT = (
     TEAM_LOGO_BASE_HEIGHT
     if (HYPERPIXEL_LAYOUT or is_kernel_driven_display())
@@ -93,10 +94,12 @@ _SESSION = get_session()
 
 
 def _scoreboard_fonts() -> tuple:
-    score = get_screen_font(SCREEN_ID, "score", base_font=FONT_TEAM_SPORTS, default_size=43)
-    status = get_screen_font(SCREEN_ID, "status", base_font=FONT_STATUS, default_size=28)
-    status_small = get_screen_font(SCREEN_ID, "status_small", base_font=FONT_STATUS, default_size=20)
-    center = get_screen_font(SCREEN_ID, "center", base_font=FONT_STATUS, default_size=28)
+    # Keep score typography aligned with NHL Scoreboard v2.
+    score = get_screen_font(SCREEN_ID, "score", base_font=FONT_TEAM_SPORTS, default_size=24)
+    status = get_screen_font(SCREEN_ID, "status", base_font=FONT_STATUS, default_size=18)
+    # Reduce game time/date text by 4pt from prior default (20 -> 16).
+    status_small = get_screen_font(SCREEN_ID, "status_small", base_font=FONT_STATUS, default_size=16)
+    center = get_screen_font(SCREEN_ID, "center", base_font=FONT_STATUS, default_size=18)
     return score, status, status_small, center
 
 
@@ -597,7 +600,6 @@ def _draw_series_block(canvas: Image.Image, draw: ImageDraw.ImageDraw, series: d
     teams = (series or {}).get("teams", {})
     away = teams.get("away", {})
     home = teams.get("home", {})
-    score_text = f"{away.get('score', 0)}-{home.get('score', 0)}"
     score_top = top
 
     for idx, text in ((0, str(away.get("score", 0))), (2, "-"), (4, str(home.get("score", 0)))):
@@ -626,7 +628,16 @@ def _draw_series_block(canvas: Image.Image, draw: ImageDraw.ImageDraw, series: d
         canvas.paste(logo, (x0, y0), logo)
 
     status_top = score_top + SCORE_ROW_H
-    _center_text(draw, score_text, STATUS_FONT, left, SERIES_WIDTH, status_top, STATUS_ROW_H, fill=(220, 220, 220))
+    _center_text(
+        draw,
+        str(series.get("status_text") or "Series"),
+        STATUS_FONT,
+        left,
+        SERIES_WIDTH,
+        status_top,
+        STATUS_ROW_H,
+        fill=(220, 220, 220),
+    )
     _center_text(
         draw,
         series.get("next_text") or "Next: TBD",
