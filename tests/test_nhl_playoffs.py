@@ -94,3 +94,21 @@ def test_render_uses_projected_standings_when_no_live_playoff_series(monkeypatch
 
     rendered = nhl_playoffs.render_nhl_playoffs(_DisplayStub(), games=[], transition=False)
     assert rendered.displayed is True
+
+
+def test_recompute_series_layout_keeps_two_columns_on_screen(monkeypatch):
+    monkeypatch.setattr(nhl_playoffs, "WIDTH", 800)
+    monkeypatch.setattr(nhl_playoffs, "PAIR_SPACING_BASE", 40)
+    monkeypatch.setattr(nhl_playoffs, "SERIES_COL_WIDTHS_BASE", [105, 80, 40, 80, 105])
+
+    nhl_playoffs._recompute_series_layout()
+
+    assert nhl_playoffs.CONTENT_WIDTH <= nhl_playoffs.WIDTH
+    assert nhl_playoffs.EAST_X + nhl_playoffs.SERIES_WIDTH <= nhl_playoffs.WIDTH
+
+
+def test_fit_widths_to_total_preserves_total_and_min_width():
+    fitted = nhl_playoffs._fit_widths_to_total([105, 80, 40, 80, 105], 400)
+
+    assert sum(fitted) == 400
+    assert all(width >= 1 for width in fitted)
