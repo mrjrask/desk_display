@@ -1309,7 +1309,7 @@ def _register_screenshots_removed(count: int) -> Tuple[int, bool]:
         return _screenshot_count or 0, _archive_pending
 
 
-def _save_screenshot(sid: str, img: Image.Image) -> Optional[Tuple[str, bool]]:
+def _save_screenshot(sid: str, img: Image.Image) -> Optional[Tuple[str, bool, int]]:
     ts = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
     folder = _sanitize_directory_name(sid)
     prefix = _sanitize_filename_prefix(sid)
@@ -1341,19 +1341,14 @@ def _save_screenshot(sid: str, img: Image.Image) -> Optional[Tuple[str, bool]]:
     except Exception:
         logging.warning(f"⚠️ Failed to update current screenshot for '{sid}'")
 
+    removed = 0
     if saved:
         removed = _prune_screenshots_in_dir(target_dir, MAX_SCREENSHOTS_PER_SCREEN)
         if removed:
             _register_screenshots_removed(removed)
-            logging.info(
-                "🧹 Pruned %d screenshot(s) from %s (limit %d).",
-                removed,
-                target_dir,
-                MAX_SCREENSHOTS_PER_SCREEN,
-            )
 
     if saved:
-        return folder, archive_needed
+        return folder, archive_needed, removed
     return None
 
 
@@ -2274,6 +2269,7 @@ def main_loop():
                 continue
 
             skip_delay = False
+            pruned_screenshots_this_loop = 0
             led_context = (
                 temporary_display_led(*led_override)
                 if led_override is not None
@@ -2293,6 +2289,8 @@ def main_loop():
                             saved = _save_screenshot(sid, img)
                             if saved and saved[1]:
                                 maybe_archive_screenshots(saved[0])
+                            if saved:
+                                pruned_screenshots_this_loop += saved[2]
                         if ENABLE_VIDEO and video_out:
                             import cv2, numpy as np
 
@@ -2312,6 +2310,8 @@ def main_loop():
                             saved = _save_screenshot(sid, img)
                             if saved and saved[1]:
                                 maybe_archive_screenshots(saved[0])
+                            if saved:
+                                pruned_screenshots_this_loop += saved[2]
                         if ENABLE_VIDEO and video_out:
                             import cv2, numpy as np
 
@@ -2319,6 +2319,14 @@ def main_loop():
                             video_out.write(frame)
                 else:
                     logging.info("Screen '%s' produced no drawable image.", sid)
+
+                if pruned_screenshots_this_loop:
+                    logging.info(
+                        "🧹 Deleted %d screenshot file(s) after iteration %d (%s).",
+                        pruned_screenshots_this_loop,
+                        loop_count,
+                        sid,
+                    )
 
                 if _shutdown_event.is_set():
                     break
