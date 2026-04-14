@@ -58,6 +58,7 @@ DIVISION_GAP_TOP = scale_value(6)
 DIVISION_GAP_BOTTOM = scale_value(4)
 DIVISION_SECTION_GAP = scale_value(8)
 DIVISION_CONTENT_GAP = scale_value(10)
+STAT_HEADER_GAP = scale_value(4)
 ROW_GAP = scale_value(6)
 LEFT_MARGIN = scale_value(5)
 RIGHT_MARGIN = scale_value(8)
@@ -435,6 +436,28 @@ def _draw_record_with_pct(draw: ImageDraw.ImageDraw, record_value: str, pct_valu
     )
 
 
+def _stat_header_labels() -> dict[str, str]:
+    return {
+        "record": "Record",
+        "last10": "L10",
+        "pct": "Win%",
+        "gb": "GB",
+    }
+
+
+def _draw_stat_headers(draw: ImageDraw.ImageDraw, layout: dict[str, int], y: int) -> int:
+    labels = _stat_header_labels()
+    for key in _stat_columns():
+        draw.text(
+            (layout[key], y),
+            labels.get(key, key.upper()),
+            font=RECORD_PCT_FONT,
+            fill=(200, 200, 200),
+            anchor="rm",
+        )
+    return y + _text_size(draw, "Record", RECORD_PCT_FONT)[1] + STAT_HEADER_GAP
+
+
 def _draw_gb(draw: ImageDraw.ImageDraw, gb_value: Any, x: int, y: int) -> None:
     gb_text, gb_frac = _split_gb_text(gb_value)
     gb_w = _gb_value_width(draw, gb_text, gb_frac)
@@ -655,6 +678,7 @@ def _draw_league_screen(title: str, league_id: int, screen_id: str) -> Image.Ima
         division_label = f"{title.split()[1]} {div}"
         draw.text((WIDTH // 2, y), division_label, font=DIVISION_FONT, fill=(255, 255, 255), anchor="mt")
         y += _text_size(draw, division_label, DIVISION_FONT)[1] + DIVISION_CONTENT_GAP
+        y = _draw_stat_headers(draw, col, y)
 
         for row in rows:
             row_center = y + row_h // 2

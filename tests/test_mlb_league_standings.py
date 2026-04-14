@@ -161,3 +161,11 @@ def test_compact_layout_increases_record_to_gb_gap(monkeypatch):
     inter_column_gap = layout["gb"] - layout["record"] - gb_w
 
     assert inter_column_gap >= 52
+
+
+def test_stat_header_labels_include_record_l10_and_gb():
+    labels = mlb_league_standings._stat_header_labels()
+
+    assert labels["record"] == "Record"
+    assert labels["last10"] == "L10"
+    assert labels["gb"] == "GB"
