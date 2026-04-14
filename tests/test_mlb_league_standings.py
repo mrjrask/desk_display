@@ -201,3 +201,41 @@ def test_draw_stat_headers_centers_labels_in_column(monkeypatch):
     assert probe.calls[0] == ((180, 50), "Record", "mm")
     assert probe.calls[1] == ((280, 50), "L10", "mm")
     assert probe.calls[2] == ((365, 50), "GB", "mm")
+
+
+def test_draw_league_screen_canvas_height_includes_stat_headers(monkeypatch):
+    monkeypatch.setattr(mlb_league_standings, "SHOW_LAST_10", False)
+    monkeypatch.setattr(mlb_league_standings, "SHOW_WIN_PCT", False)
+    monkeypatch.setattr(mlb_league_standings, "HEIGHT", 100)
+    monkeypatch.setattr(mlb_league_standings, "WIDTH", 320)
+    monkeypatch.setattr(mlb_league_standings, "LOGO_SIZE", 8)
+    monkeypatch.setattr(mlb_league_standings, "ROW_GAP", 4)
+    monkeypatch.setattr(mlb_league_standings, "DIVISION_CONTENT_GAP", 2)
+    monkeypatch.setattr(mlb_league_standings, "STAT_HEADER_GAP", 3)
+    monkeypatch.setattr(mlb_league_standings, "DIVISION_GAP_BOTTOM", 5)
+    monkeypatch.setattr(mlb_league_standings, "DIVISION_SECTION_GAP", 6)
+    monkeypatch.setattr(mlb_league_standings, "SCOREBOARD_STANDINGS_BOTTOM_PADDING", 7)
+    monkeypatch.setattr(mlb_league_standings, "scale_value", lambda value: value)
+    monkeypatch.setattr(mlb_league_standings, "_draw_table_title", lambda _img, _draw, _title: 0)
+    monkeypatch.setattr(mlb_league_standings, "_load_logo", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(mlb_league_standings, "_text_size", lambda _draw, _text, _font: (10, 10))
+    monkeypatch.setattr(
+        mlb_league_standings,
+        "_column_layout",
+        lambda _draw, _rows: {"team": 0, "team_max": 40, "record": 120, "record_width": 40, "gb": 180, "gb_width": 20},
+    )
+    monkeypatch.setattr(
+        mlb_league_standings,
+        "_fetch_league_standings",
+        lambda: {
+            mlb_league_standings.AL_LEAGUE_ID: {
+                "East": [{"team_name": "A", "abbr": "A", "wins": 10, "losses": 5, "gb": "-"}],
+                "Central": [{"team_name": "B", "abbr": "B", "wins": 9, "losses": 6, "gb": "1"}],
+                "West": [],
+            }
+        },
+    )
+
+    image = mlb_league_standings._draw_league_screen("MLB AL Standings", mlb_league_standings.AL_LEAGUE_ID, "MLB AL Standings")
+
+    assert image.height == 185

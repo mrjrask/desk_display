@@ -458,7 +458,11 @@ def _draw_stat_headers(draw: ImageDraw.ImageDraw, layout: dict[str, int], y: int
             fill=(200, 200, 200),
             anchor="mm",
         )
-    return y + _text_size(draw, "Record", RECORD_PCT_FONT)[1] + STAT_HEADER_GAP
+    return y + _stat_header_height(draw)
+
+
+def _stat_header_height(draw: ImageDraw.ImageDraw) -> int:
+    return _text_size(draw, "Record", RECORD_PCT_FONT)[1] + STAT_HEADER_GAP
 
 
 def _draw_gb(draw: ImageDraw.ImageDraw, gb_value: Any, x: int, y: int) -> None:
@@ -656,6 +660,7 @@ def _draw_league_screen(title: str, league_id: int, screen_id: str) -> Image.Ima
 
     row_h = max(LOGO_SIZE, _text_size(probe, "SEA", TEAM_FONT)[1], _text_size(probe, "999", STATS_FONT)[1]) + scale_value(2)
     division_title_h = _text_size(probe, "AL East", DIVISION_FONT)[1] + DIVISION_CONTENT_GAP
+    stat_header_h = _stat_header_height(probe)
 
     visible_divisions = [div for div in DIVISION_ORDER if standings.get(div)]
 
@@ -663,6 +668,7 @@ def _draw_league_screen(title: str, league_id: int, screen_id: str) -> Image.Ima
     for idx, div in enumerate(visible_divisions):
         rows = standings.get(div) or []
         section_h += division_title_h
+        section_h += stat_header_h
         section_h += len(rows) * (row_h + ROW_GAP)
         section_h += DIVISION_GAP_BOTTOM
         if idx < len(visible_divisions) - 1:
