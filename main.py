@@ -2356,14 +2356,6 @@ def main_loop():
                 else:
                     logging.info("Screen '%s' produced no drawable image.", sid)
 
-                if pruned_screenshots_this_loop:
-                    logging.info(
-                        "🧹 Deleted %d screenshot file(s) after iteration %d (%s).",
-                        pruned_screenshots_this_loop,
-                        loop_count,
-                        sid,
-                    )
-
                 if _shutdown_event.is_set():
                     break
 
