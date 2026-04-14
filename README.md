@@ -15,6 +15,7 @@ Desk Display is a Python dashboard application for Raspberry Pi and Linux displa
 - [Installers (recommended on Raspberry Pi)](#installers-recommended-on-raspberry-pi)
 - [Configuration](#configuration)
 - [Screens and scheduling](#screens-and-scheduling)
+- [Screen catalog (canonical IDs)](#screen-catalog-canonical-ids)
 - [Web UI (screen configuration)](#web-ui-screen-configuration)
 - [Services](#services)
 - [Developer workflow](#developer-workflow)
@@ -83,8 +84,9 @@ Hardware/workflows currently supported in this repo:
 
 ## Requirements
 
-- Linux environment (Raspberry Pi OS recommended for hardware use).
-- Python 3.9+.
+- Raspberry Pi OS / Linux for hardware deployments.
+- macOS and Windows are supported for SDL window mode via the provided launch/install scripts.
+- Python 3.9+ (project tooling targets Python 3.11).
 - Display target or headless mode.
 
 ### Typical OS packages (Raspberry Pi OS/Debian)
@@ -240,7 +242,7 @@ Configuration is environment-driven. Most values can be placed in `.env`.
 | Variable group | Purpose |
 | --- | --- |
 | `WEATHERKIT_*`, `OWM_*` | Weather provider credentials/settings |
-| `TRAVEL_TO_*`, `APPLE_MAPS_*` | Travel route + Apple Maps config |
+| `TRAVEL_MODE`, `TRAVEL_TO_*`, `GOOGLE_MAPS_*`, `APPLE_MAPS_*`, `MAPKIT_TOKEN` | Travel route + provider selection/auth |
 | `INSIDE_SENSOR`, `INSIDE_I2C_BUSES` | Indoor sensor selection and I2C probing |
 | `ENABLE_WIFI_MONITOR`, `ENABLE_WIFI_RECOVERY` | Wi-Fi monitor/recovery controls |
 
@@ -315,6 +317,22 @@ Default playlist order is:
 
 ---
 
+## Screen catalog (canonical IDs)
+
+The authoritative list of valid screen IDs lives in `screens_catalog.py` as `RAW_SCREEN_IDS`.
+
+Current canonical IDs:
+
+- Core/weather/inside: `date`, `nixie`, `quad`, `weather logo`, `weather1`, `weather2`, `weather hourly`, `weather daily`, `weather quad`, `weather radar`, `inside`, `verano logo`, `vrnof`
+- NFL/Bears: `bears logo`, `bears stand1`, `bears stand2`, `bears next`, `bears next season`, `nfl logo`, `NFL Scoreboard`, `NFL Overview NFC`, `NFL Overview AFC`, `NFL Standings NFC`, `NFL Standings AFC`
+- NBA/Bulls/NCAAM: `nba logo`, `NBA Scoreboard`, `NBA Playoffs`, `NCAAM Scoreboard`, `bulls logo`, `bulls stand1`, `bulls last`, `bulls live`, `bulls next`, `bulls next home`, `bulls schedule quad`
+- NHL/Blackhawks/Wolves: `hawks logo`, `hawks stand1`, `hawks last`, `hawks live`, `hawks next`, `hawks next home`, `hawks schedule quad`, `nhl logo`, `NHL Scoreboard`, `NHL Playoffs`, `NHL Standings Overview West`, `NHL Standings Overview East`, `NHL Standings West`, `NHL Standings West v2`, `NHL Standings East`, `NHL Standings East v2`, `wolves logo`, `wolves last`, `wolves next`, `wolves next home`
+- MLB/Cubs/Sox/league: `cubs logo`, `cubs stand1`, `cubs stand2`, `cubs stand3`, `cubs last`, `cubs result`, `cubs live`, `cubs next`, `cubs next home`, `cubs current series`, `cubs next series`, `cubs next home series`, `cubs schedule quad`, `sox logo`, `sox stand1`, `sox stand2`, `sox stand3`, `sox last`, `sox live`, `sox next`, `sox next home`, `sox current series`, `sox next series`, `sox next home series`, `sox schedule quad`, `mlb logo`, `MLB Scoreboard`, `NL Overview`, `AL Overview`, `MLB AL Standings`, `MLB NL Standings`
+
+Legacy IDs are canonicalized automatically (`time` → `nixie`, `sensors` → `inside`, and legacy `* v2` scoreboard aliases map to current names), so older saved configs still load.
+
+---
+
 ## Web UI (screen configuration)
 
 Start the UI:
@@ -384,6 +402,9 @@ pytest
 
 # Validate required files
 python tools/validate_required_files.py
+
+# Validate external API connectivity/credentials
+python scripts/test_api_connections.py
 
 # Render screens for verification
 python tools/maintenance/render_all_screens.py
