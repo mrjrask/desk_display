@@ -59,14 +59,17 @@ BLOCK_SPACING = _scale_y(10)
 SCORE_ROW_H = _scale_y(56)
 STATUS_ROW_H = _scale_y(18)
 REQUEST_TIMEOUT = 8
-PAIR_SPACING = max(8, scale_value_width(16))
-SERIES_COL_WIDTHS = [
+PAIR_SPACING_BASE = max(8, scale_value_width(16))
+SERIES_COL_WIDTHS_BASE = [
     scale_value_width(42),
     scale_value_width(32),
     scale_value_width(16),
     scale_value_width(32),
     scale_value_width(42),
 ]
+
+PAIR_SPACING = PAIR_SPACING_BASE
+SERIES_COL_WIDTHS = list(SERIES_COL_WIDTHS_BASE)
 SERIES_WIDTH = sum(SERIES_COL_WIDTHS)
 CONTENT_WIDTH = SERIES_WIDTH * 2 + PAIR_SPACING
 CONTENT_LEFT = max(0, (WIDTH - CONTENT_WIDTH) // 2)
@@ -108,11 +111,68 @@ BACKGROUND_COLOR = (0, 0, 0)
 _LOGO_CACHE: dict[tuple[str, int], Optional[Image.Image]] = {}
 
 
+def _fit_widths_to_total(widths: list[int], target_total: int) -> list[int]:
+    if not widths:
+        return []
+    target_total = max(len(widths), target_total)
+    current_total = sum(widths)
+    if current_total <= 0:
+        return [1] * len(widths)
+    scaled = [max(1, int(round(w * target_total / current_total))) for w in widths]
+    delta = target_total - sum(scaled)
+    order = sorted(range(len(widths)), key=lambda idx: widths[idx], reverse=(delta > 0))
+    while delta != 0 and order:
+        changed = False
+        for idx in order:
+            if delta == 0:
+                break
+            if delta < 0 and scaled[idx] <= 1:
+                continue
+            scaled[idx] += 1 if delta > 0 else -1
+            delta += -1 if delta > 0 else 1
+            changed = True
+        if not changed:
+            break
+    return scaled
+
+
+def _recompute_series_layout() -> None:
+    global PAIR_SPACING, SERIES_COL_WIDTHS, SERIES_WIDTH, CONTENT_WIDTH, CONTENT_LEFT, WEST_X, EAST_X, SERIES_COL_X
+
+    preferred_spacing = max(0, PAIR_SPACING_BASE)
+    preferred_series_width = sum(SERIES_COL_WIDTHS_BASE)
+
+    if preferred_series_width * 2 + preferred_spacing <= WIDTH:
+        spacing = preferred_spacing
+        series_col_widths = list(SERIES_COL_WIDTHS_BASE)
+    else:
+        series_target = max(len(SERIES_COL_WIDTHS_BASE), WIDTH // 2)
+        series_col_widths = _fit_widths_to_total(SERIES_COL_WIDTHS_BASE, series_target)
+        fitted_series_width = sum(series_col_widths)
+        spacing = min(preferred_spacing, max(0, WIDTH - (fitted_series_width * 2)))
+
+    series_width = sum(series_col_widths)
+    content_width = min(WIDTH, series_width * 2 + spacing)
+    content_left = max(0, (WIDTH - content_width) // 2)
+
+    PAIR_SPACING = spacing
+    SERIES_COL_WIDTHS = series_col_widths
+    SERIES_WIDTH = series_width
+    CONTENT_WIDTH = content_width
+    CONTENT_LEFT = content_left
+    WEST_X = content_left
+    EAST_X = content_left + series_width + spacing
+    SERIES_COL_X = [0]
+    for w in series_col_widths:
+        SERIES_COL_X.append(SERIES_COL_X[-1] + w)
+
+
 def _apply_style_overrides() -> None:
     global SCORE_FONT, STATUS_FONT, STATUS_SMALL_FONT, CENTER_FONT, LOGO_HEIGHT, BACKGROUND_COLOR
 
     SCORE_FONT, STATUS_FONT, STATUS_SMALL_FONT, CENTER_FONT = _scoreboard_fonts()
     BACKGROUND_COLOR = (0, 0, 0)
+    _recompute_series_layout()
     team_scale = get_screen_image_scale(SCREEN_ID, "team_logo", 1.0)
     target_logo_height = max(1, int(round(TEAM_LOGO_BASE_HEIGHT * team_scale)))
     max_row_fit = max(1, SCORE_ROW_H - scale_value(8))
