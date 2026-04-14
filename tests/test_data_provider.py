@@ -51,6 +51,35 @@ def test_read_sports_payloads_excludes_wbc_scoreboard(monkeypatch):
     assert "wbc" not in payload["scoreboards"]
 
 
+def test_read_sports_payloads_fetches_only_requested_leagues(monkeypatch):
+    provider = DataProvider()
+    calls = {"nfl": 0, "mlb": 0, "nba": 0, "ncaam": 0, "nhl": 0}
+
+    def _track(league):
+        def _fetch(*args, **kwargs):
+            calls[league] += 1
+            return [{"league": league}]
+
+        return _fetch
+
+    monkeypatch.setattr("services.data_provider.fetch_nfl_week_scoreboard", _track("nfl"))
+    monkeypatch.setattr("services.data_provider.fetch_nfl_next_scoreboard", _track("nfl"))
+    monkeypatch.setattr("services.data_provider.fetch_mlb_scoreboard", _track("mlb"))
+    monkeypatch.setattr("services.data_provider.fetch_nba_scoreboard", _track("nba"))
+    monkeypatch.setattr("services.data_provider.fetch_nhl_scoreboard", _track("nhl"))
+    monkeypatch.setattr("services.data_provider.fetch_ncaam_scoreboard", _track("ncaam"))
+
+    payload = provider.read_sports_payloads(ttl_seconds=0, leagues={"mlb"})
+
+    assert payload["scoreboards"]["mlb"] == [{"league": "mlb"}]
+    assert payload["scoreboards"]["nfl"] == []
+    assert calls["mlb"] == 1
+    assert calls["nfl"] == 0
+    assert calls["nba"] == 0
+    assert calls["ncaam"] == 0
+    assert calls["nhl"] == 0
+
+
 def test_read_weather_is_safe_under_concurrent_access(monkeypatch):
     provider = DataProvider()
     calls = {"count": 0}
@@ -71,16 +100,12 @@ def test_read_weather_is_safe_under_concurrent_access(monkeypatch):
 def test_read_sports_payloads_is_safe_under_concurrent_access(monkeypatch):
     provider = DataProvider()
 
-    monkeypatch.setattr("services.data_provider._fetch_nfl_games_for_week", lambda now: [{"league": "nfl"}])
-    monkeypatch.setattr("services.data_provider._fetch_nfl_next_games", lambda day: [])
-    monkeypatch.setattr("services.data_provider._mlb_scoreboard_date", lambda now: now.date())
-    monkeypatch.setattr("services.data_provider._nba_scoreboard_date", lambda now: now.date())
-    monkeypatch.setattr("services.data_provider._ncaam_scoreboard_date", lambda now: now.date())
-    monkeypatch.setattr("services.data_provider._nhl_scoreboard_date", lambda now: now.date())
-    monkeypatch.setattr("services.data_provider._fetch_mlb_games_for_date", lambda day: [{"league": "mlb"}])
-    monkeypatch.setattr("services.data_provider._fetch_nba_games_for_date", lambda day: [{"league": "nba"}])
-    monkeypatch.setattr("services.data_provider._fetch_ncaam_games_for_date", lambda day: [{"league": "ncaam"}])
-    monkeypatch.setattr("services.data_provider._fetch_nhl_games_for_date", lambda day: [{"league": "nhl"}])
+    monkeypatch.setattr("services.data_provider.fetch_nfl_week_scoreboard", lambda now=None: [{"league": "nfl"}])
+    monkeypatch.setattr("services.data_provider.fetch_nfl_next_scoreboard", lambda start_date, max_days=370: [])
+    monkeypatch.setattr("services.data_provider.fetch_mlb_scoreboard", lambda day=None, now=None: [{"league": "mlb"}])
+    monkeypatch.setattr("services.data_provider.fetch_nba_scoreboard", lambda day=None, now=None: [{"league": "nba"}])
+    monkeypatch.setattr("services.data_provider.fetch_ncaam_scoreboard", lambda day=None, now=None, mode=None: [{"league": "ncaam"}])
+    monkeypatch.setattr("services.data_provider.fetch_nhl_scoreboard", lambda day=None, now=None: [{"league": "nhl"}])
 
     with ThreadPoolExecutor(max_workers=8) as pool:
         results = list(pool.map(lambda _: provider.read_sports_payloads(ttl_seconds=60), range(24)))

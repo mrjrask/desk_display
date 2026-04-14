@@ -64,3 +64,13 @@ def test_feed_to_force_refresh_for_screen_skips_offline_and_non_live_screens():
 
     assert main._feed_to_force_refresh_for_screen("cubs live", offline=True) is None
     assert main._feed_to_force_refresh_for_screen("date", offline=False) is None
+
+
+def test_requested_scoreboard_leagues_only_includes_enabled_scoreboard_screens():
+    main = _load_main()
+    original_requested = main._requested_screen_ids
+    try:
+        main._requested_screen_ids = {"MLB Scoreboard", "date", "hawks next"}
+        assert main._requested_scoreboard_leagues() == {"mlb"}
+    finally:
+        main._requested_screen_ids = original_requested
