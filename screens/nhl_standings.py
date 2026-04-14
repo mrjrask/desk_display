@@ -34,6 +34,7 @@ from config import (
     scale_value_width,
     is_hyperpixel_4_square_layout,
 )
+from display_profiles import DISPLAY_PROFILE_ADAFRUIT_MINIPITFT_114
 from services.http_client import NHL_HEADERS, get_session
 from utils import ScreenImage, clear_display, log_call, log_missing_team_logo, clone_font, scroll_vertical_content
 
@@ -125,7 +126,6 @@ DIVISION_MARGIN_BOTTOM = scale_value(4)
 COLUMN_GAP_BELOW = scale_value(3)
 DIVISION_HEADER_GAP = scale_value(6)
 
-TITLE_FONT = FONT_TITLE_SPORTS
 _DEFAULT_STYLE_ID = "NHL Standings Default"
 _HYPERPIXEL_4_STANDINGS_IDS = {
     "NHL Standings West",
@@ -160,6 +160,25 @@ _ACTIVE_SCREEN_ID = _DEFAULT_STYLE_ID
 def _is_display_hat_mini_layout() -> bool:
     """Return True when running on Display HAT Mini dimensions."""
     return sorted((int(WIDTH), int(HEIGHT))) == [240, 320]
+
+
+def _mlb_standings_title_default_size() -> int:
+    profile_id = config.get_display_profile_id(int(WIDTH), int(HEIGHT))
+    if is_hyperpixel_4_square_layout():
+        return 30
+    if profile_id in {"display_hat_mini", DISPLAY_PROFILE_ADAFRUIT_MINIPITFT_114}:
+        return 39
+    if is_hyperpixel_next_layout() or min(int(WIDTH), int(HEIGHT)) >= 480:
+        return 34
+    return 39
+
+
+TITLE_FONT = get_screen_font(
+    _DEFAULT_STYLE_ID,
+    "title",
+    base_font=FONT_TITLE_SPORTS,
+    default_size=_mlb_standings_title_default_size(),
+)
 
 _BASE_FONT_SIZES = {
     "division": 26,
@@ -300,12 +319,12 @@ def _apply_style_overrides(screen_id: str) -> None:
     _ACTIVE_SCREEN_ID = screen_id
     _refresh_column_header_fonts()
 
-    TITLE_FONT = FONT_TITLE_SPORTS
-    if screen_id in _NHL_STANDINGS_TEAM_SIZE_IDS:
-        if is_hyperpixel_4_square_layout():
-            TITLE_FONT = clone_font(TITLE_FONT, max(8, getattr(TITLE_FONT, "size", 24) - 5))
-        elif _IS_1080P_LAYOUT:
-            TITLE_FONT = clone_font(TITLE_FONT, max(8, getattr(TITLE_FONT, "size", 24) - 8))
+    TITLE_FONT = get_screen_font(
+        screen_id,
+        "title",
+        base_font=FONT_TITLE_SPORTS,
+        default_size=_mlb_standings_title_default_size(),
+    )
 
     team_scale = get_screen_image_scale(screen_id, "team_logo", 1.0)
     if _IS_HYPERPIXEL_4 and screen_id.startswith("NHL Standings"):

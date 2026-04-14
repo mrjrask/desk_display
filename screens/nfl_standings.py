@@ -34,6 +34,7 @@ from config import (
     scale_value_width,
     is_hyperpixel_4_square_layout,
 )
+from display_profiles import DISPLAY_PROFILE_ADAFRUIT_MINIPITFT_114
 from services.http_client import get_session
 from utils import ScreenImage, clear_display, load_team_logo, log_call, log_missing_team_logo, scroll_vertical_content
 
@@ -80,9 +81,27 @@ COLUMN_GAP_BELOW = scale_value(3)
 RECORD_COLUMN_SPACING = scale_value(10)
 TEAM_COLUMN_PADDING = scale_value(6)
 
-TITLE_FONT = FONT_TITLE_SPORTS
 _DEFAULT_STYLE_ID = "NFL Standings Default"
 _NFL_SQUARE_FONT_SCALE = 0.78 if is_hyperpixel_4_square_layout() else 1.0
+
+
+def _mlb_standings_title_default_size() -> int:
+    profile_id = config.get_display_profile_id(int(WIDTH), int(HEIGHT))
+    if is_hyperpixel_4_square_layout():
+        return 30
+    if profile_id in {"display_hat_mini", DISPLAY_PROFILE_ADAFRUIT_MINIPITFT_114}:
+        return 39
+    if is_hyperpixel_next_layout() or min(int(WIDTH), int(HEIGHT)) >= 480:
+        return 34
+    return 39
+
+
+TITLE_FONT = get_screen_font(
+    _DEFAULT_STYLE_ID,
+    "title",
+    base_font=FONT_TITLE_SPORTS,
+    default_size=_mlb_standings_title_default_size(),
+)
 DIVISION_FONT = get_screen_font(
     _DEFAULT_STYLE_ID,
     "division",
@@ -104,7 +123,14 @@ ROW_FONT = get_screen_font(
 
 
 def _apply_style_overrides(screen_id: str) -> None:
-    global DIVISION_FONT, COLUMN_FONT, ROW_FONT, BACKGROUND_COLOR
+    global TITLE_FONT, DIVISION_FONT, COLUMN_FONT, ROW_FONT, BACKGROUND_COLOR
+
+    TITLE_FONT = get_screen_font(
+        screen_id,
+        "title",
+        base_font=FONT_TITLE_SPORTS,
+        default_size=_mlb_standings_title_default_size(),
+    )
 
     DIVISION_FONT = get_screen_font(
         screen_id,
