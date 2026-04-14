@@ -403,6 +403,7 @@ def _column_layout(draw: ImageDraw.ImageDraw, rows: list[dict[str, Any]]) -> dic
     cursor = right_edge
     for key in reversed(columns):
         layout[key] = cursor
+        layout[f"{key}_width"] = stat_widths[key]
         gap = _WIDE_STAT_COLUMN_GAP if SHOW_LAST_10 else _STAT_COLUMN_GAP
         if key == "gb" and "pct" in columns:
             gap += _PCT_TO_GB_EXTRA_GAP
@@ -448,12 +449,14 @@ def _stat_header_labels() -> dict[str, str]:
 def _draw_stat_headers(draw: ImageDraw.ImageDraw, layout: dict[str, int], y: int) -> int:
     labels = _stat_header_labels()
     for key in _stat_columns():
+        col_width = int(layout.get(f"{key}_width", 0) or 0)
+        center_x = layout[key] - (col_width // 2)
         draw.text(
-            (layout[key], y),
+            (center_x, y),
             labels.get(key, key.upper()),
             font=RECORD_PCT_FONT,
             fill=(200, 200, 200),
-            anchor="rm",
+            anchor="mm",
         )
     return y + _text_size(draw, "Record", RECORD_PCT_FONT)[1] + STAT_HEADER_GAP
 
