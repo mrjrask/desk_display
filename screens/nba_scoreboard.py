@@ -180,7 +180,7 @@ _NBA_SCOREBOARD_BASES: tuple[tuple[str, bool], ...] = (
 )
 _FORBIDDEN_CACHE_TTL = datetime.timedelta(minutes=30)
 _last_forbidden: Optional[datetime.datetime] = None
-_nba_cdn_fallback_notice_at: Optional[datetime.datetime] = None
+_nba_cdn_fallback_notice_at_by_day: dict[datetime.date, datetime.datetime] = {}
 
 _INTRO_LOGO_CACHE: Optional[Image.Image] = None
 _INTRO_LOGO_LOADED = False
@@ -1010,28 +1010,31 @@ def _fetch_games_from_espn(day: datetime.date) -> list[dict]:
 
 
 def _log_nba_cdn_fallback(day: datetime.date) -> None:
-    """Log a single fallback notice within the forbidden cache window."""
-
-    global _nba_cdn_fallback_notice_at
+    """Log one fallback notice per day within the forbidden cache window."""
 
     now = datetime.datetime.now()
-    if (
-        _nba_cdn_fallback_notice_at is None
-        or (now - _nba_cdn_fallback_notice_at) >= _FORBIDDEN_CACHE_TTL
-    ):
-        logging.info(
-            "Using NBA CDN scoreboard fallback while ESPN data is unavailable (first encountered for %s)",
-            day,
-        )
-        _nba_cdn_fallback_notice_at = now
+    last_notice_at = _nba_cdn_fallback_notice_at_by_day.get(day)
+    if last_notice_at and (now - last_notice_at) < _FORBIDDEN_CACHE_TTL:
+        return
+
+    logging.info(
+        "Using NBA CDN scoreboard fallback while ESPN data is unavailable (first encountered for %s)",
+        day,
+    )
+    _nba_cdn_fallback_notice_at_by_day[day] = now
 
 
 def _reset_nba_cdn_fallback_notice() -> None:
-    """Reset the fallback notice cache so it can be emitted again later."""
+    """Drop stale fallback notices so dates can be logged again later."""
 
-    global _nba_cdn_fallback_notice_at
-
-    _nba_cdn_fallback_notice_at = None
+    now = datetime.datetime.now()
+    stale_days = [
+        day
+        for day, notice_at in _nba_cdn_fallback_notice_at_by_day.items()
+        if (now - notice_at) >= _FORBIDDEN_CACHE_TTL
+    ]
+    for day in stale_days:
+        _nba_cdn_fallback_notice_at_by_day.pop(day, None)
 
 
 def _fetch_games_from_nba_cdn(day: datetime.date) -> list[dict]:

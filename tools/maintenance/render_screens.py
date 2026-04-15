@@ -49,8 +49,17 @@ os.environ.setdefault("CONFIG_LOAD_DOTENV", "1")
 
 
 def _load_project_root_env_file() -> None:
-    env_path = PROJECT_ROOT / ".env"
-    if not env_path.is_file():
+    candidate_paths = (
+        Path.home() / "desk_display" / ".env",
+        PROJECT_ROOT / ".env",
+    )
+
+    env_path: Optional[Path] = None
+    for candidate in candidate_paths:
+        if candidate.is_file():
+            env_path = candidate
+            break
+    if env_path is None:
         return
 
     try:
