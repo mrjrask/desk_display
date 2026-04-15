@@ -41,6 +41,7 @@ from config import (
 from utils import (
     LED_INDICATOR_LEVEL,
     ScreenImage,
+    fit_font,
     fit_logo_to_box,
     standard_next_game_logo_frame_width,
     standard_next_game_logo_height,
@@ -750,8 +751,16 @@ def _render_next_game(game: Dict, *, title: str, logo_scale: float = 1.0) -> Ima
 
     matchup = _format_matchup_line(game)
     if matchup:
-        wrap_width = WIDTH - (edge_pad * 4)
-        y += _center_wrapped_text(draw, y, matchup, FONT_NEXT_OPP, max_width=wrap_width) + line_gap
+        line_width = max(1, WIDTH - (edge_pad * 2))
+        matchup_font = fit_font(
+            draw,
+            matchup,
+            FONT_NEXT_OPP,
+            max_width=line_width,
+            max_height=max(1, _text_h(draw, FONT_NEXT_OPP) * 2),
+            min_pt=max(8, int(round(getattr(FONT_NEXT_OPP, "size", 20) * 0.6))),
+        )
+        y += _center_text(draw, y, matchup, matchup_font) + line_gap
 
     away = _team_entry(game, "away")
     home = _team_entry(game, "home")

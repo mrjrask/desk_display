@@ -59,6 +59,7 @@ from services.http_client import NHL_HEADERS, get_session, request_json
 from utils import (
     LED_INDICATOR_LEVEL,
     ScreenImage,
+    fit_font,
     fit_logo_to_box,
     standard_next_game_logo_frame_width,
     standard_next_game_logo_height,
@@ -1180,14 +1181,17 @@ def _draw_next_card(
     opp_full = _team_full_name(raw_home if is_hawks_away else raw_away) or (home_tri if is_hawks_away else away_tri)
     prefix   = "@ " if is_hawks_away else "vs. " if is_hawks_home else ""
     opp_line = f"{prefix}{opp_full or '—'}"
-    wrapped_h = _center_wrapped_text(
+    max_line_width = max(1, WIDTH - (edge_pad * 2))
+    opp_font = fit_font(
         d,
-        y_top,
         opp_line,
         FONT_NEXT_OPP,
-        max_width=WIDTH - (edge_pad * 2),
+        max_width=max_line_width,
+        max_height=max(1, _text_h(d, FONT_NEXT_OPP) * 2),
+        min_pt=max(8, int(round(getattr(FONT_NEXT_OPP, "size", 20) * 0.6))),
     )
-    y_top += wrapped_h + line_gap if wrapped_h else _text_h(d, FONT_NEXT_OPP) + line_gap
+    opp_h = _center_text(d, y_top, opp_line, opp_font)
+    y_top += (opp_h if opp_h else _text_h(d, opp_font)) + line_gap
 
     # Bottom label text (we need its height to avoid overlap)
     official_date = game.get("officialDate") or ""

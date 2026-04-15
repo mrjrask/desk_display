@@ -26,6 +26,7 @@ from config import (
 from utils import (
     LED_INDICATOR_LEVEL,
     ScreenImage,
+    fit_font,
     get_team_display_name,
     get_mlb_abbreviation,
     get_mlb_tricode,
@@ -842,13 +843,20 @@ def draw_sports_screen(display, game, title, transition=False, screen_id: Option
     else:
         prefix, opponent = 'vs.', get_team_display_name(away_tm)
 
-    wrap_width = WIDTH - (edge_pad * 2) if hyperpixel_layout else WIDTH
-    lines = wrap_text(f"{prefix} {opponent}", FONT_TEAM_SPORTS, wrap_width)[:2]
+    opponent_line = f"{prefix} {opponent}"
+    line_width = max(1, (WIDTH - (edge_pad * 2)) if hyperpixel_layout else WIDTH)
+    opponent_font = fit_font(
+        draw,
+        opponent_line,
+        FONT_TEAM_SPORTS,
+        max_width=line_width,
+        max_height=max(1, draw.textsize("Ag", font=FONT_TEAM_SPORTS)[1] * 2),
+        min_pt=max(8, int(round(getattr(FONT_TEAM_SPORTS, "size", 20) * 0.6))),
+    )
     y_text = edge_pad + th + (config.scale_value(4) if hyperpixel_layout else 4)
-    for ln in lines:
-        lw, lh = draw.textsize(ln, font=FONT_TEAM_SPORTS)
-        draw.text(((WIDTH - lw)//2, y_text), ln, font=FONT_TEAM_SPORTS, fill=(255,255,255))
-        y_text += lh + line_gap
+    lw, lh = draw.textsize(opponent_line, font=opponent_font)
+    draw.text(((WIDTH - lw)//2, y_text), opponent_line, font=opponent_font, fill=(255,255,255))
+    y_text += lh + line_gap
 
     # logos + “@” inline
     def load_logo_for_tm(tm, frame_size: int):
