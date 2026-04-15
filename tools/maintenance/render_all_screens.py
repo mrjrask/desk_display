@@ -16,8 +16,13 @@ if str(PROJECT_ROOT) not in sys.path:
 
 
 def _load_project_root_env_file() -> None:
-    env_path = PROJECT_ROOT / ".env"
-    if not env_path.is_file():
+    candidate_paths = (
+        Path.home() / "desk_display" / ".env",
+        PROJECT_ROOT / ".env",
+    )
+
+    env_path = next((path for path in candidate_paths if path.is_file()), None)
+    if env_path is None:
         return
 
     try:
