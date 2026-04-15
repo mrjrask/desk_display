@@ -983,7 +983,7 @@ def _map_espn_game(event: Dict[str, Any], competition: Dict[str, Any], day: date
     return mapped_game
 
 
-def _fetch_games_from_espn(day: datetime.date) -> list[dict]:
+def _fetch_games_from_espn(day: datetime.date) -> Optional[list[dict]]:
     url = (
         "https://site.api.espn.com/apis/site/v2/sports/basketball/nba/scoreboard"
         f"?dates={day.strftime('%Y%m%d')}"
@@ -994,7 +994,7 @@ def _fetch_games_from_espn(day: datetime.date) -> list[dict]:
         data = response.json()
     except Exception as exc:
         logging.error("Failed to fetch NBA scoreboard from ESPN for %s: %s", day, exc)
-        return []
+        return None
 
     raw_games: list[dict] = []
     for event in data.get("events") or []:
@@ -1112,7 +1112,7 @@ def _fetch_games_from_nba_cdn(day: datetime.date) -> list[dict]:
 
 def _fetch_games_for_date(day: datetime.date) -> list[dict]:
     games = _fetch_games_from_espn(day)
-    if games:
+    if games is not None:
         _reset_nba_cdn_fallback_notice()
         return games
 
