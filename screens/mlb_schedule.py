@@ -1105,10 +1105,27 @@ def draw_series_screen(display, games, title, transition=False, screen_id: Optio
     else:
         prefix, opponent = "vs.", get_team_display_name(away_tm)
 
+    opponent_text = f"{prefix} {opponent}"
+    scale_single_line_opponent = normalized_screen_id in {
+        "cubs next home series",
+        "sox next home series",
+    }
     wrap_width = WIDTH - (edge_pad * 2) if hyperpixel_layout else WIDTH
-    lines = wrap_text(f"{prefix} {opponent}", FONT_TEAM_SPORTS, wrap_width)[:2]
+    if scale_single_line_opponent:
+        opponent_font = fit_font(
+            draw,
+            opponent_text,
+            FONT_TEAM_SPORTS,
+            max_width=max(1, wrap_width),
+            max_height=max(1, draw.textsize("Ag", font=FONT_TEAM_SPORTS)[1] * 2),
+            min_pt=max(8, int(round(getattr(FONT_TEAM_SPORTS, "size", 20) * 0.6))),
+        )
+        lines = [opponent_text]
+    else:
+        opponent_font = FONT_TEAM_SPORTS
+        lines = wrap_text(opponent_text, FONT_TEAM_SPORTS, wrap_width)[:2]
     title_to_opponent_gap = config.scale_value(4) if hyperpixel_layout else 4
-    opponent_line_heights = [draw.textsize(ln, font=FONT_TEAM_SPORTS)[1] for ln in lines]
+    opponent_line_heights = [draw.textsize(ln, font=opponent_font)[1] for ln in lines]
     opponent_lines_h = sum(opponent_line_heights) + (line_gap * max(0, len(lines) - 1))
     y_text = edge_pad + th + title_to_opponent_gap
 
@@ -1175,8 +1192,8 @@ def draw_series_screen(display, games, title, transition=False, screen_id: Optio
     draw.text(((WIDTH - tw) // 2, edge_pad), title, font=FONT_TITLE_SPORTS, fill=(255, 255, 255))
     text_line_y = y_text
     for ln in lines:
-        lw, lh = draw.textsize(ln, font=FONT_TEAM_SPORTS)
-        draw.text(((WIDTH - lw) // 2, text_line_y), ln, font=FONT_TEAM_SPORTS, fill=(255, 255, 255))
+        lw, lh = draw.textsize(ln, font=opponent_font)
+        draw.text(((WIDTH - lw) // 2, text_line_y), ln, font=opponent_font, fill=(255, 255, 255))
         text_line_y += lh + line_gap
 
     if logo_away:
