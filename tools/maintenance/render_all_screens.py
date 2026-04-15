@@ -3,7 +3,7 @@
 
 This shim intentionally mirrors ``tools.maintenance.render_screens`` so users
 running the legacy entrypoint still pick up current rendering behavior (such
-as refreshed scoreboard payload hydration).
+as refreshed scoreboard payload hydration and interactive CLI prompts.
 """
 
 from pathlib import Path

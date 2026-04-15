@@ -254,6 +254,27 @@ def _maybe_prompt_resolution_selection() -> None:
             _apply_resolution_token(selection)
 
 
+def _sync_flag_was_explicit(argv: list[str]) -> bool:
+    return "--sync-screenshots" in argv or "--no-sync-screenshots" in argv
+
+
+def _maybe_prompt_screenshot_webpage_sync(default_value: bool) -> bool:
+    if sys.stdin is None or sys.stdin.closed or not sys.stdin.isatty():
+        return default_value
+    prompt = (
+        "Should this output feed the screenshot webpage? "
+        f"[{'Y' if default_value else 'y'}/{'n' if default_value else 'N'}]: "
+    )
+    response = input(prompt).strip().lower()
+    if not response:
+        return default_value
+    if response in {"y", "yes"}:
+        return True
+    if response in {"n", "no"}:
+        return False
+    return default_value
+
+
 def load_logo(
     filename: str,
     height: Optional[int] = None,
@@ -738,7 +759,7 @@ def _build_arg_parser() -> argparse.ArgumentParser:
         action="store_false",
         help="Disable screenshot syncing even if ENABLE_SCREENSHOTS is true.",
     )
-    parser.set_defaults(sync_screenshots=config.ENABLE_SCREENSHOTS)
+    parser.set_defaults(sync_screenshots=None)
     parser.add_argument(
         "--no-archive",
         action="store_true",
@@ -753,14 +774,23 @@ def _build_arg_parser() -> argparse.ArgumentParser:
 
 
 def main(argv: Optional[list[str]] = None) -> int:
+    argv_list = list(argv) if argv is not None else sys.argv[1:]
     parser = _build_arg_parser()
-    args = parser.parse_args(argv)
+    args = parser.parse_args(argv_list)
     if args.resolution:
         _apply_resolution_token(args.resolution)
     else:
         _maybe_prompt_resolution_selection()
+    default_sync = config.ENABLE_SCREENSHOTS
+    sync_screenshots = (
+        args.sync_screenshots
+        if args.sync_screenshots is not None
+        else default_sync
+    )
+    if not _sync_flag_was_explicit(argv_list):
+        sync_screenshots = _maybe_prompt_screenshot_webpage_sync(sync_screenshots)
     return _render_all_screens_impl(
-        sync_screenshots=args.sync_screenshots,
+        sync_screenshots=sync_screenshots,
         create_archive=not args.no_archive,
         ignore_schedule=args.ignore_schedule,
         suppress_images=args.no_images,
