@@ -45,6 +45,49 @@ def test_cli_defaults_to_rendering_all_screens():
     assert args.ignore_schedule is True
 
 
+def test_main_prompts_for_screenshot_webpage_when_sync_flag_omitted(monkeypatch):
+    prompted_with = []
+    captured = {}
+
+    monkeypatch.setattr(render_all_screens, "_maybe_prompt_resolution_selection", lambda: None)
+    monkeypatch.setattr(
+        render_all_screens,
+        "_maybe_prompt_screenshot_webpage_sync",
+        lambda default: prompted_with.append(default) or False,
+    )
+    monkeypatch.setattr(
+        render_all_screens,
+        "_render_all_screens_impl",
+        lambda **kwargs: captured.update(kwargs) or 0,
+    )
+
+    exit_code = render_all_screens.main(["--no-archive"])
+
+    assert exit_code == 0
+    assert prompted_with == [render_all_screens.config.ENABLE_SCREENSHOTS]
+    assert captured["sync_screenshots"] is False
+
+
+def test_main_does_not_prompt_for_screenshot_webpage_when_sync_flag_set(monkeypatch):
+    monkeypatch.setattr(render_all_screens, "_maybe_prompt_resolution_selection", lambda: None)
+
+    def _unexpected_prompt(_default: bool) -> bool:
+        raise AssertionError("webpage sync prompt should not run with explicit sync flag")
+
+    monkeypatch.setattr(render_all_screens, "_maybe_prompt_screenshot_webpage_sync", _unexpected_prompt)
+    captured = {}
+    monkeypatch.setattr(
+        render_all_screens,
+        "_render_all_screens_impl",
+        lambda **kwargs: captured.update(kwargs) or 0,
+    )
+
+    exit_code = render_all_screens.main(["--no-archive", "--no-sync-screenshots"])
+
+    assert exit_code == 0
+    assert captured["sync_screenshots"] is False
+
+
 def test_legacy_wrapper_tracks_main_render_module():
     assert legacy_render_all_screens.main is render_all_screens.main
     assert legacy_render_all_screens.build_cache is render_all_screens.build_cache
