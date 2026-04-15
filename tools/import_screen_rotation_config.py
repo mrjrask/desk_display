@@ -62,9 +62,26 @@ def parse_args() -> argparse.Namespace:
 
 def _read_payload(source: str) -> Dict[str, Any]:
     if source == "-":
+        if sys.stdin.isatty():
+            print(
+                "Paste JSON payload, then press Ctrl-D (Linux/macOS) or Ctrl-Z then Enter (Windows).",
+                file=sys.stderr,
+            )
         raw = sys.stdin.read()
     else:
         raw = Path(source).read_text(encoding="utf-8")
+
+    raw = raw.strip()
+    if raw.startswith("```"):
+        lines = raw.splitlines()
+        if lines and lines[0].startswith("```"):
+            lines = lines[1:]
+        if lines and lines[-1].startswith("```"):
+            lines = lines[:-1]
+        raw = "\n".join(lines).strip()
+
+    if not raw:
+        raise ValueError("No input received. Provide JSON via file or stdin.")
 
     try:
         payload = json.loads(raw)
