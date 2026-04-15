@@ -252,6 +252,19 @@ def _live_boxscore_status(game: dict) -> str:
         return detailed
     return "In Progress"
 
+
+def _format_live_outs_text(outs: object) -> Optional[str]:
+    try:
+        outs_int = int(outs)
+    except (TypeError, ValueError):
+        return None
+    if outs_int < 0:
+        return None
+    if outs_int in (0, 1):
+        return f"{outs_int} out"
+    return f"{outs_int} outs"
+
+
 def _bbox_center(draw: ImageDraw.ImageDraw, x: int, y: int, w: int, h: int,
                  text: str, font, *, fill=(255,255,255)):
     """
@@ -739,6 +752,11 @@ def draw_box_score(display, game, title="Live Game...", transition=False, screen
 
     ls      = game.get("linescore", {})
     inning  = _live_boxscore_status(game)
+    normalized_screen_id = (screen_id or "").strip().lower()
+    if normalized_screen_id in {"cubs live", "sox live"}:
+        outs_text = _format_live_outs_text(ls.get("outs"))
+        if outs_text:
+            inning = f"{inning}, {outs_text}"
     away_ls = ls.get("teams", {}).get("away", {})
     home_ls = ls.get("teams", {}).get("home", {})
 
