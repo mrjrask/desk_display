@@ -560,6 +560,40 @@ def test_draw_series_screen_centers_three_blocks_on_display_hat_mini(monkeypatch
     assert captured["row_ys"][0] == expected_first_row_y
 
 
+def test_draw_series_screen_next_home_series_scales_opponent_to_single_line(monkeypatch):
+    opponent_lines = []
+    original_text = ImageDraw.ImageDraw.text
+
+    def _capture_text(self, xy, text, *args, **kwargs):
+        if isinstance(text, str) and ("Boston Red Sox" in text or "Athletics" in text):
+            opponent_lines.append(text)
+        return original_text(self, xy, text, *args, **kwargs)
+
+    monkeypatch.setattr(ImageDraw.ImageDraw, "text", _capture_text)
+    monkeypatch.setattr(mlb_schedule.config, "is_hyperpixel_next_layout", lambda: True)
+    monkeypatch.setattr(mlb_schedule.config, "scale_value", lambda value: value)
+    monkeypatch.setattr(mlb_schedule, "load_team_logo", lambda *args, **kwargs: None)
+
+    game = {
+        "status": {"detailedState": "Scheduled"},
+        "teams": {
+            "away": {"team": {"id": 121, "name": "Boston Red Sox"}},
+            "home": {"team": {"id": 145, "name": "Chicago White Sox"}},
+        },
+    }
+
+    mlb_schedule.draw_series_screen(
+        None,
+        [game],
+        title="Sox Next Home Series",
+        screen_id="sox next home series",
+    )
+
+    assert "vs. Boston Red Sox" in opponent_lines
+    assert "vs. Boston" not in opponent_lines
+    assert "Red Sox" not in opponent_lines
+
+
 def test_series_line_fill_uses_live_scoreboard_color_for_in_progress_game():
     game = {
         "status": {
