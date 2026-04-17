@@ -239,19 +239,20 @@ def _draw_live_basepaths_indicator(
     on_third: bool,
 ) -> None:
     """Draw a small 1st/2nd/3rd base indicator as three diamonds."""
-    if size <= 0:
+    if size <= 1:
         return
 
-    gap = max(2, size // 3)
-    first_cx = x + size + gap
-    second_cx = first_cx - (size + gap) // 2
-    third_cx = x
-    first_cy = y + size + gap
+    # Keep the indicator compact and tightly grouped (matching mockup).
+    step = max(3, size)
+    first_cx = x + step
+    second_cx = x
+    third_cx = x - step
+    first_cy = y + step
     second_cy = y
-    third_cy = first_cy
+    third_cy = y + step
 
     def _diamond(cx: int, cy: int, filled: bool) -> None:
-        half = size // 2
+        half = max(2, step // 2)
         pts = [
             (cx, cy - half),
             (cx + half, cy),
@@ -288,10 +289,9 @@ def _center_bottom_text_with_live_bases(
         tw, th = draw.textsize(text, font=font)
         l = t = 0
 
-    base_size = max(6, int(round(th * 0.45)))
-    base_gap = max(4, base_size // 2)
-    # indicator spans from third base center to first base center plus half-widths
-    indicator_w = (base_size * 2) + (max(2, base_size // 3) * 2)
+    base_size = max(3, int(round(th * 0.28)))
+    base_gap = max(3, base_size // 2)
+    indicator_w = base_size * 3
     group_w = tw + base_gap + indicator_w
     group_x = max(0, (WIDTH - group_w) // 2)
 
@@ -299,8 +299,8 @@ def _center_bottom_text_with_live_bases(
     text_y = HEIGHT - th - margin - t
     draw.text((text_x, text_y), text, font=font, fill=(255, 255, 255))
 
-    indicator_x = group_x + tw + base_gap + (base_size // 2)
-    indicator_y = text_y + max(0, (th - (base_size * 2 + max(2, base_size // 3))) // 2)
+    indicator_x = group_x + tw + base_gap + base_size
+    indicator_y = text_y + max(0, (th - (base_size * 2)) // 2)
     _draw_live_basepaths_indicator(
         draw,
         x=indicator_x,
