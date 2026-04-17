@@ -228,6 +228,90 @@ def _center_bottom_text(
     draw.text((tx, ty), text, font=font, fill=fill)
 
 
+def _draw_live_basepaths_indicator(
+    draw: ImageDraw.ImageDraw,
+    *,
+    x: int,
+    y: int,
+    size: int,
+    on_first: bool,
+    on_second: bool,
+    on_third: bool,
+) -> None:
+    """Draw a small 1st/2nd/3rd base indicator as three diamonds."""
+    if size <= 0:
+        return
+
+    gap = max(2, size // 3)
+    first_cx = x + size + gap
+    second_cx = first_cx - (size + gap) // 2
+    third_cx = x
+    first_cy = y + size + gap
+    second_cy = y
+    third_cy = first_cy
+
+    def _diamond(cx: int, cy: int, filled: bool) -> None:
+        half = size // 2
+        pts = [
+            (cx, cy - half),
+            (cx + half, cy),
+            (cx, cy + half),
+            (cx - half, cy),
+        ]
+        draw.polygon(
+            pts,
+            outline=(255, 255, 255),
+            fill=((255, 255, 0) if filled else None),
+        )
+
+    _diamond(first_cx, first_cy, on_first)
+    _diamond(second_cx, second_cy, on_second)
+    _diamond(third_cx, third_cy, on_third)
+
+
+def _center_bottom_text_with_live_bases(
+    draw: ImageDraw.ImageDraw,
+    text: str,
+    font: ImageFont.ImageFont,
+    *,
+    margin: int = BOTTOM_MARGIN,
+    live_bases: tuple[bool, bool, bool],
+) -> None:
+    """Center bottom text with a small basepaths indicator to its right."""
+    if not text:
+        return
+
+    try:
+        l, t, r, b = draw.textbbox((0, 0), text, font=font)
+        tw, th = r - l, b - t
+    except Exception:
+        tw, th = draw.textsize(text, font=font)
+        l = t = 0
+
+    base_size = max(6, int(round(th * 0.45)))
+    base_gap = max(4, base_size // 2)
+    # indicator spans from third base center to first base center plus half-widths
+    indicator_w = (base_size * 2) + (max(2, base_size // 3) * 2)
+    group_w = tw + base_gap + indicator_w
+    group_x = max(0, (WIDTH - group_w) // 2)
+
+    text_x = group_x - l
+    text_y = HEIGHT - th - margin - t
+    draw.text((text_x, text_y), text, font=font, fill=(255, 255, 255))
+
+    indicator_x = group_x + tw + base_gap + (base_size // 2)
+    indicator_y = text_y + max(0, (th - (base_size * 2 + max(2, base_size // 3))) // 2)
+    _draw_live_basepaths_indicator(
+        draw,
+        x=indicator_x,
+        y=indicator_y,
+        size=base_size,
+        on_first=bool(live_bases[0]),
+        on_second=bool(live_bases[1]),
+        on_third=bool(live_bases[2]),
+    )
+
+
 def _live_boxscore_status(game: dict) -> str:
     status = (game or {}).get("status", {}) or {}
     linescore = (game or {}).get("linescore", {}) or {}
@@ -280,6 +364,30 @@ def _is_live_play_active(game: dict) -> bool:
     if "suspended" in detailed:
         return False
     return True
+
+
+def _runner_on_base(base_value: object) -> bool:
+    if isinstance(base_value, dict):
+        return bool(base_value)
+    if isinstance(base_value, str):
+        return bool(base_value.strip())
+    return bool(base_value)
+
+
+def _live_base_state(linescore: dict) -> tuple[bool, bool, bool]:
+    offense = (linescore or {}).get("offense", {}) or {}
+
+    first = _runner_on_base(offense.get("first")) or _runner_on_base(offense.get("firstBase"))
+    second = _runner_on_base(offense.get("second")) or _runner_on_base(offense.get("secondBase"))
+    third = _runner_on_base(offense.get("third")) or _runner_on_base(offense.get("thirdBase"))
+
+    bases_occupied = offense.get("basesOccupied")
+    if isinstance(bases_occupied, (list, tuple, set)):
+        first = first or 1 in bases_occupied
+        second = second or 2 in bases_occupied
+        third = third or 3 in bases_occupied
+
+    return first, second, third
 
 
 def _bbox_center(draw: ImageDraw.ImageDraw, x: int, y: int, w: int, h: int,
@@ -483,7 +591,8 @@ def _draw_boxscore_table(img: Image.Image, draw: ImageDraw.ImageDraw, title: str
                          center_content_vertically: bool=False,
                          center_ignores_reserved_flag_block: bool=False,
                          flag_scale: float=1.0,
-                         row_height_matches_reserved_flag_block: Optional[bool]=None):
+                         row_height_matches_reserved_flag_block: Optional[bool]=None,
+                         live_bases: Optional[tuple[bool, bool, bool]]=None):
     """
     Render the whole screen (title + header + table + optional small flag + bottom line).
     - Columns 2–4 are true squares; column 1 stretches.
@@ -660,7 +769,16 @@ def _draw_boxscore_table(img: Image.Image, draw: ImageDraw.ImageDraw, title: str
                 pass
 
     # Bottom label
-    _center_bottom_text(draw, bottom_text, FONT_DATE_SPORTS, margin=bottom_margin)
+    if live_bases is not None:
+        _center_bottom_text_with_live_bases(
+            draw,
+            bottom_text,
+            FONT_DATE_SPORTS,
+            margin=bottom_margin,
+            live_bases=live_bases,
+        )
+    else:
+        _center_bottom_text(draw, bottom_text, FONT_DATE_SPORTS, margin=bottom_margin)
 
 
 # ── Screens ─────────────────────────────────────────────────────────────────
@@ -774,6 +892,9 @@ def draw_box_score(display, game, title="Live Game...", transition=False, screen
         outs_text = _format_live_outs_text(ls.get("outs"))
         if outs_text:
             inning = f"{inning}, {outs_text}"
+    live_bases = None
+    if normalized_screen_id in {"cubs live", "sox live"}:
+        live_bases = _live_base_state(ls)
     away_ls = ls.get("teams", {}).get("away", {})
     home_ls = ls.get("teams", {}).get("home", {})
 
@@ -803,6 +924,7 @@ def draw_box_score(display, game, title="Live Game...", transition=False, screen
         hyperpixel_layout=hyperpixel_layout,
         center_content_vertically=(screen_id in {"cubs live", "sox live"}),
         center_ignores_reserved_flag_block=(screen_id in {"cubs live", "sox live"}),
+        live_bases=live_bases,
     )
 
     return ScreenImage(img, displayed=False)

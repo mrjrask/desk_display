@@ -209,6 +209,60 @@ def test_draw_box_score_hides_outs_during_delay(monkeypatch):
 
 
 
+def test_live_base_state_reads_offense_base_keys():
+    linescore = {
+        "offense": {
+            "first": {"id": 1},
+            "second": None,
+            "third": {"id": 3},
+        }
+    }
+
+    assert mlb_schedule._live_base_state(linescore) == (True, False, True)
+
+
+def test_live_base_state_accepts_bases_occupied_fallback():
+    linescore = {
+        "offense": {
+            "basesOccupied": [2],
+        }
+    }
+
+    assert mlb_schedule._live_base_state(linescore) == (False, True, False)
+
+
+def test_draw_box_score_passes_live_bases_for_live_screens(monkeypatch):
+    captured = {}
+
+    def _fake_draw_table(*args, **kwargs):
+        captured.update(kwargs)
+
+    monkeypatch.setattr(mlb_schedule, "_draw_boxscore_table", _fake_draw_table)
+
+    game = {
+        "linescore": {
+            "inningState": "Top",
+            "currentInningOrdinal": "3rd",
+            "outs": 1,
+            "offense": {"first": {"id": 10}, "second": None, "third": {"id": 30}},
+            "teams": {
+                "away": {"hits": 1, "errors": 0},
+                "home": {"hits": 2, "errors": 0},
+            },
+        },
+        "teams": {
+            "away": {"score": 2, "team": {"name": "Chicago Cubs"}},
+            "home": {"score": 3, "team": {"name": "St. Louis Cardinals"}},
+        },
+    }
+
+    mlb_schedule.draw_box_score(None, game, title="Cubs Live...", screen_id="cubs live")
+    assert captured["live_bases"] == (True, False, True)
+
+    mlb_schedule.draw_box_score(None, game, title="Live Game...", screen_id="cubs next")
+    assert captured["live_bases"] is None
+
+
 def test_draw_box_score_centers_content_vertically_for_live_screens(monkeypatch):
     captured = {}
 
