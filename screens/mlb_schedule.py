@@ -888,12 +888,13 @@ def draw_box_score(display, game, title="Live Game...", transition=False, screen
     ls      = game.get("linescore", {})
     inning  = _live_boxscore_status(game)
     normalized_screen_id = (screen_id or "").strip().lower()
-    if normalized_screen_id in {"cubs live", "sox live"} and _is_live_play_active(game):
+    live_play_active = _is_live_play_active(game)
+    if normalized_screen_id in {"cubs live", "sox live"} and live_play_active:
         outs_text = _format_live_outs_text(ls.get("outs"))
         if outs_text:
             inning = f"{inning}, {outs_text}"
     live_bases = None
-    if normalized_screen_id in {"cubs live", "sox live"}:
+    if normalized_screen_id in {"cubs live", "sox live"} and live_play_active:
         live_bases = _live_base_state(ls)
     away_ls = ls.get("teams", {}).get("away", {})
     home_ls = ls.get("teams", {}).get("home", {})
