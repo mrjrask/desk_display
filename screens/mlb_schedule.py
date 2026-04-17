@@ -266,6 +266,22 @@ def _format_live_outs_text(outs: object) -> Optional[str]:
     return f"{outs_int} outs"
 
 
+def _is_live_play_active(game: dict) -> bool:
+    status = (game or {}).get("status", {}) or {}
+    detailed = str(status.get("detailedState") or "").strip().lower()
+    normalized_detail = detailed.replace("-", "")
+
+    if "warmup" in normalized_detail:
+        return False
+    if "delay" in detailed:
+        return False
+    if "postponed" in detailed:
+        return False
+    if "suspended" in detailed:
+        return False
+    return True
+
+
 def _bbox_center(draw: ImageDraw.ImageDraw, x: int, y: int, w: int, h: int,
                  text: str, font, *, fill=(255,255,255)):
     """
@@ -754,7 +770,7 @@ def draw_box_score(display, game, title="Live Game...", transition=False, screen
     ls      = game.get("linescore", {})
     inning  = _live_boxscore_status(game)
     normalized_screen_id = (screen_id or "").strip().lower()
-    if normalized_screen_id in {"cubs live", "sox live"}:
+    if normalized_screen_id in {"cubs live", "sox live"} and _is_live_play_active(game):
         outs_text = _format_live_outs_text(ls.get("outs"))
         if outs_text:
             inning = f"{inning}, {outs_text}"
