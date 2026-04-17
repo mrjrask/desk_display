@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Render NHL first-round playoff matchups using bracket-style cards."""
+"""Render NHL playoff series matchups using scoreboard-style layout."""
 
 from __future__ import annotations
 
@@ -56,16 +56,16 @@ TITLE = "NHL Playoffs"
 SCREEN_ID = "NHL Playoffs"
 TITLE_GAP = _scale_y(8)
 BLOCK_SPACING = _scale_y(10)
-SCORE_ROW_H = _scale_y(24)
-STATUS_ROW_H = _scale_y(16)
+SCORE_ROW_H = _scale_y(56)
+STATUS_ROW_H = _scale_y(18)
 REQUEST_TIMEOUT = 8
 PAIR_SPACING_BASE = max(8, scale_value_width(16))
 SERIES_COL_WIDTHS_BASE = [
-    scale_value_width(28),   # seed
-    scale_value_width(36),   # logo
-    scale_value_width(80),   # team
-    scale_value_width(12),   # spacer
-    scale_value_width(30),   # wins
+    scale_value_width(42),
+    scale_value_width(32),
+    scale_value_width(16),
+    scale_value_width(32),
+    scale_value_width(42),
 ]
 
 PAIR_SPACING = PAIR_SPACING_BASE
@@ -92,13 +92,6 @@ if HYPERPIXEL_4_SQUARE:
     LEAGUE_LOGO_BASE_HEIGHT = min(LEAGUE_LOGO_BASE_HEIGHT, scale_value_width(40))
 LOGO_HEIGHT = TEAM_LOGO_BASE_HEIGHT
 LEAGUE_LOGO_GAP = _scale_y(4)
-CARD_PADDING_X = scale_value_width(6)
-CARD_PADDING_Y = _scale_y(5)
-CARD_RADIUS = max(4, scale_value_width(8))
-CARD_OUTLINE = (74, 92, 122)
-CARD_FILL = (10, 16, 28)
-CONFERENCE_HEADER_H = _scale_y(18)
-CONFERENCE_HEADER_FONT = get_screen_font(SCREEN_ID, "conference", base_font=FONT_STATUS, default_size=14)
 
 _SESSION = get_session()
 
@@ -667,95 +660,50 @@ def _draw_series_block(canvas: Image.Image, draw: ImageDraw.ImageDraw, series: d
     teams = (series or {}).get("teams", {})
     away = teams.get("away", {})
     home = teams.get("home", {})
-    card_bottom = top + (SCORE_ROW_H * 2) + (STATUS_ROW_H * 2) + (CARD_PADDING_Y * 2)
-    draw.rounded_rectangle(
-        (left, top, left + SERIES_WIDTH - 1, card_bottom - 1),
-        radius=CARD_RADIUS,
-        fill=CARD_FILL,
-        outline=CARD_OUTLINE,
-        width=1,
-    )
-    score_top = top + CARD_PADDING_Y
-    row_y = {0: score_top, 1: score_top + SCORE_ROW_H}
-    seed_fill = (166, 183, 212)
-    text_fill = (238, 244, 255)
-    score_fill = (255, 255, 255)
+    score_top = top
 
-    away_seed = _first_int([(away.get("team") or {}).get("seed"), series.get("lower_seed")])
-    home_seed = _first_int([(home.get("team") or {}).get("seed"), series.get("higher_seed")])
-    for idx, seed in ((0, away_seed), (1, home_seed)):
+    for idx, text in ((0, str(away.get("score", 0))), (2, "-"), (4, str(home.get("score", 0)))):
+        font = SCORE_FONT if idx != 2 else CENTER_FONT
         _center_text(
             draw,
-            str(seed if seed is not None else "-"),
-            STATUS_FONT,
-            left + SERIES_COL_X[0],
-            SERIES_COL_WIDTHS[0],
-            row_y[idx],
+            text,
+            font,
+            left + SERIES_COL_X[idx],
+            SERIES_COL_WIDTHS[idx],
+            score_top,
             SCORE_ROW_H,
-            fill=seed_fill,
+            fill=(255, 255, 255),
         )
 
-    for idx, team_side in ((0, away), (1, home)):
+    for idx, team_side in ((1, away), (3, home)):
         team_obj = (team_side or {}).get("team", {})
         abbr = _team_logo_abbr(team_obj)
         logo = _load_logo_cached(abbr)
-        if logo:
-            x0 = left + SERIES_COL_X[1] + (SERIES_COL_WIDTHS[1] - logo.width) // 2
-            y_logo = row_y[idx] + (SCORE_ROW_H - logo.height) // 2
-            canvas.paste(logo, (x0, y_logo), logo)
-        else:
+        if not logo:
             team_name = (team_obj or {}).get("name") or (team_obj or {}).get("teamName") or "Unknown Team"
             log_missing_team_logo(SCREEN_ID, team_name, abbr)
-            _center_text(
-                draw,
-                abbr or "?",
-                STATUS_SMALL_FONT,
-                left + SERIES_COL_X[1],
-                SERIES_COL_WIDTHS[1],
-                row_y[idx],
-                SCORE_ROW_H,
-                fill=text_fill,
-            )
+            continue
+        x0 = left + SERIES_COL_X[idx] + (SERIES_COL_WIDTHS[idx] - logo.width) // 2
+        y0 = score_top + (SCORE_ROW_H - logo.height) // 2
+        canvas.paste(logo, (x0, y0), logo)
 
-        team_name = str((team_obj or {}).get("name") or abbr or "Team")
-        _center_text(
-            draw,
-            team_name.upper(),
-            STATUS_SMALL_FONT,
-            left + SERIES_COL_X[2],
-            SERIES_COL_WIDTHS[2] + SERIES_COL_WIDTHS[3],
-            row_y[idx],
-            SCORE_ROW_H,
-            fill=text_fill,
-        )
-        _center_text(
-            draw,
-            str(team_side.get("score", 0)),
-            SCORE_FONT,
-            left + SERIES_COL_X[4],
-            SERIES_COL_WIDTHS[4],
-            row_y[idx],
-            SCORE_ROW_H,
-            fill=score_fill,
-        )
-
-    status_top = score_top + SCORE_ROW_H * 2
+    status_top = score_top + SCORE_ROW_H
     _center_text(
         draw,
         str(series.get("status_text") or "Series"),
         STATUS_FONT,
-        left + CARD_PADDING_X,
-        SERIES_WIDTH - (CARD_PADDING_X * 2),
+        left,
+        SERIES_WIDTH,
         status_top,
         STATUS_ROW_H,
-        fill=(189, 205, 232),
+        fill=(220, 220, 220),
     )
     _center_text(
         draw,
         series.get("next_text") or "Next: TBD",
         STATUS_SMALL_FONT,
-        left + CARD_PADDING_X,
-        SERIES_WIDTH - (CARD_PADDING_X * 2),
+        left,
+        SERIES_WIDTH,
         status_top + STATUS_ROW_H,
         STATUS_ROW_H,
         fill=(255, 255, 255),
@@ -767,34 +715,14 @@ def _compose_canvas(series: list[dict]) -> Image.Image:
         return Image.new("RGB", (WIDTH, HEIGHT), BACKGROUND_COLOR)
     west_series, east_series = _conference_buckets(series)
     rows = max(len(west_series), len(east_series))
-    block_height = (SCORE_ROW_H * 2) + (STATUS_ROW_H * 2) + (CARD_PADDING_Y * 2)
-    total_height = CONFERENCE_HEADER_H + (block_height * rows)
+    block_height = SCORE_ROW_H + (STATUS_ROW_H * 2)
+    total_height = block_height * rows
     if rows > 1:
         total_height += BLOCK_SPACING * (rows - 1)
     canvas = Image.new("RGB", (WIDTH, total_height), BACKGROUND_COLOR)
     draw = ImageDraw.Draw(canvas)
 
-    _center_text(
-        draw,
-        "WEST",
-        CONFERENCE_HEADER_FONT,
-        WEST_X,
-        SERIES_WIDTH,
-        0,
-        CONFERENCE_HEADER_H,
-        fill=(173, 196, 230),
-    )
-    _center_text(
-        draw,
-        "EAST",
-        CONFERENCE_HEADER_FONT,
-        EAST_X,
-        SERIES_WIDTH,
-        0,
-        CONFERENCE_HEADER_H,
-        fill=(173, 196, 230),
-    )
-    y = CONFERENCE_HEADER_H
+    y = 0
     for idx in range(rows):
         if idx < len(west_series):
             _draw_series_block(canvas, draw, west_series[idx], left=WEST_X, top=y)
