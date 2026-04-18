@@ -334,3 +334,58 @@ def test_main_uses_independent_font_sizes_for_date_and_time(monkeypatch):
     assert rc == 0
     assert ("Date", 16) in font_sizes
     assert ("Time", 20) in font_sizes
+
+
+def test_cubs_oled_frames_prefers_live_game(monkeypatch):
+    mod = _load_module()
+    rendered = []
+    game = {
+        "gamePk": 123,
+        "status": {"abstractGameState": "Live", "detailedState": "In Progress", "statusCode": "I"},
+        "teams": {
+            "away": {"team": {"id": 112, "name": "Chicago Cubs", "abbreviation": "CHC"}, "score": 3},
+            "home": {"team": {"id": 121, "name": "New York Mets", "abbreviation": "NYM"}, "score": 2},
+        },
+        "linescore": {"inningState": "Bottom", "currentInningOrdinal": "3rd", "outs": 2},
+    }
+
+    monkeypatch.setattr(mod, "_read_display_status_payload", lambda: {"cubs": {"live_game": game}})
+    monkeypatch.setattr(mod, "_render_score_panel", lambda *_args, **kwargs: rendered.append(kwargs) or object())
+    monkeypatch.setattr(mod, "_resolve_mlb_abbreviation", lambda: (lambda text: "NYM" if "Mets" in text else "CUBS"))
+    monkeypatch.setattr(mod, "_CUBS_FINAL_GAME_PK", None)
+    monkeypatch.setattr(mod, "_CUBS_FINAL_HOLD_UNTIL_MONOTONIC", 0.0)
+
+    frames = mod._cubs_oled_frames()
+
+    assert frames is not None
+    assert len(rendered) == 2
+    assert rendered[0]["team"] == "CUBS"
+    assert rendered[0]["footer"] == ""
+    assert rendered[1]["team"] == "NYM"
+    assert rendered[1]["footer"] == "Bottom 3rd • 2 Outs"
+
+
+def test_cubs_oled_frames_holds_final_for_90_minutes(monkeypatch):
+    mod = _load_module()
+    game = {
+        "gamePk": 999,
+        "status": {"abstractGameState": "Final", "detailedState": "Final", "statusCode": "F"},
+        "teams": {
+            "away": {"team": {"id": 112, "name": "Chicago Cubs", "abbreviation": "CHC"}, "score": 7},
+            "home": {"team": {"id": 111, "name": "Boston Red Sox", "abbreviation": "BOS"}, "score": 4},
+        },
+        "linescore": {},
+    }
+
+    now = [1000.0]
+    monkeypatch.setattr(mod, "time", types.SimpleNamespace(monotonic=lambda: now[0]))
+    monkeypatch.setattr(mod, "_read_display_status_payload", lambda: {"cubs": {"last_game": game}})
+    monkeypatch.setattr(mod, "_render_score_panel", lambda *_args, **_kwargs: object())
+    monkeypatch.setattr(mod, "_CUBS_FINAL_GAME_PK", None)
+    monkeypatch.setattr(mod, "_CUBS_FINAL_HOLD_UNTIL_MONOTONIC", 0.0)
+
+    assert mod._cubs_oled_frames() is not None
+    now[0] += (90 * 60) - 1
+    assert mod._cubs_oled_frames() is not None
+    now[0] += 2
+    assert mod._cubs_oled_frames() is None

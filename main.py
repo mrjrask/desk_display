@@ -1384,6 +1384,12 @@ def _write_display_status(
         "image_digest": hashlib.sha1(img.tobytes()).hexdigest()[:12],
         "frame_id": frame_id,
     }
+    cubs_cache = cache.get("cubs") if isinstance(cache, dict) else None
+    if isinstance(cubs_cache, dict):
+        payload["cubs"] = {
+            "live_game": cubs_cache.get("live"),
+            "last_game": cubs_cache.get("last"),
+        }
     if isinstance(screen_play_counts, dict):
         payload["screen_play_counts"] = {
             str(screen_name): int(count)
@@ -1394,7 +1400,7 @@ def _write_display_status(
     temp_path = f"{DISPLAY_STATUS_PATH}.tmp"
     try:
         with open(temp_path, "w", encoding="utf-8") as handle:
-            json.dump(payload, handle, indent=2)
+            json.dump(payload, handle, indent=2, default=str)
             handle.write("\n")
         os.replace(temp_path, DISPLAY_STATUS_PATH)
     except Exception as exc:
