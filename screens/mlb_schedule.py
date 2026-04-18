@@ -238,21 +238,23 @@ def _draw_live_basepaths_indicator(
     on_second: bool,
     on_third: bool,
 ) -> None:
-    """Draw a small 1st/2nd/3rd base indicator as three diamonds."""
+    """Draw a small 1st/2nd/3rd base indicator as three diamonds.
+
+    The x/y coordinates represent the top-left corner of the indicator bounds.
+    """
     if size <= 1:
         return
 
-    # Keep the indicator compact and tightly grouped (matching mockup).
     step = max(3, size)
-    first_cx = x + step
-    second_cx = x
-    third_cx = x - step
-    first_cy = y + step
-    second_cy = y
-    third_cy = y + step
+    half = max(2, step // 2)
+    third_cx = x + half
+    second_cx = third_cx + step
+    first_cx = second_cx + step
+    second_cy = y + half
+    third_cy = second_cy + step
+    first_cy = third_cy
 
     def _diamond(cx: int, cy: int, filled: bool) -> None:
-        half = max(2, step // 2)
         pts = [
             (cx, cy - half),
             (cx + half, cy),
@@ -290,8 +292,17 @@ def _center_bottom_text_with_live_bases(
         l = t = 0
 
     base_size = max(3, int(round(th * 0.28)))
-    base_gap = max(3, base_size // 2)
-    indicator_w = base_size * 3
+    step = max(3, base_size)
+    half = max(2, step // 2)
+
+    try:
+        sl, _, sr, _ = draw.textbbox((0, 0), "   ", font=font)
+        base_gap = max(3, sr - sl)
+    except Exception:
+        base_gap = max(3, base_size)
+
+    indicator_w = (2 * step) + (2 * half)
+    indicator_h = step + (2 * half)
     group_w = tw + base_gap + indicator_w
     group_x = max(0, (WIDTH - group_w) // 2)
 
@@ -299,8 +310,14 @@ def _center_bottom_text_with_live_bases(
     text_y = HEIGHT - th - margin - t
     draw.text((text_x, text_y), text, font=font, fill=(255, 255, 255))
 
-    indicator_x = group_x + tw + base_gap + base_size
-    indicator_y = text_y + max(0, (th - (base_size * 2)) // 2)
+    try:
+        _, text_top, _, text_bottom = draw.textbbox((text_x, text_y), text, font=font)
+        text_center_y = (text_top + text_bottom) // 2
+    except Exception:
+        text_center_y = text_y + (th // 2)
+
+    indicator_x = group_x + tw + base_gap
+    indicator_y = text_center_y - (indicator_h // 2)
     _draw_live_basepaths_indicator(
         draw,
         x=indicator_x,

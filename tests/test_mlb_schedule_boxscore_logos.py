@@ -263,6 +263,79 @@ def test_draw_box_score_passes_live_bases_for_live_screens(monkeypatch):
     assert captured["live_bases"] is None
 
 
+def test_center_bottom_text_with_live_bases_uses_space_gap(monkeypatch):
+    captured = {}
+    img = Image.new("RGB", (mlb_schedule.WIDTH, mlb_schedule.HEIGHT), (0, 0, 0))
+    draw = ImageDraw.Draw(img)
+    text = "Top 5th, 2 outs"
+    font = mlb_schedule.FONT_DATE_SPORTS
+
+    def _capture_indicator(_draw, *, x, y, size, on_first, on_second, on_third):
+        captured.update({"x": x, "y": y, "size": size})
+
+    monkeypatch.setattr(mlb_schedule, "_draw_live_basepaths_indicator", _capture_indicator)
+
+    mlb_schedule._center_bottom_text_with_live_bases(
+        draw,
+        text,
+        font,
+        live_bases=(True, False, True),
+    )
+
+    l, t, r, b = draw.textbbox((0, 0), text, font=font)
+    tw, th = r - l, b - t
+    base_size = max(3, int(round(th * 0.28)))
+    step = max(3, base_size)
+    half = max(2, step // 2)
+    indicator_w = (2 * step) + (2 * half)
+    sl, _, sr, _ = draw.textbbox((0, 0), "   ", font=font)
+    min_gap = sr - sl
+    group_w = tw + min_gap + indicator_w
+    group_x = max(0, (mlb_schedule.WIDTH - group_w) // 2)
+    text_right = (group_x - l) + tw
+
+    assert captured["x"] >= text_right + min_gap
+
+
+def test_center_bottom_text_with_live_bases_aligns_indicator_vertically(monkeypatch):
+    captured = {}
+    img = Image.new("RGB", (mlb_schedule.WIDTH, mlb_schedule.HEIGHT), (0, 0, 0))
+    draw = ImageDraw.Draw(img)
+    text = "Bot 7th, 1 out"
+    font = mlb_schedule.FONT_DATE_SPORTS
+
+    def _capture_indicator(_draw, *, x, y, size, on_first, on_second, on_third):
+        captured.update({"x": x, "y": y, "size": size})
+
+    monkeypatch.setattr(mlb_schedule, "_draw_live_basepaths_indicator", _capture_indicator)
+
+    mlb_schedule._center_bottom_text_with_live_bases(
+        draw,
+        text,
+        font,
+        live_bases=(False, True, False),
+    )
+
+    l, t, r, b = draw.textbbox((0, 0), text, font=font)
+    tw, th = r - l, b - t
+    step = max(3, captured["size"])
+    half = max(2, step // 2)
+    indicator_h = step + (2 * half)
+
+    sl, _, sr, _ = draw.textbbox((0, 0), "   ", font=font)
+    gap = sr - sl
+    indicator_w = (2 * step) + (2 * half)
+    group_w = tw + gap + indicator_w
+    group_x = max(0, (mlb_schedule.WIDTH - group_w) // 2)
+    text_x = group_x - l
+    text_y = mlb_schedule.HEIGHT - th - mlb_schedule.BOTTOM_MARGIN - t
+    _, text_top, _, text_bottom = draw.textbbox((text_x, text_y), text, font=font)
+    text_center_y = (text_top + text_bottom) // 2
+
+    indicator_center_y = captured["y"] + (indicator_h // 2)
+    assert abs(indicator_center_y - text_center_y) <= 1
+
+
 def test_draw_box_score_centers_content_vertically_for_live_screens(monkeypatch):
     captured = {}
 
