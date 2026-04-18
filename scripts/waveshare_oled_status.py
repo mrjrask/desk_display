@@ -23,6 +23,7 @@ from functools import lru_cache
 from datetime import datetime
 from pathlib import Path
 from threading import Event
+from typing import Callable, Optional
 
 from PIL import Image, ImageDraw, ImageFont
 
@@ -81,6 +82,8 @@ _LAST_WEATHER_TEMP_F: float | None = None
 _WEATHER2_RENDERED = False
 _LAST_GITHUB_UPDATE_CHECK_AT = 0.0
 _LAST_GITHUB_UPDATE_AVAILABLE = False
+_CUBS_FINAL_GAME_PK: str | None = None
+_CUBS_FINAL_HOLD_UNTIL_MONOTONIC = 0.0
 
 
 class SSD1306Display:
@@ -283,6 +286,226 @@ def _display_status_path() -> Path:
     repo_root = Path(__file__).resolve().parents[1]
     screenshot_dir = os.getenv("SCREENSHOT_DIR", str(repo_root / "screenshots"))
     return Path(screenshot_dir).expanduser() / "current" / "display_status.json"
+
+@lru_cache(maxsize=1)
+def _resolve_mlb_abbreviation() -> Optional[Callable[[str], str]]:
+    try:
+        from screens.mlb_schedule import get_mlb_abbreviation  # pylint: disable=import-outside-toplevel
+
+        return get_mlb_abbreviation
+    except Exception:
+        return None
+
+
+def _read_display_status_payload() -> dict:
+    status_path = _display_status_path()
+    try:
+        payload = json.loads(status_path.read_text(encoding="utf-8"))
+        return payload if isinstance(payload, dict) else {}
+    except Exception:
+        return {}
+
+
+def _is_cubs_team(team: dict) -> bool:
+    if not isinstance(team, dict):
+        return False
+    team_id = team.get("id")
+    if str(team_id) == "112":
+        return True
+    for key in ("teamName", "name", "clubName", "abbreviation", "triCode"):
+        value = str(team.get(key) or "").strip().lower()
+        if "cubs" in value or value == "chc":
+            return True
+    return False
+
+
+def _team_label(team: dict) -> str:
+    if _is_cubs_team(team):
+        return "CUBS"
+    helper = _resolve_mlb_abbreviation()
+    if callable(helper):
+        display_name = (
+            team.get("name")
+            or team.get("teamName")
+            or team.get("clubName")
+            or team.get("abbreviation")
+            or ""
+        )
+        try:
+            value = str(helper(display_name) or "").strip().upper()
+            if value:
+                return value
+        except Exception:
+            pass
+    for key in ("triCode", "abbreviation", "teamCode", "abbrev"):
+        value = str(team.get(key) or "").strip().upper()
+        if value:
+            return value
+    return "TEAM"
+
+
+def _mlb_live_state(game: dict) -> tuple[bool, bool]:
+    status = (game or {}).get("status") or {}
+    abstract = str(status.get("abstractGameState") or "").lower()
+    detailed = str(status.get("detailedState") or "").lower()
+    code = str(status.get("statusCode") or status.get("codedGameState") or "").upper()
+    text = f"{abstract} {detailed}".strip()
+    is_final = code in {"F", "O"} or "final" in text or "completed" in text
+    is_live = (
+        code in {"I", "2", "3"}
+        or "live" in text
+        or "in progress" in text
+        or "top " in text
+        or "bottom " in text
+        or "middle " in text
+    )
+    return is_live, is_final
+
+
+def _format_inning_text(game: dict, *, final: bool = False) -> str:
+    if final:
+        return "Final"
+    linescore = (game or {}).get("linescore") or {}
+    inning_state = str(linescore.get("inningState") or "").strip()
+    inning_ord = str(linescore.get("currentInningOrdinal") or "").strip()
+    if inning_state and inning_ord:
+        return f"{inning_state} {inning_ord}"
+    if inning_ord:
+        return inning_ord
+    status = (game or {}).get("status") or {}
+    detailed = str(status.get("detailedState") or "").strip()
+    return detailed or "Live"
+
+
+def _format_outs_text(game: dict) -> tuple[str, str]:
+    linescore = (game or {}).get("linescore") or {}
+    raw_outs = linescore.get("outs")
+    try:
+        outs = int(raw_outs)
+    except (TypeError, ValueError):
+        return ("", "")
+    outs_label = "Out" if outs == 1 else "Outs"
+    outs_text = f"{outs} {outs_label}"
+    inning_state = str(linescore.get("inningState") or "").lower()
+    batting_side = "away" if inning_state.startswith("top") else "home" if inning_state.startswith("bottom") else ""
+    return outs_text, batting_side
+
+
+def _render_score_panel(width: int, height: int, *, team: str, score: str, footer: str) -> Image.Image:
+    image = Image.new("1", (width, height), 0)
+    draw = ImageDraw.Draw(image)
+    center_y = max(0, (height // 2) - 8)
+    team_font_size = max(12, min(34, _best_value_font_size(int(width * 0.64), height, team, 2)))
+    score_font_size = max(20, min(58, _best_value_font_size(int(width * 0.33), height, score, 0) + 8))
+    footer_font_size = max(10, min(20, _best_value_font_size(width - 8, 24, footer or " ", 0)))
+    team_font = _load_value_font(team_font_size)
+    score_font = _load_value_font(score_font_size)
+    footer_font = _load_value_font(footer_font_size)
+
+    team_bbox = draw.textbbox((0, 0), team, font=team_font)
+    score_bbox = draw.textbbox((0, 0), score, font=score_font)
+    team_w = team_bbox[2] - team_bbox[0]
+    team_h = team_bbox[3] - team_bbox[1]
+    score_w = score_bbox[2] - score_bbox[0]
+    score_h = score_bbox[3] - score_bbox[1]
+
+    gap = 4
+    team_x = 3
+    team_y = center_y - (team_h // 2)
+    score_x = width - score_w - 4
+    score_y = center_y - (score_h // 2)
+    if team_x + team_w + gap > score_x:
+        available = max(10, score_x - team_x - gap)
+        reduced_size = max(10, team_font_size - 2)
+        while reduced_size >= 10:
+            test_font = _load_value_font(reduced_size)
+            test_bbox = draw.textbbox((0, 0), team, font=test_font)
+            if (test_bbox[2] - test_bbox[0]) <= available:
+                team_font = test_font
+                team_w = test_bbox[2] - test_bbox[0]
+                team_h = test_bbox[3] - test_bbox[1]
+                team_y = center_y - (team_h // 2)
+                break
+            reduced_size -= 1
+
+    draw.text((team_x, team_y), team, font=team_font, fill=255)
+    draw.text((score_x, score_y), score, font=score_font, fill=255)
+
+    if footer:
+        footer_bbox = draw.textbbox((0, 0), footer, font=footer_font)
+        footer_w = footer_bbox[2] - footer_bbox[0]
+        footer_h = footer_bbox[3] - footer_bbox[1]
+        footer_x = max(2, (width - footer_w) // 2)
+        footer_y = max(0, height - footer_h - 2)
+        draw.text((footer_x, footer_y), footer, font=footer_font, fill=255)
+
+    return image
+
+
+def _cubs_oled_frames() -> tuple[Image.Image, Image.Image] | None:
+    global _CUBS_FINAL_GAME_PK, _CUBS_FINAL_HOLD_UNTIL_MONOTONIC
+
+    payload = _read_display_status_payload()
+    cubs = payload.get("cubs") if isinstance(payload, dict) else None
+    if not isinstance(cubs, dict):
+        return None
+
+    live_game = cubs.get("live_game") if isinstance(cubs.get("live_game"), dict) else None
+    last_game = cubs.get("last_game") if isinstance(cubs.get("last_game"), dict) else None
+
+    selected_game = None
+    is_final = False
+    now_mono = time.monotonic()
+    if isinstance(live_game, dict):
+        live_live, live_final = _mlb_live_state(live_game)
+        if live_live:
+            selected_game = live_game
+            is_final = False
+        elif live_final:
+            selected_game = live_game
+            is_final = True
+
+    if selected_game is None and isinstance(last_game, dict):
+        _live, last_final = _mlb_live_state(last_game)
+        if last_final:
+            selected_game = last_game
+            is_final = True
+
+    if selected_game is None:
+        return None
+
+    game_pk = str(selected_game.get("gamePk") or selected_game.get("game_id") or "")
+    if is_final:
+        if game_pk and game_pk != _CUBS_FINAL_GAME_PK:
+            _CUBS_FINAL_GAME_PK = game_pk
+            _CUBS_FINAL_HOLD_UNTIL_MONOTONIC = now_mono + (90 * 60)
+        if now_mono > _CUBS_FINAL_HOLD_UNTIL_MONOTONIC:
+            return None
+    else:
+        _CUBS_FINAL_GAME_PK = game_pk or _CUBS_FINAL_GAME_PK
+        _CUBS_FINAL_HOLD_UNTIL_MONOTONIC = 0.0
+
+    teams = selected_game.get("teams") or {}
+    away = (teams.get("away") or {}).get("team") or {}
+    home = (teams.get("home") or {}).get("team") or {}
+    away_score = (teams.get("away") or {}).get("score")
+    home_score = (teams.get("home") or {}).get("score")
+    away_label = _team_label(away)
+    home_label = _team_label(home)
+    away_score_text = str(away_score) if isinstance(away_score, int) else "-"
+    home_score_text = str(home_score) if isinstance(home_score, int) else "-"
+    inning_text = _format_inning_text(selected_game, final=is_final)
+    outs_text, batting_side = _format_outs_text(selected_game)
+    away_footer = outs_text if batting_side == "away" else ""
+    if batting_side == "home" and outs_text:
+        home_footer = f"{inning_text} • {outs_text}"
+    else:
+        home_footer = inning_text
+
+    return (
+        _render_score_panel(OLED_WIDTH, OLED_HEIGHT, team=away_label, score=away_score_text, footer=away_footer),
+        _render_score_panel(OLED_WIDTH, OLED_HEIGHT, team=home_label, score=home_score_text, footer=home_footer),
+    )
 
 
 def _weather2_screen_has_rendered() -> bool:
@@ -634,41 +857,45 @@ def main() -> int:
     next_swap_at = time.monotonic() + random_swap_interval_seconds()
     try:
         while not _STOP_EVENT.is_set():
-            time_text = current_time_12h()
-            date_text = current_date_mdy()
-            time_top_margin = _title_top_margin(OLED_WIDTH, "Time")
-            date_top_margin = _title_top_margin(OLED_WIDTH, "Date")
-            time_value_font_size = _best_time_font_size(
-                OLED_WIDTH,
-                OLED_HEIGHT,
-                time_text,
-                time_top_margin,
-            )
-            date_value_font_size = _best_value_font_size(
-                OLED_WIDTH,
-                OLED_HEIGHT,
-                date_text,
-                date_top_margin,
-            )
+            cubs_frames = _cubs_oled_frames()
+            if cubs_frames is not None:
+                left_image, right_image = cubs_frames
+            else:
+                time_text = current_time_12h()
+                date_text = current_date_mdy()
+                time_top_margin = _title_top_margin(OLED_WIDTH, "Time")
+                date_top_margin = _title_top_margin(OLED_WIDTH, "Date")
+                time_value_font_size = _best_time_font_size(
+                    OLED_WIDTH,
+                    OLED_HEIGHT,
+                    time_text,
+                    time_top_margin,
+                )
+                date_value_font_size = _best_value_font_size(
+                    OLED_WIDTH,
+                    OLED_HEIGHT,
+                    date_text,
+                    date_top_margin,
+                )
 
-            date_image = render_centered_text(
-                OLED_WIDTH,
-                OLED_HEIGHT,
-                date_text,
-                title="Date",
-                value_font_size=date_value_font_size,
-            )
-            time_image = render_centered_time_text(
-                OLED_WIDTH,
-                OLED_HEIGHT,
-                time_text,
-                title="Time",
-                value_font_size=time_value_font_size,
-            )
+                date_image = render_centered_text(
+                    OLED_WIDTH,
+                    OLED_HEIGHT,
+                    date_text,
+                    title="Date",
+                    value_font_size=date_value_font_size,
+                )
+                time_image = render_centered_time_text(
+                    OLED_WIDTH,
+                    OLED_HEIGHT,
+                    time_text,
+                    title="Time",
+                    value_font_size=time_value_font_size,
+                )
 
-            left_image, right_image = (
-                (date_image, time_image) if show_date_on_left else (time_image, date_image)
-            )
+                left_image, right_image = (
+                    (date_image, time_image) if show_date_on_left else (time_image, date_image)
+                )
             if _github_updates_available():
                 left_image = _invert_for_update(left_image)
                 right_image = _invert_for_update(right_image)
@@ -683,7 +910,7 @@ def main() -> int:
                 except Exception as exc:
                     LOGGER.warning("OLED reinitialization failed: %s", exc)
 
-            if time.monotonic() >= next_swap_at:
+            if cubs_frames is None and time.monotonic() >= next_swap_at:
                 show_date_on_left = not show_date_on_left
                 next_swap_at = time.monotonic() + random_swap_interval_seconds()
 
