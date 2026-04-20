@@ -6,6 +6,7 @@ from __future__ import annotations
 import datetime
 import logging
 import os
+import re
 import time
 from typing import Any, Optional
 
@@ -241,6 +242,32 @@ def _first_int(values: list[Any]) -> Optional[int]:
     return None
 
 
+def _dict_localized_text(value: Any) -> str:
+    if isinstance(value, str) and value.strip():
+        return value.strip()
+    if isinstance(value, dict):
+        for key in ("default", "en", "fr", "es", "name"):
+            candidate = value.get(key)
+            if isinstance(candidate, str) and candidate.strip():
+                return candidate.strip()
+    return ""
+
+
+def _team_abbr(team: dict) -> str:
+    if not isinstance(team, dict):
+        return ""
+    for key in ("abbreviation", "abbrev", "teamAbbrev", "triCode", "shortName", "code"):
+        candidate = _dict_localized_text(team.get(key))
+        if candidate:
+            return candidate.upper()
+    nested_team = team.get("team")
+    if isinstance(nested_team, dict):
+        nested_abbr = _team_abbr(nested_team)
+        if nested_abbr:
+            return nested_abbr
+    return _team_logo_abbr(team)
+
+
 def _parse_datetime(value: Any) -> Optional[datetime.datetime]:
     if not value:
         return None
@@ -290,6 +317,10 @@ def _extract_next_game_dt(series: dict) -> Optional[datetime.datetime]:
 def _first_present_int(values: list[Any], default: int = 0) -> int:
     for value in values:
         parsed = _as_int(value)
+        if parsed is None and isinstance(value, str):
+            match = re.match(r"^\s*(\d+)\s*[-/]", value)
+            if match:
+                parsed = _as_int(match.group(1))
         if parsed is not None:
             return parsed
     return default
@@ -333,8 +364,8 @@ def _normalize_series_item(series: dict) -> Optional[dict]:
         ]
     )
 
-    away_abbr = _team_logo_abbr(away_team)
-    home_abbr = _team_logo_abbr(home_team)
+    away_abbr = _team_abbr(away_team)
+    home_abbr = _team_abbr(home_team)
     if not away_abbr or not home_abbr:
         return None
 
@@ -412,7 +443,7 @@ def _extract_series(payload: Any) -> list[dict]:
         teams = (series.get("teams") or {})
         away_team = ((teams.get("away") or {}).get("team") or {})
         home_team = ((teams.get("home") or {}).get("team") or {})
-        key = (_team_logo_abbr(away_team), _team_logo_abbr(home_team))
+        key = (_team_abbr(away_team), _team_abbr(home_team))
         if not all(key) or key in seen:
             continue
         seen.add(key)
@@ -510,7 +541,7 @@ def _projected_series(higher_seed: dict, lower_seed: dict, *, conference: str, h
             "away": {"team": _standings_team_obj(lower_seed), "score": 0},
             "home": {"team": _standings_team_obj(higher_seed), "score": 0},
         },
-        "status_text": "Projected",
+        "status_text": "",
         "conference": conference,
         "higher_seed": higher_seed_rank,
         "lower_seed": lower_seed_rank,
@@ -628,7 +659,7 @@ def _derive_playoff_matchups_from_games(games: list[dict]) -> list[dict]:
         home = teams.get("home") or {}
         away_team = away.get("team") or {}
         home_team = home.get("team") or {}
-        key = (_team_logo_abbr(away_team), _team_logo_abbr(home_team))
+        key = (_team_abbr(away_team), _team_abbr(home_team))
         if not all(key) or key in seen:
             continue
         seen.add(key)
@@ -664,7 +695,7 @@ def _series_order_key(series: dict) -> tuple[int, int, str, str]:
     )
     high = higher_seed if higher_seed is not None else fallback_high
     low = lower_seed if lower_seed is not None else 99
-    return (high, low, _team_logo_abbr(home_team), _team_logo_abbr(away_team))
+    return (high, low, _team_abbr(home_team), _team_abbr(away_team))
 
 
 def _conference_buckets(series: list[dict]) -> tuple[list[dict], list[dict]]:
@@ -699,7 +730,7 @@ def _draw_series_block(canvas: Image.Image, draw: ImageDraw.ImageDraw, series: d
 
     for idx, team_side in ((1, away), (3, home)):
         team_obj = (team_side or {}).get("team", {})
-        abbr = _team_logo_abbr(team_obj)
+        abbr = _team_abbr(team_obj)
         logo = _load_logo_cached(abbr)
         if not logo:
             team_name = (team_obj or {}).get("name") or (team_obj or {}).get("teamName") or "Unknown Team"

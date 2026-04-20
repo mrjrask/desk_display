@@ -38,7 +38,7 @@ def test_projected_matchups_from_standings_builds_first_round_bracket():
     projected = nhl_playoffs._projected_matchups_from_standings(standings)
 
     assert len(projected) == 8
-    assert all(item.get("status_text") == "Projected" for item in projected)
+    assert all(item.get("status_text") == "" for item in projected)
 
     east_atlantic_top_vs_wc1 = projected[0]
     assert east_atlantic_top_vs_wc1["teams"]["home"]["team"]["abbreviation"] == "TOR"
@@ -129,6 +129,16 @@ def test_normalize_series_item_reads_nested_wins_and_hides_projected_status():
     assert normalized["teams"]["home"]["score"] == 2
     assert normalized["status_text"] == ""
     assert normalized["next_text"] == "Next: 4/19 9:00 PM CDT"
+
+
+def test_team_abbr_supports_localized_team_abbrev_shapes():
+    assert nhl_playoffs._team_abbr({"teamAbbrev": {"default": "WPG"}}) == "WPG"
+    assert nhl_playoffs._team_abbr({"abbrev": {"default": "TOR"}}) == "TOR"
+    assert nhl_playoffs._team_abbr({"team": {"triCode": "car"}}) == "CAR"
+
+
+def test_first_present_int_supports_record_text():
+    assert nhl_playoffs._first_present_int(["3-2", None]) == 3
 
 
 def test_apply_style_overrides_reduces_logo_height_by_ten_percent(monkeypatch):
