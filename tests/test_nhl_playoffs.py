@@ -190,6 +190,11 @@ def test_normalize_next_text_strips_timezone_and_leading_zeroes():
     assert nhl_playoffs._normalize_next_text("Next: 04/09 8:00 PM ET") == "Next: 4/9 8:00 PM"
 
 
+def test_normalize_next_text_preserves_meridiem_and_tbd_tokens():
+    assert nhl_playoffs._normalize_next_text("Next: 04/19 9:00 PM") == "Next: 4/19 9:00 PM"
+    assert nhl_playoffs._normalize_next_text("Next: TBD") == "Next: TBD"
+
+
 def test_team_abbr_supports_localized_team_abbrev_shapes():
     assert nhl_playoffs._team_abbr({"teamAbbrev": {"default": "WPG"}}) == "WPG"
     assert nhl_playoffs._team_abbr({"abbrev": {"default": "TOR"}}) == "TOR"

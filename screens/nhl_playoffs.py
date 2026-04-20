@@ -366,8 +366,35 @@ def _normalize_next_text(text: Any) -> str:
     if not raw:
         return "Next: TBD"
 
-    # Drop trailing timezone abbreviations (e.g., ET/CDT/PST).
-    normalized = re.sub(r"\s+[A-Z]{2,4}$", "", raw).strip()
+    normalized = raw
+
+    # Drop trailing timezone abbreviations (e.g., ET/CDT/PST) but keep schedule
+    # tokens like AM/PM/TBD intact.
+    tz_match = re.search(r"\s+([A-Za-z]{2,4})$", normalized)
+    if tz_match:
+        trailing_token = tz_match.group(1).upper()
+        recognized_timezones = {
+            "ET",
+            "CT",
+            "MT",
+            "PT",
+            "EST",
+            "EDT",
+            "CST",
+            "CDT",
+            "MST",
+            "MDT",
+            "PST",
+            "PDT",
+            "UTC",
+            "GMT",
+            "AKST",
+            "AKDT",
+            "HST",
+            "HDT",
+        }
+        if trailing_token in recognized_timezones:
+            normalized = normalized[: tz_match.start()].strip()
 
     # Remove leading zeros from month/day date fragments (e.g., 04/09 -> 4/9).
     normalized = re.sub(
