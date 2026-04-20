@@ -93,18 +93,18 @@ _IS_HYPERPIXEL_4_OR_LARGER = _show_win_pct_for_layout(int(WIDTH), int(HEIGHT))
 _BASE_FONTS = {
     "title": 39,
     "division": 35,
-    "team": 28,
-    "stats": 28,
-    "gb_suffix": 21,
-    "gb_fraction": 18,
+    "team": 24,
+    "stats": 20,
+    "gb_suffix": 17,
+    "gb_fraction": 14,
 }
 
 _HYPERPIXEL_FONTS = {
     "title": 34,
     "division": 24,
-    "team": 26,
-    "stats": 24,
-    "gb_suffix": 19,
+    "team": 22,
+    "stats": 20,
+    "gb_suffix": 15,
 }
 
 if _IS_HYPERPIXEL_4_OR_LARGER:
@@ -117,9 +117,9 @@ if config.is_hyperpixel_4_square_layout():
     _font_sizes = {
         "title": 30,
         "division": 24,
-        "team": 20,
-        "stats": 20,
-        "gb_suffix": 14,
+        "team": 16,
+        "stats": 16,
+        "gb_suffix": 10,
     }
 
 _COLUMN_GAP_MULTIPLIER = 0.75 if config.is_hyperpixel_4_square_layout() else 1.0
