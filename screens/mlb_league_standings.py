@@ -400,16 +400,48 @@ def _column_layout(draw: ImageDraw.ImageDraw, rows: list[dict[str, Any]]) -> dic
         stat_widths[key] = width
 
     layout = {"team": team_x}
-    cursor = right_edge
-    for key in reversed(columns):
-        layout[key] = cursor
-        layout[f"{key}_width"] = stat_widths[key]
-        gap = _WIDE_STAT_COLUMN_GAP if SHOW_LAST_10 else _STAT_COLUMN_GAP
-        if key == "gb" and "pct" in columns:
-            gap += _PCT_TO_GB_EXTRA_GAP
-        if key == "gb" and "record" in columns:
-            gap += _RECORD_TO_GB_EXTRA_GAP
-        cursor -= stat_widths[key] + gap
+
+    def _apply_default_right_aligned_layout() -> None:
+        cursor = right_edge
+        for key in reversed(columns):
+            layout[key] = cursor
+            layout[f"{key}_width"] = stat_widths[key]
+            gap = _WIDE_STAT_COLUMN_GAP if SHOW_LAST_10 else _STAT_COLUMN_GAP
+            if key == "gb" and "pct" in columns:
+                gap += _PCT_TO_GB_EXTRA_GAP
+            if key == "gb" and "record" in columns:
+                gap += _RECORD_TO_GB_EXTRA_GAP
+            cursor -= stat_widths[key] + gap
+
+    if SHOW_LAST_10 and columns == ("record", "last10", "gb"):
+        # Keep GB at the same right-aligned placement while centering Record
+        # and placing L10 midway between Record and GB.
+        gb_right = right_edge
+        gb_center = gb_right - (stat_widths["gb"] / 2.0)
+        record_center = WIDTH / 2.0
+        last10_center = (record_center + gb_center) / 2.0
+
+        record_right = int(round(record_center + (stat_widths["record"] / 2.0)))
+        last10_right = int(round(last10_center + (stat_widths["last10"] / 2.0)))
+
+        record_right = min(record_right, gb_right - stat_widths["last10"] - stat_widths["record"])
+        last10_right = min(last10_right, gb_right - max(2, scale_value(2)))
+
+        record_left = record_right - stat_widths["record"]
+        last10_left = last10_right - stat_widths["last10"]
+        gb_left = gb_right - stat_widths["gb"]
+
+        if record_right < last10_left and last10_right < gb_left:
+            layout["record"] = record_right
+            layout["record_width"] = stat_widths["record"]
+            layout["last10"] = last10_right
+            layout["last10_width"] = stat_widths["last10"]
+            layout["gb"] = gb_right
+            layout["gb_width"] = stat_widths["gb"]
+        else:
+            _apply_default_right_aligned_layout()
+    else:
+        _apply_default_right_aligned_layout()
 
     first_col = columns[0]
     team_gap = _TEAM_TO_RECORD_GAP_WIDE if SHOW_LAST_10 else _STAT_COLUMN_GAP
