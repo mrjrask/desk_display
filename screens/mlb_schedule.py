@@ -1262,10 +1262,7 @@ def draw_series_screen(display, games, title, transition=False, screen_id: Optio
         prefix, opponent = "vs.", get_team_display_name(away_tm)
 
     opponent_text = f"{prefix} {opponent}"
-    scale_single_line_opponent = normalized_screen_id in {
-        "cubs next home series",
-        "sox next home series",
-    }
+    scale_single_line_opponent = normalized_screen_id in series_screen_ids
     wrap_width = WIDTH - (edge_pad * 2) if hyperpixel_layout else WIDTH
     if scale_single_line_opponent:
         opponent_font = fit_font(
