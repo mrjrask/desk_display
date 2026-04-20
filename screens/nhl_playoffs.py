@@ -81,8 +81,9 @@ for w in SERIES_COL_WIDTHS:
 
 TITLE_FONT = FONT_TITLE_SPORTS
 LOGO_DIR = os.path.join(IMAGES_DIR, "nhl")
-# Match NHL Scoreboard v2 logo baseline sizing.
+# Match NHL Scoreboard v2 logo baseline sizing, then reduce by 10% for playoffs.
 TEAM_LOGO_BASE_HEIGHT = scale_value_width(26)
+PLAYOFF_LOGO_SCALE = 0.9
 LEAGUE_LOGO_BASE_HEIGHT = (
     TEAM_LOGO_BASE_HEIGHT
     if (HYPERPIXEL_LAYOUT or is_kernel_driven_display())
@@ -174,7 +175,7 @@ def _apply_style_overrides() -> None:
     BACKGROUND_COLOR = (0, 0, 0)
     _recompute_series_layout()
     team_scale = get_screen_image_scale(SCREEN_ID, "team_logo", 1.0)
-    target_logo_height = max(1, int(round(TEAM_LOGO_BASE_HEIGHT * team_scale)))
+    target_logo_height = max(1, int(round(TEAM_LOGO_BASE_HEIGHT * team_scale * PLAYOFF_LOGO_SCALE)))
     max_row_fit = max(1, SCORE_ROW_H - scale_value(8))
     LOGO_HEIGHT = min(target_logo_height, max_row_fit)
 
@@ -264,9 +265,13 @@ def _extract_next_game_dt(series: dict) -> Optional[datetime.datetime]:
     candidate_keys = (
         "nextGameStartTimeUTC",
         "nextGameStartTime",
+        "nextGameDateTimeUTC",
         "nextGameDateTime",
+        "nextGameUtc",
         "nextGameDate",
         "startTimeUTC",
+        "gameDateUTC",
+        "gameDateTime",
         "gameDate",
     )
     for key in candidate_keys:
@@ -275,11 +280,19 @@ def _extract_next_game_dt(series: dict) -> Optional[datetime.datetime]:
             return dt
     next_game = series.get("nextGame")
     if isinstance(next_game, dict):
-        for key in ("startTimeUTC", "startTime", "gameDate", "date"):
+        for key in ("startTimeUTC", "startTime", "gameDateUTC", "gameDateTime", "gameDate", "date"):
             dt = _parse_datetime(next_game.get(key))
             if dt:
                 return dt
     return None
+
+
+def _first_present_int(values: list[Any], default: int = 0) -> int:
+    for value in values:
+        parsed = _as_int(value)
+        if parsed is not None:
+            return parsed
+    return default
 
 
 def _format_next_text(series: dict) -> str:
@@ -299,17 +312,25 @@ def _normalize_series_item(series: dict) -> Optional[dict]:
     away_team = _team_from_series(series, "awayTeam", "topSeedTeam", "team1", "homeTeam1")
     home_team = _team_from_series(series, "homeTeam", "bottomSeedTeam", "team2", "homeTeam2")
 
-    away_wins = (
-        _as_int(series.get("awayWins"))
-        or _as_int(series.get("topSeedWins"))
-        or _as_int(series.get("team1Wins"))
-        or 0
+    away_wins = _first_present_int(
+        [
+            series.get("awayWins"),
+            series.get("topSeedWins"),
+            series.get("team1Wins"),
+            series.get("topSeedTeamWins"),
+            away_team.get("wins") if isinstance(away_team, dict) else None,
+            away_team.get("seriesWins") if isinstance(away_team, dict) else None,
+        ]
     )
-    home_wins = (
-        _as_int(series.get("homeWins"))
-        or _as_int(series.get("bottomSeedWins"))
-        or _as_int(series.get("team2Wins"))
-        or 0
+    home_wins = _first_present_int(
+        [
+            series.get("homeWins"),
+            series.get("bottomSeedWins"),
+            series.get("team2Wins"),
+            series.get("bottomSeedTeamWins"),
+            home_team.get("wins") if isinstance(home_team, dict) else None,
+            home_team.get("seriesWins") if isinstance(home_team, dict) else None,
+        ]
     )
 
     away_abbr = _team_logo_abbr(away_team)
@@ -324,6 +345,7 @@ def _normalize_series_item(series: dict) -> Optional[dict]:
         or series.get("roundLabel")
         or "Series"
     )
+    status_text = "" if str(status).strip().lower() == "projected" else str(status)
     conference = _normalize_conference_label(
         series.get("conferenceAbbrev")
         or series.get("conferenceName")
@@ -351,7 +373,7 @@ def _normalize_series_item(series: dict) -> Optional[dict]:
             "away": {"team": away_team, "score": away_wins},
             "home": {"team": home_team, "score": home_wins},
         },
-        "status_text": str(status),
+        "status_text": status_text,
         "conference": conference,
         "higher_seed": higher_seed,
         "lower_seed": lower_seed,
