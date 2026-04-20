@@ -14,8 +14,8 @@ def test_normalize_series_item_supports_matchup_shape_and_next_game_time():
     )
 
     assert normalized is not None
-    assert normalized["teams"]["away"]["team"]["team"]["teamTricode"] == "BOS"
-    assert normalized["teams"]["home"]["team"]["team"]["teamTricode"] == "MIA"
+    assert normalized["teams"]["away"]["team"]["teamTricode"] == "BOS"
+    assert normalized["teams"]["home"]["team"]["teamTricode"] == "MIA"
     assert normalized["teams"]["away"]["score"] == 3
     assert normalized["teams"]["home"]["score"] == 1
     assert normalized["next_text"].startswith("Next: ")
@@ -70,3 +70,30 @@ def test_derive_playoff_matchups_supports_scoreboard_games_shape():
     assert len(derived) == 1
     assert derived[0]["teams"]["away"]["team"]["abbreviation"] == "BOS"
     assert derived[0]["teams"]["home"]["team"]["abbreviation"] == "NYK"
+
+
+def test_derive_playoff_matchups_counts_wins_from_finals():
+    games = [
+        {
+            "gameDate": "2026-04-18T00:00:00Z",
+            "status": {"statusCode": "3", "detailedState": "Final"},
+            "teams": {
+                "away": {"team": {"abbreviation": "BOS"}, "score": 100},
+                "home": {"team": {"abbreviation": "NYK"}, "score": 90},
+            },
+        },
+        {
+            "gameDate": "2026-04-20T00:00:00Z",
+            "status": {"statusCode": "3", "detailedState": "Final"},
+            "teams": {
+                "away": {"team": {"abbreviation": "BOS"}, "score": 95},
+                "home": {"team": {"abbreviation": "NYK"}, "score": 101},
+            },
+        },
+    ]
+
+    derived = nba_playoffs._derive_playoff_matchups_from_games(games)
+
+    assert len(derived) == 1
+    assert derived[0]["teams"]["away"]["score"] == 1
+    assert derived[0]["teams"]["home"]["score"] == 1

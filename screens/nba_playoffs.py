@@ -44,7 +44,14 @@ from utils import (
     standard_scoreboard_team_logo_height,
     standard_scoreboard_league_logo_height,
 )
-from screens.nba_scoreboard import _center_text, _team_logo_abbr, _get_league_logo, _NBA_HEADERS
+from screens.nba_scoreboard import (
+    _center_text,
+    _team_logo_abbr,
+    _get_league_logo,
+    _NBA_HEADERS,
+    _fetch_games_for_date,
+    _scoreboard_date,
+)
 
 HYPERPIXEL_LAYOUT = is_hyperpixel_next_layout()
 HYPERPIXEL_4_SQUARE = is_hyperpixel_4_square_layout()
@@ -139,11 +146,21 @@ def _first_present_int(values: list[Any]) -> int:
     return 0
 
 
-def _team_from_series(series: dict, *keys: str) -> dict:
+def _team_slot_from_series(series: dict, *keys: str) -> dict:
     for key in keys:
         value = series.get(key)
-        if isinstance(value, dict):
+        if isinstance(value, dict) and value:
             return value
+    return {}
+
+
+def _team_from_series(series: dict, *keys: str) -> dict:
+    slot = _team_slot_from_series(series, *keys)
+    nested_team = slot.get("team") if isinstance(slot, dict) else None
+    if isinstance(nested_team, dict) and nested_team:
+        return nested_team
+    if isinstance(slot, dict):
+        return slot
     return {}
 
 
@@ -215,15 +232,57 @@ def _normalize_series_item(series: dict) -> Optional[dict]:
     if not isinstance(series, dict):
         return None
 
-    away_team = _team_from_series(series, "awayTeam", "topSeedTeam", "topSeed", "team1")
-    home_team = _team_from_series(series, "homeTeam", "bottomSeedTeam", "bottomSeed", "team2")
+    away_slot = _team_slot_from_series(
+        series,
+        "awayTeam",
+        "topSeedTeam",
+        "topSeed",
+        "highSeedTeam",
+        "higherSeedTeam",
+        "higherSeed",
+        "team1",
+    )
+    home_slot = _team_slot_from_series(
+        series,
+        "homeTeam",
+        "bottomSeedTeam",
+        "bottomSeed",
+        "lowSeedTeam",
+        "lowerSeedTeam",
+        "lowerSeed",
+        "team2",
+    )
+    away_team = _team_from_series(
+        series,
+        "awayTeam",
+        "topSeedTeam",
+        "topSeed",
+        "highSeedTeam",
+        "higherSeedTeam",
+        "higherSeed",
+        "team1",
+    )
+    home_team = _team_from_series(
+        series,
+        "homeTeam",
+        "bottomSeedTeam",
+        "bottomSeed",
+        "lowSeedTeam",
+        "lowerSeedTeam",
+        "lowerSeed",
+        "team2",
+    )
 
     away_wins = _first_present_int(
         [
             series.get("awayWins"),
             series.get("topSeedWins"),
+            series.get("highSeedWins"),
+            series.get("higherSeedWins"),
             series.get("team1Wins"),
             series.get("topSeedTeamWins"),
+            away_slot.get("wins") if isinstance(away_slot, dict) else None,
+            away_slot.get("seriesWins") if isinstance(away_slot, dict) else None,
             away_team.get("wins") if isinstance(away_team, dict) else None,
             away_team.get("seriesWins") if isinstance(away_team, dict) else None,
         ]
@@ -232,8 +291,12 @@ def _normalize_series_item(series: dict) -> Optional[dict]:
         [
             series.get("homeWins"),
             series.get("bottomSeedWins"),
+            series.get("lowSeedWins"),
+            series.get("lowerSeedWins"),
             series.get("team2Wins"),
             series.get("bottomSeedTeamWins"),
+            home_slot.get("wins") if isinstance(home_slot, dict) else None,
+            home_slot.get("seriesWins") if isinstance(home_slot, dict) else None,
             home_team.get("wins") if isinstance(home_team, dict) else None,
             home_team.get("seriesWins") if isinstance(home_team, dict) else None,
         ]
@@ -321,6 +384,53 @@ def _fetch_playoff_matchups() -> list[dict]:
     return []
 
 
+def _status_text(game: dict) -> str:
+    status = (game or {}).get("status") or {}
+    return str(status.get("detailedState") or "").strip()
+
+
+def _is_final_game(game: dict) -> bool:
+    status = (game or {}).get("status") or {}
+    code = str(status.get("statusCode") or "").strip()
+    abstract = str(status.get("abstractGameState") or "").strip().lower()
+    detailed = _status_text(game).lower()
+    return code in {"3", "4"} or abstract in {"final", "completed"} or "final" in detailed
+
+
+def _parse_series_record_from_text(text: str) -> Optional[tuple[int, int]]:
+    raw = str(text or "").strip()
+    if not raw:
+        return None
+    match = re.search(r"\b(\d+)\s*-\s*(\d+)\b", raw)
+    if not match:
+        return None
+    return int(match.group(1)), int(match.group(2))
+
+
+def _derive_playoff_matchups_from_recent_games(now: Optional[datetime.datetime] = None) -> list[dict]:
+    base_day = _scoreboard_date(now)
+    recent_days = [base_day - datetime.timedelta(days=offset) for offset in range(14, -1, -1)]
+    upcoming_days = [base_day + datetime.timedelta(days=offset) for offset in range(0, 8)]
+
+    all_games: list[dict] = []
+    seen_ids: set[str] = set()
+    for day in [*recent_days, *upcoming_days]:
+        try:
+            games_for_day = _fetch_games_for_date(day)
+        except Exception as exc:
+            logging.debug("NBA playoffs fallback fetch failed (%s): %s", day, exc)
+            continue
+        for game in games_for_day or []:
+            game_id = str(game.get("gamePk") or game.get("id") or "")
+            if game_id and game_id in seen_ids:
+                continue
+            if game_id:
+                seen_ids.add(game_id)
+            all_games.append(game)
+
+    return _derive_playoff_matchups_from_games(all_games)
+
+
 def _derive_playoff_matchups_from_games(games: list[dict]) -> list[dict]:
     def _team_from_game_side(game: dict, side: str) -> dict:
         direct = game.get(f"{side}Team") or game.get(side)
@@ -335,17 +445,18 @@ def _derive_playoff_matchups_from_games(games: list[dict]) -> list[dict]:
                 return nested
         return {}
 
-    results: list[dict] = []
-    seen: set[tuple[str, str]] = set()
+    result_by_pair: dict[tuple[str, str], dict] = {}
     for game in games or []:
         away_team = _team_from_game_side(game, "away")
         home_team = _team_from_game_side(game, "home")
         key = (_team_logo_abbr(away_team), _team_logo_abbr(home_team))
-        if not all(key) or key in seen:
+        if not all(key):
             continue
-        seen.add(key)
-        results.append(
-            {
+        reverse_key = (key[1], key[0])
+
+        existing = result_by_pair.get(key) or result_by_pair.get(reverse_key)
+        if existing is None:
+            existing = {
                 "teams": {
                     "away": {"team": away_team, "score": 0},
                     "home": {"team": home_team, "score": 0},
@@ -353,8 +464,39 @@ def _derive_playoff_matchups_from_games(games: list[dict]) -> list[dict]:
                 "status_text": "Series",
                 "next_text": "Next: TBD",
             }
-        )
-    return results
+            result_by_pair[key] = existing
+
+        if _is_final_game(game):
+            away_score = _as_int(((game.get("teams") or {}).get("away") or {}).get("score"))
+            home_score = _as_int(((game.get("teams") or {}).get("home") or {}).get("score"))
+            if away_score is not None and home_score is not None and away_score != home_score:
+                if key in result_by_pair:
+                    winner_side = "away" if away_score > home_score else "home"
+                else:
+                    winner_side = "home" if away_score > home_score else "away"
+                existing["teams"][winner_side]["score"] = int(existing["teams"][winner_side]["score"]) + 1
+
+        detailed = _status_text(game)
+        parsed = _parse_series_record_from_text(detailed)
+        if parsed:
+            if key in result_by_pair:
+                existing["teams"]["away"]["score"] = parsed[0]
+                existing["teams"]["home"]["score"] = parsed[1]
+            else:
+                existing["teams"]["away"]["score"] = parsed[1]
+                existing["teams"]["home"]["score"] = parsed[0]
+            existing["status_text"] = detailed
+
+        start_date = game.get("gameDate")
+        game_dt = _extract_next_game_dt(start_date)
+        if game_dt and game_dt >= datetime.datetime.now(CENTRAL_TIME):
+            next_text = f"Next: {game_dt.month}/{game_dt.day} {game_dt.strftime('%-I:%M %p')}"
+            if key in result_by_pair:
+                existing["next_text"] = next_text
+            elif existing.get("next_text") == "Next: TBD":
+                existing["next_text"] = next_text
+
+    return list(result_by_pair.values())
 
 
 def _draw_game_block(canvas: Image.Image, draw: ImageDraw.ImageDraw, game: dict, top: int):
@@ -468,6 +610,8 @@ def render_nba_playoffs(display, games: list[dict], transition: bool = False) ->
     series = _fetch_playoff_matchups()
     if not series:
         series = _derive_playoff_matchups_from_games(games)
+    if not series:
+        series = _derive_playoff_matchups_from_recent_games()
 
     if not series:
         clear_display(display)
