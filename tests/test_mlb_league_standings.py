@@ -201,3 +201,24 @@ def test_draw_stat_headers_centers_labels_in_column(monkeypatch):
     assert probe.calls[0] == ((180, 50), "Record", "mm")
     assert probe.calls[1] == ((280, 50), "L10", "mm")
     assert probe.calls[2] == ((365, 50), "GB", "mm")
+
+
+def test_wide_layout_centers_record_and_midpoints_l10(monkeypatch):
+    monkeypatch.setattr(mlb_league_standings, "SHOW_LAST_10", True)
+    monkeypatch.setattr(mlb_league_standings, "SHOW_WIN_PCT", True)
+    monkeypatch.setattr(mlb_league_standings, "WIDTH", 480)
+    monkeypatch.setattr(mlb_league_standings, "RIGHT_MARGIN", 8)
+    monkeypatch.setattr(mlb_league_standings, "LEFT_MARGIN", 5)
+    monkeypatch.setattr(mlb_league_standings, "LOGO_SIZE", 24)
+    monkeypatch.setattr(mlb_league_standings, "TEAM_GAP", 6)
+
+    draw = ImageDraw.Draw(Image.new("RGB", (480, 320), (0, 0, 0)))
+    rows = [{"wins": "99", "losses": "62", "pct": ".615", "last10": "8-2", "gb": "12 1/2"}]
+    layout = mlb_league_standings._column_layout(draw, rows)
+
+    record_center = layout["record"] - (layout["record_width"] / 2.0)
+    last10_center = layout["last10"] - (layout["last10_width"] / 2.0)
+    gb_center = layout["gb"] - (layout["gb_width"] / 2.0)
+
+    assert abs(record_center - (mlb_league_standings.WIDTH / 2.0)) <= 1.0
+    assert abs(last10_center - ((record_center + gb_center) / 2.0)) <= 1.0
