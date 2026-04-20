@@ -60,12 +60,12 @@ def test_projected_matchups_from_standings_builds_first_round_bracket():
 
 def test_format_next_text_omits_timezone():
     text = nhl_playoffs._format_next_text({"nextGameStartTimeUTC": "2026-04-20T00:30:00Z"})
-    assert text == "Next: 4/19 7:30 PM"
+    assert text == "4/19 7:30 PM"
 
 
 def test_format_next_text_supports_date_only_without_time():
     text = nhl_playoffs._format_next_text({"nextGameDate": "2026-04-27"})
-    assert text == "Next: 4/27"
+    assert text == "4/27"
 
 
 def test_conference_buckets_order_by_seed():
@@ -137,7 +137,7 @@ def test_normalize_series_item_reads_nested_wins_and_hides_projected_status():
     assert normalized["teams"]["away"]["score"] == 3
     assert normalized["teams"]["home"]["score"] == 2
     assert normalized["status_text"] == ""
-    assert normalized["next_text"] == "Next: 4/19 9:00 PM"
+    assert normalized["next_text"] == "4/19 9 PM"
 
 
 def test_normalize_series_item_supports_rounds_series_topseed_bottomseed_shape():
@@ -163,7 +163,7 @@ def test_series_next_text_from_games_uses_upcoming_matchup_time(monkeypatch):
             "away": {"team": {"abbrev": "BUF"}, "score": 1},
             "home": {"team": {"abbrev": "BOS"}, "score": 0},
         },
-        "next_text": "Next: TBD",
+        "next_text": "TBD",
     }
     games = [
         {
@@ -188,7 +188,7 @@ def test_series_next_text_from_games_uses_upcoming_matchup_time(monkeypatch):
             return cls(2026, 4, 20, 12, 0, tzinfo=tz)
 
     monkeypatch.setattr(nhl_playoffs.datetime, "datetime", _FixedNow)
-    assert nhl_playoffs._series_next_text_from_games(series, games) == "Next: Tonight 8:00 PM"
+    assert nhl_playoffs._series_next_text_from_games(series, games) == "Tonight 8 PM"
 
 
 def test_series_next_text_from_games_uses_date_only_when_time_is_tbd(monkeypatch):
@@ -197,7 +197,7 @@ def test_series_next_text_from_games_uses_date_only_when_time_is_tbd(monkeypatch
             "away": {"team": {"abbrev": "BUF"}, "score": 1},
             "home": {"team": {"abbrev": "BOS"}, "score": 0},
         },
-        "next_text": "Next: TBD",
+        "next_text": "TBD",
     }
     games = [
         {
@@ -215,23 +215,23 @@ def test_series_next_text_from_games_uses_date_only_when_time_is_tbd(monkeypatch
             return cls(2026, 4, 20, 12, 0, tzinfo=tz)
 
     monkeypatch.setattr(nhl_playoffs.datetime, "datetime", _FixedNow)
-    assert nhl_playoffs._series_next_text_from_games(series, games) == "Next: 4/27"
+    assert nhl_playoffs._series_next_text_from_games(series, games) == "4/27"
 
 
 def test_normalize_next_text_strips_known_timezone_and_leading_zeroes():
-    assert nhl_playoffs._normalize_next_text("Next: 04/09 8:00 PM ET") == "Next: 4/9 8:00 PM"
+    assert nhl_playoffs._normalize_next_text("Next: 04/09 8:00 PM ET") == "4/9 8 PM"
 
 
 def test_normalize_next_text_keeps_text_without_timezone_unchanged():
-    assert nhl_playoffs._normalize_next_text("Next: 4/9 8:00 PM") == "Next: 4/9 8:00 PM"
+    assert nhl_playoffs._normalize_next_text("Next: 4/9 8:00 PM") == "4/9 8 PM"
 
 
 def test_normalize_next_text_keeps_meridiem_suffix():
-    assert nhl_playoffs._normalize_next_text("Next: 4/9 8:00 AM") == "Next: 4/9 8:00 AM"
+    assert nhl_playoffs._normalize_next_text("Next: 4/9 8:00 AM") == "4/9 8 AM"
 
 
 def test_normalize_next_text_preserves_tbd():
-    assert nhl_playoffs._normalize_next_text("Next: TBD") == "Next: TBD"
+    assert nhl_playoffs._normalize_next_text("Next: TBD") == "TBD"
 
 
 def test_normalize_next_text_uses_tonight_when_date_matches_today(monkeypatch):
@@ -241,7 +241,7 @@ def test_normalize_next_text_uses_tonight_when_date_matches_today(monkeypatch):
             return cls(2026, 4, 9, 10, 0, tzinfo=tz)
 
     monkeypatch.setattr(nhl_playoffs.datetime, "datetime", _FixedNow)
-    assert nhl_playoffs._normalize_next_text("Next: 04/09 8:00 PM ET") == "Next: Tonight 8:00 PM"
+    assert nhl_playoffs._normalize_next_text("Next: 04/09 8:00 PM ET") == "Tonight 8 PM"
 
 
 def test_normalize_next_text_uses_tomorrow_when_date_matches_next_day(monkeypatch):
@@ -251,7 +251,7 @@ def test_normalize_next_text_uses_tomorrow_when_date_matches_next_day(monkeypatc
             return cls(2026, 4, 8, 10, 0, tzinfo=tz)
 
     monkeypatch.setattr(nhl_playoffs.datetime, "datetime", _FixedNow)
-    assert nhl_playoffs._normalize_next_text("Next: 04/09 8:00 PM ET") == "Next: Tomorrow 8:00 PM"
+    assert nhl_playoffs._normalize_next_text("Next: 04/09 8:00 PM ET") == "Tomorrow 8 PM"
 
 
 def test_team_abbr_supports_localized_team_abbrev_shapes():
@@ -298,4 +298,4 @@ def test_format_next_text_supports_nested_next_game_schedule(monkeypatch):
             }
         }
     )
-    assert text == "Next: Tomorrow 8:00 PM"
+    assert text == "Tomorrow 8 PM"
