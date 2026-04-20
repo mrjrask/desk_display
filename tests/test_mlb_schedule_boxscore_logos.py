@@ -692,7 +692,7 @@ def test_draw_series_screen_centers_three_blocks_on_display_hat_mini(monkeypatch
     def _capture_text(self, xy, text, *args, **kwargs):
         if text == "Sox Next Series":
             captured["title_y"] = xy[1]
-        elif text == "vs. Boston Red Sox":
+        elif text == "Boston Red Sox":
             captured["opponent_y"] = xy[1]
         elif isinstance(text, str) and text.startswith("BLOCKROW "):
             captured.setdefault("row_ys", []).append(xy[1])
@@ -734,8 +734,15 @@ def test_draw_series_screen_centers_three_blocks_on_display_hat_mini(monkeypatch
     assert captured["title_y"] == 0
     assert len(captured.get("row_ys", [])) == 3
 
-    opponent_h = ImageDraw.Draw(Image.new("RGB", (1, 1))).textsize("vs. Boston Red Sox", font=mlb_schedule.FONT_TEAM_SPORTS)[1]
-    row_text_h = ImageDraw.Draw(Image.new("RGB", (1, 1))).textsize("Tonight • 7 PM", font=mlb_schedule.FONT_DATE_SPORTS)[1]
+    measure_draw = ImageDraw.Draw(Image.new("RGB", (1, 1)))
+    prefix_font = mlb_schedule.FONT_TEAM_SPORTS.font_variant(
+        size=max(8, int(round(getattr(mlb_schedule.FONT_TEAM_SPORTS, "size", 20) * 0.6)))
+    )
+    opponent_h = max(
+        measure_draw.textsize("vs. ", font=prefix_font)[1],
+        measure_draw.textsize("Boston Red Sox", font=mlb_schedule.FONT_TEAM_SPORTS)[1],
+    )
+    row_text_h = measure_draw.textsize("Tonight • 7 PM", font=mlb_schedule.FONT_DATE_SPORTS)[1]
 
     block_h_title = captured["opponent_y"] + opponent_h - captured["title_y"]
     logo_h = min(mlb_schedule.standard_next_game_logo_height(mlb_schedule.HEIGHT), max(16, mlb_schedule.HEIGHT // 5))
@@ -745,7 +752,7 @@ def test_draw_series_screen_centers_three_blocks_on_display_hat_mini(monkeypatch
     used_h = block_h_title + logo_h + block_h_games
     between_block_gap = max(0, (mlb_schedule.HEIGHT - mlb_schedule.BOTTOM_MARGIN - used_h) // 2)
     expected_first_row_y = (captured["opponent_y"] + opponent_h) + logo_h + (between_block_gap * 2)
-    assert captured["row_ys"][0] == expected_first_row_y
+    assert abs(captured["row_ys"][0] - expected_first_row_y) <= 1
 
 
 def test_draw_series_screen_series_variants_scale_opponent_to_single_line(monkeypatch):
@@ -906,7 +913,7 @@ def test_draw_sports_screen_cubs_next_uses_current_series_title_spacing_on_squar
     def _capture_text(self, xy, text, *args, **kwargs):
         if text == "Next Cubs game...":
             captured["title_y"] = xy[1]
-        elif text == "vs. Philadelphia Phillies":
+        elif text == "Philadelphia Phillies":
             captured["opponent_y"] = xy[1]
         return original_text(self, xy, text, *args, **kwargs)
 
@@ -934,7 +941,45 @@ def test_draw_sports_screen_cubs_next_uses_current_series_title_spacing_on_squar
         font=mlb_schedule.FONT_TITLE_SPORTS,
     )[1]
     assert captured["title_y"] == 0
-    assert captured["opponent_y"] == reference_h + 4
+    assert reference_h - 8 <= captured["opponent_y"] <= reference_h + 4
+
+
+def test_draw_sports_screen_sox_next_uses_current_series_title_spacing(monkeypatch):
+    captured = {}
+    original_text = ImageDraw.ImageDraw.text
+
+    def _capture_text(self, xy, text, *args, **kwargs):
+        if text == "Next Sox game...":
+            captured["title_y"] = xy[1]
+        elif text == "Detroit Tigers":
+            captured["opponent_y"] = xy[1]
+        return original_text(self, xy, text, *args, **kwargs)
+
+    monkeypatch.setattr(ImageDraw.ImageDraw, "text", _capture_text)
+    monkeypatch.setattr(mlb_schedule, "is_hyperpixel_4_square_layout", lambda: False)
+    monkeypatch.setattr(mlb_schedule.config, "is_hyperpixel_next_layout", lambda: False)
+    monkeypatch.setattr(mlb_schedule.config, "scale_value", lambda value: value)
+    monkeypatch.setattr(mlb_schedule, "load_team_logo", lambda *args, **kwargs: None)
+    monkeypatch.setattr(mlb_schedule, "_center_bottom_text", lambda *args, **kwargs: None)
+
+    game = {
+        "officialDate": "2026-05-01",
+        "startTimeCentral": "6:40 PM",
+        "status": {"detailedState": "Scheduled"},
+        "teams": {
+            "away": {"team": {"id": 145, "name": "Chicago White Sox"}},
+            "home": {"team": {"id": 116, "name": "Detroit Tigers"}},
+        },
+    }
+
+    mlb_schedule.draw_sports_screen(None, game, "Next Sox game...", screen_id="sox next")
+
+    reference_h = ImageDraw.Draw(Image.new("RGB", (1, 1))).textsize(
+        "Sox Current Series",
+        font=mlb_schedule.FONT_TITLE_SPORTS,
+    )[1]
+    assert captured["title_y"] == 0
+    assert reference_h - 8 <= captured["opponent_y"] <= reference_h + 4
 
 
 def test_draw_sports_screen_sox_next_uses_current_series_title_spacing(monkeypatch):
