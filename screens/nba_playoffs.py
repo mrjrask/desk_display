@@ -401,10 +401,24 @@ def _parse_series_record_from_text(text: str) -> Optional[tuple[int, int]]:
     raw = str(text or "").strip()
     if not raw:
         return None
+    lowered = raw.lower()
+    if "series" not in lowered and "leads" not in lowered and "tied" not in lowered:
+        return None
     match = re.search(r"\b(\d+)\s*-\s*(\d+)\b", raw)
     if not match:
         return None
     return int(match.group(1)), int(match.group(2))
+
+
+def _looks_like_playoff_game(game: dict) -> bool:
+    game_id = str(game.get("gamePk") or game.get("id") or game.get("gameId") or "").strip()
+    if game_id.startswith("004") or game_id.startswith("005"):
+        return True
+    game_type = str(game.get("gameType") or game.get("seasonType") or game.get("seasonStage") or "").strip().lower()
+    if game_type in {"p", "playoffs", "postseason", "post-season", "4", "5", "004", "005"}:
+        return True
+    status_text = _status_text(game).lower()
+    return "series" in status_text and ("lead" in status_text or "tied" in status_text)
 
 
 def _derive_playoff_matchups_from_recent_games(now: Optional[datetime.datetime] = None) -> list[dict]:
@@ -445,16 +459,20 @@ def _derive_playoff_matchups_from_games(games: list[dict]) -> list[dict]:
                 return nested
         return {}
 
+    filtered_games = [game for game in (games or []) if _looks_like_playoff_game(game)]
+    source_games = filtered_games if filtered_games else (games or [])
+
     result_by_pair: dict[tuple[str, str], dict] = {}
-    for game in games or []:
+    for game in source_games:
         away_team = _team_from_game_side(game, "away")
         home_team = _team_from_game_side(game, "home")
-        key = (_team_logo_abbr(away_team), _team_logo_abbr(home_team))
-        if not all(key):
+        away_abbr = _team_logo_abbr(away_team)
+        home_abbr = _team_logo_abbr(home_team)
+        if not away_abbr or not home_abbr:
             continue
-        reverse_key = (key[1], key[0])
+        key = tuple(sorted((away_abbr, home_abbr)))
 
-        existing = result_by_pair.get(key) or result_by_pair.get(reverse_key)
+        existing = result_by_pair.get(key)
         if existing is None:
             existing = {
                 "teams": {
@@ -470,21 +488,16 @@ def _derive_playoff_matchups_from_games(games: list[dict]) -> list[dict]:
             away_score = _as_int(((game.get("teams") or {}).get("away") or {}).get("score"))
             home_score = _as_int(((game.get("teams") or {}).get("home") or {}).get("score"))
             if away_score is not None and home_score is not None and away_score != home_score:
-                if key in result_by_pair:
-                    winner_side = "away" if away_score > home_score else "home"
-                else:
-                    winner_side = "home" if away_score > home_score else "away"
+                winner_abbr = away_abbr if away_score > home_score else home_abbr
+                stored_away_abbr = _team_logo_abbr((existing["teams"]["away"] or {}).get("team") or {})
+                winner_side = "away" if winner_abbr == stored_away_abbr else "home"
                 existing["teams"][winner_side]["score"] = int(existing["teams"][winner_side]["score"]) + 1
 
         detailed = _status_text(game)
         parsed = _parse_series_record_from_text(detailed)
         if parsed:
-            if key in result_by_pair:
-                existing["teams"]["away"]["score"] = parsed[0]
-                existing["teams"]["home"]["score"] = parsed[1]
-            else:
-                existing["teams"]["away"]["score"] = parsed[1]
-                existing["teams"]["home"]["score"] = parsed[0]
+            existing["teams"]["away"]["score"] = parsed[0]
+            existing["teams"]["home"]["score"] = parsed[1]
             existing["status_text"] = detailed
 
         start_date = game.get("gameDate")
@@ -609,9 +622,9 @@ def render_nba_playoffs(display, games: list[dict], transition: bool = False) ->
 
     series = _fetch_playoff_matchups()
     if not series:
-        series = _derive_playoff_matchups_from_games(games)
-    if not series:
         series = _derive_playoff_matchups_from_recent_games()
+    if not series:
+        series = _derive_playoff_matchups_from_games(games)
 
     if not series:
         clear_display(display)
