@@ -322,11 +322,24 @@ def _fetch_playoff_matchups() -> list[dict]:
 
 
 def _derive_playoff_matchups_from_games(games: list[dict]) -> list[dict]:
+    def _team_from_game_side(game: dict, side: str) -> dict:
+        direct = game.get(f"{side}Team") or game.get(side)
+        if isinstance(direct, dict) and direct:
+            return direct
+        teams = game.get("teams")
+        if isinstance(teams, dict):
+            nested = teams.get(side)
+            if isinstance(nested, dict):
+                if isinstance(nested.get("team"), dict):
+                    return nested.get("team") or {}
+                return nested
+        return {}
+
     results: list[dict] = []
     seen: set[tuple[str, str]] = set()
     for game in games or []:
-        away_team = (game.get("awayTeam") or game.get("away") or {})
-        home_team = (game.get("homeTeam") or game.get("home") or {})
+        away_team = _team_from_game_side(game, "away")
+        home_team = _team_from_game_side(game, "home")
         key = (_team_logo_abbr(away_team), _team_logo_abbr(home_team))
         if not all(key) or key in seen:
             continue

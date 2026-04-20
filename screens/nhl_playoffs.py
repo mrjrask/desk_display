@@ -373,6 +373,22 @@ def _extract_next_game_info(series: dict) -> tuple[Optional[datetime.datetime], 
             dt = _parse_datetime(value)
             if dt:
                 return dt, _value_has_time_component(value)
+    for container_key in ("nextGameSchedule", "nextGameInfo"):
+        nested = series.get(container_key)
+        if isinstance(nested, dict):
+            for key in (
+                "startTimeUTC",
+                "startTime",
+                "scheduledStartTimeUTC",
+                "gameDateUTC",
+                "gameDateTime",
+                "gameDate",
+                "date",
+            ):
+                value = nested.get(key)
+                dt = _parse_datetime(value)
+                if dt:
+                    return dt, _value_has_time_component(value)
     return None, False
 
 
