@@ -256,7 +256,10 @@ def _dict_localized_text(value: Any) -> str:
 def _team_abbr(team: dict) -> str:
     if not isinstance(team, dict):
         return ""
-    for key in ("abbreviation", "abbrev", "teamAbbrev", "triCode", "shortName", "code"):
+
+    # Prefer canonical tri-codes/abbreviations first (including nested payloads)
+    # before falling back to human-readable labels such as shortName/code.
+    for key in ("abbreviation", "abbrev", "teamAbbrev", "triCode"):
         candidate = _dict_localized_text(team.get(key))
         if candidate:
             return candidate.upper()
@@ -265,6 +268,10 @@ def _team_abbr(team: dict) -> str:
         nested_abbr = _team_abbr(nested_team)
         if nested_abbr:
             return nested_abbr
+    for key in ("shortName", "code"):
+        candidate = _dict_localized_text(team.get(key))
+        if candidate:
+            return candidate.upper()
     return _team_logo_abbr(team)
 
 

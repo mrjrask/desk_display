@@ -137,6 +137,12 @@ def test_team_abbr_supports_localized_team_abbrev_shapes():
     assert nhl_playoffs._team_abbr({"team": {"triCode": "car"}}) == "CAR"
 
 
+def test_team_abbr_prefers_nested_canonical_abbreviation_over_localized_short_name():
+    team = {"shortName": {"default": "Rangers"}, "team": {"abbreviation": "NYR"}}
+
+    assert nhl_playoffs._team_abbr(team) == "NYR"
+
+
 def test_first_present_int_supports_record_text():
     assert nhl_playoffs._first_present_int(["3-2", None]) == 3
 
