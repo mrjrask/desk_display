@@ -1342,7 +1342,12 @@ def draw_series_screen(display, games, title, transition=False, screen_id: Optio
         rows_top = row_y + logo_h + between_block_gap
         extra_row_gap = 0
 
-    draw.text(((WIDTH - tw) // 2, edge_pad), title, font=FONT_TITLE_SPORTS, fill=(255, 255, 255))
+    title_fill = (
+        config.SCOREBOARD_IN_PROGRESS_SCORE_COLOR
+        if title in {"Cubs Current Series", "Sox Current Series"}
+        else (255, 255, 255)
+    )
+    draw.text(((WIDTH - tw) // 2, edge_pad), title, font=FONT_TITLE_SPORTS, fill=title_fill)
     text_line_y = y_text
     for ln in lines:
         lw, lh = draw.textsize(ln, font=opponent_font)
