@@ -299,3 +299,93 @@ def test_format_next_text_supports_nested_next_game_schedule(monkeypatch):
         }
     )
     assert text == "Tomorrow 8 PM"
+
+
+def test_fetch_remaining_playoff_schedule_games_includes_upcoming_through_june(monkeypatch):
+    class _FixedNow(datetime.datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return cls(2026, 4, 20, 12, 0, tzinfo=tz)
+
+    class _Response:
+        def __init__(self, payload):
+            self._payload = payload
+
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            return self._payload
+
+    payload = {
+        "gameWeek": [
+            {
+                "games": [
+                    {
+                        "id": 1,
+                        "startTimeUTC": "2026-05-02T00:00:00Z",
+                        "awayTeam": {"abbrev": "WPG"},
+                        "homeTeam": {"abbrev": "DAL"},
+                    },
+                    {
+                        "id": 2,
+                        "gameDate": "2026-07-02T00:00:00Z",
+                        "awayTeam": {"abbrev": "NYR"},
+                        "homeTeam": {"abbrev": "CAR"},
+                    },
+                ]
+            }
+        ]
+    }
+
+    monkeypatch.setattr(nhl_playoffs.datetime, "datetime", _FixedNow)
+    monkeypatch.setattr(
+        nhl_playoffs._SESSION,
+        "get",
+        lambda *_args, **_kwargs: _Response(payload),
+    )
+
+    games = nhl_playoffs._fetch_remaining_playoff_schedule_games()
+    assert len(games) == 1
+    assert games[0]["gamePk"] == 1
+
+
+def test_render_nhl_playoffs_enriches_next_text_with_official_schedule(monkeypatch):
+    class _DisplayStub:
+        def image(self, _img):
+            return None
+
+    monkeypatch.setattr(nhl_playoffs, "_apply_style_overrides", lambda: None)
+    monkeypatch.setattr(
+        nhl_playoffs,
+        "_fetch_playoff_matchups",
+        lambda: [
+            {
+                "teams": {
+                    "away": {"team": {"abbreviation": "WPG"}, "score": 1},
+                    "home": {"team": {"abbreviation": "DAL"}, "score": 1},
+                },
+                "next_text": "TBD",
+                "conference": "west",
+            }
+        ],
+    )
+    monkeypatch.setattr(nhl_playoffs, "_fetch_projected_matchups_from_standings", lambda: [])
+    monkeypatch.setattr(
+        nhl_playoffs,
+        "_fetch_remaining_playoff_schedule_games",
+        lambda: [{"gameDate": "2026-04-28", "teams": {"away": {"team": {"abbreviation": "WPG"}}, "home": {"team": {"abbreviation": "DAL"}}}}],
+    )
+    captured = {}
+
+    def _render(series):
+        captured["series"] = series
+        return __import__("PIL").Image.new("RGB", (10, 10))
+
+    monkeypatch.setattr(nhl_playoffs, "_render_playoff_screen", _render)
+    monkeypatch.setattr(nhl_playoffs.time, "sleep", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(nhl_playoffs, "HEIGHT", 100)
+
+    rendered = nhl_playoffs.render_nhl_playoffs(_DisplayStub(), games=[], transition=False)
+    assert rendered.displayed is True
+    assert captured["series"][0]["next_text"] == "4/28"
