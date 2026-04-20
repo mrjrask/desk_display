@@ -313,6 +313,15 @@ def _parse_datetime(value: Any) -> Optional[datetime.datetime]:
     return dt.astimezone(CENTRAL_TIME)
 
 
+def _value_has_time_component(value: Any) -> bool:
+    if isinstance(value, datetime.datetime):
+        return True
+    text = str(value or "").strip()
+    if not text:
+        return False
+    return "T" in text or " " in text
+
+
 def _extract_next_game_dt(series: dict) -> Optional[datetime.datetime]:
     candidate_keys = (
         "nextGameStartTimeUTC",
@@ -339,6 +348,34 @@ def _extract_next_game_dt(series: dict) -> Optional[datetime.datetime]:
     return None
 
 
+def _extract_next_game_info(series: dict) -> tuple[Optional[datetime.datetime], bool]:
+    candidate_keys = (
+        "nextGameStartTimeUTC",
+        "nextGameStartTime",
+        "nextGameDateTimeUTC",
+        "nextGameDateTime",
+        "nextGameUtc",
+        "nextGameDate",
+        "startTimeUTC",
+        "gameDateUTC",
+        "gameDateTime",
+        "gameDate",
+    )
+    for key in candidate_keys:
+        value = series.get(key)
+        dt = _parse_datetime(value)
+        if dt:
+            return dt, _value_has_time_component(value)
+    next_game = series.get("nextGame")
+    if isinstance(next_game, dict):
+        for key in ("startTimeUTC", "startTime", "gameDateUTC", "gameDateTime", "gameDate", "date"):
+            value = next_game.get(key)
+            dt = _parse_datetime(value)
+            if dt:
+                return dt, _value_has_time_component(value)
+    return None, False
+
+
 def _first_present_int(values: list[Any], default: int = 0) -> int:
     for value in values:
         parsed = _as_int(value)
@@ -352,14 +389,18 @@ def _first_present_int(values: list[Any], default: int = 0) -> int:
 
 
 def _format_next_text(series: dict) -> str:
-    dt = _extract_next_game_dt(series)
+    dt, has_time = _extract_next_game_info(series)
     if not dt:
         return "Next: TBD"
     day_label = _next_day_label(dt)
     if day_label:
-        return f"Next: {day_label} {dt.strftime('%-I:%M %p')}"
+        if has_time:
+            return f"Next: {day_label} {dt.strftime('%-I:%M %p')}"
+        return f"Next: {day_label}"
     month = dt.month
     day = dt.day
+    if not has_time:
+        return f"Next: {month}/{day}"
     time_text = dt.strftime("%-I:%M %p")
     return f"Next: {month}/{day} {time_text}"
 
@@ -769,25 +810,35 @@ def _series_next_text_from_games(series: dict, games: list[dict]) -> str:
 
     now = datetime.datetime.now(CENTRAL_TIME)
     next_dt: Optional[datetime.datetime] = None
+    next_has_time = True
     for game in games or []:
         game_teams = game.get("teams") or {}
         game_away_abbr = _team_abbr(((game_teams.get("away") or {}).get("team") or {}))
         game_home_abbr = _team_abbr(((game_teams.get("home") or {}).get("team") or {}))
         if {game_away_abbr, game_home_abbr} != {away_abbr, home_abbr}:
             continue
-        candidate_dt = _extract_next_game_dt(game)
-        if not candidate_dt or candidate_dt < now:
+        candidate_dt, candidate_has_time = _extract_next_game_info(game)
+        if not candidate_dt:
+            continue
+        if candidate_has_time and candidate_dt < now:
+            continue
+        if (not candidate_has_time) and candidate_dt.date() < now.date():
             continue
         if next_dt is None or candidate_dt < next_dt:
             next_dt = candidate_dt
+            next_has_time = candidate_has_time
 
     if not next_dt:
         return _normalize_next_text(series.get("next_text") or "Next: TBD")
     day_label = _next_day_label(next_dt, now=now)
     if day_label:
-        return f"Next: {day_label} {next_dt.strftime('%-I:%M %p')}"
+        if next_has_time:
+            return f"Next: {day_label} {next_dt.strftime('%-I:%M %p')}"
+        return f"Next: {day_label}"
     month = next_dt.month
     day = next_dt.day
+    if not next_has_time:
+        return f"Next: {month}/{day}"
     time_text = next_dt.strftime("%-I:%M %p")
     return f"Next: {month}/{day} {time_text}"
 
