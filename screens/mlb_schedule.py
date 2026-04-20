@@ -1012,7 +1012,7 @@ def draw_sports_screen(display, game, title, transition=False, screen_id: Option
         min_pt=max(8, int(round(getattr(FONT_TEAM_SPORTS, "size", 20) * 0.6))),
     )
     title_line_h = th
-    if is_hyperpixel_4_square_layout() and normalized_screen_id in {"cubs next", "sox next"}:
+    if normalized_screen_id in {"cubs next", "sox next"}:
         reference_title = "Cubs Current Series" if normalized_screen_id == "cubs next" else "Sox Current Series"
         _, reference_h = draw.textsize(reference_title, font=FONT_TITLE_SPORTS)
         title_line_h = reference_h
