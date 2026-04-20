@@ -63,6 +63,11 @@ def test_format_next_text_omits_timezone():
     assert text == "Next: 4/19 7:30 PM"
 
 
+def test_format_next_text_supports_date_only_without_time():
+    text = nhl_playoffs._format_next_text({"nextGameDate": "2026-04-27"})
+    assert text == "Next: 4/27"
+
+
 def test_conference_buckets_order_by_seed():
     series = [
         {"conference": "west", "higher_seed": 3, "lower_seed": 6, "teams": {"away": {"team": {"abbreviation": "AAA"}}, "home": {"team": {"abbreviation": "BBB"}}}},
@@ -184,6 +189,33 @@ def test_series_next_text_from_games_uses_upcoming_matchup_time(monkeypatch):
 
     monkeypatch.setattr(nhl_playoffs.datetime, "datetime", _FixedNow)
     assert nhl_playoffs._series_next_text_from_games(series, games) == "Next: Tonight 8:00 PM"
+
+
+def test_series_next_text_from_games_uses_date_only_when_time_is_tbd(monkeypatch):
+    series = {
+        "teams": {
+            "away": {"team": {"abbrev": "BUF"}, "score": 1},
+            "home": {"team": {"abbrev": "BOS"}, "score": 0},
+        },
+        "next_text": "Next: TBD",
+    }
+    games = [
+        {
+            "gameDate": "2026-04-27",
+            "teams": {
+                "away": {"team": {"abbreviation": "BUF"}},
+                "home": {"team": {"abbreviation": "BOS"}},
+            },
+        },
+    ]
+
+    class _FixedNow(datetime.datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return cls(2026, 4, 20, 12, 0, tzinfo=tz)
+
+    monkeypatch.setattr(nhl_playoffs.datetime, "datetime", _FixedNow)
+    assert nhl_playoffs._series_next_text_from_games(series, games) == "Next: 4/27"
 
 
 def test_normalize_next_text_strips_known_timezone_and_leading_zeroes():
