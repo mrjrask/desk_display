@@ -234,6 +234,15 @@ def _normalize_conference_label(value: Any) -> str:
     return ""
 
 
+def _conference_from_series_letter(value: Any) -> str:
+    text = str(value or "").strip().upper()
+    if text in {"A", "B", "C", "D"}:
+        return "east"
+    if text in {"E", "F", "G", "H"}:
+        return "west"
+    return ""
+
+
 def _first_int(values: list[Any]) -> Optional[int]:
     for value in values:
         parsed = _as_int(value)
@@ -347,8 +356,8 @@ def _normalize_series_item(series: dict) -> Optional[dict]:
     if not isinstance(series, dict):
         return None
 
-    away_team = _team_from_series(series, "awayTeam", "topSeedTeam", "team1", "homeTeam1")
-    home_team = _team_from_series(series, "homeTeam", "bottomSeedTeam", "team2", "homeTeam2")
+    away_team = _team_from_series(series, "awayTeam", "topSeedTeam", "topSeed", "team1", "homeTeam1")
+    home_team = _team_from_series(series, "homeTeam", "bottomSeedTeam", "bottomSeed", "team2", "homeTeam2")
 
     away_wins = _first_present_int(
         [
@@ -356,6 +365,7 @@ def _normalize_series_item(series: dict) -> Optional[dict]:
             series.get("topSeedWins"),
             series.get("team1Wins"),
             series.get("topSeedTeamWins"),
+            series.get("topSeed", {}).get("wins") if isinstance(series.get("topSeed"), dict) else None,
             away_team.get("wins") if isinstance(away_team, dict) else None,
             away_team.get("seriesWins") if isinstance(away_team, dict) else None,
         ]
@@ -366,6 +376,7 @@ def _normalize_series_item(series: dict) -> Optional[dict]:
             series.get("bottomSeedWins"),
             series.get("team2Wins"),
             series.get("bottomSeedTeamWins"),
+            series.get("bottomSeed", {}).get("wins") if isinstance(series.get("bottomSeed"), dict) else None,
             home_team.get("wins") if isinstance(home_team, dict) else None,
             home_team.get("seriesWins") if isinstance(home_team, dict) else None,
         ]
@@ -376,17 +387,10 @@ def _normalize_series_item(series: dict) -> Optional[dict]:
     if not away_abbr or not home_abbr:
         return None
 
-    status = (
-        series.get("seriesStatusShort")
-        or series.get("seriesStatus")
-        or series.get("seriesTitle")
-        or series.get("roundLabel")
-        or "Series"
-    )
-    status_text = "" if str(status).strip().lower() == "projected" else str(status)
     conference = _normalize_conference_label(
         series.get("conferenceAbbrev")
         or series.get("conferenceName")
+        or _conference_from_series_letter(series.get("seriesLetter"))
         or (away_team.get("conferenceAbbrev") if isinstance(away_team, dict) else None)
         or (home_team.get("conferenceAbbrev") if isinstance(home_team, dict) else None)
     )
@@ -411,7 +415,7 @@ def _normalize_series_item(series: dict) -> Optional[dict]:
             "away": {"team": away_team, "score": away_wins},
             "home": {"team": home_team, "score": home_wins},
         },
-        "status_text": status_text,
+        "status_text": "",
         "conference": conference,
         "higher_seed": higher_seed,
         "lower_seed": lower_seed,
@@ -690,6 +694,37 @@ def _derive_playoff_matchups_from_games(games: list[dict]) -> list[dict]:
     return results
 
 
+def _series_next_text_from_games(series: dict, games: list[dict]) -> str:
+    teams = (series or {}).get("teams") or {}
+    away = ((teams.get("away") or {}).get("team") or {})
+    home = ((teams.get("home") or {}).get("team") or {})
+    away_abbr = _team_abbr(away)
+    home_abbr = _team_abbr(home)
+    if not away_abbr or not home_abbr:
+        return series.get("next_text") or "Next: TBD"
+
+    now = datetime.datetime.now(CENTRAL_TIME)
+    next_dt: Optional[datetime.datetime] = None
+    for game in games or []:
+        game_teams = game.get("teams") or {}
+        game_away_abbr = _team_abbr(((game_teams.get("away") or {}).get("team") or {}))
+        game_home_abbr = _team_abbr(((game_teams.get("home") or {}).get("team") or {}))
+        if {game_away_abbr, game_home_abbr} != {away_abbr, home_abbr}:
+            continue
+        candidate_dt = _extract_next_game_dt(game)
+        if not candidate_dt or candidate_dt < now:
+            continue
+        if next_dt is None or candidate_dt < next_dt:
+            next_dt = candidate_dt
+
+    if not next_dt:
+        return series.get("next_text") or "Next: TBD"
+    month = next_dt.month
+    day = next_dt.day
+    time_text = next_dt.strftime("%-I:%M %p")
+    return f"Next: {month}/{day} {time_text} CDT"
+
+
 def _series_order_key(series: dict) -> tuple[int, int, str, str]:
     higher_seed = _as_int(series.get("higher_seed"))
     lower_seed = _as_int(series.get("lower_seed"))
@@ -750,21 +785,11 @@ def _draw_series_block(canvas: Image.Image, draw: ImageDraw.ImageDraw, series: d
     status_top = score_top + SCORE_ROW_H
     _center_text(
         draw,
-        str(series.get("status_text") or "Series"),
-        STATUS_FONT,
-        left,
-        SERIES_WIDTH,
-        status_top,
-        STATUS_ROW_H,
-        fill=(220, 220, 220),
-    )
-    _center_text(
-        draw,
         series.get("next_text") or "Next: TBD",
         STATUS_SMALL_FONT,
         left,
         SERIES_WIDTH,
-        status_top + STATUS_ROW_H,
+        status_top,
         STATUS_ROW_H,
         fill=(255, 255, 255),
     )
@@ -775,7 +800,7 @@ def _compose_canvas(series: list[dict]) -> Image.Image:
         return Image.new("RGB", (WIDTH, HEIGHT), BACKGROUND_COLOR)
     west_series, east_series = _conference_buckets(series)
     rows = max(len(west_series), len(east_series))
-    block_height = SCORE_ROW_H + (STATUS_ROW_H * 2)
+    block_height = SCORE_ROW_H + STATUS_ROW_H
     total_height = block_height * rows
     if rows > 1:
         total_height += BLOCK_SPACING * (rows - 1)
@@ -858,6 +883,9 @@ def render_nhl_playoffs(display, games: list[dict], transition: bool = False) ->
         series = _fetch_projected_matchups_from_standings()
     if not series:
         series = _derive_playoff_matchups_from_games(games)
+    else:
+        for item in series:
+            item["next_text"] = _series_next_text_from_games(item, games)
 
     if not series:
         clear_display(display)

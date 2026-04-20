@@ -1,3 +1,7 @@
+import datetime
+
+import pytest
+
 from screens import nhl_playoffs
 
 
@@ -129,6 +133,57 @@ def test_normalize_series_item_reads_nested_wins_and_hides_projected_status():
     assert normalized["teams"]["home"]["score"] == 2
     assert normalized["status_text"] == ""
     assert normalized["next_text"] == "Next: 4/19 9:00 PM CDT"
+
+
+def test_normalize_series_item_supports_rounds_series_topseed_bottomseed_shape():
+    normalized = nhl_playoffs._normalize_series_item(
+        {
+            "seriesLetter": "B",
+            "topSeed": {"abbrev": "TBL", "wins": 1},
+            "bottomSeed": {"abbrev": "MTL", "wins": 2},
+        }
+    )
+
+    assert normalized is not None
+    assert normalized["teams"]["away"]["team"]["abbrev"] == "TBL"
+    assert normalized["teams"]["home"]["team"]["abbrev"] == "MTL"
+    assert normalized["teams"]["away"]["score"] == 1
+    assert normalized["teams"]["home"]["score"] == 2
+    assert normalized["conference"] == "east"
+
+
+def test_series_next_text_from_games_uses_upcoming_matchup_time(monkeypatch):
+    series = {
+        "teams": {
+            "away": {"team": {"abbrev": "BUF"}, "score": 1},
+            "home": {"team": {"abbrev": "BOS"}, "score": 0},
+        },
+        "next_text": "Next: TBD",
+    }
+    games = [
+        {
+            "gameDate": "2026-04-18T01:00:00Z",
+            "teams": {
+                "away": {"team": {"abbreviation": "BUF"}},
+                "home": {"team": {"abbreviation": "BOS"}},
+            },
+        },
+        {
+            "gameDate": "2026-04-21T01:00:00Z",
+            "teams": {
+                "away": {"team": {"abbreviation": "BOS"}},
+                "home": {"team": {"abbreviation": "BUF"}},
+            },
+        },
+    ]
+
+    class _FixedNow(datetime.datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return cls(2026, 4, 20, 12, 0, tzinfo=tz)
+
+    monkeypatch.setattr(nhl_playoffs.datetime, "datetime", _FixedNow)
+    assert nhl_playoffs._series_next_text_from_games(series, games) == "Next: 4/20 8:00 PM CDT"
 
 
 def test_team_abbr_supports_localized_team_abbrev_shapes():
