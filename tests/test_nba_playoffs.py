@@ -53,3 +53,20 @@ def test_format_next_text_uses_tonight_label(monkeypatch):
     monkeypatch.setattr(nba_playoffs.datetime, "datetime", _FixedNow)
     text = nba_playoffs._format_next_text({"nextGameStartTimeUTC": "2026-04-21T02:30:00Z"})
     assert text == "Next: Tonight 9:30 PM"
+
+
+def test_derive_playoff_matchups_supports_scoreboard_games_shape():
+    games = [
+        {
+            "teams": {
+                "away": {"team": {"abbreviation": "BOS"}},
+                "home": {"team": {"abbreviation": "NYK"}},
+            }
+        }
+    ]
+
+    derived = nba_playoffs._derive_playoff_matchups_from_games(games)
+
+    assert len(derived) == 1
+    assert derived[0]["teams"]["away"]["team"]["abbreviation"] == "BOS"
+    assert derived[0]["teams"]["home"]["team"]["abbreviation"] == "NYK"

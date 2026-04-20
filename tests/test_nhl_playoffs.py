@@ -282,3 +282,20 @@ def test_apply_style_overrides_reduces_logo_height_by_ten_percent(monkeypatch):
     nhl_playoffs._apply_style_overrides()
 
     assert nhl_playoffs.LOGO_HEIGHT == 18
+
+
+def test_format_next_text_supports_nested_next_game_schedule(monkeypatch):
+    class _FixedNow(datetime.datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return cls(2026, 4, 20, 12, 0, tzinfo=tz)
+
+    monkeypatch.setattr(nhl_playoffs.datetime, "datetime", _FixedNow)
+    text = nhl_playoffs._format_next_text(
+        {
+            "nextGameSchedule": {
+                "scheduledStartTimeUTC": "2026-04-22T01:00:00Z",
+            }
+        }
+    )
+    assert text == "Next: Tomorrow 8:00 PM"
