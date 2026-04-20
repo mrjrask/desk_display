@@ -1002,6 +1002,12 @@ def draw_sports_screen(display, game, title, transition=False, screen_id: Option
         prefix, opponent = 'vs.', get_team_display_name(away_tm)
 
     opponent_line = f"{prefix} {opponent}"
+    use_scaled_prefix = normalized_screen_id in {
+        "cubs next",
+        "cubs next home",
+        "sox next",
+        "sox next home",
+    }
     line_width = max(1, (WIDTH - (edge_pad * 2)) if hyperpixel_layout else WIDTH)
     opponent_font = fit_font(
         draw,
@@ -1018,8 +1024,18 @@ def draw_sports_screen(display, game, title, transition=False, screen_id: Option
         title_line_h = reference_h
 
     y_text = edge_pad + title_line_h + (config.scale_value(4) if hyperpixel_layout else 4)
-    lw, lh = draw.textsize(opponent_line, font=opponent_font)
-    draw.text(((WIDTH - lw)//2, y_text), opponent_line, font=opponent_font, fill=(255,255,255))
+    if use_scaled_prefix:
+        lh = _draw_prefix_opponent_line(
+            draw,
+            WIDTH // 2,
+            y_text,
+            prefix,
+            opponent,
+            opponent_font=opponent_font,
+        )
+    else:
+        lw, lh = draw.textsize(opponent_line, font=opponent_font)
+        draw.text(((WIDTH - lw)//2, y_text), opponent_line, font=opponent_font, fill=(255,255,255))
     y_text += lh + line_gap
 
     # logos + “@” inline
@@ -1192,6 +1208,47 @@ def _series_line_fill(game: dict) -> tuple[int, int, int]:
     return (255, 255, 255)
 
 
+def _draw_prefix_opponent_line(
+    draw: ImageDraw.ImageDraw,
+    x_center: int,
+    y: int,
+    prefix: str,
+    opponent: str,
+    *,
+    opponent_font,
+    fill: tuple[int, int, int] = (255, 255, 255),
+    prefix_scale: float = 0.6,
+) -> int:
+    """Draw '<prefix> <opponent>' with a smaller prefix and return rendered line height."""
+    prefix_text = f"{prefix} "
+    if hasattr(opponent_font, "font_variant"):
+        base_size = int(getattr(opponent_font, "size", 20) or 20)
+        prefix_size = max(8, int(round(base_size * prefix_scale)))
+        prefix_font = opponent_font.font_variant(size=prefix_size)
+    else:
+        prefix_font = opponent_font
+
+    prefix_w, prefix_h = draw.textsize(prefix_text, font=prefix_font)
+    opponent_w, opponent_h = draw.textsize(opponent, font=opponent_font)
+    line_h = max(prefix_h, opponent_h)
+    start_x = x_center - ((prefix_w + opponent_w) // 2)
+
+    try:
+        p_bbox = draw.textbbox((0, 0), prefix_text, font=prefix_font)
+        p_y = int(round(y + (line_h - (p_bbox[3] - p_bbox[1])) / 2.0 - p_bbox[1]))
+    except Exception:
+        p_y = y + ((line_h - prefix_h) // 2)
+    draw.text((start_x, p_y), prefix_text, font=prefix_font, fill=fill)
+
+    try:
+        o_bbox = draw.textbbox((0, 0), opponent, font=opponent_font)
+        o_y = int(round(y + (line_h - (o_bbox[3] - o_bbox[1])) / 2.0 - o_bbox[1]))
+    except Exception:
+        o_y = y + ((line_h - opponent_h) // 2)
+    draw.text((start_x + prefix_w, o_y), opponent, font=opponent_font, fill=fill)
+    return line_h
+
+
 def _series_final_result_parts(game: dict, focus_id: Optional[int]) -> Optional[tuple[str, str, str]]:
     """Return (date_label, W/L result, score) for a final game from the focus team's view."""
     if not _is_final_game(game):
@@ -1286,7 +1343,20 @@ def draw_series_screen(display, games, title, transition=False, screen_id: Optio
         opponent_font = FONT_TEAM_SPORTS
         lines = wrap_text(opponent_text, FONT_TEAM_SPORTS, wrap_width)[:2]
     title_to_opponent_gap = config.scale_value(4) if hyperpixel_layout else 4
-    opponent_line_heights = [draw.textsize(ln, font=opponent_font)[1] for ln in lines]
+    if scale_single_line_opponent:
+        opponent_prefix_font = (
+            opponent_font.font_variant(size=max(8, int(round(getattr(opponent_font, "size", 20) * 0.6))))
+            if hasattr(opponent_font, "font_variant")
+            else opponent_font
+        )
+        opponent_line_heights = [
+            max(
+                draw.textsize(f"{prefix} ", font=opponent_prefix_font)[1],
+                draw.textsize(opponent, font=opponent_font)[1],
+            )
+        ]
+    else:
+        opponent_line_heights = [draw.textsize(ln, font=opponent_font)[1] for ln in lines]
     opponent_lines_h = sum(opponent_line_heights) + (line_gap * max(0, len(lines) - 1))
     y_text = edge_pad + th + title_to_opponent_gap
 
@@ -1357,9 +1427,19 @@ def draw_series_screen(display, games, title, transition=False, screen_id: Optio
     )
     draw.text(((WIDTH - tw) // 2, edge_pad), title, font=FONT_TITLE_SPORTS, fill=title_fill)
     text_line_y = y_text
-    for ln in lines:
-        lw, lh = draw.textsize(ln, font=opponent_font)
-        draw.text(((WIDTH - lw) // 2, text_line_y), ln, font=opponent_font, fill=(255, 255, 255))
+    for idx, ln in enumerate(lines):
+        if scale_single_line_opponent and idx == 0:
+            lh = _draw_prefix_opponent_line(
+                draw,
+                WIDTH // 2,
+                text_line_y,
+                prefix,
+                opponent,
+                opponent_font=opponent_font,
+            )
+        else:
+            lw, lh = draw.textsize(ln, font=opponent_font)
+            draw.text(((WIDTH - lw) // 2, text_line_y), ln, font=opponent_font, fill=(255, 255, 255))
         text_line_y += lh + line_gap
 
     if logo_away:
