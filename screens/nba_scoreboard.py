@@ -291,12 +291,25 @@ def play_nba_logo_animation(display, *, hold: float = INTRO_ANIM_HOLD) -> Option
 def _team_logo_abbr(team: Dict[str, Any]) -> str:
     if not isinstance(team, dict):
         return ""
-    for key in ("teamTricode", "triCode", "tricode", "abbreviation", "abbr"):
+    for key in ("teamTricode", "triCode", "tricode", "abbreviation", "abbr", "teamCode", "code"):
         val = team.get(key)
         if isinstance(val, str) and val.strip():
             candidate = val.strip().upper()
             candidate = _LOGO_ABBREVIATION_OVERRIDES.get(candidate, candidate)
             return candidate
+    nested_team = team.get("team")
+    if isinstance(nested_team, dict):
+        nested_candidate = _team_logo_abbr(nested_team)
+        if nested_candidate:
+            return nested_candidate
+    profile = team.get("profile")
+    if isinstance(profile, dict):
+        for key in ("abbreviation", "abbr"):
+            val = profile.get(key)
+            if isinstance(val, str) and val.strip():
+                candidate = val.strip().upper()
+                candidate = _LOGO_ABBREVIATION_OVERRIDES.get(candidate, candidate)
+                return candidate
     city = (team.get("teamCity") or team.get("city") or "").strip()
     name = (team.get("teamName") or team.get("name") or "").strip()
     nickname = " ".join(part for part in (city, name) if part)
