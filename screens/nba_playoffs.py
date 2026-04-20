@@ -3,8 +3,10 @@
 
 from __future__ import annotations
 
+import datetime
 import logging
 import os
+import re
 import time
 from typing import Any, Optional
 
@@ -13,6 +15,7 @@ from PIL import Image, ImageDraw
 from config import (
     WIDTH,
     HEIGHT,
+    CENTRAL_TIME,
     FONT_TITLE_SPORTS,
     FONT_TEAM_SPORTS,
     FONT_STATUS,
@@ -128,6 +131,14 @@ def _as_int(value: Any) -> Optional[int]:
         return None
 
 
+def _first_present_int(values: list[Any]) -> int:
+    for value in values:
+        parsed = _as_int(value)
+        if parsed is not None:
+            return parsed
+    return 0
+
+
 def _team_from_series(series: dict, *keys: str) -> dict:
     for key in keys:
         value = series.get(key)
@@ -136,24 +147,96 @@ def _team_from_series(series: dict, *keys: str) -> dict:
     return {}
 
 
+def _extract_next_game_dt(value: Any) -> Optional[datetime.datetime]:
+    if isinstance(value, (int, float)):
+        try:
+            return datetime.datetime.fromtimestamp(float(value), tz=datetime.timezone.utc).astimezone(CENTRAL_TIME)
+        except Exception:
+            return None
+    if not isinstance(value, str):
+        return None
+    raw = value.strip()
+    if not raw:
+        return None
+    if raw.endswith("Z"):
+        raw = raw[:-1] + "+00:00"
+    try:
+        dt = datetime.datetime.fromisoformat(raw)
+    except Exception:
+        return None
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=datetime.timezone.utc)
+    return dt.astimezone(CENTRAL_TIME)
+
+
+def _next_day_label(dt: datetime.datetime, *, now: Optional[datetime.datetime] = None) -> Optional[str]:
+    now_dt = now or datetime.datetime.now(CENTRAL_TIME)
+    if dt.date() == now_dt.date():
+        return "Tonight"
+    if dt.date() == (now_dt + datetime.timedelta(days=1)).date():
+        return "Tomorrow"
+    return None
+
+
+def _format_next_text(series: dict) -> str:
+    next_dt = _extract_next_game_dt(
+        series.get("nextGameStartTimeUTC")
+        or series.get("nextGameDateTime")
+        or series.get("nextGameTimeUTC")
+    )
+    if next_dt is None:
+        text = str(series.get("nextGameLabel") or series.get("nextGameText") or "").strip()
+        return f"Next: {text}" if text else "Next: TBD"
+    day_label = _next_day_label(next_dt)
+    if day_label:
+        return f"Next: {day_label} {next_dt.strftime('%-I:%M %p')}"
+    return f"Next: {next_dt.month}/{next_dt.day} {next_dt.strftime('%-I:%M %p')}"
+
+
+def _normalize_next_text(text: Any) -> str:
+    raw = str(text or "").strip()
+    if not raw:
+        return "Next: TBD"
+    normalized = re.sub(
+        r"\s+(?:ET|EST|EDT|CT|CST|CDT|MT|MST|MDT|PT|PST|PDT|UTC)$",
+        "",
+        raw,
+        flags=re.IGNORECASE,
+    ).strip()
+    normalized = re.sub(
+        r"(?<!\d)(\d{1,2})/(\d{1,2})(?!\d)",
+        lambda match: f"{int(match.group(1))}/{int(match.group(2))}",
+        normalized,
+    )
+    return normalized or "Next: TBD"
+
+
 def _normalize_series_item(series: dict) -> Optional[dict]:
     if not isinstance(series, dict):
         return None
 
-    away_team = _team_from_series(series, "awayTeam", "topSeedTeam", "team1")
-    home_team = _team_from_series(series, "homeTeam", "bottomSeedTeam", "team2")
+    away_team = _team_from_series(series, "awayTeam", "topSeedTeam", "topSeed", "team1")
+    home_team = _team_from_series(series, "homeTeam", "bottomSeedTeam", "bottomSeed", "team2")
 
-    away_wins = (
-        _as_int(series.get("awayWins"))
-        or _as_int(series.get("topSeedWins"))
-        or _as_int(series.get("team1Wins"))
-        or 0
+    away_wins = _first_present_int(
+        [
+            series.get("awayWins"),
+            series.get("topSeedWins"),
+            series.get("team1Wins"),
+            series.get("topSeedTeamWins"),
+            away_team.get("wins") if isinstance(away_team, dict) else None,
+            away_team.get("seriesWins") if isinstance(away_team, dict) else None,
+        ]
     )
-    home_wins = (
-        _as_int(series.get("homeWins"))
-        or _as_int(series.get("bottomSeedWins"))
-        or _as_int(series.get("team2Wins"))
-        or 0
+    home_wins = _first_present_int(
+        [
+            series.get("homeWins"),
+            series.get("bottomSeedWins"),
+            series.get("team2Wins"),
+            series.get("bottomSeedTeamWins"),
+            home_team.get("wins") if isinstance(home_team, dict) else None,
+            home_team.get("seriesWins") if isinstance(home_team, dict) else None,
+        ]
     )
 
     away_abbr = _team_logo_abbr(away_team)
@@ -175,6 +258,7 @@ def _normalize_series_item(series: dict) -> Optional[dict]:
             "home": {"team": home_team, "score": home_wins},
         },
         "status_text": str(status),
+        "next_text": _format_next_text(series),
     }
 
 
@@ -193,7 +277,7 @@ def _extract_series(payload: Any) -> list[dict]:
         return [direct]
 
     results: list[dict] = []
-    for key in ("series", "seriesList", "rounds", "bracket", "playoffBracket", "bracketData"):
+    for key in ("series", "seriesList", "matchups", "rounds", "bracket", "playoffBracket", "bracketData"):
         value = payload.get(key)
         if value:
             results.extend(_extract_series(value))
@@ -254,6 +338,7 @@ def _derive_playoff_matchups_from_games(games: list[dict]) -> list[dict]:
                     "home": {"team": home_team, "score": 0},
                 },
                 "status_text": "Series",
+                "next_text": "Next: TBD",
             }
         )
     return results
@@ -285,7 +370,7 @@ def _draw_game_block(canvas: Image.Image, draw: ImageDraw.ImageDraw, game: dict,
         canvas.paste(logo, (x0, y0), logo)
 
     status_top = score_top + SCORE_ROW_H
-    status_text = game.get("status_text") or "Series"
+    status_text = _normalize_next_text(game.get("next_text") or game.get("status_text") or "Next: TBD")
     _center_text(draw, status_text, STATUS_FONT, COL_X[2], COL_WIDTHS[2], status_top, STATUS_ROW_H, fill=(255, 255, 255))
 
 
