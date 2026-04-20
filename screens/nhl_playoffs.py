@@ -871,6 +871,100 @@ def _series_next_text_from_games(series: dict, games: list[dict]) -> str:
     return f"{month}/{day} {time_text}"
 
 
+def _map_schedule_game_for_series(game: dict) -> Optional[dict]:
+    if not isinstance(game, dict):
+        return None
+
+    teams = {
+        "away": {"team": game.get("awayTeam") or game.get("away") or {}},
+        "home": {"team": game.get("homeTeam") or game.get("home") or {}},
+    }
+    if not _team_abbr((teams["away"] or {}).get("team") or {}):
+        return None
+    if not _team_abbr((teams["home"] or {}).get("team") or {}):
+        return None
+
+    return {
+        "gamePk": game.get("id") or game.get("gamePk") or game.get("gameId"),
+        "gameDate": game.get("startTimeUTC") or game.get("startTime") or game.get("gameDateUTC") or game.get("gameDate"),
+        "teams": teams,
+    }
+
+
+def _extract_schedule_games(payload: dict) -> list[dict]:
+    if not isinstance(payload, dict):
+        return []
+
+    games: list[dict] = []
+    for key in ("games",):
+        value = payload.get(key)
+        if isinstance(value, list):
+            for game in value:
+                mapped = _map_schedule_game_for_series(game)
+                if mapped:
+                    games.append(mapped)
+
+    weeks = payload.get("gameWeek")
+    if isinstance(weeks, list):
+        for week in weeks:
+            if not isinstance(week, dict):
+                continue
+            for game in week.get("games") or []:
+                mapped = _map_schedule_game_for_series(game)
+                if mapped:
+                    games.append(mapped)
+
+    return games
+
+
+def _fetch_remaining_playoff_schedule_games() -> list[dict]:
+    """Fetch upcoming playoff games from the official NHL schedule feed.
+
+    The schedule page (nhl.com/schedule) is backed by api-web schedule endpoints,
+    and can provide concrete start times for future playoff games even when other
+    playoff series endpoints still show TBD.
+    """
+
+    today = datetime.datetime.now(CENTRAL_TIME).date()
+    urls = [
+        "https://api-web.nhle.com/v1/schedule/now",
+        f"https://api-web.nhle.com/v1/schedule/{today.isoformat()}",
+    ]
+
+    merged: list[dict] = []
+    seen: set[tuple[str, str, str]] = set()
+    for url in urls:
+        try:
+            response = _SESSION.get(url, timeout=REQUEST_TIMEOUT, headers=NHL_HEADERS)
+            response.raise_for_status()
+            games = _extract_schedule_games(response.json())
+        except Exception as exc:
+            logging.debug("NHL official schedule endpoint failed (%s): %s", url, exc)
+            continue
+
+        for game in games:
+            dt, has_time = _extract_next_game_info(game)
+            if not dt:
+                continue
+            # User-facing requirement: remaining games through June are playoffs.
+            # Keep only upcoming schedule entries from now through June 30.
+            season_end = datetime.date(dt.year, 6, 30)
+            if dt.date() < today or dt.date() > season_end:
+                continue
+            away_abbr = _team_abbr(((game.get("teams") or {}).get("away") or {}).get("team") or {})
+            home_abbr = _team_abbr(((game.get("teams") or {}).get("home") or {}).get("team") or {})
+            if not away_abbr or not home_abbr:
+                continue
+            stamp = dt.isoformat() if has_time else dt.date().isoformat()
+            key = (away_abbr, home_abbr, stamp)
+            if key in seen:
+                continue
+            seen.add(key)
+            merged.append(game)
+
+    return merged
+
+
 def _series_order_key(series: dict) -> tuple[int, int, str, str]:
     higher_seed = _as_int(series.get("higher_seed"))
     lower_seed = _as_int(series.get("lower_seed"))
@@ -1024,14 +1118,17 @@ def _scroll_display(display, full_img: Image.Image):
 def render_nhl_playoffs(display, games: list[dict], transition: bool = False) -> ScreenImage:
     _apply_style_overrides()
 
+    upcoming_schedule_games = _fetch_remaining_playoff_schedule_games()
+    merged_games = list(games or []) + upcoming_schedule_games
+
     series = _fetch_playoff_matchups()
     if not series:
         series = _fetch_projected_matchups_from_standings()
     if not series:
-        series = _derive_playoff_matchups_from_games(games)
+        series = _derive_playoff_matchups_from_games(merged_games)
     else:
         for item in series:
-            item["next_text"] = _series_next_text_from_games(item, games)
+            item["next_text"] = _series_next_text_from_games(item, merged_games)
 
     if not series:
         clear_display(display)
