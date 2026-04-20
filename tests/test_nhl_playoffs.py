@@ -58,9 +58,9 @@ def test_projected_matchups_from_standings_builds_first_round_bracket():
     assert projected[3]["higher_seed"] == 4
 
 
-def test_format_next_text_uses_cdt():
+def test_format_next_text_omits_timezone():
     text = nhl_playoffs._format_next_text({"nextGameStartTimeUTC": "2026-04-20T00:30:00Z"})
-    assert text == "Next: 4/19 7:30 PM CDT"
+    assert text == "Next: 4/19 7:30 PM"
 
 
 def test_conference_buckets_order_by_seed():
@@ -132,7 +132,7 @@ def test_normalize_series_item_reads_nested_wins_and_hides_projected_status():
     assert normalized["teams"]["away"]["score"] == 3
     assert normalized["teams"]["home"]["score"] == 2
     assert normalized["status_text"] == ""
-    assert normalized["next_text"] == "Next: 4/19 9:00 PM CDT"
+    assert normalized["next_text"] == "Next: 4/19 9:00 PM"
 
 
 def test_normalize_series_item_supports_rounds_series_topseed_bottomseed_shape():
@@ -183,7 +183,11 @@ def test_series_next_text_from_games_uses_upcoming_matchup_time(monkeypatch):
             return cls(2026, 4, 20, 12, 0, tzinfo=tz)
 
     monkeypatch.setattr(nhl_playoffs.datetime, "datetime", _FixedNow)
-    assert nhl_playoffs._series_next_text_from_games(series, games) == "Next: 4/20 8:00 PM CDT"
+    assert nhl_playoffs._series_next_text_from_games(series, games) == "Next: 4/20 8:00 PM"
+
+
+def test_normalize_next_text_strips_timezone_and_leading_zeroes():
+    assert nhl_playoffs._normalize_next_text("Next: 04/09 8:00 PM ET") == "Next: 4/9 8:00 PM"
 
 
 def test_team_abbr_supports_localized_team_abbrev_shapes():

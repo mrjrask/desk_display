@@ -113,6 +113,15 @@ BACKGROUND_COLOR = (0, 0, 0)
 _LOGO_CACHE: dict[tuple[str, int], Optional[Image.Image]] = {}
 
 
+def _get_playoffs_logo() -> Optional[Image.Image]:
+    """Return the Stanley Cup Playoffs logo for the NHL Playoffs screen."""
+    logo = load_team_logo(LOGO_DIR, "SCP", height=LEAGUE_LOGO_BASE_HEIGHT, box_size=LEAGUE_LOGO_BASE_HEIGHT, trim=True)
+    if logo:
+        return logo
+    # Fallback to the shared NHL league logo behavior if SCP.png is unavailable.
+    return _get_league_logo()
+
+
 def _fit_widths_to_total(widths: list[int], target_total: int) -> list[int]:
     if not widths:
         return []
@@ -349,7 +358,25 @@ def _format_next_text(series: dict) -> str:
     month = dt.month
     day = dt.day
     time_text = dt.strftime("%-I:%M %p")
-    return f"Next: {month}/{day} {time_text} CDT"
+    return f"Next: {month}/{day} {time_text}"
+
+
+def _normalize_next_text(text: Any) -> str:
+    raw = str(text or "").strip()
+    if not raw:
+        return "Next: TBD"
+
+    # Drop trailing timezone abbreviations (e.g., ET/CDT/PST).
+    normalized = re.sub(r"\s+[A-Z]{2,4}$", "", raw).strip()
+
+    # Remove leading zeros from month/day date fragments (e.g., 04/09 -> 4/9).
+    normalized = re.sub(
+        r"(?<!\d)(\d{1,2})/(\d{1,2})(?!\d)",
+        lambda match: f"{int(match.group(1))}/{int(match.group(2))}",
+        normalized,
+    )
+
+    return normalized or "Next: TBD"
 
 
 def _normalize_series_item(series: dict) -> Optional[dict]:
@@ -701,7 +728,7 @@ def _series_next_text_from_games(series: dict, games: list[dict]) -> str:
     away_abbr = _team_abbr(away)
     home_abbr = _team_abbr(home)
     if not away_abbr or not home_abbr:
-        return series.get("next_text") or "Next: TBD"
+        return _normalize_next_text(series.get("next_text") or "Next: TBD")
 
     now = datetime.datetime.now(CENTRAL_TIME)
     next_dt: Optional[datetime.datetime] = None
@@ -718,11 +745,11 @@ def _series_next_text_from_games(series: dict, games: list[dict]) -> str:
             next_dt = candidate_dt
 
     if not next_dt:
-        return series.get("next_text") or "Next: TBD"
+        return _normalize_next_text(series.get("next_text") or "Next: TBD")
     month = next_dt.month
     day = next_dt.day
     time_text = next_dt.strftime("%-I:%M %p")
-    return f"Next: {month}/{day} {time_text} CDT"
+    return f"Next: {month}/{day} {time_text}"
 
 
 def _series_order_key(series: dict) -> tuple[int, int, str, str]:
@@ -785,7 +812,7 @@ def _draw_series_block(canvas: Image.Image, draw: ImageDraw.ImageDraw, series: d
     status_top = score_top + SCORE_ROW_H
     _center_text(
         draw,
-        series.get("next_text") or "Next: TBD",
+        _normalize_next_text(series.get("next_text") or "Next: TBD"),
         STATUS_SMALL_FONT,
         left,
         SERIES_WIDTH,
@@ -832,7 +859,7 @@ def _render_playoff_screen(series: list[dict]) -> Image.Image:
     except Exception:
         _, title_h = dd.textsize(TITLE, font=TITLE_FONT)
 
-    league_logo = _get_league_logo()
+    league_logo = _get_playoffs_logo()
     logo_height = league_logo.height if league_logo else 0
     logo_gap = LEAGUE_LOGO_GAP if league_logo else 0
 
@@ -891,7 +918,7 @@ def render_nhl_playoffs(display, games: list[dict], transition: bool = False) ->
         clear_display(display)
         img = Image.new("RGB", (WIDTH, HEIGHT), BACKGROUND_COLOR)
         draw = ImageDraw.Draw(img)
-        league_logo = _get_league_logo()
+        league_logo = _get_playoffs_logo()
         title_top = 0
         if league_logo:
             logo_x = (WIDTH - league_logo.width) // 2
