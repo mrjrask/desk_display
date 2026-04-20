@@ -967,6 +967,8 @@ def draw_sports_screen(display, game, title, transition=False, screen_id: Option
     img  = Image.new("RGB", (WIDTH, HEIGHT), BACKGROUND_COLOR)
     draw = ImageDraw.Draw(img)
 
+    normalized_screen_id = (screen_id or "").strip().lower()
+
     tw, th = draw.textsize(title, font=FONT_TITLE_SPORTS)
     draw.text(
         ((WIDTH - tw) // 2, edge_pad),
@@ -1009,7 +1011,13 @@ def draw_sports_screen(display, game, title, transition=False, screen_id: Option
         max_height=max(1, draw.textsize("Ag", font=FONT_TEAM_SPORTS)[1] * 2),
         min_pt=max(8, int(round(getattr(FONT_TEAM_SPORTS, "size", 20) * 0.6))),
     )
-    y_text = edge_pad + th + (config.scale_value(4) if hyperpixel_layout else 4)
+    title_line_h = th
+    if is_hyperpixel_4_square_layout() and normalized_screen_id in {"cubs next", "sox next"}:
+        reference_title = "Cubs Current Series" if normalized_screen_id == "cubs next" else "Sox Current Series"
+        _, reference_h = draw.textsize(reference_title, font=FONT_TITLE_SPORTS)
+        title_line_h = reference_h
+
+    y_text = edge_pad + title_line_h + (config.scale_value(4) if hyperpixel_layout else 4)
     lw, lh = draw.textsize(opponent_line, font=opponent_font)
     draw.text(((WIDTH - lw)//2, y_text), opponent_line, font=opponent_font, fill=(255,255,255))
     y_text += lh + line_gap
@@ -1041,7 +1049,7 @@ def draw_sports_screen(display, game, title, transition=False, screen_id: Option
     else:
         bl_h = 0
     bottom_margin = config.scale_value(BOTTOM_MARGIN) if hyperpixel_layout else BOTTOM_MARGIN
-    if _IS_1080P_LAYOUT and (screen_id or "").strip().lower() == "cubs next":
+    if _IS_1080P_LAYOUT and normalized_screen_id == "cubs next":
         bottom_margin += _BOTTOM_TEXT_1080P_OFFSET
     bottom_y = HEIGHT - bl_h - bottom_margin
 

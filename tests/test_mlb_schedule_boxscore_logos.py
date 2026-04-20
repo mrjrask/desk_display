@@ -898,6 +898,44 @@ def test_draw_sports_screen_uses_postponed_bottom_label(monkeypatch):
     assert captured["bottom"] == "Postponed"
 
 
+def test_draw_sports_screen_cubs_next_uses_current_series_title_spacing_on_square_layout(monkeypatch):
+    captured = {}
+    original_text = ImageDraw.ImageDraw.text
+
+    def _capture_text(self, xy, text, *args, **kwargs):
+        if text == "Next Cubs game...":
+            captured["title_y"] = xy[1]
+        elif text == "vs. Philadelphia Phillies":
+            captured["opponent_y"] = xy[1]
+        return original_text(self, xy, text, *args, **kwargs)
+
+    monkeypatch.setattr(ImageDraw.ImageDraw, "text", _capture_text)
+    monkeypatch.setattr(mlb_schedule, "is_hyperpixel_4_square_layout", lambda: True)
+    monkeypatch.setattr(mlb_schedule.config, "is_hyperpixel_next_layout", lambda: False)
+    monkeypatch.setattr(mlb_schedule.config, "scale_value", lambda value: value)
+    monkeypatch.setattr(mlb_schedule, "load_team_logo", lambda *args, **kwargs: None)
+    monkeypatch.setattr(mlb_schedule, "_center_bottom_text", lambda *args, **kwargs: None)
+
+    game = {
+        "officialDate": "2026-05-01",
+        "startTimeCentral": "6:40 PM",
+        "status": {"detailedState": "Scheduled"},
+        "teams": {
+            "away": {"team": {"id": 143, "name": "Philadelphia Phillies"}},
+            "home": {"team": {"id": 112, "name": "Chicago Cubs"}},
+        },
+    }
+
+    mlb_schedule.draw_sports_screen(None, game, "Next Cubs game...", screen_id="cubs next")
+
+    reference_h = ImageDraw.Draw(Image.new("RGB", (1, 1))).textsize(
+        "Cubs Current Series",
+        font=mlb_schedule.FONT_TITLE_SPORTS,
+    )[1]
+    assert captured["title_y"] == 0
+    assert captured["opponent_y"] == reference_h + 4
+
+
 def test_is_postponed_game_detects_common_status_shapes():
     assert mlb_schedule._is_postponed_game({"status": {"detailedState": "Postponed"}})
     assert mlb_schedule._is_postponed_game({"status": {"abstractGameState": "Postponed"}})
