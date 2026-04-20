@@ -407,18 +407,18 @@ def _first_present_int(values: list[Any], default: int = 0) -> int:
 def _format_next_text(series: dict) -> str:
     dt, has_time = _extract_next_game_info(series)
     if not dt:
-        return "Next: TBD"
+        return "TBD"
     day_label = _next_day_label(dt)
     if day_label:
         if has_time:
-            return f"Next: {day_label} {dt.strftime('%-I:%M %p')}"
-        return f"Next: {day_label}"
+            return f"{day_label} {_format_clock(dt)}"
+        return f"{day_label}"
     month = dt.month
     day = dt.day
     if not has_time:
-        return f"Next: {month}/{day}"
-    time_text = dt.strftime("%-I:%M %p")
-    return f"Next: {month}/{day} {time_text}"
+        return f"{month}/{day}"
+    time_text = _format_clock(dt)
+    return f"{month}/{day} {time_text}"
 
 
 def _next_day_label(dt: datetime.datetime, *, now: Optional[datetime.datetime] = None) -> Optional[str]:
@@ -430,16 +430,26 @@ def _next_day_label(dt: datetime.datetime, *, now: Optional[datetime.datetime] =
     return None
 
 
+def _format_clock(dt: datetime.datetime) -> str:
+    if dt.minute == 0:
+        return dt.strftime("%-I %p")
+    return dt.strftime("%-I:%M %p")
+
+
 def _normalize_next_text(text: Any) -> str:
     raw = str(text or "").strip()
     if not raw:
-        return "Next: TBD"
+        return "TBD"
+
+    normalized = re.sub(r"^\s*Next:\s*", "", raw, flags=re.IGNORECASE).strip()
+    if not normalized:
+        return "TBD"
 
     # Drop trailing timezone abbreviations, while preserving meridiem markers (AM/PM).
     normalized = re.sub(
         r"\s+(?:ET|EST|EDT|CT|CST|CDT|MT|MST|MDT|PT|PST|PDT|UTC)$",
         "",
-        raw,
+        normalized,
         flags=re.IGNORECASE,
     ).strip()
 
@@ -450,11 +460,11 @@ def _normalize_next_text(text: Any) -> str:
         normalized,
     )
 
-    date_match = re.match(r"^(Next:\s*)(\d{1,2})/(\d{1,2})(\s+.+)$", normalized)
+    date_match = re.match(r"^(\d{1,2})/(\d{1,2})(\s+.+)$", normalized)
     if date_match:
-        month = int(date_match.group(2))
-        day = int(date_match.group(3))
-        suffix = date_match.group(4)
+        month = int(date_match.group(1))
+        day = int(date_match.group(2))
+        suffix = date_match.group(3)
         try:
             next_dt = datetime.datetime.now(CENTRAL_TIME).replace(
                 month=month,
@@ -468,9 +478,11 @@ def _normalize_next_text(text: Any) -> str:
             next_dt = None
         day_label = _next_day_label(next_dt) if next_dt else None
         if day_label:
-            normalized = f"{date_match.group(1)}{day_label}{suffix}"
+            normalized = f"{day_label}{suffix}"
 
-    return normalized or "Next: TBD"
+    normalized = re.sub(r"(\b\d{1,2}):00(\s+[AP]M\b)", r"\1\2", normalized, flags=re.IGNORECASE)
+
+    return normalized or "TBD"
 
 
 def _normalize_series_item(series: dict) -> Optional[dict]:
@@ -677,7 +689,7 @@ def _projected_series(higher_seed: dict, lower_seed: dict, *, conference: str, h
         "conference": conference,
         "higher_seed": higher_seed_rank,
         "lower_seed": lower_seed_rank,
-        "next_text": "Next: TBD",
+        "next_text": "TBD",
     }
 
 
@@ -809,7 +821,7 @@ def _derive_playoff_matchups_from_games(games: list[dict]) -> list[dict]:
                 ),
                 "higher_seed": None,
                 "lower_seed": None,
-                "next_text": "Next: TBD",
+                "next_text": "TBD",
             }
         )
     return results
@@ -822,7 +834,7 @@ def _series_next_text_from_games(series: dict, games: list[dict]) -> str:
     away_abbr = _team_abbr(away)
     home_abbr = _team_abbr(home)
     if not away_abbr or not home_abbr:
-        return _normalize_next_text(series.get("next_text") or "Next: TBD")
+        return _normalize_next_text(series.get("next_text") or "TBD")
 
     now = datetime.datetime.now(CENTRAL_TIME)
     next_dt: Optional[datetime.datetime] = None
@@ -845,18 +857,18 @@ def _series_next_text_from_games(series: dict, games: list[dict]) -> str:
             next_has_time = candidate_has_time
 
     if not next_dt:
-        return _normalize_next_text(series.get("next_text") or "Next: TBD")
+        return _normalize_next_text(series.get("next_text") or "TBD")
     day_label = _next_day_label(next_dt, now=now)
     if day_label:
         if next_has_time:
-            return f"Next: {day_label} {next_dt.strftime('%-I:%M %p')}"
-        return f"Next: {day_label}"
+            return f"{day_label} {_format_clock(next_dt)}"
+        return f"{day_label}"
     month = next_dt.month
     day = next_dt.day
     if not next_has_time:
-        return f"Next: {month}/{day}"
-    time_text = next_dt.strftime("%-I:%M %p")
-    return f"Next: {month}/{day} {time_text}"
+        return f"{month}/{day}"
+    time_text = _format_clock(next_dt)
+    return f"{month}/{day} {time_text}"
 
 
 def _series_order_key(series: dict) -> tuple[int, int, str, str]:
@@ -919,7 +931,7 @@ def _draw_series_block(canvas: Image.Image, draw: ImageDraw.ImageDraw, series: d
     status_top = score_top + SCORE_ROW_H
     _center_text(
         draw,
-        _normalize_next_text(series.get("next_text") or "Next: TBD"),
+        _normalize_next_text(series.get("next_text") or "TBD"),
         STATUS_SMALL_FONT,
         left,
         SERIES_WIDTH,
