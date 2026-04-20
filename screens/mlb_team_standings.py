@@ -66,6 +66,16 @@ _HAWKS_STAND1_MATCH_SCREEN_IDS = {
 }
 
 
+def _use_half_glyph(screen_id: str | None) -> bool:
+    return bool(screen_id and str(screen_id).lower() in _HAWKS_STAND1_MATCH_SCREEN_IDS)
+
+
+def _normalize_half_text(text: str, *, screen_id: str | None) -> str:
+    if not _use_half_glyph(screen_id):
+        return text
+    return text.replace("1/2", "½")
+
+
 def _restore_font(font):
     size = getattr(font, "size", None)
     if not isinstance(size, int) or size <= 0:
@@ -422,13 +432,17 @@ def draw_standings_screen1(
         lines.append((f"Streak: {_format_streak(streak_raw)}", rank_font))
 
     # Layout text
-    heights = [_measure_fraction_text(draw, txt, font)[1] for txt, font in lines]
+    heights = [
+        _measure_fraction_text(draw, _normalize_half_text(txt, screen_id=screen_id), font)[1]
+        for txt, font in lines
+    ]
     total_h = sum(heights)
     avail_h = bottom_limit - text_top
     spacing = (avail_h - total_h) / (len(lines)+1)
 
     y = text_top + spacing
     for txt,font in lines:
+        txt = _normalize_half_text(txt, screen_id=screen_id)
         _, h0 = _measure_fraction_text(draw, txt, font)
         _draw_fraction_text_centered(draw, int(y), txt, font, fill=(255, 255, 255))
         y += h0 + spacing
@@ -719,7 +733,7 @@ def draw_standings_screen3(
     def draw_column(lines, x, width):
         heights = []
         for line in lines:
-            txt, font = line[0], line[1]
+            txt, font = _normalize_half_text(line[0], screen_id=screen_id), line[1]
             if len(line) > 2 and line[2] == "record" and use_cubs_record_markers:
                 _, h0 = draw.textsize("00", font)
                 heights.append(h0)
@@ -730,6 +744,7 @@ def draw_standings_screen3(
         y = text_top + spacing
         for idx, line in enumerate(lines):
             txt, font = line[0], line[1]
+            txt = _normalize_half_text(txt, screen_id=screen_id)
             h0 = heights[idx]
             if len(line) > 2 and line[2] == "record" and use_cubs_record_markers:
                 record = rec.get("leagueRecord", {})
