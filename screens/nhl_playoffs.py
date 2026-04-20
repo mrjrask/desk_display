@@ -355,10 +355,22 @@ def _format_next_text(series: dict) -> str:
     dt = _extract_next_game_dt(series)
     if not dt:
         return "Next: TBD"
+    day_label = _next_day_label(dt)
+    if day_label:
+        return f"Next: {day_label} {dt.strftime('%-I:%M %p')}"
     month = dt.month
     day = dt.day
     time_text = dt.strftime("%-I:%M %p")
     return f"Next: {month}/{day} {time_text}"
+
+
+def _next_day_label(dt: datetime.datetime, *, now: Optional[datetime.datetime] = None) -> Optional[str]:
+    now_dt = now or datetime.datetime.now(CENTRAL_TIME)
+    if dt.date() == now_dt.date():
+        return "Tonight"
+    if dt.date() == (now_dt + datetime.timedelta(days=1)).date():
+        return "Tomorrow"
+    return None
 
 
 def _normalize_next_text(text: Any) -> str:
@@ -366,8 +378,13 @@ def _normalize_next_text(text: Any) -> str:
     if not raw:
         return "Next: TBD"
 
-    # Drop trailing timezone abbreviations (e.g., ET/CDT/PST).
-    normalized = re.sub(r"\s+[A-Z]{2,4}$", "", raw).strip()
+    # Drop trailing timezone abbreviations, while preserving meridiem markers (AM/PM).
+    normalized = re.sub(
+        r"\s+(?:ET|EST|EDT|CT|CST|CDT|MT|MST|MDT|PT|PST|PDT|UTC)$",
+        "",
+        raw,
+        flags=re.IGNORECASE,
+    ).strip()
 
     # Remove leading zeros from month/day date fragments (e.g., 04/09 -> 4/9).
     normalized = re.sub(
@@ -375,6 +392,26 @@ def _normalize_next_text(text: Any) -> str:
         lambda match: f"{int(match.group(1))}/{int(match.group(2))}",
         normalized,
     )
+
+    date_match = re.match(r"^(Next:\s*)(\d{1,2})/(\d{1,2})(\s+.+)$", normalized)
+    if date_match:
+        month = int(date_match.group(2))
+        day = int(date_match.group(3))
+        suffix = date_match.group(4)
+        try:
+            next_dt = datetime.datetime.now(CENTRAL_TIME).replace(
+                month=month,
+                day=day,
+                hour=0,
+                minute=0,
+                second=0,
+                microsecond=0,
+            )
+        except ValueError:
+            next_dt = None
+        day_label = _next_day_label(next_dt) if next_dt else None
+        if day_label:
+            normalized = f"{date_match.group(1)}{day_label}{suffix}"
 
     return normalized or "Next: TBD"
 
@@ -746,6 +783,9 @@ def _series_next_text_from_games(series: dict, games: list[dict]) -> str:
 
     if not next_dt:
         return _normalize_next_text(series.get("next_text") or "Next: TBD")
+    day_label = _next_day_label(next_dt, now=now)
+    if day_label:
+        return f"Next: {day_label} {next_dt.strftime('%-I:%M %p')}"
     month = next_dt.month
     day = next_dt.day
     time_text = next_dt.strftime("%-I:%M %p")
