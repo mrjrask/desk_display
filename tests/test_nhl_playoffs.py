@@ -38,7 +38,7 @@ def test_projected_matchups_from_standings_builds_first_round_bracket():
     projected = nhl_playoffs._projected_matchups_from_standings(standings)
 
     assert len(projected) == 8
-    assert all(item.get("status_text") == "Projected" for item in projected)
+    assert all(item.get("status_text") == "" for item in projected)
 
     east_atlantic_top_vs_wc1 = projected[0]
     assert east_atlantic_top_vs_wc1["teams"]["home"]["team"]["abbreviation"] == "TOR"
@@ -112,3 +112,44 @@ def test_fit_widths_to_total_preserves_total_and_min_width():
 
     assert sum(fitted) == 400
     assert all(width >= 1 for width in fitted)
+
+
+def test_normalize_series_item_reads_nested_wins_and_hides_projected_status():
+    normalized = nhl_playoffs._normalize_series_item(
+        {
+            "topSeedTeam": {"abbreviation": "DAL", "wins": 3},
+            "bottomSeedTeam": {"abbreviation": "COL", "seriesWins": 2},
+            "seriesStatus": "Projected",
+            "nextGameDateTimeUTC": "2026-04-20T02:00:00Z",
+        }
+    )
+
+    assert normalized is not None
+    assert normalized["teams"]["away"]["score"] == 3
+    assert normalized["teams"]["home"]["score"] == 2
+    assert normalized["status_text"] == ""
+    assert normalized["next_text"] == "Next: 4/19 9:00 PM CDT"
+
+
+def test_team_abbr_supports_localized_team_abbrev_shapes():
+    assert nhl_playoffs._team_abbr({"teamAbbrev": {"default": "WPG"}}) == "WPG"
+    assert nhl_playoffs._team_abbr({"abbrev": {"default": "TOR"}}) == "TOR"
+    assert nhl_playoffs._team_abbr({"team": {"triCode": "car"}}) == "CAR"
+
+
+def test_first_present_int_supports_record_text():
+    assert nhl_playoffs._first_present_int(["3-2", None]) == 3
+
+
+def test_apply_style_overrides_reduces_logo_height_by_ten_percent(monkeypatch):
+    monkeypatch.setattr(nhl_playoffs, "TEAM_LOGO_BASE_HEIGHT", 20)
+    monkeypatch.setattr(nhl_playoffs, "PLAYOFF_LOGO_SCALE", 0.9)
+    monkeypatch.setattr(nhl_playoffs, "SCORE_ROW_H", 56)
+    monkeypatch.setattr(nhl_playoffs, "get_screen_image_scale", lambda *args, **kwargs: 1.0)
+    monkeypatch.setattr(nhl_playoffs, "scale_value", lambda value: value)
+    monkeypatch.setattr(nhl_playoffs, "_scoreboard_fonts", lambda: (None, None, None, None))
+    monkeypatch.setattr(nhl_playoffs, "_recompute_series_layout", lambda: None)
+
+    nhl_playoffs._apply_style_overrides()
+
+    assert nhl_playoffs.LOGO_HEIGHT == 18

@@ -6,6 +6,7 @@ from __future__ import annotations
 import datetime
 import logging
 import os
+import re
 import time
 from typing import Any, Optional
 
@@ -81,8 +82,9 @@ for w in SERIES_COL_WIDTHS:
 
 TITLE_FONT = FONT_TITLE_SPORTS
 LOGO_DIR = os.path.join(IMAGES_DIR, "nhl")
-# Match NHL Scoreboard v2 logo baseline sizing.
+# Match NHL Scoreboard v2 logo baseline sizing, then reduce by 10% for playoffs.
 TEAM_LOGO_BASE_HEIGHT = scale_value_width(26)
+PLAYOFF_LOGO_SCALE = 0.9
 LEAGUE_LOGO_BASE_HEIGHT = (
     TEAM_LOGO_BASE_HEIGHT
     if (HYPERPIXEL_LAYOUT or is_kernel_driven_display())
@@ -174,7 +176,7 @@ def _apply_style_overrides() -> None:
     BACKGROUND_COLOR = (0, 0, 0)
     _recompute_series_layout()
     team_scale = get_screen_image_scale(SCREEN_ID, "team_logo", 1.0)
-    target_logo_height = max(1, int(round(TEAM_LOGO_BASE_HEIGHT * team_scale)))
+    target_logo_height = max(1, int(round(TEAM_LOGO_BASE_HEIGHT * team_scale * PLAYOFF_LOGO_SCALE)))
     max_row_fit = max(1, SCORE_ROW_H - scale_value(8))
     LOGO_HEIGHT = min(target_logo_height, max_row_fit)
 
@@ -240,6 +242,32 @@ def _first_int(values: list[Any]) -> Optional[int]:
     return None
 
 
+def _dict_localized_text(value: Any) -> str:
+    if isinstance(value, str) and value.strip():
+        return value.strip()
+    if isinstance(value, dict):
+        for key in ("default", "en", "fr", "es", "name"):
+            candidate = value.get(key)
+            if isinstance(candidate, str) and candidate.strip():
+                return candidate.strip()
+    return ""
+
+
+def _team_abbr(team: dict) -> str:
+    if not isinstance(team, dict):
+        return ""
+    for key in ("abbreviation", "abbrev", "teamAbbrev", "triCode", "shortName", "code"):
+        candidate = _dict_localized_text(team.get(key))
+        if candidate:
+            return candidate.upper()
+    nested_team = team.get("team")
+    if isinstance(nested_team, dict):
+        nested_abbr = _team_abbr(nested_team)
+        if nested_abbr:
+            return nested_abbr
+    return _team_logo_abbr(team)
+
+
 def _parse_datetime(value: Any) -> Optional[datetime.datetime]:
     if not value:
         return None
@@ -264,9 +292,13 @@ def _extract_next_game_dt(series: dict) -> Optional[datetime.datetime]:
     candidate_keys = (
         "nextGameStartTimeUTC",
         "nextGameStartTime",
+        "nextGameDateTimeUTC",
         "nextGameDateTime",
+        "nextGameUtc",
         "nextGameDate",
         "startTimeUTC",
+        "gameDateUTC",
+        "gameDateTime",
         "gameDate",
     )
     for key in candidate_keys:
@@ -275,11 +307,23 @@ def _extract_next_game_dt(series: dict) -> Optional[datetime.datetime]:
             return dt
     next_game = series.get("nextGame")
     if isinstance(next_game, dict):
-        for key in ("startTimeUTC", "startTime", "gameDate", "date"):
+        for key in ("startTimeUTC", "startTime", "gameDateUTC", "gameDateTime", "gameDate", "date"):
             dt = _parse_datetime(next_game.get(key))
             if dt:
                 return dt
     return None
+
+
+def _first_present_int(values: list[Any], default: int = 0) -> int:
+    for value in values:
+        parsed = _as_int(value)
+        if parsed is None and isinstance(value, str):
+            match = re.match(r"^\s*(\d+)\s*[-/]", value)
+            if match:
+                parsed = _as_int(match.group(1))
+        if parsed is not None:
+            return parsed
+    return default
 
 
 def _format_next_text(series: dict) -> str:
@@ -299,21 +343,29 @@ def _normalize_series_item(series: dict) -> Optional[dict]:
     away_team = _team_from_series(series, "awayTeam", "topSeedTeam", "team1", "homeTeam1")
     home_team = _team_from_series(series, "homeTeam", "bottomSeedTeam", "team2", "homeTeam2")
 
-    away_wins = (
-        _as_int(series.get("awayWins"))
-        or _as_int(series.get("topSeedWins"))
-        or _as_int(series.get("team1Wins"))
-        or 0
+    away_wins = _first_present_int(
+        [
+            series.get("awayWins"),
+            series.get("topSeedWins"),
+            series.get("team1Wins"),
+            series.get("topSeedTeamWins"),
+            away_team.get("wins") if isinstance(away_team, dict) else None,
+            away_team.get("seriesWins") if isinstance(away_team, dict) else None,
+        ]
     )
-    home_wins = (
-        _as_int(series.get("homeWins"))
-        or _as_int(series.get("bottomSeedWins"))
-        or _as_int(series.get("team2Wins"))
-        or 0
+    home_wins = _first_present_int(
+        [
+            series.get("homeWins"),
+            series.get("bottomSeedWins"),
+            series.get("team2Wins"),
+            series.get("bottomSeedTeamWins"),
+            home_team.get("wins") if isinstance(home_team, dict) else None,
+            home_team.get("seriesWins") if isinstance(home_team, dict) else None,
+        ]
     )
 
-    away_abbr = _team_logo_abbr(away_team)
-    home_abbr = _team_logo_abbr(home_team)
+    away_abbr = _team_abbr(away_team)
+    home_abbr = _team_abbr(home_team)
     if not away_abbr or not home_abbr:
         return None
 
@@ -324,6 +376,7 @@ def _normalize_series_item(series: dict) -> Optional[dict]:
         or series.get("roundLabel")
         or "Series"
     )
+    status_text = "" if str(status).strip().lower() == "projected" else str(status)
     conference = _normalize_conference_label(
         series.get("conferenceAbbrev")
         or series.get("conferenceName")
@@ -351,7 +404,7 @@ def _normalize_series_item(series: dict) -> Optional[dict]:
             "away": {"team": away_team, "score": away_wins},
             "home": {"team": home_team, "score": home_wins},
         },
-        "status_text": str(status),
+        "status_text": status_text,
         "conference": conference,
         "higher_seed": higher_seed,
         "lower_seed": lower_seed,
@@ -390,7 +443,7 @@ def _extract_series(payload: Any) -> list[dict]:
         teams = (series.get("teams") or {})
         away_team = ((teams.get("away") or {}).get("team") or {})
         home_team = ((teams.get("home") or {}).get("team") or {})
-        key = (_team_logo_abbr(away_team), _team_logo_abbr(home_team))
+        key = (_team_abbr(away_team), _team_abbr(home_team))
         if not all(key) or key in seen:
             continue
         seen.add(key)
@@ -488,7 +541,7 @@ def _projected_series(higher_seed: dict, lower_seed: dict, *, conference: str, h
             "away": {"team": _standings_team_obj(lower_seed), "score": 0},
             "home": {"team": _standings_team_obj(higher_seed), "score": 0},
         },
-        "status_text": "Projected",
+        "status_text": "",
         "conference": conference,
         "higher_seed": higher_seed_rank,
         "lower_seed": lower_seed_rank,
@@ -606,7 +659,7 @@ def _derive_playoff_matchups_from_games(games: list[dict]) -> list[dict]:
         home = teams.get("home") or {}
         away_team = away.get("team") or {}
         home_team = home.get("team") or {}
-        key = (_team_logo_abbr(away_team), _team_logo_abbr(home_team))
+        key = (_team_abbr(away_team), _team_abbr(home_team))
         if not all(key) or key in seen:
             continue
         seen.add(key)
@@ -642,7 +695,7 @@ def _series_order_key(series: dict) -> tuple[int, int, str, str]:
     )
     high = higher_seed if higher_seed is not None else fallback_high
     low = lower_seed if lower_seed is not None else 99
-    return (high, low, _team_logo_abbr(home_team), _team_logo_abbr(away_team))
+    return (high, low, _team_abbr(home_team), _team_abbr(away_team))
 
 
 def _conference_buckets(series: list[dict]) -> tuple[list[dict], list[dict]]:
@@ -677,7 +730,7 @@ def _draw_series_block(canvas: Image.Image, draw: ImageDraw.ImageDraw, series: d
 
     for idx, team_side in ((1, away), (3, home)):
         team_obj = (team_side or {}).get("team", {})
-        abbr = _team_logo_abbr(team_obj)
+        abbr = _team_abbr(team_obj)
         logo = _load_logo_cached(abbr)
         if not logo:
             team_name = (team_obj or {}).get("name") or (team_obj or {}).get("teamName") or "Unknown Team"
