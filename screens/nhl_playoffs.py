@@ -889,6 +889,9 @@ def _map_schedule_game_for_series(game: dict) -> Optional[dict]:
     return {
         "gamePk": game.get("id") or game.get("gamePk") or game.get("gameId"),
         "gameDate": game.get("startTimeUTC") or game.get("startTime") or game.get("gameDateUTC") or game.get("gameDate"),
+        "gameType": game.get("gameType") or game.get("gameTypeCode") or game.get("seasonType"),
+        "gameScheduleState": game.get("gameScheduleState"),
+        "seriesStatusShort": game.get("seriesStatusShort"),
         "teams": teams,
     }
 
@@ -919,6 +922,24 @@ def _extract_schedule_games(payload: dict) -> list[dict]:
     return games
 
 
+def _is_playoff_schedule_game(game: dict) -> bool:
+    game_type = str((game or {}).get("gameType") or "").strip().lower()
+    if game_type in {"3", "03", "p", "playoff", "playoffs", "postseason", "post-season"}:
+        return True
+
+    schedule_state = str((game or {}).get("gameScheduleState") or "").strip().lower()
+    if schedule_state in {"post", "postseason", "post-season", "playoff", "playoffs"}:
+        return True
+
+    # api-web schedule payloads can expose abbreviated series statuses for playoff rounds.
+    # We only treat explicit playoff-looking statuses as a match.
+    series_status = str((game or {}).get("seriesStatusShort") or "").strip().lower()
+    if series_status in {"r1", "r2", "ecf", "wcf", "scf", "qf", "sf", "f"}:
+        return True
+
+    return False
+
+
 def _fetch_remaining_playoff_schedule_games() -> list[dict]:
     """Fetch upcoming playoff games from the official NHL schedule feed.
 
@@ -945,6 +966,8 @@ def _fetch_remaining_playoff_schedule_games() -> list[dict]:
             continue
 
         for game in games:
+            if not _is_playoff_schedule_game(game):
+                continue
             dt, has_time = _extract_next_game_info(game)
             if not dt:
                 continue

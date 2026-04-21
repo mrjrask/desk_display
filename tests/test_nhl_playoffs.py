@@ -324,12 +324,14 @@ def test_fetch_remaining_playoff_schedule_games_includes_upcoming_through_june(m
                     {
                         "id": 1,
                         "startTimeUTC": "2026-05-02T00:00:00Z",
+                        "gameType": 3,
                         "awayTeam": {"abbrev": "WPG"},
                         "homeTeam": {"abbrev": "DAL"},
                     },
                     {
                         "id": 2,
                         "gameDate": "2026-07-02T00:00:00Z",
+                        "gameType": 3,
                         "awayTeam": {"abbrev": "NYR"},
                         "homeTeam": {"abbrev": "CAR"},
                     },
@@ -348,6 +350,57 @@ def test_fetch_remaining_playoff_schedule_games_includes_upcoming_through_june(m
     games = nhl_playoffs._fetch_remaining_playoff_schedule_games()
     assert len(games) == 1
     assert games[0]["gamePk"] == 1
+
+
+def test_fetch_remaining_playoff_schedule_games_excludes_non_playoff_game_types(monkeypatch):
+    class _FixedNow(datetime.datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return cls(2026, 4, 20, 12, 0, tzinfo=tz)
+
+    class _Response:
+        def __init__(self, payload):
+            self._payload = payload
+
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            return self._payload
+
+    payload = {
+        "gameWeek": [
+            {
+                "games": [
+                    {
+                        "id": 10,
+                        "startTimeUTC": "2026-05-03T00:00:00Z",
+                        "gameType": 2,
+                        "awayTeam": {"abbrev": "WPG"},
+                        "homeTeam": {"abbrev": "DAL"},
+                    },
+                    {
+                        "id": 11,
+                        "startTimeUTC": "2026-05-04T00:00:00Z",
+                        "gameType": 3,
+                        "awayTeam": {"abbrev": "VGK"},
+                        "homeTeam": {"abbrev": "EDM"},
+                    },
+                ]
+            }
+        ]
+    }
+
+    monkeypatch.setattr(nhl_playoffs.datetime, "datetime", _FixedNow)
+    monkeypatch.setattr(
+        nhl_playoffs._SESSION,
+        "get",
+        lambda *_args, **_kwargs: _Response(payload),
+    )
+
+    games = nhl_playoffs._fetch_remaining_playoff_schedule_games()
+    assert len(games) == 1
+    assert games[0]["gamePk"] == 11
 
 
 def test_render_nhl_playoffs_enriches_next_text_with_official_schedule(monkeypatch):
