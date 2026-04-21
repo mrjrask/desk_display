@@ -252,6 +252,26 @@ def _reference_series_title_height(
     return reference_h
 
 
+def _next_variant_title_opponent_gap(
+    *,
+    normalized_screen_id: str,
+    base_gap: int,
+) -> int:
+    """Add breathing room for Cubs/Sox next-variant title/opponent lines."""
+    if normalized_screen_id in {
+        "cubs next",
+        "cubs next home",
+        "sox next",
+        "sox next home",
+        "cubs next series",
+        "cubs next home series",
+        "sox next series",
+        "sox next home series",
+    }:
+        return base_gap + 2
+    return base_gap
+
+
 def _draw_live_basepaths_indicator(
     draw: ImageDraw.ImageDraw,
     *,
@@ -1047,19 +1067,13 @@ def draw_sports_screen(display, game, title, transition=False, screen_id: Option
         fallback_height=th,
     )
 
-    y_text = edge_pad + title_line_h + (config.scale_value(4) if hyperpixel_layout else 4)
-    if use_scaled_prefix:
-        lh = _draw_prefix_opponent_line(
-            draw,
-            WIDTH // 2,
-            y_text,
-            prefix,
-            opponent,
-            opponent_font=opponent_font,
-        )
-    else:
-        lw, lh = draw.textsize(opponent_line, font=opponent_font)
-        draw.text(((WIDTH - lw)//2, y_text), opponent_line, font=opponent_font, fill=(255,255,255))
+    title_to_opponent_gap = _next_variant_title_opponent_gap(
+        normalized_screen_id=normalized_screen_id,
+        base_gap=(config.scale_value(4) if hyperpixel_layout else 4),
+    )
+    y_text = edge_pad + title_line_h + title_to_opponent_gap
+    lw, lh = draw.textsize(opponent_line, font=opponent_font)
+    draw.text(((WIDTH - lw)//2, y_text), opponent_line, font=opponent_font, fill=(255,255,255))
     y_text += lh + line_gap
 
     # logos + “@” inline
@@ -1366,7 +1380,10 @@ def draw_series_screen(display, games, title, transition=False, screen_id: Optio
     else:
         opponent_font = FONT_TEAM_SPORTS
         lines = wrap_text(opponent_text, FONT_TEAM_SPORTS, wrap_width)[:2]
-    title_to_opponent_gap = config.scale_value(4) if hyperpixel_layout else 4
+    title_to_opponent_gap = _next_variant_title_opponent_gap(
+        normalized_screen_id=normalized_screen_id,
+        base_gap=(config.scale_value(4) if hyperpixel_layout else 4),
+    )
     title_line_h = _reference_series_title_height(
         draw,
         normalized_screen_id=normalized_screen_id,
