@@ -298,11 +298,8 @@ def test_escape_double_press_stops_service(main_module, monkeypatch):
     monkeypatch.setattr(main_module.time, "monotonic", lambda: next(timestamps))
 
     called = {"count": 0}
-    monkeypatch.setattr(
-        main_module,
-        "_stop_desk_display_service",
-        lambda: called.__setitem__("count", called["count"] + 1),
-    )
+    monkeypatch.setattr(main_module, "_ESC_DOUBLE_PRESS_ACTION", "stop")
+    monkeypatch.setattr(main_module, "_stop_desk_display_service", lambda: called.__setitem__("count", called["count"] + 1))
 
     main_module.pygame = _FakePygame()
     main_module._last_escape_key_monotonic = 0.0
@@ -331,11 +328,8 @@ def test_escape_double_press_expires_outside_interval(main_module, monkeypatch):
     monkeypatch.setattr(main_module.time, "monotonic", lambda: next(timestamps))
 
     called = {"count": 0}
-    monkeypatch.setattr(
-        main_module,
-        "_stop_desk_display_service",
-        lambda: called.__setitem__("count", called["count"] + 1),
-    )
+    monkeypatch.setattr(main_module, "_ESC_DOUBLE_PRESS_ACTION", "stop")
+    monkeypatch.setattr(main_module, "_stop_desk_display_service", lambda: called.__setitem__("count", called["count"] + 1))
 
     main_module.pygame = _FakePygame()
     main_module._last_escape_key_monotonic = 0.0
@@ -343,3 +337,43 @@ def test_escape_double_press_expires_outside_interval(main_module, monkeypatch):
     assert main_module._check_keyboard_shutdown_request() is False
     assert main_module._check_keyboard_shutdown_request() is False
     assert called["count"] == 0
+
+
+def test_escape_double_press_restarts_service_when_configured(main_module, monkeypatch):
+    class _FakeEvent:
+        def __init__(self, event_type, key):
+            self.type = event_type
+            self.key = key
+
+    class _FakePygame:
+        KEYDOWN = 1
+        K_ESCAPE = 27
+
+        class event:  # noqa: N801 - mirror pygame namespace
+            @staticmethod
+            def get(_event_types):
+                return [_FakeEvent(1, 27)]
+
+    timestamps = iter((100.0, 100.5))
+    monkeypatch.setattr(main_module.time, "monotonic", lambda: next(timestamps))
+
+    called = {"restart": 0, "stop": 0}
+    monkeypatch.setattr(main_module, "_ESC_DOUBLE_PRESS_ACTION", "restart")
+    monkeypatch.setattr(
+        main_module,
+        "_restart_desk_display_service",
+        lambda: called.__setitem__("restart", called["restart"] + 1),
+    )
+    monkeypatch.setattr(
+        main_module,
+        "_stop_desk_display_service",
+        lambda: called.__setitem__("stop", called["stop"] + 1),
+    )
+
+    main_module.pygame = _FakePygame()
+    main_module._last_escape_key_monotonic = 0.0
+
+    assert main_module._check_keyboard_shutdown_request() is False
+    assert main_module._check_keyboard_shutdown_request() is True
+    assert called["restart"] == 1
+    assert called["stop"] == 0
