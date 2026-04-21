@@ -1234,7 +1234,7 @@ def test_draw_sports_screen_next_home_uses_current_series_title_spacing(
         reference_title,
         font=mlb_schedule.FONT_TITLE_SPORTS,
     )[1]
-    expected_y = reference_h + 4
+    expected_y = reference_h + 6
     if "opponent_y" not in captured:
         opponent = expected_opponent_text.split(". ", 1)[1]
         for x, y, text in line_calls:

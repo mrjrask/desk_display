@@ -260,7 +260,9 @@ def _next_variant_title_opponent_gap(
     """Match Cubs/Sox Next Game spacing for title/opponent lines on related series views."""
     if normalized_screen_id in {
         "cubs next",
+        "cubs next home",
         "sox next",
+        "sox next home",
         "cubs current series",
         "sox current series",
         "cubs next series",
