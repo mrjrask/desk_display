@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Render NBA playoff series matchups using scoreboard-style layout."""
+"""Render NBA playoff series matchups using NHL-playoffs-style layout."""
 
 from __future__ import annotations
 
@@ -25,10 +25,9 @@ from config import (
     SCOREBOARD_SCROLL_PAUSE_TOP,
     SCOREBOARD_SCROLL_PAUSE_BOTTOM,
     SCOREBOARD_STANDINGS_BOTTOM_PADDING,
-    SCOREBOARD_BACKGROUND_COLOR,
-    get_screen_background_color,
     get_screen_font,
     get_screen_image_scale,
+    is_kernel_driven_display,
     is_hyperpixel_next_layout,
     is_hyperpixel_4_square_layout,
     scale_value,
@@ -41,7 +40,6 @@ from utils import (
     load_team_logo,
     log_missing_team_logo,
     scroll_vertical_content,
-    standard_scoreboard_team_logo_height,
     standard_scoreboard_league_logo_height,
 )
 from screens.nba_scoreboard import (
@@ -62,30 +60,43 @@ def _scale_y(value: int) -> int:
 
 
 TITLE = "NBA Playoffs"
+SUBTITLE = "Best-of-7"
 SCREEN_ID = "NBA Playoffs"
 TITLE_GAP = _scale_y(8)
+SUBTITLE_GAP = _scale_y(4)
 BLOCK_SPACING = _scale_y(10)
 SCORE_ROW_H = _scale_y(56)
 STATUS_ROW_H = _scale_y(18)
 REQUEST_TIMEOUT = 8
-
-COL_WIDTHS = [
-    scale_value_width(70),
-    scale_value_width(60),
-    scale_value_width(60),
-    scale_value_width(60),
-    scale_value_width(70),
+PAIR_SPACING_BASE = max(8, scale_value_width(16))
+SERIES_COL_WIDTHS_BASE = [
+    scale_value_width(42),
+    scale_value_width(32),
+    scale_value_width(16),
+    scale_value_width(32),
+    scale_value_width(42),
 ]
-_TOTAL_COL_WIDTH = sum(COL_WIDTHS)
-_COL_LEFT = max(0, (WIDTH - _TOTAL_COL_WIDTH) // 2)
-COL_X = [_COL_LEFT]
-for w in COL_WIDTHS:
-    COL_X.append(COL_X[-1] + w)
+
+PAIR_SPACING = PAIR_SPACING_BASE
+SERIES_COL_WIDTHS = list(SERIES_COL_WIDTHS_BASE)
+SERIES_WIDTH = sum(SERIES_COL_WIDTHS)
+CONTENT_WIDTH = SERIES_WIDTH * 2 + PAIR_SPACING
+CONTENT_LEFT = max(0, (WIDTH - CONTENT_WIDTH) // 2)
+WEST_X = CONTENT_LEFT
+EAST_X = CONTENT_LEFT + SERIES_WIDTH + PAIR_SPACING
+SERIES_COL_X = [0]
+for w in SERIES_COL_WIDTHS:
+    SERIES_COL_X.append(SERIES_COL_X[-1] + w)
 
 TITLE_FONT = FONT_TITLE_SPORTS
 LOGO_DIR = os.path.join(IMAGES_DIR, "nba")
-TEAM_LOGO_BASE_HEIGHT = standard_scoreboard_team_logo_height(HEIGHT)
-LEAGUE_LOGO_BASE_HEIGHT = standard_scoreboard_league_logo_height(TEAM_LOGO_BASE_HEIGHT)
+TEAM_LOGO_BASE_HEIGHT = scale_value_width(26)
+PLAYOFF_LOGO_SCALE = 0.9
+LEAGUE_LOGO_BASE_HEIGHT = (
+    TEAM_LOGO_BASE_HEIGHT
+    if (HYPERPIXEL_LAYOUT or is_kernel_driven_display())
+    else standard_scoreboard_league_logo_height(TEAM_LOGO_BASE_HEIGHT)
+)
 if HYPERPIXEL_4_SQUARE:
     LEAGUE_LOGO_BASE_HEIGHT = min(LEAGUE_LOGO_BASE_HEIGHT, scale_value_width(40))
 LOGO_HEIGHT = TEAM_LOGO_BASE_HEIGHT
@@ -95,24 +106,82 @@ _SESSION = get_session()
 
 
 def _scoreboard_fonts() -> tuple:
-    score = get_screen_font(SCREEN_ID, "score", base_font=FONT_TEAM_SPORTS, default_size=43)
-    status = get_screen_font(SCREEN_ID, "status", base_font=FONT_STATUS, default_size=28)
-    center = get_screen_font(SCREEN_ID, "center", base_font=FONT_STATUS, default_size=28)
-    return score, status, center
+    score = get_screen_font(SCREEN_ID, "score", base_font=FONT_TEAM_SPORTS, default_size=24)
+    status = get_screen_font(SCREEN_ID, "status", base_font=FONT_STATUS, default_size=18)
+    status_small = get_screen_font(SCREEN_ID, "status_small", base_font=FONT_STATUS, default_size=16)
+    center = get_screen_font(SCREEN_ID, "center", base_font=FONT_STATUS, default_size=18)
+    return score, status, status_small, center
 
 
-SCORE_FONT, STATUS_FONT, CENTER_FONT = _scoreboard_fonts()
-BACKGROUND_COLOR = get_screen_background_color(SCREEN_ID, SCOREBOARD_BACKGROUND_COLOR)
+SCORE_FONT, STATUS_FONT, STATUS_SMALL_FONT, CENTER_FONT = _scoreboard_fonts()
+BACKGROUND_COLOR = (0, 0, 0)
 _LOGO_CACHE: dict[tuple[str, int], Optional[Image.Image]] = {}
 
 
-def _apply_style_overrides() -> None:
-    global SCORE_FONT, STATUS_FONT, CENTER_FONT, LOGO_HEIGHT, BACKGROUND_COLOR
+def _fit_widths_to_total(widths: list[int], target_total: int) -> list[int]:
+    if not widths:
+        return []
+    target_total = max(len(widths), target_total)
+    current_total = sum(widths)
+    if current_total <= 0:
+        return [1] * len(widths)
+    scaled = [max(1, int(round(w * target_total / current_total))) for w in widths]
+    delta = target_total - sum(scaled)
+    order = sorted(range(len(widths)), key=lambda idx: widths[idx], reverse=(delta > 0))
+    while delta != 0 and order:
+        changed = False
+        for idx in order:
+            if delta == 0:
+                break
+            if delta < 0 and scaled[idx] <= 1:
+                continue
+            scaled[idx] += 1 if delta > 0 else -1
+            delta += -1 if delta > 0 else 1
+            changed = True
+        if not changed:
+            break
+    return scaled
 
-    SCORE_FONT, STATUS_FONT, CENTER_FONT = _scoreboard_fonts()
-    BACKGROUND_COLOR = get_screen_background_color(SCREEN_ID, SCOREBOARD_BACKGROUND_COLOR)
+
+def _recompute_series_layout() -> None:
+    global PAIR_SPACING, SERIES_COL_WIDTHS, SERIES_WIDTH, CONTENT_WIDTH, CONTENT_LEFT, WEST_X, EAST_X, SERIES_COL_X
+
+    preferred_spacing = max(0, PAIR_SPACING_BASE)
+    preferred_series_width = sum(SERIES_COL_WIDTHS_BASE)
+
+    if preferred_series_width * 2 + preferred_spacing <= WIDTH:
+        spacing = preferred_spacing
+        series_col_widths = list(SERIES_COL_WIDTHS_BASE)
+    else:
+        series_target = max(len(SERIES_COL_WIDTHS_BASE), WIDTH // 2)
+        series_col_widths = _fit_widths_to_total(SERIES_COL_WIDTHS_BASE, series_target)
+        fitted_series_width = sum(series_col_widths)
+        spacing = min(preferred_spacing, max(0, WIDTH - (fitted_series_width * 2)))
+
+    series_width = sum(series_col_widths)
+    content_width = min(WIDTH, series_width * 2 + spacing)
+    content_left = max(0, (WIDTH - content_width) // 2)
+
+    PAIR_SPACING = spacing
+    SERIES_COL_WIDTHS = series_col_widths
+    SERIES_WIDTH = series_width
+    CONTENT_WIDTH = content_width
+    CONTENT_LEFT = content_left
+    WEST_X = content_left
+    EAST_X = content_left + series_width + spacing
+    SERIES_COL_X = [0]
+    for w in series_col_widths:
+        SERIES_COL_X.append(SERIES_COL_X[-1] + w)
+
+
+def _apply_style_overrides() -> None:
+    global SCORE_FONT, STATUS_FONT, STATUS_SMALL_FONT, CENTER_FONT, LOGO_HEIGHT, BACKGROUND_COLOR
+
+    SCORE_FONT, STATUS_FONT, STATUS_SMALL_FONT, CENTER_FONT = _scoreboard_fonts()
+    BACKGROUND_COLOR = (0, 0, 0)
+    _recompute_series_layout()
     team_scale = get_screen_image_scale(SCREEN_ID, "team_logo", 1.0)
-    target_logo_height = max(1, int(round(TEAM_LOGO_BASE_HEIGHT * team_scale)))
+    target_logo_height = max(1, int(round(TEAM_LOGO_BASE_HEIGHT * team_scale * PLAYOFF_LOGO_SCALE)))
     max_row_fit = max(1, SCORE_ROW_H - scale_value(8))
     LOGO_HEIGHT = min(target_logo_height, max_row_fit)
 
@@ -164,6 +233,15 @@ def _team_from_series(series: dict, *keys: str) -> dict:
     return {}
 
 
+def _normalize_conference_label(value: Any) -> str:
+    text = str(value or "").strip().lower()
+    if text.startswith("w"):
+        return "west"
+    if text.startswith("e"):
+        return "east"
+    return ""
+
+
 def _extract_next_game_dt(value: Any) -> Optional[datetime.datetime]:
     if isinstance(value, (int, float)):
         try:
@@ -203,21 +281,22 @@ def _format_next_text(series: dict) -> str:
     )
     if next_dt is None:
         text = str(series.get("nextGameLabel") or series.get("nextGameText") or "").strip()
-        return f"Next: {text}" if text else "Next: TBD"
+        return text if text else "TBD"
     day_label = _next_day_label(next_dt)
     if day_label:
-        return f"Next: {day_label} {next_dt.strftime('%-I:%M %p')}"
-    return f"Next: {next_dt.month}/{next_dt.day} {next_dt.strftime('%-I:%M %p')}"
+        return f"{day_label} {next_dt.strftime('%-I:%M %p')}"
+    return f"{next_dt.month}/{next_dt.day} {next_dt.strftime('%-I:%M %p')}"
 
 
 def _normalize_next_text(text: Any) -> str:
     raw = str(text or "").strip()
     if not raw:
-        return "Next: TBD"
+        return "TBD"
+    normalized = re.sub(r"^\s*Next:\s*", "", raw, flags=re.IGNORECASE).strip()
     normalized = re.sub(
         r"\s+(?:ET|EST|EDT|CT|CST|CDT|MT|MST|MDT|PT|PST|PDT|UTC)$",
         "",
-        raw,
+        normalized,
         flags=re.IGNORECASE,
     ).strip()
     normalized = re.sub(
@@ -225,7 +304,7 @@ def _normalize_next_text(text: Any) -> str:
         lambda match: f"{int(match.group(1))}/{int(match.group(2))}",
         normalized,
     )
-    return normalized or "Next: TBD"
+    return normalized or "TBD"
 
 
 def _normalize_series_item(series: dict) -> Optional[dict]:
@@ -251,8 +330,7 @@ def _normalize_series_item(series: dict) -> Optional[dict]:
         "roundLabel",
         "roundName",
     }
-    has_playoff_shape = any(key in series for key in playoff_shape_keys)
-    if not has_playoff_shape:
+    if not any(key in series for key in playoff_shape_keys):
         return None
 
     away_slot = _team_slot_from_series(
@@ -330,6 +408,9 @@ def _normalize_series_item(series: dict) -> Optional[dict]:
     if not away_abbr or not home_abbr:
         return None
 
+    conference = _normalize_conference_label(
+        series.get("conferenceAbbrev") or series.get("conferenceName") or series.get("conference")
+    )
     status = (
         series.get("seriesStatusShort")
         or series.get("seriesStatus")
@@ -344,6 +425,9 @@ def _normalize_series_item(series: dict) -> Optional[dict]:
             "home": {"team": home_team, "score": home_wins},
         },
         "status_text": str(status),
+        "conference": conference,
+        "higher_seed": _as_int(series.get("topSeedRank") or series.get("higherSeedRank") or away_team.get("seed")),
+        "lower_seed": _as_int(series.get("bottomSeedRank") or series.get("lowerSeedRank") or home_team.get("seed")),
         "next_text": _format_next_text(series),
     }
 
@@ -482,8 +566,7 @@ def _derive_playoff_matchups_from_games(games: list[dict]) -> list[dict]:
                 return nested
         return {}
 
-    filtered_games = [game for game in (games or []) if _looks_like_playoff_game(game)]
-    source_games = filtered_games if filtered_games else (games or [])
+    source_games = [game for game in (games or []) if _looks_like_playoff_game(game)]
 
     result_by_pair: dict[tuple[str, str], dict] = {}
     for game in source_games:
@@ -503,7 +586,12 @@ def _derive_playoff_matchups_from_games(games: list[dict]) -> list[dict]:
                     "home": {"team": home_team, "score": 0},
                 },
                 "status_text": "Series",
-                "next_text": "Next: TBD",
+                "conference": _normalize_conference_label(
+                    away_team.get("conference") or away_team.get("conferenceName") or home_team.get("conference")
+                ),
+                "higher_seed": _as_int(away_team.get("seed") or home_team.get("seed")),
+                "lower_seed": None,
+                "next_text": "TBD",
             }
             result_by_pair[key] = existing
 
@@ -523,30 +611,65 @@ def _derive_playoff_matchups_from_games(games: list[dict]) -> list[dict]:
             existing["teams"]["home"]["score"] = parsed[1]
             existing["status_text"] = detailed
 
-        start_date = game.get("gameDate")
-        game_dt = _extract_next_game_dt(start_date)
+        game_dt = _extract_next_game_dt(game.get("gameDate"))
         if game_dt and game_dt >= datetime.datetime.now(CENTRAL_TIME):
-            next_text = f"Next: {game_dt.month}/{game_dt.day} {game_dt.strftime('%-I:%M %p')}"
-            if key in result_by_pair:
-                existing["next_text"] = next_text
-            elif existing.get("next_text") == "Next: TBD":
-                existing["next_text"] = next_text
+            existing["next_text"] = f"{game_dt.month}/{game_dt.day} {game_dt.strftime('%-I:%M %p')}"
 
     return list(result_by_pair.values())
 
 
-def _draw_game_block(canvas: Image.Image, draw: ImageDraw.ImageDraw, game: dict, top: int):
-    teams = (game or {}).get("teams", {})
+def _is_current_series(series: dict) -> bool:
+    teams = (series or {}).get("teams") or {}
+    away = teams.get("away") or {}
+    home = teams.get("home") or {}
+    away_wins = _as_int(away.get("score")) or 0
+    home_wins = _as_int(home.get("score")) or 0
+    return away_wins < 4 and home_wins < 4
+
+
+def _series_order_key(series: dict) -> tuple[int, int, str, str]:
+    higher_seed = _as_int(series.get("higher_seed"))
+    lower_seed = _as_int(series.get("lower_seed"))
+    teams = series.get("teams") or {}
+    away_team = ((teams.get("away") or {}).get("team") or {})
+    home_team = ((teams.get("home") or {}).get("team") or {})
+    fallback_high = min(
+        _as_int(away_team.get("seed")) or 99,
+        _as_int(home_team.get("seed")) or 99,
+    )
+    high = higher_seed if higher_seed is not None else fallback_high
+    low = lower_seed if lower_seed is not None else 99
+    return (high, low, _team_logo_abbr(home_team), _team_logo_abbr(away_team))
+
+
+def _conference_buckets(series: list[dict]) -> tuple[list[dict], list[dict]]:
+    west = [item for item in series if _normalize_conference_label(item.get("conference")) == "west"]
+    east = [item for item in series if _normalize_conference_label(item.get("conference")) == "east"]
+    unknown = [item for item in series if item not in west and item not in east]
+    for idx, item in enumerate(unknown):
+        (west if idx % 2 == 0 else east).append(item)
+    west.sort(key=_series_order_key)
+    east.sort(key=_series_order_key)
+    return west, east
+
+
+def _draw_series_block(canvas: Image.Image, draw: ImageDraw.ImageDraw, series: dict, *, left: int, top: int):
+    teams = (series or {}).get("teams", {})
     away = teams.get("away", {})
     home = teams.get("home", {})
 
-    away_text = str(away.get("score", 0))
-    home_text = str(home.get("score", 0))
-
-    score_top = top
-    for idx, text in ((0, away_text), (2, "@"), (4, home_text)):
+    for idx, text in ((0, str(away.get("score", 0))), (2, "-"), (4, str(home.get("score", 0)))):
         font = SCORE_FONT if idx != 2 else CENTER_FONT
-        _center_text(draw, text, font, COL_X[idx], COL_WIDTHS[idx], score_top, SCORE_ROW_H, fill=(255, 255, 255))
+        _center_text(
+            draw,
+            text,
+            font,
+            left + SERIES_COL_X[idx],
+            SERIES_COL_WIDTHS[idx],
+            top,
+            SCORE_ROW_H,
+            fill=(255, 255, 255),
+        )
 
     for idx, team_side in ((1, away), (3, home)):
         team_obj = (team_side or {}).get("team", {})
@@ -556,30 +679,43 @@ def _draw_game_block(canvas: Image.Image, draw: ImageDraw.ImageDraw, game: dict,
             team_name = (team_obj or {}).get("teamName") or (team_obj or {}).get("teamCity") or "Unknown Team"
             log_missing_team_logo(SCREEN_ID, team_name, abbr)
             continue
-        x0 = COL_X[idx] + (COL_WIDTHS[idx] - logo.width) // 2
-        y0 = score_top + (SCORE_ROW_H - logo.height) // 2
+        x0 = left + SERIES_COL_X[idx] + (SERIES_COL_WIDTHS[idx] - logo.width) // 2
+        y0 = top + (SCORE_ROW_H - logo.height) // 2
         canvas.paste(logo, (x0, y0), logo)
 
-    status_top = score_top + SCORE_ROW_H
-    status_text = _normalize_next_text(game.get("next_text") or game.get("status_text") or "Next: TBD")
-    _center_text(draw, status_text, STATUS_FONT, COL_X[2], COL_WIDTHS[2], status_top, STATUS_ROW_H, fill=(255, 255, 255))
+    status_top = top + SCORE_ROW_H
+    _center_text(
+        draw,
+        _normalize_next_text(series.get("next_text") or series.get("status_text") or "TBD"),
+        STATUS_SMALL_FONT,
+        left,
+        SERIES_WIDTH,
+        status_top,
+        STATUS_ROW_H,
+        fill=(255, 255, 255),
+    )
 
 
-def _compose_canvas(games: list[dict]) -> Image.Image:
-    if not games:
+def _compose_canvas(series: list[dict]) -> Image.Image:
+    if not series:
         return Image.new("RGB", (WIDTH, HEIGHT), BACKGROUND_COLOR)
+    west_series, east_series = _conference_buckets(series)
+    rows = max(len(west_series), len(east_series))
     block_height = SCORE_ROW_H + STATUS_ROW_H
-    total_height = block_height * len(games)
-    if len(games) > 1:
-        total_height += BLOCK_SPACING * (len(games) - 1)
+    total_height = block_height * rows
+    if rows > 1:
+        total_height += BLOCK_SPACING * (rows - 1)
     canvas = Image.new("RGB", (WIDTH, total_height), BACKGROUND_COLOR)
     draw = ImageDraw.Draw(canvas)
 
     y = 0
-    for idx, game in enumerate(games):
-        _draw_game_block(canvas, draw, game, y)
-        y += SCORE_ROW_H + STATUS_ROW_H
-        if idx < len(games) - 1:
+    for idx in range(rows):
+        if idx < len(west_series):
+            _draw_series_block(canvas, draw, west_series[idx], left=WEST_X, top=y)
+        if idx < len(east_series):
+            _draw_series_block(canvas, draw, east_series[idx], left=EAST_X, top=y)
+        y += block_height
+        if idx < rows - 1:
             sep_y = y + BLOCK_SPACING // 2
             draw.line((10, sep_y, WIDTH - 10, sep_y), fill=(45, 45, 45))
             y += BLOCK_SPACING
@@ -596,12 +732,17 @@ def _render_playoff_screen(series: list[dict]) -> Image.Image:
         title_h = b - t
     except Exception:
         _, title_h = dd.textsize(TITLE, font=TITLE_FONT)
+    try:
+        l, t, r, b = dd.textbbox((0, 0), SUBTITLE, font=STATUS_SMALL_FONT)
+        subtitle_h = b - t
+    except Exception:
+        _, subtitle_h = dd.textsize(SUBTITLE, font=STATUS_SMALL_FONT)
 
     league_logo = _get_league_logo()
     logo_height = league_logo.height if league_logo else 0
     logo_gap = LEAGUE_LOGO_GAP if league_logo else 0
 
-    content_top = logo_height + logo_gap + title_h + TITLE_GAP
+    content_top = logo_height + logo_gap + title_h + SUBTITLE_GAP + subtitle_h + TITLE_GAP
     img_height = max(HEIGHT, content_top + canvas.height + SCOREBOARD_STANDINGS_BOTTOM_PADDING)
     img = Image.new("RGB", (WIDTH, img_height), BACKGROUND_COLOR)
     draw = ImageDraw.Draw(img)
@@ -621,6 +762,8 @@ def _render_playoff_screen(series: list[dict]) -> Image.Image:
         tx = (WIDTH - tw) // 2
         ty = title_top
     draw.text((tx, ty), TITLE, font=TITLE_FONT, fill=(255, 255, 255))
+    subtitle_top = ty + th + SUBTITLE_GAP
+    _center_text(draw, SUBTITLE, STATUS_SMALL_FONT, 0, WIDTH, subtitle_top, subtitle_h)
 
     img.paste(canvas, (0, content_top))
     return img
@@ -649,6 +792,8 @@ def render_nba_playoffs(display, games: list[dict], transition: bool = False) ->
     if not series:
         series = _derive_playoff_matchups_from_games(games)
 
+    series = [item for item in series if _is_current_series(item)]
+
     if not series:
         clear_display(display)
         img = Image.new("RGB", (WIDTH, HEIGHT), BACKGROUND_COLOR)
@@ -660,8 +805,10 @@ def render_nba_playoffs(display, games: list[dict], transition: bool = False) ->
             img.paste(league_logo, (logo_x, 0), league_logo)
             title_top = league_logo.height + LEAGUE_LOGO_GAP
         _center_text(draw, TITLE, TITLE_FONT, 0, WIDTH, title_top, _scale_y(40))
-        msg_top = title_top + _scale_y(56)
-        _center_text(draw, "No playoff series", STATUS_FONT, 0, WIDTH, msg_top, STATUS_ROW_H)
+        subtitle_top = title_top + _scale_y(40)
+        _center_text(draw, SUBTITLE, STATUS_SMALL_FONT, 0, WIDTH, subtitle_top, STATUS_ROW_H)
+        msg_top = subtitle_top + STATUS_ROW_H + _scale_y(16)
+        _center_text(draw, "No active series", STATUS_FONT, 0, WIDTH, msg_top, STATUS_ROW_H)
         if transition:
             return ScreenImage(img, displayed=False)
         display.image(img)
