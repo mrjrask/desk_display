@@ -40,6 +40,22 @@ def test_extract_series_reads_matchups_key():
     assert extracted[0]["teams"]["home"]["team"]["teamTricode"] == "DET"
 
 
+def test_extract_series_ignores_non_series_matchups_without_playoff_shape():
+    extracted = nba_playoffs._extract_series(
+        {
+            "matchups": [
+                {
+                    "awayTeam": {"teamTricode": "BOS"},
+                    "homeTeam": {"teamTricode": "NYK"},
+                    "gameDate": "2026-04-21T00:00:00Z",
+                }
+            ]
+        }
+    )
+
+    assert extracted == []
+
+
 def test_normalize_next_text_strips_timezone_suffix():
     assert nba_playoffs._normalize_next_text("Next: 04/09 8:00 PM ET") == "Next: 4/9 8:00 PM"
 

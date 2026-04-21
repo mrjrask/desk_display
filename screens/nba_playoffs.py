@@ -232,6 +232,29 @@ def _normalize_series_item(series: dict) -> Optional[dict]:
     if not isinstance(series, dict):
         return None
 
+    playoff_shape_keys = {
+        "awayWins",
+        "homeWins",
+        "topSeedWins",
+        "bottomSeedWins",
+        "highSeedWins",
+        "lowSeedWins",
+        "higherSeedWins",
+        "lowerSeedWins",
+        "team1Wins",
+        "team2Wins",
+        "topSeedTeamWins",
+        "bottomSeedTeamWins",
+        "seriesStatusShort",
+        "seriesStatus",
+        "seriesText",
+        "roundLabel",
+        "roundName",
+    }
+    has_playoff_shape = any(key in series for key in playoff_shape_keys)
+    if not has_playoff_shape:
+        return None
+
     away_slot = _team_slot_from_series(
         series,
         "awayTeam",
