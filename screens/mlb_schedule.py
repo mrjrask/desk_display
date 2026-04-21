@@ -1072,8 +1072,20 @@ def draw_sports_screen(display, game, title, transition=False, screen_id: Option
         base_gap=(config.scale_value(4) if hyperpixel_layout else 4),
     )
     y_text = edge_pad + title_line_h + title_to_opponent_gap
-    lw, lh = draw.textsize(opponent_line, font=opponent_font)
-    draw.text(((WIDTH - lw)//2, y_text), opponent_line, font=opponent_font, fill=(255,255,255))
+    if use_scaled_prefix and hasattr(opponent_font, "font_variant"):
+        base_size = int(getattr(opponent_font, "size", 20) or 20)
+        prefix_size = max(8, int(round(base_size * 0.6)))
+        prefix_font = opponent_font.font_variant(size=prefix_size)
+        prefix_text = f"{prefix} "
+        prefix_w, prefix_h = draw.textsize(prefix_text, font=prefix_font)
+        opponent_w, opponent_h = draw.textsize(opponent, font=opponent_font)
+        lh = max(prefix_h, opponent_h)
+        start_x = (WIDTH - (prefix_w + opponent_w)) // 2
+        draw.text((start_x, y_text + ((lh - prefix_h) // 2)), prefix_text, font=prefix_font, fill=(255, 255, 255))
+        draw.text((start_x + prefix_w, y_text + ((lh - opponent_h) // 2)), opponent, font=opponent_font, fill=(255, 255, 255))
+    else:
+        lw, lh = draw.textsize(opponent_line, font=opponent_font)
+        draw.text(((WIDTH - lw)//2, y_text), opponent_line, font=opponent_font, fill=(255,255,255))
     y_text += lh + line_gap
 
     # logos + “@” inline

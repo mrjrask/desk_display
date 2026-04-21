@@ -951,7 +951,7 @@ def test_draw_sports_screen_sox_next_uses_current_series_title_spacing(monkeypat
     def _capture_text(self, xy, text, *args, **kwargs):
         if text == "Next Sox game...":
             captured["title_y"] = xy[1]
-        elif text == "@ Detroit Tigers":
+        elif text == "Detroit Tigers":
             captured["opponent_y"] = xy[1]
         return original_text(self, xy, text, *args, **kwargs)
 
@@ -1049,6 +1049,41 @@ def test_draw_sports_screen_next_home_uses_current_series_title_spacing(
     )[1]
     assert captured["title_y"] == 0
     assert captured["opponent_y"] == reference_h + 6
+
+
+def test_draw_sports_screen_next_variants_scale_prefix_font(monkeypatch):
+    captured = []
+    original_text = ImageDraw.ImageDraw.text
+
+    def _capture_text(self, xy, text, *args, **kwargs):
+        font = kwargs.get("font")
+        font_size = getattr(font, "size", None)
+        captured.append((text, font_size))
+        return original_text(self, xy, text, *args, **kwargs)
+
+    monkeypatch.setattr(ImageDraw.ImageDraw, "text", _capture_text)
+    monkeypatch.setattr(mlb_schedule.config, "is_hyperpixel_next_layout", lambda: False)
+    monkeypatch.setattr(mlb_schedule.config, "scale_value", lambda value: value)
+    monkeypatch.setattr(mlb_schedule, "load_team_logo", lambda *args, **kwargs: None)
+    monkeypatch.setattr(mlb_schedule, "_center_bottom_text", lambda *args, **kwargs: None)
+
+    game = {
+        "officialDate": "2026-05-01",
+        "startTimeCentral": "6:40 PM",
+        "status": {"detailedState": "Scheduled"},
+        "teams": {
+            "away": {"team": {"id": 143, "name": "Philadelphia Phillies"}},
+            "home": {"team": {"id": 112, "name": "Chicago Cubs"}},
+        },
+    }
+
+    mlb_schedule.draw_sports_screen(None, game, "Next Cubs game...", screen_id="cubs next")
+
+    prefix_draw = next((entry for entry in captured if entry[0] == "vs. "), None)
+    opponent_draw = next((entry for entry in captured if entry[0] == "Philadelphia Phillies"), None)
+    assert prefix_draw is not None
+    assert opponent_draw is not None
+    assert prefix_draw[1] < opponent_draw[1]
 
 
 def test_draw_series_screen_next_variants_use_current_series_title_spacing(monkeypatch):
