@@ -141,7 +141,7 @@ def test_scheduler_respects_frequency():
     registry = make_registry({"date": True, "inside": True})
 
     sequence = collect_sequence(scheduler, registry, 6)
-    assert sequence == ["date", "date", "inside", "date", "date", "inside"]
+    assert sequence == ["date", "inside", "date", "inside", "date", "date"]
 
 
 def test_scheduler_frequency_interval_matches_configuration():
@@ -150,9 +150,10 @@ def test_scheduler_frequency_interval_matches_configuration():
     registry = make_registry({"date": True, "inside": True})
 
     sequence = collect_sequence(scheduler, registry, 12)
-    # ``inside`` should appear on every fourth pass.
+    # ``inside`` appears once during the initial loop, then on every fourth pass.
     assert sequence == [
         "date",
+        "inside",
         "date",
         "date",
         "date",
@@ -162,7 +163,6 @@ def test_scheduler_frequency_interval_matches_configuration():
         "date",
         "date",
         "inside",
-        "date",
         "date",
     ]
 

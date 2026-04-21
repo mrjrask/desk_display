@@ -97,3 +97,34 @@ def test_derive_playoff_matchups_counts_wins_from_finals():
     assert len(derived) == 1
     assert derived[0]["teams"]["away"]["score"] == 1
     assert derived[0]["teams"]["home"]["score"] == 1
+
+
+def test_parse_series_record_ignores_non_series_score_text():
+    assert nba_playoffs._parse_series_record_from_text("Final 117-99") is None
+
+
+def test_derive_playoff_matchups_filters_non_playoff_games_when_playoff_game_present():
+    games = [
+        {
+            "gamePk": "0022500001",
+            "status": {"statusCode": "3", "detailedState": "Final"},
+            "teams": {
+                "away": {"team": {"abbreviation": "BOS"}, "score": 120},
+                "home": {"team": {"abbreviation": "NYK"}, "score": 100},
+            },
+        },
+        {
+            "gamePk": "0042500101",
+            "status": {"statusCode": "3", "detailedState": "Final"},
+            "teams": {
+                "away": {"team": {"abbreviation": "BOS"}, "score": 98},
+                "home": {"team": {"abbreviation": "NYK"}, "score": 95},
+            },
+        },
+    ]
+
+    derived = nba_playoffs._derive_playoff_matchups_from_games(games)
+
+    assert len(derived) == 1
+    assert derived[0]["teams"]["away"]["score"] == 1
+    assert derived[0]["teams"]["home"]["score"] == 0

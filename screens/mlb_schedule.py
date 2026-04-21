@@ -228,6 +228,44 @@ def _center_bottom_text(
     draw.text((tx, ty), text, font=font, fill=fill)
 
 
+def _reference_series_title_height(
+    draw: ImageDraw.ImageDraw,
+    *,
+    normalized_screen_id: str,
+    fallback_height: int,
+) -> int:
+    """Use Current Series title height so title/opponent placement stays consistent."""
+    reference_titles = {
+        "cubs next": "Cubs Current Series",
+        "cubs next home": "Cubs Current Series",
+        "cubs next series": "Cubs Current Series",
+        "cubs next home series": "Cubs Current Series",
+        "sox next": "Sox Current Series",
+        "sox next home": "Sox Current Series",
+        "sox next series": "Sox Current Series",
+        "sox next home series": "Sox Current Series",
+    }
+    reference_title = reference_titles.get(normalized_screen_id)
+    if not reference_title:
+        return fallback_height
+    _, reference_h = draw.textsize(reference_title, font=FONT_TITLE_SPORTS)
+    return reference_h
+
+
+def _next_variant_title_opponent_gap(
+    *,
+    normalized_screen_id: str,
+    base_gap: int,
+) -> int:
+    """Add breathing room for Cubs/Sox next-variant title/opponent lines."""
+    if normalized_screen_id in {
+        "cubs next",
+        "sox next",
+    }:
+        return base_gap + 2
+    return base_gap
+
+
 def _draw_live_basepaths_indicator(
     draw: ImageDraw.ImageDraw,
     *,
@@ -1023,11 +1061,11 @@ def draw_sports_screen(display, game, title, transition=False, screen_id: Option
         max_height=max(1, draw.textsize("Ag", font=FONT_TEAM_SPORTS)[1] * 2),
         min_pt=max(8, int(round(getattr(FONT_TEAM_SPORTS, "size", 20) * 0.6))),
     )
-    title_line_h = th
-    if normalized_screen_id in {"cubs next", "sox next"}:
-        reference_title = "Cubs Current Series" if normalized_screen_id == "cubs next" else "Sox Current Series"
-        _, reference_h = draw.textsize(reference_title, font=FONT_TITLE_SPORTS)
-        title_line_h = reference_h
+    title_line_h = _reference_series_title_height(
+        draw,
+        normalized_screen_id=normalized_screen_id,
+        fallback_height=th,
+    )
 
     y_text = edge_pad + title_line_h + (config.scale_value(4) if hyperpixel_layout else 4)
     if use_scaled_prefix:
@@ -1370,7 +1408,7 @@ def draw_series_screen(display, games, title, transition=False, screen_id: Optio
     else:
         opponent_line_heights = [draw.textsize(ln, font=opponent_font)[1] for ln in lines]
     opponent_lines_h = sum(opponent_line_heights) + (line_gap * max(0, len(lines) - 1))
-    y_text = edge_pad + th + title_to_opponent_gap
+    y_text = edge_pad + title_line_h + title_to_opponent_gap
 
     logo_h = min(standard_next_game_logo_height(HEIGHT), max(16, HEIGHT // 5))
     logo_away = load_team_logo(MLB_LOGOS_DIR, get_mlb_tricode(away_tm) or get_mlb_abbreviation(get_team_display_name(away_tm)), box_size=logo_h)
@@ -1420,14 +1458,14 @@ def draw_series_screen(display, games, title, transition=False, screen_id: Optio
         extra_row_gap = remaining_space // (display_rows - 1)
 
     if hyperpixel_square_series_layout or display_hat_mini_series_layout:
-        block_h_title = th + title_to_opponent_gap + opponent_lines_h
+        block_h_title = title_line_h + title_to_opponent_gap + opponent_lines_h
         block_h_logos = logo_h
         block_h_games = display_rows * row_h
         usable_top = edge_pad
         usable_bottom = HEIGHT - bottom_margin
         used_h = block_h_title + block_h_logos + block_h_games
         between_block_gap = max(0, (usable_bottom - usable_top - used_h) // 2)
-        y_text = usable_top + th + title_to_opponent_gap
+        y_text = usable_top + title_line_h + title_to_opponent_gap
         row_y = y_text + opponent_lines_h + between_block_gap
         rows_top = row_y + logo_h + between_block_gap
         extra_row_gap = 0

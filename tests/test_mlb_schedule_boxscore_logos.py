@@ -1,4 +1,5 @@
 from PIL import Image, ImageDraw
+import pytest
 
 import screens.mlb_schedule as mlb_schedule
 
@@ -1011,6 +1012,53 @@ def test_draw_sports_screen_next_title_without_screen_id_scales_prefix(monkeypat
     mlb_schedule.draw_sports_screen(None, game, "Next Cubs game...", screen_id=None)
 
     assert captured["prefix_size"] < captured["opponent_size"]
+
+
+def test_draw_series_screen_next_variants_use_current_series_title_spacing(monkeypatch):
+    cases = [
+        ("Cubs Next Series", "cubs next series", "vs. Milwaukee Brewers", "Cubs Current Series"),
+        ("Cubs Next Home Series", "cubs next home series", "vs. Milwaukee Brewers", "Cubs Current Series"),
+        ("Sox Next Series", "sox next series", "vs. Cleveland Guardians", "Sox Current Series"),
+        ("Sox Next Home Series", "sox next home series", "vs. Cleveland Guardians", "Sox Current Series"),
+    ]
+
+    monkeypatch.setattr(mlb_schedule.config, "is_hyperpixel_next_layout", lambda: False)
+    monkeypatch.setattr(mlb_schedule.config, "scale_value", lambda value: value)
+    monkeypatch.setattr(mlb_schedule, "load_team_logo", lambda *args, **kwargs: None)
+    monkeypatch.setattr(mlb_schedule, "_series_final_result_parts", lambda *args, **kwargs: None)
+
+    original_text = ImageDraw.ImageDraw.text
+    for title, screen_id, opponent_text, reference_title in cases:
+        captured = {}
+
+        def _capture_text(self, xy, text, *args, **kwargs):
+            if text == title:
+                captured["title_y"] = xy[1]
+            elif text == opponent_text:
+                captured["opponent_y"] = xy[1]
+            return original_text(self, xy, text, *args, **kwargs)
+
+        monkeypatch.setattr(ImageDraw.ImageDraw, "text", _capture_text)
+
+        focus_id = 112 if "cubs" in screen_id else 145
+        games = [
+            {
+                "status": {"detailedState": "Scheduled"},
+                "teams": {
+                    "away": {"team": {"id": 158 if focus_id == 112 else 114, "name": "Milwaukee Brewers" if focus_id == 112 else "Cleveland Guardians"}},
+                    "home": {"team": {"id": focus_id, "name": "Chicago Cubs" if focus_id == 112 else "Chicago White Sox"}},
+                },
+            }
+        ]
+
+        mlb_schedule.draw_series_screen(None, games, title=title, screen_id=screen_id)
+
+        reference_h = ImageDraw.Draw(Image.new("RGB", (1, 1))).textsize(
+            reference_title,
+            font=mlb_schedule.FONT_TITLE_SPORTS,
+        )[1]
+        assert captured["title_y"] == 0
+        assert captured["opponent_y"] == reference_h + 4
 
 
 def test_is_postponed_game_detects_common_status_shapes():
