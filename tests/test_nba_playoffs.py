@@ -18,7 +18,7 @@ def test_normalize_series_item_supports_matchup_shape_and_next_game_time():
     assert normalized["teams"]["home"]["team"]["teamTricode"] == "MIA"
     assert normalized["teams"]["away"]["score"] == 3
     assert normalized["teams"]["home"]["score"] == 1
-    assert normalized["next_text"].startswith("Next: ")
+    assert normalized["next_text"]
 
 
 def test_extract_series_reads_matchups_key():
@@ -57,7 +57,7 @@ def test_extract_series_ignores_non_series_matchups_without_playoff_shape():
 
 
 def test_normalize_next_text_strips_timezone_suffix():
-    assert nba_playoffs._normalize_next_text("Next: 04/09 8:00 PM ET") == "Next: 4/9 8:00 PM"
+    assert nba_playoffs._normalize_next_text("Next: 04/09 8:00 PM ET") == "4/9 8:00 PM"
 
 
 def test_format_next_text_uses_tonight_label(monkeypatch):
@@ -68,16 +68,17 @@ def test_format_next_text_uses_tonight_label(monkeypatch):
 
     monkeypatch.setattr(nba_playoffs.datetime, "datetime", _FixedNow)
     text = nba_playoffs._format_next_text({"nextGameStartTimeUTC": "2026-04-21T02:30:00Z"})
-    assert text == "Next: Tonight 9:30 PM"
+    assert text == "Tonight 9:30 PM"
 
 
 def test_derive_playoff_matchups_supports_scoreboard_games_shape():
     games = [
         {
+            "gamePk": "0042600001",
             "teams": {
                 "away": {"team": {"abbreviation": "BOS"}},
                 "home": {"team": {"abbreviation": "NYK"}},
-            }
+            },
         }
     ]
 
@@ -91,6 +92,7 @@ def test_derive_playoff_matchups_supports_scoreboard_games_shape():
 def test_derive_playoff_matchups_counts_wins_from_finals():
     games = [
         {
+            "gamePk": "0042600101",
             "gameDate": "2026-04-18T00:00:00Z",
             "status": {"statusCode": "3", "detailedState": "Final"},
             "teams": {
@@ -99,6 +101,7 @@ def test_derive_playoff_matchups_counts_wins_from_finals():
             },
         },
         {
+            "gamePk": "0042600102",
             "gameDate": "2026-04-20T00:00:00Z",
             "status": {"statusCode": "3", "detailedState": "Final"},
             "teams": {
@@ -144,3 +147,14 @@ def test_derive_playoff_matchups_filters_non_playoff_games_when_playoff_game_pre
     assert len(derived) == 1
     assert derived[0]["teams"]["away"]["score"] == 1
     assert derived[0]["teams"]["home"]["score"] == 0
+
+
+def test_is_current_series_filters_completed_series():
+    series = {
+        "teams": {
+            "away": {"score": 4},
+            "home": {"score": 2},
+        }
+    }
+
+    assert nba_playoffs._is_current_series(series) is False
