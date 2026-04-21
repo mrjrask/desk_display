@@ -204,6 +204,9 @@ _last_touch_tap_monotonic = 0.0
 _ESC_DOUBLE_PRESS_MAX_INTERVAL_SECONDS = max(
     0.1, float(os.environ.get("ESC_DOUBLE_PRESS_MAX_INTERVAL_SECONDS", "1.0"))
 )
+_ESC_DOUBLE_PRESS_ACTION = os.environ.get("ESC_DOUBLE_PRESS_ACTION", "stop").strip().lower()
+if _ESC_DOUBLE_PRESS_ACTION not in {"stop", "restart", "toggle"}:
+    _ESC_DOUBLE_PRESS_ACTION = "stop"
 _last_escape_key_monotonic = 0.0
 _pending_touch_focus_screen_id: Optional[str] = None
 _pending_touch_return_screen_id: Optional[str] = None
@@ -443,7 +446,7 @@ def _check_touch_skip_request(
 
 
 def _check_keyboard_shutdown_request() -> bool:
-    """Stop the service when Escape is pressed twice within a short interval."""
+    """Handle the configured service action when Escape is pressed twice quickly."""
 
     global _last_escape_key_monotonic
 
@@ -474,12 +477,46 @@ def _check_keyboard_shutdown_request() -> bool:
         now = time.monotonic()
         if _last_escape_key_monotonic > 0 and (now - _last_escape_key_monotonic) <= _ESC_DOUBLE_PRESS_MAX_INTERVAL_SECONDS:
             _last_escape_key_monotonic = 0.0
-            logging.info("⌨️ Double Escape detected; stopping desk_display service.")
-            _stop_desk_display_service()
+            _handle_double_escape_service_action()
             return True
         _last_escape_key_monotonic = now
 
     return False
+
+
+def _handle_double_escape_service_action() -> None:
+    """Run the configured service action for a double-Escape keypress."""
+
+    action = _ESC_DOUBLE_PRESS_ACTION
+    if action == "restart":
+        logging.info("⌨️ Double Escape detected; restarting desk_display service.")
+        _restart_desk_display_service()
+        return
+    if action == "toggle":
+        if _is_desk_display_service_active():
+            logging.info("⌨️ Double Escape detected; stopping desk_display service.")
+            _stop_desk_display_service()
+        else:
+            logging.info("⌨️ Double Escape detected; restarting desk_display service.")
+            _restart_desk_display_service()
+        return
+
+    logging.info("⌨️ Double Escape detected; stopping desk_display service.")
+    _stop_desk_display_service()
+
+
+def _is_desk_display_service_active() -> bool:
+    """Return whether `desk_display.service` is currently active."""
+
+    try:
+        result = subprocess.run(
+            ["systemctl", "is-active", "--quiet", "desk_display.service"],
+            check=False,
+        )
+    except Exception as exc:
+        logging.warning("Unable to determine desk_display.service state: %s", exc)
+        return True
+    return result.returncode == 0
 
 
 def _handle_button_down(name: str) -> bool:
