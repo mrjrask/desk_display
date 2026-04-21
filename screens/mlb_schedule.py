@@ -1040,12 +1040,18 @@ def draw_sports_screen(display, game, title, transition=False, screen_id: Option
         prefix, opponent = 'vs.', get_team_display_name(away_tm)
 
     opponent_line = f"{prefix} {opponent}"
+    normalized_title = (title or "").strip().lower()
     use_scaled_prefix = normalized_screen_id in {
         "cubs next",
         "cubs next home",
         "sox next",
         "sox next home",
     }
+    if not use_scaled_prefix and normalized_title:
+        use_scaled_prefix = (
+            ("cubs" in normalized_title or "sox" in normalized_title)
+            and "next" in normalized_title
+        )
     line_width = max(1, (WIDTH - (edge_pad * 2)) if hyperpixel_layout else WIDTH)
     opponent_font = fit_font(
         draw,
@@ -1061,13 +1067,19 @@ def draw_sports_screen(display, game, title, transition=False, screen_id: Option
         fallback_height=th,
     )
 
-    title_to_opponent_gap = _next_variant_title_opponent_gap(
-        normalized_screen_id=normalized_screen_id,
-        base_gap=(config.scale_value(4) if hyperpixel_layout else 4),
-    )
-    y_text = edge_pad + title_line_h + title_to_opponent_gap
-    lw, lh = draw.textsize(opponent_line, font=opponent_font)
-    draw.text(((WIDTH - lw)//2, y_text), opponent_line, font=opponent_font, fill=(255,255,255))
+    y_text = edge_pad + title_line_h + (config.scale_value(4) if hyperpixel_layout else 4)
+    if use_scaled_prefix:
+        lh = _draw_prefix_opponent_line(
+            draw,
+            WIDTH // 2,
+            y_text,
+            prefix,
+            opponent,
+            opponent_font=opponent_font,
+        )
+    else:
+        lw, lh = draw.textsize(opponent_line, font=opponent_font)
+        draw.text(((WIDTH - lw)//2, y_text), opponent_line, font=opponent_font, fill=(255,255,255))
     y_text += lh + line_gap
 
     # logos + “@” inline
@@ -1359,7 +1371,13 @@ def draw_series_screen(display, games, title, transition=False, screen_id: Optio
         prefix, opponent = "vs.", get_team_display_name(away_tm)
 
     opponent_text = f"{prefix} {opponent}"
+    normalized_title = (title or "").strip().lower()
     scale_single_line_opponent = normalized_screen_id in series_screen_ids
+    if not scale_single_line_opponent and normalized_title:
+        scale_single_line_opponent = (
+            ("cubs" in normalized_title or "sox" in normalized_title)
+            and "series" in normalized_title
+        )
     wrap_width = WIDTH - (edge_pad * 2) if hyperpixel_layout else WIDTH
     if scale_single_line_opponent:
         opponent_font = fit_font(
@@ -1374,16 +1392,21 @@ def draw_series_screen(display, games, title, transition=False, screen_id: Optio
     else:
         opponent_font = FONT_TEAM_SPORTS
         lines = wrap_text(opponent_text, FONT_TEAM_SPORTS, wrap_width)[:2]
-    title_to_opponent_gap = _next_variant_title_opponent_gap(
-        normalized_screen_id=normalized_screen_id,
-        base_gap=(config.scale_value(4) if hyperpixel_layout else 4),
-    )
-    title_line_h = _reference_series_title_height(
-        draw,
-        normalized_screen_id=normalized_screen_id,
-        fallback_height=th,
-    )
-    opponent_line_heights = [draw.textsize(ln, font=opponent_font)[1] for ln in lines]
+    title_to_opponent_gap = config.scale_value(4) if hyperpixel_layout else 4
+    if scale_single_line_opponent:
+        opponent_prefix_font = (
+            opponent_font.font_variant(size=max(8, int(round(getattr(opponent_font, "size", 20) * 0.6))))
+            if hasattr(opponent_font, "font_variant")
+            else opponent_font
+        )
+        opponent_line_heights = [
+            max(
+                draw.textsize(f"{prefix} ", font=opponent_prefix_font)[1],
+                draw.textsize(opponent, font=opponent_font)[1],
+            )
+        ]
+    else:
+        opponent_line_heights = [draw.textsize(ln, font=opponent_font)[1] for ln in lines]
     opponent_lines_h = sum(opponent_line_heights) + (line_gap * max(0, len(lines) - 1))
     y_text = edge_pad + title_line_h + title_to_opponent_gap
 
