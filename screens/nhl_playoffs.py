@@ -54,8 +54,10 @@ def _scale_y(value: int) -> int:
 
 
 TITLE = "NHL Playoffs"
+SUBTITLE = "Best-of-7"
 SCREEN_ID = "NHL Playoffs"
 TITLE_GAP = _scale_y(8)
+SUBTITLE_GAP = _scale_y(4)
 BLOCK_SPACING = _scale_y(10)
 SCORE_ROW_H = _scale_y(56)
 STATUS_ROW_H = _scale_y(18)
@@ -1071,12 +1073,17 @@ def _render_playoff_screen(series: list[dict]) -> Image.Image:
         title_h = b - t
     except Exception:
         _, title_h = dd.textsize(TITLE, font=TITLE_FONT)
+    try:
+        l, t, r, b = dd.textbbox((0, 0), SUBTITLE, font=STATUS_SMALL_FONT)
+        subtitle_h = b - t
+    except Exception:
+        _, subtitle_h = dd.textsize(SUBTITLE, font=STATUS_SMALL_FONT)
 
     league_logo = _get_playoffs_logo()
     logo_height = league_logo.height if league_logo else 0
     logo_gap = LEAGUE_LOGO_GAP if league_logo else 0
 
-    content_top = logo_height + logo_gap + title_h + TITLE_GAP
+    content_top = logo_height + logo_gap + title_h + SUBTITLE_GAP + subtitle_h + TITLE_GAP
     img_height = max(HEIGHT, content_top + canvas.height + SCOREBOARD_STANDINGS_BOTTOM_PADDING)
     img = Image.new("RGB", (WIDTH, img_height), BACKGROUND_COLOR)
     draw = ImageDraw.Draw(img)
@@ -1096,6 +1103,8 @@ def _render_playoff_screen(series: list[dict]) -> Image.Image:
         tx = (WIDTH - tw) // 2
         ty = title_top
     draw.text((tx, ty), TITLE, font=TITLE_FONT, fill=(255, 255, 255))
+    subtitle_top = ty + th + SUBTITLE_GAP
+    _center_text(draw, SUBTITLE, STATUS_SMALL_FONT, 0, WIDTH, subtitle_top, subtitle_h)
 
     img.paste(canvas, (0, content_top))
     return img
@@ -1141,7 +1150,9 @@ def render_nhl_playoffs(display, games: list[dict], transition: bool = False) ->
             img.paste(league_logo, (logo_x, 0), league_logo)
             title_top = league_logo.height + LEAGUE_LOGO_GAP
         _center_text(draw, TITLE, TITLE_FONT, 0, WIDTH, title_top, _scale_y(40))
-        msg_top = title_top + _scale_y(56)
+        subtitle_top = title_top + _scale_y(40)
+        _center_text(draw, SUBTITLE, STATUS_SMALL_FONT, 0, WIDTH, subtitle_top, STATUS_ROW_H)
+        msg_top = subtitle_top + STATUS_ROW_H + _scale_y(16)
         _center_text(draw, "No playoff series", STATUS_FONT, 0, WIDTH, msg_top, STATUS_ROW_H)
         if transition:
             return ScreenImage(img, displayed=False)
