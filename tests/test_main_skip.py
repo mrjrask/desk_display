@@ -277,3 +277,69 @@ def test_touch_focused_screen_skips_screenshot_once(main_module):
 
     assert main_module._consume_touch_focus_screenshot_skip("inside") is True
     assert main_module._consume_touch_focus_screenshot_skip("inside") is False
+
+
+def test_escape_double_press_stops_service(main_module, monkeypatch):
+    class _FakeEvent:
+        def __init__(self, event_type, key):
+            self.type = event_type
+            self.key = key
+
+    class _FakePygame:
+        KEYDOWN = 1
+        K_ESCAPE = 27
+
+        class event:  # noqa: N801 - mirror pygame namespace
+            @staticmethod
+            def get(_event_types):
+                return [_FakeEvent(1, 27)]
+
+    timestamps = iter((100.0, 100.5))
+    monkeypatch.setattr(main_module.time, "monotonic", lambda: next(timestamps))
+
+    called = {"count": 0}
+    monkeypatch.setattr(
+        main_module,
+        "_stop_desk_display_service",
+        lambda: called.__setitem__("count", called["count"] + 1),
+    )
+
+    main_module.pygame = _FakePygame()
+    main_module._last_escape_key_monotonic = 0.0
+
+    assert main_module._check_keyboard_shutdown_request() is False
+    assert main_module._check_keyboard_shutdown_request() is True
+    assert called["count"] == 1
+
+
+def test_escape_double_press_expires_outside_interval(main_module, monkeypatch):
+    class _FakeEvent:
+        def __init__(self, event_type, key):
+            self.type = event_type
+            self.key = key
+
+    class _FakePygame:
+        KEYDOWN = 1
+        K_ESCAPE = 27
+
+        class event:  # noqa: N801 - mirror pygame namespace
+            @staticmethod
+            def get(_event_types):
+                return [_FakeEvent(1, 27)]
+
+    timestamps = iter((100.0, 101.2))
+    monkeypatch.setattr(main_module.time, "monotonic", lambda: next(timestamps))
+
+    called = {"count": 0}
+    monkeypatch.setattr(
+        main_module,
+        "_stop_desk_display_service",
+        lambda: called.__setitem__("count", called["count"] + 1),
+    )
+
+    main_module.pygame = _FakePygame()
+    main_module._last_escape_key_monotonic = 0.0
+
+    assert main_module._check_keyboard_shutdown_request() is False
+    assert main_module._check_keyboard_shutdown_request() is False
+    assert called["count"] == 0
