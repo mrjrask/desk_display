@@ -373,6 +373,22 @@ def _extract_next_game_info(series: dict) -> tuple[Optional[datetime.datetime], 
             dt = _parse_datetime(value)
             if dt:
                 return dt, _value_has_time_component(value)
+    for container_key in ("nextGameSchedule", "nextGameInfo"):
+        nested = series.get(container_key)
+        if isinstance(nested, dict):
+            for key in (
+                "startTimeUTC",
+                "startTime",
+                "scheduledStartTimeUTC",
+                "gameDateUTC",
+                "gameDateTime",
+                "gameDate",
+                "date",
+            ):
+                value = nested.get(key)
+                dt = _parse_datetime(value)
+                if dt:
+                    return dt, _value_has_time_component(value)
     return None, False
 
 
@@ -391,18 +407,18 @@ def _first_present_int(values: list[Any], default: int = 0) -> int:
 def _format_next_text(series: dict) -> str:
     dt, has_time = _extract_next_game_info(series)
     if not dt:
-        return "Next: TBD"
+        return "TBD"
     day_label = _next_day_label(dt)
     if day_label:
         if has_time:
-            return f"Next: {day_label} {dt.strftime('%-I:%M %p')}"
-        return f"Next: {day_label}"
+            return f"{day_label} {_format_clock(dt)}"
+        return f"{day_label}"
     month = dt.month
     day = dt.day
     if not has_time:
-        return f"Next: {month}/{day}"
-    time_text = dt.strftime("%-I:%M %p")
-    return f"Next: {month}/{day} {time_text}"
+        return f"{month}/{day}"
+    time_text = _format_clock(dt)
+    return f"{month}/{day} {time_text}"
 
 
 def _next_day_label(dt: datetime.datetime, *, now: Optional[datetime.datetime] = None) -> Optional[str]:
@@ -414,16 +430,26 @@ def _next_day_label(dt: datetime.datetime, *, now: Optional[datetime.datetime] =
     return None
 
 
+def _format_clock(dt: datetime.datetime) -> str:
+    if dt.minute == 0:
+        return dt.strftime("%-I %p")
+    return dt.strftime("%-I:%M %p")
+
+
 def _normalize_next_text(text: Any) -> str:
     raw = str(text or "").strip()
     if not raw:
-        return "Next: TBD"
+        return "TBD"
+
+    normalized = re.sub(r"^\s*Next:\s*", "", raw, flags=re.IGNORECASE).strip()
+    if not normalized:
+        return "TBD"
 
     # Drop trailing timezone abbreviations, while preserving meridiem markers (AM/PM).
     normalized = re.sub(
         r"\s+(?:ET|EST|EDT|CT|CST|CDT|MT|MST|MDT|PT|PST|PDT|UTC)$",
         "",
-        raw,
+        normalized,
         flags=re.IGNORECASE,
     ).strip()
 
@@ -434,11 +460,11 @@ def _normalize_next_text(text: Any) -> str:
         normalized,
     )
 
-    date_match = re.match(r"^(Next:\s*)(\d{1,2})/(\d{1,2})(\s+.+)$", normalized)
+    date_match = re.match(r"^(\d{1,2})/(\d{1,2})(\s+.+)$", normalized)
     if date_match:
-        month = int(date_match.group(2))
-        day = int(date_match.group(3))
-        suffix = date_match.group(4)
+        month = int(date_match.group(1))
+        day = int(date_match.group(2))
+        suffix = date_match.group(3)
         try:
             next_dt = datetime.datetime.now(CENTRAL_TIME).replace(
                 month=month,
@@ -452,9 +478,11 @@ def _normalize_next_text(text: Any) -> str:
             next_dt = None
         day_label = _next_day_label(next_dt) if next_dt else None
         if day_label:
-            normalized = f"{date_match.group(1)}{day_label}{suffix}"
+            normalized = f"{day_label}{suffix}"
 
-    return normalized or "Next: TBD"
+    normalized = re.sub(r"(\b\d{1,2}):00(\s+[AP]M\b)", r"\1\2", normalized, flags=re.IGNORECASE)
+
+    return normalized or "TBD"
 
 
 def _normalize_series_item(series: dict) -> Optional[dict]:
@@ -661,7 +689,7 @@ def _projected_series(higher_seed: dict, lower_seed: dict, *, conference: str, h
         "conference": conference,
         "higher_seed": higher_seed_rank,
         "lower_seed": lower_seed_rank,
-        "next_text": "Next: TBD",
+        "next_text": "TBD",
     }
 
 
@@ -793,7 +821,7 @@ def _derive_playoff_matchups_from_games(games: list[dict]) -> list[dict]:
                 ),
                 "higher_seed": None,
                 "lower_seed": None,
-                "next_text": "Next: TBD",
+                "next_text": "TBD",
             }
         )
     return results
@@ -806,7 +834,7 @@ def _series_next_text_from_games(series: dict, games: list[dict]) -> str:
     away_abbr = _team_abbr(away)
     home_abbr = _team_abbr(home)
     if not away_abbr or not home_abbr:
-        return _normalize_next_text(series.get("next_text") or "Next: TBD")
+        return _normalize_next_text(series.get("next_text") or "TBD")
 
     now = datetime.datetime.now(CENTRAL_TIME)
     next_dt: Optional[datetime.datetime] = None
@@ -829,18 +857,112 @@ def _series_next_text_from_games(series: dict, games: list[dict]) -> str:
             next_has_time = candidate_has_time
 
     if not next_dt:
-        return _normalize_next_text(series.get("next_text") or "Next: TBD")
+        return _normalize_next_text(series.get("next_text") or "TBD")
     day_label = _next_day_label(next_dt, now=now)
     if day_label:
         if next_has_time:
-            return f"Next: {day_label} {next_dt.strftime('%-I:%M %p')}"
-        return f"Next: {day_label}"
+            return f"{day_label} {_format_clock(next_dt)}"
+        return f"{day_label}"
     month = next_dt.month
     day = next_dt.day
     if not next_has_time:
-        return f"Next: {month}/{day}"
-    time_text = next_dt.strftime("%-I:%M %p")
-    return f"Next: {month}/{day} {time_text}"
+        return f"{month}/{day}"
+    time_text = _format_clock(next_dt)
+    return f"{month}/{day} {time_text}"
+
+
+def _map_schedule_game_for_series(game: dict) -> Optional[dict]:
+    if not isinstance(game, dict):
+        return None
+
+    teams = {
+        "away": {"team": game.get("awayTeam") or game.get("away") or {}},
+        "home": {"team": game.get("homeTeam") or game.get("home") or {}},
+    }
+    if not _team_abbr((teams["away"] or {}).get("team") or {}):
+        return None
+    if not _team_abbr((teams["home"] or {}).get("team") or {}):
+        return None
+
+    return {
+        "gamePk": game.get("id") or game.get("gamePk") or game.get("gameId"),
+        "gameDate": game.get("startTimeUTC") or game.get("startTime") or game.get("gameDateUTC") or game.get("gameDate"),
+        "teams": teams,
+    }
+
+
+def _extract_schedule_games(payload: dict) -> list[dict]:
+    if not isinstance(payload, dict):
+        return []
+
+    games: list[dict] = []
+    for key in ("games",):
+        value = payload.get(key)
+        if isinstance(value, list):
+            for game in value:
+                mapped = _map_schedule_game_for_series(game)
+                if mapped:
+                    games.append(mapped)
+
+    weeks = payload.get("gameWeek")
+    if isinstance(weeks, list):
+        for week in weeks:
+            if not isinstance(week, dict):
+                continue
+            for game in week.get("games") or []:
+                mapped = _map_schedule_game_for_series(game)
+                if mapped:
+                    games.append(mapped)
+
+    return games
+
+
+def _fetch_remaining_playoff_schedule_games() -> list[dict]:
+    """Fetch upcoming playoff games from the official NHL schedule feed.
+
+    The schedule page (nhl.com/schedule) is backed by api-web schedule endpoints,
+    and can provide concrete start times for future playoff games even when other
+    playoff series endpoints still show TBD.
+    """
+
+    today = datetime.datetime.now(CENTRAL_TIME).date()
+    urls = [
+        "https://api-web.nhle.com/v1/schedule/now",
+        f"https://api-web.nhle.com/v1/schedule/{today.isoformat()}",
+    ]
+
+    merged: list[dict] = []
+    seen: set[tuple[str, str, str]] = set()
+    for url in urls:
+        try:
+            response = _SESSION.get(url, timeout=REQUEST_TIMEOUT, headers=NHL_HEADERS)
+            response.raise_for_status()
+            games = _extract_schedule_games(response.json())
+        except Exception as exc:
+            logging.debug("NHL official schedule endpoint failed (%s): %s", url, exc)
+            continue
+
+        for game in games:
+            dt, has_time = _extract_next_game_info(game)
+            if not dt:
+                continue
+            # User-facing requirement: remaining games through June are playoffs.
+            # Keep only upcoming schedule entries from now through June 30.
+            season_end = datetime.date(dt.year, 6, 30)
+            if dt.date() < today or dt.date() > season_end:
+                continue
+            away_abbr = _team_abbr(((game.get("teams") or {}).get("away") or {}).get("team") or {})
+            home_abbr = _team_abbr(((game.get("teams") or {}).get("home") or {}).get("team") or {})
+            if not away_abbr or not home_abbr:
+                continue
+            stamp = dt.isoformat() if has_time else dt.date().isoformat()
+            key = (away_abbr, home_abbr, stamp)
+            if key in seen:
+                continue
+            seen.add(key)
+            merged.append(game)
+
+    return merged
 
 
 def _series_order_key(series: dict) -> tuple[int, int, str, str]:
@@ -903,7 +1025,7 @@ def _draw_series_block(canvas: Image.Image, draw: ImageDraw.ImageDraw, series: d
     status_top = score_top + SCORE_ROW_H
     _center_text(
         draw,
-        _normalize_next_text(series.get("next_text") or "Next: TBD"),
+        _normalize_next_text(series.get("next_text") or "TBD"),
         STATUS_SMALL_FONT,
         left,
         SERIES_WIDTH,
@@ -996,14 +1118,17 @@ def _scroll_display(display, full_img: Image.Image):
 def render_nhl_playoffs(display, games: list[dict], transition: bool = False) -> ScreenImage:
     _apply_style_overrides()
 
+    upcoming_schedule_games = _fetch_remaining_playoff_schedule_games()
+    merged_games = list(games or []) + upcoming_schedule_games
+
     series = _fetch_playoff_matchups()
     if not series:
         series = _fetch_projected_matchups_from_standings()
     if not series:
-        series = _derive_playoff_matchups_from_games(games)
+        series = _derive_playoff_matchups_from_games(merged_games)
     else:
         for item in series:
-            item["next_text"] = _series_next_text_from_games(item, games)
+            item["next_text"] = _series_next_text_from_games(item, merged_games)
 
     if not series:
         clear_display(display)
