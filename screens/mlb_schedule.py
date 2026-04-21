@@ -260,13 +260,7 @@ def _next_variant_title_opponent_gap(
     """Add breathing room for Cubs/Sox next-variant title/opponent lines."""
     if normalized_screen_id in {
         "cubs next",
-        "cubs next home",
         "sox next",
-        "sox next home",
-        "cubs next series",
-        "cubs next home series",
-        "sox next series",
-        "sox next home series",
     }:
         return base_gap + 2
     return base_gap
