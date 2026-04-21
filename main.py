@@ -201,6 +201,10 @@ _TOUCH_DOUBLE_TAP_MAX_INTERVAL_SECONDS = max(
     0.1, float(os.environ.get("TOUCH_DOUBLE_TAP_MAX_INTERVAL_SECONDS", "0.45"))
 )
 _last_touch_tap_monotonic = 0.0
+_ESC_DOUBLE_PRESS_MAX_INTERVAL_SECONDS = max(
+    0.1, float(os.environ.get("ESC_DOUBLE_PRESS_MAX_INTERVAL_SECONDS", "1.0"))
+)
+_last_escape_key_monotonic = 0.0
 _pending_touch_focus_screen_id: Optional[str] = None
 _pending_touch_return_screen_id: Optional[str] = None
 _pending_touch_focus_screenshot_skip_ids: set[str] = set()
@@ -434,6 +438,46 @@ def _check_touch_skip_request(
             return _request_next_screen()
 
         _last_touch_tap_monotonic = tap_time
+
+    return False
+
+
+def _check_keyboard_shutdown_request() -> bool:
+    """Stop the service when Escape is pressed twice within a short interval."""
+
+    global _last_escape_key_monotonic
+
+    if pygame is None:
+        return False
+
+    if _shutdown_event.is_set():
+        return False
+
+    keydown = getattr(pygame, "KEYDOWN", None)
+    key_escape = getattr(pygame, "K_ESCAPE", None)
+    if keydown is None or key_escape is None:
+        return False
+
+    try:
+        events = pygame.event.get([keydown])
+    except Exception:
+        return False
+
+    if not events:
+        return False
+
+    for event in events:
+        if getattr(event, "type", None) != keydown:
+            continue
+        if getattr(event, "key", None) != key_escape:
+            continue
+        now = time.monotonic()
+        if _last_escape_key_monotonic > 0 and (now - _last_escape_key_monotonic) <= _ESC_DOUBLE_PRESS_MAX_INTERVAL_SECONDS:
+            _last_escape_key_monotonic = 0.0
+            logging.info("⌨️ Double Escape detected; stopping desk_display service.")
+            _stop_desk_display_service()
+            return True
+        _last_escape_key_monotonic = now
 
     return False
 
@@ -750,6 +794,24 @@ def _restart_desk_display_service() -> None:
         logging.error("Failed to restart desk_display.service: %s", exc)
 
 
+def _stop_desk_display_service() -> None:
+    """Stop the desk_display systemd service."""
+
+    request_shutdown("keyboard double-escape")
+    try:
+        result = subprocess.run(
+            ["sudo", "systemctl", "--no-block", "stop", "desk_display.service"],
+            check=False,
+        )
+        if result.returncode != 0:
+            logging.error(
+                "desk_display.service stop returned non-zero exit code: %s",
+                result.returncode,
+            )
+    except Exception as exc:
+        logging.error("Failed to stop desk_display.service: %s", exc)
+
+
 def _git_pull_and_restart_desk_display_service() -> None:
     """Pull latest code in this repo, then restart the desk_display service."""
 
@@ -816,6 +878,9 @@ def _check_control_buttons(
         return False
 
     if _shutdown_event.is_set():
+        return False
+
+    if _check_keyboard_shutdown_request():
         return False
 
     if enable_touch and _check_touch_skip_request(
