@@ -257,10 +257,16 @@ def _next_variant_title_opponent_gap(
     normalized_screen_id: str,
     base_gap: int,
 ) -> int:
-    """Add breathing room for Cubs/Sox next-variant title/opponent lines."""
+    """Match Cubs/Sox Next Game spacing for title/opponent lines on related series views."""
     if normalized_screen_id in {
         "cubs next",
         "sox next",
+        "cubs current series",
+        "sox current series",
+        "cubs next series",
+        "sox next series",
+        "cubs next home series",
+        "sox next home series",
     }:
         return base_gap + 2
     return base_gap
