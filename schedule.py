@@ -36,6 +36,7 @@ class _ScheduleEntry:
     screen_id: str
     frequency: int
     cycle_count: int = 0
+    initial_cycle_seen: bool = False
     extra_seconds: int = 0
     hide_after: Optional[datetime] = None
     alternate: Optional[_AlternateSchedule] = None
@@ -91,6 +92,7 @@ class ScreenScheduler:
                     screen_id=entry.screen_id,
                     frequency=entry.frequency,
                     cycle_count=entry.cycle_count,
+                    initial_cycle_seen=entry.initial_cycle_seen,
                     extra_seconds=entry.extra_seconds,
                     hide_after=entry.hide_after,
                     alternate=cloned_alt,
@@ -120,9 +122,15 @@ class ScreenScheduler:
             entry = self._entries[self._cursor]
             self._cursor = (self._cursor + 1) % len(self._entries)
             if entry.hide_after is not None and now_utc >= entry.hide_after:
+                if not entry.initial_cycle_seen:
+                    entry.initial_cycle_seen = True
                 continue
 
             entry.cycle_count += 1
+            if not entry.initial_cycle_seen:
+                entry.initial_cycle_seen = True
+                return entry.screen_id
+
             if entry.cycle_count % entry.frequency != 0:
                 continue
 
@@ -143,11 +151,20 @@ class ScreenScheduler:
             entry = self._entries[self._cursor]
             self._cursor = (self._cursor + 1) % len(self._entries)
             if entry.hide_after is not None and now_utc >= entry.hide_after:
+                if not entry.initial_cycle_seen:
+                    entry.initial_cycle_seen = True
                 continue
 
             # A frequency of ``n`` means the screen is shown on every
             # ``n``th scheduler pass for that entry.
             entry.cycle_count += 1
+            if not entry.initial_cycle_seen:
+                entry.initial_cycle_seen = True
+                definition = registry.get(entry.screen_id)
+                if definition and definition.available:
+                    return definition
+                continue
+
             if entry.cycle_count % entry.frequency != 0:
                 continue
 
