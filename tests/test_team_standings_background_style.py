@@ -1,4 +1,5 @@
 import screens.mlb_team_standings as mlb_team_standings
+import pytest
 
 
 def _record():
@@ -84,3 +85,59 @@ def test_standings_screen3_uses_w_l_markers_for_cubs_only(monkeypatch):
     assert sox_image is not None
     assert [letter for letter, _ in cubs_calls] == ["W", "L"]
     assert calls == []
+
+
+@pytest.mark.parametrize("screen_id", ["cubs stand3", "sox stand3"])
+def test_standings_screen3_wcgb_tied_lead_never_shows_plus_minus(monkeypatch, screen_id):
+    rec = _record()
+    rec["wildCardGamesBack"] = "-"
+    rec["wildCardRank"] = "2"
+
+    normalized_inputs = []
+
+    def _capture_normalize(text, *, screen_id=None):
+        normalized_inputs.append(text)
+        return text
+
+    monkeypatch.setattr(mlb_team_standings, "_normalize_half_text", _capture_normalize)
+
+    image = mlb_team_standings.draw_standings_screen3(
+        display=None,
+        rec=rec,
+        logo_path="/tmp/does-not-exist.png",
+        division_name="AL Central",
+        screen_id=screen_id,
+        transition=True,
+    )
+
+    assert image is not None
+    assert "- WCGB" in normalized_inputs
+    assert "+- WCGB" not in normalized_inputs
+
+
+@pytest.mark.parametrize("screen_id", ["cubs stand1", "sox stand1"])
+def test_standings_screen1_wcgb_tied_lead_never_shows_plus_minus(monkeypatch, screen_id):
+    rec = _record()
+    rec["wildCardGamesBack"] = "-"
+    rec["wildCardRank"] = "2"
+
+    normalized_inputs = []
+
+    def _capture_normalize(text, *, screen_id=None):
+        normalized_inputs.append(text)
+        return text
+
+    monkeypatch.setattr(mlb_team_standings, "_normalize_half_text", _capture_normalize)
+
+    image = mlb_team_standings.draw_standings_screen1(
+        display=None,
+        rec=rec,
+        logo_path="/tmp/does-not-exist.png",
+        division_name="AL Central",
+        screen_id=screen_id,
+        transition=True,
+    )
+
+    assert image is not None
+    assert "- WCGB" in normalized_inputs
+    assert "+- WCGB" not in normalized_inputs

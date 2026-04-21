@@ -677,18 +677,7 @@ def draw_standings_screen3(
     wc_txt = None
     wc_raw = rec.get("wildCardGamesBack")
     wc_rank = rec.get("wildCardRank")
-    if wc_raw is not None:
-        base = format_games_back(wc_raw)
-        try:
-            rank_int = int(wc_rank)
-        except Exception:
-            rank_int = None
-        if wc_raw == 0:
-            wc_txt = "-- WCGB"
-        elif rank_int and rank_int <= 3:
-            wc_txt = f"+{base} WCGB"
-        else:
-            wc_txt = f"{base} WCGB"
+    wc_txt = _format_wcgb_text(wc_raw, wc_rank)
 
     left_lines = [
         (record_line, left_header_font, "record"),
