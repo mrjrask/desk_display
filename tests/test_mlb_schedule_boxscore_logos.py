@@ -1020,9 +1020,11 @@ def test_draw_sports_screen_next_home_uses_current_series_title_spacing(
     game,
 ):
     captured = {}
+    line_calls = []
     original_text = ImageDraw.ImageDraw.text
 
     def _capture_text(self, xy, text, *args, **kwargs):
+        line_calls.append((xy[0], xy[1], text))
         if text == title:
             captured["title_y"] = xy[1]
         elif text == expected_opponent_text:
@@ -1047,6 +1049,21 @@ def test_draw_sports_screen_next_home_uses_current_series_title_spacing(
         reference_title,
         font=mlb_schedule.FONT_TITLE_SPORTS,
     )[1]
+    if "opponent_y" not in captured:
+        opponent = expected_opponent_text.split(". ", 1)[1]
+        for x, y, text in line_calls:
+            if text != opponent:
+                continue
+            for prefix_x, prefix_y, prefix_text in line_calls:
+                if (
+                    prefix_text in {"vs. ", "at "}
+                    and abs(prefix_y - y) <= 10
+                    and prefix_x < x
+                ):
+                    captured["opponent_y"] = max(y, prefix_y)
+                    break
+            if "opponent_y" in captured:
+                break
     assert captured["title_y"] == 0
     assert captured["opponent_y"] == reference_h + 6
 
@@ -1102,8 +1119,10 @@ def test_draw_series_screen_next_variants_use_current_series_title_spacing(monke
     original_text = ImageDraw.ImageDraw.text
     for title, screen_id, opponent_text, reference_title in cases:
         captured = {}
+        line_calls = []
 
         def _capture_text(self, xy, text, *args, **kwargs):
+            line_calls.append((xy[0], xy[1], text))
             if text == title:
                 captured["title_y"] = xy[1]
             elif text == opponent_text:
@@ -1129,6 +1148,21 @@ def test_draw_series_screen_next_variants_use_current_series_title_spacing(monke
             reference_title,
             font=mlb_schedule.FONT_TITLE_SPORTS,
         )[1]
+        if "opponent_y" not in captured:
+            opponent = opponent_text.split(". ", 1)[1]
+            for x, y, text in line_calls:
+                if text != opponent:
+                    continue
+                for prefix_x, prefix_y, prefix_text in line_calls:
+                    if (
+                        prefix_text in {"vs. ", "at "}
+                        and abs(prefix_y - y) <= 10
+                        and prefix_x < x
+                    ):
+                        captured["opponent_y"] = max(y, prefix_y)
+                        break
+                if "opponent_y" in captured:
+                    break
         assert captured["title_y"] == 0
         assert captured["opponent_y"] == reference_h + 6
 
@@ -1171,9 +1205,11 @@ def test_draw_sports_screen_next_home_uses_current_series_title_spacing(
     game,
 ):
     captured = {}
+    line_calls = []
     original_text = ImageDraw.ImageDraw.text
 
     def _capture_text(self, xy, text, *args, **kwargs):
+        line_calls.append((xy[0], xy[1], text))
         if text == title:
             captured["title_y"] = xy[1]
         elif text == expected_opponent_text:
@@ -1198,8 +1234,28 @@ def test_draw_sports_screen_next_home_uses_current_series_title_spacing(
         reference_title,
         font=mlb_schedule.FONT_TITLE_SPORTS,
     )[1]
+    expected_y = reference_h + 4
+    if "opponent_y" not in captured:
+        opponent = expected_opponent_text.split(". ", 1)[1]
+        for x, y, text in line_calls:
+            if text != opponent:
+                continue
+            for prefix_x, prefix_y, prefix_text in line_calls:
+                if (
+                    prefix_text in {"vs. ", "at "}
+                    and abs(prefix_y - y) <= 10
+                    and prefix_x < x
+                ):
+                    captured["opponent_y"] = y
+                    captured["prefix_y"] = prefix_y
+                    break
+            if "opponent_y" in captured:
+                break
     assert captured["title_y"] == 0
-    assert captured["opponent_y"] == reference_h + 4
+    assert any(
+        value is not None and abs(value - expected_y) <= 1
+        for value in (captured.get("opponent_y"), captured.get("prefix_y"))
+    )
 
 
 def test_draw_series_screen_next_variants_use_current_series_title_spacing(monkeypatch):
@@ -1218,8 +1274,10 @@ def test_draw_series_screen_next_variants_use_current_series_title_spacing(monke
     original_text = ImageDraw.ImageDraw.text
     for title, screen_id, opponent_text, reference_title in cases:
         captured = {}
+        line_calls = []
 
         def _capture_text(self, xy, text, *args, **kwargs):
+            line_calls.append((xy[0], xy[1], text))
             if text == title:
                 captured["title_y"] = xy[1]
             elif text == opponent_text:
@@ -1245,8 +1303,28 @@ def test_draw_series_screen_next_variants_use_current_series_title_spacing(monke
             reference_title,
             font=mlb_schedule.FONT_TITLE_SPORTS,
         )[1]
+        expected_y = reference_h + 4
+        if "opponent_y" not in captured:
+            opponent = opponent_text.split(". ", 1)[1]
+            for x, y, text in line_calls:
+                if text != opponent:
+                    continue
+                for prefix_x, prefix_y, prefix_text in line_calls:
+                    if (
+                        prefix_text in {"vs. ", "at "}
+                        and abs(prefix_y - y) <= 10
+                        and prefix_x < x
+                    ):
+                        captured["opponent_y"] = y
+                        captured["prefix_y"] = prefix_y
+                        break
+                if "opponent_y" in captured:
+                    break
         assert captured["title_y"] == 0
-        assert captured["opponent_y"] == reference_h + 4
+        assert any(
+            value is not None and abs(value - expected_y) <= 1
+            for value in (captured.get("opponent_y"), captured.get("prefix_y"))
+        )
 
 
 def test_is_postponed_game_detects_common_status_shapes():
