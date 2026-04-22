@@ -546,8 +546,10 @@ def _extract_series(payload: Any) -> list[dict]:
         teams = (series.get("teams") or {})
         away_team = ((teams.get("away") or {}).get("team") or {})
         home_team = ((teams.get("home") or {}).get("team") or {})
-        key = (_team_logo_abbr(away_team), _team_logo_abbr(home_team))
-        if not all(key) or key in seen:
+        away_abbr = _team_logo_abbr(away_team)
+        home_abbr = _team_logo_abbr(home_team)
+        key = tuple(sorted((away_abbr, home_abbr)))
+        if not away_abbr or not home_abbr or key in seen:
             continue
         seen.add(key)
         deduped.append(series)
@@ -602,8 +604,10 @@ def _parse_series_record_from_text(text: str) -> Optional[tuple[int, int]]:
 
 def _looks_like_playoff_game(game: dict) -> bool:
     game_id = str(game.get("gamePk") or game.get("id") or game.get("gameId") or "").strip()
-    if game_id.startswith("004") or game_id.startswith("005"):
+    if game_id.startswith("004"):
         return True
+    if game_id.startswith("005"):
+        return False
     game_type = str(game.get("gameType") or game.get("seasonType") or game.get("seasonStage") or "").strip().lower()
     if game_type in {
         "p",
@@ -611,13 +615,12 @@ def _looks_like_playoff_game(game: dict) -> bool:
         "postseason",
         "post-season",
         "3",
-        "4",
-        "5",
         "003",
         "004",
-        "005",
     }:
         return True
+    if game_type in {"playin", "play-in", "4", "5", "005"}:
+        return False
     status_text = _status_text(game).lower()
     return "series" in status_text and ("lead" in status_text or "tied" in status_text)
 

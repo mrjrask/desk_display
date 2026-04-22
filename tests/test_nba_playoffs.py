@@ -203,6 +203,38 @@ def test_looks_like_playoff_game_accepts_espn_postseason_type():
     assert nba_playoffs._looks_like_playoff_game(game) is True
 
 
+def test_looks_like_playoff_game_rejects_play_in_game_id_prefix():
+    game = {
+        "gamePk": "0052600101",
+        "status": {"detailedState": "Final"},
+    }
+
+    assert nba_playoffs._looks_like_playoff_game(game) is False
+
+
+def test_extract_series_dedupes_when_home_away_flipped():
+    extracted = nba_playoffs._extract_series(
+        {
+            "series": [
+                {
+                    "awayTeam": {"teamTricode": "GSW"},
+                    "homeTeam": {"teamTricode": "LAL"},
+                    "awayWins": 1,
+                    "homeWins": 1,
+                },
+                {
+                    "awayTeam": {"teamTricode": "LAL"},
+                    "homeTeam": {"teamTricode": "GSW"},
+                    "awayWins": 1,
+                    "homeWins": 1,
+                },
+            ]
+        }
+    )
+
+    assert len(extracted) == 1
+
+
 def test_select_current_round_series_prefers_lowest_round_rank():
     series = [
         {"teams": {"away": {"score": 1}, "home": {"score": 1}}, "round_rank": 1},
