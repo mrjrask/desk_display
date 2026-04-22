@@ -43,11 +43,14 @@ def main_for_buttons(monkeypatch):
     main._BUTTON_PRESS_STARTED_AT = {name: 0.0 for name in main._BUTTON_NAMES}
     main._BUTTON_PRESS_HANDLED = {name: False for name in main._BUTTON_NAMES}
     main._manual_display_off = False
+    main.resume_display_updates()
 
     yield main
 
+    main.resume_display_updates()
     main.request_shutdown("tests")
     main._finalize_shutdown()
+    main.resume_display_updates()
     sys.modules.pop("main", None)
 
 
@@ -136,21 +139,20 @@ def test_a_button_advances_to_next_screen(main_for_buttons):
     assert main_for_buttons._manual_skip_event.is_set()
 
 
-def test_x_button_pulls_and_restarts_service(main_for_buttons, monkeypatch):
+def test_x_button_toggles_update_indicator(main_for_buttons, monkeypatch):
     main_for_buttons.display = object()
-    called = {"count": 0}
+    called = {"set": []}
 
-    def fake_git_pull_and_restart():
-        called["count"] += 1
+    monkeypatch.setattr(main_for_buttons, "update_indicator_enabled", lambda: True)
 
-    monkeypatch.setattr(
-        main_for_buttons,
-        "_git_pull_and_restart_desk_display_service",
-        fake_git_pull_and_restart,
-    )
+    def fake_set_update_indicator_enabled(enabled, display):
+        called["set"].append((enabled, display))
+        return enabled
+
+    monkeypatch.setattr(main_for_buttons, "set_update_indicator_enabled", fake_set_update_indicator_enabled)
 
     assert main_for_buttons._handle_button_down("X") is False
-    assert called["count"] == 1
+    assert called["set"] == [(False, main_for_buttons.display)]
 
 
 def test_b_button_toggles_display(main_for_buttons, monkeypatch):

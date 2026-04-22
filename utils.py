@@ -935,6 +935,7 @@ class _UpdateStatus:
 
 
 _UPDATE_STATUS = _UpdateStatus()
+_UPDATE_INDICATOR_ENABLED = True
 
 _DISPLAY_UPDATE_GATE = threading.Event()
 _DISPLAY_UPDATE_GATE.set()
@@ -945,6 +946,12 @@ def get_update_status() -> _UpdateStatus:
     """Return the last known update status for GitHub and apt."""
 
     return _UPDATE_STATUS
+
+
+def update_indicator_enabled() -> bool:
+    """Return whether update indicator LED/border output is enabled."""
+
+    return _UPDATE_INDICATOR_ENABLED
 
 
 def suspend_display_updates() -> None:
@@ -1869,12 +1876,20 @@ class Display:
         if self._display is None or not should_drive_hardware_led:  # pragma: no cover - hardware import
             return
         try:  # pragma: no cover - hardware import
+            if self._display_hat_mini_indicator_border:
+                led_kwargs = {
+                    "r": self._indicator_channel_to_pixel(r),
+                    "g": self._indicator_channel_to_pixel(g),
+                    "b": self._indicator_channel_to_pixel(b),
+                }
+            else:
+                led_kwargs = {
+                    "r": _normalized_led_to_driver_channel(r),
+                    "g": _normalized_led_to_driver_channel(g),
+                    "b": _normalized_led_to_driver_channel(b),
+                }
             with self._display_io_lock:
-                self._display.set_led(
-                    r=_normalized_led_to_driver_channel(r),
-                    g=_normalized_led_to_driver_channel(g),
-                    b=_normalized_led_to_driver_channel(b),
-                )
+                self._display.set_led(**led_kwargs)
         except Exception as exc:  # pragma: no cover - hardware import
             logging.debug("Display LED update failed: %s", exc)
 
@@ -2936,6 +2951,20 @@ def _refresh_led_indicator(display: Optional["Display"] = None) -> None:
         or getattr(display, "_display_hat_mini_indicator_border", False)
     )
 
+    if not _UPDATE_INDICATOR_ENABLED:
+        if _LED_INDICATOR_ANIMATOR is not None:
+            try:  # pragma: no cover - hardware import
+                _LED_INDICATOR_ANIMATOR.stop()
+            except Exception as exc:
+                logging.debug("Failed to stop LED animator while disabling indicator: %s", exc)
+            finally:
+                _LED_INDICATOR_ANIMATOR = None
+        try:
+            display.set_led(r=0.0, g=0.0, b=0.0)
+        except Exception as exc:  # pragma: no cover - hardware import
+            logging.debug("Failed to clear LED while indicator disabled: %s", exc)
+        return
+
     if pattern is None:
         if _LED_INDICATOR_ANIMATOR is not None:
             try:  # pragma: no cover - hardware import
@@ -3023,6 +3052,18 @@ def clear_update_indicator(display: Optional["Display"] = None) -> None:
         display.set_led(r=0.0, g=0.0, b=0.0)
     except Exception as exc:  # pragma: no cover - hardware import
         logging.debug("Failed to clear LED during cleanup: %s", exc)
+
+
+def set_update_indicator_enabled(
+    enabled: bool,
+    display: Optional["Display"] = None,
+) -> bool:
+    """Enable/disable the update indicator and immediately apply the new state."""
+
+    global _UPDATE_INDICATOR_ENABLED
+    _UPDATE_INDICATOR_ENABLED = bool(enabled)
+    _refresh_led_indicator(display)
+    return _UPDATE_INDICATOR_ENABLED
 
 
 @contextmanager
