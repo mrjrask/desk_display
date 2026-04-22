@@ -60,7 +60,7 @@ def _scale_y(value: int) -> int:
 
 
 TITLE = "NBA Playoffs"
-SUBTITLE = "Best-of-7"
+SUBTITLE = ""
 SCREEN_ID = "NBA Playoffs"
 TITLE_GAP = _scale_y(8)
 SUBTITLE_GAP = _scale_y(4)
@@ -330,9 +330,6 @@ def _normalize_series_item(series: dict) -> Optional[dict]:
         "roundLabel",
         "roundName",
     }
-    if not any(key in series for key in playoff_shape_keys):
-        return None
-
     away_slot = _team_slot_from_series(
         series,
         "awayTeam",
@@ -353,6 +350,15 @@ def _normalize_series_item(series: dict) -> Optional[dict]:
         "lowerSeed",
         "team2",
     )
+    has_series_indicators = any(key in series for key in playoff_shape_keys)
+    has_nested_series_wins = any(
+        _as_int(container.get(field)) is not None
+        for container in (away_slot, home_slot)
+        if isinstance(container, dict)
+        for field in ("wins", "seriesWins")
+    )
+    if not has_series_indicators and not has_nested_series_wins:
+        return None
     away_team = _team_from_series(
         series,
         "awayTeam",
@@ -416,6 +422,7 @@ def _normalize_series_item(series: dict) -> Optional[dict]:
         or series.get("seriesStatus")
         or series.get("seriesText")
         or series.get("roundLabel")
+        or series.get("roundName")
         or "Series"
     )
 
@@ -732,17 +739,20 @@ def _render_playoff_screen(series: list[dict]) -> Image.Image:
         title_h = b - t
     except Exception:
         _, title_h = dd.textsize(TITLE, font=TITLE_FONT)
-    try:
-        l, t, r, b = dd.textbbox((0, 0), SUBTITLE, font=STATUS_SMALL_FONT)
-        subtitle_h = b - t
-    except Exception:
-        _, subtitle_h = dd.textsize(SUBTITLE, font=STATUS_SMALL_FONT)
+    subtitle_h = 0
+    if SUBTITLE:
+        try:
+            l, t, r, b = dd.textbbox((0, 0), SUBTITLE, font=STATUS_SMALL_FONT)
+            subtitle_h = b - t
+        except Exception:
+            _, subtitle_h = dd.textsize(SUBTITLE, font=STATUS_SMALL_FONT)
 
     league_logo = _get_league_logo()
     logo_height = league_logo.height if league_logo else 0
     logo_gap = LEAGUE_LOGO_GAP if league_logo else 0
 
-    content_top = logo_height + logo_gap + title_h + SUBTITLE_GAP + subtitle_h + TITLE_GAP
+    subtitle_gap = SUBTITLE_GAP if SUBTITLE else 0
+    content_top = logo_height + logo_gap + title_h + subtitle_gap + subtitle_h + TITLE_GAP
     img_height = max(HEIGHT, content_top + canvas.height + SCOREBOARD_STANDINGS_BOTTOM_PADDING)
     img = Image.new("RGB", (WIDTH, img_height), BACKGROUND_COLOR)
     draw = ImageDraw.Draw(img)
@@ -762,8 +772,9 @@ def _render_playoff_screen(series: list[dict]) -> Image.Image:
         tx = (WIDTH - tw) // 2
         ty = title_top
     draw.text((tx, ty), TITLE, font=TITLE_FONT, fill=(255, 255, 255))
-    subtitle_top = ty + th + SUBTITLE_GAP
-    _center_text(draw, SUBTITLE, STATUS_SMALL_FONT, 0, WIDTH, subtitle_top, subtitle_h)
+    if SUBTITLE:
+        subtitle_top = ty + th + SUBTITLE_GAP
+        _center_text(draw, SUBTITLE, STATUS_SMALL_FONT, 0, WIDTH, subtitle_top, subtitle_h)
 
     img.paste(canvas, (0, content_top))
     return img
@@ -806,8 +817,10 @@ def render_nba_playoffs(display, games: list[dict], transition: bool = False) ->
             title_top = league_logo.height + LEAGUE_LOGO_GAP
         _center_text(draw, TITLE, TITLE_FONT, 0, WIDTH, title_top, _scale_y(40))
         subtitle_top = title_top + _scale_y(40)
-        _center_text(draw, SUBTITLE, STATUS_SMALL_FONT, 0, WIDTH, subtitle_top, STATUS_ROW_H)
-        msg_top = subtitle_top + STATUS_ROW_H + _scale_y(16)
+        msg_top = subtitle_top + _scale_y(16)
+        if SUBTITLE:
+            _center_text(draw, SUBTITLE, STATUS_SMALL_FONT, 0, WIDTH, subtitle_top, STATUS_ROW_H)
+            msg_top = subtitle_top + STATUS_ROW_H + _scale_y(16)
         _center_text(draw, "No active series", STATUS_FONT, 0, WIDTH, msg_top, STATUS_ROW_H)
         if transition:
             return ScreenImage(img, displayed=False)
