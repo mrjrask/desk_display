@@ -264,6 +264,52 @@ def _extract_next_game_dt(value: Any) -> Optional[datetime.datetime]:
     return dt.astimezone(CENTRAL_TIME)
 
 
+def _extract_series_next_game_dt(series: dict) -> Optional[datetime.datetime]:
+    candidate_keys = (
+        "nextGameStartTimeUTC",
+        "nextGameStartTime",
+        "nextGameDateTimeUTC",
+        "nextGameDateTime",
+        "nextGameTimeUTC",
+        "nextGameUtc",
+        "nextGameDate",
+        "startTimeUTC",
+        "gameDateUTC",
+        "gameDateTime",
+        "gameDate",
+    )
+    for key in candidate_keys:
+        dt = _extract_next_game_dt(series.get(key))
+        if dt:
+            return dt
+
+    nested_candidates = (
+        "nextGame",
+        "nextGameInfo",
+        "nextGameSchedule",
+        "upcomingGame",
+    )
+    nested_keys = (
+        "startTimeUTC",
+        "startTime",
+        "scheduledStartTimeUTC",
+        "gameDateUTC",
+        "gameDateTimeUTC",
+        "gameDateTime",
+        "gameDate",
+        "date",
+    )
+    for container_key in nested_candidates:
+        container = series.get(container_key)
+        if not isinstance(container, dict):
+            continue
+        for key in nested_keys:
+            dt = _extract_next_game_dt(container.get(key))
+            if dt:
+                return dt
+    return None
+
+
 def _next_day_label(dt: datetime.datetime, *, now: Optional[datetime.datetime] = None) -> Optional[str]:
     now_dt = now or datetime.datetime.now(CENTRAL_TIME)
     if dt.date() == now_dt.date():
@@ -274,11 +320,7 @@ def _next_day_label(dt: datetime.datetime, *, now: Optional[datetime.datetime] =
 
 
 def _format_next_text(series: dict) -> str:
-    next_dt = _extract_next_game_dt(
-        series.get("nextGameStartTimeUTC")
-        or series.get("nextGameDateTime")
-        or series.get("nextGameTimeUTC")
-    )
+    next_dt = _extract_series_next_game_dt(series)
     if next_dt is None:
         text = str(series.get("nextGameLabel") or series.get("nextGameText") or "").strip()
         return text if text else "TBD"
