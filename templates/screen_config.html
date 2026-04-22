@@ -515,8 +515,8 @@
         <div>Freq</div>
       </div>
       <div>Background</div>
-      <div>Alt screen</div>
       <div>Hide after</div>
+      <div>Alt screen</div>
       <div>Extra sec</div>
       <div>Alt freq</div>
     </div>
@@ -540,6 +540,13 @@
           <div class="hint">Hex color (e.g. #000000).</div>
         </div>
         <div>
+          <div class="hide-after-field">
+            <input type="checkbox" class="hide-after-enabled-input" {% if screen.hide_after_enabled %}checked{% endif %} aria-label="Enable hide-after date for {{ screen.id }}">
+            <input type="datetime-local" class="hide-after-input" value="{{ screen.hide_after_at }}">
+          </div>
+          <div class="hint">When checked, hide after this date/time.</div>
+        </div>
+        <div>
           <div class="alt-screen-field">
             <select class="alt-screen-input">
               <option value="">No alternate</option>
@@ -552,13 +559,6 @@
             <button type="button" class="alt-screen-clear" aria-label="Clear alternate screens" title="Clear alternate screens">×</button>
           </div>
           <div class="hint">Select one alternate screen.</div>
-        </div>
-        <div>
-          <div class="hide-after-field">
-            <input type="checkbox" class="hide-after-enabled-input" {% if screen.hide_after_enabled %}checked{% endif %} aria-label="Enable hide-after date for {{ screen.id }}">
-            <input type="datetime-local" class="hide-after-input" value="{{ screen.hide_after_at }}">
-          </div>
-          <div class="hint">When checked, hide after this date/time.</div>
         </div>
         <div>
           <input type="number" min="0" step="1" value="{{ screen.extra_seconds }}" class="extra-seconds-input compact-number-input">
@@ -1208,6 +1208,13 @@
           <div class="hint">Hex color (e.g. #000000).</div>
         </div>
         <div>
+          <div class="hide-after-field">
+            <input type="checkbox" class="hide-after-enabled-input" ${screen.hide_after_enabled ? "checked" : ""} aria-label="Enable hide-after date for ${screen.id}">
+            <input type="datetime-local" class="hide-after-input" value="${screen.hide_after_at ?? ""}">
+          </div>
+          <div class="hint">When checked, hide after this date/time.</div>
+        </div>
+        <div>
           <div class="alt-screen-field">
             <select class="alt-screen-input">
               ${buildAltScreenOptions(screen.id, screen.alt_screen ?? "")}
@@ -1215,13 +1222,6 @@
             <button type="button" class="alt-screen-clear" aria-label="Clear alternate screens" title="Clear alternate screens">×</button>
           </div>
           <div class="hint">Select one alternate screen.</div>
-        </div>
-        <div>
-          <div class="hide-after-field">
-            <input type="checkbox" class="hide-after-enabled-input" ${screen.hide_after_enabled ? "checked" : ""} aria-label="Enable hide-after date for ${screen.id}">
-            <input type="datetime-local" class="hide-after-input" value="${screen.hide_after_at ?? ""}">
-          </div>
-          <div class="hint">When checked, hide after this date/time.</div>
         </div>
         <div>
           <input type="number" min="0" step="1" value="${screen.extra_seconds ?? 0}" class="extra-seconds-input compact-number-input">
