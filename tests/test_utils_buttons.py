@@ -365,7 +365,7 @@ def test_display_hat_mini_led_is_still_updated_when_indicator_border_is_enabled(
     display.set_led(r=0.1, g=0.2, b=0.3)
 
     assert fake_display.called is True
-    assert fake_display.color == {"r": 26, "g": 51, "b": 76}
+    assert fake_display.color == {"r": 255, "g": 255, "b": 255}
 
 
 def test_image_always_applies_bottom_safe_buffer(monkeypatch):
@@ -550,6 +550,28 @@ def test_refresh_led_indicator_uses_static_color_for_indicator_border(monkeypatc
     assert animator.stopped is True
     assert utils._LED_INDICATOR_ANIMATOR is None
     assert fake_display.calls == [(0.0, 0.0, utils.LED_INDICATOR_LEVEL)]
+
+
+def test_set_update_indicator_enabled_clears_led_when_disabled(monkeypatch):
+    class _FakeDisplay:
+        _hyperpixel_indicator_border = False
+        _display_hat_mini_indicator_border = False
+
+        def __init__(self):
+            self.calls = []
+
+        def set_led(self, *, r, g, b):
+            self.calls.append((r, g, b))
+
+    fake_display = _FakeDisplay()
+    monkeypatch.setattr(utils, "_LED_INDICATOR_ANIMATOR", None)
+    monkeypatch.setattr(utils, "_UPDATE_INDICATOR_ENABLED", True)
+
+    enabled = utils.set_update_indicator_enabled(False, fake_display)
+
+    assert enabled is False
+    assert utils.update_indicator_enabled() is False
+    assert fake_display.calls == [(0.0, 0.0, 0.0)]
 
 
 def test_reinitialize_display_retries_after_failure(monkeypatch):

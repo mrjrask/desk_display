@@ -87,7 +87,9 @@ from utils import (
     display_updates_enabled,
     resume_display_updates,
     suspend_display_updates,
+    set_update_indicator_enabled,
     temporary_display_led,
+    update_indicator_enabled,
 )
 import data_fetch
 from services.data_provider import provider as data_provider
@@ -526,8 +528,7 @@ def _handle_button_down(name: str) -> bool:
     if display is None:
         return False
     if name == "X":
-        logging.info("⬇️  X button pressed – pulling latest desk_display changes and restarting service…")
-        _git_pull_and_restart_desk_display_service()
+        _toggle_update_indicator()
         return False
     if name == "A":
         return _request_next_screen()
@@ -537,6 +538,20 @@ def _handle_button_down(name: str) -> bool:
         logging.info("🔁 Y button pressed – restarting desk_display service…")
         _restart_desk_display_service()
         return False
+    return False
+
+
+def _toggle_update_indicator() -> bool:
+    """Toggle update indicator visibility on both border and onboard LED."""
+
+    new_state = set_update_indicator_enabled(
+        not update_indicator_enabled(),
+        display,
+    )
+    if new_state:
+        logging.info("💡 X button pressed – update LED indicator enabled.")
+    else:
+        logging.info("🌑 X button pressed – update LED indicator disabled.")
     return False
 
 
