@@ -341,14 +341,17 @@ def _center_bottom_text_with_live_bases(
     step = max(3, base_size)
     half = max(2, step // 2)
 
-    try:
-        sl, _, sr, _ = draw.textbbox((0, 0), "   ", font=font)
-        base_gap = max(3, sr - sl)
-    except Exception:
-        base_gap = max(3, base_size)
-
     indicator_w = (2 * step) + (2 * half)
     indicator_h = step + (2 * half)
+    try:
+        sl, _, sr, _ = draw.textbbox((0, 0), "   ", font=font)
+        preferred_gap = max(3, sr - sl)
+    except Exception:
+        preferred_gap = max(3, base_size)
+
+    max_gap = max(1, WIDTH - tw - indicator_w)
+    base_gap = max(1, min(preferred_gap, max_gap))
+
     group_w = tw + base_gap + indicator_w
     group_x = max(0, (WIDTH - group_w) // 2)
 
