@@ -1285,18 +1285,10 @@ def _draw_prefix_opponent_line(
     line_h = max(prefix_h, opponent_h)
     start_x = x_center - ((prefix_w + opponent_w) // 2)
 
-    try:
-        p_bbox = draw.textbbox((0, 0), prefix_text, font=prefix_font)
-        p_y = int(round(y + (line_h - (p_bbox[3] - p_bbox[1])) / 2.0 - p_bbox[1]))
-    except Exception:
-        p_y = y + ((line_h - prefix_h) // 2)
+    p_y = y + ((line_h - prefix_h) // 2)
     draw.text((start_x, p_y), prefix_text, font=prefix_font, fill=fill)
 
-    try:
-        o_bbox = draw.textbbox((0, 0), opponent, font=opponent_font)
-        o_y = int(round(y + (line_h - (o_bbox[3] - o_bbox[1])) / 2.0 - o_bbox[1]))
-    except Exception:
-        o_y = y + ((line_h - opponent_h) // 2)
+    o_y = y + ((line_h - opponent_h) // 2)
     draw.text((start_x + prefix_w, o_y), opponent, font=opponent_font, fill=fill)
     return line_h
 
