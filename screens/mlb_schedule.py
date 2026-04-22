@@ -270,7 +270,7 @@ def _next_variant_title_opponent_gap(
         "cubs next home series",
         "sox next home series",
     }:
-        return base_gap + 2
+        return base_gap + 4
     return base_gap
 
 

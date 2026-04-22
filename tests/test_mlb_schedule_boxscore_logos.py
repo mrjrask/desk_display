@@ -941,7 +941,7 @@ def test_draw_sports_screen_cubs_next_uses_current_series_title_spacing_on_squar
         font=mlb_schedule.FONT_TITLE_SPORTS,
     )[1]
     assert captured["title_y"] == 0
-    assert captured["opponent_y"] == reference_h + 6
+    assert captured["opponent_y"] == reference_h + 8
 
 
 def test_draw_sports_screen_sox_next_uses_current_series_title_spacing(monkeypatch):
@@ -979,7 +979,7 @@ def test_draw_sports_screen_sox_next_uses_current_series_title_spacing(monkeypat
         font=mlb_schedule.FONT_TITLE_SPORTS,
     )[1]
     assert captured["title_y"] == 0
-    assert captured["opponent_y"] == reference_h + 6
+    assert captured["opponent_y"] == reference_h + 8
 
 
 @pytest.mark.parametrize(
@@ -1065,7 +1065,7 @@ def test_draw_sports_screen_next_home_uses_current_series_title_spacing(
             if "opponent_y" in captured:
                 break
     assert captured["title_y"] == 0
-    assert captured["opponent_y"] == reference_h + 6
+    assert captured["opponent_y"] == reference_h + 8
 
 
 def test_draw_sports_screen_next_variants_scale_prefix_font(monkeypatch):
@@ -1164,7 +1164,7 @@ def test_draw_series_screen_next_variants_use_current_series_title_spacing(monke
                 if "opponent_y" in captured:
                     break
         assert captured["title_y"] == 0
-        assert captured["opponent_y"] == reference_h + 6
+        assert captured["opponent_y"] == reference_h + 8
 
 
 @pytest.mark.parametrize(
@@ -1234,7 +1234,7 @@ def test_draw_sports_screen_next_home_uses_current_series_title_spacing(
         reference_title,
         font=mlb_schedule.FONT_TITLE_SPORTS,
     )[1]
-    expected_y = reference_h + 6
+    expected_y = reference_h + 8
     if "opponent_y" not in captured:
         opponent = expected_opponent_text.split(". ", 1)[1]
         for x, y, text in line_calls:
