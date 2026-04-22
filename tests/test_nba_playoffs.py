@@ -88,6 +88,22 @@ def test_format_next_text_uses_tonight_label(monkeypatch):
     assert text == "Tonight 9:30 PM"
 
 
+def test_format_next_text_supports_next_game_datetime_utc_key():
+    text = nba_playoffs._format_next_text({"nextGameDateTimeUTC": "2026-04-22T00:00:00Z"})
+    assert text == "4/21 7:00 PM"
+
+
+def test_format_next_text_supports_nested_next_game_payload(monkeypatch):
+    class _FixedNow(datetime.datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return cls(2026, 4, 20, 10, 0, tzinfo=tz)
+
+    monkeypatch.setattr(nba_playoffs.datetime, "datetime", _FixedNow)
+    text = nba_playoffs._format_next_text({"nextGame": {"gameDateTimeUTC": "2026-04-23T00:30:00Z"}})
+    assert text == "4/22 7:30 PM"
+
+
 def test_derive_playoff_matchups_supports_scoreboard_games_shape():
     games = [
         {
