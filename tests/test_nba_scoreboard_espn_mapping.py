@@ -26,3 +26,21 @@ def test_map_espn_game_includes_season_metadata_for_playoff_detection():
     assert mapped is not None
     assert mapped["seasonType"] == 3
     assert mapped["seasonStage"] == "post-season"
+
+
+def test_map_game_preserves_espn_season_metadata_for_downstream_detectors():
+    mapped = nba_scoreboard._map_game(
+        {
+            "id": "401999999",
+            "gameTimeUTC": "2026-04-22T23:00Z",
+            "statusNum": "1",
+            "statusText": "Scheduled",
+            "awayTeam": {"teamAbbr": "BOS"},
+            "homeTeam": {"teamAbbr": "NYK"},
+            "seasonType": 3,
+            "seasonStage": "post-season",
+        }
+    )
+
+    assert mapped["seasonType"] == 3
+    assert mapped["seasonStage"] == "post-season"
