@@ -809,6 +809,14 @@ def _map_game(game: Dict[str, Any]) -> Dict[str, Any]:
             "home": _map_team(game.get("homeTeam") or game.get("home")),
         },
     }
+    for source_key, target_key in (
+        ("seasonType", "seasonType"),
+        ("seasonStage", "seasonStage"),
+        ("gameType", "gameType"),
+    ):
+        value = game.get(source_key)
+        if value not in (None, ""):
+            mapped[target_key] = value
     if abstract:
         mapped["status"]["abstractGameState"] = abstract
 
