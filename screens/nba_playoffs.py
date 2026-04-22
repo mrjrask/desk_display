@@ -529,7 +529,18 @@ def _looks_like_playoff_game(game: dict) -> bool:
     if game_id.startswith("004") or game_id.startswith("005"):
         return True
     game_type = str(game.get("gameType") or game.get("seasonType") or game.get("seasonStage") or "").strip().lower()
-    if game_type in {"p", "playoffs", "postseason", "post-season", "4", "5", "004", "005"}:
+    if game_type in {
+        "p",
+        "playoffs",
+        "postseason",
+        "post-season",
+        "3",
+        "4",
+        "5",
+        "003",
+        "004",
+        "005",
+    }:
         return True
     status_text = _status_text(game).lower()
     return "series" in status_text and ("lead" in status_text or "tied" in status_text)
