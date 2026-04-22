@@ -242,6 +242,39 @@ def _normalize_conference_label(value: Any) -> str:
     return ""
 
 
+def _round_rank_from_text(value: Any) -> Optional[int]:
+    text = str(value or "").strip().lower()
+    if not text:
+        return None
+    if "first round" in text:
+        return 1
+    if "semifinal" in text:
+        return 2
+    if "conference final" in text:
+        return 3
+    if text == "finals" or "nba finals" in text:
+        return 4
+    return None
+
+
+def _round_rank_from_series_payload(series: dict) -> Optional[int]:
+    for key in ("roundNumber", "round", "playoffRound", "roundNo", "roundId"):
+        parsed = _as_int(series.get(key))
+        if parsed is not None and parsed > 0:
+            return parsed
+
+    text_rank = _round_rank_from_text(
+        series.get("roundName")
+        or series.get("roundLabel")
+        or series.get("seriesStatusShort")
+        or series.get("seriesStatus")
+        or series.get("seriesText")
+    )
+    if text_rank is not None:
+        return text_rank
+    return None
+
+
 def _extract_next_game_dt(value: Any) -> Optional[datetime.datetime]:
     if isinstance(value, (int, float)):
         try:
@@ -478,6 +511,7 @@ def _normalize_series_item(series: dict) -> Optional[dict]:
         "higher_seed": _as_int(series.get("topSeedRank") or series.get("higherSeedRank") or away_team.get("seed")),
         "lower_seed": _as_int(series.get("bottomSeedRank") or series.get("lowerSeedRank") or home_team.get("seed")),
         "next_text": _format_next_text(series),
+        "round_rank": _round_rank_from_series_payload(series),
     }
 
 
@@ -512,8 +546,10 @@ def _extract_series(payload: Any) -> list[dict]:
         teams = (series.get("teams") or {})
         away_team = ((teams.get("away") or {}).get("team") or {})
         home_team = ((teams.get("home") or {}).get("team") or {})
-        key = (_team_logo_abbr(away_team), _team_logo_abbr(home_team))
-        if not all(key) or key in seen:
+        away_abbr = _team_logo_abbr(away_team)
+        home_abbr = _team_logo_abbr(home_team)
+        key = tuple(sorted((away_abbr, home_abbr)))
+        if not away_abbr or not home_abbr or key in seen:
             continue
         seen.add(key)
         deduped.append(series)
@@ -568,8 +604,10 @@ def _parse_series_record_from_text(text: str) -> Optional[tuple[int, int]]:
 
 def _looks_like_playoff_game(game: dict) -> bool:
     game_id = str(game.get("gamePk") or game.get("id") or game.get("gameId") or "").strip()
-    if game_id.startswith("004") or game_id.startswith("005"):
+    if game_id.startswith("004"):
         return True
+    if game_id.startswith("005"):
+        return False
     game_type = str(game.get("gameType") or game.get("seasonType") or game.get("seasonStage") or "").strip().lower()
     if game_type in {
         "p",
@@ -577,13 +615,12 @@ def _looks_like_playoff_game(game: dict) -> bool:
         "postseason",
         "post-season",
         "3",
-        "4",
-        "5",
         "003",
         "004",
-        "005",
     }:
         return True
+    if game_type in {"playin", "play-in", "4", "5", "005"}:
+        return False
     status_text = _status_text(game).lower()
     return "series" in status_text and ("lead" in status_text or "tied" in status_text)
 
@@ -711,6 +748,16 @@ def _conference_buckets(series: list[dict]) -> tuple[list[dict], list[dict]]:
     west.sort(key=_series_order_key)
     east.sort(key=_series_order_key)
     return west, east
+
+
+def _select_current_round_series(series: list[dict]) -> list[dict]:
+    if not series:
+        return []
+    ranked = [item for item in series if _as_int(item.get("round_rank")) is not None]
+    if not ranked:
+        return series
+    current_round = min(_as_int(item.get("round_rank")) for item in ranked if _as_int(item.get("round_rank")) is not None)
+    return [item for item in ranked if _as_int(item.get("round_rank")) == current_round]
 
 
 def _draw_series_block(canvas: Image.Image, draw: ImageDraw.ImageDraw, series: dict, *, left: int, top: int):
@@ -857,6 +904,7 @@ def render_nba_playoffs(display, games: list[dict], transition: bool = False) ->
         series = _derive_playoff_matchups_from_games(games)
 
     series = [item for item in series if _is_current_series(item)]
+    series = _select_current_round_series(series)
 
     if not series:
         clear_display(display)
