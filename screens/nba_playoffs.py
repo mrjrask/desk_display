@@ -754,10 +754,14 @@ def _select_current_round_series(series: list[dict]) -> list[dict]:
     if not series:
         return []
     ranked = [item for item in series if _as_int(item.get("round_rank")) is not None]
+    unranked = [item for item in series if _as_int(item.get("round_rank")) is None]
     if not ranked:
         return series
     current_round = min(_as_int(item.get("round_rank")) for item in ranked if _as_int(item.get("round_rank")) is not None)
-    return [item for item in ranked if _as_int(item.get("round_rank")) == current_round]
+    current_ranked = [item for item in ranked if _as_int(item.get("round_rank")) == current_round]
+    if not unranked:
+        return current_ranked
+    return current_ranked + unranked
 
 
 def _draw_series_block(canvas: Image.Image, draw: ImageDraw.ImageDraw, series: dict, *, left: int, top: int):

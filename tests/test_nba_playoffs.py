@@ -259,6 +259,18 @@ def test_select_current_round_series_keeps_all_when_round_unknown():
     assert selected == series
 
 
+def test_select_current_round_series_keeps_unranked_when_round_metadata_partial():
+    series = [
+        {"teams": {"away": {"score": 1}, "home": {"score": 1}}, "round_rank": 1},
+        {"teams": {"away": {"score": 0}, "home": {"score": 0}}, "round_rank": 2},
+        {"teams": {"away": {"score": 2}, "home": {"score": 1}}},
+    ]
+
+    selected = nba_playoffs._select_current_round_series(series)
+
+    assert selected == [series[0], series[2]]
+
+
 def test_round_rank_from_text_supports_common_labels():
     assert nba_playoffs._round_rank_from_text("Western Conference First Round") == 1
     assert nba_playoffs._round_rank_from_text("Conference Semifinals") == 2
