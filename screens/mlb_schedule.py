@@ -64,7 +64,7 @@ TABLE_SIDE_MARGIN       = 4          # left/right inset of table
 MIN_TEAM_COL_WIDTH      = 40         # never let the team column be narrower
 DESIRED_SQUARE_FRACTION = 0.24       # starting point for square width vs total_w
 GRID_BG                 = (14, 36, 22)  # dark forest green
-NEXT_GAME_LOGO_SCALE    = 0.92       # slightly reduce logo size inside frame
+NEXT_GAME_LOGO_SCALE    = 0.874      # reduce Cubs/Sox next-game logos an additional 5%
 
 # Cubs mini-flag sizing/reservation
 SMALL_RESULT_FLAG_H     = int(os.environ.get("SMALL_RESULT_FLAG_H", "48"))
