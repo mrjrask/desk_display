@@ -175,3 +175,13 @@ def test_is_current_series_filters_completed_series():
     }
 
     assert nba_playoffs._is_current_series(series) is False
+
+
+def test_looks_like_playoff_game_accepts_espn_postseason_type():
+    game = {
+        "gamePk": "401999999",
+        "seasonType": "3",
+        "status": {"detailedState": "Scheduled"},
+    }
+
+    assert nba_playoffs._looks_like_playoff_game(game) is True

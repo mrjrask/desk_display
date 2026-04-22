@@ -966,6 +966,9 @@ def _map_espn_game(event: Dict[str, Any], competition: Dict[str, Any], day: date
             home_team = home_team or mapped
 
     game_id = competition.get("id") or event.get("id")
+    season_info = event.get("season") or {}
+    season_type = season_info.get("type")
+    season_slug = season_info.get("slug")
     mapped_game: Dict[str, Any] = {
         "gameId": game_id,
         "id": game_id,
@@ -982,6 +985,8 @@ def _map_espn_game(event: Dict[str, Any], competition: Dict[str, Any], day: date
         "periodDescriptor": period_descriptor or None,
         "awayTeam": away_team,
         "homeTeam": home_team,
+        "seasonType": season_type,
+        "seasonStage": season_slug,
     }
     if abstract:
         mapped_game["status"] = {
