@@ -337,7 +337,7 @@ def _center_bottom_text_with_live_bases(
         tw, th = draw.textsize(text, font=font)
         l = t = 0
 
-    base_size = max(3, int(round(th * 0.28)))
+    base_size = max(3, int(round(th * 0.35)))
     step = max(3, base_size)
     half = max(2, step // 2)
 

@@ -285,7 +285,7 @@ def test_center_bottom_text_with_live_bases_uses_space_gap(monkeypatch):
 
     l, t, r, b = draw.textbbox((0, 0), text, font=font)
     tw, th = r - l, b - t
-    base_size = max(3, int(round(th * 0.28)))
+    base_size = max(3, int(round(th * 0.35)))
     step = max(3, base_size)
     half = max(2, step // 2)
     indicator_w = (2 * step) + (2 * half)
