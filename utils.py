@@ -1831,10 +1831,6 @@ class Display:
         # Clamp the requested level to keep the screen visible but not blinding.
         # Allow 0.0 for explicit "off" requests (used by display toggle).
         level = max(0.0, min(1.0, level))
-        # Treat the top-end as true full brightness so 100% matches forcing
-        # the underlying driver brightness to 1.0.
-        if level >= 1.0:
-            level = 1.0
 
         with self._backlight_lock:
             self._backlight_level = level
@@ -1845,8 +1841,6 @@ class Display:
             try:  # pragma: no cover - hardware import
                 with self._display_io_lock:
                     self._display.set_backlight(self._backlight_level)
-                    if self._backlight_level == 1.0 and hasattr(self._display, "brightness"):
-                        self._display.brightness = 1.0
             except Exception as exc:  # pragma: no cover - hardware import
                 logging.debug("Failed to set backlight level: %s", exc)
 
