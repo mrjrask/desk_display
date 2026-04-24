@@ -817,6 +817,47 @@ def test_series_line_fill_uses_white_for_non_live_game():
 
     assert mlb_schedule._series_line_fill(game) == (255, 255, 255)
 
+
+@pytest.mark.parametrize(
+    ("scores", "expected_result", "expected_fill"),
+    [
+        ((5, 2), "W", (0, 180, 0)),
+        ((1, 4), "L", (220, 0, 0)),
+    ],
+)
+def test_draw_series_screen_sox_current_series_colors_result_letter(monkeypatch, scores, expected_result, expected_fill):
+    monkeypatch.setattr(mlb_schedule, "load_team_logo", lambda *args, **kwargs: None)
+
+    home_score, away_score = scores
+    games = [
+        {
+            "officialDate": "2026-05-01",
+            "status": {"abstractGameState": "Final", "detailedState": "Final", "statusCode": "F"},
+            "teams": {
+                "away": {"score": away_score, "team": {"id": 121, "name": "Boston Red Sox"}},
+                "home": {"score": home_score, "team": {"id": 145, "name": "Chicago White Sox"}},
+            },
+        }
+    ]
+
+    text_calls = []
+    original_text = ImageDraw.ImageDraw.text
+
+    def _capture_text(self, xy, text, *args, **kwargs):
+        text_calls.append((text, kwargs.get("fill")))
+        return original_text(self, xy, text, *args, **kwargs)
+
+    monkeypatch.setattr(ImageDraw.ImageDraw, "text", _capture_text)
+
+    mlb_schedule.draw_series_screen(
+        None,
+        games,
+        "Sox Current Series",
+        screen_id="sox current series",
+    )
+
+    assert (expected_result, expected_fill) in text_calls
+
 def test_centered_boxscore_accounts_for_header_height(monkeypatch):
     img = Image.new("RGB", (mlb_schedule.WIDTH, mlb_schedule.HEIGHT), (0, 0, 0))
     draw = ImageDraw.Draw(img)

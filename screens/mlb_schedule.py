@@ -1500,16 +1500,28 @@ def draw_series_screen(display, games, title, transition=False, screen_id: Optio
         "cubs current series",
         "cubs next series",
     }
+    use_sox_colored_result_letter = normalized_screen_id == "sox current series"
 
     for idx in range(display_rows):
         y = rows_top + (idx * (row_h + extra_row_gap))
         game_row = series_games[idx]
-        final_parts = _series_final_result_parts(game_row, focus_id) if use_cubs_result_icon else None
+        final_parts = _series_final_result_parts(game_row, focus_id) if (use_cubs_result_icon or use_sox_colored_result_letter) else None
 
         if final_parts:
             date_label, result_flag, score_text = final_parts
             text_before = f"{date_label} • "
             text_after = f" {score_text}"
+            if use_sox_colored_result_letter:
+                result_fill = (0, 180, 0) if result_flag == "W" else (220, 0, 0)
+                before_w, _ = draw.textsize(text_before, font=row_font)
+                result_w, _ = draw.textsize(result_flag, font=row_font)
+                after_w, _ = draw.textsize(text_after, font=row_font)
+                total_w = before_w + result_w + after_w
+                x = (WIDTH - total_w) // 2
+                draw.text((x, y), text_before, font=row_font, fill=(255, 255, 255))
+                draw.text((x + before_w, y), result_flag, font=row_font, fill=result_fill)
+                draw.text((x + before_w + result_w, y), text_after, font=row_font, fill=(255, 255, 255))
+                continue
             icon_path = os.path.join(IMAGES_DIR, "mlb", f"{result_flag}.png")
             icon = None
             if os.path.exists(icon_path):
