@@ -228,6 +228,47 @@ def test_update_display_resizes_rotated_hardware_buffer_to_native_size():
     assert captured["size"] == (display.width, display.height)
 
 
+
+
+def test_set_backlight_forces_driver_brightness_at_full_scale():
+    class _FakeHardwareDisplay:
+        def __init__(self):
+            self.levels = []
+            self.brightness = 0.0
+
+        def set_backlight(self, level):
+            self.levels.append(level)
+
+    display = utils.Display()
+    fake_display = _FakeHardwareDisplay()
+    display._display = fake_display
+
+    level = display.set_backlight(1.0)
+
+    assert level == 1.0
+    assert fake_display.levels == [1.0]
+    assert fake_display.brightness == 1.0
+
+
+def test_set_backlight_does_not_force_driver_brightness_below_full_scale():
+    class _FakeHardwareDisplay:
+        def __init__(self):
+            self.levels = []
+            self.brightness = 0.5
+
+        def set_backlight(self, level):
+            self.levels.append(level)
+
+    display = utils.Display()
+    fake_display = _FakeHardwareDisplay()
+    display._display = fake_display
+
+    level = display.set_backlight(0.99)
+
+    assert level == 0.99
+    assert fake_display.levels == [0.99]
+    assert fake_display.brightness == 0.5
+
 def test_hyperpixel_indicator_border_renders_led_color(monkeypatch):
     monkeypatch.setattr(utils, "is_hyperpixel_next_layout", lambda w, h: True)
 
