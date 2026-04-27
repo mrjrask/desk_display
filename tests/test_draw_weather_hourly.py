@@ -5,6 +5,7 @@ from screens.draw_weather import (
     _gather_daily_forecast,
     _gather_hourly_forecast,
     _temperature_chart_color,
+    draw_weather_daily,
 )
 
 
@@ -101,3 +102,28 @@ def test_temperature_chart_color_uses_expected_band_colors():
 def test_temperature_chart_color_interpolates_between_bands():
     # 65°F sits halfway between the 60°F and 70°F chart colors.
     assert _temperature_chart_color(65) == (249, 192, 45)
+
+
+def test_draw_weather_daily_renders_without_tuple_unpack_errors():
+    now = datetime.datetime(2024, 1, 1, 9, 0, tzinfo=CENTRAL_TIME)
+    weather = {
+        "daily": [
+            {
+                "dt": int(now.timestamp()),
+                "temp": {"max": 50, "min": 31},
+                "weather": [{"main": "Clouds", "icon": "Cloudy", "condition_code": "Cloudy"}],
+            },
+            {
+                "dt": int((now + datetime.timedelta(days=1)).timestamp()),
+                "temp": {"max": 55, "min": 35},
+                "pop": 0.2,
+                "weather": [{"main": "Rain", "icon": "Rain", "condition_code": "Rain"}],
+            },
+        ]
+    }
+
+    rendered = draw_weather_daily(None, weather, transition=False, days=1)
+
+    assert rendered is not None
+    assert rendered.image.size[0] > 0
+    assert rendered.image.size[1] > 0

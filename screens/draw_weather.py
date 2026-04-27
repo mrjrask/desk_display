@@ -1196,6 +1196,7 @@ def draw_weather_daily(display, weather, transition: bool = False, days: int = 5
                 ),
                 None,
                 None,
+                None,
             ),
             (
                 _render_stat_text(
@@ -1204,6 +1205,7 @@ def draw_weather_daily(display, weather, transition: bool = False, days: int = 5
                         (lo_value, stat_font, _temperature_chart_color(lo_val)),
                     ]
                 ),
+                None,
                 None,
                 None,
             ),
