@@ -357,15 +357,21 @@ def _next_day_label(dt: datetime.datetime, *, now: Optional[datetime.datetime] =
     return None
 
 
+def _weekday_label(dt: datetime.datetime) -> str:
+    return dt.strftime("%A")
+
+
+def _next_game_day_label(dt: datetime.datetime, *, now: Optional[datetime.datetime] = None) -> str:
+    return _next_day_label(dt, now=now) or _weekday_label(dt)
+
+
 def _format_next_text(series: dict) -> str:
     next_dt = _extract_series_next_game_dt(series)
     if next_dt is None:
         text = str(series.get("nextGameLabel") or series.get("nextGameText") or "").strip()
         return text if text else "TBD"
-    day_label = _next_day_label(next_dt)
-    if day_label:
-        return f"{day_label} {next_dt.strftime('%-I:%M %p')}"
-    return f"{next_dt.month}/{next_dt.day} {next_dt.strftime('%-I:%M %p')}"
+    day_label = _next_game_day_label(next_dt)
+    return f"{day_label} {next_dt.strftime('%-I:%M %p')}"
 
 
 def _normalize_next_text(text: Any) -> str:
@@ -384,6 +390,24 @@ def _normalize_next_text(text: Any) -> str:
         lambda match: f"{int(match.group(1))}/{int(match.group(2))}",
         normalized,
     )
+    date_match = re.match(r"^(\d{1,2})/(\d{1,2})(\s+.+)$", normalized)
+    if date_match:
+        month = int(date_match.group(1))
+        day = int(date_match.group(2))
+        suffix = date_match.group(3)
+        try:
+            next_dt = datetime.datetime.now(CENTRAL_TIME).replace(
+                month=month,
+                day=day,
+                hour=0,
+                minute=0,
+                second=0,
+                microsecond=0,
+            )
+        except ValueError:
+            next_dt = None
+        if next_dt:
+            normalized = f"{_next_game_day_label(next_dt)}{suffix}"
     return normalized or "TBD"
 
 
@@ -715,7 +739,7 @@ def _derive_playoff_matchups_from_games(games: list[dict]) -> list[dict]:
 
         game_dt = _extract_next_game_dt(game.get("gameDate"))
         if game_dt and game_dt >= datetime.datetime.now(CENTRAL_TIME):
-            existing["next_text"] = f"{game_dt.month}/{game_dt.day} {game_dt.strftime('%-I:%M %p')}"
+            existing["next_text"] = f"{_next_game_day_label(game_dt)} {game_dt.strftime('%-I:%M %p')}"
 
     return list(result_by_pair.values())
 

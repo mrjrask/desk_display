@@ -60,7 +60,7 @@ def test_projected_matchups_from_standings_builds_first_round_bracket():
 
 def test_format_next_text_omits_timezone():
     text = nhl_playoffs._format_next_text({"nextGameStartTimeUTC": "2026-04-20T00:30:00Z"})
-    assert text == "4/19 7:30 PM"
+    assert text == "Sunday 7:30 PM"
 
 
 def test_format_next_text_supports_date_only_without_time(monkeypatch):
@@ -71,7 +71,7 @@ def test_format_next_text_supports_date_only_without_time(monkeypatch):
 
     monkeypatch.setattr(nhl_playoffs.datetime, "datetime", _FixedNow)
     text = nhl_playoffs._format_next_text({"nextGameDate": "2026-04-27"})
-    assert text == "4/27"
+    assert text == "Monday"
 
 
 def test_conference_buckets_order_by_seed():
@@ -143,7 +143,7 @@ def test_normalize_series_item_reads_nested_wins_and_hides_projected_status():
     assert normalized["teams"]["away"]["score"] == 3
     assert normalized["teams"]["home"]["score"] == 2
     assert normalized["status_text"] == ""
-    assert normalized["next_text"] == "4/19 9 PM"
+    assert normalized["next_text"] == "Sunday 9 PM"
 
 
 def test_normalize_series_item_supports_rounds_series_topseed_bottomseed_shape():
@@ -221,19 +221,19 @@ def test_series_next_text_from_games_uses_date_only_when_time_is_tbd(monkeypatch
             return cls(2026, 4, 20, 12, 0, tzinfo=tz)
 
     monkeypatch.setattr(nhl_playoffs.datetime, "datetime", _FixedNow)
-    assert nhl_playoffs._series_next_text_from_games(series, games) == "4/27"
+    assert nhl_playoffs._series_next_text_from_games(series, games) == "Monday"
 
 
 def test_normalize_next_text_strips_known_timezone_and_leading_zeroes():
-    assert nhl_playoffs._normalize_next_text("Next: 04/09 8:00 PM ET") == "4/9 8 PM"
+    assert nhl_playoffs._normalize_next_text("Next: 04/09 8:00 PM ET") == "Thursday 8 PM"
 
 
 def test_normalize_next_text_keeps_text_without_timezone_unchanged():
-    assert nhl_playoffs._normalize_next_text("Next: 4/9 8:00 PM") == "4/9 8 PM"
+    assert nhl_playoffs._normalize_next_text("Next: 4/9 8:00 PM") == "Thursday 8 PM"
 
 
 def test_normalize_next_text_keeps_meridiem_suffix():
-    assert nhl_playoffs._normalize_next_text("Next: 4/9 8:00 AM") == "4/9 8 AM"
+    assert nhl_playoffs._normalize_next_text("Next: 4/9 8:00 AM") == "Thursday 8 AM"
 
 
 def test_normalize_next_text_preserves_tbd():
@@ -452,7 +452,7 @@ def test_render_nhl_playoffs_enriches_next_text_with_official_schedule(monkeypat
 
     rendered = nhl_playoffs.render_nhl_playoffs(_DisplayStub(), games=[], transition=False)
     assert rendered.displayed is True
-    assert captured["series"][0]["next_text"] == "4/28"
+    assert captured["series"][0]["next_text"] == "Tuesday"
 
 
 def test_select_current_round_series_keeps_completed_first_round_visible():
