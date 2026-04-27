@@ -441,17 +441,11 @@ def _format_next_text(series: dict) -> str:
     dt, has_time = _extract_next_game_info(series)
     if not dt:
         return "TBD"
-    day_label = _next_day_label(dt)
-    if day_label:
-        if has_time:
-            return f"{day_label} {_format_clock(dt)}"
-        return f"{day_label}"
-    month = dt.month
-    day = dt.day
+    day_label = _next_game_day_label(dt)
     if not has_time:
-        return f"{month}/{day}"
+        return day_label
     time_text = _format_clock(dt)
-    return f"{month}/{day} {time_text}"
+    return f"{day_label} {time_text}"
 
 
 def _next_day_label(dt: datetime.datetime, *, now: Optional[datetime.datetime] = None) -> Optional[str]:
@@ -461,6 +455,14 @@ def _next_day_label(dt: datetime.datetime, *, now: Optional[datetime.datetime] =
     if dt.date() == (now_dt + datetime.timedelta(days=1)).date():
         return "Tomorrow"
     return None
+
+
+def _weekday_label(dt: datetime.datetime) -> str:
+    return dt.strftime("%A")
+
+
+def _next_game_day_label(dt: datetime.datetime, *, now: Optional[datetime.datetime] = None) -> str:
+    return _next_day_label(dt, now=now) or _weekday_label(dt)
 
 
 def _format_clock(dt: datetime.datetime) -> str:
@@ -509,7 +511,7 @@ def _normalize_next_text(text: Any) -> str:
             )
         except ValueError:
             next_dt = None
-        day_label = _next_day_label(next_dt) if next_dt else None
+        day_label = _next_game_day_label(next_dt) if next_dt else None
         if day_label:
             normalized = f"{day_label}{suffix}"
 
@@ -892,17 +894,11 @@ def _series_next_text_from_games(series: dict, games: list[dict]) -> str:
 
     if not next_dt:
         return _normalize_next_text(series.get("next_text") or "TBD")
-    day_label = _next_day_label(next_dt, now=now)
-    if day_label:
-        if next_has_time:
-            return f"{day_label} {_format_clock(next_dt)}"
-        return f"{day_label}"
-    month = next_dt.month
-    day = next_dt.day
+    day_label = _next_game_day_label(next_dt, now=now)
     if not next_has_time:
-        return f"{month}/{day}"
+        return day_label
     time_text = _format_clock(next_dt)
-    return f"{month}/{day} {time_text}"
+    return f"{day_label} {time_text}"
 
 
 def _map_schedule_game_for_series(game: dict) -> Optional[dict]:
