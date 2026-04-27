@@ -527,11 +527,14 @@ def draw_weather_screen_1(display, weather, transition=False):
     # Feels/Hi/Lo groups
     labels    = ["Feels", "Hi", "Lo"]
     values    = [f"{feels}°", f"{hi}°", f"{lo}°"]
-    val_colors = [
-        _temperature_chart_color(feels),
-        _temperature_chart_color(hi),
-        _temperature_chart_color(lo),
-    ]
+    # dynamic colors
+    if feels > hi:
+        feels_col = (255,165,0)
+    elif feels < lo:
+        feels_col = uv_index_color(2)
+    else:
+        feels_col = (255,255,255)
+    val_colors = [feels_col, (255,0,0), (0,0,255)]
 
     groups = []
     for lbl, val in zip(labels, values):
