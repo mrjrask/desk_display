@@ -254,6 +254,37 @@ def _conference_from_series_letter(value: Any) -> str:
     return ""
 
 
+def _round_rank_from_text(value: Any) -> Optional[int]:
+    text = str(value or "").strip().lower()
+    if not text:
+        return None
+    if "first round" in text or text in {"r1", "qf", "quarterfinal", "quarterfinals"}:
+        return 1
+    if "second round" in text or "semifinal" in text or text in {"r2", "sf"}:
+        return 2
+    if "conference final" in text or text in {"ecf", "wcf", "cf", "r3"}:
+        return 3
+    if "stanley cup final" in text or text in {"scf", "final", "f", "r4"}:
+        return 4
+    short = re.search(r"\br\s*([1-4])\b", text)
+    if short:
+        return int(short.group(1))
+    return None
+
+
+def _round_rank_from_series_payload(series: dict) -> Optional[int]:
+    for key in ("roundNumber", "round", "playoffRound", "roundNo", "roundId"):
+        parsed = _as_int(series.get(key))
+        if parsed is not None and parsed > 0:
+            return parsed
+    return _round_rank_from_text(
+        series.get("roundName")
+        or series.get("roundLabel")
+        or series.get("seriesStatusShort")
+        or series.get("seriesStatus")
+    )
+
+
 def _first_int(values: list[Any]) -> Optional[int]:
     for value in values:
         parsed = _as_int(value)
@@ -555,6 +586,7 @@ def _normalize_series_item(series: dict) -> Optional[dict]:
         "higher_seed": higher_seed,
         "lower_seed": lower_seed,
         "next_text": _format_next_text(series),
+        "round_rank": _round_rank_from_series_payload(series),
     }
 
 
@@ -1016,6 +1048,79 @@ def _conference_buckets(series: list[dict]) -> tuple[list[dict], list[dict]]:
     return west, east
 
 
+def _has_both_opponents(series: dict) -> bool:
+    teams = (series or {}).get("teams") or {}
+    away_slot = teams.get("away") or {}
+    home_slot = teams.get("home") or {}
+    away_team = (away_slot.get("team") or {}) if isinstance(away_slot, dict) else {}
+    home_team = (home_slot.get("team") or {}) if isinstance(home_slot, dict) else {}
+    away_abbr = _team_abbr(away_team) if isinstance(away_team, dict) else ""
+    home_abbr = _team_abbr(home_team) if isinstance(home_team, dict) else ""
+    if away_abbr and home_abbr:
+        return True
+    return bool(away_slot and home_slot)
+
+
+def _is_completed_series(series: dict) -> bool:
+    teams = (series or {}).get("teams") or {}
+    away_wins = _as_int(((teams.get("away") or {}).get("score"))) or 0
+    home_wins = _as_int(((teams.get("home") or {}).get("score"))) or 0
+    return away_wins >= 4 or home_wins >= 4
+
+
+def _series_status_line_text(series: dict) -> str:
+    if _is_completed_series(series):
+        return ""
+    return _normalize_next_text(series.get("next_text") or "TBD")
+
+
+def _series_has_started(series: dict) -> bool:
+    if not _has_both_opponents(series):
+        return False
+    if _is_completed_series(series):
+        return True
+    teams = (series or {}).get("teams") or {}
+    away_wins = _as_int(((teams.get("away") or {}).get("score"))) or 0
+    home_wins = _as_int(((teams.get("home") or {}).get("score"))) or 0
+    if away_wins > 0 or home_wins > 0:
+        return True
+    next_text = _normalize_next_text(series.get("next_text") or "")
+    if next_text != "TBD":
+        return True
+    status_text = str(series.get("status_text") or "").strip().lower()
+    return any(token in status_text for token in ("lead", "leads", "tied", "final", "game", "live", "in progress"))
+
+
+def _select_current_round_series(series: list[dict]) -> list[dict]:
+    if not series:
+        return []
+    with_opponents = [item for item in series if _has_both_opponents(item)]
+    ranked = [item for item in with_opponents if _as_int(item.get("round_rank")) is not None]
+    if not ranked:
+        return with_opponents
+
+    rounds: dict[int, list[dict]] = {}
+    for item in ranked:
+        rank = _as_int(item.get("round_rank"))
+        if rank is None:
+            continue
+        rounds.setdefault(rank, []).append(item)
+    ordered_ranks = sorted(rounds)
+    if not ordered_ranks:
+        return with_opponents
+
+    for idx, rank in enumerate(ordered_ranks):
+        current_round = rounds[rank]
+        if any(not _is_completed_series(item) for item in current_round):
+            return current_round
+        later_rounds = ordered_ranks[idx + 1 :]
+        later_started = any(_series_has_started(item) for later in later_rounds for item in rounds[later])
+        if not later_started:
+            return current_round
+
+    return rounds[ordered_ranks[-1]]
+
+
 def _draw_series_block(canvas: Image.Image, draw: ImageDraw.ImageDraw, series: dict, *, left: int, top: int):
     teams = (series or {}).get("teams", {})
     away = teams.get("away", {})
@@ -1050,7 +1155,7 @@ def _draw_series_block(canvas: Image.Image, draw: ImageDraw.ImageDraw, series: d
     status_top = score_top + SCORE_ROW_H
     _center_text(
         draw,
-        _normalize_next_text(series.get("next_text") or "TBD"),
+        _series_status_line_text(series),
         STATUS_SMALL_FONT,
         left,
         SERIES_WIDTH,
@@ -1161,6 +1266,7 @@ def render_nhl_playoffs(display, games: list[dict], transition: bool = False) ->
     else:
         for item in series:
             item["next_text"] = _series_next_text_from_games(item, merged_games)
+    series = _select_current_round_series(series)
 
     if not series:
         clear_display(display)

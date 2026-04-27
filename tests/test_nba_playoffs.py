@@ -264,3 +264,54 @@ def test_round_rank_from_text_supports_common_labels():
     assert nba_playoffs._round_rank_from_text("Conference Semifinals") == 2
     assert nba_playoffs._round_rank_from_text("Eastern Conference Finals") == 3
     assert nba_playoffs._round_rank_from_text("NBA Finals") == 4
+
+
+def test_select_current_round_series_keeps_completed_first_round_visible():
+    series = [
+        {"teams": {"away": {"team": {"abbreviation": "BOS"}, "score": 4}, "home": {"team": {"abbreviation": "ORL"}, "score": 1}}, "round_rank": 1},
+        {"teams": {"away": {"team": {"abbreviation": "NYK"}, "score": 3}, "home": {"team": {"abbreviation": "DET"}, "score": 2}}, "round_rank": 1},
+        {"teams": {"away": {"team": {"abbreviation": "CLE"}, "score": 0}, "home": {"team": {"abbreviation": "MIA"}, "score": 0}}, "round_rank": 2},
+    ]
+
+    selected = nba_playoffs._select_current_round_series(series)
+
+    assert len(selected) == 2
+    assert all(item["round_rank"] == 1 for item in selected)
+
+
+def test_select_current_round_series_ignores_opponentless_next_round_series():
+    series = [
+        {"teams": {"away": {"team": {"abbreviation": "BOS"}, "score": 4}, "home": {"team": {"abbreviation": "ORL"}, "score": 1}}, "round_rank": 1},
+        {"teams": {"away": {"team": {"abbreviation": "NYK"}, "score": 2}, "home": {"team": {"abbreviation": "DET"}, "score": 2}}, "round_rank": 1},
+        {"teams": {"away": {"team": {"abbreviation": "BOS"}, "score": 0}, "home": {"team": {}, "score": 0}}, "round_rank": 2},
+    ]
+
+    selected = nba_playoffs._select_current_round_series(series)
+
+    assert len(selected) == 2
+    assert all(item["round_rank"] == 1 for item in selected)
+
+
+def test_select_current_round_series_advances_only_when_next_round_started():
+    series = [
+        {"teams": {"away": {"team": {"abbreviation": "BOS"}, "score": 4}, "home": {"team": {"abbreviation": "ORL"}, "score": 1}}, "round_rank": 1},
+        {"teams": {"away": {"team": {"abbreviation": "NYK"}, "score": 4}, "home": {"team": {"abbreviation": "DET"}, "score": 2}}, "round_rank": 1},
+        {"teams": {"away": {"team": {"abbreviation": "BOS"}, "score": 0}, "home": {"team": {"abbreviation": "NYK"}, "score": 0}, "next_text": "TBD"}, "round_rank": 2},
+    ]
+    assert all(item["round_rank"] == 1 for item in nba_playoffs._select_current_round_series(series))
+
+    series[2]["next_text"] = "Tonight 8:00 PM"
+    selected = nba_playoffs._select_current_round_series(series)
+    assert len(selected) == 1
+    assert selected[0]["round_rank"] == 2
+
+
+def test_series_status_line_text_hides_tbd_for_completed_series():
+    series = {
+        "teams": {
+            "away": {"score": 4},
+            "home": {"score": 1},
+        },
+        "next_text": "TBD",
+    }
+    assert nba_playoffs._series_status_line_text(series) == ""
