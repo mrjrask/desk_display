@@ -1123,7 +1123,7 @@ def _draw_series_block(canvas: Image.Image, draw: ImageDraw.ImageDraw, series: d
     home = teams.get("home", {})
     score_top = top
 
-    for idx, text in ((0, str(away.get("score", 0))), (2, "-"), (4, str(home.get("score", 0)))):
+    for idx, text in ((0, str(away.get("score", 0))), (2, ""), (4, str(home.get("score", 0)))):
         font = SCORE_FONT if idx != 2 else CENTER_FONT
         _center_text(
             draw,
