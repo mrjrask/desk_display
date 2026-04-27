@@ -63,7 +63,13 @@ def test_format_next_text_omits_timezone():
     assert text == "4/19 7:30 PM"
 
 
-def test_format_next_text_supports_date_only_without_time():
+def test_format_next_text_supports_date_only_without_time(monkeypatch):
+    class _FixedNow(datetime.datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return cls(2026, 4, 20, 12, 0, tzinfo=tz)
+
+    monkeypatch.setattr(nhl_playoffs.datetime, "datetime", _FixedNow)
     text = nhl_playoffs._format_next_text({"nextGameDate": "2026-04-27"})
     assert text == "4/27"
 
@@ -438,7 +444,52 @@ def test_render_nhl_playoffs_enriches_next_text_with_official_schedule(monkeypat
     monkeypatch.setattr(nhl_playoffs, "_render_playoff_screen", _render)
     monkeypatch.setattr(nhl_playoffs.time, "sleep", lambda *_args, **_kwargs: None)
     monkeypatch.setattr(nhl_playoffs, "HEIGHT", 100)
+    class _FixedNow(datetime.datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return cls(2026, 4, 20, 12, 0, tzinfo=tz)
+    monkeypatch.setattr(nhl_playoffs.datetime, "datetime", _FixedNow)
 
     rendered = nhl_playoffs.render_nhl_playoffs(_DisplayStub(), games=[], transition=False)
     assert rendered.displayed is True
     assert captured["series"][0]["next_text"] == "4/28"
+
+
+def test_select_current_round_series_keeps_completed_first_round_visible():
+    series = [
+        {"teams": {"away": {"team": {"abbreviation": "DAL"}, "score": 4}, "home": {"team": {"abbreviation": "COL"}, "score": 1}}, "round_rank": 1},
+        {"teams": {"away": {"team": {"abbreviation": "WPG"}, "score": 3}, "home": {"team": {"abbreviation": "STL"}, "score": 2}}, "round_rank": 1},
+        {"teams": {"away": {"team": {"abbreviation": "DAL"}, "score": 0}, "home": {"team": {"abbreviation": "WPG"}, "score": 0}, "next_text": "TBD"}, "round_rank": 2},
+    ]
+
+    selected = nhl_playoffs._select_current_round_series(series)
+
+    assert len(selected) == 2
+    assert all(item["round_rank"] == 1 for item in selected)
+
+
+def test_select_current_round_series_ignores_opponentless_next_round_series():
+    series = [
+        {"teams": {"away": {"team": {"abbreviation": "DAL"}, "score": 4}, "home": {"team": {"abbreviation": "COL"}, "score": 1}}, "round_rank": 1},
+        {"teams": {"away": {"team": {"abbreviation": "WPG"}, "score": 2}, "home": {"team": {"abbreviation": "STL"}, "score": 2}}, "round_rank": 1},
+        {"teams": {"away": {"team": {"abbreviation": "DAL"}, "score": 0}, "home": {"team": {}, "score": 0}, "next_text": "Tomorrow 7 PM"}, "round_rank": 2},
+    ]
+
+    selected = nhl_playoffs._select_current_round_series(series)
+
+    assert len(selected) == 2
+    assert all(item["round_rank"] == 1 for item in selected)
+
+
+def test_select_current_round_series_advances_only_when_next_round_started():
+    series = [
+        {"teams": {"away": {"team": {"abbreviation": "DAL"}, "score": 4}, "home": {"team": {"abbreviation": "COL"}, "score": 1}}, "round_rank": 1},
+        {"teams": {"away": {"team": {"abbreviation": "WPG"}, "score": 4}, "home": {"team": {"abbreviation": "STL"}, "score": 2}}, "round_rank": 1},
+        {"teams": {"away": {"team": {"abbreviation": "DAL"}, "score": 0}, "home": {"team": {"abbreviation": "WPG"}, "score": 0}, "next_text": "TBD"}, "round_rank": 2},
+    ]
+    assert all(item["round_rank"] == 1 for item in nhl_playoffs._select_current_round_series(series))
+
+    series[2]["next_text"] = "Tomorrow 7 PM"
+    selected = nhl_playoffs._select_current_round_series(series)
+    assert len(selected) == 1
+    assert selected[0]["round_rank"] == 2
