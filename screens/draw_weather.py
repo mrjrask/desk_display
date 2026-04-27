@@ -81,6 +81,20 @@ PRESSURE_TREND_SYMBOLS = {
     "steady": ("↔", (255, 255, 255)),
 }
 EMOJI_DRAW_KWARGS = {"embedded_color": True} if EMOJI_EMBEDDED_COLOR else {}
+TEMPERATURE_COLOR_STOPS_F: tuple[tuple[float, tuple[int, int, int]], ...] = (
+    (-10.0, (211, 46, 179)),
+    (0.0, (172, 45, 176)),
+    (10.0, (134, 67, 186)),
+    (20.0, (76, 86, 232)),
+    (30.0, (30, 160, 236)),
+    (40.0, (0, 184, 105)),
+    (50.0, (155, 206, 96)),
+    (60.0, (255, 214, 0)),
+    (70.0, (243, 171, 90)),
+    (80.0, (255, 58, 20)),
+    (90.0, (229, 30, 0)),
+    (100.0, (204, 0, 0)),
+)
 
 # Keep weather radar tiles centered on downtown Chicago regardless of the
 # weather location used for forecast details.
@@ -195,6 +209,34 @@ def _render_stat_text(parts):
         x += w
 
     return result
+
+
+def _temperature_chart_color(temp_f: float | int | None) -> tuple[int, int, int]:
+    """Map Fahrenheit values to the rainbow weather-chart palette."""
+
+    try:
+        value = float(temp_f)
+    except (TypeError, ValueError):
+        return (255, 255, 255)
+
+    stops = TEMPERATURE_COLOR_STOPS_F
+    if value <= stops[0][0]:
+        return stops[0][1]
+    if value >= stops[-1][0]:
+        return stops[-1][1]
+
+    for idx in range(1, len(stops)):
+        low_temp, low_color = stops[idx - 1]
+        high_temp, high_color = stops[idx]
+        if value <= high_temp:
+            span = high_temp - low_temp or 1.0
+            alpha = (value - low_temp) / span
+            return tuple(
+                int(round(low + (high - low) * alpha))
+                for low, high in zip(low_color, high_color)
+            )
+
+    return stops[-1][1]
 
 
 def _pop_pct_from(entry):
@@ -421,7 +463,12 @@ def draw_weather_screen_1(display, weather, transition=False):
     # Temperature
     temp_str = f"{temp}°F"
     w_temp, h_temp = draw.textsize(temp_str, font=FONT_TEMP)
-    draw.text(((WIDTH - w_temp)//2, 0), temp_str, font=FONT_TEMP, fill=(255,255,255))
+    draw.text(
+        ((WIDTH - w_temp) // 2, 0),
+        temp_str,
+        font=FONT_TEMP,
+        fill=_temperature_chart_color(temp),
+    )
 
     font_desc = FONT_CONDITION
     w_desc, h_desc = draw.textsize(desc, font=font_desc)
@@ -480,14 +527,11 @@ def draw_weather_screen_1(display, weather, transition=False):
     # Feels/Hi/Lo groups
     labels    = ["Feels", "Hi", "Lo"]
     values    = [f"{feels}°", f"{hi}°", f"{lo}°"]
-    # dynamic colors
-    if feels > hi:
-        feels_col = (255,165,0)
-    elif feels < lo:
-        feels_col = uv_index_color(2)
-    else:
-        feels_col = (255,255,255)
-    val_colors = [feels_col, (255,0,0), (0,0,255)]
+    val_colors = [
+        _temperature_chart_color(feels),
+        _temperature_chart_color(hi),
+        _temperature_chart_color(lo),
+    ]
 
     groups = []
     for lbl, val in zip(labels, values):
@@ -871,7 +915,12 @@ def draw_weather_hourly(display, weather, transition: bool = False, hours: int =
         temp_str = f"{temp_val}°"
         temp_w, temp_h = draw.textsize(temp_str, font=FONT_CONDITION)
         temp_text_y = max(trend_top, min(trend_bottom - temp_h, temp_y - temp_h // 2))
-        draw.text((cx - temp_w // 2, temp_text_y), temp_str, font=FONT_CONDITION, fill=(255, 255, 255))
+        draw.text(
+            (cx - temp_w // 2, temp_text_y),
+            temp_str,
+            font=FONT_CONDITION,
+            fill=_temperature_chart_color(temp_val),
+        )
 
         icon_code = hour.get("icon")
         condition_code = hour.get("condition_code")
@@ -1122,8 +1171,8 @@ def draw_weather_daily(display, weather, transition: bool = False, days: int = 5
             cond_y = icon_area_top + max(0, (icon_area_bottom - icon_area_top - cond_h) // 2)
             draw.text((cx - cond_w // 2, cond_y), display_text, font=FONT_WEATHER_DETAILS_TINY, fill=(190, 190, 190))
 
-        hi_text = f"Hi {hi_val}°" if hi_val is not None else "Hi —"
-        lo_text = f"Lo {lo_val}°" if lo_val is not None else "Lo —"
+        hi_value = f"{hi_val}°" if hi_val is not None else "—"
+        lo_value = f"{lo_val}°" if lo_val is not None else "—"
 
         pop_text = "—"
         precip_icon = None
@@ -1135,13 +1184,34 @@ def draw_weather_daily(display, weather, transition: bool = False, days: int = 5
             precip_icon = _render_precip_icon(is_snow, 10, precip_color)
 
         stats = [
-            (hi_text, stat_font, (255, 120, 120), None),
-            (lo_text, stat_font, (120, 170, 255), None),
+            (
+                _render_stat_text(
+                    [
+                        ("Hi ", stat_font, (235, 235, 235)),
+                        (hi_value, stat_font, _temperature_chart_color(hi_val)),
+                    ]
+                ),
+                None,
+                None,
+            ),
+            (
+                _render_stat_text(
+                    [
+                        ("Lo ", stat_font, (235, 235, 235)),
+                        (lo_value, stat_font, _temperature_chart_color(lo_val)),
+                    ]
+                ),
+                None,
+                None,
+            ),
             (pop_text, pop_font, precip_color, precip_icon),
         ]
         segment_h = max(1, (stat_area_bottom - stat_area_top) / max(1, len(stats)))
         for stat_idx, (text, font, color, icon) in enumerate(stats):
-            text_w, text_h = draw.textsize(text, font=font)
+            if isinstance(text, Image.Image):
+                text_w, text_h = text.size
+            else:
+                text_w, text_h = draw.textsize(text, font=font)
             center_y = stat_area_top + segment_h * (stat_idx + 0.5)
             text_y = int(center_y - text_h / 2)
             text_y = max(stat_area_top, min(text_y, stat_area_bottom - text_h))
@@ -1154,6 +1224,9 @@ def draw_weather_daily(display, weather, transition: bool = False, days: int = 5
                 text_x = icon_x + icon_w + gap_icon
                 img.paste(icon, (icon_x, icon_y), icon)
                 draw.text((text_x, text_y), text, font=font, fill=color)
+            elif isinstance(text, Image.Image):
+                text_x = cx - text_w // 2
+                img.paste(text, (text_x, text_y), text)
             else:
                 text_x = cx - text_w // 2
                 draw.text((text_x, text_y), text, font=font, fill=color)

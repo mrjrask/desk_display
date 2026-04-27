@@ -1,7 +1,11 @@
 import datetime
 
 from config import CENTRAL_TIME
-from screens.draw_weather import _gather_daily_forecast, _gather_hourly_forecast
+from screens.draw_weather import (
+    _gather_daily_forecast,
+    _gather_hourly_forecast,
+    _temperature_chart_color,
+)
 
 
 def _build_hourly_entry(dt: datetime.datetime, *, main: str = "Clouds", icon: str = "Cloudy") -> dict:
@@ -86,3 +90,14 @@ def test_gather_daily_forecast_includes_icon_metadata():
             "condition_code": "Rain",
         }
     ]
+
+
+def test_temperature_chart_color_uses_expected_band_colors():
+    assert _temperature_chart_color(-20) == (211, 46, 179)
+    assert _temperature_chart_color(60) == (255, 214, 0)
+    assert _temperature_chart_color(105) == (204, 0, 0)
+
+
+def test_temperature_chart_color_interpolates_between_bands():
+    # 65°F sits halfway between the 60°F and 70°F chart colors.
+    assert _temperature_chart_color(65) == (249, 192, 45)
