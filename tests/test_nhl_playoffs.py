@@ -493,3 +493,14 @@ def test_select_current_round_series_advances_only_when_next_round_started():
     selected = nhl_playoffs._select_current_round_series(series)
     assert len(selected) == 1
     assert selected[0]["round_rank"] == 2
+
+
+def test_series_status_line_text_hides_tbd_for_completed_series():
+    series = {
+        "teams": {
+            "away": {"score": 4},
+            "home": {"score": 2},
+        },
+        "next_text": "TBD",
+    }
+    assert nhl_playoffs._series_status_line_text(series) == ""

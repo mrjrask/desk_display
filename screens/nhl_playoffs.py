@@ -1068,6 +1068,12 @@ def _is_completed_series(series: dict) -> bool:
     return away_wins >= 4 or home_wins >= 4
 
 
+def _series_status_line_text(series: dict) -> str:
+    if _is_completed_series(series):
+        return ""
+    return _normalize_next_text(series.get("next_text") or "TBD")
+
+
 def _series_has_started(series: dict) -> bool:
     if not _has_both_opponents(series):
         return False
@@ -1149,7 +1155,7 @@ def _draw_series_block(canvas: Image.Image, draw: ImageDraw.ImageDraw, series: d
     status_top = score_top + SCORE_ROW_H
     _center_text(
         draw,
-        _normalize_next_text(series.get("next_text") or "TBD"),
+        _series_status_line_text(series),
         STATUS_SMALL_FONT,
         left,
         SERIES_WIDTH,

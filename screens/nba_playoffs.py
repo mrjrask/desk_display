@@ -768,6 +768,12 @@ def _series_has_started(series: dict) -> bool:
     return next_text != "TBD"
 
 
+def _series_status_line_text(series: dict) -> str:
+    if _is_completed_series(series):
+        return ""
+    return _normalize_next_text(series.get("next_text") or series.get("status_text") or "TBD")
+
+
 def _series_order_key(series: dict) -> tuple[int, int, str, str]:
     higher_seed = _as_int(series.get("higher_seed"))
     lower_seed = _as_int(series.get("lower_seed"))
@@ -857,7 +863,7 @@ def _draw_series_block(canvas: Image.Image, draw: ImageDraw.ImageDraw, series: d
     status_top = top + SCORE_ROW_H
     _center_text(
         draw,
-        _normalize_next_text(series.get("next_text") or series.get("status_text") or "TBD"),
+        _series_status_line_text(series),
         STATUS_SMALL_FONT,
         left,
         SERIES_WIDTH,
