@@ -597,7 +597,7 @@ def draw_weather_screen_1(display, weather, transition=False):
     side_font = FONT_WEATHER_DETAILS
     sub_font = FONT_WEATHER_DETAILS_TINY
     stack_gap = 2
-    detail_line_offset = 2
+    detail_line_offset = 12
     edge_margin = 4
     if precip_percent:
         precip_emoji = "❄️" if is_snow else "💧"
