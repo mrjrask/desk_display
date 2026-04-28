@@ -1558,6 +1558,15 @@ def draw_weather_astronomical(display, weather, transition: bool = False):
         y1 = int(sun_center[1] + math.sin(angle) * outer)
         draw.line((x0, y0, x1, y1), fill=(255, 208, 110, 230), width=1 if layout["compact"] else 2)
 
+    panel_x0 = (left_w + edge) if split_columns else edge
+    panel_x1 = WIDTH - edge
+    panel_w = max(40, panel_x1 - panel_x0)
+    moon_center = (
+        panel_x0 + panel_w // 2,
+        content_top + int(content_height * (0.30 if split_columns else 0.66)),
+    )
+    moon_diameter = max(22 if layout["compact"] else 28, min(panel_w - 6, content_height // (2 if split_columns else 3)))
+
     sun_values = {
         "sunrise_astro": _astronomy_time_text(sunrise_astro),
         "sunrise_civil": _astronomy_time_text(sunrise_civil),
@@ -1568,26 +1577,21 @@ def draw_weather_astronomical(display, weather, transition: bool = False):
     }
     sun_rows = [(label, sun_values[key]) for label, key in layout["sun_labels"]]
     row_start_y = sun_center[1] + sun_radius + 12
-    row_gap = max(1, (content_bottom - row_start_y) // max(1, len(sun_rows)))
+    sun_bottom_limit = content_bottom
+    if not split_columns:
+        # Keep sunrise/sunset rows above the moon panel when using a single column.
+        sun_bottom_limit = min(sun_bottom_limit, moon_center[1] - moon_diameter // 2 - 8)
+    row_gap = max(1, (sun_bottom_limit - row_start_y) // max(1, len(sun_rows)))
     label_x = edge + 2 if split_columns else edge + 4
     value_right = (left_w - edge) if split_columns else (WIDTH - edge * 2)
     for idx, (label, value) in enumerate(sun_rows):
         y = row_start_y + idx * row_gap
-        if y > content_bottom - 10:
+        if y > sun_bottom_limit - 10:
             break
         draw.text((label_x, y), label, font=label_font, fill=(255, 210, 150))
         value_bbox = _safe_textbbox(draw, value, value_font)
         value_w = value_bbox[2] - value_bbox[0]
         draw.text((value_right - value_w, y), value, font=value_font, fill=(230, 235, 245))
-
-    panel_x0 = (left_w + edge) if split_columns else edge
-    panel_x1 = WIDTH - edge
-    panel_w = max(40, panel_x1 - panel_x0)
-    moon_center = (
-        panel_x0 + panel_w // 2,
-        content_top + int(content_height * (0.30 if split_columns else 0.66)),
-    )
-    moon_diameter = max(22 if layout["compact"] else 28, min(panel_w - 6, content_height // (2 if split_columns else 3)))
     _draw_moon_phase_icon(img, moon_center, moon_diameter, phase_fraction)
 
     phase_text = f"Phase: {phase_label}"
