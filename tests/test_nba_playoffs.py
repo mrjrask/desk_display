@@ -306,15 +306,26 @@ def test_select_current_round_series_advances_only_when_next_round_started():
     assert selected[0]["round_rank"] == 2
 
 
-def test_series_status_line_text_hides_tbd_for_completed_series():
+def test_series_status_line_text_shows_winner_for_completed_series():
     series = {
         "teams": {
-            "away": {"score": 4},
-            "home": {"score": 1},
+            "away": {"score": 4, "team": {"teamName": "Celtics"}},
+            "home": {"score": 1, "team": {"teamName": "Knicks"}},
         },
         "next_text": "TBD",
     }
-    assert nba_playoffs._series_status_line_text(series) == ""
+    assert nba_playoffs._series_status_line_text(series) == "Celtics win!"
+
+
+def test_series_status_line_text_omits_city_for_completed_series():
+    series = {
+        "teams": {
+            "away": {"score": 4, "team": {"abbreviation": "LAL", "name": "Los Angeles Lakers", "teamCity": "Los Angeles"}},
+            "home": {"score": 1, "team": {"abbreviation": "DEN", "name": "Denver Nuggets", "teamCity": "Denver"}},
+        },
+        "next_text": "TBD",
+    }
+    assert nba_playoffs._series_status_line_text(series) == "Lakers win!"
 
 
 def test_series_status_line_text_uses_live_and_yellow_fill_for_live_series():
