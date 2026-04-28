@@ -175,3 +175,34 @@ def test_build_config_persists_hide_after_fields():
         "hide_after_enabled": True,
         "hide_after_at": "2026-04-06T12:00",
     }
+
+
+def test_build_selectable_screen_ids_prioritizes_rendered_entries():
+    screen_ids = config_ui._build_selectable_screen_ids(
+        [
+            {"id": "astronomical"},
+            {"id": "date"},
+            {"id": "astronomical"},
+        ]
+    )
+
+    assert screen_ids[:2] == ["astronomical", "date"]
+
+
+def test_screen_config_page_uses_rendered_entries_for_selectable_screen_ids(monkeypatch):
+    monkeypatch.setattr(config_ui, "_load_active_config", lambda: {"screens": {"date": 1}})
+    monkeypatch.setattr(config_ui, "_load_active_style_config", lambda: {"screens": {}})
+    monkeypatch.setattr(
+        config_ui,
+        "_build_screen_entries",
+        lambda config, style: [
+            {"id": "astronomical", "frequency": 1, "background": "#000000", "alt_screen": "", "alt_frequency": ""}
+        ],
+    )
+
+    client = config_ui.app.test_client()
+    response = client.get("/")
+
+    assert response.status_code == 200
+    html = response.get_data(as_text=True)
+    assert 'const selectableScreenIds = ["astronomical"' in html
