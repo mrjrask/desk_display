@@ -45,6 +45,7 @@ from utils import (
     standard_scoreboard_league_logo_height,
 )
 from screens.nhl_scoreboard import _center_text, _team_logo_abbr, _get_league_logo
+from screens.team_abbreviation_mappings import NHL_ABBR_TO_COMMON_NAME
 
 HYPERPIXEL_LAYOUT = is_hyperpixel_next_layout()
 HYPERPIXEL_4_SQUARE = is_hyperpixel_4_square_layout()
@@ -100,42 +101,6 @@ LOGO_HEIGHT = TEAM_LOGO_BASE_HEIGHT
 LEAGUE_LOGO_GAP = _scale_y(4)
 
 _SESSION = get_session()
-
-_NHL_ABBR_TO_COMMON_NAME = {
-    "ANA": "Ducks",
-    "BOS": "Bruins",
-    "BUF": "Sabres",
-    "CAR": "Hurricanes",
-    "CBJ": "Blue Jackets",
-    "CGY": "Flames",
-    "CHI": "Blackhawks",
-    "COL": "Avalanche",
-    "DAL": "Stars",
-    "DET": "Red Wings",
-    "EDM": "Oilers",
-    "FLA": "Panthers",
-    "LAK": "Kings",
-    "MIN": "Wild",
-    "MTL": "Canadiens",
-    "NJD": "Devils",
-    "NSH": "Predators",
-    "NYI": "Islanders",
-    "NYR": "Rangers",
-    "OTT": "Senators",
-    "PHI": "Flyers",
-    "PIT": "Penguins",
-    "SJS": "Sharks",
-    "SEA": "Kraken",
-    "STL": "Blues",
-    "TBL": "Lightning",
-    "TOR": "Maple Leafs",
-    "UTA": "Mammoth",
-    "VAN": "Canucks",
-    "VGK": "Golden Knights",
-    "WPG": "Jets",
-    "WSH": "Capitals",
-}
-
 
 def _scoreboard_fonts() -> tuple:
     # Keep score typography aligned with NHL Scoreboard v2.
@@ -1153,7 +1118,7 @@ def _series_winner_name(series: dict) -> str:
             return candidate
     winner_abbr = _team_abbr(winner_team)
     if winner_abbr:
-        return _NHL_ABBR_TO_COMMON_NAME.get(winner_abbr, "")
+        return NHL_ABBR_TO_COMMON_NAME.get(winner_abbr, "")
     return ""
 
 
