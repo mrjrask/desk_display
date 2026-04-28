@@ -22,6 +22,8 @@ def test_weatherkit_measurements_extract_wind_gust_and_speed():
             "uvIndex": 3,
             "asOf": _iso("12:00:00"),
             "cloudCover": 0.1,
+            "precipitationIntensity": {"value": 2.54},
+            "visibility": {"value": 16093.44},
         },
         "forecastDaily": {
             "days": [
@@ -59,6 +61,8 @@ def test_weatherkit_measurements_extract_wind_gust_and_speed():
     assert normalized is not None
     assert normalized["current"]["wind_speed"] == pytest.approx(4.2)
     assert normalized["current"]["wind_gust"] == pytest.approx(9.6)
+    assert normalized["current"]["precipitation_intensity"] == pytest.approx(2.54)
+    assert normalized["current"]["visibility"] == pytest.approx(16093.44)
 
     hourly = normalized["hourly"][0]
     assert hourly["wind_speed"] == pytest.approx(5.1)

@@ -520,9 +520,13 @@ def draw_weather_screen_1(display, weather, transition=False):
     if pop_pct is not None:
         precip_percent = f"{max(0, min(pop_pct, 100))}%"
 
+    precip_intensity_text = _format_precip_intensity_inches_per_hour(current.get("precipitation_intensity"))
+
     cloud_percent = None
     if cloud_cover is not None:
         cloud_percent = f"{max(0, min(cloud_cover, 100))}%"
+
+    visibility_text = _format_visibility_miles(current.get("visibility"))
 
     # Feels/Hi/Lo groups
     labels    = ["Feels", "Hi", "Lo"]
@@ -591,6 +595,7 @@ def draw_weather_screen_1(display, weather, transition=False):
         img.paste(icon_img, (icon_x, y_icon), icon_img)
 
     side_font = FONT_WEATHER_DETAILS
+    sub_font = FONT_WEATHER_DETAILS_TINY
     stack_gap = 2
     edge_margin = 4
     if precip_percent:
@@ -599,8 +604,13 @@ def draw_weather_screen_1(display, weather, transition=False):
         precip_icon = _ensure_rgba_icon(_render_emoji_glyph(precip_emoji, FONT_EMOJI, precip_color))
         emoji_w, emoji_h = precip_icon.size
         pct_w, pct_h = draw.textsize(precip_percent, font=side_font)
-        block_w = max(emoji_w, pct_w)
+        intensity_w, intensity_h = (0, 0)
+        if precip_intensity_text:
+            intensity_w, intensity_h = draw.textsize(precip_intensity_text, font=sub_font)
+        block_w = max(emoji_w, pct_w, intensity_w)
         block_h = emoji_h + stack_gap + pct_h
+        if precip_intensity_text:
+            block_h += stack_gap + intensity_h
         left_available = max(0, icon_x - edge_margin)
         precip_x = edge_margin + max(0, (left_available - block_w) // 2)
         precip_x = min(precip_x, max(edge_margin, icon_x - block_w))
@@ -608,15 +618,24 @@ def draw_weather_screen_1(display, weather, transition=False):
         emoji_x = precip_x + (block_w - emoji_w) // 2
         pct_x = precip_x + (block_w - pct_w) // 2
         img.paste(precip_icon, (emoji_x, block_y), precip_icon)
-        draw.text((pct_x, block_y + emoji_h + stack_gap), precip_percent, font=side_font, fill=precip_color)
+        next_y = block_y + emoji_h + stack_gap
+        draw.text((pct_x, next_y), precip_percent, font=side_font, fill=precip_color)
+        if precip_intensity_text:
+            intensity_x = precip_x + (block_w - intensity_w) // 2
+            draw.text((intensity_x, next_y + pct_h + stack_gap), precip_intensity_text, font=sub_font, fill=precip_color)
 
     if cloud_percent:
         cloud_emoji = "☁️"
         cloud_icon = _ensure_rgba_icon(_render_emoji_glyph(cloud_emoji, FONT_EMOJI, (211, 211, 211)))
         emoji_w, emoji_h = cloud_icon.size
         pct_w, pct_h = draw.textsize(cloud_percent, font=side_font)
-        block_w = max(emoji_w, pct_w)
+        visibility_w, visibility_h = (0, 0)
+        if visibility_text:
+            visibility_w, visibility_h = draw.textsize(visibility_text, font=sub_font)
+        block_w = max(emoji_w, pct_w, visibility_w)
         block_h = emoji_h + stack_gap + pct_h
+        if visibility_text:
+            block_h += stack_gap + visibility_h
         right_start = icon_x + weather_icon_size
         right_available = max(0, WIDTH - edge_margin - right_start)
         cloud_x = right_start + max(0, (right_available - block_w) // 2)
@@ -625,7 +644,11 @@ def draw_weather_screen_1(display, weather, transition=False):
         emoji_x = cloud_x + (block_w - emoji_w) // 2
         pct_x = cloud_x + (block_w - pct_w) // 2
         img.paste(cloud_icon, (emoji_x, block_y), cloud_icon)
-        draw.text((pct_x, block_y + emoji_h + stack_gap), cloud_percent, font=side_font, fill=(211, 211, 211))
+        next_y = block_y + emoji_h + stack_gap
+        draw.text((pct_x, next_y), cloud_percent, font=side_font, fill=(211, 211, 211))
+        if visibility_text:
+            visibility_x = cloud_x + (block_w - visibility_w) // 2
+            draw.text((visibility_x, next_y + pct_h + stack_gap), visibility_text, font=sub_font, fill=(211, 211, 211))
 
     # draw groups
     x = x0
@@ -664,6 +687,30 @@ def _format_day_label(timestamp: Optional[int], *, index: int) -> str:
     if dt:
         return dt.strftime("%a")
     return f"+{index}d"
+
+
+def _format_precip_intensity_inches_per_hour(intensity: object) -> Optional[str]:
+    try:
+        intensity_val = float(intensity)
+    except (TypeError, ValueError):
+        return None
+    if intensity_val <= 0:
+        return None
+    intensity_in_hr = intensity_val * 0.0393701
+    return f"{intensity_in_hr:.2f} in/hr"
+
+
+def _format_visibility_miles(visibility: object) -> Optional[str]:
+    try:
+        visibility_val = float(visibility)
+    except (TypeError, ValueError):
+        return None
+    if visibility_val < 0:
+        return None
+    visibility_mi = visibility_val * 0.000621371
+    if visibility_mi >= 10:
+        return f"{visibility_mi:.0f} mi"
+    return f"{visibility_mi:.1f} mi"
 
 
 def _wind_arrow(degrees: Optional[float]) -> str:
