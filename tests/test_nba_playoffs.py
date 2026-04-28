@@ -329,3 +329,28 @@ def test_series_status_line_text_uses_live_and_yellow_fill_for_live_series():
 
     assert nba_playoffs._series_status_line_text(series) == "LIVE!"
     assert nba_playoffs._series_status_line_fill(series) == nba_playoffs.SCOREBOARD_IN_PROGRESS_SCORE_COLOR
+
+
+def test_compose_canvas_uses_single_series_per_row_on_low_resolution(monkeypatch):
+    monkeypatch.setattr(nba_playoffs, "_use_single_series_per_row_layout", lambda: True)
+
+    draw_calls = []
+
+    def _record_draw(_canvas, _draw, _series, *, left, top):
+        draw_calls.append((left, top))
+
+    monkeypatch.setattr(nba_playoffs, "_draw_series_block", _record_draw)
+
+    series = [
+        {"conference": "west", "teams": {"away": {}, "home": {}}},
+        {"conference": "east", "teams": {"away": {}, "home": {}}},
+    ]
+
+    canvas = nba_playoffs._compose_canvas(series)
+
+    block_height = nba_playoffs.SCORE_ROW_H + nba_playoffs.STATUS_ROW_H
+    assert len(draw_calls) == 2
+    assert draw_calls[0] == (nba_playoffs.WEST_X, 0)
+    assert draw_calls[1] == (nba_playoffs.WEST_X, block_height + nba_playoffs.BLOCK_SPACING)
+    assert canvas.width == nba_playoffs.WIDTH
+
