@@ -99,6 +99,20 @@ def test_normalize_row_keeps_white_sox_short_name():
     assert row["team_name"] == "Sox"
 
 
+def test_normalize_row_expands_toronto_jays_short_name():
+    record = {
+        "team": {"name": "Toronto", "abbreviation": "TOR", "teamName": "Jays"},
+        "wins": 12,
+        "losses": 8,
+        "winningPercentage": ".600",
+        "gamesBack": "1.0",
+    }
+
+    row = mlb_league_standings._normalize_row(record)
+
+    assert row["team_name"] == "Blue Jays"
+
+
 def test_normalize_row_formats_zero_games_back_as_dash():
     record = {
         "team": {"name": "New York Mets", "abbreviation": "NYM"},
