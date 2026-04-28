@@ -843,23 +843,37 @@ def _fetch_weatherkit(now: datetime.datetime) -> Optional[dict[str, Any]]:
         lon=LONGITUDE,
     )
 
-    params = {
-        "dataSets": "currentWeather,forecastDaily,forecastHourly,weatherAlerts",
-        "timezone": WEATHERKIT_TIMEZONE,
-    }
-
     headers = {
         "Authorization": f"Bearer {token}",
     }
 
-    try:
-        r = _session.get(url, params=params, headers=headers, timeout=10)
-        r.raise_for_status()
-        normalized = _normalise_weatherkit_response(r.json())
-        return normalized
-    except Exception as exc:
-        logging.error("Error fetching WeatherKit data: %s", exc)
-        return None
+    weather_datasets = "currentWeather,forecastDaily,forecastHourly,weatherAlerts"
+    fallback_datasets = "currentWeather,forecastDaily,forecastHourly"
+
+    for datasets in (weather_datasets, fallback_datasets):
+        params = {
+            "dataSets": datasets,
+            "timezone": WEATHERKIT_TIMEZONE,
+        }
+        try:
+            r = _session.get(url, params=params, headers=headers, timeout=10)
+            r.raise_for_status()
+            normalized = _normalise_weatherkit_response(r.json())
+            return normalized
+        except requests.exceptions.HTTPError as exc:
+            status = exc.response.status_code if exc.response is not None else None
+            if status == 404 and datasets == weather_datasets:
+                logging.warning(
+                    "WeatherKit returned 404 with weatherAlerts dataset; retrying without alerts"
+                )
+                continue
+            logging.error("Error fetching WeatherKit data: %s", exc)
+            return None
+        except Exception as exc:
+            logging.error("Error fetching WeatherKit data: %s", exc)
+            return None
+
+    return None
 
 
 def _fetch_openweathermap(now: datetime.datetime) -> Optional[dict[str, Any]]:
