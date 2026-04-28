@@ -51,6 +51,7 @@ from screens.nba_scoreboard import (
     _fetch_games_for_date,
     _scoreboard_date,
 )
+from screens.team_abbreviation_mappings import NBA_ABBR_TO_NICKNAME
 
 HYPERPIXEL_LAYOUT = is_hyperpixel_next_layout()
 HYPERPIXEL_4_SQUARE = is_hyperpixel_4_square_layout()
@@ -105,46 +106,6 @@ LOGO_HEIGHT = TEAM_LOGO_BASE_HEIGHT
 LEAGUE_LOGO_GAP = _scale_y(4)
 
 _SESSION = get_session()
-
-_NBA_ABBR_TO_NICKNAME = {
-    "ATL": "Hawks",
-    "BOS": "Celtics",
-    "BKN": "Nets",
-    "BRK": "Nets",
-    "CHA": "Hornets",
-    "CHI": "Bulls",
-    "CLE": "Cavaliers",
-    "DAL": "Mavericks",
-    "DEN": "Nuggets",
-    "DET": "Pistons",
-    "GSW": "Warriors",
-    "GS": "Warriors",
-    "HOU": "Rockets",
-    "IND": "Pacers",
-    "LAC": "Clippers",
-    "LAL": "Lakers",
-    "MEM": "Grizzlies",
-    "MIA": "Heat",
-    "MIL": "Bucks",
-    "MIN": "Timberwolves",
-    "NOP": "Pelicans",
-    "NO": "Pelicans",
-    "NYK": "Knicks",
-    "NY": "Knicks",
-    "OKC": "Thunder",
-    "ORL": "Magic",
-    "PHI": "76ers",
-    "PHX": "Suns",
-    "POR": "Trail Blazers",
-    "SAC": "Kings",
-    "SAS": "Spurs",
-    "SA": "Spurs",
-    "TOR": "Raptors",
-    "UTA": "Jazz",
-    "WAS": "Wizards",
-    "WSH": "Wizards",
-}
-
 
 def _scoreboard_fonts() -> tuple:
     score = get_screen_font(SCREEN_ID, "score", base_font=FONT_TEAM_SPORTS, default_size=24)
@@ -874,7 +835,7 @@ def _series_winner_name(series: dict) -> str:
             return candidate
     winner_abbr = _team_logo_abbr(winner_team)
     if winner_abbr:
-        mapped = _NBA_ABBR_TO_NICKNAME.get(winner_abbr)
+        mapped = NBA_ABBR_TO_NICKNAME.get(winner_abbr)
         if mapped:
             return mapped
     for key in ("teamName", "name"):
