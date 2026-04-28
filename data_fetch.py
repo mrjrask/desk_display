@@ -650,6 +650,15 @@ def _normalise_weatherkit_response(data: dict[str, Any]) -> Optional[dict[str, A
                 },
                 "sunrise": _parse_iso_timestamp(day.get("sunrise")),
                 "sunset": _parse_iso_timestamp(day.get("sunset")),
+                "sunriseCivil": _parse_iso_timestamp(day.get("sunriseCivil")),
+                "sunriseNautical": _parse_iso_timestamp(day.get("sunriseNautical")),
+                "sunriseAstronomical": _parse_iso_timestamp(day.get("sunriseAstronomical")),
+                "sunsetCivil": _parse_iso_timestamp(day.get("sunsetCivil")),
+                "sunsetNautical": _parse_iso_timestamp(day.get("sunsetNautical")),
+                "sunsetAstronomical": _parse_iso_timestamp(day.get("sunsetAstronomical")),
+                "moonrise": _parse_iso_timestamp(day.get("moonrise")),
+                "moonset": _parse_iso_timestamp(day.get("moonset")),
+                "moonPhase": day.get("moonPhase"),
                 "pop": day.get("precipitationChance"),
                 "weather": [
                     {
