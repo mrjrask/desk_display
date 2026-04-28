@@ -124,6 +124,54 @@ def test_weatherkit_hourly_daylight_does_not_force_night_icon():
     assert normalized["hourly"][0]["weather"][0]["icon"] == "Clear"
 
 
+def test_weatherkit_daily_maps_astronomical_and_moon_fields():
+    data = {
+        "currentWeather": {
+            "temperature": 10,
+            "conditionCode": "Clear",
+            "asOf": _iso("12:00:00"),
+        },
+        "forecastDaily": {
+            "days": [
+                {
+                    "sunrise": _iso("12:00:00"),
+                    "sunset": _iso("22:00:00"),
+                    "sunriseCivil": _iso("11:30:00"),
+                    "sunriseNautical": _iso("11:00:00"),
+                    "sunriseAstronomical": _iso("10:30:00"),
+                    "sunsetCivil": _iso("22:30:00"),
+                    "sunsetNautical": _iso("23:00:00"),
+                    "sunsetAstronomical": _iso("23:30:00"),
+                    "moonrise": _iso("15:15:00"),
+                    "moonset": _iso("05:45:00"),
+                    "moonPhase": "WaxingGibbous",
+                    "temperatureMax": 20,
+                    "temperatureMin": 5,
+                    "precipitationChance": 0,
+                    "conditionCode": "Clear",
+                    "forecastStart": _iso("00:00:00"),
+                }
+            ]
+        },
+        "forecastHourly": {"hours": []},
+        "weatherAlerts": {"alerts": []},
+    }
+
+    normalized = _normalise_weatherkit_response(data)
+
+    assert normalized is not None
+    day = normalized["daily"][0]
+    assert day["sunriseCivil"] is not None
+    assert day["sunriseNautical"] is not None
+    assert day["sunriseAstronomical"] is not None
+    assert day["sunsetCivil"] is not None
+    assert day["sunsetNautical"] is not None
+    assert day["sunsetAstronomical"] is not None
+    assert day["moonrise"] is not None
+    assert day["moonset"] is not None
+    assert day["moonPhase"] == "WaxingGibbous"
+
+
 def test_fetch_weatherkit_retries_without_alerts_on_404(monkeypatch):
     import datetime
     import requests
