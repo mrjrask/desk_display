@@ -288,6 +288,8 @@ def _normalize_row(record: dict[str, Any]) -> dict[str, Any]:
     nickname = _team_nickname(record) or abbr
     if abbr == "BOS" and isinstance(nickname, str) and nickname.strip().lower() == "sox":
         nickname = "Red Sox"
+    elif abbr == "TOR" and isinstance(nickname, str) and nickname.strip().lower() == "jays":
+        nickname = "Blue Jays"
     elif (
         abbr == "BOS"
         and isinstance(raw_name, str)
