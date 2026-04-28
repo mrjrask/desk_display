@@ -1131,6 +1131,42 @@
       );
     }
 
+    function mergeScreensWithCatalog(baseScreens, preferredScreens) {
+      const merged = [];
+      const seen = new Set();
+
+      normalizeScreens(preferredScreens).forEach((screen) => {
+        const id = String(screen.id);
+        if (seen.has(id)) return;
+        seen.add(id);
+        merged.push(screen);
+      });
+
+      normalizeScreens(baseScreens).forEach((screen) => {
+        const id = String(screen.id);
+        if (seen.has(id)) return;
+        seen.add(id);
+        merged.push(screen);
+      });
+
+      selectableScreenIds.forEach((screenId) => {
+        if (typeof screenId !== "string" || seen.has(screenId)) {
+          return;
+        }
+        seen.add(screenId);
+        merged.push({
+          id: screenId,
+          frequency: 0,
+          background: "#000000",
+          alt_screen: "",
+          alt_frequency: "",
+          extra_seconds: 0,
+        });
+      });
+
+      return merged;
+    }
+
     function applyImportedPlaylists(config) {
       if (!config || typeof config !== "object") return false;
       const configPlaylists = config.playlists;
@@ -1450,7 +1486,7 @@
         if (draft?.screens?.length) {
           const shouldRestore = window.confirm("Restore unsaved screen rotation edits from your last visit?");
           if (shouldRestore) {
-            initialScreens = draft.screens;
+            initialScreens = mergeScreensWithCatalog(initialScreens, draft.screens);
             if (Array.isArray(draft.playlists)) {
               playlists = draft.playlists.filter((playlist) => playlist?.id && playlist?.name);
             }

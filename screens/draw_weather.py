@@ -597,7 +597,7 @@ def draw_weather_screen_1(display, weather, transition=False):
     side_font = FONT_WEATHER_DETAILS
     sub_font = FONT_WEATHER_DETAILS_TINY
     stack_gap = 2
-    detail_line_offset = 2
+    detail_line_offset = 12
     edge_margin = 4
     if precip_percent:
         precip_emoji = "❄️" if is_snow else "💧"
@@ -1309,7 +1309,28 @@ def draw_weather_daily(display, weather, transition: bool = False, days: int = 5
 
 
 def _astronomy_time_text(value: object) -> str:
-    dt_value = timestamp_to_datetime(value, CENTRAL_TIME)
+    dt_value: datetime.datetime | None = None
+    if isinstance(value, datetime.datetime):
+        dt_value = value if value.tzinfo else value.replace(tzinfo=CENTRAL_TIME)
+    elif isinstance(value, str):
+        trimmed = value.strip()
+        if trimmed:
+            try:
+                dt_value = timestamp_to_datetime(float(trimmed), CENTRAL_TIME)
+            except (TypeError, ValueError):
+                iso_candidate = trimmed.replace("Z", "+00:00")
+                try:
+                    parsed = datetime.datetime.fromisoformat(iso_candidate)
+                except ValueError:
+                    parsed = None
+                if parsed is not None:
+                    dt_value = parsed if parsed.tzinfo else parsed.replace(tzinfo=CENTRAL_TIME)
+    else:
+        dt_value = timestamp_to_datetime(value, CENTRAL_TIME)
+
+    if dt_value is not None and dt_value.tzinfo is not None:
+        dt_value = dt_value.astimezone(CENTRAL_TIME)
+
     if not dt_value:
         return "—"
     return dt_value.strftime("%-I:%M %p")
@@ -1417,6 +1438,52 @@ def _draw_moon_phase_icon(
     image.alpha_composite(moon, (cx - moon.width // 2, cy - moon.height // 2))
 
 
+def _astronomical_layout_details(width: int, height: int) -> dict[str, object]:
+    short_edge = min(width, height)
+    ultra_compact = short_edge <= 135 or width <= 240 or height <= 135
+    compact = ultra_compact or short_edge <= 240 or width <= 360
+    split_columns = width >= 280 and not (height >= width and short_edge < 220)
+
+    if ultra_compact:
+        sun_labels = (
+            ("Astro ↑", "sunrise_astro"),
+            ("Civil ↑", "sunrise_civil"),
+            ("Astro ↓", "sunset_astro"),
+            ("Civil ↓", "sunset_civil"),
+        )
+    elif compact:
+        sun_labels = (
+            ("Astro ↑", "sunrise_astro"),
+            ("Civil ↑", "sunrise_civil"),
+            ("Naut ↑", "sunrise_nautical"),
+            ("Astro ↓", "sunset_astro"),
+            ("Civil ↓", "sunset_civil"),
+            ("Naut ↓", "sunset_nautical"),
+        )
+    else:
+        sun_labels = (
+            ("☀ Astro ↑", "sunrise_astro"),
+            ("🌇 Civil ↑", "sunrise_civil"),
+            ("⚓ Naut ↑", "sunrise_nautical"),
+            ("☀ Astro ↓", "sunset_astro"),
+            ("🌆 Civil ↓", "sunset_civil"),
+            ("⚓ Naut ↓", "sunset_nautical"),
+        )
+
+    return {
+        "compact": compact,
+        "ultra_compact": ultra_compact,
+        "split_columns": split_columns,
+        "title_font": FONT_WEATHER_DETAILS_SMALL_BOLD if compact else FONT_WEATHER_LABEL,
+        "label_font": FONT_WEATHER_DETAILS_TINY_LARGE if compact else FONT_WEATHER_DETAILS_SMALL_BOLD,
+        "value_font": FONT_WEATHER_DETAILS_TINY if compact else FONT_WEATHER_DETAILS_SMALL,
+        "phase_font": FONT_WEATHER_DETAILS_TINY_LARGE if compact else FONT_WEATHER_DETAILS_SMALL_BOLD,
+        "sun_labels": sun_labels,
+        "title_y": 1 if compact else 4,
+        "edge": 2 if compact else 4,
+    }
+
+
 def draw_weather_astronomical(display, weather, transition: bool = False):
     if not weather:
         return None
@@ -1440,22 +1507,31 @@ def draw_weather_astronomical(display, weather, transition: bool = False):
 
     phase_fraction, phase_label = _normalise_moon_phase(moon_phase_raw)
 
+    layout = _astronomical_layout_details(WIDTH, HEIGHT)
+    title_font = layout["title_font"]
+    label_font = layout["label_font"]
+    value_font = layout["value_font"]
+    phase_font = layout["phase_font"]
+    edge = int(layout["edge"])
+
     title = "Astronomical"
-    title_bbox = _safe_textbbox(draw, title, FONT_WEATHER_LABEL)
+    title_bbox = _safe_textbbox(draw, title, title_font)
     title_w = title_bbox[2] - title_bbox[0]
     title_h = title_bbox[3] - title_bbox[1]
-    title_x = max(4, WIDTH // 2 - title_w // 2)
-    title_y = 4
-    draw.text((title_x, title_y), title, font=FONT_WEATHER_LABEL, fill=(236, 236, 255))
+    title_x = max(edge, WIDTH // 2 - title_w // 2)
+    title_y = int(layout["title_y"])
+    draw.text((title_x, title_y), title, font=title_font, fill=(236, 236, 255))
 
     content_top = title_y + title_h + 2
-    content_bottom = HEIGHT - 4
+    content_bottom = HEIGHT - edge
     content_height = max(40, content_bottom - content_top)
-    left_w = WIDTH // 2
-
-    # Cool "sun" feature: gradient halo + rays.
-    sun_center = (left_w // 2, content_top + int(content_height * 0.28))
-    sun_radius = max(10, min(left_w, content_height) // 6)
+    split_columns = bool(layout["split_columns"])
+    left_w = WIDTH // 2 if split_columns else WIDTH - edge * 2
+    sun_center = (
+        (left_w // 2) if split_columns else WIDTH // 2,
+        content_top + int(content_height * (0.26 if split_columns else 0.18)),
+    )
+    sun_radius = max(8 if layout["compact"] else 10, min(left_w, content_height) // (8 if layout["compact"] else 6))
     sun_layers = (
         (sun_radius * 3, (255, 162, 54, 36)),
         (sun_radius * 2, (255, 196, 88, 76)),
@@ -1471,50 +1547,57 @@ def draw_weather_astronomical(display, weather, transition: bool = False):
             ),
             fill=color,
         )
-    for idx in range(12):
-        angle = math.radians(idx * 30)
-        inner = sun_radius + 4
-        outer = sun_radius + 14
+    ray_count = 8 if layout["compact"] else 12
+    for idx in range(ray_count):
+        angle = math.radians(idx * (360 / ray_count))
+        inner = sun_radius + (2 if layout["compact"] else 4)
+        outer = sun_radius + (9 if layout["compact"] else 14)
         x0 = int(sun_center[0] + math.cos(angle) * inner)
         y0 = int(sun_center[1] + math.sin(angle) * inner)
         x1 = int(sun_center[0] + math.cos(angle) * outer)
         y1 = int(sun_center[1] + math.sin(angle) * outer)
-        draw.line((x0, y0, x1, y1), fill=(255, 208, 110, 230), width=2)
+        draw.line((x0, y0, x1, y1), fill=(255, 208, 110, 230), width=1 if layout["compact"] else 2)
 
-    sun_rows = [
-        ("☀ Astro ↑", _astronomy_time_text(sunrise_astro)),
-        ("🌇 Civil ↑", _astronomy_time_text(sunrise_civil)),
-        ("⚓ Naut ↑", _astronomy_time_text(sunrise_nautical)),
-        ("☀ Astro ↓", _astronomy_time_text(sunset_astro)),
-        ("🌆 Civil ↓", _astronomy_time_text(sunset_civil)),
-        ("⚓ Naut ↓", _astronomy_time_text(sunset_nautical)),
-    ]
+    sun_values = {
+        "sunrise_astro": _astronomy_time_text(sunrise_astro),
+        "sunrise_civil": _astronomy_time_text(sunrise_civil),
+        "sunrise_nautical": _astronomy_time_text(sunrise_nautical),
+        "sunset_astro": _astronomy_time_text(sunset_astro),
+        "sunset_civil": _astronomy_time_text(sunset_civil),
+        "sunset_nautical": _astronomy_time_text(sunset_nautical),
+    }
+    sun_rows = [(label, sun_values[key]) for label, key in layout["sun_labels"]]
     row_start_y = sun_center[1] + sun_radius + 12
     row_gap = max(1, (content_bottom - row_start_y) // max(1, len(sun_rows)))
+    label_x = edge + 2 if split_columns else edge + 4
+    value_right = (left_w - edge) if split_columns else (WIDTH - edge * 2)
     for idx, (label, value) in enumerate(sun_rows):
         y = row_start_y + idx * row_gap
         if y > content_bottom - 10:
             break
-        draw.text((6, y), label, font=FONT_WEATHER_DETAILS_SMALL_BOLD, fill=(255, 210, 150))
-        value_bbox = _safe_textbbox(draw, value, FONT_WEATHER_DETAILS_SMALL)
+        draw.text((label_x, y), label, font=label_font, fill=(255, 210, 150))
+        value_bbox = _safe_textbbox(draw, value, value_font)
         value_w = value_bbox[2] - value_bbox[0]
-        draw.text((left_w - value_w - 4, y), value, font=FONT_WEATHER_DETAILS_SMALL, fill=(230, 235, 245))
+        draw.text((value_right - value_w, y), value, font=value_font, fill=(230, 235, 245))
 
-    # Moon panel.
-    panel_x0 = left_w + 2
-    panel_x1 = WIDTH - 4
+    panel_x0 = (left_w + edge) if split_columns else edge
+    panel_x1 = WIDTH - edge
     panel_w = max(40, panel_x1 - panel_x0)
-    moon_center = (panel_x0 + panel_w // 2, content_top + int(content_height * 0.30))
-    moon_diameter = max(28, min(panel_w - 6, content_height // 2))
+    moon_center = (
+        panel_x0 + panel_w // 2,
+        content_top + int(content_height * (0.30 if split_columns else 0.66)),
+    )
+    moon_diameter = max(22 if layout["compact"] else 28, min(panel_w - 6, content_height // (2 if split_columns else 3)))
     _draw_moon_phase_icon(img, moon_center, moon_diameter, phase_fraction)
 
     phase_text = f"Phase: {phase_label}"
-    phase_bbox = _safe_textbbox(draw, phase_text, FONT_WEATHER_DETAILS_SMALL_BOLD)
+    phase_bbox = _safe_textbbox(draw, phase_text, phase_font)
     phase_w = phase_bbox[2] - phase_bbox[0]
+    phase_y = moon_center[1] + moon_diameter // 2 + (3 if layout["compact"] else 6)
     draw.text(
-        (panel_x0 + (panel_w - phase_w) // 2, moon_center[1] + moon_diameter // 2 + 6),
+        (panel_x0 + (panel_w - phase_w) // 2, phase_y),
         phase_text,
-        font=FONT_WEATHER_DETAILS_SMALL_BOLD,
+        font=phase_font,
         fill=(218, 226, 255),
     )
 
@@ -1522,14 +1605,18 @@ def draw_weather_astronomical(display, weather, transition: bool = False):
         ("Moonrise", _astronomy_time_text(moonrise)),
         ("Moonset", _astronomy_time_text(moonset)),
     ]
-    moon_row_y = moon_center[1] + moon_diameter // 2 + 22
-    moon_row_gap = max(10, (content_bottom - moon_row_y) // 2)
+    if layout["ultra_compact"]:
+        moon_rows = [("Moon", f"{_astronomy_time_text(moonrise)} / {_astronomy_time_text(moonset)}")]
+    moon_row_y = phase_y + (12 if layout["compact"] else 16)
+    moon_row_gap = max(8 if layout["compact"] else 10, (content_bottom - moon_row_y) // max(1, len(moon_rows)))
     for idx, (label, value) in enumerate(moon_rows):
         y = moon_row_y + idx * moon_row_gap
-        draw.text((panel_x0 + 4, y), f"{label}:", font=FONT_WEATHER_DETAILS_SMALL_BOLD, fill=(198, 210, 255))
-        value_bbox = _safe_textbbox(draw, value, FONT_WEATHER_DETAILS_SMALL)
+        if y > content_bottom - 8:
+            break
+        draw.text((panel_x0 + 2, y), f"{label}:", font=label_font, fill=(198, 210, 255))
+        value_bbox = _safe_textbbox(draw, value, value_font)
         value_w = value_bbox[2] - value_bbox[0]
-        draw.text((panel_x1 - value_w - 2, y), value, font=FONT_WEATHER_DETAILS_SMALL, fill=(230, 235, 245))
+        draw.text((panel_x1 - value_w - 2, y), value, font=value_font, fill=(230, 235, 245))
 
     return ScreenImage(img.convert("RGB"), displayed=False)
 

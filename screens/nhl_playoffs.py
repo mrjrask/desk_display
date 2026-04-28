@@ -64,6 +64,7 @@ SCORE_ROW_H = _scale_y(56)
 STATUS_ROW_H = _scale_y(18)
 REQUEST_TIMEOUT = 8
 PAIR_SPACING_BASE = max(8, scale_value_width(16))
+LOWER_THAN_HYPERPIXEL_RESOLUTION = (WIDTH * HEIGHT) < (800 * 480)
 SERIES_COL_WIDTHS_BASE = [
     scale_value_width(42),
     scale_value_width(32),
@@ -185,13 +186,23 @@ def _fit_widths_to_total(widths: list[int], target_total: int) -> list[int]:
     return scaled
 
 
+def _use_single_series_per_row_layout() -> bool:
+    """Return True when displays are lower resolution than HyperPixel baselines."""
+    return LOWER_THAN_HYPERPIXEL_RESOLUTION
+
+
 def _recompute_series_layout() -> None:
     global PAIR_SPACING, SERIES_COL_WIDTHS, SERIES_WIDTH, CONTENT_WIDTH, CONTENT_LEFT, WEST_X, EAST_X, SERIES_COL_X
 
     preferred_spacing = max(0, PAIR_SPACING_BASE)
     preferred_series_width = sum(SERIES_COL_WIDTHS_BASE)
+    single_series_per_row = _use_single_series_per_row_layout()
 
-    if preferred_series_width * 2 + preferred_spacing <= WIDTH:
+    if single_series_per_row:
+        spacing = 0
+        series_target = max(len(SERIES_COL_WIDTHS_BASE), WIDTH)
+        series_col_widths = _fit_widths_to_total(SERIES_COL_WIDTHS_BASE, series_target)
+    elif preferred_series_width * 2 + preferred_spacing <= WIDTH:
         spacing = preferred_spacing
         series_col_widths = list(SERIES_COL_WIDTHS_BASE)
     else:
@@ -201,7 +212,7 @@ def _recompute_series_layout() -> None:
         spacing = min(preferred_spacing, max(0, WIDTH - (fitted_series_width * 2)))
 
     series_width = sum(series_col_widths)
-    content_width = min(WIDTH, series_width * 2 + spacing)
+    content_width = min(WIDTH, series_width if single_series_per_row else series_width * 2 + spacing)
     content_left = max(0, (WIDTH - content_width) // 2)
 
     PAIR_SPACING = spacing
@@ -210,7 +221,7 @@ def _recompute_series_layout() -> None:
     CONTENT_WIDTH = content_width
     CONTENT_LEFT = content_left
     WEST_X = content_left
-    EAST_X = content_left + series_width + spacing
+    EAST_X = content_left if single_series_per_row else content_left + series_width + spacing
     SERIES_COL_X = [0]
     for w in series_col_widths:
         SERIES_COL_X.append(SERIES_COL_X[-1] + w)
@@ -1261,7 +1272,14 @@ def _compose_canvas(series: list[dict]) -> Image.Image:
     if not series:
         return Image.new("RGB", (WIDTH, HEIGHT), BACKGROUND_COLOR)
     west_series, east_series = _conference_buckets(series)
-    rows = max(len(west_series), len(east_series))
+    single_series_per_row = _use_single_series_per_row_layout()
+    if single_series_per_row:
+        ordered_series = [*west_series, *east_series]
+        rows = len(ordered_series)
+    else:
+        ordered_series = []
+        rows = max(len(west_series), len(east_series))
+
     block_height = SCORE_ROW_H + STATUS_ROW_H
     total_height = block_height * rows
     if rows > 1:
@@ -1271,10 +1289,13 @@ def _compose_canvas(series: list[dict]) -> Image.Image:
 
     y = 0
     for idx in range(rows):
-        if idx < len(west_series):
-            _draw_series_block(canvas, draw, west_series[idx], left=WEST_X, top=y)
-        if idx < len(east_series):
-            _draw_series_block(canvas, draw, east_series[idx], left=EAST_X, top=y)
+        if single_series_per_row:
+            _draw_series_block(canvas, draw, ordered_series[idx], left=WEST_X, top=y)
+        else:
+            if idx < len(west_series):
+                _draw_series_block(canvas, draw, west_series[idx], left=WEST_X, top=y)
+            if idx < len(east_series):
+                _draw_series_block(canvas, draw, east_series[idx], left=EAST_X, top=y)
         y += block_height
         if idx < rows - 1:
             sep_y = y + BLOCK_SPACING // 2
