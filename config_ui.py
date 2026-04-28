@@ -904,6 +904,27 @@ def _build_screen_entries(
     return entries
 
 
+def _build_selectable_screen_ids(entries: List[Dict[str, Any]]) -> List[str]:
+    ordered_screen_ids: List[str] = []
+
+    for entry in entries:
+        screen_id = entry.get("id")
+        if not isinstance(screen_id, str):
+            continue
+        if screen_id in HIDDEN_CONFIG_SCREEN_IDS:
+            continue
+        if screen_id not in ordered_screen_ids:
+            ordered_screen_ids.append(screen_id)
+
+    for screen_id in SCREEN_IDS:
+        if screen_id in HIDDEN_CONFIG_SCREEN_IDS:
+            continue
+        if screen_id not in ordered_screen_ids:
+            ordered_screen_ids.append(screen_id)
+
+    return ordered_screen_ids
+
+
 def _build_config(entries: List[Dict[str, Any]]) -> Dict[str, Any]:
     screens: Dict[str, Any] = {}
     for entry in entries:
@@ -1091,6 +1112,7 @@ def screen_config() -> str:
     style_config = _load_active_style_config()
     layouts_config = _load_active_layouts_config()
     entries = _build_screen_entries(config, style_config)
+    selectable_screen_ids = _build_selectable_screen_ids(entries)
     quad_config = layouts_config.get("screens", {}).get("quad", {})
     quad_enabled = bool(quad_config.get("enabled", False))
     quad_scroll_speed = _normalize_quad_scroll_speed(quad_config.get("scroll_speed", 1.0))
@@ -1099,7 +1121,7 @@ def screen_config() -> str:
     return render_template(
         "screen_config.html",
         screens=entries,
-        screen_ids=sorted(SCREEN_IDS),
+        screen_ids=selectable_screen_ids,
         quad_enabled=quad_enabled,
         quad_scroll_speed=quad_scroll_speed,
         quad_pages=quad_pages,
@@ -1159,10 +1181,11 @@ def get_screens() -> Any:
     config = _load_active_config()
     style_config = _load_active_style_config()
     layouts_config = _load_active_layouts_config()
+    entries = _build_screen_entries(config, style_config)
     return jsonify(
         {
-            "screens": _build_screen_entries(config, style_config),
-            "screen_ids": sorted(SCREEN_IDS),
+            "screens": entries,
+            "screen_ids": _build_selectable_screen_ids(entries),
             "quad_enabled": bool(layouts_config.get("screens", {}).get("quad", {}).get("enabled", False)),
             "quad_scroll_speed": _normalize_quad_scroll_speed(layouts_config.get("screens", {}).get("quad", {}).get("scroll_speed", 1.0)),
             "quad_pages": layouts_config.get("screens", {}).get("quad", {}).get("pages", []),
