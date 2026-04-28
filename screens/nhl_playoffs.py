@@ -101,6 +101,41 @@ LEAGUE_LOGO_GAP = _scale_y(4)
 
 _SESSION = get_session()
 
+_NHL_ABBR_TO_COMMON_NAME = {
+    "ANA": "Ducks",
+    "BOS": "Bruins",
+    "BUF": "Sabres",
+    "CAR": "Hurricanes",
+    "CBJ": "Blue Jackets",
+    "CGY": "Flames",
+    "CHI": "Blackhawks",
+    "COL": "Avalanche",
+    "DAL": "Stars",
+    "DET": "Red Wings",
+    "EDM": "Oilers",
+    "FLA": "Panthers",
+    "LAK": "Kings",
+    "MIN": "Wild",
+    "MTL": "Canadiens",
+    "NJD": "Devils",
+    "NSH": "Predators",
+    "NYI": "Islanders",
+    "NYR": "Rangers",
+    "OTT": "Senators",
+    "PHI": "Flyers",
+    "PIT": "Penguins",
+    "SJS": "Sharks",
+    "SEA": "Kraken",
+    "STL": "Blues",
+    "TBL": "Lightning",
+    "TOR": "Maple Leafs",
+    "UTA": "Mammoth",
+    "VAN": "Canucks",
+    "VGK": "Golden Knights",
+    "WPG": "Jets",
+    "WSH": "Capitals",
+}
+
 
 def _scoreboard_fonts() -> tuple:
     # Keep score typography aligned with NHL Scoreboard v2.
@@ -1116,7 +1151,10 @@ def _series_winner_name(series: dict) -> str:
         candidate = _dict_localized_text(winner_team.get(key))
         if candidate:
             return candidate
-    return _team_abbr(winner_team)
+    winner_abbr = _team_abbr(winner_team)
+    if winner_abbr:
+        return _NHL_ABBR_TO_COMMON_NAME.get(winner_abbr, "")
+    return ""
 
 
 def _series_status_line_text(series: dict) -> str:

@@ -106,6 +106,45 @@ LEAGUE_LOGO_GAP = _scale_y(4)
 
 _SESSION = get_session()
 
+_NBA_ABBR_TO_NICKNAME = {
+    "ATL": "Hawks",
+    "BOS": "Celtics",
+    "BKN": "Nets",
+    "BRK": "Nets",
+    "CHA": "Hornets",
+    "CHI": "Bulls",
+    "CLE": "Cavaliers",
+    "DAL": "Mavericks",
+    "DEN": "Nuggets",
+    "DET": "Pistons",
+    "GSW": "Warriors",
+    "GS": "Warriors",
+    "HOU": "Rockets",
+    "IND": "Pacers",
+    "LAC": "Clippers",
+    "LAL": "Lakers",
+    "MEM": "Grizzlies",
+    "MIA": "Heat",
+    "MIL": "Bucks",
+    "MIN": "Timberwolves",
+    "NOP": "Pelicans",
+    "NO": "Pelicans",
+    "NYK": "Knicks",
+    "NY": "Knicks",
+    "OKC": "Thunder",
+    "ORL": "Magic",
+    "PHI": "76ers",
+    "PHX": "Suns",
+    "POR": "Trail Blazers",
+    "SAC": "Kings",
+    "SAS": "Spurs",
+    "SA": "Spurs",
+    "TOR": "Raptors",
+    "UTA": "Jazz",
+    "WAS": "Wizards",
+    "WSH": "Wizards",
+}
+
 
 def _scoreboard_fonts() -> tuple:
     score = get_screen_font(SCREEN_ID, "score", base_font=FONT_TEAM_SPORTS, default_size=24)
@@ -829,11 +868,23 @@ def _series_winner_name(series: dict) -> str:
     away_wins = _as_int(away_slot.get("score")) or 0
     home_wins = _as_int(home_slot.get("score")) or 0
     winner_team = (away_slot if away_wins >= 4 and away_wins >= home_wins else home_slot).get("team") or {}
-    for key in ("teamName", "nickname", "name"):
+    for key in ("nickname",):
         candidate = str(winner_team.get(key) or "").strip()
         if candidate:
             return candidate
-    return _team_logo_abbr(winner_team)
+    winner_abbr = _team_logo_abbr(winner_team)
+    if winner_abbr:
+        mapped = _NBA_ABBR_TO_NICKNAME.get(winner_abbr)
+        if mapped:
+            return mapped
+    for key in ("teamName", "name"):
+        candidate = str(winner_team.get(key) or "").strip()
+        if candidate:
+            team_city = str(winner_team.get("teamCity") or winner_team.get("city") or "").strip()
+            if team_city and candidate.lower().startswith(f"{team_city.lower()} "):
+                return candidate[len(team_city) + 1 :].strip()
+            return candidate
+    return ""
 
 
 def _series_has_started(series: dict) -> bool:

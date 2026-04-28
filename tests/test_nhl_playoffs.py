@@ -506,6 +506,17 @@ def test_series_status_line_text_shows_winner_for_completed_series():
     assert nhl_playoffs._series_status_line_text(series) == "Avalanche win!"
 
 
+def test_series_status_line_text_uses_team_name_map_instead_of_abbreviation():
+    series = {
+        "teams": {
+            "away": {"score": 4, "team": {"abbreviation": "COL"}},
+            "home": {"score": 2, "team": {"abbreviation": "DAL"}},
+        },
+        "next_text": "TBD",
+    }
+    assert nhl_playoffs._series_status_line_text(series) == "Avalanche win!"
+
+
 def test_series_status_line_text_uses_live_and_yellow_fill_for_live_series():
     series = {
         "teams": {
