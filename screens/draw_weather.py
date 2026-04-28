@@ -597,6 +597,7 @@ def draw_weather_screen_1(display, weather, transition=False):
     side_font = FONT_WEATHER_DETAILS
     sub_font = FONT_WEATHER_DETAILS_TINY
     stack_gap = 2
+    detail_line_offset = 2
     edge_margin = 4
     if precip_percent:
         precip_emoji = "❄️" if is_snow else "💧"
@@ -622,7 +623,12 @@ def draw_weather_screen_1(display, weather, transition=False):
         draw.text((pct_x, next_y), precip_percent, font=side_font, fill=precip_color)
         if precip_intensity_text:
             intensity_x = precip_x + (block_w - intensity_w) // 2
-            draw.text((intensity_x, next_y + pct_h + stack_gap), precip_intensity_text, font=sub_font, fill=precip_color)
+            draw.text(
+                (intensity_x, next_y + pct_h + stack_gap + detail_line_offset),
+                precip_intensity_text,
+                font=sub_font,
+                fill=precip_color,
+            )
 
     if cloud_percent:
         cloud_emoji = "☁️"
@@ -648,7 +654,12 @@ def draw_weather_screen_1(display, weather, transition=False):
         draw.text((pct_x, next_y), cloud_percent, font=side_font, fill=(211, 211, 211))
         if visibility_text:
             visibility_x = cloud_x + (block_w - visibility_w) // 2
-            draw.text((visibility_x, next_y + pct_h + stack_gap), visibility_text, font=sub_font, fill=(211, 211, 211))
+            draw.text(
+                (visibility_x, next_y + pct_h + stack_gap + detail_line_offset),
+                visibility_text,
+                font=sub_font,
+                fill=(211, 211, 211),
+            )
 
     # draw groups
     x = x0
