@@ -19,7 +19,7 @@ import logging
 import math
 import time
 from io import BytesIO
-from typing import NamedTuple, Optional, Tuple
+from typing import Any, NamedTuple, Optional, Tuple
 
 import requests
 from PIL import Image, ImageDraw, ImageFont
@@ -1241,6 +1241,232 @@ def draw_weather_daily(display, weather, transition: bool = False, days: int = 5
     draw.text((title_x, title_y), title, font=FONT_WEATHER_LABEL, fill=(200, 200, 200))
 
     return ScreenImage(img, displayed=False)
+
+
+def _astronomy_time_text(value: object) -> str:
+    dt_value = timestamp_to_datetime(value, CENTRAL_TIME)
+    if not dt_value:
+        return "—"
+    return dt_value.strftime("%-I:%M %p")
+
+
+def _normalise_moon_phase(phase: object) -> tuple[float | None, str]:
+    """Return moon illumination fraction [0,1] and display label."""
+
+    if isinstance(phase, (int, float)):
+        numeric = float(phase)
+        if numeric > 1:
+            numeric = numeric / 100.0
+        numeric = max(0.0, min(1.0, numeric))
+        return numeric, f"{int(round(numeric * 100))}% Lit"
+
+    if isinstance(phase, str):
+        phase_text = phase.strip()
+        if not phase_text:
+            return None, "Unknown"
+        lowered = phase_text.lower()
+        mapping: dict[str, float] = {
+            "new": 0.0,
+            "newmoon": 0.0,
+            "waxingcrescent": 0.18,
+            "firstquarter": 0.5,
+            "waxinggibbous": 0.75,
+            "full": 1.0,
+            "fullmoon": 1.0,
+            "waninggibbous": 0.75,
+            "lastquarter": 0.5,
+            "thirdquarter": 0.5,
+            "waningcrescent": 0.18,
+        }
+        compact = "".join(ch for ch in lowered if ch.isalpha())
+        phase_fraction = mapping.get(compact)
+        label = " ".join(word.capitalize() for word in phase_text.replace("_", " ").replace("-", " ").split())
+        if phase_fraction is not None:
+            return phase_fraction, label
+        try:
+            numeric = float(phase_text)
+            return _normalise_moon_phase(numeric)
+        except (TypeError, ValueError):
+            return None, label or "Unknown"
+
+    return None, "Unknown"
+
+
+def _draw_moon_phase_icon(
+    image: Image.Image,
+    center: tuple[int, int],
+    diameter: int,
+    phase_fraction: float | None,
+) -> None:
+    radius = max(6, diameter // 2)
+    cx, cy = center
+
+    moon = Image.new("RGBA", (radius * 2 + 6, radius * 2 + 6), (0, 0, 0, 0))
+    moon_draw = ImageDraw.Draw(moon)
+    moon_center = (moon.width // 2, moon.height // 2)
+    mx, my = moon_center
+
+    outline_color = (180, 200, 220, 255)
+    shadow_color = (38, 45, 70, 230)
+    bright_color = (250, 246, 220, 245)
+
+    moon_draw.ellipse((mx - radius, my - radius, mx + radius, my + radius), fill=shadow_color)
+
+    if phase_fraction is not None:
+        brightness = max(0.0, min(1.0, phase_fraction))
+        if brightness > 0:
+            moon_draw.ellipse((mx - radius, my - radius, mx + radius, my + radius), fill=bright_color)
+            phase_progress = brightness * 2.0 - 1.0
+            shadow_width = int(abs(phase_progress) * radius * 2)
+            if shadow_width > 0:
+                if brightness >= 0.5:
+                    moon_draw.ellipse(
+                        (mx - radius - shadow_width, my - radius, mx + radius - shadow_width, my + radius),
+                        fill=shadow_color,
+                    )
+                else:
+                    moon_draw.ellipse(
+                        (mx - radius + shadow_width, my - radius, mx + radius + shadow_width, my + radius),
+                        fill=shadow_color,
+                    )
+
+    moon_draw.ellipse(
+        (mx - radius, my - radius, mx + radius, my + radius),
+        outline=outline_color,
+        width=max(1, diameter // 18),
+    )
+
+    # Tiny crater accents keep the moon from looking flat.
+    crater_color = (160, 165, 175, 80)
+    for crater in (
+        (mx - radius // 3, my - radius // 5, radius // 5),
+        (mx + radius // 5, my + radius // 8, radius // 6),
+        (mx - radius // 10, my + radius // 3, radius // 7),
+    ):
+        crater_x, crater_y, crater_r = crater
+        moon_draw.ellipse(
+            (crater_x - crater_r, crater_y - crater_r, crater_x + crater_r, crater_y + crater_r),
+            fill=crater_color,
+        )
+
+    image.alpha_composite(moon, (cx - moon.width // 2, cy - moon.height // 2))
+
+
+def draw_weather_astronomical(display, weather, transition: bool = False):
+    if not weather:
+        return None
+
+    background = get_screen_background_color("astronomical", (6, 10, 20))
+    img = Image.new("RGBA", (WIDTH, HEIGHT), background + (255,))
+    draw = ImageDraw.Draw(img)
+
+    daily = weather.get("daily") if isinstance(weather.get("daily"), list) else []
+    day0 = daily[0] if daily else {}
+
+    sunrise_astro = day0.get("sunriseAstronomical", day0.get("sunrise_astronomical", day0.get("sunrise")))
+    sunrise_civil = day0.get("sunriseCivil", day0.get("sunrise_civil"))
+    sunrise_nautical = day0.get("sunriseNautical", day0.get("sunrise_nautical"))
+    sunset_astro = day0.get("sunsetAstronomical", day0.get("sunset_astronomical", day0.get("sunset")))
+    sunset_civil = day0.get("sunsetCivil", day0.get("sunset_civil"))
+    sunset_nautical = day0.get("sunsetNautical", day0.get("sunset_nautical"))
+    moon_phase_raw = day0.get("moonPhase", day0.get("moon_phase"))
+    moonrise = day0.get("moonrise")
+    moonset = day0.get("moonset")
+
+    phase_fraction, phase_label = _normalise_moon_phase(moon_phase_raw)
+
+    title = "Astronomical"
+    title_bbox = _safe_textbbox(draw, title, FONT_WEATHER_LABEL)
+    title_w = title_bbox[2] - title_bbox[0]
+    title_h = title_bbox[3] - title_bbox[1]
+    title_x = max(4, WIDTH // 2 - title_w // 2)
+    title_y = 4
+    draw.text((title_x, title_y), title, font=FONT_WEATHER_LABEL, fill=(236, 236, 255))
+
+    content_top = title_y + title_h + 2
+    content_bottom = HEIGHT - 4
+    content_height = max(40, content_bottom - content_top)
+    left_w = WIDTH // 2
+
+    # Cool "sun" feature: gradient halo + rays.
+    sun_center = (left_w // 2, content_top + int(content_height * 0.28))
+    sun_radius = max(10, min(left_w, content_height) // 6)
+    sun_layers = (
+        (sun_radius * 3, (255, 162, 54, 36)),
+        (sun_radius * 2, (255, 196, 88, 76)),
+        (sun_radius, (255, 225, 120, 240)),
+    )
+    for radius, color in sun_layers:
+        draw.ellipse(
+            (
+                sun_center[0] - radius,
+                sun_center[1] - radius,
+                sun_center[0] + radius,
+                sun_center[1] + radius,
+            ),
+            fill=color,
+        )
+    for idx in range(12):
+        angle = math.radians(idx * 30)
+        inner = sun_radius + 4
+        outer = sun_radius + 14
+        x0 = int(sun_center[0] + math.cos(angle) * inner)
+        y0 = int(sun_center[1] + math.sin(angle) * inner)
+        x1 = int(sun_center[0] + math.cos(angle) * outer)
+        y1 = int(sun_center[1] + math.sin(angle) * outer)
+        draw.line((x0, y0, x1, y1), fill=(255, 208, 110, 230), width=2)
+
+    sun_rows = [
+        ("☀ Astro ↑", _astronomy_time_text(sunrise_astro)),
+        ("🌇 Civil ↑", _astronomy_time_text(sunrise_civil)),
+        ("⚓ Naut ↑", _astronomy_time_text(sunrise_nautical)),
+        ("☀ Astro ↓", _astronomy_time_text(sunset_astro)),
+        ("🌆 Civil ↓", _astronomy_time_text(sunset_civil)),
+        ("⚓ Naut ↓", _astronomy_time_text(sunset_nautical)),
+    ]
+    row_start_y = sun_center[1] + sun_radius + 12
+    row_gap = max(1, (content_bottom - row_start_y) // max(1, len(sun_rows)))
+    for idx, (label, value) in enumerate(sun_rows):
+        y = row_start_y + idx * row_gap
+        if y > content_bottom - 10:
+            break
+        draw.text((6, y), label, font=FONT_WEATHER_DETAILS_SMALL_BOLD, fill=(255, 210, 150))
+        value_bbox = _safe_textbbox(draw, value, FONT_WEATHER_DETAILS_SMALL)
+        value_w = value_bbox[2] - value_bbox[0]
+        draw.text((left_w - value_w - 4, y), value, font=FONT_WEATHER_DETAILS_SMALL, fill=(230, 235, 245))
+
+    # Moon panel.
+    panel_x0 = left_w + 2
+    panel_x1 = WIDTH - 4
+    panel_w = max(40, panel_x1 - panel_x0)
+    moon_center = (panel_x0 + panel_w // 2, content_top + int(content_height * 0.30))
+    moon_diameter = max(28, min(panel_w - 6, content_height // 2))
+    _draw_moon_phase_icon(img, moon_center, moon_diameter, phase_fraction)
+
+    phase_text = f"Phase: {phase_label}"
+    phase_bbox = _safe_textbbox(draw, phase_text, FONT_WEATHER_DETAILS_SMALL_BOLD)
+    phase_w = phase_bbox[2] - phase_bbox[0]
+    draw.text(
+        (panel_x0 + (panel_w - phase_w) // 2, moon_center[1] + moon_diameter // 2 + 6),
+        phase_text,
+        font=FONT_WEATHER_DETAILS_SMALL_BOLD,
+        fill=(218, 226, 255),
+    )
+
+    moon_rows = [
+        ("Moonrise", _astronomy_time_text(moonrise)),
+        ("Moonset", _astronomy_time_text(moonset)),
+    ]
+    moon_row_y = moon_center[1] + moon_diameter // 2 + 22
+    moon_row_gap = max(10, (content_bottom - moon_row_y) // 2)
+    for idx, (label, value) in enumerate(moon_rows):
+        y = moon_row_y + idx * moon_row_gap
+        draw.text((panel_x0 + 4, y), f"{label}:", font=FONT_WEATHER_DETAILS_SMALL_BOLD, fill=(198, 210, 255))
+        value_bbox = _safe_textbbox(draw, value, FONT_WEATHER_DETAILS_SMALL)
+        value_w = value_bbox[2] - value_bbox[0]
+        draw.text((panel_x1 - value_w - 2, y), value, font=FONT_WEATHER_DETAILS_SMALL, fill=(230, 235, 245))
+
+    return ScreenImage(img.convert("RGB"), displayed=False)
 
 
 # ─── Screen 2: Detailed (with UV index) ───────────────────────────────────────

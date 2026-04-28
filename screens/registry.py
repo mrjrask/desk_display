@@ -37,6 +37,7 @@ from screens.draw_inside import draw_inside, is_inside_sensor_available
 from screens.draw_vrnof import draw_vrnof_screen
 from screens.draw_weather import (
     _pop_pct_from,
+    draw_weather_astronomical,
     draw_weather_daily,
     draw_weather_hourly,
     draw_weather_radar,
@@ -685,6 +686,11 @@ def build_screen_registry(context: ScreenContext) -> Tuple[Dict[str, ScreenDefin
     register(
         "weather daily",
         lambda data=weather_data: draw_weather_daily(context.display, data, transition=True),
+        available=weather_hourly_available,
+    )
+    register(
+        "astronomical",
+        lambda data=weather_data: draw_weather_astronomical(context.display, data, transition=True),
         available=weather_hourly_available,
     )
     register(

@@ -8,6 +8,7 @@
     "weather hourly": 1,
     "weather radar": 1,
     "weather daily": 1,
+    "astronomical": 1,
     "inside": 1,
     "verano logo": 0,
     "vrnof": 3,
@@ -141,6 +142,9 @@
         },
         {
           "screen": "weather daily"
+        },
+        {
+          "screen": "astronomical"
         }
       ]
     },

@@ -144,6 +144,7 @@ def test_weather_hourly_screens_stay_available_with_cached_data_offline():
 
     assert registry["weather hourly"].available is True
     assert registry["weather daily"].available is True
+    assert registry["astronomical"].available is True
 
 
 def test_weather_quad_screen_available_with_cached_weather_offline():

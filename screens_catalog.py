@@ -34,6 +34,7 @@ RAW_SCREEN_IDS = [
     "weather2",
     "weather hourly",
     "weather daily",
+    "astronomical",
     "weather quad",
     "weather radar",
     "inside",
