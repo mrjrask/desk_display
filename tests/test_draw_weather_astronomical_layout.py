@@ -43,3 +43,8 @@ def test_astronomy_time_text_is_12_hour_central_without_leading_zero():
 
 def test_astronomy_time_text_accepts_iso_timestamp_strings():
     assert _astronomy_time_text("2026-01-01T07:05:00Z") == "1:05 AM"
+
+
+def test_astronomy_time_text_formats_midnight_and_noon_without_platform_specific_directives():
+    assert _astronomy_time_text("2026-01-01T06:00:00Z") == "12:00 AM"
+    assert _astronomy_time_text("2026-01-01T18:00:00Z") == "12:00 PM"

@@ -1333,7 +1333,7 @@ def _astronomy_time_text(value: object) -> str:
 
     if not dt_value:
         return "—"
-    return dt_value.strftime("%-I:%M %p")
+    return f"{dt_value.hour % 12 or 12}:{dt_value:%M %p}"
 
 
 def _normalise_moon_phase(phase: object) -> tuple[float | None, str]:
@@ -1769,7 +1769,7 @@ def _format_radar_timestamp(timestamp: Optional[int]) -> str:
     dt = timestamp_to_datetime(timestamp, CENTRAL_TIME)
     if dt is None:
         return ""
-    return dt.strftime("%-I:%M %p")
+    return f"{dt.hour % 12 or 12}:{dt:%M %p}"
 
 
 def _fetch_radar_frames(zoom: int = 7, max_frames: int = 6) -> list[RadarFrame]:
