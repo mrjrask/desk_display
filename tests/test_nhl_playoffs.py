@@ -504,3 +504,17 @@ def test_series_status_line_text_hides_tbd_for_completed_series():
         "next_text": "TBD",
     }
     assert nhl_playoffs._series_status_line_text(series) == ""
+
+
+def test_series_status_line_text_uses_live_and_yellow_fill_for_live_series():
+    series = {
+        "teams": {
+            "away": {"score": 3},
+            "home": {"score": 2},
+        },
+        "has_live_game": True,
+        "next_text": "Tomorrow 7 PM",
+    }
+
+    assert nhl_playoffs._series_status_line_text(series) == "LIVE!"
+    assert nhl_playoffs._series_status_line_fill(series) == nhl_playoffs.SCOREBOARD_IN_PROGRESS_SCORE_COLOR

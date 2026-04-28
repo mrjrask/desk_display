@@ -315,3 +315,17 @@ def test_series_status_line_text_hides_tbd_for_completed_series():
         "next_text": "TBD",
     }
     assert nba_playoffs._series_status_line_text(series) == ""
+
+
+def test_series_status_line_text_uses_live_and_yellow_fill_for_live_series():
+    series = {
+        "teams": {
+            "away": {"score": 2},
+            "home": {"score": 2},
+        },
+        "has_live_game": True,
+        "next_text": "Tonight 8:00 PM",
+    }
+
+    assert nba_playoffs._series_status_line_text(series) == "LIVE!"
+    assert nba_playoffs._series_status_line_fill(series) == nba_playoffs.SCOREBOARD_IN_PROGRESS_SCORE_COLOR

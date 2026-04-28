@@ -25,6 +25,7 @@ from config import (
     SCOREBOARD_SCROLL_PAUSE_TOP,
     SCOREBOARD_SCROLL_PAUSE_BOTTOM,
     SCOREBOARD_STANDINGS_BOTTOM_PADDING,
+    SCOREBOARD_IN_PROGRESS_SCORE_COLOR,
     get_screen_font,
     get_screen_image_scale,
     is_kernel_driven_display,
@@ -858,6 +859,7 @@ def _derive_playoff_matchups_from_games(games: list[dict]) -> list[dict]:
                 "higher_seed": None,
                 "lower_seed": None,
                 "next_text": "TBD",
+                "has_live_game": _is_live_schedule_game(game),
             }
         )
     return results
@@ -899,6 +901,34 @@ def _series_next_text_from_games(series: dict, games: list[dict]) -> str:
         return day_label
     time_text = _format_clock(next_dt)
     return f"{day_label} {time_text}"
+
+
+def _is_live_schedule_game(game: dict) -> bool:
+    game_state = str((game or {}).get("gameState") or (game or {}).get("gameStatus") or "").strip().lower()
+    if game_state in {"live", "crit", "critical", "in", "inprogress", "in-progress"}:
+        return True
+    game_status = str((game or {}).get("detailedState") or "").strip().lower()
+    return any(token in game_status for token in ("live", "in progress", "intermission"))
+
+
+def _series_has_live_game_from_games(series: dict, games: list[dict]) -> bool:
+    teams = (series or {}).get("teams") or {}
+    away = ((teams.get("away") or {}).get("team") or {})
+    home = ((teams.get("home") or {}).get("team") or {})
+    away_abbr = _team_abbr(away)
+    home_abbr = _team_abbr(home)
+    if not away_abbr or not home_abbr:
+        return False
+
+    for game in games or []:
+        game_teams = game.get("teams") or {}
+        game_away_abbr = _team_abbr(((game_teams.get("away") or {}).get("team") or {}))
+        game_home_abbr = _team_abbr(((game_teams.get("home") or {}).get("team") or {}))
+        if {game_away_abbr, game_home_abbr} != {away_abbr, home_abbr}:
+            continue
+        if _is_live_schedule_game(game):
+            return True
+    return False
 
 
 def _map_schedule_game_for_series(game: dict) -> Optional[dict]:
@@ -1067,7 +1097,20 @@ def _is_completed_series(series: dict) -> bool:
 def _series_status_line_text(series: dict) -> str:
     if _is_completed_series(series):
         return ""
+    if _series_has_live_game(series):
+        return "LIVE!"
     return _normalize_next_text(series.get("next_text") or "TBD")
+
+
+def _series_has_live_game(series: dict) -> bool:
+    if bool(series.get("has_live_game")):
+        return True
+    status_text = str(series.get("status_text") or "").strip().lower()
+    return any(token in status_text for token in ("live", "in progress", "critical", "intermission"))
+
+
+def _series_status_line_fill(series: dict) -> tuple[int, int, int]:
+    return SCOREBOARD_IN_PROGRESS_SCORE_COLOR if _series_has_live_game(series) else (255, 255, 255)
 
 
 def _series_has_started(series: dict) -> bool:
@@ -1157,7 +1200,7 @@ def _draw_series_block(canvas: Image.Image, draw: ImageDraw.ImageDraw, series: d
         SERIES_WIDTH,
         status_top,
         STATUS_ROW_H,
-        fill=(255, 255, 255),
+        fill=_series_status_line_fill(series),
     )
 
 
@@ -1262,6 +1305,7 @@ def render_nhl_playoffs(display, games: list[dict], transition: bool = False) ->
     else:
         for item in series:
             item["next_text"] = _series_next_text_from_games(item, merged_games)
+            item["has_live_game"] = _series_has_live_game_from_games(item, merged_games)
     series = _select_current_round_series(series)
 
     if not series:

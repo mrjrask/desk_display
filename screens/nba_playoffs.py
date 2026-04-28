@@ -25,6 +25,7 @@ from config import (
     SCOREBOARD_SCROLL_PAUSE_TOP,
     SCOREBOARD_SCROLL_PAUSE_BOTTOM,
     SCOREBOARD_STANDINGS_BOTTOM_PADDING,
+    SCOREBOARD_IN_PROGRESS_SCORE_COLOR,
     get_screen_font,
     get_screen_image_scale,
     is_kernel_driven_display,
@@ -678,6 +679,38 @@ def _derive_playoff_matchups_from_recent_games(now: Optional[datetime.datetime] 
     return _derive_playoff_matchups_from_games(all_games)
 
 
+def _is_live_game(game: dict) -> bool:
+    status = (game or {}).get("status") or {}
+    abstract = str(status.get("abstractGameState") or status.get("state") or "").strip().lower()
+    code = str(status.get("statusCode") or "").strip()
+    detailed = _status_text(game).lower()
+    return (
+        abstract in {"live", "in progress"}
+        or code == "2"
+        or any(token in detailed for token in ("in progress", "live", "halftime", "qtr", "quarter"))
+    )
+
+
+def _series_has_live_game_from_games(series: dict, games: list[dict]) -> bool:
+    teams = (series or {}).get("teams") or {}
+    away = ((teams.get("away") or {}).get("team") or {})
+    home = ((teams.get("home") or {}).get("team") or {})
+    away_abbr = _team_logo_abbr(away)
+    home_abbr = _team_logo_abbr(home)
+    if not away_abbr or not home_abbr:
+        return False
+
+    for game in games or []:
+        game_teams = game.get("teams") or {}
+        game_away_abbr = _team_logo_abbr(((game_teams.get("away") or {}).get("team") or {}))
+        game_home_abbr = _team_logo_abbr(((game_teams.get("home") or {}).get("team") or {}))
+        if {game_away_abbr, game_home_abbr} != {away_abbr, home_abbr}:
+            continue
+        if _is_live_game(game):
+            return True
+    return False
+
+
 def _derive_playoff_matchups_from_games(games: list[dict]) -> list[dict]:
     def _team_from_game_side(game: dict, side: str) -> dict:
         direct = game.get(f"{side}Team") or game.get(side)
@@ -718,6 +751,7 @@ def _derive_playoff_matchups_from_games(games: list[dict]) -> list[dict]:
                 "higher_seed": _as_int(away_team.get("seed") or home_team.get("seed")),
                 "lower_seed": None,
                 "next_text": "TBD",
+                "has_live_game": False,
             }
             result_by_pair[key] = existing
 
@@ -740,6 +774,8 @@ def _derive_playoff_matchups_from_games(games: list[dict]) -> list[dict]:
         game_dt = _extract_next_game_dt(game.get("gameDate"))
         if game_dt and game_dt >= datetime.datetime.now(CENTRAL_TIME):
             existing["next_text"] = f"{_next_game_day_label(game_dt)} {game_dt.strftime('%-I:%M %p')}"
+        if _is_live_game(game):
+            existing["has_live_game"] = True
 
     return list(result_by_pair.values())
 
@@ -795,7 +831,20 @@ def _series_has_started(series: dict) -> bool:
 def _series_status_line_text(series: dict) -> str:
     if _is_completed_series(series):
         return ""
+    if _series_has_live_game(series):
+        return "LIVE!"
     return _normalize_next_text(series.get("next_text") or series.get("status_text") or "TBD")
+
+
+def _series_has_live_game(series: dict) -> bool:
+    if bool(series.get("has_live_game")):
+        return True
+    status_text = str(series.get("status_text") or "").strip().lower()
+    return any(token in status_text for token in ("live", "in progress", "halftime", "qtr", "quarter"))
+
+
+def _series_status_line_fill(series: dict) -> tuple[int, int, int]:
+    return SCOREBOARD_IN_PROGRESS_SCORE_COLOR if _series_has_live_game(series) else (255, 255, 255)
 
 
 def _series_order_key(series: dict) -> tuple[int, int, str, str]:
@@ -893,7 +942,7 @@ def _draw_series_block(canvas: Image.Image, draw: ImageDraw.ImageDraw, series: d
         SERIES_WIDTH,
         status_top,
         STATUS_ROW_H,
-        fill=(255, 255, 255),
+        fill=_series_status_line_fill(series),
     )
 
 
@@ -991,11 +1040,15 @@ def _scroll_display(display, full_img: Image.Image):
 def render_nba_playoffs(display, games: list[dict], transition: bool = False) -> ScreenImage:
     _apply_style_overrides()
 
+    merged_games = list(games or [])
     series = _fetch_playoff_matchups()
     if not series:
         series = _derive_playoff_matchups_from_recent_games()
     if not series:
-        series = _derive_playoff_matchups_from_games(games)
+        series = _derive_playoff_matchups_from_games(merged_games)
+    else:
+        for item in series:
+            item["has_live_game"] = _series_has_live_game_from_games(item, merged_games)
 
     series = _select_current_round_series(series)
 
