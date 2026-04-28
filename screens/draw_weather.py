@@ -1184,7 +1184,14 @@ def draw_weather_daily(display, weather, transition: bool = False, days: int = 5
             clamped_pop = max(0, min(pop_val, 100))
             precip_color = (173, 216, 230) if is_snow else (135, 206, 250)
             pop_text = f"{clamped_pop}%"
-            precip_icon = _render_precip_icon(is_snow, 10, precip_color)
+            precip_emoji = "❄️" if is_snow else "💧"
+            _, pop_text_h = draw.textsize(pop_text, font=pop_font)
+            target_icon_size = max(8, pop_text_h)
+            precip_icon = _ensure_rgba_icon(_render_emoji_glyph(precip_emoji, FONT_EMOJI, precip_color))
+            if precip_icon.height != target_icon_size and precip_icon.height > 0:
+                scale = target_icon_size / precip_icon.height
+                resized_w = max(1, int(round(precip_icon.width * scale)))
+                precip_icon = precip_icon.resize((resized_w, target_icon_size), Image.Resampling.LANCZOS)
 
         stats = [
             (
