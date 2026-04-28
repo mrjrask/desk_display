@@ -46,6 +46,7 @@ import sys
 from collections import deque
 from contextlib import nullcontext
 from typing import Callable, Dict, List, Optional, Set, Tuple
+from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeoutError
 try:
     import pygame
 except Exception:
@@ -1817,6 +1818,55 @@ _LIVE_TEAM_SCREEN_TO_FEED: Dict[str, str] = {
 
 _last_feed_refresh: Dict[str, float] = {}
 
+_STARTUP_CRITICAL_FEEDS: Tuple[str, ...] = ("weather", "scoreboards")
+_STARTUP_CRITICAL_FEED_TIMEOUT_SECONDS = max(1.0, float(os.environ.get("STARTUP_CRITICAL_FEED_TIMEOUT_SECONDS", "8")))
+
+
+def _startup_critical_feeds() -> List[str]:
+    """Return critical startup feeds requested by the active schedule."""
+
+    requested = _requested_data_feeds()
+    return [feed for feed in _STARTUP_CRITICAL_FEEDS if feed in requested]
+
+
+def _refresh_startup_critical_feeds() -> None:
+    """Attempt to fetch weather/scoreboard data before entering the main loop."""
+
+    if _wifi_outage_active:
+        logging.info("⏭️  Skipping startup critical refresh during Wi‑Fi outage.")
+        return
+
+    critical_feeds = _startup_critical_feeds()
+    if not critical_feeds:
+        return
+
+    logging.info(
+        "⚡ Startup critical refresh (timeout=%ss): %s",
+        int(_STARTUP_CRITICAL_FEED_TIMEOUT_SECONDS),
+        ", ".join(critical_feeds),
+    )
+
+    with ThreadPoolExecutor(max_workers=len(critical_feeds)) as pool:
+        futures = {
+            feed: pool.submit(_FEED_REFRESHERS[feed])
+            for feed in critical_feeds
+            if _FEED_REFRESHERS.get(feed)
+        }
+
+        for feed, future in futures.items():
+            try:
+                future.result(timeout=_STARTUP_CRITICAL_FEED_TIMEOUT_SECONDS)
+                _last_feed_refresh[feed] = time.monotonic()
+                logging.info("✅ Startup critical feed ready: %s", feed)
+            except FuturesTimeoutError:
+                logging.warning(
+                    "⏱️  Startup critical feed timed out after %ss: %s",
+                    int(_STARTUP_CRITICAL_FEED_TIMEOUT_SECONDS),
+                    feed,
+                )
+            except Exception as exc:
+                logging.error("Failed startup critical feed refresh %s: %s", feed, exc)
+
 
 def _requested_data_feeds() -> Set[str]:
     feeds: Set[str] = set()
@@ -2080,23 +2130,28 @@ def _background_refresh() -> None:
 
 
 def _scheduled_startup_feed_order(limit: int = 4) -> List[str]:
-    """Return feed names ordered by first upcoming scheduled appearance."""
+    """Return feed names ordered by startup priority and schedule proximity."""
+
+    requested = _requested_data_feeds()
+    critical_feeds = [feed for feed in _startup_critical_feeds() if feed in requested]
 
     scheduler = screen_scheduler
     if scheduler is None:
-        return sorted(_requested_data_feeds())
+        ordered = critical_feeds[:]
+        for feed in sorted(requested):
+            if feed not in ordered:
+                ordered.append(feed)
+        return ordered
 
     scheduled_ids = scheduler.preview_scheduled_ids(limit)
-    if not scheduled_ids:
-        return sorted(_requested_data_feeds())
+    ordered_feeds: List[str] = critical_feeds[:]
 
-    ordered_feeds: List[str] = []
     for screen_id in scheduled_ids:
         for feed, feed_screen_ids in _FEED_DEPENDENCIES.items():
-            if screen_id in feed_screen_ids and feed not in ordered_feeds:
+            if feed in requested and screen_id in feed_screen_ids and feed not in ordered_feeds:
                 ordered_feeds.append(feed)
 
-    for feed in sorted(_requested_data_feeds()):
+    for feed in sorted(requested):
         if feed not in ordered_feeds:
             ordered_feeds.append(feed)
 
@@ -2196,6 +2251,7 @@ def init_runtime() -> None:
         logging.info("🔌 Wi-Fi monitor skipped for current network setup.")
 
     refresh_schedule_if_needed(force=True)
+    _refresh_startup_critical_feeds()
 
     if ENABLE_SCREENSHOTS:
         os.makedirs(SCREENSHOT_DIR, exist_ok=True)
