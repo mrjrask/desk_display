@@ -206,3 +206,24 @@ def test_screen_config_page_uses_rendered_entries_for_selectable_screen_ids(monk
     assert response.status_code == 200
     html = response.get_data(as_text=True)
     assert 'const selectableScreenIds = ["astronomical"' in html
+
+
+def test_screen_config_page_merges_restored_draft_with_server_catalog(monkeypatch):
+    monkeypatch.setattr(config_ui, "_load_active_config", lambda: {"screens": {"date": 1}})
+    monkeypatch.setattr(config_ui, "_load_active_style_config", lambda: {"screens": {}})
+    monkeypatch.setattr(
+        config_ui,
+        "_build_screen_entries",
+        lambda config, style: [
+            {"id": "date", "frequency": 1, "background": "#000000", "alt_screen": "", "alt_frequency": ""},
+            {"id": "astronomical", "frequency": 0, "background": "#000000", "alt_screen": "", "alt_frequency": ""},
+        ],
+    )
+
+    client = config_ui.app.test_client()
+    response = client.get("/")
+
+    assert response.status_code == 200
+    html = response.get_data(as_text=True)
+    assert "function mergeScreensWithCatalog(baseScreens, preferredScreens)" in html
+    assert "initialScreens = mergeScreensWithCatalog(initialScreens, draft.screens);" in html
