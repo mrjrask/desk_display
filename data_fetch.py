@@ -631,6 +631,8 @@ def _normalise_weatherkit_response(data: dict[str, Any]) -> Optional[dict[str, A
         "sunset": sunset,
         "dt": _parse_iso_timestamp(current_raw.get("asOf")),
         "clouds": int(round(float(current_raw.get("cloudCover")) * 100)) if current_raw.get("cloudCover") is not None else None,
+        "precipitation_intensity": _measurement_value(current_raw.get("precipitationIntensity")),
+        "visibility": _measurement_value(current_raw.get("visibility")),
     }
     current["pressure_trend"] = _update_pressure_trend(current.get("dt"), current.get("pressure"))
 
