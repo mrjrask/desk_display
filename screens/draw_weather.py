@@ -1581,6 +1581,10 @@ def draw_weather_astronomical(display, weather, transition: bool = False):
     if not split_columns:
         # Keep sunrise/sunset rows above the moon panel when using a single column.
         sun_bottom_limit = min(sun_bottom_limit, moon_center[1] - moon_diameter // 2 - 8)
+    # Guarantee at least one sunrise/sunset row remains visible on very short
+    # single-column layouts (e.g. 240x135) even when moon placement leaves no
+    # vertical budget above the moon panel.
+    sun_bottom_limit = max(sun_bottom_limit, row_start_y + 10)
     row_gap = max(1, (sun_bottom_limit - row_start_y) // max(1, len(sun_rows)))
     label_x = edge + 2 if split_columns else edge + 4
     value_right = (left_w - edge) if split_columns else (WIDTH - edge * 2)
