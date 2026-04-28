@@ -941,8 +941,11 @@ def fetch_weather(force_refresh: bool = False):
     if cached and cached_at:
         cache_age = (now - cached_at).total_seconds()
         if not force_refresh and cache_age < WEATHER_REFRESH_SECONDS:
-            logging.debug(
-                "Returning cached weather data (age: %.0fs, TTL: %ds)", cache_age, WEATHER_REFRESH_SECONDS
+            logging.warning(
+                "Using cached weather data last retrieved at %s (age: %.0fs, TTL: %ds)",
+                cached_at.isoformat(),
+                cache_age,
+                WEATHER_REFRESH_SECONDS,
             )
             return cached
 
@@ -963,8 +966,10 @@ def fetch_weather(force_refresh: bool = False):
         cached_at = _weather_cache_fetched_at
     if cached and cached_at:
         cache_age = cache_age if cache_age is not None else (now - cached_at).total_seconds()
-        logging.info(
-            "Returning stale weather cache after fetch errors (age: %.0fs)", cache_age
+        logging.warning(
+            "Using stale cached weather data last retrieved at %s after fetch errors (age: %.0fs)",
+            cached_at.isoformat(),
+            cache_age,
         )
         return cached
 
