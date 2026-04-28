@@ -1,6 +1,6 @@
 import pytest
 
-from data_fetch import _normalise_weatherkit_response
+from data_fetch import _fetch_weatherkit, _normalise_weatherkit_response
 
 
 def _iso(dt: str) -> str:
@@ -122,3 +122,51 @@ def test_weatherkit_hourly_daylight_does_not_force_night_icon():
 
     assert normalized is not None
     assert normalized["hourly"][0]["weather"][0]["icon"] == "Clear"
+
+
+def test_fetch_weatherkit_retries_without_alerts_on_404(monkeypatch):
+    import datetime
+    import requests
+    import data_fetch
+
+    now = datetime.datetime(2026, 4, 28, tzinfo=datetime.timezone.utc)
+    calls: list[str] = []
+
+    class _Resp:
+        def __init__(self, status_code: int, payload: dict):
+            self.status_code = status_code
+            self._payload = payload
+
+        def raise_for_status(self):
+            if self.status_code >= 400:
+                raise requests.exceptions.HTTPError(response=self)
+
+        def json(self):
+            return self._payload
+
+    class _Session:
+        def get(self, _url, params, headers, timeout):
+            assert headers["Authorization"] == "Bearer fake-token"
+            assert timeout == 10
+            calls.append(params["dataSets"])
+            if "weatherAlerts" in params["dataSets"]:
+                return _Resp(404, {})
+            return _Resp(
+                200,
+                {
+                    "currentWeather": {"temperature": 10, "conditionCode": "Clear", "asOf": _iso("12:00:00")},
+                    "forecastDaily": {"days": []},
+                    "forecastHourly": {"hours": []},
+                },
+            )
+
+    monkeypatch.setattr(data_fetch, "_build_weatherkit_token", lambda _now: "fake-token")
+    monkeypatch.setattr(data_fetch, "_session", _Session())
+
+    normalized = _fetch_weatherkit(now)
+
+    assert normalized is not None
+    assert calls == [
+        "currentWeather,forecastDaily,forecastHourly,weatherAlerts",
+        "currentWeather,forecastDaily,forecastHourly",
+    ]
