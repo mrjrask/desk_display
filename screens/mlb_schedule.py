@@ -1464,7 +1464,7 @@ def draw_series_screen(display, games, title, transition=False, screen_id: Optio
 
     title_fill = (
         config.SCOREBOARD_IN_PROGRESS_SCORE_COLOR
-        if title in {"Cubs Current Series", "Sox Current Series"}
+        if normalized_screen_id in {"cubs current series", "sox current series"}
         else (255, 255, 255)
     )
     draw.text(((WIDTH - tw) // 2, edge_pad), title, font=FONT_TITLE_SPORTS, fill=title_fill)
