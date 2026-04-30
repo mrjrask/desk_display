@@ -117,6 +117,33 @@ fi
 # shellcheck source=/dev/null
 source "$VENV_DIR/bin/activate"
 
+check_venv_permissions() {
+  local current_user current_group
+  current_user=$(id -un)
+  current_group=$(id -gn)
+
+  # pip upgrades can fail mid-uninstall when these files are not writable
+  # (for example after previously running the script with sudo).
+  local required_paths=(
+    "$VENV_DIR/bin"
+    "$VENV_DIR/bin/pip"
+    "$VENV_DIR/lib"
+  )
+
+  local path
+  for path in "${required_paths[@]}"; do
+    if [[ -e "$path" && ! -w "$path" ]]; then
+      echo "[ERROR] Virtual environment is not writable: $path" >&2
+      echo "[ERROR] This usually means the venv is owned by another user (often root)." >&2
+      echo "[ERROR] Fix ownership, then rerun:" >&2
+      echo "[ERROR]   sudo chown -R \"$current_user:$current_group\" \"$VENV_DIR\"" >&2
+      return 1
+    fi
+  done
+}
+
+check_venv_permissions
+
 log "Upgrading pip"
 pip install --upgrade pip
 
