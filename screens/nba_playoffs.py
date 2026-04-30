@@ -383,7 +383,9 @@ def _format_next_text(series: dict) -> str:
         text = str(series.get("nextGameLabel") or series.get("nextGameText") or "").strip()
         return text if text else "TBD"
     day_label = _next_game_day_label(next_dt)
-    return f"{day_label} {next_dt.strftime('%-I:%M %p')}"
+    time_text = next_dt.strftime('%-I:%M %p')
+    time_text = re.sub(r"^(\d{1,2}):00(\s+[AP]M)$", r"\1\2", time_text, flags=re.IGNORECASE)
+    return f"{day_label} {time_text}"
 
 
 def _normalize_next_text(text: Any) -> str:
@@ -420,6 +422,7 @@ def _normalize_next_text(text: Any) -> str:
             next_dt = None
         if next_dt:
             normalized = f"{_next_game_day_label(next_dt)}{suffix}"
+    normalized = re.sub(r"(\b\d{1,2}):00(\s+[AP]M\b)", r"\1\2", normalized, flags=re.IGNORECASE)
     return normalized or "TBD"
 
 
