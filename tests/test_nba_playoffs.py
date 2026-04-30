@@ -74,7 +74,7 @@ def test_extract_series_accepts_nested_team_wins_without_top_level_series_keys()
 
 
 def test_normalize_next_text_strips_timezone_suffix():
-    assert nba_playoffs._normalize_next_text("Next: 04/09 8:00 PM ET") == "Thursday 8:00 PM"
+    assert nba_playoffs._normalize_next_text("Next: 04/09 8:00 PM ET") == "Thursday 8 PM"
 
 
 def test_format_next_text_uses_tonight_label(monkeypatch):
@@ -90,7 +90,7 @@ def test_format_next_text_uses_tonight_label(monkeypatch):
 
 def test_format_next_text_supports_next_game_datetime_utc_key():
     text = nba_playoffs._format_next_text({"nextGameDateTimeUTC": "2026-04-22T00:00:00Z"})
-    assert text == "Tuesday 7:00 PM"
+    assert text == "Tuesday 7 PM"
 
 
 def test_format_next_text_supports_nested_next_game_payload(monkeypatch):
