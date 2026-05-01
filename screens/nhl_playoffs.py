@@ -960,6 +960,8 @@ def _map_schedule_game_for_series(game: dict) -> Optional[dict]:
         "gameDate": game.get("startTimeUTC") or game.get("startTime") or game.get("gameDateUTC") or game.get("gameDate"),
         "gameType": game.get("gameType") or game.get("gameTypeCode") or game.get("seasonType"),
         "gameScheduleState": game.get("gameScheduleState"),
+        "gameState": game.get("gameState") or game.get("gameStatus"),
+        "detailedState": game.get("gameScheduleState") or game.get("gameState"),
         "seriesStatusShort": game.get("seriesStatusShort"),
         "teams": teams,
     }
