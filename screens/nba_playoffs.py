@@ -885,6 +885,8 @@ def _series_has_live_game(series: dict) -> bool:
 
 
 def _series_status_line_fill(series: dict) -> tuple[int, int, int]:
+    if _is_completed_series(series):
+        return (0, 200, 0)
     return SCOREBOARD_IN_PROGRESS_SCORE_COLOR if _series_has_live_game(series) else (255, 255, 255)
 
 
