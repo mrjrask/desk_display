@@ -1447,7 +1447,7 @@ def build_screen_registry(context: ScreenContext) -> Tuple[Dict[str, ScreenDefin
                 mlb_scoreboard_games,
                 transition=True,
             )
-            if adafruit_minipitft_layout or waveshare_oled_lcd_hat
+            if adafruit_minipitft_layout
             else render_mlb_scoreboard_v2(
                 context.display,
                 mlb_scoreboard_games,
