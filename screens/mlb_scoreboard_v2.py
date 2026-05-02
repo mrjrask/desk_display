@@ -259,8 +259,7 @@ def _draw_single_game(
     results = _final_results(away, home) if final else {"away": None, "home": None}
 
     score_top = top
-    away_team_abbr = _team_logo_abbr((away or {}).get("team", {}))
-    away_score_y_offset = -2 if (_IS_WAVESHARE_OLED_LCD_PROFILE and away_team_abbr == "CHC") else 0
+    away_score_y_offset = -2 if _IS_WAVESHARE_OLED_LCD_PROFILE else 0
 
     # Draw scores and @ symbol
     for idx, text in ((0, away_text), (2, "@"), (4, home_text)):
