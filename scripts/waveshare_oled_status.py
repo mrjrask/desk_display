@@ -523,7 +523,7 @@ def _cubs_oled_frames() -> tuple[Image.Image, Image.Image] | None:
     away_score_text = str(away_score) if isinstance(away_score, int) else "-"
     home_score_text = str(home_score) if isinstance(home_score, int) else "-"
     inning_text = _format_inning_text(selected_game, final=is_final)
-    outs_text, batting_side = _format_outs_text(selected_game)
+    outs_text, batting_side = ("", "") if is_final else _format_outs_text(selected_game)
     away_footer = outs_text if batting_side == "away" else ""
     if batting_side == "home" and outs_text:
         home_footer = f"{inning_text} • {outs_text}"

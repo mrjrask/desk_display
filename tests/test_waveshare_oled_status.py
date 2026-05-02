@@ -367,6 +367,36 @@ def test_cubs_oled_frames_prefers_live_game(monkeypatch):
     assert rendered[1]["footer"] == "Bottom 3rd • 2 Outs"
 
 
+
+
+def test_cubs_oled_frames_final_hides_outs(monkeypatch):
+    mod = _load_module()
+    rendered = []
+    game = {
+        "gamePk": 777,
+        "status": {"abstractGameState": "Final", "detailedState": "Final", "statusCode": "F"},
+        "teams": {
+            "away": {"team": {"id": 112, "name": "Chicago Cubs", "abbreviation": "CHC"}, "score": 5},
+            "home": {"team": {"id": 121, "name": "New York Mets", "abbreviation": "NYM"}, "score": 3},
+        },
+        "linescore": {"inningState": "Bottom", "currentInningOrdinal": "9th", "outs": 2},
+    }
+
+    monkeypatch.setattr(mod, "time", types.SimpleNamespace(time=lambda: 1000.0))
+    monkeypatch.setattr(mod, "_read_display_status_payload", lambda: {"cubs": {"last_game": game}})
+    monkeypatch.setattr(mod, "_render_score_panel", lambda *_args, **kwargs: rendered.append(kwargs) or object())
+    monkeypatch.setattr(mod, "_CUBS_FINAL_GAME_PK", None)
+    monkeypatch.setattr(mod, "_CUBS_FINAL_HOLD_UNTIL_EPOCH", 0.0)
+    monkeypatch.setattr(mod, "_load_cubs_final_state", lambda: (None, 0.0))
+    monkeypatch.setattr(mod, "_persist_cubs_final_state", lambda *_args, **_kwargs: None)
+
+    frames = mod._cubs_oled_frames()
+
+    assert frames is not None
+    assert len(rendered) == 2
+    assert rendered[0]["footer"] == ""
+    assert rendered[1]["footer"] == "Final"
+
 def test_cubs_oled_frames_holds_final_for_90_minutes(monkeypatch):
     mod = _load_module()
     game = {
