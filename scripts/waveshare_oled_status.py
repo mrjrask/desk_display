@@ -83,7 +83,31 @@ _WEATHER2_RENDERED = False
 _LAST_GITHUB_UPDATE_CHECK_AT = 0.0
 _LAST_GITHUB_UPDATE_AVAILABLE = False
 _CUBS_FINAL_GAME_PK: str | None = None
-_CUBS_FINAL_HOLD_UNTIL_MONOTONIC = 0.0
+_CUBS_FINAL_HOLD_UNTIL_EPOCH = 0.0
+_CUBS_FINAL_STATE_PATH = Path(os.getenv("WAVESHARE_OLED_CUBS_FINAL_STATE_PATH", "/var/tmp/desk_display_cubs_final_state.json"))
+
+
+def _load_cubs_final_state() -> tuple[str | None, float]:
+    try:
+        payload = json.loads(_CUBS_FINAL_STATE_PATH.read_text(encoding="utf-8"))
+    except Exception:
+        return None, 0.0
+
+    game_pk = str(payload.get("game_pk") or "").strip() or None
+    try:
+        hold_until = float(payload.get("hold_until_epoch") or 0.0)
+    except Exception:
+        hold_until = 0.0
+    return game_pk, hold_until
+
+
+def _persist_cubs_final_state(game_pk: str | None, hold_until_epoch: float) -> None:
+    payload = {"game_pk": (game_pk or ""), "hold_until_epoch": float(hold_until_epoch)}
+    try:
+        _CUBS_FINAL_STATE_PATH.parent.mkdir(parents=True, exist_ok=True)
+        _CUBS_FINAL_STATE_PATH.write_text(json.dumps(payload), encoding="utf-8")
+    except Exception:
+        return
 
 
 class SSD1306Display:
@@ -443,7 +467,7 @@ def _render_score_panel(width: int, height: int, *, team: str, score: str, foote
 
 
 def _cubs_oled_frames() -> tuple[Image.Image, Image.Image] | None:
-    global _CUBS_FINAL_GAME_PK, _CUBS_FINAL_HOLD_UNTIL_MONOTONIC
+    global _CUBS_FINAL_GAME_PK, _CUBS_FINAL_HOLD_UNTIL_EPOCH
 
     payload = _read_display_status_payload()
     cubs = payload.get("cubs") if isinstance(payload, dict) else None
@@ -455,7 +479,9 @@ def _cubs_oled_frames() -> tuple[Image.Image, Image.Image] | None:
 
     selected_game = None
     is_final = False
-    now_mono = time.monotonic()
+    now_epoch = time.time()
+    if _CUBS_FINAL_GAME_PK is None and _CUBS_FINAL_HOLD_UNTIL_EPOCH <= 0:
+        _CUBS_FINAL_GAME_PK, _CUBS_FINAL_HOLD_UNTIL_EPOCH = _load_cubs_final_state()
     if isinstance(live_game, dict):
         live_live, live_final = _mlb_live_state(live_game)
         if live_live:
@@ -478,12 +504,14 @@ def _cubs_oled_frames() -> tuple[Image.Image, Image.Image] | None:
     if is_final:
         if game_pk and game_pk != _CUBS_FINAL_GAME_PK:
             _CUBS_FINAL_GAME_PK = game_pk
-            _CUBS_FINAL_HOLD_UNTIL_MONOTONIC = now_mono + (90 * 60)
-        if now_mono > _CUBS_FINAL_HOLD_UNTIL_MONOTONIC:
+            _CUBS_FINAL_HOLD_UNTIL_EPOCH = now_epoch + (90 * 60)
+            _persist_cubs_final_state(_CUBS_FINAL_GAME_PK, _CUBS_FINAL_HOLD_UNTIL_EPOCH)
+        if now_epoch > _CUBS_FINAL_HOLD_UNTIL_EPOCH:
             return None
     else:
         _CUBS_FINAL_GAME_PK = game_pk or _CUBS_FINAL_GAME_PK
-        _CUBS_FINAL_HOLD_UNTIL_MONOTONIC = 0.0
+        _CUBS_FINAL_HOLD_UNTIL_EPOCH = 0.0
+        _persist_cubs_final_state(_CUBS_FINAL_GAME_PK, _CUBS_FINAL_HOLD_UNTIL_EPOCH)
 
     teams = selected_game.get("teams") or {}
     away = (teams.get("away") or {}).get("team") or {}
