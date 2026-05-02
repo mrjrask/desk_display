@@ -393,3 +393,31 @@ def test_cubs_oled_frames_holds_final_for_90_minutes(monkeypatch):
     assert mod._cubs_oled_frames() is not None
     now[0] += 2
     assert mod._cubs_oled_frames() is None
+
+
+def test_cubs_oled_frames_restarts_hold_when_same_game_was_persisted_live(monkeypatch):
+    mod = _load_module()
+    game = {
+        "gamePk": 999,
+        "status": {"abstractGameState": "Final", "detailedState": "Final", "statusCode": "F"},
+        "teams": {
+            "away": {"team": {"id": 112, "name": "Chicago Cubs", "abbreviation": "CHC"}, "score": 7},
+            "home": {"team": {"id": 111, "name": "Boston Red Sox", "abbreviation": "BOS"}, "score": 4},
+        },
+        "linescore": {},
+    }
+
+    now = [1000.0]
+    persisted = []
+    monkeypatch.setattr(mod, "time", types.SimpleNamespace(time=lambda: now[0]))
+    monkeypatch.setattr(mod, "_read_display_status_payload", lambda: {"cubs": {"last_game": game}})
+    monkeypatch.setattr(mod, "_render_score_panel", lambda *_args, **_kwargs: object())
+    monkeypatch.setattr(mod, "_CUBS_FINAL_GAME_PK", None)
+    monkeypatch.setattr(mod, "_CUBS_FINAL_HOLD_UNTIL_EPOCH", 0.0)
+    monkeypatch.setattr(mod, "_load_cubs_final_state", lambda: ("999", 0.0))
+    monkeypatch.setattr(mod, "_persist_cubs_final_state", lambda *args, **_kwargs: persisted.append(args))
+
+    assert mod._cubs_oled_frames() is not None
+    assert mod._CUBS_FINAL_GAME_PK == "999"
+    assert mod._CUBS_FINAL_HOLD_UNTIL_EPOCH == 1000.0 + (90 * 60)
+    assert persisted[-1] == ("999", 1000.0 + (90 * 60))

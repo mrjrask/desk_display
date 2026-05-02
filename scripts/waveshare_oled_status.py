@@ -502,14 +502,21 @@ def _cubs_oled_frames() -> tuple[Image.Image, Image.Image] | None:
 
     game_pk = str(selected_game.get("gamePk") or selected_game.get("game_id") or "")
     if is_final:
-        if game_pk and game_pk != _CUBS_FINAL_GAME_PK:
+        should_start_hold = (
+            bool(game_pk)
+            and (
+                game_pk != _CUBS_FINAL_GAME_PK
+                or _CUBS_FINAL_HOLD_UNTIL_EPOCH <= 0
+            )
+        )
+        if should_start_hold:
             _CUBS_FINAL_GAME_PK = game_pk
             _CUBS_FINAL_HOLD_UNTIL_EPOCH = now_epoch + (90 * 60)
             _persist_cubs_final_state(_CUBS_FINAL_GAME_PK, _CUBS_FINAL_HOLD_UNTIL_EPOCH)
         if now_epoch > _CUBS_FINAL_HOLD_UNTIL_EPOCH:
             return None
     else:
-        _CUBS_FINAL_GAME_PK = game_pk or _CUBS_FINAL_GAME_PK
+        _CUBS_FINAL_GAME_PK = None
         _CUBS_FINAL_HOLD_UNTIL_EPOCH = 0.0
         _persist_cubs_final_state(_CUBS_FINAL_GAME_PK, _CUBS_FINAL_HOLD_UNTIL_EPOCH)
 
