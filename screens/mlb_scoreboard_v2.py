@@ -78,6 +78,7 @@ HYPERPIXEL_LAYOUT = is_hyperpixel_next_layout()
 _IS_1080P_LAYOUT = is_hdmi_1080p_layout()
 _HD_LAYOUT_TEXT_BOOST = 1.25 if _IS_1080P_LAYOUT else 1.0
 _IS_HYPERPIXEL_4_PROFILE = is_display_profile("hyperpixel4") or is_display_profile("hyperpixel4_square")
+_IS_WAVESHARE_OLED_LCD_PROFILE = is_display_profile("display_hat_mini")
 
 
 def _scale_width(value: int) -> int:
@@ -258,6 +259,8 @@ def _draw_single_game(
     results = _final_results(away, home) if final else {"away": None, "home": None}
 
     score_top = top
+    away_team_abbr = _team_logo_abbr((away or {}).get("team", {}))
+    away_score_y_offset = -2 if (_IS_WAVESHARE_OLED_LCD_PROFILE and away_team_abbr == "CHC") else 0
 
     # Draw scores and @ symbol
     for idx, text in ((0, away_text), (2, "@"), (4, home_text)):
@@ -274,7 +277,7 @@ def _draw_single_game(
             font,
             x_offset + GAME_COL_X[idx],
             GAME_COL_WIDTHS[idx],
-            score_top,
+            score_top + (away_score_y_offset if idx == 0 else 0),
             SCORE_ROW_H,
             fill=fill,
         )
