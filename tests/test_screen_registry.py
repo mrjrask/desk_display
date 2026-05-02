@@ -412,7 +412,7 @@ def test_adafruit_minipitft_routes_scoreboard_v2_ids_to_v1_renderers(monkeypatch
     assert calls == ["nfl_v1", "nhl_v1", "mlb_v1", "nba_v1"]
 
 
-def test_waveshare_routes_scoreboard_v2_ids_to_v1_renderers(monkeypatch):
+def test_waveshare_routes_scoreboard_v2_ids_to_v1_renderers_except_mlb(monkeypatch):
     now = datetime.datetime(2024, 7, 1, 12, 0, tzinfo=CENTRAL_TIME)
     weather = {"hourly": []}
     calls: list[str] = []
@@ -450,7 +450,7 @@ def test_waveshare_routes_scoreboard_v2_ids_to_v1_renderers(monkeypatch):
     registry["MLB Scoreboard v2"].render()
     registry["NBA Scoreboard v2"].render()
 
-    assert calls == ["nfl_v1", "nhl_v1", "mlb_v1", "nba_v1"]
+    assert calls == ["nfl_v1", "nhl_v1", "mlb_v2", "nba_v1"]
 
 
 def test_cubs_live_is_available_when_status_is_warmup():
