@@ -87,24 +87,31 @@ for w in SERIES_COL_WIDTHS:
 
 TITLE_FONT = FONT_TITLE_SPORTS
 LOGO_DIR = os.path.join(IMAGES_DIR, "nhl")
-TEAM_LOGO_BASE_HEIGHT = standard_scoreboard_team_logo_height(HEIGHT)
+PLAYOFF_LOGO_BASE_HEIGHT = scale_value_width(26)
+PLAYOFF_LOGO_SCALE = 0.9
+SCOREBOARD_LOGO_BASE_HEIGHT = standard_scoreboard_team_logo_height(HEIGHT)
 LEAGUE_LOGO_BASE_HEIGHT = (
-    TEAM_LOGO_BASE_HEIGHT
+    PLAYOFF_LOGO_BASE_HEIGHT
     if (HYPERPIXEL_LAYOUT or is_kernel_driven_display())
-    else standard_scoreboard_league_logo_height(TEAM_LOGO_BASE_HEIGHT)
+    else standard_scoreboard_league_logo_height(PLAYOFF_LOGO_BASE_HEIGHT)
 )
 if HYPERPIXEL_4_SQUARE:
     LEAGUE_LOGO_BASE_HEIGHT = min(LEAGUE_LOGO_BASE_HEIGHT, scale_value_width(40))
-LOGO_HEIGHT = TEAM_LOGO_BASE_HEIGHT
+LOGO_HEIGHT = PLAYOFF_LOGO_BASE_HEIGHT
 LEAGUE_LOGO_GAP = _scale_y(4)
 
 _SESSION = get_session()
 
 def _scoreboard_fonts() -> tuple:
-    score = get_screen_font(SCREEN_ID, "score", base_font=FONT_TEAM_SPORTS, default_size=43)
-    status = get_screen_font(SCREEN_ID, "status", base_font=FONT_STATUS, default_size=28)
-    status_small = get_screen_font(SCREEN_ID, "status_small", base_font=FONT_STATUS, default_size=28)
-    center = get_screen_font(SCREEN_ID, "center", base_font=FONT_STATUS, default_size=28)
+    small_display = _use_single_series_per_row_layout()
+    score_size = 43 if small_display else 24
+    status_size = 28 if small_display else 18
+    status_small_size = 28 if small_display else 16
+    center_size = 28 if small_display else 18
+    score = get_screen_font(SCREEN_ID, "score", base_font=FONT_TEAM_SPORTS, default_size=score_size)
+    status = get_screen_font(SCREEN_ID, "status", base_font=FONT_STATUS, default_size=status_size)
+    status_small = get_screen_font(SCREEN_ID, "status_small", base_font=FONT_STATUS, default_size=status_small_size)
+    center = get_screen_font(SCREEN_ID, "center", base_font=FONT_STATUS, default_size=center_size)
     return score, status, status_small, center
 
 
@@ -195,7 +202,9 @@ def _apply_style_overrides() -> None:
     BACKGROUND_COLOR = (0, 0, 0)
     _recompute_series_layout()
     team_scale = get_screen_image_scale(SCREEN_ID, "team_logo", 1.0)
-    target_logo_height = max(1, int(round(TEAM_LOGO_BASE_HEIGHT * team_scale)))
+    base_logo_height = SCOREBOARD_LOGO_BASE_HEIGHT if _use_single_series_per_row_layout() else PLAYOFF_LOGO_BASE_HEIGHT
+    logo_scale = 1.0 if _use_single_series_per_row_layout() else PLAYOFF_LOGO_SCALE
+    target_logo_height = max(1, int(round(base_logo_height * team_scale * logo_scale)))
     max_row_fit = max(1, SCORE_ROW_H - scale_value(8))
     LOGO_HEIGHT = min(target_logo_height, max_row_fit)
 
