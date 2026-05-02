@@ -87,9 +87,7 @@ for w in SERIES_COL_WIDTHS:
 
 TITLE_FONT = FONT_TITLE_SPORTS
 LOGO_DIR = os.path.join(IMAGES_DIR, "nhl")
-# Match NHL Scoreboard v2 logo baseline sizing, then reduce by 10% for playoffs.
-TEAM_LOGO_BASE_HEIGHT = scale_value_width(26)
-PLAYOFF_LOGO_SCALE = 0.9
+TEAM_LOGO_BASE_HEIGHT = standard_scoreboard_team_logo_height(HEIGHT)
 LEAGUE_LOGO_BASE_HEIGHT = (
     TEAM_LOGO_BASE_HEIGHT
     if (HYPERPIXEL_LAYOUT or is_kernel_driven_display())
@@ -103,12 +101,10 @@ LEAGUE_LOGO_GAP = _scale_y(4)
 _SESSION = get_session()
 
 def _scoreboard_fonts() -> tuple:
-    # Keep score typography aligned with NHL Scoreboard v2.
-    score = get_screen_font(SCREEN_ID, "score", base_font=FONT_TEAM_SPORTS, default_size=24)
-    status = get_screen_font(SCREEN_ID, "status", base_font=FONT_STATUS, default_size=18)
-    # Reduce game time/date text by 4pt from prior default (20 -> 16).
-    status_small = get_screen_font(SCREEN_ID, "status_small", base_font=FONT_STATUS, default_size=16)
-    center = get_screen_font(SCREEN_ID, "center", base_font=FONT_STATUS, default_size=18)
+    score = get_screen_font(SCREEN_ID, "score", base_font=FONT_TEAM_SPORTS, default_size=43)
+    status = get_screen_font(SCREEN_ID, "status", base_font=FONT_STATUS, default_size=28)
+    status_small = get_screen_font(SCREEN_ID, "status_small", base_font=FONT_STATUS, default_size=28)
+    center = get_screen_font(SCREEN_ID, "center", base_font=FONT_STATUS, default_size=28)
     return score, status, status_small, center
 
 
@@ -199,7 +195,7 @@ def _apply_style_overrides() -> None:
     BACKGROUND_COLOR = (0, 0, 0)
     _recompute_series_layout()
     team_scale = get_screen_image_scale(SCREEN_ID, "team_logo", 1.0)
-    target_logo_height = max(1, int(round(TEAM_LOGO_BASE_HEIGHT * team_scale * PLAYOFF_LOGO_SCALE)))
+    target_logo_height = max(1, int(round(TEAM_LOGO_BASE_HEIGHT * team_scale)))
     max_row_fit = max(1, SCORE_ROW_H - scale_value(8))
     LOGO_HEIGHT = min(target_logo_height, max_row_fit)
 
