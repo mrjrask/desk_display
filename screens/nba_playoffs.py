@@ -108,6 +108,11 @@ LEAGUE_LOGO_GAP = _scale_y(4)
 
 _SESSION = get_session()
 
+def _use_single_series_per_row_layout() -> bool:
+    """Return True when displays are lower resolution than HyperPixel baselines."""
+    return LOWER_THAN_HYPERPIXEL_RESOLUTION
+
+
 def _scoreboard_fonts() -> tuple:
     small_display = _use_single_series_per_row_layout()
     score_size = 39 if small_display else 24
@@ -149,11 +154,6 @@ def _fit_widths_to_total(widths: list[int], target_total: int) -> list[int]:
         if not changed:
             break
     return scaled
-
-
-def _use_single_series_per_row_layout() -> bool:
-    """Return True when displays are lower resolution than HyperPixel baselines."""
-    return LOWER_THAN_HYPERPIXEL_RESOLUTION
 
 
 def _recompute_series_layout() -> None:
