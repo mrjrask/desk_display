@@ -121,7 +121,6 @@ def _scoreboard_fonts() -> tuple:
     return score, status, status_small, center
 
 
-SCORE_FONT, STATUS_FONT, STATUS_SMALL_FONT, CENTER_FONT = _scoreboard_fonts()
 BACKGROUND_COLOR = (0, 0, 0)
 _LOGO_CACHE: dict[tuple[str, int], Optional[Image.Image]] = {}
 
@@ -154,6 +153,9 @@ def _fit_widths_to_total(widths: list[int], target_total: int) -> list[int]:
 def _use_single_series_per_row_layout() -> bool:
     """Return True when displays are lower resolution than HyperPixel baselines."""
     return LOWER_THAN_HYPERPIXEL_RESOLUTION
+
+
+SCORE_FONT, STATUS_FONT, STATUS_SMALL_FONT, CENTER_FONT = _scoreboard_fonts()
 
 
 def _recompute_series_layout() -> None:
