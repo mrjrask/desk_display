@@ -353,7 +353,9 @@ def test_cubs_oled_frames_prefers_live_game(monkeypatch):
     monkeypatch.setattr(mod, "_render_score_panel", lambda *_args, **kwargs: rendered.append(kwargs) or object())
     monkeypatch.setattr(mod, "_resolve_mlb_abbreviation", lambda: (lambda text: "NYM" if "Mets" in text else "CUBS"))
     monkeypatch.setattr(mod, "_CUBS_FINAL_GAME_PK", None)
-    monkeypatch.setattr(mod, "_CUBS_FINAL_HOLD_UNTIL_MONOTONIC", 0.0)
+    monkeypatch.setattr(mod, "_CUBS_FINAL_HOLD_UNTIL_EPOCH", 0.0)
+    monkeypatch.setattr(mod, "_load_cubs_final_state", lambda: (None, 0.0))
+    monkeypatch.setattr(mod, "_persist_cubs_final_state", lambda *_args, **_kwargs: None)
 
     frames = mod._cubs_oled_frames()
 
@@ -378,11 +380,13 @@ def test_cubs_oled_frames_holds_final_for_90_minutes(monkeypatch):
     }
 
     now = [1000.0]
-    monkeypatch.setattr(mod, "time", types.SimpleNamespace(monotonic=lambda: now[0]))
+    monkeypatch.setattr(mod, "time", types.SimpleNamespace(time=lambda: now[0]))
     monkeypatch.setattr(mod, "_read_display_status_payload", lambda: {"cubs": {"last_game": game}})
     monkeypatch.setattr(mod, "_render_score_panel", lambda *_args, **_kwargs: object())
     monkeypatch.setattr(mod, "_CUBS_FINAL_GAME_PK", None)
-    monkeypatch.setattr(mod, "_CUBS_FINAL_HOLD_UNTIL_MONOTONIC", 0.0)
+    monkeypatch.setattr(mod, "_CUBS_FINAL_HOLD_UNTIL_EPOCH", 0.0)
+    monkeypatch.setattr(mod, "_load_cubs_final_state", lambda: (None, 0.0))
+    monkeypatch.setattr(mod, "_persist_cubs_final_state", lambda *_args, **_kwargs: None)
 
     assert mod._cubs_oled_frames() is not None
     now[0] += (90 * 60) - 1
