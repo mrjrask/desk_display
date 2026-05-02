@@ -264,6 +264,15 @@ def _normalize_conference_label(value: Any) -> str:
     return ""
 
 
+def _is_known_team_abbr(value: str) -> bool:
+    candidate = str(value or "").strip().upper()
+    if not candidate:
+        return False
+    if candidate in {"TBD", "TBA", "UNK", "N/A", "NA", "0", "00", "000"}:
+        return False
+    return bool(re.fullmatch(r"[A-Z]{2,4}", candidate))
+
+
 def _round_rank_from_text(value: Any) -> Optional[int]:
     text = str(value or "").strip().lower()
     if not text:
@@ -540,7 +549,7 @@ def _normalize_series_item(series: dict) -> Optional[dict]:
 
     away_abbr = _team_logo_abbr(away_team)
     home_abbr = _team_logo_abbr(home_team)
-    if not away_abbr or not home_abbr:
+    if not _is_known_team_abbr(away_abbr) or not _is_known_team_abbr(home_abbr):
         return None
 
     conference = _normalize_conference_label(
@@ -603,7 +612,11 @@ def _extract_series(payload: Any) -> list[dict]:
         away_abbr = _team_logo_abbr(away_team)
         home_abbr = _team_logo_abbr(home_team)
         key = tuple(sorted((away_abbr, home_abbr)))
-        if not away_abbr or not home_abbr or key in seen:
+        if (
+            not _is_known_team_abbr(away_abbr)
+            or not _is_known_team_abbr(home_abbr)
+            or key in seen
+        ):
             continue
         seen.add(key)
         deduped.append(series)
@@ -821,7 +834,7 @@ def _has_both_opponents(series: dict) -> bool:
     home_team = (home_slot.get("team") or {}) if isinstance(home_slot, dict) else {}
     away_abbr = _team_logo_abbr(away_team) if isinstance(away_team, dict) else ""
     home_abbr = _team_logo_abbr(home_team) if isinstance(home_team, dict) else ""
-    if away_abbr and home_abbr:
+    if _is_known_team_abbr(away_abbr) and _is_known_team_abbr(home_abbr):
         return True
     return bool(away_slot and home_slot)
 
