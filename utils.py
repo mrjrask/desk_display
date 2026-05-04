@@ -1020,9 +1020,6 @@ from config import (
     HEIGHT,
     CENTRAL_TIME,
     DISPLAY_ROTATION,
-    EMOJI_EMBEDDED_COLOR,
-    WEATHER_USE_EMOJI_ICONS,
-    get_emoji_font,
     is_hyperpixel_next_layout,
     is_hyperpixel_4_square_layout,
     HYPERPIXEL_LED_INDICATOR_BORDER_ENABLED,
@@ -1038,7 +1035,6 @@ from config import (
     get_display_profile_id,
 )
 
-EMOJI_DRAW_KWARGS = {"embedded_color": True} if EMOJI_EMBEDDED_COLOR else {}
 # Color utilities
 from screens.color_palettes import random_color
 # ─── Logging decorator ──────────────────────────────────────────────────────
@@ -3550,52 +3546,6 @@ ICON_RENDERERS = {
 }
 
 
-@dataclass(frozen=True)
-class WeatherConditionInfo:
-    display_name: str
-    day_emoji: str
-    night_emoji: str
-    precipitation_type: str
-    severity: int
-
-
-WEATHERKIT_CONDITION_EMOJI: dict[str, WeatherConditionInfo] = {
-    "Clear": WeatherConditionInfo("Clear", "☀️", "🌙", "none", 0),
-    "MostlyClear": WeatherConditionInfo("Mostly Clear", "🌤️", "🌙✨", "none", 0),
-    "PartlyCloudy": WeatherConditionInfo("Partly Cloudy", "⛅", "☁️🌙", "none", 0),
-    "MostlyCloudy": WeatherConditionInfo("Mostly Cloudy", "🌥️", "☁️🌙", "none", 0),
-    "Cloudy": WeatherConditionInfo("Cloudy", "☁️", "☁️🌙", "none", 0),
-    "Foggy": WeatherConditionInfo("Fog", "🌫️", "🌫️🌙", "none", 1),
-    "Haze": WeatherConditionInfo("Haze", "🌫️", "🌫️🌙", "none", 1),
-    "Smoky": WeatherConditionInfo("Smoke", "🌫️", "🌫️🌙", "none", 1),
-    "BlowingDust": WeatherConditionInfo("Blowing Dust", "🌪️", "🌪️🌙", "none", 2),
-    "Breezy": WeatherConditionInfo("Breezy", "🍃", "🍃🌙", "none", 0),
-    "Windy": WeatherConditionInfo("Windy", "🌬️", "🌬️🌙", "none", 1),
-    "Drizzle": WeatherConditionInfo("Drizzle", "🌦️", "🌧️🌙", "rain", 1),
-    "Rain": WeatherConditionInfo("Rain", "🌧️", "🌧️🌙", "rain", 1),
-    "HeavyRain": WeatherConditionInfo("Heavy Rain", "🌧️🌧️", "🌧️🌧️🌙", "rain", 2),
-    "SunShowers": WeatherConditionInfo("Sun Showers", "🌦️", "🌧️🌙", "rain", 1),
-    "IsolatedThunderstorms": WeatherConditionInfo("Isolated Thunderstorms", "🌩️", "🌩️🌙", "thunderstorm", 2),
-    "ScatteredThunderstorms": WeatherConditionInfo("Scattered Thunderstorms", "⛈️", "⛈️🌙", "thunderstorm", 2),
-    "Thunderstorms": WeatherConditionInfo("Thunderstorms", "⛈️", "⛈️🌙", "thunderstorm", 3),
-    "StrongStorms": WeatherConditionInfo("Strong Storms", "⛈️⚡", "⛈️⚡🌙", "thunderstorm", 4),
-    "Flurries": WeatherConditionInfo("Flurries", "🌨️", "🌨️🌙", "snow", 1),
-    "SunFlurries": WeatherConditionInfo("Sun Flurries", "🌨️☀️", "🌨️🌙", "snow", 1),
-    "Snow": WeatherConditionInfo("Snow", "❄️", "❄️🌙", "snow", 2),
-    "HeavySnow": WeatherConditionInfo("Heavy Snow", "❄️❄️", "❄️❄️🌙", "snow", 3),
-    "BlowingSnow": WeatherConditionInfo("Blowing Snow", "🌬️❄️", "🌬️❄️🌙", "snow", 3),
-    "Sleet": WeatherConditionInfo("Sleet", "🌨️🌧️", "🌨️🌧️🌙", "wintry_mix", 2),
-    "WintryMix": WeatherConditionInfo("Wintry Mix", "🌨️🌧️", "🌨️🌧️🌙", "wintry_mix", 2),
-    "FreezingDrizzle": WeatherConditionInfo("Freezing Drizzle", "🌧️🧊", "🌧️🧊🌙", "ice", 3),
-    "FreezingRain": WeatherConditionInfo("Freezing Rain", "🌧️🧊", "🌧️🧊🌙", "ice", 4),
-    "Hail": WeatherConditionInfo("Hail", "🌨️🧊", "🌨️🧊🌙", "hail", 4),
-    "Blizzard": WeatherConditionInfo("Blizzard", "🌨️🌪️", "🌨️🌪️🌙", "snow", 5),
-    "Frigid": WeatherConditionInfo("Frigid", "🥶", "🥶🌙", "none", 3),
-    "Hot": WeatherConditionInfo("Hot", "🔥", "🔥🌙", "none", 3),
-    "TropicalStorm": WeatherConditionInfo("Tropical Storm", "🌀🌧️", "🌀🌧️🌙", "storm", 4),
-    "Hurricane": WeatherConditionInfo("Hurricane", "🌀", "🌀🌙", "storm", 5),
-}
-
 _WEATHERKIT_CONDITION_ALIASES = {
     "Fog": "Foggy",
     "Hazy": "Haze",
@@ -3610,74 +3560,24 @@ _WEATHERKIT_NIGHT_ICON_NAMES = {
 }
 
 
-def _resolve_weatherkit_condition(condition_code: Optional[str], icon_code: Optional[str]) -> WeatherConditionInfo:
-    raw_code = condition_code or icon_code or ""
-    code = str(raw_code).strip()
-    if code.endswith("_night"):
-        code = code[: -len("_night")]
-    code = _WEATHERKIT_CONDITION_ALIASES.get(code, code)
-    info = WEATHERKIT_CONDITION_EMOJI.get(code)
-    if not info:
-        logging.warning("Unknown WeatherKit condition %s; falling back to Cloudy emoji.", code)
-        info = WEATHERKIT_CONDITION_EMOJI["Cloudy"]
-    return info
+def _condition_code_to_asset_stem(condition: str) -> str:
+    cleaned = str(condition or "").strip()
+    if not cleaned:
+        return ""
+    if cleaned.endswith("_night"):
+        cleaned = cleaned[: -len("_night")]
+    cleaned = _WEATHERKIT_CONDITION_ALIASES.get(cleaned, cleaned)
+    if cleaned == "Fog":
+        cleaned = "Foggy"
+    if cleaned == "MostlySunny":
+        cleaned = "MostlyClear"
+    return cleaned[0].lower() + cleaned[1:] if cleaned else ""
 
 
 def _resolve_daylight(icon_code: Optional[str], is_daylight: Optional[bool]) -> bool:
     if is_daylight is None:
         return not (isinstance(icon_code, str) and icon_code.endswith("_night"))
     return bool(is_daylight)
-
-
-def _split_emoji_sequence(emoji: str) -> list[str]:
-    tokens: list[str] = []
-    current = ""
-    for char in emoji:
-        if char in ("\uFE0F", "\uFE0E", "\u200D"):
-            current += char
-            continue
-        if current:
-            tokens.append(current)
-        current = char
-    if current:
-        tokens.append(current)
-    return tokens
-
-
-def _render_emoji_icon(emoji: str, size: int, *, stack_emojis: bool = False) -> Image.Image:
-    size = max(1, int(size))
-    icon = Image.new("RGBA", (size, size), (0, 0, 0, 0))
-    draw = ImageDraw.Draw(icon)
-    tokens = _split_emoji_sequence(emoji)
-    if stack_emojis and len(tokens) > 1:
-        count = len(tokens)
-        slot_height = max(1, size // count)
-        font_size = max(1, int(slot_height * 0.9))
-        for idx, token in enumerate(tokens):
-            font = get_emoji_font(font_size)
-            bbox = draw.textbbox((0, 0), token, font=font)
-            text_w = bbox[2] - bbox[0]
-            text_h = bbox[3] - bbox[1]
-            slot_top = idx * slot_height
-            x = (size - text_w) // 2 - bbox[0]
-            y = slot_top + (slot_height - text_h) // 2 - bbox[1]
-            try:
-                draw.text((x, y), token, font=font, fill=(255, 255, 255, 255), **EMOJI_DRAW_KWARGS)
-            except TypeError:
-                draw.text((x, y), token, font=font, fill=(255, 255, 255, 255))
-        return icon
-
-    font = get_emoji_font(size)
-    bbox = draw.textbbox((0, 0), emoji, font=font)
-    text_w = bbox[2] - bbox[0]
-    text_h = bbox[3] - bbox[1]
-    x = (size - text_w) // 2 - bbox[0]
-    y = (size - text_h) // 2 - bbox[1]
-    try:
-        draw.text((x, y), emoji, font=font, fill=(255, 255, 255, 255), **EMOJI_DRAW_KWARGS)
-    except TypeError:
-        draw.text((x, y), emoji, font=font, fill=(255, 255, 255, 255))
-    return icon
 
 
 @log_call
@@ -3692,17 +3592,11 @@ def fetch_weather_icon(
     if not icon_code and not condition_code:
         return None
 
-    if WEATHER_USE_EMOJI_ICONS:
-        info = _resolve_weatherkit_condition(condition_code, icon_code)
-        daylight = _resolve_daylight(icon_code, is_daylight)
-        emoji = info.day_emoji if daylight else info.night_emoji
-        return _render_emoji_icon(emoji, size, stack_emojis=stack_emojis)
-
     icon_lookup = str(icon_code).strip()
-    if not icon_lookup:
+    if not icon_lookup and not condition_code:
         return None
 
-    daylight = _resolve_daylight(icon_lookup, is_daylight)
+    daylight = _resolve_daylight(icon_lookup or condition_code, is_daylight)
 
     alias_map = {
         "sunny": "Clear",
@@ -3712,17 +3606,19 @@ def fetch_weather_icon(
         "snow": "Snow",
         "sleet": "Sleet",
         "storm": "Thunderstorms",
-        "fog": "Fog",
+        "fog": "Foggy",
         "wind": "Windy",
     }
-    icon_name = alias_map.get(icon_lookup.lower(), icon_lookup)
-    if not daylight:
-        icon_name = _WEATHERKIT_NIGHT_ICON_NAMES.get(icon_name, icon_name)
+    canonical_name = _condition_code_to_asset_stem(condition_code or alias_map.get(icon_lookup.lower(), icon_lookup))
+    if not canonical_name:
+        canonical_name = "cloudy"
+
+    icon_name = canonical_name if daylight else f"{canonical_name}_night"
 
     icon_dir = Path(__file__).resolve().parent / "images" / "WeatherKit"
-    candidates = [icon_dir / f"{icon_name}.png"]
-    if icon_name != "Cloudy":
-        candidates.append(icon_dir / "Cloudy.png")
+    candidates = [icon_dir / f"{icon_name}.png", icon_dir / f"{canonical_name}.png"]
+    if canonical_name != "cloudy":
+        candidates.append(icon_dir / "cloudy.png")
 
     for candidate in candidates:
         try:
