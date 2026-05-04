@@ -218,3 +218,65 @@ def test_fetch_weatherkit_retries_without_alerts_on_404(monkeypatch):
         "currentWeather,forecastDaily,forecastHourly,weatherAlerts",
         "currentWeather,forecastDaily,forecastHourly",
     ]
+
+
+def test_weatherkit_hourly_uses_two_hour_rounded_sunset_for_night_icon():
+    data = {
+        "currentWeather": {"temperature": 10, "conditionCode": "Clear", "asOf": _iso("12:00:00")},
+        "forecastDaily": {
+            "days": [
+                {
+                    "sunrise": _iso("06:00:00"),
+                    "sunset": _iso("19:10:00"),
+                    "temperatureMax": 20,
+                    "temperatureMin": 5,
+                    "precipitationChance": 0,
+                    "conditionCode": "Clear",
+                    "forecastStart": _iso("00:00:00"),
+                }
+            ]
+        },
+        "forecastHourly": {
+            "hours": [
+                {"forecastStart": _iso("18:00:00"), "temperature": 10, "precipitationChance": 0, "conditionCode": "Clear"},
+                {"forecastStart": _iso("20:00:00"), "temperature": 9, "precipitationChance": 0, "conditionCode": "Clear"},
+            ]
+        },
+        "weatherAlerts": {"alerts": []},
+    }
+
+    normalized = _normalise_weatherkit_response(data)
+
+    assert normalized is not None
+    assert normalized["hourly"][0]["weather"][0]["icon"] == "Clear"
+    assert normalized["hourly"][1]["weather"][0]["icon"] == "Clear_night"
+
+
+def test_weatherkit_current_switches_to_night_only_after_actual_sunset():
+    data = {
+        "currentWeather": {
+            "temperature": 10,
+            "conditionCode": "Clear",
+            "asOf": _iso("19:30:00"),
+        },
+        "forecastDaily": {
+            "days": [
+                {
+                    "sunrise": _iso("06:00:00"),
+                    "sunset": _iso("20:00:00"),
+                    "temperatureMax": 20,
+                    "temperatureMin": 5,
+                    "precipitationChance": 0,
+                    "conditionCode": "Clear",
+                    "forecastStart": _iso("00:00:00"),
+                }
+            ]
+        },
+        "forecastHourly": {"hours": []},
+        "weatherAlerts": {"alerts": []},
+    }
+
+    normalized = _normalise_weatherkit_response(data)
+
+    assert normalized is not None
+    assert normalized["current"]["weather"][0]["icon"] == "Clear"
