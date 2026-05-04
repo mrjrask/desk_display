@@ -81,6 +81,7 @@ PRESSURE_TREND_SYMBOLS = {
     "steady": ("↔", (255, 255, 255)),
 }
 EMOJI_DRAW_KWARGS = {"embedded_color": True} if EMOJI_EMBEDDED_COLOR else {}
+WEATHER_ICON_SCALE = 0.9
 TEMPERATURE_COLOR_STOPS_F: tuple[tuple[float, tuple[int, int, int]], ...] = (
     (-10.0, (211, 46, 179)),
     (0.0, (172, 45, 176)),
@@ -174,6 +175,10 @@ def _ensure_rgba_icon(icon: Image.Image) -> Image.Image:
     if icon.mode != "RGBA" or "A" not in icon.getbands():
         return icon.convert("RGBA")
     return icon
+
+
+def _scaled_weather_icon_size(size: int) -> int:
+    return max(1, int(round(size * WEATHER_ICON_SCALE)))
 
 
 def _render_stat_text(parts):
@@ -577,9 +582,9 @@ def draw_weather_screen_1(display, weather, transition=False):
     # the Feels/Hi/Lo labels so it doesn't overlap other content.
     available_icon_height = y_lbl - top_of_icons
     if available_icon_height > 0:
-        weather_icon_size = max(1, min(WEATHER_ICON_SIZE, available_icon_height))
+        weather_icon_size = _scaled_weather_icon_size(min(WEATHER_ICON_SIZE, available_icon_height))
     else:
-        weather_icon_size = min(WEATHER_ICON_SIZE, HEIGHT // 2)
+        weather_icon_size = _scaled_weather_icon_size(min(WEATHER_ICON_SIZE, HEIGHT // 2))
     icon_img = fetch_weather_icon(
         icon_code,
         weather_icon_size,
@@ -882,9 +887,9 @@ def draw_weather_hourly(display, weather, transition: bool = False, hours: int =
     col_w = max(1, available_width // hours_to_show)
     icon_cache: dict[tuple[Optional[str], Optional[str], Optional[bool], bool], Optional[Image.Image]] = {}
     if WEATHER_USE_EMOJI_ICONS:
-        icon_size = max(18, min(WEATHER_ICON_SIZE, col_w - 12))
+        icon_size = max(18, _scaled_weather_icon_size(min(WEATHER_ICON_SIZE, col_w - 12)))
     else:
-        icon_size = max(32, min(WEATHER_ICON_SIZE, col_w - 10))
+        icon_size = max(32, _scaled_weather_icon_size(min(WEATHER_ICON_SIZE, col_w - 10)))
     time_font = FONT_WEATHER_DETAILS_SMALL_BOLD
 
     card_top = title_h + 6
@@ -1170,7 +1175,7 @@ def draw_weather_daily(display, weather, transition: bool = False, days: int = 5
     card_bottom = HEIGHT - 6
     card_height = card_bottom - card_top
     icon_cache: dict[tuple[Optional[str], Optional[str], bool], Optional[Image.Image]] = {}
-    icon_size = max(16, min(WEATHER_ICON_SIZE, col_w - 10))
+    icon_size = max(16, _scaled_weather_icon_size(min(WEATHER_ICON_SIZE, col_w - 10)))
     day_font = FONT_WEATHER_DETAILS_SMALL_BOLD
     stat_font = FONT_WEATHER_DETAILS_SMALL
     pop_font = FONT_WEATHER_DETAILS_TINY_LARGE
