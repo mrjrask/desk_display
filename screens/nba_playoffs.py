@@ -945,7 +945,8 @@ def _select_current_round_series(series: list[dict]) -> list[dict]:
     with_opponents = [item for item in series if _has_both_opponents(item)]
     ranked = [item for item in with_opponents if _as_int(item.get("round_rank")) is not None]
     if not ranked:
-        return with_opponents
+        current_only = [item for item in with_opponents if not _is_completed_series(item)]
+        return current_only or with_opponents
 
     rounds: dict[int, list[dict]] = {}
     for item in ranked:
