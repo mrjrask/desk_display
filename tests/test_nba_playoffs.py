@@ -292,15 +292,12 @@ def test_select_current_round_series_ignores_opponentless_next_round_series():
     assert all(item["round_rank"] == 1 for item in selected)
 
 
-def test_select_current_round_series_advances_only_when_next_round_started():
+def test_select_current_round_series_advances_when_next_round_has_matchup():
     series = [
         {"teams": {"away": {"team": {"abbreviation": "BOS"}, "score": 4}, "home": {"team": {"abbreviation": "ORL"}, "score": 1}}, "round_rank": 1},
         {"teams": {"away": {"team": {"abbreviation": "NYK"}, "score": 4}, "home": {"team": {"abbreviation": "DET"}, "score": 2}}, "round_rank": 1},
         {"teams": {"away": {"team": {"abbreviation": "BOS"}, "score": 0}, "home": {"team": {"abbreviation": "NYK"}, "score": 0}, "next_text": "TBD"}, "round_rank": 2},
     ]
-    assert all(item["round_rank"] == 1 for item in nba_playoffs._select_current_round_series(series))
-
-    series[2]["next_text"] = "Tonight 8:00 PM"
     selected = nba_playoffs._select_current_round_series(series)
     assert len(selected) == 1
     assert selected[0]["round_rank"] == 2
@@ -365,3 +362,16 @@ def test_compose_canvas_uses_single_series_per_row_on_low_resolution(monkeypatch
     assert draw_calls[1] == (nba_playoffs.WEST_X, block_height + nba_playoffs.BLOCK_SPACING)
     assert canvas.width == nba_playoffs.WIDTH
 
+
+def test_select_current_round_series_advances_when_prior_round_complete():
+    series = [
+        {"teams": {"away": {"score": 4}, "home": {"score": 1}}, "round_rank": 1},
+        {"teams": {"away": {"score": 4}, "home": {"score": 3}}, "round_rank": 1},
+        {"teams": {"away": {"score": 0}, "home": {"score": 0}}, "round_rank": 2},
+        {"teams": {"away": {"score": 0}, "home": {"score": 0}}, "round_rank": 2},
+    ]
+
+    selected = nba_playoffs._select_current_round_series(series)
+
+    assert len(selected) == 2
+    assert all(item["round_rank"] == 2 for item in selected)
