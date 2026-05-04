@@ -906,7 +906,7 @@ def draw_weather_hourly(display, weather, transition: bool = False, hours: int =
     draw = ImageDraw.Draw(img)
 
     hours_to_show = len(forecast)
-    title = "Next 10 hours..."
+    title = "Hourly Forecast"
     title_w, title_h = draw.textsize(title, font=FONT_WEATHER_LABEL)
     title_x = (WIDTH - title_w) // 2
     title_y = 2
