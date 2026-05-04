@@ -957,13 +957,9 @@ def _select_current_round_series(series: list[dict]) -> list[dict]:
     if not ordered_ranks:
         return with_opponents
 
-    for idx, rank in enumerate(ordered_ranks):
+    for rank in ordered_ranks:
         current_round = rounds[rank]
         if any(not _is_completed_series(item) for item in current_round):
-            return current_round
-        later_rounds = ordered_ranks[idx + 1 :]
-        later_started = any(_series_has_started(item) for later in later_rounds for item in rounds[later])
-        if not later_started:
             return current_round
 
     return rounds[ordered_ranks[-1]]
