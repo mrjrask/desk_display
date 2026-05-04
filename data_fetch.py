@@ -405,12 +405,12 @@ def _camel_to_words(text: str) -> str:
 
 
 def _night_icon_name(icon: str) -> str:
-    mapping = {
-        "Clear": "Clear_night",
-        "MostlyClear": "MostlyClear_night",
-        "PartlyCloudy": "PartlyCloudy_night",
-    }
-    return mapping.get(icon, icon)
+    value = str(icon or "").strip()
+    if not value:
+        return value
+    if value.endswith("_night"):
+        return value
+    return f"{value}_night"
 
 
 def _is_night_time(ts: Any, sunrise: Any, sunset: Any) -> bool:
@@ -420,7 +420,7 @@ def _is_night_time(ts: Any, sunrise: Any, sunset: Any) -> bool:
         sunset_val = int(sunset)
     except (TypeError, ValueError, OverflowError):
         return False
-    return ts_val >= sunset_val or ts_val < sunrise_val
+    return ts_val >= (sunset_val - 3600) or ts_val < sunrise_val
 
 
 def _sun_windows(daily: list[dict[str, Any]]) -> list[tuple[int, int, int]]:
