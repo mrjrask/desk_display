@@ -760,16 +760,48 @@ def _gather_hourly_forecast(
         key=lambda h: h.get("dt") if isinstance(h, dict) and h.get("dt") is not None else float("inf")
     )
 
-    # Sample the forecast every two hours so each column represents a two-hour block when there
-    # is enough data. If we only have a handful of entries, show them all to avoid dropping
-    # recent hours.
-    if len(future_hours) > hours:
-        two_hourly_forecast = future_hours[::2]
-    else:
-        two_hourly_forecast = future_hours
+    def _is_significant_change(current: dict, upcoming: dict) -> bool:
+        current_condition = _normalise_condition(current)
+        upcoming_condition = _normalise_condition(upcoming)
+        if current_condition != upcoming_condition:
+            return True
+
+        current_pop = _pop_pct_from(current)
+        upcoming_pop = _pop_pct_from(upcoming)
+        if current_pop is not None and upcoming_pop is not None and abs(upcoming_pop - current_pop) >= 20:
+            return True
+
+        try:
+            current_temp = float(current.get("temp"))
+            upcoming_temp = float(upcoming.get("temp"))
+            if abs(upcoming_temp - current_temp) >= 3:
+                return True
+        except (TypeError, ValueError):
+            pass
+
+        return False
+
+    def _select_dynamic_hour_entries(entries: list[dict], max_hours: int) -> list[dict]:
+        if len(entries) <= max_hours:
+            return entries
+
+        selected: list[dict] = []
+        idx = 0
+        while idx < len(entries) and len(selected) < max_hours:
+            current = entries[idx]
+            selected.append(current)
+            if idx + 1 >= len(entries):
+                break
+            if _is_significant_change(current, entries[idx + 1]):
+                idx += 1
+            else:
+                idx += 2
+        return selected
+
+    selected_forecast = _select_dynamic_hour_entries(future_hours, hours)
 
     forecast = []
-    for idx, hour in enumerate(two_hourly_forecast[:hours]):
+    for idx, hour in enumerate(selected_forecast[:hours]):
         if not isinstance(hour, dict):
             continue
         wind_speed = None

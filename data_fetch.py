@@ -413,12 +413,14 @@ def _night_icon_name(icon: str) -> str:
     return f"{value}_night"
 
 
-def _round_up_to_next_two_hour(ts: Any) -> Optional[int]:
+def _round_up_to_increment(ts: Any, increment_seconds: int) -> Optional[int]:
     try:
         ts_val = int(ts)
     except (TypeError, ValueError, OverflowError):
         return None
-    return ((ts_val + 7199) // 7200) * 7200
+    if increment_seconds <= 0:
+        return ts_val
+    return ((ts_val + increment_seconds - 1) // increment_seconds) * increment_seconds
 
 
 def _is_night_time_current(ts: Any, sunrise: Any, sunset: Any) -> bool:
@@ -431,13 +433,31 @@ def _is_night_time_current(ts: Any, sunrise: Any, sunset: Any) -> bool:
     return ts_val >= sunset_val or ts_val < sunrise_val
 
 
-def _is_night_time_hourly(ts: Any, sunrise: Any, sunset: Any) -> bool:
-    rounded_ts = _round_up_to_next_two_hour(ts)
-    rounded_sunrise = _round_up_to_next_two_hour(sunrise)
-    rounded_sunset = _round_up_to_next_two_hour(sunset)
+def _is_night_time_hourly(ts: Any, sunrise: Any, sunset: Any, *, increment_seconds: int) -> bool:
+    rounded_ts = _round_up_to_increment(ts, increment_seconds)
+    rounded_sunrise = _round_up_to_increment(sunrise, increment_seconds)
+    rounded_sunset = _round_up_to_increment(sunset, increment_seconds)
     if rounded_ts is None or rounded_sunrise is None or rounded_sunset is None:
         return False
     return rounded_ts >= rounded_sunset or rounded_ts < rounded_sunrise
+
+
+def _hourly_increment_seconds(hourly_entries: list[dict[str, Any]]) -> int:
+    diffs: dict[int, int] = {}
+    previous_ts: Optional[int] = None
+    for entry in hourly_entries:
+        try:
+            ts_val = int(entry.get("dt"))
+        except (TypeError, ValueError, OverflowError, AttributeError):
+            continue
+        if previous_ts is not None:
+            diff = ts_val - previous_ts
+            if diff > 0:
+                diffs[diff] = diffs.get(diff, 0) + 1
+        previous_ts = ts_val
+    if not diffs:
+        return 7200
+    return max(diffs.items(), key=lambda item: (item[1], -item[0]))[0]
 
 
 def _sun_windows(daily: list[dict[str, Any]]) -> list[tuple[int, int, int]]:
@@ -481,7 +501,14 @@ def _apply_nighttime_icons(weather: dict[str, Any]) -> dict[str, Any]:
     if not isinstance(weather, dict):
         return weather
 
-    def _apply(entry: dict[str, Any], sunrise_val: Any, sunset_val: Any, *, use_hourly_rounding: bool) -> None:
+    def _apply(
+        entry: dict[str, Any],
+        sunrise_val: Any,
+        sunset_val: Any,
+        *,
+        use_hourly_rounding: bool,
+        increment_seconds: int = 7200,
+    ) -> None:
         if not isinstance(entry, dict):
             return
         is_daylight = entry.get("is_daylight")
@@ -489,7 +516,12 @@ def _apply_nighttime_icons(weather: dict[str, Any]) -> dict[str, Any]:
             return
 
         if use_hourly_rounding:
-            is_night = _is_night_time_hourly(entry.get("dt"), sunrise_val, sunset_val)
+            is_night = _is_night_time_hourly(
+                entry.get("dt"),
+                sunrise_val,
+                sunset_val,
+                increment_seconds=increment_seconds,
+            )
         else:
             is_night = _is_night_time_current(entry.get("dt"), sunrise_val, sunset_val)
         weather_list = entry.get("weather") if isinstance(entry.get("weather"), list) else []
@@ -517,13 +549,20 @@ def _apply_nighttime_icons(weather: dict[str, Any]) -> dict[str, Any]:
             _apply(current, sunrise, sunset, use_hourly_rounding=False)
 
     hourly_entries = weather.get("hourly") if isinstance(weather.get("hourly"), list) else []
+    hourly_increment = _hourly_increment_seconds(hourly_entries)
     for hour in hourly_entries:
         sunrise = hour.get("sunrise")
         sunset = hour.get("sunset")
         if sunrise is None or sunset is None:
             sunrise, sunset = _sun_times_for(hour.get("dt"), sun_windows)
         if sunrise is not None and sunset is not None:
-            _apply(hour, sunrise, sunset, use_hourly_rounding=True)
+            _apply(
+                hour,
+                sunrise,
+                sunset,
+                use_hourly_rounding=True,
+                increment_seconds=hourly_increment,
+            )
 
     return weather
 
