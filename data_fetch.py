@@ -413,14 +413,31 @@ def _night_icon_name(icon: str) -> str:
     return f"{value}_night"
 
 
-def _is_night_time(ts: Any, sunrise: Any, sunset: Any) -> bool:
+def _round_up_to_next_two_hour(ts: Any) -> Optional[int]:
+    try:
+        ts_val = int(ts)
+    except (TypeError, ValueError, OverflowError):
+        return None
+    return ((ts_val + 7199) // 7200) * 7200
+
+
+def _is_night_time_current(ts: Any, sunrise: Any, sunset: Any) -> bool:
     try:
         ts_val = int(ts)
         sunrise_val = int(sunrise)
         sunset_val = int(sunset)
     except (TypeError, ValueError, OverflowError):
         return False
-    return ts_val >= (sunset_val - 3600) or ts_val < sunrise_val
+    return ts_val >= sunset_val or ts_val < sunrise_val
+
+
+def _is_night_time_hourly(ts: Any, sunrise: Any, sunset: Any) -> bool:
+    rounded_ts = _round_up_to_next_two_hour(ts)
+    rounded_sunrise = _round_up_to_next_two_hour(sunrise)
+    rounded_sunset = _round_up_to_next_two_hour(sunset)
+    if rounded_ts is None or rounded_sunrise is None or rounded_sunset is None:
+        return False
+    return rounded_ts >= rounded_sunset or rounded_ts < rounded_sunrise
 
 
 def _sun_windows(daily: list[dict[str, Any]]) -> list[tuple[int, int, int]]:
@@ -464,16 +481,17 @@ def _apply_nighttime_icons(weather: dict[str, Any]) -> dict[str, Any]:
     if not isinstance(weather, dict):
         return weather
 
-    def _apply(entry: dict[str, Any], sunrise_val: Any, sunset_val: Any) -> None:
+    def _apply(entry: dict[str, Any], sunrise_val: Any, sunset_val: Any, *, use_hourly_rounding: bool) -> None:
         if not isinstance(entry, dict):
             return
         is_daylight = entry.get("is_daylight")
-        if isinstance(is_daylight, bool):
-            if is_daylight:
-                return
-            is_night = True
+        if isinstance(is_daylight, bool) and is_daylight:
+            return
+
+        if use_hourly_rounding:
+            is_night = _is_night_time_hourly(entry.get("dt"), sunrise_val, sunset_val)
         else:
-            is_night = _is_night_time(entry.get("dt"), sunrise_val, sunset_val)
+            is_night = _is_night_time_current(entry.get("dt"), sunrise_val, sunset_val)
         weather_list = entry.get("weather") if isinstance(entry.get("weather"), list) else []
         if not weather_list:
             return
@@ -496,7 +514,7 @@ def _apply_nighttime_icons(weather: dict[str, Any]) -> dict[str, Any]:
         if sunrise is None or sunset is None:
             sunrise, sunset = _sun_times_for(current.get("dt"), sun_windows)
         if sunrise is not None and sunset is not None:
-            _apply(current, sunrise, sunset)
+            _apply(current, sunrise, sunset, use_hourly_rounding=False)
 
     hourly_entries = weather.get("hourly") if isinstance(weather.get("hourly"), list) else []
     for hour in hourly_entries:
@@ -505,7 +523,7 @@ def _apply_nighttime_icons(weather: dict[str, Any]) -> dict[str, Any]:
         if sunrise is None or sunset is None:
             sunrise, sunset = _sun_times_for(hour.get("dt"), sun_windows)
         if sunrise is not None and sunset is not None:
-            _apply(hour, sunrise, sunset)
+            _apply(hour, sunrise, sunset, use_hourly_rounding=True)
 
     return weather
 
