@@ -59,6 +59,34 @@ def test_gather_hourly_forecast_orders_future_entries():
     assert [entry["time"] for entry in forecast] == ["10am", "11am", "12pm"]
 
 
+def test_gather_hourly_forecast_uses_two_hour_steps_when_stable():
+    now = datetime.datetime(2024, 1, 1, 9, 0, tzinfo=CENTRAL_TIME)
+    weather = {
+        "hourly": [_build_hourly_entry(now + datetime.timedelta(hours=offset)) for offset in range(6)]
+    }
+
+    forecast = _gather_hourly_forecast(weather, 4, now=now)
+
+    assert [entry["time"] for entry in forecast] == ["9am", "11am", "1pm"]
+
+
+def test_gather_hourly_forecast_keeps_one_hour_steps_on_significant_changes():
+    now = datetime.datetime(2024, 1, 1, 9, 0, tzinfo=CENTRAL_TIME)
+    weather = {
+        "hourly": [
+            _build_hourly_entry(now + datetime.timedelta(hours=0), main="Clouds"),
+            _build_hourly_entry(now + datetime.timedelta(hours=1), main="Rain"),
+            _build_hourly_entry(now + datetime.timedelta(hours=2), main="Clear"),
+            _build_hourly_entry(now + datetime.timedelta(hours=3), main="Clouds"),
+            _build_hourly_entry(now + datetime.timedelta(hours=4), main="Clouds"),
+        ]
+    }
+
+    forecast = _gather_hourly_forecast(weather, 4, now=now)
+
+    assert [entry["time"] for entry in forecast] == ["9am", "10am", "11am", "12pm"]
+
+
 def test_gather_daily_forecast_includes_icon_metadata():
     now = datetime.datetime(2024, 1, 1, 9, 0, tzinfo=CENTRAL_TIME)
     weather = {
