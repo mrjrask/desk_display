@@ -248,7 +248,7 @@ def test_select_current_round_series_prefers_lowest_round_rank():
     assert all(item["round_rank"] == 1 for item in selected)
 
 
-def test_select_current_round_series_keeps_all_when_round_unknown():
+def test_select_current_round_series_keeps_all_active_when_round_unknown():
     series = [
         {"teams": {"away": {"score": 1}, "home": {"score": 1}}},
         {"teams": {"away": {"score": 2}, "home": {"score": 0}}},
@@ -257,6 +257,20 @@ def test_select_current_round_series_keeps_all_when_round_unknown():
     selected = nba_playoffs._select_current_round_series(series)
 
     assert selected == series
+
+
+
+
+def test_select_current_round_series_round_unknown_filters_completed_series():
+    series = [
+        {"teams": {"away": {"score": 4}, "home": {"score": 1}}},
+        {"teams": {"away": {"score": 2}, "home": {"score": 2}}},
+        {"teams": {"away": {"score": 1}, "home": {"score": 3}}},
+    ]
+
+    selected = nba_playoffs._select_current_round_series(series)
+
+    assert selected == series[1:]
 
 
 def test_round_rank_from_text_supports_common_labels():
