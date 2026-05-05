@@ -931,6 +931,10 @@ def draw_weather_hourly(display, weather, transition: bool = False, hours: int =
     card_height = card_bottom - card_top
     x_start = (WIDTH - (hours_to_show * col_w + gap * (hours_to_show - 1))) // 2
 
+   # Keep icon vertical placement identical between Hourly and Next 5 Days cards.
+    icon_area_top_offset = int(card_height * 0.28)
+    icon_area_bottom_offset = int(card_height * 0.62)
+
     card_layouts = []
 
     for idx, hour in enumerate(forecast):
@@ -948,14 +952,14 @@ def draw_weather_hourly(display, weather, transition: bool = False, hours: int =
         time_label = hour.get("time", "")
         time_w, time_h = draw.textsize(time_label, font=time_font)
 
+        icon_area_top = card_top + icon_area_top_offset
+        icon_area_bottom = card_top + icon_area_bottom_offset
+
         trend_area_top = card_top + 6 + time_h + 4
-        trend_area_bottom = card_top + int(card_height * 0.30)
+        trend_area_bottom = icon_area_top - 4
         if trend_area_bottom - trend_area_top < 14:
             trend_area_bottom = trend_area_top + 14
 
-        # Match Next 5 Days icon/stat area proportions for visual consistency.
-        icon_area_top = trend_area_bottom + 4
-        icon_area_bottom = card_top + int(card_height * 0.64)
         stat_area_top = icon_area_bottom + 3
         stat_area_bottom = card_bottom - 6
 
@@ -1178,6 +1182,9 @@ def draw_weather_daily(display, weather, transition: bool = False, days: int = 5
     card_top = title_h + 6
     card_bottom = HEIGHT - 6
     card_height = card_bottom - card_top
+    # Mirror Hourly icon band so both screens align vertically.
+    icon_area_top_offset = int(card_height * 0.28)
+    icon_area_bottom_offset = int(card_height * 0.62)
     icon_cache: dict[tuple[Optional[str], Optional[str], bool], Optional[Image.Image]] = {}
     icon_size = max(16, _scaled_weather_icon_size(min(WEATHER_ICON_SIZE, col_w - 10)))
     day_font = FONT_WEATHER_DETAILS_SMALL_BOLD
@@ -1209,8 +1216,8 @@ def draw_weather_daily(display, weather, transition: bool = False, days: int = 5
         day_y = card_top + 6
         draw.text((cx - day_w // 2, day_y), day_label, font=day_font, fill=(235, 235, 235))
 
-        icon_area_top = day_y + day_h + 4
-        icon_area_bottom = card_top + int(card_height * 0.64)
+        icon_area_top = card_top + icon_area_top_offset
+        icon_area_bottom = card_top + icon_area_bottom_offset
         stat_area_top = icon_area_bottom + 3
         stat_area_bottom = card_bottom - 6
 
