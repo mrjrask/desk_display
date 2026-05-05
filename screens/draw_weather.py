@@ -856,8 +856,18 @@ def _gather_daily_forecast(weather: object, days: int) -> list[dict]:
     if not isinstance(weather, dict):
         return []
     daily = weather.get("daily") if isinstance(weather.get("daily"), list) else []
+    hourly = weather.get("hourly") if isinstance(weather.get("hourly"), list) else []
     if not daily:
         return []
+
+    hourly_by_day: dict[datetime.date, list[dict]] = {}
+    for hour in hourly:
+        if not isinstance(hour, dict):
+            continue
+        hour_dt = timestamp_to_datetime(hour.get("dt"), CENTRAL_TIME)
+        if not hour_dt:
+            continue
+        hourly_by_day.setdefault(hour_dt.date(), []).append(hour)
 
     start_idx = 1 if len(daily) > 1 else 0
     entries = daily[start_idx : start_idx + days]
@@ -878,6 +888,40 @@ def _gather_daily_forecast(weather: object, days: int) -> list[dict]:
         except Exception:
             lo_val = None
 
+        day_dt = timestamp_to_datetime(day.get("dt"), CENTRAL_TIME)
+        day_hours = hourly_by_day.get(day_dt.date(), []) if day_dt else []
+
+        daily_wind_speed = day.get("wind_speed")
+        daily_wind_deg = day.get("wind_deg")
+        daily_uvi = day.get("uvi")
+
+        if daily_wind_speed is None and day_hours:
+            wind_values = []
+            for hour in day_hours:
+                try:
+                    wind_values.append(float(hour.get("wind_speed")))
+                except Exception:
+                    continue
+            if wind_values:
+                daily_wind_speed = sum(wind_values) / len(wind_values)
+
+        if daily_wind_deg is None and day_hours:
+            for hour in day_hours:
+                deg = hour.get("wind_deg")
+                if isinstance(deg, (int, float)):
+                    daily_wind_deg = deg
+                    break
+
+        if daily_uvi is None and day_hours:
+            uv_values = []
+            for hour in day_hours:
+                try:
+                    uv_values.append(float(hour.get("uvi")))
+                except Exception:
+                    continue
+            if uv_values:
+                daily_uvi = max(uv_values)
+
         entry = {
             "day": _format_day_label(day.get("dt"), index=idx + 1),
             "hi": hi_val,
@@ -887,9 +931,9 @@ def _gather_daily_forecast(weather: object, days: int) -> list[dict]:
             "condition": _normalise_condition(day),
             "icon": daily_weather.get("icon"),
             "condition_code": daily_weather.get("condition_code"),
-            "wind_speed": day.get("wind_speed"),
-            "wind_dir": _wind_arrow(day.get("wind_deg")) or wind_direction(day.get("wind_deg")),
-            "uvi": day.get("uvi"),
+            "wind_speed": daily_wind_speed,
+            "wind_dir": _wind_arrow(daily_wind_deg) or wind_direction(daily_wind_deg),
+            "uvi": daily_uvi,
         }
         forecast.append(entry)
     return forecast
