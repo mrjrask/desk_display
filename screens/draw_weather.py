@@ -1385,7 +1385,8 @@ def draw_weather_daily(display, weather, transition: bool = False, days: int = 5
                 text_x = cx - text_w // 2
                 draw.text((text_x, text_y), text, font=font, fill=color)
                 if isinstance(text, str) and text in underlined_labels:
-                    underline_y = min(stat_area_bottom - 1, text_y + text_h + 1)
+                    bbox = draw.textbbox((text_x, text_y), text, font=font)
+                    underline_y = min(stat_area_bottom - 1, bbox[3] + 1)
                     draw.line((text_x, underline_y, text_x + text_w - 1, underline_y), fill=color, width=1)
 
     if is_hyperpixel_next_layout():
