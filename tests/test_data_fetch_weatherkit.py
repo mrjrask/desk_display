@@ -33,6 +33,9 @@ def test_weatherkit_measurements_extract_wind_gust_and_speed():
                     "temperatureMax": 20,
                     "temperatureMin": 5,
                     "precipitationChance": 0,
+                    "windSpeed": {"value": 6.8},
+                    "windDirection": 225,
+                    "uvIndex": 5,
                     "conditionCode": "Clear",
                     "forecastStart": _iso("00:00:00"),
                 }
@@ -67,6 +70,10 @@ def test_weatherkit_measurements_extract_wind_gust_and_speed():
     hourly = normalized["hourly"][0]
     assert hourly["wind_speed"] == pytest.approx(5.1)
     assert hourly["wind_gust"] == pytest.approx(11.2)
+    daily = normalized["daily"][0]
+    assert daily["wind_speed"] == pytest.approx(6.8)
+    assert daily["wind_deg"] == 225
+    assert daily["uvi"] == 5
 
 
 def test_save_pressure_history_creates_parent_directory(tmp_path, monkeypatch):
