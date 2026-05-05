@@ -1359,6 +1359,7 @@ def draw_weather_daily(display, weather, transition: bool = False, days: int = 5
             (uv_value_text, FONT_WEATHER_DETAILS_TINY_MICRO, uv_color, None),
             (pop_text, pop_font, precip_color, precip_icon),
         ]
+        underlined_labels = {"Wind", "UV Peak"}
         segment_h = max(1, (stat_area_bottom - stat_area_top) / max(1, len(stats)))
         for stat_idx, (text, font, color, icon) in enumerate(stats):
             if isinstance(text, Image.Image):
@@ -1383,6 +1384,9 @@ def draw_weather_daily(display, weather, transition: bool = False, days: int = 5
             else:
                 text_x = cx - text_w // 2
                 draw.text((text_x, text_y), text, font=font, fill=color)
+                if isinstance(text, str) and text in underlined_labels:
+                    underline_y = min(stat_area_bottom - 1, text_y + text_h + 1)
+                    draw.line((text_x, underline_y, text_x + text_w - 1, underline_y), fill=color, width=1)
 
     if is_hyperpixel_next_layout():
         draw.rectangle((0, 0, WIDTH, title_y + title_h + 2), fill=background)
