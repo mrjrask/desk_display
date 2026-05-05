@@ -856,8 +856,18 @@ def _gather_daily_forecast(weather: object, days: int) -> list[dict]:
     if not isinstance(weather, dict):
         return []
     daily = weather.get("daily") if isinstance(weather.get("daily"), list) else []
+    hourly = weather.get("hourly") if isinstance(weather.get("hourly"), list) else []
     if not daily:
         return []
+
+    hourly_by_day: dict[datetime.date, list[dict]] = {}
+    for hour in hourly:
+        if not isinstance(hour, dict):
+            continue
+        hour_dt = timestamp_to_datetime(hour.get("dt"), CENTRAL_TIME)
+        if not hour_dt:
+            continue
+        hourly_by_day.setdefault(hour_dt.date(), []).append(hour)
 
     start_idx = 1 if len(daily) > 1 else 0
     entries = daily[start_idx : start_idx + days]
@@ -878,6 +888,40 @@ def _gather_daily_forecast(weather: object, days: int) -> list[dict]:
         except Exception:
             lo_val = None
 
+        day_dt = timestamp_to_datetime(day.get("dt"), CENTRAL_TIME)
+        day_hours = hourly_by_day.get(day_dt.date(), []) if day_dt else []
+
+        daily_wind_speed = day.get("wind_speed")
+        daily_wind_deg = day.get("wind_deg")
+        daily_uvi = day.get("uvi")
+
+        if daily_wind_speed is None and day_hours:
+            wind_values = []
+            for hour in day_hours:
+                try:
+                    wind_values.append(float(hour.get("wind_speed")))
+                except Exception:
+                    continue
+            if wind_values:
+                daily_wind_speed = sum(wind_values) / len(wind_values)
+
+        if daily_wind_deg is None and day_hours:
+            for hour in day_hours:
+                deg = hour.get("wind_deg")
+                if isinstance(deg, (int, float)):
+                    daily_wind_deg = deg
+                    break
+
+        if daily_uvi is None and day_hours:
+            uv_values = []
+            for hour in day_hours:
+                try:
+                    uv_values.append(float(hour.get("uvi")))
+                except Exception:
+                    continue
+            if uv_values:
+                daily_uvi = max(uv_values)
+
         entry = {
             "day": _format_day_label(day.get("dt"), index=idx + 1),
             "hi": hi_val,
@@ -887,6 +931,9 @@ def _gather_daily_forecast(weather: object, days: int) -> list[dict]:
             "condition": _normalise_condition(day),
             "icon": daily_weather.get("icon"),
             "condition_code": daily_weather.get("condition_code"),
+            "wind_speed": daily_wind_speed,
+            "wind_dir": _wind_arrow(daily_wind_deg) or wind_direction(daily_wind_deg),
+            "uvi": daily_uvi,
         }
         forecast.append(entry)
     return forecast
@@ -1250,6 +1297,26 @@ def draw_weather_daily(display, weather, transition: bool = False, days: int = 5
 
         hi_value = f"{hi_val}°" if hi_val is not None else "—"
         lo_value = f"{lo_val}°" if lo_val is not None else "—"
+        hi_line = _render_stat_text(
+            [
+                ("Hi ", stat_font, (235, 235, 235)),
+                (hi_value, stat_font, _temperature_chart_color(hi_val)),
+            ]
+        )
+        lo_line = _render_stat_text(
+            [
+                ("Lo ", stat_font, (235, 235, 235)),
+                (lo_value, stat_font, _temperature_chart_color(lo_val)),
+            ]
+        )
+
+        above_gap = 2
+        total_above_h = hi_line.height + lo_line.height + above_gap
+        above_start_y = day_y + day_h + max(1, (icon_area_top - (day_y + day_h) - total_above_h) // 2)
+        hi_x = cx - hi_line.width // 2
+        lo_x = cx - lo_line.width // 2
+        img.paste(hi_line, (hi_x, above_start_y), hi_line)
+        img.paste(lo_line, (lo_x, above_start_y + hi_line.height + above_gap), lo_line)
 
         pop_text = "—"
         precip_icon = None
@@ -1267,29 +1334,27 @@ def draw_weather_daily(display, weather, transition: bool = False, days: int = 5
                 resized_w = max(1, int(round(precip_icon.width * scale)))
                 precip_icon = precip_icon.resize((resized_w, target_icon_size), Image.Resampling.LANCZOS)
 
+        wind_speed_raw = day.get("wind_speed")
+        try:
+            wind_speed_val = int(round(float(wind_speed_raw)))
+        except Exception:
+            wind_speed_val = None
+        wind_dir = day.get("wind_dir") or ""
+        wind_text = "Wind —"
+        if wind_speed_val is not None:
+            wind_text = f"Wind {wind_dir} {wind_speed_val} mph".replace("  ", " ").strip()
+
+        uvi_raw = day.get("uvi")
+        try:
+            uvi_val = int(round(float(uvi_raw)))
+        except Exception:
+            uvi_val = None
+        uv_text = "UV Peak —" if uvi_val is None else f"UV Peak {uvi_val}"
+        uv_color = uv_index_color(uvi_val) if uvi_val is not None else (190, 190, 190)
+
         stats = [
-            (
-                _render_stat_text(
-                    [
-                        ("Hi ", stat_font, (235, 235, 235)),
-                        (hi_value, stat_font, _temperature_chart_color(hi_val)),
-                    ]
-                ),
-                None,
-                None,
-                None,
-            ),
-            (
-                _render_stat_text(
-                    [
-                        ("Lo ", stat_font, (235, 235, 235)),
-                        (lo_value, stat_font, _temperature_chart_color(lo_val)),
-                    ]
-                ),
-                None,
-                None,
-                None,
-            ),
+            (wind_text, FONT_WEATHER_DETAILS_TINY_MICRO, (190, 190, 190), None),
+            (uv_text, FONT_WEATHER_DETAILS_TINY_MICRO, uv_color, None),
             (pop_text, pop_font, precip_color, precip_icon),
         ]
         segment_h = max(1, (stat_area_bottom - stat_area_top) / max(1, len(stats)))
