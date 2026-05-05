@@ -957,8 +957,9 @@ def draw_weather_hourly(display, weather, transition: bool = False, hours: int =
         icon_area_top = trend_area_bottom + 6
         icon_area_bottom = card_top + int(card_height * 0.68)
 
-        stat_area_top = icon_area_bottom + 8
-        stat_area_bottom = card_bottom - (10 if is_hyperpixel_4_square_layout() else 8)
+        # Match Next 5 Days vertical stat spacing for better visual consistency.
+        stat_area_top = icon_area_bottom + 6
+        stat_area_bottom = card_bottom - 6
 
         card_layouts.append(
             {
@@ -1139,8 +1140,7 @@ def draw_weather_hourly(display, weather, transition: bool = False, hours: int =
 
                 center_y = stat_area_top + segment_height * (idx + 0.5)
                 text_y = int(center_y - text_h / 2)
-                bottom_clamp = stat_area_bottom - text_h - (1 if is_hyperpixel_4_square_layout() else 0)
-                text_y = max(stat_area_top, min(text_y, bottom_clamp))
+                text_y = max(stat_area_top, min(text_y, stat_area_bottom - text_h))
 
                 if icon:
                     # Render icon + text side by side
