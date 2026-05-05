@@ -434,6 +434,18 @@ def _is_night_time_current(ts: Any, sunrise: Any, sunset: Any) -> bool:
 
 
 def _is_night_time_hourly(ts: Any, sunrise: Any, sunset: Any, *, increment_seconds: int) -> bool:
+    try:
+        ts_val = int(ts)
+        local_dt = datetime.datetime.fromtimestamp(ts_val, CENTRAL_TIME)
+    except (TypeError, ValueError, OverflowError):
+        local_dt = None
+
+    if local_dt is not None:
+        hour = local_dt.hour
+        is_dst = bool(local_dt.dst())
+        night_start_hour = 18 if is_dst else 17
+        return hour >= night_start_hour or hour < 5
+
     rounded_ts = _round_up_to_increment(ts, increment_seconds)
     rounded_sunrise = _round_up_to_increment(sunrise, increment_seconds)
     rounded_sunset = _round_up_to_increment(sunset, increment_seconds)
