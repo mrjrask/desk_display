@@ -729,6 +729,9 @@ def _normalise_weatherkit_response(data: dict[str, Any]) -> Optional[dict[str, A
                 "moonset": _parse_iso_timestamp(day.get("moonset")),
                 "moonPhase": day.get("moonPhase"),
                 "pop": day.get("precipitationChance"),
+                "wind_speed": _measurement_value(day.get("windSpeed")),
+                "wind_deg": day.get("windDirection"),
+                "uvi": day.get("uvIndex"),
                 "weather": [
                     {
                         "description": day_desc,
