@@ -932,7 +932,6 @@ def draw_weather_hourly(display, weather, transition: bool = False, hours: int =
     x_start = (WIDTH - (hours_to_show * col_w + gap * (hours_to_show - 1))) // 2
 
     card_layouts = []
-    temps = []
 
     for idx, hour in enumerate(forecast):
         x0 = x_start + idx * (col_w + gap)
@@ -949,15 +948,14 @@ def draw_weather_hourly(display, weather, transition: bool = False, hours: int =
         time_label = hour.get("time", "")
         time_w, time_h = draw.textsize(time_label, font=time_font)
 
-        trend_area_top = card_top + 6 + time_h + 6
-        trend_area_bottom = card_top + int(card_height * 0.36)
-        if trend_area_bottom - trend_area_top < 16:
-            trend_area_bottom = trend_area_top + 16
+        trend_area_top = card_top + 6 + time_h + 4
+        trend_area_bottom = card_top + int(card_height * 0.30)
+        if trend_area_bottom - trend_area_top < 14:
+            trend_area_bottom = trend_area_top + 14
 
-        icon_area_top = trend_area_bottom + 6
-        icon_area_bottom = card_top + int(card_height * 0.68)
-
-        # Match Next 5 Days vertical stat spacing for better visual consistency.
+        # Match Next 5 Days icon/stat area proportions for visual consistency.
+        icon_area_top = trend_area_bottom + 4
+        icon_area_bottom = card_top + int(card_height * 0.64)
         stat_area_top = icon_area_bottom + 6
         stat_area_bottom = card_bottom - 6
 
@@ -974,32 +972,6 @@ def draw_weather_hourly(display, weather, transition: bool = False, hours: int =
                 "stat_area": (stat_area_top, stat_area_bottom),
             }
         )
-        temps.append(hour.get("temp", 0))
-
-    if temps:
-        min_temp = min(temps)
-        max_temp = max(temps)
-    else:
-        min_temp = max_temp = 0
-
-    temp_range = max(1, max_temp - min_temp)
-
-    for layout in card_layouts:
-        hour = layout["hour"]
-        x0, x1 = layout["x0"], layout["x1"]
-        cx = layout["cx"]
-        time_label = layout["time_label"]
-        time_w, time_h = layout["time_size"]
-        trend_top, trend_bottom = layout["trend_area"]
-        icon_area_top, icon_area_bottom = layout["icon_area"]
-        stat_area_top, stat_area_bottom = layout["stat_area"]
-        stat_area_height = max(1, stat_area_bottom - stat_area_top)
-
-        temp_val = hour.get("temp", 0)
-        temp_frac = (temp_val - min_temp) / temp_range
-        temp_y = int(trend_bottom - temp_frac * (trend_bottom - trend_top))
-        layout["temp_y"] = temp_y
-
         draw.text((cx - time_w // 2, card_top + 6), time_label, font=time_font, fill=(235, 235, 235))
 
     for layout in card_layouts:
@@ -1010,12 +982,10 @@ def draw_weather_hourly(display, weather, transition: bool = False, hours: int =
         icon_area_top, icon_area_bottom = layout["icon_area"]
         stat_area_top, stat_area_bottom = layout["stat_area"]
         stat_area_height = max(1, stat_area_bottom - stat_area_top)
-        temp_y = layout.get("temp_y", trend_bottom)
-
         temp_val = hour.get("temp", 0)
         temp_str = f"{temp_val}°"
         temp_w, temp_h = draw.textsize(temp_str, font=FONT_CONDITION)
-        temp_text_y = max(trend_top, min(trend_bottom - temp_h, temp_y - temp_h // 2))
+        temp_text_y = trend_top + max(0, (trend_bottom - trend_top - temp_h) // 2)
         draw.text(
             (cx - temp_w // 2, temp_text_y),
             temp_str,
