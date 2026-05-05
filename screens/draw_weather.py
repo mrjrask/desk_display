@@ -555,7 +555,7 @@ def draw_weather_screen_1(display, weather, transition=False):
         groups.append((lbl, lw, lh, val, vw, vh, gw))
 
     # horizontal layout
-    SPACING_X = 12
+    SPACING_X = 16
     total_w   = sum(g[6] for g in groups) + SPACING_X * (len(groups)-1)
     x0        = (WIDTH - total_w)//2
 
@@ -956,7 +956,7 @@ def draw_weather_hourly(display, weather, transition: bool = False, hours: int =
         # Match Next 5 Days icon/stat area proportions for visual consistency.
         icon_area_top = trend_area_bottom + 4
         icon_area_bottom = card_top + int(card_height * 0.64)
-        stat_area_top = icon_area_bottom + 6
+        stat_area_top = icon_area_bottom + 3
         stat_area_bottom = card_bottom - 6
 
         card_layouts.append(
@@ -985,7 +985,7 @@ def draw_weather_hourly(display, weather, transition: bool = False, hours: int =
         temp_val = hour.get("temp", 0)
         temp_str = f"{temp_val}°"
         temp_w, temp_h = draw.textsize(temp_str, font=FONT_CONDITION)
-        temp_text_y = trend_top + max(0, (trend_bottom - trend_top - temp_h) // 2)
+        temp_text_y = trend_top + max(0, (trend_bottom - trend_top - temp_h) // 2) - 3
         draw.text(
             (cx - temp_w // 2, temp_text_y),
             temp_str,
@@ -1211,7 +1211,7 @@ def draw_weather_daily(display, weather, transition: bool = False, days: int = 5
 
         icon_area_top = day_y + day_h + 4
         icon_area_bottom = card_top + int(card_height * 0.64)
-        stat_area_top = icon_area_bottom + 6
+        stat_area_top = icon_area_bottom + 3
         stat_area_bottom = card_bottom - 6
 
         icon_img = None
