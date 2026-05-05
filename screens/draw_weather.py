@@ -81,7 +81,7 @@ PRESSURE_TREND_SYMBOLS = {
     "steady": ("↔", (255, 255, 255)),
 }
 EMOJI_DRAW_KWARGS = {"embedded_color": True} if EMOJI_EMBEDDED_COLOR else {}
-WEATHER_ICON_SCALE = 0.9
+WEATHER_ICON_SCALE = 0.8
 TEMPERATURE_COLOR_STOPS_F: tuple[tuple[float, tuple[int, int, int]], ...] = (
     (-10.0, (211, 46, 179)),
     (0.0, (172, 45, 176)),
