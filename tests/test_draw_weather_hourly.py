@@ -121,6 +121,41 @@ def test_gather_daily_forecast_includes_icon_metadata():
     ]
 
 
+def test_gather_daily_forecast_falls_back_to_hourly_wind_and_uv():
+    now = datetime.datetime(2024, 1, 1, 9, 0, tzinfo=CENTRAL_TIME)
+    weather = {
+        "daily": [
+            {
+                "dt": int(now.timestamp()),
+                "temp": {"max": 50, "min": 31},
+                "weather": [{"main": "Clouds", "icon": "Cloudy", "condition_code": "Cloudy"}],
+            },
+            {
+                "dt": int((now + datetime.timedelta(days=1)).timestamp()),
+                "temp": {"max": 55, "min": 35},
+                "pop": 0.2,
+                "weather": [{"main": "Rain", "icon": "Rain", "condition_code": "Rain"}],
+            },
+        ],
+        "hourly": [
+            _build_hourly_entry(now + datetime.timedelta(days=1, hours=1)),
+            _build_hourly_entry(now + datetime.timedelta(days=1, hours=2)),
+        ],
+    }
+    weather["hourly"][0]["wind_speed"] = 10
+    weather["hourly"][0]["wind_deg"] = 135
+    weather["hourly"][0]["uvi"] = 4
+    weather["hourly"][1]["wind_speed"] = 14
+    weather["hourly"][1]["wind_deg"] = 180
+    weather["hourly"][1]["uvi"] = 6
+
+    forecast = _gather_daily_forecast(weather, 1)
+
+    assert forecast[0]["wind_speed"] == 12
+    assert forecast[0]["wind_dir"] in {"↘", "SE"}
+    assert forecast[0]["uvi"] == 6
+
+
 def test_temperature_chart_color_uses_expected_band_colors():
     assert _temperature_chart_color(-20) == (211, 46, 179)
     assert _temperature_chart_color(60) == (255, 214, 0)
