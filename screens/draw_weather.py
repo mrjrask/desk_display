@@ -1340,21 +1340,23 @@ def draw_weather_daily(display, weather, transition: bool = False, days: int = 5
         except Exception:
             wind_speed_val = None
         wind_dir = day.get("wind_dir") or ""
-        wind_text = "Wind —"
+        wind_value_text = "—"
         if wind_speed_val is not None:
-            wind_text = f"Wind {wind_dir} {wind_speed_val} mph".replace("  ", " ").strip()
+            wind_value_text = f"{wind_dir} {wind_speed_val} mph".replace("  ", " ").strip()
 
         uvi_raw = day.get("uvi")
         try:
             uvi_val = int(round(float(uvi_raw)))
         except Exception:
             uvi_val = None
-        uv_text = "UV Peak —" if uvi_val is None else f"UV Peak {uvi_val}"
+        uv_value_text = "—" if uvi_val is None else f"{uvi_val}"
         uv_color = uv_index_color(uvi_val) if uvi_val is not None else (190, 190, 190)
 
         stats = [
-            (wind_text, FONT_WEATHER_DETAILS_TINY_MICRO, (190, 190, 190), None),
-            (uv_text, FONT_WEATHER_DETAILS_TINY_MICRO, uv_color, None),
+            ("Wind", FONT_WEATHER_DETAILS_TINY_MICRO, (190, 190, 190), None),
+            (wind_value_text, FONT_WEATHER_DETAILS_TINY_MICRO, (190, 190, 190), None),
+            ("UV Peak", FONT_WEATHER_DETAILS_TINY_MICRO, (190, 190, 190), None),
+            (uv_value_text, FONT_WEATHER_DETAILS_TINY_MICRO, uv_color, None),
             (pop_text, pop_font, precip_color, precip_icon),
         ]
         segment_h = max(1, (stat_area_bottom - stat_area_top) / max(1, len(stats)))
