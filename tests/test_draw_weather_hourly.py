@@ -109,7 +109,7 @@ def test_gather_daily_forecast_includes_icon_metadata():
 
     assert forecast == [
         {
-            "day": "Tue",
+            "day": "Tmrw",
             "hi": 55,
             "lo": 35,
             "pop": 20,
@@ -117,6 +117,9 @@ def test_gather_daily_forecast_includes_icon_metadata():
             "condition": "Rain",
             "icon": "Rain",
             "condition_code": "Rain",
+            "wind_speed": None,
+            "wind_dir": "",
+            "uvi": None,
         }
     ]
 

@@ -702,6 +702,8 @@ def _normalise_condition(hour: dict) -> str:
 
 def _format_day_label(timestamp: Optional[int], *, index: int) -> str:
     dt = timestamp_to_datetime(timestamp, CENTRAL_TIME)
+    if index == 1:
+        return "Tmrw"
     if dt:
         return dt.strftime("%a")
     return f"+{index}d"
