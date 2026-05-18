@@ -1253,13 +1253,14 @@ def draw_sports_screen(display, game, title, transition=False, screen_id: Option
     at_x = left_x + frame_w + gap
     right_x = at_x + at_w + gap
 
-    def _fit_logo_to_frame(logo: Image.Image | None, scale_adjust: float = 1.0) -> Image.Image | None:
+    def _fit_logo_to_frame(logo: Image.Image | None, scale_adjust: float = 1.0, frame_width: Optional[int] = None) -> Image.Image | None:
         if not logo or frame_w <= 0 or logo_h <= 0:
             return logo
         width, height = logo.size
         if width <= 0 or height <= 0:
             return logo
-        scale = min(frame_w / float(width), logo_h / float(height), 1.0)
+        usable_frame_w = max(1, int(frame_width if frame_width is not None else frame_w))
+        scale = min(usable_frame_w / float(width), logo_h / float(height), 1.0)
         scale *= NEXT_GAME_LOGO_SCALE * scale_adjust
         if scale >= 1.0:
             return logo
@@ -1270,11 +1271,12 @@ def draw_sports_screen(display, game, title, transition=False, screen_id: Option
     def _draw_logo_box(frame_x: int) -> None:
         return None
 
-    def _paste_logo(logo, frame_x, scale_adjust: float = 1.0):
-        logo = _fit_logo_to_frame(logo, scale_adjust=scale_adjust)
+    def _paste_logo(logo, frame_x, scale_adjust: float = 1.0, frame_width: Optional[int] = None):
+        logo = _fit_logo_to_frame(logo, scale_adjust=scale_adjust, frame_width=frame_width)
         if not logo:
             return
-        lx = frame_x + (frame_w - logo.width) // 2
+        usable_frame_w = max(1, int(frame_width if frame_width is not None else frame_w))
+        lx = frame_x + (usable_frame_w - logo.width) // 2
         ly = row_y + (logo_h - logo.height) // 2
         img.paste(logo, (lx, ly), logo)
 
@@ -1314,10 +1316,10 @@ def draw_sports_screen(display, game, title, transition=False, screen_id: Option
         )
 
         _draw_logo_box(away_logo_x)
-        _paste_logo(logo_away, away_logo_x + max(0, (frame_w - v2_logo_frame_w) // 2), scale_adjust=v2_logo_scale_adjust)
+        _paste_logo(logo_away, away_logo_x, scale_adjust=v2_logo_scale_adjust, frame_width=v2_logo_frame_w)
         draw.text((at_x_v2, row_y + (block_h - at_h)//2), at_txt, font=FONT_TEAM_SPORTS, fill=(255,255,255))
         _draw_logo_box(home_logo_x)
-        _paste_logo(logo_home, home_logo_x + max(0, (frame_w - v2_logo_frame_w) // 2), scale_adjust=v2_logo_scale_adjust)
+        _paste_logo(logo_home, home_logo_x, scale_adjust=v2_logo_scale_adjust, frame_width=v2_logo_frame_w)
 
         def _draw_pitcher_block(frame_x: int, image_url: str, name: str, record: str) -> None:
             photo = _load_remote_image(image_url, pitcher_photo_size)

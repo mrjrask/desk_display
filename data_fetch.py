@@ -2005,7 +2005,7 @@ def _fetch_mlb_schedule(team_id):
         url = (
             f"{MLB_API_URL}"
             f"?sportId=1&teamId={team_id}"
-            f"&startDate={start}&endDate={end}&hydrate=team,linescore"
+            f"&startDate={start}&endDate={end}&hydrate=team,linescore,probablePitcher"
         )
         r = _session.get(url, timeout=10)
         r.raise_for_status()
