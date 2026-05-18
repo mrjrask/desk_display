@@ -1324,6 +1324,43 @@ def draw_sports_screen(display, game, title, transition=False, screen_id: Option
         _draw_logo_box(right_x)
         _paste_logo(logo_home, right_x)
 
+    if normalized_screen_id in {"cubs next v2", "sox next v2"}:
+        away_name, away_record, away_image_url = _extract_probable_pitcher(game.get("teams", {}).get("away", {}))
+        home_name, home_record, home_image_url = _extract_probable_pitcher(game.get("teams", {}).get("home", {}))
+
+        pitcher_photo_size = max(20, min(logo_h, HEIGHT // 6))
+        pitcher_gap = max(4, config.scale_value(4) if hyperpixel_layout else 4)
+        pitcher_row_y = min(bottom_y - pitcher_photo_size, row_y + logo_h + pitcher_gap)
+        name_font = fit_font(
+            draw,
+            "Pitcher Name",
+            FONT_DATE_SPORTS,
+            max_width=max(20, frame_w),
+            max_height=max(10, int(draw.textsize("Ag", font=FONT_DATE_SPORTS)[1] * 1.2)),
+            min_pt=8,
+        )
+
+        def _draw_pitcher_block(frame_x: int, image_url: str, name: str, record: str) -> None:
+            photo = _load_remote_image(image_url, pitcher_photo_size)
+            if photo:
+                px = frame_x + (frame_w - photo.width) // 2
+                img.paste(photo, (px, pitcher_row_y), photo)
+            def _draw_centered_line(text: str, font, y: int) -> None:
+                if not text:
+                    return
+                text_w, text_h = draw.textsize(text, font=font)
+                tx = frame_x + max(0, (frame_w - text_w) // 2)
+                draw.text((tx, y), text, font=font, fill=(255, 255, 255))
+            name_y = pitcher_row_y + pitcher_photo_size + 2
+            if name:
+                _draw_centered_line(name, name_font, name_y)
+            if record:
+                rec_y = name_y + max(10, name_font.size + 1)
+                _draw_centered_line(record, FONT_DATE_SPORTS, rec_y)
+
+        _draw_pitcher_block(left_x, away_image_url, away_name, away_record)
+        _draw_pitcher_block(right_x, home_image_url, home_name, home_record)
+
     _center_bottom_text(draw, bottom, FONT_DATE_SPORTS, margin=bottom_margin)
 
     return ScreenImage(img, displayed=False)
