@@ -183,8 +183,12 @@ def _first_str(*values) -> str:
     return ""
 
 
-def _extract_probable_pitcher(team_block: dict) -> tuple[str, str, str]:
+def _extract_probable_pitcher(team_block: dict, game: dict | None = None, side: str = "") -> tuple[str, str, str]:
     probable = (team_block or {}).get("probablePitcher") or {}
+    if not probable and isinstance(game, dict):
+        shared_probables = game.get("probablePitchers")
+        if isinstance(shared_probables, dict) and side:
+            probable = shared_probables.get(side) or {}
     person = probable.get("person") if isinstance(probable.get("person"), dict) else {}
     stats = probable.get("stats") if isinstance(probable.get("stats"), dict) else {}
     pitcher_id = probable.get("id") or person.get("id")
@@ -192,6 +196,15 @@ def _extract_probable_pitcher(team_block: dict) -> tuple[str, str, str]:
     full_name = _first_str(probable.get("fullName"), probable.get("name"), person.get("fullName"), person.get("name"))
     name = full_name.split()[-1] if full_name else ""
     record = _first_str(probable.get("record"), stats.get("record") if isinstance(stats, dict) else "")
+    if not record and isinstance(stats, dict):
+        stat_splits = stats.get("splits")
+        if isinstance(stat_splits, list) and stat_splits:
+            split_stat = stat_splits[0].get("stat") if isinstance(stat_splits[0], dict) else {}
+            if isinstance(split_stat, dict):
+                wins_from_split = split_stat.get("wins")
+                losses_from_split = split_stat.get("losses")
+                if isinstance(wins_from_split, int) and isinstance(losses_from_split, int):
+                    record = f"{wins_from_split}-{losses_from_split}"
     wins = probable.get("wins")
     losses = probable.get("losses")
     if not record and isinstance(wins, int) and isinstance(losses, int):
@@ -1240,14 +1253,14 @@ def draw_sports_screen(display, game, title, transition=False, screen_id: Option
     at_x = left_x + frame_w + gap
     right_x = at_x + at_w + gap
 
-    def _fit_logo_to_frame(logo: Image.Image | None) -> Image.Image | None:
+    def _fit_logo_to_frame(logo: Image.Image | None, scale_adjust: float = 1.0) -> Image.Image | None:
         if not logo or frame_w <= 0 or logo_h <= 0:
             return logo
         width, height = logo.size
         if width <= 0 or height <= 0:
             return logo
         scale = min(frame_w / float(width), logo_h / float(height), 1.0)
-        scale *= NEXT_GAME_LOGO_SCALE
+        scale *= NEXT_GAME_LOGO_SCALE * scale_adjust
         if scale >= 1.0:
             return logo
         new_width = max(1, int(round(width * scale)))
@@ -1257,8 +1270,8 @@ def draw_sports_screen(display, game, title, transition=False, screen_id: Option
     def _draw_logo_box(frame_x: int) -> None:
         return None
 
-    def _paste_logo(logo, frame_x):
-        logo = _fit_logo_to_frame(logo)
+    def _paste_logo(logo, frame_x, scale_adjust: float = 1.0):
+        logo = _fit_logo_to_frame(logo, scale_adjust=scale_adjust)
         if not logo:
             return
         lx = frame_x + (frame_w - logo.width) // 2
@@ -1266,18 +1279,28 @@ def draw_sports_screen(display, game, title, transition=False, screen_id: Option
         img.paste(logo, (lx, ly), logo)
 
     if normalized_screen_id in {"cubs next v2", "sox next v2"}:
-        away_name, away_record, away_image_url = _extract_probable_pitcher(game.get("teams", {}).get("away", {}))
-        home_name, home_record, home_image_url = _extract_probable_pitcher(game.get("teams", {}).get("home", {}))
+        away_name, away_record, away_image_url = _extract_probable_pitcher(
+            game.get("teams", {}).get("away", {}),
+            game=game,
+            side="away",
+        )
+        home_name, home_record, home_image_url = _extract_probable_pitcher(
+            game.get("teams", {}).get("home", {}),
+            game=game,
+            side="home",
+        )
 
-        pitcher_photo_size = max(20, min(logo_h, HEIGHT // 6))
+        v2_logo_scale_adjust = 0.78
+        v2_logo_frame_w = max(12, int(round(frame_w * 0.84)))
+        pitcher_photo_size = max(24, min(logo_h + max(3, logo_h // 6), HEIGHT // 5))
         logo_gap = max(8, gap)
-        total_v2_w = (pitcher_photo_size * 2) + frame_w + at_w + frame_w + (logo_gap * 4)
+        total_v2_w = (pitcher_photo_size * 2) + v2_logo_frame_w + at_w + v2_logo_frame_w + (logo_gap * 4)
         start_x_v2 = max(0, (WIDTH - total_v2_w) // 2)
         away_pitcher_x = start_x_v2
         away_logo_x = away_pitcher_x + pitcher_photo_size + logo_gap
-        at_x_v2 = away_logo_x + frame_w + logo_gap
+        at_x_v2 = away_logo_x + v2_logo_frame_w + logo_gap
         home_logo_x = at_x_v2 + at_w + logo_gap
-        home_pitcher_x = home_logo_x + frame_w + logo_gap
+        home_pitcher_x = home_logo_x + v2_logo_frame_w + logo_gap
 
         row_y = max(y_text + line_gap, min(row_y, bottom_y - logo_h - line_gap))
 
@@ -1291,10 +1314,10 @@ def draw_sports_screen(display, game, title, transition=False, screen_id: Option
         )
 
         _draw_logo_box(away_logo_x)
-        _paste_logo(logo_away, away_logo_x)
+        _paste_logo(logo_away, away_logo_x + max(0, (frame_w - v2_logo_frame_w) // 2), scale_adjust=v2_logo_scale_adjust)
         draw.text((at_x_v2, row_y + (block_h - at_h)//2), at_txt, font=FONT_TEAM_SPORTS, fill=(255,255,255))
         _draw_logo_box(home_logo_x)
-        _paste_logo(logo_home, home_logo_x)
+        _paste_logo(logo_home, home_logo_x + max(0, (frame_w - v2_logo_frame_w) // 2), scale_adjust=v2_logo_scale_adjust)
 
         def _draw_pitcher_block(frame_x: int, image_url: str, name: str, record: str) -> None:
             photo = _load_remote_image(image_url, pitcher_photo_size)

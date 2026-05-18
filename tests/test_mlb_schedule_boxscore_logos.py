@@ -4,6 +4,36 @@ import pytest
 import screens.mlb_schedule as mlb_schedule
 
 
+def test_extract_probable_pitcher_falls_back_to_game_level_probables():
+    game = {
+        "probablePitchers": {
+            "away": {"id": 12345, "fullName": "Jane Smith", "record": "4-2"},
+        }
+    }
+    team_block = {"team": {"name": "Chicago Cubs"}}
+
+    name, record, image_url = mlb_schedule._extract_probable_pitcher(team_block, game=game, side="away")
+
+    assert name == "Smith"
+    assert record == "4-2"
+    assert "/12345/" in image_url
+
+
+def test_extract_probable_pitcher_builds_record_from_stat_splits():
+    team_block = {
+        "probablePitcher": {
+            "person": {"id": 777, "fullName": "John Doe"},
+            "stats": {"splits": [{"stat": {"wins": 6, "losses": 1}}]},
+        }
+    }
+
+    name, record, image_url = mlb_schedule._extract_probable_pitcher(team_block)
+
+    assert name == "Doe"
+    assert record == "6-1"
+    assert "/777/" in image_url
+
+
 def test_should_show_team_logo_boxscore_for_supported_mlb_screens():
     assert mlb_schedule._should_show_team_logo_boxscore("cubs live")
     assert mlb_schedule._should_show_team_logo_boxscore("sox last")
