@@ -547,8 +547,10 @@ def build_screen_registry(context: ScreenContext) -> Tuple[Dict[str, ScreenDefin
     mlb_rotation_cursors: Dict[str, int] = {
         "cubs last": 0,
         "cubs next": 0,
+        "cubs next v2": 0,
         "sox last": 0,
         "sox next": 0,
+        "sox next v2": 0,
     }
 
     def _rotate_games(screen_id: str, primary: Any, alternate: Any) -> Any:
@@ -1212,6 +1214,17 @@ def build_screen_registry(context: ScreenContext) -> Tuple[Dict[str, ScreenDefin
             ),
             available=bool(cubs_next or cubs_next_alt),
         )
+        register(
+            "cubs next v2",
+            lambda primary=cubs_next, alternate=cubs_next_alt: draw_sports_screen(
+                context.display,
+                _rotate_games("cubs next v2", primary, alternate),
+                "Next Cubs game...",
+                screen_id="cubs next v2",
+                transition=True,
+            ),
+            available=bool(cubs_next or cubs_next_alt),
+        )
         if cubs_next_home:
             register(
                 "cubs next home",
@@ -1357,6 +1370,17 @@ def build_screen_registry(context: ScreenContext) -> Tuple[Dict[str, ScreenDefin
                 _rotate_games("sox next", primary, alternate),
                 "Next Sox game...",
                 screen_id="sox next",
+                transition=True,
+            ),
+            available=bool(sox_next or sox_next_alt),
+        )
+        register(
+            "sox next v2",
+            lambda primary=sox_next, alternate=sox_next_alt: draw_sports_screen(
+                context.display,
+                _rotate_games("sox next v2", primary, alternate),
+                "Next Sox game...",
+                screen_id="sox next v2",
                 transition=True,
             ),
             available=bool(sox_next or sox_next_alt),
