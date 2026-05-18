@@ -60,12 +60,13 @@ BLOCK_SPACING = scale_value(8)
 PAIR_SPACING = scale_value_width(4)
 SCORE_ROW_H = scale_value(28)
 STATUS_ROW_H = scale_value(12)
+# [Score 44][Logo 30][@ 12][Logo 30][Score 44] = 160
 GAME_COL_WIDTHS = [
-    scale_value_width(40),
+    scale_value_width(44),
     scale_value_width(30),
-    scale_value_width(20),
+    scale_value_width(12),
     scale_value_width(30),
-    scale_value_width(40),
+    scale_value_width(44),
 ]
 GAME_WIDTH = sum(GAME_COL_WIDTHS)
 GAME_COL_X = [0]

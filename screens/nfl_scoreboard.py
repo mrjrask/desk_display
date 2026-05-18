@@ -75,11 +75,11 @@ SUPER_BOWL_LOGO_GAP = _scale_y(6)
 SUPER_BOWL_DATE     = (2, 8)  # Feb 8
 
 COL_WIDTHS = [
-    scale_value_width(70),
+    scale_value_width(80),
     scale_value_width(60),
+    scale_value_width(40),
     scale_value_width(60),
-    scale_value_width(60),
-    scale_value_width(70),
+    scale_value_width(80),
 ]
 _TOTAL_COL_WIDTH = sum(COL_WIDTHS)
 _COL_LEFT = max(0, (WIDTH - _TOTAL_COL_WIDTH) // 2)

@@ -73,11 +73,11 @@ SEED_GAP = max(2, scale_value_width(3))
 RANK_GAP = max(0, scale_value_width(1))
 
 COL_WIDTHS = [
-    scale_value_width(70),
+    scale_value_width(80),
     scale_value_width(60),
+    scale_value_width(40),
     scale_value_width(60),
-    scale_value_width(60),
-    scale_value_width(70),
+    scale_value_width(80),
 ]
 _TOTAL_COL_WIDTH = sum(COL_WIDTHS)
 _COL_LEFT = max(0, (WIDTH - _TOTAL_COL_WIDTH) // 2)

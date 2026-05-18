@@ -79,11 +79,11 @@ REQUEST_TIMEOUT       = 10
 FETCH_CACHE_TTL_SECONDS = 60
 MLB_SPORT_IDS = "1,51"  # MLB + World Baseball Classic
 COL_WIDTHS = [
-    _scale_width(70),
+    _scale_width(80),
     _scale_width(60),
+    _scale_width(40),
     _scale_width(60),
-    _scale_width(60),
-    _scale_width(70),
+    _scale_width(80),
 ]  # total = 320 (WIDTH)
 _TOTAL_COL_WIDTH = sum(COL_WIDTHS)
 _COL_LEFT = max(0, (WIDTH - _TOTAL_COL_WIDTH) // 2)
