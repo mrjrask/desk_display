@@ -183,6 +183,66 @@ def _first_str(*values) -> str:
     return ""
 
 
+def _first_number_text(*values) -> str:
+    for value in values:
+        if value is None:
+            continue
+        if isinstance(value, str):
+            cleaned = value.strip()
+            if cleaned and cleaned not in {"-", "--", ".---"}:
+                return cleaned
+            continue
+        if isinstance(value, (int, float)):
+            return str(value)
+    return ""
+
+
+def _record_from_values(wins, losses) -> str:
+    if wins is None or losses is None:
+        return ""
+    try:
+        return f"{int(wins)}-{int(losses)}"
+    except Exception:
+        return ""
+
+
+def _format_pitcher_era(value) -> str:
+    era = _first_number_text(value)
+    if not era:
+        return ""
+    try:
+        return f"{float(era):.2f}"
+    except Exception:
+        return era
+
+
+def _format_pitcher_stat_line(record: str, era: str) -> str:
+    clean_record = (record or "").strip()
+    if clean_record.startswith("(") and clean_record.endswith(")"):
+        clean_record = clean_record[1:-1].strip()
+    clean_era = _format_pitcher_era(era)
+    if clean_record and clean_era:
+        return f"({clean_record}) {clean_era} ERA"
+    if clean_record:
+        return f"({clean_record})"
+    if clean_era:
+        return f"{clean_era} ERA"
+    return ""
+
+
+def _fit_image_within_box(image: Image.Image, box_size: int) -> Image.Image:
+    if box_size <= 0:
+        return image
+    width, height = image.size
+    if width <= 0 or height <= 0:
+        return image
+    scale = min(box_size / float(width), box_size / float(height), 1.0)
+    new_size = (max(1, int(round(width * scale))), max(1, int(round(height * scale))))
+    if new_size == image.size:
+        return image
+    return image.resize(new_size, Image.LANCZOS)
+
+
 def _extract_probable_pitcher(team_block: dict, game: dict | None = None, side: str = "") -> tuple[str, str, str]:
     probable = (team_block or {}).get("probablePitcher") or {}
     if not probable and isinstance(game, dict):
@@ -195,20 +255,31 @@ def _extract_probable_pitcher(team_block: dict, game: dict | None = None, side: 
 
     full_name = _first_str(probable.get("fullName"), probable.get("name"), person.get("fullName"), person.get("name"))
     name = full_name.split()[-1] if full_name else ""
-    record = _first_str(probable.get("record"), stats.get("record") if isinstance(stats, dict) else "")
-    if not record and isinstance(stats, dict):
+    split_stat = {}
+    if isinstance(stats, dict):
         stat_splits = stats.get("splits")
         if isinstance(stat_splits, list) and stat_splits:
             split_stat = stat_splits[0].get("stat") if isinstance(stat_splits[0], dict) else {}
-            if isinstance(split_stat, dict):
-                wins_from_split = split_stat.get("wins")
-                losses_from_split = split_stat.get("losses")
-                if isinstance(wins_from_split, int) and isinstance(losses_from_split, int):
-                    record = f"{wins_from_split}-{losses_from_split}"
-    wins = probable.get("wins")
-    losses = probable.get("losses")
-    if not record and isinstance(wins, int) and isinstance(losses, int):
-        record = f"{wins}-{losses}"
+            if not isinstance(split_stat, dict):
+                split_stat = {}
+
+    record = _first_str(probable.get("record"), stats.get("record") if isinstance(stats, dict) else "")
+    if not record:
+        record = _record_from_values(split_stat.get("wins"), split_stat.get("losses"))
+    if not record:
+        record = _record_from_values(probable.get("wins"), probable.get("losses"))
+    if not record and isinstance(stats, dict):
+        record = _record_from_values(stats.get("wins"), stats.get("losses"))
+
+    era = _first_number_text(
+        probable.get("era"),
+        probable.get("earnedRunAverage"),
+        stats.get("era") if isinstance(stats, dict) else None,
+        stats.get("earnedRunAverage") if isinstance(stats, dict) else None,
+        split_stat.get("era"),
+        split_stat.get("earnedRunAverage"),
+    )
+    stat_line = _format_pitcher_stat_line(record, era)
 
     image_url = _first_str(
         probable.get("imageUrl"),
@@ -218,7 +289,7 @@ def _extract_probable_pitcher(team_block: dict, game: dict | None = None, side: 
     )
     if not image_url and pitcher_id:
         image_url = f"https://img.mlbstatic.com/mlb-photos/image/upload/w_120,q_auto:best/v1/people/{int(pitcher_id)}/headshot/67/current"
-    return name, record, image_url
+    return name, stat_line, image_url
 
 
 def _load_remote_image(url: str, box_size: int) -> Optional[Image.Image]:
@@ -237,7 +308,7 @@ def _load_remote_image(url: str, box_size: int) -> Optional[Image.Image]:
             mtime = os.path.getmtime(cache_path)
             if (now_ts - mtime) <= PITCHER_HEADSHOT_CACHE_TTL_SECONDS:
                 cached = Image.open(cache_path).convert("RGBA")
-                return cached.resize((box_size, box_size), Image.LANCZOS)
+                return _fit_image_within_box(cached, box_size)
         except Exception:
             pass
 
@@ -252,7 +323,7 @@ def _load_remote_image(url: str, box_size: int) -> Optional[Image.Image]:
             img.save(cache_path, format="PNG")
         except Exception:
             pass
-    return img.resize((box_size, box_size), Image.LANCZOS)
+    return _fit_image_within_box(img, box_size)
 
 def _rel_date_only(official_date: str) -> str:
     """'Today', 'Tomorrow', 'Yesterday', else 'Tue M/D' (no time)."""
@@ -1306,12 +1377,18 @@ def draw_sports_screen(display, game, title, transition=False, screen_id: Option
 
         row_y = max(y_text + line_gap, min(row_y, bottom_y - logo_h - line_gap))
 
+        name_base_font = FONT_DATE_SPORTS
+        if hasattr(FONT_DATE_SPORTS, "font_variant"):
+            try:
+                name_base_font = FONT_DATE_SPORTS.font_variant(size=int(getattr(FONT_DATE_SPORTS, "size", 12)) + 2)
+            except Exception:
+                name_base_font = FONT_DATE_SPORTS
         name_font = fit_font(
             draw,
             "Pitcher Name",
-            FONT_DATE_SPORTS,
+            name_base_font,
             max_width=max(20, pitcher_photo_size + 8),
-            max_height=max(10, int(draw.textsize("Ag", font=FONT_DATE_SPORTS)[1] * 1.2)),
+            max_height=max(10, int(draw.textsize("Ag", font=name_base_font)[1] * 1.2)),
             min_pt=8,
         )
 
