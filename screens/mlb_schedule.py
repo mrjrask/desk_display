@@ -189,7 +189,8 @@ def _extract_probable_pitcher(team_block: dict) -> tuple[str, str, str]:
     stats = probable.get("stats") if isinstance(probable.get("stats"), dict) else {}
     pitcher_id = probable.get("id") or person.get("id")
 
-    name = _first_str(probable.get("fullName"), probable.get("name"), person.get("fullName"), person.get("name"))
+    full_name = _first_str(probable.get("fullName"), probable.get("name"), person.get("fullName"), person.get("name"))
+    name = full_name.split()[-1] if full_name else ""
     record = _first_str(probable.get("record"), stats.get("record") if isinstance(stats, dict) else "")
     wins = probable.get("wins")
     losses = probable.get("losses")
@@ -1191,6 +1192,8 @@ def draw_sports_screen(display, game, title, transition=False, screen_id: Option
     raw_time = game.get('startTimeCentral','TBD')
     postponed = _is_postponed_game(game)
     bottom = "Postponed" if postponed else _format_game_label(raw_date, raw_time)
+    if normalized_screen_id in {"cubs next v2", "sox next v2"} and " • " in bottom:
+        bottom = bottom.replace(" • ", " · ", 1)
     if bottom:
         try:
             _, t, _, b = draw.textbbox((0, 0), bottom, font=FONT_DATE_SPORTS)
@@ -1262,11 +1265,64 @@ def draw_sports_screen(display, game, title, transition=False, screen_id: Option
         ly = row_y + (logo_h - logo.height) // 2
         img.paste(logo, (lx, ly), logo)
 
-    _draw_logo_box(left_x)
-    _paste_logo(logo_away, left_x)
-    draw.text((at_x, row_y + (block_h - at_h)//2), at_txt, font=FONT_TEAM_SPORTS, fill=(255,255,255))
-    _draw_logo_box(right_x)
-    _paste_logo(logo_home, right_x)
+    if normalized_screen_id in {"cubs next v2", "sox next v2"}:
+        away_name, away_record, away_image_url = _extract_probable_pitcher(game.get("teams", {}).get("away", {}))
+        home_name, home_record, home_image_url = _extract_probable_pitcher(game.get("teams", {}).get("home", {}))
+
+        pitcher_photo_size = max(20, min(logo_h, HEIGHT // 6))
+        logo_gap = max(8, gap)
+        total_v2_w = (pitcher_photo_size * 2) + frame_w + at_w + frame_w + (logo_gap * 4)
+        start_x_v2 = max(0, (WIDTH - total_v2_w) // 2)
+        away_pitcher_x = start_x_v2
+        away_logo_x = away_pitcher_x + pitcher_photo_size + logo_gap
+        at_x_v2 = away_logo_x + frame_w + logo_gap
+        home_logo_x = at_x_v2 + at_w + logo_gap
+        home_pitcher_x = home_logo_x + frame_w + logo_gap
+
+        row_y = max(y_text + line_gap, min(row_y, bottom_y - logo_h - line_gap))
+
+        name_font = fit_font(
+            draw,
+            "Pitcher Name",
+            FONT_DATE_SPORTS,
+            max_width=max(20, pitcher_photo_size + 8),
+            max_height=max(10, int(draw.textsize("Ag", font=FONT_DATE_SPORTS)[1] * 1.2)),
+            min_pt=8,
+        )
+
+        _draw_logo_box(away_logo_x)
+        _paste_logo(logo_away, away_logo_x)
+        draw.text((at_x_v2, row_y + (block_h - at_h)//2), at_txt, font=FONT_TEAM_SPORTS, fill=(255,255,255))
+        _draw_logo_box(home_logo_x)
+        _paste_logo(logo_home, home_logo_x)
+
+        def _draw_pitcher_block(frame_x: int, image_url: str, name: str, record: str) -> None:
+            photo = _load_remote_image(image_url, pitcher_photo_size)
+            photo_y = row_y + max(0, (logo_h - pitcher_photo_size) // 2)
+            if photo:
+                px = frame_x + (pitcher_photo_size - photo.width) // 2
+                img.paste(photo, (px, photo_y), photo)
+            def _draw_centered_line(text: str, font, y: int) -> None:
+                if not text:
+                    return
+                text_w, text_h = draw.textsize(text, font=font)
+                tx = frame_x + max(0, (pitcher_photo_size - text_w) // 2)
+                draw.text((tx, y), text, font=font, fill=(255, 255, 255))
+            name_y = photo_y + pitcher_photo_size + 2
+            if name:
+                _draw_centered_line(name, name_font, name_y)
+            if record:
+                rec_y = name_y + max(10, name_font.size + 1)
+                _draw_centered_line(record, FONT_DATE_SPORTS, rec_y)
+
+        _draw_pitcher_block(away_pitcher_x, away_image_url, away_name, away_record)
+        _draw_pitcher_block(home_pitcher_x, home_image_url, home_name, home_record)
+    else:
+        _draw_logo_box(left_x)
+        _paste_logo(logo_away, left_x)
+        draw.text((at_x, row_y + (block_h - at_h)//2), at_txt, font=FONT_TEAM_SPORTS, fill=(255,255,255))
+        _draw_logo_box(right_x)
+        _paste_logo(logo_home, right_x)
 
     if normalized_screen_id in {"cubs next v2", "sox next v2"}:
         away_name, away_record, away_image_url = _extract_probable_pitcher(game.get("teams", {}).get("away", {}))
