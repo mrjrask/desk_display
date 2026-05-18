@@ -93,13 +93,13 @@ SCORE_ROW_H = max(1, int(round(scale_value(30) * _HD_LAYOUT_TEXT_BOOST)))
 STATUS_ROW_H = max(1, int(round(scale_value(14) * _HD_LAYOUT_TEXT_BOOST)))
 
 # Dual-game column layout (per game, 160px wide)
-# [Score 40][Logo 30][@ 20][Logo 30][Score 40] = 160
+# [Score 44][Logo 30][@ 12][Logo 30][Score 44] = 160
 GAME_COL_WIDTHS = [
-    _scale_width(40),
+    _scale_width(44),
     _scale_width(30),
-    _scale_width(20),
+    _scale_width(12),
     _scale_width(30),
-    _scale_width(40),
+    _scale_width(44),
 ]
 GAME_WIDTH = sum(GAME_COL_WIDTHS)
 GAME_COL_X = [0]

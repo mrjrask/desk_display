@@ -91,13 +91,13 @@ STATUS_ROW_H = max(1, int(round(_scale_y(14) * _HD_LAYOUT_TEXT_BOOST)))
 SUPER_BOWL_LOGO_GAP = _scale_y(6)
 
 # Dual-game column layout (per game, 160px wide)
-# [Score 40][Logo 30][@ 20][Logo 30][Score 40] = 160
+# [Score 44][Logo 30][@ 12][Logo 30][Score 44] = 160
 GAME_COL_WIDTHS = [
-    scale_value_width(40),
+    scale_value_width(44),
     scale_value_width(30),
-    scale_value_width(20),
+    scale_value_width(12),
     scale_value_width(30),
-    scale_value_width(40),
+    scale_value_width(44),
 ]
 GAME_WIDTH = sum(GAME_COL_WIDTHS)
 GAME_COL_X = [0]

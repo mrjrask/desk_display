@@ -77,11 +77,11 @@ STATUS_ROW_H        = _scale_y(18)
 REQUEST_TIMEOUT     = 10
 
 COL_WIDTHS = [
-    scale_value_width(70),
+    scale_value_width(80),
     scale_value_width(60),
+    scale_value_width(40),
     scale_value_width(60),
-    scale_value_width(60),
-    scale_value_width(70),
+    scale_value_width(80),
 ]  # total = 320 (WIDTH)
 _TOTAL_COL_WIDTH = sum(COL_WIDTHS)
 _COL_LEFT = max(0, (WIDTH - _TOTAL_COL_WIDTH) // 2)
