@@ -14,7 +14,7 @@ def test_extract_probable_pitcher_falls_back_to_game_level_probables():
 
     name, record, image_url = mlb_schedule._extract_probable_pitcher(team_block, game=game, side="away")
 
-    assert name == "Smith"
+    assert name == "Jane Smith"
     assert record == "(4-2)"
     assert "/12345/" in image_url
 
@@ -29,7 +29,7 @@ def test_extract_probable_pitcher_builds_record_from_stat_splits():
 
     name, record, image_url = mlb_schedule._extract_probable_pitcher(team_block)
 
-    assert name == "Doe"
+    assert name == "John Doe"
     assert record == "(6-1)"
     assert "/777/" in image_url
 
@@ -45,9 +45,24 @@ def test_extract_probable_pitcher_formats_record_before_era():
 
     name, record, image_url = mlb_schedule._extract_probable_pitcher(team_block)
 
-    assert name == "Doe"
+    assert name == "Jane Doe"
     assert record == "(5-3) 3.21 ERA"
     assert "/888/" in image_url
+
+
+def test_extract_probable_pitcher_reads_season_stats_record_and_era():
+    team_block = {
+        "probablePitcher": {
+            "person": {"id": 999, "fullName": "Alex Sample"},
+            "seasonStats": {"wins": 7, "losses": 4, "era": "2.98"},
+        }
+    }
+
+    name, record, image_url = mlb_schedule._extract_probable_pitcher(team_block)
+
+    assert name == "Alex Sample"
+    assert record == "(7-4) 2.98 ERA"
+    assert "/999/" in image_url
 
 
 def test_fit_image_within_box_preserves_headshot_aspect_ratio():

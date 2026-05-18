@@ -254,7 +254,7 @@ def _extract_probable_pitcher(team_block: dict, game: dict | None = None, side: 
     pitcher_id = probable.get("id") or person.get("id")
 
     full_name = _first_str(probable.get("fullName"), probable.get("name"), person.get("fullName"), person.get("name"))
-    name = full_name.split()[-1] if full_name else ""
+    name = full_name.strip() if full_name else ""
     split_stat = {}
     if isinstance(stats, dict):
         stat_splits = stats.get("splits")
@@ -263,19 +263,35 @@ def _extract_probable_pitcher(team_block: dict, game: dict | None = None, side: 
             if not isinstance(split_stat, dict):
                 split_stat = {}
 
-    record = _first_str(probable.get("record"), stats.get("record") if isinstance(stats, dict) else "")
+    season_stats = probable.get("seasonStats")
+    if not isinstance(season_stats, dict):
+        season_stats = probable.get("seasonStat")
+    if not isinstance(season_stats, dict):
+        season_stats = probable.get("pitchingStats")
+    if not isinstance(season_stats, dict):
+        season_stats = {}
+
+    record = _first_str(
+        probable.get("record"),
+        stats.get("record") if isinstance(stats, dict) else "",
+        season_stats.get("record"),
+    )
     if not record:
         record = _record_from_values(split_stat.get("wins"), split_stat.get("losses"))
     if not record:
         record = _record_from_values(probable.get("wins"), probable.get("losses"))
     if not record and isinstance(stats, dict):
         record = _record_from_values(stats.get("wins"), stats.get("losses"))
+    if not record:
+        record = _record_from_values(season_stats.get("wins"), season_stats.get("losses"))
 
     era = _first_number_text(
         probable.get("era"),
         probable.get("earnedRunAverage"),
         stats.get("era") if isinstance(stats, dict) else None,
         stats.get("earnedRunAverage") if isinstance(stats, dict) else None,
+        season_stats.get("era"),
+        season_stats.get("earnedRunAverage"),
         split_stat.get("era"),
         split_stat.get("earnedRunAverage"),
     )
@@ -290,6 +306,16 @@ def _extract_probable_pitcher(team_block: dict, game: dict | None = None, side: 
     if not image_url and pitcher_id:
         image_url = f"https://img.mlbstatic.com/mlb-photos/image/upload/w_120,q_auto:best/v1/people/{int(pitcher_id)}/headshot/67/current"
     return name, stat_line, image_url
+
+
+def _font_variant_delta(font, delta: int):
+    if hasattr(font, "font_variant"):
+        try:
+            size = int(getattr(font, "size", 12) or 12) + delta
+            return font.font_variant(size=max(1, size))
+        except Exception:
+            return font
+    return font
 
 
 def _load_remote_image(url: str, box_size: int) -> Optional[Image.Image]:
@@ -1365,7 +1391,7 @@ def draw_sports_screen(display, game, title, transition=False, screen_id: Option
 
         v2_logo_scale_adjust = 0.78
         v2_logo_frame_w = max(12, int(round(frame_w * 0.84)))
-        pitcher_photo_size = max(24, min(logo_h + max(3, logo_h // 6), HEIGHT // 5))
+        pitcher_photo_size = max(24, min(int(round((logo_h + max(3, logo_h // 6)) * 1.10)), HEIGHT // 5))
         logo_gap = max(8, gap)
         total_v2_w = (pitcher_photo_size * 2) + v2_logo_frame_w + at_w + v2_logo_frame_w + (logo_gap * 4)
         start_x_v2 = max(0, (WIDTH - total_v2_w) // 2)
@@ -1375,22 +1401,28 @@ def draw_sports_screen(display, game, title, transition=False, screen_id: Option
         home_logo_x = at_x_v2 + at_w + logo_gap
         home_pitcher_x = home_logo_x + v2_logo_frame_w + logo_gap
 
-        row_y = max(y_text + line_gap, min(row_y, bottom_y - logo_h - line_gap))
-
-        name_base_font = FONT_DATE_SPORTS
-        if hasattr(FONT_DATE_SPORTS, "font_variant"):
-            try:
-                name_base_font = FONT_DATE_SPORTS.font_variant(size=int(getattr(FONT_DATE_SPORTS, "size", 12)) + 2)
-            except Exception:
-                name_base_font = FONT_DATE_SPORTS
+        name_base_font = _font_variant_delta(FONT_DATE_SPORTS, 4)
+        stat_base_font = _font_variant_delta(FONT_DATE_SPORTS, 2)
         name_font = fit_font(
             draw,
-            "Pitcher Name",
+            max((away_name or "TBD"), (home_name or "TBD"), key=len),
             name_base_font,
             max_width=max(20, pitcher_photo_size + 8),
             max_height=max(10, int(draw.textsize("Ag", font=name_base_font)[1] * 1.2)),
             min_pt=8,
         )
+        stat_font = fit_font(
+            draw,
+            max((away_record or "(0-0) 0.00 ERA"), (home_record or "(0-0) 0.00 ERA"), key=len),
+            stat_base_font,
+            max_width=max(20, pitcher_photo_size + 12),
+            max_height=max(10, int(draw.textsize("Ag", font=stat_base_font)[1] * 1.2)),
+            min_pt=8,
+        )
+        name_line_h = draw.textsize("Ag", font=name_font)[1]
+        stat_line_h = draw.textsize("Ag", font=stat_font)[1]
+        pitcher_block_h = pitcher_photo_size + 2 + name_line_h + (1 + stat_line_h)
+        row_y = max(y_text + line_gap, min(row_y, bottom_y - pitcher_block_h - line_gap))
 
         _draw_logo_box(away_logo_x)
         _paste_logo(logo_away, away_logo_x, scale_adjust=v2_logo_scale_adjust, frame_width=v2_logo_frame_w)
@@ -1422,8 +1454,8 @@ def draw_sports_screen(display, game, title, transition=False, screen_id: Option
             display_name = name or "TBD"
             _draw_centered_line(display_name, name_font, name_y)
             if record:
-                rec_y = name_y + max(10, name_font.size + 1)
-                _draw_centered_line(record, FONT_DATE_SPORTS, rec_y)
+                rec_y = name_y + name_line_h + 1
+                _draw_centered_line(record, stat_font, rec_y)
 
         _draw_pitcher_block(away_pitcher_x, away_image_url, away_name, away_record)
         _draw_pitcher_block(home_pitcher_x, home_image_url, home_name, home_record)
