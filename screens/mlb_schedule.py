@@ -260,8 +260,10 @@ def _next_variant_title_opponent_gap(
     """Match Cubs/Sox Next Game spacing for title/opponent lines on related series views."""
     if normalized_screen_id in {
         "cubs next",
+        "cubs next v2",
         "cubs next home",
         "sox next",
+        "sox next v2",
         "sox next home",
         "cubs current series",
         "sox current series",
@@ -1006,8 +1008,10 @@ def draw_sports_screen(display, game, title, transition=False, screen_id: Option
 
     hyperpixel_layout = config.is_hyperpixel_next_layout() and screen_id in {
         "cubs next",
+        "cubs next v2",
         "cubs next home",
         "sox next",
+        "sox next v2",
         "sox next home",
     }
     edge_pad = max(2, config.scale_value(2)) if hyperpixel_layout else 0
@@ -1053,8 +1057,10 @@ def draw_sports_screen(display, game, title, transition=False, screen_id: Option
     opponent_line = f"{prefix} {opponent}"
     use_scaled_prefix = normalized_screen_id in {
         "cubs next",
+        "cubs next v2",
         "cubs next home",
         "sox next",
+        "sox next v2",
         "sox next home",
     }
     line_width = max(1, (WIDTH - (edge_pad * 2)) if hyperpixel_layout else WIDTH)
@@ -1102,6 +1108,8 @@ def draw_sports_screen(display, game, title, transition=False, screen_id: Option
 
     # Desired logo frame height mirrors the Hawks "Next Game" layout for consistency.
     desired_logo_h = standard_next_game_logo_height(HEIGHT)
+    if normalized_screen_id in {"cubs next v2", "sox next v2"}:
+        desired_logo_h = min(standard_next_game_logo_height(HEIGHT), max(16, HEIGHT // 5))
     if hyperpixel_layout:
         desired_logo_h = max(1, int(round(desired_logo_h * config.DISPLAY_SCALE)))
     elif _IS_1080P_LAYOUT:
@@ -1120,7 +1128,7 @@ def draw_sports_screen(display, game, title, transition=False, screen_id: Option
     else:
         bl_h = 0
     bottom_margin = config.scale_value(BOTTOM_MARGIN) if hyperpixel_layout else BOTTOM_MARGIN
-    if _IS_1080P_LAYOUT and normalized_screen_id == "cubs next":
+    if _IS_1080P_LAYOUT and normalized_screen_id in {"cubs next", "cubs next v2"}:
         bottom_margin += _BOTTOM_TEXT_1080P_OFFSET
     bottom_y = HEIGHT - bl_h - bottom_margin
 
