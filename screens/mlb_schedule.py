@@ -11,6 +11,7 @@ import datetime
 import io
 import urllib.request
 import hashlib
+import threading
 from typing import Optional, Tuple
 from PIL import Image, ImageDraw, Image, ImageFont
 
@@ -52,6 +53,9 @@ def _set_background(screen_id: Optional[str]) -> None:
 MLB_LOGOS_DIR = os.path.join(IMAGES_DIR, "mlb")
 PITCHER_HEADSHOT_CACHE_DIR = os.path.join(IMAGES_DIR, "cache", "mlb_pitchers")
 PITCHER_HEADSHOT_CACHE_TTL_SECONDS = 24 * 60 * 60
+PITCHER_HEADSHOT_FAILURE_TTL_SECONDS = 10 * 60
+_PITCHER_HEADSHOT_FETCH_LOCK = threading.Lock()
+_PITCHER_HEADSHOT_IN_FLIGHT: set[str] = set()
 
 # ── Layout constants ─────────────────────────────────────────────────────────
 if is_hyperpixel_4_square_layout():
@@ -211,12 +215,15 @@ def _extract_probable_pitcher(team_block: dict) -> tuple[str, str, str]:
 def _load_remote_image(url: str, box_size: int) -> Optional[Image.Image]:
     if not url or box_size <= 0:
         return None
+    cache_key = ""
     try:
         os.makedirs(PITCHER_HEADSHOT_CACHE_DIR, exist_ok=True)
         cache_key = hashlib.sha256(url.encode("utf-8")).hexdigest()
         cache_path = os.path.join(PITCHER_HEADSHOT_CACHE_DIR, f"{cache_key}.png")
+        failure_cache_path = os.path.join(PITCHER_HEADSHOT_CACHE_DIR, f"{cache_key}.failed")
     except Exception:
         cache_path = ""
+        failure_cache_path = ""
 
     if cache_path:
         try:
@@ -228,18 +235,45 @@ def _load_remote_image(url: str, box_size: int) -> Optional[Image.Image]:
         except Exception:
             pass
 
-    try:
-        with urllib.request.urlopen(url, timeout=4) as response:
-            content = response.read()
-        img = Image.open(io.BytesIO(content)).convert("RGBA")
-    except Exception:
-        return None
-    if cache_path:
+    if failure_cache_path:
         try:
-            img.save(cache_path, format="PNG")
+            now_ts = datetime.datetime.now(datetime.timezone.utc).timestamp()
+            failed_mtime = os.path.getmtime(failure_cache_path)
+            if (now_ts - failed_mtime) <= PITCHER_HEADSHOT_FAILURE_TTL_SECONDS:
+                return None
         except Exception:
             pass
-    return img.resize((box_size, box_size), Image.LANCZOS)
+
+    if cache_key in _PITCHER_HEADSHOT_IN_FLIGHT:
+        return None
+
+    with _PITCHER_HEADSHOT_FETCH_LOCK:
+        if cache_key in _PITCHER_HEADSHOT_IN_FLIGHT:
+            return None
+        _PITCHER_HEADSHOT_IN_FLIGHT.add(cache_key)
+
+    def _fetch_and_cache() -> None:
+        try:
+            with urllib.request.urlopen(url, timeout=4) as response:
+                content = response.read()
+            img = Image.open(io.BytesIO(content)).convert("RGBA")
+            if cache_path:
+                img.save(cache_path, format="PNG")
+            if failure_cache_path and os.path.exists(failure_cache_path):
+                os.remove(failure_cache_path)
+        except Exception:
+            if failure_cache_path:
+                try:
+                    with open(failure_cache_path, "wb") as failed:
+                        failed.write(b"")
+                except Exception:
+                    pass
+        finally:
+            with _PITCHER_HEADSHOT_FETCH_LOCK:
+                _PITCHER_HEADSHOT_IN_FLIGHT.discard(cache_key)
+
+    threading.Thread(target=_fetch_and_cache, daemon=True).start()
+    return None
 
 def _rel_date_only(official_date: str) -> str:
     """'Today', 'Tomorrow', 'Yesterday', else 'Tue M/D' (no time)."""
