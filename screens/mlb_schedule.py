@@ -52,6 +52,7 @@ def _set_background(screen_id: Optional[str]) -> None:
 MLB_LOGOS_DIR = os.path.join(IMAGES_DIR, "mlb")
 PITCHER_HEADSHOT_CACHE_DIR = os.path.join(IMAGES_DIR, "cache", "mlb_pitchers")
 PITCHER_HEADSHOT_CACHE_TTL_SECONDS = 24 * 60 * 60
+PITCHER_HEADSHOT_FAILURE_CACHE_TTL_SECONDS = 15 * 60
 
 # ── Layout constants ─────────────────────────────────────────────────────────
 if is_hyperpixel_4_square_layout():
@@ -218,13 +219,21 @@ def _load_remote_image(url: str, box_size: int) -> Optional[Image.Image]:
     except Exception:
         cache_path = ""
 
+    failure_cache_path = f"{cache_path}.failed" if cache_path else ""
+
     if cache_path:
+        now_ts = datetime.datetime.now(datetime.timezone.utc).timestamp()
         try:
-            now_ts = datetime.datetime.now(datetime.timezone.utc).timestamp()
             mtime = os.path.getmtime(cache_path)
             if (now_ts - mtime) <= PITCHER_HEADSHOT_CACHE_TTL_SECONDS:
                 cached = Image.open(cache_path).convert("RGBA")
                 return cached.resize((box_size, box_size), Image.LANCZOS)
+        except Exception:
+            pass
+        try:
+            failed_mtime = os.path.getmtime(failure_cache_path)
+            if (now_ts - failed_mtime) <= PITCHER_HEADSHOT_FAILURE_CACHE_TTL_SECONDS:
+                return None
         except Exception:
             pass
 
@@ -233,10 +242,19 @@ def _load_remote_image(url: str, box_size: int) -> Optional[Image.Image]:
             content = response.read()
         img = Image.open(io.BytesIO(content)).convert("RGBA")
     except Exception:
+        if failure_cache_path:
+            try:
+                with open(failure_cache_path, "a", encoding="utf-8"):
+                    pass
+                os.utime(failure_cache_path, None)
+            except Exception:
+                pass
         return None
     if cache_path:
         try:
             img.save(cache_path, format="PNG")
+            if failure_cache_path and os.path.exists(failure_cache_path):
+                os.remove(failure_cache_path)
         except Exception:
             pass
     return img.resize((box_size, box_size), Image.LANCZOS)
