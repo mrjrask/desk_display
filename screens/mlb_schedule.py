@@ -12,7 +12,7 @@ import io
 import urllib.request
 import hashlib
 from typing import Optional, Tuple
-from PIL import Image, ImageDraw, Image, ImageFont
+from PIL import Image, ImageDraw, ImageFont
 
 import config
 from config import (
