@@ -342,3 +342,4 @@ def test_fetch_mlb_schedule_uses_45_day_window(monkeypatch):
 
     assert "startDate=2026-03-29" in captured["url"]
     assert "endDate=2026-05-16" in captured["url"]
+    assert "hydrate=team,linescore,probablePitcher" in captured["url"]
