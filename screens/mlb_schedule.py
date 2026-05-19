@@ -270,11 +270,25 @@ def _extract_probable_pitcher(team_block: dict, game: dict | None = None, side: 
         season_stats = probable.get("pitchingStats")
     if not isinstance(season_stats, dict):
         season_stats = {}
+    if isinstance(season_stats, dict):
+        nested_pitching = season_stats.get("pitching")
+        if isinstance(nested_pitching, dict) and nested_pitching:
+            season_stats = nested_pitching
+
+    probable_record = probable.get("record")
+    if isinstance(probable_record, dict):
+        probable_record = _record_from_values(probable_record.get("wins"), probable_record.get("losses"))
+    stats_record = stats.get("record") if isinstance(stats, dict) else ""
+    if isinstance(stats_record, dict):
+        stats_record = _record_from_values(stats_record.get("wins"), stats_record.get("losses"))
+    season_record = season_stats.get("record")
+    if isinstance(season_record, dict):
+        season_record = _record_from_values(season_record.get("wins"), season_record.get("losses"))
 
     record = _first_str(
-        probable.get("record"),
-        stats.get("record") if isinstance(stats, dict) else "",
-        season_stats.get("record"),
+        probable_record,
+        stats_record,
+        season_record,
     )
     if not record:
         record = _record_from_values(split_stat.get("wins"), split_stat.get("losses"))
@@ -1401,7 +1415,7 @@ def draw_sports_screen(display, game, title, transition=False, screen_id: Option
         home_logo_x = at_x_v2 + at_w + logo_gap
         home_pitcher_x = home_logo_x + v2_logo_frame_w + logo_gap
 
-        name_base_font = _font_variant_delta(FONT_DATE_SPORTS, 4)
+        name_base_font = _font_variant_delta(FONT_DATE_SPORTS, 8)
         stat_base_font = _font_variant_delta(FONT_DATE_SPORTS, 2)
         name_font = fit_font(
             draw,
