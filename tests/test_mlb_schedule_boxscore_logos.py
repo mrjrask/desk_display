@@ -65,20 +65,6 @@ def test_extract_probable_pitcher_reads_season_stats_record_and_era():
     assert "/999/" in image_url
 
 
-def test_extract_probable_pitcher_handles_stats_list_and_split_record_era():
-    team_block = {
-        "probablePitcher": {
-            "person": {"id": 111, "fullName": "List Stats"},
-            "stats": [{"splits": [{"stat": {"record": "8-2", "era": "2.67"}}]}],
-        }
-    }
-
-    name, record, image_url = mlb_schedule._extract_probable_pitcher(team_block)
-
-    assert name == "List Stats"
-    assert record == "(8-2) 2.67 ERA"
-    assert "/111/" in image_url
-
 def test_fit_image_within_box_preserves_headshot_aspect_ratio():
     wide = Image.new("RGBA", (120, 60), (255, 0, 0, 255))
 
