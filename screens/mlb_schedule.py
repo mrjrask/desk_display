@@ -249,8 +249,13 @@ def _extract_probable_pitcher(team_block: dict, game: dict | None = None, side: 
         shared_probables = game.get("probablePitchers")
         if isinstance(shared_probables, dict) and side:
             probable = shared_probables.get(side) or {}
+    if not isinstance(probable, dict):
+        probable = {}
     person = probable.get("person") if isinstance(probable.get("person"), dict) else {}
-    stats = probable.get("stats") if isinstance(probable.get("stats"), dict) else {}
+    raw_stats = probable.get("stats")
+    if isinstance(raw_stats, list) and raw_stats:
+        raw_stats = raw_stats[0]
+    stats = raw_stats if isinstance(raw_stats, dict) else {}
     pitcher_id = probable.get("id") or person.get("id")
 
     full_name = _first_str(probable.get("fullName"), probable.get("name"), person.get("fullName"), person.get("name"))
@@ -258,6 +263,8 @@ def _extract_probable_pitcher(team_block: dict, game: dict | None = None, side: 
     split_stat = {}
     if isinstance(stats, dict):
         stat_splits = stats.get("splits")
+        if not isinstance(stat_splits, list):
+            stat_splits = probable.get("splits")
         if isinstance(stat_splits, list) and stat_splits:
             split_stat = stat_splits[0].get("stat") if isinstance(stat_splits[0], dict) else {}
             if not isinstance(split_stat, dict):
@@ -289,6 +296,7 @@ def _extract_probable_pitcher(team_block: dict, game: dict | None = None, side: 
         probable_record,
         stats_record,
         season_record,
+        split_stat.get("record") if isinstance(split_stat.get("record"), str) else "",
     )
     if not record:
         record = _record_from_values(split_stat.get("wins"), split_stat.get("losses"))
@@ -1417,13 +1425,14 @@ def draw_sports_screen(display, game, title, transition=False, screen_id: Option
 
         name_base_font = _font_variant_delta(FONT_DATE_SPORTS, 8)
         stat_base_font = _font_variant_delta(FONT_DATE_SPORTS, 2)
+        name_min_pt = max(10, int(round(getattr(name_base_font, "size", 12) * 0.75)))
         name_font = fit_font(
             draw,
             max((away_name or "TBD"), (home_name or "TBD"), key=len),
             name_base_font,
             max_width=max(20, pitcher_photo_size + 8),
             max_height=max(10, int(draw.textsize("Ag", font=name_base_font)[1] * 1.2)),
-            min_pt=8,
+            min_pt=name_min_pt,
         )
         stat_font = fit_font(
             draw,
