@@ -13,6 +13,7 @@ Shows the next Chicago Bears game with:
 
 import datetime
 import os
+import re
 import time
 from functools import lru_cache
 from PIL import Image, ImageDraw
@@ -24,8 +25,10 @@ from config import (
     get_screen_background_color,
 )
 from utils import (
+    ScreenImage,
     load_team_logo,
     next_game_from_schedule,
+    scroll_vertical_content,
     standard_next_game_logo_frame_width,
     standard_next_game_logo_height,
     standard_next_game_logo_height_for_space,
@@ -442,7 +445,7 @@ def _format_schedule_line_time(date_text: str, time_text: str) -> str:
         return time_part
     if not time_part or time_part in {"—", "TBD"}:
         return date_part
-    return f"{date_part} {time_part} CT"
+    return f"{date_part} {time_part}"
 
 
 def show_bears_next_season_sched(display, transition=False):
@@ -458,8 +461,8 @@ def show_bears_next_season_sched(display, transition=False):
     draw.text(((config.WIDTH - draw.textsize(title, font=title_font)[0]) // 2, 2), title, font=title_font, fill=(255, 255, 255))
 
     rows_top = header_h + 6
-    row_h = max(14, draw.textsize("Ag", font=row_font)[1] + 6)
-    visible_rows = max(1, (config.HEIGHT - rows_top - 2) // row_h)
+    base_row_h = max(14, draw.textsize("Ag", font=row_font)[1] + 6)
+    row_h = base_row_h
 
     schedule_rows = []
     for game in BEARS_SCHEDULE:
@@ -492,48 +495,75 @@ def show_bears_next_season_sched(display, transition=False):
     if not schedule_rows:
         draw.text((4, rows_top), "No scheduled games.", font=row_font, fill=(255, 255, 255))
     else:
-        scroll_index = int(time.time() // 4) % max(1, len(schedule_rows))
-        if len(schedule_rows) <= visible_rows:
-            visible = schedule_rows
-        else:
-            visible = [schedule_rows[(scroll_index + i) % len(schedule_rows)] for i in range(visible_rows)]
-
-        logo_size = max(12, int((row_h - 4) * 1.3))
-        week_w = max(draw.textsize("W18", font=date_font)[0], draw.textsize("Week", font=date_font)[0])
+        logo_size = max(14, int((base_row_h - 3) * 1.55))
+        row_h = max(base_row_h, logo_size + 4)
+        content_h = rows_top + (row_h * len(schedule_rows)) + 2
+        full_h = max(config.HEIGHT, content_h)
+        full_img = Image.new("RGB", (config.WIDTH, full_h), background)
+        full_draw = ImageDraw.Draw(full_img)
+        full_draw.text(((config.WIDTH - draw.textsize(title, font=title_font)[0]) // 2, 2), title, font=title_font, fill=(255, 255, 255))
+        week_w = draw.textsize("W18", font=date_font)[0]
         x_week = 2
         x_prefix = x_week + week_w + 3
-        x_logo = x_prefix + draw.textsize("vs.", font=row_font)[0] + 2
+        x_logo = x_prefix + full_draw.textsize("vs.", font=date_font)[0] + 2
         x_name = x_logo + logo_size + 3
-        for idx, row in enumerate(visible):
+        for idx, row in enumerate(schedule_rows):
             y = rows_top + idx * row_h
             week_txt = row["week"] if row["week"] else ""
+            week_txt = re.sub(r"(?i)^week\s*", "", week_txt).strip()
             week_disp = f"W{week_txt}" if week_txt and not week_txt.lower().startswith("w") else week_txt
             if week_disp:
-                draw.text((x_week, y + max(0, (row_h - draw.textsize(week_disp, font=date_font)[1]) // 2)), week_disp, font=date_font, fill=(160, 180, 220))
+                full_draw.text((x_week, y + max(0, (row_h - full_draw.textsize(week_disp, font=date_font)[1]) // 2)), week_disp, font=date_font, fill=(160, 180, 220))
 
-            draw.text((x_prefix, y), row["prefix"], font=row_font, fill=(255, 255, 255))
+            full_draw.text(
+                (x_prefix, y + max(0, (row_h - full_draw.textsize(row["prefix"], font=date_font)[1]) // 2)),
+                row["prefix"],
+                font=date_font,
+                fill=(255, 255, 255),
+            )
             logo = _cached_team_logo(row["abbr"], logo_size)
             if logo:
                 ly = y + (row_h - logo.height) // 2
-                img.paste(logo, (x_logo, ly), logo)
+                full_img.paste(logo, (x_logo, ly), logo)
             right_text = row["when"]
             if row["score"]:
                 right_text = f"{right_text} {row['score']}".strip()
-            right_w = draw.textsize(right_text, font=date_font)[0]
+            right_w = full_draw.textsize(right_text, font=date_font)[0]
             max_name_w = max(20, config.WIDTH - x_name - right_w - 3)
             name = row["opponent"]
-            while draw.textsize(name, font=row_font)[0] > max_name_w and len(name) > 4:
+            while full_draw.textsize(name, font=row_font)[0] > max_name_w and len(name) > 4:
                 name = name[:-2] + "…"
-            draw.text((x_name, y), name, font=row_font, fill=(255, 255, 255))
-            rw = draw.textsize(right_text, font=date_font)[0]
-            rt_h = draw.textsize(right_text, font=date_font)[1]
-            draw.text((config.WIDTH - rw - 2, y + max(0, (row_h - rt_h) // 2)), right_text, font=date_font, fill=(180, 220, 255))
+            full_draw.text((x_name, y), name, font=row_font, fill=(255, 255, 255))
+            rw = full_draw.textsize(right_text, font=date_font)[0]
+            rt_h = full_draw.textsize(right_text, font=date_font)[1]
+            full_draw.text((config.WIDTH - rw - 2, y + max(0, (row_h - rt_h) // 2)), right_text, font=date_font, fill=(180, 220, 255))
+        img = full_img
 
     if transition:
-        return img
-    display.image(img)
-    display.show()
-    return None
+        scroll_vertical_content(
+            display=display,
+            content_height=img.height,
+            viewport_width=config.WIDTH,
+            viewport_height=config.HEIGHT,
+            render_at_offset=lambda offset: display.image(img.crop((0, offset, config.WIDTH, offset + config.HEIGHT))),
+            base_step=max(1, int(round(row_h * 0.6))),
+            pause_start=0.75,
+            pause_end=0.85,
+            min_frame_time=0.03,
+        )
+        return ScreenImage(img, displayed=True)
+    scroll_vertical_content(
+        display=display,
+        content_height=img.height,
+        viewport_width=config.WIDTH,
+        viewport_height=config.HEIGHT,
+        render_at_offset=lambda offset: display.image(img.crop((0, offset, config.WIDTH, offset + config.HEIGHT))),
+        base_step=max(1, int(round(row_h * 0.6))),
+        pause_start=0.75,
+        pause_end=0.85,
+        min_frame_time=0.03,
+    )
+    return ScreenImage(img, displayed=True)
 def show_bears_next_season(display, transition=False):
     background = get_screen_background_color("bears next season", (0, 0, 0))
     static_img = _cached_bears_next_season_static_image(config.WIDTH, config.HEIGHT)
