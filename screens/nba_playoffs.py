@@ -834,9 +834,16 @@ def _has_both_opponents(series: dict) -> bool:
     home_team = (home_slot.get("team") or {}) if isinstance(home_slot, dict) else {}
     away_abbr = _team_logo_abbr(away_team) if isinstance(away_team, dict) else ""
     home_abbr = _team_logo_abbr(home_team) if isinstance(home_team, dict) else ""
-    if _is_known_team_abbr(away_abbr) and _is_known_team_abbr(home_abbr):
-        return True
-    return bool(away_slot and home_slot)
+    return _is_known_team_abbr(away_abbr) and _is_known_team_abbr(home_abbr)
+
+
+def _has_distinct_opponents(series: dict) -> bool:
+    teams = (series or {}).get("teams") or {}
+    away_team = ((teams.get("away") or {}).get("team") or {})
+    home_team = ((teams.get("home") or {}).get("team") or {})
+    away_abbr = _team_logo_abbr(away_team)
+    home_abbr = _team_logo_abbr(home_team)
+    return bool(away_abbr and home_abbr and away_abbr != home_abbr)
 
 
 def _is_completed_series(series: dict) -> bool:
@@ -942,7 +949,7 @@ def _conference_buckets(series: list[dict]) -> tuple[list[dict], list[dict]]:
 def _select_current_round_series(series: list[dict]) -> list[dict]:
     if not series:
         return []
-    with_opponents = [item for item in series if _has_both_opponents(item)]
+    with_opponents = [item for item in series if _has_both_opponents(item) and _has_distinct_opponents(item)]
     ranked = [item for item in with_opponents if _as_int(item.get("round_rank")) is not None]
     if not ranked:
         current_only = [item for item in with_opponents if not _is_completed_series(item)]
