@@ -1405,7 +1405,7 @@ def draw_sports_screen(display, game, title, transition=False, screen_id: Option
 
         v2_logo_scale_adjust = 0.78
         v2_logo_frame_w = max(12, int(round(frame_w * 0.84)))
-        pitcher_photo_size = max(24, min(int(round((logo_h + max(3, logo_h // 6)) * 1.10)), HEIGHT // 5))
+        pitcher_photo_size = max(20, min(logo_h, HEIGHT // 5))
         logo_gap = max(8, gap)
         total_v2_w = (pitcher_photo_size * 2) + v2_logo_frame_w + at_w + v2_logo_frame_w + (logo_gap * 4)
         start_x_v2 = max(0, (WIDTH - total_v2_w) // 2)
@@ -1415,21 +1415,21 @@ def draw_sports_screen(display, game, title, transition=False, screen_id: Option
         home_logo_x = at_x_v2 + at_w + logo_gap
         home_pitcher_x = home_logo_x + v2_logo_frame_w + logo_gap
 
-        name_base_font = _font_variant_delta(FONT_DATE_SPORTS, 8)
+        name_base_font = _font_variant_delta(FONT_DATE_SPORTS, 5)
         stat_base_font = _font_variant_delta(FONT_DATE_SPORTS, 2)
         name_font = fit_font(
             draw,
             max((away_name or "TBD"), (home_name or "TBD"), key=len),
             name_base_font,
-            max_width=max(20, pitcher_photo_size + 8),
+            max_width=max(18, pitcher_photo_size),
             max_height=max(10, int(draw.textsize("Ag", font=name_base_font)[1] * 1.2)),
-            min_pt=8,
+            min_pt=7,
         )
         stat_font = fit_font(
             draw,
             max((away_record or "(0-0) 0.00 ERA"), (home_record or "(0-0) 0.00 ERA"), key=len),
             stat_base_font,
-            max_width=max(20, pitcher_photo_size + 12),
+            max_width=max(18, pitcher_photo_size + 4),
             max_height=max(10, int(draw.textsize("Ag", font=stat_base_font)[1] * 1.2)),
             min_pt=8,
         )
