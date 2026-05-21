@@ -477,7 +477,14 @@ def show_bears_next_season_sched(display, transition=False):
             home_score = game.get("home_score")
             away_score = game.get("away_score")
             if home_score is not None and away_score is not None:
-                score = f"F {away_score}-{home_score}"
+                # Keep score perspective consistent with row labeling:
+                # each row is keyed by opponent ("vs." or "@" + opponent),
+                # so render opponent score first in both home and away games.
+                if ha == "away":
+                    opp_score, bears_score = home_score, away_score
+                else:
+                    opp_score, bears_score = away_score, home_score
+                score = f"F {opp_score}-{bears_score}"
         schedule_rows.append({"prefix": prefix, "abbr": abbr, "opponent": opponent, "when": when, "score": score})
 
     if not schedule_rows:
