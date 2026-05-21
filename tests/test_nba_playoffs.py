@@ -237,9 +237,9 @@ def test_extract_series_dedupes_when_home_away_flipped():
 
 def test_select_current_round_series_prefers_lowest_round_rank():
     series = [
-        {"teams": {"away": {"score": 1}, "home": {"score": 1}}, "round_rank": 1},
-        {"teams": {"away": {"score": 2}, "home": {"score": 0}}, "round_rank": 1},
-        {"teams": {"away": {"score": 0}, "home": {"score": 0}}, "round_rank": 2},
+        {"teams": {"away": {"team": {"abbreviation": "BOS"}, "score": 1}, "home": {"team": {"abbreviation": "NYK"}, "score": 1}}, "round_rank": 1},
+        {"teams": {"away": {"team": {"abbreviation": "CLE"}, "score": 2}, "home": {"team": {"abbreviation": "IND"}, "score": 0}}, "round_rank": 1},
+        {"teams": {"away": {"team": {"abbreviation": "MIN"}, "score": 0}, "home": {"team": {"abbreviation": "OKC"}, "score": 0}}, "round_rank": 2},
     ]
 
     selected = nba_playoffs._select_current_round_series(series)
@@ -250,8 +250,8 @@ def test_select_current_round_series_prefers_lowest_round_rank():
 
 def test_select_current_round_series_keeps_all_active_when_round_unknown():
     series = [
-        {"teams": {"away": {"score": 1}, "home": {"score": 1}}},
-        {"teams": {"away": {"score": 2}, "home": {"score": 0}}},
+        {"teams": {"away": {"team": {"abbreviation": "BOS"}, "score": 1}, "home": {"team": {"abbreviation": "NYK"}, "score": 1}}},
+        {"teams": {"away": {"team": {"abbreviation": "CLE"}, "score": 2}, "home": {"team": {"abbreviation": "IND"}, "score": 0}}},
     ]
 
     selected = nba_playoffs._select_current_round_series(series)
@@ -263,9 +263,9 @@ def test_select_current_round_series_keeps_all_active_when_round_unknown():
 
 def test_select_current_round_series_round_unknown_filters_completed_series():
     series = [
-        {"teams": {"away": {"score": 4}, "home": {"score": 1}}},
-        {"teams": {"away": {"score": 2}, "home": {"score": 2}}},
-        {"teams": {"away": {"score": 1}, "home": {"score": 3}}},
+        {"teams": {"away": {"team": {"abbreviation": "BOS"}, "score": 4}, "home": {"team": {"abbreviation": "NYK"}, "score": 1}}},
+        {"teams": {"away": {"team": {"abbreviation": "CLE"}, "score": 2}, "home": {"team": {"abbreviation": "IND"}, "score": 2}}},
+        {"teams": {"away": {"team": {"abbreviation": "MIN"}, "score": 1}, "home": {"team": {"abbreviation": "OKC"}, "score": 3}}},
     ]
 
     selected = nba_playoffs._select_current_round_series(series)
@@ -379,13 +379,55 @@ def test_compose_canvas_uses_single_series_per_row_on_low_resolution(monkeypatch
 
 def test_select_current_round_series_advances_when_prior_round_complete():
     series = [
-        {"teams": {"away": {"score": 4}, "home": {"score": 1}}, "round_rank": 1},
-        {"teams": {"away": {"score": 4}, "home": {"score": 3}}, "round_rank": 1},
-        {"teams": {"away": {"score": 0}, "home": {"score": 0}}, "round_rank": 2},
-        {"teams": {"away": {"score": 0}, "home": {"score": 0}}, "round_rank": 2},
+        {"teams": {"away": {"team": {"abbreviation": "BOS"}, "score": 4}, "home": {"team": {"abbreviation": "NYK"}, "score": 1}}, "round_rank": 1},
+        {"teams": {"away": {"team": {"abbreviation": "CLE"}, "score": 4}, "home": {"team": {"abbreviation": "IND"}, "score": 3}}, "round_rank": 1},
+        {"teams": {"away": {"team": {"abbreviation": "MIN"}, "score": 0}, "home": {"team": {"abbreviation": "OKC"}, "score": 0}}, "round_rank": 2},
+        {"teams": {"away": {"team": {"abbreviation": "DEN"}, "score": 0}, "home": {"team": {"abbreviation": "LAL"}, "score": 0}}, "round_rank": 2},
     ]
 
     selected = nba_playoffs._select_current_round_series(series)
 
     assert len(selected) == 2
     assert all(item["round_rank"] == 2 for item in selected)
+
+
+def test_has_both_opponents_rejects_unset_slots():
+    series = {
+        "teams": {
+            "away": {"team": {"teamTricode": "TBD"}, "score": 0},
+            "home": {"team": {"teamTricode": "BOS"}, "score": 0},
+        }
+    }
+
+    assert nba_playoffs._has_both_opponents(series) is False
+
+
+def test_select_current_round_series_drops_unset_or_duplicate_matchups():
+    series = [
+        {
+            "teams": {
+                "away": {"team": {"abbreviation": "BOS"}, "score": 1},
+                "home": {"team": {"abbreviation": "NYK"}, "score": 1},
+            },
+            "round_rank": 2,
+        },
+        {
+            "teams": {
+                "away": {"team": {"abbreviation": "TBD"}, "score": 0},
+                "home": {"team": {"abbreviation": "IND"}, "score": 0},
+            },
+            "round_rank": 2,
+        },
+        {
+            "teams": {
+                "away": {"team": {"abbreviation": "OKC"}, "score": 0},
+                "home": {"team": {"abbreviation": "OKC"}, "score": 0},
+            },
+            "round_rank": 2,
+        },
+    ]
+
+    selected = nba_playoffs._select_current_round_series(series)
+
+    assert len(selected) == 1
+    assert selected[0]["teams"]["away"]["team"]["abbreviation"] == "BOS"
