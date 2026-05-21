@@ -453,7 +453,7 @@ def show_bears_next_season_sched(display, transition=False):
     title = "Bears Schedule"
     title_font = config.FONT_TITLE_SPORTS
     row_font = config.FONT_DATE_SPORTS
-    date_font = config.FONT_TINY
+    date_font = getattr(config, "FONT_TINY", config.FONT_WEATHER_DETAILS_TINY)
     header_h = draw.textsize(title, font=title_font)[1]
     draw.text(((config.WIDTH - draw.textsize(title, font=title_font)[0]) // 2, 2), title, font=title_font, fill=(255, 255, 255))
 
