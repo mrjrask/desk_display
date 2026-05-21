@@ -45,6 +45,7 @@ RAW_SCREEN_IDS = [
     "bears stand2",
     "bears next",
     "bears next season",
+    "bears next season sched",
     "nfl logo",
     "NFL Scoreboard",
     "NFL Overview NFC",
