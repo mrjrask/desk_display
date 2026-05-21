@@ -433,6 +433,94 @@ def _cached_bears_next_season_static_image(width: int, height: int) -> Image.Ima
     return None
 
 
+
+
+def _format_schedule_line_time(date_text: str, time_text: str) -> str:
+    date_part = _format_game_date(date_text)
+    time_part = str(time_text or "").strip()
+    if not date_part:
+        return time_part
+    if not time_part or time_part in {"—", "TBD"}:
+        return date_part
+    return f"{date_part} {time_part} CT"
+
+
+def show_bears_next_season_sched(display, transition=False):
+    background = get_screen_background_color("bears next season sched", (0, 0, 0))
+    img = Image.new("RGB", (config.WIDTH, config.HEIGHT), background)
+    draw = ImageDraw.Draw(img)
+
+    title = "Bears Next Season Sched"
+    title_font = config.FONT_TITLE_SPORTS
+    row_font = config.FONT_DATE_SPORTS
+    header_h = draw.textsize(title, font=title_font)[1]
+    draw.text(((config.WIDTH - draw.textsize(title, font=title_font)[0]) // 2, 2), title, font=title_font, fill=(255, 255, 255))
+
+    rows_top = header_h + 6
+    row_h = max(12, draw.textsize("Ag", font=row_font)[1] + 4)
+    visible_rows = max(1, (config.HEIGHT - rows_top - 2) // row_h)
+
+    schedule_rows = []
+    for game in BEARS_SCHEDULE:
+        opponent = str(game.get("opponent") or "").strip()
+        if not opponent or opponent in {"—", "TBD"}:
+            continue
+        ha = str(game.get("home_away") or "").strip().lower()
+        prefix = "@" if ha == "away" else "vs."
+        team_key = opponent.split()[-1].lower()
+        abbr = NFL_TEAM_ABBREVIATIONS.get(team_key, team_key[:3])
+        if abbr == "was":
+            abbr = "wsh"
+        when = _format_schedule_line_time(str(game.get("date") or ""), str(game.get("time") or ""))
+        score = str(game.get("final_score") or "").strip()
+        if not score:
+            home_score = game.get("home_score")
+            away_score = game.get("away_score")
+            if home_score is not None and away_score is not None:
+                # Keep score perspective consistent with row labeling:
+                # each row is keyed by opponent ("vs." or "@" + opponent),
+                # so render opponent score first in both home and away games.
+                if ha == "away":
+                    opp_score, bears_score = home_score, away_score
+                else:
+                    opp_score, bears_score = away_score, home_score
+                score = f"F {opp_score}-{bears_score}"
+        schedule_rows.append({"prefix": prefix, "abbr": abbr, "opponent": opponent, "when": when, "score": score})
+
+    if not schedule_rows:
+        draw.text((4, rows_top), "No scheduled games.", font=row_font, fill=(255, 255, 255))
+    else:
+        scroll_index = int(time.time() // 4) % max(1, len(schedule_rows))
+        if len(schedule_rows) <= visible_rows:
+            visible = schedule_rows
+        else:
+            visible = [schedule_rows[(scroll_index + i) % len(schedule_rows)] for i in range(visible_rows)]
+
+        logo_size = max(10, row_h - 2)
+        x_prefix, x_logo = 2, 28
+        x_name = x_logo + logo_size + 4
+        for idx, row in enumerate(visible):
+            y = rows_top + idx * row_h
+            draw.text((x_prefix, y), row["prefix"], font=row_font, fill=(255, 255, 255))
+            logo = _cached_team_logo(row["abbr"], logo_size)
+            if logo:
+                img.paste(logo, (x_logo, y), logo)
+            right_text = row["when"]
+            if row["score"]:
+                right_text = f"{right_text} {row['score']}".strip()
+            max_name_w = max(40, config.WIDTH - x_name - draw.textsize(right_text, font=row_font)[0] - 4)
+            name = row["opponent"]
+            while draw.textsize(name, font=row_font)[0] > max_name_w and len(name) > 4:
+                name = name[:-2] + "…"
+            draw.text((x_name, y), name, font=row_font, fill=(255, 255, 255))
+            rw = draw.textsize(right_text, font=row_font)[0]
+            draw.text((config.WIDTH - rw - 2, y), right_text, font=row_font, fill=(180, 220, 255))
+
+    if transition:
+        return img
+    display.image(img)
+    display.show()
+    return None
 def show_bears_next_season(display, transition=False):
     background = get_screen_background_color("bears next season", (0, 0, 0))
     static_img = _cached_bears_next_season_static_image(config.WIDTH, config.HEIGHT)

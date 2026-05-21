@@ -14,7 +14,7 @@ from PIL import Image
 from config import CENTRAL_TIME, HEIGHT, NBA_TEAM_TRICODE, WIDTH, is_display_profile
 from paths import resolve_layouts_config_path, resolve_screens_config_paths
 from utils import ScreenImage, animate_scroll, timestamp_to_datetime
-from screens.draw_bears_schedule import show_bears_next_game, show_bears_next_season
+from screens.draw_bears_schedule import show_bears_next_game, show_bears_next_season, show_bears_next_season_sched
 from screens.draw_bulls_schedule import (
     draw_bulls_next_home_game,
     draw_last_bulls_game,
@@ -920,6 +920,7 @@ def build_screen_registry(context: ScreenContext) -> Tuple[Dict[str, ScreenDefin
 
     register("bears next", lambda: show_bears_next_game(context.display, transition=True))
     register("bears next season", lambda: show_bears_next_season(context.display, transition=True))
+    register("bears next season sched", lambda: show_bears_next_season_sched(context.display, transition=True))
     register(
         "NFL Scoreboard",
         lambda: render_nfl_scoreboard(
