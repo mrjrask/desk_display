@@ -450,14 +450,15 @@ def show_bears_next_season_sched(display, transition=False):
     img = Image.new("RGB", (config.WIDTH, config.HEIGHT), background)
     draw = ImageDraw.Draw(img)
 
-    title = "Bears Next Season Sched"
+    title = "Bears Schedule"
     title_font = config.FONT_TITLE_SPORTS
     row_font = config.FONT_DATE_SPORTS
+    date_font = config.FONT_TINY
     header_h = draw.textsize(title, font=title_font)[1]
     draw.text(((config.WIDTH - draw.textsize(title, font=title_font)[0]) // 2, 2), title, font=title_font, fill=(255, 255, 255))
 
     rows_top = header_h + 6
-    row_h = max(12, draw.textsize("Ag", font=row_font)[1] + 4)
+    row_h = max(14, draw.textsize("Ag", font=row_font)[1] + 6)
     visible_rows = max(1, (config.HEIGHT - rows_top - 2) // row_h)
 
     schedule_rows = []
@@ -485,7 +486,8 @@ def show_bears_next_season_sched(display, transition=False):
                 else:
                     opp_score, bears_score = away_score, home_score
                 score = f"F {opp_score}-{bears_score}"
-        schedule_rows.append({"prefix": prefix, "abbr": abbr, "opponent": opponent, "when": when, "score": score})
+        week = str(game.get("week") or game.get("game_no") or "").strip()
+        schedule_rows.append({"week": week, "prefix": prefix, "abbr": abbr, "opponent": opponent, "when": when, "score": score})
 
     if not schedule_rows:
         draw.text((4, rows_top), "No scheduled games.", font=row_font, fill=(255, 255, 255))
@@ -496,25 +498,36 @@ def show_bears_next_season_sched(display, transition=False):
         else:
             visible = [schedule_rows[(scroll_index + i) % len(schedule_rows)] for i in range(visible_rows)]
 
-        logo_size = max(10, row_h - 2)
-        x_prefix, x_logo = 2, 28
-        x_name = x_logo + logo_size + 4
+        logo_size = max(12, int((row_h - 4) * 1.3))
+        week_w = max(draw.textsize("W18", font=date_font)[0], draw.textsize("Week", font=date_font)[0])
+        x_week = 2
+        x_prefix = x_week + week_w + 3
+        x_logo = x_prefix + draw.textsize("vs.", font=row_font)[0] + 2
+        x_name = x_logo + logo_size + 3
         for idx, row in enumerate(visible):
             y = rows_top + idx * row_h
+            week_txt = row["week"] if row["week"] else ""
+            week_disp = f"W{week_txt}" if week_txt and not week_txt.lower().startswith("w") else week_txt
+            if week_disp:
+                draw.text((x_week, y + max(0, (row_h - draw.textsize(week_disp, font=date_font)[1]) // 2)), week_disp, font=date_font, fill=(160, 180, 220))
+
             draw.text((x_prefix, y), row["prefix"], font=row_font, fill=(255, 255, 255))
             logo = _cached_team_logo(row["abbr"], logo_size)
             if logo:
-                img.paste(logo, (x_logo, y), logo)
+                ly = y + (row_h - logo.height) // 2
+                img.paste(logo, (x_logo, ly), logo)
             right_text = row["when"]
             if row["score"]:
                 right_text = f"{right_text} {row['score']}".strip()
-            max_name_w = max(40, config.WIDTH - x_name - draw.textsize(right_text, font=row_font)[0] - 4)
+            right_w = draw.textsize(right_text, font=date_font)[0]
+            max_name_w = max(20, config.WIDTH - x_name - right_w - 3)
             name = row["opponent"]
             while draw.textsize(name, font=row_font)[0] > max_name_w and len(name) > 4:
                 name = name[:-2] + "…"
             draw.text((x_name, y), name, font=row_font, fill=(255, 255, 255))
-            rw = draw.textsize(right_text, font=row_font)[0]
-            draw.text((config.WIDTH - rw - 2, y), right_text, font=row_font, fill=(180, 220, 255))
+            rw = draw.textsize(right_text, font=date_font)[0]
+            rt_h = draw.textsize(right_text, font=date_font)[1]
+            draw.text((config.WIDTH - rw - 2, y + max(0, (row_h - rt_h) // 2)), right_text, font=date_font, fill=(180, 220, 255))
 
     if transition:
         return img
