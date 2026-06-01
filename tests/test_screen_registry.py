@@ -1052,3 +1052,41 @@ def test_wbc_scoreboards_are_removed_from_registry():
 
     assert "WBC Scoreboard" not in registry
     assert "WBC Scoreboard v2" not in registry
+
+
+def test_mlb_no_game_screens_available_when_no_game_today():
+    now = datetime.datetime(2024, 7, 1, 12, 0, tzinfo=CENTRAL_TIME)
+    weather = {"hourly": []}
+
+    registry, _ = build_screen_registry(
+        _make_context(
+            weather,
+            now,
+            cache_updates={
+                "cubs": {"next": {"gamePk": 1, "officialDate": "2024-07-02"}},
+                "sox": {"last": {"gamePk": 2, "officialDate": "2024-06-30"}},
+            },
+        )
+    )
+
+    assert registry["cubs no game"].available is True
+    assert registry["sox no game"].available is True
+
+
+def test_mlb_no_game_screens_hidden_when_game_is_today():
+    now = datetime.datetime(2024, 7, 1, 12, 0, tzinfo=CENTRAL_TIME)
+    weather = {"hourly": []}
+
+    registry, _ = build_screen_registry(
+        _make_context(
+            weather,
+            now,
+            cache_updates={
+                "cubs": {"next": {"gamePk": 1, "officialDate": "2024-07-01"}},
+                "sox": {"last": {"gamePk": 2, "officialDate": "2024-07-01"}},
+            },
+        )
+    )
+
+    assert registry["cubs no game"].available is False
+    assert registry["sox no game"].available is False
