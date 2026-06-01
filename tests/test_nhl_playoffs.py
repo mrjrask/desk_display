@@ -531,6 +531,25 @@ def test_series_status_line_text_uses_live_and_yellow_fill_for_live_series():
     assert nhl_playoffs._series_status_line_fill(series) == nhl_playoffs.SCOREBOARD_IN_PROGRESS_SCORE_COLOR
 
 
+def test_compose_canvas_centers_single_series_in_two_column_layout(monkeypatch):
+    monkeypatch.setattr(nhl_playoffs, "_use_single_series_per_row_layout", lambda: False)
+
+    draw_calls = []
+
+    def _record_draw(_canvas, _draw, _series, *, left, top):
+        draw_calls.append((left, top, _series))
+
+    monkeypatch.setattr(nhl_playoffs, "_draw_series_block", _record_draw)
+
+    series = [{"conference": "east", "teams": {"away": {}, "home": {}}}]
+
+    nhl_playoffs._compose_canvas(series)
+
+    expected_left = max(0, (nhl_playoffs.WIDTH - nhl_playoffs.SERIES_WIDTH) // 2)
+    assert len(draw_calls) == 1
+    assert draw_calls[0] == (expected_left, 0, series[0])
+
+
 def test_compose_canvas_uses_single_series_per_row_on_low_resolution(monkeypatch):
     monkeypatch.setattr(nhl_playoffs, "_use_single_series_per_row_layout", lambda: True)
 
