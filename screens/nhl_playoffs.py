@@ -90,6 +90,7 @@ LOGO_DIR = os.path.join(IMAGES_DIR, "nhl")
 PLAYOFF_LOGO_BASE_HEIGHT = scale_value_width(26)
 PLAYOFF_LOGO_SCALE = 0.9
 SCOREBOARD_LOGO_BASE_HEIGHT = standard_scoreboard_team_logo_height(HEIGHT)
+TEAM_LOGO_BASE_HEIGHT = SCOREBOARD_LOGO_BASE_HEIGHT
 LEAGUE_LOGO_BASE_HEIGHT = (
     PLAYOFF_LOGO_BASE_HEIGHT
     if (HYPERPIXEL_LAYOUT or is_kernel_driven_display())
@@ -203,8 +204,8 @@ def _apply_style_overrides() -> None:
     BACKGROUND_COLOR = (0, 0, 0)
     _recompute_series_layout()
     team_scale = get_screen_image_scale(SCREEN_ID, "team_logo", 1.0)
-    base_logo_height = SCOREBOARD_LOGO_BASE_HEIGHT if _use_single_series_per_row_layout() else PLAYOFF_LOGO_BASE_HEIGHT
-    logo_scale = 1.0 if _use_single_series_per_row_layout() else PLAYOFF_LOGO_SCALE
+    base_logo_height = TEAM_LOGO_BASE_HEIGHT if _use_single_series_per_row_layout() else PLAYOFF_LOGO_BASE_HEIGHT
+    logo_scale = PLAYOFF_LOGO_SCALE
     target_logo_height = max(1, int(round(base_logo_height * team_scale * logo_scale)))
     max_row_fit = max(1, SCORE_ROW_H - scale_value(8))
     LOGO_HEIGHT = min(target_logo_height, max_row_fit)
@@ -1263,9 +1264,14 @@ def _compose_canvas(series: list[dict]) -> Image.Image:
     draw = ImageDraw.Draw(canvas)
 
     y = 0
+    single_visible_series_left = max(0, (WIDTH - SERIES_WIDTH) // 2)
+    only_one_series = len(series) == 1
     for idx in range(rows):
         if single_series_per_row:
             _draw_series_block(canvas, draw, ordered_series[idx], left=WEST_X, top=y)
+        elif only_one_series:
+            visible_series = west_series[0] if west_series else east_series[0]
+            _draw_series_block(canvas, draw, visible_series, left=single_visible_series_left, top=y)
         else:
             if idx < len(west_series):
                 _draw_series_block(canvas, draw, west_series[idx], left=WEST_X, top=y)
