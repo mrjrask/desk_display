@@ -2020,6 +2020,7 @@ def _fetch_mlb_schedule(team_id):
             "live_game": None,
             "last_game": None,
             "last_game_alt": None,
+            "schedule_covers_today": isinstance(data.get("dates"), list),
         }
         finished = []
         home_candidates = []
@@ -2417,6 +2418,7 @@ def _fetch_mlb_schedule(team_id):
             "live_game": None,
             "last_game": None,
             "last_game_alt": None,
+            "schedule_covers_today": False,
         }
 
 
