@@ -13,6 +13,7 @@ if TYPE_CHECKING:
 
 
 KNOWN_SCREENS: Set[str] = set(SCREEN_IDS)
+REPLACEMENT_ONLY_SCREENS: Set[str] = {"cubs no game", "sox no game"}
 
 
 
@@ -440,6 +441,12 @@ def build_scheduler(config: Dict[str, Any]) -> ScreenScheduler:
 
         if frequency < 0:
             raise ValueError(f"Frequency for '{screen_id}' cannot be negative")
+
+        if screen_id in REPLACEMENT_ONLY_SCREENS:
+            # These screens are rendered through their team's configured "next"
+            # slot so existing local configs that contain both IDs do not get an
+            # extra standalone no-game slot.
+            continue
 
         if frequency == 0:
             # A frequency of zero disables the screen.  This allows playlists to

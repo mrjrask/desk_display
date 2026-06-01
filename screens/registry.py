@@ -51,6 +51,7 @@ from screens.mlb_schedule import (
     draw_box_score,
     draw_cubs_result,
     draw_last_game,
+    draw_no_game_screen,
     draw_series_screen,
     draw_next_home_game,
     draw_sports_screen,
@@ -875,6 +876,56 @@ def build_screen_registry(context: ScreenContext) -> Tuple[Dict[str, ScreenDefin
 
         return True
 
+    def _mlb_game_date(game: Any) -> Optional[_dt.date]:
+        if not isinstance(game, dict):
+            return None
+
+        for key in ("officialDate", "official_date", "date"):
+            value = game.get(key)
+            if isinstance(value, str) and value.strip():
+                try:
+                    return _dt.date.fromisoformat(value.strip()[:10])
+                except ValueError:
+                    pass
+
+        game_date = game.get("gameDate") or game.get("game_date")
+        if isinstance(game_date, str) and game_date.strip():
+            raw = game_date.strip()
+            try:
+                if raw.endswith("Z"):
+                    dt = _dt.datetime.fromisoformat(raw[:-1] + "+00:00")
+                else:
+                    dt = _dt.datetime.fromisoformat(raw)
+                if dt.tzinfo is None:
+                    return dt.date()
+                return dt.astimezone(CENTRAL_TIME).date()
+            except ValueError:
+                try:
+                    return _dt.date.fromisoformat(raw[:10])
+                except ValueError:
+                    return None
+
+        return None
+
+    def _mlb_games_on_today(*items: Any) -> bool:
+        today = context.now.date()
+
+        def _iter_games(value: Any):
+            if isinstance(value, list):
+                for item in value:
+                    yield from _iter_games(item)
+            elif isinstance(value, tuple):
+                for item in value:
+                    yield from _iter_games(item)
+            elif isinstance(value, dict):
+                yield value
+
+        for item in items:
+            for game in _iter_games(item):
+                if _mlb_game_date(game) == today:
+                    return True
+        return False
+
     def register_logo(screen_id: str):
         image = context.logos.get(screen_id)
         if image is None:
@@ -1139,6 +1190,14 @@ def build_screen_registry(context: ScreenContext) -> Tuple[Dict[str, ScreenDefin
         cubs_next_home = cubs.get("next_home")
         if _games_match(cubs_next_home, cubs_next):
             cubs_next_home = None
+        cubs_has_game_today = _mlb_games_on_today(
+            cubs.get("live"),
+            cubs_next,
+            cubs_next_alt,
+            cubs.get("last"),
+            cubs.get("last_alt"),
+            cubs_current_series,
+        )
 
         register(
             "cubs stand1",
@@ -1204,29 +1263,63 @@ def build_screen_registry(context: ScreenContext) -> Tuple[Dict[str, ScreenDefin
             ),
             available=_is_live_game_today(cubs.get("live")),
         )
-        register(
-            "cubs next",
-            lambda primary=cubs_next, alternate=cubs_next_alt: draw_sports_screen(
+        cubs_schedule_available = any(
+            bool(cubs.get(key))
+            for key in (
+                "last",
+                "last_alt",
+                "live",
+                "next",
+                "next_alt",
+                "current_series",
+                "next_series",
+                "next_home_series",
+                "next_home",
+            )
+        )
+        cubs_no_game_today = cubs_schedule_available and not cubs_has_game_today
+
+        def _draw_cubs_next_or_no_game(screen_id: str):
+            if cubs_no_game_today:
+                return draw_no_game_screen(
+                    context.display,
+                    team="Cubs",
+                    logo_path=os.path.join(context.image_dir, "mlb/CUBS.png"),
+                    screen_id="cubs no game",
+                    transition=True,
+                )
+            return draw_sports_screen(
                 context.display,
-                _rotate_games("cubs next", primary, alternate),
+                _rotate_games(screen_id, cubs_next, cubs_next_alt),
                 "Next Cubs game...",
-                screen_id="cubs next",
+                screen_id=screen_id,
+                transition=True,
+            )
+
+        register(
+            "cubs no game",
+            lambda: draw_no_game_screen(
+                context.display,
+                team="Cubs",
+                logo_path=os.path.join(context.image_dir, "mlb/CUBS.png"),
+                screen_id="cubs no game",
                 transition=True,
             ),
-            available=bool(cubs_next or cubs_next_alt),
+            available=cubs_no_game_today,
+        )
+        register(
+            "cubs next",
+            lambda: _draw_cubs_next_or_no_game("cubs next"),
+            available=cubs_no_game_today or (cubs_has_game_today and bool(cubs_next or cubs_next_alt)),
+            replaces_with="cubs no game" if cubs_no_game_today else None,
         )
         register(
             "cubs next v2",
-            lambda primary=cubs_next, alternate=cubs_next_alt: draw_sports_screen(
-                context.display,
-                _rotate_games("cubs next v2", primary, alternate),
-                "Next Cubs game...",
-                screen_id="cubs next v2",
-                transition=True,
-            ),
-            available=bool(cubs_next or cubs_next_alt),
+            lambda: _draw_cubs_next_or_no_game("cubs next v2"),
+            available=cubs_no_game_today or (cubs_has_game_today and bool(cubs_next or cubs_next_alt)),
+            replaces_with="cubs no game" if cubs_no_game_today else None,
         )
-        if cubs_next_home:
+        if cubs_has_game_today and cubs_next_home:
             register(
                 "cubs next home",
                 lambda data=cubs_next_home: draw_next_home_game(
@@ -1283,7 +1376,8 @@ def build_screen_registry(context: ScreenContext) -> Tuple[Dict[str, ScreenDefin
                 transition=True,
                 scroll_speed=scroll_speed,
             ),
-            available=bool(cubs_next or cubs_next_alt)
+            available=cubs_has_game_today
+            and bool(cubs_next or cubs_next_alt)
             and bool(cubs_current_series)
             and bool(cubs_next_series)
             and bool(cubs_next_home_series),
@@ -1306,6 +1400,14 @@ def build_screen_registry(context: ScreenContext) -> Tuple[Dict[str, ScreenDefin
         sox_next_home = sox.get("next_home")
         if _games_match(sox_next_home, sox_next):
             sox_next_home = None
+        sox_has_game_today = _mlb_games_on_today(
+            sox.get("live"),
+            sox_next,
+            sox_next_alt,
+            sox.get("last"),
+            sox.get("last_alt"),
+            sox_current_series,
+        )
 
         register(
             "sox stand1",
@@ -1364,29 +1466,63 @@ def build_screen_registry(context: ScreenContext) -> Tuple[Dict[str, ScreenDefin
             ),
             available=_is_live_game_today(sox.get("live")),
         )
-        register(
-            "sox next",
-            lambda primary=sox_next, alternate=sox_next_alt: draw_sports_screen(
+        sox_schedule_available = any(
+            bool(sox.get(key))
+            for key in (
+                "last",
+                "last_alt",
+                "live",
+                "next",
+                "next_alt",
+                "current_series",
+                "next_series",
+                "next_home_series",
+                "next_home",
+            )
+        )
+        sox_no_game_today = sox_schedule_available and not sox_has_game_today
+
+        def _draw_sox_next_or_no_game(screen_id: str):
+            if sox_no_game_today:
+                return draw_no_game_screen(
+                    context.display,
+                    team="Sox",
+                    logo_path=os.path.join(context.image_dir, "mlb/SOX.png"),
+                    screen_id="sox no game",
+                    transition=True,
+                )
+            return draw_sports_screen(
                 context.display,
-                _rotate_games("sox next", primary, alternate),
+                _rotate_games(screen_id, sox_next, sox_next_alt),
                 "Next Sox game...",
-                screen_id="sox next",
+                screen_id=screen_id,
+                transition=True,
+            )
+
+        register(
+            "sox no game",
+            lambda: draw_no_game_screen(
+                context.display,
+                team="Sox",
+                logo_path=os.path.join(context.image_dir, "mlb/SOX.png"),
+                screen_id="sox no game",
                 transition=True,
             ),
-            available=bool(sox_next or sox_next_alt),
+            available=sox_no_game_today,
+        )
+        register(
+            "sox next",
+            lambda: _draw_sox_next_or_no_game("sox next"),
+            available=sox_no_game_today or (sox_has_game_today and bool(sox_next or sox_next_alt)),
+            replaces_with="sox no game" if sox_no_game_today else None,
         )
         register(
             "sox next v2",
-            lambda primary=sox_next, alternate=sox_next_alt: draw_sports_screen(
-                context.display,
-                _rotate_games("sox next v2", primary, alternate),
-                "Next Sox game...",
-                screen_id="sox next v2",
-                transition=True,
-            ),
-            available=bool(sox_next or sox_next_alt),
+            lambda: _draw_sox_next_or_no_game("sox next v2"),
+            available=sox_no_game_today or (sox_has_game_today and bool(sox_next or sox_next_alt)),
+            replaces_with="sox no game" if sox_no_game_today else None,
         )
-        if sox_next_home:
+        if sox_has_game_today and sox_next_home:
             register(
                 "sox next home",
                 lambda data=sox_next_home: draw_next_home_game(
@@ -1443,7 +1579,8 @@ def build_screen_registry(context: ScreenContext) -> Tuple[Dict[str, ScreenDefin
                 transition=True,
                 scroll_speed=scroll_speed,
             ),
-            available=bool(sox_next or sox_next_alt)
+            available=sox_has_game_today
+            and bool(sox_next or sox_next_alt)
             and bool(sox_current_series)
             and bool(sox_next_series)
             and bool(sox_next_home_series),

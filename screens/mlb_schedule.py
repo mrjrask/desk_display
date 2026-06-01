@@ -18,7 +18,7 @@ import config
 from config import (
     WIDTH, HEIGHT,
     FONT_TITLE_SPORTS, FONT_DATE_SPORTS,
-    FONT_TEAM_SPORTS, FONT_SCORE,
+    FONT_TEAM_SPORTS, FONT_SCORE, FONT_CONDITION,
     MLB_CUBS_TEAM_ID, MLB_SOX_TEAM_ID,
     CENTRAL_TIME,
     IMAGES_DIR,
@@ -77,6 +77,75 @@ FLAG_BLOCK_PAD          = 6
 FLAG_BLOCK_H            = SMALL_RESULT_FLAG_H + FLAG_BLOCK_PAD  # reserved area (always)
 
 # ── Helpers ──────────────────────────────────────────────────────────────────
+
+
+def _text_size(draw: ImageDraw.ImageDraw, text: str, font: ImageFont.ImageFont) -> tuple[int, int]:
+    try:
+        left, top, right, bottom = draw.textbbox((0, 0), text, font=font)
+        return right - left, bottom - top
+    except Exception:
+        return draw.textsize(text, font=font)
+
+
+def _fit_logo_image(logo: Image.Image, max_width: int, max_height: int) -> Image.Image:
+    if logo.width <= 0 or logo.height <= 0 or max_width <= 0 or max_height <= 0:
+        return logo
+    scale = min(max_width / float(logo.width), max_height / float(logo.height), 1.0)
+    if scale >= 1.0:
+        return logo
+    new_size = (max(1, int(round(logo.width * scale))), max(1, int(round(logo.height * scale))))
+    return logo.resize(new_size, Image.LANCZOS)
+
+
+@log_call
+def draw_no_game_screen(
+    display,
+    *,
+    team: str,
+    logo_path: str,
+    transition: bool = False,
+    screen_id: Optional[str] = None,
+):
+    """Render a simple team-branded "No Game Today" MLB screen."""
+    _set_background(screen_id)
+    img = Image.new("RGB", (WIDTH, HEIGHT), BACKGROUND_COLOR)
+    draw = ImageDraw.Draw(img)
+
+    logo = None
+    if logo_path and os.path.exists(logo_path):
+        try:
+            logo = Image.open(logo_path).convert("RGBA")
+        except Exception as exc:
+            logging.warning("Could not load %s no-game logo from %s: %s", team, logo_path, exc)
+
+    text = "No Game Today"
+    text_font = fit_font(
+        draw,
+        text,
+        FONT_CONDITION,
+        max_width=max(1, int(WIDTH * 0.86)),
+        max_height=max(1, int(HEIGHT * 0.16)),
+        min_pt=8,
+    )
+    text_w, text_h = _text_size(draw, text, text_font)
+
+    logo_max_w = max(1, int(WIDTH * 0.36))
+    logo_max_h = max(1, int(HEIGHT * 0.42))
+    if logo is not None:
+        logo = _fit_logo_image(logo, logo_max_w, logo_max_h)
+
+    gap = max(6, int(round(HEIGHT * 0.08)))
+    content_h = (logo.height if logo else 0) + (gap if logo else 0) + text_h
+    content_top = max(0, int(round((HEIGHT - content_h) * 0.40)))
+
+    y = content_top
+    if logo is not None:
+        img.paste(logo, ((WIDTH - logo.width) // 2, y), logo)
+        y += logo.height + gap
+
+    draw.text(((WIDTH - text_w) // 2, y), text, font=text_font, fill=(255, 255, 255))
+    return ScreenImage(img, displayed=False)
+
 
 def _format_game_label(official_date: str, start_time: str) -> str:
     """Bottom label for next-game screens with relative-day logic."""
