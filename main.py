@@ -1717,8 +1717,8 @@ cache = {
     "hawks":   {"stand":None, "last":None, "live":None, "next":None, "next_home":None},
     "wolves":  {"last":None, "live":None, "next":None, "next_home":None},
     "bulls":   {"stand":None, "last":None, "live":None, "next":None, "next_home":None},
-    "cubs":    {"stand":None, "last":None, "last_alt":None, "live":None, "next":None, "next_alt":None, "current_series":None, "next_series":None, "next_home_series":None, "next_home":None},
-    "sox":     {"stand":None, "last":None, "last_alt":None, "live":None, "next":None, "next_alt":None, "current_series":None, "next_series":None, "next_home_series":None, "next_home":None},
+    "cubs":    {"stand":None, "last":None, "last_alt":None, "live":None, "next":None, "next_alt":None, "current_series":None, "next_series":None, "next_home_series":None, "next_home":None, "schedule_covers_today":False},
+    "sox":     {"stand":None, "last":None, "last_alt":None, "live":None, "next":None, "next_alt":None, "current_series":None, "next_series":None, "next_home_series":None, "next_home":None, "schedule_covers_today":False},
     "scoreboards": {"nfl": None, "mlb": None, "nba": None, "ncaam": None, "nhl": None},
 }
 
@@ -2047,6 +2047,7 @@ def _refresh_cubs() -> None:
         "next_series": cubg.get("next_series_games"),
         "next_home_series": cubg.get("next_home_series_games"),
         "next_home": cubg.get("next_home_game"),
+        "schedule_covers_today": bool(cubg.get("schedule_covers_today")),
     })
 
 
@@ -2063,6 +2064,7 @@ def _refresh_sox() -> None:
         "next_series": soxg.get("next_series_games"),
         "next_home_series": soxg.get("next_home_series_games"),
         "next_home": soxg.get("next_home_game"),
+        "schedule_covers_today": bool(soxg.get("schedule_covers_today")),
     })
 
 
