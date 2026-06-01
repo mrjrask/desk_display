@@ -16,7 +16,7 @@ import os
 import re
 import time
 from functools import lru_cache
-from PIL import Image, ImageDraw
+from PIL import Image, ImageDraw, ImageFont
 import config
 from config import (
     BEARS_BOTTOM_MARGIN,
@@ -44,19 +44,33 @@ def _text_size(draw, text, *, font):
         return draw.textsize(text, font=font)
 
 
+def _parse_schedule_date(date_text: str) -> datetime.datetime | None:
+    if not date_text:
+        return None
+    date_text = str(date_text).strip()
+    if not date_text or date_text.upper() == "BYE":
+        return None
+    for fmt in ("%a, %b %d %Y", "%a, %b %d, %Y", "%a, %b %d"):
+        try:
+            return datetime.datetime.strptime(date_text, fmt)
+        except Exception:
+            continue
+    return None
+
+
 def _format_game_date(date_text: str) -> str:
     if not date_text:
         return ""
     date_text = str(date_text).strip()
     if not date_text:
         return ""
-    for fmt in ("%a, %b %d %Y", "%a, %b %d, %Y", "%a, %b %d"):
-        try:
-            dt0 = datetime.datetime.strptime(date_text, fmt)
-            return f"{dt0.month}/{dt0.day}"
-        except Exception:
-            continue
-    return date_text
+    dt0 = _parse_schedule_date(date_text)
+    if dt0 is None:
+        return date_text
+    date_part = f"{dt0.month}/{dt0.day}"
+    if dt0.weekday() == 6:
+        return date_part
+    return f"{dt0.strftime('%a')} {date_part}"
 
 
 NFL_LOGO_DIR = os.path.join(config.IMAGES_DIR, "nfl")
@@ -448,6 +462,71 @@ def _format_schedule_line_time(date_text: str, time_text: str) -> str:
     return f"{date_part} {time_part}"
 
 
+def _is_postseason_week(week: str) -> bool:
+    week_lower = str(week or "").strip().lower()
+    return any(token in week_lower for token in ("wild", "divisional", "conference", "championship", "super bowl", "playoff"))
+
+
+def _should_show_bears_schedule_game(game: dict, today: datetime.date | None = None) -> bool:
+    opponent = str(game.get("opponent") or "").strip()
+    if not opponent or opponent in {"—", "TBD"}:
+        return False
+
+    week = str(game.get("week") or game.get("game_no") or "").strip()
+    week_lower = week.lower()
+    if week_lower.startswith("preseason") or re.match(r"^week\s*\d+\b", week_lower):
+        return True
+
+    if _is_postseason_week(week_lower):
+        game_date = _parse_schedule_date(str(game.get("date") or ""))
+        if game_date is None:
+            return False
+        if today is None:
+            today = datetime.date.today()
+        return game_date.date() >= today
+
+    return False
+
+
+def _format_bears_schedule_week_label(week: str) -> str:
+    week_txt = str(week or "").strip()
+    preseason = re.search(r"(?i)preseason\s*(\d+)?", week_txt)
+    if preseason:
+        return f"P{preseason.group(1)}" if preseason.group(1) else "Pre"
+
+    regular = re.search(r"(?i)^week\s*(\d+)\b", week_txt)
+    if regular:
+        return f"W{regular.group(1)}"
+
+    if week_txt and not week_txt.lower().startswith("w"):
+        return week_txt
+    return week_txt
+
+
+def _clone_font_at_size(font: ImageFont.ImageFont, size: int) -> ImageFont.ImageFont:
+    path = getattr(font, "path", None)
+    if path:
+        try:
+            return ImageFont.truetype(path, size)
+        except OSError:
+            pass
+    return font
+
+
+def _fit_font_to_width(
+    draw: ImageDraw.ImageDraw,
+    text: str,
+    base_font: ImageFont.ImageFont,
+    max_width: int,
+    *,
+    min_size: int = 12,
+) -> ImageFont.ImageFont:
+    size = int(getattr(base_font, "size", min_size) or min_size)
+    while size > min_size and draw.textsize(text, font=_clone_font_at_size(base_font, size))[0] > max_width:
+        size -= 1
+    return _clone_font_at_size(base_font, max(min_size, size))
+
+
 def show_bears_next_season_sched(display, transition=False):
     background = get_screen_background_color("bears next season sched", (0, 0, 0))
     img = Image.new("RGB", (config.WIDTH, config.HEIGHT), background)
@@ -466,9 +545,9 @@ def show_bears_next_season_sched(display, transition=False):
 
     schedule_rows = []
     for game in BEARS_SCHEDULE:
-        opponent = str(game.get("opponent") or "").strip()
-        if not opponent or opponent in {"—", "TBD"}:
+        if not _should_show_bears_schedule_game(game):
             continue
+        opponent = str(game.get("opponent") or "").strip()
         ha = str(game.get("home_away") or "").strip().lower()
         prefix = "@" if ha == "away" else "vs."
         team_key = opponent.split()[-1].lower()
@@ -502,16 +581,18 @@ def show_bears_next_season_sched(display, transition=False):
         full_img = Image.new("RGB", (config.WIDTH, full_h), background)
         full_draw = ImageDraw.Draw(full_img)
         full_draw.text(((config.WIDTH - draw.textsize(title, font=title_font)[0]) // 2, 2), title, font=title_font, fill=(255, 255, 255))
-        week_w = draw.textsize("W18", font=date_font)[0]
+        week_w = max(draw.textsize(sample, font=date_font)[0] for sample in ("W18", "P3"))
+        logo_col_w = max(logo_size, *(
+            (_cached_team_logo(row["abbr"], logo_size).width if _cached_team_logo(row["abbr"], logo_size) else logo_size)
+            for row in schedule_rows
+        ))
         x_week = 2
         x_prefix = x_week + week_w + 3
         x_logo = x_prefix + full_draw.textsize("vs.", font=date_font)[0] + 2
-        x_name = x_logo + logo_size + 3
+        x_name = x_logo + logo_col_w + 3
         for idx, row in enumerate(schedule_rows):
             y = rows_top + idx * row_h
-            week_txt = row["week"] if row["week"] else ""
-            week_txt = re.sub(r"(?i)^week\s*", "", week_txt).strip()
-            week_disp = f"W{week_txt}" if week_txt and not week_txt.lower().startswith("w") else week_txt
+            week_disp = _format_bears_schedule_week_label(row["week"])
             if week_disp:
                 full_draw.text((x_week, y + max(0, (row_h - full_draw.textsize(week_disp, font=date_font)[1]) // 2)), week_disp, font=date_font, fill=(160, 180, 220))
 
@@ -523,17 +604,18 @@ def show_bears_next_season_sched(display, transition=False):
             )
             logo = _cached_team_logo(row["abbr"], logo_size)
             if logo:
+                lx = x_logo + max(0, (logo_col_w - logo.width) // 2)
                 ly = y + (row_h - logo.height) // 2
-                full_img.paste(logo, (x_logo, ly), logo)
+                full_img.paste(logo, (lx, ly), logo)
             right_text = row["when"]
             if row["score"]:
                 right_text = f"{right_text} {row['score']}".strip()
             right_w = full_draw.textsize(right_text, font=date_font)[0]
             max_name_w = max(20, config.WIDTH - x_name - right_w - 3)
             name = row["opponent"]
-            while full_draw.textsize(name, font=row_font)[0] > max_name_w and len(name) > 4:
-                name = name[:-2] + "…"
-            full_draw.text((x_name, y), name, font=row_font, fill=(255, 255, 255))
+            name_font = _fit_font_to_width(full_draw, name, row_font, max_name_w)
+            name_h = full_draw.textsize(name, font=name_font)[1]
+            full_draw.text((x_name, y + max(0, (row_h - name_h) // 2)), name, font=name_font, fill=(255, 255, 255))
             rw = full_draw.textsize(right_text, font=date_font)[0]
             rt_h = full_draw.textsize(right_text, font=date_font)[1]
             full_draw.text((config.WIDTH - rw - 2, y + max(0, (row_h - rt_h) // 2)), right_text, font=date_font, fill=(180, 220, 255))
