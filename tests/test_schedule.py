@@ -318,3 +318,27 @@ def test_scheduler_rejects_hide_after_when_enabled_without_datetime():
                 }
             }
         )
+
+
+def test_mlb_no_game_entries_do_not_add_standalone_schedule_slots():
+    scheduler = build_scheduler(
+        {
+            "screens": {
+                "cubs no game": 1,
+                "cubs next": 1,
+                "sox no game": 1,
+                "sox next": 1,
+            }
+        }
+    )
+
+    assert scheduler.node_count == 2
+    assert scheduler.requested_ids == {"cubs next", "sox next"}
+
+    registry = make_registry({"cubs next": True, "sox next": True})
+    assert collect_sequence(scheduler, registry, 4) == [
+        "cubs next",
+        "sox next",
+        "cubs next",
+        "sox next",
+    ]

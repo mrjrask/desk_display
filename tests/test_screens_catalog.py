@@ -27,12 +27,22 @@ def test_mlb_no_game_screen_ids_are_listed():
     assert "sox no game" in RAW_SCREEN_IDS
 
 
-def test_mlb_no_game_default_frequency_matches_next_screen():
+def test_mlb_no_game_screens_are_replacement_only_in_default_config():
     config = json.loads(Path("screens_config.json").read_text())
     screens = config["screens"]
+    playlist_steps = [
+        step.get("screen")
+        for playlist in config.get("playlists", {}).values()
+        for step in playlist.get("steps", [])
+        if isinstance(step, dict)
+    ]
 
-    assert screens["cubs no game"] == screens["cubs next"]
-    assert screens["sox no game"] == screens["sox next"]
+    assert "cubs no game" not in screens
+    assert "sox no game" not in screens
+    assert "cubs no game" not in playlist_steps
+    assert "sox no game" not in playlist_steps
+    assert screens["cubs next"] > 0
+    assert screens["sox next"] > 0
 
 
 def test_nba_nhl_schedule_quad_screen_ids_are_listed():

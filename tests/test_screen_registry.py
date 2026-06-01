@@ -1063,41 +1063,18 @@ def test_mlb_no_game_screens_available_when_no_game_today():
             weather,
             now,
             cache_updates={
-                "cubs": {
-                    "next": {"gamePk": 1, "officialDate": "2024-07-02"},
-                    "schedule_covers_today": True,
-                },
-                "sox": {
-                    "last": {"gamePk": 2, "officialDate": "2024-06-30"},
-                    "schedule_covers_today": True,
-                },
+                "cubs": {"next": {"gamePk": 1, "officialDate": "2024-07-02"}},
+                "sox": {"last": {"gamePk": 2, "officialDate": "2024-06-30"}},
             },
         )
     )
 
     assert registry["cubs no game"].available is True
     assert registry["sox no game"].available is True
-    assert registry["cubs next"].available is False
-    assert registry["sox next"].available is False
-
-
-def test_mlb_no_game_screens_hidden_when_schedule_did_not_cover_today():
-    now = datetime.datetime(2024, 7, 1, 12, 0, tzinfo=CENTRAL_TIME)
-    weather = {"hourly": []}
-
-    registry, _ = build_screen_registry(
-        _make_context(
-            weather,
-            now,
-            cache_updates={
-                "cubs": {"stand": {"team": {"id": 112}}},
-                "sox": {"stand": {"team": {"id": 145}}},
-            },
-        )
-    )
-
-    assert registry["cubs no game"].available is False
-    assert registry["sox no game"].available is False
+    assert registry["cubs next"].available is True
+    assert registry["sox next"].available is True
+    assert registry["cubs next"].metadata["replaces_with"] == "cubs no game"
+    assert registry["sox next"].metadata["replaces_with"] == "sox no game"
 
 
 def test_mlb_no_game_screens_hidden_when_game_is_today():
@@ -1109,14 +1086,8 @@ def test_mlb_no_game_screens_hidden_when_game_is_today():
             weather,
             now,
             cache_updates={
-                "cubs": {
-                    "next": {"gamePk": 1, "officialDate": "2024-07-01"},
-                    "schedule_covers_today": True,
-                },
-                "sox": {
-                    "next": {"gamePk": 2, "officialDate": "2024-07-01"},
-                    "schedule_covers_today": True,
-                },
+                "cubs": {"next": {"gamePk": 1, "officialDate": "2024-07-01"}},
+                "sox": {"next": {"gamePk": 2, "officialDate": "2024-07-01"}},
             },
         )
     )
@@ -1125,3 +1096,5 @@ def test_mlb_no_game_screens_hidden_when_game_is_today():
     assert registry["sox no game"].available is False
     assert registry["cubs next"].available is True
     assert registry["sox next"].available is True
+    assert registry["cubs next"].metadata["replaces_with"] is None
+    assert registry["sox next"].metadata["replaces_with"] is None
