@@ -907,6 +907,9 @@ def build_screen_registry(context: ScreenContext) -> Tuple[Dict[str, ScreenDefin
 
         return None
 
+    def _mlb_schedule_covers_today(team_cache: Any) -> bool:
+        return isinstance(team_cache, dict) and bool(team_cache.get("schedule_covers_today"))
+
     def _mlb_games_on_today(*items: Any) -> bool:
         today = context.now.date()
 
@@ -1190,6 +1193,7 @@ def build_screen_registry(context: ScreenContext) -> Tuple[Dict[str, ScreenDefin
         cubs_next_home = cubs.get("next_home")
         if _games_match(cubs_next_home, cubs_next):
             cubs_next_home = None
+        cubs_schedule_covers_today = _mlb_schedule_covers_today(cubs)
         cubs_has_game_today = _mlb_games_on_today(
             cubs.get("live"),
             cubs_next,
@@ -1272,7 +1276,7 @@ def build_screen_registry(context: ScreenContext) -> Tuple[Dict[str, ScreenDefin
                 screen_id="cubs no game",
                 transition=True,
             ),
-            available=not cubs_has_game_today,
+            available=cubs_schedule_covers_today and not cubs_has_game_today,
         )
         register(
             "cubs next",
@@ -1377,6 +1381,7 @@ def build_screen_registry(context: ScreenContext) -> Tuple[Dict[str, ScreenDefin
         sox_next_home = sox.get("next_home")
         if _games_match(sox_next_home, sox_next):
             sox_next_home = None
+        sox_schedule_covers_today = _mlb_schedule_covers_today(sox)
         sox_has_game_today = _mlb_games_on_today(
             sox.get("live"),
             sox_next,
@@ -1452,7 +1457,7 @@ def build_screen_registry(context: ScreenContext) -> Tuple[Dict[str, ScreenDefin
                 screen_id="sox no game",
                 transition=True,
             ),
-            available=not sox_has_game_today,
+            available=sox_schedule_covers_today and not sox_has_game_today,
         )
         register(
             "sox next",
