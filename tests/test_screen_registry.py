@@ -511,12 +511,12 @@ def test_mlb_next_alt_games_rotate_on_primary_next_screen(monkeypatch):
             now,
             cache_updates={
                 "cubs": {
-                    "next": {"gamePk": 1},
-                    "next_alt": {"gamePk": 2},
+                    "next": {"gamePk": 1, "officialDate": "2024-03-10"},
+                    "next_alt": {"gamePk": 2, "officialDate": "2024-03-10"},
                 },
                 "sox": {
-                    "next": {"gamePk": 3},
-                    "next_alt": {"gamePk": 4},
+                    "next": {"gamePk": 3, "officialDate": "2024-03-10"},
+                    "next_alt": {"gamePk": 4, "officialDate": "2024-03-10"},
                 },
             },
         )
@@ -651,8 +651,8 @@ def test_cubs_schedule_quad_uses_expected_tile_selection(monkeypatch):
         now,
         cache_updates={
             "cubs": {
-                "next": {"gamePk": 1},
-                "current_series": [{"gamePk": 2}],
+                "next": {"gamePk": 1, "officialDate": "2024-01-01"},
+                "current_series": [{"gamePk": 2, "officialDate": "2024-01-01"}],
                 "next_series": [{"gamePk": 3}],
                 "next_home_series": [{"gamePk": 4}],
             }
@@ -686,8 +686,8 @@ def test_sox_schedule_quad_uses_expected_tile_selection(monkeypatch):
         now,
         cache_updates={
             "sox": {
-                "next": {"gamePk": 10},
-                "current_series": [{"gamePk": 20}],
+                "next": {"gamePk": 10, "officialDate": "2024-01-01"},
+                "current_series": [{"gamePk": 20, "officialDate": "2024-01-01"}],
                 "next_series": [{"gamePk": 30}],
                 "next_home_series": [{"gamePk": 40}],
             }
@@ -1071,6 +1071,8 @@ def test_mlb_no_game_screens_available_when_no_game_today():
 
     assert registry["cubs no game"].available is True
     assert registry["sox no game"].available is True
+    assert registry["cubs next"].available is False
+    assert registry["sox next"].available is False
 
 
 def test_mlb_no_game_screens_hidden_when_game_is_today():
@@ -1083,10 +1085,12 @@ def test_mlb_no_game_screens_hidden_when_game_is_today():
             now,
             cache_updates={
                 "cubs": {"next": {"gamePk": 1, "officialDate": "2024-07-01"}},
-                "sox": {"last": {"gamePk": 2, "officialDate": "2024-07-01"}},
+                "sox": {"next": {"gamePk": 2, "officialDate": "2024-07-01"}},
             },
         )
     )
 
     assert registry["cubs no game"].available is False
     assert registry["sox no game"].available is False
+    assert registry["cubs next"].available is True
+    assert registry["sox next"].available is True

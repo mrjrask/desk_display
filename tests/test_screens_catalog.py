@@ -1,3 +1,6 @@
+import json
+from pathlib import Path
+
 from screens_catalog import RAW_SCREEN_IDS
 
 
@@ -22,6 +25,14 @@ def test_mlb_schedule_quad_screen_ids_are_listed():
 def test_mlb_no_game_screen_ids_are_listed():
     assert "cubs no game" in RAW_SCREEN_IDS
     assert "sox no game" in RAW_SCREEN_IDS
+
+
+def test_mlb_no_game_default_frequency_matches_next_screen():
+    config = json.loads(Path("screens_config.json").read_text())
+    screens = config["screens"]
+
+    assert screens["cubs no game"] == screens["cubs next"]
+    assert screens["sox no game"] == screens["sox next"]
 
 
 def test_nba_nhl_schedule_quad_screen_ids_are_listed():

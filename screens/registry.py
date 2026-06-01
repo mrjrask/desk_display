@@ -1283,7 +1283,7 @@ def build_screen_registry(context: ScreenContext) -> Tuple[Dict[str, ScreenDefin
                 screen_id="cubs next",
                 transition=True,
             ),
-            available=bool(cubs_next or cubs_next_alt),
+            available=cubs_has_game_today and bool(cubs_next or cubs_next_alt),
         )
         register(
             "cubs next v2",
@@ -1294,9 +1294,9 @@ def build_screen_registry(context: ScreenContext) -> Tuple[Dict[str, ScreenDefin
                 screen_id="cubs next v2",
                 transition=True,
             ),
-            available=bool(cubs_next or cubs_next_alt),
+            available=cubs_has_game_today and bool(cubs_next or cubs_next_alt),
         )
-        if cubs_next_home:
+        if cubs_has_game_today and cubs_next_home:
             register(
                 "cubs next home",
                 lambda data=cubs_next_home: draw_next_home_game(
@@ -1353,7 +1353,8 @@ def build_screen_registry(context: ScreenContext) -> Tuple[Dict[str, ScreenDefin
                 transition=True,
                 scroll_speed=scroll_speed,
             ),
-            available=bool(cubs_next or cubs_next_alt)
+            available=cubs_has_game_today
+            and bool(cubs_next or cubs_next_alt)
             and bool(cubs_current_series)
             and bool(cubs_next_series)
             and bool(cubs_next_home_series),
@@ -1462,7 +1463,7 @@ def build_screen_registry(context: ScreenContext) -> Tuple[Dict[str, ScreenDefin
                 screen_id="sox next",
                 transition=True,
             ),
-            available=bool(sox_next or sox_next_alt),
+            available=sox_has_game_today and bool(sox_next or sox_next_alt),
         )
         register(
             "sox next v2",
@@ -1473,9 +1474,9 @@ def build_screen_registry(context: ScreenContext) -> Tuple[Dict[str, ScreenDefin
                 screen_id="sox next v2",
                 transition=True,
             ),
-            available=bool(sox_next or sox_next_alt),
+            available=sox_has_game_today and bool(sox_next or sox_next_alt),
         )
-        if sox_next_home:
+        if sox_has_game_today and sox_next_home:
             register(
                 "sox next home",
                 lambda data=sox_next_home: draw_next_home_game(
@@ -1532,7 +1533,8 @@ def build_screen_registry(context: ScreenContext) -> Tuple[Dict[str, ScreenDefin
                 transition=True,
                 scroll_speed=scroll_speed,
             ),
-            available=bool(sox_next or sox_next_alt)
+            available=sox_has_game_today
+            and bool(sox_next or sox_next_alt)
             and bool(sox_current_series)
             and bool(sox_next_series)
             and bool(sox_next_home_series),
