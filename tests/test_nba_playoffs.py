@@ -431,3 +431,44 @@ def test_select_current_round_series_drops_unset_or_duplicate_matchups():
 
     assert len(selected) == 1
     assert selected[0]["teams"]["away"]["team"]["abbreviation"] == "BOS"
+
+
+def test_select_current_round_series_prefers_finals_over_stale_incomplete_prior_rounds():
+    stale_conference_finals = {
+        "teams": {
+            "away": {"team": {"abbreviation": "BOS"}, "score": 3},
+            "home": {"team": {"abbreviation": "NYK"}, "score": 3},
+        },
+        "round_rank": 3,
+    }
+    finals = {
+        "teams": {
+            "away": {"team": {"abbreviation": "SAS"}, "score": 1},
+            "home": {"team": {"abbreviation": "NYK"}, "score": 1},
+        },
+        "round_rank": 4,
+    }
+
+    selected = nba_playoffs._select_current_round_series([stale_conference_finals, finals])
+
+    assert len(selected) == 1
+    assert selected[0]["round_rank"] == 4
+
+
+def test_compose_canvas_centers_single_series_on_display(monkeypatch):
+    monkeypatch.setattr(nba_playoffs, "_use_single_series_per_row_layout", lambda: False)
+
+    draw_calls = []
+
+    def _record_draw(_canvas, _draw, _series, *, left, top):
+        draw_calls.append((left, top))
+
+    monkeypatch.setattr(nba_playoffs, "_draw_series_block", _record_draw)
+
+    series = [{"conference": "west", "teams": {"away": {}, "home": {}}}]
+
+    canvas = nba_playoffs._compose_canvas(series)
+
+    expected_left = max(0, (nba_playoffs.WIDTH - nba_playoffs.SERIES_WIDTH) // 2)
+    assert draw_calls == [(expected_left, 0)]
+    assert canvas.width == nba_playoffs.WIDTH

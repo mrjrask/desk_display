@@ -946,11 +946,19 @@ def _conference_buckets(series: list[dict]) -> tuple[list[dict], list[dict]]:
     return west, east
 
 
+def _is_finals_series(series: dict) -> bool:
+    return _as_int((series or {}).get("round_rank")) == 4
+
+
 def _select_current_round_series(series: list[dict]) -> list[dict]:
     if not series:
         return []
     with_opponents = [item for item in series if _has_both_opponents(item) and _has_distinct_opponents(item)]
     ranked = [item for item in with_opponents if _as_int(item.get("round_rank")) is not None]
+    finals_series = [item for item in ranked if _is_finals_series(item)]
+    if finals_series:
+        current_finals = [item for item in finals_series if not _is_completed_series(item)]
+        return current_finals or finals_series
     if not ranked:
         current_only = [item for item in with_opponents if not _is_completed_series(item)]
         return current_only or with_opponents
@@ -1021,7 +1029,10 @@ def _compose_canvas(series: list[dict]) -> Image.Image:
         return Image.new("RGB", (WIDTH, HEIGHT), BACKGROUND_COLOR)
     west_series, east_series = _conference_buckets(series)
     single_series_per_row = _use_single_series_per_row_layout()
-    if single_series_per_row:
+    if len(series) == 1:
+        ordered_series = series
+        rows = 1
+    elif single_series_per_row:
         ordered_series = [*west_series, *east_series]
         rows = len(ordered_series)
     else:
@@ -1037,7 +1048,10 @@ def _compose_canvas(series: list[dict]) -> Image.Image:
 
     y = 0
     for idx in range(rows):
-        if single_series_per_row:
+        if len(series) == 1:
+            centered_left = max(0, (WIDTH - SERIES_WIDTH) // 2)
+            _draw_series_block(canvas, draw, ordered_series[idx], left=centered_left, top=y)
+        elif single_series_per_row:
             _draw_series_block(canvas, draw, ordered_series[idx], left=WEST_X, top=y)
         else:
             if idx < len(west_series):

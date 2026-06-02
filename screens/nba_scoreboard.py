@@ -161,6 +161,8 @@ def _intro_max_height() -> int:
 _LOGO_CACHE: dict[tuple[str, int], Optional[Image.Image]] = {}
 _LOGO_ABBREVIATION_OVERRIDES: dict[str, str] = {
     "BKN": "BRK",
+    "NYK": "NY",
+    "SAS": "SA",
     "WAS": "WSH",
 }
 _SESSION = get_session()
