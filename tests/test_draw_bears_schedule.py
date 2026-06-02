@@ -58,7 +58,7 @@ def test_bears_schedule_opponent_team_name_removes_city_names():
     assert draw_bears_schedule._opponent_team_name("Green Bay Packers") == "Packers"
 
 
-def test_bears_schedule_scroll_uses_slow_continuous_settings(monkeypatch):
+def test_bears_schedule_scroll_uses_scoreboard_scroll_settings(monkeypatch):
     calls = []
 
     def fake_scroll_vertical_content(**kwargs):
@@ -74,6 +74,8 @@ def test_bears_schedule_scroll_uses_slow_continuous_settings(monkeypatch):
 
     assert result.displayed is True
     assert calls
-    assert calls[0]["page_jump_mode"] is False
-    assert calls[0]["min_frame_time"] >= 0.08
-    assert calls[0]["base_step"] <= 5
+    assert "page_jump_mode" not in calls[0]
+    assert calls[0]["base_step"] == config.SCOREBOARD_SCROLL_STEP
+    assert calls[0]["pause_start"] == config.SCOREBOARD_SCROLL_PAUSE_TOP
+    assert calls[0]["pause_end"] == config.SCOREBOARD_SCROLL_PAUSE_BOTTOM
+    assert calls[0]["min_frame_time"] == config.SCOREBOARD_SCROLL_DELAY
