@@ -83,6 +83,7 @@ PRESSURE_TREND_SYMBOLS = {
 EMOJI_DRAW_KWARGS = {"embedded_color": True} if EMOJI_EMBEDDED_COLOR else {}
 WEATHER_ICON_SCALE = 0.9
 WEATHER_ICON_SCALE_HYPERPIXEL_SQUARE = 0.8
+WEATHER_LO_TEMP_COLOR = (176, 224, 230)
 TEMPERATURE_COLOR_STOPS_F: tuple[tuple[float, tuple[int, int, int]], ...] = (
     (-10.0, (211, 46, 179)),
     (0.0, (172, 45, 176)),
@@ -545,7 +546,7 @@ def draw_weather_screen_1(display, weather, transition=False):
         feels_col = uv_index_color(2)
     else:
         feels_col = (255,255,255)
-    val_colors = [feels_col, (255,0,0), (0,0,255)]
+    val_colors = [feels_col, (255, 0, 0), WEATHER_LO_TEMP_COLOR]
 
     groups = []
     for lbl, val in zip(labels, values):
