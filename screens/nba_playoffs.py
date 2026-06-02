@@ -106,6 +106,17 @@ if HYPERPIXEL_4_SQUARE:
 LOGO_HEIGHT = PLAYOFF_LOGO_BASE_HEIGHT
 LEAGUE_LOGO_GAP = _scale_y(4)
 
+# The 2026 NBA Playoffs screen is intentionally pinned to the active Finals
+# matchup so stale conference finals records from upstream bracket feeds do not
+# keep rendering alongside the championship series.
+CURRENT_FINALS_TEAM_ABBRS = frozenset({"NY", "SA"})
+_CURRENT_FINALS_ABBR_ALIASES = {
+    "NYK": "NY",
+    "NY": "NY",
+    "SAS": "SA",
+    "SA": "SA",
+}
+
 _SESSION = get_session()
 
 def _scoreboard_fonts() -> tuple:
@@ -846,6 +857,47 @@ def _has_distinct_opponents(series: dict) -> bool:
     return bool(away_abbr and home_abbr and away_abbr != home_abbr)
 
 
+def _current_finals_team_key(team: dict) -> str:
+    abbr = _team_logo_abbr(team)
+    mapped = _CURRENT_FINALS_ABBR_ALIASES.get(abbr)
+    if mapped:
+        return mapped
+
+    if not isinstance(team, dict):
+        return ""
+    text_parts = [
+        str(team.get(key) or "")
+        for key in ("teamCity", "city", "teamName", "name", "nickname")
+    ]
+    profile = team.get("profile")
+    if isinstance(profile, dict):
+        text_parts.extend(
+            str(profile.get(key) or "") for key in ("city", "name", "nickname")
+        )
+    normalized_text = " ".join(text_parts).strip().lower()
+    if "knicks" in normalized_text or "new york" in normalized_text:
+        return "NY"
+    if "spurs" in normalized_text or "san antonio" in normalized_text:
+        return "SA"
+    return ""
+
+
+def _is_current_finals_matchup(series: dict) -> bool:
+    teams = (series or {}).get("teams") or {}
+    away_team = ((teams.get("away") or {}).get("team") or {})
+    home_team = ((teams.get("home") or {}).get("team") or {})
+    team_keys = {_current_finals_team_key(away_team), _current_finals_team_key(home_team)}
+    return team_keys == CURRENT_FINALS_TEAM_ABBRS
+
+
+def _filter_current_finals_series(series: list[dict]) -> list[dict]:
+    return [
+        item
+        for item in (series or [])
+        if _has_distinct_opponents(item) and _is_current_finals_matchup(item)
+    ]
+
+
 def _is_completed_series(series: dict) -> bool:
     teams = (series or {}).get("teams") or {}
     away = teams.get("away") or {}
@@ -1135,14 +1187,18 @@ def render_nba_playoffs(display, games: list[dict], transition: bool = False) ->
     _apply_style_overrides()
 
     merged_games = list(games or [])
-    series = _fetch_playoff_matchups()
+
+    fetched_series = _fetch_playoff_matchups()
+    series = _filter_current_finals_series(fetched_series)
     if not series:
-        series = _derive_playoff_matchups_from_recent_games()
+        recent_series = _derive_playoff_matchups_from_recent_games()
+        series = _filter_current_finals_series(recent_series)
     if not series:
-        series = _derive_playoff_matchups_from_games(merged_games)
-    else:
-        for item in series:
-            item["has_live_game"] = _series_has_live_game_from_games(item, merged_games)
+        game_series = _derive_playoff_matchups_from_games(merged_games)
+        series = _filter_current_finals_series(game_series)
+
+    for item in series:
+        item["has_live_game"] = _series_has_live_game_from_games(item, merged_games)
 
     series = _select_current_round_series(series)
 

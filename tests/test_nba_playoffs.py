@@ -433,6 +433,45 @@ def test_select_current_round_series_drops_unset_or_duplicate_matchups():
     assert selected[0]["teams"]["away"]["team"]["abbreviation"] == "BOS"
 
 
+def test_filter_current_finals_series_only_keeps_knicks_spurs_matchup():
+    series = [
+        {
+            "teams": {
+                "away": {"team": {"abbreviation": "BOS"}, "score": 3},
+                "home": {"team": {"abbreviation": "NYK"}, "score": 3},
+            },
+            "round_rank": 3,
+        },
+        {
+            "teams": {
+                "away": {"team": {"abbreviation": "SAS"}, "score": 1},
+                "home": {"team": {"abbreviation": "NYK"}, "score": 1},
+            },
+            "round_rank": 4,
+        },
+    ]
+
+    selected = nba_playoffs._filter_current_finals_series(series)
+
+    assert selected == [series[1]]
+
+
+def test_filter_current_finals_series_matches_team_names_when_abbreviation_missing():
+    series = [
+        {
+            "teams": {
+                "away": {"team": {"teamCity": "San Antonio", "teamName": "Spurs"}, "score": 0},
+                "home": {"team": {"teamCity": "New York", "teamName": "Knicks"}, "score": 0},
+            },
+            "round_rank": 4,
+        }
+    ]
+
+    selected = nba_playoffs._filter_current_finals_series(series)
+
+    assert selected == series
+
+
 def test_select_current_round_series_prefers_finals_over_stale_incomplete_prior_rounds():
     stale_conference_finals = {
         "teams": {
