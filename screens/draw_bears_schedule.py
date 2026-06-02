@@ -22,6 +22,10 @@ from config import (
     BEARS_BOTTOM_MARGIN,
     BEARS_SCHEDULE,
     NFL_TEAM_ABBREVIATIONS,
+    SCOREBOARD_SCROLL_DELAY,
+    SCOREBOARD_SCROLL_PAUSE_BOTTOM,
+    SCOREBOARD_SCROLL_PAUSE_TOP,
+    SCOREBOARD_SCROLL_STEP,
     get_screen_background_color,
 )
 from utils import (
@@ -675,11 +679,10 @@ def show_bears_next_season_sched(display, transition=False):
             viewport_width=config.WIDTH,
             viewport_height=config.HEIGHT,
             render_at_offset=lambda offset: display.image(img.crop((0, offset, config.WIDTH, offset + config.HEIGHT))),
-            base_step=max(1, int(round(row_h * 0.12))),
-            pause_start=1.0,
-            pause_end=1.0,
-            page_jump_mode=False,
-            min_frame_time=0.08,
+            base_step=SCOREBOARD_SCROLL_STEP,
+            pause_start=SCOREBOARD_SCROLL_PAUSE_TOP,
+            pause_end=SCOREBOARD_SCROLL_PAUSE_BOTTOM,
+            min_frame_time=SCOREBOARD_SCROLL_DELAY,
         )
         return ScreenImage(img, displayed=True)
     scroll_vertical_content(
@@ -688,11 +691,10 @@ def show_bears_next_season_sched(display, transition=False):
         viewport_width=config.WIDTH,
         viewport_height=config.HEIGHT,
         render_at_offset=lambda offset: display.image(img.crop((0, offset, config.WIDTH, offset + config.HEIGHT))),
-        base_step=max(1, int(round(row_h * 0.12))),
-        pause_start=1.0,
-        pause_end=1.0,
-        page_jump_mode=False,
-        min_frame_time=0.08,
+        base_step=SCOREBOARD_SCROLL_STEP,
+        pause_start=SCOREBOARD_SCROLL_PAUSE_TOP,
+        pause_end=SCOREBOARD_SCROLL_PAUSE_BOTTOM,
+        min_frame_time=SCOREBOARD_SCROLL_DELAY,
     )
     return ScreenImage(img, displayed=True)
 
