@@ -907,6 +907,9 @@ def build_screen_registry(context: ScreenContext) -> Tuple[Dict[str, ScreenDefin
 
         return None
 
+    def _mlb_schedule_covers_today(team_cache: Any) -> bool:
+        return isinstance(team_cache, dict) and bool(team_cache.get("schedule_covers_today"))
+
     def _mlb_games_on_today(*items: Any) -> bool:
         today = context.now.date()
 
@@ -1263,21 +1266,8 @@ def build_screen_registry(context: ScreenContext) -> Tuple[Dict[str, ScreenDefin
             ),
             available=_is_live_game_today(cubs.get("live")),
         )
-        cubs_schedule_available = any(
-            bool(cubs.get(key))
-            for key in (
-                "last",
-                "last_alt",
-                "live",
-                "next",
-                "next_alt",
-                "current_series",
-                "next_series",
-                "next_home_series",
-                "next_home",
-            )
-        )
-        cubs_no_game_today = cubs_schedule_available and not cubs_has_game_today
+        cubs_schedule_covers_today = _mlb_schedule_covers_today(cubs)
+        cubs_no_game_today = cubs_schedule_covers_today and not cubs_has_game_today
 
         def _draw_cubs_next_or_no_game(screen_id: str):
             if cubs_no_game_today:
@@ -1466,21 +1456,8 @@ def build_screen_registry(context: ScreenContext) -> Tuple[Dict[str, ScreenDefin
             ),
             available=_is_live_game_today(sox.get("live")),
         )
-        sox_schedule_available = any(
-            bool(sox.get(key))
-            for key in (
-                "last",
-                "last_alt",
-                "live",
-                "next",
-                "next_alt",
-                "current_series",
-                "next_series",
-                "next_home_series",
-                "next_home",
-            )
-        )
-        sox_no_game_today = sox_schedule_available and not sox_has_game_today
+        sox_schedule_covers_today = _mlb_schedule_covers_today(sox)
+        sox_no_game_today = sox_schedule_covers_today and not sox_has_game_today
 
         def _draw_sox_next_or_no_game(screen_id: str):
             if sox_no_game_today:
