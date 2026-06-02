@@ -451,6 +451,30 @@ def _cached_bears_next_season_static_image(width: int, height: int) -> Image.Ima
 
 
 
+def _text_vcenter_y(
+    draw: ImageDraw.ImageDraw,
+    text: str,
+    font: ImageFont.ImageFont,
+    row_y: int,
+    row_h: int,
+) -> int:
+    try:
+        _left, top, _right, bottom = draw.textbbox((0, 0), text, font=font)
+        text_h = bottom - top
+        return int(row_y + (row_h - text_h) / 2 - top)
+    except Exception:
+        text_h = draw.textsize(text, font=font)[1]
+        return int(row_y + (row_h - text_h) / 2)
+
+
+def _opponent_team_name(opponent: str) -> str:
+    opponent = str(opponent or "").strip()
+    if not opponent:
+        return ""
+    if opponent in {"—", "TBD"}:
+        return opponent
+    return opponent.split()[-1]
+
 
 def _format_schedule_line_time(date_text: str, time_text: str) -> str:
     date_part = _format_game_date(date_text)
@@ -539,7 +563,7 @@ def show_bears_next_season_sched(display, transition=False):
     header_h = draw.textsize(title, font=title_font)[1]
     draw.text(((config.WIDTH - draw.textsize(title, font=title_font)[0]) // 2, 2), title, font=title_font, fill=(255, 255, 255))
 
-    rows_top = header_h + 6
+    rows_top = header_h + 12
     base_row_h = max(14, draw.textsize("Ag", font=row_font)[1] + 6)
     row_h = base_row_h
 
@@ -569,7 +593,17 @@ def show_bears_next_season_sched(display, transition=False):
                     opp_score, bears_score = away_score, home_score
                 score = f"F {opp_score}-{bears_score}"
         week = str(game.get("week") or game.get("game_no") or "").strip()
-        schedule_rows.append({"week": week, "prefix": prefix, "abbr": abbr, "opponent": opponent, "when": when, "score": score})
+        team_name = _opponent_team_name(opponent)
+        schedule_rows.append(
+            {
+                "week": week,
+                "prefix": prefix,
+                "abbr": abbr,
+                "opponent": team_name,
+                "when": when,
+                "score": score,
+            }
+        )
 
     if not schedule_rows:
         draw.text((4, rows_top), "No scheduled games.", font=row_font, fill=(255, 255, 255))
@@ -594,10 +628,15 @@ def show_bears_next_season_sched(display, transition=False):
             y = rows_top + idx * row_h
             week_disp = _format_bears_schedule_week_label(row["week"])
             if week_disp:
-                full_draw.text((x_week, y + max(0, (row_h - full_draw.textsize(week_disp, font=date_font)[1]) // 2)), week_disp, font=date_font, fill=(160, 180, 220))
+                full_draw.text(
+                    (x_week, _text_vcenter_y(full_draw, week_disp, date_font, y, row_h)),
+                    week_disp,
+                    font=date_font,
+                    fill=(160, 180, 220),
+                )
 
             full_draw.text(
-                (x_prefix, y + max(0, (row_h - full_draw.textsize(row["prefix"], font=date_font)[1]) // 2)),
+                (x_prefix, _text_vcenter_y(full_draw, row["prefix"], date_font, y, row_h)),
                 row["prefix"],
                 font=date_font,
                 fill=(255, 255, 255),
@@ -614,11 +653,19 @@ def show_bears_next_season_sched(display, transition=False):
             max_name_w = max(20, config.WIDTH - x_name - right_w - 3)
             name = row["opponent"]
             name_font = _fit_font_to_width(full_draw, name, row_font, max_name_w)
-            name_h = full_draw.textsize(name, font=name_font)[1]
-            full_draw.text((x_name, y + max(0, (row_h - name_h) // 2)), name, font=name_font, fill=(255, 255, 255))
+            full_draw.text(
+                (x_name, _text_vcenter_y(full_draw, name, name_font, y, row_h)),
+                name,
+                font=name_font,
+                fill=(255, 255, 255),
+            )
             rw = full_draw.textsize(right_text, font=date_font)[0]
-            rt_h = full_draw.textsize(right_text, font=date_font)[1]
-            full_draw.text((config.WIDTH - rw - 2, y + max(0, (row_h - rt_h) // 2)), right_text, font=date_font, fill=(180, 220, 255))
+            full_draw.text(
+                (config.WIDTH - rw - 2, _text_vcenter_y(full_draw, right_text, date_font, y, row_h)),
+                right_text,
+                font=date_font,
+                fill=(180, 220, 255),
+            )
         img = full_img
 
     if transition:
@@ -628,10 +675,11 @@ def show_bears_next_season_sched(display, transition=False):
             viewport_width=config.WIDTH,
             viewport_height=config.HEIGHT,
             render_at_offset=lambda offset: display.image(img.crop((0, offset, config.WIDTH, offset + config.HEIGHT))),
-            base_step=max(1, int(round(row_h * 0.6))),
-            pause_start=0.75,
-            pause_end=0.85,
-            min_frame_time=0.03,
+            base_step=max(1, int(round(row_h * 0.12))),
+            pause_start=1.0,
+            pause_end=1.0,
+            page_jump_mode=False,
+            min_frame_time=0.08,
         )
         return ScreenImage(img, displayed=True)
     scroll_vertical_content(
@@ -640,12 +688,15 @@ def show_bears_next_season_sched(display, transition=False):
         viewport_width=config.WIDTH,
         viewport_height=config.HEIGHT,
         render_at_offset=lambda offset: display.image(img.crop((0, offset, config.WIDTH, offset + config.HEIGHT))),
-        base_step=max(1, int(round(row_h * 0.6))),
-        pause_start=0.75,
-        pause_end=0.85,
-        min_frame_time=0.03,
+        base_step=max(1, int(round(row_h * 0.12))),
+        pause_start=1.0,
+        pause_end=1.0,
+        page_jump_mode=False,
+        min_frame_time=0.08,
     )
     return ScreenImage(img, displayed=True)
+
+
 def show_bears_next_season(display, transition=False):
     background = get_screen_background_color("bears next season", (0, 0, 0))
     static_img = _cached_bears_next_season_static_image(config.WIDTH, config.HEIGHT)

@@ -50,3 +50,30 @@ def test_fit_font_to_width_shrinks_without_truncating_text():
     name = "Washington Commanders"
     fitted = draw_bears_schedule._fit_font_to_width(draw, name, config.FONT_DATE_SPORTS, 160)
     assert draw.textsize(name, font=fitted)[0] <= 160
+
+
+def test_bears_schedule_opponent_team_name_removes_city_names():
+    assert draw_bears_schedule._opponent_team_name("Washington Commanders") == "Commanders"
+    assert draw_bears_schedule._opponent_team_name("San Francisco 49ers") == "49ers"
+    assert draw_bears_schedule._opponent_team_name("Green Bay Packers") == "Packers"
+
+
+def test_bears_schedule_scroll_uses_slow_continuous_settings(monkeypatch):
+    calls = []
+
+    def fake_scroll_vertical_content(**kwargs):
+        calls.append(kwargs)
+
+    class FakeDisplay:
+        def image(self, image):
+            self.last_image = image
+
+    monkeypatch.setattr(draw_bears_schedule, "scroll_vertical_content", fake_scroll_vertical_content)
+
+    result = draw_bears_schedule.show_bears_next_season_sched(FakeDisplay())
+
+    assert result.displayed is True
+    assert calls
+    assert calls[0]["page_jump_mode"] is False
+    assert calls[0]["min_frame_time"] >= 0.08
+    assert calls[0]["base_step"] <= 5
