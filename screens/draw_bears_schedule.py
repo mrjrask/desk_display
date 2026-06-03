@@ -12,10 +12,12 @@ Shows the next Chicago Bears game with:
 """
 
 import datetime
+import logging
 import os
 import re
 import time
 from functools import lru_cache
+from typing import Any
 from PIL import Image, ImageDraw, ImageFont
 import config
 from config import (
@@ -31,7 +33,6 @@ from config import (
 from utils import (
     ScreenImage,
     load_team_logo,
-    next_game_from_schedule,
     scroll_vertical_content,
     standard_next_game_logo_frame_width,
     standard_next_game_logo_height,
@@ -81,6 +82,9 @@ NFL_LOGO_DIR = os.path.join(config.IMAGES_DIR, "nfl")
 DROP_STEPS = 18
 DROP_STAGGER = 0.25
 DROP_FRAME_DELAY = 0.01
+BEARS_TEAM_ABBR = "CHI"
+BEARS_SCOREBOARD_CACHE_TTL_SECONDS = 10 * 60
+_BEAR_SCORE_CACHE: dict[datetime.date, tuple[float, list[dict[str, Any]]]] = {}
 
 DEFAULT_BEARS_NEXT_SEASON_HOME_OPPONENTS = ("det", "gb", "jax", "min", "ne", "no", "nyj", "phi", "tb")
 DEFAULT_BEARS_NEXT_SEASON_AWAY_OPPONENTS = ("atl", "buf", "car", "det", "gb", "mia", "min", "sea")
@@ -89,6 +93,67 @@ DEFAULT_BEARS_NEXT_SEASON_AWAY_OPPONENTS = ("atl", "buf", "car", "det", "gb", "m
 @lru_cache(maxsize=96)
 def _cached_team_logo(abbr: str, logo_size: int) -> Image.Image | None:
     return load_team_logo(NFL_LOGO_DIR, abbr, height=logo_size, box_size=logo_size)
+
+
+def _bears_week_sort_value(week_label: str) -> float:
+    week_txt = str(week_label or "").strip().lower()
+    if week_txt.startswith("preseason"):
+        match = re.search(r"(\d+)", week_txt)
+        return float(f"0.{match.group(1)}") if match else 0.0
+    if week_txt.startswith("week"):
+        match = re.search(r"(\d+)", week_txt)
+        return float(match.group(1)) if match else float("inf")
+    try:
+        return float(week_txt)
+    except ValueError:
+        return float("inf")
+
+
+def _bears_game_sort_value(game: dict) -> float:
+    game_no = game.get("game_no")
+    if game_no is not None:
+        try:
+            return float(str(game_no))
+        except ValueError:
+            pass
+    return _bears_week_sort_value(str(game.get("week") or ""))
+
+
+def _has_completed_bears_game(game: dict, today: datetime.date) -> bool:
+    parsed_date = _parse_schedule_date(str(game.get("date") or ""))
+    if parsed_date is not None:
+        if parsed_date.date() < today:
+            return True
+        if parsed_date.date() == today and _bears_schedule_score_text(game):
+            return True
+    return False
+
+
+def _next_bears_game_from_schedule(
+    schedule: list[dict],
+    today: datetime.date | None = None,
+) -> dict | None:
+    today = today or datetime.datetime.now(config.CENTRAL_TIME).date()
+    candidates = [
+        game
+        for game in schedule
+        if _should_show_bears_schedule_game(game) and not _is_bye_week(game)
+    ]
+    if not candidates:
+        return None
+
+    last_completed_sort = max(
+        (_bears_game_sort_value(game) for game in candidates if _has_completed_bears_game(game, today)),
+        default=float("-inf"),
+    )
+    upcoming = [
+        game
+        for game in candidates
+        if _bears_game_sort_value(game) > last_completed_sort
+    ]
+    if upcoming:
+        return min(upcoming, key=_bears_game_sort_value)
+    return min(candidates, key=_bears_game_sort_value)
 
 
 def _ease_out_cubic(t: float) -> float:
@@ -158,8 +223,10 @@ def _animate_logo_drop(display, base: Image.Image, row_positions):
         sleep_time = max(0, DROP_FRAME_DELAY - elapsed)
         if sleep_time > 0:
             time.sleep(sleep_time)
+
+
 def show_bears_next_game(display, transition=False):
-    game = next_game_from_schedule(BEARS_SCHEDULE)
+    game = _next_bears_game_from_schedule(BEARS_SCHEDULE)
     title = "Next for Da Bears:"
     background = get_screen_background_color("bears next", (0, 0, 0))
     img   = Image.new("RGB", (config.WIDTH, config.HEIGHT), background)
@@ -214,9 +281,10 @@ def show_bears_next_game(display, transition=False):
         if not wk:
             game_no = str(game.get("game_no", "")).strip()
             wk = f"Game {game_no}" if game_no else ""
-        date_txt = _format_game_date(game.get("date", ""))
-        t_txt = game["time"].strip()
-        date_time = " ".join(part for part in (date_txt, t_txt) if part).strip()
+        date_time = _format_schedule_line_time(
+            str(game.get("date") or ""),
+            str(game.get("time") or ""),
+        )
         bottom_lines = [line for line in (wk, date_time) if line]
         bottom_line_gap = line_gap
         if bottom_lines:
@@ -490,18 +558,162 @@ def _format_schedule_line_time(date_text: str, time_text: str) -> str:
     return f"{date_part} {time_part}"
 
 
+def _normalize_nfl_abbr(abbr: str) -> str:
+    normalized = str(abbr or "").strip().upper()
+    if normalized == "WSH":
+        return "WAS"
+    return normalized
+
+
+def _schedule_opponent_abbr(game: dict) -> str:
+    opponent = str(game.get("opponent") or "").strip()
+    if not opponent or opponent in {"—", "TBD"}:
+        return ""
+    team_key = opponent.split()[-1].lower()
+    return _normalize_nfl_abbr(NFL_TEAM_ABBREVIATIONS.get(team_key, team_key[:3]))
+
+
+def _scoreboard_competitor_abbr(competitor: dict) -> str:
+    team = (competitor or {}).get("team") or {}
+    for key in ("abbreviation", "abbrev"):
+        value = team.get(key)
+        if isinstance(value, str) and value.strip():
+            return _normalize_nfl_abbr(value)
+    return ""
+
+
+def _scoreboard_score_value(competitor: dict) -> int | None:
+    score = (competitor or {}).get("score")
+    if isinstance(score, bool):
+        return None
+    if isinstance(score, int):
+        return score
+    if isinstance(score, float):
+        return int(score)
+    if isinstance(score, str):
+        cleaned = score.strip()
+        if not cleaned:
+            return None
+        try:
+            return int(float(cleaned))
+        except ValueError:
+            return None
+    return None
+
+
+def _scoreboard_game_is_final(game: dict) -> bool:
+    status = (game or {}).get("status") or {}
+    type_info = status.get("type") or {}
+    state = str(type_info.get("state") or "").strip().lower()
+    if state == "post":
+        return True
+    if type_info.get("completed") is True:
+        return True
+    description = str(type_info.get("description") or "").strip().lower()
+    return "final" in description
+
+
+def _fetch_bears_scoreboard_games_for_date(day: datetime.date) -> list[dict[str, Any]]:
+    now = time.monotonic()
+    cached = _BEAR_SCORE_CACHE.get(day)
+    if cached and (now - cached[0]) < BEARS_SCOREBOARD_CACHE_TTL_SECONDS:
+        return cached[1]
+
+    try:
+        from screens.nfl_scoreboard import _fetch_games_for_date
+
+        games = _fetch_games_for_date(day)
+    except Exception as exc:
+        logging.error("Failed to fetch Bears scores from NFL scoreboard feed for %s: %s", day, exc)
+        games = []
+
+    _BEAR_SCORE_CACHE[day] = (now, games)
+    return games
+
+
+def _scoreboard_scores_for_bears_game(game: dict) -> tuple[int | None, int | None] | None:
+    if _is_bye_week(game):
+        return None
+
+    parsed_date = _parse_schedule_date(str(game.get("date") or ""))
+    if parsed_date is None:
+        return None
+    today = datetime.datetime.now(config.CENTRAL_TIME).date()
+    if parsed_date.date() > today:
+        return None
+
+    expected_opponent = _schedule_opponent_abbr(game)
+    if not expected_opponent:
+        return None
+
+    expected_home_away = str(game.get("home_away") or "").strip().lower()
+    for scoreboard_game in _fetch_bears_scoreboard_games_for_date(parsed_date.date()):
+        if not _scoreboard_game_is_final(scoreboard_game):
+            continue
+        competitors = (scoreboard_game or {}).get("competitors") or []
+        bears = next((c for c in competitors if _scoreboard_competitor_abbr(c) == BEARS_TEAM_ABBR), None)
+        opponent = next((c for c in competitors if _scoreboard_competitor_abbr(c) == expected_opponent), None)
+        if not bears or not opponent:
+            continue
+        bears_home_away = str(bears.get("homeAway") or "").strip().lower()
+        if expected_home_away in {"home", "away"} and bears_home_away != expected_home_away:
+            continue
+        bears_score = _scoreboard_score_value(bears)
+        opponent_score = _scoreboard_score_value(opponent)
+        if bears_score is None or opponent_score is None:
+            continue
+        if expected_home_away == "away":
+            return opponent_score, bears_score
+        return bears_score, opponent_score
+    return None
+
+
+def _bears_schedule_score_text(game: dict) -> str:
+    configured_score = str(game.get("final_score") or "").strip()
+    if configured_score:
+        return configured_score
+
+    scores = _scoreboard_scores_for_bears_game(game)
+    if scores is not None:
+        home_score, away_score = scores
+    else:
+        home_score = game.get("home_score")
+        away_score = game.get("away_score")
+    if home_score is None or away_score is None:
+        return ""
+
+    ha = str(game.get("home_away") or "").strip().lower()
+    # Keep score perspective consistent with row labeling: each row is keyed by
+    # opponent ("vs." or "@" + opponent), so render opponent score first.
+    if ha == "away":
+        opp_score, bears_score = home_score, away_score
+    else:
+        opp_score, bears_score = away_score, home_score
+    return f"F {opp_score}-{bears_score}"
+
+
 def _is_postseason_week(week: str) -> bool:
     week_lower = str(week or "").strip().lower()
     return any(token in week_lower for token in ("wild", "divisional", "conference", "championship", "super bowl", "playoff"))
 
 
+def _is_bye_week(game: dict) -> bool:
+    date_text = str(game.get("date") or "").strip().upper()
+    opponent = str(game.get("opponent") or "").strip().upper()
+    return date_text == "BYE" or opponent == "BYE"
+
+
 def _should_show_bears_schedule_game(game: dict, today: datetime.date | None = None) -> bool:
     opponent = str(game.get("opponent") or "").strip()
+    week = str(game.get("week") or game.get("game_no") or "").strip()
+    week_lower = week.lower()
+
+    if _is_bye_week(game):
+        return bool(re.match(r"^week\s*\d+\b", week_lower))
+
     if not opponent or opponent in {"—", "TBD"}:
         return False
 
-    week = str(game.get("week") or game.get("game_no") or "").strip()
-    week_lower = week.lower()
     if week_lower.startswith("preseason") or re.match(r"^week\s*\d+\b", week_lower):
         return True
 
@@ -577,27 +789,20 @@ def show_bears_next_season_sched(display, transition=False):
             continue
         opponent = str(game.get("opponent") or "").strip()
         ha = str(game.get("home_away") or "").strip().lower()
-        prefix = "@" if ha == "away" else "vs."
-        team_key = opponent.split()[-1].lower()
-        abbr = NFL_TEAM_ABBREVIATIONS.get(team_key, team_key[:3])
+        is_bye = _is_bye_week(game)
+        prefix = "" if is_bye else ("@" if ha == "away" else "vs.")
+        team_key = opponent.split()[-1].lower() if opponent else ""
+        abbr = "" if is_bye else NFL_TEAM_ABBREVIATIONS.get(team_key, team_key[:3])
         if abbr == "was":
             abbr = "wsh"
-        when = _format_schedule_line_time(str(game.get("date") or ""), str(game.get("time") or ""))
-        score = str(game.get("final_score") or "").strip()
-        if not score:
-            home_score = game.get("home_score")
-            away_score = game.get("away_score")
-            if home_score is not None and away_score is not None:
-                # Keep score perspective consistent with row labeling:
-                # each row is keyed by opponent ("vs." or "@" + opponent),
-                # so render opponent score first in both home and away games.
-                if ha == "away":
-                    opp_score, bears_score = home_score, away_score
-                else:
-                    opp_score, bears_score = away_score, home_score
-                score = f"F {opp_score}-{bears_score}"
+        when = (
+            ""
+            if is_bye
+            else _format_schedule_line_time(str(game.get("date") or ""), str(game.get("time") or ""))
+        )
+        score = _bears_schedule_score_text(game)
         week = str(game.get("week") or game.get("game_no") or "").strip()
-        team_name = _opponent_team_name(opponent)
+        team_name = "BYE" if is_bye else _opponent_team_name(opponent)
         schedule_rows.append(
             {
                 "week": week,
@@ -621,7 +826,11 @@ def show_bears_next_season_sched(display, transition=False):
         full_draw.text(((config.WIDTH - draw.textsize(title, font=title_font)[0]) // 2, 2), title, font=title_font, fill=(255, 255, 255))
         week_w = max(draw.textsize(sample, font=date_font)[0] for sample in ("W18", "P3"))
         logo_col_w = max(logo_size, *(
-            (_cached_team_logo(row["abbr"], logo_size).width if _cached_team_logo(row["abbr"], logo_size) else logo_size)
+            (
+                _cached_team_logo(row["abbr"], logo_size).width
+                if row["abbr"] and _cached_team_logo(row["abbr"], logo_size)
+                else logo_size
+            )
             for row in schedule_rows
         ))
         x_week = 2
@@ -645,7 +854,7 @@ def show_bears_next_season_sched(display, transition=False):
                 font=date_font,
                 fill=(255, 255, 255),
             )
-            logo = _cached_team_logo(row["abbr"], logo_size)
+            logo = _cached_team_logo(row["abbr"], logo_size) if row["abbr"] else None
             if logo:
                 lx = x_logo + max(0, (logo_col_w - logo.width) // 2)
                 ly = y + (row_h - logo.height) // 2
