@@ -1366,8 +1366,10 @@ def build_screen_registry(context: ScreenContext) -> Tuple[Dict[str, ScreenDefin
                 transition=True,
                 scroll_speed=scroll_speed,
             ),
-            available=cubs_has_game_today
-            and bool(cubs_next or cubs_next_alt)
+            available=(
+                cubs_no_game_today
+                or (cubs_has_game_today and bool(cubs_next or cubs_next_alt))
+            )
             and bool(cubs_current_series)
             and bool(cubs_next_series)
             and bool(cubs_next_home_series),
@@ -1556,8 +1558,10 @@ def build_screen_registry(context: ScreenContext) -> Tuple[Dict[str, ScreenDefin
                 transition=True,
                 scroll_speed=scroll_speed,
             ),
-            available=sox_has_game_today
-            and bool(sox_next or sox_next_alt)
+            available=(
+                sox_no_game_today
+                or (sox_has_game_today and bool(sox_next or sox_next_alt))
+            )
             and bool(sox_current_series)
             and bool(sox_next_series)
             and bool(sox_next_home_series),

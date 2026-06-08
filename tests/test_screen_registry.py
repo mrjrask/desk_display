@@ -713,6 +713,62 @@ def test_sox_schedule_quad_uses_expected_tile_selection(monkeypatch):
     ]
 
 
+def test_mlb_schedule_quads_remain_available_on_no_game_days(monkeypatch):
+    now = datetime.datetime(2024, 7, 1, 12, 0, tzinfo=CENTRAL_TIME)
+    weather = {"hourly": []}
+    context = _make_context(
+        weather,
+        now,
+        cache_updates={
+            "cubs": {
+                "next": {"gamePk": 1, "officialDate": "2024-07-02"},
+                "current_series": [{"gamePk": 2, "officialDate": "2024-07-02"}],
+                "next_series": [{"gamePk": 3}],
+                "next_home_series": [{"gamePk": 4}],
+                "schedule_covers_today": True,
+            },
+            "sox": {
+                "next": {"gamePk": 10, "officialDate": "2024-07-02"},
+                "current_series": [{"gamePk": 20, "officialDate": "2024-07-02"}],
+                "next_series": [{"gamePk": 30}],
+                "next_home_series": [{"gamePk": 40}],
+                "schedule_covers_today": True,
+            },
+        },
+    )
+    captured = {}
+
+    def _fake_draw_quad_screen(_display, tiles, transition=False, scroll_speed=1.0):
+        captured.setdefault("labels", []).append([tile.label for tile in tiles])
+        return None
+
+    monkeypatch.setattr("screens.registry.draw_quad_screen", _fake_draw_quad_screen)
+
+    registry, _ = build_screen_registry(context)
+
+    assert registry["cubs no game"].available is True
+    assert registry["sox no game"].available is True
+    assert registry["cubs schedule quad"].available is True
+    assert registry["sox schedule quad"].available is True
+
+    registry["cubs schedule quad"].render()
+    registry["sox schedule quad"].render()
+
+    assert captured["labels"] == [
+        [
+            "cubs next",
+            "cubs current series",
+            "cubs next series",
+            "cubs next home series",
+        ],
+        [
+            "sox next",
+            "sox current series",
+            "sox next series",
+            "sox next home series",
+        ],
+    ]
+
 def test_hawks_schedule_quad_uses_expected_tile_selection(monkeypatch):
     now = datetime.datetime(2024, 1, 1, 12, 0, tzinfo=CENTRAL_TIME)
     weather = {"hourly": []}
