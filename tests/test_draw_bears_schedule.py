@@ -65,6 +65,32 @@ def test_bears_schedule_opponent_team_name_removes_city_names():
     assert draw_bears_schedule._opponent_team_name("Green Bay Packers") == "Packers"
 
 
+def test_bears_next_game_reads_same_config_schedule_as_schedule_screen(monkeypatch):
+    schedule = [
+        {
+            "game_no": "0.1",
+            "week": "Preseason 1",
+            "date": "TBD",
+            "opponent": "Cleveland Browns",
+            "home_away": "Home",
+            "time": "TBD",
+        }
+    ]
+    captured = {}
+
+    def fake_next_game(schedule_arg, today=None):
+        captured["schedule"] = schedule_arg
+        return schedule_arg[0]
+
+    monkeypatch.setattr(config, "BEARS_SCHEDULE", schedule)
+    monkeypatch.setattr(draw_bears_schedule, "_next_bears_game_from_schedule", fake_next_game)
+
+    image = draw_bears_schedule.show_bears_next_game(None, transition=True)
+
+    assert image.size == (config.WIDTH, config.HEIGHT)
+    assert captured["schedule"] == schedule
+
+
 def test_next_bears_game_uses_tbd_preseason_before_dated_regular_season():
     schedule = [
         {

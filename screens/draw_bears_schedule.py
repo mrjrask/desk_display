@@ -22,7 +22,6 @@ from PIL import Image, ImageDraw, ImageFont
 import config
 from config import (
     BEARS_BOTTOM_MARGIN,
-    BEARS_SCHEDULE,
     NFL_TEAM_ABBREVIATIONS,
     SCOREBOARD_SCROLL_DELAY,
     SCOREBOARD_SCROLL_PAUSE_BOTTOM,
@@ -225,8 +224,13 @@ def _animate_logo_drop(display, base: Image.Image, row_positions):
             time.sleep(sleep_time)
 
 
+def _bears_schedule_games() -> list[dict]:
+    """Return the Bears schedule source shared by the next-game and schedule screens."""
+    return list(config.BEARS_SCHEDULE)
+
+
 def show_bears_next_game(display, transition=False):
-    game = _next_bears_game_from_schedule(BEARS_SCHEDULE)
+    game = _next_bears_game_from_schedule(_bears_schedule_games())
     title = "Next for Da Bears:"
     background = get_screen_background_color("bears next", (0, 0, 0))
     img   = Image.new("RGB", (config.WIDTH, config.HEIGHT), background)
@@ -784,7 +788,7 @@ def show_bears_next_season_sched(display, transition=False):
     row_h = base_row_h
 
     schedule_rows = []
-    for game in BEARS_SCHEDULE:
+    for game in _bears_schedule_games():
         if not _should_show_bears_schedule_game(game):
             continue
         opponent = str(game.get("opponent") or "").strip()
