@@ -213,13 +213,8 @@ install_waveshare_stack() {
   mkdir -p "$WORKDIR" "$INSTALL_ROOT" "$overlays_dir"
 
   echo
-  echo "==> Updating package index"
-  apt-get update
-
-  echo
-  echo "==> Upgrading system"
-  DEBIAN_FRONTEND=noninteractive apt-get upgrade -y
-  DEBIAN_FRONTEND=noninteractive apt-get full-upgrade -y
+  echo "==> Running initial apt maintenance"
+  run_initial_apt_maintenance
 
   echo
   echo "==> Installing required tools"
