@@ -461,15 +461,21 @@ select_gdk_pixbuf_pkg() {
   echo "${candidates[-1]}"
 }
 
+run_initial_apt_maintenance() {
+  log "Running initial apt maintenance."
+  ${SUDO:-} apt update
+  ${SUDO:-} apt full-upgrade -y
+  ${SUDO:-} apt autoremove -y
+}
+
 install_apt_packages() {
+  run_initial_apt_maintenance
+
   local codename="${EXPECTED_CODENAME:-}"
   if [[ -z "$codename" ]]; then
     warn "EXPECTED_CODENAME is not set; defaulting to detected release name"
     codename=$(lsb_release -sc 2>/dev/null || echo "")
   fi
-
-  log "Updating apt package index."
-  ${SUDO:-} apt-get update
 
   local shared_packages=(
     python3-venv python3-pip python3-dev python3-opencv
