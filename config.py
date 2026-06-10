@@ -199,9 +199,17 @@ _STYLE_CONFIG_MTIME: Optional[float] = None
 _STYLE_CONFIG_LOCK = threading.Lock()
 
 # ─── Feature flags ────────────────────────────────────────────────────────────
+DESK_DISPLAY_PROFILE = os.environ.get("DESK_DISPLAY_PROFILE", "").strip().lower()
+DESK_DISPLAY_LOW_POWER = _get_bool_env(
+    "DESK_DISPLAY_LOW_POWER",
+    DESK_DISPLAY_PROFILE == "hyperpixel_pi_zero",
+)
+
 _display_output = os.environ.get("DESK_DISPLAY_OUTPUT", "auto").strip().lower()
 _is_macos_window_output = _display_output == "window" and platform.system() == "Darwin"
-_default_enable_screenshots = not _is_macos_window_output
+_default_enable_screenshots = not (
+    _is_macos_window_output or DESK_DISPLAY_LOW_POWER
+)
 
 ENABLE_SCREENSHOTS   = _get_bool_env("ENABLE_SCREENSHOTS", _default_enable_screenshots)
 ENABLE_VIDEO         = _get_bool_env("ENABLE_VIDEO", False)
