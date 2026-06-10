@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 import os
+import threading
 from typing import Any, Dict, Optional
 
 import requests
@@ -51,11 +52,28 @@ def _build_session() -> requests.Session:
     return session
 
 
-_SESSION = _build_session()
+class ThreadLocalSession:
+    """Thread-safe facade that gives each thread its own requests session."""
+
+    def __init__(self) -> None:
+        self._local = threading.local()
+
+    def current(self) -> requests.Session:
+        session = getattr(self._local, "session", None)
+        if session is None:
+            session = _build_session()
+            self._local.session = session
+        return session
+
+    def __getattr__(self, name: str) -> Any:
+        return getattr(self.current(), name)
 
 
-def get_session() -> requests.Session:
-    """Return the shared HTTP session."""
+_SESSION = ThreadLocalSession()
+
+
+def get_session() -> ThreadLocalSession:
+    """Return a thread-local HTTP session facade safe for parallel refreshes."""
 
     return _SESSION
 
@@ -72,7 +90,7 @@ def request_json(
 ) -> Optional[Dict[str, Any]]:
     """Perform a GET request that returns JSON, with optional quiet logging."""
 
-    sess = session or _SESSION
+    sess = session or get_session()
     try:
         response = sess.get(url, params=params, headers=headers, timeout=timeout, **kwargs)
         response.raise_for_status()

@@ -46,7 +46,7 @@ import sys
 from collections import deque
 from contextlib import nullcontext
 from typing import Callable, Dict, List, Optional, Set, Tuple
-from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeoutError
+from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeoutError, as_completed
 try:
     import pygame
 except Exception:
@@ -75,6 +75,7 @@ from config import (
     is_within_dark_hours,
     AHL_TEAM_TRICODE,
     ENABLE_WIFI_RECOVERY,
+    DATA_REFRESH_MAX_WORKERS,
     WEATHER_REFRESH_SECONDS,
     initialise_runtime_probes,
 )
@@ -2107,16 +2108,29 @@ def refresh_all(force: bool = False) -> None:
         return
 
     logging.info("🔄 Refreshing data for feeds: %s", ", ".join(sorted(due_feeds)))
-    for feed in sorted(due_feeds):
-        refresher = _FEED_REFRESHERS.get(feed)
-        if not refresher:
-            continue
-        try:
-            refresher()
-            _last_feed_refresh[feed] = time.monotonic()
-            _bump_registry_cache_nonce()
-        except Exception as exc:
-            logging.error("Failed to refresh %s feed: %s", feed, exc)
+    refreshers = [
+        (feed, _FEED_REFRESHERS[feed])
+        for feed in sorted(due_feeds)
+        if _FEED_REFRESHERS.get(feed)
+    ]
+    if not refreshers:
+        return
+
+    successful_feeds = 0
+    max_workers = max(1, min(DATA_REFRESH_MAX_WORKERS, len(refreshers)))
+    with ThreadPoolExecutor(max_workers=max_workers) as pool:
+        futures = {pool.submit(refresher): feed for feed, refresher in refreshers}
+        for future in as_completed(futures):
+            feed = futures[future]
+            try:
+                future.result()
+                _last_feed_refresh[feed] = time.monotonic()
+                successful_feeds += 1
+            except Exception as exc:
+                logging.error("Failed to refresh %s feed: %s", feed, exc)
+
+    if successful_feeds:
+        _bump_registry_cache_nonce()
 
 def _background_refresh() -> None:
     time.sleep(30)
