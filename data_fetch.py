@@ -70,7 +70,14 @@ from config import (
 )
 
 # ─── Shared HTTP session ─────────────────────────────────────────────────────
-_session = get_session()
+class _ThreadLocalSessionProxy:
+    """Delegate HTTP calls to the current thread's reusable session."""
+
+    def get(self, *args: Any, **kwargs: Any) -> requests.Response:
+        return get_session().get(*args, **kwargs)
+
+
+_session = _ThreadLocalSessionProxy()
 
 # Weather caching to limit API usage across devices
 _weather_cache: Optional[dict[str, Any]] = None
