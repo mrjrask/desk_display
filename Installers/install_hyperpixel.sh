@@ -46,10 +46,18 @@ run_user_systemctl() {
     fi
   fi
 
-  if [[ -n "$SUDO" ]]; then
-    $SUDO -u "$service_user" env "${systemctl_env[@]}" systemctl --user "$@"
-  else
+  local current_user
+  current_user=$(id -un 2>/dev/null || true)
+
+  if [[ "$current_user" == "$service_user" ]]; then
     env "${systemctl_env[@]}" systemctl --user "$@"
+  elif command -v sudo >/dev/null 2>&1; then
+    sudo -u "$service_user" env "${systemctl_env[@]}" systemctl --user "$@"
+  elif command -v runuser >/dev/null 2>&1; then
+    runuser -u "$service_user" -- env "${systemctl_env[@]}" systemctl --user "$@"
+  else
+    warn "Unable to run systemctl --user as $service_user; sudo or runuser is required."
+    return 1
   fi
 }
 
