@@ -94,6 +94,7 @@ from utils import (
 )
 import data_fetch
 from services.data_provider import provider as data_provider
+from services.system_health import get_system_health
 try:
     from services import wifi_utils as _wifi_utils
     wifi_utils = _wifi_utils
@@ -1506,6 +1507,13 @@ def _write_display_status(
         "image_digest": hashlib.sha1(img.tobytes()).hexdigest()[:12],
         "frame_id": frame_id,
     }
+    storage_path = SCREENSHOT_DIR or CURRENT_SCREENSHOT_DIR or os.getcwd()
+    try:
+        system_health = get_system_health(storage_path)
+    except Exception:
+        system_health = {}
+    if isinstance(system_health, dict):
+        payload["system_health"] = system_health
     cubs_cache = cache.get("cubs") if isinstance(cache, dict) else None
     if isinstance(cubs_cache, dict):
         payload["cubs"] = {

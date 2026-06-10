@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 import os
+import threading
 from typing import Any, Dict, Optional
 
 import requests
@@ -51,13 +52,17 @@ def _build_session() -> requests.Session:
     return session
 
 
-_SESSION = _build_session()
+_SESSION_LOCAL = threading.local()
 
 
 def get_session() -> requests.Session:
-    """Return the shared HTTP session."""
+    """Return the current thread's reusable HTTP session."""
 
-    return _SESSION
+    session = getattr(_SESSION_LOCAL, "session", None)
+    if session is None:
+        session = _build_session()
+        _SESSION_LOCAL.session = session
+    return session
 
 
 def request_json(
@@ -72,7 +77,7 @@ def request_json(
 ) -> Optional[Dict[str, Any]]:
     """Perform a GET request that returns JSON, with optional quiet logging."""
 
-    sess = session or _SESSION
+    sess = session if session is not None else get_session()
     try:
         response = sess.get(url, params=params, headers=headers, timeout=timeout, **kwargs)
         response.raise_for_status()
