@@ -246,6 +246,7 @@ Configuration is environment-driven. Most values can be placed in `.env`.
 | `DESK_DISPLAY_OUTPUT` | Output mode (`auto`, `displayhatmini`, `minipitft`, `kernel`, `window`, `framebuffer`, `headless`) |
 | `DESK_DISPLAY_PROFILE` | Optional deployment profile (for example `hyperpixel_pi_zero`) |
 | `DESK_DISPLAY_LOW_POWER` | Low-power defaults flag; defaults to `1` when `DESK_DISPLAY_PROFILE=hyperpixel_pi_zero` |
+| `DESK_DISPLAY_SERVICE_START_DELAY` | Optional systemd launch delay in seconds; defaults to `15` for low-power or detected Raspberry Pi Zero-style deployments and `0` otherwise |
 | `DISPLAY_TARGET_FPS` | Overall display frame pacing target; defaults to 60 FPS normally and 12 FPS in low-power mode |
 | `DISPLAY_SCROLL_TARGET_FPS` | Scroll/scoreboard frame pacing target; defaults to the active display profile normally and 12 FPS in low-power mode |
 | `DISPLAY_ANIMATION_TARGET_FPS` | General animation/fade frame pacing target; defaults to 60 FPS normally and 12 FPS in low-power mode |
@@ -304,7 +305,7 @@ DISPLAY_SCROLL_TARGET_FPS=12
 DISPLAY_ANIMATION_TARGET_FPS=12
 ```
 
-The low-power profile keeps scrolling and animations around 10-15 FPS, and the HyperPixel installer can write a reduced internal render canvas such as `RENDER_WIDTH=400` and `RENDER_HEIGHT=240` while preserving the full `DISPLAY_WIDTH=800` and `DISPLAY_HEIGHT=480` panel output. This reduces CPU load and heat on Pi Zero-class hardware while preserving normal 60 FPS/full-render defaults on faster desktop or Raspberry Pi hardware.
+The low-power profile keeps scrolling and animations around 10-15 FPS, and the HyperPixel installer can write a reduced internal render canvas such as `RENDER_WIDTH=400` and `RENDER_HEIGHT=240` while preserving the full `DISPLAY_WIDTH=800` and `DISPLAY_HEIGHT=480` panel output. This reduces CPU load and heat on Pi Zero-class hardware while preserving normal 60 FPS/full-render defaults on faster desktop or Raspberry Pi hardware. Low-power or detected Raspberry Pi Zero-style service installs also add a 15-second systemd pre-start delay so the Pi has more time to settle before the display, config UI, and helper services launch; set `DESK_DISPLAY_SERVICE_START_DELAY=0` before installing to opt out or another whole-second value to tune it.
 
 Pi Zero-class HyperPixel installs also select `screens_config.pi_zero_hyperpixel.json` by default when the installer detects a Raspberry Pi Zero model and no custom `SCREENS_CONFIG_PATH` is already set. That lightweight preset enables only `date`, `weather1`, `weather2`, and `inside` by default, while keeping radar, scoreboards, standings, live sports, stock/league/team logos, and animated/quad-style screens disabled. The installer pairs it with `screens_config.pi_zero_hyperpixel.local.json` for UI edits so the standard schedule remains untouched.
 
