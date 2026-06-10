@@ -243,6 +243,8 @@ Configuration is environment-driven. Most values can be placed in `.env`.
 | Variable | Description |
 | --- | --- |
 | `DESK_DISPLAY_OUTPUT` | Output mode (`auto`, `displayhatmini`, `minipitft`, `kernel`, `window`, `framebuffer`, `headless`) |
+| `DESK_DISPLAY_PROFILE` | Optional deployment profile (for example `hyperpixel_pi_zero`) |
+| `DESK_DISPLAY_LOW_POWER` | Low-power defaults flag; defaults to `1` when `DESK_DISPLAY_PROFILE=hyperpixel_pi_zero` |
 | `DESK_DISPLAY_FORCE_HEADLESS` | Force headless behavior |
 | `DISPLAY_WIDTH` / `DISPLAY_HEIGHT` | Render size override |
 | `DISPLAY_ROTATION` | App rotation (`0`,`90`,`180`,`270` or `0-3`) |
@@ -273,12 +275,12 @@ Configuration is environment-driven. Most values can be placed in `.env`.
 
 | Variable | Description |
 | --- | --- |
-| `ENABLE_SCREENSHOTS` | Enable screenshot capture (default: `0` on macOS when `DESK_DISPLAY_OUTPUT=window`; otherwise `1`) |
+| `ENABLE_SCREENSHOTS` | Enable screenshot capture (default: `0` on macOS when `DESK_DISPLAY_OUTPUT=window` or when low-power mode is active; otherwise `1`) |
 | `ENABLE_VIDEO` | Enable rolling MP4 capture |
 | `SCREENSHOT_DIR` | Screenshot output location |
 | `SCREENSHOT_ARCHIVE_BASE` | Archive location |
 
-On macOS desktop/window setups (`DESK_DISPLAY_OUTPUT=window`), screenshot capture now defaults to disabled to avoid extra capture load unless explicitly enabled. Set `ENABLE_SCREENSHOTS=1` to force-enable, or `ENABLE_SCREENSHOTS=0` to force-disable regardless of platform/output mode.
+On macOS desktop/window setups (`DESK_DISPLAY_OUTPUT=window`), screenshot capture defaults to disabled to avoid extra capture load unless explicitly enabled. HyperPixel/Pi Zero low-power deployments (`DESK_DISPLAY_LOW_POWER=1` or `DESK_DISPLAY_PROFILE=hyperpixel_pi_zero`) also default screenshots off, and the HyperPixel installer writes `ENABLE_SCREENSHOTS=0`, `ENABLE_VIDEO=0`, `SCREEN_CONFIG_AUTOSTART=0`, and `ENABLE_WIFI_MONITOR=0` unless overridden in the installer environment. Screenshots and video can be re-enabled manually for debugging with `ENABLE_SCREENSHOTS=1` and `ENABLE_VIDEO=1`, but should stay off for normal Pi Zero 2 W operation. Set `ENABLE_SCREENSHOTS=0` to force-disable regardless of platform/output mode.
 
 For API-specific keys/fields, see [README_APIS.md](README_APIS.md).
 
