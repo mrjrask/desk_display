@@ -16,6 +16,7 @@ from PIL import Image, ImageDraw, ImageEnhance, ImageFilter, ImageFont
 
 from config import (
     DATE_TIME_GH_ICON_INVERT,
+    DISPLAY_ANIMATION_FRAME_INTERVAL,
     DATE_TIME_GH_ICON_PATHS,
     DATE_TIME_GH_ICON_SIZE,
     FONT_AM_PM,
@@ -457,7 +458,7 @@ def _play_flicker(display, base: Image.Image) -> None:
                 display.show()
         except Exception:  # pragma: no cover - defensive refresh guard
             break
-        time.sleep(0.08)
+        time.sleep(max(0.08, DISPLAY_ANIMATION_FRAME_INTERVAL))
 
 
 def _start_live_updates(display, *, expected_frame_id: int | None = None) -> None:
@@ -490,7 +491,7 @@ def _start_live_updates(display, *, expected_frame_id: int | None = None) -> Non
                 except Exception:
                     LOGGER.exception("Failed to render Nixie clock")
                     return
-            time.sleep(0.2)
+            time.sleep(max(0.2, DISPLAY_ANIMATION_FRAME_INTERVAL))
 
     threading.Thread(target=_worker, daemon=True).start()
 
