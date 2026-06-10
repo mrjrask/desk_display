@@ -152,6 +152,9 @@ export DISABLE_SPI_I2C="1"
 HYPERPIXEL_PANEL="${HYPERPIXEL_PANEL:-}"
 DISPLAY_WIDTH="${DISPLAY_WIDTH:-}"
 DISPLAY_HEIGHT="${DISPLAY_HEIGHT:-}"
+RENDER_WIDTH="${RENDER_WIDTH:-}"
+RENDER_HEIGHT="${RENDER_HEIGHT:-}"
+DISPLAY_RENDER_SCALE="${DISPLAY_RENDER_SCALE:-}"
 
 export DISPLAY_ROTATION="${DISPLAY_ROTATION:-0}"
 
@@ -248,6 +251,84 @@ detect_hyperpixel_panel() {
   prompt_panel_type
 }
 
+set_render_size_for_choice() {
+  local choice="$1"
+  case "$HYPERPIXEL_PANEL:$choice" in
+    hyperpixel4:full)
+      RENDER_WIDTH="$DISPLAY_WIDTH"
+      RENDER_HEIGHT="$DISPLAY_HEIGHT"
+      ;;
+    hyperpixel4:balanced)
+      RENDER_WIDTH="480"
+      RENDER_HEIGHT="288"
+      ;;
+    hyperpixel4:low)
+      RENDER_WIDTH="400"
+      RENDER_HEIGHT="240"
+      ;;
+    hyperpixel4sq:full)
+      RENDER_WIDTH="$DISPLAY_WIDTH"
+      RENDER_HEIGHT="$DISPLAY_HEIGHT"
+      ;;
+    hyperpixel4sq:balanced)
+      RENDER_WIDTH="480"
+      RENDER_HEIGHT="480"
+      ;;
+    hyperpixel4sq:low)
+      RENDER_WIDTH="360"
+      RENDER_HEIGHT="360"
+      ;;
+  esac
+}
+
+render_size_label() {
+  local choice="$1"
+  case "$HYPERPIXEL_PANEL:$choice" in
+    hyperpixel4:low) echo "400x240" ;;
+    hyperpixel4:balanced) echo "480x288" ;;
+    hyperpixel4sq:low) echo "360x360" ;;
+    hyperpixel4sq:balanced) echo "480x480" ;;
+    *) echo "${DISPLAY_WIDTH}x${DISPLAY_HEIGHT}" ;;
+  esac
+}
+
+configure_render_size() {
+  if [[ -n "$DISPLAY_RENDER_SCALE" ]]; then
+    return 0
+  fi
+
+  if [[ -n "$RENDER_WIDTH" && -n "$RENDER_HEIGHT" ]]; then
+    return 0
+  fi
+
+  local default_choice="full"
+  if [[ "${DESK_DISPLAY_LOW_POWER:-}" == "1" || ( -z "${DESK_DISPLAY_LOW_POWER:-}" && "${DESK_DISPLAY_PROFILE:-hyperpixel_pi_zero}" == "hyperpixel_pi_zero" ) ]]; then
+    default_choice="low"
+  fi
+
+  if [[ -t 0 ]]; then
+    cat <<MENU
+Select internal render size for ${HYPERPIXEL_PANEL} (${DISPLAY_WIDTH}x${DISPLAY_HEIGHT} output):
+  1) Low-power ($(render_size_label low))
+  2) Balanced ($(render_size_label balanced))
+  3) Full panel (${DISPLAY_WIDTH}x${DISPLAY_HEIGHT})
+MENU
+    read -r -p "Enter a number [1-3, default ${default_choice}]: " selection
+    case "$selection" in
+      "") set_render_size_for_choice "$default_choice" ;;
+      1) set_render_size_for_choice low ;;
+      2) set_render_size_for_choice balanced ;;
+      3) set_render_size_for_choice full ;;
+      *)
+        warn "Unrecognized render size selection; using low-power defaults."
+        set_render_size_for_choice low
+        ;;
+    esac
+  else
+    set_render_size_for_choice "$default_choice"
+  fi
+}
+
 detect_framebuffer_device() {
   local requested_size="${DISPLAY_WIDTH}x${DISPLAY_HEIGHT}"
   local fb_path sysfs_base mode_value virtual_value candidate_size
@@ -327,6 +408,8 @@ if ! validate_hyperpixel_env_overrides && ! detect_hyperpixel_panel; then
   exit 1
 fi
 
+configure_render_size
+
 ENV_PATH="$PROJECT_DIR/.env"
 ENV_LINES=()
 ENV_LINES+=("DESK_DISPLAY_OUTPUT=${DESK_DISPLAY_OUTPUT}")
@@ -335,6 +418,12 @@ ENV_LINES+=("DESK_DISPLAY_LOW_POWER=${DESK_DISPLAY_LOW_POWER:-1}")
 ENV_LINES+=("HYPERPIXEL_PANEL=${HYPERPIXEL_PANEL}")
 ENV_LINES+=("DISPLAY_WIDTH=${DISPLAY_WIDTH}")
 ENV_LINES+=("DISPLAY_HEIGHT=${DISPLAY_HEIGHT}")
+if [[ -n "$RENDER_WIDTH" && -n "$RENDER_HEIGHT" ]]; then
+  ENV_LINES+=("RENDER_WIDTH=${RENDER_WIDTH}")
+  ENV_LINES+=("RENDER_HEIGHT=${RENDER_HEIGHT}")
+elif [[ -n "$DISPLAY_RENDER_SCALE" ]]; then
+  ENV_LINES+=("DISPLAY_RENDER_SCALE=${DISPLAY_RENDER_SCALE}")
+fi
 ENV_LINES+=("INSIDE_I2C_BUSES=${INSIDE_I2C_BUSES:-13}")
 ENV_LINES+=("ENABLE_SCREENSHOTS=${ENABLE_SCREENSHOTS:-0}")
 ENV_LINES+=("ENABLE_VIDEO=${ENABLE_VIDEO:-0}")

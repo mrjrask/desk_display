@@ -558,28 +558,63 @@ def _read_kernel_overlay_rotation() -> Optional[int]:
 
 _display_width_set = "DISPLAY_WIDTH" in os.environ
 _display_height_set = "DISPLAY_HEIGHT" in os.environ
+_render_width_set = "RENDER_WIDTH" in os.environ
+_render_height_set = "RENDER_HEIGHT" in os.environ
+_render_scale_set = "DISPLAY_RENDER_SCALE" in os.environ
 
-try:
-    WIDTH = int(os.environ.get("DISPLAY_WIDTH", str(BASE_WIDTH)))
-except (TypeError, ValueError):
-    logging.warning("Invalid DISPLAY_WIDTH value; defaulting to %s.", BASE_WIDTH)
-    WIDTH = BASE_WIDTH
 
-try:
-    HEIGHT = int(os.environ.get("DISPLAY_HEIGHT", str(BASE_HEIGHT)))
-except (TypeError, ValueError):
-    logging.warning("Invalid DISPLAY_HEIGHT value; defaulting to %s.", BASE_HEIGHT)
-    HEIGHT = BASE_HEIGHT
+def _get_positive_int_env(name: str, default: int) -> int:
+    """Parse a positive integer config value from the environment."""
+
+    raw = os.environ.get(name)
+    if raw is None:
+        return default
+
+    try:
+        value = int(raw)
+    except (TypeError, ValueError):
+        logging.warning("Invalid %s value %r; defaulting to %d.", name, raw, default)
+        return default
+
+    if value <= 0:
+        logging.warning("%s must be positive; defaulting to %d.", name, default)
+        return default
+    return value
+
+
+def _normalise_hyperpixel_dimensions(width: int, height: int) -> Tuple[int, int]:
+    if (width, height) == (480, 800) and (
+        _hyperpixel_panel == "hyperpixel4" or _display_output in {"kernel", "kms", "drm", "sdl", "window"}
+    ):
+        logging.info(
+            "Detected HyperPixel 4 portrait mode dimensions (480x800); normalizing to 800x480."
+        )
+        return 800, 480
+    return width, height
+
+
+def _compute_render_dimensions(display_width: int, display_height: int) -> Tuple[int, int]:
+    default_width = display_width
+    default_height = display_height
+    if _render_scale_set and not (_render_width_set and _render_height_set):
+        render_scale = _get_positive_float_env("DISPLAY_RENDER_SCALE", 1.0)
+        default_width = max(1, int(round(display_width * render_scale)))
+        default_height = max(1, int(round(display_height * render_scale)))
+    return (
+        _get_positive_int_env("RENDER_WIDTH", default_width),
+        _get_positive_int_env("RENDER_HEIGHT", default_height),
+    )
+
 
 _hyperpixel_panel = os.environ.get("HYPERPIXEL_PANEL", "").strip().lower()
 
-if (WIDTH, HEIGHT) == (480, 800) and (
-    _hyperpixel_panel == "hyperpixel4" or _display_output in {"kernel", "kms", "drm", "sdl", "window"}
-):
-    logging.info(
-        "Detected HyperPixel 4 portrait mode dimensions (480x800); normalizing to 800x480."
-    )
-    WIDTH, HEIGHT = 800, 480
+DISPLAY_WIDTH = _get_positive_int_env("DISPLAY_WIDTH", BASE_WIDTH)
+DISPLAY_HEIGHT = _get_positive_int_env("DISPLAY_HEIGHT", BASE_HEIGHT)
+DISPLAY_WIDTH, DISPLAY_HEIGHT = _normalise_hyperpixel_dimensions(DISPLAY_WIDTH, DISPLAY_HEIGHT)
+
+# WIDTH/HEIGHT are the internal render canvas dimensions used by screen code.
+# DISPLAY_WIDTH/DISPLAY_HEIGHT remain the physical output target dimensions.
+WIDTH, HEIGHT = _compute_render_dimensions(DISPLAY_WIDTH, DISPLAY_HEIGHT)
 
 HYPERPIXEL_LED_INDICATOR_BORDER_ENABLED = _get_bool_env(
     "HYPERPIXEL_LED_INDICATOR_BORDER_ENABLED",
@@ -656,15 +691,15 @@ def scale_value_width(value: float) -> int:
 KERNEL_DRIVEN_OUTPUTS = {"kernel", "kms", "drm", "sdl", "fullscreen", "window"}
 
 
-ACTIVE_DISPLAY_PROFILE: DisplayProfilePreset = resolve_display_profile(WIDTH, HEIGHT)
+ACTIVE_DISPLAY_PROFILE: DisplayProfilePreset = resolve_display_profile(DISPLAY_WIDTH, DISPLAY_HEIGHT)
 DISPLAY_PROFILE_ID = ACTIVE_DISPLAY_PROFILE.profile_id
 
 
 def get_display_profile(width: int | None = None, height: int | None = None) -> DisplayProfilePreset:
     if width is None:
-        width = WIDTH
+        width = DISPLAY_WIDTH
     if height is None:
-        height = HEIGHT
+        height = DISPLAY_HEIGHT
     return resolve_display_profile(width, height)
 
 
@@ -829,7 +864,7 @@ def initialise_runtime_probes() -> None:
     """
 
     global CURRENT_SSID, LATITUDE, LONGITUDE, TRAVEL_MODE, OWM_API_KEY, ENABLE_WEATHER
-    global WIDTH, HEIGHT, DISPLAY_SCALE, DISPLAY_SCALE_WIDTH
+    global DISPLAY_WIDTH, DISPLAY_HEIGHT, WIDTH, HEIGHT, DISPLAY_SCALE, DISPLAY_SCALE_WIDTH
     global ACTIVE_DISPLAY_PROFILE, DISPLAY_PROFILE_ID
     global DISPLAY_FADE_IN_DEFAULT_STEPS
     global DISPLAY_PROFILE_LOGO_SCALE_CAP, DISPLAY_PROFILE_ANIMATION_DELAY
@@ -858,8 +893,8 @@ def initialise_runtime_probes() -> None:
     else:
         ENABLE_WEATHER = True
 
-    runtime_width = WIDTH
-    runtime_height = HEIGHT
+    runtime_display_width = DISPLAY_WIDTH
+    runtime_display_height = DISPLAY_HEIGHT
     if (_display_width_set, _display_height_set) != (True, True):
         if _display_output in {"framebuffer", "fb", "framebuffer-device"}:
             fb_device = os.environ.get("DISPLAY_FB_DEVICE", "/dev/fb0")
@@ -871,28 +906,29 @@ def initialise_runtime_probes() -> None:
             if fb_size:
                 fb_width, fb_height = fb_size
                 if not _display_width_set:
-                    runtime_width = fb_width
+                    runtime_display_width = fb_width
                 if not _display_height_set:
-                    runtime_height = fb_height
+                    runtime_display_height = fb_height
         elif _display_output in {"kernel", "kms", "drm", "sdl", "window"}:
             drm_size = _read_drm_mode_size()
             if drm_size:
                 drm_width, drm_height = drm_size
                 if not _display_width_set:
-                    runtime_width = drm_width
+                    runtime_display_width = drm_width
                 if not _display_height_set:
-                    runtime_height = drm_height
+                    runtime_display_height = drm_height
 
-    if (runtime_width, runtime_height) == (480, 800) and (
-        _hyperpixel_panel == "hyperpixel4" or _display_output in {"kernel", "kms", "drm", "sdl", "window"}
-    ):
-        runtime_width, runtime_height = 800, 480
+    runtime_display_width, runtime_display_height = _normalise_hyperpixel_dimensions(
+        runtime_display_width,
+        runtime_display_height,
+    )
 
-    WIDTH = runtime_width
-    HEIGHT = runtime_height
+    DISPLAY_WIDTH = runtime_display_width
+    DISPLAY_HEIGHT = runtime_display_height
+    WIDTH, HEIGHT = _compute_render_dimensions(DISPLAY_WIDTH, DISPLAY_HEIGHT)
     DISPLAY_SCALE = _compute_display_scale(BASE_WIDTH, BASE_HEIGHT, WIDTH, HEIGHT)
     DISPLAY_SCALE_WIDTH = max(0.1, WIDTH / BASE_WIDTH) if BASE_WIDTH > 0 else 1.0
-    ACTIVE_DISPLAY_PROFILE = resolve_display_profile(WIDTH, HEIGHT)
+    ACTIVE_DISPLAY_PROFILE = resolve_display_profile(DISPLAY_WIDTH, DISPLAY_HEIGHT)
     DISPLAY_PROFILE_ID = ACTIVE_DISPLAY_PROFILE.profile_id
     DISPLAY_FADE_IN_DEFAULT_STEPS = DISPLAY_FADE_IN_STEPS_BY_PROFILE.get(
         DISPLAY_PROFILE_ID,
