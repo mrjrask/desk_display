@@ -805,8 +805,12 @@ def _clear_display_immediately(reason: Optional[str] = None) -> None:
 
     try:
         resume_display_updates()
-        clear_display(display)
+        clear_display(display, force=True)
         try:
+            display.show(force=True)
+        except TypeError as exc:
+            if "force" not in str(exc):
+                raise
             display.show()
         except (AttributeError, OSError, RuntimeError) as exc:
             logging.debug("clear_display_immediately display.show fallback err=%s", exc)
