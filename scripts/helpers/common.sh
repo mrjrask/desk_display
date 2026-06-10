@@ -226,12 +226,21 @@ install_kernel_user_service() {
   local project_dir_safe="$project_dir"
   local venv_dir_safe="$venv_dir"
   local maintenance_dir_safe="$maintenance_dir"
+  local output_env_line=""
+
+  # Keep any generated DESK_DISPLAY_OUTPUT default before EnvironmentFile so
+  # PROJECT_DIR/.env remains authoritative. This is especially important for
+  # HyperPixel installs that may fall back from kernel to framebuffer mode.
+  if [[ "${DESK_DISPLAY_OUTPUT:-}" == "kernel" ]]; then
+    output_env_line="Environment=DESK_DISPLAY_OUTPUT=kernel"
+  fi
 
   local service_contents
   service_contents=$(sed \
     -e "s|@PROJECT_DIR@|$project_dir_safe|g" \
     -e "s|@VENV_DIR@|$venv_dir_safe|g" \
     -e "s|@MAINTENANCE_DIR@|$maintenance_dir_safe|g" \
+    -e "s|@DESK_DISPLAY_OUTPUT_ENV@|$output_env_line|g" \
     "$template_path")
 
   if [[ -n "${SUDO:-}" ]]; then

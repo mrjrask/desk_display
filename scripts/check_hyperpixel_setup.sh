@@ -72,6 +72,78 @@ else
   echo "No .env found at $ENV_PATH"
 fi
 
+
+read_env_value() {
+  local key="$1"
+  local target="$2"
+  awk -F= -v key="$key" '$1 == key {print substr($0, length(key) + 2); exit}' "$target"
+}
+
+read_unit_output_value() {
+  local target="$1"
+  awk '
+    /^Environment=/ {
+      line = $0
+      sub(/^Environment=/, "", line)
+      count = split(line, parts, /[[:space:]]+/)
+      for (i = 1; i <= count; i++) {
+        gsub(/^"|"$/, "", parts[i])
+        if (parts[i] ~ /^DESK_DISPLAY_OUTPUT=/) {
+          sub(/^DESK_DISPLAY_OUTPUT=/, "", parts[i])
+          print parts[i]
+          exit
+        }
+      }
+    }
+  ' "$target"
+}
+
+add_unit_path() {
+  local target="$1"
+  [[ -n "$target" && -f "$target" ]] || return 0
+
+  local existing
+  for existing in "${UNIT_PATHS[@]}"; do
+    [[ "$existing" == "$target" ]] && return 0
+  done
+  UNIT_PATHS+=("$target")
+}
+
+section "Desk Display output agreement"
+env_output=""
+if [[ -f "$ENV_PATH" ]]; then
+  env_output=$(read_env_value "DESK_DISPLAY_OUTPUT" "$ENV_PATH")
+  echo ".env DESK_DISPLAY_OUTPUT=${env_output:-<unset>}"
+else
+  echo ".env DESK_DISPLAY_OUTPUT=<missing .env>"
+fi
+
+UNIT_PATHS=()
+if command -v systemctl >/dev/null 2>&1; then
+  unit_fragment=$(systemctl --user show -p FragmentPath --value desk_display-kernel.service 2>/dev/null || true)
+  add_unit_path "$unit_fragment"
+fi
+add_unit_path "${XDG_CONFIG_HOME:-$HOME/.config}/systemd/user/desk_display-kernel.service"
+add_unit_path "$PROJECT_DIR/scripts/desk_display_kernel_user.service"
+
+if [[ ${#UNIT_PATHS[@]} -eq 0 ]]; then
+  echo "No desk_display-kernel.service unit file found to compare."
+else
+  for unit_path in "${UNIT_PATHS[@]}"; do
+    unit_output=$(read_unit_output_value "$unit_path")
+    echo "-- $unit_path"
+    if [[ -n "$unit_output" ]]; then
+      echo "unit DESK_DISPLAY_OUTPUT=${unit_output}"
+      if [[ -n "$env_output" && "$unit_output" != "$env_output" ]]; then
+        echo "[WARN] desk_display-kernel.service sets DESK_DISPLAY_OUTPUT=${unit_output}, but .env sets DESK_DISPLAY_OUTPUT=${env_output}."
+        echo "[WARN] If the unit assignment appears after EnvironmentFile, it can override .env; keep any default before EnvironmentFile or remove it."
+      fi
+    else
+      echo "unit DESK_DISPLAY_OUTPUT=<not explicitly set; .env controls output mode>"
+    fi
+  done
+fi
+
 show_cmd "System services" systemctl --no-pager --full status desk_display.service
 show_cmd "User kernel service" systemctl --user --no-pager --full status desk_display-kernel.service
 
