@@ -202,7 +202,8 @@ def test_load_display_status_reads_heartbeat(monkeypatch, tmp_path):
   "loop_iteration": 42,
   "rendered_at": "%s",
   "frame_id": 314,
-  "screen_play_counts": {"bears next season": 12}
+  "screen_play_counts": {"bears next season": 12},
+  "system_health": {"cpu_temperature_c": 42.5, "memory": {"available_bytes": 1048576}}
 }
 """ % rendered_at.isoformat(),
         encoding="utf-8",
@@ -220,5 +221,9 @@ def test_load_display_status_reads_heartbeat(monkeypatch, tmp_path):
     assert status["loop_iteration"] == 42
     assert status["frame_id"] == 314
     assert status["screen_play_counts"] == {"bears next season": 12}
+    assert status["system_health"] == {
+        "cpu_temperature_c": 42.5,
+        "memory": {"available_bytes": 1048576},
+    }
     assert status["is_stale"] is False
     assert status["elapsed"] is not None
