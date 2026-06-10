@@ -4,6 +4,7 @@ set -euo pipefail
 SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 PROJECT_DIR="${PROJECT_DIR:-$(cd -- "$SCRIPT_DIR/.." && pwd)}"
 SERVICE_USER="${SUDO_USER:-$(whoami)}"
+SYSTEM_SERVICE_NAME="desk_display.service"
 USER_SERVICE_NAME="desk_display-kernel.service"
 USER_SERVICE_TEMPLATE="$PROJECT_DIR/scripts/desk_display_kernel_user.service"
 
@@ -21,6 +22,82 @@ if [[ $EUID -ne 0 ]]; then
 else
   SUDO=""
 fi
+
+run_user_systemctl() {
+  local service_user="$1"
+  shift
+
+  if ! command -v systemctl >/dev/null 2>&1; then
+    return 1
+  fi
+
+  local uid runtime_dir
+  uid=$(id -u "$service_user" 2>/dev/null || true)
+  runtime_dir=""
+  if [[ -n "$uid" ]]; then
+    runtime_dir="/run/user/$uid"
+  fi
+
+  local systemctl_env=()
+  if [[ -n "$runtime_dir" && -d "$runtime_dir" ]]; then
+    systemctl_env=("XDG_RUNTIME_DIR=$runtime_dir")
+    if [[ -S "$runtime_dir/bus" ]]; then
+      systemctl_env+=("DBUS_SESSION_BUS_ADDRESS=unix:path=$runtime_dir/bus")
+    fi
+  fi
+
+  if [[ -n "$SUDO" ]]; then
+    $SUDO -u "$service_user" env "${systemctl_env[@]}" systemctl --user "$@"
+  else
+    env "${systemctl_env[@]}" systemctl --user "$@"
+  fi
+}
+
+disable_user_kernel_service() {
+  local service_user="$1"
+  local service_name="$2"
+  local home_dir user_systemd_dir wants_link
+
+  log "Disabling $service_name to avoid conflicts with $SYSTEM_SERVICE_NAME."
+  run_user_systemctl "$service_user" disable --now "$service_name" \
+    || warn "Failed to disable $service_name via systemctl --user; removing fallback wants link if present."
+
+  home_dir=$(getent passwd "$service_user" | cut -d: -f6)
+  if [[ -z "$home_dir" ]]; then
+    home_dir="/home/$service_user"
+  fi
+  user_systemd_dir="$home_dir/.config/systemd/user"
+  wants_link="$user_systemd_dir/default.target.wants/$service_name"
+
+  if [[ -e "$wants_link" || -L "$wants_link" ]]; then
+    if [[ -n "$SUDO" ]]; then
+      $SUDO rm -f "$wants_link"
+    else
+      rm -f "$wants_link"
+    fi
+    log "Removed fallback user service link $wants_link."
+  fi
+}
+
+disable_system_display_service() {
+  if command -v systemctl >/dev/null 2>&1; then
+    log "Disabling $SYSTEM_SERVICE_NAME to avoid conflicts with $USER_SERVICE_NAME."
+    $SUDO systemctl disable --now "$SYSTEM_SERVICE_NAME" || warn "Failed to disable $SYSTEM_SERVICE_NAME."
+  fi
+}
+
+enable_user_linger() {
+  local service_user="$1"
+  if command -v loginctl >/dev/null 2>&1; then
+    if [[ -n "$SUDO" ]]; then
+      $SUDO loginctl enable-linger "$service_user" || warn "Failed to enable linger for $service_user."
+    else
+      loginctl enable-linger "$service_user" || warn "Failed to enable linger for $service_user."
+    fi
+  else
+    warn "loginctl not available; cannot enable linger."
+  fi
+}
 
 detect_codename() {
   if command -v lsb_release >/dev/null 2>&1; then
@@ -255,37 +332,21 @@ fi
 
 prepend_env_vars "$ENV_PATH" "${ENV_LINES[@]}"
 
-"$PROJECT_DIR/scripts/helpers/base_setup.sh"
-
-install_kernel_user_service "$PROJECT_DIR" "$SERVICE_USER" "$USER_SERVICE_TEMPLATE" "$USER_SERVICE_NAME"
-
-if command -v loginctl >/dev/null 2>&1; then
-  if [[ -n "$SUDO" ]]; then
-    $SUDO loginctl enable-linger "$SERVICE_USER" || warn "Failed to enable linger for $SERVICE_USER."
-  else
-    loginctl enable-linger "$SERVICE_USER" || warn "Failed to enable linger for $SERVICE_USER."
-  fi
-else
-  warn "loginctl not available; cannot enable linger."
-fi
-
 if [[ -e /dev/dri/card0 ]]; then
   log "DRM device detected at /dev/dri/card0"
 else
   warn "DRM device /dev/dri/card0 not found. Ensure your HyperPixel dtoverlay is configured correctly."
 fi
 
-if detect_desktop_session "$SERVICE_USER"; then
-  log "Detected an active Wayland/X11 session."
-else
-  warn "No active Wayland/X11 session detected."
-
-  if [[ "${DESK_DISPLAY_OUTPUT}" == "kernel" && "${AUTO_FALLBACK_FRAMEBUFFER:-1}" == "1" ]]; then
+if [[ "${DESK_DISPLAY_OUTPUT}" == "kernel" ]]; then
+  if detect_desktop_session "$SERVICE_USER"; then
+    log "Detected an active Wayland/X11 session; HyperPixel will use $USER_SERVICE_NAME."
+  elif [[ "${AUTO_FALLBACK_FRAMEBUFFER:-1}" == "1" ]]; then
+    warn "No active Wayland/X11 session detected."
     warn "Switching DESK_DISPLAY_OUTPUT from kernel to framebuffer for Lite/headless startup reliability."
     DESK_DISPLAY_OUTPUT="framebuffer"
     export DESK_DISPLAY_OUTPUT
 
-    ENV_PATH="$PROJECT_DIR/.env"
     prepend_env_vars "$ENV_PATH" "DESK_DISPLAY_OUTPUT=${DESK_DISPLAY_OUTPUT}"
 
     if framebuffer_device=$(detect_framebuffer_device); then
@@ -295,25 +356,52 @@ else
       prepend_env_vars "$ENV_PATH" "DISPLAY_FB_DEVICE=/dev/fb0"
       warn "Unable to detect framebuffer device automatically; set DISPLAY_FB_DEVICE=/dev/fb0."
     fi
-
-    log "Re-running base setup to apply framebuffer service wiring."
-    "$PROJECT_DIR/scripts/helpers/base_setup.sh"
   else
+    warn "No active Wayland/X11 session detected."
     warn "Keeping DESK_DISPLAY_OUTPUT=${DESK_DISPLAY_OUTPUT}. Set AUTO_FALLBACK_FRAMEBUFFER=1 to auto-switch on Lite/headless systems."
   fi
+else
+  log "DESK_DISPLAY_OUTPUT=${DESK_DISPLAY_OUTPUT}; HyperPixel will use $SYSTEM_SERVICE_NAME."
+fi
+
+if [[ "${DESK_DISPLAY_OUTPUT}" == "kernel" ]]; then
+  export SKIP_SYSTEM_DISPLAY_SERVICE="1"
+  log "HyperPixel runtime choice: $USER_SERVICE_NAME will run the display loop; $SYSTEM_SERVICE_NAME will stay disabled."
+else
+  export SKIP_SYSTEM_DISPLAY_SERVICE="0"
+  log "HyperPixel runtime choice: $SYSTEM_SERVICE_NAME will run the display loop; $USER_SERVICE_NAME will stay disabled."
+fi
+
+"$PROJECT_DIR/scripts/helpers/base_setup.sh"
+
+if [[ "${DESK_DISPLAY_OUTPUT}" == "kernel" ]]; then
+  install_kernel_user_service "$PROJECT_DIR" "$SERVICE_USER" "$USER_SERVICE_TEMPLATE" "$USER_SERVICE_NAME"
+  enable_user_linger "$SERVICE_USER"
+  disable_system_display_service
+else
+  disable_user_kernel_service "$SERVICE_USER" "$USER_SERVICE_NAME"
 fi
 
 if command -v systemctl >/dev/null 2>&1; then
-  uid=$(id -u "$SERVICE_USER" 2>/dev/null || true)
   host=$(hostname)
-  if [[ -n "$uid" ]]; then
-    cat <<EOF
+  if [[ "${DESK_DISPLAY_OUTPUT}" == "kernel" ]]; then
+    uid=$(id -u "$SERVICE_USER" 2>/dev/null || true)
+    if [[ -n "$uid" ]]; then
+      cat <<EOF
 SSH service control commands:
   ssh ${SERVICE_USER}@${host} '${PROJECT_DIR}/scripts/ssh_kernel_display.sh status'
   ssh ${SERVICE_USER}@${host} '${PROJECT_DIR}/scripts/ssh_kernel_display.sh restart'
   ssh ${SERVICE_USER}@${host} '${PROJECT_DIR}/scripts/ssh_kernel_display.sh stop'
 EOF
+    else
+      warn "Unable to resolve UID for $SERVICE_USER; skipping SSH command hints."
+    fi
   else
-    warn "Unable to resolve UID for $SERVICE_USER; skipping SSH command hints."
+    cat <<EOF
+SSH service control commands:
+  ssh ${SERVICE_USER}@${host} 'sudo systemctl status ${SYSTEM_SERVICE_NAME}'
+  ssh ${SERVICE_USER}@${host} 'sudo systemctl restart ${SYSTEM_SERVICE_NAME}'
+  ssh ${SERVICE_USER}@${host} 'sudo systemctl stop ${SYSTEM_SERVICE_NAME}'
+EOF
   fi
 fi

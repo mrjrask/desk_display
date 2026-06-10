@@ -185,6 +185,19 @@ bash ./Installers/install_hyperpixel.sh
 bash ./Installers/install_kernel.sh
 ```
 
+The HyperPixel installer intentionally runs exactly one display loop:
+
+- On desktop sessions, HyperPixel uses the per-user kernel service, `desk_display-kernel.service`, and keeps the system display service, `desk_display.service`, disabled. The separate `config_ui_desk_display.service` remains available for the configuration UI.
+- On Lite/headless systems where the installer falls back to framebuffer output, HyperPixel uses the system display service, `desk_display.service`, and disables the per-user `desk_display-kernel.service`.
+
+After installing, verify that only the selected runtime service is active:
+
+```bash
+systemctl --user status desk_display-kernel.service
+sudo systemctl status desk_display.service
+sudo systemctl status config_ui_desk_display.service
+```
+
 ### macOS scalable HyperPixel 4 window (800×480 render)
 
 ```bash
