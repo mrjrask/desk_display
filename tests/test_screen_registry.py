@@ -541,7 +541,11 @@ def test_logo_scroll_threshold_detects_1080p_and_higher():
 def test_logo_scroll_speed_is_doubled_for_1080p_layout():
     assert _logo_scroll_speed_for_layout(1920, 1080) == 4.4
     assert _logo_scroll_speed_for_layout(1080, 1920) == 4.4
-    assert _logo_scroll_speed_for_layout(800, 480) == 2.2
+
+
+def test_logo_scroll_speed_is_tripled_for_hyperpixel4_layout():
+    assert _logo_scroll_speed_for_layout(800, 480) == pytest.approx(6.6)
+    assert _logo_scroll_speed_for_layout(480, 800) == pytest.approx(6.6)
 
 
 def test_date_nixie_screens_render_with_live_color_cycle_mode(monkeypatch):

@@ -11,7 +11,7 @@ from typing import Any, Callable, Dict, Optional, Tuple
 
 from PIL import Image
 
-from config import CENTRAL_TIME, HEIGHT, NBA_TEAM_TRICODE, WIDTH, is_display_profile
+from config import CENTRAL_TIME, DISPLAY_HEIGHT, DISPLAY_WIDTH, HEIGHT, NBA_TEAM_TRICODE, WIDTH, is_display_profile
 from paths import resolve_layouts_config_path, resolve_screens_config_paths
 from utils import ScreenImage, animate_scroll, timestamp_to_datetime
 from screens.draw_bears_schedule import show_bears_next_game, show_bears_next_season, show_bears_next_season_sched
@@ -361,12 +361,14 @@ def _is_waveshare_oled_lcd_hat() -> bool:
 
 def _logo_scroll_speed_for_layout(width: int, height: int) -> float:
     base_speed = 2.2
+    if is_display_profile("hyperpixel4", width, height):
+        return base_speed * 3.0
     if _is_display_hat_mini_layout(width, height):
         return base_speed * 2.0
     return base_speed * (2.0 if _is_1080p_or_higher(width, height) else 1.0)
 
 
-_LOGO_SCROLL_SPEED = _logo_scroll_speed_for_layout(WIDTH, HEIGHT)
+_LOGO_SCROLL_SPEED = _logo_scroll_speed_for_layout(DISPLAY_WIDTH, DISPLAY_HEIGHT)
 
 
 @dataclass

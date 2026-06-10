@@ -293,7 +293,16 @@ def test_display_hat_mini_reinit_seconds_invalid_and_negative(monkeypatch):
     assert module.DISPLAY_HAT_MINI_REINIT_SECONDS == 0
 
 
-def test_scoreboard_scroll_step_doubles_only_on_1080p(monkeypatch):
+def test_scoreboard_scroll_step_uses_display_profile_defaults(monkeypatch):
+    module = _reload_config(monkeypatch, DISPLAY_WIDTH="800", DISPLAY_HEIGHT="480")
+    assert module.SCOREBOARD_SCROLL_STEP == 3
+
+    module = _reload_config(monkeypatch, DISPLAY_WIDTH="480", DISPLAY_HEIGHT="800")
+    assert module.SCOREBOARD_SCROLL_STEP == 3
+
+    module = _reload_config(monkeypatch, DISPLAY_WIDTH="720", DISPLAY_HEIGHT="720")
+    assert module.SCOREBOARD_SCROLL_STEP == 3
+
     module = _reload_config(monkeypatch, DISPLAY_WIDTH="1920", DISPLAY_HEIGHT="1080")
     assert module.SCOREBOARD_SCROLL_STEP == 2
 

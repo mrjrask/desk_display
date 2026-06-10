@@ -53,7 +53,7 @@ PROFILE_PRESETS: dict[str, DisplayProfilePreset] = {
     DISPLAY_PROFILE_HYPERPIXEL4: DisplayProfilePreset(
         profile_id=DISPLAY_PROFILE_HYPERPIXEL4,
         fade_in_steps=6,
-        scoreboard_scroll_step=1,
+        scoreboard_scroll_step=3,
         scoreboard_scroll_delay=0.030,
         logo_scale_cap=3.0,
         animation_delay=0.05,
@@ -62,7 +62,7 @@ PROFILE_PRESETS: dict[str, DisplayProfilePreset] = {
     DISPLAY_PROFILE_HYPERPIXEL4_SQUARE: DisplayProfilePreset(
         profile_id=DISPLAY_PROFILE_HYPERPIXEL4_SQUARE,
         fade_in_steps=6,
-        scoreboard_scroll_step=1,
+        scoreboard_scroll_step=3,
         scoreboard_scroll_delay=0.030,
         logo_scale_cap=3.0,
         animation_delay=0.05,
