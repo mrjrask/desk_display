@@ -123,8 +123,8 @@ else:
             time.sleep(0.06)
 
         # Keep the legacy clear path as a final fallback redraw.
-        clear_display(display)
-        display.clear()
+        clear_display(display, force=True)
+        display.clear(force=True)
 
         # Blank the panel backlight at shutdown so any residual LCD ghosting is
         # not visible once cleanup finishes.

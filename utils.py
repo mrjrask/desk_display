@@ -558,13 +558,17 @@ def _convert_rgb565(image: Image.Image, *, order: str = "rgb") -> bytes:
 
 
 def _convert_rgb888(image: Image.Image, *, order: str = "rgb") -> bytes:
-    image = image.convert("RGB")
+    if image.mode == "RGB" and order == "rgb":
+        return image.tobytes()
+    if image.mode != "RGB":
+        image = image.convert("RGB")
     raw_mode = "BGR" if order == "bgr" else "RGB"
     return image.tobytes("raw", raw_mode)
 
 
 def _convert_rgbx8888(image: Image.Image, *, order: str = "rgb") -> bytes:
-    image = image.convert("RGB")
+    if image.mode != "RGB":
+        image = image.convert("RGB")
     raw_mode = "BGRX" if order == "bgr" else "RGBX"
     return image.tobytes("raw", raw_mode)
 
@@ -588,6 +592,8 @@ class _FrameBufferDevice:
         self.bytes_per_pixel = max(1, self.bpp // 8)
         self.pixel_format, self.pixel_order = _resolve_framebuffer_pixel_settings(device_path, self.bpp)
         self._fd: Optional[int] = None
+        self._padded_stride_buffer: Optional[bytearray] = None
+        self._padded_stride_key: Optional[Tuple[int, int, int, int]] = None
 
         try:
             self._fd = os.open(self.device_path, os.O_RDWR)
@@ -643,7 +649,12 @@ class _FrameBufferDevice:
                 os.write(self._fd, raw)
                 return
 
-            padded = bytearray(stride * self.height)
+            stride_key = (self.width, self.height, row_bytes, stride)
+            if self._padded_stride_key != stride_key or self._padded_stride_buffer is None:
+                self._padded_stride_buffer = bytearray(stride * self.height)
+                self._padded_stride_key = stride_key
+
+            padded = self._padded_stride_buffer
             for row in range(self.height):
                 start_src = row * row_bytes
                 start_dst = row * stride
@@ -1131,7 +1142,7 @@ class Display:
         self._rotation_requires_expand = self.rotation in (90, 270)
         self._frame_transform: Callable[[Image.Image], Image.Image] = lambda img: img
         self._frame_writer: Callable[[Image.Image], None] = lambda img: None
-        self._last_frame_write_monotonic: Optional[float] = None
+        self._last_written_frame_signature: Optional[Tuple[Tuple[int, int], str, bytes]] = None
         self._output_strategy = "headless"
         self._display_driver = "none"
         self._minipitft_backlight = None
@@ -1439,34 +1450,40 @@ class Display:
 
         return False
 
-    def _pace_frame_write(self, *, force: bool = False) -> None:
-        """Apply central output frame pacing before writing to display hardware."""
+    def _frame_signature(self, image: Image.Image) -> Tuple[Tuple[int, int], str, bytes]:
+        """Return a compact signature for suppressing duplicate output frames."""
 
-        if force:
-            return
+        import hashlib
 
-        interval = max(0.0, float(DISPLAY_FRAME_INTERVAL))
-        if interval <= 0:
-            return
+        digest = hashlib.blake2b(image.tobytes(), digest_size=16).digest()
+        return image.size, image.mode, digest
 
+    def _display_hat_mini_reinit_due(self) -> bool:
+        if self._display is None:
+            return False
+        if self._display_reinit_seconds <= 0 or self._display_reinit_disabled:
+            return False
         now = time.monotonic()
-        if self._last_frame_write_monotonic is None:
-            return
-
-        elapsed = now - self._last_frame_write_monotonic
-        remaining = interval - elapsed
-        if remaining > 0:
-            time.sleep(remaining)
+        return (
+            now - self._last_display_reinit >= self._display_reinit_seconds
+            and now >= self._next_display_reinit_retry
+        )
 
     def _update_display(self, *, force: bool = False):
         if not display_updates_enabled():
             return
         if self._output_strategy == "headless" and self._display is not None:
             self._configure_output_strategy()
-        self._pace_frame_write(force=force)
+        if self._output_strategy == "display_hat_mini" and self._display_hat_mini_reinit_due():
+            force = True
+
         buffer_to_display = self._frame_transform(self._indicator_buffer())
-        self._last_frame_write_monotonic = time.monotonic()
+        frame_signature = self._frame_signature(buffer_to_display)
+        if not force and frame_signature == self._last_written_frame_signature:
+            return
+
         self._frame_writer(buffer_to_display)
+        self._last_written_frame_signature = frame_signature
 
     def _write_display_hat_mini_frame(self, buffer_to_display: Image.Image) -> None:
         """Push a frame to Display HAT Mini, including hot reinitialization logic."""
@@ -1793,10 +1810,10 @@ class Display:
         with self._frame_lock:
             self._frame_id += 1
 
-    def clear(self):
+    def clear(self, *, force: bool = False):
         self._buffer = Image.new("RGB", (self.width, self.height), "black")
         self._bump_frame_id()
-        self._update_display(force=True)
+        self._update_display(force=force)
 
     def image(self, pil_img: Image.Image):
         pil_img = self._apply_bottom_safe_buffer(pil_img)
@@ -1858,10 +1875,9 @@ class Display:
         )
         return buffered_img
 
-    def show(self):
-        # Explicit show calls are used for immediate clears/shutdown blanking and
-        # should not be delayed by regular frame pacing.
-        self._update_display(force=True)
+    def show(self, *, force: bool = False):
+        # No additional action required; display() is triggered during image()
+        self._update_display(force=force)
 
     def capture(self) -> Image.Image:
         """Return a copy of the currently buffered frame."""
@@ -2116,7 +2132,7 @@ class ScreenImage:
 
 # ─── Basic utilities ────────────────────────────────────────────────────────
 @log_call
-def clear_display(display):
+def clear_display(display, *, force: bool = False):
     """
     Clear the connected display, falling back to a blank frame.
     """
@@ -2126,12 +2142,22 @@ def clear_display(display):
         # in-memory buffer to black causes a visible blank fade between screens.
         return
     try:
-        display.clear()
+        try:
+            display.clear(force=force)
+        except TypeError as exc:
+            if "force" not in str(exc):
+                raise
+            display.clear()
     except Exception:
         try:
             blank = Image.new("RGB", (getattr(display, "width", WIDTH), getattr(display, "height", HEIGHT)), "black")
             display.image(blank)
-            display.show()
+            try:
+                display.show(force=force)
+            except TypeError as exc:
+                if "force" not in str(exc):
+                    raise
+                display.show()
         except Exception:
             pass
 
