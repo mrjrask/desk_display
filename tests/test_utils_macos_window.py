@@ -289,3 +289,73 @@ def test_window_mode_uses_fast_scale_and_drains_resize_events_on_macos(monkeypat
     assert called["scale_size"] == (1440, 864)
     assert called["smooth_size"] is None
     assert called["event_types"] == [10, 11, 12, 13]
+
+
+def test_kernel_display_scales_internal_render_to_output_window(monkeypatch):
+    fake_pygame = _FakePygame()
+    monkeypatch.setattr(utils, "_load_pygame", lambda: fake_pygame)
+    monkeypatch.setattr(utils, "_sdl_driver_candidates", lambda: [None])
+    monkeypatch.setattr(utils, "_maybe_configure_desktop_env", lambda: None)
+    monkeypatch.setattr(utils, "_park_mouse_cursor", lambda _pygame: None)
+    monkeypatch.setattr(utils, "_wiggle_mouse_cursor", lambda _pygame: None)
+    monkeypatch.setattr(utils, "_schedule_mouse_cursor_wiggle", lambda *_args, **_kwargs: None)
+    monkeypatch.setenv("DESK_DISPLAY_WINDOW_SCALE", "1")
+    monkeypatch.setenv("DESK_DISPLAY_SDL_FULLSCREEN", "0")
+
+    display = utils._KernelDisplay(
+        800,
+        480,
+        render_width=400,
+        render_height=240,
+        window_mode=True,
+    )
+
+    called = {"size": None}
+
+    def _smoothscale(_surface, size):
+        called["size"] = size
+        return _FakeSurface(size)
+
+    fake_pygame.transform = SimpleNamespace(smoothscale=_smoothscale)
+
+    display.write_image(utils.Image.new("RGB", (400, 240), "black"))
+
+    assert fake_pygame.display.last_set_mode[0] == (800, 480)
+    assert called["size"] == (800, 480)
+
+
+def test_low_power_kernel_display_prefers_fast_scale(monkeypatch):
+    fake_pygame = _FakePygame()
+    monkeypatch.setattr(utils, "_load_pygame", lambda: fake_pygame)
+    monkeypatch.setattr(utils, "_sdl_driver_candidates", lambda: [None])
+    monkeypatch.setattr(utils, "_maybe_configure_desktop_env", lambda: None)
+    monkeypatch.setattr(utils, "_park_mouse_cursor", lambda _pygame: None)
+    monkeypatch.setattr(utils, "_wiggle_mouse_cursor", lambda _pygame: None)
+    monkeypatch.setattr(utils, "_schedule_mouse_cursor_wiggle", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(utils, "DESK_DISPLAY_LOW_POWER", True)
+    monkeypatch.setenv("DESK_DISPLAY_WINDOW_SCALE", "1")
+    monkeypatch.setenv("DESK_DISPLAY_SDL_FULLSCREEN", "0")
+
+    display = utils._KernelDisplay(
+        800,
+        480,
+        render_width=400,
+        render_height=240,
+        window_mode=True,
+    )
+
+    called = {"scale_size": None, "smooth_size": None}
+
+    def _scale(_surface, size):
+        called["scale_size"] = size
+        return _FakeSurface(size)
+
+    def _smoothscale(_surface, size):
+        called["smooth_size"] = size
+        return _FakeSurface(size)
+
+    fake_pygame.transform = SimpleNamespace(scale=_scale, smoothscale=_smoothscale)
+
+    display.write_image(utils.Image.new("RGB", (400, 240), "black"))
+
+    assert called == {"scale_size": (800, 480), "smooth_size": None}

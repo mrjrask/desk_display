@@ -250,7 +250,9 @@ Configuration is environment-driven. Most values can be placed in `.env`.
 | `DISPLAY_SCROLL_TARGET_FPS` | Scroll/scoreboard frame pacing target; defaults to the active display profile normally and 12 FPS in low-power mode |
 | `DISPLAY_ANIMATION_TARGET_FPS` | General animation/fade frame pacing target; defaults to 60 FPS normally and 12 FPS in low-power mode |
 | `DESK_DISPLAY_FORCE_HEADLESS` | Force headless behavior |
-| `DISPLAY_WIDTH` / `DISPLAY_HEIGHT` | Render size override |
+| `DISPLAY_WIDTH` / `DISPLAY_HEIGHT` | Physical output size override (for example `800`×`480` for HyperPixel 4) |
+| `RENDER_WIDTH` / `RENDER_HEIGHT` | Optional internal render canvas size; frames are scaled once to `DISPLAY_WIDTH` / `DISPLAY_HEIGHT` at output |
+| `DISPLAY_RENDER_SCALE` | Optional internal render scale used when `RENDER_WIDTH` / `RENDER_HEIGHT` are unset (for example `0.5` renders an 800×480 panel at 400×240) |
 | `DISPLAY_ROTATION` | App rotation (`0`,`90`,`180`,`270` or `0-3`) |
 | `DISPLAY_FB_DEVICE` | Framebuffer device (default `/dev/fb0`) |
 | `DISPLAY_FB_PIXEL_FORMAT` | FB pixel format override |
@@ -291,13 +293,18 @@ For Pi Zero 2 W or HyperPixel deployments, use the low-power frame pacing profil
 ```bash
 DESK_DISPLAY_PROFILE=hyperpixel_pi_zero
 DESK_DISPLAY_LOW_POWER=1
+# Keep the HyperPixel panel output at full resolution while composing fewer pixels.
+DISPLAY_WIDTH=800
+DISPLAY_HEIGHT=480
+RENDER_WIDTH=400
+RENDER_HEIGHT=240
 # Optional explicit override; the low-power defaults already use 12 FPS.
 DISPLAY_TARGET_FPS=12
 DISPLAY_SCROLL_TARGET_FPS=12
 DISPLAY_ANIMATION_TARGET_FPS=12
 ```
 
-The low-power profile keeps scrolling and animations around 10-15 FPS, which reduces CPU load and heat on Pi Zero-class hardware while preserving normal 60 FPS defaults on faster desktop or Raspberry Pi hardware.
+The low-power profile keeps scrolling and animations around 10-15 FPS, and the HyperPixel installer can write a reduced internal render canvas such as `RENDER_WIDTH=400` and `RENDER_HEIGHT=240` while preserving the full `DISPLAY_WIDTH=800` and `DISPLAY_HEIGHT=480` panel output. This reduces CPU load and heat on Pi Zero-class hardware while preserving normal 60 FPS/full-render defaults on faster desktop or Raspberry Pi hardware.
 
 For API-specific keys/fields, see [README_APIS.md](README_APIS.md).
 

@@ -654,9 +654,19 @@ class _FrameBufferDevice:
 
 
 class _KernelDisplay:
-    def __init__(self, width: int, height: int, *, window_mode: bool = False):
-        self.render_width = width
-        self.render_height = height
+    def __init__(
+        self,
+        width: int,
+        height: int,
+        *,
+        render_width: Optional[int] = None,
+        render_height: Optional[int] = None,
+        window_mode: bool = False,
+    ):
+        self.output_width = width
+        self.output_height = height
+        self.render_width = render_width or width
+        self.render_height = render_height or height
         self.window_mode = bool(window_mode)
         self._pygame = _load_pygame()
         if self._pygame is None:
@@ -745,9 +755,9 @@ class _KernelDisplay:
             return surface
 
         # AppKit can emit dense resize traffic while dragging macOS windows.
-        # Prefer the faster nearest-neighbor path during windowed rendering to
-        # keep resize interactions responsive.
-        if self.window_mode and sys.platform == "darwin":
+        # Low-power deployments also prefer nearest-neighbor scaling so the
+        # final upscale is fast and happens only once at output time.
+        if DESK_DISPLAY_LOW_POWER or (self.window_mode and sys.platform == "darwin"):
             fast_scale = getattr(transform, "scale", None)
             if callable(fast_scale):
                 return fast_scale(surface, target_size)
@@ -773,8 +783,8 @@ class _KernelDisplay:
             if self._window_resizable:
                 flags |= self._pygame.RESIZABLE
             requested_size = (
-                max(1, int(round(self.render_width * self._window_scale))),
-                max(1, int(round(self.render_height * self._window_scale))),
+                max(1, int(round(self.output_width * self._window_scale))),
+                max(1, int(round(self.output_height * self._window_scale))),
             )
         errors: List[str] = []
         for driver in _sdl_driver_candidates():
@@ -794,7 +804,7 @@ class _KernelDisplay:
                     message = str(exc)
                     if "0 sized" in message or "0-sized" in message:
                         screen = self._pygame.display.set_mode(
-                            (self.render_width, self.render_height),
+                            (self.output_width, self.output_height),
                             flags,
                         )
                     else:
@@ -1018,6 +1028,8 @@ LED_INDICATOR_LEVEL = _get_led_indicator_level()
 from config import (
     WIDTH,
     HEIGHT,
+    DISPLAY_WIDTH,
+    DISPLAY_HEIGHT,
     CENTRAL_TIME,
     DISPLAY_ROTATION,
     is_hyperpixel_next_layout,
@@ -1027,6 +1039,7 @@ from config import (
     DISPLAY_HAT_MINI_LED_INDICATOR_BORDER_ENABLED,
     DISPLAY_HAT_MINI_LED_ENABLED,
     DISPLAY_HAT_MINI_REINIT_SECONDS,
+    DESK_DISPLAY_LOW_POWER,
     DISPLAY_FADE_IN_ENABLED,
     DISPLAY_FADE_IN_DISPLAY_HAT_MINI_STEPS,
     DISPLAY_FADE_IN_HYPERPIXEL_STEPS,
@@ -1080,6 +1093,8 @@ class Display:
 
         self.width = WIDTH
         self.height = HEIGHT
+        self.output_width = DISPLAY_WIDTH
+        self.output_height = DISPLAY_HEIGHT
         self.rotation = DISPLAY_ROTATION % 360
         if self.rotation not in (0, 90, 180, 270):
             logging.warning(
@@ -1128,7 +1143,7 @@ class Display:
             )
             logging.info("Display initialization skipped; running headless (%s).", reason)
         elif output == "framebuffer":
-            requested_size = (self.width, self.height)
+            requested_size = (self.output_width, self.output_height)
             self._framebuffer = _init_framebuffer_output(
                 requested_size=requested_size,
                 configured_device=_FRAMEBUFFER_DEVICE,
@@ -1138,7 +1153,7 @@ class Display:
                     "Framebuffer output requested but unavailable; running headless."
                 )
         elif output == "auto":
-            requested_size = (self.width, self.height)
+            requested_size = (self.output_width, self.output_height)
             exact_framebuffer_device = _detect_exact_framebuffer_device(
                 _FRAMEBUFFER_DEVICE,
                 requested_size,
@@ -1178,7 +1193,7 @@ class Display:
                             exc,
                         )
                         self._framebuffer = _init_framebuffer_output(
-                            requested_size=(self.width, self.height),
+                            requested_size=(self.output_width, self.output_height),
                             configured_device=_FRAMEBUFFER_DEVICE,
                         )
                         if self._framebuffer is None:
@@ -1198,8 +1213,10 @@ class Display:
             window_mode = output == "window"
             try:
                 self._kernel_display = _KernelDisplay(
-                    self.width,
-                    self.height,
+                    self.output_width,
+                    self.output_height,
+                    render_width=self.width,
+                    render_height=self.height,
                     window_mode=window_mode,
                 )
             except Exception as exc:
@@ -1217,7 +1234,7 @@ class Display:
                         mode_label.lower(),
                     )
                     self._framebuffer = _init_framebuffer_output(
-                        requested_size=(self.width, self.height),
+                        requested_size=(self.output_width, self.output_height),
                         configured_device=_FRAMEBUFFER_DEVICE,
                     )
                     if self._framebuffer is None:
@@ -1244,6 +1261,17 @@ class Display:
                         driver_label,
                     )
                 if (self.width, self.height) != (
+                    self.output_width,
+                    self.output_height,
+                ):
+                    logging.info(
+                        "Internal render size is %dx%d; frames will be scaled to the %dx%d output.",
+                        self.width,
+                        self.height,
+                        self.output_width,
+                        self.output_height,
+                    )
+                elif (self.width, self.height) != (
                     self._kernel_display.screen_width,
                     self._kernel_display.screen_height,
                 ):

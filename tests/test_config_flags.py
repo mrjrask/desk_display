@@ -136,6 +136,41 @@ def test_kernel_portrait_mode_is_normalized_to_landscape(monkeypatch):
     assert module.HEIGHT == 480
 
 
+
+
+def test_render_dimensions_can_be_smaller_than_physical_output(monkeypatch):
+    module = _reload_config(
+        monkeypatch,
+        DISPLAY_WIDTH="800",
+        DISPLAY_HEIGHT="480",
+        RENDER_WIDTH="400",
+        RENDER_HEIGHT="240",
+        DISPLAY_RENDER_SCALE=None,
+    )
+
+    assert module.DISPLAY_WIDTH == 800
+    assert module.DISPLAY_HEIGHT == 480
+    assert module.WIDTH == 400
+    assert module.HEIGHT == 240
+    assert module.get_display_profile_id() == "hyperpixel4"
+
+
+def test_display_render_scale_sets_internal_dimensions(monkeypatch):
+    module = _reload_config(
+        monkeypatch,
+        DISPLAY_WIDTH="800",
+        DISPLAY_HEIGHT="480",
+        RENDER_WIDTH=None,
+        RENDER_HEIGHT=None,
+        DISPLAY_RENDER_SCALE="0.5",
+    )
+
+    assert module.DISPLAY_WIDTH == 800
+    assert module.DISPLAY_HEIGHT == 480
+    assert module.WIDTH == 400
+    assert module.HEIGHT == 240
+
+
 def test_display_rotation_defaults_to_0(monkeypatch):
     module = _reload_config(monkeypatch, DISPLAY_ROTATION=None)
     assert module.DISPLAY_ROTATION == 0

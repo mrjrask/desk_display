@@ -91,6 +91,9 @@ add_service_env "DISPLAY_FB_PIXEL_FORMAT" "${DISPLAY_FB_PIXEL_FORMAT:-}"
 add_service_env "DISPLAY_FB_PIXEL_ORDER" "${DISPLAY_FB_PIXEL_ORDER:-}"
 add_service_env "DISPLAY_WIDTH" "${DISPLAY_WIDTH:-}"
 add_service_env "DISPLAY_HEIGHT" "${DISPLAY_HEIGHT:-}"
+add_service_env "RENDER_WIDTH" "${RENDER_WIDTH:-}"
+add_service_env "RENDER_HEIGHT" "${RENDER_HEIGHT:-}"
+add_service_env "DISPLAY_RENDER_SCALE" "${DISPLAY_RENDER_SCALE:-}"
 add_service_env "DISPLAY_ROTATION" "${DISPLAY_ROTATION:-}"
 
 if [[ -n "${DESK_DISPLAY_OUTPUT:-}" ]]; then
