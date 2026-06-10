@@ -155,6 +155,7 @@ DISPLAY_HEIGHT="${DISPLAY_HEIGHT:-}"
 RENDER_WIDTH="${RENDER_WIDTH:-}"
 RENDER_HEIGHT="${RENDER_HEIGHT:-}"
 DISPLAY_RENDER_SCALE="${DISPLAY_RENDER_SCALE:-}"
+PI_ZERO_HYPERPIXEL_CONFIG="$PROJECT_DIR/screens_config.pi_zero_hyperpixel.json"
 
 export DISPLAY_ROTATION="${DISPLAY_ROTATION:-0}"
 
@@ -329,6 +330,73 @@ MENU
   fi
 }
 
+detect_pi_zero_class_device() {
+  local model_path model
+  for model_path in \
+    "${PI_MODEL_PATH:-}" \
+    /proc/device-tree/model \
+    /sys/firmware/devicetree/base/model; do
+    [[ -n "$model_path" && -r "$model_path" ]] || continue
+    model=$(tr -d '\0\r' < "$model_path" | head -n 1)
+    case "$model" in
+      *"Raspberry Pi Zero"*)
+        return 0
+        ;;
+    esac
+  done
+
+  return 1
+}
+
+select_schedule_preset() {
+  local default_choice="default"
+  local selection
+
+  if [[ ! -f "$PI_ZERO_HYPERPIXEL_CONFIG" ]]; then
+    warn "Pi Zero HyperPixel schedule preset not found at $PI_ZERO_HYPERPIXEL_CONFIG."
+    return 0
+  fi
+
+  if [[ -n "${SCREENS_CONFIG_PATH:-}" ]]; then
+    log "SCREENS_CONFIG_PATH is already set; leaving the existing schedule selection unchanged."
+    return 0
+  fi
+
+  if detect_pi_zero_class_device; then
+    default_choice="pi_zero"
+  fi
+
+  if [[ "$default_choice" == "pi_zero" && -t 0 ]]; then
+    cat <<MENU
+Detected a Raspberry Pi Zero-class device.
+Select the default screen schedule:
+  1) Lightweight Pi Zero + HyperPixel preset (recommended)
+  2) Standard schedule
+MENU
+    read -r -p "Enter a number [1-2, default 1]: " selection
+    case "$selection" in
+      ""|1)
+        default_choice="pi_zero"
+        ;;
+      2)
+        default_choice="default"
+        ;;
+      *)
+        warn "Unrecognized schedule selection; using the lightweight Pi Zero + HyperPixel preset."
+        default_choice="pi_zero"
+        ;;
+    esac
+  fi
+
+  if [[ "$default_choice" == "pi_zero" ]]; then
+    SCREENS_CONFIG_PATH="$PI_ZERO_HYPERPIXEL_CONFIG"
+    SCREENS_CONFIG_LOCAL_PATH="${SCREENS_CONFIG_LOCAL_PATH:-$PROJECT_DIR/screens_config.pi_zero_hyperpixel.local.json}"
+    export SCREENS_CONFIG_PATH SCREENS_CONFIG_LOCAL_PATH
+    log "Using lightweight Pi Zero + HyperPixel schedule preset."
+    log "Re-enable radar, sports, standings, and animated/logo screens one at a time after CPU temperature/load is stable."
+  fi
+}
+
 detect_framebuffer_device() {
   local requested_size="${DISPLAY_WIDTH}x${DISPLAY_HEIGHT}"
   local fb_path sysfs_base mode_value virtual_value candidate_size
@@ -409,6 +477,7 @@ if ! validate_hyperpixel_env_overrides && ! detect_hyperpixel_panel; then
 fi
 
 configure_render_size
+select_schedule_preset
 
 ENV_PATH="$PROJECT_DIR/.env"
 ENV_LINES=()
@@ -429,6 +498,12 @@ ENV_LINES+=("ENABLE_SCREENSHOTS=${ENABLE_SCREENSHOTS:-0}")
 ENV_LINES+=("ENABLE_VIDEO=${ENABLE_VIDEO:-0}")
 ENV_LINES+=("SCREEN_CONFIG_AUTOSTART=0")
 ENV_LINES+=("ENABLE_WIFI_MONITOR=${ENABLE_WIFI_MONITOR:-0}")
+if [[ -n "${SCREENS_CONFIG_PATH:-}" ]]; then
+  ENV_LINES+=("SCREENS_CONFIG_PATH=${SCREENS_CONFIG_PATH}")
+fi
+if [[ -n "${SCREENS_CONFIG_LOCAL_PATH:-}" ]]; then
+  ENV_LINES+=("SCREENS_CONFIG_LOCAL_PATH=${SCREENS_CONFIG_LOCAL_PATH}")
+fi
 if [[ -n "${DISPLAY_ROTATION:-}" ]]; then
   ENV_LINES+=("DISPLAY_ROTATION=${DISPLAY_ROTATION}")
 fi
