@@ -1,5 +1,7 @@
 import importlib
+import queue
 import sys
+import threading
 
 import pytest
 

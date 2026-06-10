@@ -75,7 +75,11 @@ _SESSION = ThreadLocalSession()
 def get_session() -> ThreadLocalSession:
     """Return a thread-local HTTP session facade safe for parallel refreshes."""
 
-    return _SESSION
+    session = getattr(_SESSION_LOCAL, "session", None)
+    if session is None:
+        session = _build_session()
+        _SESSION_LOCAL.session = session
+    return session
 
 
 def request_json(
