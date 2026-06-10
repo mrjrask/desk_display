@@ -315,6 +315,18 @@
       {% if display_status.frame_id is not none %}
         — frame {{ display_status.frame_id }}
       {% endif %}
+      {% if display_status.system_health %}
+        {% set health = display_status.system_health %}
+        {% if health.cpu_temperature_c is defined %}
+          — CPU {{ health.cpu_temperature_c }}°C
+        {% endif %}
+        {% if health.memory is defined and health.memory.available_bytes is defined %}
+          — memory {{ (health.memory.available_bytes / 1024 / 1024) | round(0) | int }} MiB free
+        {% endif %}
+        {% if health.disk is defined and health.disk.free_bytes is defined %}
+          — disk {{ (health.disk.free_bytes / 1024 / 1024 / 1024) | round(1) }} GiB free
+        {% endif %}
+      {% endif %}
     {% else %}
       Display heartbeat unavailable.
     {% endif %}
@@ -503,6 +515,18 @@
               }
               if (typeof status.frame_id === "number") {
                 summary += ` — frame ${status.frame_id}`;
+              }
+              if (status.system_health && typeof status.system_health === "object") {
+                const health = status.system_health;
+                if (typeof health.cpu_temperature_c === "number") {
+                  summary += ` — CPU ${health.cpu_temperature_c}°C`;
+                }
+                if (health.memory && typeof health.memory.available_bytes === "number") {
+                  summary += ` — memory ${Math.round(health.memory.available_bytes / 1024 / 1024)} MiB free`;
+                }
+                if (health.disk && typeof health.disk.free_bytes === "number") {
+                  summary += ` — disk ${(health.disk.free_bytes / 1024 / 1024 / 1024).toFixed(1)} GiB free`;
+                }
               }
               displayStatusBanner.innerHTML = summary;
             } else {
