@@ -528,6 +528,9 @@ if [[ -z "$VENV_DIR" ]]; then
   VENV_DIR="$PROJECT_DIR/venv"
 fi
 
+SERVICE_START_DELAY_PRESTART_LINES=()
+mapfile -t SERVICE_START_DELAY_PRESTART_LINES < <(systemd_start_delay_lines)
+
 log "Writing Waveshare OLED helper service to $WAVESHARE_OLED_SERVICE_PATH"
 $SUDO tee "$WAVESHARE_OLED_SERVICE_PATH" >/dev/null <<SERVICE
 [Unit]
@@ -538,6 +541,7 @@ After=network-online.target
 Type=simple
 WorkingDirectory=$PROJECT_DIR
 EnvironmentFile=-$PROJECT_DIR/.env
+$(printf '%s\n' "${SERVICE_START_DELAY_PRESTART_LINES[@]}")
 ExecStart=$VENV_DIR/bin/python $PROJECT_DIR/scripts/waveshare_oled_status.py
 Restart=always
 RestartSec=2
@@ -560,6 +564,7 @@ After=multi-user.target
 
 [Service]
 Type=simple
+$(printf '%s\n' "${SERVICE_START_DELAY_PRESTART_LINES[@]}")
 ExecStart=/usr/local/bin/fbcp
 Restart=always
 RestartSec=2

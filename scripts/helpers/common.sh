@@ -4,6 +4,55 @@ set -euo pipefail
 log() { printf '[INFO] %s\n' "$*"; }
 warn() { printf '[WARN] %s\n' "$*"; }
 
+detect_low_power_raspberry_pi_device() {
+  local model_path model
+
+  for model_path in \
+    "${PI_MODEL_PATH:-}" \
+    /proc/device-tree/model \
+    /sys/firmware/devicetree/base/model; do
+    [[ -n "$model_path" && -r "$model_path" ]] || continue
+    model=$(tr -d '\0\r' < "$model_path" | head -n 1)
+    case "$model" in
+      *"Raspberry Pi Zero"*)
+        return 0
+        ;;
+    esac
+  done
+
+  return 1
+}
+
+service_start_delay_seconds() {
+  local delay="${DESK_DISPLAY_SERVICE_START_DELAY:-}"
+
+  if [[ -n "$delay" ]]; then
+    if [[ "$delay" =~ ^[0-9]+$ ]]; then
+      echo "$delay"
+    else
+      warn "Ignoring invalid DESK_DISPLAY_SERVICE_START_DELAY='$delay'; expected whole seconds." >&2
+      echo "0"
+    fi
+    return 0
+  fi
+
+  if [[ "${DESK_DISPLAY_LOW_POWER:-}" == "1" || "${DESK_DISPLAY_PROFILE:-}" == "hyperpixel_pi_zero" ]] \
+    || detect_low_power_raspberry_pi_device; then
+    echo "15"
+  else
+    echo "0"
+  fi
+}
+
+systemd_start_delay_lines() {
+  local delay
+  delay=$(service_start_delay_seconds)
+
+  if [[ "$delay" != "0" ]]; then
+    printf 'ExecStartPre=/bin/sleep %s\n' "$delay"
+  fi
+}
+
 ensure_executable() {
   local file_path="$1"
 
@@ -227,6 +276,8 @@ install_kernel_user_service() {
   local venv_dir_safe="$venv_dir"
   local maintenance_dir_safe="$maintenance_dir"
   local output_env_line=""
+  local start_delay_prestart_line=""
+  start_delay_prestart_line=$(systemd_start_delay_lines)
 
   # Keep any generated DESK_DISPLAY_OUTPUT default before EnvironmentFile so
   # PROJECT_DIR/.env remains authoritative. This is especially important for
@@ -241,6 +292,7 @@ install_kernel_user_service() {
     -e "s|@VENV_DIR@|$venv_dir_safe|g" \
     -e "s|@MAINTENANCE_DIR@|$maintenance_dir_safe|g" \
     -e "s|@DESK_DISPLAY_OUTPUT_ENV@|$output_env_line|g" \
+    -e "s|@SERVICE_START_DELAY_PRESTART@|$start_delay_prestart_line|g" \
     "$template_path")
 
   if [[ -n "${SUDO:-}" ]]; then

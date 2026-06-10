@@ -39,6 +39,9 @@ if [[ ! -f "$PROJECT_DIR/config_ui.py" ]]; then
   exit 1
 fi
 
+SERVICE_START_DELAY_PRESTART_LINES=()
+mapfile -t SERVICE_START_DELAY_PRESTART_LINES < <(systemd_start_delay_lines)
+
 log "Writing systemd service to $SERVICE_PATH"
 $SUDO tee "$SERVICE_PATH" >/dev/null <<SERVICE
 [Unit]
@@ -48,6 +51,7 @@ After=network-online.target
 [Service]
 WorkingDirectory=$PROJECT_DIR
 EnvironmentFile=-$PROJECT_DIR/.env
+$(printf '%s\n' "${SERVICE_START_DELAY_PRESTART_LINES[@]}")
 ExecStart=$VENV_DIR/bin/python $PROJECT_DIR/config_ui.py
 Restart=always
 User=$SERVICE_USER

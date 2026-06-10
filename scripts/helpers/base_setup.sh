@@ -74,6 +74,8 @@ ensure_executable "$PROJECT_DIR/scripts/framebuffer_service.sh"
 
 SERVICE_PATH="/etc/systemd/system/$SERVICE_NAME"
 CONFIG_UI_SERVICE_PATH="/etc/systemd/system/$CONFIG_UI_SERVICE_NAME"
+SERVICE_START_DELAY_PRESTART_LINES=()
+mapfile -t SERVICE_START_DELAY_PRESTART_LINES < <(systemd_start_delay_lines)
 SERVICE_ENV_LINES=()
 SERVICE_ENV_OVERRIDE_LINES=()
 
@@ -127,6 +129,7 @@ WorkingDirectory=$PROJECT_DIR
 $(printf '%s\n' "${SERVICE_ENV_LINES[@]}")
 EnvironmentFile=-$PROJECT_DIR/.env
 $(printf '%s\n' "${SERVICE_ENV_OVERRIDE_LINES[@]}")
+$(printf '%s\n' "${SERVICE_START_DELAY_PRESTART_LINES[@]}")
 $(printf '%s\n' "${FRAMEBUFFER_PRESTART_LINES[@]}")
 ExecStart=$VENV_DIR/bin/python $PROJECT_DIR/main.py
 ExecStop=/bin/bash -lc '$MAINTENANCE_DIR/cleanup.sh'
@@ -147,6 +150,7 @@ After=network-online.target
 [Service]
 WorkingDirectory=$PROJECT_DIR
 EnvironmentFile=-$PROJECT_DIR/.env
+$(printf '%s\n' "${SERVICE_START_DELAY_PRESTART_LINES[@]}")
 ExecStart=$VENV_DIR/bin/python $PROJECT_DIR/config_ui.py
 Restart=always
 User=$SERVICE_USER
