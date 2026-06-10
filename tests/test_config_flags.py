@@ -400,3 +400,30 @@ def test_ip_with_time_flag_obeys_env(monkeypatch):
 
     module = _reload_config(monkeypatch, IP_WITH_TIME=None)
     assert module.IP_WITH_TIME is True
+
+
+def test_data_refresh_max_workers_defaults_for_power_mode(monkeypatch):
+    monkeypatch.setattr(platform, "system", lambda: "Linux")
+    module = _reload_config(
+        monkeypatch,
+        DATA_REFRESH_MAX_WORKERS=None,
+        DESK_DISPLAY_LOW_POWER=None,
+        DESK_DISPLAY_PROFILE=None,
+    )
+    assert module.DATA_REFRESH_MAX_WORKERS == 4
+
+    module = _reload_config(
+        monkeypatch,
+        DATA_REFRESH_MAX_WORKERS=None,
+        DESK_DISPLAY_LOW_POWER="1",
+        DESK_DISPLAY_PROFILE=None,
+    )
+    assert module.DATA_REFRESH_MAX_WORKERS == 2
+
+
+def test_data_refresh_max_workers_env_override_is_clamped(monkeypatch):
+    module = _reload_config(monkeypatch, DATA_REFRESH_MAX_WORKERS="0")
+    assert module.DATA_REFRESH_MAX_WORKERS == 1
+
+    module = _reload_config(monkeypatch, DATA_REFRESH_MAX_WORKERS="6")
+    assert module.DATA_REFRESH_MAX_WORKERS == 6
