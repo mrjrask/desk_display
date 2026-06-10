@@ -1032,6 +1032,8 @@ from config import (
     DISPLAY_FADE_IN_HYPERPIXEL_STEPS,
     DISPLAY_FADE_IN_HDMI_1080P_STEPS,
     DISPLAY_FADE_IN_STEPS_BY_PROFILE,
+    DISPLAY_ANIMATION_FRAME_INTERVAL,
+    DISPLAY_SCROLL_FRAME_INTERVAL,
     get_display_profile_id,
 )
 
@@ -2222,6 +2224,7 @@ def animate_fade_in(
     """
 
     resolved_steps = _resolve_fade_steps(display, steps)
+    delay = max(float(delay), DISPLAY_ANIMATION_FRAME_INTERVAL)
     if resolved_steps <= 0:
         display.image(new_image)
         return
@@ -2280,7 +2283,7 @@ def animate_scroll(display: Display, image: Image.Image, speed=3.0, y_offset=Non
     background_color = (0, 0, 0, 0) if has_alpha else (0, 0, 0)
     frame_mode = "RGBA" if has_alpha else "RGB"
 
-    target_frame_time = 0.016  # ~60 FPS for smoother animation
+    target_frame_time = DISPLAY_SCROLL_FRAME_INTERVAL
 
     wait_for_skip = getattr(display, "wait_for_skip", None)
     skip_requested = getattr(display, "skip_requested", None)
@@ -2347,7 +2350,7 @@ def compute_adaptive_scroll_params(
     viewport_height: int,
     viewport_width: int,
     base_step: int,
-    min_frame_time: float = 0.016,
+    min_frame_time: float = DISPLAY_SCROLL_FRAME_INTERVAL,
     page_jump_mode: bool = True,
     page_jump_threshold_ratio: float = 8.0,
 ) -> AdaptiveScrollParams:
@@ -2389,7 +2392,7 @@ def scroll_vertical_content(
     pause_end: float,
     reverse: bool = False,
     page_jump_mode: bool = True,
-    min_frame_time: float = 0.016,
+    min_frame_time: float = DISPLAY_SCROLL_FRAME_INTERVAL,
 ) -> None:
     """Shared vertical scroll driver with adaptive timing and skip support."""
 

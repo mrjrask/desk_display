@@ -245,6 +245,9 @@ Configuration is environment-driven. Most values can be placed in `.env`.
 | `DESK_DISPLAY_OUTPUT` | Output mode (`auto`, `displayhatmini`, `minipitft`, `kernel`, `window`, `framebuffer`, `headless`) |
 | `DESK_DISPLAY_PROFILE` | Optional deployment profile (for example `hyperpixel_pi_zero`) |
 | `DESK_DISPLAY_LOW_POWER` | Low-power defaults flag; defaults to `1` when `DESK_DISPLAY_PROFILE=hyperpixel_pi_zero` |
+| `DISPLAY_TARGET_FPS` | Overall display frame pacing target; defaults to 60 FPS normally and 12 FPS in low-power mode |
+| `DISPLAY_SCROLL_TARGET_FPS` | Scroll/scoreboard frame pacing target; defaults to the active display profile normally and 12 FPS in low-power mode |
+| `DISPLAY_ANIMATION_TARGET_FPS` | General animation/fade frame pacing target; defaults to 60 FPS normally and 12 FPS in low-power mode |
 | `DESK_DISPLAY_FORCE_HEADLESS` | Force headless behavior |
 | `DISPLAY_WIDTH` / `DISPLAY_HEIGHT` | Render size override |
 | `DISPLAY_ROTATION` | App rotation (`0`,`90`,`180`,`270` or `0-3`) |
@@ -281,6 +284,19 @@ Configuration is environment-driven. Most values can be placed in `.env`.
 | `SCREENSHOT_ARCHIVE_BASE` | Archive location |
 
 On macOS desktop/window setups (`DESK_DISPLAY_OUTPUT=window`), screenshot capture defaults to disabled to avoid extra capture load unless explicitly enabled. HyperPixel/Pi Zero low-power deployments (`DESK_DISPLAY_LOW_POWER=1` or `DESK_DISPLAY_PROFILE=hyperpixel_pi_zero`) also default screenshots off, and the HyperPixel installer writes `ENABLE_SCREENSHOTS=0`, `ENABLE_VIDEO=0`, `SCREEN_CONFIG_AUTOSTART=0`, and `ENABLE_WIFI_MONITOR=0` unless overridden in the installer environment. Screenshots and video can be re-enabled manually for debugging with `ENABLE_SCREENSHOTS=1` and `ENABLE_VIDEO=1`, but should stay off for normal Pi Zero 2 W operation. Set `ENABLE_SCREENSHOTS=0` to force-disable regardless of platform/output mode.
+
+For Pi Zero 2 W or HyperPixel deployments, use the low-power frame pacing profile unless you are actively debugging animation smoothness:
+
+```bash
+DESK_DISPLAY_PROFILE=hyperpixel_pi_zero
+DESK_DISPLAY_LOW_POWER=1
+# Optional explicit override; the low-power defaults already use 12 FPS.
+DISPLAY_TARGET_FPS=12
+DISPLAY_SCROLL_TARGET_FPS=12
+DISPLAY_ANIMATION_TARGET_FPS=12
+```
+
+The low-power profile keeps scrolling and animations around 10-15 FPS, which reduces CPU load and heat on Pi Zero-class hardware while preserving normal 60 FPS defaults on faster desktop or Raspberry Pi hardware.
 
 For API-specific keys/fields, see [README_APIS.md](README_APIS.md).
 

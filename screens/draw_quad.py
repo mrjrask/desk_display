@@ -7,7 +7,7 @@ from typing import Callable, Optional
 
 from PIL import Image, ImageDraw, ImageFont
 
-from config import HEIGHT, SCREEN_DELAY, WIDTH
+from config import DISPLAY_ANIMATION_FRAME_INTERVAL, HEIGHT, SCREEN_DELAY, WIDTH
 from utils import ScreenImage
 
 RenderResult = Optional[Image.Image | ScreenImage | list[Image.Image]]
@@ -104,7 +104,7 @@ def draw_quad_screen(
     # - Minimum frame time keeps CPU usage reasonable.
     # - Maximum frame time avoids very "choppy" updates when tiles only
     #   provide a handful of sampled frames.
-    min_frame_time = 0.016  # ~60 FPS ceiling
+    min_frame_time = DISPLAY_ANIMATION_FRAME_INTERVAL
     max_frame_time = 0.100  # ~10 FPS floor for visible smoothness
     speed_factor = max(0.25, min(3.0, float(scroll_speed)))
     target_frame_time = min(

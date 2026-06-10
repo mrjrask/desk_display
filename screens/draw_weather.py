@@ -2073,7 +2073,7 @@ def draw_weather_radar(display, weather=None, transition: bool = False):
         for _ in range(RADAR_ANIMATION_LOOPS):
             for frame_image in composed_frames:
                 _display_frame(frame_image)
-                time.sleep(RADAR_ANIMATION_FRAME_DELAY_SECONDS)
+                time.sleep(max(RADAR_ANIMATION_FRAME_DELAY_SECONDS, config.DISPLAY_ANIMATION_FRAME_INTERVAL))
         return ScreenImage(composed_frames[-1], displayed=True)
 
     last_frame = composed_frames[-1]

@@ -150,6 +150,31 @@ def _get_int_env(name: str, default: int) -> int:
         return default
 
 
+def _get_positive_float_env(name: str, default: float) -> float:
+    """Parse a positive floating-point config value from the environment."""
+
+    raw = os.environ.get(name)
+    if raw is None:
+        return default
+
+    try:
+        value = float(raw)
+    except (TypeError, ValueError):
+        logging.warning("Invalid %s value %r; defaulting to %.3f.", name, raw, default)
+        return default
+
+    if value <= 0:
+        logging.warning("%s must be positive; defaulting to %.3f.", name, default)
+        return default
+    return value
+
+
+def _fps_to_frame_interval(fps: float) -> float:
+    """Return seconds per frame for a positive FPS target."""
+
+    return 1.0 / max(0.001, float(fps))
+
+
 def _get_required_env_var(*names: str) -> str:
     value = _get_first_env_var(*names)
     if value:
@@ -214,6 +239,18 @@ _default_enable_screenshots = not (
 ENABLE_SCREENSHOTS   = _get_bool_env("ENABLE_SCREENSHOTS", _default_enable_screenshots)
 ENABLE_VIDEO         = _get_bool_env("ENABLE_VIDEO", False)
 VIDEO_FPS            = 30
+
+_LOW_POWER_FRAME_PACING_FPS = 12.0
+DISPLAY_TARGET_FPS = _get_positive_float_env(
+    "DISPLAY_TARGET_FPS",
+    _LOW_POWER_FRAME_PACING_FPS if DESK_DISPLAY_LOW_POWER else 60.0,
+)
+DISPLAY_FRAME_INTERVAL = _fps_to_frame_interval(DISPLAY_TARGET_FPS)
+DISPLAY_ANIMATION_TARGET_FPS = _get_positive_float_env(
+    "DISPLAY_ANIMATION_TARGET_FPS",
+    _LOW_POWER_FRAME_PACING_FPS if DESK_DISPLAY_LOW_POWER else 60.0,
+)
+DISPLAY_ANIMATION_FRAME_INTERVAL = _fps_to_frame_interval(DISPLAY_ANIMATION_TARGET_FPS)
 ENABLE_WIFI_MONITOR  = _get_bool_env("ENABLE_WIFI_MONITOR", True)
 ENABLE_WIFI_RECOVERY = _get_bool_env("ENABLE_WIFI_RECOVERY", True)
 WIFI_TCP_PROBE_URLS  = os.environ.get("WIFI_TCP_PROBE_URLS", "")
@@ -684,6 +721,19 @@ DISPLAY_FADE_IN_DEFAULT_STEPS = DISPLAY_FADE_IN_STEPS_BY_PROFILE.get(
 )
 DISPLAY_PROFILE_LOGO_SCALE_CAP = ACTIVE_DISPLAY_PROFILE.logo_scale_cap
 DISPLAY_PROFILE_ANIMATION_DELAY = ACTIVE_DISPLAY_PROFILE.animation_delay
+
+
+def _default_scroll_target_fps(profile: DisplayProfilePreset) -> float:
+    if DESK_DISPLAY_LOW_POWER:
+        return _LOW_POWER_FRAME_PACING_FPS
+    return 1.0 / max(0.001, float(profile.scoreboard_scroll_delay))
+
+
+DISPLAY_SCROLL_TARGET_FPS = _get_positive_float_env(
+    "DISPLAY_SCROLL_TARGET_FPS",
+    _default_scroll_target_fps(ACTIVE_DISPLAY_PROFILE),
+)
+DISPLAY_SCROLL_FRAME_INTERVAL = _fps_to_frame_interval(DISPLAY_SCROLL_TARGET_FPS)
 SCREEN_DELAY             = 4
 try:
     HOURLY_FORECAST_HOURS = int(os.environ.get("HOURLY_FORECAST_HOURS", "5"))
@@ -783,6 +833,8 @@ def initialise_runtime_probes() -> None:
     global ACTIVE_DISPLAY_PROFILE, DISPLAY_PROFILE_ID
     global DISPLAY_FADE_IN_DEFAULT_STEPS
     global DISPLAY_PROFILE_LOGO_SCALE_CAP, DISPLAY_PROFILE_ANIMATION_DELAY
+    global DISPLAY_SCROLL_TARGET_FPS, DISPLAY_SCROLL_FRAME_INTERVAL
+    global SCOREBOARD_SCROLL_DELAY
     global _kernel_overlay_rotation, DISPLAY_ROTATION
 
     initialise_env_if_requested()
@@ -848,6 +900,13 @@ def initialise_runtime_probes() -> None:
     )
     DISPLAY_PROFILE_LOGO_SCALE_CAP = ACTIVE_DISPLAY_PROFILE.logo_scale_cap
     DISPLAY_PROFILE_ANIMATION_DELAY = ACTIVE_DISPLAY_PROFILE.animation_delay
+    DISPLAY_SCROLL_TARGET_FPS = _get_positive_float_env(
+        "DISPLAY_SCROLL_TARGET_FPS",
+        _default_scroll_target_fps(ACTIVE_DISPLAY_PROFILE),
+    )
+    DISPLAY_SCROLL_FRAME_INTERVAL = _fps_to_frame_interval(DISPLAY_SCROLL_TARGET_FPS)
+    if "SCOREBOARD_SCROLL_DELAY" in globals():
+        SCOREBOARD_SCROLL_DELAY = DISPLAY_SCROLL_FRAME_INTERVAL
     _kernel_overlay_rotation = (
         _read_kernel_overlay_rotation() if _use_kernel_rotation_source else None
     )
@@ -1109,7 +1168,7 @@ SCOREBOARD_FINAL_LOSING_SCORE_COLOR = (200, 200, 200)
 
 # ─── Scoreboard scrolling configuration ───────────────────────────────────────
 SCOREBOARD_SCROLL_STEP         = ACTIVE_DISPLAY_PROFILE.scoreboard_scroll_step
-SCOREBOARD_SCROLL_DELAY        = ACTIVE_DISPLAY_PROFILE.scoreboard_scroll_delay
+SCOREBOARD_SCROLL_DELAY        = DISPLAY_SCROLL_FRAME_INTERVAL
 SCOREBOARD_SCROLL_PAUSE_TOP    = 0.75
 SCOREBOARD_SCROLL_PAUSE_BOTTOM = 0.5
 SCOREBOARD_STANDINGS_BOTTOM_PADDING = _get_non_negative_int_env(
