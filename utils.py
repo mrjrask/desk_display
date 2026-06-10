@@ -1046,6 +1046,7 @@ from config import (
     DISPLAY_FADE_IN_HDMI_1080P_STEPS,
     DISPLAY_FADE_IN_STEPS_BY_PROFILE,
     DISPLAY_ANIMATION_FRAME_INTERVAL,
+    DISPLAY_FRAME_INTERVAL,
     DISPLAY_SCROLL_FRAME_INTERVAL,
     get_display_profile_id,
 )
@@ -1130,6 +1131,7 @@ class Display:
         self._rotation_requires_expand = self.rotation in (90, 270)
         self._frame_transform: Callable[[Image.Image], Image.Image] = lambda img: img
         self._frame_writer: Callable[[Image.Image], None] = lambda img: None
+        self._last_frame_write_monotonic: Optional[float] = None
         self._output_strategy = "headless"
         self._display_driver = "none"
         self._minipitft_backlight = None
@@ -1437,12 +1439,33 @@ class Display:
 
         return False
 
-    def _update_display(self):
+    def _pace_frame_write(self, *, force: bool = False) -> None:
+        """Apply central output frame pacing before writing to display hardware."""
+
+        if force:
+            return
+
+        interval = max(0.0, float(DISPLAY_FRAME_INTERVAL))
+        if interval <= 0:
+            return
+
+        now = time.monotonic()
+        if self._last_frame_write_monotonic is None:
+            return
+
+        elapsed = now - self._last_frame_write_monotonic
+        remaining = interval - elapsed
+        if remaining > 0:
+            time.sleep(remaining)
+
+    def _update_display(self, *, force: bool = False):
         if not display_updates_enabled():
             return
         if self._output_strategy == "headless" and self._display is not None:
             self._configure_output_strategy()
+        self._pace_frame_write(force=force)
         buffer_to_display = self._frame_transform(self._indicator_buffer())
+        self._last_frame_write_monotonic = time.monotonic()
         self._frame_writer(buffer_to_display)
 
     def _write_display_hat_mini_frame(self, buffer_to_display: Image.Image) -> None:
@@ -1773,7 +1796,7 @@ class Display:
     def clear(self):
         self._buffer = Image.new("RGB", (self.width, self.height), "black")
         self._bump_frame_id()
-        self._update_display()
+        self._update_display(force=True)
 
     def image(self, pil_img: Image.Image):
         pil_img = self._apply_bottom_safe_buffer(pil_img)
@@ -1836,8 +1859,9 @@ class Display:
         return buffered_img
 
     def show(self):
-        # No additional action required; display() is triggered during image()
-        self._update_display()
+        # Explicit show calls are used for immediate clears/shutdown blanking and
+        # should not be delayed by regular frame pacing.
+        self._update_display(force=True)
 
     def capture(self) -> Image.Image:
         """Return a copy of the currently buffered frame."""
