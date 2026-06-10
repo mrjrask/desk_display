@@ -56,3 +56,15 @@ def test_http_client_uses_distinct_sessions_per_thread(monkeypatch: pytest.Monke
         assert worker_sessions[0].trust_env is False
     finally:
         _reload_http_client(monkeypatch, None)
+
+
+def test_http_client_get_session_returns_thread_local_facade(monkeypatch: pytest.MonkeyPatch):
+    http_client = _reload_http_client(monkeypatch, None)
+    try:
+        facade = http_client.get_session()
+
+        assert facade is http_client.get_session()
+        assert facade.current() is facade.current()
+        assert facade.trust_env is False
+    finally:
+        _reload_http_client(monkeypatch, None)
