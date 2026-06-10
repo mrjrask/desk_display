@@ -8,6 +8,7 @@ WorkingDirectory=@PROJECT_DIR@
 Environment=CONFIG_LOAD_DOTENV=1
 @DESK_DISPLAY_OUTPUT_ENV@
 EnvironmentFile=-@PROJECT_DIR@/.env
+Environment=SCREEN_CONFIG_AUTOSTART=0
 ExecStartPre=/bin/bash -lc '@PROJECT_DIR@/scripts/wait_for_display_ready.sh'
 ExecStart=@VENV_DIR@/bin/python @PROJECT_DIR@/main.py
 ExecStop=/bin/bash -lc '@MAINTENANCE_DIR@/cleanup.sh'

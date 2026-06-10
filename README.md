@@ -187,10 +187,11 @@ bash ./Installers/install_kernel.sh
 
 The HyperPixel installer intentionally runs exactly one display loop:
 
-- On desktop sessions, HyperPixel uses the per-user kernel service, `desk_display-kernel.service`, and keeps the system display service, `desk_display.service`, disabled. The separate `config_ui_desk_display.service` remains available for the configuration UI.
+- On desktop sessions, HyperPixel uses the per-user kernel service, `desk_display-kernel.service`, and keeps the system display service, `desk_display.service`, disabled. The display loop sets `SCREEN_CONFIG_AUTOSTART=0`, so it does not spawn `config_ui.py` itself.
 - On Lite/headless systems where the installer falls back to framebuffer output, HyperPixel uses the system display service, `desk_display.service`, and disables the per-user `desk_display-kernel.service`.
+- The separate `config_ui_desk_display.service` is the only config UI process to start when you want the web UI. Start it temporarily with `sudo systemctl start config_ui_desk_display.service`, stop it with `sudo systemctl stop config_ui_desk_display.service`, or enable it persistently only if you want it at every boot.
 
-After installing, verify that only the selected runtime service is active:
+After installing, verify that only the selected runtime service is active, and that the config UI service is active only when you intentionally started it:
 
 ```bash
 systemctl --user status desk_display-kernel.service
@@ -366,11 +367,21 @@ Legacy IDs are canonicalized automatically (`time` → `nixie`, `sensors` → `i
 
 ## Web UI (screen configuration)
 
-Start the UI:
+Start the UI manually for a local development session:
 
 ```bash
 python config_ui.py
 ```
+
+On systemd installs, start the dedicated config UI service only while you need it:
+
+```bash
+sudo systemctl start config_ui_desk_display.service
+# make your changes at http://localhost:5002
+sudo systemctl stop config_ui_desk_display.service
+```
+
+HyperPixel installs write `SCREEN_CONFIG_AUTOSTART=0` and the kernel user service also forces that value, so the display loop will not spawn a second config UI process.
 
 Default URL:
 
