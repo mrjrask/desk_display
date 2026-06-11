@@ -88,6 +88,7 @@ echo "    → Clearing display…"
 # physical Display HAT Mini panel when hardware output is available.
 "${python_bin}" - <<'PY'
 import logging
+import os
 import time
 import sys
 from pathlib import Path
@@ -133,40 +134,76 @@ else:
     except Exception as exc:  # pragma: no cover - best effort during shutdown
         logging.warning("Display cleanup failed: %s", exc)
 
-try:
-    from smbus import SMBus
-except Exception:
+FALSEY_ENV_VALUES = {"", "0", "false", "no", "off"}
+
+
+def _truthy_env(name):
+    return os.environ.get(name, "").strip().lower() not in FALSEY_ENV_VALUES
+
+
+def _waveshare_oled_cleanup_enabled():
+    marker = os.environ.get("WAVESHARE_OLED_LCD_HAT_A_INSTALLED")
+    if marker is not None:
+        return marker.strip().lower() not in FALSEY_ENV_VALUES
+
+    # The Waveshare installer writes these OLED-specific settings to the
+    # service environment.  Avoid touching I2C on unrelated displays (for
+    # example HyperPixel) where smbus may exist but the Waveshare OLEDs do not.
+    return (
+        "WAVESHARE_OLED_MAX_VALUE_FONT_SIZE" in os.environ
+        or "WAVESHARE_OLED_MAX_TIME_FONT_SIZE" in os.environ
+        or _truthy_env("WAVESHARE_OLED_CLEANUP")
+    )
+
+
+if not _waveshare_oled_cleanup_enabled():
+    logging.info("Waveshare OLED cleanup skipped (not configured for this display profile)")
+else:
     try:
-        from smbus2 import SMBus
-    except Exception as exc:  # pragma: no cover - optional Waveshare dependency
-        logging.info("Waveshare OLED cleanup skipped (smbus/smbus2 unavailable): %s", exc)
-        SMBus = None
-
-if SMBus is not None:
-    try:
-        scripts_dir = PROJECT_ROOT / "scripts"
-        if str(scripts_dir) not in sys.path:
-            sys.path.insert(0, str(scripts_dir))
-
-        import waveshare_oled_status as waveshare_oled
-
-        bus = SMBus(waveshare_oled.I2C_BUS)
+        from smbus import SMBus
+    except Exception:
         try:
-            for addr in (waveshare_oled.TEMP_ADDR, waveshare_oled.TIME_ADDR):
-                oled = waveshare_oled.SSD1306Display(
-                    bus,
-                    addr,
-                    waveshare_oled.OLED_WIDTH,
-                    waveshare_oled.OLED_HEIGHT,
+            from smbus2 import SMBus
+        except Exception as exc:  # pragma: no cover - optional Waveshare dependency
+            logging.info("Waveshare OLED cleanup skipped (smbus/smbus2 unavailable): %s", exc)
+            SMBus = None
+
+    if SMBus is not None:
+        try:
+            scripts_dir = PROJECT_ROOT / "scripts"
+            if str(scripts_dir) not in sys.path:
+                sys.path.insert(0, str(scripts_dir))
+
+            import waveshare_oled_status as waveshare_oled
+
+            i2c_device = Path(f"/dev/i2c-{waveshare_oled.I2C_BUS}")
+            if not i2c_device.exists():
+                logging.info(
+                    "Waveshare OLED cleanup skipped (%s not present)",
+                    i2c_device,
                 )
-                oled.initialize()
-                oled.clear()
-        finally:
-            close_bus = getattr(bus, "close", None)
-            if callable(close_bus):
-                close_bus()
-    except Exception as exc:  # pragma: no cover - best effort during shutdown
-        logging.warning("Waveshare OLED cleanup failed: %s", exc)
+            else:
+                bus = SMBus(waveshare_oled.I2C_BUS)
+                try:
+                    for addr in (waveshare_oled.TEMP_ADDR, waveshare_oled.TIME_ADDR):
+                        oled = waveshare_oled.SSD1306Display(
+                            bus,
+                            addr,
+                            waveshare_oled.OLED_WIDTH,
+                            waveshare_oled.OLED_HEIGHT,
+                        )
+                        oled.initialize()
+                        oled.clear()
+                finally:
+                    close_bus = getattr(bus, "close", None)
+                    if callable(close_bus):
+                        close_bus()
+        except FileNotFoundError as exc:  # pragma: no cover - hardware specific
+            logging.info("Waveshare OLED cleanup skipped (I2C device missing): %s", exc)
+        except OSError as exc:  # pragma: no cover - hardware specific
+            logging.info("Waveshare OLED cleanup skipped (I2C unavailable): %s", exc)
+        except Exception as exc:  # pragma: no cover - best effort during shutdown
+            logging.warning("Waveshare OLED cleanup failed: %s", exc)
 PY
 
 # 2) Remove __pycache__ directories
