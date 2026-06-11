@@ -52,7 +52,7 @@ Expected statuses and exit-code behavior:
   - `forecastDaily.days`: `temperatureMax`, `temperatureMin`, `sunrise`, `sunset`, `precipitationChance`, `conditionCode`, `forecastStart`
   - `forecastHourly.hours`: `temperature`, `temperatureApparent`, `precipitationChance`, `windSpeed`, `windGust`, `windDirection`, `uvIndex`, `conditionCode`, `forecastStart`
   - `weatherAlerts.alerts`: alert payloads passed through for display
-- **Notes:** JWT auth signed via `WEATHERKIT_TEAM_ID`, `WEATHERKIT_KEY_ID`, `WEATHERKIT_SERVICE_ID`, and `WEATHERKIT_PRIVATE_KEY/WEATHERKIT_KEY_PATH`.
+- **Notes:** JWT auth signed via `WEATHERKIT_TEAM_ID`, `WEATHERKIT_KEY_ID`, `WEATHERKIT_SERVICE_ID`, and either `WEATHERKIT_PRIVATE_KEY` (the PEM key contents) or `WEATHERKIT_KEY_PATH` (path to the downloaded `.p8` private key). `WEATHERKIT_KEY_ID` is only the Apple key identifier and does not replace the private key.
 
 ### OpenWeatherMap OneCall (fallback)
 - **Endpoint:** `https://api.openweathermap.org/data/3.0/onecall`

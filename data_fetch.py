@@ -82,6 +82,7 @@ _weatherkit_key_cache: Optional[Any] = None
 _weatherkit_auth_lock = threading.Lock()
 _owm_backoff_until: Optional[datetime.datetime] = None
 _owm_backoff_lock = threading.Lock()
+_weatherkit_config_warning_logged = False
 _PRESSURE_TREND_WINDOW_SECONDS = 3 * 60 * 60
 _PRESSURE_TREND_PRUNE_SECONDS = 6 * 60 * 60
 _PRESSURE_TREND_THRESHOLD_HPA = 0.5
@@ -349,8 +350,8 @@ def _load_weatherkit_private_key() -> Optional[Any]:
     return None
 
 
-def _build_weatherkit_token(now: datetime.datetime) -> Optional[str]:
-    global _weatherkit_token, _weatherkit_token_exp
+def _missing_weatherkit_config() -> list[str]:
+    """Return missing WeatherKit settings needed to sign JWT requests."""
 
     missing = [
         name
@@ -361,8 +362,35 @@ def _build_weatherkit_token(now: datetime.datetime) -> Optional[str]:
         )
         if not value
     ]
+    if not (WEATHERKIT_PRIVATE_KEY or WEATHERKIT_KEY_PATH):
+        missing.append("WEATHERKIT_PRIVATE_KEY or WEATHERKIT_KEY_PATH")
+    return missing
+
+
+def _weatherkit_configured() -> bool:
+    return not _missing_weatherkit_config()
+
+
+def _log_weatherkit_config_warning_once(missing: list[str]) -> None:
+    global _weatherkit_config_warning_logged
+
+    if _weatherkit_config_warning_logged:
+        return
+
+    message = "WeatherKit not fully configured (%s)." % ", ".join(missing)
+    if OWM_API_KEY:
+        logging.info("%s Using OpenWeatherMap fallback.", message)
+    else:
+        logging.warning("%s OpenWeatherMap is also not configured.", message)
+    _weatherkit_config_warning_logged = True
+
+
+def _build_weatherkit_token(now: datetime.datetime) -> Optional[str]:
+    global _weatherkit_token, _weatherkit_token_exp
+
+    missing = _missing_weatherkit_config()
     if missing:
-        logging.error("Missing WeatherKit configuration: %s", ", ".join(missing))
+        _log_weatherkit_config_warning_once(missing)
         return None
 
     with _weatherkit_auth_lock:
@@ -1030,7 +1058,12 @@ def fetch_weather(force_refresh: bool = False):
             )
             return cached
 
-    normalized = _fetch_weatherkit(now)
+    normalized = None
+    if _weatherkit_configured():
+        normalized = _fetch_weatherkit(now)
+    else:
+        _log_weatherkit_config_warning_once(_missing_weatherkit_config())
+
     if normalized is None:
         normalized = _fetch_openweathermap(now)
 
