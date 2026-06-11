@@ -1,143 +1,326 @@
 # External API Reference
 
-This project pulls weather, travel, finance, and sports data from third-party endpoints. The app normalizes most payloads into internal structures so screens can share logic regardless of upstream provider shape. This document lists the active endpoints in code and in `scripts/test_api_connections.py`, plus the key fields relied on by renderers.
+Desk Display pulls live data from third-party weather, maps, travel, finance, and sports providers. Most provider payloads are normalized in `data_fetch.py`, `services/`, or individual screen modules before being rendered.
 
-> **Tip:** Most API keys can be provided via `.env` (with `CONFIG_LOAD_DOTENV=1`) or the environment.
+Most credentials can be supplied in `.env` when `CONFIG_LOAD_DOTENV=1` or through the process/service environment.
 
 ---
 
+## Table of contents
 
-## Connectivity test script
+- [Diagnostics](#diagnostics)
+- [Weather and radar](#weather-and-radar)
+- [Travel and map services](#travel-and-map-services)
+- [Sports](#sports)
+- [Finance](#finance)
+- [AHL / Chicago Wolves](#ahl--chicago-wolves)
+- [Wi-Fi probe endpoints](#wi-fi-probe-endpoints)
+- [Credential quick reference](#credential-quick-reference)
+- [Notes on payload handling](#notes-on-payload-handling)
 
-Use the single supported diagnostics script below to probe third-party API
-reachability and app-level fetch helper behavior:
+---
+
+## Diagnostics
+
+Use the connectivity script to check provider reachability, credentials, response shape, and key app-level fetch helpers:
 
 ```bash
 python scripts/test_api_connections.py
 ```
 
-Common CLI usage:
+For automation:
 
 ```bash
-# Human-readable output
-python scripts/test_api_connections.py
-
-# JSON output for automation/CI parsing
 python scripts/test_api_connections.py --json
 ```
 
-Expected statuses and exit-code behavior:
-- `OK`: check passed.
-- `SKIP`: check intentionally skipped (usually due to missing optional credentials).
-- `FAIL`: connectivity, authentication, parsing, or payload-shape validation failed.
-- Exit code `0`: all checks are `OK` or `SKIP`.
-- Exit code `1`: one or more checks are `FAIL`.
+Statuses:
 
-### Endpoint families covered by the diagnostic script
-- Weather: WeatherKit, OpenWeatherMap, RainViewer
-- Travel/maps: Google Directions + Static Maps, Apple Maps Directions + Snapshot
-- Sports: NHL/NBA/NFL/MLB scoreboards + standings, AHL ICS + HockeyTech
-- Finance: Yahoo chart API (used by stock screen helpers)
-- App-level helper probes for Bears/Bulls/Blackhawks/Cubs/Sox/Wolves fetch functions
+| Status | Meaning |
+| --- | --- |
+| `OK` | The check passed. |
+| `SKIP` | The check was intentionally skipped, usually because optional credentials are not configured. |
+| `FAIL` | Connectivity, authentication, parsing, or payload-shape validation failed. |
 
----
+Exit codes:
 
-## Weather
+| Exit code | Meaning |
+| --- | --- |
+| `0` | All checks were `OK` or `SKIP`. |
+| `1` | One or more checks returned `FAIL`. |
 
-### Apple WeatherKit (primary)
-- **Endpoint:** `https://weatherkit.apple.com/api/v1/weather/{language}/{lat}/{lon}`
-- **Data sets:** `currentWeather`, `forecastDaily`, `forecastHourly`, `weatherAlerts`
-- **Fields used:**
-  - `currentWeather`: `temperature`, `temperatureApparent`, `windSpeed`, `windGust`, `windDirection`, `humidity`, `pressure`, `uvIndex`, `cloudCover`, `asOf`, `conditionCode`, `sunrise`, `sunset`
-  - `forecastDaily.days`: `temperatureMax`, `temperatureMin`, `sunrise`, `sunset`, `precipitationChance`, `conditionCode`, `forecastStart`
-  - `forecastHourly.hours`: `temperature`, `temperatureApparent`, `precipitationChance`, `windSpeed`, `windGust`, `windDirection`, `uvIndex`, `conditionCode`, `forecastStart`
-  - `weatherAlerts.alerts`: alert payloads passed through for display
-- **Notes:** JWT auth signed via `WEATHERKIT_TEAM_ID`, `WEATHERKIT_KEY_ID`, `WEATHERKIT_SERVICE_ID`, and either `WEATHERKIT_PRIVATE_KEY` (the PEM key contents) or `WEATHERKIT_KEY_PATH` (path to the downloaded `.p8` private key). `WEATHERKIT_KEY_ID` is only the Apple key identifier and does not replace the private key.
-
-### OpenWeatherMap OneCall (fallback)
-- **Endpoint:** `https://api.openweathermap.org/data/3.0/onecall`
-- **Fields used:**
-  - `current`: `temp`, `feels_like`, `wind_speed`, `wind_gust`, `wind_deg`, `humidity`, `pressure`, `uvi`, `sunrise`, `sunset`, `dt`, `clouds`, `weather[].description/icon`
-  - `daily[]`: `temp.max`, `temp.min`, `sunrise`, `sunset`, `pop`, `weather[].description/icon`
-  - `hourly[]`: `dt`, `temp`, `feels_like`, `pop`, `wind_speed`, `wind_gust`, `wind_deg`, `uvi`, `weather[].description/icon`
-  - `alerts`: passed through for display
-- **Notes:** Used when WeatherKit is unavailable; normalized into the same structure.
-
-### RainViewer radar + Google Static Maps
-- **RainViewer metadata (primary):** `https://api.rainviewer.com/public/weather-maps.json`
-- **RainViewer metadata (fallback):** `https://api.rainviewer.com/public/maps.json`
-- **RainViewer tiles:** `https://{host}/{path}/256/{zoom}/{x}/{y}/2/1_1.png`
-- **Google Static Maps:** `https://maps.googleapis.com/maps/api/staticmap`
-- **Fields used:**
-  - RainViewer: `host`, `radar.past`, `radar.nowcast` (`path`, `time`)
-  - Google Static Maps: map tiles for the radar background (with `center`, `zoom`, `size`, `maptype`, `key`)
+The diagnostic script covers WeatherKit/OpenWeatherMap, RainViewer, Google Directions/Static Maps, Apple Maps Directions/Snapshot, NHL/NBA/NFL/MLB scoreboards and standings, AHL ICS/HockeyTech, Yahoo Finance chart data, and app-level helpers for Bears, Bulls, Blackhawks, Cubs, Sox, and Wolves.
 
 ---
 
-## Travel & map services
+## Weather and radar
 
-### Google Directions (travel routes)
-- **Endpoint:** `https://maps.googleapis.com/maps/api/directions/json`
-- **Fields used:** `routes[].summary`, `legs[].duration` / `duration_in_traffic`, `legs[].steps[].html_instructions`
-- **Notes:** Enabled when `GOOGLE_MAPS_API_KEY` is configured. Route filtering is performed in-app on normalized summary/step text.
+### Apple WeatherKit
+
+| Item | Value |
+| --- | --- |
+| Role | Primary weather provider when configured. |
+| Endpoint | `https://weatherkit.apple.com/api/v1/weather/{language}/{lat}/{lon}` |
+| Config | `WEATHERKIT_TEAM_ID`, `WEATHERKIT_KEY_ID`, `WEATHERKIT_SERVICE_ID`, `WEATHERKIT_PRIVATE_KEY` or `WEATHERKIT_KEY_PATH`, optional `WEATHERKIT_LANGUAGE`, optional `WEATHERKIT_TIMEZONE`. |
+| Location | `WEATHER_LATITUDE`, `WEATHER_LONGITUDE`. |
+
+Data sets requested/used:
+
+- `currentWeather`
+- `forecastDaily`
+- `forecastHourly`
+- `weatherAlerts`
+
+Fields used include:
+
+- Current: `temperature`, `temperatureApparent`, `windSpeed`, `windGust`, `windDirection`, `humidity`, `pressure`, `uvIndex`, `cloudCover`, `asOf`, `conditionCode`, `sunrise`, `sunset`.
+- Daily: `temperatureMax`, `temperatureMin`, `sunrise`, `sunset`, `precipitationChance`, `conditionCode`, `forecastStart`.
+- Hourly: `temperature`, `temperatureApparent`, `precipitationChance`, `windSpeed`, `windGust`, `windDirection`, `uvIndex`, `conditionCode`, `forecastStart`.
+- Alerts: alert payloads are passed through for display.
+
+Important signing note: `WEATHERKIT_KEY_ID` is only the Apple key identifier. The app still needs the private key material via `WEATHERKIT_PRIVATE_KEY` or the downloaded `.p8` path in `WEATHERKIT_KEY_PATH`.
+
+### OpenWeatherMap One Call
+
+| Item | Value |
+| --- | --- |
+| Role | Fallback weather provider when WeatherKit is unavailable or unconfigured. |
+| Endpoint | `https://api.openweathermap.org/data/3.0/onecall` |
+| Config | `OWM_API_KEY`, optional `OWM_UNITS`, optional `OWM_LANGUAGE`. |
+| Location | `WEATHER_LATITUDE`, `WEATHER_LONGITUDE`. |
+
+Fields used include:
+
+- `current.temp`, `current.feels_like`, `current.wind_speed`, `current.wind_gust`, `current.wind_deg`, `current.humidity`, `current.pressure`, `current.uvi`, `current.sunrise`, `current.sunset`, `current.dt`, `current.clouds`, `current.weather[].description`, `current.weather[].icon`.
+- `daily[].temp.max`, `daily[].temp.min`, `daily[].sunrise`, `daily[].sunset`, `daily[].pop`, `daily[].weather[].description`, `daily[].weather[].icon`.
+- `hourly[].dt`, `hourly[].temp`, `hourly[].feels_like`, `hourly[].pop`, `hourly[].wind_speed`, `hourly[].wind_gust`, `hourly[].wind_deg`, `hourly[].uvi`, `hourly[].weather[].description`, `hourly[].weather[].icon`.
+- `alerts` payloads are passed through for display.
+
+OpenWeatherMap data is normalized toward the same internal shape as WeatherKit data.
+
+### RainViewer radar
+
+| Item | Value |
+| --- | --- |
+| Role | Radar frame metadata and radar tiles. |
+| Metadata endpoint, primary | `https://api.rainviewer.com/public/weather-maps.json` |
+| Metadata endpoint, fallback | `https://api.rainviewer.com/public/maps.json` |
+| Tile endpoint pattern | `https://{host}/{path}/256/{zoom}/{x}/{y}/2/1_1.png` |
+
+Fields used:
+
+- `host`
+- `radar.past[]`
+- `radar.nowcast[]`
+- frame `path`
+- frame `time`
+
+### Additional weather map tiles
+
+Weather radar/map rendering may also use:
+
+| Provider | Endpoint pattern | Purpose |
+| --- | --- | --- |
+| Google Static Maps | `https://maps.googleapis.com/maps/api/staticmap` | Optional radar background/basemap when `GOOGLE_MAPS_API_KEY` is available. |
+| Iowa State Mesonet | `https://mesonet.agron.iastate.edu/cache/tile.py/1.0.0/q2-hsr-900913/{zoom}/{x}/{y}.png` | Radar tile fallback/source used by weather map rendering. |
+| OpenStreetMap | `https://tile.openstreetmap.org/{zoom}/{x}/{y}.png` | Basemap tile fallback. |
+| CARTO | `https://basemaps.cartocdn.com/light_all/{zoom}/{x}/{y}.png` | Basemap tile fallback. |
+
+---
+
+## Travel and map services
+
+### Google Directions
+
+| Item | Value |
+| --- | --- |
+| Role | Travel route estimates. |
+| Endpoint | `https://maps.googleapis.com/maps/api/directions/json` |
+| Config | `GOOGLE_MAPS_API_KEY`, `TRAVEL_MODE`, `TRAVEL_TO_HOME_ORIGIN`, `TRAVEL_TO_HOME_DESTINATION`, `TRAVEL_TO_WORK_ORIGIN`, `TRAVEL_TO_WORK_DESTINATION`. |
+
+Fields used:
+
+- `routes[].summary`
+- `routes[].legs[].duration`
+- `routes[].legs[].duration_in_traffic`
+- `routes[].legs[].steps[].html_instructions`
+
+Route filtering is performed in-app after normalizing summary and step text.
+
+### Google Static Maps
+
+| Item | Value |
+| --- | --- |
+| Endpoint | `https://maps.googleapis.com/maps/api/staticmap` |
+| Config | `GOOGLE_MAPS_API_KEY`, `WEATHER_LATITUDE`, `WEATHER_LONGITUDE`. |
+| Used parameters | `center`, `zoom`, `size`, `maptype`, `key`. |
 
 ### Apple Maps Directions
-- **Endpoint:** `https://maps-api.apple.com/v1/directions`
-- **Fields used:** route travel times (`expectedTravelTime`, `staticTravelTime`, `typicalTravelTime`), summary/name fields, and route steps/polyline data when present
-- **Notes:** Auth supports either `APPLE_MAPS_API_KEY`/`MAPKIT_TOKEN` or JWT signing via `APPLE_MAPS_TEAM_ID`, `APPLE_MAPS_KEY_ID`, and private key (`APPLE_MAPS_PRIVATE_KEY` or `APPLE_MAPS_KEY_PATH`). WeatherKit signing keys can be reused as fallback.
+
+| Item | Value |
+| --- | --- |
+| Role | Alternative travel route provider. |
+| Endpoint | `https://maps-api.apple.com/v1/directions` by default; override with `APPLE_MAPS_DIRECTIONS_URL`. |
+| Config | `APPLE_MAPS_API_KEY` or `MAPKIT_TOKEN`; JWT signing via `APPLE_MAPS_TEAM_ID`, `APPLE_MAPS_KEY_ID`, and `APPLE_MAPS_PRIVATE_KEY` or `APPLE_MAPS_KEY_PATH`. WeatherKit signing values can be reused as fallback where supported. |
+
+Fields used:
+
+- route time fields such as `expectedTravelTime`, `staticTravelTime`, and `typicalTravelTime`,
+- route summary/name fields,
+- step/polyline data when present.
 
 ### Apple Maps Snapshot
-- **Endpoint:** `https://maps-api.apple.com/v1/snapshot`
-- **Fields used:** binary map image payload for travel/weather map imagery integrations
 
+| Item | Value |
+| --- | --- |
+| Role | Binary map image payloads. |
+| Endpoint | `https://maps-api.apple.com/v1/snapshot` by default; override with `APPLE_MAPS_SNAPSHOT_URL`. |
+| Config | Same Apple Maps auth values as directions. |
 
 ---
 
 ## Sports
 
-### NHL (Blackhawks)
-- **Team schedule helper:** `https://api-web.nhle.com/v1/club-schedule-season/CHI/20252026` (configured team-season feed used by Blackhawks helper screens)
-- **League scoreboard:** `https://api-web.nhle.com/v1/scoreboard/{date}` and `/scoreboard/now`
-- **Legacy fallback endpoint still supported by some paths:** `https://statsapi.web.nhl.com/api/v1/schedule?date=YYYY-MM-DD&expand=schedule.linescore,schedule.teams`
-- **Standings:**
-  - `https://statsapi.web.nhl.com/api/v1/standings` (primary)
-  - `https://api-web.nhle.com/v1/standings/now` (fallback)
-- **Fields used:** game IDs, dates, game state, team records, scores, linescore info, venue, start times, and standings metrics (`divisionRank`, `leagueRecord`, `gamesBack`, `wildCardGamesBack`, `streak`, split records).
+### NHL / Blackhawks / league
 
-### MLB (Cubs / White Sox)
-- **Schedule:** `https://statsapi.mlb.com/api/v1/schedule` with team IDs `112` (Cubs) and `145` (White Sox)
-- **Standings:** `https://statsapi.mlb.com/api/v1/standings`
-- **Fields used:** game IDs, dates, status, team records/scores, venue, probable pitchers, linescore, division standings (W/L/GB/WCGB/streak).
+| Use | Endpoint |
+| --- | --- |
+| Blackhawks configured season schedule | `https://api-web.nhle.com/v1/club-schedule-season/CHI/20252026` |
+| Team month schedule | `https://api-web.nhle.com/v1/club-schedule/{tric}/month/now` |
+| Team season schedule | `https://api-web.nhle.com/v1/club-schedule-season/{tric}/now` |
+| Game landing | `https://api-web.nhle.com/v1/gamecenter/{gid}/landing` |
+| Game boxscore | `https://api-web.nhle.com/v1/gamecenter/{gid}/boxscore` |
+| League scoreboard by date | `https://api-web.nhle.com/v1/scoreboard/{date}` |
+| League scoreboard now | `https://api-web.nhle.com/v1/scoreboard/now` |
+| Standings, current API | `https://api-web.nhle.com/v1/standings/now` |
+| Legacy schedule fallback | `https://statsapi.web.nhl.com/api/v1/schedule` |
+| Legacy live feed fallback | `https://statsapi.web.nhl.com/api/v1/game/{gamePk}/feed/live` |
+| Legacy standings fallback | `https://statsapi.web.nhl.com/api/v1/standings` |
+| ESPN standings fallback | `https://site.web.api.espn.com/apis/v2/sports/hockey/nhl/standings` |
 
-### NBA (Bulls)
-- **Scoreboard:** `https://site.api.espn.com/apis/site/v2/sports/basketball/nba/scoreboard`
-- **Standings (primary):** `https://cdn.nba.com/static/json/liveData/standings/league.json`
-- **Standings (fallback):** `https://site.web.api.espn.com/apis/v2/sports/basketball/nba/standings`
-- **Fields used:** game status, team IDs/triCodes, scores, venue/broadcast info, and standings stats (wins, losses, winPct, streaks, ranks, split records).
+Fields used include game IDs, dates, game state/status, team records, team scores, linescore info, venue, start times, conference/division ranks, games back, wild-card games back, streaks, and split records.
 
-### NFL (Bears / league scoreboards)
-- **Scoreboard:** `https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard`
-- **Standings:** `https://raw.githubusercontent.com/nflverse/nfldata/master/data/standings.csv`
-- **Fields used:** game status, team records, standings ranks, streaks, and split records.
+### NHL playoffs
 
+| Use | Endpoint |
+| --- | --- |
+| Playoff series carousel by season | `https://api-web.nhle.com/v1/playoff-series/carousel/{season}` |
+| Playoff bracket by season | `https://api-web.nhle.com/v1/playoff-bracket/{season}` |
+| Current playoff series carousel | `https://api-web.nhle.com/v1/playoff-series/carousel/now` |
+| Current playoff bracket | `https://api-web.nhle.com/v1/playoff-bracket/now` |
+| Current schedule fallback | `https://api-web.nhle.com/v1/schedule/now` |
+| Schedule by date fallback | `https://api-web.nhle.com/v1/schedule/{date}` |
 
-### AHL (Chicago Wolves)
-- **Schedule (ICS):** Stanza feed configured via `AHL_SCHEDULE_ICS_URL` (defaults to the Wolves calendar)
-- **HockeyTech feeds:** `https://lscluster.hockeytech.com/feed/` (base) with league/team parameters
-- **Fields used:** game dates, opponents, home/away flags, final scores, and recent scoring details (cached for faster redraws).
+### MLB / Cubs / White Sox / league
+
+| Use | Endpoint |
+| --- | --- |
+| Schedule, team screens, scoreboard | `https://statsapi.mlb.com/api/v1/schedule` |
+| Standings | `https://statsapi.mlb.com/api/v1/standings` |
+| Probable-pitcher headshots | `https://img.mlbstatic.com/mlb-photos/image/upload/w_120,q_auto:best/v1/people/{pitcher_id}/headshot/67/current` |
+
+Team IDs used by app helpers include `112` for the Chicago Cubs and `145` for the Chicago White Sox.
+
+Fields used include game IDs, game dates, game status, team records, scores, venue, probable pitchers, linescore data, division standings, wins, losses, games back, wild-card games back, and streaks.
+
+### NBA / Bulls / league
+
+| Use | Endpoint |
+| --- | --- |
+| NBA.com live scoreboard | `https://cdn.nba.com/static/json/liveData/scoreboard` |
+| NBA.com scoreboard fallback | `https://nba-prod-us-east-1-media.s3.amazonaws.com/json/liveData/scoreboard` |
+| ESPN scoreboard fallback | `https://site.api.espn.com/apis/site/v2/sports/basketball/nba/scoreboard` |
+| NBA.com standings | `https://cdn.nba.com/static/json/liveData/standings/league.json` |
+| ESPN standings fallback | `https://site.web.api.espn.com/apis/v2/sports/basketball/nba/standings` |
+
+Fields used include game status, clock/period, team IDs, team tricode values, scores, venue, broadcast info, wins, losses, win percentage, streaks, conference/division ranks, and split records.
+
+### NBA playoffs
+
+| Use | Endpoint |
+| --- | --- |
+| NBA.com playoff bracket | `https://cdn.nba.com/static/json/liveData/playoffbracket/playoffbracket_00.json` |
+| NBA S3 playoff bracket fallback | `https://nba-prod-us-east-1-media.s3.amazonaws.com/json/liveData/playoffbracket/playoffbracket_00.json` |
+| NBA.com bracket fallback | `https://cdn.nba.com/static/json/liveData/bracket/bracket_00.json` |
+| NBA S3 bracket fallback | `https://nba-prod-us-east-1-media.s3.amazonaws.com/json/liveData/bracket/bracket_00.json` |
+
+### NFL / Bears / league
+
+| Use | Endpoint |
+| --- | --- |
+| ESPN NFL scoreboard | `https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard` |
+| NFL standings CSV | `https://raw.githubusercontent.com/nflverse/nfldata/master/data/standings.csv` |
+
+Fields used include game status, team records, scores, standings ranks, wins, losses, ties, streaks, and split records.
+
+### NCAAM
+
+| Use | Endpoint |
+| --- | --- |
+| ESPN men's college basketball scoreboard | `https://site.api.espn.com/apis/site/v2/sports/basketball/mens-college-basketball/scoreboard` |
+
+`NCAAM_SCOREBOARD_MODE` controls display filtering; the default is `top25`.
 
 ---
 
-## Stocks
+## Finance
 
-### Yahoo Finance (yfinance + chart API)
-- **Library source:** `yfinance` (Yahoo Finance wrappers)
-- **Direct diagnostic endpoint:** `https://query1.finance.yahoo.com/v8/finance/chart/SPY`
-- **Fields used:** `regularMarketPrice`, `previousClose`, or historical close values (plus chart payload availability checks in diagnostics).
+### Yahoo Finance / yfinance
+
+| Use | Endpoint/source |
+| --- | --- |
+| Stock helpers | `yfinance` Python package. |
+| Connectivity diagnostic | `https://query1.finance.yahoo.com/v8/finance/chart/SPY` |
+
+Fields used include `regularMarketPrice`, `previousClose`, and historical close values when available. The diagnostics check chart payload availability with `range=1d` and `interval=1d`.
 
 ---
 
-## Maps & imagery
+## AHL / Chicago Wolves
 
-- **Google Static Maps** is used for the weather radar basemap.
-- **Team and league logos** are loaded from the local `images/` folder rather than external CDN endpoints.
+| Use | Endpoint/config |
+| --- | --- |
+| Schedule calendar | `AHL_SCHEDULE_ICS_URL`; defaults to the bundled Stanza Chicago Wolves webcal URL converted to HTTPS as needed. |
+| HockeyTech feed base | `AHL_API_BASE_URL`; default family is `https://lscluster.hockeytech.com/feed/` / `https://lscluster.hockeytech.com/feed/index.php`. |
+| HockeyTech params | `AHL_API_KEY`, `AHL_CLIENT_CODE`, `AHL_LEAGUE_ID`, `AHL_SITE_ID`, `AHL_SEASON_ID`, `AHL_TEAM_ID`, `AHL_TEAM_TRICODE`, `AHL_TEAM_NAME`. |
+
+Fields used include game dates, opponent, home/away flags, final scores, recent scoring details, and schedule metadata. Responses are cached by helpers where useful for redraw performance.
+
+---
+
+## Wi-Fi probe endpoints
+
+Wi-Fi utilities can probe configured HTTPS/TCP targets to decide whether recovery should run.
+
+| Variable | Purpose |
+| --- | --- |
+| `WIFI_TCP_PROBE_HOST` | Single TCP host probe. |
+| `WIFI_TCP_PROBE_HOSTS` | Multiple TCP host probes. |
+| `WIFI_TCP_PROBE_PORT` | TCP probe port. |
+| `WIFI_TCP_PROBE_URL` | Single URL probe. |
+| `WIFI_TCP_PROBE_URLS` | Multiple URL probes. |
+| `WIFI_HTTPS_PROBE_URL` | HTTPS probe URL. |
+
+---
+
+## Credential quick reference
+
+| Feature | Required/important environment variables |
+| --- | --- |
+| WeatherKit | `WEATHERKIT_TEAM_ID`, `WEATHERKIT_KEY_ID`, `WEATHERKIT_SERVICE_ID`, `WEATHERKIT_PRIVATE_KEY` or `WEATHERKIT_KEY_PATH`. |
+| OpenWeatherMap | `OWM_API_KEY`. |
+| Weather/map location | `WEATHER_LATITUDE`, `WEATHER_LONGITUDE`. |
+| Google Directions/Static Maps | `GOOGLE_MAPS_API_KEY`, travel origin/destination variables. |
+| Apple Maps | `APPLE_MAPS_API_KEY` or `MAPKIT_TOKEN`, or JWT values: `APPLE_MAPS_TEAM_ID`, `APPLE_MAPS_KEY_ID`, `APPLE_MAPS_PRIVATE_KEY` or `APPLE_MAPS_KEY_PATH`. |
+| Travel routes | `TRAVEL_MODE`, `TRAVEL_TO_HOME_ORIGIN`, `TRAVEL_TO_HOME_DESTINATION`, `TRAVEL_TO_WORK_ORIGIN`, `TRAVEL_TO_WORK_DESTINATION`. |
+| AHL/Wolves | Optional `AHL_*` overrides; defaults are provided for the Chicago Wolves helper path. |
+
+---
+
+## Notes on payload handling
+
+- External APIs may change without notice; run `python scripts/test_api_connections.py` after upgrades or when a screen goes blank.
+- Missing optional credentials usually produce diagnostic `SKIP` results rather than failures.
+- Weather providers are normalized to a shared internal structure so renderers can prefer WeatherKit while still using OpenWeatherMap fallback data.
+- Team and league logos are loaded primarily from the local `images/` folder. Some sports providers may include remote logos, but the renderers generally prefer bundled assets for predictable offline rendering.
+- The app uses local caching/normalization in several helpers to reduce redraw latency and isolate screens from provider-specific response shapes.
