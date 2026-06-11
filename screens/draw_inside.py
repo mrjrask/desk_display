@@ -349,6 +349,27 @@ def _suppress_i2c_error_output():
     return _Suppressor()
 
 
+def _import_smbus_class() -> Any:
+    """Return an SMBus class from the available Python I2C bindings.
+
+    Raspberry Pi OS commonly ships the ``smbus`` package, while many Python
+    projects depend on ``smbus2``.  The Pimoroni pure-Python drivers only need
+    an object with the SMBus read/write methods, so accept either package.
+    """
+
+    import_errors: List[str] = []
+    for module_name in ("smbus2", "smbus"):
+        try:
+            module = __import__(module_name, fromlist=["SMBus"])
+            return getattr(module, "SMBus")
+        except Exception as exc:  # pragma: no cover - depends on host packages
+            import_errors.append(f"{module_name}: {exc}")
+
+    raise ModuleNotFoundError(
+        "No SMBus Python binding available; tried " + "; ".join(import_errors)
+    )
+
+
 def _probe_adafruit_bme680(i2c: Any, addresses: Set[int]) -> Optional[SensorProbeResult]:
     if addresses and not addresses.intersection({0x76, 0x77}):
         return None
@@ -597,7 +618,7 @@ def _probe_pimoroni_bme680(_i2c: Any, addresses: Set[int]) -> Optional[SensorPro
     variant_high = getattr(module, "VARIANT_HIGH", None)
     variant_low = getattr(module, "VARIANT_LOW", None)
     try:
-        from smbus2 import SMBus
+        SMBus = _import_smbus_class()
     except Exception as exc:
         last_error = exc
         SMBus = None  # type: ignore[assignment]
@@ -766,9 +787,9 @@ def _probe_pimoroni_bme280(i2c: Any, addresses: Set[int]) -> Optional[SensorProb
     expected_chip_id = 0x60
 
     try:
-        from smbus2 import SMBus
+        SMBus = _import_smbus_class()
     except Exception as exc:
-        logging.warning("draw_inside: failed to import smbus2 SMBus: %s", exc)
+        logging.warning("draw_inside: failed to import an SMBus binding: %s", exc)
         raise
 
     bus_candidates = _get_smbus_candidates(i2c)

@@ -8,6 +8,7 @@ from screens.draw_inside import (
     _iter_board_i2c_pin_pairs,
     _get_probe_order,
     _get_sensor_env_override,
+    _import_smbus_class,
     _normalize_sensor_name,
     _normalize_pressure,
     _parse_i2c_bus_candidates,
@@ -102,6 +103,23 @@ def test_i2c_pin_pairs_include_hyperpixel_bus_10_mapping():
 def test_parse_i2c_bus_candidates_defaults_include_hyperpixel_buses(monkeypatch):
     monkeypatch.delenv("INSIDE_I2C_BUSES", raising=False)
     assert _parse_i2c_bus_candidates() == (1, 2, 10, 11, 13, 14, 15)
+
+
+def test_import_smbus_class_falls_back_to_legacy_smbus(monkeypatch):
+    fake_smbus = types.SimpleNamespace(SMBus=object)
+
+    original_import = __import__
+
+    def fake_import(name, globals=None, locals=None, fromlist=(), level=0):
+        if name == "smbus2":
+            raise ModuleNotFoundError("No module named 'smbus2'")
+        if name == "smbus":
+            return fake_smbus
+        return original_import(name, globals, locals, fromlist, level)
+
+    monkeypatch.setattr("builtins.__import__", fake_import)
+
+    assert _import_smbus_class() is object
 
 
 def test_get_smbus_candidates_prioritizes_i2cdetect_hits(monkeypatch):
