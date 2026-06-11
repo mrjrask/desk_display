@@ -427,9 +427,43 @@ def _probe_adafruit_bme680(i2c: Any, addresses: Set[int]) -> Optional[SensorProb
     return "Adafruit BME680", read
 
 
+def _should_try_bme68x_helper(_i2c: Any) -> bool:
+    """Return True when the Pimoroni bme68x helper can address the configured bus."""
+
+    # The pi3g/Pimoroni bme68x C extension used by the helper opens
+    # /dev/i2c-1 internally.  When the indoor sensor is explicitly configured
+    # on another Linux bus (for example HyperPixel STEMMA/QT bus 15), trying
+    # the helper only produces a noisy startup traceback before the working
+    # pure-Python fallback runs.
+    primary_bus = _resolve_i2c_bus_number(_i2c) if _i2c is not None else None
+    if primary_bus is not None:
+        return primary_bus == 1
+    return 1 in _parse_i2c_bus_candidates()
+
+
+def _summarize_bme68x_helper_error(message: str) -> str:
+    """Collapse helper stderr tracebacks to a single useful log line."""
+
+    lines = [line.strip() for line in message.splitlines() if line.strip()]
+    if not lines:
+        return "BME68X helper failed"
+
+    for line in reversed(lines):
+        if "Error:" in line or line.startswith(("ModuleNotFoundError", "ImportError")):
+            return line
+    return lines[-1]
+
+
 def _probe_pimoroni_bme68x(_i2c: Any, addresses: Set[int]) -> Optional[SensorProbeResult]:
     if addresses and not addresses.intersection({0x76, 0x77}):
         return None
+
+    if not _should_try_bme68x_helper(_i2c):
+        logging.debug(
+            "draw_inside: skipping Pimoroni bme68x helper because it only supports "
+            "/dev/i2c-1; using pimoroni_bme680 fallback"
+        )
+        return _probe_pimoroni_bme680(_i2c, addresses)
 
     def _read_bme68x_via_subprocess() -> Dict[str, Any]:
         repo_root = Path(__file__).resolve().parents[1]
@@ -533,8 +567,8 @@ print(json.dumps({
             if result.returncode < 0:
                 signal_num = -result.returncode
                 raise RuntimeError(f"BME68X helper exited by signal {signal_num}")
-            stderr = (result.stderr or "").strip()
-            raise RuntimeError(stderr or "BME68X helper failed")
+            stderr = _summarize_bme68x_helper_error((result.stderr or "").strip())
+            raise RuntimeError(stderr)
 
         stdout = (result.stdout or "").strip()
         if not stdout:

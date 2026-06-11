@@ -380,6 +380,44 @@ def test_probe_pimoroni_bme68x_survives_child_segfault(monkeypatch):
         raise AssertionError("Expected RuntimeError when helper process segfaults")
 
 
+def test_probe_pimoroni_bme68x_skips_helper_when_bus_one_is_not_configured(monkeypatch):
+    import screens.draw_inside as draw_inside_module
+
+    def reader():
+        return {"temp_f": 70.0}
+
+    monkeypatch.setenv("INSIDE_I2C_BUSES", "15")
+    monkeypatch.setattr(
+        draw_inside_module.subprocess,
+        "run",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("helper should be skipped")),
+    )
+    monkeypatch.setattr(
+        draw_inside_module,
+        "_probe_pimoroni_bme680",
+        lambda _i2c, _addresses: ("Pimoroni BME688 (bus 15, 0x76)", reader),
+    )
+
+    provider, probe_reader = draw_inside_module._probe_pimoroni_bme68x(None, set())
+
+    assert provider == "Pimoroni BME688 (bus 15, 0x76)"
+    assert probe_reader is reader
+
+
+def test_summarize_bme68x_helper_error_removes_traceback():
+    import screens.draw_inside as draw_inside_module
+
+    stderr = """Traceback (most recent call last):
+  File "<string>", line 8, in <module>
+    import bme68x
+ModuleNotFoundError: No module named 'bme68x'
+"""
+
+    summary = draw_inside_module._summarize_bme68x_helper_error(stderr)
+
+    assert summary == "ModuleNotFoundError: No module named 'bme68x'"
+    assert "Traceback" not in summary
+
 def test_probe_pimoroni_bme68x_helper_uses_vendored_pythonpath(monkeypatch):
     import json
     import os
