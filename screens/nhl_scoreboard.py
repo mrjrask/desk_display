@@ -1121,8 +1121,15 @@ def render_nhl_scoreboard(display, games: list[dict], transition: bool = False) 
             tx = (WIDTH - tw) // 2
             ty = title_top
         draw.text((tx, ty), TITLE, font=TITLE_FONT, fill=(255, 255, 255))
-        msg_top = max(ty + th + _scale_y(8), title_top + th + _scale_y(8))
-        _center_text(draw, "No games", STATUS_FONT, 0, WIDTH, msg_top, STATUS_ROW_H)
+        _center_text(
+            draw,
+            "No games",
+            STATUS_FONT,
+            0,
+            WIDTH,
+            HEIGHT // 2 - STATUS_ROW_H // 2,
+            STATUS_ROW_H,
+        )
         if transition:
             return ScreenImage(img, displayed=False)
         display.image(img)
