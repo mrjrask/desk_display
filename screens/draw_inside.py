@@ -188,6 +188,7 @@ def _prepend_vendor_sensor_drivers():
     vendor_paths = (
         repo_root / "vendor" / "pimoroni-bme280",
         repo_root / "vendor" / "pimoroni-bme680",
+        repo_root / "vendor" / "bme68x",
     )
     for vendor_path in vendor_paths:
         if vendor_path.exists():
@@ -431,10 +432,23 @@ def _probe_pimoroni_bme68x(_i2c: Any, addresses: Set[int]) -> Optional[SensorPro
         return None
 
     def _read_bme68x_via_subprocess() -> Dict[str, Any]:
+        repo_root = Path(__file__).resolve().parents[1]
+        bme68x_vendor_path = repo_root / "vendor" / "bme68x"
+        helper_env = os.environ.copy()
+        if bme68x_vendor_path.exists():
+            existing_pythonpath = helper_env.get("PYTHONPATH")
+            helper_env["PYTHONPATH"] = (
+                str(bme68x_vendor_path)
+                if not existing_pythonpath
+                else f"{bme68x_vendor_path}{os.pathsep}{existing_pythonpath}"
+            )
+
         script = """
 import json
 import sys
 from importlib import import_module
+
+sys.path.insert(0, __BME68X_VENDOR_PATH__)
 
 import bme68x
 
@@ -506,13 +520,14 @@ print(json.dumps({
     'gas_resistance': extract_field(data, 'gas_resistance'),
     'voc_index': voc_index,
 }))
-"""
+""".replace("__BME68X_VENDOR_PATH__", repr(str(bme68x_vendor_path)))
         result = subprocess.run(
             [sys.executable, "-c", script],
             capture_output=True,
             text=True,
             timeout=6,
             check=False,
+            env=helper_env,
         )
         if result.returncode != 0:
             if result.returncode < 0:
@@ -1379,7 +1394,17 @@ def is_inside_sensor_available(*, force_refresh: bool = False) -> bool:
     """Return ``True`` when an indoor sensor can be probed successfully."""
 
     provider, read_fn = _probe_sensor_cached(force_refresh=force_refresh)
-    return bool(provider and read_fn)
+    if provider and read_fn:
+        return True
+
+    preference, raw_preference = _get_sensor_env_override()
+    if preference or raw_preference:
+        logging.warning(
+            "draw_inside: keeping inside screen available because an indoor sensor is explicitly configured"
+        )
+        return True
+
+    return False
 
 
 def _log_sensor_data(provider: Optional[str], data: Dict[str, Optional[float]]) -> None:

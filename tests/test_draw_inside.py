@@ -378,3 +378,57 @@ def test_probe_pimoroni_bme68x_survives_child_segfault(monkeypatch):
         assert "signal 11" in str(exc)
     else:
         raise AssertionError("Expected RuntimeError when helper process segfaults")
+
+
+def test_probe_pimoroni_bme68x_helper_uses_vendored_pythonpath(monkeypatch):
+    import json
+    import os
+    import screens.draw_inside as draw_inside_module
+
+    captured = {}
+
+    def fake_run(_args, **kwargs):
+        captured["script"] = _args[2]
+        captured["env"] = kwargs.get("env", {})
+        return draw_inside_module.subprocess.CompletedProcess(
+            args=[],
+            returncode=0,
+            stdout=json.dumps(
+                {
+                    "provider": "Pimoroni BME688",
+                    "temperature": 21.0,
+                    "humidity": 50.0,
+                    "pressure": 1013.25,
+                    "gas_resistance": 12000.0,
+                }
+            ),
+            stderr="",
+        )
+
+    monkeypatch.setenv("PYTHONPATH", "existing-path")
+    monkeypatch.setattr(draw_inside_module.subprocess, "run", fake_run)
+
+    provider, reader = draw_inside_module._probe_pimoroni_bme68x(None, set())
+
+    vendor_path = str(
+        draw_inside_module.Path(draw_inside_module.__file__).resolve().parents[1]
+        / "vendor"
+        / "bme68x"
+    )
+    assert provider == "Pimoroni BME688"
+    assert captured["script"].count(vendor_path) == 1
+    assert captured["env"]["PYTHONPATH"].split(os.pathsep)[0] == vendor_path
+    assert reader()["temp_f"] == 69.8
+
+
+def test_is_inside_sensor_available_keeps_explicit_sensor_screen_enabled(monkeypatch):
+    import screens.draw_inside as draw_inside_module
+
+    monkeypatch.setenv("INSIDE_SENSOR", "pimoroni_bme68x")
+    monkeypatch.setattr(
+        draw_inside_module,
+        "_probe_sensor_cached",
+        lambda force_refresh=False: (None, None),
+    )
+
+    assert draw_inside_module.is_inside_sensor_available() is True
