@@ -1751,14 +1751,15 @@ NFL_TEAM_ABBREVIATIONS = {
 
 # VRNO screen
 VRNO_FRESHNESS_LIMIT = 10 * 60
+# Reverse 5-to-1 split occurred on 6/11/26; fractional shares are rounded down.
 VRNO_LOTS = [
-    {"shares": 125, "cost": 3.39},
-    {"shares": 230, "cost": 0.74},
-    {"shares": 230, "cost": 1.34},
-    {"shares": 230, "cost": 1.27}, #march10'26
-    {"shares": 555, "cost": 0.75}, #etrade
-    {"shares": 107, "cost": 0.64}, #etrade
-    {"shares": 157, "cost": 0.60}, #etrade
+    {"shares": 25, "cost": 16.95},
+    {"shares": 46, "cost": 3.70},
+    {"shares": 46, "cost": 6.70},
+    {"shares": 46, "cost": 6.35}, #march10'26
+    {"shares": 111, "cost": 3.75}, #etrade
+    {"shares": 21, "cost": 3.20}, #etrade
+    {"shares": 31, "cost": 3.00}, #etrade
 ]
 
 # Hockey assets
