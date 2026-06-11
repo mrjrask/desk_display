@@ -26,3 +26,29 @@ def test_owm_api_key_randomly_selected_from_pool(monkeypatch):
     monkeypatch.setattr(config.random, "choice", lambda values: values[-1])
 
     assert config._get_owm_api_key() == "verano-key"
+
+
+def test_weather_config_accepts_single_openweathermap_key(monkeypatch):
+    monkeypatch.setattr(config, "OWM_API_KEY", "default-key")
+    monkeypatch.setattr(config, "WEATHERKIT_TEAM_ID", "team-id")
+    monkeypatch.setattr(config, "WEATHERKIT_KEY_ID", "key-id")
+    monkeypatch.setattr(config, "WEATHERKIT_SERVICE_ID", "service-id")
+    monkeypatch.setattr(config, "WEATHERKIT_PRIVATE_KEY", None)
+    monkeypatch.setattr(config, "WEATHERKIT_KEY_PATH", None)
+
+    assert config._build_weather_config_errors([]) == []
+
+
+def test_weather_config_requires_at_least_one_provider(monkeypatch):
+    monkeypatch.setattr(config, "OWM_API_KEY", None)
+    monkeypatch.setattr(config, "WEATHERKIT_TEAM_ID", "team-id")
+    monkeypatch.setattr(config, "WEATHERKIT_KEY_ID", "key-id")
+    monkeypatch.setattr(config, "WEATHERKIT_SERVICE_ID", "service-id")
+    monkeypatch.setattr(config, "WEATHERKIT_PRIVATE_KEY", None)
+    monkeypatch.setattr(config, "WEATHERKIT_KEY_PATH", None)
+
+    errors = config._build_weather_config_errors([])
+
+    assert len(errors) == 1
+    assert "No weather provider configured" in errors[0]
+    assert "WEATHERKIT_PRIVATE_KEY or WEATHERKIT_KEY_PATH" in errors[0]

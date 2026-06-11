@@ -110,6 +110,11 @@ def initialise_env_if_requested(force: bool = False) -> None:
     _ENV_INITIALISED = True
 
 
+# Load .env before module-level settings are read so services that import
+# constants directly see the same values as runtime startup.
+initialise_env_if_requested()
+
+
 def _get_first_env_var(*names: str):
     """Return the first populated environment variable from *names.*"""
 
@@ -300,19 +305,46 @@ WEATHERKIT_LANGUAGE    = os.environ.get("WEATHERKIT_LANGUAGE", "en")
 WEATHERKIT_TIMEZONE    = os.environ.get("WEATHERKIT_TIMEZONE", "America/Chicago")
 WEATHER_USE_EMOJI_ICONS = _get_bool_env("WEATHER_USE_EMOJI_ICONS", False)
 
+OWM_KEY_NAMES = (
+    "OWM_API_KEY",
+    "OWM_API_KEY_DEFAULT",
+    "OWM_API_KEY_WIFFY",
+    "OWM_API_KEY_VERANO",
+)
+
+
 def _get_owm_api_key() -> Optional[str]:
     """Choose a random OpenWeatherMap API key from configured key slots."""
 
-    key_names = (
-        "OWM_API_KEY",
-        "OWM_API_KEY_DEFAULT",
-        "OWM_API_KEY_WIFFY",
-        "OWM_API_KEY_VERANO",
-    )
-    candidates = [value for value in (_get_first_env_var(name) for name in key_names) if value]
+    candidates = [value for value in (_get_first_env_var(name) for name in OWM_KEY_NAMES) if value]
     if not candidates:
         return None
     return random.choice(candidates)
+
+
+def _has_weatherkit_credentials() -> bool:
+    """Return True when all WeatherKit JWT credentials are configured."""
+
+    return bool(
+        WEATHERKIT_TEAM_ID
+        and WEATHERKIT_KEY_ID
+        and WEATHERKIT_SERVICE_ID
+        and (WEATHERKIT_PRIVATE_KEY or WEATHERKIT_KEY_PATH)
+    )
+
+
+def _build_weather_config_errors(coordinate_errors: list[str]) -> list[str]:
+    """Validate that coordinates and at least one weather provider are configured."""
+
+    errors = list(coordinate_errors)
+    if not OWM_API_KEY and not _has_weatherkit_credentials():
+        errors.append(
+            "No weather provider configured; set WEATHERKIT_TEAM_ID, "
+            "WEATHERKIT_KEY_ID, WEATHERKIT_SERVICE_ID, and either "
+            "WEATHERKIT_PRIVATE_KEY or WEATHERKIT_KEY_PATH, or set one of "
+            + ", ".join(OWM_KEY_NAMES)
+        )
+    return errors
 
 
 OWM_API_KEY = _get_owm_api_key()
@@ -320,18 +352,7 @@ OWM_API_URL   = "https://api.openweathermap.org/data/3.0/onecall"
 OWM_UNITS     = os.environ.get("OWM_UNITS", "imperial")
 OWM_LANGUAGE  = os.environ.get("OWM_LANGUAGE", "en")
 
-_weather_errors: list[str] = []
-_weather_errors.extend(_weather_coordinate_errors)
-
-_owm_required_keys = (
-    "OWM_API_KEY",
-    "OWM_API_KEY_DEFAULT",
-    "OWM_API_KEY_WIFFY",
-    "OWM_API_KEY_VERANO",
-)
-for key_name in _owm_required_keys:
-    if not os.environ.get(key_name):
-        _weather_errors.append(f"{key_name} is missing")
+_weather_errors = _build_weather_config_errors(_weather_coordinate_errors)
 
 if _weather_errors:
     ENABLE_WEATHER = False
@@ -771,6 +792,8 @@ def initialise_runtime_probes() -> None:
     """
 
     global CURRENT_SSID, LATITUDE, LONGITUDE, TRAVEL_MODE, OWM_API_KEY, ENABLE_WEATHER
+    global WEATHERKIT_TEAM_ID, WEATHERKIT_KEY_ID, WEATHERKIT_SERVICE_ID
+    global WEATHERKIT_KEY_PATH, WEATHERKIT_PRIVATE_KEY
     global WIDTH, HEIGHT, DISPLAY_SCALE, DISPLAY_SCALE_WIDTH
     global ACTIVE_DISPLAY_PROFILE, DISPLAY_PROFILE_ID
     global DISPLAY_FADE_IN_DEFAULT_STEPS
@@ -782,13 +805,14 @@ def initialise_runtime_probes() -> None:
     CURRENT_SSID = get_current_ssid()
     TRAVEL_MODE = os.environ.get("TRAVEL_MODE", "to_home")
     LATITUDE, LONGITUDE, weather_coordinate_errors = _resolve_weather_coordinates()
+    WEATHERKIT_TEAM_ID = os.environ.get("WEATHERKIT_TEAM_ID")
+    WEATHERKIT_KEY_ID = os.environ.get("WEATHERKIT_KEY_ID")
+    WEATHERKIT_SERVICE_ID = os.environ.get("WEATHERKIT_SERVICE_ID")
+    WEATHERKIT_KEY_PATH = os.environ.get("WEATHERKIT_KEY_PATH")
+    WEATHERKIT_PRIVATE_KEY = os.environ.get("WEATHERKIT_PRIVATE_KEY")
     OWM_API_KEY = _get_owm_api_key()
 
-    runtime_weather_errors: list[str] = []
-    runtime_weather_errors.extend(weather_coordinate_errors)
-    for key_name in ("OWM_API_KEY", "OWM_API_KEY_DEFAULT", "OWM_API_KEY_WIFFY", "OWM_API_KEY_VERANO"):
-        if not os.environ.get(key_name):
-            runtime_weather_errors.append(f"{key_name} is missing")
+    runtime_weather_errors = _build_weather_config_errors(weather_coordinate_errors)
     if runtime_weather_errors:
         ENABLE_WEATHER = False
         logging.warning(

@@ -304,6 +304,42 @@ def test_load_env_file_accepts_export_prefix(tmp_path, monkeypatch):
     assert config.os.environ["WEATHERKIT_TEAM_ID"] == "team_123"
 
 
+def test_config_import_loads_dotenv_before_weather_constants(tmp_path, monkeypatch):
+    env_path = tmp_path / ".env"
+    env_path.write_text(
+        "WEATHER_LATITUDE=41.1\n"
+        "WEATHER_LONGITUDE=-87.2\n"
+        "WEATHERKIT_TEAM_ID=team_123\n"
+        "WEATHERKIT_KEY_ID=key_123\n"
+        "WEATHERKIT_SERVICE_ID=service_123\n"
+        "WEATHERKIT_KEY_PATH=/tmp/AuthKey_key_123.p8\n",
+        encoding="utf-8",
+    )
+    monkeypatch.chdir(tmp_path)
+    for key in (
+        "WEATHER_LATITUDE",
+        "WEATHER_LONGITUDE",
+        "WEATHERKIT_TEAM_ID",
+        "WEATHERKIT_KEY_ID",
+        "WEATHERKIT_SERVICE_ID",
+        "WEATHERKIT_KEY_PATH",
+        "WEATHERKIT_PRIVATE_KEY",
+        "OWM_API_KEY",
+        "OWM_API_KEY_DEFAULT",
+        "OWM_API_KEY_WIFFY",
+        "OWM_API_KEY_VERANO",
+    ):
+        monkeypatch.delenv(key, raising=False)
+
+    module = _reload_config(monkeypatch)
+
+    assert module.WEATHERKIT_TEAM_ID == "team_123"
+    assert module.WEATHERKIT_KEY_ID == "key_123"
+    assert module.WEATHERKIT_SERVICE_ID == "service_123"
+    assert module.WEATHERKIT_KEY_PATH == "/tmp/AuthKey_key_123.p8"
+    assert module.ENABLE_WEATHER is True
+
+
 def test_ip_with_time_flag_obeys_env(monkeypatch):
     module = _reload_config(monkeypatch, IP_WITH_TIME="false")
     assert module.IP_WITH_TIME is False
