@@ -459,7 +459,7 @@ def test_probe_pimoroni_bme68x_helper_uses_vendored_pythonpath(monkeypatch):
     assert reader()["temp_f"] == 69.8
 
 
-def test_is_inside_sensor_available_keeps_explicit_sensor_screen_enabled(monkeypatch):
+def test_is_inside_sensor_available_skips_explicit_sensor_when_not_detected(monkeypatch):
     import screens.draw_inside as draw_inside_module
 
     monkeypatch.setenv("INSIDE_SENSOR", "pimoroni_bme68x")
@@ -469,4 +469,4 @@ def test_is_inside_sensor_available_keeps_explicit_sensor_screen_enabled(monkeyp
         lambda force_refresh=False: (None, None),
     )
 
-    assert draw_inside_module.is_inside_sensor_available() is True
+    assert draw_inside_module.is_inside_sensor_available() is False
