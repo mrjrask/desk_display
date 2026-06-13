@@ -1425,7 +1425,7 @@ def _probe_sensor_cached(
 
 
 def is_inside_sensor_available(*, force_refresh: bool = False) -> bool:
-    """Return ``True`` when an indoor sensor can be probed successfully."""
+    """Return ``True`` only when an indoor sensor can be probed successfully."""
 
     provider, read_fn = _probe_sensor_cached(force_refresh=force_refresh)
     if provider and read_fn:
@@ -1434,9 +1434,12 @@ def is_inside_sensor_available(*, force_refresh: bool = False) -> bool:
     preference, raw_preference = _get_sensor_env_override()
     if preference or raw_preference:
         logging.warning(
-            "draw_inside: keeping inside screen available because an indoor sensor is explicitly configured"
+            "draw_inside: explicitly configured indoor sensor was not detected; inside screen will be skipped"
         )
-        return True
+    else:
+        logging.info(
+            "draw_inside: no indoor sensor configured or auto-detected; inside screen will be skipped"
+        )
 
     return False
 
