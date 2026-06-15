@@ -268,6 +268,8 @@ Configuration is environment-driven. Put local values in `.env` for development 
 | `DISPLAY_FB_DEVICE` | Framebuffer device path. Defaults to `/dev/fb0` where applicable. |
 | `DISPLAY_FB_PIXEL_FORMAT` | Framebuffer pixel format override. |
 | `DISPLAY_FB_PIXEL_ORDER` | Framebuffer channel order, usually `rgb` or `bgr`. |
+| `DISPLAY_FB_HIDE_CONSOLE_CURSOR` | Hide the Linux console cursor in framebuffer mode. Defaults to enabled; set to `0` to disable. |
+| `DISPLAY_FB_CONSOLE_GRAPHICS` | Switch the active console to graphics mode while framebuffer output is open, preventing fbcon cursor/text redraws. Defaults to enabled; set to `0` to only send cursor-hide controls. |
 | `HYPERPIXEL_PANEL` | HyperPixel panel hint, such as `hyperpixel4`. |
 | `DESK_DISPLAY_WINDOW_SCALE` | SDL window scaling factor. |
 | `DESK_DISPLAY_WINDOW_RESIZABLE` | Allow SDL window resizing. |
@@ -648,6 +650,7 @@ python tools/import_screen_rotation_config.py path/to/export.json
 | Indoor sensor is blank | Verify I2C is enabled, sensor wiring, `INSIDE_SENSOR`, `INSIDE_I2C_BUSES`, and run `i2cdetect`. |
 | Wrong rotation/orientation | Avoid double rotation between kernel overlays and `DISPLAY_ROTATION`; check `HYPERPIXEL_PANEL` and display dimensions. |
 | Blank framebuffer/kernel output | Verify `DESK_DISPLAY_OUTPUT`, `DISPLAY_FB_DEVICE`, display dimensions, pixel format/order, and device permissions. |
+| Blinking cursor on framebuffer output | Keep `DISPLAY_FB_HIDE_CONSOLE_CURSOR=1` and `DISPLAY_FB_CONSOLE_GRAPHICS=1` so Linux fbcon does not redraw a cursor over direct framebuffer animation. |
 | macOS/window mode uses too much CPU | Use `./scripts/launch_macos_window_perf.sh` or set `DESK_DISPLAY_WINDOW_SCALE=1`, `ENABLE_SCREENSHOTS=0`, `ENABLE_VIDEO=0`, `ENABLE_WIFI_MONITOR=0`, and `ENABLE_WIFI_RECOVERY=0`. |
 | Waveshare OLED/LCD HAT issues | Run `scripts/check_waveshare_setup.sh`, verify I2C addresses, framebuffer config, and `WAVESHARE_OLED_LCD_HAT_A_INSTALLED`. |
 | API/feed problem | Run `python scripts/test_api_connections.py`; use `--json` for machine-readable details. |
