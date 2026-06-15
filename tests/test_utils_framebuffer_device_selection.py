@@ -168,3 +168,37 @@ def test_init_framebuffer_output_returns_none_when_all_devices_fail(monkeypatch)
     )
 
     assert framebuffer is None
+
+
+def test_hide_framebuffer_console_cursor_switches_tty_to_graphics(monkeypatch):
+    writes = []
+    ioctls = []
+    closed = []
+
+    monkeypatch.setattr(utils, "_FRAMEBUFFER_HIDE_CONSOLE_CURSOR", True)
+    monkeypatch.setattr(utils, "_FRAMEBUFFER_CONSOLE_GRAPHICS", True)
+    monkeypatch.setattr(utils, "_open_framebuffer_console", lambda: 42)
+    monkeypatch.setattr(utils.os, "write", lambda fd, data: writes.append((fd, data)) or len(data))
+    monkeypatch.setattr(utils.fcntl, "ioctl", lambda fd, req, arg: ioctls.append((fd, req, arg)))
+    monkeypatch.setattr(utils.os, "close", lambda fd: closed.append(fd))
+
+    tty_fd = utils._hide_framebuffer_console_cursor()
+    utils._restore_framebuffer_console_cursor(tty_fd)
+
+    assert tty_fd == 42
+    assert writes == [(42, b"\033[?25l"), (42, b"\033[?25h")]
+    assert ioctls == [
+        (42, utils._KDSETMODE, utils._KD_GRAPHICS),
+        (42, utils._KDSETMODE, utils._KD_TEXT),
+    ]
+    assert closed == [42]
+
+
+def test_hide_framebuffer_console_cursor_respects_disable_flag(monkeypatch):
+    opened = []
+
+    monkeypatch.setattr(utils, "_FRAMEBUFFER_HIDE_CONSOLE_CURSOR", False)
+    monkeypatch.setattr(utils, "_open_framebuffer_console", lambda: opened.append(True) or 42)
+
+    assert utils._hide_framebuffer_console_cursor() is None
+    assert opened == []

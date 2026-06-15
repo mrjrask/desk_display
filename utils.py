@@ -12,6 +12,7 @@ Core utilities for the desk display project:
 """
 import datetime
 import errno
+import fcntl
 import html
 import logging
 import math
@@ -100,6 +101,12 @@ _DISPLAY_OUTPUT = os.environ.get("DESK_DISPLAY_OUTPUT", "auto").strip().lower()
 _FRAMEBUFFER_DEVICE = os.environ.get("DISPLAY_FB_DEVICE", "/dev/fb0")
 _FRAMEBUFFER_PIXEL_FORMAT = os.environ.get("DISPLAY_FB_PIXEL_FORMAT", "").strip().lower()
 _FRAMEBUFFER_PIXEL_ORDER = os.environ.get("DISPLAY_FB_PIXEL_ORDER", "").strip().lower()
+_FRAMEBUFFER_HIDE_CONSOLE_CURSOR = os.environ.get(
+    "DISPLAY_FB_HIDE_CONSOLE_CURSOR", "1"
+).strip().lower() not in {"0", "false", "no", "off"}
+_FRAMEBUFFER_CONSOLE_GRAPHICS = os.environ.get(
+    "DISPLAY_FB_CONSOLE_GRAPHICS", "1"
+).strip().lower() not in {"0", "false", "no", "off"}
 _PYGAME_MODULE = None
 _PYGAME_ERROR: Optional[Exception] = None
 _CURSOR_WIGGLE_DELAY_SECONDS = 30.0
@@ -536,12 +543,71 @@ def _resolve_framebuffer_pixel_settings(
     return fmt, order
 
 
+_KDSETMODE = 0x4B3A
+_KD_TEXT = 0x00
+_KD_GRAPHICS = 0x01
+_FRAMEBUFFER_TTY_CANDIDATES = ("/dev/tty0", "/dev/tty1", "/dev/console")
+
+
 def _disable_framebuffer_cursor() -> None:
+    if not _FRAMEBUFFER_HIDE_CONSOLE_CURSOR:
+        return
     for path in ("/sys/class/graphics/fbcon/cursor_blink", "/sys/class/graphics/fbcon/cursor"):
         try:
             Path(path).write_text("0", encoding="utf-8")
         except OSError:
             continue
+
+
+def _open_framebuffer_console() -> Optional[int]:
+    for tty_path in _FRAMEBUFFER_TTY_CANDIDATES:
+        try:
+            return os.open(tty_path, os.O_RDWR | os.O_NOCTTY)
+        except OSError:
+            continue
+    return None
+
+
+def _hide_framebuffer_console_cursor() -> Optional[int]:
+    if not _FRAMEBUFFER_HIDE_CONSOLE_CURSOR:
+        return None
+
+    tty_fd = _open_framebuffer_console()
+    if tty_fd is None:
+        return None
+
+    try:
+        os.write(tty_fd, b"\033[?25l")
+    except OSError:
+        pass
+
+    if _FRAMEBUFFER_CONSOLE_GRAPHICS:
+        try:
+            fcntl.ioctl(tty_fd, _KDSETMODE, _KD_GRAPHICS)
+        except OSError as exc:
+            logging.debug("Unable to switch console to graphics mode: %s", exc)
+
+    return tty_fd
+
+
+def _restore_framebuffer_console_cursor(tty_fd: Optional[int]) -> None:
+    if tty_fd is None:
+        return
+    try:
+        if _FRAMEBUFFER_CONSOLE_GRAPHICS:
+            try:
+                fcntl.ioctl(tty_fd, _KDSETMODE, _KD_TEXT)
+            except OSError as exc:
+                logging.debug("Unable to restore console text mode: %s", exc)
+        try:
+            os.write(tty_fd, b"\033[?25h")
+        except OSError:
+            pass
+    finally:
+        try:
+            os.close(tty_fd)
+        except OSError:
+            pass
 
 
 def _convert_rgb565(image: Image.Image, *, order: str = "rgb") -> bytes:
@@ -588,6 +654,7 @@ class _FrameBufferDevice:
         self.bytes_per_pixel = max(1, self.bpp // 8)
         self.pixel_format, self.pixel_order = _resolve_framebuffer_pixel_settings(device_path, self.bpp)
         self._fd: Optional[int] = None
+        self._tty_fd: Optional[int] = None
 
         try:
             self._fd = os.open(self.device_path, os.O_RDWR)
@@ -596,8 +663,11 @@ class _FrameBufferDevice:
             self._fd = None
         else:
             _disable_framebuffer_cursor()
+            self._tty_fd = _hide_framebuffer_console_cursor()
 
     def close(self) -> None:
+        _restore_framebuffer_console_cursor(self._tty_fd)
+        self._tty_fd = None
         if self._fd is None:
             return
         try:
