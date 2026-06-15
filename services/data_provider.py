@@ -24,6 +24,7 @@ from services.sports.nfl import (
     fetch_week_scoreboard as fetch_nfl_week_scoreboard,
 )
 from services.sports.nhl import fetch_scoreboard as fetch_nhl_scoreboard
+from services.sports.world_cup import fetch_scoreboard as fetch_world_cup_scoreboard
 
 
 @dataclass
@@ -97,6 +98,7 @@ class DataProvider:
                 "nba": lambda: fetch_nba_scoreboard(now=now),
                 "ncaam": lambda: fetch_ncaam_scoreboard(now=now),
                 "nhl": lambda: fetch_nhl_scoreboard(now=now),
+                "world_cup": lambda: fetch_world_cup_scoreboard(now=now),
             }
 
             selected_leagues = {
@@ -128,6 +130,7 @@ class DataProvider:
                     "nba": scoreboards["nba"],
                     "ncaam": scoreboards["ncaam"],
                     "nhl": scoreboards["nhl"],
+                    "world_cup": scoreboards["world_cup"],
                 },
             }
 
