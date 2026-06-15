@@ -56,6 +56,7 @@ RAW_SCREEN_IDS = [
     "NBA Scoreboard",
     "NBA Playoffs",
     "NCAAM Scoreboard",
+    "World Cup Scoreboard",
     "bulls logo",
     "bulls stand1",
     "bulls last",
