@@ -8,37 +8,41 @@
     "weather hourly": 1,
     "weather radar": 1,
     "weather daily": 1,
-    "astronomical": 1,
+    "astronomical": 0,
+    "weather quad": 0,
     "inside": 1,
     "verano logo": 0,
     "vrnof": 3,
-    "hawks logo": 2,
-    "hawks stand1": 2,
-    "hawks last": 2,
-    "hawks live": 1,
-    "hawks next": 2,
-    "hawks next home": 2,
-    "hawks schedule quad": 2,
+    "hawks logo": 0,
+    "hawks stand1": 0,
+    "hawks last": 0,
+    "hawks live": 0,
+    "hawks next": 0,
+    "hawks next home": 0,
+    "hawks schedule quad": 0,
     "NHL Standings West": {
-      "frequency": 5,
+      "frequency": 0,
+      "extra_seconds": 0,
       "alt": {
         "screen": "NHL Standings West v2",
         "frequency": 2
       }
     },
     "NHL Standings East": {
-      "frequency": 5,
+      "frequency": 0,
+      "extra_seconds": 0,
       "alt": {
         "screen": "NHL Standings East v2",
         "frequency": 2
       }
     },
     "nhl logo": 0,
-    "NHL Scoreboard": 1,
-    "NHL Standings Overview West": 3,
-    "NHL Standings Overview East": 3,
+    "NHL Scoreboard": 0,
+    "NHL Standings Overview West": 0,
+    "NHL Standings Overview East": 0,
     "NHL Standings West v2": 0,
     "NHL Standings East v2": 0,
+    "NHL Playoffs": 0,
     "wolves logo": 0,
     "wolves last": 0,
     "wolves next": 0,
@@ -51,8 +55,13 @@
     "cubs result": 0,
     "cubs live": 1,
     "cubs next": 2,
-    "cubs next v2": 2,
     "cubs next home": 2,
+    "cubs next series": 2,
+    "cubs next home series": 2,
+    "cubs current series": 2,
+    "cubs schedule quad": 2,
+    "cubs next v2": 0,
+    "cubs no game": 0,
     "sox logo": 5,
     "sox stand1": 0,
     "sox stand2": 0,
@@ -60,8 +69,13 @@
     "sox last": 5,
     "sox live": 1,
     "sox next": 5,
-    "sox next v2": 5,
     "sox next home": 5,
+    "sox next series": 5,
+    "sox next home series": 5,
+    "sox current series": 5,
+    "sox schedule quad": 5,
+    "sox next v2": 5,
+    "sox no game": 0,
     "mlb logo": 0,
     "MLB Scoreboard": 2,
     "NL Overview": 0,
@@ -72,12 +86,13 @@
     "bears stand1": 0,
     "bears stand2": 0,
     "bears next": 0,
-    "bears next season": 0,
     "bears next season sched": 7,
+    "bears next season": 0,
     "nfl logo": 0,
     "NFL Scoreboard": 0,
     "NFL Overview NFC": {
       "frequency": 0,
+      "extra_seconds": 0,
       "alt": {
         "screen": "NFL Standings NFC",
         "frequency": 1
@@ -85,6 +100,7 @@
     },
     "NFL Overview AFC": {
       "frequency": 0,
+      "extra_seconds": 0,
       "alt": {
         "screen": "NFL Standings AFC",
         "frequency": 1
@@ -92,27 +108,19 @@
     },
     "NFL Standings NFC": 0,
     "NFL Standings AFC": 0,
-    "bulls logo": 3,
-    "bulls stand1": 3,
-    "bulls last": 3,
-    "bulls live": 1,
-    "bulls next": 3,
-    "bulls next home": 3,
-    "bulls schedule quad": 3,
+    "bulls logo": 0,
+    "bulls stand1": 0,
+    "bulls last": 0,
+    "bulls live": 0,
+    "bulls next": 0,
+    "bulls next home": 0,
+    "bulls schedule quad": 0,
     "nba logo": 0,
-    "NBA Scoreboard": 4,
-    "NCAAM Scoreboard": 5,
-    "World Cup Scoreboard": 5,
+    "NBA Scoreboard": 0,
+    "NBA Playoffs": 0,
+    "NCAAM Scoreboard": 0,
     "quad": 0,
-    "NHL Playoffs": 0,
-    "cubs next series": 2,
-    "sox next series": 5,
-    "cubs next home series": 2,
-    "sox next home series": 5,
-    "cubs current series": 2,
-    "sox current series": 5,
-    "cubs schedule quad": 2,
-    "sox schedule quad": 5
+    "World Cup Scoreboard": 1
   },
   "playlists": {
     "playlist-1771301244817-427": {
@@ -149,6 +157,9 @@
         },
         {
           "screen": "astronomical"
+        },
+        {
+          "screen": "weather quad"
         }
       ]
     },
@@ -277,16 +288,22 @@
           "screen": "cubs next home"
         },
         {
-          "screen": "cubs current series"
-        },
-        {
           "screen": "cubs next series"
         },
         {
           "screen": "cubs next home series"
         },
         {
+          "screen": "cubs current series"
+        },
+        {
           "screen": "cubs schedule quad"
+        },
+        {
+          "screen": "cubs next v2"
+        },
+        {
+          "screen": "cubs no game"
         }
       ]
     },
@@ -318,16 +335,22 @@
           "screen": "sox next home"
         },
         {
-          "screen": "sox current series"
-        },
-        {
           "screen": "sox next series"
         },
         {
           "screen": "sox next home series"
         },
         {
+          "screen": "sox current series"
+        },
+        {
           "screen": "sox schedule quad"
+        },
+        {
+          "screen": "sox next v2"
+        },
+        {
+          "screen": "sox no game"
         }
       ]
     },
@@ -371,6 +394,9 @@
         },
         {
           "screen": "bears next season sched"
+        },
+        {
+          "screen": "bears next season"
         }
       ]
     },
@@ -431,6 +457,9 @@
         },
         {
           "screen": "NBA Scoreboard"
+        },
+        {
+          "screen": "NBA Playoffs"
         }
       ]
     },
@@ -442,6 +471,9 @@
         },
         {
           "screen": "quad"
+        },
+        {
+          "screen": "World Cup Scoreboard"
         }
       ]
     }
