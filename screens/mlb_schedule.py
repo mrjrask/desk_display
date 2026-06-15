@@ -1764,6 +1764,14 @@ def draw_series_screen(display, games, title, transition=False, screen_id: Optio
     y_text = edge_pad + title_line_h + title_to_opponent_gap
 
     logo_h = min(standard_next_game_logo_height(HEIGHT), max(16, HEIGHT // 5))
+    if hyperpixel_square_series_layout:
+        logo_h = max(
+            logo_h,
+            min(
+                max(16, int(round(HEIGHT * 0.28))),
+                max(16, int(round(standard_next_game_logo_height(HEIGHT) * 1.35))),
+            ),
+        )
     logo_away = load_team_logo(MLB_LOGOS_DIR, get_mlb_tricode(away_tm) or get_mlb_abbreviation(get_team_display_name(away_tm)), box_size=logo_h)
     logo_home = load_team_logo(MLB_LOGOS_DIR, get_mlb_tricode(home_tm) or get_mlb_abbreviation(get_team_display_name(home_tm)), box_size=logo_h)
     gap = config.scale_value(10) if hyperpixel_layout else 10
