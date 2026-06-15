@@ -9,6 +9,7 @@ from .nfl import (
     fetch_week_scoreboard as fetch_nfl_week_scoreboard,
 )
 from .nhl import fetch_scoreboard as fetch_nhl_scoreboard, scoreboard_date as nhl_scoreboard_date
+from .world_cup import fetch_scoreboard as fetch_world_cup_scoreboard, scoreboard_date as world_cup_scoreboard_date
 
 __all__ = [
     "fetch_mlb_scoreboard",
@@ -22,4 +23,6 @@ __all__ = [
     "fetch_nfl_next_scoreboard",
     "fetch_nhl_scoreboard",
     "nhl_scoreboard_date",
+    "fetch_world_cup_scoreboard",
+    "world_cup_scoreboard_date",
 ]

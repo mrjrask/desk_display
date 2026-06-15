@@ -261,6 +261,14 @@ Fields used include game status, team records, scores, standings ranks, wins, lo
 
 `NCAAM_SCOREBOARD_MODE` controls display filtering; the default is `top25`.
 
+### FIFA World Cup
+
+| Use | Endpoint |
+| --- | --- |
+| ESPN FIFA World Cup scoreboard | `https://site.api.espn.com/apis/site/v2/sports/soccer/fifa.world/scoreboard` |
+
+Fields used include game status, team logos, start times, scores, and final/in-progress state.
+
 ---
 
 ## Finance

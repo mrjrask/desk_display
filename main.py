@@ -1775,6 +1775,7 @@ _FEED_DEPENDENCIES: Dict[str, Set[str]] = {
         "NBA Scoreboard",
         "NBA Scoreboard v2",
         "NCAAM Scoreboard",
+        "World Cup Scoreboard",
     },
 }
 
@@ -1799,6 +1800,7 @@ _SCOREBOARD_SCREEN_IDS = {
     "NBA Scoreboard",
     "NBA Scoreboard v2",
     "NCAAM Scoreboard",
+    "World Cup Scoreboard",
 }
 
 _SCOREBOARD_SCREEN_TO_LEAGUES: Dict[str, Set[str]] = {
@@ -1811,6 +1813,7 @@ _SCOREBOARD_SCREEN_TO_LEAGUES: Dict[str, Set[str]] = {
     "NBA Scoreboard": {"nba"},
     "NBA Scoreboard v2": {"nba"},
     "NCAAM Scoreboard": {"ncaam"},
+    "World Cup Scoreboard": {"world_cup"},
 }
 
 _LIVE_TEAM_SCREEN_TO_FEED: Dict[str, str] = {
