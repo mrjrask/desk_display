@@ -185,6 +185,7 @@ from display_profiles import (
     DISPLAY_PROFILE_HDMI_1080P,
     DisplayProfilePreset,
     resolve_display_profile,
+    resolve_display_profile_by_id,
 )
 
 try:
@@ -205,14 +206,15 @@ _STYLE_CONFIG_LOCK = threading.Lock()
 
 # ─── Feature flags ────────────────────────────────────────────────────────────
 _display_output = os.environ.get("DESK_DISPLAY_OUTPUT", "auto").strip().lower()
+DESK_DISPLAY_LOW_POWER = _get_bool_env("DESK_DISPLAY_LOW_POWER", False)
 _is_macos_window_output = _display_output == "window" and platform.system() == "Darwin"
-_default_enable_screenshots = not _is_macos_window_output
+_default_enable_screenshots = not (_is_macos_window_output or DESK_DISPLAY_LOW_POWER)
 
 ENABLE_SCREENSHOTS   = _get_bool_env("ENABLE_SCREENSHOTS", _default_enable_screenshots)
 ENABLE_VIDEO         = _get_bool_env("ENABLE_VIDEO", False)
 VIDEO_FPS            = 30
-ENABLE_WIFI_MONITOR  = _get_bool_env("ENABLE_WIFI_MONITOR", True)
-ENABLE_WIFI_RECOVERY = _get_bool_env("ENABLE_WIFI_RECOVERY", True)
+ENABLE_WIFI_MONITOR  = _get_bool_env("ENABLE_WIFI_MONITOR", not DESK_DISPLAY_LOW_POWER)
+ENABLE_WIFI_RECOVERY = _get_bool_env("ENABLE_WIFI_RECOVERY", not DESK_DISPLAY_LOW_POWER)
 WIFI_TCP_PROBE_URLS  = os.environ.get("WIFI_TCP_PROBE_URLS", "")
 WIFI_TCP_PROBE_HOSTS = os.environ.get("WIFI_TCP_PROBE_HOSTS", "")
 WIFI_TCP_PROBE_PORT  = os.environ.get("WIFI_TCP_PROBE_PORT", "443")
@@ -632,11 +634,31 @@ def scale_value_width(value: float) -> int:
 KERNEL_DRIVEN_OUTPUTS = {"kernel", "kms", "drm", "sdl", "fullscreen", "window"}
 
 
-ACTIVE_DISPLAY_PROFILE: DisplayProfilePreset = resolve_display_profile(WIDTH, HEIGHT)
+_display_profile_override = os.environ.get("DESK_DISPLAY_PROFILE", "").strip().lower()
+
+
+def _resolve_active_display_profile(width: int, height: int) -> DisplayProfilePreset:
+    if _display_profile_override:
+        profile = resolve_display_profile_by_id(_display_profile_override)
+        if profile is not None:
+            return profile
+        logging.warning(
+            "Ignoring invalid DESK_DISPLAY_PROFILE value %r; using resolution-based profile.",
+            _display_profile_override,
+        )
+    return resolve_display_profile(width, height)
+
+
+ACTIVE_DISPLAY_PROFILE: DisplayProfilePreset = _resolve_active_display_profile(WIDTH, HEIGHT)
 DISPLAY_PROFILE_ID = ACTIVE_DISPLAY_PROFILE.profile_id
 
 
-def get_display_profile(width: int | None = None, height: int | None = None) -> DisplayProfilePreset:
+def get_display_profile(
+    width: int | None = None,
+    height: int | None = None,
+) -> DisplayProfilePreset:
+    if width is None and height is None:
+        return ACTIVE_DISPLAY_PROFILE
     if width is None:
         width = WIDTH
     if height is None:
@@ -856,7 +878,7 @@ def initialise_runtime_probes() -> None:
     HEIGHT = runtime_height
     DISPLAY_SCALE = _compute_display_scale(BASE_WIDTH, BASE_HEIGHT, WIDTH, HEIGHT)
     DISPLAY_SCALE_WIDTH = max(0.1, WIDTH / BASE_WIDTH) if BASE_WIDTH > 0 else 1.0
-    ACTIVE_DISPLAY_PROFILE = resolve_display_profile(WIDTH, HEIGHT)
+    ACTIVE_DISPLAY_PROFILE = _resolve_active_display_profile(WIDTH, HEIGHT)
     DISPLAY_PROFILE_ID = ACTIVE_DISPLAY_PROFILE.profile_id
     DISPLAY_FADE_IN_DEFAULT_STEPS = DISPLAY_FADE_IN_STEPS_BY_PROFILE.get(
         DISPLAY_PROFILE_ID,

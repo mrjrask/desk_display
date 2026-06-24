@@ -108,6 +108,10 @@ def _is_hd_widescreen_layout(width: int, height: int) -> bool:
     return (long_edge / short_edge) >= (16 / 10)
 
 
+def resolve_display_profile_by_id(profile_id: str) -> DisplayProfilePreset | None:
+    return PROFILE_PRESETS.get(profile_id.strip().lower())
+
+
 def resolve_display_profile(width: int, height: int) -> DisplayProfilePreset:
     if (width, height) in {(320, 240), (240, 320)}:
         return PROFILE_PRESETS[DISPLAY_PROFILE_DISPLAY_HAT_MINI]
