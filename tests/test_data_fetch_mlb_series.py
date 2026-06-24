@@ -343,3 +343,55 @@ def test_fetch_mlb_schedule_uses_45_day_window(monkeypatch):
     assert "startDate=2026-03-29" in captured["url"]
     assert "endDate=2026-05-16" in captured["url"]
     assert "hydrate=team,linescore,probablePitcher" in captured["url"]
+
+
+def test_game_over_doubleheader_opener_counts_as_last_game(monkeypatch):
+    monkeypatch.setattr(data_fetch.datetime, "datetime", _FrozenDateTime)
+
+    opener = _game(60, "2026-04-01", "O", 112, 121)
+    opener["status"] = {
+        "statusCode": "O",
+        "abstractGameState": "Live",
+        "detailedState": "Game Over",
+    }
+    nightcap = _game(61, "2026-04-01", "S", 112, 121)
+
+    payload = {"dates": [{"date": "2026-04-01", "games": [opener, nightcap]}]}
+    monkeypatch.setattr(data_fetch._session, "get", lambda *args, **kwargs: _DummyResponse(payload))
+
+    result = data_fetch._fetch_mlb_schedule(112)
+
+    assert result["last_game"]["gamePk"] == 60
+    assert result["live_game"] is None
+    assert result["next_game"]["gamePk"] == 61
+
+
+def test_game_over_doubleheader_opener_not_replaced_by_previous_day(monkeypatch):
+    monkeypatch.setattr(data_fetch.datetime, "datetime", _FrozenDateTime)
+
+    previous = _game(59, "2026-03-31", "F", 112, 121)
+    previous["status"] = {
+        "statusCode": "F",
+        "abstractGameState": "Final",
+        "detailedState": "Final",
+    }
+    opener = _game(60, "2026-04-01", "O", 112, 121)
+    opener["status"] = {
+        "statusCode": "O",
+        "abstractGameState": "Live",
+        "detailedState": "Game Over",
+    }
+    nightcap = _game(61, "2026-04-01", "S", 112, 121)
+
+    payload = {
+        "dates": [
+            {"date": "2026-03-31", "games": [previous]},
+            {"date": "2026-04-01", "games": [opener, nightcap]},
+        ]
+    }
+    monkeypatch.setattr(data_fetch._session, "get", lambda *args, **kwargs: _DummyResponse(payload))
+
+    result = data_fetch._fetch_mlb_schedule(112)
+
+    assert result["last_game"]["gamePk"] == 60
+    assert result["last_game_alt"] is None
