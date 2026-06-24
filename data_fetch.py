@@ -2125,18 +2125,34 @@ def _fetch_mlb_schedule(team_id):
                     if is_scheduled and not is_postponed:
                         home_candidates.append((local_dt, g))
 
-                # Live game
-                if code == "I" or abstract == "live" or "progress" in detailed:
+                is_game_over = (
+                    code in {"F", "O"}
+                    or abstract == "final"
+                    or "final" in detailed
+                    or "game over" in detailed
+                )
+                is_scheduled = code == "S" or abstract in ("preview", "scheduled")
+                is_live = (
+                    not is_game_over
+                    and (code == "I" or abstract == "live" or "progress" in detailed)
+                )
+
+                # Live game.  MLB can briefly report a just-completed Game 1 of a
+                # doubleheader as statusCode=O / abstractGameState=Live /
+                # detailedState=Game Over before the feed flips to Final.  Treat
+                # that terminal state as finished so the Last Game screen can show
+                # the earlier game while Game 2 is still upcoming or live.
+                if is_live:
                     result["live_game"] = g
 
                 # Next game (today scheduled)
-                if day == today and (code == "S" or abstract in ("preview","scheduled")):
+                if day == today and is_scheduled:
                     result["next_game"] = g
                     if local_dt:
                         scheduled_today.append((local_dt, g))
 
                 # Finished up to today
-                if day <= today and code not in ("S","I") and abstract not in ("preview","scheduled","live"):
+                if day <= today and is_game_over:
                     finished.append(g)
 
                 schedule_rows.append(
