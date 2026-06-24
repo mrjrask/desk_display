@@ -24,6 +24,33 @@ def test_enable_screenshots_obeys_env(monkeypatch):
     assert module.ENABLE_SCREENSHOTS is True
 
 
+def test_low_power_defaults_disable_optional_background_work(monkeypatch):
+    module = _reload_config(
+        monkeypatch,
+        DESK_DISPLAY_LOW_POWER="1",
+        ENABLE_SCREENSHOTS=None,
+        ENABLE_WIFI_MONITOR=None,
+        ENABLE_WIFI_RECOVERY=None,
+    )
+
+    assert module.DESK_DISPLAY_LOW_POWER is True
+    assert module.ENABLE_SCREENSHOTS is False
+    assert module.ENABLE_WIFI_MONITOR is False
+    assert module.ENABLE_WIFI_RECOVERY is False
+
+def test_low_power_defaults_can_be_overridden(monkeypatch):
+    module = _reload_config(
+        monkeypatch,
+        DESK_DISPLAY_LOW_POWER="1",
+        ENABLE_SCREENSHOTS="1",
+        ENABLE_WIFI_MONITOR="1",
+        ENABLE_WIFI_RECOVERY="1",
+    )
+
+    assert module.ENABLE_SCREENSHOTS is True
+    assert module.ENABLE_WIFI_MONITOR is True
+    assert module.ENABLE_WIFI_RECOVERY is True
+
 def test_enable_screenshots_defaults_off_for_macos_window_output(monkeypatch):
     monkeypatch.setattr(platform, "system", lambda: "Darwin")
     module = _reload_config(
@@ -239,6 +266,28 @@ def test_display_profile_id_resolution(monkeypatch):
     module = _reload_config(monkeypatch, DISPLAY_WIDTH="1080", DISPLAY_HEIGHT="1920")
     assert module.get_display_profile_id() == "hdmi_1080p"
 
+
+def test_display_profile_env_override(monkeypatch):
+    module = _reload_config(
+        monkeypatch,
+        DISPLAY_WIDTH="800",
+        DISPLAY_HEIGHT="480",
+        DESK_DISPLAY_PROFILE="display_hat_mini",
+    )
+
+    assert module.get_display_profile_id() == "display_hat_mini"
+    assert module.get_display_profile_id(800, 480) == "hyperpixel4"
+
+
+def test_invalid_display_profile_env_falls_back_to_resolution(monkeypatch):
+    module = _reload_config(
+        monkeypatch,
+        DISPLAY_WIDTH="800",
+        DISPLAY_HEIGHT="480",
+        DESK_DISPLAY_PROFILE="bogus",
+    )
+
+    assert module.get_display_profile_id() == "hyperpixel4"
 
 def test_display_profile_presets_drive_scroll_defaults(monkeypatch):
     module = _reload_config(monkeypatch, DISPLAY_WIDTH="1920", DISPLAY_HEIGHT="1080")
