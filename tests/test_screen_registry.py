@@ -1,4 +1,5 @@
 import datetime
+import sys
 
 import pytest
 import screens.registry as registry_module
@@ -1250,3 +1251,26 @@ def test_mlb_no_game_screens_hidden_when_game_is_today():
     assert registry["sox next"].available is True
     assert registry["cubs next"].metadata["replaces_with"] is None
     assert registry["sox next"].metadata["replaces_with"] is None
+
+
+def test_disabled_scoreboard_screens_do_not_import_heavy_renderers(monkeypatch):
+    heavy_modules = {
+        "screens.nba_scoreboard",
+        "screens.nba_scoreboard_v2",
+        "screens.nhl_scoreboard",
+        "screens.nhl_scoreboard_v2",
+        "screens.nfl_standings",
+        "screens.nhl_standings",
+        "services.sports.nhl",
+    }
+    for module_name in heavy_modules:
+        sys.modules.pop(module_name, None)
+    registry_module._LAZY_CALLABLE_CACHE.clear()
+
+    now = datetime.datetime(2024, 1, 1, 12, 0, tzinfo=CENTRAL_TIME)
+    context = _make_context({"hourly": []}, now, offline=True, cache_updates={"scoreboards": {}})
+    context.skip_scoreboards = True
+    registry, _ = build_screen_registry(context)
+
+    assert registry["NBA Scoreboard"].available is False
+    assert heavy_modules.isdisjoint(sys.modules)

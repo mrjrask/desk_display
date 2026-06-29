@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import datetime as _dt
+import importlib
 import json
 import logging
 import os
@@ -33,7 +34,6 @@ from screens.draw_wolves_schedule import (
     draw_sports_screen_wolves,
     draw_wolves_next_home_game,
 )
-from screens.draw_inside import draw_inside, is_inside_sensor_available
 from screens.draw_vrnof import draw_vrnof_screen
 from screens.draw_weather import (
     _pop_pct_from,
@@ -75,35 +75,62 @@ from screens.nfl_team_standings import (
     draw_nfl_standings_screen2,
 )
 from screens.nhl_team_standings import draw_nhl_standings_screen1
-from screens.nba_scoreboard import render_nba_scoreboard
-from screens.nba_scoreboard_v2 import render_nba_scoreboard_v2
 from screens.ncaam_scoreboard import render_ncaam_scoreboard
 from screens.world_cup_scoreboard import render_world_cup_scoreboard
 from screens.nfl_scoreboard import render_nfl_scoreboard
 from screens.nfl_scoreboard_v2 import render_nfl_scoreboard_v2
-from screens.nfl_standings import (
-    draw_nfl_overview_afc,
-    draw_nfl_overview_nfc,
-    draw_nfl_standings_afc,
-    draw_nfl_standings_nfc,
-)
-from screens.nhl_scoreboard import render_nhl_scoreboard
-from screens.nhl_scoreboard_v2 import render_nhl_scoreboard_v2
 from screens.nhl_playoffs import render_nhl_playoffs
 from screens.nba_playoffs import render_nba_playoffs
-from screens.nhl_standings import (
-    draw_nhl_standings_east,
-    draw_nhl_standings_overview_east,
-    draw_nhl_standings_overview_west,
-    draw_nhl_standings_west,
-)
-from screens.nhl_standings_v2 import (
-    draw_nhl_standings_east_v2,
-    draw_nhl_standings_west_v2,
-)
-from services.sports.nhl import prepare_scoreboard_data as prepare_nhl_scoreboard_data
 
 RenderCallable = Callable[[], Optional[Image.Image | ScreenImage]]
+_LAZY_CALLABLE_CACHE: dict[str, Callable[..., Any]] = {}
+_LAZY_CALLABLE_LOCK = threading.Lock()
+
+
+def _lazy_callable(import_path: str) -> Callable[..., Any]:
+    """Import and cache a callable the first time a screen renders."""
+
+    def _resolve() -> Callable[..., Any]:
+        with _LAZY_CALLABLE_LOCK:
+            cached = _LAZY_CALLABLE_CACHE.get(import_path)
+            if cached is not None:
+                return cached
+
+            module_name, _, attr_name = import_path.rpartition(".")
+            if not module_name or not attr_name:
+                raise ValueError(f"Invalid callable import path: {import_path!r}")
+            func = getattr(importlib.import_module(module_name), attr_name)
+            if not callable(func):
+                raise TypeError(f"Lazy import path is not callable: {import_path}")
+            _LAZY_CALLABLE_CACHE[import_path] = func
+            return func
+
+    def _call(*args: Any, **kwargs: Any) -> Any:
+        return _resolve()(*args, **kwargs)
+
+    return _call
+
+
+# Heavyweight renderers are resolved lazily so importing the registry does not
+# trigger runtime probes, network helpers, or large renderer modules for disabled
+# screens.
+draw_inside = _lazy_callable("screens.draw_inside.draw_inside")
+is_inside_sensor_available = _lazy_callable("screens.draw_inside.is_inside_sensor_available")
+render_nba_scoreboard = _lazy_callable("screens.nba_scoreboard.render_nba_scoreboard")
+render_nba_scoreboard_v2 = _lazy_callable("screens.nba_scoreboard_v2.render_nba_scoreboard_v2")
+draw_nfl_overview_afc = _lazy_callable("screens.nfl_standings.draw_nfl_overview_afc")
+draw_nfl_overview_nfc = _lazy_callable("screens.nfl_standings.draw_nfl_overview_nfc")
+draw_nfl_standings_afc = _lazy_callable("screens.nfl_standings.draw_nfl_standings_afc")
+draw_nfl_standings_nfc = _lazy_callable("screens.nfl_standings.draw_nfl_standings_nfc")
+render_nhl_scoreboard = _lazy_callable("screens.nhl_scoreboard.render_nhl_scoreboard")
+render_nhl_scoreboard_v2 = _lazy_callable("screens.nhl_scoreboard_v2.render_nhl_scoreboard_v2")
+draw_nhl_standings_east = _lazy_callable("screens.nhl_standings.draw_nhl_standings_east")
+draw_nhl_standings_overview_east = _lazy_callable("screens.nhl_standings.draw_nhl_standings_overview_east")
+draw_nhl_standings_overview_west = _lazy_callable("screens.nhl_standings.draw_nhl_standings_overview_west")
+draw_nhl_standings_west = _lazy_callable("screens.nhl_standings.draw_nhl_standings_west")
+draw_nhl_standings_east_v2 = _lazy_callable("screens.nhl_standings_v2.draw_nhl_standings_east_v2")
+draw_nhl_standings_west_v2 = _lazy_callable("screens.nhl_standings_v2.draw_nhl_standings_west_v2")
+prepare_nhl_scoreboard_data = _lazy_callable("services.sports.nhl.prepare_scoreboard_data")
 
 _LAYOUTS_CONFIG_PATH = str(resolve_layouts_config_path())
 
@@ -749,7 +776,12 @@ def build_screen_registry(context: ScreenContext) -> Tuple[Dict[str, ScreenDefin
     scoreboards_available = not (context.offline and context.skip_scoreboards)
     scoreboards = (context.cache.get("scoreboards") or {})
     mlb_scoreboard_games = scoreboards.get("mlb") or []
-    nhl_scoreboard_games = prepare_nhl_scoreboard_data(scoreboards.get("nhl"))
+    raw_nhl_scoreboard_games = scoreboards.get("nhl")
+    nhl_scoreboard_games = (
+        prepare_nhl_scoreboard_data(raw_nhl_scoreboard_games)
+        if raw_nhl_scoreboard_games
+        else []
+    )
     today = context.now.date()
     nhl_scoreboards_available = scoreboards_available and not _is_nhl_break_day(today)
 
@@ -1013,16 +1045,20 @@ def build_screen_registry(context: ScreenContext) -> Tuple[Dict[str, ScreenDefin
     register(
         "NFL Scoreboard v2",
         (
-            lambda: render_nfl_scoreboard(
-                context.display,
-                (context.cache.get("scoreboards") or {}).get("nfl") or [],
-                transition=True,
+            (
+                lambda: render_nfl_scoreboard(
+                    context.display,
+                    (context.cache.get("scoreboards") or {}).get("nfl") or [],
+                    transition=True,
+                )
             )
             if adafruit_minipitft_layout or waveshare_oled_lcd_hat
-            else render_nfl_scoreboard_v2(
-                context.display,
-                (context.cache.get("scoreboards") or {}).get("nfl") or [],
-                transition=True,
+            else (
+                lambda: render_nfl_scoreboard_v2(
+                    context.display,
+                    (context.cache.get("scoreboards") or {}).get("nfl") or [],
+                    transition=True,
+                )
             )
         ),
         available=scoreboards_available,
@@ -1123,16 +1159,20 @@ def build_screen_registry(context: ScreenContext) -> Tuple[Dict[str, ScreenDefin
         register(
             "NHL Scoreboard v2",
             (
-                lambda: render_nhl_scoreboard(
-                    context.display,
-                    nhl_scoreboard_games,
-                    transition=True,
+                (
+                    lambda: render_nhl_scoreboard(
+                        context.display,
+                        nhl_scoreboard_games,
+                        transition=True,
+                    )
                 )
                 if adafruit_minipitft_layout or waveshare_oled_lcd_hat
-                else render_nhl_scoreboard_v2(
-                    context.display,
-                    nhl_scoreboard_games,
-                    transition=True,
+                else (
+                    lambda: render_nhl_scoreboard_v2(
+                        context.display,
+                        nhl_scoreboard_games,
+                        transition=True,
+                    )
                 )
             ),
             available=nhl_scoreboards_available,
@@ -1583,16 +1623,20 @@ def build_screen_registry(context: ScreenContext) -> Tuple[Dict[str, ScreenDefin
     register(
         "MLB Scoreboard v2",
         (
-            lambda: render_mlb_scoreboard(
-                context.display,
-                mlb_scoreboard_games,
-                transition=True,
+            (
+                lambda: render_mlb_scoreboard(
+                    context.display,
+                    mlb_scoreboard_games,
+                    transition=True,
+                )
             )
             if adafruit_minipitft_layout
-            else render_mlb_scoreboard_v2(
-                context.display,
-                mlb_scoreboard_games,
-                transition=True,
+            else (
+                lambda: render_mlb_scoreboard_v2(
+                    context.display,
+                    mlb_scoreboard_games,
+                    transition=True,
+                )
             )
         ),
         available=scoreboards_available,
@@ -1609,16 +1653,20 @@ def build_screen_registry(context: ScreenContext) -> Tuple[Dict[str, ScreenDefin
     register(
         "NBA Scoreboard v2",
         (
-            lambda: render_nba_scoreboard(
-                context.display,
-                (context.cache.get("scoreboards") or {}).get("nba") or [],
-                transition=True,
+            (
+                lambda: render_nba_scoreboard(
+                    context.display,
+                    (context.cache.get("scoreboards") or {}).get("nba") or [],
+                    transition=True,
+                )
             )
             if adafruit_minipitft_layout or waveshare_oled_lcd_hat
-            else render_nba_scoreboard_v2(
-                context.display,
-                (context.cache.get("scoreboards") or {}).get("nba") or [],
-                transition=True,
+            else (
+                lambda: render_nba_scoreboard_v2(
+                    context.display,
+                    (context.cache.get("scoreboards") or {}).get("nba") or [],
+                    transition=True,
+                )
             )
         ),
         available=scoreboards_available,
