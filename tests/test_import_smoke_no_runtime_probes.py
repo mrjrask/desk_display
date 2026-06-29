@@ -20,3 +20,29 @@ def test_import_does_not_probe_runtime(monkeypatch, module_name):
 
     sys.modules.pop(module_name, None)
     importlib.import_module(module_name)
+
+
+def test_import_screen_registry_does_not_import_heavy_renderers(monkeypatch):
+    heavy_modules = {
+        "screens.draw_inside",
+        "screens.nba_scoreboard",
+        "screens.nhl_scoreboard",
+        "screens.nfl_standings",
+        "screens.nhl_standings",
+        "services.sports.nhl",
+    }
+    for module_name in ["screens.registry", *heavy_modules]:
+        sys.modules.pop(module_name, None)
+
+    real_import_module = importlib.import_module
+    imported = []
+
+    def _tracking_import(name, package=None):
+        imported.append(name)
+        return real_import_module(name, package)
+
+    monkeypatch.setattr(importlib, "import_module", _tracking_import)
+    importlib.import_module("screens.registry")
+
+    assert heavy_modules.isdisjoint(imported)
+    assert heavy_modules.isdisjoint(sys.modules)
