@@ -771,7 +771,7 @@ def build_screen_registry(context: ScreenContext) -> Tuple[Dict[str, ScreenDefin
             lambda img=verano_logo: _show_logo(context.display, img),
             available=True,
         )
-    register("vrnof", lambda: draw_vrnof_screen(context.display, "VRNO", transition=True))
+    register("vrnof", lambda: draw_vrnof_screen(context.display, transition=True))
 
     scoreboards_available = not (context.offline and context.skip_scoreboards)
     scoreboards = (context.cache.get("scoreboards") or {})

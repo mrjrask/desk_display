@@ -38,12 +38,33 @@ from utils import (
 
 # In-memory cache
 _cache = {
-    "price":       None,
-    "change_val":  None,
-    "change_pct":  None,
-    "all_time":    None,
-    "ts":          0.0
+    "price":         None,
+    "change_val":    None,
+    "change_pct":    None,
+    "all_time":      None,
+    "ts":            0.0,
+    "active_symbol": None,
 }
+
+VRNO_PRIMARY_SYMBOL = "VRNO.D"
+VRNO_PRIMARY_QUOTE_SYMBOL = "VRNOD"
+VRNO_FALLBACK_SYMBOL = "VRNO"
+
+
+def _candidate_symbols(symbol: str | None = None) -> list[tuple[str, str]]:
+    """Return ``(quote symbol, display symbol)`` pairs to try in display order.
+
+    Yahoo Finance exposes the temporary OTC reverse-split ticker as ``VRNOD``
+    even though broker/search UIs may show the customer-facing symbol as
+    ``VRNO.D``. Keep the display symbol as requested while using the lookup
+    symbol yfinance can resolve.
+    """
+    if symbol in (None, "", VRNO_FALLBACK_SYMBOL, VRNO_PRIMARY_SYMBOL):
+        return [
+            (VRNO_PRIMARY_QUOTE_SYMBOL, VRNO_PRIMARY_SYMBOL),
+            (VRNO_FALLBACK_SYMBOL, VRNO_FALLBACK_SYMBOL),
+        ]
+    return [(symbol, symbol)]
 
 _IS_1080P_LAYOUT = config.is_hdmi_1080p_layout()
 _LOGO_SCALE_1080 = config.DISPLAY_PROFILE_LOGO_SCALE_CAP
@@ -74,8 +95,9 @@ def _get_logo() -> Image.Image | None:
         _LOGO = None
     return _LOGO
 
-def _fetch_price(symbol: str):
-    """Fetch latest price + change; update cache."""
+def _fetch_price(symbol: str, display_symbol: str | None = None) -> bool:
+    """Fetch latest price + change; update cache; return whether a price was found."""
+    display_symbol = display_symbol or symbol
     price = None
     change_val = None
     change_pct = None
@@ -136,27 +158,52 @@ def _fetch_price(symbol: str):
 
     # update cache
     _cache.update({
-        "price":      price,
-        "change_val": change_val,
-        "change_pct": change_pct,
-        "all_time":   all_time_str,
-        "ts":         time.time()
+        "price":         price,
+        "change_val":    change_val,
+        "change_pct":    change_pct,
+        "all_time":      all_time_str,
+        "ts":            time.time(),
+        "active_symbol": display_symbol if price is not None else None,
     })
+    return price is not None
 
 
-def _build_image(symbol: str = "VRNO") -> Image.Image:
+def _fetch_preferred_price(symbol: str | None = None) -> None:
+    """Fetch VRNO.D first, falling back to VRNO once VRNO.D is unavailable."""
+    last_display_symbol = None
+    for quote_symbol, display_symbol in _candidate_symbols(symbol):
+        last_display_symbol = display_symbol
+        if _fetch_price(quote_symbol, display_symbol):
+            return
+
+    # Keep the last attempted symbol visible on the unavailable screen.
+    _cache["active_symbol"] = last_display_symbol
+
+
+def _build_image(symbol: str | None = None) -> Image.Image:
     """Construct the PIL image for the stock screen."""
     background = get_screen_background_color("vrnof", (0, 0, 0))
     now = time.time()
-    if _cache["price"] is None or (now - _cache["ts"] > VRNO_FRESHNESS_LIMIT):
-        _fetch_price(symbol)
+    candidate_symbols = _candidate_symbols(symbol)
+    display_symbols = [display_symbol for _, display_symbol in candidate_symbols]
+    if (
+        _cache["price"] is None
+        or (
+            _cache.get("active_symbol") is not None
+            and _cache.get("active_symbol") not in display_symbols
+        )
+        or (now - _cache["ts"] > VRNO_FRESHNESS_LIMIT)
+    ):
+        _fetch_preferred_price(symbol)
+
+    display_symbol = _cache.get("active_symbol") or display_symbols[-1]
 
     # Fallback when no price
     logo = _get_logo()
     if _cache["price"] is None:
         img = Image.new("RGB", (WIDTH, HEIGHT), background)
         draw = ImageDraw.Draw(img)
-        title = symbol
+        title = display_symbol
         title_top = 2
         if logo:
             logo_x = (WIDTH - logo.width) // 2
@@ -193,7 +240,7 @@ def _build_image(symbol: str = "VRNO") -> Image.Image:
         title_top = logo.height + LOGO_GAP
 
     # Title fixed at top (below logo when present)
-    title = symbol
+    title = display_symbol
     w_title, h_title = draw.textsize(title, font=FONT_STOCK_TITLE)
     draw.text(((WIDTH - w_title)//2, title_top), title, font=FONT_STOCK_TITLE, fill=(255,255,255))
 
@@ -242,7 +289,7 @@ def _build_image(symbol: str = "VRNO") -> Image.Image:
     return img
 
 
-def draw_vrnof_screen(display, symbol: str = "VRNO", transition: bool = False):
+def draw_vrnof_screen(display, symbol: str | None = None, transition: bool = False):
     img = _build_image(symbol)
     change_val = _cache.get("change_val")
     led_color = None
