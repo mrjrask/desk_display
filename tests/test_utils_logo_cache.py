@@ -67,3 +67,27 @@ def test_load_team_logo_caches_misses(monkeypatch, tmp_path):
     assert load_team_logo(str(tmp_path), "CHC", height=12) is None
     assert load_team_logo(str(tmp_path), "CHC", height=12) is None
     assert opened == []
+
+
+def test_load_team_logo_continues_after_cached_corrupt_variant(monkeypatch, tmp_path):
+    corrupt_logo_path = tmp_path / "chc.png"
+    valid_logo_path = tmp_path / "CHC.png"
+    corrupt_logo_path.write_bytes(b"not a real png")
+    _write_logo(valid_logo_path)
+    utils._TEAM_LOGO_CACHE.clear()
+    real_open = Image.open
+    opened = []
+
+    def tracked_open(path, *args, **kwargs):
+        opened.append(path)
+        return real_open(path, *args, **kwargs)
+
+    monkeypatch.setattr(utils.Image, "open", tracked_open)
+
+    first = load_team_logo(str(tmp_path), "chc", height=12)
+    second = load_team_logo(str(tmp_path), "chc", height=12)
+
+    assert first is not None
+    assert second is not None
+    assert first is not second
+    assert opened == [str(corrupt_logo_path), str(valid_logo_path)]
