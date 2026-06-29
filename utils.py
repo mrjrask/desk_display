@@ -3167,7 +3167,9 @@ def load_team_logo(
         cache_key = (*base_cache_key, resolved_path, stat_result.st_mtime_ns)
         if cache_key in _TEAM_LOGO_CACHE:
             cached_logo = _TEAM_LOGO_CACHE[cache_key]
-            return cached_logo.copy() if cached_logo is not None else None
+            if cached_logo is not None:
+                return cached_logo.copy()
+            continue
 
         try:
             logo = Image.open(path).convert("RGBA")
