@@ -30,10 +30,6 @@ from config import (
     FONT_STATUS,
     CENTRAL_TIME,
     IMAGES_DIR,
-    SCOREBOARD_SCROLL_STEP,
-    SCOREBOARD_SCROLL_DELAY,
-    SCOREBOARD_SCROLL_PAUSE_TOP,
-    SCOREBOARD_SCROLL_PAUSE_BOTTOM,
     SCOREBOARD_STANDINGS_BOTTOM_PADDING,
     SCOREBOARD_BACKGROUND_COLOR,
     SCOREBOARD_IN_PROGRESS_SCORE_COLOR,
@@ -53,10 +49,19 @@ from utils import (
     clear_display,
     load_team_logo,
     log_call,
-    log_missing_team_logo,
-    scroll_vertical_content,
     standard_scoreboard_team_logo_height,
     standard_scoreboard_league_logo_height,
+)
+from screens.scoreboard_components import (
+    SCROLL_PAUSE_BOTTOM,
+    center_text as _center_text,
+    display_no_games,
+    display_or_scroll_scoreboard,
+    draw_score_game_row,
+    render_headered_scoreboard,
+    render_no_games_image,
+    scroll_display,
+    score_fill as shared_score_fill,
 )
 from services.sports.nhl import fetch_scoreboard
 from services.http_client import NHL_HEADERS, get_session
@@ -329,17 +334,6 @@ def _final_results(away: dict, home: dict) -> dict:
         away_result = "win"
 
     return {"away": away_result, "home": home_result}
-def _score_fill(team_key: str, *, in_progress: bool, final: bool, results: dict) -> tuple[int, int, int]:
-    if in_progress:
-        return IN_PROGRESS_SCORE_COLOR
-    if final:
-        result = results.get(team_key)
-        if result == "loss":
-            return FINAL_LOSING_SCORE_COLOR
-        if result == "win":
-            return FINAL_WINNING_SCORE_COLOR
-    return (255, 255, 255)
-
 
 def _normalize_period_for_display(period_ord: str) -> str:
     if not isinstance(period_ord, str):
@@ -358,8 +352,6 @@ def _normalize_period_for_display(period_ord: str) -> str:
             overtime_number = value - 3
             return "OT" if overtime_number == 1 else f"{overtime_number}OT"
     return text
-
-
 
 
 def _strip_leading_zero_minutes(clock_text: str) -> str:
@@ -411,67 +403,48 @@ def _format_status(game: dict) -> str:
 
     return detailed or "TBD"
 
-
-def _center_text(draw: ImageDraw.ImageDraw, text: str, font, x: int, width: int,
-                 y: int, height: int, *, fill=(255, 255, 255)):
-    if not text:
-        return
-    try:
-        l, t, r, b = draw.textbbox((0, 0), text, font=font)
-        tw, th = r - l, b - t
-        tx = x + (width - tw) // 2 - l
-        ty = y + (height - th) // 2 - t
-    except Exception:
-        tw, th = draw.textsize(text, font=font)
-        tx = x + (width - tw) // 2
-        ty = y + (height - th) // 2
-    draw.text((tx, ty), text, font=font, fill=fill)
+def _score_fill(
+    team_key: str, *, in_progress: bool, final: bool, results: dict
+) -> tuple[int, int, int]:
+    return shared_score_fill(
+        team_key,
+        in_progress=in_progress,
+        final=final,
+        results=results,
+        in_progress_color=IN_PROGRESS_SCORE_COLOR,
+        winning_color=FINAL_WINNING_SCORE_COLOR,
+        losing_color=FINAL_LOSING_SCORE_COLOR,
+    )
 
 
 def _draw_game_block(canvas: Image.Image, draw: ImageDraw.ImageDraw, game: dict, top: int):
-    teams = (game or {}).get("teams", {})
-    away = teams.get("away", {})
-    home = teams.get("home", {})
-
-    show_scores = _should_display_scores(game)
-    away_text = _score_text(away, show=show_scores)
-    home_text = _score_text(home, show=show_scores)
-    in_progress = _is_game_in_progress(game)
-    final = _is_game_final(game)
-    results = _final_results(away, home) if final else {"away": None, "home": None}
-
-    score_top = top
-    for idx, text in ((0, away_text), (2, "@"), (4, home_text)):
-        font = SCORE_FONT if idx != 2 else CENTER_FONT
-        if idx == 0:
-            fill = _score_fill("away", in_progress=in_progress, final=final, results=results)
-        elif idx == 4:
-            fill = _score_fill("home", in_progress=in_progress, final=final, results=results)
-        else:
-            fill = (255, 255, 255)
-        _center_text(draw, text, font, COL_X[idx], COL_WIDTHS[idx], score_top, SCORE_ROW_H, fill=fill)
-
-    for idx, team_side, team_key in ((1, away, "away"), (3, home, "home")):
-        team_obj = (team_side or {}).get("team", {})
-        abbr = _team_logo_abbr(team_obj)
-        logo = _load_logo_cached(abbr)
-        if not logo:
-            team_name = (
-                (team_obj or {}).get("name")
-                or (team_obj or {}).get("teamName")
-                or (team_obj or {}).get("shortName")
-                or "Unknown Team"
-            )
-            log_missing_team_logo(SCREEN_ID, team_name, abbr)
-            continue
-        x0 = COL_X[idx] + (COL_WIDTHS[idx] - logo.width) // 2
-        y0 = score_top + (SCORE_ROW_H - logo.height) // 2
-        canvas.paste(logo, (x0, y0), logo)
-
-    status_top = score_top + SCORE_ROW_H
-    status_text = _format_status(game)
-    status_fill = IN_PROGRESS_STATUS_COLOR if in_progress else (255, 255, 255)
-    _center_text(draw, status_text, STATUS_FONT, COL_X[2], COL_WIDTHS[2], status_top, STATUS_ROW_H, fill=status_fill)
+    draw_score_game_row(
+        canvas=canvas,
+        draw=draw,
+        game=game,
+        x_offset=0,
+        top=top,
+        col_x=COL_X,
+        col_widths=COL_WIDTHS,
+        score_row_h=SCORE_ROW_H,
+        status_row_h=STATUS_ROW_H,
+        score_font=SCORE_FONT,
+        center_font=CENTER_FONT,
+        status_font=STATUS_FONT,
+        score_text=lambda team, show: _score_text(team, show=show),
+        should_display_scores=_should_display_scores,
+        is_game_in_progress=_is_game_in_progress,
+        is_game_final=_is_game_final,
+        final_results=_final_results,
+        format_status=_format_status,
+        team_logo_abbr=_team_logo_abbr,
+        load_logo=_load_logo_cached,
+        screen_id=SCREEN_ID,
+        in_progress_score_color=IN_PROGRESS_SCORE_COLOR,
+        in_progress_status_color=IN_PROGRESS_STATUS_COLOR,
+        final_winning_score_color=FINAL_WINNING_SCORE_COLOR,
+        final_losing_score_color=FINAL_LOSING_SCORE_COLOR,
+    )
 
 
 def _compose_canvas(games: list[dict]) -> Image.Image:
@@ -1028,66 +1001,22 @@ def _fetch_games_for_date(day: datetime.date) -> list[dict]:
     return _fetch_games_api_web(day)
 
 
-def _render_scoreboard(games: list[dict]) -> Image.Image:
+def _render_scoreboard(games: list[dict], *, show_super_bowl_logo: bool = False) -> Image.Image:
     canvas = _compose_canvas(games)
-
-    dummy = Image.new("RGB", (WIDTH, 10), BACKGROUND_COLOR)
-    dd = ImageDraw.Draw(dummy)
-    try:
-        l, t, r, b = dd.textbbox((0, 0), TITLE, font=TITLE_FONT)
-        title_h = b - t
-    except Exception:
-        _, title_h = dd.textsize(TITLE, font=TITLE_FONT)
-
-    league_logo = _get_league_logo()
-    logo_height = league_logo.height if league_logo else 0
-    logo_gap = LEAGUE_LOGO_GAP if league_logo else 0
-
-    content_top = logo_height + logo_gap + title_h + TITLE_GAP
-    img_height = max(
-        HEIGHT,
-        content_top + canvas.height + SCOREBOARD_STANDINGS_BOTTOM_PADDING,
+    return render_headered_scoreboard(
+        canvas=canvas,
+        title=TITLE,
+        title_font=TITLE_FONT,
+        league_logo=_get_league_logo(),
+        league_logo_gap=LEAGUE_LOGO_GAP,
+        title_gap=TITLE_GAP,
+        background_color=BACKGROUND_COLOR,
     )
-    img = Image.new("RGB", (WIDTH, img_height), BACKGROUND_COLOR)
-    draw = ImageDraw.Draw(img)
-
-    if league_logo:
-        logo_x = (WIDTH - league_logo.width) // 2
-        img.paste(league_logo, (logo_x, 0), league_logo)
-    title_top = logo_height + logo_gap
-
-    try:
-        l, t, r, b = draw.textbbox((0, 0), TITLE, font=TITLE_FONT)
-        tw, th = r - l, b - t
-        tx = (WIDTH - tw) // 2 - l
-        ty = title_top - t
-    except Exception:
-        tw, th = draw.textsize(TITLE, font=TITLE_FONT)
-        tx = (WIDTH - tw) // 2
-        ty = title_top
-    draw.text((tx, ty), TITLE, font=TITLE_FONT, fill=(255, 255, 255))
-
-    img.paste(canvas, (0, content_top))
-    return img
 
 
 def _scroll_display(display, full_img: Image.Image):
-    scroll_vertical_content(
-        display=display,
-        content_height=full_img.height,
-        viewport_width=WIDTH,
-        viewport_height=HEIGHT,
-        render_at_offset=lambda offset: display.image(
-            full_img.crop((0, offset, WIDTH, offset + HEIGHT))
-        ),
-        base_step=SCOREBOARD_SCROLL_STEP,
-        pause_start=SCOREBOARD_SCROLL_PAUSE_TOP,
-        pause_end=SCOREBOARD_SCROLL_PAUSE_BOTTOM,
-        min_frame_time=SCOREBOARD_SCROLL_DELAY,
-    )
+    return scroll_display(display, full_img)
 
-
-# ─── Public API ───────────────────────────────────────────────────────────────
 def render_nhl_scoreboard(display, games: list[dict], transition: bool = False) -> ScreenImage:
     games = games or []
     from screens.nhl_scoreboard_v2 import (
@@ -1102,51 +1031,20 @@ def render_nhl_scoreboard(display, games: list[dict], transition: bool = False) 
     _apply_style_overrides()
 
     if not games:
-        clear_display(display)
-        img = Image.new("RGB", (WIDTH, HEIGHT), BACKGROUND_COLOR)
-        draw = ImageDraw.Draw(img)
-        league_logo = _get_league_logo()
-        title_top = 0
-        if league_logo:
-            logo_x = (WIDTH - league_logo.width) // 2
-            img.paste(league_logo, (logo_x, 0), league_logo)
-            title_top = league_logo.height + LEAGUE_LOGO_GAP
-        try:
-            l, t, r, b = draw.textbbox((0, 0), TITLE, font=TITLE_FONT)
-            tw, th = r - l, b - t
-            tx = (WIDTH - tw) // 2 - l
-            ty = title_top - t
-        except Exception:
-            tw, th = draw.textsize(TITLE, font=TITLE_FONT)
-            tx = (WIDTH - tw) // 2
-            ty = title_top
-        draw.text((tx, ty), TITLE, font=TITLE_FONT, fill=(255, 255, 255))
-        _center_text(
-            draw,
-            "No games",
-            STATUS_FONT,
-            0,
-            WIDTH,
-            HEIGHT // 2 - STATUS_ROW_H // 2,
-            STATUS_ROW_H,
+        img = render_no_games_image(
+            title=TITLE,
+            title_font=TITLE_FONT,
+            status_font=STATUS_FONT,
+            status_row_h=STATUS_ROW_H,
+            league_logo=_get_league_logo(),
+            league_logo_gap=LEAGUE_LOGO_GAP,
+            background_color=BACKGROUND_COLOR,
+            message="No games",
         )
-        if transition:
-            return ScreenImage(img, displayed=False)
-        display.image(img)
-        time.sleep(SCOREBOARD_SCROLL_PAUSE_BOTTOM)
-        return ScreenImage(img, displayed=True)
+        return display_no_games(display, img, transition=transition)
 
     full_img = _render_scoreboard(games)
-    if transition:
-        _scroll_display(display, full_img)
-        return ScreenImage(full_img, displayed=True)
-
-    if full_img.height <= HEIGHT:
-        display.image(full_img)
-        time.sleep(SCOREBOARD_SCROLL_PAUSE_BOTTOM)
-    else:
-        _scroll_display(display, full_img)
-    return ScreenImage(full_img, displayed=True)
+    return display_or_scroll_scoreboard(display, full_img, transition=transition)
 
 
 @log_call
