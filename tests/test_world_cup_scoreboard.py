@@ -51,3 +51,33 @@ def test_single_game_scoreboard_displays_without_scrolling(monkeypatch):
     assert result.displayed is True
     assert display.images == [result.image]
     assert result.image.size == (world_cup_scoreboard.WIDTH, world_cup_scoreboard.HEIGHT)
+
+
+def test_multi_game_second_scroll_cycle_replaces_title_with_line(monkeypatch):
+    calls = []
+    rendered_styles = []
+
+    def fake_render_scoreboard(games, *, title_style="title"):
+        rendered_styles.append(title_style)
+        color = (255, 255, 255) if title_style == "title" else (45, 45, 45)
+        return Image.new(
+            "RGB",
+            (world_cup_scoreboard.WIDTH, world_cup_scoreboard.HEIGHT + 1),
+            color,
+        )
+
+    def fake_scroll_display(display, img, repeat_images=None):
+        calls.append({"img": img, "repeat_images": repeat_images})
+
+    monkeypatch.setattr(world_cup_scoreboard, "_render_scoreboard", fake_render_scoreboard)
+    monkeypatch.setattr(world_cup_scoreboard, "_scroll_display", fake_scroll_display)
+
+    world_cup_scoreboard.render_world_cup_scoreboard(object(), [{}, {}])
+
+    assert rendered_styles == ["title", "line"]
+    assert len(calls) == 1
+    repeat_images = calls[0]["repeat_images"]
+    assert len(repeat_images) == 2
+    assert repeat_images[0] is calls[0]["img"]
+    assert repeat_images[0].getpixel((0, 0)) == (255, 255, 255)
+    assert repeat_images[1].getpixel((0, 0)) == (45, 45, 45)

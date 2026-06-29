@@ -299,7 +299,7 @@ def _get_league_logo() -> Optional[Image.Image]:
     _LEAGUE_LOGO_CACHE[cache_key] = None
     return None
 
-def _render_scoreboard(games: list[dict]) -> Image.Image:
+def _render_scoreboard(games: list[dict], *, title_style: str = "title") -> Image.Image:
     title = "World Cup Scores"
     logo_height = _team_logo_height()
 
@@ -367,29 +367,38 @@ def _render_scoreboard(games: list[dict]) -> Image.Image:
     if league_logo:
         out.paste(league_logo, ((WIDTH - league_logo.width) // 2, 0), league_logo)
     title_top = league_h + gap
-    try:
-        l, t, r, b = draw_out.textbbox((0, 0), title, font=FONT_TITLE_SPORTS)
-        draw_out.text(((WIDTH - (r - l)) // 2 - l, title_top - t), title, font=FONT_TITLE_SPORTS, fill=(255, 255, 255))
-    except Exception:
-        tw, _ = draw_out.textsize(title, font=FONT_TITLE_SPORTS)
-        draw_out.text(((WIDTH - tw) // 2, title_top), title, font=FONT_TITLE_SPORTS, fill=(255, 255, 255))
+    if title_style == "line":
+        line_y = title_top + max(1, title_h // 2)
+        draw_out.line((scale_value_width(10), line_y, WIDTH - scale_value_width(10), line_y), fill=(45, 45, 45))
+    else:
+        try:
+            l, t, r, b = draw_out.textbbox((0, 0), title, font=FONT_TITLE_SPORTS)
+            draw_out.text(((WIDTH - (r - l)) // 2 - l, title_top - t), title, font=FONT_TITLE_SPORTS, fill=(255, 255, 255))
+        except Exception:
+            tw, _ = draw_out.textsize(title, font=FONT_TITLE_SPORTS)
+            draw_out.text(((WIDTH - tw) // 2, title_top), title, font=FONT_TITLE_SPORTS, fill=(255, 255, 255))
 
     out.paste(canvas, (0, content_top))
     return out
 
 
-def _repeated_scroll_image(img: Image.Image) -> Image.Image:
+def _repeated_scroll_image(img: Image.Image, repeat_images: list[Image.Image] | None = None) -> Image.Image:
     if SCROLL_REPEAT_COUNT <= 1:
         return img
 
-    repeated = Image.new("RGB", (WIDTH, img.height * SCROLL_REPEAT_COUNT), BACKGROUND_COLOR)
+    images = repeat_images or [img]
+    repeated_height = sum(images[index % len(images)].height for index in range(SCROLL_REPEAT_COUNT))
+    repeated = Image.new("RGB", (WIDTH, repeated_height), BACKGROUND_COLOR)
+    y = 0
     for index in range(SCROLL_REPEAT_COUNT):
-        repeated.paste(img, (0, img.height * index))
+        cycle_img = images[index % len(images)]
+        repeated.paste(cycle_img, (0, y))
+        y += cycle_img.height
     return repeated
 
 
-def _scroll_display(display, img: Image.Image):
-    scroll_img = _repeated_scroll_image(img)
+def _scroll_display(display, img: Image.Image, repeat_images: list[Image.Image] | None = None):
+    scroll_img = _repeated_scroll_image(img, repeat_images)
     scroll_vertical_content(
         display=display,
         content_height=scroll_img.height,
@@ -446,15 +455,18 @@ def _render_world_cup_scoreboard_v1(display, games: list[dict] | None, transitio
         time.sleep(SCOREBOARD_SCROLL_PAUSE_BOTTOM)
         return ScreenImage(viewport, displayed=True)
 
+    second_cycle = _render_scoreboard(games, title_style="line")
+    repeat_images = [full, second_cycle]
+
     if transition:
-        _scroll_display(display, full)
+        _scroll_display(display, full, repeat_images=repeat_images)
         return ScreenImage(full, displayed=True)
 
     if full.height <= HEIGHT:
         display.image(full)
         time.sleep(SCOREBOARD_SCROLL_PAUSE_BOTTOM)
     else:
-        _scroll_display(display, full)
+        _scroll_display(display, full, repeat_images=repeat_images)
     return ScreenImage(full, displayed=True)
 
 
