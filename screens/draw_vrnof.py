@@ -46,7 +46,7 @@ _cache = {
     "active_symbol": None,
 }
 
-VRNO_PRIMARY_SYMBOL = "VRNO.D"
+VRNO_PRIMARY_SYMBOL = "VRNOD"
 VRNO_FALLBACK_SYMBOL = "VRNO"
 
 
@@ -158,7 +158,7 @@ def _fetch_price(symbol: str) -> bool:
 
 
 def _fetch_preferred_price(symbol: str | None = None) -> None:
-    """Fetch VRNO.D first, falling back to VRNO once VRNO.D is unavailable."""
+    """Fetch VRNOD first, falling back to VRNO once VRNOD is unavailable."""
     last_symbol = None
     for candidate in _candidate_symbols(symbol):
         last_symbol = candidate
