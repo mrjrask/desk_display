@@ -39,6 +39,9 @@ from screens_catalog import SCREEN_IDS, canonical_screen_id
 _screens_config_paths = resolve_screens_config_paths()
 DEFAULT_CONFIG_PATH = str(_screens_config_paths.default_path)
 LOCAL_CONFIG_PATH = str(_screens_config_paths.local_override_path)
+DEFAULT_SCREENS_PATH = os.environ.get(
+    "DEFAULT_SCREENS_PATH", str(Path(__file__).resolve().parent / "default_screens.json")
+)
 STYLE_CONFIG_PATH = str(resolve_style_config_path())
 LAYOUTS_CONFIG_PATH = str(resolve_layouts_config_path())
 
@@ -466,6 +469,36 @@ def _load_style_config(path: str) -> Dict[str, Any]:
         raise ValueError("Style configuration must include a 'screens' mapping")
     return data
 
+
+def _load_default_screens_bundle() -> Tuple[Dict[str, Any], Dict[str, Any], Dict[str, Any]]:
+    """Load the repo-backed defaults used by the web UI Load Defaults button."""
+
+    try:
+        with open(DEFAULT_SCREENS_PATH, "r", encoding="utf-8") as fh:
+            payload = json.load(fh)
+    except FileNotFoundError:
+        payload = _load_config(DEFAULT_CONFIG_PATH)
+
+    if not isinstance(payload, dict):
+        raise ValueError("Default screens file must be a JSON object")
+
+    config_payload = payload.get("config") if isinstance(payload.get("config"), dict) else payload
+    config = _validate_config_payload(config_payload)
+    config, _ = _normalize_legacy_scoreboard_ids(config)
+
+    style_payload = payload.get("style")
+    if style_payload is not None:
+        style_config = _validate_style_payload(style_payload)
+    else:
+        style_config = _load_style_config(STYLE_CONFIG_PATH)
+
+    layouts_payload = payload.get("layouts")
+    if layouts_payload is not None:
+        layouts_config = _normalize_layouts_config(layouts_payload)
+    else:
+        layouts_config = _load_layouts_config(LAYOUTS_CONFIG_PATH)
+
+    return config, style_config, layouts_config
 
 def _load_active_config() -> Dict[str, Any]:
     if os.path.exists(LOCAL_CONFIG_PATH):
@@ -1195,11 +1228,17 @@ def get_screens() -> Any:
 
 @app.get("/api/screens/defaults")
 def get_default_screens() -> Any:
-    config = _load_config(DEFAULT_CONFIG_PATH)
-    style_config = _load_style_config(STYLE_CONFIG_PATH)
-    layouts_config = _load_layouts_config(LAYOUTS_CONFIG_PATH)
+    try:
+        config, style_config, layouts_config = _load_default_screens_bundle()
+    except Exception as exc:
+        return jsonify({"error": str(exc)}), 400
+
+    playlists, playlist_assignments = _build_playlist_assignments(config)
     return jsonify({
+        "config": config,
         "screens": _build_screen_entries(config, style_config),
+        "playlists": playlists,
+        "playlist_assignments": playlist_assignments,
         "quad_enabled": bool(layouts_config.get("screens", {}).get("quad", {}).get("enabled", False)),
         "quad_scroll_speed": _normalize_quad_scroll_speed(layouts_config.get("screens", {}).get("quad", {}).get("scroll_speed", 1.0)),
         "quad_pages": layouts_config.get("screens", {}).get("quad", {}).get("pages", []),

@@ -1,3 +1,4 @@
+import json
 import config_ui
 
 
@@ -455,3 +456,94 @@ def test_build_style_config_omits_default_stand3_background(monkeypatch):
     )
 
     assert style == {"screens": {}}
+
+
+def test_default_screens_endpoint_reads_repo_backed_file_each_request(tmp_path, monkeypatch):
+    default_path = tmp_path / "default_screens.json"
+    style_path = tmp_path / "screens_style.json"
+    layouts_path = tmp_path / "screens_layouts.json"
+    default_path.write_text(
+        json.dumps(
+            {
+                "screens": {"date": 2},
+                "playlists": {"daily": {"label": "Daily", "steps": [{"screen": "date"}]}},
+                "sequence": [{"playlist": "daily"}],
+            }
+        ),
+        encoding="utf-8",
+    )
+    style_path.write_text('{"screens": {}}', encoding="utf-8")
+    layouts_path.write_text(
+        '{"screens": {"quad": {"enabled": false, "scroll_speed": 1, "pages": []}}}',
+        encoding="utf-8",
+    )
+
+    monkeypatch.setattr(config_ui, "DEFAULT_SCREENS_PATH", str(default_path))
+    monkeypatch.setattr(config_ui, "STYLE_CONFIG_PATH", str(style_path))
+    monkeypatch.setattr(config_ui, "LAYOUTS_CONFIG_PATH", str(layouts_path))
+    monkeypatch.setattr(
+        config_ui,
+        "_build_screen_entries",
+        lambda config, style: [{"id": "date", "frequency": config["screens"]["date"]}],
+    )
+
+    client = config_ui.app.test_client()
+    first_payload = client.get("/api/screens/defaults").get_json()
+
+    default_path.write_text(
+        json.dumps(
+            {
+                "screens": {"date": 7},
+                "playlists": {"nightly": {"label": "Nightly", "steps": [{"screen": "date"}]}},
+                "sequence": [{"playlist": "nightly"}],
+            }
+        ),
+        encoding="utf-8",
+    )
+    second_payload = client.get("/api/screens/defaults").get_json()
+
+    assert first_payload["config"]["screens"] == {"date": 2}
+    assert first_payload["playlists"] == [{"id": "daily", "name": "Daily"}]
+    assert first_payload["playlist_assignments"] == {"date": "daily"}
+    assert second_payload["config"]["screens"] == {"date": 7}
+    assert second_payload["playlists"] == [{"id": "nightly", "name": "Nightly"}]
+
+
+def test_default_screens_endpoint_accepts_export_payload(tmp_path, monkeypatch):
+    default_path = tmp_path / "default_screens.json"
+    default_path.write_text(
+        json.dumps(
+            {
+                "config": {
+                    "screens": {"date": 4},
+                    "playlists": {"default": {"label": "Default", "steps": [{"screen": "date"}]}},
+                    "sequence": [{"playlist": "default"}],
+                },
+                "style": {"screens": {"date": {"background": "#112233"}}},
+                "layouts": {
+                    "screens": {
+                        "quad": {
+                            "enabled": True,
+                            "scroll_speed": 1.5,
+                            "pages": [{"tiles": ["date", "inside", "weather1", "weather hourly"]}],
+                        }
+                    }
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    monkeypatch.setattr(config_ui, "DEFAULT_SCREENS_PATH", str(default_path))
+
+    client = config_ui.app.test_client()
+    response = client.get("/api/screens/defaults")
+    payload = response.get_json()
+
+    assert response.status_code == 200
+    assert payload["config"]["screens"] == {"date": 4}
+    assert payload["screens"][0]["id"] == "date"
+    assert payload["screens"][0]["background"] == "#112233"
+    assert payload["playlists"] == [{"id": "default", "name": "Default"}]
+    assert payload["quad_enabled"] is True
+    assert payload["quad_scroll_speed"] == 1.5

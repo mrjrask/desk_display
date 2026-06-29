@@ -1368,6 +1368,16 @@
         if (!response.ok) {
           throw new Error(data.error || "Unable to load defaults");
         }
+        if (data.config) {
+          applyImportedPlaylists(data.config);
+        } else if (Array.isArray(data.playlists)) {
+          playlists = data.playlists.filter((playlist) => playlist?.id && playlist?.name);
+          playlistAssignments =
+            data.playlist_assignments && typeof data.playlist_assignments === "object"
+              ? { ...data.playlist_assignments }
+              : {};
+          collapsedPlaylists = {};
+        }
         renderScreens(data.screens || []);
         markDirty();
       } catch (err) {
