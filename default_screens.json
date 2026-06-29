@@ -10,7 +10,6 @@
         }
       },
       "nixie": 0,
-      "World Cup Scoreboard": 1,
       "weather logo": 0,
       "weather1": 1,
       "weather2": 1,
@@ -143,7 +142,8 @@
       "NBA Scoreboard": 0,
       "NBA Playoffs": 0,
       "NCAAM Scoreboard": 0,
-      "quad": 0
+      "quad": 0,
+      "World Cup Scoreboard": 1
     },
     "playlists": {
       "playlist-1771301244817-427": {
@@ -154,9 +154,6 @@
           },
           {
             "screen": "nixie"
-          },
-          {
-            "screen": "World Cup Scoreboard"
           }
         ]
       },
@@ -484,13 +481,16 @@
         ]
       },
       "playlist-1771301555724-243": {
-        "label": "quad",
+        "label": "Other",
         "steps": [
           {
             "screen": "NCAAM Scoreboard"
           },
           {
             "screen": "quad"
+          },
+          {
+            "screen": "World Cup Scoreboard"
           }
         ]
       }
@@ -549,9 +549,6 @@
         "background": "#000000"
       },
       "nixie": {
-        "background": "#000000"
-      },
-      "World Cup Scoreboard": {
         "background": "#000000"
       },
       "weather logo": {
@@ -816,6 +813,9 @@
         "background": "#000000"
       },
       "quad": {
+        "background": "#000000"
+      },
+      "World Cup Scoreboard": {
         "background": "#000000"
       }
     }
