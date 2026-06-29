@@ -2411,6 +2411,15 @@ class AdaptiveScrollParams:
     use_page_jump: bool
 
 
+MANUAL_SCROLL_RESUME_DELAY_SECONDS = 2.0
+
+
+@dataclass(frozen=True)
+class _ScrollDragEvent:
+    action: str
+    y: float
+
+
 def compute_adaptive_scroll_params(
     *,
     content_height: int,
@@ -2447,6 +2456,120 @@ def compute_adaptive_scroll_params(
     )
 
 
+def _pygame_module_for_display(display: Any) -> Any:
+    """Return the pygame module backing the active display/window, if any."""
+
+    kernel_display = getattr(display, "_kernel_display", None)
+    for candidate in (
+        getattr(kernel_display, "_pygame", None),
+        getattr(display, "_pygame", None),
+        _PYGAME_MODULE,
+    ):
+        if candidate is not None:
+            return candidate
+    return _load_pygame()
+
+
+def _read_scroll_drag_events(
+    display: Any,
+    *,
+    viewport_width: int,
+    viewport_height: int,
+) -> List[_ScrollDragEvent]:
+    """Read touch/mouse drag events and map their Y positions to pixels."""
+
+    pygame_module = _pygame_module_for_display(display)
+    if pygame_module is None:
+        return []
+
+    try:
+        mouse = getattr(pygame_module, "mouse", None)
+        set_visible = getattr(mouse, "set_visible", None)
+        if callable(set_visible):
+            set_visible(False)
+    except Exception:
+        pass
+
+    event_api = getattr(pygame_module, "event", None)
+    event_get = getattr(event_api, "get", None)
+    if not callable(event_get):
+        return []
+
+    event_type_names = (
+        "FINGERDOWN",
+        "FINGERMOTION",
+        "FINGERUP",
+        "MOUSEBUTTONDOWN",
+        "MOUSEMOTION",
+        "MOUSEBUTTONUP",
+    )
+    event_types = [
+        getattr(pygame_module, event_name, None)
+        for event_name in event_type_names
+        if getattr(pygame_module, event_name, None) is not None
+    ]
+    if not event_types:
+        return []
+
+    try:
+        raw_events = event_get(event_types)
+    except Exception:
+        return []
+
+    display_height = float(getattr(display, "height", viewport_height) or viewport_height)
+    if display_height <= 0:
+        display_height = float(max(1, viewport_height))
+
+    def _finger_y(event: Any) -> float:
+        return max(0.0, min(display_height, float(getattr(event, "y", 0.0)) * display_height))
+
+    def _mouse_y(event: Any) -> Optional[float]:
+        pos = getattr(event, "pos", None)
+        if isinstance(pos, tuple) and len(pos) >= 2:
+            return max(0.0, min(display_height, float(pos[1])))
+        if hasattr(event, "y"):
+            return max(0.0, min(display_height, float(getattr(event, "y"))))
+        return None
+
+    fingerdown = getattr(pygame_module, "FINGERDOWN", None)
+    fingermotion = getattr(pygame_module, "FINGERMOTION", None)
+    fingerup = getattr(pygame_module, "FINGERUP", None)
+    mousebuttondown = getattr(pygame_module, "MOUSEBUTTONDOWN", None)
+    mousemotion = getattr(pygame_module, "MOUSEMOTION", None)
+    mousebuttonup = getattr(pygame_module, "MOUSEBUTTONUP", None)
+
+    drag_events: List[_ScrollDragEvent] = []
+    for event in raw_events:
+        event_type = getattr(event, "type", None)
+        if event_type == fingerdown:
+            drag_events.append(_ScrollDragEvent("down", _finger_y(event)))
+        elif event_type == fingermotion:
+            drag_events.append(_ScrollDragEvent("motion", _finger_y(event)))
+        elif event_type == fingerup:
+            drag_events.append(_ScrollDragEvent("up", _finger_y(event)))
+        elif event_type == mousebuttondown:
+            if getattr(event, "button", 1) != 1:
+                continue
+            y_pos = _mouse_y(event)
+            if y_pos is not None:
+                drag_events.append(_ScrollDragEvent("down", y_pos))
+        elif event_type == mousemotion:
+            buttons = getattr(event, "buttons", None)
+            if buttons is not None and (not buttons or not bool(buttons[0])):
+                continue
+            y_pos = _mouse_y(event)
+            if y_pos is not None:
+                drag_events.append(_ScrollDragEvent("motion", y_pos))
+        elif event_type == mousebuttonup:
+            if getattr(event, "button", 1) != 1:
+                continue
+            y_pos = _mouse_y(event)
+            if y_pos is not None:
+                drag_events.append(_ScrollDragEvent("up", y_pos))
+
+    return drag_events
+
+
 def scroll_vertical_content(
     *,
     display,
@@ -2469,13 +2592,64 @@ def scroll_vertical_content(
     def _should_skip() -> bool:
         return bool(callable(skip_requested) and skip_requested())
 
+    def _handle_drag_events(current_offset: int) -> Tuple[int, bool, bool]:
+        nonlocal last_drag_y, dragging, last_manual_movement
+
+        updated_offset = current_offset
+        moved = False
+        for drag_event in _read_scroll_drag_events(
+            display,
+            viewport_width=viewport_width,
+            viewport_height=viewport_height,
+        ):
+            if drag_event.action == "down":
+                dragging = True
+                last_drag_y = drag_event.y
+                last_manual_movement = time.monotonic()
+                continue
+            if drag_event.action == "up":
+                dragging = False
+                last_drag_y = None
+                last_manual_movement = time.monotonic()
+                continue
+            if drag_event.action != "motion" or not dragging:
+                continue
+            if last_drag_y is None:
+                last_drag_y = drag_event.y
+                continue
+            delta_y = drag_event.y - last_drag_y
+            last_drag_y = drag_event.y
+            next_offset = max(0, min(max_offset, int(round(updated_offset - delta_y))))
+            last_manual_movement = time.monotonic()
+            if next_offset == updated_offset:
+                continue
+            updated_offset = next_offset
+            moved = True
+            render_at_offset(updated_offset)
+
+        return updated_offset, moved, dragging
+
     def _sleep(duration: float) -> bool:
         if duration <= 0:
             return _should_skip()
-        if callable(wait_for_skip):
-            return bool(wait_for_skip(duration))
-        time.sleep(duration)
-        return _should_skip()
+        end = time.monotonic() + duration
+        while True:
+            if _should_skip():
+                return True
+            new_offset, _moved, _is_dragging = _handle_drag_events(current_offset_state[0])
+            current_offset_state[0] = new_offset
+            remaining = end - time.monotonic()
+            if remaining <= 0:
+                return _should_skip()
+            sleep_chunk = min(0.05, remaining)
+            if callable(wait_for_skip):
+                before_wait = time.monotonic()
+                if wait_for_skip(sleep_chunk):
+                    return True
+                if time.monotonic() <= before_wait:
+                    time.sleep(sleep_chunk)
+            else:
+                time.sleep(sleep_chunk)
 
     max_offset = max(0, int(content_height) - int(viewport_height))
     params = compute_adaptive_scroll_params(
@@ -2492,6 +2666,10 @@ def scroll_vertical_content(
         stride = max(stride, int(viewport_height * 0.4))
 
     start_offset = max_offset if reverse else 0
+    current_offset_state = [start_offset]
+    last_drag_y: Optional[float] = None
+    dragging = False
+    last_manual_movement: Optional[float] = None
     render_at_offset(start_offset)
 
     if _sleep(pause_start):
@@ -2500,16 +2678,36 @@ def scroll_vertical_content(
         _sleep(pause_end)
         return
 
-    if reverse:
-        offsets = range(start_offset - stride, -stride, -stride)
-    else:
-        offsets = range(stride, max_offset + stride, stride)
+    target_offset = 0 if reverse else max_offset
 
-    for raw_offset in offsets:
+    while current_offset_state[0] != target_offset:
         if _should_skip():
             return
+        new_offset, _moved, is_dragging = _handle_drag_events(current_offset_state[0])
+        current_offset_state[0] = new_offset
+        if _should_skip():
+            return
+        now = time.monotonic()
+        if is_dragging or (
+            last_manual_movement is not None
+            and (now - last_manual_movement) < MANUAL_SCROLL_RESUME_DELAY_SECONDS
+        ):
+            sleep_time = min(
+                params.target_frame_time,
+                max(0.0, MANUAL_SCROLL_RESUME_DELAY_SECONDS - (now - last_manual_movement))
+                if last_manual_movement is not None
+                else params.target_frame_time,
+            )
+            if _sleep(sleep_time):
+                return
+            continue
+
         frame_start = time.time()
-        offset = max(0, min(max_offset, raw_offset))
+        if reverse:
+            offset = max(target_offset, current_offset_state[0] - stride)
+        else:
+            offset = min(target_offset, current_offset_state[0] + stride)
+        current_offset_state[0] = offset
         render_at_offset(offset)
         elapsed = time.time() - frame_start
         sleep_time = max(0, params.target_frame_time - elapsed)
