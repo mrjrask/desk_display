@@ -3995,33 +3995,42 @@ def load_weather_icon(
     if canonical_name != "cloudy":
         candidates.append(icon_dir / "cloudy.png")
 
-    selected_candidate = next((candidate for candidate in candidates if candidate.is_file()), None)
-    selected_path = str(selected_candidate) if selected_candidate is not None else None
     cache_args = (condition_code, icon_lookup, is_daylight, size)
-    cache_key = (cache_args, selected_path)
 
-    cached = _WEATHER_ICON_CACHE.get(cache_key)
-    if cached is _WEATHER_ICON_NOT_FOUND:
-        return None
-    if isinstance(cached, Image.Image):
-        return cached.copy()
+    found_candidate = False
+    for candidate in candidates:
+        if not candidate.is_file():
+            continue
 
-    if selected_candidate is None:
-        _WEATHER_ICON_CACHE[cache_key] = _WEATHER_ICON_NOT_FOUND
+        found_candidate = True
+        selected_path = str(candidate)
+        cache_key = (cache_args, selected_path)
+
+        cached = _WEATHER_ICON_CACHE.get(cache_key)
+        if cached is _WEATHER_ICON_NOT_FOUND:
+            continue
+        if isinstance(cached, Image.Image):
+            return cached.copy()
+
+        try:
+            icon = Image.open(candidate).convert("RGBA")
+            if icon.size != (size, size):
+                icon = icon.resize((size, size), Image.ANTIALIAS)
+        except Exception as exc:  # pragma: no cover - drawing failures are non-fatal
+            logging.warning("Weather icon load failed for %s: %s", candidate, exc)
+            _WEATHER_ICON_CACHE[cache_key] = _WEATHER_ICON_NOT_FOUND
+            continue
+
+        _WEATHER_ICON_CACHE[cache_key] = icon
+        return icon.copy()
+
+    cache_key = (cache_args, None)
+    _WEATHER_ICON_CACHE[cache_key] = _WEATHER_ICON_NOT_FOUND
+    if found_candidate:
+        logging.warning("No usable weather icon found for %s; returning None", icon_name)
+    else:
         logging.warning("Weather icon %s not found; returning None", icon_name)
-        return None
-
-    try:
-        icon = Image.open(selected_candidate).convert("RGBA")
-        if icon.size != (size, size):
-            icon = icon.resize((size, size), Image.ANTIALIAS)
-    except Exception as exc:  # pragma: no cover - drawing failures are non-fatal
-        logging.warning("Weather icon load failed for %s: %s", selected_candidate, exc)
-        _WEATHER_ICON_CACHE[cache_key] = _WEATHER_ICON_NOT_FOUND
-        return None
-
-    _WEATHER_ICON_CACHE[cache_key] = icon
-    return icon.copy()
+    return None
 
 
 @log_call
