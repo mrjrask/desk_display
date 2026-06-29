@@ -2411,7 +2411,7 @@ class AdaptiveScrollParams:
     use_page_jump: bool
 
 
-MANUAL_SCROLL_RESUME_DELAY_SECONDS = 2.0
+MANUAL_SCROLL_RESUME_DELAY_SECONDS = 1.0
 
 
 @dataclass(frozen=True)
@@ -2481,8 +2481,14 @@ def _touch_skip_handler_from_loaded_main() -> Optional[Callable[..., bool]]:
     return None
 
 
+_SCROLL_TAP_TRACKER: Dict[str, Dict[str, Any]] = {
+    "finger": {"down": None, "dragged": False},
+    "mouse": {"down": None, "dragged": False},
+}
+
+
 def _scroll_tap_candidates(raw_events: List[Any], pygame_module: Any) -> List[Any]:
-    """Return down events that were taps rather than drag gestures."""
+    """Return completed down events that were taps rather than drag gestures."""
 
     fingerdown = getattr(pygame_module, "FINGERDOWN", None)
     fingermotion = getattr(pygame_module, "FINGERMOTION", None)
@@ -2492,48 +2498,46 @@ def _scroll_tap_candidates(raw_events: List[Any], pygame_module: Any) -> List[An
     mousebuttonup = getattr(pygame_module, "MOUSEBUTTONUP", None)
 
     candidates: List[Any] = []
-    active_down: Optional[Any] = None
-    active_kind: Optional[str] = None
-    active_dragged = False
 
-    def _finish_active() -> None:
-        nonlocal active_down, active_kind, active_dragged
-        if active_down is not None and not active_dragged:
-            candidates.append(active_down)
-        active_down = None
-        active_kind = None
-        active_dragged = False
+    def _start(kind: str, event: Any) -> None:
+        _SCROLL_TAP_TRACKER[kind] = {"down": event, "dragged": False}
+
+    def _drag(kind: str) -> None:
+        if _SCROLL_TAP_TRACKER[kind]["down"] is not None:
+            _SCROLL_TAP_TRACKER[kind]["dragged"] = True
+
+    def _finish(kind: str) -> None:
+        state = _SCROLL_TAP_TRACKER[kind]
+        if state["down"] is not None and not state["dragged"]:
+            candidates.append(state["down"])
+        _SCROLL_TAP_TRACKER[kind] = {"down": None, "dragged": False}
 
     for event in raw_events:
         event_type = getattr(event, "type", None)
         if fingerdown is not None and event_type == fingerdown:
-            _finish_active()
-            active_down = event
-            active_kind = "finger"
+            _start("finger", event)
             continue
         if mousebuttondown is not None and event_type == mousebuttondown:
             if getattr(event, "button", 1) != 1:
                 continue
-            _finish_active()
-            active_down = event
-            active_kind = "mouse"
+            _start("mouse", event)
             continue
-        if active_kind == "finger" and fingermotion is not None and event_type == fingermotion:
-            active_dragged = True
+        if fingermotion is not None and event_type == fingermotion:
+            _drag("finger")
             continue
-        if active_kind == "mouse" and mousemotion is not None and event_type == mousemotion:
+        if mousemotion is not None and event_type == mousemotion:
             buttons = getattr(event, "buttons", None)
             if buttons is None or (buttons and bool(buttons[0])):
-                active_dragged = True
+                _drag("mouse")
             continue
-        if active_kind == "finger" and fingerup is not None and event_type == fingerup:
-            _finish_active()
+        if fingerup is not None and event_type == fingerup:
+            _finish("finger")
             continue
-        if active_kind == "mouse" and mousebuttonup is not None and event_type == mousebuttonup:
-            _finish_active()
+        if mousebuttonup is not None and event_type == mousebuttonup:
+            if getattr(event, "button", 1) == 1:
+                _finish("mouse")
             continue
 
-    _finish_active()
     return candidates
 
 

@@ -99,8 +99,8 @@ def test_scroll_vertical_content_touch_drag_changes_offsets_and_pauses_auto_scro
 
     assert frames[0] == (0.0, 0)
     assert frames[1] == (0.0, 30)
-    assert all(offset <= 30 for timestamp, offset in frames if timestamp < 2.0)
-    resumed_frames = [(timestamp, offset) for timestamp, offset in frames if timestamp >= 2.0]
+    assert all(offset <= 30 for timestamp, offset in frames if timestamp < 1.0)
+    resumed_frames = [(timestamp, offset) for timestamp, offset in frames if timestamp >= 1.0]
     assert resumed_frames[0][1] > 30
     assert frames[-1][1] == 50
     assert fake_pygame.mouse.visibility
@@ -181,7 +181,9 @@ def test_scroll_vertical_content_routes_non_drag_taps_to_skip_handler(monkeypatc
     fake_pygame = FakePygame(
         [[
             _event(FakePygame.FINGERDOWN, x=0.9, y=0.5),
+            _event(FakePygame.FINGERUP, x=0.9, y=0.5),
             _event(FakePygame.FINGERDOWN, x=0.9, y=0.5),
+            _event(FakePygame.FINGERUP, x=0.9, y=0.5),
         ]]
     )
     fake_main = SimpleNamespace(
@@ -209,6 +211,51 @@ def test_scroll_vertical_content_routes_non_drag_taps_to_skip_handler(monkeypatc
     assert frames == [0]
     assert len(calls) == 1
     assert [event.type for event in calls[0]] == [FakePygame.FINGERDOWN, FakePygame.FINGERDOWN]
+
+
+
+def test_scroll_vertical_content_does_not_route_unfinished_down_as_skip_tap(monkeypatch):
+    display = FakeDisplay()
+    calls = []
+    fake_pygame = FakePygame([[_event(FakePygame.FINGERDOWN, x=0.9, y=0.5)]])
+    fake_main = SimpleNamespace(
+        _check_touch_skip_request=lambda **kwargs: calls.append(kwargs["events"]) or True
+    )
+
+    monkeypatch.setattr(utils, "_PYGAME_MODULE", fake_pygame)
+    monkeypatch.setitem(utils.sys.modules, "main", fake_main)
+
+    events = utils._read_scroll_drag_events(display, viewport_width=100, viewport_height=50)
+
+    assert calls == []
+    assert [event.action for event in events] == ["down"]
+
+
+def test_scroll_vertical_content_does_not_route_cross_poll_drag_as_skip_tap(monkeypatch):
+    display = FakeDisplay()
+    calls = []
+    fake_pygame = FakePygame(
+        [
+            [_event(FakePygame.FINGERDOWN, x=0.9, y=0.5)],
+            [
+                _event(FakePygame.FINGERMOTION, x=0.9, y=0.2),
+                _event(FakePygame.FINGERUP, x=0.9, y=0.2),
+            ],
+        ]
+    )
+    fake_main = SimpleNamespace(
+        _check_touch_skip_request=lambda **kwargs: calls.append(kwargs["events"]) or True
+    )
+
+    monkeypatch.setattr(utils, "_PYGAME_MODULE", fake_pygame)
+    monkeypatch.setitem(utils.sys.modules, "main", fake_main)
+
+    first_events = utils._read_scroll_drag_events(display, viewport_width=100, viewport_height=50)
+    second_events = utils._read_scroll_drag_events(display, viewport_width=100, viewport_height=50)
+
+    assert calls == []
+    assert [event.action for event in first_events] == ["down"]
+    assert [event.action for event in second_events] == ["motion", "up"]
 
 
 def test_scroll_vertical_content_does_not_route_drag_down_as_skip_tap(monkeypatch):
