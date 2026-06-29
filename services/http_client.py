@@ -60,6 +60,21 @@ def get_session() -> requests.Session:
     return _SESSION
 
 
+def http_get(
+    url: str,
+    *,
+    params: Optional[Dict[str, Any]] = None,
+    timeout: float = 10.0,
+    headers: Optional[Dict[str, str]] = None,
+    session: Optional[requests.Session] = None,
+    **kwargs: Any,
+) -> requests.Response:
+    """Perform a GET request using the shared HTTP session."""
+
+    sess = session or _SESSION
+    return sess.get(url, params=params, headers=headers, timeout=timeout, **kwargs)
+
+
 def request_json(
     url: str,
     *,
@@ -74,7 +89,7 @@ def request_json(
 
     sess = session or _SESSION
     try:
-        response = sess.get(url, params=params, headers=headers, timeout=timeout, **kwargs)
+        response = http_get(url, params=params, headers=headers, timeout=timeout, session=sess, **kwargs)
         response.raise_for_status()
         return response.json()
     except Exception as exc:  # pragma: no cover - defensive network layer
