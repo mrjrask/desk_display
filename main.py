@@ -353,6 +353,7 @@ def _check_touch_skip_request(
     *,
     current_screen_id: Optional[str] = None,
     current_quad_tiles: Optional[List[str]] = None,
+    events: Optional[List[object]] = None,
 ) -> bool:
     """Handle touchscreen gestures for skip and quad tile fullscreen focus."""
 
@@ -370,10 +371,11 @@ def _check_touch_skip_request(
         return False
 
     event_types = [event_type for event_type in (fingerdown, mousebuttondown) if event_type is not None]
-    try:
-        events = pygame.event.get(event_types)
-    except Exception:
-        return False
+    if events is None:
+        try:
+            events = pygame.event.get(event_types)
+        except Exception:
+            return False
 
     if not events:
         return False

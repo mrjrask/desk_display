@@ -2470,6 +2470,90 @@ def _pygame_module_for_display(display: Any) -> Any:
     return _load_pygame()
 
 
+def _touch_skip_handler_from_loaded_main() -> Optional[Callable[..., bool]]:
+    """Return main._check_touch_skip_request without importing main during startup."""
+
+    for module_name in ("main", "__main__"):
+        module = sys.modules.get(module_name)
+        handler = getattr(module, "_check_touch_skip_request", None) if module else None
+        if callable(handler):
+            return handler
+    return None
+
+
+def _scroll_tap_candidates(raw_events: List[Any], pygame_module: Any) -> List[Any]:
+    """Return down events that were taps rather than drag gestures."""
+
+    fingerdown = getattr(pygame_module, "FINGERDOWN", None)
+    fingermotion = getattr(pygame_module, "FINGERMOTION", None)
+    fingerup = getattr(pygame_module, "FINGERUP", None)
+    mousebuttondown = getattr(pygame_module, "MOUSEBUTTONDOWN", None)
+    mousemotion = getattr(pygame_module, "MOUSEMOTION", None)
+    mousebuttonup = getattr(pygame_module, "MOUSEBUTTONUP", None)
+
+    candidates: List[Any] = []
+    active_down: Optional[Any] = None
+    active_kind: Optional[str] = None
+    active_dragged = False
+
+    def _finish_active() -> None:
+        nonlocal active_down, active_kind, active_dragged
+        if active_down is not None and not active_dragged:
+            candidates.append(active_down)
+        active_down = None
+        active_kind = None
+        active_dragged = False
+
+    for event in raw_events:
+        event_type = getattr(event, "type", None)
+        if fingerdown is not None and event_type == fingerdown:
+            _finish_active()
+            active_down = event
+            active_kind = "finger"
+            continue
+        if mousebuttondown is not None and event_type == mousebuttondown:
+            if getattr(event, "button", 1) != 1:
+                continue
+            _finish_active()
+            active_down = event
+            active_kind = "mouse"
+            continue
+        if active_kind == "finger" and fingermotion is not None and event_type == fingermotion:
+            active_dragged = True
+            continue
+        if active_kind == "mouse" and mousemotion is not None and event_type == mousemotion:
+            buttons = getattr(event, "buttons", None)
+            if buttons is None or (buttons and bool(buttons[0])):
+                active_dragged = True
+            continue
+        if active_kind == "finger" and fingerup is not None and event_type == fingerup:
+            _finish_active()
+            continue
+        if active_kind == "mouse" and mousebuttonup is not None and event_type == mousebuttonup:
+            _finish_active()
+            continue
+
+    _finish_active()
+    return candidates
+
+
+def _handle_scroll_touch_skip_events(raw_events: List[Any], pygame_module: Any) -> bool:
+    """Route non-drag tap events consumed by scroll handling to main's skip handler."""
+
+    handler = _touch_skip_handler_from_loaded_main()
+    if not callable(handler):
+        return False
+    tap_events = _scroll_tap_candidates(raw_events, pygame_module)
+    if not tap_events:
+        return False
+    try:
+        return bool(handler(events=tap_events))
+    except TypeError:
+        return False
+    except Exception:
+        logging.debug("Touch skip handler failed while processing scroll taps.", exc_info=True)
+        return False
+
 def _read_scroll_drag_events(
     display: Any,
     *,
@@ -2515,6 +2599,11 @@ def _read_scroll_drag_events(
         raw_events = event_get(event_types)
     except Exception:
         return []
+
+    if raw_events and _handle_scroll_touch_skip_events(raw_events, pygame_module):
+        skip_requested = getattr(display, "skip_requested", None)
+        if not callable(skip_requested) or skip_requested():
+            return []
 
     display_height = float(getattr(display, "height", viewport_height) or viewport_height)
     if display_height <= 0:
@@ -2646,8 +2735,8 @@ def scroll_vertical_content(
                 before_wait = time.monotonic()
                 if wait_for_skip(sleep_chunk):
                     return True
-                if time.monotonic() <= before_wait:
-                    time.sleep(sleep_chunk)
+                if (time.monotonic() - before_wait) < sleep_chunk:
+                    return _should_skip()
             else:
                 time.sleep(sleep_chunk)
 
