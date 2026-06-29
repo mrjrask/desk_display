@@ -77,3 +77,86 @@ def test_fetch_price_falls_back_when_info_change_is_unrealistic(monkeypatch):
     assert draw_vrnof._cache["price"] == 0.994
     assert draw_vrnof._cache["change_val"] == pytest.approx(-0.061)
     assert draw_vrnof._cache["change_pct"] == pytest.approx(-5.781990521327014)
+
+
+def test_build_image_prefers_reverse_split_symbol_then_fallback(monkeypatch):
+    calls = []
+
+    def _fake_fetch(symbol):
+        calls.append(symbol)
+        if symbol == draw_vrnof.VRNO_PRIMARY_SYMBOL:
+            draw_vrnof._cache.update({
+                "price": None,
+                "change_val": None,
+                "change_pct": None,
+                "all_time": None,
+                "ts": time.time(),
+                "active_symbol": None,
+            })
+            return False
+        draw_vrnof._cache.update({
+            "price": 1.23,
+            "change_val": 0.02,
+            "change_pct": 1.65,
+            "all_time": "-7.10%",
+            "ts": time.time(),
+            "active_symbol": symbol,
+        })
+        return True
+
+    monkeypatch.setattr(draw_vrnof, "_fetch_price", _fake_fetch)
+    monkeypatch.setattr(draw_vrnof, "_get_logo", lambda: None)
+    draw_vrnof._cache.update({
+        "price": None,
+        "change_val": None,
+        "change_pct": None,
+        "all_time": None,
+        "ts": 0.0,
+        "active_symbol": None,
+    })
+
+    draw_vrnof._build_image()
+
+    assert calls == [draw_vrnof.VRNO_PRIMARY_SYMBOL, draw_vrnof.VRNO_FALLBACK_SYMBOL]
+    assert draw_vrnof._cache["active_symbol"] == draw_vrnof.VRNO_FALLBACK_SYMBOL
+
+
+def test_build_image_displays_reverse_split_symbol_when_available(monkeypatch):
+    calls = []
+
+    def _fake_fetch(symbol):
+        calls.append(symbol)
+        draw_vrnof._cache.update({
+            "price": 1.23,
+            "change_val": 0.02,
+            "change_pct": 1.65,
+            "all_time": "-7.10%",
+            "ts": time.time(),
+            "active_symbol": symbol,
+        })
+        return True
+
+    monkeypatch.setattr(draw_vrnof, "_fetch_price", _fake_fetch)
+    monkeypatch.setattr(draw_vrnof, "_get_logo", lambda: None)
+    draw_vrnof._cache.update({
+        "price": None,
+        "change_val": None,
+        "change_pct": None,
+        "all_time": None,
+        "ts": 0.0,
+        "active_symbol": None,
+    })
+
+    captured = []
+    original_text = ImageDraw.ImageDraw.text
+
+    def _capture_text(self, xy, text, *args, **kwargs):
+        captured.append(text)
+        return original_text(self, xy, text, *args, **kwargs)
+
+    monkeypatch.setattr(ImageDraw.ImageDraw, "text", _capture_text)
+
+    draw_vrnof._build_image()
+
+    assert calls == [draw_vrnof.VRNO_PRIMARY_SYMBOL]
+    assert draw_vrnof.VRNO_PRIMARY_SYMBOL in captured
