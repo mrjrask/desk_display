@@ -31,18 +31,36 @@ def test_import_screen_registry_does_not_import_heavy_renderers(monkeypatch):
         "screens.nhl_standings",
         "services.sports.nhl",
     }
-    for module_name in ["screens.registry", *heavy_modules]:
-        sys.modules.pop(module_name, None)
+    module_names = ["screens.registry", *heavy_modules]
+    original_modules = {name: sys.modules.get(name) for name in module_names}
+    missing_registry_attr = object()
+    original_registry_attr = getattr(sys.modules["screens"], "registry", missing_registry_attr)
 
-    real_import_module = importlib.import_module
-    imported = []
+    try:
+        for module_name in module_names:
+            sys.modules.pop(module_name, None)
 
-    def _tracking_import(name, package=None):
-        imported.append(name)
-        return real_import_module(name, package)
+        real_import_module = importlib.import_module
+        imported = []
 
-    monkeypatch.setattr(importlib, "import_module", _tracking_import)
-    importlib.import_module("screens.registry")
+        def _tracking_import(name, package=None):
+            imported.append(name)
+            return real_import_module(name, package)
 
-    assert heavy_modules.isdisjoint(imported)
-    assert heavy_modules.isdisjoint(sys.modules)
+        monkeypatch.setattr(importlib, "import_module", _tracking_import)
+        importlib.import_module("screens.registry")
+
+        assert heavy_modules.isdisjoint(imported)
+        assert heavy_modules.isdisjoint(sys.modules)
+    finally:
+        for module_name in module_names:
+            original_module = original_modules[module_name]
+            if original_module is None:
+                sys.modules.pop(module_name, None)
+            else:
+                sys.modules[module_name] = original_module
+        if original_registry_attr is missing_registry_attr:
+            if hasattr(sys.modules["screens"], "registry"):
+                delattr(sys.modules["screens"], "registry")
+        else:
+            sys.modules["screens"].registry = original_registry_attr
