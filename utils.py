@@ -3969,6 +3969,59 @@ def _resolve_daylight(icon_code: Optional[str], is_daylight: Optional[bool]) -> 
     return bool(is_daylight)
 
 
+_WEATHER_ICON_NOT_FOUND = object()
+_WEATHER_ICON_CACHE: Dict[
+    Tuple[Tuple[Optional[str], str, bool, int], Optional[str]],
+    Image.Image | object,
+] = {}
+
+
+def load_weather_icon(
+    condition_code: Optional[str],
+    icon_lookup: str,
+    is_daylight: bool,
+    size: int,
+) -> Image.Image | None:
+    canonical_name = _condition_code_to_asset_stem(condition_code or icon_lookup)
+    if not canonical_name:
+        canonical_name = "cloudy"
+
+    icon_name = canonical_name if is_daylight else f"{canonical_name}_night"
+
+    icon_dir = Path(__file__).resolve().parent / "images" / "WeatherKit"
+    candidates = [icon_dir / f"{icon_name}.png", icon_dir / f"{canonical_name}.png"]
+    if canonical_name != "cloudy":
+        candidates.append(icon_dir / "cloudy.png")
+
+    selected_candidate = next((candidate for candidate in candidates if candidate.is_file()), None)
+    selected_path = str(selected_candidate) if selected_candidate is not None else None
+    cache_args = (condition_code, icon_lookup, is_daylight, size)
+    cache_key = (cache_args, selected_path)
+
+    cached = _WEATHER_ICON_CACHE.get(cache_key)
+    if cached is _WEATHER_ICON_NOT_FOUND:
+        return None
+    if isinstance(cached, Image.Image):
+        return cached.copy()
+
+    if selected_candidate is None:
+        _WEATHER_ICON_CACHE[cache_key] = _WEATHER_ICON_NOT_FOUND
+        logging.warning("Weather icon %s not found; returning None", icon_name)
+        return None
+
+    try:
+        icon = Image.open(selected_candidate).convert("RGBA")
+        if icon.size != (size, size):
+            icon = icon.resize((size, size), Image.ANTIALIAS)
+    except Exception as exc:  # pragma: no cover - drawing failures are non-fatal
+        logging.warning("Weather icon load failed for %s: %s", selected_candidate, exc)
+        _WEATHER_ICON_CACHE[cache_key] = _WEATHER_ICON_NOT_FOUND
+        return None
+
+    _WEATHER_ICON_CACHE[cache_key] = icon
+    return icon.copy()
+
+
 @log_call
 def fetch_weather_icon(
     icon_code: str,
@@ -3998,29 +4051,12 @@ def fetch_weather_icon(
         "fog": "Foggy",
         "wind": "Windy",
     }
-    canonical_name = _condition_code_to_asset_stem(condition_code or alias_map.get(icon_lookup.lower(), icon_lookup))
-    if not canonical_name:
-        canonical_name = "cloudy"
-
-    icon_name = canonical_name if daylight else f"{canonical_name}_night"
-
-    icon_dir = Path(__file__).resolve().parent / "images" / "WeatherKit"
-    candidates = [icon_dir / f"{icon_name}.png", icon_dir / f"{canonical_name}.png"]
-    if canonical_name != "cloudy":
-        candidates.append(icon_dir / "cloudy.png")
-
-    for candidate in candidates:
-        try:
-            if candidate.is_file():
-                icon = Image.open(candidate).convert("RGBA")
-                if icon.size != (size, size):
-                    icon = icon.resize((size, size), Image.ANTIALIAS)
-                return icon
-        except Exception as exc:  # pragma: no cover - drawing failures are non-fatal
-            logging.warning("Weather icon load failed for %s: %s", candidate, exc)
-
-    logging.warning("Weather icon %s not found; returning None", icon_name)
-    return None
+    return load_weather_icon(
+        condition_code,
+        alias_map.get(icon_lookup.lower(), icon_lookup),
+        daylight,
+        size,
+    )
 
 
 def uv_index_color(uvi: int) -> tuple[int, int, int]:
