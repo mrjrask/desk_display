@@ -46,7 +46,7 @@ _cache = {
     "active_symbol": None,
 }
 
-VRNO_PRIMARY_SYMBOL = "VRNO.D"
+VRNO_PRIMARY_SYMBOL = "VRNOD"
 VRNO_FALLBACK_SYMBOL = "VRNO"
 
 
