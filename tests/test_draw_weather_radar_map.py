@@ -1,13 +1,17 @@
 import datetime
 from io import BytesIO
 
+import pytest
 from PIL import Image
 
 from screens.draw_weather import (
+    BASE_MAP_CACHE_TTL_SECONDS,
     RADAR_ANIMATION_LOOPS,
+    RADAR_FRAMES_CACHE_TTL_SECONDS,
     RADAR_CENTER_LATITUDE,
     RADAR_CENTER_LONGITUDE,
     RadarFrame,
+    _clear_radar_map_caches,
     _fetch_base_map,
     _fetch_radar_frames,
     draw_weather_radar,
@@ -20,6 +24,14 @@ class _MockResponse:
 
     def raise_for_status(self):
         return None
+
+
+
+@pytest.fixture(autouse=True)
+def _clear_caches_between_tests():
+    _clear_radar_map_caches()
+    yield
+    _clear_radar_map_caches()
 
 
 def _png_bytes(color=(255, 255, 255)):
@@ -66,6 +78,44 @@ def test_fetch_base_map_falls_back_when_osm_unavailable(monkeypatch):
     assert "cartocdn.com/light_all" in seen_urls[1]
 
 
+def test_fetch_base_map_uses_cache_within_ttl(monkeypatch):
+    now = 1_000.0
+    calls = []
+
+    def _mock_get(url, timeout, headers):
+        calls.append(url)
+        return _MockResponse(_png_bytes(color=(10, 20, 30)))
+
+    monkeypatch.setattr("screens.draw_weather.time.monotonic", lambda: now)
+    monkeypatch.setattr("screens.draw_weather.requests.get", _mock_get)
+
+    first = _fetch_base_map(zoom=7)
+    second = _fetch_base_map(zoom=7)
+
+    assert first is not None
+    assert second is not None
+    assert len(calls) == 1
+    assert first is not second
+
+
+def test_fetch_base_map_refreshes_after_ttl(monkeypatch):
+    now = 1_000.0
+    calls = []
+
+    def _mock_get(url, timeout, headers):
+        calls.append(url)
+        return _MockResponse(_png_bytes(color=(len(calls), 20, 30)))
+
+    monkeypatch.setattr("screens.draw_weather.time.monotonic", lambda: now)
+    monkeypatch.setattr("screens.draw_weather.requests.get", _mock_get)
+
+    assert _fetch_base_map(zoom=7) is not None
+    now += BASE_MAP_CACHE_TTL_SECONDS + 1
+    assert _fetch_base_map(zoom=7) is not None
+
+    assert len(calls) == 2
+
+
 def test_fetch_base_map_uses_chicago_center_coordinates(monkeypatch):
     seen_coords = []
 
@@ -83,6 +133,61 @@ def test_fetch_base_map_uses_chicago_center_coordinates(monkeypatch):
 
     assert result is not None
     assert seen_coords == [(RADAR_CENTER_LATITUDE, RADAR_CENTER_LONGITUDE, 7)]
+
+
+def test_fetch_radar_frames_uses_cache_within_ttl(monkeypatch):
+    now = 2_000.0
+    urls_requested = []
+    timestamp = int(datetime.datetime.now(datetime.timezone.utc).timestamp())
+    metadata = {
+        "host": "https://tilecache.rainviewer.com",
+        "radar": {"past": [{"path": "cached", "time": timestamp}]},
+    }
+
+    class _JsonResponse(_MockResponse):
+        def __init__(self, payload):
+            self._payload = payload
+            super().__init__(b"")
+
+        def json(self):
+            return self._payload
+
+    def _mock_get(url, timeout):
+        urls_requested.append(url)
+        if "weather-maps.json" in url:
+            return _JsonResponse(metadata)
+        return _MockResponse(_png_bytes())
+
+    monkeypatch.setattr("screens.draw_weather.time.monotonic", lambda: now)
+    monkeypatch.setattr("screens.draw_weather.requests.get", _mock_get)
+
+    first = _fetch_radar_frames(zoom=7, max_frames=6)
+    second = _fetch_radar_frames(zoom=7, max_frames=6)
+
+    assert len(first) == 1
+    assert len(second) == 1
+    assert len(urls_requested) == 2
+    assert first[0].image is not second[0].image
+
+
+def test_fetch_radar_frames_refreshes_after_ttl(monkeypatch):
+    now = 2_000.0
+    calls = []
+    timestamp = int(datetime.datetime.now(datetime.timezone.utc).timestamp())
+
+    def _mock_rainviewer(zoom, max_frames):
+        calls.append((zoom, max_frames))
+        return [RadarFrame(Image.new("RGBA", (8, 8), (len(calls), 255, 255, 255)), timestamp)]
+
+    monkeypatch.setattr("screens.draw_weather.time.monotonic", lambda: now)
+    monkeypatch.setattr("screens.draw_weather._fetch_rainviewer_frames", _mock_rainviewer)
+    monkeypatch.setattr("screens.draw_weather._fetch_iem_radar_fallback_frames", lambda zoom: [])
+
+    assert _fetch_radar_frames(zoom=7, max_frames=6)
+    now += RADAR_FRAMES_CACHE_TTL_SECONDS + 1
+    assert _fetch_radar_frames(zoom=7, max_frames=6)
+
+    assert calls == [(7, 6), (7, 6)]
 
 
 def test_fetch_radar_frames_prefers_recent_frames(monkeypatch):

@@ -111,6 +111,19 @@ RAINVIEWER_METADATA_URLS = (
     # RainViewer's free metadata endpoint has moved at times; keep a fallback.
     "https://api.rainviewer.com/public/maps.json",
 )
+BASE_MAP_CACHE_TTL_SECONDS = 12 * 60 * 60
+RADAR_FRAMES_CACHE_TTL_SECONDS = 5 * 60
+_BASE_MAP_CACHE: dict[int, tuple[float, Image.Image]] = {}
+_RADAR_FRAMES_CACHE: dict[tuple[int, int], tuple[float, list["RadarFrame"]]] = {}
+
+
+def _copy_radar_frames(frames: list["RadarFrame"]) -> list["RadarFrame"]:
+    return [RadarFrame(frame.image.copy(), frame.timestamp) for frame in frames]
+
+
+def _clear_radar_map_caches() -> None:
+    _BASE_MAP_CACHE.clear()
+    _RADAR_FRAMES_CACHE.clear()
 
 
 _IS_1080P_LAYOUT = config.is_hdmi_1080p_layout()
@@ -1892,6 +1905,14 @@ def _format_radar_timestamp(timestamp: Optional[int]) -> str:
 
 
 def _fetch_radar_frames(zoom: int = 7, max_frames: int = 6) -> list[RadarFrame]:
+    cache_key = (zoom, max_frames)
+    now = time.monotonic()
+    cached = _RADAR_FRAMES_CACHE.get(cache_key)
+    if cached is not None:
+        fetched_at, cached_frames = cached
+        if now - fetched_at < RADAR_FRAMES_CACHE_TTL_SECONDS:
+            return _copy_radar_frames(cached_frames)
+
     frames = _fetch_rainviewer_frames(zoom=zoom, max_frames=max_frames)
     if not frames:
         frames = _fetch_iem_radar_fallback_frames(zoom=zoom)
@@ -1904,9 +1925,9 @@ def _fetch_radar_frames(zoom: int = 7, max_frames: int = 6) -> list[RadarFrame]:
         for frame in frames
         if frame.timestamp is not None and now_ts - frame.timestamp <= int(RADAR_MAX_FRAME_AGE.total_seconds())
     ]
-    if fresh_frames:
-        return fresh_frames
-    return frames
+    result = fresh_frames if fresh_frames else frames
+    _RADAR_FRAMES_CACHE[cache_key] = (now, _copy_radar_frames(result))
+    return _copy_radar_frames(result)
 
 
 def _fetch_rainviewer_frames(zoom: int = 7, max_frames: int = 6) -> list[RadarFrame]:
@@ -1987,6 +2008,13 @@ def _fetch_iem_radar_fallback_frames(zoom: int = 7) -> list[RadarFrame]:
 
 
 def _fetch_base_map(zoom: int = 7) -> Optional[Image.Image]:
+    now = time.monotonic()
+    cached = _BASE_MAP_CACHE.get(zoom)
+    if cached is not None:
+        fetched_at, cached_image = cached
+        if now - fetched_at < BASE_MAP_CACHE_TTL_SECONDS:
+            return cached_image.copy()
+
     x_tile, y_tile, _, _ = _latlon_to_tile(
         RADAR_CENTER_LATITUDE,
         RADAR_CENTER_LONGITUDE,
@@ -2004,7 +2032,9 @@ def _fetch_base_map(zoom: int = 7) -> Optional[Image.Image]:
         try:
             resp = requests.get(url, timeout=6, headers=headers)
             resp.raise_for_status()
-            return Image.open(BytesIO(resp.content)).convert("RGB")
+            image = Image.open(BytesIO(resp.content)).convert("RGB")
+            _BASE_MAP_CACHE[zoom] = (now, image.copy())
+            return image
         except Exception as exc:  # pragma: no cover - network failures are non-fatal
             logging.warning("Radar base map fetch failed from %s: %s", url, exc)
 
@@ -2027,12 +2057,12 @@ def draw_weather_radar(display, weather=None, transition: bool = False):
 
     map_section = None
     if base_map:
-        map_section = base_map.resize((WIDTH, HEIGHT), Image.LANCZOS).convert("RGBA")
+        map_section = base_map.copy().resize((WIDTH, HEIGHT), Image.LANCZOS).convert("RGBA")
     else:
         map_section = Image.new("RGBA", (WIDTH, HEIGHT), background + (255,))
 
     def _compose_frame(frame: RadarFrame) -> Image.Image:
-        radar_resized = frame.image.resize((WIDTH, HEIGHT), Image.LANCZOS).convert("RGBA")
+        radar_resized = frame.image.copy().resize((WIDTH, HEIGHT), Image.LANCZOS).convert("RGBA")
         radar_opacity = 0.6
         if radar_opacity < 1.0:
             alpha = radar_resized.getchannel("A")
