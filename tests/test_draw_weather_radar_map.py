@@ -36,7 +36,7 @@ def test_fetch_base_map_uses_basic_free_osm(monkeypatch):
         seen.append((url, timeout, headers.get("User-Agent")))
         return _MockResponse(_png_bytes())
 
-    monkeypatch.setattr("screens.draw_weather.requests.get", _mock_get)
+    monkeypatch.setattr("screens.draw_weather.http_get", _mock_get)
 
     result = _fetch_base_map(zoom=7)
 
@@ -56,7 +56,7 @@ def test_fetch_base_map_falls_back_when_osm_unavailable(monkeypatch):
             raise RuntimeError("temporary outage")
         return _MockResponse(_png_bytes(color=(64, 64, 64)))
 
-    monkeypatch.setattr("screens.draw_weather.requests.get", _mock_get)
+    monkeypatch.setattr("screens.draw_weather.http_get", _mock_get)
 
     result = _fetch_base_map(zoom=7)
 
@@ -77,7 +77,7 @@ def test_fetch_base_map_uses_chicago_center_coordinates(monkeypatch):
         return _MockResponse(_png_bytes())
 
     monkeypatch.setattr("screens.draw_weather._latlon_to_tile", _mock_latlon_to_tile)
-    monkeypatch.setattr("screens.draw_weather.requests.get", _mock_get)
+    monkeypatch.setattr("screens.draw_weather.http_get", _mock_get)
 
     result = _fetch_base_map(zoom=7)
 
@@ -159,7 +159,7 @@ def test_fetch_rainviewer_frames_sorts_to_include_latest(monkeypatch):
         timestamps_requested.append(url.split("/")[3])
         return _MockResponse(_png_bytes())
 
-    monkeypatch.setattr("screens.draw_weather.requests.get", _mock_get)
+    monkeypatch.setattr("screens.draw_weather.http_get", _mock_get)
 
     _fetch_radar_frames(zoom=7, max_frames=2)
 
@@ -190,7 +190,7 @@ def test_fetch_rainviewer_frames_tries_alternate_metadata_url(monkeypatch):
             return _JsonResponse(metadata)
         return _MockResponse(_png_bytes())
 
-    monkeypatch.setattr("screens.draw_weather.requests.get", _mock_get)
+    monkeypatch.setattr("screens.draw_weather.http_get", _mock_get)
 
     frames = _fetch_radar_frames(zoom=7, max_frames=2)
 

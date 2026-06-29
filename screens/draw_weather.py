@@ -21,8 +21,9 @@ import time
 from io import BytesIO
 from typing import Any, NamedTuple, Optional, Tuple
 
-import requests
 from PIL import Image, ImageDraw, ImageFont
+
+from services.http_client import http_get
 
 import config
 from config import (
@@ -1913,7 +1914,7 @@ def _fetch_rainviewer_frames(zoom: int = 7, max_frames: int = 6) -> list[RadarFr
     metadata = None
     for metadata_url in RAINVIEWER_METADATA_URLS:
         try:
-            meta_resp = requests.get(metadata_url, timeout=6)
+            meta_resp = http_get(metadata_url, timeout=6)
             meta_resp.raise_for_status()
             metadata = meta_resp.json()
             break
@@ -1951,7 +1952,7 @@ def _fetch_rainviewer_frames(zoom: int = 7, max_frames: int = 6) -> list[RadarFr
             f"{host.rstrip('/')}/{path.strip('/')}/256/{zoom}/{x_tile}/{y_tile}/2/1_1.png"
         )
         try:
-            tile_resp = requests.get(url, timeout=6)
+            tile_resp = http_get(url, timeout=6)
             tile_resp.raise_for_status()
             tile = Image.open(BytesIO(tile_resp.content)).convert("RGBA")
         except Exception as exc:  # pragma: no cover - network failures are non-fatal
@@ -1975,7 +1976,7 @@ def _fetch_iem_radar_fallback_frames(zoom: int = 7) -> list[RadarFrame]:
     )
     url = f"https://mesonet.agron.iastate.edu/cache/tile.py/1.0.0/q2-hsr-900913/{zoom}/{x_tile}/{y_tile}.png"
     try:
-        resp = requests.get(url, timeout=6, headers={"User-Agent": "desk-display/weather-radar"})
+        resp = http_get(url, timeout=6, headers={"User-Agent": "desk-display/weather-radar"})
         resp.raise_for_status()
         tile = Image.open(BytesIO(resp.content)).convert("RGBA")
     except Exception as exc:  # pragma: no cover - network failures are non-fatal
@@ -2002,7 +2003,7 @@ def _fetch_base_map(zoom: int = 7) -> Optional[Image.Image]:
 
     for url in urls:
         try:
-            resp = requests.get(url, timeout=6, headers=headers)
+            resp = http_get(url, timeout=6, headers=headers)
             resp.raise_for_status()
             return Image.open(BytesIO(resp.content)).convert("RGB")
         except Exception as exc:  # pragma: no cover - network failures are non-fatal

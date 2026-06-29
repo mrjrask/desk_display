@@ -21,6 +21,7 @@ from config import (
     WEATHERKIT_PRIVATE_KEY,
     WEATHERKIT_TEAM_ID,
 )
+from services.http_client import http_get
 
 APPLE_MAPS_USER_AGENT = "desk-display/apple-maps"
 APPLE_MAPS_TOKEN_TTL_MINUTES = 30
@@ -290,7 +291,7 @@ def fetch_apple_maps_routes(
         params["avoid"] = ",".join(avoid_values)
 
     try:
-        response = requests.get(
+        response = http_get(
             url,
             params=params,
             timeout=10,
@@ -343,7 +344,7 @@ def fetch_apple_maps_snapshot(
     }
 
     try:
-        response = requests.get(
+        response = http_get(
             url,
             params=params,
             timeout=10,

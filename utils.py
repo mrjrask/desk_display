@@ -37,6 +37,8 @@ import PIL.ImageDraw as _ID
 import requests
 from PIL import Image, ImageDraw, ImageEnhance, ImageFont, ImageOps
 
+from services.http_client import http_get
+
 # ─── Pillow compatibility shim ─────────────────────────────────────────────
 # Re-add ImageDraw.textsize if missing (Pillow ≥10 compatibility)
 if not hasattr(_ID.ImageDraw, "textsize"):
@@ -3207,7 +3209,7 @@ def load_svg(key, url) -> Image.Image | None:
     local = os.path.join(cache_dir, f"{key}.svg")
     if not os.path.exists(local):
         try:
-            r = requests.get(url, timeout=5)
+            r = http_get(url, timeout=5)
             r.raise_for_status()
             with open(local, "wb") as f:
                 f.write(r.content)
@@ -4109,7 +4111,7 @@ def fetch_directions_routes(
         params["avoid"] = "|".join(avoid)
 
     try:
-        response = requests.get(url, params=params, timeout=10)
+        response = http_get(url, params=params, timeout=10)
         response.raise_for_status()
         payload = response.json()
     except Exception as exc:
