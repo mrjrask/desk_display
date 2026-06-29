@@ -57,6 +57,7 @@ REQUEST_TIMEOUT = 10
 SCREEN_ID = "World Cup Scoreboard"
 LOGO_DIR = os.path.join(IMAGES_DIR, "world_cup")
 ESPN_URL = "https://site.api.espn.com/apis/site/v2/sports/soccer/fifa.world/scoreboard"
+SCROLL_REPEAT_COUNT = 2
 
 TITLE_GAP = scale_value(8)
 BLOCK_SPACING = scale_value(10)
@@ -378,17 +379,22 @@ def _render_scoreboard(games: list[dict]) -> Image.Image:
 
 
 def _scroll_display(display, img: Image.Image):
-    scroll_vertical_content(
-        display=display,
-        content_height=img.height,
-        viewport_width=WIDTH,
-        viewport_height=HEIGHT,
-        render_at_offset=lambda offset: display.image(img.crop((0, offset, WIDTH, offset + HEIGHT))),
-        base_step=SCOREBOARD_SCROLL_STEP,
-        pause_start=SCOREBOARD_SCROLL_PAUSE_TOP,
-        pause_end=SCOREBOARD_SCROLL_PAUSE_BOTTOM,
-        min_frame_time=SCOREBOARD_SCROLL_DELAY,
-    )
+    for _ in range(SCROLL_REPEAT_COUNT):
+        scroll_vertical_content(
+            display=display,
+            content_height=img.height,
+            viewport_width=WIDTH,
+            viewport_height=HEIGHT,
+            render_at_offset=lambda offset: display.image(img.crop((0, offset, WIDTH, offset + HEIGHT))),
+            base_step=SCOREBOARD_SCROLL_STEP,
+            pause_start=SCOREBOARD_SCROLL_PAUSE_TOP,
+            pause_end=SCOREBOARD_SCROLL_PAUSE_BOTTOM,
+            min_frame_time=SCOREBOARD_SCROLL_DELAY,
+        )
+
+
+def _viewport_image(img: Image.Image) -> Image.Image:
+    return img if img.height <= HEIGHT else img.crop((0, 0, WIDTH, HEIGHT))
 
 
 def _render_world_cup_scoreboard_v1(display, games: list[dict] | None, transition: bool = False) -> ScreenImage:
@@ -422,6 +428,14 @@ def _render_world_cup_scoreboard_v1(display, games: list[dict] | None, transitio
         return ScreenImage(img, displayed=True)
 
     full = _render_scoreboard(games)
+    if len(games) == 1:
+        viewport = _viewport_image(full)
+        if transition:
+            return ScreenImage(viewport, displayed=False)
+        display.image(viewport)
+        time.sleep(SCOREBOARD_SCROLL_PAUSE_BOTTOM)
+        return ScreenImage(viewport, displayed=True)
+
     if transition:
         _scroll_display(display, full)
         return ScreenImage(full, displayed=True)
