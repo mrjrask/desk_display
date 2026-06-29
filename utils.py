@@ -3131,6 +3131,10 @@ def _logo_filename_candidates(abbr: str) -> list[str]:
     return candidates
 
 
+_TeamLogoCacheKey = tuple[str, str, int, int | None, bool, str | None, int | None]
+_TEAM_LOGO_CACHE: dict[_TeamLogoCacheKey, Image.Image | None] = {}
+
+
 def load_team_logo(
     base_dir: str,
     abbr: str,
@@ -3140,14 +3144,31 @@ def load_team_logo(
     trim: bool = False,
 ) -> Image.Image | None:
     candidates = _logo_filename_candidates(abbr)
+    base_cache_key = (base_dir, abbr, height, box_size, trim)
     if not candidates:
+        cache_key = (*base_cache_key, None, None)
+        _TEAM_LOGO_CACHE.setdefault(cache_key, None)
         return None
+
     last_error: Optional[Exception] = None
+    miss_cache_key = (*base_cache_key, None, None)
     for candidate in candidates:
         filename = f"{candidate}.png"
         path = os.path.join(base_dir, filename)
-        if not os.path.exists(path):
+        try:
+            stat_result = os.stat(path)
+        except FileNotFoundError:
             continue
+        except OSError as exc:
+            last_error = exc
+            continue
+
+        resolved_path = os.path.realpath(path)
+        cache_key = (*base_cache_key, resolved_path, stat_result.st_mtime_ns)
+        if cache_key in _TEAM_LOGO_CACHE:
+            cached_logo = _TEAM_LOGO_CACHE[cache_key]
+            return cached_logo.copy() if cached_logo is not None else None
+
         try:
             logo = Image.open(path).convert("RGBA")
             logo = _adjust_logo_brightness(logo, base_dir, candidate)
@@ -3157,14 +3178,19 @@ def load_team_logo(
                 if bbox:
                     logo = logo.crop(bbox)
             if box_size and box_size > 0:
-                return fit_logo_to_box(logo, box_size)
-            ratio = height / logo.height
-            return logo.resize((int(logo.width * ratio), height), Image.ANTIALIAS)
+                logo = fit_logo_to_box(logo, box_size)
+            else:
+                ratio = height / logo.height
+                logo = logo.resize((int(logo.width * ratio), height), Image.ANTIALIAS)
+            _TEAM_LOGO_CACHE[cache_key] = logo
+            return logo.copy()
         except Exception as exc:  # pragma: no cover - rare file corruption
             last_error = exc
+            _TEAM_LOGO_CACHE[cache_key] = None
             continue
     if last_error:
         logging.warning("Could not load logo '%s': %s", abbr, last_error)
+    _TEAM_LOGO_CACHE.setdefault(miss_cache_key, None)
     return None
 
 
