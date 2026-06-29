@@ -77,7 +77,7 @@ SCORE_ROW_H           = scale_value(56)
 STATUS_ROW_H          = scale_value(18)
 REQUEST_TIMEOUT       = 10
 FETCH_CACHE_TTL_SECONDS = 60
-MLB_SPORT_IDS = "1,51"  # MLB + World Baseball Classic
+MLB_SPORT_IDS = "1"  # MLB Add 51 for World Baseball Classic (International)
 COL_WIDTHS = [
     _scale_width(80),
     _scale_width(60),
