@@ -45,6 +45,11 @@ def test_mlb_no_game_screens_are_replacement_only_in_default_config():
     assert screens["sox next"] > 0
 
 
+def test_mlb_next_v2_screen_ids_are_not_listed():
+    assert "cubs next v2" not in RAW_SCREEN_IDS
+    assert "sox next v2" not in RAW_SCREEN_IDS
+
+
 def test_nba_nhl_schedule_quad_screen_ids_are_listed():
     assert "bulls schedule quad" in RAW_SCREEN_IDS
     assert "hawks schedule quad" in RAW_SCREEN_IDS

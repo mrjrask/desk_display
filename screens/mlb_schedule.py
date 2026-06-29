@@ -526,10 +526,8 @@ def _next_variant_title_opponent_gap(
     """Match Cubs/Sox Next Game spacing for title/opponent lines on related series views."""
     if normalized_screen_id in {
         "cubs next",
-        "cubs next v2",
         "cubs next home",
         "sox next",
-        "sox next v2",
         "sox next home",
         "cubs current series",
         "sox current series",
@@ -1274,10 +1272,8 @@ def draw_sports_screen(display, game, title, transition=False, screen_id: Option
 
     hyperpixel_layout = config.is_hyperpixel_next_layout() and screen_id in {
         "cubs next",
-        "cubs next v2",
         "cubs next home",
         "sox next",
-        "sox next v2",
         "sox next home",
     }
     edge_pad = max(2, config.scale_value(2)) if hyperpixel_layout else 0
@@ -1323,10 +1319,8 @@ def draw_sports_screen(display, game, title, transition=False, screen_id: Option
     opponent_line = f"{prefix} {opponent}"
     use_scaled_prefix = normalized_screen_id in {
         "cubs next",
-        "cubs next v2",
         "cubs next home",
         "sox next",
-        "sox next v2",
         "sox next home",
     }
     line_width = max(1, (WIDTH - (edge_pad * 2)) if hyperpixel_layout else WIDTH)
@@ -1374,8 +1368,6 @@ def draw_sports_screen(display, game, title, transition=False, screen_id: Option
 
     # Desired logo frame height mirrors the Hawks "Next Game" layout for consistency.
     desired_logo_h = standard_next_game_logo_height(HEIGHT)
-    if normalized_screen_id in {"cubs next v2", "sox next v2"}:
-        desired_logo_h = min(standard_next_game_logo_height(HEIGHT), max(16, HEIGHT // 5))
     if hyperpixel_layout:
         desired_logo_h = max(1, int(round(desired_logo_h * config.DISPLAY_SCALE)))
     elif _IS_1080P_LAYOUT:
@@ -1385,8 +1377,6 @@ def draw_sports_screen(display, game, title, transition=False, screen_id: Option
     raw_time = game.get('startTimeCentral','TBD')
     postponed = _is_postponed_game(game)
     bottom = "Postponed" if postponed else _format_game_label(raw_date, raw_time)
-    if normalized_screen_id in {"cubs next v2", "sox next v2"} and " • " in bottom:
-        bottom = bottom.replace(" • ", " · ", 1)
     if bottom:
         try:
             _, t, _, b = draw.textbbox((0, 0), bottom, font=FONT_DATE_SPORTS)
@@ -1396,7 +1386,7 @@ def draw_sports_screen(display, game, title, transition=False, screen_id: Option
     else:
         bl_h = 0
     bottom_margin = config.scale_value(BOTTOM_MARGIN) if hyperpixel_layout else BOTTOM_MARGIN
-    if _IS_1080P_LAYOUT and normalized_screen_id in {"cubs next", "cubs next v2"}:
+    if _IS_1080P_LAYOUT and normalized_screen_id == "cubs next":
         bottom_margin += _BOTTOM_TEXT_1080P_OFFSET
     bottom_y = HEIGHT - bl_h - bottom_margin
 
@@ -1460,94 +1450,11 @@ def draw_sports_screen(display, game, title, transition=False, screen_id: Option
         ly = row_y + (logo_h - logo.height) // 2
         img.paste(logo, (lx, ly), logo)
 
-    if normalized_screen_id in {"cubs next v2", "sox next v2"}:
-        away_name, away_record, away_image_url = _extract_probable_pitcher(
-            game.get("teams", {}).get("away", {}),
-            game=game,
-            side="away",
-        )
-        home_name, home_record, home_image_url = _extract_probable_pitcher(
-            game.get("teams", {}).get("home", {}),
-            game=game,
-            side="home",
-        )
-
-        v2_logo_scale_adjust = 0.78
-        v2_logo_frame_w = max(12, int(round(frame_w * 0.84)))
-        pitcher_photo_size = max(24, min(int(round((logo_h + max(3, logo_h // 6)) * 1.10)), HEIGHT // 5))
-        logo_gap = max(8, gap)
-        total_v2_w = (pitcher_photo_size * 2) + v2_logo_frame_w + at_w + v2_logo_frame_w + (logo_gap * 4)
-        start_x_v2 = max(0, (WIDTH - total_v2_w) // 2)
-        away_pitcher_x = start_x_v2
-        away_logo_x = away_pitcher_x + pitcher_photo_size + logo_gap
-        at_x_v2 = away_logo_x + v2_logo_frame_w + logo_gap
-        home_logo_x = at_x_v2 + at_w + logo_gap
-        home_pitcher_x = home_logo_x + v2_logo_frame_w + logo_gap
-
-        name_base_font = _font_variant_delta(FONT_DATE_SPORTS, 8)
-        stat_base_font = _font_variant_delta(FONT_DATE_SPORTS, 2)
-        name_font = fit_font(
-            draw,
-            max((away_name or "TBD"), (home_name or "TBD"), key=len),
-            name_base_font,
-            max_width=max(20, pitcher_photo_size + 8),
-            max_height=max(10, int(draw.textsize("Ag", font=name_base_font)[1] * 1.2)),
-            min_pt=8,
-        )
-        stat_font = fit_font(
-            draw,
-            max((away_record or "(0-0) 0.00 ERA"), (home_record or "(0-0) 0.00 ERA"), key=len),
-            stat_base_font,
-            max_width=max(20, pitcher_photo_size + 12),
-            max_height=max(10, int(draw.textsize("Ag", font=stat_base_font)[1] * 1.2)),
-            min_pt=8,
-        )
-        name_line_h = draw.textsize("Ag", font=name_font)[1]
-        stat_line_h = draw.textsize("Ag", font=stat_font)[1]
-        pitcher_block_h = pitcher_photo_size + 2 + name_line_h + (1 + stat_line_h)
-        row_y = max(y_text + line_gap, min(row_y, bottom_y - pitcher_block_h - line_gap))
-
-        _draw_logo_box(away_logo_x)
-        _paste_logo(logo_away, away_logo_x, scale_adjust=v2_logo_scale_adjust, frame_width=v2_logo_frame_w)
-        draw.text((at_x_v2, row_y + (block_h - at_h)//2), at_txt, font=FONT_TEAM_SPORTS, fill=(255,255,255))
-        _draw_logo_box(home_logo_x)
-        _paste_logo(logo_home, home_logo_x, scale_adjust=v2_logo_scale_adjust, frame_width=v2_logo_frame_w)
-
-        def _draw_pitcher_block(frame_x: int, image_url: str, name: str, record: str) -> None:
-            photo = _load_remote_image(image_url, pitcher_photo_size)
-            photo_y = row_y + max(0, (logo_h - pitcher_photo_size) // 2)
-            if photo:
-                px = frame_x + (pitcher_photo_size - photo.width) // 2
-                img.paste(photo, (px, photo_y), photo)
-            else:
-                placeholder = (
-                    frame_x,
-                    photo_y,
-                    frame_x + pitcher_photo_size - 1,
-                    photo_y + pitcher_photo_size - 1,
-                )
-                draw.rectangle(placeholder, fill=(95, 95, 95), outline=(150, 150, 150), width=1)
-            def _draw_centered_line(text: str, font, y: int) -> None:
-                if not text:
-                    return
-                text_w, text_h = draw.textsize(text, font=font)
-                tx = frame_x + max(0, (pitcher_photo_size - text_w) // 2)
-                draw.text((tx, y), text, font=font, fill=(255, 255, 255))
-            name_y = photo_y + pitcher_photo_size + 2
-            display_name = name or "TBD"
-            _draw_centered_line(display_name, name_font, name_y)
-            if record:
-                rec_y = name_y + name_line_h + 1
-                _draw_centered_line(record, stat_font, rec_y)
-
-        _draw_pitcher_block(away_pitcher_x, away_image_url, away_name, away_record)
-        _draw_pitcher_block(home_pitcher_x, home_image_url, home_name, home_record)
-    else:
-        _draw_logo_box(left_x)
-        _paste_logo(logo_away, left_x)
-        draw.text((at_x, row_y + (block_h - at_h)//2), at_txt, font=FONT_TEAM_SPORTS, fill=(255,255,255))
-        _draw_logo_box(right_x)
-        _paste_logo(logo_home, right_x)
+    _draw_logo_box(left_x)
+    _paste_logo(logo_away, left_x)
+    draw.text((at_x, row_y + (block_h - at_h)//2), at_txt, font=FONT_TEAM_SPORTS, fill=(255,255,255))
+    _draw_logo_box(right_x)
+    _paste_logo(logo_home, right_x)
 
     _center_bottom_text(draw, bottom, FONT_DATE_SPORTS, margin=bottom_margin)
 

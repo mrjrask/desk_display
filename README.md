@@ -509,7 +509,6 @@ The authoritative list is `RAW_SCREEN_IDS` in `screens_catalog.py`. Legacy IDs a
 - `cubs live`
 - `cubs no game`
 - `cubs next`
-- `cubs next v2`
 - `cubs next home`
 - `cubs current series`
 - `cubs next series`
@@ -523,7 +522,6 @@ The authoritative list is `RAW_SCREEN_IDS` in `screens_catalog.py`. Legacy IDs a
 - `sox live`
 - `sox no game`
 - `sox next`
-- `sox next v2`
 - `sox next home`
 - `sox current series`
 - `sox next series`
