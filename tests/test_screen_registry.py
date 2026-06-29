@@ -1139,6 +1139,36 @@ def test_mlb_no_game_screens_available_when_no_game_today():
     assert registry["sox next"].metadata["replaces_with"] == "sox no game"
 
 
+def test_mlb_no_game_hidden_after_completed_game_today_with_next_tomorrow():
+    now = datetime.datetime(2024, 7, 1, 18, 0, tzinfo=CENTRAL_TIME)
+    weather = {"hourly": []}
+
+    registry, _ = build_screen_registry(
+        _make_context(
+            weather,
+            now,
+            cache_updates={
+                "cubs": {
+                    "last": {"gamePk": 1, "officialDate": "2024-07-01"},
+                    "next": {"gamePk": 2, "officialDate": "2024-07-02"},
+                    "schedule_covers_today": True,
+                },
+                "sox": {
+                    "last_alt": {"gamePk": 3, "officialDate": "2024-07-01"},
+                    "next": {"gamePk": 4, "officialDate": "2024-07-02"},
+                    "schedule_covers_today": True,
+                },
+            },
+        )
+    )
+
+    assert registry["cubs no game"].available is False
+    assert registry["cubs next"].available is True
+    assert registry["cubs next"].metadata["replaces_with"] is None
+    assert registry["sox no game"].available is False
+    assert registry["sox next"].available is True
+    assert registry["sox next"].metadata["replaces_with"] is None
+
 def test_mlb_no_game_screens_hidden_when_schedule_did_not_cover_today():
     now = datetime.datetime(2024, 7, 1, 12, 0, tzinfo=CENTRAL_TIME)
     weather = {"hourly": []}

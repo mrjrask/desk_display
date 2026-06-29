@@ -930,6 +930,33 @@ def build_screen_registry(context: ScreenContext) -> Tuple[Dict[str, ScreenDefin
                     return True
         return False
 
+    def _mlb_team_has_game_dated_today(team_cache: Any) -> bool:
+        """Return True if any game-like cache field is dated today.
+
+        This deliberately includes completed-game fields so a finished game today
+        suppresses the no-game replacement even when the next upcoming game has
+        already rolled forward to tomorrow.
+        """
+
+        if not isinstance(team_cache, dict):
+            return False
+
+        return _mlb_games_on_today(
+            team_cache.get("live"),
+            team_cache.get("next"),
+            team_cache.get("next_alt"),
+            team_cache.get("last"),
+            team_cache.get("last_alt"),
+            team_cache.get("current_series"),
+        )
+
+    def _mlb_no_game_today_available(team_cache: Any) -> bool:
+        """Return True only when today's schedule was checked and has no game today."""
+
+        return _mlb_schedule_covers_today(team_cache) and not _mlb_team_has_game_dated_today(
+            team_cache
+        )
+
     def register_logo(screen_id: str):
         image = context.logos.get(screen_id)
         if image is None:
@@ -1194,14 +1221,7 @@ def build_screen_registry(context: ScreenContext) -> Tuple[Dict[str, ScreenDefin
         cubs_next_home = cubs.get("next_home")
         if _games_match(cubs_next_home, cubs_next):
             cubs_next_home = None
-        cubs_has_game_today = _mlb_games_on_today(
-            cubs.get("live"),
-            cubs_next,
-            cubs_next_alt,
-            cubs.get("last"),
-            cubs.get("last_alt"),
-            cubs_current_series,
-        )
+        cubs_has_game_today = _mlb_team_has_game_dated_today(cubs)
 
         register(
             "cubs stand1",
@@ -1267,8 +1287,7 @@ def build_screen_registry(context: ScreenContext) -> Tuple[Dict[str, ScreenDefin
             ),
             available=_is_live_game_today(cubs.get("live")),
         )
-        cubs_schedule_covers_today = _mlb_schedule_covers_today(cubs)
-        cubs_no_game_today = cubs_schedule_covers_today and not cubs_has_game_today
+        cubs_no_game_today = _mlb_no_game_today_available(cubs)
 
         def _draw_cubs_next_or_no_game(screen_id: str):
             if cubs_no_game_today:
@@ -1393,14 +1412,7 @@ def build_screen_registry(context: ScreenContext) -> Tuple[Dict[str, ScreenDefin
         sox_next_home = sox.get("next_home")
         if _games_match(sox_next_home, sox_next):
             sox_next_home = None
-        sox_has_game_today = _mlb_games_on_today(
-            sox.get("live"),
-            sox_next,
-            sox_next_alt,
-            sox.get("last"),
-            sox.get("last_alt"),
-            sox_current_series,
-        )
+        sox_has_game_today = _mlb_team_has_game_dated_today(sox)
 
         register(
             "sox stand1",
@@ -1459,8 +1471,7 @@ def build_screen_registry(context: ScreenContext) -> Tuple[Dict[str, ScreenDefin
             ),
             available=_is_live_game_today(sox.get("live")),
         )
-        sox_schedule_covers_today = _mlb_schedule_covers_today(sox)
-        sox_no_game_today = sox_schedule_covers_today and not sox_has_game_today
+        sox_no_game_today = _mlb_no_game_today_available(sox)
 
         def _draw_sox_next_or_no_game(screen_id: str):
             if sox_no_game_today:
