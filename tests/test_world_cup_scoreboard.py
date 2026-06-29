@@ -11,7 +11,7 @@ class DummyDisplay:
         self.images.append(img)
 
 
-def test_scroll_display_scrolls_through_scoreboard_twice(monkeypatch):
+def test_scroll_display_scrolls_through_scoreboard_twice_with_continuous_content(monkeypatch):
     calls = []
 
     def fake_scroll_vertical_content(**kwargs):
@@ -26,8 +26,9 @@ def test_scroll_display_scrolls_through_scoreboard_twice(monkeypatch):
     )
     world_cup_scoreboard._scroll_display(object(), img)
 
-    assert len(calls) == world_cup_scoreboard.SCROLL_REPEAT_COUNT == 2
-    assert all(call["content_height"] == img.height for call in calls)
+    assert len(calls) == 1
+    assert world_cup_scoreboard.SCROLL_REPEAT_COUNT == 2
+    assert calls[0]["content_height"] == img.height * world_cup_scoreboard.SCROLL_REPEAT_COUNT
 
 
 def test_single_game_scoreboard_displays_without_scrolling(monkeypatch):

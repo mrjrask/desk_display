@@ -378,19 +378,29 @@ def _render_scoreboard(games: list[dict]) -> Image.Image:
     return out
 
 
+def _repeated_scroll_image(img: Image.Image) -> Image.Image:
+    if SCROLL_REPEAT_COUNT <= 1:
+        return img
+
+    repeated = Image.new("RGB", (WIDTH, img.height * SCROLL_REPEAT_COUNT), BACKGROUND_COLOR)
+    for index in range(SCROLL_REPEAT_COUNT):
+        repeated.paste(img, (0, img.height * index))
+    return repeated
+
+
 def _scroll_display(display, img: Image.Image):
-    for _ in range(SCROLL_REPEAT_COUNT):
-        scroll_vertical_content(
-            display=display,
-            content_height=img.height,
-            viewport_width=WIDTH,
-            viewport_height=HEIGHT,
-            render_at_offset=lambda offset: display.image(img.crop((0, offset, WIDTH, offset + HEIGHT))),
-            base_step=SCOREBOARD_SCROLL_STEP,
-            pause_start=SCOREBOARD_SCROLL_PAUSE_TOP,
-            pause_end=SCOREBOARD_SCROLL_PAUSE_BOTTOM,
-            min_frame_time=SCOREBOARD_SCROLL_DELAY,
-        )
+    scroll_img = _repeated_scroll_image(img)
+    scroll_vertical_content(
+        display=display,
+        content_height=scroll_img.height,
+        viewport_width=WIDTH,
+        viewport_height=HEIGHT,
+        render_at_offset=lambda offset: display.image(scroll_img.crop((0, offset, WIDTH, offset + HEIGHT))),
+        base_step=SCOREBOARD_SCROLL_STEP,
+        pause_start=SCOREBOARD_SCROLL_PAUSE_TOP,
+        pause_end=SCOREBOARD_SCROLL_PAUSE_BOTTOM,
+        min_frame_time=SCOREBOARD_SCROLL_DELAY,
+    )
 
 
 def _viewport_image(img: Image.Image) -> Image.Image:
