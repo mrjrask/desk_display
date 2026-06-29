@@ -196,6 +196,16 @@ def test_travel_map_v2_alias_is_not_registered():
     assert "travel map v2" not in registry
 
 
+def test_mlb_next_v2_screen_ids_are_not_registered():
+    now = datetime.datetime(2024, 1, 1, 12, 0, tzinfo=CENTRAL_TIME)
+    weather = {"hourly": []}
+
+    registry, _ = build_screen_registry(_make_context(weather, now))
+
+    assert "cubs next v2" not in registry
+    assert "sox next v2" not in registry
+
+
 def test_mlb_current_series_screens_are_registered_and_available():
     now = datetime.datetime(2024, 1, 1, 12, 0, tzinfo=CENTRAL_TIME)
     weather = {"hourly": []}

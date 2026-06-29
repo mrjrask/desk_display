@@ -549,10 +549,8 @@ def build_screen_registry(context: ScreenContext) -> Tuple[Dict[str, ScreenDefin
     mlb_rotation_cursors: Dict[str, int] = {
         "cubs last": 0,
         "cubs next": 0,
-        "cubs next v2": 0,
         "sox last": 0,
         "sox next": 0,
-        "sox next v2": 0,
     }
 
     def _rotate_games(screen_id: str, primary: Any, alternate: Any) -> Any:
@@ -1304,12 +1302,6 @@ def build_screen_registry(context: ScreenContext) -> Tuple[Dict[str, ScreenDefin
             available=cubs_no_game_today or (cubs_has_game_today and bool(cubs_next or cubs_next_alt)),
             replaces_with="cubs no game" if cubs_no_game_today else None,
         )
-        register(
-            "cubs next v2",
-            lambda: _draw_cubs_next_or_no_game("cubs next v2"),
-            available=cubs_no_game_today or (cubs_has_game_today and bool(cubs_next or cubs_next_alt)),
-            replaces_with="cubs no game" if cubs_no_game_today else None,
-        )
         if cubs_has_game_today and cubs_next_home:
             register(
                 "cubs next home",
@@ -1493,12 +1485,6 @@ def build_screen_registry(context: ScreenContext) -> Tuple[Dict[str, ScreenDefin
         register(
             "sox next",
             lambda: _draw_sox_next_or_no_game("sox next"),
-            available=sox_no_game_today or (sox_has_game_today and bool(sox_next or sox_next_alt)),
-            replaces_with="sox no game" if sox_no_game_today else None,
-        )
-        register(
-            "sox next v2",
-            lambda: _draw_sox_next_or_no_game("sox next v2"),
             available=sox_no_game_today or (sox_has_game_today and bool(sox_next or sox_next_alt)),
             replaces_with="sox no game" if sox_no_game_today else None,
         )

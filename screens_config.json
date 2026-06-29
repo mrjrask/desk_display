@@ -60,8 +60,6 @@
     "cubs next home series": 2,
     "cubs current series": 2,
     "cubs schedule quad": 2,
-    "cubs next v2": 0,
-    "cubs no game": 0,
     "sox logo": 5,
     "sox stand1": 0,
     "sox stand2": 0,
@@ -74,8 +72,6 @@
     "sox next home series": 5,
     "sox current series": 5,
     "sox schedule quad": 5,
-    "sox next v2": 5,
-    "sox no game": 0,
     "mlb logo": 0,
     "MLB Scoreboard": 2,
     "NL Overview": 0,
@@ -298,12 +294,6 @@
         },
         {
           "screen": "cubs schedule quad"
-        },
-        {
-          "screen": "cubs next v2"
-        },
-        {
-          "screen": "cubs no game"
         }
       ]
     },
@@ -345,12 +335,6 @@
         },
         {
           "screen": "sox schedule quad"
-        },
-        {
-          "screen": "sox next v2"
-        },
-        {
-          "screen": "sox no game"
         }
       ]
     },
