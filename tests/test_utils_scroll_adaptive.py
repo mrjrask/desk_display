@@ -70,3 +70,39 @@ def test_scroll_vertical_content_keeps_dense_readable_frames_for_long_content():
     assert display.frames[0] == 0
     assert display.frames[-1] == 960
     assert len(display.frames) > 80
+
+
+class ImmediateWaitCaptureDisplay:
+    def __init__(self, frame_limit=1):
+        self.frames = []
+        self.wait_calls = []
+        self.frame_limit = frame_limit
+
+    def wait_for_skip(self, duration: float) -> bool:
+        self.wait_calls.append(duration)
+        return False
+
+    def skip_requested(self) -> bool:
+        return len(self.frames) >= self.frame_limit
+
+
+def test_scroll_vertical_content_preserves_immediate_wait_for_skip_capture_semantics():
+    display = ImmediateWaitCaptureDisplay(frame_limit=3)
+
+    scroll_vertical_content(
+        display=display,
+        content_height=100,
+        viewport_width=100,
+        viewport_height=50,
+        render_at_offset=display.frames.append,
+        base_step=10,
+        pause_start=30,
+        pause_end=30,
+        page_jump_mode=False,
+        min_frame_time=0.1,
+    )
+
+    assert len(display.frames) == 3
+    assert display.wait_calls
+    assert len(display.wait_calls) <= 3
+    assert all(duration <= 0.05 for duration in display.wait_calls)

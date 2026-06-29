@@ -172,3 +172,63 @@ def test_scroll_vertical_content_skip_still_exits_promptly(monkeypatch):
     )
 
     assert frames == [0]
+
+
+def test_scroll_vertical_content_routes_non_drag_taps_to_skip_handler(monkeypatch):
+    display = FakeDisplay()
+    frames = []
+    calls = []
+    fake_pygame = FakePygame(
+        [[
+            _event(FakePygame.FINGERDOWN, x=0.9, y=0.5),
+            _event(FakePygame.FINGERDOWN, x=0.9, y=0.5),
+        ]]
+    )
+    fake_main = SimpleNamespace(
+        _check_touch_skip_request=lambda **kwargs: calls.append(kwargs["events"])
+        or setattr(display, "skip", True)
+        or True
+    )
+
+    monkeypatch.setattr(utils, "_PYGAME_MODULE", fake_pygame)
+    monkeypatch.setitem(utils.sys.modules, "main", fake_main)
+
+    utils.scroll_vertical_content(
+        display=display,
+        content_height=100,
+        viewport_width=100,
+        viewport_height=50,
+        render_at_offset=frames.append,
+        base_step=10,
+        pause_start=0,
+        pause_end=0,
+        page_jump_mode=False,
+        min_frame_time=0.1,
+    )
+
+    assert frames == [0]
+    assert len(calls) == 1
+    assert [event.type for event in calls[0]] == [FakePygame.FINGERDOWN, FakePygame.FINGERDOWN]
+
+
+def test_scroll_vertical_content_does_not_route_drag_down_as_skip_tap(monkeypatch):
+    display = FakeDisplay()
+    calls = []
+    fake_pygame = FakePygame(
+        [[
+            _event(FakePygame.FINGERDOWN, x=0.5, y=0.8),
+            _event(FakePygame.FINGERMOTION, x=0.5, y=0.2),
+            _event(FakePygame.FINGERUP, x=0.5, y=0.2),
+        ]]
+    )
+    fake_main = SimpleNamespace(
+        _check_touch_skip_request=lambda **kwargs: calls.append(kwargs["events"]) or True
+    )
+
+    monkeypatch.setattr(utils, "_PYGAME_MODULE", fake_pygame)
+    monkeypatch.setitem(utils.sys.modules, "main", fake_main)
+
+    events = utils._read_scroll_drag_events(display, viewport_width=100, viewport_height=50)
+
+    assert calls == []
+    assert [event.action for event in events] == ["down", "motion", "up"]
