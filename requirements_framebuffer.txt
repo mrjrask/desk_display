@@ -20,8 +20,5 @@ rpi.gpio
 colorama
 adafruit-circuitpython-bme280
 i2cdevice>=1.0.0
--e ./vendor/pimoroni-bme280
--e ./vendor/pimoroni-bme680
--e ./vendor/bme68x
 git+https://github.com/pimoroni/ltr559-python.git#egg=ltr559
 git+https://github.com/pimoroni/lsm6ds3-python.git#egg=lsm6ds3

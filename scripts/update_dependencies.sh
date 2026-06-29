@@ -9,6 +9,7 @@ REQUIREMENTS_FILE_OVERRIDE="${REQUIREMENTS_FILE:-}"
 OUTPUT_MODE="${DESK_DISPLAY_OUTPUT:-}"
 INCLUDE_VENDOR_REQUIREMENTS="${INCLUDE_VENDOR_REQUIREMENTS:-0}"
 INCLUDE_PLATFORM_SPECIFIC_REQUIREMENTS="${INCLUDE_PLATFORM_SPECIFIC_REQUIREMENTS:-0}"
+PIMORONI_SENSOR_REQUIREMENTS_FILE="${PIMORONI_SENSOR_REQUIREMENTS_FILE:-requirements_sensors_pimoroni.txt}"
 
 if [[ ! -f "$COMMON_SCRIPT" ]]; then
   echo "[ERROR] Missing helper script: $COMMON_SCRIPT" >&2
@@ -73,6 +74,82 @@ pick_requirements_file() {
 }
 
 REQUIREMENTS_FILE=$(pick_requirements_file)
+
+normalize_sensor_name() {
+  printf '%s' "$1" | tr '[:upper:]- ' '[:lower:]__'
+}
+
+read_env_file_value() {
+  local env_path="$1"
+  local key="$2"
+
+  if [[ ! -f "$env_path" ]]; then
+    return 1
+  fi
+
+  awk -v key="$key" '
+    /^[[:space:]]*(#|$)/ { next }
+    {
+      line=$0
+      sub(/^[[:space:]]*export[[:space:]]+/, "", line)
+      if (line !~ "^[[:space:]]*" key "[[:space:]]*=") {
+        next
+      }
+      sub("^[[:space:]]*" key "[[:space:]]*=[[:space:]]*", "", line)
+      sub(/[[:space:]]+#.*$/, "", line)
+      sub(/^[[:space:]]+|[[:space:]]+$/, "", line)
+      if ((line ~ /^".*"$/) || (line ~ /^\047.*\047$/)) {
+        line=substr(line, 2, length(line)-2)
+      }
+      print line
+      exit 0
+    }
+  ' "$env_path"
+}
+
+configured_inside_sensor() {
+  if [[ -n "${INSIDE_SENSOR:-}" ]]; then
+    printf '%s' "$INSIDE_SENSOR"
+    return 0
+  fi
+  if [[ -n "${INDOOR_SENSOR:-}" ]]; then
+    printf '%s' "$INDOOR_SENSOR"
+    return 0
+  fi
+
+  local env_path="$PROJECT_DIR/.env"
+  local value
+  value=$(read_env_file_value "$env_path" "INSIDE_SENSOR" || true)
+  if [[ -n "$value" ]]; then
+    printf '%s' "$value"
+    return 0
+  fi
+  value=$(read_env_file_value "$env_path" "INDOOR_SENSOR" || true)
+  if [[ -n "$value" ]]; then
+    printf '%s' "$value"
+    return 0
+  fi
+
+  return 1
+}
+
+should_install_pimoroni_sensor_requirements() {
+  local sensor
+  sensor=$(configured_inside_sensor || true)
+  if [[ -z "$sensor" ]]; then
+    return 1
+  fi
+
+  case "$(normalize_sensor_name "$sensor")" in
+    pimoroni_bme280|pimoroni_bme680|pimoroni_bme68x|pimoroni_bme688)
+      return 0
+      ;;
+    *)
+      return 1
+      ;;
+  esac
+}
+
 cleanup_stale_egg_info() {
   local vendor_dir="$PROJECT_DIR/vendor"
   local had_permission_errors=0
@@ -194,6 +271,20 @@ if [[ -f "$PROJECT_DIR/$REQUIREMENTS_FILE" ]]; then
   popd >/dev/null
 else
   warn "$REQUIREMENTS_FILE not found; skipping pip install."
+fi
+
+if should_install_pimoroni_sensor_requirements; then
+  if [[ -f "$PROJECT_DIR/$PIMORONI_SENSOR_REQUIREMENTS_FILE" ]]; then
+    log "Installing optional Pimoroni sensor dependencies from $PIMORONI_SENSOR_REQUIREMENTS_FILE"
+    cleanup_stale_egg_info
+    pushd "$PROJECT_DIR" >/dev/null
+    pip install -r "$PIMORONI_SENSOR_REQUIREMENTS_FILE"
+    popd >/dev/null
+  else
+    warn "$PIMORONI_SENSOR_REQUIREMENTS_FILE not found; skipping optional Pimoroni sensor dependencies."
+  fi
+else
+  log "Skipping optional Pimoroni sensor dependencies (set INSIDE_SENSOR to pimoroni_bme280, pimoroni_bme680, or pimoroni_bme68x to install them)."
 fi
 
 deactivate
