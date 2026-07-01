@@ -17,6 +17,7 @@ Screen 2:
 import datetime
 import logging
 import math
+import textwrap
 import time
 from io import BytesIO
 from typing import Any, NamedTuple, Optional, Tuple
@@ -433,17 +434,132 @@ def _render_precip_icon(is_snow: bool, size: int, color: Tuple[int, int, int]) -
     return icon
 
 
-def _detect_weather_alert(weather: object) -> Tuple[Optional[str], Optional[Tuple[float, float, float]]]:
+
+def _selected_alert(weather: object) -> tuple[Optional[str], Optional[dict]]:
     alerts = _normalise_alerts(weather)
-    severity: Optional[str] = None
+    selected_severity: Optional[str] = None
+    selected_alert: Optional[dict] = None
     for alert in alerts:
         level = _classify_alert(alert)
         if level is None:
             continue
-        if severity is None or ALERT_PRIORITY[level] > ALERT_PRIORITY[severity]:
-            severity = level
-            if severity == "warning":
+        if selected_severity is None or ALERT_PRIORITY[level] > ALERT_PRIORITY[selected_severity]:
+            selected_severity = level
+            selected_alert = alert
+            if selected_severity == "warning":
                 break
+    return selected_severity, selected_alert
+
+
+def _alert_message_text(alert: Optional[dict]) -> str:
+    if not isinstance(alert, dict):
+        return ""
+
+    title = ""
+    for key in ("event", "title", "headline"):
+        value = alert.get(key)
+        if isinstance(value, str) and value.strip():
+            title = value.strip()
+            break
+
+    body = ""
+    for key in ("description", "message", "instruction", "details"):
+        value = alert.get(key)
+        if isinstance(value, str) and value.strip():
+            body = value.strip()
+            break
+
+    if title and body:
+        body_lower = body.lower()
+        if body_lower.startswith(title.lower()):
+            return body
+        return f"{title}: {body}"
+    return title or body
+
+
+def _wrap_alert_text(
+    draw: ImageDraw.ImageDraw,
+    text: str,
+    font: ImageFont.FreeTypeFont,
+    max_width: int,
+    max_lines: int,
+) -> list[str]:
+    words = " ".join(text.split())
+    if not words or max_lines <= 0:
+        return []
+
+    avg_char_width = max(1, draw.textsize("ABCDEFGHIJKLMNOPQRSTUVWXYZ", font=font)[0] // 26)
+    approx_chars = max(8, max_width // avg_char_width)
+    candidate_lines: list[str] = []
+    for paragraph in textwrap.wrap(words, width=approx_chars):
+        line = paragraph
+        while line and draw.textsize(line, font=font)[0] > max_width:
+            cut = max(1, len(line) - 1)
+            while cut > 1 and draw.textsize(line[:cut] + "…", font=font)[0] > max_width:
+                cut -= 1
+            candidate_lines.append(line[:cut].rstrip() + "…")
+            line = line[cut:].lstrip()
+        if line:
+            candidate_lines.append(line)
+
+    lines = candidate_lines[:max_lines]
+    if len(candidate_lines) > max_lines and lines:
+        last = lines[-1]
+        while last and draw.textsize(last + "…", font=font)[0] > max_width:
+            last = last[:-1].rstrip()
+        lines[-1] = (last or lines[-1][:1]) + "…"
+    return lines
+
+
+def _draw_alert_message_banner(
+    img: Image.Image,
+    draw: ImageDraw.ImageDraw,
+    severity: Optional[str],
+    alert: Optional[dict],
+    *,
+    top: int = 2,
+    max_height: Optional[int] = None,
+) -> int:
+    message = _alert_message_text(alert)
+    if not severity or not message:
+        return top
+
+    icon_color = ALERT_ICON_COLORS.get(severity, (255, 215, 0))
+    margin_x = 4
+    padding = 3
+    line_gap = 1
+    font = FONT_WEATHER_DETAILS_TINY if WIDTH < 320 else FONT_WEATHER_DETAILS_SMALL
+    max_banner_h = max_height or max(24, HEIGHT // 3)
+    max_text_w = WIDTH - margin_x * 2 - padding * 2
+    line_h = max(1, draw.textsize("Ag", font=font)[1])
+    max_lines = max(1, (max_banner_h - padding * 2) // (line_h + line_gap))
+    lines = _wrap_alert_text(draw, message, font, max_text_w, max_lines)
+    if not lines:
+        return top
+
+    banner_h = min(max_banner_h, padding * 2 + len(lines) * line_h + (len(lines) - 1) * line_gap)
+    draw.rounded_rectangle(
+        (margin_x, top, WIDTH - margin_x, top + banner_h),
+        radius=4,
+        fill=(36, 20, 16),
+        outline=icon_color,
+    )
+    y = top + padding
+    for line in lines:
+        line_w = draw.textsize(line, font=font)[0]
+        draw.text(
+            (margin_x + padding + max(0, (max_text_w - line_w) // 2), y),
+            line,
+            font=font,
+            fill=(255, 240, 210),
+        )
+        y += line_h + line_gap
+    return top + banner_h + 2
+
+def _detect_weather_alert(
+    weather: object,
+) -> Tuple[Optional[str], Optional[Tuple[float, float, float]]]:
+    severity, _alert = _selected_alert(weather)
     return severity, ALERT_LED_COLORS.get(severity)
 
 
@@ -466,7 +582,8 @@ def draw_weather_screen_1(display, weather, transition=False):
         return None
 
     background = get_screen_background_color("weather1", (0, 0, 0))
-    severity, led_color = _detect_weather_alert(weather)
+    severity, alert = _selected_alert(weather)
+    led_color = ALERT_LED_COLORS.get(severity)
 
     current = weather.get("current", {})
     daily   = weather.get("daily", [{}])[0]
@@ -482,11 +599,17 @@ def draw_weather_screen_1(display, weather, transition=False):
     img  = Image.new("RGB", (WIDTH, HEIGHT), background)
     draw = ImageDraw.Draw(img)
 
+    content_top = _draw_alert_message_banner(
+        img, draw, severity, alert, top=2, max_height=max(24, HEIGHT // 4)
+    )
+    if not (severity and alert):
+        content_top = 0
+
     # Temperature
     temp_str = f"{temp}°F"
     w_temp, h_temp = draw.textsize(temp_str, font=FONT_TEMP)
     draw.text(
-        ((WIDTH - w_temp) // 2, 0),
+        ((WIDTH - w_temp) // 2, content_top),
         temp_str,
         font=FONT_TEMP,
         fill=_temperature_chart_color(temp),
@@ -498,7 +621,7 @@ def draw_weather_screen_1(display, weather, transition=False):
         font_desc = FONT_WEATHER_DETAILS_BOLD
         w_desc, h_desc = draw.textsize(desc, font=font_desc)
     draw.text(
-        ((WIDTH - w_desc)//2, h_temp + WEATHER_DESC_GAP),
+        ((WIDTH - w_desc)//2, content_top + h_temp + WEATHER_DESC_GAP),
         desc,
         font=font_desc,
         fill=(255,255,255)
@@ -590,7 +713,7 @@ def draw_weather_screen_1(display, weather, transition=False):
     y_lbl     = y_val - max_lbl_h - LABEL_GAP
 
     # paste icon between desc and labels
-    top_of_icons = h_temp + h_desc + WEATHER_DESC_GAP * 2
+    top_of_icons = content_top + h_temp + h_desc + WEATHER_DESC_GAP * 2
     current_weather = current.get("weather", [{}])[0]
     icon_code = current_weather.get("icon")
     condition_code = current_weather.get("condition_code")
@@ -1760,7 +1883,8 @@ def draw_weather_screen_2(display, weather, transition=False):
         return None
 
     background = get_screen_background_color("weather2", (0, 0, 0))
-    severity, led_color = _detect_weather_alert(weather)
+    severity, alert = _selected_alert(weather)
+    led_color = ALERT_LED_COLORS.get(severity)
 
     current = weather.get("current", {})
     daily   = weather.get("daily", [{}])[0]
@@ -1813,6 +1937,10 @@ def draw_weather_screen_2(display, weather, transition=False):
     img  = Image.new("RGB", (WIDTH, HEIGHT), background)
     draw = ImageDraw.Draw(img)
 
+    banner_bottom = _draw_alert_message_banner(
+        img, draw, severity, alert, top=2, max_height=max(26, HEIGHT // 3)
+    )
+
     # compute per-row heights
     row_metrics = []
     total_h = 0
@@ -1846,8 +1974,10 @@ def draw_weather_screen_2(display, weather, transition=False):
         total_h += row_h
 
     # vertical spacing
-    space = (HEIGHT - total_h) // (len(items) + 1)
-    y = space
+    content_top = banner_bottom if severity and alert else 0
+    available_h = max(1, HEIGHT - content_top)
+    space = max(1, (available_h - total_h) // (len(items) + 1))
+    y = content_top + space
 
     # render each row, vertically centering label & value
     for lbl, val, row_h, h_lbl, h_val, lw, v_w, lbl_bbox, val_bbox, color in row_metrics:
