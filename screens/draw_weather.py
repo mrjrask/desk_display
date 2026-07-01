@@ -66,6 +66,12 @@ from utils import (
 
 ALERT_SYMBOL = "⚠️"
 ALERT_PRIORITY = {"warning": 3, "watch": 2, "hazard": 1}
+ALERT_PROVIDER_SEVERITY_LEVELS = {
+    "extreme": "warning",
+    "severe": "warning",
+    "moderate": "watch",
+    "minor": "hazard",
+}
 ALERT_LED_COLORS = {
     "warning": (LED_INDICATOR_LEVEL, 0.0, 0.0),
     "watch": (LED_INDICATOR_LEVEL, LED_INDICATOR_LEVEL * 0.5, 0.0),
@@ -325,6 +331,12 @@ def _normalise_alerts(weather: object) -> list:
 
 
 def _classify_alert(alert: dict) -> Optional[str]:
+    provider_severity = alert.get("severity")
+    if isinstance(provider_severity, str):
+        mapped_severity = ALERT_PROVIDER_SEVERITY_LEVELS.get(provider_severity.strip().lower())
+        if mapped_severity:
+            return mapped_severity
+
     texts = []
     for key in ("event", "title", "headline"):
         value = alert.get(key)
