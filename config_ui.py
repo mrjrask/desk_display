@@ -40,8 +40,22 @@ _screens_config_paths = resolve_screens_config_paths()
 DEFAULT_CONFIG_PATH = str(_screens_config_paths.default_path)
 LOCAL_CONFIG_PATH = str(_screens_config_paths.local_override_path)
 DEFAULT_SCREENS_PATH = os.environ.get(
-    "DEFAULT_SCREENS_PATH", str(Path(__file__).resolve().parent / "default_screens.json")
+    "DEFAULT_SCREENS_PATH", str(Path(__file__).resolve().parent / "default_screens_large.json")
 )
+DEFAULT_SCREEN_BUNDLES = {
+    "large": {
+        "label": "Large Default Configuration",
+        "path": os.environ.get("DEFAULT_SCREENS_LARGE_PATH", DEFAULT_SCREENS_PATH),
+    },
+    "small": {
+        "label": "Small Default Configuration",
+        "path": os.environ.get(
+            "DEFAULT_SCREENS_SMALL_PATH",
+            str(Path(__file__).resolve().parent / "default_screens_small.json"),
+        ),
+    },
+}
+DEFAULT_SCREEN_PROFILE = "large"
 STYLE_CONFIG_PATH = str(resolve_style_config_path())
 LAYOUTS_CONFIG_PATH = str(resolve_layouts_config_path())
 
@@ -470,11 +484,19 @@ def _load_style_config(path: str) -> Dict[str, Any]:
     return data
 
 
-def _load_default_screens_bundle() -> Tuple[Dict[str, Any], Dict[str, Any], Dict[str, Any]]:
+def _resolve_default_screens_path(profile: Optional[str] = None) -> str:
+    profile_id = (profile or DEFAULT_SCREEN_PROFILE).strip().lower()
+    if profile_id in DEFAULT_SCREEN_BUNDLES:
+        return DEFAULT_SCREEN_BUNDLES[profile_id]["path"]
+    raise ValueError("Unknown default configuration. Choose large or small.")
+
+
+def _load_default_screens_bundle(profile: Optional[str] = None) -> Tuple[Dict[str, Any], Dict[str, Any], Dict[str, Any]]:
     """Load the repo-backed defaults used by the web UI Load Defaults button."""
 
+    default_screens_path = _resolve_default_screens_path(profile)
     try:
-        with open(DEFAULT_SCREENS_PATH, "r", encoding="utf-8") as fh:
+        with open(default_screens_path, "r", encoding="utf-8") as fh:
             payload = json.load(fh)
     except FileNotFoundError:
         payload = _load_config(DEFAULT_CONFIG_PATH)
@@ -1228,14 +1250,17 @@ def get_screens() -> Any:
 
 @app.get("/api/screens/defaults")
 def get_default_screens() -> Any:
+    profile = request.args.get("profile", DEFAULT_SCREEN_PROFILE)
     try:
-        config, style_config, layouts_config = _load_default_screens_bundle()
+        config, style_config, layouts_config = _load_default_screens_bundle(profile)
     except Exception as exc:
         return jsonify({"error": str(exc)}), 400
 
     playlists, playlist_assignments = _build_playlist_assignments(config)
     return jsonify({
         "config": config,
+        "default_profiles": DEFAULT_SCREEN_BUNDLES,
+        "selected_default_profile": (profile or DEFAULT_SCREEN_PROFILE).strip().lower(),
         "screens": _build_screen_entries(config, style_config),
         "playlists": playlists,
         "playlist_assignments": playlist_assignments,

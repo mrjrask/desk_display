@@ -489,7 +489,11 @@
       <div class="status">Editing: {{ config_path }}</div>
       <div class="actions">
         <button class="btn" id="saveBtn">Save changes</button>
-        <button class="btn" id="loadDefaultsBtn" type="button">Load defaults</button>
+        <select id="defaultConfigSelect" class="btn-secondary" aria-label="Default configuration size">
+          <option value="large">Large defaults</option>
+          <option value="small">Small defaults</option>
+        </select>
+        <button class="btn" id="loadDefaultsBtn" type="button">Load selected defaults</button>
         <button class="btn" id="exportBtn" type="button">Export configuration</button>
         <button class="btn" id="importBtn" type="button">Import configuration</button>
         <a class="btn-secondary" href="{{ url_for('screen_screenshots') }}">View screenshots</a>
@@ -574,7 +578,11 @@
     <div class="footer-actions">
       <div class="actions">
         <button class="btn" id="saveBtnBottom">Save changes</button>
-        <button class="btn" id="loadDefaultsBtnBottom" type="button">Load defaults</button>
+        <select id="defaultConfigSelectBottom" class="btn-secondary" aria-label="Default configuration size">
+          <option value="large">Large defaults</option>
+          <option value="small">Small defaults</option>
+        </select>
+        <button class="btn" id="loadDefaultsBtnBottom" type="button">Load selected defaults</button>
         <button class="btn" id="exportBtnBottom" type="button">Export configuration</button>
         <button class="btn" id="importBtnBottom" type="button">Import configuration</button>
       </div>
@@ -587,10 +595,12 @@
     const screenTable = document.getElementById("screenTable");
     const saveBtn = document.getElementById("saveBtn");
     const loadDefaultsBtn = document.getElementById("loadDefaultsBtn");
+    const defaultConfigSelect = document.getElementById("defaultConfigSelect");
     const exportBtn = document.getElementById("exportBtn");
     const importBtn = document.getElementById("importBtn");
     const saveBtnBottom = document.getElementById("saveBtnBottom");
     const loadDefaultsBtnBottom = document.getElementById("loadDefaultsBtnBottom");
+    const defaultConfigSelectBottom = document.getElementById("defaultConfigSelectBottom");
     const exportBtnBottom = document.getElementById("exportBtnBottom");
     const importBtnBottom = document.getElementById("importBtnBottom");
     const importFileInput = document.getElementById("importFile");
@@ -922,10 +932,12 @@
       [
         saveBtn,
         loadDefaultsBtn,
+        defaultConfigSelect,
         exportBtn,
         importBtn,
         saveBtnBottom,
         loadDefaultsBtnBottom,
+        defaultConfigSelectBottom,
         exportBtnBottom,
         importBtnBottom,
       ].forEach((btn) => {
@@ -1359,11 +1371,22 @@
       }
     }
 
+    function selectedDefaultProfile() {
+      return defaultConfigSelect?.value || defaultConfigSelectBottom?.value || "large";
+    }
+
+    function syncDefaultProfileSelects(value) {
+      if (defaultConfigSelect) defaultConfigSelect.value = value;
+      if (defaultConfigSelectBottom) defaultConfigSelectBottom.value = value;
+    }
+
     async function loadDefaults() {
       clearError();
       setButtonsDisabled(true);
+      const profile = selectedDefaultProfile();
+      syncDefaultProfileSelects(profile);
       try {
-        const response = await fetch("/api/screens/defaults");
+        const response = await fetch(`/api/screens/defaults?profile=${encodeURIComponent(profile)}`);
         const data = await response.json();
         if (!response.ok) {
           throw new Error(data.error || "Unable to load defaults");
@@ -1427,6 +1450,8 @@
 
     saveBtn.addEventListener("click", saveConfiguration);
     saveBtnBottom.addEventListener("click", saveConfiguration);
+    defaultConfigSelect?.addEventListener("change", () => syncDefaultProfileSelects(defaultConfigSelect.value));
+    defaultConfigSelectBottom?.addEventListener("change", () => syncDefaultProfileSelects(defaultConfigSelectBottom.value));
     loadDefaultsBtn.addEventListener("click", loadDefaults);
     loadDefaultsBtnBottom.addEventListener("click", loadDefaults);
     exportBtn.addEventListener("click", exportConfiguration);
