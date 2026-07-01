@@ -461,6 +461,7 @@ The authoritative list is `RAW_SCREEN_IDS` in `screens_catalog.py`. Legacy IDs a
 - `weather logo`
 - `weather1`
 - `weather2`
+- `weather alert`
 - `weather hourly`
 - `weather daily`
 - `astronomical`

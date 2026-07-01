@@ -587,6 +587,102 @@ def _draw_alert_indicator(
     y_icon = HEIGHT - h_icon - 2
     img.paste(icon_img, (x_icon, y_icon), icon_img)
 
+
+def _fit_wrapped_text(
+    draw: ImageDraw.ImageDraw,
+    text: str,
+    fonts: tuple[ImageFont.FreeTypeFont, ...],
+    max_width: int,
+    max_height: int,
+) -> tuple[ImageFont.FreeTypeFont, list[str], bool]:
+    """Return the largest font and wrapped lines that fit the given area."""
+
+    for font in fonts:
+        line_h = max(1, draw.textsize("Ag", font=font)[1])
+        max_lines = max(1, max_height // (line_h + 2))
+        lines = _wrap_alert_text(draw, text, font, max_width, max_lines)
+        if len(lines) < max_lines or not lines or not lines[-1].endswith("…"):
+            return font, lines, False
+
+    font = fonts[-1]
+    line_h = max(1, draw.textsize("Ag", font=font)[1])
+    max_lines = max(1, max_height // (line_h + 1))
+    return font, _wrap_alert_text(draw, text, font, max_width, max_lines), True
+
+
+@log_call
+def draw_weather_alert_screen(display, weather, transition: bool = False):
+    """Render the selected weather alert on its own full-screen page."""
+
+    if not weather:
+        return None
+
+    severity, alert = _selected_alert(weather)
+    message = _alert_message_text(alert)
+    if not severity or not message:
+        return None
+
+    background = get_screen_background_color("weather alert", (0, 0, 0))
+    led_color = ALERT_LED_COLORS.get(severity)
+    icon_color = ALERT_ICON_COLORS.get(severity, (255, 215, 0))
+
+    img = Image.new("RGB", (WIDTH, HEIGHT), background)
+    draw = ImageDraw.Draw(img)
+
+    margin = max(4, WIDTH // 40)
+    header_font = FONT_WEATHER_DETAILS_SMALL_BOLD if WIDTH < 320 else FONT_WEATHER_DETAILS_BOLD
+    body_fonts = (
+        FONT_WEATHER_DETAILS,
+        FONT_WEATHER_DETAILS_SMALL,
+        FONT_WEATHER_DETAILS_TINY_LARGE,
+        FONT_WEATHER_DETAILS_TINY,
+        FONT_WEATHER_DETAILS_TINY_MICRO,
+    )
+
+    header = f"{ALERT_SYMBOL} {severity.upper()}"
+    header_bbox = _safe_textbbox(draw, header, header_font)
+    header_w = header_bbox[2] - header_bbox[0]
+    header_h = header_bbox[3] - header_bbox[1]
+    header_y = margin - header_bbox[1]
+    draw.rounded_rectangle(
+        (margin, margin, WIDTH - margin, margin + header_h + 6),
+        radius=4,
+        fill=(36, 20, 16),
+        outline=icon_color,
+    )
+    _draw_text_with_fallback(
+        draw,
+        ((WIDTH - header_w) // 2, header_y + 3),
+        header,
+        header_font,
+        (255, 240, 210),
+    )
+
+    body_top = margin + header_h + 12
+    body_max_w = WIDTH - margin * 2
+    body_max_h = max(1, HEIGHT - body_top - margin)
+    font, lines, truncated = _fit_wrapped_text(
+        draw,
+        message,
+        body_fonts,
+        body_max_w,
+        body_max_h,
+    )
+    line_h = max(1, draw.textsize("Ag", font=font)[1])
+    line_gap = 2 if line_h >= 10 else 1
+    total_h = len(lines) * line_h + max(0, len(lines) - 1) * line_gap
+    y = body_top + max(0, (body_max_h - total_h) // 2)
+
+    for line in lines:
+        line_w = draw.textsize(line, font=font)[0]
+        draw.text((margin + max(0, (body_max_w - line_w) // 2), y), line, font=font, fill=(255, 255, 255))
+        y += line_h + line_gap
+
+    if truncated:
+        logging.info("Weather alert text was truncated to fit the alert screen.")
+
+    return ScreenImage(img, displayed=False, led_override=led_color)
+
 # ─── Screen 1: Basic weather + two-line Feels/Hi/Lo ────────────────────────────
 @log_call
 def draw_weather_screen_1(display, weather, transition=False):
@@ -611,11 +707,7 @@ def draw_weather_screen_1(display, weather, transition=False):
     img  = Image.new("RGB", (WIDTH, HEIGHT), background)
     draw = ImageDraw.Draw(img)
 
-    content_top = _draw_alert_message_banner(
-        img, draw, severity, alert, top=2, max_height=max(24, HEIGHT // 4)
-    )
-    if not (severity and alert):
-        content_top = 0
+    content_top = 0
 
     # Temperature
     temp_str = f"{temp}°F"
@@ -1949,10 +2041,6 @@ def draw_weather_screen_2(display, weather, transition=False):
     img  = Image.new("RGB", (WIDTH, HEIGHT), background)
     draw = ImageDraw.Draw(img)
 
-    banner_bottom = _draw_alert_message_banner(
-        img, draw, severity, alert, top=2, max_height=max(26, HEIGHT // 3)
-    )
-
     # compute per-row heights
     row_metrics = []
     total_h = 0
@@ -1986,7 +2074,7 @@ def draw_weather_screen_2(display, weather, transition=False):
         total_h += row_h
 
     # vertical spacing
-    content_top = banner_bottom if severity and alert else 0
+    content_top = 0
     available_h = max(1, HEIGHT - content_top)
     space = max(1, (available_h - total_h) // (len(items) + 1))
     y = content_top + space

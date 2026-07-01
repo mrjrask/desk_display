@@ -37,6 +37,8 @@ from screens.draw_wolves_schedule import (
 from screens.draw_vrnof import draw_vrnof_screen
 from screens.draw_weather import (
     _pop_pct_from,
+    _selected_alert,
+    draw_weather_alert_screen,
     draw_weather_astronomical,
     draw_weather_daily,
     draw_weather_hourly,
@@ -706,6 +708,11 @@ def build_screen_registry(context: ScreenContext) -> Tuple[Dict[str, ScreenDefin
         "weather2",
         lambda data=weather_data: draw_weather_screen_2(context.display, data, transition=True),
         available=weather_current_available,
+    )
+    register(
+        "weather alert",
+        lambda data=weather_data: draw_weather_alert_screen(context.display, data, transition=True),
+        available=bool(_selected_alert(weather_data)[0]) if weather_data else False,
     )
     register(
         "weather hourly",
