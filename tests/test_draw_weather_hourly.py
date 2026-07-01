@@ -193,3 +193,33 @@ def test_draw_weather_daily_renders_without_tuple_unpack_errors():
     assert rendered is not None
     assert rendered.image.size[0] > 0
     assert rendered.image.size[1] > 0
+
+
+def test_alert_message_text_prefers_event_and_description():
+    from screens.draw_weather import _alert_message_text
+
+    alert = {
+        "event": "Severe Thunderstorm Warning",
+        "description": "Take shelter now. Damaging winds are expected.",
+    }
+
+    assert (
+        _alert_message_text(alert)
+        == "Severe Thunderstorm Warning: Take shelter now. Damaging winds are expected."
+    )
+
+
+def test_selected_alert_returns_highest_priority_alert_with_message():
+    from screens.draw_weather import _alert_message_text, _selected_alert
+
+    weather = {
+        "alerts": [
+            {"event": "Flood Advisory", "description": "Minor flooding is possible."},
+            {"event": "Tornado Warning", "description": "Move to an interior room now."},
+        ]
+    }
+
+    severity, alert = _selected_alert(weather)
+
+    assert severity == "warning"
+    assert _alert_message_text(alert) == "Tornado Warning: Move to an interior room now."
