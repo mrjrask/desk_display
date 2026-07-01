@@ -223,3 +223,30 @@ def test_selected_alert_returns_highest_priority_alert_with_message():
 
     assert severity == "warning"
     assert _alert_message_text(alert) == "Tornado Warning: Move to an interior room now."
+
+
+def test_selected_alert_uses_provider_severity_when_text_is_generic():
+    from screens.draw_weather import _selected_alert
+
+    weather = {"alerts": [{"description": "Flooding", "severity": "extreme"}]}
+
+    severity, alert = _selected_alert(weather)
+
+    assert severity == "warning"
+    assert alert == weather["alerts"][0]
+
+
+def test_selected_alert_maps_provider_severity_priority():
+    from screens.draw_weather import _selected_alert
+
+    weather = {
+        "alerts": [
+            {"description": "Coastal flooding", "severity": "minor"},
+            {"description": "River flooding", "severity": "moderate"},
+        ]
+    }
+
+    severity, alert = _selected_alert(weather)
+
+    assert severity == "watch"
+    assert alert == weather["alerts"][1]
