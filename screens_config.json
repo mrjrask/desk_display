@@ -5,6 +5,7 @@
     "weather logo": 0,
     "weather1": 1,
     "weather2": 1,
+    "weather alert": 1,
     "weather hourly": 1,
     "weather radar": 1,
     "weather daily": 1,
@@ -141,6 +142,9 @@
         },
         {
           "screen": "weather2"
+        },
+        {
+          "screen": "weather alert"
         },
         {
           "screen": "weather hourly"
