@@ -14,3 +14,32 @@ def test_build_commands_runs_pytest_before_standalone_scripts():
     assert commands[0].name == "pytest suite"
     assert commands[0].command[-1] == "-q"
     assert any("scripts/test_api_connections.py" in command.command for command in commands[1:])
+
+
+def test_main_forwards_dash_prefixed_pytest_args_without_separator(monkeypatch, capsys):
+    captured_pytest_args = None
+
+    def fake_build_commands(pytest_args):
+        nonlocal captured_pytest_args
+        captured_pytest_args = pytest_args
+        return []
+
+    monkeypatch.setattr(test_all, "_build_commands", fake_build_commands)
+
+    assert test_all.main(["--list", "-q", "-k", "weather"]) == 0
+    assert captured_pytest_args == ["-q", "-k", "weather"]
+    assert capsys.readouterr().out == ""
+
+
+def test_main_accepts_optional_separator_before_pytest_args(monkeypatch):
+    captured_pytest_args = None
+
+    def fake_build_commands(pytest_args):
+        nonlocal captured_pytest_args
+        captured_pytest_args = pytest_args
+        return []
+
+    monkeypatch.setattr(test_all, "_build_commands", fake_build_commands)
+
+    assert test_all.main(["--list", "--", "-q"]) == 0
+    assert captured_pytest_args == ["-q"]
