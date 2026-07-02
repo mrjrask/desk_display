@@ -14,9 +14,11 @@ def test_pre_update_scoreboard_appends_todays_schedule_after_prior_finals():
             return [
                 {"id": "final", "status": {"abstractGameState": "Final"}},
                 {"id": "live", "status": {"abstractGameState": "Live"}},
+                {"id": "postponed-prior", "status": {"detailedState": "Postponed"}},
             ]
         return [
             {"id": "scheduled", "status": {"abstractGameState": "Preview"}},
+            {"id": "in-progress", "status": {"statusCode": "I"}},
             {"id": "postponed", "status": {"detailedState": "Postponed"}},
         ]
 

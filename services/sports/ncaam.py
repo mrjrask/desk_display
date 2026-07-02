@@ -23,13 +23,15 @@ def fetch_scoreboard(
     selected_mode = (mode or "").strip().lower()
     target_day = day or scoreboard_date(current_now)
     if day is None and before_scoreboard_update(now=current_now, scoreboard_day=target_day):
-        return compose_pre_update_scoreboard(
+        games = compose_pre_update_scoreboard(
             now=current_now,
             scoreboard_day=target_day,
             fetch_games_for_date=lambda selected_day: _fetch_games_for_date(selected_day, mode=mode),
         )
-
-    games = _fetch_games_for_date(target_day, mode=mode)
+        if selected_mode != "tournament" or games:
+            return games
+    else:
+        games = _fetch_games_for_date(target_day, mode=mode)
     if not isinstance(games, list):
         games = []
 

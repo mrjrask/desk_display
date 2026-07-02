@@ -6,7 +6,8 @@ import datetime as dt
 from typing import Callable
 
 
-_FINAL_TOKENS = ("final", "completed", "complete", "post")
+_FINAL_TOKENS = ("final", "completed", "complete")
+_FINAL_EXACT_STATES = {"post", "4"}
 _SCHEDULED_TOKENS = ("scheduled", "preview", "pregame", "pre", "future")
 _CANCELLED_TOKENS = ("postponed", "canceled", "cancelled", "suspend")
 
@@ -48,7 +49,12 @@ def _status_values(game: dict) -> list[str]:
 
 def is_final_game(game: dict) -> bool:
     values = _status_values(game)
-    return any(any(token in value for token in _FINAL_TOKENS) for value in values) or "4" in values
+    if any(any(token in value for token in _CANCELLED_TOKENS) for value in values):
+        return False
+    return (
+        any(any(token in value for token in _FINAL_TOKENS) for value in values)
+        or any(value in _FINAL_EXACT_STATES for value in values)
+    )
 
 
 def is_scheduled_game(game: dict) -> bool:
@@ -57,7 +63,7 @@ def is_scheduled_game(game: dict) -> bool:
         return False
     if any(any(token == value or token in value for token in _SCHEDULED_TOKENS) for value in values):
         return True
-    return any(value in {"1", "s", "i"} for value in values)
+    return any(value in {"1", "s"} for value in values)
 
 
 def compose_pre_update_scoreboard(
