@@ -84,14 +84,14 @@ def main(argv: Sequence[str] | None = None) -> int:
         action="store_true",
         help="Print the commands that would run without executing them.",
     )
-    parser.add_argument(
-        "pytest_args",
-        nargs=argparse.REMAINDER,
-        help="Arguments passed through to pytest after an optional '--'.",
+    parser.epilog = (
+        "Any arguments not recognized by this runner are passed through to pytest. "
+        "Use '--' before pytest arguments only when you need to pass a pytest "
+        "argument that has the same name as an aggregate-runner option."
     )
-    args = parser.parse_args(argv)
+    args, pytest_args = parser.parse_known_args(argv)
 
-    pytest_args = list(args.pytest_args)
+    pytest_args = list(pytest_args)
     if pytest_args and pytest_args[0] == "--":
         pytest_args = pytest_args[1:]
 
