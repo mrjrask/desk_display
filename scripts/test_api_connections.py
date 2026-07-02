@@ -64,7 +64,7 @@ from data_fetch import (
     fetch_wolves_games,
 )
 from screens.nhl_scoreboard import dns_diagnostics
-from screens.draw_weather import _fetch_rainviewer_frames
+from screens.draw_weather import _alert_message_text, _fetch_rainviewer_frames, _selected_alert
 from services.apple_maps import fetch_apple_maps_routes, fetch_apple_maps_snapshot
 from utils import fetch_directions_routes
 
@@ -122,9 +122,39 @@ def _http_json(url: str, *, params: Optional[dict] = None, timeout: int = 12) ->
 def check_weatherkit_or_owm() -> tuple[str, str]:
     payload = fetch_weather()
     if payload and isinstance(payload, dict) and payload.get("current"):
-        source = payload.get("_source", "weather")
+        source = payload.get("_source") or payload.get("source") or "weather"
         return _ok(f"weather data returned (source={source})")
     return _fail("fetch_weather returned empty payload")
+
+
+def check_weather_alerts() -> tuple[str, str]:
+    payload = fetch_weather()
+    if not isinstance(payload, dict) or not payload.get("current"):
+        return _fail("fetch_weather returned empty payload")
+
+    raw_alerts = payload.get("alerts")
+    if isinstance(raw_alerts, dict):
+        raw_count = len(raw_alerts.get("alerts") or []) if isinstance(raw_alerts.get("alerts"), list) else 1
+    elif isinstance(raw_alerts, list):
+        raw_count = len(raw_alerts)
+    elif raw_alerts:
+        raw_count = 1
+    else:
+        raw_count = 0
+
+    severity, alert = _selected_alert(payload)
+    source = payload.get("_source") or payload.get("source") or "weather"
+    if alert is None:
+        return _ok(f"no active weather alerts reported (source={source}, alerts={raw_count})")
+
+    message = _alert_message_text(alert) or "active alert"
+    compact_message = " ".join(message.split())
+    if len(compact_message) > 160:
+        compact_message = f"{compact_message[:157].rstrip()}..."
+    return _ok(
+        f"active {severity or 'weather'} alert reported "
+        f"(source={source}, alerts={raw_count}): {compact_message}"
+    )
 
 
 def check_openweathermap_direct() -> tuple[str, str]:
@@ -387,6 +417,7 @@ def check_nhl_network_diagnostics() -> tuple[str, str]:
 
 CHECKS = [
     Check("weather (weatherkit/owm via app helper)", check_weatherkit_or_owm),
+    Check("weather alerts", check_weather_alerts),
     Check("openweathermap onecall", check_openweathermap_direct),
     Check("rainviewer metadata/tiles", check_rainviewer_metadata),
     Check("google directions", check_google_directions),
