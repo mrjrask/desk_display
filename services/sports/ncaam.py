@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import datetime as dt
 
+from config import CENTRAL_TIME
+from services.sports.scoreboard_window import before_scoreboard_update, compose_pre_update_scoreboard
 from screens.ncaam_scoreboard import _fetch_games_for_date, _scoreboard_date
 
 
@@ -17,8 +19,16 @@ def fetch_scoreboard(
     now: dt.datetime | None = None,
     mode: str | None = None,
 ) -> list[dict]:
+    current_now = now or dt.datetime.now(CENTRAL_TIME)
     selected_mode = (mode or "").strip().lower()
-    target_day = day or scoreboard_date(now)
+    target_day = day or scoreboard_date(current_now)
+    if day is None and before_scoreboard_update(now=current_now, scoreboard_day=target_day):
+        return compose_pre_update_scoreboard(
+            now=current_now,
+            scoreboard_day=target_day,
+            fetch_games_for_date=lambda selected_day: _fetch_games_for_date(selected_day, mode=mode),
+        )
+
     games = _fetch_games_for_date(target_day, mode=mode)
     if not isinstance(games, list):
         games = []
