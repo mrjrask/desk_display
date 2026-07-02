@@ -3,6 +3,13 @@ from PIL import Image
 from screens import world_cup_scoreboard
 
 
+class FixedDateTime(world_cup_scoreboard.datetime.datetime):
+    @classmethod
+    def now(cls, tz=None):
+        current = cls(2026, 6, 12, 12, 0, tzinfo=world_cup_scoreboard.datetime.timezone.utc)
+        return current.astimezone(tz) if tz else current.replace(tzinfo=None)
+
+
 class DummyDisplay:
     def __init__(self):
         self.images = []
@@ -81,3 +88,24 @@ def test_multi_game_second_scroll_cycle_replaces_title_with_line(monkeypatch):
     assert repeat_images[0] is calls[0]["img"]
     assert repeat_images[0].getpixel((0, 0)) == (255, 255, 255)
     assert repeat_images[1].getpixel((0, 0)) == (45, 45, 45)
+
+
+def test_parse_start_time_central_uses_today_for_same_day_match(monkeypatch):
+    monkeypatch.setattr(world_cup_scoreboard.datetime, "datetime", FixedDateTime)
+    game = {"date": "2026-06-12T17:00:00Z"}
+
+    assert world_cup_scoreboard._parse_start_time_central(game) == "Today 12:00 PM"
+
+
+def test_parse_start_time_central_uses_tonight_for_same_day_evening_match(monkeypatch):
+    monkeypatch.setattr(world_cup_scoreboard.datetime, "datetime", FixedDateTime)
+    game = {"date": "2026-06-12T23:00:00Z"}
+
+    assert world_cup_scoreboard._parse_start_time_central(game) == "Tonight 6:00 PM"
+
+
+def test_parse_start_time_central_keeps_date_for_later_match(monkeypatch):
+    monkeypatch.setattr(world_cup_scoreboard.datetime, "datetime", FixedDateTime)
+    game = {"date": "2026-06-13T17:00:00Z"}
+
+    assert world_cup_scoreboard._parse_start_time_central(game) == "Sat 6/13 12:00 PM"

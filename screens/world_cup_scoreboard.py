@@ -192,10 +192,15 @@ def _parse_start_time_central(game: dict[str, Any]) -> str:
         if dt.tzinfo is None:
             dt = dt.replace(tzinfo=datetime.timezone.utc)
         local = dt.astimezone(CENTRAL_TIME)
+        today = datetime.datetime.now(CENTRAL_TIME).date()
+        gametime = local.strftime("%-I:%M %p")
+        if local.date() == today:
+            label = "Tonight" if local.hour >= 18 else "Today"
+            return f"{label} {gametime}"
+
         day_of_week = local.strftime("%a")
         month = local.month
         day = local.day
-        gametime = local.strftime("%-I:%M %p")
         return f"{day_of_week} {month}/{day} {gametime}"
     except Exception:
         return ""
