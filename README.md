@@ -31,14 +31,14 @@ The project is optimized for desk-sized devices but also includes larger 800×48
 - Rotating screen engine with per-screen frequency, alternate-screen, and extra-hold-time controls.
 - JSON-backed playlists and sequence ordering in `screens_config.json`.
 - Optional quad layouts in `screens_layouts.json`, including touch-to-fullscreen behavior on supported HyperPixel setups.
-- Weather screens for current conditions, forecast details, hourly forecast, daily forecast, astronomical/sun events, and radar imagery.
+- Weather screens for current conditions, forecast details, hourly forecast, daily forecast, astronomical/sun events, alerts, and radar imagery.
 - Indoor sensor screen with BME280/BME680/BME688/SHT4x-style sensor support and configurable I2C probing.
-- Sports coverage for NFL, NHL, NBA, MLB, NCAAM, and AHL/Wolves helpers.
+- Sports coverage for NFL, NHL, NBA, MLB, NCAAM, FIFA World Cup, and AHL/Wolves helpers.
 - Chicago-focused team screens for Bears, Blackhawks, Wolves, Bulls, Cubs, and White Sox.
 - MLB series screens for current, next, and next-home Cubs/Sox series.
 - NHL and NBA playoff bracket screens.
 - Optional screenshot capture and rolling video capture.
-- Flask/Waitress configuration UI with optional password protection.
+- Flask/Waitress configuration UI with optional password protection and import/export support.
 - Installer scripts for Display HAT Mini, Adafruit miniPiTFT, Waveshare OLED/LCD HAT (A), HyperPixel/kernel display, Pi desktop window mode, macOS window mode, and Windows window mode.
 - Optional Wi-Fi monitor/recovery utilities for Raspberry Pi deployments.
 
@@ -103,7 +103,7 @@ Supported workflow profiles include:
 - Python 3.9+; project lint/tooling targets Python 3.11.
 - A display target, SDL desktop session, framebuffer device, or headless mode.
 - Network access for live weather, map, finance, and sports feeds.
-- Optional API credentials for WeatherKit, OpenWeatherMap, Google Maps, and Apple Maps.
+- Optional API credentials for WeatherKit, OpenWeatherMap, Google Maps, Apple Maps, and travel routes.
 
 ### Typical Debian/Raspberry Pi OS packages
 
@@ -129,17 +129,13 @@ sudo apt-get install -y \
 | `requirements_minipitft.txt` | Adafruit miniPiTFT-focused install set. |
 | `requirements_sensors_pimoroni.txt` | Optional editable Pimoroni BME280/BME680/BME68x sensor drivers. |
 
-Pimoroni sensor drivers are optional because they use editable installs from
-`vendor/`. The installer adds them automatically only when `INSIDE_SENSOR` (or
-legacy `INDOOR_SENSOR`) is configured as `pimoroni_bme280`, `pimoroni_bme680`,
-or `pimoroni_bme68x` in the environment or `.env` before running the installer:
+Pimoroni sensor drivers are optional because they use editable installs from `vendor/`. The installer adds them automatically only when `INSIDE_SENSOR` (or legacy `INDOOR_SENSOR`) is configured as `pimoroni_bme280`, `pimoroni_bme680`, or `pimoroni_bme68x` in the environment or `.env` before running the installer:
 
 ```bash
 INSIDE_SENSOR=pimoroni_bme680 bash ./Installers/install.sh display_hat_mini
 ```
 
-For manual setup, install the regular requirements first, then add the optional
-sensor requirements from the repository root:
+For manual setup, install the regular requirements first, then add the optional sensor requirements from the repository root:
 
 ```bash
 pip install -r requirements.txt
@@ -281,8 +277,11 @@ Configuration is environment-driven. Put local values in `.env` for development 
 | `CONFIG_LOAD_DOTENV` | Load `.env` at startup. Defaults to enabled. |
 | `DESK_DISPLAY_OUTPUT` | Output mode: `auto`, `displayhatmini`, `minipitft`, `kernel`, `window`, `framebuffer`, or `headless`. |
 | `DESK_DISPLAY_FORCE_HEADLESS` | Force headless behavior even if another output is configured. |
+| `DESK_DISPLAY_PROFILE` | Optional display profile override. Invalid values fall back to resolution-based detection. |
+| `DESK_DISPLAY_LOW_POWER` | Low-power mode; defaults screenshots/video and Wi-Fi monitoring/recovery toward lower resource usage. |
 | `DISPLAY_WIDTH` / `DISPLAY_HEIGHT` | Render dimensions override. |
 | `DISPLAY_ROTATION` | App rotation. Accepts degrees (`0`, `90`, `180`, `270`) or quarter-turn values (`0`-`3`). |
+| `DISPLAY_ROTATION_STRICT` | When enabled, invalid rotation values are treated as configuration errors. |
 | `DISPLAY_FB_DEVICE` | Framebuffer device path. Defaults to `/dev/fb0` where applicable. |
 | `DISPLAY_FB_PIXEL_FORMAT` | Framebuffer pixel format override. |
 | `DISPLAY_FB_PIXEL_ORDER` | Framebuffer channel order, usually `rgb` or `bgr`. |
@@ -306,12 +305,17 @@ Configuration is environment-driven. Put local values in `.env` for development 
 | `ESC_DOUBLE_PRESS_MAX_INTERVAL_SECONDS` | Double-Escape timing window. |
 | `DARK_HOURS` | Time windows used to suppress/alter display behavior during dark hours. |
 | `DISPLAY_FADE_IN_ENABLED` | Enables fade-in behavior where supported. |
+| `DISPLAY_FADE_IN_DISPLAY_HAT_MINI_STEPS` | Fade-in step count for Display HAT Mini. |
+| `DISPLAY_FADE_IN_HYPERPIXEL_STEPS` | Fade-in step count for HyperPixel-style profiles. |
+| `DISPLAY_FADE_IN_HDMI_1080P_STEPS` | Fade-in step count for HDMI/1080p-style profiles. |
 | `DISPLAY_HAT_MINI_REINIT_SECONDS` | Periodic Display HAT Mini reinitialization interval; `0` disables. |
 | `DISPLAY_HAT_MINI_LED_ENABLED` | Enables Display HAT Mini LED behavior. |
 | `DISPLAY_HAT_MINI_LED_LEVEL` | Display HAT Mini LED level. |
 | `DISPLAY_HAT_MINI_LED_INDICATOR_BORDER_ENABLED` | Adds the LED indicator border on Display HAT Mini. |
 | `HYPERPIXEL_LED_INDICATOR_BORDER_ENABLED` | Adds an indicator border on HyperPixel profiles. |
 | `HYPERPIXEL_LED_INDICATOR_BORDER_WIDTH` | Indicator border width. |
+| `IP_WITH_TIME` | Include IP/status text with the time display where supported. |
+| `NIXIE_TIME_FORMAT` | Nixie/time screen clock format; defaults to 12-hour mode. |
 
 ### Weather, maps, travel, and sensor variables
 
@@ -320,6 +324,7 @@ Configuration is environment-driven. Put local values in `.env` for development 
 | `WEATHER_LATITUDE`, `WEATHER_LONGITUDE` | Weather and map center location. |
 | `WEATHER_REFRESH_SECONDS` | Weather refresh interval. |
 | `HOURLY_FORECAST_HOURS` | Number of hourly forecast entries displayed. |
+| `WEATHER_USE_EMOJI_ICONS` | Use emoji weather symbols where supported. |
 | `WEATHERKIT_*` | Apple WeatherKit team/key/service/private-key settings. |
 | `OWM_API_KEY`, `OWM_UNITS`, `OWM_LANGUAGE` | OpenWeatherMap fallback settings. |
 | `TRAVEL_MODE`, `TRAVEL_TO_HOME_*`, `TRAVEL_TO_WORK_*` | Travel origin/destination selection. |
@@ -328,11 +333,7 @@ Configuration is environment-driven. Put local values in `.env` for development 
 | `INSIDE_SENSOR`, `INSIDE_I2C_BUSES` | Indoor sensor selection and I2C bus probing. |
 | `PRESSURE_HISTORY_PATH` | Pressure history cache path for trend display. |
 
-Set `INSIDE_SENSOR` to `pimoroni_bme280`, `pimoroni_bme680`, or
-`pimoroni_bme68x` before running an installer when you need the optional
-vendored Pimoroni sensor drivers. If those optional drivers are absent,
-the inside screen keeps its normal fallback behavior and is skipped when no
-supported sensor can be probed.
+Set `INSIDE_SENSOR` to `pimoroni_bme280`, `pimoroni_bme680`, or `pimoroni_bme68x` before running an installer when you need the optional vendored Pimoroni sensor drivers. If those optional drivers are absent, the inside screen keeps its normal fallback behavior and is skipped when no supported sensor can be probed.
 
 ### Sports and data variables
 
@@ -350,6 +351,7 @@ supported sensor can be probed.
 | --- | --- |
 | `SCREEN_CONFIG_HOST` | Config UI bind host; default is `0.0.0.0`. |
 | `SCREEN_CONFIG_PORT` | Config UI port; default is `5002`. |
+| `DEFAULT_SCREENS_PATH`, `DEFAULT_SCREENS_LARGE_PATH`, `DEFAULT_SCREENS_SMALL_PATH` | Optional paths for UI defaults and import/reset workflows. |
 | `SCREEN_UI_PASSWORD` | Enables password-protected UI when set. |
 | `SCREEN_UI_USERNAME` | Optional username. |
 | `SCREEN_AUTH_ENABLED` | Force auth behavior. |
@@ -358,7 +360,7 @@ supported sensor can be probed.
 
 | Variable | Description |
 | --- | --- |
-| `ENABLE_SCREENSHOTS` | Enables screenshot capture. Defaults to disabled on macOS window mode and enabled elsewhere unless overridden. |
+| `ENABLE_SCREENSHOTS` | Enables screenshot capture. Defaults to disabled on macOS window mode and low-power mode, and enabled elsewhere unless overridden. |
 | `ENABLE_VIDEO` | Enables rolling MP4 capture. |
 | `SCREENSHOT_DIR` | Current screenshot output location. |
 | `SCREENSHOT_ARCHIVE_BASE` | Screenshot archive base location. |
@@ -423,7 +425,7 @@ Example:
 }
 ```
 
-The default playlists include starter, weather, sensors, stocks, Hawks, NHL, Wolves, Cubs, Sox, MLB, Bears, NFL, Bulls, NBA, and quad groups.
+The default playlists include starter, weather, sensors, stocks, Hawks, NHL, Wolves, Cubs, Sox, MLB, Bears, NFL, Bulls, NBA, NCAAM, World Cup, and quad groups.
 
 ### MLB series screens
 
@@ -486,12 +488,13 @@ The authoritative list is `RAW_SCREEN_IDS` in `screens_catalog.py`. Legacy IDs a
 - `NFL Standings NFC`
 - `NFL Standings AFC`
 
-### NBA, Bulls, and NCAAM
+### NBA, Bulls, NCAAM, and World Cup
 
 - `nba logo`
 - `NBA Scoreboard`
 - `NBA Playoffs`
 - `NCAAM Scoreboard`
+- `World Cup Scoreboard`
 - `bulls logo`
 - `bulls stand1`
 - `bulls last`
@@ -674,7 +677,7 @@ python tools/import_screen_rotation_config.py path/to/export.json
 | Wrong rotation/orientation | Avoid double rotation between kernel overlays and `DISPLAY_ROTATION`; check `HYPERPIXEL_PANEL` and display dimensions. |
 | Blank framebuffer/kernel output | Verify `DESK_DISPLAY_OUTPUT`, `DISPLAY_FB_DEVICE`, display dimensions, pixel format/order, and device permissions. |
 | Blinking cursor on framebuffer output | Keep `DISPLAY_FB_HIDE_CONSOLE_CURSOR=1` and `DISPLAY_FB_CONSOLE_GRAPHICS=1` so Linux fbcon does not redraw a cursor over direct framebuffer animation. |
-| macOS/window mode uses too much CPU | Use `./scripts/launch_macos_window_perf.sh` or set `DESK_DISPLAY_WINDOW_SCALE=1`, `ENABLE_SCREENSHOTS=0`, `ENABLE_VIDEO=0`, `ENABLE_WIFI_MONITOR=0`, and `ENABLE_WIFI_RECOVERY=0`. |
+| macOS/window mode uses too much CPU | Use `./scripts/launch_macos_window_perf.sh` or set `DESK_DISPLAY_LOW_POWER=1`, `DESK_DISPLAY_WINDOW_SCALE=1`, `ENABLE_SCREENSHOTS=0`, `ENABLE_VIDEO=0`, `ENABLE_WIFI_MONITOR=0`, and `ENABLE_WIFI_RECOVERY=0`. |
 | Waveshare OLED/LCD HAT issues | Run `scripts/check_waveshare_setup.sh`, verify I2C addresses, framebuffer config, and `WAVESHARE_OLED_LCD_HAT_A_INSTALLED`. |
 | API/feed problem | Run `python scripts/test_api_connections.py`; use `--json` for machine-readable details. |
 
@@ -682,4 +685,4 @@ python tools/import_screen_rotation_config.py path/to/export.json
 
 ## External APIs
 
-See [README_APIS.md](README_APIS.md) for a detailed catalog of third-party endpoints, credentials, payload fields, and diagnostics.
+See [README_APIS.md](README_APIS.md) for a detailed catalog of third-party endpoints, credentials, payload fields, diagnostics, and payload-handling notes.
