@@ -33,6 +33,16 @@ class _Entry:
     fetched_at: float
 
 
+def _payload_source_label(key: str, value: Any) -> Optional[str]:
+    """Return a human-readable upstream source label for payload logging."""
+
+    if key == "weather" and isinstance(value, dict):
+        source = value.get("source") or value.get("provider")
+        if isinstance(source, str) and source.strip():
+            return source.strip()
+    return None
+
+
 class DataProvider:
     """TTL cache with stale fallback for API-backed payloads."""
 
@@ -50,6 +60,15 @@ class DataProvider:
         with self._cache_lock:
             cached = self._cache.get(key)
         if cached and now - cached.fetched_at < ttl_seconds:
+            source = _payload_source_label(key, cached.value)
+            if source:
+                logging.info(
+                    "Using cached %s payload from %s (age: %.0fs, TTL: %ds)",
+                    key,
+                    source,
+                    now - cached.fetched_at,
+                    ttl_seconds,
+                )
             return cached.value
 
         try:
@@ -58,17 +77,28 @@ class DataProvider:
                 with self._cache_lock:
                     stale = self._cache.get(key)
                 if stale is not None:
-                    logging.warning("Using stale %s payload after empty fetch result", key)
+                    source = _payload_source_label(key, stale.value)
+                    if source:
+                        logging.warning("Using stale %s payload from %s after empty fetch result", key, source)
+                    else:
+                        logging.warning("Using stale %s payload after empty fetch result", key)
                     return stale.value
                 return None
             with self._cache_lock:
                 self._cache[key] = _Entry(value=value, fetched_at=now)
+            source = _payload_source_label(key, value)
+            if source:
+                logging.info("Fetched %s payload from %s", key, source)
             return value
         except Exception as exc:
             with self._cache_lock:
                 stale = self._cache.get(key)
             if stale is not None:
-                logging.warning("Using stale %s payload after fetch failure: %s", key, exc)
+                source = _payload_source_label(key, stale.value)
+                if source:
+                    logging.warning("Using stale %s payload from %s after fetch failure: %s", key, source, exc)
+                else:
+                    logging.warning("Using stale %s payload after fetch failure: %s", key, exc)
                 return stale.value
             raise
 
