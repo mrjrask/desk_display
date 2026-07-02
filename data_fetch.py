@@ -75,6 +75,7 @@ _session = get_session()
 # Weather caching to limit API usage across devices
 _weather_cache: Optional[dict[str, Any]] = None
 _weather_cache_fetched_at: Optional[datetime.datetime] = None
+_weather_cache_source: Optional[str] = None
 _weather_cache_lock = threading.Lock()
 _weatherkit_token: Optional[str] = None
 _weatherkit_token_exp: Optional[datetime.datetime] = None
@@ -802,6 +803,7 @@ def _normalise_weatherkit_response(data: dict[str, Any]) -> Optional[dict[str, A
         "daily": daily,
         "hourly": hourly,
         "alerts": alerts_raw,
+        "source": "Apple WeatherKit",
     }
     return _apply_nighttime_icons(mapped)
 
@@ -937,6 +939,7 @@ def _normalise_openweathermap_response(data: dict[str, Any]) -> Optional[dict[st
         "daily": daily,
         "hourly": hourly,
         "alerts": alerts_raw,
+        "source": "OpenWeatherMap",
     }
     return _apply_nighttime_icons(mapped)
 
@@ -1033,6 +1036,16 @@ def _fetch_openweathermap(now: datetime.datetime) -> Optional[dict[str, Any]]:
         return None
 
 
+def _weather_source_label(weather: Any) -> str:
+    """Return a human-readable source label for normalized weather payloads."""
+
+    if isinstance(weather, dict):
+        source = weather.get("source") or weather.get("provider")
+        if isinstance(source, str) and source.strip():
+            return source.strip()
+    return "unknown source"
+
+
 def fetch_weather(force_refresh: bool = False):
     """Fetch weather from WeatherKit with OpenWeatherMap as a fallback.
 
@@ -1040,18 +1053,20 @@ def fetch_weather(force_refresh: bool = False):
         force_refresh: If True, bypass the local cache TTL and fetch new data.
     """
 
-    global _weather_cache, _weather_cache_fetched_at
+    global _weather_cache, _weather_cache_fetched_at, _weather_cache_source
     now = datetime.datetime.now(datetime.timezone.utc)
 
     cache_age = None
     with _weather_cache_lock:
         cached = _weather_cache
         cached_at = _weather_cache_fetched_at
+        cached_source = _weather_cache_source or _weather_source_label(cached)
     if cached and cached_at:
         cache_age = (now - cached_at).total_seconds()
         if not force_refresh and cache_age < WEATHER_REFRESH_SECONDS:
             logging.warning(
-                "Using cached weather data last retrieved at %s (age: %.0fs, TTL: %ds)",
+                "Using cached weather data from %s last retrieved at %s (age: %.0fs, TTL: %ds)",
+                cached_source,
                 cached_at.isoformat(),
                 cache_age,
                 WEATHER_REFRESH_SECONDS,
@@ -1071,6 +1086,8 @@ def fetch_weather(force_refresh: bool = False):
         with _weather_cache_lock:
             _weather_cache = normalized
             _weather_cache_fetched_at = now
+            _weather_cache_source = _weather_source_label(normalized)
+            logging.info("Fetched weather data from %s at %s", _weather_cache_source, now.isoformat())
             return _weather_cache
 
     # If both sources fail, fall back to stale cached data instead of returning
@@ -1078,10 +1095,12 @@ def fetch_weather(force_refresh: bool = False):
     with _weather_cache_lock:
         cached = _weather_cache
         cached_at = _weather_cache_fetched_at
+        cached_source = _weather_cache_source or _weather_source_label(cached)
     if cached and cached_at:
         cache_age = cache_age if cache_age is not None else (now - cached_at).total_seconds()
         logging.warning(
-            "Using stale cached weather data last retrieved at %s after fetch errors (age: %.0fs)",
+            "Using stale cached weather data from %s last retrieved at %s after fetch errors (age: %.0fs)",
+            cached_source,
             cached_at.isoformat(),
             cache_age,
         )
