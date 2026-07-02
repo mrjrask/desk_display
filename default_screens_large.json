@@ -13,6 +13,7 @@
       "weather logo": 0,
       "weather1": 1,
       "weather2": 1,
+      "weather alert": 1,
       "weather hourly": 1,
       "weather daily": 3,
       "weather quad": {
@@ -168,6 +169,9 @@
           },
           {
             "screen": "weather2"
+          },
+          {
+            "screen": "weather alert"
           },
           {
             "screen": "weather hourly"
@@ -558,6 +562,9 @@
         "background": "#000000"
       },
       "weather2": {
+        "background": "#000000"
+      },
+      "weather alert": {
         "background": "#000000"
       },
       "weather hourly": {
