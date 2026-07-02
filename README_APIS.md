@@ -2,7 +2,7 @@
 
 Desk Display pulls live data from third-party weather, maps, travel, finance, and sports providers. Most provider payloads are normalized in `data_fetch.py`, `services/`, or individual screen modules before being rendered.
 
-Most credentials can be supplied in `.env` when `CONFIG_LOAD_DOTENV=1` or through the process/service environment.
+Most credentials can be supplied in `.env` when `CONFIG_LOAD_DOTENV=1` or through the process/service environment. Optional providers should fail closed: missing credentials should skip the related diagnostic or fall back to another provider rather than preventing unrelated screens from rendering.
 
 ---
 
@@ -49,7 +49,7 @@ Exit codes:
 | `0` | All checks were `OK` or `SKIP`. |
 | `1` | One or more checks returned `FAIL`. |
 
-The diagnostic script covers WeatherKit/OpenWeatherMap, RainViewer, Google Directions/Static Maps, Apple Maps Directions/Snapshot, NHL/NBA/NFL/MLB scoreboards and standings, AHL ICS/HockeyTech, Yahoo Finance chart data, and app-level helpers for Bears, Bulls, Blackhawks, Cubs, Sox, and Wolves.
+The diagnostic script covers WeatherKit/OpenWeatherMap, RainViewer, Google Directions/Static Maps, Apple Maps Directions/Snapshot, NHL/NBA/NFL/MLB scoreboards and standings, AHL ICS/HockeyTech, Yahoo Finance chart data, NHL network diagnostics, and app-level helpers for Bears, Bulls, Blackhawks, Cubs, Sox, and Wolves. NCAAM and World Cup screens use ESPN scoreboard endpoints documented below, but they are not currently included in `scripts/test_api_connections.py`.
 
 ---
 
@@ -267,7 +267,7 @@ Fields used include game status, team records, scores, standings ranks, wins, lo
 | --- | --- |
 | ESPN FIFA World Cup scoreboard | `https://site.api.espn.com/apis/site/v2/sports/soccer/fifa.world/scoreboard` |
 
-Fields used include game status, team logos, start times, scores, and final/in-progress state.
+Fields used include game IDs, status, team display names/abbreviations, team logos, start times, scores, and final/in-progress state.
 
 ---
 
@@ -322,12 +322,13 @@ Wi-Fi utilities can probe configured HTTPS/TCP targets to decide whether recover
 | Apple Maps | `APPLE_MAPS_API_KEY` or `MAPKIT_TOKEN`, or JWT values: `APPLE_MAPS_TEAM_ID`, `APPLE_MAPS_KEY_ID`, `APPLE_MAPS_PRIVATE_KEY` or `APPLE_MAPS_KEY_PATH`. |
 | Travel routes | `TRAVEL_MODE`, `TRAVEL_TO_HOME_ORIGIN`, `TRAVEL_TO_HOME_DESTINATION`, `TRAVEL_TO_WORK_ORIGIN`, `TRAVEL_TO_WORK_DESTINATION`. |
 | AHL/Wolves | Optional `AHL_*` overrides; defaults are provided for the Chicago Wolves helper path. |
+| Wi-Fi probes | Optional `WIFI_TCP_PROBE_*`, `WIFI_HTTPS_PROBE_URL`, and `RPI_CONNECT_CONTROL_HOST` values. |
 
 ---
 
 ## Notes on payload handling
 
-- External APIs may change without notice; run `python scripts/test_api_connections.py` after upgrades or when a screen goes blank.
+- External APIs may change without notice; run `python scripts/test_api_connections.py` after upgrades or when a screen goes blank. For NCAAM or World Cup issues, test the ESPN scoreboard endpoint directly because those endpoints are documented here but not part of the diagnostic script yet.
 - Missing optional credentials usually produce diagnostic `SKIP` results rather than failures.
 - Weather providers are normalized to a shared internal structure so renderers can prefer WeatherKit while still using OpenWeatherMap fallback data.
 - Team and league logos are loaded primarily from the local `images/` folder. Some sports providers may include remote logos, but the renderers generally prefer bundled assets for predictable offline rendering.
