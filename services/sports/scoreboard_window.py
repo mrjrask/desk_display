@@ -7,7 +7,7 @@ from typing import Callable
 
 
 _FINAL_TOKENS = ("final", "completed", "complete")
-_FINAL_EXACT_STATES = {"post", "4"}
+_FINAL_EXACT_STATES = {"post", "4", "f", "o"}
 _SCHEDULED_TOKENS = ("scheduled", "preview", "pregame", "pre", "future")
 _CANCELLED_TOKENS = ("postponed", "canceled", "cancelled", "suspend")
 

@@ -13,6 +13,7 @@ def test_pre_update_scoreboard_appends_todays_schedule_after_prior_finals():
         if day == yesterday:
             return [
                 {"id": "final", "status": {"abstractGameState": "Final"}},
+                {"id": "game-over", "status": {"statusCode": "O", "detailedState": "Game Over"}},
                 {"id": "live", "status": {"abstractGameState": "Live"}},
                 {"id": "postponed-prior", "status": {"detailedState": "Postponed"}},
             ]
@@ -28,5 +29,5 @@ def test_pre_update_scoreboard_appends_todays_schedule_after_prior_finals():
         fetch_games_for_date=fetch,
     )
 
-    assert [game["id"] for game in games] == ["final", "scheduled"]
+    assert [game["id"] for game in games] == ["final", "game-over", "scheduled"]
     assert calls == [yesterday, today]
