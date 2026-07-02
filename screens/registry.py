@@ -709,10 +709,13 @@ def build_screen_registry(context: ScreenContext) -> Tuple[Dict[str, ScreenDefin
         lambda data=weather_data: draw_weather_screen_2(context.display, data, transition=True),
         available=weather_current_available,
     )
+    active_weather_alert = bool(_selected_alert(weather_data)[0]) if weather_data else False
     register(
         "weather alert",
         lambda data=weather_data: draw_weather_alert_screen(context.display, data, transition=True),
-        available=bool(_selected_alert(weather_data)[0]) if weather_data else False,
+        # Keep this screen in schedules/default playlists, but only allow it to
+        # rotate in while the current weather payload contains an active alert.
+        available=active_weather_alert,
     )
     register(
         "weather hourly",

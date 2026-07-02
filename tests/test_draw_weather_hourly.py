@@ -250,3 +250,28 @@ def test_selected_alert_maps_provider_severity_priority():
 
     assert severity == "watch"
     assert alert == weather["alerts"][1]
+
+
+def test_alert_indicator_stays_above_bottom_safe_buffer():
+    from PIL import Image, ImageDraw
+
+    from screens import draw_weather
+
+    img = Image.new("RGB", (draw_weather.WIDTH, draw_weather.HEIGHT), "black")
+    draw = ImageDraw.Draw(img)
+
+    draw_weather._draw_alert_indicator(img, draw, "warning")
+
+    bottom_rows = [
+        img.getpixel((x, y))
+        for y in range(max(0, draw_weather.HEIGHT - 6), draw_weather.HEIGHT)
+        for x in range(draw_weather.WIDTH)
+    ]
+    top_rows = [
+        img.getpixel((x, y))
+        for y in range(0, min(24, draw_weather.HEIGHT))
+        for x in range(draw_weather.WIDTH)
+    ]
+
+    assert any(pixel != (0, 0, 0) for pixel in top_rows)
+    assert all(pixel == (0, 0, 0) for pixel in bottom_rows)

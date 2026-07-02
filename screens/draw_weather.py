@@ -583,8 +583,11 @@ def _draw_alert_indicator(
     icon_color = ALERT_ICON_COLORS.get(severity, (255, 215, 0))
     icon_img = _ensure_rgba_icon(_render_emoji_glyph(ALERT_SYMBOL, FONT_EMOJI_SMALL, icon_color))
     w_icon, h_icon = icon_img.size
+    # Keep the alert glyph clear of display-level bottom safety buffers.
+    # Display HAT Mini and non-square HyperPixel profiles clear a few pixels at
+    # the bottom edge just before output, which could erase a bottom-corner icon.
     x_icon = WIDTH - w_icon - 2
-    y_icon = HEIGHT - h_icon - 2
+    y_icon = 2
     img.paste(icon_img, (x_icon, y_icon), icon_img)
 
 

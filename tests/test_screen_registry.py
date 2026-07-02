@@ -114,6 +114,34 @@ def test_weather_radar_detects_precipitation_amount_without_pop():
     assert registry["weather radar"].available is True
 
 
+def test_weather_alert_screen_unavailable_without_active_alert():
+    now = datetime.datetime(2024, 1, 1, 12, 0, tzinfo=CENTRAL_TIME)
+    weather = {"current": {}, "daily": [{}], "hourly": []}
+
+    registry, _ = build_screen_registry(_make_context(weather, now))
+
+    assert registry["weather alert"].available is False
+
+
+def test_weather_alert_screen_available_with_active_alert():
+    now = datetime.datetime(2024, 1, 1, 12, 0, tzinfo=CENTRAL_TIME)
+    weather = {
+        "current": {},
+        "daily": [{}],
+        "hourly": [],
+        "alerts": [
+            {
+                "event": "Severe Thunderstorm Warning",
+                "description": "Take shelter now.",
+            }
+        ],
+    }
+
+    registry, _ = build_screen_registry(_make_context(weather, now))
+
+    assert registry["weather alert"].available is True
+
+
 def test_weather_current_screens_stay_available_with_cached_data_offline():
     now = datetime.datetime(2024, 1, 1, 12, 0, tzinfo=CENTRAL_TIME)
     stale_fetch = now - datetime.timedelta(hours=12)
