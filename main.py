@@ -58,6 +58,7 @@ gc = __import__('gc')
 
 from PIL import Image
 
+import config
 from config import (
     WIDTH,
     HEIGHT,
