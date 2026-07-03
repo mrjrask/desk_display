@@ -10,7 +10,7 @@ import os
 import time
 from typing import Any, Optional
 
-from PIL import Image, ImageDraw
+from PIL import Image, ImageDraw, ImageFont
 
 try:
     RESAMPLE = Image.ANTIALIAS
@@ -82,6 +82,22 @@ LEAGUE_LOGO_BASE_HEIGHT = TEAM_LOGO_BASE_HEIGHT
 LEAGUE_LOGO_GAP = scale_value(4)
 
 SCORE_FONT = get_screen_font(SCREEN_ID, "score", base_font=FONT_TEAM_SPORTS, default_size=39)
+PK_SCORE_FONT_SCALE = 0.7
+
+
+def _scale_font(font: ImageFont.FreeTypeFont, scale: float) -> ImageFont.FreeTypeFont:
+    size = getattr(font, "size", None)
+    path = getattr(font, "path", None)
+    if not size or not path:
+        return font
+    try:
+        return ImageFont.truetype(path, max(1, int(round(size * scale))))
+    except OSError:
+        logging.debug("Unable to scale font %s by %s", path, scale)
+        return font
+
+
+PK_SCORE_FONT = _scale_font(SCORE_FONT, PK_SCORE_FONT_SCALE)
 STATUS_FONT = get_screen_font(SCREEN_ID, "status", base_font=FONT_STATUS, default_size=28)
 CENTER_FONT = get_screen_font(SCREEN_ID, "center", base_font=FONT_STATUS, default_size=28)
 
@@ -123,6 +139,40 @@ def _center_text(draw: ImageDraw.ImageDraw, text: str, font, x: int, width: int,
         tx = x + (width - tw) // 2
         ty = y + (height - th) // 2
     draw.text((tx, ty), text, font=font, fill=fill)
+
+
+def _measure_text(draw: ImageDraw.ImageDraw, text: str, font) -> tuple[int, int, int, int]:
+    try:
+        return draw.textbbox((0, 0), text, font=font)
+    except Exception:
+        width, height = draw.textsize(text, font=font)
+        return (0, 0, width, height)
+
+
+def _score_text_segments(team: dict, *, show: bool) -> list[tuple[str, ImageFont.FreeTypeFont]]:
+    if not show:
+        return [("—", SCORE_FONT)]
+    score = team.get("score")
+    base_score = str(score) if score not in (None, "") else "—"
+    penalty_score = _penalty_score_value(team)
+    if penalty_score is not None:
+        return [(base_score, SCORE_FONT), (f" ({penalty_score})", PK_SCORE_FONT)]
+    return [(base_score, SCORE_FONT)]
+
+
+def _center_score_text(draw: ImageDraw.ImageDraw, team: dict, *, show: bool, x: int, width: int, y: int, height: int, fill=(255, 255, 255)):
+    segments = _score_text_segments(team, show=show)
+    measurements = [_measure_text(draw, text, font) for text, font in segments]
+    total_width = sum(r - l for l, _t, r, _b in measurements)
+    max_height = max((b - t for _l, t, _r, b in measurements), default=0)
+    current_x = x + (width - total_width) // 2
+    for (text, font), (l, t, r, b) in zip(segments, measurements):
+        segment_width = r - l
+        segment_height = b - t
+        tx = current_x - l
+        ty = y + (height - max_height) // 2 + (max_height - segment_height) // 2 - t
+        draw.text((tx, ty), text, font=font, fill=fill)
+        current_x += segment_width
 
 
 def _fetch_json(params: dict[str, Any]) -> dict[str, Any]:
@@ -344,19 +394,15 @@ def _render_scoreboard(games: list[dict], *, title_style: str = "title") -> Imag
         home = teams.get("home") or {}
 
         show_scores = _should_display_scores(game)
-        away_score = _score_text(away, show=show_scores)
-        home_score = _score_text(home, show=show_scores)
         in_progress = _is_in_progress(game)
         final = _is_final(game)
 
-        for col_idx, text in ((0, away_score), (2, "@"), (4, home_score)):
-            font = SCORE_FONT if col_idx != 2 else CENTER_FONT
-            fill = (255, 255, 255)
-            if col_idx == 0:
-                fill = _score_fill("away", in_progress=in_progress, final=final, away=away, home=home)
-            elif col_idx == 4:
-                fill = _score_fill("home", in_progress=in_progress, final=final, away=away, home=home)
-            _center_text(draw, text, font, COL_X[col_idx], COL_WIDTHS[col_idx], y, SCORE_ROW_H, fill=fill)
+        for col_idx, text in ((2, "@"),):
+            _center_text(draw, text, CENTER_FONT, COL_X[col_idx], COL_WIDTHS[col_idx], y, SCORE_ROW_H, fill=(255, 255, 255))
+
+        for team_key, col_idx, team in (("away", 0, away), ("home", 4, home)):
+            fill = _score_fill(team_key, in_progress=in_progress, final=final, away=away, home=home)
+            _center_score_text(draw, team, show=show_scores, x=COL_X[col_idx], width=COL_WIDTHS[col_idx], y=y, height=SCORE_ROW_H, fill=fill)
 
         for col_idx, team in ((1, away), (3, home)):
             url = _team_logo_url(team)
