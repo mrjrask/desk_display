@@ -151,3 +151,18 @@ def test_score_fill_uses_nested_zero_penalty_score_to_choose_final_loser():
     assert world_cup_scoreboard._score_fill(
         "home", in_progress=False, final=True, away=away, home=home
     ) == world_cup_scoreboard.FINAL_WINNING_SCORE_COLOR
+
+
+def test_penalty_score_font_is_30_percent_smaller_than_regular_score():
+    expected_size = max(1, int(round(world_cup_scoreboard.SCORE_FONT.size * 0.7)))
+
+    assert world_cup_scoreboard.PK_SCORE_FONT.size == expected_size
+
+
+def test_score_text_segments_use_smaller_penalty_score_font():
+    team = {"score": "1", "shootoutScore": "4"}
+
+    assert world_cup_scoreboard._score_text_segments(team, show=True) == [
+        ("1", world_cup_scoreboard.SCORE_FONT),
+        (" (4)", world_cup_scoreboard.PK_SCORE_FONT),
+    ]
