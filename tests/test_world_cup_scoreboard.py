@@ -133,3 +133,21 @@ def test_score_text_supports_nested_penalty_score_payloads():
     team = {"score": "2", "penaltyScore": {"score": "5"}}
 
     assert world_cup_scoreboard._score_text(team, show=True) == "2 (5)"
+
+
+def test_score_text_preserves_nested_zero_penalty_score():
+    team = {"score": "1", "penaltyScore": {"score": 0, "value": None}}
+
+    assert world_cup_scoreboard._score_text(team, show=True) == "1 (0)"
+
+
+def test_score_fill_uses_nested_zero_penalty_score_to_choose_final_loser():
+    away = {"score": "1", "penaltyScore": {"score": 0}}
+    home = {"score": "1", "penaltyScore": {"score": 3}}
+
+    assert world_cup_scoreboard._score_fill(
+        "away", in_progress=False, final=True, away=away, home=home
+    ) == world_cup_scoreboard.FINAL_LOSING_SCORE_COLOR
+    assert world_cup_scoreboard._score_fill(
+        "home", in_progress=False, final=True, away=away, home=home
+    ) == world_cup_scoreboard.FINAL_WINNING_SCORE_COLOR

@@ -220,7 +220,8 @@ def _penalty_score_value(team: dict) -> Optional[int]:
     for key in ("shootoutScore", "penaltyScore", "penalties", "penaltyKicks", "pkScore"):
         value = team.get(key)
         if isinstance(value, dict):
-            value = value.get("score") or value.get("value")
+            score_value = value.get("score")
+            value = score_value if score_value not in (None, "") else value.get("value")
         try:
             if value not in (None, ""):
                 return int(str(value))
