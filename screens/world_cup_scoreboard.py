@@ -216,11 +216,28 @@ def _is_final(game: dict) -> bool:
     return state == "post" or bool(status_type.get("completed"))
 
 
+def _penalty_score_value(team: dict) -> Optional[int]:
+    for key in ("shootoutScore", "penaltyScore", "penalties", "penaltyKicks", "pkScore"):
+        value = team.get(key)
+        if isinstance(value, dict):
+            value = value.get("score") or value.get("value")
+        try:
+            if value not in (None, ""):
+                return int(str(value))
+        except Exception:
+            continue
+    return None
+
+
 def _score_text(team: dict, *, show: bool) -> str:
     if not show:
         return "—"
     score = team.get("score")
-    return str(score) if score not in (None, "") else "—"
+    base_score = str(score) if score not in (None, "") else "—"
+    penalty_score = _penalty_score_value(team)
+    if penalty_score is not None:
+        return f"{base_score} ({penalty_score})"
+    return base_score
 
 
 def _should_display_scores(game: dict) -> bool:
@@ -242,6 +259,12 @@ def _score_fill(team_key: str, *, in_progress: bool, final: bool, away: dict, ho
         return (255, 255, 255)
     away_score = _score_value(away)
     home_score = _score_value(home)
+    away_penalties = _penalty_score_value(away)
+    home_penalties = _penalty_score_value(home)
+    if away_penalties is not None and home_penalties is not None and away_penalties != home_penalties:
+        if team_key == "away":
+            return FINAL_WINNING_SCORE_COLOR if away_penalties > home_penalties else FINAL_LOSING_SCORE_COLOR
+        return FINAL_WINNING_SCORE_COLOR if home_penalties > away_penalties else FINAL_LOSING_SCORE_COLOR
     if away_score is None or home_score is None or away_score == home_score:
         return (255, 255, 255)
     if team_key == "away":
