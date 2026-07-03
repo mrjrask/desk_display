@@ -155,9 +155,12 @@ LOGO_SCREEN_WIDTH = max(
 )
 
 RESOLUTION_OPTIONS: tuple[tuple[str, str, tuple[int, int], Optional[int]], ...] = (
-    ("hyperpixel4-rotated", "Hyperpixel4 - 800x480 (landscape)", (800, 480), 270),
-    ("hyperpixel4-square", "Hyperpixel4 Square - 720x720", (720, 720), None),
-    ("hyperpixel4", "Hyperpixel4 - vertical - 480x800", (480, 800), None),
+    ("displayhatmini", "Pimoroni Display HAT Mini - 320x240", (320, 240), None),
+    ("display-hat-mini", "Pimoroni Display HAT Mini - 320x240", (320, 240), None),
+    ("hyperpixel4-landscape", "HyperPixel 4 - 800x480 (landscape)", (800, 480), None),
+    ("hyperpixel4-rotated", "HyperPixel 4 - 800x480 (landscape, rotate 270)", (800, 480), 270),
+    ("hyperpixel4-square", "HyperPixel 4 Square - 720x720", (720, 720), None),
+    ("hyperpixel4", "HyperPixel 4 - vertical - 480x800", (480, 800), None),
     ("640x480", "640x480", (640, 480), None),
     ("1080p", "1080p - 1920x1080", (1920, 1080), None),
     ("1440p", "1440p - 2560x1440", (2560, 1440), None),

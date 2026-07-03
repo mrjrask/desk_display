@@ -78,7 +78,7 @@ def test_screenshots_template_adds_stale_class(monkeypatch):
     assert response.status_code == 200
     assert 'class="timestamp is-stale"' in html
     assert "1d 2h 3m 4s ago" in html
-    assert 'id="hideMissingScreens" checked' in html
+    assert 'id="hideMissingScreens" checked' not in html
     assert 'data-screen-play-counter="date">Plays 5<' in html
 
 
@@ -202,6 +202,7 @@ def test_load_display_status_reads_heartbeat(monkeypatch, tmp_path):
   "loop_iteration": 42,
   "rendered_at": "%s",
   "frame_id": 314,
+  "display": {"profile_id": "hyperpixel4", "width": 800, "height": 480},
   "screen_play_counts": {"bears next season": 12}
 }
 """ % rendered_at.isoformat(),
@@ -219,6 +220,7 @@ def test_load_display_status_reads_heartbeat(monkeypatch, tmp_path):
     assert status["screen_id"] == "bears next season"
     assert status["loop_iteration"] == 42
     assert status["frame_id"] == 314
+    assert status["display"] == {"profile_id": "hyperpixel4", "width": 800, "height": 480}
     assert status["screen_play_counts"] == {"bears next season": 12}
     assert status["is_stale"] is False
     assert status["elapsed"] is not None
