@@ -34,6 +34,7 @@ from paths import (
 )
 from schedule import build_scheduler
 from screens_catalog import SCREEN_IDS, canonical_screen_id
+import config
 
 # Config path precedence/fallback rules are centralized in paths.py.
 _screens_config_paths = resolve_screens_config_paths()
@@ -745,6 +746,11 @@ def _load_display_status() -> Dict[str, Any]:
         "loop_iteration": None,
         "frame_id": None,
         "screen_play_counts": {},
+        "display": {
+            "profile_id": config.get_display_profile_id(),
+            "width": config.WIDTH,
+            "height": config.HEIGHT,
+        },
         "is_stale": True,
     }
 
@@ -762,6 +768,18 @@ def _load_display_status() -> Dict[str, Any]:
     screen_id = payload.get("screen_id")
     if isinstance(screen_id, str) and screen_id.strip():
         status["screen_id"] = screen_id
+
+    display_payload = payload.get("display")
+    if isinstance(display_payload, dict):
+        profile_id = display_payload.get("profile_id")
+        width = display_payload.get("width")
+        height = display_payload.get("height")
+        if isinstance(profile_id, str) and profile_id.strip():
+            status["display"]["profile_id"] = profile_id.strip()
+        if isinstance(width, int) and width > 0:
+            status["display"]["width"] = width
+        if isinstance(height, int) and height > 0:
+            status["display"]["height"] = height
 
     rendered_at_raw = payload.get("rendered_at")
     if isinstance(rendered_at_raw, str) and rendered_at_raw.strip():

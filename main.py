@@ -1503,6 +1503,11 @@ def _write_display_status(
         "rendered_at": timestamp.isoformat(),
         "image_digest": hashlib.sha1(img.tobytes()).hexdigest()[:12],
         "frame_id": frame_id,
+        "display": {
+            "profile_id": config.get_display_profile_id(),
+            "width": config.WIDTH,
+            "height": config.HEIGHT,
+        },
     }
     cubs_cache = cache.get("cubs") if isinstance(cache, dict) else None
     if isinstance(cubs_cache, dict):

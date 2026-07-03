@@ -297,7 +297,7 @@
         Plays: <strong id="playCounterValue">{{ display_status.loop_iteration if display_status.loop_iteration is not none else 0 }}</strong>
       </div>
       <label class="toggle">
-        <input type="checkbox" id="hideMissingScreens" checked>
+        <input type="checkbox" id="hideMissingScreens">
         Hide screens without screenshots
       </label>
     </div>
@@ -314,6 +314,9 @@
       {% endif %}
       {% if display_status.frame_id is not none %}
         — frame {{ display_status.frame_id }}
+      {% endif %}
+      {% if display_status.display %}
+        — {{ display_status.display.profile_id }} ({{ display_status.display.width }}×{{ display_status.display.height }})
       {% endif %}
     {% else %}
       Display heartbeat unavailable.
@@ -503,6 +506,12 @@
               }
               if (typeof status.frame_id === "number") {
                 summary += ` — frame ${status.frame_id}`;
+              }
+              if (status.display && typeof status.display === "object") {
+                const profileId = status.display.profile_id || "unknown";
+                const width = status.display.width || "?";
+                const height = status.display.height || "?";
+                summary += ` — ${profileId} (${width}×${height})`;
               }
               displayStatusBanner.innerHTML = summary;
             } else {
