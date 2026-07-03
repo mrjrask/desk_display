@@ -109,3 +109,27 @@ def test_parse_start_time_central_keeps_date_for_later_match(monkeypatch):
     game = {"date": "2026-06-13T17:00:00Z"}
 
     assert world_cup_scoreboard._parse_start_time_central(game) == "Sat 6/13 12:00 PM"
+
+
+def test_score_text_includes_penalty_score_in_parentheses():
+    team = {"score": "1", "shootoutScore": "4"}
+
+    assert world_cup_scoreboard._score_text(team, show=True) == "1 (4)"
+
+
+def test_score_fill_uses_penalty_score_to_choose_final_winner():
+    away = {"score": "1", "shootoutScore": "4"}
+    home = {"score": "1", "shootoutScore": "2"}
+
+    assert world_cup_scoreboard._score_fill(
+        "away", in_progress=False, final=True, away=away, home=home
+    ) == world_cup_scoreboard.FINAL_WINNING_SCORE_COLOR
+    assert world_cup_scoreboard._score_fill(
+        "home", in_progress=False, final=True, away=away, home=home
+    ) == world_cup_scoreboard.FINAL_LOSING_SCORE_COLOR
+
+
+def test_score_text_supports_nested_penalty_score_payloads():
+    team = {"score": "2", "penaltyScore": {"score": "5"}}
+
+    assert world_cup_scoreboard._score_text(team, show=True) == "2 (5)"
