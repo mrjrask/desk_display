@@ -76,6 +76,7 @@ from config import (
     AHL_TEAM_TRICODE,
     ENABLE_WIFI_RECOVERY,
     WEATHER_REFRESH_SECONDS,
+    get_display_profile_id,
     initialise_runtime_probes,
 )
 from utils import (
@@ -1504,9 +1505,9 @@ def _write_display_status(
         "image_digest": hashlib.sha1(img.tobytes()).hexdigest()[:12],
         "frame_id": frame_id,
         "display": {
-            "profile_id": config.get_display_profile_id(),
-            "width": config.WIDTH,
-            "height": config.HEIGHT,
+            "profile_id": get_display_profile_id(),
+            "width": WIDTH,
+            "height": HEIGHT,
         },
     }
     cubs_cache = cache.get("cubs") if isinstance(cache, dict) else None
