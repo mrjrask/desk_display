@@ -123,20 +123,20 @@ def _wiki_items(feed_type: str, month: int, day: int, limit: int = 3) -> list[Da
 
 def _build_sections(today: dt.date) -> dict[str, list[DayItem]]:
     month, day = today.month, today.day
+    fallback = _FALLBACK_BY_DATE.get((month, day), {})
+    if fallback:
+        # Curated local categories add the requested Chicago/American/Sports/Tech
+        # flavor and should render promptly when the live feed is unavailable.
+        # Prefer them without probing Wikimedia first; the shared HTTP client can
+        # spend several retry cycles per feed while offline or under DNS failure.
+        return {title: list(items) for title, items in fallback.items() if items}
+
     sections = {
         "🌎 General History": _wiki_items("events", month, day, 4),
         "🎂 Famous Birthdays": _wiki_items("births", month, day, 3),
         "🕯️ Notable Lives": _wiki_items("deaths", month, day, 2),
         "🎉 Holidays & Culture": _wiki_items("holidays", month, day, 2),
     }
-
-    fallback = _FALLBACK_BY_DATE.get((month, day), {})
-    if fallback:
-        # Curated local categories add the requested Chicago/American/Sports/Tech flavor.
-        ordered = dict(fallback)
-        for key, value in sections.items():
-            ordered.setdefault(key, value)
-        sections = ordered
 
     return {title: items for title, items in sections.items() if items}
 
