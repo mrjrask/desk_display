@@ -3,6 +3,7 @@
     "screens": {
       "date": 1,
       "nixie": 0,
+      "on this day": 1,
       "weather logo": 0,
       "weather1": 1,
       "weather2": 1,
@@ -131,6 +132,9 @@
           },
           {
             "screen": "nixie"
+          },
+          {
+            "screen": "on this day"
           }
         ]
       },
