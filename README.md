@@ -311,9 +311,7 @@ Configuration is environment-driven. Put local values in `.env` for development 
 | `DISPLAY_HAT_MINI_REINIT_SECONDS` | Periodic Display HAT Mini reinitialization interval; `0` disables. |
 | `DISPLAY_HAT_MINI_LED_ENABLED` | Enables Display HAT Mini LED behavior. |
 | `DISPLAY_HAT_MINI_LED_LEVEL` | Display HAT Mini LED level. |
-| `DISPLAY_HAT_MINI_LED_INDICATOR_BORDER_ENABLED` | Adds the LED indicator border on Display HAT Mini. |
-| `HYPERPIXEL_LED_INDICATOR_BORDER_ENABLED` | Adds an indicator border on HyperPixel profiles. |
-| `HYPERPIXEL_LED_INDICATOR_BORDER_WIDTH` | Indicator border width. |
+| `HYPERPIXEL_LED_INDICATOR_BORDER_WIDTH` | Indicator border width; the LED indicator border is enabled by default on all display sizes. |
 | `IP_WITH_TIME` | Include IP/status text with the time display where supported. |
 | `NIXIE_TIME_FORMAT` | Nixie/time screen clock format; defaults to 12-hour mode. |
 

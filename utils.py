@@ -1170,7 +1170,10 @@ class Display:
         self._frame_id = 0
         self._frame_lock = threading.Lock()
         self._led_color: Tuple[float, float, float] = (0.0, 0.0, 0.0)
-        self._hyperpixel_indicator_border = bool(HYPERPIXEL_LED_INDICATOR_BORDER_ENABLED)
+        # The in-frame LED indicator border is the default for every display
+        # profile; Display HAT Mini hardware-specific LED scaling is tracked
+        # separately below.
+        self._hyperpixel_indicator_border = True
         self._display_hat_mini_indicator_border = False
         self._uses_kernel_output = False
         self._display_reinit_seconds = DISPLAY_HAT_MINI_REINIT_SECONDS
@@ -1386,8 +1389,7 @@ class Display:
         """Select frame transform/output handlers once during initialization."""
 
         display_hat_indicator_eligible = (
-            DISPLAY_HAT_MINI_LED_INDICATOR_BORDER_ENABLED
-            and (self.width, self.height) in {(320, 240), (240, 320)}
+            (self.width, self.height) in {(320, 240), (240, 320)}
         )
 
         if self._framebuffer is not None:
