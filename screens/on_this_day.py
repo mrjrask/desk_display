@@ -174,14 +174,47 @@ def _rounded(
     draw.rounded_rectangle(box, radius=radius, fill=fill, outline=outline, width=1)
 
 
-def _estimate_height(draw: ImageDraw.ImageDraw, sections: dict[str, list[DayItem]], max_text_width: int) -> int:
-    y = 18 + measure_text(draw, "On This Day", TITLE_FONT)[1] + 22
+def _item_text_layout(
+    draw: ImageDraw.ImageDraw,
+    item: DayItem,
+    card_left: int,
+    card_right: int,
+    thumb_size: int,
+) -> tuple[int, int]:
+    """Return the rendered x-coordinate and wrap width for an item body."""
+
+    text_x = card_left + 8
+    if thumb_size:
+        text_x += thumb_size + 8
+    if item.year is not None:
+        text_x += measure_text(draw, str(item.year), YEAR_FONT)[0] + 7
+    return text_x, max(20, card_right - 8 - text_x)
+
+
+def _estimate_height(
+    draw: ImageDraw.ImageDraw,
+    sections: dict[str, list[DayItem]],
+    pad: int,
+    thumb_size: int,
+    subtitle: str,
+) -> int:
+    title = "📅 On This Day"
+    title_h = measure_text(draw, title, TITLE_FONT)[1]
+    subtitle_h = measure_text(draw, subtitle, BODY_FONT)[1]
+    y = 20 + title_h + subtitle_h + 10
+    card_left = pad
+    card_right = W - pad
+    line_h = measure_text(draw, "Ag", BODY_FONT)[1] + 3
+
     for title, items in sections.items():
-        y += measure_text(draw, title, SECTION_FONT)[1] + 8
+        y += 7
+        y += measure_text(draw, title, SECTION_FONT)[1] + 6
         for item in items:
-            lines = wrap_text(item.text, BODY_FONT, max_text_width)
-            y += max(42, len(lines) * (measure_text(draw, "Ag", BODY_FONT)[1] + 3) + 16) + 7
-        y += 8
+            _, text_width = _item_text_layout(draw, item, card_left, card_right, thumb_size)
+            lines = wrap_text(item.text, BODY_FONT, text_width)
+            card_h = max(42, len(lines) * line_h + 18)
+            y += card_h + 7
+        y += 6
     return max(H, y + 18)
 
 
@@ -190,15 +223,14 @@ def _render_full_image(today: dt.date) -> Image.Image:
     probe_draw = ImageDraw.Draw(probe)
     pad = max(8, W // 32)
     thumb_size = 34 if W >= 300 else 0
-    max_text_width = W - pad * 3 - (thumb_size + 8 if thumb_size else 0)
     sections = _build_sections(today)
-    height = _estimate_height(probe_draw, sections, max_text_width)
+    title = "📅 On This Day"
+    subtitle = today.strftime("%B %-d") if hasattr(today, "strftime") else f"{today.month}/{today.day}"
+    height = _estimate_height(probe_draw, sections, pad, thumb_size, subtitle)
     img = Image.new("RGB", (W, height), _BG)
     _draw_gradient(img)
     draw = ImageDraw.Draw(img)
 
-    title = "📅 On This Day"
-    subtitle = today.strftime("%B %-d") if hasattr(today, "strftime") else f"{today.month}/{today.day}"
     tw, th = measure_text(draw, title, TITLE_FONT)
     draw.text(((W - tw) // 2, 10), title, font=TITLE_FONT, fill=_TEXT)
     sw, sh = measure_text(draw, subtitle, BODY_FONT)
@@ -213,7 +245,8 @@ def _render_full_image(today: dt.date) -> Image.Image:
         y += measure_text(draw, section, SECTION_FONT)[1] + 6
         for item in items:
             card_top = y
-            lines = wrap_text(item.text, BODY_FONT, max_text_width)
+            text_x, text_width = _item_text_layout(draw, item, pad, W - pad, thumb_size)
+            lines = wrap_text(item.text, BODY_FONT, text_width)
             line_h = measure_text(draw, "Ag", BODY_FONT)[1] + 3
             card_h = max(42, len(lines) * line_h + 18)
             _rounded(draw, (pad, card_top, W - pad, card_top + card_h), _CARD, (44, 54, 88))
@@ -228,9 +261,6 @@ def _render_full_image(today: dt.date) -> Image.Image:
                 x += thumb_size + 8
             if item.year is not None:
                 draw.text((x, card_top + 7), str(item.year), font=YEAR_FONT, fill=accent)
-                text_x = x + measure_text(draw, str(item.year), YEAR_FONT)[0] + 7
-            else:
-                text_x = x
             text_y = card_top + 7
             for line in lines:
                 draw.text((text_x, text_y), line, font=BODY_FONT, fill=_TEXT)
