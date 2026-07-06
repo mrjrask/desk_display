@@ -96,3 +96,39 @@ def test_cleanup_skips_waveshare_oled_when_i2c_device_is_missing(monkeypatch, tm
     )
 
     exec(_cleanup_python_block(), {})
+
+
+def test_cleanup_skips_waveshare_oled_when_hyperpixel_profile_is_configured(monkeypatch, tmp_path):
+    _install_display_fakes(monkeypatch)
+    _clear_waveshare_env(monkeypatch)
+    monkeypatch.setenv("WAVESHARE_OLED_MAX_VALUE_FONT_SIZE", "26")
+    monkeypatch.setenv("HYPERPIXEL_PANEL", "hyperpixel4")
+    monkeypatch.chdir(tmp_path)
+
+    def _fail_import(name, *args, **kwargs):
+        if name in {"smbus", "smbus2", "waveshare_oled_status"}:
+            raise AssertionError(f"unexpected Waveshare cleanup import: {name}")
+        return original_import(name, *args, **kwargs)
+
+    original_import = __import__
+    monkeypatch.setattr("builtins.__import__", _fail_import)
+
+    exec(_cleanup_python_block(), {})
+
+
+def test_cleanup_skips_waveshare_oled_when_pimoroni_profile_is_configured(monkeypatch, tmp_path):
+    _install_display_fakes(monkeypatch)
+    _clear_waveshare_env(monkeypatch)
+    monkeypatch.setenv("WAVESHARE_OLED_MAX_VALUE_FONT_SIZE", "26")
+    monkeypatch.setenv("DESK_DISPLAY_OUTPUT", "displayhatmini")
+    monkeypatch.chdir(tmp_path)
+
+    def _fail_import(name, *args, **kwargs):
+        if name in {"smbus", "smbus2", "waveshare_oled_status"}:
+            raise AssertionError(f"unexpected Waveshare cleanup import: {name}")
+        return original_import(name, *args, **kwargs)
+
+    original_import = __import__
+    monkeypatch.setattr("builtins.__import__", _fail_import)
+
+    exec(_cleanup_python_block(), {})

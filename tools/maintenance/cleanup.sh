@@ -52,9 +52,69 @@ stop_kernel_user_service() {
 
 stop_kernel_user_service
 
-# If present, stop the Waveshare OLED helper so it doesn't redraw while cleanup
-# is blanking the side OLED panels.
-if command -v systemctl >/dev/null 2>&1; then
+FALSEY_ENV_VALUES_REGEX='^(|0|false|no|off)$'
+
+lookup_config_value() {
+  local name="$1"
+  local value="${!name-}"
+
+  if [[ -n "$value" || -v "$name" ]]; then
+    printf '%s' "$value"
+    return 0
+  fi
+
+  if [[ -f "$PROJECT_ROOT/.env" ]]; then
+    value="$(awk -F= -v key="$name" '
+      $0 ~ /^[[:space:]]*(#|$)/ { next }
+      {
+        candidate = $1
+        sub(/^[[:space:]]*/, "", candidate)
+        sub(/[[:space:]]*$/, "", candidate)
+        if (candidate == key) {
+          $1 = ""
+          sub(/^=/, "")
+          sub(/^[[:space:]]*/, "")
+          sub(/[[:space:]]*(#.*)?$/, "")
+          print
+          exit
+        }
+      }
+    ' "$PROJECT_ROOT/.env")"
+    printf '%s' "$value"
+  fi
+}
+
+is_truthy_config() {
+  local value
+  value="$(lookup_config_value "$1" | tr '[:upper:]' '[:lower:]')"
+  [[ ! "$value" =~ $FALSEY_ENV_VALUES_REGEX ]]
+}
+
+is_waveshare_oled_profile() {
+  local marker output hyperpixel_panel
+  marker="$(lookup_config_value WAVESHARE_OLED_LCD_HAT_A_INSTALLED | tr '[:upper:]' '[:lower:]')"
+  if [[ -n "$marker" ]]; then
+    [[ ! "$marker" =~ $FALSEY_ENV_VALUES_REGEX ]]
+    return
+  fi
+
+  output="$(lookup_config_value DESK_DISPLAY_OUTPUT | tr '[:upper:]' '[:lower:]')"
+  hyperpixel_panel="$(lookup_config_value HYPERPIXEL_PANEL | tr '[:upper:]' '[:lower:]')"
+  if [[ "$output" == "displayhatmini" || "$output" == "display-hat-mini" || "$output" == "pimoroni" || -n "$hyperpixel_panel" ]]; then
+    return 1
+  fi
+
+  [[ -n "$(lookup_config_value WAVESHARE_OLED_MAX_VALUE_FONT_SIZE)" ]] \
+    || [[ -n "$(lookup_config_value WAVESHARE_OLED_MAX_TIME_FONT_SIZE)" ]] \
+    || is_truthy_config WAVESHARE_OLED_CLEANUP
+}
+
+# If present and configured for this display profile, stop the Waveshare OLED
+# helper so it doesn't redraw while cleanup is blanking the side OLED panels.
+# Gate this before calling systemctl: on non-Waveshare displays a stale installed
+# helper can otherwise trigger a desktop authentication prompt during service
+# restarts.
+if command -v systemctl >/dev/null 2>&1 && is_waveshare_oled_profile; then
   systemctl --no-block stop desk_display_waveshare_oled.service >/dev/null 2>&1 || true
 fi
 
@@ -145,6 +205,11 @@ def _waveshare_oled_cleanup_enabled():
     marker = os.environ.get("WAVESHARE_OLED_LCD_HAT_A_INSTALLED")
     if marker is not None:
         return marker.strip().lower() not in FALSEY_ENV_VALUES
+
+    display_output = os.environ.get("DESK_DISPLAY_OUTPUT", "").strip().lower()
+    hyperpixel_panel = os.environ.get("HYPERPIXEL_PANEL", "").strip().lower()
+    if display_output in {"displayhatmini", "display-hat-mini", "pimoroni"} or hyperpixel_panel:
+        return False
 
     # The Waveshare installer writes these OLED-specific settings to the
     # service environment.  Avoid touching I2C on unrelated displays (for
