@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import datetime as dt
 import logging
+import re
 from dataclasses import dataclass
 from io import BytesIO
 
@@ -43,6 +44,29 @@ TITLE_FONT = clone_font(config.FONT_DAY_DATE, max(18, min(34, W // 10)))
 SECTION_FONT = clone_font(config.FONT_WEATHER_DETAILS_BOLD, max(13, min(20, W // 16)))
 BODY_FONT = clone_font(config.FONT_WEATHER_DETAILS_SMALL, max(10, min(15, W // 24)))
 YEAR_FONT = clone_font(config.FONT_WEATHER_DETAILS_SMALL_BOLD, max(10, min(14, W // 25)))
+
+_SCROLL_FRAME_SECONDS = 0.075
+_SCROLL_START_PAUSE_SECONDS = 2.0
+_SCROLL_END_PAUSE_SECONDS = 3.0
+_EMOJI_PREFIX_RE = re.compile(r"^[^\w#]+\s*")
+
+_SECTION_LABELS = {
+    "General History": "General History",
+    "American History": "American History",
+    "Chicago History": "Chicago History",
+    "Sports History": "Sports History",
+    "Famous Birthdays": "Famous Birthdays",
+    "Tech & Science": "Tech & Science",
+    "Notable Lives": "Notable Lives",
+    "Holidays & Culture": "Holidays & Culture",
+}
+
+
+def _display_label(label: str) -> str:
+    """Return text that is safe for non-emoji fonts on small displays."""
+
+    cleaned = _EMOJI_PREFIX_RE.sub("", label).strip()
+    return _SECTION_LABELS.get(cleaned, cleaned or label)
 
 
 @dataclass(frozen=True)
@@ -198,7 +222,7 @@ def _estimate_height(
     thumb_size: int,
     subtitle: str,
 ) -> int:
-    title = "📅 On This Day"
+    title = "On This Day"
     title_h = measure_text(draw, title, TITLE_FONT)[1]
     subtitle_h = measure_text(draw, subtitle, BODY_FONT)[1]
     y = 20 + title_h + subtitle_h + 10
@@ -208,7 +232,8 @@ def _estimate_height(
 
     for title, items in sections.items():
         y += 7
-        y += measure_text(draw, title, SECTION_FONT)[1] + 6
+        label = _display_label(title)
+        y += measure_text(draw, label, SECTION_FONT)[1] + 6
         for item in items:
             _, text_width = _item_text_layout(draw, item, card_left, card_right, thumb_size)
             lines = wrap_text(item.text, BODY_FONT, text_width)
@@ -224,7 +249,7 @@ def _render_full_image(today: dt.date) -> Image.Image:
     pad = max(8, W // 32)
     thumb_size = 34 if W >= 300 else 0
     sections = _build_sections(today)
-    title = "📅 On This Day"
+    title = "On This Day"
     subtitle = today.strftime("%B %-d") if hasattr(today, "strftime") else f"{today.month}/{today.day}"
     height = _estimate_height(probe_draw, sections, pad, thumb_size, subtitle)
     img = Image.new("RGB", (W, height), _BG)
@@ -241,8 +266,12 @@ def _render_full_image(today: dt.date) -> Image.Image:
         accent = _ACCENTS[idx % len(_ACCENTS)]
         draw.rounded_rectangle((pad, y, W - pad, y + 3), radius=2, fill=accent)
         y += 7
-        draw.text((pad, y), section, font=SECTION_FONT, fill=accent)
-        y += measure_text(draw, section, SECTION_FONT)[1] + 6
+        section_label = _display_label(section)
+        dot_r = max(3, min(6, W // 64))
+        dot_y = y + max(0, (measure_text(draw, section_label, SECTION_FONT)[1] - dot_r * 2) // 2)
+        draw.ellipse((pad, dot_y, pad + dot_r * 2, dot_y + dot_r * 2), fill=accent)
+        draw.text((pad + dot_r * 2 + 6, y), section_label, font=SECTION_FONT, fill=accent)
+        y += measure_text(draw, section_label, SECTION_FONT)[1] + 6
         for item in items:
             card_top = y
             text_x, text_width = _item_text_layout(draw, item, pad, W - pad, thumb_size)
@@ -257,7 +286,16 @@ def _render_full_image(today: dt.date) -> Image.Image:
                     img.paste(thumb, (x, card_top + 7))
                 else:
                     draw.ellipse((x, card_top + 8, x + thumb_size, card_top + 8 + thumb_size), fill=accent)
-                    draw.text((x + thumb_size // 2 - 4, card_top + 15), "✦", font=BODY_FONT, fill=_BG)
+                    inner_pad = max(8, thumb_size // 3)
+                    draw.ellipse(
+                        (
+                            x + inner_pad,
+                            card_top + 8 + inner_pad,
+                            x + thumb_size - inner_pad,
+                            card_top + 8 + thumb_size - inner_pad,
+                        ),
+                        fill=_BG,
+                    )
                 x += thumb_size + 8
             if item.year is not None:
                 draw.text((x, card_top + 7), str(item.year), font=YEAR_FONT, fill=accent)
@@ -287,9 +325,10 @@ def draw_on_this_day(display, transition: bool = True, today: dt.date | None = N
             viewport_height=H,
             render_at_offset=_show,
             base_step=max(1, H // 120),
-            pause_start=1.0,
-            pause_end=1.5,
-            min_frame_time=0.035,
+            pause_start=_SCROLL_START_PAUSE_SECONDS,
+            pause_end=_SCROLL_END_PAUSE_SECONDS,
+            page_jump_mode=False,
+            min_frame_time=_SCROLL_FRAME_SECONDS,
         )
         bottom_offset = max(0, full_img.height - H)
         bottom_frame = full_img.crop((0, bottom_offset, W, bottom_offset + H))
