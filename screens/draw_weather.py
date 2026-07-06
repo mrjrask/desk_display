@@ -580,15 +580,35 @@ def _draw_alert_indicator(
 ) -> None:
     if not severity:
         return
+
+    # Draw the alert marker as vector shapes instead of an emoji glyph.  Some
+    # non-HyperPixel-square installs do not have a color emoji font available,
+    # which made the weather-alert indicator silently render as a transparent
+    # or missing glyph even though an active alert was detected.
     icon_color = ALERT_ICON_COLORS.get(severity, (255, 215, 0))
-    icon_img = _ensure_rgba_icon(_render_emoji_glyph(ALERT_SYMBOL, FONT_EMOJI_SMALL, icon_color))
-    w_icon, h_icon = icon_img.size
-    # Keep the alert glyph clear of display-level bottom safety buffers.
-    # Display HAT Mini and non-square HyperPixel profiles clear a few pixels at
-    # the bottom edge just before output, which could erase a bottom-corner icon.
-    x_icon = WIDTH - w_icon - 2
-    y_icon = 2
-    img.paste(icon_img, (x_icon, y_icon), icon_img)
+    size = max(12, min(32, int(round(min(WIDTH, HEIGHT) * 0.11))))
+    x0 = WIDTH - size - 2
+    y0 = 2
+    x1 = x0 + size
+    y1 = y0 + size
+    points = (
+        (x0 + size // 2, y0),
+        (x0, y1),
+        (x1, y1),
+    )
+    draw.polygon(points, fill=icon_color, outline=(255, 255, 255))
+
+    inset = max(2, size // 8)
+    line_w = max(1, size // 10)
+    cx = x0 + size // 2
+    draw.line(
+        (cx, y0 + inset * 2, cx, y1 - inset * 3),
+        fill=(0, 0, 0),
+        width=line_w,
+    )
+    dot_r = max(1, size // 12)
+    dot_y = y1 - inset - dot_r
+    draw.ellipse((cx - dot_r, dot_y - dot_r, cx + dot_r, dot_y + dot_r), fill=(0, 0, 0))
 
 
 def _fit_wrapped_text(

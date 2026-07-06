@@ -1737,6 +1737,7 @@ _FEED_DEPENDENCIES: Dict[str, Set[str]] = {
         "weather hourly",
         "weather daily",
         "weather radar",
+        "weather alert",
         "weather logo",
         "weather quad",
     },

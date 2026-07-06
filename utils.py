@@ -1170,10 +1170,7 @@ class Display:
         self._frame_id = 0
         self._frame_lock = threading.Lock()
         self._led_color: Tuple[float, float, float] = (0.0, 0.0, 0.0)
-        self._hyperpixel_indicator_border = (
-            HYPERPIXEL_LED_INDICATOR_BORDER_ENABLED
-            and is_hyperpixel_next_layout(self.width, self.height)
-        )
+        self._hyperpixel_indicator_border = bool(HYPERPIXEL_LED_INDICATOR_BORDER_ENABLED)
         self._display_hat_mini_indicator_border = False
         self._uses_kernel_output = False
         self._display_reinit_seconds = DISPLAY_HAT_MINI_REINIT_SECONDS
