@@ -78,7 +78,9 @@ def test_screenshots_template_adds_stale_class(monkeypatch):
     assert response.status_code == 200
     assert 'class="timestamp is-stale"' in html
     assert "1d 2h 3m 4s ago" in html
-    assert 'id="hideMissingScreens" checked' not in html
+    assert 'id="hideMissingScreens" checked' in html
+    assert 'const hideMissingStorageKey = "deskDisplay.hideMissingScreens";' in html
+    assert 'window.localStorage.setItem(hideMissingStorageKey, shouldHide ? "true" : "false");' in html
     assert 'data-screen-play-counter="date">Plays 5<' in html
 
 
