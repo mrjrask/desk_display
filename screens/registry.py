@@ -47,6 +47,7 @@ from screens.draw_weather import (
     draw_weather_screen_2,
 )
 from screens.draw_nixie import draw_nixie
+from screens.on_this_day import draw_on_this_day
 from screens.draw_date_time import draw_date
 from screens.draw_quad import _TileSpec, draw_quad_screen
 from screens.mlb_schedule import (
@@ -595,6 +596,7 @@ def build_screen_registry(context: ScreenContext) -> Tuple[Dict[str, ScreenDefin
     # color-cycle threads can keep animating while those screens are visible.
     register("date", lambda: draw_date(context.display, transition=False))
     register("nixie", lambda: draw_nixie(context.display, transition=False))
+    register("on this day", lambda: draw_on_this_day(context.display, transition=True))
 
     weather_data = context.cache.get("weather")
 
