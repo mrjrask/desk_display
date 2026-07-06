@@ -297,7 +297,7 @@
         Plays: <strong id="playCounterValue">{{ display_status.loop_iteration if display_status.loop_iteration is not none else 0 }}</strong>
       </div>
       <label class="toggle">
-        <input type="checkbox" id="hideMissingScreens">
+        <input type="checkbox" id="hideMissingScreens" checked>
         Hide screens without screenshots
       </label>
     </div>
@@ -628,8 +628,15 @@
       }
     });
 
+    const hideMissingStorageKey = "deskDisplay.hideMissingScreens";
+    const savedHideMissing = window.localStorage.getItem(hideMissingStorageKey);
+    if (savedHideMissing !== null) {
+      hideMissingToggle.checked = savedHideMissing === "true";
+    }
+
     function updateMissingVisibility() {
       const shouldHide = hideMissingToggle.checked;
+      window.localStorage.setItem(hideMissingStorageKey, shouldHide ? "true" : "false");
       screenshotCards.forEach((card) => {
         const hasScreenshot = card.dataset.hasScreenshot === "true";
         if (!hasScreenshot && shouldHide) {
