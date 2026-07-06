@@ -629,14 +629,31 @@
     });
 
     const hideMissingStorageKey = "deskDisplay.hideMissingScreens";
-    const savedHideMissing = window.localStorage.getItem(hideMissingStorageKey);
+
+    function getStoredHideMissingPreference() {
+      try {
+        return window.localStorage.getItem(hideMissingStorageKey);
+      } catch (error) {
+        return null;
+      }
+    }
+
+    function storeHideMissingPreference(shouldHide) {
+      try {
+        window.localStorage.setItem(hideMissingStorageKey, shouldHide ? "true" : "false");
+      } catch (error) {
+        // Persistence is best-effort; filtering must still work when storage is unavailable.
+      }
+    }
+
+    const savedHideMissing = getStoredHideMissingPreference();
     if (savedHideMissing !== null) {
       hideMissingToggle.checked = savedHideMissing === "true";
     }
 
     function updateMissingVisibility() {
       const shouldHide = hideMissingToggle.checked;
-      window.localStorage.setItem(hideMissingStorageKey, shouldHide ? "true" : "false");
+      storeHideMissingPreference(shouldHide);
       screenshotCards.forEach((card) => {
         const hasScreenshot = card.dataset.hasScreenshot === "true";
         if (!hasScreenshot && shouldHide) {
