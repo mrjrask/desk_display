@@ -252,6 +252,19 @@ def test_indicator_buffer_returns_fresh_frame_when_border_enabled(monkeypatch):
 
     assert frame_a is not frame_b
 
+
+def test_indicator_border_renders_led_color_for_non_hyperpixel_layout(monkeypatch):
+    monkeypatch.setattr(utils, "is_hyperpixel_next_layout", lambda w, h: False)
+    monkeypatch.setattr(utils, "HYPERPIXEL_LED_INDICATOR_BORDER_ENABLED", True)
+
+    display = utils.Display()
+    display._buffer = utils.Image.new("RGB", (display.width, display.height), "black")
+
+    display.set_led(r=utils.LED_INDICATOR_LEVEL, g=0.0, b=0.0)
+
+    pixel = display._indicator_buffer().getpixel((0, 0))
+    assert pixel == (255, 0, 0)
+
 def test_hyperpixel_indicator_border_clears_when_led_is_off(monkeypatch):
     monkeypatch.setattr(utils, "is_hyperpixel_next_layout", lambda w, h: True)
 
@@ -397,6 +410,7 @@ def test_image_applies_bottom_safe_buffer_when_indicator_border_disabled(monkeyp
 
 def test_kernel_output_uses_25px_bottom_safe_buffer_without_indicator_border(monkeypatch):
     monkeypatch.setattr(utils, "is_hyperpixel_next_layout", lambda w, h: False)
+    monkeypatch.setattr(utils, "HYPERPIXEL_LED_INDICATOR_BORDER_ENABLED", False)
     monkeypatch.setattr(utils, "DISPLAY_HAT_MINI_LED_INDICATOR_BORDER_ENABLED", False)
 
     display = utils.Display()
