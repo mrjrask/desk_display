@@ -83,3 +83,22 @@ def test_on_this_day_year_items_wrap_within_remaining_card_width(monkeypatch):
                 for line in lines
             )
             assert text_width <= 210
+
+
+def test_on_this_day_scroll_uses_smooth_readable_tuning(monkeypatch):
+    monkeypatch.setattr("screens.on_this_day._wiki_items", lambda *args, **kwargs: [])
+    monkeypatch.setattr("screens.on_this_day._download_thumbnail", lambda *args, **kwargs: None)
+    captured = {}
+
+    def fake_scroll_vertical_content(**kwargs):
+        captured.update(kwargs)
+        kwargs["render_at_offset"](0)
+
+    monkeypatch.setattr(otd, "scroll_vertical_content", fake_scroll_vertical_content)
+    display = DummyDisplay()
+
+    draw_on_this_day(display, transition=True, today=dt.date(2026, 7, 6))
+
+    assert captured["base_step"] == 1
+    assert captured["min_frame_time"] == 0.030
+    assert captured["page_jump_mode"] is False

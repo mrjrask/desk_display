@@ -42,10 +42,10 @@ _ACCENTS = [
 
 TITLE_FONT = clone_font(config.FONT_DAY_DATE, max(18, min(34, W // 10)))
 SECTION_FONT = clone_font(config.FONT_WEATHER_DETAILS_BOLD, max(13, min(20, W // 16)))
-BODY_FONT = clone_font(config.FONT_WEATHER_DETAILS_SMALL, max(10, min(15, W // 24)))
-YEAR_FONT = clone_font(config.FONT_WEATHER_DETAILS_SMALL_BOLD, max(10, min(14, W // 25)))
+BODY_FONT = clone_font(config.FONT_WEATHER_DETAILS_SMALL, max(12, min(18, W // 21)))
+YEAR_FONT = clone_font(config.FONT_WEATHER_DETAILS_SMALL_BOLD, max(11, min(16, W // 23)))
 
-_SCROLL_FRAME_SECONDS = 0.075
+_SCROLL_FRAME_SECONDS = 0.030
 _SCROLL_START_PAUSE_SECONDS = 2.0
 _SCROLL_END_PAUSE_SECONDS = 3.0
 _EMOJI_PREFIX_RE = re.compile(r"^[^\w#]+\s*")
@@ -324,7 +324,7 @@ def draw_on_this_day(display, transition: bool = True, today: dt.date | None = N
             viewport_width=W,
             viewport_height=H,
             render_at_offset=_show,
-            base_step=max(1, H // 120),
+            base_step=1,
             pause_start=_SCROLL_START_PAUSE_SECONDS,
             pause_end=_SCROLL_END_PAUSE_SECONDS,
             page_jump_mode=False,
