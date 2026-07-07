@@ -2124,12 +2124,16 @@ class ScreenImage:
     consumed_delay:
         True when the screen renderer has already consumed the normal dwell
         delay internally (for example, by rendering an animation loop).
+    screenshot_image:
+        Optional image to use for still screenshot capture when it should differ
+        from the display-sized frame returned in ``image``.
     """
 
     image: Image.Image
     displayed: bool = False
     led_override: Optional[Tuple[float, float, float]] = None
     consumed_delay: bool = False
+    screenshot_image: Optional[Image.Image] = None
 
 # ─── Basic utilities ────────────────────────────────────────────────────────
 @log_call

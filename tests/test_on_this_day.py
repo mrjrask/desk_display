@@ -82,6 +82,9 @@ def test_on_this_day_renderer_produces_frame(monkeypatch):
     screen = draw_on_this_day(display, transition=False, today=dt.date(2026, 7, 6))
 
     assert screen.image.size == (320, 240)
+    assert screen.screenshot_image is not None
+    assert screen.screenshot_image.size[0] == 320
+    assert screen.screenshot_image.size[1] >= screen.image.size[1]
     assert display.frames
 
 
@@ -137,8 +140,10 @@ def test_on_this_day_scroll_uses_smooth_readable_tuning(monkeypatch):
     monkeypatch.setattr(otd, "scroll_vertical_content", fake_scroll_vertical_content)
     display = DummyDisplay()
 
-    draw_on_this_day(display, transition=True, today=dt.date(2026, 7, 6))
+    screen = draw_on_this_day(display, transition=True, today=dt.date(2026, 7, 6))
 
+    assert screen.screenshot_image is not None
+    assert screen.screenshot_image.height > screen.image.height
     assert captured["base_step"] == 1
     assert captured["min_frame_time"] == 0.030
     assert captured["page_jump_mode"] is False
