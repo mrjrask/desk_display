@@ -127,3 +127,44 @@ def test_on_this_day_scroll_uses_smooth_readable_tuning(monkeypatch):
     assert captured["base_step"] == 1
     assert captured["min_frame_time"] == 0.030
     assert captured["page_jump_mode"] is False
+
+
+def test_on_this_day_sections_cache_checks_wikimedia_once_per_date(monkeypatch):
+    otd._clear_caches_for_tests()
+    calls = []
+
+    def fake_wiki(feed_type, month, day, limit=3):
+        calls.append((feed_type, month, day, limit))
+        return [otd.DayItem(2000, f"{feed_type} item")]
+
+    monkeypatch.setattr(otd, "_wiki_items", fake_wiki)
+
+    first = otd._build_sections(dt.date(2026, 7, 7))
+    second = otd._build_sections(dt.date(2026, 7, 7))
+    next_day = otd._build_sections(dt.date(2026, 7, 8))
+
+    assert first == second
+    assert next_day
+    assert len(calls) == 8
+    assert [call[2] for call in calls] == [7, 7, 7, 7, 8, 8, 8, 8]
+
+
+def test_on_this_day_render_cache_reuses_daily_image(monkeypatch):
+    otd._clear_caches_for_tests()
+    calls = []
+
+    def fake_build_sections(today):
+        calls.append(today)
+        return {"🌎 General History": [otd.DayItem(2000, "Cached render item")]}
+
+    monkeypatch.setattr(otd, "_build_sections", fake_build_sections)
+    monkeypatch.setattr(otd, "_download_thumbnail", lambda *args, **kwargs: None)
+
+    first = otd._render_full_image(dt.date(2026, 7, 7))
+    second = otd._render_full_image(dt.date(2026, 7, 7))
+    next_day = otd._render_full_image(dt.date(2026, 7, 8))
+
+    assert first.size == second.size
+    assert next_day.size
+    assert calls == [dt.date(2026, 7, 7), dt.date(2026, 7, 8)]
+    assert first is not second
