@@ -47,6 +47,7 @@ ON_THIS_DAY_FONT_SIZES_BY_PROFILE = {
     "fallback_hd": {"title": 56, "section": 32, "body": 26, "year": 24},
     "fallback_default": {"title": 32, "section": 20, "body": 15, "year": 13},
     "display_hat_mini": {"title": 32, "section": 20, "body": 15, "year": 13},
+    "adafruit_minipitft_114": {"title": 24, "section": 15, "body": 12, "year": 11},
     "hyperpixel4_square": {"title": 58, "section": 34, "body": 28, "year": 24},
     "hyperpixel4": {"title": 50, "section": 30, "body": 24, "year": 22},
 }
