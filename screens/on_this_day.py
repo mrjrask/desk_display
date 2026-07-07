@@ -10,6 +10,7 @@ from __future__ import annotations
 import datetime as dt
 import logging
 import re
+import threading
 from dataclasses import dataclass
 from io import BytesIO
 
@@ -72,6 +73,19 @@ YEAR_FONT = clone_font(config.FONT_WEATHER_DETAILS_SMALL_BOLD, _FONT_SIZES["year
 _SCROLL_FRAME_SECONDS = 0.030
 _SCROLL_START_PAUSE_SECONDS = 2.0
 _SCROLL_END_PAUSE_SECONDS = 3.0
+
+# Keep live Wikimedia content off the display hot path.  The Raspberry Pi Zero 2 W
+# can spend seconds fetching multiple feeds and thumbnails; caching by date means
+# the screen checks for new On This Day content only when the calendar day changes.
+_SECTIONS_CACHE_LOCK = threading.Lock()
+_SECTIONS_CACHE_DATE: dt.date | None = None
+_SECTIONS_CACHE_VALUE: dict[str, list["DayItem"]] | None = None
+_RENDER_CACHE_LOCK = threading.Lock()
+_RENDER_CACHE_DATE: dt.date | None = None
+_RENDER_CACHE_IMAGE: Image.Image | None = None
+_THUMBNAIL_CACHE_LOCK = threading.Lock()
+_THUMBNAIL_CACHE: dict[tuple[str, int], Image.Image | None] = {}
+
 _EMOJI_PREFIX_RE = re.compile(r"^[^\w#]+\s*")
 
 _SECTION_LABELS = {
@@ -169,7 +183,11 @@ def _wiki_items(feed_type: str, month: int, day: int, limit: int = 3) -> list[Da
     return items
 
 
-def _build_sections(today: dt.date) -> dict[str, list[DayItem]]:
+def _copy_sections(sections: dict[str, list[DayItem]]) -> dict[str, list[DayItem]]:
+    return {title: list(items) for title, items in sections.items()}
+
+
+def _build_sections_uncached(today: dt.date) -> dict[str, list[DayItem]]:
     month, day = today.month, today.day
     fallback = _FALLBACK_BY_DATE.get((month, day), {})
     if fallback:
@@ -189,17 +207,43 @@ def _build_sections(today: dt.date) -> dict[str, list[DayItem]]:
     return {title: items for title, items in sections.items() if items}
 
 
+def _build_sections(today: dt.date) -> dict[str, list[DayItem]]:
+    global _SECTIONS_CACHE_DATE, _SECTIONS_CACHE_VALUE
+
+    with _SECTIONS_CACHE_LOCK:
+        if _SECTIONS_CACHE_DATE == today and _SECTIONS_CACHE_VALUE is not None:
+            return _copy_sections(_SECTIONS_CACHE_VALUE)
+
+    sections = _build_sections_uncached(today)
+
+    with _SECTIONS_CACHE_LOCK:
+        _SECTIONS_CACHE_DATE = today
+        _SECTIONS_CACHE_VALUE = _copy_sections(sections)
+        return _copy_sections(_SECTIONS_CACHE_VALUE)
+
+
 def _download_thumbnail(url: str | None, size: int) -> Image.Image | None:
     if not url or size <= 0:
         return None
+
+    cache_key = (url, size)
+    with _THUMBNAIL_CACHE_LOCK:
+        if cache_key in _THUMBNAIL_CACHE:
+            cached = _THUMBNAIL_CACHE[cache_key]
+            return cached.copy() if cached is not None else None
+
     try:
         response = http_get(url, timeout=2.5)
         response.raise_for_status()
         img = Image.open(BytesIO(response.content)).convert("RGB")
         img = ImageOps.fit(img, (size, size), method=Image.Resampling.LANCZOS)
-        return img
     except Exception:
-        return None
+        img = None
+
+    with _THUMBNAIL_CACHE_LOCK:
+        _THUMBNAIL_CACHE[cache_key] = img.copy() if img is not None else None
+
+    return img.copy() if img is not None else None
 
 
 def _draw_gradient(img: Image.Image) -> None:
@@ -267,7 +311,7 @@ def _estimate_height(
     return max(H, y + 18)
 
 
-def _render_full_image(today: dt.date) -> Image.Image:
+def _render_full_image_uncached(today: dt.date) -> Image.Image:
     probe = Image.new("RGB", (W, H), _BG)
     probe_draw = ImageDraw.Draw(probe)
     pad = max(8, W // 32)
@@ -331,6 +375,34 @@ def _render_full_image(today: dt.date) -> Image.Image:
         y += 6
 
     return img
+
+
+def _render_full_image(today: dt.date) -> Image.Image:
+    global _RENDER_CACHE_DATE, _RENDER_CACHE_IMAGE
+
+    with _RENDER_CACHE_LOCK:
+        if _RENDER_CACHE_DATE == today and _RENDER_CACHE_IMAGE is not None:
+            return _RENDER_CACHE_IMAGE.copy()
+
+    img = _render_full_image_uncached(today)
+
+    with _RENDER_CACHE_LOCK:
+        _RENDER_CACHE_DATE = today
+        _RENDER_CACHE_IMAGE = img.copy()
+        return _RENDER_CACHE_IMAGE.copy()
+
+
+def _clear_caches_for_tests() -> None:
+    global _SECTIONS_CACHE_DATE, _SECTIONS_CACHE_VALUE, _RENDER_CACHE_DATE, _RENDER_CACHE_IMAGE
+
+    with _SECTIONS_CACHE_LOCK:
+        _SECTIONS_CACHE_DATE = None
+        _SECTIONS_CACHE_VALUE = None
+    with _RENDER_CACHE_LOCK:
+        _RENDER_CACHE_DATE = None
+        _RENDER_CACHE_IMAGE = None
+    with _THUMBNAIL_CACHE_LOCK:
+        _THUMBNAIL_CACHE.clear()
 
 
 def draw_on_this_day(display, transition: bool = True, today: dt.date | None = None) -> ScreenImage:
