@@ -13,6 +13,7 @@ import re
 import threading
 from dataclasses import dataclass
 from io import BytesIO
+from urllib.parse import unquote
 
 from PIL import Image, ImageDraw, ImageOps
 
@@ -86,6 +87,11 @@ _RENDER_CACHE_IMAGE: Image.Image | None = None
 _THUMBNAIL_CACHE_LOCK = threading.Lock()
 _THUMBNAIL_CACHE: dict[tuple[str, int], Image.Image | None] = {}
 
+_HEBCAL_JEWISH_HOLIDAYS_ICS_URL = (
+    "https://download.hebcal.com/ical/jewish-holidays-all-v2.ics"
+)
+_JEWISH_HOLIDAY_LIMIT = 3
+
 _EMOJI_PREFIX_RE = re.compile(r"^[^\w#]+\s*")
 
 _SECTION_LABELS = {
@@ -117,30 +123,68 @@ class DayItem:
 _FALLBACK_BY_DATE: dict[tuple[int, int], dict[str, list[DayItem]]] = {
     (7, 6): {
         "🌎 General History": [
-            DayItem(1415, "Jan Hus was burned at the stake in Constance, helping spark the Hussite movement."),
-            DayItem(1885, "Louis Pasteur successfully tested his rabies vaccine on Joseph Meister."),
-            DayItem(1957, "John Lennon and Paul McCartney met at a church fete in Liverpool."),
+            DayItem(
+                1415,
+                "Jan Hus was burned at the stake in Constance, helping spark the Hussite movement.",
+            ),
+            DayItem(
+                1885,
+                "Louis Pasteur successfully tested his rabies vaccine on Joseph Meister.",
+            ),
+            DayItem(
+                1957,
+                "John Lennon and Paul McCartney met at a church fete in Liverpool.",
+            ),
         ],
         "🇺🇸 American History": [
-            DayItem(1777, "Fort Ticonderoga was captured by British forces during the American Revolutionary War."),
-            DayItem(1944, "The Hartford circus fire became one of the deadliest fire disasters in U.S. history."),
+            DayItem(
+                1777,
+                "Fort Ticonderoga was captured by British forces during the American Revolutionary War.",
+            ),
+            DayItem(
+                1944,
+                "The Hartford circus fire became one of the deadliest fire disasters in U.S. history.",
+            ),
         ],
         "🏙️ Chicago History": [
-            DayItem(1933, "The first Major League Baseball All-Star Game was played at Comiskey Park in Chicago."),
-            DayItem(1957, "Chicago music history got a Beatles footnote when Lennon met McCartney on this date."),
+            DayItem(
+                1933,
+                "The first Major League Baseball All-Star Game was played at Comiskey Park in Chicago.",
+            ),
+            DayItem(
+                1957,
+                "Chicago music history got a Beatles footnote when Lennon met McCartney on this date.",
+            ),
         ],
         "🏟️ Sports History": [
-            DayItem(1933, "Babe Ruth hit the first home run in MLB All-Star Game history at Comiskey Park."),
-            DayItem(2013, "Andy Murray won Wimbledon, becoming the first British men's singles champion there since 1936."),
+            DayItem(
+                1933,
+                "Babe Ruth hit the first home run in MLB All-Star Game history at Comiskey Park.",
+            ),
+            DayItem(
+                2013,
+                "Andy Murray won Wimbledon, becoming the first British men's singles champion there since 1936.",
+            ),
         ],
         "🎂 Famous Birthdays": [
-            DayItem(1907, "Frida Kahlo, Mexican painter known for vivid self-portraits, was born."),
-            DayItem(1946, "George W. Bush, 43rd president of the United States, was born."),
+            DayItem(
+                1907,
+                "Frida Kahlo, Mexican painter known for vivid self-portraits, was born.",
+            ),
+            DayItem(
+                1946, "George W. Bush, 43rd president of the United States, was born."
+            ),
             DayItem(1975, "50 Cent, rapper, actor, and entrepreneur, was born."),
         ],
         "💾 Tech & Science": [
-            DayItem(1885, "Pasteur's rabies vaccine milestone helped define modern immunology."),
-            DayItem(1997, "NASA's Sojourner rover began rolling on Mars during the Pathfinder mission weekend."),
+            DayItem(
+                1885,
+                "Pasteur's rabies vaccine milestone helped define modern immunology.",
+            ),
+            DayItem(
+                1997,
+                "NASA's Sojourner rover began rolling on Mars during the Pathfinder mission weekend.",
+            ),
         ],
     }
 }
@@ -172,15 +216,105 @@ def _wiki_items(feed_type: str, month: int, day: int, limit: int = 3) -> list[Da
         if isinstance(pages, list):
             for page in pages:
                 thumbnail = page.get("thumbnail") if isinstance(page, dict) else None
-                source = thumbnail.get("source") if isinstance(thumbnail, dict) else None
+                source = (
+                    thumbnail.get("source") if isinstance(thumbnail, dict) else None
+                )
                 if source:
                     thumb = str(source)
                     break
         year = raw.get("year")
-        items.append(DayItem(int(year) if isinstance(year, int) else None, text=text, thumbnail_url=thumb))
+        items.append(
+            DayItem(
+                int(year) if isinstance(year, int) else None,
+                text=text,
+                thumbnail_url=thumb,
+            )
+        )
         if len(items) >= limit:
             break
     return items
+
+
+def _unfold_ics_lines(text: str) -> list[str]:
+    """Return RFC 5545-unfolded calendar lines."""
+
+    lines: list[str] = []
+    for raw_line in (
+        str(text or "").replace("\r\n", "\n").replace("\r", "\n").split("\n")
+    ):
+        if raw_line.startswith((" ", "\t")) and lines:
+            lines[-1] += raw_line[1:]
+        else:
+            lines.append(raw_line)
+    return lines
+
+
+def _ics_value(line: str) -> tuple[str, str] | None:
+    if ":" not in line:
+        return None
+    name, value = line.split(":", 1)
+    return name.split(";", 1)[0].upper(), unquote(
+        value.replace("\\,", ",").replace("\\;", ";").replace("\\n", " ").strip()
+    )
+
+
+def _parse_ics_date(value: str) -> dt.date | None:
+    value = str(value or "").strip()
+    if not value:
+        return None
+    date_part = value[:8]
+    try:
+        return dt.datetime.strptime(date_part, "%Y%m%d").date()
+    except ValueError:
+        return None
+
+
+def _parse_jewish_holidays_ics(text: str, today: dt.date) -> list[DayItem]:
+    """Extract Hebcal all-holidays events for today's Gregorian month/day."""
+
+    items: list[DayItem] = []
+    in_event = False
+    event: dict[str, str] = {}
+    for line in _unfold_ics_lines(text):
+        if line == "BEGIN:VEVENT":
+            in_event = True
+            event = {}
+            continue
+        if line == "END:VEVENT":
+            start = _parse_ics_date(event.get("DTSTART", ""))
+            summary = _clean_text(event.get("SUMMARY", ""))
+            if (
+                start
+                and start.month == today.month
+                and start.day == today.day
+                and summary
+            ):
+                items.append(DayItem(None, f"Jewish holiday: {summary}."))
+            in_event = False
+            event = {}
+            continue
+        if not in_event:
+            continue
+        parsed = _ics_value(line)
+        if parsed is None:
+            continue
+        name, value = parsed
+        if name in {"DTSTART", "SUMMARY"}:
+            event[name] = value
+    return items
+
+
+def _jewish_holiday_items(
+    today: dt.date, limit: int = _JEWISH_HOLIDAY_LIMIT
+) -> list[DayItem]:
+    try:
+        response = http_get(_HEBCAL_JEWISH_HOLIDAYS_ICS_URL, timeout=3.0)
+        response.raise_for_status()
+        items = _parse_jewish_holidays_ics(response.text, today)
+    except Exception as exc:
+        logging.debug("on_this_day: Hebcal Jewish holiday feed failed: %s", exc)
+        return []
+    return items[:limit]
 
 
 def _copy_sections(sections: dict[str, list[DayItem]]) -> dict[str, list[DayItem]]:
@@ -195,13 +329,20 @@ def _build_sections_uncached(today: dt.date) -> dict[str, list[DayItem]]:
         # flavor and should render promptly when the live feed is unavailable.
         # Prefer them without probing Wikimedia first; the shared HTTP client can
         # spend several retry cycles per feed while offline or under DNS failure.
-        return {title: list(items) for title, items in fallback.items() if items}
+        sections = {title: list(items) for title, items in fallback.items() if items}
+        jewish_holidays = _jewish_holiday_items(today)
+        if jewish_holidays:
+            sections["🎉 Holidays & Culture"] = jewish_holidays
+        return sections
 
+    holiday_items = _jewish_holiday_items(today) + _wiki_items(
+        "holidays", month, day, 2
+    )
     sections = {
         "🌎 General History": _wiki_items("events", month, day, 4),
         "🎂 Famous Birthdays": _wiki_items("births", month, day, 3),
         "🕯️ Notable Lives": _wiki_items("deaths", month, day, 2),
-        "🎉 Holidays & Culture": _wiki_items("holidays", month, day, 2),
+        "🎉 Holidays & Culture": holiday_items,
     }
 
     return {title: items for title, items in sections.items() if items}
@@ -303,7 +444,9 @@ def _estimate_height(
         label = _display_label(title)
         y += measure_text(draw, label, SECTION_FONT)[1] + 6
         for item in items:
-            _, text_width = _item_text_layout(draw, item, card_left, card_right, thumb_size)
+            _, text_width = _item_text_layout(
+                draw, item, card_left, card_right, thumb_size
+            )
             lines = wrap_text(item.text, BODY_FONT, text_width)
             card_h = max(42, len(lines) * line_h + 18)
             y += card_h + 7
@@ -318,7 +461,11 @@ def _render_full_image_uncached(today: dt.date) -> Image.Image:
     thumb_size = 34 if W >= 300 else 0
     sections = _build_sections(today)
     title = "On This Day"
-    subtitle = today.strftime("%B %-d") if hasattr(today, "strftime") else f"{today.month}/{today.day}"
+    subtitle = (
+        today.strftime("%B %-d")
+        if hasattr(today, "strftime")
+        else f"{today.month}/{today.day}"
+    )
     height = _estimate_height(probe_draw, sections, pad, thumb_size, subtitle)
     img = Image.new("RGB", (W, height), _BG)
     _draw_gradient(img)
@@ -336,9 +483,13 @@ def _render_full_image_uncached(today: dt.date) -> Image.Image:
         y += 7
         section_label = _display_label(section)
         dot_r = max(3, min(6, W // 64))
-        dot_y = y + max(0, (measure_text(draw, section_label, SECTION_FONT)[1] - dot_r * 2) // 2)
+        dot_y = y + max(
+            0, (measure_text(draw, section_label, SECTION_FONT)[1] - dot_r * 2) // 2
+        )
         draw.ellipse((pad, dot_y, pad + dot_r * 2, dot_y + dot_r * 2), fill=accent)
-        draw.text((pad + dot_r * 2 + 6, y), section_label, font=SECTION_FONT, fill=accent)
+        draw.text(
+            (pad + dot_r * 2 + 6, y), section_label, font=SECTION_FONT, fill=accent
+        )
         y += measure_text(draw, section_label, SECTION_FONT)[1] + 6
         for item in items:
             card_top = y
@@ -346,14 +497,19 @@ def _render_full_image_uncached(today: dt.date) -> Image.Image:
             lines = wrap_text(item.text, BODY_FONT, text_width)
             line_h = measure_text(draw, "Ag", BODY_FONT)[1] + 3
             card_h = max(42, len(lines) * line_h + 18)
-            _rounded(draw, (pad, card_top, W - pad, card_top + card_h), _CARD, (44, 54, 88))
+            _rounded(
+                draw, (pad, card_top, W - pad, card_top + card_h), _CARD, (44, 54, 88)
+            )
             x = pad + 8
             if thumb_size:
                 thumb = _download_thumbnail(item.thumbnail_url, thumb_size)
                 if thumb is not None:
                     img.paste(thumb, (x, card_top + 7))
                 else:
-                    draw.ellipse((x, card_top + 8, x + thumb_size, card_top + 8 + thumb_size), fill=accent)
+                    draw.ellipse(
+                        (x, card_top + 8, x + thumb_size, card_top + 8 + thumb_size),
+                        fill=accent,
+                    )
                     inner_pad = max(8, thumb_size // 3)
                     draw.ellipse(
                         (
@@ -366,7 +522,9 @@ def _render_full_image_uncached(today: dt.date) -> Image.Image:
                     )
                 x += thumb_size + 8
             if item.year is not None:
-                draw.text((x, card_top + 7), str(item.year), font=YEAR_FONT, fill=accent)
+                draw.text(
+                    (x, card_top + 7), str(item.year), font=YEAR_FONT, fill=accent
+                )
             text_y = card_top + 7
             for line in lines:
                 draw.text((text_x, text_y), line, font=BODY_FONT, fill=_TEXT)
@@ -405,7 +563,9 @@ def _clear_caches_for_tests() -> None:
         _THUMBNAIL_CACHE.clear()
 
 
-def draw_on_this_day(display, transition: bool = True, today: dt.date | None = None) -> ScreenImage:
+def draw_on_this_day(
+    display, transition: bool = True, today: dt.date | None = None
+) -> ScreenImage:
     today = today or dt.datetime.now(config.CENTRAL_TIME).date()
     clear_display(display)
     full_img = _render_full_image(today)

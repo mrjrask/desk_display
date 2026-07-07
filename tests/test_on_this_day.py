@@ -47,6 +47,7 @@ def test_on_this_day_exposes_editable_font_defaults_for_requested_profiles():
 
 def test_on_this_day_has_requested_curated_sections_for_july_6(monkeypatch):
     monkeypatch.setattr("screens.on_this_day._wiki_items", lambda *args, **kwargs: [])
+    monkeypatch.setattr(otd, "_jewish_holiday_items", lambda *args, **kwargs: [])
 
     sections = _build_sections(dt.date(2026, 7, 6))
 
@@ -71,6 +72,7 @@ def test_on_this_day_uses_curated_sections_without_wikimedia_calls(monkeypatch):
 
 def test_on_this_day_renderer_produces_frame(monkeypatch):
     monkeypatch.setattr("screens.on_this_day._wiki_items", lambda *args, **kwargs: [])
+    monkeypatch.setattr(otd, "_jewish_holiday_items", lambda *args, **kwargs: [])
     display = DummyDisplay()
 
     screen = draw_on_this_day(display, transition=False, today=dt.date(2026, 7, 6))
@@ -81,7 +83,10 @@ def test_on_this_day_renderer_produces_frame(monkeypatch):
 
 def test_on_this_day_full_image_is_tall_enough_for_curated_july_6(monkeypatch):
     monkeypatch.setattr("screens.on_this_day._wiki_items", lambda *args, **kwargs: [])
-    monkeypatch.setattr("screens.on_this_day._download_thumbnail", lambda *args, **kwargs: None)
+    monkeypatch.setattr(otd, "_jewish_holiday_items", lambda *args, **kwargs: [])
+    monkeypatch.setattr(
+        "screens.on_this_day._download_thumbnail", lambda *args, **kwargs: None
+    )
 
     full_img = otd._render_full_image(dt.date(2026, 7, 6))
 
@@ -90,6 +95,7 @@ def test_on_this_day_full_image_is_tall_enough_for_curated_july_6(monkeypatch):
 
 def test_on_this_day_year_items_wrap_within_remaining_card_width(monkeypatch):
     monkeypatch.setattr("screens.on_this_day._wiki_items", lambda *args, **kwargs: [])
+    monkeypatch.setattr(otd, "_jewish_holiday_items", lambda *args, **kwargs: [])
     sections = otd._build_sections(dt.date(2026, 7, 6))
     draw = ImageDraw.Draw(Image.new("RGB", (otd.W, otd.H), otd._BG))
     pad = max(8, otd.W // 32)
@@ -99,7 +105,9 @@ def test_on_this_day_year_items_wrap_within_remaining_card_width(monkeypatch):
         for item in items:
             if item.year is None:
                 continue
-            _, text_width = otd._item_text_layout(draw, item, pad, otd.W - pad, thumb_size)
+            _, text_width = otd._item_text_layout(
+                draw, item, pad, otd.W - pad, thumb_size
+            )
             lines = otd.wrap_text(item.text, otd.BODY_FONT, text_width)
 
             assert lines
@@ -112,7 +120,10 @@ def test_on_this_day_year_items_wrap_within_remaining_card_width(monkeypatch):
 
 def test_on_this_day_scroll_uses_smooth_readable_tuning(monkeypatch):
     monkeypatch.setattr("screens.on_this_day._wiki_items", lambda *args, **kwargs: [])
-    monkeypatch.setattr("screens.on_this_day._download_thumbnail", lambda *args, **kwargs: None)
+    monkeypatch.setattr(otd, "_jewish_holiday_items", lambda *args, **kwargs: [])
+    monkeypatch.setattr(
+        "screens.on_this_day._download_thumbnail", lambda *args, **kwargs: None
+    )
     captured = {}
 
     def fake_scroll_vertical_content(**kwargs):
@@ -138,6 +149,7 @@ def test_on_this_day_sections_cache_checks_wikimedia_once_per_date(monkeypatch):
         return [otd.DayItem(2000, f"{feed_type} item")]
 
     monkeypatch.setattr(otd, "_wiki_items", fake_wiki)
+    monkeypatch.setattr(otd, "_jewish_holiday_items", lambda *args, **kwargs: [])
 
     first = otd._build_sections(dt.date(2026, 7, 7))
     second = otd._build_sections(dt.date(2026, 7, 7))
@@ -168,3 +180,30 @@ def test_on_this_day_render_cache_reuses_daily_image(monkeypatch):
     assert next_day.size
     assert calls == [dt.date(2026, 7, 7), dt.date(2026, 7, 8)]
     assert first is not second
+
+
+def test_on_this_day_parses_hebrew_calendar_holidays_for_today():
+    ics = """BEGIN:VCALENDAR\nBEGIN:VEVENT\nDTSTART;VALUE=DATE:20260707\nSUMMARY:Tzom Tammuz\nEND:VEVENT\nBEGIN:VEVENT\nDTSTART;VALUE=DATE:20260708\nSUMMARY:Different Day\nEND:VEVENT\nEND:VCALENDAR\n"""
+
+    items = otd._parse_jewish_holidays_ics(ics, dt.date(2026, 7, 7))
+
+    assert items == [otd.DayItem(None, "Jewish holiday: Tzom Tammuz.")]
+
+
+def test_on_this_day_includes_jewish_holidays_in_holidays_and_culture(monkeypatch):
+    otd._clear_caches_for_tests()
+
+    class FakeResponse:
+        text = """BEGIN:VCALENDAR\nBEGIN:VEVENT\nDTSTART;VALUE=DATE:20260707\nSUMMARY:Tzom Tammuz\nEND:VEVENT\nEND:VCALENDAR\n"""
+
+        def raise_for_status(self):
+            pass
+
+    monkeypatch.setattr(otd, "http_get", lambda *args, **kwargs: FakeResponse())
+    monkeypatch.setattr(otd, "_wiki_items", lambda *args, **kwargs: [])
+
+    sections = otd._build_sections(dt.date(2026, 7, 7))
+
+    assert sections["🎉 Holidays & Culture"] == [
+        otd.DayItem(None, "Jewish holiday: Tzom Tammuz.")
+    ]
