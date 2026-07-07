@@ -2470,6 +2470,7 @@ def main_loop():
             led_override = None
             consumed_delay = False
             img = None
+            screenshot_img = None
 
             if result is None:
                 logging.info(
@@ -2482,6 +2483,7 @@ def main_loop():
                     already_displayed = True
             elif isinstance(result, ScreenImage):
                 img = result.image
+                screenshot_img = getattr(result, "screenshot_image", None)
                 already_displayed = result.displayed
                 led_override = result.led_override
                 consumed_delay = bool(getattr(result, "consumed_delay", False))
@@ -2515,7 +2517,7 @@ def main_loop():
                             )
                             animate_fade_in(display, img, steps=1, delay=0.01)
                         if capture_screenshot:
-                            saved = _save_screenshot(sid, img)
+                            saved = _save_screenshot(sid, screenshot_img or img)
                             if saved and saved[1]:
                                 maybe_archive_screenshots(saved[0])
                             if saved:
@@ -2536,7 +2538,7 @@ def main_loop():
                         if not already_displayed:
                             animate_fade_in(display, img, steps=1, delay=0.015)
                         if capture_screenshot:
-                            saved = _save_screenshot(sid, img)
+                            saved = _save_screenshot(sid, screenshot_img or img)
                             if saved and saved[1]:
                                 maybe_archive_screenshots(saved[0])
                             if saved:

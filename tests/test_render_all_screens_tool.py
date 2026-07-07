@@ -1,5 +1,8 @@
+from PIL import Image
+
 from tools.maintenance import render_screens as render_all_screens
 from tools.maintenance import render_all_screens as legacy_render_all_screens
+from utils import ScreenImage
 
 
 def test_non_interactive_resolution_prompt_is_silent(monkeypatch):
@@ -122,3 +125,17 @@ def test_build_cache_includes_scoreboards_payload(monkeypatch):
     cache = render_all_screens.build_cache()
 
     assert cache["scoreboards"]["nba"] == [{"id": "game-1"}]
+
+
+def test_extract_image_prefers_screenimage_screenshot_image():
+    display = render_all_screens.HeadlessDisplay(320, 240)
+    display_frame = Image.new("RGB", (320, 240), "black")
+    screenshot_image = Image.new("RGB", (320, 900), "blue")
+
+    extracted = render_all_screens._extract_image(
+        ScreenImage(display_frame, displayed=True, screenshot_image=screenshot_image),
+        display,
+    )
+
+    assert extracted is screenshot_image
+    assert extracted.size == (320, 900)

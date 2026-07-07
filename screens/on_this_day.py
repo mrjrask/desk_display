@@ -583,8 +583,13 @@ def draw_on_this_day(
         )
         bottom_offset = max(0, full_img.height - H)
         bottom_frame = full_img.crop((0, bottom_offset, W, bottom_offset + H))
-        return ScreenImage(bottom_frame, displayed=True, consumed_delay=True)
+        return ScreenImage(
+            bottom_frame,
+            displayed=True,
+            consumed_delay=True,
+            screenshot_image=full_img,
+        )
 
     first = full_img.crop((0, 0, W, H))
     display.image(first)
-    return ScreenImage(first, displayed=True)
+    return ScreenImage(first, displayed=True, screenshot_image=full_img)
