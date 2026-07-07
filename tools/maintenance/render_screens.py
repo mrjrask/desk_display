@@ -469,6 +469,8 @@ def load_requested_screen_ids() -> Tuple[set[str], Optional[str]]:
 
 def _extract_image(result: object, display: HeadlessDisplay) -> Optional[Image.Image]:
     if isinstance(result, ScreenImage):
+        if result.screenshot_image is not None:
+            return result.screenshot_image
         if result.image is not None:
             return result.image
         if result.displayed:
