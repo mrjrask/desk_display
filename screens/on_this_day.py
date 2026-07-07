@@ -40,10 +40,33 @@ _ACCENTS = [
     (255, 149, 94),
 ]
 
-TITLE_FONT = clone_font(config.FONT_DAY_DATE, max(18, min(34, W // 10)))
-SECTION_FONT = clone_font(config.FONT_WEATHER_DETAILS_BOLD, max(13, min(20, W // 16)))
-BODY_FONT = clone_font(config.FONT_WEATHER_DETAILS_SMALL, max(12, min(18, W // 21)))
-YEAR_FONT = clone_font(config.FONT_WEATHER_DETAILS_SMALL_BOLD, max(11, min(16, W // 23)))
+# Edit these per-display defaults to tune the On This Day typography.
+# Keys are display profile IDs returned by config.get_display_profile_id().
+ON_THIS_DAY_FONT_SIZES_BY_PROFILE = {
+    "hdmi_1080p": {"title": 84, "section": 48, "body": 36, "year": 32},
+    "fallback_hd": {"title": 56, "section": 32, "body": 26, "year": 24},
+    "fallback_default": {"title": 32, "section": 20, "body": 15, "year": 13},
+    "display_hat_mini": {"title": 32, "section": 20, "body": 15, "year": 13},
+    "hyperpixel4_square": {"title": 58, "section": 34, "body": 28, "year": 24},
+    "hyperpixel4": {"title": 50, "section": 30, "body": 24, "year": 22},
+}
+
+_DEFAULT_FONT_SIZES = {"title": 32, "section": 20, "body": 15, "year": 13}
+
+
+def _font_sizes_for_profile(profile_id: str | None = None) -> dict[str, int]:
+    """Return editable On This Day font sizes for the active display profile."""
+
+    profile_id = profile_id or config.get_display_profile_id()
+    sizes = ON_THIS_DAY_FONT_SIZES_BY_PROFILE.get(profile_id, _DEFAULT_FONT_SIZES)
+    return {**_DEFAULT_FONT_SIZES, **sizes}
+
+
+_FONT_SIZES = _font_sizes_for_profile()
+TITLE_FONT = clone_font(config.FONT_DAY_DATE, _FONT_SIZES["title"])
+SECTION_FONT = clone_font(config.FONT_WEATHER_DETAILS_BOLD, _FONT_SIZES["section"])
+BODY_FONT = clone_font(config.FONT_WEATHER_DETAILS_SMALL, _FONT_SIZES["body"])
+YEAR_FONT = clone_font(config.FONT_WEATHER_DETAILS_SMALL_BOLD, _FONT_SIZES["year"])
 
 _SCROLL_FRAME_SECONDS = 0.030
 _SCROLL_START_PAUSE_SECONDS = 2.0
