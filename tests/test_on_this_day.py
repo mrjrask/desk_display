@@ -58,11 +58,15 @@ def test_on_this_day_has_requested_curated_sections_for_july_6(monkeypatch):
     assert "💾 Tech & Science" in sections
 
 
-def test_on_this_day_uses_curated_sections_without_wikimedia_calls(monkeypatch):
+def test_on_this_day_uses_curated_sections_without_live_feed_calls(monkeypatch):
     def fail_wiki_call(*args, **kwargs):
         raise AssertionError("fallback date should not call Wikimedia feeds")
 
+    def fail_jewish_holiday_call(*args, **kwargs):
+        raise AssertionError("fallback date should not call Hebcal feed")
+
     monkeypatch.setattr("screens.on_this_day._wiki_items", fail_wiki_call)
+    monkeypatch.setattr(otd, "_jewish_holiday_items", fail_jewish_holiday_call)
 
     sections = _build_sections(dt.date(2026, 7, 6))
 
@@ -183,7 +187,25 @@ def test_on_this_day_render_cache_reuses_daily_image(monkeypatch):
 
 
 def test_on_this_day_parses_hebrew_calendar_holidays_for_today():
-    ics = """BEGIN:VCALENDAR\nBEGIN:VEVENT\nDTSTART;VALUE=DATE:20260707\nSUMMARY:Tzom Tammuz\nEND:VEVENT\nBEGIN:VEVENT\nDTSTART;VALUE=DATE:20260708\nSUMMARY:Different Day\nEND:VEVENT\nEND:VCALENDAR\n"""
+    ics = """BEGIN:VCALENDAR
+BEGIN:VEVENT
+DTSTART;VALUE=DATE:20250707
+SUMMARY:Past Same Gregorian Date
+END:VEVENT
+BEGIN:VEVENT
+DTSTART;VALUE=DATE:20260707
+SUMMARY:Tzom Tammuz
+END:VEVENT
+BEGIN:VEVENT
+DTSTART;VALUE=DATE:20260708
+SUMMARY:Different Day
+END:VEVENT
+BEGIN:VEVENT
+DTSTART;VALUE=DATE:20270707
+SUMMARY:Future Same Gregorian Date
+END:VEVENT
+END:VCALENDAR
+"""
 
     items = otd._parse_jewish_holidays_ics(ics, dt.date(2026, 7, 7))
 
