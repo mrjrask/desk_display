@@ -20,6 +20,31 @@ class DummyDisplay:
         self.frames.append(img.copy())
 
 
+def test_on_this_day_exposes_editable_font_defaults_for_requested_profiles():
+    expected_profiles = {
+        "hdmi_1080p",
+        "fallback_hd",
+        "fallback_default",
+        "display_hat_mini",
+        "adafruit_minipitft_114",
+        "hyperpixel4_square",
+        "hyperpixel4",
+    }
+
+    assert expected_profiles <= set(otd.ON_THIS_DAY_FONT_SIZES_BY_PROFILE)
+    for profile in expected_profiles:
+        sizes = otd._font_sizes_for_profile(profile)
+        assert {"title", "section", "body", "year"} <= set(sizes)
+        assert all(isinstance(value, int) and value > 0 for value in sizes.values())
+
+    assert otd._font_sizes_for_profile("adafruit_minipitft_114") == {
+        "title": 24,
+        "section": 15,
+        "body": 12,
+        "year": 11,
+    }
+
+
 def test_on_this_day_has_requested_curated_sections_for_july_6(monkeypatch):
     monkeypatch.setattr("screens.on_this_day._wiki_items", lambda *args, **kwargs: [])
 
