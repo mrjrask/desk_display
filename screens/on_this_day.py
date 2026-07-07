@@ -270,7 +270,7 @@ def _parse_ics_date(value: str) -> dt.date | None:
 
 
 def _parse_jewish_holidays_ics(text: str, today: dt.date) -> list[DayItem]:
-    """Extract Hebcal all-holidays events for today's Gregorian month/day."""
+    """Extract Hebcal all-holidays events for today's Gregorian date."""
 
     items: list[DayItem] = []
     in_event = False
@@ -285,8 +285,7 @@ def _parse_jewish_holidays_ics(text: str, today: dt.date) -> list[DayItem]:
             summary = _clean_text(event.get("SUMMARY", ""))
             if (
                 start
-                and start.month == today.month
-                and start.day == today.day
+                and start == today
                 and summary
             ):
                 items.append(DayItem(None, f"Jewish holiday: {summary}."))
@@ -329,11 +328,7 @@ def _build_sections_uncached(today: dt.date) -> dict[str, list[DayItem]]:
         # flavor and should render promptly when the live feed is unavailable.
         # Prefer them without probing Wikimedia first; the shared HTTP client can
         # spend several retry cycles per feed while offline or under DNS failure.
-        sections = {title: list(items) for title, items in fallback.items() if items}
-        jewish_holidays = _jewish_holiday_items(today)
-        if jewish_holidays:
-            sections["🎉 Holidays & Culture"] = jewish_holidays
-        return sections
+        return {title: list(items) for title, items in fallback.items() if items}
 
     holiday_items = _jewish_holiday_items(today) + _wiki_items(
         "holidays", month, day, 2
