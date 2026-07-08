@@ -13,6 +13,38 @@ def test_mlb_logo_height_is_capped_to_score_row(monkeypatch):
     assert mlb_scoreboard._team_logo_height() == 48
 
 
+def test_mlb_hyperpixel_square_adds_space_around_at_marker(monkeypatch):
+    monkeypatch.setattr(mlb_scoreboard, "HYPERPIXEL_LAYOUT", True)
+    monkeypatch.setattr(mlb_scoreboard, "HYPERPIXEL_4_SQUARE_LAYOUT", True)
+    monkeypatch.setattr(mlb_scoreboard, "scale_value_width", lambda value: value)
+
+    assert mlb_scoreboard._scoreboard_column_widths() == [76, 60, 48, 60, 76]
+
+
+def test_mlb_non_square_keeps_original_scoreboard_columns(monkeypatch):
+    monkeypatch.setattr(mlb_scoreboard, "HYPERPIXEL_LAYOUT", True)
+    monkeypatch.setattr(mlb_scoreboard, "HYPERPIXEL_4_SQUARE_LAYOUT", False)
+    monkeypatch.setattr(mlb_scoreboard, "scale_value_width", lambda value: value)
+
+    assert mlb_scoreboard._scoreboard_column_widths() == [80, 60, 40, 60, 80]
+
+
+def test_mlb_v2_hyperpixel_square_adds_space_around_at_marker(monkeypatch):
+    monkeypatch.setattr(mlb_scoreboard_v2, "HYPERPIXEL_LAYOUT", True)
+    monkeypatch.setattr(mlb_scoreboard_v2, "HYPERPIXEL_4_SQUARE_LAYOUT", True)
+    monkeypatch.setattr(mlb_scoreboard_v2, "scale_value_width", lambda value: value)
+
+    assert mlb_scoreboard_v2._game_column_widths() == [42, 30, 16, 30, 42]
+
+
+def test_mlb_v2_non_square_keeps_original_scoreboard_columns(monkeypatch):
+    monkeypatch.setattr(mlb_scoreboard_v2, "HYPERPIXEL_LAYOUT", True)
+    monkeypatch.setattr(mlb_scoreboard_v2, "HYPERPIXEL_4_SQUARE_LAYOUT", False)
+    monkeypatch.setattr(mlb_scoreboard_v2, "scale_value_width", lambda value: value)
+
+    assert mlb_scoreboard_v2._game_column_widths() == [44, 30, 12, 30, 44]
+
+
 def test_mlb_v2_logo_height_is_capped_to_score_row(monkeypatch):
     monkeypatch.setattr(mlb_scoreboard_v2, "TEAM_LOGO_BASE_HEIGHT", 80)
     monkeypatch.setattr(mlb_scoreboard_v2, "SCORE_ROW_H", 30)

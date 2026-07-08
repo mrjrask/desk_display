@@ -46,6 +46,7 @@ from config import (
     get_screen_font,
     get_screen_image_scale,
     is_hyperpixel_next_layout,
+    is_hyperpixel_4_square_layout,
     scale_value,
     scale_value_width,
 )
@@ -64,10 +65,21 @@ from utils import (
 
 # ─── Constants ────────────────────────────────────────────────────────────────
 HYPERPIXEL_LAYOUT = is_hyperpixel_next_layout()
+HYPERPIXEL_4_SQUARE_LAYOUT = is_hyperpixel_4_square_layout()
 
 
 def _scale_width(value: int) -> int:
     return scale_value_width(value) if HYPERPIXEL_LAYOUT else scale_value(value)
+
+
+def _scoreboard_column_widths() -> list[int]:
+    # On the 720x720 HyperPixel 4 Square, the logos can feel tight around the
+    # centered "@". Widen only the center column a bit and take the pixels from
+    # the outer score columns so the whole row remains centered and full-width.
+    base_widths = [80, 60, 40, 60, 80]
+    if HYPERPIXEL_4_SQUARE_LAYOUT:
+        base_widths = [76, 60, 48, 60, 76]
+    return [_scale_width(width) for width in base_widths]
 
 
 TITLE                 = "MLB Scoreboard"
@@ -78,13 +90,7 @@ STATUS_ROW_H          = scale_value(18)
 REQUEST_TIMEOUT       = 10
 FETCH_CACHE_TTL_SECONDS = 60
 MLB_SPORT_IDS = "1"  # MLB Add 51 for World Baseball Classic (International)
-COL_WIDTHS = [
-    _scale_width(80),
-    _scale_width(60),
-    _scale_width(40),
-    _scale_width(60),
-    _scale_width(80),
-]  # total = 320 (WIDTH)
+COL_WIDTHS = _scoreboard_column_widths()  # total = 320 scaled to display width
 _TOTAL_COL_WIDTH = sum(COL_WIDTHS)
 _COL_LEFT = max(0, (WIDTH - _TOTAL_COL_WIDTH) // 2)
 COL_X = [_COL_LEFT]
