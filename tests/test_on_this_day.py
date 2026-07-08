@@ -170,6 +170,40 @@ def test_on_this_day_sections_cache_checks_wikimedia_once_per_date(monkeypatch):
     assert [call[2] for call in calls] == [7, 7, 7, 7, 8, 8, 8, 8]
 
 
+def test_on_this_day_builds_live_sections_in_parallel(monkeypatch):
+    otd._clear_caches_for_tests()
+    calls = []
+
+    def fake_wiki(feed_type, month, day, limit=3):
+        calls.append((feed_type, month, day, limit))
+        return [otd.DayItem(2000, f"{feed_type} item")]
+
+    monkeypatch.setattr(otd, "_wiki_items", fake_wiki)
+    monkeypatch.setattr(
+        otd,
+        "_jewish_holiday_items",
+        lambda *args, **kwargs: [otd.DayItem(None, "Holiday")],
+    )
+
+    sections = otd._build_sections_uncached(dt.date(2026, 7, 8))
+
+    assert "🌎 General History" in sections
+    assert "🎉 Holidays & Culture" in sections
+    assert {call[0] for call in calls} == {"events", "births", "deaths", "holidays"}
+
+
+def test_on_this_day_thumbnail_downloads_are_opt_in(monkeypatch):
+    otd._clear_caches_for_tests()
+
+    def fail_http_get(*args, **kwargs):
+        raise AssertionError("thumbnail download should not run by default")
+
+    monkeypatch.setattr(otd, "http_get", fail_http_get)
+    monkeypatch.setattr(otd, "_LIVE_THUMBNAILS_ENABLED", False)
+
+    assert otd._download_thumbnail("https://example.com/thumb.jpg", 34) is None
+
+
 def test_on_this_day_render_cache_reuses_daily_image(monkeypatch):
     otd._clear_caches_for_tests()
     calls = []

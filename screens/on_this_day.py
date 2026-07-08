@@ -9,10 +9,13 @@ from __future__ import annotations
 
 import datetime as dt
 import logging
+import os
 import re
 import threading
+from concurrent.futures import ThreadPoolExecutor, wait
 from dataclasses import dataclass
 from io import BytesIO
+from typing import Callable
 from urllib.parse import unquote
 
 from PIL import Image, ImageDraw, ImageOps
@@ -91,6 +94,12 @@ _HEBCAL_JEWISH_HOLIDAYS_ICS_URL = (
     "https://download.hebcal.com/ical/jewish-holidays-all-v2.ics"
 )
 _JEWISH_HOLIDAY_LIMIT = 3
+_FEED_BUILD_TIMEOUT_SECONDS = max(
+    0.5, float(os.environ.get("ON_THIS_DAY_FEED_BUILD_TIMEOUT_SECONDS", "3.5"))
+)
+_LIVE_THUMBNAILS_ENABLED = os.environ.get(
+    "ON_THIS_DAY_LIVE_THUMBNAILS", "0"
+).strip().lower() in {"1", "true", "yes", "on"}
 
 _EMOJI_PREFIX_RE = re.compile(r"^[^\w#]+\s*")
 
@@ -283,11 +292,7 @@ def _parse_jewish_holidays_ics(text: str, today: dt.date) -> list[DayItem]:
         if line == "END:VEVENT":
             start = _parse_ics_date(event.get("DTSTART", ""))
             summary = _clean_text(event.get("SUMMARY", ""))
-            if (
-                start
-                and start == today
-                and summary
-            ):
+            if start and start == today and summary:
                 items.append(DayItem(None, f"Jewish holiday: {summary}."))
             in_event = False
             event = {}
@@ -330,13 +335,53 @@ def _build_sections_uncached(today: dt.date) -> dict[str, list[DayItem]]:
         # spend several retry cycles per feed while offline or under DNS failure.
         return {title: list(items) for title, items in fallback.items() if items}
 
-    holiday_items = _jewish_holiday_items(today) + _wiki_items(
-        "holidays", month, day, 2
+    # Keep On This Day off the rotation hot path.  Fetching four Wikimedia feeds
+    # plus Hebcal serially can hold the previous screen for 10+ seconds on a Pi
+    # Zero 2 W when DNS, Wi-Fi, or the upstream API is slow.  Start the feeds in
+    # parallel, collect only the calls that finish within a small overall budget,
+    # and let the screen render with whichever sections are ready.
+    task_specs: dict[str, tuple[str, Callable[[], list[DayItem]]]] = {
+        "🌎 General History": ("events", lambda: _wiki_items("events", month, day, 4)),
+        "🎂 Famous Birthdays": ("births", lambda: _wiki_items("births", month, day, 3)),
+        "🕯️ Notable Lives": ("deaths", lambda: _wiki_items("deaths", month, day, 2)),
+        "jewish_holidays": ("jewish_holidays", lambda: _jewish_holiday_items(today)),
+        "wiki_holidays": ("holidays", lambda: _wiki_items("holidays", month, day, 2)),
+    }
+
+    completed: dict[str, list[DayItem]] = {}
+    executor = ThreadPoolExecutor(max_workers=len(task_specs))
+    future_to_title = {
+        executor.submit(fetcher): title
+        for title, (_feed_name, fetcher) in task_specs.items()
+    }
+    done, pending = wait(
+        future_to_title,
+        timeout=_FEED_BUILD_TIMEOUT_SECONDS,
+    )
+    for future in done:
+        title = future_to_title[future]
+        try:
+            completed[title] = future.result() or []
+        except Exception as exc:
+            feed_name = task_specs[title][0]
+            logging.debug("on_this_day: feed failed for %s: %s", feed_name, exc)
+    if pending:
+        logging.warning(
+            "on_this_day: %d feed(s) exceeded %.1fs budget; rendering partial content.",
+            len(pending),
+            _FEED_BUILD_TIMEOUT_SECONDS,
+        )
+        for future in pending:
+            future.cancel()
+    executor.shutdown(wait=False, cancel_futures=True)
+
+    holiday_items = (completed.get("jewish_holidays") or []) + (
+        completed.get("wiki_holidays") or []
     )
     sections = {
-        "🌎 General History": _wiki_items("events", month, day, 4),
-        "🎂 Famous Birthdays": _wiki_items("births", month, day, 3),
-        "🕯️ Notable Lives": _wiki_items("deaths", month, day, 2),
+        "🌎 General History": completed.get("🌎 General History") or [],
+        "🎂 Famous Birthdays": completed.get("🎂 Famous Birthdays") or [],
+        "🕯️ Notable Lives": completed.get("🕯️ Notable Lives") or [],
         "🎉 Holidays & Culture": holiday_items,
     }
 
@@ -367,6 +412,12 @@ def _download_thumbnail(url: str | None, size: int) -> Image.Image | None:
         if cache_key in _THUMBNAIL_CACHE:
             cached = _THUMBNAIL_CACHE[cache_key]
             return cached.copy() if cached is not None else None
+
+    # Thumbnail downloads are nice-to-have, but they happen during image layout.
+    # Default them off so a slow image host cannot freeze the previous screen;
+    # operators can opt in once their network/display is known to be fast enough.
+    if not _LIVE_THUMBNAILS_ENABLED:
+        return None
 
     try:
         response = http_get(url, timeout=2.5)
