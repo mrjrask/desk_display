@@ -59,6 +59,35 @@ LOGO_DIR = os.path.join(IMAGES_DIR, "world_cup")
 ESPN_URL = "https://site.api.espn.com/apis/site/v2/sports/soccer/fifa.world/scoreboard"
 SCROLL_REPEAT_COUNT = 2
 NO_GAMES_TEXT = "No Games Today"
+OLY_LOGO_PATH = os.path.join(IMAGES_DIR, "oly", "WC.png")
+
+ROUND_QUARTERFINALS = "Quarterfinals"
+ROUND_SEMIFINALS = "Semifinals"
+ROUND_FINALS = "Finals"
+ROUND_LABEL_KEY = "round_label"
+ROUND_GAME_KEY = "round_game"
+
+WORLD_CUP_ROUNDS = {
+    ROUND_QUARTERFINALS: {
+        "dates": (
+            datetime.date(2026, 7, 9),
+            datetime.date(2026, 7, 10),
+            datetime.date(2026, 7, 11),
+        ),
+        "show_from": datetime.date(2026, 7, 8),
+        "show_through": datetime.date(2026, 7, 11),
+    },
+    ROUND_SEMIFINALS: {
+        "dates": (datetime.date(2026, 7, 14), datetime.date(2026, 7, 15)),
+        "show_from": datetime.date(2026, 7, 12),
+        "show_through": datetime.date(2026, 7, 16),
+    },
+    ROUND_FINALS: {
+        "dates": (datetime.date(2026, 7, 18), datetime.date(2026, 7, 19)),
+        "show_from": datetime.date(2026, 7, 17),
+        "show_through": datetime.date(2026, 7, 20),
+    },
+}
 
 TITLE_GAP = scale_value(8)
 BLOCK_SPACING = scale_value(10)
@@ -111,6 +140,7 @@ BACKGROUND_COLOR = get_screen_background_color(SCREEN_ID, SCOREBOARD_BACKGROUND_
 _SESSION = get_session()
 _REMOTE_LOGO_CACHE: dict[tuple[str, int], Optional[Image.Image]] = {}
 _LEAGUE_LOGO_CACHE: dict[tuple[str, int], Optional[Image.Image]] = {}
+_OLY_LOGO_CACHE: dict[int, Optional[Image.Image]] = {}
 
 
 def _team_logo_height() -> int:
@@ -208,6 +238,37 @@ def _normalize_event(event: dict[str, Any]) -> dict[str, Any]:
         },
         "teams": {"away": away, "home": home},
     }
+
+
+def _round_for_date(day: datetime.date) -> str | None:
+    for round_name, details in WORLD_CUP_ROUNDS.items():
+        if details["show_from"] <= day <= details["show_through"]:
+            return round_name
+    return None
+
+
+def _round_dates(round_name: str) -> tuple[datetime.date, ...]:
+    details = WORLD_CUP_ROUNDS.get(round_name) or {}
+    dates = details.get("dates") or ()
+    return tuple(day for day in dates if isinstance(day, datetime.date))
+
+
+def _order_round_games(games: list[dict], round_name: str) -> list[dict]:
+    if round_name != ROUND_FINALS:
+        return games
+    return sorted(games, key=lambda game: str(game.get("date") or ""), reverse=True)
+
+
+def _with_round_metadata(games: list[dict], round_name: str) -> list[dict]:
+    ordered = _order_round_games(games, round_name)
+    result: list[dict] = []
+    for idx, game in enumerate(ordered):
+        copy = dict(game)
+        copy[ROUND_LABEL_KEY] = round_name
+        if round_name == ROUND_FINALS:
+            copy[ROUND_GAME_KEY] = "Championship" if idx == 0 else "3rd Place"
+        result.append(copy)
+    return result
 
 
 def _fetch_games_for_date(day: datetime.date) -> list[dict]:
@@ -359,6 +420,24 @@ def _team_logo_url(team: dict) -> str:
     return ""
 
 
+def _get_oly_logo() -> Optional[Image.Image]:
+    h = max(1, int(round(_league_logo_height() * 0.55)))
+    if h in _OLY_LOGO_CACHE:
+        return _OLY_LOGO_CACHE[h]
+    if not os.path.exists(OLY_LOGO_PATH):
+        _OLY_LOGO_CACHE[h] = None
+        return None
+    try:
+        img = Image.open(OLY_LOGO_PATH).convert("RGBA")
+        ratio = h / max(1, img.height)
+        resized = img.resize((max(1, int(round(img.width * ratio))), h), RESAMPLE)
+        _OLY_LOGO_CACHE[h] = resized
+        return resized
+    except Exception:
+        _OLY_LOGO_CACHE[h] = None
+        return None
+
+
 def _get_league_logo() -> Optional[Image.Image]:
     h = _league_logo_height()
     cache_key = ("WC", h)
@@ -381,6 +460,7 @@ def _get_league_logo() -> Optional[Image.Image]:
 
 def _render_scoreboard(games: list[dict], *, title_style: str = "title") -> Image.Image:
     title = "World Cup Scores"
+    round_label = str((games[0] or {}).get(ROUND_LABEL_KEY) or "").strip() if games else ""
     logo_height = _team_logo_height()
 
     block_h = SCORE_ROW_H + STATUS_ROW_H
@@ -415,7 +495,11 @@ def _render_scoreboard(games: list[dict], *, title_style: str = "title") -> Imag
             canvas.paste(logo, (x0, y0), logo)
 
         status_fill = IN_PROGRESS_STATUS_COLOR if in_progress else (255, 255, 255)
-        _center_text(draw, _status_text(game), STATUS_FONT, COL_X[0], sum(COL_WIDTHS), y + SCORE_ROW_H, STATUS_ROW_H, fill=status_fill)
+        status_text = _status_text(game)
+        round_game = str(game.get(ROUND_GAME_KEY) or "").strip()
+        if round_game:
+            status_text = f"{round_game} • {status_text}"
+        _center_text(draw, status_text, STATUS_FONT, COL_X[0], sum(COL_WIDTHS), y + SCORE_ROW_H, STATUS_ROW_H, fill=status_fill)
 
         y += block_h
         if idx < len(games) - 1:
@@ -431,18 +515,26 @@ def _render_scoreboard(games: list[dict], *, title_style: str = "title") -> Imag
     except Exception:
         _, title_h = dd.textsize(title, font=FONT_TITLE_SPORTS)
 
-    league_logo = _get_league_logo()
-    league_h = league_logo.height if league_logo else 0
-    gap = LEAGUE_LOGO_GAP if league_logo else 0
+    oly_logo = _get_oly_logo()
+    oly_h = oly_logo.height if oly_logo else 0
+    oly_gap = LEAGUE_LOGO_GAP if oly_logo else 0
 
-    content_top = league_h + gap + title_h + TITLE_GAP
+    dummy_round_h = 0
+    if round_label:
+        try:
+            l2, t2, r2, b2 = dd.textbbox((0, 0), round_label, font=STATUS_FONT)
+            dummy_round_h = b2 - t2
+        except Exception:
+            _, dummy_round_h = dd.textsize(round_label, font=STATUS_FONT)
+
+    content_top = oly_h + oly_gap + title_h + (LEAGUE_LOGO_GAP + dummy_round_h if round_label else 0) + TITLE_GAP
     total_h = max(HEIGHT, content_top + canvas.height + SCOREBOARD_STANDINGS_BOTTOM_PADDING)
     out = Image.new("RGB", (WIDTH, total_h), BACKGROUND_COLOR)
     draw_out = ImageDraw.Draw(out)
 
-    if league_logo:
-        out.paste(league_logo, ((WIDTH - league_logo.width) // 2, 0), league_logo)
-    title_top = league_h + gap
+    if oly_logo:
+        out.paste(oly_logo, ((WIDTH - oly_logo.width) // 2, 0), oly_logo)
+    title_top = oly_h + oly_gap
     if title_style == "line":
         line_y = title_top + max(1, title_h // 2)
         draw_out.line((scale_value_width(10), line_y, WIDTH - scale_value_width(10), line_y), fill=(45, 45, 45))
@@ -453,6 +545,9 @@ def _render_scoreboard(games: list[dict], *, title_style: str = "title") -> Imag
         except Exception:
             tw, _ = draw_out.textsize(title, font=FONT_TITLE_SPORTS)
             draw_out.text(((WIDTH - tw) // 2, title_top), title, font=FONT_TITLE_SPORTS, fill=(255, 255, 255))
+
+    if round_label and title_style != "line":
+        _center_text(draw_out, round_label, STATUS_FONT, 0, WIDTH, title_top + title_h + LEAGUE_LOGO_GAP, dummy_round_h, fill=(255, 255, 255))
 
     out.paste(canvas, (0, content_top))
     return out
@@ -499,12 +594,12 @@ def _render_world_cup_scoreboard_v1(display, games: list[dict] | None, transitio
         title = "World Cup Scores"
         img = Image.new("RGB", (WIDTH, HEIGHT), BACKGROUND_COLOR)
         draw = ImageDraw.Draw(img)
-        league_logo = _get_league_logo()
+        oly_logo = _get_oly_logo()
         title_top = 0
         title_height = 0
-        if league_logo:
-            img.paste(league_logo, ((WIDTH - league_logo.width) // 2, 0), league_logo)
-            title_top = league_logo.height + LEAGUE_LOGO_GAP
+        if oly_logo:
+            img.paste(oly_logo, ((WIDTH - oly_logo.width) // 2, 0), oly_logo)
+            title_top = oly_logo.height + LEAGUE_LOGO_GAP
         try:
             l, t, r, b = draw.textbbox((0, 0), title, font=FONT_TITLE_SPORTS)
             title_height = b - t
