@@ -166,3 +166,7 @@ def test_score_text_segments_use_smaller_penalty_score_font():
         ("1", world_cup_scoreboard.SCORE_FONT),
         (" (4)", world_cup_scoreboard.PK_SCORE_FONT),
     ]
+
+
+def test_no_games_message_matches_requested_empty_state():
+    assert world_cup_scoreboard.NO_GAMES_TEXT == "No Games Today"
