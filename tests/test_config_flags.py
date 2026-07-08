@@ -250,6 +250,35 @@ def test_scoreboard_scroll_step_doubles_only_on_1080p(monkeypatch):
     assert module.SCOREBOARD_SCROLL_STEP == 1
 
 
+def test_mlb_scoreboard_scroll_delay_slows_only_display_hat_mini(monkeypatch):
+    module = _reload_config(
+        monkeypatch,
+        DISPLAY_WIDTH="320",
+        DISPLAY_HEIGHT="240",
+        MLB_SCOREBOARD_SCROLL_DELAY=None,
+    )
+    assert module.SCOREBOARD_SCROLL_DELAY == 0.020
+    assert module.MLB_SCOREBOARD_SCROLL_DELAY == 0.060
+
+    module = _reload_config(
+        monkeypatch,
+        DISPLAY_WIDTH="800",
+        DISPLAY_HEIGHT="480",
+        MLB_SCOREBOARD_SCROLL_DELAY=None,
+    )
+    assert module.MLB_SCOREBOARD_SCROLL_DELAY == module.SCOREBOARD_SCROLL_DELAY
+
+
+def test_mlb_scoreboard_scroll_delay_env_override(monkeypatch):
+    module = _reload_config(
+        monkeypatch,
+        DISPLAY_WIDTH="320",
+        DISPLAY_HEIGHT="240",
+        MLB_SCOREBOARD_SCROLL_DELAY="0.075",
+    )
+    assert module.MLB_SCOREBOARD_SCROLL_DELAY == 0.075
+
+
 def test_display_profile_id_resolution(monkeypatch):
     module = _reload_config(monkeypatch, DISPLAY_WIDTH="320", DISPLAY_HEIGHT="240")
     assert module.get_display_profile_id() == "display_hat_mini"

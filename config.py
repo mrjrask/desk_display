@@ -182,6 +182,7 @@ EMOJI_EMBEDDED_COLOR = _supports_embedded_color()
 from config_store import ConfigStore
 from display_profiles import (
     DISPLAY_PROFILE_ADAFRUIT_MINIPITFT_114,
+    DISPLAY_PROFILE_DISPLAY_HAT_MINI,
     DISPLAY_PROFILE_HDMI_1080P,
     DisplayProfilePreset,
     resolve_display_profile,
@@ -1101,6 +1102,21 @@ def _get_non_negative_int_env(name: str, default: int) -> int:
         return default
     return value
 
+
+def _get_non_negative_float_env(name: str, default: float) -> float:
+    raw = os.environ.get(name)
+    if raw is None:
+        return default
+    try:
+        value = float(raw)
+    except ValueError:
+        logging.warning("Invalid %s value %r; defaulting to %s.", name, raw, default)
+        return default
+    if value < 0:
+        logging.warning("Negative %s value %r; defaulting to %s.", name, raw, default)
+        return default
+    return value
+
 def _coerce_color_component(env_name: str, default: int) -> int:
     """Return a color channel value from 0-255 with logging on invalid input."""
 
@@ -1141,6 +1157,10 @@ SCOREBOARD_FINAL_LOSING_SCORE_COLOR = (200, 200, 200)
 # ─── Scoreboard scrolling configuration ───────────────────────────────────────
 SCOREBOARD_SCROLL_STEP         = ACTIVE_DISPLAY_PROFILE.scoreboard_scroll_step
 SCOREBOARD_SCROLL_DELAY        = ACTIVE_DISPLAY_PROFILE.scoreboard_scroll_delay
+MLB_SCOREBOARD_SCROLL_DELAY    = _get_non_negative_float_env(
+    "MLB_SCOREBOARD_SCROLL_DELAY",
+    0.060 if ACTIVE_DISPLAY_PROFILE.profile_id == DISPLAY_PROFILE_DISPLAY_HAT_MINI else SCOREBOARD_SCROLL_DELAY,
+)
 SCOREBOARD_SCROLL_PAUSE_TOP    = 0.75
 SCOREBOARD_SCROLL_PAUSE_BOTTOM = 0.5
 SCOREBOARD_STANDINGS_BOTTOM_PADDING = _get_non_negative_int_env(
