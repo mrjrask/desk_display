@@ -58,6 +58,7 @@ SCREEN_ID = "World Cup Scoreboard"
 LOGO_DIR = os.path.join(IMAGES_DIR, "world_cup")
 ESPN_URL = "https://site.api.espn.com/apis/site/v2/sports/soccer/fifa.world/scoreboard"
 SCROLL_REPEAT_COUNT = 2
+NO_GAMES_TEXT = "No Games Today"
 
 TITLE_GAP = scale_value(8)
 BLOCK_SPACING = scale_value(10)
@@ -514,7 +515,7 @@ def _render_world_cup_scoreboard_v1(display, games: list[dict] | None, transitio
             draw.text(((WIDTH - tw) // 2, title_top), title, font=FONT_TITLE_SPORTS, fill=(255, 255, 255))
 
         no_games_top = max(title_top + title_height + LEAGUE_LOGO_GAP, HEIGHT // 2 - STATUS_ROW_H // 2)
-        _center_text(draw, "No World Cup games", STATUS_FONT, 0, WIDTH, no_games_top, STATUS_ROW_H)
+        _center_text(draw, NO_GAMES_TEXT, STATUS_FONT, 0, WIDTH, no_games_top, STATUS_ROW_H)
         if transition:
             return ScreenImage(img, displayed=False)
         display.image(img)
