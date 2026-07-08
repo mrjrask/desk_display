@@ -170,3 +170,37 @@ def test_score_text_segments_use_smaller_penalty_score_font():
 
 def test_no_games_message_matches_requested_empty_state():
     assert world_cup_scoreboard.NO_GAMES_TEXT == "No Games Today"
+
+
+def test_round_for_date_advances_through_world_cup_final_rounds():
+    assert (
+        world_cup_scoreboard._round_for_date(world_cup_scoreboard.datetime.date(2026, 7, 8))
+        == world_cup_scoreboard.ROUND_QUARTERFINALS
+    )
+    assert (
+        world_cup_scoreboard._round_for_date(world_cup_scoreboard.datetime.date(2026, 7, 12))
+        == world_cup_scoreboard.ROUND_SEMIFINALS
+    )
+    assert (
+        world_cup_scoreboard._round_for_date(world_cup_scoreboard.datetime.date(2026, 7, 17))
+        == world_cup_scoreboard.ROUND_FINALS
+    )
+
+
+def test_finals_metadata_orders_championship_before_third_place():
+    games = [
+        {"id": "third", "date": "2026-07-18T20:00:00Z"},
+        {"id": "championship", "date": "2026-07-19T19:00:00Z"},
+    ]
+
+    result = world_cup_scoreboard._with_round_metadata(games, world_cup_scoreboard.ROUND_FINALS)
+
+    assert [game["id"] for game in result] == ["championship", "third"]
+    assert [game[world_cup_scoreboard.ROUND_GAME_KEY] for game in result] == [
+        "Championship",
+        "3rd Place",
+    ]
+    assert all(
+        game[world_cup_scoreboard.ROUND_LABEL_KEY] == world_cup_scoreboard.ROUND_FINALS
+        for game in result
+    )
