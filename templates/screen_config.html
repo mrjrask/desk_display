@@ -187,6 +187,36 @@
       grid-template-columns: repeat(4, minmax(160px, 1fr));
       gap: 0.6rem;
     }
+    .global-scroll-controls {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(240px, 1fr));
+      gap: 1rem;
+      margin-bottom: 1rem;
+      padding: 1rem;
+      border-radius: 16px;
+      border: 1px solid rgba(56, 189, 248, 0.25);
+      background: rgba(14, 116, 144, 0.16);
+    }
+    .global-scroll-controls .field {
+      display: grid;
+      gap: 0.45rem;
+    }
+    .global-scroll-controls label {
+      display: flex;
+      justify-content: space-between;
+      gap: 0.75rem;
+      font-size: 0.85rem;
+      font-weight: 700;
+      color: #e0f2fe;
+    }
+    .global-scroll-controls input[type="range"] {
+      width: 100%;
+      accent-color: #38bdf8;
+    }
+    .global-scroll-controls .hint {
+      color: #94a3b8;
+      font-size: 0.8rem;
+    }
     .playlist-controls {
       display: flex;
       align-items: center;
@@ -460,6 +490,9 @@
         grid-column: span 2;
         justify-content: flex-start;
       }
+      .global-scroll-controls {
+        grid-template-columns: 1fr;
+      }
       .playlist-row {
         flex-direction: column;
         align-items: flex-start;
@@ -500,6 +533,24 @@
       </div>
     </div>
     <div class="error" id="errorBox"></div>
+    <section class="global-scroll-controls" aria-label="Global scroll settings">
+      <div class="field">
+        <label for="scrollSpeedInput">
+          <span>Global scroll speed</span>
+          <output id="scrollSpeedValue">{{ '%.2f'|format(scroll_settings.speed) }}×</output>
+        </label>
+        <input type="range" id="scrollSpeedInput" min="0.25" max="3" step="0.05" value="{{ scroll_settings.speed }}">
+        <div class="hint">Adjusts every scrolling screen. Lower is slower; higher is faster.</div>
+      </div>
+      <div class="field">
+        <label for="scrollSmoothnessInput">
+          <span>Global scroll smoothness</span>
+          <output id="scrollSmoothnessValue">{{ '%.2f'|format(scroll_settings.smoothness) }}×</output>
+        </label>
+        <input type="range" id="scrollSmoothnessInput" min="0.5" max="2" step="0.05" value="{{ scroll_settings.smoothness }}">
+        <div class="hint">Higher values target smoother animation with more frames.</div>
+      </div>
+    </section>
     <div class="playlist-controls">
       <div class="field">
         <input type="text" id="newPlaylistName" placeholder="Create a new playlist">
@@ -606,6 +657,10 @@
     const importFileInput = document.getElementById("importFile");
     const errorBox = document.getElementById("errorBox");
     const hideZeroFreqToggle = document.getElementById("hideZeroFreq");
+    const scrollSpeedInput = document.getElementById("scrollSpeedInput");
+    const scrollSmoothnessInput = document.getElementById("scrollSmoothnessInput");
+    const scrollSpeedValue = document.getElementById("scrollSpeedValue");
+    const scrollSmoothnessValue = document.getElementById("scrollSmoothnessValue");
     const newPlaylistNameInput = document.getElementById("newPlaylistName");
     const addPlaylistBtn = document.getElementById("addPlaylistBtn");
     const draftStorageKey = "screen-config-draft";
@@ -613,6 +668,7 @@
     const selectableScreenIds = {{ screen_ids|tojson }};
     const serverPlaylists = {{ playlists|tojson }};
     const serverPlaylistAssignments = {{ playlist_assignments|tojson }};
+    const serverScrollSettings = {{ scroll_settings|tojson }};
     let isDirty = false;
     let playlists = [];
     let playlistAssignments = {};
@@ -918,6 +974,28 @@
       hideZeroFreqToggle.addEventListener("change", updateZeroFrequencyVisibility);
     }
 
+    function clampNumber(value, fallback, min, max) {
+      const parsed = Number.parseFloat(value);
+      if (Number.isNaN(parsed)) return fallback;
+      return Math.min(max, Math.max(min, parsed));
+    }
+
+    function getScrollSettings() {
+      return {
+        speed: clampNumber(scrollSpeedInput?.value, 1, 0.25, 3),
+        smoothness: clampNumber(scrollSmoothnessInput?.value, 1, 0.5, 2),
+      };
+    }
+
+    function setScrollSettings(settings = {}) {
+      const speed = clampNumber(settings.speed, 1, 0.25, 3);
+      const smoothness = clampNumber(settings.smoothness, 1, 0.5, 2);
+      if (scrollSpeedInput) scrollSpeedInput.value = speed.toFixed(2);
+      if (scrollSmoothnessInput) scrollSmoothnessInput.value = smoothness.toFixed(2);
+      if (scrollSpeedValue) scrollSpeedValue.textContent = `${speed.toFixed(2)}×`;
+      if (scrollSmoothnessValue) scrollSmoothnessValue.textContent = `${smoothness.toFixed(2)}×`;
+    }
+
     function showError(message) {
       errorBox.textContent = message;
       errorBox.style.display = "block";
@@ -1056,6 +1134,7 @@
         screens: screensPayload,
         playlists: buildPlaylistsPayload(screens),
         sequence: playlists.map((playlist) => ({ playlist: playlist.id })),
+        scroll: getScrollSettings(),
       };
     }
 
@@ -1111,6 +1190,7 @@
         updatedAt: new Date().toISOString(),
         screens: getCurrentScreens(),
         playlists,
+        scroll: getScrollSettings(),
         assignments: playlistAssignments,
         collapsed: collapsedPlaylists,
       };
@@ -1356,12 +1436,14 @@
             screens,
             playlists: buildPlaylistsPayload(screens),
             sequence: playlists.map((playlist) => ({ playlist: playlist.id })),
+            scroll: getScrollSettings(),
           }),
         });
         const data = await response.json();
         if (!response.ok) {
           throw new Error(data.error || "Unable to save configuration");
         }
+        setScrollSettings(data.scroll || getScrollSettings());
         renderScreens(data.screens || screens);
         markClean();
       } catch (err) {
@@ -1401,6 +1483,7 @@
               : {};
           collapsedPlaylists = {};
         }
+        setScrollSettings(data.scroll || serverScrollSettings);
         renderScreens(data.screens || []);
         markDirty();
       } catch (err) {
@@ -1439,6 +1522,7 @@
           throw new Error(data.error || "Unable to import configuration");
         }
         applyImportedPlaylists(payload.config);
+        setScrollSettings(data.scroll || payload.config?.scroll || serverScrollSettings);
         renderScreens(data.screens || []);
         markClean();
       } catch (err) {
@@ -1477,6 +1561,13 @@
       });
     }
 
+    [scrollSpeedInput, scrollSmoothnessInput].forEach((input) => {
+      input?.addEventListener("input", () => {
+        setScrollSettings(getScrollSettings());
+        markDirty();
+      });
+    });
+
     if (addPlaylistBtn) {
       addPlaylistBtn.addEventListener("click", () => {
         if (!newPlaylistNameInput) return;
@@ -1512,6 +1603,7 @@
       event.returnValue = "";
     });
 
+    setScrollSettings(serverScrollSettings);
     loadPlaylistState();
     let initialScreens = getCurrentScreens();
     const savedDraft = sessionStorage.getItem(draftStorageKey);
@@ -1530,6 +1622,9 @@
             }
             if (draft.collapsed && typeof draft.collapsed === "object") {
               collapsedPlaylists = { ...draft.collapsed };
+            }
+            if (draft.scroll && typeof draft.scroll === "object") {
+              setScrollSettings(draft.scroll);
             }
             savePlaylistState();
             isDirty = true;

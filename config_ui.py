@@ -98,6 +98,30 @@ def _coerce_frequency(value: Any) -> Optional[int]:
         return None
 
 
+def _normalize_scroll_speed(value: Any) -> float:
+    try:
+        speed = float(value)
+    except (TypeError, ValueError):
+        speed = 1.0
+    return round(min(3.0, max(0.25, speed)), 2)
+
+
+def _normalize_scroll_smoothness(value: Any) -> float:
+    try:
+        smoothness = float(value)
+    except (TypeError, ValueError):
+        smoothness = 1.0
+    return round(min(2.0, max(0.5, smoothness)), 2)
+
+
+def _normalize_scroll_settings(value: Any) -> Dict[str, float]:
+    settings = value if isinstance(value, dict) else {}
+    return {
+        "speed": _normalize_scroll_speed(settings.get("speed", 1.0)),
+        "smoothness": _normalize_scroll_smoothness(settings.get("smoothness", 1.0)),
+    }
+
+
 def _merge_screen_specs(existing: Any, incoming: Any) -> Any:
     if existing is None:
         return incoming
@@ -261,6 +285,7 @@ def _load_config(path: str) -> Dict[str, Any]:
     if not isinstance(screens, dict):
         raise ValueError("Configuration must include a 'screens' mapping")
     normalized, _ = _normalize_legacy_scoreboard_ids(data)
+    normalized["scroll"] = _normalize_scroll_settings(normalized.get("scroll"))
     return normalized
 
 
@@ -270,6 +295,7 @@ def _validate_config_payload(data: Any) -> Dict[str, Any]:
     screens = data.get("screens")
     if not isinstance(screens, dict):
         raise ValueError("Configuration must include a 'screens' mapping")
+    data["scroll"] = _normalize_scroll_settings(data.get("scroll"))
     return data
 
 
@@ -340,6 +366,7 @@ def _normalize_import_config_payload(data: Dict[str, Any]) -> Dict[str, Any]:
 
     result = dict(normalized)
     result["screens"] = normalized_screens
+    result["scroll"] = _normalize_scroll_settings(result.get("scroll"))
     cleaned, _ = _normalize_legacy_scoreboard_ids(result)
     return cleaned
 
@@ -487,6 +514,8 @@ def _load_style_config(path: str) -> Dict[str, Any]:
 
 def _resolve_default_screens_path(profile: Optional[str] = None) -> str:
     profile_id = (profile or DEFAULT_SCREEN_PROFILE).strip().lower()
+    if profile_id == "large":
+        return DEFAULT_SCREENS_PATH
     if profile_id in DEFAULT_SCREEN_BUNDLES:
         return DEFAULT_SCREEN_BUNDLES[profile_id]["path"]
     raise ValueError("Unknown default configuration. Choose large or small.")
@@ -1191,9 +1220,11 @@ def screen_config() -> str:
     quad_scroll_speed = _normalize_quad_scroll_speed(quad_config.get("scroll_speed", 1.0))
     quad_pages = quad_config.get("pages", [])
     playlists, playlist_assignments = _build_playlist_assignments(config)
+    scroll_settings = _normalize_scroll_settings(config.get("scroll"))
     return render_template(
         "screen_config.html",
         screens=entries,
+        scroll_settings=scroll_settings,
         screen_ids=selectable_screen_ids,
         quad_enabled=quad_enabled,
         quad_scroll_speed=quad_scroll_speed,
@@ -1259,6 +1290,7 @@ def get_screens() -> Any:
         {
             "screens": entries,
             "screen_ids": _build_selectable_screen_ids(entries),
+            "scroll": _normalize_scroll_settings(config.get("scroll")),
             "quad_enabled": bool(layouts_config.get("screens", {}).get("quad", {}).get("enabled", False)),
             "quad_scroll_speed": _normalize_quad_scroll_speed(layouts_config.get("screens", {}).get("quad", {}).get("scroll_speed", 1.0)),
             "quad_pages": layouts_config.get("screens", {}).get("quad", {}).get("pages", []),
@@ -1281,6 +1313,7 @@ def get_default_screens() -> Any:
         "selected_default_profile": (profile or DEFAULT_SCREEN_PROFILE).strip().lower(),
         "screens": _build_screen_entries(config, style_config),
         "playlists": playlists,
+        "scroll": _normalize_scroll_settings(config.get("scroll")),
         "playlist_assignments": playlist_assignments,
         "quad_enabled": bool(layouts_config.get("screens", {}).get("quad", {}).get("enabled", False)),
         "quad_scroll_speed": _normalize_quad_scroll_speed(layouts_config.get("screens", {}).get("quad", {}).get("scroll_speed", 1.0)),
@@ -1317,6 +1350,7 @@ def save_screens() -> Any:
             value = payload.get(key)
             if isinstance(value, expected_type):
                 config[key] = value
+        config["scroll"] = _normalize_scroll_settings(payload.get("scroll"))
         config, _ = _normalize_legacy_scoreboard_ids(config)
         style_config = _load_active_style_config()
         style_config = _build_style_config(entries, style_config)
@@ -1335,6 +1369,7 @@ def save_screens() -> Any:
         {
             "status": "ok",
             "screens": _build_screen_entries(config, style_config),
+            "scroll": _normalize_scroll_settings(config.get("scroll")),
             "quad_enabled": bool(layouts.get("screens", {}).get("quad", {}).get("enabled", False)),
             "quad_scroll_speed": _normalize_quad_scroll_speed(layouts.get("screens", {}).get("quad", {}).get("scroll_speed", 1.0)),
             "quad_pages": layouts.get("screens", {}).get("quad", {}).get("pages", []),
@@ -1359,6 +1394,7 @@ def import_screens() -> Any:
                 value = config_payload.get(key)
                 if value is not None:
                     config[key] = value
+            config["scroll"] = _normalize_scroll_settings(config_payload.get("scroll"))
             config, _ = _normalize_legacy_scoreboard_ids(config)
             derived_style_payload = _build_style_config(entries, _load_active_style_config())
             quad_pages_payload = payload.get("quad_pages") if isinstance(payload, dict) else None
@@ -1399,6 +1435,7 @@ def import_screens() -> Any:
         {
             "status": "ok",
             "screens": entries,
+            "scroll": _normalize_scroll_settings(config.get("scroll")),
             "quad_enabled": bool(layouts_config.get("screens", {}).get("quad", {}).get("enabled", False)),
             "quad_scroll_speed": _normalize_quad_scroll_speed(layouts_config.get("screens", {}).get("quad", {}).get("scroll_speed", 1.0)),
             "quad_pages": layouts_config.get("screens", {}).get("quad", {}).get("pages", []),

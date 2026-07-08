@@ -14,6 +14,7 @@ import datetime
 import errno
 import fcntl
 import html
+import json
 import logging
 import math
 import os
@@ -2346,7 +2347,8 @@ def animate_scroll(display: Display, image: Image.Image, speed=3.0, y_offset=Non
     img_w, img_h = image.size
     y = y_offset if y_offset is not None else (h - img_h) // 2
     direction = random.choice(("ltr", "rtl"))
-    speed = float(speed)
+    settings = get_global_scroll_settings()
+    speed = float(speed) * settings["speed"]
     if speed == 0:
         return
     start, end = ((-img_w, w) if direction == "ltr" else (w, -img_w))
@@ -2355,7 +2357,7 @@ def animate_scroll(display: Display, image: Image.Image, speed=3.0, y_offset=Non
     background_color = (0, 0, 0, 0) if has_alpha else (0, 0, 0)
     frame_mode = "RGBA" if has_alpha else "RGB"
 
-    target_frame_time = 0.016  # ~60 FPS for smoother animation
+    target_frame_time = 0.016 / settings["smoothness"]  # ~60 FPS at the default smoothness
 
     wait_for_skip = getattr(display, "wait_for_skip", None)
     skip_requested = getattr(display, "skip_requested", None)
@@ -2418,6 +2420,53 @@ class AdaptiveScrollParams:
 
 MANUAL_SCROLL_RESUME_DELAY_SECONDS = 1.0
 
+_SCROLL_SETTINGS_CACHE: Dict[str, Any] = {"path": None, "mtime": None, "settings": {"speed": 1.0, "smoothness": 1.0}}
+_SCROLL_SETTINGS_LOCK = threading.Lock()
+
+
+def _clamp_float(value: Any, default: float, minimum: float, maximum: float) -> float:
+    try:
+        parsed = float(value)
+    except (TypeError, ValueError):
+        parsed = default
+    return min(maximum, max(minimum, parsed))
+
+
+def get_global_scroll_settings() -> Dict[str, float]:
+    """Load global scroll speed/smoothness from the active screens config."""
+
+    try:
+        from paths import resolve_screens_config_paths
+
+        config_path = str(resolve_screens_config_paths().active_path)
+        mtime = os.path.getmtime(config_path)
+    except OSError:
+        return {"speed": 1.0, "smoothness": 1.0}
+    except Exception:
+        logging.debug("Unable to resolve global scroll settings.", exc_info=True)
+        return {"speed": 1.0, "smoothness": 1.0}
+
+    with _SCROLL_SETTINGS_LOCK:
+        if _SCROLL_SETTINGS_CACHE.get("path") == config_path and _SCROLL_SETTINGS_CACHE.get("mtime") == mtime:
+            return dict(_SCROLL_SETTINGS_CACHE["settings"])
+        try:
+            with open(config_path, "r", encoding="utf-8") as fh:
+                payload = json.load(fh)
+        except Exception:
+            logging.debug("Unable to read global scroll settings from %s.", config_path, exc_info=True)
+            settings = {"speed": 1.0, "smoothness": 1.0}
+        else:
+            raw = payload.get("scroll") if isinstance(payload, dict) else {}
+            if not isinstance(raw, dict):
+                raw = {}
+            settings = {
+                "speed": _clamp_float(raw.get("speed"), 1.0, 0.25, 3.0),
+                "smoothness": _clamp_float(raw.get("smoothness"), 1.0, 0.5, 2.0),
+            }
+        _SCROLL_SETTINGS_CACHE.update({"path": config_path, "mtime": mtime, "settings": settings})
+        return dict(settings)
+
+
 
 @dataclass(frozen=True)
 class _ScrollDragEvent:
@@ -2444,7 +2493,9 @@ def compute_adaptive_scroll_params(
     readable line-by-line cadence instead of skipping most rows.
     """
 
-    safe_base_step = max(1, int(base_step))
+    settings = get_global_scroll_settings()
+    safe_base_step = max(1, int(round(int(base_step) * settings["speed"])))
+    min_frame_time = max(0.001, float(min_frame_time) / settings["smoothness"])
     max_dimension = max(int(viewport_width), int(viewport_height), 1)
     resolution_scale = max(1.0, max_dimension / 320.0)
     step = max(safe_base_step, int(round(safe_base_step * resolution_scale)))
