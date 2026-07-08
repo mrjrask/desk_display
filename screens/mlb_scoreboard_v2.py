@@ -39,6 +39,7 @@ from config import (
     get_screen_image_scale,
     is_hdmi_1080p_layout,
     is_hyperpixel_next_layout,
+    is_hyperpixel_4_square_layout,
     is_display_profile,
     scale_value,
     scale_value_width,
@@ -75,6 +76,7 @@ from screens.mlb_scoreboard import (
 
 # ─── Constants ────────────────────────────────────────────────────────────────
 HYPERPIXEL_LAYOUT = is_hyperpixel_next_layout()
+HYPERPIXEL_4_SQUARE_LAYOUT = is_hyperpixel_4_square_layout()
 _IS_1080P_LAYOUT = is_hdmi_1080p_layout()
 _HD_LAYOUT_TEXT_BOOST = 1.25 if _IS_1080P_LAYOUT else 1.0
 _IS_HYPERPIXEL_4_PROFILE = is_display_profile("hyperpixel4") or is_display_profile("hyperpixel4_square")
@@ -83,6 +85,16 @@ _IS_WAVESHARE_OLED_LCD_PROFILE = is_display_profile("display_hat_mini")
 
 def _scale_width(value: int) -> int:
     return scale_value_width(value) if HYPERPIXEL_LAYOUT else scale_value(value)
+
+
+def _game_column_widths() -> list[int]:
+    # Match the v1 HyperPixel 4 Square spacing tweak for regular-season slates
+    # that use the dual-game layout: widen the centered "@" column while keeping
+    # each game block at the same total width.
+    base_widths = [44, 30, 12, 30, 44]
+    if HYPERPIXEL_4_SQUARE_LAYOUT:
+        base_widths = [42, 30, 16, 30, 42]
+    return [_scale_width(width) for width in base_widths]
 
 
 TITLE = "MLB Scoreboard"
@@ -94,13 +106,7 @@ STATUS_ROW_H = max(1, int(round(scale_value(14) * _HD_LAYOUT_TEXT_BOOST)))
 
 # Dual-game column layout (per game, 160px wide)
 # [Score 44][Logo 30][@ 12][Logo 30][Score 44] = 160
-GAME_COL_WIDTHS = [
-    _scale_width(44),
-    _scale_width(30),
-    _scale_width(12),
-    _scale_width(30),
-    _scale_width(44),
-]
+GAME_COL_WIDTHS = _game_column_widths()
 GAME_WIDTH = sum(GAME_COL_WIDTHS)
 GAME_COL_X = [0]
 for w in GAME_COL_WIDTHS:
