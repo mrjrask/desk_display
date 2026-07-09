@@ -204,3 +204,24 @@ def test_finals_metadata_orders_championship_before_third_place():
         game[world_cup_scoreboard.ROUND_LABEL_KEY] == world_cup_scoreboard.ROUND_FINALS
         for game in result
     )
+
+
+def test_pregame_score_text_defaults_to_dash(monkeypatch):
+    monkeypatch.setattr(world_cup_scoreboard, "PREGAME_SCORE_DISPLAY", "dash")
+
+    assert world_cup_scoreboard._score_text({"team": {"abbreviation": "USA"}}, show=False) == "—"
+
+
+def test_pregame_score_text_can_show_team_abbreviation(monkeypatch):
+    monkeypatch.setattr(world_cup_scoreboard, "PREGAME_SCORE_DISPLAY", "abbreviation")
+
+    assert world_cup_scoreboard._score_text({"team": {"abbreviation": "usa"}}, show=False) == "USA"
+
+
+def test_pregame_score_segments_use_status_font_for_team_abbreviation(monkeypatch):
+    monkeypatch.setattr(world_cup_scoreboard, "PREGAME_SCORE_DISPLAY", "abbreviation")
+    team = {"team": {"abbreviation": "can"}}
+
+    assert world_cup_scoreboard._score_text_segments(team, show=False) == [
+        ("CAN", world_cup_scoreboard.STATUS_FONT)
+    ]
