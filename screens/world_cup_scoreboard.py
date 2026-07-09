@@ -113,6 +113,8 @@ LEAGUE_LOGO_GAP = scale_value(4)
 
 SCORE_FONT = get_screen_font(SCREEN_ID, "score", base_font=FONT_TEAM_SPORTS, default_size=39)
 PK_SCORE_FONT_SCALE = 0.7
+PREGAME_SCORE_DISPLAY = os.environ.get("WORLD_CUP_PREGAME_SCORE_DISPLAY", "dash").strip().lower()
+PREGAME_SCORE_ABBREVIATION_VALUES = {"abbr", "abbrev", "abbreviation", "team", "team_abbreviation"}
 
 
 def _scale_font(font: ImageFont.FreeTypeFont, scale: float) -> ImageFont.FreeTypeFont:
@@ -180,9 +182,25 @@ def _measure_text(draw: ImageDraw.ImageDraw, text: str, font) -> tuple[int, int,
         return (0, 0, width, height)
 
 
+def _team_abbreviation(team: dict) -> str:
+    for source in (team, team.get("team") if isinstance(team.get("team"), dict) else None):
+        if not isinstance(source, dict):
+            continue
+        for key in ("abbreviation", "abbr", "shortDisplayName", "displayName", "name"):
+            value = str(source.get(key) or "").strip()
+            if value:
+                return value[:3].upper()
+    return ""
+
+
+def _show_pregame_team_abbreviation() -> bool:
+    return PREGAME_SCORE_DISPLAY in PREGAME_SCORE_ABBREVIATION_VALUES
+
+
 def _score_text_segments(team: dict, *, show: bool) -> list[tuple[str, ImageFont.FreeTypeFont]]:
     if not show:
-        return [("—", SCORE_FONT)]
+        abbreviation = _team_abbreviation(team) if _show_pregame_team_abbreviation() else ""
+        return [(abbreviation or "—", STATUS_FONT if abbreviation else SCORE_FONT)]
     score = team.get("score")
     base_score = str(score) if score not in (None, "") else "—"
     penalty_score = _penalty_score_value(team)
@@ -344,6 +362,8 @@ def _penalty_score_value(team: dict) -> Optional[int]:
 
 def _score_text(team: dict, *, show: bool) -> str:
     if not show:
+        if _show_pregame_team_abbreviation():
+            return _team_abbreviation(team) or "—"
         return "—"
     score = team.get("score")
     base_score = str(score) if score not in (None, "") else "—"
