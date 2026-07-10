@@ -192,6 +192,18 @@ def test_on_this_day_builds_live_sections_in_parallel(monkeypatch):
     assert {call[0] for call in calls} == {"events", "births", "deaths", "holidays"}
 
 
+def test_on_this_day_renders_non_empty_fallback_when_live_feeds_are_empty(monkeypatch):
+    otd._clear_caches_for_tests()
+    monkeypatch.setattr(otd, "_wiki_items", lambda *args, **kwargs: [])
+    monkeypatch.setattr(otd, "_jewish_holiday_items", lambda *args, **kwargs: [])
+
+    sections = otd._build_sections(dt.date(2026, 7, 10))
+
+    assert sections
+    assert "🌎 General History" in sections
+    assert any(item.text for items in sections.values() for item in items)
+
+
 def test_on_this_day_thumbnail_downloads_are_opt_in(monkeypatch):
     otd._clear_caches_for_tests()
 
