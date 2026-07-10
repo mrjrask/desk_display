@@ -120,3 +120,37 @@ def test_compute_adaptive_scroll_params_honors_max_step(monkeypatch):
     )
 
     assert params.step == 1
+
+
+def test_compute_adaptive_scroll_params_applies_min_frame_floor_after_smoothing(monkeypatch):
+    monkeypatch.setattr("utils.get_global_scroll_settings", lambda: {"speed": 1.0, "smoothness": 2.0})
+
+    params = compute_adaptive_scroll_params(
+        content_height=240,
+        viewport_height=240,
+        viewport_width=320,
+        base_step=1,
+        min_frame_time=0.100,
+        min_frame_time_floor=0.100,
+    )
+
+    assert params.target_frame_time == 0.100
+
+
+def test_scroll_vertical_content_caps_page_jump_stride_with_max_step():
+    display = DummyDisplay()
+
+    scroll_vertical_content(
+        display=display,
+        content_height=2440,
+        viewport_width=1080,
+        viewport_height=240,
+        render_at_offset=lambda offset: display.frames.append(offset),
+        base_step=1,
+        pause_start=0,
+        pause_end=0,
+        max_step=1,
+    )
+
+    assert display.frames[:3] == [0, 1, 2]
+    assert display.frames[-1] == 2200

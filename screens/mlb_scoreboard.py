@@ -641,6 +641,7 @@ def _scroll_display(display, full_img: Image.Image):
         else MLB_SCOREBOARD_SCROLL_DELAY,
         page_jump_mode=not SMALL_CONNECTED_DISPLAY_PROFILE,
         max_step=1 if SMALL_CONNECTED_DISPLAY_PROFILE else None,
+        min_frame_time_floor=0.100 if SMALL_CONNECTED_DISPLAY_PROFILE else None,
     )
 
 

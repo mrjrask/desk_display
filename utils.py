@@ -2484,6 +2484,7 @@ def compute_adaptive_scroll_params(
     page_jump_mode: bool = True,
     page_jump_threshold_ratio: float = 8.0,
     max_step: int | None = None,
+    min_frame_time_floor: float | None = None,
 ) -> AdaptiveScrollParams:
     """Compute resolution-aware scroll step and frame pacing.
 
@@ -2497,6 +2498,8 @@ def compute_adaptive_scroll_params(
     settings = get_global_scroll_settings()
     safe_base_step = max(1, int(round(int(base_step) * settings["speed"])))
     min_frame_time = max(0.001, float(min_frame_time) / settings["smoothness"])
+    if min_frame_time_floor is not None:
+        min_frame_time = max(min_frame_time, float(min_frame_time_floor))
     max_dimension = max(int(viewport_width), int(viewport_height), 1)
     resolution_scale = max(1.0, max_dimension / 320.0)
     step = max(safe_base_step, int(round(safe_base_step * resolution_scale)))
@@ -2736,6 +2739,7 @@ def scroll_vertical_content(
     page_jump_mode: bool = True,
     min_frame_time: float = 0.016,
     max_step: int | None = None,
+    min_frame_time_floor: float | None = None,
 ) -> None:
     """Shared vertical scroll driver with adaptive timing and skip support."""
 
@@ -2813,11 +2817,14 @@ def scroll_vertical_content(
         page_jump_mode=page_jump_mode,
         min_frame_time=min_frame_time,
         max_step=max_step,
+        min_frame_time_floor=min_frame_time_floor,
     )
 
     stride = params.step
     if params.use_page_jump:
         stride = max(stride, int(viewport_height * 0.4))
+    if max_step is not None:
+        stride = min(stride, max(1, int(max_step)))
 
     start_offset = max_offset if reverse else 0
     current_offset_state = [start_offset]
