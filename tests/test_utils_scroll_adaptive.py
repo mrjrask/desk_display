@@ -106,3 +106,17 @@ def test_scroll_vertical_content_preserves_immediate_wait_for_skip_capture_seman
     assert display.wait_calls
     assert len(display.wait_calls) <= 3
     assert all(duration <= 0.05 for duration in display.wait_calls)
+
+
+def test_compute_adaptive_scroll_params_honors_max_step(monkeypatch):
+    monkeypatch.setattr("utils.get_global_scroll_settings", lambda: {"speed": 3.0, "smoothness": 1.0})
+
+    params = compute_adaptive_scroll_params(
+        content_height=1200,
+        viewport_height=240,
+        viewport_width=320,
+        base_step=1,
+        max_step=1,
+    )
+
+    assert params.step == 1

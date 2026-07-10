@@ -47,6 +47,7 @@ from config import (
     get_screen_image_scale,
     is_hyperpixel_next_layout,
     is_hyperpixel_4_square_layout,
+    is_display_profile,
     scale_value,
     scale_value_width,
 )
@@ -66,6 +67,7 @@ from utils import (
 # ─── Constants ────────────────────────────────────────────────────────────────
 HYPERPIXEL_LAYOUT = is_hyperpixel_next_layout()
 HYPERPIXEL_4_SQUARE_LAYOUT = is_hyperpixel_4_square_layout()
+SMALL_CONNECTED_DISPLAY_PROFILE = is_display_profile("display_hat_mini")
 
 
 def _scale_width(value: int) -> int:
@@ -631,10 +633,14 @@ def _scroll_display(display, full_img: Image.Image):
         render_at_offset=lambda offset: display.image(
             full_img.crop((0, offset, WIDTH, offset + HEIGHT))
         ),
-        base_step=SCOREBOARD_SCROLL_STEP,
+        base_step=1 if SMALL_CONNECTED_DISPLAY_PROFILE else SCOREBOARD_SCROLL_STEP,
         pause_start=SCOREBOARD_SCROLL_PAUSE_TOP,
         pause_end=SCOREBOARD_SCROLL_PAUSE_BOTTOM,
-        min_frame_time=MLB_SCOREBOARD_SCROLL_DELAY,
+        min_frame_time=max(MLB_SCOREBOARD_SCROLL_DELAY, 0.100)
+        if SMALL_CONNECTED_DISPLAY_PROFILE
+        else MLB_SCOREBOARD_SCROLL_DELAY,
+        page_jump_mode=not SMALL_CONNECTED_DISPLAY_PROFILE,
+        max_step=1 if SMALL_CONNECTED_DISPLAY_PROFILE else None,
     )
 
 

@@ -414,10 +414,14 @@ def _scroll_display(display, full_img: Image.Image):
         render_at_offset=lambda offset: display.image(
             full_img.crop((0, offset, WIDTH, offset + HEIGHT))
         ),
-        base_step=SCOREBOARD_SCROLL_STEP,
+        base_step=1 if _IS_WAVESHARE_OLED_LCD_PROFILE else SCOREBOARD_SCROLL_STEP,
         pause_start=SCOREBOARD_SCROLL_PAUSE_TOP,
         pause_end=SCOREBOARD_SCROLL_PAUSE_BOTTOM,
-        min_frame_time=MLB_SCOREBOARD_SCROLL_DELAY,
+        min_frame_time=max(MLB_SCOREBOARD_SCROLL_DELAY, 0.100)
+        if _IS_WAVESHARE_OLED_LCD_PROFILE
+        else MLB_SCOREBOARD_SCROLL_DELAY,
+        page_jump_mode=not _IS_WAVESHARE_OLED_LCD_PROFILE,
+        max_step=1 if _IS_WAVESHARE_OLED_LCD_PROFILE else None,
     )
 
 
