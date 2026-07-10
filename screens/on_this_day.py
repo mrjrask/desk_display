@@ -385,7 +385,36 @@ def _build_sections_uncached(today: dt.date) -> dict[str, list[DayItem]]:
         "🎉 Holidays & Culture": holiday_items,
     }
 
-    return {title: items for title, items in sections.items() if items}
+    sections = {title: items for title, items in sections.items() if items}
+    if sections:
+        return sections
+
+    logging.warning(
+        "on_this_day: no live or curated content available for %s; rendering fallback card.",
+        today.isoformat(),
+    )
+    return _offline_sections_fallback()
+
+
+def _offline_sections_fallback() -> dict[str, list[DayItem]]:
+    """Return non-empty content for days whose live feeds cannot be reached."""
+
+    return {
+        "🌎 General History": [
+            DayItem(
+                None,
+                "Historical highlights are temporarily unavailable. Check the "
+                "network connection and this screen will refresh with today's "
+                "events automatically.",
+            )
+        ],
+        "🎉 Holidays & Culture": [
+            DayItem(
+                None,
+                "The On This Day screen needs Wikimedia and Hebcal access for live daily facts.",
+            )
+        ],
+    }
 
 
 def _build_sections(today: dt.date) -> dict[str, list[DayItem]]:
