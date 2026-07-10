@@ -122,11 +122,11 @@ def test_compute_adaptive_scroll_params_honors_max_step(monkeypatch):
     assert params.step == 1
 
 
-def test_compute_adaptive_scroll_params_applies_min_frame_floor_after_smoothing(monkeypatch):
-    monkeypatch.setattr("utils.get_global_scroll_settings", lambda: {"speed": 1.0, "smoothness": 2.0})
+def test_compute_adaptive_scroll_params_applies_min_frame_floor_after_overflow_scaling(monkeypatch):
+    monkeypatch.setattr("utils.get_global_scroll_settings", lambda: {"speed": 1.0, "smoothness": 3.0})
 
     params = compute_adaptive_scroll_params(
-        content_height=240,
+        content_height=720,
         viewport_height=240,
         viewport_width=320,
         base_step=1,

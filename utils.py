@@ -2498,8 +2498,6 @@ def compute_adaptive_scroll_params(
     settings = get_global_scroll_settings()
     safe_base_step = max(1, int(round(int(base_step) * settings["speed"])))
     min_frame_time = max(0.001, float(min_frame_time) / settings["smoothness"])
-    if min_frame_time_floor is not None:
-        min_frame_time = max(min_frame_time, float(min_frame_time_floor))
     max_dimension = max(int(viewport_width), int(viewport_height), 1)
     resolution_scale = max(1.0, max_dimension / 320.0)
     step = max(safe_base_step, int(round(safe_base_step * resolution_scale)))
@@ -2510,6 +2508,8 @@ def compute_adaptive_scroll_params(
     overflow_ratio = overflow / max(1, int(viewport_height))
     # For very tall content increase frame time (lower FPS).
     target_frame_time = min_frame_time * (1.0 + min(2.0, overflow_ratio * 0.6))
+    if min_frame_time_floor is not None:
+        target_frame_time = max(target_frame_time, float(min_frame_time_floor))
 
     return AdaptiveScrollParams(
         step=step,
