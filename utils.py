@@ -2793,8 +2793,6 @@ def scroll_vertical_content(
         while True:
             if _should_skip():
                 return True
-            new_offset, _moved, _is_dragging = _handle_drag_events(current_offset_state[0])
-            current_offset_state[0] = new_offset
             remaining = end - time.monotonic()
             if remaining <= 0:
                 return _should_skip()
@@ -2803,14 +2801,15 @@ def scroll_vertical_content(
                 before_wait = time.monotonic()
                 if wait_for_skip(sleep_chunk):
                     return True
-                elapsed = time.monotonic() - before_wait
-                if elapsed < sleep_chunk:
-                    if _should_skip():
-                        return True
-                    time.sleep(sleep_chunk - elapsed)
-                    if _should_skip():
-                        return True
+                new_offset, _moved, _is_dragging = _handle_drag_events(current_offset_state[0])
+                current_offset_state[0] = new_offset
+                if _should_skip():
+                    return True
+                if time.monotonic() - before_wait < sleep_chunk:
+                    return False
             else:
+                new_offset, _moved, _is_dragging = _handle_drag_events(current_offset_state[0])
+                current_offset_state[0] = new_offset
                 time.sleep(sleep_chunk)
 
     max_offset = max(0, int(content_height) - int(viewport_height))

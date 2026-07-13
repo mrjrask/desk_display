@@ -107,6 +107,55 @@ def test_scroll_vertical_content_touch_drag_changes_offsets_and_pauses_auto_scro
     assert all(visible is False for visible in fake_pygame.mouse.visibility)
 
 
+class WaitForSkipDisplay(FakeDisplay):
+    def __init__(self, fake_time):
+        super().__init__()
+        self.fake_time = fake_time
+        self.wait_calls = []
+
+    def wait_for_skip(self, duration):
+        self.wait_calls.append(duration)
+        self.fake_time.sleep(duration)
+        return False
+
+
+def test_scroll_vertical_content_polls_drag_during_wait_for_skip_pause(monkeypatch):
+    fake_time = FakeTime()
+    display = WaitForSkipDisplay(fake_time)
+    frames = []
+    fake_pygame = FakePygame(
+        [
+            [
+                _event(FakePygame.FINGERDOWN, x=0.5, y=0.8),
+                _event(FakePygame.FINGERMOTION, x=0.5, y=0.2),
+                _event(FakePygame.FINGERUP, x=0.5, y=0.2),
+            ]
+        ]
+    )
+
+    monkeypatch.setattr(utils, "_PYGAME_MODULE", fake_pygame)
+    monkeypatch.setattr(utils, "_PYGAME_ERROR", None)
+    monkeypatch.setattr(utils.time, "monotonic", fake_time.monotonic)
+    monkeypatch.setattr(utils.time, "time", fake_time.time)
+    monkeypatch.setattr(utils.time, "sleep", fake_time.sleep)
+
+    utils.scroll_vertical_content(
+        display=display,
+        content_height=100,
+        viewport_width=100,
+        viewport_height=50,
+        render_at_offset=lambda offset: frames.append((fake_time.monotonic(), offset)),
+        base_step=10,
+        pause_start=0.1,
+        pause_end=0,
+        page_jump_mode=False,
+        min_frame_time=0.1,
+    )
+
+    assert display.wait_calls
+    assert frames[0] == (0.0, 0)
+    assert (0.05, 30) in frames
+
 def test_scroll_vertical_content_mouse_drag_clamps_offsets(monkeypatch):
     fake_time = FakeTime()
     display = FakeDisplay()
