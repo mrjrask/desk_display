@@ -309,6 +309,20 @@ def test_small_connected_scoreboard_helper_display_hat_and_waveshare_markers(mon
         assert module.is_small_connected_scoreboard_display() is True
 
 
+def test_small_connected_scoreboard_helper_ignores_falsey_waveshare_markers(monkeypatch):
+    for marker_value in ("0", "false", "no", "off"):
+        module = _reload_config(
+            monkeypatch,
+            DISPLAY_WIDTH="1024",
+            DISPLAY_HEIGHT="600",
+            DESK_DISPLAY_PROFILE=None,
+            WAVESHARE_OLED_LCD_HAT_A_INSTALLED=marker_value,
+            WAVESHARE_OLED_MAX_VALUE_FONT_SIZE=None,
+            WAVESHARE_OLED_MAX_TIME_FONT_SIZE=None,
+        )
+        assert module.is_display_profile("hyperpixel4") is False
+        assert module.is_small_connected_scoreboard_display() is False
+
 def test_small_connected_scoreboard_helper_excludes_hyperpixel_profiles(monkeypatch):
     module = _reload_config(
         monkeypatch,
