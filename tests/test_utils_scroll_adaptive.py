@@ -1,5 +1,30 @@
+import time
+
+import pytest
+
+import utils
 from utils import compute_adaptive_scroll_params, scroll_vertical_content
 
+
+
+
+@pytest.fixture(autouse=True)
+def _fast_scroll_sleep(request, monkeypatch):
+    if request.node.name == "test_scroll_vertical_content_honors_frame_delay_when_wait_for_skip_returns_immediately":
+        yield
+        return
+
+    now = [time.monotonic()]
+
+    def fake_monotonic():
+        return now[0]
+
+    def fake_sleep(duration):
+        now[0] += max(0.0, duration)
+
+    monkeypatch.setattr(utils.time, "monotonic", fake_monotonic)
+    monkeypatch.setattr(utils.time, "sleep", fake_sleep)
+    yield
 
 class DummyDisplay:
     def __init__(self):
@@ -96,16 +121,37 @@ def test_scroll_vertical_content_preserves_immediate_wait_for_skip_capture_seman
         viewport_height=50,
         render_at_offset=display.frames.append,
         base_step=10,
-        pause_start=30,
-        pause_end=30,
+        pause_start=0,
+        pause_end=0,
         page_jump_mode=False,
         min_frame_time=0.1,
     )
 
     assert len(display.frames) == 3
     assert display.wait_calls
-    assert len(display.wait_calls) <= 3
     assert all(duration <= 0.05 for duration in display.wait_calls)
+
+
+def test_scroll_vertical_content_honors_frame_delay_when_wait_for_skip_returns_immediately():
+    display = DummyDisplay()
+
+    started = time.monotonic()
+    scroll_vertical_content(
+        display=display,
+        content_height=80,
+        viewport_width=100,
+        viewport_height=50,
+        render_at_offset=display.frames.append,
+        base_step=10,
+        pause_start=0,
+        pause_end=0,
+        page_jump_mode=False,
+        min_frame_time=0.05,
+    )
+    elapsed = time.monotonic() - started
+
+    assert display.frames == [0, 10, 20, 30]
+    assert elapsed >= 0.14
 
 
 def test_compute_adaptive_scroll_params_honors_max_step(monkeypatch):

@@ -2803,8 +2803,13 @@ def scroll_vertical_content(
                 before_wait = time.monotonic()
                 if wait_for_skip(sleep_chunk):
                     return True
-                if (time.monotonic() - before_wait) < sleep_chunk:
-                    return _should_skip()
+                elapsed = time.monotonic() - before_wait
+                if elapsed < sleep_chunk:
+                    if _should_skip():
+                        return True
+                    time.sleep(sleep_chunk - elapsed)
+                    if _should_skip():
+                        return True
             else:
                 time.sleep(sleep_chunk)
 
