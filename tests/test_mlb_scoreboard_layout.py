@@ -1,3 +1,5 @@
+from PIL import Image
+
 import screens.mlb_scoreboard as mlb_scoreboard
 import screens.mlb_scoreboard_v2 as mlb_scoreboard_v2
 import screens.nhl_scoreboard as nhl_scoreboard
@@ -78,6 +80,46 @@ def test_nhl_v2_logo_height_is_capped_to_score_row(monkeypatch):
     nhl_scoreboard_v2._apply_style_overrides()
 
     assert nhl_scoreboard_v2.LOGO_HEIGHT == 26
+
+
+def test_mlb_scroll_path_uses_slow_delay_for_small_connected_display(monkeypatch):
+    captured = {}
+
+    def fake_scroll_vertical_content(**kwargs):
+        captured.update(kwargs)
+
+    monkeypatch.setattr(mlb_scoreboard, "SMALL_CONNECTED_DISPLAY_PROFILE", True)
+    monkeypatch.setattr(mlb_scoreboard, "MLB_SCOREBOARD_SCROLL_DELAY", 0.060)
+    monkeypatch.setattr(mlb_scoreboard, "SCOREBOARD_SCROLL_STEP", 4)
+    monkeypatch.setattr(mlb_scoreboard, "scroll_vertical_content", fake_scroll_vertical_content)
+
+    mlb_scoreboard._scroll_display(type("Display", (), {"image": lambda self, img: None})(), Image.new("RGB", (10, 20)))
+
+    assert captured["base_step"] == 1
+    assert captured["min_frame_time"] == 0.100
+    assert captured["page_jump_mode"] is False
+    assert captured["max_step"] == 1
+    assert captured["min_frame_time_floor"] == 0.100
+
+
+def test_mlb_scroll_path_keeps_scoreboard_delay_for_hyperpixel(monkeypatch):
+    captured = {}
+
+    def fake_scroll_vertical_content(**kwargs):
+        captured.update(kwargs)
+
+    monkeypatch.setattr(mlb_scoreboard, "SMALL_CONNECTED_DISPLAY_PROFILE", False)
+    monkeypatch.setattr(mlb_scoreboard, "MLB_SCOREBOARD_SCROLL_DELAY", 0.020)
+    monkeypatch.setattr(mlb_scoreboard, "SCOREBOARD_SCROLL_STEP", 2)
+    monkeypatch.setattr(mlb_scoreboard, "scroll_vertical_content", fake_scroll_vertical_content)
+
+    mlb_scoreboard._scroll_display(type("Display", (), {"image": lambda self, img: None})(), Image.new("RGB", (10, 20)))
+
+    assert captured["base_step"] == 2
+    assert captured["min_frame_time"] == 0.020
+    assert captured["page_jump_mode"] is True
+    assert captured["max_step"] is None
+    assert captured["min_frame_time_floor"] is None
 
 
 def _game(game_pk: int, game_date: str, away_team: dict, home_team: dict) -> dict:

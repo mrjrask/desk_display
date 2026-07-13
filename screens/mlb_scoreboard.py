@@ -47,7 +47,7 @@ from config import (
     get_screen_image_scale,
     is_hyperpixel_next_layout,
     is_hyperpixel_4_square_layout,
-    is_display_profile,
+    is_small_connected_scoreboard_display,
     scale_value,
     scale_value_width,
 )
@@ -67,7 +67,7 @@ from utils import (
 # ─── Constants ────────────────────────────────────────────────────────────────
 HYPERPIXEL_LAYOUT = is_hyperpixel_next_layout()
 HYPERPIXEL_4_SQUARE_LAYOUT = is_hyperpixel_4_square_layout()
-SMALL_CONNECTED_DISPLAY_PROFILE = is_display_profile("display_hat_mini")
+SMALL_CONNECTED_DISPLAY_PROFILE = is_small_connected_scoreboard_display()
 
 
 def _scale_width(value: int) -> int:
