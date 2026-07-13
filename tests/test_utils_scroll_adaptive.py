@@ -9,11 +9,7 @@ from utils import compute_adaptive_scroll_params, scroll_vertical_content
 
 
 @pytest.fixture(autouse=True)
-def _fast_scroll_sleep(request, monkeypatch):
-    if request.node.name == "test_scroll_vertical_content_honors_frame_delay_when_wait_for_skip_returns_immediately":
-        yield
-        return
-
+def _fast_scroll_sleep(monkeypatch):
     now = [time.monotonic()]
 
     def fake_monotonic():
@@ -129,13 +125,14 @@ def test_scroll_vertical_content_preserves_immediate_wait_for_skip_capture_seman
 
     assert len(display.frames) == 3
     assert display.wait_calls
-    assert all(duration <= 0.05 for duration in display.wait_calls)
 
 
-def test_scroll_vertical_content_honors_frame_delay_when_wait_for_skip_returns_immediately():
-    display = DummyDisplay()
+def test_scroll_vertical_content_does_not_fallback_sleep_after_wait_for_skip_returns_immediately(monkeypatch):
+    display = ImmediateWaitCaptureDisplay(frame_limit=4)
+    sleep_calls = []
 
-    started = time.monotonic()
+    monkeypatch.setattr(utils.time, "sleep", lambda duration: sleep_calls.append(duration))
+
     scroll_vertical_content(
         display=display,
         content_height=80,
@@ -148,11 +145,10 @@ def test_scroll_vertical_content_honors_frame_delay_when_wait_for_skip_returns_i
         page_jump_mode=False,
         min_frame_time=0.05,
     )
-    elapsed = time.monotonic() - started
 
     assert display.frames == [0, 10, 20, 30]
-    assert elapsed >= 0.14
-
+    assert display.wait_calls
+    assert sleep_calls == []
 
 def test_compute_adaptive_scroll_params_honors_max_step(monkeypatch):
     monkeypatch.setattr("utils.get_global_scroll_settings", lambda: {"speed": 3.0, "smoothness": 1.0})

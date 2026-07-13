@@ -2789,6 +2789,10 @@ def scroll_vertical_content(
     def _sleep(duration: float) -> bool:
         if duration <= 0:
             return _should_skip()
+        if callable(wait_for_skip):
+            if wait_for_skip(duration):
+                return True
+            return _should_skip()
         end = time.monotonic() + duration
         while True:
             if _should_skip():
@@ -2798,20 +2802,7 @@ def scroll_vertical_content(
             remaining = end - time.monotonic()
             if remaining <= 0:
                 return _should_skip()
-            sleep_chunk = min(0.05, remaining)
-            if callable(wait_for_skip):
-                before_wait = time.monotonic()
-                if wait_for_skip(sleep_chunk):
-                    return True
-                elapsed = time.monotonic() - before_wait
-                if elapsed < sleep_chunk:
-                    if _should_skip():
-                        return True
-                    time.sleep(sleep_chunk - elapsed)
-                    if _should_skip():
-                        return True
-            else:
-                time.sleep(sleep_chunk)
+            time.sleep(min(0.05, remaining))
 
     max_offset = max(0, int(content_height) - int(viewport_height))
     params = compute_adaptive_scroll_params(
