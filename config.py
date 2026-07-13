@@ -141,6 +141,15 @@ def _get_bool_env(name: str, default: bool) -> bool:
     return default
 
 
+def _is_truthy_env_marker(name: str) -> bool:
+    """Return True when an environment marker is present and not explicitly false."""
+
+    raw = os.environ.get(name)
+    if raw is None:
+        return False
+    return raw.strip().lower() not in {"", "0", "false", "no", "off"}
+
+
 def _get_int_env(name: str, default: int) -> int:
     """Parse integer config values from environment variables."""
 
@@ -688,7 +697,7 @@ def is_small_connected_scoreboard_display() -> bool:
     if is_display_profile("hyperpixel4") or is_display_profile("hyperpixel4_square"):
         return False
     return any(
-        os.environ.get(name)
+        _is_truthy_env_marker(name)
         for name in (
             "WAVESHARE_OLED_LCD_HAT_A_INSTALLED",
             "WAVESHARE_OLED_MAX_VALUE_FONT_SIZE",
