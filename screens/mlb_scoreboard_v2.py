@@ -41,6 +41,7 @@ from config import (
     is_hyperpixel_next_layout,
     is_hyperpixel_4_square_layout,
     is_display_profile,
+    is_small_connected_scoreboard_display,
     scale_value,
     scale_value_width,
 )
@@ -80,7 +81,7 @@ HYPERPIXEL_4_SQUARE_LAYOUT = is_hyperpixel_4_square_layout()
 _IS_1080P_LAYOUT = is_hdmi_1080p_layout()
 _HD_LAYOUT_TEXT_BOOST = 1.25 if _IS_1080P_LAYOUT else 1.0
 _IS_HYPERPIXEL_4_PROFILE = is_display_profile("hyperpixel4") or is_display_profile("hyperpixel4_square")
-_IS_WAVESHARE_OLED_LCD_PROFILE = is_display_profile("display_hat_mini")
+_IS_SMALL_CONNECTED_SCOREBOARD_DISPLAY = is_small_connected_scoreboard_display()
 
 
 def _scale_width(value: int) -> int:
@@ -265,7 +266,7 @@ def _draw_single_game(
     results = _final_results(away, home) if final else {"away": None, "home": None}
 
     score_top = top
-    away_score_y_offset = -2 if _IS_WAVESHARE_OLED_LCD_PROFILE else 0
+    away_score_y_offset = -2 if _IS_SMALL_CONNECTED_SCOREBOARD_DISPLAY else 0
 
     # Draw scores and @ symbol
     for idx, text in ((0, away_text), (2, "@"), (4, home_text)):
@@ -414,15 +415,15 @@ def _scroll_display(display, full_img: Image.Image):
         render_at_offset=lambda offset: display.image(
             full_img.crop((0, offset, WIDTH, offset + HEIGHT))
         ),
-        base_step=1 if _IS_WAVESHARE_OLED_LCD_PROFILE else SCOREBOARD_SCROLL_STEP,
+        base_step=1 if _IS_SMALL_CONNECTED_SCOREBOARD_DISPLAY else SCOREBOARD_SCROLL_STEP,
         pause_start=SCOREBOARD_SCROLL_PAUSE_TOP,
         pause_end=SCOREBOARD_SCROLL_PAUSE_BOTTOM,
         min_frame_time=max(MLB_SCOREBOARD_SCROLL_DELAY, 0.100)
-        if _IS_WAVESHARE_OLED_LCD_PROFILE
+        if _IS_SMALL_CONNECTED_SCOREBOARD_DISPLAY
         else MLB_SCOREBOARD_SCROLL_DELAY,
-        page_jump_mode=not _IS_WAVESHARE_OLED_LCD_PROFILE,
-        max_step=1 if _IS_WAVESHARE_OLED_LCD_PROFILE else None,
-        min_frame_time_floor=0.100 if _IS_WAVESHARE_OLED_LCD_PROFILE else None,
+        page_jump_mode=not _IS_SMALL_CONNECTED_SCOREBOARD_DISPLAY,
+        max_step=1 if _IS_SMALL_CONNECTED_SCOREBOARD_DISPLAY else None,
+        min_frame_time_floor=0.100 if _IS_SMALL_CONNECTED_SCOREBOARD_DISPLAY else None,
     )
 
 

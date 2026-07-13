@@ -279,6 +279,64 @@ def test_mlb_scoreboard_scroll_delay_env_override(monkeypatch):
     assert module.MLB_SCOREBOARD_SCROLL_DELAY == 0.075
 
 
+def test_small_connected_scoreboard_helper_display_hat_and_waveshare_markers(monkeypatch):
+    module = _reload_config(
+        monkeypatch,
+        DISPLAY_WIDTH="320",
+        DISPLAY_HEIGHT="240",
+        DESK_DISPLAY_PROFILE=None,
+        WAVESHARE_OLED_LCD_HAT_A_INSTALLED=None,
+        WAVESHARE_OLED_MAX_VALUE_FONT_SIZE=None,
+        WAVESHARE_OLED_MAX_TIME_FONT_SIZE=None,
+    )
+    assert module.is_small_connected_scoreboard_display() is True
+
+    for marker_name in (
+        "WAVESHARE_OLED_LCD_HAT_A_INSTALLED",
+        "WAVESHARE_OLED_MAX_VALUE_FONT_SIZE",
+        "WAVESHARE_OLED_MAX_TIME_FONT_SIZE",
+    ):
+        env = {
+            "DISPLAY_WIDTH": "1024",
+            "DISPLAY_HEIGHT": "600",
+            "DESK_DISPLAY_PROFILE": None,
+            "WAVESHARE_OLED_LCD_HAT_A_INSTALLED": None,
+            "WAVESHARE_OLED_MAX_VALUE_FONT_SIZE": None,
+            "WAVESHARE_OLED_MAX_TIME_FONT_SIZE": None,
+        }
+        env[marker_name] = "1"
+        module = _reload_config(monkeypatch, **env)
+        assert module.is_small_connected_scoreboard_display() is True
+
+
+def test_small_connected_scoreboard_helper_excludes_hyperpixel_profiles(monkeypatch):
+    module = _reload_config(
+        monkeypatch,
+        DISPLAY_WIDTH="800",
+        DISPLAY_HEIGHT="480",
+        DESK_DISPLAY_PROFILE=None,
+        WAVESHARE_OLED_LCD_HAT_A_INSTALLED="installed",
+        WAVESHARE_OLED_MAX_VALUE_FONT_SIZE=None,
+        WAVESHARE_OLED_MAX_TIME_FONT_SIZE=None,
+    )
+    assert module.is_display_profile("hyperpixel4") is True
+    assert module.is_small_connected_scoreboard_display() is False
+    assert module.MLB_SCOREBOARD_SCROLL_DELAY == module.SCOREBOARD_SCROLL_DELAY
+
+    module = _reload_config(
+        monkeypatch,
+        DISPLAY_WIDTH="720",
+        DISPLAY_HEIGHT="720",
+        DESK_DISPLAY_PROFILE=None,
+        WAVESHARE_OLED_LCD_HAT_A_INSTALLED=None,
+        WAVESHARE_OLED_MAX_VALUE_FONT_SIZE="26",
+        WAVESHARE_OLED_MAX_TIME_FONT_SIZE=None,
+    )
+    assert module.is_display_profile("hyperpixel4_square") is True
+    assert module.is_small_connected_scoreboard_display() is False
+    assert module.MLB_SCOREBOARD_SCROLL_DELAY == module.SCOREBOARD_SCROLL_DELAY
+
+
 def test_display_profile_id_resolution(monkeypatch):
     module = _reload_config(monkeypatch, DISPLAY_WIDTH="320", DISPLAY_HEIGHT="240")
     assert module.get_display_profile_id() == "display_hat_mini"

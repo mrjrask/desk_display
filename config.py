@@ -680,6 +680,23 @@ def is_display_profile(profile_id: str, width: int | None = None, height: int | 
     return get_display_profile_id(width, height) == profile_id
 
 
+def is_small_connected_scoreboard_display() -> bool:
+    """Return True for small directly connected displays needing slower MLB scrolls."""
+
+    if is_display_profile(DISPLAY_PROFILE_DISPLAY_HAT_MINI):
+        return True
+    if is_display_profile("hyperpixel4") or is_display_profile("hyperpixel4_square"):
+        return False
+    return any(
+        os.environ.get(name)
+        for name in (
+            "WAVESHARE_OLED_LCD_HAT_A_INSTALLED",
+            "WAVESHARE_OLED_MAX_VALUE_FONT_SIZE",
+            "WAVESHARE_OLED_MAX_TIME_FONT_SIZE",
+        )
+    )
+
+
 def is_kernel_driven_display() -> bool:
     """Return True when output is configured for kernel/DRM-backed rendering."""
     return _display_output in KERNEL_DRIVEN_OUTPUTS
