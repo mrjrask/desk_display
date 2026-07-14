@@ -91,7 +91,7 @@ SCORE_ROW_H           = scale_value(56)
 STATUS_ROW_H          = scale_value(18)
 REQUEST_TIMEOUT       = 10
 FETCH_CACHE_TTL_SECONDS = 60
-MLB_SPORT_IDS = "1"  # MLB Add 51 for World Baseball Classic (International)
+MLB_SPORT_IDS = "1"  # MLB
 COL_WIDTHS = _scoreboard_column_widths()  # total = 320 scaled to display width
 _TOTAL_COL_WIDTH = sum(COL_WIDTHS)
 _COL_LEFT = max(0, (WIDTH - _TOTAL_COL_WIDTH) // 2)
@@ -554,7 +554,7 @@ def _fetch_games_for_date(day: datetime.date) -> list[dict]:
     url = (
         "https://statsapi.mlb.com/api/v1/schedule"
         f"?sportId={MLB_SPORT_IDS}&date={day.isoformat()}&hydrate=team,linescore"
-        "&gameTypes=S,E,R,F,D,L,W"
+        "&gameTypes=S,E,R,A,F,D,L,W"
     )
     try:
         response = _SESSION.get(url, timeout=REQUEST_TIMEOUT)
