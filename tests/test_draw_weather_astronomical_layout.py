@@ -61,9 +61,9 @@ def test_astronomy_time_text_formats_midnight_and_noon_without_platform_specific
     assert _astronomy_time_text("2026-01-01T18:00:00Z") == "12:00 PM"
 
 
-def test_astronomical_sun_rows_use_civil_times_only():
+def test_astronomical_sun_rows_use_civil_times_without_civil_label():
     layout = _astronomical_layout_details(640, 480)
-    assert layout["sun_labels"] == (("Civil Rise", "sunrise_civil"), ("Civil Set", "sunset_civil"))
+    assert layout["sun_labels"] == (("Rise", "sunrise_civil"), ("Set", "sunset_civil"))
 
 
 def test_moon_phase_direction_controls_illuminated_side():
