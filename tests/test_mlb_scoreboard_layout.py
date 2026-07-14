@@ -6,6 +6,13 @@ import screens.nhl_scoreboard as nhl_scoreboard
 import screens.nhl_scoreboard_v2 as nhl_scoreboard_v2
 
 
+def test_mlb_all_star_team_names_map_to_league_logo_codes():
+    assert mlb_scoreboard._team_logo_abbr({"name": "American League"}) == "AL"
+    assert mlb_scoreboard._team_logo_abbr({"name": "National League"}) == "NL"
+    assert mlb_scoreboard._team_logo_abbr({"triCode": "A.L."}) == "AL"
+    assert mlb_scoreboard._team_logo_abbr({"triCode": "N.L."}) == "NL"
+
+
 def test_mlb_logo_height_is_capped_to_score_row(monkeypatch):
     monkeypatch.setattr(mlb_scoreboard, "TEAM_LOGO_BASE_HEIGHT", 120)
     monkeypatch.setattr(mlb_scoreboard, "SCORE_ROW_H", 56)

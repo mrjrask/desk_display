@@ -81,7 +81,7 @@ def test_mlb_scoreboard_date_uses_normal_cutoff_after_override_window():
     assert mlb_scoreboard_date(after_cutoff) == datetime.date(2026, 2, 21)
 
 
-def test_mlb_fetch_includes_spring_training_and_wbc_filters(monkeypatch):
+def test_mlb_fetch_includes_spring_training_and_all_star_filters(monkeypatch):
     captured = {}
 
     class _DummyResponse:
@@ -102,8 +102,8 @@ def test_mlb_fetch_includes_spring_training_and_wbc_filters(monkeypatch):
 
     mlb_fetch_games_for_date(datetime.date(2026, 3, 1))
 
-    assert "sportId=1,51" in captured["url"]
-    assert "gameTypes=S,E,R,F,D,L,W" in captured["url"]
+    assert "sportId=1" in captured["url"]
+    assert "gameTypes=S,E,R,A,F,D,L,W" in captured["url"]
 
 
 def test_nba_live_status_drops_leading_zero_minutes():

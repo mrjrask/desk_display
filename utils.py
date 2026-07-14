@@ -3778,6 +3778,14 @@ def check_apt_updates() -> bool:
     return updates_available
 
 MLB_ABBREVIATIONS = {
+    # All-Star teams
+    "American League": "AL",
+    "AL All-Stars": "AL",
+    "American League All-Stars": "AL",
+    "National League": "NL",
+    "NL All-Stars": "NL",
+    "National League All-Stars": "NL",
+
     # National League
     "Arizona Diamondbacks": "ARI",
     "Diamondbacks": "ARI",
@@ -3846,6 +3854,16 @@ MLB_ABBREVIATIONS = {
 }
 
 MLB_LOGO_OVERRIDES = {
+    "A.L.": "AL",
+    "AMERICAN": "AL",
+    "AMERICAN LEAGUE": "AL",
+    "AMERICAN LEAGUE ALL-STARS": "AL",
+    "AL ALL-STARS": "AL",
+    "N.L.": "NL",
+    "NATIONAL": "NL",
+    "NATIONAL LEAGUE": "NL",
+    "NATIONAL LEAGUE ALL-STARS": "NL",
+    "NL ALL-STARS": "NL",
     "AZ": "ARI",
     "CHC": "CUBS",
     "CWS": "SOX",
