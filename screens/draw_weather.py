@@ -2013,10 +2013,15 @@ def draw_weather_astronomical(display, weather, transition: bool = False):
             min(sun_icon_limit, moon_icon_limit) // (1 if split_columns else 2),
         ),
     )
-    icon_center_y = max(sun_title_bottom, moon_title_bottom) + icon_d // 2 + (3 if layout["compact"] else 7)
+    icon_offset = icon_d // 2 + (3 if layout["compact"] else 7)
+    if split_columns:
+        sun_icon_center_y = moon_icon_center_y = max(sun_title_bottom, moon_title_bottom) + icon_offset
+    else:
+        sun_icon_center_y = min(sun_title_bottom + icon_offset, ly1 - icon_d // 2 - 4)
+        moon_icon_center_y = min(moon_title_bottom + icon_offset, ry1 - icon_d // 2 - 4)
     sun_icon_d = moon_icon_d = icon_d
-    sun_center = ((lx0 + lx1) // 2, icon_center_y)
-    moon_center = ((rx0 + rx1) // 2, icon_center_y)
+    sun_center = ((lx0 + lx1) // 2, sun_icon_center_y)
+    moon_center = ((rx0 + rx1) // 2, moon_icon_center_y)
     _draw_astronomy_sun_icon(img, sun_center, sun_icon_d)
     _draw_moon_phase_icon(img, moon_center, moon_icon_d, phase_fraction, moon_phase_raw, phase_label)
 
@@ -2056,14 +2061,30 @@ def draw_weather_astronomical(display, weather, transition: bool = False):
     phase_h = phase_bbox[3] - phase_bbox[1]
     moon_row_y = phase_y + phase_h + (7 if layout["compact"] else 12)
     sun_row_y = sun_center[1] + sun_icon_d // 2 + (8 if layout["compact"] else 14)
-    aligned_row_y = max(sun_row_y, moon_row_y)
-    row_gap = max(
-        13 if layout["compact"] else 22,
-        min(ly1, ry1) - aligned_row_y - 4,
-    ) // max(1, len(moon_rows))
-    row_gap = max(13 if layout["compact"] else 22, row_gap)
+    min_row_gap = 13 if layout["compact"] else 22
+    if split_columns:
+        aligned_row_y = max(sun_row_y, moon_row_y)
+        row_gap = max(
+            min_row_gap,
+            min(ly1, ry1) - aligned_row_y - 4,
+        ) // max(1, len(moon_rows))
+        row_gap = max(min_row_gap, row_gap)
+        sun_aligned_row_y = moon_aligned_row_y = aligned_row_y
+        sun_row_gap = moon_row_gap = row_gap
+    else:
+        sun_row_gap = moon_row_gap = min_row_gap
+        sun_aligned_row_y = min(
+            sun_row_y,
+            ly1 - 11 - max(0, len(sun_rows) - 1) * sun_row_gap,
+        )
+        moon_aligned_row_y = min(
+            moon_row_y,
+            ry1 - 11 - max(0, len(moon_rows) - 1) * moon_row_gap,
+        )
+        sun_aligned_row_y = max(sun_title_bottom + 1, sun_aligned_row_y)
+        moon_aligned_row_y = max(moon_title_bottom + 1, moon_aligned_row_y)
     for idx, (label, value) in enumerate(sun_rows):
-        y = aligned_row_y + idx * row_gap
+        y = sun_aligned_row_y + idx * sun_row_gap
         if y > ly1 - 11:
             break
         draw.text((lx0 + 10, y), label, font=label_font, fill=(255, 223, 178))
@@ -2076,7 +2097,7 @@ def draw_weather_astronomical(display, weather, transition: bool = False):
         )
 
     for idx, (label, value) in enumerate(moon_rows):
-        y = aligned_row_y + idx * row_gap
+        y = moon_aligned_row_y + idx * moon_row_gap
         if y > ry1 - 11:
             break
         draw.text((rx0 + 10, y), label, font=label_font, fill=(198, 210, 255))
