@@ -17,6 +17,7 @@ Screen 2:
 import datetime
 import logging
 import math
+import re
 import textwrap
 import time
 from io import BytesIO
@@ -24,36 +25,35 @@ from typing import Any, NamedTuple, Optional, Tuple
 
 from PIL import Image, ImageDraw, ImageFont
 
-from services.http_client import http_get
-
 import config
 from config import (
-    WIDTH,
-    HEIGHT,
     CENTRAL_TIME,
-    FONT_TEMP,
+    EMOJI_EMBEDDED_COLOR,
     FONT_CONDITION,
-    FONT_WEATHER_LABEL,
+    FONT_EMOJI,
+    FONT_EMOJI_SMALL,
+    FONT_TEMP,
     FONT_WEATHER_DETAILS,
     FONT_WEATHER_DETAILS_BOLD,
     FONT_WEATHER_DETAILS_SMALL,
+    FONT_WEATHER_DETAILS_SMALL_BOLD,
     FONT_WEATHER_DETAILS_TINY,
     FONT_WEATHER_DETAILS_TINY_LARGE,
     FONT_WEATHER_DETAILS_TINY_MICRO,
-    FONT_WEATHER_DETAILS_SMALL_BOLD,
-    FONT_EMOJI,
-    FONT_EMOJI_SMALL,
-    EMOJI_EMBEDDED_COLOR,
-    WEATHER_ICON_SIZE,
-    WEATHER_DESC_GAP,
+    FONT_WEATHER_LABEL,
+    HEIGHT,
     HOURLY_FORECAST_HOURS,
     LATITUDE,
     LONGITUDE,
+    WEATHER_DESC_GAP,
+    WEATHER_ICON_SIZE,
     WEATHER_USE_EMOJI_ICONS,
+    WIDTH,
     get_screen_background_color,
     is_hyperpixel_4_square_layout,
     is_hyperpixel_next_layout,
 )
+from services.http_client import http_get
 from utils import (
     LED_INDICATOR_LEVEL,
     ScreenImage,
@@ -1721,7 +1721,11 @@ def _normalise_moon_phase(phase: object) -> tuple[float | None, str]:
         }
         compact = "".join(ch for ch in lowered if ch.isalpha())
         phase_fraction = mapping.get(compact)
-        label = " ".join(word.capitalize() for word in phase_text.replace("_", " ").replace("-", " ").split())
+        spaced_phase_text = re.sub(r"(?<=[a-z])(?=[A-Z])", " ", phase_text)
+        label = " ".join(
+            word.capitalize()
+            for word in spaced_phase_text.replace("_", " ").replace("-", " ").split()
+        )
         if phase_fraction is not None:
             return phase_fraction, label
         try:
@@ -1894,6 +1898,21 @@ def _fit_text_to_width(
     return ellipsis
 
 
+def _fit_text_and_font_to_width(
+    draw: ImageDraw.ImageDraw,
+    text: str,
+    fonts: tuple[ImageFont.ImageFont, ...],
+    max_width: int,
+) -> tuple[str, ImageFont.ImageFont]:
+    for font in fonts:
+        bbox = _safe_textbbox(draw, text, font)
+        if max_width <= 0 or bbox[2] - bbox[0] <= max_width:
+            return text, font
+
+    fallback_font = fonts[-1]
+    return _fit_text_to_width(draw, text, fallback_font, max_width), fallback_font
+
+
 def _draw_astronomy_card(draw: ImageDraw.ImageDraw, box: tuple[int, int, int, int]) -> None:
     draw.rounded_rectangle(
         box,
@@ -1943,17 +1962,23 @@ def draw_weather_astronomical(display, weather, transition: bool = False):
     if LATITUDE is not None and LONGITUDE is not None and not layout["ultra_compact"]:
         coord_text = f"{LATITUDE:.2f}, {LONGITUDE:.2f}"
         coord_bbox = _safe_textbbox(draw, coord_text, caption_font)
-        draw.text(
-            (
-                WIDTH - edge - (coord_bbox[2] - coord_bbox[0]),
-                title_y + max(0, title_h - (coord_bbox[3] - coord_bbox[1])),
-            ),
-            coord_text,
-            font=caption_font,
-            fill=(132, 149, 180),
-        )
+        coord_w = coord_bbox[2] - coord_bbox[0]
+        coord_h = coord_bbox[3] - coord_bbox[1]
+        coord_x = WIDTH - edge - coord_w
+        # Avoid crowding the centered title on narrow landscape displays; the
+        # coordinates are supplemental, so drop them if they would collide.
+        if coord_x > title_x + title_w + 12:
+            draw.text(
+                (
+                    coord_x,
+                    title_y + max(0, title_h - coord_h),
+                ),
+                coord_text,
+                font=caption_font,
+                fill=(132, 149, 180),
+            )
 
-    content_top = title_y + title_h + 5
+    content_top = title_y + title_h + (10 if layout["compact"] else 14)
     content_bottom = HEIGHT - edge
     split_columns = bool(layout["split_columns"])
     gutter = 6 if layout["compact"] else 10
@@ -1979,7 +2004,10 @@ def draw_weather_astronomical(display, weather, transition: bool = False):
     lx0, ly0, lx1, ly1 = left_box
     sun_icon_d = max(
         24 if layout["compact"] else 46,
-        min(lx1 - lx0, ly1 - sun_title_bottom) // (3 if split_columns else 4),
+        min(
+            42 if layout["compact"] else 78,
+            min(lx1 - lx0 - 34, ly1 - sun_title_bottom - 86) // (2 if split_columns else 3),
+        ),
     )
     sun_center = (
         (lx0 + lx1) // 2,
@@ -2014,7 +2042,10 @@ def draw_weather_astronomical(display, weather, transition: bool = False):
     rx0, ry0, rx1, ry1 = right_box
     moon_icon_d = max(
         28 if layout["compact"] else 54,
-        min(rx1 - rx0 - 18, max(1, ry1 - moon_title_bottom)) // (2 if split_columns else 3),
+        min(
+            70 if layout["compact"] else 148,
+            min(rx1 - rx0 - 34, max(1, ry1 - moon_title_bottom - 118)) // (1 if split_columns else 2),
+        ),
     )
     moon_center = (
         (rx0 + rx1) // 2,
@@ -2022,9 +2053,21 @@ def draw_weather_astronomical(display, weather, transition: bool = False):
     )
     _draw_moon_phase_icon(img, moon_center, moon_icon_d, phase_fraction, moon_phase_raw, phase_label)
 
-    phase_text = f"Phase: {phase_label}"
+    phase_text = phase_label
     phase_y = moon_center[1] + moon_icon_d // 2 + (5 if layout["compact"] else 9)
-    phase_text = _fit_text_to_width(draw, phase_text, phase_font, rx1 - rx0 - 16)
+    phase_font_options = (
+        phase_font,
+        value_font,
+        FONT_WEATHER_DETAILS_TINY_LARGE,
+        FONT_WEATHER_DETAILS_TINY,
+        FONT_WEATHER_DETAILS_TINY_MICRO,
+    )
+    phase_text, phase_font = _fit_text_and_font_to_width(
+        draw,
+        phase_text,
+        phase_font_options,
+        rx1 - rx0 - 16,
+    )
     phase_bbox = _safe_textbbox(draw, phase_text, phase_font)
     draw.text(
         (rx0 + (rx1 - rx0 - (phase_bbox[2] - phase_bbox[0])) // 2, phase_y),

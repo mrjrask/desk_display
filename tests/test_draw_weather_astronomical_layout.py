@@ -1,10 +1,19 @@
 import datetime
 
+from PIL import Image, ImageDraw
+
 from config import CENTRAL_TIME
-from screens.draw_weather import _astronomical_layout_details
-from screens.draw_weather import _astronomy_time_text
-from screens.draw_weather import _moon_illumination_mask
-from screens.draw_weather import _moon_phase_is_waxing
+from screens.draw_weather import (
+    FONT_WEATHER_DETAILS_SMALL_BOLD,
+    FONT_WEATHER_DETAILS_TINY_LARGE,
+    _astronomical_layout_details,
+    _astronomy_time_text,
+    _fit_text_and_font_to_width,
+    _moon_illumination_mask,
+    _moon_phase_is_waxing,
+    _normalise_moon_phase,
+    _safe_textbbox,
+)
 
 
 def test_astronomical_layout_handles_supported_display_profiles():
@@ -71,3 +80,28 @@ def test_moon_phase_name_identifies_waning_labels():
     assert _moon_phase_is_waxing("WaxingCrescent", "Waxing Crescent") is True
     assert _moon_phase_is_waxing("WaningGibbous", "Waning Gibbous") is False
     assert _moon_phase_is_waxing("ThirdQuarter", "Third Quarter") is False
+
+
+def test_moon_phase_label_splits_camel_case_names():
+    fraction, label = _normalise_moon_phase("waxingGibbous")
+
+    assert fraction == 0.75
+    assert label == "Waxing Gibbous"
+
+
+def test_moon_phase_label_uses_smaller_font_before_truncating():
+    image = Image.new("RGB", (240, 80))
+    draw = ImageDraw.Draw(image)
+    phase = "Waxing Gibbous"
+    tiny_bbox = _safe_textbbox(draw, phase, FONT_WEATHER_DETAILS_TINY_LARGE)
+    max_width = tiny_bbox[2] - tiny_bbox[0]
+
+    fitted_text, fitted_font = _fit_text_and_font_to_width(
+        draw,
+        phase,
+        (FONT_WEATHER_DETAILS_SMALL_BOLD, FONT_WEATHER_DETAILS_TINY_LARGE),
+        max_width,
+    )
+
+    assert fitted_text == phase
+    assert fitted_font == FONT_WEATHER_DETAILS_TINY_LARGE
