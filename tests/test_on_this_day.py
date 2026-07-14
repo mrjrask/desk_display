@@ -267,7 +267,14 @@ def test_on_this_day_includes_jewish_holidays_in_holidays_and_culture(monkeypatc
     otd._clear_caches_for_tests()
 
     class FakeResponse:
-        text = """BEGIN:VCALENDAR\nBEGIN:VEVENT\nDTSTART;VALUE=DATE:20260707\nSUMMARY:Tzom Tammuz\nEND:VEVENT\nEND:VCALENDAR\n"""
+        text = (
+            "BEGIN:VCALENDAR\n"
+            "BEGIN:VEVENT\n"
+            "DTSTART;VALUE=DATE:20260707\n"
+            "SUMMARY:Tzom Tammuz\n"
+            "END:VEVENT\n"
+            "END:VCALENDAR\n"
+        )
 
         def raise_for_status(self):
             pass
@@ -280,3 +287,32 @@ def test_on_this_day_includes_jewish_holidays_in_holidays_and_culture(monkeypatc
     assert sections["🎉 Holidays & Culture"] == [
         otd.DayItem(None, "Jewish holiday: Tzom Tammuz.")
     ]
+
+
+def test_on_this_day_retries_after_cached_offline_fallback_expires(monkeypatch):
+    otd._clear_caches_for_tests()
+    times = iter([100.0, 200.0, 1200.0])
+    builds = []
+
+    def fake_monotonic():
+        return next(times)
+
+    def fake_build_sections_uncached(today):
+        builds.append(today)
+        if len(builds) == 1:
+            return otd._offline_sections_fallback()
+        return {"🌎 General History": [otd.DayItem(2000, "Recovered live item")]}
+
+    monkeypatch.setattr(otd.time, "monotonic", fake_monotonic)
+    monkeypatch.setattr(otd, "_OFFLINE_FALLBACK_RETRY_SECONDS", 900.0)
+    monkeypatch.setattr(otd, "_build_sections_uncached", fake_build_sections_uncached)
+
+    today = dt.date(2026, 7, 14)
+    first = otd._build_sections(today)
+    second = otd._build_sections(today)
+    third = otd._build_sections(today)
+
+    assert first == otd._offline_sections_fallback()
+    assert second == first
+    assert third == {"🌎 General History": [otd.DayItem(2000, "Recovered live item")]}
+    assert builds == [today, today]

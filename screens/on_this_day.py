@@ -12,6 +12,7 @@ import logging
 import os
 import re
 import threading
+import time
 from concurrent.futures import ThreadPoolExecutor, wait
 from dataclasses import dataclass
 from io import BytesIO
@@ -84,6 +85,7 @@ _SCROLL_END_PAUSE_SECONDS = 3.0
 _SECTIONS_CACHE_LOCK = threading.Lock()
 _SECTIONS_CACHE_DATE: dt.date | None = None
 _SECTIONS_CACHE_VALUE: dict[str, list["DayItem"]] | None = None
+_SECTIONS_CACHE_TIME: float | None = None
 _RENDER_CACHE_LOCK = threading.Lock()
 _RENDER_CACHE_DATE: dt.date | None = None
 _RENDER_CACHE_IMAGE: Image.Image | None = None
@@ -96,6 +98,9 @@ _HEBCAL_JEWISH_HOLIDAYS_ICS_URL = (
 _JEWISH_HOLIDAY_LIMIT = 3
 _FEED_BUILD_TIMEOUT_SECONDS = max(
     0.5, float(os.environ.get("ON_THIS_DAY_FEED_BUILD_TIMEOUT_SECONDS", "3.5"))
+)
+_OFFLINE_FALLBACK_RETRY_SECONDS = max(
+    60.0, float(os.environ.get("ON_THIS_DAY_OFFLINE_FALLBACK_RETRY_SECONDS", "900"))
 )
 _LIVE_THUMBNAILS_ENABLED = os.environ.get(
     "ON_THIS_DAY_LIVE_THUMBNAILS", "0"
@@ -148,21 +153,33 @@ _FALLBACK_BY_DATE: dict[tuple[int, int], dict[str, list[DayItem]]] = {
         "🇺🇸 American History": [
             DayItem(
                 1777,
-                "Fort Ticonderoga was captured by British forces during the American Revolutionary War.",
+                (
+                    "Fort Ticonderoga was captured by British forces during "
+                    "the American Revolutionary War."
+                ),
             ),
             DayItem(
                 1944,
-                "The Hartford circus fire became one of the deadliest fire disasters in U.S. history.",
+                (
+                    "The Hartford circus fire became one of the deadliest fire "
+                    "disasters in U.S. history."
+                ),
             ),
         ],
         "🏙️ Chicago History": [
             DayItem(
                 1933,
-                "The first Major League Baseball All-Star Game was played at Comiskey Park in Chicago.",
+                (
+                    "The first Major League Baseball All-Star Game was played at "
+                    "Comiskey Park in Chicago."
+                ),
             ),
             DayItem(
                 1957,
-                "Chicago music history got a Beatles footnote when Lennon met McCartney on this date.",
+                (
+                    "Chicago music history got a Beatles footnote when Lennon met "
+                    "McCartney on this date."
+                ),
             ),
         ],
         "🏟️ Sports History": [
@@ -172,7 +189,10 @@ _FALLBACK_BY_DATE: dict[tuple[int, int], dict[str, list[DayItem]]] = {
             ),
             DayItem(
                 2013,
-                "Andy Murray won Wimbledon, becoming the first British men's singles champion there since 1936.",
+                (
+                    "Andy Murray won Wimbledon, becoming the first British men's "
+                    "singles champion there since 1936."
+                ),
             ),
         ],
         "🎂 Famous Birthdays": [
@@ -192,7 +212,10 @@ _FALLBACK_BY_DATE: dict[tuple[int, int], dict[str, list[DayItem]]] = {
             ),
             DayItem(
                 1997,
-                "NASA's Sojourner rover began rolling on Mars during the Pathfinder mission weekend.",
+                (
+                    "NASA's Sojourner rover began rolling on Mars during the "
+                    "Pathfinder mission weekend."
+                ),
             ),
         ],
     }
@@ -417,18 +440,47 @@ def _offline_sections_fallback() -> dict[str, list[DayItem]]:
     }
 
 
-def _build_sections(today: dt.date) -> dict[str, list[DayItem]]:
-    global _SECTIONS_CACHE_DATE, _SECTIONS_CACHE_VALUE
+def _sections_match_offline_fallback(sections: dict[str, list[DayItem]] | None) -> bool:
+    """Return True when cached content is only the transient offline message."""
+
+    return sections == _offline_sections_fallback()
+
+
+def _cached_offline_fallback_age(now: float) -> float | None:
+    """Return cached offline fallback age when that transient state should retry."""
 
     with _SECTIONS_CACHE_LOCK:
+        if not _sections_match_offline_fallback(_SECTIONS_CACHE_VALUE):
+            return None
+        if _SECTIONS_CACHE_TIME is None:
+            return None
+        cache_age = now - _SECTIONS_CACHE_TIME
+        return cache_age if cache_age >= _OFFLINE_FALLBACK_RETRY_SECONDS else None
+
+
+def _build_sections(today: dt.date) -> dict[str, list[DayItem]]:
+    global _SECTIONS_CACHE_DATE, _SECTIONS_CACHE_VALUE, _SECTIONS_CACHE_TIME
+
+    now = time.monotonic()
+    with _SECTIONS_CACHE_LOCK:
         if _SECTIONS_CACHE_DATE == today and _SECTIONS_CACHE_VALUE is not None:
-            return _copy_sections(_SECTIONS_CACHE_VALUE)
+            cache_age = now - (_SECTIONS_CACHE_TIME or now)
+            if (
+                not _sections_match_offline_fallback(_SECTIONS_CACHE_VALUE)
+                or cache_age < _OFFLINE_FALLBACK_RETRY_SECONDS
+            ):
+                return _copy_sections(_SECTIONS_CACHE_VALUE)
+            logging.info(
+                "on_this_day: retrying live feeds after %.0fs with offline fallback cached.",
+                cache_age,
+            )
 
     sections = _build_sections_uncached(today)
 
     with _SECTIONS_CACHE_LOCK:
         _SECTIONS_CACHE_DATE = today
         _SECTIONS_CACHE_VALUE = _copy_sections(sections)
+        _SECTIONS_CACHE_TIME = now
         return _copy_sections(_SECTIONS_CACHE_VALUE)
 
 
@@ -613,9 +665,16 @@ def _render_full_image_uncached(today: dt.date) -> Image.Image:
 def _render_full_image(today: dt.date) -> Image.Image:
     global _RENDER_CACHE_DATE, _RENDER_CACHE_IMAGE
 
+    now = time.monotonic()
     with _RENDER_CACHE_LOCK:
         if _RENDER_CACHE_DATE == today and _RENDER_CACHE_IMAGE is not None:
-            return _RENDER_CACHE_IMAGE.copy()
+            cache_age = _cached_offline_fallback_age(now)
+            if cache_age is None:
+                return _RENDER_CACHE_IMAGE.copy()
+            logging.info(
+                "on_this_day: refreshing rendered offline fallback after %.0fs.",
+                cache_age,
+            )
 
     img = _render_full_image_uncached(today)
 
@@ -626,11 +685,13 @@ def _render_full_image(today: dt.date) -> Image.Image:
 
 
 def _clear_caches_for_tests() -> None:
-    global _SECTIONS_CACHE_DATE, _SECTIONS_CACHE_VALUE, _RENDER_CACHE_DATE, _RENDER_CACHE_IMAGE
+    global _SECTIONS_CACHE_DATE, _SECTIONS_CACHE_VALUE, _SECTIONS_CACHE_TIME
+    global _RENDER_CACHE_DATE, _RENDER_CACHE_IMAGE
 
     with _SECTIONS_CACHE_LOCK:
         _SECTIONS_CACHE_DATE = None
         _SECTIONS_CACHE_VALUE = None
+        _SECTIONS_CACHE_TIME = None
     with _RENDER_CACHE_LOCK:
         _RENDER_CACHE_DATE = None
         _RENDER_CACHE_IMAGE = None
