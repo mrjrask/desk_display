@@ -46,15 +46,12 @@ _cache = {
     "active_symbol": None,
 }
 
-VRNO_PRIMARY_SYMBOL = "VRNOD"
-VRNO_FALLBACK_SYMBOL = "VRNO"
+VRNO_SYMBOL = "VRNO"
 
 
 def _candidate_symbols(symbol: str | None = None) -> list[str]:
-    """Return ticker symbols to try in display order."""
-    if symbol in (None, "", VRNO_FALLBACK_SYMBOL):
-        return [VRNO_PRIMARY_SYMBOL, VRNO_FALLBACK_SYMBOL]
-    return [symbol]
+    """Return the ticker symbol to fetch."""
+    return [symbol or VRNO_SYMBOL]
 
 _IS_1080P_LAYOUT = config.is_hdmi_1080p_layout()
 _LOGO_SCALE_1080 = config.DISPLAY_PROFILE_LOGO_SCALE_CAP
@@ -158,7 +155,7 @@ def _fetch_price(symbol: str) -> bool:
 
 
 def _fetch_preferred_price(symbol: str | None = None) -> None:
-    """Fetch VRNO.D first, falling back to VRNO once VRNO.D is unavailable."""
+    """Fetch the configured VRNO ticker symbol."""
     last_symbol = None
     for candidate in _candidate_symbols(symbol):
         last_symbol = candidate
