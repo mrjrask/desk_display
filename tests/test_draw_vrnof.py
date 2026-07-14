@@ -79,21 +79,11 @@ def test_fetch_price_falls_back_when_info_change_is_unrealistic(monkeypatch):
     assert draw_vrnof._cache["change_pct"] == pytest.approx(-5.781990521327014)
 
 
-def test_build_image_prefers_reverse_split_symbol_then_fallback(monkeypatch):
+def test_build_image_fetches_vrno_symbol(monkeypatch):
     calls = []
 
     def _fake_fetch(symbol):
         calls.append(symbol)
-        if symbol == draw_vrnof.VRNO_PRIMARY_SYMBOL:
-            draw_vrnof._cache.update({
-                "price": None,
-                "change_val": None,
-                "change_pct": None,
-                "all_time": None,
-                "ts": time.time(),
-                "active_symbol": None,
-            })
-            return False
         draw_vrnof._cache.update({
             "price": 1.23,
             "change_val": 0.02,
@@ -117,11 +107,10 @@ def test_build_image_prefers_reverse_split_symbol_then_fallback(monkeypatch):
 
     draw_vrnof._build_image()
 
-    assert calls == [draw_vrnof.VRNO_PRIMARY_SYMBOL, draw_vrnof.VRNO_FALLBACK_SYMBOL]
-    assert draw_vrnof._cache["active_symbol"] == draw_vrnof.VRNO_FALLBACK_SYMBOL
+    assert calls == [draw_vrnof.VRNO_SYMBOL]
+    assert draw_vrnof._cache["active_symbol"] == draw_vrnof.VRNO_SYMBOL
 
-
-def test_build_image_displays_reverse_split_symbol_when_available(monkeypatch):
+def test_build_image_displays_vrno_symbol_when_available(monkeypatch):
     calls = []
 
     def _fake_fetch(symbol):
@@ -158,5 +147,5 @@ def test_build_image_displays_reverse_split_symbol_when_available(monkeypatch):
 
     draw_vrnof._build_image()
 
-    assert calls == [draw_vrnof.VRNO_PRIMARY_SYMBOL]
-    assert draw_vrnof.VRNO_PRIMARY_SYMBOL in captured
+    assert calls == [draw_vrnof.VRNO_SYMBOL]
+    assert draw_vrnof.VRNO_SYMBOL in captured
