@@ -3,6 +3,8 @@ import datetime
 from config import CENTRAL_TIME
 from screens.draw_weather import _astronomical_layout_details
 from screens.draw_weather import _astronomy_time_text
+from screens.draw_weather import _moon_illumination_mask
+from screens.draw_weather import _moon_phase_is_waxing
 
 
 def test_astronomical_layout_handles_supported_display_profiles():
@@ -48,3 +50,24 @@ def test_astronomy_time_text_accepts_iso_timestamp_strings():
 def test_astronomy_time_text_formats_midnight_and_noon_without_platform_specific_directives():
     assert _astronomy_time_text("2026-01-01T06:00:00Z") == "12:00 AM"
     assert _astronomy_time_text("2026-01-01T18:00:00Z") == "12:00 PM"
+
+
+def test_astronomical_sun_rows_use_civil_times_only():
+    layout = _astronomical_layout_details(640, 480)
+    assert layout["sun_labels"] == (("Civil Rise", "sunrise_civil"), ("Civil Set", "sunset_civil"))
+
+
+def test_moon_phase_direction_controls_illuminated_side():
+    waxing = _moon_illumination_mask(10, 0.5, waxing=True)
+    waning = _moon_illumination_mask(10, 0.5, waxing=False)
+
+    assert waxing.getpixel((15, 10)) == 255
+    assert waxing.getpixel((5, 10)) == 0
+    assert waning.getpixel((5, 10)) == 255
+    assert waning.getpixel((15, 10)) == 0
+
+
+def test_moon_phase_name_identifies_waning_labels():
+    assert _moon_phase_is_waxing("WaxingCrescent", "Waxing Crescent") is True
+    assert _moon_phase_is_waxing("WaningGibbous", "Waning Gibbous") is False
+    assert _moon_phase_is_waxing("ThirdQuarter", "Third Quarter") is False
