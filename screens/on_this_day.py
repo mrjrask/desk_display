@@ -226,7 +226,13 @@ def _clean_text(text: str) -> str:
     return " ".join(str(text or "").replace("\n", " ").split())
 
 
-def _wiki_items(feed_type: str, month: int, day: int, limit: int = 3) -> list[DayItem]:
+def _wiki_items(
+    feed_type: str,
+    month: int,
+    day: int,
+    limit: int = 3,
+    include_page_extract: bool = False,
+) -> list[DayItem]:
     url = f"https://api.wikimedia.org/feed/v1/wikipedia/en/onthisday/{feed_type}/{month}/{day}"
     try:
         response = http_get(url, timeout=3.0)
@@ -236,6 +242,8 @@ def _wiki_items(feed_type: str, month: int, day: int, limit: int = 3) -> list[Da
         logging.debug("on_this_day: Wikimedia feed failed for %s: %s", feed_type, exc)
         return []
 
+    include_page_extract = include_page_extract or feed_type == "holidays"
+
     items: list[DayItem] = []
     for raw in payload.get(feed_type, []) if isinstance(payload, dict) else []:
         if not isinstance(raw, dict):
@@ -244,16 +252,22 @@ def _wiki_items(feed_type: str, month: int, day: int, limit: int = 3) -> list[Da
         if not text:
             continue
         thumb = None
+        description = ""
         pages = raw.get("pages")
         if isinstance(pages, list):
             for page in pages:
-                thumbnail = page.get("thumbnail") if isinstance(page, dict) else None
+                if not isinstance(page, dict):
+                    continue
+                if include_page_extract and not description:
+                    description = _clean_text(page.get("extract", ""))
+                thumbnail = page.get("thumbnail")
                 source = (
                     thumbnail.get("source") if isinstance(thumbnail, dict) else None
                 )
-                if source:
+                if source and not thumb:
                     thumb = str(source)
-                    break
+        if include_page_extract and description:
+            text = f"{text}: {description}"
         year = raw.get("year")
         items.append(
             DayItem(
@@ -316,7 +330,13 @@ def _parse_jewish_holidays_ics(text: str, today: dt.date) -> list[DayItem]:
             start = _parse_ics_date(event.get("DTSTART", ""))
             summary = _clean_text(event.get("SUMMARY", ""))
             if start and start == today and summary:
-                items.append(DayItem(None, f"Jewish holiday: {summary}."))
+                description = _clean_text(event.get("DESCRIPTION", ""))
+                if description:
+                    items.append(
+                        DayItem(None, f"Jewish holiday: {summary}: {description}")
+                    )
+                else:
+                    items.append(DayItem(None, f"Jewish holiday: {summary}."))
             in_event = False
             event = {}
             continue
@@ -326,7 +346,7 @@ def _parse_jewish_holidays_ics(text: str, today: dt.date) -> list[DayItem]:
         if parsed is None:
             continue
         name, value = parsed
-        if name in {"DTSTART", "SUMMARY"}:
+        if name in {"DTSTART", "SUMMARY", "DESCRIPTION"}:
             event[name] = value
     return items
 
