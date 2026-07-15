@@ -117,6 +117,7 @@ def _lazy_callable(import_path: str) -> Callable[..., Any]:
 # Heavyweight renderers are resolved lazily so importing the registry does not
 # trigger runtime probes, network helpers, or large renderer modules for disabled
 # screens.
+draw_air_quality_screen = _lazy_callable("screens.draw_air_quality.draw_air_quality_screen")
 draw_inside = _lazy_callable("screens.draw_inside.draw_inside")
 is_inside_sensor_available = _lazy_callable("screens.draw_inside.is_inside_sensor_available")
 render_nba_scoreboard = _lazy_callable("screens.nba_scoreboard.render_nba_scoreboard")
@@ -710,6 +711,11 @@ def build_screen_registry(context: ScreenContext) -> Tuple[Dict[str, ScreenDefin
         "weather2",
         lambda data=weather_data: draw_weather_screen_2(context.display, data, transition=True),
         available=weather_current_available,
+    )
+    register(
+        "air quality",
+        lambda: draw_air_quality_screen(context.display, transition=True),
+        available=True,
     )
     active_weather_alert = bool(_selected_alert(weather_data)[0]) if weather_data else False
     register(

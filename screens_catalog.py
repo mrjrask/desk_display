@@ -33,6 +33,7 @@ RAW_SCREEN_IDS = [
     "weather logo",
     "weather1",
     "weather2",
+    "air quality",
     "weather alert",
     "weather hourly",
     "weather daily",

@@ -308,6 +308,51 @@ TRAVEL_MODE = os.environ.get("TRAVEL_MODE", "to_home")
 
 LATITUDE, LONGITUDE, _weather_coordinate_errors = _resolve_weather_coordinates()
 
+
+def _resolve_air_quality_coordinates() -> Tuple[Optional[float], Optional[float], list[str]]:
+    """Resolve AQI coordinates, defaulting to the weather location."""
+
+    lat_raw = os.environ.get("AIR_QUALITY_LATITUDE")
+    lon_raw = os.environ.get("AIR_QUALITY_LONGITUDE")
+    if lat_raw is None and lon_raw is None:
+        return LATITUDE, LONGITUDE, list(_weather_coordinate_errors)
+
+    errors: list[str] = []
+    try:
+        latitude = float(lat_raw) if lat_raw is not None else LATITUDE
+    except (TypeError, ValueError):
+        errors.append(f"AIR_QUALITY_LATITUDE must be numeric (got {lat_raw!r})")
+        latitude = None
+    try:
+        longitude = float(lon_raw) if lon_raw is not None else LONGITUDE
+    except (TypeError, ValueError):
+        errors.append(f"AIR_QUALITY_LONGITUDE must be numeric (got {lon_raw!r})")
+        longitude = None
+
+    if latitude is None:
+        errors.append("AIR_QUALITY_LATITUDE is missing and WEATHER_LATITUDE is unavailable")
+    elif not (-90.0 <= latitude <= 90.0):
+        errors.append(f"AIR_QUALITY_LATITUDE out of range [-90, 90] (got {latitude})")
+    if longitude is None:
+        errors.append("AIR_QUALITY_LONGITUDE is missing and WEATHER_LONGITUDE is unavailable")
+    elif not (-180.0 <= longitude <= 180.0):
+        errors.append(f"AIR_QUALITY_LONGITUDE out of range [-180, 180] (got {longitude})")
+
+    if errors:
+        return None, None, errors
+    return latitude, longitude, []
+
+
+AIR_QUALITY_PROVIDER = os.environ.get("AIR_QUALITY_PROVIDER", "open-meteo").strip().lower()
+AIR_QUALITY_ENABLE_POLLEN = _get_bool_env("AIR_QUALITY_ENABLE_POLLEN", True)
+AIR_QUALITY_LATITUDE, AIR_QUALITY_LONGITUDE, _air_quality_coordinate_errors = _resolve_air_quality_coordinates()
+_air_quality_errors = list(_air_quality_coordinate_errors)
+if AIR_QUALITY_PROVIDER not in {"open-meteo"}:
+    _air_quality_errors.append(f"Unsupported AIR_QUALITY_PROVIDER {AIR_QUALITY_PROVIDER!r}; expected open-meteo")
+ENABLE_AIR_QUALITY = not _air_quality_errors
+if _air_quality_errors:
+    logging.warning("Air quality disabled due to missing/invalid configuration: %s", "; ".join(_air_quality_errors))
+
 WEATHERKIT_TEAM_ID     = os.environ.get("WEATHERKIT_TEAM_ID")
 WEATHERKIT_KEY_ID      = os.environ.get("WEATHERKIT_KEY_ID")
 WEATHERKIT_SERVICE_ID  = os.environ.get("WEATHERKIT_SERVICE_ID")
@@ -834,6 +879,7 @@ def initialise_runtime_probes() -> None:
     """
 
     global CURRENT_SSID, LATITUDE, LONGITUDE, TRAVEL_MODE, OWM_API_KEY, ENABLE_WEATHER
+    global AIR_QUALITY_PROVIDER, AIR_QUALITY_ENABLE_POLLEN, AIR_QUALITY_LATITUDE, AIR_QUALITY_LONGITUDE, ENABLE_AIR_QUALITY
     global WEATHERKIT_TEAM_ID, WEATHERKIT_KEY_ID, WEATHERKIT_SERVICE_ID
     global WEATHERKIT_KEY_PATH, WEATHERKIT_PRIVATE_KEY
     global WIDTH, HEIGHT, DISPLAY_SCALE, DISPLAY_SCALE_WIDTH
@@ -847,6 +893,15 @@ def initialise_runtime_probes() -> None:
     CURRENT_SSID = get_current_ssid()
     TRAVEL_MODE = os.environ.get("TRAVEL_MODE", "to_home")
     LATITUDE, LONGITUDE, weather_coordinate_errors = _resolve_weather_coordinates()
+    AIR_QUALITY_PROVIDER = os.environ.get("AIR_QUALITY_PROVIDER", "open-meteo").strip().lower()
+    AIR_QUALITY_ENABLE_POLLEN = _get_bool_env("AIR_QUALITY_ENABLE_POLLEN", True)
+    AIR_QUALITY_LATITUDE, AIR_QUALITY_LONGITUDE, air_quality_coordinate_errors = _resolve_air_quality_coordinates()
+    runtime_air_quality_errors = list(air_quality_coordinate_errors)
+    if AIR_QUALITY_PROVIDER not in {"open-meteo"}:
+        runtime_air_quality_errors.append(f"Unsupported AIR_QUALITY_PROVIDER {AIR_QUALITY_PROVIDER!r}; expected open-meteo")
+    ENABLE_AIR_QUALITY = not runtime_air_quality_errors
+    if runtime_air_quality_errors:
+        logging.warning("Air quality disabled due to missing/invalid configuration: %s", "; ".join(runtime_air_quality_errors))
     WEATHERKIT_TEAM_ID = os.environ.get("WEATHERKIT_TEAM_ID")
     WEATHERKIT_KEY_ID = os.environ.get("WEATHERKIT_KEY_ID")
     WEATHERKIT_SERVICE_ID = os.environ.get("WEATHERKIT_SERVICE_ID")
