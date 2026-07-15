@@ -40,6 +40,13 @@ def _wrap(draw: ImageDraw.ImageDraw, text: str, font, max_width: int, max_lines:
     return lines or [text]
 
 
+def _format_value(value: Optional[float], suffix: str = "") -> str:
+    if value is None:
+        return "--"
+    text = f"{value:.1f}" if abs(value - round(value)) >= 0.05 else f"{value:.0f}"
+    return f"{text}{suffix}"
+
+
 def _render_report(report: AirQualityReport) -> Image.Image:
     background = get_screen_background_color("air quality", (0, 0, 0))
     img = Image.new("RGB", (WIDTH, HEIGHT), background)
@@ -65,20 +72,27 @@ def _render_report(report: AirQualityReport) -> Image.Image:
     draw.text(((WIDTH - aqi_w) // 2, center_y - aqi_h - 1), aqi_text, font=title_font, fill=badge_text)
     draw.text(((WIDTH - cat_w) // 2, center_y + 2), cat_text, font=body_font, fill=badge_text)
 
-    y = badge_top + badge_h + max(6, HEIGHT // 32)
-    details: list[str] = []
-    if report.primary_pollutant:
-        details.append(f"Main: {report.primary_pollutant}")
-    if report.pollen_level:
-        details.append(f"Pollen: {report.pollen_level}")
-    if report.pollutant_breakdown:
-        pieces = [f"{name} {value:g}" for name, value in report.pollutant_breakdown[:3]]
-        details.append(" • ".join(pieces))
+    y = badge_top + badge_h + max(4, HEIGHT // 40)
+    metrics = [
+        ("Health", report.aqi_category),
+        ("Pollutant", report.primary_pollutant or "--"),
+        ("PM2.5", _format_value(report.pm2_5_value, " µg/m³")),
+        ("Pollen", report.pollen_level or "--"),
+        ("Trend", report.trend_text or "--"),
+    ]
 
-    for detail in details[:3]:
-        line = _fit_text(draw, detail, tiny_font, WIDTH - margin * 2)
-        draw.text((margin, y), line, font=tiny_font, fill=(210, 220, 230))
-        y += draw.textsize(line, font=tiny_font)[1] + 2
+    label_color = (165, 185, 205)
+    value_color = (235, 242, 248)
+    row_h = draw.textsize("Ag", font=tiny_font)[1] + 2
+    label_w = max(draw.textsize(label, font=tiny_font)[0] for label, _value in metrics) + 5
+    metrics_bottom_limit = HEIGHT - margin - (draw.textsize("Ag", font=body_font)[1] + 2) * 2
+    for label, value in metrics:
+        if y + row_h > metrics_bottom_limit:
+            break
+        draw.text((margin, y), f"{label}:", font=tiny_font, fill=label_color)
+        value_text = _fit_text(draw, value, tiny_font, WIDTH - margin * 2 - label_w)
+        draw.text((margin + label_w, y), value_text, font=tiny_font, fill=value_color)
+        y += row_h
 
     advisory = report.advisory_text or "Check local conditions."
     lines = _wrap(draw, advisory, body_font, WIDTH - margin * 2, 2)
@@ -92,7 +106,7 @@ def _render_report(report: AirQualityReport) -> Image.Image:
 
 @log_call
 def draw_air_quality_screen(display, report: Optional[AirQualityReport] = None, transition: bool = False):
-    """Draw AQI, pollen (when available), and window guidance."""
+    """Draw current AQI, health category, pollutant, pollen, recommendation, and trend."""
 
     if report is None and config.ENABLE_AIR_QUALITY and config.AIR_QUALITY_LATITUDE is not None and config.AIR_QUALITY_LONGITUDE is not None:
         report = fetch_air_quality(
