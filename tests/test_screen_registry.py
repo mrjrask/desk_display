@@ -176,6 +176,54 @@ def test_weather_hourly_screens_stay_available_with_cached_data_offline():
     assert registry["astronomical"].available is True
 
 
+def test_air_quality_unavailable_offline_without_cached_report(monkeypatch):
+    now = datetime.datetime(2024, 1, 1, 12, 0, tzinfo=CENTRAL_TIME)
+    weather = {"hourly": []}
+    monkeypatch.setattr(registry_module.config, "ENABLE_AIR_QUALITY", True)
+    monkeypatch.setattr(registry_module.config, "AIR_QUALITY_LATITUDE", 41.88)
+    monkeypatch.setattr(registry_module.config, "AIR_QUALITY_LONGITUDE", -87.63)
+
+    registry, _ = build_screen_registry(_make_context(weather, now, offline=True))
+
+    assert registry["air quality"].available is False
+
+
+def test_air_quality_available_offline_with_cached_report(monkeypatch):
+    now = datetime.datetime(2024, 1, 1, 12, 0, tzinfo=CENTRAL_TIME)
+    weather = {"hourly": []}
+    cached_report = object()
+    captured = {}
+    monkeypatch.setattr(registry_module.config, "ENABLE_AIR_QUALITY", True)
+    monkeypatch.setattr(registry_module.config, "AIR_QUALITY_LATITUDE", 41.88)
+    monkeypatch.setattr(registry_module.config, "AIR_QUALITY_LONGITUDE", -87.63)
+
+    def _fake_draw_air_quality_screen(display, report=None, transition=False):
+        captured["report"] = report
+        captured["transition"] = transition
+        return None
+
+    monkeypatch.setattr(registry_module, "draw_air_quality_screen", _fake_draw_air_quality_screen)
+
+    registry, _ = build_screen_registry(
+        _make_context(weather, now, cache_updates={"air_quality": cached_report}, offline=True)
+    )
+
+    assert registry["air quality"].available is True
+    registry["air quality"].render()
+    assert captured == {"report": cached_report, "transition": True}
+
+def test_air_quality_unavailable_when_not_configured(monkeypatch):
+    now = datetime.datetime(2024, 1, 1, 12, 0, tzinfo=CENTRAL_TIME)
+    weather = {"hourly": []}
+    monkeypatch.setattr(registry_module.config, "ENABLE_AIR_QUALITY", True)
+    monkeypatch.setattr(registry_module.config, "AIR_QUALITY_LATITUDE", None)
+    monkeypatch.setattr(registry_module.config, "AIR_QUALITY_LONGITUDE", -87.63)
+
+    registry, _ = build_screen_registry(_make_context(weather, now))
+
+    assert registry["air quality"].available is False
+
+
 def test_weather_quad_screen_available_with_cached_weather_offline():
     now = datetime.datetime(2024, 1, 1, 12, 0, tzinfo=CENTRAL_TIME)
     weather = {

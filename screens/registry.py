@@ -12,6 +12,7 @@ from typing import Any, Callable, Dict, Optional, Tuple
 
 from PIL import Image
 
+import config
 from config import CENTRAL_TIME, HEIGHT, NBA_TEAM_TRICODE, WIDTH, is_display_profile
 from paths import resolve_layouts_config_path, resolve_screens_config_paths
 from utils import ScreenImage, animate_scroll, timestamp_to_datetime
@@ -696,6 +697,15 @@ def build_screen_registry(context: ScreenContext) -> Tuple[Dict[str, ScreenDefin
     # weather pages entirely is more disruptive than showing the latest cache.
     weather_current_available = bool(weather_data)
     weather_hourly_available = bool(weather_data)
+    air_quality_report = context.cache.get("air_quality")
+    air_quality_configured = (
+        config.ENABLE_AIR_QUALITY
+        and config.AIR_QUALITY_LATITUDE is not None
+        and config.AIR_QUALITY_LONGITUDE is not None
+    )
+    air_quality_available = air_quality_configured and (
+        not context.offline or bool(air_quality_report)
+    )
     if weather_logo is not None:
         register(
             "weather logo",
@@ -714,8 +724,10 @@ def build_screen_registry(context: ScreenContext) -> Tuple[Dict[str, ScreenDefin
     )
     register(
         "air quality",
-        lambda: draw_air_quality_screen(context.display, transition=True),
-        available=True,
+        lambda report=air_quality_report: draw_air_quality_screen(
+            context.display, report=report, transition=True
+        ),
+        available=air_quality_available,
     )
     active_weather_alert = bool(_selected_alert(weather_data)[0]) if weather_data else False
     register(
