@@ -1,7 +1,6 @@
 """Render the outdoor air quality screen."""
 from __future__ import annotations
 
-import textwrap
 from typing import Optional
 
 from PIL import Image, ImageDraw
@@ -30,15 +29,6 @@ def _fit_text(draw: ImageDraw.ImageDraw, text: str, font, max_width: int) -> str
     return text + "…" if text else "…"
 
 
-def _wrap(draw: ImageDraw.ImageDraw, text: str, font, max_width: int, max_lines: int) -> list[str]:
-    approx_chars = max(8, int(max_width / max(1, draw.textsize("M", font=font)[0])))
-    lines: list[str] = []
-    for line in textwrap.wrap(text, width=approx_chars):
-        lines.append(_fit_text(draw, line, font, max_width))
-        if len(lines) >= max_lines:
-            break
-    return lines or [text]
-
 
 def _format_value(value: Optional[float], suffix: str = "") -> str:
     if value is None:
@@ -54,55 +44,61 @@ def _render_report(report: AirQualityReport) -> Image.Image:
     margin = max(4, WIDTH // 32)
     badge_fill, badge_text = CATEGORY_COLORS.get(report.aqi_category, CATEGORY_COLORS["Unknown"])
 
-    title_font = FONT_WEATHER_DETAILS_SMALL_BOLD
-    body_font = FONT_WEATHER_DETAILS_SMALL
-    tiny_font = FONT_WEATHER_DETAILS_TINY
-    title = "AIR QUALITY"
-    draw.text((margin, margin), title, font=title_font, fill=(235, 235, 235))
+    header_font = FONT_WEATHER_DETAILS_SMALL_BOLD
+    value_font = FONT_WEATHER_DETAILS_SMALL
+    label_font = FONT_WEATHER_DETAILS_TINY
+    label_color = (165, 185, 205)
+    value_color = (235, 242, 248)
+    card_fill = (12, 28, 42)
+    card_outline = (34, 70, 98)
 
-    badge_top = margin + draw.textsize(title, font=title_font)[1] + max(4, HEIGHT // 40)
-    badge_h = max(34, HEIGHT // 4)
+    title = "AIR QUALITY"
+    draw.text((margin, margin), title, font=header_font, fill=(235, 235, 235))
+    title_h = draw.textsize(title, font=header_font)[1]
+
+    badge_top = margin + title_h + max(4, HEIGHT // 40)
+    badge_h = max(26, HEIGHT // 5)
     draw.rounded_rectangle((margin, badge_top, WIDTH - margin, badge_top + badge_h), radius=8, fill=badge_fill)
 
     aqi_text = "AQI --" if report.aqi_value is None else f"AQI {report.aqi_value}"
-    cat_text = _fit_text(draw, report.aqi_category, title_font, WIDTH - margin * 4)
-    aqi_w, aqi_h = draw.textsize(aqi_text, font=title_font)
-    cat_w, cat_h = draw.textsize(cat_text, font=body_font)
+    cat_text = _fit_text(draw, report.aqi_category, value_font, WIDTH - margin * 4)
+    aqi_w, aqi_h = draw.textsize(aqi_text, font=header_font)
+    cat_w, cat_h = draw.textsize(cat_text, font=label_font)
     center_y = badge_top + badge_h // 2
-    draw.text(((WIDTH - aqi_w) // 2, center_y - aqi_h - 1), aqi_text, font=title_font, fill=badge_text)
-    draw.text(((WIDTH - cat_w) // 2, center_y + 2), cat_text, font=body_font, fill=badge_text)
+    draw.text(((WIDTH - aqi_w) // 2, center_y - aqi_h - 1), aqi_text, font=header_font, fill=badge_text)
+    draw.text(((WIDTH - cat_w) // 2, center_y + 2), cat_text, font=label_font, fill=badge_text)
 
-    y = badge_top + badge_h + max(4, HEIGHT // 40)
+    card_top = badge_top + badge_h + max(4, HEIGHT // 40)
+    card_bottom = HEIGHT - margin
+    draw.rounded_rectangle((margin, card_top, WIDTH - margin, card_bottom), radius=8, fill=card_fill, outline=card_outline)
+
     metrics = [
         ("Health", report.aqi_category),
         ("Pollutant", report.primary_pollutant or "--"),
         ("PM2.5", _format_value(report.pm2_5_value, " µg/m³")),
         ("Pollen", report.pollen_level or "--"),
         ("Trend", report.trend_text or "--"),
+        ("Advice", report.advisory_text or "Check local conditions."),
     ]
 
-    label_color = (165, 185, 205)
-    value_color = (235, 242, 248)
-    row_h = draw.textsize("Ag", font=tiny_font)[1] + 2
-    label_w = max(draw.textsize(label, font=tiny_font)[0] for label, _value in metrics) + 5
-    metrics_bottom_limit = HEIGHT - margin - (draw.textsize("Ag", font=body_font)[1] + 2) * 2
-    for label, value in metrics:
-        if y + row_h > metrics_bottom_limit:
-            break
-        draw.text((margin, y), f"{label}:", font=tiny_font, fill=label_color)
-        value_text = _fit_text(draw, value, tiny_font, WIDTH - margin * 2 - label_w)
-        draw.text((margin + label_w, y), value_text, font=tiny_font, fill=value_color)
-        y += row_h
+    row_h = max(1, (card_bottom - card_top - 8) // len(metrics))
+    label_w = max(draw.textsize(label.upper(), font=label_font)[0] for label, _value in metrics) + 10
+    content_x = margin + 6
+    value_x = content_x + label_w
+    value_max_w = WIDTH - margin - 6 - value_x
 
-    advisory = report.advisory_text or "Check local conditions."
-    lines = _wrap(draw, advisory, body_font, WIDTH - margin * 2, 2)
-    rec_top = max(y + 2, HEIGHT - margin - len(lines) * (draw.textsize("Ag", font=body_font)[1] + 2))
-    for line in lines:
-        line_w = draw.textsize(line, font=body_font)[0]
-        draw.text(((WIDTH - line_w) // 2, rec_top), line, font=body_font, fill=(255, 255, 255))
-        rec_top += draw.textsize(line, font=body_font)[1] + 2
+    for index, (label, value) in enumerate(metrics):
+        y0 = card_top + 4 + index * row_h
+        if index > 0:
+            draw.line((margin + 6, y0, WIDTH - margin - 6, y0), fill=(26, 54, 76))
+        label_h = draw.textsize(label, font=label_font)[1]
+        value_h = draw.textsize(value, font=value_font)[1]
+        label_y = y0 + (row_h - label_h) // 2
+        value_y = y0 + (row_h - value_h) // 2
+        draw.text((content_x, label_y), label.upper(), font=label_font, fill=label_color)
+        value_text = _fit_text(draw, value, value_font, value_max_w)
+        draw.text((value_x, value_y), value_text, font=value_font, fill=value_color)
     return img
-
 
 @log_call
 def draw_air_quality_screen(display, report: Optional[AirQualityReport] = None, transition: bool = False):

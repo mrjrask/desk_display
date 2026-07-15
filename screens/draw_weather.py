@@ -153,6 +153,20 @@ def _safe_textbbox(
             return (0, 0, width, height)
 
 
+def _ellipsize_to_width(draw: ImageDraw.ImageDraw, text: str, font: ImageFont.ImageFont, max_width: int) -> str:
+    """Trim text with an ellipsis so it fits the requested width."""
+
+    def _width(value: str) -> int:
+        bbox = _safe_textbbox(draw, value, font)
+        return bbox[2] - bbox[0]
+
+    if _width(text) <= max_width:
+        return text
+    while text and _width(text + "…") > max_width:
+        text = text[:-1]
+    return text + "…" if text else "…"
+
+
 def _draw_text_with_fallback(
     draw: ImageDraw.ImageDraw,
     position: tuple[int, int],
@@ -2106,7 +2120,7 @@ def draw_weather_screen_2(display, weather, transition=False):
     now = datetime.datetime.now(CENTRAL_TIME)
     next_label, next_time = _next_sun_event(weather.get("daily"), now=now)
     if next_label and next_time:
-        items = [(f"{next_label}:", next_time.strftime("%-I:%M %p"))]
+        items = [(next_label, next_time.strftime("%-I:%M %p"))]
     else:
         items = []
 
@@ -2127,85 +2141,69 @@ def draw_weather_screen_2(display, weather, transition=False):
     pressure_text = f"{pressure_inhg:.2f} inHg" if pressure_inhg is not None else "—"
     pressure_trend = current.get("pressure_trend")
     pressure_value = pressure_text
+    pressure_color = (235, 242, 248)
     if pressure_trend in PRESSURE_TREND_SYMBOLS:
         symbol, symbol_color = PRESSURE_TREND_SYMBOLS[pressure_trend]
-        pressure_value = _render_stat_text(
-            [
-                (pressure_text, FONT_WEATHER_DETAILS, (255, 255, 255)),
-                (" ", FONT_WEATHER_DETAILS, (255, 255, 255)),
-                (symbol, FONT_WEATHER_DETAILS, symbol_color),
-            ]
-        )
+        pressure_value = f"{pressure_text} {symbol}"
+        pressure_color = symbol_color
 
     items += [
-        ("Wind:",     wind_value),
-        ("Gust:",     f"{round(current.get('wind_gust',0))} mph"),
-        ("Humidity:", f"{current.get('humidity',0)}%"),
-        ("Pressure:", pressure_value),
+        ("Wind",     wind_value),
+        ("Gust",     f"{round(current.get('wind_gust',0))} mph"),
+        ("Humidity", f"{current.get('humidity',0)}%"),
+        ("Pressure", pressure_value, pressure_color),
     ]
 
     uvi = round(current.get("uvi", 0))
     uv_col = uv_index_color(uvi)
-    items.append(("UV Index:", str(uvi), uv_col))
+    items.append(("UV Index", str(uvi), uv_col))
 
     img  = Image.new("RGB", (WIDTH, HEIGHT), background)
     draw = ImageDraw.Draw(img)
 
-    # compute per-row heights
-    row_metrics = []
-    total_h = 0
-    for it in items:
-        lbl, val = it[0], it[1]
-        lbl_bbox = _safe_textbbox(draw, lbl, FONT_WEATHER_DETAILS_BOLD)
-        lbl_w = lbl_bbox[2] - lbl_bbox[0]
-        lbl_h = lbl_bbox[3] - lbl_bbox[1]
-        if isinstance(val, Image.Image):
-            val_w, val_h = val.size
-            val_bbox = None
+    margin = max(4, WIDTH // 32)
+    header_font = FONT_WEATHER_DETAILS_SMALL_BOLD
+    label_font = FONT_WEATHER_DETAILS_TINY
+    value_font = FONT_WEATHER_DETAILS_SMALL
+    label_color = (165, 185, 205)
+    value_color = (235, 242, 248)
+    card_fill = (12, 28, 42)
+    card_outline = (34, 70, 98)
+
+    title = "WEATHER DETAILS"
+    title_bbox = _safe_textbbox(draw, title, header_font)
+    draw.text((margin, margin - title_bbox[1]), title, font=header_font, fill=(235, 235, 235))
+
+    card_top = margin + (title_bbox[3] - title_bbox[1]) + max(4, HEIGHT // 40)
+    card_bottom = HEIGHT - margin
+    draw.rounded_rectangle((margin, card_top, WIDTH - margin, card_bottom), radius=8, fill=card_fill, outline=card_outline)
+
+    row_count = len(items)
+    row_h = max(1, (card_bottom - card_top - 8) // row_count)
+    label_w = max(_safe_textbbox(draw, label.upper(), label_font)[2] - _safe_textbbox(draw, label.upper(), label_font)[0] for label, *_ in items) + 10
+    content_x = margin + 6
+    value_x = content_x + label_w
+    value_max_w = WIDTH - margin - 6 - value_x
+
+    for index, item in enumerate(items):
+        label, value = item[0], item[1]
+        color = item[2] if len(item) == 3 else value_color
+        y0 = card_top + 4 + index * row_h
+        if index > 0:
+            draw.line((margin + 6, y0, WIDTH - margin - 6, y0), fill=(26, 54, 76))
+        label_bbox = _safe_textbbox(draw, label, label_font)
+        value_bbox = value.getbbox() if isinstance(value, Image.Image) else _safe_textbbox(draw, value, value_font)
+        label_h = label_bbox[3] - label_bbox[1]
+        value_h = value.size[1] if isinstance(value, Image.Image) else value_bbox[3] - value_bbox[1]
+        label_y = y0 + (row_h - label_h) // 2 - label_bbox[1]
+        value_y = y0 + (row_h - value_h) // 2
+        draw.text((content_x, label_y), label.upper(), font=label_font, fill=label_color)
+        if isinstance(value, Image.Image):
+            img.paste(value, (value_x, value_y), value)
         else:
-            val_bbox = _safe_textbbox(draw, val, FONT_WEATHER_DETAILS)
-            val_w = val_bbox[2] - val_bbox[0]
-            val_h = val_bbox[3] - val_bbox[1]
-        row_h = max(lbl_h, val_h)
-        row_metrics.append(
-            (
-                lbl,
-                val,
-                row_h,
-                lbl_h,
-                val_h,
-                lbl_w,
-                val_w,
-                lbl_bbox,
-                val_bbox,
-                it[2] if len(it) == 3 else (255, 255, 255),
-            )
-        )
-        total_h += row_h
-
-    # vertical spacing
-    content_top = 0
-    available_h = max(1, HEIGHT - content_top)
-    space = max(1, (available_h - total_h) // (len(items) + 1))
-    y = content_top + space
-
-    # render each row, vertically centering label & value
-    for lbl, val, row_h, h_lbl, h_val, lw, v_w, lbl_bbox, val_bbox, color in row_metrics:
-        row_w = lw + 4 + v_w
-        x0    = (WIDTH - row_w)//2
-
-        y_lbl = y + (row_h - h_lbl)//2
-        y_val = y + (row_h - h_val)//2
-
-        lbl_y_draw = y_lbl - (lbl_bbox[1] if lbl_bbox else 0)
-
-        draw.text((x0, lbl_y_draw), lbl, font=FONT_WEATHER_DETAILS_BOLD, fill=(255,255,255))
-        if isinstance(val, Image.Image):
-            img.paste(val, (x0 + lw + 4, y_val), val)
-        else:
-            val_y_draw = y_val - (val_bbox[1] if val_bbox else 0)
-            draw.text((x0 + lw + 4, val_y_draw), val, font=FONT_WEATHER_DETAILS, fill=color)
-        y += row_h + space
+            value_y -= value_bbox[1]
+            value_text = _ellipsize_to_width(draw, value, value_font, value_max_w)
+            draw.text((value_x, value_y), value_text, font=value_font, fill=color)
 
     _draw_alert_indicator(img, draw, severity)
 
