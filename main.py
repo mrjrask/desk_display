@@ -1434,6 +1434,19 @@ def _register_screenshots_removed(count: int) -> Tuple[int, bool]:
         return _screenshot_count or 0, _archive_pending
 
 
+def _select_screenshot_image(
+    display_image: Image.Image, screenshot_image: Optional[Image.Image]
+) -> Image.Image:
+    """Return the image that should be persisted for screenshot capture.
+
+    Scrolling renderers can return the final display frame as ``image`` while
+    providing a taller ``screenshot_image`` containing the complete scrollable
+    content. Use an explicit ``is not None`` check so valid screenshot images
+    are preserved instead of falling back to the final viewport frame.
+    """
+    return screenshot_image if screenshot_image is not None else display_image
+
+
 def _save_screenshot(sid: str, img: Image.Image) -> Optional[Tuple[str, bool, int]]:
     ts = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
     folder = _sanitize_directory_name(sid)
@@ -2517,7 +2530,9 @@ def main_loop():
                             )
                             animate_fade_in(display, img, steps=1, delay=0.01)
                         if capture_screenshot:
-                            saved = _save_screenshot(sid, screenshot_img or img)
+                            saved = _save_screenshot(
+                                sid, _select_screenshot_image(img, screenshot_img)
+                            )
                             if saved and saved[1]:
                                 maybe_archive_screenshots(saved[0])
                             if saved:
@@ -2538,7 +2553,9 @@ def main_loop():
                         if not already_displayed:
                             animate_fade_in(display, img, steps=1, delay=0.015)
                         if capture_screenshot:
-                            saved = _save_screenshot(sid, screenshot_img or img)
+                            saved = _save_screenshot(
+                                sid, _select_screenshot_image(img, screenshot_img)
+                            )
                             if saved and saved[1]:
                                 maybe_archive_screenshots(saved[0])
                             if saved:
