@@ -254,12 +254,15 @@ def _wiki_items(
         thumb = None
         description = ""
         pages = raw.get("pages")
-        if isinstance(pages, list):
-            for page in pages:
-                if not isinstance(page, dict):
-                    continue
-                if include_page_extract and not description:
-                    description = _clean_text(page.get("extract", ""))
+        page_dicts = (
+            [page for page in pages if isinstance(page, dict)]
+            if isinstance(pages, list)
+            else []
+        )
+        if page_dicts:
+            if include_page_extract and len(page_dicts) == 1:
+                description = _clean_text(page_dicts[0].get("extract", ""))
+            for page in page_dicts:
                 thumbnail = page.get("thumbnail")
                 source = (
                     thumbnail.get("source") if isinstance(thumbnail, dict) else None

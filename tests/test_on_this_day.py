@@ -324,6 +324,47 @@ def test_on_this_day_adds_wikimedia_holiday_descriptions(monkeypatch):
     ]
 
 
+def test_on_this_day_skips_wikimedia_holiday_descriptions_for_grouped_rows(monkeypatch):
+    class FakeResponse:
+        def raise_for_status(self):
+            pass
+
+        def json(self):
+            return {
+                "holidays": [
+                    {
+                        "text": "Holiday One; Holiday Two",
+                        "pages": [
+                            {
+                                "extract": "Description for only the first holiday.",
+                                "thumbnail": {
+                                    "source": "https://example.com/first.jpg"
+                                },
+                            },
+                            {
+                                "extract": "Description for the second holiday.",
+                                "thumbnail": {
+                                    "source": "https://example.com/second.jpg"
+                                },
+                            },
+                        ],
+                    }
+                ]
+            }
+
+    monkeypatch.setattr(otd, "http_get", lambda *args, **kwargs: FakeResponse())
+
+    items = otd._wiki_items("holidays", 7, 7, 1)
+
+    assert items == [
+        otd.DayItem(
+            None,
+            "Holiday One; Holiday Two",
+            "https://example.com/first.jpg",
+        )
+    ]
+
+
 def test_on_this_day_parses_hebrew_calendar_holiday_descriptions():
     ics = """BEGIN:VCALENDAR
 BEGIN:VEVENT
