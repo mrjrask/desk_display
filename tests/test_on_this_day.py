@@ -289,6 +289,61 @@ def test_on_this_day_includes_jewish_holidays_in_holidays_and_culture(monkeypatc
     ]
 
 
+def test_on_this_day_adds_wikimedia_holiday_descriptions(monkeypatch):
+    class FakeResponse:
+        def raise_for_status(self):
+            pass
+
+        def json(self):
+            return {
+                "holidays": [
+                    {
+                        "text": "Test Holiday",
+                        "pages": [
+                            {
+                                "extract": "A day for testing holiday descriptions.",
+                                "thumbnail": {
+                                    "source": "https://example.com/holiday.jpg"
+                                },
+                            }
+                        ],
+                    }
+                ]
+            }
+
+    monkeypatch.setattr(otd, "http_get", lambda *args, **kwargs: FakeResponse())
+
+    items = otd._wiki_items("holidays", 7, 7, 1)
+
+    assert items == [
+        otd.DayItem(
+            None,
+            "Test Holiday: A day for testing holiday descriptions.",
+            "https://example.com/holiday.jpg",
+        )
+    ]
+
+
+def test_on_this_day_parses_hebrew_calendar_holiday_descriptions():
+    ics = """BEGIN:VCALENDAR
+BEGIN:VEVENT
+DTSTART;VALUE=DATE:20260707
+SUMMARY:Tzom Tammuz
+DESCRIPTION:Fast day commemorating the breach of Jerusalem's walls.
+END:VEVENT
+END:VCALENDAR
+"""
+
+    items = otd._parse_jewish_holidays_ics(ics, dt.date(2026, 7, 7))
+
+    assert items == [
+        otd.DayItem(
+            None,
+            "Jewish holiday: Tzom Tammuz: Fast day commemorating the breach of Jerusalem's walls.",
+        )
+    ]
+
+
 def test_on_this_day_retries_after_cached_offline_fallback_expires(monkeypatch):
     otd._clear_caches_for_tests()
     times = iter([100.0, 200.0, 1200.0])
