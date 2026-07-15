@@ -1,7 +1,6 @@
 """Air quality provider helpers and normalization."""
 from __future__ import annotations
 
-import datetime as dt
 import logging
 from dataclasses import dataclass
 from typing import Any, Optional
@@ -45,6 +44,8 @@ class AirQualityReport:
     pollen_level: Optional[str] = None
     advisory_text: Optional[str] = None
     pollutant_breakdown: tuple[tuple[str, float], ...] = ()
+    pm2_5_value: Optional[float] = None
+    trend_text: Optional[str] = None
 
 
 def _to_float(value: Any) -> Optional[float]:
@@ -91,19 +92,50 @@ def pollen_level_from_value(value: Optional[float]) -> Optional[str]:
 
 
 def advisory_for(category: str, pollen_level: Optional[str]) -> str:
-    """Return a short, plain-language recommendation."""
+    """Return a short, plain-language outdoor-activity recommendation."""
 
-    if category in {"Hazardous", "Very Unhealthy", "Unhealthy"}:
-        return "Keep windows closed."
+    if category in {"Hazardous", "Very Unhealthy"}:
+        return "Avoid outdoor activity."
+    if category == "Unhealthy":
+        return "Keep activity short."
     if category == "Unhealthy for Sensitive Groups":
-        return "Limit outdoor time if sensitive."
+        return "Limit exertion if sensitive."
     if pollen_level in {"High", "Very High"}:
-        return "Air is OK, but pollen is high."
+        return "Okay outside; pollen high."
     if category == "Moderate":
-        return "Okay to air out briefly."
+        return "Okay for most outdoor plans."
     if category == "Good":
-        return "Good day to open windows."
+        return "Good for outdoor activity."
     return "Check local conditions."
+
+
+def _hourly_values(payload: dict[str, Any], key: str) -> list[Optional[float]]:
+    hourly = payload.get("hourly")
+    if not isinstance(hourly, dict):
+        return []
+    values = hourly.get(key)
+    if not isinstance(values, list):
+        return []
+    return [_to_float(value) for value in values]
+
+
+def trend_for(payload: dict[str, Any], key: str = "us_aqi", hours: int = 6) -> Optional[str]:
+    """Summarize the expected trend for the next several hours."""
+
+    values = [value for value in _hourly_values(payload, key)[: max(2, hours)] if value is not None]
+    if len(values) < 2:
+        return None
+
+    start = values[0]
+    end = values[-1]
+    delta = end - start
+    if abs(delta) < 5:
+        direction = "steady"
+    elif delta > 0:
+        direction = "rising"
+    else:
+        direction = "improving"
+    return f"{direction.title()} next {len(values)}h"
 
 
 def _current_value(payload: dict[str, Any], key: str) -> Optional[float]:
@@ -111,13 +143,10 @@ def _current_value(payload: dict[str, Any], key: str) -> Optional[float]:
     if isinstance(current, dict):
         return _to_float(current.get(key))
 
-    hourly = payload.get("hourly")
-    if not isinstance(hourly, dict):
+    values = _hourly_values(payload, key)
+    if not values:
         return None
-    values = hourly.get(key)
-    if not isinstance(values, list) or not values:
-        return None
-    return _to_float(values[0])
+    return values[0]
 
 
 def _primary_pollutant(payload: dict[str, Any]) -> tuple[Optional[str], tuple[tuple[str, float], ...]]:
@@ -151,6 +180,8 @@ def normalize_open_meteo(payload: dict[str, Any]) -> AirQualityReport:
         pollen_level=pollen,
         advisory_text=advisory_for(category, pollen),
         pollutant_breakdown=breakdown,
+        pm2_5_value=_current_value(payload, "pm2_5"),
+        trend_text=trend_for(payload),
     )
 
 
@@ -164,6 +195,7 @@ def fetch_air_quality(latitude: float, longitude: float, *, include_pollen: bool
         "latitude": latitude,
         "longitude": longitude,
         "current": ",".join(variables),
+        "hourly": ",".join(variables),
         "timezone": "auto",
         "forecast_days": 1,
     }
