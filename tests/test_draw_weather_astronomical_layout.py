@@ -8,6 +8,7 @@ from screens.draw_weather import (
     FONT_WEATHER_DETAILS_TINY_LARGE,
     _astronomical_layout_details,
     _astronomy_time_text,
+    _draw_weather_history_chart,
     _fit_text_and_font_to_width,
     _moon_illumination_mask,
     _moon_phase_is_waxing,
@@ -119,3 +120,13 @@ def test_weather_history_points_filters_and_sorts_metric_values():
     }
 
     assert _weather_history_points(weather, "wind_speed") == [(600.0, 8.0), (1200.0, 12.0)]
+
+
+def test_weather_history_chart_draws_placeholder_for_fewer_than_two_points():
+    image = Image.new("RGB", (40, 24), (0, 0, 0))
+    draw = ImageDraw.Draw(image)
+
+    _draw_weather_history_chart(draw, (4, 4, 35, 19), [(600.0, 8.0)], (255, 0, 0))
+
+    assert image.getpixel((4, 11)) == (28, 64, 88)
+    assert image.getpixel((20, 11)) == (68, 105, 130)
