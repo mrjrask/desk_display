@@ -10,6 +10,9 @@ def test_normalize_open_meteo_includes_requested_air_quality_metrics():
         {
             "current": {
                 "us_aqi": 72,
+                "us_aqi_pm2_5": 72,
+                "us_aqi_pm10": 31,
+                "us_aqi_ozone": 44,
                 "pm2_5": 12.4,
                 "pm10": 20.0,
                 "ozone": 60.0,
@@ -25,6 +28,9 @@ def test_normalize_open_meteo_includes_requested_air_quality_metrics():
     assert report.aqi_category == "Moderate"
     assert report.primary_pollutant == "PM2.5"
     assert report.pm2_5_value == 12.4
+    assert report.us_aqi_pm2_5 == 72
+    assert report.us_aqi_pm10 == 31
+    assert report.us_aqi_ozone == 44
     assert report.pollen_level == "Moderate"
     assert report.advisory_text == "Okay for most outdoor plans."
     assert report.trend_text == "Rising next 6h"
@@ -86,6 +92,9 @@ def test_fetch_open_meteo_requests_current_and_hourly_metrics(monkeypatch):
     assert captured["params"]["latitude"] == 42.1373
     assert captured["params"]["longitude"] == -87.8446
     assert "us_aqi" in captured["params"]["current"]
+    assert "us_aqi_pm2_5" in captured["params"]["current"]
+    assert "us_aqi_pm10" in captured["params"]["hourly"]
+    assert "us_aqi_ozone" in captured["params"]["current"]
     assert "pm2_5" in captured["params"]["hourly"]
     assert "grass_pollen" in captured["params"]["current"]
     assert captured["timeout"] == 3.0
