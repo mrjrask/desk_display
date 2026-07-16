@@ -13,6 +13,7 @@ from screens.draw_weather import (
     _moon_phase_is_waxing,
     _normalise_moon_phase,
     _safe_textbbox,
+    _weather_history_points,
 )
 
 
@@ -105,3 +106,16 @@ def test_moon_phase_label_uses_smaller_font_before_truncating():
 
     assert fitted_text == phase
     assert fitted_font == FONT_WEATHER_DETAILS_TINY_LARGE
+
+
+def test_weather_history_points_filters_and_sorts_metric_values():
+    weather = {
+        "current_history": [
+            {"dt": 1200, "wind_speed": 12},
+            {"dt": 600, "wind_speed": 8},
+            {"dt": 1800, "humidity": 55},
+            {"dt": "bad", "wind_speed": 10},
+        ]
+    }
+
+    assert _weather_history_points(weather, "wind_speed") == [(600.0, 8.0), (1200.0, 12.0)]

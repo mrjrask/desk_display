@@ -93,6 +93,12 @@ _PRESSURE_HISTORY_LAST_SAVE = 0.0
 _pressure_history_lock = threading.RLock()
 _PRESSURE_HISTORY_SAVE_INTERVAL_SECONDS = 60.0
 _PRESSURE_HISTORY_PATH = os.environ.get("PRESSURE_HISTORY_PATH", "pressure_history.json")
+_WEATHER_METRIC_HISTORY_WINDOW_SECONDS = 6 * 60 * 60
+_WEATHER_METRIC_HISTORY_MIN_INTERVAL_SECONDS = 10 * 60
+_WEATHER_METRIC_HISTORY_PATH = os.environ.get("WEATHER_METRIC_HISTORY_PATH", "weather_metric_history.json")
+_WEATHER_METRIC_HISTORY: deque[dict[str, Any]] = deque()
+_WEATHER_METRIC_HISTORY_LOADED = False
+_weather_metric_history_lock = threading.RLock()
 # Cache statsapi DNS availability to avoid repeated slow lookups
 _statsapi_dns_available: Optional[bool] = None
 _statsapi_dns_checked_at: Optional[float] = None
@@ -245,6 +251,104 @@ def _save_pressure_history(now_ts: float) -> None:
                         tmp_path,
                         cleanup_exc,
                     )
+
+
+def _load_weather_metric_history() -> None:
+    global _WEATHER_METRIC_HISTORY_LOADED
+    with _weather_metric_history_lock:
+        if _WEATHER_METRIC_HISTORY_LOADED:
+            return
+        _WEATHER_METRIC_HISTORY_LOADED = True
+        path = _expand_path(_WEATHER_METRIC_HISTORY_PATH)
+        try:
+            with open(path, "r", encoding="utf-8") as fh:
+                payload = json.load(fh)
+            history = payload.get("history", payload)
+            if not isinstance(history, list):
+                raise ValueError("Invalid weather metric history payload")
+            now_ts = time.time()
+            for entry in history:
+                if not isinstance(entry, dict):
+                    continue
+                try:
+                    ts = float(entry.get("dt"))
+                except (TypeError, ValueError):
+                    continue
+                if now_ts - ts <= _WEATHER_METRIC_HISTORY_WINDOW_SECONDS:
+                    cleaned = {"dt": ts}
+                    for key in ("wind_speed", "wind_gust", "humidity", "pressure", "uvi"):
+                        value = entry.get(key)
+                        if isinstance(value, (int, float)):
+                            cleaned[key] = float(value)
+                    if len(cleaned) > 1:
+                        _WEATHER_METRIC_HISTORY.append(cleaned)
+        except FileNotFoundError:
+            return
+        except Exception as exc:
+            logging.warning("Unable to load weather metric history from %s: %s", path, exc)
+
+
+def _save_weather_metric_history() -> None:
+    with _weather_metric_history_lock:
+        path = _expand_path(_WEATHER_METRIC_HISTORY_PATH)
+        tmp_path = ""
+        try:
+            parent_dir = os.path.dirname(path) or "."
+            os.makedirs(parent_dir, exist_ok=True)
+            payload = {"history": list(_WEATHER_METRIC_HISTORY)}
+            with tempfile.NamedTemporaryFile(
+                "w",
+                encoding="utf-8",
+                dir=parent_dir,
+                prefix=f"{os.path.basename(path)}.",
+                suffix=".tmp",
+                delete=False,
+            ) as fh:
+                tmp_path = fh.name
+                json.dump(payload, fh)
+            os.replace(tmp_path, path)
+        except Exception as exc:
+            logging.warning("Unable to save weather metric history to %s: %s", path, exc)
+            if tmp_path:
+                try:
+                    os.remove(tmp_path)
+                except OSError:
+                    pass
+
+
+def _update_weather_metric_history(current: dict[str, Any]) -> list[dict[str, Any]]:
+    with _weather_metric_history_lock:
+        _load_weather_metric_history()
+        try:
+            now_ts = float(current.get("dt") or time.time())
+        except (TypeError, ValueError):
+            now_ts = time.time()
+
+        entry: dict[str, Any] = {"dt": now_ts}
+        for key in ("wind_speed", "wind_gust", "humidity", "pressure", "uvi"):
+            value = current.get(key)
+            try:
+                if value is not None:
+                    entry[key] = float(value)
+            except (TypeError, ValueError):
+                continue
+
+        changed = False
+        if len(entry) > 1:
+            if not _WEATHER_METRIC_HISTORY or now_ts - float(_WEATHER_METRIC_HISTORY[-1].get("dt", 0)) >= _WEATHER_METRIC_HISTORY_MIN_INTERVAL_SECONDS:
+                _WEATHER_METRIC_HISTORY.append(entry)
+                changed = True
+            else:
+                _WEATHER_METRIC_HISTORY[-1].update(entry)
+                changed = True
+
+        while _WEATHER_METRIC_HISTORY and now_ts - float(_WEATHER_METRIC_HISTORY[0].get("dt", now_ts)) > _WEATHER_METRIC_HISTORY_WINDOW_SECONDS:
+            _WEATHER_METRIC_HISTORY.popleft()
+            changed = True
+
+        if changed:
+            _save_weather_metric_history()
+        return [dict(item) for item in _WEATHER_METRIC_HISTORY]
 
 # -----------------------------------------------------------------------------
 # WEATHER — Apple WeatherKit primary, OpenWeatherMap secondary
@@ -733,6 +837,7 @@ def _normalise_weatherkit_response(data: dict[str, Any]) -> Optional[dict[str, A
         "visibility": _measurement_value(current_raw.get("visibility")),
     }
     current["pressure_trend"] = _update_pressure_trend(current.get("dt"), current.get("pressure"))
+    current_history = _update_weather_metric_history(current)
 
     daily: list[dict[str, Any]] = []
     for day in daily_raw:
@@ -802,6 +907,7 @@ def _normalise_weatherkit_response(data: dict[str, Any]) -> Optional[dict[str, A
         "current": current,
         "daily": daily,
         "hourly": hourly,
+        "current_history": current_history,
         "alerts": alerts_raw,
         "source": "Apple WeatherKit",
     }
@@ -888,6 +994,7 @@ def _normalise_openweathermap_response(data: dict[str, Any]) -> Optional[dict[st
         "clouds": current_raw.get("clouds"),
     }
     current["pressure_trend"] = _update_pressure_trend(current.get("dt"), current.get("pressure"))
+    current_history = _update_weather_metric_history(current)
 
     daily: list[dict[str, Any]] = []
     for day in daily_raw:
@@ -938,6 +1045,7 @@ def _normalise_openweathermap_response(data: dict[str, Any]) -> Optional[dict[st
         "current": current,
         "daily": daily,
         "hourly": hourly,
+        "current_history": current_history,
         "alerts": alerts_raw,
         "source": "OpenWeatherMap",
     }

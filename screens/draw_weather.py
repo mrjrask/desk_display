@@ -167,6 +167,67 @@ def _ellipsize_to_width(draw: ImageDraw.ImageDraw, text: str, font: ImageFont.Im
     return text + "…" if text else "…"
 
 
+
+def _weather_history_points(weather: dict[str, Any], metric: str) -> list[tuple[float, float]]:
+    history = weather.get("current_history") if isinstance(weather, dict) else None
+    if not isinstance(history, list):
+        return []
+    points: list[tuple[float, float]] = []
+    for entry in history:
+        if not isinstance(entry, dict):
+            continue
+        try:
+            ts = float(entry.get("dt"))
+            value = float(entry.get(metric))
+        except (TypeError, ValueError):
+            continue
+        points.append((ts, value))
+    return sorted(points, key=lambda point: point[0])
+
+
+def _draw_weather_history_chart(
+    draw: ImageDraw.ImageDraw,
+    box: tuple[int, int, int, int],
+    points: list[tuple[float, float]],
+    color: tuple[int, int, int],
+) -> None:
+    x0, y0, x1, y1 = box
+    if x1 - x0 < 12 or y1 - y0 < 8 or len(points) < 2:
+        return
+
+    grid_color = (28, 64, 88)
+    muted_color = (68, 105, 130)
+    draw.rounded_rectangle(box, radius=max(2, min(5, (y1 - y0) // 3)), outline=grid_color)
+
+    start_ts = points[0][0]
+    end_ts = points[-1][0]
+    if end_ts <= start_ts:
+        end_ts = start_ts + 600
+    values = [point[1] for point in points]
+    min_val = min(values)
+    max_val = max(values)
+    if math.isclose(min_val, max_val):
+        pad = max(1.0, abs(max_val) * 0.05)
+        min_val -= pad
+        max_val += pad
+
+    inner_x0, inner_y0 = x0 + 2, y0 + 2
+    inner_x1, inner_y1 = x1 - 2, y1 - 2
+    height = max(1, inner_y1 - inner_y0)
+    width = max(1, inner_x1 - inner_x0)
+    mid_y = inner_y0 + height // 2
+    draw.line((inner_x0, mid_y, inner_x1, mid_y), fill=muted_color)
+
+    coords: list[tuple[int, int]] = []
+    for ts, value in points:
+        x = inner_x0 + int(round(((ts - start_ts) / (end_ts - start_ts)) * width))
+        y = inner_y1 - int(round(((value - min_val) / (max_val - min_val)) * height))
+        coords.append((x, y))
+    if len(coords) >= 2:
+        draw.line(coords, fill=color, width=2 if (y1 - y0) >= 14 else 1)
+    for x, y in coords[-12:]:
+        draw.point((x, y), fill=(245, 250, 255))
+
 def _draw_text_with_fallback(
     draw: ImageDraw.ImageDraw,
     position: tuple[int, int],
@@ -2148,15 +2209,15 @@ def draw_weather_screen_2(display, weather, transition=False):
         pressure_color = symbol_color
 
     items += [
-        ("Wind",     wind_value),
-        ("Gust",     f"{round(current.get('wind_gust',0))} mph"),
-        ("Humidity", f"{current.get('humidity',0)}%"),
-        ("Pressure", pressure_value, pressure_color),
+        ("Wind",     wind_value, None, "wind_speed"),
+        ("Gust",     f"{round(current.get('wind_gust',0))} mph", None, "wind_gust"),
+        ("Humidity", f"{current.get('humidity',0)}%", None, "humidity"),
+        ("Pressure", pressure_value, pressure_color, "pressure"),
     ]
 
     uvi = round(current.get("uvi", 0))
     uv_col = uv_index_color(uvi)
-    items.append(("UV Index", str(uvi), uv_col))
+    items.append(("UV Index", str(uvi), uv_col, "uvi"))
 
     img  = Image.new("RGB", (WIDTH, HEIGHT), background)
     draw = ImageDraw.Draw(img)
@@ -2183,11 +2244,18 @@ def draw_weather_screen_2(display, weather, transition=False):
     label_w = max(_safe_textbbox(draw, label.upper(), label_font)[2] - _safe_textbbox(draw, label.upper(), label_font)[0] for label, *_ in items) + 10
     content_x = margin + 6
     value_x = content_x + label_w
-    value_max_w = WIDTH - margin - 6 - value_x
+    right_edge = WIDTH - margin - 6
+    chart_gap = max(6, WIDTH // 80)
+    chart_min_w = max(36, WIDTH // 8)
+    chart_w = min(max(54, WIDTH // 4), max(0, right_edge - value_x - chart_gap - 48))
+    chart_x = right_edge - chart_w
+    charts_enabled = chart_w >= chart_min_w
+    value_max_w = (chart_x - chart_gap - value_x) if charts_enabled else (right_edge - value_x)
 
     for index, item in enumerate(items):
         label, value = item[0], item[1]
-        color = item[2] if len(item) == 3 else value_color
+        color = item[2] if len(item) >= 3 and item[2] is not None else value_color
+        history_metric = item[3] if len(item) >= 4 else None
         y0 = card_top + 4 + index * row_h
         if index > 0:
             draw.line((margin + 6, y0, WIDTH - margin - 6, y0), fill=(26, 54, 76))
@@ -2204,6 +2272,17 @@ def draw_weather_screen_2(display, weather, transition=False):
             value_y -= value_bbox[1]
             value_text = _ellipsize_to_width(draw, value, value_font, value_max_w)
             draw.text((value_x, value_y), value_text, font=value_font, fill=color)
+
+        if charts_enabled and history_metric:
+            chart_h = max(8, min(row_h - 6, HEIGHT // 18))
+            chart_y = y0 + (row_h - chart_h) // 2
+            chart_points = _weather_history_points(weather, history_metric)
+            _draw_weather_history_chart(
+                draw,
+                (chart_x, chart_y, right_edge, chart_y + chart_h),
+                chart_points,
+                color if isinstance(color, tuple) else value_color,
+            )
 
     _draw_alert_indicator(img, draw, severity)
 
