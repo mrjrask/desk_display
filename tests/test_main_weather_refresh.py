@@ -51,3 +51,54 @@ def test_refresh_weather_logs_warning_when_payload_missing(monkeypatch):
 
     assert main.cache["weather"] is None
     assert any("Weather feed returned no data" in msg for msg in warnings)
+
+
+def test_requested_data_feeds_includes_air_quality(monkeypatch):
+    main = _load_main()
+    main._requested_screen_ids = {"air quality"}
+    monkeypatch.setattr(main.config, "ENABLE_AIR_QUALITY", True)
+
+    assert "air_quality" in main._requested_data_feeds()
+
+
+def test_refresh_air_quality_uses_configured_aqi_coordinates(monkeypatch):
+    main = _load_main()
+    report = object()
+    captured = {}
+    monkeypatch.setattr(main.config, "ENABLE_AIR_QUALITY", True)
+    monkeypatch.setattr(main.config, "AIR_QUALITY_LATITUDE", 34.0522)
+    monkeypatch.setattr(main.config, "AIR_QUALITY_LONGITUDE", -118.2437)
+    monkeypatch.setattr(main.config, "AIR_QUALITY_ENABLE_POLLEN", False)
+
+    def fake_fetch(latitude, longitude, *, include_pollen):
+        captured.update(
+            latitude=latitude,
+            longitude=longitude,
+            include_pollen=include_pollen,
+        )
+        return report
+
+    monkeypatch.setattr(main, "fetch_air_quality", fake_fetch)
+
+    main._refresh_air_quality()
+
+    assert captured == {
+        "latitude": 34.0522,
+        "longitude": -118.2437,
+        "include_pollen": False,
+    }
+    assert main.cache["air_quality"] is report
+
+
+def test_refresh_air_quality_keeps_last_report_when_request_fails(monkeypatch):
+    main = _load_main()
+    previous_report = object()
+    main.cache["air_quality"] = previous_report
+    monkeypatch.setattr(main.config, "ENABLE_AIR_QUALITY", True)
+    monkeypatch.setattr(main.config, "AIR_QUALITY_LATITUDE", 34.0522)
+    monkeypatch.setattr(main.config, "AIR_QUALITY_LONGITUDE", -118.2437)
+    monkeypatch.setattr(main, "fetch_air_quality", lambda *args, **kwargs: None)
+
+    main._refresh_air_quality()
+
+    assert main.cache["air_quality"] is previous_report
