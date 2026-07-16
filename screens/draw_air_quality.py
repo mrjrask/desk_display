@@ -44,6 +44,8 @@ def _display_metrics(report: AirQualityReport) -> list[tuple[str, str]]:
         ("Health", report.aqi_category),
         ("Pollutant", report.primary_pollutant or "--"),
         ("PM2.5", _format_value(report.us_aqi_pm2_5)),
+        ("PM10", _format_value(report.us_aqi_pm10)),
+        ("Ozone", _format_value(report.us_aqi_ozone)),
         ("Advice", report.advisory_text or "Check local conditions."),
     ]
 
