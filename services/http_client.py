@@ -84,7 +84,7 @@ def request_json(
     quiet: bool = False,
     session: Optional[requests.Session] = None,
     **kwargs: Any,
-) -> Optional[Dict[str, Any]]:
+) -> Optional[Any]:
     """Perform a GET request that returns JSON, with optional quiet logging."""
 
     sess = session or _SESSION

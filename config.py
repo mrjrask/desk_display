@@ -343,12 +343,19 @@ def _resolve_air_quality_coordinates() -> Tuple[Optional[float], Optional[float]
     return latitude, longitude, []
 
 
-AIR_QUALITY_PROVIDER = os.environ.get("AIR_QUALITY_PROVIDER", "open-meteo").strip().lower()
+AIR_QUALITY_PROVIDER = os.environ.get("AIR_QUALITY_PROVIDER", "airnow").strip().lower()
+AIRNOW_API_KEY = os.environ.get("AIRNOW_API_KEY", "").strip()
 AIR_QUALITY_ENABLE_POLLEN = _get_bool_env("AIR_QUALITY_ENABLE_POLLEN", True)
-AIR_QUALITY_LATITUDE, AIR_QUALITY_LONGITUDE, _air_quality_coordinate_errors = _resolve_air_quality_coordinates()
+AIR_QUALITY_LATITUDE, AIR_QUALITY_LONGITUDE, _air_quality_coordinate_errors = (
+    _resolve_air_quality_coordinates()
+)
 _air_quality_errors = list(_air_quality_coordinate_errors)
-if AIR_QUALITY_PROVIDER not in {"open-meteo"}:
-    _air_quality_errors.append(f"Unsupported AIR_QUALITY_PROVIDER {AIR_QUALITY_PROVIDER!r}; expected open-meteo")
+if AIR_QUALITY_PROVIDER not in {"airnow"}:
+    _air_quality_errors.append(
+        f"Unsupported AIR_QUALITY_PROVIDER {AIR_QUALITY_PROVIDER!r}; expected airnow"
+    )
+if not AIRNOW_API_KEY:
+    _air_quality_errors.append("AIRNOW_API_KEY is required for the AirNow air-quality provider")
 ENABLE_AIR_QUALITY = not _air_quality_errors
 if _air_quality_errors:
     logging.warning("Air quality disabled due to missing/invalid configuration: %s", "; ".join(_air_quality_errors))
@@ -879,7 +886,7 @@ def initialise_runtime_probes() -> None:
     """
 
     global CURRENT_SSID, LATITUDE, LONGITUDE, TRAVEL_MODE, OWM_API_KEY, ENABLE_WEATHER
-    global AIR_QUALITY_PROVIDER, AIR_QUALITY_ENABLE_POLLEN, AIR_QUALITY_LATITUDE, AIR_QUALITY_LONGITUDE, ENABLE_AIR_QUALITY
+    global AIR_QUALITY_PROVIDER, AIRNOW_API_KEY, AIR_QUALITY_ENABLE_POLLEN, AIR_QUALITY_LATITUDE, AIR_QUALITY_LONGITUDE, ENABLE_AIR_QUALITY
     global WEATHERKIT_TEAM_ID, WEATHERKIT_KEY_ID, WEATHERKIT_SERVICE_ID
     global WEATHERKIT_KEY_PATH, WEATHERKIT_PRIVATE_KEY
     global WIDTH, HEIGHT, DISPLAY_SCALE, DISPLAY_SCALE_WIDTH
@@ -893,12 +900,19 @@ def initialise_runtime_probes() -> None:
     CURRENT_SSID = get_current_ssid()
     TRAVEL_MODE = os.environ.get("TRAVEL_MODE", "to_home")
     LATITUDE, LONGITUDE, weather_coordinate_errors = _resolve_weather_coordinates()
-    AIR_QUALITY_PROVIDER = os.environ.get("AIR_QUALITY_PROVIDER", "open-meteo").strip().lower()
+    AIR_QUALITY_PROVIDER = os.environ.get("AIR_QUALITY_PROVIDER", "airnow").strip().lower()
+    AIRNOW_API_KEY = os.environ.get("AIRNOW_API_KEY", "").strip()
     AIR_QUALITY_ENABLE_POLLEN = _get_bool_env("AIR_QUALITY_ENABLE_POLLEN", True)
-    AIR_QUALITY_LATITUDE, AIR_QUALITY_LONGITUDE, air_quality_coordinate_errors = _resolve_air_quality_coordinates()
+    AIR_QUALITY_LATITUDE, AIR_QUALITY_LONGITUDE, air_quality_coordinate_errors = (
+        _resolve_air_quality_coordinates()
+    )
     runtime_air_quality_errors = list(air_quality_coordinate_errors)
-    if AIR_QUALITY_PROVIDER not in {"open-meteo"}:
-        runtime_air_quality_errors.append(f"Unsupported AIR_QUALITY_PROVIDER {AIR_QUALITY_PROVIDER!r}; expected open-meteo")
+    if AIR_QUALITY_PROVIDER not in {"airnow"}:
+        runtime_air_quality_errors.append(
+            f"Unsupported AIR_QUALITY_PROVIDER {AIR_QUALITY_PROVIDER!r}; expected airnow"
+        )
+    if not AIRNOW_API_KEY:
+        runtime_air_quality_errors.append("AIRNOW_API_KEY is required for the AirNow air-quality provider")
     ENABLE_AIR_QUALITY = not runtime_air_quality_errors
     if runtime_air_quality_errors:
         logging.warning("Air quality disabled due to missing/invalid configuration: %s", "; ".join(runtime_air_quality_errors))
