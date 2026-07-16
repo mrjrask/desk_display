@@ -75,6 +75,9 @@ def _render_report(report: AirQualityReport) -> Image.Image:
     metrics = [
         ("Health", report.aqi_category),
         ("Pollutant", report.primary_pollutant or "--"),
+        ("AQI PM2.5", _format_value(report.us_aqi_pm2_5)),
+        ("AQI PM10", _format_value(report.us_aqi_pm10)),
+        ("AQI Ozone", _format_value(report.us_aqi_ozone)),
         ("PM2.5", _format_value(report.pm2_5_value, " µg/m³")),
         ("Pollen", report.pollen_level or "--"),
         ("Trend", report.trend_text or "--"),

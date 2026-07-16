@@ -32,6 +32,11 @@ POLLUTANT_LABELS = {
     "sulphur_dioxide": "SO₂",
     "carbon_monoxide": "CO",
 }
+US_AQI_COMPONENT_KEYS = (
+    "us_aqi_pm2_5",
+    "us_aqi_pm10",
+    "us_aqi_ozone",
+)
 
 
 @dataclass(frozen=True)
@@ -45,6 +50,9 @@ class AirQualityReport:
     advisory_text: Optional[str] = None
     pollutant_breakdown: tuple[tuple[str, float], ...] = ()
     pm2_5_value: Optional[float] = None
+    us_aqi_pm2_5: Optional[int] = None
+    us_aqi_pm10: Optional[int] = None
+    us_aqi_ozone: Optional[int] = None
     trend_text: Optional[str] = None
 
 
@@ -175,6 +183,10 @@ def normalize_open_meteo(payload: dict[str, Any]) -> AirQualityReport:
     max_pollen = max((value for value in pollen_values if value is not None), default=None)
     pollen = pollen_level_from_value(max_pollen)
 
+    def current_aqi_component(key: str) -> Optional[int]:
+        value = _current_value(payload, key)
+        return int(round(value)) if value is not None else None
+
     return AirQualityReport(
         aqi_value=int(round(raw_aqi)) if raw_aqi is not None else None,
         aqi_category=category,
@@ -183,6 +195,9 @@ def normalize_open_meteo(payload: dict[str, Any]) -> AirQualityReport:
         advisory_text=advisory_for(category, pollen),
         pollutant_breakdown=breakdown,
         pm2_5_value=_current_value(payload, "pm2_5"),
+        us_aqi_pm2_5=current_aqi_component("us_aqi_pm2_5"),
+        us_aqi_pm10=current_aqi_component("us_aqi_pm10"),
+        us_aqi_ozone=current_aqi_component("us_aqi_ozone"),
         trend_text=trend_for(payload),
     )
 
@@ -196,7 +211,7 @@ def _fetch_open_meteo_air_quality(
 ) -> Optional[AirQualityReport]:
     """Fetch and normalize Open-Meteo data for coordinates."""
 
-    variables = ["us_aqi", *POLLUTANT_KEYS]
+    variables = ["us_aqi", *US_AQI_COMPONENT_KEYS, *POLLUTANT_KEYS]
     if include_pollen:
         variables.extend(POLLEN_KEYS)
     params = {
