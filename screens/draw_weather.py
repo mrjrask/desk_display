@@ -192,12 +192,21 @@ def _draw_weather_history_chart(
     color: tuple[int, int, int],
 ) -> None:
     x0, y0, x1, y1 = box
-    if x1 - x0 < 12 or y1 - y0 < 8 or len(points) < 2:
+    if x1 - x0 < 12 or y1 - y0 < 8:
         return
 
     grid_color = (28, 64, 88)
     muted_color = (68, 105, 130)
     draw.rounded_rectangle(box, radius=max(2, min(5, (y1 - y0) // 3)), outline=grid_color)
+
+    inner_x0, inner_y0 = x0 + 2, y0 + 2
+    inner_x1, inner_y1 = x1 - 2, y1 - 2
+    height = max(1, inner_y1 - inner_y0)
+    width = max(1, inner_x1 - inner_x0)
+    mid_y = inner_y0 + height // 2
+    if len(points) < 2:
+        draw.line((inner_x0, mid_y, inner_x1, mid_y), fill=muted_color)
+        return
 
     start_ts = points[0][0]
     end_ts = points[-1][0]
@@ -211,11 +220,6 @@ def _draw_weather_history_chart(
         min_val -= pad
         max_val += pad
 
-    inner_x0, inner_y0 = x0 + 2, y0 + 2
-    inner_x1, inner_y1 = x1 - 2, y1 - 2
-    height = max(1, inner_y1 - inner_y0)
-    width = max(1, inner_x1 - inner_x0)
-    mid_y = inner_y0 + height // 2
     draw.line((inner_x0, mid_y, inner_x1, mid_y), fill=muted_color)
 
     coords: list[tuple[int, int]] = []
