@@ -1,4 +1,28 @@
 from services.air_quality import advisory_for, normalize_airnow
+from services.air_quality import AirQualityReport
+from screens.draw_air_quality import _display_metrics
+
+
+def test_air_quality_screen_shows_only_compact_metrics():
+    report = AirQualityReport(
+        aqi_value=72,
+        aqi_category="Moderate",
+        primary_pollutant="PM2.5",
+        pollen_level="High",
+        advisory_text="Okay for most outdoor plans.",
+        pm2_5_value=18.4,
+        us_aqi_pm2_5=72,
+        us_aqi_pm10=31,
+        us_aqi_ozone=44,
+        trend_text="Rising",
+    )
+
+    assert _display_metrics(report) == [
+        ("Health", "Moderate"),
+        ("Pollutant", "PM2.5"),
+        ("PM2.5", "72"),
+        ("Advice", "Okay for most outdoor plans."),
+    ]
 
 
 def test_normalize_airnow_uses_highest_pollutant_aqi_as_overall_aqi():
