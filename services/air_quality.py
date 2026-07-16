@@ -168,7 +168,11 @@ def normalize_open_meteo(payload: dict[str, Any]) -> AirQualityReport:
     """Normalize an Open-Meteo air-quality response."""
 
     raw_aqi = _current_value(payload, "us_aqi")
-    category = aqi_category(raw_aqi)
+    # The display rounds the provider's decimal AQI to a whole-number US AQI.
+    # Categorize that same displayed value so, for example, 50.6 is shown as
+    # AQI 51 / Moderate rather than the contradictory AQI 51 / Good.
+    aqi_value = int(round(raw_aqi)) if raw_aqi is not None else None
+    category = aqi_category(aqi_value)
     primary, breakdown = _primary_pollutant(payload)
 
     pollen_values = [_current_value(payload, key) for key in POLLEN_KEYS]
@@ -176,7 +180,7 @@ def normalize_open_meteo(payload: dict[str, Any]) -> AirQualityReport:
     pollen = pollen_level_from_value(max_pollen)
 
     return AirQualityReport(
-        aqi_value=int(round(raw_aqi)) if raw_aqi is not None else None,
+        aqi_value=aqi_value,
         aqi_category=category,
         primary_pollutant=primary,
         pollen_level=pollen,
