@@ -94,6 +94,8 @@ from utils import (
     update_indicator_enabled,
 )
 import data_fetch
+import config
+from services.air_quality import fetch_air_quality
 from services.data_provider import provider as data_provider
 try:
     from services import wifi_utils as _wifi_utils
@@ -1735,6 +1737,7 @@ logo_cache = LogoCache(_LOGO_LOADERS)
 cache = {
     "bears":  {"stand": None},
     "weather": None,
+    "air_quality": None,
     "hawks":   {"stand":None, "last":None, "live":None, "next":None, "next_home":None},
     "wolves":  {"last":None, "live":None, "next":None, "next_home":None},
     "bulls":   {"stand":None, "last":None, "live":None, "next":None, "next_home":None},
@@ -1754,6 +1757,7 @@ _FEED_DEPENDENCIES: Dict[str, Set[str]] = {
         "weather logo",
         "weather quad",
     },
+    "air_quality": {"air quality"},
     "bears": {"bears stand1", "bears stand2"},
     "hawks": {"hawks stand1", "hawks last", "hawks live", "hawks next", "hawks next home", "hawks logo"},
     "wolves": {"wolves last", "wolves live", "wolves next", "wolves next home", "wolves logo"},
@@ -1801,6 +1805,7 @@ _FEED_DEPENDENCIES: Dict[str, Set[str]] = {
 
 _FEED_REFRESH_INTERVALS: Dict[str, int] = {
     "weather": SCHEDULE_UPDATE_INTERVAL,
+    "air_quality": SCHEDULE_UPDATE_INTERVAL,
     "hawks": SCHEDULE_UPDATE_INTERVAL,
     "bulls": SCHEDULE_UPDATE_INTERVAL,
     "wolves": SCHEDULE_UPDATE_INTERVAL,
@@ -1898,6 +1903,8 @@ def _requested_data_feeds() -> Set[str]:
     for feed, screen_ids in _FEED_DEPENDENCIES.items():
         if feed == "weather" and not ENABLE_WEATHER:
             continue
+        if feed == "air_quality" and not config.ENABLE_AIR_QUALITY:
+            continue
         if _requested_screen_ids & screen_ids:
             feeds.add(feed)
     return feeds
@@ -1908,6 +1915,37 @@ def _refresh_weather() -> None:
     if not cache["weather"]:
         logging.warning(
             "Weather feed returned no data; weather screens will remain hidden until a successful refresh."
+        )
+
+
+def _refresh_air_quality() -> None:
+    """Refresh AQI using the explicitly configured AQI coordinates.
+
+    AQI may intentionally use a different location than the weather forecast,
+    so do not derive these values from the weather payload or its map center.
+    Keep the last successful report when a request fails.
+    """
+
+    if (
+        not config.ENABLE_AIR_QUALITY
+        or config.AIR_QUALITY_LATITUDE is None
+        or config.AIR_QUALITY_LONGITUDE is None
+    ):
+        cache["air_quality"] = None
+        return
+
+    report = fetch_air_quality(
+        config.AIR_QUALITY_LATITUDE,
+        config.AIR_QUALITY_LONGITUDE,
+        include_pollen=config.AIR_QUALITY_ENABLE_POLLEN,
+    )
+    if report is not None:
+        cache["air_quality"] = report
+    else:
+        logging.warning(
+            "Air quality refresh returned no data for configured coordinates: %s, %s",
+            config.AIR_QUALITY_LATITUDE,
+            config.AIR_QUALITY_LONGITUDE,
         )
 
 
@@ -2093,6 +2131,7 @@ def _refresh_sox() -> None:
 
 _FEED_REFRESHERS: Dict[str, Callable[[], None]] = {
     "weather": _refresh_weather,
+    "air_quality": _refresh_air_quality,
     "bears": _refresh_bears,
     "hawks": _refresh_hawks,
     "wolves": _refresh_wolves,
