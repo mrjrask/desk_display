@@ -30,6 +30,13 @@ def test_normalize_open_meteo_includes_requested_air_quality_metrics():
     assert report.trend_text == "Rising next 6h"
 
 
+def test_normalize_open_meteo_categories_match_the_rounded_displayed_aqi():
+    report = normalize_open_meteo({"current": {"us_aqi": 50.6}})
+
+    assert report.aqi_value == 51
+    assert report.aqi_category == "Moderate"
+
+
 def test_trend_for_handles_steady_and_improving_forecasts():
     assert trend_for({"hourly": {"us_aqi": [42, 43, 44, 43]}}) == "Steady next 4h"
     assert trend_for({"hourly": {"us_aqi": [90, 84, 80, 75]}}) == "Improving next 4h"
