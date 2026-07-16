@@ -37,6 +37,17 @@ def _format_value(value: Optional[float], suffix: str = "") -> str:
     return f"{text}{suffix}"
 
 
+def _display_metrics(report: AirQualityReport) -> list[tuple[str, str]]:
+    """Return the compact set of readings shown beneath the AQI badge."""
+
+    return [
+        ("Health", report.aqi_category),
+        ("Pollutant", report.primary_pollutant or "--"),
+        ("PM2.5", _format_value(report.us_aqi_pm2_5)),
+        ("Advice", report.advisory_text or "Check local conditions."),
+    ]
+
+
 def _render_report(report: AirQualityReport) -> Image.Image:
     background = get_screen_background_color("air quality", (0, 0, 0))
     img = Image.new("RGB", (WIDTH, HEIGHT), background)
@@ -72,17 +83,7 @@ def _render_report(report: AirQualityReport) -> Image.Image:
     card_bottom = HEIGHT - margin
     draw.rounded_rectangle((margin, card_top, WIDTH - margin, card_bottom), radius=8, fill=card_fill, outline=card_outline)
 
-    metrics = [
-        ("Health", report.aqi_category),
-        ("Pollutant", report.primary_pollutant or "--"),
-        ("AQI PM2.5", _format_value(report.us_aqi_pm2_5)),
-        ("AQI PM10", _format_value(report.us_aqi_pm10)),
-        ("AQI Ozone", _format_value(report.us_aqi_ozone)),
-        ("PM2.5", _format_value(report.pm2_5_value, " µg/m³")),
-        ("Pollen", report.pollen_level or "--"),
-        ("Trend", report.trend_text or "--"),
-        ("Advice", report.advisory_text or "Check local conditions."),
-    ]
+    metrics = _display_metrics(report)
 
     row_h = max(1, (card_bottom - card_top - 8) // len(metrics))
     label_w = max(draw.textsize(label.upper(), font=label_font)[0] for label, _value in metrics) + 10
@@ -105,7 +106,7 @@ def _render_report(report: AirQualityReport) -> Image.Image:
 
 @log_call
 def draw_air_quality_screen(display, report: Optional[AirQualityReport] = None, transition: bool = False):
-    """Draw current AQI, health category, pollutant, pollen, recommendation, and trend."""
+    """Draw current AQI, health category, pollutant, PM2.5 AQI, and recommendation."""
 
     if report is None and config.ENABLE_AIR_QUALITY and config.AIR_QUALITY_LATITUDE is not None and config.AIR_QUALITY_LONGITUDE is not None:
         report = fetch_air_quality(
