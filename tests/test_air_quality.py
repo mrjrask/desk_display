@@ -21,6 +21,8 @@ def test_air_quality_screen_shows_only_compact_metrics():
         ("Health", "Moderate"),
         ("Pollutant", "PM2.5"),
         ("PM2.5", "72"),
+        ("PM10", "31"),
+        ("Ozone", "44"),
         ("Advice", "Okay for most outdoor plans."),
     ]
 
