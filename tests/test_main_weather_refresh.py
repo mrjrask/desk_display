@@ -68,12 +68,14 @@ def test_refresh_air_quality_uses_configured_aqi_coordinates(monkeypatch):
     monkeypatch.setattr(main.config, "ENABLE_AIR_QUALITY", True)
     monkeypatch.setattr(main.config, "AIR_QUALITY_LATITUDE", 34.0522)
     monkeypatch.setattr(main.config, "AIR_QUALITY_LONGITUDE", -118.2437)
+    monkeypatch.setattr(main.config, "AIRNOW_API_KEY", "test-key")
     monkeypatch.setattr(main.config, "AIR_QUALITY_ENABLE_POLLEN", False)
 
-    def fake_fetch(latitude, longitude, *, include_pollen):
+    def fake_fetch(latitude, longitude, *, api_key, include_pollen):
         captured.update(
             latitude=latitude,
             longitude=longitude,
+            api_key=api_key,
             include_pollen=include_pollen,
         )
         return report
@@ -85,6 +87,7 @@ def test_refresh_air_quality_uses_configured_aqi_coordinates(monkeypatch):
     assert captured == {
         "latitude": 34.0522,
         "longitude": -118.2437,
+        "api_key": "test-key",
         "include_pollen": False,
     }
     assert main.cache["air_quality"] is report

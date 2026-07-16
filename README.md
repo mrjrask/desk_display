@@ -323,6 +323,7 @@ Configuration is environment-driven. Put local values in `.env` for development 
 | `WEATHER_REFRESH_SECONDS` | Weather refresh interval. |
 | `HOURLY_FORECAST_HOURS` | Number of hourly forecast entries displayed. |
 | `WEATHER_USE_EMOJI_ICONS` | Use emoji weather symbols where supported. |
+| `AIR_QUALITY_LATITUDE`, `AIR_QUALITY_LONGITUDE`, `AIRNOW_API_KEY` | AirNow AQI location and free AirNow API key. AirNow supplies U.S. EPA monitoring data for U.S. locations. |
 | `WEATHERKIT_*` | Apple WeatherKit team/key/service/private-key settings. |
 | `OWM_API_KEY`, `OWM_UNITS`, `OWM_LANGUAGE` | OpenWeatherMap fallback settings. |
 | `TRAVEL_MODE`, `TRAVEL_TO_HOME_*`, `TRAVEL_TO_WORK_*` | Travel origin/destination selection. |

@@ -111,6 +111,7 @@ def draw_air_quality_screen(display, report: Optional[AirQualityReport] = None, 
         report = fetch_air_quality(
             config.AIR_QUALITY_LATITUDE,
             config.AIR_QUALITY_LONGITUDE,
+            api_key=config.AIRNOW_API_KEY,
             include_pollen=config.AIR_QUALITY_ENABLE_POLLEN,
         )
     if report is None:
