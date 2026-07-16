@@ -14,6 +14,7 @@ from screens.draw_weather import (
     _moon_phase_is_waxing,
     _normalise_moon_phase,
     _safe_textbbox,
+    _weather_detail_chart_layout,
     _weather_history_points,
 )
 
@@ -148,3 +149,32 @@ def test_weather_history_chart_draws_placeholder_for_fewer_than_two_points():
 
     assert image.getpixel((4, 11)) == (28, 64, 88)
     assert image.getpixel((20, 11)) == (68, 105, 130)
+    # The bottom ticks show that the chart's horizontal axis represents time.
+    assert image.getpixel((20, 17)) == (68, 105, 130)
+
+
+def test_weather_detail_charts_start_after_the_longest_value_with_padding():
+    chart_x, chart_width, charts_enabled = _weather_detail_chart_layout(
+        [115, 168, 143],
+        value_x=80,
+        right_edge=304,
+        chart_gap=8,
+        chart_min_w=40,
+    )
+
+    assert charts_enabled is True
+    assert chart_x == 176
+    assert chart_width == 128
+
+
+def test_weather_detail_chart_layout_keeps_a_shared_minimum_chart_on_narrow_displays():
+    chart_x, chart_width, charts_enabled = _weather_detail_chart_layout(
+        [140],
+        value_x=80,
+        right_edge=180,
+        chart_gap=8,
+        chart_min_w=40,
+    )
+
+    assert charts_enabled is True
+    assert (chart_x, chart_width) == (140, 40)

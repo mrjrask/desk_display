@@ -200,6 +200,28 @@ def _weather_history_points(weather: dict[str, Any], metric: str) -> list[tuple[
     return sorted(points, key=lambda point: point[0])
 
 
+def _weather_detail_chart_layout(
+    value_ends: list[int],
+    *,
+    value_x: int,
+    right_edge: int,
+    chart_gap: int,
+    chart_min_w: int,
+) -> tuple[int, int, bool]:
+    """Return the shared Weather 2 chart position and whether it fits."""
+
+    chart_x = max(value_ends, default=value_x) + chart_gap
+    chart_w = right_edge - chart_x
+    if chart_w >= chart_min_w:
+        return chart_x, chart_w, True
+
+    # Preserve a usable chart on narrow displays by shortening values; the
+    # chart remains aligned and the same length on every row.
+    chart_x = right_edge - chart_min_w
+    chart_w = chart_min_w
+    return chart_x, chart_w, chart_x > value_x + chart_gap
+
+
 def _draw_weather_history_chart(
     draw: ImageDraw.ImageDraw,
     box: tuple[int, int, int, int],
@@ -219,6 +241,17 @@ def _draw_weather_history_chart(
     height = max(1, inner_y1 - inner_y0)
     width = max(1, inner_x1 - inner_x0)
     mid_y = inner_y0 + height // 2
+
+    # Quarter-hour-style tick marks make the horizontal direction read as time
+    # even on the compact Weather 2 charts, where there is not enough vertical
+    # room for timestamp labels.  The evenly spaced ticks correspond to equal
+    # portions of the displayed history's time range.
+    time_grid_color = (43, 88, 116)
+    for tick in range(1, 4):
+        tick_x = inner_x0 + int(round(width * tick / 4))
+        draw.line((tick_x, inner_y0, tick_x, inner_y1), fill=time_grid_color)
+        draw.line((tick_x, inner_y1 - 2, tick_x, inner_y1), fill=muted_color)
+
     if len(points) < 2:
         draw.line((inner_x0, mid_y, inner_x1, mid_y), fill=muted_color)
         return
@@ -2195,7 +2228,6 @@ def draw_weather_screen_2(display, weather, transition=False):
     led_color = ALERT_LED_COLORS.get(severity)
 
     current = weather.get("current", {})
-    daily   = weather.get("daily", [{}])[0]
 
     now = datetime.datetime.now(CENTRAL_TIME)
     next_label, next_time = _next_sun_event(weather.get("daily"), now=now)
@@ -2266,9 +2298,28 @@ def draw_weather_screen_2(display, weather, transition=False):
     right_edge = WIDTH - margin - 6
     chart_gap = max(6, WIDTH // 80)
     chart_min_w = max(36, WIDTH // 8)
-    chart_w = min(max(54, WIDTH // 4), max(0, right_edge - value_x - chart_gap - 48))
-    chart_x = right_edge - chart_w
-    charts_enabled = chart_w >= chart_min_w
+
+    # Reserve only the space that the longest detail value actually needs.
+    # This gives every chart the same, maximum available width while keeping a
+    # consistent gap after the text, rather than assigning each row a fixed
+    # quarter-screen chart.
+    value_ends = []
+    for item in items:
+        value = item[1]
+        if isinstance(value, Image.Image):
+            value_width = value.width
+        else:
+            value_bbox = _safe_textbbox(draw, value, value_font)
+            value_width = value_bbox[2] - value_bbox[0]
+        value_ends.append(value_x + value_width)
+
+    chart_x, chart_w, charts_enabled = _weather_detail_chart_layout(
+        value_ends,
+        value_x=value_x,
+        right_edge=right_edge,
+        chart_gap=chart_gap,
+        chart_min_w=chart_min_w,
+    )
     value_max_w = (chart_x - chart_gap - value_x) if charts_enabled else (right_edge - value_x)
 
     for index, item in enumerate(items):
