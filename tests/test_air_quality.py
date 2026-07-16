@@ -1,6 +1,5 @@
-from services.air_quality import advisory_for, normalize_airnow
-from services.air_quality import AirQualityReport
 from screens.draw_air_quality import _display_metrics
+from services.air_quality import AirQualityReport, advisory_for, normalize_airnow
 
 
 def test_air_quality_screen_shows_only_compact_metrics():
@@ -62,10 +61,10 @@ def test_advisory_for_is_outdoor_activity_focused():
 def test_fetch_air_quality_requests_airnow_current_observations(monkeypatch):
     from services import air_quality
 
-    captured = {}
+    captured = []
 
     def fake_request_json(url, *, params, timeout, quiet):
-        captured.update(url=url, params=params, timeout=timeout, quiet=quiet)
+        captured.append((url, params, timeout, quiet))
         return [{"ParameterName": "PM2.5", "AQI": 20, "Category": {"Name": "Good"}}]
 
     monkeypatch.setattr(air_quality, "request_json", fake_request_json)
@@ -76,16 +75,70 @@ def test_fetch_air_quality_requests_airnow_current_observations(monkeypatch):
 
     assert report is not None
     assert report.aqi_value == 20
-    assert captured["url"] == air_quality.AIRNOW_CURRENT_OBSERVATION_URL
-    assert captured["params"] == {
+    assert captured[0][0] == air_quality.AIRNOW_CURRENT_OBSERVATION_URL
+    assert captured[0][1] == {
         "format": "application/json",
         "latitude": 42.1373,
         "longitude": -87.8446,
         "distance": 25,
         "API_KEY": "test-key",
     }
-    assert captured["timeout"] == 3.0
-    assert captured["quiet"] is True
+    assert captured[0][2] == 3.0
+    assert captured[0][3] is True
+
+
+def test_fetch_air_quality_supplements_missing_airnow_components(monkeypatch):
+    from services import air_quality
+
+    requests = []
+
+    def fake_request_json(url, *, params, timeout, quiet):
+        requests.append((url, params, timeout, quiet))
+        if url == air_quality.AIRNOW_CURRENT_OBSERVATION_URL:
+            return [{"ParameterName": "PM2.5", "AQI": 411, "Category": {"Name": "Hazardous"}}]
+        assert url == air_quality.OPEN_METEO_AIR_QUALITY_URL
+        return {"current": {"us_aqi_pm2_5": 400, "us_aqi_pm10": 78, "us_aqi_ozone": 52}}
+
+    monkeypatch.setattr(air_quality, "request_json", fake_request_json)
+
+    report = air_quality.fetch_air_quality(42.1373, -87.8446, api_key="test-key", timeout=3.0)
+
+    assert report is not None
+    assert report.aqi_value == 411
+    assert report.aqi_category == "Hazardous"
+    assert report.us_aqi_pm2_5 == 411
+    assert report.us_aqi_pm10 == 78
+    assert report.us_aqi_ozone == 52
+    assert requests[1] == (
+        air_quality.OPEN_METEO_AIR_QUALITY_URL,
+        {
+            "latitude": 42.1373,
+            "longitude": -87.8446,
+            "current": "us_aqi_pm2_5,us_aqi_pm10,us_aqi_ozone",
+        },
+        3.0,
+        True,
+    )
+
+
+def test_fetch_air_quality_skips_component_fallback_when_airnow_is_complete(monkeypatch):
+    from services import air_quality
+
+    def fake_request_json(url, **_kwargs):
+        assert url == air_quality.AIRNOW_CURRENT_OBSERVATION_URL
+        return [
+            {"ParameterName": "PM2.5", "AQI": 72},
+            {"ParameterName": "PM10", "AQI": 31},
+            {"ParameterName": "OZONE", "AQI": 44},
+        ]
+
+    monkeypatch.setattr(air_quality, "request_json", fake_request_json)
+
+    report = air_quality.fetch_air_quality(42.1373, -87.8446, api_key="test-key")
+
+    assert report is not None
+    assert report.us_aqi_pm10 == 31
+    assert report.us_aqi_ozone == 44
 
 
 def test_fetch_air_quality_does_not_request_without_api_key(monkeypatch):
