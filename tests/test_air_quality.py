@@ -1,9 +1,5 @@
-import pytest
-
 from services.air_quality import (
     advisory_for,
-    iqair_url_for_coordinates,
-    normalize_iqair_page,
     normalize_open_meteo,
     trend_for,
 )
@@ -44,82 +40,46 @@ def test_advisory_for_is_outdoor_activity_focused():
     assert advisory_for("Good", "High") == "Okay outside; pollen high."
 
 
-def test_iqair_url_for_configured_coordinates():
-    assert iqair_url_for_coordinates(42.1373, -87.8446) == "https://www.iqair.com/air-quality/usa/illinois/northbrook"
-    assert iqair_url_for_coordinates(41.9037, -87.6357) == "https://www.iqair.com/air-quality/usa/illinois/chicago"
-    assert iqair_url_for_coordinates(41.0, -87.0) is None
-
-
-def test_normalize_iqair_page_extracts_current_conditions_and_forecast_trend():
-    report = normalize_iqair_page(
-        """
-        <h1>Air quality in Northbrook</h1>
-        <div>437</div><div>US AQI⁺</div><div>Hazardous</div>
-        <div>Main pollutant:</div><div>PM2.5</div><div>294 µg/m³</div>
-        <h2>Hourly forecast</h2>
-        <div>Now</div><div>437</div><div>25°</div>
-        <div>10:00</div><div>407</div><div>27°</div>
-        <div>11:00</div><div>376</div><div>28°</div>
-        <div>12:00</div><div>346</div><div>29°</div>
-        """
-    )
-
-    assert report is not None
-    assert report.aqi_value == 437
-    assert report.aqi_category == "Hazardous"
-    assert report.primary_pollutant == "PM2.5"
-    assert report.pm2_5_value == 294.0
-    assert report.pollutant_breakdown == (("PM2.5", 294.0),)
-    assert report.advisory_text == "Avoid outdoor activity."
-    assert report.trend_text == "Improving next 4h"
-
-
-@pytest.mark.parametrize(
-    ("latitude", "longitude", "expected_url"),
-    [
-        (41.9037, -87.6357, "https://www.iqair.com/air-quality/usa/illinois/chicago"),
-        (42.1373, -87.8446, "https://www.iqair.com/air-quality/usa/illinois/northbrook"),
-    ],
-)
-def test_fetch_air_quality_prefers_iqair_for_configured_coordinates(
-    monkeypatch, latitude, longitude, expected_url
-):
+def test_fetch_air_quality_uses_open_meteo_for_all_coordinates(monkeypatch):
     from services import air_quality
 
-    calls = []
+    calls: list[tuple[float, float, bool, float]] = []
 
-    def fake_fetch_iqair(url, *, timeout=8.0):
-        calls.append((url, timeout))
+    def fake_fetch_open_meteo(latitude, longitude, *, include_pollen, timeout):
+        calls.append((latitude, longitude, include_pollen, timeout))
         return air_quality.AirQualityReport(55, "Moderate", "PM2.5")
 
-    monkeypatch.setattr(air_quality, "fetch_iqair_air_quality", fake_fetch_iqair)
+    monkeypatch.setattr(air_quality, "_fetch_open_meteo_air_quality", fake_fetch_open_meteo)
 
-    report = air_quality.fetch_air_quality(latitude, longitude, include_pollen=False, timeout=3.0)
+    report = air_quality.fetch_air_quality(41.9037, -87.6357, include_pollen=False, timeout=3.0)
 
     assert report is not None
     assert report.aqi_value == 55
-    assert calls == [(expected_url, 3.0)]
+    assert calls == [(41.9037, -87.6357, False, 3.0)]
 
 
-def test_fetch_air_quality_keeps_pollen_enabled_for_iqair_locations(monkeypatch):
+def test_fetch_open_meteo_requests_current_and_hourly_metrics(monkeypatch):
     from services import air_quality
 
-    monkeypatch.setattr(
-        air_quality,
-        "fetch_iqair_air_quality",
-        lambda url, *, timeout: air_quality.AirQualityReport(20, "Good", "PM2.5"),
-    )
-    monkeypatch.setattr(
-        air_quality,
-        "_fetch_open_meteo_air_quality",
-        lambda latitude, longitude, *, include_pollen, timeout: air_quality.AirQualityReport(
-            99, "Moderate", "PM2.5", pollen_level="High"
-        ),
-    )
+    captured = {}
 
-    report = air_quality.fetch_air_quality(42.1373, -87.8446, include_pollen=True)
+    def fake_request_json(url, *, params, timeout, quiet):
+        captured.update(url=url, params=params, timeout=timeout, quiet=quiet)
+        return {"current": {"us_aqi": 20}, "hourly": {"us_aqi": [20, 21]}}
+
+    monkeypatch.setattr(air_quality, "request_json", fake_request_json)
+
+    report = air_quality._fetch_open_meteo_air_quality(
+        42.1373, -87.8446, include_pollen=True, timeout=3.0
+    )
 
     assert report is not None
     assert report.aqi_value == 20
-    assert report.pollen_level == "High"
-    assert report.advisory_text == "Okay outside; pollen high."
+    assert captured["url"] == air_quality.OPEN_METEO_AIR_QUALITY_URL
+    assert captured["params"]["latitude"] == 42.1373
+    assert captured["params"]["longitude"] == -87.8446
+    assert "us_aqi" in captured["params"]["current"]
+    assert "pm2_5" in captured["params"]["hourly"]
+    assert "grass_pollen" in captured["params"]["current"]
+    assert captured["timeout"] == 3.0
+    assert captured["quiet"] is True
