@@ -122,6 +122,24 @@ def test_weather_history_points_filters_and_sorts_metric_values():
     assert _weather_history_points(weather, "wind_speed") == [(600.0, 8.0), (1200.0, 12.0)]
 
 
+def test_weather_history_points_uses_hourly_and_current_when_history_is_sparse():
+    weather = {
+        "current_history": [{"dt": 1200, "wind_speed": 8}],
+        "hourly": [
+            {"dt": 600, "wind_speed": 4},
+            {"dt": 900, "humidity": 50},
+            {"dt": "bad", "wind_speed": 6},
+        ],
+        "current": {"dt": 1800, "wind_speed": 12},
+    }
+
+    assert _weather_history_points(weather, "wind_speed") == [
+        (600.0, 4.0),
+        (1200.0, 8.0),
+        (1800.0, 12.0),
+    ]
+
+
 def test_weather_history_chart_draws_placeholder_for_fewer_than_two_points():
     image = Image.new("RGB", (40, 24), (0, 0, 0))
     draw = ImageDraw.Draw(image)

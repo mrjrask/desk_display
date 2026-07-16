@@ -169,19 +169,34 @@ def _ellipsize_to_width(draw: ImageDraw.ImageDraw, text: str, font: ImageFont.Im
 
 
 def _weather_history_points(weather: dict[str, Any], metric: str) -> list[tuple[float, float]]:
-    history = weather.get("current_history") if isinstance(weather, dict) else None
-    if not isinstance(history, list):
+    if not isinstance(weather, dict):
         return []
-    points: list[tuple[float, float]] = []
-    for entry in history:
-        if not isinstance(entry, dict):
-            continue
-        try:
-            ts = float(entry.get("dt"))
-            value = float(entry.get(metric))
-        except (TypeError, ValueError):
-            continue
-        points.append((ts, value))
+
+    def _points_from(entries: Any) -> list[tuple[float, float]]:
+        if not isinstance(entries, list):
+            return []
+        points: list[tuple[float, float]] = []
+        for entry in entries:
+            if not isinstance(entry, dict):
+                continue
+            try:
+                ts = float(entry.get("dt"))
+                value = float(entry.get(metric))
+            except (TypeError, ValueError):
+                continue
+            points.append((ts, value))
+        return points
+
+    points = _points_from(weather.get("current_history"))
+    if len(points) < 2:
+        points.extend(_points_from(weather.get("hourly")))
+
+        current = weather.get("current")
+        if isinstance(current, dict):
+            try:
+                points.append((float(current.get("dt")), float(current.get(metric))))
+            except (TypeError, ValueError):
+                pass
     return sorted(points, key=lambda point: point[0])
 
 
