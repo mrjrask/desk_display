@@ -41,13 +41,98 @@ def _display_metrics(report: AirQualityReport) -> list[tuple[str, str]]:
     """Return the compact set of readings shown beneath the AQI badge."""
 
     return [
-        ("Health", report.aqi_category),
-        ("Pollutant", report.primary_pollutant or "--"),
+        ("Top Pollutant", report.primary_pollutant or "--"),
         ("PM2.5", _format_value(report.us_aqi_pm2_5)),
         ("PM10", _format_value(report.us_aqi_pm10)),
         ("Ozone", _format_value(report.us_aqi_ozone)),
         ("Advice", report.advisory_text or "Check local conditions."),
     ]
+
+
+def _chart_layout(
+    value_ends: list[int],
+    *,
+    value_x: int,
+    right_edge: int,
+    chart_gap: int,
+    chart_min_w: int,
+) -> tuple[int, int, bool]:
+    """Size aligned component charts from the room left after their values."""
+
+    chart_x = max(value_ends, default=value_x) + chart_gap
+    chart_w = right_edge - chart_x
+    if chart_w >= chart_min_w:
+        return chart_x, chart_w, True
+
+    chart_x = right_edge - chart_min_w
+    chart_w = chart_min_w
+    return chart_x, chart_w, chart_x > value_x + chart_gap
+
+
+def _component_history_points(
+    report: AirQualityReport, component_index: int
+) -> list[tuple[float, float]]:
+    """Return timestamped samples for one displayed AQI component."""
+
+    points = []
+    for sample in report.component_history:
+        if len(sample) != 4:
+            continue
+        timestamp, *values = sample
+        value = values[component_index]
+        if value is not None:
+            points.append((timestamp, float(value)))
+    return points
+
+
+def _draw_component_chart(
+    draw: ImageDraw.ImageDraw,
+    box: tuple[int, int, int, int],
+    points: list[tuple[float, float]],
+) -> None:
+    """Draw a compact AQI history chart styled to match Weather 2."""
+
+    x0, y0, x1, y1 = box
+    if x1 - x0 < 12 or y1 - y0 < 8:
+        return
+
+    grid_color = (28, 64, 88)
+    muted_color = (68, 105, 130)
+    line_color = (115, 210, 255)
+    draw.rounded_rectangle(box, radius=max(2, min(5, (y1 - y0) // 3)), outline=grid_color)
+    inner_x0, inner_y0 = x0 + 2, y0 + 2
+    inner_x1, inner_y1 = x1 - 2, y1 - 2
+    chart_w = max(1, inner_x1 - inner_x0)
+    chart_h = max(1, inner_y1 - inner_y0)
+    mid_y = inner_y0 + chart_h // 2
+
+    for tick in range(1, 4):
+        tick_x = inner_x0 + int(round(chart_w * tick / 4))
+        draw.line((tick_x, inner_y0, tick_x, inner_y1), fill=(43, 88, 116))
+        draw.line((tick_x, inner_y1 - 2, tick_x, inner_y1), fill=muted_color)
+    draw.line((inner_x0, mid_y, inner_x1, mid_y), fill=muted_color)
+    if len(points) < 2:
+        return
+
+    start_time, end_time = points[0][0], points[-1][0]
+    if end_time <= start_time:
+        end_time = start_time + 600
+    values = [value for _timestamp, value in points]
+    low, high = min(values), max(values)
+    if low == high:
+        padding = max(1.0, abs(high) * 0.05)
+        low, high = low - padding, high + padding
+
+    coordinates = [
+        (
+            inner_x0 + int(round((timestamp - start_time) / (end_time - start_time) * chart_w)),
+            inner_y1 - int(round((value - low) / (high - low) * chart_h)),
+        )
+        for timestamp, value in points
+    ]
+    draw.line(coordinates, fill=line_color, width=2 if y1 - y0 >= 14 else 1)
+    for x, y in coordinates[-12:]:
+        draw.point((x, y), fill=(245, 250, 255))
 
 
 def _render_report(report: AirQualityReport) -> Image.Image:
@@ -87,16 +172,46 @@ def _render_report(report: AirQualityReport) -> Image.Image:
 
     metrics = _display_metrics(report)
 
-    row_h = max(1, (card_bottom - card_top - 8) // len(metrics))
-    label_w = max(draw.textsize(label.upper(), font=label_font)[0] for label, _value in metrics) + 10
+    label_w = (
+        max(draw.textsize(label.upper(), font=label_font)[0] for label, _value in metrics) + 10
+    )
     content_x = margin + 6
     value_x = content_x + label_w
-    value_max_w = WIDTH - margin - 6 - value_x
+    right_edge = WIDTH - margin - 6
+    chart_gap = max(6, WIDTH // 80)
+    chart_min_w = max(36, WIDTH // 8)
+    chart_labels = {"PM2.5", "PM10", "Ozone"}
+    value_ends = [
+        value_x + draw.textsize(value, font=value_font)[0]
+        for _label, value in metrics
+    ]
+    chart_x, _chart_w, charts_enabled = _chart_layout(
+        value_ends,
+        value_x=value_x,
+        right_edge=right_edge,
+        chart_gap=chart_gap,
+        chart_min_w=chart_min_w,
+    )
+    value_max_w = (chart_x - chart_gap - value_x) if charts_enabled else (right_edge - value_x)
+
+    # Removing the redundant Health row leaves its height to be shared by the
+    # three component rows.  Top Pollutant and Advice intentionally remain
+    # equal-height rows.
+    row_weights = (3, 4, 4, 4, 3)
+    row_space = card_bottom - card_top - 8
+    total_weight = sum(row_weights)
+    row_tops = [card_top + 4]
+    consumed_weight = 0
+    for weight in row_weights[:-1]:
+        consumed_weight += weight
+        row_tops.append(card_top + 4 + round(row_space * consumed_weight / total_weight))
+    row_bottoms = row_tops[1:] + [card_top + 4 + row_space]
 
     for index, (label, value) in enumerate(metrics):
-        y0 = card_top + 4 + index * row_h
+        y0, y1 = row_tops[index], row_bottoms[index]
+        row_h = y1 - y0
         if index > 0:
-            draw.line((margin + 6, y0, WIDTH - margin - 6, y0), fill=(26, 54, 76))
+            draw.line((margin + 6, y0, right_edge, y0), fill=(26, 54, 76))
         label_h = draw.textsize(label, font=label_font)[1]
         value_h = draw.textsize(value, font=value_font)[1]
         label_y = y0 + (row_h - label_h) // 2
@@ -104,6 +219,14 @@ def _render_report(report: AirQualityReport) -> Image.Image:
         draw.text((content_x, label_y), label.upper(), font=label_font, fill=label_color)
         value_text = _fit_text(draw, value, value_font, value_max_w)
         draw.text((value_x, value_y), value_text, font=value_font, fill=value_color)
+        if charts_enabled and label in chart_labels:
+            chart_h = max(8, min(row_h - 6, HEIGHT // 18))
+            chart_y = y0 + (row_h - chart_h) // 2
+            _draw_component_chart(
+                draw,
+                (chart_x, chart_y, right_edge, chart_y + chart_h),
+                _component_history_points(report, ("PM2.5", "PM10", "Ozone").index(label)),
+            )
     return img
 
 @log_call

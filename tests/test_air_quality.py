@@ -1,4 +1,4 @@
-from screens.draw_air_quality import _display_metrics
+from screens.draw_air_quality import _chart_layout, _component_history_points, _display_metrics
 from services.air_quality import AirQualityReport, advisory_for, normalize_airnow
 
 
@@ -17,13 +17,27 @@ def test_air_quality_screen_shows_only_compact_metrics():
     )
 
     assert _display_metrics(report) == [
-        ("Health", "Moderate"),
-        ("Pollutant", "PM2.5"),
+        ("Top Pollutant", "PM2.5"),
         ("PM2.5", "72"),
         ("PM10", "31"),
         ("Ozone", "44"),
         ("Advice", "Okay for most outdoor plans."),
     ]
+
+
+def test_air_quality_component_charts_use_history_and_available_width():
+    report = AirQualityReport(
+        aqi_value=72,
+        aqi_category="Moderate",
+        primary_pollutant="PM2.5",
+        component_history=((100.0, 65, 30, 42), (200.0, 72, None, 44)),
+    )
+
+    assert _component_history_points(report, 0) == [(100.0, 65.0), (200.0, 72.0)]
+    assert _component_history_points(report, 1) == [(100.0, 30.0)]
+    assert _chart_layout(
+        [150, 175], value_x=110, right_edge=310, chart_gap=6, chart_min_w=40
+    ) == (181, 129, True)
 
 
 def test_normalize_airnow_uses_highest_pollutant_aqi_as_overall_aqi():

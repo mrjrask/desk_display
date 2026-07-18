@@ -45,6 +45,7 @@ import subprocess
 import sys
 from collections import deque
 from contextlib import nullcontext
+from dataclasses import replace
 from typing import Callable, Dict, List, Optional, Set, Tuple
 from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeoutError
 try:
@@ -1941,6 +1942,27 @@ def _refresh_air_quality() -> None:
         include_pollen=config.AIR_QUALITY_ENABLE_POLLEN,
     )
     if report is not None:
+        if not all(
+            hasattr(report, field)
+            for field in ("us_aqi_pm2_5", "us_aqi_pm10", "us_aqi_ozone")
+        ):
+            cache["air_quality"] = report
+            return
+        now = time.time()
+        previous = cache.get("air_quality")
+        history = list(getattr(previous, "component_history", ()))
+        sample = (
+            now,
+            report.us_aqi_pm2_5,
+            report.us_aqi_pm10,
+            report.us_aqi_ozone,
+        )
+        if history and now - history[-1][0] < 10 * 60:
+            history[-1] = sample
+        else:
+            history.append(sample)
+        history = [entry for entry in history if now - entry[0] <= 6 * 60 * 60]
+        report = replace(report, component_history=tuple(history))
         cache["air_quality"] = report
     else:
         logging.warning(
