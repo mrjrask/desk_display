@@ -3,6 +3,8 @@
 import importlib
 import sys
 
+from services.air_quality import AirQualityReport
+
 
 def _load_main():
     sys.modules.pop("main", None)
@@ -91,6 +93,28 @@ def test_refresh_air_quality_uses_configured_aqi_coordinates(monkeypatch):
         "include_pollen": False,
     }
     assert main.cache["air_quality"] is report
+
+
+def test_refresh_air_quality_retains_component_history_for_charts(monkeypatch):
+    main = _load_main()
+    report = AirQualityReport(
+        72,
+        "Moderate",
+        "PM2.5",
+        us_aqi_pm2_5=72,
+        us_aqi_pm10=31,
+        us_aqi_ozone=44,
+    )
+    monkeypatch.setattr(main.config, "ENABLE_AIR_QUALITY", True)
+    monkeypatch.setattr(main.config, "AIR_QUALITY_LATITUDE", 34.0522)
+    monkeypatch.setattr(main.config, "AIR_QUALITY_LONGITUDE", -118.2437)
+    monkeypatch.setattr(main.config, "AIRNOW_API_KEY", "test-key")
+    monkeypatch.setattr(main, "fetch_air_quality", lambda *args, **kwargs: report)
+    monkeypatch.setattr(main.time, "time", lambda: 1_000.0)
+
+    main._refresh_air_quality()
+
+    assert main.cache["air_quality"].component_history == ((1_000.0, 72, 31, 44),)
 
 
 def test_refresh_air_quality_keeps_last_report_when_request_fails(monkeypatch):

@@ -37,6 +37,9 @@ class AirQualityReport:
     us_aqi_pm10: Optional[int] = None
     us_aqi_ozone: Optional[int] = None
     trend_text: Optional[str] = None
+    # Recent component readings are retained by the refresh loop for the
+    # compact history charts on the air-quality screen.
+    component_history: tuple[tuple[float, Optional[int], Optional[int], Optional[int]], ...] = ()
 
 
 def _to_int(value: Any) -> Optional[int]:
