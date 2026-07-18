@@ -206,6 +206,19 @@ def test_finals_metadata_orders_championship_before_third_place():
     )
 
 
+def test_finals_status_places_game_label_and_gametime_on_separate_lines():
+    game = {
+        world_cup_scoreboard.ROUND_GAME_KEY: "Championship",
+        "status": {"type": {"state": "pre"}},
+        "date": "2026-07-19T19:00:00Z",
+    }
+
+    assert world_cup_scoreboard._status_lines(game) == (
+        "Championship",
+        "Sun 7/19 2:00 PM",
+    )
+
+
 def test_pregame_score_text_defaults_to_dash(monkeypatch):
     monkeypatch.setattr(world_cup_scoreboard, "PREGAME_SCORE_DISPLAY", "dash")
 

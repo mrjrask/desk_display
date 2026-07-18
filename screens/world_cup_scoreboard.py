@@ -478,13 +478,21 @@ def _get_league_logo() -> Optional[Image.Image]:
     _LEAGUE_LOGO_CACHE[cache_key] = None
     return None
 
+
+def _status_lines(game: dict) -> tuple[str, ...]:
+    """Return the status text with a finals-game label on its own line."""
+    status_text = _status_text(game)
+    round_game = str(game.get(ROUND_GAME_KEY) or "").strip()
+    return (round_game, status_text) if round_game else (status_text,)
+
+
 def _render_scoreboard(games: list[dict], *, title_style: str = "title") -> Image.Image:
     title = "World Cup Scores"
     round_label = str((games[0] or {}).get(ROUND_LABEL_KEY) or "").strip() if games else ""
     logo_height = _team_logo_height()
 
-    block_h = SCORE_ROW_H + STATUS_ROW_H
-    canvas_h = max(HEIGHT, len(games) * block_h + max(0, len(games) - 1) * BLOCK_SPACING)
+    game_heights = [SCORE_ROW_H + len(_status_lines(game)) * STATUS_ROW_H for game in games]
+    canvas_h = max(HEIGHT, sum(game_heights) + max(0, len(games) - 1) * BLOCK_SPACING)
     canvas = Image.new("RGB", (WIDTH, canvas_h), BACKGROUND_COLOR)
     draw = ImageDraw.Draw(canvas)
 
@@ -515,13 +523,12 @@ def _render_scoreboard(games: list[dict], *, title_style: str = "title") -> Imag
             canvas.paste(logo, (x0, y0), logo)
 
         status_fill = IN_PROGRESS_STATUS_COLOR if in_progress else (255, 255, 255)
-        status_text = _status_text(game)
-        round_game = str(game.get(ROUND_GAME_KEY) or "").strip()
-        if round_game:
-            status_text = f"{round_game} • {status_text}"
-        _center_text(draw, status_text, STATUS_FONT, COL_X[0], sum(COL_WIDTHS), y + SCORE_ROW_H, STATUS_ROW_H, fill=status_fill)
+        status_y = y + SCORE_ROW_H
+        for status_text in _status_lines(game):
+            _center_text(draw, status_text, STATUS_FONT, COL_X[0], sum(COL_WIDTHS), status_y, STATUS_ROW_H, fill=status_fill)
+            status_y += STATUS_ROW_H
 
-        y += block_h
+        y += game_heights[idx]
         if idx < len(games) - 1:
             sep_y = y + BLOCK_SPACING // 2
             draw.line((10, sep_y, WIDTH - 10, sep_y), fill=(45, 45, 45))
