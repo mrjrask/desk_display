@@ -610,7 +610,9 @@ def _center_bottom_text_with_live_bases(
     indicator_w = (2 * step) + (2 * half)
     indicator_h = step + (2 * half)
     try:
-        sl, _, sr, _ = draw.textbbox((0, 0), "   ", font=font)
+        # A single space keeps the base diagram visually associated with the
+        # inning/outs text on the Cubs Live and Sox Live screens.
+        sl, _, sr, _ = draw.textbbox((0, 0), " ", font=font)
         preferred_gap = max(3, sr - sl)
     except Exception:
         preferred_gap = max(3, base_size)
