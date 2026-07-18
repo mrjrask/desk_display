@@ -333,7 +333,7 @@ def test_draw_box_score_passes_live_bases_for_live_screens(monkeypatch):
     assert captured["live_bases"] is None
 
 
-def test_center_bottom_text_with_live_bases_uses_space_gap(monkeypatch):
+def test_center_bottom_text_with_live_bases_uses_compact_space_gap(monkeypatch):
     captured = {}
     img = Image.new("RGB", (mlb_schedule.WIDTH, mlb_schedule.HEIGHT), (0, 0, 0))
     draw = ImageDraw.Draw(img)
@@ -358,13 +358,13 @@ def test_center_bottom_text_with_live_bases_uses_space_gap(monkeypatch):
     step = max(3, base_size)
     half = max(2, step // 2)
     indicator_w = (2 * step) + (2 * half)
-    sl, _, sr, _ = draw.textbbox((0, 0), "   ", font=font)
-    min_gap = sr - sl
-    group_w = tw + min_gap + indicator_w
+    sl, _, sr, _ = draw.textbbox((0, 0), " ", font=font)
+    compact_gap = max(3, sr - sl)
+    group_w = tw + compact_gap + indicator_w
     group_x = max(0, (mlb_schedule.WIDTH - group_w) // 2)
     text_right = (group_x - l) + tw
 
-    assert captured["x"] >= text_right + min_gap
+    assert captured["x"] == text_right + compact_gap
 
 
 def test_center_bottom_text_with_live_bases_aligns_indicator_vertically(monkeypatch):
@@ -392,7 +392,7 @@ def test_center_bottom_text_with_live_bases_aligns_indicator_vertically(monkeypa
     half = max(2, step // 2)
     indicator_h = step + (2 * half)
 
-    sl, _, sr, _ = draw.textbbox((0, 0), "   ", font=font)
+    sl, _, sr, _ = draw.textbbox((0, 0), " ", font=font)
     gap = sr - sl
     indicator_w = (2 * step) + (2 * half)
     group_w = tw + gap + indicator_w
