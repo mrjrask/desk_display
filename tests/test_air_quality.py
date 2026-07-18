@@ -1,4 +1,9 @@
-from screens.draw_air_quality import _chart_layout, _component_history_points, _display_metrics
+from screens.draw_air_quality import (
+    _chart_layout,
+    _component_history_points,
+    _display_metrics,
+    _metric_value_max_width,
+)
 from services.air_quality import AirQualityReport, advisory_for, normalize_airnow
 
 
@@ -38,6 +43,21 @@ def test_air_quality_component_charts_use_history_and_available_width():
     assert _chart_layout(
         [150, 175], value_x=110, right_edge=310, chart_gap=6, chart_min_w=40
     ) == (181, 129, True)
+
+
+def test_air_quality_non_chart_rows_keep_the_full_value_width():
+    kwargs = {
+        "chart_labels": {"PM2.5", "PM10", "Ozone"},
+        "charts_enabled": True,
+        "chart_x": 200,
+        "chart_gap": 6,
+        "value_x": 110,
+        "right_edge": 310,
+    }
+
+    assert _metric_value_max_width("PM2.5", **kwargs) == 84
+    assert _metric_value_max_width("Advice", **kwargs) == 200
+    assert _metric_value_max_width("Advice", **(kwargs | {"value_x": 71})) == 239
 
 
 def test_normalize_airnow_uses_highest_pollutant_aqi_as_overall_aqi():

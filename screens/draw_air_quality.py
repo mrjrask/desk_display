@@ -85,6 +85,23 @@ def _component_history_points(
     return points
 
 
+def _metric_value_max_width(
+    label: str,
+    *,
+    chart_labels: set[str],
+    charts_enabled: bool,
+    chart_x: int,
+    chart_gap: int,
+    value_x: int,
+    right_edge: int,
+) -> int:
+    """Reserve chart space only on rows that actually render a chart."""
+
+    if charts_enabled and label in chart_labels:
+        return chart_x - chart_gap - value_x
+    return right_edge - value_x
+
+
 def _draw_component_chart(
     draw: ImageDraw.ImageDraw,
     box: tuple[int, int, int, int],
@@ -183,7 +200,8 @@ def _render_report(report: AirQualityReport) -> Image.Image:
     chart_labels = {"PM2.5", "PM10", "Ozone"}
     value_ends = [
         value_x + draw.textsize(value, font=value_font)[0]
-        for _label, value in metrics
+        for label, value in metrics
+        if label in chart_labels
     ]
     chart_x, _chart_w, charts_enabled = _chart_layout(
         value_ends,
@@ -192,7 +210,6 @@ def _render_report(report: AirQualityReport) -> Image.Image:
         chart_gap=chart_gap,
         chart_min_w=chart_min_w,
     )
-    value_max_w = (chart_x - chart_gap - value_x) if charts_enabled else (right_edge - value_x)
 
     # Removing the redundant Health row leaves its height to be shared by the
     # three component rows.  Top Pollutant and Advice intentionally remain
@@ -217,8 +234,27 @@ def _render_report(report: AirQualityReport) -> Image.Image:
         label_y = y0 + (row_h - label_h) // 2
         value_y = y0 + (row_h - value_h) // 2
         draw.text((content_x, label_y), label.upper(), font=label_font, fill=label_color)
-        value_text = _fit_text(draw, value, value_font, value_max_w)
-        draw.text((value_x, value_y), value_text, font=value_font, fill=value_color)
+        # Advice needs its full row width; unlike the component values it has
+        # neither a chart nor a reason to align with the wider Top Pollutant
+        # label column.
+        row_value_x = value_x
+        if label == "Advice":
+            row_value_x = content_x + draw.textsize(label.upper(), font=label_font)[0] + 10
+        value_text = _fit_text(
+            draw,
+            value,
+            value_font,
+            _metric_value_max_width(
+                label,
+                chart_labels=chart_labels,
+                charts_enabled=charts_enabled,
+                chart_x=chart_x,
+                chart_gap=chart_gap,
+                value_x=row_value_x,
+                right_edge=right_edge,
+            ),
+        )
+        draw.text((row_value_x, value_y), value_text, font=value_font, fill=value_color)
         if charts_enabled and label in chart_labels:
             chart_h = max(8, min(row_h - 6, HEIGHT // 18))
             chart_y = y0 + (row_h - chart_h) // 2
