@@ -24,6 +24,28 @@ def test_import_does_not_probe_runtime(monkeypatch, module_name):
 
 def test_import_screen_registry_does_not_import_heavy_renderers(monkeypatch):
     heavy_modules = {
+        "screens.draw_bears_schedule",
+        "screens.draw_bulls_schedule",
+        "screens.draw_hawks_schedule",
+        "screens.draw_wolves_schedule",
+        "screens.draw_vrnof",
+        "screens.draw_nixie",
+        "screens.on_this_day",
+        "screens.draw_date_time",
+        "screens.mlb_schedule",
+        "screens.mlb_scoreboard",
+        "screens.mlb_scoreboard_v2",
+        "screens.mlb_league_standings",
+        "screens.mlb_team_standings",
+        "screens.nba_team_standings",
+        "screens.nfl_team_standings",
+        "screens.nhl_team_standings",
+        "screens.ncaam_scoreboard",
+        "screens.world_cup_scoreboard",
+        "screens.nfl_scoreboard",
+        "screens.nfl_scoreboard_v2",
+        "screens.nhl_playoffs",
+        "screens.nba_playoffs",
         "screens.draw_inside",
         "screens.nba_scoreboard",
         "screens.nhl_scoreboard",
@@ -31,18 +53,30 @@ def test_import_screen_registry_does_not_import_heavy_renderers(monkeypatch):
         "screens.nhl_standings",
         "services.sports.nhl",
     }
-    for module_name in ["screens.registry", *heavy_modules]:
-        sys.modules.pop(module_name, None)
+    module_names = ["screens.registry", *heavy_modules]
+    missing = object()
+    original_modules = {name: sys.modules.get(name, missing) for name in module_names}
 
-    real_import_module = importlib.import_module
-    imported = []
+    try:
+        for module_name in module_names:
+            sys.modules.pop(module_name, None)
 
-    def _tracking_import(name, package=None):
-        imported.append(name)
-        return real_import_module(name, package)
+        real_import_module = importlib.import_module
+        imported = []
 
-    monkeypatch.setattr(importlib, "import_module", _tracking_import)
-    importlib.import_module("screens.registry")
+        def _tracking_import(name, package=None):
+            imported.append(name)
+            return real_import_module(name, package)
 
-    assert heavy_modules.isdisjoint(imported)
-    assert heavy_modules.isdisjoint(sys.modules)
+        monkeypatch.setattr(importlib, "import_module", _tracking_import)
+        importlib.import_module("screens.registry")
+
+        assert heavy_modules.isdisjoint(imported)
+        assert heavy_modules.isdisjoint(sys.modules)
+    finally:
+        for module_name in module_names:
+            original = original_modules[module_name]
+            if original is missing:
+                sys.modules.pop(module_name, None)
+            else:
+                sys.modules[module_name] = original
