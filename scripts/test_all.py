@@ -20,6 +20,9 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 SCRIPTS_DIR = REPO_ROOT / "scripts"
 THIS_FILE = Path(__file__).resolve()
 
+STAGED_RUFF_CLEANUP_RULES = ("B", "C4", "PIE", "RUF", "SIM", "UP", "PLC", "PLE", "PLW")
+STAGED_RUFF_CLEANUP_IGNORES = ("B008", "PLW0603")
+
 
 @dataclass(frozen=True)
 class TestCommand:
@@ -60,7 +63,12 @@ def _build_commands(pytest_args: Sequence[str]) -> list[TestCommand]:
 
 
 def _build_lint_cleanup_command() -> TestCommand:
-    """Return the report-only Ruff command for staged lint cleanup."""
+    """Return the report-only Ruff command for staged lint cleanup.
+
+    Run isolated from pyproject so per-file ignores for staged legacy modules
+    do not hide the violations this cleanup report is intended to surface. Vendored
+    sensor libraries stay excluded because they are not part of the cleanup migration.
+    """
 
     return TestCommand(
         name="staged Ruff cleanup report",
@@ -70,6 +78,17 @@ def _build_lint_cleanup_command() -> TestCommand:
             "ruff",
             "check",
             ".",
+            "--isolated",
+            "--target-version",
+            "py311",
+            "--line-length",
+            "100",
+            "--exclude",
+            "vendor",
+            "--select",
+            ",".join(STAGED_RUFF_CLEANUP_RULES),
+            "--ignore",
+            ",".join(STAGED_RUFF_CLEANUP_IGNORES),
             "--exit-zero",
             "--statistics",
         ),
@@ -107,7 +126,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         action="store_true",
         help=(
             "Include a report-only Ruff cleanup pass for the staged lint families; "
-            "the command uses --exit-zero so existing findings do not fail the suite."
+            "the command runs isolated from pyproject per-file ignores and uses "
+            "--exit-zero so existing findings do not fail the suite."
         ),
     )
     parser.epilog = (

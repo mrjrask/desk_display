@@ -51,4 +51,8 @@ def test_lint_cleanup_option_adds_report_only_ruff_command():
 
     lint_command = commands[-1]
     assert lint_command.name == "staged Ruff cleanup report"
-    assert lint_command.command[-3:] == (".", "--exit-zero", "--statistics")
+    assert "--isolated" in lint_command.command
+    assert "--select" in lint_command.command
+    assert lint_command.command[lint_command.command.index("--exclude") + 1] == "vendor"
+    assert "B,C4,PIE,RUF,SIM,UP,PLC,PLE,PLW" in lint_command.command
+    assert lint_command.command[-2:] == ("--exit-zero", "--statistics")
