@@ -49,3 +49,44 @@ def test_fetch_blackhawks_next_game_prefers_ics_schedule(monkeypatch):
 
     assert result is games[0]
     assert result["startTimeCentral"] == now.replace(month=9, day=30, hour=19).strftime("%I:%M %p").lstrip("0")
+
+
+def test_fetch_blackhawks_last_game_uses_api_state_when_ics_has_games(monkeypatch):
+    ics_games = [
+        {
+            "gameDate": "2026-10-01T00:00:00Z",
+            "gameState": "FUT",
+            "startTimeUTC": "2026-10-01T00:00:00Z",
+        }
+    ]
+    api_games = [
+        {"gameDate": "2026-09-30T00:00:00Z", "gameState": "OFF", "id": 1},
+        {"gameDate": "2026-10-01T00:00:00Z", "gameState": "FUT", "id": 2},
+    ]
+    monkeypatch.setattr(data_fetch, "_fetch_blackhawks_ics_schedule", lambda: ics_games)
+    monkeypatch.setattr(data_fetch, "_fetch_blackhawks_api_schedule_games", lambda: api_games)
+
+    assert data_fetch.fetch_blackhawks_last_game() is api_games[0]
+
+
+def test_fetch_blackhawks_live_game_uses_api_state_when_ics_has_games(monkeypatch):
+    ics_games = [
+        {
+            "gameDate": "2026-10-01T00:00:00Z",
+            "gameState": "FUT",
+            "startTimeUTC": "2026-10-01T00:00:00Z",
+        }
+    ]
+    api_games = [
+        {
+            "gameDate": "2026-10-01T00:00:00Z",
+            "gameState": "LIVE",
+            "startTimeUTC": "2026-10-01T00:00:00Z",
+            "id": 1,
+        }
+    ]
+    monkeypatch.setattr(data_fetch, "_fetch_blackhawks_ics_schedule", lambda: ics_games)
+    monkeypatch.setattr(data_fetch, "_fetch_blackhawks_api_schedule_games", lambda: api_games)
+
+    assert data_fetch.fetch_blackhawks_live_game() is api_games[0]
+    assert api_games[0]["startTimeCentral"] == "7:00 PM"

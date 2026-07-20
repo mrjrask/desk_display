@@ -1325,19 +1325,25 @@ def _fetch_blackhawks_ics_schedule() -> List[Dict[str, Any]]:
     return sorted((game for game in games if game), key=lambda game: game.get("gameDate", ""))
 
 
-def _fetch_blackhawks_schedule_games() -> List[Dict[str, Any]]:
-    try:
-        games = _fetch_blackhawks_ics_schedule()
-        if games:
-            return games
-    except Exception as exc:
-        logging.error("Error fetching Blackhawks ICS schedule: %s", exc)
+def _fetch_blackhawks_api_schedule_games() -> List[Dict[str, Any]]:
     r = _session.get(NHL_API_URL, timeout=10, headers=NHL_HEADERS)
     r.raise_for_status()
     data = r.json()
     if "dates" in data:
         return [game for day in data["dates"] for game in day.get("games", [])]
     return data.get("games", [])
+
+
+def _fetch_blackhawks_schedule_games(prefer_ics: bool = True) -> List[Dict[str, Any]]:
+    if prefer_ics:
+        try:
+            games = _fetch_blackhawks_ics_schedule()
+            if games:
+                return games
+        except Exception as exc:
+            logging.error("Error fetching Blackhawks ICS schedule: %s", exc)
+    return _fetch_blackhawks_api_schedule_games()
+
 
 def fetch_blackhawks_next_game():
     try:
@@ -2213,7 +2219,7 @@ def fetch_blackhawks_next_home_game():
 
 def fetch_blackhawks_last_game():
     try:
-        games = _fetch_blackhawks_schedule_games()
+        games = _fetch_blackhawks_api_schedule_games()
 
         offs = [g for g in games if g.get("gameState") == "OFF"]
         if offs:
@@ -2228,7 +2234,7 @@ def fetch_blackhawks_last_game():
 
 def fetch_blackhawks_live_game():
     try:
-        games = _fetch_blackhawks_schedule_games()
+        games = _fetch_blackhawks_api_schedule_games()
         for g in games:
             state = g.get("gameState", "").lower()
             if state in ("live", "in progress"):
