@@ -49,3 +49,17 @@ def test_fetch_blackhawks_next_game_prefers_ics_schedule(monkeypatch):
 
     assert result is games[0]
     assert result["startTimeCentral"] == now.replace(month=9, day=30, hour=19).strftime("%I:%M %p").lstrip("0")
+
+
+def test_fetch_blackhawks_live_game_treats_crit_as_live(monkeypatch):
+    game = {
+        "gameDate": "2026-10-01",
+        "gameState": "CRIT",
+        "startTimeUTC": "2026-10-01T00:00:00Z",
+    }
+    monkeypatch.setattr(data_fetch, "_fetch_blackhawks_schedule_games", lambda: [game])
+
+    result = data_fetch.fetch_blackhawks_live_game()
+
+    assert result is game
+    assert result["startTimeCentral"] == "7:00 PM"

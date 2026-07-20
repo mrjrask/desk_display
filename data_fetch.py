@@ -2231,7 +2231,7 @@ def fetch_blackhawks_live_game():
         games = _fetch_blackhawks_schedule_games()
         for g in games:
             state = g.get("gameState", "").lower()
-            if state in ("live", "in progress"):
+            if state in ("live", "in progress", "crit"):
                 if not g.get("startTimeCentral"):
                     utc = g.get("startTimeUTC")
                     if utc:
