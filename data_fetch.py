@@ -31,7 +31,7 @@ from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives import serialization
 
 from services.http_client import NHL_HEADERS, get_session
-from screens.nba_scoreboard import _fetch_games_for_date as _nba_fetch_games_for_date
+from services.sports.nba import fetch_games_for_date as _nba_fetch_games_for_date
 
 from config import (
     LATITUDE,
@@ -2231,7 +2231,7 @@ def fetch_blackhawks_live_game():
         games = _fetch_blackhawks_schedule_games()
         for g in games:
             state = g.get("gameState", "").lower()
-            if state in ("live", "in progress"):
+            if state in ("live", "in progress", "crit"):
                 if not g.get("startTimeCentral"):
                     utc = g.get("startTimeUTC")
                     if utc:

@@ -16,75 +16,8 @@ import config
 from config import CENTRAL_TIME, HEIGHT, NBA_TEAM_TRICODE, WIDTH, is_display_profile
 from paths import resolve_layouts_config_path, resolve_screens_config_paths
 from utils import ScreenImage, animate_scroll, timestamp_to_datetime
-from screens.draw_bears_schedule import show_bears_next_game, show_bears_next_season, show_bears_next_season_sched
-from screens.draw_bulls_schedule import (
-    draw_bulls_next_home_game,
-    draw_last_bulls_game,
-    draw_live_bulls_game,
-    draw_sports_screen_bulls,
-)
-from screens.draw_hawks_schedule import (
-    draw_hawks_next_home_game,
-    draw_last_hawks_game,
-    draw_live_hawks_game,
-    draw_sports_screen_hawks,
-)
-from screens.draw_wolves_schedule import (
-    draw_last_wolves_game,
-    draw_live_wolves_game,
-    draw_sports_screen_wolves,
-    draw_wolves_next_home_game,
-)
-from screens.draw_vrnof import draw_vrnof_screen
-from screens.draw_weather import (
-    _pop_pct_from,
-    _selected_alert,
-    draw_weather_alert_screen,
-    draw_weather_astronomical,
-    draw_weather_daily,
-    draw_weather_hourly,
-    draw_weather_radar,
-    draw_weather_screen_1,
-    draw_weather_screen_2,
-)
-from screens.draw_nixie import draw_nixie
-from screens.on_this_day import draw_on_this_day
-from screens.draw_date_time import draw_date
-from screens.draw_quad import _TileSpec, draw_quad_screen
-from screens.mlb_schedule import (
-    draw_box_score,
-    draw_cubs_result,
-    draw_last_game,
-    draw_no_game_screen,
-    draw_series_screen,
-    draw_next_home_game,
-    draw_sports_screen,
-)
-from screens.mlb_scoreboard import render_mlb_scoreboard
-from screens.mlb_scoreboard_v2 import render_mlb_scoreboard_v2
-from screens.mlb_league_standings import (
-    draw_AL_Overview,
-    draw_NL_Overview,
-    draw_mlb_al_standings,
-    draw_mlb_nl_standings,
-)
-from screens.mlb_team_standings import (
-    draw_standings_screen1,
-    draw_standings_screen2,
-    draw_standings_screen3,
-)
-from screens.nba_team_standings import draw_nba_standings_screen1
-from screens.nfl_team_standings import (
-    draw_nfl_standings_screen1,
-    draw_nfl_standings_screen2,
-)
-from screens.nhl_team_standings import draw_nhl_standings_screen1
-from screens.ncaam_scoreboard import render_ncaam_scoreboard
-from screens.world_cup_scoreboard import render_world_cup_scoreboard
-from screens.nfl_scoreboard import render_nfl_scoreboard
-from screens.nfl_scoreboard_v2 import render_nfl_scoreboard_v2
-from screens.nhl_playoffs import render_nhl_playoffs
-from screens.nba_playoffs import render_nba_playoffs
+from screens.draw_weather import _pop_pct_from, _selected_alert
+from screens.draw_quad import _TileSpec
 
 RenderCallable = Callable[[], Optional[Image.Image | ScreenImage]]
 _LAZY_CALLABLE_CACHE: dict[str, Callable[..., Any]] = {}
@@ -118,6 +51,59 @@ def _lazy_callable(import_path: str) -> Callable[..., Any]:
 # Heavyweight renderers are resolved lazily so importing the registry does not
 # trigger runtime probes, network helpers, or large renderer modules for disabled
 # screens.
+show_bears_next_game = _lazy_callable("screens.draw_bears_schedule.show_bears_next_game")
+show_bears_next_season = _lazy_callable("screens.draw_bears_schedule.show_bears_next_season")
+show_bears_next_season_sched = _lazy_callable("screens.draw_bears_schedule.show_bears_next_season_sched")
+draw_bulls_next_home_game = _lazy_callable("screens.draw_bulls_schedule.draw_bulls_next_home_game")
+draw_last_bulls_game = _lazy_callable("screens.draw_bulls_schedule.draw_last_bulls_game")
+draw_live_bulls_game = _lazy_callable("screens.draw_bulls_schedule.draw_live_bulls_game")
+draw_sports_screen_bulls = _lazy_callable("screens.draw_bulls_schedule.draw_sports_screen_bulls")
+draw_hawks_next_home_game = _lazy_callable("screens.draw_hawks_schedule.draw_hawks_next_home_game")
+draw_last_hawks_game = _lazy_callable("screens.draw_hawks_schedule.draw_last_hawks_game")
+draw_live_hawks_game = _lazy_callable("screens.draw_hawks_schedule.draw_live_hawks_game")
+draw_sports_screen_hawks = _lazy_callable("screens.draw_hawks_schedule.draw_sports_screen_hawks")
+draw_last_wolves_game = _lazy_callable("screens.draw_wolves_schedule.draw_last_wolves_game")
+draw_live_wolves_game = _lazy_callable("screens.draw_wolves_schedule.draw_live_wolves_game")
+draw_sports_screen_wolves = _lazy_callable("screens.draw_wolves_schedule.draw_sports_screen_wolves")
+draw_wolves_next_home_game = _lazy_callable("screens.draw_wolves_schedule.draw_wolves_next_home_game")
+draw_vrnof_screen = _lazy_callable("screens.draw_vrnof.draw_vrnof_screen")
+draw_weather_alert_screen = _lazy_callable("screens.draw_weather.draw_weather_alert_screen")
+draw_weather_astronomical = _lazy_callable("screens.draw_weather.draw_weather_astronomical")
+draw_weather_daily = _lazy_callable("screens.draw_weather.draw_weather_daily")
+draw_weather_hourly = _lazy_callable("screens.draw_weather.draw_weather_hourly")
+draw_weather_radar = _lazy_callable("screens.draw_weather.draw_weather_radar")
+draw_weather_screen_1 = _lazy_callable("screens.draw_weather.draw_weather_screen_1")
+draw_weather_screen_2 = _lazy_callable("screens.draw_weather.draw_weather_screen_2")
+draw_nixie = _lazy_callable("screens.draw_nixie.draw_nixie")
+draw_on_this_day = _lazy_callable("screens.on_this_day.draw_on_this_day")
+draw_date = _lazy_callable("screens.draw_date_time.draw_date")
+draw_quad_screen = _lazy_callable("screens.draw_quad.draw_quad_screen")
+draw_box_score = _lazy_callable("screens.mlb_schedule.draw_box_score")
+draw_cubs_result = _lazy_callable("screens.mlb_schedule.draw_cubs_result")
+draw_last_game = _lazy_callable("screens.mlb_schedule.draw_last_game")
+draw_no_game_screen = _lazy_callable("screens.mlb_schedule.draw_no_game_screen")
+draw_series_screen = _lazy_callable("screens.mlb_schedule.draw_series_screen")
+draw_next_home_game = _lazy_callable("screens.mlb_schedule.draw_next_home_game")
+draw_sports_screen = _lazy_callable("screens.mlb_schedule.draw_sports_screen")
+render_mlb_scoreboard = _lazy_callable("screens.mlb_scoreboard.render_mlb_scoreboard")
+render_mlb_scoreboard_v2 = _lazy_callable("screens.mlb_scoreboard_v2.render_mlb_scoreboard_v2")
+draw_AL_Overview = _lazy_callable("screens.mlb_league_standings.draw_AL_Overview")
+draw_NL_Overview = _lazy_callable("screens.mlb_league_standings.draw_NL_Overview")
+draw_mlb_al_standings = _lazy_callable("screens.mlb_league_standings.draw_mlb_al_standings")
+draw_mlb_nl_standings = _lazy_callable("screens.mlb_league_standings.draw_mlb_nl_standings")
+draw_standings_screen1 = _lazy_callable("screens.mlb_team_standings.draw_standings_screen1")
+draw_standings_screen2 = _lazy_callable("screens.mlb_team_standings.draw_standings_screen2")
+draw_standings_screen3 = _lazy_callable("screens.mlb_team_standings.draw_standings_screen3")
+draw_nba_standings_screen1 = _lazy_callable("screens.nba_team_standings.draw_nba_standings_screen1")
+draw_nfl_standings_screen1 = _lazy_callable("screens.nfl_team_standings.draw_nfl_standings_screen1")
+draw_nfl_standings_screen2 = _lazy_callable("screens.nfl_team_standings.draw_nfl_standings_screen2")
+draw_nhl_standings_screen1 = _lazy_callable("screens.nhl_team_standings.draw_nhl_standings_screen1")
+render_ncaam_scoreboard = _lazy_callable("screens.ncaam_scoreboard.render_ncaam_scoreboard")
+render_world_cup_scoreboard = _lazy_callable("screens.world_cup_scoreboard.render_world_cup_scoreboard")
+render_nfl_scoreboard = _lazy_callable("screens.nfl_scoreboard.render_nfl_scoreboard")
+render_nfl_scoreboard_v2 = _lazy_callable("screens.nfl_scoreboard_v2.render_nfl_scoreboard_v2")
+render_nhl_playoffs = _lazy_callable("screens.nhl_playoffs.render_nhl_playoffs")
+render_nba_playoffs = _lazy_callable("screens.nba_playoffs.render_nba_playoffs")
 draw_air_quality_screen = _lazy_callable("screens.draw_air_quality.draw_air_quality_screen")
 draw_inside = _lazy_callable("screens.draw_inside.draw_inside")
 is_inside_sensor_available = _lazy_callable("screens.draw_inside.is_inside_sensor_available")

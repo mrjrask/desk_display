@@ -43,13 +43,15 @@ from utils import (
     scroll_vertical_content,
     standard_scoreboard_league_logo_height,
 )
+from services.sports.nba import (
+    _NBA_HEADERS,
+    fetch_games_for_date as _fetch_games_for_date,
+    scoreboard_date as _scoreboard_date,
+)
 from screens.nba_scoreboard import (
     _center_text,
     _team_logo_abbr,
     _get_league_logo,
-    _NBA_HEADERS,
-    _fetch_games_for_date,
-    _scoreboard_date,
 )
 from screens.team_abbreviation_mappings import NBA_ABBR_TO_NICKNAME
 

@@ -307,7 +307,7 @@ def test_mlb_next_home_series_uses_following_home_series_title(monkeypatch):
     def _fake_draw_series_screen(display, games, title, **kwargs):
         titles.append(title)
 
-    monkeypatch.setattr("screens.registry.draw_series_screen", _fake_draw_series_screen)
+    monkeypatch.setattr(registry_module, "draw_series_screen", _fake_draw_series_screen)
     monkeypatch.setattr(registry_module, "is_display_profile", lambda *args, **kwargs: False)
 
     cache_updates = {
@@ -332,7 +332,7 @@ def test_mlb_series_titles_keep_team_name_on_hyperpixel4(monkeypatch):
     def _fake_draw_series_screen(display, games, title, **kwargs):
         titles.append(title)
 
-    monkeypatch.setattr("screens.registry.draw_series_screen", _fake_draw_series_screen)
+    monkeypatch.setattr(registry_module, "draw_series_screen", _fake_draw_series_screen)
     monkeypatch.setattr(
         registry_module,
         "is_display_profile",
@@ -590,7 +590,7 @@ def test_mlb_next_alt_games_rotate_on_primary_next_screen(monkeypatch):
     def _fake_draw_sports_screen(_display, game, *_args, **_kwargs):
         rendered_game_ids.append(game.get("gamePk"))
 
-    monkeypatch.setattr("screens.registry.draw_sports_screen", _fake_draw_sports_screen)
+    monkeypatch.setattr(registry_module, "draw_sports_screen", _fake_draw_sports_screen)
 
     registry, _ = build_screen_registry(
         _make_context(
@@ -644,8 +644,8 @@ def test_date_nixie_screens_render_with_live_color_cycle_mode(monkeypatch):
     def _fake_draw_nixie(_display, transition=False):
         calls.append(("nixie", transition))
 
-    monkeypatch.setattr("screens.registry.draw_date", _fake_draw_date)
-    monkeypatch.setattr("screens.registry.draw_nixie", _fake_draw_nixie)
+    monkeypatch.setattr(registry_module, "draw_date", _fake_draw_date)
+    monkeypatch.setattr(registry_module, "draw_nixie", _fake_draw_nixie)
 
     registry, _ = build_screen_registry(context)
     registry["date"].render()
@@ -659,7 +659,8 @@ def test_quad_screen_is_registered(monkeypatch):
     weather = {"hourly": []}
 
     monkeypatch.setattr(
-        "screens.registry._next_quad_page_tiles",
+        registry_module,
+        "_next_quad_page_tiles",
         lambda: (True, 1.0, ["date", "weather1", "weather hourly", "inside"]),
     )
 
@@ -674,7 +675,8 @@ def test_quad_screen_can_be_disabled(monkeypatch):
     weather = {"hourly": []}
 
     monkeypatch.setattr(
-        "screens.registry._next_quad_page_tiles",
+        registry_module,
+        "_next_quad_page_tiles",
         lambda: (False, 1.0, ["date", "weather1", "weather hourly", "inside"]),
     )
 
@@ -689,7 +691,8 @@ def test_quad_screen_uses_layout_tile_selection(monkeypatch):
     context = _make_context(weather, now)
 
     monkeypatch.setattr(
-        "screens.registry._next_quad_page_tiles",
+        registry_module,
+        "_next_quad_page_tiles",
         lambda: (True, 1.0, ["nixie", "nixie", "inside", "weather1"]),
     )
 
@@ -699,7 +702,7 @@ def test_quad_screen_uses_layout_tile_selection(monkeypatch):
         captured["labels"] = [tile.label for tile in tiles]
         return None
 
-    monkeypatch.setattr("screens.registry.draw_quad_screen", _fake_draw_quad_screen)
+    monkeypatch.setattr(registry_module, "draw_quad_screen", _fake_draw_quad_screen)
 
     registry, _ = build_screen_registry(context)
     registry["quad"].render()
@@ -725,7 +728,7 @@ def test_weather_quad_screen_uses_weather_tile_selection(monkeypatch):
         captured["labels"] = [tile.label for tile in tiles]
         return None
 
-    monkeypatch.setattr("screens.registry.draw_quad_screen", _fake_draw_quad_screen)
+    monkeypatch.setattr(registry_module, "draw_quad_screen", _fake_draw_quad_screen)
 
     registry, _ = build_screen_registry(context)
     registry["weather quad"].render()
@@ -754,7 +757,7 @@ def test_cubs_schedule_quad_uses_expected_tile_selection(monkeypatch):
         captured["labels"] = [tile.label for tile in tiles]
         return None
 
-    monkeypatch.setattr("screens.registry.draw_quad_screen", _fake_draw_quad_screen)
+    monkeypatch.setattr(registry_module, "draw_quad_screen", _fake_draw_quad_screen)
 
     registry, _ = build_screen_registry(context)
     assert registry["cubs schedule quad"].available is True
@@ -789,7 +792,7 @@ def test_sox_schedule_quad_uses_expected_tile_selection(monkeypatch):
         captured["labels"] = [tile.label for tile in tiles]
         return None
 
-    monkeypatch.setattr("screens.registry.draw_quad_screen", _fake_draw_quad_screen)
+    monkeypatch.setattr(registry_module, "draw_quad_screen", _fake_draw_quad_screen)
 
     registry, _ = build_screen_registry(context)
     assert registry["sox schedule quad"].available is True
@@ -832,7 +835,7 @@ def test_mlb_schedule_quads_remain_available_on_no_game_days(monkeypatch):
         captured.setdefault("labels", []).append([tile.label for tile in tiles])
         return None
 
-    monkeypatch.setattr("screens.registry.draw_quad_screen", _fake_draw_quad_screen)
+    monkeypatch.setattr(registry_module, "draw_quad_screen", _fake_draw_quad_screen)
 
     registry, _ = build_screen_registry(context)
 
@@ -880,7 +883,7 @@ def test_hawks_schedule_quad_uses_expected_tile_selection(monkeypatch):
         captured["labels"] = [tile.label for tile in tiles]
         return None
 
-    monkeypatch.setattr("screens.registry.draw_quad_screen", _fake_draw_quad_screen)
+    monkeypatch.setattr(registry_module, "draw_quad_screen", _fake_draw_quad_screen)
 
     registry, _ = build_screen_registry(context)
     assert registry["hawks schedule quad"].available is True
@@ -915,7 +918,7 @@ def test_hawks_schedule_quad_uses_blank_tile_when_next_home_missing(monkeypatch)
         captured["labels"] = [tile.label for tile in tiles]
         return None
 
-    monkeypatch.setattr("screens.registry.draw_quad_screen", _fake_draw_quad_screen)
+    monkeypatch.setattr(registry_module, "draw_quad_screen", _fake_draw_quad_screen)
 
     registry, _ = build_screen_registry(context)
     assert "hawks next home" not in registry
@@ -951,7 +954,7 @@ def test_bulls_schedule_quad_uses_expected_tile_selection(monkeypatch):
         captured["labels"] = [tile.label for tile in tiles]
         return None
 
-    monkeypatch.setattr("screens.registry.draw_quad_screen", _fake_draw_quad_screen)
+    monkeypatch.setattr(registry_module, "draw_quad_screen", _fake_draw_quad_screen)
 
     registry, _ = build_screen_registry(context)
     assert registry["bulls schedule quad"].available is True
@@ -971,7 +974,8 @@ def test_quad_screen_advances_scrolling_tiles_between_renders(monkeypatch):
     context = _make_context(weather, now)
 
     monkeypatch.setattr(
-        "screens.registry._next_quad_page_tiles",
+        registry_module,
+        "_next_quad_page_tiles",
         lambda: (True, 1.0, ["date", "nixie", "inside", "weather1"]),
     )
 
@@ -995,11 +999,11 @@ def test_quad_screen_advances_scrolling_tiles_between_renders(monkeypatch):
         sampled_colors.append(rendered.getpixel((0, 0)))
         return None
 
-    monkeypatch.setattr("screens.registry.draw_date", _animated_date)
-    monkeypatch.setattr("screens.registry.draw_nixie", _single_frame)
-    monkeypatch.setattr("screens.registry.draw_inside", _single_frame)
-    monkeypatch.setattr("screens.registry.draw_weather_screen_1", _single_frame)
-    monkeypatch.setattr("screens.registry.draw_quad_screen", _fake_draw_quad_screen)
+    monkeypatch.setattr(registry_module, "draw_date", _animated_date)
+    monkeypatch.setattr(registry_module, "draw_nixie", _single_frame)
+    monkeypatch.setattr(registry_module, "draw_inside", _single_frame)
+    monkeypatch.setattr(registry_module, "draw_weather_screen_1", _single_frame)
+    monkeypatch.setattr(registry_module, "draw_quad_screen", _fake_draw_quad_screen)
 
     registry, _ = build_screen_registry(context)
     registry["quad"].render()
@@ -1015,7 +1019,8 @@ def test_quad_screen_prefers_captured_frames_over_screenimage_return(monkeypatch
     context = _make_context(weather, now)
 
     monkeypatch.setattr(
-        "screens.registry._next_quad_page_tiles",
+        registry_module,
+        "_next_quad_page_tiles",
         lambda: (True, 1.0, ["date", "nixie", "inside", "weather1"]),
     )
 
@@ -1042,11 +1047,11 @@ def test_quad_screen_prefers_captured_frames_over_screenimage_return(monkeypatch
         sampled_colors.append(rendered.getpixel((0, 0)))
         return None
 
-    monkeypatch.setattr("screens.registry.draw_date", _animated_date)
-    monkeypatch.setattr("screens.registry.draw_nixie", _single_frame)
-    monkeypatch.setattr("screens.registry.draw_inside", _single_frame)
-    monkeypatch.setattr("screens.registry.draw_weather_screen_1", _single_frame)
-    monkeypatch.setattr("screens.registry.draw_quad_screen", _fake_draw_quad_screen)
+    monkeypatch.setattr(registry_module, "draw_date", _animated_date)
+    monkeypatch.setattr(registry_module, "draw_nixie", _single_frame)
+    monkeypatch.setattr(registry_module, "draw_inside", _single_frame)
+    monkeypatch.setattr(registry_module, "draw_weather_screen_1", _single_frame)
+    monkeypatch.setattr(registry_module, "draw_quad_screen", _fake_draw_quad_screen)
 
     registry, _ = build_screen_registry(context)
     registry["quad"].render()
@@ -1062,7 +1067,8 @@ def test_quad_screen_samples_across_longer_animations(monkeypatch):
     context = _make_context(weather, now)
 
     monkeypatch.setattr(
-        "screens.registry._next_quad_page_tiles",
+        registry_module,
+        "_next_quad_page_tiles",
         lambda: (True, 1.0, ["date", "nixie", "inside", "weather1"]),
     )
 
@@ -1085,11 +1091,11 @@ def test_quad_screen_samples_across_longer_animations(monkeypatch):
         sampled_red.append(rendered.getpixel((0, 0))[0])
         return None
 
-    monkeypatch.setattr("screens.registry.draw_date", _long_animated_date)
-    monkeypatch.setattr("screens.registry.draw_nixie", _single_frame)
-    monkeypatch.setattr("screens.registry.draw_inside", _single_frame)
-    monkeypatch.setattr("screens.registry.draw_weather_screen_1", _single_frame)
-    monkeypatch.setattr("screens.registry.draw_quad_screen", _fake_draw_quad_screen)
+    monkeypatch.setattr(registry_module, "draw_date", _long_animated_date)
+    monkeypatch.setattr(registry_module, "draw_nixie", _single_frame)
+    monkeypatch.setattr(registry_module, "draw_inside", _single_frame)
+    monkeypatch.setattr(registry_module, "draw_weather_screen_1", _single_frame)
+    monkeypatch.setattr(registry_module, "draw_quad_screen", _fake_draw_quad_screen)
 
     registry, _ = build_screen_registry(context)
     for _ in range(10):
@@ -1105,7 +1111,8 @@ def test_quad_screen_preserves_scrolling_cursor_across_registry_rebuilds(monkeyp
     weather = {"hourly": []}
 
     monkeypatch.setattr(
-        "screens.registry._next_quad_page_tiles",
+        registry_module,
+        "_next_quad_page_tiles",
         lambda: (True, 1.0, ["date", "nixie", "inside", "weather1"]),
     )
 
@@ -1129,12 +1136,12 @@ def test_quad_screen_preserves_scrolling_cursor_across_registry_rebuilds(monkeyp
         sampled_colors.append(rendered.getpixel((0, 0)))
         return None
 
-    monkeypatch.setattr("screens.registry.draw_date", _animated_date)
-    monkeypatch.setattr("screens.registry.draw_nixie", _single_frame)
-    monkeypatch.setattr("screens.registry.draw_inside", _single_frame)
-    monkeypatch.setattr("screens.registry.draw_weather_screen_1", _single_frame)
-    monkeypatch.setattr("screens.registry.draw_quad_screen", _fake_draw_quad_screen)
-    monkeypatch.setattr("screens.registry._quad_tile_scroll_cursor", {})
+    monkeypatch.setattr(registry_module, "draw_date", _animated_date)
+    monkeypatch.setattr(registry_module, "draw_nixie", _single_frame)
+    monkeypatch.setattr(registry_module, "draw_inside", _single_frame)
+    monkeypatch.setattr(registry_module, "draw_weather_screen_1", _single_frame)
+    monkeypatch.setattr(registry_module, "draw_quad_screen", _fake_draw_quad_screen)
+    monkeypatch.setattr(registry_module, "_quad_tile_scroll_cursor", {})
 
     first_registry, _ = build_screen_registry(_make_context(weather, now))
     first_registry["quad"].render()
@@ -1145,12 +1152,11 @@ def test_quad_screen_preserves_scrolling_cursor_across_registry_rebuilds(monkeyp
     assert sampled_colors == [(255, 0, 0), (0, 255, 0)]
 def test_next_quad_page_tiles_rotates_pages(monkeypatch):
     monkeypatch.setattr(
-        "screens.registry._quad_layout_from_layouts",
+        registry_module,
+        "_quad_layout_from_layouts",
         lambda: (True, 1.0, [["date", "date", "date", "date"], ["nixie", "nixie", "nixie", "nixie"]]),
     )
-    monkeypatch.setattr("screens.registry._quad_page_index", 0)
-
-    from screens import registry as registry_module
+    monkeypatch.setattr(registry_module, "_quad_page_index", 0)
 
     enabled_first, speed_first, first = registry_module._next_quad_page_tiles()
     enabled_second, speed_second, second = registry_module._next_quad_page_tiles()
@@ -1182,7 +1188,7 @@ def test_mlb_scoreboard_renders_with_empty_list_when_cache_is_none(monkeypatch):
         captured["mlb_games"] = games
         return None
 
-    monkeypatch.setattr("screens.registry.render_mlb_scoreboard", _capture_mlb)
+    monkeypatch.setattr(registry_module, "render_mlb_scoreboard", _capture_mlb)
 
     registry, _ = build_screen_registry(context)
     registry["MLB Scoreboard"].render()
