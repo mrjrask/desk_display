@@ -7,4 +7,4 @@ select = ["E", "F", "I"]
 
 [tool.ruff.lint.isort]
 combine-as-imports = true
-known-first-party = ["config", "config_store", "display_profiles", "screens", "services", "utils"]
+known-first-party = ["config", "config_store", "desk_platform", "display_profiles", "screens", "services", "utils"]
