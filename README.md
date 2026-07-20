@@ -645,11 +645,11 @@ python tools/validate_required_files.py
 python scripts/test_api_connections.py
 python scripts/test_api_connections.py --json
 
-# Render all screens for visual/regression review
-python tools/maintenance/render_all_screens.py
-
-# Render selected screens with the older maintenance helper
+# Canonical render-validation command for visual/regression review
 python tools/maintenance/render_screens.py
+
+# Note: tools/maintenance/render_all_screens.py was deprecated for one release
+# and has been retired; update external automation to use render_screens.py.
 ```
 
 ### Import/export helpers
