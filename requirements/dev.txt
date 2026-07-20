@@ -1,0 +1,5 @@
+-r base.txt
+
+# Development/test dependency layer. Add local-only tooling here.
+-r sensors-adafruit.txt
+-r sensors-pimoroni.txt

@@ -61,7 +61,7 @@ esac
 export EXPECTED_CODENAME
 DESK_DISPLAY_OUTPUT="${DESK_DISPLAY_OUTPUT:-kernel}"
 export DESK_DISPLAY_OUTPUT
-export REQUIREMENTS_FILE="requirements_kernel.txt"
+export REQUIREMENTS_FILE="requirements/kernel.txt"
 export DISABLE_SPI_I2C="1"
 
 HYPERPIXEL_PANEL="${HYPERPIXEL_PANEL:-}"

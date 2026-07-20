@@ -1,0 +1,11 @@
+-r base.txt
+
+# Display HAT Mini output and Raspberry Pi GPIO/SPI stack.
+adafruit-blinka
+spidev
+smbus
+lgpio
+gpiozero
+rpi.gpio
+displayhatmini
+pygame
