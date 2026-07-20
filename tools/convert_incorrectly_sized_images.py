@@ -16,7 +16,13 @@ from typing import Iterable
 
 from PIL import Image
 
-from check_image_assets import IMAGE_ROOT, PROJECT_ROOT, SUPPORTED_EXTENSIONS, policy_for
+from check_image_assets import (
+    IMAGE_ROOT,
+    PROJECT_ROOT,
+    SUPPORTED_EXTENSIONS,
+    Policy,
+    policy_for,
+)
 
 DEFAULT_OUTPUT_ROOT = Path.home() / f"{PROJECT_ROOT.name}_corrected_images"
 
@@ -96,15 +102,61 @@ def _target_size(size: tuple[int, int], max_dimension: int) -> tuple[int, int]:
     return max(1, round(width * ratio)), max(1, round(height * ratio))
 
 
-def _save_kwargs(path: Path) -> dict[str, object]:
+def _save_kwargs(path: Path, *, quality: int = 85) -> dict[str, object]:
     suffix = path.suffix.lower()
     if suffix == ".png":
         return {"format": "PNG", "optimize": True}
     if suffix in {".jpg", ".jpeg"}:
-        return {"format": "JPEG", "quality": 85, "optimize": True, "progressive": True}
+        return {"format": "JPEG", "quality": quality, "optimize": True, "progressive": True}
     if suffix == ".webp":
-        return {"format": "WEBP", "quality": 85, "method": 6}
+        return {"format": "WEBP", "quality": quality, "method": 6}
     return {}
+
+
+def _quality_steps(path: Path) -> tuple[int, ...]:
+    if path.suffix.lower() in {".jpg", ".jpeg", ".webp"}:
+        return (85, 75, 65, 55, 45, 35)
+    return (85,)
+
+
+def _prepare_for_save(image: Image.Image, path: Path) -> Image.Image:
+    if path.suffix.lower() in {".jpg", ".jpeg"} and image.mode in {"RGBA", "LA", "P"}:
+        return image.convert("RGB")
+    return image
+
+
+def _encode_candidate(image: Image.Image, path: Path) -> tuple[bytes, int]:
+    best_data = b""
+    best_size = 0
+    for quality in _quality_steps(path):
+        buffer = BytesIO()
+        image.save(buffer, **_save_kwargs(path, quality=quality))
+        data = buffer.getvalue()
+        if not best_data or len(data) < len(best_data):
+            best_data = data
+            best_size = buffer.tell()
+    return best_data, best_size
+
+
+def _resize_to_fit_policy(image: Image.Image, path: Path, policy: Policy) -> tuple[tuple[int, int], bytes, int]:
+    """Return encoded image data that satisfies both dimension and byte limits."""
+    target_size = _target_size(image.size, policy.max_dimension)
+
+    while True:
+        if target_size != image.size:
+            candidate = image.resize(target_size, Image.Resampling.LANCZOS)
+        else:
+            candidate = image.copy()
+        candidate = _prepare_for_save(candidate, path)
+        data, encoded_size = _encode_candidate(candidate, path)
+        if encoded_size <= policy.max_bytes:
+            return target_size, data, encoded_size
+
+        width, height = target_size
+        if width == 1 and height == 1:
+            raise ValueError(f"Unable to convert {path} below {policy.max_bytes} bytes")
+
+        target_size = (max(1, int(width * 0.9)), max(1, int(height * 0.9)))
 
 
 def convert_image(path: Path, *, input_root: Path, output_root: Path, dry_run: bool = False) -> ConvertedImage:
@@ -118,17 +170,10 @@ def convert_image(path: Path, *, input_root: Path, output_root: Path, dry_run: b
     original_bytes = source_path.stat().st_size
     with Image.open(source_path) as image:
         original_size = image.size
-        converted_size = _target_size(original_size, policy.max_dimension)
-        converted = image.resize(converted_size, Image.Resampling.LANCZOS) if converted_size != original_size else image
-        if source_path.suffix.lower() in {".jpg", ".jpeg"} and converted.mode in {"RGBA", "LA", "P"}:
-            converted = converted.convert("RGB")
-
-        buffer = BytesIO()
-        converted.save(buffer, **_save_kwargs(source_path))
-        converted_bytes = buffer.tell()
+        converted_size, converted_data, converted_bytes = _resize_to_fit_policy(image, source_path, policy)
         if not dry_run:
             output_path.parent.mkdir(parents=True, exist_ok=True)
-            output_path.write_bytes(buffer.getvalue())
+            output_path.write_bytes(converted_data)
 
     return ConvertedImage(
         source_path=source_path,
@@ -178,7 +223,11 @@ def parse_args() -> argparse.Namespace:
 
 def main() -> int:
     args = parse_args()
-    results = convert_incorrectly_sized_images(args.paths or None, output_root=args.output_root, dry_run=args.dry_run)
+    results = convert_incorrectly_sized_images(
+        args.paths or None,
+        output_root=args.output_root,
+        dry_run=args.dry_run,
+    )
     verb = "Would write" if args.dry_run else "Wrote"
     for result in results:
         print(
