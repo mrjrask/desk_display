@@ -133,9 +133,10 @@ sudo apt-get install -y \
 | `requirements/dev.txt` | Development profile layered on `base.txt` and optional sensor dependencies. |
 | `requirements.txt`, `requirements_*.txt` | Backward-compatible wrappers for older commands. Prefer the `requirements/` profile files above. |
 
-Indoor sensor drivers are optional and are kept out of the default display profiles. Install `requirements/sensors-adafruit.txt` for Adafruit/CircuitPython BME280, BME680, or SHT4x sensors. Pimoroni sensor drivers use editable installs from `vendor/`; the installer adds `requirements/sensors-pimoroni.txt` automatically only when `INSIDE_SENSOR` (or legacy `INDOOR_SENSOR`) is configured as `pimoroni_bme280`, `pimoroni_bme680`, or `pimoroni_bme68x` in the environment or `.env` before running the installer:
+Indoor sensor drivers are optional and are kept out of the default display profiles. The installer adds `requirements/sensors-adafruit.txt` automatically when `INSIDE_SENSOR` (or legacy `INDOOR_SENSOR`) is configured as `adafruit_bme280`, `adafruit_bme680`, or `adafruit_sht4x` in the environment or `.env` before running the installer. Pimoroni sensor drivers use editable installs from `vendor/`; the installer adds `requirements/sensors-pimoroni.txt` automatically for `pimoroni_bme280`, `pimoroni_bme680`, or `pimoroni_bme68x`:
 
 ```bash
+INSIDE_SENSOR=adafruit_bme680 bash ./Installers/install.sh display_hat_mini
 INSIDE_SENSOR=pimoroni_bme680 bash ./Installers/install.sh display_hat_mini
 ```
 
@@ -337,7 +338,7 @@ Configuration is environment-driven. Put local values in `.env` for development 
 | `INSIDE_SENSOR`, `INSIDE_I2C_BUSES` | Indoor sensor selection and I2C bus probing. |
 | `PRESSURE_HISTORY_PATH` | Pressure history cache path for trend display. |
 
-Set `INSIDE_SENSOR` to `pimoroni_bme280`, `pimoroni_bme680`, or `pimoroni_bme68x` before running an installer when you need the optional vendored Pimoroni sensor drivers. If those optional drivers are absent, the inside screen keeps its normal fallback behavior and is skipped when no supported sensor can be probed.
+Set `INSIDE_SENSOR` to `adafruit_bme280`, `adafruit_bme680`, or `adafruit_sht4x` before running an installer when you need optional Adafruit/CircuitPython sensor drivers. Set it to `pimoroni_bme280`, `pimoroni_bme680`, or `pimoroni_bme68x` when you need the optional vendored Pimoroni sensor drivers. If those optional drivers are absent, the inside screen keeps its normal fallback behavior and is skipped when no supported sensor can be probed.
 
 ### Sports and data variables
 
@@ -677,7 +678,7 @@ python tools/import_screen_rotation_config.py path/to/export.json
 | Weather screens are empty | Verify `WEATHERKIT_*` signing values or `OWM_API_KEY`; run `python scripts/test_api_connections.py`. |
 | Radar/map is blank | Verify network access, RainViewer reachability, and `GOOGLE_MAPS_API_KEY` if Google Static Maps is expected. |
 | Travel route is blank | Verify `TRAVEL_MODE`, route origin/destination variables, and Google/Apple Maps credentials. |
-| Indoor sensor is blank | Verify I2C is enabled, sensor wiring, `INSIDE_SENSOR`, `INSIDE_I2C_BUSES`, optional Pimoroni requirements (`pip install -r requirements/sensors-pimoroni.txt`) when using Pimoroni drivers, and run `i2cdetect`. |
+| Indoor sensor is blank | Verify I2C is enabled, sensor wiring, `INSIDE_SENSOR`, `INSIDE_I2C_BUSES`, optional sensor requirements (`pip install -r requirements/sensors-adafruit.txt` or `pip install -r requirements/sensors-pimoroni.txt`), and run `i2cdetect`. |
 | Wrong rotation/orientation | Avoid double rotation between kernel overlays and `DISPLAY_ROTATION`; check `HYPERPIXEL_PANEL` and display dimensions. |
 | Blank framebuffer/kernel output | Verify `DESK_DISPLAY_OUTPUT`, `DISPLAY_FB_DEVICE`, display dimensions, pixel format/order, and device permissions. |
 | Blinking cursor on framebuffer output | Keep `DISPLAY_FB_HIDE_CONSOLE_CURSOR=1` and `DISPLAY_FB_CONSOLE_GRAPHICS=1` so Linux fbcon does not redraw a cursor over direct framebuffer animation. |

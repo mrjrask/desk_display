@@ -9,6 +9,7 @@ REQUIREMENTS_FILE_OVERRIDE="${REQUIREMENTS_FILE:-}"
 OUTPUT_MODE="${DESK_DISPLAY_OUTPUT:-}"
 INCLUDE_VENDOR_REQUIREMENTS="${INCLUDE_VENDOR_REQUIREMENTS:-0}"
 INCLUDE_PLATFORM_SPECIFIC_REQUIREMENTS="${INCLUDE_PLATFORM_SPECIFIC_REQUIREMENTS:-0}"
+ADAFRUIT_SENSOR_REQUIREMENTS_FILE="${ADAFRUIT_SENSOR_REQUIREMENTS_FILE:-requirements/sensors-adafruit.txt}"
 PIMORONI_SENSOR_REQUIREMENTS_FILE="${PIMORONI_SENSOR_REQUIREMENTS_FILE:-requirements/sensors-pimoroni.txt}"
 
 if [[ ! -f "$COMMON_SCRIPT" ]]; then
@@ -131,6 +132,23 @@ configured_inside_sensor() {
   fi
 
   return 1
+}
+
+should_install_adafruit_sensor_requirements() {
+  local sensor
+  sensor=$(configured_inside_sensor || true)
+  if [[ -z "$sensor" ]]; then
+    return 1
+  fi
+
+  case "$(normalize_sensor_name "$sensor")" in
+    adafruit_bme280|adafruit_bme680|adafruit_sht4x|adafruit_sht41)
+      return 0
+      ;;
+    *)
+      return 1
+      ;;
+  esac
 }
 
 should_install_pimoroni_sensor_requirements() {
@@ -314,6 +332,19 @@ if [[ -f "$PROJECT_DIR/$REQUIREMENTS_FILE" ]]; then
   popd >/dev/null
 else
   warn "$REQUIREMENTS_FILE not found; skipping pip install."
+fi
+
+if should_install_adafruit_sensor_requirements; then
+  if [[ -f "$PROJECT_DIR/$ADAFRUIT_SENSOR_REQUIREMENTS_FILE" ]]; then
+    log "Installing optional Adafruit sensor dependencies from $ADAFRUIT_SENSOR_REQUIREMENTS_FILE"
+    pushd "$PROJECT_DIR" >/dev/null
+    pip install -r "$ADAFRUIT_SENSOR_REQUIREMENTS_FILE"
+    popd >/dev/null
+  else
+    warn "$ADAFRUIT_SENSOR_REQUIREMENTS_FILE not found; skipping optional Adafruit sensor dependencies."
+  fi
+else
+  log "Skipping optional Adafruit sensor dependencies (set INSIDE_SENSOR to adafruit_bme280, adafruit_bme680, or adafruit_sht4x to install them)."
 fi
 
 if should_install_pimoroni_sensor_requirements; then
