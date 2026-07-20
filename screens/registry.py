@@ -758,7 +758,7 @@ def build_screen_registry(context: ScreenContext) -> Tuple[Dict[str, ScreenDefin
             context.display,
             [
                 _TileSpec("weather1", lambda speed=scroll_speed: _render_quad_tile("weather1", scroll_speed=speed)),
-                _TileSpec("weather2", lambda speed=scroll_speed: _render_quad_tile("weather2", scroll_speed=speed)),
+                _TileSpec("air quality", lambda speed=scroll_speed: _render_quad_tile("air quality", scroll_speed=speed)),
                 _TileSpec("weather hourly", lambda speed=scroll_speed: _render_quad_tile("weather hourly", scroll_speed=speed)),
                 _TileSpec("weather daily", lambda speed=scroll_speed: _render_quad_tile("weather daily", scroll_speed=speed)),
             ],
@@ -766,7 +766,7 @@ def build_screen_registry(context: ScreenContext) -> Tuple[Dict[str, ScreenDefin
             scroll_speed=scroll_speed,
         ),
         available=weather_current_available and weather_hourly_available,
-        quad_tiles=["weather1", "weather2", "weather hourly", "weather daily"],
+        quad_tiles=["weather1", "air quality", "weather hourly", "weather daily"],
     )
     radar_available = weather_hourly_available and _precip_within_hours(
         weather_data, RADAR_LOOKAHEAD_HOURS, now=context.now
