@@ -63,6 +63,14 @@ def test_requested_data_feeds_includes_air_quality(monkeypatch):
     assert "air_quality" in main._requested_data_feeds()
 
 
+def test_requested_data_feeds_includes_air_quality_for_weather_quad(monkeypatch):
+    main = _load_main()
+    main._requested_screen_ids = {"weather quad"}
+    monkeypatch.setattr(main.config, "ENABLE_AIR_QUALITY", True)
+
+    assert "air_quality" in main._requested_data_feeds()
+
+
 def test_refresh_air_quality_uses_configured_aqi_coordinates(monkeypatch):
     main = _load_main()
     report = object()
