@@ -165,6 +165,9 @@ def _intro_max_height() -> int:
     return max(1, int(round(INTRO_MAX_BASE_HEIGHT * scale)))
 
 _LOGO_CACHE: dict[tuple[str, int], Optional[Image.Image]] = {}
+_LEAGUE_LOGO_CACHE: dict[int, Optional[Image.Image]] = {}
+_INTRO_LOGO_CACHE: Optional[Image.Image] = None
+_INTRO_LOGO_LOADED = False
 _LOGO_ABBREVIATION_OVERRIDES: dict[str, str] = {
     "BKN": "BRK",
     "NYK": "NY",
