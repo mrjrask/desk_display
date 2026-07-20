@@ -714,6 +714,9 @@ def test_weather_quad_screen_uses_weather_tile_selection(monkeypatch):
         "hourly": [{"dt": _ts(now + datetime.timedelta(hours=2)), "pop": 0}],
         "daily": [{"temp": {"max": 70, "min": 50}}],
     }
+    monkeypatch.setattr(registry_module.config, "ENABLE_AIR_QUALITY", True)
+    monkeypatch.setattr(registry_module.config, "AIR_QUALITY_LATITUDE", 41.88)
+    monkeypatch.setattr(registry_module.config, "AIR_QUALITY_LONGITUDE", -87.63)
     context = _make_context(weather, now)
 
     captured = {}
@@ -727,7 +730,7 @@ def test_weather_quad_screen_uses_weather_tile_selection(monkeypatch):
     registry, _ = build_screen_registry(context)
     registry["weather quad"].render()
 
-    assert captured["labels"] == ["weather1", "weather2", "weather hourly", "weather daily"]
+    assert captured["labels"] == ["weather1", "air quality", "weather hourly", "weather daily"]
 
 
 def test_cubs_schedule_quad_uses_expected_tile_selection(monkeypatch):
