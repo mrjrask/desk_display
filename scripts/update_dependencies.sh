@@ -9,7 +9,7 @@ REQUIREMENTS_FILE_OVERRIDE="${REQUIREMENTS_FILE:-}"
 OUTPUT_MODE="${DESK_DISPLAY_OUTPUT:-}"
 INCLUDE_VENDOR_REQUIREMENTS="${INCLUDE_VENDOR_REQUIREMENTS:-0}"
 INCLUDE_PLATFORM_SPECIFIC_REQUIREMENTS="${INCLUDE_PLATFORM_SPECIFIC_REQUIREMENTS:-0}"
-PIMORONI_SENSOR_REQUIREMENTS_FILE="${PIMORONI_SENSOR_REQUIREMENTS_FILE:-requirements_sensors_pimoroni.txt}"
+PIMORONI_SENSOR_REQUIREMENTS_FILE="${PIMORONI_SENSOR_REQUIREMENTS_FILE:-requirements/sensors-pimoroni.txt}"
 
 if [[ ! -f "$COMMON_SCRIPT" ]]; then
   echo "[ERROR] Missing helper script: $COMMON_SCRIPT" >&2
@@ -59,16 +59,16 @@ pick_requirements_file() {
 
   case "$normalized_output_mode" in
     kernel)
-      echo "requirements_kernel.txt"
+      echo "requirements/kernel.txt"
       ;;
     framebuffer)
-      echo "requirements_framebuffer.txt"
+      echo "requirements/framebuffer.txt"
       ;;
     minipitft)
-      echo "requirements_minipitft.txt"
+      echo "requirements/minipitft.txt"
       ;;
     *)
-      echo "requirements.txt"
+      echo "requirements/displayhatmini.txt"
       ;;
   esac
 }
@@ -230,31 +230,74 @@ build_install_requirements_file() {
   local host_os
   host_os=$(uname -s)
 
-  if [[ "$INCLUDE_VENDOR_REQUIREMENTS" == "1" ]]; then
-    cp "$source_requirements" "$install_requirements"
-    return 0
+  SOURCE_REQUIREMENTS="$source_requirements" \
+  INSTALL_REQUIREMENTS="$install_requirements" \
+  INCLUDE_VENDOR_REQUIREMENTS="$INCLUDE_VENDOR_REQUIREMENTS" \
+  INCLUDE_PLATFORM_SPECIFIC_REQUIREMENTS="$INCLUDE_PLATFORM_SPECIFIC_REQUIREMENTS" \
+  HOST_OS="$host_os" \
+  python3 - <<'PYREQ'
+import os
+from pathlib import Path
+
+source = Path(os.environ["SOURCE_REQUIREMENTS"]).resolve()
+output = Path(os.environ["INSTALL_REQUIREMENTS"])
+include_vendor = os.environ.get("INCLUDE_VENDOR_REQUIREMENTS") == "1"
+include_platform = os.environ.get("INCLUDE_PLATFORM_SPECIFIC_REQUIREMENTS") == "1"
+host_os = os.environ.get("HOST_OS", "")
+linux_only = {"spidev", "smbus", "lgpio", "rpi.gpio", "gpiozero", "displayhatmini"}
+seen = set()
+lines = []
+
+
+def requirement_name(line):
+    stripped = line.strip()
+    if not stripped or stripped.startswith(("#", "-")) or stripped.startswith((".", "/", "git+", "http://", "https://")):
+        return ""
+    name = stripped.split(";", 1)[0].strip()
+    for marker in ("===", ">=", "<=", "!=", "~=", "==", ">", "<"):
+        name = name.split(marker, 1)[0]
+    name = name.split("[", 1)[0]
+    return name.strip().lower()
+
+
+def include_target(line, base_dir):
+    parts = line.split()
+    if len(parts) >= 2 and parts[0] in {"-r", "--requirement"}:
+        return (base_dir / parts[1]).resolve()
+    if line.startswith("--requirement="):
+        return (base_dir / line.split("=", 1)[1]).resolve()
+    return None
+
+
+def expand(path):
+    path = path.resolve()
+    if path in seen:
+        return
+    seen.add(path)
+    base_dir = path.parent
+    lines.append(f"# Expanded from {path}")
+    for raw in path.read_text().splitlines():
+        stripped = raw.strip()
+        target = include_target(stripped, base_dir)
+        if target is not None:
+            expand(target)
+            continue
+        if not include_vendor and (stripped.startswith("-e ./vendor/") or stripped.startswith("./vendor/") or stripped.startswith("-e ../vendor/") or stripped.startswith("../vendor/") or "/vendor/" in stripped):
+            continue
+        if host_os == "Darwin" and not include_platform and requirement_name(stripped) in linux_only:
+            continue
+        lines.append(raw)
+
+
+expand(source)
+output.write_text("\n".join(lines) + "\n")
+PYREQ
+
+  if [[ "$INCLUDE_VENDOR_REQUIREMENTS" != "1" ]]; then
+    log "Skipping local vendor requirements (use --include-vendor to include them)"
   fi
-
-  log "Skipping local vendor requirements (use --include-vendor to include them)"
-  awk '
-    /^[[:space:]]*#/ { print; next }
-    /^[[:space:]]*$/ { print; next }
-    /^[[:space:]]*-e[[:space:]]+\.\/vendor\// { next }
-    /^[[:space:]]*\.\/vendor\// { next }
-    /^[[:space:]]*-e[[:space:]]+file:\/\/.*\/vendor\// { next }
-    /^[[:space:]]*file:\/\/.*\/vendor\// { next }
-    { print }
-  ' "$source_requirements" > "$install_requirements"
-
   if [[ "$host_os" == "Darwin" && "$INCLUDE_PLATFORM_SPECIFIC_REQUIREMENTS" != "1" ]]; then
     log "macOS detected; skipping Linux-only hardware dependencies (use --include-platform-specific to include them)"
-    awk '
-      /^[[:space:]]*#/ { print; next }
-      /^[[:space:]]*$/ { print; next }
-      /^[[:space:]]*(spidev|smbus|lgpio|rpi\.gpio|gpiozero|displayhatmini)[[:space:]]*([<>=!~].*)?$/ { next }
-      { print }
-    ' "$install_requirements" > "${install_requirements}.macos"
-    mv "${install_requirements}.macos" "$install_requirements"
   fi
 }
 

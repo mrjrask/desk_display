@@ -1,0 +1,9 @@
+-r base.txt
+
+# Framebuffer-backed Raspberry Pi display output stack.
+adafruit-blinka
+spidev
+smbus
+lgpio
+gpiozero
+rpi.gpio

@@ -5,7 +5,7 @@ EXPECTED_CODENAME="${EXPECTED_CODENAME:-bookworm}"
 SERVICE_NAME="desk_display.service"
 CONFIG_UI_SERVICE_NAME="config_ui_desk_display.service"
 PYTHON_BIN="${PYTHON:-python3}"
-REQUIREMENTS_FILE="${REQUIREMENTS_FILE:-requirements.txt}"
+REQUIREMENTS_FILE="${REQUIREMENTS_FILE:-requirements/displayhatmini.txt}"
 
 SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 PROJECT_DIR="${PROJECT_DIR:-$(cd -- "$SCRIPT_DIR/../.." && pwd)}"

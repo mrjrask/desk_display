@@ -30,7 +30,7 @@ fi
 
 export EXPECTED_CODENAME
 export DESK_DISPLAY_OUTPUT="${DESK_DISPLAY_OUTPUT:-minipitft}"
-export REQUIREMENTS_FILE="${REQUIREMENTS_FILE:-requirements_minipitft.txt}"
+export REQUIREMENTS_FILE="${REQUIREMENTS_FILE:-requirements/minipitft.txt}"
 export DISPLAY_WIDTH="${DISPLAY_WIDTH:-240}"
 export DISPLAY_HEIGHT="${DISPLAY_HEIGHT:-135}"
 

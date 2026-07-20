@@ -1,0 +1,13 @@
+# Shared application/runtime dependencies.
+# Keep hardware drivers and optional indoor-sensor packages in profile files.
+Flask
+requests
+pytz
+Pillow
+PyJWT[crypto]>=2.8.0
+waitress
+yfinance
+numpy
+mock
+cairosvg
+colorama
