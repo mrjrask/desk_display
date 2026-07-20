@@ -1,0 +1,7 @@
+# Optional Pimoroni indoor sensor drivers used when INSIDE_SENSOR is set to
+# pimoroni_bme280, pimoroni_bme680, or pimoroni_bme68x.
+# Install from the repository root so the relative editable paths resolve.
+i2cdevice>=1.0.0
+-e ./vendor/pimoroni-bme280
+-e ./vendor/pimoroni-bme680
+-e ./vendor/bme68x

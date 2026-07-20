@@ -49,7 +49,7 @@ fi
 
 export EXPECTED_CODENAME
 export DESK_DISPLAY_OUTPUT="${DESK_DISPLAY_OUTPUT:-kernel}"
-export REQUIREMENTS_FILE="${REQUIREMENTS_FILE:-requirements_kernel.txt}"
+export REQUIREMENTS_FILE="${REQUIREMENTS_FILE:-requirements/kernel.txt}"
 
 prompt_spi_i2c() {
   if [[ -n "${DISABLE_SPI_I2C:-}" ]]; then

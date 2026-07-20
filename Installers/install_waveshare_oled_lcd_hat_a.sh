@@ -469,7 +469,7 @@ fi
 
 export EXPECTED_CODENAME
 export DESK_DISPLAY_OUTPUT="${DESK_DISPLAY_OUTPUT:-framebuffer}"
-export REQUIREMENTS_FILE="${REQUIREMENTS_FILE:-requirements_framebuffer.txt}"
+export REQUIREMENTS_FILE="${REQUIREMENTS_FILE:-requirements/framebuffer.txt}"
 export DISPLAY_WIDTH="${DISPLAY_WIDTH:-320}"
 export DISPLAY_HEIGHT="${DISPLAY_HEIGHT:-240}"
 PI_MODEL_MAJOR="${PI_MODEL_MAJOR:-$(detect_pi_model_major || true)}"

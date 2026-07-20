@@ -1,0 +1,4 @@
+# Optional Adafruit/CircuitPython indoor sensor drivers.
+adafruit-circuitpython-bme280
+adafruit-circuitpython-bme680
+adafruit-circuitpython-sht4x
