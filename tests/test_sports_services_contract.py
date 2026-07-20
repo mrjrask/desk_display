@@ -23,7 +23,7 @@ def test_mlb_fetch_scoreboard_contract(monkeypatch):
 def test_nba_fetch_scoreboard_contract(monkeypatch):
     day = dt.date(2026, 3, 30)
     monkeypatch.setattr(nba, "scoreboard_date", lambda current_now=None: day)
-    monkeypatch.setattr(nba, "_fetch_games_for_date", lambda requested_day: [{"id": "nba-1", "date": requested_day.isoformat()}])
+    monkeypatch.setattr(nba, "fetch_games_for_date", lambda requested_day: [{"id": "nba-1", "date": requested_day.isoformat()}])
 
     payload = nba.fetch_scoreboard(now=dt.datetime(2026, 3, 30, 8, 30))
 
@@ -76,7 +76,7 @@ def test_services_normalize_non_list_to_empty_list(monkeypatch):
     day = dt.date(2026, 3, 30)
 
     monkeypatch.setattr(mlb, "_fetch_games_for_date", lambda requested_day: None)
-    monkeypatch.setattr(nba, "_fetch_games_for_date", lambda requested_day: {"not": "a list"})
+    monkeypatch.setattr(nba, "fetch_games_for_date", lambda requested_day: {"not": "a list"})
     monkeypatch.setattr(nhl, "_fetch_games_for_date", lambda requested_day: "bad")
     monkeypatch.setattr(ncaam, "_fetch_games_for_date", lambda requested_day, mode=None: 5)
 

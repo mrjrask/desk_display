@@ -1,6 +1,6 @@
 import datetime
 
-from screens import nba_scoreboard
+from services.sports import nba
 
 
 def test_map_espn_game_includes_season_metadata_for_playoff_detection():
@@ -21,7 +21,7 @@ def test_map_espn_game_includes_season_metadata_for_playoff_detection():
         ],
     }
 
-    mapped = nba_scoreboard._map_espn_game(event, competition, day)
+    mapped = nba._map_espn_game(event, competition, day)
 
     assert mapped is not None
     assert mapped["seasonType"] == 3
@@ -29,7 +29,7 @@ def test_map_espn_game_includes_season_metadata_for_playoff_detection():
 
 
 def test_map_game_preserves_espn_season_metadata_for_downstream_detectors():
-    mapped = nba_scoreboard._map_game(
+    mapped = nba._map_game(
         {
             "id": "401999999",
             "gameTimeUTC": "2026-04-22T23:00Z",

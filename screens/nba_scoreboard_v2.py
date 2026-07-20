@@ -55,9 +55,8 @@ from utils import (
 )
 
 # Import shared NBA data fetching logic
+from services.sports.nba import fetch_games_for_date as _fetch_games_for_date, scoreboard_date as _scoreboard_date
 from screens.nba_scoreboard import (
-    _fetch_games_for_date,
-    _scoreboard_date,
     _is_game_in_progress,
     _is_game_final,
     _should_display_scores,

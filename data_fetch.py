@@ -31,7 +31,7 @@ from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives import serialization
 
 from services.http_client import NHL_HEADERS, get_session
-from screens.nba_scoreboard import _fetch_games_for_date as _nba_fetch_games_for_date
+from services.sports.nba import fetch_games_for_date as _nba_fetch_games_for_date
 
 from config import (
     LATITUDE,
