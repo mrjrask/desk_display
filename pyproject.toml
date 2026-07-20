@@ -4,6 +4,33 @@ line-length = 100
 
 [tool.ruff.lint]
 select = ["E", "F", "I"]
+extend-select = [
+    "B",    # flake8-bugbear: likely bugs and footguns.
+    "C4",   # flake8-comprehensions: simpler container expressions.
+    "PIE",  # flake8-pie: small, safe cleanup opportunities.
+    "RUF",  # Ruff-specific correctness and maintainability checks.
+    "SIM",  # flake8-simplify: simplify conditionals as modules are touched.
+    "UP",   # pyupgrade: keep syntax on the configured Python target.
+    "PLC",  # Pylint convention checks with low migration risk.
+    "PLE",  # Pylint error checks.
+    "PLW",  # Pylint warning checks; noisy refactors stay staged below.
+]
+extend-ignore = [
+    "B008",    # Runtime/config defaults intentionally call helpers at import time.
+    "PLW0603", # Runtime configuration refresh updates module-level state by design.
+]
+
+[tool.ruff.lint.per-file-ignores]
+# Legacy runtime modules are intentionally staged: report the broader rule families with
+# `python scripts/test_all.py --lint-cleanup` first, then shrink these ignores as they split.
+"utils.py" = ["B", "C4", "PIE", "RUF", "SIM", "UP", "PLC", "PLE", "PLW"]
+"data_fetch.py" = ["B", "C4", "PIE", "RUF", "SIM", "UP", "PLC", "PLE", "PLW"]
+"main.py" = ["B", "C4", "PIE", "RUF", "SIM", "UP", "PLC", "PLE", "PLW"]
+# Vendored sensor libraries are kept close to upstream and not migrated with app linting.
+"vendor/**/*.py" = ["B", "C4", "PIE", "RUF", "SIM", "UP", "PLC", "PLE", "PLW"]
+# Hardware probes and diagnostic scripts deliberately use broad runtime guards.
+"scripts/waveshare_oled_status.py" = ["BLE001"]
+"scripts/test_api_connections.py" = ["BLE001"]
 
 [tool.ruff.lint.isort]
 combine-as-imports = true
