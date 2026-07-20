@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 import os
 import subprocess
 from dataclasses import dataclass
@@ -54,30 +55,35 @@ def tracked_images() -> list[Path]:
     return image_paths(result.stdout.splitlines())
 
 
+def push_before_sha() -> str | None:
+    event_path = os.environ.get("GITHUB_EVENT_PATH")
+    if not event_path:
+        return None
+    with Path(event_path).open() as event_file:
+        before = json.load(event_file).get("before")
+    if before and before != "0" * 40:
+        return before
+    return None
+
+
 def changed_images() -> list[Path]:
     base_ref = os.environ.get("GITHUB_BASE_REF")
+    before_sha = push_before_sha()
     if base_ref:
-        diff_range = f"origin/{base_ref}...HEAD"
-        command = [
-            "git",
-            "diff",
-            "--name-only",
-            "--diff-filter=ACMR",
-            diff_range,
-            "--",
-            "images",
-        ]
+        diff_args = [f"origin/{base_ref}...HEAD"]
+    elif before_sha:
+        diff_args = [before_sha, "HEAD"]
     else:
-        command = [
-            "git",
-            "diff",
-            "--name-only",
-            "--diff-filter=ACMR",
-            "HEAD^",
-            "HEAD",
-            "--",
-            "images",
-        ]
+        diff_args = ["HEAD^", "HEAD"]
+    command = [
+        "git",
+        "diff",
+        "--name-only",
+        "--diff-filter=ACMR",
+        *diff_args,
+        "--",
+        "images",
+    ]
     result = subprocess.run(
         command,
         cwd=PROJECT_ROOT,
