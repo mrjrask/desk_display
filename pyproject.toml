@@ -18,6 +18,7 @@ extend-select = [
 extend-ignore = [
     "B008",    # Runtime/config defaults intentionally call helpers at import time.
     "PLW0603", # Runtime configuration refresh updates module-level state by design.
+    "UP045",   # Keep Optional[...] syntax while runtime support includes Python 3.9.
 ]
 
 [tool.ruff.lint.per-file-ignores]
