@@ -1,11 +1,12 @@
 [build-system]
-requires = ["hatchling", "hatch-fancy-pypi-readme"]
-build-backend = "hatchling.build"
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
 
 [project]
 name = "pimoroni-bme280"
-dynamic = ["version", "readme"]
+dynamic = ["version"]
 description = "Python library for the bme280 temperature, pressure and humidity sensor"
+readme = "README.md"
 license = {file = "LICENSE"}
 requires-python = ">= 3.7"
 authors = [
@@ -24,98 +25,20 @@ classifiers = [
     "License :: OSI Approved :: MIT License",
     "Operating System :: POSIX :: Linux",
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.7",
-    "Programming Language :: Python :: 3.8",
-    "Programming Language :: Python :: 3.9",
-    "Programming Language :: Python :: 3.10",
-    "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3 :: Only",
-    "Topic :: Software Development",
     "Topic :: Software Development :: Libraries",
     "Topic :: System :: Hardware",
 ]
 dependencies = [
-    "i2cdevice>=1.0.0"
+    "i2cdevice>=1.0.0",
 ]
 
 [project.urls]
 GitHub = "https://www.github.com/pimoroni/bme280-python"
 Homepage = "https://www.pimoroni.com"
 
-[tool.hatch.version]
-path = "bme280/__init__.py"
+[tool.setuptools.packages.find]
+include = ["bme280*"]
 
-[tool.hatch.build]
-include = [
-    "bme280",
-    "README.md",
-    "CHANGELOG.md",
-    "LICENSE"
-]
-
-[tool.hatch.build.targets.sdist]
-include = [
-    "*"
-]
-exclude = [
-    ".*",
-    "dist"
-]
-
-[tool.hatch.metadata.hooks.fancy-pypi-readme]
-content-type = "text/markdown"
-fragments = [
-  { path = "README.md" },
-  { text = "\n" },
-  { path = "CHANGELOG.md" }
-]
-
-[tool.ruff]
-exclude = [
-    '.tox',
-    '.egg',
-    '.git',
-    '__pycache__',
-    'build',
-    'dist'
-]
-line-length = 200
-
-[tool.codespell]
-skip = """
-./.tox,\
-./.egg,\
-./.git,\
-./__pycache__,\
-./build,\
-./dist.\
-"""
-
-[tool.isort]
-line_length = 200
-
-[tool.black]
-line_length = 200
-
-[tool.check-manifest]
-ignore = [
-    '.stickler.yml',
-    'boilerplate.md',
-    'check.sh',
-    'install.sh',
-    'uninstall.sh',
-    'Makefile',
-    'tox.ini',
-    'tests/*',
-    'examples/*',
-    '.coveragerc',
-    'requirements-dev.txt'
-]
-
-[tool.pimoroni]
-apt_packages = []
-configtxt = []
-commands = [
-    "printf \"Setting up i2c...\n\"",
-    "sudo raspi-config nonint do_i2c 0"
-]
+[tool.setuptools.dynamic]
+version = {attr = "bme280.__version__"}
