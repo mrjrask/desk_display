@@ -19,7 +19,23 @@ from PIL import Image
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_IMAGE_ROOT = PROJECT_ROOT / "images"
 DEFAULT_OUTPUT_ROOT = Path.home() / f"{PROJECT_ROOT.name}_converted_images"
-DEFAULT_MAX_DIMENSION = 256
+DEFAULT_MAX_DIMENSION = 128
+LEAGUE_LOGO_MAX_DIMENSION = 160
+LEAGUE_LOGO_NAMES = {
+    "afc",
+    "ahl",
+    "al",
+    "mlb",
+    "nba",
+    "nfc",
+    "nfl",
+    "nhl",
+    "nl",
+    "oly",
+    "sb",
+    "scp",
+    "wc",
+}
 SUPPORTED_EXTENSIONS = {".png", ".jpg", ".jpeg", ".webp"}
 
 
@@ -65,6 +81,13 @@ def iter_images(paths: Iterable[Path]) -> Iterable[Path]:
             for candidate in sorted(path.rglob("*")):
                 if candidate.is_file() and candidate.suffix.lower() in SUPPORTED_EXTENSIONS:
                     yield candidate
+
+
+def max_dimension_for(path: Path, default: int = DEFAULT_MAX_DIMENSION) -> int:
+    """Return the canonical maximum edge length for an image asset."""
+    if path.stem.lower() in LEAGUE_LOGO_NAMES:
+        return LEAGUE_LOGO_MAX_DIMENSION
+    return default
 
 
 def _target_size(size: tuple[int, int], max_dimension: int) -> tuple[int, int]:
@@ -153,7 +176,7 @@ def adjust_images(
         adjust_image(
             path,
             output_path=output_path_for(path, input_root=resolved_input_root, output_root=resolved_output_root),
-            max_dimension=max_dimension,
+            max_dimension=max_dimension_for(path, max_dimension),
             dry_run=dry_run,
         )
         for path in iter_images(scan_paths)
@@ -174,7 +197,12 @@ def parse_args() -> argparse.Namespace:
         default=DEFAULT_OUTPUT_ROOT,
         help=f"Folder for converted images; defaults to {DEFAULT_OUTPUT_ROOT}.",
     )
-    parser.add_argument("--max-dimension", type=int, default=DEFAULT_MAX_DIMENSION)
+    parser.add_argument(
+        "--max-dimension",
+        type=int,
+        default=DEFAULT_MAX_DIMENSION,
+        help="Default max edge length for team logos and flags; league logos use 160 px.",
+    )
     parser.add_argument("--dry-run", action="store_true", help="Report changes without writing converted files.")
     return parser.parse_args()
 
