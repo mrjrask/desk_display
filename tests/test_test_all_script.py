@@ -1,4 +1,20 @@
-from scripts import test_all
+import importlib.util
+import sys
+from pathlib import Path
+
+
+def _load_script_module(name: str, filename: str):
+    script_path = Path(__file__).resolve().parents[1] / "scripts" / filename
+    spec = importlib.util.spec_from_file_location(name, script_path)
+    module = importlib.util.module_from_spec(spec)
+    assert spec is not None
+    assert spec.loader is not None
+    sys.modules[name] = module
+    spec.loader.exec_module(module)
+    return module
+
+
+test_all = _load_script_module("desk_display_test_all_script", "test_all.py")
 
 
 def test_discover_standalone_scripts_excludes_aggregate_runner():
