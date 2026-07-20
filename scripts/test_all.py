@@ -12,10 +12,9 @@ import argparse
 import os
 import subprocess
 import sys
+from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Sequence
-
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 SCRIPTS_DIR = REPO_ROOT / "scripts"
@@ -60,6 +59,23 @@ def _build_commands(pytest_args: Sequence[str]) -> list[TestCommand]:
     return commands
 
 
+def _build_lint_cleanup_command() -> TestCommand:
+    """Return the report-only Ruff command for staged lint cleanup."""
+
+    return TestCommand(
+        name="staged Ruff cleanup report",
+        command=(
+            sys.executable,
+            "-m",
+            "ruff",
+            "check",
+            ".",
+            "--exit-zero",
+            "--statistics",
+        ),
+    )
+
+
 def _print_command(command: TestCommand) -> None:
     shellish = " ".join(command.command)
     print(f"\n=== {command.name} ===", flush=True)
@@ -68,7 +84,9 @@ def _print_command(command: TestCommand) -> None:
 
 def _run_command(command: TestCommand) -> int:
     _print_command(command)
-    completed = subprocess.run(command.command, cwd=REPO_ROOT, env=os.environ.copy())
+    completed = subprocess.run(
+        command.command, cwd=REPO_ROOT, env=os.environ.copy(), check=False
+    )
     return completed.returncode
 
 
@@ -84,6 +102,14 @@ def main(argv: Sequence[str] | None = None) -> int:
         action="store_true",
         help="Print the commands that would run without executing them.",
     )
+    parser.add_argument(
+        "--lint-cleanup",
+        action="store_true",
+        help=(
+            "Include a report-only Ruff cleanup pass for the staged lint families; "
+            "the command uses --exit-zero so existing findings do not fail the suite."
+        ),
+    )
     parser.epilog = (
         "Any arguments not recognized by this runner are passed through to pytest. "
         "Use '--' before pytest arguments only when you need to pass a pytest "
@@ -96,6 +122,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         pytest_args = pytest_args[1:]
 
     commands = _build_commands(pytest_args)
+    if args.lint_cleanup:
+        commands.append(_build_lint_cleanup_command())
 
     if args.list:
         for command in commands:

@@ -43,3 +43,12 @@ def test_main_accepts_optional_separator_before_pytest_args(monkeypatch):
 
     assert test_all.main(["--list", "--", "-q"]) == 0
     assert captured_pytest_args == ["-q"]
+
+
+def test_lint_cleanup_option_adds_report_only_ruff_command():
+    commands = test_all._build_commands([])
+    commands.append(test_all._build_lint_cleanup_command())
+
+    lint_command = commands[-1]
+    assert lint_command.name == "staged Ruff cleanup report"
+    assert lint_command.command[-3:] == (".", "--exit-zero", "--statistics")
