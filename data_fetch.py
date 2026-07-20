@@ -37,6 +37,7 @@ from config import (
     LATITUDE,
     LONGITUDE,
     NHL_API_URL,
+    NHL_SCHEDULE_ICS_URL,
     NHL_TEAM_ID,
     MLB_API_URL,
     MLB_CUBS_TEAM_ID,
@@ -1227,11 +1228,120 @@ def get_weather_cache_timestamp() -> Optional[datetime.datetime]:
 # -----------------------------------------------------------------------------
 # NHL — Blackhawks
 # -----------------------------------------------------------------------------
+_NHL_TEAM_ABBR_OVERRIDES = {
+    "anaheim ducks": "ANA", "arizona coyotes": "ARI", "boston bruins": "BOS",
+    "buffalo sabres": "BUF", "calgary flames": "CGY", "carolina hurricanes": "CAR",
+    "chicago blackhawks": "CHI", "colorado avalanche": "COL", "columbus blue jackets": "CBJ",
+    "dallas stars": "DAL", "detroit red wings": "DET", "edmonton oilers": "EDM",
+    "florida panthers": "FLA", "los angeles kings": "LAK", "minnesota wild": "MIN",
+    "montreal canadiens": "MTL", "nashville predators": "NSH", "new jersey devils": "NJD",
+    "new york islanders": "NYI", "new york rangers": "NYR", "ottawa senators": "OTT",
+    "philadelphia flyers": "PHI", "pittsburgh penguins": "PIT", "san jose sharks": "SJS",
+    "seattle kraken": "SEA", "st louis blues": "STL", "tampa bay lightning": "TBL",
+    "toronto maple leafs": "TOR", "utah mammoth": "UTA", "vancouver canucks": "VAN",
+    "vegas golden knights": "VGK", "washington capitals": "WSH", "winnipeg jets": "WPG",
+}
+
+
+def _calendar_url(url: Optional[str]) -> Optional[str]:
+    value = (url or "").strip()
+    if not value:
+        return None
+    if value.startswith("webcal://"):
+        return "https://" + value[len("webcal://") :].lstrip("/")
+    return value
+
+
+def _nhl_team_payload(name: str, is_hawks: bool) -> Dict[str, Any]:
+    cleaned = re.sub(r"[^a-z0-9]+", " ", (name or "").lower()).strip()
+    abbr = "CHI" if is_hawks else _NHL_TEAM_ABBR_OVERRIDES.get(cleaned) or _derive_team_abbr(name)
+    nickname = _nickname_from_name(name)
+    return {
+        "id": NHL_TEAM_ID if is_hawks else None,
+        "abbrev": abbr,
+        "triCode": abbr,
+        "name": {"default": name},
+        "commonName": {"default": nickname},
+        "teamName": nickname,
+        "score": None,
+    }
+
+
+def _split_blackhawks_summary(summary: str) -> Optional[Dict[str, str]]:
+    clean = (summary or "").strip()
+    if not clean:
+        return None
+    patterns = ((r"(.+?)\s+at\s+(.+)", False), (r"(.+?)\s+@\s+(.+)", False), (r"(.+?)\s+vs\.?\s+(.+)", True))
+    for pattern, first_is_home in patterns:
+        match = re.match(pattern, clean, re.IGNORECASE)
+        if not match:
+            continue
+        first = _clean_ics_team_fragment(match.group(1))
+        second = _clean_ics_team_fragment(match.group(2))
+        home_name, away_name = (first, second) if first_is_home else (second, first)
+        if "blackhawks" in home_name.lower() or "blackhawks" in away_name.lower():
+            return {"home_name": home_name, "away_name": away_name}
+    return None
+
+
+def _normalize_blackhawks_ics_game(event: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    if event.get("STATUS", "CONFIRMED").upper() == "CANCELLED":
+        return None
+    params = (event.get("__params__") or {}).get("DTSTART") or {}
+    start = _parse_ics_datetime(event.get("DTSTART"), params)
+    parsed = _split_blackhawks_summary(event.get("SUMMARY") or "")
+    if not start or not parsed:
+        return None
+    home_name = parsed["home_name"]
+    away_name = parsed["away_name"]
+    home_is_hawks = "blackhawks" in home_name.lower()
+    away_is_hawks = "blackhawks" in away_name.lower()
+    home_team = _nhl_team_payload(home_name, home_is_hawks)
+    away_team = _nhl_team_payload(away_name, away_is_hawks)
+    start_utc = start.astimezone(pytz.UTC)
+    start_central = start.astimezone(CENTRAL_TIME)
+    return {
+        "id": event.get("UID"),
+        "gamePk": event.get("UID"),
+        "gameDate": start_utc.strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "officialDate": start_central.date().isoformat(),
+        "startTimeUTC": start_utc.strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "startTimeCentral": start_central.strftime("%I:%M %p").lstrip("0"),
+        "gameState": "FUT",
+        "homeTeam": home_team,
+        "awayTeam": away_team,
+        "venue": {"default": event.get("LOCATION") or ""},
+    }
+
+
+def _fetch_blackhawks_ics_schedule() -> List[Dict[str, Any]]:
+    url = _calendar_url(NHL_SCHEDULE_ICS_URL)
+    if not url:
+        return []
+    headers = {"User-Agent": "desk-display/1.0", "Accept": "text/calendar, text/plain;q=0.9, */*;q=0.8"}
+    resp = _session.get(url, headers=headers, timeout=15)
+    resp.raise_for_status()
+    games = [_normalize_blackhawks_ics_game(event) for event in _parse_ics_events(resp.text)]
+    return sorted((game for game in games if game), key=lambda game: game.get("gameDate", ""))
+
+
+def _fetch_blackhawks_schedule_games() -> List[Dict[str, Any]]:
+    try:
+        games = _fetch_blackhawks_ics_schedule()
+        if games:
+            return games
+    except Exception as exc:
+        logging.error("Error fetching Blackhawks ICS schedule: %s", exc)
+    r = _session.get(NHL_API_URL, timeout=10, headers=NHL_HEADERS)
+    r.raise_for_status()
+    data = r.json()
+    if "dates" in data:
+        return [game for day in data["dates"] for game in day.get("games", [])]
+    return data.get("games", [])
+
 def fetch_blackhawks_next_game():
     try:
-        r = _session.get(NHL_API_URL, timeout=10, headers=NHL_HEADERS)
-        r.raise_for_status()
-        games = r.json().get("games", [])
+        games = _fetch_blackhawks_schedule_games()
         fut   = [g for g in games if g.get("gameState") == "FUT"]
 
         for g in fut:
@@ -2065,9 +2175,7 @@ def _fetch_nba_team_standings_espn() -> Optional[dict]:
 def fetch_blackhawks_next_home_game():
     try:
         next_game = fetch_blackhawks_next_game()
-        r = _session.get(NHL_API_URL, timeout=10, headers=NHL_HEADERS)
-        r.raise_for_status()
-        games = r.json().get("games", [])
+        games = _fetch_blackhawks_schedule_games()
         home  = []
         skipped_duplicate = False
 
@@ -2105,16 +2213,7 @@ def fetch_blackhawks_next_home_game():
 
 def fetch_blackhawks_last_game():
     try:
-        r = _session.get(NHL_API_URL, timeout=10, headers=NHL_HEADERS)
-        r.raise_for_status()
-        data  = r.json()
-        games = []
-
-        if "dates" in data:
-            for di in data["dates"]:
-                games.extend(di.get("games", []))
-        else:
-            games = data.get("games", [])
+        games = _fetch_blackhawks_schedule_games()
 
         offs = [g for g in games if g.get("gameState") == "OFF"]
         if offs:
@@ -2129,9 +2228,7 @@ def fetch_blackhawks_last_game():
 
 def fetch_blackhawks_live_game():
     try:
-        r = _session.get(NHL_API_URL, timeout=10, headers=NHL_HEADERS)
-        r.raise_for_status()
-        games = r.json().get("games", [])
+        games = _fetch_blackhawks_schedule_games()
         for g in games:
             state = g.get("gameState", "").lower()
             if state in ("live", "in progress"):
