@@ -382,6 +382,42 @@ def test_draw_wild_card_cut_line_uses_dotted_segments():
     assert any((x + 1) not in lit_pixels for x in lit_pixels[:-1])
 
 
+def test_league_screen_uses_wild_card_tie_check_before_drawing_cut_line(monkeypatch):
+    standings = {
+        mlb_league_standings.AL_LEAGUE_ID: {
+            "East": [
+                {"team_name": "East Leader", "abbr": "NYY", "wins": "90", "losses": "60", "pct": ".600", "gb": "-"},
+                {"team_name": "East Two", "abbr": "BOS", "wins": "88", "losses": "62", "pct": ".587", "gb": "2", "wcgb": "-"},
+                {"team_name": "East Three", "abbr": "TOR", "wins": "80", "losses": "70", "pct": ".533", "gb": "10", "wcgb": "8"},
+            ],
+            "Central": [
+                {"team_name": "Central Leader", "abbr": "CLE", "wins": "85", "losses": "65", "pct": ".567", "gb": "-"},
+                {"team_name": "Central Two", "abbr": "DET", "wins": "83", "losses": "67", "pct": ".553", "gb": "2", "wcgb": "5"},
+            ],
+            "West": [
+                {"team_name": "West Leader", "abbr": "HOU", "wins": "92", "losses": "58", "pct": ".613", "gb": "-"},
+                {"team_name": "West Two", "abbr": "SEA", "wins": "80", "losses": "70", "pct": ".533", "gb": "12", "wcgb": "8"},
+            ],
+        }
+    }
+    calls = []
+
+    monkeypatch.setattr(mlb_league_standings, "_fetch_league_standings", lambda: standings)
+    monkeypatch.setattr(mlb_league_standings, "_load_mlb_logo", lambda: None)
+    monkeypatch.setattr(mlb_league_standings, "_load_logo", lambda *args, **kwargs: None)
+    monkeypatch.setattr(
+        mlb_league_standings,
+        "_draw_wild_card_cut_line",
+        lambda *args, **kwargs: calls.append((args, kwargs)),
+    )
+
+    mlb_league_standings._draw_league_screen(
+        "MLB AL Standings", mlb_league_standings.AL_LEAGUE_ID, "MLB AL Standings"
+    )
+
+    assert calls == []
+
+
 def test_draw_overview_wc_non_hyperpixel_has_column_width(monkeypatch):
     class _Display:
         def image(self, _image):

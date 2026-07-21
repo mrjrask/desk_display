@@ -824,6 +824,7 @@ def _draw_league_screen(title: str, league_id: int, screen_id: str) -> Image.Ima
     bg = get_screen_background_color(screen_id, SCOREBOARD_BACKGROUND_COLOR)
     standings = _fetch_league_standings().get(league_id, {})
     wild_card_rows = _wild_card_rows(standings, limit=None)
+    draw_wild_card_cut_line = _should_draw_wild_card_cut_line(wild_card_rows)
 
     probe = ImageDraw.Draw(Image.new("RGB", (WIDTH, HEIGHT), bg))
     all_rows = [row for div in DIVISION_ORDER for row in standings.get(div, [])] + wild_card_rows
@@ -841,7 +842,7 @@ def _draw_league_screen(title: str, league_id: int, screen_id: str) -> Image.Ima
         rows = wild_card_rows if div == "Wild Card" else standings.get(div) or []
         section_h += division_title_h
         section_h += len(rows) * (row_h + ROW_GAP)
-        if div == "Wild Card" and len(rows) > 3:
+        if div == "Wild Card" and draw_wild_card_cut_line:
             section_h += ROW_GAP
         section_h += DIVISION_GAP_BOTTOM
         if idx < len(visible_divisions) - 1:
@@ -886,7 +887,7 @@ def _draw_league_screen(title: str, league_id: int, screen_id: str) -> Image.Ima
                 _draw_stat(draw, row.get("pct", "-"), col["pct"], row_center)
             _draw_gb(draw, row.get("gb", "-"), col["gb"], row_center)
             y += row_h + ROW_GAP
-            if div == "Wild Card" and row_idx == 2 and len(rows) > 3:
+            if div == "Wild Card" and row_idx == 2 and draw_wild_card_cut_line:
                 line_y = y - (ROW_GAP // 2)
                 _draw_wild_card_cut_line(draw, WIDTH / 2, WIDTH - LEFT_MARGIN - RIGHT_MARGIN, line_y)
                 y += ROW_GAP
