@@ -32,6 +32,50 @@ def test_check_apt_updates_skips_when_apt_get_unavailable(monkeypatch):
     assert called["run"] is False
 
 
+def test_check_apt_updates_uses_fresh_cached_result(monkeypatch):
+    monkeypatch.setattr(utils, "_APT_CACHE_RESULT", True)
+    monkeypatch.setattr(utils, "_APT_CACHE_AT", 100.0)
+    monkeypatch.setattr(utils, "_APT_CACHE_TTL_SECONDS", 100.0)
+    monkeypatch.setattr(utils.time, "time", lambda: 150.0)
+    monkeypatch.setattr(utils, "_newest_apt_state_mtime", lambda: 90.0)
+
+    calls = {"status": None, "run": False}
+    monkeypatch.setattr(utils, "_set_update_status", lambda **kwargs: calls.update(status=kwargs))
+
+    def _should_not_run(*_args, **_kwargs):
+        calls["run"] = True
+        raise AssertionError("cached apt result should avoid subprocess.run")
+
+    monkeypatch.setattr(utils.subprocess, "run", _should_not_run)
+
+    assert utils.check_apt_updates() is True
+    assert calls == {"status": {"apt": True}, "run": False}
+
+
+def test_check_apt_updates_refreshes_after_apt_state_changes(monkeypatch):
+    monkeypatch.setattr(utils, "_APT_CACHE_RESULT", True)
+    monkeypatch.setattr(utils, "_APT_CACHE_AT", 100.0)
+    monkeypatch.setattr(utils, "_APT_CACHE_TTL_SECONDS", 100.0)
+    monkeypatch.setattr(utils.time, "time", lambda: 150.0)
+    monkeypatch.setattr(utils, "_newest_apt_state_mtime", lambda: 125.0)
+    monkeypatch.setattr(utils.shutil, "which", lambda _name: "/usr/bin/apt-get")
+
+    calls = {"status": None, "run_args": None}
+    monkeypatch.setattr(utils, "_set_update_status", lambda **kwargs: calls.update(status=kwargs))
+
+    def _fake_run(args, **_kwargs):
+        calls["run_args"] = args
+        return SimpleNamespace(returncode=0, stdout="0 upgraded, 0 newly installed\n", stderr="")
+
+    monkeypatch.setattr(utils.subprocess, "run", _fake_run)
+
+    assert utils.check_apt_updates() is False
+    assert calls["run_args"][:2] == ["apt-get", "-s"]
+    assert calls["status"] == {"apt": False}
+    assert utils._APT_CACHE_RESULT is False
+    assert utils._APT_CACHE_AT == 150.0
+
+
 def test_window_output_failure_does_not_fallback_to_framebuffer(monkeypatch):
     monkeypatch.setattr(utils, "_FORCE_HEADLESS", False)
     monkeypatch.setattr(utils, "_DISPLAY_OUTPUT", "window")
