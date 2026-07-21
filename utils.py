@@ -3730,18 +3730,38 @@ _APT_STATE_PATHS = (
     Path("/var/lib/apt/extended_states"),
     Path("/var/cache/apt/pkgcache.bin"),
 )
+_APT_LISTS_DIR = Path("/var/lib/apt/lists")
 
 
-def _newest_apt_state_mtime() -> float:
-    """Return the newest apt/dpkg state mtime available on this system."""
+def _newest_existing_path_mtime(paths: Iterable[Path]) -> float:
+    """Return the newest mtime from paths that can be stat-ed."""
 
     newest = 0.0
-    for path in _APT_STATE_PATHS:
+    for path in paths:
         try:
             newest = max(newest, path.stat().st_mtime)
         except OSError:
             continue
     return newest
+
+
+def _apt_lists_paths() -> Iterable[Path]:
+    """Yield apt list paths that change when `apt update` refreshes indexes."""
+
+    yield _APT_LISTS_DIR
+    try:
+        yield from _APT_LISTS_DIR.iterdir()
+    except OSError:
+        return
+
+
+def _newest_apt_state_mtime() -> float:
+    """Return the newest apt/dpkg state mtime available on this system."""
+
+    return max(
+        _newest_existing_path_mtime(_APT_STATE_PATHS),
+        _newest_existing_path_mtime(_apt_lists_paths()),
+    )
 
 
 def _apt_cache_is_fresh(now: float) -> bool:
