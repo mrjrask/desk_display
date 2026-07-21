@@ -348,3 +348,61 @@ def test_draw_overview_wc_non_hyperpixel_has_column_width(monkeypatch):
     )
 
     assert result is not None
+
+
+def test_overview_wc_cut_line_drops_with_logos(monkeypatch):
+    class _Display:
+        def image(self, _image):
+            pass
+
+        def show(self):
+            pass
+
+    rows = [
+        {
+            "abbr": f"T{i}",
+            "team_name": f"Team {i}",
+            "wins": str(90 - i),
+            "losses": str(60 + i),
+            "pct": ".600",
+            "wildCardRank": str(i + 1),
+        }
+        for i in range(5)
+    ]
+    standings = {
+        mlb_league_standings.NL_LEAGUE_ID: {
+            "East": rows,
+            "Central": rows,
+            "West": rows,
+        }
+    }
+
+    line_ys = []
+
+    def _capture_line(_draw, _center_x, _col_width, y):
+        line_ys.append(y)
+
+    monkeypatch.setattr(mlb_league_standings.config, "is_hyperpixel_next_layout", lambda: False)
+    monkeypatch.setattr(mlb_league_standings.config, "is_hyperpixel_4_square_layout", lambda: False)
+    monkeypatch.setattr(mlb_league_standings, "_fetch_league_standings", lambda: standings)
+    monkeypatch.setattr(mlb_league_standings, "_load_logo", lambda *_args, **_kwargs: Image.new("RGBA", (2, 2), (255, 255, 255, 255)))
+    monkeypatch.setattr(mlb_league_standings, "_draw_wild_card_cut_line", _capture_line)
+    monkeypatch.setattr(mlb_league_standings, "OVERVIEW_DROP_STEPS", 3)
+    monkeypatch.setattr(mlb_league_standings, "OVERVIEW_DROP_STAGGER", 0.5)
+    monkeypatch.setattr(mlb_league_standings, "OVERVIEW_DROP_FRAME_DELAY", 0)
+    monkeypatch.setattr(mlb_league_standings, "OVERVIEW_PAUSE_END", 0)
+
+    mlb_league_standings.draw_overview(
+        _Display(),
+        "NL Overview+WC",
+        mlb_league_standings.NL_LEAGUE_ID,
+        transition=True,
+        include_wc=True,
+    )
+
+    _header, top_y = mlb_league_standings._overview_header_frame("NL Overview+WC", (0, 0, 0))
+    cell_h = (mlb_league_standings.HEIGHT - top_y) // mlb_league_standings.OV_ROWS
+    final_line_y = int(top_y + 3 * cell_h)
+    assert line_ys
+    assert line_ys[0] < final_line_y
+    assert final_line_y in line_ys
