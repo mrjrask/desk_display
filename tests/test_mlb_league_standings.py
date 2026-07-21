@@ -278,6 +278,10 @@ def test_wcgb_text_does_not_add_positive_sign_below_wild_card_cutoff():
     assert mlb_league_standings._wcgb_text("1.5", "4") == "1 1/2"
 
 
+def test_wcgb_text_normalizes_negative_top_three_values_to_magnitude():
+    assert mlb_league_standings._wcgb_text("-1.5", "2") == "1 1/2"
+
+
 def test_postseason_elimination_prefers_wild_card_elimination_field():
     assert (
         mlb_league_standings._is_postseason_eliminated(

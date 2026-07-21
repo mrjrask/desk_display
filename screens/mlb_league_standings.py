@@ -244,11 +244,12 @@ def _gb_text(value: Any) -> str:
 
 
 def _wcgb_text(value: Any, rank: Any = None) -> str:
-    text = _gb_text(value)
     try:
         numeric = float(value)
     except Exception:
         numeric = None
+
+    text = _gb_text(abs(numeric)) if numeric is not None else _gb_text(value)
 
     try:
         rank_int = int(rank)
