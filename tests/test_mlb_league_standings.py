@@ -238,7 +238,7 @@ def test_wide_layout_centers_record_and_midpoints_l10(monkeypatch):
     assert abs(last10_center - ((record_center + gb_center) / 2.0)) <= 1.0
 
 
-def test_wild_card_rows_excludes_division_leaders_and_limits_to_five():
+def test_wild_card_rows_excludes_division_leaders_and_defaults_to_five():
     standings = {
         "East": [
             {"team_name": "East Leader", "wins": "90", "losses": "60", "pct": ".600"},
@@ -267,6 +267,70 @@ def test_wild_card_rows_excludes_division_leaders_and_limits_to_five():
         "East Three",
     ]
     assert all("Leader" not in row["team_name"] for row in rows)
+
+
+def test_wcgb_text_preserves_positive_sign_for_current_wild_card_teams():
+    assert mlb_league_standings._wcgb_text("1.5", "2") == "+1 1/2"
+    assert mlb_league_standings._split_gb_text("+1 1/2") == ("+1", "1/2")
+
+
+def test_wcgb_text_does_not_add_positive_sign_below_wild_card_cutoff():
+    assert mlb_league_standings._wcgb_text("1.5", "4") == "1 1/2"
+
+
+def test_wcgb_text_normalizes_negative_top_three_values_to_magnitude():
+    assert mlb_league_standings._wcgb_text("-1.5", "2") == "1 1/2"
+
+
+def test_postseason_elimination_prefers_wild_card_elimination_field():
+    assert (
+        mlb_league_standings._is_postseason_eliminated(
+            {"wildCardEliminationNumber": "-", "eliminationNumber": "E"}
+        )
+        is False
+    )
+    assert (
+        mlb_league_standings._is_postseason_eliminated(
+            {"wildCardEliminationNumber": "E", "eliminationNumber": "-"}
+        )
+        is True
+    )
+
+
+def test_wild_card_rows_can_include_all_non_eliminated_teams_and_uses_wcgb():
+    standings = {
+        "East": [
+            {"team_name": "East Leader", "wins": "90", "losses": "60", "pct": ".600", "wcgb": "-"},
+            {"team_name": "East Two", "wins": "88", "losses": "62", "pct": ".587", "wcgb": "-", "wildCardRank": "1"},
+            {"team_name": "East Out", "wins": "70", "losses": "80", "pct": ".467", "wcgb": "18", "wildCardRank": "6"},
+        ],
+        "Central": [
+            {"team_name": "Central Leader", "wins": "85", "losses": "65", "pct": ".567", "wcgb": "-"},
+            {"team_name": "Central Two", "wins": "84", "losses": "66", "pct": ".560", "wcgb": "1", "wildCardRank": "2"},
+            {"team_name": "Central Eliminated", "wins": "60", "losses": "90", "pct": ".400", "wcgb": "28", "wildCardRank": "7", "wildCardEliminationNumber": "E"},
+            {"team_name": "Central Division Eliminated", "wins": "83", "losses": "67", "pct": ".553", "wcgb": "2", "wildCardRank": "3", "wildCardEliminationNumber": "-", "eliminationNumber": "E"},
+        ],
+        "West": [
+            {"team_name": "West Leader", "wins": "92", "losses": "58", "pct": ".613", "wcgb": "-"},
+            {"team_name": "West Two", "wins": "83", "losses": "67", "pct": ".553", "wcgb": "2", "wildCardRank": "3"},
+            {"team_name": "West Three", "wins": "82", "losses": "68", "pct": ".547", "wcgb": "3", "wildCardRank": "4", "wildCardEliminationNumber": "-"},
+            {"team_name": "West Four", "wins": "81", "losses": "69", "pct": ".540", "wcgb": "4", "wildCardRank": "5", "eliminationNumber": "--"},
+        ],
+    }
+
+    rows = mlb_league_standings._wild_card_rows(standings, limit=None)
+
+    assert [row["team_name"] for row in rows] == [
+        "East Two",
+        "Central Two",
+        "Central Division Eliminated",
+        "West Two",
+        "West Three",
+        "West Four",
+        "East Out",
+    ]
+    assert rows[1]["gb"] == "1"
+    assert "Central Eliminated" not in [row["team_name"] for row in rows]
 
 
 def test_wild_card_rows_uses_api_wild_card_rank_for_tied_records():
@@ -320,6 +384,42 @@ def test_draw_wild_card_cut_line_uses_dotted_segments():
     lit_pixels = [x for x in range(120) if image.getpixel((x, 20)) != (0, 0, 0)]
     assert lit_pixels
     assert any((x + 1) not in lit_pixels for x in lit_pixels[:-1])
+
+
+def test_league_screen_uses_wild_card_tie_check_before_drawing_cut_line(monkeypatch):
+    standings = {
+        mlb_league_standings.AL_LEAGUE_ID: {
+            "East": [
+                {"team_name": "East Leader", "abbr": "NYY", "wins": "90", "losses": "60", "pct": ".600", "gb": "-"},
+                {"team_name": "East Two", "abbr": "BOS", "wins": "88", "losses": "62", "pct": ".587", "gb": "2", "wcgb": "-"},
+                {"team_name": "East Three", "abbr": "TOR", "wins": "80", "losses": "70", "pct": ".533", "gb": "10", "wcgb": "8"},
+            ],
+            "Central": [
+                {"team_name": "Central Leader", "abbr": "CLE", "wins": "85", "losses": "65", "pct": ".567", "gb": "-"},
+                {"team_name": "Central Two", "abbr": "DET", "wins": "83", "losses": "67", "pct": ".553", "gb": "2", "wcgb": "5"},
+            ],
+            "West": [
+                {"team_name": "West Leader", "abbr": "HOU", "wins": "92", "losses": "58", "pct": ".613", "gb": "-"},
+                {"team_name": "West Two", "abbr": "SEA", "wins": "80", "losses": "70", "pct": ".533", "gb": "12", "wcgb": "8"},
+            ],
+        }
+    }
+    calls = []
+
+    monkeypatch.setattr(mlb_league_standings, "_fetch_league_standings", lambda: standings)
+    monkeypatch.setattr(mlb_league_standings, "_load_mlb_logo", lambda: None)
+    monkeypatch.setattr(mlb_league_standings, "_load_logo", lambda *args, **kwargs: None)
+    monkeypatch.setattr(
+        mlb_league_standings,
+        "_draw_wild_card_cut_line",
+        lambda *args, **kwargs: calls.append((args, kwargs)),
+    )
+
+    mlb_league_standings._draw_league_screen(
+        "MLB AL Standings", mlb_league_standings.AL_LEAGUE_ID, "MLB AL Standings"
+    )
+
+    assert calls == []
 
 
 def test_draw_overview_wc_non_hyperpixel_has_column_width(monkeypatch):

@@ -243,13 +243,38 @@ def _gb_text(value: Any) -> str:
     return f"{numeric:.1f}"
 
 
+def _wcgb_text(value: Any, rank: Any = None) -> str:
+    try:
+        numeric = float(value)
+    except Exception:
+        numeric = None
+
+    text = _gb_text(abs(numeric)) if numeric is not None else _gb_text(value)
+
+    try:
+        rank_int = int(rank)
+    except Exception:
+        rank_int = None
+
+    if numeric == 0:
+        return "--"
+    if rank_int is not None and rank_int <= 3 and numeric is not None and numeric > 0:
+        return f"+{text}"
+    return text
+
+
 def _split_gb_text(value: Any) -> tuple[str, str]:
-    text = _gb_text(value)
+    text = str(value if value not in (None, "") else "-").strip()
+    sign = ""
+    if text.startswith("+"):
+        sign = "+"
+        text = text[1:]
+    text = _gb_text(text)
     if text == "1/2":
-        return "", "1/2"
+        return sign, "1/2"
     if text.endswith(" 1/2"):
-        return text[:-4], "1/2"
-    return text, ""
+        return f"{sign}{text[:-4]}", "1/2"
+    return f"{sign}{text}", ""
 
 
 def _gb_value_width(draw: ImageDraw.ImageDraw, whole_text: str, frac_text: str) -> int:
@@ -315,7 +340,10 @@ def _normalize_row(record: dict[str, Any]) -> dict[str, Any]:
         "pct": _pct_text(record.get("winningPercentage")),
         "last10": last_10,
         "gb": _gb_text(record.get("gamesBack", "-")),
+        "wcgb": _wcgb_text(record.get("wildCardGamesBack", "-"), record.get("wildCardRank")),
         "wildCardRank": record.get("wildCardRank"),
+        "wildCardEliminationNumber": record.get("wildCardEliminationNumber"),
+        "eliminationNumber": record.get("eliminationNumber"),
     }
 
 
@@ -577,21 +605,45 @@ def _wild_card_record_key(row: dict[str, Any]) -> tuple[float, int, int]:
     )
 
 
-def _wild_card_rows(standings: dict[str, list[dict[str, Any]]]) -> list[dict[str, Any]]:
+def _is_postseason_eliminated(row: dict[str, Any]) -> bool:
+    wildcard_value = row.get("wildCardEliminationNumber")
+    if wildcard_value not in (None, ""):
+        return isinstance(wildcard_value, str) and wildcard_value.strip().upper() == "E"
+
+    for key in ("eliminationNumber", "elimination_number"):
+        value = row.get(key)
+        if isinstance(value, str) and value.strip().upper() == "E":
+            return True
+    return False
+
+
+def _wild_card_rows(
+    standings: dict[str, list[dict[str, Any]]],
+    *,
+    limit: int | None = OV_ROWS,
+) -> list[dict[str, Any]]:
     contenders: list[dict[str, Any]] = []
     for div in DIVISION_ORDER:
         rows = standings.get(div) or []
-        contenders.extend(rows[1:])
+        for row in rows[1:]:
+            if _is_postseason_eliminated(row):
+                continue
+            wc_row = dict(row)
+            if "wcgb" in wc_row:
+                wc_row["gb"] = wc_row.get("wcgb", "-")
+            contenders.append(wc_row)
 
     if any(_wild_card_rank_value(row) is not None for row in contenders):
         ranked = [row for row in contenders if _wild_card_rank_value(row) is not None]
         unranked = [row for row in contenders if _wild_card_rank_value(row) is None]
-        return (
+        rows = (
             sorted(ranked, key=lambda row: (_wild_card_rank_value(row) or 999,))
             + sorted(unranked, key=_wild_card_record_key, reverse=True)
-        )[:OV_ROWS]
+        )
+    else:
+        rows = sorted(contenders, key=_wild_card_record_key, reverse=True)
 
-    return sorted(contenders, key=_wild_card_record_key, reverse=True)[:OV_ROWS]
+    return rows if limit is None else rows[:limit]
 
 
 def _should_draw_wild_card_cut_line(rows: list[dict[str, Any]]) -> bool:
@@ -790,21 +842,27 @@ def draw_overview(display, title: str, league_id: int, transition: bool = False,
 def _draw_league_screen(title: str, league_id: int, screen_id: str) -> Image.Image:
     bg = get_screen_background_color(screen_id, SCOREBOARD_BACKGROUND_COLOR)
     standings = _fetch_league_standings().get(league_id, {})
+    wild_card_rows = _wild_card_rows(standings, limit=None)
+    draw_wild_card_cut_line = _should_draw_wild_card_cut_line(wild_card_rows)
 
     probe = ImageDraw.Draw(Image.new("RGB", (WIDTH, HEIGHT), bg))
-    all_rows = [row for div in DIVISION_ORDER for row in standings.get(div, [])]
+    all_rows = [row for div in DIVISION_ORDER for row in standings.get(div, [])] + wild_card_rows
     col = _column_layout(probe, all_rows)
 
     row_h = max(LOGO_SIZE, _text_size(probe, "SEA", TEAM_FONT)[1], _text_size(probe, "999", STATS_FONT)[1]) + scale_value(2)
     division_title_h = _text_size(probe, "AL East", DIVISION_FONT)[1] + DIVISION_CONTENT_GAP
 
     visible_divisions = [div for div in DIVISION_ORDER if standings.get(div)]
+    if wild_card_rows:
+        visible_divisions.append("Wild Card")
 
     section_h = 0
     for idx, div in enumerate(visible_divisions):
-        rows = standings.get(div) or []
+        rows = wild_card_rows if div == "Wild Card" else standings.get(div) or []
         section_h += division_title_h
         section_h += len(rows) * (row_h + ROW_GAP)
+        if div == "Wild Card" and draw_wild_card_cut_line:
+            section_h += ROW_GAP
         section_h += DIVISION_GAP_BOTTOM
         if idx < len(visible_divisions) - 1:
             section_h += DIVISION_SECTION_GAP
@@ -817,14 +875,14 @@ def _draw_league_screen(title: str, league_id: int, screen_id: str) -> Image.Ima
     y = _draw_table_title(img, draw, title)
 
     for idx, div in enumerate(visible_divisions):
-        rows = standings.get(div) or []
+        rows = wild_card_rows if div == "Wild Card" else standings.get(div) or []
 
         division_label = f"{title.split()[1]} {div}"
         draw.text((WIDTH // 2, y), division_label, font=DIVISION_FONT, fill=(255, 255, 255), anchor="mt")
         y += _text_size(draw, division_label, DIVISION_FONT)[1] + DIVISION_CONTENT_GAP
         y = _draw_stat_headers(draw, col, y)
 
-        for row in rows:
+        for row_idx, row in enumerate(rows):
             row_center = y + row_h // 2
             logo = _load_logo(row.get("abbr", ""), team_name=row.get("team_name", ""))
             if logo is not None:
@@ -848,6 +906,10 @@ def _draw_league_screen(title: str, league_id: int, screen_id: str) -> Image.Ima
                 _draw_stat(draw, row.get("pct", "-"), col["pct"], row_center)
             _draw_gb(draw, row.get("gb", "-"), col["gb"], row_center)
             y += row_h + ROW_GAP
+            if div == "Wild Card" and row_idx == 2 and draw_wild_card_cut_line:
+                line_y = y - (ROW_GAP // 2)
+                _draw_wild_card_cut_line(draw, WIDTH / 2, WIDTH - LEFT_MARGIN - RIGHT_MARGIN, line_y)
+                y += ROW_GAP
 
         y += DIVISION_GAP_BOTTOM
         if idx < len(visible_divisions) - 1:
