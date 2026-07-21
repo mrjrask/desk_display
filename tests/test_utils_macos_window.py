@@ -1,5 +1,6 @@
 """Tests for macOS-friendly window behavior in utils."""
 
+import os
 from types import SimpleNamespace
 
 import utils
@@ -74,6 +75,25 @@ def test_check_apt_updates_refreshes_after_apt_state_changes(monkeypatch):
     assert calls["status"] == {"apt": False}
     assert utils._APT_CACHE_RESULT is False
     assert utils._APT_CACHE_AT == 150.0
+
+
+def test_newest_apt_state_mtime_includes_apt_lists(monkeypatch, tmp_path):
+    status = tmp_path / "status"
+    lists_dir = tmp_path / "lists"
+    package_list = lists_dir / "archive_package_index"
+    status.write_text("status")
+    lists_dir.mkdir()
+    package_list.write_text("index")
+    lists_dir_mtime = 150.0
+    package_list_mtime = 250.0
+
+    monkeypatch.setattr(utils, "_APT_STATE_PATHS", (status,))
+    monkeypatch.setattr(utils, "_APT_LISTS_DIR", lists_dir)
+    os.utime(status, (100.0, 100.0))
+    os.utime(lists_dir, (lists_dir_mtime, lists_dir_mtime))
+    os.utime(package_list, (package_list_mtime, package_list_mtime))
+
+    assert utils._newest_apt_state_mtime() == package_list_mtime
 
 
 def test_window_output_failure_does_not_fallback_to_framebuffer(monkeypatch):
