@@ -89,6 +89,8 @@ render_mlb_scoreboard = _lazy_callable("screens.mlb_scoreboard.render_mlb_scoreb
 render_mlb_scoreboard_v2 = _lazy_callable("screens.mlb_scoreboard_v2.render_mlb_scoreboard_v2")
 draw_AL_Overview = _lazy_callable("screens.mlb_league_standings.draw_AL_Overview")
 draw_NL_Overview = _lazy_callable("screens.mlb_league_standings.draw_NL_Overview")
+draw_AL_Overview_WC = _lazy_callable("screens.mlb_league_standings.draw_AL_Overview_WC")
+draw_NL_Overview_WC = _lazy_callable("screens.mlb_league_standings.draw_NL_Overview_WC")
 draw_mlb_al_standings = _lazy_callable("screens.mlb_league_standings.draw_mlb_al_standings")
 draw_mlb_nl_standings = _lazy_callable("screens.mlb_league_standings.draw_mlb_nl_standings")
 draw_standings_screen1 = _lazy_callable("screens.mlb_team_standings.draw_standings_screen1")
@@ -1717,6 +1719,8 @@ def build_screen_registry(context: ScreenContext) -> Tuple[Dict[str, ScreenDefin
 
     register("NL Overview", lambda: draw_NL_Overview(context.display, transition=True))
     register("AL Overview", lambda: draw_AL_Overview(context.display, transition=True))
+    register("NL Overview+WC", lambda: draw_NL_Overview_WC(context.display, transition=True))
+    register("AL Overview+WC", lambda: draw_AL_Overview_WC(context.display, transition=True))
     register("MLB AL Standings", lambda: draw_mlb_al_standings(context.display, transition=True))
     register("MLB NL Standings", lambda: draw_mlb_nl_standings(context.display, transition=True))
 

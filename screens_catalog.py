@@ -118,6 +118,8 @@ RAW_SCREEN_IDS = [
     "MLB Scoreboard",
     "NL Overview",
     "AL Overview",
+    "NL Overview+WC",
+    "AL Overview+WC",
     "MLB AL Standings",
     "MLB NL Standings",
 ]

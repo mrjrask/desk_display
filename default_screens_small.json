@@ -82,6 +82,8 @@
       "MLB Scoreboard": 2,
       "NL Overview": 0,
       "AL Overview": 0,
+      "NL Overview+WC": 0,
+      "AL Overview+WC": 0,
       "MLB AL Standings": 2,
       "MLB NL Standings": 2,
       "bears logo": 7,
@@ -370,6 +372,12 @@
           },
           {
             "screen": "AL Overview"
+          },
+          {
+            "screen": "NL Overview+WC"
+          },
+          {
+            "screen": "AL Overview+WC"
           },
           {
             "screen": "MLB AL Standings"
@@ -801,6 +809,12 @@
         "background": "#000000"
       },
       "World Cup Scoreboard": {
+        "background": "#000000"
+      },
+      "NL Overview+WC": {
+        "background": "#000000"
+      },
+      "AL Overview+WC": {
         "background": "#000000"
       }
     }

@@ -236,3 +236,73 @@ def test_wide_layout_centers_record_and_midpoints_l10(monkeypatch):
 
     assert abs(record_center - (mlb_league_standings.WIDTH / 2.0)) <= 1.0
     assert abs(last10_center - ((record_center + gb_center) / 2.0)) <= 1.0
+
+
+def test_wild_card_rows_excludes_division_leaders_and_limits_to_five():
+    standings = {
+        "East": [
+            {"team_name": "East Leader", "wins": "90", "losses": "60", "pct": ".600"},
+            {"team_name": "East Two", "wins": "88", "losses": "62", "pct": ".587"},
+            {"team_name": "East Three", "wins": "80", "losses": "70", "pct": ".533"},
+        ],
+        "Central": [
+            {"team_name": "Central Leader", "wins": "85", "losses": "65", "pct": ".567"},
+            {"team_name": "Central Two", "wins": "89", "losses": "61", "pct": ".593"},
+            {"team_name": "Central Three", "wins": "81", "losses": "69", "pct": ".540"},
+        ],
+        "West": [
+            {"team_name": "West Leader", "wins": "92", "losses": "58", "pct": ".613"},
+            {"team_name": "West Two", "wins": "82", "losses": "68", "pct": ".547"},
+            {"team_name": "West Three", "wins": "79", "losses": "71", "pct": ".527"},
+        ],
+    }
+
+    rows = mlb_league_standings._wild_card_rows(standings)
+
+    assert [row["team_name"] for row in rows] == [
+        "Central Two",
+        "East Two",
+        "West Two",
+        "Central Three",
+        "East Three",
+    ]
+    assert all("Leader" not in row["team_name"] for row in rows)
+
+
+def test_draw_wild_card_cut_line_uses_dotted_segments():
+    image = Image.new("RGB", (120, 40), (0, 0, 0))
+    draw = ImageDraw.Draw(image)
+
+    mlb_league_standings._draw_wild_card_cut_line(draw, center_x=60, col_width=80, y=20)
+
+    lit_pixels = [x for x in range(120) if image.getpixel((x, 20)) != (0, 0, 0)]
+    assert lit_pixels
+    assert any((x + 1) not in lit_pixels for x in lit_pixels[:-1])
+
+
+def test_draw_overview_wc_non_hyperpixel_has_column_width(monkeypatch):
+    class _Display:
+        def image(self, _image):
+            pass
+
+        def show(self):
+            pass
+
+        def wait_for_skip(self, _duration):
+            return False
+
+    monkeypatch.setattr(mlb_league_standings.config, "is_hyperpixel_next_layout", lambda: False)
+    monkeypatch.setattr(mlb_league_standings.config, "is_hyperpixel_4_square_layout", lambda: False)
+    monkeypatch.setattr(mlb_league_standings, "_fetch_league_standings", lambda: {mlb_league_standings.NL_LEAGUE_ID: {}})
+    monkeypatch.setattr(mlb_league_standings, "_load_mlb_logo", lambda: None)
+    monkeypatch.setattr(mlb_league_standings, "OVERVIEW_PAUSE_END", 0)
+
+    result = mlb_league_standings.draw_overview(
+        _Display(),
+        "NL Overview+WC",
+        mlb_league_standings.NL_LEAGUE_ID,
+        transition=True,
+        include_wc=True,
+    )
+
+    assert result is not None
