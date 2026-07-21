@@ -697,19 +697,39 @@ def draw_overview(display, title: str, league_id: int, transition: bool = False,
     steps = max(2, OVERVIEW_DROP_STEPS)
     stagger = max(1, int(round(steps * OVERVIEW_DROP_STAGGER)))
 
-    schedule: list[tuple[int, list[tuple[Image.Image, int, int]]]] = []
+    schedule: list[tuple[int, int, list[tuple[Image.Image, int, int]]]] = []
     start_step = 0
     for rank in range(len(row_positions) - 1, -1, -1):
         drops = row_positions[rank]
         if not drops:
             continue
-        schedule.append((start_step, drops))
+        schedule.append((rank, start_step, drops))
         start_step += stagger
 
     if schedule:
-        total_duration = schedule[-1][0] + steps + 1
+        total_duration = schedule[-1][1] + steps + 1
         placed: list[tuple[Image.Image, int, int]] = []
         completed = [False] * len(schedule)
+        row_start_steps = {rank: start for rank, start, _drops in schedule}
+        wild_card_cut_line_y = int(top_y + 3 * cell_h)
+        wild_card_cut_line_start = row_start_steps.get(3, 0)
+
+        def _draw_wild_card_cut_line_for_step(frame: Image.Image, current_step: int) -> None:
+            if not draw_wild_card_cut_line:
+                return
+            progress = current_step - wild_card_cut_line_start
+            if progress < 0:
+                return
+            if progress >= steps:
+                line_y = wild_card_cut_line_y
+            else:
+                frac = progress / (steps - 1) if steps > 1 else 1.0
+                eased = _ease_out_cubic(frac)
+                start_y = -logo_box
+                line_y = int(start_y + (wild_card_cut_line_y - start_y) * eased)
+                if line_y > wild_card_cut_line_y:
+                    line_y = wild_card_cut_line_y
+            _draw_wild_card_cut_line(ImageDraw.Draw(frame), col_centers[-1], col_width, line_y)
 
         for current_step in range(total_duration):
             if _should_skip():
@@ -717,19 +737,17 @@ def draw_overview(display, title: str, league_id: int, transition: bool = False,
 
             frame_start = time.time()
 
-            for idx, (start, drops) in enumerate(schedule):
+            for idx, (_rank, start, drops) in enumerate(schedule):
                 if current_step >= start + steps and not completed[idx]:
                     placed.extend(drops)
                     completed[idx] = True
 
             frame = header.copy()
-            if draw_wild_card_cut_line:
-                line_y = int(top_y + 3 * cell_h)
-                _draw_wild_card_cut_line(ImageDraw.Draw(frame), col_centers[-1], col_width, line_y)
+            _draw_wild_card_cut_line_for_step(frame, current_step)
             for icon, x0, y0 in placed:
                 frame.paste(icon, (x0, y0), icon)
 
-            for start, drops in schedule:
+            for _rank, start, drops in schedule:
                 progress = current_step - start
                 if progress < 0 or progress >= steps:
                     continue
