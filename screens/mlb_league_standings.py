@@ -315,6 +315,7 @@ def _normalize_row(record: dict[str, Any]) -> dict[str, Any]:
         "pct": _pct_text(record.get("winningPercentage")),
         "last10": last_10,
         "gb": _gb_text(record.get("gamesBack", "-")),
+        "wildCardRank": record.get("wildCardRank"),
     }
 
 
@@ -553,20 +554,58 @@ def _pct_sort_value(row: dict[str, Any]) -> float:
         return 0.0
 
 
+def _int_sort_value(value: Any) -> int:
+    try:
+        return int(str(value).replace("-", "0") or 0)
+    except Exception:
+        return 0
+
+
+def _wild_card_rank_value(row: dict[str, Any]) -> int | None:
+    for key in ("wildCardRank", "wild_card_rank"):
+        rank = _int_sort_value(row.get(key))
+        if rank > 0:
+            return rank
+    return None
+
+
+def _wild_card_record_key(row: dict[str, Any]) -> tuple[float, int, int]:
+    return (
+        _pct_sort_value(row),
+        _int_sort_value(row.get("wins")),
+        -_int_sort_value(row.get("losses")),
+    )
+
+
 def _wild_card_rows(standings: dict[str, list[dict[str, Any]]]) -> list[dict[str, Any]]:
     contenders: list[dict[str, Any]] = []
     for div in DIVISION_ORDER:
         rows = standings.get(div) or []
         contenders.extend(rows[1:])
-    return sorted(
-        contenders,
-        key=lambda row: (
-            _pct_sort_value(row),
-            int(str(row.get("wins", "0")).replace("-", "0") or 0),
-            -int(str(row.get("losses", "0")).replace("-", "0") or 0),
-        ),
-        reverse=True,
-    )[:OV_ROWS]
+
+    if any(_wild_card_rank_value(row) is not None for row in contenders):
+        ranked = [row for row in contenders if _wild_card_rank_value(row) is not None]
+        unranked = [row for row in contenders if _wild_card_rank_value(row) is None]
+        return (
+            sorted(ranked, key=lambda row: (_wild_card_rank_value(row) or 999,))
+            + sorted(unranked, key=_wild_card_record_key, reverse=True)
+        )[:OV_ROWS]
+
+    return sorted(contenders, key=_wild_card_record_key, reverse=True)[:OV_ROWS]
+
+
+def _should_draw_wild_card_cut_line(rows: list[dict[str, Any]]) -> bool:
+    if len(rows) <= 3:
+        return False
+
+    third = rows[2]
+    fourth = rows[3]
+    third_rank = _wild_card_rank_value(third)
+    fourth_rank = _wild_card_rank_value(fourth)
+    if third_rank is not None and fourth_rank is not None:
+        return third_rank != fourth_rank
+
+    return _wild_card_record_key(third) != _wild_card_record_key(fourth)
 
 
 def _draw_wild_card_cut_line(draw: ImageDraw.ImageDraw, center_x: float, col_width: float, y: int) -> None:
@@ -630,8 +669,10 @@ def draw_overview(display, title: str, league_id: int, transition: bool = False,
 
     standings = _fetch_league_standings().get(league_id, {})
     logos_per_div: dict[str, list[Image.Image | None]] = {}
+    wild_card_rows = _wild_card_rows(standings) if include_wc else []
+    draw_wild_card_cut_line = _should_draw_wild_card_cut_line(wild_card_rows)
     for div in divisions:
-        rows = _wild_card_rows(standings) if div == "WC" else standings.get(div, [])[:OV_ROWS]
+        rows = wild_card_rows if div == "WC" else standings.get(div, [])[:OV_ROWS]
         logos: list[Image.Image | None] = []
         for row in rows:
             abbr = str(row.get("abbr", "") or "")
@@ -682,7 +723,7 @@ def draw_overview(display, title: str, league_id: int, transition: bool = False,
                     completed[idx] = True
 
             frame = header.copy()
-            if include_wc:
+            if draw_wild_card_cut_line:
                 line_y = int(top_y + 3 * cell_h)
                 _draw_wild_card_cut_line(ImageDraw.Draw(frame), col_centers[-1], col_width, line_y)
             for icon, x0, y0 in placed:
@@ -710,7 +751,7 @@ def draw_overview(display, title: str, league_id: int, transition: bool = False,
                 return header.copy() if transition else None
 
     final = header.copy()
-    if include_wc:
+    if draw_wild_card_cut_line:
         line_y = int(top_y + 3 * cell_h)
         _draw_wild_card_cut_line(ImageDraw.Draw(final), col_centers[-1], col_width, line_y)
     for rank in range(OV_ROWS):

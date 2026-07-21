@@ -269,6 +269,48 @@ def test_wild_card_rows_excludes_division_leaders_and_limits_to_five():
     assert all("Leader" not in row["team_name"] for row in rows)
 
 
+def test_wild_card_rows_uses_api_wild_card_rank_for_tied_records():
+    standings = {
+        "East": [
+            {"team_name": "East Leader", "wins": "90", "losses": "60", "pct": ".600"},
+            {"team_name": "East Four", "wins": "80", "losses": "70", "pct": ".533", "wildCardRank": "4"},
+        ],
+        "Central": [
+            {"team_name": "Central Leader", "wins": "91", "losses": "59", "pct": ".607"},
+            {"team_name": "Central Three", "wins": "80", "losses": "70", "pct": ".533", "wildCardRank": "3"},
+        ],
+        "West": [
+            {"team_name": "West Leader", "wins": "92", "losses": "58", "pct": ".613"},
+        ],
+    }
+
+    rows = mlb_league_standings._wild_card_rows(standings)
+
+    assert [row["team_name"] for row in rows[:2]] == ["Central Three", "East Four"]
+
+
+def test_should_not_draw_wild_card_cut_line_through_record_tie_without_api_rank():
+    rows = [
+        {"wins": "91", "losses": "59", "pct": ".607"},
+        {"wins": "88", "losses": "62", "pct": ".587"},
+        {"wins": "80", "losses": "70", "pct": ".533"},
+        {"wins": "80", "losses": "70", "pct": ".533"},
+    ]
+
+    assert mlb_league_standings._should_draw_wild_card_cut_line(rows) is False
+
+
+def test_should_draw_wild_card_cut_line_between_distinct_api_ranks():
+    rows = [
+        {"wins": "91", "losses": "59", "pct": ".607", "wildCardRank": "1"},
+        {"wins": "88", "losses": "62", "pct": ".587", "wildCardRank": "2"},
+        {"wins": "80", "losses": "70", "pct": ".533", "wildCardRank": "3"},
+        {"wins": "80", "losses": "70", "pct": ".533", "wildCardRank": "4"},
+    ]
+
+    assert mlb_league_standings._should_draw_wild_card_cut_line(rows) is True
+
+
 def test_draw_wild_card_cut_line_uses_dotted_segments():
     image = Image.new("RGB", (120, 40), (0, 0, 0))
     draw = ImageDraw.Draw(image)
