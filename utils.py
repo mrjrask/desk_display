@@ -3725,6 +3725,37 @@ def check_github_updates() -> bool:
 _APT_CACHE_TTL_SECONDS = 4 * 60 * 60
 _APT_CACHE_RESULT: Optional[bool] = None
 _APT_CACHE_AT: float = 0.0
+_APT_STATE_PATHS = (
+    Path("/var/lib/dpkg/status"),
+    Path("/var/lib/apt/extended_states"),
+    Path("/var/cache/apt/pkgcache.bin"),
+)
+
+
+def _newest_apt_state_mtime() -> float:
+    """Return the newest apt/dpkg state mtime available on this system."""
+
+    newest = 0.0
+    for path in _APT_STATE_PATHS:
+        try:
+            newest = max(newest, path.stat().st_mtime)
+        except OSError:
+            continue
+    return newest
+
+
+def _apt_cache_is_fresh(now: float) -> bool:
+    """Return True when the cached apt result can still be trusted."""
+
+    if _APT_CACHE_RESULT is None or (now - _APT_CACHE_AT) >= _APT_CACHE_TTL_SECONDS:
+        return False
+
+    newest_state_mtime = _newest_apt_state_mtime()
+    if newest_state_mtime > _APT_CACHE_AT:
+        logging.info("check_apt_updates: apt/dpkg state changed; refreshing cached result")
+        return False
+
+    return True
 
 
 def check_apt_updates() -> bool:
@@ -3733,7 +3764,7 @@ def check_apt_updates() -> bool:
     global _APT_CACHE_RESULT, _APT_CACHE_AT
 
     now = time.time()
-    if _APT_CACHE_RESULT is not None and (now - _APT_CACHE_AT) < _APT_CACHE_TTL_SECONDS:
+    if _apt_cache_is_fresh(now):
         logging.info(
             "check_apt_updates: using cached result (%s)",
             "updates" if _APT_CACHE_RESULT else "no updates",
