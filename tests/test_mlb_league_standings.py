@@ -269,6 +269,30 @@ def test_wild_card_rows_excludes_division_leaders_and_defaults_to_five():
     assert all("Leader" not in row["team_name"] for row in rows)
 
 
+def test_wcgb_text_preserves_positive_sign_for_current_wild_card_teams():
+    assert mlb_league_standings._wcgb_text("1.5", "2") == "+1 1/2"
+    assert mlb_league_standings._split_gb_text("+1 1/2") == ("+1", "1/2")
+
+
+def test_wcgb_text_does_not_add_positive_sign_below_wild_card_cutoff():
+    assert mlb_league_standings._wcgb_text("1.5", "4") == "1 1/2"
+
+
+def test_postseason_elimination_prefers_wild_card_elimination_field():
+    assert (
+        mlb_league_standings._is_postseason_eliminated(
+            {"wildCardEliminationNumber": "-", "eliminationNumber": "E"}
+        )
+        is False
+    )
+    assert (
+        mlb_league_standings._is_postseason_eliminated(
+            {"wildCardEliminationNumber": "E", "eliminationNumber": "-"}
+        )
+        is True
+    )
+
+
 def test_wild_card_rows_can_include_all_non_eliminated_teams_and_uses_wcgb():
     standings = {
         "East": [
@@ -280,6 +304,7 @@ def test_wild_card_rows_can_include_all_non_eliminated_teams_and_uses_wcgb():
             {"team_name": "Central Leader", "wins": "85", "losses": "65", "pct": ".567", "wcgb": "-"},
             {"team_name": "Central Two", "wins": "84", "losses": "66", "pct": ".560", "wcgb": "1", "wildCardRank": "2"},
             {"team_name": "Central Eliminated", "wins": "60", "losses": "90", "pct": ".400", "wcgb": "28", "wildCardRank": "7", "wildCardEliminationNumber": "E"},
+            {"team_name": "Central Division Eliminated", "wins": "83", "losses": "67", "pct": ".553", "wcgb": "2", "wildCardRank": "3", "wildCardEliminationNumber": "-", "eliminationNumber": "E"},
         ],
         "West": [
             {"team_name": "West Leader", "wins": "92", "losses": "58", "pct": ".613", "wcgb": "-"},
@@ -294,6 +319,7 @@ def test_wild_card_rows_can_include_all_non_eliminated_teams_and_uses_wcgb():
     assert [row["team_name"] for row in rows] == [
         "East Two",
         "Central Two",
+        "Central Division Eliminated",
         "West Two",
         "West Three",
         "West Four",

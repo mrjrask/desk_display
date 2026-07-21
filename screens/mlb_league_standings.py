@@ -243,13 +243,37 @@ def _gb_text(value: Any) -> str:
     return f"{numeric:.1f}"
 
 
-def _split_gb_text(value: Any) -> tuple[str, str]:
+def _wcgb_text(value: Any, rank: Any = None) -> str:
     text = _gb_text(value)
+    try:
+        numeric = float(value)
+    except Exception:
+        numeric = None
+
+    try:
+        rank_int = int(rank)
+    except Exception:
+        rank_int = None
+
+    if numeric == 0:
+        return "--"
+    if rank_int is not None and rank_int <= 3 and numeric is not None and numeric > 0:
+        return f"+{text}"
+    return text
+
+
+def _split_gb_text(value: Any) -> tuple[str, str]:
+    text = str(value if value not in (None, "") else "-").strip()
+    sign = ""
+    if text.startswith("+"):
+        sign = "+"
+        text = text[1:]
+    text = _gb_text(text)
     if text == "1/2":
-        return "", "1/2"
+        return sign, "1/2"
     if text.endswith(" 1/2"):
-        return text[:-4], "1/2"
-    return text, ""
+        return f"{sign}{text[:-4]}", "1/2"
+    return f"{sign}{text}", ""
 
 
 def _gb_value_width(draw: ImageDraw.ImageDraw, whole_text: str, frac_text: str) -> int:
@@ -315,7 +339,7 @@ def _normalize_row(record: dict[str, Any]) -> dict[str, Any]:
         "pct": _pct_text(record.get("winningPercentage")),
         "last10": last_10,
         "gb": _gb_text(record.get("gamesBack", "-")),
-        "wcgb": _gb_text(record.get("wildCardGamesBack", "-")),
+        "wcgb": _wcgb_text(record.get("wildCardGamesBack", "-"), record.get("wildCardRank")),
         "wildCardRank": record.get("wildCardRank"),
         "wildCardEliminationNumber": record.get("wildCardEliminationNumber"),
         "eliminationNumber": record.get("eliminationNumber"),
@@ -581,7 +605,11 @@ def _wild_card_record_key(row: dict[str, Any]) -> tuple[float, int, int]:
 
 
 def _is_postseason_eliminated(row: dict[str, Any]) -> bool:
-    for key in ("wildCardEliminationNumber", "eliminationNumber", "elimination_number"):
+    wildcard_value = row.get("wildCardEliminationNumber")
+    if wildcard_value not in (None, ""):
+        return isinstance(wildcard_value, str) and wildcard_value.strip().upper() == "E"
+
+    for key in ("eliminationNumber", "elimination_number"):
         value = row.get(key)
         if isinstance(value, str) and value.strip().upper() == "E":
             return True
