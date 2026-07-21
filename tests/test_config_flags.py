@@ -250,7 +250,7 @@ def test_scoreboard_scroll_step_doubles_only_on_1080p(monkeypatch):
     assert module.SCOREBOARD_SCROLL_STEP == 1
 
 
-def test_mlb_scoreboard_scroll_delay_slows_only_display_hat_mini(monkeypatch):
+def test_mlb_scoreboard_scroll_delay_matches_active_profile(monkeypatch):
     module = _reload_config(
         monkeypatch,
         DISPLAY_WIDTH="320",
@@ -258,7 +258,7 @@ def test_mlb_scoreboard_scroll_delay_slows_only_display_hat_mini(monkeypatch):
         MLB_SCOREBOARD_SCROLL_DELAY=None,
     )
     assert module.SCOREBOARD_SCROLL_DELAY == 0.020
-    assert module.MLB_SCOREBOARD_SCROLL_DELAY == 0.060
+    assert module.MLB_SCOREBOARD_SCROLL_DELAY == module.SCOREBOARD_SCROLL_DELAY
 
     module = _reload_config(
         monkeypatch,

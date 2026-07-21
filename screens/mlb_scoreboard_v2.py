@@ -415,15 +415,10 @@ def _scroll_display(display, full_img: Image.Image):
         render_at_offset=lambda offset: display.image(
             full_img.crop((0, offset, WIDTH, offset + HEIGHT))
         ),
-        base_step=1 if _IS_SMALL_CONNECTED_SCOREBOARD_DISPLAY else SCOREBOARD_SCROLL_STEP,
+        base_step=SCOREBOARD_SCROLL_STEP,
         pause_start=SCOREBOARD_SCROLL_PAUSE_TOP,
         pause_end=SCOREBOARD_SCROLL_PAUSE_BOTTOM,
-        min_frame_time=max(MLB_SCOREBOARD_SCROLL_DELAY, 0.100)
-        if _IS_SMALL_CONNECTED_SCOREBOARD_DISPLAY
-        else MLB_SCOREBOARD_SCROLL_DELAY,
-        page_jump_mode=not _IS_SMALL_CONNECTED_SCOREBOARD_DISPLAY,
-        max_step=1 if _IS_SMALL_CONNECTED_SCOREBOARD_DISPLAY else None,
-        min_frame_time_floor=0.100 if _IS_SMALL_CONNECTED_SCOREBOARD_DISPLAY else None,
+        min_frame_time=MLB_SCOREBOARD_SCROLL_DELAY,
     )
 
 

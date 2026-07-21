@@ -89,7 +89,7 @@ def test_nhl_v2_logo_height_is_capped_to_score_row(monkeypatch):
     assert nhl_scoreboard_v2.LOGO_HEIGHT == 26
 
 
-def test_mlb_scroll_path_uses_slow_delay_for_small_connected_display(monkeypatch):
+def test_mlb_scroll_path_uses_profile_timing_for_small_connected_display(monkeypatch):
     captured = {}
 
     def fake_scroll_vertical_content(**kwargs):
@@ -102,11 +102,11 @@ def test_mlb_scroll_path_uses_slow_delay_for_small_connected_display(monkeypatch
 
     mlb_scoreboard._scroll_display(type("Display", (), {"image": lambda self, img: None})(), Image.new("RGB", (10, 20)))
 
-    assert captured["base_step"] == 1
-    assert captured["min_frame_time"] == 0.100
-    assert captured["page_jump_mode"] is False
-    assert captured["max_step"] == 1
-    assert captured["min_frame_time_floor"] == 0.100
+    assert captured["base_step"] == 4
+    assert captured["min_frame_time"] == 0.060
+    assert "page_jump_mode" not in captured
+    assert "max_step" not in captured
+    assert "min_frame_time_floor" not in captured
 
 
 def test_mlb_scroll_path_keeps_scoreboard_delay_for_hyperpixel(monkeypatch):
@@ -124,9 +124,9 @@ def test_mlb_scroll_path_keeps_scoreboard_delay_for_hyperpixel(monkeypatch):
 
     assert captured["base_step"] == 2
     assert captured["min_frame_time"] == 0.020
-    assert captured["page_jump_mode"] is True
-    assert captured["max_step"] is None
-    assert captured["min_frame_time_floor"] is None
+    assert "page_jump_mode" not in captured
+    assert "max_step" not in captured
+    assert "min_frame_time_floor" not in captured
 
 
 def _game(game_pk: int, game_date: str, away_team: dict, home_team: dict) -> dict:
