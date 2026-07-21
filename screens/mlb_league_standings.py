@@ -67,6 +67,7 @@ STAT_COLUMN_GAP = scale_value(30)
 PCT_TO_GB_EXTRA_GAP = scale_value(10)
 LOGO_SIZE = scale_value(24)
 OV_COLS = 3
+OV_COLS_WITH_WC = 4
 OV_ROWS = 5
 OVERVIEW_DROP_STEPS = 30
 OVERVIEW_DROP_STAGGER = 0.4
@@ -545,8 +546,44 @@ def _ease_out_cubic(t: float) -> float:
     return 1.0 - inv * inv * inv
 
 
+def _pct_sort_value(row: dict[str, Any]) -> float:
+    try:
+        return float(str(row.get("pct", "0")).replace("-", "0"))
+    except Exception:
+        return 0.0
+
+
+def _wild_card_rows(standings: dict[str, list[dict[str, Any]]]) -> list[dict[str, Any]]:
+    contenders: list[dict[str, Any]] = []
+    for div in DIVISION_ORDER:
+        rows = standings.get(div) or []
+        contenders.extend(rows[1:])
+    return sorted(
+        contenders,
+        key=lambda row: (
+            _pct_sort_value(row),
+            int(str(row.get("wins", "0")).replace("-", "0") or 0),
+            -int(str(row.get("losses", "0")).replace("-", "0") or 0),
+        ),
+        reverse=True,
+    )[:OV_ROWS]
+
+
+def _draw_wild_card_cut_line(draw: ImageDraw.ImageDraw, center_x: float, col_width: float, y: int) -> None:
+    line_width = max(scale_value(22), int(round(col_width * 0.65)))
+    x_start = int(round(center_x - line_width / 2))
+    x_end = int(round(center_x + line_width / 2))
+    dash = max(2, scale_value(3))
+    gap = max(2, scale_value(3))
+    color = (200, 200, 200)
+    x = x_start
+    while x < x_end:
+        draw.line((x, y, min(x + dash, x_end), y), fill=color, width=max(1, scale_value(1)))
+        x += dash + gap
+
+
 @log_call
-def draw_overview(display, title: str, league_id: int, transition: bool = False):
+def draw_overview(display, title: str, league_id: int, transition: bool = False, include_wc: bool = False):
     wait_for_skip = getattr(display, "wait_for_skip", None)
     skip_requested = getattr(display, "skip_requested", None)
 
@@ -561,6 +598,8 @@ def draw_overview(display, title: str, league_id: int, transition: bool = False)
 
     bg = get_screen_background_color(title, SCOREBOARD_BACKGROUND_COLOR)
     divisions = ["East", "Central", "West"]
+    if include_wc:
+        divisions.append("WC")
     header, top_y = _overview_header_frame(title, bg)
     available_height = max(1, HEIGHT - top_y)
 
@@ -570,26 +609,28 @@ def draw_overview(display, title: str, league_id: int, transition: bool = False)
     if hyperpixel4_layout:
         overview_logo_size = max(1, int(round(LOGO_SIZE * 1.25)))
 
+    ov_cols = OV_COLS_WITH_WC if include_wc else OV_COLS
+
     if hyperpixel_layout:
         overview_margin = max(LEFT_MARGIN, scale_value(6))
         available_width = max(1, WIDTH - 2 * overview_margin)
         cell_h = available_height / OV_ROWS
-        col_width = available_width / OV_COLS
+        col_width = available_width / ov_cols
         padding = max(2, scale_value(4))
         logo_box = max(6, int(min(cell_h - padding * 2, col_width - padding * 2)))
         overview_logo_size = min(overview_logo_size, logo_box)
-        col_centers = [overview_margin + col_width * (i + 0.5) for i in range(OV_COLS)]
+        col_centers = [overview_margin + col_width * (i + 0.5) for i in range(ov_cols)]
     else:
         cell_h = available_height // OV_ROWS
         col_w = max(scale_value(44), LOGO_SIZE)
-        margin_x = (WIDTH - OV_COLS * col_w) // (OV_COLS + 1)
-        col_centers = [margin_x * (i + 1) + col_w * i + col_w / 2 for i in range(OV_COLS)]
+        margin_x = (WIDTH - ov_cols * col_w) // (ov_cols + 1)
+        col_centers = [margin_x * (i + 1) + col_w * i + col_w / 2 for i in range(ov_cols)]
         logo_box = col_w
 
     standings = _fetch_league_standings().get(league_id, {})
     logos_per_div: dict[str, list[Image.Image | None]] = {}
     for div in divisions:
-        rows = standings.get(div, [])[:OV_ROWS]
+        rows = _wild_card_rows(standings) if div == "WC" else standings.get(div, [])[:OV_ROWS]
         logos: list[Image.Image | None] = []
         for row in rows:
             abbr = str(row.get("abbr", "") or "")
@@ -640,6 +681,9 @@ def draw_overview(display, title: str, league_id: int, transition: bool = False)
                     completed[idx] = True
 
             frame = header.copy()
+            if include_wc:
+                line_y = int(top_y + 3 * cell_h)
+                _draw_wild_card_cut_line(ImageDraw.Draw(frame), col_centers[-1], col_width, line_y)
             for icon, x0, y0 in placed:
                 frame.paste(icon, (x0, y0), icon)
 
@@ -665,6 +709,9 @@ def draw_overview(display, title: str, league_id: int, transition: bool = False)
                 return header.copy() if transition else None
 
     final = header.copy()
+    if include_wc:
+        line_y = int(top_y + 3 * cell_h)
+        _draw_wild_card_cut_line(ImageDraw.Draw(final), col_centers[-1], col_width, line_y)
     for rank in range(OV_ROWS):
         for ci, div in enumerate(divisions):
             icon = logos_per_div[div][rank]
@@ -789,9 +836,21 @@ def draw_AL_Overview(display, transition: bool = False):
     return draw_overview(display, "AL Overview", AL_LEAGUE_ID, transition)
 
 
+@log_call
+def draw_NL_Overview_WC(display, transition: bool = False):
+    return draw_overview(display, "NL Overview+WC", NL_LEAGUE_ID, transition, include_wc=True)
+
+
+@log_call
+def draw_AL_Overview_WC(display, transition: bool = False):
+    return draw_overview(display, "AL Overview+WC", AL_LEAGUE_ID, transition, include_wc=True)
+
+
 __all__ = [
     "draw_mlb_al_standings",
     "draw_mlb_nl_standings",
     "draw_NL_Overview",
     "draw_AL_Overview",
+    "draw_NL_Overview_WC",
+    "draw_AL_Overview_WC",
 ]
