@@ -238,7 +238,7 @@ def test_wide_layout_centers_record_and_midpoints_l10(monkeypatch):
     assert abs(last10_center - ((record_center + gb_center) / 2.0)) <= 1.0
 
 
-def test_wild_card_rows_excludes_division_leaders_and_limits_to_five():
+def test_wild_card_rows_excludes_division_leaders_and_defaults_to_five():
     standings = {
         "East": [
             {"team_name": "East Leader", "wins": "90", "losses": "60", "pct": ".600"},
@@ -267,6 +267,40 @@ def test_wild_card_rows_excludes_division_leaders_and_limits_to_five():
         "East Three",
     ]
     assert all("Leader" not in row["team_name"] for row in rows)
+
+
+def test_wild_card_rows_can_include_all_non_eliminated_teams_and_uses_wcgb():
+    standings = {
+        "East": [
+            {"team_name": "East Leader", "wins": "90", "losses": "60", "pct": ".600", "wcgb": "-"},
+            {"team_name": "East Two", "wins": "88", "losses": "62", "pct": ".587", "wcgb": "-", "wildCardRank": "1"},
+            {"team_name": "East Out", "wins": "70", "losses": "80", "pct": ".467", "wcgb": "18", "wildCardRank": "6"},
+        ],
+        "Central": [
+            {"team_name": "Central Leader", "wins": "85", "losses": "65", "pct": ".567", "wcgb": "-"},
+            {"team_name": "Central Two", "wins": "84", "losses": "66", "pct": ".560", "wcgb": "1", "wildCardRank": "2"},
+            {"team_name": "Central Eliminated", "wins": "60", "losses": "90", "pct": ".400", "wcgb": "28", "wildCardRank": "7", "wildCardEliminationNumber": "E"},
+        ],
+        "West": [
+            {"team_name": "West Leader", "wins": "92", "losses": "58", "pct": ".613", "wcgb": "-"},
+            {"team_name": "West Two", "wins": "83", "losses": "67", "pct": ".553", "wcgb": "2", "wildCardRank": "3"},
+            {"team_name": "West Three", "wins": "82", "losses": "68", "pct": ".547", "wcgb": "3", "wildCardRank": "4", "wildCardEliminationNumber": "-"},
+            {"team_name": "West Four", "wins": "81", "losses": "69", "pct": ".540", "wcgb": "4", "wildCardRank": "5", "eliminationNumber": "--"},
+        ],
+    }
+
+    rows = mlb_league_standings._wild_card_rows(standings, limit=None)
+
+    assert [row["team_name"] for row in rows] == [
+        "East Two",
+        "Central Two",
+        "West Two",
+        "West Three",
+        "West Four",
+        "East Out",
+    ]
+    assert rows[1]["gb"] == "1"
+    assert "Central Eliminated" not in [row["team_name"] for row in rows]
 
 
 def test_wild_card_rows_uses_api_wild_card_rank_for_tied_records():
