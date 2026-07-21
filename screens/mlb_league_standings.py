@@ -624,6 +624,7 @@ def draw_overview(display, title: str, league_id: int, transition: bool = False,
         cell_h = available_height // OV_ROWS
         col_w = max(scale_value(44), LOGO_SIZE)
         margin_x = (WIDTH - ov_cols * col_w) // (ov_cols + 1)
+        col_width = col_w
         col_centers = [margin_x * (i + 1) + col_w * i + col_w / 2 for i in range(ov_cols)]
         logo_box = col_w
 

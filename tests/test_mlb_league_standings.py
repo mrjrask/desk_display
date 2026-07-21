@@ -278,3 +278,31 @@ def test_draw_wild_card_cut_line_uses_dotted_segments():
     lit_pixels = [x for x in range(120) if image.getpixel((x, 20)) != (0, 0, 0)]
     assert lit_pixels
     assert any((x + 1) not in lit_pixels for x in lit_pixels[:-1])
+
+
+def test_draw_overview_wc_non_hyperpixel_has_column_width(monkeypatch):
+    class _Display:
+        def image(self, _image):
+            pass
+
+        def show(self):
+            pass
+
+        def wait_for_skip(self, _duration):
+            return False
+
+    monkeypatch.setattr(mlb_league_standings.config, "is_hyperpixel_next_layout", lambda: False)
+    monkeypatch.setattr(mlb_league_standings.config, "is_hyperpixel_4_square_layout", lambda: False)
+    monkeypatch.setattr(mlb_league_standings, "_fetch_league_standings", lambda: {mlb_league_standings.NL_LEAGUE_ID: {}})
+    monkeypatch.setattr(mlb_league_standings, "_load_mlb_logo", lambda: None)
+    monkeypatch.setattr(mlb_league_standings, "OVERVIEW_PAUSE_END", 0)
+
+    result = mlb_league_standings.draw_overview(
+        _Display(),
+        "NL Overview+WC",
+        mlb_league_standings.NL_LEAGUE_ID,
+        transition=True,
+        include_wc=True,
+    )
+
+    assert result is not None
