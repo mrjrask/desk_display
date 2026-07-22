@@ -661,7 +661,7 @@ def _should_draw_wild_card_cut_line(rows: list[dict[str, Any]]) -> bool:
 
 
 def _draw_wild_card_cut_line(draw: ImageDraw.ImageDraw, center_x: float, col_width: float, y: int) -> None:
-    line_width = max(scale_value(22), int(round(col_width * 0.65)))
+    line_width = max(scale_value(22), int(round(col_width)))
     x_start = int(round(center_x - line_width / 2))
     x_end = int(round(center_x + line_width / 2))
     dash = max(2, scale_value(3))
