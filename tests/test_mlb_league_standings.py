@@ -383,6 +383,8 @@ def test_draw_wild_card_cut_line_uses_dotted_segments():
 
     lit_pixels = [x for x in range(120) if image.getpixel((x, 20)) != (0, 0, 0)]
     assert lit_pixels
+    assert min(lit_pixels) == 20
+    assert max(lit_pixels) == 100
     assert any((x + 1) not in lit_pixels for x in lit_pixels[:-1])
 
 
