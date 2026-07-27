@@ -496,7 +496,8 @@ def _column_layout(
 
     first_col = columns[0]
     team_gap = _TEAM_TO_RECORD_GAP_WIDE if SHOW_LAST_10 else _STAT_COLUMN_GAP
-    layout["team_max"] = max(scale_value(70), layout[first_col] - team_x - team_gap)
+    first_col_left = layout[first_col] - layout[f"{first_col}_width"]
+    layout["team_max"] = max(0, first_col_left - team_x - team_gap)
     return layout
 
 
@@ -937,12 +938,15 @@ def _draw_league_screen(
             if logo is not None:
                 img.paste(logo, (LEFT_MARGIN, row_center - logo.height // 2), logo)
 
-            team_name = str(row.get("team_name", "-") or "-")
+            original_team_name = str(row.get("team_name", "-") or "-")
+            team_name = original_team_name
             max_width = col["team_max"]
             while team_name and _text_size(draw, team_name, TEAM_FONT)[0] > max_width:
                 team_name = team_name[:-1]
-            if team_name != str(row.get("team_name", "-")):
-                team_name = f"{team_name.rstrip()}…"
+            if team_name != original_team_name:
+                while team_name and _text_size(draw, f"{team_name.rstrip()}…", TEAM_FONT)[0] > max_width:
+                    team_name = team_name[:-1]
+                team_name = f"{team_name.rstrip()}…" if team_name else ""
 
             draw.text((col["team"], row_center), team_name, font=TEAM_FONT, fill=(255, 255, 255), anchor="lm")
             record_value = f"{row.get('wins', '-')}-{row.get('losses', '-')}"

@@ -294,6 +294,31 @@ def test_wide_layout_centers_record_and_midpoints_streak_with_last_10(monkeypatc
     assert abs(streak_center - ((record_center + gb_center) / 2.0)) <= 1.0
 
 
+def test_square_layout_team_width_stops_before_three_digit_record(monkeypatch):
+    monkeypatch.setattr(mlb_league_standings, "SHOW_LAST_10", True)
+    monkeypatch.setattr(mlb_league_standings, "SHOW_WIN_PCT", True)
+    monkeypatch.setattr(mlb_league_standings, "WIDTH", 720)
+
+    draw = ImageDraw.Draw(Image.new("RGB", (720, 720), (0, 0, 0)))
+    rows = [
+        {
+            "team_name": "Guardians",
+            "wins": "100",
+            "losses": "62",
+            "pct": ".617",
+            "streak": "W2",
+            "last10": "0-10",
+            "gb": "-",
+        }
+    ]
+    layout = mlb_league_standings._column_layout(draw, rows)
+
+    team_right = layout["team"] + layout["team_max"]
+    record_left = layout["record"] - layout["record_width"]
+
+    assert team_right + mlb_league_standings._TEAM_TO_RECORD_GAP_WIDE <= record_left
+
+
 def test_wild_card_rows_excludes_division_leaders_and_defaults_to_five():
     standings = {
         "East": [
