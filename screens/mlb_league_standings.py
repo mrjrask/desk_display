@@ -155,7 +155,6 @@ SHOW_LAST_10 = int(WIDTH) > 400
 _SESSION = get_session()
 _STANDINGS_CACHE: dict[str, Any] = {"timestamp": 0.0, "data": None}
 _LOGO_CACHE: dict[tuple[str, int], Image.Image | None] = {}
-_RECENT_COLUMN_CURSOR: dict[str, bool] = {}
 
 
 def _text_size(draw: ImageDraw.ImageDraw, text: str, font) -> tuple[int, int]:
@@ -349,9 +348,9 @@ def _normalize_row(record: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def _stat_columns(recent_column: str = "last10") -> tuple[str, ...]:
+def _stat_columns() -> tuple[str, ...]:
     if SHOW_LAST_10:
-        return ("record", recent_column, "gb")
+        return ("record", "streak", "gb")
     cols = ("record", "gb")
     if SHOW_WIN_PCT:
         cols = ("record", "pct", "gb")
@@ -362,6 +361,12 @@ def _record_with_pct_width(draw: ImageDraw.ImageDraw, record_text: str, pct_text
     record_w = _text_size(draw, record_text, STATS_FONT)[0]
     pct_w = _text_size(draw, f"({pct_text})", RECORD_PCT_FONT)[0]
     return record_w + scale_value(4) + pct_w
+
+
+def _streak_with_last10_width(draw: ImageDraw.ImageDraw, streak_text: str, last10_text: str) -> int:
+    streak_w = _text_size(draw, streak_text, STATS_FONT)[0]
+    last10_w = _text_size(draw, last10_text, RECORD_PCT_FONT)[0]
+    return streak_w + scale_value(4) + last10_w
 
 
 def _fetch_league_standings() -> dict[int, dict[str, list[dict[str, Any]]]]:
@@ -413,11 +418,10 @@ def _fetch_league_standings() -> dict[int, dict[str, list[dict[str, Any]]]]:
 def _column_layout(
     draw: ImageDraw.ImageDraw,
     rows: list[dict[str, Any]],
-    recent_column: str = "last10",
 ) -> dict[str, int]:
     team_x = LEFT_MARGIN + LOGO_SIZE + TEAM_GAP
     right_edge = WIDTH - RIGHT_MARGIN
-    columns = _stat_columns(recent_column)
+    columns = _stat_columns()
 
     stat_widths: dict[str, int] = {}
     for key in columns:
@@ -433,6 +437,15 @@ def _column_layout(
                     width = max(width, _record_with_pct_width(draw, record_text, str(row.get("pct", "-"))))
                 else:
                     width = max(width, _text_size(draw, record_text, STATS_FONT)[0])
+            elif key == "streak":
+                width = max(
+                    width,
+                    _streak_with_last10_width(
+                        draw,
+                        str(row.get("streak", "-")),
+                        str(row.get("last10", "-")),
+                    ),
+                )
             else:
                 width = max(width, _text_size(draw, str(row.get(key, "-")), STATS_FONT)[0])
         stat_widths[key] = width
@@ -451,29 +464,29 @@ def _column_layout(
                 gap += _RECORD_TO_GB_EXTRA_GAP
             cursor -= stat_widths[key] + gap
 
-    if SHOW_LAST_10 and columns == ("record", recent_column, "gb"):
+    if SHOW_LAST_10 and columns == ("record", "streak", "gb"):
         # Keep GB at the same right-aligned placement while centering Record
-        # and placing the rotating L10/streak column midway between them.
+        # and placing the combined streak/L10 column midway between them.
         gb_right = right_edge
         gb_center = gb_right - (stat_widths["gb"] / 2.0)
         record_center = WIDTH / 2.0
         recent_center = (record_center + gb_center) / 2.0
 
         record_right = int(round(record_center + (stat_widths["record"] / 2.0)))
-        recent_right = int(round(recent_center + (stat_widths[recent_column] / 2.0)))
+        recent_right = int(round(recent_center + (stat_widths["streak"] / 2.0)))
 
-        record_right = min(record_right, gb_right - stat_widths[recent_column] - stat_widths["record"])
+        record_right = min(record_right, gb_right - stat_widths["streak"] - stat_widths["record"])
         recent_right = min(recent_right, gb_right - max(2, scale_value(2)))
 
         record_left = record_right - stat_widths["record"]
-        recent_left = recent_right - stat_widths[recent_column]
+        recent_left = recent_right - stat_widths["streak"]
         gb_left = gb_right - stat_widths["gb"]
 
         if record_right < recent_left and recent_right < gb_left:
             layout["record"] = record_right
             layout["record_width"] = stat_widths["record"]
-            layout[recent_column] = recent_right
-            layout[f"{recent_column}_width"] = stat_widths[recent_column]
+            layout["streak"] = recent_right
+            layout["streak_width"] = stat_widths["streak"]
             layout["gb"] = gb_right
             layout["gb_width"] = stat_widths["gb"]
         else:
@@ -507,11 +520,32 @@ def _draw_record_with_pct(draw: ImageDraw.ImageDraw, record_value: str, pct_valu
     )
 
 
+def _draw_streak_with_last10(
+    draw: ImageDraw.ImageDraw,
+    streak_value: str,
+    last10_value: str,
+    x: int,
+    y: int,
+) -> None:
+    streak_w = _text_size(draw, streak_value, STATS_FONT)[0]
+    last10_w = _text_size(draw, last10_value, RECORD_PCT_FONT)[0]
+    total_w = streak_w + scale_value(4) + last10_w
+    left = x - total_w
+    draw.text((left, y), streak_value, font=STATS_FONT, fill=(255, 255, 255), anchor="lm")
+    draw.text(
+        (left + streak_w + scale_value(4), y),
+        last10_value,
+        font=RECORD_PCT_FONT,
+        fill=(200, 200, 200),
+        anchor="lm",
+    )
+
+
 def _stat_header_labels() -> dict[str, str]:
     return {
         "record": "Record",
         "last10": "L10",
-        "streak": "STRK",
+        "streak": "STRK (L10)",
         "pct": "Win%",
         "gb": "GB",
     }
@@ -521,10 +555,9 @@ def _draw_stat_headers(
     draw: ImageDraw.ImageDraw,
     layout: dict[str, int],
     y: int,
-    recent_column: str = "last10",
 ) -> int:
     labels = _stat_header_labels()
-    for key in _stat_columns(recent_column):
+    for key in _stat_columns():
         col_width = int(layout.get(f"{key}_width", 0) or 0)
         center_x = layout[key] - (col_width // 2)
         draw.text(
@@ -855,7 +888,6 @@ def _draw_league_screen(
     title: str,
     league_id: int,
     screen_id: str,
-    recent_column: str = "last10",
 ) -> Image.Image:
     bg = get_screen_background_color(screen_id, SCOREBOARD_BACKGROUND_COLOR)
     standings = _fetch_league_standings().get(league_id, {})
@@ -864,7 +896,7 @@ def _draw_league_screen(
 
     probe = ImageDraw.Draw(Image.new("RGB", (WIDTH, HEIGHT), bg))
     all_rows = [row for div in DIVISION_ORDER for row in standings.get(div, [])] + wild_card_rows
-    col = _column_layout(probe, all_rows, recent_column)
+    col = _column_layout(probe, all_rows)
 
     row_h = max(LOGO_SIZE, _text_size(probe, "SEA", TEAM_FONT)[1], _text_size(probe, "999", STATS_FONT)[1]) + scale_value(2)
     division_title_h = _text_size(probe, "AL East", DIVISION_FONT)[1] + DIVISION_CONTENT_GAP
@@ -897,7 +929,7 @@ def _draw_league_screen(
         division_label = f"{title.split()[1]} {div}"
         draw.text((WIDTH // 2, y), division_label, font=DIVISION_FONT, fill=(255, 255, 255), anchor="mt")
         y += _text_size(draw, division_label, DIVISION_FONT)[1] + DIVISION_CONTENT_GAP
-        y = _draw_stat_headers(draw, col, y, recent_column)
+        y = _draw_stat_headers(draw, col, y)
 
         for row_idx, row in enumerate(rows):
             row_center = y + row_h // 2
@@ -916,7 +948,13 @@ def _draw_league_screen(
             record_value = f"{row.get('wins', '-')}-{row.get('losses', '-')}"
             if SHOW_LAST_10:
                 _draw_record_with_pct(draw, record_value, str(row.get("pct", "-")), col["record"], row_center)
-                _draw_stat(draw, str(row.get(recent_column, "-")), col[recent_column], row_center)
+                _draw_streak_with_last10(
+                    draw,
+                    str(row.get("streak", "-")),
+                    str(row.get("last10", "-")),
+                    col["streak"],
+                    row_center,
+                )
             else:
                 _draw_stat(draw, record_value, col["record"], row_center)
             if SHOW_WIN_PCT and not SHOW_LAST_10:
@@ -936,10 +974,7 @@ def _draw_league_screen(
 
 
 def _render_screen(display, title: str, league_id: int, screen_id: str) -> ScreenImage:
-    show_streak = _RECENT_COLUMN_CURSOR.get(screen_id, False)
-    _RECENT_COLUMN_CURSOR[screen_id] = not show_streak
-    recent_column = "streak" if show_streak else "last10"
-    image = _draw_league_screen(title, league_id, screen_id, recent_column)
+    image = _draw_league_screen(title, league_id, screen_id)
     clear_display(display)
 
     scroll_vertical_content(
