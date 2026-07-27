@@ -522,7 +522,21 @@ def _merge_sections(
     merged = _copy_sections(previous)
     for title, items in refreshed.items():
         if items:
-            merged[title] = list(items)
+            if title == "🎉 Holidays & Culture" and merged.get(title):
+                # Hebcal and Wikimedia populate this shared section in separate
+                # requests. A partial retry may receive the opposite feed from
+                # the initial attempt, so retain both sets rather than replacing
+                # one successful provider with the other. Use displayed content
+                # as the identity so a thumbnail-only change cannot add a
+                # duplicate holiday card.
+                existing = {(item.year, item.text) for item in merged[title]}
+                for item in items:
+                    identity = (item.year, item.text)
+                    if identity not in existing:
+                        merged[title].append(item)
+                        existing.add(identity)
+            else:
+                merged[title] = list(items)
     return merged
 
 

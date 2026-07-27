@@ -422,10 +422,19 @@ def test_on_this_day_retries_and_merges_partial_live_feeds(monkeypatch):
     def fake_build_sections_uncached(today):
         builds.append(today)
         if len(builds) == 1:
-            return {"🌎 General History": [otd.DayItem(2000, "First event")]}
+            return {
+                "🌎 General History": [otd.DayItem(2000, "First event")],
+                "🎉 Holidays & Culture": [
+                    otd.DayItem(None, "Jewish holiday from Hebcal")
+                ],
+            }
         return {
+            "🌎 General History": [otd.DayItem(2001, "Refreshed event")],
             "🎂 Famous Birthdays": [otd.DayItem(1980, "A birthday")],
             "🕯️ Notable Lives": [otd.DayItem(1990, "A notable life")],
+            "🎉 Holidays & Culture": [
+                otd.DayItem(None, "Public holiday from Wikimedia")
+            ],
         }
 
     monkeypatch.setattr(otd.time, "monotonic", lambda: next(times))
@@ -442,5 +451,22 @@ def test_on_this_day_retries_and_merges_partial_live_feeds(monkeypatch):
         "🌎 General History",
         "🎂 Famous Birthdays",
         "🕯️ Notable Lives",
+        "🎉 Holidays & Culture",
     }
+    assert recovered["🎉 Holidays & Culture"] == [
+        otd.DayItem(None, "Jewish holiday from Hebcal"),
+        otd.DayItem(None, "Public holiday from Wikimedia"),
+    ]
+    assert otd._sections_retry_interval(today, recovered) is None
     assert builds == [today, today]
+
+
+def test_on_this_day_merge_deduplicates_same_holiday_from_retry():
+    holiday = otd.DayItem(None, "Shared holiday")
+
+    merged = otd._merge_sections(
+        {"🎉 Holidays & Culture": [holiday]},
+        {"🎉 Holidays & Culture": [holiday]},
+    )
+
+    assert merged["🎉 Holidays & Culture"] == [holiday]
