@@ -348,6 +348,8 @@ Set `INSIDE_SENSOR` to `adafruit_bme280`, `adafruit_bme680`, or `adafruit_sht4x`
 | `NCAAM_SCOREBOARD_MODE` | NCAAM scoreboard mode; defaults to `top25`. |
 | `NHL_BREAK_WINDOWS_JSON` | Optional NHL break-window override JSON used by registry helpers. |
 | `SMALL_RESULT_FLAG_H` | Small flag height for MLB result/schedule renderers. |
+| `ON_THIS_DAY_INCOMPLETE_FEED_RETRY_SECONDS` | Retry interval for incomplete Wikimedia daily results; defaults to 300 seconds. |
+| `ON_THIS_DAY_OFFLINE_FALLBACK_RETRY_SECONDS` | Retry interval after all On This Day feeds fail; defaults to 900 seconds. |
 | `AHL_API_BASE_URL`, `AHL_API_KEY`, `AHL_CLIENT_CODE`, `AHL_LEAGUE_ID`, `AHL_SITE_ID`, `AHL_SEASON_ID`, `AHL_TEAM_ID`, `AHL_TEAM_TRICODE`, `AHL_TEAM_NAME`, `AHL_SCHEDULE_ICS_URL` | AHL/Wolves feed configuration. |
 
 ### Config UI and auth variables
