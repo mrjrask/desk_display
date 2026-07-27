@@ -156,6 +156,16 @@ def test_refresh_air_quality_restores_persisted_chart_history(monkeypatch, tmp_p
     assert persisted == [(300.0, 65, 28, 40), (1_000.0, 72, 31, 44)]
 
 
+def test_load_air_quality_history_rejects_non_object_payloads(monkeypatch, tmp_path):
+    main = _load_main()
+    history_path = tmp_path / "aq.json"
+    monkeypatch.setattr(main, "_AIR_QUALITY_HISTORY_PATH", str(history_path))
+
+    for payload in ("null", "[[300.0, 65, 28, 40]]"):
+        history_path.write_text(payload, encoding="utf-8")
+        assert main._load_air_quality_history(1_000.0) == []
+
+
 def test_refresh_air_quality_keeps_last_report_when_request_fails(monkeypatch):
     main = _load_main()
     previous_report = object()

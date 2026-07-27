@@ -2184,7 +2184,12 @@ def _record_inside_history(data: Dict[str, Optional[float]], timestamp: Optional
         for label, value in _history_values(data).items():
             points = _inside_history.setdefault(label, [])
             points.append((recorded_at, value))
-            points[:] = [point for point in points if recorded_at - point[0] <= _HISTORY_MAX_AGE_SECONDS]
+            points[:] = [
+                point
+                for point in points
+                if 0 <= recorded_at - point[0] <= _HISTORY_MAX_AGE_SECONDS
+            ]
+            points.sort(key=lambda point: point[0])
             del points[:-_HISTORY_LIMIT]
         _save_inside_history()
 
@@ -2197,11 +2202,14 @@ def _load_inside_history(now: Optional[float] = None) -> None:
         if _inside_history_loaded:
             return
         _inside_history_loaded = True
-        cutoff = (time.time() if now is None else now) - _HISTORY_MAX_AGE_SECONDS
+        current_time = time.time() if now is None else now
+        cutoff = current_time - _HISTORY_MAX_AGE_SECONDS
         path = Path(os.path.expandvars(_HISTORY_PATH)).expanduser()
         try:
             payload = json.loads(path.read_text(encoding="utf-8"))
-            history = payload.get("history", payload)
+            if not isinstance(payload, dict):
+                raise ValueError("payload must be an object")
+            history = payload.get("history")
             if not isinstance(history, dict):
                 raise ValueError("history must be an object")
             for label, raw_points in history.items():
@@ -2215,7 +2223,7 @@ def _load_inside_history(now: Optional[float] = None) -> None:
                         stamp, value = float(point[0]), float(point[1])
                     except (TypeError, ValueError):
                         continue
-                    if stamp >= cutoff and math.isfinite(stamp) and math.isfinite(value):
+                    if cutoff <= stamp <= current_time and math.isfinite(stamp) and math.isfinite(value):
                         points.append((stamp, value))
                 if points:
                     _inside_history[label] = sorted(points)[-_HISTORY_LIMIT:]

@@ -1760,7 +1760,9 @@ def _load_air_quality_history(now: float) -> List[Tuple[float, Optional[int], Op
     path = Path(os.path.expandvars(_AIR_QUALITY_HISTORY_PATH)).expanduser()
     try:
         payload = json.loads(path.read_text(encoding="utf-8"))
-        raw_history = payload.get("history", payload)
+        if not isinstance(payload, dict):
+            raise ValueError("payload must be an object")
+        raw_history = payload.get("history")
         if not isinstance(raw_history, list):
             raise ValueError("history must be a list")
         history = []

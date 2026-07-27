@@ -106,6 +106,27 @@ def test_inside_history_survives_process_restart(monkeypatch, tmp_path):
     assert draw_inside_module._inside_history == {"Humidity": [(10_000.0, 42.0)]}
 
 
+def test_inside_history_rejects_future_samples(monkeypatch, tmp_path):
+    import screens.draw_inside as draw_inside_module
+
+    history_path = tmp_path / "inside.json"
+    history_path.write_text(
+        '{"history": {"Humidity": [[10001.0, 99.0], [9999.0, 42.0]]}}',
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(draw_inside_module, "_HISTORY_PATH", str(history_path))
+    monkeypatch.setattr(draw_inside_module, "_inside_history", {})
+    monkeypatch.setattr(draw_inside_module, "_inside_history_loaded", False)
+
+    draw_inside_module._load_inside_history(now=10_000.0)
+    draw_inside_module._inside_history["Humidity"].append((10_002.0, 88.0))
+    draw_inside_module._record_inside_history({"humidity": 43.0}, timestamp=10_000.0)
+
+    assert draw_inside_module._inside_history == {
+        "Humidity": [(9_999.0, 42.0), (10_000.0, 43.0)]
+    }
+
+
 def test_normalize_sensor_env_value_handles_spacing_and_case():
     assert _normalize_sensor_name(" Pimoroni-BME680 ") == "pimoroni_bme680"
 
