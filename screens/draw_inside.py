@@ -53,6 +53,9 @@ _sensor_probe_cache_lock = threading.Lock()
 _sensor_probe_cache: Optional[Tuple[Optional[str], Optional[Callable[[], SensorReadings]]]] = None
 _KNOWN_SENSOR_I2C_ADDRESSES: Set[int] = {0x44, 0x45, 0x76, 0x77}
 _MAX_REASONABLE_I2C_HITS = 16
+_HISTORY_LIMIT = 60
+_inside_history: Dict[str, List[Tuple[float, float]]] = {}
+_inside_history_lock = threading.Lock()
 
 
 def _parse_i2c_bus_candidates() -> Tuple[int, ...]:
@@ -2138,6 +2141,145 @@ def _build_voc_tile(data: Dict[str, Optional[float]], provider: Optional[str]) -
     return dict(label=label, value=display_value, descriptor=descriptor, score=score)
 
 
+def _history_values(data: Dict[str, Optional[float]]) -> Dict[str, float]:
+    """Return the canonical readings that can be plotted on the inside screen."""
+
+    candidates = (
+        ("Humidity", "humidity"),
+        ("Pressure", "pressure_inhg"),
+        ("VOC Index", "voc_index"),
+        ("VOC", "voc_ohms"),
+        ("IAQ", "iaq"),
+        ("CO₂", "co2_ppm"),
+    )
+    values: Dict[str, float] = {}
+    for label, key in candidates:
+        value = _clean_metric(data.get(key))
+        if value is not None and label not in values:
+            values[label] = value
+    return values
+
+
+def _fit_text(draw: ImageDraw.ImageDraw, text: str, font, max_width: int) -> str:
+    """Ellipsize text so values and sensor names stay inside their columns."""
+
+    if measure_text(draw, text, font)[0] <= max_width:
+        return text
+    shortened = text
+    while shortened and measure_text(draw, shortened + "…", font)[0] > max_width:
+        shortened = shortened[:-1]
+    return shortened + "…" if shortened else "…"
+
+
+def _record_inside_history(data: Dict[str, Optional[float]], timestamp: Optional[float] = None) -> None:
+    """Store a bounded in-memory history of readings for the mini charts."""
+
+    recorded_at = time.time() if timestamp is None else timestamp
+    with _inside_history_lock:
+        for label, value in _history_values(data).items():
+            points = _inside_history.setdefault(label, [])
+            points.append((recorded_at, value))
+            del points[:-_HISTORY_LIMIT]
+
+
+def _draw_history_chart(
+    draw: ImageDraw.ImageDraw,
+    box: Tuple[int, int, int, int],
+    points: Sequence[Tuple[float, float]],
+    line_color: Tuple[int, int, int],
+) -> None:
+    """Draw an AQI-style sparkline, including its subtle grid and frame."""
+
+    x0, y0, x1, y1 = box
+    if x1 - x0 < 12 or y1 - y0 < 8:
+        return
+    draw.rounded_rectangle(box, radius=max(2, min(5, (y1 - y0) // 3)), outline=(28, 64, 88))
+    ix0, iy0, ix1, iy1 = x0 + 2, y0 + 2, x1 - 2, y1 - 2
+    width, height = max(1, ix1 - ix0), max(1, iy1 - iy0)
+    for tick in range(1, 4):
+        tick_x = ix0 + round(width * tick / 4)
+        draw.line((tick_x, iy0, tick_x, iy1), fill=(43, 88, 116))
+    draw.line((ix0, iy0 + height // 2, ix1, iy0 + height // 2), fill=(68, 105, 130))
+    if len(points) < 2:
+        return
+    start, end = points[0][0], points[-1][0]
+    if end <= start:
+        end = start + 1
+    values = [value for _, value in points]
+    low, high = min(values), max(values)
+    if low == high:
+        padding = max(1.0, abs(high) * 0.05)
+        low, high = low - padding, high + padding
+    coordinates = [
+        (ix0 + round((stamp - start) / (end - start) * width), iy1 - round((value - low) / (high - low) * height))
+        for stamp, value in points
+    ]
+    draw.line(coordinates, fill=line_color, width=2 if y1 - y0 >= 14 else 1)
+    for point in coordinates[-12:]:
+        draw.point(point, fill=(245, 250, 255))
+
+
+def _render_inside(data: Dict[str, Optional[float]], provider: Optional[str], sensor_error: Optional[str]) -> Image.Image:
+    """Render indoor readings with the same badge-and-chart language as AQI."""
+
+    img = Image.new("RGB", (W, H), config.INSIDE_COL_BG)
+    draw = ImageDraw.Draw(img)
+    margin = max(4, W // 32)
+    header_font = config.FONT_WEATHER_DETAILS_SMALL_BOLD
+    value_font = config.FONT_WEATHER_DETAILS_SMALL
+    label_font = config.FONT_WEATHER_DETAILS_TINY
+    title = "INSIDE"
+    draw.text((margin, margin), title, font=header_font, fill=(235, 235, 235))
+    title_h = measure_text(draw, title, header_font)[1]
+
+    badge_top = margin + title_h + max(4, H // 40)
+    badge_h = max(40, H // 4)
+    temp_f = _clean_metric(data.get("temp_f"))
+    badge_color = temperature_color(temp_f if temp_f is not None else 65.0)
+    badge_fill = _mix_color(badge_color, config.INSIDE_COL_BG, 0.25)
+    draw.rounded_rectangle((margin, badge_top, W - margin, badge_top + badge_h), radius=8, fill=badge_fill)
+    temp_text = f"{temp_f:.1f}°F" if temp_f is not None else "--.-°F"
+    temp_w, temp_h = measure_text(draw, temp_text, header_font)
+    source = provider or sensor_error or "Indoor sensor"
+    source = _fit_text(draw, source, label_font, W - margin * 4)
+    source_w, source_h = measure_text(draw, source, label_font)
+    center_y = badge_top + badge_h // 2
+    draw.text(((W - temp_w) // 2, center_y - temp_h - 1), temp_text, font=header_font, fill=(255, 255, 255))
+    draw.text(((W - source_w) // 2, center_y + 2), source, font=label_font, fill=(245, 245, 245))
+
+    card_top = badge_top + badge_h + max(4, H // 40)
+    card_bottom = H - margin
+    draw.rounded_rectangle((margin, card_top, W - margin, card_bottom), radius=8, fill=(12, 28, 42), outline=(34, 70, 98))
+    metrics = _build_metric_entries(data)[:4]
+    if not metrics:
+        metrics = [{"label": "Status", "value": sensor_error or "Waiting for readings", "color": config.INSIDE_CHIP_BLUE}]
+    content_x, right_edge = margin + 6, W - margin - 6
+    label_w = max(measure_text(draw, metric["label"].upper(), label_font)[0] for metric in metrics) + 10
+    value_x = content_x + label_w
+    chart_x = max(W * 5 // 8, value_x + 38)
+    charts_enabled = chart_x < right_edge - 24
+    row_h = max(1, (card_bottom - card_top - 8) // len(metrics))
+    with _inside_history_lock:
+        histories = {key: tuple(value) for key, value in _inside_history.items()}
+    for index, metric in enumerate(metrics):
+        y0 = card_top + 4 + index * row_h
+        y1 = card_top + 4 + (index + 1) * row_h if index < len(metrics) - 1 else card_bottom - 4
+        if index:
+            draw.line((content_x, y0, right_edge, y0), fill=(26, 54, 76))
+        label = metric["label"]
+        label_y = y0 + (y1 - y0 - measure_text(draw, label, label_font)[1]) // 2
+        value_max_x = chart_x - 6 if charts_enabled and label in histories else right_edge
+        value = _fit_text(draw, metric["value"], value_font, max(1, value_max_x - value_x))
+        value_y = y0 + (y1 - y0 - measure_text(draw, value, value_font)[1]) // 2
+        draw.text((content_x, label_y), label.upper(), font=label_font, fill=(165, 185, 205))
+        draw.text((value_x, value_y), value, font=value_font, fill=(235, 242, 248))
+        if charts_enabled and label in histories:
+            chart_h = max(8, min(y1 - y0 - 6, H // 18))
+            chart_y = y0 + (y1 - y0 - chart_h) // 2
+            _draw_history_chart(draw, (chart_x, chart_y, right_edge, chart_y + chart_h), histories[label], metric["color"])
+    return img
+
+
 def draw_inside(display, transition: bool=False):
     provider, read_fn = _probe_sensor_cached()
     sensor_error: Optional[str] = None
@@ -2159,6 +2301,7 @@ def draw_inside(display, transition: bool=False):
 
             # Log the sensor data to file
             _log_sensor_data(provider, cleaned)
+            _record_inside_history(cleaned)
 
         except Exception as e:
             logging.warning(f"draw_inside: sensor read failed: {e}")
@@ -2170,190 +2313,7 @@ def draw_inside(display, transition: bool=False):
         logging.warning("draw_inside: temperature missing from sensor data")
         sensor_error = "No temperature"
 
-    metrics = _build_metric_entries(cleaned)
-    voc_tile = _build_voc_tile(cleaned, provider)
-    if voc_tile:
-        metrics = [m for m in metrics if not m["label"].lower().startswith("voc")]
-
-    # Title text
-    title = "Inside"
-    subtitle = provider or sensor_error or ""
-
-    # Compose canvas
-    img  = Image.new("RGB", (W, H), config.INSIDE_COL_BG)
-    draw = ImageDraw.Draw(img)
-
-    # Fonts (with fallbacks)
-    default_title_font = config.FONT_TITLE_SPORTS
-    title_base = getattr(config, "FONT_TITLE_INSIDE", None)
-    if title_base is None or getattr(title_base, "size", 0) < getattr(default_title_font, "size", 0):
-        title_base = default_title_font
-
-    subtitle_base = getattr(config, "FONT_INSIDE_SUBTITLE", None)
-    default_subtitle_font = getattr(config, "FONT_DATE_SPORTS", default_title_font)
-    if subtitle_base is None or getattr(subtitle_base, "size", 0) < getattr(default_subtitle_font, "size", 0):
-        subtitle_base = default_subtitle_font
-
-    temp_base  = getattr(config, "FONT_TIME",        default_title_font)
-    label_base = getattr(config, "FONT_INSIDE_LABEL", getattr(config, "FONT_DATE_SPORTS", default_title_font))
-    value_base = getattr(config, "FONT_INSIDE_VALUE", getattr(config, "FONT_DATE_SPORTS", default_title_font))
-
-    # --- Title (auto-fit to width without shrinking below the standard size)
-    title_side_pad = 8
-    title_base_size = getattr(title_base, "size", 30)
-    title_sample_h = measure_text(draw, "Hg", title_base)[1]
-    title_max_h = max(1, title_sample_h)
-    t_font = fit_font(
-        draw,
-        title,
-        title_base,
-        max_width=W - 2 * title_side_pad,
-        max_height=title_max_h,
-        min_pt=min(title_base_size, 12),
-        max_pt=title_base_size,
-    )
-    tw, th = measure_text(draw, title, t_font)
-    title_y = 0
-    draw.text(((W - tw)//2, title_y), title, font=t_font, fill=config.INSIDE_COL_TITLE)
-
-    subtitle_gap = 6
-    if subtitle:
-        subtitle_base_size = getattr(subtitle_base, "size", getattr(default_subtitle_font, "size", 24))
-        subtitle_sample_h = measure_text(draw, "Hg", subtitle_base)[1]
-        subtitle_max_h = max(1, subtitle_sample_h)
-        sub_font = fit_font(
-            draw,
-            subtitle,
-            subtitle_base,
-            max_width=W - 2 * title_side_pad,
-            max_height=subtitle_max_h,
-            min_pt=min(subtitle_base_size, 12),
-            max_pt=subtitle_base_size,
-        )
-        sw, sh = measure_text(draw, subtitle, sub_font)
-        subtitle_y = title_y + th + subtitle_gap
-        draw.text(((W - sw)//2, subtitle_y), subtitle, font=sub_font, fill=config.INSIDE_COL_TITLE)
-    else:
-        sub_font = t_font
-        sw, sh = 0, 0
-        subtitle_y = title_y + th
-
-    title_block_h = subtitle_y + (sh if subtitle else 0)
-
-    # --- Temperature panel --------------------------------------------------
-    temp_value = f"{temp_f:.1f}°F" if temp_f is not None else "--.-°F"
-    descriptor = ""
-
-    content_top = title_block_h + 12
-    bottom_margin = 12
-    side_pad = 12
-    content_bottom = H - bottom_margin
-    content_height = max(1, content_bottom - content_top)
-
-    metric_count = len(metrics)
-    _, grid_rows = _metric_grid_dimensions(metric_count)
-    total_rows = grid_rows + (1 if voc_tile else 0)
-    if metric_count or voc_tile:
-        temp_ratio = max(0.42, 0.58 - 0.03 * min(metric_count, 6))
-        min_temp = max(84, 118 - 8 * min(metric_count, 6))
-    else:
-        temp_ratio = 0.82
-        min_temp = 128
-
-    temp_height = min(content_height, max(min_temp, int(content_height * temp_ratio)))
-    metric_block_gap = 12 if (metric_count or voc_tile) else 0
-    if metric_count or voc_tile:
-        min_metric_row_height = 44
-        min_metric_gap = 10 if total_rows > 1 else 0
-        target_metrics_height = (
-            total_rows * min_metric_row_height + max(0, total_rows - 1) * min_metric_gap
-        )
-        preferred_temp_cap = content_height - (target_metrics_height + metric_block_gap)
-        min_temp_floor = min(54, content_height)
-        preferred_temp_cap = max(min_temp_floor, preferred_temp_cap)
-        temp_height = min(temp_height, preferred_temp_cap)
-        temp_height = max(min_temp_floor, min(temp_height, content_height))
-    else:
-        metric_block_gap = 0
-    temp_rect = (
-        side_pad,
-        content_top,
-        W - side_pad,
-        min(content_bottom, content_top + temp_height),
-    )
-
-    _draw_temperature_panel(
-        img,
-        draw,
-        temp_rect,
-        temp_f if temp_f is not None else 72.0,
-        temp_value,
-        descriptor,
-        temp_base,
-        label_base,
-    )
-
-    if metric_count or voc_tile:
-        metrics_rect = (
-            side_pad,
-            min(content_bottom, temp_rect[3] + metric_block_gap),
-            W - side_pad,
-            content_bottom,
-        )
-        metrics_x0, metrics_y0, metrics_x1, metrics_y1 = metrics_rect
-        metrics_height = max(0, metrics_y1 - metrics_y0)
-        total_rows = grid_rows + (1 if voc_tile else 0)
-        if total_rows > 1:
-            desired_v_gap = max(8, metrics_height // 30)
-            max_v_gap = max(0, (metrics_height - total_rows) // (total_rows - 1))
-            v_gap = min(desired_v_gap, max_v_gap)
-        else:
-            v_gap = 0
-        available_height = max(total_rows, metrics_height - v_gap * (total_rows - 1))
-        row_height = max(44, available_height // total_rows) if total_rows else 0
-        if total_rows and row_height * total_rows + v_gap * (total_rows - 1) > metrics_height:
-            row_height = max(1, available_height // total_rows)
-        grid_height = min(metrics_height, row_height * total_rows + v_gap * (total_rows - 1)) if total_rows else 0
-        start_y = metrics_y0 + max(0, (metrics_height - grid_height) // 2)
-
-        if metric_count and grid_rows:
-            metrics_area_height = row_height * grid_rows + v_gap * max(0, grid_rows - 1)
-            metrics_area_rect = (
-                metrics_x0,
-                start_y,
-                metrics_x1,
-                min(metrics_y1, start_y + metrics_area_height),
-            )
-            metric_cells = _metric_grid_cells(metrics_area_rect, metric_count)
-            if metric_cells:
-                _draw_metric_rows(
-                    draw,
-                    metrics_area_rect,
-                    metrics,
-                    label_base,
-                    value_base,
-                    cells=metric_cells,
-                )
-
-        if voc_tile and total_rows:
-            voc_top = start_y + (row_height * grid_rows) + (v_gap * max(0, grid_rows))
-            voc_rect = (
-                metrics_x0,
-                min(metrics_y1, voc_top),
-                metrics_x1,
-                min(metrics_y1, voc_top + row_height),
-            )
-            if voc_rect[3] > voc_rect[1]:
-                _draw_voc_tile(
-                    draw,
-                    voc_rect,
-                    voc_tile["label"],
-                    voc_tile["value"],
-                    voc_tile["descriptor"],
-                    voc_tile["score"],
-                    label_base,
-                    value_base,
-                )
+    img = _render_inside(cleaned, provider, sensor_error)
 
     if transition:
         return img
