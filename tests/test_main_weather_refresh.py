@@ -103,7 +103,7 @@ def test_refresh_air_quality_uses_configured_aqi_coordinates(monkeypatch):
     assert main.cache["air_quality"] is report
 
 
-def test_refresh_air_quality_retains_component_history_for_charts(monkeypatch):
+def test_refresh_air_quality_retains_component_history_for_charts(monkeypatch, tmp_path):
     main = _load_main()
     report = AirQualityReport(
         72,
@@ -119,10 +119,41 @@ def test_refresh_air_quality_retains_component_history_for_charts(monkeypatch):
     monkeypatch.setattr(main.config, "AIRNOW_API_KEY", "test-key")
     monkeypatch.setattr(main, "fetch_air_quality", lambda *args, **kwargs: report)
     monkeypatch.setattr(main.time, "time", lambda: 1_000.0)
+    monkeypatch.setattr(main, "_AIR_QUALITY_HISTORY_PATH", str(tmp_path / "aq.json"))
 
     main._refresh_air_quality()
 
     assert main.cache["air_quality"].component_history == ((1_000.0, 72, 31, 44),)
+
+
+def test_refresh_air_quality_restores_persisted_chart_history(monkeypatch, tmp_path):
+    main = _load_main()
+    report = AirQualityReport(
+        72,
+        "Moderate",
+        "PM2.5",
+        us_aqi_pm2_5=72,
+        us_aqi_pm10=31,
+        us_aqi_ozone=44,
+    )
+    history_path = tmp_path / "aq.json"
+    history_path.write_text('{"history": [[300.0, 65, 28, 40]]}', encoding="utf-8")
+    monkeypatch.setattr(main.config, "ENABLE_AIR_QUALITY", True)
+    monkeypatch.setattr(main.config, "AIR_QUALITY_LATITUDE", 34.0522)
+    monkeypatch.setattr(main.config, "AIR_QUALITY_LONGITUDE", -118.2437)
+    monkeypatch.setattr(main.config, "AIRNOW_API_KEY", "test-key")
+    monkeypatch.setattr(main, "fetch_air_quality", lambda *args, **kwargs: report)
+    monkeypatch.setattr(main.time, "time", lambda: 1_000.0)
+    monkeypatch.setattr(main, "_AIR_QUALITY_HISTORY_PATH", str(history_path))
+
+    main._refresh_air_quality()
+
+    assert main.cache["air_quality"].component_history == (
+        (300.0, 65, 28, 40),
+        (1_000.0, 72, 31, 44),
+    )
+    persisted = main._load_air_quality_history(1_000.0)
+    assert persisted == [(300.0, 65, 28, 40), (1_000.0, 72, 31, 44)]
 
 
 def test_refresh_air_quality_keeps_last_report_when_request_fails(monkeypatch):
