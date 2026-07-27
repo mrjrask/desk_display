@@ -71,6 +71,17 @@ def test_normalize_row_extracts_last_ten_record():
     assert row["last10"] == "6-4"
 
 
+def test_normalize_row_extracts_streak_code():
+    record = {
+        "team": {"name": "Boston Red Sox", "abbreviation": "BOS"},
+        "streak": {"streakCode": "W5"},
+    }
+
+    row = mlb_league_standings._normalize_row(record)
+
+    assert row["streak"] == "W5"
+
+
 def test_normalize_row_expands_boston_sox_short_name():
     record = {
         "team": {"name": "Boston", "abbreviation": "BOS", "teamName": "Sox"},
@@ -182,11 +193,41 @@ def test_stat_header_labels_include_record_l10_and_gb():
 
     assert labels["record"] == "Record"
     assert labels["last10"] == "L10"
+    assert labels["streak"] == "STRK"
     assert labels["gb"] == "GB"
 
 
+def test_stat_columns_can_replace_last_10_with_streak(monkeypatch):
+    monkeypatch.setattr(mlb_league_standings, "SHOW_LAST_10", True)
+
+    assert mlb_league_standings._stat_columns("streak") == ("record", "streak", "gb")
+
+
+def test_render_screen_alternates_recent_column_per_screen(monkeypatch):
+    recent_columns = []
+    monkeypatch.setattr(mlb_league_standings, "_RECENT_COLUMN_CURSOR", {})
+    monkeypatch.setattr(
+        mlb_league_standings,
+        "_draw_league_screen",
+        lambda _title, _league_id, _screen_id, recent_column: recent_columns.append(recent_column)
+        or Image.new("RGB", (1, 1)),
+    )
+    monkeypatch.setattr(mlb_league_standings, "clear_display", lambda _display: None)
+    monkeypatch.setattr(mlb_league_standings, "scroll_vertical_content", lambda **_kwargs: None)
+
+    mlb_league_standings._render_screen(object(), "AL", 103, "MLB AL Standings")
+    mlb_league_standings._render_screen(object(), "AL", 103, "MLB AL Standings")
+    mlb_league_standings._render_screen(object(), "NL", 104, "MLB NL Standings")
+
+    assert recent_columns == ["last10", "streak", "last10"]
+
+
 def test_draw_stat_headers_centers_labels_in_column(monkeypatch):
-    monkeypatch.setattr(mlb_league_standings, "_stat_columns", lambda: ("record", "last10", "gb"))
+    monkeypatch.setattr(
+        mlb_league_standings,
+        "_stat_columns",
+        lambda _recent_column="last10": ("record", "last10", "gb"),
+    )
 
     class _DrawProbe:
         def __init__(self):

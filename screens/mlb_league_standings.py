@@ -155,6 +155,7 @@ SHOW_LAST_10 = int(WIDTH) > 400
 _SESSION = get_session()
 _STANDINGS_CACHE: dict[str, Any] = {"timestamp": 0.0, "data": None}
 _LOGO_CACHE: dict[tuple[str, int], Image.Image | None] = {}
+_RECENT_COLUMN_CURSOR: dict[str, bool] = {}
 
 
 def _text_size(draw: ImageDraw.ImageDraw, text: str, font) -> tuple[int, int]:
@@ -339,6 +340,7 @@ def _normalize_row(record: dict[str, Any]) -> dict[str, Any]:
         "losses": _int_text(record.get("losses")),
         "pct": _pct_text(record.get("winningPercentage")),
         "last10": last_10,
+        "streak": str((record.get("streak") or {}).get("streakCode") or "-"),
         "gb": _gb_text(record.get("gamesBack", "-")),
         "wcgb": _wcgb_text(record.get("wildCardGamesBack", "-"), record.get("wildCardRank")),
         "wildCardRank": record.get("wildCardRank"),
@@ -347,9 +349,9 @@ def _normalize_row(record: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def _stat_columns() -> tuple[str, ...]:
+def _stat_columns(recent_column: str = "last10") -> tuple[str, ...]:
     if SHOW_LAST_10:
-        return ("record", "last10", "gb")
+        return ("record", recent_column, "gb")
     cols = ("record", "gb")
     if SHOW_WIN_PCT:
         cols = ("record", "pct", "gb")
@@ -408,10 +410,14 @@ def _fetch_league_standings() -> dict[int, dict[str, list[dict[str, Any]]]]:
     return parsed
 
 
-def _column_layout(draw: ImageDraw.ImageDraw, rows: list[dict[str, Any]]) -> dict[str, int]:
+def _column_layout(
+    draw: ImageDraw.ImageDraw,
+    rows: list[dict[str, Any]],
+    recent_column: str = "last10",
+) -> dict[str, int]:
     team_x = LEFT_MARGIN + LOGO_SIZE + TEAM_GAP
     right_edge = WIDTH - RIGHT_MARGIN
-    columns = _stat_columns()
+    columns = _stat_columns(recent_column)
 
     stat_widths: dict[str, int] = {}
     for key in columns:
@@ -445,29 +451,29 @@ def _column_layout(draw: ImageDraw.ImageDraw, rows: list[dict[str, Any]]) -> dic
                 gap += _RECORD_TO_GB_EXTRA_GAP
             cursor -= stat_widths[key] + gap
 
-    if SHOW_LAST_10 and columns == ("record", "last10", "gb"):
+    if SHOW_LAST_10 and columns == ("record", recent_column, "gb"):
         # Keep GB at the same right-aligned placement while centering Record
-        # and placing L10 midway between Record and GB.
+        # and placing the rotating L10/streak column midway between them.
         gb_right = right_edge
         gb_center = gb_right - (stat_widths["gb"] / 2.0)
         record_center = WIDTH / 2.0
-        last10_center = (record_center + gb_center) / 2.0
+        recent_center = (record_center + gb_center) / 2.0
 
         record_right = int(round(record_center + (stat_widths["record"] / 2.0)))
-        last10_right = int(round(last10_center + (stat_widths["last10"] / 2.0)))
+        recent_right = int(round(recent_center + (stat_widths[recent_column] / 2.0)))
 
-        record_right = min(record_right, gb_right - stat_widths["last10"] - stat_widths["record"])
-        last10_right = min(last10_right, gb_right - max(2, scale_value(2)))
+        record_right = min(record_right, gb_right - stat_widths[recent_column] - stat_widths["record"])
+        recent_right = min(recent_right, gb_right - max(2, scale_value(2)))
 
         record_left = record_right - stat_widths["record"]
-        last10_left = last10_right - stat_widths["last10"]
+        recent_left = recent_right - stat_widths[recent_column]
         gb_left = gb_right - stat_widths["gb"]
 
-        if record_right < last10_left and last10_right < gb_left:
+        if record_right < recent_left and recent_right < gb_left:
             layout["record"] = record_right
             layout["record_width"] = stat_widths["record"]
-            layout["last10"] = last10_right
-            layout["last10_width"] = stat_widths["last10"]
+            layout[recent_column] = recent_right
+            layout[f"{recent_column}_width"] = stat_widths[recent_column]
             layout["gb"] = gb_right
             layout["gb_width"] = stat_widths["gb"]
         else:
@@ -505,14 +511,20 @@ def _stat_header_labels() -> dict[str, str]:
     return {
         "record": "Record",
         "last10": "L10",
+        "streak": "STRK",
         "pct": "Win%",
         "gb": "GB",
     }
 
 
-def _draw_stat_headers(draw: ImageDraw.ImageDraw, layout: dict[str, int], y: int) -> int:
+def _draw_stat_headers(
+    draw: ImageDraw.ImageDraw,
+    layout: dict[str, int],
+    y: int,
+    recent_column: str = "last10",
+) -> int:
     labels = _stat_header_labels()
-    for key in _stat_columns():
+    for key in _stat_columns(recent_column):
         col_width = int(layout.get(f"{key}_width", 0) or 0)
         center_x = layout[key] - (col_width // 2)
         draw.text(
@@ -839,7 +851,12 @@ def draw_overview(display, title: str, league_id: int, transition: bool = False,
     return final if transition else None
 
 
-def _draw_league_screen(title: str, league_id: int, screen_id: str) -> Image.Image:
+def _draw_league_screen(
+    title: str,
+    league_id: int,
+    screen_id: str,
+    recent_column: str = "last10",
+) -> Image.Image:
     bg = get_screen_background_color(screen_id, SCOREBOARD_BACKGROUND_COLOR)
     standings = _fetch_league_standings().get(league_id, {})
     wild_card_rows = _wild_card_rows(standings, limit=None)
@@ -847,7 +864,7 @@ def _draw_league_screen(title: str, league_id: int, screen_id: str) -> Image.Ima
 
     probe = ImageDraw.Draw(Image.new("RGB", (WIDTH, HEIGHT), bg))
     all_rows = [row for div in DIVISION_ORDER for row in standings.get(div, [])] + wild_card_rows
-    col = _column_layout(probe, all_rows)
+    col = _column_layout(probe, all_rows, recent_column)
 
     row_h = max(LOGO_SIZE, _text_size(probe, "SEA", TEAM_FONT)[1], _text_size(probe, "999", STATS_FONT)[1]) + scale_value(2)
     division_title_h = _text_size(probe, "AL East", DIVISION_FONT)[1] + DIVISION_CONTENT_GAP
@@ -880,7 +897,7 @@ def _draw_league_screen(title: str, league_id: int, screen_id: str) -> Image.Ima
         division_label = f"{title.split()[1]} {div}"
         draw.text((WIDTH // 2, y), division_label, font=DIVISION_FONT, fill=(255, 255, 255), anchor="mt")
         y += _text_size(draw, division_label, DIVISION_FONT)[1] + DIVISION_CONTENT_GAP
-        y = _draw_stat_headers(draw, col, y)
+        y = _draw_stat_headers(draw, col, y, recent_column)
 
         for row_idx, row in enumerate(rows):
             row_center = y + row_h // 2
@@ -899,7 +916,7 @@ def _draw_league_screen(title: str, league_id: int, screen_id: str) -> Image.Ima
             record_value = f"{row.get('wins', '-')}-{row.get('losses', '-')}"
             if SHOW_LAST_10:
                 _draw_record_with_pct(draw, record_value, str(row.get("pct", "-")), col["record"], row_center)
-                _draw_stat(draw, str(row.get("last10", "-")), col["last10"], row_center)
+                _draw_stat(draw, str(row.get(recent_column, "-")), col[recent_column], row_center)
             else:
                 _draw_stat(draw, record_value, col["record"], row_center)
             if SHOW_WIN_PCT and not SHOW_LAST_10:
@@ -919,7 +936,10 @@ def _draw_league_screen(title: str, league_id: int, screen_id: str) -> Image.Ima
 
 
 def _render_screen(display, title: str, league_id: int, screen_id: str) -> ScreenImage:
-    image = _draw_league_screen(title, league_id, screen_id)
+    show_streak = _RECENT_COLUMN_CURSOR.get(screen_id, False)
+    _RECENT_COLUMN_CURSOR[screen_id] = not show_streak
+    recent_column = "streak" if show_streak else "last10"
+    image = _draw_league_screen(title, league_id, screen_id, recent_column)
     clear_display(display)
 
     scroll_vertical_content(
