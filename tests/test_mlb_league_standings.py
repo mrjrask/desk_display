@@ -256,7 +256,7 @@ def test_draw_stat_headers_centers_labels_in_column(monkeypatch):
     assert probe.calls[2] == ((365, 50), "GB", "mm")
 
 
-def test_draw_streak_places_last_10_to_right_in_pct_font(monkeypatch):
+def test_draw_streak_places_parenthesized_last_10_to_right_in_pct_font(monkeypatch):
     calls = []
 
     class _DrawProbe:
@@ -270,8 +270,19 @@ def test_draw_streak_places_last_10_to_right_in_pct_font(monkeypatch):
     mlb_league_standings._draw_streak_with_last10(probe, "W2", "8-2", 100, 30)
 
     assert calls[0][1:3] == ("W2", mlb_league_standings.STATS_FONT)
-    assert calls[1][1:3] == ("8-2", mlb_league_standings.RECORD_PCT_FONT)
+    assert calls[1][1:3] == ("(8-2)", mlb_league_standings.RECORD_PCT_FONT)
     assert calls[1][0][0] > calls[0][0][0]
+
+
+def test_streak_width_accounts_for_last_10_parentheses():
+    class _DrawProbe:
+        def textbbox(self, _xy, value, font=None):
+            return (0, 0, len(value) * 6, 10)
+
+    width = mlb_league_standings._streak_with_last10_width(_DrawProbe(), "W2", "8-2")
+
+    expected = (len("W2") * 6) + mlb_league_standings.scale_value(4) + (len("(8-2)") * 6)
+    assert width == expected
 
 
 def test_wide_layout_centers_record_and_midpoints_streak_with_last_10(monkeypatch):

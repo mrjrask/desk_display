@@ -365,7 +365,7 @@ def _record_with_pct_width(draw: ImageDraw.ImageDraw, record_text: str, pct_text
 
 def _streak_with_last10_width(draw: ImageDraw.ImageDraw, streak_text: str, last10_text: str) -> int:
     streak_w = _text_size(draw, streak_text, STATS_FONT)[0]
-    last10_w = _text_size(draw, last10_text, RECORD_PCT_FONT)[0]
+    last10_w = _text_size(draw, f"({last10_text})", RECORD_PCT_FONT)[0]
     return streak_w + scale_value(4) + last10_w
 
 
@@ -535,14 +535,15 @@ def _draw_streak_with_last10(
     x: int,
     y: int,
 ) -> None:
+    last10_text = f"({last10_value})"
     streak_w = _text_size(draw, streak_value, STATS_FONT)[0]
-    last10_w = _text_size(draw, last10_value, RECORD_PCT_FONT)[0]
+    last10_w = _text_size(draw, last10_text, RECORD_PCT_FONT)[0]
     total_w = streak_w + scale_value(4) + last10_w
     left = x - total_w
     draw.text((left, y), streak_value, font=STATS_FONT, fill=(255, 255, 255), anchor="lm")
     draw.text(
         (left + streak_w + scale_value(4), y),
-        last10_value,
+        last10_text,
         font=RECORD_PCT_FONT,
         fill=(200, 200, 200),
         anchor="lm",
