@@ -1,4 +1,5 @@
 from PIL import Image, ImageDraw
+import pytest
 
 import screens.mlb_league_standings as mlb_league_standings
 
@@ -28,7 +29,7 @@ def test_stat_columns_show_last_10_for_wide_layout(monkeypatch):
     monkeypatch.setattr(mlb_league_standings, "SHOW_LAST_10", True)
     monkeypatch.setattr(mlb_league_standings, "SHOW_WIN_PCT", True)
 
-    assert mlb_league_standings._stat_columns() == ("record", "last10", "gb")
+    assert mlb_league_standings._stat_columns() == ("record", "streak", "gb")
 
 
 def test_show_win_pct_for_layout_matches_display_hat_mini_behavior():
@@ -193,40 +194,37 @@ def test_stat_header_labels_include_record_l10_and_gb():
 
     assert labels["record"] == "Record"
     assert labels["last10"] == "L10"
-    assert labels["streak"] == "STRK"
+    assert labels["streak"] == "STRK (L10)"
     assert labels["gb"] == "GB"
 
 
-def test_stat_columns_can_replace_last_10_with_streak(monkeypatch):
+def test_stat_columns_include_streak_with_last_10(monkeypatch):
     monkeypatch.setattr(mlb_league_standings, "SHOW_LAST_10", True)
 
-    assert mlb_league_standings._stat_columns("streak") == ("record", "streak", "gb")
+    assert mlb_league_standings._stat_columns() == ("record", "streak", "gb")
 
 
-def test_render_screen_alternates_recent_column_per_screen(monkeypatch):
-    recent_columns = []
-    monkeypatch.setattr(mlb_league_standings, "_RECENT_COLUMN_CURSOR", {})
+def test_render_screen_draws_combined_recent_column(monkeypatch):
+    draw_calls = []
     monkeypatch.setattr(
         mlb_league_standings,
         "_draw_league_screen",
-        lambda _title, _league_id, _screen_id, recent_column: recent_columns.append(recent_column)
+        lambda title, league_id, screen_id: draw_calls.append((title, league_id, screen_id))
         or Image.new("RGB", (1, 1)),
     )
     monkeypatch.setattr(mlb_league_standings, "clear_display", lambda _display: None)
     monkeypatch.setattr(mlb_league_standings, "scroll_vertical_content", lambda **_kwargs: None)
 
     mlb_league_standings._render_screen(object(), "AL", 103, "MLB AL Standings")
-    mlb_league_standings._render_screen(object(), "AL", 103, "MLB AL Standings")
-    mlb_league_standings._render_screen(object(), "NL", 104, "MLB NL Standings")
 
-    assert recent_columns == ["last10", "streak", "last10"]
+    assert draw_calls == [("AL", 103, "MLB AL Standings")]
 
 
 def test_draw_stat_headers_centers_labels_in_column(monkeypatch):
     monkeypatch.setattr(
         mlb_league_standings,
         "_stat_columns",
-        lambda _recent_column="last10": ("record", "last10", "gb"),
+        lambda: ("record", "streak", "gb"),
     )
 
     class _DrawProbe:
@@ -245,8 +243,8 @@ def test_draw_stat_headers_centers_labels_in_column(monkeypatch):
     layout = {
         "record": 210,
         "record_width": 60,
-        "last10": 300,
-        "last10_width": 40,
+        "streak": 300,
+        "streak_width": 40,
         "gb": 380,
         "gb_width": 30,
     }
@@ -254,11 +252,29 @@ def test_draw_stat_headers_centers_labels_in_column(monkeypatch):
     mlb_league_standings._draw_stat_headers(probe, layout, y=50)
 
     assert probe.calls[0] == ((180, 50), "Record", "mm")
-    assert probe.calls[1] == ((280, 50), "L10", "mm")
+    assert probe.calls[1] == ((280, 50), "STRK (L10)", "mm")
     assert probe.calls[2] == ((365, 50), "GB", "mm")
 
 
-def test_wide_layout_centers_record_and_midpoints_l10(monkeypatch):
+def test_draw_streak_places_last_10_to_right_in_pct_font(monkeypatch):
+    calls = []
+
+    class _DrawProbe:
+        def textbbox(self, _xy, value, font=None):
+            return (0, 0, len(value) * 6, 10)
+
+        def text(self, xy, value, font=None, fill=None, anchor=None):
+            calls.append((xy, value, font, fill, anchor))
+
+    probe = _DrawProbe()
+    mlb_league_standings._draw_streak_with_last10(probe, "W2", "8-2", 100, 30)
+
+    assert calls[0][1:3] == ("W2", mlb_league_standings.STATS_FONT)
+    assert calls[1][1:3] == ("8-2", mlb_league_standings.RECORD_PCT_FONT)
+    assert calls[1][0][0] > calls[0][0][0]
+
+
+def test_wide_layout_centers_record_and_midpoints_streak_with_last_10(monkeypatch):
     monkeypatch.setattr(mlb_league_standings, "SHOW_LAST_10", True)
     monkeypatch.setattr(mlb_league_standings, "SHOW_WIN_PCT", True)
     monkeypatch.setattr(mlb_league_standings, "WIDTH", 480)
@@ -268,15 +284,53 @@ def test_wide_layout_centers_record_and_midpoints_l10(monkeypatch):
     monkeypatch.setattr(mlb_league_standings, "TEAM_GAP", 6)
 
     draw = ImageDraw.Draw(Image.new("RGB", (480, 320), (0, 0, 0)))
-    rows = [{"wins": "99", "losses": "62", "pct": ".615", "last10": "8-2", "gb": "12 1/2"}]
+    rows = [{"wins": "99", "losses": "62", "pct": ".615", "streak": "W2", "last10": "8-2", "gb": "12 1/2"}]
     layout = mlb_league_standings._column_layout(draw, rows)
 
     record_center = layout["record"] - (layout["record_width"] / 2.0)
-    last10_center = layout["last10"] - (layout["last10_width"] / 2.0)
+    streak_center = layout["streak"] - (layout["streak_width"] / 2.0)
     gb_center = layout["gb"] - (layout["gb_width"] / 2.0)
 
     assert abs(record_center - (mlb_league_standings.WIDTH / 2.0)) <= 1.0
-    assert abs(last10_center - ((record_center + gb_center) / 2.0)) <= 1.0
+    assert abs(streak_center - ((record_center + gb_center) / 2.0)) <= 1.0
+
+
+def test_square_layout_team_width_stops_before_three_digit_record(monkeypatch):
+    monkeypatch.setattr(mlb_league_standings, "SHOW_LAST_10", True)
+    monkeypatch.setattr(mlb_league_standings, "SHOW_WIN_PCT", True)
+    monkeypatch.setattr(mlb_league_standings, "WIDTH", 720)
+
+    draw = ImageDraw.Draw(Image.new("RGB", (720, 720), (0, 0, 0)))
+    rows = [
+        {
+            "team_name": "Guardians",
+            "wins": "100",
+            "losses": "62",
+            "pct": ".617",
+            "streak": "W2",
+            "last10": "0-10",
+            "gb": "-",
+        }
+    ]
+    layout = mlb_league_standings._column_layout(draw, rows)
+
+    team_right = layout["team"] + layout["team_max"]
+    record_left = layout["record"] - layout["record_width"]
+
+    assert team_right + mlb_league_standings._TEAM_TO_RECORD_GAP_WIDE <= record_left
+
+
+@pytest.mark.parametrize(("width", "height"), [(135, 240), (240, 320)])
+def test_compact_portrait_layout_preserves_team_name_width(monkeypatch, width, height):
+    monkeypatch.setattr(mlb_league_standings, "SHOW_LAST_10", False)
+    monkeypatch.setattr(mlb_league_standings, "SHOW_WIN_PCT", False)
+    monkeypatch.setattr(mlb_league_standings, "WIDTH", width)
+
+    draw = ImageDraw.Draw(Image.new("RGB", (width, height), (0, 0, 0)))
+    rows = [{"team_name": "Guardians", "wins": "99", "losses": "63", "gb": "12.5"}]
+    layout = mlb_league_standings._column_layout(draw, rows)
+
+    assert layout["team_max"] >= mlb_league_standings.scale_value(70)
 
 
 def test_wild_card_rows_excludes_division_leaders_and_defaults_to_five():
