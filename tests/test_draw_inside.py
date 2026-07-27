@@ -5,6 +5,7 @@ import types
 from screens.draw_inside import (
     _build_metric_entries,
     _build_voc_tile,
+    _history_values,
     _iter_board_i2c_pin_pairs,
     _get_probe_order,
     _get_sensor_env_override,
@@ -60,6 +61,31 @@ def test_build_voc_tile_uses_bsec_voc_index():
     assert voc_tile, "Expected VOC tile to render from BSEC VOC index"
     assert voc_tile["label"] == "VOC Index"
     assert voc_tile["value"].startswith("125")
+
+
+def test_history_values_selects_graphable_indoor_metrics():
+    values = _history_values(
+        {
+            "temp_f": 72.5,
+            "humidity": 44.0,
+            "pressure_inhg": 29.91,
+            "voc_index": 82.0,
+        }
+    )
+
+    assert values == {"Humidity": 44.0, "Pressure": 29.91, "VOC Index": 82.0}
+
+
+def test_record_inside_history_is_bounded(monkeypatch):
+    import screens.draw_inside as draw_inside_module
+
+    monkeypatch.setattr(draw_inside_module, "_inside_history", {})
+    for timestamp in range(draw_inside_module._HISTORY_LIMIT + 5):
+        draw_inside_module._record_inside_history({"humidity": timestamp}, timestamp=timestamp)
+
+    points = draw_inside_module._inside_history["Humidity"]
+    assert len(points) == draw_inside_module._HISTORY_LIMIT
+    assert points[0] == (5, 5.0)
 
 
 def test_normalize_sensor_env_value_handles_spacing_and_case():
