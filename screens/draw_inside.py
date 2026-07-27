@@ -2303,7 +2303,16 @@ def _render_inside(data: Dict[str, Optional[float]], provider: Optional[str], se
     label_font = config.FONT_WEATHER_DETAILS_TINY
     title = "INSIDE"
     draw.text((margin, margin), title, font=header_font, fill=(235, 235, 235))
-    title_h = measure_text(draw, title, header_font)[1]
+    title_w, title_h = measure_text(draw, title, header_font)
+    source = provider or sensor_error or "Indoor sensor"
+    source = _fit_text(draw, source, label_font, W - title_w - margin * 3)
+    source_w, source_h = measure_text(draw, source, label_font)
+    draw.text(
+        (W - margin - source_w, margin + (title_h - source_h) // 2),
+        source,
+        font=label_font,
+        fill=(185, 200, 215),
+    )
 
     badge_top = margin + title_h + max(4, H // 40)
     badge_h = max(40, H // 4)
@@ -2312,13 +2321,18 @@ def _render_inside(data: Dict[str, Optional[float]], provider: Optional[str], se
     badge_fill = _mix_color(badge_color, config.INSIDE_COL_BG, 0.25)
     draw.rounded_rectangle((margin, badge_top, W - margin, badge_top + badge_h), radius=8, fill=badge_fill)
     temp_text = f"{temp_f:.1f}°F" if temp_f is not None else "--.-°F"
-    temp_w, temp_h = measure_text(draw, temp_text, header_font)
-    source = provider or sensor_error or "Indoor sensor"
-    source = _fit_text(draw, source, label_font, W - margin * 4)
-    source_w, source_h = measure_text(draw, source, label_font)
-    center_y = badge_top + badge_h // 2
-    draw.text(((W - temp_w) // 2, center_y - temp_h - 1), temp_text, font=header_font, fill=(255, 255, 255))
-    draw.text(((W - source_w) // 2, center_y + 2), source, font=label_font, fill=(245, 245, 245))
+    temp_font = fit_font(
+        draw,
+        temp_text,
+        config.FONT_WEATHER_DETAILS_SMALL_BOLD,
+        max_width=W - margin * 4,
+        max_height=max(24, badge_h - 12),
+        min_pt=24,
+        max_pt=max(40, H // 5),
+    )
+    temp_w, temp_h = measure_text(draw, temp_text, temp_font)
+    temp_y = badge_top + (badge_h - temp_h) // 2
+    draw.text(((W - temp_w) // 2, temp_y), temp_text, font=temp_font, fill=(255, 255, 255))
 
     card_top = badge_top + badge_h + max(4, H // 40)
     card_bottom = H - margin

@@ -90,6 +90,28 @@ def test_record_inside_history_is_bounded(monkeypatch, tmp_path):
     assert points[0] == (5, 5.0)
 
 
+def test_inside_temperature_uses_large_badge_font_on_standard_display(monkeypatch):
+    import screens.draw_inside as draw_inside_module
+
+    # Keep this assertion independent of the display profile selected by the
+    # host's environment (including the supported 240x135 Mini PiTFT).
+    monkeypatch.setattr(draw_inside_module, "W", 320)
+    monkeypatch.setattr(draw_inside_module, "H", 240)
+
+    original_fit_font = draw_inside_module.fit_font
+    fitted_sizes = []
+
+    def capture_fit_font(draw, text, base_font, **kwargs):
+        font = original_fit_font(draw, text, base_font, **kwargs)
+        if text == "72.5°F":
+            fitted_sizes.append(font.size)
+        return font
+
+    monkeypatch.setattr(draw_inside_module, "fit_font", capture_fit_font)
+    draw_inside_module._render_inside({"temp_f": 72.5}, "Test sensor", None)
+
+    assert len(fitted_sizes) == 1
+    assert fitted_sizes[0] >= 40
 def test_inside_history_survives_process_restart(monkeypatch, tmp_path):
     import screens.draw_inside as draw_inside_module
 
