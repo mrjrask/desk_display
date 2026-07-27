@@ -43,9 +43,11 @@ import signal
 import shutil
 import subprocess
 import sys
+import tempfile
 from collections import deque
 from contextlib import nullcontext
 from dataclasses import replace
+from pathlib import Path
 from typing import Callable, Dict, List, Optional, Set, Tuple
 from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeoutError
 try:
@@ -1747,6 +1749,62 @@ cache = {
     "scoreboards": {"nfl": None, "mlb": None, "nba": None, "ncaam": None, "nhl": None},
 }
 
+_AIR_QUALITY_HISTORY_PATH = os.environ.get("AIR_QUALITY_HISTORY_PATH", "air_quality_history.json")
+_AIR_QUALITY_HISTORY_WINDOW_SECONDS = 6 * 60 * 60
+_air_quality_history_lock = threading.Lock()
+
+
+def _load_air_quality_history(now: float) -> List[Tuple[float, Optional[int], Optional[int], Optional[int]]]:
+    """Return valid recent AQI samples persisted by an earlier process."""
+
+    path = Path(os.path.expandvars(_AIR_QUALITY_HISTORY_PATH)).expanduser()
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+        if not isinstance(payload, dict):
+            raise ValueError("payload must be an object")
+        raw_history = payload.get("history")
+        if not isinstance(raw_history, list):
+            raise ValueError("history must be a list")
+        history = []
+        for entry in raw_history:
+            if not isinstance(entry, (list, tuple)) or len(entry) != 4:
+                continue
+            try:
+                stamp = float(entry[0])
+                components = tuple(None if value is None else int(value) for value in entry[1:])
+            except (TypeError, ValueError):
+                continue
+            if 0 <= now - stamp <= _AIR_QUALITY_HISTORY_WINDOW_SECONDS:
+                history.append((stamp, *components))
+        return sorted(history, key=lambda entry: entry[0])
+    except FileNotFoundError:
+        return []
+    except (OSError, ValueError, TypeError, json.JSONDecodeError) as exc:
+        logging.warning("Unable to load air-quality chart history from %s: %s", path, exc)
+        return []
+
+
+def _save_air_quality_history(history: List[Tuple[float, Optional[int], Optional[int], Optional[int]]]) -> None:
+    """Atomically persist AQI chart samples for the next process startup."""
+
+    path = Path(os.path.expandvars(_AIR_QUALITY_HISTORY_PATH)).expanduser()
+    temp_name: Optional[str] = None
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with tempfile.NamedTemporaryFile(
+            "w", encoding="utf-8", dir=path.parent, prefix=f"{path.name}.", suffix=".tmp", delete=False
+        ) as handle:
+            temp_name = handle.name
+            json.dump({"history": history}, handle)
+        os.replace(temp_name, path)
+    except OSError as exc:
+        logging.warning("Unable to save air-quality chart history to %s: %s", path, exc)
+        if temp_name:
+            try:
+                os.remove(temp_name)
+            except OSError:
+                pass
+
 _FEED_DEPENDENCIES: Dict[str, Set[str]] = {
     "weather": {
         "weather1",
@@ -1950,18 +2008,26 @@ def _refresh_air_quality() -> None:
             return
         now = time.time()
         previous = cache.get("air_quality")
-        history = list(getattr(previous, "component_history", ()))
-        sample = (
-            now,
-            report.us_aqi_pm2_5,
-            report.us_aqi_pm10,
-            report.us_aqi_ozone,
-        )
-        if history and now - history[-1][0] < 10 * 60:
-            history[-1] = sample
-        else:
-            history.append(sample)
-        history = [entry for entry in history if now - entry[0] <= 6 * 60 * 60]
+        with _air_quality_history_lock:
+            history = list(getattr(previous, "component_history", ()))
+            if not history:
+                history = _load_air_quality_history(now)
+            sample = (
+                now,
+                report.us_aqi_pm2_5,
+                report.us_aqi_pm10,
+                report.us_aqi_ozone,
+            )
+            if history and now - history[-1][0] < 10 * 60:
+                history[-1] = sample
+            else:
+                history.append(sample)
+            history = [
+                entry
+                for entry in history
+                if 0 <= now - entry[0] <= _AIR_QUALITY_HISTORY_WINDOW_SECONDS
+            ]
+            _save_air_quality_history(history)
         report = replace(report, component_history=tuple(history))
         cache["air_quality"] = report
     else:

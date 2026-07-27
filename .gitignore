@@ -1,5 +1,8 @@
 #Project Specific
 pressure_history.json
+inside_history.json
+air_quality_history.json
+weather_metric_history.json
 screenshot_archive/
 screenshots/
 tools/maintenance/pressure_history.json
