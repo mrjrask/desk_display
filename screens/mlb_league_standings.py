@@ -496,8 +496,15 @@ def _column_layout(
 
     first_col = columns[0]
     team_gap = _TEAM_TO_RECORD_GAP_WIDE if SHOW_LAST_10 else _STAT_COLUMN_GAP
-    first_col_left = layout[first_col] - layout[f"{first_col}_width"]
-    layout["team_max"] = max(0, first_col_left - team_x - team_gap)
+    if SHOW_LAST_10:
+        # Wide layouts must stop names at the combined Record/PCT column's
+        # actual left edge, since streak plus L10 can shift that column left.
+        first_col_left = layout[first_col] - layout[f"{first_col}_width"]
+        layout["team_max"] = max(0, first_col_left - team_x - team_gap)
+    else:
+        # Compact portrait displays intentionally allow the team and stats
+        # areas to share horizontal space so the team label remains visible.
+        layout["team_max"] = max(scale_value(70), layout[first_col] - team_x - team_gap)
     return layout
 
 

@@ -1,4 +1,5 @@
 from PIL import Image, ImageDraw
+import pytest
 
 import screens.mlb_league_standings as mlb_league_standings
 
@@ -317,6 +318,19 @@ def test_square_layout_team_width_stops_before_three_digit_record(monkeypatch):
     record_left = layout["record"] - layout["record_width"]
 
     assert team_right + mlb_league_standings._TEAM_TO_RECORD_GAP_WIDE <= record_left
+
+
+@pytest.mark.parametrize(("width", "height"), [(135, 240), (240, 320)])
+def test_compact_portrait_layout_preserves_team_name_width(monkeypatch, width, height):
+    monkeypatch.setattr(mlb_league_standings, "SHOW_LAST_10", False)
+    monkeypatch.setattr(mlb_league_standings, "SHOW_WIN_PCT", False)
+    monkeypatch.setattr(mlb_league_standings, "WIDTH", width)
+
+    draw = ImageDraw.Draw(Image.new("RGB", (width, height), (0, 0, 0)))
+    rows = [{"team_name": "Guardians", "wins": "99", "losses": "63", "gb": "12.5"}]
+    layout = mlb_league_standings._column_layout(draw, rows)
+
+    assert layout["team_max"] >= mlb_league_standings.scale_value(70)
 
 
 def test_wild_card_rows_excludes_division_leaders_and_defaults_to_five():
