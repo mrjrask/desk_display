@@ -88,6 +88,25 @@ def test_record_inside_history_is_bounded(monkeypatch):
     assert points[0] == (5, 5.0)
 
 
+def test_inside_temperature_uses_large_badge_font(monkeypatch):
+    import screens.draw_inside as draw_inside_module
+
+    original_fit_font = draw_inside_module.fit_font
+    fitted_sizes = []
+
+    def capture_fit_font(draw, text, base_font, **kwargs):
+        font = original_fit_font(draw, text, base_font, **kwargs)
+        if text == "72.5°F":
+            fitted_sizes.append(font.size)
+        return font
+
+    monkeypatch.setattr(draw_inside_module, "fit_font", capture_fit_font)
+    draw_inside_module._render_inside({"temp_f": 72.5}, "Test sensor", None)
+
+    assert len(fitted_sizes) == 1
+    assert fitted_sizes[0] >= 40
+
+
 def test_normalize_sensor_env_value_handles_spacing_and_case():
     assert _normalize_sensor_name(" Pimoroni-BME680 ") == "pimoroni_bme680"
 
