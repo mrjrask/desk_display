@@ -76,10 +76,12 @@ def test_history_values_selects_graphable_indoor_metrics():
     assert values == {"Humidity": 44.0, "Pressure": 29.91, "VOC Index": 82.0}
 
 
-def test_record_inside_history_is_bounded(monkeypatch):
+def test_record_inside_history_is_bounded(monkeypatch, tmp_path):
     import screens.draw_inside as draw_inside_module
 
     monkeypatch.setattr(draw_inside_module, "_inside_history", {})
+    monkeypatch.setattr(draw_inside_module, "_inside_history_loaded", False)
+    monkeypatch.setattr(draw_inside_module, "_HISTORY_PATH", str(tmp_path / "inside.json"))
     for timestamp in range(draw_inside_module._HISTORY_LIMIT + 5):
         draw_inside_module._record_inside_history({"humidity": timestamp}, timestamp=timestamp)
 
@@ -110,6 +112,41 @@ def test_inside_temperature_uses_large_badge_font_on_standard_display(monkeypatc
 
     assert len(fitted_sizes) == 1
     assert fitted_sizes[0] >= 40
+def test_inside_history_survives_process_restart(monkeypatch, tmp_path):
+    import screens.draw_inside as draw_inside_module
+
+    history_path = tmp_path / "inside.json"
+    monkeypatch.setattr(draw_inside_module, "_HISTORY_PATH", str(history_path))
+    monkeypatch.setattr(draw_inside_module, "_inside_history", {})
+    monkeypatch.setattr(draw_inside_module, "_inside_history_loaded", False)
+    draw_inside_module._record_inside_history({"humidity": 42.0}, timestamp=10_000.0)
+
+    monkeypatch.setattr(draw_inside_module, "_inside_history", {})
+    monkeypatch.setattr(draw_inside_module, "_inside_history_loaded", False)
+    draw_inside_module._load_inside_history(now=10_001.0)
+
+    assert draw_inside_module._inside_history == {"Humidity": [(10_000.0, 42.0)]}
+
+
+def test_inside_history_rejects_future_samples(monkeypatch, tmp_path):
+    import screens.draw_inside as draw_inside_module
+
+    history_path = tmp_path / "inside.json"
+    history_path.write_text(
+        '{"history": {"Humidity": [[10001.0, 99.0], [9999.0, 42.0]]}}',
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(draw_inside_module, "_HISTORY_PATH", str(history_path))
+    monkeypatch.setattr(draw_inside_module, "_inside_history", {})
+    monkeypatch.setattr(draw_inside_module, "_inside_history_loaded", False)
+
+    draw_inside_module._load_inside_history(now=10_000.0)
+    draw_inside_module._inside_history["Humidity"].append((10_002.0, 88.0))
+    draw_inside_module._record_inside_history({"humidity": 43.0}, timestamp=10_000.0)
+
+    assert draw_inside_module._inside_history == {
+        "Humidity": [(9_999.0, 42.0), (10_000.0, 43.0)]
+    }
 
 
 def test_normalize_sensor_env_value_handles_spacing_and_case():

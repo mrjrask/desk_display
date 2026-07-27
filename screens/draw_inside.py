@@ -18,6 +18,7 @@ import json
 import platform
 import subprocess
 import sys
+import tempfile
 import threading
 import re
 from pathlib import Path
@@ -54,8 +55,11 @@ _sensor_probe_cache: Optional[Tuple[Optional[str], Optional[Callable[[], SensorR
 _KNOWN_SENSOR_I2C_ADDRESSES: Set[int] = {0x44, 0x45, 0x76, 0x77}
 _MAX_REASONABLE_I2C_HITS = 16
 _HISTORY_LIMIT = 60
+_HISTORY_MAX_AGE_SECONDS = 6 * 60 * 60
+_HISTORY_PATH = os.environ.get("INSIDE_HISTORY_PATH", "inside_history.json")
 _inside_history: Dict[str, List[Tuple[float, float]]] = {}
-_inside_history_lock = threading.Lock()
+_inside_history_loaded = False
+_inside_history_lock = threading.RLock()
 
 
 def _parse_i2c_bus_candidates() -> Tuple[int, ...]:
@@ -2172,14 +2176,83 @@ def _fit_text(draw: ImageDraw.ImageDraw, text: str, font, max_width: int) -> str
 
 
 def _record_inside_history(data: Dict[str, Optional[float]], timestamp: Optional[float] = None) -> None:
-    """Store a bounded in-memory history of readings for the mini charts."""
+    """Store and persist a bounded history of readings for the mini charts."""
 
     recorded_at = time.time() if timestamp is None else timestamp
     with _inside_history_lock:
+        _load_inside_history(recorded_at)
         for label, value in _history_values(data).items():
             points = _inside_history.setdefault(label, [])
             points.append((recorded_at, value))
+            points[:] = [
+                point
+                for point in points
+                if 0 <= recorded_at - point[0] <= _HISTORY_MAX_AGE_SECONDS
+            ]
+            points.sort(key=lambda point: point[0])
             del points[:-_HISTORY_LIMIT]
+        _save_inside_history()
+
+
+def _load_inside_history(now: Optional[float] = None) -> None:
+    """Load recent chart samples once, tolerating missing or corrupt state."""
+
+    global _inside_history_loaded
+    with _inside_history_lock:
+        if _inside_history_loaded:
+            return
+        _inside_history_loaded = True
+        current_time = time.time() if now is None else now
+        cutoff = current_time - _HISTORY_MAX_AGE_SECONDS
+        path = Path(os.path.expandvars(_HISTORY_PATH)).expanduser()
+        try:
+            payload = json.loads(path.read_text(encoding="utf-8"))
+            if not isinstance(payload, dict):
+                raise ValueError("payload must be an object")
+            history = payload.get("history")
+            if not isinstance(history, dict):
+                raise ValueError("history must be an object")
+            for label, raw_points in history.items():
+                if not isinstance(label, str) or not isinstance(raw_points, list):
+                    continue
+                points: List[Tuple[float, float]] = []
+                for point in raw_points:
+                    if not isinstance(point, (list, tuple)) or len(point) != 2:
+                        continue
+                    try:
+                        stamp, value = float(point[0]), float(point[1])
+                    except (TypeError, ValueError):
+                        continue
+                    if cutoff <= stamp <= current_time and math.isfinite(stamp) and math.isfinite(value):
+                        points.append((stamp, value))
+                if points:
+                    _inside_history[label] = sorted(points)[-_HISTORY_LIMIT:]
+        except FileNotFoundError:
+            return
+        except (OSError, ValueError, TypeError, json.JSONDecodeError) as exc:
+            logging.warning("draw_inside: unable to load chart history from %s: %s", path, exc)
+
+
+def _save_inside_history() -> None:
+    """Atomically save chart samples so a restart does not empty the graphs."""
+
+    path = Path(os.path.expandvars(_HISTORY_PATH)).expanduser()
+    temp_name: Optional[str] = None
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with tempfile.NamedTemporaryFile(
+            "w", encoding="utf-8", dir=path.parent, prefix=f"{path.name}.", suffix=".tmp", delete=False
+        ) as handle:
+            temp_name = handle.name
+            json.dump({"history": _inside_history}, handle)
+        os.replace(temp_name, path)
+    except OSError as exc:
+        logging.warning("draw_inside: unable to save chart history to %s: %s", path, exc)
+        if temp_name:
+            try:
+                os.remove(temp_name)
+            except OSError:
+                pass
 
 
 def _draw_history_chart(
@@ -2273,6 +2346,7 @@ def _render_inside(data: Dict[str, Optional[float]], provider: Optional[str], se
     chart_x = max(W * 5 // 8, value_x + 38)
     charts_enabled = chart_x < right_edge - 24
     row_h = max(1, (card_bottom - card_top - 8) // len(metrics))
+    _load_inside_history()
     with _inside_history_lock:
         histories = {key: tuple(value) for key, value in _inside_history.items()}
     for index, metric in enumerate(metrics):
