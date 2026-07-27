@@ -387,7 +387,7 @@ END:VCALENDAR
 
 def test_on_this_day_retries_after_cached_offline_fallback_expires(monkeypatch):
     otd._clear_caches_for_tests()
-    times = iter([100.0, 200.0, 1200.0])
+    times = iter([100.0, 100.0, 200.0, 1200.0, 1200.0])
     builds = []
 
     def fake_monotonic():
@@ -411,4 +411,36 @@ def test_on_this_day_retries_after_cached_offline_fallback_expires(monkeypatch):
     assert first == otd._offline_sections_fallback()
     assert second == first
     assert third == {"🌎 General History": [otd.DayItem(2000, "Recovered live item")]}
+    assert builds == [today, today]
+
+
+def test_on_this_day_retries_and_merges_partial_live_feeds(monkeypatch):
+    otd._clear_caches_for_tests()
+    times = iter([100.0, 100.0, 200.0, 500.0, 500.0])
+    builds = []
+
+    def fake_build_sections_uncached(today):
+        builds.append(today)
+        if len(builds) == 1:
+            return {"🌎 General History": [otd.DayItem(2000, "First event")]}
+        return {
+            "🎂 Famous Birthdays": [otd.DayItem(1980, "A birthday")],
+            "🕯️ Notable Lives": [otd.DayItem(1990, "A notable life")],
+        }
+
+    monkeypatch.setattr(otd.time, "monotonic", lambda: next(times))
+    monkeypatch.setattr(otd, "_INCOMPLETE_FEED_RETRY_SECONDS", 300.0)
+    monkeypatch.setattr(otd, "_build_sections_uncached", fake_build_sections_uncached)
+
+    today = dt.date(2026, 7, 15)
+    first = otd._build_sections(today)
+    cached = otd._build_sections(today)
+    recovered = otd._build_sections(today)
+
+    assert cached == first
+    assert set(recovered) == {
+        "🌎 General History",
+        "🎂 Famous Birthdays",
+        "🕯️ Notable Lives",
+    }
     assert builds == [today, today]

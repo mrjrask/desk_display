@@ -102,6 +102,9 @@ _FEED_BUILD_TIMEOUT_SECONDS = max(
 _OFFLINE_FALLBACK_RETRY_SECONDS = max(
     60.0, float(os.environ.get("ON_THIS_DAY_OFFLINE_FALLBACK_RETRY_SECONDS", "900"))
 )
+_INCOMPLETE_FEED_RETRY_SECONDS = max(
+    30.0, float(os.environ.get("ON_THIS_DAY_INCOMPLETE_FEED_RETRY_SECONDS", "300"))
+)
 _LIVE_THUMBNAILS_ENABLED = os.environ.get(
     "ON_THIS_DAY_LIVE_THUMBNAILS", "0"
 ).strip().lower() in {"1", "true", "yes", "on"}
@@ -469,41 +472,86 @@ def _sections_match_offline_fallback(sections: dict[str, list[DayItem]] | None) 
     return sections == _offline_sections_fallback()
 
 
-def _cached_offline_fallback_age(now: float) -> float | None:
-    """Return cached offline fallback age when that transient state should retry."""
+def _sections_retry_interval(
+    today: dt.date, sections: dict[str, list[DayItem]] | None
+) -> float | None:
+    """Return the retry interval for transient or incomplete live content."""
+
+    if sections is None or (today.month, today.day) in _FALLBACK_BY_DATE:
+        return None
+    if _sections_match_offline_fallback(sections):
+        return _OFFLINE_FALLBACK_RETRY_SECONDS
+
+    # Events, births, and deaths are populated every day by Wikimedia. A missing
+    # category therefore indicates a timeout or failed request, not a complete
+    # daily result. Do not let whichever requests happened to win the initial
+    # deadline become this device's content for the rest of the day.
+    required_sections = {
+        "🌎 General History",
+        "🎂 Famous Birthdays",
+        "🕯️ Notable Lives",
+    }
+    if not all(sections.get(title) for title in required_sections):
+        return _INCOMPLETE_FEED_RETRY_SECONDS
+    return None
+
+
+def _cached_sections_retry_age(today: dt.date, now: float) -> float | None:
+    """Return cache age when incomplete content is old enough to refresh."""
 
     with _SECTIONS_CACHE_LOCK:
-        if not _sections_match_offline_fallback(_SECTIONS_CACHE_VALUE):
-            return None
         if _SECTIONS_CACHE_TIME is None:
             return None
+        retry_interval = _sections_retry_interval(today, _SECTIONS_CACHE_VALUE)
+        if retry_interval is None:
+            return None
         cache_age = now - _SECTIONS_CACHE_TIME
-        return cache_age if cache_age >= _OFFLINE_FALLBACK_RETRY_SECONDS else None
+        return cache_age if cache_age >= retry_interval else None
+
+
+def _merge_sections(
+    previous: dict[str, list[DayItem]] | None,
+    refreshed: dict[str, list[DayItem]],
+) -> dict[str, list[DayItem]]:
+    """Keep good earlier feed results when a later refresh is only partial."""
+
+    if not previous or _sections_match_offline_fallback(previous):
+        return _copy_sections(refreshed)
+    if _sections_match_offline_fallback(refreshed):
+        return _copy_sections(previous)
+    merged = _copy_sections(previous)
+    for title, items in refreshed.items():
+        if items:
+            merged[title] = list(items)
+    return merged
 
 
 def _build_sections(today: dt.date) -> dict[str, list[DayItem]]:
     global _SECTIONS_CACHE_DATE, _SECTIONS_CACHE_VALUE, _SECTIONS_CACHE_TIME
 
     now = time.monotonic()
+    previous: dict[str, list[DayItem]] | None = None
     with _SECTIONS_CACHE_LOCK:
         if _SECTIONS_CACHE_DATE == today and _SECTIONS_CACHE_VALUE is not None:
             cache_age = now - (_SECTIONS_CACHE_TIME or now)
-            if (
-                not _sections_match_offline_fallback(_SECTIONS_CACHE_VALUE)
-                or cache_age < _OFFLINE_FALLBACK_RETRY_SECONDS
-            ):
+            retry_interval = _sections_retry_interval(today, _SECTIONS_CACHE_VALUE)
+            if retry_interval is None or cache_age < retry_interval:
                 return _copy_sections(_SECTIONS_CACHE_VALUE)
             logging.info(
-                "on_this_day: retrying live feeds after %.0fs with offline fallback cached.",
+                "on_this_day: retrying incomplete live feeds after %.0fs.",
                 cache_age,
             )
+            previous = _copy_sections(_SECTIONS_CACHE_VALUE)
 
     sections = _build_sections_uncached(today)
+    sections = _merge_sections(previous, sections)
 
     with _SECTIONS_CACHE_LOCK:
         _SECTIONS_CACHE_DATE = today
         _SECTIONS_CACHE_VALUE = _copy_sections(sections)
-        _SECTIONS_CACHE_TIME = now
+        # Start the retry interval when the network work finishes, rather than
+        # counting the time spent waiting for feeds against the cache lifetime.
+        _SECTIONS_CACHE_TIME = time.monotonic()
         return _copy_sections(_SECTIONS_CACHE_VALUE)
 
 
@@ -691,7 +739,7 @@ def _render_full_image(today: dt.date) -> Image.Image:
     now = time.monotonic()
     with _RENDER_CACHE_LOCK:
         if _RENDER_CACHE_DATE == today and _RENDER_CACHE_IMAGE is not None:
-            cache_age = _cached_offline_fallback_age(now)
+            cache_age = _cached_sections_retry_age(today, now)
             if cache_age is None:
                 return _RENDER_CACHE_IMAGE.copy()
             logging.info(
