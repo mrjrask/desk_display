@@ -559,6 +559,9 @@
       "weather2": {
         "background": "#000000"
       },
+      "air quality": {
+        "background": "#000000"
+      },
       "weather alert": {
         "background": "#000000"
       },
