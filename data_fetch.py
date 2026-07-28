@@ -561,7 +561,8 @@ def _round_up_to_increment(
     if increment_seconds <= 0:
         return ts_val
     offset = ts_val - anchor_val
-    return anchor_val + ((offset + increment_seconds - 1) // increment_seconds) * increment_seconds
+    rounded_offset = ((offset + increment_seconds - 1) // increment_seconds) * increment_seconds
+    return anchor_val + rounded_offset
 
 
 def _is_night_time_current(ts: Any, sunrise: Any, sunset: Any) -> bool:
