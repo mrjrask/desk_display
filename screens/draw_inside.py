@@ -2328,16 +2328,17 @@ def _render_inside(data: Dict[str, Optional[float]], provider: Optional[str], se
     chart_right = W - margin - badge_padding
     chart_gap = max(6, W // 64)
     temp_max_width = max(1, chart_left - chart_gap - temp_left)
+    temp_min_pt = min(24, max(10, W // 10))
     temp_font = fit_font(
         draw,
         temp_text,
         config.FONT_WEATHER_DETAILS_SMALL_BOLD,
         max_width=temp_max_width,
         max_height=max(24, badge_h - 12),
-        min_pt=24,
+        min_pt=temp_min_pt,
         max_pt=max(40, H // 5),
     )
-    _, temp_h = measure_text(draw, temp_text, temp_font)
+    temp_w, temp_h = measure_text(draw, temp_text, temp_font)
     temp_y = badge_top + (badge_h - temp_h) // 2
     draw.text((temp_left, temp_y), temp_text, font=temp_font, fill=(255, 255, 255))
 
@@ -2345,7 +2346,8 @@ def _render_inside(data: Dict[str, Optional[float]], provider: Optional[str], se
     with _inside_history_lock:
         histories = {key: tuple(value) for key, value in _inside_history.items()}
     temperature_history = histories.get("Temperature")
-    if temperature_history and chart_right - chart_left >= 12:
+    temperature_fits = temp_left + temp_w + chart_gap <= chart_left
+    if temperature_history and temperature_fits and chart_right - chart_left >= 12:
         chart_padding_y = max(7, badge_h // 6)
         _draw_history_chart(
             draw,
