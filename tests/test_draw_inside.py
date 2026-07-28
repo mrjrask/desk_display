@@ -73,7 +73,12 @@ def test_history_values_selects_graphable_indoor_metrics():
         }
     )
 
-    assert values == {"Humidity": 44.0, "Pressure": 29.91, "VOC Index": 82.0}
+    assert values == {
+        "Temperature": 72.5,
+        "Humidity": 44.0,
+        "Pressure": 29.91,
+        "VOC Index": 82.0,
+    }
 
 
 def test_record_inside_history_is_bounded(monkeypatch, tmp_path):
@@ -112,6 +117,69 @@ def test_inside_temperature_uses_large_badge_font_on_standard_display(monkeypatc
 
     assert len(fitted_sizes) == 1
     assert fitted_sizes[0] >= 40
+
+
+def test_inside_temperature_history_chart_is_to_right_of_value(monkeypatch):
+    import screens.draw_inside as draw_inside_module
+
+    monkeypatch.setattr(draw_inside_module, "W", 320)
+    monkeypatch.setattr(draw_inside_module, "H", 240)
+    monkeypatch.setattr(
+        draw_inside_module,
+        "_inside_history",
+        {"Temperature": [(1.0, 70.0), (2.0, 72.5)]},
+    )
+    monkeypatch.setattr(draw_inside_module, "_inside_history_loaded", True)
+    chart_boxes = []
+
+    def capture_chart(_draw, box, _points, _color):
+        chart_boxes.append(box)
+
+    monkeypatch.setattr(draw_inside_module, "_draw_history_chart", capture_chart)
+    draw_inside_module._render_inside({"temp_f": 72.5}, "Test sensor", None)
+
+    assert chart_boxes
+    assert chart_boxes[0][0] >= draw_inside_module.W * 9 // 16
+
+
+def test_inside_temperature_and_chart_do_not_overlap_in_portrait(monkeypatch):
+    import screens.draw_inside as draw_inside_module
+
+    monkeypatch.setattr(draw_inside_module, "W", 135)
+    monkeypatch.setattr(draw_inside_module, "H", 240)
+    monkeypatch.setattr(
+        draw_inside_module,
+        "_inside_history",
+        {"Temperature": [(1.0, 70.0), (2.0, 72.5)]},
+    )
+    monkeypatch.setattr(draw_inside_module, "_inside_history_loaded", True)
+    original_fit_font = draw_inside_module.fit_font
+    temperature_fonts = []
+    chart_boxes = []
+
+    def capture_fit_font(draw, text, base_font, **kwargs):
+        font = original_fit_font(draw, text, base_font, **kwargs)
+        if text == "72.5°F":
+            temperature_fonts.append(font)
+        return font
+
+    def capture_chart(_draw, box, _points, _color):
+        chart_boxes.append(box)
+
+    monkeypatch.setattr(draw_inside_module, "fit_font", capture_fit_font)
+    monkeypatch.setattr(draw_inside_module, "_draw_history_chart", capture_chart)
+    image = draw_inside_module._render_inside({"temp_f": 72.5}, "Test sensor", None)
+
+    assert temperature_fonts
+    assert chart_boxes
+    draw = draw_inside_module.ImageDraw.Draw(image)
+    temp_width = draw_inside_module.measure_text(draw, "72.5°F", temperature_fonts[0])[0]
+    badge_margin = max(4, draw_inside_module.W // 32)
+    temp_left = badge_margin + max(8, draw_inside_module.W // 32)
+    chart_gap = max(6, draw_inside_module.W // 64)
+    assert temp_left + temp_width + chart_gap <= chart_boxes[0][0]
+
+
 def test_inside_history_survives_process_restart(monkeypatch, tmp_path):
     import screens.draw_inside as draw_inside_module
 
