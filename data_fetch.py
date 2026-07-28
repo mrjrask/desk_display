@@ -638,14 +638,18 @@ def _sun_windows(daily: list[dict[str, Any]]) -> list[tuple[int, int, int]]:
     for day in daily:
         sunrise = day.get("sunrise")
         sunset = day.get("sunset")
-        anchor = day.get("dt") or sunrise or sunset
         try:
-            anchor_val = int(anchor)
             sunrise_val = int(sunrise)
             sunset_val = int(sunset)
+            sunrise_local = datetime.datetime.fromtimestamp(sunrise_val, CENTRAL_TIME)
         except (TypeError, ValueError, OverflowError):
             continue
-        windows.append((anchor_val, sunrise_val, sunset_val))
+
+        # A provider's daily timestamp is not necessarily the start of its
+        # forecast day.  Sunrise, however, identifies the local calendar day
+        # to which this solar window belongs.
+        day_start = sunrise_local.replace(hour=0, minute=0, second=0, microsecond=0)
+        windows.append((int(day_start.timestamp()), sunrise_val, sunset_val))
     return sorted(windows, key=lambda w: w[0])
 
 
@@ -658,16 +662,12 @@ def _sun_times_for(ts: Any, windows: list[tuple[int, int, int]]) -> tuple[Option
     if not windows:
         return None, None
 
-    best: tuple[int, int, int] | None = None
-    best_diff: int | None = None
-    for anchor, sunrise, sunset in windows:
-        diff = abs(ts_val - anchor)
-        if best is None or best_diff is None or diff < best_diff:
-            best = (anchor, sunrise, sunset)
-            best_diff = diff
-    if best is None:
-        return None, None
-    return best[1], best[2]
+    selected = windows[0]
+    for window in windows:
+        if window[0] > ts_val:
+            break
+        selected = window
+    return selected[1], selected[2]
 
 
 def _apply_nighttime_icons(weather: dict[str, Any]) -> dict[str, Any]:
