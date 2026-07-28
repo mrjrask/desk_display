@@ -594,7 +594,15 @@ def _is_night_time_hourly(
     )
     if rounded_ts is None:
         return False
-    if rounded_sunrise is not None and rounded_sunset is not None:
+    try:
+        solar_times_are_usable = int(sunrise) > 0 and int(sunset) > 0
+    except (TypeError, ValueError, OverflowError):
+        solar_times_are_usable = False
+    if (
+        solar_times_are_usable
+        and rounded_sunrise is not None
+        and rounded_sunset is not None
+    ):
         return rounded_ts >= rounded_sunset or rounded_ts < rounded_sunrise
 
     # WeatherKit can occasionally omit or return malformed astronomical times.
@@ -658,15 +666,21 @@ def _sun_times_for(ts: Any, windows: list[tuple[int, int, int]]) -> tuple[Option
     if not windows:
         return None, None
 
+    # Daily anchors mark the start of their forecast day.  Choosing the
+    # numerically nearest anchor changes days halfway between two anchors, so
+    # an afternoon hour can incorrectly receive the following day's sunrise
+    # and sunset.  Keep using the current day's window until the next daily
+    # anchor is reached.
     best: tuple[int, int, int] | None = None
-    best_diff: int | None = None
     for anchor, sunrise, sunset in windows:
-        diff = abs(ts_val - anchor)
-        if best is None or best_diff is None or diff < best_diff:
-            best = (anchor, sunrise, sunset)
-            best_diff = diff
+        if anchor > ts_val:
+            break
+        best = (anchor, sunrise, sunset)
+
+    # Forecasts can contain an hour just before their first daily anchor.  In
+    # that case the first available solar window is still the best fallback.
     if best is None:
-        return None, None
+        best = windows[0]
     return best[1], best[2]
 
 
