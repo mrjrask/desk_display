@@ -107,7 +107,7 @@ def test_fetch_base_map_refreshes_after_ttl(monkeypatch):
         return _MockResponse(_png_bytes(color=(len(calls), 20, 30)))
 
     monkeypatch.setattr("screens.draw_weather.time.monotonic", lambda: now)
-    monkeypatch.setattr("screens.draw_weather.requests.get", _mock_get)
+    monkeypatch.setattr("screens.draw_weather.http_get", _mock_get)
 
     assert _fetch_base_map(zoom=7) is not None
     now += BASE_MAP_CACHE_TTL_SECONDS + 1
