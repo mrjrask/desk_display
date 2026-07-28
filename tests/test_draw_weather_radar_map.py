@@ -159,7 +159,7 @@ def test_fetch_radar_frames_uses_cache_within_ttl(monkeypatch):
         return _MockResponse(_png_bytes())
 
     monkeypatch.setattr("screens.draw_weather.time.monotonic", lambda: now)
-    monkeypatch.setattr("screens.draw_weather.requests.get", _mock_get)
+    monkeypatch.setattr("screens.draw_weather.http_get", _mock_get)
 
     first = _fetch_radar_frames(zoom=7, max_frames=6)
     second = _fetch_radar_frames(zoom=7, max_frames=6)
