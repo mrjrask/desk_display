@@ -87,7 +87,7 @@ def test_fetch_base_map_uses_cache_within_ttl(monkeypatch):
         return _MockResponse(_png_bytes(color=(10, 20, 30)))
 
     monkeypatch.setattr("screens.draw_weather.time.monotonic", lambda: now)
-    monkeypatch.setattr("screens.draw_weather.requests.get", _mock_get)
+    monkeypatch.setattr("screens.draw_weather.http_get", _mock_get)
 
     first = _fetch_base_map(zoom=7)
     second = _fetch_base_map(zoom=7)
