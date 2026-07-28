@@ -633,7 +633,9 @@ def _hourly_increment_seconds(hourly_entries: list[dict[str, Any]]) -> int:
     return max(diffs.items(), key=lambda item: (item[1], -item[0]))[0]
 
 
-def _sun_windows(daily: list[dict[str, Any]]) -> list[tuple[int, int, int]]:
+def _sun_windows(
+    daily: list[dict[str, Any]], location_timezone: datetime.tzinfo
+) -> list[tuple[int, int, int]]:
     windows: list[tuple[int, int, int]] = []
     for day in daily:
         sunrise = day.get("sunrise")
@@ -641,14 +643,18 @@ def _sun_windows(daily: list[dict[str, Any]]) -> list[tuple[int, int, int]]:
         try:
             sunrise_val = int(sunrise)
             sunset_val = int(sunset)
-            sunrise_local = datetime.datetime.fromtimestamp(sunrise_val, CENTRAL_TIME)
+            sunrise_local = datetime.datetime.fromtimestamp(sunrise_val, location_timezone)
         except (TypeError, ValueError, OverflowError):
             continue
 
         # A provider's daily timestamp is not necessarily the start of its
         # forecast day.  Sunrise, however, identifies the local calendar day
         # to which this solar window belongs.
-        day_start = sunrise_local.replace(hour=0, minute=0, second=0, microsecond=0)
+        midnight = datetime.datetime.combine(sunrise_local.date(), datetime.time.min)
+        if hasattr(location_timezone, "localize"):
+            day_start = location_timezone.localize(midnight)  # type: ignore[attr-defined]
+        else:
+            day_start = midnight.replace(tzinfo=location_timezone)
         windows.append((int(day_start.timestamp()), sunrise_val, sunset_val))
     return sorted(windows, key=lambda w: w[0])
 
@@ -670,7 +676,9 @@ def _sun_times_for(ts: Any, windows: list[tuple[int, int, int]]) -> tuple[Option
     return selected[1], selected[2]
 
 
-def _apply_nighttime_icons(weather: dict[str, Any]) -> dict[str, Any]:
+def _apply_nighttime_icons(
+    weather: dict[str, Any], location_timezone: datetime.tzinfo
+) -> dict[str, Any]:
     if not isinstance(weather, dict):
         return weather
 
@@ -712,7 +720,7 @@ def _apply_nighttime_icons(weather: dict[str, Any]) -> dict[str, Any]:
                 entry["weather"] = weather_list
 
     daily_entries = weather.get("daily") if isinstance(weather.get("daily"), list) else []
-    sun_windows = _sun_windows(daily_entries)
+    sun_windows = _sun_windows(daily_entries, location_timezone)
 
     current = weather.get("current")
     if isinstance(current, dict):
@@ -950,7 +958,7 @@ def _normalise_weatherkit_response(data: dict[str, Any]) -> Optional[dict[str, A
         "alerts": alerts_raw,
         "source": "Apple WeatherKit",
     }
-    return _apply_nighttime_icons(mapped)
+    return _apply_nighttime_icons(mapped, pytz.timezone(WEATHERKIT_TIMEZONE))
 
 
 
@@ -1088,7 +1096,12 @@ def _normalise_openweathermap_response(data: dict[str, Any]) -> Optional[dict[st
         "alerts": alerts_raw,
         "source": "OpenWeatherMap",
     }
-    return _apply_nighttime_icons(mapped)
+    try:
+        timezone_offset = int(data.get("timezone_offset", 0))
+        location_timezone = datetime.timezone(datetime.timedelta(seconds=timezone_offset))
+    except (TypeError, ValueError, OverflowError):
+        location_timezone = datetime.timezone.utc
+    return _apply_nighttime_icons(mapped, location_timezone)
 
 
 def _fetch_weatherkit(now: datetime.datetime) -> Optional[dict[str, Any]]:

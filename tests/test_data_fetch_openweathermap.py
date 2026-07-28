@@ -51,7 +51,42 @@ def test_sun_window_selection_ignores_provider_daily_anchor():
         },
     ]
 
-    sunrise, sunset = _sun_times_for(_timestamp(2, 5), _sun_windows(daily))
+    sunrise, sunset = _sun_times_for(_timestamp(2, 5), _sun_windows(daily, CENTRAL_TIME))
 
     assert sunrise == _timestamp(2, 7)
     assert sunset == _timestamp(2, 21)
+
+
+def test_openweathermap_sun_windows_use_forecast_timezone():
+    tokyo = datetime.timezone(datetime.timedelta(hours=9))
+
+    def tokyo_timestamp(day: int, hour: int, minute: int = 0) -> int:
+        return int(datetime.datetime(2026, 7, day, hour, minute, tzinfo=tokyo).timestamp())
+
+    data = {
+        "timezone_offset": 9 * 60 * 60,
+        "current": {},
+        "daily": [
+            {
+                "dt": tokyo_timestamp(1, 12),
+                "sunrise": tokyo_timestamp(1, 4, 30),
+                "sunset": tokyo_timestamp(1, 19),
+            },
+            {
+                "dt": tokyo_timestamp(2, 12),
+                "sunrise": tokyo_timestamp(2, 4, 30),
+                "sunset": tokyo_timestamp(2, 19),
+            },
+        ],
+        "hourly": [
+            {
+                "dt": tokyo_timestamp(1, 14),
+                "weather": [{"id": 800, "main": "Clear", "description": "clear sky"}],
+            }
+        ],
+    }
+
+    normalized = _normalise_openweathermap_response(data)
+
+    assert normalized is not None
+    assert normalized["hourly"][0]["weather"][0]["icon"] == "Clear"
