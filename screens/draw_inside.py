@@ -2149,6 +2149,7 @@ def _history_values(data: Dict[str, Optional[float]]) -> Dict[str, float]:
     """Return the canonical readings that can be plotted on the inside screen."""
 
     candidates = (
+        ("Temperature", "temp_f"),
         ("Humidity", "humidity"),
         ("Pressure", "pressure_inhg"),
         ("VOC Index", "voc_index"),
@@ -2321,18 +2322,42 @@ def _render_inside(data: Dict[str, Optional[float]], provider: Optional[str], se
     badge_fill = _mix_color(badge_color, config.INSIDE_COL_BG, 0.25)
     draw.rounded_rectangle((margin, badge_top, W - margin, badge_top + badge_h), radius=8, fill=badge_fill)
     temp_text = f"{temp_f:.1f}°F" if temp_f is not None else "--.-°F"
+    badge_padding = max(8, W // 32)
+    temp_left = margin + badge_padding
+    chart_left = max(W * 9 // 16, temp_left + 1)
+    chart_right = W - margin - badge_padding
+    chart_gap = max(6, W // 64)
+    temp_max_width = max(1, chart_left - chart_gap - temp_left)
     temp_font = fit_font(
         draw,
         temp_text,
         config.FONT_WEATHER_DETAILS_SMALL_BOLD,
-        max_width=W - margin * 4,
+        max_width=temp_max_width,
         max_height=max(24, badge_h - 12),
         min_pt=24,
         max_pt=max(40, H // 5),
     )
-    temp_w, temp_h = measure_text(draw, temp_text, temp_font)
+    _, temp_h = measure_text(draw, temp_text, temp_font)
     temp_y = badge_top + (badge_h - temp_h) // 2
-    draw.text(((W - temp_w) // 2, temp_y), temp_text, font=temp_font, fill=(255, 255, 255))
+    draw.text((temp_left, temp_y), temp_text, font=temp_font, fill=(255, 255, 255))
+
+    _load_inside_history()
+    with _inside_history_lock:
+        histories = {key: tuple(value) for key, value in _inside_history.items()}
+    temperature_history = histories.get("Temperature")
+    if temperature_history and chart_right - chart_left >= 12:
+        chart_padding_y = max(7, badge_h // 6)
+        _draw_history_chart(
+            draw,
+            (
+                chart_left,
+                badge_top + chart_padding_y,
+                chart_right,
+                badge_top + badge_h - chart_padding_y,
+            ),
+            temperature_history,
+            badge_color,
+        )
 
     card_top = badge_top + badge_h + max(4, H // 40)
     card_bottom = H - margin
@@ -2346,9 +2371,6 @@ def _render_inside(data: Dict[str, Optional[float]], provider: Optional[str], se
     chart_x = max(W * 5 // 8, value_x + 38)
     charts_enabled = chart_x < right_edge - 24
     row_h = max(1, (card_bottom - card_top - 8) // len(metrics))
-    _load_inside_history()
-    with _inside_history_lock:
-        histories = {key: tuple(value) for key, value in _inside_history.items()}
     for index, metric in enumerate(metrics):
         y0 = card_top + 4 + index * row_h
         y1 = card_top + 4 + (index + 1) * row_h if index < len(metrics) - 1 else card_bottom - 4

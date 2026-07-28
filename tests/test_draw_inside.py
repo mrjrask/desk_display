@@ -73,7 +73,12 @@ def test_history_values_selects_graphable_indoor_metrics():
         }
     )
 
-    assert values == {"Humidity": 44.0, "Pressure": 29.91, "VOC Index": 82.0}
+    assert values == {
+        "Temperature": 72.5,
+        "Humidity": 44.0,
+        "Pressure": 29.91,
+        "VOC Index": 82.0,
+    }
 
 
 def test_record_inside_history_is_bounded(monkeypatch, tmp_path):
@@ -112,6 +117,31 @@ def test_inside_temperature_uses_large_badge_font_on_standard_display(monkeypatc
 
     assert len(fitted_sizes) == 1
     assert fitted_sizes[0] >= 40
+
+
+def test_inside_temperature_history_chart_is_to_right_of_value(monkeypatch):
+    import screens.draw_inside as draw_inside_module
+
+    monkeypatch.setattr(draw_inside_module, "W", 320)
+    monkeypatch.setattr(draw_inside_module, "H", 240)
+    monkeypatch.setattr(
+        draw_inside_module,
+        "_inside_history",
+        {"Temperature": [(1.0, 70.0), (2.0, 72.5)]},
+    )
+    monkeypatch.setattr(draw_inside_module, "_inside_history_loaded", True)
+    chart_boxes = []
+
+    def capture_chart(_draw, box, _points, _color):
+        chart_boxes.append(box)
+
+    monkeypatch.setattr(draw_inside_module, "_draw_history_chart", capture_chart)
+    draw_inside_module._render_inside({"temp_f": 72.5}, "Test sensor", None)
+
+    assert chart_boxes
+    assert chart_boxes[0][0] >= draw_inside_module.W * 9 // 16
+
+
 def test_inside_history_survives_process_restart(monkeypatch, tmp_path):
     import screens.draw_inside as draw_inside_module
 
