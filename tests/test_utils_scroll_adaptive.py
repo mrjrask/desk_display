@@ -165,7 +165,11 @@ def test_compute_adaptive_scroll_params_honors_max_step(monkeypatch):
 
 
 def test_compute_adaptive_scroll_params_applies_min_frame_floor_after_overflow_scaling(monkeypatch):
-    monkeypatch.setattr("utils.get_global_scroll_settings", lambda: {"speed": 1.0, "smoothness": 3.0})
+    monkeypatch.setitem(
+        compute_adaptive_scroll_params.__globals__,
+        "get_global_scroll_settings",
+        lambda: {"speed": 1.0, "smoothness": 3.0},
+    )
 
     params = compute_adaptive_scroll_params(
         content_height=720,
@@ -182,8 +186,9 @@ def test_compute_adaptive_scroll_params_applies_min_frame_floor_after_overflow_s
 def test_compute_adaptive_scroll_params_preserves_target_above_min_frame_floor(
     monkeypatch,
 ):
-    monkeypatch.setattr(
-        "utils.get_global_scroll_settings",
+    monkeypatch.setitem(
+        compute_adaptive_scroll_params.__globals__,
+        "get_global_scroll_settings",
         lambda: {"speed": 1.0, "smoothness": 3.0},
     )
 
