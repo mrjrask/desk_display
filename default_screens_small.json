@@ -1,19 +1,19 @@
 {
   "config": {
     "screens": {
+      "air quality": 0,
       "date": 1,
       "nixie": 0,
       "on this day": 1,
       "weather logo": 0,
       "weather1": 1,
       "weather2": 1,
-      "air quality": 1,
       "weather alert": 1,
       "weather hourly": 1,
       "weather daily": 1,
       "weather quad": 0,
       "weather radar": 1,
-      "astronomical": 0,
+      "astronomical": 2,
       "inside": 1,
       "verano logo": 0,
       "vrnof": 3,
@@ -82,10 +82,10 @@
       "MLB Scoreboard": 2,
       "NL Overview": 0,
       "AL Overview": 0,
-      "NL Overview+WC": 0,
-      "AL Overview+WC": 0,
       "MLB AL Standings": 2,
       "MLB NL Standings": 2,
+      "NL Overview+WC": 5,
+      "AL Overview+WC": 5,
       "bears logo": 7,
       "bears stand1": 0,
       "bears stand2": 0,
@@ -124,7 +124,7 @@
       "NBA Playoffs": 0,
       "NCAAM Scoreboard": 0,
       "quad": 0,
-      "World Cup Scoreboard": 1
+      "World Cup Scoreboard": 0
     },
     "playlists": {
       "playlist-1771301244817-427": {
@@ -160,16 +160,16 @@
             "screen": "weather hourly"
           },
           {
-            "screen": "weather radar"
-          },
-          {
             "screen": "weather daily"
           },
           {
-            "screen": "astronomical"
+            "screen": "weather quad"
           },
           {
-            "screen": "weather quad"
+            "screen": "weather radar"
+          },
+          {
+            "screen": "astronomical"
           }
         ]
       },
@@ -538,6 +538,9 @@
   },
   "style": {
     "screens": {
+      "air quality": {
+        "background": "#000000"
+      },
       "date": {
         "background": "#000000"
       },
@@ -745,6 +748,12 @@
       "MLB NL Standings": {
         "background": "#000000"
       },
+      "NL Overview+WC": {
+        "background": "#000000"
+      },
+      "AL Overview+WC": {
+        "background": "#000000"
+      },
       "bears logo": {
         "background": "#000000"
       },
@@ -818,12 +827,6 @@
         "background": "#000000"
       },
       "World Cup Scoreboard": {
-        "background": "#000000"
-      },
-      "NL Overview+WC": {
-        "background": "#000000"
-      },
-      "AL Overview+WC": {
         "background": "#000000"
       }
     }
