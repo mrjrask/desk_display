@@ -7,6 +7,7 @@ from screens.draw_weather import (
     FONT_WEATHER_DETAILS_SMALL_BOLD,
     FONT_WEATHER_DETAILS_TINY_LARGE,
     _astronomical_layout_details,
+    _astronomy_row_x_positions,
     _astronomy_time_text,
     _draw_weather_history_chart,
     _fit_text_and_font_to_width,
@@ -67,6 +68,13 @@ def test_astronomy_time_text_formats_midnight_and_noon_without_platform_specific
 def test_astronomical_sun_rows_use_civil_times_without_civil_label():
     layout = _astronomical_layout_details(640, 480)
     assert layout["sun_labels"] == (("Rise", "sunrise_civil"), ("Set", "sunset_civil"))
+
+
+def test_astronomical_row_centers_label_and_time_with_compact_gap():
+    label_x, value_x = _astronomy_row_x_positions((10, 20, 210, 220), 30, 60, compact=True)
+
+    assert (label_x, value_x) == (61, 99)
+    assert value_x - (label_x + 30) == 8
 
 
 def test_moon_phase_direction_controls_illuminated_side():

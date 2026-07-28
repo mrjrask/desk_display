@@ -2050,6 +2050,22 @@ def _draw_astronomy_card(draw: ImageDraw.ImageDraw, box: tuple[int, int, int, in
     )
 
 
+def _astronomy_row_x_positions(
+    box: tuple[int, int, int, int],
+    label_width: int,
+    value_width: int,
+    compact: bool,
+) -> tuple[int, int]:
+    """Center an astronomy label/value pair with a small, consistent gap."""
+
+    x0, _, x1, _ = box
+    gap = 8 if compact else 14
+    pair_width = label_width + gap + value_width
+    label_x = x0 + max(10, (x1 - x0 - pair_width) // 2)
+    value_x = min(label_x + label_width + gap, x1 - 10 - value_width)
+    return label_x, value_x
+
+
 def draw_weather_astronomical(display, weather, transition: bool = False):
     if not weather:
         return None
@@ -2181,8 +2197,8 @@ def draw_weather_astronomical(display, weather, transition: bool = False):
             ("Rise/Set", f"{_astronomy_time_text(moonrise)} / {_astronomy_time_text(moonset)}")
         ]
     phase_h = phase_bbox[3] - phase_bbox[1]
-    moon_row_y = phase_y + phase_h + (7 if layout["compact"] else 12)
-    sun_row_y = sun_center[1] + sun_icon_d // 2 + (8 if layout["compact"] else 14)
+    moon_row_y = phase_y + phase_h + (12 if layout["compact"] else 22)
+    sun_row_y = sun_center[1] + sun_icon_d // 2 + (13 if layout["compact"] else 24)
     aligned_row_y = max(sun_row_y, moon_row_y)
     row_gap = max(
         13 if layout["compact"] else 22,
@@ -2193,10 +2209,17 @@ def draw_weather_astronomical(display, weather, transition: bool = False):
         y = aligned_row_y + idx * row_gap
         if y > ly1 - 11:
             break
-        draw.text((lx0 + 10, y), label, font=label_font, fill=(255, 223, 178))
+        label_bbox = _safe_textbbox(draw, label, label_font)
         value_bbox = _safe_textbbox(draw, value, value_font)
+        label_x, value_x = _astronomy_row_x_positions(
+            left_box,
+            label_bbox[2] - label_bbox[0],
+            value_bbox[2] - value_bbox[0],
+            bool(layout["compact"]),
+        )
+        draw.text((label_x, y), label, font=label_font, fill=(255, 223, 178))
         draw.text(
-            (lx1 - 10 - (value_bbox[2] - value_bbox[0]), y),
+            (value_x, y),
             value,
             font=value_font,
             fill=(238, 242, 250),
@@ -2206,10 +2229,17 @@ def draw_weather_astronomical(display, weather, transition: bool = False):
         y = aligned_row_y + idx * row_gap
         if y > ry1 - 11:
             break
-        draw.text((rx0 + 10, y), label, font=label_font, fill=(198, 210, 255))
+        label_bbox = _safe_textbbox(draw, label, label_font)
         value_bbox = _safe_textbbox(draw, value, value_font)
+        label_x, value_x = _astronomy_row_x_positions(
+            right_box,
+            label_bbox[2] - label_bbox[0],
+            value_bbox[2] - value_bbox[0],
+            bool(layout["compact"]),
+        )
+        draw.text((label_x, y), label, font=label_font, fill=(198, 210, 255))
         draw.text(
-            (rx1 - 10 - (value_bbox[2] - value_bbox[0]), y),
+            (value_x, y),
             value,
             font=value_font,
             fill=(238, 242, 250),
