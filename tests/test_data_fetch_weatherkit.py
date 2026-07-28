@@ -259,6 +259,38 @@ def test_weatherkit_hourly_rounds_sunset_to_detected_two_hour_increment():
     assert normalized["hourly"][1]["weather"][0]["icon"] == "Clear_night"
 
 
+def test_weatherkit_hourly_rounding_uses_offset_forecast_grid():
+    data = {
+        "currentWeather": {"temperature": 10, "conditionCode": "Clear", "asOf": _iso("12:00:00")},
+        "forecastDaily": {
+            "days": [
+                {
+                    "sunrise": _iso("06:00:00"),
+                    "sunset": _iso("19:10:00"),
+                    "temperatureMax": 20,
+                    "temperatureMin": 5,
+                    "precipitationChance": 0,
+                    "conditionCode": "Clear",
+                    "forecastStart": _iso("00:00:00"),
+                }
+            ]
+        },
+        "forecastHourly": {
+            "hours": [
+                {"forecastStart": _iso("19:00:00"), "temperature": 10, "precipitationChance": 0, "conditionCode": "Clear"},
+                {"forecastStart": _iso("21:00:00"), "temperature": 9, "precipitationChance": 0, "conditionCode": "Clear"},
+            ]
+        },
+        "weatherAlerts": {"alerts": []},
+    }
+
+    normalized = _normalise_weatherkit_response(data)
+
+    assert normalized is not None
+    assert normalized["hourly"][0]["weather"][0]["icon"] == "Clear"
+    assert normalized["hourly"][1]["weather"][0]["icon"] == "Clear_night"
+
+
 def test_weatherkit_hourly_rounds_sunset_to_detected_one_hour_increment():
     data = {
         "currentWeather": {"temperature": 10, "conditionCode": "Clear", "asOf": _iso("12:00:00")},
