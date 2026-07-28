@@ -544,6 +544,9 @@
       "nixie": {
         "background": "#000000"
       },
+      "on this day": {
+        "background": "#000000"
+      },
       "weather logo": {
         "background": "#000000"
       },
@@ -551,6 +554,12 @@
         "background": "#000000"
       },
       "weather2": {
+        "background": "#000000"
+      },
+      "air quality": {
+        "background": "#000000"
+      },
+      "weather alert": {
         "background": "#000000"
       },
       "weather hourly": {
