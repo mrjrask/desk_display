@@ -547,14 +547,22 @@ def _night_icon_name(icon: str) -> str:
     return f"{value}_night"
 
 
-def _round_up_to_increment(ts: Any, increment_seconds: int) -> Optional[int]:
+def _round_up_to_increment(
+    ts: Any,
+    increment_seconds: int,
+    *,
+    anchor_timestamp: Any = 0,
+) -> Optional[int]:
     try:
         ts_val = int(ts)
+        anchor_val = int(anchor_timestamp)
     except (TypeError, ValueError, OverflowError):
         return None
     if increment_seconds <= 0:
         return ts_val
-    return ((ts_val + increment_seconds - 1) // increment_seconds) * increment_seconds
+    offset = ts_val - anchor_val
+    rounded_offset = ((offset + increment_seconds - 1) // increment_seconds) * increment_seconds
+    return anchor_val + rounded_offset
 
 
 def _is_night_time_current(ts: Any, sunrise: Any, sunset: Any) -> bool:
@@ -567,11 +575,26 @@ def _is_night_time_current(ts: Any, sunrise: Any, sunset: Any) -> bool:
     return ts_val >= sunset_val or ts_val < sunrise_val
 
 
-def _is_night_time_hourly(ts: Any, sunrise: Any, sunset: Any, *, increment_seconds: int) -> bool:
-    rounded_ts = _round_up_to_increment(ts, increment_seconds)
-    rounded_sunrise = _round_up_to_increment(sunrise, increment_seconds)
-    rounded_sunset = _round_up_to_increment(sunset, increment_seconds)
-    if rounded_ts is not None and rounded_sunrise is not None and rounded_sunset is not None:
+def _is_night_time_hourly(
+    ts: Any,
+    sunrise: Any,
+    sunset: Any,
+    *,
+    increment_seconds: int,
+    anchor_timestamp: Any = 0,
+) -> bool:
+    rounded_ts = _round_up_to_increment(
+        ts, increment_seconds, anchor_timestamp=anchor_timestamp
+    )
+    rounded_sunrise = _round_up_to_increment(
+        sunrise, increment_seconds, anchor_timestamp=anchor_timestamp
+    )
+    rounded_sunset = _round_up_to_increment(
+        sunset, increment_seconds, anchor_timestamp=anchor_timestamp
+    )
+    if rounded_ts is None:
+        return False
+    if rounded_sunrise is not None and rounded_sunset is not None:
         return rounded_ts >= rounded_sunset or rounded_ts < rounded_sunrise
 
     # WeatherKit can occasionally omit or return malformed astronomical times.
@@ -658,6 +681,7 @@ def _apply_nighttime_icons(weather: dict[str, Any]) -> dict[str, Any]:
         *,
         use_hourly_rounding: bool,
         increment_seconds: int = 7200,
+        anchor_timestamp: Any = 0,
     ) -> None:
         if not isinstance(entry, dict):
             return
@@ -671,6 +695,7 @@ def _apply_nighttime_icons(weather: dict[str, Any]) -> dict[str, Any]:
                 sunrise_val,
                 sunset_val,
                 increment_seconds=increment_seconds,
+                anchor_timestamp=anchor_timestamp,
             )
         else:
             is_night = _is_night_time_current(entry.get("dt"), sunrise_val, sunset_val)
@@ -700,6 +725,14 @@ def _apply_nighttime_icons(weather: dict[str, Any]) -> dict[str, Any]:
 
     hourly_entries = weather.get("hourly") if isinstance(weather.get("hourly"), list) else []
     hourly_increment = _hourly_increment_seconds(hourly_entries)
+    hourly_anchor = next(
+        (
+            timestamp
+            for entry in hourly_entries
+            if (timestamp := _round_up_to_increment(entry.get("dt"), 0)) is not None
+        ),
+        0,
+    )
     for hour in hourly_entries:
         sunrise = hour.get("sunrise")
         sunset = hour.get("sunset")
@@ -712,6 +745,7 @@ def _apply_nighttime_icons(weather: dict[str, Any]) -> dict[str, Any]:
                 sunset,
                 use_hourly_rounding=True,
                 increment_seconds=hourly_increment,
+                anchor_timestamp=hourly_anchor,
             )
 
     return weather
