@@ -568,6 +568,15 @@ def _is_night_time_current(ts: Any, sunrise: Any, sunset: Any) -> bool:
 
 
 def _is_night_time_hourly(ts: Any, sunrise: Any, sunset: Any, *, increment_seconds: int) -> bool:
+    rounded_ts = _round_up_to_increment(ts, increment_seconds)
+    rounded_sunrise = _round_up_to_increment(sunrise, increment_seconds)
+    rounded_sunset = _round_up_to_increment(sunset, increment_seconds)
+    if rounded_ts is not None and rounded_sunrise is not None and rounded_sunset is not None:
+        return rounded_ts >= rounded_sunset or rounded_ts < rounded_sunrise
+
+    # WeatherKit can occasionally omit or return malformed astronomical times.
+    # Only in that case, fall back to the historical local-time approximation;
+    # valid sunrise and sunset values must always determine the night cutover.
     try:
         ts_val = int(ts)
         local_dt = datetime.datetime.fromtimestamp(ts_val, CENTRAL_TIME)
@@ -580,12 +589,7 @@ def _is_night_time_hourly(ts: Any, sunrise: Any, sunset: Any, *, increment_secon
         night_start_hour = 18 if is_dst else 17
         return hour >= night_start_hour or hour < 5
 
-    rounded_ts = _round_up_to_increment(ts, increment_seconds)
-    rounded_sunrise = _round_up_to_increment(sunrise, increment_seconds)
-    rounded_sunset = _round_up_to_increment(sunset, increment_seconds)
-    if rounded_ts is None or rounded_sunrise is None or rounded_sunset is None:
-        return False
-    return rounded_ts >= rounded_sunset or rounded_ts < rounded_sunrise
+    return False
 
 
 def _hourly_increment_seconds(hourly_entries: list[dict[str, Any]]) -> int:
