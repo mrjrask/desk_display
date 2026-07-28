@@ -179,6 +179,28 @@ def test_compute_adaptive_scroll_params_applies_min_frame_floor_after_overflow_s
     assert params.target_frame_time == 0.100
 
 
+def test_compute_adaptive_scroll_params_preserves_target_above_min_frame_floor(
+    monkeypatch,
+):
+    monkeypatch.setattr(
+        "utils.get_global_scroll_settings",
+        lambda: {"speed": 1.0, "smoothness": 3.0},
+    )
+
+    params = compute_adaptive_scroll_params(
+        content_height=720,
+        viewport_height=240,
+        viewport_width=320,
+        base_step=1,
+        min_frame_time=0.100,
+        min_frame_time_floor=0.050,
+    )
+
+    assert params.target_frame_time == pytest.approx(
+        0.100 * (1.0 + 2.0 * 0.6) / 3.0
+    )
+
+
 def test_scroll_vertical_content_caps_page_jump_stride_with_max_step():
     display = DummyDisplay()
 
