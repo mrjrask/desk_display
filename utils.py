@@ -2493,6 +2493,11 @@ def compute_adaptive_scroll_params(
 
     Page-jump mode is intentionally conservative so long scoreboards keep a
     readable line-by-line cadence instead of skipping most rows.
+
+    ``min_frame_time_floor`` is an optional lower bound, in seconds, on the
+    final adaptive frame time. It is applied after ``min_frame_time`` has been
+    adjusted for global smoothness and content overflow, so it neither caps nor
+    replaces an adaptive target that is already higher than the floor.
     """
 
     settings = get_global_scroll_settings()
@@ -2507,9 +2512,14 @@ def compute_adaptive_scroll_params(
     overflow = max(0, int(content_height) - int(viewport_height))
     overflow_ratio = overflow / max(1, int(viewport_height))
     # For very tall content increase frame time (lower FPS).
-    target_frame_time = min_frame_time * (1.0 + min(2.0, overflow_ratio * 0.6))
+    adaptive_target_frame_time = min_frame_time * (
+        1.0 + min(2.0, overflow_ratio * 0.6)
+    )
+    target_frame_time = adaptive_target_frame_time
     if min_frame_time_floor is not None:
-        target_frame_time = max(target_frame_time, float(min_frame_time_floor))
+        target_frame_time = max(
+            adaptive_target_frame_time, float(min_frame_time_floor)
+        )
 
     return AdaptiveScrollParams(
         step=step,
