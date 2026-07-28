@@ -41,6 +41,7 @@ def test_nba_and_nhl_no_games_messages_use_same_vertical_spacing(monkeypatch):
 
     assert nba_capture["text"] == "No games today"
     assert nhl_capture["text"] == "No games"
+    assert nba_capture["row"][2:] == nhl_capture["row"][2:]
     assert nba_capture["row"] == (
         0,
         nba_scoreboard.WIDTH,
