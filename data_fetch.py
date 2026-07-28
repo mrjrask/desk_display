@@ -547,14 +547,21 @@ def _night_icon_name(icon: str) -> str:
     return f"{value}_night"
 
 
-def _round_up_to_increment(ts: Any, increment_seconds: int) -> Optional[int]:
+def _round_up_to_increment(
+    ts: Any,
+    increment_seconds: int,
+    *,
+    anchor_timestamp: Any = 0,
+) -> Optional[int]:
     try:
         ts_val = int(ts)
+        anchor_val = int(anchor_timestamp)
     except (TypeError, ValueError, OverflowError):
         return None
     if increment_seconds <= 0:
         return ts_val
-    return ((ts_val + increment_seconds - 1) // increment_seconds) * increment_seconds
+    offset = ts_val - anchor_val
+    return anchor_val + ((offset + increment_seconds - 1) // increment_seconds) * increment_seconds
 
 
 def _is_night_time_current(ts: Any, sunrise: Any, sunset: Any) -> bool:
@@ -567,20 +574,44 @@ def _is_night_time_current(ts: Any, sunrise: Any, sunset: Any) -> bool:
     return ts_val >= sunset_val or ts_val < sunrise_val
 
 
-def _is_night_time_hourly(ts: Any, sunrise: Any, sunset: Any, *, increment_seconds: int) -> bool:
-    rounded_ts = _round_up_to_increment(ts, increment_seconds)
-    rounded_sunrise = _round_up_to_increment(sunrise, increment_seconds)
-    rounded_sunset = _round_up_to_increment(sunset, increment_seconds)
-    if rounded_ts is None or rounded_sunrise is None or rounded_sunset is None:
+def _is_night_time_hourly(
+    ts: Any,
+    sunrise: Any,
+    sunset: Any,
+    *,
+    increment_seconds: int,
+    anchor_timestamp: Any = 0,
+) -> bool:
+    rounded_ts = _round_up_to_increment(
+        ts, increment_seconds, anchor_timestamp=anchor_timestamp
+    )
+    rounded_sunrise = _round_up_to_increment(
+        sunrise, increment_seconds, anchor_timestamp=anchor_timestamp
+    )
+    rounded_sunset = _round_up_to_increment(
+        sunset, increment_seconds, anchor_timestamp=anchor_timestamp
+    )
+    if rounded_ts is None:
         return False
-    if rounded_sunrise <= 0 or rounded_sunset <= 0:
-        try:
-            local_dt = datetime.datetime.fromtimestamp(rounded_ts, CENTRAL_TIME)
-        except (ValueError, OverflowError):
-            return False
-        night_start_hour = 18 if local_dt.dst() else 17
-        return local_dt.hour >= night_start_hour or local_dt.hour < 5
-    return rounded_ts >= rounded_sunset or rounded_ts < rounded_sunrise
+    if rounded_sunrise is not None and rounded_sunset is not None:
+        return rounded_ts >= rounded_sunset or rounded_ts < rounded_sunrise
+
+    # WeatherKit can occasionally omit or return malformed astronomical times.
+    # Only in that case, fall back to the historical local-time approximation:
+    # valid sunrise and sunset values must always determine the night cutover.
+    try:
+        ts_val = int(ts)
+        local_dt = datetime.datetime.fromtimestamp(ts_val, CENTRAL_TIME)
+    except (TypeError, ValueError, OverflowError):
+        local_dt = None
+
+    if local_dt is not None:
+        hour = local_dt.hour
+        is_dst = bool(local_dt.dst())
+        night_start_hour = 18 if is_dst else 17
+        return hour >= night_start_hour or hour < 5
+
+    return False
 
 
 def _hourly_increment_seconds(hourly_entries: list[dict[str, Any]]) -> int:
