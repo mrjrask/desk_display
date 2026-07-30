@@ -307,7 +307,6 @@
         minmax(165px, 1.25fr)
         minmax(130px, 0.85fr)
         minmax(120px, 0.7fr)
-        minmax(140px, 0.9fr)
         minmax(200px, 1.3fr)
         minmax(235px, 1.15fr)
         minmax(140px, 0.9fr)
@@ -351,7 +350,6 @@
         minmax(165px, 1.25fr)
         minmax(130px, 0.85fr)
         minmax(120px, 0.7fr)
-        minmax(140px, 0.9fr)
         minmax(200px, 1.3fr)
         minmax(235px, 1.15fr)
         minmax(140px, 0.9fr)
@@ -406,10 +404,6 @@
     .compact-number-input {
       width: 6ch !important;
       min-width: 6ch;
-    }
-    .background-input {
-      width: 11ch !important;
-      min-width: 11ch;
     }
     .alt-screen-clear {
       width: 30px;
@@ -468,7 +462,6 @@
           minmax(160px, 1.3fr)
           minmax(130px, 0.9fr)
           minmax(110px, 0.7fr)
-          minmax(130px, 0.9fr)
           minmax(180px, 1.1fr)
           minmax(170px, 1fr)
           minmax(130px, 0.9fr)
@@ -569,7 +562,6 @@
         </label>
         <div>Freq</div>
       </div>
-      <div>Background</div>
       <div>Hide after</div>
       <div>Alt screen</div>
       <div>Extra sec</div>
@@ -589,10 +581,6 @@
         <div>
           <input type="number" min="0" step="1" value="{{ screen.frequency }}" class="freq-input compact-number-input">
           <div class="hint">0 disables. 1=every pass, 2=every other pass.</div>
-        </div>
-        <div>
-          <input type="text" class="background-input" placeholder="#0F172A" value="{{ screen.background }}">
-          <div class="hint">Hex color (e.g. #000000).</div>
         </div>
         <div>
           <div class="hide-after-field">
@@ -1032,7 +1020,6 @@
           return {
             id: screenId,
             frequency: row.querySelector(".freq-input")?.value ?? "",
-            background: row.querySelector(".background-input")?.value ?? "",
             alt_screen: row.querySelector(".alt-screen-input")?.value ?? "",
             hide_after_at: row.querySelector(".hide-after-input")?.value ?? "",
             hide_after_enabled: row.querySelector(".hide-after-enabled-input")?.checked ?? false,
@@ -1152,18 +1139,6 @@
       return playlistPayload;
     }
 
-    function buildStylePayload(screens) {
-      const screensPayload = {};
-      screens.forEach((screen) => {
-        const screenId = String(screen.id || "").trim();
-        if (!screenId) return;
-        const background = String(screen.background ?? "").trim();
-        if (!background) return;
-        screensPayload[screenId] = { background };
-      });
-      return { screens: screensPayload };
-    }
-
     function normalizeImportPayload(payload) {
       if (payload && typeof payload === "object" && payload.config) {
         return payload;
@@ -1249,7 +1224,6 @@
         merged.push({
           id: screenId,
           frequency: 0,
-          background: "#000000",
           alt_screen: "",
           alt_frequency: "",
           extra_seconds: 0,
@@ -1330,10 +1304,6 @@
         <div>
           <input type="number" min="0" step="1" value="${screen.frequency ?? 0}" class="freq-input compact-number-input">
           <div class="hint">0 disables. 1=every pass, 2=every other pass.</div>
-        </div>
-        <div>
-          <input type="text" class="background-input" placeholder="#0F172A" value="${screen.background ?? ""}">
-          <div class="hint">Hex color (e.g. #000000).</div>
         </div>
         <div>
           <div class="hide-after-field">
@@ -1499,7 +1469,6 @@
         const screens = getCurrentScreens();
         const payload = {
           config: buildConfigPayload(screens),
-          style: buildStylePayload(screens),
         };
         downloadPayload(payload, "screens_config.export.json");
       } catch (err) {

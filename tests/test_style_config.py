@@ -73,7 +73,7 @@ def test_reload_style_config_refreshes_cache(tmp_path, monkeypatch):
     assert module.get_screen_image_scale("NBA Scoreboard", "team_logo", 1.0) == 0.8
 
 
-def test_get_screen_background_color_uses_hex_override(tmp_path, monkeypatch):
+def test_get_screen_background_color_is_always_black(tmp_path, monkeypatch):
     style_path = tmp_path / "screens_style.json"
     payload = {"screens": {"weather1": {"background": "#1a2b3c"}}}
     _write_style_config(style_path, payload)
@@ -82,23 +82,5 @@ def test_get_screen_background_color_uses_hex_override(tmp_path, monkeypatch):
     import config
 
     module = importlib.reload(config)
-    color = module.get_screen_background_color("weather1", (0, 0, 0))
-    assert color == (26, 43, 60)
-
-
-def test_legacy_v2_screen_prefers_canonical_style_entry(tmp_path, monkeypatch):
-    style_path = tmp_path / "screens_style.json"
-    payload = {
-        "screens": {
-            "MLB Scoreboard": {"background": "#112233"},
-            "MLB Scoreboard v2": {"background": "#000000"},
-        }
-    }
-    _write_style_config(style_path, payload)
-    monkeypatch.setenv("SCREENS_STYLE_PATH", str(style_path))
-
-    import config
-
-    module = importlib.reload(config)
-    color = module.get_screen_background_color("MLB Scoreboard v2", (255, 255, 255))
-    assert color == (17, 34, 51)
+    color = module.get_screen_background_color("weather1", (255, 255, 255))
+    assert color == (0, 0, 0)

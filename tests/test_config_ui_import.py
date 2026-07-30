@@ -9,12 +9,11 @@ def test_import_screens_accepts_entries_payload(monkeypatch):
     monkeypatch.setattr(config_ui, "_load_active_layouts_config", lambda: {"screens": {"quad": {"enabled": False, "scroll_speed": 1.0, "pages": [{"tiles": ["date", "weather1", "weather hourly", "inside"]}]}}})
     monkeypatch.setattr(config_ui, "build_scheduler", lambda config: None)
     monkeypatch.setattr(config_ui, "_save_config", lambda config: saved.setdefault("config", config))
-    monkeypatch.setattr(config_ui, "_save_style_config", lambda style: saved.setdefault("style", style))
     monkeypatch.setattr(config_ui, "_save_layouts_config", lambda layouts: saved.setdefault("layouts", layouts))
     monkeypatch.setattr(
         config_ui,
         "_build_screen_entries",
-        lambda config, style: [{"id": "date", "frequency": 3, "background": "#112233"}],
+        lambda config, style: [{"id": "date", "frequency": 3}],
     )
 
     client = config_ui.app.test_client()
@@ -26,7 +25,6 @@ def test_import_screens_accepts_entries_payload(monkeypatch):
                     {
                         "id": "date",
                         "frequency": "3",
-                        "background": "#112233",
                         "alt_screen": "",
                         "alt_frequency": "",
                     }
@@ -46,8 +44,6 @@ def test_import_screens_accepts_entries_payload(monkeypatch):
         "default": {"label": "Default", "steps": [{"screen": "date"}]}
     }
     assert saved["config"]["sequence"] == [{"playlist": "default"}]
-    assert saved["style"] == {"screens": {"date": {"background": "#112233"}}
-    }
 
 
 def test_hidden_doubleheader_screens_are_not_configurable():
@@ -77,12 +73,11 @@ def test_import_screens_accepts_export_payload_with_string_frequencies(monkeypat
     monkeypatch.setattr(config_ui, "_load_active_layouts_config", lambda: {"screens": {"quad": {"enabled": False, "scroll_speed": 1.0, "pages": [{"tiles": ["date", "weather1", "weather hourly", "inside"]}]}}})
     monkeypatch.setattr(config_ui, "build_scheduler", lambda config: None)
     monkeypatch.setattr(config_ui, "_save_config", lambda config: saved.setdefault("config", config))
-    monkeypatch.setattr(config_ui, "_save_style_config", lambda style: saved.setdefault("style", style))
     monkeypatch.setattr(config_ui, "_save_layouts_config", lambda layouts: saved.setdefault("layouts", layouts))
     monkeypatch.setattr(
         config_ui,
         "_build_screen_entries",
-        lambda config, style: [{"id": "date", "frequency": 3, "background": "#112233"}],
+        lambda config, style: [{"id": "date", "frequency": 3}],
     )
 
     client = config_ui.app.test_client()
@@ -100,7 +95,6 @@ def test_import_screens_accepts_export_payload_with_string_frequencies(monkeypat
                 "playlists": {"default": {"label": "Default", "steps": [{"screen": "date"}]}},
                 "sequence": [{"playlist": "default"}],
             },
-            "style": {"screens": {"date": {"background": "#112233"}}},
             "layouts": {
                 "screens": {
                     "quad": {
@@ -123,7 +117,6 @@ def test_import_screens_accepts_export_payload_with_string_frequencies(monkeypat
     assert saved["config"]["screens"]["date"] == 3
     assert saved["config"]["screens"]["NHL Standings West"]["frequency"] == 3
     assert saved["config"]["screens"]["NHL Standings West"]["alt"]["frequency"] == 2
-    assert saved["style"] == {"screens": {"date": {"background": "#112233"}}}
     assert saved["layouts"]["screens"]["quad"]["enabled"] is True
     assert saved["layouts"]["screens"]["quad"]["scroll_speed"] == 1.5
     assert saved["layouts"]["screens"]["quad"]["pages"][0]["tiles"] == ["date", "date", "weather1", "inside"]
@@ -136,12 +129,11 @@ def test_import_screens_preserves_hide_after_fields(monkeypatch):
     monkeypatch.setattr(config_ui, "_load_active_layouts_config", lambda: {"screens": {"quad": {"enabled": False, "scroll_speed": 1.0, "pages": [{"tiles": ["date", "weather1", "weather hourly", "inside"]}]}}})
     monkeypatch.setattr(config_ui, "build_scheduler", lambda config: None)
     monkeypatch.setattr(config_ui, "_save_config", lambda config: saved.setdefault("config", config))
-    monkeypatch.setattr(config_ui, "_save_style_config", lambda style: saved.setdefault("style", style))
     monkeypatch.setattr(config_ui, "_save_layouts_config", lambda layouts: saved.setdefault("layouts", layouts))
     monkeypatch.setattr(
         config_ui,
         "_build_screen_entries",
-        lambda config, style: [{"id": "date", "frequency": 3, "background": "#112233"}],
+        lambda config, style: [{"id": "date", "frequency": 3}],
     )
 
     client = config_ui.app.test_client()
@@ -174,7 +166,6 @@ def test_save_screens_persists_quad_pages(monkeypatch):
     monkeypatch.setattr(config_ui, "_load_active_style_config", lambda: {"screens": {}})
     monkeypatch.setattr(config_ui, "build_scheduler", lambda config: None)
     monkeypatch.setattr(config_ui, "_save_config", lambda config: saved.setdefault("config", config))
-    monkeypatch.setattr(config_ui, "_save_style_config", lambda style: saved.setdefault("style", style))
     monkeypatch.setattr(config_ui, "_save_layouts_config", lambda layouts: saved.setdefault("layouts", layouts))
     monkeypatch.setattr(
         config_ui,
@@ -183,7 +174,6 @@ def test_save_screens_persists_quad_pages(monkeypatch):
             {
                 "id": "date",
                 "frequency": 1,
-                "background": "#000000",
                 "alt_screen": "",
                 "alt_frequency": "",
             }
@@ -198,7 +188,6 @@ def test_save_screens_persists_quad_pages(monkeypatch):
                 {
                     "id": "date",
                     "frequency": 1,
-                    "background": "#000000",
                     "alt_screen": "",
                     "alt_frequency": "",
                 }
@@ -220,7 +209,6 @@ def test_save_screens_persists_quad_pages(monkeypatch):
         {
             "id": "date",
             "frequency": 1,
-            "background": "#000000",
             "alt_screen": "",
             "alt_frequency": "",
         }
@@ -251,7 +239,6 @@ def test_save_screens_persists_playlists_and_sequence(monkeypatch):
     monkeypatch.setattr(config_ui, "_load_active_style_config", lambda: {"screens": {}})
     monkeypatch.setattr(config_ui, "build_scheduler", lambda config: None)
     monkeypatch.setattr(config_ui, "_save_config", lambda config: saved.setdefault("config", config))
-    monkeypatch.setattr(config_ui, "_save_style_config", lambda style: saved.setdefault("style", style))
     monkeypatch.setattr(config_ui, "_save_layouts_config", lambda layouts: saved.setdefault("layouts", layouts))
     monkeypatch.setattr(
         config_ui,
@@ -260,7 +247,6 @@ def test_save_screens_persists_playlists_and_sequence(monkeypatch):
             {
                 "id": "date",
                 "frequency": 1,
-                "background": "#000000",
                 "alt_screen": "",
                 "alt_frequency": "",
             }
@@ -275,7 +261,6 @@ def test_save_screens_persists_playlists_and_sequence(monkeypatch):
                 {
                     "id": "date",
                     "frequency": 1,
-                    "background": "#000000",
                     "alt_screen": "",
                     "alt_frequency": "",
                 }
@@ -316,7 +301,6 @@ def test_save_screens_preserves_existing_layouts_when_quad_payload_missing(monke
     monkeypatch.setattr(config_ui, "_load_active_layouts_config", lambda: existing_layouts)
     monkeypatch.setattr(config_ui, "build_scheduler", lambda config: None)
     monkeypatch.setattr(config_ui, "_save_config", lambda config: saved.setdefault("config", config))
-    monkeypatch.setattr(config_ui, "_save_style_config", lambda style: saved.setdefault("style", style))
     monkeypatch.setattr(config_ui, "_save_layouts_config", lambda layouts: saved.setdefault("layouts", layouts))
     monkeypatch.setattr(
         config_ui,
@@ -325,7 +309,6 @@ def test_save_screens_preserves_existing_layouts_when_quad_payload_missing(monke
             {
                 "id": "date",
                 "frequency": 1,
-                "background": "#000000",
                 "alt_screen": "",
                 "alt_frequency": "",
             }
@@ -340,7 +323,6 @@ def test_save_screens_preserves_existing_layouts_when_quad_payload_missing(monke
                 {
                     "id": "date",
                     "frequency": 1,
-                    "background": "#000000",
                     "alt_screen": "",
                     "alt_frequency": "",
                 }
@@ -362,7 +344,6 @@ def test_save_screens_preserves_nhl_standings_v2_playlist_assignments(monkeypatc
     monkeypatch.setattr(config_ui, "_load_active_style_config", lambda: {"screens": {}})
     monkeypatch.setattr(config_ui, "build_scheduler", lambda config: None)
     monkeypatch.setattr(config_ui, "_save_config", lambda config: saved.setdefault("config", config))
-    monkeypatch.setattr(config_ui, "_save_style_config", lambda style: saved.setdefault("style", style))
     monkeypatch.setattr(config_ui, "_save_layouts_config", lambda layouts: saved.setdefault("layouts", layouts))
     monkeypatch.setattr(
         config_ui,
@@ -371,14 +352,12 @@ def test_save_screens_preserves_nhl_standings_v2_playlist_assignments(monkeypatc
             {
                 "id": "NHL Standings West v2",
                 "frequency": 1,
-                "background": "#000000",
                 "alt_screen": "",
                 "alt_frequency": "",
             },
             {
                 "id": "NHL Standings East v2",
                 "frequency": 1,
-                "background": "#000000",
                 "alt_screen": "",
                 "alt_frequency": "",
             },
@@ -393,14 +372,12 @@ def test_save_screens_preserves_nhl_standings_v2_playlist_assignments(monkeypatc
                 {
                     "id": "NHL Standings West v2",
                     "frequency": 1,
-                    "background": "#000000",
                     "alt_screen": "",
                     "alt_frequency": "",
                 },
                 {
                     "id": "NHL Standings East v2",
                     "frequency": 1,
-                    "background": "#000000",
                     "alt_screen": "",
                     "alt_frequency": "",
                 },
@@ -438,24 +415,6 @@ def test_build_layouts_clamps_quad_scroll_speed():
         }
     )
     assert layouts["screens"]["quad"]["scroll_speed"] == 3.0
-
-
-def test_default_background_for_stand3_uses_scoreboard_color(monkeypatch):
-    monkeypatch.setattr(config_ui, "_get_scoreboard_background_color", lambda: (125, 125, 125))
-
-    assert config_ui._default_background_for_screen("cubs stand3") == (125, 125, 125)
-    assert config_ui._default_background_for_screen("sox stand3") == (125, 125, 125)
-
-
-def test_build_style_config_omits_default_stand3_background(monkeypatch):
-    monkeypatch.setattr(config_ui, "_get_scoreboard_background_color", lambda: (125, 125, 125))
-
-    style = config_ui._build_style_config(
-        [{"id": "cubs stand3", "background": "#7D7D7D"}],
-        {"screens": {}},
-    )
-
-    assert style == {"screens": {}}
 
 
 def test_default_screens_endpoint_reads_repo_backed_file_each_request(tmp_path, monkeypatch):
@@ -519,7 +478,6 @@ def test_default_screens_endpoint_accepts_export_payload(tmp_path, monkeypatch):
                     "playlists": {"default": {"label": "Default", "steps": [{"screen": "date"}]}},
                     "sequence": [{"playlist": "default"}],
                 },
-                "style": {"screens": {"date": {"background": "#112233"}}},
                 "layouts": {
                     "screens": {
                         "quad": {
@@ -543,7 +501,6 @@ def test_default_screens_endpoint_accepts_export_payload(tmp_path, monkeypatch):
     assert response.status_code == 200
     assert payload["config"]["screens"] == {"date": 4}
     assert payload["screens"][0]["id"] == "date"
-    assert payload["screens"][0]["background"] == "#112233"
     assert payload["playlists"] == [{"id": "default", "name": "Default"}]
     assert payload["quad_enabled"] is True
     assert payload["quad_scroll_speed"] == 1.5

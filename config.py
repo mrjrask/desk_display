@@ -1193,37 +1193,8 @@ def _get_non_negative_float_env(name: str, default: float) -> float:
         return default
     return value
 
-def _coerce_color_component(env_name: str, default: int) -> int:
-    """Return a color channel value from 0-255 with logging on invalid input."""
-
-    raw_value = os.environ.get(env_name)
-    if raw_value is None:
-        return default
-
-    try:
-        value = int(raw_value)
-    except (TypeError, ValueError):
-        logging.warning(
-            "Invalid %s value %r; using default %d", env_name, raw_value, default
-        )
-        return default
-
-    if not 0 <= value <= 255:
-        logging.warning(
-            "%s must be between 0 and 255; clamping %d to valid range", env_name, value
-        )
-        return max(0, min(255, value))
-
-    return value
-
-
-# Default background color for scoreboards and standings screens. Use an RGB
-# tuple so callers can request either RGB or RGBA colors as needed.
-SCOREBOARD_BACKGROUND_COLOR = (
-    _coerce_color_component("SCOREBOARD_BACKGROUND_R", 125),
-    _coerce_color_component("SCOREBOARD_BACKGROUND_G", 125),
-    _coerce_color_component("SCOREBOARD_BACKGROUND_B", 125),
-)
+# All screens render on a fixed black background; this is not configurable.
+SCOREBOARD_BACKGROUND_COLOR = (0, 0, 0)
 
 # Score colors shared across scoreboard implementations.
 SCOREBOARD_IN_PROGRESS_SCORE_COLOR = (255, 210, 66)
@@ -1559,22 +1530,6 @@ def get_emoji_font(size: int) -> ImageFont.ImageFont:
     return font
 
 
-def _normalise_hex_color(value: str) -> Optional[str]:
-    cleaned = value.strip()
-    if not cleaned:
-        return None
-    if not re.fullmatch(r"#?[0-9a-fA-F]{6}", cleaned):
-        return None
-    return cleaned.upper() if cleaned.startswith("#") else f"#{cleaned.upper()}"
-
-
-def _parse_hex_color(value: str) -> Optional[Tuple[int, int, int]]:
-    normalised = _normalise_hex_color(value)
-    if not normalised:
-        return None
-    return tuple(int(normalised[i : i + 2], 16) for i in (1, 3, 5))  # type: ignore[return-value]
-
-
 def _normalise_style_config(payload: Dict[str, Any]) -> Dict[str, Any]:
     normalised: Dict[str, Any] = {"screens": {}}
     if not isinstance(payload, dict):
@@ -1621,11 +1576,6 @@ def _normalise_style_config(payload: Dict[str, Any]) -> Dict[str, Any]:
                 images[image_slot] = {"scale": scale_value}
 
         entry: Dict[str, Any] = {}
-        background = spec.get("background")
-        if isinstance(background, str):
-            normalised_background = _normalise_hex_color(background)
-            if normalised_background:
-                entry["background"] = normalised_background
         if fonts:
             entry["fonts"] = fonts
         if images:
@@ -1696,15 +1646,9 @@ def get_screen_background_color(
     screen_id: str,
     default: Tuple[int, int, int],
 ) -> Tuple[int, int, int]:
-    """Return the background color override for *screen_id* if configured."""
+    """Every screen renders on a fixed black background; not configurable."""
 
-    style = get_screen_style(screen_id)
-    background = style.get("background")
-    if isinstance(background, str):
-        parsed = _parse_hex_color(background)
-        if parsed is not None:
-            return parsed
-    return default
+    return (0, 0, 0)
 
 
 def _clone_font_instance(font: ImageFont.FreeTypeFont, size: int) -> ImageFont.FreeTypeFont:
