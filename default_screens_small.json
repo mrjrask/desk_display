@@ -56,7 +56,6 @@
       "cubs stand2": 0,
       "cubs stand3": 2,
       "cubs last": 2,
-      "cubs result": 0,
       "cubs live": 1,
       "cubs next": 2,
       "cubs next home": 2,
@@ -284,9 +283,6 @@
           },
           {
             "screen": "cubs last"
-          },
-          {
-            "screen": "cubs result"
           },
           {
             "screen": "cubs live"
@@ -559,9 +555,6 @@
       "weather2": {
         "background": "#000000"
       },
-      "air quality": {
-        "background": "#000000"
-      },
       "weather alert": {
         "background": "#000000"
       },
@@ -662,9 +655,6 @@
         "background": "#000000"
       },
       "cubs last": {
-        "background": "#000000"
-      },
-      "cubs result": {
         "background": "#000000"
       },
       "cubs live": {

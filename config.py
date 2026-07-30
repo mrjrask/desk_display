@@ -304,8 +304,6 @@ def _resolve_weather_coordinates() -> Tuple[Optional[float], Optional[float], li
     return latitude, longitude, []
 
 
-TRAVEL_MODE = os.environ.get("TRAVEL_MODE", "to_home")
-
 LATITUDE, LONGITUDE, _weather_coordinate_errors = _resolve_weather_coordinates()
 
 
@@ -426,22 +424,6 @@ if _weather_errors:
     )
 else:
     ENABLE_WEATHER = True
-
-GOOGLE_MAPS_API_KEY = os.environ.get("GOOGLE_MAPS_API_KEY")
-MAPKIT_TOKEN = os.environ.get("MAPKIT_TOKEN")
-APPLE_MAPS_API_KEY = os.environ.get("APPLE_MAPS_API_KEY") or MAPKIT_TOKEN
-APPLE_MAPS_TEAM_ID = os.environ.get("APPLE_MAPS_TEAM_ID")
-APPLE_MAPS_KEY_ID = os.environ.get("APPLE_MAPS_KEY_ID")
-APPLE_MAPS_KEY_PATH = os.environ.get("APPLE_MAPS_KEY_PATH")
-APPLE_MAPS_PRIVATE_KEY = os.environ.get("APPLE_MAPS_PRIVATE_KEY")
-APPLE_MAPS_DIRECTIONS_URL = os.environ.get(
-    "APPLE_MAPS_DIRECTIONS_URL",
-    "https://maps-api.apple.com/v1/directions",
-)
-APPLE_MAPS_SNAPSHOT_URL = os.environ.get(
-    "APPLE_MAPS_SNAPSHOT_URL",
-    "https://maps-api.apple.com/v1/snapshot",
-)
 
 # ─── Display configuration ─────────────────────────────────────────────────────
 BASE_WIDTH = 320
@@ -885,7 +867,7 @@ def initialise_runtime_probes() -> None:
     detection.
     """
 
-    global CURRENT_SSID, LATITUDE, LONGITUDE, TRAVEL_MODE, OWM_API_KEY, ENABLE_WEATHER
+    global CURRENT_SSID, LATITUDE, LONGITUDE, OWM_API_KEY, ENABLE_WEATHER
     global AIR_QUALITY_PROVIDER, AIRNOW_API_KEY, AIR_QUALITY_ENABLE_POLLEN, AIR_QUALITY_LATITUDE, AIR_QUALITY_LONGITUDE, ENABLE_AIR_QUALITY
     global WEATHERKIT_TEAM_ID, WEATHERKIT_KEY_ID, WEATHERKIT_SERVICE_ID
     global WEATHERKIT_KEY_PATH, WEATHERKIT_PRIVATE_KEY
@@ -898,7 +880,6 @@ def initialise_runtime_probes() -> None:
     initialise_env_if_requested()
 
     CURRENT_SSID = get_current_ssid()
-    TRAVEL_MODE = os.environ.get("TRAVEL_MODE", "to_home")
     LATITUDE, LONGITUDE, weather_coordinate_errors = _resolve_weather_coordinates()
     AIR_QUALITY_PROVIDER = os.environ.get("AIR_QUALITY_PROVIDER", "airnow").strip().lower()
     AIRNOW_API_KEY = os.environ.get("AIRNOW_API_KEY", "").strip()
@@ -1455,9 +1436,6 @@ FONT_INSIDE_LABEL       = _load_font("DejaVuSans-Bold.ttf", 18)
 FONT_INSIDE_VALUE       = _load_font("DejaVuSans.ttf", 17)
 FONT_TITLE_INSIDE       = _load_font("DejaVuSans-Bold.ttf", 17)
 
-FONT_TRAVEL_TITLE       = _load_font("TimesSquare-m105.ttf", 17)
-FONT_TRAVEL_HEADER      = _load_font("TimesSquare-m105.ttf", 17)
-FONT_TRAVEL_VALUE       = _load_font("HWYGNRRW.TTF", 26)
 
 FONT_IP_LABEL           = FONT_INSIDE_LABEL
 FONT_IP_VALUE           = FONT_INSIDE_VALUE
@@ -1831,44 +1809,6 @@ INSIDE_CHIP_AMBER = (233, 165, 36)
 INSIDE_CHIP_PURPLE = (150, 70, 200)
 INSIDE_COL_TEXT   = (255, 255, 255)
 INSIDE_COL_STROKE = (230, 230, 230)
-
-# Travel time screen
-TRAVEL_TO_HOME_ORIGIN = os.environ.get("TRAVEL_TO_HOME_ORIGIN", "")
-TRAVEL_TO_HOME_DESTINATION = os.environ.get("TRAVEL_TO_HOME_DESTINATION", "")
-TRAVEL_TO_WORK_ORIGIN = os.environ.get(
-    "TRAVEL_TO_WORK_ORIGIN", TRAVEL_TO_HOME_DESTINATION
-)
-TRAVEL_TO_WORK_DESTINATION = os.environ.get(
-    "TRAVEL_TO_WORK_DESTINATION", TRAVEL_TO_HOME_ORIGIN
-)
-
-TRAVEL_PROFILES = {
-    "to_home": {
-        "origin": TRAVEL_TO_HOME_ORIGIN,
-        "destination": TRAVEL_TO_HOME_DESTINATION,
-        "title": "To home:",
-        "active_window": (datetime.time(14, 30), datetime.time(19, 0)),
-    },
-    "to_work": {
-        "origin": TRAVEL_TO_WORK_ORIGIN,
-        "destination": TRAVEL_TO_WORK_DESTINATION,
-        "title": "To work:",
-        "active_window": (datetime.time(6, 0), datetime.time(11, 0)),
-    },
-    "default": {
-        "origin": TRAVEL_TO_HOME_ORIGIN,
-        "destination": TRAVEL_TO_HOME_DESTINATION,
-        "title": "Travel time:",
-        "active_window": (datetime.time(6, 0), datetime.time(19, 0)),
-    },
-}
-
-_travel_profile = TRAVEL_PROFILES.get(TRAVEL_MODE, TRAVEL_PROFILES["default"])
-TRAVEL_ORIGIN        = _travel_profile["origin"]
-TRAVEL_DESTINATION   = _travel_profile["destination"]
-TRAVEL_TITLE         = _travel_profile["title"]
-TRAVEL_ACTIVE_WINDOW = _travel_profile["active_window"]
-TRAVEL_DIRECTIONS_URL = "https://maps.googleapis.com/maps/api/directions/json"
 
 # Bears schedule screen
 BEARS_BOTTOM_MARGIN = 6

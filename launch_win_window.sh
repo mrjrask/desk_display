@@ -37,7 +37,6 @@ if [[ -n "${DESK_DISPLAY_ENV_PATH:-}" ]]; then
   load_env_file "$DESK_DISPLAY_ENV_PATH"
 fi
 
-expand_home_path_var "APPLE_MAPS_KEY_PATH"
 expand_home_path_var "WEATHERKIT_KEY_PATH"
 
 if [[ ! -d "$VENV_DIR" ]]; then

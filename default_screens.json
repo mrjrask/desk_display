@@ -69,7 +69,6 @@
       "cubs stand2": 0,
       "cubs stand3": 2,
       "cubs last": 2,
-      "cubs result": 0,
       "cubs live": 1,
       "cubs next": 0,
       "cubs next home": 0,
@@ -303,9 +302,6 @@
           },
           {
             "screen": "cubs last"
-          },
-          {
-            "screen": "cubs result"
           },
           {
             "screen": "cubs live"
@@ -669,9 +665,6 @@
         "background": "#000000"
       },
       "cubs last": {
-        "background": "#000000"
-      },
-      "cubs result": {
         "background": "#000000"
       },
       "cubs live": {

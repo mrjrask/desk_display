@@ -1,6 +1,6 @@
 # External API Reference
 
-Desk Display pulls live data from third-party weather, maps, travel, finance, and sports providers. Most provider payloads are normalized in `data_fetch.py`, `services/`, or individual screen modules before being rendered.
+Desk Display pulls live data from third-party weather, finance, and sports providers. Most provider payloads are normalized in `data_fetch.py`, `services/`, or individual screen modules before being rendered.
 
 Most credentials can be supplied in `.env` when `CONFIG_LOAD_DOTENV=1` or through the process/service environment. Optional providers should fail closed: missing credentials should skip the related diagnostic or fall back to another provider rather than preventing unrelated screens from rendering.
 
@@ -10,7 +10,6 @@ Most credentials can be supplied in `.env` when `CONFIG_LOAD_DOTENV=1` or throug
 
 - [Diagnostics](#diagnostics)
 - [Weather and radar](#weather-and-radar)
-- [Travel and map services](#travel-and-map-services)
 - [Sports](#sports)
 - [Finance](#finance)
 - [AHL / Chicago Wolves](#ahl--chicago-wolves)
@@ -49,7 +48,7 @@ Exit codes:
 | `0` | All checks were `OK` or `SKIP`. |
 | `1` | One or more checks returned `FAIL`. |
 
-The diagnostic script covers WeatherKit/OpenWeatherMap, RainViewer, Google Directions/Static Maps, Apple Maps Directions/Snapshot, NHL/NBA/NFL/MLB scoreboards and standings, AHL ICS/HockeyTech, Yahoo Finance chart data, NHL network diagnostics, and app-level helpers for Bears, Bulls, Blackhawks, Cubs, Sox, and Wolves. NCAAM and World Cup screens use ESPN scoreboard endpoints documented below, but they are not currently included in `scripts/test_api_connections.py`.
+The diagnostic script covers WeatherKit/OpenWeatherMap, RainViewer, NHL/NBA/NFL/MLB scoreboards and standings, AHL ICS/HockeyTech, Yahoo Finance chart data, NHL network diagnostics, and app-level helpers for Bears, Bulls, Blackhawks, Cubs, Sox, and Wolves. NCAAM and World Cup screens use ESPN scoreboard endpoints documented below, but they are not currently included in `scripts/test_api_connections.py`.
 
 ---
 
@@ -121,61 +120,9 @@ Weather radar/map rendering may also use:
 
 | Provider | Endpoint pattern | Purpose |
 | --- | --- | --- |
-| Google Static Maps | `https://maps.googleapis.com/maps/api/staticmap` | Optional radar background/basemap when `GOOGLE_MAPS_API_KEY` is available. |
 | Iowa State Mesonet | `https://mesonet.agron.iastate.edu/cache/tile.py/1.0.0/q2-hsr-900913/{zoom}/{x}/{y}.png` | Radar tile fallback/source used by weather map rendering. |
 | OpenStreetMap | `https://tile.openstreetmap.org/{zoom}/{x}/{y}.png` | Basemap tile fallback. |
 | CARTO | `https://basemaps.cartocdn.com/light_all/{zoom}/{x}/{y}.png` | Basemap tile fallback. |
-
----
-
-## Travel and map services
-
-### Google Directions
-
-| Item | Value |
-| --- | --- |
-| Role | Travel route estimates. |
-| Endpoint | `https://maps.googleapis.com/maps/api/directions/json` |
-| Config | `GOOGLE_MAPS_API_KEY`, `TRAVEL_MODE`, `TRAVEL_TO_HOME_ORIGIN`, `TRAVEL_TO_HOME_DESTINATION`, `TRAVEL_TO_WORK_ORIGIN`, `TRAVEL_TO_WORK_DESTINATION`. |
-
-Fields used:
-
-- `routes[].summary`
-- `routes[].legs[].duration`
-- `routes[].legs[].duration_in_traffic`
-- `routes[].legs[].steps[].html_instructions`
-
-Route filtering is performed in-app after normalizing summary and step text.
-
-### Google Static Maps
-
-| Item | Value |
-| --- | --- |
-| Endpoint | `https://maps.googleapis.com/maps/api/staticmap` |
-| Config | `GOOGLE_MAPS_API_KEY`, `WEATHER_LATITUDE`, `WEATHER_LONGITUDE`. |
-| Used parameters | `center`, `zoom`, `size`, `maptype`, `key`. |
-
-### Apple Maps Directions
-
-| Item | Value |
-| --- | --- |
-| Role | Alternative travel route provider. |
-| Endpoint | `https://maps-api.apple.com/v1/directions` by default; override with `APPLE_MAPS_DIRECTIONS_URL`. |
-| Config | `APPLE_MAPS_API_KEY` or `MAPKIT_TOKEN`; JWT signing via `APPLE_MAPS_TEAM_ID`, `APPLE_MAPS_KEY_ID`, and `APPLE_MAPS_PRIVATE_KEY` or `APPLE_MAPS_KEY_PATH`. WeatherKit signing values can be reused as fallback where supported. |
-
-Fields used:
-
-- route time fields such as `expectedTravelTime`, `staticTravelTime`, and `typicalTravelTime`,
-- route summary/name fields,
-- step/polyline data when present.
-
-### Apple Maps Snapshot
-
-| Item | Value |
-| --- | --- |
-| Role | Binary map image payloads. |
-| Endpoint | `https://maps-api.apple.com/v1/snapshot` by default; override with `APPLE_MAPS_SNAPSHOT_URL`. |
-| Config | Same Apple Maps auth values as directions. |
 
 ---
 
@@ -319,9 +266,6 @@ Wi-Fi utilities can probe configured HTTPS/TCP targets to decide whether recover
 | WeatherKit | `WEATHERKIT_TEAM_ID`, `WEATHERKIT_KEY_ID`, `WEATHERKIT_SERVICE_ID`, `WEATHERKIT_PRIVATE_KEY` or `WEATHERKIT_KEY_PATH`. |
 | OpenWeatherMap | `OWM_API_KEY`. |
 | Weather/map location | `WEATHER_LATITUDE`, `WEATHER_LONGITUDE`. |
-| Google Directions/Static Maps | `GOOGLE_MAPS_API_KEY`, travel origin/destination variables. |
-| Apple Maps | `APPLE_MAPS_API_KEY` or `MAPKIT_TOKEN`, or JWT values: `APPLE_MAPS_TEAM_ID`, `APPLE_MAPS_KEY_ID`, `APPLE_MAPS_PRIVATE_KEY` or `APPLE_MAPS_KEY_PATH`. |
-| Travel routes | `TRAVEL_MODE`, `TRAVEL_TO_HOME_ORIGIN`, `TRAVEL_TO_HOME_DESTINATION`, `TRAVEL_TO_WORK_ORIGIN`, `TRAVEL_TO_WORK_DESTINATION`. |
 | AHL/Wolves | Optional `AHL_*` overrides; defaults are provided for the Chicago Wolves helper path. |
 | Wi-Fi probes | Optional `WIFI_TCP_PROBE_*`, `WIFI_HTTPS_PROBE_URL`, and `RPI_CONNECT_CONTROL_HOST` values. |
 

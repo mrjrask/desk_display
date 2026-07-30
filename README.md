@@ -332,9 +332,6 @@ Configuration is environment-driven. Put local values in `.env` for development 
 | `AIR_QUALITY_LATITUDE`, `AIR_QUALITY_LONGITUDE`, `AIRNOW_API_KEY` | AirNow AQI location and free AirNow API key. AirNow supplies U.S. EPA monitoring data for U.S. locations. |
 | `WEATHERKIT_*` | Apple WeatherKit team/key/service/private-key settings. |
 | `OWM_API_KEY`, `OWM_UNITS`, `OWM_LANGUAGE` | OpenWeatherMap fallback settings. |
-| `TRAVEL_MODE`, `TRAVEL_TO_HOME_*`, `TRAVEL_TO_WORK_*` | Travel origin/destination selection. |
-| `GOOGLE_MAPS_API_KEY` | Google Directions and Static Maps credentials. |
-| `APPLE_MAPS_*`, `MAPKIT_TOKEN` | Apple Maps Directions/Snapshot credentials and endpoint overrides. |
 | `INSIDE_SENSOR`, `INSIDE_I2C_BUSES` | Indoor sensor selection and I2C bus probing. |
 | `PRESSURE_HISTORY_PATH` | Pressure history cache path for trend display. |
 
@@ -540,7 +537,6 @@ The authoritative list is `RAW_SCREEN_IDS` in `screens_catalog.py`. Legacy IDs a
 - `cubs stand2`
 - `cubs stand3`
 - `cubs last`
-- `cubs result`
 - `cubs live`
 - `cubs no game`
 - `cubs next`
@@ -657,9 +653,6 @@ python scripts/test_api_connections.py --json
 
 # Canonical render-validation command for visual/regression review
 python tools/maintenance/render_screens.py
-
-# Note: tools/maintenance/render_all_screens.py was deprecated for one release
-# and has been retired; update external automation to use render_screens.py.
 ```
 
 ### Import/export helpers
@@ -680,8 +673,7 @@ python tools/import_screen_rotation_config.py path/to/export.json
 | Symptom | Things to check |
 | --- | --- |
 | Weather screens are empty | Verify `WEATHERKIT_*` signing values or `OWM_API_KEY`; run `python scripts/test_api_connections.py`. |
-| Radar/map is blank | Verify network access, RainViewer reachability, and `GOOGLE_MAPS_API_KEY` if Google Static Maps is expected. |
-| Travel route is blank | Verify `TRAVEL_MODE`, route origin/destination variables, and Google/Apple Maps credentials. |
+| Radar/map is blank | Verify network access and RainViewer reachability. |
 | Indoor sensor is blank | Verify I2C is enabled, sensor wiring, `INSIDE_SENSOR`, `INSIDE_I2C_BUSES`, optional sensor requirements (`pip install -r requirements/sensors-adafruit.txt` or `pip install -r requirements/sensors-pimoroni.txt`), and run `i2cdetect`. |
 | Wrong rotation/orientation | Avoid double rotation between kernel overlays and `DISPLAY_ROTATION`; check `HYPERPIXEL_PANEL` and display dimensions. |
 | Blank framebuffer/kernel output | Verify `DESK_DISPLAY_OUTPUT`, `DISPLAY_FB_DEVICE`, display dimensions, pixel format/order, and device permissions. |
