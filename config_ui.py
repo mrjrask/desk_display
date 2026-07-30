@@ -11,7 +11,7 @@ import time
 from urllib.parse import urlsplit, urlunsplit
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, Iterable, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 from flask import (
     Flask,
@@ -538,11 +538,7 @@ def _load_default_screens_bundle(profile: Optional[str] = None) -> Tuple[Dict[st
     config = _validate_config_payload(config_payload)
     config, _ = _normalize_legacy_scoreboard_ids(config)
 
-    style_payload = payload.get("style")
-    if style_payload is not None:
-        style_config = _validate_style_payload(style_payload)
-    else:
-        style_config = _load_style_config(STYLE_CONFIG_PATH)
+    style_config = _load_style_config(STYLE_CONFIG_PATH)
 
     layouts_payload = payload.get("layouts")
     if layouts_payload is not None:
@@ -568,45 +564,6 @@ def _load_active_config() -> Dict[str, Any]:
 
 def _load_active_style_config() -> Dict[str, Any]:
     return _load_style_config(STYLE_CONFIG_PATH)
-
-
-def _validate_style_payload(data: Any) -> Dict[str, Any]:
-    if data is None:
-        return {"screens": {}}
-    if not isinstance(data, dict):
-        raise ValueError("Style configuration must be a JSON object")
-    screens = data.get("screens")
-    if screens is None:
-        return {"screens": {}}
-    if not isinstance(screens, dict):
-        raise ValueError("Style configuration must include a 'screens' mapping")
-
-    invalid_screens: List[str] = []
-    normalised_screens: Dict[str, Dict[str, str]] = {}
-    for screen_id, spec in screens.items():
-        if not isinstance(screen_id, str):
-            continue
-        background: Optional[str] = None
-        if isinstance(spec, str):
-            background = spec
-        elif isinstance(spec, dict):
-            raw_background = spec.get("background")
-            if isinstance(raw_background, str):
-                background = raw_background
-        if background is None:
-            continue
-        normalised = _normalise_hex_color(background)
-        if not normalised:
-            invalid_screens.append(screen_id)
-            continue
-        normalised_screens[screen_id] = {"background": normalised}
-
-    if invalid_screens:
-        raise ValueError(
-            "Invalid background color for: " + ", ".join(sorted(set(invalid_screens)))
-        )
-
-    return {"screens": normalised_screens}
 
 
 def _parse_alt_screen(value: Optional[str]) -> Optional[List[str]]:
@@ -897,50 +854,6 @@ def _load_service_status(unit_name: str = "desk_display.service") -> Dict[str, A
     status["summary"] = f"{active} ({sub}), {enabled}"
     return status
 
-def _normalise_hex_color(value: str) -> Optional[str]:
-    cleaned = value.strip()
-    if not cleaned:
-        return None
-    if not all(char in "0123456789abcdefABCDEF" for char in cleaned.lstrip("#")):
-        return None
-    if len(cleaned.lstrip("#")) != 6:
-        return None
-    return cleaned.upper() if cleaned.startswith("#") else f"#{cleaned.upper()}"
-
-
-def _rgb_to_hex(rgb: Iterable[int]) -> str:
-    channels = list(rgb)
-    if len(channels) != 3:
-        raise ValueError("RGB color must have exactly 3 channels")
-    return "#{0:02X}{1:02X}{2:02X}".format(*channels)
-
-
-def _coerce_env_color_component(name: str, default: int) -> int:
-    raw_value = os.environ.get(name)
-    if raw_value is None:
-        return default
-    try:
-        value = int(raw_value)
-    except (TypeError, ValueError):
-        return default
-    return max(0, min(255, value))
-
-
-def _get_scoreboard_background_color() -> Tuple[int, int, int]:
-    return (
-        _coerce_env_color_component("SCOREBOARD_BACKGROUND_R", 125),
-        _coerce_env_color_component("SCOREBOARD_BACKGROUND_G", 125),
-        _coerce_env_color_component("SCOREBOARD_BACKGROUND_B", 125),
-    )
-
-
-def _default_background_for_screen(screen_id: str) -> Tuple[int, int, int]:
-    lowered = screen_id.lower()
-    if any(token in lowered for token in ("scoreboard", "standings", "overview", "stand1", "stand2", "stand3")):
-        return _get_scoreboard_background_color()
-    return (0, 0, 0)
-
-
 def _build_screen_entries(
     config: Dict[str, Any],
     style_config: Dict[str, Any],
@@ -948,9 +861,6 @@ def _build_screen_entries(
     screens = config.get("screens", {})
     if not isinstance(screens, dict):
         return []
-    style_screens = style_config.get("screens", {})
-    if not isinstance(style_screens, dict):
-        style_screens = {}
 
     ordered_screen_ids: List[str] = []
     ordered_screen_ids.extend(
@@ -973,7 +883,6 @@ def _build_screen_entries(
             "alt_frequency": "",
             "hide_after_at": "",
             "hide_after_enabled": False,
-            "background": _rgb_to_hex(_default_background_for_screen(screen_id)),
         }
         if isinstance(raw, dict):
             entry["frequency"] = raw.get("frequency", 0)
@@ -994,13 +903,6 @@ def _build_screen_entries(
                 entry["alt_frequency"] = alt.get("frequency", "")
         else:
             entry["frequency"] = raw
-        style_entry = style_screens.get(screen_id)
-        if isinstance(style_entry, dict):
-            background = style_entry.get("background")
-            if isinstance(background, str):
-                normalised = _normalise_hex_color(background)
-                if normalised:
-                    entry["background"] = normalised
         entries.append(entry)
 
     return entries
@@ -1078,64 +980,12 @@ def _build_config(entries: List[Dict[str, Any]]) -> Dict[str, Any]:
     return cleaned
 
 
-def _build_style_config(
-    entries: List[Dict[str, Any]],
-    style_config: Dict[str, Any],
-) -> Dict[str, Any]:
-    screens: Dict[str, Any] = {}
-    existing = style_config.get("screens")
-    if isinstance(existing, dict):
-        for screen_id, spec in existing.items():
-            if isinstance(screen_id, str) and isinstance(spec, dict):
-                screens[screen_id] = dict(spec)
-
-    invalid_screens: List[str] = []
-    for entry in entries:
-        screen_id = str(entry.get("id", "")).strip()
-        if not screen_id:
-            continue
-        background_raw = entry.get("background")
-        background_value = str(background_raw).strip() if background_raw is not None else ""
-        if not background_value:
-            if screen_id in screens:
-                screens[screen_id].pop("background", None)
-                if not screens[screen_id]:
-                    screens.pop(screen_id, None)
-            continue
-        normalised = _normalise_hex_color(background_value)
-        if not normalised:
-            invalid_screens.append(screen_id)
-            continue
-        default_hex = _rgb_to_hex(_default_background_for_screen(screen_id))
-        if normalised == default_hex:
-            if screen_id in screens:
-                screens[screen_id].pop("background", None)
-                if not screens[screen_id]:
-                    screens.pop(screen_id, None)
-            continue
-        screens.setdefault(screen_id, {})["background"] = normalised
-
-    if invalid_screens:
-        raise ValueError(
-            "Invalid background color for: " + ", ".join(sorted(set(invalid_screens)))
-        )
-    return {"screens": screens}
-
-
 def _save_config(config: Dict[str, Any]) -> None:
     tmp_path = f"{LOCAL_CONFIG_PATH}.tmp"
     with open(tmp_path, "w", encoding="utf-8") as fh:
         json.dump(config, fh, indent=2)
         fh.write("\n")
     os.replace(tmp_path, LOCAL_CONFIG_PATH)
-
-
-def _save_style_config(config: Dict[str, Any]) -> None:
-    tmp_path = f"{STYLE_CONFIG_PATH}.tmp"
-    with open(tmp_path, "w", encoding="utf-8") as fh:
-        json.dump(config, fh, indent=2)
-        fh.write("\n")
-    os.replace(tmp_path, STYLE_CONFIG_PATH)
 
 
 def run_config_ui(host: str = SCREEN_CONFIG_HOST, port: int = SCREEN_CONFIG_PORT) -> None:
@@ -1352,8 +1202,6 @@ def save_screens() -> Any:
                 config[key] = value
         config["scroll"] = _normalize_scroll_settings(payload.get("scroll"))
         config, _ = _normalize_legacy_scoreboard_ids(config)
-        style_config = _load_active_style_config()
-        style_config = _build_style_config(entries, style_config)
         if any(key in payload for key in ("quad_enabled", "quad_pages", "quad_tiles", "quad_scroll_speed")):
             layouts = _build_layouts(payload)
         else:
@@ -1363,12 +1211,11 @@ def save_screens() -> Any:
         return jsonify({"error": str(exc)}), 400
 
     _save_config(config)
-    _save_style_config(style_config)
     _save_layouts_config(layouts)
     return jsonify(
         {
             "status": "ok",
-            "screens": _build_screen_entries(config, style_config),
+            "screens": _build_screen_entries(config, _load_active_style_config()),
             "scroll": _normalize_scroll_settings(config.get("scroll")),
             "quad_enabled": bool(layouts.get("screens", {}).get("quad", {}).get("enabled", False)),
             "quad_scroll_speed": _normalize_quad_scroll_speed(layouts.get("screens", {}).get("quad", {}).get("scroll_speed", 1.0)),
@@ -1384,7 +1231,6 @@ def import_screens() -> Any:
         return jsonify({"error": "Invalid payload"}), 400
 
     config_payload = payload.get("config", payload)
-    derived_style_payload: Optional[Dict[str, Any]] = None
     derived_layouts_payload: Optional[Dict[str, Any]] = None
     try:
         if isinstance(config_payload, dict) and isinstance(config_payload.get("screens"), list):
@@ -1396,7 +1242,6 @@ def import_screens() -> Any:
                     config[key] = value
             config["scroll"] = _normalize_scroll_settings(config_payload.get("scroll"))
             config, _ = _normalize_legacy_scoreboard_ids(config)
-            derived_style_payload = _build_style_config(entries, _load_active_style_config())
             quad_pages_payload = payload.get("quad_pages") if isinstance(payload, dict) else None
             quad_enabled_payload = payload.get("quad_enabled") if isinstance(payload, dict) else False
             if isinstance(quad_pages_payload, list):
@@ -1408,17 +1253,6 @@ def import_screens() -> Any:
     except Exception as exc:
         return jsonify({"error": str(exc)}), 400
 
-    style_payload = payload.get("style")
-    if derived_style_payload is not None:
-        style_config = derived_style_payload
-    elif style_payload is not None:
-        try:
-            style_config = _validate_style_payload(style_payload)
-        except Exception as exc:
-            return jsonify({"error": str(exc)}), 400
-    else:
-        style_config = _load_active_style_config()
-
     layouts_payload = payload.get("layouts")
     if derived_layouts_payload is not None:
         layouts_config = derived_layouts_payload
@@ -1428,9 +1262,8 @@ def import_screens() -> Any:
         layouts_config = _load_active_layouts_config()
 
     _save_config(config)
-    _save_style_config(style_config)
     _save_layouts_config(layouts_config)
-    entries = _build_screen_entries(config, style_config)
+    entries = _build_screen_entries(config, _load_active_style_config())
     return jsonify(
         {
             "status": "ok",
