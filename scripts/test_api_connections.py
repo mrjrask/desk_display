@@ -33,14 +33,8 @@ os.environ.setdefault("CONFIG_LOAD_DOTENV", "1")
 
 from config import (
     AHL_SCHEDULE_ICS_URL,
-    APPLE_MAPS_API_KEY,
-    APPLE_MAPS_DIRECTIONS_URL,
-    APPLE_MAPS_SNAPSHOT_URL,
-    GOOGLE_MAPS_API_KEY,
     OWM_API_KEY,
     OWM_API_URL,
-    TRAVEL_DESTINATION,
-    TRAVEL_ORIGIN,
     LATITUDE,
     LONGITUDE,
 )
@@ -65,8 +59,6 @@ from data_fetch import (
 )
 from screens.nhl_scoreboard import dns_diagnostics
 from screens.draw_weather import _alert_message_text, _fetch_rainviewer_frames, _selected_alert
-from services.apple_maps import fetch_apple_maps_routes, fetch_apple_maps_snapshot
-from utils import fetch_directions_routes
 
 
 @dataclass
@@ -177,65 +169,6 @@ def check_rainviewer_metadata() -> tuple[str, str]:
     if frames:
         return _ok(f"returned {len(frames)} frame(s)")
     return _fail("no radar frames returned")
-
-
-def check_google_directions() -> tuple[str, str]:
-    if not GOOGLE_MAPS_API_KEY:
-        return _skip("GOOGLE_MAPS_API_KEY not configured")
-    routes = fetch_directions_routes(
-        TRAVEL_ORIGIN,
-        TRAVEL_DESTINATION,
-        GOOGLE_MAPS_API_KEY,
-        url="https://maps.googleapis.com/maps/api/directions/json",
-    )
-    if routes:
-        return _ok(f"returned {len(routes)} route(s)")
-    return _fail("no routes returned")
-
-
-def check_google_static_maps() -> tuple[str, str]:
-    if not GOOGLE_MAPS_API_KEY:
-        return _skip("GOOGLE_MAPS_API_KEY not configured")
-    params = {
-        "center": f"{LATITUDE},{LONGITUDE}",
-        "zoom": "7",
-        "size": "64x64",
-        "maptype": "roadmap",
-        "key": GOOGLE_MAPS_API_KEY,
-    }
-    response = requests.get("https://maps.googleapis.com/maps/api/staticmap", params=params, timeout=12)
-    if response.ok and response.content:
-        return _ok(f"HTTP {response.status_code}, bytes={len(response.content)}")
-    return _fail(f"HTTP {response.status_code}")
-
-
-def check_apple_directions() -> tuple[str, str]:
-    routes = fetch_apple_maps_routes(
-        TRAVEL_ORIGIN,
-        TRAVEL_DESTINATION,
-        APPLE_MAPS_API_KEY or "",
-        url=APPLE_MAPS_DIRECTIONS_URL,
-    )
-    if routes:
-        return _ok(f"returned {len(routes)} route(s)")
-    if not APPLE_MAPS_API_KEY:
-        return _skip("APPLE_MAPS_API_KEY / MAPKIT_TOKEN not configured (JWT fallback may also be unset)")
-    return _fail("no routes returned")
-
-
-def check_apple_snapshot() -> tuple[str, str]:
-    content = fetch_apple_maps_snapshot(
-        center=(LATITUDE, LONGITUDE),
-        zoom=7,
-        size=(64, 64),
-        api_key=APPLE_MAPS_API_KEY or "",
-        url=APPLE_MAPS_SNAPSHOT_URL,
-    )
-    if content:
-        return _ok(f"bytes={len(content)}")
-    if not APPLE_MAPS_API_KEY:
-        return _skip("APPLE_MAPS_API_KEY / MAPKIT_TOKEN not configured (JWT fallback may also be unset)")
-    return _fail("empty snapshot response")
 
 
 def check_nhl_scoreboard() -> tuple[str, str]:
@@ -420,10 +353,6 @@ CHECKS = [
     Check("weather alerts", check_weather_alerts),
     Check("openweathermap onecall", check_openweathermap_direct),
     Check("rainviewer metadata/tiles", check_rainviewer_metadata),
-    Check("google directions", check_google_directions),
-    Check("google static maps", check_google_static_maps),
-    Check("apple maps directions", check_apple_directions),
-    Check("apple maps snapshot", check_apple_snapshot),
     Check("nhl scoreboard", check_nhl_scoreboard),
     Check("nhl standings", check_nhl_standings),
     Check("mlb schedule", check_mlb_schedule),

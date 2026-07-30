@@ -79,7 +79,6 @@ draw_on_this_day = _lazy_callable("screens.on_this_day.draw_on_this_day")
 draw_date = _lazy_callable("screens.draw_date_time.draw_date")
 draw_quad_screen = _lazy_callable("screens.draw_quad.draw_quad_screen")
 draw_box_score = _lazy_callable("screens.mlb_schedule.draw_box_score")
-draw_cubs_result = _lazy_callable("screens.mlb_schedule.draw_cubs_result")
 draw_last_game = _lazy_callable("screens.mlb_schedule.draw_last_game")
 draw_no_game_screen = _lazy_callable("screens.mlb_schedule.draw_no_game_screen")
 draw_series_screen = _lazy_callable("screens.mlb_schedule.draw_series_screen")
@@ -1324,13 +1323,6 @@ def build_screen_registry(context: ScreenContext) -> Tuple[Dict[str, ScreenDefin
                 transition=True,
             ),
             available=bool(cubs.get("last") or cubs.get("last_alt")),
-        )
-        register(
-            "cubs result",
-            lambda data=cubs.get("last"): draw_cubs_result(
-                context.display, data, transition=True
-            ),
-            available=bool(cubs.get("last")),
         )
         register(
             "cubs live",

@@ -8,6 +8,4 @@ PyJWT[crypto]>=2.8.0
 waitress
 yfinance
 numpy
-mock
 cairosvg
-colorama

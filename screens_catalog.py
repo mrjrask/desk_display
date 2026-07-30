@@ -92,7 +92,6 @@ RAW_SCREEN_IDS = [
     "cubs stand2",
     "cubs stand3",
     "cubs last",
-    "cubs result",
     "cubs live",
     "cubs no game",
     "cubs next",

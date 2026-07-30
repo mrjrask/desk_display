@@ -1847,10 +1847,3 @@ def draw_next_home_game(display, game, transition=False, screen_id: Optional[str
         transition=transition,
         screen_id=screen_id,
     )
-
-# ── Back-compat: main.py may still import this even though we no longer use it
-@log_call
-def draw_cubs_result(display, game, transition=False):
-    """Deprecated full-screen Cubs flag; keep for import compatibility."""
-    _set_background("cubs result")
-    return None
