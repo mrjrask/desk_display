@@ -192,6 +192,9 @@
             "screen": "weather radar"
           },
           {
+            "screen": "air quality"
+          },
+          {
             "screen": "astronomical"
           }
         ]
