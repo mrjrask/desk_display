@@ -123,7 +123,7 @@ if config.is_hyperpixel_4_square_layout():
         "gb_suffix": 10,
     }
 
-_COLUMN_GAP_MULTIPLIER = 0.75 if config.is_hyperpixel_4_square_layout() else 1.0
+_COLUMN_GAP_MULTIPLIER = 0.55 if config.is_hyperpixel_4_square_layout() else 1.0
 _STAT_COLUMN_GAP = max(1, int(round(STAT_COLUMN_GAP * _COLUMN_GAP_MULTIPLIER)))
 _WIDE_STAT_COLUMN_GAP = max(1, int(round(scale_value(22) * _COLUMN_GAP_MULTIPLIER)))
 _PCT_TO_GB_EXTRA_GAP = max(0, int(round(PCT_TO_GB_EXTRA_GAP * _COLUMN_GAP_MULTIPLIER)))
@@ -464,7 +464,7 @@ def _column_layout(
                 gap += _RECORD_TO_GB_EXTRA_GAP
             cursor -= stat_widths[key] + gap
 
-    if SHOW_LAST_10 and columns == ("record", "streak", "gb"):
+    if SHOW_LAST_10 and columns == ("record", "streak", "gb") and not config.is_hyperpixel_4_square_layout():
         # Keep GB at the same right-aligned placement while centering Record
         # and placing the combined streak/L10 column midway between them.
         gb_right = right_edge
