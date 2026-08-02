@@ -145,7 +145,7 @@
       "NBA Playoffs": 0,
       "NCAAM Scoreboard": 0,
       "quad": 0,
-      "World Cup Scoreboard": 1
+      "World Cup Scoreboard": 0
     },
     "playlists": {
       "playlist-1771301244817-427": {
@@ -156,9 +156,6 @@
           },
           {
             "screen": "nixie"
-          },
-          {
-            "screen": "on this day"
           }
         ]
       },
@@ -499,6 +496,9 @@
           },
           {
             "screen": "World Cup Scoreboard"
+          },
+          {
+            "screen": "on this day"
           }
         ]
       }
