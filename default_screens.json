@@ -156,9 +156,6 @@
           },
           {
             "screen": "nixie"
-          },
-          {
-            "screen": "on this day"
           }
         ]
       },
@@ -499,6 +496,9 @@
           },
           {
             "screen": "World Cup Scoreboard"
+          },
+          {
+            "screen": "on this day"
           }
         ]
       }
