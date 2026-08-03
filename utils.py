@@ -725,6 +725,98 @@ class _FrameBufferDevice:
             logging.warning("Failed to write framebuffer: %s", exc)
 
 
+def _raise_macos_window_to_front() -> None:
+    """Bring the just-created SDL window to the foreground on launch.
+
+    Plain (non-bundled) Python processes on macOS don't automatically become
+    the active/frontmost app when they open a window, so it can appear behind
+    whatever window (e.g. Terminal) launched it. Ask System Events to
+    activate this process by pid, which doesn't depend on guessing the
+    process's display name.
+    """
+
+    try:
+        subprocess.run(
+            [
+                "osascript",
+                "-e",
+                'tell application "System Events" to set frontmost of '
+                f"(first process whose unix id is {os.getpid()}) to true",
+            ],
+            check=False,
+            capture_output=True,
+            timeout=2,
+        )
+    except Exception:
+        pass
+
+
+def _raise_windows_window_to_front(pygame_module: Any) -> None:
+    """Bring the just-created SDL window to the foreground on Windows.
+
+    A window opened from a console (Command Prompt/Git Bash/PowerShell) or a
+    double-clicked launcher can otherwise be created without input focus, so
+    ask user32 to restore and foreground it explicitly by HWND.
+    """
+
+    try:
+        wm_info = pygame_module.display.get_wm_info()
+        hwnd = wm_info.get("window")
+        if not hwnd:
+            return
+        import ctypes
+
+        user32 = ctypes.windll.user32  # type: ignore[attr-defined]
+        SW_RESTORE = 9
+        user32.ShowWindow(hwnd, SW_RESTORE)
+        user32.SetForegroundWindow(hwnd)
+    except Exception:
+        pass
+
+
+def _raise_linux_window_to_front() -> None:
+    """Bring the just-created SDL window to the foreground on Linux/X11.
+
+    Best-effort: activates the window by its "Desk Display" caption via
+    whichever of `wmctrl`/`xdotool` is installed. Silently does nothing if
+    neither tool is available (e.g. Wayland compositors without either).
+    """
+
+    if shutil.which("wmctrl"):
+        try:
+            subprocess.run(
+                ["wmctrl", "-a", "Desk Display"],
+                check=False,
+                capture_output=True,
+                timeout=2,
+            )
+            return
+        except Exception:
+            pass
+
+    if shutil.which("xdotool"):
+        try:
+            subprocess.run(
+                ["xdotool", "search", "--name", "Desk Display", "windowactivate"],
+                check=False,
+                capture_output=True,
+                timeout=2,
+            )
+        except Exception:
+            pass
+
+
+def _raise_window_to_front(pygame_module: Any) -> None:
+    """Dispatch to the platform-specific window-activation helper."""
+
+    if sys.platform == "darwin":
+        _raise_macos_window_to_front()
+    elif sys.platform == "win32":
+        _raise_windows_window_to_front(pygame_module)
+    elif sys.platform.startswith("linux"):
+        _raise_linux_window_to_front()
+
+
 class _KernelDisplay:
     def __init__(self, width: int, height: int, *, window_mode: bool = False):
         self.render_width = width
@@ -772,6 +864,8 @@ class _KernelDisplay:
             self.render_height,
         )
         self._pygame.display.set_caption("Desk Display")
+        if self.window_mode:
+            _raise_window_to_front(self._pygame)
         try:
             self._pygame.mouse.set_visible(False)
             _park_mouse_cursor(self._pygame)
@@ -784,8 +878,45 @@ class _KernelDisplay:
         except Exception:  # pragma: no cover - optional behavior
             pass
 
+    def _aspect_locked_window_size(
+        self, requested_size: Tuple[int, int]
+    ) -> Tuple[int, int]:
+        """Correct a requested window size to match the render aspect ratio.
+
+        Keeps whichever dimension moved further from the current window size
+        (i.e. the edge/corner the user is actually dragging) and derives the
+        other from it, so the window can only grow/shrink along its locked
+        aspect ratio instead of letterboxing or stretching the content.
+        """
+
+        new_width = max(1, int(requested_size[0]))
+        new_height = max(1, int(requested_size[1]))
+        aspect_ratio = self.render_width / self.render_height
+
+        width_delta = abs(new_width - self.screen_width)
+        height_delta = abs(new_height - self.screen_height)
+        if width_delta >= height_delta:
+            corrected_height = max(1, round(new_width / aspect_ratio))
+            return (new_width, corrected_height)
+        corrected_width = max(1, round(new_height * aspect_ratio))
+        return (corrected_width, new_height)
+
+    def _apply_corrected_window_size(self, size: Tuple[int, int]) -> None:
+        try:
+            screen = self._pygame.display.set_mode(size, self._window_flags)
+        except Exception:
+            return
+        self._screen = screen
+        self.screen_width, self.screen_height = self._screen.get_size()
+        self._scale_to_screen = (self.screen_width, self.screen_height) != (
+            self.render_width,
+            self.render_height,
+        )
+
     def _drain_window_resize_events(self) -> None:
-        """Drop queued resize/window events to avoid backlog while dragging."""
+        """Consume queued resize events, snapping the window back to the
+        locked render aspect ratio so resizing never letterboxes or squeezes
+        the content."""
 
         event_get = getattr(self._pygame.event, "get", None)
         if event_get is None:
@@ -805,9 +936,49 @@ class _KernelDisplay:
             return
 
         try:
-            event_get(resize_event_types)
+            events = event_get(resize_event_types)
         except Exception:
             return
+
+        if self._fullscreen or not self._window_resizable:
+            return
+
+        # Only trust event types that are documented to carry the window's
+        # new size. WINDOWEVENT is drained above defensively but its x/y
+        # fields can represent a window's on-screen position rather than
+        # size, so it must not feed the aspect-lock correction below.
+        videoresize_type = getattr(self._pygame, "VIDEORESIZE", None)
+        window_size_types = {
+            t
+            for t in (
+                getattr(self._pygame, "WINDOWRESIZED", None),
+                getattr(self._pygame, "WINDOWSIZECHANGED", None),
+            )
+            if isinstance(t, int)
+        }
+
+        latest_size: Optional[Tuple[int, int]] = None
+        for event in events:
+            width = height = None
+            if event.type == videoresize_type:
+                event_size = getattr(event, "size", None)
+                if event_size:
+                    width, height = event_size
+                else:
+                    width = getattr(event, "w", None)
+                    height = getattr(event, "h", None)
+            elif event.type in window_size_types:
+                width = getattr(event, "x", None)
+                height = getattr(event, "y", None)
+            if width and height:
+                latest_size = (width, height)
+
+        if latest_size is None:
+            return
+
+        corrected_size = self._aspect_locked_window_size(latest_size)
+        if corrected_size != tuple(latest_size):
+            self._apply_corrected_window_size(corrected_size)
 
     def _scale_surface_to_target(self, surface: Any, target_size: tuple[int, int]) -> Any:
         """Choose the lowest-latency scaler for the current platform/mode."""
@@ -848,6 +1019,7 @@ class _KernelDisplay:
                 max(1, int(round(self.render_width * self._window_scale))),
                 max(1, int(round(self.render_height * self._window_scale))),
             )
+        self._window_flags = flags
         errors: List[str] = []
         for driver in _sdl_driver_candidates():
             if driver:

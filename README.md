@@ -244,6 +244,8 @@ bash ./Installers/install_win_window.sh
 
 `launch_macos_window_perf.sh` uses conservative defaults intended to reduce desktop CPU load, including a window scale of `1`, disabled screenshots/video by default, and disabled Wi-Fi monitor/recovery by default.
 
+All three desktop window launchers (`launch_macos_window.sh`, `launch_win_window.sh`, `launch_pi_window.sh`) bring the window to the front on startup instead of leaving it behind Terminal/Command Prompt/the file manager, and lock the window's aspect ratio to the `DISPLAY_WIDTH`/`DISPLAY_HEIGHT` resolution from `.env`: dragging an edge/corner resizes the window bigger or smaller along that ratio, so content never letterboxes (black bars) or gets stretched/squeezed. On Raspberry Pi/Linux desktops, bringing the window to front needs `wmctrl` or `xdotool` installed (e.g. `sudo apt install wmctrl`); it's skipped silently if neither is present.
+
 ---
 
 ## Running the app
