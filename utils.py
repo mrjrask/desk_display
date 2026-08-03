@@ -751,6 +751,72 @@ def _raise_macos_window_to_front() -> None:
         pass
 
 
+def _raise_windows_window_to_front(pygame_module: Any) -> None:
+    """Bring the just-created SDL window to the foreground on Windows.
+
+    A window opened from a console (Command Prompt/Git Bash/PowerShell) or a
+    double-clicked launcher can otherwise be created without input focus, so
+    ask user32 to restore and foreground it explicitly by HWND.
+    """
+
+    try:
+        wm_info = pygame_module.display.get_wm_info()
+        hwnd = wm_info.get("window")
+        if not hwnd:
+            return
+        import ctypes
+
+        user32 = ctypes.windll.user32  # type: ignore[attr-defined]
+        SW_RESTORE = 9
+        user32.ShowWindow(hwnd, SW_RESTORE)
+        user32.SetForegroundWindow(hwnd)
+    except Exception:
+        pass
+
+
+def _raise_linux_window_to_front() -> None:
+    """Bring the just-created SDL window to the foreground on Linux/X11.
+
+    Best-effort: activates the window by its "Desk Display" caption via
+    whichever of `wmctrl`/`xdotool` is installed. Silently does nothing if
+    neither tool is available (e.g. Wayland compositors without either).
+    """
+
+    if shutil.which("wmctrl"):
+        try:
+            subprocess.run(
+                ["wmctrl", "-a", "Desk Display"],
+                check=False,
+                capture_output=True,
+                timeout=2,
+            )
+            return
+        except Exception:
+            pass
+
+    if shutil.which("xdotool"):
+        try:
+            subprocess.run(
+                ["xdotool", "search", "--name", "Desk Display", "windowactivate"],
+                check=False,
+                capture_output=True,
+                timeout=2,
+            )
+        except Exception:
+            pass
+
+
+def _raise_window_to_front(pygame_module: Any) -> None:
+    """Dispatch to the platform-specific window-activation helper."""
+
+    if sys.platform == "darwin":
+        _raise_macos_window_to_front()
+    elif sys.platform == "win32":
+        _raise_windows_window_to_front(pygame_module)
+    elif sys.platform.startswith("linux"):
+        _raise_linux_window_to_front()
+
+
 class _KernelDisplay:
     def __init__(self, width: int, height: int, *, window_mode: bool = False):
         self.render_width = width
@@ -798,8 +864,8 @@ class _KernelDisplay:
             self.render_height,
         )
         self._pygame.display.set_caption("Desk Display")
-        if self.window_mode and sys.platform == "darwin":
-            _raise_macos_window_to_front()
+        if self.window_mode:
+            _raise_window_to_front(self._pygame)
         try:
             self._pygame.mouse.set_visible(False)
             _park_mouse_cursor(self._pygame)

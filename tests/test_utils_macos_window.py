@@ -1,4 +1,4 @@
-"""Tests for macOS-friendly window behavior in utils."""
+"""Tests for desktop window behavior in utils (macOS, Windows, Linux/Pi)."""
 
 import os
 from types import SimpleNamespace
@@ -345,10 +345,127 @@ def test_window_mode_does_not_raise_window_to_front_off_macos(monkeypatch):
 
     called = {"raised": False}
     monkeypatch.setattr(utils, "_raise_macos_window_to_front", lambda: called.__setitem__("raised", True))
+    monkeypatch.setattr(utils, "_raise_linux_window_to_front", lambda: None)
 
     utils._KernelDisplay(800, 480, window_mode=True)
 
     assert called["raised"] is False
+
+
+def test_window_mode_raises_window_to_front_on_windows(monkeypatch):
+    fake_pygame = _FakePygame()
+    monkeypatch.setattr(utils, "_load_pygame", lambda: fake_pygame)
+    monkeypatch.setattr(utils, "_sdl_driver_candidates", lambda: [None])
+    monkeypatch.setattr(utils, "_maybe_configure_desktop_env", lambda: None)
+    monkeypatch.setattr(utils, "_park_mouse_cursor", lambda _pygame: None)
+    monkeypatch.setattr(utils, "_wiggle_mouse_cursor", lambda _pygame: None)
+    monkeypatch.setattr(utils, "_schedule_mouse_cursor_wiggle", lambda *_args, **_kwargs: None)
+    monkeypatch.setenv("DESK_DISPLAY_SDL_FULLSCREEN", "0")
+    monkeypatch.setattr(utils.sys, "platform", "win32")
+
+    called = {"pygame": None}
+    monkeypatch.setattr(
+        utils,
+        "_raise_windows_window_to_front",
+        lambda pygame_module: called.__setitem__("pygame", pygame_module),
+    )
+
+    utils._KernelDisplay(800, 480, window_mode=True)
+
+    assert called["pygame"] is fake_pygame
+
+
+def test_window_mode_raises_window_to_front_on_linux(monkeypatch):
+    fake_pygame = _FakePygame()
+    monkeypatch.setattr(utils, "_load_pygame", lambda: fake_pygame)
+    monkeypatch.setattr(utils, "_sdl_driver_candidates", lambda: [None])
+    monkeypatch.setattr(utils, "_maybe_configure_desktop_env", lambda: None)
+    monkeypatch.setattr(utils, "_park_mouse_cursor", lambda _pygame: None)
+    monkeypatch.setattr(utils, "_wiggle_mouse_cursor", lambda _pygame: None)
+    monkeypatch.setattr(utils, "_schedule_mouse_cursor_wiggle", lambda *_args, **_kwargs: None)
+    monkeypatch.setenv("DESK_DISPLAY_SDL_FULLSCREEN", "0")
+    monkeypatch.setattr(utils.sys, "platform", "linux")
+
+    called = {"raised": False}
+    monkeypatch.setattr(utils, "_raise_linux_window_to_front", lambda: called.__setitem__("raised", True))
+
+    utils._KernelDisplay(800, 480, window_mode=True)
+
+    assert called["raised"] is True
+
+
+def test_raise_windows_window_to_front_uses_hwnd(monkeypatch):
+    fake_user32 = SimpleNamespace(calls=[])
+    fake_user32.ShowWindow = lambda hwnd, cmd: fake_user32.calls.append(("ShowWindow", hwnd, cmd))
+    fake_user32.SetForegroundWindow = lambda hwnd: fake_user32.calls.append(("SetForegroundWindow", hwnd))
+
+    import ctypes
+
+    monkeypatch.setattr(ctypes, "windll", SimpleNamespace(user32=fake_user32), raising=False)
+
+    fake_pygame_module = SimpleNamespace(
+        display=SimpleNamespace(get_wm_info=lambda: {"window": 777})
+    )
+
+    utils._raise_windows_window_to_front(fake_pygame_module)
+
+    assert fake_user32.calls == [
+        ("ShowWindow", 777, 9),
+        ("SetForegroundWindow", 777),
+    ]
+
+
+def test_raise_windows_window_to_front_swallows_errors(monkeypatch):
+    fake_pygame_module = SimpleNamespace(
+        display=SimpleNamespace(
+            get_wm_info=lambda: (_ for _ in ()).throw(RuntimeError("no wm info"))
+        )
+    )
+
+    utils._raise_windows_window_to_front(fake_pygame_module)
+
+
+def test_raise_linux_window_to_front_prefers_wmctrl(monkeypatch):
+    monkeypatch.setattr(utils.shutil, "which", lambda name: f"/usr/bin/{name}" if name == "wmctrl" else None)
+
+    calls = {"args": None}
+
+    def _fake_run(args, **_kwargs):
+        calls["args"] = args
+        return SimpleNamespace(returncode=0)
+
+    monkeypatch.setattr(utils.subprocess, "run", _fake_run)
+
+    utils._raise_linux_window_to_front()
+
+    assert calls["args"] == ["wmctrl", "-a", "Desk Display"]
+
+
+def test_raise_linux_window_to_front_falls_back_to_xdotool(monkeypatch):
+    monkeypatch.setattr(utils.shutil, "which", lambda name: f"/usr/bin/{name}" if name == "xdotool" else None)
+
+    calls = {"args": None}
+
+    def _fake_run(args, **_kwargs):
+        calls["args"] = args
+        return SimpleNamespace(returncode=0)
+
+    monkeypatch.setattr(utils.subprocess, "run", _fake_run)
+
+    utils._raise_linux_window_to_front()
+
+    assert calls["args"] == ["xdotool", "search", "--name", "Desk Display", "windowactivate"]
+
+
+def test_raise_linux_window_to_front_noop_without_tools(monkeypatch):
+    monkeypatch.setattr(utils.shutil, "which", lambda _name: None)
+
+    def _should_not_run(*_args, **_kwargs):
+        raise AssertionError("subprocess.run should not be called without wmctrl/xdotool")
+
+    monkeypatch.setattr(utils.subprocess, "run", _should_not_run)
+
+    utils._raise_linux_window_to_front()
 
 
 def test_raise_macos_window_to_front_invokes_osascript_with_pid(monkeypatch):
