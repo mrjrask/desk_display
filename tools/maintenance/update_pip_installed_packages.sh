@@ -127,12 +127,9 @@ if [[ "$DRY_RUN" -eq 1 ]]; then
   exit 0
 fi
 
-log "Upgrading all outdated packages"
-while IFS= read -r package; do
-  [[ -n "$package" ]] || continue
-  log "Upgrading $package"
-  "$PYTHON_BIN" -m pip install --upgrade "$package"
-done <<< "$OUTDATED_PACKAGES"
+log "Upgrading all outdated packages together"
+mapfile -t PACKAGES_TO_UPGRADE <<< "$OUTDATED_PACKAGES"
+"$PYTHON_BIN" -m pip install --upgrade "${PACKAGES_TO_UPGRADE[@]}"
 
 deactivate
 
