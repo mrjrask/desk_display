@@ -370,6 +370,12 @@ def _check_touch_skip_request(
     if _shutdown_event.is_set():
         return False
 
+    if sys.platform == "darwin" and threading.current_thread() is not threading.main_thread():
+        # Cocoa-backed SDL must only be touched from the process main thread
+        # on macOS; the background button-monitor thread must not poll
+        # pygame events there.
+        return False
+
     fingerdown = getattr(pygame, "FINGERDOWN", None)
     mousebuttondown = getattr(pygame, "MOUSEBUTTONDOWN", None)
     if fingerdown is None and mousebuttondown is None:
@@ -464,6 +470,12 @@ def _check_keyboard_shutdown_request() -> bool:
         return False
 
     if _shutdown_event.is_set():
+        return False
+
+    if sys.platform == "darwin" and threading.current_thread() is not threading.main_thread():
+        # Cocoa-backed SDL must only be touched from the process main thread
+        # on macOS; the background button-monitor thread must not poll
+        # pygame events there.
         return False
 
     keydown = getattr(pygame, "KEYDOWN", None)
