@@ -1,0 +1,43 @@
+{
+  "_comment": "Edit this file to add, remove, rename, or re-point news topics/feeds. Each topic renders as one section on the 'news headlines' screen, showing its 'headline_count' most recent items. Feeds are plain RSS/Atom URLs and need no API key. Restart desk_display (or wait for the next refresh) to pick up changes.",
+  "headline_count": 5,
+  "refresh_minutes": 20,
+  "topics": [
+    {
+      "id": "local",
+      "label": "Local News",
+      "name": "Patch – Chicago",
+      "url": "https://patch.com/illinois/chicago/rss"
+    },
+    {
+      "id": "national",
+      "label": "National News",
+      "name": "New York Times – U.S.",
+      "url": "https://rss.nytimes.com/services/xml/rss/nyt/US.xml"
+    },
+    {
+      "id": "world",
+      "label": "World News",
+      "name": "New York Times – World",
+      "url": "https://rss.nytimes.com/services/xml/rss/nyt/World.xml"
+    },
+    {
+      "id": "technology",
+      "label": "Technology News",
+      "name": "New York Times – Technology",
+      "url": "https://rss.nytimes.com/services/xml/rss/nyt/Technology.xml"
+    },
+    {
+      "id": "sports",
+      "label": "Sports News",
+      "name": "New York Times – Sports",
+      "url": "https://rss.nytimes.com/services/xml/rss/nyt/Sports.xml"
+    },
+    {
+      "id": "business",
+      "label": "Business News",
+      "name": "New York Times – Business",
+      "url": "https://rss.nytimes.com/services/xml/rss/nyt/Business.xml"
+    }
+  ]
+}

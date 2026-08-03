@@ -30,6 +30,7 @@ RAW_SCREEN_IDS = [
     "nixie",
     "quad",
     "on this day",
+    "news headlines",
     "weather logo",
     "weather1",
     "weather2",

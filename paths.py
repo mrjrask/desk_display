@@ -87,6 +87,18 @@ def resolve_layouts_config_path() -> Path:
     return _resolve_env_path("SCREENS_LAYOUTS_PATH", base_dir) or (base_dir / "screens_layouts.json")
 
 
+def resolve_news_feeds_config_path() -> Path:
+    """Resolve the news headlines feed config path from env or project default.
+
+    This is the file operators edit to add, remove, or re-point the RSS/Atom
+    feeds shown on the "news headlines" screen. See ``news_feeds.json`` at the
+    project root for the default topic list.
+    """
+
+    base_dir = _project_root()
+    return _resolve_env_path("NEWS_FEEDS_CONFIG_PATH", base_dir) or (base_dir / "news_feeds.json")
+
+
 def resolve_storage_paths(*, logger: Optional[object] = None) -> StoragePaths:
     """Return filesystem paths for screenshots and archives.
 
