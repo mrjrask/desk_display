@@ -313,6 +313,143 @@ def test_kernel_display_skips_worker_thread_render_on_macos(monkeypatch):
     assert called == {"frombuffer": False, "flip": False, "pump": False}
 
 
+def test_window_mode_raises_window_to_front_on_macos(monkeypatch):
+    fake_pygame = _FakePygame()
+    monkeypatch.setattr(utils, "_load_pygame", lambda: fake_pygame)
+    monkeypatch.setattr(utils, "_sdl_driver_candidates", lambda: [None])
+    monkeypatch.setattr(utils, "_maybe_configure_desktop_env", lambda: None)
+    monkeypatch.setattr(utils, "_park_mouse_cursor", lambda _pygame: None)
+    monkeypatch.setattr(utils, "_wiggle_mouse_cursor", lambda _pygame: None)
+    monkeypatch.setattr(utils, "_schedule_mouse_cursor_wiggle", lambda *_args, **_kwargs: None)
+    monkeypatch.setenv("DESK_DISPLAY_SDL_FULLSCREEN", "0")
+    monkeypatch.setattr(utils.sys, "platform", "darwin")
+
+    called = {"raised": False}
+    monkeypatch.setattr(utils, "_raise_macos_window_to_front", lambda: called.__setitem__("raised", True))
+
+    utils._KernelDisplay(800, 480, window_mode=True)
+
+    assert called["raised"] is True
+
+
+def test_window_mode_does_not_raise_window_to_front_off_macos(monkeypatch):
+    fake_pygame = _FakePygame()
+    monkeypatch.setattr(utils, "_load_pygame", lambda: fake_pygame)
+    monkeypatch.setattr(utils, "_sdl_driver_candidates", lambda: [None])
+    monkeypatch.setattr(utils, "_maybe_configure_desktop_env", lambda: None)
+    monkeypatch.setattr(utils, "_park_mouse_cursor", lambda _pygame: None)
+    monkeypatch.setattr(utils, "_wiggle_mouse_cursor", lambda _pygame: None)
+    monkeypatch.setattr(utils, "_schedule_mouse_cursor_wiggle", lambda *_args, **_kwargs: None)
+    monkeypatch.setenv("DESK_DISPLAY_SDL_FULLSCREEN", "0")
+    monkeypatch.setattr(utils.sys, "platform", "linux")
+
+    called = {"raised": False}
+    monkeypatch.setattr(utils, "_raise_macos_window_to_front", lambda: called.__setitem__("raised", True))
+
+    utils._KernelDisplay(800, 480, window_mode=True)
+
+    assert called["raised"] is False
+
+
+def test_raise_macos_window_to_front_invokes_osascript_with_pid(monkeypatch):
+    monkeypatch.setattr(utils.os, "getpid", lambda: 4242)
+
+    calls = {"args": None}
+
+    def _fake_run(args, **kwargs):
+        calls["args"] = args
+        return SimpleNamespace(returncode=0)
+
+    monkeypatch.setattr(utils.subprocess, "run", _fake_run)
+
+    utils._raise_macos_window_to_front()
+
+    assert calls["args"][0] == "osascript"
+    assert "4242" in calls["args"][2]
+
+
+def test_raise_macos_window_to_front_swallows_errors(monkeypatch):
+    def _raise(*_args, **_kwargs):
+        raise OSError("osascript missing")
+
+    monkeypatch.setattr(utils.subprocess, "run", _raise)
+
+    utils._raise_macos_window_to_front()
+
+
+def test_window_resize_snaps_to_locked_aspect_ratio_from_width_drag(monkeypatch):
+    fake_pygame = _FakePygame()
+    monkeypatch.setattr(utils, "_load_pygame", lambda: fake_pygame)
+    monkeypatch.setattr(utils, "_sdl_driver_candidates", lambda: [None])
+    monkeypatch.setattr(utils, "_maybe_configure_desktop_env", lambda: None)
+    monkeypatch.setattr(utils, "_park_mouse_cursor", lambda _pygame: None)
+    monkeypatch.setattr(utils, "_wiggle_mouse_cursor", lambda _pygame: None)
+    monkeypatch.setattr(utils, "_schedule_mouse_cursor_wiggle", lambda *_args, **_kwargs: None)
+    monkeypatch.setenv("DESK_DISPLAY_WINDOW_SCALE", "1")
+    monkeypatch.setenv("DESK_DISPLAY_SDL_FULLSCREEN", "0")
+    fake_pygame.VIDEORESIZE = 12
+
+    display = utils._KernelDisplay(800, 480, window_mode=True)
+    assert (display.screen_width, display.screen_height) == (800, 480)
+
+    resize_event = SimpleNamespace(type=12, w=1000, h=620, size=(1000, 620))
+    fake_pygame.event.get = lambda _types: [resize_event]
+
+    display._drain_window_resize_events()
+
+    assert fake_pygame.display.last_set_mode[0] == (1000, 600)
+    assert (display.screen_width, display.screen_height) == (1000, 600)
+
+
+def test_window_resize_snaps_to_locked_aspect_ratio_from_height_drag(monkeypatch):
+    fake_pygame = _FakePygame()
+    monkeypatch.setattr(utils, "_load_pygame", lambda: fake_pygame)
+    monkeypatch.setattr(utils, "_sdl_driver_candidates", lambda: [None])
+    monkeypatch.setattr(utils, "_maybe_configure_desktop_env", lambda: None)
+    monkeypatch.setattr(utils, "_park_mouse_cursor", lambda _pygame: None)
+    monkeypatch.setattr(utils, "_wiggle_mouse_cursor", lambda _pygame: None)
+    monkeypatch.setattr(utils, "_schedule_mouse_cursor_wiggle", lambda *_args, **_kwargs: None)
+    monkeypatch.setenv("DESK_DISPLAY_WINDOW_SCALE", "1")
+    monkeypatch.setenv("DESK_DISPLAY_SDL_FULLSCREEN", "0")
+    fake_pygame.VIDEORESIZE = 12
+
+    display = utils._KernelDisplay(800, 480, window_mode=True)
+
+    resize_event = SimpleNamespace(type=12, w=820, h=900, size=(820, 900))
+    fake_pygame.event.get = lambda _types: [resize_event]
+
+    display._drain_window_resize_events()
+
+    assert fake_pygame.display.last_set_mode[0] == (1500, 900)
+    assert (display.screen_width, display.screen_height) == (1500, 900)
+
+
+def test_window_resize_ignores_windowevent_position_fields(monkeypatch):
+    fake_pygame = _FakePygame()
+    monkeypatch.setattr(utils, "_load_pygame", lambda: fake_pygame)
+    monkeypatch.setattr(utils, "_sdl_driver_candidates", lambda: [None])
+    monkeypatch.setattr(utils, "_maybe_configure_desktop_env", lambda: None)
+    monkeypatch.setattr(utils, "_park_mouse_cursor", lambda _pygame: None)
+    monkeypatch.setattr(utils, "_wiggle_mouse_cursor", lambda _pygame: None)
+    monkeypatch.setattr(utils, "_schedule_mouse_cursor_wiggle", lambda *_args, **_kwargs: None)
+    monkeypatch.setenv("DESK_DISPLAY_WINDOW_SCALE", "1")
+    monkeypatch.setenv("DESK_DISPLAY_SDL_FULLSCREEN", "0")
+    fake_pygame.WINDOWEVENT = 13
+
+    display = utils._KernelDisplay(800, 480, window_mode=True)
+    original_mode = fake_pygame.display.last_set_mode
+
+    # A generic WINDOWEVENT (e.g. a window-move) carries x/y as position, not
+    # size, and must never be mistaken for a resize.
+    move_event = SimpleNamespace(type=13, x=50, y=75)
+    fake_pygame.event.get = lambda _types: [move_event]
+
+    display._drain_window_resize_events()
+
+    assert fake_pygame.display.last_set_mode == original_mode
+    assert (display.screen_width, display.screen_height) == (800, 480)
+
+
 def test_window_mode_uses_fast_scale_and_drains_resize_events_on_macos(monkeypatch):
     fake_pygame = _FakePygame()
     monkeypatch.setattr(utils, "_load_pygame", lambda: fake_pygame)

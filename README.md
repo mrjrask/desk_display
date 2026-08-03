@@ -244,6 +244,8 @@ bash ./Installers/install_win_window.sh
 
 `launch_macos_window_perf.sh` uses conservative defaults intended to reduce desktop CPU load, including a window scale of `1`, disabled screenshots/video by default, and disabled Wi-Fi monitor/recovery by default.
 
+On macOS, `launch_macos_window.sh` brings the window to the front on startup instead of leaving it behind Terminal, and the window's aspect ratio is locked to the `DISPLAY_WIDTH`/`DISPLAY_HEIGHT` resolution from `.env`: dragging an edge/corner resizes the window bigger or smaller along that ratio, so content never letterboxes (black bars) or gets stretched/squeezed.
+
 ---
 
 ## Running the app
