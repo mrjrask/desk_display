@@ -11,7 +11,7 @@ from typing import Any
 from PIL import Image, ImageDraw
 
 import config
-from display_profiles import DISPLAY_PROFILE_ADAFRUIT_MINIPITFT_114
+from display_profiles import DISPLAY_PROFILE_ADAFRUIT_MINIPITFT_114, DISPLAY_PROFILE_HYPERPIXEL4
 from config import (
     WIDTH,
     HEIGHT,
@@ -415,6 +415,15 @@ def _fetch_league_standings() -> dict[int, dict[str, list[dict[str, Any]]]]:
     return parsed
 
 
+def _is_hyperpixel_4_layout() -> bool:
+    """True for either HyperPixel 4 variant (standard or square)."""
+
+    return (
+        config.is_hyperpixel_4_square_layout()
+        or config.get_display_profile_id() == DISPLAY_PROFILE_HYPERPIXEL4
+    )
+
+
 def _column_layout(
     draw: ImageDraw.ImageDraw,
     rows: list[dict[str, Any]],
@@ -464,9 +473,11 @@ def _column_layout(
                 gap += _RECORD_TO_GB_EXTRA_GAP
             cursor -= stat_widths[key] + gap
 
-    if SHOW_LAST_10 and columns == ("record", "streak", "gb") and not config.is_hyperpixel_4_square_layout():
+    if SHOW_LAST_10 and columns == ("record", "streak", "gb") and not _is_hyperpixel_4_layout():
         # Keep GB at the same right-aligned placement while centering Record
         # and placing the combined streak/L10 column midway between them.
+        # HyperPixel 4 displays skip this and use the tightly-packed
+        # right-aligned layout below to leave more room for team names.
         gb_right = right_edge
         gb_center = gb_right - (stat_widths["gb"] / 2.0)
         record_center = WIDTH / 2.0
