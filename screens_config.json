@@ -2,6 +2,11 @@
   "screens": {
     "date": 1,
     "nixie": 0,
+    "news headlines": {
+      "frequency": 1,
+      "extra_seconds": 16
+    },
+    "on this day": 1,
     "weather logo": 0,
     "weather1": 1,
     "weather2": 1,
@@ -466,6 +471,12 @@
         },
         {
           "screen": "World Cup Scoreboard"
+        },
+        {
+          "screen": "news headlines"
+        },
+        {
+          "screen": "on this day"
         }
       ]
     }
