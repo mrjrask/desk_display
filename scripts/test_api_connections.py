@@ -59,6 +59,7 @@ from data_fetch import (
 )
 from screens.nhl_scoreboard import dns_diagnostics
 from screens.draw_weather import _alert_message_text, _fetch_rainviewer_frames, _selected_alert
+from services.news_feeds import fetch_topic_headlines, load_news_feed_config
 
 
 @dataclass
@@ -348,6 +349,30 @@ def check_nhl_network_diagnostics() -> tuple[str, str]:
     return _ok("dns + endpoint diagnostics passed")
 
 
+def check_news_feeds() -> tuple[str, str]:
+    """Fetch every topic feed listed in news_feeds.json and report per-topic results.
+
+    Feeds/topics are edited in news_feeds.json, not here — see README_APIS.md.
+    """
+
+    topics, headline_count, _refresh_minutes = load_news_feed_config()
+    if not topics:
+        return _skip("no topics configured in news_feeds.json")
+
+    failures: list[str] = []
+    counts: list[str] = []
+    for topic in topics:
+        headlines = fetch_topic_headlines(topic, headline_count, timeout=10.0)
+        if not headlines:
+            failures.append(topic.id)
+        else:
+            counts.append(f"{topic.id}={len(headlines)}")
+
+    if failures:
+        return _fail(f"no headlines returned for: {', '.join(failures)} (ok: {', '.join(counts)})")
+    return _ok(f"headlines returned for all topics ({', '.join(counts)})")
+
+
 CHECKS = [
     Check("weather (weatherkit/owm via app helper)", check_weatherkit_or_owm),
     Check("weather alerts", check_weather_alerts),
@@ -381,6 +406,7 @@ CHECKS = [
     Check("app helper mlb sox standings", check_mlb_sox_standings_helper),
     Check("app helper ahl wolves games", check_ahl_wolves_games_helper),
     Check("nhl network diagnostics", check_nhl_network_diagnostics),
+    Check("news headlines feeds", check_news_feeds),
 ]
 
 

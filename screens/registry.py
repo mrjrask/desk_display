@@ -76,6 +76,7 @@ draw_weather_screen_1 = _lazy_callable("screens.draw_weather.draw_weather_screen
 draw_weather_screen_2 = _lazy_callable("screens.draw_weather.draw_weather_screen_2")
 draw_nixie = _lazy_callable("screens.draw_nixie.draw_nixie")
 draw_on_this_day = _lazy_callable("screens.on_this_day.draw_on_this_day")
+draw_news_headlines = _lazy_callable("screens.draw_news_headlines.draw_news_headlines")
 draw_date = _lazy_callable("screens.draw_date_time.draw_date")
 draw_quad_screen = _lazy_callable("screens.draw_quad.draw_quad_screen")
 draw_box_score = _lazy_callable("screens.mlb_schedule.draw_box_score")
@@ -586,6 +587,11 @@ def build_screen_registry(context: ScreenContext) -> Tuple[Dict[str, ScreenDefin
     register("date", lambda: draw_date(context.display, transition=False))
     register("nixie", lambda: draw_nixie(context.display, transition=False))
     register("on this day", lambda: draw_on_this_day(context.display, transition=True))
+    register(
+        "news headlines",
+        lambda: draw_news_headlines(context.display, transition=True),
+        available=config.ENABLE_NEWS_HEADLINES,
+    )
 
     weather_data = context.cache.get("weather")
 

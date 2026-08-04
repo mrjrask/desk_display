@@ -5,6 +5,10 @@
       "date": 1,
       "nixie": 0,
       "on this day": 1,
+      "news headlines": {
+        "frequency": 1,
+        "extra_seconds": 16
+      },
       "weather logo": 0,
       "weather1": 1,
       "weather2": 1,
@@ -483,6 +487,9 @@
           },
           {
             "screen": "on this day"
+          },
+          {
+            "screen": "news headlines"
           }
         ]
       }

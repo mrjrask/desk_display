@@ -358,6 +358,16 @@ ENABLE_AIR_QUALITY = not _air_quality_errors
 if _air_quality_errors:
     logging.warning("Air quality disabled due to missing/invalid configuration: %s", "; ".join(_air_quality_errors))
 
+# ─── News headlines ticker ──────────────────────────────────────────────────
+# Feed sources (name + URL) live in news_feeds.json, not here — see
+# paths.resolve_news_feeds_config_path(). These knobs only tune behavior.
+ENABLE_NEWS_HEADLINES = _get_bool_env("ENABLE_NEWS_HEADLINES", True)
+NEWS_HEADLINES_SHOW_IMAGES = _get_bool_env("NEWS_HEADLINES_SHOW_IMAGES", True)
+NEWS_TICKER_BASE_SPEED = float(os.environ.get("NEWS_TICKER_BASE_SPEED", "2.0") or 2.0)
+NEWS_ARTICLE_FETCH_TIMEOUT_SECONDS = float(
+    os.environ.get("NEWS_ARTICLE_FETCH_TIMEOUT_SECONDS", "6.0") or 6.0
+)
+
 WEATHERKIT_TEAM_ID     = os.environ.get("WEATHERKIT_TEAM_ID")
 WEATHERKIT_KEY_ID      = os.environ.get("WEATHERKIT_KEY_ID")
 WEATHERKIT_SERVICE_ID  = os.environ.get("WEATHERKIT_SERVICE_ID")
