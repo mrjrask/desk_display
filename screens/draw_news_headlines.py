@@ -72,6 +72,7 @@ HEADLINE_FONT = clone_font(config.FONT_WEATHER_DETAILS_SMALL, _FONT_SIZES["headl
 # _FALLBACK_THEME. Edit freely to restyle a lane.
 _ROW_THEMES: dict[str, dict[str, tuple[int, int, int]]] = {
     "local": {"bg": (14, 56, 39), "label_bg": (8, 110, 66), "text": (232, 255, 240)},
+    "chicagoland": {"bg": (32, 40, 54), "label_bg": (70, 82, 112), "text": (230, 234, 245)},
     "national": {"bg": (19, 28, 74), "label_bg": (36, 58, 168), "text": (232, 238, 255)},
     "world": {"bg": (61, 18, 66), "label_bg": (140, 40, 150), "text": (250, 235, 255)},
     "technology": {"bg": (10, 50, 68), "label_bg": (8, 120, 150), "text": (225, 250, 255)},

@@ -10,6 +10,12 @@
       "url": "https://patch.com/illinois/chicago/rss"
     },
     {
+      "id": "chicagoland",
+      "label": "Chicagoland News",
+      "name": "Chicago Tribune – News",
+      "url": "https://www.chicagotribune.com/arcio/rss/category/news/"
+    },
+    {
       "id": "national",
       "label": "National News",
       "name": "New York Times – U.S.",
@@ -29,9 +35,9 @@
     },
     {
       "id": "sports",
-      "label": "Sports News",
-      "name": "New York Times – Sports",
-      "url": "https://rss.nytimes.com/services/xml/rss/nyt/Sports.xml"
+      "label": "Chicago Sports",
+      "name": "Chicago Tribune – Sports",
+      "url": "https://www.chicagotribune.com/arcio/rss/category/sports/"
     },
     {
       "id": "business",
