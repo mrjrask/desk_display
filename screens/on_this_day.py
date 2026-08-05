@@ -705,7 +705,13 @@ def _build_sections(today: dt.date) -> dict[str, list[DayItem]]:
         _SECTIONS_CACHE_TIME = time.monotonic()
         result = _copy_sections(_SECTIONS_CACHE_VALUE)
 
-    _save_disk_cache(today, sections, saved_at)
+    if not _sections_match_offline_fallback(sections):
+        # Don't persist the transient "temporarily unavailable" placeholder:
+        # a process restart shortly after a network hiccup would otherwise
+        # reload it from disk and treat it as fresh content for up to
+        # _OFFLINE_FALLBACK_RETRY_SECONDS, re-showing "unavailable" long
+        # after the network (and a fresh fetch) would have recovered.
+        _save_disk_cache(today, sections, saved_at)
     return result
 
 

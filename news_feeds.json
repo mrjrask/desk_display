@@ -12,8 +12,8 @@
     {
       "id": "chicagoland",
       "label": "Chicagoland News",
-      "name": "Chicago Tribune – News",
-      "url": "https://www.chicagotribune.com/arcio/rss/category/news/"
+      "name": "Block Club Chicago",
+      "url": "https://blockclubchicago.org/feed/"
     },
     {
       "id": "national",
@@ -36,8 +36,8 @@
     {
       "id": "sports",
       "label": "Chicago Sports",
-      "name": "Chicago Tribune – Sports",
-      "url": "https://www.chicagotribune.com/arcio/rss/category/sports/"
+      "name": "WGN9 – Sports",
+      "url": "https://wgntv.com/sports-feed/"
     },
     {
       "id": "business",

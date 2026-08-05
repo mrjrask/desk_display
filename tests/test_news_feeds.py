@@ -233,6 +233,42 @@ def test_fetch_all_headlines_refetches_after_refresh_interval(monkeypatch):
     assert result["local"][0].title == "Headline 1"
 
 
+def test_fetch_all_headlines_keeps_last_known_good_for_topic_that_fails(monkeypatch):
+    # A topic whose feed fails/times out on a given refresh cycle should keep
+    # showing its last successfully fetched headlines instead of losing its
+    # ticker row just because other topics happened to refresh fine.
+    nf.clear_headline_cache_for_tests()
+    topics = [
+        NewsTopic(id="local", label="Local", name="Test", url="https://example.com/local.xml"),
+        NewsTopic(id="sports", label="Sports", name="Test", url="https://example.com/sports.xml"),
+    ]
+    monkeypatch.setattr(nf, "load_news_feed_config", lambda: (topics, 5, 20))
+
+    def fake_fetch_ok(topic, limit, timeout=5.0):
+        return [nf.NewsHeadline(topic_id=topic.id, title="Good headline", link="https://example.com/x")]
+
+    monkeypatch.setattr(nf, "fetch_topic_headlines", fake_fetch_ok)
+    first = fetch_all_headlines()
+    assert [h.title for h in first["sports"]] == ["Good headline"]
+
+    nf.clear_headline_cache_for_tests()
+    with nf._headlines_cache_lock:
+        nf._headlines_cache_value = {topic_id: list(items) for topic_id, items in first.items()}
+        nf._headlines_cache_time = time.monotonic() - 3600.0
+
+    def fake_fetch_sports_fails(topic, limit, timeout=5.0):
+        if topic.id == "sports":
+            return []
+        return [nf.NewsHeadline(topic_id=topic.id, title="Refreshed headline", link="https://example.com/y")]
+
+    monkeypatch.setattr(nf, "fetch_topic_headlines", fake_fetch_sports_fails)
+    monkeypatch.setattr(nf, "load_news_feed_config", lambda: (topics, 5, 1))
+    second = fetch_all_headlines()
+
+    assert [h.title for h in second["local"]] == ["Refreshed headline"]
+    assert [h.title for h in second["sports"]] == ["Good headline"]
+
+
 def test_article_text_extractor_prefers_article_tag_and_finds_og_image():
     html = (
         "<html><head>"

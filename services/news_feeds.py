@@ -371,12 +371,19 @@ def fetch_all_headlines(*, force: bool = False) -> dict[str, list[NewsHeadline]]
 
     with _headlines_cache_lock:
         if results:
-            _headlines_cache_value = results
+            # Merge per-topic rather than replacing the whole cache: a topic
+            # whose feed fails/times out this cycle would otherwise wipe out
+            # its last known-good headlines (and thus its ticker row) even
+            # though every other topic refreshed fine.
+            merged_cache = dict(_headlines_cache_value)
+            for topic_id, items in results.items():
+                if items or topic_id not in merged_cache:
+                    merged_cache[topic_id] = items
+            _headlines_cache_value = merged_cache
             _headlines_cache_time = time.monotonic()
         elif not _headlines_cache_value:
             _headlines_cache_time = time.monotonic()
-        merged = results or _headlines_cache_value
-        return {topic_id: list(items) for topic_id, items in merged.items()}
+        return {topic_id: list(items) for topic_id, items in _headlines_cache_value.items()}
 
 
 def clear_headline_cache_for_tests() -> None:
