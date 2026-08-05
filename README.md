@@ -685,6 +685,12 @@ python tools/maintenance/render_screens.py
 ```bash
 python tools/export_screen_rotation_config.py
 python tools/import_screen_rotation_config.py path/to/export.json
+
+# Load the small/large screen rotation defaults (same as the Screen Config
+# page's "Load selected defaults" + Save, without opening the webpage)
+python tools/load_default_screen_config.py small
+python tools/load_default_screen_config.py large
+python tools/load_default_screen_config.py small --dry-run  # preview only
 ```
 
 ### Style/lint context
