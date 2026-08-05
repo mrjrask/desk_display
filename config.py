@@ -206,6 +206,11 @@ except AttributeError:  # pragma: no cover - fallback for older Pillow
 # ─── Project paths ────────────────────────────────────────────────────────────
 IMAGES_DIR  = os.path.join(SCRIPT_DIR, "images")
 
+# Company logos for the stock ticker (see draw_news_headlines._load_company_logo).
+# Drop a logo in here named after its ticker symbol (any common image
+# extension; filename case doesn't matter, e.g. "AAPL.png" or "aapl.png").
+COMPANY_LOGOS_DIR = os.path.join(IMAGES_DIR, "company")
+
 STYLE_CONFIG_PATH = os.environ.get(
     "SCREENS_STYLE_PATH", os.path.join(SCRIPT_DIR, "screens_style.json")
 )

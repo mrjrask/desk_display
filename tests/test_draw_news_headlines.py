@@ -230,26 +230,64 @@ def test_format_stock_entry_text_colors_by_direction():
     assert "N/A" in unpriced_text
 
 
+def test_load_company_logo_is_case_insensitive(tmp_path, monkeypatch):
+    (tmp_path / "aapl.png").write_bytes(_tiny_png_bytes())
+    monkeypatch.setattr(dnh.config, "COMPANY_LOGOS_DIR", str(tmp_path))
+    dnh._COMPANY_LOGO_INDEX_DIR_STAMP = None
+    dnh._COMPANY_LOGO_CACHE.clear()
+
+    logo = dnh._load_company_logo("AAPL", 16)
+
+    assert logo is not None
+    assert logo.size == (16, 16)
+
+
+def test_load_company_logo_missing_logs_warning_once(tmp_path, monkeypatch, caplog):
+    monkeypatch.setattr(dnh.config, "COMPANY_LOGOS_DIR", str(tmp_path))
+    dnh._COMPANY_LOGO_INDEX_DIR_STAMP = None
+    dnh._COMPANY_LOGO_CACHE.clear()
+    dnh._LOGGED_MISSING_COMPANY_LOGOS.clear()
+
+    with caplog.at_level("WARNING"):
+        first = dnh._load_company_logo("ZZZZ", 16)
+        second = dnh._load_company_logo("ZZZZ", 16)
+
+    assert first is None
+    assert second is None
+    warnings = [r for r in caplog.records if "ZZZZ" in r.message]
+    assert len(warnings) == 1
+
+
+def _tiny_png_bytes() -> bytes:
+    from io import BytesIO
+
+    from PIL import Image
+
+    buf = BytesIO()
+    Image.new("RGBA", (4, 4), (255, 0, 0, 255)).save(buf, format="PNG")
+    return buf.getvalue()
+
+
 def test_build_stock_row_skips_unpriced_quotes_and_none_when_empty():
     quotes = [
         StockQuote(symbol="^DJI", label="DJIA", price=44000.0, change=10.0, change_pct=0.02),
         StockQuote(symbol="XXXX", label="XXXX", price=None, change=None, change_pct=None),
     ]
 
-    row = dnh._build_stock_row(quotes)
+    row = dnh._build_stock_row(quotes, row_height=20)
 
     assert row is not None
     assert row.topic.id == "markets"
     assert len(row.entries) == 1
     assert row.entries[0].headline is None
 
-    assert dnh._build_stock_row([]) is None
-    assert dnh._build_stock_row([StockQuote("X", "X", None, None, None)]) is None
+    assert dnh._build_stock_row([], row_height=20) is None
+    assert dnh._build_stock_row([StockQuote("X", "X", None, None, None)], row_height=20) is None
 
 
 def test_render_frame_stock_row_entries_are_not_tappable():
     quotes = [StockQuote(symbol="AAPL", label="AAPL", price=200.0, change=1.5, change_pct=0.75)]
-    row = dnh._build_stock_row(quotes)
+    row = dnh._build_stock_row(quotes, row_height=20)
     row_height, row_tops = dnh._compute_row_layout(1)
 
     _img, hit_rects = dnh._render_frame([row], row_height, row_tops)
