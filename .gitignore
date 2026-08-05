@@ -3,6 +3,7 @@ pressure_history.json
 inside_history.json
 air_quality_history.json
 weather_metric_history.json
+on_this_day_cache.json
 screenshot_archive/
 screenshots/
 tools/maintenance/pressure_history.json

@@ -7,10 +7,13 @@ fallbacks for offline use.
 
 from __future__ import annotations
 
+import contextlib
 import datetime as dt
+import json
 import logging
 import os
 import re
+import tempfile
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor, wait
@@ -91,6 +94,15 @@ _RENDER_CACHE_DATE: dt.date | None = None
 _RENDER_CACHE_IMAGE: Image.Image | None = None
 _THUMBNAIL_CACHE_LOCK = threading.Lock()
 _THUMBNAIL_CACHE: dict[tuple[str, int], Image.Image | None] = {}
+
+# The in-memory caches above are process-lifetime only: a restart (deploy, crash,
+# Pi reboot) previously discarded the day's already-fetched Wikimedia/Hebcal
+# content and forced a fresh round trip -- showing the "temporarily unavailable"
+# offline fallback until that succeeded. Persist the most recent successful
+# build to disk (mirrors the pressure/weather history JSON cache pattern in
+# data_fetch.py) so a fresh process can reuse today's content immediately.
+_CACHE_DISK_PATH = os.environ.get("ON_THIS_DAY_CACHE_PATH", "on_this_day_cache.json")
+_DISK_CACHE_LOADED = False
 
 _HEBCAL_JEWISH_HOLIDAYS_ICS_URL = (
     "https://download.hebcal.com/ical/jewish-holidays-all-v2.ics"
@@ -374,6 +386,128 @@ def _copy_sections(sections: dict[str, list[DayItem]]) -> dict[str, list[DayItem
     return {title: list(items) for title, items in sections.items()}
 
 
+def _expand_cache_path() -> str:
+    return os.path.expanduser(os.path.expandvars(_CACHE_DISK_PATH))
+
+
+def _sections_to_jsonable(
+    sections: dict[str, list[DayItem]]
+) -> dict[str, list[dict[str, object]]]:
+    return {
+        title: [
+            {"year": item.year, "text": item.text, "thumbnail_url": item.thumbnail_url}
+            for item in items
+        ]
+        for title, items in sections.items()
+    }
+
+
+def _sections_from_jsonable(payload: object) -> dict[str, list[DayItem]]:
+    sections: dict[str, list[DayItem]] = {}
+    if not isinstance(payload, dict):
+        return sections
+    for title, raw_items in payload.items():
+        if not isinstance(raw_items, list):
+            continue
+        items: list[DayItem] = []
+        for raw in raw_items:
+            if not isinstance(raw, dict):
+                continue
+            text = _clean_text(raw.get("text", ""))
+            if not text:
+                continue
+            year = raw.get("year")
+            thumb = raw.get("thumbnail_url")
+            items.append(
+                DayItem(
+                    year if isinstance(year, int) else None,
+                    text=text,
+                    thumbnail_url=str(thumb) if isinstance(thumb, str) and thumb else None,
+                )
+            )
+        if items:
+            sections[str(title)] = items
+    return sections
+
+
+def _load_disk_cache_once(today: dt.date) -> None:
+    """Seed the in-memory sections cache from disk on first use per process."""
+
+    global _DISK_CACHE_LOADED, _SECTIONS_CACHE_DATE, _SECTIONS_CACHE_VALUE, _SECTIONS_CACHE_TIME
+
+    with _SECTIONS_CACHE_LOCK:
+        if _DISK_CACHE_LOADED:
+            return
+        _DISK_CACHE_LOADED = True
+
+        path = _expand_cache_path()
+        try:
+            with open(path, encoding="utf-8") as fh:
+                payload = json.load(fh)
+        except FileNotFoundError:
+            return
+        except Exception as exc:
+            logging.warning("on_this_day: could not read cache at %s: %s", path, exc)
+            return
+
+        try:
+            cached_date = dt.date.fromisoformat(str(payload.get("date")))
+            saved_at = float(payload.get("saved_at"))
+        except (TypeError, ValueError) as exc:
+            logging.warning("on_this_day: invalid cache metadata at %s: %s", path, exc)
+            return
+
+        if cached_date != today:
+            # Stale content from a previous day is not useful; let the normal
+            # live/curated fetch populate today's cache instead.
+            return
+
+        sections = _sections_from_jsonable(payload.get("sections"))
+        if not sections:
+            return
+
+        age = max(0.0, time.time() - saved_at)
+        _SECTIONS_CACHE_DATE = cached_date
+        _SECTIONS_CACHE_VALUE = sections
+        _SECTIONS_CACHE_TIME = time.monotonic() - age
+        logging.info(
+            "on_this_day: restored cached sections for %s from disk (age %.0fs).",
+            cached_date.isoformat(),
+            age,
+        )
+
+
+def _save_disk_cache(
+    today: dt.date, sections: dict[str, list[DayItem]], saved_at: float
+) -> None:
+    path = _expand_cache_path()
+    tmp_path = ""
+    try:
+        parent_dir = os.path.dirname(path) or "."
+        os.makedirs(parent_dir, exist_ok=True)
+        payload = {
+            "date": today.isoformat(),
+            "saved_at": saved_at,
+            "sections": _sections_to_jsonable(sections),
+        }
+        with tempfile.NamedTemporaryFile(
+            "w",
+            encoding="utf-8",
+            dir=parent_dir,
+            prefix=f"{os.path.basename(path)}.",
+            suffix=".tmp",
+            delete=False,
+        ) as fh:
+            tmp_path = fh.name
+            json.dump(payload, fh)
+        os.replace(tmp_path, path)
+    except Exception as exc:
+        logging.warning("on_this_day: could not save cache to %s: %s", path, exc)
+        if tmp_path:
+            with contextlib.suppress(OSError):
+                os.remove(tmp_path)
+
+
 def _build_sections_uncached(today: dt.date) -> dict[str, list[DayItem]]:
     month, day = today.month, today.day
     fallback = _FALLBACK_BY_DATE.get((month, day), {})
@@ -543,6 +677,8 @@ def _merge_sections(
 def _build_sections(today: dt.date) -> dict[str, list[DayItem]]:
     global _SECTIONS_CACHE_DATE, _SECTIONS_CACHE_VALUE, _SECTIONS_CACHE_TIME
 
+    _load_disk_cache_once(today)
+
     now = time.monotonic()
     previous: dict[str, list[DayItem]] | None = None
     with _SECTIONS_CACHE_LOCK:
@@ -559,6 +695,7 @@ def _build_sections(today: dt.date) -> dict[str, list[DayItem]]:
 
     sections = _build_sections_uncached(today)
     sections = _merge_sections(previous, sections)
+    saved_at = time.time()
 
     with _SECTIONS_CACHE_LOCK:
         _SECTIONS_CACHE_DATE = today
@@ -566,7 +703,10 @@ def _build_sections(today: dt.date) -> dict[str, list[DayItem]]:
         # Start the retry interval when the network work finishes, rather than
         # counting the time spent waiting for feeds against the cache lifetime.
         _SECTIONS_CACHE_TIME = time.monotonic()
-        return _copy_sections(_SECTIONS_CACHE_VALUE)
+        result = _copy_sections(_SECTIONS_CACHE_VALUE)
+
+    _save_disk_cache(today, sections, saved_at)
+    return result
 
 
 def _download_thumbnail(url: str | None, size: int) -> Image.Image | None:
@@ -772,11 +912,16 @@ def _render_full_image(today: dt.date) -> Image.Image:
 def _clear_caches_for_tests() -> None:
     global _SECTIONS_CACHE_DATE, _SECTIONS_CACHE_VALUE, _SECTIONS_CACHE_TIME
     global _RENDER_CACHE_DATE, _RENDER_CACHE_IMAGE
+    global _DISK_CACHE_LOADED
 
     with _SECTIONS_CACHE_LOCK:
         _SECTIONS_CACHE_DATE = None
         _SECTIONS_CACHE_VALUE = None
         _SECTIONS_CACHE_TIME = None
+        # Treat the disk cache as already "loaded" so tests never race a real
+        # on_this_day_cache.json in the working directory unless a test opts
+        # in by monkeypatching _CACHE_DISK_PATH and _DISK_CACHE_LOADED itself.
+        _DISK_CACHE_LOADED = True
     with _RENDER_CACHE_LOCK:
         _RENDER_CACHE_DATE = None
         _RENDER_CACHE_IMAGE = None

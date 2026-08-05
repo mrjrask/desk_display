@@ -1,4 +1,5 @@
 import datetime as dt
+import json
 
 from PIL import Image, ImageDraw
 
@@ -470,3 +471,83 @@ def test_on_this_day_merge_deduplicates_same_holiday_from_retry():
     )
 
     assert merged["🎉 Holidays & Culture"] == [holiday]
+
+
+def test_on_this_day_disk_cache_round_trips_sections(tmp_path, monkeypatch):
+    cache_path = tmp_path / "on_this_day_cache.json"
+    monkeypatch.setattr(otd, "_CACHE_DISK_PATH", str(cache_path))
+    today = dt.date(2026, 7, 20)
+    sections = {
+        "🌎 General History": [otd.DayItem(1999, "Something happened", "https://x/thumb.jpg")]
+    }
+
+    otd._save_disk_cache(today, sections, otd.time.time())
+    assert cache_path.exists()
+
+    loaded = otd._sections_from_jsonable(
+        json.loads(cache_path.read_text())["sections"]
+    )
+    assert loaded == sections
+
+
+def test_on_this_day_restores_cache_from_disk_on_fresh_process(tmp_path, monkeypatch):
+    cache_path = tmp_path / "on_this_day_cache.json"
+    monkeypatch.setattr(otd, "_CACHE_DISK_PATH", str(cache_path))
+    today = dt.date(2026, 7, 21)
+    sections = {"🌎 General History": [otd.DayItem(2010, "Persisted event")]}
+    otd._save_disk_cache(today, sections, otd.time.time())
+
+    # Simulate a process restart: in-memory caches are gone, but the disk
+    # cache flag/state must look exactly like process start (not the
+    # "already loaded, skip disk" state that _clear_caches_for_tests sets).
+    otd._SECTIONS_CACHE_DATE = None
+    otd._SECTIONS_CACHE_VALUE = None
+    otd._SECTIONS_CACHE_TIME = None
+    otd._DISK_CACHE_LOADED = False
+
+    def fail_build(*args, **kwargs):
+        raise AssertionError("restored disk cache should avoid a live rebuild")
+
+    monkeypatch.setattr(otd, "_build_sections_uncached", fail_build)
+
+    result = otd._build_sections(today)
+
+    assert result == sections
+    otd._clear_caches_for_tests()
+
+
+def test_on_this_day_ignores_disk_cache_from_a_previous_day(tmp_path, monkeypatch):
+    cache_path = tmp_path / "on_this_day_cache.json"
+    monkeypatch.setattr(otd, "_CACHE_DISK_PATH", str(cache_path))
+    yesterday = dt.date(2026, 7, 21)
+    otd._save_disk_cache(
+        yesterday, {"🌎 General History": [otd.DayItem(2010, "Old event")]}, otd.time.time()
+    )
+
+    otd._SECTIONS_CACHE_DATE = None
+    otd._SECTIONS_CACHE_VALUE = None
+    otd._SECTIONS_CACHE_TIME = None
+    otd._DISK_CACHE_LOADED = False
+
+    today = dt.date(2026, 7, 22)
+    otd._load_disk_cache_once(today)
+
+    assert otd._SECTIONS_CACHE_DATE is None
+    assert otd._SECTIONS_CACHE_VALUE is None
+    otd._clear_caches_for_tests()
+
+
+def test_on_this_day_build_sections_persists_to_disk(tmp_path, monkeypatch):
+    otd._clear_caches_for_tests()
+    cache_path = tmp_path / "on_this_day_cache.json"
+    monkeypatch.setattr(otd, "_CACHE_DISK_PATH", str(cache_path))
+    monkeypatch.setattr(otd, "_wiki_items", lambda *args, **kwargs: [])
+    monkeypatch.setattr(otd, "_jewish_holiday_items", lambda *args, **kwargs: [])
+
+    today = dt.date(2026, 7, 6)
+    sections = otd._build_sections(today)
+
+    assert cache_path.exists()
+    payload = json.loads(cache_path.read_text())
+    assert payload["date"] == today.isoformat()
+    assert otd._sections_from_jsonable(payload["sections"]) == sections
