@@ -537,6 +537,24 @@ def test_on_this_day_ignores_disk_cache_from_a_previous_day(tmp_path, monkeypatc
     otd._clear_caches_for_tests()
 
 
+def test_on_this_day_does_not_persist_offline_fallback_to_disk(tmp_path, monkeypatch):
+    # A process restart shortly after a transient network failure should
+    # retry live feeds immediately, not reload a persisted "temporarily
+    # unavailable" placeholder from disk and treat it as fresh content.
+    otd._clear_caches_for_tests()
+    cache_path = tmp_path / "on_this_day_cache.json"
+    monkeypatch.setattr(otd, "_CACHE_DISK_PATH", str(cache_path))
+    monkeypatch.setattr(
+        otd, "_build_sections_uncached", lambda today: otd._offline_sections_fallback()
+    )
+
+    today = dt.date(2026, 8, 5)
+    sections = otd._build_sections(today)
+
+    assert sections == otd._offline_sections_fallback()
+    assert not cache_path.exists()
+
+
 def test_on_this_day_build_sections_persists_to_disk(tmp_path, monkeypatch):
     otd._clear_caches_for_tests()
     cache_path = tmp_path / "on_this_day_cache.json"
