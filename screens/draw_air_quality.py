@@ -8,7 +8,7 @@ from PIL import Image, ImageDraw
 import config
 from config import FONT_WEATHER_DETAILS_SMALL, FONT_WEATHER_DETAILS_SMALL_BOLD, FONT_WEATHER_DETAILS_TINY, HEIGHT, WIDTH, get_screen_background_color
 from services.air_quality import AirQualityReport, fetch_air_quality
-from utils import ScreenImage, log_call
+from utils import ScreenImage, log_call, wrap_text
 
 CATEGORY_COLORS = {
     "Good": ((0, 170, 80), (0, 0, 0)),
@@ -27,6 +27,21 @@ def _fit_text(draw: ImageDraw.ImageDraw, text: str, font, max_width: int) -> str
     while text and draw.textsize(text + "…", font=font)[0] > max_width:
         text = text[:-1]
     return text + "…" if text else "…"
+
+
+def _wrap_advice_lines(
+    draw: ImageDraw.ImageDraw, text: str, font, max_width: int, max_lines: int
+) -> list[str]:
+    """Word-wrap advisory text, only falling back to an ellipsis if it still
+    doesn't fit within ``max_lines``."""
+
+    lines = wrap_text(text, font, max_width) or [text]
+    if len(lines) <= max_lines:
+        return lines
+    kept = lines[: max_lines - 1]
+    remainder = " ".join(lines[max_lines - 1 :])
+    kept.append(_fit_text(draw, remainder, font, max_width))
+    return kept
 
 
 
@@ -212,9 +227,9 @@ def _render_report(report: AirQualityReport) -> Image.Image:
     )
 
     # Removing the redundant Health row leaves its height to be shared by the
-    # three component rows.  Top Pollutant and Advice intentionally remain
-    # equal-height rows.
-    row_weights = (3, 4, 4, 4, 3)
+    # three component rows.  Advice gets extra height so its recommendation
+    # can wrap onto a second line instead of being truncated.
+    row_weights = (3, 4, 4, 4, 5)
     row_space = card_bottom - card_top - 8
     total_weight = sum(row_weights)
     row_tops = [card_top + 4]
@@ -240,21 +255,27 @@ def _render_report(report: AirQualityReport) -> Image.Image:
         row_value_x = value_x
         if label == "Advice":
             row_value_x = content_x + draw.textsize(label.upper(), font=label_font)[0] + 10
-        value_text = _fit_text(
-            draw,
-            value,
-            value_font,
-            _metric_value_max_width(
-                label,
-                chart_labels=chart_labels,
-                charts_enabled=charts_enabled,
-                chart_x=chart_x,
-                chart_gap=chart_gap,
-                value_x=row_value_x,
-                right_edge=right_edge,
-            ),
+        available_width = _metric_value_max_width(
+            label,
+            chart_labels=chart_labels,
+            charts_enabled=charts_enabled,
+            chart_x=chart_x,
+            chart_gap=chart_gap,
+            value_x=row_value_x,
+            right_edge=right_edge,
         )
-        draw.text((row_value_x, value_y), value_text, font=value_font, fill=value_color)
+        if label == "Advice":
+            line_gap = 2
+            max_lines = max(1, min(2, row_h // (value_h + line_gap)))
+            lines = _wrap_advice_lines(draw, value, value_font, available_width, max_lines)
+            block_h = len(lines) * value_h + (len(lines) - 1) * line_gap
+            line_y = y0 + max(0, (row_h - block_h) // 2)
+            for line in lines:
+                draw.text((row_value_x, line_y), line, font=value_font, fill=value_color)
+                line_y += value_h + line_gap
+        else:
+            value_text = _fit_text(draw, value, value_font, available_width)
+            draw.text((row_value_x, value_y), value_text, font=value_font, fill=value_color)
         if charts_enabled and label in chart_labels:
             chart_h = max(8, min(row_h - 6, HEIGHT // 18))
             chart_y = y0 + (row_h - chart_h) // 2
