@@ -362,6 +362,7 @@ Set `INSIDE_SENSOR` to `adafruit_bme280`, `adafruit_bme680`, or `adafruit_sht4x`
 | `NEWS_HEADLINES_SHOW_IMAGES` | Download/show inline article images and reader-overlay hero images; defaults to enabled. |
 | `NEWS_TICKER_BASE_SPEED` | Base ticker scroll speed in pixels/frame before each topic's per-lane speed variation; defaults to `2.0`. |
 | `NEWS_ARTICLE_FETCH_TIMEOUT_SECONDS` | Timeout for fetching full article text when a headline is tapped; defaults to `6.0`. |
+| `NEWS_HEADLINES_DISPLAY_SECONDS` | How long the ticker keeps scrolling each time the screen is shown (it manages its own on-screen duration rather than using the short generic `SCREEN_DELAY`); defaults to `20.0`. |
 
 ### Config UI and auth variables
 
@@ -473,7 +474,7 @@ When `quad` or `weather quad` is shown on a touch-capable HyperPixel setup:
 
 - **Feed sources live in `news_feeds.json`** at the project root (override the path with `NEWS_FEEDS_CONFIG_PATH`), not in code. Each topic entry is `{"id", "label", "name", "url"}`; `url` is a plain RSS/Atom feed and needs no API key. Add, remove, rename, or re-point topics by editing that file — no restart-proof hot reload is required beyond the next fetch cycle (`refresh_minutes` in the same file, default 20). See [README_APIS.md](README_APIS.md#news-headlines-rssatom) for the default feed list and image-extraction behavior.
 - On a touch-capable display (SDL window/mouse or a real touchscreen), tapping a headline opens a fullscreen "Reader"-style overlay with the article's extracted text and image; tap anywhere (or the normal skip button/gesture) to close it and resume the ticker. On non-touch outputs (framebuffer/kernel/headless without pointer input), headlines render the same way but are not interactive.
-- Relevant environment variables: `ENABLE_NEWS_HEADLINES`, `NEWS_HEADLINES_SHOW_IMAGES`, `NEWS_TICKER_BASE_SPEED`, `NEWS_ARTICLE_FETCH_TIMEOUT_SECONDS`, `NEWS_FEEDS_CONFIG_PATH` (see the variable table below).
+- Relevant environment variables: `ENABLE_NEWS_HEADLINES`, `NEWS_HEADLINES_SHOW_IMAGES`, `NEWS_TICKER_BASE_SPEED`, `NEWS_ARTICLE_FETCH_TIMEOUT_SECONDS`, `NEWS_HEADLINES_DISPLAY_SECONDS`, `NEWS_FEEDS_CONFIG_PATH` (see the variable table below).
 
 ---
 

@@ -19,7 +19,7 @@ from typing import Optional
 from PIL import Image, ImageDraw, ImageOps
 
 import config
-from config import HEIGHT, SCREEN_DELAY, WIDTH
+from config import HEIGHT, NEWS_HEADLINES_DISPLAY_SECONDS, WIDTH
 from services.http_client import http_get
 from services.news_feeds import (
     ArticleContent,
@@ -595,7 +595,7 @@ def _run_ticker(display, rows: list[_TickerRow]) -> ScreenImage:
 
     last_frame: Optional[Image.Image] = None
     hit_rects: list[tuple[int, int, int, int, NewsHeadline]] = []
-    end_time = time.monotonic() + float(SCREEN_DELAY)
+    end_time = time.monotonic() + float(NEWS_HEADLINES_DISPLAY_SECONDS)
 
     while time.monotonic() < end_time and not _should_stop():
         frame_start = time.monotonic()
@@ -605,7 +605,7 @@ def _run_ticker(display, rows: list[_TickerRow]) -> ScreenImage:
                 headline = _hit_test(hit_rects, tap_x, tap_y)
                 if headline is not None:
                     _show_reader_overlay(display, headline, pygame_module)
-                    end_time = time.monotonic() + float(SCREEN_DELAY)
+                    end_time = time.monotonic() + float(NEWS_HEADLINES_DISPLAY_SECONDS)
                     frame_start = time.monotonic()
 
         last_frame, hit_rects = _render_frame(rows, row_height, row_tops)

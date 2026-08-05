@@ -367,6 +367,14 @@ NEWS_TICKER_BASE_SPEED = float(os.environ.get("NEWS_TICKER_BASE_SPEED", "2.0") o
 NEWS_ARTICLE_FETCH_TIMEOUT_SECONDS = float(
     os.environ.get("NEWS_ARTICLE_FETCH_TIMEOUT_SECONDS", "6.0") or 6.0
 )
+# The ticker keeps scrolling for this whole window every time the screen is
+# shown, instead of the (much shorter) generic SCREEN_DELAY used by static
+# screens. Without this, the marquee only animates for SCREEN_DELAY seconds
+# and then sits frozen mid-scroll (looking stuck, with headlines cut off at
+# the lane edge) for the remainder of its scheduled on-screen time.
+NEWS_HEADLINES_DISPLAY_SECONDS = float(
+    os.environ.get("NEWS_HEADLINES_DISPLAY_SECONDS", "20.0") or 20.0
+)
 
 WEATHERKIT_TEAM_ID     = os.environ.get("WEATHERKIT_TEAM_ID")
 WEATHERKIT_KEY_ID      = os.environ.get("WEATHERKIT_KEY_ID")

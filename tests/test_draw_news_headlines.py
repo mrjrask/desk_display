@@ -145,7 +145,7 @@ def test_is_touch_capable_detects_finger_or_mouse_support():
 
 
 def test_draw_news_headlines_renders_without_touch(monkeypatch):
-    monkeypatch.setattr(dnh, "SCREEN_DELAY", 0.05)
+    monkeypatch.setattr(dnh, "NEWS_HEADLINES_DISPLAY_SECONDS", 0.05)
     monkeypatch.setattr(dnh, "_pygame_module_for_display", lambda display: None)
     monkeypatch.setattr(dnh, "_download_thumbnail", lambda *args, **kwargs: None)
 
@@ -183,7 +183,7 @@ def test_draw_news_headlines_shows_empty_state_when_no_topics(monkeypatch):
 
 
 def test_run_ticker_opens_reader_overlay_on_headline_tap(monkeypatch):
-    monkeypatch.setattr(dnh, "SCREEN_DELAY", 0.3)
+    monkeypatch.setattr(dnh, "NEWS_HEADLINES_DISPLAY_SECONDS", 0.3)
     monkeypatch.setattr(dnh, "_download_thumbnail", lambda *args, **kwargs: None)
     topics = _topics(["local"])
     headlines = _headlines_for(topics, count=1)
