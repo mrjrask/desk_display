@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import contextlib
 import logging
+import os
 import threading
 import time
 from dataclasses import dataclass
@@ -234,6 +235,85 @@ def _build_rows(
     return rows
 
 
+# ─── Company logos (images/company/<TICKER>.<ext>, case-insensitive) ──────────
+
+_COMPANY_LOGO_EXTENSIONS = (".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp")
+_COMPANY_LOGO_INDEX_LOCK = threading.Lock()
+_COMPANY_LOGO_INDEX: dict[str, str] = {}
+_COMPANY_LOGO_INDEX_DIR_STAMP: Optional[int] = None
+_COMPANY_LOGO_CACHE: dict[tuple[str, int], Optional[Image.Image]] = {}
+_LOGGED_MISSING_COMPANY_LOGOS: set[str] = set()
+
+
+def _company_logo_index() -> dict[str, str]:
+    """Case-insensitive map of ``ticker symbol -> logo file path``.
+
+    Rebuilt whenever images/company's mtime changes so operators can drop in
+    new logos without restarting the app.
+    """
+
+    global _COMPANY_LOGO_INDEX, _COMPANY_LOGO_INDEX_DIR_STAMP
+    try:
+        stamp = os.stat(config.COMPANY_LOGOS_DIR).st_mtime_ns
+    except OSError:
+        return {}
+
+    with _COMPANY_LOGO_INDEX_LOCK:
+        if stamp == _COMPANY_LOGO_INDEX_DIR_STAMP:
+            return _COMPANY_LOGO_INDEX
+        index: dict[str, str] = {}
+        try:
+            for name in os.listdir(config.COMPANY_LOGOS_DIR):
+                stem, ext = os.path.splitext(name)
+                if ext.lower() not in _COMPANY_LOGO_EXTENSIONS or not stem:
+                    continue
+                index[stem.lower()] = os.path.join(config.COMPANY_LOGOS_DIR, name)
+        except OSError:
+            pass
+        _COMPANY_LOGO_INDEX = index
+        _COMPANY_LOGO_INDEX_DIR_STAMP = stamp
+        return index
+
+
+def _load_company_logo(symbol: str, size: int) -> Optional[Image.Image]:
+    """Return a *size*x*size* logo for *symbol*, or None (and log) if missing."""
+
+    if size <= 0:
+        return None
+
+    path = _company_logo_index().get(symbol.strip().lower())
+    if path is None:
+        if symbol not in _LOGGED_MISSING_COMPANY_LOGOS:
+            _LOGGED_MISSING_COMPANY_LOGOS.add(symbol)
+            logging.warning(
+                "news_headlines: no company logo for stock ticker %s (looked in %s)",
+                symbol,
+                config.COMPANY_LOGOS_DIR,
+            )
+        return None
+
+    cache_key = (path, size)
+    with _COMPANY_LOGO_INDEX_LOCK:
+        if cache_key in _COMPANY_LOGO_CACHE:
+            cached = _COMPANY_LOGO_CACHE[cache_key]
+            return cached.copy() if cached is not None else None
+
+    try:
+        raw = Image.open(path).convert("RGBA")
+        ratio = min(size / raw.width, size / raw.height)
+        new_size = (max(1, round(raw.width * ratio)), max(1, round(raw.height * ratio)))
+        resized = raw.resize(new_size, Image.Resampling.LANCZOS)
+        logo = Image.new("RGB", (size, size), _STOCK_THEME["bg"])
+        logo.paste(resized, ((size - new_size[0]) // 2, (size - new_size[1]) // 2), resized)
+    except Exception as exc:
+        logging.warning("news_headlines: failed to load company logo for %s at %s: %s", symbol, path, exc)
+        logo = None
+
+    with _COMPANY_LOGO_INDEX_LOCK:
+        _COMPANY_LOGO_CACHE[cache_key] = logo.copy() if logo is not None else None
+    return logo.copy() if logo is not None else None
+
+
 def _format_stock_entry_text(quote: StockQuote) -> tuple[str, tuple[int, int, int]]:
     price_str = f"{quote.price:,.2f}"
     if quote.change is not None and quote.change_pct is not None:
@@ -250,23 +330,26 @@ def _format_stock_entry_text(quote: StockQuote) -> tuple[str, tuple[int, int, in
     return f"{quote.label} {price_str}  {change_str}" + _ENTRY_SEPARATOR, color
 
 
-def _build_stock_row(quotes: list[StockQuote]) -> Optional[_TickerRow]:
+def _build_stock_row(quotes: list[StockQuote], row_height: int) -> Optional[_TickerRow]:
     """Build the bottom ticker row from fetched quotes; None if none priced."""
 
+    logo_size = max(0, row_height - 10)
     probe_draw = ImageDraw.Draw(Image.new("RGB", (4, 4)))
     entries: list[_TickerEntry] = []
     for quote in quotes:
         if quote.price is None:
             continue
         text, color = _format_stock_entry_text(quote)
-        width = measure_text(probe_draw, text, HEADLINE_FONT)[0]
+        logo = _load_company_logo(quote.symbol, logo_size) if logo_size else None
+        text_width = measure_text(probe_draw, text, HEADLINE_FONT)[0]
+        width = text_width + (logo.size[0] + 8 if logo is not None else 0)
         entries.append(
             _TickerEntry(
                 headline=None,
                 text=text,
                 width=max(1, width),
-                thumb=None,
-                thumb_size=0,
+                thumb=logo,
+                thumb_size=logo_size,
                 text_color=color,
             )
         )
@@ -711,7 +794,7 @@ def draw_news_headlines(display, transition: bool = True) -> ScreenImage:
 
     if config.ENABLE_STOCK_TICKER:
         quotes = fetch_stock_quotes(default_symbol_order())
-        stock_row = _build_stock_row(quotes)
+        stock_row = _build_stock_row(quotes, row_height_estimate)
         if stock_row is not None:
             rows.append(stock_row)
 
