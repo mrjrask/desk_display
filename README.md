@@ -362,7 +362,7 @@ Set `INSIDE_SENSOR` to `adafruit_bme280`, `adafruit_bme680`, or `adafruit_sht4x`
 | `NEWS_HEADLINES_SHOW_IMAGES` | Download/show inline article images and reader-overlay hero images; defaults to enabled. |
 | `NEWS_TICKER_BASE_SPEED` | Base ticker scroll speed in pixels/frame before each topic's per-lane speed variation; defaults to `2.0`. |
 | `NEWS_ARTICLE_FETCH_TIMEOUT_SECONDS` | Timeout for fetching full article text when a headline is tapped; defaults to `6.0`. |
-| `NEWS_HEADLINES_DISPLAY_SECONDS` | How long the ticker keeps scrolling each time the screen is shown (it manages its own on-screen duration rather than using the short generic `SCREEN_DELAY`); defaults to `20.0`. |
+| `NEWS_HEADLINES_DISPLAY_SECONDS` | How long the ticker keeps scrolling each time the screen is shown (it manages its own on-screen duration rather than using the short generic `SCREEN_DELAY`); defaults to `30.0`. |
 
 ### Config UI and auth variables
 

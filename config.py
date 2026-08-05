@@ -373,7 +373,7 @@ NEWS_ARTICLE_FETCH_TIMEOUT_SECONDS = float(
 # and then sits frozen mid-scroll (looking stuck, with headlines cut off at
 # the lane edge) for the remainder of its scheduled on-screen time.
 NEWS_HEADLINES_DISPLAY_SECONDS = float(
-    os.environ.get("NEWS_HEADLINES_DISPLAY_SECONDS", "20.0") or 20.0
+    os.environ.get("NEWS_HEADLINES_DISPLAY_SECONDS", "30.0") or 30.0
 )
 
 # Adds a bottom ticker lane to the news headlines screen showing major index
