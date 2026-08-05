@@ -1,5 +1,6 @@
 import screens.draw_news_headlines as dnh
 from services.news_feeds import NewsHeadline, NewsTopic
+from services.stock_quotes import StockQuote
 
 
 class DummyDisplay:
@@ -148,6 +149,7 @@ def test_draw_news_headlines_renders_without_touch(monkeypatch):
     monkeypatch.setattr(dnh, "NEWS_HEADLINES_DISPLAY_SECONDS", 0.05)
     monkeypatch.setattr(dnh, "_pygame_module_for_display", lambda display: None)
     monkeypatch.setattr(dnh, "_download_thumbnail", lambda *args, **kwargs: None)
+    monkeypatch.setattr(dnh, "fetch_stock_quotes", lambda *args, **kwargs: [])
 
     topics = _topics(["local", "sports", "business"])
     headlines = _headlines_for(topics)
@@ -160,6 +162,99 @@ def test_draw_news_headlines_renders_without_touch(monkeypatch):
     assert screen.displayed is True
     assert screen.image.size == (dnh.WIDTH, dnh.HEIGHT)
     assert display.frames
+
+
+def test_draw_news_headlines_appends_stock_row_at_bottom(monkeypatch):
+    monkeypatch.setattr(dnh, "NEWS_HEADLINES_DISPLAY_SECONDS", 0.05)
+    monkeypatch.setattr(dnh, "_pygame_module_for_display", lambda display: None)
+    monkeypatch.setattr(dnh, "_download_thumbnail", lambda *args, **kwargs: None)
+
+    topics = _topics(["local"])
+    headlines = _headlines_for(topics)
+    monkeypatch.setattr(dnh, "load_news_feed_config", lambda: (topics, 5, 20))
+    monkeypatch.setattr(dnh, "fetch_all_headlines", lambda: headlines)
+
+    quotes = [StockQuote(symbol="^DJI", label="DJIA", price=44000.0, change=12.5, change_pct=0.03)]
+    captured_rows = []
+    monkeypatch.setattr(dnh, "fetch_stock_quotes", lambda *args, **kwargs: quotes)
+    original_run_ticker = dnh._run_ticker
+
+    def _spy_run_ticker(display, rows):
+        captured_rows.extend(rows)
+        return original_run_ticker(display, rows)
+
+    monkeypatch.setattr(dnh, "_run_ticker", _spy_run_ticker)
+
+    display = DummyDisplay()
+    dnh.draw_news_headlines(display, transition=True)
+
+    assert [row.topic.id for row in captured_rows] == ["local", "markets"]
+
+
+def test_draw_news_headlines_skips_stock_row_when_disabled(monkeypatch):
+    monkeypatch.setattr(dnh, "NEWS_HEADLINES_DISPLAY_SECONDS", 0.05)
+    monkeypatch.setattr(dnh, "_pygame_module_for_display", lambda display: None)
+    monkeypatch.setattr(dnh, "_download_thumbnail", lambda *args, **kwargs: None)
+    monkeypatch.setattr(dnh.config, "ENABLE_STOCK_TICKER", False)
+
+    calls = []
+    monkeypatch.setattr(dnh, "fetch_stock_quotes", lambda *args, **kwargs: calls.append(1) or [])
+
+    topics = _topics(["local"])
+    headlines = _headlines_for(topics)
+    monkeypatch.setattr(dnh, "load_news_feed_config", lambda: (topics, 5, 20))
+    monkeypatch.setattr(dnh, "fetch_all_headlines", lambda: headlines)
+
+    display = DummyDisplay()
+    dnh.draw_news_headlines(display, transition=True)
+
+    assert calls == []
+
+
+def test_format_stock_entry_text_colors_by_direction():
+    up = StockQuote(symbol="AAPL", label="AAPL", price=200.0, change=1.5, change_pct=0.75)
+    down = StockQuote(symbol="MSFT", label="MSFT", price=400.0, change=-2.0, change_pct=-0.5)
+    flat = StockQuote(symbol="VRNO", label="VRNO", price=1.0, change=0.0, change_pct=0.0)
+    unpriced = StockQuote(symbol="NVDA", label="NVDA", price=120.0, change=None, change_pct=None)
+
+    up_text, up_color = dnh._format_stock_entry_text(up)
+    _down_text, down_color = dnh._format_stock_entry_text(down)
+    _flat_text, flat_color = dnh._format_stock_entry_text(flat)
+    unpriced_text, unpriced_color = dnh._format_stock_entry_text(unpriced)
+
+    assert up_color == dnh._STOCK_UP_COLOR
+    assert "200.00" in up_text and "+1.50" in up_text
+    assert down_color == dnh._STOCK_DOWN_COLOR
+    assert flat_color == dnh._STOCK_FLAT_COLOR
+    assert unpriced_color == dnh._STOCK_FLAT_COLOR
+    assert "N/A" in unpriced_text
+
+
+def test_build_stock_row_skips_unpriced_quotes_and_none_when_empty():
+    quotes = [
+        StockQuote(symbol="^DJI", label="DJIA", price=44000.0, change=10.0, change_pct=0.02),
+        StockQuote(symbol="XXXX", label="XXXX", price=None, change=None, change_pct=None),
+    ]
+
+    row = dnh._build_stock_row(quotes)
+
+    assert row is not None
+    assert row.topic.id == "markets"
+    assert len(row.entries) == 1
+    assert row.entries[0].headline is None
+
+    assert dnh._build_stock_row([]) is None
+    assert dnh._build_stock_row([StockQuote("X", "X", None, None, None)]) is None
+
+
+def test_render_frame_stock_row_entries_are_not_tappable():
+    quotes = [StockQuote(symbol="AAPL", label="AAPL", price=200.0, change=1.5, change_pct=0.75)]
+    row = dnh._build_stock_row(quotes)
+    row_height, row_tops = dnh._compute_row_layout(1)
+
+    _img, hit_rects = dnh._render_frame([row], row_height, row_tops)
+
+    assert hit_rects == []
 
 
 def test_draw_news_headlines_shows_empty_state_when_disabled(monkeypatch):

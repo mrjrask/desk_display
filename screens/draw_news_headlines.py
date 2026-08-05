@@ -30,6 +30,7 @@ from services.news_feeds import (
     fetch_article_text,
     load_news_feed_config,
 )
+from services.stock_quotes import StockQuote, default_symbol_order, fetch_stock_quotes
 from utils import (
     ScreenImage,
     _pygame_module_for_display,
@@ -78,6 +79,14 @@ _ROW_THEMES: dict[str, dict[str, tuple[int, int, int]]] = {
 }
 _FALLBACK_THEME = {"bg": (30, 30, 38), "label_bg": (62, 62, 78), "text": (232, 232, 238)}
 
+# Synthetic topic + theme for the stock ticker row appended at the bottom of
+# the screen (see _build_stock_row). Not a real entry in news_feeds.json.
+_STOCK_TOPIC = NewsTopic(id="markets", label="Markets", name="markets", url="")
+_STOCK_THEME = {"bg": (8, 8, 14), "label_bg": (28, 28, 40), "text": (235, 235, 245)}
+_STOCK_UP_COLOR = (60, 220, 100)
+_STOCK_DOWN_COLOR = (235, 70, 70)
+_STOCK_FLAT_COLOR = (235, 235, 245)
+
 _ENTRY_SEPARATOR = "     •     "
 _MIN_ROW_HEIGHT = 20
 _FRAME_INTERVAL_SECONDS = 0.045
@@ -99,11 +108,12 @@ def _speed_multiplier(topic_id: str) -> float:
 
 @dataclass
 class _TickerEntry:
-    headline: NewsHeadline
+    headline: Optional[NewsHeadline]
     text: str
     width: int
     thumb: Optional[Image.Image]
     thumb_size: int
+    text_color: Optional[tuple[int, int, int]] = None
 
 
 @dataclass
@@ -224,6 +234,52 @@ def _build_rows(
     return rows
 
 
+def _format_stock_entry_text(quote: StockQuote) -> tuple[str, tuple[int, int, int]]:
+    price_str = f"{quote.price:,.2f}"
+    if quote.change is not None and quote.change_pct is not None:
+        if quote.change > 0:
+            arrow, color = "▲", _STOCK_UP_COLOR
+        elif quote.change < 0:
+            arrow, color = "▼", _STOCK_DOWN_COLOR
+        else:
+            arrow, color = "◆", _STOCK_FLAT_COLOR
+        change_str = f"{arrow} {quote.change:+.2f} ({quote.change_pct:+.2f}%)"
+    else:
+        color = _STOCK_FLAT_COLOR
+        change_str = "N/A"
+    return f"{quote.label} {price_str}  {change_str}" + _ENTRY_SEPARATOR, color
+
+
+def _build_stock_row(quotes: list[StockQuote]) -> Optional[_TickerRow]:
+    """Build the bottom ticker row from fetched quotes; None if none priced."""
+
+    probe_draw = ImageDraw.Draw(Image.new("RGB", (4, 4)))
+    entries: list[_TickerEntry] = []
+    for quote in quotes:
+        if quote.price is None:
+            continue
+        text, color = _format_stock_entry_text(quote)
+        width = measure_text(probe_draw, text, HEADLINE_FONT)[0]
+        entries.append(
+            _TickerEntry(
+                headline=None,
+                text=text,
+                width=max(1, width),
+                thumb=None,
+                thumb_size=0,
+                text_color=color,
+            )
+        )
+    if not entries:
+        return None
+    return _TickerRow(
+        topic=_STOCK_TOPIC,
+        theme=_STOCK_THEME,
+        entries=entries,
+        speed=config.NEWS_TICKER_BASE_SPEED * _speed_multiplier(_STOCK_TOPIC.id),
+    )
+
+
 # ─── Pure marquee layout math (no PIL/pygame; easy to unit test) ──────────────
 
 
@@ -312,12 +368,14 @@ def _render_frame(
                 content_x += entry.thumb_size + 8
             text_h = measure_text(lane_draw, entry.text, HEADLINE_FONT)[1]
             text_y = (row_height - text_h) // 2
-            lane_draw.text((content_x, text_y), entry.text, font=HEADLINE_FONT, fill=theme["text"])
+            fill = entry.text_color or theme["text"]
+            lane_draw.text((content_x, text_y), entry.text, font=HEADLINE_FONT, fill=fill)
 
-            hit_x0 = lane_x0 + max(0, int(x0))
-            hit_x1 = lane_x0 + min(lane_width, int(x1))
-            if hit_x1 > hit_x0:
-                hit_rects.append((hit_x0, top, hit_x1, top + row_height, entry.headline))
+            if entry.headline is not None:
+                hit_x0 = lane_x0 + max(0, int(x0))
+                hit_x1 = lane_x0 + min(lane_width, int(x1))
+                if hit_x1 > hit_x0:
+                    hit_rects.append((hit_x0, top, hit_x1, top + row_height, entry.headline))
 
         img.paste(lane_img, (lane_x0, top))
 
@@ -647,8 +705,16 @@ def draw_news_headlines(display, transition: bool = True) -> ScreenImage:
         return _render_empty_state(display)
 
     headlines_by_topic = fetch_all_headlines()
-    row_height_estimate, _row_tops_estimate = _compute_row_layout(len(topics))
+    row_count_estimate = len(topics) + (1 if config.ENABLE_STOCK_TICKER else 0)
+    row_height_estimate, _row_tops_estimate = _compute_row_layout(row_count_estimate)
     rows = _build_rows(topics, headlines_by_topic, row_height_estimate)
+
+    if config.ENABLE_STOCK_TICKER:
+        quotes = fetch_stock_quotes(default_symbol_order())
+        stock_row = _build_stock_row(quotes)
+        if stock_row is not None:
+            rows.append(stock_row)
+
     if not rows:
         return _render_empty_state(display)
 

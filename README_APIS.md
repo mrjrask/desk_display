@@ -268,6 +268,8 @@ Diagnostics: `python scripts/test_api_connections.py` includes a `news headlines
 
 Fields used include `regularMarketPrice`, `previousClose`, and historical close values when available. The diagnostics check chart payload availability with `range=1d` and `interval=1d`.
 
+The news headlines screen (`screens/draw_news_headlines.py`) appends a bottom "Markets" ticker lane driven by `services/stock_quotes.py`, which fetches the same way as the VRNO screen for a fixed symbol list: `^DJI` (DJIA), `^IXIC` (Nasdaq Composite), `^GSPC` (S&P 500), `VRNO`, `AAPL`, and `services.stock_quotes.TOP_MARKET_CAP_SYMBOLS` (currently `NVDA`, `AAPL`, `MSFT`, `GOOGL`, `AMZN` — edit that list as market-cap rankings shift; duplicates against the fixed symbols are dropped). Quotes are cached for `STOCK_TICKER_CACHE_TTL_SECONDS` (default 900s). Set `ENABLE_STOCK_TICKER=false` to hide the row.
+
 ---
 
 ## AHL / Chicago Wolves
