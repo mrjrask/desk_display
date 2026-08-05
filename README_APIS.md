@@ -241,13 +241,14 @@ Default topics/feeds shipped in `news_feeds.json`:
 | Topic id | Label | Default feed |
 | --- | --- | --- |
 | `local` | Local News | Patch – Chicago (`https://patch.com/illinois/chicago/rss`) |
+| `chicagoland` | Chicagoland News | Chicago Tribune – News (`https://www.chicagotribune.com/arcio/rss/category/news/`) |
 | `national` | National News | New York Times – U.S. (`https://rss.nytimes.com/services/xml/rss/nyt/US.xml`) |
 | `world` | World News | New York Times – World (`https://rss.nytimes.com/services/xml/rss/nyt/World.xml`) |
 | `technology` | Technology News | New York Times – Technology (`https://rss.nytimes.com/services/xml/rss/nyt/Technology.xml`) |
-| `sports` | Sports News | New York Times – Sports (`https://rss.nytimes.com/services/xml/rss/nyt/Sports.xml`) |
+| `sports` | Chicago Sports | Chicago Tribune – Sports (`https://www.chicagotribune.com/arcio/rss/category/sports/`) |
 | `business` | Business News | New York Times – Business (`https://rss.nytimes.com/services/xml/rss/nyt/Business.xml`) |
 
-`local` defaults to Chicago to match this project's other Chicago-focused screens (Bears/Bulls/Cubs/Sox/Hawks) — edit `news_feeds.json` to point it at your own city/outlet, or add/remove topics entirely. Any topic added to the file automatically gets its own ticker lane, a fallback color theme, and a deterministic-but-distinct scroll speed; add an entry to `_ROW_THEMES` in `screens/draw_news_headlines.py` to give a custom topic its own colors instead of the fallback theme.
+`local`, `chicagoland`, and `sports` default to Chicago to match this project's other Chicago-focused screens (Bears/Bulls/Cubs/Sox/Hawks) — edit `news_feeds.json` to point them at your own city/outlet, or add/remove topics entirely. Any topic added to the file automatically gets its own ticker lane, a fallback color theme, and a deterministic-but-distinct scroll speed; add an entry to `_ROW_THEMES` in `screens/draw_news_headlines.py` to give a custom topic its own colors instead of the fallback theme.
 
 Fields used per headline: title, link, description/summary (HTML-stripped for the ticker), publish date (used to sort newest-first and to pick the most recent `headline_count` items), and an image URL resolved from, in order, `media:content` (largest `width` wins), `media:thumbnail`, an `<enclosure type="image/*">`, or the first `<img>` found in the description/`content:encoded` HTML. Any step in that chain can come back empty; the ticker simply renders without a thumbnail for that headline.
 

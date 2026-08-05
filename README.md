@@ -32,7 +32,7 @@ The project is optimized for desk-sized devices but also includes larger 800×48
 - JSON-backed playlists and sequence ordering in `screens_config.json`.
 - Optional quad layouts in `screens_layouts.json`, including touch-to-fullscreen behavior on supported HyperPixel setups.
 - Weather screens for current conditions, forecast details, hourly forecast, daily forecast, astronomical/sun events, alerts, and radar imagery.
-- News headlines screen with one colored scrolling ticker lane per topic (local, national, world, technology, sports, business by default), inline article images, and tap-to-read overlay on touch displays. Feeds are configured in `news_feeds.json`.
+- News headlines screen with one colored scrolling ticker lane per topic (local, Chicagoland, national, world, technology, sports, business by default), inline article images, and tap-to-read overlay on touch displays. Feeds are configured in `news_feeds.json`.
 - Indoor sensor screen with BME280/BME680/BME688/SHT4x-style sensor support and configurable I2C probing.
 - Sports coverage for NFL, NHL, NBA, MLB, NCAAM, FIFA World Cup, and AHL/Wolves helpers.
 - Chicago-focused team screens for Bears, Blackhawks, Wolves, Bulls, Cubs, and White Sox.
