@@ -376,6 +376,14 @@ NEWS_HEADLINES_DISPLAY_SECONDS = float(
     os.environ.get("NEWS_HEADLINES_DISPLAY_SECONDS", "20.0") or 20.0
 )
 
+# Adds a bottom ticker lane to the news headlines screen showing major index
+# levels plus a handful of individual stock quotes (see
+# services/stock_quotes.py). Uses the same yfinance source as the VRNO screen.
+ENABLE_STOCK_TICKER = _get_bool_env("ENABLE_STOCK_TICKER", True)
+STOCK_TICKER_CACHE_TTL_SECONDS = int(
+    os.environ.get("STOCK_TICKER_CACHE_TTL_SECONDS", "900") or 900
+)
+
 WEATHERKIT_TEAM_ID     = os.environ.get("WEATHERKIT_TEAM_ID")
 WEATHERKIT_KEY_ID      = os.environ.get("WEATHERKIT_KEY_ID")
 WEATHERKIT_SERVICE_ID  = os.environ.get("WEATHERKIT_SERVICE_ID")
