@@ -231,7 +231,7 @@ Fields used include game IDs, status, team display names/abbreviations, team log
 Feed name/URL pairs are intentionally kept out of code so they're easy to find and edit. Each entry in `news_feeds.json`'s `topics` array is:
 
 ```json
-{ "id": "local", "label": "Local News", "name": "Patch – Chicago", "url": "https://patch.com/illinois/chicago/rss" }
+{ "id": "local", "label": "Local", "name": "Patch – Chicago", "url": "https://patch.com/illinois/chicago/rss" }
 ```
 
 `headline_count` (default 5) controls how many recent headlines are kept per topic; `refresh_minutes` (default 20) controls how often feeds are re-fetched.
@@ -240,13 +240,13 @@ Default topics/feeds shipped in `news_feeds.json`:
 
 | Topic id | Label | Default feed |
 | --- | --- | --- |
-| `local` | Local News | Patch – Chicago (`https://patch.com/illinois/chicago/rss`) |
-| `chicagoland` | Chicagoland News | Chicago Tribune – News (`https://www.chicagotribune.com/arcio/rss/category/news/`) |
-| `national` | National News | New York Times – U.S. (`https://rss.nytimes.com/services/xml/rss/nyt/US.xml`) |
-| `world` | World News | New York Times – World (`https://rss.nytimes.com/services/xml/rss/nyt/World.xml`) |
-| `technology` | Technology News | New York Times – Technology (`https://rss.nytimes.com/services/xml/rss/nyt/Technology.xml`) |
+| `local` | Local | Patch – Chicago (`https://patch.com/illinois/chicago/rss`) |
+| `chicagoland` | Chicagoland | Chicago Tribune – News (`https://www.chicagotribune.com/arcio/rss/category/news/`) |
+| `national` | National | New York Times – U.S. (`https://rss.nytimes.com/services/xml/rss/nyt/US.xml`) |
+| `world` | World | New York Times – World (`https://rss.nytimes.com/services/xml/rss/nyt/World.xml`) |
+| `technology` | Technology | New York Times – Technology (`https://rss.nytimes.com/services/xml/rss/nyt/Technology.xml`) |
 | `sports` | Chicago Sports | Chicago Tribune – Sports (`https://www.chicagotribune.com/arcio/rss/category/sports/`) |
-| `business` | Business News | New York Times – Business (`https://rss.nytimes.com/services/xml/rss/nyt/Business.xml`) |
+| `business` | Business | New York Times – Business (`https://rss.nytimes.com/services/xml/rss/nyt/Business.xml`) |
 
 `local`, `chicagoland`, and `sports` default to Chicago to match this project's other Chicago-focused screens (Bears/Bulls/Cubs/Sox/Hawks) — edit `news_feeds.json` to point them at your own city/outlet, or add/remove topics entirely. Any topic added to the file automatically gets its own ticker lane, a fallback color theme, and a deterministic-but-distinct scroll speed; add an entry to `_ROW_THEMES` in `screens/draw_news_headlines.py` to give a custom topic its own colors instead of the fallback theme.
 

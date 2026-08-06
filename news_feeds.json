@@ -5,31 +5,31 @@
   "topics": [
     {
       "id": "local",
-      "label": "Local News",
+      "label": "Local",
       "name": "Patch – Chicago",
       "url": "https://patch.com/illinois/chicago/rss"
     },
     {
       "id": "chicagoland",
-      "label": "Chicagoland News",
+      "label": "Chicagoland",
       "name": "Block Club Chicago",
       "url": "https://blockclubchicago.org/feed/"
     },
     {
       "id": "national",
-      "label": "National News",
+      "label": "National",
       "name": "New York Times – U.S.",
       "url": "https://rss.nytimes.com/services/xml/rss/nyt/US.xml"
     },
     {
       "id": "world",
-      "label": "World News",
+      "label": "World",
       "name": "New York Times – World",
       "url": "https://rss.nytimes.com/services/xml/rss/nyt/World.xml"
     },
     {
       "id": "technology",
-      "label": "Technology News",
+      "label": "Technology",
       "name": "New York Times – Technology",
       "url": "https://rss.nytimes.com/services/xml/rss/nyt/Technology.xml"
     },
@@ -41,7 +41,7 @@
     },
     {
       "id": "business",
-      "label": "Business News",
+      "label": "Business",
       "name": "New York Times – Business",
       "url": "https://rss.nytimes.com/services/xml/rss/nyt/Business.xml"
     }
