@@ -5,6 +5,7 @@ SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 PROJECT_DIR="${PROJECT_DIR:-$(cd -- "$SCRIPT_DIR/.." && pwd)}"
 SERVICE_USER="${SUDO_USER:-$(whoami)}"
 SERVICE_NAME="desk_display.service"
+CONFIG_UI_SERVICE_NAME="config_ui_desk_display.service"
 
 COMMON_SCRIPT="$PROJECT_DIR/scripts/helpers/common.sh"
 if [[ ! -f "$COMMON_SCRIPT" ]]; then
@@ -295,5 +296,14 @@ Service control commands:
   sudo systemctl restart ${SERVICE_NAME}
   sudo systemctl stop ${SERVICE_NAME}
   sudo journalctl -u ${SERVICE_NAME} -f
+
+Configuration and screenshot webpage service control commands:
+  sudo systemctl status ${CONFIG_UI_SERVICE_NAME}
+  sudo systemctl restart ${CONFIG_UI_SERVICE_NAME}
+  sudo systemctl stop ${CONFIG_UI_SERVICE_NAME}
+  sudo journalctl -u ${CONFIG_UI_SERVICE_NAME} -f
+
+Configuration and screenshot webpage:
+  http://$(hostname -I 2>/dev/null | awk '{print $1}'):${SCREEN_CONFIG_PORT:-5002}
 EOF
 fi
