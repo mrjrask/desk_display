@@ -20,6 +20,38 @@ else
   SUDO=""
 fi
 
+BACKUP_DIR="${UNINSTALL_BACKUP_DIR:-$HOME/desk_display_uninstalled}"
+
+cat >&2 <<EOF
+
+################################################################################
+ WARNING: this permanently uninstalls Desk Display.
+
+ This script will:
+   - stop and disable the desk_display systemd services
+   - remove the Python virtual environment
+   - move .env and ~/keys/ (if present) into:
+       $BACKUP_DIR
+   - DELETE the entire project directory:
+       $PROJECT_DIR
+
+ This cannot be undone, other than restoring from the backup folder above.
+################################################################################
+
+EOF
+
+if [[ -t 0 ]]; then
+  read -r -p 'Type UNINSTALL (all caps) to continue: ' confirm_word
+  if [[ "$confirm_word" != "UNINSTALL" ]]; then
+    warn 'Confirmation not received. Aborting without changes.'
+    exit 1
+  fi
+elif [[ "${CONFIRM_UNINSTALL:-}" != "yes" ]]; then
+  warn 'Non-interactive shell and CONFIRM_UNINSTALL is not set to "yes". Aborting without changes.'
+  warn 'Set CONFIRM_UNINSTALL=yes to run this uninstaller non-interactively.'
+  exit 1
+fi
+
 if command -v systemctl >/dev/null 2>&1; then
   log "Stopping $SERVICE_NAME"
   $SUDO systemctl stop "$SERVICE_NAME" || warn "Failed to stop $SERVICE_NAME"
@@ -165,8 +197,6 @@ if [[ -d "$VENV_DIR" ]]; then
 else
   warn "No virtual environment found at $VENV_DIR"
 fi
-
-BACKUP_DIR="${UNINSTALL_BACKUP_DIR:-$HOME/desk_display_uninstalled}"
 
 move_to_backup() {
   local src="$1"
