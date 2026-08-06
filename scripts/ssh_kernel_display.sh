@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-SERVICE_NAME="${SERVICE_NAME:-desk_display-kernel.service}"
+SERVICE_NAME="${SERVICE_NAME:-desk_display.service}"
 SERVICE_USER="${DESK_DISPLAY_SESSION_USER:-${SUDO_USER:-$(whoami)}}"
 
 usage() {

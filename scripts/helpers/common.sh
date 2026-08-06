@@ -244,7 +244,7 @@ install_kernel_user_service() {
   local project_dir="$1"
   local service_user="$2"
   local template_path="$3"
-  local service_name="${4:-desk_display-kernel.service}"
+  local service_name="${4:-desk_display.service}"
 
   if [[ ! -f "$template_path" ]]; then
     warn "Kernel user service template not found at $template_path"
