@@ -11,12 +11,21 @@ warn() { printf '[WARN] %s\n' "$*"; }
 SERVICE_NAME="desk_display.service"
 CONFIG_UI_SERVICE_NAME="config_ui_desk_display.service"
 KERNEL_USER_SERVICE_NAME="desk_display.service"
+WAVESHARE_OLED_SERVICE_NAME="desk_display_waveshare_oled.service"
+WAVESHARE_FBCP_SERVICE_NAME="waveshare-fbcp.service"
 
 SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 PROJECT_DIR="${PROJECT_DIR:-$(cd -- "$SCRIPT_DIR/.." && pwd)}"
 SERVICE_PATH="/etc/systemd/system/$SERVICE_NAME"
 CONFIG_UI_SERVICE_PATH="/etc/systemd/system/$CONFIG_UI_SERVICE_NAME"
 COMMON_SCRIPT="$PROJECT_DIR/scripts/helpers/common.sh"
+
+# Any live foreground launcher (scripts/launch_kernel_display.sh) restarts
+# the system service from an EXIT trap when it stops. This lock tells it
+# (and any future cooperating script) that an uninstall is underway so it
+# must not fight the uninstaller by bringing the service back.
+UNINSTALL_LOCK="${DESK_DISPLAY_UNINSTALL_LOCK:-/tmp/.desk_display_uninstall_in_progress}"
+export DESK_DISPLAY_UNINSTALL_LOCK="$UNINSTALL_LOCK"
 
 if [[ $EUID -ne 0 ]]; then
   SUDO="sudo"
@@ -111,11 +120,98 @@ if [[ $PROJECT_DIR_SUSPICIOUS -eq 0 ]]; then
   fi
 fi
 
+# From here on the uninstall is committed. Drop the lock so any launcher
+# script (or a future re-run) knows not to restart the service out from
+# under us, and make sure it's removed however the script exits.
+: > "$UNINSTALL_LOCK" 2>/dev/null || $SUDO tee "$UNINSTALL_LOCK" >/dev/null 2>&1 || true
+trap 'rm -f "$UNINSTALL_LOCK" 2>/dev/null || $SUDO rm -f "$UNINSTALL_LOCK" 2>/dev/null || true' EXIT
+
+# Collect every user who might have a per-user "kernel" desk_display
+# service or desktop launcher/autostart entry installed, so nothing is
+# left behind to relaunch the display on next login. Do not rely solely on
+# SUDO_USER/whoami: if the uninstaller is run as literal root (e.g. from a
+# root console/cron, no SUDO_USER set), whoami is "root" and the real
+# service-owning user would otherwise be missed entirely.
+declare -a kernel_service_users=()
+declare -A seen_kernel_users=()
+
+add_kernel_service_user() {
+  local candidate="$1"
+  if [[ -n "$candidate" && "$candidate" != "root" && -z "${seen_kernel_users[$candidate]:-}" ]]; then
+    seen_kernel_users["$candidate"]=1
+    kernel_service_users+=("$candidate")
+  fi
+}
+
+if [[ -n "${DESK_DISPLAY_SESSION_USER:-}" ]]; then
+  add_kernel_service_user "$DESK_DISPLAY_SESSION_USER"
+fi
+if [[ -n "${SUDO_USER:-}" ]]; then
+  add_kernel_service_user "$SUDO_USER"
+fi
+add_kernel_service_user "$(whoami)"
+
+if command -v systemctl >/dev/null 2>&1; then
+  system_service_owner=$($SUDO systemctl show -p User --value "$SERVICE_NAME" 2>/dev/null || true)
+  add_kernel_service_user "$system_service_owner"
+fi
+
+# Fall back to scanning every home directory for an installed per-user
+# unit; this is what catches the case above (root with no SUDO_USER).
+if [[ -d /home ]]; then
+  for candidate_unit in /home/*/.config/systemd/user/"$KERNEL_USER_SERVICE_NAME"; do
+    [[ -e "$candidate_unit" ]] || continue
+    candidate_home="${candidate_unit%/.config/systemd/user/*}"
+    add_kernel_service_user "$(basename -- "$candidate_home")"
+  done
+fi
+
+if [[ ${#kernel_service_users[@]} -eq 0 ]]; then
+  warn "Could not determine which user owns the per-user kernel display service; it may not be stopped."
+fi
+
+# Kill any foreground/manual instance (e.g. launched via the "Desk Display
+# (Kernel Display)" desktop icon, or a bare `python main.py`) before
+# touching systemd at all. These are not managed by `systemctl stop` and,
+# left running, will keep drawing to the display (and can restart the
+# system service from their own exit trap) throughout the rest of this
+# script. SIGKILL is used deliberately so no exit trap in a killed process
+# can react and restart anything.
+kill_stray_processes() {
+  local pattern="$1"
+  local user="${2:-}"
+  if [[ -n "$user" ]]; then
+    pkill -9 -u "$user" -f "$pattern" 2>/dev/null || true
+  else
+    pkill -9 -f "$pattern" 2>/dev/null || true
+  fi
+}
+
+if command -v pkill >/dev/null 2>&1; then
+  log "Killing any running Desk Display processes"
+  kill_stray_processes "$PROJECT_DIR/main.py"
+  kill_stray_processes "$PROJECT_DIR/scripts/launch_kernel_display.sh"
+  kill_stray_processes "$PROJECT_DIR/scripts/launch_framebuffer.sh"
+  for service_user in "${kernel_service_users[@]}"; do
+    kill_stray_processes "main.py" "$service_user"
+    kill_stray_processes "launch_kernel_display.sh" "$service_user"
+    kill_stray_processes "launch_framebuffer.sh" "$service_user"
+  done
+fi
+
 if command -v systemctl >/dev/null 2>&1; then
   log "Stopping $SERVICE_NAME"
   $SUDO systemctl stop "$SERVICE_NAME" || warn "Failed to stop $SERVICE_NAME"
   log "Stopping $CONFIG_UI_SERVICE_NAME"
   $SUDO systemctl stop "$CONFIG_UI_SERVICE_NAME" || warn "Failed to stop $CONFIG_UI_SERVICE_NAME"
+  if systemctl list-unit-files | grep -q "^$WAVESHARE_OLED_SERVICE_NAME"; then
+    log "Stopping $WAVESHARE_OLED_SERVICE_NAME"
+    $SUDO systemctl stop "$WAVESHARE_OLED_SERVICE_NAME" || warn "Failed to stop $WAVESHARE_OLED_SERVICE_NAME"
+  fi
+  if systemctl list-unit-files | grep -q "^$WAVESHARE_FBCP_SERVICE_NAME"; then
+    log "Stopping $WAVESHARE_FBCP_SERVICE_NAME"
+    $SUDO systemctl stop "$WAVESHARE_FBCP_SERVICE_NAME" || warn "Failed to stop $WAVESHARE_FBCP_SERVICE_NAME"
+  fi
 fi
 
 stop_kernel_user_service() {
@@ -166,28 +262,86 @@ stop_kernel_user_service() {
   fi
 }
 
-if command -v systemctl >/dev/null 2>&1; then
-  declare -a kernel_service_users=()
-  if [[ -n "${DESK_DISPLAY_SESSION_USER:-}" ]]; then
-    kernel_service_users+=("$DESK_DISPLAY_SESSION_USER")
-  fi
-  if [[ -n "${SUDO_USER:-}" ]]; then
-    kernel_service_users+=("$SUDO_USER")
-  fi
-  if [[ -z "${SUDO_USER:-}" ]]; then
-    kernel_service_users+=("$(whoami)")
+disable_kernel_user_service() {
+  local service_user="$1"
+  local user_uid=""
+  local runtime_dir=""
+  local -a user_env=()
+
+  if [[ -z "$service_user" ]]; then
+    return 0
   fi
 
-  declare -A seen_kernel_users=()
-  for service_user in "${kernel_service_users[@]}"; do
-    if [[ -n "$service_user" && -z "${seen_kernel_users[$service_user]:-}" ]]; then
-      seen_kernel_users["$service_user"]=1
-      if [[ "$service_user" != "root" ]]; then
-        stop_kernel_user_service "$service_user"
-      fi
+  user_uid=$(id -u "$service_user" 2>/dev/null || true)
+  if [[ -n "$user_uid" ]]; then
+    runtime_dir="/run/user/$user_uid"
+    if [[ -d "$runtime_dir" ]]; then
+      user_env+=("XDG_RUNTIME_DIR=$runtime_dir")
+    fi
+  fi
+
+  log "Disabling the user-session $KERNEL_USER_SERVICE_NAME for user $service_user"
+  if [[ -n "$SUDO" ]]; then
+    if [[ ${#user_env[@]} -gt 0 ]]; then
+      $SUDO -u "$service_user" env "${user_env[@]}" systemctl --user disable "$KERNEL_USER_SERVICE_NAME" >/dev/null 2>&1 || true
+    else
+      $SUDO -u "$service_user" systemctl --user disable "$KERNEL_USER_SERVICE_NAME" >/dev/null 2>&1 || true
+    fi
+  else
+    if [[ ${#user_env[@]} -gt 0 ]]; then
+      env "${user_env[@]}" systemctl --user disable "$KERNEL_USER_SERVICE_NAME" >/dev/null 2>&1 || true
+    else
+      systemctl --user disable "$KERNEL_USER_SERVICE_NAME" >/dev/null 2>&1 || true
+    fi
+  fi
+
+  local home_dir
+  home_dir=$(getent passwd "$service_user" | cut -d: -f6)
+  if [[ -z "$home_dir" ]]; then
+    home_dir="/home/$service_user"
+  fi
+
+  local user_unit_path="$home_dir/.config/systemd/user/$KERNEL_USER_SERVICE_NAME"
+  local wants_link="$home_dir/.config/systemd/user/default.target.wants/$KERNEL_USER_SERVICE_NAME"
+
+  if [[ -e "$user_unit_path" ]]; then
+    log "Removing user systemd unit at $user_unit_path"
+    $SUDO rm -f "$user_unit_path"
+  fi
+  if [[ -e "$wants_link" || -L "$wants_link" ]]; then
+    log "Removing user systemd wants link at $wants_link"
+    $SUDO rm -f "$wants_link"
+  fi
+}
+
+remove_desktop_entries() {
+  local service_user="$1"
+  local home_dir
+  home_dir=$(getent passwd "$service_user" | cut -d: -f6)
+  if [[ -z "$home_dir" ]]; then
+    home_dir="/home/$service_user"
+  fi
+
+  local -a entries=(
+    "$home_dir/.config/autostart/desk-display-kernel.desktop"
+    "$home_dir/.local/share/applications/desk-display-kernel.desktop"
+    "$home_dir/.local/share/applications/desk-display-framebuffer.desktop"
+    "$home_dir/Desktop/Desk Display Kernel.desktop"
+    "$home_dir/Desktop/Desk Display Framebuffer.desktop"
+  )
+
+  local entry
+  for entry in "${entries[@]}"; do
+    if [[ -e "$entry" ]]; then
+      log "Removing desktop entry at $entry"
+      $SUDO rm -f "$entry"
     fi
   done
-fi
+}
+
+for service_user in "${kernel_service_users[@]}"; do
+  stop_kernel_user_service "$service_user"
+done
 
 log "Starting uninstall for $PROJECT_DIR"
 
@@ -204,6 +358,14 @@ if command -v systemctl >/dev/null 2>&1; then
   else
     warn "$CONFIG_UI_SERVICE_NAME not registered with systemd"
   fi
+  if systemctl list-unit-files | grep -q "^$WAVESHARE_OLED_SERVICE_NAME"; then
+    log "Disabling $WAVESHARE_OLED_SERVICE_NAME"
+    $SUDO systemctl disable "$WAVESHARE_OLED_SERVICE_NAME" || warn "Failed to disable $WAVESHARE_OLED_SERVICE_NAME"
+  fi
+  if systemctl list-unit-files | grep -q "^$WAVESHARE_FBCP_SERVICE_NAME"; then
+    log "Disabling $WAVESHARE_FBCP_SERVICE_NAME"
+    $SUDO systemctl disable "$WAVESHARE_FBCP_SERVICE_NAME" || warn "Failed to disable $WAVESHARE_FBCP_SERVICE_NAME"
+  fi
 
   if [[ -f "$SERVICE_PATH" ]]; then
     log "Removing systemd unit at $SERVICE_PATH"
@@ -218,6 +380,11 @@ if command -v systemctl >/dev/null 2>&1; then
   else
     warn "No systemd unit found at $CONFIG_UI_SERVICE_PATH"
   fi
+
+  for service_user in "${kernel_service_users[@]}"; do
+    disable_kernel_user_service "$service_user"
+    remove_desktop_entries "$service_user"
+  done
 
   log "Reloading systemd daemon"
   $SUDO systemctl daemon-reload || warn "Failed to reload systemd daemon"
@@ -270,6 +437,30 @@ else
 fi
 
 log "Sensitive files (.env, keys) copied to $BACKUP_DIR if present"
+
+# Belt-and-suspenders: everything above stopped and disabled every known
+# service and killed known process patterns once, near the start of the
+# script. If anything raced back to life in between (for example a
+# foreground launcher that was mid-exec when it was killed, or a restart
+# queued just before its unit was disabled), catch it here before the
+# project directory is removed, rather than leaving a live process holding
+# deleted files open and still drawing to the display.
+log "Verifying nothing has respawned before removing the project directory"
+if command -v pkill >/dev/null 2>&1; then
+  kill_stray_processes "$PROJECT_DIR/main.py"
+  for service_user in "${kernel_service_users[@]}"; do
+    kill_stray_processes "main.py" "$service_user"
+  done
+fi
+if command -v systemctl >/dev/null 2>&1; then
+  $SUDO systemctl stop "$SERVICE_NAME" >/dev/null 2>&1 || true
+  $SUDO systemctl stop "$CONFIG_UI_SERVICE_NAME" >/dev/null 2>&1 || true
+  $SUDO systemctl stop "$WAVESHARE_OLED_SERVICE_NAME" >/dev/null 2>&1 || true
+  $SUDO systemctl stop "$WAVESHARE_FBCP_SERVICE_NAME" >/dev/null 2>&1 || true
+  for service_user in "${kernel_service_users[@]}"; do
+    stop_kernel_user_service "$service_user" >/dev/null 2>&1 || true
+  done
+fi
 
 if [[ $PROJECT_DIR_SUSPICIOUS -eq 1 ]]; then
   warn "Refusing to delete suspicious project directory: $PROJECT_DIR"

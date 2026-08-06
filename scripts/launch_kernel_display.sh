@@ -30,6 +30,10 @@ if command -v systemctl >/dev/null 2>&1; then
 fi
 
 cleanup() {
+  if [[ -e "${DESK_DISPLAY_UNINSTALL_LOCK:-/tmp/.desk_display_uninstall_in_progress}" ]]; then
+    log "Uninstall in progress; not restarting $SERVICE_NAME."
+    return
+  fi
   if [[ "$service_was_active" == "true" ]] && command -v systemctl >/dev/null 2>&1; then
     log "Restarting $SERVICE_NAME."
     $SUDO systemctl restart "$SERVICE_NAME"
