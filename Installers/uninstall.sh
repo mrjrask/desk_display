@@ -36,6 +36,22 @@ REAL_USER="${REAL_USER:-$(whoami)}"
 
 BACKUP_DIR="${UNINSTALL_BACKUP_DIR:-$REAL_HOME/desk_display_uninstalled}"
 
+if [[ -f "$COMMON_SCRIPT" ]]; then
+  # shellcheck source=/dev/null
+  source "$COMMON_SCRIPT"
+fi
+
+VENV_DIR="$PROJECT_DIR/venv"
+EXISTING_VENV=$(detect_existing_venv "$PROJECT_DIR" || true)
+if [[ -n "$EXISTING_VENV" ]]; then
+  VENV_DIR="$EXISTING_VENV"
+fi
+
+PROJECT_DIR_SUSPICIOUS=0
+if [[ -z "$PROJECT_DIR" || "$PROJECT_DIR" == "/" || "$PROJECT_DIR" == "$HOME" || "$PROJECT_DIR" == "$REAL_HOME" ]]; then
+  PROJECT_DIR_SUSPICIOUS=1
+fi
+
 cat >&2 <<EOF
 
 ################################################################################
@@ -54,16 +70,45 @@ cat >&2 <<EOF
 
 EOF
 
+# All confirmation prompts happen up front so the uninstall itself, once
+# started below, runs to completion without stopping partway through to
+# wait on input.
+
 if [[ -t 0 ]]; then
-  read -r -p 'Type UNINSTALL (all caps) to continue: ' confirm_word
-  if [[ "$confirm_word" != "UNINSTALL" ]]; then
-    warn 'Confirmation not received. Aborting without changes.'
-    exit 1
-  fi
+  read -r -p 'Proceed with uninstall? [y/N]: ' confirm_reply
+  case "${confirm_reply,,}" in
+    y|yes) ;;
+    *)
+      warn 'Confirmation not received. Aborting without changes.'
+      exit 1
+      ;;
+  esac
 elif [[ "${CONFIRM_UNINSTALL:-}" != "yes" ]]; then
   warn 'Non-interactive shell and CONFIRM_UNINSTALL is not set to "yes". Aborting without changes.'
   warn 'Set CONFIRM_UNINSTALL=yes to run this uninstaller non-interactively.'
   exit 1
+fi
+
+keep_venv_choice="${KEEP_VENV:-}"
+if [[ -d "$VENV_DIR" ]]; then
+  if [[ -z "$keep_venv_choice" && -t 0 ]]; then
+    read -r -p "Keep virtual environment at $VENV_DIR? [y/N]: " keep_reply
+    case "${keep_reply,,}" in
+      y|yes) keep_venv_choice="yes" ;;
+      *) keep_venv_choice="no" ;;
+    esac
+  fi
+fi
+
+keep_project_dir_choice="${KEEP_PROJECT_DIR:-}"
+if [[ $PROJECT_DIR_SUSPICIOUS -eq 0 ]]; then
+  if [[ -z "$keep_project_dir_choice" && -t 0 ]]; then
+    read -r -p "Delete project directory $PROJECT_DIR? [Y/n]: " keep_reply
+    case "${keep_reply,,}" in
+      n|no) keep_project_dir_choice="yes" ;;
+      *) keep_project_dir_choice="no" ;;
+    esac
+  fi
 fi
 
 if command -v systemctl >/dev/null 2>&1; then
@@ -146,17 +191,6 @@ fi
 
 log "Starting uninstall for $PROJECT_DIR"
 
-if [[ -f "$COMMON_SCRIPT" ]]; then
-  # shellcheck source=/dev/null
-  source "$COMMON_SCRIPT"
-fi
-
-VENV_DIR="$PROJECT_DIR/venv"
-EXISTING_VENV=$(detect_existing_venv "$PROJECT_DIR" || true)
-if [[ -n "$EXISTING_VENV" ]]; then
-  VENV_DIR="$EXISTING_VENV"
-fi
-
 if command -v systemctl >/dev/null 2>&1; then
   if systemctl list-unit-files | grep -q "^$SERVICE_NAME"; then
     log "Disabling $SERVICE_NAME"
@@ -192,17 +226,7 @@ else
 fi
 
 if [[ -d "$VENV_DIR" ]]; then
-  keep_choice="${KEEP_VENV:-}"
-
-  if [[ -z "$keep_choice" && -t 0 ]]; then
-    read -r -p "Keep virtual environment at $VENV_DIR? [y/N]: " keep_reply
-    case "${keep_reply,,}" in
-      y|yes) keep_choice="yes" ;;
-      *) keep_choice="no" ;;
-    esac
-  fi
-
-  if [[ "$keep_choice" == "1" || "$keep_choice" == "yes" ]]; then
+  if [[ "$keep_venv_choice" == "1" || "$keep_venv_choice" == "yes" ]]; then
     log "Keeping virtual environment at $VENV_DIR"
   else
     log "Removing virtual environment at $VENV_DIR"
@@ -247,20 +271,10 @@ fi
 
 log "Sensitive files (.env, keys) copied to $BACKUP_DIR if present"
 
-if [[ -z "$PROJECT_DIR" || "$PROJECT_DIR" == "/" || "$PROJECT_DIR" == "$HOME" || "$PROJECT_DIR" == "$REAL_HOME" ]]; then
+if [[ $PROJECT_DIR_SUSPICIOUS -eq 1 ]]; then
   warn "Refusing to delete suspicious project directory: $PROJECT_DIR"
 else
-  keep_choice="${KEEP_PROJECT_DIR:-}"
-
-  if [[ -z "$keep_choice" && -t 0 ]]; then
-    read -r -p "Delete project directory $PROJECT_DIR? [Y/n]: " keep_reply
-    case "${keep_reply,,}" in
-      n|no) keep_choice="yes" ;;
-      *) keep_choice="no" ;;
-    esac
-  fi
-
-  if [[ "$keep_choice" == "1" || "$keep_choice" == "yes" ]]; then
+  if [[ "$keep_project_dir_choice" == "1" || "$keep_project_dir_choice" == "yes" ]]; then
     log "Keeping project directory at $PROJECT_DIR"
     log "Uninstall complete. Project files remain in $PROJECT_DIR"
   else
