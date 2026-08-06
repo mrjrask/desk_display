@@ -635,16 +635,31 @@ sudo systemctl status desk_display.service
 sudo systemctl status config_ui_desk_display.service
 sudo systemctl restart desk_display.service
 sudo systemctl restart config_ui_desk_display.service
+sudo journalctl -u desk_display.service -f
+sudo journalctl -u config_ui_desk_display.service -f
 ./scripts/restart_services.sh
 ```
 
 Kernel user service commands, when installed. This is the same unit name,
 `desk_display.service`, but running as a per-user service (`systemctl --user`)
-rather than a system service:
+rather than a system service. Because it lives in your user's systemd
+namespace instead of the system manager's, the plain `sudo systemctl status
+desk_display.service` / `sudo journalctl -u desk_display.service -f` commands
+above will report "could not be found" or show nothing for it — use
+`--user`/`--user-unit` instead:
 
 ```bash
+# As the service user:
 systemctl --user status desk_display.service
 systemctl --user restart desk_display.service
+journalctl --user -u desk_display.service -f
+
+# As root, reading the merged journal (e.g. over SSH):
+sudo journalctl --user-unit desk_display.service -f
+
+# Or use the SSH helper, which sets up the user systemd environment for you:
+./scripts/ssh_kernel_display.sh status
+./scripts/ssh_kernel_display.sh logs -f
 ```
 
 Useful operations helpers:

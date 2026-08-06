@@ -6,10 +6,13 @@ SERVICE_USER="${DESK_DISPLAY_SESSION_USER:-${SUDO_USER:-$(whoami)}}"
 
 usage() {
   cat <<EOF
-Usage: $0 <start|stop|restart|status|enable|disable|logs>
+Usage: $0 <start|stop|restart|status|enable|disable|logs> [extra journalctl args]
 
 Manages the Desk Display kernel user service over SSH by ensuring
 the correct user systemd environment variables are set.
+
+'logs' defaults to the last 200 lines. Pass extra journalctl args to
+change that, e.g. '$0 logs -f' to follow live output.
 
 Optional environment variables:
   SERVICE_NAME                Override the user service name (default: $SERVICE_NAME)
@@ -46,7 +49,11 @@ if [[ -d "$RUNTIME_DIR" ]]; then
 fi
 
 SYSTEMCTL_CMD=(systemctl --user "$ACTION" "$SERVICE_NAME")
-JOURNAL_CMD=(journalctl --user --unit "$SERVICE_NAME" -n 200 --no-pager)
+JOURNAL_ARGS=("$@")
+if [[ ${#JOURNAL_ARGS[@]} -eq 0 ]]; then
+  JOURNAL_ARGS=(-n 200 --no-pager)
+fi
+JOURNAL_CMD=(journalctl --user --unit "$SERVICE_NAME" "${JOURNAL_ARGS[@]}")
 
 case "$ACTION" in
   start|stop|restart|status|enable|disable)

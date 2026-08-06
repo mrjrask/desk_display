@@ -236,6 +236,8 @@ report_user_service_status() {
   log "$service_name is a per-user systemd service, not a system service."
   log "'sudo systemctl status $service_name' will always report \"could not be found\" because it only queries the system manager."
   log "Check it with 'systemctl --user status $service_name' as $service_user, or via the SSH helper below."
+  log "Likewise, 'sudo journalctl -u $service_name -f' will show nothing for it: '-u'/'--unit' only matches system-manager units."
+  log "Tail its logs with 'journalctl --user -u $service_name -f' as $service_user, or 'sudo journalctl --user-unit $service_name -f' as root."
   log "Current $service_name status:"
   run_user_systemctl "$service_user" status --no-pager "$service_name" || true
 }
