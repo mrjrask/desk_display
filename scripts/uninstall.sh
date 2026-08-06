@@ -166,4 +166,36 @@ else
   warn "No virtual environment found at $VENV_DIR"
 fi
 
+BACKUP_DIR="${UNINSTALL_BACKUP_DIR:-$HOME/desk_display_uninstalled}"
+
+move_to_backup() {
+  local src="$1"
+  local name
+  name=$(basename -- "$src")
+  local dest="$BACKUP_DIR/$name"
+
+  if [[ -e "$dest" ]]; then
+    dest="$BACKUP_DIR/${name}_$(date +%Y%m%d%H%M%S)"
+  fi
+
+  mkdir -p "$BACKUP_DIR"
+  log "Moving $src to $dest"
+  mv "$src" "$dest"
+}
+
+ENV_FILE="$PROJECT_DIR/.env"
+if [[ -f "$ENV_FILE" ]]; then
+  move_to_backup "$ENV_FILE"
+else
+  warn "No .env file found at $ENV_FILE"
+fi
+
+KEYS_DIR="$HOME/keys"
+if [[ -d "$KEYS_DIR" ]]; then
+  move_to_backup "$KEYS_DIR"
+else
+  warn "No keys folder found at $KEYS_DIR"
+fi
+
 log "Uninstall complete. Project files remain in $PROJECT_DIR"
+log "Sensitive files (.env, keys) moved to $BACKUP_DIR if present"
