@@ -300,8 +300,7 @@ fi
 
 copy_to_backup() {
   local src="$1"
-  local name
-  name=$(basename -- "$src")
+  local name="${2:-$(basename -- "$src")}"
   local dest="$BACKUP_DIR/$name"
 
   if [[ -e "$dest" ]]; then
@@ -319,7 +318,9 @@ copy_to_backup() {
 
 ENV_FILE="$PROJECT_DIR/.env"
 if [[ -f "$ENV_FILE" ]]; then
-  copy_to_backup "$ENV_FILE"
+  # Backed up as "dot.env" rather than ".env" so it isn't a hidden file in
+  # the backup folder and is easy to spot when browsing there.
+  copy_to_backup "$ENV_FILE" "dot.env"
 else
   warn "No .env file found at $ENV_FILE"
 fi
