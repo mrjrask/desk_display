@@ -4,8 +4,13 @@ set -euo pipefail
 SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 PROJECT_DIR="${PROJECT_DIR:-$(cd -- "$SCRIPT_DIR/.." && pwd)}"
 SERVICE_USER="${SUDO_USER:-$(whoami)}"
+# The system-wide service and the per-user kernel-mode service share the
+# unit name "desk_display.service" so `systemctl status desk_display.service`
+# is the right command regardless of install method. They live in separate
+# systemd namespaces (system manager vs. this user's `systemctl --user`
+# manager), so the shared name causes no conflict.
 SERVICE_NAME="desk_display.service"
-USER_SERVICE_NAME="desk_display-kernel.service"
+USER_SERVICE_NAME="desk_display.service"
 USER_SERVICE_TEMPLATE="$PROJECT_DIR/scripts/desk_display_kernel_user.service"
 
 COMMON_SCRIPT="$PROJECT_DIR/scripts/helpers/common.sh"
@@ -304,6 +309,7 @@ if [[ "$SKIP_SYSTEM_DISPLAY_SERVICE" == "1" ]] && command -v loginctl >/dev/null
   log "Enabling lingering for $SERVICE_USER so $USER_SERVICE_NAME survives reboots without an active login."
   $SUDO loginctl enable-linger "$SERVICE_USER" || warn "Failed to enable linger for $SERVICE_USER."
 fi
+report_user_service_status "$SERVICE_USER" "$USER_SERVICE_NAME"
 
 install_kernel_launcher "$PROJECT_DIR" "$SERVICE_NAME" "$SERVICE_USER"
 if [[ "${AUTO_START_KERNEL_DISPLAY:-}" == "1" ]]; then

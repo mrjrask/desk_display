@@ -4,9 +4,13 @@ set -euo pipefail
 log() { printf '[INFO] %s\n' "$*"; }
 warn() { printf '[WARN] %s\n' "$*"; }
 
+# The system-wide service and the per-user kernel-mode service share the
+# unit name "desk_display.service"; they live in separate systemd
+# namespaces (system manager vs. `systemctl --user`), so the shared name
+# causes no conflict, but log messages below call out which scope is meant.
 SERVICE_NAME="desk_display.service"
 CONFIG_UI_SERVICE_NAME="config_ui_desk_display.service"
-KERNEL_USER_SERVICE_NAME="desk_display-kernel.service"
+KERNEL_USER_SERVICE_NAME="desk_display.service"
 
 SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 PROJECT_DIR="${PROJECT_DIR:-$(cd -- "$SCRIPT_DIR/.." && pwd)}"
@@ -88,7 +92,7 @@ stop_kernel_user_service() {
     fi
   fi
 
-  log "Stopping $KERNEL_USER_SERVICE_NAME for user $service_user"
+  log "Stopping the user-session $KERNEL_USER_SERVICE_NAME for user $service_user"
   if [[ -n "$SUDO" ]]; then
     if [[ ${#user_env[@]} -gt 0 ]] && \
       $SUDO -u "$service_user" env "${user_env[@]}" systemctl --user stop "$KERNEL_USER_SERVICE_NAME" >/dev/null 2>&1; then
@@ -113,7 +117,7 @@ stop_kernel_user_service() {
   fi
 
   if [[ $stopped -eq 0 ]]; then
-    warn "Failed to stop $KERNEL_USER_SERVICE_NAME for $service_user"
+    warn "Failed to stop the user-session $KERNEL_USER_SERVICE_NAME for $service_user"
   fi
 }
 

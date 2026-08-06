@@ -4,8 +4,13 @@ set -euo pipefail
 SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 PROJECT_DIR="${PROJECT_DIR:-$(cd -- "$SCRIPT_DIR/.." && pwd)}"
 SERVICE_USER="${SUDO_USER:-$(whoami)}"
+# The system-wide service and the per-user kernel-mode service share the
+# unit name "desk_display.service" so `systemctl status desk_display.service`
+# is the right command regardless of install method. They live in separate
+# systemd namespaces (system manager vs. this user's `systemctl --user`
+# manager), so the shared name causes no conflict.
 SYSTEM_SERVICE_NAME="desk_display.service"
-USER_SERVICE_NAME="desk_display-kernel.service"
+USER_SERVICE_NAME="desk_display.service"
 USER_SERVICE_TEMPLATE="$PROJECT_DIR/scripts/desk_display_kernel_user.service"
 
 COMMON_SCRIPT="$PROJECT_DIR/scripts/helpers/common.sh"
@@ -23,42 +28,12 @@ else
   SUDO=""
 fi
 
-run_user_systemctl() {
-  local service_user="$1"
-  shift
-
-  if ! command -v systemctl >/dev/null 2>&1; then
-    return 1
-  fi
-
-  local uid runtime_dir
-  uid=$(id -u "$service_user" 2>/dev/null || true)
-  runtime_dir=""
-  if [[ -n "$uid" ]]; then
-    runtime_dir="/run/user/$uid"
-  fi
-
-  local systemctl_env=()
-  if [[ -n "$runtime_dir" && -d "$runtime_dir" ]]; then
-    systemctl_env=("XDG_RUNTIME_DIR=$runtime_dir")
-    if [[ -S "$runtime_dir/bus" ]]; then
-      systemctl_env+=("DBUS_SESSION_BUS_ADDRESS=unix:path=$runtime_dir/bus")
-    fi
-  fi
-
-  if [[ -n "$SUDO" ]]; then
-    $SUDO -u "$service_user" env "${systemctl_env[@]}" systemctl --user "$@"
-  else
-    env "${systemctl_env[@]}" systemctl --user "$@"
-  fi
-}
-
 disable_user_kernel_service() {
   local service_user="$1"
   local service_name="$2"
   local home_dir user_systemd_dir wants_link
 
-  log "Disabling $service_name to avoid conflicts with $SYSTEM_SERVICE_NAME."
+  log "Disabling the user-session $service_name to avoid conflicts with the system-wide $SYSTEM_SERVICE_NAME."
   run_user_systemctl "$service_user" disable --now "$service_name" \
     || warn "Failed to disable $service_name via systemctl --user; removing fallback wants link if present."
 
@@ -81,7 +56,7 @@ disable_user_kernel_service() {
 
 disable_system_display_service() {
   if command -v systemctl >/dev/null 2>&1; then
-    log "Disabling $SYSTEM_SERVICE_NAME to avoid conflicts with $USER_SERVICE_NAME."
+    log "Disabling the system-wide $SYSTEM_SERVICE_NAME to avoid conflicts with the user-session $USER_SERVICE_NAME."
     $SUDO systemctl disable --now "$SYSTEM_SERVICE_NAME" || warn "Failed to disable $SYSTEM_SERVICE_NAME."
   fi
 }
@@ -340,7 +315,7 @@ fi
 
 if [[ "${DESK_DISPLAY_OUTPUT}" == "kernel" ]]; then
   if detect_desktop_session "$SERVICE_USER"; then
-    log "Detected an active Wayland/X11 session; HyperPixel will use $USER_SERVICE_NAME."
+    log "Detected an active Wayland/X11 session; HyperPixel will use the user-session $USER_SERVICE_NAME."
   elif [[ "${AUTO_FALLBACK_FRAMEBUFFER:-1}" == "1" ]]; then
     warn "No active Wayland/X11 session detected."
     warn "Switching DESK_DISPLAY_OUTPUT from kernel to framebuffer for Lite/headless startup reliability."
@@ -361,7 +336,7 @@ if [[ "${DESK_DISPLAY_OUTPUT}" == "kernel" ]]; then
     warn "Keeping DESK_DISPLAY_OUTPUT=${DESK_DISPLAY_OUTPUT}. Set AUTO_FALLBACK_FRAMEBUFFER=1 to auto-switch on Lite/headless systems."
   fi
 else
-  log "DESK_DISPLAY_OUTPUT=${DESK_DISPLAY_OUTPUT}; HyperPixel will use $SYSTEM_SERVICE_NAME."
+  log "DESK_DISPLAY_OUTPUT=${DESK_DISPLAY_OUTPUT}; HyperPixel will use the system-wide $SYSTEM_SERVICE_NAME."
 fi
 
 # Only one display loop may own the panel at a time: the per-user kernel
@@ -370,10 +345,10 @@ fi
 # "stuck" screens that still report an active service).
 if [[ "${DESK_DISPLAY_OUTPUT}" == "kernel" ]]; then
   export SKIP_SYSTEM_DISPLAY_SERVICE="1"
-  log "HyperPixel runtime choice: $USER_SERVICE_NAME will run the display loop; $SYSTEM_SERVICE_NAME will stay disabled."
+  log "HyperPixel runtime choice: the user-session $USER_SERVICE_NAME will run the display loop; the system-wide $SYSTEM_SERVICE_NAME will stay disabled."
 else
   export SKIP_SYSTEM_DISPLAY_SERVICE="0"
-  log "HyperPixel runtime choice: $SYSTEM_SERVICE_NAME will run the display loop; $USER_SERVICE_NAME will stay disabled."
+  log "HyperPixel runtime choice: the system-wide $SYSTEM_SERVICE_NAME will run the display loop; the user-session $USER_SERVICE_NAME will stay disabled."
 fi
 
 "$PROJECT_DIR/scripts/helpers/base_setup.sh"
@@ -382,6 +357,7 @@ if [[ "${DESK_DISPLAY_OUTPUT}" == "kernel" ]]; then
   install_kernel_user_service "$PROJECT_DIR" "$SERVICE_USER" "$USER_SERVICE_TEMPLATE" "$USER_SERVICE_NAME"
   enable_user_linger "$SERVICE_USER"
   disable_system_display_service
+  report_user_service_status "$SERVICE_USER" "$USER_SERVICE_NAME"
 else
   disable_user_kernel_service "$SERVICE_USER" "$USER_SERVICE_NAME"
 fi

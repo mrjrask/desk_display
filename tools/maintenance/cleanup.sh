@@ -13,7 +13,9 @@ cd "$PROJECT_ROOT"
 
 stop_kernel_user_service() {
   local system_service="desk_display.service"
-  local kernel_service="desk_display-kernel.service"
+  # Same unit name as $system_service, but in the per-user systemd
+  # namespace (systemctl --user) rather than the system manager.
+  local kernel_service="desk_display.service"
   local service_user=""
   local uid=""
   local runtime_dir=""

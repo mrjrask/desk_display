@@ -72,8 +72,8 @@ else
   echo "No .env found at $ENV_PATH"
 fi
 
-show_cmd "System services" systemctl --no-pager --full status desk_display.service
-show_cmd "User kernel service" systemctl --user --no-pager --full status desk_display-kernel.service
+show_cmd "System service (desk_display.service)" systemctl --no-pager --full status desk_display.service
+show_cmd "User-session service (desk_display.service, systemctl --user)" systemctl --user --no-pager --full status desk_display.service
 
 section "Session/display environment"
 echo "XDG_SESSION_TYPE=${XDG_SESSION_TYPE:-<unset>}"
@@ -86,5 +86,5 @@ echo
 section "Quick hints"
 echo "- If DESK_DISPLAY_OUTPUT=kernel and no active desktop session exists, use framebuffer mode instead."
 echo "- If you use dtoverlay rotate=..., keep DISPLAY_ROTATION=0 unless DISPLAY_ROTATION_STRICT=0 is intentional."
-echo "- If desk_display-kernel.service fails over SSH, run scripts/launch_kernel_display.sh from the Pi desktop session."
-echo "- desk_display.service and desk_display-kernel.service must not both be active; two display loops racing the same panel causes flicker/rapid color changes or a frozen/blank screen even though systemctl reports it as running. Disable whichever one you are not using."
+echo "- If the user-session desk_display.service fails over SSH, run scripts/launch_kernel_display.sh from the Pi desktop session."
+echo "- Both are named desk_display.service but are separate units: the system-wide one (sudo systemctl status desk_display.service) and the user-session one (systemctl --user status desk_display.service). They must not both be active; two display loops racing the same panel causes flicker/rapid color changes or a frozen/blank screen even though systemctl reports it as running. Disable whichever one you are not using."
