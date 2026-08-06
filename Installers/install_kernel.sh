@@ -285,12 +285,24 @@ prepend_env_vars "$ENV_PATH" "${ENV_LINES[@]}"
 
 prompt_spi_i2c
 
+# Only one display loop may own the panel at a time: the per-user kernel
+# service and the system-wide desk_display.service must never both run,
+# or they race to draw the same framebuffer/DRM plane (flickering,
+# "stuck" screens that still report an active service). This installer's
+# purpose is the per-user kernel service, so keep the system service
+# disabled unless the caller explicitly opts out.
+if [[ "${DISABLE_SYSTEM_KERNEL_SERVICE:-1}" == "0" ]]; then
+  export SKIP_SYSTEM_DISPLAY_SERVICE="0"
+else
+  export SKIP_SYSTEM_DISPLAY_SERVICE="1"
+fi
+
 "$PROJECT_DIR/scripts/helpers/base_setup.sh"
 
 install_kernel_user_service "$PROJECT_DIR" "$SERVICE_USER" "$USER_SERVICE_TEMPLATE" "$USER_SERVICE_NAME"
-if [[ "${DISABLE_SYSTEM_KERNEL_SERVICE:-}" == "1" ]] && command -v systemctl >/dev/null 2>&1; then
-  log "Disabling $SERVICE_NAME to avoid conflicts with $USER_SERVICE_NAME."
-  $SUDO systemctl disable --now "$SERVICE_NAME" || warn "Failed to disable $SERVICE_NAME."
+if [[ "$SKIP_SYSTEM_DISPLAY_SERVICE" == "1" ]] && command -v loginctl >/dev/null 2>&1; then
+  log "Enabling lingering for $SERVICE_USER so $USER_SERVICE_NAME survives reboots without an active login."
+  $SUDO loginctl enable-linger "$SERVICE_USER" || warn "Failed to enable linger for $SERVICE_USER."
 fi
 
 install_kernel_launcher "$PROJECT_DIR" "$SERVICE_NAME" "$SERVICE_USER"
