@@ -6,6 +6,7 @@ SERVICE_NAME="desk_display.service"
 CONFIG_UI_SERVICE_NAME="config_ui_desk_display.service"
 PYTHON_BIN="${PYTHON:-python3}"
 REQUIREMENTS_FILE="${REQUIREMENTS_FILE:-requirements/displayhatmini.txt}"
+SKIP_SYSTEM_DISPLAY_SERVICE="${SKIP_SYSTEM_DISPLAY_SERVICE:-0}"
 
 SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 PROJECT_DIR="${PROJECT_DIR:-$(cd -- "$SCRIPT_DIR/../.." && pwd)}"
@@ -151,13 +152,22 @@ User=$SERVICE_USER
 WantedBy=multi-user.target
 SERVICE
 
-log "Reloading systemd, enabling and starting $SERVICE_NAME + $CONFIG_UI_SERVICE_NAME"
+log "Reloading systemd and applying service state."
 $SUDO systemctl daemon-reload
-$SUDO systemctl enable "$SERVICE_NAME"
+if [[ "$SKIP_SYSTEM_DISPLAY_SERVICE" == "1" ]]; then
+  log "Skipping enable/restart for $SERVICE_NAME because SKIP_SYSTEM_DISPLAY_SERVICE=1."
+  $SUDO systemctl disable --now "$SERVICE_NAME" || warn "Failed to disable $SERVICE_NAME."
+else
+  $SUDO systemctl enable "$SERVICE_NAME"
+  $SUDO systemctl restart "$SERVICE_NAME"
+fi
 $SUDO systemctl enable "$CONFIG_UI_SERVICE_NAME"
-$SUDO systemctl restart "$SERVICE_NAME"
 $SUDO systemctl restart "$CONFIG_UI_SERVICE_NAME"
 
 log "Installation complete. Service status:"
-$SUDO systemctl status --no-pager "$SERVICE_NAME"
+if [[ "$SKIP_SYSTEM_DISPLAY_SERVICE" == "1" ]]; then
+  $SUDO systemctl status --no-pager "$SERVICE_NAME" || true
+else
+  $SUDO systemctl status --no-pager "$SERVICE_NAME"
+fi
 $SUDO systemctl status --no-pager "$CONFIG_UI_SERVICE_NAME"
