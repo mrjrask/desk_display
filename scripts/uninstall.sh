@@ -197,5 +197,28 @@ else
   warn "No keys folder found at $KEYS_DIR"
 fi
 
-log "Uninstall complete. Project files remain in $PROJECT_DIR"
 log "Sensitive files (.env, keys) moved to $BACKUP_DIR if present"
+
+if [[ -z "$PROJECT_DIR" || "$PROJECT_DIR" == "/" || "$PROJECT_DIR" == "$HOME" ]]; then
+  warn "Refusing to delete suspicious project directory: $PROJECT_DIR"
+else
+  keep_choice="${KEEP_PROJECT_DIR:-}"
+
+  if [[ -z "$keep_choice" && -t 0 ]]; then
+    read -r -p "Delete project directory $PROJECT_DIR? [Y/n]: " keep_reply
+    case "${keep_reply,,}" in
+      n|no) keep_choice="yes" ;;
+      *) keep_choice="no" ;;
+    esac
+  fi
+
+  if [[ "$keep_choice" == "1" || "$keep_choice" == "yes" ]]; then
+    log "Keeping project directory at $PROJECT_DIR"
+    log "Uninstall complete. Project files remain in $PROJECT_DIR"
+  else
+    log "Removing project directory $PROJECT_DIR"
+    cd "$HOME" 2>/dev/null || cd /
+    rm -rf -- "$PROJECT_DIR"
+    log "Uninstall complete. $PROJECT_DIR removed."
+  fi
+fi
