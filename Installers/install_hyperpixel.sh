@@ -382,6 +382,12 @@ if [[ "${DESK_DISPLAY_OUTPUT}" == "kernel" ]]; then
   install_kernel_user_service "$PROJECT_DIR" "$SERVICE_USER" "$USER_SERVICE_TEMPLATE" "$USER_SERVICE_NAME"
   enable_user_linger "$SERVICE_USER"
   disable_system_display_service
+
+  log "$USER_SERVICE_NAME is a per-user systemd service, not a system service."
+  log "'sudo systemctl status $USER_SERVICE_NAME' will always report \"could not be found\" because it only queries the system manager."
+  log "Check it with 'systemctl --user status $USER_SERVICE_NAME' as $SERVICE_USER, or via the SSH helper below."
+  log "Current $USER_SERVICE_NAME status:"
+  run_user_systemctl "$SERVICE_USER" status --no-pager "$USER_SERVICE_NAME" || true
 else
   disable_user_kernel_service "$SERVICE_USER" "$USER_SERVICE_NAME"
 fi
