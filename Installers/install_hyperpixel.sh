@@ -23,36 +23,6 @@ else
   SUDO=""
 fi
 
-run_user_systemctl() {
-  local service_user="$1"
-  shift
-
-  if ! command -v systemctl >/dev/null 2>&1; then
-    return 1
-  fi
-
-  local uid runtime_dir
-  uid=$(id -u "$service_user" 2>/dev/null || true)
-  runtime_dir=""
-  if [[ -n "$uid" ]]; then
-    runtime_dir="/run/user/$uid"
-  fi
-
-  local systemctl_env=()
-  if [[ -n "$runtime_dir" && -d "$runtime_dir" ]]; then
-    systemctl_env=("XDG_RUNTIME_DIR=$runtime_dir")
-    if [[ -S "$runtime_dir/bus" ]]; then
-      systemctl_env+=("DBUS_SESSION_BUS_ADDRESS=unix:path=$runtime_dir/bus")
-    fi
-  fi
-
-  if [[ -n "$SUDO" ]]; then
-    $SUDO -u "$service_user" env "${systemctl_env[@]}" systemctl --user "$@"
-  else
-    env "${systemctl_env[@]}" systemctl --user "$@"
-  fi
-}
-
 disable_user_kernel_service() {
   local service_user="$1"
   local service_name="$2"
@@ -382,12 +352,7 @@ if [[ "${DESK_DISPLAY_OUTPUT}" == "kernel" ]]; then
   install_kernel_user_service "$PROJECT_DIR" "$SERVICE_USER" "$USER_SERVICE_TEMPLATE" "$USER_SERVICE_NAME"
   enable_user_linger "$SERVICE_USER"
   disable_system_display_service
-
-  log "$USER_SERVICE_NAME is a per-user systemd service, not a system service."
-  log "'sudo systemctl status $USER_SERVICE_NAME' will always report \"could not be found\" because it only queries the system manager."
-  log "Check it with 'systemctl --user status $USER_SERVICE_NAME' as $SERVICE_USER, or via the SSH helper below."
-  log "Current $USER_SERVICE_NAME status:"
-  run_user_systemctl "$SERVICE_USER" status --no-pager "$USER_SERVICE_NAME" || true
+  report_user_service_status "$SERVICE_USER" "$USER_SERVICE_NAME"
 else
   disable_user_kernel_service "$SERVICE_USER" "$USER_SERVICE_NAME"
 fi

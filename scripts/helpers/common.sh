@@ -196,6 +196,50 @@ EOF
   log "Installed kernel display autostart entry at $autostart_entry"
 }
 
+run_user_systemctl() {
+  local service_user="$1"
+  shift
+
+  if ! command -v systemctl >/dev/null 2>&1; then
+    return 1
+  fi
+
+  local uid runtime_dir
+  uid=$(id -u "$service_user" 2>/dev/null || true)
+  runtime_dir=""
+  if [[ -n "$uid" ]]; then
+    runtime_dir="/run/user/$uid"
+  fi
+
+  local systemctl_env=()
+  if [[ -n "$runtime_dir" && -d "$runtime_dir" ]]; then
+    systemctl_env=("XDG_RUNTIME_DIR=$runtime_dir")
+    if [[ -S "$runtime_dir/bus" ]]; then
+      systemctl_env+=("DBUS_SESSION_BUS_ADDRESS=unix:path=$runtime_dir/bus")
+    fi
+  fi
+
+  if [[ -n "${SUDO:-}" ]]; then
+    $SUDO -u "$service_user" env "${systemctl_env[@]}" systemctl --user "$@"
+  else
+    env "${systemctl_env[@]}" systemctl --user "$@"
+  fi
+}
+
+# Log and print the live status of a per-user systemd service, with a note
+# explaining why `sudo systemctl status` will never find it (it only
+# queries the system manager, not per-user unit instances).
+report_user_service_status() {
+  local service_user="$1"
+  local service_name="$2"
+
+  log "$service_name is a per-user systemd service, not a system service."
+  log "'sudo systemctl status $service_name' will always report \"could not be found\" because it only queries the system manager."
+  log "Check it with 'systemctl --user status $service_name' as $service_user, or via the SSH helper below."
+  log "Current $service_name status:"
+  run_user_systemctl "$service_user" status --no-pager "$service_name" || true
+}
+
 install_kernel_user_service() {
   local project_dir="$1"
   local service_user="$2"

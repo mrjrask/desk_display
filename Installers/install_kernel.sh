@@ -304,6 +304,7 @@ if [[ "$SKIP_SYSTEM_DISPLAY_SERVICE" == "1" ]] && command -v loginctl >/dev/null
   log "Enabling lingering for $SERVICE_USER so $USER_SERVICE_NAME survives reboots without an active login."
   $SUDO loginctl enable-linger "$SERVICE_USER" || warn "Failed to enable linger for $SERVICE_USER."
 fi
+report_user_service_status "$SERVICE_USER" "$USER_SERVICE_NAME"
 
 install_kernel_launcher "$PROJECT_DIR" "$SERVICE_NAME" "$SERVICE_USER"
 if [[ "${AUTO_START_KERNEL_DISPLAY:-}" == "1" ]]; then
