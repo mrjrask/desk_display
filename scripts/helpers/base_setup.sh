@@ -132,9 +132,20 @@ if [[ "${DESK_DISPLAY_OUTPUT:-}" == "kernel" ]]; then
   KERNEL_ENV_OVERRIDE_LINES=(
     "EnvironmentFile=-$KERNEL_SESSION_ENV_FILE"
   )
+  # Also order After=multi-user.target explicitly. This unit is
+  # WantedBy=multi-user.target, so without an explicit After= on that same
+  # target systemd implicitly adds Before=multi-user.target to it. Combined
+  # with After=graphical.target (which itself Requires/After=multi-user.target),
+  # that implicit Before= creates an ordering cycle:
+  # desk_display.service -> multi-user.target -> graphical.target ->
+  # desk_display.service. Systemd breaks such cycles at boot by silently
+  # deleting this unit's start job, logged only under PID 1's own messages
+  # (not under `journalctl -u desk_display.service`), leaving the unit
+  # enabled but permanently inactive with no unit-tagged log output.
   KERNEL_UNIT_LINES=(
     "After=graphical.target"
     "Wants=graphical.target"
+    "After=multi-user.target"
   )
 fi
 log "Writing systemd service to $SERVICE_PATH"
