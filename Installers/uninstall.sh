@@ -44,7 +44,7 @@ cat >&2 <<EOF
  This script will:
    - stop and disable the desk_display systemd services
    - remove the Python virtual environment
-   - move .env and ~/keys/ (if present) into:
+   - copy .env and ~/keys/ (if present) into:
        $BACKUP_DIR
    - DELETE the entire project directory:
        $PROJECT_DIR
@@ -212,7 +212,7 @@ else
   warn "No virtual environment found at $VENV_DIR"
 fi
 
-move_to_backup() {
+copy_to_backup() {
   local src="$1"
   local name
   name=$(basename -- "$src")
@@ -223,8 +223,8 @@ move_to_backup() {
   fi
 
   $SUDO mkdir -p "$BACKUP_DIR"
-  log "Moving $src to $dest"
-  $SUDO mv "$src" "$dest"
+  log "Copying $src to $dest"
+  $SUDO cp -a "$src" "$dest"
 
   if [[ -n "$REAL_USER" && "$REAL_USER" != "root" ]]; then
     $SUDO chown -R "$REAL_USER" "$BACKUP_DIR" 2>/dev/null || true
@@ -233,19 +233,19 @@ move_to_backup() {
 
 ENV_FILE="$PROJECT_DIR/.env"
 if [[ -f "$ENV_FILE" ]]; then
-  move_to_backup "$ENV_FILE"
+  copy_to_backup "$ENV_FILE"
 else
   warn "No .env file found at $ENV_FILE"
 fi
 
 KEYS_DIR="$REAL_HOME/keys"
 if [[ -d "$KEYS_DIR" ]]; then
-  move_to_backup "$KEYS_DIR"
+  copy_to_backup "$KEYS_DIR"
 else
   warn "No keys folder found at $KEYS_DIR"
 fi
 
-log "Sensitive files (.env, keys) moved to $BACKUP_DIR if present"
+log "Sensitive files (.env, keys) copied to $BACKUP_DIR if present"
 
 if [[ -z "$PROJECT_DIR" || "$PROJECT_DIR" == "/" || "$PROJECT_DIR" == "$HOME" || "$PROJECT_DIR" == "$REAL_HOME" ]]; then
   warn "Refusing to delete suspicious project directory: $PROJECT_DIR"
