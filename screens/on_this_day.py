@@ -254,10 +254,27 @@ def _wiki_items(
         response.raise_for_status()
         payload = response.json()
     except Exception as exc:
-        logging.debug("on_this_day: Wikimedia feed failed for %s: %s", feed_type, exc)
+        status_code = getattr(getattr(exc, "response", None), "status_code", None)
+        logging.warning(
+            "on_this_day: Wikimedia '%s' feed failed (%s) url=%s status=%s: %s",
+            feed_type,
+            type(exc).__name__,
+            url,
+            status_code,
+            exc,
+        )
         return []
 
     include_page_extract = include_page_extract or feed_type == "holidays"
+
+    if not isinstance(payload, dict) or feed_type not in payload:
+        logging.warning(
+            "on_this_day: Wikimedia '%s' feed returned an unexpected payload shape "
+            "url=%s keys=%s",
+            feed_type,
+            url,
+            list(payload.keys()) if isinstance(payload, dict) else type(payload).__name__,
+        )
 
     items: list[DayItem] = []
     for raw in payload.get(feed_type, []) if isinstance(payload, dict) else []:
@@ -296,6 +313,12 @@ def _wiki_items(
         )
         if len(items) >= limit:
             break
+    logging.info(
+        "on_this_day: Wikimedia '%s' feed returned %d item(s) (requested up to %d).",
+        feed_type,
+        len(items),
+        limit,
+    )
     return items
 
 
@@ -377,9 +400,23 @@ def _jewish_holiday_items(
         response.raise_for_status()
         items = _parse_jewish_holidays_ics(response.text, today)
     except Exception as exc:
-        logging.debug("on_this_day: Hebcal Jewish holiday feed failed: %s", exc)
+        status_code = getattr(getattr(exc, "response", None), "status_code", None)
+        logging.warning(
+            "on_this_day: Hebcal Jewish holiday feed failed (%s) url=%s status=%s: %s",
+            type(exc).__name__,
+            _HEBCAL_JEWISH_HOLIDAYS_ICS_URL,
+            status_code,
+            exc,
+        )
         return []
-    return items[:limit]
+    result = items[:limit]
+    logging.info(
+        "on_this_day: Hebcal feed returned %d holiday item(s) for %s (parsed %d before limit).",
+        len(result),
+        today.isoformat(),
+        len(items),
+    )
+    return result
 
 
 def _copy_sections(sections: dict[str, list[DayItem]]) -> dict[str, list[DayItem]]:
@@ -516,6 +553,10 @@ def _build_sections_uncached(today: dt.date) -> dict[str, list[DayItem]]:
         # flavor and should render promptly when the live feed is unavailable.
         # Prefer them without probing Wikimedia first; the shared HTTP client can
         # spend several retry cycles per feed while offline or under DNS failure.
+        logging.info(
+            "on_this_day: using curated fallback content for %s (skips live feeds).",
+            today.isoformat(),
+        )
         return {title: list(items) for title, items in fallback.items() if items}
 
     # Keep On This Day off the rotation hot path.  Fetching four Wikimedia feeds
@@ -543,16 +584,25 @@ def _build_sections_uncached(today: dt.date) -> dict[str, list[DayItem]]:
     )
     for future in done:
         title = future_to_title[future]
+        feed_name = task_specs[title][0]
         try:
             completed[title] = future.result() or []
         except Exception as exc:
-            feed_name = task_specs[title][0]
-            logging.debug("on_this_day: feed failed for %s: %s", feed_name, exc)
+            logging.warning(
+                "on_this_day: feed '%s' (section=%s) raised %s: %s",
+                feed_name,
+                title,
+                type(exc).__name__,
+                exc,
+            )
     if pending:
+        pending_feed_names = [task_specs[future_to_title[f]][0] for f in pending]
         logging.warning(
-            "on_this_day: %d feed(s) exceeded %.1fs budget; rendering partial content.",
+            "on_this_day: %d feed(s) exceeded %.1fs budget; rendering partial content. "
+            "pending=%s",
             len(pending),
             _FEED_BUILD_TIMEOUT_SECONDS,
+            pending_feed_names,
         )
         for future in pending:
             future.cancel()
@@ -567,6 +617,12 @@ def _build_sections_uncached(today: dt.date) -> dict[str, list[DayItem]]:
         "🕯️ Notable Lives": completed.get("🕯️ Notable Lives") or [],
         "🎉 Holidays & Culture": holiday_items,
     }
+
+    logging.info(
+        "on_this_day: live feed section counts for %s: %s",
+        today.isoformat(),
+        {title: len(items) for title, items in sections.items()},
+    )
 
     sections = {title: items for title, items in sections.items() if items}
     if sections:
