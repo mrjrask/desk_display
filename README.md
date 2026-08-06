@@ -654,11 +654,11 @@ Useful operations helpers:
 ./scripts/check_hyperpixel_setup.sh
 ./scripts/check_waveshare_setup.sh
 ./scripts/restore_desktop.sh
-./scripts/uninstall.sh
+./Installers/uninstall.sh
 ./scripts/uninstall_airplay.sh
 ```
 
-`./scripts/uninstall.sh` is a full uninstaller: it stops and disables the
+`./Installers/uninstall.sh` is a full uninstaller: it stops and disables the
 systemd services, removes the virtual environment, moves any `.env` file
 from the project directory and the `~/keys/` folder (if present) into
 `~/desk_display_uninstalled` so credentials are preserved rather than
