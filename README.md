@@ -640,27 +640,14 @@ sudo journalctl -u config_ui_desk_display.service -f
 ./scripts/restart_services.sh
 ```
 
-Kernel user service commands, when installed. This is the same unit name,
-`desk_display.service`, but running as a per-user service (`systemctl --user`)
-rather than a system service. Because it lives in your user's systemd
-namespace instead of the system manager's, the plain `sudo systemctl status
-desk_display.service` / `sudo journalctl -u desk_display.service -f` commands
-above will report "could not be found" or show nothing for it — use
-`--user`/`--user-unit` instead:
-
-```bash
-# As the service user:
-systemctl --user status desk_display.service
-systemctl --user restart desk_display.service
-journalctl --user -u desk_display.service -f
-
-# As root, reading the merged journal (e.g. over SSH):
-sudo journalctl --user-unit desk_display.service -f
-
-# Or use the SSH helper, which sets up the user systemd environment for you:
-./scripts/ssh_kernel_display.sh status
-./scripts/ssh_kernel_display.sh logs -f
-```
+`DESK_DISPLAY_OUTPUT=kernel` (HyperPixel/KMS setups) runs under the same
+system-wide `desk_display.service` as every other output mode — the commands
+above work unchanged. Kernel-mode output draws into the desktop user's
+active X11/Wayland session, so an `ExecStartPre` step
+(`scripts/prepare_kernel_session_env.sh`) waits for that session's
+`DISPLAY`/`WAYLAND_DISPLAY`/`XAUTHORITY` and feeds them to the unit; if no
+desktop session ever comes up, the service keeps retrying (`Restart=always`)
+and `sudo journalctl -u desk_display.service -f` will show why.
 
 Useful operations helpers:
 
@@ -739,7 +726,7 @@ python tools/load_default_screen_config.py small --dry-run  # preview only
 | Indoor sensor is blank | Verify I2C is enabled, sensor wiring, `INSIDE_SENSOR`, `INSIDE_I2C_BUSES`, optional sensor requirements (`pip install -r requirements/sensors-adafruit.txt` or `pip install -r requirements/sensors-pimoroni.txt`), and run `i2cdetect`. |
 | Wrong rotation/orientation | Avoid double rotation between kernel overlays and `DISPLAY_ROTATION`; check `HYPERPIXEL_PANEL` and display dimensions. |
 | Blank framebuffer/kernel output | Verify `DESK_DISPLAY_OUTPUT`, `DISPLAY_FB_DEVICE`, display dimensions, pixel format/order, and device permissions. |
-| Kernel display flickers/rapidly cycles colors, freezes on one screen, or shows nothing after a reboot even though `systemctl` reports the service as running | Two display loops are fighting over the same panel: the per-user and system-wide services are both active (both are named `desk_display.service`, but are separate units in separate systemd namespaces). Run `systemctl --user status desk_display.service` and `sudo systemctl status desk_display.service`; only one should be active. Disable the one you don't want (`sudo systemctl disable --now desk_display.service` for kernel-mode HyperPixel setups) and re-run `Installers/install_hyperpixel.sh` or `Installers/install_kernel.sh`, which now keep the unused service disabled automatically. |
+| Kernel display flickers/rapidly cycles colors, freezes on one screen, or shows nothing after a reboot even though `systemctl` reports the service as running | Usually a leftover per-user unit from an older install (`~/.config/systemd/user/desk_display.service`) is still running and racing the current system-wide `desk_display.service` for the same panel. Check with `systemctl --user status desk_display.service` as the desktop user; if it exists, disable it (`systemctl --user disable --now desk_display.service`) and remove `~/.config/systemd/user/desk_display.service`, or just re-run `Installers/install_hyperpixel.sh`/`Installers/install_kernel.sh`, which clean this up automatically. |
 | Blinking cursor on framebuffer output | Keep `DISPLAY_FB_HIDE_CONSOLE_CURSOR=1` and `DISPLAY_FB_CONSOLE_GRAPHICS=1` so Linux fbcon does not redraw a cursor over direct framebuffer animation. |
 | macOS/window mode uses too much CPU | Use `./scripts/launch_macos_window_perf.sh` or set `DESK_DISPLAY_LOW_POWER=1`, `DESK_DISPLAY_WINDOW_SCALE=1`, `ENABLE_SCREENSHOTS=0`, `ENABLE_VIDEO=0`, `ENABLE_WIFI_MONITOR=0`, and `ENABLE_WIFI_RECOVERY=0`. |
 | Waveshare OLED/LCD HAT issues | Run `scripts/check_waveshare_setup.sh`, verify I2C addresses, framebuffer config, and `WAVESHARE_OLED_LCD_HAT_A_INSTALLED`. |

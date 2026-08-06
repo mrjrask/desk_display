@@ -6,6 +6,7 @@ weather_metric_history.json
 on_this_day_cache.json
 screenshot_archive/
 screenshots/
+.runtime/
 tools/maintenance/pressure_history.json
 screens_style.json
 

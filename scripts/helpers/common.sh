@@ -196,13 +196,35 @@ EOF
   log "Installed kernel display autostart entry at $autostart_entry"
 }
 
-run_user_systemctl() {
+# Older installs ran kernel-mode output as a per-user `systemctl --user`
+# service (~/.config/systemd/user/desk_display.service) instead of the
+# system-wide unit, which is why plain `sudo systemctl`/`sudo journalctl -u`
+# couldn't see it. Installers now always use the system-wide unit, so clean
+# up any leftover per-user unit from a prior install: left in place, it
+# would start a second display loop racing the same panel as the system
+# service (flicker, stuck screens).
+disable_legacy_kernel_user_service() {
   local service_user="$1"
-  shift
+  local service_name="${2:-desk_display.service}"
 
-  if ! command -v systemctl >/dev/null 2>&1; then
-    return 1
+  if [[ -z "$service_user" ]]; then
+    return 0
   fi
+
+  local home_dir
+  home_dir=$(getent passwd "$service_user" | cut -d: -f6)
+  if [[ -z "$home_dir" ]]; then
+    home_dir="/home/$service_user"
+  fi
+
+  local user_unit_path="$home_dir/.config/systemd/user/$service_name"
+  local wants_link="$home_dir/.config/systemd/user/default.target.wants/$service_name"
+
+  if [[ ! -e "$user_unit_path" && ! -e "$wants_link" && ! -L "$wants_link" ]]; then
+    return 0
+  fi
+
+  log "Found a legacy per-user $service_name from an older install; disabling it."
 
   local uid runtime_dir
   uid=$(id -u "$service_user" 2>/dev/null || true)
@@ -210,7 +232,6 @@ run_user_systemctl() {
   if [[ -n "$uid" ]]; then
     runtime_dir="/run/user/$uid"
   fi
-
   local systemctl_env=()
   if [[ -n "$runtime_dir" && -d "$runtime_dir" ]]; then
     systemctl_env=("XDG_RUNTIME_DIR=$runtime_dir")
@@ -220,193 +241,13 @@ run_user_systemctl() {
   fi
 
   if [[ -n "${SUDO:-}" ]]; then
-    $SUDO -u "$service_user" env "${systemctl_env[@]}" systemctl --user "$@"
+    $SUDO -u "$service_user" env "${systemctl_env[@]}" systemctl --user disable --now "$service_name" >/dev/null 2>&1 || true
+    $SUDO rm -f "$user_unit_path" "$wants_link"
   else
-    env "${systemctl_env[@]}" systemctl --user "$@"
+    env "${systemctl_env[@]}" systemctl --user disable --now "$service_name" >/dev/null 2>&1 || true
+    rm -f "$user_unit_path" "$wants_link"
   fi
-}
-
-# Log and print the live status of a per-user systemd service, with a note
-# explaining why `sudo systemctl status` will never find it (it only
-# queries the system manager, not per-user unit instances).
-report_user_service_status() {
-  local service_user="$1"
-  local service_name="$2"
-
-  log "$service_name is a per-user systemd service, not a system service."
-  log "'sudo systemctl status $service_name' will always report \"could not be found\" because it only queries the system manager."
-  log "Check it with 'systemctl --user status $service_name' as $service_user, or via the SSH helper below."
-  log "Likewise, 'sudo journalctl -u $service_name -f' will show nothing for it: '-u'/'--unit' only matches system-manager units."
-  log "Tail its logs with 'journalctl --user -u $service_name -f' as $service_user, or 'sudo journalctl --user-unit $service_name -f' as root."
-  log "Current $service_name status:"
-  run_user_systemctl "$service_user" status --no-pager "$service_name" || true
-}
-
-install_kernel_user_service() {
-  local project_dir="$1"
-  local service_user="$2"
-  local template_path="$3"
-  local service_name="${4:-desk_display.service}"
-
-  if [[ ! -f "$template_path" ]]; then
-    warn "Kernel user service template not found at $template_path"
-    return 1
-  fi
-
-  local home_dir
-  home_dir=$(getent passwd "$service_user" | cut -d: -f6)
-  if [[ -z "$home_dir" ]]; then
-    home_dir="/home/$service_user"
-  fi
-
-  local user_systemd_dir="$home_dir/.config/systemd/user"
-  local service_path="$user_systemd_dir/$service_name"
-
-  local venv_dir
-  venv_dir=$(detect_existing_venv "$project_dir" || true)
-  if [[ -z "$venv_dir" ]]; then
-    venv_dir="$project_dir/venv"
-  fi
-
-  local maintenance_dir="$project_dir/tools/maintenance"
-  local project_dir_safe="$project_dir"
-  local venv_dir_safe="$venv_dir"
-  local maintenance_dir_safe="$maintenance_dir"
-
-  local service_contents
-  service_contents=$(sed \
-    -e "s|@PROJECT_DIR@|$project_dir_safe|g" \
-    -e "s|@VENV_DIR@|$venv_dir_safe|g" \
-    -e "s|@MAINTENANCE_DIR@|$maintenance_dir_safe|g" \
-    "$template_path")
-
-  if [[ -n "${SUDO:-}" ]]; then
-    $SUDO -u "$service_user" mkdir -p "$user_systemd_dir"
-    echo "$service_contents" | $SUDO -u "$service_user" tee "$service_path" >/dev/null
-  else
-    mkdir -p "$user_systemd_dir"
-    echo "$service_contents" > "$service_path"
-  fi
-
-  log "Installed user systemd service to $service_path"
-
-  local enable_target="default.target"
-  local wants_dir="$user_systemd_dir/${enable_target}.wants"
-  local wants_link="$wants_dir/$service_name"
-
-  create_user_wants_link() {
-    if [[ -n "${SUDO:-}" ]]; then
-      $SUDO -u "$service_user" mkdir -p "$wants_dir"
-      $SUDO -u "$service_user" ln -sf "$service_path" "$wants_link"
-    else
-      mkdir -p "$wants_dir"
-      ln -sf "$service_path" "$wants_link"
-    fi
-    log "Linked $service_name into $enable_target (fallback)."
-  }
-
-  if command -v systemctl >/dev/null 2>&1; then
-    local uid runtime_dir
-    uid=$(id -u "$service_user" 2>/dev/null || true)
-    runtime_dir=""
-    if [[ -n "$uid" ]]; then
-      runtime_dir="/run/user/$uid"
-    fi
-
-    # `systemctl --user` for another account needs that account's
-    # user@<uid>.service manager (and its D-Bus session bus) already
-    # running. Over SSH/headless there is no active login to start it,
-    # so start it directly and give it a moment to create the bus socket
-    # before touching the user's systemd instance at all.
-    if [[ -n "$uid" ]] && command -v loginctl >/dev/null 2>&1; then
-      $SUDO systemctl start "user@${uid}.service" >/dev/null 2>&1 || true
-      local wait_attempt
-      for wait_attempt in $(seq 1 10); do
-        [[ -S "$runtime_dir/bus" ]] && break
-        sleep 0.5
-      done
-    fi
-
-    local systemctl_env=()
-    if [[ -n "$runtime_dir" && -d "$runtime_dir" ]]; then
-      systemctl_env=("XDG_RUNTIME_DIR=$runtime_dir")
-      if [[ -S "$runtime_dir/bus" ]]; then
-        systemctl_env+=("DBUS_SESSION_BUS_ADDRESS=unix:path=$runtime_dir/bus")
-      fi
-    fi
-
-    if [[ -n "${SUDO:-}" ]]; then
-      if ! $SUDO -u "$service_user" env "${systemctl_env[@]}" systemctl --user daemon-reload; then
-        warn "Failed to reload user systemd daemon for $service_user."
-        warn "Attempting to enable lingering for SSH/headless setups."
-        if $SUDO loginctl enable-linger "$service_user"; then
-          $SUDO systemctl start "user@${uid}.service" >/dev/null 2>&1 || true
-          for wait_attempt in $(seq 1 10); do
-            [[ -S "$runtime_dir/bus" ]] && break
-            sleep 0.5
-          done
-          if $SUDO -u "$service_user" XDG_RUNTIME_DIR="/run/user/$uid" systemctl --user daemon-reload; then
-            $SUDO -u "$service_user" XDG_RUNTIME_DIR="/run/user/$uid" systemctl --user enable --now "$service_name" \
-              || {
-                warn "Failed to enable/start $service_name after enabling linger."
-                create_user_wants_link
-              }
-            return 0
-          fi
-        fi
-        warn "To enable manually, run:"
-        warn "  sudo loginctl enable-linger $service_user"
-        warn "  sudo systemctl start user@$uid.service"
-        warn "  sudo -u $service_user XDG_RUNTIME_DIR=/run/user/$uid systemctl --user daemon-reload"
-        warn "  sudo -u $service_user XDG_RUNTIME_DIR=/run/user/$uid systemctl --user enable --now $service_name"
-        warn "If enable fails, link the unit into the default target:"
-        warn "  sudo -u $service_user mkdir -p $wants_dir"
-        warn "  sudo -u $service_user ln -sf $service_path $wants_link"
-        return 0
-      fi
-      if detect_desktop_session "$service_user"; then
-        $SUDO -u "$service_user" env "${systemctl_env[@]}" systemctl --user enable --now "$service_name" \
-          || {
-            warn "Failed to enable/start $service_name (user session may be offline)."
-            create_user_wants_link
-          }
-      else
-        $SUDO -u "$service_user" env "${systemctl_env[@]}" systemctl --user enable "$service_name" \
-          || {
-            warn "Failed to enable $service_name (user session may be offline)."
-            create_user_wants_link
-          }
-      fi
-    else
-      if ! env "${systemctl_env[@]}" systemctl --user daemon-reload; then
-        warn "Failed to reload user systemd daemon for $service_user."
-        warn "To enable manually on SSH/headless setups, run:"
-        warn "  sudo loginctl enable-linger $service_user"
-        warn "  sudo systemctl start user@$uid.service"
-        warn "  sudo -u $service_user XDG_RUNTIME_DIR=/run/user/$uid systemctl --user daemon-reload"
-        warn "  sudo -u $service_user XDG_RUNTIME_DIR=/run/user/$uid systemctl --user enable --now $service_name"
-        warn "If enable fails, link the unit into the default target:"
-        warn "  sudo -u $service_user mkdir -p $wants_dir"
-        warn "  sudo -u $service_user ln -sf $service_path $wants_link"
-        return 0
-      fi
-      if detect_desktop_session "$service_user"; then
-        env "${systemctl_env[@]}" systemctl --user enable --now "$service_name" \
-          || {
-            warn "Failed to enable/start $service_name (user session may be offline)."
-            create_user_wants_link
-          }
-      else
-        env "${systemctl_env[@]}" systemctl --user enable "$service_name" \
-          || {
-            warn "Failed to enable $service_name (user session may be offline)."
-            create_user_wants_link
-          }
-      fi
-    fi
-  else
-    warn "systemctl not available; skipping user service enablement."
-  fi
+  log "Removed legacy per-user $service_name for $service_user."
 }
 
 detect_existing_venv() {
