@@ -222,12 +222,12 @@ move_to_backup() {
     dest="$BACKUP_DIR/${name}_$(date +%Y%m%d%H%M%S)"
   fi
 
-  mkdir -p "$BACKUP_DIR"
+  $SUDO mkdir -p "$BACKUP_DIR"
   log "Moving $src to $dest"
-  mv "$src" "$dest"
+  $SUDO mv "$src" "$dest"
 
-  if [[ $EUID -eq 0 && -n "$REAL_USER" && "$REAL_USER" != "root" ]]; then
-    chown -R "$REAL_USER" "$BACKUP_DIR" 2>/dev/null || true
+  if [[ -n "$REAL_USER" && "$REAL_USER" != "root" ]]; then
+    $SUDO chown -R "$REAL_USER" "$BACKUP_DIR" 2>/dev/null || true
   fi
 }
 
