@@ -266,6 +266,21 @@ install_kernel_user_service() {
     if [[ -n "$uid" ]]; then
       runtime_dir="/run/user/$uid"
     fi
+
+    # `systemctl --user` for another account needs that account's
+    # user@<uid>.service manager (and its D-Bus session bus) already
+    # running. Over SSH/headless there is no active login to start it,
+    # so start it directly and give it a moment to create the bus socket
+    # before touching the user's systemd instance at all.
+    if [[ -n "$uid" ]] && command -v loginctl >/dev/null 2>&1; then
+      $SUDO systemctl start "user@${uid}.service" >/dev/null 2>&1 || true
+      local wait_attempt
+      for wait_attempt in $(seq 1 10); do
+        [[ -S "$runtime_dir/bus" ]] && break
+        sleep 0.5
+      done
+    fi
+
     local systemctl_env=()
     if [[ -n "$runtime_dir" && -d "$runtime_dir" ]]; then
       systemctl_env=("XDG_RUNTIME_DIR=$runtime_dir")
@@ -279,6 +294,11 @@ install_kernel_user_service() {
         warn "Failed to reload user systemd daemon for $service_user."
         warn "Attempting to enable lingering for SSH/headless setups."
         if $SUDO loginctl enable-linger "$service_user"; then
+          $SUDO systemctl start "user@${uid}.service" >/dev/null 2>&1 || true
+          for wait_attempt in $(seq 1 10); do
+            [[ -S "$runtime_dir/bus" ]] && break
+            sleep 0.5
+          done
           if $SUDO -u "$service_user" XDG_RUNTIME_DIR="/run/user/$uid" systemctl --user daemon-reload; then
             $SUDO -u "$service_user" XDG_RUNTIME_DIR="/run/user/$uid" systemctl --user enable --now "$service_name" \
               || {
@@ -290,6 +310,7 @@ install_kernel_user_service() {
         fi
         warn "To enable manually, run:"
         warn "  sudo loginctl enable-linger $service_user"
+        warn "  sudo systemctl start user@$uid.service"
         warn "  sudo -u $service_user XDG_RUNTIME_DIR=/run/user/$uid systemctl --user daemon-reload"
         warn "  sudo -u $service_user XDG_RUNTIME_DIR=/run/user/$uid systemctl --user enable --now $service_name"
         warn "If enable fails, link the unit into the default target:"
@@ -315,6 +336,7 @@ install_kernel_user_service() {
         warn "Failed to reload user systemd daemon for $service_user."
         warn "To enable manually on SSH/headless setups, run:"
         warn "  sudo loginctl enable-linger $service_user"
+        warn "  sudo systemctl start user@$uid.service"
         warn "  sudo -u $service_user XDG_RUNTIME_DIR=/run/user/$uid systemctl --user daemon-reload"
         warn "  sudo -u $service_user XDG_RUNTIME_DIR=/run/user/$uid systemctl --user enable --now $service_name"
         warn "If enable fails, link the unit into the default target:"
