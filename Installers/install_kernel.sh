@@ -4,14 +4,7 @@ set -euo pipefail
 SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 PROJECT_DIR="${PROJECT_DIR:-$(cd -- "$SCRIPT_DIR/.." && pwd)}"
 SERVICE_USER="${SUDO_USER:-$(whoami)}"
-# The system-wide service and the per-user kernel-mode service share the
-# unit name "desk_display.service" so `systemctl status desk_display.service`
-# is the right command regardless of install method. They live in separate
-# systemd namespaces (system manager vs. this user's `systemctl --user`
-# manager), so the shared name causes no conflict.
 SERVICE_NAME="desk_display.service"
-USER_SERVICE_NAME="desk_display.service"
-USER_SERVICE_TEMPLATE="$PROJECT_DIR/scripts/desk_display_kernel_user.service"
 
 COMMON_SCRIPT="$PROJECT_DIR/scripts/helpers/common.sh"
 if [[ ! -f "$COMMON_SCRIPT" ]]; then
@@ -290,26 +283,9 @@ prepend_env_vars "$ENV_PATH" "${ENV_LINES[@]}"
 
 prompt_spi_i2c
 
-# Only one display loop may own the panel at a time: the per-user kernel
-# service and the system-wide desk_display.service must never both run,
-# or they race to draw the same framebuffer/DRM plane (flickering,
-# "stuck" screens that still report an active service). This installer's
-# purpose is the per-user kernel service, so keep the system service
-# disabled unless the caller explicitly opts out.
-if [[ "${DISABLE_SYSTEM_KERNEL_SERVICE:-1}" == "0" ]]; then
-  export SKIP_SYSTEM_DISPLAY_SERVICE="0"
-else
-  export SKIP_SYSTEM_DISPLAY_SERVICE="1"
-fi
+disable_legacy_kernel_user_service "$SERVICE_USER" "$SERVICE_NAME"
 
 "$PROJECT_DIR/scripts/helpers/base_setup.sh"
-
-install_kernel_user_service "$PROJECT_DIR" "$SERVICE_USER" "$USER_SERVICE_TEMPLATE" "$USER_SERVICE_NAME"
-if [[ "$SKIP_SYSTEM_DISPLAY_SERVICE" == "1" ]] && command -v loginctl >/dev/null 2>&1; then
-  log "Enabling lingering for $SERVICE_USER so $USER_SERVICE_NAME survives reboots without an active login."
-  $SUDO loginctl enable-linger "$SERVICE_USER" || warn "Failed to enable linger for $SERVICE_USER."
-fi
-report_user_service_status "$SERVICE_USER" "$USER_SERVICE_NAME"
 
 install_kernel_launcher "$PROJECT_DIR" "$SERVICE_NAME" "$SERVICE_USER"
 if [[ "${AUTO_START_KERNEL_DISPLAY:-}" == "1" ]]; then
@@ -319,11 +295,11 @@ fi
 prompt_launch_kernel_display
 
 if command -v systemctl >/dev/null 2>&1; then
-  host=$(hostname)
   cat <<EOF
-SSH service control commands:
-  ssh ${SERVICE_USER}@${host} '${PROJECT_DIR}/scripts/ssh_kernel_display.sh status'
-  ssh ${SERVICE_USER}@${host} '${PROJECT_DIR}/scripts/ssh_kernel_display.sh restart'
-  ssh ${SERVICE_USER}@${host} '${PROJECT_DIR}/scripts/ssh_kernel_display.sh stop'
+Service control commands:
+  sudo systemctl status ${SERVICE_NAME}
+  sudo systemctl restart ${SERVICE_NAME}
+  sudo systemctl stop ${SERVICE_NAME}
+  sudo journalctl -u ${SERVICE_NAME} -f
 EOF
 fi

@@ -6,7 +6,6 @@ SERVICE_NAME="desk_display.service"
 CONFIG_UI_SERVICE_NAME="config_ui_desk_display.service"
 PYTHON_BIN="${PYTHON:-python3}"
 REQUIREMENTS_FILE="${REQUIREMENTS_FILE:-requirements/displayhatmini.txt}"
-SKIP_SYSTEM_DISPLAY_SERVICE="${SKIP_SYSTEM_DISPLAY_SERVICE:-0}"
 
 SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 PROJECT_DIR="${PROJECT_DIR:-$(cd -- "$SCRIPT_DIR/../.." && pwd)}"
@@ -71,6 +70,8 @@ fi
 ensure_executable "$MAINTENANCE_DIR/cleanup.sh"
 ensure_executable "$MAINTENANCE_DIR/reset_screenshots.sh"
 ensure_executable "$PROJECT_DIR/scripts/framebuffer_service.sh"
+ensure_executable "$PROJECT_DIR/scripts/prepare_kernel_session_env.sh"
+ensure_executable "$PROJECT_DIR/scripts/wait_for_display_ready.sh"
 
 SERVICE_PATH="/etc/systemd/system/$SERVICE_NAME"
 CONFIG_UI_SERVICE_PATH="/etc/systemd/system/$CONFIG_UI_SERVICE_NAME"
@@ -112,12 +113,37 @@ if [[ "${DESK_DISPLAY_OUTPUT:-}" == "framebuffer" ]]; then
     "After=display-manager.service"
   )
 fi
+# Kernel-mode output draws into the desktop user's active X11/Wayland
+# session, so it needs that session's DISPLAY/WAYLAND_DISPLAY/XAUTHORITY
+# before ExecStart runs. prepare_kernel_session_env.sh polls for them (the
+# session may not exist yet this early in boot) and writes whatever it
+# finds to KERNEL_SESSION_ENV_FILE, which EnvironmentFile= below re-reads
+# for ExecStart. It exits non-zero on timeout so Restart=always retries the
+# whole start until the desktop session comes up.
+KERNEL_PRESTART_LINES=()
+KERNEL_ENV_OVERRIDE_LINES=()
+KERNEL_UNIT_LINES=()
+if [[ "${DESK_DISPLAY_OUTPUT:-}" == "kernel" ]]; then
+  KERNEL_SESSION_ENV_FILE="$PROJECT_DIR/.runtime/kernel-session.env"
+  KERNEL_PRESTART_LINES=(
+    "ExecStartPre=/bin/bash -lc '$PROJECT_DIR/scripts/wait_for_display_ready.sh'"
+    "ExecStartPre=/bin/bash -lc 'DESK_DISPLAY_SESSION_USER=$SERVICE_USER DESK_DISPLAY_SESSION_ENV_FILE=$KERNEL_SESSION_ENV_FILE $PROJECT_DIR/scripts/prepare_kernel_session_env.sh'"
+  )
+  KERNEL_ENV_OVERRIDE_LINES=(
+    "EnvironmentFile=-$KERNEL_SESSION_ENV_FILE"
+  )
+  KERNEL_UNIT_LINES=(
+    "After=graphical.target"
+    "Wants=graphical.target"
+  )
+fi
 log "Writing systemd service to $SERVICE_PATH"
 $SUDO tee "$SERVICE_PATH" >/dev/null <<SERVICE
 [Unit]
 Description=Desk Display Service - main
 After=network-online.target
 $(printf '%s\n' "${FRAMEBUFFER_UNIT_LINES[@]}")
+$(printf '%s\n' "${KERNEL_UNIT_LINES[@]}")
 
 [Service]
 WorkingDirectory=$PROJECT_DIR
@@ -125,10 +151,13 @@ $(printf '%s\n' "${SERVICE_ENV_LINES[@]}")
 EnvironmentFile=-$PROJECT_DIR/.env
 $(printf '%s\n' "${SERVICE_ENV_OVERRIDE_LINES[@]}")
 $(printf '%s\n' "${FRAMEBUFFER_PRESTART_LINES[@]}")
+$(printf '%s\n' "${KERNEL_PRESTART_LINES[@]}")
+$(printf '%s\n' "${KERNEL_ENV_OVERRIDE_LINES[@]}")
 ExecStart=$VENV_DIR/bin/python $PROJECT_DIR/main.py
 ExecStop=/bin/bash -lc '$MAINTENANCE_DIR/cleanup.sh'
 $(printf '%s\n' "${FRAMEBUFFER_POSTSTOP_LINES[@]}")
 Restart=always
+RestartSec=5
 User=$SERVICE_USER
 
 [Install]
@@ -154,20 +183,11 @@ SERVICE
 
 log "Reloading systemd and applying service state."
 $SUDO systemctl daemon-reload
-if [[ "$SKIP_SYSTEM_DISPLAY_SERVICE" == "1" ]]; then
-  log "Skipping enable/restart for $SERVICE_NAME because SKIP_SYSTEM_DISPLAY_SERVICE=1."
-  $SUDO systemctl disable --now "$SERVICE_NAME" || warn "Failed to disable $SERVICE_NAME."
-else
-  $SUDO systemctl enable "$SERVICE_NAME"
-  $SUDO systemctl restart "$SERVICE_NAME"
-fi
+$SUDO systemctl enable "$SERVICE_NAME"
+$SUDO systemctl restart "$SERVICE_NAME"
 $SUDO systemctl enable "$CONFIG_UI_SERVICE_NAME"
 $SUDO systemctl restart "$CONFIG_UI_SERVICE_NAME"
 
 log "Installation complete. Service status:"
-if [[ "$SKIP_SYSTEM_DISPLAY_SERVICE" == "1" ]]; then
-  $SUDO systemctl status --no-pager "$SERVICE_NAME" || true
-else
-  $SUDO systemctl status --no-pager "$SERVICE_NAME"
-fi
+$SUDO systemctl status --no-pager "$SERVICE_NAME" || true
 $SUDO systemctl status --no-pager "$CONFIG_UI_SERVICE_NAME"

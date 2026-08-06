@@ -73,9 +73,7 @@ else
 fi
 
 show_cmd "System service (desk_display.service)" systemctl --no-pager --full status desk_display.service
-show_cmd "User-session service (desk_display.service, systemctl --user)" systemctl --user --no-pager --full status desk_display.service
-show_cmd "Recent system desk_display journal" journalctl -u desk_display.service -n 80 --no-pager
-show_cmd "Recent user-session desk_display journal" journalctl --user-unit desk_display.service -n 80 --no-pager
+show_cmd "Recent desk_display journal" journalctl -u desk_display.service -n 80 --no-pager
 
 section "Session/display environment"
 echo "XDG_SESSION_TYPE=${XDG_SESSION_TYPE:-<unset>}"
@@ -83,11 +81,14 @@ echo "WAYLAND_DISPLAY=${WAYLAND_DISPLAY:-<unset>}"
 echo "DISPLAY=${DISPLAY:-<unset>}"
 echo "XDG_RUNTIME_DIR=${XDG_RUNTIME_DIR:-<unset>}"
 echo "XAUTHORITY=${XAUTHORITY:-<unset>}"
+if [[ -f "$PROJECT_DIR/.runtime/kernel-session.env" ]]; then
+  section "Detected kernel-mode session environment"
+  cat "$PROJECT_DIR/.runtime/kernel-session.env"
+fi
 
 echo
 section "Quick hints"
 echo "- If DESK_DISPLAY_OUTPUT=kernel and no active desktop session exists, use framebuffer mode instead."
 echo "- If you use dtoverlay rotate=..., keep DISPLAY_ROTATION=0 unless DISPLAY_ROTATION_STRICT=0 is intentional."
-echo "- If the user-session desk_display.service fails over SSH, run scripts/launch_kernel_display.sh from the Pi desktop session."
-echo "- Both are named desk_display.service but are separate units: the system-wide one (sudo systemctl status desk_display.service) and the user-session one (systemctl --user status desk_display.service). They must not both be active; two display loops racing the same panel causes flicker/rapid color changes or a frozen/blank screen even though systemctl reports it as running. Disable whichever one you are not using."
-echo "- 'sudo journalctl -u desk_display.service -f' only shows the system-wide unit's logs. For the user-session unit, use 'journalctl --user -u desk_display.service -f' as the desktop user, or 'sudo journalctl --user-unit desk_display.service -f' as root, or './scripts/ssh_kernel_display.sh logs -f'."
+echo "- Kernel-mode output needs an active X11/Wayland desktop session; if desk_display.service keeps restarting, check 'sudo journalctl -u desk_display.service -f' for 'No active X11/Wayland desktop session detected'."
+echo "- Manage it with 'sudo systemctl status/restart/stop desk_display.service' and 'sudo journalctl -u desk_display.service -f' like any other system service."

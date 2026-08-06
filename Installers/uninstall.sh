@@ -4,13 +4,8 @@ set -euo pipefail
 log() { printf '[INFO] %s\n' "$*"; }
 warn() { printf '[WARN] %s\n' "$*"; }
 
-# The system-wide service and the per-user kernel-mode service share the
-# unit name "desk_display.service"; they live in separate systemd
-# namespaces (system manager vs. `systemctl --user`), so the shared name
-# causes no conflict, but log messages below call out which scope is meant.
 SERVICE_NAME="desk_display.service"
 CONFIG_UI_SERVICE_NAME="config_ui_desk_display.service"
-KERNEL_USER_SERVICE_NAME="desk_display.service"
 WAVESHARE_OLED_SERVICE_NAME="desk_display_waveshare_oled.service"
 WAVESHARE_FBCP_SERVICE_NAME="waveshare-fbcp.service"
 
@@ -156,10 +151,11 @@ if command -v systemctl >/dev/null 2>&1; then
   add_kernel_service_user "$system_service_owner"
 fi
 
-# Fall back to scanning every home directory for an installed per-user
-# unit; this is what catches the case above (root with no SUDO_USER).
+# Fall back to scanning every home directory for a legacy per-user unit
+# (older installs ran kernel-mode output as `systemctl --user`); this is
+# what catches the case above (root with no SUDO_USER).
 if [[ -d /home ]]; then
-  for candidate_unit in /home/*/.config/systemd/user/"$KERNEL_USER_SERVICE_NAME"; do
+  for candidate_unit in /home/*/.config/systemd/user/"$SERVICE_NAME"; do
     [[ -e "$candidate_unit" ]] || continue
     candidate_home="${candidate_unit%/.config/systemd/user/*}"
     add_kernel_service_user "$(basename -- "$candidate_home")"
@@ -214,106 +210,6 @@ if command -v systemctl >/dev/null 2>&1; then
   fi
 fi
 
-stop_kernel_user_service() {
-  local service_user="$1"
-  local user_uid=""
-  local runtime_dir=""
-  local -a user_env=()
-  local stopped=0
-
-  if [[ -z "$service_user" ]]; then
-    return 0
-  fi
-
-  user_uid=$(id -u "$service_user" 2>/dev/null || true)
-  if [[ -n "$user_uid" ]]; then
-    runtime_dir="/run/user/$user_uid"
-    if [[ -d "$runtime_dir" ]]; then
-      user_env+=("XDG_RUNTIME_DIR=$runtime_dir")
-    fi
-  fi
-
-  log "Stopping the user-session $KERNEL_USER_SERVICE_NAME for user $service_user"
-  if [[ -n "$SUDO" ]]; then
-    if [[ ${#user_env[@]} -gt 0 ]] && \
-      $SUDO -u "$service_user" env "${user_env[@]}" systemctl --user stop "$KERNEL_USER_SERVICE_NAME" >/dev/null 2>&1; then
-      stopped=1
-    elif [[ ${#user_env[@]} -eq 0 ]] && \
-      $SUDO -u "$service_user" systemctl --user stop "$KERNEL_USER_SERVICE_NAME" >/dev/null 2>&1; then
-      stopped=1
-    fi
-
-    if [[ $stopped -eq 0 ]] && \
-      $SUDO systemctl --quiet --machine="${service_user}@.host" --user status "$KERNEL_USER_SERVICE_NAME" >/dev/null 2>&1; then
-      if $SUDO systemctl --machine="${service_user}@.host" --user stop "$KERNEL_USER_SERVICE_NAME" >/dev/null 2>&1; then
-        stopped=1
-      fi
-    fi
-  else
-    if [[ ${#user_env[@]} -gt 0 ]] && env "${user_env[@]}" systemctl --user stop "$KERNEL_USER_SERVICE_NAME" >/dev/null 2>&1; then
-      stopped=1
-    elif [[ ${#user_env[@]} -eq 0 ]] && systemctl --user stop "$KERNEL_USER_SERVICE_NAME" >/dev/null 2>&1; then
-      stopped=1
-    fi
-  fi
-
-  if [[ $stopped -eq 0 ]]; then
-    warn "Failed to stop the user-session $KERNEL_USER_SERVICE_NAME for $service_user"
-  fi
-}
-
-disable_kernel_user_service() {
-  local service_user="$1"
-  local user_uid=""
-  local runtime_dir=""
-  local -a user_env=()
-
-  if [[ -z "$service_user" ]]; then
-    return 0
-  fi
-
-  user_uid=$(id -u "$service_user" 2>/dev/null || true)
-  if [[ -n "$user_uid" ]]; then
-    runtime_dir="/run/user/$user_uid"
-    if [[ -d "$runtime_dir" ]]; then
-      user_env+=("XDG_RUNTIME_DIR=$runtime_dir")
-    fi
-  fi
-
-  log "Disabling the user-session $KERNEL_USER_SERVICE_NAME for user $service_user"
-  if [[ -n "$SUDO" ]]; then
-    if [[ ${#user_env[@]} -gt 0 ]]; then
-      $SUDO -u "$service_user" env "${user_env[@]}" systemctl --user disable "$KERNEL_USER_SERVICE_NAME" >/dev/null 2>&1 || true
-    else
-      $SUDO -u "$service_user" systemctl --user disable "$KERNEL_USER_SERVICE_NAME" >/dev/null 2>&1 || true
-    fi
-  else
-    if [[ ${#user_env[@]} -gt 0 ]]; then
-      env "${user_env[@]}" systemctl --user disable "$KERNEL_USER_SERVICE_NAME" >/dev/null 2>&1 || true
-    else
-      systemctl --user disable "$KERNEL_USER_SERVICE_NAME" >/dev/null 2>&1 || true
-    fi
-  fi
-
-  local home_dir
-  home_dir=$(getent passwd "$service_user" | cut -d: -f6)
-  if [[ -z "$home_dir" ]]; then
-    home_dir="/home/$service_user"
-  fi
-
-  local user_unit_path="$home_dir/.config/systemd/user/$KERNEL_USER_SERVICE_NAME"
-  local wants_link="$home_dir/.config/systemd/user/default.target.wants/$KERNEL_USER_SERVICE_NAME"
-
-  if [[ -e "$user_unit_path" ]]; then
-    log "Removing user systemd unit at $user_unit_path"
-    $SUDO rm -f "$user_unit_path"
-  fi
-  if [[ -e "$wants_link" || -L "$wants_link" ]]; then
-    log "Removing user systemd wants link at $wants_link"
-    $SUDO rm -f "$wants_link"
-  fi
-}
-
 remove_desktop_entries() {
   local service_user="$1"
   local home_dir
@@ -340,7 +236,7 @@ remove_desktop_entries() {
 }
 
 for service_user in "${kernel_service_users[@]}"; do
-  stop_kernel_user_service "$service_user"
+  disable_legacy_kernel_user_service "$service_user" "$SERVICE_NAME"
 done
 
 log "Starting uninstall for $PROJECT_DIR"
@@ -382,7 +278,6 @@ if command -v systemctl >/dev/null 2>&1; then
   fi
 
   for service_user in "${kernel_service_users[@]}"; do
-    disable_kernel_user_service "$service_user"
     remove_desktop_entries "$service_user"
   done
 
@@ -458,7 +353,7 @@ if command -v systemctl >/dev/null 2>&1; then
   $SUDO systemctl stop "$WAVESHARE_OLED_SERVICE_NAME" >/dev/null 2>&1 || true
   $SUDO systemctl stop "$WAVESHARE_FBCP_SERVICE_NAME" >/dev/null 2>&1 || true
   for service_user in "${kernel_service_users[@]}"; do
-    stop_kernel_user_service "$service_user" >/dev/null 2>&1 || true
+    disable_legacy_kernel_user_service "$service_user" "$SERVICE_NAME" >/dev/null 2>&1 || true
   done
 fi
 

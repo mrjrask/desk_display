@@ -4,14 +4,7 @@ set -euo pipefail
 SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 PROJECT_DIR="${PROJECT_DIR:-$(cd -- "$SCRIPT_DIR/.." && pwd)}"
 SERVICE_USER="${SUDO_USER:-$(whoami)}"
-# The system-wide service and the per-user kernel-mode service share the
-# unit name "desk_display.service" so `systemctl status desk_display.service`
-# is the right command regardless of install method. They live in separate
-# systemd namespaces (system manager vs. this user's `systemctl --user`
-# manager), so the shared name causes no conflict.
-SYSTEM_SERVICE_NAME="desk_display.service"
-USER_SERVICE_NAME="desk_display.service"
-USER_SERVICE_TEMPLATE="$PROJECT_DIR/scripts/desk_display_kernel_user.service"
+SERVICE_NAME="desk_display.service"
 
 COMMON_SCRIPT="$PROJECT_DIR/scripts/helpers/common.sh"
 if [[ ! -f "$COMMON_SCRIPT" ]]; then
@@ -27,52 +20,6 @@ if [[ $EUID -ne 0 ]]; then
 else
   SUDO=""
 fi
-
-disable_user_kernel_service() {
-  local service_user="$1"
-  local service_name="$2"
-  local home_dir user_systemd_dir wants_link
-
-  log "Disabling the user-session $service_name to avoid conflicts with the system-wide $SYSTEM_SERVICE_NAME."
-  run_user_systemctl "$service_user" disable --now "$service_name" \
-    || warn "Failed to disable $service_name via systemctl --user; removing fallback wants link if present."
-
-  home_dir=$(getent passwd "$service_user" | cut -d: -f6)
-  if [[ -z "$home_dir" ]]; then
-    home_dir="/home/$service_user"
-  fi
-  user_systemd_dir="$home_dir/.config/systemd/user"
-  wants_link="$user_systemd_dir/default.target.wants/$service_name"
-
-  if [[ -e "$wants_link" || -L "$wants_link" ]]; then
-    if [[ -n "$SUDO" ]]; then
-      $SUDO rm -f "$wants_link"
-    else
-      rm -f "$wants_link"
-    fi
-    log "Removed fallback user service link $wants_link."
-  fi
-}
-
-disable_system_display_service() {
-  if command -v systemctl >/dev/null 2>&1; then
-    log "Disabling the system-wide $SYSTEM_SERVICE_NAME to avoid conflicts with the user-session $USER_SERVICE_NAME."
-    $SUDO systemctl disable --now "$SYSTEM_SERVICE_NAME" || warn "Failed to disable $SYSTEM_SERVICE_NAME."
-  fi
-}
-
-enable_user_linger() {
-  local service_user="$1"
-  if command -v loginctl >/dev/null 2>&1; then
-    if [[ -n "$SUDO" ]]; then
-      $SUDO loginctl enable-linger "$service_user" || warn "Failed to enable linger for $service_user."
-    else
-      loginctl enable-linger "$service_user" || warn "Failed to enable linger for $service_user."
-    fi
-  else
-    warn "loginctl not available; cannot enable linger."
-  fi
-}
 
 detect_codename() {
   if command -v lsb_release >/dev/null 2>&1; then
@@ -315,7 +262,7 @@ fi
 
 if [[ "${DESK_DISPLAY_OUTPUT}" == "kernel" ]]; then
   if detect_desktop_session "$SERVICE_USER"; then
-    log "Detected an active Wayland/X11 session; HyperPixel will use the user-session $USER_SERVICE_NAME."
+    log "Detected an active Wayland/X11 session; HyperPixel will use kernel-mode output via $SERVICE_NAME."
   elif [[ "${AUTO_FALLBACK_FRAMEBUFFER:-1}" == "1" ]]; then
     warn "No active Wayland/X11 session detected."
     warn "Switching DESK_DISPLAY_OUTPUT from kernel to framebuffer for Lite/headless startup reliability."
@@ -335,53 +282,18 @@ if [[ "${DESK_DISPLAY_OUTPUT}" == "kernel" ]]; then
     warn "No active Wayland/X11 session detected."
     warn "Keeping DESK_DISPLAY_OUTPUT=${DESK_DISPLAY_OUTPUT}. Set AUTO_FALLBACK_FRAMEBUFFER=1 to auto-switch on Lite/headless systems."
   fi
-else
-  log "DESK_DISPLAY_OUTPUT=${DESK_DISPLAY_OUTPUT}; HyperPixel will use the system-wide $SYSTEM_SERVICE_NAME."
 fi
 
-# Only one display loop may own the panel at a time: the per-user kernel
-# service and the system-wide desk_display.service must never both run,
-# or they race to draw the same framebuffer/DRM plane (flickering,
-# "stuck" screens that still report an active service).
-if [[ "${DESK_DISPLAY_OUTPUT}" == "kernel" ]]; then
-  export SKIP_SYSTEM_DISPLAY_SERVICE="1"
-  log "HyperPixel runtime choice: the user-session $USER_SERVICE_NAME will run the display loop; the system-wide $SYSTEM_SERVICE_NAME will stay disabled."
-else
-  export SKIP_SYSTEM_DISPLAY_SERVICE="0"
-  log "HyperPixel runtime choice: the system-wide $SYSTEM_SERVICE_NAME will run the display loop; the user-session $USER_SERVICE_NAME will stay disabled."
-fi
+disable_legacy_kernel_user_service "$SERVICE_USER" "$SERVICE_NAME"
 
 "$PROJECT_DIR/scripts/helpers/base_setup.sh"
 
-if [[ "${DESK_DISPLAY_OUTPUT}" == "kernel" ]]; then
-  install_kernel_user_service "$PROJECT_DIR" "$SERVICE_USER" "$USER_SERVICE_TEMPLATE" "$USER_SERVICE_NAME"
-  enable_user_linger "$SERVICE_USER"
-  disable_system_display_service
-  report_user_service_status "$SERVICE_USER" "$USER_SERVICE_NAME"
-else
-  disable_user_kernel_service "$SERVICE_USER" "$USER_SERVICE_NAME"
-fi
-
 if command -v systemctl >/dev/null 2>&1; then
-  host=$(hostname)
-  if [[ "${DESK_DISPLAY_OUTPUT}" == "kernel" ]]; then
-    uid=$(id -u "$SERVICE_USER" 2>/dev/null || true)
-    if [[ -n "$uid" ]]; then
-      cat <<EOF
-SSH service control commands:
-  ssh ${SERVICE_USER}@${host} '${PROJECT_DIR}/scripts/ssh_kernel_display.sh status'
-  ssh ${SERVICE_USER}@${host} '${PROJECT_DIR}/scripts/ssh_kernel_display.sh restart'
-  ssh ${SERVICE_USER}@${host} '${PROJECT_DIR}/scripts/ssh_kernel_display.sh stop'
+  cat <<EOF
+Service control commands:
+  sudo systemctl status ${SERVICE_NAME}
+  sudo systemctl restart ${SERVICE_NAME}
+  sudo systemctl stop ${SERVICE_NAME}
+  sudo journalctl -u ${SERVICE_NAME} -f
 EOF
-    else
-      warn "Unable to resolve UID for $SERVICE_USER; skipping SSH command hints."
-    fi
-  else
-    cat <<EOF
-SSH service control commands:
-  ssh ${SERVICE_USER}@${host} 'sudo systemctl status ${SYSTEM_SERVICE_NAME}'
-  ssh ${SERVICE_USER}@${host} 'sudo systemctl restart ${SYSTEM_SERVICE_NAME}'
-  ssh ${SERVICE_USER}@${host} 'sudo systemctl stop ${SYSTEM_SERVICE_NAME}'
-EOF
-  fi
 fi
