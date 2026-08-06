@@ -20,7 +20,17 @@ else
   SUDO=""
 fi
 
-BACKUP_DIR="${UNINSTALL_BACKUP_DIR:-$HOME/desk_display_uninstalled}"
+# When run via `sudo`, $HOME is root's home directory, not the invoking
+# user's. Resolve the real user's home so backups land in their home
+# folder (e.g. /home/pi) instead of /root.
+REAL_USER="${SUDO_USER:-}"
+if [[ $EUID -eq 0 && -n "$REAL_USER" && "$REAL_USER" != "root" ]]; then
+  REAL_HOME=$(getent passwd "$REAL_USER" | cut -d: -f6)
+fi
+REAL_HOME="${REAL_HOME:-$HOME}"
+REAL_USER="${REAL_USER:-$(whoami)}"
+
+BACKUP_DIR="${UNINSTALL_BACKUP_DIR:-$REAL_HOME/desk_display_uninstalled}"
 
 cat >&2 <<EOF
 
@@ -211,6 +221,10 @@ move_to_backup() {
   mkdir -p "$BACKUP_DIR"
   log "Moving $src to $dest"
   mv "$src" "$dest"
+
+  if [[ $EUID -eq 0 && -n "$REAL_USER" && "$REAL_USER" != "root" ]]; then
+    chown -R "$REAL_USER" "$BACKUP_DIR" 2>/dev/null || true
+  fi
 }
 
 ENV_FILE="$PROJECT_DIR/.env"
@@ -220,7 +234,7 @@ else
   warn "No .env file found at $ENV_FILE"
 fi
 
-KEYS_DIR="$HOME/keys"
+KEYS_DIR="$REAL_HOME/keys"
 if [[ -d "$KEYS_DIR" ]]; then
   move_to_backup "$KEYS_DIR"
 else
@@ -229,7 +243,7 @@ fi
 
 log "Sensitive files (.env, keys) moved to $BACKUP_DIR if present"
 
-if [[ -z "$PROJECT_DIR" || "$PROJECT_DIR" == "/" || "$PROJECT_DIR" == "$HOME" ]]; then
+if [[ -z "$PROJECT_DIR" || "$PROJECT_DIR" == "/" || "$PROJECT_DIR" == "$HOME" || "$PROJECT_DIR" == "$REAL_HOME" ]]; then
   warn "Refusing to delete suspicious project directory: $PROJECT_DIR"
 else
   keep_choice="${KEEP_PROJECT_DIR:-}"
@@ -247,7 +261,7 @@ else
     log "Uninstall complete. Project files remain in $PROJECT_DIR"
   else
     log "Removing project directory $PROJECT_DIR"
-    cd "$HOME" 2>/dev/null || cd /
+    cd "$REAL_HOME" 2>/dev/null || cd /
     rm -rf -- "$PROJECT_DIR"
     log "Uninstall complete. $PROJECT_DIR removed."
   fi
