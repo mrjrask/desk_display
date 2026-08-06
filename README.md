@@ -656,6 +656,20 @@ Useful operations helpers:
 ./scripts/uninstall_airplay.sh
 ```
 
+`./scripts/uninstall.sh` is a full uninstaller: it stops and disables the
+systemd services, removes the virtual environment, moves any `.env` file
+from the project directory and the `~/keys/` folder (if present) into
+`~/desk_display_uninstalled` so credentials are preserved rather than
+deleted, and finally deletes the project directory itself. Because this is
+destructive, it prints a warning banner on launch and requires confirmation
+before doing anything: in an interactive shell you must type `UNINSTALL`
+exactly, and in a non-interactive shell it aborts unless
+`CONFIRM_UNINSTALL=yes` is set. Set `UNINSTALL_BACKUP_DIR` to use a
+different backup location, `KEEP_VENV=1` to keep the virtual environment,
+and `KEEP_PROJECT_DIR=1` to keep the project directory instead of deleting
+it. When run interactively it also asks for confirmation before removing
+the virtual environment and again before deleting the project directory.
+
 ---
 
 ## Developer workflow

@@ -20,6 +20,38 @@ else
   SUDO=""
 fi
 
+BACKUP_DIR="${UNINSTALL_BACKUP_DIR:-$HOME/desk_display_uninstalled}"
+
+cat >&2 <<EOF
+
+################################################################################
+ WARNING: this permanently uninstalls Desk Display.
+
+ This script will:
+   - stop and disable the desk_display systemd services
+   - remove the Python virtual environment
+   - move .env and ~/keys/ (if present) into:
+       $BACKUP_DIR
+   - DELETE the entire project directory:
+       $PROJECT_DIR
+
+ This cannot be undone, other than restoring from the backup folder above.
+################################################################################
+
+EOF
+
+if [[ -t 0 ]]; then
+  read -r -p 'Type UNINSTALL (all caps) to continue: ' confirm_word
+  if [[ "$confirm_word" != "UNINSTALL" ]]; then
+    warn 'Confirmation not received. Aborting without changes.'
+    exit 1
+  fi
+elif [[ "${CONFIRM_UNINSTALL:-}" != "yes" ]]; then
+  warn 'Non-interactive shell and CONFIRM_UNINSTALL is not set to "yes". Aborting without changes.'
+  warn 'Set CONFIRM_UNINSTALL=yes to run this uninstaller non-interactively.'
+  exit 1
+fi
+
 if command -v systemctl >/dev/null 2>&1; then
   log "Stopping $SERVICE_NAME"
   $SUDO systemctl stop "$SERVICE_NAME" || warn "Failed to stop $SERVICE_NAME"
@@ -166,4 +198,57 @@ else
   warn "No virtual environment found at $VENV_DIR"
 fi
 
-log "Uninstall complete. Project files remain in $PROJECT_DIR"
+move_to_backup() {
+  local src="$1"
+  local name
+  name=$(basename -- "$src")
+  local dest="$BACKUP_DIR/$name"
+
+  if [[ -e "$dest" ]]; then
+    dest="$BACKUP_DIR/${name}_$(date +%Y%m%d%H%M%S)"
+  fi
+
+  mkdir -p "$BACKUP_DIR"
+  log "Moving $src to $dest"
+  mv "$src" "$dest"
+}
+
+ENV_FILE="$PROJECT_DIR/.env"
+if [[ -f "$ENV_FILE" ]]; then
+  move_to_backup "$ENV_FILE"
+else
+  warn "No .env file found at $ENV_FILE"
+fi
+
+KEYS_DIR="$HOME/keys"
+if [[ -d "$KEYS_DIR" ]]; then
+  move_to_backup "$KEYS_DIR"
+else
+  warn "No keys folder found at $KEYS_DIR"
+fi
+
+log "Sensitive files (.env, keys) moved to $BACKUP_DIR if present"
+
+if [[ -z "$PROJECT_DIR" || "$PROJECT_DIR" == "/" || "$PROJECT_DIR" == "$HOME" ]]; then
+  warn "Refusing to delete suspicious project directory: $PROJECT_DIR"
+else
+  keep_choice="${KEEP_PROJECT_DIR:-}"
+
+  if [[ -z "$keep_choice" && -t 0 ]]; then
+    read -r -p "Delete project directory $PROJECT_DIR? [Y/n]: " keep_reply
+    case "${keep_reply,,}" in
+      n|no) keep_choice="yes" ;;
+      *) keep_choice="no" ;;
+    esac
+  fi
+
+  if [[ "$keep_choice" == "1" || "$keep_choice" == "yes" ]]; then
+    log "Keeping project directory at $PROJECT_DIR"
+    log "Uninstall complete. Project files remain in $PROJECT_DIR"
+  else
+    log "Removing project directory $PROJECT_DIR"
+    cd "$HOME" 2>/dev/null || cd /
+    rm -rf -- "$PROJECT_DIR"
+    log "Uninstall complete. $PROJECT_DIR removed."
+  fi
+fi
