@@ -143,7 +143,7 @@ backup_file() {
   if [[ -f "$file" ]]; then
     local ts
     ts="$(date +%Y%m%d_%H%M%S)"
-    cp -a "$file" "${file}.bak.${ts}"
+    $SUDO cp -a "$file" "${file}.bak.${ts}"
     log "Backup created: ${file}.bak.${ts}"
   fi
 }
@@ -155,8 +155,9 @@ append_if_missing() {
 }
 
 install_waveshare_stack() {
-  mkdir -p "$(dirname "$LOGFILE")"
-  touch "$LOGFILE"
+  $SUDO mkdir -p "$(dirname "$LOGFILE")"
+  $SUDO touch "$LOGFILE"
+  $SUDO chown "$TARGET_USER:$TARGET_USER" "$LOGFILE"
   exec > >(tee -a "$LOGFILE") 2>&1
 
   echo "===================================================================="
@@ -210,7 +211,7 @@ install_waveshare_stack() {
   echo "Using config file: $config_file"
   echo "Using overlays directory: $overlays_dir"
 
-  mkdir -p "$WORKDIR" "$INSTALL_ROOT" "$overlays_dir"
+  $SUDO mkdir -p "$WORKDIR" "$INSTALL_ROOT" "$overlays_dir"
 
   echo
   echo "==> Running initial apt maintenance"
@@ -218,7 +219,7 @@ install_waveshare_stack() {
 
   echo
   echo "==> Installing required tools"
-  DEBIAN_FRONTEND=noninteractive apt-get install -y \
+  $SUDO env DEBIAN_FRONTEND=noninteractive apt-get install -y \
     unzip \
     wget \
     curl \
@@ -239,24 +240,25 @@ install_waveshare_stack() {
 
   echo
   echo "==> Attempting optional font package from Waveshare wiki"
-  if ! DEBIAN_FRONTEND=noninteractive apt-get install -y ttf-mscorefonts-installer; then
+  if ! $SUDO env DEBIAN_FRONTEND=noninteractive apt-get install -y ttf-mscorefonts-installer; then
     echo "Optional package ttf-mscorefonts-installer was not installed. Continuing."
   fi
 
   echo
   echo "==> Attempting optional VideoCore headers package for fbcp"
-  if ! DEBIAN_FRONTEND=noninteractive apt-get install -y libraspberrypi-dev; then
+  if ! $SUDO env DEBIAN_FRONTEND=noninteractive apt-get install -y libraspberrypi-dev; then
     echo "Optional package libraspberrypi-dev was not installed."
     echo "If fbcp build fails with missing bcm_host.h, install userland dev headers and rerun."
   fi
 
   echo
   echo "==> Enabling SPI and I2C"
-  raspi-config nonint do_spi 0 || true
-  raspi-config nonint do_i2c 0 || true
+  $SUDO raspi-config nonint do_spi 0 || true
+  $SUDO raspi-config nonint do_i2c 0 || true
 
   echo
   echo "==> Preparing working directories"
+  $SUDO chown "$TARGET_USER:$TARGET_USER" "$WORKDIR" "$INSTALL_ROOT"
   cd "$WORKDIR"
   rm -rf wiringpi_extract overlay_extract demo_extract
   mkdir -p wiringpi_extract overlay_extract demo_extract
@@ -282,7 +284,7 @@ install_waveshare_stack() {
 
       if [[ -n "$deb_candidate" ]]; then
         echo "==> Installing WiringPi package: $deb_candidate"
-        apt-get install -y "$deb_candidate" || dpkg -i "$deb_candidate" || true
+        $SUDO apt-get install -y "$deb_candidate" || $SUDO dpkg -i "$deb_candidate" || true
       else
         echo "WARNING: WiringPi .deb not found after build. Continuing."
       fi
@@ -316,8 +318,8 @@ install_waveshare_stack() {
   fi
 
   echo "==> Installing device tree overlay"
-  cp -f "$dtbo_file" "$overlays_dir/OLED_LCD_HAT_A.dtbo"
-  chmod 644 "$overlays_dir/OLED_LCD_HAT_A.dtbo"
+  $SUDO cp -f "$dtbo_file" "$overlays_dir/OLED_LCD_HAT_A.dtbo"
+  $SUDO chmod 644 "$overlays_dir/OLED_LCD_HAT_A.dtbo"
   echo "Installed overlay to $overlays_dir/OLED_LCD_HAT_A.dtbo"
 
   if [[ "${PI_MODEL_MAJOR:-}" != "5" ]]; then
@@ -344,7 +346,7 @@ install_waveshare_stack() {
         cd "$fbcp_root/build"
         cmake ..
         if make -j"$(nproc)"; then
-          install -m 755 fbcp /usr/local/bin/fbcp
+          $SUDO install -m 755 fbcp /usr/local/bin/fbcp
         else
           echo "WARNING: fbcp build failed; continuing without fbcp service."
         fi
@@ -379,20 +381,20 @@ install_waveshare_stack() {
   echo
   echo "==> Updating boot config"
   backup_file "$config_file"
-  sed -i '/^dtparam=spi=on$/d' "$config_file"
-  sed -i '/^dtoverlay=OLED_LCD_HAT_A$/d' "$config_file"
-  sed -i '/^dtoverlay=OLED_LCD_HAT_A:rotate=90$/d' "$config_file"
-  sed -i '/^display_rotate=0$/d' "$config_file"
-  sed -i '/^hdmi_force_hotplug=1$/d' "$config_file"
-  sed -i '/^max_usb_current=1$/d' "$config_file"
-  sed -i '/^hdmi_group=2$/d' "$config_file"
-  sed -i '/^hdmi_mode=87$/d' "$config_file"
-  sed -i '/^hdmi_cvt 640 480 60 6 0 0 0$/d' "$config_file"
-  sed -i '/^hdmi_drive=2$/d' "$config_file"
-  sed -i 's/^dtoverlay=vc4-kms-v3d/#dtoverlay=vc4-kms-v3d/' "$config_file"
-  sed -i 's/^dtoverlay=vc4-kms-v3d-pi4/#dtoverlay=vc4-kms-v3d-pi4/' "$config_file"
+  $SUDO sed -i '/^dtparam=spi=on$/d' "$config_file"
+  $SUDO sed -i '/^dtoverlay=OLED_LCD_HAT_A$/d' "$config_file"
+  $SUDO sed -i '/^dtoverlay=OLED_LCD_HAT_A:rotate=90$/d' "$config_file"
+  $SUDO sed -i '/^display_rotate=0$/d' "$config_file"
+  $SUDO sed -i '/^hdmi_force_hotplug=1$/d' "$config_file"
+  $SUDO sed -i '/^max_usb_current=1$/d' "$config_file"
+  $SUDO sed -i '/^hdmi_group=2$/d' "$config_file"
+  $SUDO sed -i '/^hdmi_mode=87$/d' "$config_file"
+  $SUDO sed -i '/^hdmi_cvt 640 480 60 6 0 0 0$/d' "$config_file"
+  $SUDO sed -i '/^hdmi_drive=2$/d' "$config_file"
+  $SUDO sed -i 's/^dtoverlay=vc4-kms-v3d/#dtoverlay=vc4-kms-v3d/' "$config_file"
+  $SUDO sed -i 's/^dtoverlay=vc4-kms-v3d-pi4/#dtoverlay=vc4-kms-v3d-pi4/' "$config_file"
 
-  cat >>"$config_file" <<'CFGEOF'
+  $SUDO tee -a "$config_file" >/dev/null <<'CFGEOF'
 
 # Waveshare OLED/LCD HAT (A)
 dtparam=spi=on
@@ -417,29 +419,29 @@ CFGEOF
 
   echo
   echo "==> Creating helper commands"
-  cat >/usr/local/bin/waveshare-oled-lcd-hat-a-demo-lcd <<'BINEOF'
+  $SUDO tee /usr/local/bin/waveshare-oled-lcd-hat-a-demo-lcd >/dev/null <<'BINEOF'
 #!/usr/bin/env bash
 set -euo pipefail
 cd /opt/waveshare/OLED_LCD_HAT_A/python/example
 exec sudo -E python3 2inch.py
 BINEOF
-  chmod 755 /usr/local/bin/waveshare-oled-lcd-hat-a-demo-lcd
+  $SUDO chmod 755 /usr/local/bin/waveshare-oled-lcd-hat-a-demo-lcd
 
-  cat >/usr/local/bin/waveshare-oled-lcd-hat-a-demo-oled <<'BINEOF'
+  $SUDO tee /usr/local/bin/waveshare-oled-lcd-hat-a-demo-oled >/dev/null <<'BINEOF'
 #!/usr/bin/env bash
 set -euo pipefail
 cd /opt/waveshare/OLED_LCD_HAT_A/python/example
 exec sudo -E python3 0inch96.py
 BINEOF
-  chmod 755 /usr/local/bin/waveshare-oled-lcd-hat-a-demo-oled
+  $SUDO chmod 755 /usr/local/bin/waveshare-oled-lcd-hat-a-demo-oled
 
-  cat >/usr/local/bin/waveshare-oled-lcd-hat-a-demo-all <<'BINEOF'
+  $SUDO tee /usr/local/bin/waveshare-oled-lcd-hat-a-demo-all >/dev/null <<'BINEOF'
 #!/usr/bin/env bash
 set -euo pipefail
 cd /opt/waveshare/OLED_LCD_HAT_A/python/example
 exec sudo -E python3 all.py
 BINEOF
-  chmod 755 /usr/local/bin/waveshare-oled-lcd-hat-a-demo-all
+  $SUDO chmod 755 /usr/local/bin/waveshare-oled-lcd-hat-a-demo-all
 
   echo
   echo "==> Build C demo if present"
