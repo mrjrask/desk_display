@@ -258,7 +258,7 @@ install_waveshare_stack() {
 
   echo
   echo "==> Preparing working directories"
-  $SUDO chown "$TARGET_USER:$TARGET_USER" "$WORKDIR" "$INSTALL_ROOT"
+  $SUDO chown -R "$TARGET_USER:$TARGET_USER" "$WORKDIR" "$INSTALL_ROOT"
   cd "$WORKDIR"
   rm -rf wiringpi_extract overlay_extract demo_extract
   mkdir -p wiringpi_extract overlay_extract demo_extract
