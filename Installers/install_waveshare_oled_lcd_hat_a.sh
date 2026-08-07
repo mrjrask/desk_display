@@ -373,10 +373,10 @@ install_waveshare_stack() {
   fi
 
   echo "==> Installing demo package into $INSTALL_ROOT"
-  rm -rf "$INSTALL_ROOT"
-  mkdir -p "$INSTALL_ROOT"
+  $SUDO rm -rf "$INSTALL_ROOT"
+  $SUDO mkdir -p "$INSTALL_ROOT"
+  $SUDO chown -R "$TARGET_USER:$TARGET_USER" "$INSTALL_ROOT"
   cp -a "$demo_root/." "$INSTALL_ROOT/"
-  chown -R "$TARGET_USER:$TARGET_USER" "$INSTALL_ROOT"
 
   echo
   echo "==> Updating boot config"
