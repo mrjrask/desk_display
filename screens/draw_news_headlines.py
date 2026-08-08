@@ -77,6 +77,7 @@ _ROW_THEMES: dict[str, dict[str, tuple[int, int, int]]] = {
     "world": {"bg": (61, 18, 66), "label_bg": (140, 40, 150), "text": (250, 235, 255)},
     "technology": {"bg": (10, 50, 68), "label_bg": (8, 120, 150), "text": (225, 250, 255)},
     "sports": {"bg": (74, 30, 12), "label_bg": (178, 68, 14), "text": (255, 240, 225)},
+    "espn": {"bg": (48, 10, 10), "label_bg": (204, 0, 0), "text": (255, 240, 235)},
     "business": {"bg": (64, 56, 8), "label_bg": (160, 132, 8), "text": (255, 250, 225)},
 }
 _FALLBACK_THEME = {"bg": (30, 30, 38), "label_bg": (62, 62, 78), "text": (232, 232, 238)}

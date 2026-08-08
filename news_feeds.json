@@ -40,6 +40,12 @@
       "url": "https://wgntv.com/sports-feed/"
     },
     {
+      "id": "espn",
+      "label": "Sports",
+      "name": "ESPN – Top Headlines",
+      "url": "https://www.espn.com/espn/rss/news"
+    },
+    {
       "id": "business",
       "label": "Business",
       "name": "New York Times – Business",
