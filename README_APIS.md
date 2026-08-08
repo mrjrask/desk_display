@@ -241,11 +241,12 @@ Default topics/feeds shipped in `news_feeds.json`:
 | Topic id | Label | Default feed |
 | --- | --- | --- |
 | `local` | Local | Patch – Chicago (`https://patch.com/illinois/chicago/rss`) |
-| `chicagoland` | Chicagoland | Chicago Tribune – News (`https://www.chicagotribune.com/arcio/rss/category/news/`) |
+| `chicagoland` | Chicagoland | Block Club Chicago (`https://blockclubchicago.org/feed/`) |
 | `national` | National | New York Times – U.S. (`https://rss.nytimes.com/services/xml/rss/nyt/US.xml`) |
 | `world` | World | New York Times – World (`https://rss.nytimes.com/services/xml/rss/nyt/World.xml`) |
 | `technology` | Technology | New York Times – Technology (`https://rss.nytimes.com/services/xml/rss/nyt/Technology.xml`) |
-| `sports` | Chicago Sports | Chicago Tribune – Sports (`https://www.chicagotribune.com/arcio/rss/category/sports/`) |
+| `sports` | Chicago Sports | WGN9 – Sports (`https://wgntv.com/sports-feed/`) |
+| `espn` | Sports | ESPN – Top Headlines (`https://www.espn.com/espn/rss/news`) |
 | `business` | Business | New York Times – Business (`https://rss.nytimes.com/services/xml/rss/nyt/Business.xml`) |
 
 `local`, `chicagoland`, and `sports` default to Chicago to match this project's other Chicago-focused screens (Bears/Bulls/Cubs/Sox/Hawks) — edit `news_feeds.json` to point them at your own city/outlet, or add/remove topics entirely. Any topic added to the file automatically gets its own ticker lane, a fallback color theme, and a deterministic-but-distinct scroll speed; add an entry to `_ROW_THEMES` in `screens/draw_news_headlines.py` to give a custom topic its own colors instead of the fallback theme.
