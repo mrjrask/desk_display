@@ -908,22 +908,29 @@ def _draw_league_screen(
     title: str,
     league_id: int,
     screen_id: str,
+    *,
+    wild_card_only: bool = False,
 ) -> Image.Image:
     bg = get_screen_background_color(screen_id, SCOREBOARD_BACKGROUND_COLOR)
     standings = _fetch_league_standings().get(league_id, {})
-    wild_card_rows = _wild_card_rows(standings, limit=None)
-    draw_wild_card_cut_line = _should_draw_wild_card_cut_line(wild_card_rows)
+    league_abbr = "AL" if league_id == AL_LEAGUE_ID else "NL"
+
+    if wild_card_only:
+        wild_card_rows = _wild_card_rows(standings, limit=None)
+        draw_wild_card_cut_line = _should_draw_wild_card_cut_line(wild_card_rows)
+        visible_divisions = ["Wild Card"] if wild_card_rows else []
+        all_rows = wild_card_rows
+    else:
+        wild_card_rows = []
+        draw_wild_card_cut_line = False
+        visible_divisions = [div for div in DIVISION_ORDER if standings.get(div)]
+        all_rows = [row for div in DIVISION_ORDER for row in standings.get(div, [])]
 
     probe = ImageDraw.Draw(Image.new("RGB", (WIDTH, HEIGHT), bg))
-    all_rows = [row for div in DIVISION_ORDER for row in standings.get(div, [])] + wild_card_rows
     col = _column_layout(probe, all_rows)
 
     row_h = max(LOGO_SIZE, _text_size(probe, "SEA", TEAM_FONT)[1], _text_size(probe, "999", STATS_FONT)[1]) + scale_value(2)
     division_title_h = _text_size(probe, "AL East", DIVISION_FONT)[1] + DIVISION_CONTENT_GAP
-
-    visible_divisions = [div for div in DIVISION_ORDER if standings.get(div)]
-    if wild_card_rows:
-        visible_divisions.append("Wild Card")
 
     section_h = 0
     for idx, div in enumerate(visible_divisions):
@@ -946,7 +953,7 @@ def _draw_league_screen(
     for idx, div in enumerate(visible_divisions):
         rows = wild_card_rows if div == "Wild Card" else standings.get(div) or []
 
-        division_label = f"{title.split()[1]} {div}"
+        division_label = f"{league_abbr} {div}"
         draw.text((WIDTH // 2, y), division_label, font=DIVISION_FONT, fill=(255, 255, 255), anchor="mt")
         y += _text_size(draw, division_label, DIVISION_FONT)[1] + DIVISION_CONTENT_GAP
         y = _draw_stat_headers(draw, col, y)
@@ -996,8 +1003,15 @@ def _draw_league_screen(
     return img
 
 
-def _render_screen(display, title: str, league_id: int, screen_id: str) -> ScreenImage:
-    image = _draw_league_screen(title, league_id, screen_id)
+def _render_screen(
+    display,
+    title: str,
+    league_id: int,
+    screen_id: str,
+    *,
+    wild_card_only: bool = False,
+) -> ScreenImage:
+    image = _draw_league_screen(title, league_id, screen_id, wild_card_only=wild_card_only)
     clear_display(display)
 
     scroll_vertical_content(
@@ -1021,9 +1035,25 @@ def draw_mlb_al_standings(display, transition: bool = False) -> ScreenImage:
 
 
 @log_call
+def draw_mlb_al_wc_standings(display, transition: bool = False) -> ScreenImage:
+    _ = transition
+    return _render_screen(
+        display, "MLB ALWC Standings", AL_LEAGUE_ID, "MLB ALWC Standings", wild_card_only=True
+    )
+
+
+@log_call
 def draw_mlb_nl_standings(display, transition: bool = False) -> ScreenImage:
     _ = transition
     return _render_screen(display, "MLB NL Standings", NL_LEAGUE_ID, "MLB NL Standings")
+
+
+@log_call
+def draw_mlb_nl_wc_standings(display, transition: bool = False) -> ScreenImage:
+    _ = transition
+    return _render_screen(
+        display, "MLB NLWC Standings", NL_LEAGUE_ID, "MLB NLWC Standings", wild_card_only=True
+    )
 
 
 @log_call
@@ -1048,7 +1078,9 @@ def draw_AL_Overview_WC(display, transition: bool = False):
 
 __all__ = [
     "draw_mlb_al_standings",
+    "draw_mlb_al_wc_standings",
     "draw_mlb_nl_standings",
+    "draw_mlb_nl_wc_standings",
     "draw_NL_Overview",
     "draw_AL_Overview",
     "draw_NL_Overview_WC",

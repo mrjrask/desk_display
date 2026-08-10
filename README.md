@@ -605,7 +605,9 @@ The authoritative list is `RAW_SCREEN_IDS` in `screens_catalog.py`. Legacy IDs a
 - `NL Overview+WC`
 - `AL Overview+WC`
 - `MLB AL Standings`
+- `MLB ALWC Standings`
 - `MLB NL Standings`
+- `MLB NLWC Standings`
 
 ---
 
