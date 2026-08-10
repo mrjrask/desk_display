@@ -1788,9 +1788,9 @@ INSIDE_COL_STROKE = (230, 230, 230)
 # Bears schedule screen
 BEARS_BOTTOM_MARGIN = 6
 BEARS_SCHEDULE = [
-    {"game_no": "0.1", "week": "Preseason 1", "date": "TBD", "opponent": "Cleveland Browns", "home_away": "Home", "time": "TBD"},
-    {"game_no": "0.2", "week": "Preseason 2", "date": "TBD", "opponent": "Cincinnati Bengals", "home_away": "Away", "time": "TBD"},
-    {"game_no": "0.3", "week": "Preseason 3", "date": "TBD", "opponent": "Tennessee Titans", "home_away": "Away", "time": "TBD"},
+    {"game_no": "0.1", "week": "Preseason 1", "date": "Sat, Aug 15, 2026", "opponent": "Cleveland Browns", "home_away": "Home", "time": "Noon"},
+    {"game_no": "0.2", "week": "Preseason 2", "date": "Sat, Aug 22, 2026", "opponent": "Cincinnati Bengals", "home_away": "Away", "time": "6:00PM"},
+    {"game_no": "0.3", "week": "Preseason 3", "date": "Sat, Aug 29, 2026", "opponent": "Tennessee Titans", "home_away": "Away", "time": "5:00PM"},
     {"game_no": "1", "week": "Week 1", "date": "Sun, Sep 13, 2026", "opponent": "Carolina Panthers", "home_away": "Away", "time": "Noon"},
     {"game_no": "2", "week": "Week 2", "date": "Sun, Sep 20, 2026", "opponent": "Minnesota Vikings", "home_away": "Home", "time": "Noon"},
     {"game_no": "3", "week": "Week 3", "date": "Mon, Sep 28, 2026", "opponent": "Philadelphia Eagles", "home_away": "Home", "time": "7:15PM"},
