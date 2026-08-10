@@ -99,6 +99,18 @@ def resolve_news_feeds_config_path() -> Path:
     return _resolve_env_path("NEWS_FEEDS_CONFIG_PATH", base_dir) or (base_dir / "news_feeds.json")
 
 
+def resolve_news_feeds_config_path_2() -> Path:
+    """Resolve the second news headlines feed config path from env or project default.
+
+    This is the file operators edit to add, remove, or re-point the RSS/Atom
+    feeds shown on the "news headlines 2" screen. See ``news_feeds_2.json`` at
+    the project root for the default topic list.
+    """
+
+    base_dir = _project_root()
+    return _resolve_env_path("NEWS_FEEDS_CONFIG_PATH_2", base_dir) or (base_dir / "news_feeds_2.json")
+
+
 def resolve_storage_paths(*, logger: Optional[object] = None) -> StoragePaths:
     """Return filesystem paths for screenshots and archives.
 

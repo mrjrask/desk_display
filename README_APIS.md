@@ -224,19 +224,19 @@ Fields used include game IDs, status, team display names/abbreviations, team log
 
 | Item | Value |
 | --- | --- |
-| Role | Headline source for the "news headlines" ticker screen. |
-| Config file | `news_feeds.json` at the project root (path override: `NEWS_FEEDS_CONFIG_PATH`). |
+| Role | Headline source for the "news headlines" and "news headlines 2" ticker screens. |
+| Config file | `news_feeds.json` for "news headlines" (path override: `NEWS_FEEDS_CONFIG_PATH`); `news_feeds_2.json` for "news headlines 2" (path override: `NEWS_FEEDS_CONFIG_PATH_2`). Both live at the project root. |
 | Format | Free RSS 2.0 or Atom feeds — no API key required. |
 
-Feed name/URL pairs are intentionally kept out of code so they're easy to find and edit. Each entry in `news_feeds.json`'s `topics` array is:
+Feed name/URL pairs are intentionally kept out of code so they're easy to find and edit. Each entry in a `news_feeds*.json` file's `topics` array is:
 
 ```json
 { "id": "local", "label": "Local", "name": "Patch – Chicago", "url": "https://patch.com/illinois/chicago/rss" }
 ```
 
-`headline_count` (default 5) controls how many recent headlines are kept per topic; `refresh_minutes` (default 20) controls how often feeds are re-fetched.
+`headline_count` (default 5) controls how many recent headlines are kept per topic; `refresh_minutes` (default 20) controls how often feeds are re-fetched. The two config files, caches, and enable flags (`ENABLE_NEWS_HEADLINES` / `ENABLE_NEWS_HEADLINES_2`) are entirely independent of each other.
 
-Default topics/feeds shipped in `news_feeds.json`:
+Default topics/feeds shipped in `news_feeds.json` (the "news headlines" screen):
 
 | Topic id | Label | Default feed |
 | --- | --- | --- |
@@ -249,13 +249,23 @@ Default topics/feeds shipped in `news_feeds.json`:
 | `espn` | Sports | ESPN – Top Headlines (`https://www.espn.com/espn/rss/news`) |
 | `business` | Business | New York Times – Business (`https://rss.nytimes.com/services/xml/rss/nyt/Business.xml`) |
 
-`local`, `chicagoland`, and `sports` default to Chicago to match this project's other Chicago-focused screens (Bears/Bulls/Cubs/Sox/Hawks) — edit `news_feeds.json` to point them at your own city/outlet, or add/remove topics entirely. Any topic added to the file automatically gets its own ticker lane, a fallback color theme, and a deterministic-but-distinct scroll speed; add an entry to `_ROW_THEMES` in `screens/draw_news_headlines.py` to give a custom topic its own colors instead of the fallback theme.
+Default topics/feeds shipped in `news_feeds_2.json` (the "news headlines 2" screen):
+
+| Topic id | Label | Default feed |
+| --- | --- | --- |
+| `cnn` | CNN | CNN Breaking News (`http://rss.cnn.com/rss/cnn_topstories.rss`) |
+| `tribune` | Chicago Tribune | Chicago Tribune via Google News (`https://news.google.com/rss/search?q=site:chicagotribune.com&hl=en-US&gl=US&ceid=US:en`) |
+| `wgn` | WGN News | WGN News (`https://wgntv.com/feed/`) |
+| `macrumors` | MacRumors | MacRumors (`https://feeds.macrumors.com/MacRumors-All`) |
+| `espn` | ESPN | ESPN Top Stories (`https://www.espn.com/espn/rss/news`) |
+
+`local`, `chicagoland`, and `sports` default to Chicago to match this project's other Chicago-focused screens (Bears/Bulls/Cubs/Sox/Hawks) — edit `news_feeds.json`/`news_feeds_2.json` to point them at your own city/outlet, or add/remove topics entirely. Any topic added to either file automatically gets its own ticker lane, a fallback color theme, and a deterministic-but-distinct scroll speed; add an entry to `_ROW_THEMES` in `screens/draw_news_headlines.py` to give a custom topic its own colors instead of the fallback theme (theme lookup is by topic id, shared across both screens' configs).
 
 Fields used per headline: title, link, description/summary (HTML-stripped for the ticker), publish date (used to sort newest-first and to pick the most recent `headline_count` items), and an image URL resolved from, in order, `media:content` (largest `width` wins), `media:thumbnail`, an `<enclosure type="image/*">`, or the first `<img>` found in the description/`content:encoded` HTML. Any step in that chain can come back empty; the ticker simply renders without a thumbnail for that headline.
 
 When a headline is tapped on a touch-capable display, the reader overlay fetches the full article page and extracts text with a small built-in readability-style parser (prefers text inside an `<article>` element, falls back to every `<p>` in the page, and picks up an `og:image`/`twitter:image` meta tag for the hero image). If that fetch fails or a site blocks scraping, the overlay falls back to the feed's own summary/`content:encoded` text.
 
-Diagnostics: `python scripts/test_api_connections.py` includes a `news headlines feeds` check that fetches every configured topic feed and reports which topics returned headlines.
+Diagnostics: `python scripts/test_api_connections.py` includes `news headlines feeds` and `news headlines 2 feeds` checks that fetch every configured topic feed (for each screen's config) and report which topics returned headlines.
 
 ---
 
@@ -270,7 +280,7 @@ Diagnostics: `python scripts/test_api_connections.py` includes a `news headlines
 
 Fields used include `regularMarketPrice`, `previousClose`, and historical close values when available. The diagnostics check chart payload availability with `range=1d` and `interval=1d`.
 
-The news headlines screen (`screens/draw_news_headlines.py`) appends a bottom "Markets" ticker lane driven by `services/stock_quotes.py`, which fetches the same way as the VRNO screen for a fixed symbol list: `^DJI` (DJIA), `^IXIC` (Nasdaq Composite), `^GSPC` (S&P 500), `VRNO`, `AAPL`, and `services.stock_quotes.TOP_MARKET_CAP_SYMBOLS` (currently `NVDA`, `AAPL`, `MSFT`, `GOOGL`, `AMZN` — edit that list as market-cap rankings shift; duplicates against the fixed symbols are dropped). Quotes are cached for `STOCK_TICKER_CACHE_TTL_SECONDS` (default 900s). Set `ENABLE_STOCK_TICKER=false` to hide the row.
+Both news headlines screens (`screens/draw_news_headlines.py`: `draw_news_headlines` and `draw_news_headlines_2`) append the same bottom "Markets" ticker lane driven by `services/stock_quotes.py`, which fetches the same way as the VRNO screen for a fixed symbol list: `^DJI` (DJIA), `^IXIC` (Nasdaq Composite), `^GSPC` (S&P 500), `VRNO`, `AAPL`, and `services.stock_quotes.TOP_MARKET_CAP_SYMBOLS` (currently `NVDA`, `AAPL`, `MSFT`, `GOOGL`, `AMZN` — edit that list as market-cap rankings shift; duplicates against the fixed symbols are dropped). Quotes are cached for `STOCK_TICKER_CACHE_TTL_SECONDS` (default 900s). Set `ENABLE_STOCK_TICKER=false` to hide the row on both screens.
 
 ---
 

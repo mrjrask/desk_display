@@ -28,8 +28,10 @@ from services.news_feeds import (
     NewsTopic,
     _strip_html,
     fetch_all_headlines,
+    fetch_all_headlines_2,
     fetch_article_text,
     load_news_feed_config,
+    load_news_feed_config_2,
 )
 from services.stock_quotes import StockQuote, default_symbol_order, fetch_stock_quotes
 from utils import (
@@ -79,6 +81,11 @@ _ROW_THEMES: dict[str, dict[str, tuple[int, int, int]]] = {
     "sports": {"bg": (74, 30, 12), "label_bg": (178, 68, 14), "text": (255, 240, 225)},
     "espn": {"bg": (48, 10, 10), "label_bg": (204, 0, 0), "text": (255, 240, 235)},
     "business": {"bg": (64, 56, 8), "label_bg": (160, 132, 8), "text": (255, 250, 225)},
+    # Topics used by the second "news headlines 2" screen (news_feeds_2.json).
+    "cnn": {"bg": (54, 10, 10), "label_bg": (176, 24, 24), "text": (255, 238, 235)},
+    "tribune": {"bg": (16, 34, 58), "label_bg": (32, 78, 138), "text": (232, 242, 255)},
+    "wgn": {"bg": (16, 44, 44), "label_bg": (24, 104, 104), "text": (230, 255, 252)},
+    "macrumors": {"bg": (40, 26, 60), "label_bg": (96, 60, 160), "text": (240, 232, 255)},
 }
 _FALLBACK_THEME = {"bg": (30, 30, 38), "label_bg": (62, 62, 78), "text": (232, 232, 238)}
 
@@ -771,25 +778,30 @@ def _run_ticker(display, rows: list[_TickerRow]) -> ScreenImage:
     return ScreenImage(last_frame, displayed=True, consumed_delay=True)
 
 
-@log_call
-def draw_news_headlines(display, transition: bool = True) -> ScreenImage:
-    """Render the multi-topic news ticker screen.
+def _render_news_headlines_screen(
+    display,
+    *,
+    enabled: bool,
+    topics_loader,
+    headlines_fetcher,
+    config_filename: str,
+) -> ScreenImage:
+    """Shared render path for both news-ticker screens.
 
-    Topics/feeds come from news_feeds.json (see
-    paths.resolve_news_feeds_config_path). Each topic becomes one ticker
-    lane; lanes with no fetched headlines are skipped for this pass rather
-    than shown empty.
+    Each screen supplies its own config loader/headline fetcher (backed by a
+    separate news_feeds*.json file and cache slot, see services/news_feeds.py)
+    so the two screens' topics and refresh cycles stay fully independent.
     """
 
-    if not config.ENABLE_NEWS_HEADLINES:
+    if not enabled:
         return _render_empty_state(display)
 
-    topics, _headline_count, _refresh_minutes = load_news_feed_config()
+    topics, _headline_count, _refresh_minutes = topics_loader()
     if not topics:
-        logging.warning("news_headlines: no topics configured in news_feeds.json")
+        logging.warning("news_headlines: no topics configured in %s", config_filename)
         return _render_empty_state(display)
 
-    headlines_by_topic = fetch_all_headlines()
+    headlines_by_topic = headlines_fetcher()
     row_count_estimate = len(topics) + (1 if config.ENABLE_STOCK_TICKER else 0)
     row_height_estimate, _row_tops_estimate = _compute_row_layout(row_count_estimate)
     rows = _build_rows(topics, headlines_by_topic, row_height_estimate)
@@ -804,3 +816,40 @@ def draw_news_headlines(display, transition: bool = True) -> ScreenImage:
         return _render_empty_state(display)
 
     return _run_ticker(display, rows)
+
+
+@log_call
+def draw_news_headlines(display, transition: bool = True) -> ScreenImage:
+    """Render the multi-topic news ticker screen.
+
+    Topics/feeds come from news_feeds.json (see
+    paths.resolve_news_feeds_config_path). Each topic becomes one ticker
+    lane; lanes with no fetched headlines are skipped for this pass rather
+    than shown empty.
+    """
+
+    return _render_news_headlines_screen(
+        display,
+        enabled=config.ENABLE_NEWS_HEADLINES,
+        topics_loader=load_news_feed_config,
+        headlines_fetcher=fetch_all_headlines,
+        config_filename="news_feeds.json",
+    )
+
+
+@log_call
+def draw_news_headlines_2(display, transition: bool = True) -> ScreenImage:
+    """Render the second multi-topic news ticker screen.
+
+    Topics/feeds come from news_feeds_2.json (see
+    paths.resolve_news_feeds_config_path_2), independent of the primary
+    "news headlines" screen's topics.
+    """
+
+    return _render_news_headlines_screen(
+        display,
+        enabled=config.ENABLE_NEWS_HEADLINES_2,
+        topics_loader=load_news_feed_config_2,
+        headlines_fetcher=fetch_all_headlines_2,
+        config_filename="news_feeds_2.json",
+    )

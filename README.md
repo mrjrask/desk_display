@@ -84,6 +84,7 @@ Supported workflow profiles include:
 | `screens_catalog.py` | Canonical screen IDs and legacy ID canonicalization. |
 | `screens_config.json` | Default screen frequencies, playlists, and sequence. Runtime/local overrides may be stored separately by config helpers. |
 | `news_feeds.json` | Editable list of news topics/feeds (name + RSS/Atom URL) shown on the "news headlines" screen. |
+| `news_feeds_2.json` | Same as above, but for the independent "news headlines 2" screen. |
 | `screens_layouts.json` | Quad/layout configuration. |
 | `data_fetch.py` | Weather, sports, finance, AHL, and team data fetch/normalization helpers. |
 | `services/` | Shared API/provider clients, HTTP session helpers, sports service modules, and Wi-Fi utilities. |
@@ -367,8 +368,10 @@ Set `INSIDE_SENSOR` to `adafruit_bme280`, `adafruit_bme680`, or `adafruit_sht4x`
 
 | Variable | Description |
 | --- | --- |
-| `NEWS_FEEDS_CONFIG_PATH` | Optional path override for `news_feeds.json` (topic name/URL list; see [Screens, playlists, and scheduling](#news-headlines-screen)). |
+| `NEWS_FEEDS_CONFIG_PATH` | Optional path override for `news_feeds.json` (topic name/URL list; see [Screens, playlists, and scheduling](#news-headlines-screens)). |
+| `NEWS_FEEDS_CONFIG_PATH_2` | Optional path override for `news_feeds_2.json`, the "news headlines 2" screen's independent topic/URL list. |
 | `ENABLE_NEWS_HEADLINES` | Enables/disables the "news headlines" screen; defaults to enabled. |
+| `ENABLE_NEWS_HEADLINES_2` | Enables/disables the "news headlines 2" screen; defaults to enabled. |
 | `NEWS_HEADLINES_SHOW_IMAGES` | Download/show inline article images and reader-overlay hero images; defaults to enabled. |
 | `NEWS_TICKER_BASE_SPEED` | Base ticker scroll speed in pixels/frame before each topic's per-lane speed variation; defaults to `2.0`. |
 | `NEWS_ARTICLE_FETCH_TIMEOUT_SECONDS` | Timeout for fetching full article text when a headline is tapped; defaults to `6.0`. |
@@ -478,13 +481,14 @@ When `quad` or `weather quad` is shown on a touch-capable HyperPixel setup:
 - `extra_seconds` is ignored for that touch-initiated fullscreen play and for the immediate return-to-quad interval.
 - Normal rotation resumes afterward.
 
-### News headlines screen
+### News headlines screens
 
-`news headlines` renders one horizontally scrolling ticker lane per configured topic, each with its own color theme, label badge, and scroll speed, showing the most recent headlines (with inline images when a feed provides one).
+`news headlines` renders one horizontally scrolling ticker lane per configured topic, each with its own color theme, label badge, and scroll speed, showing the most recent headlines (with inline images when a feed provides one). `news headlines 2` is a second, independent instance of the same screen with its own feed list, config file, cache, and enable flag — everything else (rendering, the stock ticker row, reader overlay, on-screen duration) works identically to `news headlines`.
 
-- **Feed sources live in `news_feeds.json`** at the project root (override the path with `NEWS_FEEDS_CONFIG_PATH`), not in code. Each topic entry is `{"id", "label", "name", "url"}`; `url` is a plain RSS/Atom feed and needs no API key. Add, remove, rename, or re-point topics by editing that file — no restart-proof hot reload is required beyond the next fetch cycle (`refresh_minutes` in the same file, default 20). See [README_APIS.md](README_APIS.md#news-headlines-rssatom) for the default feed list and image-extraction behavior.
+- **Feed sources live in `news_feeds.json`** (for `news headlines`; override the path with `NEWS_FEEDS_CONFIG_PATH`) and `news_feeds_2.json` (for `news headlines 2`; override with `NEWS_FEEDS_CONFIG_PATH_2`), both at the project root, not in code. Each topic entry is `{"id", "label", "name", "url"}`; `url` is a plain RSS/Atom feed and needs no API key. Add, remove, rename, or re-point topics by editing the relevant file — no restart-proof hot reload is required beyond the next fetch cycle (`refresh_minutes` in the same file, default 20). See [README_APIS.md](README_APIS.md#news-headlines-rssatom) for the default feed lists and image-extraction behavior.
 - On a touch-capable display (SDL window/mouse or a real touchscreen), tapping a headline opens a fullscreen "Reader"-style overlay with the article's extracted text and image; tap anywhere (or the normal skip button/gesture) to close it and resume the ticker. On non-touch outputs (framebuffer/kernel/headless without pointer input), headlines render the same way but are not interactive.
-- Relevant environment variables: `ENABLE_NEWS_HEADLINES`, `NEWS_HEADLINES_SHOW_IMAGES`, `NEWS_TICKER_BASE_SPEED`, `NEWS_ARTICLE_FETCH_TIMEOUT_SECONDS`, `NEWS_HEADLINES_DISPLAY_SECONDS`, `NEWS_FEEDS_CONFIG_PATH` (see the variable table below).
+- Both screens share the same stock ticker row (see below) and the same `NEWS_HEADLINES_DISPLAY_SECONDS` on-screen duration, so `news headlines 2` scrolls for exactly as long as `news headlines` each time it's shown.
+- Relevant environment variables: `ENABLE_NEWS_HEADLINES`, `ENABLE_NEWS_HEADLINES_2`, `NEWS_HEADLINES_SHOW_IMAGES`, `NEWS_TICKER_BASE_SPEED`, `NEWS_ARTICLE_FETCH_TIMEOUT_SECONDS`, `NEWS_HEADLINES_DISPLAY_SECONDS`, `NEWS_FEEDS_CONFIG_PATH`, `NEWS_FEEDS_CONFIG_PATH_2` (see the variable table below).
 
 ---
 
@@ -499,6 +503,7 @@ The authoritative list is `RAW_SCREEN_IDS` in `screens_catalog.py`. Legacy IDs a
 - `quad`
 - `on this day`
 - `news headlines`
+- `news headlines 2`
 - `weather logo`
 - `weather1`
 - `weather2`

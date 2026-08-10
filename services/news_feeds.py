@@ -22,7 +22,7 @@ from html.parser import HTMLParser
 from typing import ClassVar, Optional
 from xml.etree import ElementTree
 
-from paths import resolve_news_feeds_config_path
+from paths import resolve_news_feeds_config_path, resolve_news_feeds_config_path_2
 from services.http_client import http_get
 
 _DEFAULT_HEADLINE_COUNT = 5
@@ -65,9 +65,48 @@ _config_cache_path: Optional[str] = None
 _config_cache_mtime: Optional[float] = None
 _config_cache_value: Optional[tuple[list[NewsTopic], int, int]] = None
 
+# Cache slot for the second "news headlines 2" screen (news_feeds_2.json),
+# kept separate from the primary screen's slot above so the two screens
+# refresh/reload independently of each other.
+_config_cache_path_2: Optional[str] = None
+_config_cache_mtime_2: Optional[float] = None
+_config_cache_value_2: Optional[tuple[list[NewsTopic], int, int]] = None
+
 
 def _fallback_config() -> tuple[list[NewsTopic], int, int]:
     return [], _DEFAULT_HEADLINE_COUNT, _DEFAULT_REFRESH_MINUTES
+
+
+def _parse_news_feed_config(path: str) -> tuple[list[NewsTopic], int, int]:
+    try:
+        with open(path, encoding="utf-8") as fh:
+            payload = json.load(fh)
+    except Exception as exc:
+        logging.warning("news_feeds: could not read config at %s: %s", path, exc)
+        return _fallback_config()
+
+    topics: list[NewsTopic] = []
+    for raw in payload.get("topics", []) if isinstance(payload, dict) else []:
+        if not isinstance(raw, dict):
+            continue
+        topic_id = str(raw.get("id") or "").strip()
+        url = str(raw.get("url") or "").strip()
+        if not topic_id or not url:
+            continue
+        label = str(raw.get("label") or topic_id.title()).strip()
+        name = str(raw.get("name") or label).strip()
+        topics.append(NewsTopic(id=topic_id, label=label, name=name, url=url))
+
+    try:
+        headline_count = max(1, int(payload.get("headline_count", _DEFAULT_HEADLINE_COUNT)))
+    except Exception:
+        headline_count = _DEFAULT_HEADLINE_COUNT
+    try:
+        refresh_minutes = max(1, int(payload.get("refresh_minutes", _DEFAULT_REFRESH_MINUTES)))
+    except Exception:
+        refresh_minutes = _DEFAULT_REFRESH_MINUTES
+
+    return topics, headline_count, refresh_minutes
 
 
 def load_news_feed_config() -> tuple[list[NewsTopic], int, int]:
@@ -94,38 +133,37 @@ def load_news_feed_config() -> tuple[list[NewsTopic], int, int]:
         ):
             return _config_cache_value
 
-        try:
-            with open(path, encoding="utf-8") as fh:
-                payload = json.load(fh)
-        except Exception as exc:
-            logging.warning("news_feeds: could not read config at %s: %s", path, exc)
-            result = _fallback_config()
-            _config_cache_path, _config_cache_mtime, _config_cache_value = path, mtime, result
-            return result
-
-        topics: list[NewsTopic] = []
-        for raw in payload.get("topics", []) if isinstance(payload, dict) else []:
-            if not isinstance(raw, dict):
-                continue
-            topic_id = str(raw.get("id") or "").strip()
-            url = str(raw.get("url") or "").strip()
-            if not topic_id or not url:
-                continue
-            label = str(raw.get("label") or topic_id.title()).strip()
-            name = str(raw.get("name") or label).strip()
-            topics.append(NewsTopic(id=topic_id, label=label, name=name, url=url))
-
-        try:
-            headline_count = max(1, int(payload.get("headline_count", _DEFAULT_HEADLINE_COUNT)))
-        except Exception:
-            headline_count = _DEFAULT_HEADLINE_COUNT
-        try:
-            refresh_minutes = max(1, int(payload.get("refresh_minutes", _DEFAULT_REFRESH_MINUTES)))
-        except Exception:
-            refresh_minutes = _DEFAULT_REFRESH_MINUTES
-
-        result = (topics, headline_count, refresh_minutes)
+        result = _parse_news_feed_config(path)
         _config_cache_path, _config_cache_mtime, _config_cache_value = path, mtime, result
+        return result
+
+
+def load_news_feed_config_2() -> tuple[list[NewsTopic], int, int]:
+    """Same as ``load_news_feed_config`` but for the "news headlines 2" screen.
+
+    Reads/caches ``news_feeds_2.json`` (see
+    ``paths.resolve_news_feeds_config_path_2``) independently of the primary
+    screen's config.
+    """
+
+    global _config_cache_path_2, _config_cache_mtime_2, _config_cache_value_2
+
+    path = str(resolve_news_feeds_config_path_2())
+    try:
+        mtime = os.path.getmtime(path)
+    except OSError:
+        mtime = None
+
+    with _config_cache_lock:
+        if (
+            _config_cache_path_2 == path
+            and _config_cache_mtime_2 == mtime
+            and _config_cache_value_2 is not None
+        ):
+            return _config_cache_value_2
+
+        result = _parse_news_feed_config(path)
+        _config_cache_path_2, _config_cache_mtime_2, _config_cache_value_2 = path, mtime, result
         return result
 
 
@@ -323,7 +361,41 @@ _headlines_cache_lock = threading.Lock()
 _headlines_cache_value: dict[str, list[NewsHeadline]] = {}
 _headlines_cache_time: Optional[float] = None
 _headlines_cache_refresh_seconds: float = _DEFAULT_REFRESH_MINUTES * 60
+
+# Cache slot for the second "news headlines 2" screen, kept separate from the
+# primary screen's slot above so the two screens refresh independently.
+_headlines_cache_value_2: dict[str, list[NewsHeadline]] = {}
+_headlines_cache_time_2: Optional[float] = None
+_headlines_cache_refresh_seconds_2: float = _DEFAULT_REFRESH_MINUTES * 60
+
 _FEED_FETCH_TIMEOUT_BUDGET_SECONDS = 6.0
+
+
+def _fetch_topics_parallel(
+    topics: list[NewsTopic], headline_count: int
+) -> dict[str, list[NewsHeadline]]:
+    """Fetch every topic's headlines in parallel with a shared time budget.
+
+    Mirrors the pattern used by the "on this day" screen so one slow/
+    unreachable feed cannot stall the whole screen.
+    """
+
+    results: dict[str, list[NewsHeadline]] = {}
+    with ThreadPoolExecutor(max_workers=max(1, len(topics))) as executor:
+        future_to_topic = {
+            executor.submit(fetch_topic_headlines, topic, headline_count): topic
+            for topic in topics
+        }
+        done, pending = wait(future_to_topic, timeout=_FEED_FETCH_TIMEOUT_BUDGET_SECONDS)
+        for future in done:
+            topic = future_to_topic[future]
+            try:
+                results[topic.id] = future.result() or []
+            except Exception as exc:
+                logging.debug("news_feeds: topic %s raised: %s", topic.id, exc)
+        for future in pending:
+            future.cancel()
+    return results
 
 
 def fetch_all_headlines(*, force: bool = False) -> dict[str, list[NewsHeadline]]:
@@ -353,21 +425,7 @@ def fetch_all_headlines(*, force: bool = False) -> dict[str, list[NewsHeadline]]
     if not topics:
         return {}
 
-    results: dict[str, list[NewsHeadline]] = {}
-    with ThreadPoolExecutor(max_workers=max(1, len(topics))) as executor:
-        future_to_topic = {
-            executor.submit(fetch_topic_headlines, topic, headline_count): topic
-            for topic in topics
-        }
-        done, pending = wait(future_to_topic, timeout=_FEED_FETCH_TIMEOUT_BUDGET_SECONDS)
-        for future in done:
-            topic = future_to_topic[future]
-            try:
-                results[topic.id] = future.result() or []
-            except Exception as exc:
-                logging.debug("news_feeds: topic %s raised: %s", topic.id, exc)
-        for future in pending:
-            future.cancel()
+    results = _fetch_topics_parallel(topics, headline_count)
 
     with _headlines_cache_lock:
         if results:
@@ -386,13 +444,50 @@ def fetch_all_headlines(*, force: bool = False) -> dict[str, list[NewsHeadline]]
         return {topic_id: list(items) for topic_id, items in _headlines_cache_value.items()}
 
 
+def fetch_all_headlines_2(*, force: bool = False) -> dict[str, list[NewsHeadline]]:
+    """Same as ``fetch_all_headlines`` but for the "news headlines 2" screen."""
+
+    global _headlines_cache_value_2, _headlines_cache_time_2, _headlines_cache_refresh_seconds_2
+
+    topics, headline_count, refresh_minutes = load_news_feed_config_2()
+    _headlines_cache_refresh_seconds_2 = max(60, refresh_minutes * 60)
+
+    now = time.monotonic()
+    with _headlines_cache_lock:
+        if (
+            not force
+            and _headlines_cache_time_2 is not None
+            and (now - _headlines_cache_time_2) < _headlines_cache_refresh_seconds_2
+            and _headlines_cache_value_2
+        ):
+            return {topic_id: list(items) for topic_id, items in _headlines_cache_value_2.items()}
+
+    if not topics:
+        return {}
+
+    results = _fetch_topics_parallel(topics, headline_count)
+
+    with _headlines_cache_lock:
+        if results:
+            merged_cache = dict(_headlines_cache_value_2)
+            for topic_id, items in results.items():
+                if items or topic_id not in merged_cache:
+                    merged_cache[topic_id] = items
+            _headlines_cache_value_2 = merged_cache
+            _headlines_cache_time_2 = time.monotonic()
+        elif not _headlines_cache_value_2:
+            _headlines_cache_time_2 = time.monotonic()
+        return {topic_id: list(items) for topic_id, items in _headlines_cache_value_2.items()}
+
+
 def clear_headline_cache_for_tests() -> None:
     global _headlines_cache_value, _headlines_cache_time
+    global _headlines_cache_value_2, _headlines_cache_time_2
     with _headlines_cache_lock:
         _headlines_cache_value = {}
         _headlines_cache_time = None
-    with _config_cache_lock:
-        pass
+        _headlines_cache_value_2 = {}
+        _headlines_cache_time_2 = None
 
 
 # ─── Reader-style article text extraction ──────────────────────────────────
