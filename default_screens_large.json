@@ -512,6 +512,9 @@
           },
           {
             "screen": "news headlines"
+          },
+          {
+            "screen": "news headlines 2"
           }
         ]
       }
