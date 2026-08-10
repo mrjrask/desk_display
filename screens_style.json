@@ -198,7 +198,13 @@
     "MLB AL Standings": {
       "background": "#000000"
     },
+    "MLB ALWC Standings": {
+      "background": "#000000"
+    },
     "MLB NL Standings": {
+      "background": "#000000"
+    },
+    "MLB NLWC Standings": {
       "background": "#000000"
     },
     "bears logo": {

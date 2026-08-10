@@ -209,7 +209,9 @@ def test_render_screen_draws_combined_recent_column(monkeypatch):
     monkeypatch.setattr(
         mlb_league_standings,
         "_draw_league_screen",
-        lambda title, league_id, screen_id: draw_calls.append((title, league_id, screen_id))
+        lambda title, league_id, screen_id, *, wild_card_only=False: draw_calls.append(
+            (title, league_id, screen_id, wild_card_only)
+        )
         or Image.new("RGB", (1, 1)),
     )
     monkeypatch.setattr(mlb_league_standings, "clear_display", lambda _display: None)
@@ -217,7 +219,27 @@ def test_render_screen_draws_combined_recent_column(monkeypatch):
 
     mlb_league_standings._render_screen(object(), "AL", 103, "MLB AL Standings")
 
-    assert draw_calls == [("AL", 103, "MLB AL Standings")]
+    assert draw_calls == [("AL", 103, "MLB AL Standings", False)]
+
+
+def test_render_screen_passes_through_wild_card_only(monkeypatch):
+    draw_calls = []
+    monkeypatch.setattr(
+        mlb_league_standings,
+        "_draw_league_screen",
+        lambda title, league_id, screen_id, *, wild_card_only=False: draw_calls.append(
+            (title, league_id, screen_id, wild_card_only)
+        )
+        or Image.new("RGB", (1, 1)),
+    )
+    monkeypatch.setattr(mlb_league_standings, "clear_display", lambda _display: None)
+    monkeypatch.setattr(mlb_league_standings, "scroll_vertical_content", lambda **_kwargs: None)
+
+    mlb_league_standings._render_screen(
+        object(), "ALWC", 103, "MLB ALWC Standings", wild_card_only=True
+    )
+
+    assert draw_calls == [("ALWC", 103, "MLB ALWC Standings", True)]
 
 
 def test_draw_stat_headers_centers_labels_in_column(monkeypatch):
@@ -528,6 +550,68 @@ def test_league_screen_uses_wild_card_tie_check_before_drawing_cut_line(monkeypa
     )
 
     assert calls == []
+
+
+def test_wild_card_only_screen_draws_cut_line_when_applicable(monkeypatch):
+    standings = {
+        mlb_league_standings.AL_LEAGUE_ID: {
+            "East": [
+                {"team_name": "East Leader", "abbr": "NYY", "wins": "90", "losses": "60", "pct": ".600", "gb": "-"},
+                {"team_name": "East Two", "abbr": "BOS", "wins": "88", "losses": "62", "pct": ".587", "gb": "2", "wcgb": "-", "wildCardRank": "1"},
+                {"team_name": "East Three", "abbr": "TOR", "wins": "80", "losses": "70", "pct": ".533", "gb": "10", "wcgb": "8", "wildCardRank": "3"},
+            ],
+            "Central": [
+                {"team_name": "Central Leader", "abbr": "CLE", "wins": "85", "losses": "65", "pct": ".567", "gb": "-"},
+                {"team_name": "Central Two", "abbr": "DET", "wins": "83", "losses": "67", "pct": ".553", "gb": "2", "wcgb": "5", "wildCardRank": "2"},
+            ],
+            "West": [
+                {"team_name": "West Leader", "abbr": "HOU", "wins": "92", "losses": "58", "pct": ".613", "gb": "-"},
+                {"team_name": "West Two", "abbr": "SEA", "wins": "78", "losses": "72", "pct": ".520", "gb": "14", "wcgb": "9", "wildCardRank": "4"},
+            ],
+        }
+    }
+    calls = []
+
+    monkeypatch.setattr(mlb_league_standings, "_fetch_league_standings", lambda: standings)
+    monkeypatch.setattr(mlb_league_standings, "_load_mlb_logo", lambda: None)
+    monkeypatch.setattr(mlb_league_standings, "_load_logo", lambda *args, **kwargs: None)
+    monkeypatch.setattr(
+        mlb_league_standings,
+        "_draw_wild_card_cut_line",
+        lambda *args, **kwargs: calls.append((args, kwargs)),
+    )
+
+    mlb_league_standings._draw_league_screen(
+        "MLB ALWC Standings",
+        mlb_league_standings.AL_LEAGUE_ID,
+        "MLB ALWC Standings",
+        wild_card_only=True,
+    )
+
+    assert calls
+
+
+def test_draw_mlb_wc_standings_route_to_wild_card_only_render(monkeypatch):
+    calls = []
+    monkeypatch.setattr(
+        mlb_league_standings,
+        "_render_screen",
+        lambda display, title, league_id, screen_id, **kwargs: calls.append(
+            (title, league_id, screen_id, kwargs)
+        ),
+    )
+
+    mlb_league_standings.draw_mlb_al_wc_standings(object())
+    mlb_league_standings.draw_mlb_nl_wc_standings(object())
+    mlb_league_standings.draw_mlb_al_standings(object())
+    mlb_league_standings.draw_mlb_nl_standings(object())
+
+    assert calls == [
+        ("MLB ALWC Standings", mlb_league_standings.AL_LEAGUE_ID, "MLB ALWC Standings", {"wild_card_only": True}),
+        ("MLB NLWC Standings", mlb_league_standings.NL_LEAGUE_ID, "MLB NLWC Standings", {"wild_card_only": True}),
+        ("MLB AL Standings", mlb_league_standings.AL_LEAGUE_ID, "MLB AL Standings", {}),
+        ("MLB NL Standings", mlb_league_standings.NL_LEAGUE_ID, "MLB NL Standings", {}),
+    ]
 
 
 def test_draw_overview_wc_non_hyperpixel_has_column_width(monkeypatch):

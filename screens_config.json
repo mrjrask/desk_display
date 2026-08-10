@@ -82,7 +82,9 @@
     "NL Overview+WC": 0,
     "AL Overview+WC": 0,
     "MLB AL Standings": 2,
+    "MLB ALWC Standings": 2,
     "MLB NL Standings": 2,
+    "MLB NLWC Standings": 2,
     "bears logo": 7,
     "bears stand1": 0,
     "bears stand2": 0,
@@ -368,7 +370,13 @@
           "screen": "MLB AL Standings"
         },
         {
+          "screen": "MLB ALWC Standings"
+        },
+        {
           "screen": "MLB NL Standings"
+        },
+        {
+          "screen": "MLB NLWC Standings"
         }
       ]
     },

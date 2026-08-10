@@ -84,7 +84,9 @@
       "NL Overview": 0,
       "AL Overview": 0,
       "MLB AL Standings": 2,
+      "MLB ALWC Standings": 2,
       "MLB NL Standings": 2,
+      "MLB NLWC Standings": 2,
       "NL Overview+WC": 5,
       "AL Overview+WC": 5,
       "bears logo": 3,
@@ -381,7 +383,13 @@
             "screen": "MLB AL Standings"
           },
           {
+            "screen": "MLB ALWC Standings"
+          },
+          {
             "screen": "MLB NL Standings"
+          },
+          {
+            "screen": "MLB NLWC Standings"
           }
         ]
       },
@@ -746,7 +754,13 @@
       "MLB AL Standings": {
         "background": "#000000"
       },
+      "MLB ALWC Standings": {
+        "background": "#000000"
+      },
       "MLB NL Standings": {
+        "background": "#000000"
+      },
+      "MLB NLWC Standings": {
         "background": "#000000"
       },
       "NL Overview+WC": {
