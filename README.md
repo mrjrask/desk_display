@@ -190,7 +190,13 @@ Update installed Python dependencies later with:
 bash ./Installers/install.sh
 ```
 
-You can pass a profile to skip prompts:
+After the hardware installer finishes, it also prompts for which default
+screen rotation to load — `small` or `large` (via
+`tools/load_default_screen_config.py`, documented under
+[Import/export helpers](#importexport-helpers) below).
+
+You can pass a profile, and optionally a screen-defaults choice, to skip
+prompts:
 
 ```bash
 bash ./Installers/install.sh display_hat_mini
@@ -201,6 +207,10 @@ bash ./Installers/install.sh macos_window
 bash ./Installers/install.sh pi_window
 bash ./Installers/install.sh win_window
 bash ./Installers/install.sh waveshare_oled_lcd_hat_a
+
+# Skip both prompts by also passing the screen defaults profile
+bash ./Installers/install.sh display_hat_mini small
+bash ./Installers/install.sh display_hat_mini large
 ```
 
 ### Hardware/display-specific installers

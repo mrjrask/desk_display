@@ -7,7 +7,7 @@ PROJECT_DIR="${PROJECT_DIR:-$(cd -- "$SCRIPT_DIR/.." && pwd)}"
 print_usage() {
   cat <<'USAGE'
 Usage:
-  bash ./Installers/install.sh [profile]
+  bash ./Installers/install.sh [profile] [screen_defaults]
 
 Profiles:
   display_hat_mini   (default)
@@ -18,6 +18,10 @@ Profiles:
   pi_window
   win_window
   waveshare_oled_lcd_hat_a
+
+Screen defaults:
+  small
+  large               (default)
 USAGE
 }
 
@@ -79,7 +83,22 @@ MENU
   esac
 }
 
+prompt_screen_defaults() {
+  cat <<'MENU'
+Which default screen rotation should be loaded?
+  1) small
+  2) large (default)
+MENU
+  read -r -p "Enter choice [1-2]: " choice
+  case "$choice" in
+    1) echo "small" ;;
+    ""|2) echo "large" ;;
+    *) return 1 ;;
+  esac
+}
+
 profile="${1:-}"
+screen_defaults="${2:-}"
 
 if [[ -z "$profile" && -t 0 ]]; then
   profile=$(prompt_profile) || {
@@ -99,4 +118,20 @@ if [[ ! -x "$installer" ]]; then
 fi
 
 echo "[INFO] Running installer: $installer"
-exec "$installer"
+"$installer"
+
+if [[ -z "$screen_defaults" && -t 0 ]]; then
+  screen_defaults=$(prompt_screen_defaults) || {
+    echo "[WARN] Invalid selection; skipping screen rotation defaults." >&2
+    screen_defaults=""
+  }
+fi
+
+if [[ -n "$screen_defaults" ]]; then
+  echo "[INFO] Loading $screen_defaults screen rotation defaults."
+  if ! python3 "$PROJECT_DIR/tools/load_default_screen_config.py" "$screen_defaults"; then
+    echo "[WARN] Failed to load $screen_defaults screen rotation defaults." >&2
+  fi
+else
+  echo "[INFO] Skipping screen rotation defaults (no selection made)."
+fi
