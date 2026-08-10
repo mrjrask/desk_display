@@ -59,7 +59,11 @@ from data_fetch import (
 )
 from screens.nhl_scoreboard import dns_diagnostics
 from screens.draw_weather import _alert_message_text, _fetch_rainviewer_frames, _selected_alert
-from services.news_feeds import fetch_topic_headlines, load_news_feed_config
+from services.news_feeds import (
+    fetch_topic_headlines,
+    load_news_feed_config,
+    load_news_feed_config_2,
+)
 
 
 @dataclass
@@ -349,15 +353,9 @@ def check_nhl_network_diagnostics() -> tuple[str, str]:
     return _ok("dns + endpoint diagnostics passed")
 
 
-def check_news_feeds() -> tuple[str, str]:
-    """Fetch every topic feed listed in news_feeds.json and report per-topic results.
-
-    Feeds/topics are edited in news_feeds.json, not here — see README_APIS.md.
-    """
-
-    topics, headline_count, _refresh_minutes = load_news_feed_config()
+def _check_news_feeds_config(config_name: str, topics, headline_count: int) -> tuple[str, str]:
     if not topics:
-        return _skip("no topics configured in news_feeds.json")
+        return _skip(f"no topics configured in {config_name}")
 
     failures: list[str] = []
     counts: list[str] = []
@@ -371,6 +369,26 @@ def check_news_feeds() -> tuple[str, str]:
     if failures:
         return _fail(f"no headlines returned for: {', '.join(failures)} (ok: {', '.join(counts)})")
     return _ok(f"headlines returned for all topics ({', '.join(counts)})")
+
+
+def check_news_feeds() -> tuple[str, str]:
+    """Fetch every topic feed listed in news_feeds.json and report per-topic results.
+
+    Feeds/topics are edited in news_feeds.json, not here — see README_APIS.md.
+    """
+
+    topics, headline_count, _refresh_minutes = load_news_feed_config()
+    return _check_news_feeds_config("news_feeds.json", topics, headline_count)
+
+
+def check_news_feeds_2() -> tuple[str, str]:
+    """Fetch every topic feed listed in news_feeds_2.json and report per-topic results.
+
+    Feeds/topics are edited in news_feeds_2.json, not here — see README_APIS.md.
+    """
+
+    topics, headline_count, _refresh_minutes = load_news_feed_config_2()
+    return _check_news_feeds_config("news_feeds_2.json", topics, headline_count)
 
 
 CHECKS = [
@@ -407,6 +425,7 @@ CHECKS = [
     Check("app helper ahl wolves games", check_ahl_wolves_games_helper),
     Check("nhl network diagnostics", check_nhl_network_diagnostics),
     Check("news headlines feeds", check_news_feeds),
+    Check("news headlines 2 feeds", check_news_feeds_2),
 ]
 
 

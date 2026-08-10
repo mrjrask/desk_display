@@ -183,6 +183,73 @@ def test_load_news_feed_config_falls_back_when_file_missing(tmp_path, monkeypatc
     assert refresh_minutes == nf._DEFAULT_REFRESH_MINUTES
 
 
+def test_load_news_feed_config_2_reads_topics_independently_of_primary(tmp_path, monkeypatch):
+    primary_path = tmp_path / "news_feeds.json"
+    primary_path.write_text(
+        json.dumps({"topics": [{"id": "local", "label": "Local", "name": "Local", "url": "https://example.com/local.xml"}]})
+    )
+    secondary_path = tmp_path / "news_feeds_2.json"
+    secondary_path.write_text(
+        json.dumps(
+            {
+                "headline_count": 4,
+                "refresh_minutes": 15,
+                "topics": [
+                    {"id": "cnn", "label": "CNN", "name": "CNN Breaking News", "url": "https://example.com/cnn.xml"},
+                ],
+            }
+        )
+    )
+    monkeypatch.setattr(nf, "resolve_news_feeds_config_path", lambda: primary_path)
+    monkeypatch.setattr(nf, "resolve_news_feeds_config_path_2", lambda: secondary_path)
+    with nf._config_cache_lock:
+        nf._config_cache_path = None
+        nf._config_cache_mtime = None
+        nf._config_cache_value = None
+        nf._config_cache_path_2 = None
+        nf._config_cache_mtime_2 = None
+        nf._config_cache_value_2 = None
+
+    primary_topics, _primary_count, _primary_refresh = load_news_feed_config()
+    secondary_topics, secondary_count, secondary_refresh = nf.load_news_feed_config_2()
+
+    assert [t.id for t in primary_topics] == ["local"]
+    assert [t.id for t in secondary_topics] == ["cnn"]
+    assert secondary_count == 4
+    assert secondary_refresh == 15
+
+
+def test_fetch_all_headlines_2_caches_independently_of_primary(monkeypatch):
+    nf.clear_headline_cache_for_tests()
+    primary_topics = [NewsTopic(id="local", label="Local", name="Test", url="https://example.com/local.xml")]
+    secondary_topics = [NewsTopic(id="cnn", label="CNN", name="Test", url="https://example.com/cnn.xml")]
+    monkeypatch.setattr(nf, "load_news_feed_config", lambda: (primary_topics, 5, 20))
+    monkeypatch.setattr(nf, "load_news_feed_config_2", lambda: (secondary_topics, 5, 20))
+
+    calls = []
+
+    def fake_fetch(topic, limit, timeout=5.0):
+        calls.append(topic.id)
+        return [nf.NewsHeadline(topic_id=topic.id, title=f"{topic.id} headline", link="https://example.com/x")]
+
+    monkeypatch.setattr(nf, "fetch_topic_headlines", fake_fetch)
+
+    primary = fetch_all_headlines()
+    secondary = nf.fetch_all_headlines_2()
+
+    assert sorted(calls) == ["cnn", "local"]
+    assert "cnn" not in primary
+    assert "local" not in secondary
+    assert primary["local"][0].title == "local headline"
+    assert secondary["cnn"][0].title == "cnn headline"
+
+    # Second calls should be served from each independent cache slot.
+    calls.clear()
+    fetch_all_headlines()
+    nf.fetch_all_headlines_2()
+    assert calls == []
+
+
 def test_fetch_all_headlines_caches_until_refresh_interval_elapses(monkeypatch):
     # Deliberately avoids patching time.monotonic: concurrent.futures.wait()
     # calls the real time module internally during fetch_all_headlines, and a

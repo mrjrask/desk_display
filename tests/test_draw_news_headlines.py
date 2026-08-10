@@ -315,6 +315,47 @@ def test_draw_news_headlines_shows_empty_state_when_no_topics(monkeypatch):
     assert display.frames
 
 
+def test_draw_news_headlines_2_renders_using_its_own_feeds(monkeypatch):
+    monkeypatch.setattr(dnh, "NEWS_HEADLINES_DISPLAY_SECONDS", 0.05)
+    monkeypatch.setattr(dnh, "_pygame_module_for_display", lambda display: None)
+    monkeypatch.setattr(dnh, "_download_thumbnail", lambda *args, **kwargs: None)
+    monkeypatch.setattr(dnh, "fetch_stock_quotes", lambda *args, **kwargs: [])
+
+    primary_topics = _topics(["local"])
+    secondary_topics = _topics(["cnn", "tribune"])
+    monkeypatch.setattr(dnh, "load_news_feed_config", lambda: (primary_topics, 5, 20))
+    monkeypatch.setattr(dnh, "fetch_all_headlines", lambda: _headlines_for(primary_topics))
+    monkeypatch.setattr(dnh, "load_news_feed_config_2", lambda: (secondary_topics, 5, 20))
+    monkeypatch.setattr(dnh, "fetch_all_headlines_2", lambda: _headlines_for(secondary_topics))
+
+    display = DummyDisplay()
+    screen = dnh.draw_news_headlines_2(display, transition=True)
+
+    assert screen.displayed is True
+    assert screen.image.size == (dnh.WIDTH, dnh.HEIGHT)
+    assert display.frames
+
+
+def test_draw_news_headlines_2_shows_empty_state_when_disabled(monkeypatch):
+    monkeypatch.setattr(dnh.config, "ENABLE_NEWS_HEADLINES_2", False)
+    display = DummyDisplay()
+
+    screen = dnh.draw_news_headlines_2(display, transition=True)
+
+    assert screen.image.size == (dnh.WIDTH, dnh.HEIGHT)
+    assert display.frames
+
+
+def test_draw_news_headlines_2_shows_empty_state_when_no_topics(monkeypatch):
+    monkeypatch.setattr(dnh, "load_news_feed_config_2", lambda: ([], 5, 20))
+    display = DummyDisplay()
+
+    screen = dnh.draw_news_headlines_2(display, transition=True)
+
+    assert screen.image.size == (dnh.WIDTH, dnh.HEIGHT)
+    assert display.frames
+
+
 def test_run_ticker_opens_reader_overlay_on_headline_tap(monkeypatch):
     monkeypatch.setattr(dnh, "NEWS_HEADLINES_DISPLAY_SECONDS", 0.3)
     monkeypatch.setattr(dnh, "_download_thumbnail", lambda *args, **kwargs: None)

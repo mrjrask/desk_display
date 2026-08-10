@@ -367,6 +367,9 @@ if _air_quality_errors:
 # Feed sources (name + URL) live in news_feeds.json, not here — see
 # paths.resolve_news_feeds_config_path(). These knobs only tune behavior.
 ENABLE_NEWS_HEADLINES = _get_bool_env("ENABLE_NEWS_HEADLINES", True)
+# Second, independently-configured news ticker screen ("news headlines 2");
+# its feeds live in news_feeds_2.json (paths.resolve_news_feeds_config_path_2).
+ENABLE_NEWS_HEADLINES_2 = _get_bool_env("ENABLE_NEWS_HEADLINES_2", True)
 NEWS_HEADLINES_SHOW_IMAGES = _get_bool_env("NEWS_HEADLINES_SHOW_IMAGES", True)
 NEWS_TICKER_BASE_SPEED = float(os.environ.get("NEWS_TICKER_BASE_SPEED", "2.0") or 2.0)
 NEWS_ARTICLE_FETCH_TIMEOUT_SECONDS = float(

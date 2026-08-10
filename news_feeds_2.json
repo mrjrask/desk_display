@@ -1,0 +1,37 @@
+{
+  "_comment": "Edit this file to add, remove, rename, or re-point news topics/feeds. Each topic renders as one section on the 'news headlines 2' screen, showing its 'headline_count' most recent items. Feeds are plain RSS/Atom URLs and need no API key. Restart desk_display (or wait for the next refresh) to pick up changes.",
+  "headline_count": 5,
+  "refresh_minutes": 20,
+  "topics": [
+    {
+      "id": "cnn",
+      "label": "CNN",
+      "name": "CNN Breaking News",
+      "url": "http://rss.cnn.com/rss/cnn_topstories.rss"
+    },
+    {
+      "id": "tribune",
+      "label": "Chicago Tribune",
+      "name": "Chicago Tribune",
+      "url": "https://news.google.com/rss/search?q=site:chicagotribune.com&hl=en-US&gl=US&ceid=US:en"
+    },
+    {
+      "id": "wgn",
+      "label": "WGN News",
+      "name": "WGN News",
+      "url": "https://wgntv.com/feed/"
+    },
+    {
+      "id": "macrumors",
+      "label": "MacRumors",
+      "name": "Macrumors",
+      "url": "https://feeds.macrumors.com/MacRumors-All"
+    },
+    {
+      "id": "espn",
+      "label": "ESPN",
+      "name": "ESPN Top Stories",
+      "url": "https://www.espn.com/espn/rss/news"
+    }
+  ]
+}
