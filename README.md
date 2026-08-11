@@ -684,9 +684,19 @@ Useful operations helpers:
 ./scripts/check_hyperpixel_setup.sh
 ./scripts/check_waveshare_setup.sh
 ./scripts/restore_desktop.sh
+./scripts/update_services.sh
 ./Installers/uninstall.sh
 ./scripts/uninstall_airplay.sh
 ```
+
+`./scripts/update_services.sh` patches any already-installed systemd unit
+(`desk_display.service`, `config_ui_desk_display.service`,
+`desk_display_waveshare_oled.service`) whose `ExecStart`/`ExecStop` still
+points at a script path from before a repo-side script move/rename, then
+reloads systemd and restarts only the units it changed. It leaves every
+other unit setting (display profile, `Environment=` overrides, etc.)
+untouched, unlike re-running a full hardware installer, which regenerates
+the unit from scratch using whatever environment it happens to run with.
 
 `./Installers/uninstall.sh` is a full uninstaller: it stops and disables the
 systemd services, removes the virtual environment, moves any `.env` file
