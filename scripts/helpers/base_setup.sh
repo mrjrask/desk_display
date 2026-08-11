@@ -10,7 +10,6 @@ REQUIREMENTS_FILE="${REQUIREMENTS_FILE:-requirements/displayhatmini.txt}"
 SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 PROJECT_DIR="${PROJECT_DIR:-$(cd -- "$SCRIPT_DIR/../.." && pwd)}"
 SERVICE_USER="${SUDO_USER:-$(whoami)}"
-MAINTENANCE_DIR="$PROJECT_DIR/tools/maintenance"
 
 COMMON_SCRIPT="$SCRIPT_DIR/common.sh"
 if [[ ! -f "$COMMON_SCRIPT" ]]; then
@@ -67,8 +66,8 @@ if [[ -n "$EXISTING_VENV" ]]; then
   VENV_DIR="$EXISTING_VENV"
 fi
 
-ensure_executable "$MAINTENANCE_DIR/cleanup.sh"
-ensure_executable "$MAINTENANCE_DIR/reset_screenshots.sh"
+ensure_executable "$PROJECT_DIR/scripts/cleanup.sh"
+ensure_executable "$PROJECT_DIR/scripts/reset_screenshots.sh"
 ensure_executable "$PROJECT_DIR/scripts/framebuffer_service.sh"
 ensure_executable "$PROJECT_DIR/scripts/prepare_kernel_session_env.sh"
 ensure_executable "$PROJECT_DIR/scripts/wait_for_display_ready.sh"
@@ -165,7 +164,7 @@ $(printf '%s\n' "${FRAMEBUFFER_PRESTART_LINES[@]}")
 $(printf '%s\n' "${KERNEL_PRESTART_LINES[@]}")
 $(printf '%s\n' "${KERNEL_ENV_OVERRIDE_LINES[@]}")
 ExecStart=$VENV_DIR/bin/python $PROJECT_DIR/main.py
-ExecStop=/bin/bash -lc '$MAINTENANCE_DIR/cleanup.sh'
+ExecStop=/bin/bash -lc '$PROJECT_DIR/scripts/cleanup.sh'
 $(printf '%s\n' "${FRAMEBUFFER_POSTSTOP_LINES[@]}")
 Restart=always
 RestartSec=5

@@ -129,7 +129,7 @@ fi
 
 if [[ -n "$screen_defaults" ]]; then
   echo "[INFO] Loading $screen_defaults screen rotation defaults."
-  if ! python3 "$PROJECT_DIR/tools/load_default_screen_config.py" "$screen_defaults"; then
+  if ! python3 "$PROJECT_DIR/scripts/load_default_screen_config.py" "$screen_defaults"; then
     echo "[WARN] Failed to load $screen_defaults screen rotation defaults." >&2
   fi
 else

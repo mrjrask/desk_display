@@ -1,6 +1,6 @@
 from PIL import Image
 
-from tools.maintenance import render_screens
+from scripts import render_screens
 from utils import ScreenImage
 
 

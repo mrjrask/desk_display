@@ -90,8 +90,7 @@ Supported workflow profiles include:
 | `services/` | Shared API/provider clients, HTTP session helpers, sports service modules, and Wi-Fi utilities. |
 | `templates/` | Config UI and screenshot UI templates. |
 | `Installers/` | Platform/display install scripts. |
-| `scripts/` | Service, launch, diagnostics, setup, and operations scripts. |
-| `tools/` | Import/export, validation, font audit, and maintenance rendering/cleanup tools. |
+| `scripts/` | Service, launch, diagnostics, setup, operations, import/export, validation, font audit, and maintenance rendering/cleanup scripts. |
 | `tests/` | Pytest suite. |
 | `images/` | Team, league, and static image assets. |
 | `fonts/` | Bundled fonts used by renderers. |
@@ -205,7 +204,7 @@ bash ./Installers/install.sh
 
 After the hardware installer finishes, it also prompts for which default
 screen rotation to load — `small` or `large` (via
-`tools/load_default_screen_config.py`, documented under
+`scripts/load_default_screen_config.py`, documented under
 [Import/export helpers](#importexport-helpers) below).
 
 You can pass a profile, and optionally a screen-defaults choice, to skip
@@ -717,27 +716,27 @@ pytest
 pytest -q tests/test_screens_catalog.py tests/test_screen_registry.py tests/test_config_flags.py
 
 # Validate required files
-python tools/validate_required_files.py
+python scripts/validate_required_files.py
 
 # Validate external API connectivity and configured credentials
 python scripts/test_api_connections.py
 python scripts/test_api_connections.py --json
 
 # Canonical render-validation command for visual/regression review
-python tools/maintenance/render_screens.py
+python scripts/render_screens.py
 ```
 
 ### Import/export helpers
 
 ```bash
-python tools/export_screen_rotation_config.py
-python tools/import_screen_rotation_config.py path/to/export.json
+python scripts/export_screen_rotation_config.py
+python scripts/import_screen_rotation_config.py path/to/export.json
 
 # Load the small/large screen rotation defaults (same as the Screen Config
 # page's "Load selected defaults" + Save, without opening the webpage)
-python tools/load_default_screen_config.py small
-python tools/load_default_screen_config.py large
-python tools/load_default_screen_config.py small --dry-run  # preview only
+python scripts/load_default_screen_config.py small
+python scripts/load_default_screen_config.py large
+python scripts/load_default_screen_config.py small --dry-run  # preview only
 ```
 
 ### Style/lint context

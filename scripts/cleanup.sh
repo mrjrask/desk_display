@@ -6,7 +6,7 @@ IFS=$'\n\t'
 #   sed -i 's/\r$//' cleanup.sh && chmod +x cleanup.sh
 
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &>/dev/null && pwd -P)"
-PROJECT_ROOT="$(cd -- "$SCRIPT_DIR/../.." &>/dev/null && pwd -P)"
+PROJECT_ROOT="$(cd -- "$SCRIPT_DIR/.." &>/dev/null && pwd -P)"
 
 echo "⏱  Running cleanup at $(date +%Y%m%d_%H%M%S)…"
 cd "$PROJECT_ROOT"

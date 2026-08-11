@@ -8,8 +8,8 @@ Scans:
 - screens_layouts.json for per-display layout variants
 
 Usage:
-  python3 tools/font_audit.py
-  python3 tools/font_audit.py --json out_fonts.json
+  python3 scripts/font_audit.py
+  python3 scripts/font_audit.py --json out_fonts.json
 """
 
 from __future__ import annotations
