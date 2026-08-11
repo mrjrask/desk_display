@@ -33,7 +33,7 @@ import datetime as dt
 import logging
 import os
 import re
-from typing import Dict, Optional, Tuple
+from typing import Optional
 
 from PIL import Image, ImageDraw, ImageFont
 

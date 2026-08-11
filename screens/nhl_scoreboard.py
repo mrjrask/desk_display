@@ -19,7 +19,7 @@ import socket
 import sys
 import time
 from collections.abc import Iterable
-from typing import Any, Dict, Optional
+from typing import Any, Optional
 
 from PIL import Image, ImageDraw
 
@@ -34,7 +34,6 @@ from config import (
     SCOREBOARD_FINAL_LOSING_SCORE_COLOR,
     SCOREBOARD_FINAL_WINNING_SCORE_COLOR,
     SCOREBOARD_IN_PROGRESS_SCORE_COLOR,
-    SCOREBOARD_STANDINGS_BOTTOM_PADDING,
     WIDTH,
     get_screen_background_color,
     get_screen_font,
@@ -46,8 +45,7 @@ from config import (
     scale_value_width,
 )
 from screens.scoreboard_components import (
-    SCROLL_PAUSE_BOTTOM,
-    center_text as _center_text,
+    center_text as _center_text,  # noqa: F401 -- re-exported for screens.nhl_playoffs
     display_no_games,
     display_or_scroll_scoreboard,
     draw_score_game_row,

@@ -22,7 +22,6 @@ from config import (
     FONT_STOCK_TITLE,
     HEIGHT,
     IMAGES_DIR,
-    VRNO_CACHE_TTL,
     VRNO_FRESHNESS_LIMIT,
     VRNO_LOTS,
     WIDTH,
@@ -33,7 +32,6 @@ from config import (
 from utils import (
     LED_INDICATOR_LEVEL,
     ScreenImage,
-    log_call,
 )
 
 # In-memory cache

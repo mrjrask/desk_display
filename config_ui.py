@@ -10,7 +10,7 @@ import subprocess
 import time
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, FrozenSet, List, Optional, Tuple
+from typing import Any, Optional
 from urllib.parse import urlsplit, urlunsplit
 
 from flask import (

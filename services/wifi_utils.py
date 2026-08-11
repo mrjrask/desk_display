@@ -13,7 +13,7 @@ import threading
 import time
 from collections.abc import Sequence
 from pathlib import Path
-from typing import List, Optional, Tuple
+from typing import Optional
 from urllib.parse import urlsplit
 
 # ─── Behaviour configuration ───────────────────────────────────────────────────

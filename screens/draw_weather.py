@@ -21,7 +21,7 @@ import re
 import textwrap
 import time
 from io import BytesIO
-from typing import Any, NamedTuple, Optional, Tuple
+from typing import Any, NamedTuple, Optional
 
 from PIL import Image, ImageDraw, ImageFont
 
@@ -31,7 +31,6 @@ from config import (
     EMOJI_EMBEDDED_COLOR,
     FONT_CONDITION,
     FONT_EMOJI,
-    FONT_EMOJI_SMALL,
     FONT_TEMP,
     FONT_WEATHER_DETAILS,
     FONT_WEATHER_DETAILS_BOLD,

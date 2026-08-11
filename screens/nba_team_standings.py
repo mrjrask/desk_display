@@ -1,6 +1,6 @@
 """NBA team standings screens."""
 import config
-from config import HEIGHT, WIDTH, is_hyperpixel_4_square_layout, is_hyperpixel_next_layout
+from config import is_hyperpixel_4_square_layout, is_hyperpixel_next_layout
 from screens.mlb_team_standings import (
     LOGO_SZ,
     draw_standings_screen1 as _base_screen1,

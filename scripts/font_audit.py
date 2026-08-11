@@ -22,7 +22,7 @@ import re
 import sys
 from dataclasses import asdict, dataclass
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Optional
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 

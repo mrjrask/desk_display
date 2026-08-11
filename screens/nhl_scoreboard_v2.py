@@ -8,17 +8,12 @@ Compact layout with smaller fonts and logos for a denser presentation.
 
 from __future__ import annotations
 
-import argparse
-import datetime
-import logging
 import os
-import time
 from typing import Optional
 
 from PIL import Image, ImageDraw
 
 from config import (
-    CENTRAL_TIME,
     FONT_STATUS,
     FONT_TEAM_SPORTS,
     FONT_TITLE_SPORTS,
@@ -28,7 +23,6 @@ from config import (
     SCOREBOARD_FINAL_LOSING_SCORE_COLOR,
     SCOREBOARD_FINAL_WINNING_SCORE_COLOR,
     SCOREBOARD_IN_PROGRESS_SCORE_COLOR,
-    SCOREBOARD_STANDINGS_BOTTOM_PADDING,
     WIDTH,
     get_screen_background_color,
     get_screen_font,
@@ -49,14 +43,11 @@ from screens.nhl_scoreboard import (
     _is_game_final,
     _is_game_in_progress,
     _score_text,
-    _score_value,
     _should_display_scores,
     _team_logo_abbr,
-    _team_result,
     render_nhl_scoreboard as render_nhl_scoreboard_v1,
 )
 from screens.scoreboard_components import (
-    center_text as _center_text,
     display_no_games,
     display_or_scroll_scoreboard,
     draw_score_game_row,

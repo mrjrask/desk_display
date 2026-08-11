@@ -11,7 +11,7 @@ import io
 import logging
 import os
 import urllib.request
-from typing import Optional, Tuple
+from typing import Optional
 
 from PIL import Image, ImageDraw, ImageFont
 

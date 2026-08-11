@@ -18,10 +18,8 @@ from PIL import Image, ImageDraw
 import config
 from config import (
     DISPLAY_SCALE,
-    FONT_STAND1_GB_LABEL,
     FONT_STAND1_GB_VALUE,
     FONT_STAND1_RANK,
-    FONT_STAND1_WCGB_LABEL,
     FONT_STAND1_WCGB_VALUE,
     FONT_STAND1_WL,
     FONT_STAND2_RECORD,

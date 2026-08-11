@@ -3,8 +3,6 @@ import config
 from config import (
     DISPLAY_SCALE,
     FONT_STAND1_RANK,
-    HEIGHT,
-    WIDTH,
     is_hyperpixel_4_square_layout,
     is_hyperpixel_next_layout,
 )

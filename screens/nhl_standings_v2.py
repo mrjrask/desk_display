@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 from contextlib import contextmanager
-from typing import List, Tuple
 
 import screens.nhl_standings as nhl_standings
 from screens.nhl_standings import (

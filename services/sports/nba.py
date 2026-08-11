@@ -5,7 +5,7 @@ from __future__ import annotations
 import datetime
 import logging
 from collections.abc import Iterable
-from typing import Any, Dict, Optional
+from typing import Any, Optional
 
 from config import CENTRAL_TIME
 from services.http_client import get_session

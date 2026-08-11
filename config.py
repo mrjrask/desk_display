@@ -13,7 +13,7 @@ import subprocess
 import threading
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Optional
 from zoneinfo import ZoneInfo
 
 from screens_catalog import canonical_screen_id

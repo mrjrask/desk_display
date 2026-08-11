@@ -16,7 +16,7 @@ import os
 import re
 import time
 from collections.abc import Iterable
-from typing import Any, Dict, Optional
+from typing import Any, Optional
 
 from PIL import Image, ImageDraw
 
@@ -26,7 +26,6 @@ except AttributeError:  # Pillow ≥11
     RESAMPLE = Image.Resampling.LANCZOS
 
 from config import (
-    CENTRAL_TIME,
     FONT_STATUS,
     FONT_TEAM_SPORTS,
     FONT_TITLE_SPORTS,
@@ -50,13 +49,6 @@ from config import (
     is_kernel_driven_display,
     scale_value,
     scale_value_width,
-)
-from services.sports.nba import (
-    _NBA_HEADERS,
-    _map_espn_game,
-    _map_game,
-    _scoreboard_date,
-    fetch_games_for_date as _fetch_games_for_date,
 )
 from utils import (
     ScreenImage,

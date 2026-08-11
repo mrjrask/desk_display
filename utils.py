@@ -34,7 +34,6 @@ from pathlib import Path
 from typing import Any, Callable, Dict, Iterable, List, Optional, Tuple
 
 import PIL.ImageDraw as _ID
-import requests
 from PIL import Image, ImageDraw, ImageEnhance, ImageFont, ImageOps
 
 from services.http_client import http_get
@@ -1263,19 +1262,16 @@ from config import (
     CENTRAL_TIME,
     DISPLAY_FADE_IN_DISPLAY_HAT_MINI_STEPS,
     DISPLAY_FADE_IN_ENABLED,
-    DISPLAY_FADE_IN_HDMI_1080P_STEPS,
-    DISPLAY_FADE_IN_HYPERPIXEL_STEPS,
     DISPLAY_FADE_IN_STEPS_BY_PROFILE,
     DISPLAY_HAT_MINI_LED_ENABLED,
-    DISPLAY_HAT_MINI_LED_INDICATOR_BORDER_ENABLED,
+    DISPLAY_HAT_MINI_LED_INDICATOR_BORDER_ENABLED,  # noqa: F401 -- legacy flag, kept for test monkeypatching
     DISPLAY_HAT_MINI_REINIT_SECONDS,
     DISPLAY_ROTATION,
     HEIGHT,
-    HYPERPIXEL_LED_INDICATOR_BORDER_ENABLED,
+    HYPERPIXEL_LED_INDICATOR_BORDER_ENABLED,  # noqa: F401 -- legacy flag, kept for test monkeypatching
     HYPERPIXEL_LED_INDICATOR_BORDER_WIDTH,
     WIDTH,
     get_display_profile_id,
-    is_hyperpixel_4_square_layout,
     is_hyperpixel_next_layout,
 )
 
@@ -3297,7 +3293,7 @@ def standard_next_game_logo_height_for_space(
 
 def standard_scoreboard_team_logo_height(panel_height: int, *, compact: bool = False) -> int:
     """Return the shared scoreboard team logo height for the given panel size."""
-    from config import is_hyperpixel_next_layout, scale_value, scale_value_width
+    from config import scale_value, scale_value_width
 
     if compact:
         return scale_value_width(20) if is_hyperpixel_next_layout() else scale_value(26)

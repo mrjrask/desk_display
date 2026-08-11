@@ -7,7 +7,7 @@ import logging
 import socket
 import time
 from collections.abc import Iterable
-from typing import Any, Dict, Optional
+from typing import Any, Optional
 
 from config import CENTRAL_TIME
 from services.http_client import NHL_HEADERS, get_session

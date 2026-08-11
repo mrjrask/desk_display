@@ -1,6 +1,5 @@
 import datetime
 
-import pytest
 
 from screens import nhl_playoffs
 

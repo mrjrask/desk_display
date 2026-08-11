@@ -56,7 +56,6 @@ from services.http_client import get_session
 from utils import (
     ScreenImage,
     clear_display,
-    get_mlb_abbreviation,
     get_mlb_tricode,
     load_team_logo,
     log_call,

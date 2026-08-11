@@ -8,9 +8,7 @@ Compact layout with smaller fonts and logos for a denser presentation.
 
 from __future__ import annotations
 
-import argparse
 import datetime
-import logging
 import os
 import time
 from typing import Optional
@@ -55,10 +53,8 @@ from screens.nfl_scoreboard import (
     _is_game_in_progress,
     _is_super_bowl_game,
     _score_text,
-    _score_value,
     _should_display_scores,
     _team_logo_abbr,
-    _team_result,
     render_nfl_scoreboard as render_nfl_scoreboard_v1,
 )
 from utils import (

@@ -25,7 +25,7 @@ import time
 from collections.abc import Callable, Sequence
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Set, Tuple
+from typing import Any, Optional
 
 from PIL import Image, ImageDraw
 

@@ -14,7 +14,6 @@ import sys
 from collections.abc import Iterable
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict, List, Set
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 IMAGE_EXTS = {".png", ".jpg", ".jpeg", ".webp", ".gif", ".bmp", ".tif", ".tiff"}

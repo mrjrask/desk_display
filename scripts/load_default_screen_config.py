@@ -18,7 +18,7 @@ import argparse
 import json
 import sys
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 for _path in (str(REPO_ROOT), str(REPO_ROOT / "scripts")):

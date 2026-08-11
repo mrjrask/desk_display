@@ -4,8 +4,8 @@ from __future__ import annotations
 import json
 from collections.abc import Sequence
 from dataclasses import dataclass
-from datetime import UTC, datetime, timezone
-from typing import TYPE_CHECKING, Any, Dict, List, Optional, Set, Tuple
+from datetime import UTC, datetime
+from typing import TYPE_CHECKING, Any, Optional
 
 from screens_catalog import SCREEN_IDS, canonical_screen_id
 

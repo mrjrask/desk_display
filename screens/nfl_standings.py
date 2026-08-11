@@ -11,7 +11,7 @@ import os
 import re
 import time
 from collections.abc import Iterable, Iterable as _Iterable
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Optional
 
 from PIL import Image, ImageDraw
 

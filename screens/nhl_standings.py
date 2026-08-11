@@ -8,9 +8,9 @@ import os
 import socket
 import time
 from collections.abc import Iterable, Sequence
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Optional
 
-from PIL import Image, ImageDraw, ImageFont
+from PIL import Image, ImageDraw
 
 import config
 from config import (

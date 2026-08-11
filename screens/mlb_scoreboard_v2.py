@@ -8,9 +8,6 @@ Compact layout with smaller fonts and logos for a denser presentation.
 
 from __future__ import annotations
 
-import argparse
-import datetime
-import logging
 import os
 import time
 from typing import Optional
@@ -18,7 +15,6 @@ from typing import Optional
 from PIL import Image, ImageDraw
 
 from config import (
-    CENTRAL_TIME,
     FONT_STATUS,
     FONT_TEAM_SPORTS,
     FONT_TITLE_SPORTS,
@@ -55,18 +51,15 @@ from screens.mlb_scoreboard import (
     _is_game_final,
     _is_game_in_progress,
     _score_text,
-    _score_value,
     _scoreboard_date,
     _should_display_scores,
     _team_logo_abbr,
-    _team_result,
     render_mlb_scoreboard as render_mlb_scoreboard_v1,
 )
 from utils import (
     ScreenImage,
     clear_display,
     clone_font,
-    get_mlb_abbreviation,
     load_team_logo,
     log_call,
     log_missing_team_logo,

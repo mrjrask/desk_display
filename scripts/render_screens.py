@@ -11,7 +11,7 @@ import sys
 import zipfile
 from collections.abc import Callable, Iterable
 from pathlib import Path
-from typing import Dict, Optional, Tuple
+from typing import Optional
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 

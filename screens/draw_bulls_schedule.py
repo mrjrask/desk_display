@@ -20,7 +20,7 @@ import datetime as dt
 import logging
 import os
 from collections.abc import Sequence
-from typing import Dict, List, Optional, Tuple
+from typing import Optional
 
 from PIL import Image, ImageDraw, ImageFont
 

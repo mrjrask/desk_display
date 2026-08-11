@@ -5,7 +5,7 @@ import argparse
 import json
 import os
 from dataclasses import dataclass
-from typing import Any, Dict, List, Tuple
+from typing import Any
 
 from schedule import build_scheduler
 

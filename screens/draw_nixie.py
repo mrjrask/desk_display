@@ -11,7 +11,7 @@ import time
 from collections.abc import Iterable, Sequence
 from functools import lru_cache
 from pathlib import Path
-from typing import Dict, Optional
+from typing import Optional
 
 from PIL import Image, ImageDraw, ImageEnhance, ImageFilter, ImageFont
 

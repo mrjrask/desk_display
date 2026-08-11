@@ -74,7 +74,6 @@ from config import (
     ENABLE_WEATHER,
     ENABLE_WIFI_MONITOR,
     ENABLE_WIFI_RECOVERY,
-    FONT_DATE_SPORTS,
     HEIGHT,
     SCHEDULE_UPDATE_INTERVAL,
     SCREEN_DELAY,
@@ -2435,7 +2434,6 @@ def init_runtime() -> None:
 
     if ENABLE_VIDEO:
         import cv2
-        import numpy as np
         FOURCC     = cv2.VideoWriter_fourcc(*"mp4v")
         video_path = os.path.join(SCREENSHOT_DIR, "display_output.mp4")
         logging.info(

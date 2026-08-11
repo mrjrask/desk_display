@@ -13,7 +13,7 @@ import time
 from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
-from typing import Any, Dict, Optional, Set
+from typing import Any, Optional
 
 import data_fetch
 from config import CENTRAL_TIME

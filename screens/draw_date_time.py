@@ -22,7 +22,7 @@ import logging
 import threading
 import time
 from collections.abc import Callable
-from typing import Literal, Tuple
+from typing import Literal
 
 from PIL import Image, ImageDraw, ImageFont
 
