@@ -42,6 +42,7 @@ from config import (
     scale_value,
     scale_value_width,
 )
+from screens.scoreboard_components import center_text as _center_text
 from services.http_client import get_session
 from utils import ScreenImage, clear_display, log_call, scroll_vertical_content
 
@@ -158,20 +159,6 @@ def _league_logo_height() -> int:
     scale = get_screen_image_scale(SCREEN_ID, "league_logo", team_scale)
     return max(1, int(round(LEAGUE_LOGO_BASE_HEIGHT * scale)))
 
-
-def _center_text(draw: ImageDraw.ImageDraw, text: str, font, x: int, width: int, y: int, height: int, *, fill=(255, 255, 255)):
-    if not text:
-        return
-    try:
-        l, t, r, b = draw.textbbox((0, 0), text, font=font)
-        tw, th = r - l, b - t
-        tx = x + (width - tw) // 2 - l
-        ty = y + (height - th) // 2 - t
-    except Exception:
-        tw, th = draw.textsize(text, font=font)
-        tx = x + (width - tw) // 2
-        ty = y + (height - th) // 2
-    draw.text((tx, ty), text, font=font, fill=fill)
 
 
 def _measure_text(draw: ImageDraw.ImageDraw, text: str, font) -> tuple[int, int, int, int]:

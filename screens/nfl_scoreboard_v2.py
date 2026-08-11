@@ -57,6 +57,7 @@ from screens.nfl_scoreboard import (
     _team_logo_abbr,
     render_nfl_scoreboard as render_nfl_scoreboard_v1,
 )
+from screens.scoreboard_components import center_text as _center_text
 from utils import (
     ScreenImage,
     clear_display,
@@ -213,30 +214,6 @@ def _get_super_bowl_logo() -> Optional[Image.Image]:
     _SUPER_BOWL_LOGO_CACHE[height] = logo
     return logo
 
-
-def _center_text(
-    draw: ImageDraw.ImageDraw,
-    text: str,
-    font,
-    x: int,
-    width: int,
-    y: int,
-    height: int,
-    *,
-    fill=(255, 255, 255),
-):
-    if not text:
-        return
-    try:
-        l, t, r, b = draw.textbbox((0, 0), text, font=font)
-        tw, th = r - l, b - t
-        tx = x + (width - tw) // 2 - l
-        ty = y + (height - th) // 2 - t
-    except Exception:
-        tw, th = draw.textsize(text, font=font)
-        tx = x + (width - tw) // 2
-        ty = y + (height - th) // 2
-    draw.text((tx, ty), text, font=font, fill=fill)
 
 
 def _score_fill(

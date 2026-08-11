@@ -51,6 +51,7 @@ from screens.nba_scoreboard import (
     _team_logo_abbr,
     render_nba_scoreboard as render_nba_scoreboard_v1,
 )
+from screens.scoreboard_components import center_text as _center_text
 
 # Import shared NBA data fetching logic
 from services.sports.nba import (
@@ -196,30 +197,6 @@ def _load_logo_cached(abbr: str) -> Optional[Image.Image]:
     _LOGO_CACHE[cache_token] = logo
     return logo
 
-
-def _center_text(
-    draw: ImageDraw.ImageDraw,
-    text: str,
-    font,
-    x: int,
-    width: int,
-    y: int,
-    height: int,
-    *,
-    fill=(255, 255, 255),
-):
-    if not text:
-        return
-    try:
-        l, t, r, b = draw.textbbox((0, 0), text, font=font)
-        tw, th = r - l, b - t
-        tx = x + (width - tw) // 2 - l
-        ty = y + (height - th) // 2 - t
-    except Exception:
-        tw, th = draw.textsize(text, font=font)
-        tx = x + (width - tw) // 2
-        ty = y + (height - th) // 2
-    draw.text((tx, ty), text, font=font, fill=fill)
 
 
 def _score_fill(
