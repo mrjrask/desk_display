@@ -11,6 +11,7 @@ Everything is dynamically sized to stay legible on the configured canvas.
 
 from __future__ import annotations
 
+import contextlib
 import json
 import logging
 import math
@@ -317,10 +318,8 @@ def _read_chip_id(i2c: Any, addr: int, register: int = 0xD0) -> Optional[int]:
         return buf[0]
     finally:
         if locked and hasattr(i2c, "unlock"):
-            try:
+            with contextlib.suppress(Exception):
                 i2c.unlock()
-            except Exception:
-                pass
 
 
 
@@ -335,10 +334,8 @@ def _suppress_i2c_error_output():
                 self._fd = None
                 return self
 
-            try:
+            with contextlib.suppress(Exception):
                 sys.stderr.flush()
-            except Exception:
-                pass
 
             self._saved = os.dup(self._fd)
             self._devnull = open(os.devnull, "wb")  # pylint: disable=consider-using-with
@@ -349,10 +346,8 @@ def _suppress_i2c_error_output():
             if getattr(self, "_fd", None) is None:
                 return False
 
-            try:
+            with contextlib.suppress(Exception):
                 sys.stderr.flush()
-            except Exception:
-                pass
 
             os.dup2(self._saved, self._fd)
             os.close(self._saved)
@@ -751,10 +746,8 @@ def _probe_pimoroni_bme680(_i2c: Any, addresses: set[int]) -> Optional[SensorPro
     ):
         fn = getattr(sensor, method, None)
         if callable(fn) and value is not None:
-            try:
+            with contextlib.suppress(Exception):
                 fn(value)
-            except Exception:
-                pass
 
     gas_temp = getattr(
         module,
@@ -769,15 +762,11 @@ def _probe_pimoroni_bme680(_i2c: Any, addresses: set[int]) -> Optional[SensorPro
     fn_temp = getattr(sensor, "set_gas_heater_temperature", None)
     fn_dur = getattr(sensor, "set_gas_heater_duration", None)
     if callable(fn_temp) and gas_temp is not None:
-        try:
+        with contextlib.suppress(Exception):
             fn_temp(gas_temp)
-        except Exception:
-            pass
     if callable(fn_dur) and gas_dur is not None:
-        try:
+        with contextlib.suppress(Exception):
             fn_dur(gas_dur)
-        except Exception:
-            pass
 
     def read() -> SensorReadings:
         if not getattr(sensor, "get_sensor_data", lambda: False)():
@@ -1235,10 +1224,8 @@ def _scan_i2c_addresses(i2c: Any) -> set[int]:
             logging.debug("draw_inside: could not lock I2C bus for scanning")
     finally:
         if locked and hasattr(i2c, "unlock"):
-            try:
+            with contextlib.suppress(Exception):
                 i2c.unlock()
-            except Exception:
-                pass
 
     return addresses
 
@@ -2255,10 +2242,8 @@ def _save_inside_history() -> None:
     except OSError as exc:
         logging.warning("draw_inside: unable to save chart history to %s: %s", path, exc)
         if temp_name:
-            try:
+            with contextlib.suppress(OSError):
                 os.remove(temp_name)
-            except OSError:
-                pass
 
 
 def _draw_history_chart(

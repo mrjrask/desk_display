@@ -29,6 +29,7 @@ Function signatures (match main.py):
 
 from __future__ import annotations
 
+import contextlib
 import datetime as dt
 import logging
 import os
@@ -595,10 +596,8 @@ def _draw_scoreboard(
         if logo:
             lw, lh = logo.size
             ly = cy - lh//2
-            try:
+            with contextlib.suppress(Exception):
                 img.paste(logo, (lx, ly), logo)
-            except Exception:
-                pass
             tx = lx + lw + pad_outer
 
         max_width = spec["max_width"]

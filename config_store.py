@@ -1,6 +1,7 @@
 """Configuration storage with versioning, rollback, and pruning."""
 from __future__ import annotations
 
+import contextlib
 import datetime as _dt
 import json
 import os
@@ -164,10 +165,8 @@ class ConfigStore:
                 conn.commit()
 
         for archive_file in sorted(self.archive_dir.glob("*.json"))[:-self.retention]:
-            try:
+            with contextlib.suppress(OSError):
                 archive_file.unlink()
-            except OSError:
-                pass
 
 
 def summarise_diff(old: dict[str, Any], new: dict[str, Any]) -> str:

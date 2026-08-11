@@ -5,6 +5,7 @@ with both team logos on the Next Game screen, in AWAY @ HOME order,
 and a small W/L flag between the boxscore and date on Cubs 'Last Game'.
 """
 
+import contextlib
 import datetime
 import hashlib
 import io
@@ -434,10 +435,8 @@ def _load_remote_image(url: str, box_size: int) -> Optional[Image.Image]:
     except Exception:
         return None
     if cache_path:
-        try:
+        with contextlib.suppress(Exception):
             img.save(cache_path, format="PNG")
-        except Exception:
-            pass
     return _fit_image_within_box(img, box_size)
 
 def _rel_date_only(official_date: str) -> str:

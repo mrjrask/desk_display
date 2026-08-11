@@ -14,6 +14,7 @@ Screen 2:
   • Each label/value pair vertically centered within its row.
 """
 
+import contextlib
 import datetime
 import logging
 import math
@@ -192,10 +193,8 @@ def _weather_history_points(weather: dict[str, Any], metric: str) -> list[tuple[
 
         current = weather.get("current")
         if isinstance(current, dict):
-            try:
+            with contextlib.suppress(TypeError, ValueError):
                 points.append((float(current.get("dt")), float(current.get(metric))))
-            except (TypeError, ValueError):
-                pass
     return sorted(points, key=lambda point: point[0])
 
 

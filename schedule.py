@@ -1,6 +1,7 @@
 """Simple frequency-based screen scheduler."""
 from __future__ import annotations
 
+import contextlib
 import json
 from collections.abc import Sequence
 from dataclasses import dataclass
@@ -265,16 +266,12 @@ def sanitize_schedule_config(config: dict[str, Any]) -> tuple[dict[str, Any], li
         if isinstance(existing_raw, dict):
             existing_freq = existing_raw.get("frequency")
             new_freq = cleaned_raw.get("frequency")
-            try:
+            with contextlib.suppress(Exception):
                 existing_raw["frequency"] = max(int(existing_freq), int(new_freq))
-            except Exception:
-                pass
             existing_extra = existing_raw.get("extra_seconds")
             new_extra = cleaned_raw.get("extra_seconds")
-            try:
+            with contextlib.suppress(Exception):
                 existing_raw["extra_seconds"] = max(int(existing_extra or 0), int(new_extra or 0))
-            except Exception:
-                pass
             if "alt" not in existing_raw and "alt" in cleaned_raw:
                 existing_raw["alt"] = cleaned_raw["alt"]
             cleaned_screens[canonical_id] = existing_raw

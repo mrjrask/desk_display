@@ -17,6 +17,7 @@ Options:
 - GH_ICON_SIZE:   height of the GitHub icon in pixels.
 """
 
+import contextlib
 import datetime
 import logging
 import threading
@@ -298,13 +299,11 @@ def _cycle_colors_after_load(
             takeover_observations = 0
         img = _compose_frame(base_order, bright_color(), bright_color(), gh_state(), screen_id)
         display.image(img)
-        try:
-            # Some display drivers (notably HyperPixel/HDMI paths) only flush
-            # framebuffer updates when show() is called.
+        # Some display drivers (notably HyperPixel/HDMI paths) only flush
+        # framebuffer updates when show() is called. Drivers that auto-refresh
+        # on image() do not expose show().
+        with contextlib.suppress(AttributeError):
             display.show()
-        except AttributeError:
-            # Drivers that auto-refresh on image() do not expose show().
-            pass
         if hasattr(display, "frame_id"):
             latest_frame_id = display.frame_id()
             # Track the frame id that *this* screen last rendered so we only stop
@@ -355,10 +354,8 @@ def _start_update_checks(
             if frame_state is not None and hasattr(display, "frame_id"):
                 with frame_state["lock"]:
                     frame_state["value"] = display.frame_id()
-            try:
+            with contextlib.suppress(AttributeError):
                 display.show()
-            except AttributeError:
-                pass
         except Exception:
             logging.exception("Background update checks failed")
 
@@ -412,11 +409,9 @@ def draw_date(display, transition: bool=False):
 
     clear_display(display)
     display.image(img)
-    try:
+    # Some display drivers immediately refresh when image() is called.
+    with contextlib.suppress(AttributeError):
         display.show()
-    except AttributeError:
-        # Some display drivers immediately refresh when image() is called.
-        pass
     frame_id = display.frame_id()
     frame_state = {"value": frame_id, "lock": threading.Lock()}
     _start_update_checks(

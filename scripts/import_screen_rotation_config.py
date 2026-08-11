@@ -12,6 +12,7 @@ Use --dry-run to validate and preview normalized payloads without writing.
 from __future__ import annotations
 
 import argparse
+import contextlib
 import json
 import os
 import sys
@@ -189,10 +190,8 @@ def _normalize_import_config_payload(data: dict[str, Any]) -> dict[str, Any]:
                 alt_payload["screen"] = _canonicalize_screen_reference(alt_payload.get("screen"))
                 alt_frequency = alt_payload.get("frequency")
                 if alt_frequency is not None:
-                    try:
+                    with contextlib.suppress(TypeError, ValueError):
                         alt_payload["frequency"] = int(alt_frequency)
-                    except (TypeError, ValueError):
-                        pass
 
             normalized_spec: dict[str, Any] = {"frequency": frequency_int}
             if isinstance(extra_seconds, int) and extra_seconds > 0:

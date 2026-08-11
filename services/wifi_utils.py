@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import datetime
 import logging
 import os
@@ -61,11 +62,9 @@ def _append_line(path: Path, text: str) -> None:
 def _system_log(message: str) -> None:
     text = f"{_timestamp()} [wifi-auto-recover] {message}"
     _LOGGER.info(message)
-    try:
+    # _append_line already logs the failure; swallow to avoid recursion
+    with contextlib.suppress(Exception):
         _append_line(_SYSTEM_LOG_PATH, text)
-    except Exception:
-        # _append_line already logs the failure; swallow to avoid recursion
-        pass
 
 
 def _user_log(message: str) -> None:

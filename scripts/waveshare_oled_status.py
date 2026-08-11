@@ -8,6 +8,7 @@ Default behavior:
 
 from __future__ import annotations
 
+import contextlib
 import importlib
 import importlib.util
 import json
@@ -949,10 +950,8 @@ def main() -> int:
     finally:
         _safe_clear_display(temp_display, "left")
         _safe_clear_display(time_display, "right")
-        try:
+        with contextlib.suppress(Exception):
             bus.close()
-        except Exception:
-            pass
 
     return 0
 

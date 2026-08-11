@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import datetime
 import logging
 from collections.abc import Iterable
@@ -156,10 +157,8 @@ def _parse_period_info(game: dict[str, Any]) -> tuple[Optional[int], str, Option
                     pass
         period_type = str(period_info.get("type") or period_info.get("periodType") or "").upper()
     elif period_info not in (None, ""):
-        try:
+        with contextlib.suppress(Exception):
             number = int(period_info)
-        except Exception:
-            pass
 
     descriptor = game.get("periodDescriptor") or {}
     if isinstance(descriptor, dict):
@@ -176,10 +175,8 @@ def _parse_period_info(game: dict[str, Any]) -> tuple[Optional[int], str, Option
             period_type = str(descriptor.get("type") or descriptor.get("periodType") or "").upper()
         final_period_val = descriptor.get("maxRegular") or descriptor.get("max") or descriptor.get("total")
         if final_period_val not in (None, ""):
-            try:
+            with contextlib.suppress(Exception):
                 final_period = int(final_period_val)
-            except Exception:
-                pass
 
     if final_period is None:
         final_period = number
