@@ -663,6 +663,33 @@ def _is_screenshot_stale(timestamp: float, *, max_age_seconds: int = 2 * 60 * 60
     return datetime.now().timestamp() - timestamp > max_age_seconds
 
 
+def _apply_playlist_grouping(
+    ordered_screen_ids: List[str],
+    playlists: List[Dict[str, str]],
+    playlist_assignments: Dict[str, str],
+) -> List[str]:
+    """Reorder screen ids to match the Config page's rendered grouping.
+
+    The Config page's JS groups rows by playlist on every render: the
+    "Ungrouped" screens first, then each playlist's screens in the
+    playlist sequence order, with each group's screens kept in their
+    relative ``ordered_screen_ids`` order. This mirrors that exact
+    algorithm (see ``renderScreens`` in screen_config.html) so the
+    Screenshots page's arrangement matches what's actually displayed on
+    the Config page.
+    """
+
+    group_ids = [""] + [playlist["id"] for playlist in playlists]
+    grouped: List[str] = []
+    for group_id in group_ids:
+        grouped.extend(
+            screen_id
+            for screen_id in ordered_screen_ids
+            if playlist_assignments.get(screen_id, "") == group_id
+        )
+    return grouped
+
+
 def _build_screenshot_entries() -> List[Dict[str, Any]]:
     storage_paths = resolve_storage_paths()
     screenshot_dir = storage_paths.screenshot_dir
@@ -670,6 +697,8 @@ def _build_screenshot_entries() -> List[Dict[str, Any]]:
     config = _load_active_config()
     screens_config = config.get("screens", {})
     ordered_screen_ids = _ordered_screen_ids(screens_config)
+    playlists, playlist_assignments = _build_playlist_assignments(config)
+    ordered_screen_ids = _apply_playlist_grouping(ordered_screen_ids, playlists, playlist_assignments)
     entries: List[Dict[str, Any]] = []
     for screen_id in ordered_screen_ids:
         prefix = _sanitize_filename_prefix(screen_id)
