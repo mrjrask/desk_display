@@ -18,56 +18,59 @@ from typing import Optional
 from PIL import Image, ImageDraw
 
 from config import (
-    WIDTH,
-    HEIGHT,
-    FONT_TITLE_SPORTS,
-    FONT_TEAM_SPORTS,
-    FONT_STATUS,
     CENTRAL_TIME,
+    FONT_STATUS,
+    FONT_TEAM_SPORTS,
+    FONT_TITLE_SPORTS,
+    HEIGHT,
     IMAGES_DIR,
-    SCOREBOARD_SCROLL_STEP,
-    SCOREBOARD_SCROLL_DELAY,
-    SCOREBOARD_SCROLL_PAUSE_TOP,
-    SCOREBOARD_SCROLL_PAUSE_BOTTOM,
-    SCOREBOARD_STANDINGS_BOTTOM_PADDING,
     SCOREBOARD_BACKGROUND_COLOR,
-    SCOREBOARD_IN_PROGRESS_SCORE_COLOR,
-    SCOREBOARD_FINAL_WINNING_SCORE_COLOR,
     SCOREBOARD_FINAL_LOSING_SCORE_COLOR,
+    SCOREBOARD_FINAL_WINNING_SCORE_COLOR,
+    SCOREBOARD_IN_PROGRESS_SCORE_COLOR,
+    SCOREBOARD_SCROLL_DELAY,
+    SCOREBOARD_SCROLL_PAUSE_BOTTOM,
+    SCOREBOARD_SCROLL_PAUSE_TOP,
+    SCOREBOARD_SCROLL_STEP,
+    SCOREBOARD_STANDINGS_BOTTOM_PADDING,
+    WIDTH,
     get_screen_background_color,
     get_screen_font,
     get_screen_image_scale,
-    is_kernel_driven_display,
+    is_display_profile,
     is_hdmi_1080p_layout,
     is_hyperpixel_next_layout,
-    is_display_profile,
+    is_kernel_driven_display,
     scale_value,
     scale_value_width,
+)
+from screens.nba_scoreboard import (
+    _final_results,
+    _format_status,
+    _get_league_logo,
+    _is_game_final,
+    _is_game_in_progress,
+    _score_text,
+    _score_value,
+    _should_display_scores,
+    _team_logo_abbr,
+    _team_result,
+    render_nba_scoreboard as render_nba_scoreboard_v1,
+)
+
+# Import shared NBA data fetching logic
+from services.sports.nba import (
+    fetch_games_for_date as _fetch_games_for_date,
+    scoreboard_date as _scoreboard_date,
 )
 from utils import (
     ScreenImage,
     clear_display,
-    load_team_logo,
-    log_missing_team_logo,
-    log_call,
-    scroll_vertical_content,
     clone_font,
-)
-
-# Import shared NBA data fetching logic
-from services.sports.nba import fetch_games_for_date as _fetch_games_for_date, scoreboard_date as _scoreboard_date
-from screens.nba_scoreboard import (
-    _is_game_in_progress,
-    _is_game_final,
-    _should_display_scores,
-    _score_text,
-    _score_value,
-    _team_result,
-    _final_results,
-    _format_status,
-    _team_logo_abbr,
-    _get_league_logo,
-    render_nba_scoreboard as render_nba_scoreboard_v1,
+    load_team_logo,
+    log_call,
+    log_missing_team_logo,
+    scroll_vertical_content,
 )
 
 # ─── Constants ────────────────────────────────────────────────────────────────

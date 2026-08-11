@@ -16,10 +16,10 @@ import re
 import tempfile
 import threading
 import time
+from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor, wait
 from dataclasses import dataclass
 from io import BytesIO
-from typing import Callable
 from urllib.parse import unquote
 
 from PIL import Image, ImageDraw, ImageOps
@@ -88,7 +88,7 @@ _SCROLL_END_PAUSE_SECONDS = 3.0
 # the screen checks for new On This Day content only when the calendar day changes.
 _SECTIONS_CACHE_LOCK = threading.Lock()
 _SECTIONS_CACHE_DATE: dt.date | None = None
-_SECTIONS_CACHE_VALUE: dict[str, list["DayItem"]] | None = None
+_SECTIONS_CACHE_VALUE: dict[str, list[DayItem]] | None = None
 _SECTIONS_CACHE_TIME: float | None = None
 _RENDER_CACHE_LOCK = threading.Lock()
 _RENDER_CACHE_DATE: dt.date | None = None
@@ -739,7 +739,7 @@ def _build_sections(today: dt.date) -> dict[str, list[DayItem]]:
     now = time.monotonic()
     previous: dict[str, list[DayItem]] | None = None
     with _SECTIONS_CACHE_LOCK:
-        if _SECTIONS_CACHE_DATE == today and _SECTIONS_CACHE_VALUE is not None:
+        if today == _SECTIONS_CACHE_DATE and _SECTIONS_CACHE_VALUE is not None:
             cache_age = now - (_SECTIONS_CACHE_TIME or now)
             retry_interval = _sections_retry_interval(today, _SECTIONS_CACHE_VALUE)
             if retry_interval is None or cache_age < retry_interval:
@@ -955,7 +955,7 @@ def _render_full_image(today: dt.date) -> Image.Image:
 
     now = time.monotonic()
     with _RENDER_CACHE_LOCK:
-        if _RENDER_CACHE_DATE == today and _RENDER_CACHE_IMAGE is not None:
+        if today == _RENDER_CACHE_DATE and _RENDER_CACHE_IMAGE is not None:
             cache_age = _cached_sections_retry_age(today, now)
             if cache_age is None:
                 return _RENDER_CACHE_IMAGE.copy()

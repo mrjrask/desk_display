@@ -8,18 +8,19 @@ logo placement, text centering, no-games, header, and scroll behavior.
 from __future__ import annotations
 
 import time
-from typing import Callable, Optional, Sequence
+from collections.abc import Callable, Sequence
+from typing import Optional
 
 from PIL import Image, ImageDraw
 
 from config import (
     HEIGHT,
-    WIDTH,
     SCOREBOARD_SCROLL_DELAY,
     SCOREBOARD_SCROLL_PAUSE_BOTTOM,
     SCOREBOARD_SCROLL_PAUSE_TOP,
     SCOREBOARD_SCROLL_STEP,
     SCOREBOARD_STANDINGS_BOTTOM_PADDING,
+    WIDTH,
 )
 from utils import ScreenImage, clear_display, log_missing_team_logo, scroll_vertical_content
 

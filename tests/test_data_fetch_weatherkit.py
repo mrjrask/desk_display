@@ -181,10 +181,12 @@ def test_weatherkit_daily_maps_astronomical_and_moon_fields():
 
 def test_fetch_weatherkit_retries_without_alerts_on_404(monkeypatch):
     import datetime
+
     import requests
+
     import data_fetch
 
-    now = datetime.datetime(2026, 4, 28, tzinfo=datetime.timezone.utc)
+    now = datetime.datetime(2026, 4, 28, tzinfo=datetime.UTC)
     calls: list[str] = []
 
     class _Resp:

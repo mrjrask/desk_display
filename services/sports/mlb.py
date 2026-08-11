@@ -5,8 +5,11 @@ from __future__ import annotations
 import datetime as dt
 
 from config import CENTRAL_TIME
-from services.sports.scoreboard_window import before_scoreboard_update, compose_pre_update_scoreboard
 from screens.mlb_scoreboard import _fetch_games_for_date, _scoreboard_date
+from services.sports.scoreboard_window import (
+    before_scoreboard_update,
+    compose_pre_update_scoreboard,
+)
 
 
 def scoreboard_date(now: dt.datetime | None = None) -> dt.date:

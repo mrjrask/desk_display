@@ -2,9 +2,10 @@
 from __future__ import annotations
 
 import json
-from datetime import datetime, timezone
+from collections.abc import Sequence
 from dataclasses import dataclass
-from typing import Any, Dict, List, Optional, Sequence, Set, TYPE_CHECKING, Tuple
+from datetime import UTC, datetime, timezone
+from typing import TYPE_CHECKING, Any, Dict, List, Optional, Set, Tuple
 
 from screens_catalog import SCREEN_IDS, canonical_screen_id
 
@@ -12,8 +13,8 @@ if TYPE_CHECKING:
     from screens.registry import ScreenDefinition
 
 
-KNOWN_SCREENS: Set[str] = set(SCREEN_IDS)
-REPLACEMENT_ONLY_SCREENS: Set[str] = {"cubs no game", "sox no game"}
+KNOWN_SCREENS: set[str] = set(SCREEN_IDS)
+REPLACEMENT_ONLY_SCREENS: set[str] = {"cubs no game", "sox no game"}
 
 
 
@@ -47,10 +48,10 @@ class ScreenScheduler:
     """Iterator that yields the next available screen based on frequencies."""
 
     def __init__(self, entries: Sequence[_ScheduleEntry]):
-        self._entries: List[_ScheduleEntry] = list(entries)
+        self._entries: list[_ScheduleEntry] = list(entries)
         self._cursor: int = 0
-        self._extra_seconds_by_id: Dict[str, int] = {}
-        requested: Set[str] = set()
+        self._extra_seconds_by_id: dict[str, int] = {}
+        requested: set[str] = set()
         for entry in self._entries:
             requested.add(entry.screen_id)
             self._extra_seconds_by_id[entry.screen_id] = max(
@@ -66,19 +67,19 @@ class ScreenScheduler:
         return len(self._entries)
 
     @property
-    def requested_ids(self) -> Set[str]:
+    def requested_ids(self) -> set[str]:
         return set(self._requested)
 
     def extra_seconds_for(self, screen_id: str) -> int:
         return max(0, int(self._extra_seconds_by_id.get(screen_id, 0)))
 
-    def preview_scheduled_ids(self, limit: int) -> List[str]:
+    def preview_scheduled_ids(self, limit: int) -> list[str]:
         """Return upcoming scheduled screen IDs without mutating scheduler state."""
 
         if limit <= 0 or not self._entries:
             return []
 
-        cloned_entries: List[_ScheduleEntry] = []
+        cloned_entries: list[_ScheduleEntry] = []
         for entry in self._entries:
             cloned_alt: Optional[_AlternateSchedule] = None
             if entry.alternate is not None:
@@ -103,7 +104,7 @@ class ScreenScheduler:
         preview = ScreenScheduler(cloned_entries)
         preview._cursor = self._cursor
 
-        scheduled_ids: List[str] = []
+        scheduled_ids: list[str] = []
         for _ in range(limit):
             next_id = preview._next_scheduled_id()
             if next_id is None:
@@ -118,7 +119,7 @@ class ScreenScheduler:
         if not self._entries:
             return None
 
-        now_utc = datetime.now(timezone.utc)
+        now_utc = datetime.now(UTC)
         for _ in range(len(self._entries)):
             entry = self._entries[self._cursor]
             self._cursor = (self._cursor + 1) % len(self._entries)
@@ -143,11 +144,11 @@ class ScreenScheduler:
 
         return None
 
-    def next_available(self, registry: Dict[str, "ScreenDefinition"]) -> Optional["ScreenDefinition"]:
+    def next_available(self, registry: dict[str, ScreenDefinition]) -> Optional[ScreenDefinition]:
         if not self._entries:
             return None
 
-        now_utc = datetime.now(timezone.utc)
+        now_utc = datetime.now(UTC)
         for _ in range(len(self._entries)):
             entry = self._entries[self._cursor]
             self._cursor = (self._cursor + 1) % len(self._entries)
@@ -186,15 +187,15 @@ class ScreenScheduler:
         return None
 
 
-def load_schedule_config(path: str) -> Dict[str, Any]:
-    with open(path, "r", encoding="utf-8") as fh:
+def load_schedule_config(path: str) -> dict[str, Any]:
+    with open(path, encoding="utf-8") as fh:
         data = json.load(fh)
     if not isinstance(data, dict):
         raise ValueError("Schedule configuration must be a JSON object")
     return data
 
 
-def sanitize_schedule_config(config: Dict[str, Any]) -> Tuple[Dict[str, Any], List[str]]:
+def sanitize_schedule_config(config: dict[str, Any]) -> tuple[dict[str, Any], list[str]]:
     """Return a copy of *config* with unknown screens stripped.
 
     The display service should continue running even if stale screen IDs are
@@ -209,8 +210,8 @@ def sanitize_schedule_config(config: Dict[str, Any]) -> Tuple[Dict[str, Any], Li
         return dict(config), []
 
     sanitized = dict(config)
-    cleaned_screens: Dict[str, Any] = {}
-    removed: List[str] = []
+    cleaned_screens: dict[str, Any] = {}
+    removed: list[str] = []
 
     for screen_id, raw in screens.items():
         canonical_id = canonical_screen_id(screen_id) if isinstance(screen_id, str) else screen_id
@@ -245,7 +246,7 @@ def sanitize_schedule_config(config: Dict[str, Any]) -> Tuple[Dict[str, Any], Li
                     cleaned_alt["screen"] = mapped_alt
                     cleaned_raw["alt"] = cleaned_alt
             elif isinstance(alt_screen_value, list):
-                known_alt_screens: List[str] = []
+                known_alt_screens: list[str] = []
                 for alt in alt_screen_value:
                     if not isinstance(alt, str):
                         continue
@@ -284,7 +285,7 @@ def sanitize_schedule_config(config: Dict[str, Any]) -> Tuple[Dict[str, Any], Li
     return sanitized, removed
 
 
-def build_scheduler(config: Dict[str, Any]) -> ScreenScheduler:
+def build_scheduler(config: dict[str, Any]) -> ScreenScheduler:
     if not isinstance(config, dict):
         raise ValueError("Schedule configuration must be a JSON object")
 
@@ -294,13 +295,13 @@ def build_scheduler(config: Dict[str, Any]) -> ScreenScheduler:
     if not isinstance(screens, dict) or not screens:
         raise ValueError("Configuration must provide a non-empty 'screens' mapping")
 
-    ordered_screens: List[Tuple[str, Any]] = []
-    seen_screen_ids: Set[str] = set()
+    ordered_screens: list[tuple[str, Any]] = []
+    seen_screen_ids: set[str] = set()
 
     playlists = config.get("playlists")
     sequence = config.get("sequence")
     if isinstance(playlists, dict):
-        ordered_playlist_ids: List[str] = []
+        ordered_playlist_ids: list[str] = []
         if isinstance(sequence, list):
             for item in sequence:
                 if not isinstance(item, dict):
@@ -342,7 +343,7 @@ def build_scheduler(config: Dict[str, Any]) -> ScreenScheduler:
             continue
         ordered_screens.append((screen_id, raw))
 
-    entries: List[_ScheduleEntry] = []
+    entries: list[_ScheduleEntry] = []
     for screen_id, raw in ordered_screens:
         screen_id = canonical_screen_id(screen_id)
         if not isinstance(screen_id, str):
@@ -382,7 +383,7 @@ def build_scheduler(config: Dict[str, Any]) -> ScreenScheduler:
                     ) from exc
                 if hide_after_value.tzinfo is None:
                     hide_after_value = hide_after_value.astimezone()
-                hide_after = hide_after_value.astimezone(timezone.utc)
+                hide_after = hide_after_value.astimezone(UTC)
 
             alt_spec = raw.get("alt")
             if alt_spec is not None:

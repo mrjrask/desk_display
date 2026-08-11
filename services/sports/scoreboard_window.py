@@ -3,8 +3,7 @@
 from __future__ import annotations
 
 import datetime as dt
-from typing import Callable
-
+from collections.abc import Callable
 
 _FINAL_TOKENS = ("final", "completed", "complete")
 _FINAL_EXACT_STATES = {"post", "4", "f", "o"}

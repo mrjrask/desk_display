@@ -1,5 +1,5 @@
-from PIL import Image, ImageDraw
 import pytest
+from PIL import Image, ImageDraw
 
 import screens.mlb_schedule as mlb_schedule
 
@@ -102,7 +102,7 @@ def test_draw_left_team_cell_with_logo_stays_inside_cell(monkeypatch):
     assert any(img.getpixel((x, y)) != (0, 0, 0) for x in range(10, 34) for y in range(10, 26))
 
     # Ensure helper never paints past the right edge of the target cell.
-    assert all(img.getpixel((x, y)) == (0, 0, 0) for x in range(34, 80) for y in range(0, 40))
+    assert all(img.getpixel((x, y)) == (0, 0, 0) for x in range(34, 80) for y in range(40))
 
 
 

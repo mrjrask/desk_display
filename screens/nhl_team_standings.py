@@ -1,13 +1,20 @@
 """NHL team standings screens."""
 import config
+from config import (
+    DISPLAY_SCALE,
+    FONT_STAND1_RANK,
+    HEIGHT,
+    WIDTH,
+    is_hyperpixel_4_square_layout,
+    is_hyperpixel_next_layout,
+)
 from screens.mlb_team_standings import (
     LOGO_SZ,
+    _format_int,
     draw_standings_screen1 as _base_screen1,
     draw_standings_screen2 as _base_screen2,
-    _format_int,
 )
-from config import FONT_STAND1_RANK, DISPLAY_SCALE, WIDTH, HEIGHT, is_hyperpixel_4_square_layout, is_hyperpixel_next_layout
-from utils import log_call, clone_font
+from utils import clone_font, log_call
 
 _IS_HYPERPIXEL_4_SQUARE = is_hyperpixel_4_square_layout()
 _IS_HYPERPIXEL_LAYOUT = is_hyperpixel_next_layout()

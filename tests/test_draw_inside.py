@@ -5,13 +5,13 @@ import types
 from screens.draw_inside import (
     _build_metric_entries,
     _build_voc_tile,
-    _history_values,
-    _iter_board_i2c_pin_pairs,
     _get_probe_order,
     _get_sensor_env_override,
+    _history_values,
     _import_smbus_class,
-    _normalize_sensor_name,
+    _iter_board_i2c_pin_pairs,
     _normalize_pressure,
+    _normalize_sensor_name,
     _parse_i2c_bus_candidates,
 )
 
@@ -326,6 +326,7 @@ def test_parse_i2cdetect_addresses_ignores_headers_and_extracts_hits():
 
 def test_i2cdetect_bus_has_known_sensor_ignores_noisy_bus(monkeypatch):
     import subprocess
+
     import screens.draw_inside as draw_inside_module
 
     noisy_output = """
@@ -426,6 +427,7 @@ def test_probe_sensor_skips_non_linux_platform(monkeypatch):
 
 def test_probe_pimoroni_bme680_reads_chip_id_from_each_bus(monkeypatch):
     import importlib
+
     import screens.draw_inside as draw_inside_module
 
     class FakeBus:
@@ -506,7 +508,7 @@ def test_is_inside_sensor_available_reflects_probe_result(monkeypatch):
     monkeypatch.setattr(
         draw_inside_module,
         "_probe_sensor_cached",
-        lambda force_refresh=False: ("Pimoroni BME280", lambda: {}),
+        lambda force_refresh=False: ("Pimoroni BME280", dict),
     )
     assert draw_inside_module.is_inside_sensor_available() is True
 
@@ -520,6 +522,7 @@ def test_is_inside_sensor_available_reflects_probe_result(monkeypatch):
 
 def test_probe_pimoroni_bme68x_survives_child_segfault(monkeypatch):
     import subprocess
+
     import screens.draw_inside as draw_inside_module
 
     def fake_run(*_args, **_kwargs):
@@ -576,6 +579,7 @@ ModuleNotFoundError: No module named 'bme68x'
 def test_probe_pimoroni_bme68x_helper_uses_vendored_pythonpath(monkeypatch):
     import json
     import os
+
     import screens.draw_inside as draw_inside_module
 
     captured = {}

@@ -11,10 +11,10 @@ import socket
 import subprocess
 import threading
 import time
+from collections.abc import Sequence
 from pathlib import Path
-from typing import List, Optional, Sequence, Tuple
+from typing import List, Optional, Tuple
 from urllib.parse import urlsplit
-
 
 # ─── Behaviour configuration ───────────────────────────────────────────────────
 
@@ -225,10 +225,10 @@ def _has_default_route(iface: str) -> bool:
         return False
 
 
-def _get_default_route_interfaces() -> List[str]:
+def _get_default_route_interfaces() -> list[str]:
     """Return interfaces carrying default routes."""
 
-    interfaces: List[str] = []
+    interfaces: list[str] = []
     try:
         proc = _run_command(["ip", "route", "show", "default"])
     except Exception as exc:
@@ -287,8 +287,8 @@ def _check_dns_resolution() -> bool:
         return False
 
 
-def _check_internet(iface: str) -> Tuple[bool, List[str]]:
-    tried: List[str] = []
+def _check_internet(iface: str) -> tuple[bool, list[str]]:
+    tried: list[str] = []
     tcp_targets = _get_tcp_probe_targets()
 
     if tcp_targets and _check_tcp_targets(tcp_targets, tried):
@@ -377,7 +377,7 @@ def _check_internet(iface: str) -> Tuple[bool, List[str]]:
     return False, tried
 
 
-def _split_env_list(raw: Optional[str]) -> List[str]:
+def _split_env_list(raw: Optional[str]) -> list[str]:
     if not raw:
         return []
     return [item.strip() for item in raw.split(",") if item.strip()]
@@ -392,8 +392,8 @@ def _parse_port(raw: Optional[str], default: int = 443) -> int:
         return default
 
 
-def _get_tcp_probe_targets() -> List[Tuple[str, int, str]]:
-    targets: List[Tuple[str, int, str]] = []
+def _get_tcp_probe_targets() -> list[tuple[str, int, str]]:
+    targets: list[tuple[str, int, str]] = []
     default_port = _parse_port(os.environ.get("WIFI_TCP_PROBE_PORT"), 443)
 
     url_candidates = _split_env_list(
@@ -421,7 +421,7 @@ def _get_tcp_probe_targets() -> List[Tuple[str, int, str]]:
         label = f"tcp://{host}:{port}"
         targets.append((host, port, label))
 
-    deduped: List[Tuple[str, int, str]] = []
+    deduped: list[tuple[str, int, str]] = []
     seen = set()
     for host, port, label in targets:
         key = (host, port)
@@ -433,7 +433,7 @@ def _get_tcp_probe_targets() -> List[Tuple[str, int, str]]:
     return deduped
 
 
-def _check_tcp_targets(targets: Sequence[Tuple[str, int, str]], tried: List[str]) -> bool:
+def _check_tcp_targets(targets: Sequence[tuple[str, int, str]], tried: list[str]) -> bool:
     for host, port, label in targets:
         tried.append(label)
         try:
@@ -703,7 +703,7 @@ def start_monitor(allow_recovery: bool = True) -> None:
 def get_assigned_ipv4() -> Optional[str]:
     """Return the device IPv4 address used for local network access."""
 
-    preferred_interfaces: List[str] = []
+    preferred_interfaces: list[str] = []
 
     if _IFACE:
         preferred_interfaces.append(_IFACE)
@@ -734,7 +734,7 @@ def get_assigned_ipv4() -> Optional[str]:
     return None
 
 
-def get_wifi_state() -> Tuple[str, Optional[str]]:
+def get_wifi_state() -> tuple[str, Optional[str]]:
     """Return the current Wi-Fi state and SSID."""
 
     with _STATE_LOCK:

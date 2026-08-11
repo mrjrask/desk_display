@@ -1,7 +1,6 @@
 from PIL import Image, ImageDraw
 
-from screens import nhl_standings
-from screens import nhl_standings_v2
+from screens import nhl_standings, nhl_standings_v2
 
 
 def test_draw_division_centers_all_stat_values(monkeypatch):

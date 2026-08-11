@@ -22,8 +22,9 @@ import os
 import pathlib
 import sys
 import time
+from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Any, Callable, Optional
+from typing import Any, Optional
 
 import requests
 
@@ -33,12 +34,11 @@ os.environ.setdefault("CONFIG_LOAD_DOTENV", "1")
 
 from config import (
     AHL_SCHEDULE_ICS_URL,
-    OWM_API_KEY,
-    OWM_API_URL,
     LATITUDE,
     LONGITUDE,
+    OWM_API_KEY,
+    OWM_API_URL,
 )
-from data_fetch import fetch_weather
 from data_fetch import (
     fetch_bears_standings,
     fetch_blackhawks_last_game,
@@ -55,10 +55,11 @@ from data_fetch import (
     fetch_cubs_standings,
     fetch_sox_games,
     fetch_sox_standings,
+    fetch_weather,
     fetch_wolves_games,
 )
-from screens.nhl_scoreboard import dns_diagnostics
 from screens.draw_weather import _alert_message_text, _fetch_rainviewer_frames, _selected_alert
+from screens.nhl_scoreboard import dns_diagnostics
 from services.news_feeds import (
     fetch_topic_headlines,
     load_news_feed_config,

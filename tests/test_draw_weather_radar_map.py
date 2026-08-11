@@ -7,9 +7,9 @@ from PIL import Image
 from screens.draw_weather import (
     BASE_MAP_CACHE_TTL_SECONDS,
     RADAR_ANIMATION_LOOPS,
-    RADAR_FRAMES_CACHE_TTL_SECONDS,
     RADAR_CENTER_LATITUDE,
     RADAR_CENTER_LONGITUDE,
+    RADAR_FRAMES_CACHE_TTL_SECONDS,
     RadarFrame,
     _clear_radar_map_caches,
     _fetch_base_map,
@@ -138,7 +138,7 @@ def test_fetch_base_map_uses_chicago_center_coordinates(monkeypatch):
 def test_fetch_radar_frames_uses_cache_within_ttl(monkeypatch):
     now = 2_000.0
     urls_requested = []
-    timestamp = int(datetime.datetime.now(datetime.timezone.utc).timestamp())
+    timestamp = int(datetime.datetime.now(datetime.UTC).timestamp())
     metadata = {
         "host": "https://tilecache.rainviewer.com",
         "radar": {"past": [{"path": "cached", "time": timestamp}]},
@@ -173,7 +173,7 @@ def test_fetch_radar_frames_uses_cache_within_ttl(monkeypatch):
 def test_fetch_radar_frames_refreshes_after_ttl(monkeypatch):
     now = 2_000.0
     calls = []
-    timestamp = int(datetime.datetime.now(datetime.timezone.utc).timestamp())
+    timestamp = int(datetime.datetime.now(datetime.UTC).timestamp())
 
     def _mock_rainviewer(zoom, max_frames):
         calls.append((zoom, max_frames))
@@ -191,7 +191,7 @@ def test_fetch_radar_frames_refreshes_after_ttl(monkeypatch):
 
 
 def test_fetch_radar_frames_prefers_recent_frames(monkeypatch):
-    now_ts = int(datetime.datetime.now(datetime.timezone.utc).timestamp())
+    now_ts = int(datetime.datetime.now(datetime.UTC).timestamp())
     stale_ts = now_ts - (6 * 60 * 60)
     fresh_ts = now_ts - (20 * 60)
     sample = Image.new("RGBA", (8, 8), (255, 255, 255, 255))
@@ -238,7 +238,7 @@ def test_draw_weather_radar_animates_when_transition_enabled(monkeypatch):
 
 def test_fetch_rainviewer_frames_sorts_to_include_latest(monkeypatch):
     timestamps_requested = []
-    now_ts = int(datetime.datetime.now(datetime.timezone.utc).timestamp())
+    now_ts = int(datetime.datetime.now(datetime.UTC).timestamp())
     metadata = {
         "host": "https://tilecache.rainviewer.com",
         "radar": {
@@ -273,7 +273,7 @@ def test_fetch_rainviewer_frames_sorts_to_include_latest(monkeypatch):
 
 def test_fetch_rainviewer_frames_tries_alternate_metadata_url(monkeypatch):
     seen_urls = []
-    now_ts = int(datetime.datetime.now(datetime.timezone.utc).timestamp())
+    now_ts = int(datetime.datetime.now(datetime.UTC).timestamp())
     metadata = {
         "host": "https://tilecache.rainviewer.com",
         "radar": {"past": [{"path": "z", "time": now_ts}]},

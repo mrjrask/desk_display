@@ -5,41 +5,47 @@ with both team logos on the Next Game screen, in AWAY @ HOME order,
 and a small W/L flag between the boxscore and date on Cubs 'Last Game'.
 """
 
-import os
-import logging
 import datetime
-import io
-import urllib.request
 import hashlib
+import io
+import logging
+import os
+import urllib.request
 from typing import Optional, Tuple
+
 from PIL import Image, ImageDraw, ImageFont
 
 import config
 from config import (
-    WIDTH, HEIGHT,
-    FONT_TITLE_SPORTS, FONT_DATE_SPORTS,
-    FONT_TEAM_SPORTS, FONT_SCORE, FONT_CONDITION,
-    MLB_CUBS_TEAM_ID, MLB_SOX_TEAM_ID,
     CENTRAL_TIME,
+    FONT_CONDITION,
+    FONT_DATE_SPORTS,
+    FONT_SCORE,
+    FONT_TEAM_SPORTS,
+    FONT_TITLE_SPORTS,
+    HEIGHT,
     IMAGES_DIR,
+    MLB_CUBS_TEAM_ID,
+    MLB_SOX_TEAM_ID,
+    WIDTH,
     get_screen_background_color,
     is_hyperpixel_4_square_layout,
     is_hyperpixel_next_layout,
 )
+from display_profiles import DISPLAY_PROFILE_DISPLAY_HAT_MINI, DISPLAY_PROFILE_HYPERPIXEL4
 from utils import (
     LED_INDICATOR_LEVEL,
     ScreenImage,
     fit_font,
-    get_team_display_name,
     get_mlb_abbreviation,
     get_mlb_tricode,
-    log_call,
+    get_team_display_name,
     load_team_logo,
+    log_call,
     standard_next_game_logo_frame_width,
     standard_next_game_logo_height,
     wrap_text,
 )
-from display_profiles import DISPLAY_PROFILE_DISPLAY_HAT_MINI, DISPLAY_PROFILE_HYPERPIXEL4
 
 # ── Paths ────────────────────────────────────────────────────────────────────
 BACKGROUND_COLOR = (0, 0, 0)
@@ -159,7 +165,7 @@ def _format_game_label(official_date: str, start_time: str) -> str:
         except Exception:
             return None
 
-    def _parse_time(parts: list[str]) -> Tuple[Optional[datetime.time], str]:
+    def _parse_time(parts: list[str]) -> tuple[Optional[datetime.time], str]:
         time_token = ""
         ampm_token = ""
         for part in parts:
@@ -413,7 +419,7 @@ def _load_remote_image(url: str, box_size: int) -> Optional[Image.Image]:
 
     if cache_path:
         try:
-            now_ts = datetime.datetime.now(datetime.timezone.utc).timestamp()
+            now_ts = datetime.datetime.now(datetime.UTC).timestamp()
             mtime = os.path.getmtime(cache_path)
             if (now_ts - mtime) <= PITCHER_HEADSHOT_CACHE_TTL_SECONDS:
                 cached = Image.open(cache_path).convert("RGBA")

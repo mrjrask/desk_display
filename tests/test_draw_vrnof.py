@@ -1,7 +1,7 @@
-from PIL import Image
-from PIL import ImageDraw
-import pytest
 import time
+
+import pytest
+from PIL import Image, ImageDraw
 
 from screens import draw_vrnof
 

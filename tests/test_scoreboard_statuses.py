@@ -4,13 +4,15 @@ import datetime
 
 import pytest
 
-from screens.mlb_scoreboard import _format_status as mlb_format_status
-from screens.mlb_scoreboard import _fetch_games_for_date as mlb_fetch_games_for_date
-from screens.mlb_scoreboard import _scoreboard_date as mlb_scoreboard_date
-from screens.nfl_scoreboard import _format_status as nfl_format_status
-from screens.nba_scoreboard import _format_status as nba_format_status
-from screens.nhl_scoreboard import _format_status as nhl_format_status
 from config import CENTRAL_TIME
+from screens.mlb_scoreboard import (
+    _fetch_games_for_date as mlb_fetch_games_for_date,
+    _format_status as mlb_format_status,
+    _scoreboard_date as mlb_scoreboard_date,
+)
+from screens.nba_scoreboard import _format_status as nba_format_status
+from screens.nfl_scoreboard import _format_status as nfl_format_status
+from screens.nhl_scoreboard import _format_status as nhl_format_status
 
 
 def _mlb_game(*, detailed: str, abstract: str = "preview", start: bool = True) -> dict:

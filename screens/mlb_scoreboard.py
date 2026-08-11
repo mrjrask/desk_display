@@ -21,32 +21,33 @@ import logging
 import os
 import re
 import time
-from typing import Iterable, Optional
+from collections.abc import Iterable
+from typing import Optional
 
 from PIL import Image, ImageDraw
 
 from config import (
-    WIDTH,
-    HEIGHT,
-    FONT_TITLE_SPORTS,
-    FONT_TEAM_SPORTS,
-    FONT_STATUS,
     CENTRAL_TIME,
+    FONT_STATUS,
+    FONT_TEAM_SPORTS,
+    FONT_TITLE_SPORTS,
+    HEIGHT,
     IMAGES_DIR,
-    SCOREBOARD_SCROLL_STEP,
     MLB_SCOREBOARD_SCROLL_DELAY,
-    SCOREBOARD_SCROLL_PAUSE_TOP,
-    SCOREBOARD_SCROLL_PAUSE_BOTTOM,
-    SCOREBOARD_STANDINGS_BOTTOM_PADDING,
     SCOREBOARD_BACKGROUND_COLOR,
-    SCOREBOARD_IN_PROGRESS_SCORE_COLOR,
-    SCOREBOARD_FINAL_WINNING_SCORE_COLOR,
     SCOREBOARD_FINAL_LOSING_SCORE_COLOR,
+    SCOREBOARD_FINAL_WINNING_SCORE_COLOR,
+    SCOREBOARD_IN_PROGRESS_SCORE_COLOR,
+    SCOREBOARD_SCROLL_PAUSE_BOTTOM,
+    SCOREBOARD_SCROLL_PAUSE_TOP,
+    SCOREBOARD_SCROLL_STEP,
+    SCOREBOARD_STANDINGS_BOTTOM_PADDING,
+    WIDTH,
     get_screen_background_color,
     get_screen_font,
     get_screen_image_scale,
-    is_hyperpixel_next_layout,
     is_hyperpixel_4_square_layout,
+    is_hyperpixel_next_layout,
     is_small_connected_scoreboard_display,
     scale_value,
     scale_value_width,
@@ -503,7 +504,7 @@ def _timestamp_to_local(ts: str) -> Optional[datetime.datetime]:
         return None
     try:
         dt = datetime.datetime.strptime(ts, "%Y-%m-%dT%H:%M:%SZ")
-        dt = dt.replace(tzinfo=datetime.timezone.utc)
+        dt = dt.replace(tzinfo=datetime.UTC)
         return dt.astimezone(CENTRAL_TIME)
     except Exception:
         return None

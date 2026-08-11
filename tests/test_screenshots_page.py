@@ -1,5 +1,5 @@
 import os
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta, timezone
 from types import SimpleNamespace
 
 import config_ui
@@ -131,7 +131,7 @@ def test_layout_editor_routes_removed():
 
 
 def test_screenshots_template_removes_layout_editor_nav_link(monkeypatch):
-    monkeypatch.setattr(config_ui, "_build_screenshot_entries", lambda: [])
+    monkeypatch.setattr(config_ui, "_build_screenshot_entries", list)
     monkeypatch.setattr(
         config_ui,
         "_load_service_status",
@@ -272,7 +272,7 @@ def test_screenshot_order_matches_playlist_grouped_config_order(monkeypatch, tmp
 def test_load_display_status_reads_heartbeat(monkeypatch, tmp_path):
     current_dir = tmp_path / "current"
     current_dir.mkdir()
-    rendered_at = datetime.now(timezone.utc) - timedelta(seconds=30)
+    rendered_at = datetime.now(UTC) - timedelta(seconds=30)
     (current_dir / "display_status.json").write_text(
         """{
   "screen_id": "bears next season",

@@ -18,7 +18,9 @@ import re
 import time
 from functools import lru_cache
 from typing import Any
+
 from PIL import Image, ImageDraw, ImageFont
+
 import config
 from config import (
     BEARS_BOTTOM_MARGIN,

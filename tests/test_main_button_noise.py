@@ -13,19 +13,19 @@ from services import wifi_utils
 def main_for_buttons(monkeypatch):
     monkeypatch.setattr(wifi_utils, "start_monitor", lambda *args, **kwargs: None)
     monkeypatch.setattr(wifi_utils, "stop_monitor", lambda: None)
-    monkeypatch.setattr(data_fetch, "fetch_weather", lambda: {})
+    monkeypatch.setattr(data_fetch, "fetch_weather", dict)
     monkeypatch.setattr(data_fetch, "fetch_blackhawks_last_game", lambda: None)
     monkeypatch.setattr(data_fetch, "fetch_blackhawks_live_game", lambda: None)
     monkeypatch.setattr(data_fetch, "fetch_blackhawks_next_game", lambda: None)
     monkeypatch.setattr(data_fetch, "fetch_blackhawks_next_home_game", lambda: None)
-    monkeypatch.setattr(data_fetch, "fetch_wolves_games", lambda: {})
+    monkeypatch.setattr(data_fetch, "fetch_wolves_games", dict)
     monkeypatch.setattr(data_fetch, "fetch_bulls_last_game", lambda: None)
     monkeypatch.setattr(data_fetch, "fetch_bulls_live_game", lambda: None)
     monkeypatch.setattr(data_fetch, "fetch_bulls_next_game", lambda: None)
     monkeypatch.setattr(data_fetch, "fetch_bulls_next_home_game", lambda: None)
-    monkeypatch.setattr(data_fetch, "fetch_cubs_games", lambda: {})
+    monkeypatch.setattr(data_fetch, "fetch_cubs_games", dict)
     monkeypatch.setattr(data_fetch, "fetch_cubs_standings", lambda: None)
-    monkeypatch.setattr(data_fetch, "fetch_sox_games", lambda: {})
+    monkeypatch.setattr(data_fetch, "fetch_sox_games", dict)
     monkeypatch.setattr(data_fetch, "fetch_sox_standings", lambda: None)
 
     sys.modules.pop("main", None)
@@ -39,9 +39,9 @@ def main_for_buttons(monkeypatch):
 
     main._manual_skip_event.clear()
     main._skip_request_pending = False
-    main._BUTTON_STATE = {name: False for name in main._BUTTON_NAMES}
-    main._BUTTON_PRESS_STARTED_AT = {name: 0.0 for name in main._BUTTON_NAMES}
-    main._BUTTON_PRESS_HANDLED = {name: False for name in main._BUTTON_NAMES}
+    main._BUTTON_STATE = dict.fromkeys(main._BUTTON_NAMES, False)
+    main._BUTTON_PRESS_STARTED_AT = dict.fromkeys(main._BUTTON_NAMES, 0.0)
+    main._BUTTON_PRESS_HANDLED = dict.fromkeys(main._BUTTON_NAMES, False)
     main._manual_display_off = False
     main.resume_display_updates()
 

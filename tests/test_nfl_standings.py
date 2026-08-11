@@ -6,7 +6,6 @@ from screens.nfl_standings import (
     _parse_csv_standings,
 )
 
-
 CSV_SAMPLE = textwrap.dedent(
     """\
     season,conf,division,team,wins,losses,ties,pct,div_rank,scored,allowed,net,sov,sos,seed,playoff

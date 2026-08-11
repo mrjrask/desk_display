@@ -392,10 +392,10 @@ def test_invalid_display_profile_env_falls_back_to_resolution(monkeypatch):
 
 def test_display_profile_presets_drive_scroll_defaults(monkeypatch):
     module = _reload_config(monkeypatch, DISPLAY_WIDTH="1920", DISPLAY_HEIGHT="1080")
-    assert module.SCOREBOARD_SCROLL_STEP == module.ACTIVE_DISPLAY_PROFILE.scoreboard_scroll_step
+    assert module.ACTIVE_DISPLAY_PROFILE.scoreboard_scroll_step == module.SCOREBOARD_SCROLL_STEP
 
     module = _reload_config(monkeypatch, DISPLAY_WIDTH="1280", DISPLAY_HEIGHT="720")
-    assert module.SCOREBOARD_SCROLL_STEP == module.ACTIVE_DISPLAY_PROFILE.scoreboard_scroll_step
+    assert module.ACTIVE_DISPLAY_PROFILE.scoreboard_scroll_step == module.SCOREBOARD_SCROLL_STEP
 
 
 def test_hyperpixel_fade_steps_default_to_zero(monkeypatch):

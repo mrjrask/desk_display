@@ -15,7 +15,8 @@ import logging
 import os
 import re
 import time
-from typing import Any, Dict, Iterable, Optional
+from collections.abc import Iterable
+from typing import Any, Dict, Optional
 
 from PIL import Image, ImageDraw
 
@@ -25,30 +26,37 @@ except AttributeError:  # Pillow ≥11
     RESAMPLE = Image.Resampling.LANCZOS
 
 from config import (
-    WIDTH,
-    HEIGHT,
-    FONT_TITLE_SPORTS,
-    FONT_TEAM_SPORTS,
-    FONT_STATUS,
     CENTRAL_TIME,
+    FONT_STATUS,
+    FONT_TEAM_SPORTS,
+    FONT_TITLE_SPORTS,
+    HEIGHT,
     IMAGES_DIR,
-    SCOREBOARD_SCROLL_STEP,
-    SCOREBOARD_SCROLL_DELAY,
-    SCOREBOARD_SCROLL_PAUSE_TOP,
-    SCOREBOARD_SCROLL_PAUSE_BOTTOM,
-    SCOREBOARD_STANDINGS_BOTTOM_PADDING,
     SCOREBOARD_BACKGROUND_COLOR,
-    SCOREBOARD_IN_PROGRESS_SCORE_COLOR,
-    SCOREBOARD_FINAL_WINNING_SCORE_COLOR,
     SCOREBOARD_FINAL_LOSING_SCORE_COLOR,
+    SCOREBOARD_FINAL_WINNING_SCORE_COLOR,
+    SCOREBOARD_IN_PROGRESS_SCORE_COLOR,
+    SCOREBOARD_SCROLL_DELAY,
+    SCOREBOARD_SCROLL_PAUSE_BOTTOM,
+    SCOREBOARD_SCROLL_PAUSE_TOP,
+    SCOREBOARD_SCROLL_STEP,
+    SCOREBOARD_STANDINGS_BOTTOM_PADDING,
+    WIDTH,
     get_screen_background_color,
     get_screen_font,
     get_screen_image_scale,
-    is_kernel_driven_display,
-    is_hyperpixel_next_layout,
     is_hyperpixel_4_square_layout,
+    is_hyperpixel_next_layout,
+    is_kernel_driven_display,
     scale_value,
     scale_value_width,
+)
+from services.sports.nba import (
+    _NBA_HEADERS,
+    _map_espn_game,
+    _map_game,
+    _scoreboard_date,
+    fetch_games_for_date as _fetch_games_for_date,
 )
 from utils import (
     ScreenImage,
@@ -57,13 +65,6 @@ from utils import (
     log_call,
     log_missing_team_logo,
     scroll_vertical_content,
-)
-from services.sports.nba import (
-    _NBA_HEADERS,
-    _map_espn_game,
-    _map_game,
-    _scoreboard_date,
-    fetch_games_for_date as _fetch_games_for_date,
 )
 
 # ─── Constants ────────────────────────────────────────────────────────────────
@@ -267,7 +268,7 @@ def play_nba_logo_animation(display, *, hold: float = INTRO_ANIM_HOLD) -> Option
     return _play_intro_animation(display, hold=hold)
 
 
-def _team_logo_abbr(team: Dict[str, Any]) -> str:
+def _team_logo_abbr(team: dict[str, Any]) -> str:
     if not isinstance(team, dict):
         return ""
     for key in ("teamTricode", "triCode", "tricode", "abbreviation", "abbr", "teamCode", "code"):

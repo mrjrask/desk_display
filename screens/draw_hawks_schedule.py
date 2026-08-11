@@ -40,9 +40,11 @@ from PIL import Image, ImageDraw, ImageFont
 
 import config
 from config import (
+    CENTRAL_TIME,
     FONT_DATE_SPORTS,
     FONT_TEAM_SPORTS,
     FONT_TITLE_SPORTS,
+    HEIGHT,
     NHL_API_ENDPOINTS,
     NHL_FALLBACK_LOGO,
     NHL_IMAGES_DIR,
@@ -50,8 +52,6 @@ from config import (
     NHL_TEAM_TRICODE,
     TIMES_SQUARE_FONT_PATH,
     WIDTH,
-    HEIGHT,
-    CENTRAL_TIME,
     is_hyperpixel_4_square_layout,
     is_hyperpixel_next_layout,
 )
@@ -98,7 +98,7 @@ def _ts(size: int) -> ImageFont.ImageFont:
 # Try to reuse MLB's helper functions for title layout and date labels.
 _MLB = None
 try:
-    import screens.mlb_schedule as _MLB  # noqa: N816
+    import screens.mlb_schedule as _MLB
 except Exception:
     _MLB = None
 
@@ -128,7 +128,7 @@ _ABBR_FONT_SIZE = int(round(_ABBR_BASE * 1.3))
 _SOG_FONT_SIZE = _SOG_BASE
 _SCORE_FONT_SIZE = int(round(_SOG_FONT_SIZE * (1.55 if _IS_HYPERPIXEL_4_SQUARE else 1.45)))
 
-_H4SQ_SOG_BASE = int(round((30 if HEIGHT > 64 else 26) * 1.15))
+_H4SQ_SOG_BASE = round((30 if HEIGHT > 64 else 26) * 1.15)
 _H4SQ_SOG_FONT_SIZE = _H4SQ_SOG_BASE + 6
 _H4SQ_SCORE_FONT_SIZE = int(round(int(round(_H4SQ_SOG_BASE * 1.55)) * 3.0))
 
@@ -176,7 +176,7 @@ def _push(
     img: Optional[Image.Image],
     *,
     transition: bool = False,
-    led_override: Optional[Tuple[float, float, float]] = None,
+    led_override: Optional[tuple[float, float, float]] = None,
 ):
     if img is None or display is None:
         return None
@@ -188,14 +188,14 @@ def _push(
 _SESSION = get_session()
 
 
-def _req_json(url: str, **kwargs) -> Optional[Dict]:
+def _req_json(url: str, **kwargs) -> Optional[dict]:
     """GET → JSON with optional quiet logging (quiet=True)."""
     headers = kwargs.pop("headers", None)
     if headers is None and "api-web.nhle.com" in url:
         headers = NHL_HEADERS
     return request_json(url, headers=headers, session=_SESSION, **kwargs)
 
-def _map_apiweb_game(g: Dict) -> Dict:
+def _map_apiweb_game(g: dict) -> dict:
     """Map api-web game into a minimal StatsAPI-like shape."""
     gid = g.get("id") or g.get("gameId") or g.get("gamePk")
     game_date = (
@@ -205,7 +205,7 @@ def _map_apiweb_game(g: Dict) -> Dict:
     home = g.get("homeTeam", {}) or g.get("home", {}) or {}
     away = g.get("awayTeam", {}) or g.get("away", {}) or {}
 
-    def _tri(team: Dict, default: str) -> str:
+    def _tri(team: dict, default: str) -> str:
         return team.get("abbrev") or team.get("triCode") or team.get("abbreviation") or default
 
     home_tri = _tri(home, "HOME")
@@ -237,7 +237,7 @@ def _map_apiweb_game(g: Dict) -> Dict:
         "officialDate": g.get("gameDate", "")[:10],
     }
 
-def fetch_schedule_apiweb(days_back: int, days_fwd: int) -> Optional[Dict]:
+def fetch_schedule_apiweb(days_back: int, days_fwd: int) -> Optional[dict]:
     """api-web 'season now' (broader) or 'month now' mapped to {dates:[{games:[...]}}]."""
     j = _req_json(NHL_WEB_TEAM_SEASON_NOW.format(tric=TEAM_TRICODE))
     if not j:
@@ -259,18 +259,18 @@ def fetch_schedule_apiweb(days_back: int, days_fwd: int) -> Optional[Dict]:
         return None
     return {"dates": [{"games": flat}]}
 
-def fetch_schedule_legacy(days_back: int, days_fwd: int) -> Optional[Dict]:
+def fetch_schedule_legacy(days_back: int, days_fwd: int) -> Optional[dict]:
     today = dt.date.today()
     start = (today - dt.timedelta(days=days_back)).strftime("%Y-%m-%d")
     end   = (today + dt.timedelta(days=days_fwd)).strftime("%Y-%m-%d")
     return _req_json(NHL_STATS_SCHEDULE, params={"teamId": TEAM_ID, "startDate": start, "endDate": end}, quiet=True)
 
-def fetch_schedule(days_back: int, days_fwd: int) -> Optional[Dict]:
+def fetch_schedule(days_back: int, days_fwd: int) -> Optional[dict]:
     j = fetch_schedule_apiweb(days_back, days_fwd)
     if j: return j
     return fetch_schedule_legacy(days_back, days_fwd)
 
-def classify_games(schedule_json: Dict) -> Tuple[Optional[Dict], Optional[Dict], Optional[Dict]]:
+def classify_games(schedule_json: dict) -> tuple[Optional[dict], Optional[dict], Optional[dict]]:
     """Return (live, last_final, next_sched)."""
     dates = schedule_json.get("dates", [])
     games = [g for day in dates for g in day.get("games", [])]
@@ -287,7 +287,7 @@ def classify_games(schedule_json: Dict) -> Tuple[Optional[Dict], Optional[Dict],
 
     return live, last_final, next_sched
 
-def fetch_game_feed(game_pk: int) -> Optional[Dict]:
+def fetch_game_feed(game_pk: int) -> Optional[dict]:
     """Prefer api-web boxscore/landing (goals + SOG). Quiet legacy fallback."""
     box  = _req_json(NHL_WEB_GAME_BOXSCORE.format(gid=game_pk))
     land = None if box else _req_json(NHL_WEB_GAME_LANDING.format(gid=game_pk))
@@ -296,7 +296,7 @@ def fetch_game_feed(game_pk: int) -> Optional[Dict]:
         home = payload.get("homeTeam") or payload.get("home") or {}
         away = payload.get("awayTeam") or payload.get("away") or {}
 
-        def _tri(t: Dict, default: str) -> str:
+        def _tri(t: dict, default: str) -> str:
             return t.get("abbrev") or t.get("triCode") or t.get("abbreviation") or default
         def _as_int(v):
             try: return int(v) if v is not None else None
@@ -349,7 +349,7 @@ def fetch_game_feed(game_pk: int) -> Optional[Dict]:
     teams = lines.get("teams", {})
     gd    = data.get("gameData", {}).get("teams", {})
 
-    def _tri2(t: Dict, default: str) -> str:
+    def _tri2(t: dict, default: str) -> str:
         return t.get("abbreviation") or t.get("triCode") or default
     def _as_int(v):
         try: return int(v) if v is not None else None
@@ -374,13 +374,13 @@ def fetch_game_feed(game_pk: int) -> Optional[Dict]:
 
 FALLBACK_LOGO = NHL_FALLBACK_LOGO
 
-def _team_obj_from_any(t: Dict) -> Dict:
+def _team_obj_from_any(t: dict) -> dict:
     """Return team dict with {'abbrev','id','name'} (and discover names)."""
     if not isinstance(t, dict):
         return {}
     raw = t.get("team") if isinstance(t.get("team"), dict) else t
 
-    def _name_from(d: Dict) -> Optional[str]:
+    def _name_from(d: dict) -> Optional[str]:
         v = d.get("name")
         if isinstance(v, str) and v.strip():
             return v
@@ -413,7 +413,7 @@ def _team_obj_from_any(t: Dict) -> Dict:
     tid  = raw.get("id") or raw.get("teamId")
     return {"abbrev": abbr, "id": tid, "name": name}
 
-def _extract_tris_from_game(game: Dict) -> Tuple[str, str]:
+def _extract_tris_from_game(game: dict) -> tuple[str, str]:
     """(away_tri, home_tri) from a game-like dict."""
     away = game.get("awayTeam") or (game.get("teams") or {}).get("away") or {}
     home = game.get("homeTeam") or (game.get("teams") or {}).get("home") or {}
@@ -592,8 +592,8 @@ def _draw_title_line(
 
 def _draw_dotted_line(
     d: ImageDraw.ImageDraw,
-    start: Tuple[int, int],
-    end: Tuple[int, int],
+    start: tuple[int, int],
+    end: tuple[int, int],
     color,
     *,
     dash: int = 3,
@@ -625,7 +625,7 @@ def _draw_dotted_line(
 
 def _draw_dotted_rect(
     d: ImageDraw.ImageDraw,
-    bbox: Tuple[int, int, int, int],
+    bbox: tuple[int, int, int, int],
     color,
     *,
     dash: int = 3,
@@ -639,7 +639,7 @@ def _draw_dotted_rect(
     _draw_dotted_line(d, (left, bottom), (left, top), color, dash=dash, gap=gap)
 
 
-def _team_scoreboard_label(team_like: Dict, fallback: str = "") -> str:
+def _team_scoreboard_label(team_like: dict, fallback: str = "") -> str:
     """Prefer short team names ("Kings") for the scoreboard column."""
     if not isinstance(team_like, dict):
         return fallback
@@ -762,7 +762,7 @@ def _draw_scoreboard(
         score: Optional[int],
         sog: Optional[int],
         label: Optional[str],
-    ) -> Dict:
+    ) -> dict:
         pad_logo = config.scale_value(4) if hyperpixel_layout else 4
         logo_mid = config.scale_value(56) if hyperpixel_layout else 56
         logo_max = config.scale_value(64) if hyperpixel_layout else 64
@@ -822,7 +822,7 @@ def _draw_scoreboard(
                 break
         name_font = chosen or _ts(min_size)
 
-    def _draw_row(spec: Dict):
+    def _draw_row(spec: dict):
         y_top = spec["top"]
         row_height = spec["height"]
         tri = spec["tri"]
@@ -912,7 +912,7 @@ def _normalize_period(period_val) -> str:
         return ""
 
 
-def _format_live_dateline(feed: Dict) -> str:
+def _format_live_dateline(feed: dict) -> str:
     period = _normalize_period(feed.get("perOrdinal"))
     clock = str(feed.get("clock") or "").strip()
     clock_state = str(feed.get("clockState") or "").strip()
@@ -952,7 +952,7 @@ def _format_last_date_bottom(game_date_iso: str) -> str:
     return local.strftime("%a %b %-d") if os.name != "nt" else local.strftime("%a %b %#d")
 
 
-def _last_game_result_prefix(game: Dict, feed: Optional[Dict] = None) -> str:
+def _last_game_result_prefix(game: dict, feed: Optional[dict] = None) -> str:
     """Return "Final", "Final/OT", or "Final/SO" for a completed game."""
 
     def _norm(value: Optional[str]) -> str:
@@ -1029,7 +1029,7 @@ def _last_game_result_prefix(game: Dict, feed: Optional[Dict] = None) -> str:
     return "Final"
 
 
-def _format_last_bottom_line(game: Dict, feed: Optional[Dict] = None) -> str:
+def _format_last_bottom_line(game: dict, feed: Optional[dict] = None) -> str:
     prefix = _last_game_result_prefix(game, feed)
 
     if callable(_MLB_REL_DATE_ONLY):
@@ -1044,7 +1044,7 @@ def _format_last_bottom_line(game: Dict, feed: Optional[Dict] = None) -> str:
 # ─────────────────────────────────────────────────────────────────────────────
 # Next-game helpers (names, local PNG logos, centered bigger logos)
 
-def _team_full_name(team_like: Dict) -> Optional[str]:
+def _team_full_name(team_like: dict) -> Optional[str]:
     """Extract a full team name from a 'homeTeam'/'awayTeam' shape."""
     info = _team_obj_from_any(team_like)
     return info.get("name") or info.get("abbrev")
@@ -1131,7 +1131,7 @@ def _format_next_bottom(
 
 def _draw_next_card(
     display,
-    game: Dict,
+    game: dict,
     *,
     title: str,
     transition: bool = False,
@@ -1217,7 +1217,7 @@ def _draw_next_card(
             scale=logo_scale,
         )
 
-    def _load_logos(height: int) -> Tuple[Optional[Image.Image], Optional[Image.Image]]:
+    def _load_logos(height: int) -> tuple[Optional[Image.Image], Optional[Image.Image]]:
         return (
             _load_logo_png(away_tri, height=height),
             _load_logo_png(home_tri, height=height),
@@ -1388,7 +1388,7 @@ def draw_last_hawks_game(display, game, transition: bool=False):
     elif hawks_tri and hawks_tri == away_tri:
         hawks_score, opponent_score = away_score, home_score
 
-    def _team_id(entry: Dict) -> str:
+    def _team_id(entry: dict) -> str:
         info = entry.get("team") if isinstance(entry.get("team"), dict) else entry
         return str(
             info.get("id")
@@ -1423,7 +1423,7 @@ def draw_last_hawks_game(display, game, transition: bool=False):
             opponent_score = _as_int(raw_home.get("score"))
 
 
-    led_override: Optional[Tuple[float, float, float]] = None
+    led_override: Optional[tuple[float, float, float]] = None
     if (
         isinstance(hawks_score, int)
         and isinstance(opponent_score, int)

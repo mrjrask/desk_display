@@ -8,9 +8,10 @@ import logging
 import os
 import threading
 import time
+from collections.abc import Iterable, Sequence
 from functools import lru_cache
 from pathlib import Path
-from typing import Dict, Iterable, Optional, Sequence
+from typing import Dict, Optional
 
 from PIL import Image, ImageDraw, ImageEnhance, ImageFilter, ImageFont
 
@@ -22,8 +23,8 @@ from config import (
     HEIGHT,
     IP_WITH_TIME,
     SCREEN_DELAY,
-    WIDTH,
     TIMES_SQUARE_FONT_PATH,
+    WIDTH,
     get_screen_background_color,
 )
 from services.wifi_utils import get_assigned_ipv4
@@ -299,7 +300,7 @@ def _digit_image(height: int, value: str) -> Image.Image:
 
 
 @lru_cache(maxsize=32)
-def _digits_for_height(height: int) -> Dict[str, Image.Image]:
+def _digits_for_height(height: int) -> dict[str, Image.Image]:
     return {value: _digit_image(height, value) for value in "0123456789"}
 
 

@@ -2,14 +2,14 @@ import datetime
 import sys
 
 import pytest
-import screens.registry as registry_module
 from PIL import Image
 
+import screens.registry as registry_module
 from config import CENTRAL_TIME
 from screens.registry import (
     ScreenContext,
-    _logo_scroll_speed_for_layout,
     _is_1080p_or_higher,
+    _logo_scroll_speed_for_layout,
     build_screen_registry,
 )
 from utils import ScreenImage
@@ -51,7 +51,7 @@ def _make_context(
         logos=_DummyLogos(),
         image_dir="",
         now=now,
-        now_utc=now.astimezone(datetime.timezone.utc),
+        now_utc=now.astimezone(datetime.UTC),
         offline=offline,
         weather_fetched_at=weather_fetched_at,
         skip_scoreboards=False,

@@ -13,28 +13,39 @@ from typing import Any, Optional
 from PIL import Image, ImageDraw
 
 from config import (
-    WIDTH,
-    HEIGHT,
     CENTRAL_TIME,
-    FONT_TITLE_SPORTS,
-    FONT_TEAM_SPORTS,
     FONT_STATUS,
+    FONT_TEAM_SPORTS,
+    FONT_TITLE_SPORTS,
+    HEIGHT,
     IMAGES_DIR,
-    SCOREBOARD_SCROLL_STEP,
-    SCOREBOARD_SCROLL_DELAY,
-    SCOREBOARD_SCROLL_PAUSE_TOP,
-    SCOREBOARD_SCROLL_PAUSE_BOTTOM,
-    SCOREBOARD_STANDINGS_BOTTOM_PADDING,
     SCOREBOARD_IN_PROGRESS_SCORE_COLOR,
+    SCOREBOARD_SCROLL_DELAY,
+    SCOREBOARD_SCROLL_PAUSE_BOTTOM,
+    SCOREBOARD_SCROLL_PAUSE_TOP,
+    SCOREBOARD_SCROLL_STEP,
+    SCOREBOARD_STANDINGS_BOTTOM_PADDING,
+    WIDTH,
     get_screen_font,
     get_screen_image_scale,
-    is_kernel_driven_display,
-    is_hyperpixel_next_layout,
     is_hyperpixel_4_square_layout,
+    is_hyperpixel_next_layout,
+    is_kernel_driven_display,
     scale_value,
     scale_value_width,
 )
+from screens.nba_scoreboard import (
+    _center_text,
+    _get_league_logo,
+    _team_logo_abbr,
+)
+from screens.team_abbreviation_mappings import NBA_ABBR_TO_NICKNAME
 from services.http_client import get_session
+from services.sports.nba import (
+    _NBA_HEADERS,
+    fetch_games_for_date as _fetch_games_for_date,
+    scoreboard_date as _scoreboard_date,
+)
 from utils import (
     ScreenImage,
     clear_display,
@@ -43,17 +54,6 @@ from utils import (
     scroll_vertical_content,
     standard_scoreboard_league_logo_height,
 )
-from services.sports.nba import (
-    _NBA_HEADERS,
-    fetch_games_for_date as _fetch_games_for_date,
-    scoreboard_date as _scoreboard_date,
-)
-from screens.nba_scoreboard import (
-    _center_text,
-    _team_logo_abbr,
-    _get_league_logo,
-)
-from screens.team_abbreviation_mappings import NBA_ABBR_TO_NICKNAME
 
 HYPERPIXEL_LAYOUT = is_hyperpixel_next_layout()
 HYPERPIXEL_4_SQUARE = is_hyperpixel_4_square_layout()
@@ -327,7 +327,7 @@ def _round_rank_from_series_payload(series: dict) -> Optional[int]:
 def _extract_next_game_dt(value: Any) -> Optional[datetime.datetime]:
     if isinstance(value, (int, float)):
         try:
-            return datetime.datetime.fromtimestamp(float(value), tz=datetime.timezone.utc).astimezone(CENTRAL_TIME)
+            return datetime.datetime.fromtimestamp(float(value), tz=datetime.UTC).astimezone(CENTRAL_TIME)
         except Exception:
             return None
     if not isinstance(value, str):
@@ -342,7 +342,7 @@ def _extract_next_game_dt(value: Any) -> Optional[datetime.datetime]:
     except Exception:
         return None
     if dt.tzinfo is None:
-        dt = dt.replace(tzinfo=datetime.timezone.utc)
+        dt = dt.replace(tzinfo=datetime.UTC)
     return dt.astimezone(CENTRAL_TIME)
 
 
@@ -708,7 +708,7 @@ def _looks_like_playoff_game(game: dict) -> bool:
 def _derive_playoff_matchups_from_recent_games(now: Optional[datetime.datetime] = None) -> list[dict]:
     base_day = _scoreboard_date(now)
     recent_days = [base_day - datetime.timedelta(days=offset) for offset in range(14, -1, -1)]
-    upcoming_days = [base_day + datetime.timedelta(days=offset) for offset in range(0, 8)]
+    upcoming_days = [base_day + datetime.timedelta(days=offset) for offset in range(8)]
 
     all_games: list[dict] = []
     seen_ids: set[str] = set()
@@ -752,8 +752,8 @@ def _series_has_live_game_from_games(series: dict, games: list[dict]) -> bool:
 
     for game in games or []:
         game_teams = game.get("teams") or {}
-        game_away_abbr = _team_logo_abbr(((game_teams.get("away") or {}).get("team") or {}))
-        game_home_abbr = _team_logo_abbr(((game_teams.get("home") or {}).get("team") or {}))
+        game_away_abbr = _team_logo_abbr((game_teams.get("away") or {}).get("team") or {})
+        game_home_abbr = _team_logo_abbr((game_teams.get("home") or {}).get("team") or {})
         if {game_away_abbr, game_home_abbr} != {away_abbr, home_abbr}:
             continue
         if _is_live_game(game):
@@ -941,8 +941,8 @@ def _series_has_started(series: dict) -> bool:
     if _is_completed_series(series):
         return True
     teams = (series or {}).get("teams") or {}
-    away_wins = _as_int(((teams.get("away") or {}).get("score"))) or 0
-    home_wins = _as_int(((teams.get("home") or {}).get("score"))) or 0
+    away_wins = _as_int((teams.get("away") or {}).get("score")) or 0
+    home_wins = _as_int((teams.get("home") or {}).get("score")) or 0
     if away_wins > 0 or home_wins > 0:
         return True
     status_text = str(series.get("status_text") or "").strip().lower()

@@ -19,25 +19,25 @@ from __future__ import annotations
 import datetime as dt
 import logging
 import os
-from typing import Dict, List, Optional, Sequence, Tuple
+from collections.abc import Sequence
+from typing import Dict, List, Optional, Tuple
 
 from PIL import Image, ImageDraw, ImageFont
 
 import config
 from config import (
+    CENTRAL_TIME,
     FONT_DATE_SPORTS,
     FONT_TEAM_SPORTS,
     FONT_TITLE_SPORTS,
-    NBA_IMAGES_DIR,         # images/nba/
-    NBA_TEAM_TRICODE,       # e.g., "CHI"
-    TIMES_SQUARE_FONT_PATH, # TimesSquare-m105.ttf
-    WIDTH,
     HEIGHT,
-    CENTRAL_TIME,
+    NBA_IMAGES_DIR,  # images/nba/
+    NBA_TEAM_TRICODE,  # e.g., "CHI"
+    TIMES_SQUARE_FONT_PATH,  # TimesSquare-m105.ttf
+    WIDTH,
     get_screen_background_color,
     is_hyperpixel_4_square_layout,
 )
-
 from utils import (
     LED_INDICATOR_LEVEL,
     ScreenImage,
@@ -126,7 +126,7 @@ _IS_ADAFRUIT_MINIPITFT = sorted((WIDTH, HEIGHT)) == [135, 240]
 _MINIPITFT_FONT_SCALE = 0.56 if _IS_ADAFRUIT_MINIPITFT else 1.0
 _FONT_ABBR_SIZE = 40 if _IS_HYPERPIXEL_4_SQUARE else (33 if HEIGHT >= 240 else 28)
 _FONT_SCORE_SIZE = 60 if _IS_HYPERPIXEL_4_SQUARE else (48 if HEIGHT >= 240 else 38)
-_H4SQ_SCORE_FONT_SIZE = int(round(60 * 3.0))
+_H4SQ_SCORE_FONT_SIZE = round(60 * 3.0)
 _SCORE_X_SHIFT_PX = 10
 if _IS_HYPERPIXEL_4_SQUARE:
     # HyperPixel 4 Square request:
@@ -212,8 +212,8 @@ def _center_wrapped_text(
     if not text:
         return 0
     words = text.split()
-    lines: List[str] = []
-    cur: List[str] = []
+    lines: list[str] = []
+    cur: list[str] = []
     for w in words:
         trial = " ".join(cur + [w]) if cur else w
         if _text_w(draw, trial, font) <= max_width:
@@ -257,7 +257,7 @@ def _load_logo_png(abbr: str, height: int) -> Optional[Image.Image]:
 # ─────────────────────────────────────────────────────────────────────────────
 # Data helpers
 
-def _get_s(game: Dict, path: Sequence[str], default="") -> str:
+def _get_s(game: dict, path: Sequence[str], default="") -> str:
     d: object = game
     for key in path:
         if not isinstance(d, dict):
@@ -302,7 +302,7 @@ def _strip_location_prefix(name: str, locations: Sequence[str]) -> str:
                 return remainder
     return candidate
 
-def _team_entry(game: Dict, side: str) -> Dict[str, Optional[str]]:
+def _team_entry(game: dict, side: str) -> dict[str, Optional[str]]:
     teams = game.get("teams") or {}
     entry = teams.get(side) or {}
     team_info = entry.get("team") if isinstance(entry.get("team"), dict) else None
@@ -358,8 +358,8 @@ def _team_entry(game: Dict, side: str) -> Dict[str, Optional[str]]:
                 tri = str(entry[k])
                 break
 
-    names: List[str] = []
-    locations: List[str] = []
+    names: list[str] = []
+    locations: list[str] = []
 
     if team_info and isinstance(team_info, dict):
         for key in name_candidates:
@@ -436,11 +436,11 @@ def _team_entry(game: Dict, side: str) -> Dict[str, Optional[str]]:
         "full_name": full_name,
     }
 
-def _is_bulls_side(entry: Dict[str, Optional[str]]) -> bool:
+def _is_bulls_side(entry: dict[str, Optional[str]]) -> bool:
     tri = (entry.get("tri") or "").upper()
     return tri == TEAM_TRICODE or tri == "CHI"  # ensure CHI is always considered Bulls
 
-def _game_state(game: Dict) -> str:
+def _game_state(game: dict) -> str:
     state = _str_or_blank(game.get("gameStatusText") or game.get("gameStatus") or game.get("status"))
     s = state.lower()
     if "final" in s or s == "finished":
@@ -456,7 +456,7 @@ def _official_date_from_str(official: str) -> Optional[dt.date]:
     except Exception:
         return None
 
-def _official_date(game: Dict) -> Optional[dt.date]:
+def _official_date(game: dict) -> Optional[dt.date]:
     for k in ("officialDate", "official_date", "gameDate", "date", "game_date"):
         d = game.get(k)
         if isinstance(d, str):
@@ -466,7 +466,7 @@ def _official_date(game: Dict) -> Optional[dt.date]:
     start = _get_local_start(game)
     return start.date() if isinstance(start, dt.datetime) else None
 
-def _get_local_start(game: Dict) -> Optional[dt.datetime]:
+def _get_local_start(game: dict) -> Optional[dt.datetime]:
     iso = (game.get("dateTime") or game.get("startTime") or game.get("gameDate") or "")
     if not iso:
         return None
@@ -494,10 +494,10 @@ def _relative_label(date_obj: Optional[dt.date]) -> str:
         return date_obj.strftime("%A")
     return date_obj.strftime("%b %-d")
 
-def _status_text(game: Dict) -> str:
+def _status_text(game: dict) -> str:
     raw_status = game.get("gameStatusText") or game.get("statusText") or game.get("status") or game.get("gameStatus")
 
-    def _from_mapping(status_obj: Dict) -> str:
+    def _from_mapping(status_obj: dict) -> str:
         for key in ("detailedState", "shortDetail", "detail", "description", "state", "name", "text"):
             value = status_obj.get(key)
             if isinstance(value, dict):
@@ -522,7 +522,7 @@ def _status_text(game: Dict) -> str:
 
     return _str_or_blank(raw_status)
 
-def _format_footer_last(game: Dict) -> str:
+def _format_footer_last(game: dict) -> str:
     status = _status_text(game).strip()
     if not status:
         status = "Final"
@@ -530,7 +530,7 @@ def _format_footer_last(game: Dict) -> str:
     parts = [part for part in (status, date_label) if part]
     return " • ".join(parts)
 
-def _format_footer_next(game: Dict) -> str:
+def _format_footer_next(game: dict) -> str:
     # Date + local time with relative-day labels when applicable.
     start = _get_local_start(game)
     if not isinstance(start, dt.datetime):
@@ -548,13 +548,13 @@ def _format_footer_next(game: Dict) -> str:
     return f"{day_label} • {start.strftime('%-I:%M %p')}"
 
 
-def _format_footer_live(game: Dict) -> str:
+def _format_footer_live(game: dict) -> str:
     status = _status_text(game).strip()
     if not status:
         status = "Live"
     return status
 
-def _format_matchup_line(game: Dict) -> str:
+def _format_matchup_line(game: dict) -> str:
     away = _team_entry(game, "away")
     home = _team_entry(game, "home")
     bulls_home = _is_bulls_side(home)
@@ -587,7 +587,7 @@ def _draw_scoreboard_table(
     img: Image.Image,
     draw: ImageDraw.ImageDraw,
     top_y: int,
-    rows: Tuple[Dict[str, object], ...],
+    rows: tuple[dict[str, object], ...],
     *,
     bottom_reserved_px: int = 0,
     hyperpixel_layout: bool = False,
@@ -684,7 +684,7 @@ def _render_message(title: str, message: str, *, hyperpixel_layout: bool = False
     return img
 
 def _render_scoreboard(
-    game: Dict,
+    game: dict,
     *,
     title: str,
     footer: Optional[str] = "",
@@ -734,7 +734,7 @@ def _render_scoreboard(
 
     return img
 
-def _render_next_game(game: Dict, *, title: str, logo_scale: float = 1.0) -> Image.Image:
+def _render_next_game(game: dict, *, title: str, logo_scale: float = 1.0) -> Image.Image:
     """
     Two large logos with an '@' centered between them, plus matchup text and footer.
     """
@@ -857,7 +857,7 @@ def _render_next_game(game: Dict, *, title: str, logo_scale: float = 1.0) -> Ima
 # ─────────────────────────────────────────────────────────────────────────────
 # Display push
 
-def _push(display, img: Optional[Image.Image], *, transition: bool = False, led_override: Optional[Tuple[float, float, float]] = None):
+def _push(display, img: Optional[Image.Image], *, transition: bool = False, led_override: Optional[tuple[float, float, float]] = None):
     if img is None or display is None:
         return None
     return ScreenImage(img, displayed=False, led_override=led_override)
@@ -865,7 +865,7 @@ def _push(display, img: Optional[Image.Image], *, transition: bool = False, led_
 # ─────────────────────────────────────────────────────────────────────────────
 # Public entry points (used by screens/registry.py)
 
-def draw_last_bulls_game(display, game: Optional[Dict], transition: bool = False):
+def draw_last_bulls_game(display, game: Optional[dict], transition: bool = False):
     global BACKGROUND_COLOR
     BACKGROUND_COLOR = get_screen_background_color("bulls last", (0, 0, 0))
     hyperpixel_layout = config.is_hyperpixel_next_layout()
@@ -882,7 +882,7 @@ def draw_last_bulls_game(display, game: Optional[Dict], transition: bool = False
     )
 
     # LED: green win, red loss (if both scores present)
-    led_override: Optional[Tuple[float, float, float]] = None
+    led_override: Optional[tuple[float, float, float]] = None
     away = _team_entry(game, "away")
     home = _team_entry(game, "home")
     bulls = away if _is_bulls_side(away) else home
@@ -903,7 +903,7 @@ def draw_last_bulls_game(display, game: Optional[Dict], transition: bool = False
         )
     return _push(display, img, transition=transition, led_override=led_override)
 
-def draw_live_bulls_game(display, game: Optional[Dict], transition: bool = False):
+def draw_live_bulls_game(display, game: Optional[dict], transition: bool = False):
     global BACKGROUND_COLOR
     BACKGROUND_COLOR = get_screen_background_color("bulls live", (0, 0, 0))
     hyperpixel_layout = config.is_hyperpixel_next_layout()
@@ -920,7 +920,7 @@ def draw_live_bulls_game(display, game: Optional[Dict], transition: bool = False
     )
     return _push(display, img, transition=transition)
 
-def draw_sports_screen_bulls(display, game: Optional[Dict], transition: bool = False):
+def draw_sports_screen_bulls(display, game: Optional[dict], transition: bool = False):
     global BACKGROUND_COLOR
     BACKGROUND_COLOR = get_screen_background_color("bulls next", (0, 0, 0))
     if not game:
@@ -929,7 +929,7 @@ def draw_sports_screen_bulls(display, game: Optional[Dict], transition: bool = F
     img = _render_next_game(game, title="Next Bulls game:", logo_scale=_LOGO_SCALE_1080)
     return _push(display, img, transition=transition)
 
-def draw_bulls_next_home_game(display, game: Optional[Dict], transition: bool = False):
+def draw_bulls_next_home_game(display, game: Optional[dict], transition: bool = False):
     global BACKGROUND_COLOR
     BACKGROUND_COLOR = get_screen_background_color("bulls next home", (0, 0, 0))
     if not game:

@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-
 DISPLAY_PROFILE_DISPLAY_HAT_MINI = "display_hat_mini"
 DISPLAY_PROFILE_ADAFRUIT_MINIPITFT_114 = "adafruit_minipitft_114"
 DISPLAY_PROFILE_HYPERPIXEL4 = "hyperpixel4"

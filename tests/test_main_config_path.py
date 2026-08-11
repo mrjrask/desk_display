@@ -86,8 +86,8 @@ def test_active_config_path_prefers_local_file_when_present(tmp_path, monkeypatc
 
     main = importlib.import_module("main")
     try:
-        assert main.DEFAULT_CONFIG_PATH == str(default_path)
-        assert main.LOCAL_CONFIG_PATH == str(local_path)
+        assert str(default_path) == main.DEFAULT_CONFIG_PATH
+        assert str(local_path) == main.LOCAL_CONFIG_PATH
         assert main._active_config_path() == str(local_path)
     finally:
         main.request_shutdown("tests")

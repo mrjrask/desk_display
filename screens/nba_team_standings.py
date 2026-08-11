@@ -1,11 +1,11 @@
 """NBA team standings screens."""
 import config
+from config import HEIGHT, WIDTH, is_hyperpixel_4_square_layout, is_hyperpixel_next_layout
 from screens.mlb_team_standings import (
     LOGO_SZ,
     draw_standings_screen1 as _base_screen1,
     draw_standings_screen2 as _base_screen2,
 )
-from config import WIDTH, HEIGHT, is_hyperpixel_4_square_layout, is_hyperpixel_next_layout
 from utils import log_call
 
 _IS_HYPERPIXEL_4_SQUARE = is_hyperpixel_4_square_layout()

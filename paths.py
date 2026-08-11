@@ -7,8 +7,8 @@ fallback behavior consistent across CLI code, background services, and the web
 configuration UI.
 """
 
-from dataclasses import dataclass
 import os
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional
 

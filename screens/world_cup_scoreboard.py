@@ -18,27 +18,27 @@ except AttributeError:
     RESAMPLE = Image.Resampling.LANCZOS
 
 from config import (
-    WIDTH,
-    HEIGHT,
-    FONT_TITLE_SPORTS,
-    FONT_TEAM_SPORTS,
-    FONT_STATUS,
     CENTRAL_TIME,
+    FONT_STATUS,
+    FONT_TEAM_SPORTS,
+    FONT_TITLE_SPORTS,
+    HEIGHT,
     IMAGES_DIR,
-    SCOREBOARD_SCROLL_STEP,
-    SCOREBOARD_SCROLL_DELAY,
-    SCOREBOARD_SCROLL_PAUSE_TOP,
-    SCOREBOARD_SCROLL_PAUSE_BOTTOM,
-    SCOREBOARD_STANDINGS_BOTTOM_PADDING,
     SCOREBOARD_BACKGROUND_COLOR,
-    SCOREBOARD_IN_PROGRESS_SCORE_COLOR,
-    SCOREBOARD_FINAL_WINNING_SCORE_COLOR,
     SCOREBOARD_FINAL_LOSING_SCORE_COLOR,
+    SCOREBOARD_FINAL_WINNING_SCORE_COLOR,
+    SCOREBOARD_IN_PROGRESS_SCORE_COLOR,
+    SCOREBOARD_SCROLL_DELAY,
+    SCOREBOARD_SCROLL_PAUSE_BOTTOM,
+    SCOREBOARD_SCROLL_PAUSE_TOP,
+    SCOREBOARD_SCROLL_STEP,
+    SCOREBOARD_STANDINGS_BOTTOM_PADDING,
+    WIDTH,
     get_screen_background_color,
     get_screen_font,
     get_screen_image_scale,
-    is_hyperpixel_next_layout,
     is_hyperpixel_4_square_layout,
+    is_hyperpixel_next_layout,
     scale_value,
     scale_value_width,
 )
@@ -320,7 +320,7 @@ def _parse_start_time_central(game: dict[str, Any]) -> str:
     try:
         dt = datetime.datetime.fromisoformat(raw.replace("Z", "+00:00"))
         if dt.tzinfo is None:
-            dt = dt.replace(tzinfo=datetime.timezone.utc)
+            dt = dt.replace(tzinfo=datetime.UTC)
         local = dt.astimezone(CENTRAL_TIME)
         today = datetime.datetime.now(CENTRAL_TIME).date()
         gametime = local.strftime("%-I:%M %p")

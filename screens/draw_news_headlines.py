@@ -127,7 +127,7 @@ def _saved_offset(screen_key: str, topic_id: str) -> float:
         return _ROW_OFFSETS.get(_offset_key(screen_key, topic_id), 0.0)
 
 
-def _save_row_offsets(screen_key: str, rows: list["_TickerRow"]) -> None:
+def _save_row_offsets(screen_key: str, rows: list[_TickerRow]) -> None:
     with _ROW_OFFSETS_LOCK:
         for row in rows:
             _ROW_OFFSETS[_offset_key(screen_key, row.topic.id)] = row.offset

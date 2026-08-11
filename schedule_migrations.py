@@ -9,7 +9,6 @@ from typing import Any, Dict, List, Tuple
 
 from schedule import build_scheduler
 
-
 LEGACY_VERSION = 1
 TARGET_VERSION = 2
 
@@ -20,11 +19,11 @@ class MigrationError(RuntimeError):
 
 @dataclass
 class MigrationResult:
-    config: Dict[str, Any]
+    config: dict[str, Any]
     migrated: bool
 
 
-def migrate_config(data: Dict[str, Any], *, source: str | None = None) -> MigrationResult:
+def migrate_config(data: dict[str, Any], *, source: str | None = None) -> MigrationResult:
     """Return a schema v2 configuration, migrating legacy payloads when needed."""
 
     if not isinstance(data, dict):
@@ -69,7 +68,7 @@ def migrate_config(data: Dict[str, Any], *, source: str | None = None) -> Migrat
     return MigrationResult(config_v2, True)
 
 
-def legacy_item_to_step(entry: Any) -> Dict[str, Any]:
+def legacy_item_to_step(entry: Any) -> dict[str, Any]:
     """Convert legacy sequence entries into playlist step descriptors."""
 
     if isinstance(entry, str):
@@ -116,15 +115,15 @@ def legacy_item_to_step(entry: Any) -> Dict[str, Any]:
     raise MigrationError(f"Unsupported legacy entry: {entry!r}")
 
 
-def load_json(path: str) -> Dict[str, Any]:
-    with open(path, "r", encoding="utf-8") as fh:
+def load_json(path: str) -> dict[str, Any]:
+    with open(path, encoding="utf-8") as fh:
         data = json.load(fh)
     if not isinstance(data, dict):
         raise MigrationError("Configuration must be a JSON object")
     return data
 
 
-def write_json(path: str, data: Dict[str, Any]) -> None:
+def write_json(path: str, data: dict[str, Any]) -> None:
     with open(path, "w", encoding="utf-8") as fh:
         json.dump(data, fh, indent=2, sort_keys=True)
         fh.write("\n")
@@ -158,7 +157,7 @@ def _build_cli() -> argparse.ArgumentParser:
     return parser
 
 
-def main(argv: List[str] | None = None) -> int:
+def main(argv: list[str] | None = None) -> int:
     parser = _build_cli()
     args = parser.parse_args(argv)
     return args.func(args)

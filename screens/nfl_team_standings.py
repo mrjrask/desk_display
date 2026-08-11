@@ -1,12 +1,11 @@
 """NFL team standings screens."""
+import config
+from config import FONT_STAND1_WL_LARGE
 from screens.mlb_team_standings import (
     draw_standings_screen1 as _base_screen1,
     draw_standings_screen2 as _base_screen2,
 )
-import config
-from config import FONT_STAND1_WL_LARGE
 from utils import log_call
-
 
 _IS_1080P_LAYOUT = config.is_hdmi_1080p_layout()
 

@@ -3,31 +3,31 @@
 
 from __future__ import annotations
 
+import logging
 import os
 import time
-import logging
 from typing import Any
 
 from PIL import Image, ImageDraw
 
 import config
-from display_profiles import DISPLAY_PROFILE_ADAFRUIT_MINIPITFT_114, DISPLAY_PROFILE_HYPERPIXEL4
 from config import (
-    WIDTH,
-    HEIGHT,
-    FONT_TITLE_SPORTS,
     FONT_STATUS,
+    FONT_TITLE_SPORTS,
+    HEIGHT,
     IMAGES_DIR,
     SCOREBOARD_BACKGROUND_COLOR,
-    SCOREBOARD_SCROLL_STEP,
     SCOREBOARD_SCROLL_DELAY,
-    SCOREBOARD_SCROLL_PAUSE_TOP,
     SCOREBOARD_SCROLL_PAUSE_BOTTOM,
+    SCOREBOARD_SCROLL_PAUSE_TOP,
+    SCOREBOARD_SCROLL_STEP,
     SCOREBOARD_STANDINGS_BOTTOM_PADDING,
+    WIDTH,
     get_screen_background_color,
     get_screen_font,
     scale_value,
 )
+from display_profiles import DISPLAY_PROFILE_ADAFRUIT_MINIPITFT_114, DISPLAY_PROFILE_HYPERPIXEL4
 from services.http_client import get_session
 from utils import (
     ScreenImage,
@@ -1077,12 +1077,12 @@ def draw_AL_Overview_WC(display, transition: bool = False):
 
 
 __all__ = [
+    "draw_AL_Overview",
+    "draw_AL_Overview_WC",
+    "draw_NL_Overview",
+    "draw_NL_Overview_WC",
     "draw_mlb_al_standings",
     "draw_mlb_al_wc_standings",
     "draw_mlb_nl_standings",
     "draw_mlb_nl_wc_standings",
-    "draw_NL_Overview",
-    "draw_AL_Overview",
-    "draw_NL_Overview_WC",
-    "draw_AL_Overview_WC",
 ]

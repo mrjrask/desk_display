@@ -285,7 +285,7 @@ def _draw_text_with_fallback(
     position: tuple[int, int],
     text: str,
     font: ImageFont.FreeTypeFont,
-    fill: Tuple[int, int, int] | Tuple[int, int, int, int],
+    fill: tuple[int, int, int] | tuple[int, int, int, int],
 ) -> None:
     """Draw text, retrying without embedded color if needed."""
 
@@ -302,7 +302,7 @@ def _draw_text_with_fallback(
 def _render_emoji_glyph(
     emoji: str,
     font: ImageFont.FreeTypeFont,
-    fill: Tuple[int, int, int] | Tuple[int, int, int, int],
+    fill: tuple[int, int, int] | tuple[int, int, int, int],
 ) -> Image.Image:
     scratch = Image.new("RGB", (1, 1))
     scratch_draw = ImageDraw.Draw(scratch)
@@ -488,7 +488,7 @@ def _classify_alert(alert: dict) -> Optional[str]:
     return None
 
 
-def _render_precip_icon(is_snow: bool, size: int, color: Tuple[int, int, int]) -> Image.Image:
+def _render_precip_icon(is_snow: bool, size: int, color: tuple[int, int, int]) -> Image.Image:
     """Return a simple precipitation marker that doesn't rely on emoji fonts.
 
     Some systems don't ship an emoji font Pillow can render, which results in
@@ -697,7 +697,7 @@ def _draw_alert_message_banner(
 
 def _detect_weather_alert(
     weather: object,
-) -> Tuple[Optional[str], Optional[Tuple[float, float, float]]]:
+) -> tuple[Optional[str], Optional[tuple[float, float, float]]]:
     severity, _alert = _selected_alert(weather)
     return severity, ALERT_LED_COLORS.get(severity)
 
@@ -2437,7 +2437,7 @@ def _fetch_radar_frames(zoom: int = 7, max_frames: int = 6) -> list[RadarFrame]:
     if not frames:
         return []
 
-    now_ts = int(datetime.datetime.now(datetime.timezone.utc).timestamp())
+    now_ts = int(datetime.datetime.now(datetime.UTC).timestamp())
     fresh_frames = [
         frame
         for frame in frames
@@ -2522,7 +2522,7 @@ def _fetch_iem_radar_fallback_frames(zoom: int = 7) -> list[RadarFrame]:
         return []
 
     final_frame = tile.resize((WIDTH, HEIGHT), Image.LANCZOS).convert("RGBA")
-    return [RadarFrame(final_frame, int(datetime.datetime.now(datetime.timezone.utc).timestamp()))]
+    return [RadarFrame(final_frame, int(datetime.datetime.now(datetime.UTC).timestamp()))]
 
 
 def _fetch_base_map(zoom: int = 7) -> Optional[Image.Image]:

@@ -1,8 +1,9 @@
-import logging
 import importlib.util
+import logging
+
+import pytest
 
 import data_fetch
-import pytest
 import screens.mlb_team_standings as mlb_team_standings
 
 _NETWORK_SPEC = importlib.util.find_spec("services.network")

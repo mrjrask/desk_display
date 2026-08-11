@@ -1,5 +1,6 @@
-from screens import ncaam_scoreboard
 from PIL import Image
+
+from screens import ncaam_scoreboard
 
 
 def test_mode_title_has_no_emoji(monkeypatch):

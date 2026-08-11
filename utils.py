@@ -13,6 +13,7 @@ Core utilities for the desk display project:
 import datetime
 import errno
 import fcntl
+import functools
 import json
 import logging
 import math
@@ -32,7 +33,6 @@ from io import BytesIO
 from pathlib import Path
 from typing import Any, Callable, Dict, Iterable, List, Optional, Tuple
 
-import functools
 import PIL.ImageDraw as _ID
 import requests
 from PIL import Image, ImageDraw, ImageEnhance, ImageFont, ImageOps
@@ -1260,27 +1260,29 @@ LED_INDICATOR_LEVEL = _get_led_indicator_level()
 
 # Project config
 from config import (
-    WIDTH,
-    HEIGHT,
     CENTRAL_TIME,
+    DISPLAY_FADE_IN_DISPLAY_HAT_MINI_STEPS,
+    DISPLAY_FADE_IN_ENABLED,
+    DISPLAY_FADE_IN_HDMI_1080P_STEPS,
+    DISPLAY_FADE_IN_HYPERPIXEL_STEPS,
+    DISPLAY_FADE_IN_STEPS_BY_PROFILE,
+    DISPLAY_HAT_MINI_LED_ENABLED,
+    DISPLAY_HAT_MINI_LED_INDICATOR_BORDER_ENABLED,
+    DISPLAY_HAT_MINI_REINIT_SECONDS,
     DISPLAY_ROTATION,
-    is_hyperpixel_next_layout,
-    is_hyperpixel_4_square_layout,
+    HEIGHT,
     HYPERPIXEL_LED_INDICATOR_BORDER_ENABLED,
     HYPERPIXEL_LED_INDICATOR_BORDER_WIDTH,
-    DISPLAY_HAT_MINI_LED_INDICATOR_BORDER_ENABLED,
-    DISPLAY_HAT_MINI_LED_ENABLED,
-    DISPLAY_HAT_MINI_REINIT_SECONDS,
-    DISPLAY_FADE_IN_ENABLED,
-    DISPLAY_FADE_IN_DISPLAY_HAT_MINI_STEPS,
-    DISPLAY_FADE_IN_HYPERPIXEL_STEPS,
-    DISPLAY_FADE_IN_HDMI_1080P_STEPS,
-    DISPLAY_FADE_IN_STEPS_BY_PROFILE,
+    WIDTH,
     get_display_profile_id,
+    is_hyperpixel_4_square_layout,
+    is_hyperpixel_next_layout,
 )
 
 # Color utilities
 from screens.color_palettes import random_color
+
+
 # ─── Logging decorator ──────────────────────────────────────────────────────
 def log_call(func):
     """

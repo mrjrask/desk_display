@@ -9,12 +9,10 @@ directory. Source images are never modified.
 from __future__ import annotations
 
 import argparse
+from collections.abc import Iterable
 from dataclasses import dataclass
 from io import BytesIO
 from pathlib import Path
-from typing import Iterable
-
-from PIL import Image
 
 from check_image_assets import (
     IMAGE_ROOT,
@@ -23,6 +21,7 @@ from check_image_assets import (
     Policy,
     policy_for,
 )
+from PIL import Image
 
 DEFAULT_OUTPUT_ROOT = Path.home() / f"{PROJECT_ROOT.name}_corrected_images"
 

@@ -1,5 +1,5 @@
-from PIL import Image, ImageDraw
 import pytest
+from PIL import Image, ImageDraw
 
 import screens.mlb_league_standings as mlb_league_standings
 

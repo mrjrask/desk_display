@@ -10,7 +10,7 @@ import requests
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 
-DEFAULT_HEADERS: Dict[str, str] = {
+DEFAULT_HEADERS: dict[str, str] = {
     "User-Agent": (
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
         "AppleWebKit/537.36 (KHTML, like Gecko) "
@@ -20,7 +20,7 @@ DEFAULT_HEADERS: Dict[str, str] = {
     "Accept-Language": "en-US,en;q=0.9",
 }
 
-NHL_HEADERS: Dict[str, str] = {
+NHL_HEADERS: dict[str, str] = {
     "Origin": "https://www.nhl.com",
     "Referer": "https://www.nhl.com/",
 }
@@ -63,9 +63,9 @@ def get_session() -> requests.Session:
 def http_get(
     url: str,
     *,
-    params: Optional[Dict[str, Any]] = None,
+    params: Optional[dict[str, Any]] = None,
     timeout: float = 10.0,
-    headers: Optional[Dict[str, str]] = None,
+    headers: Optional[dict[str, str]] = None,
     session: Optional[requests.Session] = None,
     **kwargs: Any,
 ) -> requests.Response:
@@ -78,9 +78,9 @@ def http_get(
 def request_json(
     url: str,
     *,
-    params: Optional[Dict[str, Any]] = None,
+    params: Optional[dict[str, Any]] = None,
     timeout: float = 10.0,
-    headers: Optional[Dict[str, str]] = None,
+    headers: Optional[dict[str, str]] = None,
     quiet: bool = False,
     session: Optional[requests.Session] = None,
     **kwargs: Any,

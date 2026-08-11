@@ -17,12 +17,12 @@ Options:
 - GH_ICON_SIZE:   height of the GitHub icon in pixels.
 """
 
+import datetime
+import logging
 import threading
 import time
-import datetime
-from typing import Tuple, Literal, Callable
-
-import logging
+from collections.abc import Callable
+from typing import Literal, Tuple
 
 from PIL import Image, ImageDraw, ImageFont
 
@@ -30,25 +30,24 @@ _IP_OVERLAY_FONT: ImageFont.ImageFont | None = None
 _IP_OVERLAY_BOTTOM_PADDING = 6
 
 from config import (
-    WIDTH,
-    HEIGHT,
-    FONT_DAY_DATE,
-    FONT_DATE,
-    FONT_TIME,
-    FONT_AM_PM,
     DATE_TIME_GH_ICON_INVERT,
-    DATE_TIME_GH_ICON_SIZE,
     DATE_TIME_GH_ICON_PATHS,
-    is_hyperpixel_next_layout,
-    is_hyperpixel_4_square_layout,
-    is_kernel_driven_display,
+    DATE_TIME_GH_ICON_SIZE,
+    FONT_AM_PM,
+    FONT_DATE,
+    FONT_DAY_DATE,
+    FONT_TIME,
+    HEIGHT,
+    IP_WITH_TIME,
+    SCREEN_DELAY,
+    WIDTH,
     get_display_profile_id,
     get_screen_background_color,
-    SCREEN_DELAY,
-    IP_WITH_TIME,
+    is_hyperpixel_4_square_layout,
+    is_hyperpixel_next_layout,
+    is_kernel_driven_display,
 )
 from services.wifi_utils import get_assigned_ipv4
-
 from utils import (
     ScreenImage,
     bright_color,
@@ -122,8 +121,8 @@ def _assigned_ip_overlay_text() -> str:
 
 def _compose_frame(
     order: Literal["date_time", "time_date"],
-    col_top: Tuple[int,int,int],
-    col_bottom: Tuple[int,int,int],
+    col_top: tuple[int,int,int],
+    col_bottom: tuple[int,int,int],
     gh_on: bool,
     screen_id: str,
 ) -> Image.Image:
@@ -322,7 +321,7 @@ def _cycle_colors_after_load(
 
 def _start_update_checks(
     order: Literal["date_time", "time_date"],
-    colors: Tuple[Tuple[int, int, int], Tuple[int, int, int]],
+    colors: tuple[tuple[int, int, int], tuple[int, int, int]],
     gh_state: dict,
     display,
     screen_id: str,

@@ -1,5 +1,6 @@
-import screens.mlb_team_standings as mlb_team_standings
 import pytest
+
+import screens.mlb_team_standings as mlb_team_standings
 
 
 def _record():

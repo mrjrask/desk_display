@@ -269,7 +269,7 @@ def test_alert_indicator_stays_above_bottom_safe_buffer():
     ]
     top_rows = [
         img.getpixel((x, y))
-        for y in range(0, min(24, draw_weather.HEIGHT))
+        for y in range(min(24, draw_weather.HEIGHT))
         for x in range(draw_weather.WIDTH)
     ]
 

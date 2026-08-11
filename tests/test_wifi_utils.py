@@ -11,7 +11,7 @@ class DummyResult:
 def test_check_internet_falls_back_without_interface_binding(monkeypatch):
     calls = []
 
-    monkeypatch.setattr(wifi_utils, "_get_tcp_probe_targets", lambda: [])
+    monkeypatch.setattr(wifi_utils, "_get_tcp_probe_targets", list)
 
     def fake_run(args, capture_output=True, text=True, check=False):
         calls.append(tuple(args))
@@ -179,7 +179,7 @@ def test_get_assigned_ipv4_falls_back_to_socket_when_interfaces_missing(monkeypa
 
     monkeypatch.setattr(wifi_utils, "_IFACE", None)
     monkeypatch.setattr(wifi_utils, "_detect_interface", lambda: None)
-    monkeypatch.setattr(wifi_utils, "_get_default_route_interfaces", lambda: [])
+    monkeypatch.setattr(wifi_utils, "_get_default_route_interfaces", list)
     monkeypatch.setattr(wifi_utils.socket, "socket", lambda *_args, **_kwargs: FakeSocket())
 
     assert wifi_utils.get_assigned_ipv4() == "10.1.2.3"

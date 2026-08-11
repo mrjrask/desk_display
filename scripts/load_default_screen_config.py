@@ -31,6 +31,7 @@ from import_screen_rotation_config import (  # noqa: E402
     _save_config,
     _validate_config_payload,
 )
+
 from schedule import build_scheduler  # noqa: E402
 
 DEFAULT_SCREEN_PROFILES = {
@@ -39,7 +40,7 @@ DEFAULT_SCREEN_PROFILES = {
 }
 
 
-def _load_profile_config(profile: str) -> Dict[str, Any]:
+def _load_profile_config(profile: str) -> dict[str, Any]:
     path = DEFAULT_SCREEN_PROFILES.get(profile)
     if path is None:
         raise ValueError(

@@ -6,7 +6,14 @@ from typing import Optional
 from PIL import Image, ImageDraw
 
 import config
-from config import FONT_WEATHER_DETAILS_SMALL, FONT_WEATHER_DETAILS_SMALL_BOLD, FONT_WEATHER_DETAILS_TINY, HEIGHT, WIDTH, get_screen_background_color
+from config import (
+    FONT_WEATHER_DETAILS_SMALL,
+    FONT_WEATHER_DETAILS_SMALL_BOLD,
+    FONT_WEATHER_DETAILS_TINY,
+    HEIGHT,
+    WIDTH,
+    get_screen_background_color,
+)
 from services.air_quality import AirQualityReport, fetch_air_quality
 from utils import ScreenImage, log_call, wrap_text
 
