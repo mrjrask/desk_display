@@ -181,6 +181,18 @@ Update installed Python dependencies later with:
 ./scripts/update_dependencies.sh
 ```
 
+`update_dependencies.sh` also handles the maintenance tasks that used to be
+separate scripts:
+
+```bash
+# Also upgrade any other outdated packages already installed in the venv
+# (add --dry-run to only report what would be upgraded)
+./scripts/update_dependencies.sh --upgrade-outdated
+
+# Also clean apt and pip caches to reclaim disk space (Raspberry Pi/Debian hosts)
+./scripts/update_dependencies.sh --clean-caches
+```
+
 ---
 
 ## Installer workflows
