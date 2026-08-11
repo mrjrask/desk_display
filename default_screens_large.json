@@ -74,11 +74,11 @@
       "cubs stand3": 2,
       "cubs last": 2,
       "cubs live": 1,
-      "cubs next": 0,
-      "cubs next home": 0,
-      "cubs current series": 0,
-      "cubs next series": 0,
-      "cubs next home series": 0,
+      "cubs next": 3,
+      "cubs next home": 3,
+      "cubs current series": 3,
+      "cubs next series": 3,
+      "cubs next home series": 3,
       "cubs schedule quad": {
         "frequency": 2,
         "extra_seconds": 3
