@@ -194,6 +194,32 @@ def test_build_screenshot_entries_falls_back_to_latest_screen_folder(monkeypatch
     assert entry_map["travel map"]["path"] == "travel map/travel_map_20260101_120000.png"
 
 
+def test_screenshot_order_matches_config_page_order(monkeypatch, tmp_path):
+    current_dir = tmp_path / "current"
+    current_dir.mkdir()
+
+    config = {"screens": {"weather": {}, "date": {}, "news headlines": {}}}
+
+    monkeypatch.setattr(
+        config_ui,
+        "resolve_storage_paths",
+        lambda **kwargs: SimpleNamespace(screenshot_dir=tmp_path, current_screenshot_dir=current_dir),
+    )
+    monkeypatch.setattr(config_ui, "_load_active_config", lambda: config)
+
+    config_page_order = [
+        entry["id"] for entry in config_ui._build_screen_entries(config, {})
+    ]
+    screenshot_page_order = [
+        entry["id"] for entry in config_ui._build_screenshot_entries()
+    ]
+    visible_screenshot_order = [
+        screen_id for screen_id in screenshot_page_order if screen_id in config_page_order
+    ]
+
+    assert visible_screenshot_order == config_page_order
+
+
 def test_load_display_status_reads_heartbeat(monkeypatch, tmp_path):
     current_dir = tmp_path / "current"
     current_dir.mkdir()

@@ -11,7 +11,7 @@ import time
 from urllib.parse import urlsplit, urlunsplit
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, FrozenSet, List, Optional, Tuple
 
 from flask import (
     Flask,
@@ -669,12 +669,7 @@ def _build_screenshot_entries() -> List[Dict[str, Any]]:
     current_dir = storage_paths.current_screenshot_dir
     config = _load_active_config()
     screens_config = config.get("screens", {})
-    ordered_screen_ids: List[str] = []
-    if isinstance(screens_config, dict):
-        ordered_screen_ids.extend(list(screens_config.keys()))
-    for screen_id in SCREEN_IDS:
-        if screen_id not in ordered_screen_ids:
-            ordered_screen_ids.append(screen_id)
+    ordered_screen_ids = _ordered_screen_ids(screens_config)
     entries: List[Dict[str, Any]] = []
     for screen_id in ordered_screen_ids:
         prefix = _sanitize_filename_prefix(screen_id)
@@ -854,6 +849,33 @@ def _load_service_status(unit_name: str = "desk_display.service") -> Dict[str, A
     status["summary"] = f"{active} ({sub}), {enabled}"
     return status
 
+def _ordered_screen_ids(
+    screens_config: Any,
+    *,
+    exclude: FrozenSet[str] = frozenset(),
+) -> List[str]:
+    """Return screen ids in the same order they're arranged on the Config page.
+
+    Screens explicitly ordered in ``screens_config`` (a dict, so insertion
+    order reflects the drag-and-drop arrangement saved from the Config page)
+    come first, followed by any catalog screens not yet present in the
+    config, in catalog order. Shared by both the Config page and the
+    Screenshots page so their arrangements can't drift apart.
+    """
+
+    ordered_screen_ids: List[str] = []
+    if isinstance(screens_config, dict):
+        ordered_screen_ids.extend(
+            screen_id for screen_id in screens_config.keys() if screen_id not in exclude
+        )
+    for screen_id in SCREEN_IDS:
+        if screen_id in exclude:
+            continue
+        if screen_id not in ordered_screen_ids:
+            ordered_screen_ids.append(screen_id)
+    return ordered_screen_ids
+
+
 def _build_screen_entries(
     config: Dict[str, Any],
     style_config: Dict[str, Any],
@@ -862,15 +884,7 @@ def _build_screen_entries(
     if not isinstance(screens, dict):
         return []
 
-    ordered_screen_ids: List[str] = []
-    ordered_screen_ids.extend(
-        [screen_id for screen_id in screens.keys() if screen_id not in HIDDEN_CONFIG_SCREEN_IDS]
-    )
-    for screen_id in SCREEN_IDS:
-        if screen_id in HIDDEN_CONFIG_SCREEN_IDS:
-            continue
-        if screen_id not in ordered_screen_ids:
-            ordered_screen_ids.append(screen_id)
+    ordered_screen_ids = _ordered_screen_ids(screens, exclude=HIDDEN_CONFIG_SCREEN_IDS)
 
     entries: List[Dict[str, Any]] = []
     for screen_id in ordered_screen_ids:
