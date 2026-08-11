@@ -90,11 +90,11 @@
       "sox stand3": 5,
       "sox last": 5,
       "sox live": 1,
-      "sox next": 0,
-      "sox next home": 0,
-      "sox current series": 0,
-      "sox next series": 0,
-      "sox next home series": 0,
+      "sox next": 7,
+      "sox next home": 7,
+      "sox current series": 7,
+      "sox next series": 7,
+      "sox next home series": 7,
       "sox schedule quad": {
         "frequency": 5,
         "extra_seconds": 3
