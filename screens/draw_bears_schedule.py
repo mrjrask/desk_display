@@ -271,10 +271,7 @@ def show_bears_next_game(display, transition=False):
         opp_ab = NFL_TEAM_ABBREVIATIONS.get(opp_key, opp_key[:3])
         week_label = str(game.get("week", "") or "")
         if opp.strip().upper() == "TBD":
-            if "super bowl" in week_label.lower():
-                opp_ab = "afc"
-            else:
-                opp_ab = "nfc"
+            opp_ab = "afc" if "super bowl" in week_label.lower() else "nfc"
         if opp_ab == "was":
             opp_ab = "wsh"
         if ha == "away":

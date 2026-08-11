@@ -439,10 +439,7 @@ def _is_snow_condition(entry: object) -> bool:
 
 def _normalise_alerts(weather: object) -> list:
     alerts = []
-    if isinstance(weather, dict):
-        raw_alerts = weather.get("alerts")
-    else:
-        raw_alerts = None
+    raw_alerts = weather.get("alerts") if isinstance(weather, dict) else None
 
     if isinstance(raw_alerts, list):
         alerts = [alert for alert in raw_alerts if isinstance(alert, dict)]
@@ -2259,10 +2256,7 @@ def draw_weather_screen_2(display, weather, transition=False):
 
     now = datetime.datetime.now(CENTRAL_TIME)
     next_label, next_time = _next_sun_event(weather.get("daily"), now=now)
-    if next_label and next_time:
-        items = [(next_label, next_time.strftime("%-I:%M %p"))]
-    else:
-        items = []
+    items = [(next_label, next_time.strftime("%-I:%M %p"))] if next_label and next_time else []
 
     # Other details
     wind_speed = round(current.get('wind_speed', 0))

@@ -633,10 +633,7 @@ def _extract_team_info(entry: Any) -> Optional[dict[str, Any]]:
                 nickname = parts[-1]
 
     abbr = team.get("abbreviation") or team.get("shortDisplayName") or team.get("displayName")
-    if isinstance(abbr, str):
-        abbr = abbr.strip().upper()
-    else:
-        abbr = ""
+    abbr = abbr.strip().upper() if isinstance(abbr, str) else ""
     if not abbr:
         name_source = nickname or team.get("displayName") or ""
         abbr = name_source[:3].upper() if isinstance(name_source, str) else ""

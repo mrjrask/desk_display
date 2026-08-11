@@ -886,10 +886,7 @@ def _ordinal(n: int) -> str:
     except Exception:
         return str(n)
 
-    if 10 <= num % 100 <= 20:
-        suffix = "th"
-    else:
-        suffix = {1: "st", 2: "nd", 3: "rd"}.get(num % 10, "th")
+    suffix = "th" if 10 <= num % 100 <= 20 else {1: "st", 2: "nd", 3: "rd"}.get(num % 10, "th")
     return f"{num}{suffix}"
 
 

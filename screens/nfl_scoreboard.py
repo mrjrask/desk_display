@@ -187,10 +187,7 @@ def _playoff_rules_active(now: datetime.datetime) -> bool:
 def _regular_week_start(now: datetime.datetime) -> datetime.date:
     if now.weekday() == 2:  # Wednesday
         cutoff = now.replace(hour=9, minute=0, second=0, microsecond=0)
-        if now >= cutoff:
-            ref_date = now.date() + datetime.timedelta(days=1)
-        else:
-            ref_date = now.date()
+        ref_date = now.date() + datetime.timedelta(days=1) if now >= cutoff else now.date()
     else:
         ref_date = now.date()
     return _week_start_for_date(ref_date)

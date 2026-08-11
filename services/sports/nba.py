@@ -350,10 +350,7 @@ def _map_espn_competitor(comp: dict[str, Any]) -> dict[str, Any]:
     comp = comp or {}
     team = comp.get("team") or {}
     abbr = team.get("abbreviation") or comp.get("teamAbbreviation") or ""
-    if isinstance(abbr, str):
-        abbr = abbr.strip().upper()
-    else:
-        abbr = ""
+    abbr = abbr.strip().upper() if isinstance(abbr, str) else ""
 
     location = team.get("location") or team.get("displayName") or ""
     nickname = team.get("name") or team.get("shortDisplayName") or ""
@@ -405,10 +402,7 @@ def _map_espn_game(event: dict[str, Any], competition: dict[str, Any], day: date
             period_descriptor["type"] = "OT"
 
     clock = status.get("displayClock") or status.get("clock")
-    if clock not in (None, ""):
-        clock = str(clock)
-    else:
-        clock = ""
+    clock = str(clock) if clock not in (None, "") else ""
 
     home_team: dict[str, Any] = {}
     away_team: dict[str, Any] = {}

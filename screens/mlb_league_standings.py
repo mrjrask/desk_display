@@ -108,10 +108,7 @@ _HYPERPIXEL_FONTS = {
     "gb_suffix": 15,
 }
 
-if _IS_HYPERPIXEL_4_OR_LARGER:
-    _font_sizes = _HYPERPIXEL_FONTS
-else:
-    _font_sizes = _BASE_FONTS
+_font_sizes = _HYPERPIXEL_FONTS if _IS_HYPERPIXEL_4_OR_LARGER else _BASE_FONTS
 
 if config.is_hyperpixel_4_square_layout():
     # HyperPixel 4 Square explicit league-standings font tuning.

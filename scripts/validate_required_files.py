@@ -66,10 +66,7 @@ def resolve_relative_module(current: str, module: str | None, level: int) -> str
     base_parts = current.split(".")
     if base_parts:
         base_parts = base_parts[:-1]  # remove current module name
-    if level > len(base_parts):
-        base_parts = []
-    else:
-        base_parts = base_parts[: len(base_parts) - level + 1]
+    base_parts = [] if level > len(base_parts) else base_parts[:len(base_parts) - level + 1]
 
     prefix = ".".join(base_parts)
     if module:

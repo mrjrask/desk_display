@@ -89,10 +89,7 @@ def _resolve_user_log() -> Optional[Path]:
 
     if not home_path or not home_path.exists():
         candidate = Path("/home/pi")
-        if candidate.exists():
-            home_path = candidate
-        else:
-            home_path = Path("/root")
+        home_path = candidate if candidate.exists() else Path("/root")
 
     return home_path / "wifi_recovery.log"
 

@@ -233,10 +233,7 @@ def _load_logo_cached(abbr: str) -> Optional[Image.Image]:
 
 def _playoff_season(now: Optional[datetime.datetime] = None) -> str:
     now = now or datetime.datetime.now(CENTRAL_TIME)
-    if now.month >= 9:
-        start_year = now.year
-    else:
-        start_year = now.year - 1
+    start_year = now.year if now.month >= 9 else now.year - 1
     return f"{start_year}{start_year + 1}"
 
 

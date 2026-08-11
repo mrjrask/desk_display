@@ -101,10 +101,7 @@ def _ord(n):
         return f"{n}th"
     if i <= 0:
         return "-"
-    if 10 <= i % 100 <= 20:
-        suffix = "th"
-    else:
-        suffix = {1:"st", 2:"nd", 3:"rd"}.get(i % 10, "th")
+    suffix = "th" if 10 <= i % 100 <= 20 else {1: "st", 2: "nd", 3: "rd"}.get(i % 10, "th")
     return f"{i}{suffix}"
 
 def format_games_back(gb):
@@ -530,10 +527,7 @@ def draw_standings_screen2(
     base_rec = f"{w}-{l}"
     if t not in (None, '', '-', 0, '0'):
         base_rec = f"{base_rec}-{t}"
-    if record_details_fn:
-        rec_txt = record_details_fn(rec, base_rec)
-    else:
-        rec_txt = f"{base_rec} ({pct})"
+    rec_txt = record_details_fn(rec, base_rec) if record_details_fn else f"{base_rec} ({pct})"
 
     # Splits
     split_overrides = split_overrides or {}

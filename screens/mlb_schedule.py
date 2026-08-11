@@ -225,10 +225,7 @@ def _format_game_label(official_date: str, start_time: str) -> str:
     if local_dt:
         game_date = local_dt.date()
         if game_date == today.date():
-            if time_obj and local_dt.hour >= 18:
-                label = "Tonight"
-            else:
-                label = "Today"
+            label = "Tonight" if time_obj and local_dt.hour >= 18 else "Today"
         elif game_date == today.date() + datetime.timedelta(days=1):
             label = "Tomorrow"
         else:
@@ -791,10 +788,7 @@ def _draw_left_team_cell_with_logo(
 
     text_x = x + left_pad
     if logo:
-        if replace_abbreviation_with_logo:
-            lx = x + (w - logo.width) // 2
-        else:
-            lx = x + left_pad
+        lx = x + (w - logo.width) // 2 if replace_abbreviation_with_logo else x + left_pad
         ly = y + (h - logo.height) // 2
         img.paste(logo, (lx, ly), logo)
         text_x = lx + logo.width + max(2, left_pad // 2)

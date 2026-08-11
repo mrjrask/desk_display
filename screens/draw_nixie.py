@@ -359,10 +359,7 @@ def _compose_frame(now: dt.datetime | None = None, *, gh_on: bool = False) -> Im
 
     # Format time according to user preference (12 or 24 hour)
     time_format = _get_time_format()
-    if time_format == "12":
-        time_digits = now.strftime("%I%M%S")
-    else:
-        time_digits = now.strftime("%H%M%S")
+    time_digits = now.strftime("%I%M%S") if time_format == "12" else now.strftime("%H%M%S")
 
     elements = [
         time_digits[0],

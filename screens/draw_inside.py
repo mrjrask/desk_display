@@ -1822,10 +1822,7 @@ def _draw_voc_tile(
     stack_top = y0 + (height - stack_h) // 2
     min_top = y0 + padding_y
     max_top = y1 - padding_y - stack_h
-    if max_top < min_top:
-        stack_top = min_top
-    else:
-        stack_top = max(min_top, min(stack_top, max_top))
+    stack_top = min_top if max_top < min_top else max(min_top, min(stack_top, max_top))
 
     label_x = left_x
     label_y = stack_top

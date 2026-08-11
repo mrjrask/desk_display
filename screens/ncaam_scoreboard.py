@@ -466,10 +466,7 @@ def _draw_rank(
     except Exception:
         tw, th = draw.textsize(text, font=RANK_FONT)
         l = t = 0
-    if position == "left":
-        x = x_logo - RANK_GAP - tw - l
-    else:
-        x = x_logo + logo_w + RANK_GAP
+    x = x_logo - RANK_GAP - tw - l if position == "left" else x_logo + logo_w + RANK_GAP
     y = y_logo + logo_h - th - t
     draw.text((x, y), text, font=RANK_FONT, fill=(210, 210, 210))
 
