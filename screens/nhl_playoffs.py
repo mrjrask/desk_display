@@ -1009,10 +1009,7 @@ def _is_playoff_schedule_game(game: dict) -> bool:
     # api-web schedule payloads can expose abbreviated series statuses for playoff rounds.
     # We only treat explicit playoff-looking statuses as a match.
     series_status = str((game or {}).get("seriesStatusShort") or "").strip().lower()
-    if series_status in {"r1", "r2", "ecf", "wcf", "scf", "qf", "sf", "f"}:
-        return True
-
-    return False
+    return series_status in {"r1", "r2", "ecf", "wcf", "scf", "qf", "sf", "f"}
 
 
 def _fetch_remaining_playoff_schedule_games() -> list[dict]:

@@ -213,9 +213,7 @@ def _should_display_scores(game: dict) -> bool:
         return True
     if code in {"F", "O", "I"}:  # Final, Over, In-progress
         return True
-    if "progress" in detailed or "final" in detailed:
-        return True
-    return False
+    return bool("progress" in detailed or "final" in detailed)
 
 
 def _is_game_in_progress(game: dict) -> bool:
@@ -227,9 +225,7 @@ def _is_game_in_progress(game: dict) -> bool:
     if code == "I":
         return True
     detailed = (status.get("detailedState") or "").lower()
-    if "progress" in detailed:
-        return True
-    return False
+    return "progress" in detailed
 
 
 def _is_game_final(game: dict) -> bool:
@@ -242,9 +238,7 @@ def _is_game_final(game: dict) -> bool:
         return True
     if code in {"F", "O"}:
         return True
-    if "final" in detailed:
-        return True
-    return False
+    return "final" in detailed
 
 
 def _score_text(side: dict, *, show: bool) -> str:

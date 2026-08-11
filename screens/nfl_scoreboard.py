@@ -259,9 +259,7 @@ def _should_display_scores(game: dict) -> bool:
     state = (type_info.get("state") or "").lower()
     if state in {"in", "post"}:
         return True
-    if (type_info.get("completed") or False) is True:
-        return True
-    return False
+    return (type_info.get("completed") or False) is True
 
 
 def _is_game_in_progress(game: dict) -> bool:
@@ -281,9 +279,7 @@ def _is_game_final(game: dict) -> bool:
     if isinstance(completed, bool) and completed:
         return True
     description = (type_info.get("description") or "").lower()
-    if "final" in description:
-        return True
-    return False
+    return "final" in description
 
 
 def _score_text(side: dict, *, show: bool) -> str:

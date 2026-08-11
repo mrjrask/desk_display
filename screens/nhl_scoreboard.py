@@ -245,9 +245,7 @@ def _should_display_scores(game: dict) -> bool:
         return True
     if code in {"3", "4"}:  # Live or Final in NHL stats API
         return True
-    if "progress" in detailed or "final" in detailed:
-        return True
-    return False
+    return bool("progress" in detailed or "final" in detailed)
 
 
 def _is_game_in_progress(game: dict) -> bool:
@@ -259,9 +257,7 @@ def _is_game_in_progress(game: dict) -> bool:
     if code == "3":
         return True
     detailed = (status.get("detailedState") or "").lower()
-    if "progress" in detailed:
-        return True
-    return False
+    return "progress" in detailed
 
 
 def _is_game_final(game: dict) -> bool:
@@ -274,9 +270,7 @@ def _is_game_final(game: dict) -> bool:
         return True
     if code == "4":
         return True
-    if "final" in detailed:
-        return True
-    return False
+    return "final" in detailed
 
 
 def _score_text(side: dict, *, show: bool) -> str:

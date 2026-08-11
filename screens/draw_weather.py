@@ -431,10 +431,7 @@ def _is_snow_condition(entry: object) -> bool:
     description = (weather.get("description") or "").strip().lower()
     if any(token in description for token in frozen_tokens):
         return True
-    if entry.get("snow"):
-        return True
-
-    return False
+    return bool(entry.get("snow"))
 
 
 def _normalise_alerts(weather: object) -> list:
@@ -1861,9 +1858,7 @@ def _normalise_moon_phase(phase: object) -> tuple[float | None, str]:
 
 def _moon_phase_is_waxing(phase: object, phase_label: str) -> bool:
     phase_text = f"{phase or ''} {phase_label}".lower()
-    if "waning" in phase_text or "last" in phase_text or "third" in phase_text:
-        return False
-    return True
+    return not ("waning" in phase_text or "last" in phase_text or "third" in phase_text)
 
 
 def _moon_illumination_mask(radius: int, phase_fraction: float, waxing: bool) -> Image.Image:

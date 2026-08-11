@@ -379,9 +379,7 @@ def _is_waveshare_oled_lcd_hat() -> bool:
     # The Waveshare installer writes these env vars for the main service.
     if os.environ.get("WAVESHARE_OLED_MAX_VALUE_FONT_SIZE") is not None:
         return True
-    if os.environ.get("WAVESHARE_OLED_MAX_TIME_FONT_SIZE") is not None:
-        return True
-    return False
+    return os.environ.get("WAVESHARE_OLED_MAX_TIME_FONT_SIZE") is not None
 
 
 def _logo_scroll_speed_for_layout(width: int, height: int) -> float:
@@ -931,9 +929,7 @@ def build_screen_registry(context: ScreenContext) -> tuple[dict[str, ScreenDefin
                 game_date = _dt.date.fromisoformat(candidate)
             except ValueError:
                 continue
-            if game_date == today:
-                return True
-            return False
+            return game_date == today
 
         return True
 

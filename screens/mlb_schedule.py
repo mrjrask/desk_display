@@ -697,9 +697,7 @@ def _is_live_play_active(game: dict) -> bool:
         return False
     if "postponed" in detailed:
         return False
-    if "suspended" in detailed:
-        return False
-    return True
+    return "suspended" not in detailed
 
 
 def _runner_on_base(base_value: object) -> bool:

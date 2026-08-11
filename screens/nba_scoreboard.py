@@ -305,9 +305,7 @@ def _should_display_scores(game: dict) -> bool:
     if code in {"2", "3"}:  # 2 = live, 3 = final from NBA feed
         return True
     detailed = (status.get("detailedState") or "").lower()
-    if "final" in detailed or "progress" in detailed:
-        return True
-    return False
+    return bool("final" in detailed or "progress" in detailed)
 
 
 def _is_game_in_progress(game: dict) -> bool:
@@ -319,9 +317,7 @@ def _is_game_in_progress(game: dict) -> bool:
     if status_code == "2":
         return True
     detailed = (status.get("detailedState") or "").lower()
-    if "progress" in detailed or "halftime" in detailed:
-        return True
-    return False
+    return bool("progress" in detailed or "halftime" in detailed)
 
 
 def _is_game_final(game: dict) -> bool:
@@ -334,9 +330,7 @@ def _is_game_final(game: dict) -> bool:
         return True
     if status_code in {"3", "4"}:
         return True
-    if "final" in detailed:
-        return True
-    return False
+    return "final" in detailed
 
 
 def _score_text(side: dict, *, show: bool) -> str:
