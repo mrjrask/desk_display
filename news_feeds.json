@@ -43,7 +43,7 @@
       "id": "espn",
       "label": "Sports",
       "name": "ESPN – Top Headlines",
-      "url": "https://www.espn.com/espn/rss/news"
+      "url": "https://news.google.com/rss/search?q=site:espn.com&hl=en-US&gl=US&ceid=US:en"
     },
     {
       "id": "business",

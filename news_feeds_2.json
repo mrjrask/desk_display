@@ -7,7 +7,7 @@
       "id": "cnn",
       "label": "CNN",
       "name": "CNN Breaking News",
-      "url": "http://rss.cnn.com/rss/cnn_topstories.rss"
+      "url": "https://news.google.com/rss/search?q=site:cnn.com&hl=en-US&gl=US&ceid=US:en"
     },
     {
       "id": "tribune",
@@ -31,7 +31,7 @@
       "id": "espn",
       "label": "ESPN",
       "name": "ESPN Top Stories",
-      "url": "https://www.espn.com/espn/rss/news"
+      "url": "https://news.google.com/rss/search?q=site:espn.com&hl=en-US&gl=US&ceid=US:en"
     }
   ]
 }

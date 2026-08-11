@@ -246,18 +246,18 @@ Default topics/feeds shipped in `news_feeds.json` (the "news headlines" screen):
 | `world` | World | New York Times – World (`https://rss.nytimes.com/services/xml/rss/nyt/World.xml`) |
 | `technology` | Technology | New York Times – Technology (`https://rss.nytimes.com/services/xml/rss/nyt/Technology.xml`) |
 | `sports` | Chicago Sports | WGN9 – Sports (`https://wgntv.com/sports-feed/`) |
-| `espn` | Sports | ESPN – Top Headlines (`https://www.espn.com/espn/rss/news`) |
+| `espn` | Sports | ESPN via Google News (`https://news.google.com/rss/search?q=site:espn.com&hl=en-US&gl=US&ceid=US:en`) — ESPN's own `espn.com/espn/rss/news` feed no longer returns items, so this topic is routed through Google News like `tribune`/`cnn` |
 | `business` | Business | New York Times – Business (`https://rss.nytimes.com/services/xml/rss/nyt/Business.xml`) |
 
 Default topics/feeds shipped in `news_feeds_2.json` (the "news headlines 2" screen):
 
 | Topic id | Label | Default feed |
 | --- | --- | --- |
-| `cnn` | CNN | CNN Breaking News (`http://rss.cnn.com/rss/cnn_topstories.rss`) |
+| `cnn` | CNN | CNN via Google News (`https://news.google.com/rss/search?q=site:cnn.com&hl=en-US&gl=US&ceid=US:en`) — CNN retired its public `rss.cnn.com` feeds in 2024, so this topic is routed through Google News like `tribune` |
 | `tribune` | Chicago Tribune | Chicago Tribune via Google News (`https://news.google.com/rss/search?q=site:chicagotribune.com&hl=en-US&gl=US&ceid=US:en`) |
 | `wgn` | WGN News | WGN News (`https://wgntv.com/feed/`) |
 | `macrumors` | MacRumors | MacRumors (`https://feeds.macrumors.com/MacRumors-All`) |
-| `espn` | ESPN | ESPN Top Stories (`https://www.espn.com/espn/rss/news`) |
+| `espn` | ESPN | ESPN via Google News (`https://news.google.com/rss/search?q=site:espn.com&hl=en-US&gl=US&ceid=US:en`) — see note on the primary screen's `espn` row above |
 
 `local`, `chicagoland`, and `sports` default to Chicago to match this project's other Chicago-focused screens (Bears/Bulls/Cubs/Sox/Hawks) — edit `news_feeds.json`/`news_feeds_2.json` to point them at your own city/outlet, or add/remove topics entirely. Any topic added to either file automatically gets its own ticker lane, a fallback color theme, and a deterministic-but-distinct scroll speed; add an entry to `_ROW_THEMES` in `screens/draw_news_headlines.py` to give a custom topic its own colors instead of the fallback theme (theme lookup is by topic id, shared across both screens' configs).
 
