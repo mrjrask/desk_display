@@ -49,6 +49,7 @@ from screens.scoreboard_components import (
     display_no_games,
     display_or_scroll_scoreboard,
     draw_score_game_row,
+    final_results as _final_results,
     render_headered_scoreboard,
     render_no_games_image,
     score_fill as shared_score_fill,
@@ -284,55 +285,6 @@ def _score_text(side: dict, *, show: bool) -> str:
     score = (side or {}).get("score")
     return "—" if score is None else str(score)
 
-
-def _score_value(side: dict) -> Optional[int]:
-    score = (side or {}).get("score")
-    if isinstance(score, (int, float)):
-        return int(score)
-    if isinstance(score, str):
-        cleaned = score.strip()
-        if cleaned.isdigit():
-            try:
-                return int(cleaned)
-            except Exception:
-                return None
-        try:
-            return int(float(cleaned))
-        except Exception:
-            return None
-    return None
-
-
-def _team_result(side: dict, opponent: dict) -> Optional[str]:
-    for key in ("isWinner", "winner", "won"):
-        value = (side or {}).get(key)
-        if isinstance(value, bool):
-            return "win" if value else "loss"
-
-    side_score = _score_value(side)
-    opp_score = _score_value(opponent)
-    if side_score is not None and opp_score is not None:
-        if side_score > opp_score:
-            return "win"
-        if side_score < opp_score:
-            return "loss"
-    return None
-
-
-def _final_results(away: dict, home: dict) -> dict:
-    away_result = _team_result(away, home)
-    home_result = _team_result(home, away)
-
-    if away_result == "win":
-        home_result = "loss"
-    elif away_result == "loss":
-        home_result = "win"
-    elif home_result == "win":
-        away_result = "loss"
-    elif home_result == "loss":
-        away_result = "win"
-
-    return {"away": away_result, "home": home_result}
 
 def _normalize_period_for_display(period_ord: str) -> str:
     if not isinstance(period_ord, str):
