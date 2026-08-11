@@ -9,32 +9,32 @@ Screen 1: logo at top center, then W-L, rank, GB, WCGB with:
   - “n” for everyone else
 Screen 2: logo at top center, then overall record and splits.
 """
+import logging
 import os
 import time
-import logging
+
 from PIL import Image, ImageDraw
+
 import config
 from config import (
-    WIDTH,
-    HEIGHT,
-    TEAM_STANDINGS_DISPLAY_SECONDS,
-    FONT_STAND1_WL,
-    FONT_STAND1_RANK,
-    FONT_STAND1_GB_LABEL,
+    DISPLAY_SCALE,
     FONT_STAND1_GB_VALUE,
-    FONT_STAND1_WCGB_LABEL,
+    FONT_STAND1_RANK,
     FONT_STAND1_WCGB_VALUE,
+    FONT_STAND1_WL,
     FONT_STAND2_RECORD,
     FONT_STAND2_VALUE,
+    HEIGHT,
     SCOREBOARD_BACKGROUND_COLOR,
+    TEAM_STANDINGS_DISPLAY_SECONDS,
+    WIDTH,
     get_screen_background_color,
+    is_hyperpixel_4_square_layout,
     is_hyperpixel_next_layout,
     scale_value,
     scale_value_width,
-    DISPLAY_SCALE,
-    is_hyperpixel_4_square_layout,
 )
-from utils import clear_display, fit_logo_to_box, log_call, clone_font
+from utils import clear_display, clone_font, fit_logo_to_box, log_call
 
 # Constants
 _DISPLAY_OUTPUT = os.environ.get("DESK_DISPLAY_OUTPUT", "auto").strip().lower()
@@ -101,10 +101,7 @@ def _ord(n):
         return f"{n}th"
     if i <= 0:
         return "-"
-    if 10 <= i % 100 <= 20:
-        suffix = "th"
-    else:
-        suffix = {1:"st", 2:"nd", 3:"rd"}.get(i % 10, "th")
+    suffix = "th" if 10 <= i % 100 <= 20 else {1: "st", 2: "nd", 3: "rd"}.get(i % 10, "th")
     return f"{i}{suffix}"
 
 def format_games_back(gb):
@@ -530,10 +527,7 @@ def draw_standings_screen2(
     base_rec = f"{w}-{l}"
     if t not in (None, '', '-', 0, '0'):
         base_rec = f"{base_rec}-{t}"
-    if record_details_fn:
-        rec_txt = record_details_fn(rec, base_rec)
-    else:
-        rec_txt = f"{base_rec} ({pct})"
+    rec_txt = record_details_fn(rec, base_rec) if record_details_fn else f"{base_rec} ({pct})"
 
     # Splits
     split_overrides = split_overrides or {}

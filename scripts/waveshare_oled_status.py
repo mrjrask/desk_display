@@ -8,22 +8,24 @@ Default behavior:
 
 from __future__ import annotations
 
+import contextlib
+import importlib
+import importlib.util
+import json
+import logging
 import os
 import random
 import re
 import signal
 import subprocess
-import time
-import logging
-import json
-import importlib.util
-import importlib
 import sys
-from functools import lru_cache
+import time
+from collections.abc import Callable
 from datetime import datetime
+from functools import lru_cache
 from pathlib import Path
 from threading import Event
-from typing import Callable, Optional
+from typing import Optional
 
 from PIL import Image, ImageDraw, ImageFont
 
@@ -209,7 +211,7 @@ def _read_cpu_temp_c() -> float | None:
         if not os.path.exists(path):
             continue
         try:
-            raw = open(path, "r", encoding="utf-8").read().strip()
+            raw = open(path, encoding="utf-8").read().strip()
             value = float(raw)
             if value > 1000:
                 value = value / 1000.0
@@ -314,7 +316,9 @@ def _display_status_path() -> Path:
 @lru_cache(maxsize=1)
 def _resolve_mlb_abbreviation() -> Optional[Callable[[str], str]]:
     try:
-        from screens.mlb_schedule import get_mlb_abbreviation  # pylint: disable=import-outside-toplevel
+        from screens.mlb_schedule import (
+            get_mlb_abbreviation,  # pylint: disable=import-outside-toplevel
+        )
 
         return get_mlb_abbreviation
     except Exception:
@@ -837,7 +841,7 @@ def fade_transition(display: SSD1306Display, new_image: Image.Image) -> None:
 
     display.display_image(new_image)
 
-    for step in range(0, FADE_STEPS + 1):
+    for step in range(FADE_STEPS + 1):
         display.set_contrast(int(255 * step / FADE_STEPS))
         time.sleep(FADE_STEP_MS / 1000)
 
@@ -946,10 +950,8 @@ def main() -> int:
     finally:
         _safe_clear_display(temp_display, "left")
         _safe_clear_display(time_display, "right")
-        try:
+        with contextlib.suppress(Exception):
             bus.close()
-        except Exception:
-            pass
 
     return 0
 

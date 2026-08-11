@@ -19,31 +19,32 @@ except AttributeError:
     RESAMPLE = Image.Resampling.LANCZOS
 
 from config import (
-    WIDTH,
-    HEIGHT,
-    FONT_TITLE_SPORTS,
-    FONT_TEAM_SPORTS,
-    FONT_STATUS,
     CENTRAL_TIME,
+    FONT_STATUS,
+    FONT_TEAM_SPORTS,
+    FONT_TITLE_SPORTS,
+    HEIGHT,
     IMAGES_DIR,
     NCAAM_SCOREBOARD_MODE,
-    SCOREBOARD_SCROLL_STEP,
-    SCOREBOARD_SCROLL_DELAY,
-    SCOREBOARD_SCROLL_PAUSE_TOP,
-    SCOREBOARD_SCROLL_PAUSE_BOTTOM,
-    SCOREBOARD_STANDINGS_BOTTOM_PADDING,
     SCOREBOARD_BACKGROUND_COLOR,
-    SCOREBOARD_IN_PROGRESS_SCORE_COLOR,
-    SCOREBOARD_FINAL_WINNING_SCORE_COLOR,
     SCOREBOARD_FINAL_LOSING_SCORE_COLOR,
+    SCOREBOARD_FINAL_WINNING_SCORE_COLOR,
+    SCOREBOARD_IN_PROGRESS_SCORE_COLOR,
+    SCOREBOARD_SCROLL_DELAY,
+    SCOREBOARD_SCROLL_PAUSE_BOTTOM,
+    SCOREBOARD_SCROLL_PAUSE_TOP,
+    SCOREBOARD_SCROLL_STEP,
+    SCOREBOARD_STANDINGS_BOTTOM_PADDING,
+    WIDTH,
     get_screen_background_color,
     get_screen_font,
     get_screen_image_scale,
-    is_hyperpixel_next_layout,
     is_hyperpixel_4_square_layout,
+    is_hyperpixel_next_layout,
     scale_value,
     scale_value_width,
 )
+from screens.scoreboard_components import center_text as _center_text
 from services.http_client import get_session
 from utils import ScreenImage, clear_display, log_call, scroll_vertical_content
 
@@ -134,20 +135,6 @@ def _league_logo_height() -> int:
     return max(1, int(round(LEAGUE_LOGO_BASE_HEIGHT * scale)))
 
 
-def _center_text(draw: ImageDraw.ImageDraw, text: str, font, x: int, width: int, y: int, height: int, *, fill=(255, 255, 255)):
-    if not text:
-        return
-    try:
-        l, t, r, b = draw.textbbox((0, 0), text, font=font)
-        tw, th = r - l, b - t
-        tx = x + (width - tw) // 2 - l
-        ty = y + (height - th) // 2 - t
-    except Exception:
-        tw, th = draw.textsize(text, font=font)
-        tx = x + (width - tw) // 2
-        ty = y + (height - th) // 2
-    draw.text((tx, ty), text, font=font, fill=fill)
-
 
 def _fetch_json(params: dict[str, Any]) -> dict[str, Any]:
     resp = _SESSION.get(ESPN_URL, params=params, timeout=REQUEST_TIMEOUT)
@@ -231,7 +218,7 @@ def _is_tournament_game(event: dict[str, Any]) -> bool:
             if _extract_seed(c):
                 return True
     text = " ".join(text_parts)
-    return "tournament" in text or "march madness" in text or "ncaa" in text and "first four" in text
+    return "tournament" in text or "march madness" in text or ("ncaa" in text and "first four" in text)
 
 
 def _normalize_event(event: dict[str, Any]) -> dict[str, Any]:
@@ -323,7 +310,7 @@ def _parse_start_time_central(game: dict[str, Any]) -> str:
     try:
         dt = datetime.datetime.fromisoformat(raw.replace("Z", "+00:00"))
         if dt.tzinfo is None:
-            dt = dt.replace(tzinfo=datetime.timezone.utc)
+            dt = dt.replace(tzinfo=datetime.UTC)
         local = dt.astimezone(CENTRAL_TIME)
         day_of_week = local.strftime("%a")
         month = local.month
@@ -466,10 +453,7 @@ def _draw_rank(
     except Exception:
         tw, th = draw.textsize(text, font=RANK_FONT)
         l = t = 0
-    if position == "left":
-        x = x_logo - RANK_GAP - tw - l
-    else:
-        x = x_logo + logo_w + RANK_GAP
+    x = x_logo - RANK_GAP - tw - l if position == "left" else x_logo + logo_w + RANK_GAP
     y = y_logo + logo_h - th - t
     draw.text((x, y), text, font=RANK_FONT, fill=(210, 210, 210))
 

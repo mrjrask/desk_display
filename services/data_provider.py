@@ -10,9 +10,10 @@ import datetime as dt
 import logging
 import threading
 import time
+from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
-from typing import Any, Callable, Dict, Optional, Set
+from typing import Any, Optional
 
 import data_fetch
 from config import CENTRAL_TIME
@@ -47,7 +48,7 @@ class DataProvider:
     """TTL cache with stale fallback for API-backed payloads."""
 
     def __init__(self) -> None:
-        self._cache: Dict[str, _Entry] = {}
+        self._cache: dict[str, _Entry] = {}
         self._cache_lock = threading.RLock()
 
     def _read_cached(
@@ -113,16 +114,16 @@ class DataProvider:
         self,
         *,
         ttl_seconds: int = 120,
-        leagues: Optional[Set[str]] = None,
-    ) -> Dict[str, Any]:
-        def _fetch_payloads() -> Dict[str, Any]:
+        leagues: Optional[set[str]] = None,
+    ) -> dict[str, Any]:
+        def _fetch_payloads() -> dict[str, Any]:
             now = dt.datetime.now(CENTRAL_TIME)
             today = now.date()
 
             def _fetch_nfl() -> Any:
                 return fetch_nfl_week_scoreboard(now=now) or fetch_nfl_next_scoreboard(start_date=today)
 
-            all_tasks: Dict[str, Callable[[], Any]] = {
+            all_tasks: dict[str, Callable[[], Any]] = {
                 "nfl": _fetch_nfl,
                 "mlb": lambda: fetch_mlb_scoreboard(now=now),
                 "nba": lambda: fetch_nba_scoreboard(now=now),
@@ -136,7 +137,7 @@ class DataProvider:
             }
             tasks = {league: fetcher for league, fetcher in all_tasks.items() if league in selected_leagues}
 
-            scoreboards: Dict[str, Any] = {league: [] for league in all_tasks}
+            scoreboards: dict[str, Any] = {league: [] for league in all_tasks}
             if not tasks:
                 return {"scoreboards": scoreboards}
 

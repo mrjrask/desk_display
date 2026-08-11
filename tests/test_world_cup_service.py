@@ -1,7 +1,7 @@
 import datetime as dt
 
-from services.sports import world_cup
 from screens import world_cup_scoreboard
+from services.sports import world_cup
 
 
 def test_fetch_scoreboard_uses_round_dates_during_quarterfinals(monkeypatch):

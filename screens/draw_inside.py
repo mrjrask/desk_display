@@ -10,22 +10,26 @@ Everything is dynamically sized to stay legible on the configured canvas.
 """
 
 from __future__ import annotations
-import time
+
+import contextlib
+import json
 import logging
 import math
 import os
-import json
 import platform
+import re
 import subprocess
 import sys
 import tempfile
 import threading
-import re
-from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional, Sequence, Set, Tuple
+import time
+from collections.abc import Callable, Sequence
 from datetime import datetime
+from pathlib import Path
+from typing import Any, Optional
 
 from PIL import Image, ImageDraw
+
 import config
 from paths import resolve_cache_file_path
 from utils import (
@@ -39,39 +43,40 @@ from utils import (
 
 # Optional HW libs (import lazily in _probe_sensor)
 try:
-    import board, busio  # type: ignore
+    import board
+    import busio  # type: ignore
 except Exception:  # allows non-Pi dev boxes
     board = None
     busio = None
 
 W, H = config.WIDTH, config.HEIGHT
 
-SensorReadings = Dict[str, Optional[float]]
-SensorProbeResult = Tuple[str, Callable[[], SensorReadings]]
-SensorProbeFn = Callable[[Any, Set[int]], Optional[SensorProbeResult]]
+SensorReadings = dict[str, Optional[float]]
+SensorProbeResult = tuple[str, Callable[[], SensorReadings]]
+SensorProbeFn = Callable[[Any, set[int]], Optional[SensorProbeResult]]
 SensorProbeName = str
 
 _sensor_probe_cache_lock = threading.Lock()
-_sensor_probe_cache: Optional[Tuple[Optional[str], Optional[Callable[[], SensorReadings]]]] = None
-_KNOWN_SENSOR_I2C_ADDRESSES: Set[int] = {0x44, 0x45, 0x76, 0x77}
+_sensor_probe_cache: Optional[tuple[Optional[str], Optional[Callable[[], SensorReadings]]]] = None
+_KNOWN_SENSOR_I2C_ADDRESSES: set[int] = {0x44, 0x45, 0x76, 0x77}
 _MAX_REASONABLE_I2C_HITS = 16
 _HISTORY_LIMIT = 60
 _HISTORY_MAX_AGE_SECONDS = 6 * 60 * 60
 _HISTORY_PATH = str(resolve_cache_file_path("INSIDE_HISTORY_PATH", "inside_history.json"))
-_inside_history: Dict[str, List[Tuple[float, float]]] = {}
+_inside_history: dict[str, list[tuple[float, float]]] = {}
 _inside_history_loaded = False
 _inside_history_lock = threading.RLock()
 
 
-def _parse_i2c_bus_candidates() -> Tuple[int, ...]:
+def _parse_i2c_bus_candidates() -> tuple[int, ...]:
     """Return preferred Linux I2C bus numbers for fallback probing."""
 
     # Keep a universal default candidate set that covers common Pi setups:
     # - 1/2 for standard headers and legacy overlays
     # - 10/11/13/14/15 for HyperPixel accessory headers.
     raw = os.environ.get("INSIDE_I2C_BUSES", "1,2,10,11,13,14,15")
-    buses: List[int] = []
-    seen: Set[int] = set()
+    buses: list[int] = []
+    seen: set[int] = set()
     for token in raw.split(","):
         token = token.strip()
         if not token:
@@ -123,10 +128,10 @@ def _i2cdetect_bus_has_known_sensor(bus_num: int) -> bool:
     return False
 
 
-def _parse_i2cdetect_addresses(output: str) -> Set[int]:
+def _parse_i2cdetect_addresses(output: str) -> set[int]:
     """Extract responding I2C addresses from `i2cdetect` table output."""
 
-    addresses: Set[int] = set()
+    addresses: set[int] = set()
     for line in output.splitlines():
         match = re.match(r"^\s*([0-7][0-9a-fA-F]):\s+(.*)$", line)
         if not match:
@@ -144,11 +149,11 @@ def _parse_i2cdetect_addresses(output: str) -> Set[int]:
     return addresses
 
 
-def _rank_i2c_buses(configured_buses: Sequence[int]) -> Tuple[int, ...]:
+def _rank_i2c_buses(configured_buses: Sequence[int]) -> tuple[int, ...]:
     """Return configured buses ordered by detected supported sensor addresses."""
 
     detected_sensor_buses = [bus for bus in configured_buses if _i2cdetect_bus_has_known_sensor(bus)]
-    ranked: List[int] = list(detected_sensor_buses)
+    ranked: list[int] = list(detected_sensor_buses)
     for bus_num in configured_buses:
         if bus_num not in ranked:
             ranked.append(bus_num)
@@ -172,10 +177,10 @@ def _resolve_i2c_bus_number(i2c: Any) -> Optional[int]:
 
     return None
 
-def _get_smbus_candidates(i2c: Any) -> Tuple[int, ...]:
+def _get_smbus_candidates(i2c: Any) -> tuple[int, ...]:
     """Return ordered Linux SMBus numbers to probe for Pimoroni drivers."""
 
-    candidates: List[int] = []
+    candidates: list[int] = []
     primary_bus = _resolve_i2c_bus_number(i2c) if i2c is not None else None
     if primary_bus is not None:
         candidates.append(primary_bus)
@@ -214,7 +219,7 @@ def _normalize_sensor_name(raw: str) -> str:
     return "_".join(tokens)
 
 
-def _get_sensor_env_override() -> Tuple[Optional[SensorProbeName], Optional[str]]:
+def _get_sensor_env_override() -> tuple[Optional[SensorProbeName], Optional[str]]:
     """Return the requested sensor driver from the environment, if provided."""
 
     aliases = {
@@ -263,7 +268,7 @@ def _extract_field(data: Any, key: str) -> Optional[float]:
         return None
 
 
-def _normalize_pressure(pres_raw: Optional[float]) -> Tuple[Optional[float], Optional[float]]:
+def _normalize_pressure(pres_raw: Optional[float]) -> tuple[Optional[float], Optional[float]]:
     """Return (pressure_hpa, pressure_inhg) for a raw sensor reading."""
 
     if pres_raw is None:
@@ -313,10 +318,8 @@ def _read_chip_id(i2c: Any, addr: int, register: int = 0xD0) -> Optional[int]:
         return buf[0]
     finally:
         if locked and hasattr(i2c, "unlock"):
-            try:
+            with contextlib.suppress(Exception):
                 i2c.unlock()
-            except Exception:
-                pass
 
 
 
@@ -331,10 +334,8 @@ def _suppress_i2c_error_output():
                 self._fd = None
                 return self
 
-            try:
+            with contextlib.suppress(Exception):
                 sys.stderr.flush()
-            except Exception:
-                pass
 
             self._saved = os.dup(self._fd)
             self._devnull = open(os.devnull, "wb")  # pylint: disable=consider-using-with
@@ -345,10 +346,8 @@ def _suppress_i2c_error_output():
             if getattr(self, "_fd", None) is None:
                 return False
 
-            try:
+            with contextlib.suppress(Exception):
                 sys.stderr.flush()
-            except Exception:
-                pass
 
             os.dup2(self._saved, self._fd)
             os.close(self._saved)
@@ -366,11 +365,11 @@ def _import_smbus_class() -> Any:
     an object with the SMBus read/write methods, so accept either package.
     """
 
-    import_errors: List[str] = []
+    import_errors: list[str] = []
     for module_name in ("smbus2", "smbus"):
         try:
             module = __import__(module_name, fromlist=["SMBus"])
-            return getattr(module, "SMBus")
+            return module.SMBus
         except Exception as exc:  # pragma: no cover - depends on host packages
             import_errors.append(f"{module_name}: {exc}")
 
@@ -379,7 +378,7 @@ def _import_smbus_class() -> Any:
     )
 
 
-def _probe_adafruit_bme680(i2c: Any, addresses: Set[int]) -> Optional[SensorProbeResult]:
+def _probe_adafruit_bme680(i2c: Any, addresses: set[int]) -> Optional[SensorProbeResult]:
     if addresses and not addresses.intersection({0x76, 0x77}):
         return None
 
@@ -462,7 +461,7 @@ def _summarize_bme68x_helper_error(message: str) -> str:
     return lines[-1]
 
 
-def _probe_pimoroni_bme68x(_i2c: Any, addresses: Set[int]) -> Optional[SensorProbeResult]:
+def _probe_pimoroni_bme68x(_i2c: Any, addresses: set[int]) -> Optional[SensorProbeResult]:
     if addresses and not addresses.intersection({0x76, 0x77}):
         return None
 
@@ -473,7 +472,7 @@ def _probe_pimoroni_bme68x(_i2c: Any, addresses: Set[int]) -> Optional[SensorPro
         )
         return _probe_pimoroni_bme680(_i2c, addresses)
 
-    def _read_bme68x_via_subprocess() -> Dict[str, Any]:
+    def _read_bme68x_via_subprocess() -> dict[str, Any]:
         repo_root = Path(__file__).resolve().parents[1]
         bme68x_vendor_path = repo_root / "vendor" / "bme68x"
         helper_env = os.environ.copy()
@@ -632,7 +631,7 @@ print(json.dumps({
     return provider, read
 
 
-def _probe_pimoroni_bme680(_i2c: Any, addresses: Set[int]) -> Optional[SensorProbeResult]:
+def _probe_pimoroni_bme680(_i2c: Any, addresses: set[int]) -> Optional[SensorProbeResult]:
     if addresses and not addresses.intersection({0x76, 0x77}):
         return None
 
@@ -747,10 +746,8 @@ def _probe_pimoroni_bme680(_i2c: Any, addresses: Set[int]) -> Optional[SensorPro
     ):
         fn = getattr(sensor, method, None)
         if callable(fn) and value is not None:
-            try:
+            with contextlib.suppress(Exception):
                 fn(value)
-            except Exception:
-                pass
 
     gas_temp = getattr(
         module,
@@ -765,15 +762,11 @@ def _probe_pimoroni_bme680(_i2c: Any, addresses: Set[int]) -> Optional[SensorPro
     fn_temp = getattr(sensor, "set_gas_heater_temperature", None)
     fn_dur = getattr(sensor, "set_gas_heater_duration", None)
     if callable(fn_temp) and gas_temp is not None:
-        try:
+        with contextlib.suppress(Exception):
             fn_temp(gas_temp)
-        except Exception:
-            pass
     if callable(fn_dur) and gas_dur is not None:
-        try:
+        with contextlib.suppress(Exception):
             fn_dur(gas_dur)
-        except Exception:
-            pass
 
     def read() -> SensorReadings:
         if not getattr(sensor, "get_sensor_data", lambda: False)():
@@ -814,7 +807,7 @@ def _probe_pimoroni_bme680(_i2c: Any, addresses: Set[int]) -> Optional[SensorPro
     return provider_label, read
 
 
-def _probe_pimoroni_bme280(i2c: Any, addresses: Set[int]) -> Optional[SensorProbeResult]:
+def _probe_pimoroni_bme280(i2c: Any, addresses: set[int]) -> Optional[SensorProbeResult]:
     if addresses and not addresses.intersection({0x76, 0x77}):
         return None
 
@@ -1096,7 +1089,7 @@ def _probe_pimoroni_bme280(i2c: Any, addresses: Set[int]) -> Optional[SensorProb
     return label, read
 
 
-def _probe_adafruit_bme280(i2c: Any, addresses: Set[int]) -> Optional[SensorProbeResult]:
+def _probe_adafruit_bme280(i2c: Any, addresses: set[int]) -> Optional[SensorProbeResult]:
     if addresses and not addresses.intersection({0x76, 0x77}):
         return None
 
@@ -1157,7 +1150,7 @@ def _probe_adafruit_bme280(i2c: Any, addresses: Set[int]) -> Optional[SensorProb
     return "Adafruit BME280", read
 
 
-def _probe_adafruit_sht4x(i2c: Any, addresses: Set[int]) -> Optional[SensorProbeResult]:
+def _probe_adafruit_sht4x(i2c: Any, addresses: set[int]) -> Optional[SensorProbeResult]:
     if addresses and not addresses.intersection({0x44, 0x45}):
         return None
 
@@ -1180,8 +1173,8 @@ def _probe_adafruit_sht4x(i2c: Any, addresses: Set[int]) -> Optional[SensorProbe
     return "Adafruit SHT41", read
 
 
-def _get_probe_order(preference: Optional[SensorProbeName]) -> Tuple[Tuple[SensorProbeName, SensorProbeFn], ...]:
-    probers: Tuple[Tuple[SensorProbeName, SensorProbeFn], ...] = (
+def _get_probe_order(preference: Optional[SensorProbeName]) -> tuple[tuple[SensorProbeName, SensorProbeFn], ...]:
+    probers: tuple[tuple[SensorProbeName, SensorProbeFn], ...] = (
         ("pimoroni_bme280", _probe_pimoroni_bme280),
         ("adafruit_bme280", _probe_adafruit_bme280),
         ("pimoroni_bme680", _probe_pimoroni_bme680),
@@ -1205,8 +1198,8 @@ def _get_probe_order(preference: Optional[SensorProbeName]) -> Tuple[Tuple[Senso
     return probers
 
 
-def _scan_i2c_addresses(i2c: Any) -> Set[int]:
-    addresses: Set[int] = set()
+def _scan_i2c_addresses(i2c: Any) -> set[int]:
+    addresses: set[int] = set()
 
     if not hasattr(i2c, "scan"):
         return addresses
@@ -1231,15 +1224,13 @@ def _scan_i2c_addresses(i2c: Any) -> Set[int]:
             logging.debug("draw_inside: could not lock I2C bus for scanning")
     finally:
         if locked and hasattr(i2c, "unlock"):
-            try:
+            with contextlib.suppress(Exception):
                 i2c.unlock()
-            except Exception:
-                pass
 
     return addresses
 
 
-def _iter_board_i2c_pin_pairs() -> Tuple[Tuple[str, str], ...]:
+def _iter_board_i2c_pin_pairs() -> tuple[tuple[str, str], ...]:
     """Return candidate ``(scl, sda)`` board pin names for Blinka I2C init."""
 
     return (
@@ -1283,7 +1274,7 @@ def _try_init_blinka_i2c() -> Optional[Any]:
     return None
 
 
-def _probe_sensor() -> Tuple[Optional[str], Optional[Callable[[], SensorReadings]]]:
+def _probe_sensor() -> tuple[Optional[str], Optional[Callable[[], SensorReadings]]]:
     """Try the available sensor drivers and return the first match."""
 
     if platform.system() != "Linux":
@@ -1360,7 +1351,7 @@ def _probe_sensor() -> Tuple[Optional[str], Optional[Callable[[], SensorReadings
             "draw_inside: no usable Blinka I2C bus available; continuing with SMBus-only probes"
         )
 
-    addresses: Set[int] = set()
+    addresses: set[int] = set()
     if i2c is not None:
         addresses = _scan_i2c_addresses(i2c)
         if addresses:
@@ -1375,7 +1366,7 @@ def _probe_sensor() -> Tuple[Optional[str], Optional[Callable[[], SensorReadings
     # BME280-specific probers first keeps the readings aligned with the
     # standalone BME280 CLI script. When INSIDE_SENSOR is set, only the
     # requested probe will run.
-    probe_passes: List[Tuple[str, Tuple[Tuple[SensorProbeName, SensorProbeFn], ...]]] = [
+    probe_passes: list[tuple[str, tuple[tuple[SensorProbeName, SensorProbeFn], ...]]] = [
         ("preferred", _get_probe_order(preference)),
     ]
     if preference:
@@ -1411,7 +1402,7 @@ def _probe_sensor() -> Tuple[Optional[str], Optional[Callable[[], SensorReadings
 def _probe_sensor_cached(
     *,
     force_refresh: bool = False,
-) -> Tuple[Optional[str], Optional[Callable[[], SensorReadings]]]:
+) -> tuple[Optional[str], Optional[Callable[[], SensorReadings]]]:
     """Return a cached sensor probe result to avoid repeated full hardware scans."""
 
     global _sensor_probe_cache
@@ -1452,7 +1443,7 @@ def is_inside_sensor_available(*, force_refresh: bool = False) -> bool:
     return False
 
 
-def _log_sensor_data(provider: Optional[str], data: Dict[str, Optional[float]]) -> None:
+def _log_sensor_data(provider: Optional[str], data: dict[str, Optional[float]]) -> None:
     """Log sensor readings to a file in the user's home directory."""
     try:
         home_dir = Path.home()
@@ -1479,15 +1470,15 @@ def _log_sensor_data(provider: Optional[str], data: Dict[str, Optional[float]]) 
 
 
 # ── Layout helpers ───────────────────────────────────────────────────────────
-def _mix_color(color: Tuple[int, int, int], target: Tuple[int, int, int], factor: float) -> Tuple[int, int, int]:
+def _mix_color(color: tuple[int, int, int], target: tuple[int, int, int], factor: float) -> tuple[int, int, int]:
     factor = max(0.0, min(1.0, factor))
     return tuple(int(round(color[idx] * (1 - factor) + target[idx] * factor)) for idx in range(3))
 
 
 def _interpolate_color(
-    stops: Sequence[Tuple[float, Tuple[int, int, int]]],
+    stops: Sequence[tuple[float, tuple[int, int, int]]],
     value: float,
-) -> Tuple[int, int, int]:
+) -> tuple[int, int, int]:
     """Linearly interpolate *value* across a gradient defined by *stops*.
 
     ``stops`` should contain ``(position, color)`` pairs sorted by position in the
@@ -1514,7 +1505,7 @@ def _interpolate_color(
 def _draw_temperature_panel(
     img: Image.Image,
     draw: ImageDraw.ImageDraw,
-    rect: Tuple[int, int, int, int],
+    rect: tuple[int, int, int, int],
     temp_f: float,
     temp_text: str,
     descriptor: str,
@@ -1638,10 +1629,10 @@ def _draw_temperature_panel(
 
 def _draw_metric_row(
     draw: ImageDraw.ImageDraw,
-    rect: Tuple[int, int, int, int],
+    rect: tuple[int, int, int, int],
     label: str,
     value: str,
-    accent: Tuple[int, int, int],
+    accent: tuple[int, int, int],
     label_base,
     value_base,
 ) -> None:
@@ -1692,7 +1683,7 @@ def _draw_metric_row(
         current,
         current_size: int,
         min_size: int,
-    ) -> Tuple[Any, Tuple[int, int], int]:
+    ) -> tuple[Any, tuple[int, int], int]:
         """Reduce *current* font size until the text fits or *min_size* reached."""
 
         width_limit = available_width
@@ -1778,7 +1769,7 @@ def _draw_metric_row(
 
 def _draw_voc_tile(
     draw: ImageDraw.ImageDraw,
-    rect: Tuple[int, int, int, int],
+    rect: tuple[int, int, int, int],
     label: str,
     value: str,
     descriptor: str,
@@ -1831,10 +1822,7 @@ def _draw_voc_tile(
     stack_top = y0 + (height - stack_h) // 2
     min_top = y0 + padding_y
     max_top = y1 - padding_y - stack_h
-    if max_top < min_top:
-        stack_top = min_top
-    else:
-        stack_top = max(min_top, min(stack_top, max_top))
+    stack_top = min_top if max_top < min_top else max(min_top, min(stack_top, max_top))
 
     label_x = left_x
     label_y = stack_top
@@ -1858,7 +1846,7 @@ def _draw_voc_tile(
     draw.text((value_x, value_y), value, font=value_font, fill=value_color)
 
 
-def _metric_grid_dimensions(count: int) -> Tuple[int, int]:
+def _metric_grid_dimensions(count: int) -> tuple[int, int]:
     if count <= 0:
         return 0, 0
     if count <= 2:
@@ -1873,8 +1861,8 @@ def _metric_grid_dimensions(count: int) -> Tuple[int, int]:
 
 
 def _metric_grid_cells(
-    rect: Tuple[int, int, int, int], count: int
-) -> List[Tuple[int, int, int, int]]:
+    rect: tuple[int, int, int, int], count: int
+) -> list[tuple[int, int, int, int]]:
     x0, y0, x1, y1 = rect
     width = max(0, x1 - x0)
     height = max(0, y1 - y0)
@@ -1916,7 +1904,7 @@ def _metric_grid_cells(
     start_x = x0 + max(0, (width - grid_width) // 2)
     start_y = y0 + max(0, (height - grid_height) // 2)
 
-    cells: List[Tuple[int, int, int, int]] = []
+    cells: list[tuple[int, int, int, int]] = []
     for index in range(count):
         row = index // columns
         col = index % columns
@@ -1933,12 +1921,12 @@ def _metric_grid_cells(
 
 def _draw_metric_rows(
     draw: ImageDraw.ImageDraw,
-    rect: Tuple[int, int, int, int],
-    metrics: Sequence[Dict[str, Any]],
+    rect: tuple[int, int, int, int],
+    metrics: Sequence[dict[str, Any]],
     label_base,
     value_base,
     *,
-    cells: Optional[Sequence[Tuple[int, int, int, int]]] = None,
+    cells: Optional[Sequence[tuple[int, int, int, int]]] = None,
 ) -> None:
     count = len(metrics)
     cell_rects = list(cells) if cells is not None else _metric_grid_cells(rect, count)
@@ -2028,7 +2016,7 @@ def _voc_quality_score(value: Optional[float], scale: str) -> Optional[float]:
     return max(0.0, min(1.0, normalized))
 
 
-def _voc_quality_color(score: float) -> Tuple[int, int, int]:
+def _voc_quality_color(score: float) -> tuple[int, int, int]:
     gradient = (
         (0.0, (190, 38, 44)),
         (0.25, (225, 118, 32)),
@@ -2063,12 +2051,12 @@ def _clean_metric(value: Optional[float]) -> Optional[float]:
     return numeric
 
 
-def _build_metric_entries(data: Dict[str, Optional[float]]) -> List[Dict[str, Any]]:
-    metrics: List[Dict[str, Any]] = []
-    used_keys: Set[str] = set()
-    used_groups: Set[str] = set()
+def _build_metric_entries(data: dict[str, Optional[float]]) -> list[dict[str, Any]]:
+    metrics: list[dict[str, Any]] = []
+    used_keys: set[str] = set()
+    used_groups: set[str] = set()
 
-    palette: List[Tuple[int, int, int]] = [
+    palette: list[tuple[int, int, int]] = [
         config.INSIDE_CHIP_BLUE,
         config.INSIDE_CHIP_AMBER,
         config.INSIDE_CHIP_PURPLE,
@@ -2077,7 +2065,7 @@ def _build_metric_entries(data: Dict[str, Optional[float]]) -> List[Dict[str, An
         _mix_color(config.INSIDE_CHIP_PURPLE, config.INSIDE_COL_BG, 0.35),
     ]
 
-    Spec = Tuple[str, str, Callable[[float], str], Tuple[int, int, int], Optional[str]]
+    Spec = tuple[str, str, Callable[[float], str], tuple[int, int, int], Optional[str]]
     known_specs: Sequence[Spec] = (
         ("humidity", "Humidity", lambda v: f"{v:.1f}%", config.INSIDE_CHIP_BLUE, "humidity"),
         ("dew_point_f", "Dew Point", lambda v: f"{v:.1f}°F", config.INSIDE_CHIP_BLUE, "dew_point"),
@@ -2126,7 +2114,7 @@ def _build_metric_entries(data: Dict[str, Optional[float]]) -> List[Dict[str, An
     return metrics
 
 
-def _build_voc_tile(data: Dict[str, Optional[float]], provider: Optional[str]) -> Optional[Dict[str, Any]]:
+def _build_voc_tile(data: dict[str, Optional[float]], provider: Optional[str]) -> Optional[dict[str, Any]]:
     voc_index = data.get("voc_index")
     voc_ohms = data.get("voc_ohms")
 
@@ -2146,7 +2134,7 @@ def _build_voc_tile(data: Dict[str, Optional[float]], provider: Optional[str]) -
     return dict(label=label, value=display_value, descriptor=descriptor, score=score)
 
 
-def _history_values(data: Dict[str, Optional[float]]) -> Dict[str, float]:
+def _history_values(data: dict[str, Optional[float]]) -> dict[str, float]:
     """Return the canonical readings that can be plotted on the inside screen."""
 
     candidates = (
@@ -2158,7 +2146,7 @@ def _history_values(data: Dict[str, Optional[float]]) -> Dict[str, float]:
         ("IAQ", "iaq"),
         ("CO₂", "co2_ppm"),
     )
-    values: Dict[str, float] = {}
+    values: dict[str, float] = {}
     for label, key in candidates:
         value = _clean_metric(data.get(key))
         if value is not None and label not in values:
@@ -2177,7 +2165,7 @@ def _fit_text(draw: ImageDraw.ImageDraw, text: str, font, max_width: int) -> str
     return shortened + "…" if shortened else "…"
 
 
-def _record_inside_history(data: Dict[str, Optional[float]], timestamp: Optional[float] = None) -> None:
+def _record_inside_history(data: dict[str, Optional[float]], timestamp: Optional[float] = None) -> None:
     """Store and persist a bounded history of readings for the mini charts."""
 
     recorded_at = time.time() if timestamp is None else timestamp
@@ -2217,7 +2205,7 @@ def _load_inside_history(now: Optional[float] = None) -> None:
             for label, raw_points in history.items():
                 if not isinstance(label, str) or not isinstance(raw_points, list):
                     continue
-                points: List[Tuple[float, float]] = []
+                points: list[tuple[float, float]] = []
                 for point in raw_points:
                     if not isinstance(point, (list, tuple)) or len(point) != 2:
                         continue
@@ -2251,17 +2239,15 @@ def _save_inside_history() -> None:
     except OSError as exc:
         logging.warning("draw_inside: unable to save chart history to %s: %s", path, exc)
         if temp_name:
-            try:
+            with contextlib.suppress(OSError):
                 os.remove(temp_name)
-            except OSError:
-                pass
 
 
 def _draw_history_chart(
     draw: ImageDraw.ImageDraw,
-    box: Tuple[int, int, int, int],
-    points: Sequence[Tuple[float, float]],
-    line_color: Tuple[int, int, int],
+    box: tuple[int, int, int, int],
+    points: Sequence[tuple[float, float]],
+    line_color: tuple[int, int, int],
 ) -> None:
     """Draw an AQI-style sparkline, including its subtle grid and frame."""
 
@@ -2294,7 +2280,7 @@ def _draw_history_chart(
         draw.point(point, fill=(245, 250, 255))
 
 
-def _render_inside(data: Dict[str, Optional[float]], provider: Optional[str], sensor_error: Optional[str]) -> Image.Image:
+def _render_inside(data: dict[str, Optional[float]], provider: Optional[str], sensor_error: Optional[str]) -> Image.Image:
     """Render indoor readings with the same badge-and-chart language as AQI."""
 
     img = Image.new("RGB", (W, H), config.INSIDE_COL_BG)
@@ -2404,7 +2390,7 @@ def draw_inside(display, transition: bool=False):
     else:
         try:
             data = read_fn()
-            cleaned: Dict[str, Optional[float]] = {}
+            cleaned: dict[str, Optional[float]] = {}
             if isinstance(data, dict):
                 cleaned = {key: _clean_metric(value) for key, value in data.items()}
             else:

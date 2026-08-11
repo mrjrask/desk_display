@@ -11,9 +11,9 @@ from __future__ import annotations
 import ast
 import subprocess
 import sys
+from collections.abc import Iterable
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict, Iterable, List, Set
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 IMAGE_EXTS = {".png", ".jpg", ".jpeg", ".webp", ".gif", ".bmp", ".tif", ".tiff"}
@@ -26,10 +26,10 @@ OPTIONAL_MODULES: set[str] = set()
 class ModuleNode:
     name: str
     path: Path
-    imports: Set[str]
+    imports: set[str]
 
 
-def _git_ls(args: List[str]) -> List[Path]:
+def _git_ls(args: list[str]) -> list[Path]:
     result = subprocess.run(
         ["git", "-C", str(REPO_ROOT), "ls-files", *args],
         check=True,
@@ -39,7 +39,7 @@ def _git_ls(args: List[str]) -> List[Path]:
     return [Path(line.strip()) for line in result.stdout.splitlines() if line.strip()]
 
 
-def run_git_ls_files() -> List[Path]:
+def run_git_ls_files() -> list[Path]:
     tracked = _git_ls([])
     untracked = _git_ls(["--others", "--exclude-standard"])
 
@@ -66,10 +66,7 @@ def resolve_relative_module(current: str, module: str | None, level: int) -> str
     base_parts = current.split(".")
     if base_parts:
         base_parts = base_parts[:-1]  # remove current module name
-    if level > len(base_parts):
-        base_parts = []
-    else:
-        base_parts = base_parts[: len(base_parts) - level + 1]
+    base_parts = [] if level > len(base_parts) else base_parts[:len(base_parts) - level + 1]
 
     prefix = ".".join(base_parts)
     if module:
@@ -77,8 +74,8 @@ def resolve_relative_module(current: str, module: str | None, level: int) -> str
     return prefix
 
 
-def parse_imports(path: Path, module_name: str) -> Set[str]:
-    imports: Set[str] = set()
+def parse_imports(path: Path, module_name: str) -> set[str]:
+    imports: set[str] = set()
     source = path.read_text(encoding="utf-8")
     tree = ast.parse(source, filename=str(path))
 
@@ -96,8 +93,8 @@ def parse_imports(path: Path, module_name: str) -> Set[str]:
     return imports
 
 
-def build_module_graph(py_files: Iterable[Path]) -> Dict[str, ModuleNode]:
-    graph: Dict[str, ModuleNode] = {}
+def build_module_graph(py_files: Iterable[Path]) -> dict[str, ModuleNode]:
+    graph: dict[str, ModuleNode] = {}
     for path in py_files:
         module = module_name_from_path(path)
         imports = parse_imports(REPO_ROOT / path, module)
@@ -105,28 +102,26 @@ def build_module_graph(py_files: Iterable[Path]) -> Dict[str, ModuleNode]:
     return graph
 
 
-def determine_seeds(graph: Dict[str, ModuleNode]) -> Set[str]:
-    seeds: Set[str] = set()
+def determine_seeds(graph: dict[str, ModuleNode]) -> set[str]:
+    seeds: set[str] = set()
     for name, node in graph.items():
         top_level = node.path.parts[0]
-        if node.path.name in {"main.py", "config_ui.py", "schedule_migrations.py", "storage_overrides.py"}:
-            seeds.add(name)
-        elif top_level == "scripts":
+        if node.path.name in {"main.py", "config_ui.py", "schedule_migrations.py", "storage_overrides.py"} or top_level == "scripts":
             seeds.add(name)
     return seeds
 
 
-def _parent_modules(name: str) -> List[str]:
+def _parent_modules(name: str) -> list[str]:
     parts = name.split(".")
-    parents: List[str] = []
+    parents: list[str] = []
     while len(parts) > 1:
         parts = parts[:-1]
         parents.append(".".join(parts))
     return parents
 
 
-def find_reachable_modules(graph: Dict[str, ModuleNode], seeds: Set[str]) -> Set[str]:
-    reachable: Set[str] = set()
+def find_reachable_modules(graph: dict[str, ModuleNode], seeds: set[str]) -> set[str]:
+    reachable: set[str] = set()
     stack = list(seeds)
 
     while stack:

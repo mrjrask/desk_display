@@ -1,7 +1,5 @@
 import datetime
 
-import pytest
-
 from screens import nhl_playoffs
 
 
@@ -87,7 +85,7 @@ def test_conference_buckets_order_by_seed():
 
 
 def test_render_uses_projected_standings_when_no_live_playoff_series(monkeypatch):
-    monkeypatch.setattr(nhl_playoffs, "_fetch_playoff_matchups", lambda: [])
+    monkeypatch.setattr(nhl_playoffs, "_fetch_playoff_matchups", list)
     monkeypatch.setattr(
         nhl_playoffs,
         "_fetch_projected_matchups_from_standings",
@@ -429,7 +427,7 @@ def test_render_nhl_playoffs_enriches_next_text_with_official_schedule(monkeypat
             }
         ],
     )
-    monkeypatch.setattr(nhl_playoffs, "_fetch_projected_matchups_from_standings", lambda: [])
+    monkeypatch.setattr(nhl_playoffs, "_fetch_projected_matchups_from_standings", list)
     monkeypatch.setattr(
         nhl_playoffs,
         "_fetch_remaining_playoff_schedule_games",

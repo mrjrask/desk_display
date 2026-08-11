@@ -2,20 +2,22 @@
 """Web UI for editing the screen rotation configuration."""
 from __future__ import annotations
 
+import contextlib
 import json
 import logging
 import os
 import socket
 import subprocess
 import time
-from urllib.parse import urlsplit, urlunsplit
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, FrozenSet, List, Optional, Tuple
+from typing import Any, Optional
+from urllib.parse import urlsplit, urlunsplit
 
 from flask import (
     Flask,
     abort,
+    g,
     jsonify,
     redirect,
     render_template,
@@ -23,9 +25,9 @@ from flask import (
     send_from_directory,
     session,
     url_for,
-    g,
 )
 
+import config
 from paths import (
     resolve_layouts_config_path,
     resolve_screens_config_paths,
@@ -34,7 +36,6 @@ from paths import (
 )
 from schedule import build_scheduler
 from screens_catalog import SCREEN_IDS, canonical_screen_id
-import config
 
 # Config path precedence/fallback rules are centralized in paths.py.
 _screens_config_paths = resolve_screens_config_paths()
@@ -80,7 +81,7 @@ def _canonicalize_screen_reference(value: Any) -> Any:
     if isinstance(value, str):
         return canonical_screen_id(value)
     if isinstance(value, list):
-        canonical: List[str] = []
+        canonical: list[str] = []
         for item in value:
             if not isinstance(item, str):
                 continue
@@ -114,7 +115,7 @@ def _normalize_scroll_smoothness(value: Any) -> float:
     return round(min(2.0, max(0.5, smoothness)), 2)
 
 
-def _normalize_scroll_settings(value: Any) -> Dict[str, float]:
+def _normalize_scroll_settings(value: Any) -> dict[str, float]:
     settings = value if isinstance(value, dict) else {}
     return {
         "speed": _normalize_scroll_speed(settings.get("speed", 1.0)),
@@ -134,7 +135,7 @@ def _merge_screen_specs(existing: Any, incoming: Any) -> Any:
     return incoming if incoming_freq > existing_freq else existing
 
 
-def _normalize_legacy_scoreboard_ids(config: Dict[str, Any]) -> tuple[Dict[str, Any], bool]:
+def _normalize_legacy_scoreboard_ids(config: dict[str, Any]) -> tuple[dict[str, Any], bool]:
     if not isinstance(config, dict):
         return config, False
 
@@ -142,7 +143,7 @@ def _normalize_legacy_scoreboard_ids(config: Dict[str, Any]) -> tuple[Dict[str, 
     normalized = dict(config)
     screens = normalized.get("screens")
     if isinstance(screens, dict):
-        cleaned_screens: Dict[str, Any] = {}
+        cleaned_screens: dict[str, Any] = {}
         for raw_screen_id, raw_spec in screens.items():
             if not isinstance(raw_screen_id, str):
                 continue
@@ -182,7 +183,7 @@ def _normalize_legacy_scoreboard_ids(config: Dict[str, Any]) -> tuple[Dict[str, 
 
     playlists = normalized.get("playlists")
     if isinstance(playlists, dict):
-        cleaned_playlists: Dict[str, Any] = {}
+        cleaned_playlists: dict[str, Any] = {}
         for playlist_id, playlist in playlists.items():
             if not isinstance(playlist, dict):
                 cleaned_playlists[playlist_id] = playlist
@@ -190,7 +191,7 @@ def _normalize_legacy_scoreboard_ids(config: Dict[str, Any]) -> tuple[Dict[str, 
             playlist_copy = dict(playlist)
             steps = playlist_copy.get("steps")
             if isinstance(steps, list):
-                cleaned_steps: List[Any] = []
+                cleaned_steps: list[Any] = []
                 for step in steps:
                     if not isinstance(step, dict):
                         cleaned_steps.append(step)
@@ -273,9 +274,9 @@ def _require_authentication() -> Optional[Any]:
     return redirect(url_for("login", next=request.full_path if request.query_string else request.path))
 
 
-def _load_config(path: str) -> Dict[str, Any]:
+def _load_config(path: str) -> dict[str, Any]:
     try:
-        with open(path, "r", encoding="utf-8") as fh:
+        with open(path, encoding="utf-8") as fh:
             data = json.load(fh)
     except FileNotFoundError:
         return {"screens": {}}
@@ -289,7 +290,7 @@ def _load_config(path: str) -> Dict[str, Any]:
     return normalized
 
 
-def _validate_config_payload(data: Any) -> Dict[str, Any]:
+def _validate_config_payload(data: Any) -> dict[str, Any]:
     if not isinstance(data, dict):
         raise ValueError("Configuration must be a JSON object")
     screens = data.get("screens")
@@ -299,12 +300,12 @@ def _validate_config_payload(data: Any) -> Dict[str, Any]:
     return data
 
 
-def _normalize_import_config_payload(data: Dict[str, Any]) -> Dict[str, Any]:
+def _normalize_import_config_payload(data: dict[str, Any]) -> dict[str, Any]:
     """Normalize imported config values so scheduler validation is predictable."""
 
     normalized = _validate_config_payload(data)
     screens = normalized.get("screens", {})
-    normalized_screens: Dict[str, Any] = {}
+    normalized_screens: dict[str, Any] = {}
 
     for screen_id, raw in screens.items():
         canonical_id = canonical_screen_id(screen_id) if isinstance(screen_id, str) else screen_id
@@ -329,19 +330,17 @@ def _normalize_import_config_payload(data: Dict[str, Any]) -> Dict[str, Any]:
                 else ""
             )
 
-            alt_payload: Optional[Dict[str, Any]] = None
+            alt_payload: Optional[dict[str, Any]] = None
             alt = raw.get("alt")
             if isinstance(alt, dict):
                 alt_payload = dict(alt)
                 alt_payload["screen"] = _canonicalize_screen_reference(alt_payload.get("screen"))
                 alt_frequency = alt_payload.get("frequency")
                 if alt_frequency is not None:
-                    try:
+                    with contextlib.suppress(TypeError, ValueError):
                         alt_payload["frequency"] = int(alt_frequency)
-                    except (TypeError, ValueError):
-                        pass
 
-            normalized_spec: Dict[str, Any] = {"frequency": frequency_int}
+            normalized_spec: dict[str, Any] = {"frequency": frequency_int}
             if isinstance(extra_seconds, int) and extra_seconds > 0:
                 normalized_spec["extra_seconds"] = extra_seconds
             if alt_payload is not None:
@@ -373,7 +372,7 @@ def _normalize_import_config_payload(data: Dict[str, Any]) -> Dict[str, Any]:
 
 
 
-def _default_layouts_config() -> Dict[str, Any]:
+def _default_layouts_config() -> dict[str, Any]:
     return {
         "screens": {
             "quad": {
@@ -395,12 +394,12 @@ def _normalize_quad_scroll_speed(value: Any) -> float:
     return min(3.0, max(0.25, speed))
 
 
-def _normalize_quad_page(raw_page: Any, defaults: List[str]) -> Dict[str, Any]:
+def _normalize_quad_page(raw_page: Any, defaults: list[str]) -> dict[str, Any]:
     tiles_source = raw_page.get("tiles") if isinstance(raw_page, dict) else raw_page
     if not isinstance(tiles_source, list):
         tiles_source = []
 
-    tiles: List[str] = []
+    tiles: list[str] = []
     for item in tiles_source:
         if not isinstance(item, str):
             continue
@@ -417,7 +416,7 @@ def _normalize_quad_page(raw_page: Any, defaults: List[str]) -> Dict[str, Any]:
     return {"tiles": tiles}
 
 
-def _normalize_layouts_config(data: Any) -> Dict[str, Any]:
+def _normalize_layouts_config(data: Any) -> dict[str, Any]:
     result = _default_layouts_config()
     defaults = result["screens"]["quad"]["pages"][0]["tiles"]
 
@@ -433,7 +432,7 @@ def _normalize_layouts_config(data: Any) -> Dict[str, Any]:
     result["screens"]["quad"]["enabled"] = bool(quad.get("enabled", False))
     result["screens"]["quad"]["scroll_speed"] = _normalize_quad_scroll_speed(quad.get("scroll_speed", 1.0))
 
-    pages: List[Dict[str, Any]] = []
+    pages: list[dict[str, Any]] = []
     raw_pages = quad.get("pages")
     if isinstance(raw_pages, list):
         pages = [_normalize_quad_page(raw_page, defaults) for raw_page in raw_pages]
@@ -448,20 +447,20 @@ def _normalize_layouts_config(data: Any) -> Dict[str, Any]:
     return result
 
 
-def _load_layouts_config(path: str) -> Dict[str, Any]:
+def _load_layouts_config(path: str) -> dict[str, Any]:
     try:
-        with open(path, "r", encoding="utf-8") as fh:
+        with open(path, encoding="utf-8") as fh:
             data = json.load(fh)
     except FileNotFoundError:
         return _default_layouts_config()
     return _normalize_layouts_config(data)
 
 
-def _load_active_layouts_config() -> Dict[str, Any]:
+def _load_active_layouts_config() -> dict[str, Any]:
     return _load_layouts_config(LAYOUTS_CONFIG_PATH)
 
 
-def _save_layouts_config(config: Dict[str, Any]) -> None:
+def _save_layouts_config(config: dict[str, Any]) -> None:
     tmp_path = f"{LAYOUTS_CONFIG_PATH}.tmp"
     with open(tmp_path, "w", encoding="utf-8") as fh:
         json.dump(config, fh, indent=2)
@@ -469,7 +468,7 @@ def _save_layouts_config(config: Dict[str, Any]) -> None:
     os.replace(tmp_path, LAYOUTS_CONFIG_PATH)
 
 
-def _build_layouts(entries: Dict[str, Any]) -> Dict[str, Any]:
+def _build_layouts(entries: dict[str, Any]) -> dict[str, Any]:
     if not isinstance(entries, dict):
         raise ValueError("Invalid layouts payload")
 
@@ -484,7 +483,7 @@ def _build_layouts(entries: Dict[str, Any]) -> Dict[str, Any]:
             raise ValueError("quad_pages must be a list")
 
     defaults = _default_layouts_config()["screens"]["quad"]["pages"][0]["tiles"]
-    pages: List[Dict[str, Any]] = []
+    pages: list[dict[str, Any]] = []
 
     for raw_page in raw_pages:
         if not isinstance(raw_page, dict):
@@ -498,9 +497,9 @@ def _build_layouts(entries: Dict[str, Any]) -> Dict[str, Any]:
     return {"screens": {"quad": {"enabled": quad_enabled, "scroll_speed": quad_scroll_speed, "pages": pages}}}
 
 
-def _load_style_config(path: str) -> Dict[str, Any]:
+def _load_style_config(path: str) -> dict[str, Any]:
     try:
-        with open(path, "r", encoding="utf-8") as fh:
+        with open(path, encoding="utf-8") as fh:
             data = json.load(fh)
     except FileNotFoundError:
         return {"screens": {}}
@@ -521,12 +520,12 @@ def _resolve_default_screens_path(profile: Optional[str] = None) -> str:
     raise ValueError("Unknown default configuration. Choose large or small.")
 
 
-def _load_default_screens_bundle(profile: Optional[str] = None) -> Tuple[Dict[str, Any], Dict[str, Any], Dict[str, Any]]:
+def _load_default_screens_bundle(profile: Optional[str] = None) -> tuple[dict[str, Any], dict[str, Any], dict[str, Any]]:
     """Load the repo-backed defaults used by the web UI Load Defaults button."""
 
     default_screens_path = _resolve_default_screens_path(profile)
     try:
-        with open(default_screens_path, "r", encoding="utf-8") as fh:
+        with open(default_screens_path, encoding="utf-8") as fh:
             payload = json.load(fh)
     except FileNotFoundError:
         payload = _load_config(DEFAULT_CONFIG_PATH)
@@ -548,7 +547,7 @@ def _load_default_screens_bundle(profile: Optional[str] = None) -> Tuple[Dict[st
 
     return config, style_config, layouts_config
 
-def _load_active_config() -> Dict[str, Any]:
+def _load_active_config() -> dict[str, Any]:
     if os.path.exists(LOCAL_CONFIG_PATH):
         config = _load_config(LOCAL_CONFIG_PATH)
         cleaned, changed = _normalize_legacy_scoreboard_ids(config)
@@ -562,11 +561,11 @@ def _load_active_config() -> Dict[str, Any]:
     return cleaned
 
 
-def _load_active_style_config() -> Dict[str, Any]:
+def _load_active_style_config() -> dict[str, Any]:
     return _load_style_config(STYLE_CONFIG_PATH)
 
 
-def _parse_alt_screen(value: Optional[str]) -> Optional[List[str]]:
+def _parse_alt_screen(value: Optional[str]) -> Optional[list[str]]:
     if not value:
         return None
     parts = [item.strip() for item in value.split(",")]
@@ -582,13 +581,13 @@ def _serialize_alt_screen(value: Any) -> str:
     return ""
 
 
-def _build_playlist_assignments(config: Dict[str, Any]) -> Tuple[List[Dict[str, str]], Dict[str, str]]:
+def _build_playlist_assignments(config: dict[str, Any]) -> tuple[list[dict[str, str]], dict[str, str]]:
     config_playlists = config.get("playlists")
     if not isinstance(config_playlists, dict):
         return [], {}
 
     sequence = config.get("sequence")
-    ordered_ids: List[str] = []
+    ordered_ids: list[str] = []
     if isinstance(sequence, list):
         for item in sequence:
             if not isinstance(item, dict):
@@ -601,8 +600,8 @@ def _build_playlist_assignments(config: Dict[str, Any]) -> Tuple[List[Dict[str, 
         if isinstance(playlist_id, str) and playlist_id and playlist_id not in ordered_ids:
             ordered_ids.append(playlist_id)
 
-    playlists: List[Dict[str, str]] = []
-    assignments: Dict[str, str] = {}
+    playlists: list[dict[str, str]] = []
+    assignments: dict[str, str] = {}
     for playlist_id in ordered_ids:
         playlist = config_playlists.get(playlist_id)
         if not isinstance(playlist, dict):
@@ -664,10 +663,10 @@ def _is_screenshot_stale(timestamp: float, *, max_age_seconds: int = 2 * 60 * 60
 
 
 def _apply_playlist_grouping(
-    ordered_screen_ids: List[str],
-    playlists: List[Dict[str, str]],
-    playlist_assignments: Dict[str, str],
-) -> List[str]:
+    ordered_screen_ids: list[str],
+    playlists: list[dict[str, str]],
+    playlist_assignments: dict[str, str],
+) -> list[str]:
     """Reorder screen ids to match the Config page's rendered grouping.
 
     The Config page's JS groups rows by playlist on every render: the
@@ -680,7 +679,7 @@ def _apply_playlist_grouping(
     """
 
     group_ids = [""] + [playlist["id"] for playlist in playlists]
-    grouped: List[str] = []
+    grouped: list[str] = []
     for group_id in group_ids:
         grouped.extend(
             screen_id
@@ -690,7 +689,7 @@ def _apply_playlist_grouping(
     return grouped
 
 
-def _build_screenshot_entries() -> List[Dict[str, Any]]:
+def _build_screenshot_entries() -> list[dict[str, Any]]:
     storage_paths = resolve_storage_paths()
     screenshot_dir = storage_paths.screenshot_dir
     current_dir = storage_paths.current_screenshot_dir
@@ -699,10 +698,10 @@ def _build_screenshot_entries() -> List[Dict[str, Any]]:
     ordered_screen_ids = _ordered_screen_ids(screens_config)
     playlists, playlist_assignments = _build_playlist_assignments(config)
     ordered_screen_ids = _apply_playlist_grouping(ordered_screen_ids, playlists, playlist_assignments)
-    entries: List[Dict[str, Any]] = []
+    entries: list[dict[str, Any]] = []
     for screen_id in ordered_screen_ids:
         prefix = _sanitize_filename_prefix(screen_id)
-        entry: Dict[str, Any] = {
+        entry: dict[str, Any] = {
             "id": screen_id,
             "path": None,
             "timestamp": None,
@@ -710,7 +709,7 @@ def _build_screenshot_entries() -> List[Dict[str, Any]]:
             "version": None,
             "is_stale": False,
         }
-        candidates: List[Path] = [
+        candidates: list[Path] = [
             current_dir / f"{prefix}{ext}" for ext in ALLOWED_SCREEN_EXTS
         ]
         screen_dir = screenshot_dir / _sanitize_directory_name(screen_id)
@@ -745,11 +744,11 @@ def _build_screenshot_entries() -> List[Dict[str, Any]]:
 
 
 
-def _load_display_status() -> Dict[str, Any]:
+def _load_display_status() -> dict[str, Any]:
     storage_paths = resolve_storage_paths()
     status_path = storage_paths.current_screenshot_dir / "display_status.json"
 
-    status: Dict[str, Any] = {
+    status: dict[str, Any] = {
         "screen_id": None,
         "rendered_at": None,
         "elapsed": None,
@@ -814,7 +813,7 @@ def _load_display_status() -> Dict[str, Any]:
 
     raw_play_counts = payload.get("screen_play_counts")
     if isinstance(raw_play_counts, dict):
-        parsed_counts: Dict[str, int] = {}
+        parsed_counts: dict[str, int] = {}
         for screen_name, count in raw_play_counts.items():
             if isinstance(screen_name, str) and isinstance(count, int):
                 parsed_counts[screen_name] = count
@@ -823,8 +822,8 @@ def _load_display_status() -> Dict[str, Any]:
     return status
 
 
-def _load_service_status(unit_name: str = "desk_display.service") -> Dict[str, Any]:
-    status: Dict[str, Any] = {
+def _load_service_status(unit_name: str = "desk_display.service") -> dict[str, Any]:
+    status: dict[str, Any] = {
         "unit": unit_name,
         "active_state": "unknown",
         "sub_state": "unknown",
@@ -881,8 +880,8 @@ def _load_service_status(unit_name: str = "desk_display.service") -> Dict[str, A
 def _ordered_screen_ids(
     screens_config: Any,
     *,
-    exclude: FrozenSet[str] = frozenset(),
-) -> List[str]:
+    exclude: frozenset[str] = frozenset(),
+) -> list[str]:
     """Return screen ids in the same order they're arranged on the Config page.
 
     Screens explicitly ordered in ``screens_config`` (a dict, so insertion
@@ -892,7 +891,7 @@ def _ordered_screen_ids(
     Screenshots page so their arrangements can't drift apart.
     """
 
-    ordered_screen_ids: List[str] = []
+    ordered_screen_ids: list[str] = []
     if isinstance(screens_config, dict):
         ordered_screen_ids.extend(
             screen_id for screen_id in screens_config.keys() if screen_id not in exclude
@@ -906,19 +905,19 @@ def _ordered_screen_ids(
 
 
 def _build_screen_entries(
-    config: Dict[str, Any],
-    style_config: Dict[str, Any],
-) -> List[Dict[str, Any]]:
+    config: dict[str, Any],
+    style_config: dict[str, Any],
+) -> list[dict[str, Any]]:
     screens = config.get("screens", {})
     if not isinstance(screens, dict):
         return []
 
     ordered_screen_ids = _ordered_screen_ids(screens, exclude=HIDDEN_CONFIG_SCREEN_IDS)
 
-    entries: List[Dict[str, Any]] = []
+    entries: list[dict[str, Any]] = []
     for screen_id in ordered_screen_ids:
         raw = screens.get(screen_id, 0)
-        entry: Dict[str, Any] = {
+        entry: dict[str, Any] = {
             "id": screen_id,
             "frequency": 0,
             "extra_seconds": 0,
@@ -951,8 +950,8 @@ def _build_screen_entries(
     return entries
 
 
-def _build_selectable_screen_ids(entries: List[Dict[str, Any]]) -> List[str]:
-    ordered_screen_ids: List[str] = []
+def _build_selectable_screen_ids(entries: list[dict[str, Any]]) -> list[str]:
+    ordered_screen_ids: list[str] = []
 
     for entry in entries:
         screen_id = entry.get("id")
@@ -972,8 +971,8 @@ def _build_selectable_screen_ids(entries: List[Dict[str, Any]]) -> List[str]:
     return ordered_screen_ids
 
 
-def _build_config(entries: List[Dict[str, Any]]) -> Dict[str, Any]:
-    screens: Dict[str, Any] = {}
+def _build_config(entries: list[dict[str, Any]]) -> dict[str, Any]:
+    screens: dict[str, Any] = {}
     for entry in entries:
         screen_id = canonical_screen_id(str(entry.get("id", "")).strip())
         if not screen_id:
@@ -995,9 +994,9 @@ def _build_config(entries: List[Dict[str, Any]]) -> Dict[str, Any]:
         if alt_screen:
             alt_screen = [canonical_screen_id(item) for item in alt_screen]
             alt_frequency_int = int(alt_frequency) if alt_frequency not in ("", None) else 1
-            alt_payload: Dict[str, Any] = {"screen": alt_screen[0] if len(alt_screen) == 1 else alt_screen}
+            alt_payload: dict[str, Any] = {"screen": alt_screen[0] if len(alt_screen) == 1 else alt_screen}
             alt_payload["frequency"] = alt_frequency_int
-            spec: Dict[str, Any] = {"frequency": frequency, "alt": alt_payload}
+            spec: dict[str, Any] = {"frequency": frequency, "alt": alt_payload}
             if extra_seconds > 0:
                 spec["extra_seconds"] = extra_seconds
             if hide_after_enabled and hide_after_at:
@@ -1023,7 +1022,7 @@ def _build_config(entries: List[Dict[str, Any]]) -> Dict[str, Any]:
     return cleaned
 
 
-def _save_config(config: Dict[str, Any]) -> None:
+def _save_config(config: dict[str, Any]) -> None:
     tmp_path = f"{LOCAL_CONFIG_PATH}.tmp"
     with open(tmp_path, "w", encoding="utf-8") as fh:
         json.dump(config, fh, indent=2)
@@ -1044,7 +1043,7 @@ def run_config_ui(host: str = SCREEN_CONFIG_HOST, port: int = SCREEN_CONFIG_PORT
 
 
 @app.context_processor
-def inject_machine_hostname() -> Dict[str, str]:
+def inject_machine_hostname() -> dict[str, str]:
     return {"machine_hostname": socket.gethostname()}
 
 
@@ -1274,7 +1273,7 @@ def import_screens() -> Any:
         return jsonify({"error": "Invalid payload"}), 400
 
     config_payload = payload.get("config", payload)
-    derived_layouts_payload: Optional[Dict[str, Any]] = None
+    derived_layouts_payload: Optional[dict[str, Any]] = None
     try:
         if isinstance(config_payload, dict) and isinstance(config_payload.get("screens"), list):
             entries = config_payload.get("screens", [])

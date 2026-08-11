@@ -15,35 +15,40 @@ import datetime
 import logging
 import os
 import time
-from typing import Iterable, Optional
+from collections.abc import Iterable
+from typing import Optional
 
 from PIL import Image, ImageDraw
 
 from config import (
-    WIDTH,
-    HEIGHT,
-    FONT_TITLE_SPORTS,
-    FONT_TEAM_SPORTS,
-    FONT_STATUS,
     CENTRAL_TIME,
+    FONT_STATUS,
+    FONT_TEAM_SPORTS,
+    FONT_TITLE_SPORTS,
+    HEIGHT,
     IMAGES_DIR,
-    SCOREBOARD_SCROLL_STEP,
-    SCOREBOARD_SCROLL_DELAY,
-    SCOREBOARD_SCROLL_PAUSE_TOP,
-    SCOREBOARD_SCROLL_PAUSE_BOTTOM,
-    SCOREBOARD_STANDINGS_BOTTOM_PADDING,
     SCOREBOARD_BACKGROUND_COLOR,
-    SCOREBOARD_IN_PROGRESS_SCORE_COLOR,
-    SCOREBOARD_FINAL_WINNING_SCORE_COLOR,
     SCOREBOARD_FINAL_LOSING_SCORE_COLOR,
+    SCOREBOARD_FINAL_WINNING_SCORE_COLOR,
+    SCOREBOARD_IN_PROGRESS_SCORE_COLOR,
+    SCOREBOARD_SCROLL_DELAY,
+    SCOREBOARD_SCROLL_PAUSE_BOTTOM,
+    SCOREBOARD_SCROLL_PAUSE_TOP,
+    SCOREBOARD_SCROLL_STEP,
+    SCOREBOARD_STANDINGS_BOTTOM_PADDING,
+    WIDTH,
     get_screen_background_color,
     get_screen_font,
     get_screen_image_scale,
-    is_kernel_driven_display,
-    is_hyperpixel_next_layout,
     is_hyperpixel_4_square_layout,
+    is_hyperpixel_next_layout,
+    is_kernel_driven_display,
     scale_value,
     scale_value_width,
+)
+from screens.scoreboard_components import (
+    center_text as _center_text,
+    final_results as _final_results,
 )
 from services.http_client import get_session
 from utils import (
@@ -186,10 +191,7 @@ def _playoff_rules_active(now: datetime.datetime) -> bool:
 def _regular_week_start(now: datetime.datetime) -> datetime.date:
     if now.weekday() == 2:  # Wednesday
         cutoff = now.replace(hour=9, minute=0, second=0, microsecond=0)
-        if now >= cutoff:
-            ref_date = now.date() + datetime.timedelta(days=1)
-        else:
-            ref_date = now.date()
+        ref_date = now.date() + datetime.timedelta(days=1) if now >= cutoff else now.date()
     else:
         ref_date = now.date()
     return _week_start_for_date(ref_date)
@@ -257,9 +259,7 @@ def _should_display_scores(game: dict) -> bool:
     state = (type_info.get("state") or "").lower()
     if state in {"in", "post"}:
         return True
-    if (type_info.get("completed") or False) is True:
-        return True
-    return False
+    return (type_info.get("completed") or False) is True
 
 
 def _is_game_in_progress(game: dict) -> bool:
@@ -279,9 +279,7 @@ def _is_game_final(game: dict) -> bool:
     if isinstance(completed, bool) and completed:
         return True
     description = (type_info.get("description") or "").lower()
-    if "final" in description:
-        return True
-    return False
+    return "final" in description
 
 
 def _score_text(side: dict, *, show: bool) -> str:
@@ -291,54 +289,6 @@ def _score_text(side: dict, *, show: bool) -> str:
     return "—" if score is None else str(score)
 
 
-def _score_value(side: dict) -> Optional[int]:
-    score = (side or {}).get("score")
-    if isinstance(score, (int, float)):
-        return int(score)
-    if isinstance(score, str):
-        cleaned = score.strip()
-        if cleaned.isdigit():
-            try:
-                return int(cleaned)
-            except Exception:
-                return None
-        try:
-            return int(float(cleaned))
-        except Exception:
-            return None
-    return None
-
-
-def _team_result(side: dict, opponent: dict) -> Optional[str]:
-    for key in ("isWinner", "winner", "won"):
-        value = (side or {}).get(key)
-        if isinstance(value, bool):
-            return "win" if value else "loss"
-
-    side_score = _score_value(side)
-    opp_score = _score_value(opponent)
-    if side_score is not None and opp_score is not None:
-        if side_score > opp_score:
-            return "win"
-        if side_score < opp_score:
-            return "loss"
-    return None
-
-
-def _final_results(away: dict, home: dict) -> dict:
-    away_result = _team_result(away, home)
-    home_result = _team_result(home, away)
-
-    if away_result == "win":
-        home_result = "loss"
-    elif away_result == "loss":
-        home_result = "win"
-    elif home_result == "win":
-        away_result = "loss"
-    elif home_result == "loss":
-        away_result = "win"
-
-    return {"away": away_result, "home": home_result}
 def _score_fill(team_key: str, *, in_progress: bool, final: bool, results: dict) -> tuple[int, int, int]:
     if in_progress:
         return IN_PROGRESS_SCORE_COLOR
@@ -396,21 +346,6 @@ def _format_status(game: dict) -> str:
 
     return short_detail or detail or "TBD"
 
-
-def _center_text(draw: ImageDraw.ImageDraw, text: str, font, x: int, width: int,
-                 y: int, height: int, *, fill=(255, 255, 255)):
-    if not text:
-        return
-    try:
-        l, t, r, b = draw.textbbox((0, 0), text, font=font)
-        tw, th = r - l, b - t
-        tx = x + (width - tw) // 2 - l
-        ty = y + (height - th) // 2 - t
-    except Exception:
-        tw, th = draw.textsize(text, font=font)
-        tx = x + (width - tw) // 2
-        ty = y + (height - th) // 2
-    draw.text((tx, ty), text, font=font, fill=fill)
 
 
 def _draw_game_block(canvas: Image.Image, draw: ImageDraw.ImageDraw, game: dict, top: int):
@@ -497,7 +432,7 @@ def _timestamp_to_local(ts: str) -> Optional[datetime.datetime]:
             dt = datetime.datetime.strptime(ts, "%Y-%m-%dT%H:%M:%SZ")
         except ValueError:
             return None
-    dt = dt.replace(tzinfo=datetime.timezone.utc)
+    dt = dt.replace(tzinfo=datetime.UTC)
     return dt.astimezone(CENTRAL_TIME)
 
 

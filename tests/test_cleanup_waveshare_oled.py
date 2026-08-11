@@ -6,7 +6,6 @@ import sys
 import types
 from pathlib import Path
 
-
 CLEANUP_SCRIPT = Path(__file__).resolve().parents[1] / "scripts" / "cleanup.sh"
 
 

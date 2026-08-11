@@ -4,53 +4,51 @@
 from __future__ import annotations
 
 import time
-from typing import Optional
 
 from PIL import Image, ImageDraw
 
 from config import (
-    WIDTH,
-    HEIGHT,
-    FONT_TITLE_SPORTS,
-    FONT_TEAM_SPORTS,
     FONT_STATUS,
-    SCOREBOARD_SCROLL_STEP,
-    SCOREBOARD_SCROLL_DELAY,
-    SCOREBOARD_SCROLL_PAUSE_TOP,
-    SCOREBOARD_SCROLL_PAUSE_BOTTOM,
-    SCOREBOARD_STANDINGS_BOTTOM_PADDING,
+    FONT_TEAM_SPORTS,
+    FONT_TITLE_SPORTS,
+    HEIGHT,
     SCOREBOARD_BACKGROUND_COLOR,
-    SCOREBOARD_IN_PROGRESS_SCORE_COLOR,
-    SCOREBOARD_FINAL_WINNING_SCORE_COLOR,
     SCOREBOARD_FINAL_LOSING_SCORE_COLOR,
+    SCOREBOARD_FINAL_WINNING_SCORE_COLOR,
+    SCOREBOARD_IN_PROGRESS_SCORE_COLOR,
+    SCOREBOARD_SCROLL_DELAY,
+    SCOREBOARD_SCROLL_PAUSE_BOTTOM,
+    SCOREBOARD_SCROLL_PAUSE_TOP,
+    SCOREBOARD_SCROLL_STEP,
+    SCOREBOARD_STANDINGS_BOTTOM_PADDING,
+    WIDTH,
     get_screen_background_color,
     get_screen_font,
     scale_value,
     scale_value_width,
 )
-from utils import ScreenImage, clear_display, scroll_vertical_content
-
 from screens.ncaam_scoreboard import (
-    _mode_title_and_logo,
-    _team_logo_height,
-    _load_remote_logo,
-    _team_logo_url,
-    _rank_for_display,
-    _draw_seed,
-    _seed_text_for_display,
+    MODE_TOURNAMENT,
+    _center_text,
     _draw_rank,
-    _is_in_progress,
+    _draw_seed,
+    _get_league_logo,
     _is_final,
-    _score_text,
+    _is_in_progress,
+    _load_remote_logo,
+    _mode_title_and_logo,
+    _rank_for_display,
+    _render_ncaam_scoreboard_v1,
     _score_fill,
+    _score_text,
+    _scoreboard_mode,
+    _seed_text_for_display,
     _should_display_scores,
     _status_text,
-    _center_text,
-    _get_league_logo,
-    _scoreboard_mode,
-    MODE_TOURNAMENT,
-    _render_ncaam_scoreboard_v1,
+    _team_logo_height,
+    _team_logo_url,
 )
+from utils import ScreenImage, clear_display, scroll_vertical_content
 
 SCREEN_ID = "NCAAM Scoreboard v2"
 MIN_GAMES_FOR_V2_LAYOUT = 6

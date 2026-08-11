@@ -9,8 +9,9 @@ import logging
 import os
 import sys
 import zipfile
+from collections.abc import Callable, Iterable
 from pathlib import Path
-from typing import Callable, Dict, Iterable, Optional, Tuple
+from typing import Optional
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
@@ -89,11 +90,11 @@ _load_project_root_env_file()
 
 import config
 import data_fetch
-from services.data_provider import provider as data_provider
+from paths import resolve_storage_paths
 from schedule import build_scheduler, load_schedule_config
 from screens_catalog import SCREEN_IDS
+from services.data_provider import provider as data_provider
 from utils import ScreenImage
-from paths import resolve_storage_paths
 
 try:
     import utils
@@ -335,7 +336,7 @@ def load_logo(
         return None
 
 
-def build_logo_map() -> Dict[str, Optional[Image.Image]]:
+def build_logo_map() -> dict[str, Optional[Image.Image]]:
     wolves_logo = None
     wolves_tri = (config.AHL_TEAM_TRICODE or "CHI").strip() or "CHI"
     for variant in {wolves_tri.upper(), wolves_tri.lower()}:
@@ -361,9 +362,9 @@ def build_logo_map() -> Dict[str, Optional[Image.Image]]:
     }
 
 
-def build_cache() -> Dict[str, object]:
+def build_cache() -> dict[str, object]:
     logging.info("Refreshing data feeds…")
-    cache: Dict[str, object] = {
+    cache: dict[str, object] = {
         "weather": None,
         "scoreboards": {
             "nfl": [],
@@ -456,7 +457,7 @@ def build_cache() -> Dict[str, object]:
     return cache
 
 
-def load_requested_screen_ids() -> Tuple[set[str], Optional[str]]:
+def load_requested_screen_ids() -> tuple[set[str], Optional[str]]:
     try:
         config = load_schedule_config(CONFIG_PATH)
         scheduler = build_scheduler(config)
@@ -481,12 +482,12 @@ def _extract_image(result: object, display: HeadlessDisplay) -> Optional[Image.I
     return display.current_image.copy()
 
 
-def _write_zip(assets: Iterable[Tuple[str, Image.Image]], timestamp: _dt.datetime) -> str:
+def _write_zip(assets: Iterable[tuple[str, Image.Image]], timestamp: _dt.datetime) -> str:
     os.makedirs(ARCHIVE_DIR, exist_ok=True)
     zip_name = f"screens_{timestamp.strftime('%Y%m%d_%H%M%S')}.zip"
     zip_path = os.path.join(ARCHIVE_DIR, zip_name)
 
-    counts: Dict[str, int] = {}
+    counts: dict[str, int] = {}
     with zipfile.ZipFile(zip_path, "w", compression=zipfile.ZIP_DEFLATED) as zf:
         for screen_id, image in assets:
             prefix = _sanitize_filename_prefix(screen_id)
@@ -501,7 +502,7 @@ def _write_zip(assets: Iterable[Tuple[str, Image.Image]], timestamp: _dt.datetim
 
 
 def _write_screenshots(
-    assets: Iterable[Tuple[str, Image.Image]], timestamp: _dt.datetime
+    assets: Iterable[tuple[str, Image.Image]], timestamp: _dt.datetime
 ) -> list[str]:
     dated_dir = os.path.join(SCREENSHOT_DIR, timestamp.strftime("%Y%m%d"))
     os.makedirs(dated_dir, exist_ok=True)
@@ -510,7 +511,7 @@ def _write_screenshots(
     saved: list[str] = []
     current_written: set[str] = set()
     ts_suffix = timestamp.strftime("%Y%m%d_%H%M%S")
-    counts: Dict[str, int] = {}
+    counts: dict[str, int] = {}
 
     for screen_id, image in assets:
         prefix = _sanitize_filename_prefix(screen_id)
@@ -618,7 +619,7 @@ def _render_all_screens_impl(
 
     restore_sleep = _suppress_animation_delay()
     restore_images = _suppress_image_loading() if suppress_images else lambda: None
-    assets: list[Tuple[str, Image.Image]] = []
+    assets: list[tuple[str, Image.Image]] = []
     now = _dt.datetime.now(config.CENTRAL_TIME)
     try:
         display = HeadlessDisplay()
@@ -633,7 +634,7 @@ def _render_all_screens_impl(
                 logging.info("Continuing without schedule data (%s)", schedule_error)
 
         now = _dt.datetime.now(config.CENTRAL_TIME)
-        now_utc = _dt.datetime.now(_dt.timezone.utc)
+        now_utc = _dt.datetime.now(_dt.UTC)
         weather_fetched_at = data_fetch.get_weather_cache_timestamp()
         context = ScreenContext(
             display=display,

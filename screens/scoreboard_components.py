@@ -8,18 +8,19 @@ logo placement, text centering, no-games, header, and scroll behavior.
 from __future__ import annotations
 
 import time
-from typing import Callable, Optional, Sequence
+from collections.abc import Callable, Sequence
+from typing import Optional
 
 from PIL import Image, ImageDraw
 
 from config import (
     HEIGHT,
-    WIDTH,
     SCOREBOARD_SCROLL_DELAY,
     SCOREBOARD_SCROLL_PAUSE_BOTTOM,
     SCOREBOARD_SCROLL_PAUSE_TOP,
     SCOREBOARD_SCROLL_STEP,
     SCOREBOARD_STANDINGS_BOTTOM_PADDING,
+    WIDTH,
 )
 from utils import ScreenImage, clear_display, log_missing_team_logo, scroll_vertical_content
 
@@ -71,6 +72,59 @@ def text_height(text: str, font, *, background_color) -> int:
     except Exception:
         _w, h = draw.textsize(text, font=font)
         return h
+
+
+def score_value(side: dict) -> Optional[int]:
+    """Coerce a competitor's raw score field to an int, if possible."""
+    score = (side or {}).get("score")
+    if isinstance(score, (int, float)):
+        return int(score)
+    if isinstance(score, str):
+        cleaned = score.strip()
+        if cleaned.isdigit():
+            try:
+                return int(cleaned)
+            except Exception:
+                return None
+        try:
+            return int(float(cleaned))
+        except Exception:
+            return None
+    return None
+
+
+def team_result(side: dict, opponent: dict) -> Optional[str]:
+    """Return "win"/"loss" for *side* against *opponent*, or None if undetermined."""
+    for key in ("isWinner", "winner", "won"):
+        value = (side or {}).get(key)
+        if isinstance(value, bool):
+            return "win" if value else "loss"
+
+    side_score = score_value(side)
+    opp_score = score_value(opponent)
+    if side_score is not None and opp_score is not None:
+        if side_score > opp_score:
+            return "win"
+        if side_score < opp_score:
+            return "loss"
+    return None
+
+
+def final_results(away: dict, home: dict) -> dict:
+    """Return {"away": ..., "home": ...} win/loss results, reconciled both ways."""
+    away_result = team_result(away, home)
+    home_result = team_result(home, away)
+
+    if away_result == "win":
+        home_result = "loss"
+    elif away_result == "loss":
+        home_result = "win"
+    elif home_result == "win":
+        away_result = "loss"
+    elif home_result == "loss":
+        away_result = "win"
+
+    return {"away": away_result, "home": home_result}
 
 
 def score_fill(team_key: str, *, in_progress: bool, final: bool, results: dict, in_progress_color, winning_color, losing_color, default=WHITE):

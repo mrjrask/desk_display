@@ -21,7 +21,7 @@ import argparse
 import json
 import sys
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 if str(REPO_ROOT) not in sys.path:
@@ -30,19 +30,19 @@ if str(REPO_ROOT) not in sys.path:
 from config_ui import _build_screen_entries, _load_active_config, _load_active_style_config
 
 
-def _parse_alt_screen(value: str) -> List[str]:
+def _parse_alt_screen(value: str) -> list[str]:
     if not value:
         return []
     return [item.strip() for item in value.split(",") if item.strip()]
 
 
-def _build_playlist_assignments(config: Dict[str, Any]) -> tuple[list[dict[str, str]], dict[str, str]]:
+def _build_playlist_assignments(config: dict[str, Any]) -> tuple[list[dict[str, str]], dict[str, str]]:
     config_playlists = config.get("playlists")
     if not isinstance(config_playlists, dict):
         return [], {}
 
     sequence = config.get("sequence")
-    ordered_ids: List[str] = []
+    ordered_ids: list[str] = []
     if isinstance(sequence, list):
         for item in sequence:
             if isinstance(item, dict):
@@ -77,8 +77,8 @@ def _build_playlist_assignments(config: Dict[str, Any]) -> tuple[list[dict[str, 
     return playlists, assignments
 
 
-def _build_config_payload(screens: List[Dict[str, Any]], config: Dict[str, Any]) -> Dict[str, Any]:
-    screens_payload: Dict[str, Any] = {}
+def _build_config_payload(screens: list[dict[str, Any]], config: dict[str, Any]) -> dict[str, Any]:
+    screens_payload: dict[str, Any] = {}
     for screen in screens:
         screen_id = str(screen.get("id", "")).strip()
         if not screen_id:
@@ -99,7 +99,7 @@ def _build_config_payload(screens: List[Dict[str, Any]], config: Dict[str, Any])
         hide_after_enabled = bool(screen.get("hide_after_enabled", False)) and bool(hide_after_at)
 
         alt_screens = _parse_alt_screen(str(screen.get("alt_screen", "")).strip())
-        base_spec: Dict[str, Any] = {"frequency": frequency}
+        base_spec: dict[str, Any] = {"frequency": frequency}
         if extra_seconds > 0:
             base_spec["extra_seconds"] = extra_seconds
         if hide_after_enabled:
@@ -123,7 +123,7 @@ def _build_config_payload(screens: List[Dict[str, Any]], config: Dict[str, Any])
             screens_payload[screen_id] = base_spec
 
     playlists, assignments = _build_playlist_assignments(config)
-    playlists_payload: Dict[str, Any] = {}
+    playlists_payload: dict[str, Any] = {}
     for playlist in playlists:
         pid = playlist["id"]
         steps = [
@@ -143,8 +143,8 @@ def _build_config_payload(screens: List[Dict[str, Any]], config: Dict[str, Any])
     }
 
 
-def _build_style_payload(screens: List[Dict[str, Any]]) -> Dict[str, Any]:
-    screens_payload: Dict[str, Dict[str, str]] = {}
+def _build_style_payload(screens: list[dict[str, Any]]) -> dict[str, Any]:
+    screens_payload: dict[str, dict[str, str]] = {}
     for screen in screens:
         screen_id = str(screen.get("id", "")).strip()
         if not screen_id:

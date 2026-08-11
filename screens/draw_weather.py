@@ -14,6 +14,7 @@ Screen 2:
   • Each label/value pair vertically centered within its row.
 """
 
+import contextlib
 import datetime
 import logging
 import math
@@ -21,7 +22,7 @@ import re
 import textwrap
 import time
 from io import BytesIO
-from typing import Any, NamedTuple, Optional, Tuple
+from typing import Any, NamedTuple, Optional
 
 from PIL import Image, ImageDraw, ImageFont
 
@@ -31,7 +32,6 @@ from config import (
     EMOJI_EMBEDDED_COLOR,
     FONT_CONDITION,
     FONT_EMOJI,
-    FONT_EMOJI_SMALL,
     FONT_TEMP,
     FONT_WEATHER_DETAILS,
     FONT_WEATHER_DETAILS_BOLD,
@@ -193,10 +193,8 @@ def _weather_history_points(weather: dict[str, Any], metric: str) -> list[tuple[
 
         current = weather.get("current")
         if isinstance(current, dict):
-            try:
+            with contextlib.suppress(TypeError, ValueError):
                 points.append((float(current.get("dt")), float(current.get(metric))))
-            except (TypeError, ValueError):
-                pass
     return sorted(points, key=lambda point: point[0])
 
 
@@ -285,7 +283,7 @@ def _draw_text_with_fallback(
     position: tuple[int, int],
     text: str,
     font: ImageFont.FreeTypeFont,
-    fill: Tuple[int, int, int] | Tuple[int, int, int, int],
+    fill: tuple[int, int, int] | tuple[int, int, int, int],
 ) -> None:
     """Draw text, retrying without embedded color if needed."""
 
@@ -302,7 +300,7 @@ def _draw_text_with_fallback(
 def _render_emoji_glyph(
     emoji: str,
     font: ImageFont.FreeTypeFont,
-    fill: Tuple[int, int, int] | Tuple[int, int, int, int],
+    fill: tuple[int, int, int] | tuple[int, int, int, int],
 ) -> Image.Image:
     scratch = Image.new("RGB", (1, 1))
     scratch_draw = ImageDraw.Draw(scratch)
@@ -433,18 +431,12 @@ def _is_snow_condition(entry: object) -> bool:
     description = (weather.get("description") or "").strip().lower()
     if any(token in description for token in frozen_tokens):
         return True
-    if entry.get("snow"):
-        return True
-
-    return False
+    return bool(entry.get("snow"))
 
 
 def _normalise_alerts(weather: object) -> list:
     alerts = []
-    if isinstance(weather, dict):
-        raw_alerts = weather.get("alerts")
-    else:
-        raw_alerts = None
+    raw_alerts = weather.get("alerts") if isinstance(weather, dict) else None
 
     if isinstance(raw_alerts, list):
         alerts = [alert for alert in raw_alerts if isinstance(alert, dict)]
@@ -488,7 +480,7 @@ def _classify_alert(alert: dict) -> Optional[str]:
     return None
 
 
-def _render_precip_icon(is_snow: bool, size: int, color: Tuple[int, int, int]) -> Image.Image:
+def _render_precip_icon(is_snow: bool, size: int, color: tuple[int, int, int]) -> Image.Image:
     """Return a simple precipitation marker that doesn't rely on emoji fonts.
 
     Some systems don't ship an emoji font Pillow can render, which results in
@@ -697,7 +689,7 @@ def _draw_alert_message_banner(
 
 def _detect_weather_alert(
     weather: object,
-) -> Tuple[Optional[str], Optional[Tuple[float, float, float]]]:
+) -> tuple[Optional[str], Optional[tuple[float, float, float]]]:
     severity, _alert = _selected_alert(weather)
     return severity, ALERT_LED_COLORS.get(severity)
 
@@ -1866,9 +1858,7 @@ def _normalise_moon_phase(phase: object) -> tuple[float | None, str]:
 
 def _moon_phase_is_waxing(phase: object, phase_label: str) -> bool:
     phase_text = f"{phase or ''} {phase_label}".lower()
-    if "waning" in phase_text or "last" in phase_text or "third" in phase_text:
-        return False
-    return True
+    return not ("waning" in phase_text or "last" in phase_text or "third" in phase_text)
 
 
 def _moon_illumination_mask(radius: int, phase_fraction: float, waxing: bool) -> Image.Image:
@@ -2261,10 +2251,7 @@ def draw_weather_screen_2(display, weather, transition=False):
 
     now = datetime.datetime.now(CENTRAL_TIME)
     next_label, next_time = _next_sun_event(weather.get("daily"), now=now)
-    if next_label and next_time:
-        items = [(next_label, next_time.strftime("%-I:%M %p"))]
-    else:
-        items = []
+    items = [(next_label, next_time.strftime("%-I:%M %p"))] if next_label and next_time else []
 
     # Other details
     wind_speed = round(current.get('wind_speed', 0))
@@ -2437,7 +2424,7 @@ def _fetch_radar_frames(zoom: int = 7, max_frames: int = 6) -> list[RadarFrame]:
     if not frames:
         return []
 
-    now_ts = int(datetime.datetime.now(datetime.timezone.utc).timestamp())
+    now_ts = int(datetime.datetime.now(datetime.UTC).timestamp())
     fresh_frames = [
         frame
         for frame in frames
@@ -2522,7 +2509,7 @@ def _fetch_iem_radar_fallback_frames(zoom: int = 7) -> list[RadarFrame]:
         return []
 
     final_frame = tile.resize((WIDTH, HEIGHT), Image.LANCZOS).convert("RGBA")
-    return [RadarFrame(final_frame, int(datetime.datetime.now(datetime.timezone.utc).timestamp()))]
+    return [RadarFrame(final_frame, int(datetime.datetime.now(datetime.UTC).timestamp()))]
 
 
 def _fetch_base_map(zoom: int = 7) -> Optional[Image.Image]:

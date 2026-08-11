@@ -6,8 +6,6 @@ import utils
 from utils import compute_adaptive_scroll_params, scroll_vertical_content
 
 
-
-
 @pytest.fixture(autouse=True)
 def _fast_scroll_sleep(monkeypatch):
     now = [time.monotonic()]

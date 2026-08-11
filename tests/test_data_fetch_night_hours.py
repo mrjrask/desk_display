@@ -1,7 +1,7 @@
 import datetime
 
-from data_fetch import _is_night_time_hourly
 from config import CENTRAL_TIME
+from data_fetch import _is_night_time_hourly
 
 
 def _to_ts(year: int, month: int, day: int, hour: int) -> int:

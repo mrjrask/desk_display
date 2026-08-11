@@ -1,5 +1,6 @@
+from datetime import UTC, datetime
+
 import pytest
-from datetime import datetime, timezone
 
 from schedule import KNOWN_SCREENS, build_scheduler, sanitize_schedule_config
 from screens.registry import ScreenDefinition
@@ -299,7 +300,7 @@ def test_scheduler_skips_screen_after_hide_after_datetime(monkeypatch):
     class _FutureDateTime:
         @staticmethod
         def now(tz=None):
-            return datetime(2026, 4, 6, 0, 0, tzinfo=timezone.utc)
+            return datetime(2026, 4, 6, 0, 0, tzinfo=UTC)
 
     monkeypatch.setattr("schedule.datetime", _FutureDateTime)
     sequence = collect_sequence(scheduler, registry, 4)

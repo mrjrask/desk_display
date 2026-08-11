@@ -49,7 +49,7 @@ def test_astronomical_layout_compacts_vertical_small_panels():
 
 
 def test_astronomy_time_text_is_12_hour_central_without_leading_zero():
-    utc_event = datetime.datetime(2026, 1, 1, 7, 5, tzinfo=datetime.timezone.utc)
+    utc_event = datetime.datetime(2026, 1, 1, 7, 5, tzinfo=datetime.UTC)
     assert _astronomy_time_text(utc_event) == "1:05 AM"
 
     central_event = datetime.datetime(2026, 1, 1, 13, 5, tzinfo=CENTRAL_TIME)

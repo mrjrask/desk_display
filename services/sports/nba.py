@@ -2,13 +2,18 @@
 
 from __future__ import annotations
 
+import contextlib
 import datetime
 import logging
-from typing import Any, Dict, Iterable, Optional
+from collections.abc import Iterable
+from typing import Any, Optional
 
 from config import CENTRAL_TIME
 from services.http_client import get_session
-from services.sports.scoreboard_window import before_scoreboard_update, compose_pre_update_scoreboard
+from services.sports.scoreboard_window import (
+    before_scoreboard_update,
+    compose_pre_update_scoreboard,
+)
 
 REQUEST_TIMEOUT = 10
 _SESSION = get_session()
@@ -102,14 +107,14 @@ def _timestamp_to_local(ts: str) -> Optional[datetime.datetime]:
         except Exception:
             continue
         else:
-            dt = dt.replace(tzinfo=datetime.timezone.utc)
+            dt = dt.replace(tzinfo=datetime.UTC)
             return dt.astimezone(CENTRAL_TIME)
     try:
         dt = datetime.datetime.fromisoformat(text.replace("Z", "+00:00"))
     except Exception:
         return None
     if dt.tzinfo is None:
-        dt = dt.replace(tzinfo=datetime.timezone.utc)
+        dt = dt.replace(tzinfo=datetime.UTC)
     return dt.astimezone(CENTRAL_TIME)
 
 
@@ -135,7 +140,7 @@ def _hydrate_games(raw_games: Iterable[dict]) -> list[dict]:
     return games
 
 
-def _parse_period_info(game: Dict[str, Any]) -> tuple[Optional[int], str, Optional[int]]:
+def _parse_period_info(game: dict[str, Any]) -> tuple[Optional[int], str, Optional[int]]:
     period_info = game.get("period")
     period_type = ""
     final_period = None
@@ -152,10 +157,8 @@ def _parse_period_info(game: Dict[str, Any]) -> tuple[Optional[int], str, Option
                     pass
         period_type = str(period_info.get("type") or period_info.get("periodType") or "").upper()
     elif period_info not in (None, ""):
-        try:
+        with contextlib.suppress(Exception):
             number = int(period_info)
-        except Exception:
-            pass
 
     descriptor = game.get("periodDescriptor") or {}
     if isinstance(descriptor, dict):
@@ -172,10 +175,8 @@ def _parse_period_info(game: Dict[str, Any]) -> tuple[Optional[int], str, Option
             period_type = str(descriptor.get("type") or descriptor.get("periodType") or "").upper()
         final_period_val = descriptor.get("maxRegular") or descriptor.get("max") or descriptor.get("total")
         if final_period_val not in (None, ""):
-            try:
+            with contextlib.suppress(Exception):
                 final_period = int(final_period_val)
-            except Exception:
-                pass
 
     if final_period is None:
         final_period = number
@@ -183,7 +184,7 @@ def _parse_period_info(game: Dict[str, Any]) -> tuple[Optional[int], str, Option
     return number, period_type, final_period
 
 
-def _map_team(team: Dict[str, Any]) -> Dict[str, Any]:
+def _map_team(team: dict[str, Any]) -> dict[str, Any]:
     team = team or {}
     abbr = ""
     for key in ("teamTricode", "triCode", "tricode", "abbreviation", "abbr"):
@@ -207,7 +208,7 @@ def _map_team(team: Dict[str, Any]) -> Dict[str, Any]:
             break
     full_name = " ".join(name_parts).strip()
 
-    mapped: Dict[str, Any] = {"team": {}}
+    mapped: dict[str, Any] = {"team": {}}
     if abbr:
         mapped["team"]["abbreviation"] = abbr
         mapped["team"]["triCode"] = abbr
@@ -224,7 +225,7 @@ def _map_team(team: Dict[str, Any]) -> Dict[str, Any]:
     return mapped
 
 
-def _map_game(game: Dict[str, Any]) -> Dict[str, Any]:
+def _map_game(game: dict[str, Any]) -> dict[str, Any]:
     game = game or {}
     status_code_raw = game.get("gameStatus") or game.get("statusNum")
     status_code = ""
@@ -247,7 +248,7 @@ def _map_game(game: Dict[str, Any]) -> Dict[str, Any]:
         abstract = "preview"
 
     game_date = game.get("gameTimeUTC") or game.get("gameTime") or game.get("startTimeUTC") or game.get("gameDate")
-    mapped: Dict[str, Any] = {
+    mapped: dict[str, Any] = {
         "gamePk": game.get("gameId") or game.get("id") or game.get("gameCode"),
         "gameDate": game_date,
         "status": {
@@ -273,7 +274,7 @@ def _map_game(game: Dict[str, Any]) -> Dict[str, Any]:
     period_number, period_type, final_period = _parse_period_info(game)
     clock = _normalize_clock(game.get("gameClock") or game.get("clock"))
 
-    linescore: Dict[str, Any] = {}
+    linescore: dict[str, Any] = {}
     if period_number is not None:
         is_ot = False
         if period_number > 4 or period_type in {"OT", "OVERTIME"}:
@@ -300,7 +301,7 @@ def _map_game(game: Dict[str, Any]) -> Dict[str, Any]:
     return mapped
 
 
-def _espn_status_code(status_type: Dict[str, Any]) -> str:
+def _espn_status_code(status_type: dict[str, Any]) -> str:
     status_type = status_type or {}
     raw = status_type.get("id") or status_type.get("state") or status_type.get("name")
     code = ""
@@ -322,7 +323,7 @@ def _espn_status_code(status_type: Dict[str, Any]) -> str:
     return code
 
 
-def _espn_status_text(status: Dict[str, Any]) -> str:
+def _espn_status_text(status: dict[str, Any]) -> str:
     status = status or {}
     status_type = status.get("type") or {}
     for key in ("shortDetail", "detail", "description", "name"):
@@ -332,7 +333,7 @@ def _espn_status_text(status: Dict[str, Any]) -> str:
     return ""
 
 
-def _espn_status_abstract(status_code: str, status: Dict[str, Any]) -> str:
+def _espn_status_abstract(status_code: str, status: dict[str, Any]) -> str:
     status = status or {}
     status_type = status.get("type") or {}
     state = str(status_type.get("state") or "").lower()
@@ -345,14 +346,11 @@ def _espn_status_abstract(status_code: str, status: Dict[str, Any]) -> str:
     return {"3": "final", "2": "live", "1": "preview"}.get(status_code, "")
 
 
-def _map_espn_competitor(comp: Dict[str, Any]) -> Dict[str, Any]:
+def _map_espn_competitor(comp: dict[str, Any]) -> dict[str, Any]:
     comp = comp or {}
     team = comp.get("team") or {}
     abbr = team.get("abbreviation") or comp.get("teamAbbreviation") or ""
-    if isinstance(abbr, str):
-        abbr = abbr.strip().upper()
-    else:
-        abbr = ""
+    abbr = abbr.strip().upper() if isinstance(abbr, str) else ""
 
     location = team.get("location") or team.get("displayName") or ""
     nickname = team.get("name") or team.get("shortDisplayName") or ""
@@ -366,7 +364,7 @@ def _map_espn_competitor(comp: Dict[str, Any]) -> Dict[str, Any]:
         else:
             nickname = team["displayName"]
 
-    mapped: Dict[str, Any] = {
+    mapped: dict[str, Any] = {
         "teamTricode": abbr,
         "teamCity": location,
         "teamName": nickname,
@@ -376,7 +374,7 @@ def _map_espn_competitor(comp: Dict[str, Any]) -> Dict[str, Any]:
     return mapped
 
 
-def _map_espn_game(event: Dict[str, Any], competition: Dict[str, Any], day: datetime.date) -> Optional[Dict[str, Any]]:
+def _map_espn_game(event: dict[str, Any], competition: dict[str, Any], day: datetime.date) -> Optional[dict[str, Any]]:
     competition = competition or {}
     event_date = competition.get("date") or event.get("date")
     if event_date:
@@ -395,7 +393,7 @@ def _map_espn_game(event: Dict[str, Any], competition: Dict[str, Any], day: date
     except Exception:
         period_number = None
 
-    period_descriptor: Dict[str, Any] = {}
+    period_descriptor: dict[str, Any] = {}
     if period_number is not None:
         period_descriptor["period"] = period_number
         period_descriptor["maxRegular"] = 4
@@ -404,21 +402,16 @@ def _map_espn_game(event: Dict[str, Any], competition: Dict[str, Any], day: date
             period_descriptor["type"] = "OT"
 
     clock = status.get("displayClock") or status.get("clock")
-    if clock not in (None, ""):
-        clock = str(clock)
-    else:
-        clock = ""
+    clock = str(clock) if clock not in (None, "") else ""
 
-    home_team: Dict[str, Any] = {}
-    away_team: Dict[str, Any] = {}
+    home_team: dict[str, Any] = {}
+    away_team: dict[str, Any] = {}
     for competitor in competition.get("competitors") or []:
         mapped = _map_espn_competitor(competitor)
         side = (competitor.get("homeAway") or "").lower()
         if side == "home":
             home_team = mapped
-        elif side == "away":
-            away_team = mapped
-        elif not away_team:
+        elif side == "away" or not away_team:
             away_team = mapped
         else:
             home_team = home_team or mapped
@@ -427,7 +420,7 @@ def _map_espn_game(event: Dict[str, Any], competition: Dict[str, Any], day: date
     season_info = event.get("season") or {}
     season_type = season_info.get("type")
     season_slug = season_info.get("slug")
-    mapped_game: Dict[str, Any] = {
+    mapped_game: dict[str, Any] = {
         "gameId": game_id,
         "id": game_id,
         "gameCode": event.get("uid"),
@@ -514,7 +507,7 @@ def _reset_nba_cdn_fallback_notice() -> None:
 
 
 def _fetch_games_from_nba_cdn(day: datetime.date) -> list[dict]:
-    def _load_json(url: str, *, respect_forbidden_cache: bool = True) -> Optional[Dict[str, Any]]:
+    def _load_json(url: str, *, respect_forbidden_cache: bool = True) -> Optional[dict[str, Any]]:
         global _last_forbidden
 
         if (
@@ -547,7 +540,7 @@ def _fetch_games_from_nba_cdn(day: datetime.date) -> list[dict]:
             logging.error("Failed to fetch NBA scoreboard from %s: %s", url, exc)
             return None
 
-    data: Optional[Dict[str, Any]] = None
+    data: Optional[dict[str, Any]] = None
     source_base: Optional[str] = None
     today = datetime.date.today()
     for base, respect_cache in _NBA_SCOREBOARD_BASES:

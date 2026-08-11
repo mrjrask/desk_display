@@ -8,49 +8,46 @@ Compact layout with smaller fonts and logos for a denser presentation.
 
 from __future__ import annotations
 
-import argparse
-import datetime
-import logging
 import os
-import time
 from typing import Optional
 
 from PIL import Image, ImageDraw
 
 from config import (
-    WIDTH,
-    HEIGHT,
-    FONT_TITLE_SPORTS,
-    FONT_TEAM_SPORTS,
     FONT_STATUS,
-    CENTRAL_TIME,
+    FONT_TEAM_SPORTS,
+    FONT_TITLE_SPORTS,
+    HEIGHT,
     IMAGES_DIR,
-    SCOREBOARD_STANDINGS_BOTTOM_PADDING,
     SCOREBOARD_BACKGROUND_COLOR,
-    SCOREBOARD_IN_PROGRESS_SCORE_COLOR,
-    SCOREBOARD_FINAL_WINNING_SCORE_COLOR,
     SCOREBOARD_FINAL_LOSING_SCORE_COLOR,
+    SCOREBOARD_FINAL_WINNING_SCORE_COLOR,
+    SCOREBOARD_IN_PROGRESS_SCORE_COLOR,
+    WIDTH,
     get_screen_background_color,
     get_screen_font,
     get_screen_image_scale,
-    is_hdmi_1080p_layout,
-    is_kernel_driven_display,
-    is_hyperpixel_next_layout,
     is_display_profile,
+    is_hdmi_1080p_layout,
+    is_hyperpixel_next_layout,
+    is_kernel_driven_display,
     scale_value,
     scale_value_width,
 )
-from utils import (
-    ScreenImage,
-    clear_display,
-    load_team_logo,
-    log_call,
-    standard_scoreboard_league_logo_height,
-    clone_font,
-)
 
+# Import shared NHL render helpers from v1 module.
+from screens.nhl_scoreboard import (
+    _final_results,
+    _format_status,
+    _get_league_logo,
+    _is_game_final,
+    _is_game_in_progress,
+    _score_text,
+    _should_display_scores,
+    _team_logo_abbr,
+    render_nhl_scoreboard as render_nhl_scoreboard_v1,
+)
 from screens.scoreboard_components import (
-    center_text as _center_text,
     display_no_games,
     display_or_scroll_scoreboard,
     draw_score_game_row,
@@ -59,21 +56,15 @@ from screens.scoreboard_components import (
     score_fill as shared_score_fill,
     scroll_display,
 )
-# Import shared NHL render helpers from v1 module.
-from screens.nhl_scoreboard import (
-    _is_game_in_progress,
-    _is_game_final,
-    _should_display_scores,
-    _score_text,
-    _score_value,
-    _team_result,
-    _final_results,
-    _format_status,
-    _team_logo_abbr,
-    _get_league_logo,
-    render_nhl_scoreboard as render_nhl_scoreboard_v1,
-)
 from services.sports.nhl import fetch_scoreboard
+from utils import (
+    ScreenImage,
+    clear_display,
+    clone_font,
+    load_team_logo,
+    log_call,
+    standard_scoreboard_league_logo_height,
+)
 
 # ─── Constants ────────────────────────────────────────────────────────────────
 HYPERPIXEL_LAYOUT = is_hyperpixel_next_layout()

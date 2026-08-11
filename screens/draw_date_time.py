@@ -17,12 +17,13 @@ Options:
 - GH_ICON_SIZE:   height of the GitHub icon in pixels.
 """
 
+import contextlib
+import datetime
+import logging
 import threading
 import time
-import datetime
-from typing import Tuple, Literal, Callable
-
-import logging
+from collections.abc import Callable
+from typing import Literal
 
 from PIL import Image, ImageDraw, ImageFont
 
@@ -30,25 +31,24 @@ _IP_OVERLAY_FONT: ImageFont.ImageFont | None = None
 _IP_OVERLAY_BOTTOM_PADDING = 6
 
 from config import (
-    WIDTH,
-    HEIGHT,
-    FONT_DAY_DATE,
-    FONT_DATE,
-    FONT_TIME,
-    FONT_AM_PM,
     DATE_TIME_GH_ICON_INVERT,
-    DATE_TIME_GH_ICON_SIZE,
     DATE_TIME_GH_ICON_PATHS,
-    is_hyperpixel_next_layout,
-    is_hyperpixel_4_square_layout,
-    is_kernel_driven_display,
+    DATE_TIME_GH_ICON_SIZE,
+    FONT_AM_PM,
+    FONT_DATE,
+    FONT_DAY_DATE,
+    FONT_TIME,
+    HEIGHT,
+    IP_WITH_TIME,
+    SCREEN_DELAY,
+    WIDTH,
     get_display_profile_id,
     get_screen_background_color,
-    SCREEN_DELAY,
-    IP_WITH_TIME,
+    is_hyperpixel_4_square_layout,
+    is_hyperpixel_next_layout,
+    is_kernel_driven_display,
 )
 from services.wifi_utils import get_assigned_ipv4
-
 from utils import (
     ScreenImage,
     bright_color,
@@ -122,8 +122,8 @@ def _assigned_ip_overlay_text() -> str:
 
 def _compose_frame(
     order: Literal["date_time", "time_date"],
-    col_top: Tuple[int,int,int],
-    col_bottom: Tuple[int,int,int],
+    col_top: tuple[int,int,int],
+    col_bottom: tuple[int,int,int],
     gh_on: bool,
     screen_id: str,
 ) -> Image.Image:
@@ -299,13 +299,11 @@ def _cycle_colors_after_load(
             takeover_observations = 0
         img = _compose_frame(base_order, bright_color(), bright_color(), gh_state(), screen_id)
         display.image(img)
-        try:
-            # Some display drivers (notably HyperPixel/HDMI paths) only flush
-            # framebuffer updates when show() is called.
+        # Some display drivers (notably HyperPixel/HDMI paths) only flush
+        # framebuffer updates when show() is called. Drivers that auto-refresh
+        # on image() do not expose show().
+        with contextlib.suppress(AttributeError):
             display.show()
-        except AttributeError:
-            # Drivers that auto-refresh on image() do not expose show().
-            pass
         if hasattr(display, "frame_id"):
             latest_frame_id = display.frame_id()
             # Track the frame id that *this* screen last rendered so we only stop
@@ -322,7 +320,7 @@ def _cycle_colors_after_load(
 
 def _start_update_checks(
     order: Literal["date_time", "time_date"],
-    colors: Tuple[Tuple[int, int, int], Tuple[int, int, int]],
+    colors: tuple[tuple[int, int, int], tuple[int, int, int]],
     gh_state: dict,
     display,
     screen_id: str,
@@ -356,10 +354,8 @@ def _start_update_checks(
             if frame_state is not None and hasattr(display, "frame_id"):
                 with frame_state["lock"]:
                     frame_state["value"] = display.frame_id()
-            try:
+            with contextlib.suppress(AttributeError):
                 display.show()
-            except AttributeError:
-                pass
         except Exception:
             logging.exception("Background update checks failed")
 
@@ -413,11 +409,9 @@ def draw_date(display, transition: bool=False):
 
     clear_display(display)
     display.image(img)
-    try:
+    # Some display drivers immediately refresh when image() is called.
+    with contextlib.suppress(AttributeError):
         display.show()
-    except AttributeError:
-        # Some display drivers immediately refresh when image() is called.
-        pass
     frame_id = display.frame_id()
     frame_state = {"value": frame_id, "lock": threading.Lock()}
     _start_update_checks(

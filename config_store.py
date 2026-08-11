@@ -1,13 +1,13 @@
 """Configuration storage with versioning, rollback, and pruning."""
 from __future__ import annotations
 
+import contextlib
 import datetime as _dt
 import json
 import os
 import sqlite3
 from pathlib import Path
-from typing import Any, Dict, List, Optional
-
+from typing import Any, Optional
 
 DEFAULT_RETENTION = 25
 
@@ -31,7 +31,7 @@ class ConfigStore:
 
     # ------------------------------------------------------------------
     # Public API
-    def load(self) -> Dict[str, Any]:
+    def load(self) -> dict[str, Any]:
         try:
             with self.config_path.open("r", encoding="utf-8") as fh:
                 data = json.load(fh)
@@ -43,11 +43,11 @@ class ConfigStore:
 
     def save(
         self,
-        config: Dict[str, Any],
+        config: dict[str, Any],
         *,
         actor: str = "system",
         summary: Optional[str] = None,
-        metadata: Optional[Dict[str, Any]] = None,
+        metadata: Optional[dict[str, Any]] = None,
     ) -> int:
         current = self.load()
         summary = summary or summarise_diff(current, config)
@@ -59,7 +59,7 @@ class ConfigStore:
         self._prune_history()
         return version_id
 
-    def list_versions(self, limit: int = 20) -> List[Dict[str, Any]]:
+    def list_versions(self, limit: int = 20) -> list[dict[str, Any]]:
         query = """
             SELECT id, created_at, actor, summary
             FROM config_versions
@@ -76,7 +76,7 @@ class ConfigStore:
             row = conn.execute("SELECT id FROM config_versions ORDER BY id DESC LIMIT 1").fetchone()
         return int(row[0]) if row else None
 
-    def load_version(self, version_id: int) -> Dict[str, Any]:
+    def load_version(self, version_id: int) -> dict[str, Any]:
         with sqlite3.connect(self.db_path) as conn:
             conn.row_factory = sqlite3.Row
             row = conn.execute(
@@ -90,7 +90,7 @@ class ConfigStore:
             raise ValueError("Stored configuration is not a JSON object")
         return payload
 
-    def rollback(self, version_id: int, *, actor: str = "system") -> Dict[str, Any]:
+    def rollback(self, version_id: int, *, actor: str = "system") -> dict[str, Any]:
         config = self.load_version(version_id)
         summary = f"Rollback to version {version_id}"
         self.save(config, actor=actor, summary=summary, metadata={"rollback_from": version_id})
@@ -116,7 +116,7 @@ class ConfigStore:
             conn.commit()
         os.makedirs(self.archive_dir, exist_ok=True)
 
-    def _write_config(self, config: Dict[str, Any]) -> None:
+    def _write_config(self, config: dict[str, Any]) -> None:
         tmp_path = self.config_path.with_suffix(".tmp")
         with tmp_path.open("w", encoding="utf-8") as fh:
             json.dump(config, fh, indent=2, sort_keys=False)
@@ -125,15 +125,15 @@ class ConfigStore:
 
     def _record_version(
         self,
-        config: Dict[str, Any],
+        config: dict[str, Any],
         *,
         actor: str,
         summary: str,
-        metadata: Dict[str, Any],
+        metadata: dict[str, Any],
     ) -> int:
         payload = json.dumps(config, indent=2, sort_keys=False)
         metadata_json = json.dumps(metadata, sort_keys=True)
-        created_at = _dt.datetime.now(_dt.timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z")
+        created_at = _dt.datetime.now(_dt.UTC).isoformat(timespec="seconds").replace("+00:00", "Z")
 
         with sqlite3.connect(self.db_path) as conn:
             cursor = conn.execute(
@@ -165,16 +165,14 @@ class ConfigStore:
                 conn.commit()
 
         for archive_file in sorted(self.archive_dir.glob("*.json"))[:-self.retention]:
-            try:
+            with contextlib.suppress(OSError):
                 archive_file.unlink()
-            except OSError:
-                pass
 
 
-def summarise_diff(old: Dict[str, Any], new: Dict[str, Any]) -> str:
+def summarise_diff(old: dict[str, Any], new: dict[str, Any]) -> str:
     """Generate a human-readable summary of configuration changes."""
 
-    def _normalise_screens(config: Dict[str, Any]) -> Dict[str, Any]:
+    def _normalise_screens(config: dict[str, Any]) -> dict[str, Any]:
         screens = config.get("screens")
         if isinstance(screens, dict):
             return screens
@@ -183,9 +181,9 @@ def summarise_diff(old: Dict[str, Any], new: Dict[str, Any]) -> str:
     old_screens = _normalise_screens(old)
     new_screens = _normalise_screens(new)
 
-    added: List[str] = []
-    removed: List[str] = []
-    changed: List[str] = []
+    added: list[str] = []
+    removed: list[str] = []
+    changed: list[str] = []
 
     for key in sorted(set(old_screens) | set(new_screens)):
         if key not in old_screens:
@@ -195,7 +193,7 @@ def summarise_diff(old: Dict[str, Any], new: Dict[str, Any]) -> str:
         elif old_screens.get(key) != new_screens.get(key):
             changed.append(key)
 
-    parts: List[str] = []
+    parts: list[str] = []
     if added:
         parts.append("Added screens: " + ", ".join(added))
     if changed:

@@ -12,17 +12,23 @@ Use --dry-run to validate and preview normalized payloads without writing.
 from __future__ import annotations
 
 import argparse
+import contextlib
 import json
 import os
 import sys
+from collections.abc import Iterable
 from pathlib import Path
-from typing import Any, Dict, Iterable, List, Optional, Tuple
+from typing import Any, Optional
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-from paths import resolve_layouts_config_path, resolve_screens_config_paths, resolve_style_config_path
+from paths import (
+    resolve_layouts_config_path,
+    resolve_screens_config_paths,
+    resolve_style_config_path,
+)
 from schedule import build_scheduler
 from screens_catalog import SCREEN_IDS, canonical_screen_id
 
@@ -59,7 +65,7 @@ def _canonicalize_screen_reference(value: Any) -> Any:
     if isinstance(value, str):
         return canonical_screen_id(value)
     if isinstance(value, list):
-        canonical: List[str] = []
+        canonical: list[str] = []
         for item in value:
             if not isinstance(item, str):
                 continue
@@ -70,7 +76,7 @@ def _canonicalize_screen_reference(value: Any) -> Any:
     return value
 
 
-def _normalize_legacy_scoreboard_ids(config: Dict[str, Any]) -> tuple[Dict[str, Any], bool]:
+def _normalize_legacy_scoreboard_ids(config: dict[str, Any]) -> tuple[dict[str, Any], bool]:
     if not isinstance(config, dict):
         return config, False
 
@@ -78,7 +84,7 @@ def _normalize_legacy_scoreboard_ids(config: Dict[str, Any]) -> tuple[Dict[str, 
     normalized = dict(config)
     screens = normalized.get("screens")
     if isinstance(screens, dict):
-        cleaned_screens: Dict[str, Any] = {}
+        cleaned_screens: dict[str, Any] = {}
         for raw_screen_id, raw_spec in screens.items():
             if not isinstance(raw_screen_id, str):
                 continue
@@ -117,7 +123,7 @@ def _normalize_legacy_scoreboard_ids(config: Dict[str, Any]) -> tuple[Dict[str, 
 
     playlists = normalized.get("playlists")
     if isinstance(playlists, dict):
-        cleaned_playlists: Dict[str, Any] = {}
+        cleaned_playlists: dict[str, Any] = {}
         for playlist_id, playlist in playlists.items():
             if not isinstance(playlist, dict):
                 cleaned_playlists[playlist_id] = playlist
@@ -125,7 +131,7 @@ def _normalize_legacy_scoreboard_ids(config: Dict[str, Any]) -> tuple[Dict[str, 
             playlist_copy = dict(playlist)
             steps = playlist_copy.get("steps")
             if isinstance(steps, list):
-                cleaned_steps: List[Any] = []
+                cleaned_steps: list[Any] = []
                 for step in steps:
                     if not isinstance(step, dict):
                         cleaned_steps.append(step)
@@ -145,7 +151,7 @@ def _normalize_legacy_scoreboard_ids(config: Dict[str, Any]) -> tuple[Dict[str, 
     return normalized, changed
 
 
-def _validate_config_payload(data: Any) -> Dict[str, Any]:
+def _validate_config_payload(data: Any) -> dict[str, Any]:
     if not isinstance(data, dict):
         raise ValueError("Configuration must be a JSON object")
     screens = data.get("screens")
@@ -154,10 +160,10 @@ def _validate_config_payload(data: Any) -> Dict[str, Any]:
     return data
 
 
-def _normalize_import_config_payload(data: Dict[str, Any]) -> Dict[str, Any]:
+def _normalize_import_config_payload(data: dict[str, Any]) -> dict[str, Any]:
     normalized = _validate_config_payload(data)
     screens = normalized.get("screens", {})
-    normalized_screens: Dict[str, Any] = {}
+    normalized_screens: dict[str, Any] = {}
     for screen_id, raw in screens.items():
         canonical_id = canonical_screen_id(screen_id) if isinstance(screen_id, str) else screen_id
         if not isinstance(canonical_id, str):
@@ -177,19 +183,17 @@ def _normalize_import_config_payload(data: Dict[str, Any]) -> Dict[str, Any]:
             hide_after_at_raw = raw.get("hide_after_at")
             hide_after_at = str(hide_after_at_raw).strip() if hide_after_at_raw is not None else ""
 
-            alt_payload: Optional[Dict[str, Any]] = None
+            alt_payload: Optional[dict[str, Any]] = None
             alt = raw.get("alt")
             if isinstance(alt, dict):
                 alt_payload = dict(alt)
                 alt_payload["screen"] = _canonicalize_screen_reference(alt_payload.get("screen"))
                 alt_frequency = alt_payload.get("frequency")
                 if alt_frequency is not None:
-                    try:
+                    with contextlib.suppress(TypeError, ValueError):
                         alt_payload["frequency"] = int(alt_frequency)
-                    except (TypeError, ValueError):
-                        pass
 
-            normalized_spec: Dict[str, Any] = {"frequency": frequency_int}
+            normalized_spec: dict[str, Any] = {"frequency": frequency_int}
             if isinstance(extra_seconds, int) and extra_seconds > 0:
                 normalized_spec["extra_seconds"] = extra_seconds
             if alt_payload is not None:
@@ -211,7 +215,7 @@ def _normalize_import_config_payload(data: Dict[str, Any]) -> Dict[str, Any]:
     return cleaned
 
 
-def _default_layouts_config() -> Dict[str, Any]:
+def _default_layouts_config() -> dict[str, Any]:
     return {"screens": {"quad": {"enabled": False, "scroll_speed": 1.0, "pages": [{"tiles": ["date", "weather1", "weather hourly", "inside"]}]}}}
 
 
@@ -223,11 +227,11 @@ def _normalize_quad_scroll_speed(value: Any) -> float:
     return min(3.0, max(0.25, speed))
 
 
-def _normalize_quad_page(raw_page: Any, defaults: List[str]) -> Dict[str, Any]:
+def _normalize_quad_page(raw_page: Any, defaults: list[str]) -> dict[str, Any]:
     tiles_source = raw_page.get("tiles") if isinstance(raw_page, dict) else raw_page
     if not isinstance(tiles_source, list):
         tiles_source = []
-    tiles: List[str] = []
+    tiles: list[str] = []
     for item in tiles_source:
         if not isinstance(item, str):
             continue
@@ -242,7 +246,7 @@ def _normalize_quad_page(raw_page: Any, defaults: List[str]) -> Dict[str, Any]:
     return {"tiles": tiles}
 
 
-def _normalize_layouts_config(data: Any) -> Dict[str, Any]:
+def _normalize_layouts_config(data: Any) -> dict[str, Any]:
     result = _default_layouts_config()
     defaults = result["screens"]["quad"]["pages"][0]["tiles"]
     if not isinstance(data, dict):
@@ -255,7 +259,7 @@ def _normalize_layouts_config(data: Any) -> Dict[str, Any]:
         return result
     result["screens"]["quad"]["enabled"] = bool(quad.get("enabled", False))
     result["screens"]["quad"]["scroll_speed"] = _normalize_quad_scroll_speed(quad.get("scroll_speed", 1.0))
-    pages: List[Dict[str, Any]] = []
+    pages: list[dict[str, Any]] = []
     raw_pages = quad.get("pages")
     if isinstance(raw_pages, list):
         pages = [_normalize_quad_page(raw_page, defaults) for raw_page in raw_pages]
@@ -267,16 +271,16 @@ def _normalize_layouts_config(data: Any) -> Dict[str, Any]:
     return result
 
 
-def _load_active_layouts_config() -> Dict[str, Any]:
+def _load_active_layouts_config() -> dict[str, Any]:
     try:
-        with open(LAYOUTS_CONFIG_PATH, "r", encoding="utf-8") as fh:
+        with open(LAYOUTS_CONFIG_PATH, encoding="utf-8") as fh:
             data = json.load(fh)
     except FileNotFoundError:
         return _default_layouts_config()
     return _normalize_layouts_config(data)
 
 
-def _save_layouts_config(config: Dict[str, Any]) -> None:
+def _save_layouts_config(config: dict[str, Any]) -> None:
     tmp_path = f"{LAYOUTS_CONFIG_PATH}.tmp"
     with open(tmp_path, "w", encoding="utf-8") as fh:
         json.dump(config, fh, indent=2)
@@ -284,7 +288,7 @@ def _save_layouts_config(config: Dict[str, Any]) -> None:
     os.replace(tmp_path, LAYOUTS_CONFIG_PATH)
 
 
-def _build_layouts(entries: Dict[str, Any]) -> Dict[str, Any]:
+def _build_layouts(entries: dict[str, Any]) -> dict[str, Any]:
     if not isinstance(entries, dict):
         raise ValueError("Invalid layouts payload")
     quad_enabled = bool(entries.get("quad_enabled", False))
@@ -297,7 +301,7 @@ def _build_layouts(entries: Dict[str, Any]) -> Dict[str, Any]:
         else:
             raise ValueError("quad_pages must be a list")
     defaults = _default_layouts_config()["screens"]["quad"]["pages"][0]["tiles"]
-    pages: List[Dict[str, Any]] = []
+    pages: list[dict[str, Any]] = []
     for raw_page in raw_pages:
         if isinstance(raw_page, dict):
             pages.append(_normalize_quad_page(raw_page, defaults))
@@ -306,9 +310,9 @@ def _build_layouts(entries: Dict[str, Any]) -> Dict[str, Any]:
     return {"screens": {"quad": {"enabled": quad_enabled, "scroll_speed": quad_scroll_speed, "pages": pages}}}
 
 
-def _load_active_style_config() -> Dict[str, Any]:
+def _load_active_style_config() -> dict[str, Any]:
     try:
-        with open(STYLE_CONFIG_PATH, "r", encoding="utf-8") as fh:
+        with open(STYLE_CONFIG_PATH, encoding="utf-8") as fh:
             data = json.load(fh)
     except FileNotFoundError:
         return {"screens": {}}
@@ -335,14 +339,14 @@ def _rgb_to_hex(rgb: Iterable[int]) -> str:
     return "#{0:02X}{1:02X}{2:02X}".format(*channels)
 
 
-def _default_background_for_screen(screen_id: str) -> Tuple[int, int, int]:
+def _default_background_for_screen(screen_id: str) -> tuple[int, int, int]:
     lowered = screen_id.lower()
     if any(token in lowered for token in ("scoreboard", "standings", "overview", "stand1", "stand2", "stand3")):
         return (125, 125, 125)
     return (0, 0, 0)
 
 
-def _validate_style_payload(data: Any) -> Dict[str, Any]:
+def _validate_style_payload(data: Any) -> dict[str, Any]:
     if data is None:
         return {"screens": {}}
     if not isinstance(data, dict):
@@ -352,8 +356,8 @@ def _validate_style_payload(data: Any) -> Dict[str, Any]:
         return {"screens": {}}
     if not isinstance(screens, dict):
         raise ValueError("Style configuration must include a 'screens' mapping")
-    invalid_screens: List[str] = []
-    normalised_screens: Dict[str, Dict[str, str]] = {}
+    invalid_screens: list[str] = []
+    normalised_screens: dict[str, dict[str, str]] = {}
     for screen_id, spec in screens.items():
         if not isinstance(screen_id, str):
             continue
@@ -376,21 +380,21 @@ def _validate_style_payload(data: Any) -> Dict[str, Any]:
     return {"screens": normalised_screens}
 
 
-def _build_screen_entries(config: Dict[str, Any], style_config: Dict[str, Any]) -> List[Dict[str, Any]]:
+def _build_screen_entries(config: dict[str, Any], style_config: dict[str, Any]) -> list[dict[str, Any]]:
     screens = config.get("screens", {})
     if not isinstance(screens, dict):
         return []
     style_screens = style_config.get("screens", {})
     if not isinstance(style_screens, dict):
         style_screens = {}
-    ordered_screen_ids: List[str] = [screen_id for screen_id in screens.keys() if screen_id not in HIDDEN_CONFIG_SCREEN_IDS]
+    ordered_screen_ids: list[str] = [screen_id for screen_id in screens.keys() if screen_id not in HIDDEN_CONFIG_SCREEN_IDS]
     for screen_id in SCREEN_IDS:
         if screen_id not in HIDDEN_CONFIG_SCREEN_IDS and screen_id not in ordered_screen_ids:
             ordered_screen_ids.append(screen_id)
-    entries: List[Dict[str, Any]] = []
+    entries: list[dict[str, Any]] = []
     for screen_id in ordered_screen_ids:
         raw = screens.get(screen_id, 0)
-        entry: Dict[str, Any] = {
+        entry: dict[str, Any] = {
             "id": screen_id,
             "frequency": 0,
             "extra_seconds": 0,
@@ -423,8 +427,8 @@ def _build_screen_entries(config: Dict[str, Any], style_config: Dict[str, Any]) 
     return entries
 
 
-def _build_config(entries: List[Dict[str, Any]]) -> Dict[str, Any]:
-    screens: Dict[str, Any] = {}
+def _build_config(entries: list[dict[str, Any]]) -> dict[str, Any]:
+    screens: dict[str, Any] = {}
     for entry in entries:
         screen_id = canonical_screen_id(str(entry.get("id", "")).strip())
         if not screen_id or screen_id in HIDDEN_CONFIG_SCREEN_IDS:
@@ -433,7 +437,7 @@ def _build_config(entries: List[Dict[str, Any]]) -> Dict[str, Any]:
         extra_seconds = int(entry.get("extra_seconds", 0))
         if extra_seconds < 0:
             raise ValueError(f"Additional seconds for '{screen_id}' cannot be negative")
-        spec: Dict[str, Any] = {"frequency": frequency}
+        spec: dict[str, Any] = {"frequency": frequency}
         if extra_seconds > 0:
             spec["extra_seconds"] = extra_seconds
         hide_after_at = str(entry.get("hide_after_at", "")).strip()
@@ -446,19 +450,19 @@ def _build_config(entries: List[Dict[str, Any]]) -> Dict[str, Any]:
             alt_screens = [canonical_screen_id(item.strip()) for item in alt_screen_raw.split(",") if item.strip()]
             alt_frequency = int(entry.get("alt_frequency") or 1)
             spec["alt"] = {"screen": alt_screens[0] if len(alt_screens) == 1 else alt_screens, "frequency": alt_frequency}
-        screens[screen_id] = spec if any(k != "frequency" for k in spec.keys()) else frequency
+        screens[screen_id] = spec if any(k != "frequency" for k in spec) else frequency
     cleaned, _ = _normalize_legacy_scoreboard_ids({"screens": screens})
     return cleaned
 
 
-def _build_style_config(entries: List[Dict[str, Any]], style_config: Dict[str, Any]) -> Dict[str, Any]:
-    screens: Dict[str, Any] = {}
+def _build_style_config(entries: list[dict[str, Any]], style_config: dict[str, Any]) -> dict[str, Any]:
+    screens: dict[str, Any] = {}
     existing = style_config.get("screens")
     if isinstance(existing, dict):
         for screen_id, spec in existing.items():
             if isinstance(screen_id, str) and isinstance(spec, dict):
                 screens[screen_id] = dict(spec)
-    invalid_screens: List[str] = []
+    invalid_screens: list[str] = []
     for entry in entries:
         screen_id = str(entry.get("id", "")).strip()
         if not screen_id:
@@ -478,7 +482,7 @@ def _build_style_config(entries: List[Dict[str, Any]], style_config: Dict[str, A
     return {"screens": screens}
 
 
-def _save_config(config: Dict[str, Any]) -> None:
+def _save_config(config: dict[str, Any]) -> None:
     tmp_path = f"{LOCAL_CONFIG_PATH}.tmp"
     with open(tmp_path, "w", encoding="utf-8") as fh:
         json.dump(config, fh, indent=2)
@@ -486,7 +490,7 @@ def _save_config(config: Dict[str, Any]) -> None:
     os.replace(tmp_path, LOCAL_CONFIG_PATH)
 
 
-def _save_style_config(config: Dict[str, Any]) -> None:
+def _save_style_config(config: dict[str, Any]) -> None:
     tmp_path = f"{STYLE_CONFIG_PATH}.tmp"
     with open(tmp_path, "w", encoding="utf-8") as fh:
         json.dump(config, fh, indent=2)
@@ -515,7 +519,7 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def _read_payload(source: str) -> Dict[str, Any]:
+def _read_payload(source: str) -> dict[str, Any]:
     if source == "-":
         if sys.stdin.isatty():
             print(
@@ -548,10 +552,10 @@ def _read_payload(source: str) -> Dict[str, Any]:
     return payload
 
 
-def _resolve_import(payload: Dict[str, Any]) -> Tuple[Dict[str, Any], Dict[str, Any], Dict[str, Any]]:
+def _resolve_import(payload: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any], dict[str, Any]]:
     config_payload = payload.get("config", payload)
-    derived_style_payload: Optional[Dict[str, Any]] = None
-    derived_layouts_payload: Optional[Dict[str, Any]] = None
+    derived_style_payload: Optional[dict[str, Any]] = None
+    derived_layouts_payload: Optional[dict[str, Any]] = None
 
     if isinstance(config_payload, dict) and isinstance(config_payload.get("screens"), list):
         entries = config_payload.get("screens", [])

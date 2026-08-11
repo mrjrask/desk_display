@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import datetime
 import logging
 import os
@@ -11,10 +12,10 @@ import socket
 import subprocess
 import threading
 import time
+from collections.abc import Sequence
 from pathlib import Path
-from typing import List, Optional, Sequence, Tuple
+from typing import Optional
 from urllib.parse import urlsplit
-
 
 # ─── Behaviour configuration ───────────────────────────────────────────────────
 
@@ -61,11 +62,9 @@ def _append_line(path: Path, text: str) -> None:
 def _system_log(message: str) -> None:
     text = f"{_timestamp()} [wifi-auto-recover] {message}"
     _LOGGER.info(message)
-    try:
+    # _append_line already logs the failure; swallow to avoid recursion
+    with contextlib.suppress(Exception):
         _append_line(_SYSTEM_LOG_PATH, text)
-    except Exception:
-        # _append_line already logs the failure; swallow to avoid recursion
-        pass
 
 
 def _user_log(message: str) -> None:
@@ -90,10 +89,7 @@ def _resolve_user_log() -> Optional[Path]:
 
     if not home_path or not home_path.exists():
         candidate = Path("/home/pi")
-        if candidate.exists():
-            home_path = candidate
-        else:
-            home_path = Path("/root")
+        home_path = candidate if candidate.exists() else Path("/root")
 
     return home_path / "wifi_recovery.log"
 
@@ -225,10 +221,10 @@ def _has_default_route(iface: str) -> bool:
         return False
 
 
-def _get_default_route_interfaces() -> List[str]:
+def _get_default_route_interfaces() -> list[str]:
     """Return interfaces carrying default routes."""
 
-    interfaces: List[str] = []
+    interfaces: list[str] = []
     try:
         proc = _run_command(["ip", "route", "show", "default"])
     except Exception as exc:
@@ -287,8 +283,8 @@ def _check_dns_resolution() -> bool:
         return False
 
 
-def _check_internet(iface: str) -> Tuple[bool, List[str]]:
-    tried: List[str] = []
+def _check_internet(iface: str) -> tuple[bool, list[str]]:
+    tried: list[str] = []
     tcp_targets = _get_tcp_probe_targets()
 
     if tcp_targets and _check_tcp_targets(tcp_targets, tried):
@@ -377,7 +373,7 @@ def _check_internet(iface: str) -> Tuple[bool, List[str]]:
     return False, tried
 
 
-def _split_env_list(raw: Optional[str]) -> List[str]:
+def _split_env_list(raw: Optional[str]) -> list[str]:
     if not raw:
         return []
     return [item.strip() for item in raw.split(",") if item.strip()]
@@ -392,8 +388,8 @@ def _parse_port(raw: Optional[str], default: int = 443) -> int:
         return default
 
 
-def _get_tcp_probe_targets() -> List[Tuple[str, int, str]]:
-    targets: List[Tuple[str, int, str]] = []
+def _get_tcp_probe_targets() -> list[tuple[str, int, str]]:
+    targets: list[tuple[str, int, str]] = []
     default_port = _parse_port(os.environ.get("WIFI_TCP_PROBE_PORT"), 443)
 
     url_candidates = _split_env_list(
@@ -421,7 +417,7 @@ def _get_tcp_probe_targets() -> List[Tuple[str, int, str]]:
         label = f"tcp://{host}:{port}"
         targets.append((host, port, label))
 
-    deduped: List[Tuple[str, int, str]] = []
+    deduped: list[tuple[str, int, str]] = []
     seen = set()
     for host, port, label in targets:
         key = (host, port)
@@ -433,7 +429,7 @@ def _get_tcp_probe_targets() -> List[Tuple[str, int, str]]:
     return deduped
 
 
-def _check_tcp_targets(targets: Sequence[Tuple[str, int, str]], tried: List[str]) -> bool:
+def _check_tcp_targets(targets: Sequence[tuple[str, int, str]], tried: list[str]) -> bool:
     for host, port, label in targets:
         tried.append(label)
         try:
@@ -703,7 +699,7 @@ def start_monitor(allow_recovery: bool = True) -> None:
 def get_assigned_ipv4() -> Optional[str]:
     """Return the device IPv4 address used for local network access."""
 
-    preferred_interfaces: List[str] = []
+    preferred_interfaces: list[str] = []
 
     if _IFACE:
         preferred_interfaces.append(_IFACE)
@@ -734,7 +730,7 @@ def get_assigned_ipv4() -> Optional[str]:
     return None
 
 
-def get_wifi_state() -> Tuple[str, Optional[str]]:
+def get_wifi_state() -> tuple[str, Optional[str]]:
     """Return the current Wi-Fi state and SSID."""
 
     with _STATE_LOCK:

@@ -11,29 +11,27 @@ import math
 import os
 import time
 
-from PIL import Image, ImageDraw
 import yfinance as yf
+from PIL import Image, ImageDraw
 
 import config
 from config import (
-    WIDTH,
+    FONT_STOCK_CHANGE,
+    FONT_STOCK_PRICE,
+    FONT_STOCK_TEXT,
+    FONT_STOCK_TITLE,
     HEIGHT,
-    VRNO_CACHE_TTL,
+    IMAGES_DIR,
     VRNO_FRESHNESS_LIMIT,
     VRNO_LOTS,
-    FONT_STOCK_TITLE,
-    FONT_STOCK_PRICE,
-    FONT_STOCK_CHANGE,
-    FONT_STOCK_TEXT,
+    WIDTH,
     get_screen_background_color,
-    IMAGES_DIR,
     is_hyperpixel_4_square_layout,
     is_hyperpixel_next_layout,
 )
 from utils import (
     LED_INDICATOR_LEVEL,
     ScreenImage,
-    log_call,
 )
 
 # In-memory cache

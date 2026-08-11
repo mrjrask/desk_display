@@ -6,11 +6,15 @@ import datetime as dt
 import logging
 import socket
 import time
-from typing import Any, Dict, Iterable, Optional
+from collections.abc import Iterable
+from typing import Any, Optional
 
 from config import CENTRAL_TIME
 from services.http_client import NHL_HEADERS, get_session
-from services.sports.scoreboard_window import before_scoreboard_update, compose_pre_update_scoreboard
+from services.sports.scoreboard_window import (
+    before_scoreboard_update,
+    compose_pre_update_scoreboard,
+)
 
 REQUEST_TIMEOUT = 10
 API_WEB_SCOREBOARD_URL = "https://api-web.nhle.com/v1/scoreboard/{date}"
@@ -37,7 +41,7 @@ def _timestamp_to_local(ts: str) -> Optional[dt.datetime]:
         return None
     try:
         parsed = dt.datetime.strptime(ts, "%Y-%m-%dT%H:%M:%SZ")
-        parsed = parsed.replace(tzinfo=dt.timezone.utc)
+        parsed = parsed.replace(tzinfo=dt.UTC)
         return parsed.astimezone(CENTRAL_TIME)
     except Exception:
         return None
@@ -62,7 +66,7 @@ def _ordinal_from_number(num: Any) -> str:
     return f"{value}TH"
 
 
-def _normalize_team_name(team: Dict[str, Any]) -> Optional[str]:
+def _normalize_team_name(team: dict[str, Any]) -> Optional[str]:
     name = team.get("name") or team.get("teamName")
     if isinstance(name, str) and name.strip():
         return name.strip()
@@ -94,7 +98,7 @@ def _normalize_team_name(team: Dict[str, Any]) -> Optional[str]:
     return None
 
 
-def _map_api_web_team(team: Dict[str, Any]) -> Dict[str, Any]:
+def _map_api_web_team(team: dict[str, Any]) -> dict[str, Any]:
     team = team or {}
     abbr = None
     for key in ("abbrev", "triCode", "abbreviation", "teamTricode"):
@@ -121,7 +125,7 @@ def _map_api_web_team(team: Dict[str, Any]) -> Dict[str, Any]:
     return mapped
 
 
-def _map_api_web_game(game: Dict[str, Any], day: dt.date) -> Dict[str, Any]:
+def _map_api_web_game(game: dict[str, Any], day: dt.date) -> dict[str, Any]:
     start_candidates = (
         game.get("startTimeUTC"),
         game.get("startTime"),
@@ -140,18 +144,18 @@ def _map_api_web_game(game: Dict[str, Any], day: dt.date) -> Dict[str, Any]:
                 parsed = dt.datetime.fromisoformat(text.replace("Z", "+00:00"))
             except ValueError:
                 continue
-            parsed = parsed.astimezone(dt.timezone.utc)
+            parsed = parsed.astimezone(dt.UTC)
             game_dt = parsed
             break
         try:
             parsed = dt.datetime.strptime(text, "%Y-%m-%dT%H:%M:%SZ")
         except ValueError:
             continue
-        game_dt = parsed.replace(tzinfo=dt.timezone.utc)
+        game_dt = parsed.replace(tzinfo=dt.UTC)
         break
 
     if game_dt is None:
-        game_dt = dt.datetime.combine(day, dt.time(0, 0), tzinfo=dt.timezone.utc)
+        game_dt = dt.datetime.combine(day, dt.time(0, 0), tzinfo=dt.UTC)
 
     clock = game.get("clock") or {}
     period = game.get("periodDescriptor") or {}
@@ -221,7 +225,7 @@ def _map_api_web_game(game: Dict[str, Any], day: dt.date) -> Dict[str, Any]:
     return mapped
 
 
-def _extract_api_web_games(data: Dict[str, Any], day: dt.date) -> list[Dict[str, Any]]:
+def _extract_api_web_games(data: dict[str, Any], day: dt.date) -> list[dict[str, Any]]:
     def _normalize_date(value: Any) -> Optional[str]:
         if not value:
             return None
@@ -235,7 +239,7 @@ def _extract_api_web_games(data: Dict[str, Any], day: dt.date) -> list[Dict[str,
         return text
 
     day_iso = day.isoformat()
-    games: list[Dict[str, Any]] = []
+    games: list[dict[str, Any]] = []
 
     def _append_from(container: Iterable[Any]):
         for item in container or []:
@@ -267,7 +271,7 @@ def _extract_api_web_games(data: Dict[str, Any], day: dt.date) -> list[Dict[str,
                 _append_from(bucket_games)
 
     seen_ids: set[Any] = set()
-    filtered: list[Dict[str, Any]] = []
+    filtered: list[dict[str, Any]] = []
     for game in games:
         game_id = game.get("id") or game.get("gamePk") or game.get("gameId")
         key = game_id or id(game)
@@ -362,7 +366,7 @@ def _fetch_games_for_date(day: dt.date) -> list[dict]:
         "https://statsapi.web.nhl.com/api/v1/schedule"
         f"?date={day.isoformat()}&expand=schedule.linescore,schedule.teams"
     )
-    data: Optional[Dict[str, Any]] = None
+    data: Optional[dict[str, Any]] = None
     try:
         response = _SESSION.get(stats_url, timeout=REQUEST_TIMEOUT)
         response.raise_for_status()

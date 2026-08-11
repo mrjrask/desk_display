@@ -13,7 +13,7 @@ import subprocess
 import threading
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Optional
 from zoneinfo import ZoneInfo
 
 from screens_catalog import canonical_screen_id
@@ -27,7 +27,7 @@ def _load_env_file(path: str) -> None:
     """Load simple KEY=VALUE pairs from *path* without overriding existing vars."""
 
     try:
-        with open(path, "r", encoding="utf-8") as fh:
+        with open(path, encoding="utf-8") as fh:
             lines = fh.readlines()
     except FileNotFoundError:
         return
@@ -215,7 +215,7 @@ STYLE_CONFIG_PATH = os.environ.get(
     "SCREENS_STYLE_PATH", os.path.join(SCRIPT_DIR, "screens_style.json")
 )
 _STYLE_CONFIG_STORE = ConfigStore(STYLE_CONFIG_PATH)
-_STYLE_CONFIG_CACHE: Dict[str, Any] = {"screens": {}}
+_STYLE_CONFIG_CACHE: dict[str, Any] = {"screens": {}}
 _STYLE_CONFIG_MTIME: Optional[float] = None
 _STYLE_CONFIG_LOCK = threading.Lock()
 
@@ -255,7 +255,7 @@ def get_current_ssid():
 
 CURRENT_SSID: Optional[str] = None
 
-def _parse_lat_lon(value: Optional[str]) -> Optional[Tuple[float, float]]:
+def _parse_lat_lon(value: Optional[str]) -> Optional[tuple[float, float]]:
     if not value:
         return None
     text = str(value).strip()
@@ -274,7 +274,7 @@ def _parse_lat_lon(value: Optional[str]) -> Optional[Tuple[float, float]]:
     return lat, lon
 
 
-def _resolve_weather_coordinates() -> Tuple[Optional[float], Optional[float], list[str]]:
+def _resolve_weather_coordinates() -> tuple[Optional[float], Optional[float], list[str]]:
     """Resolve weather coordinates from WEATHER_LATITUDE / WEATHER_LONGITUDE."""
 
     errors: list[str] = []
@@ -312,7 +312,7 @@ def _resolve_weather_coordinates() -> Tuple[Optional[float], Optional[float], li
 LATITUDE, LONGITUDE, _weather_coordinate_errors = _resolve_weather_coordinates()
 
 
-def _resolve_air_quality_coordinates() -> Tuple[Optional[float], Optional[float], list[str]]:
+def _resolve_air_quality_coordinates() -> tuple[Optional[float], Optional[float], list[str]]:
     """Resolve AQI coordinates, defaulting to the weather location."""
 
     lat_raw = os.environ.get("AIR_QUALITY_LATITUDE")
@@ -463,7 +463,7 @@ else:
 BASE_WIDTH = 320
 BASE_HEIGHT = 240
 
-def _parse_mode_size(raw: Optional[str]) -> Optional[Tuple[int, int]]:
+def _parse_mode_size(raw: Optional[str]) -> Optional[tuple[int, int]]:
     if not raw:
         return None
     match = re.search(r"(\d+)\s*x\s*(\d+)", raw)
@@ -472,7 +472,7 @@ def _parse_mode_size(raw: Optional[str]) -> Optional[Tuple[int, int]]:
     return int(match.group(1)), int(match.group(2))
 
 
-def _read_framebuffer_mode_size(device_path: str) -> Optional[Tuple[int, int]]:
+def _read_framebuffer_mode_size(device_path: str) -> Optional[tuple[int, int]]:
     fb_name = Path(device_path).name
     sysfs_base = Path("/sys/class/graphics") / fb_name
     try:
@@ -490,7 +490,7 @@ def _read_framebuffer_mode_size(device_path: str) -> Optional[Tuple[int, int]]:
     return _parse_mode_size(first_line)
 
 
-def _read_framebuffer_fbset_size(device_path: str) -> Optional[Tuple[int, int]]:
+def _read_framebuffer_fbset_size(device_path: str) -> Optional[tuple[int, int]]:
     try:
         result = subprocess.run(
             ["fbset", "-fb", device_path, "-s"],
@@ -510,7 +510,7 @@ def _read_framebuffer_fbset_size(device_path: str) -> Optional[Tuple[int, int]]:
     return None
 
 
-def _read_framebuffer_virtual_size(device_path: str) -> Optional[Tuple[int, int]]:
+def _read_framebuffer_virtual_size(device_path: str) -> Optional[tuple[int, int]]:
     fb_name = Path(device_path).name
     sysfs_base = Path("/sys/class/graphics") / fb_name / "virtual_size"
     try:
@@ -526,7 +526,7 @@ def _read_framebuffer_virtual_size(device_path: str) -> Optional[Tuple[int, int]
         return None
 
 
-def _read_drm_mode_size() -> Optional[Tuple[int, int]]:
+def _read_drm_mode_size() -> Optional[tuple[int, int]]:
     for status_path in Path("/sys/class/drm").glob("card*-*/status"):
         try:
             status = status_path.read_text(encoding="utf-8").strip().lower()
@@ -792,7 +792,7 @@ DISPLAY_FADE_IN_HDMI_1080P_STEPS = max(
     0,
     _get_int_env("DISPLAY_FADE_IN_HDMI_1080P_STEPS", 0),
 )
-DISPLAY_FADE_IN_STEPS_BY_PROFILE: Dict[str, int] = {
+DISPLAY_FADE_IN_STEPS_BY_PROFILE: dict[str, int] = {
     "display_hat_mini": DISPLAY_FADE_IN_DISPLAY_HAT_MINI_STEPS,
     DISPLAY_PROFILE_ADAFRUIT_MINIPITFT_114: DISPLAY_FADE_IN_HYPERPIXEL_STEPS,
     "hyperpixel4": DISPLAY_FADE_IN_HYPERPIXEL_STEPS,
@@ -1544,14 +1544,14 @@ def _load_emoji_font(size: int) -> ImageFont.ImageFont:
 
     if not getattr(_load_emoji_font, "_warned_fallback", False):
         logging.warning("Emoji font not found; falling back to PIL default font")
-        setattr(_load_emoji_font, "_warned_fallback", True)
+        _load_emoji_font._warned_fallback = True
     return ImageFont.load_default()
 
 
 FONT_EMOJI = _load_emoji_font(30)
 FONT_EMOJI_SMALL = _load_emoji_font(18)
 
-_EMOJI_FONT_CACHE: Dict[int, ImageFont.ImageFont] = {}
+_EMOJI_FONT_CACHE: dict[int, ImageFont.ImageFont] = {}
 
 
 def get_emoji_font(size: int) -> ImageFont.ImageFont:
@@ -1564,8 +1564,8 @@ def get_emoji_font(size: int) -> ImageFont.ImageFont:
     return font
 
 
-def _normalise_style_config(payload: Dict[str, Any]) -> Dict[str, Any]:
-    normalised: Dict[str, Any] = {"screens": {}}
+def _normalise_style_config(payload: dict[str, Any]) -> dict[str, Any]:
+    normalised: dict[str, Any] = {"screens": {}}
     if not isinstance(payload, dict):
         return normalised
 
@@ -1577,15 +1577,15 @@ def _normalise_style_config(payload: Dict[str, Any]) -> Dict[str, Any]:
         if not isinstance(screen_id, str) or not isinstance(spec, dict):
             continue
 
-        fonts: Dict[str, Dict[str, Any]] = {}
-        images: Dict[str, Dict[str, Any]] = {}
+        fonts: dict[str, dict[str, Any]] = {}
+        images: dict[str, dict[str, Any]] = {}
 
         font_specs = spec.get("fonts")
         if isinstance(font_specs, dict):
             for font_slot, font_spec in font_specs.items():
                 if not isinstance(font_slot, str) or not isinstance(font_spec, dict):
                     continue
-                entry: Dict[str, Any] = {}
+                entry: dict[str, Any] = {}
                 family = font_spec.get("family")
                 if isinstance(family, str) and family.strip():
                     entry["family"] = family.strip()
@@ -1609,7 +1609,7 @@ def _normalise_style_config(payload: Dict[str, Any]) -> Dict[str, Any]:
                     continue
                 images[image_slot] = {"scale": scale_value}
 
-        entry: Dict[str, Any] = {}
+        entry: dict[str, Any] = {}
         if fonts:
             entry["fonts"] = fonts
         if images:
@@ -1620,7 +1620,7 @@ def _normalise_style_config(payload: Dict[str, Any]) -> Dict[str, Any]:
     return normalised
 
 
-def _load_style_config(*, force: bool = False) -> Dict[str, Any]:
+def _load_style_config(*, force: bool = False) -> dict[str, Any]:
     global _STYLE_CONFIG_CACHE, _STYLE_CONFIG_MTIME
 
     try:
@@ -1629,7 +1629,7 @@ def _load_style_config(*, force: bool = False) -> Dict[str, Any]:
         mtime = None
 
     with _STYLE_CONFIG_LOCK:
-        if not force and _STYLE_CONFIG_CACHE is not None and _STYLE_CONFIG_MTIME == mtime:
+        if not force and _STYLE_CONFIG_CACHE is not None and mtime == _STYLE_CONFIG_MTIME:
             return _STYLE_CONFIG_CACHE
 
         try:
@@ -1644,19 +1644,19 @@ def _load_style_config(*, force: bool = False) -> Dict[str, Any]:
         return normalised
 
 
-def reload_style_config() -> Dict[str, Any]:
+def reload_style_config() -> dict[str, Any]:
     """Force a reload of the style configuration."""
 
     return _load_style_config(force=True)
 
 
-def get_style_config() -> Dict[str, Any]:
+def get_style_config() -> dict[str, Any]:
     """Return the cached style configuration."""
 
     return _load_style_config()
 
 
-def get_screen_style(screen_id: str) -> Dict[str, Any]:
+def get_screen_style(screen_id: str) -> dict[str, Any]:
     """Return the style overrides for *screen_id*."""
 
     config = get_style_config()
@@ -1678,8 +1678,8 @@ def get_screen_style(screen_id: str) -> Dict[str, Any]:
 
 def get_screen_background_color(
     screen_id: str,
-    default: Tuple[int, int, int],
-) -> Tuple[int, int, int]:
+    default: tuple[int, int, int],
+) -> tuple[int, int, int]:
     """Every screen renders on a fixed black background; not configurable."""
 
     return (0, 0, 0)

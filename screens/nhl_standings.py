@@ -7,36 +7,43 @@ import logging
 import os
 import socket
 import time
-from collections.abc import Iterable
-from typing import Any, Dict, List, Optional, Sequence, Tuple
+from collections.abc import Iterable, Sequence
+from typing import Any, Optional
 
-from PIL import Image, ImageDraw, ImageFont
+from PIL import Image, ImageDraw
 
 import config
 from config import (
-    WIDTH,
-    HEIGHT,
-    FONT_TITLE_SPORTS,
     FONT_STATUS,
+    FONT_TITLE_SPORTS,
+    HEIGHT,
     NHL_IMAGES_DIR,
-    SCOREBOARD_SCROLL_STEP,
-    SCOREBOARD_SCROLL_DELAY,
-    SCOREBOARD_SCROLL_PAUSE_TOP,
-    SCOREBOARD_SCROLL_PAUSE_BOTTOM,
-    SCOREBOARD_STANDINGS_BOTTOM_PADDING,
     SCOREBOARD_BACKGROUND_COLOR,
+    SCOREBOARD_SCROLL_DELAY,
+    SCOREBOARD_SCROLL_PAUSE_BOTTOM,
+    SCOREBOARD_SCROLL_PAUSE_TOP,
+    SCOREBOARD_SCROLL_STEP,
+    SCOREBOARD_STANDINGS_BOTTOM_PADDING,
+    WIDTH,
     get_screen_background_color,
     get_screen_font,
     get_screen_image_scale,
-    is_kernel_driven_display,
+    is_hyperpixel_4_square_layout,
     is_hyperpixel_next_layout,
+    is_kernel_driven_display,
     scale_value,
     scale_value_width,
-    is_hyperpixel_4_square_layout,
 )
 from display_profiles import DISPLAY_PROFILE_ADAFRUIT_MINIPITFT_114
 from services.http_client import NHL_HEADERS, get_session
-from utils import ScreenImage, clear_display, log_call, log_missing_team_logo, clone_font, scroll_vertical_content
+from utils import (
+    ScreenImage,
+    clear_display,
+    clone_font,
+    log_call,
+    log_missing_team_logo,
+    scroll_vertical_content,
+)
 
 # ─── Constants ────────────────────────────────────────────────────────────────
 TITLE_WEST = "Western Conference"
@@ -649,7 +656,7 @@ def _update_row_metrics() -> None:
 
 
 def _conference_column_layout(
-    standings: Dict[str, List[dict]],
+    standings: dict[str, list[dict]],
     divisions: Sequence[str],
 ) -> tuple[dict[str, int], int]:
     max_team_name_width = 0
@@ -1687,10 +1694,10 @@ def _draw_division(
 
 def _render_conference(
     title: str,
-    division_order: List[str],
-    standings: Dict[str, List[dict]],
+    division_order: list[str],
+    standings: dict[str, list[dict]],
     subtitle: str | None = None,
-    division_labels: Dict[str, str] | None = None,
+    division_labels: dict[str, str] | None = None,
     conference_key: str | None = None,
     column_layout: dict[str, int] | None = None,
     team_name_max_width: int | None = None,
@@ -1756,14 +1763,14 @@ def _render_conference(
     return img
 
 
-Placement = Tuple[str, Image.Image, int, int]
+Placement = tuple[str, Image.Image, int, int]
 
 
 def _overview_layout(
-    divisions: Sequence[tuple[str, List[dict]]],
+    divisions: Sequence[tuple[str, list[dict]]],
     title: str = OVERVIEW_TITLE,
     conference_key: str | None = None,
-) -> tuple[Image.Image, List[float], float, float, int, int]:
+) -> tuple[Image.Image, list[float], float, float, int, int]:
     base = Image.new("RGB", (WIDTH, HEIGHT), BACKGROUND_COLOR)
     draw = ImageDraw.Draw(base)
 
@@ -1818,14 +1825,14 @@ def _overview_logo_position(
 
 
 def _build_overview_rows(
-    divisions: Sequence[tuple[str, List[dict]]],
+    divisions: Sequence[tuple[str, list[dict]]],
     col_centers: Sequence[float],
     logos_top: float,
     cell_height: float,
     logo_box_size: int,
     max_rows: int,
-) -> List[List[Placement]]:
-    rows: List[List[Placement]] = [[] for _ in range(max_rows)]
+) -> list[list[Placement]]:
+    rows: list[list[Placement]] = [[] for _ in range(max_rows)]
 
     for col_idx, (_, teams) in enumerate(divisions):
         limited = teams[:max_rows]
@@ -1860,9 +1867,9 @@ def _ease_out_cubic(t: float) -> float:
 
 def _compose_overview_image(
     base: Image.Image, row_positions: Sequence[Sequence[Placement]]
-) -> tuple[Image.Image, List[Placement]]:
+) -> tuple[Image.Image, list[Placement]]:
     final = base.copy()
-    placements: List[Placement] = []
+    placements: list[Placement] = []
 
     for row in reversed(row_positions):
         for placement in row:
@@ -1896,7 +1903,7 @@ def _animate_overview_drop(
     steps = max(2, OVERVIEW_DROP_STEPS)
     stagger = max(1, int(round(steps * OVERVIEW_DROP_STAGGER)))
 
-    schedule: List[tuple[int, Sequence[Placement]]] = []
+    schedule: list[tuple[int, Sequence[Placement]]] = []
     start_step = 0
     for rank in range(len(row_positions) - 1, -1, -1):
         drops = row_positions[rank]
@@ -1909,7 +1916,7 @@ def _animate_overview_drop(
         return
 
     total_duration = schedule[-1][0] + steps + 1
-    placed: List[Placement] = []
+    placed: list[Placement] = []
     completed = [False] * len(schedule)
 
     for current_step in range(total_duration):
@@ -1924,7 +1931,7 @@ def _animate_overview_drop(
                 completed[idx] = True
 
         frame = base.copy()
-        dynamic: List[Placement] = []
+        dynamic: list[Placement] = []
 
         for abbr, logo, x0, y0 in placed:
             frame.paste(logo, (x0, y0), logo)
@@ -1957,10 +1964,10 @@ def _animate_overview_drop(
 
 
 def _prepare_overview(
-    divisions: List[tuple[str, List[dict]]],
+    divisions: list[tuple[str, list[dict]]],
     title: str = OVERVIEW_TITLE,
     conference_key: str | None = None,
-) -> tuple[Image.Image, List[List[Placement]]]:
+) -> tuple[Image.Image, list[list[Placement]]]:
     (
         base,
         col_centers,
@@ -1985,7 +1992,7 @@ def _prepare_overview(
 
 
 def _overview_layout_horizontal(
-    rows: Sequence[tuple[str, List[dict]]],
+    rows: Sequence[tuple[str, list[dict]]],
     title: str,
     conference_key: str | None = None,
 ) -> tuple[Image.Image, float, float]:
@@ -2025,18 +2032,18 @@ def _row_logo_box(row_height: float, team_count: int) -> int:
 
 
 def _build_overview_rows_horizontal(
-    rows: Sequence[tuple[str, List[dict]]],
+    rows: Sequence[tuple[str, list[dict]]],
     logos_top: float,
     row_height: float,
-) -> List[List[Placement]]:
-    placements: List[List[Placement]] = []
+) -> list[list[Placement]]:
+    placements: list[list[Placement]] = []
     available_width = max(1.0, WIDTH - 2 * OVERVIEW_MARGIN_X)
     leader_rows = rows[:3]
     leader_team_count = max((len(teams) for _, teams in leader_rows), default=0)
     leader_box_size = _row_logo_box(row_height, leader_team_count)
 
     for row_idx, (_, teams) in enumerate(rows):
-        row: List[Placement] = []
+        row: list[Placement] = []
         if not teams:
             placements.append(row)
             continue
@@ -2064,10 +2071,10 @@ def _build_overview_rows_horizontal(
 
 
 def _prepare_overview_horizontal(
-    rows: Sequence[tuple[str, List[dict]]],
+    rows: Sequence[tuple[str, list[dict]]],
     title: str,
     conference_key: str | None = None,
-) -> tuple[Image.Image, List[List[Placement]]]:
+) -> tuple[Image.Image, list[list[Placement]]]:
     base, logos_top, row_height = _overview_layout_horizontal(
         rows,
         title=title,

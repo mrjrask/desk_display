@@ -1,9 +1,10 @@
 """Quad-view mode that renders four screens simultaneously in a 2x2 grid."""
 from __future__ import annotations
 
-from dataclasses import dataclass
 import time
-from typing import Callable, Optional
+from collections.abc import Callable
+from dataclasses import dataclass
+from typing import Optional
 
 from PIL import Image, ImageDraw, ImageFont
 

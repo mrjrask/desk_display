@@ -1,9 +1,10 @@
 """Tests for manual skip behaviour in main loop."""
 
-from dataclasses import dataclass
 import importlib
 import sys
-from typing import Dict, Iterable, Optional
+from collections.abc import Iterable
+from dataclasses import dataclass
+from typing import Optional
 
 import pytest
 
@@ -21,7 +22,7 @@ class _FakeScheduler:
         self._cursor = 0
         self.node_count = len(self._order)
 
-    def next_available(self, registry: Dict[str, ScreenDefinition]) -> Optional[ScreenDefinition]:
+    def next_available(self, registry: dict[str, ScreenDefinition]) -> Optional[ScreenDefinition]:
         if not self._order:
             return None
         sid = self._order[self._cursor % len(self._order)]
@@ -31,19 +32,19 @@ class _FakeScheduler:
 
 @pytest.fixture
 def main_module(monkeypatch):
-    monkeypatch.setattr(data_fetch, "fetch_weather", lambda: {})
+    monkeypatch.setattr(data_fetch, "fetch_weather", dict)
     monkeypatch.setattr(data_fetch, "fetch_blackhawks_last_game", lambda: None)
     monkeypatch.setattr(data_fetch, "fetch_blackhawks_live_game", lambda: None)
     monkeypatch.setattr(data_fetch, "fetch_blackhawks_next_game", lambda: None)
     monkeypatch.setattr(data_fetch, "fetch_blackhawks_next_home_game", lambda: None)
-    monkeypatch.setattr(data_fetch, "fetch_wolves_games", lambda: {})
+    monkeypatch.setattr(data_fetch, "fetch_wolves_games", dict)
     monkeypatch.setattr(data_fetch, "fetch_bulls_last_game", lambda: None)
     monkeypatch.setattr(data_fetch, "fetch_bulls_live_game", lambda: None)
     monkeypatch.setattr(data_fetch, "fetch_bulls_next_game", lambda: None)
     monkeypatch.setattr(data_fetch, "fetch_bulls_next_home_game", lambda: None)
-    monkeypatch.setattr(data_fetch, "fetch_cubs_games", lambda: {})
+    monkeypatch.setattr(data_fetch, "fetch_cubs_games", dict)
     monkeypatch.setattr(data_fetch, "fetch_cubs_standings", lambda: None)
-    monkeypatch.setattr(data_fetch, "fetch_sox_games", lambda: {})
+    monkeypatch.setattr(data_fetch, "fetch_sox_games", dict)
     monkeypatch.setattr(data_fetch, "fetch_sox_standings", lambda: None)
     monkeypatch.setattr(wifi_utils, "start_monitor", lambda *args, **kwargs: None)
 
@@ -60,7 +61,7 @@ def main_module(monkeypatch):
     sys.modules.pop("main", None)
 
 
-def _build_registry(*ids: str) -> Dict[str, ScreenDefinition]:
+def _build_registry(*ids: str) -> dict[str, ScreenDefinition]:
     return {sid: ScreenDefinition(id=sid, render=lambda: None) for sid in ids}
 
 
@@ -141,7 +142,7 @@ def test_touch_double_tap_on_right_third_requests_next_screen(main_module):
         FINGERDOWN = 1
         MOUSEBUTTONDOWN = 2
 
-        class event:  # noqa: N801 - mirror pygame namespace
+        class event:
             @staticmethod
             def get(_event_types):
                 return [_FakeEvent(1, 0.9), _FakeEvent(1, 0.9)]
@@ -165,7 +166,7 @@ def test_touch_double_tap_ignores_left_side_taps(main_module):
         FINGERDOWN = 1
         MOUSEBUTTONDOWN = 2
 
-        class event:  # noqa: N801 - mirror pygame namespace
+        class event:
             @staticmethod
             def get(_event_types):
                 return [_FakeEvent(1, 0.2), _FakeEvent(1, 0.2)]
@@ -190,7 +191,7 @@ def test_touch_tap_on_quad_tile_requests_fullscreen(main_module):
         FINGERDOWN = 1
         MOUSEBUTTONDOWN = 2
 
-        class event:  # noqa: N801 - mirror pygame namespace
+        class event:
             @staticmethod
             def get(_event_types):
                 return [_FakeEvent(1, 0.8, 0.2)]
@@ -221,7 +222,7 @@ def test_touch_tap_on_quad_prefers_most_recent_tap(main_module):
         FINGERDOWN = 1
         MOUSEBUTTONDOWN = 2
 
-        class event:  # noqa: N801 - mirror pygame namespace
+        class event:
             @staticmethod
             def get(_event_types):
                 return [
@@ -253,7 +254,7 @@ def test_touch_tap_on_quad_tile_honors_display_rotation(main_module):
         FINGERDOWN = 1
         MOUSEBUTTONDOWN = 2
 
-        class event:  # noqa: N801 - mirror pygame namespace
+        class event:
             @staticmethod
             def get(_event_types):
                 return [_FakeEvent(1, 0.8, 0.2)]
@@ -289,7 +290,7 @@ def test_escape_double_press_stops_service(main_module, monkeypatch):
         KEYDOWN = 1
         K_ESCAPE = 27
 
-        class event:  # noqa: N801 - mirror pygame namespace
+        class event:
             @staticmethod
             def get(_event_types):
                 return [_FakeEvent(1, 27)]
@@ -319,7 +320,7 @@ def test_escape_double_press_expires_outside_interval(main_module, monkeypatch):
         KEYDOWN = 1
         K_ESCAPE = 27
 
-        class event:  # noqa: N801 - mirror pygame namespace
+        class event:
             @staticmethod
             def get(_event_types):
                 return [_FakeEvent(1, 27)]
@@ -349,7 +350,7 @@ def test_escape_double_press_restarts_service_when_configured(main_module, monke
         KEYDOWN = 1
         K_ESCAPE = 27
 
-        class event:  # noqa: N801 - mirror pygame namespace
+        class event:
             @staticmethod
             def get(_event_types):
                 return [_FakeEvent(1, 27)]

@@ -7,17 +7,18 @@ import json
 import logging
 import os
 import threading
+from collections.abc import Callable
 from dataclasses import dataclass, field
-from typing import Any, Callable, Dict, Optional, Tuple
+from typing import Any, Optional
 
 from PIL import Image
 
 import config
 from config import CENTRAL_TIME, HEIGHT, NBA_TEAM_TRICODE, WIDTH, is_display_profile
 from paths import resolve_layouts_config_path, resolve_screens_config_paths
-from utils import ScreenImage, animate_scroll, timestamp_to_datetime
-from screens.draw_weather import _pop_pct_from, _selected_alert
 from screens.draw_quad import _TileSpec
+from screens.draw_weather import _pop_pct_from, _selected_alert
+from utils import ScreenImage, animate_scroll, timestamp_to_datetime
 
 RenderCallable = Callable[[], Optional[Image.Image | ScreenImage]]
 _LAZY_CALLABLE_CACHE: dict[str, Callable[..., Any]] = {}
@@ -141,7 +142,7 @@ _layouts_payload_mtime: Optional[float] = None
 
 _QUAD_TILE_SAMPLE_FRAMES = 10
 _QUAD_TILE_CAPTURE_FRAME_LIMIT = 120
-_quad_tile_scroll_cursor: Dict[str, float] = {}
+_quad_tile_scroll_cursor: dict[str, float] = {}
 _quad_tile_scroll_lock = threading.Lock()
 
 
@@ -219,7 +220,7 @@ def _load_layouts_payload() -> Optional[dict[str, Any]]:
             return _layouts_payload_cache
 
         try:
-            with open(_LAYOUTS_CONFIG_PATH, "r", encoding="utf-8") as fh:
+            with open(_LAYOUTS_CONFIG_PATH, encoding="utf-8") as fh:
                 payload = json.load(fh)
         except Exception:
             _layouts_payload_cache = None
@@ -328,7 +329,7 @@ def _load_nhl_break_windows() -> tuple[tuple[_dt.date, _dt.date], ...]:
 
         payload: Any = {}
         try:
-            with open(config_path, "r", encoding="utf-8") as fh:
+            with open(config_path, encoding="utf-8") as fh:
                 payload = json.load(fh)
         except Exception:
             payload = {}
@@ -378,9 +379,7 @@ def _is_waveshare_oled_lcd_hat() -> bool:
     # The Waveshare installer writes these env vars for the main service.
     if os.environ.get("WAVESHARE_OLED_MAX_VALUE_FONT_SIZE") is not None:
         return True
-    if os.environ.get("WAVESHARE_OLED_MAX_TIME_FONT_SIZE") is not None:
-        return True
-    return False
+    return os.environ.get("WAVESHARE_OLED_MAX_TIME_FONT_SIZE") is not None
 
 
 def _logo_scroll_speed_for_layout(width: int, height: int) -> float:
@@ -400,7 +399,7 @@ class ScreenDefinition:
     id: str
     render: RenderCallable
     available: bool = True
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    metadata: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass
@@ -408,7 +407,7 @@ class ScreenContext:
     """Runtime context required to build screen callables."""
 
     display: Any
-    cache: Dict[str, Any]
+    cache: dict[str, Any]
     logos: Any
     image_dir: str
     now: _dt.datetime
@@ -547,11 +546,11 @@ def _precip_within_hours(weather: object, hours: int, *, now: Optional[_dt.datet
     return False
 
 
-def build_screen_registry(context: ScreenContext) -> Tuple[Dict[str, ScreenDefinition], Dict[str, Any]]:
+def build_screen_registry(context: ScreenContext) -> tuple[dict[str, ScreenDefinition], dict[str, Any]]:
     """Create a registry mapping screen IDs to render callables."""
 
-    registry: Dict[str, ScreenDefinition] = {}
-    metadata: Dict[str, Any] = {}
+    registry: dict[str, ScreenDefinition] = {}
+    metadata: dict[str, Any] = {}
     adafruit_minipitft_layout = _is_adafruit_minipitft_layout(WIDTH, HEIGHT)
     waveshare_oled_lcd_hat = _is_waveshare_oled_lcd_hat()
     hyperpixel4_layout = is_display_profile("hyperpixel4", WIDTH, HEIGHT)
@@ -569,7 +568,7 @@ def build_screen_registry(context: ScreenContext) -> Tuple[Dict[str, ScreenDefin
             metadata=extra,
         )
 
-    mlb_rotation_cursors: Dict[str, int] = {
+    mlb_rotation_cursors: dict[str, int] = {
         "cubs last": 0,
         "cubs next": 0,
         "sox last": 0,
@@ -905,9 +904,7 @@ def build_screen_registry(context: ScreenContext) -> Tuple[Dict[str, ScreenDefin
             positive = True
 
         if not positive:
-            if coded == "I":
-                positive = True
-            elif status_code == "2":
+            if coded == "I" or status_code == "2":
                 positive = True
 
         if not positive:
@@ -932,9 +929,7 @@ def build_screen_registry(context: ScreenContext) -> Tuple[Dict[str, ScreenDefin
                 game_date = _dt.date.fromisoformat(candidate)
             except ValueError:
                 continue
-            if game_date == today:
-                return True
-            return False
+            return game_date == today
 
         return True
 
@@ -976,10 +971,7 @@ def build_screen_registry(context: ScreenContext) -> Tuple[Dict[str, ScreenDefin
         today = context.now.date()
 
         def _iter_games(value: Any):
-            if isinstance(value, list):
-                for item in value:
-                    yield from _iter_games(item)
-            elif isinstance(value, tuple):
+            if isinstance(value, list) or isinstance(value, tuple):
                 for item in value:
                     yield from _iter_games(item)
             elif isinstance(value, dict):

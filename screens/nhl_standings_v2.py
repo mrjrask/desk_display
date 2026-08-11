@@ -2,9 +2,8 @@
 """Wild card NHL standings screens (v2) using GP, RW, and Points columns."""
 from __future__ import annotations
 
+from collections.abc import Sequence
 from contextlib import contextmanager
-from typing import List, Sequence, Tuple
-from utils import ScreenImage, clear_display, log_call
 
 import screens.nhl_standings as nhl_standings
 from screens.nhl_standings import (
@@ -12,22 +11,23 @@ from screens.nhl_standings import (
     CONFERENCE_WEST_KEY,
     DIVISION_ORDER_EAST,
     DIVISION_ORDER_WEST,
+    OVERVIEW_TITLE_EAST,
+    OVERVIEW_TITLE_WEST,
     TITLE_EAST,
     TITLE_WEST,
-    _conference_overview_rows,
-    _division_sequence_sort_key,
     _animate_overview_drop,
     _apply_style_overrides,
     _compose_overview_image,
+    _conference_overview_rows,
+    _division_sequence_sort_key,
     _fetch_standings_data,
     _normalize_int,
     _prepare_overview_horizontal,
     _render_conference,
     _render_empty,
     _scroll_vertical,
-    OVERVIEW_TITLE_EAST,
-    OVERVIEW_TITLE_WEST,
 )
+from utils import ScreenImage, clear_display, log_call
 
 WILDCARD_SECTION_NAME = "Wild Card"
 OVERVIEW_TITLE_WEST_V3 = "NHL West Wild Card"
@@ -105,7 +105,7 @@ def _normalize_wildcard_team(team: dict) -> dict:
     return normalized
 
 
-def _wildcard_sort_key(team: dict) -> Tuple[int, int, int, int, int, str]:
+def _wildcard_sort_key(team: dict) -> tuple[int, int, int, int, int, str]:
     points = _normalize_int(team.get("points"))
     regulation_wins = _normalize_int(team.get("regulationWins"))
     regulation_plus_overtime_wins = _normalize_int(
@@ -126,7 +126,7 @@ def _wildcard_sort_key(team: dict) -> Tuple[int, int, int, int, int, str]:
     )
 
 
-def _wildcard_order_sort_key(team: dict) -> Tuple:
+def _wildcard_order_sort_key(team: dict) -> tuple:
     wildcard_rank = _normalize_int(team.get("wildcardRank") or team.get("wildCardRank"))
     if wildcard_rank > 0:
         return (0, wildcard_rank) + _wildcard_sort_key(team)
@@ -158,7 +158,7 @@ def _conference_wildcard_standings(
         if wildcard_order:
             order_map = {abbr.upper(): idx for idx, abbr in enumerate(wildcard_order)}
 
-            def _order_key(team: dict) -> tuple[int, Tuple[int, int, int, int, int, str]]:
+            def _order_key(team: dict) -> tuple[int, tuple[int, int, int, int, int, str]]:
                 abbr = str(team.get("abbr", "")).upper()
                 return (order_map.get(abbr, 999), _wildcard_order_sort_key(team))
 
@@ -173,7 +173,7 @@ def _conference_wildcard_standings(
     if wildcard_order:
         order_map = {abbr.upper(): idx for idx, abbr in enumerate(wildcard_order)}
 
-        def _order_key(team: dict) -> tuple[int, Tuple[int, int, int, int, int, str]]:
+        def _order_key(team: dict) -> tuple[int, tuple[int, int, int, int, int, str]]:
             abbr = str(team.get("abbr", "")).upper()
             return (order_map.get(abbr, 999), _wildcard_order_sort_key(team))
 

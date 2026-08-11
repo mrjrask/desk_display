@@ -29,27 +29,28 @@ Function signatures (match main.py):
 
 from __future__ import annotations
 
+import contextlib
 import datetime as dt
 import logging
 import os
 import re
-from typing import Dict, Optional, Tuple
+from typing import Optional
 
 from PIL import Image, ImageDraw, ImageFont
 
 import config
 from config import (
-    FONT_DATE_SPORTS,
-    FONT_TEAM_SPORTS,
-    FONT_TITLE_SPORTS,
     AHL_FALLBACK_LOGO,
     AHL_IMAGES_DIR,
     AHL_TEAM_ID,
     AHL_TEAM_NAME,
     AHL_TEAM_TRICODE,
+    FONT_DATE_SPORTS,
+    FONT_TEAM_SPORTS,
+    FONT_TITLE_SPORTS,
+    HEIGHT,
     TIMES_SQUARE_FONT_PATH,
     WIDTH,
-    HEIGHT,
 )
 from utils import (
     LED_INDICATOR_LEVEL,
@@ -76,7 +77,7 @@ def _ts(size: int) -> ImageFont.ImageFont:
 # Try to reuse MLB's helper functions for title layout and date labels.
 _MLB = None
 try:
-    import screens.mlb_schedule as _MLB  # noqa: N816
+    import screens.mlb_schedule as _MLB
 except Exception:
     _MLB = None
 
@@ -183,7 +184,7 @@ def _push(
     img: Optional[Image.Image],
     *,
     transition: bool = False,
-    led_override: Optional[Tuple[float, float, float]] = None,
+    led_override: Optional[tuple[float, float, float]] = None,
 ):
     if img is None or display is None:
         return None
@@ -194,7 +195,7 @@ def _push(
 
 FALLBACK_LOGO = AHL_FALLBACK_LOGO
 
-def _team_obj_from_any(t: Dict) -> Dict:
+def _team_obj_from_any(t: dict) -> dict:
     """Return team dict with {'abbrev','id','name','nickname'} from AHL structure."""
     if not isinstance(t, dict):
         return {}
@@ -213,7 +214,7 @@ def _team_obj_from_any(t: Dict) -> Dict:
 
     return {"abbrev": resolved_abbr, "id": tid, "name": name, "nickname": nickname}
 
-def _extract_tris_from_game(game: Dict) -> Tuple[str, str]:
+def _extract_tris_from_game(game: dict) -> tuple[str, str]:
     """(away_tri, home_tri) from a game-like dict."""
     away = game.get("away") or {}
     home = game.get("home") or {}
@@ -396,8 +397,8 @@ def _draw_title_line(
 
 def _draw_dotted_line(
     d: ImageDraw.ImageDraw,
-    start: Tuple[int, int],
-    end: Tuple[int, int],
+    start: tuple[int, int],
+    end: tuple[int, int],
     color,
     *,
     dash: int = 3,
@@ -429,7 +430,7 @@ def _draw_dotted_line(
 
 def _draw_dotted_rect(
     d: ImageDraw.ImageDraw,
-    bbox: Tuple[int, int, int, int],
+    bbox: tuple[int, int, int, int],
     color,
     *,
     dash: int = 3,
@@ -443,7 +444,7 @@ def _draw_dotted_rect(
     _draw_dotted_line(d, (left, bottom), (left, top), color, dash=dash, gap=gap)
 
 
-def _team_scoreboard_label(team_like: Dict, fallback: str = "") -> str:
+def _team_scoreboard_label(team_like: dict, fallback: str = "") -> str:
     """Prefer short team names for the scoreboard column."""
     if not isinstance(team_like, dict):
         return fallback
@@ -526,7 +527,7 @@ def _draw_scoreboard(
         tri: str,
         score: Optional[int],
         label: Optional[str],
-    ) -> Dict:
+    ) -> dict:
         pad_logo = config.scale_value(4) if hyperpixel_layout else 4
         logo_mid = config.scale_value(56) if hyperpixel_layout else 56
         logo_max = config.scale_value(64) if hyperpixel_layout else 64
@@ -579,7 +580,7 @@ def _draw_scoreboard(
                 break
         name_font = chosen or _ts(min_size)
 
-    def _draw_row(spec: Dict):
+    def _draw_row(spec: dict):
         y_top = spec["top"]
         row_height = spec["height"]
         tri = spec["tri"]
@@ -595,10 +596,8 @@ def _draw_scoreboard(
         if logo:
             lw, lh = logo.size
             ly = cy - lh//2
-            try:
+            with contextlib.suppress(Exception):
                 img.paste(logo, (lx, ly), logo)
-            except Exception:
-                pass
             tx = lx + lw + pad_outer
 
         max_width = spec["max_width"]
@@ -636,10 +635,7 @@ def _ordinal(n: int) -> str:
     except Exception:
         return str(n)
 
-    if 10 <= num % 100 <= 20:
-        suffix = "th"
-    else:
-        suffix = {1: "st", 2: "nd", 3: "rd"}.get(num % 10, "th")
+    suffix = "th" if 10 <= num % 100 <= 20 else {1: "st", 2: "nd", 3: "rd"}.get(num % 10, "th")
     return f"{num}{suffix}"
 
 
@@ -661,7 +657,7 @@ def _normalize_period(period_val) -> str:
         return ""
 
 
-def _format_live_dateline(game: Dict) -> str:
+def _format_live_dateline(game: dict) -> str:
     """Format live game status line from AHL data structure."""
     status = game.get("status") or {}
     period = _normalize_period(status.get("period"))
@@ -701,7 +697,7 @@ def _format_last_date_bottom(game_date_iso: str) -> str:
     return local.strftime("%a %b %-d") if os.name != "nt" else local.strftime("%a %b %#d")
 
 
-def _last_game_result_prefix(game: Dict) -> str:
+def _last_game_result_prefix(game: dict) -> str:
     """Return "Final", "Final/OT", or "Final/SO" for a completed game."""
     status = game.get("status") or {}
     detail = str(status.get("detail") or "").strip().upper()
@@ -722,7 +718,7 @@ def _last_game_result_prefix(game: Dict) -> str:
     return "Final"
 
 
-def _format_last_bottom_line(game: Dict) -> str:
+def _format_last_bottom_line(game: dict) -> str:
     prefix = _last_game_result_prefix(game)
 
     if callable(_MLB_REL_DATE_ONLY):
@@ -737,7 +733,7 @@ def _format_last_bottom_line(game: Dict) -> str:
 # ─────────────────────────────────────────────────────────────────────────────
 # Next-game helpers (names, local PNG logos, centered bigger logos)
 
-def _team_full_name(team_like: Dict) -> Optional[str]:
+def _team_full_name(team_like: dict) -> Optional[str]:
     """Extract a full team name from AHL team structure."""
     info = _team_obj_from_any(team_like)
     return info.get("name") or info.get("nickname") or info.get("abbrev")
@@ -820,7 +816,7 @@ def _format_next_bottom(
 
 def _draw_next_card(
     display,
-    game: Dict,
+    game: dict,
     *,
     title: str,
     transition: bool = False,
@@ -1006,7 +1002,7 @@ def draw_last_wolves_game(display, game, transition: bool=False):
     )
 
     # LED indicator logic
-    led_override: Optional[Tuple[float, float, float]] = None
+    led_override: Optional[tuple[float, float, float]] = None
 
     wolves_home = str(home_info.get("id")) == str(TEAM_ID)
     wolves_score = home_score if wolves_home else away_score

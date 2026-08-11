@@ -19,11 +19,12 @@ for _path in (str(REPO_ROOT), str(REPO_ROOT / "scripts")):
     if _path not in sys.path:
         sys.path.insert(0, _path)
 
+from import_screen_rotation_config import LOCAL_CONFIG_PATH, _save_config  # noqa: E402
 from load_default_screen_config import (  # noqa: E402
     DEFAULT_SCREEN_PROFILES,
     _load_profile_config,
 )
-from import_screen_rotation_config import LOCAL_CONFIG_PATH, _save_config  # noqa: E402
+
 from schedule import build_scheduler  # noqa: E402
 
 PROMPT = (

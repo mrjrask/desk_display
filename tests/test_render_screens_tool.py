@@ -99,15 +99,15 @@ def test_build_cache_includes_scoreboards_payload(monkeypatch):
     monkeypatch.setattr(render_screens.data_fetch, "fetch_blackhawks_next_game", lambda: None)
     monkeypatch.setattr(render_screens.data_fetch, "fetch_blackhawks_next_home_game", lambda: None)
     monkeypatch.setattr(render_screens.data_fetch, "fetch_blackhawks_standings", lambda: None)
-    monkeypatch.setattr(render_screens.data_fetch, "fetch_wolves_games", lambda: {})
+    monkeypatch.setattr(render_screens.data_fetch, "fetch_wolves_games", dict)
     monkeypatch.setattr(render_screens.data_fetch, "fetch_bulls_last_game", lambda: None)
     monkeypatch.setattr(render_screens.data_fetch, "fetch_bulls_live_game", lambda: None)
     monkeypatch.setattr(render_screens.data_fetch, "fetch_bulls_next_game", lambda: None)
     monkeypatch.setattr(render_screens.data_fetch, "fetch_bulls_next_home_game", lambda: None)
     monkeypatch.setattr(render_screens.data_fetch, "fetch_bulls_standings", lambda: None)
-    monkeypatch.setattr(render_screens.data_fetch, "fetch_cubs_games", lambda: {})
+    monkeypatch.setattr(render_screens.data_fetch, "fetch_cubs_games", dict)
     monkeypatch.setattr(render_screens.data_fetch, "fetch_cubs_standings", lambda: None)
-    monkeypatch.setattr(render_screens.data_fetch, "fetch_sox_games", lambda: {})
+    monkeypatch.setattr(render_screens.data_fetch, "fetch_sox_games", dict)
     monkeypatch.setattr(render_screens.data_fetch, "fetch_sox_standings", lambda: None)
 
     payload = {"scoreboards": {"nba": [{"id": "game-1"}], "nfl": []}}

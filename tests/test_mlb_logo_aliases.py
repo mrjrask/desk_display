@@ -4,7 +4,6 @@ from PIL import Image
 
 from utils import get_mlb_abbreviation, load_team_logo
 
-
 REPO_ROOT = Path(__file__).resolve().parents[1]
 MLB_LOGO_DIR = REPO_ROOT / "images" / "mlb"
 

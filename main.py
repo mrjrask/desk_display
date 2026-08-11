@@ -13,8 +13,9 @@ Changes:
   the live screenshots/ folder structure.
 """
 import warnings
+
 try:
-    from gpiozero.exc import PinFactoryFallback, NativePinFactoryFallback
+    from gpiozero.exc import NativePinFactoryFallback, PinFactoryFallback
 except Exception:
     class PinFactoryFallback(Warning):
         """Fallback warning class when gpiozero is unavailable."""
@@ -31,25 +32,26 @@ warnings.filterwarnings(
     module=r"pygame\.pkgdata",
 )
 
-import glob
-import os
-import time
-import logging
-import threading
 import datetime
-import json
+import glob
 import hashlib
-import signal
+import json
+import logging
+import os
 import shutil
+import signal
 import subprocess
 import sys
 import tempfile
+import threading
+import time
 from collections import deque
+from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeoutError
 from contextlib import nullcontext
 from dataclasses import replace
 from pathlib import Path
 from typing import Callable, Dict, List, Optional, Set, Tuple
-from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeoutError
+
 try:
     import pygame
 except Exception:
@@ -61,26 +63,29 @@ gc = __import__('gc')
 
 from PIL import Image
 
+import config
+import data_fetch
 from config import (
-    WIDTH,
-    HEIGHT,
-    SCREEN_DELAY,
-    SCHEDULE_UPDATE_INTERVAL,
-    FONT_DATE_SPORTS,
-    ENABLE_SCREENSHOTS,
-    ENABLE_VIDEO,
-    VIDEO_FPS,
-    ENABLE_WEATHER,
-    ENABLE_WIFI_MONITOR,
+    AHL_TEAM_TRICODE,
     CENTRAL_TIME,
     DARK_HOURS_ENABLED,
-    is_within_dark_hours,
-    AHL_TEAM_TRICODE,
+    ENABLE_SCREENSHOTS,
+    ENABLE_VIDEO,
+    ENABLE_WEATHER,
+    ENABLE_WIFI_MONITOR,
     ENABLE_WIFI_RECOVERY,
+    HEIGHT,
+    SCHEDULE_UPDATE_INTERVAL,
+    SCREEN_DELAY,
+    VIDEO_FPS,
     WEATHER_REFRESH_SECONDS,
+    WIDTH,
     get_display_profile_id,
     initialise_runtime_probes,
+    is_within_dark_hours,
 )
+from services.air_quality import fetch_air_quality
+from services.data_provider import provider as data_provider
 from utils import (
     Display,
     ScreenImage,
@@ -90,15 +95,12 @@ from utils import (
     defer_clear_display,
     display_updates_enabled,
     resume_display_updates,
-    suspend_display_updates,
     set_update_indicator_enabled,
+    suspend_display_updates,
     temporary_display_led,
     update_indicator_enabled,
 )
-import data_fetch
-import config
-from services.air_quality import fetch_air_quality
-from services.data_provider import provider as data_provider
+
 try:
     from services import wifi_utils as _wifi_utils
     wifi_utils = _wifi_utils
@@ -122,9 +124,13 @@ except Exception as exc:
 
     wifi_utils = _WifiUtilsFallback()
 from paths import resolve_cache_file_path, resolve_screens_config_paths, resolve_storage_paths
-
+from schedule import (
+    ScreenScheduler,
+    build_scheduler,
+    load_schedule_config,
+    sanitize_schedule_config,
+)
 from screens.registry import ScreenContext, ScreenDefinition, build_screen_registry
-from schedule import ScreenScheduler, build_scheduler, load_schedule_config, sanitize_schedule_config
 
 # ─── Paths ───────────────────────────────────────────────────────────────────
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -2427,7 +2433,7 @@ def init_runtime() -> None:
         _apply_screenshot_limits_on_startup()
 
     if ENABLE_VIDEO:
-        import cv2, numpy as np
+        import cv2
         FOURCC     = cv2.VideoWriter_fourcc(*"mp4v")
         video_path = os.path.join(SCREENSHOT_DIR, "display_output.mp4")
         logging.info(
@@ -2678,7 +2684,8 @@ def main_loop():
                             if saved:
                                 pruned_screenshots_this_loop += saved[2]
                         if ENABLE_VIDEO and video_out:
-                            import cv2, numpy as np
+                            import cv2
+                            import numpy as np
 
                             frame = cv2.cvtColor(np.array(img), cv2.COLOR_RGB2BGR)
                             video_out.write(frame)
@@ -2701,7 +2708,8 @@ def main_loop():
                             if saved:
                                 pruned_screenshots_this_loop += saved[2]
                         if ENABLE_VIDEO and video_out:
-                            import cv2, numpy as np
+                            import cv2
+                            import numpy as np
 
                             frame = cv2.cvtColor(np.array(img), cv2.COLOR_RGB2BGR)
                             video_out.write(frame)

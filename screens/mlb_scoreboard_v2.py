@@ -8,9 +8,6 @@ Compact layout with smaller fonts and logos for a denser presentation.
 
 from __future__ import annotations
 
-import argparse
-import datetime
-import logging
 import os
 import time
 from typing import Optional
@@ -18,61 +15,58 @@ from typing import Optional
 from PIL import Image, ImageDraw
 
 from config import (
-    WIDTH,
-    HEIGHT,
-    FONT_TITLE_SPORTS,
-    FONT_TEAM_SPORTS,
     FONT_STATUS,
-    CENTRAL_TIME,
+    FONT_TEAM_SPORTS,
+    FONT_TITLE_SPORTS,
+    HEIGHT,
     IMAGES_DIR,
-    SCOREBOARD_SCROLL_STEP,
     MLB_SCOREBOARD_SCROLL_DELAY,
-    SCOREBOARD_SCROLL_PAUSE_TOP,
-    SCOREBOARD_SCROLL_PAUSE_BOTTOM,
-    SCOREBOARD_STANDINGS_BOTTOM_PADDING,
     SCOREBOARD_BACKGROUND_COLOR,
-    SCOREBOARD_IN_PROGRESS_SCORE_COLOR,
-    SCOREBOARD_FINAL_WINNING_SCORE_COLOR,
     SCOREBOARD_FINAL_LOSING_SCORE_COLOR,
+    SCOREBOARD_FINAL_WINNING_SCORE_COLOR,
+    SCOREBOARD_IN_PROGRESS_SCORE_COLOR,
+    SCOREBOARD_SCROLL_PAUSE_BOTTOM,
+    SCOREBOARD_SCROLL_PAUSE_TOP,
+    SCOREBOARD_SCROLL_STEP,
+    SCOREBOARD_STANDINGS_BOTTOM_PADDING,
+    WIDTH,
     get_screen_background_color,
     get_screen_font,
     get_screen_image_scale,
-    is_hdmi_1080p_layout,
-    is_hyperpixel_next_layout,
-    is_hyperpixel_4_square_layout,
     is_display_profile,
+    is_hdmi_1080p_layout,
+    is_hyperpixel_4_square_layout,
+    is_hyperpixel_next_layout,
     is_small_connected_scoreboard_display,
     scale_value,
     scale_value_width,
-)
-from utils import (
-    ScreenImage,
-    clear_display,
-    get_mlb_abbreviation,
-    load_team_logo,
-    log_missing_team_logo,
-    log_call,
-    scroll_vertical_content,
-    standard_scoreboard_league_logo_height,
-    standard_scoreboard_team_logo_height,
-    clone_font,
 )
 
 # Import shared MLB data fetching logic
 from screens.mlb_scoreboard import (
     _fetch_games_for_date,
-    _scoreboard_date,
-    _is_game_in_progress,
-    _is_game_final,
-    _should_display_scores,
-    _score_text,
-    _score_value,
-    _team_result,
     _final_results,
     _format_status,
-    _team_logo_abbr,
     _get_league_logo,
+    _is_game_final,
+    _is_game_in_progress,
+    _score_text,
+    _scoreboard_date,
+    _should_display_scores,
+    _team_logo_abbr,
     render_mlb_scoreboard as render_mlb_scoreboard_v1,
+)
+from screens.scoreboard_components import center_text as _center_text
+from utils import (
+    ScreenImage,
+    clear_display,
+    clone_font,
+    load_team_logo,
+    log_call,
+    log_missing_team_logo,
+    scroll_vertical_content,
+    standard_scoreboard_league_logo_height,
+    standard_scoreboard_team_logo_height,
 )
 
 # ─── Constants ────────────────────────────────────────────────────────────────
@@ -210,30 +204,6 @@ def _load_logo_cached(abbr: str) -> Optional[Image.Image]:
     _LOGO_CACHE[cache_key] = logo
     return logo
 
-
-def _center_text(
-    draw: ImageDraw.ImageDraw,
-    text: str,
-    font,
-    x: int,
-    width: int,
-    y: int,
-    height: int,
-    *,
-    fill=(255, 255, 255),
-):
-    if not text:
-        return
-    try:
-        l, t, r, b = draw.textbbox((0, 0), text, font=font)
-        tw, th = r - l, b - t
-        tx = x + (width - tw) // 2 - l
-        ty = y + (height - th) // 2 - t
-    except Exception:
-        tw, th = draw.textsize(text, font=font)
-        tx = x + (width - tw) // 2
-        ty = y + (height - th) // 2
-    draw.text((tx, ty), text, font=font, fill=fill)
 
 
 def _score_fill(

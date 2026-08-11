@@ -13,27 +13,29 @@ from typing import Any, Optional
 from PIL import Image, ImageDraw
 
 from config import (
-    WIDTH,
-    HEIGHT,
-    FONT_TITLE_SPORTS,
-    FONT_TEAM_SPORTS,
-    FONT_STATUS,
     CENTRAL_TIME,
+    FONT_STATUS,
+    FONT_TEAM_SPORTS,
+    FONT_TITLE_SPORTS,
+    HEIGHT,
     IMAGES_DIR,
-    SCOREBOARD_SCROLL_STEP,
-    SCOREBOARD_SCROLL_DELAY,
-    SCOREBOARD_SCROLL_PAUSE_TOP,
-    SCOREBOARD_SCROLL_PAUSE_BOTTOM,
-    SCOREBOARD_STANDINGS_BOTTOM_PADDING,
     SCOREBOARD_IN_PROGRESS_SCORE_COLOR,
+    SCOREBOARD_SCROLL_DELAY,
+    SCOREBOARD_SCROLL_PAUSE_BOTTOM,
+    SCOREBOARD_SCROLL_PAUSE_TOP,
+    SCOREBOARD_SCROLL_STEP,
+    SCOREBOARD_STANDINGS_BOTTOM_PADDING,
+    WIDTH,
     get_screen_font,
     get_screen_image_scale,
-    is_kernel_driven_display,
-    is_hyperpixel_next_layout,
     is_hyperpixel_4_square_layout,
+    is_hyperpixel_next_layout,
+    is_kernel_driven_display,
     scale_value,
     scale_value_width,
 )
+from screens.nhl_scoreboard import _center_text, _get_league_logo, _team_logo_abbr
+from screens.team_abbreviation_mappings import NHL_ABBR_TO_COMMON_NAME
 from services.http_client import NHL_HEADERS, get_session
 from utils import (
     ScreenImage,
@@ -41,11 +43,9 @@ from utils import (
     load_team_logo,
     log_missing_team_logo,
     scroll_vertical_content,
-    standard_scoreboard_team_logo_height,
     standard_scoreboard_league_logo_height,
+    standard_scoreboard_team_logo_height,
 )
-from screens.nhl_scoreboard import _center_text, _team_logo_abbr, _get_league_logo
-from screens.team_abbreviation_mappings import NHL_ABBR_TO_COMMON_NAME
 
 HYPERPIXEL_LAYOUT = is_hyperpixel_next_layout()
 HYPERPIXEL_4_SQUARE = is_hyperpixel_4_square_layout()
@@ -233,10 +233,7 @@ def _load_logo_cached(abbr: str) -> Optional[Image.Image]:
 
 def _playoff_season(now: Optional[datetime.datetime] = None) -> str:
     now = now or datetime.datetime.now(CENTRAL_TIME)
-    if now.month >= 9:
-        start_year = now.year
-    else:
-        start_year = now.year - 1
+    start_year = now.year if now.month >= 9 else now.year - 1
     return f"{start_year}{start_year + 1}"
 
 
@@ -897,8 +894,8 @@ def _series_next_text_from_games(series: dict, games: list[dict]) -> str:
     next_has_time = True
     for game in games or []:
         game_teams = game.get("teams") or {}
-        game_away_abbr = _team_abbr(((game_teams.get("away") or {}).get("team") or {}))
-        game_home_abbr = _team_abbr(((game_teams.get("home") or {}).get("team") or {}))
+        game_away_abbr = _team_abbr((game_teams.get("away") or {}).get("team") or {})
+        game_home_abbr = _team_abbr((game_teams.get("home") or {}).get("team") or {})
         if {game_away_abbr, game_home_abbr} != {away_abbr, home_abbr}:
             continue
         candidate_dt, candidate_has_time = _extract_next_game_info(game)
@@ -940,8 +937,8 @@ def _series_has_live_game_from_games(series: dict, games: list[dict]) -> bool:
 
     for game in games or []:
         game_teams = game.get("teams") or {}
-        game_away_abbr = _team_abbr(((game_teams.get("away") or {}).get("team") or {}))
-        game_home_abbr = _team_abbr(((game_teams.get("home") or {}).get("team") or {}))
+        game_away_abbr = _team_abbr((game_teams.get("away") or {}).get("team") or {})
+        game_home_abbr = _team_abbr((game_teams.get("home") or {}).get("team") or {})
         if {game_away_abbr, game_home_abbr} != {away_abbr, home_abbr}:
             continue
         if _is_live_schedule_game(game):
@@ -1012,10 +1009,7 @@ def _is_playoff_schedule_game(game: dict) -> bool:
     # api-web schedule payloads can expose abbreviated series statuses for playoff rounds.
     # We only treat explicit playoff-looking statuses as a match.
     series_status = str((game or {}).get("seriesStatusShort") or "").strip().lower()
-    if series_status in {"r1", "r2", "ecf", "wcf", "scf", "qf", "sf", "f"}:
-        return True
-
-    return False
+    return series_status in {"r1", "r2", "ecf", "wcf", "scf", "qf", "sf", "f"}
 
 
 def _fetch_remaining_playoff_schedule_games() -> list[dict]:
@@ -1109,8 +1103,8 @@ def _has_both_opponents(series: dict) -> bool:
 
 def _is_completed_series(series: dict) -> bool:
     teams = (series or {}).get("teams") or {}
-    away_wins = _as_int(((teams.get("away") or {}).get("score"))) or 0
-    home_wins = _as_int(((teams.get("home") or {}).get("score"))) or 0
+    away_wins = _as_int((teams.get("away") or {}).get("score")) or 0
+    home_wins = _as_int((teams.get("home") or {}).get("score")) or 0
     return away_wins >= 4 or home_wins >= 4
 
 
@@ -1159,8 +1153,8 @@ def _series_has_started(series: dict) -> bool:
     if _is_completed_series(series):
         return True
     teams = (series or {}).get("teams") or {}
-    away_wins = _as_int(((teams.get("away") or {}).get("score"))) or 0
-    home_wins = _as_int(((teams.get("home") or {}).get("score"))) or 0
+    away_wins = _as_int((teams.get("away") or {}).get("score")) or 0
+    home_wins = _as_int((teams.get("home") or {}).get("score")) or 0
     if away_wins > 0 or home_wins > 0:
         return True
     next_text = _normalize_next_text(series.get("next_text") or "")

@@ -3,7 +3,6 @@
 
 from __future__ import annotations
 
-import config
 import csv
 import datetime
 import io
@@ -11,33 +10,41 @@ import logging
 import os
 import re
 import time
-from collections.abc import Iterable
-from typing import Any, Dict, Iterable as _Iterable, List, Optional, Tuple
+from collections.abc import Iterable, Iterable as _Iterable
+from typing import Any, Optional
 
 from PIL import Image, ImageDraw
 
+import config
 from config import (
-    WIDTH,
-    HEIGHT,
-    FONT_TITLE_SPORTS,
     FONT_STATUS,
+    FONT_TITLE_SPORTS,
+    HEIGHT,
     IMAGES_DIR,
-    SCOREBOARD_SCROLL_STEP,
-    SCOREBOARD_SCROLL_DELAY,
-    SCOREBOARD_SCROLL_PAUSE_TOP,
-    SCOREBOARD_SCROLL_PAUSE_BOTTOM,
-    SCOREBOARD_STANDINGS_BOTTOM_PADDING,
     SCOREBOARD_BACKGROUND_COLOR,
+    SCOREBOARD_SCROLL_DELAY,
+    SCOREBOARD_SCROLL_PAUSE_BOTTOM,
+    SCOREBOARD_SCROLL_PAUSE_TOP,
+    SCOREBOARD_SCROLL_STEP,
+    SCOREBOARD_STANDINGS_BOTTOM_PADDING,
+    WIDTH,
     get_screen_background_color,
     get_screen_font,
+    is_hyperpixel_4_square_layout,
     is_hyperpixel_next_layout,
     scale_value,
     scale_value_width,
-    is_hyperpixel_4_square_layout,
 )
 from display_profiles import DISPLAY_PROFILE_ADAFRUIT_MINIPITFT_114
 from services.http_client import get_session
-from utils import ScreenImage, clear_display, load_team_logo, log_call, log_missing_team_logo, scroll_vertical_content
+from utils import (
+    ScreenImage,
+    clear_display,
+    load_team_logo,
+    log_call,
+    log_missing_team_logo,
+    scroll_vertical_content,
+)
 
 # ─── Constants ────────────────────────────────────────────────────────────────
 TITLE_NFC = "NFC Standings"
@@ -202,9 +209,9 @@ _SESSION = get_session()
 _MEASURE_IMG = Image.new("RGB", (1, 1))
 _MEASURE_DRAW = ImageDraw.Draw(_MEASURE_IMG)
 
-_STANDINGS_CACHE: Dict[str, Any] = {"timestamp": 0.0, "data": None, "message": None}
-_LOGO_CACHE: Dict[tuple[str, int], Optional[Image.Image]] = {}
-_OVERVIEW_LOGO_CACHE: Dict[tuple[str, int], Optional[Image.Image]] = {}
+_STANDINGS_CACHE: dict[str, Any] = {"timestamp": 0.0, "data": None, "message": None}
+_LOGO_CACHE: dict[tuple[str, int], Optional[Image.Image]] = {}
+_OVERVIEW_LOGO_CACHE: dict[tuple[str, int], Optional[Image.Image]] = {}
 
 _CONFERENCE_ALIASES = {
     "american football conference": CONFERENCE_AFC_KEY,
@@ -217,7 +224,7 @@ _DIVISION_PATTERN = re.compile(r"\b(AFC|NFC)\s+(EAST|WEST|NORTH|SOUTH)\b", re.IG
 DIVISION_ORDER_NFC = ["NFC North", "NFC East", "NFC South", "NFC West"]
 DIVISION_ORDER_AFC = ["AFC North", "AFC East", "AFC South", "AFC West"]
 
-COLUMN_HEADERS: List[tuple[str, str, str]] = [
+COLUMN_HEADERS: list[tuple[str, str, str]] = [
     ("", "team", "left"),
     ("W", "wins", "right"),
     ("L", "losses", "right"),
@@ -285,7 +292,7 @@ def _build_column_layout(team_names: Iterable[str] | None = None) -> dict[str, i
         "ties": "9",
     }
 
-    record_columns: List[Tuple[str, str, int]] = []
+    record_columns: list[tuple[str, str, int]] = []
     for label, key, _ in COLUMN_HEADERS:
         if key == "team":
             continue
@@ -356,7 +363,7 @@ def _team_display_name(team: dict) -> str:
 
 
 def _load_logo_for_height(
-    abbr: str, height: int, cache: Dict[tuple[str, int], Optional[Image.Image]]
+    abbr: str, height: int, cache: dict[tuple[str, int], Optional[Image.Image]]
 ) -> Optional[Image.Image]:
     key = (abbr or "").strip()
     if not key:
@@ -435,7 +442,7 @@ def _normalize_division(name: Any, conference: str = "") -> str:
     if text.lower().endswith("division"):
         text = text[: -len("division")].strip()
     parts = text.split()
-    normalized: List[str] = []
+    normalized: list[str] = []
     seen_conference = False
     for part in parts:
         upper = part.upper()
@@ -468,8 +475,8 @@ def _target_season_year(today: Optional[datetime.date] = None) -> int:
     return today.year - 1
 
 
-def _build_standings_from_rows(rows: Iterable[dict], *, conference_key: str) -> Dict[str, List[dict]]:
-    divisions: Dict[str, List[dict]] = {}
+def _build_standings_from_rows(rows: Iterable[dict], *, conference_key: str) -> dict[str, list[dict]]:
+    divisions: dict[str, list[dict]] = {}
     for row in rows:
         division = _normalize_division(row.get("division"), conference_key)
         if not division:
@@ -511,11 +518,11 @@ def _build_standings_from_rows(rows: Iterable[dict], *, conference_key: str) -> 
     return divisions
 
 
-def _parse_csv_standings(text: str, season: int) -> Tuple[dict[str, dict[str, List[dict]]], Optional[int]]:
+def _parse_csv_standings(text: str, season: int) -> tuple[dict[str, dict[str, list[dict]]], Optional[int]]:
     reader = csv.DictReader(io.StringIO(text))
     rows = [row for row in reader if row]
 
-    standings: dict[str, dict[str, List[dict]]] = {
+    standings: dict[str, dict[str, list[dict]]] = {
         CONFERENCE_NFC_KEY: {},
         CONFERENCE_AFC_KEY: {},
     }
@@ -527,7 +534,7 @@ def _parse_csv_standings(text: str, season: int) -> Tuple[dict[str, dict[str, Li
             continue
 
         used_season = candidate
-        grouped: Dict[str, List[dict]] = {CONFERENCE_NFC_KEY: [], CONFERENCE_AFC_KEY: []}
+        grouped: dict[str, list[dict]] = {CONFERENCE_NFC_KEY: [], CONFERENCE_AFC_KEY: []}
         for row in filtered:
             conference = (row.get("conf") or "").strip().upper()
             if conference not in standings:
@@ -604,7 +611,7 @@ def _first_string(source: Any, keys: _Iterable[str]) -> str:
     return ""
 
 
-def _extract_team_info(entry: Any) -> Optional[Dict[str, Any]]:
+def _extract_team_info(entry: Any) -> Optional[dict[str, Any]]:
     if not isinstance(entry, dict):
         return None
 
@@ -626,10 +633,7 @@ def _extract_team_info(entry: Any) -> Optional[Dict[str, Any]]:
                 nickname = parts[-1]
 
     abbr = team.get("abbreviation") or team.get("shortDisplayName") or team.get("displayName")
-    if isinstance(abbr, str):
-        abbr = abbr.strip().upper()
-    else:
-        abbr = ""
+    abbr = abbr.strip().upper() if isinstance(abbr, str) else ""
     if not abbr:
         name_source = nickname or team.get("displayName") or ""
         abbr = name_source[:3].upper() if isinstance(name_source, str) else ""
@@ -710,9 +714,9 @@ def _extract_team_info(entry: Any) -> Optional[Dict[str, Any]]:
     }
 
 
-def _collect_division_groups(data: Any) -> List[Tuple[str, str, List[dict]]]:
-    groups: List[Tuple[str, str, List[dict]]] = []
-    stack: List[Any] = [data]
+def _collect_division_groups(data: Any) -> list[tuple[str, str, list[dict]]]:
+    groups: list[tuple[str, str, list[dict]]] = []
+    stack: list[Any] = [data]
     seen_nodes: set[int] = set()
     while stack:
         node = stack.pop()
@@ -818,7 +822,7 @@ def _collect_division_groups(data: Any) -> List[Tuple[str, str, List[dict]]]:
     return groups
 
 
-def _extract_entries(payload: Any) -> List[dict]:
+def _extract_entries(payload: Any) -> list[dict]:
     """Return the first set of overall standings entries found in *payload*."""
 
     if isinstance(payload, dict):
@@ -832,8 +836,8 @@ def _extract_entries(payload: Any) -> List[dict]:
                 if isinstance(group, dict) and isinstance(group.get("entries"), list):
                     return group["entries"]  # type: ignore[return-value]
 
-    stack: List[Any] = [payload]
-    candidates: List[tuple[str, List[dict]]] = []
+    stack: list[Any] = [payload]
+    candidates: list[tuple[str, list[dict]]] = []
     while stack:
         node = stack.pop()
         if isinstance(node, dict):
@@ -856,11 +860,11 @@ def _extract_entries(payload: Any) -> List[dict]:
     return candidates[0][1]
 
 
-def _find_all_team_entries(payload: Any) -> List[dict]:
+def _find_all_team_entries(payload: Any) -> list[dict]:
     """Return every dict that looks like a standings entry within *payload*."""
 
-    entries: List[dict] = []
-    stack: List[Any] = [payload]
+    entries: list[dict] = []
+    stack: list[Any] = [payload]
     while stack:
         node = stack.pop()
         if isinstance(node, dict):
@@ -876,8 +880,8 @@ def _find_all_team_entries(payload: Any) -> List[dict]:
     return entries
 
 
-def _parse_standings(data: Any) -> dict[str, dict[str, List[dict]]]:
-    standings: dict[str, dict[str, List[dict]]] = {
+def _parse_standings(data: Any) -> dict[str, dict[str, list[dict]]]:
+    standings: dict[str, dict[str, list[dict]]] = {
         CONFERENCE_NFC_KEY: {},
         CONFERENCE_AFC_KEY: {},
     }
@@ -930,7 +934,7 @@ def _parse_standings(data: Any) -> dict[str, dict[str, List[dict]]]:
             logging.warning("NFL standings response missing entries")
             return standings
 
-        seen: set[Tuple[str, str, str]] = set()
+        seen: set[tuple[str, str, str]] = set()
         for entry in entries:
             info = _extract_team_info(entry)
             if not info:
@@ -994,7 +998,7 @@ def _in_offseason(today: Optional[datetime.date] = None) -> bool:
     return start <= today < end
 
 
-def _fetch_standings_data() -> Tuple[dict[str, dict[str, List[dict]]], Optional[str]]:
+def _fetch_standings_data() -> tuple[dict[str, dict[str, list[dict]]], Optional[str]]:
     now = time.time()
     cached = _STANDINGS_CACHE.get("data")
     timestamp = float(_STANDINGS_CACHE.get("timestamp", 0.0))
@@ -1059,7 +1063,7 @@ def _division_section_height(team_count: int) -> int:
     return height
 
 
-def _render_conference(title: str, division_order: List[str], standings: Dict[str, List[dict]]) -> Image.Image:
+def _render_conference(title: str, division_order: list[str], standings: dict[str, list[dict]]) -> Image.Image:
     sections = [
         _division_section_height(len(standings.get(division, [])))
         for division in division_order
@@ -1090,7 +1094,7 @@ def _render_conference(title: str, division_order: List[str], standings: Dict[st
 
     y = TITLE_MARGIN_TOP + TITLE_TEXT_HEIGHT + TITLE_MARGIN_BOTTOM
 
-    team_names: List[str] = []
+    team_names: list[str] = []
     for division in division_order:
         for team in standings.get(division, []) or []:
             name = _team_display_name(team)
@@ -1193,7 +1197,7 @@ def _render_conference(title: str, division_order: List[str], standings: Dict[st
     return img
 
 
-def _overview_header_frame(title: str) -> Tuple[Image.Image, int]:
+def _overview_header_frame(title: str) -> tuple[Image.Image, int]:
     img = Image.new("RGB", (WIDTH, HEIGHT), BACKGROUND_COLOR)
     draw = ImageDraw.Draw(img)
     try:
@@ -1210,7 +1214,7 @@ def _overview_header_frame(title: str) -> Tuple[Image.Image, int]:
     return img, content_top
 
 
-def _paste_overview_logos(canvas: Image.Image, placements: Iterable[Dict[str, Any]]):
+def _paste_overview_logos(canvas: Image.Image, placements: Iterable[dict[str, Any]]):
     ordered = sorted(
         (
             placement
@@ -1230,16 +1234,16 @@ def _paste_overview_logos(canvas: Image.Image, placements: Iterable[Dict[str, An
 
 
 def _prepare_overview_columns(
-    division_order: List[str],
-    standings: Dict[str, List[dict]],
+    division_order: list[str],
+    standings: dict[str, list[dict]],
     content_top: int,
-) -> Tuple[List[Dict[int, Optional[Dict[str, Any]]]], int]:
+) -> tuple[list[dict[int, Optional[dict[str, Any]]]], int]:
     hyperpixel_layout = is_hyperpixel_next_layout()
     column_count = max(1, len(division_order))
     column_width = WIDTH / column_count
     available_height = max(0, HEIGHT - content_top)
 
-    columns: List[Dict[int, Optional[Dict[str, Any]]]] = []
+    columns: list[dict[int, Optional[dict[str, Any]]]] = []
     max_rows = 0
 
     for idx, division in enumerate(division_order):
@@ -1269,7 +1273,7 @@ def _prepare_overview_columns(
         col_center = int((idx + 0.5) * column_width)
         width_limit = max(0, int(column_width - 2 * OVERVIEW_COLUMN_MARGIN))
 
-        column: Dict[int, Optional[Dict[str, Any]]] = {}
+        column: dict[int, Optional[dict[str, Any]]] = {}
         for rank, team in enumerate(teams):
             abbr = team.get("abbr", "")
             logo_source = _load_overview_logo(abbr, height=logo_height)
@@ -1316,8 +1320,8 @@ def _ease_out_cubic(t: float) -> float:
 def _render_overview(
     display,
     title: str,
-    division_order: List[str],
-    standings: Dict[str, List[dict]],
+    division_order: list[str],
+    standings: dict[str, list[dict]],
     transition: bool,
     fallback_message: Optional[str],
 ) -> ScreenImage:
@@ -1342,9 +1346,9 @@ def _render_overview(
     if max_rows == 0:
         return _render_overview_fallback(display, title, fallback_message, transition)
 
-    row_positions: List[List[Dict[str, Any]]] = []
+    row_positions: list[list[dict[str, Any]]] = []
     for rank in range(max_rows):
-        row: List[Dict[str, Any]] = []
+        row: list[dict[str, Any]] = []
         for column in columns:
             placement = column.get(rank)
             if placement:
@@ -1354,7 +1358,7 @@ def _render_overview(
     steps = max(2, OVERVIEW_DROP_STEPS)
     stagger = max(1, int(round(steps * OVERVIEW_DROP_STAGGER)))
 
-    schedule: List[Tuple[int, List[Dict[str, Any]]]] = []
+    schedule: list[tuple[int, list[dict[str, Any]]]] = []
     start_step = 0
     for rank in range(len(row_positions) - 1, -1, -1):
         drops = row_positions[rank]
@@ -1365,7 +1369,7 @@ def _render_overview(
 
     if schedule:
         total_duration = schedule[-1][0] + steps + 1
-        placed: List[Dict[str, Any]] = []
+        placed: list[dict[str, Any]] = []
         completed = [False] * len(schedule)
 
         for current_step in range(total_duration):
@@ -1389,7 +1393,7 @@ def _render_overview(
             if placed:
                 _paste_overview_logos(frame, placed)
 
-            animated: List[Dict[str, Any]] = []
+            animated: list[dict[str, Any]] = []
             for idx, (start, drops) in enumerate(schedule):
                 progress = current_step - start
                 if progress < 0 or progress >= steps:
@@ -1421,7 +1425,7 @@ def _render_overview(
                 return ScreenImage(header.copy(), displayed=True)
 
     final = header.copy()
-    all_placements: List[Dict[str, Any]] = []
+    all_placements: list[dict[str, Any]] = []
     for column in columns:
         for placement in column.values():
             if placement:
@@ -1516,8 +1520,8 @@ def _scroll_display(display, full_img: Image.Image):
 def _render_and_display(
     display,
     title: str,
-    division_order: List[str],
-    standings: Dict[str, List[dict]],
+    division_order: list[str],
+    standings: dict[str, list[dict]],
     transition: bool,
     fallback_message: Optional[str] = None,
 ) -> ScreenImage:
