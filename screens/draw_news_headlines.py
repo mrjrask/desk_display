@@ -9,6 +9,7 @@ headline opens a full-screen "Reader"-style overlay with the article text.
 from __future__ import annotations
 
 import contextlib
+import datetime as dt
 import logging
 import os
 import threading
@@ -103,6 +104,44 @@ _FRAME_INTERVAL_SECONDS = 0.045
 _OVERLAY_MAX_SECONDS = 45.0
 _OVERLAY_FRAME_INTERVAL_SECONDS = 0.03
 _OVERLAY_SCROLL_STEP = 1
+
+# Oldest an article is allowed to be (by RSS publish date) before it's dropped
+# from a ticker lane. Undated headlines are always kept since their age is
+# unknown.
+_MAX_HEADLINE_AGE_DAYS = 10
+
+# Per-(screen, topic) scroll offset, persisted across screen rotations so a
+# lane resumes where it left off instead of restarting at its first entry.
+# Keyed by "<config_filename>:<topic_id>" so the two independent news screens
+# never collide even if they happen to share a topic id.
+_ROW_OFFSETS_LOCK = threading.Lock()
+_ROW_OFFSETS: dict[str, float] = {}
+
+
+def _offset_key(screen_key: str, topic_id: str) -> str:
+    return f"{screen_key}:{topic_id}"
+
+
+def _saved_offset(screen_key: str, topic_id: str) -> float:
+    with _ROW_OFFSETS_LOCK:
+        return _ROW_OFFSETS.get(_offset_key(screen_key, topic_id), 0.0)
+
+
+def _save_row_offsets(screen_key: str, rows: list["_TickerRow"]) -> None:
+    with _ROW_OFFSETS_LOCK:
+        for row in rows:
+            _ROW_OFFSETS[_offset_key(screen_key, row.topic.id)] = row.offset
+
+
+def _filter_recent_headlines(headlines: list[NewsHeadline]) -> list[NewsHeadline]:
+    """Drop headlines published more than _MAX_HEADLINE_AGE_DAYS ago.
+
+    Headlines with no known publish date are kept, since we can't tell how
+    old they are.
+    """
+
+    cutoff = dt.datetime.now(dt.UTC) - dt.timedelta(days=_MAX_HEADLINE_AGE_DAYS)
+    return [h for h in headlines if h.published is None or h.published >= cutoff]
 
 
 def _theme_for_topic(topic_id: str) -> dict[str, tuple[int, int, int]]:
@@ -208,13 +247,14 @@ def _build_rows(
     topics: list[NewsTopic],
     headlines_by_topic: dict[str, list[NewsHeadline]],
     row_height: int,
+    screen_key: str = "default",
 ) -> list[_TickerRow]:
     thumb_size = max(0, row_height - 10) if config.NEWS_HEADLINES_SHOW_IMAGES else 0
     probe_draw = ImageDraw.Draw(Image.new("RGB", (4, 4)))
 
     rows: list[_TickerRow] = []
     for topic in topics:
-        items = headlines_by_topic.get(topic.id) or []
+        items = _filter_recent_headlines(headlines_by_topic.get(topic.id) or [])
         if not items:
             continue
         entries: list[_TickerEntry] = []
@@ -239,6 +279,7 @@ def _build_rows(
                     theme=_theme_for_topic(topic.id),
                     entries=entries,
                     speed=config.NEWS_TICKER_BASE_SPEED * _speed_multiplier(topic.id),
+                    offset=_saved_offset(screen_key, topic.id),
                 )
             )
     return rows
@@ -339,7 +380,9 @@ def _format_stock_entry_text(quote: StockQuote) -> tuple[str, tuple[int, int, in
     return f"{quote.label} {price_str}  {change_str}" + _ENTRY_SEPARATOR, color
 
 
-def _build_stock_row(quotes: list[StockQuote], row_height: int) -> Optional[_TickerRow]:
+def _build_stock_row(
+    quotes: list[StockQuote], row_height: int, screen_key: str = "default"
+) -> Optional[_TickerRow]:
     """Build the bottom ticker row from fetched quotes; None if none priced."""
 
     logo_size = max(0, row_height - 10)
@@ -369,6 +412,7 @@ def _build_stock_row(quotes: list[StockQuote], row_height: int) -> Optional[_Tic
         theme=_STOCK_THEME,
         entries=entries,
         speed=config.NEWS_TICKER_BASE_SPEED * _speed_multiplier(_STOCK_TOPIC.id),
+        offset=_saved_offset(screen_key, _STOCK_TOPIC.id),
     )
 
 
@@ -804,18 +848,21 @@ def _render_news_headlines_screen(
     headlines_by_topic = headlines_fetcher()
     row_count_estimate = len(topics) + (1 if config.ENABLE_STOCK_TICKER else 0)
     row_height_estimate, _row_tops_estimate = _compute_row_layout(row_count_estimate)
-    rows = _build_rows(topics, headlines_by_topic, row_height_estimate)
+    rows = _build_rows(topics, headlines_by_topic, row_height_estimate, config_filename)
 
     if config.ENABLE_STOCK_TICKER:
         quotes = fetch_stock_quotes(default_symbol_order())
-        stock_row = _build_stock_row(quotes, row_height_estimate)
+        stock_row = _build_stock_row(quotes, row_height_estimate, config_filename)
         if stock_row is not None:
             rows.append(stock_row)
 
     if not rows:
         return _render_empty_state(display)
 
-    return _run_ticker(display, rows)
+    try:
+        return _run_ticker(display, rows)
+    finally:
+        _save_row_offsets(config_filename, rows)
 
 
 @log_call
