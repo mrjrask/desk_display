@@ -253,7 +253,7 @@ Default topics/feeds shipped in `news_feeds_2.json` (the "news headlines 2" scre
 
 | Topic id | Label | Default feed |
 | --- | --- | --- |
-| `cnn` | CNN | CNN Breaking News (`http://rss.cnn.com/rss/cnn_topstories.rss`) |
+| `cnn` | CNN | CNN via Google News (`https://news.google.com/rss/search?q=site:cnn.com&hl=en-US&gl=US&ceid=US:en`) — CNN retired its public `rss.cnn.com` feeds in 2024, so this topic is routed through Google News like `tribune` |
 | `tribune` | Chicago Tribune | Chicago Tribune via Google News (`https://news.google.com/rss/search?q=site:chicagotribune.com&hl=en-US&gl=US&ceid=US:en`) |
 | `wgn` | WGN News | WGN News (`https://wgntv.com/feed/`) |
 | `macrumors` | MacRumors | MacRumors (`https://feeds.macrumors.com/MacRumors-All`) |
