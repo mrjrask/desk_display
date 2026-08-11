@@ -220,6 +220,55 @@ def test_screenshot_order_matches_config_page_order(monkeypatch, tmp_path):
     assert visible_screenshot_order == config_page_order
 
 
+def test_screenshot_order_matches_playlist_grouped_config_order(monkeypatch, tmp_path):
+    current_dir = tmp_path / "current"
+    current_dir.mkdir()
+
+    config = {
+        "screens": {
+            "date": {},
+            "nixie": {},
+            "on this day": {},
+            "news headlines": {},
+            "weather logo": {},
+            "weather1": {},
+        },
+        "playlists": {
+            "starter": {"label": "starter", "steps": [{"screen": "date"}, {"screen": "nixie"}]},
+            "weather": {
+                "label": "weather",
+                "steps": [{"screen": "weather logo"}, {"screen": "weather1"}],
+            },
+            "other": {
+                "label": "Other",
+                "steps": [{"screen": "on this day"}, {"screen": "news headlines"}],
+            },
+        },
+        "sequence": [
+            {"playlist": "starter"},
+            {"playlist": "weather"},
+            {"playlist": "other"},
+        ],
+    }
+
+    monkeypatch.setattr(
+        config_ui,
+        "resolve_storage_paths",
+        lambda **kwargs: SimpleNamespace(screenshot_dir=tmp_path, current_screenshot_dir=current_dir),
+    )
+    monkeypatch.setattr(config_ui, "_load_active_config", lambda: config)
+
+    entries = config_ui._build_screenshot_entries()
+    order = [entry["id"] for entry in entries if entry["id"] in config["screens"]]
+
+    # The Config page groups rows by playlist (in sequence order), not raw
+    # dict order, so screens assigned to a later playlist ("Other") must
+    # appear after screens in earlier playlists ("starter", "weather") even
+    # though "on this day" and "news headlines" come earlier in the raw
+    # screens dict.
+    assert order == ["date", "nixie", "weather logo", "weather1", "on this day", "news headlines"]
+
+
 def test_load_display_status_reads_heartbeat(monkeypatch, tmp_path):
     current_dir = tmp_path / "current"
     current_dir.mkdir()
