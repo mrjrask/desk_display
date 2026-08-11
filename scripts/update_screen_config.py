@@ -7,7 +7,7 @@ load_default_screen_config.py, which takes the profile as a CLI argument
 instead of prompting for it.
 
 Usage:
-    python3 tools/update_screen_config.py
+    python3 scripts/update_screen_config.py
 """
 from __future__ import annotations
 
@@ -15,7 +15,7 @@ import sys
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
-for _path in (str(REPO_ROOT), str(REPO_ROOT / "tools")):
+for _path in (str(REPO_ROOT), str(REPO_ROOT / "scripts")):
     if _path not in sys.path:
         sys.path.insert(0, _path)
 

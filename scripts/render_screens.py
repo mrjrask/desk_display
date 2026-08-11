@@ -12,7 +12,7 @@ import zipfile
 from pathlib import Path
 from typing import Callable, Dict, Iterable, Optional, Tuple
 
-PROJECT_ROOT = Path(__file__).resolve().parents[2]
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
 
 def _maybe_reexec_with_project_venv() -> None:

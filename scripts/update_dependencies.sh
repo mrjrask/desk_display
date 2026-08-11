@@ -11,6 +11,9 @@ INCLUDE_VENDOR_REQUIREMENTS="${INCLUDE_VENDOR_REQUIREMENTS:-0}"
 INCLUDE_PLATFORM_SPECIFIC_REQUIREMENTS="${INCLUDE_PLATFORM_SPECIFIC_REQUIREMENTS:-0}"
 ADAFRUIT_SENSOR_REQUIREMENTS_FILE="${ADAFRUIT_SENSOR_REQUIREMENTS_FILE:-requirements/sensors-adafruit.txt}"
 PIMORONI_SENSOR_REQUIREMENTS_FILE="${PIMORONI_SENSOR_REQUIREMENTS_FILE:-requirements/sensors-pimoroni.txt}"
+UPGRADE_OUTDATED=0
+CLEAN_CACHES=0
+DRY_RUN=0
 
 if [[ ! -f "$COMMON_SCRIPT" ]]; then
   echo "[ERROR] Missing helper script: $COMMON_SCRIPT" >&2
@@ -19,6 +22,27 @@ fi
 
 # shellcheck source=/dev/null
 source "$COMMON_SCRIPT"
+
+usage() {
+  cat >&2 <<USAGE
+Usage: $0 [--requirements <file>] [--output <displayhatmini|minipitft|kernel|framebuffer>]
+          [--python <python-bin>] [--include-vendor] [--include-platform-specific]
+          [--upgrade-outdated] [--clean-caches] [--dry-run]
+
+  --requirements <file>        Requirements file to install (overrides --output).
+  --output <mode>               Pick the requirements file for a display output mode.
+  --python <python-bin>         Interpreter used to create the virtual environment.
+  --include-vendor              Also install local ./vendor editable requirements.
+  --include-platform-specific   On macOS, also install Linux-only hardware requirements.
+  --upgrade-outdated             After installing requirements, upgrade any other
+                                 outdated packages already installed in the venv.
+  --clean-caches                 After updating dependencies, clean apt and pip caches
+                                 to reclaim disk space (Raspberry Pi/Debian hosts).
+  --dry-run                      With --upgrade-outdated, report outdated packages
+                                 without upgrading them.
+USAGE
+  exit 1
+}
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -42,9 +66,20 @@ while [[ $# -gt 0 ]]; do
       INCLUDE_PLATFORM_SPECIFIC_REQUIREMENTS=1
       shift
       ;;
+    --upgrade-outdated)
+      UPGRADE_OUTDATED=1
+      shift
+      ;;
+    --clean-caches)
+      CLEAN_CACHES=1
+      shift
+      ;;
+    --dry-run)
+      DRY_RUN=1
+      shift
+      ;;
     *)
-      echo "Usage: $0 [--requirements <file>] [--output <displayhatmini|minipitft|kernel|framebuffer>] [--python <python-bin>] [--include-vendor] [--include-platform-specific]" >&2
-      exit 1
+      usage
       ;;
   esac
 done
@@ -232,7 +267,8 @@ check_venv_permissions() {
       echo "[ERROR] This usually means the venv is owned by another user (often root)." >&2
       echo "[ERROR] Fix ownership, then rerun:" >&2
       echo "[ERROR]   sudo chown -R \"$current_user:$current_group\" \"$VENV_DIR\"" >&2
-      return 1
+      deactivate
+      exit 1
     fi
   done
 }
@@ -361,6 +397,86 @@ else
   log "Skipping optional Pimoroni sensor dependencies (set INSIDE_SENSOR to pimoroni_bme280, pimoroni_bme680, or pimoroni_bme68x to install them)."
 fi
 
+if [[ "$UPGRADE_OUTDATED" -eq 1 ]]; then
+  log "Checking for outdated installed packages"
+  OUTDATED_PACKAGES=$(python3 - <<'PY'
+import json
+import subprocess
+import sys
+
+result = subprocess.run(
+    [sys.executable, "-m", "pip", "list", "--outdated", "--format=json"],
+    check=True,
+    capture_output=True,
+    text=True,
+)
+packages = json.loads(result.stdout or "[]")
+for package in packages:
+    name = package.get("name")
+    if name:
+        print(name)
+PY
+)
+
+  if [[ -z "$OUTDATED_PACKAGES" ]]; then
+    log "All installed packages are already up to date."
+  else
+    log "Outdated packages detected:"
+    printf '%s\n' "$OUTDATED_PACKAGES"
+
+    if [[ "$DRY_RUN" -eq 1 ]]; then
+      log "Dry run enabled; skipping upgrade step."
+    else
+      log "Upgrading all outdated packages together"
+      mapfile -t PACKAGES_TO_UPGRADE <<< "$OUTDATED_PACKAGES"
+      pip install --upgrade "${PACKAGES_TO_UPGRADE[@]}"
+    fi
+  fi
+fi
+
 deactivate
 
 log "Dependency update complete."
+
+if [[ "$CLEAN_CACHES" -eq 1 ]]; then
+  run_as_root() {
+    if [[ "${EUID}" -eq 0 ]]; then
+      "$@"
+    elif command -v sudo >/dev/null 2>&1; then
+      sudo "$@"
+    else
+      warn "Skipping root-required command (sudo not found): $*"
+      return 0
+    fi
+  }
+
+  log "Cleaning apt and pip caches"
+
+  log "Disk usage before cleanup:"
+  df -h /
+
+  if command -v apt-get >/dev/null 2>&1; then
+    run_as_root apt-get clean
+    run_as_root apt-get autoclean -y
+    run_as_root apt-get autoremove -y
+    log "APT cache cleaned"
+  else
+    warn "apt-get not found; skipping APT cache cleanup"
+  fi
+
+  if command -v pip3 >/dev/null 2>&1; then
+    pip3 cache purge || true
+    run_as_root pip3 cache purge || true
+  else
+    warn "pip3 not found for current user; skipping pip cache purge"
+  fi
+
+  rm -rf "$HOME/.cache/pip"
+  run_as_root rm -rf /root/.cache/pip
+  log "pip cache cleaned"
+
+  log "Disk usage after cleanup:"
+  df -h /
+
+  log "Cache cleanup complete."
+fi

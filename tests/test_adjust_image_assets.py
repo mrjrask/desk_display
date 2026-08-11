@@ -2,7 +2,7 @@ from pathlib import Path
 
 from PIL import Image
 
-from tools.adjust_image_assets import adjust_images, ensure_output_root
+from scripts.adjust_image_assets import adjust_images, ensure_output_root
 
 
 def test_adjust_images_downscales_and_preserves_png_alpha(tmp_path: Path):

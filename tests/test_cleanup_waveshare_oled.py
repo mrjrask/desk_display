@@ -7,7 +7,7 @@ import types
 from pathlib import Path
 
 
-CLEANUP_SCRIPT = Path(__file__).resolve().parents[1] / "tools" / "maintenance" / "cleanup.sh"
+CLEANUP_SCRIPT = Path(__file__).resolve().parents[1] / "scripts" / "cleanup.sh"
 
 
 def _cleanup_python_block() -> str:

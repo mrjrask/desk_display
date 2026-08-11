@@ -11,6 +11,6 @@ Canonical limits:
 | Weather icons | `images/weather/` | 128 px | 75 KB |
 | Nixie digits | `images/nixie/` | 256 px | 75 KB |
 
-Use `tools/adjust_image_assets.py` to generate optimized copies outside the repository, then visually review those copies before replacing tracked files. The default team-logo/flag max edge is 128 px; known league/event logos are capped at 160 px.
+Use `scripts/adjust_image_assets.py` to generate optimized copies outside the repository, then visually review those copies before replacing tracked files. The default team-logo/flag max edge is 128 px; known league/event logos are capped at 160 px.
 
-Run `python tools/check_image_assets.py` before committing image changes. The check reports tracked image assets that exceed the policy without rewriting files; pass `--fail-on-violation` when you want a non-zero exit for strict local or CI gates.
+Run `python scripts/check_image_assets.py` before committing image changes. The check reports tracked image assets that exceed the policy without rewriting files; pass `--fail-on-violation` when you want a non-zero exit for strict local or CI gates.

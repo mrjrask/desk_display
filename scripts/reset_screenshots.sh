@@ -7,7 +7,7 @@ set -Eeuo pipefail
 
 # Resolve the absolute directory of this script (works with symlinks)
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &>/dev/null && pwd -P)"
-PROJECT_ROOT="$(cd -- "$SCRIPT_DIR/../.." &>/dev/null && pwd -P)"
+PROJECT_ROOT="$(cd -- "$SCRIPT_DIR/.." &>/dev/null && pwd -P)"
 
 # Target directories (inside the project root)
 TARGETS=(

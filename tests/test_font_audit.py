@@ -1,6 +1,6 @@
 import ast
 
-from tools.font_audit import FontCallScanner, build_known_font_sizes
+from scripts.font_audit import FontCallScanner, build_known_font_sizes
 
 
 def test_build_known_font_sizes_supports_annotated_assignments(tmp_path):
