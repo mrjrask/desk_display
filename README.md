@@ -133,7 +133,6 @@ sudo apt-get install -y \
 | `requirements/sensors-adafruit.txt` | Optional Adafruit/CircuitPython indoor sensor drivers. |
 | `requirements/sensors-pimoroni.txt` | Optional editable Pimoroni BME280/BME680/BME68x sensor drivers. |
 | `requirements/dev.txt` | Development profile layered on `base.txt` and optional sensor dependencies. |
-| `requirements.txt`, `requirements_*.txt` | Backward-compatible wrappers for older commands. Prefer the `requirements/` profile files above. |
 
 Indoor sensor drivers are optional and are kept out of the default display profiles. The installer adds `requirements/sensors-adafruit.txt` automatically when `INSIDE_SENSOR` (or legacy `INDOOR_SENSOR`) is configured as `adafruit_bme280`, `adafruit_bme680`, or `adafruit_sht4x` in the environment or `.env` before running the installer. Pimoroni sensor drivers use editable installs from `vendor/`; the installer adds `requirements/sensors-pimoroni.txt` automatically for `pimoroni_bme280`, `pimoroni_bme680`, or `pimoroni_bme68x`:
 
