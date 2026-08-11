@@ -25,6 +25,7 @@ from urllib.parse import unquote
 from PIL import Image, ImageDraw, ImageOps
 
 import config
+from paths import resolve_cache_file_path
 from services.http_client import http_get
 from utils import (
     ScreenImage,
@@ -101,7 +102,7 @@ _THUMBNAIL_CACHE: dict[tuple[str, int], Image.Image | None] = {}
 # offline fallback until that succeeded. Persist the most recent successful
 # build to disk (mirrors the pressure/weather history JSON cache pattern in
 # data_fetch.py) so a fresh process can reuse today's content immediately.
-_CACHE_DISK_PATH = os.environ.get("ON_THIS_DAY_CACHE_PATH", "on_this_day_cache.json")
+_CACHE_DISK_PATH = str(resolve_cache_file_path("ON_THIS_DAY_CACHE_PATH", "on_this_day_cache.json"))
 _DISK_CACHE_LOADED = False
 
 _HEBCAL_JEWISH_HOLIDAYS_ICS_URL = (

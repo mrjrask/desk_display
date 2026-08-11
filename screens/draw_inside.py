@@ -27,6 +27,7 @@ from datetime import datetime
 
 from PIL import Image, ImageDraw
 import config
+from paths import resolve_cache_file_path
 from utils import (
     clear_display,
     clone_font,
@@ -56,7 +57,7 @@ _KNOWN_SENSOR_I2C_ADDRESSES: Set[int] = {0x44, 0x45, 0x76, 0x77}
 _MAX_REASONABLE_I2C_HITS = 16
 _HISTORY_LIMIT = 60
 _HISTORY_MAX_AGE_SECONDS = 6 * 60 * 60
-_HISTORY_PATH = os.environ.get("INSIDE_HISTORY_PATH", "inside_history.json")
+_HISTORY_PATH = str(resolve_cache_file_path("INSIDE_HISTORY_PATH", "inside_history.json"))
 _inside_history: Dict[str, List[Tuple[float, float]]] = {}
 _inside_history_loaded = False
 _inside_history_lock = threading.RLock()

@@ -30,6 +30,7 @@ import jwt
 from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives import serialization
 
+from paths import resolve_cache_file_path
 from services.http_client import NHL_HEADERS, get_session
 from services.sports.nba import fetch_games_for_date as _nba_fetch_games_for_date
 
@@ -93,10 +94,12 @@ _PRESSURE_HISTORY_LOADED = False
 _PRESSURE_HISTORY_LAST_SAVE = 0.0
 _pressure_history_lock = threading.RLock()
 _PRESSURE_HISTORY_SAVE_INTERVAL_SECONDS = 60.0
-_PRESSURE_HISTORY_PATH = os.environ.get("PRESSURE_HISTORY_PATH", "pressure_history.json")
+_PRESSURE_HISTORY_PATH = str(resolve_cache_file_path("PRESSURE_HISTORY_PATH", "pressure_history.json"))
 _WEATHER_METRIC_HISTORY_WINDOW_SECONDS = 6 * 60 * 60
 _WEATHER_METRIC_HISTORY_MIN_INTERVAL_SECONDS = 10 * 60
-_WEATHER_METRIC_HISTORY_PATH = os.environ.get("WEATHER_METRIC_HISTORY_PATH", "weather_metric_history.json")
+_WEATHER_METRIC_HISTORY_PATH = str(
+    resolve_cache_file_path("WEATHER_METRIC_HISTORY_PATH", "weather_metric_history.json")
+)
 _WEATHER_METRIC_HISTORY: deque[dict[str, Any]] = deque()
 _WEATHER_METRIC_HISTORY_LOADED = False
 _weather_metric_history_lock = threading.RLock()
