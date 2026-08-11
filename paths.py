@@ -111,6 +111,22 @@ def resolve_news_feeds_config_path_2() -> Path:
     return _resolve_env_path("NEWS_FEEDS_CONFIG_PATH_2", base_dir) or (base_dir / "news_feeds_2.json")
 
 
+def resolve_cache_file_path(env_var: str, filename: str) -> Path:
+    """Resolve a runtime cache/history JSON file path.
+
+    Precedence:
+    1. ``env_var`` override (absolute, or relative to the project root).
+    2. Project-root default: ``cache/<filename>``.
+
+    Callers (pressure/weather/air-quality/inside history, on-this-day cache)
+    create the parent directory themselves on write, so this only resolves
+    the path.
+    """
+
+    base_dir = _project_root()
+    return _resolve_env_path(env_var, base_dir) or (base_dir / "cache" / filename)
+
+
 def resolve_storage_paths(*, logger: Optional[object] = None) -> StoragePaths:
     """Return filesystem paths for screenshots and archives.
 

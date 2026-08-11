@@ -358,7 +358,7 @@ Configuration is environment-driven. Put local values in `.env` for development 
 | `WEATHERKIT_*` | Apple WeatherKit team/key/service/private-key settings. |
 | `OWM_API_KEY`, `OWM_UNITS`, `OWM_LANGUAGE` | OpenWeatherMap fallback settings. |
 | `INSIDE_SENSOR`, `INSIDE_I2C_BUSES` | Indoor sensor selection and I2C bus probing. |
-| `PRESSURE_HISTORY_PATH` | Pressure history cache path for trend display. |
+| `PRESSURE_HISTORY_PATH` | Pressure history cache path for trend display. Defaults to `cache/pressure_history.json`. |
 
 Set `INSIDE_SENSOR` to `adafruit_bme280`, `adafruit_bme680`, or `adafruit_sht4x` before running an installer when you need optional Adafruit/CircuitPython sensor drivers. Set it to `pimoroni_bme280`, `pimoroni_bme680`, or `pimoroni_bme68x` when you need the optional vendored Pimoroni sensor drivers. If those optional drivers are absent, the inside screen keeps its normal fallback behavior and is skipped when no supported sensor can be probed.
 

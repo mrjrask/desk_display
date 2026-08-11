@@ -121,7 +121,7 @@ except Exception as exc:
             return "ok", None
 
     wifi_utils = _WifiUtilsFallback()
-from paths import resolve_screens_config_paths, resolve_storage_paths
+from paths import resolve_cache_file_path, resolve_screens_config_paths, resolve_storage_paths
 
 from screens.registry import ScreenContext, ScreenDefinition, build_screen_registry
 from schedule import ScreenScheduler, build_scheduler, load_schedule_config, sanitize_schedule_config
@@ -1760,7 +1760,9 @@ cache = {
     "scoreboards": {"nfl": None, "mlb": None, "nba": None, "ncaam": None, "nhl": None},
 }
 
-_AIR_QUALITY_HISTORY_PATH = os.environ.get("AIR_QUALITY_HISTORY_PATH", "air_quality_history.json")
+_AIR_QUALITY_HISTORY_PATH = str(
+    resolve_cache_file_path("AIR_QUALITY_HISTORY_PATH", "air_quality_history.json")
+)
 _AIR_QUALITY_HISTORY_WINDOW_SECONDS = 6 * 60 * 60
 _air_quality_history_lock = threading.Lock()
 

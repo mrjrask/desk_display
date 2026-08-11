@@ -1,9 +1,5 @@
 #Project Specific
-pressure_history.json
-inside_history.json
-air_quality_history.json
-weather_metric_history.json
-on_this_day_cache.json
+cache/
 screenshot_archive/
 screenshots/
 .runtime/
