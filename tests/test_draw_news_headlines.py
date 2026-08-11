@@ -1,3 +1,5 @@
+import datetime as dt
+
 import screens.draw_news_headlines as dnh
 from services.news_feeds import NewsHeadline, NewsTopic
 from services.stock_quotes import StockQuote
@@ -394,3 +396,91 @@ def test_run_ticker_opens_reader_overlay_on_headline_tap(monkeypatch):
 
     assert len(overlay_calls) == 1
     assert overlay_calls[0].topic_id == "local"
+
+
+def test_filter_recent_headlines_drops_old_but_keeps_undated():
+    now = dt.datetime.now(dt.UTC)
+    fresh = NewsHeadline(topic_id="local", title="Fresh", link="https://example.com/1", published=now)
+    stale = NewsHeadline(
+        topic_id="local",
+        title="Stale",
+        link="https://example.com/2",
+        published=now - dt.timedelta(days=dnh._MAX_HEADLINE_AGE_DAYS + 1),
+    )
+    undated = NewsHeadline(topic_id="local", title="Undated", link="https://example.com/3")
+
+    result = dnh._filter_recent_headlines([fresh, stale, undated])
+
+    assert result == [fresh, undated]
+
+
+def test_build_rows_filters_out_stale_headlines(monkeypatch):
+    monkeypatch.setattr(dnh, "_download_thumbnail", lambda *args, **kwargs: None)
+    topics = _topics(["local"])
+    now = dt.datetime.now(dt.UTC)
+    stale = NewsHeadline(
+        topic_id="local",
+        title="Old news",
+        link="https://example.com/old",
+        published=now - dt.timedelta(days=dnh._MAX_HEADLINE_AGE_DAYS + 5),
+    )
+    headlines = {"local": [stale]}
+
+    rows = dnh._build_rows(topics, headlines, row_height=40)
+
+    assert rows == []
+
+
+def test_build_rows_restores_saved_offset(monkeypatch):
+    monkeypatch.setattr(dnh, "_download_thumbnail", lambda *args, **kwargs: None)
+    dnh._ROW_OFFSETS.clear()
+    dnh._ROW_OFFSETS[dnh._offset_key("news_feeds.json", "local")] = 123.5
+    topics = _topics(["local"])
+    headlines = _headlines_for(topics)
+
+    rows = dnh._build_rows(topics, headlines, row_height=40, screen_key="news_feeds.json")
+
+    assert rows[0].offset == 123.5
+
+    # A different screen key must not see another screen's saved offset.
+    other_rows = dnh._build_rows(topics, headlines, row_height=40, screen_key="news_feeds_2.json")
+    assert other_rows[0].offset == 0.0
+
+
+def test_save_row_offsets_persists_per_screen_and_topic():
+    dnh._ROW_OFFSETS.clear()
+    row = dnh._TickerRow(
+        topic=NewsTopic(id="local", label="Local", name="local", url="https://example.com"),
+        theme=dnh._FALLBACK_THEME,
+        entries=[],
+        speed=1.0,
+        offset=42.0,
+    )
+
+    dnh._save_row_offsets("news_feeds.json", [row])
+
+    assert dnh._saved_offset("news_feeds.json", "local") == 42.0
+    assert dnh._saved_offset("news_feeds_2.json", "local") == 0.0
+
+
+def test_draw_news_headlines_resumes_scroll_position_across_calls(monkeypatch):
+    monkeypatch.setattr(dnh, "NEWS_HEADLINES_DISPLAY_SECONDS", 0.05)
+    monkeypatch.setattr(dnh, "_pygame_module_for_display", lambda display: None)
+    monkeypatch.setattr(dnh, "_download_thumbnail", lambda *args, **kwargs: None)
+    monkeypatch.setattr(dnh, "fetch_stock_quotes", lambda *args, **kwargs: [])
+    dnh._ROW_OFFSETS.clear()
+
+    topics = _topics(["local"])
+    monkeypatch.setattr(dnh, "load_news_feed_config", lambda: (topics, 5, 20))
+    monkeypatch.setattr(dnh, "fetch_all_headlines", lambda: _headlines_for(topics))
+
+    display = DummyDisplay()
+    dnh.draw_news_headlines(display, transition=True)
+
+    saved_offset = dnh._saved_offset("news_feeds.json", "local")
+    assert saved_offset > 0.0
+
+    display2 = DummyDisplay()
+    dnh.draw_news_headlines(display2, transition=True)
+
+    assert dnh._saved_offset("news_feeds.json", "local") > saved_offset
