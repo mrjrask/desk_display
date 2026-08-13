@@ -209,13 +209,19 @@
         ]
       },
       "playlist-1771301274262-66": {
-        "label": "stocks",
+        "label": "news & stocks",
         "steps": [
           {
             "screen": "verano logo"
           },
           {
             "screen": "vrnof"
+          },
+          {
+            "screen": "news headlines"
+          },
+          {
+            "screen": "news headlines 2"
           }
         ]
       },
@@ -517,12 +523,6 @@
           },
           {
             "screen": "on this day"
-          },
-          {
-            "screen": "news headlines"
-          },
-          {
-            "screen": "news headlines 2"
           }
         ]
       }
