@@ -313,7 +313,7 @@ Configuration is environment-driven. Put local values in `.env` for development 
 | `DESK_DISPLAY_OUTPUT` | Output mode: `auto`, `displayhatmini`, `minipitft`, `kernel`, `window`, `framebuffer`, or `headless`. |
 | `DESK_DISPLAY_FORCE_HEADLESS` | Force headless behavior even if another output is configured. |
 | `DESK_DISPLAY_PROFILE` | Optional display profile override. Invalid values fall back to resolution-based detection. |
-| `DESK_DISPLAY_LOW_POWER` | Low-power mode; defaults screenshots/video and Wi-Fi monitoring/recovery toward lower resource usage. |
+| `DESK_DISPLAY_LOW_POWER` | Low-power mode; defaults screenshots/video and Wi-Fi monitoring/recovery toward lower resource usage, and trims the weather radar's frame count/animation loops. Auto-detected as enabled on Raspberry Pi Zero / Zero 2 W boards (via `/proc/device-tree/model`); set to `0` to force it off there. |
 | `DISPLAY_WIDTH` / `DISPLAY_HEIGHT` | Render dimensions override. |
 | `DISPLAY_ROTATION` | App rotation. Accepts degrees (`0`, `90`, `180`, `270`) or quarter-turn values (`0`-`3`). |
 | `DISPLAY_ROTATION_STRICT` | When enabled, invalid rotation values are treated as configuration errors. |
@@ -772,6 +772,7 @@ python scripts/load_default_screen_config.py small --dry-run  # preview only
 | Kernel display flickers/rapidly cycles colors, freezes on one screen, or shows nothing after a reboot even though `systemctl` reports the service as running | Usually a leftover per-user unit from an older install (`~/.config/systemd/user/desk_display.service`) is still running and racing the current system-wide `desk_display.service` for the same panel. Check with `systemctl --user status desk_display.service` as the desktop user; if it exists, disable it (`systemctl --user disable --now desk_display.service`) and remove `~/.config/systemd/user/desk_display.service`, or just re-run `Installers/install_hyperpixel.sh`/`Installers/install_kernel.sh`, which clean this up automatically. |
 | Blinking cursor on framebuffer output | Keep `DISPLAY_FB_HIDE_CONSOLE_CURSOR=1` and `DISPLAY_FB_CONSOLE_GRAPHICS=1` so Linux fbcon does not redraw a cursor over direct framebuffer animation. |
 | macOS/window mode uses too much CPU | Use `./scripts/launch_macos_window_perf.sh` or set `DESK_DISPLAY_LOW_POWER=1`, `DESK_DISPLAY_WINDOW_SCALE=1`, `ENABLE_SCREENSHOTS=0`, `ENABLE_VIDEO=0`, `ENABLE_WIFI_MONITOR=0`, and `ENABLE_WIFI_RECOVERY=0`. |
+| Long pause on the weather radar or indoor sensor screen on a Pi Zero / Zero 2 W | Expected to be much less noticeable now: `DESK_DISPLAY_LOW_POWER` auto-enables on Zero boards (fewer radar tiles/animation loops, concurrent tile fetch instead of sequential), and fonts are cached instead of reloaded from disk on every render. If it's still slow, check Wi-Fi signal strength — retried/timed-out radar tile requests are the most likely remaining cause. |
 | Waveshare OLED/LCD HAT issues | Run `scripts/check_waveshare_setup.sh`, verify I2C addresses, framebuffer config, and `WAVESHARE_OLED_LCD_HAT_A_INSTALLED`. |
 | API/feed problem | Run `python scripts/test_api_connections.py`; use `--json` for machine-readable details. |
 

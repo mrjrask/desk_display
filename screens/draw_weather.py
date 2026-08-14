@@ -21,6 +21,7 @@ import math
 import re
 import textwrap
 import time
+from concurrent.futures import ThreadPoolExecutor
 from io import BytesIO
 from typing import Any, NamedTuple, Optional
 
@@ -113,7 +114,9 @@ RADAR_CENTER_LATITUDE = 41.8781
 RADAR_CENTER_LONGITUDE = -87.6298
 RADAR_MAX_FRAME_AGE = datetime.timedelta(hours=2)
 RADAR_ANIMATION_FRAME_DELAY_SECONDS = 0.2
-RADAR_ANIMATION_LOOPS = 3
+RADAR_ANIMATION_LOOPS = 1 if config.DESK_DISPLAY_LOW_POWER else 3
+RADAR_MAX_FRAMES = 3 if config.DESK_DISPLAY_LOW_POWER else 6
+RADAR_TILE_FETCH_WORKERS = 4
 RAINVIEWER_METADATA_URLS = (
     "https://api.rainviewer.com/public/weather-maps.json",
     # RainViewer's free metadata endpoint has moved at times; keep a fallback.
@@ -2409,7 +2412,7 @@ def _format_radar_timestamp(timestamp: Optional[int]) -> str:
     return f"{dt.hour % 12 or 12}:{dt:%M %p}"
 
 
-def _fetch_radar_frames(zoom: int = 7, max_frames: int = 6) -> list[RadarFrame]:
+def _fetch_radar_frames(zoom: int = 7, max_frames: int = RADAR_MAX_FRAMES) -> list[RadarFrame]:
     cache_key = (zoom, max_frames)
     now = time.monotonic()
     cached = _RADAR_FRAMES_CACHE.get(cache_key)
@@ -2435,7 +2438,7 @@ def _fetch_radar_frames(zoom: int = 7, max_frames: int = 6) -> list[RadarFrame]:
     return _copy_radar_frames(result)
 
 
-def _fetch_rainviewer_frames(zoom: int = 7, max_frames: int = 6) -> list[RadarFrame]:
+def _fetch_rainviewer_frames(zoom: int = 7, max_frames: int = RADAR_MAX_FRAMES) -> list[RadarFrame]:
     metadata = None
     for metadata_url in RAINVIEWER_METADATA_URLS:
         try:
@@ -2461,18 +2464,20 @@ def _fetch_rainviewer_frames(zoom: int = 7, max_frames: int = 6) -> list[RadarFr
     )
     frames = frames[-max_frames:]
 
+    if not frames:
+        return []
+
     x_tile, y_tile, x_offset, y_offset = _latlon_to_tile(
         RADAR_CENTER_LATITUDE,
         RADAR_CENTER_LONGITUDE,
         zoom,
     )
-    images: list[RadarFrame] = []
 
-    for frame in frames:
+    def _fetch_one(frame: Any) -> Optional[RadarFrame]:
         path = frame.get("path") if isinstance(frame, dict) else None
-        timestamp = _normalise_radar_timestamp(frame.get("time") if isinstance(frame, dict) else None)
         if not path:
-            continue
+            return None
+        timestamp = _normalise_radar_timestamp(frame.get("time") if isinstance(frame, dict) else None)
         url = (
             f"{host.rstrip('/')}/{path.strip('/')}/256/{zoom}/{x_tile}/{y_tile}/2/1_1.png"
         )
@@ -2482,14 +2487,20 @@ def _fetch_rainviewer_frames(zoom: int = 7, max_frames: int = 6) -> list[RadarFr
             tile = Image.open(BytesIO(tile_resp.content)).convert("RGBA")
         except Exception as exc:  # pragma: no cover - network failures are non-fatal
             logging.warning("Radar tile fetch failed: %s", exc)
-            continue
+            return None
 
         frame_img = Image.new("RGBA", tile.size, (0, 0, 0, 255))
         frame_img.alpha_composite(tile)
         final_frame = frame_img.resize((WIDTH, HEIGHT), Image.LANCZOS).convert("RGBA")
-        images.append(RadarFrame(final_frame, timestamp))
+        return RadarFrame(final_frame, timestamp)
 
-    return images
+    # Each tile is an independent network fetch; on flaky/weak Wi-Fi hardware
+    # (e.g. Pi Zero 2 W) a handful of slow requests otherwise serialize into a
+    # multi-tile wait before the radar screen can render at all.
+    with ThreadPoolExecutor(max_workers=min(RADAR_TILE_FETCH_WORKERS, len(frames))) as executor:
+        results = list(executor.map(_fetch_one, frames))
+
+    return [frame for frame in results if frame is not None]
 
 
 def _fetch_iem_radar_fallback_frames(zoom: int = 7) -> list[RadarFrame]:
@@ -2567,7 +2578,12 @@ def draw_weather_radar(display, weather=None, transition: bool = False):
         map_section = Image.new("RGBA", (WIDTH, HEIGHT), background + (255,))
 
     def _compose_frame(frame: RadarFrame) -> Image.Image:
-        radar_resized = frame.image.copy().resize((WIDTH, HEIGHT), Image.LANCZOS).convert("RGBA")
+        radar_image = frame.image
+        if radar_image.size != (WIDTH, HEIGHT):
+            # Frames are pre-resized when fetched; this only triggers for
+            # stale cached frames from a previous, differently-sized layout.
+            radar_image = radar_image.resize((WIDTH, HEIGHT), Image.LANCZOS)
+        radar_resized = radar_image.convert("RGBA")
         radar_opacity = 0.6
         if radar_opacity < 1.0:
             alpha = radar_resized.getchannel("A")

@@ -175,6 +175,49 @@ def _get_required_env_var(*names: str) -> str:
         f"{joined}"
     )
 
+
+def _read_pi_model() -> str:
+    """Best-effort read of the Raspberry Pi board model string, if any."""
+
+    for path in ("/proc/device-tree/model", "/sys/firmware/devicetree/base/model"):
+        try:
+            with open(path, "rb") as fh:
+                return fh.read().decode("utf-8", "ignore").strip("\x00").strip()
+        except OSError:
+            continue
+
+    try:
+        with open("/proc/cpuinfo", encoding="utf-8", errors="ignore") as fh:
+            for line in fh:
+                if line.lower().startswith("model"):
+                    return line.split(":", 1)[-1].strip()
+    except OSError:
+        pass
+
+    return ""
+
+
+def _detect_low_power_hardware_from_model(model: str) -> bool:
+    """Return True for board model strings too weak for full-fat rendering.
+
+    The Raspberry Pi Zero / Zero 2 W share the same low pin-count form factor
+    as the Pi 4/5 this project also targets, but run on a single low-clock
+    core (Zero) or four Cortex-A53 cores clocked well below the Pi 4/5
+    (Zero 2 W). Detect them from the device-tree model string so low-power
+    behavior (fewer radar frames/animation loops, skipped optional
+    background work, etc.) kicks in automatically without requiring the
+    operator to discover and set DESK_DISPLAY_LOW_POWER by hand.
+    """
+
+    return "raspberry pi zero" in model.lower()
+
+
+def _detect_low_power_hardware() -> bool:
+    return _detect_low_power_hardware_from_model(_read_pi_model())
+
+
+DESK_DISPLAY_LOW_POWER_AUTO_DETECTED = _detect_low_power_hardware()
+
 from PIL import Image, ImageDraw, ImageFont
 
 
@@ -221,7 +264,15 @@ _STYLE_CONFIG_LOCK = threading.Lock()
 
 # ─── Feature flags ────────────────────────────────────────────────────────────
 _display_output = os.environ.get("DESK_DISPLAY_OUTPUT", "auto").strip().lower()
-DESK_DISPLAY_LOW_POWER = _get_bool_env("DESK_DISPLAY_LOW_POWER", False)
+DESK_DISPLAY_LOW_POWER = _get_bool_env(
+    "DESK_DISPLAY_LOW_POWER", DESK_DISPLAY_LOW_POWER_AUTO_DETECTED
+)
+if DESK_DISPLAY_LOW_POWER_AUTO_DETECTED and os.environ.get("DESK_DISPLAY_LOW_POWER") is None:
+    logging.info(
+        "Detected a Raspberry Pi Zero board (%s); enabling low-power mode automatically. "
+        "Set DESK_DISPLAY_LOW_POWER=0 to override.",
+        _read_pi_model() or "unknown model",
+    )
 _is_macos_window_output = _display_output == "window" and platform.system() == "Darwin"
 _default_enable_screenshots = not (_is_macos_window_output or DESK_DISPLAY_LOW_POWER)
 

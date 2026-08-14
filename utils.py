@@ -2374,14 +2374,29 @@ def measure_text(draw: ImageDraw.ImageDraw, text: str, font: ImageFont.FreeTypeF
         return right - left, bottom - top
 
 
+_FONT_CLONE_CACHE: Dict[Tuple[str, int], ImageFont.FreeTypeFont] = {}
+_FONT_CLONE_CACHE_LOCK = threading.Lock()
+
+
 def clone_font(font: ImageFont.FreeTypeFont, size: int) -> ImageFont.FreeTypeFont:
     path = getattr(font, "path", None)
-    if path:
-        try:
-            return ImageFont.truetype(path, size)
-        except Exception:
-            pass
-    return font
+    if not path:
+        return font
+
+    cache_key = (path, size)
+    with _FONT_CLONE_CACHE_LOCK:
+        cached = _FONT_CLONE_CACHE.get(cache_key)
+    if cached is not None:
+        return cached
+
+    try:
+        cloned = ImageFont.truetype(path, size)
+    except Exception:
+        return font
+
+    with _FONT_CLONE_CACHE_LOCK:
+        _FONT_CLONE_CACHE[cache_key] = cloned
+    return cloned
 
 
 def fit_font(
