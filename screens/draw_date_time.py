@@ -263,9 +263,19 @@ def _cycle_colors_after_load(
                 expected_frame_id = current_frame_id
     # Keep cycling while this screen remains active, but stop immediately once
     # another screen has updated the display frame buffer.
+    #
+    # ``steps`` assumes each iteration only costs ``color_cycle_interval`` of
+    # wall-clock time. In practice composing a frame and writing it to the
+    # display both take real, non-zero time, so a run of many iterations can
+    # overrun its intended dwell window by a large margin — long enough to
+    # bleed a stray "date" frame into whatever screen comes next (visible as
+    # a brief, non-animated flash back to the date/time screen). Bound the
+    # loop by wall-clock time too so it can never run substantially longer
+    # than the window it was sized for, regardless of per-iteration overhead.
+    loop_deadline = time.monotonic() + (steps * color_cycle_interval) + 0.25
     count = 0
     takeover_observations = 0
-    while count < steps:
+    while count < steps and time.monotonic() < loop_deadline:
         if (
             enforce_takeover_tracking
             and
@@ -298,6 +308,20 @@ def _cycle_colors_after_load(
                 continue
             takeover_observations = 0
         img = _compose_frame(base_order, bright_color(), bright_color(), gh_state(), screen_id)
+        if (
+            enforce_takeover_tracking
+            and expected_frame_id is not None
+            and hasattr(display, "frame_id")
+        ):
+            # Composing a frame takes measurable time. Re-check right before
+            # writing so a takeover that lands while we were composing can't
+            # still get overwritten by this now-stale frame.
+            current_frame_id = display.frame_id()
+            if frame_state is not None:
+                with frame_state["lock"]:
+                    expected_frame_id = max(expected_frame_id, frame_state["value"])
+            if current_frame_id > expected_frame_id:
+                break
         display.image(img)
         # Some display drivers (notably HyperPixel/HDMI paths) only flush
         # framebuffer updates when show() is called. Drivers that auto-refresh
@@ -339,10 +363,14 @@ def _start_update_checks(
             if display is None:
                 return
             if worker_expected_frame_id is not None:
-                current_frame_id = display.frame_id()
+                # Read the shared frame state before the display's live frame
+                # id so a concurrent color-cycle write can't leave us with a
+                # stale (too-low) expected id compared against a freshly-read
+                # current id, which would look like a false takeover.
                 if frame_state is not None:
                     with frame_state["lock"]:
                         worker_expected_frame_id = frame_state["value"]
+                current_frame_id = display.frame_id()
                 if current_frame_id > worker_expected_frame_id:
                     logging.info(
                         "Background update checks skipped; display already updated."
