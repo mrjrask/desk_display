@@ -187,35 +187,39 @@
       grid-template-columns: repeat(4, minmax(160px, 1fr));
       gap: 0.6rem;
     }
-    .global-scroll-controls {
-      display: grid;
-      grid-template-columns: repeat(2, minmax(240px, 1fr));
-      gap: 1rem;
-      margin-bottom: 1rem;
-      padding: 1rem;
-      border-radius: 16px;
-      border: 1px solid rgba(56, 189, 248, 0.25);
-      background: rgba(14, 116, 144, 0.16);
-    }
-    .global-scroll-controls .field {
-      display: grid;
-      gap: 0.45rem;
-    }
-    .global-scroll-controls label {
+    .screen-speed-field {
       display: flex;
-      justify-content: space-between;
-      gap: 0.75rem;
-      font-size: 0.85rem;
-      font-weight: 700;
-      color: #e0f2fe;
+      align-items: center;
+      gap: 0.4rem;
+      margin-top: 0.4rem;
     }
-    .global-scroll-controls input[type="range"] {
-      width: 100%;
+    .screen-speed-field .screen-speed-toggle {
+      display: flex;
+      align-items: center;
+      gap: 0.3rem;
+      font-size: 0.75rem;
+      font-weight: 600;
+      color: #cbd5f5;
+      white-space: nowrap;
+    }
+    .screen-speed-field .screen-speed-toggle input[type="checkbox"] {
+      margin: 0;
+      accent-color: #38bdf8;
+      width: auto;
+    }
+    .screen-speed-field input[type="range"] {
+      flex: 1;
+      min-width: 0;
       accent-color: #38bdf8;
     }
-    .global-scroll-controls .hint {
+    .screen-speed-field .screen-speed-value {
+      font-size: 0.75rem;
       color: #94a3b8;
-      font-size: 0.8rem;
+      min-width: 3ch;
+      text-align: right;
+    }
+    .screen-speed-field input[type="range"]:disabled {
+      opacity: 0.4;
     }
     .playlist-controls {
       display: flex;
@@ -307,6 +311,7 @@
         minmax(165px, 1.25fr)
         minmax(130px, 0.85fr)
         minmax(120px, 0.7fr)
+        minmax(160px, 0.95fr)
         minmax(200px, 1.3fr)
         minmax(235px, 1.15fr)
         minmax(140px, 0.9fr)
@@ -350,6 +355,7 @@
         minmax(165px, 1.25fr)
         minmax(130px, 0.85fr)
         minmax(120px, 0.7fr)
+        minmax(160px, 0.95fr)
         minmax(200px, 1.3fr)
         minmax(235px, 1.15fr)
         minmax(140px, 0.9fr)
@@ -462,6 +468,7 @@
           minmax(160px, 1.3fr)
           minmax(130px, 0.9fr)
           minmax(110px, 0.7fr)
+          minmax(150px, 0.9fr)
           minmax(180px, 1.1fr)
           minmax(170px, 1fr)
           minmax(130px, 0.9fr)
@@ -526,24 +533,6 @@
       </div>
     </div>
     <div class="error" id="errorBox"></div>
-    <section class="global-scroll-controls" aria-label="Global scroll settings">
-      <div class="field">
-        <label for="scrollSpeedInput">
-          <span>Global scroll speed</span>
-          <output id="scrollSpeedValue">{{ '%.2f'|format(scroll_settings.speed) }}×</output>
-        </label>
-        <input type="range" id="scrollSpeedInput" min="0.25" max="3" step="0.05" value="{{ scroll_settings.speed }}">
-        <div class="hint">Adjusts every scrolling screen. Lower is slower; higher is faster.</div>
-      </div>
-      <div class="field">
-        <label for="scrollSmoothnessInput">
-          <span>Global scroll smoothness</span>
-          <output id="scrollSmoothnessValue">{{ '%.2f'|format(scroll_settings.smoothness) }}×</output>
-        </label>
-        <input type="range" id="scrollSmoothnessInput" min="0.5" max="2" step="0.05" value="{{ scroll_settings.smoothness }}">
-        <div class="hint">Higher values target smoother animation with more frames.</div>
-      </div>
-    </section>
     <div class="playlist-controls">
       <div class="field">
         <input type="text" id="newPlaylistName" placeholder="Create a new playlist">
@@ -562,6 +551,7 @@
         </label>
         <div>Freq</div>
       </div>
+      <div>Speed</div>
       <div>Hide after</div>
       <div>Alt screen</div>
       <div>Extra sec</div>
@@ -581,6 +571,16 @@
         <div>
           <input type="number" min="0" step="1" value="{{ screen.frequency }}" class="freq-input compact-number-input">
           <div class="hint">0 disables. 1=every pass, 2=every other pass.</div>
+        </div>
+        <div>
+          <div class="screen-speed-field">
+            <label class="screen-speed-toggle">
+              <input type="checkbox" class="screen-speed-enabled-input" {% if screen.scroll_speed_enabled %}checked{% endif %} aria-label="Override scroll speed for {{ screen.id }}">
+            </label>
+            <input type="range" min="0.25" max="3" step="0.05" value="{{ screen.scroll_speed|default(1.0) }}" class="screen-speed-input" {% if not screen.scroll_speed_enabled %}disabled{% endif %}>
+            <output class="screen-speed-value">{{ '%.2f'|format(screen.scroll_speed|default(1.0)) }}×</output>
+          </div>
+          <div class="hint">When checked, overrides this screen's scroll speed.</div>
         </div>
         <div>
           <div class="hide-after-field">
@@ -645,10 +645,6 @@
     const importFileInput = document.getElementById("importFile");
     const errorBox = document.getElementById("errorBox");
     const hideZeroFreqToggle = document.getElementById("hideZeroFreq");
-    const scrollSpeedInput = document.getElementById("scrollSpeedInput");
-    const scrollSmoothnessInput = document.getElementById("scrollSmoothnessInput");
-    const scrollSpeedValue = document.getElementById("scrollSpeedValue");
-    const scrollSmoothnessValue = document.getElementById("scrollSmoothnessValue");
     const newPlaylistNameInput = document.getElementById("newPlaylistName");
     const addPlaylistBtn = document.getElementById("addPlaylistBtn");
     const draftStorageKey = "screen-config-draft";
@@ -656,7 +652,6 @@
     const selectableScreenIds = {{ screen_ids|tojson }};
     const serverPlaylists = {{ playlists|tojson }};
     const serverPlaylistAssignments = {{ playlist_assignments|tojson }};
-    const serverScrollSettings = {{ scroll_settings|tojson }};
     let isDirty = false;
     let playlists = [];
     let playlistAssignments = {};
@@ -918,9 +913,23 @@
       if (event.target.matches(".freq-input")) {
         updateZeroFrequencyVisibility();
       }
+      if (event.target.matches(".screen-speed-input")) {
+        const row = event.target.closest(".screen-row");
+        const output = row?.querySelector(".screen-speed-value");
+        if (output) {
+          output.textContent = `${Number.parseFloat(event.target.value).toFixed(2)}×`;
+        }
+      }
     });
 
     screenTable.addEventListener("change", (event) => {
+      if (event.target.matches(".screen-speed-enabled-input")) {
+        const row = event.target.closest(".screen-row");
+        const speedInput = row?.querySelector(".screen-speed-input");
+        if (speedInput) {
+          speedInput.disabled = !event.target.checked;
+        }
+      }
       if (event.target.matches(".playlist-select")) {
         const row = event.target.closest(".screen-row");
         if (!row) return;
@@ -968,22 +977,6 @@
       return Math.min(max, Math.max(min, parsed));
     }
 
-    function getScrollSettings() {
-      return {
-        speed: clampNumber(scrollSpeedInput?.value, 1, 0.25, 3),
-        smoothness: clampNumber(scrollSmoothnessInput?.value, 1, 0.5, 2),
-      };
-    }
-
-    function setScrollSettings(settings = {}) {
-      const speed = clampNumber(settings.speed, 1, 0.25, 3);
-      const smoothness = clampNumber(settings.smoothness, 1, 0.5, 2);
-      if (scrollSpeedInput) scrollSpeedInput.value = speed.toFixed(2);
-      if (scrollSmoothnessInput) scrollSmoothnessInput.value = smoothness.toFixed(2);
-      if (scrollSpeedValue) scrollSpeedValue.textContent = `${speed.toFixed(2)}×`;
-      if (scrollSmoothnessValue) scrollSmoothnessValue.textContent = `${smoothness.toFixed(2)}×`;
-    }
-
     function showError(message) {
       errorBox.textContent = message;
       errorBox.style.display = "block";
@@ -1025,6 +1018,8 @@
             hide_after_enabled: row.querySelector(".hide-after-enabled-input")?.checked ?? false,
             extra_seconds: row.querySelector(".extra-seconds-input")?.value ?? "",
             alt_frequency: row.querySelector(".alt-frequency-input")?.value ?? "",
+            scroll_speed_enabled: row.querySelector(".screen-speed-enabled-input")?.checked ?? false,
+            scroll_speed: row.querySelector(".screen-speed-input")?.value ?? "",
           };
         })
         .filter(Boolean);
@@ -1077,51 +1072,38 @@
         const hideAfterAt = String(screen.hide_after_at ?? "").trim();
         const hideAfterEnabled = Boolean(screen.hide_after_enabled) && hideAfterAt.length > 0;
         const altScreens = parseAltScreen(String(screen.alt_screen ?? "").trim());
+        const scrollSpeedEnabled = Boolean(screen.scroll_speed_enabled);
+
+        const spec = { frequency: Number.isNaN(frequency) ? 0 : frequency };
         if (altScreens.length > 0) {
           const altFrequencyRaw = screen.alt_frequency;
           const altFrequency = Number.isNaN(Number.parseInt(altFrequencyRaw, 10))
             ? 1
             : Number.parseInt(altFrequencyRaw, 10);
-          screensPayload[screenId] = {
-            frequency: Number.isNaN(frequency) ? 0 : frequency,
-            extra_seconds: Number.isNaN(extraSeconds) ? 0 : Math.max(0, extraSeconds),
-            alt: {
-              screen: altScreens.length === 1 ? altScreens[0] : altScreens,
-              frequency: altFrequency,
-            },
+          spec.alt = {
+            screen: altScreens.length === 1 ? altScreens[0] : altScreens,
+            frequency: altFrequency,
           };
-          if (hideAfterEnabled) {
-            screensPayload[screenId].hide_after_enabled = true;
-            screensPayload[screenId].hide_after_at = hideAfterAt;
-          }
-        } else {
-          if (Number.isNaN(extraSeconds) || extraSeconds <= 0) {
-            if (hideAfterEnabled) {
-              screensPayload[screenId] = {
-                frequency: Number.isNaN(frequency) ? 0 : frequency,
-                hide_after_enabled: true,
-                hide_after_at: hideAfterAt,
-              };
-            } else {
-              screensPayload[screenId] = Number.isNaN(frequency) ? 0 : frequency;
-            }
-          } else {
-            screensPayload[screenId] = {
-              frequency: Number.isNaN(frequency) ? 0 : frequency,
-              extra_seconds: Math.max(0, extraSeconds),
-            };
-            if (hideAfterEnabled) {
-              screensPayload[screenId].hide_after_enabled = true;
-              screensPayload[screenId].hide_after_at = hideAfterAt;
-            }
-          }
         }
+        if (!Number.isNaN(extraSeconds) && extraSeconds > 0) {
+          spec.extra_seconds = extraSeconds;
+        }
+        if (hideAfterEnabled) {
+          spec.hide_after_enabled = true;
+          spec.hide_after_at = hideAfterAt;
+        }
+        if (scrollSpeedEnabled) {
+          const speed = clampNumber(screen.scroll_speed, 1, 0.25, 3);
+          spec.scroll = { speed };
+        }
+
+        const specKeys = Object.keys(spec);
+        screensPayload[screenId] = specKeys.length === 1 && specKeys[0] === "frequency" ? spec.frequency : spec;
       });
       return {
         screens: screensPayload,
         playlists: buildPlaylistsPayload(screens),
         sequence: playlists.map((playlist) => ({ playlist: playlist.id })),
-        scroll: getScrollSettings(),
       };
     }
 
@@ -1165,7 +1147,6 @@
         updatedAt: new Date().toISOString(),
         screens: getCurrentScreens(),
         playlists,
-        scroll: getScrollSettings(),
         assignments: playlistAssignments,
         collapsed: collapsedPlaylists,
       };
@@ -1306,6 +1287,16 @@
           <div class="hint">0 disables. 1=every pass, 2=every other pass.</div>
         </div>
         <div>
+          <div class="screen-speed-field">
+            <label class="screen-speed-toggle">
+              <input type="checkbox" class="screen-speed-enabled-input" ${screen.scroll_speed_enabled ? "checked" : ""} aria-label="Override scroll speed for ${screen.id}">
+            </label>
+            <input type="range" min="0.25" max="3" step="0.05" value="${screen.scroll_speed ?? 1}" class="screen-speed-input" ${screen.scroll_speed_enabled ? "" : "disabled"}>
+            <output class="screen-speed-value">${Number(screen.scroll_speed ?? 1).toFixed(2)}×</output>
+          </div>
+          <div class="hint">When checked, overrides this screen's scroll speed.</div>
+        </div>
+        <div>
           <div class="hide-after-field">
             <input type="checkbox" class="hide-after-enabled-input" ${screen.hide_after_enabled ? "checked" : ""} aria-label="Enable hide-after date for ${screen.id}">
             <input type="datetime-local" class="hide-after-input" value="${screen.hide_after_at ?? ""}">
@@ -1406,14 +1397,12 @@
             screens,
             playlists: buildPlaylistsPayload(screens),
             sequence: playlists.map((playlist) => ({ playlist: playlist.id })),
-            scroll: getScrollSettings(),
           }),
         });
         const data = await response.json();
         if (!response.ok) {
           throw new Error(data.error || "Unable to save configuration");
         }
-        setScrollSettings(data.scroll || getScrollSettings());
         renderScreens(data.screens || screens);
         markClean();
       } catch (err) {
@@ -1453,7 +1442,6 @@
               : {};
           collapsedPlaylists = {};
         }
-        setScrollSettings(data.scroll || serverScrollSettings);
         renderScreens(data.screens || []);
         markDirty();
       } catch (err) {
@@ -1491,7 +1479,6 @@
           throw new Error(data.error || "Unable to import configuration");
         }
         applyImportedPlaylists(payload.config);
-        setScrollSettings(data.scroll || payload.config?.scroll || serverScrollSettings);
         renderScreens(data.screens || []);
         markClean();
       } catch (err) {
@@ -1530,13 +1517,6 @@
       });
     }
 
-    [scrollSpeedInput, scrollSmoothnessInput].forEach((input) => {
-      input?.addEventListener("input", () => {
-        setScrollSettings(getScrollSettings());
-        markDirty();
-      });
-    });
-
     if (addPlaylistBtn) {
       addPlaylistBtn.addEventListener("click", () => {
         if (!newPlaylistNameInput) return;
@@ -1572,7 +1552,6 @@
       event.returnValue = "";
     });
 
-    setScrollSettings(serverScrollSettings);
     loadPlaylistState();
     let initialScreens = getCurrentScreens();
     const savedDraft = sessionStorage.getItem(draftStorageKey);
@@ -1591,9 +1570,6 @@
             }
             if (draft.collapsed && typeof draft.collapsed === "object") {
               collapsedPlaylists = { ...draft.collapsed };
-            }
-            if (draft.scroll && typeof draft.scroll === "object") {
-              setScrollSettings(draft.scroll);
             }
             savePlaylistState();
             isDirty = true;

@@ -89,6 +89,7 @@ from services.data_provider import provider as data_provider
 from utils import (
     Display,
     ScreenImage,
+    active_scroll_screen,
     animate_fade_in,
     clear_display,
     clear_update_indicator,
@@ -2614,7 +2615,7 @@ def main_loop():
                     frame_id_before_render = None
 
             try:
-                with defer_clear_display():
+                with defer_clear_display(), active_scroll_screen(sid):
                     result = entry.render()
             except Exception as exc:
                 logging.error(f"Error in screen '{sid}': {exc}")
