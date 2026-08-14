@@ -10,6 +10,7 @@ Core utilities for the desk display project:
 - Team/MLB helpers
 - GitHub update checker
 """
+import contextvars
 import datetime
 import errno
 import fcntl
@@ -2516,7 +2517,7 @@ def animate_scroll(display: Display, image: Image.Image, speed=3.0, y_offset=Non
     img_w, img_h = image.size
     y = y_offset if y_offset is not None else (h - img_h) // 2
     direction = random.choice(("ltr", "rtl"))
-    settings = get_global_scroll_settings()
+    settings = _effective_scroll_settings()
     speed = float(speed) * settings["speed"]
     if speed == 0:
         return
@@ -2589,8 +2590,40 @@ class AdaptiveScrollParams:
 
 MANUAL_SCROLL_RESUME_DELAY_SECONDS = 1.0
 
-_SCROLL_SETTINGS_CACHE: Dict[str, Any] = {"path": None, "mtime": None, "settings": {"speed": 1.0, "smoothness": 1.0}}
+_SCROLL_SETTINGS_CACHE: Dict[str, Any] = {
+    "path": None,
+    "mtime": None,
+    "settings": {"speed": 1.0, "smoothness": 1.0},
+    "screens": {},
+}
 _SCROLL_SETTINGS_LOCK = threading.Lock()
+
+# Screen id the render loop is currently drawing, used so scroll helpers can
+# pick up that screen's per-screen speed/smoothness override (if any) without
+# every caller having to thread a screen_id through animate_scroll/
+# compute_adaptive_scroll_params/scroll_vertical_content by hand. A ContextVar
+# (rather than a plain module global) keeps this safe if rendering is ever
+# driven from more than one context (e.g. concurrent preview requests).
+_ACTIVE_SCROLL_SCREEN_ID: "contextvars.ContextVar[Optional[str]]" = contextvars.ContextVar(
+    "active_scroll_screen_id", default=None
+)
+
+
+@contextmanager
+def active_scroll_screen(screen_id: Optional[str]):
+    """Mark *screen_id* as the screen currently being rendered/scrolled.
+
+    Wrap a screen's render call in this so animate_scroll/
+    compute_adaptive_scroll_params resolve that screen's per-screen scroll
+    override (screens_config.json screens[screen_id].scroll), falling back to
+    the global scroll speed/smoothness when it has none.
+    """
+
+    token = _ACTIVE_SCROLL_SCREEN_ID.set(screen_id)
+    try:
+        yield
+    finally:
+        _ACTIVE_SCROLL_SCREEN_ID.reset(token)
 
 
 def _clamp_float(value: Any, default: float, minimum: float, maximum: float) -> float:
@@ -2601,8 +2634,21 @@ def _clamp_float(value: Any, default: float, minimum: float, maximum: float) -> 
     return min(maximum, max(minimum, parsed))
 
 
-def get_global_scroll_settings() -> Dict[str, float]:
-    """Load global scroll speed/smoothness from the active screens config."""
+def _parse_screen_scroll_override(raw: Any) -> Dict[str, float]:
+    """Parse a per-screen ``scroll`` spec, keeping only the keys it sets."""
+
+    if not isinstance(raw, dict):
+        return {}
+    override: Dict[str, float] = {}
+    if "speed" in raw:
+        override["speed"] = _clamp_float(raw.get("speed"), 1.0, 0.25, 3.0)
+    if "smoothness" in raw:
+        override["smoothness"] = _clamp_float(raw.get("smoothness"), 1.0, 0.5, 2.0)
+    return override
+
+
+def _load_scroll_config() -> Dict[str, Any]:
+    """Load and cache the global scroll settings plus per-screen overrides."""
 
     try:
         from paths import resolve_screens_config_paths
@@ -2610,20 +2656,24 @@ def get_global_scroll_settings() -> Dict[str, float]:
         config_path = str(resolve_screens_config_paths().active_path)
         mtime = os.path.getmtime(config_path)
     except OSError:
-        return {"speed": 1.0, "smoothness": 1.0}
+        return {"settings": {"speed": 1.0, "smoothness": 1.0}, "screens": {}}
     except Exception:
         logging.debug("Unable to resolve global scroll settings.", exc_info=True)
-        return {"speed": 1.0, "smoothness": 1.0}
+        return {"settings": {"speed": 1.0, "smoothness": 1.0}, "screens": {}}
 
     with _SCROLL_SETTINGS_LOCK:
         if _SCROLL_SETTINGS_CACHE.get("path") == config_path and _SCROLL_SETTINGS_CACHE.get("mtime") == mtime:
-            return dict(_SCROLL_SETTINGS_CACHE["settings"])
+            return {
+                "settings": dict(_SCROLL_SETTINGS_CACHE["settings"]),
+                "screens": dict(_SCROLL_SETTINGS_CACHE["screens"]),
+            }
         try:
             with open(config_path, "r", encoding="utf-8") as fh:
                 payload = json.load(fh)
         except Exception:
             logging.debug("Unable to read global scroll settings from %s.", config_path, exc_info=True)
             settings = {"speed": 1.0, "smoothness": 1.0}
+            screen_overrides: Dict[str, Dict[str, float]] = {}
         else:
             raw = payload.get("scroll") if isinstance(payload, dict) else {}
             if not isinstance(raw, dict):
@@ -2632,8 +2682,39 @@ def get_global_scroll_settings() -> Dict[str, float]:
                 "speed": _clamp_float(raw.get("speed"), 1.0, 0.25, 3.0),
                 "smoothness": _clamp_float(raw.get("smoothness"), 1.0, 0.5, 2.0),
             }
-        _SCROLL_SETTINGS_CACHE.update({"path": config_path, "mtime": mtime, "settings": settings})
-        return dict(settings)
+            screen_overrides = {}
+            screens_raw = payload.get("screens") if isinstance(payload, dict) else {}
+            if isinstance(screens_raw, dict):
+                for screen_id, spec in screens_raw.items():
+                    if not isinstance(screen_id, str) or not isinstance(spec, dict):
+                        continue
+                    override = _parse_screen_scroll_override(spec.get("scroll"))
+                    if override:
+                        screen_overrides[screen_id] = override
+        _SCROLL_SETTINGS_CACHE.update(
+            {"path": config_path, "mtime": mtime, "settings": settings, "screens": screen_overrides}
+        )
+        return {"settings": dict(settings), "screens": dict(screen_overrides)}
+
+
+def get_global_scroll_settings() -> Dict[str, float]:
+    """Load global scroll speed/smoothness from the active screens config."""
+
+    return dict(_load_scroll_config()["settings"])
+
+
+def _effective_scroll_settings(screen_id: Optional[str] = None) -> Dict[str, float]:
+    """Resolve scroll speed/smoothness for *screen_id*, falling back to global.
+
+    ``screen_id`` defaults to whatever ``active_scroll_screen`` currently has
+    set for this render, so existing call sites don't need to pass one.
+    """
+
+    settings = dict(get_global_scroll_settings())
+    resolved_id = screen_id if screen_id is not None else _ACTIVE_SCROLL_SCREEN_ID.get()
+    if resolved_id:
+        settings.update(_load_scroll_config()["screens"].get(resolved_id, {}))
+    return settings
 
 
 
@@ -2669,7 +2750,7 @@ def compute_adaptive_scroll_params(
     replaces an adaptive target that is already higher than the floor.
     """
 
-    settings = get_global_scroll_settings()
+    settings = _effective_scroll_settings()
     safe_base_step = max(1, int(round(int(base_step) * settings["speed"])))
     min_frame_time = max(0.001, float(min_frame_time) / settings["smoothness"])
     max_dimension = max(int(viewport_width), int(viewport_height), 1)

@@ -94,7 +94,7 @@ from paths import resolve_storage_paths
 from schedule import build_scheduler, load_schedule_config
 from screens_catalog import SCREEN_IDS
 from services.data_provider import provider as data_provider
-from utils import ScreenImage
+from utils import ScreenImage, active_scroll_screen
 
 try:
     import utils
@@ -668,7 +668,8 @@ def _render_all_screens_impl(
             else:
                 logging.info("Rendering '%s'", screen_id)
             try:
-                result = definition.render()
+                with active_scroll_screen(screen_id):
+                    result = definition.render()
             except Exception as exc:
                 logging.error("Failed to render '%s': %s", screen_id, exc)
                 continue

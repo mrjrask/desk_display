@@ -123,6 +123,18 @@ def _normalize_scroll_settings(value: Any) -> dict[str, float]:
     }
 
 
+def _normalize_screen_scroll_override(value: Any) -> Optional[dict[str, float]]:
+    """Normalize a per-screen ``scroll`` override, or None when unset.
+
+    Only speed is exposed per-screen (smoothness stays a global-only knob);
+    a screen with no override falls back to the global scroll speed.
+    """
+
+    if not isinstance(value, dict) or "speed" not in value:
+        return None
+    return {"speed": _normalize_scroll_speed(value.get("speed"))}
+
+
 def _merge_screen_specs(existing: Any, incoming: Any) -> Any:
     if existing is None:
         return incoming
@@ -329,6 +341,7 @@ def _normalize_import_config_payload(data: dict[str, Any]) -> dict[str, Any]:
                 if hide_after_at_raw is not None
                 else ""
             )
+            scroll_override = _normalize_screen_scroll_override(raw.get("scroll"))
 
             alt_payload: Optional[dict[str, Any]] = None
             alt = raw.get("alt")
@@ -348,6 +361,8 @@ def _normalize_import_config_payload(data: dict[str, Any]) -> dict[str, Any]:
             if hide_after_enabled and hide_after_at:
                 normalized_spec["hide_after_enabled"] = True
                 normalized_spec["hide_after_at"] = hide_after_at
+            if scroll_override is not None:
+                normalized_spec["scroll"] = scroll_override
             normalized_screens[canonical_id] = _merge_screen_specs(
                 normalized_screens.get(canonical_id),
                 normalized_spec,
@@ -925,10 +940,16 @@ def _build_screen_entries(
             "alt_frequency": "",
             "hide_after_at": "",
             "hide_after_enabled": False,
+            "scroll_speed_enabled": False,
+            "scroll_speed": 1.0,
         }
         if isinstance(raw, dict):
             entry["frequency"] = raw.get("frequency", 0)
             entry["extra_seconds"] = raw.get("extra_seconds", 0)
+            scroll_override = _normalize_screen_scroll_override(raw.get("scroll"))
+            if scroll_override is not None:
+                entry["scroll_speed_enabled"] = True
+                entry["scroll_speed"] = scroll_override["speed"]
             hide_after_at = raw.get("hide_after_at")
             if isinstance(hide_after_at, str):
                 try:
@@ -990,34 +1011,31 @@ def _build_config(entries: list[dict[str, Any]]) -> dict[str, Any]:
         hide_after_enabled = bool(entry.get("hide_after_enabled", False))
         if hide_after_enabled and not hide_after_at:
             raise ValueError(f"Hide-after date/time for '{screen_id}' must be provided when enabled")
+        scroll_speed_enabled = bool(entry.get("scroll_speed_enabled", False))
+        scroll_override = (
+            {"speed": _normalize_scroll_speed(entry.get("scroll_speed", 1.0))}
+            if scroll_speed_enabled
+            else None
+        )
         alt_screen = _parse_alt_screen(str(alt_screen_raw).strip()) if alt_screen_raw is not None else None
+
+        spec: dict[str, Any] = {"frequency": frequency}
         if alt_screen:
             alt_screen = [canonical_screen_id(item) for item in alt_screen]
             alt_frequency_int = int(alt_frequency) if alt_frequency not in ("", None) else 1
-            alt_payload: dict[str, Any] = {"screen": alt_screen[0] if len(alt_screen) == 1 else alt_screen}
-            alt_payload["frequency"] = alt_frequency_int
-            spec: dict[str, Any] = {"frequency": frequency, "alt": alt_payload}
-            if extra_seconds > 0:
-                spec["extra_seconds"] = extra_seconds
-            if hide_after_enabled and hide_after_at:
-                spec["hide_after_enabled"] = True
-                spec["hide_after_at"] = hide_after_at
-            screens[screen_id] = spec
-        else:
-            if extra_seconds > 0:
-                spec = {"frequency": frequency, "extra_seconds": extra_seconds}
-                if hide_after_enabled and hide_after_at:
-                    spec["hide_after_enabled"] = True
-                    spec["hide_after_at"] = hide_after_at
-                screens[screen_id] = spec
-            elif hide_after_enabled and hide_after_at:
-                screens[screen_id] = {
-                    "frequency": frequency,
-                    "hide_after_enabled": True,
-                    "hide_after_at": hide_after_at,
-                }
-            else:
-                screens[screen_id] = frequency
+            spec["alt"] = {
+                "screen": alt_screen[0] if len(alt_screen) == 1 else alt_screen,
+                "frequency": alt_frequency_int,
+            }
+        if extra_seconds > 0:
+            spec["extra_seconds"] = extra_seconds
+        if hide_after_enabled and hide_after_at:
+            spec["hide_after_enabled"] = True
+            spec["hide_after_at"] = hide_after_at
+        if scroll_override is not None:
+            spec["scroll"] = scroll_override
+
+        screens[screen_id] = frequency if spec.keys() == {"frequency"} else spec
     cleaned, _ = _normalize_legacy_scoreboard_ids({"screens": screens})
     return cleaned
 
@@ -1242,7 +1260,12 @@ def save_screens() -> Any:
             value = payload.get(key)
             if isinstance(value, expected_type):
                 config[key] = value
-        config["scroll"] = _normalize_scroll_settings(payload.get("scroll"))
+        # The UI no longer exposes global scroll speed/smoothness controls
+        # (per-screen speed overrides replace them), so a save that doesn't
+        # include "scroll" should leave whatever is already on disk alone
+        # instead of resetting it to the 1.0/1.0 defaults.
+        current_scroll = _load_active_config().get("scroll")
+        config["scroll"] = _normalize_scroll_settings(payload.get("scroll", current_scroll))
         config, _ = _normalize_legacy_scoreboard_ids(config)
         if any(key in payload for key in ("quad_enabled", "quad_pages", "quad_tiles", "quad_scroll_speed")):
             layouts = _build_layouts(payload)
@@ -1282,7 +1305,8 @@ def import_screens() -> Any:
                 value = config_payload.get(key)
                 if value is not None:
                     config[key] = value
-            config["scroll"] = _normalize_scroll_settings(config_payload.get("scroll"))
+            current_scroll = _load_active_config().get("scroll")
+            config["scroll"] = _normalize_scroll_settings(config_payload.get("scroll", current_scroll))
             config, _ = _normalize_legacy_scoreboard_ids(config)
             quad_pages_payload = payload.get("quad_pages") if isinstance(payload, dict) else None
             quad_enabled_payload = payload.get("quad_enabled") if isinstance(payload, dict) else False
