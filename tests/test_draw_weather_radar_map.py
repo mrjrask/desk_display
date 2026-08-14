@@ -1,4 +1,5 @@
 import datetime
+import importlib
 from io import BytesIO
 
 import pytest
@@ -261,14 +262,20 @@ def test_fetch_rainviewer_frames_sorts_to_include_latest(monkeypatch):
     def _mock_get(url, timeout):
         if "weather-maps.json" in url:
             return _JsonResponse(metadata)
+        # Tile fetches run concurrently, so record which paths were
+        # requested without assuming a particular completion order.
         timestamps_requested.append(url.split("/")[3])
         return _MockResponse(_png_bytes())
 
     monkeypatch.setattr("screens.draw_weather.http_get", _mock_get)
 
-    _fetch_radar_frames(zoom=7, max_frames=2)
+    frames = _fetch_radar_frames(zoom=7, max_frames=2)
 
-    assert timestamps_requested == ["c", "b"]
+    # The two most recent frames ("c" then "b") should be fetched and
+    # returned in chronological order, even though the concurrent fetch
+    # may complete the underlying requests in either order.
+    assert sorted(timestamps_requested) == ["b", "c"]
+    assert [frame.timestamp for frame in frames] == [now_ts - 300, now_ts - 60]
 
 
 def test_fetch_rainviewer_frames_tries_alternate_metadata_url(monkeypatch):
@@ -302,6 +309,19 @@ def test_fetch_rainviewer_frames_tries_alternate_metadata_url(monkeypatch):
     assert frames
     assert any("weather-maps.json" in url for url in seen_urls)
     assert any("maps.json" in url for url in seen_urls)
+
+
+def test_low_power_mode_trims_radar_frame_count_and_animation_loops(monkeypatch):
+    import config
+
+    monkeypatch.setattr(config, "DESK_DISPLAY_LOW_POWER", True)
+    module = importlib.reload(importlib.import_module("screens.draw_weather"))
+    try:
+        assert module.RADAR_MAX_FRAMES < 6
+        assert module.RADAR_ANIMATION_LOOPS < 3
+    finally:
+        monkeypatch.setattr(config, "DESK_DISPLAY_LOW_POWER", False)
+        importlib.reload(module)
 
 
 def test_fetch_radar_frames_uses_iem_when_rainviewer_unavailable(monkeypatch):

@@ -1,4 +1,5 @@
 import importlib
+import io
 import platform
 from pathlib import Path
 
@@ -37,6 +38,62 @@ def test_low_power_defaults_disable_optional_background_work(monkeypatch):
     assert module.ENABLE_SCREENSHOTS is False
     assert module.ENABLE_WIFI_MONITOR is False
     assert module.ENABLE_WIFI_RECOVERY is False
+
+def test_detect_low_power_hardware_matches_pi_zero_models():
+    import config
+
+    assert config._detect_low_power_hardware_from_model("Raspberry Pi Zero 2 W Rev 1.0") is True
+    assert config._detect_low_power_hardware_from_model("Raspberry Pi Zero W Rev 1.1") is True
+    assert config._detect_low_power_hardware_from_model("Raspberry Pi 5 Model B Rev 1.0") is False
+    assert config._detect_low_power_hardware_from_model("Raspberry Pi 4 Model B Rev 1.4") is False
+    assert config._detect_low_power_hardware_from_model("") is False
+
+
+def _fake_open_device_tree_model(monkeypatch, model_text):
+    import builtins
+
+    real_open = builtins.open
+
+    def fake_open(path, *args, **kwargs):
+        if str(path) == "/proc/device-tree/model":
+            if model_text is None:
+                raise OSError("no such file")
+            return io.BytesIO(model_text.encode("utf-8") + b"\x00")
+        if str(path) in {"/sys/firmware/devicetree/base/model", "/proc/cpuinfo"}:
+            raise OSError("no such file")
+        return real_open(path, *args, **kwargs)
+
+    monkeypatch.setattr(builtins, "open", fake_open)
+
+
+def test_low_power_auto_detected_on_pi_zero_board_when_env_unset(monkeypatch):
+    _fake_open_device_tree_model(monkeypatch, "Raspberry Pi Zero 2 W Rev 1.0")
+    module = _reload_config(
+        monkeypatch,
+        DESK_DISPLAY_LOW_POWER=None,
+        ENABLE_SCREENSHOTS=None,
+        ENABLE_WIFI_MONITOR=None,
+        ENABLE_WIFI_RECOVERY=None,
+    )
+
+    assert module.DESK_DISPLAY_LOW_POWER is True
+    assert module.ENABLE_SCREENSHOTS is False
+    assert module.ENABLE_WIFI_MONITOR is False
+
+
+def test_low_power_auto_detection_ignores_non_zero_pi_models(monkeypatch):
+    _fake_open_device_tree_model(monkeypatch, "Raspberry Pi 5 Model B Rev 1.0")
+    module = _reload_config(monkeypatch, DESK_DISPLAY_LOW_POWER=None)
+
+    assert module.DESK_DISPLAY_LOW_POWER is False
+
+
+def test_low_power_auto_detection_can_be_overridden_by_env(monkeypatch):
+    _fake_open_device_tree_model(monkeypatch, "Raspberry Pi Zero 2 W Rev 1.0")
+    module = _reload_config(monkeypatch, DESK_DISPLAY_LOW_POWER="0")
+
+    assert module.DESK_DISPLAY_LOW_POWER is False
+
 
 def test_low_power_defaults_can_be_overridden(monkeypatch):
     module = _reload_config(
