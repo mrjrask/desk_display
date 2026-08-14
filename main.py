@@ -212,6 +212,18 @@ _wifi_monitor_enabled = ENABLE_WIFI_MONITOR
 
 GC_COLLECT_INTERVAL = max(5.0, float(os.environ.get("DESK_DISPLAY_GC_INTERVAL_SECONDS", "30")))
 _last_gc_collect_monotonic = 0.0
+
+# Testing mode: repeatedly present a single screen instead of rotating through
+# the normal schedule, so a scroll speed slider can be tweaked in the config
+# UI and its effect watched live without waiting for the rotation to come
+# back around. Enable with DESK_DISPLAY_TEST_SCREEN=<screen_id>.
+TEST_LOOP_SCREEN_ID = (os.environ.get("DESK_DISPLAY_TEST_SCREEN") or "").strip() or None
+try:
+    TEST_LOOP_SCREEN_DELAY = max(
+        0.0, float(os.environ.get("DESK_DISPLAY_TEST_SCREEN_DELAY", "0.5"))
+    )
+except (TypeError, ValueError):
+    TEST_LOOP_SCREEN_DELAY = 0.5
 _TOUCH_DOUBLE_TAP_MAX_INTERVAL_SECONDS = max(
     0.1, float(os.environ.get("TOUCH_DOUBLE_TAP_MAX_INTERVAL_SECONDS", "0.45"))
 )
@@ -1229,6 +1241,29 @@ def _next_screen_from_registry(
 
     _skip_request_pending = False
     return entry
+
+
+def _select_entry_for_iteration(
+    registry: Dict[str, ScreenDefinition]
+) -> Optional[ScreenDefinition]:
+    """Pick the screen to present this iteration, honoring testing mode.
+
+    When ``DESK_DISPLAY_TEST_SCREEN`` is set, keep presenting that single
+    screen instead of advancing the normal rotation, so its scroll speed can
+    be tuned live via the config UI. Falls back to normal rotation for the
+    iteration if the requested screen id is missing or unavailable.
+    """
+
+    if TEST_LOOP_SCREEN_ID:
+        entry = registry.get(TEST_LOOP_SCREEN_ID)
+        if entry is not None and entry.available:
+            return entry
+        logging.warning(
+            "🧪 Testing mode: screen '%s' not found or unavailable; "
+            "falling back to normal rotation for this iteration.",
+            TEST_LOOP_SCREEN_ID,
+        )
+    return _next_screen_from_registry(registry)
 
 
 def _consume_normal_duration_override(screen_id: str) -> bool:
@@ -2472,6 +2507,16 @@ def main_loop():
     refresh_schedule_if_needed(force=True)
     screen_play_counts: Dict[str, int] = {}
 
+    if TEST_LOOP_SCREEN_ID:
+        logging.info(
+            "🧪 Testing mode active: looping screen '%s' every %.1fs. "
+            "Tweak its scroll speed slider in the config UI and the change "
+            "will apply on the next pass. Unset DESK_DISPLAY_TEST_SCREEN to "
+            "resume normal rotation.",
+            TEST_LOOP_SCREEN_ID,
+            TEST_LOOP_SCREEN_DELAY,
+        )
+
     try:
         while not _shutdown_event.is_set():
             refresh_schedule_if_needed()
@@ -2558,7 +2603,7 @@ def main_loop():
             )
             registry, _metadata = _build_registry_if_needed(context)
 
-            entry = _next_screen_from_registry(registry)
+            entry = _select_entry_for_iteration(registry)
             if entry is None:
                 logging.info(
                     "No eligible screens available; sleeping for %s seconds.",
@@ -2732,8 +2777,11 @@ def main_loop():
                     _screen_history.append(sid)
                     if len(_screen_history) > _SCREEN_HISTORY_LIMIT:
                         _screen_history[:] = _screen_history[-_SCREEN_HISTORY_LIMIT:]
-                extra_seconds = 0 if _consume_normal_duration_override(sid) else _extra_seconds_for_screen(sid)
-                wait_duration = (0.0 if consumed_delay else SCREEN_DELAY) + float(extra_seconds)
+                if TEST_LOOP_SCREEN_ID and sid == TEST_LOOP_SCREEN_ID:
+                    wait_duration = 0.0 if consumed_delay else TEST_LOOP_SCREEN_DELAY
+                else:
+                    extra_seconds = 0 if _consume_normal_duration_override(sid) else _extra_seconds_for_screen(sid)
+                    wait_duration = (0.0 if consumed_delay else SCREEN_DELAY) + float(extra_seconds)
                 quad_tiles = entry.metadata.get("quad_tiles") if isinstance(entry.metadata, dict) else None
                 skip_delay = _wait_with_button_checks(
                     wait_duration,
