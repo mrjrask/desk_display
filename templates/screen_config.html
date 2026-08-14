@@ -577,15 +577,15 @@
             <label class="screen-speed-toggle">
               <input type="checkbox" class="screen-speed-enabled-input" {% if screen.scroll_speed_enabled %}checked{% endif %} aria-label="Override scroll speed for {{ screen.id }}">
             </label>
-            <input type="range" min="0.25" max="3" step="0.05" value="{{ screen.scroll_speed|default(1.0) }}" class="screen-speed-input" {% if not screen.scroll_speed_enabled %}disabled{% endif %}>
-            <output class="screen-speed-value">{{ '%.2f'|format(screen.scroll_speed|default(1.0)) }}×</output>
+            <input type="range" min="0.25" max="3" step="0.1" value="{{ screen.scroll_speed|default(1.0) }}" class="screen-speed-input" {% if not screen.scroll_speed_enabled %}disabled{% endif %}>
+            <output class="screen-speed-value">{{ '%.1f'|format(screen.scroll_speed|default(1.0)) }}×</output>
           </div>
           <div class="hint">When checked, overrides this screen's scroll speed.</div>
         </div>
         <div>
           <div class="hide-after-field">
             <input type="checkbox" class="hide-after-enabled-input" {% if screen.hide_after_enabled %}checked{% endif %} aria-label="Enable hide-after date for {{ screen.id }}">
-            <input type="datetime-local" class="hide-after-input" value="{{ screen.hide_after_at }}">
+            <input type="datetime-local" class="hide-after-input" value="{{ screen.hide_after_at }}" {% if not screen.hide_after_enabled %}hidden{% endif %}>
           </div>
           <div class="hint">When checked, hide after this date/time.</div>
         </div>
@@ -917,7 +917,7 @@
         const row = event.target.closest(".screen-row");
         const output = row?.querySelector(".screen-speed-value");
         if (output) {
-          output.textContent = `${Number.parseFloat(event.target.value).toFixed(2)}×`;
+          output.textContent = `${Number.parseFloat(event.target.value).toFixed(1)}×`;
         }
       }
     });
@@ -928,6 +928,13 @@
         const speedInput = row?.querySelector(".screen-speed-input");
         if (speedInput) {
           speedInput.disabled = !event.target.checked;
+        }
+      }
+      if (event.target.matches(".hide-after-enabled-input")) {
+        const row = event.target.closest(".screen-row");
+        const dateInput = row?.querySelector(".hide-after-input");
+        if (dateInput) {
+          dateInput.hidden = !event.target.checked;
         }
       }
       if (event.target.matches(".playlist-select")) {
@@ -1291,15 +1298,15 @@
             <label class="screen-speed-toggle">
               <input type="checkbox" class="screen-speed-enabled-input" ${screen.scroll_speed_enabled ? "checked" : ""} aria-label="Override scroll speed for ${screen.id}">
             </label>
-            <input type="range" min="0.25" max="3" step="0.05" value="${screen.scroll_speed ?? 1}" class="screen-speed-input" ${screen.scroll_speed_enabled ? "" : "disabled"}>
-            <output class="screen-speed-value">${Number(screen.scroll_speed ?? 1).toFixed(2)}×</output>
+            <input type="range" min="0.25" max="3" step="0.1" value="${screen.scroll_speed ?? 1}" class="screen-speed-input" ${screen.scroll_speed_enabled ? "" : "disabled"}>
+            <output class="screen-speed-value">${Number(screen.scroll_speed ?? 1).toFixed(1)}×</output>
           </div>
           <div class="hint">When checked, overrides this screen's scroll speed.</div>
         </div>
         <div>
           <div class="hide-after-field">
             <input type="checkbox" class="hide-after-enabled-input" ${screen.hide_after_enabled ? "checked" : ""} aria-label="Enable hide-after date for ${screen.id}">
-            <input type="datetime-local" class="hide-after-input" value="${screen.hide_after_at ?? ""}">
+            <input type="datetime-local" class="hide-after-input" value="${screen.hide_after_at ?? ""}" ${screen.hide_after_enabled ? "" : "hidden"}>
           </div>
           <div class="hint">When checked, hide after this date/time.</div>
         </div>
