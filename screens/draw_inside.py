@@ -2292,17 +2292,31 @@ def _render_inside(data: dict[str, Optional[float]], provider: Optional[str], se
     title = "INSIDE"
     draw.text((margin, margin), title, font=header_font, fill=(235, 235, 235))
     title_w, title_h = measure_text(draw, title, header_font)
+
+    # Sensor attribution (name, bus, address) gets its own full-width row so
+    # long strings like "Pimoroni BME688 (bus 15, 0x77)" always fit instead
+    # of being ellipsized in the narrow strip beside the title.
     source = provider or sensor_error or "Indoor sensor"
-    source = _fit_text(draw, source, label_font, W - title_w - margin * 3)
-    source_w, source_h = measure_text(draw, source, label_font)
-    draw.text(
-        (W - margin - source_w, margin + (title_h - source_h) // 2),
+    source_max_width = W - margin * 2
+    source_font = fit_font(
+        draw,
         source,
-        font=label_font,
+        label_font,
+        max_width=source_max_width,
+        max_height=label_font.size + 4,
+        min_pt=7,
+        max_pt=label_font.size,
+    )
+    source_w, source_h = measure_text(draw, source, source_font)
+    source_y = margin + title_h + max(2, H // 160)
+    draw.text(
+        (W - margin - source_w, source_y),
+        source,
+        font=source_font,
         fill=(185, 200, 215),
     )
 
-    badge_top = margin + title_h + max(4, H // 40)
+    badge_top = source_y + source_h + max(4, H // 40)
     badge_h = max(40, H // 4)
     temp_f = _clean_metric(data.get("temp_f"))
     badge_color = temperature_color(temp_f if temp_f is not None else 65.0)
