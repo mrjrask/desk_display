@@ -291,6 +291,10 @@ DESK_DISPLAY_FORCE_HEADLESS=1 DESK_DISPLAY_OUTPUT=headless python main.py
 
 # Run the configuration UI
 python config_ui.py
+
+# Testing mode: loop a single scrolling screen so you can tune its scroll
+# speed slider in the config UI and watch the effect live
+DESK_DISPLAY_TEST_SCREEN="news headlines" python main.py
 ```
 
 At startup the app loads `.env` when `CONFIG_LOAD_DOTENV` is enabled, initializes display/profile settings, fetches startup data, and begins rotating enabled screens from the configured sequence.
@@ -345,6 +349,8 @@ Configuration is environment-driven. Put local values in `.env` for development 
 | `HYPERPIXEL_LED_INDICATOR_BORDER_WIDTH` | Indicator border width; the LED indicator border is enabled by default on all display sizes. |
 | `IP_WITH_TIME` | Include IP/status text with the time display where supported. |
 | `NIXIE_TIME_FORMAT` | Nixie/time screen clock format; defaults to 12-hour mode. |
+| `DESK_DISPLAY_TEST_SCREEN` | Testing mode: set to a [canonical screen ID](#canonical-screen-ids) (e.g. `news headlines`) to repeatedly present just that screen instead of rotating through the normal schedule. Handy for tuning a screen's scroll speed slider in the config UI and watching the effect immediately on the next pass. Leave unset for normal rotation. |
+| `DESK_DISPLAY_TEST_SCREEN_DELAY` | Seconds to pause between repeats while `DESK_DISPLAY_TEST_SCREEN` is set. Defaults to `0.5`. |
 
 ### Weather, maps, travel, and sensor variables
 
