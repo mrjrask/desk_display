@@ -64,6 +64,34 @@ def _parse_schedule_date(date_text: str) -> datetime.datetime | None:
     return None
 
 
+def _parse_time_hour(time_text: str) -> int | None:
+    text = str(time_text or "").strip().upper()
+    if not text or text in {"TBD", "—"}:
+        return None
+    if text == "NOON":
+        return 12
+    if text == "MIDNIGHT":
+        return 0
+    match = re.match(r"^(\d{1,2}):(\d{2})\s*(AM|PM)$", text)
+    if not match:
+        return None
+    hour = int(match.group(1)) % 12
+    if match.group(3) == "PM":
+        hour += 12
+    return hour
+
+
+def _relative_day_label(parsed_date: datetime.datetime, time_text: str) -> str | None:
+    today = datetime.datetime.now(config.CENTRAL_TIME).date()
+    game_date = parsed_date.date()
+    if game_date == today:
+        hour = _parse_time_hour(time_text)
+        return "Tonight" if hour is not None and hour >= 18 else "Today"
+    if game_date == today + datetime.timedelta(days=1):
+        return "Tomorrow"
+    return None
+
+
 def _format_game_date(date_text: str) -> str:
     if not date_text:
         return ""
@@ -287,6 +315,7 @@ def show_bears_next_game(display, transition=False):
         date_time = _format_schedule_line_time(
             str(game.get("date") or ""),
             str(game.get("time") or ""),
+            use_relative_labels=True,
         )
         bottom_lines = [line for line in (wk, date_time) if line]
         bottom_line_gap = line_gap
@@ -551,8 +580,16 @@ def _opponent_team_name(opponent: str) -> str:
     return opponent.split()[-1]
 
 
-def _format_schedule_line_time(date_text: str, time_text: str) -> str:
+def _format_schedule_line_time(
+    date_text: str, time_text: str, *, use_relative_labels: bool = False
+) -> str:
     date_part = _format_game_date(date_text)
+    if use_relative_labels:
+        parsed_date = _parse_schedule_date(date_text)
+        if parsed_date is not None:
+            relative_label = _relative_day_label(parsed_date, time_text)
+            if relative_label is not None:
+                date_part = relative_label
     time_part = str(time_text or "").strip()
     if not date_part:
         return time_part
