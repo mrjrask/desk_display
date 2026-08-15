@@ -12,6 +12,47 @@ def test_format_game_date_includes_day_only_for_non_sundays():
     assert draw_bears_schedule._format_game_date("Fri, Dec 25, 2026") == "Fri 12/25"
 
 
+def test_format_schedule_line_time_uses_relative_labels_for_bears_next(monkeypatch):
+    fixed_now = datetime.datetime(2026, 9, 13, 9, 0, tzinfo=config.CENTRAL_TIME)
+
+    class FixedDatetime(datetime.datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return fixed_now if tz is not None else fixed_now.replace(tzinfo=None)
+
+    monkeypatch.setattr(draw_bears_schedule.datetime, "datetime", FixedDatetime)
+
+    assert (
+        draw_bears_schedule._format_schedule_line_time(
+            "Sun, Sep 13, 2026", "Noon", use_relative_labels=True
+        )
+        == "Today Noon"
+    )
+    assert (
+        draw_bears_schedule._format_schedule_line_time(
+            "Sun, Sep 13, 2026", "7:20PM", use_relative_labels=True
+        )
+        == "Tonight 7:20PM"
+    )
+    assert (
+        draw_bears_schedule._format_schedule_line_time(
+            "Mon, Sep 14, 2026", "7:15PM", use_relative_labels=True
+        )
+        == "Tomorrow 7:15PM"
+    )
+    assert (
+        draw_bears_schedule._format_schedule_line_time(
+            "Sun, Sep 20, 2026", "Noon", use_relative_labels=True
+        )
+        == "9/20 Noon"
+    )
+    # Default behavior (schedule list) is unaffected.
+    assert (
+        draw_bears_schedule._format_schedule_line_time("Sun, Sep 13, 2026", "Noon")
+        == "9/13 Noon"
+    )
+
+
 def test_bears_schedule_screen_filters_to_preseason_and_regular_season_by_default():
     today = datetime.date(2026, 6, 1)
     assert draw_bears_schedule._should_show_bears_schedule_game(
