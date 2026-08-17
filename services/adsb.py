@@ -20,10 +20,27 @@ from pathlib import Path
 from typing import Any, Optional
 
 from paths import resolve_cache_file_path
-from services.http_client import request_json
+from services.http_client import http_get
 
 EARTH_RADIUS_NM = 3440.065
 EARTH_RADIUS_MI = 3958.8
+
+# dump1090-fa's web alias has varied across FlightAware PiAware image
+# versions ("skyaware" is the current branding; "dump1090-fa" is the older
+# alias, still present on many installs) and plain dump1090 serves straight
+# from the web root. Try each in order and remember whichever one answers
+# for a given host so steady-state polling only makes one request.
+_AIRCRAFT_JSON_PATHS: tuple[str, ...] = (
+    "/dump1090-fa/data/aircraft.json",
+    "/skyaware/data/aircraft.json",
+    "/data/aircraft.json",
+)
+_STATS_JSON_PATHS: tuple[str, ...] = (
+    "/dump1090-fa/data/stats.json",
+    "/skyaware/data/stats.json",
+    "/data/stats.json",
+)
+_working_path_index: dict[str, int] = {}
 
 _SCHEMA_SQL = """
 CREATE TABLE IF NOT EXISTS sightings (
@@ -211,6 +228,60 @@ def _extract_messages_total(stats_payload: Any) -> Optional[int]:
         return None
 
 
+def _short_error(exc: BaseException) -> str:
+    """Condense a (often very verbose, nested) requests/urllib3 exception.
+
+    The OS-level reason (``Connection refused``, ``timed out``, ``Name or
+    service not known``, ...) is normally at the very end of the chained
+    ``str()`` output, so keep the tail rather than the front.
+    """
+
+    text = str(exc)
+    if len(text) > 120:
+        text = f"…{text[-117:]}"
+    return f"{exc.__class__.__name__}: {text}"
+
+
+def _get_json(path: str, url: str, *, timeout: float) -> tuple[Any, Optional[str]]:
+    """Fetch JSON from ``url``, returning (payload, error_detail keyed by ``path``)."""
+
+    try:
+        response = http_get(url, timeout=timeout)
+    except Exception as exc:  # connection refused, DNS failure, timeout, etc.
+        return None, f"{path}: {_short_error(exc)}"
+    if response.status_code != 200:
+        return None, f"{path}: HTTP {response.status_code}"
+    try:
+        return response.json(), None
+    except ValueError as exc:
+        return None, f"{path}: invalid JSON ({exc})"
+
+
+def _fetch_aircraft_json(
+    base: str, host_key: str, *, timeout: float
+) -> tuple[Any, Optional[int], list[str]]:
+    """Try each known aircraft.json path, preferring the last one that worked.
+
+    Returns (payload, path_index_used, errors_from_failed_attempts).
+    """
+
+    cached_index = _working_path_index.get(host_key)
+    order = list(range(len(_AIRCRAFT_JSON_PATHS)))
+    if cached_index is not None:
+        order.remove(cached_index)
+        order.insert(0, cached_index)
+
+    errors: list[str] = []
+    for index in order:
+        path = _AIRCRAFT_JSON_PATHS[index]
+        payload, error = _get_json(path, f"{base}{path}", timeout=timeout)
+        if isinstance(payload, dict):
+            return payload, index, errors
+        if error:
+            errors.append(error)
+    return None, None, errors
+
+
 def poll_device(
     device: AdsbDevice,
     *,
@@ -219,26 +290,33 @@ def poll_device(
     unit: str = "nm",
     timeout: float = 5.0,
 ) -> PollResult:
-    """Poll one receiver's aircraft.json (and best-effort stats.json)."""
+    """Poll one receiver's aircraft.json (and best-effort stats.json).
+
+    dump1090-fa's web path has varied across PiAware image versions
+    (``/dump1090-fa/data/...`` vs. ``/skyaware/data/...`` vs. plain
+    ``/data/...``), so every known variant is tried; whichever one answers
+    is cached per host so later polls make a single request.
+    """
 
     base = device.host.strip().rstrip("/")
     if not base.startswith(("http://", "https://")):
         base = f"http://{base}"
 
-    aircraft_payload = request_json(
-        f"{base}/dump1090-fa/data/aircraft.json", timeout=timeout, quiet=True
-    )
+    aircraft_payload, path_index, errors = _fetch_aircraft_json(base, device.host, timeout=timeout)
     if not isinstance(aircraft_payload, dict):
-        return PollResult(device=device, ok=False, error="aircraft.json unreachable")
+        detail = errors[-1] if errors else "no response"
+        if len(errors) > 1:
+            detail += f" (tried {len(errors)} known paths)"
+        return PollResult(device=device, ok=False, error=f"aircraft.json unreachable: {detail}")
+    _working_path_index[device.host] = path_index
 
     sightings = tuple(
         _parse_aircraft(
             aircraft_payload.get("aircraft"), home_lat=home_lat, home_lon=home_lon, unit=unit
         )
     )
-    stats_payload = request_json(
-        f"{base}/dump1090-fa/data/stats.json", timeout=timeout, quiet=True
-    )
+    stats_path = _STATS_JSON_PATHS[path_index]
+    stats_payload, _stats_error = _get_json(stats_path, f"{base}{stats_path}", timeout=timeout)
     return PollResult(
         device=device,
         ok=True,
