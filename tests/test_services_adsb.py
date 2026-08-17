@@ -299,6 +299,29 @@ def test_poll_device_falls_back_to_skyaware_path_when_dump1090_fa_path_missing(m
     assert requested_urls[1].endswith("/skyaware/data/aircraft.json")
 
 
+def test_poll_device_falls_back_when_dump1090_fa_path_returns_html_200(monkeypatch):
+    """Real-world case: some PiAware images serve a stale Apache/lighttpd
+    default page with a 200 status (not a 404) at the old /dump1090-fa/
+    alias instead of JSON, while /skyaware/ returns real aircraft data."""
+
+    device = AdsbDevice(host="192.168.1.203", label="Attic")
+
+    def _fake_http_get(url, *, timeout=10.0, **kwargs):
+        if url.endswith("/dump1090-fa/data/aircraft.json"):
+            return _FakeResponse(200, None)  # HTML body; .json() raises ValueError
+        if url.endswith("/skyaware/data/aircraft.json"):
+            return _FakeResponse(200, {"aircraft": [{"hex": "a77077", "alt_baro": 9900}]})
+        return _FakeResponse(404)
+
+    monkeypatch.setattr(adsb_module, "http_get", _fake_http_get)
+
+    result = poll_device(device, home_lat=None, home_lon=None, timeout=1.0)
+
+    assert result.ok is True
+    assert len(result.sightings) == 1
+    assert result.sightings[0].hex == "a77077"
+
+
 def test_poll_device_reuses_cached_working_path_on_next_poll(monkeypatch):
     device = AdsbDevice(host="192.168.1.50", label="Attic")
     requested_urls = []
