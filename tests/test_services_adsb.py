@@ -1,5 +1,8 @@
 import datetime
 
+import pytest
+
+import services.adsb as adsb_module
 from services.adsb import (
     AdsbDevice,
     AdsbStore,
@@ -8,14 +11,33 @@ from services.adsb import (
     _extract_messages_total,
     _parse_aircraft,
     haversine_distance,
+    poll_device,
     today_key,
 )
 
 UTC = datetime.UTC
 
 
+@pytest.fixture(autouse=True)
+def _clear_working_path_cache():
+    adsb_module._working_path_index.clear()
+    yield
+    adsb_module._working_path_index.clear()
+
+
 def _store(tmp_path) -> AdsbStore:
     return AdsbStore(db_path=str(tmp_path / "adsb_test.db"))
+
+
+class _FakeResponse:
+    def __init__(self, status_code: int, payload=None):
+        self.status_code = status_code
+        self._payload = payload
+
+    def json(self):
+        if self._payload is None:
+            raise ValueError("no JSON body")
+        return self._payload
 
 
 def test_haversine_distance_zero_for_same_point():
@@ -252,3 +274,81 @@ def test_prune_removes_old_sightings_but_keeps_all_time_record(tmp_path):
     assert old_day_stats.total_combined == 0
     assert old_day_stats.all_time_furthest is not None
     assert old_day_stats.all_time_furthest.distance_nm == 80.0
+
+
+def test_poll_device_falls_back_to_skyaware_path_when_dump1090_fa_path_missing(monkeypatch):
+    device = AdsbDevice(host="192.168.1.50", label="Attic")
+    requested_urls = []
+
+    def _fake_http_get(url, *, timeout=10.0, **kwargs):
+        requested_urls.append(url)
+        if url.endswith("/dump1090-fa/data/aircraft.json"):
+            return _FakeResponse(404)
+        if url.endswith("/skyaware/data/aircraft.json"):
+            return _FakeResponse(200, {"aircraft": [{"hex": "abc123", "flight": "UAL123"}]})
+        return _FakeResponse(404)
+
+    monkeypatch.setattr(adsb_module, "http_get", _fake_http_get)
+
+    result = poll_device(device, home_lat=None, home_lon=None, timeout=1.0)
+
+    assert result.ok is True
+    assert len(result.sightings) == 1
+    assert result.sightings[0].hex == "abc123"
+    assert requested_urls[0].endswith("/dump1090-fa/data/aircraft.json")
+    assert requested_urls[1].endswith("/skyaware/data/aircraft.json")
+
+
+def test_poll_device_reuses_cached_working_path_on_next_poll(monkeypatch):
+    device = AdsbDevice(host="192.168.1.50", label="Attic")
+    requested_urls = []
+
+    def _fake_http_get(url, *, timeout=10.0, **kwargs):
+        requested_urls.append(url)
+        if url.endswith("/skyaware/data/aircraft.json"):
+            return _FakeResponse(200, {"aircraft": []})
+        if url.endswith("/skyaware/data/stats.json"):
+            return _FakeResponse(200, {"total": {"messages": 5}})
+        return _FakeResponse(404)
+
+    monkeypatch.setattr(adsb_module, "http_get", _fake_http_get)
+
+    first = poll_device(device, home_lat=None, home_lon=None, timeout=1.0)
+    assert first.ok is True
+    requested_urls.clear()
+
+    second = poll_device(device, home_lat=None, home_lon=None, timeout=1.0)
+    assert second.ok is True
+    aircraft_requests = [u for u in requested_urls if "aircraft.json" in u]
+    assert aircraft_requests == [f"http://{device.host}/skyaware/data/aircraft.json"]
+
+
+def test_poll_device_reports_detail_when_every_path_fails(monkeypatch):
+    device = AdsbDevice(host="192.168.1.50", label="Attic")
+
+    def _fake_http_get(url, *, timeout=10.0, **kwargs):
+        return _FakeResponse(404)
+
+    monkeypatch.setattr(adsb_module, "http_get", _fake_http_get)
+
+    result = poll_device(device, home_lat=None, home_lon=None, timeout=1.0)
+
+    assert result.ok is False
+    assert "HTTP 404" in result.error
+    assert "tried 3 known paths" in result.error
+
+
+def test_poll_device_reports_connection_error_detail(monkeypatch):
+    device = AdsbDevice(host="192.168.1.50", label="Attic")
+
+    def _fake_http_get(url, *, timeout=10.0, **kwargs):
+        raise ConnectionError("Connection refused")
+
+    monkeypatch.setattr(adsb_module, "http_get", _fake_http_get)
+
+    result = poll_device(device, home_lat=None, home_lon=None, timeout=1.0)
+
+    assert result.ok is False
+    assert "ConnectionError" in result.error
+    assert "Connection refused" in result.error
+    assert "tried 3 known paths" in result.error
