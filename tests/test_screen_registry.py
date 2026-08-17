@@ -5,7 +5,7 @@ import pytest
 from PIL import Image
 
 import screens.registry as registry_module
-from config import CENTRAL_TIME
+from config import CENTRAL_TIME, MLB_CUBS_TEAM_ID, MLB_SOX_TEAM_ID
 from screens.registry import (
     ScreenContext,
     _is_1080p_or_higher,
@@ -861,6 +861,75 @@ def test_mlb_schedule_quads_remain_available_on_no_game_days(monkeypatch):
             "sox next home series",
         ],
     ]
+
+def _crosstown_series_game(gamepk: int, official_date: str) -> dict:
+    return {
+        "gamePk": gamepk,
+        "officialDate": official_date,
+        "teams": {
+            "home": {"team": {"id": int(MLB_SOX_TEAM_ID)}},
+            "away": {"team": {"id": int(MLB_CUBS_TEAM_ID)}},
+        },
+    }
+
+
+def test_sox_screens_hidden_when_cubs_current_series_is_vs_sox():
+    now = datetime.datetime(2024, 7, 1, 12, 0, tzinfo=CENTRAL_TIME)
+    weather = {"hourly": []}
+    cache_updates = {
+        "cubs": {
+            "current_series": [_crosstown_series_game(1, "2024-07-01")],
+        },
+        "sox": {
+            "next": {"gamePk": 10, "officialDate": "2024-07-01"},
+            "live": {
+                "officialDate": "2024-07-01",
+                "status": {"detailedState": "In Progress"},
+            },
+            "current_series": [{"gamePk": 20, "officialDate": "2024-07-01"}],
+            "next_series": [{"gamePk": 30}],
+            "next_home_series": [{"gamePk": 40}],
+        },
+    }
+
+    registry, _ = build_screen_registry(_make_context(weather, now, cache_updates=cache_updates))
+
+    assert registry["sox next"].available is False
+    assert registry["sox live"].available is False
+    assert registry["sox current series"].available is False
+    assert registry["sox schedule quad"].available is False
+
+    # Unrelated Sox screens keep their normal availability.
+    assert registry["sox next series"].available is True
+    assert registry["sox next home series"].available is True
+
+
+def test_sox_screens_available_when_cubs_current_series_is_not_vs_sox():
+    now = datetime.datetime(2024, 7, 1, 12, 0, tzinfo=CENTRAL_TIME)
+    weather = {"hourly": []}
+    cache_updates = {
+        "cubs": {
+            "current_series": [{"gamePk": 1, "officialDate": "2024-07-01"}],
+        },
+        "sox": {
+            "next": {"gamePk": 10, "officialDate": "2024-07-01"},
+            "live": {
+                "officialDate": "2024-07-01",
+                "status": {"detailedState": "In Progress"},
+            },
+            "current_series": [{"gamePk": 20, "officialDate": "2024-07-01"}],
+            "next_series": [{"gamePk": 30}],
+            "next_home_series": [{"gamePk": 40}],
+        },
+    }
+
+    registry, _ = build_screen_registry(_make_context(weather, now, cache_updates=cache_updates))
+
+    assert registry["sox next"].available is True
+    assert registry["sox live"].available is True
+    assert registry["sox current series"].available is True
+    assert registry["sox schedule quad"].available is True
+
 
 def test_hawks_schedule_quad_uses_expected_tile_selection(monkeypatch):
     now = datetime.datetime(2024, 1, 1, 12, 0, tzinfo=CENTRAL_TIME)

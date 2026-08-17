@@ -445,6 +445,30 @@ def _extract_team_tricode(blob):
     return None
 
 
+def _series_is_cubs_vs_sox(games: Any) -> bool:
+    """Return True when *games* represents a Cubs/White Sox crosstown series."""
+
+    if not isinstance(games, list):
+        return False
+
+    cubs_id = int(config.MLB_CUBS_TEAM_ID)
+    sox_id = int(config.MLB_SOX_TEAM_ID)
+
+    for game in games:
+        if not isinstance(game, dict):
+            continue
+        teams = game.get("teams")
+        if not isinstance(teams, dict):
+            continue
+        home_id = _extract_team_id(teams.get("home"))
+        away_id = _extract_team_id(teams.get("away"))
+        ids = {home_id, away_id}
+        if cubs_id in ids and sox_id in ids:
+            return True
+
+    return False
+
+
 def _games_match(game_a, game_b):
     if not game_a or not game_b:
         return False
@@ -1271,12 +1295,15 @@ def build_screen_registry(context: ScreenContext) -> tuple[dict[str, ScreenDefin
                 available=True,
             )
 
+    cubs_current_series_vs_sox = False
+
     cubs = context.cache.get("cubs") or {}
     if any(cubs.values()):
         register_logo("cubs logo")
         cubs_next = cubs.get("next")
         cubs_next_alt = cubs.get("next_alt")
         cubs_current_series = cubs.get("current_series")
+        cubs_current_series_vs_sox = _series_is_cubs_vs_sox(cubs_current_series)
         cubs_next_series = cubs.get("next_series")
         cubs_next_home_series = cubs.get("next_home_series")
         cubs_next_home = cubs.get("next_home")
@@ -1517,7 +1544,7 @@ def build_screen_registry(context: ScreenContext) -> tuple[dict[str, ScreenDefin
                 screen_id="sox live",
                 transition=True,
             ),
-            available=_is_live_game_today(sox.get("live")),
+            available=_is_live_game_today(sox.get("live")) and not cubs_current_series_vs_sox,
         )
         sox_no_game_today = _mlb_no_game_today_available(sox)
 
@@ -1552,7 +1579,10 @@ def build_screen_registry(context: ScreenContext) -> tuple[dict[str, ScreenDefin
         register(
             "sox next",
             lambda: _draw_sox_next_or_no_game("sox next"),
-            available=sox_no_game_today or (sox_has_game_today and bool(sox_next or sox_next_alt)),
+            available=(
+                sox_no_game_today or (sox_has_game_today and bool(sox_next or sox_next_alt))
+            )
+            and not cubs_current_series_vs_sox,
             replaces_with="sox no game" if sox_no_game_today else None,
         )
         if sox_has_game_today and sox_next_home:
@@ -1575,7 +1605,7 @@ def build_screen_registry(context: ScreenContext) -> tuple[dict[str, ScreenDefin
                 screen_id="sox current series",
                 transition=True,
             ),
-            available=bool(sox_current_series),
+            available=bool(sox_current_series) and not cubs_current_series_vs_sox,
         )
         register(
             "sox next series",
@@ -1618,7 +1648,8 @@ def build_screen_registry(context: ScreenContext) -> tuple[dict[str, ScreenDefin
             )
             and bool(sox_current_series)
             and bool(sox_next_series)
-            and bool(sox_next_home_series),
+            and bool(sox_next_home_series)
+            and not cubs_current_series_vs_sox,
             quad_tiles=[
                 "sox next",
                 "sox current series",
