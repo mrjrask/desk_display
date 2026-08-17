@@ -132,6 +132,7 @@ class DailyStats:
     furthest: Optional[FurthestCatch]
     busiest_hour_combined: Optional[tuple[int, int]]
     busiest_hour_by_device: dict[str, tuple[int, int]]
+    hourly_counts_combined: dict[int, int]
     highest_altitude_ft: Optional[int]
     messages_today_by_device: dict[str, int]
     currently_tracked_combined: int
@@ -551,6 +552,9 @@ class AdsbStore:
         if combined_hour_map:
             best_hour, hexes = max(combined_hour_map.items(), key=lambda item: len(item[1]))
             busiest_combined = (best_hour, len(hexes))
+        hourly_counts_combined = {
+            hour: len(hexes) for hour, hexes in combined_hour_map.items()
+        }
 
         device_online: dict[str, bool] = {}
         device_errors: dict[str, str] = {}
@@ -592,6 +596,7 @@ class AdsbStore:
             furthest=furthest,
             busiest_hour_combined=busiest_combined,
             busiest_hour_by_device=busiest_by_device,
+            hourly_counts_combined=hourly_counts_combined,
             highest_altitude_ft=highest_altitude,
             messages_today_by_device=messages_today_by_device,
             currently_tracked_combined=len(all_current_hexes),

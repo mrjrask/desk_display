@@ -197,6 +197,7 @@ def test_busiest_hour_counts_unique_aircraft_first_seen_per_hour(tmp_path):
     stats = store.compute_daily_stats(day=day, tz=UTC)
     assert stats.busiest_hour_combined == (15, 3)
     assert stats.busiest_hour_by_device["Receiver 1"] == (15, 3)
+    assert stats.hourly_counts_combined == {15: 3, 16: 1}
 
 
 def test_failed_poll_marks_device_offline_without_crashing(tmp_path):
