@@ -50,7 +50,7 @@ from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeou
 from contextlib import nullcontext
 from dataclasses import replace
 from pathlib import Path
-from typing import Callable, Dict, List, Optional, Set, Tuple
+from typing import Any, Callable, Dict, List, Optional, Set, Tuple
 
 try:
     import pygame
@@ -1587,6 +1587,13 @@ def _write_display_status(
             "live_game": cubs_cache.get("live"),
             "last_game": cubs_cache.get("last"),
         }
+    hawks_cache = cache.get("hawks") if isinstance(cache, dict) else None
+    if isinstance(hawks_cache, dict):
+        payload["hawks"] = {
+            "live_game": hawks_cache.get("live"),
+            "live_feed": hawks_cache.get("live_feed"),
+            "last_game": hawks_cache.get("last"),
+        }
     if isinstance(screen_play_counts, dict):
         payload["screen_play_counts"] = {
             str(screen_name): int(count)
@@ -1794,7 +1801,7 @@ cache = {
     "bears":  {"stand": None},
     "weather": None,
     "air_quality": None,
-    "hawks":   {"stand":None, "last":None, "live":None, "next":None, "next_home":None},
+    "hawks":   {"stand":None, "last":None, "live":None, "live_feed":None, "next":None, "next_home":None},
     "wolves":  {"last":None, "live":None, "next":None, "next_home":None},
     "bulls":   {"stand":None, "last":None, "live":None, "next":None, "next_home":None},
     "cubs":    {"stand":None, "last":None, "last_alt":None, "live":None, "next":None, "next_alt":None, "current_series":None, "next_series":None, "next_home_series":None, "next_home":None, "schedule_covers_today":False},
@@ -2208,11 +2215,34 @@ def _refresh_bears() -> None:
     })
 
 
+def _fetch_hawks_live_feed(live_game: Optional[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+    """Fetch period/clock detail for a live Blackhawks game, if any.
+
+    The schedule-level game payload cached for ``hawks.live`` doesn't carry
+    the current period or clock, so pull the richer boxscore/landing feed
+    (the same one the main "hawks live" screen renders) and cache it
+    alongside so the OLED helper can show it without its own network call.
+    """
+    if not isinstance(live_game, dict):
+        return None
+    game_pk = live_game.get("id") or live_game.get("gamePk")
+    if not game_pk:
+        return None
+    try:
+        from screens.draw_hawks_schedule import fetch_game_feed
+        return fetch_game_feed(game_pk)
+    except Exception as exc:
+        logging.debug("Failed to fetch Blackhawks live feed for OLED: %s", exc)
+        return None
+
+
 def _refresh_hawks() -> None:
+    live_game = data_fetch.fetch_blackhawks_live_game()
     cache["hawks"].update({
         "stand": data_fetch.fetch_blackhawks_standings(),
         "last": data_fetch.fetch_blackhawks_last_game(),
-        "live": data_fetch.fetch_blackhawks_live_game(),
+        "live": live_game,
+        "live_feed": _fetch_hawks_live_feed(live_game),
         "next": data_fetch.fetch_blackhawks_next_game(),
         "next_home": data_fetch.fetch_blackhawks_next_home_game(),
     })

@@ -278,6 +278,7 @@ def test_main_inverts_frames_when_github_update_available(monkeypatch):
     monkeypatch.setattr(mod, "_best_time_font_size", lambda *_args, **_kwargs: 20)
     monkeypatch.setattr(mod, "_best_value_font_size", lambda *_args, **_kwargs: 16)
     monkeypatch.setattr(mod, "_github_updates_available", lambda: True)
+    monkeypatch.setattr(mod, "_save_oled_screenshot", lambda *_args, **_kwargs: None)
     monkeypatch.setattr(mod._STOP_EVENT, "wait", lambda _seconds: mod._STOP_EVENT.set())
 
     def _solid_white(*_args, **_kwargs):
@@ -361,11 +362,39 @@ def test_cubs_oled_frames_prefers_live_game(monkeypatch):
     assert frames is not None
     assert len(rendered) == 2
     assert rendered[0]["team"] == "CUBS"
-    assert rendered[0]["footer"] == ""
+    assert rendered[0]["footer"] == "Bottom 3rd"
     assert rendered[1]["team"] == "NYM"
-    assert rendered[1]["footer"] == "Bottom 3rd • 2 Outs"
+    assert rendered[1]["footer"] == "2 Outs"
 
 
+def test_cubs_oled_frames_footer_layout_is_consistent_regardless_of_batter(monkeypatch):
+    """The inning always renders on the away panel and outs on the home panel,
+    regardless of which team is currently batting."""
+    mod = _load_module()
+    rendered = []
+    game = {
+        "gamePk": 321,
+        "status": {"abstractGameState": "Live", "detailedState": "In Progress", "statusCode": "I"},
+        "teams": {
+            "away": {"team": {"id": 112, "name": "Chicago Cubs", "abbreviation": "CHC"}, "score": 1},
+            "home": {"team": {"id": 121, "name": "New York Mets", "abbreviation": "NYM"}, "score": 0},
+        },
+        "linescore": {"inningState": "Top", "currentInningOrdinal": "5th", "outs": 1},
+    }
+
+    monkeypatch.setattr(mod, "_read_display_status_payload", lambda: {"cubs": {"live_game": game}})
+    monkeypatch.setattr(mod, "_render_score_panel", lambda *_args, **kwargs: rendered.append(kwargs) or object())
+    monkeypatch.setattr(mod, "_resolve_mlb_abbreviation", lambda: (lambda text: "NYM" if "Mets" in text else "CUBS"))
+    monkeypatch.setattr(mod, "_CUBS_FINAL_GAME_PK", None)
+    monkeypatch.setattr(mod, "_CUBS_FINAL_HOLD_UNTIL_EPOCH", 0.0)
+    monkeypatch.setattr(mod, "_load_cubs_final_state", lambda: (None, 0.0))
+    monkeypatch.setattr(mod, "_persist_cubs_final_state", lambda *_args, **_kwargs: None)
+
+    frames = mod._cubs_oled_frames()
+
+    assert frames is not None
+    assert rendered[0]["footer"] == "Top 5th"
+    assert rendered[1]["footer"] == "1 Out"
 
 
 def test_cubs_oled_frames_final_hides_outs(monkeypatch):
@@ -422,3 +451,140 @@ def test_cubs_oled_frames_holds_final_for_90_minutes(monkeypatch):
     assert mod._cubs_oled_frames() is not None
     now[0] += 2
     assert mod._cubs_oled_frames() is None
+
+
+def test_hawks_oled_frames_prefers_live_game(monkeypatch):
+    mod = _load_module()
+    rendered = []
+    game = {
+        "id": 555,
+        "gameState": "LIVE",
+        "awayTeam": {"id": 16, "abbrev": "CHI"},
+        "homeTeam": {"id": 10, "abbrev": "TOR"},
+    }
+    feed = {
+        "awayScore": 2,
+        "homeScore": 1,
+        "perOrdinal": "2",
+        "clock": "12:34",
+        "clockState": "",
+    }
+
+    monkeypatch.setattr(
+        mod,
+        "_read_display_status_payload",
+        lambda: {"hawks": {"live_game": game, "live_feed": feed}},
+    )
+    monkeypatch.setattr(mod, "_render_score_panel", lambda *_args, **kwargs: rendered.append(kwargs) or object())
+    monkeypatch.setattr(mod, "_HAWKS_FINAL_GAME_PK", None)
+    monkeypatch.setattr(mod, "_HAWKS_FINAL_HOLD_UNTIL_EPOCH", 0.0)
+    monkeypatch.setattr(mod, "_load_hawks_final_state", lambda: (None, 0.0))
+    monkeypatch.setattr(mod, "_persist_hawks_final_state", lambda *_args, **_kwargs: None)
+
+    frames = mod._hawks_oled_frames()
+
+    assert frames is not None
+    assert len(rendered) == 2
+    assert rendered[0]["team"] == "HAWKS"
+    assert rendered[0]["score"] == "2"
+    assert rendered[0]["footer"] == "2nd Period"
+    assert rendered[1]["team"] == "TOR"
+    assert rendered[1]["score"] == "1"
+    assert rendered[1]["footer"] == "12:34"
+
+
+def test_hawks_oled_frames_final_hides_clock(monkeypatch):
+    mod = _load_module()
+    rendered = []
+    game = {
+        "id": 556,
+        "gameState": "OFF",
+        "awayTeam": {"id": 16, "abbrev": "CHI", "score": 4},
+        "homeTeam": {"id": 10, "abbrev": "TOR", "score": 3},
+    }
+
+    monkeypatch.setattr(mod, "time", types.SimpleNamespace(time=lambda: 1000.0))
+    monkeypatch.setattr(mod, "_read_display_status_payload", lambda: {"hawks": {"last_game": game}})
+    monkeypatch.setattr(mod, "_render_score_panel", lambda *_args, **kwargs: rendered.append(kwargs) or object())
+    monkeypatch.setattr(mod, "_HAWKS_FINAL_GAME_PK", None)
+    monkeypatch.setattr(mod, "_HAWKS_FINAL_HOLD_UNTIL_EPOCH", 0.0)
+    monkeypatch.setattr(mod, "_load_hawks_final_state", lambda: (None, 0.0))
+    monkeypatch.setattr(mod, "_persist_hawks_final_state", lambda *_args, **_kwargs: None)
+
+    frames = mod._hawks_oled_frames()
+
+    assert frames is not None
+    assert len(rendered) == 2
+    assert rendered[0]["score"] == "4"
+    assert rendered[0]["footer"] == ""
+    assert rendered[1]["score"] == "3"
+    assert rendered[1]["footer"] == "Final"
+
+
+def test_hawks_oled_frames_holds_final_for_90_minutes(monkeypatch):
+    mod = _load_module()
+    game = {
+        "id": 557,
+        "gameState": "OFF",
+        "awayTeam": {"id": 16, "abbrev": "CHI", "score": 5},
+        "homeTeam": {"id": 10, "abbrev": "TOR", "score": 2},
+    }
+
+    now = [1000.0]
+    monkeypatch.setattr(mod, "time", types.SimpleNamespace(time=lambda: now[0]))
+    monkeypatch.setattr(mod, "_read_display_status_payload", lambda: {"hawks": {"last_game": game}})
+    monkeypatch.setattr(mod, "_render_score_panel", lambda *_args, **_kwargs: object())
+    monkeypatch.setattr(mod, "_HAWKS_FINAL_GAME_PK", None)
+    monkeypatch.setattr(mod, "_HAWKS_FINAL_HOLD_UNTIL_EPOCH", 0.0)
+    monkeypatch.setattr(mod, "_load_hawks_final_state", lambda: (None, 0.0))
+    monkeypatch.setattr(mod, "_persist_hawks_final_state", lambda *_args, **_kwargs: None)
+
+    assert mod._hawks_oled_frames() is not None
+    now[0] += (90 * 60) - 1
+    assert mod._hawks_oled_frames() is not None
+    now[0] += 2
+    assert mod._hawks_oled_frames() is None
+
+
+def test_hawks_oled_frames_falls_back_when_cubs_not_playing(monkeypatch):
+    mod = _load_module()
+    hawks_game = {
+        "id": 558,
+        "gameState": "LIVE",
+        "awayTeam": {"id": 16, "abbrev": "CHI"},
+        "homeTeam": {"id": 10, "abbrev": "TOR"},
+    }
+
+    monkeypatch.setattr(mod, "_read_display_status_payload", lambda: {"hawks": {"live_game": hawks_game}})
+    monkeypatch.setattr(mod, "_render_score_panel", lambda *_args, **_kwargs: object())
+    monkeypatch.setattr(mod, "_HAWKS_FINAL_GAME_PK", None)
+    monkeypatch.setattr(mod, "_HAWKS_FINAL_HOLD_UNTIL_EPOCH", 0.0)
+    monkeypatch.setattr(mod, "_load_hawks_final_state", lambda: (None, 0.0))
+    monkeypatch.setattr(mod, "_persist_hawks_final_state", lambda *_args, **_kwargs: None)
+
+    assert mod._cubs_oled_frames() is None
+    assert mod._hawks_oled_frames() is not None
+
+
+def test_save_oled_screenshot_writes_current_png(monkeypatch, tmp_path):
+    mod = _load_module()
+    monkeypatch.setenv("WAVESHARE_OLED_SCREENSHOT_DIR", str(tmp_path))
+
+    image = mod.Image.new("1", (mod.OLED_WIDTH, mod.OLED_HEIGHT), 1)
+    mod._save_oled_screenshot("oled_left", image)
+
+    saved_path = tmp_path / "oled_left.png"
+    assert saved_path.exists()
+    assert not (tmp_path / "oled_left.png.tmp").exists()
+
+
+def test_save_oled_screenshot_swallows_errors(monkeypatch, tmp_path):
+    mod = _load_module()
+    monkeypatch.setenv("WAVESHARE_OLED_SCREENSHOT_DIR", str(tmp_path))
+
+    class _Unsavable:
+        def save(self, _path):
+            raise RuntimeError("boom")
+
+    # Should not raise.
+    mod._save_oled_screenshot("oled_left", _Unsavable())

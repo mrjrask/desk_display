@@ -87,11 +87,14 @@ _LAST_GITHUB_UPDATE_AVAILABLE = False
 _CUBS_FINAL_GAME_PK: str | None = None
 _CUBS_FINAL_HOLD_UNTIL_EPOCH = 0.0
 _CUBS_FINAL_STATE_PATH = Path(os.getenv("WAVESHARE_OLED_CUBS_FINAL_STATE_PATH", "/var/tmp/desk_display_cubs_final_state.json"))
+_HAWKS_FINAL_GAME_PK: str | None = None
+_HAWKS_FINAL_HOLD_UNTIL_EPOCH = 0.0
+_HAWKS_FINAL_STATE_PATH = Path(os.getenv("WAVESHARE_OLED_HAWKS_FINAL_STATE_PATH", "/var/tmp/desk_display_hawks_final_state.json"))
 
 
-def _load_cubs_final_state() -> tuple[str | None, float]:
+def _load_final_state(state_path: Path) -> tuple[str | None, float]:
     try:
-        payload = json.loads(_CUBS_FINAL_STATE_PATH.read_text(encoding="utf-8"))
+        payload = json.loads(state_path.read_text(encoding="utf-8"))
     except Exception:
         return None, 0.0
 
@@ -103,13 +106,29 @@ def _load_cubs_final_state() -> tuple[str | None, float]:
     return game_pk, hold_until
 
 
-def _persist_cubs_final_state(game_pk: str | None, hold_until_epoch: float) -> None:
+def _persist_final_state(state_path: Path, game_pk: str | None, hold_until_epoch: float) -> None:
     payload = {"game_pk": (game_pk or ""), "hold_until_epoch": float(hold_until_epoch)}
     try:
-        _CUBS_FINAL_STATE_PATH.parent.mkdir(parents=True, exist_ok=True)
-        _CUBS_FINAL_STATE_PATH.write_text(json.dumps(payload), encoding="utf-8")
+        state_path.parent.mkdir(parents=True, exist_ok=True)
+        state_path.write_text(json.dumps(payload), encoding="utf-8")
     except Exception:
         return
+
+
+def _load_cubs_final_state() -> tuple[str | None, float]:
+    return _load_final_state(_CUBS_FINAL_STATE_PATH)
+
+
+def _persist_cubs_final_state(game_pk: str | None, hold_until_epoch: float) -> None:
+    _persist_final_state(_CUBS_FINAL_STATE_PATH, game_pk, hold_until_epoch)
+
+
+def _load_hawks_final_state() -> tuple[str | None, float]:
+    return _load_final_state(_HAWKS_FINAL_STATE_PATH)
+
+
+def _persist_hawks_final_state(game_pk: str | None, hold_until_epoch: float) -> None:
+    _persist_final_state(_HAWKS_FINAL_STATE_PATH, game_pk, hold_until_epoch)
 
 
 class SSD1306Display:
@@ -313,6 +332,32 @@ def _display_status_path() -> Path:
     screenshot_dir = os.getenv("SCREENSHOT_DIR", str(repo_root / "screenshots"))
     return Path(screenshot_dir).expanduser() / "current" / "display_status.json"
 
+
+def _screenshot_current_dir() -> Path:
+    override = os.getenv("WAVESHARE_OLED_SCREENSHOT_DIR")
+    if override:
+        return Path(override).expanduser()
+
+    repo_root = Path(__file__).resolve().parents[1]
+    screenshot_dir = os.getenv("SCREENSHOT_DIR", str(repo_root / "screenshots"))
+    return Path(screenshot_dir).expanduser() / "current"
+
+
+def _save_oled_screenshot(name: str, image: Image.Image) -> None:
+    """Persist the frame actually pushed to an OLED so the web screenshot
+    gallery can show it (mirrors how the main display's screens are saved).
+    """
+    try:
+        current_dir = _screenshot_current_dir()
+        current_dir.mkdir(parents=True, exist_ok=True)
+        target = current_dir / f"{name}.png"
+        tmp_target = current_dir / f"{name}.png.tmp"
+        image.save(tmp_target, format="PNG")
+        os.replace(tmp_target, target)
+    except Exception as exc:
+        LOGGER.debug("Failed to save %s OLED screenshot: %s", name, exc)
+
+
 @lru_cache(maxsize=1)
 def _resolve_mlb_abbreviation() -> Optional[Callable[[str], str]]:
     try:
@@ -390,9 +435,7 @@ def _mlb_live_state(game: dict) -> tuple[bool, bool]:
     return is_live, is_final
 
 
-def _format_inning_text(game: dict, *, final: bool = False) -> str:
-    if final:
-        return "Final"
+def _format_inning_text(game: dict) -> str:
     linescore = (game or {}).get("linescore") or {}
     inning_state = str(linescore.get("inningState") or "").strip()
     inning_ord = str(linescore.get("currentInningOrdinal") or "").strip()
@@ -405,18 +448,15 @@ def _format_inning_text(game: dict, *, final: bool = False) -> str:
     return detailed or "Live"
 
 
-def _format_outs_text(game: dict) -> tuple[str, str]:
+def _format_outs_text(game: dict) -> str:
     linescore = (game or {}).get("linescore") or {}
     raw_outs = linescore.get("outs")
     try:
         outs = int(raw_outs)
     except (TypeError, ValueError):
-        return ("", "")
+        return ""
     outs_label = "Out" if outs == 1 else "Outs"
-    outs_text = f"{outs} {outs_label}"
-    inning_state = str(linescore.get("inningState") or "").lower()
-    batting_side = "away" if inning_state.startswith("top") else "home" if inning_state.startswith("bottom") else ""
-    return outs_text, batting_side
+    return f"{outs} {outs_label}"
 
 
 def _render_score_panel(width: int, height: int, *, team: str, score: str, footer: str) -> Image.Image:
@@ -526,13 +566,157 @@ def _cubs_oled_frames() -> tuple[Image.Image, Image.Image] | None:
     home_label = _team_label(home)
     away_score_text = str(away_score) if isinstance(away_score, int) else "-"
     home_score_text = str(home_score) if isinstance(home_score, int) else "-"
-    inning_text = _format_inning_text(selected_game, final=is_final)
-    outs_text, batting_side = ("", "") if is_final else _format_outs_text(selected_game)
-    away_footer = outs_text if batting_side == "away" else ""
-    if batting_side == "home" and outs_text:
-        home_footer = f"{inning_text} • {outs_text}"
+    # Consistent, fixed layout regardless of which side is batting: the away
+    # panel always carries the inning, the home panel always carries the
+    # outs (or "Final" once the game has ended).
+    away_footer = "" if is_final else _format_inning_text(selected_game)
+    home_footer = "Final" if is_final else _format_outs_text(selected_game)
+
+    return (
+        _render_score_panel(OLED_WIDTH, OLED_HEIGHT, team=away_label, score=away_score_text, footer=away_footer),
+        _render_score_panel(OLED_WIDTH, OLED_HEIGHT, team=home_label, score=home_score_text, footer=home_footer),
+    )
+
+
+NHL_HAWKS_TEAM_ID = 16
+
+
+def _is_hawks_team(team: dict) -> bool:
+    if not isinstance(team, dict):
+        return False
+    team_id = team.get("id") or team.get("teamId")
+    if str(team_id) == str(NHL_HAWKS_TEAM_ID):
+        return True
+    for key in ("commonName", "name", "teamName", "clubName", "abbrev", "abbreviation", "triCode"):
+        value = team.get(key)
+        if isinstance(value, dict):
+            value = value.get("default") or value.get("en") or ""
+        value = str(value or "").strip().lower()
+        if "blackhawks" in value or value == "chi":
+            return True
+    return False
+
+
+def _team_label_nhl(team: dict) -> str:
+    if _is_hawks_team(team):
+        return "HAWKS"
+    for key in ("abbrev", "triCode", "abbreviation", "teamCode"):
+        value = team.get(key) if isinstance(team, dict) else None
+        if isinstance(value, dict):
+            value = value.get("default") or value.get("en") or ""
+        value = str(value or "").strip().upper()
+        if value:
+            return value
+    return "TEAM"
+
+
+def _nhl_live_state(game: dict) -> tuple[bool, bool]:
+    state = str((game or {}).get("gameState") or "").strip().upper()
+    is_live = state in {"LIVE", "CRIT"}
+    is_final = state in {"OFF", "FINAL"}
+    return is_live, is_final
+
+
+def _format_period_text(game: dict, feed: dict | None) -> str:
+    period = ""
+    if isinstance(feed, dict):
+        period = _normalize_nhl_period(feed.get("perOrdinal"))
+    if not period:
+        period_desc = (game or {}).get("periodDescriptor") or {}
+        period = _normalize_nhl_period(
+            period_desc.get("ordinalNum") or period_desc.get("number")
+        )
+    return f"{period} Period" if period else "Live"
+
+
+def _normalize_nhl_period(period_val) -> str:
+    if period_val is None:
+        return ""
+    text = str(period_val).strip()
+    if not text:
+        return ""
+    if text.isdigit():
+        num = int(text)
+        suffix = "th" if 10 <= num % 100 <= 20 else {1: "st", 2: "nd", 3: "rd"}.get(num % 10, "th")
+        return f"{num}{suffix}"
+    return text
+
+
+def _format_clock_text(feed: dict | None) -> str:
+    if not isinstance(feed, dict):
+        return ""
+    clock_state = str(feed.get("clockState") or "").strip()
+    if clock_state.upper() == "INTERMISSION":
+        return "Intermission"
+    clock = str(feed.get("clock") or "").strip()
+    return clock
+
+
+def _hawks_oled_frames() -> tuple[Image.Image, Image.Image] | None:
+    global _HAWKS_FINAL_GAME_PK, _HAWKS_FINAL_HOLD_UNTIL_EPOCH
+
+    payload = _read_display_status_payload()
+    hawks = payload.get("hawks") if isinstance(payload, dict) else None
+    if not isinstance(hawks, dict):
+        return None
+
+    live_game = hawks.get("live_game") if isinstance(hawks.get("live_game"), dict) else None
+    last_game = hawks.get("last_game") if isinstance(hawks.get("last_game"), dict) else None
+    live_feed = hawks.get("live_feed") if isinstance(hawks.get("live_feed"), dict) else None
+
+    selected_game = None
+    is_final = False
+    now_epoch = time.time()
+    if _HAWKS_FINAL_GAME_PK is None and _HAWKS_FINAL_HOLD_UNTIL_EPOCH <= 0:
+        _HAWKS_FINAL_GAME_PK, _HAWKS_FINAL_HOLD_UNTIL_EPOCH = _load_hawks_final_state()
+    if isinstance(live_game, dict):
+        live_live, live_final = _nhl_live_state(live_game)
+        if live_live:
+            selected_game = live_game
+            is_final = False
+        elif live_final:
+            selected_game = live_game
+            is_final = True
+
+    if selected_game is None and isinstance(last_game, dict):
+        _live, last_final = _nhl_live_state(last_game)
+        if last_final:
+            selected_game = last_game
+            is_final = True
+
+    if selected_game is None:
+        return None
+
+    game_pk = str(selected_game.get("id") or selected_game.get("gamePk") or "")
+    if is_final:
+        if game_pk and game_pk != _HAWKS_FINAL_GAME_PK:
+            _HAWKS_FINAL_GAME_PK = game_pk
+            _HAWKS_FINAL_HOLD_UNTIL_EPOCH = now_epoch + (90 * 60)
+            _persist_hawks_final_state(_HAWKS_FINAL_GAME_PK, _HAWKS_FINAL_HOLD_UNTIL_EPOCH)
+        if now_epoch > _HAWKS_FINAL_HOLD_UNTIL_EPOCH:
+            return None
     else:
-        home_footer = inning_text
+        _HAWKS_FINAL_GAME_PK = game_pk or _HAWKS_FINAL_GAME_PK
+        _HAWKS_FINAL_HOLD_UNTIL_EPOCH = 0.0
+        _persist_hawks_final_state(_HAWKS_FINAL_GAME_PK, _HAWKS_FINAL_HOLD_UNTIL_EPOCH)
+
+    away = selected_game.get("awayTeam") or {}
+    home = selected_game.get("homeTeam") or {}
+    away_score = away.get("score")
+    home_score = home.get("score")
+    if isinstance(live_feed, dict):
+        if isinstance(live_feed.get("awayScore"), int):
+            away_score = live_feed["awayScore"]
+        if isinstance(live_feed.get("homeScore"), int):
+            home_score = live_feed["homeScore"]
+    away_label = _team_label_nhl(away)
+    home_label = _team_label_nhl(home)
+    away_score_text = str(away_score) if isinstance(away_score, int) else "-"
+    home_score_text = str(home_score) if isinstance(home_score, int) else "-"
+    # Same fixed layout as the Cubs panels: the away panel always carries
+    # the period, the home panel always carries the clock (or "Final").
+    away_footer = "" if is_final else _format_period_text(selected_game, live_feed)
+    home_footer = "Final" if is_final else _format_clock_text(live_feed)
 
     return (
         _render_score_panel(OLED_WIDTH, OLED_HEIGHT, team=away_label, score=away_score_text, footer=away_footer),
@@ -889,9 +1073,9 @@ def main() -> int:
     next_swap_at = time.monotonic() + random_swap_interval_seconds()
     try:
         while not _STOP_EVENT.is_set():
-            cubs_frames = _cubs_oled_frames()
-            if cubs_frames is not None:
-                left_image, right_image = cubs_frames
+            sports_frames = _cubs_oled_frames() or _hawks_oled_frames()
+            if sports_frames is not None:
+                left_image, right_image = sports_frames
             else:
                 time_text = current_time_12h()
                 date_text = current_date_mdy()
@@ -933,6 +1117,8 @@ def main() -> int:
                 right_image = _invert_for_update(right_image)
             left_ok = _safe_render(temp_display, left_image, "left")
             right_ok = _safe_render(time_display, right_image, "right")
+            _save_oled_screenshot("oled_left", left_image)
+            _save_oled_screenshot("oled_right", right_image)
 
             if not left_ok or not right_ok:
                 LOGGER.info("Reinitializing OLED displays after render failure.")
@@ -942,7 +1128,7 @@ def main() -> int:
                 except Exception as exc:
                     LOGGER.warning("OLED reinitialization failed: %s", exc)
 
-            if cubs_frames is None and time.monotonic() >= next_swap_at:
+            if sports_frames is None and time.monotonic() >= next_swap_at:
                 show_date_on_left = not show_date_on_left
                 next_swap_at = time.monotonic() + random_swap_interval_seconds()
 
