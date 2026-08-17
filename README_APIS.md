@@ -15,6 +15,7 @@ Most credentials can be supplied in `.env` when `CONFIG_LOAD_DOTENV=1` or throug
 - [Finance](#finance)
 - [AHL / Chicago Wolves](#ahl--chicago-wolves)
 - [Wi-Fi probe endpoints](#wi-fi-probe-endpoints)
+- [ADS-B receivers (dump1090-fa)](#ads-b-receivers-dump1090-fa)
 - [Credential quick reference](#credential-quick-reference)
 - [Notes on payload handling](#notes-on-payload-handling)
 
@@ -311,6 +312,24 @@ Wi-Fi utilities can probe configured HTTPS/TCP targets to decide whether recover
 
 ---
 
+## ADS-B receivers (dump1090-fa)
+
+The standalone collector (`scripts/adsb_collector.py`) polls up to two local
+dump1090-fa receivers (e.g. PiAware devices) — never the display process
+itself. No API key is required; these are plain local-network HTTP
+endpoints.
+
+| Endpoint | Purpose |
+| --- | --- |
+| `http://<host>/dump1090-fa/data/aircraft.json` | Current aircraft snapshot (hex, callsign, position, altitude) polled every `ADSB_POLL_INTERVAL_SECONDS`. |
+| `http://<host>/dump1090-fa/data/stats.json` | Best-effort cumulative message count, used for the optional "messages today" stat. Missing/unreachable stats.json does not fail the poll cycle. |
+
+See [ADS-B stats screen](README.md#ads-b-stats-screen) in the main README
+for the collector/database/display data flow, and [ADS-B receiver
+variables](README.md#ads-b-receiver-variables) for configuration.
+
+---
+
 ## Credential quick reference
 
 | Feature | Required/important environment variables |
@@ -320,6 +339,7 @@ Wi-Fi utilities can probe configured HTTPS/TCP targets to decide whether recover
 | Weather/map location | `WEATHER_LATITUDE`, `WEATHER_LONGITUDE`. |
 | AHL/Wolves | Optional `AHL_*` overrides; defaults are provided for the Chicago Wolves helper path. |
 | Wi-Fi probes | Optional `WIFI_TCP_PROBE_*`, `WIFI_HTTPS_PROBE_URL`, and `RPI_CONNECT_CONTROL_HOST` values. |
+| ADS-B receivers | `ADSB_DEVICE_1_HOST` (and optionally `ADSB_DEVICE_2_HOST`); no API key needed. |
 
 ---
 

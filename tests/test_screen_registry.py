@@ -224,6 +224,35 @@ def test_air_quality_unavailable_when_not_configured(monkeypatch):
     assert registry["air quality"].available is False
 
 
+def test_adsb_stats_unavailable_when_no_devices_configured(monkeypatch):
+    now = datetime.datetime(2024, 1, 1, 12, 0, tzinfo=CENTRAL_TIME)
+    weather = {"hourly": []}
+    monkeypatch.setattr(registry_module.config, "ENABLE_ADSB", False)
+
+    registry, _ = build_screen_registry(_make_context(weather, now))
+
+    assert registry["adsb stats"].available is False
+
+
+def test_adsb_stats_available_when_devices_configured(monkeypatch):
+    now = datetime.datetime(2024, 1, 1, 12, 0, tzinfo=CENTRAL_TIME)
+    weather = {"hourly": []}
+    captured = {}
+    monkeypatch.setattr(registry_module.config, "ENABLE_ADSB", True)
+
+    def _fake_draw_adsb_stats_screen(display, stats=None, transition=False):
+        captured["transition"] = transition
+        return None
+
+    monkeypatch.setattr(registry_module, "draw_adsb_stats_screen", _fake_draw_adsb_stats_screen)
+
+    registry, _ = build_screen_registry(_make_context(weather, now))
+
+    assert registry["adsb stats"].available is True
+    registry["adsb stats"].render()
+    assert captured == {"transition": True}
+
+
 def test_weather_quad_screen_available_with_cached_weather_offline():
     now = datetime.datetime(2024, 1, 1, 12, 0, tzinfo=CENTRAL_TIME)
     weather = {
