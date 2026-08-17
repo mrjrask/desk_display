@@ -414,6 +414,63 @@ ENABLE_AIR_QUALITY = not _air_quality_errors
 if _air_quality_errors:
     logging.warning("Air quality disabled due to missing/invalid configuration: %s", "; ".join(_air_quality_errors))
 
+# ─── ADS-B receiver stats ───────────────────────────────────────────────────
+# The "adsb stats" screen never talks to receivers itself. A standalone
+# collector process (scripts/adsb_collector.py) polls the configured
+# dump1090-fa receivers and writes to a local SQLite database; the screen
+# only reads that database (see services/adsb.py). Up to two receivers are
+# supported via ADSB_DEVICE_1_HOST/ADSB_DEVICE_2_HOST.
+
+
+def _adsb_devices_from_env() -> list[dict[str, str]]:
+    devices: list[dict[str, str]] = []
+    for index in (1, 2):
+        host = os.environ.get(f"ADSB_DEVICE_{index}_HOST", "").strip()
+        if not host:
+            continue
+        label = (
+            os.environ.get(f"ADSB_DEVICE_{index}_LABEL", "").strip()
+            or f"Receiver {index}"
+        )
+        devices.append({"host": host, "label": label})
+    return devices
+
+
+def _resolve_adsb_home_coordinates() -> tuple[Optional[float], Optional[float]]:
+    """Resolve the receiver site location, defaulting to the weather location."""
+
+    lat_raw = os.environ.get("ADSB_HOME_LATITUDE")
+    lon_raw = os.environ.get("ADSB_HOME_LONGITUDE")
+    try:
+        latitude = float(lat_raw) if lat_raw else LATITUDE
+    except (TypeError, ValueError):
+        latitude = LATITUDE
+    try:
+        longitude = float(lon_raw) if lon_raw else LONGITUDE
+    except (TypeError, ValueError):
+        longitude = LONGITUDE
+    return latitude, longitude
+
+
+ADSB_DEVICES = _adsb_devices_from_env()
+ADSB_HOME_LATITUDE, ADSB_HOME_LONGITUDE = _resolve_adsb_home_coordinates()
+ADSB_DISTANCE_UNIT = os.environ.get("ADSB_DISTANCE_UNIT", "nm").strip().lower()
+if ADSB_DISTANCE_UNIT not in {"nm", "mi"}:
+    ADSB_DISTANCE_UNIT = "nm"
+try:
+    ADSB_POLL_INTERVAL_SECONDS = float(os.environ.get("ADSB_POLL_INTERVAL_SECONDS", "10"))
+except (TypeError, ValueError):
+    ADSB_POLL_INTERVAL_SECONDS = 10.0
+try:
+    ADSB_REQUEST_TIMEOUT_SECONDS = float(os.environ.get("ADSB_REQUEST_TIMEOUT_SECONDS", "5"))
+except (TypeError, ValueError):
+    ADSB_REQUEST_TIMEOUT_SECONDS = 5.0
+try:
+    ADSB_RETENTION_DAYS = int(os.environ.get("ADSB_RETENTION_DAYS", "7"))
+except (TypeError, ValueError):
+    ADSB_RETENTION_DAYS = 7
+ENABLE_ADSB = bool(ADSB_DEVICES)
+
 # ─── News headlines ticker ──────────────────────────────────────────────────
 # Feed sources (name + URL) live in news_feeds.json, not here — see
 # paths.resolve_news_feeds_config_path(). These knobs only tune behavior.

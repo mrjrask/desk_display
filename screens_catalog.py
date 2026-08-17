@@ -125,6 +125,7 @@ RAW_SCREEN_IDS = [
     "MLB ALWC Standings",
     "MLB NL Standings",
     "MLB NLWC Standings",
+    "adsb stats",
 ]
 
 SCREEN_IDS = RAW_SCREEN_IDS

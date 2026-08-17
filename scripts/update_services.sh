@@ -39,6 +39,7 @@ UNIT_NAMES=(
   desk_display.service
   config_ui_desk_display.service
   desk_display_waveshare_oled.service
+  desk_display_adsb_collector.service
 )
 
 # Relative paths (from the project root) that moved during past script

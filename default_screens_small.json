@@ -127,7 +127,8 @@
       "NBA Playoffs": 0,
       "NCAAM Scoreboard": 0,
       "quad": 0,
-      "World Cup Scoreboard": 0
+      "World Cup Scoreboard": 0,
+      "adsb stats": 4
     },
     "playlists": {
       "playlist-1771301244817-427": {
@@ -499,6 +500,9 @@
           },
           {
             "screen": "on this day"
+          },
+          {
+            "screen": "adsb stats"
           }
         ]
       }

@@ -111,6 +111,7 @@ render_nfl_scoreboard_v2 = _lazy_callable("screens.nfl_scoreboard_v2.render_nfl_
 render_nhl_playoffs = _lazy_callable("screens.nhl_playoffs.render_nhl_playoffs")
 render_nba_playoffs = _lazy_callable("screens.nba_playoffs.render_nba_playoffs")
 draw_air_quality_screen = _lazy_callable("screens.draw_air_quality.draw_air_quality_screen")
+draw_adsb_stats_screen = _lazy_callable("screens.draw_adsb_stats.draw_adsb_stats_screen")
 draw_inside = _lazy_callable("screens.draw_inside.draw_inside")
 is_inside_sensor_available = _lazy_callable("screens.draw_inside.is_inside_sensor_available")
 render_nba_scoreboard = _lazy_callable("screens.nba_scoreboard.render_nba_scoreboard")
@@ -1831,6 +1832,12 @@ def build_screen_registry(context: ScreenContext) -> tuple[dict[str, ScreenDefin
             "bulls next",
             "bulls next home",
         ],
+    )
+
+    register(
+        "adsb stats",
+        lambda: draw_adsb_stats_screen(context.display, transition=True),
+        available=config.ENABLE_ADSB,
     )
 
     return registry, metadata
