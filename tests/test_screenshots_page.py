@@ -269,6 +269,44 @@ def test_screenshot_order_matches_playlist_grouped_config_order(monkeypatch, tmp
     assert order == ["date", "nixie", "weather logo", "weather1", "on this day", "news headlines"]
 
 
+def test_build_screenshot_entries_includes_oled_when_present(monkeypatch, tmp_path):
+    current_dir = tmp_path / "current"
+    current_dir.mkdir()
+    (current_dir / "oled_left.png").write_bytes(b"x")
+    (current_dir / "oled_right.png").write_bytes(b"x")
+
+    monkeypatch.setattr(
+        config_ui,
+        "resolve_storage_paths",
+        lambda **kwargs: SimpleNamespace(screenshot_dir=tmp_path, current_screenshot_dir=current_dir),
+    )
+    monkeypatch.setattr(config_ui, "_load_active_config", lambda: {"screens": {"date": {}}})
+
+    entries = config_ui._build_screenshot_entries()
+    entry_map = {entry["id"]: entry for entry in entries}
+
+    assert entry_map["oled left"]["path"] == "current/oled_left.png"
+    assert entry_map["oled right"]["path"] == "current/oled_right.png"
+
+
+def test_build_screenshot_entries_hides_oled_when_absent(monkeypatch, tmp_path):
+    current_dir = tmp_path / "current"
+    current_dir.mkdir()
+
+    monkeypatch.setattr(
+        config_ui,
+        "resolve_storage_paths",
+        lambda **kwargs: SimpleNamespace(screenshot_dir=tmp_path, current_screenshot_dir=current_dir),
+    )
+    monkeypatch.setattr(config_ui, "_load_active_config", lambda: {"screens": {"date": {}}})
+
+    entries = config_ui._build_screenshot_entries()
+    entry_map = {entry["id"]: entry for entry in entries}
+
+    assert entry_map["oled left"]["path"] is None
+    assert entry_map["oled right"]["path"] is None
+
+
 def test_load_display_status_reads_heartbeat(monkeypatch, tmp_path):
     current_dir = tmp_path / "current"
     current_dir.mkdir()

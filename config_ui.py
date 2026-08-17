@@ -66,6 +66,12 @@ SCREEN_CONFIG_PORT = int(os.environ.get("SCREEN_CONFIG_PORT", "5002"))
 SCREEN_UI_USERNAME = os.environ.get("SCREEN_UI_USERNAME", "")
 SCREEN_UI_PASSWORD = os.environ.get("SCREEN_UI_PASSWORD", "")
 ALLOWED_SCREEN_EXTS = (".png", ".jpg", ".jpeg")
+# The Waveshare OLED/LCD HAT is a separate pair of small hardware displays
+# driven by scripts/waveshare_oled_status.py, not a rotation "screen" from
+# screens_config.json. They're appended to the screenshots page (rather than
+# the main screen loop) only when that helper has actually saved a frame, so
+# desks without the OLED HAT don't show two permanently-empty cards.
+OLED_SCREEN_IDS = ("oled left", "oled right")
 app = Flask(__name__)
 app.secret_key = SCREEN_UI_PASSWORD or "desk-display-config-ui"
 WEB_LOGGER = logging.getLogger("desk_display.web")
@@ -704,6 +710,55 @@ def _apply_playlist_grouping(
     return grouped
 
 
+def _build_screenshot_entry(
+    screen_id: str,
+    screenshot_dir: Path,
+    current_dir: Path,
+    *,
+    search_history: bool = True,
+) -> dict[str, Any]:
+    prefix = _sanitize_filename_prefix(screen_id)
+    entry: dict[str, Any] = {
+        "id": screen_id,
+        "path": None,
+        "timestamp": None,
+        "elapsed": None,
+        "version": None,
+        "is_stale": False,
+    }
+    candidates: list[Path] = [
+        current_dir / f"{prefix}{ext}" for ext in ALLOWED_SCREEN_EXTS
+    ]
+    if search_history:
+        screen_dir = screenshot_dir / _sanitize_directory_name(screen_id)
+        if screen_dir.is_dir():
+            candidates.extend(
+                path
+                for path in screen_dir.glob(f"{prefix}_*")
+                if path.is_file() and path.suffix.lower() in ALLOWED_SCREEN_EXTS
+            )
+
+    path: Optional[Path] = None
+    existing_candidates = [candidate for candidate in candidates if candidate.exists()]
+    if existing_candidates:
+        path = max(existing_candidates, key=lambda item: item.stat().st_mtime)
+
+    if path and path.exists():
+        entry["path"] = path.relative_to(screenshot_dir).as_posix()
+        try:
+            modified_time = path.stat().st_mtime
+            entry["timestamp"] = _format_timestamp(modified_time)
+            entry["elapsed"] = _format_elapsed_since(modified_time)
+            entry["version"] = int(modified_time)
+            entry["is_stale"] = _is_screenshot_stale(modified_time)
+        except OSError:
+            entry["timestamp"] = None
+            entry["elapsed"] = None
+            entry["version"] = None
+            entry["is_stale"] = False
+    return entry
+
+
 def _build_screenshot_entries() -> list[dict[str, Any]]:
     storage_paths = resolve_storage_paths()
     screenshot_dir = storage_paths.screenshot_dir
@@ -713,50 +768,20 @@ def _build_screenshot_entries() -> list[dict[str, Any]]:
     ordered_screen_ids = _ordered_screen_ids(screens_config)
     playlists, playlist_assignments = _build_playlist_assignments(config)
     ordered_screen_ids = _apply_playlist_grouping(ordered_screen_ids, playlists, playlist_assignments)
-    entries: list[dict[str, Any]] = []
-    for screen_id in ordered_screen_ids:
-        prefix = _sanitize_filename_prefix(screen_id)
-        entry: dict[str, Any] = {
-            "id": screen_id,
-            "path": None,
-            "timestamp": None,
-            "elapsed": None,
-            "version": None,
-            "is_stale": False,
-        }
-        candidates: list[Path] = [
-            current_dir / f"{prefix}{ext}" for ext in ALLOWED_SCREEN_EXTS
-        ]
-        screen_dir = screenshot_dir / _sanitize_directory_name(screen_id)
-        if screen_dir.is_dir():
-            candidates.extend(
-                path
-                for path in screen_dir.glob(f"{prefix}_*")
-                if path.is_file() and path.suffix.lower() in ALLOWED_SCREEN_EXTS
-            )
+    entries = [
+        _build_screenshot_entry(screen_id, screenshot_dir, current_dir)
+        for screen_id in ordered_screen_ids
+    ]
 
-        path: Optional[Path] = None
-        existing_candidates = [candidate for candidate in candidates if candidate.exists()]
-        if existing_candidates:
-            path = max(existing_candidates, key=lambda item: item.stat().st_mtime)
-
-        if path and path.exists():
-            entry["path"] = path.relative_to(screenshot_dir).as_posix()
-            try:
-                modified_time = path.stat().st_mtime
-                entry["timestamp"] = _format_timestamp(modified_time)
-                entry["elapsed"] = _format_elapsed_since(modified_time)
-                entry["version"] = int(modified_time)
-                entry["is_stale"] = _is_screenshot_stale(modified_time)
-            except OSError:
-                entry["timestamp"] = None
-                entry["elapsed"] = None
-                entry["version"] = None
-                entry["is_stale"] = False
-        entries.append(entry)
+    # The OLED HAT displays aren't part of screens_config's rotation, so they
+    # aren't in ordered_screen_ids. Only their latest "current" frame exists
+    # (no rotating history), and the card stays hidden by the "Hide screens
+    # without screenshots" toggle until the OLED helper has actually saved one.
+    entries.extend(
+        _build_screenshot_entry(screen_id, screenshot_dir, current_dir, search_history=False)
+        for screen_id in OLED_SCREEN_IDS
+    )
     return entries
-
-
 
 
 def _load_display_status() -> dict[str, Any]:
