@@ -343,6 +343,20 @@ def _screenshot_current_dir() -> Path:
     return Path(screenshot_dir).expanduser() / "current"
 
 
+# Approximates the pixel color of the physical Waveshare OLED/LCD HAT (A)
+# blue OLED panels so the web screenshot gallery matches what the hardware
+# actually shows instead of rendering lit pixels as plain white.
+OLED_SCREENSHOT_ON_COLOR = (63, 166, 255)
+
+
+def _tint_oled_screenshot(image: Image.Image) -> Image.Image:
+    """Recolor a 1-bit OLED frame to the panel's blue for the web preview."""
+    mask = image if image.mode == "1" else image.convert("1")
+    tinted = Image.new("RGB", mask.size, (0, 0, 0))
+    tinted.paste(OLED_SCREENSHOT_ON_COLOR, (0, 0), mask)
+    return tinted
+
+
 def _save_oled_screenshot(name: str, image: Image.Image) -> None:
     """Persist the frame actually pushed to an OLED so the web screenshot
     gallery can show it (mirrors how the main display's screens are saved).
@@ -352,7 +366,7 @@ def _save_oled_screenshot(name: str, image: Image.Image) -> None:
         current_dir.mkdir(parents=True, exist_ok=True)
         target = current_dir / f"{name}.png"
         tmp_target = current_dir / f"{name}.png.tmp"
-        image.save(tmp_target, format="PNG")
+        _tint_oled_screenshot(image).save(tmp_target, format="PNG")
         os.replace(tmp_target, target)
     except Exception as exc:
         LOGGER.debug("Failed to save %s OLED screenshot: %s", name, exc)
