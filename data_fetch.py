@@ -1001,6 +1001,36 @@ def _owm_condition_mapping(weather: dict[str, Any]) -> tuple[str, str]:
     return description or "Unknown", icon
 
 
+def _owm_moon_phase_label(value: Any) -> Optional[str]:
+    """Map OpenWeatherMap's 0-1 lunar cycle position to a WeatherKit-style label.
+
+    OWM's ``moon_phase`` is a position in the cycle (0/1 = new, 0.25 = first
+    quarter, 0.5 = full, 0.75 = last quarter), not an illumination fraction,
+    so it must be bucketed into a named phase rather than used directly.
+    """
+
+    try:
+        phase = float(value)
+    except (TypeError, ValueError):
+        return None
+    phase = phase % 1.0
+    if phase < 0.0625 or phase >= 0.9375:
+        return "New"
+    if phase < 0.1875:
+        return "WaxingCrescent"
+    if phase < 0.3125:
+        return "FirstQuarter"
+    if phase < 0.4375:
+        return "WaxingGibbous"
+    if phase < 0.5625:
+        return "Full"
+    if phase < 0.6875:
+        return "WaningGibbous"
+    if phase < 0.8125:
+        return "LastQuarter"
+    return "WaningCrescent"
+
+
 def _normalise_openweathermap_response(data: dict[str, Any]) -> Optional[dict[str, Any]]:
     if not isinstance(data, dict):
         return None
@@ -1048,6 +1078,9 @@ def _normalise_openweathermap_response(data: dict[str, Any]) -> Optional[dict[st
                 "temp": {"max": (day.get("temp") or {}).get("max"), "min": (day.get("temp") or {}).get("min")},
                 "sunrise": day.get("sunrise"),
                 "sunset": day.get("sunset"),
+                "moonrise": day.get("moonrise"),
+                "moonset": day.get("moonset"),
+                "moonPhase": _owm_moon_phase_label(day.get("moon_phase")),
                 "pop": day.get("pop"),
                 "weather": [
                     {
