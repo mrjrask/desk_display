@@ -473,6 +473,38 @@ def test_poll_device_reports_detail_when_every_path_fails(monkeypatch):
     assert "tried 3 known paths" in result.error
 
 
+def test_poll_device_fills_missing_type_from_local_type_db(monkeypatch):
+    """aircraft.json usually omits "t" (see services/aircraft_type_db.py);
+    poll_device should backfill it from the local type lookup DB when
+    aircraft.json didn't provide one, but never override a type it did."""
+
+    device = AdsbDevice(host="192.168.1.50", label="Attic")
+
+    def _fake_http_get(url, *, timeout=10.0, **kwargs):
+        if url.endswith("/dump1090-fa/data/aircraft.json"):
+            return _FakeResponse(
+                200,
+                {
+                    "aircraft": [
+                        {"hex": "abc123", "flight": "UAL123"},  # no "t"
+                        {"hex": "def456", "flight": "DAL456", "t": "A320"},
+                    ]
+                },
+            )
+        return _FakeResponse(404)
+
+    def _fake_lookup(hex_id):
+        return {"abc123": "B738"}.get(hex_id)
+
+    monkeypatch.setattr(adsb_module, "http_get", _fake_http_get)
+    monkeypatch.setattr(adsb_module.aircraft_type_db, "lookup", _fake_lookup)
+
+    result = poll_device(device, home_lat=None, home_lon=None, timeout=1.0)
+
+    by_hex = {s.hex: s.aircraft_type for s in result.sightings}
+    assert by_hex == {"abc123": "B738", "def456": "A320"}
+
+
 def test_poll_device_reports_connection_error_detail(monkeypatch):
     device = AdsbDevice(host="192.168.1.50", label="Attic")
 

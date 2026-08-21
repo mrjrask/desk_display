@@ -25,6 +25,7 @@ from typing import Optional
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 import config
+from services import aircraft_type_db
 from services.adsb import AdsbDevice, AdsbStore, poll_device, today_key
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
@@ -78,7 +79,13 @@ def main(argv: Optional[list[str]] = None) -> int:
         store.db_path,
     )
 
+    try:
+        aircraft_type_db.refresh()
+    except Exception:  # pragma: no cover - defensive; startup must not fail on this
+        logger.exception("ADS-B: initial aircraft type DB refresh failed")
+
     last_prune_day: Optional[dt.date] = None
+    last_type_db_check_day: Optional[dt.date] = None
     try:
         while True:
             try:
@@ -93,6 +100,9 @@ def main(argv: Optional[list[str]] = None) -> int:
                             config.ADSB_RETENTION_DAYS,
                         )
                     last_prune_day = today
+                if today != last_type_db_check_day:
+                    aircraft_type_db.refresh()
+                    last_type_db_check_day = today
             except Exception:  # pragma: no cover - defensive loop guard
                 logger.exception("Unhandled error during ADS-B poll cycle")
 
