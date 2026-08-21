@@ -415,7 +415,23 @@ class AdsbStore:
                 default=None,
             )
             if furthest_this_poll is not None:
-                self._maybe_update_all_time(furthest_this_poll, device_label, now)
+                # sighting.callsign is only what this single poll saw; the
+                # sightings row just upserted above may already carry a
+                # callsign learned from an earlier or later poll today
+                # (COALESCE'd in). Prefer that so an all-time record doesn't
+                # permanently lock in a blank flight number just because the
+                # farthest-distance poll happened to arrive before the
+                # aircraft's identification message.
+                resolved_row = self._conn.execute(
+                    "SELECT callsign FROM sightings WHERE day = ? AND hex = ? AND device = ?",
+                    (day, furthest_this_poll.hex, device_label),
+                ).fetchone()
+                resolved_callsign = (
+                    resolved_row[0] if resolved_row and resolved_row[0] else furthest_this_poll.callsign
+                )
+                self._maybe_update_all_time(
+                    furthest_this_poll, device_label, now, callsign=resolved_callsign
+                )
 
             tracked_hexes = ",".join(sorted({s.hex for s in result.sightings}))
             self._conn.execute(
@@ -443,7 +459,12 @@ class AdsbStore:
                 )
 
     def _maybe_update_all_time(
-        self, sighting: AircraftSighting, device_label: str, now: float
+        self,
+        sighting: AircraftSighting,
+        device_label: str,
+        now: float,
+        *,
+        callsign: Optional[str] = None,
     ) -> None:
         row = self._conn.execute(
             "SELECT distance_nm FROM all_time_furthest WHERE id = 1"
@@ -462,7 +483,7 @@ class AdsbStore:
                 distance_nm = excluded.distance_nm,
                 seen_at = excluded.seen_at
             """,
-            (sighting.hex, sighting.callsign, device_label, sighting.distance_nm, now),
+            (sighting.hex, callsign if callsign is not None else sighting.callsign, device_label, sighting.distance_nm, now),
         )
 
     def prune(self, retention_days: int, *, now_day: dt.date) -> int:

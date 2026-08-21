@@ -154,14 +154,18 @@ def _format_count(value: int) -> str:
 
 
 def _catch_detail(catch: FurthestCatch, *, when: str) -> Optional[str]:
-    bits = [bit for bit in (catch.callsign, catch.device, when) if bit]
-    return " · ".join(bits) if bits else None
+    """Two-line caption: date/time on the first line, flight number and
+    receiver (whichever are known) on the second."""
+
+    id_bits = [bit for bit in (catch.callsign, catch.device) if bit]
+    lines = [line for line in (when, " · ".join(id_bits) if id_bits else None) if line]
+    return "\n".join(lines) if lines else None
 
 
 def _by_receiver_text(stats: DailyStats) -> str:
     labels = [device["label"] for device in config.ADSB_DEVICES] or sorted(stats.total_by_device)
     parts = [f"{label}: {stats.total_by_device.get(label, 0)}" for label in labels]
-    return " · ".join(parts) if parts else "--"
+    return "\n".join(parts) if parts else "--"
 
 
 def _status_text(stats: Optional[DailyStats]) -> str:
@@ -283,12 +287,13 @@ def _draw_stat_tile(
     caption_h = 0
     caption_font = None
     if caption:
+        caption_lines = caption.count("\n") + 1
         caption_font = fit_font(
             draw,
             caption,
             FONT_WEATHER_DETAILS_TINY,
             max_width=max_text_width,
-            max_height=max(9, int(height * 0.2)),
+            max_height=max(9, int(height * 0.2)) * caption_lines,
             min_pt=6,
             max_pt=FONT_WEATHER_DETAILS_TINY.size,
         )
