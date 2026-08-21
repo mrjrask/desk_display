@@ -123,52 +123,51 @@ def test_import_uses_smbus2_when_smbus_missing():
     assert mod.SMBus is _FakeSMBus
 
 
-def test_read_weather1_temp_uses_fetch_weather(monkeypatch):
+def test_read_weather1_payload_reads_display_status_file(monkeypatch):
     mod = _load_module()
 
-    fake = types.ModuleType("data_fetch")
-    fake.fetch_weather = lambda: {"current": {"temp": 68.4}}
-    monkeypatch.setitem(sys.modules, "data_fetch", fake)
+    monkeypatch.setattr(
+        mod,
+        "_read_display_status_payload",
+        lambda: {"weather": {"temp_f": 68.4, "condition": "clear sky"}},
+    )
 
     assert mod._read_weather1_temp_f() == 68.4
+    assert mod._LAST_WEATHER_CONDITION == "Clear Sky"
+    assert mod.read_weather_condition() == "Clear Sky"
 
 
-def test_read_weather1_temp_supports_legacy_get_weather_data(monkeypatch):
+def test_read_weather1_payload_does_not_call_data_fetch(monkeypatch):
+    """The OLED helper must never make its own weather API call; it only
+    reads the summary main.py already wrote to display_status.json."""
+
     mod = _load_module()
 
-    fake = types.ModuleType("data_fetch")
-    fake.get_weather_data = lambda: {"current": {"temp": "71"}}
-    monkeypatch.setitem(sys.modules, "data_fetch", fake)
-
-    assert mod._read_weather1_temp_f() == 71.0
-
-
-def test_read_weather1_temp_prefers_cached_weather_before_force_refresh(monkeypatch):
-    mod = _load_module()
-    calls = []
+    def _boom(*_args, **_kwargs):
+        raise AssertionError("OLED helper must not call data_fetch itself")
 
     fake = types.ModuleType("data_fetch")
-
-    def _fetch_weather(*, force_refresh=False):
-        calls.append(force_refresh)
-        return {"current": {"temp": 67.9}}
-
-    fake.fetch_weather = _fetch_weather
+    fake.fetch_weather = _boom
     monkeypatch.setitem(sys.modules, "data_fetch", fake)
+    monkeypatch.setattr(
+        mod,
+        "_read_display_status_payload",
+        lambda: {"weather": {"temp_f": 70.0, "condition": "windy"}},
+    )
 
-    assert mod._read_weather1_temp_f() == 67.9
-    assert calls == [False]
+    assert mod._read_weather1_temp_f() == 70.0
+    assert mod.read_weather_condition() == "Windy"
 
 
-def test_read_weather1_temp_returns_last_known_value_when_fetch_fails(monkeypatch):
+def test_read_weather1_temp_returns_last_known_value_when_status_missing_weather(monkeypatch):
     mod = _load_module()
     mod._LAST_WEATHER_TEMP_F = 72.2
+    mod._LAST_WEATHER_CONDITION = "Sunny"
 
-    fake = types.ModuleType("data_fetch")
-    fake.fetch_weather = lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("boom"))
-    monkeypatch.setitem(sys.modules, "data_fetch", fake)
+    monkeypatch.setattr(mod, "_read_display_status_payload", lambda: {})
 
     assert mod._read_weather1_temp_f() == 72.2
+    assert mod.read_weather_condition() == "Sunny"
 
 
 def test_read_temperature_uses_last_known_weather_value(monkeypatch):
@@ -180,31 +179,18 @@ def test_read_temperature_uses_last_known_weather_value(monkeypatch):
     assert mod.read_temperature() == "70°F"
 
 
-def test_read_weather1_temp_caches_condition_text(monkeypatch):
-    mod = _load_module()
-
-    fake = types.ModuleType("data_fetch")
-    fake.fetch_weather = lambda: {
-        "current": {"temp": 68.4, "weather": [{"description": "clear sky"}]}
-    }
-    monkeypatch.setitem(sys.modules, "data_fetch", fake)
-
-    assert mod._read_weather1_temp_f() == 68.4
-    assert mod._LAST_WEATHER_CONDITION == "Clear Sky"
-
-
 def test_read_weather_condition_returns_cached_value(monkeypatch):
     mod = _load_module()
-    monkeypatch.setattr(mod, "_read_weather1_temp_f", lambda: 68.4)
-    monkeypatch.setattr(mod, "_LAST_WEATHER_CONDITION", "Sunny")
+    monkeypatch.setattr(
+        mod, "_read_weather1_payload", lambda: (68.4, "Sunny")
+    )
 
     assert mod.read_weather_condition() == "Sunny"
 
 
 def test_read_weather_condition_defaults_to_empty_string(monkeypatch):
     mod = _load_module()
-    monkeypatch.setattr(mod, "_read_weather1_temp_f", lambda: None)
-    monkeypatch.setattr(mod, "_LAST_WEATHER_CONDITION", None)
+    monkeypatch.setattr(mod, "_read_weather1_payload", lambda: (None, None))
 
     assert mod.read_weather_condition() == ""
 
@@ -248,26 +234,6 @@ def test_weather2_gate_disabled_for_non_weather_sources(monkeypatch):
     assert mod._weather2_screen_has_rendered() is True
 
 
-def test_render_weather_panel_draws_temp_and_condition():
-    mod = _load_module()
-
-    image = mod.render_weather_panel(
-        mod.OLED_WIDTH, mod.OLED_HEIGHT, temp_text="72°F", condition_text="Sunny"
-    )
-
-    assert image.size == (mod.OLED_WIDTH, mod.OLED_HEIGHT)
-    assert image.getbbox() is not None
-
-
-def test_render_weather_panel_without_condition_still_renders():
-    mod = _load_module()
-
-    image = mod.render_weather_panel(mod.OLED_WIDTH, mod.OLED_HEIGHT, temp_text="72°F")
-
-    assert image.size == (mod.OLED_WIDTH, mod.OLED_HEIGHT)
-    assert image.getbbox() is not None
-
-
 def test_render_idle_panel_dispatches_by_content_id(monkeypatch):
     mod = _load_module()
 
@@ -277,35 +243,55 @@ def test_render_idle_panel_dispatches_by_content_id(monkeypatch):
     monkeypatch.setattr(mod, "read_weather_condition", lambda: "Sunny")
 
     calls = {}
+
+    def _capture_centered_text(_w, _h, text, *, title=None, value_font_size=None):
+        calls[title] = text
+        return object()
+
     monkeypatch.setattr(
         mod,
         "render_centered_text",
-        lambda *_a, **kw: calls.setdefault("date", kw.get("title")) or object(),
+        _capture_centered_text,
     )
     monkeypatch.setattr(
         mod,
         "render_centered_time_text",
-        lambda *_a, **kw: calls.setdefault("time", kw.get("title")) or object(),
-    )
-    monkeypatch.setattr(
-        mod,
-        "render_weather_panel",
-        lambda *_a, **kw: calls.setdefault(
-            "weather", (kw.get("temp_text"), kw.get("condition_text"))
-        )
-        or object(),
+        lambda *_a, **kw: calls.setdefault("Time", kw.get("title")) or object(),
     )
 
     mod._render_idle_panel("date")
     mod._render_idle_panel("time")
-    mod._render_idle_panel("weather")
+    mod._render_idle_panel("temp")
+    mod._render_idle_panel("condition")
 
-    assert calls["date"] == "Date"
-    assert calls["time"] == "Time"
-    assert calls["weather"] == ("72°F", "Sunny")
+    assert calls["Date"] == "11/18/26"
+    assert calls["Time"] == "Time"
+    assert calls["Temp"] == "72°F"
+    assert calls["Now"] == "Sunny"
 
 
-def test_main_rotates_through_date_time_and_weather(monkeypatch):
+def test_render_idle_panel_falls_back_to_placeholder_when_weather_missing(monkeypatch):
+    mod = _load_module()
+
+    monkeypatch.setattr(mod, "read_temperature", lambda: "")
+    monkeypatch.setattr(mod, "read_weather_condition", lambda: "")
+
+    calls = {}
+
+    def _capture_centered_text(_w, _h, text, *, title=None, value_font_size=None):
+        calls[title] = text
+        return object()
+
+    monkeypatch.setattr(mod, "render_centered_text", _capture_centered_text)
+
+    mod._render_idle_panel("temp")
+    mod._render_idle_panel("condition")
+
+    assert calls["Temp"] == "--"
+    assert calls["Now"] == "--"
+
+
+def test_main_rotates_between_date_time_and_temp_condition_pairs(monkeypatch):
     mod = _load_module()
 
     bus = _FakeSMBus()
@@ -359,8 +345,8 @@ def test_main_rotates_through_date_time_and_weather(monkeypatch):
     assert rc == 0
     assert seen_pairs == [
         ["date", "time"],
-        ["time", "weather"],
-        ["weather", "date"],
+        ["temp", "condition"],
+        ["date", "time"],
     ]
 
 
