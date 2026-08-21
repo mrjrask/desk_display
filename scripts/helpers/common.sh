@@ -203,6 +203,13 @@ EOF
 # up any leftover per-user unit from a prior install: left in place, it
 # would start a second display loop racing the same panel as the system
 # service (flicker, stuck screens).
+#
+# Before the unit was renamed for consistency with the system-wide service,
+# the per-user unit was named desk_display-kernel.service, so that legacy
+# name is always checked too, in addition to whatever current name is passed
+# in, to catch installs from before that rename.
+LEGACY_KERNEL_USER_SERVICE_NAME="desk_display-kernel.service"
+
 disable_legacy_kernel_user_service() {
   local service_user="$1"
   local service_name="${2:-desk_display.service}"
@@ -217,14 +224,10 @@ disable_legacy_kernel_user_service() {
     home_dir="/home/$service_user"
   fi
 
-  local user_unit_path="$home_dir/.config/systemd/user/$service_name"
-  local wants_link="$home_dir/.config/systemd/user/default.target.wants/$service_name"
-
-  if [[ ! -e "$user_unit_path" && ! -e "$wants_link" && ! -L "$wants_link" ]]; then
-    return 0
+  local -a legacy_names=("$service_name")
+  if [[ "$service_name" != "$LEGACY_KERNEL_USER_SERVICE_NAME" ]]; then
+    legacy_names+=("$LEGACY_KERNEL_USER_SERVICE_NAME")
   fi
-
-  log "Found a legacy per-user $service_name from an older install; disabling it."
 
   local uid runtime_dir
   uid=$(id -u "$service_user" 2>/dev/null || true)
@@ -240,14 +243,26 @@ disable_legacy_kernel_user_service() {
     fi
   fi
 
-  if [[ -n "${SUDO:-}" ]]; then
-    $SUDO -u "$service_user" env "${systemctl_env[@]}" systemctl --user disable --now "$service_name" >/dev/null 2>&1 || true
-    $SUDO rm -f "$user_unit_path" "$wants_link"
-  else
-    env "${systemctl_env[@]}" systemctl --user disable --now "$service_name" >/dev/null 2>&1 || true
-    rm -f "$user_unit_path" "$wants_link"
-  fi
-  log "Removed legacy per-user $service_name for $service_user."
+  local name user_unit_path wants_link
+  for name in "${legacy_names[@]}"; do
+    user_unit_path="$home_dir/.config/systemd/user/$name"
+    wants_link="$home_dir/.config/systemd/user/default.target.wants/$name"
+
+    if [[ ! -e "$user_unit_path" && ! -e "$wants_link" && ! -L "$wants_link" ]]; then
+      continue
+    fi
+
+    log "Found a legacy per-user $name from an older install; disabling it."
+
+    if [[ -n "${SUDO:-}" ]]; then
+      $SUDO -u "$service_user" env "${systemctl_env[@]}" systemctl --user disable --now "$name" >/dev/null 2>&1 || true
+      $SUDO rm -f "$user_unit_path" "$wants_link"
+    else
+      env "${systemctl_env[@]}" systemctl --user disable --now "$name" >/dev/null 2>&1 || true
+      rm -f "$user_unit_path" "$wants_link"
+    fi
+    log "Removed legacy per-user $name for $service_user."
+  done
 }
 
 detect_existing_venv() {

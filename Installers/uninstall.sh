@@ -5,6 +5,10 @@ log() { printf '[INFO] %s\n' "$*"; }
 warn() { printf '[WARN] %s\n' "$*"; }
 
 SERVICE_NAME="desk_display.service"
+# Pre-rename name of the per-user kernel-mode unit (see
+# disable_legacy_kernel_user_service in common.sh); still checked for so
+# installs from before the rename get cleaned up too.
+LEGACY_KERNEL_USER_SERVICE_NAME="desk_display-kernel.service"
 CONFIG_UI_SERVICE_NAME="config_ui_desk_display.service"
 WAVESHARE_OLED_SERVICE_NAME="desk_display_waveshare_oled.service"
 WAVESHARE_FBCP_SERVICE_NAME="waveshare-fbcp.service"
@@ -153,9 +157,11 @@ fi
 
 # Fall back to scanning every home directory for a legacy per-user unit
 # (older installs ran kernel-mode output as `systemctl --user`); this is
-# what catches the case above (root with no SUDO_USER).
+# what catches the case above (root with no SUDO_USER). Older installs also
+# named the per-user unit desk_display-kernel.service before it was renamed
+# to match the system-wide unit, so check both names.
 if [[ -d /home ]]; then
-  for candidate_unit in /home/*/.config/systemd/user/"$SERVICE_NAME"; do
+  for candidate_unit in /home/*/.config/systemd/user/"$SERVICE_NAME" /home/*/.config/systemd/user/"$LEGACY_KERNEL_USER_SERVICE_NAME"; do
     [[ -e "$candidate_unit" ]] || continue
     candidate_home="${candidate_unit%/.config/systemd/user/*}"
     add_kernel_service_user "$(basename -- "$candidate_home")"
