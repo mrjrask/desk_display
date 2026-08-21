@@ -2,16 +2,16 @@
 """Render simple status content on the Waveshare OLED/LCD HAT (A) OLED displays.
 
 Default behavior (when no Cubs/Blackhawks game is in progress or recently
-final): the two OLEDs rotate through date, time, and current weather
-(temperature + conditions), swapping which pair is shown on a random
-interval so all three eventually appear.
+final): the two OLEDs alternate, on a random interval, between a date/time
+pair and a temperature/condition pair. The weather values are read from the
+same display heartbeat file (display_status.json) that the main display's
+weather screens already populate, so this helper never makes its own
+external weather API call.
 """
 
 from __future__ import annotations
 
 import contextlib
-import importlib
-import importlib.util
 import json
 import logging
 import os
@@ -19,7 +19,6 @@ import random
 import re
 import signal
 import subprocess
-import sys
 import time
 from collections.abc import Callable
 from datetime import datetime
@@ -247,88 +246,38 @@ def _read_cpu_temp_c() -> float | None:
         return None
 
 
-def _read_weather1_temp_f() -> float | None:
+def _read_weather1_payload() -> tuple[float | None, str | None]:
+    """Read the current temperature/condition from the display heartbeat file.
+
+    This intentionally never calls out to the weather API itself: main.py
+    already fetches and caches weather data for the weather screens and
+    writes a summary of it into display_status.json on every render, so the
+    OLED helper just reads that shared file instead of duplicating the
+    network call.
+    """
+
     global _LAST_WEATHER_TEMP_F, _LAST_WEATHER_CONDITION
 
-    def _resolve_fetch_weather():
+    payload = _read_display_status_payload()
+    weather = payload.get("weather") if isinstance(payload, dict) else None
+    if isinstance(weather, dict):
+        temp_f = weather.get("temp_f")
         try:
-            module = importlib.import_module("data_fetch")
-            fetch_weather = getattr(module, "fetch_weather", None)
-            if callable(fetch_weather):
-                return fetch_weather
-            legacy = getattr(module, "get_weather_data", None)
-            if callable(legacy):
-                return legacy
-        except Exception:
+            if temp_f is not None:
+                _LAST_WEATHER_TEMP_F = float(temp_f)
+        except (TypeError, ValueError):
             pass
 
-        repo_root = Path(__file__).resolve().parents[1]
-        module_path = repo_root / "data_fetch.py"
-        if not module_path.exists():
-            return None
+        condition = weather.get("condition")
+        if isinstance(condition, str) and condition.strip():
+            _LAST_WEATHER_CONDITION = condition.strip().title()
 
-        spec = importlib.util.spec_from_file_location("data_fetch", module_path)
-        if spec is None or spec.loader is None:
-            return None
+    return _LAST_WEATHER_TEMP_F, _LAST_WEATHER_CONDITION
 
-        module = importlib.util.module_from_spec(spec)
-        sys.modules.setdefault("data_fetch", module)
-        try:
-            spec.loader.exec_module(module)
-        except Exception:
-            return None
 
-        fetch_weather = getattr(module, "fetch_weather", None)
-        if callable(fetch_weather):
-            return fetch_weather
-        legacy = getattr(module, "get_weather_data", None)
-        return legacy if callable(legacy) else None
-
-    fetch_weather = _resolve_fetch_weather()
-    if fetch_weather is None:
-        return _LAST_WEATHER_TEMP_F
-
-    def _fetch_weather_payload(force_refresh: bool):
-        try:
-            return fetch_weather(force_refresh=force_refresh)
-        except TypeError:
-            # Backward compatibility for older data_fetch modules.
-            if force_refresh:
-                return None
-            return fetch_weather()
-
-    try:
-        # Prefer cached weather to avoid API rate limits and transient misses on
-        # the OLED loop cadence.
-        weather = _fetch_weather_payload(force_refresh=False)
-        if weather is None:
-            weather = _fetch_weather_payload(force_refresh=True)
-    except Exception:
-        return _LAST_WEATHER_TEMP_F
-
-    if not isinstance(weather, dict):
-        return _LAST_WEATHER_TEMP_F
-
-    current = weather.get("current")
-    if not isinstance(current, dict):
-        return _LAST_WEATHER_TEMP_F
-
-    weather_list = current.get("weather")
-    if isinstance(weather_list, list) and weather_list and isinstance(weather_list[0], dict):
-        description = weather_list[0].get("description")
-        if isinstance(description, str) and description.strip():
-            _LAST_WEATHER_CONDITION = description.strip().title()
-
-    temp_f = (
-        current.get("temp")
-        or current.get("temp_f")
-        or current.get("temperature")
-    )
-    try:
-        _LAST_WEATHER_TEMP_F = float(temp_f)
-        return _LAST_WEATHER_TEMP_F
-    except (TypeError, ValueError):
-        return _LAST_WEATHER_TEMP_F
+def _read_weather1_temp_f() -> float | None:
+    temp_f, _condition = _read_weather1_payload()
+    return temp_f
 
 
 def _display_status_path() -> Path:
@@ -797,8 +746,8 @@ def read_temperature() -> str:
 def read_weather_condition() -> str:
     """Return the current weather conditions text (e.g. "Sunny"), if known."""
 
-    _read_weather1_temp_f()
-    return _LAST_WEATHER_CONDITION or ""
+    _temp_f, condition = _read_weather1_payload()
+    return condition or ""
 
 
 def current_time_12h() -> str:
@@ -1047,62 +996,17 @@ def render_centered_time_text(
     return image
 
 
-def render_weather_panel(
-    width: int,
-    height: int,
-    *,
-    temp_text: str,
-    condition_text: str = "",
-    title: str | None = "Weather",
-) -> Image.Image:
-    image = Image.new("1", (width, height), 0)
-    draw = ImageDraw.Draw(image)
-    title_font = ImageFont.load_default()
-
-    y_offset = 0
-    if title:
-        title_bbox = draw.textbbox((0, 0), title, font=title_font)
-        title_w = title_bbox[2] - title_bbox[0]
-        title_h = title_bbox[3] - title_bbox[1]
-        draw.text(((width - title_w) // 2, 2), title, font=title_font, fill=255)
-        y_offset = title_h + 6
-
-    top_margin = max(2, y_offset)
-
-    condition_font = None
-    condition_reserved = 0
-    if condition_text:
-        condition_font_size = max(8, min(16, _best_value_font_size(width - 8, 20, condition_text, 0)))
-        condition_font = _load_value_font(condition_font_size)
-        condition_bbox = draw.textbbox((0, 0), condition_text, font=condition_font)
-        condition_reserved = (condition_bbox[3] - condition_bbox[1]) + 4
-
-    available_height = max(10, height - top_margin - condition_reserved - 2)
-    temp_font_size = _best_value_font_size(width, top_margin + available_height, temp_text, top_margin)
-    temp_font = _load_value_font(temp_font_size)
-    temp_bbox = draw.textbbox((0, 0), temp_text, font=temp_font)
-    temp_w = temp_bbox[2] - temp_bbox[0]
-    temp_h = temp_bbox[3] - temp_bbox[1]
-    temp_x = (width - temp_w) // 2
-    temp_y = top_margin + max(0, (available_height - temp_h) // 2)
-    draw.text((temp_x, temp_y), temp_text, font=temp_font, fill=255)
-
-    if condition_text and condition_font is not None:
-        condition_bbox = draw.textbbox((0, 0), condition_text, font=condition_font)
-        condition_w = condition_bbox[2] - condition_bbox[0]
-        condition_h = condition_bbox[3] - condition_bbox[1]
-        condition_x = max(0, (width - condition_w) // 2)
-        condition_y = max(0, height - condition_h - 2)
-        draw.text((condition_x, condition_y), condition_text, font=condition_font, fill=255)
-
-    return image
-
-
-IDLE_PANEL_CONTENT = ("date", "time", "weather")
+# Each pair is shown together: whenever the temperature is on one OLED, the
+# current condition text is always shown on the other OLED, and likewise for
+# date/time.
+IDLE_PANEL_PAIRS: tuple[tuple[str, str], ...] = (
+    ("date", "time"),
+    ("temp", "condition"),
+)
 
 
 def _render_idle_panel(content_id: str) -> Image.Image:
-    """Render one of the idle-rotation panels (date, time, or weather)."""
+    """Render one of the idle-rotation panels (date, time, temp, or condition)."""
 
     if content_id == "date":
         date_text = current_date_mdy()
@@ -1132,13 +1036,31 @@ def _render_idle_panel(content_id: str) -> Image.Image:
             value_font_size=time_value_font_size,
         )
 
+    if content_id == "condition":
+        condition_text = read_weather_condition() or "--"
+        condition_top_margin = _title_top_margin(OLED_WIDTH, "Now")
+        condition_value_font_size = _best_value_font_size(
+            OLED_WIDTH, OLED_HEIGHT, condition_text, condition_top_margin
+        )
+        return render_centered_text(
+            OLED_WIDTH,
+            OLED_HEIGHT,
+            condition_text,
+            title="Now",
+            value_font_size=condition_value_font_size,
+        )
+
     temp_text = read_temperature() or "--"
-    condition_text = read_weather_condition()
-    return render_weather_panel(
+    temp_top_margin = _title_top_margin(OLED_WIDTH, "Temp")
+    temp_value_font_size = _best_value_font_size(
+        OLED_WIDTH, OLED_HEIGHT, temp_text, temp_top_margin
+    )
+    return render_centered_text(
         OLED_WIDTH,
         OLED_HEIGHT,
-        temp_text=temp_text,
-        condition_text=condition_text,
+        temp_text,
+        title="Temp",
+        value_font_size=temp_value_font_size,
     )
 
 
@@ -1193,7 +1115,7 @@ def main() -> int:
     temp_display.clear()
     time_display.clear()
 
-    idle_panel_offset = 0
+    idle_pair_offset = 0
     next_swap_at = time.monotonic() + random_swap_interval_seconds()
     try:
         while not _STOP_EVENT.is_set():
@@ -1201,9 +1123,7 @@ def main() -> int:
             if sports_frames is not None:
                 left_image, right_image = sports_frames
             else:
-                panel_count = len(IDLE_PANEL_CONTENT)
-                left_content = IDLE_PANEL_CONTENT[idle_panel_offset % panel_count]
-                right_content = IDLE_PANEL_CONTENT[(idle_panel_offset + 1) % panel_count]
+                left_content, right_content = IDLE_PANEL_PAIRS[idle_pair_offset % len(IDLE_PANEL_PAIRS)]
                 left_image = _render_idle_panel(left_content)
                 right_image = _render_idle_panel(right_content)
             if _github_updates_available():
@@ -1223,7 +1143,7 @@ def main() -> int:
                     LOGGER.warning("OLED reinitialization failed: %s", exc)
 
             if sports_frames is None and time.monotonic() >= next_swap_at:
-                idle_panel_offset = (idle_panel_offset + 1) % len(IDLE_PANEL_CONTENT)
+                idle_pair_offset = (idle_pair_offset + 1) % len(IDLE_PANEL_PAIRS)
                 next_swap_at = time.monotonic() + random_swap_interval_seconds()
 
             _STOP_EVENT.wait(REFRESH_SECONDS)
