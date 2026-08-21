@@ -471,6 +471,29 @@ except (TypeError, ValueError):
     ADSB_RETENTION_DAYS = 7
 ENABLE_ADSB = bool(ADSB_DEVICES)
 
+# Most dump1090-fa/readsb receivers never populate aircraft.json's "t" (type)
+# field unless the operator has separately configured a `--db-file` aircraft
+# database — tar1090's web map looks up type client-side from its own bundled
+# database, entirely independent of that field, which is why it shows a type
+# for nearly every aircraft while a bare aircraft.json usually doesn't. To
+# match that experience, the collector maintains its own local copy of the
+# same aircraft database (hex -> ICAO type) and fills in whatever aircraft.json
+# didn't provide. See services/aircraft_type_db.py.
+ADSB_TYPE_DB_ENABLED = os.environ.get("ADSB_TYPE_DB_ENABLED", "true").strip().lower() not in {
+    "0",
+    "false",
+    "no",
+    "off",
+}
+ADSB_TYPE_DB_URL = os.environ.get(
+    "ADSB_TYPE_DB_URL",
+    "https://raw.githubusercontent.com/wiedehopf/tar1090-db/csv/aircraft.csv.gz",
+).strip()
+try:
+    ADSB_TYPE_DB_REFRESH_DAYS = int(os.environ.get("ADSB_TYPE_DB_REFRESH_DAYS", "30"))
+except (TypeError, ValueError):
+    ADSB_TYPE_DB_REFRESH_DAYS = 30
+
 # ─── News headlines ticker ──────────────────────────────────────────────────
 # Feed sources (name + URL) live in news_feeds.json, not here — see
 # paths.resolve_news_feeds_config_path(). These knobs only tune behavior.

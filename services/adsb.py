@@ -15,11 +15,12 @@ import datetime as dt
 import math
 import sqlite3
 import threading
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Any, Optional
 
 from paths import resolve_cache_file_path
+from services import aircraft_type_db
 from services.http_client import http_get
 
 EARTH_RADIUS_NM = 3440.065
@@ -224,6 +225,21 @@ def _parse_aircraft(
     return sightings
 
 
+def _fill_missing_types(sightings: list[AircraftSighting]) -> list[AircraftSighting]:
+    """Fall back to the local aircraft type database for sightings whose
+    aircraft.json entry didn't carry a ``"t"`` field (see
+    ``services/aircraft_type_db.py`` -- most receivers never populate it)."""
+
+    filled = []
+    for sighting in sightings:
+        if sighting.aircraft_type is None:
+            looked_up = aircraft_type_db.lookup(sighting.hex)
+            if looked_up is not None:
+                sighting = replace(sighting, aircraft_type=looked_up)
+        filled.append(sighting)
+    return filled
+
+
 def _extract_messages_total(stats_payload: Any) -> Optional[int]:
     if not isinstance(stats_payload, dict):
         return None
@@ -320,8 +336,10 @@ def poll_device(
     _working_path_index[device.host] = path_index
 
     sightings = tuple(
-        _parse_aircraft(
-            aircraft_payload.get("aircraft"), home_lat=home_lat, home_lon=home_lon, unit=unit
+        _fill_missing_types(
+            _parse_aircraft(
+                aircraft_payload.get("aircraft"), home_lat=home_lat, home_lon=home_lon, unit=unit
+            )
         )
     )
     stats_path = _STATS_JSON_PATHS[path_index]
