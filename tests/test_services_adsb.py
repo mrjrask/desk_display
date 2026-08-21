@@ -257,6 +257,117 @@ def test_currently_tracked_reflects_latest_poll_snapshot(tmp_path):
     assert stats.currently_tracked_combined == 2  # deduped across devices
 
 
+def test_currently_tracked_by_model_dedupes_and_buckets_unknown(tmp_path):
+    store = _store(tmp_path)
+    device_a = AdsbDevice(host="1.2.3.4", label="Receiver 1")
+    device_b = AdsbDevice(host="1.2.3.5", label="Receiver 2")
+    day = "2026-08-17"
+
+    shared = AircraftSighting(
+        hex="aaa111", callsign=None, distance_nm=None, altitude_ft=None, aircraft_type="B738"
+    )
+    known = AircraftSighting(
+        hex="bbb222", callsign=None, distance_nm=None, altitude_ft=None, aircraft_type="A320"
+    )
+    no_type = AircraftSighting(hex="ccc333", callsign=None, distance_nm=None, altitude_ft=None)
+
+    store.record_poll(
+        PollResult(device=device_a, ok=True, error=None, sightings=(shared, no_type)),
+        now=1000.0,
+        day=day,
+    )
+    store.record_poll(
+        PollResult(device=device_b, ok=True, error=None, sightings=(shared, known)),
+        now=1001.0,
+        day=day,
+    )
+
+    stats = store.compute_daily_stats(day=day, tz=UTC)
+    assert stats.currently_tracked_by_model == {"B738": 1, "A320": 1, "Unknown": 1}
+
+
+def test_all_time_furthest_picks_up_callsign_learned_in_an_earlier_poll(tmp_path):
+    """A poll that sets a new all-time distance record doesn't always carry
+    the aircraft's callsign (ID messages arrive less often than position
+    reports). If an earlier poll today already learned that aircraft's
+    callsign, the all-time record should use it instead of overwriting with
+    blank."""
+
+    store = _store(tmp_path)
+    device = AdsbDevice(host="1.2.3.4", label="Receiver 1")
+    day = "2026-08-17"
+
+    # First distance report for this aircraft: below the eventual all-time
+    # best and with no callsign yet.
+    first_seen = AircraftSighting(hex="aaa111", callsign=None, distance_nm=90.0, altitude_ft=35000)
+    store.record_poll(
+        PollResult(device=device, ok=True, error=None, sightings=(first_seen,)),
+        now=1000.0,
+        day=day,
+    )
+    stats = store.compute_daily_stats(day=day, tz=UTC)
+    assert stats.all_time_furthest.callsign is None
+
+    # A later poll (no distance report this cycle) learns the callsign.
+    identified = AircraftSighting(hex="aaa111", callsign="UAL456", distance_nm=None, altitude_ft=None)
+    store.record_poll(
+        PollResult(device=device, ok=True, error=None, sightings=(identified,)),
+        now=1001.0,
+        day=day,
+    )
+
+    # A subsequent poll sets a new all-time record for the same aircraft,
+    # but this specific message didn't repeat the callsign.
+    new_record = AircraftSighting(hex="aaa111", callsign=None, distance_nm=95.0, altitude_ft=36000)
+    store.record_poll(
+        PollResult(device=device, ok=True, error=None, sightings=(new_record,)),
+        now=1002.0,
+        day=day,
+    )
+
+    stats2 = store.compute_daily_stats(day=day, tz=UTC)
+    assert stats2.all_time_furthest.distance_nm == 95.0
+    assert stats2.all_time_furthest.callsign == "UAL456"
+
+
+def test_opening_a_pre_existing_db_adds_missing_tracked_types_column(tmp_path):
+    """Older on-device databases were created before ``tracked_types``
+    existed; opening the store should migrate them in place rather than
+    erroring on the first record_poll/compute_daily_stats call."""
+
+    import sqlite3
+
+    db_path = tmp_path / "legacy.db"
+    conn = sqlite3.connect(str(db_path))
+    conn.execute(
+        """
+        CREATE TABLE device_status (
+            device TEXT PRIMARY KEY,
+            last_poll_at REAL,
+            online INTEGER NOT NULL DEFAULT 0,
+            error TEXT,
+            tracked_hexes TEXT,
+            messages_total INTEGER
+        )
+        """
+    )
+    conn.commit()
+    conn.close()
+
+    store = AdsbStore(db_path=str(db_path))
+    device = AdsbDevice(host="1.2.3.4", label="Receiver 1")
+    sighting = AircraftSighting(
+        hex="aaa111", callsign=None, distance_nm=None, altitude_ft=None, aircraft_type="B738"
+    )
+    store.record_poll(
+        PollResult(device=device, ok=True, error=None, sightings=(sighting,)),
+        now=1000.0,
+        day="2026-08-17",
+    )
+    stats = store.compute_daily_stats(day="2026-08-17", tz=UTC)
+    assert stats.currently_tracked_by_model == {"B738": 1}
+
+
 def test_prune_removes_old_sightings_but_keeps_all_time_record(tmp_path):
     store = _store(tmp_path)
     device = AdsbDevice(host="1.2.3.4", label="Receiver 1")

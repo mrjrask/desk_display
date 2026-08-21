@@ -63,7 +63,8 @@ CREATE TABLE IF NOT EXISTS device_status (
     online INTEGER NOT NULL DEFAULT 0,
     error TEXT,
     tracked_hexes TEXT,
-    messages_total INTEGER
+    messages_total INTEGER,
+    tracked_types TEXT
 );
 
 CREATE TABLE IF NOT EXISTS message_baseline (
@@ -100,6 +101,7 @@ class AircraftSighting:
     callsign: Optional[str]
     distance_nm: Optional[float]
     altitude_ft: Optional[int]
+    aircraft_type: Optional[str] = None
 
 
 @dataclass(frozen=True)
@@ -140,6 +142,7 @@ class DailyStats:
     device_online: dict[str, bool]
     all_time_furthest: Optional[FurthestCatch]
     device_errors: dict[str, str] = field(default_factory=dict)
+    currently_tracked_by_model: dict[str, int] = field(default_factory=dict)
 
 
 def haversine_distance(
@@ -195,6 +198,10 @@ def _parse_aircraft(
 
         altitude = _parse_altitude(entry.get("alt_baro", entry.get("alt_geom")))
 
+        type_raw = entry.get("t")
+        aircraft_type = type_raw.strip() if isinstance(type_raw, str) else None
+        aircraft_type = aircraft_type or None
+
         distance = None
         lat, lon = entry.get("lat"), entry.get("lon")
         if (
@@ -211,6 +218,7 @@ def _parse_aircraft(
                 callsign=callsign,
                 distance_nm=distance,
                 altitude_ft=altitude,
+                aircraft_type=aircraft_type,
             )
         )
     return sightings
@@ -339,6 +347,16 @@ class AdsbStore:
             self._conn.execute("PRAGMA journal_mode=WAL")
         with self._lock, self._conn:
             self._conn.executescript(_SCHEMA_SQL)
+            self._ensure_column("device_status", "tracked_types", "TEXT")
+
+    def _ensure_column(self, table: str, column: str, coltype: str) -> None:
+        """Add *column* to *table* if it's missing (for DBs created by an
+        older schema version — ``CREATE TABLE IF NOT EXISTS`` doesn't alter
+        existing tables)."""
+
+        existing = {row[1] for row in self._conn.execute(f"PRAGMA table_info({table})")}
+        if column not in existing:
+            self._conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {coltype}")
 
     def close(self) -> None:
         with self._lock:
@@ -415,22 +433,43 @@ class AdsbStore:
                 default=None,
             )
             if furthest_this_poll is not None:
-                self._maybe_update_all_time(furthest_this_poll, device_label, now)
+                # sighting.callsign is only what this single poll saw; the
+                # sightings row just upserted above may already carry a
+                # callsign learned from an earlier or later poll today
+                # (COALESCE'd in). Prefer that so an all-time record doesn't
+                # permanently lock in a blank flight number just because the
+                # farthest-distance poll happened to arrive before the
+                # aircraft's identification message.
+                resolved_row = self._conn.execute(
+                    "SELECT callsign FROM sightings WHERE day = ? AND hex = ? AND device = ?",
+                    (day, furthest_this_poll.hex, device_label),
+                ).fetchone()
+                resolved_callsign = (
+                    resolved_row[0] if resolved_row and resolved_row[0] else furthest_this_poll.callsign
+                )
+                self._maybe_update_all_time(
+                    furthest_this_poll, device_label, now, callsign=resolved_callsign
+                )
 
             tracked_hexes = ",".join(sorted({s.hex for s in result.sightings}))
+            tracked_types = ",".join(
+                sorted(f"{s.hex}:{s.aircraft_type}" for s in result.sightings if s.aircraft_type)
+            )
             self._conn.execute(
                 """
                 INSERT INTO device_status (
-                    device, last_poll_at, online, error, tracked_hexes, messages_total
-                ) VALUES (?, ?, 1, NULL, ?, ?)
+                    device, last_poll_at, online, error, tracked_hexes, messages_total,
+                    tracked_types
+                ) VALUES (?, ?, 1, NULL, ?, ?, ?)
                 ON CONFLICT(device) DO UPDATE SET
                     last_poll_at = excluded.last_poll_at,
                     online = 1,
                     error = NULL,
                     tracked_hexes = excluded.tracked_hexes,
-                    messages_total = COALESCE(excluded.messages_total, device_status.messages_total)
+                    messages_total = COALESCE(excluded.messages_total, device_status.messages_total),
+                    tracked_types = excluded.tracked_types
                 """,
-                (device_label, now, tracked_hexes, result.messages_total),
+                (device_label, now, tracked_hexes, result.messages_total, tracked_types),
             )
 
             if result.messages_total is not None:
@@ -443,7 +482,12 @@ class AdsbStore:
                 )
 
     def _maybe_update_all_time(
-        self, sighting: AircraftSighting, device_label: str, now: float
+        self,
+        sighting: AircraftSighting,
+        device_label: str,
+        now: float,
+        *,
+        callsign: Optional[str] = None,
     ) -> None:
         row = self._conn.execute(
             "SELECT distance_nm FROM all_time_furthest WHERE id = 1"
@@ -462,7 +506,7 @@ class AdsbStore:
                 distance_nm = excluded.distance_nm,
                 seen_at = excluded.seen_at
             """,
-            (sighting.hex, sighting.callsign, device_label, sighting.distance_nm, now),
+            (sighting.hex, callsign if callsign is not None else sighting.callsign, device_label, sighting.distance_nm, now),
         )
 
     def prune(self, retention_days: int, *, now_day: dt.date) -> int:
@@ -487,7 +531,10 @@ class AdsbStore:
                 (day,),
             ).fetchall()
             device_rows = self._conn.execute(
-                "SELECT device, online, error, tracked_hexes, messages_total FROM device_status"
+                """
+                SELECT device, online, error, tracked_hexes, messages_total, tracked_types
+                FROM device_status
+                """
             ).fetchall()
             baseline_rows = self._conn.execute(
                 "SELECT device, baseline FROM message_baseline WHERE day = ?", (day,)
@@ -561,7 +608,8 @@ class AdsbStore:
         currently_tracked_by_device: dict[str, int] = {}
         all_current_hexes: set[str] = set()
         messages_total_by_device: dict[str, int] = {}
-        for device, online, error, tracked_hexes, messages_total in device_rows:
+        type_by_hex: dict[str, str] = {}
+        for device, online, error, tracked_hexes, messages_total, tracked_types in device_rows:
             device_online[device] = bool(online)
             if error:
                 device_errors[device] = error
@@ -570,6 +618,15 @@ class AdsbStore:
             all_current_hexes |= hexes
             if messages_total is not None:
                 messages_total_by_device[device] = messages_total
+            for pair in (tracked_types or "").split(","):
+                hex_id, sep, aircraft_type = pair.partition(":")
+                if sep and hex_id and aircraft_type:
+                    type_by_hex[hex_id] = aircraft_type
+
+        currently_tracked_by_model: dict[str, int] = {}
+        for hex_id in all_current_hexes:
+            model = type_by_hex.get(hex_id, "Unknown")
+            currently_tracked_by_model[model] = currently_tracked_by_model.get(model, 0) + 1
 
         baseline_by_device = dict(baseline_rows)
         messages_today_by_device: dict[str, int] = {}
@@ -604,6 +661,7 @@ class AdsbStore:
             device_online=device_online,
             all_time_furthest=all_time_furthest,
             device_errors=device_errors,
+            currently_tracked_by_model=currently_tracked_by_model,
         )
 
 

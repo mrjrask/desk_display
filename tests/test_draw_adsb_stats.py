@@ -1,11 +1,13 @@
 from PIL import Image, ImageDraw
 
 import config
+import screens.draw_adsb_stats as draw_adsb_stats_module
 from screens.draw_adsb_stats import (
     _activity_color,
     _build_tiles,
     _fit_text,
     _hour_range_label,
+    _live_now_breakdown_lines,
     _status_text,
     _tile_grid_cells,
     draw_adsb_stats_screen,
@@ -133,6 +135,44 @@ def test_build_tiles_caps_extras_at_two():
     labels = [tile["label"] for tile in tiles]
     assert "All-Time Best" in labels
     assert "Live Now" in labels  # next-highest priority extra
+
+
+def test_live_now_breakdown_lines_sorts_and_folds_overflow_into_other():
+    counts = {"B738": 5, "A320": 8, "E170": 2, "CRJ7": 1, "C172": 1}
+    lines = _live_now_breakdown_lines(counts, max_lines=3)
+    assert lines == ["A320: 8", "B738: 5", "Other: 4"]  # E170 + CRJ7 + C172
+
+
+def test_live_now_breakdown_lines_empty_when_no_models():
+    assert _live_now_breakdown_lines({}) == []
+
+
+def test_build_tiles_live_now_toggles_between_count_and_breakdown(monkeypatch):
+    stats = _stats(
+        currently_tracked_combined=5, currently_tracked_by_model={"B738": 3, "A320": 2}
+    )
+
+    monkeypatch.setattr(draw_adsb_stats_module.time, "time", lambda: 0.0)
+    count_tile = next(t for t in _build_tiles(stats) if t["label"] == "Live Now")
+    assert count_tile["value"] == "5"
+    assert count_tile["caption"] == "aircraft in range"
+
+    monkeypatch.setattr(
+        draw_adsb_stats_module.time, "time", lambda: draw_adsb_stats_module._LIVE_NOW_CYCLE_SECONDS
+    )
+    breakdown_tile = next(t for t in _build_tiles(stats) if t["label"] == "Live Now")
+    assert breakdown_tile["value"] == "B738: 3\nA320: 2"
+    assert breakdown_tile["caption"] == "by model"
+
+
+def test_build_tiles_live_now_stays_on_count_when_no_model_data(monkeypatch):
+    stats = _stats(currently_tracked_by_model={})
+    monkeypatch.setattr(
+        draw_adsb_stats_module.time, "time", lambda: draw_adsb_stats_module._LIVE_NOW_CYCLE_SECONDS
+    )
+    tile = next(t for t in _build_tiles(stats) if t["label"] == "Live Now")
+    assert tile["value"] == str(stats.currently_tracked_combined)
+    assert tile["caption"] == "aircraft in range"
 
 
 def test_build_tiles_omits_all_time_when_same_as_todays_furthest():
