@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
 """Render simple status content on the Waveshare OLED/LCD HAT (A) OLED displays.
 
-Default behavior:
-- Left OLED (0x3c): current date in M/D/YY format
-- Right OLED (0x3d): local time in 12-hour format, no leading zero (small AM/PM)
+Default behavior (when no Cubs/Blackhawks game is in progress or recently
+final): the two OLEDs rotate through date, time, and current weather
+(temperature + conditions), swapping which pair is shown on a random
+interval so all three eventually appear.
 """
 
 from __future__ import annotations
@@ -81,6 +82,7 @@ MAX_TIME_FONT_SIZE = max(
 LOGGER = logging.getLogger("waveshare_oled_status")
 _STOP_EVENT = Event()
 _LAST_WEATHER_TEMP_F: float | None = None
+_LAST_WEATHER_CONDITION: str | None = None
 _WEATHER2_RENDERED = False
 _LAST_GITHUB_UPDATE_CHECK_AT = 0.0
 _LAST_GITHUB_UPDATE_AVAILABLE = False
@@ -246,7 +248,7 @@ def _read_cpu_temp_c() -> float | None:
 
 
 def _read_weather1_temp_f() -> float | None:
-    global _LAST_WEATHER_TEMP_F
+    global _LAST_WEATHER_TEMP_F, _LAST_WEATHER_CONDITION
 
     def _resolve_fetch_weather():
         try:
@@ -310,6 +312,12 @@ def _read_weather1_temp_f() -> float | None:
     current = weather.get("current")
     if not isinstance(current, dict):
         return _LAST_WEATHER_TEMP_F
+
+    weather_list = current.get("weather")
+    if isinstance(weather_list, list) and weather_list and isinstance(weather_list[0], dict):
+        description = weather_list[0].get("description")
+        if isinstance(description, str) and description.strip():
+            _LAST_WEATHER_CONDITION = description.strip().title()
 
     temp_f = (
         current.get("temp")
@@ -786,6 +794,13 @@ def read_temperature() -> str:
     return f"{value_c:.1f}°C"
 
 
+def read_weather_condition() -> str:
+    """Return the current weather conditions text (e.g. "Sunny"), if known."""
+
+    _read_weather1_temp_f()
+    return _LAST_WEATHER_CONDITION or ""
+
+
 def current_time_12h() -> str:
     return datetime.now().strftime("%I:%M %p").lstrip("0")
 
@@ -1032,6 +1047,101 @@ def render_centered_time_text(
     return image
 
 
+def render_weather_panel(
+    width: int,
+    height: int,
+    *,
+    temp_text: str,
+    condition_text: str = "",
+    title: str | None = "Weather",
+) -> Image.Image:
+    image = Image.new("1", (width, height), 0)
+    draw = ImageDraw.Draw(image)
+    title_font = ImageFont.load_default()
+
+    y_offset = 0
+    if title:
+        title_bbox = draw.textbbox((0, 0), title, font=title_font)
+        title_w = title_bbox[2] - title_bbox[0]
+        title_h = title_bbox[3] - title_bbox[1]
+        draw.text(((width - title_w) // 2, 2), title, font=title_font, fill=255)
+        y_offset = title_h + 6
+
+    top_margin = max(2, y_offset)
+
+    condition_font = None
+    condition_reserved = 0
+    if condition_text:
+        condition_font_size = max(8, min(16, _best_value_font_size(width - 8, 20, condition_text, 0)))
+        condition_font = _load_value_font(condition_font_size)
+        condition_bbox = draw.textbbox((0, 0), condition_text, font=condition_font)
+        condition_reserved = (condition_bbox[3] - condition_bbox[1]) + 4
+
+    available_height = max(10, height - top_margin - condition_reserved - 2)
+    temp_font_size = _best_value_font_size(width, top_margin + available_height, temp_text, top_margin)
+    temp_font = _load_value_font(temp_font_size)
+    temp_bbox = draw.textbbox((0, 0), temp_text, font=temp_font)
+    temp_w = temp_bbox[2] - temp_bbox[0]
+    temp_h = temp_bbox[3] - temp_bbox[1]
+    temp_x = (width - temp_w) // 2
+    temp_y = top_margin + max(0, (available_height - temp_h) // 2)
+    draw.text((temp_x, temp_y), temp_text, font=temp_font, fill=255)
+
+    if condition_text and condition_font is not None:
+        condition_bbox = draw.textbbox((0, 0), condition_text, font=condition_font)
+        condition_w = condition_bbox[2] - condition_bbox[0]
+        condition_h = condition_bbox[3] - condition_bbox[1]
+        condition_x = max(0, (width - condition_w) // 2)
+        condition_y = max(0, height - condition_h - 2)
+        draw.text((condition_x, condition_y), condition_text, font=condition_font, fill=255)
+
+    return image
+
+
+IDLE_PANEL_CONTENT = ("date", "time", "weather")
+
+
+def _render_idle_panel(content_id: str) -> Image.Image:
+    """Render one of the idle-rotation panels (date, time, or weather)."""
+
+    if content_id == "date":
+        date_text = current_date_mdy()
+        date_top_margin = _title_top_margin(OLED_WIDTH, "Date")
+        date_value_font_size = _best_value_font_size(
+            OLED_WIDTH, OLED_HEIGHT, date_text, date_top_margin
+        )
+        return render_centered_text(
+            OLED_WIDTH,
+            OLED_HEIGHT,
+            date_text,
+            title="Date",
+            value_font_size=date_value_font_size,
+        )
+
+    if content_id == "time":
+        time_text = current_time_12h()
+        time_top_margin = _title_top_margin(OLED_WIDTH, "Time")
+        time_value_font_size = _best_time_font_size(
+            OLED_WIDTH, OLED_HEIGHT, time_text, time_top_margin
+        )
+        return render_centered_time_text(
+            OLED_WIDTH,
+            OLED_HEIGHT,
+            time_text,
+            title="Time",
+            value_font_size=time_value_font_size,
+        )
+
+    temp_text = read_temperature() or "--"
+    condition_text = read_weather_condition()
+    return render_weather_panel(
+        OLED_WIDTH,
+        OLED_HEIGHT,
+        temp_text=temp_text,
+        condition_text=condition_text,
+    )
+
+
 def fade_transition(display: SSD1306Display, new_image: Image.Image) -> None:
     for step in range(FADE_STEPS, -1, -1):
         display.set_contrast(int(255 * step / FADE_STEPS))
@@ -1083,7 +1193,7 @@ def main() -> int:
     temp_display.clear()
     time_display.clear()
 
-    show_date_on_left = True
+    idle_panel_offset = 0
     next_swap_at = time.monotonic() + random_swap_interval_seconds()
     try:
         while not _STOP_EVENT.is_set():
@@ -1091,41 +1201,11 @@ def main() -> int:
             if sports_frames is not None:
                 left_image, right_image = sports_frames
             else:
-                time_text = current_time_12h()
-                date_text = current_date_mdy()
-                time_top_margin = _title_top_margin(OLED_WIDTH, "Time")
-                date_top_margin = _title_top_margin(OLED_WIDTH, "Date")
-                time_value_font_size = _best_time_font_size(
-                    OLED_WIDTH,
-                    OLED_HEIGHT,
-                    time_text,
-                    time_top_margin,
-                )
-                date_value_font_size = _best_value_font_size(
-                    OLED_WIDTH,
-                    OLED_HEIGHT,
-                    date_text,
-                    date_top_margin,
-                )
-
-                date_image = render_centered_text(
-                    OLED_WIDTH,
-                    OLED_HEIGHT,
-                    date_text,
-                    title="Date",
-                    value_font_size=date_value_font_size,
-                )
-                time_image = render_centered_time_text(
-                    OLED_WIDTH,
-                    OLED_HEIGHT,
-                    time_text,
-                    title="Time",
-                    value_font_size=time_value_font_size,
-                )
-
-                left_image, right_image = (
-                    (date_image, time_image) if show_date_on_left else (time_image, date_image)
-                )
+                panel_count = len(IDLE_PANEL_CONTENT)
+                left_content = IDLE_PANEL_CONTENT[idle_panel_offset % panel_count]
+                right_content = IDLE_PANEL_CONTENT[(idle_panel_offset + 1) % panel_count]
+                left_image = _render_idle_panel(left_content)
+                right_image = _render_idle_panel(right_content)
             if _github_updates_available():
                 left_image = _invert_for_update(left_image)
                 right_image = _invert_for_update(right_image)
@@ -1143,7 +1223,7 @@ def main() -> int:
                     LOGGER.warning("OLED reinitialization failed: %s", exc)
 
             if sports_frames is None and time.monotonic() >= next_swap_at:
-                show_date_on_left = not show_date_on_left
+                idle_panel_offset = (idle_panel_offset + 1) % len(IDLE_PANEL_CONTENT)
                 next_swap_at = time.monotonic() + random_swap_interval_seconds()
 
             _STOP_EVENT.wait(REFRESH_SECONDS)

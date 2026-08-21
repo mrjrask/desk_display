@@ -180,6 +180,35 @@ def test_read_temperature_uses_last_known_weather_value(monkeypatch):
     assert mod.read_temperature() == "70°F"
 
 
+def test_read_weather1_temp_caches_condition_text(monkeypatch):
+    mod = _load_module()
+
+    fake = types.ModuleType("data_fetch")
+    fake.fetch_weather = lambda: {
+        "current": {"temp": 68.4, "weather": [{"description": "clear sky"}]}
+    }
+    monkeypatch.setitem(sys.modules, "data_fetch", fake)
+
+    assert mod._read_weather1_temp_f() == 68.4
+    assert mod._LAST_WEATHER_CONDITION == "Clear Sky"
+
+
+def test_read_weather_condition_returns_cached_value(monkeypatch):
+    mod = _load_module()
+    monkeypatch.setattr(mod, "_read_weather1_temp_f", lambda: 68.4)
+    monkeypatch.setattr(mod, "_LAST_WEATHER_CONDITION", "Sunny")
+
+    assert mod.read_weather_condition() == "Sunny"
+
+
+def test_read_weather_condition_defaults_to_empty_string(monkeypatch):
+    mod = _load_module()
+    monkeypatch.setattr(mod, "_read_weather1_temp_f", lambda: None)
+    monkeypatch.setattr(mod, "_LAST_WEATHER_CONDITION", None)
+
+    assert mod.read_weather_condition() == ""
+
+
 def test_weather2_gate_uses_status_path_override(monkeypatch, tmp_path):
     mod = _load_module()
     status_path = tmp_path / "status.json"
@@ -217,6 +246,122 @@ def test_weather2_gate_disabled_for_non_weather_sources(monkeypatch):
     monkeypatch.setattr(mod, "WAIT_FOR_WEATHER2", True)
 
     assert mod._weather2_screen_has_rendered() is True
+
+
+def test_render_weather_panel_draws_temp_and_condition():
+    mod = _load_module()
+
+    image = mod.render_weather_panel(
+        mod.OLED_WIDTH, mod.OLED_HEIGHT, temp_text="72°F", condition_text="Sunny"
+    )
+
+    assert image.size == (mod.OLED_WIDTH, mod.OLED_HEIGHT)
+    assert image.getbbox() is not None
+
+
+def test_render_weather_panel_without_condition_still_renders():
+    mod = _load_module()
+
+    image = mod.render_weather_panel(mod.OLED_WIDTH, mod.OLED_HEIGHT, temp_text="72°F")
+
+    assert image.size == (mod.OLED_WIDTH, mod.OLED_HEIGHT)
+    assert image.getbbox() is not None
+
+
+def test_render_idle_panel_dispatches_by_content_id(monkeypatch):
+    mod = _load_module()
+
+    monkeypatch.setattr(mod, "current_date_mdy", lambda: "11/18/26")
+    monkeypatch.setattr(mod, "current_time_12h", lambda: "10:54 PM")
+    monkeypatch.setattr(mod, "read_temperature", lambda: "72°F")
+    monkeypatch.setattr(mod, "read_weather_condition", lambda: "Sunny")
+
+    calls = {}
+    monkeypatch.setattr(
+        mod,
+        "render_centered_text",
+        lambda *_a, **kw: calls.setdefault("date", kw.get("title")) or object(),
+    )
+    monkeypatch.setattr(
+        mod,
+        "render_centered_time_text",
+        lambda *_a, **kw: calls.setdefault("time", kw.get("title")) or object(),
+    )
+    monkeypatch.setattr(
+        mod,
+        "render_weather_panel",
+        lambda *_a, **kw: calls.setdefault(
+            "weather", (kw.get("temp_text"), kw.get("condition_text"))
+        )
+        or object(),
+    )
+
+    mod._render_idle_panel("date")
+    mod._render_idle_panel("time")
+    mod._render_idle_panel("weather")
+
+    assert calls["date"] == "Date"
+    assert calls["time"] == "Time"
+    assert calls["weather"] == ("72°F", "Sunny")
+
+
+def test_main_rotates_through_date_time_and_weather(monkeypatch):
+    mod = _load_module()
+
+    bus = _FakeSMBus()
+    seen_pairs = []
+
+    class _Display:
+        def __init__(self, *_args, **_kwargs):
+            pass
+
+        def initialize(self):
+            return None
+
+        def clear(self):
+            return None
+
+    monkeypatch.setattr(mod, "SMBus", lambda *_args, **_kwargs: bus)
+    monkeypatch.setattr(mod, "SSD1306Display", _Display)
+    monkeypatch.setattr(mod, "fade_transition", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(mod, "_cubs_oled_frames", lambda: None)
+    monkeypatch.setattr(mod, "_hawks_oled_frames", lambda: None)
+    monkeypatch.setattr(mod, "_github_updates_available", lambda: False)
+    monkeypatch.setattr(mod, "_save_oled_screenshot", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(mod, "random_swap_interval_seconds", lambda: 0)
+
+    def _render_idle_panel(content_id):
+        return content_id
+
+    monkeypatch.setattr(mod, "_render_idle_panel", _render_idle_panel)
+
+    remaining_iterations = [3]
+
+    def _capture_render(_display, image, name):
+        if name == "left":
+            seen_pairs.append([image])
+        else:
+            seen_pairs[-1].append(image)
+        return True
+
+    monkeypatch.setattr(mod, "_safe_render", _capture_render)
+
+    def _fake_wait(_seconds):
+        remaining_iterations[0] -= 1
+        if remaining_iterations[0] <= 0:
+            mod._STOP_EVENT.set()
+
+    monkeypatch.setattr(mod._STOP_EVENT, "wait", _fake_wait)
+
+    mod._STOP_EVENT.clear()
+    rc = mod.main()
+
+    assert rc == 0
+    assert seen_pairs == [
+        ["date", "time"],
+        ["time", "weather"],
+        ["weather", "date"],
+    ]
 
 
 def test_best_time_font_size_accounts_for_meridiem_width():
