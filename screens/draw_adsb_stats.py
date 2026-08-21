@@ -48,7 +48,6 @@ _ACCENT_FURTHEST = (90, 205, 225)
 _ACCENT_RECEIVER = (110, 150, 230)
 _ACCENT_ALL_TIME = (230, 185, 70)
 _ACCENT_LIVE = (95, 220, 150)
-_ACCENT_ALTITUDE = (175, 135, 235)
 _ACCENT_MESSAGES = (230, 150, 95)
 
 # How often the Live Now tile flips between the headline count and the
@@ -364,7 +363,7 @@ def _draw_stat_tile(
 
 def _build_tiles(stats: DailyStats) -> list[dict[str, Any]]:
     """Pick up to four stat tiles: Furthest and By Receiver always lead,
-    then whichever of All-Time Best / Live Now / Altitude / Messages the
+    then whichever of All-Time Best / Live Now / Messages the
     data actually supports fills the remaining one or two slots."""
 
     tiles: list[dict[str, Any]] = []
@@ -439,16 +438,6 @@ def _build_tiles(stats: DailyStats) -> list[dict[str, Any]]:
                     "accent": _ACCENT_LIVE,
                 }
             )
-
-    if stats.highest_altitude_ft is not None:
-        extras.append(
-            {
-                "label": "Altitude",
-                "value": f"{stats.highest_altitude_ft:,} ft",
-                "caption": "highest today",
-                "accent": _ACCENT_ALTITUDE,
-            }
-        )
 
     total_messages = sum(stats.messages_today_by_device.values())
     if total_messages:
