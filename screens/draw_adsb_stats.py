@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import datetime as dt
 import logging
+import time
 from typing import Any, Optional
 
 from PIL import Image, ImageDraw
@@ -49,6 +50,13 @@ _ACCENT_ALL_TIME = (230, 185, 70)
 _ACCENT_LIVE = (95, 220, 150)
 _ACCENT_ALTITUDE = (175, 135, 235)
 _ACCENT_MESSAGES = (230, 150, 95)
+
+# How often the Live Now tile flips between the headline count and the
+# by-model breakdown. Rendering is stateless (no background thread), so
+# this only ever changes what a given appearance of the screen shows —
+# each time the rotation brings the ADS-B screen back up, the wall clock
+# has likely moved into a different half of this window.
+_LIVE_NOW_CYCLE_SECONDS = 30
 
 
 def _get_store() -> Optional[AdsbStore]:
@@ -166,6 +174,20 @@ def _by_receiver_text(stats: DailyStats) -> str:
     labels = [device["label"] for device in config.ADSB_DEVICES] or sorted(stats.total_by_device)
     parts = [f"{label}: {stats.total_by_device.get(label, 0)}" for label in labels]
     return "\n".join(parts) if parts else "--"
+
+
+def _live_now_breakdown_lines(model_counts: dict[str, int], *, max_lines: int = 4) -> list[str]:
+    """Top models by current count, folding any overflow into "Other" so
+    the lines always add up to the same total as the headline count."""
+
+    if not model_counts:
+        return []
+    items = sorted(model_counts.items(), key=lambda kv: (-kv[1], kv[0]))
+    if len(items) > max_lines:
+        head = items[: max_lines - 1]
+        other_total = sum(count for _, count in items[max_lines - 1 :])
+        items = head + [("Other", other_total)]
+    return [f"{model}: {count}" for model, count in items]
 
 
 def _status_text(stats: Optional[DailyStats]) -> str:
@@ -394,14 +416,29 @@ def _build_tiles(stats: DailyStats) -> list[dict[str, Any]]:
         )
 
     if stats.currently_tracked_combined:
-        extras.append(
-            {
-                "label": "Live Now",
-                "value": str(stats.currently_tracked_combined),
-                "caption": "aircraft in range",
-                "accent": _ACCENT_LIVE,
-            }
+        show_breakdown = bool(stats.currently_tracked_by_model) and (
+            int(time.time() // _LIVE_NOW_CYCLE_SECONDS) % 2 == 1
         )
+        if show_breakdown:
+            extras.append(
+                {
+                    "label": "Live Now",
+                    "value": "\n".join(
+                        _live_now_breakdown_lines(stats.currently_tracked_by_model)
+                    ),
+                    "caption": "by model",
+                    "accent": _ACCENT_LIVE,
+                }
+            )
+        else:
+            extras.append(
+                {
+                    "label": "Live Now",
+                    "value": str(stats.currently_tracked_combined),
+                    "caption": "aircraft in range",
+                    "accent": _ACCENT_LIVE,
+                }
+            )
 
     if stats.highest_altitude_ft is not None:
         extras.append(
