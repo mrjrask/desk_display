@@ -8,6 +8,8 @@ import sys
 import types
 from pathlib import Path
 
+import pytest
+
 SCRIPT_PATH = Path(__file__).resolve().parents[1] / "scripts" / "waveshare_oled_status.py"
 
 
@@ -556,6 +558,48 @@ def test_cubs_oled_frames_final_hides_outs(monkeypatch):
     assert rendered[0]["footer"] == ""
     assert rendered[1]["footer"] == "Final"
 
+@pytest.mark.parametrize(
+    "detailed, expected_status",
+    [
+        ("Warmup", "Warmup"),
+        ("Pre-Game Warmup", "Warmup"),
+        ("Delayed", "Delayed"),
+        ("Rain Delay", "Rain Delay"),
+        ("Suspended", "Suspended"),
+        ("Postponed", "Postponed"),
+        ("Canceled", "Canceled"),
+    ],
+)
+def test_cubs_oled_frames_shows_non_inning_statuses(monkeypatch, detailed, expected_status):
+    mod = _load_module()
+    rendered = []
+    game = {
+        "gamePk": 246,
+        "status": {"abstractGameState": "Preview", "detailedState": detailed, "statusCode": ""},
+        "teams": {
+            "away": {"team": {"id": 112, "name": "Chicago Cubs", "abbreviation": "CHC"}, "score": 0},
+            "home": {"team": {"id": 121, "name": "New York Mets", "abbreviation": "NYM"}, "score": 0},
+        },
+        "linescore": {},
+    }
+
+    monkeypatch.setattr(mod, "_read_display_status_payload", lambda: {"cubs": {"live_game": game}})
+    monkeypatch.setattr(mod, "_render_score_panel", lambda *_args, **kwargs: rendered.append(kwargs) or object())
+    monkeypatch.setattr(mod, "_resolve_mlb_abbreviation", lambda: (lambda text: "NYM" if "Mets" in text else "CUBS"))
+    monkeypatch.setattr(mod, "_CUBS_FINAL_GAME_PK", None)
+    monkeypatch.setattr(mod, "_CUBS_FINAL_HOLD_UNTIL_EPOCH", 0.0)
+    monkeypatch.setattr(mod, "_load_cubs_final_state", lambda: (None, 0.0))
+    monkeypatch.setattr(mod, "_persist_cubs_final_state", lambda *_args, **_kwargs: None)
+
+    frames = mod._cubs_oled_frames()
+
+    assert frames is not None
+    assert len(rendered) == 2
+    assert rendered[0]["team"] == "CUBS"
+    assert rendered[0]["footer"] == expected_status
+    assert rendered[1]["footer"] == ""
+
+
 def test_cubs_oled_frames_holds_final_for_90_minutes(monkeypatch):
     mod = _load_module()
     game = {
@@ -650,6 +694,42 @@ def test_hawks_oled_frames_final_hides_clock(monkeypatch):
     assert rendered[0]["footer"] == ""
     assert rendered[1]["score"] == "3"
     assert rendered[1]["footer"] == "Final"
+
+
+@pytest.mark.parametrize(
+    "game_state, expected_status",
+    [
+        ("PRE", "Pre-Game"),
+        ("PREGAME", "Pre-Game"),
+        ("POSTP", "Postponed"),
+        ("PPD", "Postponed"),
+        ("SUSP", "Suspended"),
+    ],
+)
+def test_hawks_oled_frames_shows_non_period_statuses(monkeypatch, game_state, expected_status):
+    mod = _load_module()
+    rendered = []
+    game = {
+        "id": 559,
+        "gameState": game_state,
+        "awayTeam": {"id": 16, "abbrev": "CHI"},
+        "homeTeam": {"id": 10, "abbrev": "TOR"},
+    }
+
+    monkeypatch.setattr(mod, "_read_display_status_payload", lambda: {"hawks": {"live_game": game}})
+    monkeypatch.setattr(mod, "_render_score_panel", lambda *_args, **kwargs: rendered.append(kwargs) or object())
+    monkeypatch.setattr(mod, "_HAWKS_FINAL_GAME_PK", None)
+    monkeypatch.setattr(mod, "_HAWKS_FINAL_HOLD_UNTIL_EPOCH", 0.0)
+    monkeypatch.setattr(mod, "_load_hawks_final_state", lambda: (None, 0.0))
+    monkeypatch.setattr(mod, "_persist_hawks_final_state", lambda *_args, **_kwargs: None)
+
+    frames = mod._hawks_oled_frames()
+
+    assert frames is not None
+    assert len(rendered) == 2
+    assert rendered[0]["team"] == "HAWKS"
+    assert rendered[0]["footer"] == expected_status
+    assert rendered[1]["footer"] == ""
 
 
 def test_hawks_oled_frames_holds_final_for_90_minutes(monkeypatch):

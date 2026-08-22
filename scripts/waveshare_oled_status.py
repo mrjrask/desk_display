@@ -388,22 +388,77 @@ def _team_label(team: dict) -> str:
     return "TEAM"
 
 
-def _mlb_live_state(game: dict) -> tuple[bool, bool]:
+def _mlb_game_phase(game: dict) -> str:
+    """Classify an MLB game's status the way the MLB scoreboard does.
+
+    Returns "final", "live" (innings are actually being played), "pending"
+    (warmup, a delay, a suspension, a postponement/cancellation, or any
+    other in-between status the MLB scoreboard surfaces), or "idle" (a
+    plain scheduled game with no game-day activity yet).
+    """
     status = (game or {}).get("status") or {}
     abstract = str(status.get("abstractGameState") or "").lower()
-    detailed = str(status.get("detailedState") or "").lower()
+    detailed = str(status.get("detailedState") or "").strip()
+    detailed_lower = detailed.lower()
+    normalized = detailed_lower.replace("-", "")
     code = str(status.get("statusCode") or status.get("codedGameState") or "").upper()
-    text = f"{abstract} {detailed}".strip()
-    is_final = code in {"F", "O"} or "final" in text or "completed" in text
-    is_live = (
-        code in {"I", "2", "3"}
-        or "live" in text
-        or "in progress" in text
-        or "top " in text
-        or "bottom " in text
-        or "middle " in text
-    )
-    return is_live, is_final
+
+    if "postponed" in detailed_lower or "cancel" in detailed_lower:
+        return "pending"
+    if (
+        "warmup" in normalized
+        or "pregame" in normalized
+        or detailed_lower == "delayed"
+        or "delay" in detailed_lower
+        or "suspend" in detailed_lower
+        or "challenge" in detailed_lower
+        or "review" in detailed_lower
+    ):
+        return "pending"
+
+    if (
+        code in {"F", "O"}
+        or abstract in {"final", "completed"}
+        or "final" in detailed_lower
+        or "completed" in detailed_lower
+    ):
+        return "final"
+
+    if (
+        code == "I"
+        or abstract == "live"
+        or "progress" in detailed_lower
+        or "top " in detailed_lower
+        or "bottom " in detailed_lower
+        or "middle " in detailed_lower
+    ):
+        return "live"
+
+    return "idle"
+
+
+def _mlb_status_label(game: dict) -> str:
+    """Footer text for an MLB game that isn't actively being played (or final)."""
+    status = (game or {}).get("status") or {}
+    detailed = str(status.get("detailedState") or "").strip()
+    detailed_lower = detailed.lower()
+    normalized = detailed_lower.replace("-", "")
+
+    if "postponed" in detailed_lower:
+        return "Postponed"
+    if "cancel" in detailed_lower:
+        return "Canceled"
+    if "warmup" in normalized:
+        return "Warmup"
+    if "pregame" in normalized:
+        return "Pre-Game"
+    if detailed_lower == "delayed":
+        return "Delayed"
+    if "delay" in detailed_lower:
+        return detailed
+    if "suspend" in detailed_lower:
+        return detailed or "Suspended"
+    return detailed or "Pending"
 
 
 def _format_inning_text(game: dict) -> str:
@@ -494,21 +549,22 @@ def _cubs_oled_frames() -> tuple[Image.Image, Image.Image] | None:
 
     selected_game = None
     is_final = False
+    live_phase = None
     now_epoch = time.time()
     if _CUBS_FINAL_GAME_PK is None and _CUBS_FINAL_HOLD_UNTIL_EPOCH <= 0:
         _CUBS_FINAL_GAME_PK, _CUBS_FINAL_HOLD_UNTIL_EPOCH = _load_cubs_final_state()
     if isinstance(live_game, dict):
-        live_live, live_final = _mlb_live_state(live_game)
-        if live_live:
+        phase = _mlb_game_phase(live_game)
+        if phase in ("live", "pending"):
             selected_game = live_game
+            live_phase = phase
             is_final = False
-        elif live_final:
+        elif phase == "final":
             selected_game = live_game
             is_final = True
 
     if selected_game is None and isinstance(last_game, dict):
-        _live, last_final = _mlb_live_state(last_game)
-        if last_final:
+        if _mlb_game_phase(last_game) == "final":
             selected_game = last_game
             is_final = True
 
@@ -538,10 +594,18 @@ def _cubs_oled_frames() -> tuple[Image.Image, Image.Image] | None:
     away_score_text = str(away_score) if isinstance(away_score, int) else "-"
     home_score_text = str(home_score) if isinstance(home_score, int) else "-"
     # Consistent, fixed layout regardless of which side is batting: the away
-    # panel always carries the inning, the home panel always carries the
-    # outs (or "Final" once the game has ended).
-    away_footer = "" if is_final else _format_inning_text(selected_game)
-    home_footer = "Final" if is_final else _format_outs_text(selected_game)
+    # panel always carries the inning (or status like "Warmup"/"Delayed"),
+    # the home panel always carries the outs (or "Final" once the game has
+    # ended).
+    if is_final:
+        away_footer = ""
+        home_footer = "Final"
+    elif live_phase == "pending":
+        away_footer = _mlb_status_label(selected_game)
+        home_footer = ""
+    else:
+        away_footer = _format_inning_text(selected_game)
+        home_footer = _format_outs_text(selected_game)
 
     return (
         _render_score_panel(OLED_WIDTH, OLED_HEIGHT, team=away_label, score=away_score_text, footer=away_footer),
@@ -581,11 +645,35 @@ def _team_label_nhl(team: dict) -> str:
     return "TEAM"
 
 
-def _nhl_live_state(game: dict) -> tuple[bool, bool]:
-    state = str((game or {}).get("gameState") or "").strip().upper()
-    is_live = state in {"LIVE", "CRIT"}
-    is_final = state in {"OFF", "FINAL"}
-    return is_live, is_final
+def _nhl_game_phase(game: dict) -> str:
+    """Classify an NHL game's status the way the NHL scoreboard does.
+
+    Returns "final", "live" (period is actually being played), "pending"
+    (pre-game warmup, a postponement, or a suspension), or "idle" (a plain
+    scheduled game that hasn't entered its pregame window yet).
+    """
+    state = str((game or {}).get("gameState") or (game or {}).get("gameScheduleState") or "").strip().upper()
+    if state in {"OFF", "FINAL"}:
+        return "final"
+    if state in {"LIVE", "CRIT"}:
+        return "live"
+    if state in {"PRE", "PREGAME", "POSTP", "POSTPONED", "PPD", "SUSP", "SUSPENDED"}:
+        return "pending"
+    return "idle"
+
+
+def _nhl_status_label(game: dict) -> str:
+    """Footer text for an NHL game that isn't actively being played (or final)."""
+    state = str((game or {}).get("gameState") or (game or {}).get("gameScheduleState") or "").strip().upper()
+    detailed = str((game or {}).get("gameStatus") or (game or {}).get("gameStatusText") or "").strip()
+
+    if state in {"POSTP", "POSTPONED", "PPD"}:
+        return detailed or "Postponed"
+    if state in {"SUSP", "SUSPENDED"}:
+        return detailed or "Suspended"
+    if state in {"PRE", "PREGAME"}:
+        return detailed or "Pre-Game"
+    return detailed or (state.title() if state else "Pending")
 
 
 def _format_period_text(game: dict, feed: dict | None) -> str:
@@ -637,21 +725,22 @@ def _hawks_oled_frames() -> tuple[Image.Image, Image.Image] | None:
 
     selected_game = None
     is_final = False
+    live_phase = None
     now_epoch = time.time()
     if _HAWKS_FINAL_GAME_PK is None and _HAWKS_FINAL_HOLD_UNTIL_EPOCH <= 0:
         _HAWKS_FINAL_GAME_PK, _HAWKS_FINAL_HOLD_UNTIL_EPOCH = _load_hawks_final_state()
     if isinstance(live_game, dict):
-        live_live, live_final = _nhl_live_state(live_game)
-        if live_live:
+        phase = _nhl_game_phase(live_game)
+        if phase in ("live", "pending"):
             selected_game = live_game
+            live_phase = phase
             is_final = False
-        elif live_final:
+        elif phase == "final":
             selected_game = live_game
             is_final = True
 
     if selected_game is None and isinstance(last_game, dict):
-        _live, last_final = _nhl_live_state(last_game)
-        if last_final:
+        if _nhl_game_phase(last_game) == "final":
             selected_game = last_game
             is_final = True
 
@@ -685,9 +774,17 @@ def _hawks_oled_frames() -> tuple[Image.Image, Image.Image] | None:
     away_score_text = str(away_score) if isinstance(away_score, int) else "-"
     home_score_text = str(home_score) if isinstance(home_score, int) else "-"
     # Same fixed layout as the Cubs panels: the away panel always carries
-    # the period, the home panel always carries the clock (or "Final").
-    away_footer = "" if is_final else _format_period_text(selected_game, live_feed)
-    home_footer = "Final" if is_final else _format_clock_text(live_feed)
+    # the period (or status like "Pre-Game"/"Postponed"), the home panel
+    # always carries the clock (or "Final").
+    if is_final:
+        away_footer = ""
+        home_footer = "Final"
+    elif live_phase == "pending":
+        away_footer = _nhl_status_label(selected_game)
+        home_footer = ""
+    else:
+        away_footer = _format_period_text(selected_game, live_feed)
+        home_footer = _format_clock_text(live_feed)
 
     return (
         _render_score_panel(OLED_WIDTH, OLED_HEIGHT, team=away_label, score=away_score_text, footer=away_footer),
