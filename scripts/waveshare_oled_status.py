@@ -528,9 +528,13 @@ def _render_score_panel(width: int, height: int, *, team: str, score: str, foote
     if footer:
         footer_bbox = draw.textbbox((0, 0), footer, font=footer_font)
         footer_w = footer_bbox[2] - footer_bbox[0]
-        footer_h = footer_bbox[3] - footer_bbox[1]
         footer_x = max(2, (width - footer_w) // 2)
-        footer_y = max(0, height - footer_h - 2)
+        # Anchor by the bbox's actual bottom (not height - top-offset), since
+        # textbbox's top is rarely 0 (e.g. text with no ascenders/descenders
+        # sits a few px below the glyph origin). Using footer_h here would
+        # push the drawn glyphs that far past the intended baseline and off
+        # the bottom edge of the panel.
+        footer_y = max(0, height - 2 - footer_bbox[3])
         draw.text((footer_x, footer_y), footer, font=footer_font, fill=255)
 
     return image

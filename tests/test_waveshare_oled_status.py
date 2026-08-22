@@ -469,6 +469,19 @@ def test_main_uses_independent_font_sizes_for_date_and_time(monkeypatch):
     assert ("Time", 20) in font_sizes
 
 
+@pytest.mark.parametrize("footer", ["Top 3rd", "1 Out", "Bottom 9th", "3 Outs", "Final"])
+def test_render_score_panel_footer_stays_within_bounds(footer):
+    """Regression test: footer text (inning/outs) must not run off the bottom
+    edge of the OLED panel. Verifies no lit pixel exists on the final row."""
+    mod = _load_module()
+
+    image = mod._render_score_panel(128, 64, team="CUBS", score="3", footer=footer)
+
+    assert image.height == 64
+    last_row_pixels = [image.getpixel((x, 63)) for x in range(image.width)]
+    assert not any(last_row_pixels), f"footer {footer!r} has ink on the bottom row"
+
+
 def test_cubs_oled_frames_prefers_live_game(monkeypatch):
     mod = _load_module()
     rendered = []
