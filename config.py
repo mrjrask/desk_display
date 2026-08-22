@@ -471,6 +471,11 @@ except (TypeError, ValueError):
     ADSB_RETENTION_DAYS = 7
 ENABLE_ADSB = bool(ADSB_DEVICES)
 
+# Airline logos for the "Live Now (by airline)" tile: images/air/<CODE>.png
+# or .jpg, named for the flight's ICAO airline code (case-insensitive).
+AIR_IMAGES_DIR = os.path.join(IMAGES_DIR, "air")
+os.makedirs(AIR_IMAGES_DIR, exist_ok=True)
+
 # Most dump1090-fa/readsb receivers never populate aircraft.json's "t" (type)
 # field unless the operator has separately configured a `--db-file` aircraft
 # database — tar1090's web map looks up type client-side from its own bundled

@@ -13,6 +13,7 @@ from __future__ import annotations
 import contextlib
 import datetime as dt
 import math
+import re
 import sqlite3
 import threading
 from dataclasses import dataclass, field, replace
@@ -65,7 +66,8 @@ CREATE TABLE IF NOT EXISTS device_status (
     error TEXT,
     tracked_hexes TEXT,
     messages_total INTEGER,
-    tracked_types TEXT
+    tracked_types TEXT,
+    tracked_callsigns TEXT
 );
 
 CREATE TABLE IF NOT EXISTS message_baseline (
@@ -144,6 +146,7 @@ class DailyStats:
     all_time_furthest: Optional[FurthestCatch]
     device_errors: dict[str, str] = field(default_factory=dict)
     currently_tracked_by_model: dict[str, int] = field(default_factory=dict)
+    currently_tracked_by_airline: dict[str, int] = field(default_factory=dict)
 
 
 def haversine_distance(
@@ -157,6 +160,20 @@ def haversine_distance(
     dlambda = math.radians(lon2 - lon1)
     a = math.sin(dphi / 2) ** 2 + math.cos(phi1) * math.cos(phi2) * math.sin(dlambda / 2) ** 2
     return 2 * radius * math.asin(min(1.0, math.sqrt(a)))
+
+
+_AIRLINE_CALLSIGN_RE = re.compile(r"^[A-Z]{2,3}(?=\d)")
+
+
+def _airline_code(callsign: Optional[str]) -> str:
+    """Best-effort ICAO airline code from a flight callsign (e.g. "UAL123"
+    -> "UAL"). Falls back to "Other" for tail numbers (e.g. "N12345") and
+    anything else that doesn't look like a scheduled-flight callsign."""
+
+    if not callsign:
+        return "Other"
+    match = _AIRLINE_CALLSIGN_RE.match(callsign.strip().upper())
+    return match.group(0) if match else "Other"
 
 
 def _parse_altitude(raw: Any) -> Optional[int]:
@@ -366,6 +383,7 @@ class AdsbStore:
         with self._lock, self._conn:
             self._conn.executescript(_SCHEMA_SQL)
             self._ensure_column("device_status", "tracked_types", "TEXT")
+            self._ensure_column("device_status", "tracked_callsigns", "TEXT")
 
     def _ensure_column(self, table: str, column: str, coltype: str) -> None:
         """Add *column* to *table* if it's missing (for DBs created by an
@@ -473,21 +491,32 @@ class AdsbStore:
             tracked_types = ",".join(
                 sorted(f"{s.hex}:{s.aircraft_type}" for s in result.sightings if s.aircraft_type)
             )
+            tracked_callsigns = ",".join(
+                sorted(f"{s.hex}:{s.callsign}" for s in result.sightings if s.callsign)
+            )
             self._conn.execute(
                 """
                 INSERT INTO device_status (
                     device, last_poll_at, online, error, tracked_hexes, messages_total,
-                    tracked_types
-                ) VALUES (?, ?, 1, NULL, ?, ?, ?)
+                    tracked_types, tracked_callsigns
+                ) VALUES (?, ?, 1, NULL, ?, ?, ?, ?)
                 ON CONFLICT(device) DO UPDATE SET
                     last_poll_at = excluded.last_poll_at,
                     online = 1,
                     error = NULL,
                     tracked_hexes = excluded.tracked_hexes,
                     messages_total = COALESCE(excluded.messages_total, device_status.messages_total),
-                    tracked_types = excluded.tracked_types
+                    tracked_types = excluded.tracked_types,
+                    tracked_callsigns = excluded.tracked_callsigns
                 """,
-                (device_label, now, tracked_hexes, result.messages_total, tracked_types),
+                (
+                    device_label,
+                    now,
+                    tracked_hexes,
+                    result.messages_total,
+                    tracked_types,
+                    tracked_callsigns,
+                ),
             )
 
             if result.messages_total is not None:
@@ -550,7 +579,8 @@ class AdsbStore:
             ).fetchall()
             device_rows = self._conn.execute(
                 """
-                SELECT device, online, error, tracked_hexes, messages_total, tracked_types
+                SELECT device, online, error, tracked_hexes, messages_total, tracked_types,
+                       tracked_callsigns
                 FROM device_status
                 """
             ).fetchall()
@@ -627,7 +657,16 @@ class AdsbStore:
         all_current_hexes: set[str] = set()
         messages_total_by_device: dict[str, int] = {}
         type_by_hex: dict[str, str] = {}
-        for device, online, error, tracked_hexes, messages_total, tracked_types in device_rows:
+        callsign_by_hex: dict[str, str] = {}
+        for (
+            device,
+            online,
+            error,
+            tracked_hexes,
+            messages_total,
+            tracked_types,
+            tracked_callsigns,
+        ) in device_rows:
             device_online[device] = bool(online)
             if error:
                 device_errors[device] = error
@@ -640,11 +679,18 @@ class AdsbStore:
                 hex_id, sep, aircraft_type = pair.partition(":")
                 if sep and hex_id and aircraft_type:
                     type_by_hex[hex_id] = aircraft_type
+            for pair in (tracked_callsigns or "").split(","):
+                hex_id, sep, callsign = pair.partition(":")
+                if sep and hex_id and callsign:
+                    callsign_by_hex[hex_id] = callsign
 
         currently_tracked_by_model: dict[str, int] = {}
+        currently_tracked_by_airline: dict[str, int] = {}
         for hex_id in all_current_hexes:
             model = type_by_hex.get(hex_id, "Unknown")
             currently_tracked_by_model[model] = currently_tracked_by_model.get(model, 0) + 1
+            airline = _airline_code(callsign_by_hex.get(hex_id))
+            currently_tracked_by_airline[airline] = currently_tracked_by_airline.get(airline, 0) + 1
 
         baseline_by_device = dict(baseline_rows)
         messages_today_by_device: dict[str, int] = {}
@@ -680,6 +726,7 @@ class AdsbStore:
             all_time_furthest=all_time_furthest,
             device_errors=device_errors,
             currently_tracked_by_model=currently_tracked_by_model,
+            currently_tracked_by_airline=currently_tracked_by_airline,
         )
 
 

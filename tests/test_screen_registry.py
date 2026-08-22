@@ -232,16 +232,18 @@ def test_adsb_stats_unavailable_when_no_devices_configured(monkeypatch):
     registry, _ = build_screen_registry(_make_context(weather, now))
 
     assert registry["adsb stats"].available is False
+    assert registry["adsb live"].available is False
+    assert registry["adsb live airlines"].available is False
 
 
 def test_adsb_stats_available_when_devices_configured(monkeypatch):
     now = datetime.datetime(2024, 1, 1, 12, 0, tzinfo=CENTRAL_TIME)
     weather = {"hourly": []}
-    captured = {}
+    captured = []
     monkeypatch.setattr(registry_module.config, "ENABLE_ADSB", True)
 
-    def _fake_draw_adsb_stats_screen(display, stats=None, transition=False):
-        captured["transition"] = transition
+    def _fake_draw_adsb_stats_screen(display, stats=None, transition=False, variant="best"):
+        captured.append({"transition": transition, "variant": variant})
         return None
 
     monkeypatch.setattr(registry_module, "draw_adsb_stats_screen", _fake_draw_adsb_stats_screen)
@@ -249,8 +251,17 @@ def test_adsb_stats_available_when_devices_configured(monkeypatch):
     registry, _ = build_screen_registry(_make_context(weather, now))
 
     assert registry["adsb stats"].available is True
+    assert registry["adsb live"].available is True
+    assert registry["adsb live airlines"].available is True
+
     registry["adsb stats"].render()
-    assert captured == {"transition": True}
+    registry["adsb live"].render()
+    registry["adsb live airlines"].render()
+    assert captured == [
+        {"transition": True, "variant": "best"},
+        {"transition": True, "variant": "live"},
+        {"transition": True, "variant": "live airlines"},
+    ]
 
 
 def test_weather_quad_screen_available_with_cached_weather_offline():

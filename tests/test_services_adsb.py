@@ -8,6 +8,7 @@ from services.adsb import (
     AdsbStore,
     AircraftSighting,
     PollResult,
+    _airline_code,
     _extract_messages_total,
     _parse_aircraft,
     haversine_distance,
@@ -284,6 +285,84 @@ def test_currently_tracked_by_model_dedupes_and_buckets_unknown(tmp_path):
 
     stats = store.compute_daily_stats(day=day, tz=UTC)
     assert stats.currently_tracked_by_model == {"B738": 1, "A320": 1, "Unknown": 1}
+
+
+def test_airline_code_extracts_icao_prefix_and_buckets_tail_numbers():
+    assert _airline_code("UAL123") == "UAL"
+    assert _airline_code("dal456") == "DAL"
+    assert _airline_code("N12345") == "Other"  # GA tail number, not a flight callsign
+    assert _airline_code(None) == "Other"
+    assert _airline_code("") == "Other"
+
+
+def test_currently_tracked_by_airline_dedupes_and_buckets_other(tmp_path):
+    store = _store(tmp_path)
+    device_a = AdsbDevice(host="1.2.3.4", label="Receiver 1")
+    device_b = AdsbDevice(host="1.2.3.5", label="Receiver 2")
+    day = "2026-08-17"
+
+    shared = AircraftSighting(
+        hex="aaa111", callsign="UAL123", distance_nm=None, altitude_ft=None
+    )
+    known = AircraftSighting(
+        hex="bbb222", callsign="DAL456", distance_nm=None, altitude_ft=None
+    )
+    tail_number = AircraftSighting(
+        hex="ccc333", callsign="N12345", distance_nm=None, altitude_ft=None
+    )
+
+    store.record_poll(
+        PollResult(device=device_a, ok=True, error=None, sightings=(shared, tail_number)),
+        now=1000.0,
+        day=day,
+    )
+    store.record_poll(
+        PollResult(device=device_b, ok=True, error=None, sightings=(shared, known)),
+        now=1001.0,
+        day=day,
+    )
+
+    stats = store.compute_daily_stats(day=day, tz=UTC)
+    assert stats.currently_tracked_by_airline == {"UAL": 1, "DAL": 1, "Other": 1}
+
+
+def test_opening_a_pre_existing_db_adds_missing_tracked_callsigns_column(tmp_path):
+    """Older on-device databases predate ``tracked_callsigns``; opening the
+    store should migrate them in place rather than erroring on the first
+    record_poll/compute_daily_stats call."""
+
+    import sqlite3
+
+    db_path = tmp_path / "legacy.db"
+    conn = sqlite3.connect(str(db_path))
+    conn.execute(
+        """
+        CREATE TABLE device_status (
+            device TEXT PRIMARY KEY,
+            last_poll_at REAL,
+            online INTEGER NOT NULL DEFAULT 0,
+            error TEXT,
+            tracked_hexes TEXT,
+            messages_total INTEGER,
+            tracked_types TEXT
+        )
+        """
+    )
+    conn.commit()
+    conn.close()
+
+    store = AdsbStore(db_path=str(db_path))
+    device = AdsbDevice(host="1.2.3.4", label="Receiver 1")
+    sighting = AircraftSighting(
+        hex="aaa111", callsign="UAL123", distance_nm=None, altitude_ft=None
+    )
+    store.record_poll(
+        PollResult(device=device, ok=True, error=None, sightings=(sighting,)),
+        now=1000.0,
+        day="2026-08-17",
+    )
+    stats = store.compute_daily_stats(day="2026-08-17", tz=UTC)
+    assert stats.currently_tracked_by_airline == {"UAL": 1}
 
 
 def test_all_time_furthest_picks_up_callsign_learned_in_an_earlier_poll(tmp_path):
