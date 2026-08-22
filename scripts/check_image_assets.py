@@ -24,7 +24,7 @@ NIXIE_DIGIT_MAX_DIMENSION = 256
 LEAGUE_LOGO_NAMES = {
     "afc", "ahl", "al", "mlb", "nba", "nfc", "nfl", "nhl", "nl", "oly", "sb", "scp", "wc",
 }
-POLICY_DIRS = {"ahl", "nba", "nhl", "mlb", "nfl", "oly"}
+POLICY_DIRS = {"ahl", "nba", "nhl", "mlb", "nfl", "oly", "air"}
 
 
 @dataclass(frozen=True)

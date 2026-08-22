@@ -7,6 +7,7 @@ Canonical limits:
 | Asset class | Paths | Max edge | Max file size |
 | --- | --- | ---: | ---: |
 | Team logos and country flags | `images/ahl/`, `images/nba/`, `images/nhl/`, `images/mlb/`, `images/nfl/`, `images/oly/` | 128 px | 75 KB |
+| Airline logos | `images/air/` | 128 px | 75 KB |
 | League, conference, event, and trophy logos | League/event files in the same folders, such as `NBA.png`, `nhl.png`, `AFC.png`, `NL.png`, `WC.png`, and `OLY.png` | 160 px | 100 KB |
 | Weather icons | `images/weather/` | 128 px | 75 KB |
 | Nixie digits | `images/nixie/` | 256 px | 75 KB |

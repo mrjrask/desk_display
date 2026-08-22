@@ -17,7 +17,7 @@ from __future__ import annotations
 
 import datetime as dt
 import logging
-import time
+import os
 from typing import Any, Optional
 
 from PIL import Image, ImageDraw
@@ -53,12 +53,16 @@ _ACCENT_MESSAGES = (230, 150, 95)
 _DOT_ONLINE = (95, 220, 150)
 _DOT_OFFLINE = (225, 90, 90)
 
-# How often the Live Now tile flips between the headline count and the
-# by-model breakdown. Rendering is stateless (no background thread), so
-# this only ever changes what a given appearance of the screen shows —
-# each time the rotation brings the ADS-B screen back up, the wall clock
-# has likely moved into a different half of this window.
-_LIVE_NOW_CYCLE_SECONDS = 30
+# The ADS-B dashboard is three separate registered screens (see
+# screens/registry.py) rather than one screen that rotates through every
+# tile combination: Furthest and By Receiver always lead, and each variant
+# supplies a fixed pair of tiles for the remaining two slots.
+_VARIANT_BEST = "best"
+_VARIANT_LIVE = "live"
+_VARIANT_LIVE_AIRLINES = "live airlines"
+
+_AIRLINE_LOGO_EXTENSIONS = (".png", ".jpg", ".jpeg")
+_AIRLINE_LOGO_CACHE: dict[tuple[str, int], Optional[Image.Image]] = {}
 
 
 def _get_store() -> Optional[AdsbStore]:
@@ -183,18 +187,72 @@ def _by_receiver_lines(stats: DailyStats) -> list[tuple[str, bool]]:
     ]
 
 
-def _live_now_breakdown_lines(model_counts: dict[str, int], *, max_lines: int = 4) -> list[str]:
-    """Top models by current count, folding any overflow into "Other" so
-    the lines always add up to the same total as the headline count."""
+def _top_breakdown_items(counts: dict[str, int], *, max_lines: int = 4) -> list[tuple[str, int]]:
+    """Top entries by current count, folding any overflow into "Other" so
+    the entries always add up to the same total as the headline count."""
 
-    if not model_counts:
+    if not counts:
         return []
-    items = sorted(model_counts.items(), key=lambda kv: (-kv[1], kv[0]))
+    items = sorted(counts.items(), key=lambda kv: (-kv[1], kv[0]))
     if len(items) > max_lines:
         head = items[: max_lines - 1]
         other_total = sum(count for _, count in items[max_lines - 1 :])
         items = head + [("Other", other_total)]
-    return [f"{model}: {count}" for model, count in items]
+    return items
+
+
+def _live_now_breakdown_lines(model_counts: dict[str, int], *, max_lines: int = 4) -> list[str]:
+    """Top models by current count, formatted as ``"model: count"`` lines."""
+
+    return [
+        f"{model}: {count}"
+        for model, count in _top_breakdown_items(model_counts, max_lines=max_lines)
+    ]
+
+
+def _airline_logo_path(code: str) -> Optional[str]:
+    """Path to ``images/air/<code>.png``/``.jpg`` (case-insensitive), if any."""
+
+    cleaned = (code or "").strip().lower()
+    if not cleaned:
+        return None
+    try:
+        entries = os.listdir(config.AIR_IMAGES_DIR)
+    except OSError:
+        return None
+    for name in entries:
+        stem, ext = os.path.splitext(name)
+        if stem.lower() == cleaned and ext.lower() in _AIRLINE_LOGO_EXTENSIONS:
+            return os.path.join(config.AIR_IMAGES_DIR, name)
+    return None
+
+
+def _airline_logo(code: str, height: int) -> Optional[Image.Image]:
+    """Load and cache the logo for an airline code, resized to *height*.
+
+    Returns ``None`` (no drawing performed) when no matching file exists,
+    so the caller falls back to printing the airline code as text.
+    """
+
+    height = max(1, height)
+    cache_key = ((code or "").strip().lower(), height)
+    if cache_key in _AIRLINE_LOGO_CACHE:
+        cached = _AIRLINE_LOGO_CACHE[cache_key]
+        return cached.copy() if cached is not None else None
+
+    logo = None
+    path = _airline_logo_path(code)
+    if path is not None:
+        try:
+            opened = Image.open(path).convert("RGBA")
+            ratio = height / opened.height
+            logo = opened.resize((max(1, round(opened.width * ratio)), height), Image.ANTIALIAS)
+        except Exception:
+            logging.exception("ADS-B: failed to load airline logo '%s'", path)
+            logo = None
+
+    _AIRLINE_LOGO_CACHE[cache_key] = logo
+    return logo.copy() if logo is not None else None
 
 
 def _status_text(stats: Optional[DailyStats]) -> str:
@@ -359,6 +417,25 @@ def _draw_stat_tile(
     )
     value = _fit_text(draw, value, value_font, value_max_width)
     _, value_h = _text_extent(draw, value, value_font)
+
+    if caption_h and value_h > value_max_h:
+        # Even fit_font's smallest allowed size doesn't fit the value above
+        # the caption (e.g. a multi-line breakdown in a small tile) — drop
+        # the caption rather than let the two overlap.
+        caption, caption_font, caption_h = None, None, 0
+        value_max_h = max(min_value_h, content_bottom - value_top)
+        value_font = fit_font(
+            draw,
+            value,
+            FONT_WEATHER_DETAILS_SMALL_BOLD,
+            max_width=value_max_width,
+            max_height=value_max_h,
+            min_pt=9,
+            max_pt=max(FONT_WEATHER_DETAILS_SMALL_BOLD.size, int(height * 0.4)),
+        )
+        value = _fit_text(draw, value, value_font, value_max_width)
+        _, value_h = _text_extent(draw, value, value_font)
+
     value_draw_top = value_top + max(0, (value_max_h - value_h) // 2)
 
     label_color = _mix_color(accent, _TEXT_COLOR, 0.25)
@@ -399,111 +476,256 @@ def _draw_stat_tile(
         )
 
 
-def _build_tiles(stats: DailyStats) -> list[dict[str, Any]]:
-    """Pick up to four stat tiles: Furthest and By Receiver always lead,
-    then whichever of All-Time Best / Live Now / Messages the
-    data actually supports fills the remaining one or two slots."""
+def _draw_airline_tile(
+    img: Image.Image,
+    draw: ImageDraw.ImageDraw,
+    rect: tuple[int, int, int, int],
+    label: str,
+    rows: list[tuple[str, int]],
+    caption: Optional[str],
+    accent: tuple[int, int, int],
+) -> None:
+    """Like ``_draw_stat_tile``, but each value line shows an airline logo
+    (when ``images/air/<code>.png``/``.jpg`` exists) or the airline code as
+    text, followed by its current aircraft count."""
 
-    tiles: list[dict[str, Any]] = []
+    x0, y0, x1, y1 = rect
+    width, height = x1 - x0, y1 - y0
+    if width <= 0 or height <= 0 or not rows:
+        return
 
-    if stats.furthest is not None:
-        tiles.append(
-            {
-                "label": "Furthest",
-                "value": _distance_text(stats.furthest.distance_nm),
-                "caption": _catch_detail(stats.furthest, when=_time_text(stats.furthest.seen_at)),
-                "accent": _ACCENT_FURTHEST,
-            }
-        )
-    else:
-        tiles.append(
-            {
-                "label": "Furthest",
-                "value": "--",
-                "caption": "No position data yet",
-                "accent": _ACCENT_FURTHEST,
-            }
-        )
-
-    receiver_lines = _by_receiver_lines(stats)
-    tiles.append(
-        {
-            "label": "By Receiver",
-            "value": "\n".join(text for text, _ in receiver_lines) if receiver_lines else "--",
-            "caption": None,
-            "accent": _ACCENT_RECEIVER,
-            "line_online": [online for _, online in receiver_lines] if receiver_lines else None,
-        }
+    radius = max(6, min(16, min(width, height) // 5))
+    draw.rounded_rectangle(
+        rect,
+        radius=radius,
+        fill=_mix_color(accent, _CARD_BG, 0.72),
+        outline=_mix_color(accent, _CARD_BG, 0.4),
+        width=1,
     )
 
-    extras: list[dict[str, Any]] = []
+    pad_x = max(8, width // 12)
+    pad_y = max(6, height // 10)
+    gap = max(2, height // 16)
+    max_text_width = max(1, width - 2 * pad_x)
+    content_top = y0 + pad_y
+    content_bottom = y1 - pad_y
 
+    label_text = label.upper()
+    label_font = fit_font(
+        draw,
+        label_text,
+        FONT_WEATHER_DETAILS_TINY,
+        max_width=max_text_width,
+        max_height=max(9, int(height * 0.22)),
+        min_pt=7,
+        max_pt=FONT_WEATHER_DETAILS_TINY.size,
+    )
+    _, label_h = _text_extent(draw, label_text, label_font)
+
+    caption_h = 0
+    caption_font = None
+    if caption:
+        caption_font = fit_font(
+            draw,
+            caption,
+            FONT_WEATHER_DETAILS_TINY,
+            max_width=max_text_width,
+            max_height=max(9, int(height * 0.2)),
+            min_pt=6,
+            max_pt=FONT_WEATHER_DETAILS_TINY.size,
+        )
+        caption = _fit_text(draw, caption, caption_font, max_text_width)
+        _, caption_h = _text_extent(draw, caption, caption_font)
+
+    label_color = _mix_color(accent, _TEXT_COLOR, 0.25)
+    _draw_line(draw, x0 + pad_x, content_top, label_text, label_font, label_color)
+
+    rows_top = content_top + label_h + gap
+    rows_bottom = content_bottom - (caption_h + gap if caption_h else 0)
+    rows_height = max(10, rows_bottom - rows_top)
+    row_h = max(10, rows_height // len(rows))
+
+    if caption_h and row_h * len(rows) > rows_height:
+        # Even the minimum row height doesn't leave room for every row above
+        # the caption (e.g. many airlines in a small tile) — drop the
+        # caption rather than let the rows spill into it.
+        caption, caption_font, caption_h = None, None, 0
+        rows_bottom = content_bottom
+        rows_height = max(10, rows_bottom - rows_top)
+        row_h = max(10, rows_height // len(rows))
+    icon_dim = max(10, min(row_h - 4, max_text_width // 5))
+    icon_col = icon_dim + max(4, width // 30)
+
+    count_font = fit_font(
+        draw,
+        "\n".join(str(count) for _, count in rows),
+        FONT_WEATHER_DETAILS_SMALL_BOLD,
+        max_width=max(1, max_text_width - icon_col),
+        max_height=row_h - 2,
+        min_pt=8,
+        max_pt=max(FONT_WEATHER_DETAILS_SMALL_BOLD.size, int(height * 0.35)),
+    )
+
+    y = rows_top
+    for code, count in rows:
+        row_center = y + row_h // 2
+        icon_x = x0 + pad_x
+        logo = _airline_logo(code, icon_dim)
+        if logo is not None:
+            paste_x = icon_x + max(0, (icon_dim - logo.width) // 2)
+            paste_y = row_center - logo.height // 2
+            img.paste(logo, (paste_x, paste_y), logo)
+        else:
+            abbr_font = fit_font(
+                draw,
+                code,
+                FONT_WEATHER_DETAILS_TINY,
+                max_width=icon_dim,
+                max_height=icon_dim,
+                min_pt=6,
+                max_pt=FONT_WEATHER_DETAILS_TINY.size,
+            )
+            abbr_text = _fit_text(draw, code, abbr_font, icon_dim)
+            abbr_top_offset, abbr_h = _text_extent(draw, abbr_text, abbr_font)
+            draw.text(
+                (icon_x, row_center - abbr_h // 2 - abbr_top_offset),
+                abbr_text,
+                font=abbr_font,
+                fill=_TEXT_COLOR,
+            )
+
+        count_text = str(count)
+        top_offset, text_h = _text_extent(draw, count_text, count_font)
+        draw.text(
+            (x0 + pad_x + icon_col, row_center - text_h // 2 - top_offset),
+            count_text,
+            font=count_font,
+            fill=_TEXT_COLOR,
+        )
+        y += row_h
+
+    if caption and caption_font is not None:
+        _draw_line(
+            draw,
+            x0 + pad_x,
+            content_bottom - caption_h,
+            caption,
+            caption_font,
+            _mix_color(accent, _TEXT_COLOR, 0.45),
+        )
+
+
+def _tile_furthest(stats: DailyStats) -> dict[str, Any]:
+    if stats.furthest is not None:
+        return {
+            "label": "Furthest",
+            "value": _distance_text(stats.furthest.distance_nm),
+            "caption": _catch_detail(stats.furthest, when=_time_text(stats.furthest.seen_at)),
+            "accent": _ACCENT_FURTHEST,
+        }
+    return {
+        "label": "Furthest",
+        "value": "--",
+        "caption": "No position data yet",
+        "accent": _ACCENT_FURTHEST,
+    }
+
+
+def _tile_by_receiver(stats: DailyStats) -> dict[str, Any]:
+    receiver_lines = _by_receiver_lines(stats)
+    return {
+        "label": "By Receiver",
+        "value": "\n".join(text for text, _ in receiver_lines) if receiver_lines else "--",
+        "caption": None,
+        "accent": _ACCENT_RECEIVER,
+        "line_online": [online for _, online in receiver_lines] if receiver_lines else None,
+    }
+
+
+def _tile_all_time_best(stats: DailyStats) -> Optional[dict[str, Any]]:
     show_all_time = stats.all_time_furthest is not None and (
         stats.furthest is None
         or stats.all_time_furthest.hex != stats.furthest.hex
         or stats.all_time_furthest.distance_nm != stats.furthest.distance_nm
     )
-    if show_all_time:
-        at = stats.all_time_furthest
-        extras.append(
-            {
-                "label": "All-Time Best",
-                "value": _distance_text(at.distance_nm),
-                "caption": _catch_detail(at, when=_date_text(at.seen_at)),
-                "accent": _ACCENT_ALL_TIME,
-            }
-        )
+    if not show_all_time:
+        return None
+    at = stats.all_time_furthest
+    return {
+        "label": "All-Time Best",
+        "value": _distance_text(at.distance_nm),
+        "caption": _catch_detail(at, when=_date_text(at.seen_at)),
+        "accent": _ACCENT_ALL_TIME,
+    }
 
-    if stats.currently_tracked_combined:
-        show_breakdown = bool(stats.currently_tracked_by_model) and (
-            int(time.time() // _LIVE_NOW_CYCLE_SECONDS) % 2 == 1
-        )
-        if show_breakdown:
-            extras.append(
-                {
-                    "label": "Live Now",
-                    "value": "\n".join(
-                        _live_now_breakdown_lines(stats.currently_tracked_by_model)
-                    ),
-                    "caption": "by model",
-                    "accent": _ACCENT_LIVE,
-                }
-            )
-        else:
-            extras.append(
-                {
-                    "label": "Live Now",
-                    "value": str(stats.currently_tracked_combined),
-                    "caption": "aircraft in range",
-                    "accent": _ACCENT_LIVE,
-                }
-            )
 
+def _tile_messages(stats: DailyStats) -> Optional[dict[str, Any]]:
     total_messages = sum(stats.messages_today_by_device.values())
-    if total_messages:
-        extras.append(
-            {
-                "label": "Messages",
-                "value": _format_count(total_messages),
-                "caption": "today",
-                "accent": _ACCENT_MESSAGES,
-            }
-        )
+    if not total_messages:
+        return None
+    return {
+        "label": "Messages",
+        "value": _format_count(total_messages),
+        "caption": "today",
+        "accent": _ACCENT_MESSAGES,
+    }
 
-    if not extras:
-        online = sum(1 for is_online in stats.device_online.values() if is_online)
-        total_devices = len(stats.device_online) or len(config.ADSB_DEVICES)
-        if total_devices:
-            extras.append(
-                {
-                    "label": "Receivers",
-                    "value": f"{online}/{total_devices}",
-                    "caption": "online",
-                    "accent": _ACCENT_RECEIVER,
-                }
-            )
 
-    tiles.extend(extras[:2])
+def _tile_live_total(stats: DailyStats) -> Optional[dict[str, Any]]:
+    if not stats.currently_tracked_combined:
+        return None
+    return {
+        "label": "Live Now",
+        "value": str(stats.currently_tracked_combined),
+        "caption": "aircraft in range",
+        "accent": _ACCENT_LIVE,
+    }
+
+
+def _tile_live_by_aircraft(stats: DailyStats) -> Optional[dict[str, Any]]:
+    if not stats.currently_tracked_combined:
+        return None
+    lines = _live_now_breakdown_lines(stats.currently_tracked_by_model, max_lines=3)
+    if not lines:
+        return None
+    return {
+        "label": "Live Now",
+        "value": "\n".join(lines),
+        "caption": "by aircraft",
+        "accent": _ACCENT_LIVE,
+    }
+
+
+def _tile_live_by_airline(stats: DailyStats) -> Optional[dict[str, Any]]:
+    if not stats.currently_tracked_combined:
+        return None
+    rows = _top_breakdown_items(stats.currently_tracked_by_airline, max_lines=3)
+    if not rows:
+        return None
+    return {
+        "label": "Live Now",
+        "caption": "by airline",
+        "accent": _ACCENT_LIVE,
+        "airline_rows": rows,
+    }
+
+
+def _build_tiles(stats: DailyStats, variant: str) -> list[dict[str, Any]]:
+    """Furthest and By Receiver always lead; the other two slots are a
+    fixed pair of tiles for *variant* (one of ``_VARIANT_BEST``,
+    ``_VARIANT_LIVE``, ``_VARIANT_LIVE_AIRLINES``) rather than a rotating
+    selection, since each variant is its own registered screen."""
+
+    tiles: list[dict[str, Any]] = [_tile_furthest(stats), _tile_by_receiver(stats)]
+
+    if variant == _VARIANT_LIVE:
+        extras = [_tile_live_total(stats), _tile_live_by_aircraft(stats)]
+    elif variant == _VARIANT_LIVE_AIRLINES:
+        extras = [_tile_live_by_aircraft(stats), _tile_live_by_airline(stats)]
+    else:
+        extras = [_tile_all_time_best(stats), _tile_messages(stats)]
+
+    tiles.extend(tile for tile in extras if tile is not None)
     return tiles
 
 
@@ -572,7 +794,7 @@ def _render_no_data(stats: Optional[DailyStats]) -> Image.Image:
     return img
 
 
-def _render_stats(stats: DailyStats) -> Image.Image:
+def _render_stats(stats: DailyStats, variant: str) -> Image.Image:
     background = get_screen_background_color("adsb stats", (0, 0, 0))
     img = Image.new("RGB", (WIDTH, HEIGHT), background)
     draw = ImageDraw.Draw(img)
@@ -700,25 +922,45 @@ def _render_stats(stats: DailyStats) -> Image.Image:
     # Stat tile row/grid below the badge.
     card_top = badge_top + badge_h + max(4, HEIGHT // 40)
     card_bottom = HEIGHT - margin
-    tiles = _build_tiles(stats)
+    tiles = _build_tiles(stats, variant)
     cells = _tile_grid_cells((margin, card_top, WIDTH - margin, card_bottom), len(tiles))
     for tile, cell in zip(tiles, cells, strict=False):
-        _draw_stat_tile(
-            draw,
-            cell,
-            tile["label"],
-            tile["value"],
-            tile["caption"],
-            tile["accent"],
-            tile.get("line_online"),
-        )
+        if "airline_rows" in tile:
+            _draw_airline_tile(
+                img,
+                draw,
+                cell,
+                tile["label"],
+                tile["airline_rows"],
+                tile["caption"],
+                tile["accent"],
+            )
+        else:
+            _draw_stat_tile(
+                draw,
+                cell,
+                tile["label"],
+                tile["value"],
+                tile["caption"],
+                tile["accent"],
+                tile.get("line_online"),
+            )
 
     return img
 
 
 @log_call
-def draw_adsb_stats_screen(display, stats: Optional[DailyStats] = None, transition: bool = False):
-    """Draw today's ADS-B receive stats, or a graceful "no data yet" state."""
+def draw_adsb_stats_screen(
+    display,
+    stats: Optional[DailyStats] = None,
+    transition: bool = False,
+    variant: str = _VARIANT_BEST,
+):
+    """Draw today's ADS-B receive stats, or a graceful "no data yet" state.
+
+    *variant* selects the fixed extra-tile pair (see ``_build_tiles``);
+    each variant is registered as its own screen in ``screens/registry.py``.
+    """
 
     if stats is None:
         store = _get_store()
@@ -733,6 +975,6 @@ def draw_adsb_stats_screen(display, stats: Optional[DailyStats] = None, transiti
     if stats is None or stats.total_combined == 0:
         img = _render_no_data(stats)
     else:
-        img = _render_stats(stats)
+        img = _render_stats(stats, variant)
 
     return ScreenImage(img, displayed=False)
