@@ -2299,12 +2299,28 @@ def fetch_blackhawks_last_game():
         return None
 
 
+_BLACKHAWKS_LIVE_WINDOW_STATES = (
+    "live",
+    "in progress",
+    "crit",
+    # Non-play statuses that still belong on the live/OLED score panel
+    # instead of falling back to "no game today": pregame warmup, and any
+    # delay/postponement/suspension of today's game.
+    "pre",
+    "pregame",
+    "postponed",
+    "ppd",
+    "suspended",
+    "susp",
+)
+
+
 def fetch_blackhawks_live_game():
     try:
         games = _fetch_blackhawks_schedule_games()
         for g in games:
             state = g.get("gameState", "").lower()
-            if state in ("live", "in progress", "crit"):
+            if state in _BLACKHAWKS_LIVE_WINDOW_STATES:
                 if not g.get("startTimeCentral"):
                     utc = g.get("startTimeUTC")
                     if utc:
@@ -2433,13 +2449,33 @@ def _fetch_mlb_schedule(team_id):
                     not is_game_over
                     and (code == "I" or abstract == "live" or "progress" in detailed)
                 )
+                # Today's game can sit in a non-play status (warmup, a delay,
+                # a suspension, a postponement) without ever reporting
+                # abstractGameState "Live" or statusCode "I". Surface those
+                # too so the Cubs Live screen and OLED helper can show the
+                # real status instead of treating the game as not started.
+                normalized_detail = detailed.replace("-", "")
+                is_pending_today = (
+                    not is_game_over
+                    and local_dt is not None
+                    and local_dt.date() == today
+                    and (
+                        "warmup" in normalized_detail
+                        or "pregame" in normalized_detail
+                        or detailed == "delayed"
+                        or "delay" in detailed
+                        or "suspend" in detailed
+                        or "postponed" in detailed
+                        or "cancel" in detailed
+                    )
+                )
 
                 # Live game.  MLB can briefly report a just-completed Game 1 of a
                 # doubleheader as statusCode=O / abstractGameState=Live /
                 # detailedState=Game Over before the feed flips to Final.  Treat
                 # that terminal state as finished so the Last Game screen can show
                 # the earlier game while Game 2 is still upcoming or live.
-                if is_live:
+                if is_live or is_pending_today:
                     result["live_game"] = g
 
                 # Next game (today scheduled)
