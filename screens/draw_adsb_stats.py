@@ -50,6 +50,9 @@ _ACCENT_ALL_TIME = (230, 185, 70)
 _ACCENT_LIVE = (95, 220, 150)
 _ACCENT_MESSAGES = (230, 150, 95)
 
+_DOT_ONLINE = (95, 220, 150)
+_DOT_OFFLINE = (225, 90, 90)
+
 # How often the Live Now tile flips between the headline count and the
 # by-model breakdown. Rendering is stateless (no background thread), so
 # this only ever changes what a given appearance of the screen shows —
@@ -169,10 +172,15 @@ def _catch_detail(catch: FurthestCatch, *, when: str) -> Optional[str]:
     return "\n".join(lines) if lines else None
 
 
-def _by_receiver_text(stats: DailyStats) -> str:
+def _by_receiver_lines(stats: DailyStats) -> list[tuple[str, bool]]:
+    """One ``"label: count"`` line per receiver, paired with whether that
+    receiver is currently online (for the status dot drawn beside it)."""
+
     labels = [device["label"] for device in config.ADSB_DEVICES] or sorted(stats.total_by_device)
-    parts = [f"{label}: {stats.total_by_device.get(label, 0)}" for label in labels]
-    return "\n".join(parts) if parts else "--"
+    return [
+        (f"{label}: {stats.total_by_device.get(label, 0)}", bool(stats.device_online.get(label)))
+        for label in labels
+    ]
 
 
 def _live_now_breakdown_lines(model_counts: dict[str, int], *, max_lines: int = 4) -> list[str]:
@@ -271,6 +279,7 @@ def _draw_stat_tile(
     value: str,
     caption: Optional[str],
     accent: tuple[int, int, int],
+    line_online: Optional[list[bool]] = None,
 ) -> None:
     x0, y0, x1, y1 = rect
     width, height = x1 - x0, y1 - y0
@@ -334,22 +343,51 @@ def _draw_stat_tile(
         value_max_h = value_bottom - value_top
     value_max_h = max(min_value_h, value_max_h)
 
+    # Reserve room for a status dot to the left of each value line when the
+    # caller wants receiver-online indicators (e.g. the "By Receiver" tile).
+    dot_reserve = max(9, width // 14) + max(3, width // 40) if line_online else 0
+    value_max_width = max(1, max_text_width - dot_reserve)
+
     value_font = fit_font(
         draw,
         value,
         FONT_WEATHER_DETAILS_SMALL_BOLD,
-        max_width=max_text_width,
+        max_width=value_max_width,
         max_height=value_max_h,
         min_pt=9,
         max_pt=max(FONT_WEATHER_DETAILS_SMALL_BOLD.size, int(height * 0.4)),
     )
-    value = _fit_text(draw, value, value_font, max_text_width)
+    value = _fit_text(draw, value, value_font, value_max_width)
     _, value_h = _text_extent(draw, value, value_font)
     value_draw_top = value_top + max(0, (value_max_h - value_h) // 2)
 
     label_color = _mix_color(accent, _TEXT_COLOR, 0.25)
     _draw_line(draw, x0 + pad_x, content_top, label_text, label_font, label_color)
-    _draw_line(draw, x0 + pad_x, value_draw_top, value, value_font, _TEXT_COLOR)
+
+    if line_online:
+        lines = value.split("\n")
+        flags = list(line_online[: len(lines)]) + [False] * max(0, len(lines) - len(line_online))
+        text_x = x0 + pad_x + dot_reserve
+        y = value_draw_top
+        for line_text, online in zip(lines, flags):
+            top_offset, line_h = _text_extent(draw, line_text, value_font)
+            dot_d = max(5, min(dot_reserve - 4, line_h - 2))
+            dot_cy = y + line_h // 2
+            dot_color = _DOT_ONLINE if online else _DOT_OFFLINE
+            draw.ellipse(
+                (
+                    x0 + pad_x,
+                    dot_cy - dot_d // 2,
+                    x0 + pad_x + dot_d,
+                    dot_cy - dot_d // 2 + dot_d,
+                ),
+                fill=dot_color,
+            )
+            draw.text((text_x, y - top_offset), line_text, font=value_font, fill=_TEXT_COLOR)
+            y += line_h + 2
+    else:
+        _draw_line(draw, x0 + pad_x, value_draw_top, value, value_font, _TEXT_COLOR)
+
     if caption and caption_font is not None:
         _draw_line(
             draw,
@@ -387,12 +425,14 @@ def _build_tiles(stats: DailyStats) -> list[dict[str, Any]]:
             }
         )
 
+    receiver_lines = _by_receiver_lines(stats)
     tiles.append(
         {
             "label": "By Receiver",
-            "value": _by_receiver_text(stats),
+            "value": "\n".join(text for text, _ in receiver_lines) if receiver_lines else "--",
             "caption": None,
             "accent": _ACCENT_RECEIVER,
+            "line_online": [online for _, online in receiver_lines] if receiver_lines else None,
         }
     )
 
@@ -663,7 +703,15 @@ def _render_stats(stats: DailyStats) -> Image.Image:
     tiles = _build_tiles(stats)
     cells = _tile_grid_cells((margin, card_top, WIDTH - margin, card_bottom), len(tiles))
     for tile, cell in zip(tiles, cells, strict=False):
-        _draw_stat_tile(draw, cell, tile["label"], tile["value"], tile["caption"], tile["accent"])
+        _draw_stat_tile(
+            draw,
+            cell,
+            tile["label"],
+            tile["value"],
+            tile["caption"],
+            tile["accent"],
+            tile.get("line_online"),
+        )
 
     return img
 

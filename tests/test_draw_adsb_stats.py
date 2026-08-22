@@ -113,6 +113,15 @@ def test_build_tiles_leads_with_furthest_and_by_receiver():
     assert "UAL123" in tiles[0]["caption"]
 
 
+def test_build_tiles_by_receiver_carries_online_status_per_line():
+    tiles = _build_tiles(
+        _stats(device_online={"Receiver 1": True, "Receiver 2": False})
+    )
+    by_receiver = next(tile for tile in tiles if tile["label"] == "By Receiver")
+    assert by_receiver["value"] == "Receiver 1: 8\nReceiver 2: 6"
+    assert by_receiver["line_online"] == [True, False]
+
+
 def test_build_tiles_shows_no_position_message_without_furthest():
     tiles = _build_tiles(_stats(furthest=None))
     assert tiles[0]["value"] == "--"
