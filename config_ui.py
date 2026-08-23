@@ -1182,6 +1182,12 @@ def screen_screenshots() -> str:
     )
 
 
+@app.get("/feed")
+def screen_feed() -> str:
+    entries = _build_screenshot_entries()
+    return render_template("feed.html", screens=entries)
+
+
 @app.get("/api/screenshots")
 def get_screenshots() -> Any:
     return jsonify(

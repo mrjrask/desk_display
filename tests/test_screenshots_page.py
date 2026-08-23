@@ -123,6 +123,42 @@ def test_screenshots_api_returns_entries(monkeypatch):
     }
 
 
+def test_feed_page_renders_only_screens_with_screenshots(monkeypatch):
+    monkeypatch.setattr(
+        config_ui,
+        "_build_screenshot_entries",
+        lambda: [
+            {
+                "id": "date",
+                "path": "current/date.png",
+                "timestamp": "2025-01-01 00:00:00",
+                "elapsed": "1d 2h 3m 4s ago",
+                "version": 1735689600,
+                "is_stale": True,
+            },
+            {
+                "id": "weather",
+                "path": None,
+                "timestamp": None,
+                "elapsed": None,
+                "version": None,
+                "is_stale": False,
+            },
+        ],
+    )
+
+    client = config_ui.app.test_client()
+    response = client.get("/feed")
+
+    html = response.get_data(as_text=True)
+
+    assert response.status_code == 200
+    assert 'data-screen-id="date"' in html
+    assert 'data-screen-id="weather"' not in html
+    assert "<h1>" not in html
+    assert "<nav" not in html
+
+
 def test_layout_editor_routes_removed():
     client = config_ui.app.test_client()
 
