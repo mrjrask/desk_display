@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{ machine_hostname }} - Feed</title>
+  <style>
+    html, body {
+      margin: 0;
+      padding: 0;
+      background: #000;
+    }
+    #feed {
+      display: block;
+      line-height: 0;
+    }
+    #feed img {
+      display: block;
+      width: 100%;
+      height: auto;
+    }
+  </style>
+</head>
+<body>
+  <main id="feed">
+    {% for screen in screens %}
+      {% if screen.path %}
+      <img
+        data-screen-id="{{ screen.id }}"
+        data-version="{{ screen.version if screen.version else '' }}"
+        src="{{ url_for('screenshot_file', relative_path=screen.path) }}?v={{ screen.version if screen.version else 0 }}"
+        alt=""
+      >
+      {% endif %}
+    {% endfor %}
+  </main>
+  <script>
+    const feedApiUrl = "{{ url_for('get_screenshots') }}";
+    const feed = document.getElementById("feed");
+
+    function buildSrc(entry) {
+      const encodedPath = entry.path.split("/").map(encodeURIComponent).join("/");
+      const version = entry.version || Date.now();
+      return `/screenshots/file/${encodedPath}?v=${version}`;
+    }
+
+    function refreshFeed() {
+      fetch(feedApiUrl, { cache: "no-store" })
+        .then((response) => {
+          if (!response.ok) {
+            throw new Error("Failed to fetch screenshots");
+          }
+          return response.json();
+        })
+        .then((payload) => {
+          if (!payload || !Array.isArray(payload.screens)) {
+            return;
+          }
+          const withScreenshots = payload.screens.filter((entry) => Boolean(entry.path));
+          const wantedIds = new Set(withScreenshots.map((entry) => entry.id));
+
+          Array.from(feed.children).forEach((child) => {
+            if (!wantedIds.has(child.dataset.screenId)) {
+              child.remove();
+            }
+          });
+
+          let previousNode = null;
+          withScreenshots.forEach((entry) => {
+            let img = feed.querySelector(`img[data-screen-id="${CSS.escape(entry.id)}"]`);
+            if (!img) {
+              img = document.createElement("img");
+              img.dataset.screenId = entry.id;
+              img.alt = "";
+            }
+            const version = entry.version != null ? String(entry.version) : "";
+            if (img.dataset.version !== version || !img.getAttribute("src")) {
+              img.dataset.version = version;
+              img.src = buildSrc(entry);
+            }
+            const afterNode = previousNode ? previousNode.nextSibling : feed.firstChild;
+            if (afterNode !== img) {
+              feed.insertBefore(img, afterNode);
+            }
+            previousNode = img;
+          });
+        })
+        .catch(() => {
+          // Ignore refresh failures; next polling attempt will retry.
+        });
+    }
+
+    setInterval(refreshFeed, 5000);
+  </script>
+</body>
+</html>
