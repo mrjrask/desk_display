@@ -187,18 +187,31 @@ def _by_receiver_lines(stats: DailyStats) -> list[tuple[str, bool]]:
     ]
 
 
+_OTHER_LABEL = "Other"
+
+
 def _top_breakdown_items(counts: dict[str, int], *, max_lines: int = 4) -> list[tuple[str, int]]:
     """Top entries by current count, folding any overflow into "Other" so
-    the entries always add up to the same total as the headline count."""
+    the entries always add up to the same total as the headline count.
+
+    *counts* may already carry its own "Other" bucket (e.g. unknown
+    aircraft types or unparseable callsigns) — that's merged into the
+    single folded-overflow "Other" line rather than kept as a separate
+    entry, so "Other" never appears twice.
+    """
 
     if not counts:
         return []
-    items = sorted(counts.items(), key=lambda kv: (-kv[1], kv[0]))
-    if len(items) > max_lines:
-        head = items[: max_lines - 1]
-        other_total = sum(count for _, count in items[max_lines - 1 :])
-        items = head + [("Other", other_total)]
-    return items
+    other_total = counts.get(_OTHER_LABEL, 0)
+    named = sorted(
+        ((label, count) for label, count in counts.items() if label != _OTHER_LABEL),
+        key=lambda kv: (-kv[1], kv[0]),
+    )
+    if len(named) + (1 if other_total else 0) > max_lines:
+        keep = max(0, max_lines - 1)
+        other_total += sum(count for _, count in named[keep:])
+        named = named[:keep]
+    return named + [(_OTHER_LABEL, other_total)] if other_total else named
 
 
 def _live_now_breakdown_lines(model_counts: dict[str, int], *, max_lines: int = 4) -> list[str]:
@@ -685,7 +698,7 @@ def _tile_live_total(stats: DailyStats) -> Optional[dict[str, Any]]:
 def _tile_live_by_aircraft(stats: DailyStats) -> Optional[dict[str, Any]]:
     if not stats.currently_tracked_combined:
         return None
-    lines = _live_now_breakdown_lines(stats.currently_tracked_by_model, max_lines=3)
+    lines = _live_now_breakdown_lines(stats.currently_tracked_by_model, max_lines=5)
     if not lines:
         return None
     return {
@@ -699,7 +712,7 @@ def _tile_live_by_aircraft(stats: DailyStats) -> Optional[dict[str, Any]]:
 def _tile_live_by_airline(stats: DailyStats) -> Optional[dict[str, Any]]:
     if not stats.currently_tracked_combined:
         return None
-    rows = _top_breakdown_items(stats.currently_tracked_by_airline, max_lines=3)
+    rows = _top_breakdown_items(stats.currently_tracked_by_airline, max_lines=5)
     if not rows:
         return None
     return {

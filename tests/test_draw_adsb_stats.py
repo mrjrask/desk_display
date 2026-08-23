@@ -221,6 +221,22 @@ def test_top_breakdown_items_empty_when_no_data():
     assert _top_breakdown_items({}) == []
 
 
+def test_top_breakdown_items_merges_existing_other_with_folded_overflow():
+    """A pre-existing "Other" bucket (e.g. unparseable callsigns) must be
+    merged with any folded overflow rather than appear as its own entry
+    alongside the folded one -- "Other" should never be listed twice."""
+
+    counts = {"UAL": 19, "Other": 83, "AAL": 5, "DAL": 3, "SWA": 2, "JBU": 1}
+    items = _top_breakdown_items(counts, max_lines=3)
+    labels = [label for label, _ in items]
+    assert labels.count("Other") == 1
+    assert items == [("UAL", 19), ("AAL", 5), ("Other", 83 + 3 + 2 + 1)]
+
+
+def test_top_breakdown_items_keeps_solo_other_bucket_when_no_other_data():
+    assert _top_breakdown_items({"Other": 4}, max_lines=3) == [("Other", 4)]
+
+
 def test_live_now_breakdown_lines_sorts_and_folds_overflow_into_other():
     counts = {"B738": 5, "A320": 8, "E170": 2, "CRJ7": 1, "C172": 1}
     lines = _live_now_breakdown_lines(counts, max_lines=3)
