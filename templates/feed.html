@@ -18,6 +18,15 @@
       display: block;
       width: 100%;
       height: auto;
+      cursor: pointer;
+      filter: brightness(1);
+      transition: filter 0.15s ease;
+    }
+    #feed img.is-copy-success {
+      filter: brightness(1.5);
+    }
+    #feed img.is-copy-error {
+      filter: brightness(0.6) saturate(3) hue-rotate(-50deg);
     }
   </style>
 </head>
@@ -30,6 +39,10 @@
         data-version="{{ screen.version if screen.version else '' }}"
         src="{{ url_for('screenshot_file', relative_path=screen.path) }}?v={{ screen.version if screen.version else 0 }}"
         alt=""
+        title="Click to copy image"
+        aria-label="Copy screenshot to clipboard"
+        role="button"
+        tabindex="0"
       >
       {% endif %}
     {% endfor %}
@@ -72,6 +85,10 @@
               img = document.createElement("img");
               img.dataset.screenId = entry.id;
               img.alt = "";
+              img.title = "Click to copy image";
+              img.setAttribute("aria-label", "Copy screenshot to clipboard");
+              img.setAttribute("role", "button");
+              img.tabIndex = 0;
             }
             const version = entry.version != null ? String(entry.version) : "";
             if (img.dataset.version !== version || !img.getAttribute("src")) {
@@ -91,6 +108,62 @@
     }
 
     setInterval(refreshFeed, 5000);
+
+    function toPngBlob(blob) {
+      if (blob.type === "image/png") {
+        return Promise.resolve(blob);
+      }
+      return createImageBitmap(blob).then((bitmap) => {
+        const canvas = document.createElement("canvas");
+        canvas.width = bitmap.width;
+        canvas.height = bitmap.height;
+        canvas.getContext("2d").drawImage(bitmap, 0, 0);
+        return new Promise((resolve, reject) => {
+          canvas.toBlob((pngBlob) => {
+            if (pngBlob) {
+              resolve(pngBlob);
+            } else {
+              reject(new Error("Failed to convert image to PNG"));
+            }
+          }, "image/png");
+        });
+      });
+    }
+
+    function flashImage(img, className) {
+      img.classList.remove("is-copy-success", "is-copy-error");
+      // Force reflow so a repeated flash restarts its transition.
+      void img.offsetWidth;
+      img.classList.add(className);
+      setTimeout(() => img.classList.remove(className), 220);
+    }
+
+    function copyImageToClipboard(img) {
+      if (!navigator.clipboard || typeof ClipboardItem === "undefined") {
+        flashImage(img, "is-copy-error");
+        return;
+      }
+      const pngBlobPromise = fetch(img.currentSrc || img.src, { cache: "no-store" })
+        .then((response) => response.blob())
+        .then((blob) => toPngBlob(blob));
+      navigator.clipboard
+        .write([new ClipboardItem({ "image/png": pngBlobPromise })])
+        .then(() => flashImage(img, "is-copy-success"))
+        .catch(() => flashImage(img, "is-copy-error"));
+    }
+
+    feed.addEventListener("click", (event) => {
+      if (event.target.tagName === "IMG") {
+        copyImageToClipboard(event.target);
+      }
+    });
+
+    feed.addEventListener("keydown", (event) => {
+      if (event.target.tagName === "IMG" && (event.key === "Enter" || event.key === " ")) {
+        event.preventDefault();
+        copyImageToClipboard(event.target);
+      }
+    });
   </script>
 </body>
 </html>

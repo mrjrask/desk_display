@@ -157,6 +157,8 @@ def test_feed_page_renders_only_screens_with_screenshots(monkeypatch):
     assert 'data-screen-id="weather"' not in html
     assert "<h1>" not in html
     assert "<nav" not in html
+    assert 'role="button"' in html
+    assert 'tabindex="0"' in html
 
 
 def test_layout_editor_routes_removed():
