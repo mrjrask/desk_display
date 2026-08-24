@@ -5,6 +5,7 @@ from __future__ import annotations
 import contextlib
 import datetime
 import logging
+import time
 from collections.abc import Iterable
 from typing import Any, Optional
 
@@ -17,6 +18,8 @@ from services.sports.scoreboard_window import (
 
 REQUEST_TIMEOUT = 10
 _SESSION = get_session()
+_GAMES_FOR_DATE_CACHE_TTL_SECONDS = 60
+_games_for_date_cache: dict[datetime.date, tuple[float, list[dict]]] = {}
 _NBA_HEADERS = {
     "Origin": "https://www.nba.com",
     "Referer": "https://www.nba.com/",
@@ -580,13 +583,20 @@ def _fetch_games_from_nba_cdn(day: datetime.date) -> list[dict]:
 
 
 def _fetch_games_for_date(day: datetime.date) -> list[dict]:
+    now = time.monotonic()
+    cached = _games_for_date_cache.get(day)
+    if cached and (now - cached[0]) < _GAMES_FOR_DATE_CACHE_TTL_SECONDS:
+        return cached[1]
+
     games = _fetch_games_from_espn(day)
     if games is not None:
         _reset_nba_cdn_fallback_notice()
-        return games
+    else:
+        _log_nba_cdn_fallback(day)
+        games = _fetch_games_from_nba_cdn(day)
 
-    _log_nba_cdn_fallback(day)
-    return _fetch_games_from_nba_cdn(day)
+    _games_for_date_cache[day] = (now, games)
+    return games
 
 
 def fetch_games_for_date(day: datetime.date) -> list[dict]:

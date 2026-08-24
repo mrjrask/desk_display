@@ -2,6 +2,7 @@ import importlib
 import sys
 
 import pytest
+import requests
 
 
 def _reload_http_client(monkeypatch: pytest.MonkeyPatch, value: str | None):
@@ -31,5 +32,68 @@ def test_http_client_can_opt_in_to_system_proxies(monkeypatch: pytest.MonkeyPatc
     try:
         session = http_client.get_session()
         assert session.trust_env is True
+    finally:
+        _reload_http_client(monkeypatch, None)
+
+
+def _fake_response(status_code: int) -> requests.Response:
+    response = requests.Response()
+    response.status_code = status_code
+    response._content = b"{}"
+    return response
+
+
+def test_circuit_breaker_short_circuits_after_403(monkeypatch: pytest.MonkeyPatch):
+    http_client = _reload_http_client(monkeypatch, None)
+    try:
+        session = http_client.get_session()
+        calls = []
+
+        def fake_send(self, request, **kwargs):
+            calls.append(request.url)
+            return _fake_response(403)
+
+        monkeypatch.setattr(requests.Session, "send", fake_send)
+
+        # First request actually hits the network and gets a 403.
+        response = session.get("https://blocked.example.com/a")
+        assert response.status_code == 403
+        assert len(calls) == 1
+
+        # A second request to the same host, made shortly after, should be
+        # short-circuited (no real network call) instead of also hitting 403.
+        with pytest.raises(http_client.HostTemporarilyForbidden):
+            session.get("https://blocked.example.com/b")
+        assert len(calls) == 1  # no new network call was made
+
+        # A different host is unaffected.
+        response = session.get("https://other.example.com/c")
+        assert response.status_code == 403
+        assert len(calls) == 2
+    finally:
+        _reload_http_client(monkeypatch, None)
+
+
+def test_circuit_breaker_clears_after_success(monkeypatch: pytest.MonkeyPatch):
+    http_client = _reload_http_client(monkeypatch, None)
+    try:
+        session = http_client.get_session()
+        statuses = iter([403, 200])
+
+        def fake_send(self, request, **kwargs):
+            return _fake_response(next(statuses))
+
+        monkeypatch.setattr(requests.Session, "send", fake_send)
+
+        assert session.get("https://recovering.example.com/a").status_code == 403
+        with pytest.raises(http_client.HostTemporarilyForbidden):
+            session.get("https://recovering.example.com/b")
+
+        # Manually expire the cooldown (as if enough time had passed) and
+        # confirm a subsequent success clears the block for later requests.
+        http_client._forbidden_hosts_until["recovering.example.com"] = 0.0
+        response = session.get("https://recovering.example.com/c")
+        assert response.status_code == 200
+        assert "recovering.example.com" not in http_client._forbidden_hosts_until
     finally:
         _reload_http_client(monkeypatch, None)

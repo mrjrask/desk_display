@@ -4,7 +4,10 @@ from __future__ import annotations
 
 import logging
 import os
+import threading
+import time
 from typing import Any, Optional
+from urllib.parse import urlsplit
 
 import requests
 from requests.adapters import HTTPAdapter
@@ -40,9 +43,58 @@ _USE_SYSTEM_PROXIES = (
     in {"1", "true", "yes", "on"}
 )
 
+# A 403 from a host almost always means "you are being rate-limited/blocked",
+# not "this particular resource doesn't exist" -- every other request to that
+# same host is likely to fail the same way for a while. Callers that scan many
+# URLs on the same host in a tight loop (e.g. a day-by-day schedule lookahead)
+# would otherwise keep making real, slow network round-trips for every
+# remaining day even though the host is clearly not going to answer. Once a
+# host returns 403, short-circuit further requests to it for a cooldown
+# window instead of hammering it -- this fails fast (no network I/O) and
+# gives the block a chance to clear.
+FORBIDDEN_COOLDOWN_SECONDS = float(
+    os.environ.get("HTTP_CLIENT_FORBIDDEN_COOLDOWN_SECONDS", "300")
+)
+
+_forbidden_hosts_lock = threading.Lock()
+_forbidden_hosts_until: dict[str, float] = {}
+
+
+class HostTemporarilyForbidden(requests.exceptions.RequestException):
+    """Raised in place of a real request while a host is in its 403 cooldown."""
+
+
+def _host_of(url: str) -> str:
+    return (urlsplit(url).netloc or "").lower()
+
+
+class _CircuitBreakerSession(requests.Session):
+    def request(self, method, url, *args, **kwargs):  # type: ignore[override]
+        host = _host_of(url)
+        now = time.monotonic()
+        if host:
+            with _forbidden_hosts_lock:
+                blocked_until = _forbidden_hosts_until.get(host)
+            if blocked_until is not None and now < blocked_until:
+                raise HostTemporarilyForbidden(
+                    f"{host} returned 403 recently; skipping request to {url} for "
+                    f"another {blocked_until - now:.0f}s to avoid hammering it"
+                )
+
+        response = super().request(method, url, *args, **kwargs)
+
+        if host:
+            with _forbidden_hosts_lock:
+                if response.status_code == 403:
+                    _forbidden_hosts_until[host] = now + FORBIDDEN_COOLDOWN_SECONDS
+                else:
+                    _forbidden_hosts_until.pop(host, None)
+
+        return response
+
 
 def _build_session() -> requests.Session:
-    session = requests.Session()
+    session = _CircuitBreakerSession()
     session.trust_env = _USE_SYSTEM_PROXIES
     session.headers.update(DEFAULT_HEADERS)
     adapter = HTTPAdapter(max_retries=_RETRY)
