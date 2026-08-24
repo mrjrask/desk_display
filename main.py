@@ -1983,7 +1983,7 @@ _LIVE_TEAM_SCREEN_TO_FEED: Dict[str, str] = {
 
 _last_feed_refresh: Dict[str, float] = {}
 
-_STARTUP_CRITICAL_FEEDS: Tuple[str, ...] = ("weather", "scoreboards")
+_STARTUP_CRITICAL_FEEDS: Tuple[str, ...] = ("weather", "scoreboards", "air_quality")
 _STARTUP_CRITICAL_FEED_TIMEOUT_SECONDS = max(1.0, float(os.environ.get("STARTUP_CRITICAL_FEED_TIMEOUT_SECONDS", "8")))
 
 
@@ -1995,7 +1995,15 @@ def _startup_critical_feeds() -> List[str]:
 
 
 def _refresh_startup_critical_feeds() -> None:
-    """Attempt to fetch weather/scoreboard data before entering the main loop."""
+    """Attempt to fetch weather/scoreboard/air-quality data before entering the main loop.
+
+    Air quality is included here (rather than only via the best-effort async
+    startup wave) because the "air quality" screen's registry entry falls
+    back to a synchronous, blocking AirNow/Open-Meteo fetch whenever
+    ``cache["air_quality"]`` is still empty when it first renders. Priming it
+    up front avoids stalling the display loop the first time that screen is
+    shown.
+    """
 
     if _wifi_outage_active:
         logging.info("⏭️  Skipping startup critical refresh during Wi‑Fi outage.")

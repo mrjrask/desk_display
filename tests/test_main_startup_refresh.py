@@ -94,3 +94,39 @@ def test_startup_refresh_runs_first_wave_before_background(monkeypatch):
     main._startup_refresh()
 
     assert calls == [["weather", "hawks"], ["bears"]]
+
+
+def test_air_quality_is_a_startup_critical_feed():
+    main = _load_main()
+
+    assert "air_quality" in main._STARTUP_CRITICAL_FEEDS
+
+
+def test_startup_critical_feeds_includes_air_quality_when_requested(monkeypatch):
+    main = _load_main()
+
+    monkeypatch.setattr(main, "_requested_data_feeds", lambda: {"weather", "scoreboards", "air_quality"})
+
+    assert main._startup_critical_feeds() == ["weather", "scoreboards", "air_quality"]
+
+
+def test_refresh_startup_critical_feeds_fetches_air_quality_before_main_loop(monkeypatch):
+    """AQI must be primed alongside weather/scoreboards so the "air quality"
+    screen's registry entry never falls back to a synchronous, blocking
+    AirNow/Open-Meteo fetch the first time it renders."""
+
+    main = _load_main()
+
+    monkeypatch.setattr(main, "_wifi_outage_active", False)
+    monkeypatch.setattr(main, "_requested_data_feeds", lambda: {"weather", "scoreboards", "air_quality"})
+    main._last_feed_refresh.clear()
+
+    called = []
+    monkeypatch.setitem(main._FEED_REFRESHERS, "weather", lambda: called.append("weather"))
+    monkeypatch.setitem(main._FEED_REFRESHERS, "scoreboards", lambda: called.append("scoreboards"))
+    monkeypatch.setitem(main._FEED_REFRESHERS, "air_quality", lambda: called.append("air_quality"))
+
+    main._refresh_startup_critical_feeds()
+
+    assert set(called) == {"weather", "scoreboards", "air_quality"}
+    assert "air_quality" in main._last_feed_refresh
