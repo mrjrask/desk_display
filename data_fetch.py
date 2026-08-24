@@ -68,7 +68,7 @@ from config import (
 )
 from paths import resolve_cache_file_path
 from services.http_client import NHL_HEADERS, get_session
-from services.sports.nba import fetch_games_for_date as _nba_fetch_games_for_date
+from services.sports.nba import fetch_team_schedule as _nba_fetch_team_schedule
 
 # ─── Shared HTTP session ─────────────────────────────────────────────────────
 _session = get_session()
@@ -1596,37 +1596,49 @@ def _nba_game_state(game):
     return detailed
 
 
-def _get_bulls_games_for_day(day):
+def _bulls_schedule_games():
+    # Fetch the whole Bulls schedule in one request rather than scanning
+    # scoreboard days one at a time -- a 120-day forward scan was enough to
+    # trip ESPN's rate limiter and 403 the shared site.api.espn.com host,
+    # which then blocked every other sport's requests (NFL included) for
+    # the circuit breaker's cooldown window.
     try:
-        games = _nba_fetch_games_for_date(day)
+        games = _nba_fetch_team_schedule(_BULLS_TEAM_ID)
     except Exception as exc:
-        logging.error("Failed to fetch NBA scoreboard for %s: %s", day, exc)
+        logging.error("Failed to fetch Bulls schedule: %s", exc)
         return []
     results = []
     for game in games or []:
         if not _is_bulls_game(game):
             continue
         augmented = _augment_nba_game(game)
-        if augmented:
+        if augmented and isinstance(augmented.get("_start_local"), datetime.datetime):
             results.append(augmented)
     return results
 
 
 def _future_bulls_games(days_forward):
     today = datetime.datetime.now(CENTRAL_TIME).date()
-    for delta in range(0, days_forward + 1):
-        day = today + datetime.timedelta(days=delta)
-        for game in _get_bulls_games_for_day(day):
-            yield game
+    cutoff = today + datetime.timedelta(days=days_forward)
+    games = [
+        game
+        for game in _bulls_schedule_games()
+        if today <= game["_start_local"].date() <= cutoff
+    ]
+    games.sort(key=lambda game: game["_start_local"])
+    yield from games
 
 
 def _past_bulls_games(days_back):
     today = datetime.datetime.now(CENTRAL_TIME).date()
-    for delta in range(0, days_back + 1):
-        day = today - datetime.timedelta(days=delta)
-        games = _get_bulls_games_for_day(day)
-        for game in reversed(games):
-            yield game
+    cutoff = today - datetime.timedelta(days=days_back)
+    games = [
+        game
+        for game in _bulls_schedule_games()
+        if cutoff <= game["_start_local"].date() <= today
+    ]
+    games.sort(key=lambda game: game["_start_local"], reverse=True)
+    yield from games
 
 
 def fetch_bulls_next_game():

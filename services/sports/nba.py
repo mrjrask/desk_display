@@ -377,10 +377,12 @@ def _map_espn_competitor(comp: dict[str, Any]) -> dict[str, Any]:
     return mapped
 
 
-def _map_espn_game(event: dict[str, Any], competition: dict[str, Any], day: datetime.date) -> Optional[dict[str, Any]]:
+def _map_espn_game(
+    event: dict[str, Any], competition: dict[str, Any], day: Optional[datetime.date]
+) -> Optional[dict[str, Any]]:
     competition = competition or {}
     event_date = competition.get("date") or event.get("date")
-    if event_date:
+    if event_date and day is not None:
         start_local = _timestamp_to_local(event_date)
         if start_local and start_local.date() != day:
             return None
@@ -479,6 +481,57 @@ def _fetch_games_from_espn(day: datetime.date) -> Optional[list[dict]]:
 
     mapped_games = [_map_game(game) for game in raw_games]
     return _hydrate_games(mapped_games)
+
+
+_TEAM_SCHEDULE_CACHE_TTL_SECONDS = 30 * 60
+_team_schedule_cache: dict[str, tuple[float, list[dict]]] = {}
+
+
+def _fetch_team_schedule_from_espn(team_id: str) -> list[dict]:
+    """Fetch a team's full schedule in one request instead of scanning day by day.
+
+    Bulls next/last/home-game lookups used to scan up to 120 individual
+    scoreboard days one HTTP request at a time, which was enough to trip
+    ESPN's rate limiter and 403 the shared site.api.espn.com host -- that
+    then blocked every other sport's requests (NFL included) for the
+    circuit breaker's cooldown window. The team schedule endpoint returns
+    the whole season in a single request, so callers can filter it in
+    memory instead of hammering the scoreboard endpoint.
+    """
+
+    url = f"https://site.api.espn.com/apis/site/v2/sports/basketball/nba/teams/{team_id}/schedule"
+    try:
+        response = _SESSION.get(url, timeout=REQUEST_TIMEOUT)
+        response.raise_for_status()
+        data = response.json()
+    except Exception as exc:
+        logging.error("Failed to fetch NBA team schedule for %s: %s", team_id, exc)
+        return []
+
+    raw_games: list[dict] = []
+    for event in data.get("events") or []:
+        competitions = event.get("competitions") or []
+        competition = competitions[0] if competitions else event
+        mapped = _map_espn_game(event, competition, day=None)
+        if mapped:
+            raw_games.append(mapped)
+
+    mapped_games = [_map_game(game) for game in raw_games]
+    return _hydrate_games(mapped_games)
+
+
+def fetch_team_schedule(team_id: str) -> list[dict]:
+    """Return a team's full schedule, cached to avoid refetching every call."""
+
+    now = time.monotonic()
+    cached = _team_schedule_cache.get(team_id)
+    if cached and (now - cached[0]) < _TEAM_SCHEDULE_CACHE_TTL_SECONDS:
+        return cached[1]
+
+    games = _fetch_team_schedule_from_espn(team_id)
+    if games:
+        _team_schedule_cache[team_id] = (now, games)
+    return games
 
 
 def _log_nba_cdn_fallback(day: datetime.date) -> None:
