@@ -15,6 +15,7 @@ desk_display panel of its own.
 from __future__ import annotations
 
 import hmac
+import json
 import logging
 import os
 import socket
@@ -45,6 +46,7 @@ _PROJECT_ROOT = Path(__file__).resolve().parent
 FEED_STORAGE_DIR = Path(
     os.environ.get("FEED_STORAGE_DIR", str(_PROJECT_ROOT / "feed_uploads"))
 ).expanduser()
+DEFAULT_SCREENS_LARGE_PATH = _PROJECT_ROOT / "default_screens_large.json"
 
 app = Flask(__name__)
 app.config["MAX_CONTENT_LENGTH"] = FEED_MAX_UPLOAD_BYTES
@@ -58,6 +60,42 @@ def _sanitize_id(value: str) -> str:
     safe = safe.replace(" ", "_")
     safe = "".join(ch for ch in safe if ch.isalnum() or ch in ("_", "-"))
     return safe or "unknown"
+
+
+def _load_large_screen_order() -> list[str]:
+    """Return sanitized screen ids in the order large-screen defaults play them.
+
+    Flattens ``default_screens_large.json``'s ``sequence`` (playlist order)
+    and each playlist's ``steps`` (screen order within it) into a single
+    list, matching the exact id every screen's uploaded filename uses
+    (``_sanitize_id`` mirrors the sanitizing ``main.py`` applies when it
+    names screenshot files). Falls back to an empty list -- callers then
+    fall back to alphabetical order -- if the defaults file is missing or
+    malformed, e.g. on a Feed-server-only checkout without it.
+    """
+
+    try:
+        payload = json.loads(DEFAULT_SCREENS_LARGE_PATH.read_text(encoding="utf-8"))
+        config = payload["config"]
+        playlists = config["playlists"]
+        sequence = config["sequence"]
+    except (OSError, json.JSONDecodeError, KeyError, TypeError):
+        return []
+
+    order: list[str] = []
+    for item in sequence:
+        playlist = playlists.get(item.get("playlist")) if isinstance(item, dict) else None
+        steps = playlist.get("steps") if isinstance(playlist, dict) else None
+        if not isinstance(steps, list):
+            continue
+        for step in steps:
+            screen = step.get("screen") if isinstance(step, dict) else None
+            if isinstance(screen, str) and screen:
+                order.append(_sanitize_id(screen))
+    return order
+
+
+LARGE_SCREEN_ORDER = _load_large_screen_order()
 
 
 def _source_dir(source_id: str) -> Path:
@@ -114,24 +152,33 @@ def inject_machine_hostname() -> dict[str, str]:
 
 def _build_source_screen_entries(source_id: str) -> list[dict[str, Any]]:
     current_dir = _source_current_dir(source_id)
-    entries: list[dict[str, Any]] = []
     if not current_dir.is_dir():
-        return entries
-    for path in sorted(current_dir.iterdir()):
+        return []
+
+    by_id: dict[str, dict[str, Any]] = {}
+    for path in current_dir.iterdir():
         if not path.is_file() or path.suffix.lower() not in ALLOWED_SCREEN_EXTS:
             continue
         try:
             mtime = path.stat().st_mtime
         except OSError:
             continue
-        entries.append(
-            {
-                "id": path.stem,
-                "filename": path.name,
-                "version": int(mtime),
-            }
-        )
-    return entries
+        # Keep only the newest file per screen id, so a screen never shows
+        # more than one screenshot even if a stale extra file lingers.
+        existing = by_id.get(path.stem)
+        if existing is not None and existing["version"] >= int(mtime):
+            continue
+        by_id[path.stem] = {
+            "id": path.stem,
+            "filename": path.name,
+            "version": int(mtime),
+        }
+
+    # Large-screen-defaults order first, then any uploaded screen id that
+    # defaults file doesn't know about (e.g. a newer screen), alphabetically.
+    ordered_ids = [screen_id for screen_id in LARGE_SCREEN_ORDER if screen_id in by_id]
+    remaining_ids = sorted(set(by_id) - set(ordered_ids))
+    return [by_id[screen_id] for screen_id in ordered_ids + remaining_ids]
 
 
 def _list_sources() -> list[dict[str, Any]]:

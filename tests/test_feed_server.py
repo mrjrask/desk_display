@@ -1,5 +1,6 @@
 import importlib
 import io
+import os
 import threading
 import time
 
@@ -181,3 +182,49 @@ def test_upload_overwrites_previous_screenshot_for_same_screen(monkeypatch, tmp_
     current_dir = feed_server._source_current_dir("hyper")
     matches = list(current_dir.glob("date.*"))
     assert len(matches) == 1
+
+
+def test_screenshots_ordered_like_large_screen_defaults_and_skip_missing(monkeypatch, tmp_path):
+    feed_server = _reload_feed_server(monkeypatch, tmp_path)
+    client = feed_server.app.test_client()
+
+    # "nixie" precedes "weather1" in default_screens_large.json's sequence,
+    # but upload them in the opposite order and confirm the page/API still
+    # reflect the large-screen-defaults order rather than upload order. Skip
+    # every other screen in between (e.g. "date") entirely -- no image was
+    # ever uploaded for it, so it should not appear at all.
+    for screen_id in ("weather1", "nixie"):
+        response = client.post(
+            "/api/feed/hyper/upload",
+            headers={"Authorization": "Bearer secret-token"},
+            data={"screen_id": screen_id, "file": (io.BytesIO(_png_bytes()), f"{screen_id}.png")},
+            content_type="multipart/form-data",
+        )
+        assert response.status_code == 200
+
+    payload = client.get("/api/feed/hyper/screenshots").get_json()
+    ids = [screen["id"] for screen in payload["screens"]]
+    assert ids == ["nixie", "weather1"]
+    assert "date" not in ids
+
+    html = client.get("/feed/hyper").get_data(as_text=True)
+    assert html.index('data-screen-id="nixie"') < html.index('data-screen-id="weather1"')
+
+
+def test_screenshots_dedup_to_one_entry_per_screen_id(monkeypatch, tmp_path):
+    feed_server = _reload_feed_server(monkeypatch, tmp_path)
+    current_dir = feed_server._source_current_dir("hyper")
+    current_dir.mkdir(parents=True)
+
+    # Simulate a leftover stale file alongside the current one for the same
+    # screen id (e.g. a format change) -- only the newest should be shown.
+    stale = current_dir / "date.jpg"
+    stale.write_bytes(_png_bytes())
+    fresh = current_dir / "date.png"
+    fresh.write_bytes(_png_bytes())
+    os.utime(stale, (1, 1))
+    os.utime(fresh, (1000, 1000))
+
+    entries = feed_server._build_source_screen_entries("hyper")
+    assert len(entries) == 1
+    assert entries[0]["filename"] == "date.png"
