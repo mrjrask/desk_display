@@ -92,10 +92,42 @@ def test_circuit_breaker_clears_after_success(monkeypatch: pytest.MonkeyPatch):
 
         # Manually expire the cooldown (as if enough time had passed) and
         # confirm a subsequent success clears the block for later requests.
-        http_client._forbidden_hosts_until["recovering.example.com"] = 0.0
+        session._forbidden_hosts_until["recovering.example.com"] = 0.0
         response = session.get("https://recovering.example.com/c")
         assert response.status_code == 200
-        assert "recovering.example.com" not in http_client._forbidden_hosts_until
+        assert "recovering.example.com" not in session._forbidden_hosts_until
+    finally:
+        _reload_http_client(monkeypatch, None)
+
+
+def test_named_sessions_have_isolated_circuit_breakers(monkeypatch: pytest.MonkeyPatch):
+    http_client = _reload_http_client(monkeypatch, None)
+    try:
+        nfl_session = http_client.get_session("nfl")
+        nba_session = http_client.get_session("nba")
+        assert nfl_session is not nba_session
+
+        calls = []
+
+        def fake_send(self, request, **kwargs):
+            calls.append(request.url)
+            return _fake_response(403)
+
+        monkeypatch.setattr(requests.Session, "send", fake_send)
+
+        # NBA's request to the shared host gets 403'd and cools NBA's own
+        # session down.
+        assert nba_session.get("https://site.api.espn.com/a").status_code == 403
+        with pytest.raises(http_client.HostTemporarilyForbidden):
+            nba_session.get("https://site.api.espn.com/b")
+
+        # NFL's separate session is unaffected and still hits the network.
+        response = nfl_session.get("https://site.api.espn.com/c")
+        assert response.status_code == 403
+        assert len(calls) == 2
+
+        # Requesting the same name twice returns the same session instance.
+        assert http_client.get_session("nfl") is nfl_session
     finally:
         _reload_http_client(monkeypatch, None)
 

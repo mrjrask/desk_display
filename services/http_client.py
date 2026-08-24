@@ -56,9 +56,6 @@ FORBIDDEN_COOLDOWN_SECONDS = float(
     os.environ.get("HTTP_CLIENT_FORBIDDEN_COOLDOWN_SECONDS", "300")
 )
 
-_forbidden_hosts_lock = threading.Lock()
-_forbidden_hosts_until: dict[str, float] = {}
-
 
 class HostTemporarilyForbidden(requests.exceptions.RequestException):
     """Raised in place of a real request while a host is in its 403 cooldown."""
@@ -69,12 +66,30 @@ def _host_of(url: str) -> str:
 
 
 class _CircuitBreakerSession(requests.Session):
+    """A session whose 403 cooldown state is private to this instance.
+
+    Several unrelated screens (NFL, NBA, NCAAM, World Cup) all fetch from
+    the same site.api.espn.com host. Day-by-day scan bugs in one of them
+    (Bulls widget, NBA Playoffs) have repeatedly tripped a *shared*
+    circuit breaker and collaterally blocked every other sport's requests
+    to that host for the cooldown window -- including sports that never
+    made an excessive request themselves. Keeping the forbidden-host
+    tracking per session instance (see get_session()'s ``name`` param)
+    means a 403 seen by one caller only cools that caller down, not
+    everyone who happens to share the host.
+    """
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._forbidden_hosts_lock = threading.Lock()
+        self._forbidden_hosts_until: dict[str, float] = {}
+
     def request(self, method, url, *args, **kwargs):  # type: ignore[override]
         host = _host_of(url)
         now = time.monotonic()
         if host:
-            with _forbidden_hosts_lock:
-                blocked_until = _forbidden_hosts_until.get(host)
+            with self._forbidden_hosts_lock:
+                blocked_until = self._forbidden_hosts_until.get(host)
             if blocked_until is not None and now < blocked_until:
                 raise HostTemporarilyForbidden(
                     f"{host} returned 403 recently; skipping request to {url} for "
@@ -84,11 +99,11 @@ class _CircuitBreakerSession(requests.Session):
         response = super().request(method, url, *args, **kwargs)
 
         if host:
-            with _forbidden_hosts_lock:
+            with self._forbidden_hosts_lock:
                 if response.status_code == 403:
-                    _forbidden_hosts_until[host] = now + FORBIDDEN_COOLDOWN_SECONDS
+                    self._forbidden_hosts_until[host] = now + FORBIDDEN_COOLDOWN_SECONDS
                 else:
-                    _forbidden_hosts_until.pop(host, None)
+                    self._forbidden_hosts_until.pop(host, None)
 
         return response
 
@@ -103,13 +118,26 @@ def _build_session() -> requests.Session:
     return session
 
 
-_SESSION = _build_session()
+_sessions_lock = threading.Lock()
+_sessions: dict[str, requests.Session] = {}
 
 
-def get_session() -> requests.Session:
-    """Return the shared HTTP session."""
+def get_session(name: str = "default") -> requests.Session:
+    """Return a shared HTTP session for ``name``.
 
-    return _SESSION
+    Each distinct ``name`` gets its own session -- and therefore its own
+    circuit-breaker cooldown state -- so a 403 one caller triggers never
+    short-circuits a different caller's requests to that same host. Callers
+    that don't care about isolation (most non-scoreboard fetches) can omit
+    ``name`` and share the default session as before.
+    """
+
+    with _sessions_lock:
+        session = _sessions.get(name)
+        if session is None:
+            session = _build_session()
+            _sessions[name] = session
+        return session
 
 
 def http_get(

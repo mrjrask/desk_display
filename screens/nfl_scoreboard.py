@@ -141,7 +141,7 @@ _SUPER_BOWL_LOGO_CACHE: dict[int, Optional[Image.Image]] = {}
 _GAMES_CACHE: dict[tuple[datetime.date, str], tuple[float, list[dict]]] = {}
 NO_UPCOMING_GAMES_COOLDOWN_SECONDS = 30 * 60
 _NO_UPCOMING_GAMES_COOLDOWN = DayScanCooldown(NO_UPCOMING_GAMES_COOLDOWN_SECONDS)
-_SESSION = get_session()
+_SESSION = get_session("nfl")
 
 
 def _apply_style_overrides() -> None:
