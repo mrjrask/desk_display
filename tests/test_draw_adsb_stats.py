@@ -7,6 +7,10 @@ from screens.draw_adsb_stats import (
     _airline_logo,
     _airline_logo_path,
     _build_tiles,
+    _draw_airline_tile,
+    _draw_grid_lines,
+    _draw_stat_tile,
+    _fit_font_for_lines,
     _fit_text,
     _hour_range_label,
     _live_now_breakdown_lines,
@@ -182,6 +186,7 @@ def test_build_tiles_live_variant_shows_total_and_by_aircraft():
     assert total_tile["caption"] == "aircraft in range"
     assert by_aircraft_tile["value"] == "B738: 3\nA320: 2"
     assert by_aircraft_tile["caption"] == "by aircraft"
+    assert by_aircraft_tile["columns"] == 2
 
 
 def test_build_tiles_live_variant_omits_live_tiles_when_nothing_tracked():
@@ -200,8 +205,10 @@ def test_build_tiles_live_airlines_variant_shows_by_aircraft_and_by_airline():
     assert labels == ["Furthest", "By Receiver", "Live Now", "Live Now"]
     by_aircraft_tile, by_airline_tile = tiles[2], tiles[3]
     assert by_aircraft_tile["caption"] == "by aircraft"
+    assert by_aircraft_tile["columns"] == 2
     assert by_airline_tile["caption"] == "by airline"
     assert by_airline_tile["airline_rows"] == [("UAL", 2), ("DAL", 1)]
+    assert by_airline_tile["columns"] == 2
 
 
 def test_build_tiles_live_airlines_variant_omitted_when_no_airline_data():
@@ -245,6 +252,90 @@ def test_live_now_breakdown_lines_sorts_and_folds_overflow_into_other():
 
 def test_live_now_breakdown_lines_empty_when_no_models():
     assert _live_now_breakdown_lines({}) == []
+
+
+def test_fit_font_for_lines_shrinks_until_every_line_fits():
+    img = Image.new("RGB", (200, 200))
+    draw = ImageDraw.Draw(img)
+    short_lines = ["B738", "A20N"]
+    long_lines = ["B738", "A LOT LONGER LABEL"]
+    small_font = _fit_font_for_lines(
+        draw, short_lines, config.FONT_WEATHER_DETAILS_SMALL_BOLD, max_width=100, max_height=30
+    )
+    shrunk_font = _fit_font_for_lines(
+        draw, long_lines, config.FONT_WEATHER_DETAILS_SMALL_BOLD, max_width=100, max_height=30
+    )
+    assert shrunk_font.size < small_font.size
+    for line in long_lines:
+        w, _h = draw.textbbox((0, 0), line, font=shrunk_font)[2:4]
+        assert w <= 100
+
+
+def test_draw_grid_lines_places_entries_left_to_right_top_to_bottom(monkeypatch):
+    img = Image.new("RGB", (200, 200), (0, 0, 0))
+    draw = ImageDraw.Draw(img)
+    drawn_positions = []
+    original_text = draw.text
+
+    def spy_text(xy, text, **kwargs):
+        drawn_positions.append((xy[0], text))
+        return original_text(xy, text, **kwargs)
+
+    monkeypatch.setattr(draw, "text", spy_text)
+    lines = ["AAA: 1", "BBB: 2", "CCC: 3", "DDD: 4"]
+    _draw_grid_lines(
+        draw, 0, 0, 200, 100, lines, config.FONT_WEATHER_DETAILS_SMALL_BOLD, (255, 255, 255),
+        columns=2,
+    )
+    assert len(drawn_positions) == 4
+    xs = [x for x, _ in drawn_positions]
+    # Even indices (col 0) sit strictly left of odd indices (col 1).
+    assert max(xs[0], xs[2]) < min(xs[1], xs[3])
+
+
+def test_draw_stat_tile_two_columns_renders_without_error():
+    img = Image.new("RGB", (400, 300), (0, 0, 0))
+    draw = ImageDraw.Draw(img)
+    value = "\n".join(f"AC{i}: {i}" for i in range(6))
+    _draw_stat_tile(
+        draw, (0, 0, 200, 150), "Live Now", value, "by aircraft", (95, 220, 150), columns=2
+    )
+
+
+def test_draw_airline_tile_two_columns_renders_without_error(tmp_path, monkeypatch):
+    monkeypatch.setattr(config, "AIR_IMAGES_DIR", str(tmp_path))
+    draw_adsb_stats_module._AIRLINE_LOGO_CACHE.clear()
+    img = Image.new("RGB", (400, 300), (0, 0, 0))
+    draw = ImageDraw.Draw(img)
+    rows = [(code, i + 1) for i, code in enumerate(["UAL", "AAL", "DAL", "SWA", "JBU", "Other"])]
+    _draw_airline_tile(
+        img, draw, (0, 0, 200, 150), "Live Now", rows, "by airline", (95, 220, 150), columns=2
+    )
+
+
+def test_draw_live_variant_renders_with_many_aircraft_types():
+    stats = _stats(
+        currently_tracked_combined=20,
+        currently_tracked_by_model={
+            "B738": 4, "A320": 3, "E75L": 3, "CRJ9": 2, "B739": 2, "A21N": 2, "Unknown": 4
+        },
+    )
+    result = draw_adsb_stats_screen(None, stats=stats, variant="live")
+    assert isinstance(result, ScreenImage)
+    assert result.image.size == (config.WIDTH, config.HEIGHT)
+
+
+def test_draw_live_airlines_variant_renders_with_many_airlines():
+    stats = _stats(
+        currently_tracked_combined=20,
+        currently_tracked_by_model={"B738": 10, "A320": 10},
+        currently_tracked_by_airline={
+            "UAL": 5, "AAL": 4, "DAL": 3, "SWA": 3, "JBU": 2, "Other": 3
+        },
+    )
+    result = draw_adsb_stats_screen(None, stats=stats, variant="live airlines")
+    assert isinstance(result, ScreenImage)
+    assert result.image.size == (config.WIDTH, config.HEIGHT)
 
 
 def test_tile_grid_cells_covers_rect_without_overlap_for_various_counts():
