@@ -66,6 +66,10 @@ SCREEN_CONFIG_PORT = int(os.environ.get("SCREEN_CONFIG_PORT", "5002"))
 SCREEN_UI_USERNAME = os.environ.get("SCREEN_UI_USERNAME", "")
 SCREEN_UI_PASSWORD = os.environ.get("SCREEN_UI_PASSWORD", "")
 ALLOWED_SCREEN_EXTS = (".png", ".jpg", ".jpeg")
+# The Feed page (unlike Screenshots, which flags-but-still-shows old frames)
+# drops a screen entirely once its screenshot hasn't been refreshed within
+# this window, so a Pi that's stopped rendering doesn't linger on the feed.
+FEED_SCREEN_STALE_SECONDS = int(os.environ.get("FEED_SCREEN_STALE_SECONDS", str(20 * 60)))
 # The Waveshare OLED/LCD HAT is a separate pair of small hardware displays
 # driven by scripts/waveshare_oled_status.py, not a rotation "screen" from
 # screens_config.json. They're appended to the screenshots page (rather than
@@ -784,6 +788,28 @@ def _build_screenshot_entries() -> list[dict[str, Any]]:
     return entries
 
 
+def _build_feed_screenshot_entries() -> list[dict[str, Any]]:
+    """Return screenshot entries for the Feed page, dropping stale screens.
+
+    Unlike the Screenshots page (which keeps showing an old frame with a red
+    "stale" timestamp so it's obvious something stopped updating), the Feed
+    page is meant to be glanced at, so a screen whose screenshot hasn't been
+    refreshed in ``FEED_SCREEN_STALE_SECONDS`` is treated as if it had no
+    screenshot at all.
+    """
+
+    now = datetime.now().timestamp()
+    entries = _build_screenshot_entries()
+    for entry in entries:
+        version = entry.get("version")
+        if entry.get("path") and (version is None or now - version > FEED_SCREEN_STALE_SECONDS):
+            entry["path"] = None
+            entry["timestamp"] = None
+            entry["elapsed"] = None
+            entry["version"] = None
+    return entries
+
+
 def _load_display_status() -> dict[str, Any]:
     storage_paths = resolve_storage_paths()
     status_path = storage_paths.current_screenshot_dir / "display_status.json"
@@ -1184,8 +1210,24 @@ def screen_screenshots() -> str:
 
 @app.get("/feed")
 def screen_feed() -> str:
-    entries = _build_screenshot_entries()
-    return render_template("feed.html", screens=entries)
+    entries = _build_feed_screenshot_entries()
+    return render_template(
+        "feed.html",
+        screens=entries,
+        display_status=_load_display_status(),
+        service_status=_load_service_status(),
+    )
+
+
+@app.get("/api/feed/screenshots")
+def get_feed_screenshots() -> Any:
+    return jsonify(
+        {
+            "screens": _build_feed_screenshot_entries(),
+            "display_status": _load_display_status(),
+            "service_status": _load_service_status(),
+        }
+    )
 
 
 @app.get("/api/screenshots")

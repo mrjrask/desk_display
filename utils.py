@@ -2134,27 +2134,42 @@ class Display:
     def _indicator_buffer(self) -> Image.Image:
         """Return a frame with the border LED indicator overlay when enabled."""
 
-        if not (
-            self._hyperpixel_indicator_border
-            or self._display_hat_mini_indicator_border
-        ):
-            return self._buffer
-
-        color = tuple(self._indicator_channel_to_pixel(value) for value in self._led_color)
-        if not any(color):
-            return self._buffer
-
         # Compose onto a fresh image each frame so concurrent ``_update_display()``
         # calls cannot mutate a buffer while a previous frame is still being
         # transferred to the panel. Reusing a shared work buffer can surface as
         # partial-frame flicker/tearing near the top edge.
-        indicator_frame = self._buffer.copy()
-        ImageDraw.Draw(indicator_frame).rectangle(
-            [(0, 0), (self.width - 1, self.height - 1)],
+        return self.apply_indicator_border(self._buffer)
+
+    def apply_indicator_border(self, img: Image.Image) -> Image.Image:
+        """Return *img* with the LED notification border overlay, when enabled.
+
+        Mirrors the overlay ``_indicator_buffer()`` composites onto the frame
+        sent to the physical panel. Screenshots persist the pre-composited
+        render (see ``main.py``'s ``_save_screenshot``), so callers that want
+        saved screenshots to reflect the same on-screen notification border
+        should route the image through here before writing it to disk.
+        """
+
+        if not (
+            self._hyperpixel_indicator_border
+            or self._display_hat_mini_indicator_border
+        ):
+            return img
+
+        color = tuple(self._indicator_channel_to_pixel(value) for value in self._led_color)
+        if not any(color):
+            return img
+
+        bordered = img.copy()
+        if bordered.mode != "RGB":
+            bordered = bordered.convert("RGB")
+        width, height = bordered.size
+        ImageDraw.Draw(bordered).rectangle(
+            [(0, 0), (width - 1, height - 1)],
             outline=color,
             width=HYPERPIXEL_LED_INDICATOR_BORDER_WIDTH,
         )
-        return indicator_frame
+        return bordered
 
     @staticmethod
     def _indicator_channel_to_pixel(value: float) -> int:

@@ -353,7 +353,7 @@ Configuration is environment-driven. Put local values in `.env` for development 
 | `DISPLAY_HAT_MINI_REINIT_SECONDS` | Periodic Display HAT Mini reinitialization interval; `0` disables. |
 | `DISPLAY_HAT_MINI_LED_ENABLED` | Enables Display HAT Mini LED behavior. |
 | `DISPLAY_HAT_MINI_LED_LEVEL` | Display HAT Mini LED level. |
-| `HYPERPIXEL_LED_INDICATOR_BORDER_WIDTH` | Indicator border width; the LED indicator border is enabled by default on all display sizes. |
+| `HYPERPIXEL_LED_INDICATOR_BORDER_WIDTH` | Indicator border width; the LED indicator border is enabled by default on all display sizes. When enabled (`HYPERPIXEL_LED_INDICATOR_BORDER_ENABLED` / `DISPLAY_HAT_MINI_LED_INDICATOR_BORDER_ENABLED`) and a notification color is active, the same border is also drawn onto saved screenshots so the Screenshots/Feed pages reflect what's actually on the panel. |
 | `IP_WITH_TIME` | Include IP/status text with the time display where supported. |
 | `NIXIE_TIME_FORMAT` | Nixie/time screen clock format; defaults to 12-hour mode. |
 | `DESK_DISPLAY_TEST_SCREEN` | Testing mode: set to a [canonical screen ID](#canonical-screen-ids) (e.g. `news headlines`) to repeatedly present just that screen instead of rotating through the normal schedule. Handy for tuning a screen's scroll speed slider in the config UI and watching the effect immediately on the next pass. Leave unset for normal rotation. |
@@ -750,12 +750,19 @@ where `<source>` defaults to that Pi's hostname (override with
 uploaded at least one screenshot, with a link and last-updated status for
 each.
 
+`scripts/screenshot_uploader.py` also mirrors the source Pi's own
+`display_status.json` heartbeat to the Feed host, so `/feed/<source>` (and
+each card on the Feed host's `/` index) shows the same "Display heartbeat"
+banner as that Pi's local Screenshots/Feed pages.
+
 | Variable | Where | Description |
 | --- | --- | --- |
 | `FEED_SERVER_HOST` / `FEED_SERVER_PORT` | Feed host | Bind address/port for `feed_server.py`. Defaults to `0.0.0.0:5003`. |
 | `FEED_UPLOAD_TOKEN` | Feed host + source Pis | Shared bearer-token secret; uploads are rejected without a matching token. Must match on both sides. |
 | `FEED_STORAGE_DIR` | Feed host | Where uploaded screenshots are stored. Defaults to `feed_uploads/` under the project root. |
 | `FEED_STALE_SECONDS` | Feed host | Age (seconds) after which a source is flagged stale on the index page. Defaults to `120`. |
+| `FEED_SCREEN_STALE_SECONDS` | Feed host | Age (seconds) after which an individual screen is dropped from a source's `/feed/<source>` page (and from `config_ui.py`'s own `/feed`), as if it had never been uploaded. Defaults to `1200` (20 minutes). |
+| `FEED_HEARTBEAT_STALE_SECONDS` | Feed host | Age (seconds) after which a source's uploaded "Display heartbeat" is flagged stale. Defaults to `600` (10 minutes). |
 | `FEED_UPLOAD_URL` | Source Pis | Base URL of the Feed host, e.g. `http://192.168.1.200:5003`. |
 | `FEED_SOURCE_NAME` | Source Pis | Identifier this Pi uploads under. Defaults to `hostname`. |
 | `FEED_UPLOAD_INTERVAL_SECONDS` | Source Pis | How often to check for changed screenshots. Defaults to `5`. |

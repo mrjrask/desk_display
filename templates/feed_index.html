@@ -58,6 +58,14 @@
     .card .meta.is-stale {
       color: #ef4444;
     }
+    .card .heartbeat {
+      font-size: 0.78rem;
+      color: #94a3b8;
+      margin: 0 0 0.5rem;
+    }
+    .card .heartbeat.is-stale {
+      color: #ef4444;
+    }
     .empty-state {
       text-align: center;
       color: #94a3b8;
@@ -75,6 +83,14 @@
       {% for source in sources %}
         <a class="card" href="/feed/{{ source.name }}">
           <h2>{{ source.name }}</h2>
+          <div class="heartbeat{% if source.display_status.is_stale %} is-stale{% endif %}">
+            {% if source.display_status.screen_id %}
+              Display heartbeat: <strong>{{ source.display_status.screen_id }}</strong>
+              {% if source.display_status.elapsed %} ({{ source.display_status.elapsed }}){% endif %}
+            {% else %}
+              Display heartbeat unavailable.
+            {% endif %}
+          </div>
           <div class="meta{% if source.is_stale %} is-stale{% endif %}">
             {{ source.screen_count }} screen{{ '' if source.screen_count == 1 else 's' }}
             {% if source.elapsed %} — updated {{ source.elapsed }}{% else %} — no uploads yet{% endif %}

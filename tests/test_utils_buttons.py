@@ -240,6 +240,50 @@ def test_hyperpixel_indicator_border_renders_led_color(monkeypatch):
     assert pixel == (0, 0, 255)
 
 
+def test_apply_indicator_border_overlays_arbitrary_image(monkeypatch):
+    monkeypatch.setattr(utils, "is_hyperpixel_next_layout", lambda w, h: True)
+
+    display = utils.Display()
+    display.set_led(r=0.0, g=0.0, b=utils.LED_INDICATOR_LEVEL)
+
+    # A taller image than the panel, e.g. a scrollable screenshot capture,
+    # should still get the border drawn around its own bounds.
+    screenshot = utils.Image.new("RGB", (display.width, display.height * 3), "black")
+    bordered = display.apply_indicator_border(screenshot)
+
+    assert bordered is not screenshot
+    assert bordered.size == screenshot.size
+    assert bordered.getpixel((0, 0)) == (0, 0, 255)
+
+
+def test_apply_indicator_border_is_noop_when_disabled(monkeypatch):
+    monkeypatch.setattr(utils, "is_hyperpixel_next_layout", lambda w, h: False)
+    monkeypatch.setattr(utils, "HYPERPIXEL_LED_INDICATOR_BORDER_ENABLED", False)
+    monkeypatch.setattr(utils, "DISPLAY_HAT_MINI_LED_INDICATOR_BORDER_ENABLED", False)
+
+    display = utils.Display()
+    display._hyperpixel_indicator_border = False
+    display._display_hat_mini_indicator_border = False
+    display.set_led(r=0.0, g=0.0, b=utils.LED_INDICATOR_LEVEL)
+
+    screenshot = utils.Image.new("RGB", (display.width, display.height), "black")
+    bordered = display.apply_indicator_border(screenshot)
+
+    assert bordered is screenshot
+
+
+def test_apply_indicator_border_is_noop_when_led_off(monkeypatch):
+    monkeypatch.setattr(utils, "is_hyperpixel_next_layout", lambda w, h: True)
+
+    display = utils.Display()
+    display.set_led(r=0.0, g=0.0, b=0.0)
+
+    screenshot = utils.Image.new("RGB", (display.width, display.height), "black")
+    bordered = display.apply_indicator_border(screenshot)
+
+    assert bordered is screenshot
+
+
 def test_indicator_buffer_returns_fresh_frame_when_border_enabled(monkeypatch):
     monkeypatch.setattr(utils, "is_hyperpixel_next_layout", lambda w, h: True)
 
