@@ -172,8 +172,8 @@ def _distance_text(value: Optional[float]) -> str:
 
 
 def _format_count(value: int) -> str:
-    if value >= 1000:
-        return f"{value / 1000:.1f}k"
+    if value >= 1_000_000:
+        return f"{value / 1_000_000:.1f}M"
     return str(value)
 
 
