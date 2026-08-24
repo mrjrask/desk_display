@@ -40,7 +40,7 @@ from screens.nba_scoreboard import (
     _team_logo_abbr,
 )
 from screens.team_abbreviation_mappings import NBA_ABBR_TO_NICKNAME
-from services.http_client import get_session
+from services.http_client import DayScanCooldown, get_session
 from services.sports.nba import (
     _NBA_HEADERS,
     fetch_games_for_date as _fetch_games_for_date,
@@ -705,7 +705,31 @@ def _looks_like_playoff_game(game: dict) -> bool:
     return "series" in status_text and ("lead" in status_text or "tied" in status_text)
 
 
+# NBA playoffs (play-in through Finals) run mid-April to mid-June. Outside
+# that window this fallback can't find anything real, so skip its ~23-day
+# day-by-day ESPN scoreboard scan entirely rather than burning it every
+# rotation cycle. That burst was enough to trip ESPN's rate limiter and 403
+# the shared site.api.espn.com host, which the circuit breaker in
+# services/http_client.py then blocks for *every* sport -- including the
+# NFL scoreboard -- for its cooldown window, which is why NFL Scoreboard
+# kept showing "No games" even with real games that week.
+_PLAYOFF_SEASON_MONTHS = {4, 5, 6}
+
+# Even inside the playoff window (e.g. the first few days of April, before
+# the play-in games are actually scheduled), a scan that comes up empty
+# would otherwise re-run in full every rotation cycle. Cool down after an
+# empty scan so a dry spell doesn't turn into the same repeated-burst
+# problem the month gate above exists to prevent.
+_RECENT_GAMES_SCAN_COOLDOWN = DayScanCooldown(30 * 60)
+
+
 def _derive_playoff_matchups_from_recent_games(now: Optional[datetime.datetime] = None) -> list[dict]:
+    reference = now or datetime.datetime.now(CENTRAL_TIME)
+    if reference.month not in _PLAYOFF_SEASON_MONTHS:
+        return []
+    if _RECENT_GAMES_SCAN_COOLDOWN.blocked():
+        return []
+
     base_day = _scoreboard_date(now)
     recent_days = [base_day - datetime.timedelta(days=offset) for offset in range(14, -1, -1)]
     upcoming_days = [base_day + datetime.timedelta(days=offset) for offset in range(8)]
@@ -725,6 +749,11 @@ def _derive_playoff_matchups_from_recent_games(now: Optional[datetime.datetime] 
             if game_id:
                 seen_ids.add(game_id)
             all_games.append(game)
+
+    if all_games:
+        _RECENT_GAMES_SCAN_COOLDOWN.reset()
+    else:
+        _RECENT_GAMES_SCAN_COOLDOWN.mark_empty()
 
     return _derive_playoff_matchups_from_games(all_games)
 

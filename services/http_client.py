@@ -127,6 +127,46 @@ def http_get(
     return sess.get(url, params=params, headers=headers, timeout=timeout, **kwargs)
 
 
+class DayScanCooldown:
+    """Cooldown gate for day-by-day schedule scans.
+
+    Several sport screens fall back to walking a range of individual days
+    looking for games, one HTTP request per day, because the source API has
+    no bulk "next game" endpoint for that lookup. Repeating that burst every
+    refresh cycle -- e.g. during an off-season, when it's guaranteed to come
+    up empty -- is enough to trip the host's rate limiter, which then blocks
+    every other caller sharing that host's circuit breaker cooldown (see
+    _CircuitBreakerSession above), including unrelated sports. Two separate
+    day-by-day scans (an NBA Bulls widget and the NBA Playoffs screen) have
+    already caused the NFL scoreboard to go blank this way.
+
+    Call `blocked()` before a scan and skip it entirely while it returns
+    True; call `mark_empty()` after a scan that found nothing to start the
+    cooldown, and `reset()` as soon as a scan finds something so the next
+    miss starts a fresh cooldown rather than inheriting a stale one.
+    """
+
+    def __init__(self, cooldown_seconds: float):
+        self._cooldown_seconds = cooldown_seconds
+        self._checked_at: Optional[float] = None
+        self._lock = threading.Lock()
+
+    def blocked(self) -> bool:
+        with self._lock:
+            checked_at = self._checked_at
+        if checked_at is None:
+            return False
+        return (time.monotonic() - checked_at) < self._cooldown_seconds
+
+    def mark_empty(self) -> None:
+        with self._lock:
+            self._checked_at = time.monotonic()
+
+    def reset(self) -> None:
+        with self._lock:
+            self._checked_at = None
+
+
 def request_json(
     url: str,
     *,

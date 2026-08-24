@@ -1,5 +1,6 @@
 import importlib
 import sys
+import time
 
 import pytest
 import requests
@@ -97,3 +98,38 @@ def test_circuit_breaker_clears_after_success(monkeypatch: pytest.MonkeyPatch):
         assert "recovering.example.com" not in http_client._forbidden_hosts_until
     finally:
         _reload_http_client(monkeypatch, None)
+
+
+def test_day_scan_cooldown_starts_unblocked():
+    from services.http_client import DayScanCooldown
+
+    cooldown = DayScanCooldown(1800)
+    assert cooldown.blocked() is False
+
+
+def test_day_scan_cooldown_blocks_after_empty_scan(monkeypatch: pytest.MonkeyPatch):
+    from services.http_client import DayScanCooldown
+
+    cooldown = DayScanCooldown(1800)
+    fake_now = [1000.0]
+    monkeypatch.setattr(time, "monotonic", lambda: fake_now[0])
+
+    cooldown.mark_empty()
+    assert cooldown.blocked() is True
+
+    fake_now[0] += 1799
+    assert cooldown.blocked() is True
+
+    fake_now[0] += 2
+    assert cooldown.blocked() is False
+
+
+def test_day_scan_cooldown_reset_clears_block(monkeypatch: pytest.MonkeyPatch):
+    from services.http_client import DayScanCooldown
+
+    cooldown = DayScanCooldown(1800)
+    cooldown.mark_empty()
+    assert cooldown.blocked() is True
+
+    cooldown.reset()
+    assert cooldown.blocked() is False

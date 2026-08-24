@@ -50,7 +50,7 @@ from screens.scoreboard_components import (
     center_text as _center_text,
     final_results as _final_results,
 )
-from services.http_client import get_session
+from services.http_client import DayScanCooldown, get_session
 from utils import (
     ScreenImage,
     clear_display,
@@ -140,7 +140,7 @@ _LEAGUE_LOGO_CACHE: dict[int, Optional[Image.Image]] = {}
 _SUPER_BOWL_LOGO_CACHE: dict[int, Optional[Image.Image]] = {}
 _GAMES_CACHE: dict[tuple[datetime.date, str], tuple[float, list[dict]]] = {}
 NO_UPCOMING_GAMES_COOLDOWN_SECONDS = 30 * 60
-_NO_UPCOMING_GAMES_CHECKED_AT: Optional[float] = None
+_NO_UPCOMING_GAMES_COOLDOWN = DayScanCooldown(NO_UPCOMING_GAMES_COOLDOWN_SECONDS)
 _SESSION = get_session()
 
 
@@ -575,22 +575,16 @@ def _fetch_next_games(
     *,
     max_days: int = 370,
 ) -> list[dict]:
-    global _NO_UPCOMING_GAMES_CHECKED_AT
-
-    now = time.monotonic()
-    if (
-        _NO_UPCOMING_GAMES_CHECKED_AT is not None
-        and (now - _NO_UPCOMING_GAMES_CHECKED_AT) < NO_UPCOMING_GAMES_COOLDOWN_SECONDS
-    ):
+    if _NO_UPCOMING_GAMES_COOLDOWN.blocked():
         return []
 
     for offset in range(max_days + 1):
         day = start_date + datetime.timedelta(days=offset)
         games = _fetch_games_for_date(day)
         if games:
-            _NO_UPCOMING_GAMES_CHECKED_AT = None
+            _NO_UPCOMING_GAMES_COOLDOWN.reset()
             return games
-    _NO_UPCOMING_GAMES_CHECKED_AT = now
+    _NO_UPCOMING_GAMES_COOLDOWN.mark_empty()
     logging.warning("NFL scoreboard could not find upcoming games after %s", start_date)
     return []
 
