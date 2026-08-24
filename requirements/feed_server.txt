@@ -1,0 +1,5 @@
+# Standalone Feed server (feed_server.py) dependencies. Deliberately excludes
+# the rendering/GPIO stack in base.txt so a Feed-only host doesn't need it.
+Flask
+waitress
+Pillow
