@@ -32,7 +32,7 @@ from config import (
     get_screen_background_color,
 )
 from services.adsb import AdsbStore, DailyStats, FurthestCatch, today_key
-from utils import ScreenImage, fit_font, log_call, measure_text
+from utils import ScreenImage, clone_font, fit_font, log_call, measure_text
 
 _store: Optional[AdsbStore] = None
 _store_failed = False
@@ -52,6 +52,16 @@ _ACCENT_MESSAGES = (230, 150, 95)
 
 _DOT_ONLINE = (95, 220, 150)
 _DOT_OFFLINE = (225, 90, 90)
+
+# Below this row height, a grid cell can no longer legibly fit its text (or,
+# for the airline tile, its icon + count) -- the caption should be dropped
+# first to free up room rather than let rows render illegibly small.
+_MIN_GRID_ROW_H = 16
+
+# Below this icon size, a logo or a text abbreviation is too small to read
+# (a 2-3 letter airline code shrinks to an unreadable sliver) -- the airline
+# tile falls back to plain "CODE: count" text instead of icon + count.
+_MIN_ICON_DIM = 16
 
 # The ADS-B dashboard is three separate registered screens (see
 # screens/registry.py) rather than one screen that rotates through every
@@ -317,6 +327,78 @@ def _draw_hour_bars(
     draw.line((x0, baseline_y, x1, baseline_y), fill=_mix_color(empty_color, (0, 0, 0), 0.6))
 
 
+def _fit_font_for_lines(
+    draw: ImageDraw.ImageDraw,
+    lines: list[str],
+    base_font,
+    max_width: int,
+    max_height: int,
+    *,
+    min_pt: int = 8,
+    max_pt: Optional[int] = None,
+):
+    """Like ``fit_font``, but sizes for a set of independently-positioned
+    lines (e.g. grid cells) rather than one stacked block of text: finds
+    the largest size at which every line individually fits *max_width* x
+    *max_height*."""
+
+    base_size = getattr(base_font, "size", 16)
+    hi = max_pt if max_pt else base_size
+    lo = min_pt
+    best = clone_font(base_font, lo)
+    while lo <= hi:
+        mid = (lo + hi) // 2
+        test_font = clone_font(base_font, mid)
+        if all(
+            w <= max_width and h <= max_height
+            for w, h in (measure_text(draw, line, test_font) for line in lines)
+        ):
+            best = test_font
+            lo = mid + 1
+        else:
+            hi = mid - 1
+    return best
+
+
+def _draw_grid_lines(
+    draw: ImageDraw.ImageDraw,
+    x: int,
+    y_top: int,
+    max_width: int,
+    max_height: int,
+    lines: list[str],
+    base_font,
+    color: tuple[int, int, int],
+    *,
+    columns: int = 2,
+    min_pt: int = 8,
+    max_pt: Optional[int] = None,
+) -> None:
+    """Lay *lines* out left-to-right, top-to-bottom in *columns* columns
+    instead of one line per row, so more entries fit in the same vertical
+    space (e.g. the "by aircraft" tile)."""
+
+    if not lines or max_width <= 0 or max_height <= 0:
+        return
+    columns = max(1, min(columns, len(lines)))
+    rows = -(-len(lines) // columns)  # ceil division
+    col_gap = max(6, max_width // 20) if columns > 1 else 0
+    col_width = max(1, (max_width - col_gap * (columns - 1)) // columns)
+    row_h = max(1, max_height // rows)
+
+    font = _fit_font_for_lines(
+        draw, lines, base_font, col_width, row_h, min_pt=min_pt, max_pt=max_pt
+    )
+
+    for index, text in enumerate(lines):
+        row, col = divmod(index, columns)
+        text = _fit_text(draw, text, font, col_width)
+        top_offset, line_h = _text_extent(draw, text, font)
+        cell_x = x + col * (col_width + col_gap)
+        cell_y = y_top + row * row_h + max(0, (row_h - line_h) // 2)
+        draw.text((cell_x, cell_y - top_offset), text, font=font, fill=color)
+
+
 def _tile_grid_cells(
     rect: tuple[int, int, int, int], count: int
 ) -> list[tuple[int, int, int, int]]:
@@ -351,6 +433,7 @@ def _draw_stat_tile(
     caption: Optional[str],
     accent: tuple[int, int, int],
     line_online: Optional[list[bool]] = None,
+    columns: int = 1,
 ) -> None:
     x0, y0, x1, y1 = rect
     width, height = x1 - x0, y1 - y0
@@ -372,6 +455,9 @@ def _draw_stat_tile(
     max_text_width = max(1, width - 2 * pad_x)
     content_top = y0 + pad_y
     content_bottom = y1 - pad_y
+
+    _raw_lines = value.split("\n")
+    use_grid = columns >= 2 and len(_raw_lines) > 1 and not line_online
 
     label_text = label.upper()
     label_font = fit_font(
@@ -406,6 +492,9 @@ def _draw_stat_tile(
     value_max_h = value_bottom - value_top
 
     min_value_h = 12
+    if use_grid:
+        grid_rows = -(-len(_raw_lines) // columns)  # ceil division
+        min_value_h = max(min_value_h, grid_rows * _MIN_GRID_ROW_H)
     if caption_h and value_max_h < min_value_h:
         # Too tight for label + value + caption on this tile size — drop
         # the caption rather than let it overlap the value.
@@ -418,6 +507,34 @@ def _draw_stat_tile(
     # caller wants receiver-online indicators (e.g. the "By Receiver" tile).
     dot_reserve = max(9, width // 14) + max(3, width // 40) if line_online else 0
     value_max_width = max(1, max_text_width - dot_reserve)
+
+    label_color = _mix_color(accent, _TEXT_COLOR, 0.25)
+    _draw_line(draw, x0 + pad_x, content_top, label_text, label_font, label_color)
+
+    if use_grid:
+        _draw_grid_lines(
+            draw,
+            x0 + pad_x,
+            value_top,
+            value_max_width,
+            value_max_h,
+            _raw_lines,
+            FONT_WEATHER_DETAILS_SMALL_BOLD,
+            _TEXT_COLOR,
+            columns=columns,
+            min_pt=9,
+            max_pt=max(FONT_WEATHER_DETAILS_SMALL_BOLD.size, int(height * 0.4)),
+        )
+        if caption and caption_font is not None:
+            _draw_line(
+                draw,
+                x0 + pad_x,
+                content_bottom - caption_h,
+                caption,
+                caption_font,
+                _mix_color(accent, _TEXT_COLOR, 0.45),
+            )
+        return
 
     value_font = fit_font(
         draw,
@@ -450,9 +567,6 @@ def _draw_stat_tile(
         _, value_h = _text_extent(draw, value, value_font)
 
     value_draw_top = value_top + max(0, (value_max_h - value_h) // 2)
-
-    label_color = _mix_color(accent, _TEXT_COLOR, 0.25)
-    _draw_line(draw, x0 + pad_x, content_top, label_text, label_font, label_color)
 
     if line_online:
         lines = value.split("\n")
@@ -497,10 +611,13 @@ def _draw_airline_tile(
     rows: list[tuple[str, int]],
     caption: Optional[str],
     accent: tuple[int, int, int],
+    columns: int = 1,
 ) -> None:
     """Like ``_draw_stat_tile``, but each value line shows an airline logo
     (when ``images/air/<code>.png``/``.jpg`` exists) or the airline code as
-    text, followed by its current aircraft count."""
+    text, followed by its current aircraft count. When *columns* is 2+,
+    rows are laid out left-to-right, top-to-bottom in that many columns so
+    more airlines fit in the same vertical space."""
 
     x0, y0, x1, y1 = rect
     width, height = x1 - x0, y1 - y0
@@ -553,36 +670,72 @@ def _draw_airline_tile(
     label_color = _mix_color(accent, _TEXT_COLOR, 0.25)
     _draw_line(draw, x0 + pad_x, content_top, label_text, label_font, label_color)
 
+    columns = max(1, min(columns, len(rows)))
+    grid_rows = -(-len(rows) // columns)  # ceil division
+
     rows_top = content_top + label_h + gap
     rows_bottom = content_bottom - (caption_h + gap if caption_h else 0)
     rows_height = max(10, rows_bottom - rows_top)
-    row_h = max(10, rows_height // len(rows))
+    row_h = max(10, rows_height // grid_rows)
 
-    if caption_h and row_h * len(rows) > rows_height:
-        # Even the minimum row height doesn't leave room for every row above
-        # the caption (e.g. many airlines in a small tile) — drop the
-        # caption rather than let the rows spill into it.
+    if caption_h and (row_h < _MIN_GRID_ROW_H or row_h * grid_rows > rows_height):
+        # Rows would render too small to be legible (or wouldn't fit at
+        # all) above the caption in this tile size — drop the caption
+        # rather than let the rows spill into it or shrink to illegible
+        # icon/text sizes.
         caption, caption_font, caption_h = None, None, 0
         rows_bottom = content_bottom
         rows_height = max(10, rows_bottom - rows_top)
-        row_h = max(10, rows_height // len(rows))
-    icon_dim = max(10, min(row_h - 4, max_text_width // 5))
-    icon_col = icon_dim + max(4, width // 30)
+        row_h = max(10, rows_height // grid_rows)
 
-    count_font = fit_font(
+    col_gap = max(6, max_text_width // 20) if columns > 1 else 0
+    col_width = max(1, (max_text_width - col_gap * (columns - 1)) // columns)
+    icon_dim = max(10, min(row_h - 4, col_width // 5))
+
+    if icon_dim < _MIN_ICON_DIM:
+        # Too little room left for a legible icon or code abbreviation --
+        # fall back to plain "CODE: count" text, like the by-aircraft tile.
+        _draw_grid_lines(
+            draw,
+            x0 + pad_x,
+            rows_top,
+            max_text_width,
+            rows_height,
+            [f"{code}: {count}" for code, count in rows],
+            FONT_WEATHER_DETAILS_SMALL_BOLD,
+            _TEXT_COLOR,
+            columns=columns,
+            min_pt=7,
+            max_pt=max(FONT_WEATHER_DETAILS_SMALL_BOLD.size, int(height * 0.35)),
+        )
+        if caption and caption_font is not None:
+            _draw_line(
+                draw,
+                x0 + pad_x,
+                content_bottom - caption_h,
+                caption,
+                caption_font,
+                _mix_color(accent, _TEXT_COLOR, 0.45),
+            )
+        return
+
+    icon_col = icon_dim + max(4, col_width // 12)
+
+    count_font = _fit_font_for_lines(
         draw,
-        "\n".join(str(count) for _, count in rows),
+        [str(count) for _, count in rows],
         FONT_WEATHER_DETAILS_SMALL_BOLD,
-        max_width=max(1, max_text_width - icon_col),
-        max_height=row_h - 2,
+        max(1, col_width - icon_col),
+        row_h - 2,
         min_pt=8,
         max_pt=max(FONT_WEATHER_DETAILS_SMALL_BOLD.size, int(height * 0.35)),
     )
 
-    y = rows_top
-    for code, count in rows:
-        row_center = y + row_h // 2
-        icon_x = x0 + pad_x
+    for index, (code, count) in enumerate(rows):
+        row, col = divmod(index, columns)
+        cell_x0 = x0 + pad_x + col * (col_width + col_gap)
+        row_center = rows_top + row * row_h + row_h // 2
+        icon_x = cell_x0
         logo = _airline_logo(code, icon_dim)
         if logo is not None:
             paste_x = icon_x + max(0, (icon_dim - logo.width) // 2)
@@ -607,15 +760,14 @@ def _draw_airline_tile(
                 fill=_TEXT_COLOR,
             )
 
-        count_text = str(count)
+        count_text = _fit_text(draw, str(count), count_font, max(1, col_width - icon_col))
         top_offset, text_h = _text_extent(draw, count_text, count_font)
         draw.text(
-            (x0 + pad_x + icon_col, row_center - text_h // 2 - top_offset),
+            (cell_x0 + icon_col, row_center - text_h // 2 - top_offset),
             count_text,
             font=count_font,
             fill=_TEXT_COLOR,
         )
-        y += row_h
 
     if caption and caption_font is not None:
         _draw_line(
@@ -698,7 +850,7 @@ def _tile_live_total(stats: DailyStats) -> Optional[dict[str, Any]]:
 def _tile_live_by_aircraft(stats: DailyStats) -> Optional[dict[str, Any]]:
     if not stats.currently_tracked_combined:
         return None
-    lines = _live_now_breakdown_lines(stats.currently_tracked_by_model, max_lines=5)
+    lines = _live_now_breakdown_lines(stats.currently_tracked_by_model, max_lines=6)
     if not lines:
         return None
     return {
@@ -706,13 +858,14 @@ def _tile_live_by_aircraft(stats: DailyStats) -> Optional[dict[str, Any]]:
         "value": "\n".join(lines),
         "caption": "by aircraft",
         "accent": _ACCENT_LIVE,
+        "columns": 2,
     }
 
 
 def _tile_live_by_airline(stats: DailyStats) -> Optional[dict[str, Any]]:
     if not stats.currently_tracked_combined:
         return None
-    rows = _top_breakdown_items(stats.currently_tracked_by_airline, max_lines=5)
+    rows = _top_breakdown_items(stats.currently_tracked_by_airline, max_lines=6)
     if not rows:
         return None
     return {
@@ -720,6 +873,7 @@ def _tile_live_by_airline(stats: DailyStats) -> Optional[dict[str, Any]]:
         "caption": "by airline",
         "accent": _ACCENT_LIVE,
         "airline_rows": rows,
+        "columns": 2,
     }
 
 
@@ -947,6 +1101,7 @@ def _render_stats(stats: DailyStats, variant: str) -> Image.Image:
                 tile["airline_rows"],
                 tile["caption"],
                 tile["accent"],
+                columns=tile.get("columns", 1),
             )
         else:
             _draw_stat_tile(
@@ -957,6 +1112,7 @@ def _render_stats(stats: DailyStats, variant: str) -> Image.Image:
                 tile["caption"],
                 tile["accent"],
                 tile.get("line_online"),
+                columns=tile.get("columns", 1),
             )
 
     return img
