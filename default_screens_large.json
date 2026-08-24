@@ -125,7 +125,7 @@
         }
       },
       "NFL Scoreboard": {
-        "frequency": 0,
+        "frequency": 2,
         "extra_seconds": 0,
         "alt": {
           "screen": "NFL Standings AFC",
