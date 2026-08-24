@@ -1,6 +1,8 @@
 import importlib
 import io
 import os
+import threading
+import time
 
 from PIL import Image
 
@@ -116,6 +118,52 @@ def test_feed_screenshot_file_blocks_path_traversal(monkeypatch, tmp_path):
 
     response = client.get("/feed/hyper/file/..%2F..%2Fsecret.png")
     assert response.status_code == 404
+
+
+def test_concurrent_uploads_for_same_screen_do_not_corrupt_file(monkeypatch, tmp_path):
+    feed_server = _reload_feed_server(monkeypatch, tmp_path)
+    client = feed_server.app.test_client()
+
+    original_save = Image.Image.save
+
+    def slow_save(self, fp, *args, **kwargs):
+        time.sleep(0.05)
+        return original_save(self, fp, *args, **kwargs)
+
+    monkeypatch.setattr(Image.Image, "save", slow_save)
+
+    def _colored_png(color) -> bytes:
+        buffer = io.BytesIO()
+        Image.new("RGB", (16, 16), color).save(buffer, format="PNG")
+        return buffer.getvalue()
+
+    statuses: list[int] = []
+
+    def upload(color) -> None:
+        response = client.post(
+            "/api/feed/hyper/upload",
+            headers={"Authorization": "Bearer secret-token"},
+            data={"screen_id": "date", "file": (io.BytesIO(_colored_png(color)), "date.png")},
+            content_type="multipart/form-data",
+        )
+        statuses.append(response.status_code)
+
+    threads = [
+        threading.Thread(target=upload, args=(color,))
+        for color in [(255, 0, 0), (0, 255, 0)]
+    ]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join()
+
+    assert statuses == [200, 200]
+
+    target = feed_server._source_current_dir("hyper") / "date.png"
+    image = Image.open(target)
+    image.load()
+    assert image.size == (16, 16)
+    assert image.getpixel((0, 0)) in [(255, 0, 0), (0, 255, 0)]
 
 
 def test_upload_overwrites_previous_screenshot_for_same_screen(monkeypatch, tmp_path):

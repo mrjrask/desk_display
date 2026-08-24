@@ -19,6 +19,7 @@ import json
 import logging
 import os
 import socket
+import tempfile
 import time
 from pathlib import Path
 from typing import Any, Optional
@@ -287,12 +288,17 @@ def upload_screenshot(source: str) -> Any:
             existing.unlink(missing_ok=True)
 
     target_path = target_dir / f"{screen_id}.png"
-    tmp_path = target_dir / f"{screen_id}.png.tmp"
+    tmp_fd, tmp_name = tempfile.mkstemp(
+        prefix=f".{screen_id}.", suffix=".png.tmp", dir=target_dir
+    )
+    tmp_path = Path(tmp_name)
     try:
-        image.save(tmp_path, format="PNG")
+        with os.fdopen(tmp_fd, "wb") as tmp_file:
+            image.save(tmp_file, format="PNG")
         os.replace(tmp_path, target_path)
     except OSError as exc:
         WEB_LOGGER.warning("Failed to persist upload for %s/%s: %s", source_id, screen_id, exc)
+        tmp_path.unlink(missing_ok=True)
         return jsonify({"error": "Failed to store image"}), 500
 
     return jsonify({"status": "ok", "source": source_id, "screen_id": screen_id})
