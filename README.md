@@ -80,6 +80,7 @@ Supported workflow profiles include:
 | `main.py` | Runtime loop, refresh orchestration, transitions, capture, touch/button handling, and display writes. |
 | `config.py` | Environment parsing, defaults, display profile detection, style config, API credentials, and runtime constants. |
 | `config_ui.py` | Flask/Waitress screen configuration web app. |
+| `feed_server.py` | Standalone Flask/Waitress app that hosts `/feed/<source>` pages built from screenshots uploaded by other desk_display Pis. Install by itself with `Installers/install_feed_server.sh`. |
 | `screens/` | Screen renderer modules and registry integration. |
 | `screens/registry.py` | Screen registration, playlist config loading, layout config loading, aliases, and special display helpers. |
 | `screens_catalog.py` | Canonical screen IDs and legacy ID canonicalization. |
@@ -91,7 +92,7 @@ Supported workflow profiles include:
 | `services/` | Shared API/provider clients, HTTP session helpers, sports service modules, Wi-Fi utilities, and the ADS-B receiver/SQLite storage layer (`services/adsb.py`). |
 | `templates/` | Config UI and screenshot UI templates. |
 | `Installers/` | Platform/display install scripts. |
-| `scripts/` | Service, launch, diagnostics, setup, operations, import/export, validation, font audit, maintenance rendering/cleanup scripts, and the standalone ADS-B collector (`scripts/adsb_collector.py`). |
+| `scripts/` | Service, launch, diagnostics, setup, operations, import/export, validation, font audit, maintenance rendering/cleanup scripts, the standalone ADS-B collector (`scripts/adsb_collector.py`), and the screenshot uploader (`scripts/screenshot_uploader.py`). |
 | `tests/` | Pytest suite. |
 | `images/` | Team, league, and static image assets. |
 | `fonts/` | Bundled fonts used by renderers. |
@@ -134,6 +135,7 @@ sudo apt-get install -y \
 | `requirements/sensors-adafruit.txt` | Optional Adafruit/CircuitPython indoor sensor drivers. |
 | `requirements/sensors-pimoroni.txt` | Optional editable Pimoroni BME280/BME680/BME68x sensor drivers. |
 | `requirements/dev.txt` | Development profile layered on `base.txt` and optional sensor dependencies. |
+| `requirements/feed_server.txt` | Standalone Feed server profile (`feed_server.py`). Deliberately excludes the rendering/GPIO stack in `base.txt`. |
 
 Indoor sensor drivers are optional and are kept out of the default display profiles. The installer adds `requirements/sensors-adafruit.txt` automatically when `INSIDE_SENSOR` (or legacy `INDOOR_SENSOR`) is configured as `adafruit_bme280`, `adafruit_bme680`, or `adafruit_sht4x` in the environment or `.env` before running the installer. Pimoroni sensor drivers use editable installs from `vendor/`; the installer adds `requirements/sensors-pimoroni.txt` automatically for `pimoroni_bme280`, `pimoroni_bme680`, or `pimoroni_bme68x`:
 
@@ -691,6 +693,72 @@ Install only the config UI service for an existing deployment with:
 ```bash
 bash ./Installers/install_config_ui_service.sh
 ```
+
+---
+
+## Feed server (multi-Pi screenshot feed)
+
+`config_ui.py`'s `/feed` page only ever shows screens rendered by *that*
+machine. To dedicate one Pi to hosting Feed pages built from screenshots
+pushed by *other* desk_display Pis instead, use `feed_server.py` together
+with `scripts/screenshot_uploader.py`:
+
+- **Feed host** — install just the Feed server, with no rendering stack or
+  GPIO dependencies:
+
+  ```bash
+  bash ./Installers/install_feed_server.sh
+  ```
+
+  This creates its own virtual environment from
+  `requirements/feed_server.txt`, generates a random `FEED_UPLOAD_TOKEN`
+  (reused on reinstall) if one isn't already set, writes it to `.env`, and
+  installs/starts the `feed_server_desk_display.service` systemd unit. It
+  prints the token and the exact `install_screenshot_uploader.sh` command to
+  run on each source Pi. Default port is `5003`; override with
+  `FEED_SERVER_HOST`/`FEED_SERVER_PORT`.
+
+  For example, to make `cm5` (`192.168.1.200`) the Feed host:
+
+  ```bash
+  # on cm5
+  bash ./Installers/install_feed_server.sh
+  ```
+
+- **Source Pis** (any existing desk_display install, e.g. `hyper` or
+  `square`) — install the uploader, which watches this Pi's own
+  `<screenshot_dir>/current` folder (the same one `main.py` already writes
+  on every render) and pushes any screenshot that has changed since the last
+  upload to the Feed host:
+
+  ```bash
+  # on hyper and square
+  FEED_UPLOAD_URL=http://192.168.1.200:5003 \
+  FEED_UPLOAD_TOKEN=<token printed by install_feed_server.sh> \
+  bash ./Installers/install_screenshot_uploader.sh
+  ```
+
+  This installs/starts the `screenshot_uploader_desk_display.service`
+  systemd unit using the existing project virtual environment (`requests` is
+  already part of `requirements/base.txt`), so it requires a prior full
+  install on that Pi. Omit `FEED_UPLOAD_URL`/`FEED_UPLOAD_TOKEN` to be
+  prompted for them interactively instead.
+
+Each source Pi gets its own page at `http://<feed-host>:5003/feed/<source>`,
+where `<source>` defaults to that Pi's hostname (override with
+`FEED_SOURCE_NAME`); the Feed host's `/` page lists every source that has
+uploaded at least one screenshot, with a link and last-updated status for
+each.
+
+| Variable | Where | Description |
+| --- | --- | --- |
+| `FEED_SERVER_HOST` / `FEED_SERVER_PORT` | Feed host | Bind address/port for `feed_server.py`. Defaults to `0.0.0.0:5003`. |
+| `FEED_UPLOAD_TOKEN` | Feed host + source Pis | Shared bearer-token secret; uploads are rejected without a matching token. Must match on both sides. |
+| `FEED_STORAGE_DIR` | Feed host | Where uploaded screenshots are stored. Defaults to `feed_uploads/` under the project root. |
+| `FEED_STALE_SECONDS` | Feed host | Age (seconds) after which a source is flagged stale on the index page. Defaults to `120`. |
+| `FEED_UPLOAD_URL` | Source Pis | Base URL of the Feed host, e.g. `http://192.168.1.200:5003`. |
+| `FEED_SOURCE_NAME` | Source Pis | Identifier this Pi uploads under. Defaults to `hostname`. |
+| `FEED_UPLOAD_INTERVAL_SECONDS` | Source Pis | How often to check for changed screenshots. Defaults to `5`. |
 
 ---
 

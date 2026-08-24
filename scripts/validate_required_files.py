@@ -106,7 +106,7 @@ def determine_seeds(graph: dict[str, ModuleNode]) -> set[str]:
     seeds: set[str] = set()
     for name, node in graph.items():
         top_level = node.path.parts[0]
-        if node.path.name in {"main.py", "config_ui.py", "schedule_migrations.py", "storage_overrides.py"} or top_level == "scripts":
+        if node.path.name in {"main.py", "config_ui.py", "feed_server.py", "schedule_migrations.py", "storage_overrides.py"} or top_level == "scripts":
             seeds.add(name)
     return seeds
 

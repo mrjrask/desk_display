@@ -1,0 +1,167 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{ source }} - Feed</title>
+  <style>
+    html, body {
+      margin: 0;
+      padding: 0;
+      background: #000;
+    }
+    #feed {
+      display: block;
+      line-height: 0;
+    }
+    #feed img {
+      display: block;
+      width: 100%;
+      height: auto;
+      cursor: pointer;
+      filter: brightness(1);
+      transition: filter 0.15s ease;
+    }
+    #feed img.is-copy-success {
+      filter: brightness(1.5);
+    }
+    #feed img.is-copy-error {
+      filter: brightness(0.6) saturate(3) hue-rotate(-50deg);
+    }
+  </style>
+</head>
+<body>
+  <main id="feed">
+    {% for screen in screens %}
+      <img
+        data-screen-id="{{ screen.id }}"
+        data-version="{{ screen.version if screen.version else '' }}"
+        src="{{ url_for('feed_screenshot_file', source=source, filename=screen.filename) }}?v={{ screen.version if screen.version else 0 }}"
+        alt=""
+        title="Click to copy image"
+        aria-label="Copy screenshot to clipboard"
+        role="button"
+        tabindex="0"
+      >
+    {% endfor %}
+  </main>
+  <script>
+    const source = {{ source|tojson }};
+    const feedApiUrl = "{{ url_for('feed_source_screenshots', source=source) }}";
+    const feed = document.getElementById("feed");
+
+    function buildSrc(entry) {
+      const encodedFilename = entry.filename.split("/").map(encodeURIComponent).join("/");
+      const version = entry.version || Date.now();
+      return `/feed/${encodeURIComponent(source)}/file/${encodedFilename}?v=${version}`;
+    }
+
+    function refreshFeed() {
+      fetch(feedApiUrl, { cache: "no-store" })
+        .then((response) => {
+          if (!response.ok) {
+            throw new Error("Failed to fetch screenshots");
+          }
+          return response.json();
+        })
+        .then((payload) => {
+          if (!payload || !Array.isArray(payload.screens)) {
+            return;
+          }
+          const wantedIds = new Set(payload.screens.map((entry) => entry.id));
+
+          Array.from(feed.children).forEach((child) => {
+            if (!wantedIds.has(child.dataset.screenId)) {
+              child.remove();
+            }
+          });
+
+          let previousNode = null;
+          payload.screens.forEach((entry) => {
+            let img = feed.querySelector(`img[data-screen-id="${CSS.escape(entry.id)}"]`);
+            if (!img) {
+              img = document.createElement("img");
+              img.dataset.screenId = entry.id;
+              img.alt = "";
+              img.title = "Click to copy image";
+              img.setAttribute("aria-label", "Copy screenshot to clipboard");
+              img.setAttribute("role", "button");
+              img.tabIndex = 0;
+            }
+            const version = entry.version != null ? String(entry.version) : "";
+            if (img.dataset.version !== version || !img.getAttribute("src")) {
+              img.dataset.version = version;
+              img.src = buildSrc(entry);
+            }
+            const afterNode = previousNode ? previousNode.nextSibling : feed.firstChild;
+            if (afterNode !== img) {
+              feed.insertBefore(img, afterNode);
+            }
+            previousNode = img;
+          });
+        })
+        .catch(() => {
+          // Ignore refresh failures; next polling attempt will retry.
+        });
+    }
+
+    setInterval(refreshFeed, 5000);
+
+    function toPngBlob(blob) {
+      if (blob.type === "image/png") {
+        return Promise.resolve(blob);
+      }
+      return createImageBitmap(blob).then((bitmap) => {
+        const canvas = document.createElement("canvas");
+        canvas.width = bitmap.width;
+        canvas.height = bitmap.height;
+        canvas.getContext("2d").drawImage(bitmap, 0, 0);
+        return new Promise((resolve, reject) => {
+          canvas.toBlob((pngBlob) => {
+            if (pngBlob) {
+              resolve(pngBlob);
+            } else {
+              reject(new Error("Failed to convert image to PNG"));
+            }
+          }, "image/png");
+        });
+      });
+    }
+
+    function flashImage(img, className) {
+      img.classList.remove("is-copy-success", "is-copy-error");
+      // Force reflow so a repeated flash restarts its transition.
+      void img.offsetWidth;
+      img.classList.add(className);
+      setTimeout(() => img.classList.remove(className), 220);
+    }
+
+    function copyImageToClipboard(img) {
+      if (!navigator.clipboard || typeof ClipboardItem === "undefined") {
+        flashImage(img, "is-copy-error");
+        return;
+      }
+      const pngBlobPromise = fetch(img.currentSrc || img.src, { cache: "no-store" })
+        .then((response) => response.blob())
+        .then((blob) => toPngBlob(blob));
+      navigator.clipboard
+        .write([new ClipboardItem({ "image/png": pngBlobPromise })])
+        .then(() => flashImage(img, "is-copy-success"))
+        .catch(() => flashImage(img, "is-copy-error"));
+    }
+
+    feed.addEventListener("click", (event) => {
+      if (event.target.tagName === "IMG") {
+        copyImageToClipboard(event.target);
+      }
+    });
+
+    feed.addEventListener("keydown", (event) => {
+      if (event.target.tagName === "IMG" && (event.key === "Enter" || event.key === " ")) {
+        event.preventDefault();
+        copyImageToClipboard(event.target);
+      }
+    });
+  </script>
+</body>
+</html>

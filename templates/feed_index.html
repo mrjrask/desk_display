@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{ machine_hostname }} - Feed Server</title>
+  <style>
+    :root {
+      color-scheme: light dark;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: #0b1120;
+      color: #e2e8f0;
+    }
+    body {
+      margin: 0;
+      padding: 1.5rem;
+      min-height: 100vh;
+      box-sizing: border-box;
+    }
+    header {
+      text-align: center;
+      margin-bottom: 2rem;
+    }
+    h1 {
+      margin: 0 0 0.4rem;
+      font-size: clamp(1.6rem, 3vw, 2.3rem);
+    }
+    .subtitle {
+      color: #94a3b8;
+      margin: 0;
+      font-size: 0.95rem;
+    }
+    .grid {
+      display: grid;
+      gap: 1rem;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      max-width: 900px;
+      margin: 0 auto;
+    }
+    .card {
+      display: block;
+      background: rgba(15, 23, 42, 0.85);
+      border: 1px solid rgba(148, 163, 184, 0.2);
+      border-radius: 14px;
+      padding: 1.1rem 1.25rem;
+      text-decoration: none;
+      color: inherit;
+    }
+    .card h2 {
+      margin: 0 0 0.4rem;
+      font-size: 1.1rem;
+      color: #f8fafc;
+    }
+    .card .meta {
+      font-size: 0.85rem;
+      color: #cbd5f5;
+    }
+    .card .meta.is-stale {
+      color: #ef4444;
+    }
+    .empty-state {
+      text-align: center;
+      color: #94a3b8;
+      padding: 2rem;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Feed Server</h1>
+    <p class="subtitle">Screenshots uploaded from other desk_display Pis.</p>
+  </header>
+  {% if sources %}
+    <section class="grid">
+      {% for source in sources %}
+        <a class="card" href="/feed/{{ source.name }}">
+          <h2>{{ source.name }}</h2>
+          <div class="meta{% if source.is_stale %} is-stale{% endif %}">
+            {{ source.screen_count }} screen{{ '' if source.screen_count == 1 else 's' }}
+            {% if source.elapsed %} — updated {{ source.elapsed }}{% else %} — no uploads yet{% endif %}
+          </div>
+        </a>
+      {% endfor %}
+    </section>
+  {% else %}
+    <p class="empty-state">No screenshots have been uploaded yet.</p>
+  {% endif %}
+</body>
+</html>
