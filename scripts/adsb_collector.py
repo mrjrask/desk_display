@@ -14,12 +14,21 @@ Usage:
 """
 from __future__ import annotations
 
+import sys
+from pathlib import Path
+
+if __name__ == "__main__":
+    try:
+        from scripts._venv_bootstrap import reexec_with_project_venv
+    except ImportError:
+        sys.path.insert(0, str(Path(__file__).resolve().parent))
+        from _venv_bootstrap import reexec_with_project_venv
+    reexec_with_project_venv()
+
 import argparse
 import datetime as dt
 import logging
-import sys
 import time
-from pathlib import Path
 from typing import Optional
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))

@@ -15,24 +15,16 @@ from typing import Optional
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
-
-def _maybe_reexec_with_project_venv() -> None:
-    if os.environ.get("VIRTUAL_ENV"):
-        return
-    base_prefix = getattr(sys, "base_prefix", sys.prefix)
-    if sys.prefix != base_prefix:
-        return
-    candidates = (PROJECT_ROOT / ".venv", PROJECT_ROOT / "venv")
-    for candidate in candidates:
-        if os.name == "nt":
-            python_path = candidate / "Scripts" / "python.exe"
-        else:
-            python_path = candidate / "bin" / "python"
-        if python_path.exists():
-            os.execv(str(python_path), [str(python_path), *sys.argv])
-
-
-_maybe_reexec_with_project_venv()
+if __name__ == "__main__":
+    # Only re-exec when this script is run directly, not when it's
+    # imported as a library (e.g. `from scripts import render_screens` in
+    # tests) -- see _venv_bootstrap.py.
+    try:
+        from scripts._venv_bootstrap import reexec_with_project_venv
+    except ImportError:
+        sys.path.insert(0, str(Path(__file__).resolve().parent))
+        from _venv_bootstrap import reexec_with_project_venv
+    reexec_with_project_venv()
 
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))

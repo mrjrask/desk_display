@@ -11,6 +11,17 @@ external weather API call.
 
 from __future__ import annotations
 
+import sys
+from pathlib import Path
+
+if __name__ == "__main__":
+    try:
+        from scripts._venv_bootstrap import reexec_with_project_venv
+    except ImportError:
+        sys.path.insert(0, str(Path(__file__).resolve().parent))
+        from _venv_bootstrap import reexec_with_project_venv
+    reexec_with_project_venv()
+
 import contextlib
 import json
 import logging
@@ -23,7 +34,6 @@ import time
 from collections.abc import Callable
 from datetime import datetime
 from functools import lru_cache
-from pathlib import Path
 from threading import Event
 from typing import Optional
 

@@ -8,11 +8,21 @@ same relative organization as the project's ``images`` directory.
 """
 from __future__ import annotations
 
+import sys
+from pathlib import Path
+
+if __name__ == "__main__":
+    try:
+        from scripts._venv_bootstrap import reexec_with_project_venv
+    except ImportError:
+        sys.path.insert(0, str(Path(__file__).resolve().parent))
+        from _venv_bootstrap import reexec_with_project_venv
+    reexec_with_project_venv()
+
 import argparse
 from collections.abc import Iterable
 from dataclasses import dataclass
 from io import BytesIO
-from pathlib import Path
 
 from PIL import Image
 
