@@ -17,7 +17,7 @@ for `images/air/<code>.png` (case-insensitive; `.jpg`/`.jpeg` also work).
 - Filenames are ICAO codes, uppercase, matching what `_airline_code()` parses
   from callsigns.
 
-## The 20 codes included
+## The 22 codes included
 
 Chicago Executive (PWK) is a GA/business-jet reliever field with no
 scheduled airline service, so there's no "top airlines at PWK" list to draw
@@ -47,6 +47,7 @@ operators.
 | UAE | Emirates |
 | SKW | SkyWest Airlines (regional feeder for United Express/Delta Connection/Alaska SkyWest) |
 | ENY | Envoy Air (American Eagle regional feeder) |
+| RPA | Republic Airways (regional feeder for American Eagle/United Express/Delta Connection) |
 
 **Cargo**
 | Code | Airline |
@@ -55,6 +56,11 @@ operators.
 | UPS | UPS Airlines |
 | GTI | Atlas Air |
 | CKS | Kalitta Air |
+
+**Business/GA**
+| Code | Airline |
+|---|---|
+| EJA | NetJets (Executive Jet Aviation) |
 
 Not a hard science — "top 20" was picked by scheduled flight volume/hub
 presence at ORD + MDW, not a ranked traffic count. Swap any code out easily:
