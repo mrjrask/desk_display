@@ -2,12 +2,22 @@
 """Report tracked image assets that exceed the repository size policy."""
 from __future__ import annotations
 
+import sys
+from pathlib import Path
+
+if __name__ == "__main__":
+    try:
+        from scripts._venv_bootstrap import reexec_with_project_venv
+    except ImportError:
+        sys.path.insert(0, str(Path(__file__).resolve().parent))
+        from _venv_bootstrap import reexec_with_project_venv
+    reexec_with_project_venv()
+
 import argparse
 import json
 import os
 import subprocess
 from dataclasses import dataclass
-from pathlib import Path
 
 from PIL import Image
 

@@ -15,20 +15,34 @@ Exit code behavior:
 
 from __future__ import annotations
 
-import argparse
-import datetime as dt
-import json
 import os
 import pathlib
 import sys
+
+REPO_ROOT = pathlib.Path(__file__).resolve().parents[1]
+
+if __name__ == "__main__":
+    # Only re-exec when this script is run directly (`python3
+    # scripts/test_api_connections.py`), not when it's imported under
+    # another name (e.g. tests loading it via
+    # importlib.util.spec_from_file_location) -- see _venv_bootstrap.py.
+    try:
+        from scripts._venv_bootstrap import reexec_with_project_venv
+    except ImportError:
+        sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
+        from _venv_bootstrap import reexec_with_project_venv
+    reexec_with_project_venv()
+
+import argparse
+import datetime as dt
+import json
 import time
 from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Any, Optional
+from typing import Any
 
 import requests
 
-REPO_ROOT = pathlib.Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO_ROOT))
 os.environ.setdefault("CONFIG_LOAD_DOTENV", "1")
 
