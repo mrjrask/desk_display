@@ -29,9 +29,9 @@ class _FakeSession:
         self._response = response or _FakeResponse()
         self._exc = exc
 
-    def post(self, url, headers=None, data=None, files=None, timeout=None):
+    def post(self, url, headers=None, data=None, files=None, json=None, timeout=None):
         self.calls.append(
-            SimpleNamespace(url=url, headers=headers, data=data, files=files, timeout=timeout)
+            SimpleNamespace(url=url, headers=headers, data=data, files=files, json=json, timeout=timeout)
         )
         if self._exc is not None:
             raise self._exc
@@ -86,6 +86,44 @@ def test_upload_file_posts_expected_request(monkeypatch, tmp_path):
     assert call.headers == {"Authorization": "Bearer secret-token"}
     assert call.data == {"screen_id": "date"}
     assert call.files["file"][0] == "date.png"
+
+
+def test_upload_status_posts_json_body(monkeypatch, tmp_path):
+    uploader = _reload_uploader(
+        monkeypatch,
+        FEED_UPLOAD_URL="http://192.168.1.200:5003",
+        FEED_UPLOAD_TOKEN="secret-token",
+        FEED_SOURCE_NAME="hyper",
+    )
+
+    status_path = tmp_path / "display_status.json"
+    status_path.write_text('{"screen_id": "date", "loop_iteration": 3}', encoding="utf-8")
+
+    session = _FakeSession()
+    result = uploader._upload_status(session, status_path)
+
+    assert result is True
+    assert len(session.calls) == 1
+    call = session.calls[0]
+    assert call.url == "http://192.168.1.200:5003/api/feed/hyper/status"
+    assert call.headers == {"Authorization": "Bearer secret-token"}
+
+
+def test_upload_status_returns_false_for_invalid_json(monkeypatch, tmp_path):
+    uploader = _reload_uploader(
+        monkeypatch,
+        FEED_UPLOAD_URL="http://192.168.1.200:5003",
+        FEED_SOURCE_NAME="hyper",
+    )
+
+    status_path = tmp_path / "display_status.json"
+    status_path.write_text("not json", encoding="utf-8")
+
+    session = _FakeSession()
+    result = uploader._upload_status(session, status_path)
+
+    assert result is False
+    assert session.calls == []
 
 
 def test_upload_file_returns_false_on_error_status(monkeypatch, tmp_path):
@@ -172,3 +210,48 @@ def test_run_loop_uploads_changed_files_and_skips_unchanged(monkeypatch, tmp_pat
     # Uploaded once on the first pass; unchanged mtime on the second pass
     # (before the stop event trips) means no duplicate upload.
     assert upload_calls == ["date.png"]
+
+
+def test_run_loop_uploads_changed_display_status_and_skips_unchanged(monkeypatch, tmp_path):
+    uploader = _reload_uploader(
+        monkeypatch,
+        FEED_UPLOAD_URL="http://192.168.1.200:5003",
+        FEED_UPLOAD_TOKEN="secret-token",
+        FEED_SOURCE_NAME="hyper",
+    )
+
+    current_dir = tmp_path / "current"
+    current_dir.mkdir()
+    status_path = current_dir / "display_status.json"
+    status_path.write_text('{"screen_id": "date"}', encoding="utf-8")
+
+    monkeypatch.setattr(
+        uploader,
+        "resolve_storage_paths",
+        lambda: SimpleNamespace(current_screenshot_dir=current_dir),
+    )
+    monkeypatch.setattr(uploader, "_upload_file", lambda session, path: True)
+
+    status_calls = []
+
+    def fake_upload_status(session, path):
+        status_calls.append(path.name)
+        return True
+
+    monkeypatch.setattr(uploader, "_upload_status", fake_upload_status)
+
+    wait_calls = {"count": 0}
+
+    def fake_wait(_seconds):
+        wait_calls["count"] += 1
+        if wait_calls["count"] >= 2:
+            uploader._STOP_EVENT.set()
+
+    monkeypatch.setattr(uploader._STOP_EVENT, "wait", fake_wait)
+    monkeypatch.setattr(uploader._STOP_EVENT, "is_set", lambda: wait_calls["count"] >= 2)
+
+    uploader.run_loop()
+
+    # Uploaded once on the first pass; unchanged mtime on the second pass
+    # (before the stop event trips) means no duplicate upload.
+    assert status_calls == ["display_status.json"]

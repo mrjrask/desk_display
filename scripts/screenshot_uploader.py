@@ -11,6 +11,7 @@ changed since the last successful upload to the Feed server's ingest API.
 """
 from __future__ import annotations
 
+import json
 import logging
 import os
 import signal
@@ -18,7 +19,7 @@ import socket
 import sys
 from pathlib import Path
 from threading import Event
-from typing import Iterator
+from typing import Iterator, Optional
 
 import requests
 
@@ -101,6 +102,39 @@ def _upload_file(session: requests.Session, path: Path) -> bool:
     return True
 
 
+def _upload_status(session: requests.Session, path: Path) -> bool:
+    """Upload the heartbeat this Pi's main loop writes to display_status.json.
+
+    Lets the Feed server show the same "Display heartbeat" banner for a
+    remote source that the local Screenshots/Feed pages show for this Pi.
+    """
+    url = f"{FEED_UPLOAD_URL}/api/feed/{FEED_SOURCE_NAME}/status"
+    headers = {"Authorization": f"Bearer {FEED_UPLOAD_TOKEN}"} if FEED_UPLOAD_TOKEN else {}
+    try:
+        with open(path, "r", encoding="utf-8") as fh:
+            payload = json.load(fh)
+    except (OSError, ValueError) as exc:
+        LOGGER.warning("Failed to read display status for upload: %s", exc)
+        return False
+
+    try:
+        response = session.post(url, headers=headers, json=payload, timeout=FEED_UPLOAD_TIMEOUT_SECONDS)
+    except requests.RequestException as exc:
+        LOGGER.warning("Feed status upload failed: %s", exc)
+        return False
+
+    if response.status_code != 200:
+        LOGGER.warning(
+            "Feed status upload failed: %s %s",
+            response.status_code,
+            response.text[:200],
+        )
+        return False
+
+    LOGGER.debug("Uploaded display status to %s", url)
+    return True
+
+
 def run_loop() -> int:
     logging.basicConfig(
         level=os.getenv("FEED_UPLOAD_LOG_LEVEL", "INFO").upper(),
@@ -128,7 +162,9 @@ def run_loop() -> int:
         FEED_UPLOAD_INTERVAL_SECONDS,
     )
 
+    status_path = current_dir / "display_status.json"
     last_uploaded_mtimes: dict[str, float] = {}
+    last_status_mtime: Optional[float] = None
     session = requests.Session()
 
     while not _STOP_EVENT.is_set():
@@ -142,6 +178,15 @@ def run_loop() -> int:
                 continue
             if _upload_file(session, path):
                 last_uploaded_mtimes[key] = mtime
+
+        try:
+            status_mtime = status_path.stat().st_mtime
+        except OSError:
+            status_mtime = None
+        if status_mtime is not None and last_status_mtime != status_mtime:
+            if _upload_status(session, status_path):
+                last_status_mtime = status_mtime
+
         _STOP_EVENT.wait(FEED_UPLOAD_INTERVAL_SECONDS)
 
     return 0

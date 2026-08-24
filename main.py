@@ -2768,7 +2768,10 @@ def main_loop():
                             animate_fade_in(display, img, steps=1, delay=0.01)
                         if capture_screenshot:
                             saved = _save_screenshot(
-                                sid, _select_screenshot_image(img, screenshot_img)
+                                sid,
+                                display.apply_indicator_border(
+                                    _select_screenshot_image(img, screenshot_img)
+                                ),
                             )
                             if saved and saved[1]:
                                 maybe_archive_screenshots(saved[0])
@@ -2792,7 +2795,10 @@ def main_loop():
                             animate_fade_in(display, img, steps=1, delay=0.015)
                         if capture_screenshot:
                             saved = _save_screenshot(
-                                sid, _select_screenshot_image(img, screenshot_img)
+                                sid,
+                                display.apply_indicator_border(
+                                    _select_screenshot_image(img, screenshot_img)
+                                ),
                             )
                             if saved and saved[1]:
                                 maybe_archive_screenshots(saved[0])

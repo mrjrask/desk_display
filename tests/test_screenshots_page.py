@@ -124,6 +124,7 @@ def test_screenshots_api_returns_entries(monkeypatch):
 
 
 def test_feed_page_renders_only_screens_with_screenshots(monkeypatch):
+    fresh_timestamp = datetime.now().timestamp() - 60
     monkeypatch.setattr(
         config_ui,
         "_build_screenshot_entries",
@@ -132,9 +133,9 @@ def test_feed_page_renders_only_screens_with_screenshots(monkeypatch):
                 "id": "date",
                 "path": "current/date.png",
                 "timestamp": "2025-01-01 00:00:00",
-                "elapsed": "1d 2h 3m 4s ago",
-                "version": 1735689600,
-                "is_stale": True,
+                "elapsed": "0d 0h 1m 0s ago",
+                "version": int(fresh_timestamp),
+                "is_stale": False,
             },
             {
                 "id": "weather",
@@ -145,6 +146,12 @@ def test_feed_page_renders_only_screens_with_screenshots(monkeypatch):
                 "is_stale": False,
             },
         ],
+    )
+    monkeypatch.setattr(config_ui, "_load_display_status", lambda: {"screen_id": "date", "is_stale": False})
+    monkeypatch.setattr(
+        config_ui,
+        "_load_service_status",
+        lambda: {"unit": "desk_display.service", "summary": "active (running), enabled", "is_active": True, "error": None},
     )
 
     client = config_ui.app.test_client()
@@ -159,6 +166,61 @@ def test_feed_page_renders_only_screens_with_screenshots(monkeypatch):
     assert "<nav" not in html
     assert 'role="button"' in html
     assert 'tabindex="0"' in html
+    assert "Display heartbeat" in html
+
+
+def test_feed_page_drops_screenshots_stale_beyond_twenty_minutes(monkeypatch):
+    now = datetime.now().timestamp()
+    monkeypatch.setattr(
+        config_ui,
+        "_build_screenshot_entries",
+        lambda: [
+            {
+                "id": "date",
+                "path": "current/date.png",
+                "timestamp": "2025-01-01 00:00:00",
+                "elapsed": "0d 0h 25m 0s ago",
+                "version": int(now - 25 * 60),
+                "is_stale": False,
+            },
+            {
+                "id": "weather",
+                "path": "current/weather.png",
+                "timestamp": "2025-01-01 00:00:00",
+                "elapsed": "0d 0h 5m 0s ago",
+                "version": int(now - 5 * 60),
+                "is_stale": False,
+            },
+        ],
+    )
+
+    entries = config_ui._build_feed_screenshot_entries()
+    entry_map = {entry["id"]: entry for entry in entries}
+
+    assert entry_map["date"]["path"] is None
+    assert entry_map["weather"]["path"] == "current/weather.png"
+
+
+def test_feed_screenshots_api_returns_display_status(monkeypatch):
+    monkeypatch.setattr(config_ui, "_build_screenshot_entries", lambda: [])
+    monkeypatch.setattr(
+        config_ui,
+        "_load_display_status",
+        lambda: {"screen_id": "date", "loop_iteration": 3, "is_stale": False},
+    )
+    monkeypatch.setattr(
+        config_ui,
+        "_load_service_status",
+        lambda: {"unit": "desk_display.service", "summary": "active (running), enabled", "is_active": True, "error": None},
+    )
+
+    client = config_ui.app.test_client()
+    response = client.get("/api/feed/screenshots")
+
+    assert response.status_code == 200
+    payload = response.get_json()
+    assert payload["display_status"]["screen_id"] == "date"
+    assert payload["service_status"]["unit"] == "desk_display.service"
 
 
 def test_layout_editor_routes_removed():
