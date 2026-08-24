@@ -36,7 +36,7 @@ def test_default_screen_configs_include_adsb_screens_at_end_of_other():
     for filename in ("default_screens_large.json", "default_screens_small.json"):
         config = _load_default_config(filename)
 
-        assert config["config"]["screens"].get("adsb stats") == 6
+        assert config["config"]["screens"].get("adsb stats") == 3
         assert config["config"]["screens"].get("adsb live") == 3
         assert config["config"]["screens"].get("adsb live airlines") == 3
         other_steps = _other_playlist_steps(config)
