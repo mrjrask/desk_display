@@ -6,9 +6,12 @@ import importlib.util
 import json
 import sys
 import types
+from datetime import datetime
 from pathlib import Path
 
 import pytest
+
+TODAY = datetime.now().strftime("%Y-%m-%d")
 
 SCRIPT_PATH = Path(__file__).resolve().parents[1] / "scripts" / "waveshare_oled_status.py"
 
@@ -548,6 +551,7 @@ def test_cubs_oled_frames_final_hides_outs(monkeypatch):
     rendered = []
     game = {
         "gamePk": 777,
+        "officialDate": TODAY,
         "status": {"abstractGameState": "Final", "detailedState": "Final", "statusCode": "F"},
         "teams": {
             "away": {"team": {"id": 112, "name": "Chicago Cubs", "abbreviation": "CHC"}, "score": 5},
@@ -635,10 +639,38 @@ def test_cubs_oled_frames_hides_plain_pregame_status(monkeypatch):
     assert mod._cubs_oled_frames() is None
 
 
+def test_cubs_oled_frames_hides_final_from_an_earlier_date(monkeypatch):
+    """A restart (or a slow-to-refresh cache) shouldn't re-arm the 90-minute
+    final-score hold for a game that actually ended on a previous day: the
+    process has no reliable way to know it isn't fresh, so it should just
+    stay hidden instead of showing a stale score."""
+    mod = _load_module()
+    game = {
+        "gamePk": 888,
+        "officialDate": "2000-01-01",
+        "status": {"abstractGameState": "Final", "detailedState": "Final", "statusCode": "F"},
+        "teams": {
+            "away": {"team": {"id": 112, "name": "Chicago Cubs", "abbreviation": "CHC"}, "score": 6},
+            "home": {"team": {"id": 121, "name": "New York Mets", "abbreviation": "NYM"}, "score": 1},
+        },
+        "linescore": {},
+    }
+
+    monkeypatch.setattr(mod, "_read_display_status_payload", lambda: {"cubs": {"last_game": game}})
+    monkeypatch.setattr(mod, "_render_score_panel", lambda *_args, **_kwargs: object())
+    monkeypatch.setattr(mod, "_CUBS_FINAL_GAME_PK", None)
+    monkeypatch.setattr(mod, "_CUBS_FINAL_HOLD_UNTIL_EPOCH", 0.0)
+    monkeypatch.setattr(mod, "_load_cubs_final_state", lambda: (None, 0.0))
+    monkeypatch.setattr(mod, "_persist_cubs_final_state", lambda *_args, **_kwargs: None)
+
+    assert mod._cubs_oled_frames() is None
+
+
 def test_cubs_oled_frames_holds_final_for_90_minutes(monkeypatch):
     mod = _load_module()
     game = {
         "gamePk": 999,
+        "officialDate": TODAY,
         "status": {"abstractGameState": "Final", "detailedState": "Final", "statusCode": "F"},
         "teams": {
             "away": {"team": {"id": 112, "name": "Chicago Cubs", "abbreviation": "CHC"}, "score": 7},
@@ -709,6 +741,7 @@ def test_hawks_oled_frames_final_hides_clock(monkeypatch):
     game = {
         "id": 556,
         "gameState": "OFF",
+        "officialDate": TODAY,
         "awayTeam": {"id": 16, "abbrev": "CHI", "score": 4},
         "homeTeam": {"id": 10, "abbrev": "TOR", "score": 3},
     }
@@ -729,6 +762,29 @@ def test_hawks_oled_frames_final_hides_clock(monkeypatch):
     assert rendered[0]["footer"] == ""
     assert rendered[1]["score"] == "3"
     assert rendered[1]["footer"] == "Final"
+
+
+def test_hawks_oled_frames_hides_final_from_an_earlier_date(monkeypatch):
+    """Same restart/stale-cache protection as the Cubs panel: a final game
+    dated before today should stay hidden rather than re-arming the
+    90-minute hold with a stale score."""
+    mod = _load_module()
+    game = {
+        "id": 561,
+        "gameState": "OFF",
+        "officialDate": "2000-01-01",
+        "awayTeam": {"id": 16, "abbrev": "CHI", "score": 4},
+        "homeTeam": {"id": 10, "abbrev": "TOR", "score": 3},
+    }
+
+    monkeypatch.setattr(mod, "_read_display_status_payload", lambda: {"hawks": {"last_game": game}})
+    monkeypatch.setattr(mod, "_render_score_panel", lambda *_args, **_kwargs: object())
+    monkeypatch.setattr(mod, "_HAWKS_FINAL_GAME_PK", None)
+    monkeypatch.setattr(mod, "_HAWKS_FINAL_HOLD_UNTIL_EPOCH", 0.0)
+    monkeypatch.setattr(mod, "_load_hawks_final_state", lambda: (None, 0.0))
+    monkeypatch.setattr(mod, "_persist_hawks_final_state", lambda *_args, **_kwargs: None)
+
+    assert mod._hawks_oled_frames() is None
 
 
 @pytest.mark.parametrize(
@@ -790,6 +846,7 @@ def test_hawks_oled_frames_holds_final_for_90_minutes(monkeypatch):
     game = {
         "id": 557,
         "gameState": "OFF",
+        "officialDate": TODAY,
         "awayTeam": {"id": 16, "abbrev": "CHI", "score": 5},
         "homeTeam": {"id": 10, "abbrev": "TOR", "score": 2},
     }
