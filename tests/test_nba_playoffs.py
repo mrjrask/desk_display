@@ -519,6 +519,7 @@ def test_derive_playoff_matchups_from_recent_games_skips_espn_scan_outside_playo
 
 
 def test_derive_playoff_matchups_from_recent_games_scans_during_playoff_season(monkeypatch):
+    nba_playoffs._RECENT_GAMES_SCAN_COOLDOWN.reset()
     calls = []
 
     def _fake_fetch(day):
@@ -531,6 +532,34 @@ def test_derive_playoff_matchups_from_recent_games_scans_during_playoff_season(m
     nba_playoffs._derive_playoff_matchups_from_recent_games(now=april_now)
 
     assert len(calls) == 23
+
+
+def test_derive_playoff_matchups_from_recent_games_cools_down_after_empty_scan(monkeypatch):
+    """Regression test: even inside the playoff window, an empty scan must
+    not re-burst every call -- it should cool down like the NFL scoreboard's
+    own next-games scan does, so a dry spell can't reproduce the same
+    repeated-burst problem the month gate exists to prevent."""
+
+    nba_playoffs._RECENT_GAMES_SCAN_COOLDOWN.reset()
+    calls = []
+
+    def _fake_fetch(day):
+        calls.append(day)
+        return []
+
+    monkeypatch.setattr(nba_playoffs, "_fetch_games_for_date", _fake_fetch)
+
+    april_now = datetime.datetime(2026, 4, 20, 12, 0, tzinfo=CENTRAL_TIME)
+    nba_playoffs._derive_playoff_matchups_from_recent_games(now=april_now)
+    assert len(calls) == 23
+
+    calls.clear()
+    result = nba_playoffs._derive_playoff_matchups_from_recent_games(now=april_now)
+
+    assert result == []
+    assert calls == []
+
+    nba_playoffs._RECENT_GAMES_SCAN_COOLDOWN.reset()
 
 
 def test_compose_canvas_centers_single_series_on_display(monkeypatch):

@@ -136,7 +136,7 @@ def test_fetch_scoreboard_falls_back_to_next_games_when_week_is_empty(monkeypatc
         ],
     }
     _install_fake_session(monkeypatch, events_by_date)
-    monkeypatch.setattr(nfl_scoreboard, "_NO_UPCOMING_GAMES_CHECKED_AT", None)
+    nfl_scoreboard._NO_UPCOMING_GAMES_COOLDOWN.reset()
 
     now = datetime.datetime(2026, 8, 24, 12, 0, tzinfo=nfl_scoreboard.CENTRAL_TIME)
 
