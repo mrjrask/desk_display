@@ -32,7 +32,7 @@ import signal
 import subprocess
 import time
 from collections.abc import Callable
-from datetime import datetime
+from datetime import datetime, timezone
 from functools import lru_cache
 from threading import Event
 from typing import Optional
@@ -398,6 +398,52 @@ def _team_label(team: dict) -> str:
     return "TEAM"
 
 
+def _game_local_date(game: dict):
+    """Best-effort local calendar date for a game.
+
+    Prefers the schedule feed's own local "officialDate" (already a
+    Central-time date string for MLB/Hawks) and falls back to converting a
+    UTC "gameDate"/"startTimeUTC" timestamp to the system's local timezone
+    (the Pi's clock is expected to already be set to Central time, same
+    assumption the rest of this module makes). Returns None when no usable
+    date field is present, so a stale/unrecognized "final" game is never
+    mistaken for one that just ended.
+    """
+    if not isinstance(game, dict):
+        return None
+    official = str(game.get("officialDate") or "").strip()
+    if official:
+        try:
+            return datetime.strptime(official, "%Y-%m-%d").date()
+        except ValueError:
+            pass
+    for key in ("gameDate", "startTimeUTC"):
+        raw = str(game.get(key) or "").strip()
+        if not raw:
+            continue
+        try:
+            utc_dt = datetime.strptime(raw, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc)
+        except ValueError:
+            continue
+        return utc_dt.astimezone().date()
+    return None
+
+
+def _game_finished_today(game: dict) -> bool:
+    """Whether a "final" game's local date matches today.
+
+    A final game whose date we can't confirm as today (missing date
+    fields, or an older game the schedule feed is still reporting as the
+    most recent finished game) is treated as not-today: this OLED helper
+    only knows a game just ended once it observes it "final" for the
+    first time, so without this check a process restart hours or days
+    after the real end could re-arm the 90-minute final-score hold and
+    show a stale score again.
+    """
+    local_date = _game_local_date(game)
+    return local_date is not None and local_date == datetime.now().date()
+
+
 def _mlb_game_phase(game: dict) -> str:
     """Classify an MLB game's status the way the MLB scoreboard does.
 
@@ -570,12 +616,12 @@ def _cubs_oled_frames() -> tuple[Image.Image, Image.Image] | None:
             selected_game = live_game
             live_phase = phase
             is_final = False
-        elif phase == "final":
+        elif phase == "final" and _game_finished_today(live_game):
             selected_game = live_game
             is_final = True
 
     if selected_game is None and isinstance(last_game, dict):
-        if _mlb_game_phase(last_game) == "final":
+        if _mlb_game_phase(last_game) == "final" and _game_finished_today(last_game):
             selected_game = last_game
             is_final = True
 
@@ -744,12 +790,12 @@ def _hawks_oled_frames() -> tuple[Image.Image, Image.Image] | None:
             selected_game = live_game
             live_phase = phase
             is_final = False
-        elif phase == "final":
+        elif phase == "final" and _game_finished_today(live_game):
             selected_game = live_game
             is_final = True
 
     if selected_game is None and isinstance(last_game, dict):
-        if _nhl_game_phase(last_game) == "final":
+        if _nhl_game_phase(last_game) == "final" and _game_finished_today(last_game):
             selected_game = last_game
             is_final = True
 
