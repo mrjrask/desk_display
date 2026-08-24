@@ -523,7 +523,7 @@ def _draw_stat_tile(
             _TEXT_COLOR,
             columns=columns,
             min_pt=9,
-            max_pt=max(FONT_WEATHER_DETAILS_SMALL_BOLD.size, int(height * 0.4)),
+            max_pt=max(FONT_WEATHER_DETAILS_SMALL_BOLD.size, int(height * 0.28)),
         )
         if caption and caption_font is not None:
             _draw_line(
@@ -706,7 +706,7 @@ def _draw_airline_tile(
             _TEXT_COLOR,
             columns=columns,
             min_pt=7,
-            max_pt=max(FONT_WEATHER_DETAILS_SMALL_BOLD.size, int(height * 0.35)),
+            max_pt=max(FONT_WEATHER_DETAILS_SMALL_BOLD.size, int(height * 0.26)),
         )
         if caption and caption_font is not None:
             _draw_line(
@@ -728,7 +728,7 @@ def _draw_airline_tile(
         max(1, col_width - icon_col),
         row_h - 2,
         min_pt=8,
-        max_pt=max(FONT_WEATHER_DETAILS_SMALL_BOLD.size, int(height * 0.35)),
+        max_pt=max(FONT_WEATHER_DETAILS_SMALL_BOLD.size, int(height * 0.24)),
     )
 
     for index, (code, count) in enumerate(rows):
@@ -738,6 +738,21 @@ def _draw_airline_tile(
         icon_x = cell_x0
         logo = _airline_logo(code, icon_dim)
         if logo is not None:
+            # Airline logos vary widely in color and many have transparent
+            # backgrounds, so they can vanish against the tile's dark tinted
+            # background -- a light plate behind the logo keeps it legible
+            # regardless of the logo's own colors.
+            plate_pad = max(1, icon_dim // 8)
+            draw.rounded_rectangle(
+                (
+                    icon_x - plate_pad,
+                    row_center - icon_dim // 2 - plate_pad,
+                    icon_x + icon_dim + plate_pad,
+                    row_center + icon_dim // 2 + plate_pad,
+                ),
+                radius=max(2, plate_pad + 1),
+                fill=(245, 247, 250),
+            )
             paste_x = icon_x + max(0, (icon_dim - logo.width) // 2)
             paste_y = row_center - logo.height // 2
             img.paste(logo, (paste_x, paste_y), logo)
