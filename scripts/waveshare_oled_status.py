@@ -417,7 +417,6 @@ def _mlb_game_phase(game: dict) -> str:
         return "pending"
     if (
         "warmup" in normalized
-        or "pregame" in normalized
         or detailed_lower == "delayed"
         or "delay" in detailed_lower
         or "suspend" in detailed_lower
@@ -460,8 +459,6 @@ def _mlb_status_label(game: dict) -> str:
         return "Canceled"
     if "warmup" in normalized:
         return "Warmup"
-    if "pregame" in normalized:
-        return "Pre-Game"
     if detailed_lower == "delayed":
         return "Delayed"
     if "delay" in detailed_lower:
@@ -663,15 +660,15 @@ def _nhl_game_phase(game: dict) -> str:
     """Classify an NHL game's status the way the NHL scoreboard does.
 
     Returns "final", "live" (period is actually being played), "pending"
-    (pre-game warmup, a postponement, or a suspension), or "idle" (a plain
-    scheduled game that hasn't entered its pregame window yet).
+    (a postponement or a suspension), or "idle" (a plain scheduled or
+    pre-game game that hasn't started yet).
     """
     state = str((game or {}).get("gameState") or (game or {}).get("gameScheduleState") or "").strip().upper()
     if state in {"OFF", "FINAL"}:
         return "final"
     if state in {"LIVE", "CRIT"}:
         return "live"
-    if state in {"PRE", "PREGAME", "POSTP", "POSTPONED", "PPD", "SUSP", "SUSPENDED"}:
+    if state in {"POSTP", "POSTPONED", "PPD", "SUSP", "SUSPENDED"}:
         return "pending"
     return "idle"
 
@@ -685,8 +682,6 @@ def _nhl_status_label(game: dict) -> str:
         return detailed or "Postponed"
     if state in {"SUSP", "SUSPENDED"}:
         return detailed or "Suspended"
-    if state in {"PRE", "PREGAME"}:
-        return detailed or "Pre-Game"
     return detailed or (state.title() if state else "Pending")
 
 
@@ -788,7 +783,7 @@ def _hawks_oled_frames() -> tuple[Image.Image, Image.Image] | None:
     away_score_text = str(away_score) if isinstance(away_score, int) else "-"
     home_score_text = str(home_score) if isinstance(home_score, int) else "-"
     # Same fixed layout as the Cubs panels: the away panel always carries
-    # the period (or status like "Pre-Game"/"Postponed"), the home panel
+    # the period (or status like "Postponed"/"Suspended"), the home panel
     # always carries the clock (or "Final").
     if is_final:
         away_footer = ""

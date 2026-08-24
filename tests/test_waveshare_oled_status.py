@@ -613,6 +613,28 @@ def test_cubs_oled_frames_shows_non_inning_statuses(monkeypatch, detailed, expec
     assert rendered[1]["footer"] == ""
 
 
+def test_cubs_oled_frames_hides_plain_pregame_status(monkeypatch):
+    mod = _load_module()
+    game = {
+        "gamePk": 247,
+        "status": {"abstractGameState": "Preview", "detailedState": "Pre-Game", "statusCode": ""},
+        "teams": {
+            "away": {"team": {"id": 112, "name": "Chicago Cubs", "abbreviation": "CHC"}, "score": 0},
+            "home": {"team": {"id": 121, "name": "New York Mets", "abbreviation": "NYM"}, "score": 0},
+        },
+        "linescore": {},
+    }
+
+    monkeypatch.setattr(mod, "_read_display_status_payload", lambda: {"cubs": {"live_game": game}})
+    monkeypatch.setattr(mod, "_render_score_panel", lambda *_args, **_kwargs: object())
+    monkeypatch.setattr(mod, "_CUBS_FINAL_GAME_PK", None)
+    monkeypatch.setattr(mod, "_CUBS_FINAL_HOLD_UNTIL_EPOCH", 0.0)
+    monkeypatch.setattr(mod, "_load_cubs_final_state", lambda: (None, 0.0))
+    monkeypatch.setattr(mod, "_persist_cubs_final_state", lambda *_args, **_kwargs: None)
+
+    assert mod._cubs_oled_frames() is None
+
+
 def test_cubs_oled_frames_holds_final_for_90_minutes(monkeypatch):
     mod = _load_module()
     game = {
@@ -712,8 +734,6 @@ def test_hawks_oled_frames_final_hides_clock(monkeypatch):
 @pytest.mark.parametrize(
     "game_state, expected_status",
     [
-        ("PRE", "Pre-Game"),
-        ("PREGAME", "Pre-Game"),
         ("POSTP", "Postponed"),
         ("PPD", "Postponed"),
         ("SUSP", "Suspended"),
@@ -743,6 +763,26 @@ def test_hawks_oled_frames_shows_non_period_statuses(monkeypatch, game_state, ex
     assert rendered[0]["team"] == "HAWKS"
     assert rendered[0]["footer"] == expected_status
     assert rendered[1]["footer"] == ""
+
+
+@pytest.mark.parametrize("game_state", ["PRE", "PREGAME"])
+def test_hawks_oled_frames_hides_pregame_status(monkeypatch, game_state):
+    mod = _load_module()
+    game = {
+        "id": 560,
+        "gameState": game_state,
+        "awayTeam": {"id": 16, "abbrev": "CHI"},
+        "homeTeam": {"id": 10, "abbrev": "TOR"},
+    }
+
+    monkeypatch.setattr(mod, "_read_display_status_payload", lambda: {"hawks": {"live_game": game}})
+    monkeypatch.setattr(mod, "_render_score_panel", lambda *_args, **_kwargs: object())
+    monkeypatch.setattr(mod, "_HAWKS_FINAL_GAME_PK", None)
+    monkeypatch.setattr(mod, "_HAWKS_FINAL_HOLD_UNTIL_EPOCH", 0.0)
+    monkeypatch.setattr(mod, "_load_hawks_final_state", lambda: (None, 0.0))
+    monkeypatch.setattr(mod, "_persist_hawks_final_state", lambda *_args, **_kwargs: None)
+
+    assert mod._hawks_oled_frames() is None
 
 
 def test_hawks_oled_frames_holds_final_for_90_minutes(monkeypatch):
