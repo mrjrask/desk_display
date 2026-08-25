@@ -786,11 +786,12 @@ sudo journalctl -u desk_display_adsb_collector.service -f
 ./scripts/restart_services.sh
 ```
 
-`./scripts/restart_services.sh` restarts every installed desk_display
-service one at a time, in dependency order (data collectors and the feed
-server first, the main renderer next, the Waveshare fbcp mirror and OLED
-helper after it, then the screenshot uploader, config UI, and AirPlay
-add-on last). Pass one or more service names to restart just those (still
+`./scripts/restart_services.sh` only ever acts on this project's own 8
+systemd services (never any other unit on the machine), restarting whichever
+of them are installed here one at a time, in dependency order (data
+collectors and the feed server first, the main renderer next, the Waveshare
+fbcp mirror and OLED helper after it, then the screenshot uploader, config
+UI, and AirPlay add-on last). Pass one or more service names to restart just those (still
 one at a time, in that same order), or `--list` to print the known
 services and their order.
 

@@ -26,10 +26,13 @@
 #   8. airplay_desk_display.service          - AirPlay receiver add-on;
 #                                               independent, least urgent.
 #
-# Only services actually installed on this machine are restarted; the rest
-# are skipped. By default every installed service is restarted in the order
-# above. Pass one or more service names to restart just those (still one at
-# a time, in the order given below rather than the order typed).
+# This script only ever touches the 8 services listed above (ORDERED_SERVICES
+# below) — it never queries or restarts any other systemd unit on the
+# machine. Of those 8, only the ones actually installed here are restarted;
+# the rest are skipped. By default every installed one of these project
+# services is restarted in the order above. Pass one or more service names
+# to restart just those (still one at a time, in the order given below
+# rather than the order typed).
 set -euo pipefail
 
 SUDO="${SUDO:-}"
@@ -63,14 +66,19 @@ Usage:
   $(basename "$0") --list
   $(basename "$0") --help
 
-With no arguments, restarts every installed desk_display service, one at a
-time, in dependency order (see the comment block at the top of this script).
+This script only ever acts on the desk_display project's own systemd
+services (listed below) - it never touches any other unit on the machine.
+
+With no arguments, restarts every one of this project's services that is
+installed here, one at a time, in dependency order (see the comment block
+at the top of this script).
 
 With one or more service names, restarts only those (still one at a time,
 in the order below rather than the order given), skipping any that aren't
-installed on this machine.
+installed on this machine. Names outside this project's own list below are
+rejected.
 
-Known services, in restart order:
+This project's services, in restart order:
 $(printf '  %s\n' "${ORDERED_SERVICES[@]}")
 USAGE
 }
