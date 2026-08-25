@@ -130,6 +130,41 @@ def test_scheduler_with_multiple_alternates():
     ]
 
 
+def test_alt_screen_ids_for_returns_configured_alternates():
+    config = {
+        "screens": {
+            "date": {
+                "frequency": 1,
+                "alt": {"screen": "nixie", "frequency": 3},
+            },
+            "nixie": 0,
+        }
+    }
+    scheduler = build_scheduler(config)
+    assert scheduler.alt_screen_ids_for("date") == ("nixie",)
+    assert scheduler.alt_screen_ids_for("nixie") == ()
+    assert scheduler.alt_screen_ids_for("missing") == ()
+
+
+def test_alt_screen_ids_for_multiple_alternates():
+    config = {
+        "screens": {
+            "date": {
+                "frequency": 1,
+                "alt": {"screen": ["inside", "weather1"], "frequency": 2},
+            }
+        }
+    }
+    scheduler = build_scheduler(config)
+    assert scheduler.alt_screen_ids_for("date") == ("inside", "weather1")
+
+
+def test_alt_screen_ids_for_without_alt_config():
+    config = {"screens": {"date": 1, "inside": 2}}
+    scheduler = build_scheduler(config)
+    assert scheduler.alt_screen_ids_for("date") == ()
+
+
 def test_build_scheduler_rejects_unknown_screen():
     config = {"screens": {"missing": 1}}
     with pytest.raises(ValueError):

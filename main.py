@@ -1505,6 +1505,55 @@ def _select_screenshot_image(
     return screenshot_image if screenshot_image is not None else display_image
 
 
+def _nixie_alt_frame() -> Image.Image:
+    from screens.draw_nixie import nixie_frame
+
+    return nixie_frame()
+
+
+# Screens that can be configured as an "alt" for another screen while
+# themselves carrying a frequency of 0 (excluded from their own rotation
+# slot) need an off-screen way to refresh their screenshot on cycles where
+# the base screen renders instead of the alternate. Only screens with a
+# render path that is safe to call without touching the physical display
+# belong here.
+_ALT_SCREENSHOT_REFRESHERS: Dict[str, Callable[[], Image.Image]] = {
+    "nixie": _nixie_alt_frame,
+}
+
+
+def _refresh_alt_screenshots(sid: str) -> None:
+    """Regenerate screenshots for screens configured as an alternate of *sid*.
+
+    A screen like Nixie can be set up as an alternate for the Date screen
+    while itself having a frequency of 0. On cycles where the base screen
+    renders instead of the alternate, the alternate's screenshot would
+    otherwise go stale (e.g. an outdated clock time). Render it off-screen
+    so the feed and screenshot webpages stay current even though the
+    alternate isn't actually shown on the physical display this cycle.
+    """
+
+    if not ENABLE_SCREENSHOTS or screen_scheduler is None:
+        return
+
+    for alt_id in screen_scheduler.alt_screen_ids_for(sid):
+        if alt_id == sid:
+            continue
+        refresher = _ALT_SCREENSHOT_REFRESHERS.get(alt_id)
+        if refresher is None:
+            continue
+        try:
+            frame = refresher()
+        except Exception:
+            logging.exception("Failed to refresh alternate screenshot for '%s'", alt_id)
+            continue
+        if not isinstance(frame, Image.Image):
+            continue
+        saved = _save_screenshot(alt_id, display.apply_indicator_border(frame))
+        if saved and saved[1]:
+            maybe_archive_screenshots(saved[0])
+
+
 def _save_screenshot(sid: str, img: Image.Image) -> Optional[Tuple[str, bool, int]]:
     ts = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
     folder = _sanitize_directory_name(sid)
@@ -2810,6 +2859,7 @@ def main_loop():
                     capture_screenshot = ENABLE_SCREENSHOTS and not _consume_touch_focus_screenshot_skip(sid)
                     if capture_screenshot:
                         _save_current_ticker_data(sid, ticker_data)
+                        _refresh_alt_screenshots(sid)
                     if "logo" in sid:
                         if not _frame_id_changed(display, frame_id_before_render):
                             logging.warning(
