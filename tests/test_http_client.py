@@ -132,6 +132,43 @@ def test_named_sessions_have_isolated_circuit_breakers(monkeypatch: pytest.Monke
         _reload_http_client(monkeypatch, None)
 
 
+def test_http_get_without_explicit_session_uses_default_session(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    http_client = _reload_http_client(monkeypatch, None)
+    try:
+        calls = []
+
+        def fake_send(self, request, **kwargs):
+            calls.append((self, request.url))
+            return _fake_response(200)
+
+        monkeypatch.setattr(requests.Session, "send", fake_send)
+
+        response = http_client.http_get("https://example.com/a", timeout=1)
+        assert response.status_code == 200
+        assert calls == [(http_client.get_session(), "https://example.com/a")]
+    finally:
+        _reload_http_client(monkeypatch, None)
+
+
+def test_request_json_without_explicit_session_uses_default_session(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    http_client = _reload_http_client(monkeypatch, None)
+    try:
+        def fake_send(self, request, **kwargs):
+            response = _fake_response(200)
+            response._content = b'{"ok": true}'
+            return response
+
+        monkeypatch.setattr(requests.Session, "send", fake_send)
+
+        assert http_client.request_json("https://example.com/a", timeout=1) == {"ok": True}
+    finally:
+        _reload_http_client(monkeypatch, None)
+
+
 def test_day_scan_cooldown_starts_unblocked():
     from services.http_client import DayScanCooldown
 

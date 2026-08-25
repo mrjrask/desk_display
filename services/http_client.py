@@ -151,7 +151,7 @@ def http_get(
 ) -> requests.Response:
     """Perform a GET request using the shared HTTP session."""
 
-    sess = session or _SESSION
+    sess = session or get_session()
     return sess.get(url, params=params, headers=headers, timeout=timeout, **kwargs)
 
 
@@ -207,7 +207,7 @@ def request_json(
 ) -> Optional[Any]:
     """Perform a GET request that returns JSON, with optional quiet logging."""
 
-    sess = session or _SESSION
+    sess = session or get_session()
     try:
         response = http_get(url, params=params, headers=headers, timeout=timeout, session=sess, **kwargs)
         response.raise_for_status()
