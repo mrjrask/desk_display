@@ -2313,6 +2313,10 @@ class ScreenImage:
     screenshot_image:
         Optional image to use for still screenshot capture when it should differ
         from the display-sized frame returned in ``image``.
+    ticker_data:
+        Optional JSON-serializable payload describing a scrolling ticker (see
+        screens/draw_news_headlines.py) so the Feed webpages can animate the
+        screen client-side instead of showing a frozen screenshot.
     """
 
     image: Image.Image
@@ -2320,6 +2324,7 @@ class ScreenImage:
     led_override: Optional[Tuple[float, float, float]] = None
     consumed_delay: bool = False
     screenshot_image: Optional[Image.Image] = None
+    ticker_data: Optional[dict] = None
 
 # ─── Basic utilities ────────────────────────────────────────────────────────
 @log_call

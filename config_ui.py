@@ -714,6 +714,20 @@ def _apply_playlist_grouping(
     return grouped
 
 
+def _read_ticker_data(current_dir: Path, prefix: str) -> Optional[dict[str, Any]]:
+    """Read the JSON ticker sidecar main.py writes next to a screenshot.
+
+    Present only for screens that render a scrolling ticker (see
+    screens/draw_news_headlines.py) and lets the Feed page animate that
+    ticker client-side instead of showing a frozen screenshot.
+    """
+    ticker_path = current_dir / f"{prefix}.ticker.json"
+    try:
+        return json.loads(ticker_path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+
+
 def _build_screenshot_entry(
     screen_id: str,
     screenshot_dir: Path,
@@ -729,6 +743,7 @@ def _build_screenshot_entry(
         "elapsed": None,
         "version": None,
         "is_stale": False,
+        "ticker": _read_ticker_data(current_dir, prefix),
     }
     candidates: list[Path] = [
         current_dir / f"{prefix}{ext}" for ext in ALLOWED_SCREEN_EXTS
@@ -807,6 +822,7 @@ def _build_feed_screenshot_entries() -> list[dict[str, Any]]:
             entry["timestamp"] = None
             entry["elapsed"] = None
             entry["version"] = None
+            entry["ticker"] = None
     return entries
 
 

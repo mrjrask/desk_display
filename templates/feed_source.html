@@ -45,6 +45,7 @@
       filter: brightness(0.6) saturate(3) hue-rotate(-50deg);
     }
   </style>
+  {% include "_feed_ticker.html" %}
 </head>
 <body>
   <section class="status-banner{% if display_status.is_stale %} is-stale{% endif %}" id="displayStatusBanner">
@@ -68,8 +69,17 @@
   </section>
   <main id="feed">
     {% for screen in screens %}
+      {% if screen.ticker %}
+      <div
+        class="ticker"
+        data-screen-id="{{ screen.id }}"
+        data-kind="ticker"
+        data-ticker='{{ screen.ticker|tojson }}'
+      ></div>
+      {% else %}
       <img
         data-screen-id="{{ screen.id }}"
+        data-kind="image"
         data-version="{{ screen.version if screen.version else '' }}"
         src="{{ url_for('feed_screenshot_file', source=source, filename=screen.filename) }}?v={{ screen.version if screen.version else 0 }}"
         alt=""
@@ -78,6 +88,7 @@
         role="button"
         tabindex="0"
       >
+      {% endif %}
     {% endfor %}
   </main>
   <script>
@@ -122,6 +133,43 @@
       return `/feed/${encodeURIComponent(source)}/file/${encodedFilename}?v=${version}`;
     }
 
+    // Screens with a ticker payload (see screens/draw_news_headlines.py)
+    // scroll live in the browser via FeedTicker instead of showing a
+    // frozen screenshot; every other screen keeps behaving like before.
+    document.querySelectorAll('#feed .ticker[data-ticker]').forEach((el) => {
+      try {
+        FeedTicker.apply(el, JSON.parse(el.dataset.ticker));
+      } catch (e) {
+        // Ignore malformed initial payloads; the next poll will retry.
+      }
+      el.removeAttribute("data-ticker");
+    });
+
+    function ensureElement(entry, kind) {
+      let el = feed.querySelector(`[data-screen-id="${CSS.escape(entry.id)}"]`);
+      if (el && el.dataset.kind !== kind) {
+        el.remove();
+        el = null;
+      }
+      if (el) {
+        return el;
+      }
+      if (kind === "ticker") {
+        el = document.createElement("div");
+        el.className = "ticker";
+      } else {
+        el = document.createElement("img");
+        el.alt = "";
+        el.title = "Click to copy image";
+        el.setAttribute("aria-label", "Copy screenshot to clipboard");
+        el.setAttribute("role", "button");
+        el.tabIndex = 0;
+      }
+      el.dataset.screenId = entry.id;
+      el.dataset.kind = kind;
+      return el;
+    }
+
     function refreshFeed() {
       fetch(feedApiUrl, { cache: "no-store" })
         .then((response) => {
@@ -145,26 +193,24 @@
 
           let previousNode = null;
           payload.screens.forEach((entry) => {
-            let img = feed.querySelector(`img[data-screen-id="${CSS.escape(entry.id)}"]`);
-            if (!img) {
-              img = document.createElement("img");
-              img.dataset.screenId = entry.id;
-              img.alt = "";
-              img.title = "Click to copy image";
-              img.setAttribute("aria-label", "Copy screenshot to clipboard");
-              img.setAttribute("role", "button");
-              img.tabIndex = 0;
+            const kind = entry.ticker ? "ticker" : "image";
+            const el = ensureElement(entry, kind);
+
+            if (kind === "ticker") {
+              FeedTicker.apply(el, entry.ticker);
+            } else {
+              const version = entry.version != null ? String(entry.version) : "";
+              if (el.dataset.version !== version || !el.getAttribute("src")) {
+                el.dataset.version = version;
+                el.src = buildSrc(entry);
+              }
             }
-            const version = entry.version != null ? String(entry.version) : "";
-            if (img.dataset.version !== version || !img.getAttribute("src")) {
-              img.dataset.version = version;
-              img.src = buildSrc(entry);
-            }
+
             const afterNode = previousNode ? previousNode.nextSibling : feed.firstChild;
-            if (afterNode !== img) {
-              feed.insertBefore(img, afterNode);
+            if (afterNode !== el) {
+              feed.insertBefore(el, afterNode);
             }
-            previousNode = img;
+            previousNode = el;
           });
         })
         .catch(() => {
@@ -217,14 +263,21 @@
         .catch(() => flashImage(img, "is-copy-error"));
     }
 
+    function isTopLevelScreenshot(target) {
+      // Excludes headline thumbnails nested inside a .ticker: those are
+      // just illustration, not the whole-screen image the copy affordance
+      // is for.
+      return target.tagName === "IMG" && target.dataset.kind === "image";
+    }
+
     feed.addEventListener("click", (event) => {
-      if (event.target.tagName === "IMG") {
+      if (isTopLevelScreenshot(event.target)) {
         copyImageToClipboard(event.target);
       }
     });
 
     feed.addEventListener("keydown", (event) => {
-      if (event.target.tagName === "IMG" && (event.key === "Enter" || event.key === " ")) {
+      if (isTopLevelScreenshot(event.target) && (event.key === "Enter" || event.key === " ")) {
         event.preventDefault();
         copyImageToClipboard(event.target);
       }

@@ -156,6 +156,20 @@ def inject_machine_hostname() -> dict[str, str]:
     return {"machine_hostname": socket.gethostname()}
 
 
+def _read_ticker_data(current_dir: Path, screen_id: str) -> Optional[dict[str, Any]]:
+    """Read the JSON ticker sidecar a source Pi uploads next to a screenshot.
+
+    Present only for screens that render a scrolling ticker (see
+    screens/draw_news_headlines.py) and lets the Feed page animate that
+    ticker client-side instead of showing a frozen screenshot.
+    """
+    ticker_path = current_dir / f"{screen_id}.ticker.json"
+    try:
+        return json.loads(ticker_path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+
+
 def _build_source_screen_entries(source_id: str) -> list[dict[str, Any]]:
     current_dir = _source_current_dir(source_id)
     if not current_dir.is_dir():
@@ -178,6 +192,7 @@ def _build_source_screen_entries(source_id: str) -> list[dict[str, Any]]:
             "id": path.stem,
             "filename": path.name,
             "version": int(mtime),
+            "ticker": _read_ticker_data(current_dir, path.stem),
         }
 
     # Large-screen-defaults order first, then any uploaded screen id that
@@ -407,6 +422,56 @@ def upload_screenshot(source: str) -> Any:
         WEB_LOGGER.warning("Failed to persist upload for %s/%s: %s", source_id, screen_id, exc)
         tmp_path.unlink(missing_ok=True)
         return jsonify({"error": "Failed to store image"}), 500
+
+    return jsonify({"status": "ok", "source": source_id, "screen_id": screen_id})
+
+
+@app.post("/api/feed/<source>/upload_ticker")
+def upload_ticker(source: str) -> Any:
+    """Store a screen's JSON ticker sidecar (see screens/draw_news_headlines.py).
+
+    Companion to ``upload_screenshot``: ``scripts/screenshot_uploader.py``
+    posts a screen's ``<screen_id>.ticker.json`` here alongside its
+    screenshot so the Feed page can animate that screen's scrolling ticker
+    client-side instead of showing a frozen frame.
+    """
+    if not FEED_UPLOAD_TOKEN:
+        return jsonify({"error": "Feed server has no FEED_UPLOAD_TOKEN configured"}), 503
+
+    auth_header = request.headers.get("Authorization", "")
+    provided = auth_header[7:] if auth_header.startswith("Bearer ") else ""
+    if not provided or not hmac.compare_digest(provided, FEED_UPLOAD_TOKEN):
+        return jsonify({"error": "Unauthorized"}), 401
+
+    payload = request.get_json(silent=True)
+    if not isinstance(payload, dict):
+        return jsonify({"error": "JSON object body is required"}), 400
+
+    screen_id_raw = str(payload.get("screen_id") or "").strip()
+    if not screen_id_raw:
+        return jsonify({"error": "screen_id is required"}), 400
+    ticker = payload.get("ticker")
+    if not isinstance(ticker, dict):
+        return jsonify({"error": "ticker object is required"}), 400
+
+    source_id = _sanitize_id(source)
+    screen_id = _sanitize_id(screen_id_raw)
+    target_dir = _source_current_dir(source_id)
+    target_dir.mkdir(parents=True, exist_ok=True)
+
+    target_path = target_dir / f"{screen_id}.ticker.json"
+    tmp_fd, tmp_name = tempfile.mkstemp(
+        prefix=f".{screen_id}.ticker.", suffix=".json.tmp", dir=target_dir
+    )
+    tmp_path = Path(tmp_name)
+    try:
+        with os.fdopen(tmp_fd, "w", encoding="utf-8") as tmp_file:
+            json.dump(ticker, tmp_file)
+        os.replace(tmp_path, target_path)
+    except OSError as exc:
+        WEB_LOGGER.warning("Failed to persist ticker data for %s/%s: %s", source_id, screen_id, exc)
+        tmp_path.unlink(missing_ok=True)
+        return jsonify({"error": "Failed to store ticker data"}), 500
 
     return jsonify({"status": "ok", "source": source_id, "screen_id": screen_id})
 

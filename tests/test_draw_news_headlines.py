@@ -181,9 +181,9 @@ def test_draw_news_headlines_appends_stock_row_at_bottom(monkeypatch):
     monkeypatch.setattr(dnh, "fetch_stock_quotes", lambda *args, **kwargs: quotes)
     original_run_ticker = dnh._run_ticker
 
-    def _spy_run_ticker(display, rows):
+    def _spy_run_ticker(display, rows, ticker_data=None):
         captured_rows.extend(rows)
-        return original_run_ticker(display, rows)
+        return original_run_ticker(display, rows, ticker_data)
 
     monkeypatch.setattr(dnh, "_run_ticker", _spy_run_ticker)
 
