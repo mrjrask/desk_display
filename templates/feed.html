@@ -46,7 +46,7 @@
       display: block;
       line-height: 0;
     }
-    #feed img {
+    #feed > img {
       display: block;
       width: 100%;
       height: auto;
@@ -54,10 +54,10 @@
       filter: brightness(1);
       transition: filter 0.15s ease;
     }
-    #feed img.is-copy-success {
+    #feed > img.is-copy-success {
       filter: brightness(1.5);
     }
-    #feed img.is-copy-error {
+    #feed > img.is-copy-error {
       filter: brightness(0.6) saturate(3) hue-rotate(-50deg);
     }
   </style>
