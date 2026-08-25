@@ -155,6 +155,24 @@ def _speed_multiplier(topic_id: str) -> float:
     return 0.82 + (digest % 55) / 100.0
 
 
+# Minimum gap (in the same px/frame units as _TickerRow.speed) enforced
+# between any two rows shown on the same screen. _speed_multiplier only has
+# 55 buckets, so unrelated topics occasionally hash to the same speed (e.g.
+# "cnn" and "markets"); without this those two lanes would scroll in
+# lockstep instead of visibly desyncing.
+_MIN_ROW_SPEED_GAP = 0.15
+
+
+def _dedupe_row_speeds(rows: list["_TickerRow"]) -> None:
+    """Nudge apart any rows whose speeds collided (or landed too close)."""
+
+    used: list[float] = []
+    for row in rows:
+        while any(abs(row.speed - other) < _MIN_ROW_SPEED_GAP for other in used):
+            row.speed += _MIN_ROW_SPEED_GAP
+        used.append(row.speed)
+
+
 @dataclass
 class _TickerEntry:
     headline: Optional[NewsHeadline]
@@ -913,6 +931,8 @@ def _render_news_headlines_screen(
 
     if not rows:
         return _render_empty_state(display)
+
+    _dedupe_row_speeds(rows)
 
     ticker_data = _build_ticker_payload(rows)
     try:
