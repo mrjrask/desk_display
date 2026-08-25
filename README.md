@@ -786,6 +786,14 @@ sudo journalctl -u desk_display_adsb_collector.service -f
 ./scripts/restart_services.sh
 ```
 
+`./scripts/restart_services.sh` restarts every installed desk_display
+service one at a time, in dependency order (data collectors and the feed
+server first, the main renderer next, the Waveshare fbcp mirror and OLED
+helper after it, then the screenshot uploader, config UI, and AirPlay
+add-on last). Pass one or more service names to restart just those (still
+one at a time, in that same order), or `--list` to print the known
+services and their order.
+
 `DESK_DISPLAY_OUTPUT=kernel` (HyperPixel/KMS setups) runs under the same
 system-wide `desk_display.service` as every other output mode — the commands
 above work unchanged. Kernel-mode output draws into the desktop user's
