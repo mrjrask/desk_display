@@ -333,6 +333,11 @@ def feed_index() -> str:
     return render_template("feed_index.html", sources=_list_sources())
 
 
+@app.get("/api/feed/sources")
+def feed_sources() -> Any:
+    return jsonify({"sources": _list_sources()})
+
+
 @app.get("/feed/<source>")
 def feed_source_page(source: str) -> str:
     source_id = _sanitize_id(source)

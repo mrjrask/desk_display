@@ -105,6 +105,29 @@ def test_upload_then_feed_page_and_api_reflect_screenshot(monkeypatch, tmp_path)
     assert "1 screen" in index_html
 
 
+def test_feed_sources_api_reflects_screen_count_and_heartbeat(monkeypatch, tmp_path):
+    feed_server = _reload_feed_server(monkeypatch, tmp_path)
+    client = feed_server.app.test_client()
+
+    upload_response = client.post(
+        "/api/feed/hyper/upload",
+        headers={"Authorization": "Bearer secret-token"},
+        data={"screen_id": "date", "file": (io.BytesIO(_png_bytes()), "date.png")},
+        content_type="multipart/form-data",
+    )
+    assert upload_response.status_code == 200
+
+    response = client.get("/api/feed/sources")
+    assert response.status_code == 200
+    payload = response.get_json()
+    assert len(payload["sources"]) == 1
+    source = payload["sources"][0]
+    assert source["name"] == "hyper"
+    assert source["screen_count"] == 1
+    assert source["elapsed"] is not None
+    assert "display_status" in source
+
+
 def test_feed_screenshot_file_blocks_path_traversal(monkeypatch, tmp_path):
     feed_server = _reload_feed_server(monkeypatch, tmp_path)
     client = feed_server.app.test_client()
