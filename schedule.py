@@ -74,6 +74,21 @@ class ScreenScheduler:
     def extra_seconds_for(self, screen_id: str) -> int:
         return max(0, int(self._extra_seconds_by_id.get(screen_id, 0)))
 
+    def alt_screen_ids_for(self, screen_id: str) -> tuple[str, ...]:
+        """Return alternate screen ids configured on *screen_id*'s entry.
+
+        Used to keep an alternate's own outputs (e.g. a screenshot) fresh on
+        cycles where the base screen renders instead of the alternate.
+        """
+
+        ids: list[str] = []
+        for entry in self._entries:
+            if entry.screen_id == screen_id and entry.alternate is not None:
+                for alt_id in entry.alternate.screen_ids:
+                    if alt_id not in ids:
+                        ids.append(alt_id)
+        return tuple(ids)
+
     def preview_scheduled_ids(self, limit: int) -> list[str]:
         """Return upcoming scheduled screen IDs without mutating scheduler state."""
 
