@@ -82,7 +82,7 @@ log "Writing systemd service to $SERVICE_PATH"
 $SUDO tee "$SERVICE_PATH" >/dev/null <<SERVICE
 [Unit]
 Description=Desk Display Service - screenshot uploader
-After=network-online.target desk_display.service
+After=network-online.target
 
 [Service]
 WorkingDirectory=$PROJECT_DIR
