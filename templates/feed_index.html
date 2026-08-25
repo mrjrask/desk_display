@@ -78,28 +78,110 @@
     <h1>Feed Server</h1>
     <p class="subtitle">Screenshots uploaded from other desk_display Pis.</p>
   </header>
-  {% if sources %}
-    <section class="grid">
-      {% for source in sources %}
-        <a class="card" href="/feed/{{ source.name }}">
-          <h2>{{ source.name }}</h2>
-          <div class="heartbeat{% if source.display_status.is_stale %} is-stale{% endif %}">
-            {% if source.display_status.screen_id %}
-              Display heartbeat: <strong>{{ source.display_status.screen_id }}</strong>
-              {% if source.display_status.elapsed %} ({{ source.display_status.elapsed }}){% endif %}
-            {% else %}
-              Display heartbeat unavailable.
-            {% endif %}
-          </div>
-          <div class="meta{% if source.is_stale %} is-stale{% endif %}">
-            {{ source.screen_count }} screen{{ '' if source.screen_count == 1 else 's' }}
-            {% if source.elapsed %} — updated {{ source.elapsed }}{% else %} — no uploads yet{% endif %}
-          </div>
-        </a>
-      {% endfor %}
-    </section>
-  {% else %}
-    <p class="empty-state">No screenshots have been uploaded yet.</p>
-  {% endif %}
+  <section class="grid" id="sourceGrid" style="{{ '' if sources else 'display: none;' }}">
+    {% for source in sources %}
+      <a class="card" href="/feed/{{ source.name }}" data-source-name="{{ source.name }}">
+        <h2>{{ source.name }}</h2>
+        <div class="heartbeat{% if source.display_status.is_stale %} is-stale{% endif %}" data-role="heartbeat">
+          {% if source.display_status.screen_id %}
+            Display heartbeat: <strong>{{ source.display_status.screen_id }}</strong>
+            {% if source.display_status.elapsed %} ({{ source.display_status.elapsed }}){% endif %}
+          {% else %}
+            Display heartbeat unavailable.
+          {% endif %}
+        </div>
+        <div class="meta{% if source.is_stale %} is-stale{% endif %}" data-role="meta">
+          {{ source.screen_count }} screen{{ '' if source.screen_count == 1 else 's' }}
+          {% if source.elapsed %} — updated {{ source.elapsed }}{% else %} — no uploads yet{% endif %}
+        </div>
+      </a>
+    {% endfor %}
+  </section>
+  <p class="empty-state" id="emptyState" style="{{ 'display: none;' if sources else '' }}">No screenshots have been uploaded yet.</p>
+  <script>
+    const sourcesApiUrl = "{{ url_for('feed_sources') }}";
+    const sourceGrid = document.getElementById("sourceGrid");
+    const emptyState = document.getElementById("emptyState");
+
+    function heartbeatHtml(status) {
+      if (!status || !status.screen_id) {
+        return "Display heartbeat unavailable.";
+      }
+      let html = `Display heartbeat: <strong>${status.screen_id}</strong>`;
+      if (status.elapsed) {
+        html += ` (${status.elapsed})`;
+      }
+      return html;
+    }
+
+    function metaHtml(source) {
+      const count = source.screen_count;
+      const label = `${count} screen${count === 1 ? "" : "s"}`;
+      return source.elapsed ? `${label} — updated ${source.elapsed}` : `${label} — no uploads yet`;
+    }
+
+    function ensureCard(source) {
+      let card = sourceGrid.querySelector(`[data-source-name="${CSS.escape(source.name)}"]`);
+      if (card) {
+        return card;
+      }
+      card = document.createElement("a");
+      card.className = "card";
+      card.href = `/feed/${encodeURIComponent(source.name)}`;
+      card.dataset.sourceName = source.name;
+      card.innerHTML = `
+        <h2></h2>
+        <div class="heartbeat" data-role="heartbeat"></div>
+        <div class="meta" data-role="meta"></div>
+      `;
+      card.querySelector("h2").textContent = source.name;
+      sourceGrid.appendChild(card);
+      return card;
+    }
+
+    function refreshSources() {
+      fetch(sourcesApiUrl, { cache: "no-store" })
+        .then((response) => {
+          if (!response.ok) {
+            throw new Error("Failed to fetch sources");
+          }
+          return response.json();
+        })
+        .then((payload) => {
+          if (!payload || !Array.isArray(payload.sources)) {
+            return;
+          }
+          const sources = payload.sources;
+          if (emptyState) {
+            emptyState.style.display = sources.length ? "none" : "";
+          }
+          if (!sourceGrid) {
+            return;
+          }
+          sourceGrid.style.display = sources.length ? "" : "none";
+          const wantedNames = new Set(sources.map((source) => source.name));
+          Array.from(sourceGrid.children).forEach((child) => {
+            if (!wantedNames.has(child.dataset.sourceName)) {
+              child.remove();
+            }
+          });
+
+          sources.forEach((source) => {
+            const card = ensureCard(source);
+            const heartbeat = card.querySelector('[data-role="heartbeat"]');
+            const meta = card.querySelector('[data-role="meta"]');
+            heartbeat.innerHTML = heartbeatHtml(source.display_status);
+            heartbeat.classList.toggle("is-stale", Boolean(source.display_status && source.display_status.is_stale));
+            meta.innerHTML = metaHtml(source);
+            meta.classList.toggle("is-stale", Boolean(source.is_stale));
+          });
+        })
+        .catch(() => {
+          // Ignore refresh failures; next polling attempt will retry.
+        });
+    }
+
+    setInterval(refreshSources, 5000);
+  </script>
 </body>
 </html>
