@@ -1548,6 +1548,33 @@ def _save_screenshot(sid: str, img: Image.Image) -> Optional[Tuple[str, bool, in
     return None
 
 
+def _save_current_ticker_data(sid: str, ticker_data: Optional[dict]) -> None:
+    """Persist (or clear) the JSON ticker sidecar the Feed pages animate.
+
+    Written alongside the "current" screenshot for a screen so config_ui.py
+    and feed_server.py can serve a scrolling ticker instead of a static
+    image for screens that provide one (see screens/draw_news_headlines.py).
+    """
+    prefix = _sanitize_filename_prefix(sid)
+    target_path = os.path.join(CURRENT_SCREENSHOT_DIR, f"{prefix}.ticker.json")
+
+    if not ticker_data:
+        try:
+            os.remove(target_path)
+        except OSError:
+            pass
+        return
+
+    try:
+        os.makedirs(CURRENT_SCREENSHOT_DIR, exist_ok=True)
+        tmp_path = f"{target_path}.tmp"
+        with open(tmp_path, "w", encoding="utf-8") as fh:
+            json.dump(ticker_data, fh)
+        os.replace(tmp_path, target_path)
+    except OSError:
+        logging.warning(f"⚠️ Failed to update ticker data for '{sid}'")
+
+
 def _write_display_status(
     sid: str,
     img: Image.Image,
@@ -2729,6 +2756,7 @@ def main_loop():
             consumed_delay = False
             img = None
             screenshot_img = None
+            ticker_data = None
 
             if result is None:
                 logging.info(
@@ -2742,6 +2770,7 @@ def main_loop():
             elif isinstance(result, ScreenImage):
                 img = result.image
                 screenshot_img = getattr(result, "screenshot_image", None)
+                ticker_data = getattr(result, "ticker_data", None)
                 already_displayed = result.displayed
                 led_override = result.led_override
                 consumed_delay = bool(getattr(result, "consumed_delay", False))
@@ -2767,6 +2796,8 @@ def main_loop():
             with led_context:
                 if isinstance(img, Image.Image):
                     capture_screenshot = ENABLE_SCREENSHOTS and not _consume_touch_focus_screenshot_skip(sid)
+                    if capture_screenshot:
+                        _save_current_ticker_data(sid, ticker_data)
                     if "logo" in sid:
                         if not _frame_id_changed(display, frame_id_before_render):
                             logging.warning(

@@ -16,7 +16,7 @@ import threading
 import time
 from dataclasses import dataclass
 from io import BytesIO
-from typing import Optional
+from typing import Any, Optional
 
 from PIL import Image, ImageDraw, ImageOps
 
@@ -518,6 +518,59 @@ def _render_frame(
     return img, hit_rects
 
 
+def _hex_color(color: tuple[int, int, int]) -> str:
+    return "#{:02x}{:02x}{:02x}".format(*color)
+
+
+def _build_ticker_payload(rows: list[_TickerRow]) -> Optional[dict[str, Any]]:
+    """Serialize *rows* into the JSON the Feed webpages animate client-side.
+
+    The Feed pages (config_ui.py's /feed and feed_server.py's /feed/<source>)
+    only ever see a still screenshot of whatever this screen last rendered.
+    Shipping this lightweight description of each ticker lane alongside that
+    screenshot lets those pages recreate the same scrolling marquee in the
+    browser instead of showing a frozen frame.
+    """
+
+    row_payloads: list[dict[str, Any]] = []
+    for row in rows:
+        theme = row.theme
+        entries_payload: list[dict[str, Any]] = []
+        for entry in row.entries:
+            text = entry.text
+            if text.endswith(_ENTRY_SEPARATOR):
+                text = text[: -len(_ENTRY_SEPARATOR)]
+            text = text.strip()
+            if not text:
+                continue
+            entry_payload: dict[str, Any] = {"text": text}
+            if entry.headline is not None:
+                if entry.headline.image_url:
+                    entry_payload["image_url"] = entry.headline.image_url
+                if entry.headline.link:
+                    entry_payload["link"] = entry.headline.link
+            if entry.text_color is not None:
+                entry_payload["color"] = _hex_color(entry.text_color)
+            entries_payload.append(entry_payload)
+        if not entries_payload:
+            continue
+        row_payloads.append(
+            {
+                "id": row.topic.id,
+                "label": row.topic.label,
+                "bg": _hex_color(theme["bg"]),
+                "label_bg": _hex_color(theme["label_bg"]),
+                "text": _hex_color(theme["text"]),
+                "speed_px_per_sec": round(row.speed / _FRAME_INTERVAL_SECONDS, 2),
+                "entries": entries_payload,
+            }
+        )
+
+    if not row_payloads:
+        return None
+    return {"width": WIDTH, "height": HEIGHT, "rows": row_payloads}
+
+
 def _render_empty_state(display) -> ScreenImage:
     img = Image.new("RGB", (WIDTH, HEIGHT), (18, 18, 24))
     draw = ImageDraw.Draw(img)
@@ -773,7 +826,9 @@ def _show_reader_overlay(display, headline: NewsHeadline, pygame_module) -> None
 # ─── Main ticker loop ───────────────────────────────────────────────────────
 
 
-def _run_ticker(display, rows: list[_TickerRow]) -> ScreenImage:
+def _run_ticker(
+    display, rows: list[_TickerRow], ticker_data: Optional[dict[str, Any]] = None
+) -> ScreenImage:
     clear_display(display)
     pygame_module = _pygame_module_for_display(display)
     touch_capable = _is_touch_capable(pygame_module)
@@ -819,7 +874,7 @@ def _run_ticker(display, rows: list[_TickerRow]) -> ScreenImage:
         last_frame, _hit_rects = _render_frame(rows, row_height, row_tops)
         display.image(last_frame)
 
-    return ScreenImage(last_frame, displayed=True, consumed_delay=True)
+    return ScreenImage(last_frame, displayed=True, consumed_delay=True, ticker_data=ticker_data)
 
 
 def _render_news_headlines_screen(
@@ -859,8 +914,9 @@ def _render_news_headlines_screen(
     if not rows:
         return _render_empty_state(display)
 
+    ticker_data = _build_ticker_payload(rows)
     try:
-        return _run_ticker(display, rows)
+        return _run_ticker(display, rows, ticker_data)
     finally:
         _save_row_offsets(config_filename, rows)
 

@@ -1,0 +1,200 @@
+<style>
+  .ticker {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    aspect-ratio: var(--ticker-aspect, 16 / 9);
+    background: #000;
+    overflow: hidden;
+    font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  }
+  .ticker-row {
+    display: flex;
+    align-items: stretch;
+    flex: 1 1 0;
+    min-height: 0;
+    overflow: hidden;
+  }
+  .ticker-label {
+    flex: 0 0 auto;
+    display: flex;
+    align-items: center;
+    padding: 0 0.7em;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    white-space: nowrap;
+    font-size: calc(var(--ticker-row-height, 24px) * 0.34);
+  }
+  .ticker-lane {
+    flex: 1 1 auto;
+    position: relative;
+    overflow: hidden;
+  }
+  .ticker-lane-inner {
+    display: flex;
+    align-items: center;
+    height: 100%;
+    width: max-content;
+    will-change: transform;
+  }
+  .ticker-lane-inner.ticker-scroll {
+    animation-name: ticker-scroll;
+    animation-timing-function: linear;
+    animation-iteration-count: infinite;
+  }
+  @keyframes ticker-scroll {
+    from { transform: translateX(0); }
+    to { transform: translateX(calc(-1 * var(--ticker-distance, 0px))); }
+  }
+  .ticker-entry {
+    display: inline-flex;
+    align-items: center;
+    white-space: nowrap;
+    padding-right: 0.9em;
+    font-size: calc(var(--ticker-row-height, 24px) * 0.36);
+  }
+  .ticker-thumb {
+    height: calc(var(--ticker-row-height, 24px) - 10px);
+    width: calc(var(--ticker-row-height, 24px) - 10px);
+    object-fit: cover;
+    border-radius: 2px;
+    margin-right: 0.4em;
+  }
+  .ticker-sep {
+    margin: 0 0.6em;
+    opacity: 0.6;
+  }
+</style>
+<script>
+  // Shared by feed.html and feed_source.html: recreates the device's
+  // scrolling news ticker (see screens/draw_news_headlines.py) in the
+  // browser from the JSON payload main.py writes alongside each news
+  // screen's screenshot, instead of showing a frozen frame.
+  window.FeedTicker = (function () {
+    function tickerSignature(payload) {
+      if (!payload || !Array.isArray(payload.rows)) {
+        return "";
+      }
+      return JSON.stringify(payload.rows.map((row) => [row.id, row.entries.map((e) => e.text)]));
+    }
+
+    function buildEntry(entry) {
+      const span = document.createElement("span");
+      span.className = "ticker-entry";
+      if (entry.image_url) {
+        const img = document.createElement("img");
+        img.className = "ticker-thumb";
+        img.src = entry.image_url;
+        img.alt = "";
+        img.loading = "lazy";
+        img.addEventListener("error", () => img.remove());
+        span.appendChild(img);
+      }
+      const text = document.createElement("span");
+      text.textContent = entry.text;
+      if (entry.color) {
+        text.style.color = entry.color;
+      }
+      span.appendChild(text);
+      const sep = document.createElement("span");
+      sep.className = "ticker-sep";
+      sep.textContent = "•";
+      span.appendChild(sep);
+      return span;
+    }
+
+    function buildLane(laneEl, entries, speedPxPerSec) {
+      laneEl.innerHTML = "";
+      if (!Array.isArray(entries) || entries.length === 0) {
+        return;
+      }
+      const inner = document.createElement("div");
+      inner.className = "ticker-lane-inner";
+      laneEl.appendChild(inner);
+
+      // Repeat the entry list until one "block" is at least as wide as the
+      // lane, then duplicate that whole block once more so a CSS animation
+      // translating by exactly one block's width loops seamlessly forever.
+      const laneWidth = laneEl.clientWidth || 1;
+      let blockWidth = 0;
+      for (let sets = 0; sets < 40 && blockWidth < laneWidth; sets += 1) {
+        entries.forEach((entry) => inner.appendChild(buildEntry(entry)));
+        blockWidth = inner.scrollWidth;
+      }
+      if (blockWidth <= 0) {
+        return;
+      }
+      Array.from(inner.cloneNode(true).children).forEach((child) => inner.appendChild(child));
+
+      const speed = Math.max(4, Number(speedPxPerSec) || 40);
+      const duration = Math.max(4, blockWidth / speed);
+      inner.style.setProperty("--ticker-distance", `${blockWidth}px`);
+      inner.style.animationDuration = `${duration}s`;
+      inner.classList.add("ticker-scroll");
+    }
+
+    function render(container, payload) {
+      container.innerHTML = "";
+      if (!payload || !Array.isArray(payload.rows) || payload.rows.length === 0) {
+        return;
+      }
+      if (payload.width && payload.height) {
+        container.style.setProperty("--ticker-aspect", `${payload.width} / ${payload.height}`);
+      }
+      const containerWidth = container.clientWidth || 0;
+      const rowHeightPx =
+        payload.width && payload.height
+          ? (containerWidth * (payload.height / payload.width)) / payload.rows.length
+          : 24;
+      container.style.setProperty("--ticker-row-height", `${rowHeightPx || 24}px`);
+
+      payload.rows.forEach((row) => {
+        const rowEl = document.createElement("div");
+        rowEl.className = "ticker-row";
+        rowEl.style.background = row.bg;
+
+        const labelEl = document.createElement("div");
+        labelEl.className = "ticker-label";
+        labelEl.style.background = row.label_bg;
+        labelEl.style.color = row.text;
+        labelEl.textContent = (row.label || "").toUpperCase();
+        rowEl.appendChild(labelEl);
+
+        const laneEl = document.createElement("div");
+        laneEl.className = "ticker-lane";
+        laneEl.style.background = row.bg;
+        laneEl.style.color = row.text;
+        rowEl.appendChild(laneEl);
+
+        container.appendChild(rowEl);
+        buildLane(laneEl, row.entries, row.speed_px_per_sec);
+      });
+    }
+
+    function apply(container, payload) {
+      const sig = tickerSignature(payload);
+      // Skip the rebuild when nothing changed so an in-progress scroll
+      // doesn't visibly jump/restart on every polling refresh.
+      if (container.dataset.tickerSig === sig && container._tickerPayload) {
+        return;
+      }
+      container.dataset.tickerSig = sig;
+      container._tickerPayload = payload;
+      render(container, payload);
+    }
+
+    let resizeTimer = null;
+    window.addEventListener("resize", () => {
+      clearTimeout(resizeTimer);
+      resizeTimer = setTimeout(() => {
+        document.querySelectorAll(".ticker").forEach((el) => {
+          if (el._tickerPayload) {
+            render(el, el._tickerPayload);
+          }
+        });
+      }, 200);
+    });
+
+    return { apply };
+  })();
+</script>

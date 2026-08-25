@@ -75,6 +75,14 @@ def _iter_current_screenshots(current_dir: Path) -> Iterator[Path]:
         yield entry
 
 
+def _iter_current_ticker_files(current_dir: Path) -> Iterator[Path]:
+    if not current_dir.is_dir():
+        return
+    for entry in sorted(current_dir.glob("*.ticker.json")):
+        if entry.is_file():
+            yield entry
+
+
 def _content_type_for(path: Path) -> str:
     if path.suffix.lower() in (".jpg", ".jpeg"):
         return "image/jpeg"
@@ -108,6 +116,46 @@ def _upload_file(session: requests.Session, path: Path) -> bool:
         return False
 
     LOGGER.debug("Uploaded '%s' to %s", screen_id, url)
+    return True
+
+
+def _upload_ticker(session: requests.Session, path: Path) -> bool:
+    """Upload a screen's JSON ticker sidecar (see screens/draw_news_headlines.py).
+
+    Lets the Feed server animate that screen's scrolling ticker client-side
+    instead of showing the frozen screenshot uploaded alongside it.
+    """
+    screen_id = path.name[: -len(".ticker.json")]
+    url = f"{FEED_UPLOAD_URL}/api/feed/{FEED_SOURCE_NAME}/upload_ticker"
+    headers = {"Authorization": f"Bearer {FEED_UPLOAD_TOKEN}"} if FEED_UPLOAD_TOKEN else {}
+    try:
+        with open(path, "r", encoding="utf-8") as fh:
+            ticker = json.load(fh)
+    except (OSError, ValueError) as exc:
+        LOGGER.warning("Failed to read ticker data for '%s': %s", screen_id, exc)
+        return False
+
+    try:
+        response = session.post(
+            url,
+            headers=headers,
+            json={"screen_id": screen_id, "ticker": ticker},
+            timeout=FEED_UPLOAD_TIMEOUT_SECONDS,
+        )
+    except requests.RequestException as exc:
+        LOGGER.warning("Feed ticker upload for '%s' failed: %s", screen_id, exc)
+        return False
+
+    if response.status_code != 200:
+        LOGGER.warning(
+            "Feed ticker upload for '%s' failed: %s %s",
+            screen_id,
+            response.status_code,
+            response.text[:200],
+        )
+        return False
+
+    LOGGER.debug("Uploaded ticker data for '%s' to %s", screen_id, url)
     return True
 
 
@@ -173,6 +221,7 @@ def run_loop() -> int:
 
     status_path = current_dir / "display_status.json"
     last_uploaded_mtimes: dict[str, float] = {}
+    last_uploaded_ticker_mtimes: dict[str, float] = {}
     last_status_mtime: Optional[float] = None
     session = requests.Session()
 
@@ -187,6 +236,17 @@ def run_loop() -> int:
                 continue
             if _upload_file(session, path):
                 last_uploaded_mtimes[key] = mtime
+
+        for path in _iter_current_ticker_files(current_dir):
+            try:
+                mtime = path.stat().st_mtime
+            except OSError:
+                continue
+            key = path.name
+            if last_uploaded_ticker_mtimes.get(key) == mtime:
+                continue
+            if _upload_ticker(session, path):
+                last_uploaded_ticker_mtimes[key] = mtime
 
         try:
             status_mtime = status_path.stat().st_mtime
