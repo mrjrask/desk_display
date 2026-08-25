@@ -70,6 +70,33 @@ def test_speed_multiplier_is_deterministic_and_topic_specific():
     assert first != other
 
 
+def test_dedupe_row_speeds_separates_colliding_topics():
+    # "cnn" and "markets" hash to the same _speed_multiplier bucket, so
+    # rows built from them would scroll in lockstep without deduping.
+    assert dnh._speed_multiplier("cnn") == dnh._speed_multiplier("markets")
+
+    def _row(topic_id, speed):
+        return dnh._TickerRow(
+            topic=NewsTopic(id=topic_id, label=topic_id, name=topic_id, url=""),
+            theme=dnh._FALLBACK_THEME,
+            entries=[],
+            speed=speed,
+        )
+
+    rows = [
+        _row("cnn", dnh._speed_multiplier("cnn")),
+        _row("tribune", dnh._speed_multiplier("tribune")),
+        _row("markets", dnh._speed_multiplier("markets")),
+    ]
+
+    dnh._dedupe_row_speeds(rows)
+
+    speeds = [row.speed for row in rows]
+    for i, a in enumerate(speeds):
+        for b in speeds[i + 1 :]:
+            assert abs(a - b) >= dnh._MIN_ROW_SPEED_GAP
+
+
 def test_theme_for_topic_falls_back_for_unknown_topic():
     assert dnh._theme_for_topic("local") is dnh._ROW_THEMES["local"]
     assert dnh._theme_for_topic("some_custom_topic") is dnh._FALLBACK_THEME
