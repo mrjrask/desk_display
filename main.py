@@ -1526,14 +1526,26 @@ def _save_screenshot(sid: str, img: Image.Image) -> Optional[Tuple[str, bool, in
 
     try:
         os.makedirs(CURRENT_SCREENSHOT_DIR, exist_ok=True)
+        current_path = os.path.join(CURRENT_SCREENSHOT_DIR, f"{prefix}.png")
+        # Write to a temp file and atomically replace the target so a reader
+        # polling this directory (the local /feed page, screenshot_uploader.py)
+        # never observes a missing or partially-written file.
+        tmp_fd, tmp_name = tempfile.mkstemp(
+            prefix=f".{prefix}.", suffix=".png.tmp", dir=CURRENT_SCREENSHOT_DIR
+        )
+        try:
+            with os.fdopen(tmp_fd, "wb") as tmp_file:
+                img.save(tmp_file, format="PNG")
+            os.replace(tmp_name, current_path)
+        except Exception:
+            os.remove(tmp_name)
+            raise
         for entry in os.scandir(CURRENT_SCREENSHOT_DIR):
-            if not entry.is_file():
+            if not entry.is_file() or entry.path == current_path:
                 continue
             stem, ext = os.path.splitext(entry.name)
             if stem == prefix and ext.lower() in ALLOWED_SCREEN_EXTS:
                 os.remove(entry.path)
-        current_path = os.path.join(CURRENT_SCREENSHOT_DIR, f"{prefix}.png")
-        img.save(current_path)
     except Exception:
         logging.warning(f"⚠️ Failed to update current screenshot for '{sid}'")
 
