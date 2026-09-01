@@ -625,7 +625,11 @@ def _fetch_next_games(
                 if isinstance(first_start, datetime.datetime)
                 else window_start
             )
-            return _fetch_week_from_start(_week_start_for_date(first_day))
+            full_week_games = _fetch_week_from_start(_week_start_for_date(first_day))
+            # The scan already confirmed these games.  Do not throw them away
+            # if the follow-up request for the aligned Thursday-Wednesday week
+            # is blocked or fails transiently.
+            return full_week_games or games
     _NO_UPCOMING_GAMES_COOLDOWN.mark_empty()
     logging.warning("NFL scoreboard could not find upcoming games after %s", start_date)
     return []

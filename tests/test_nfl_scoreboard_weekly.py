@@ -181,6 +181,26 @@ def test_next_games_fallback_returns_the_full_week(monkeypatch):
     assert [game["id"] for game in games] == ["thursday", "sunday"]
 
 
+def test_next_games_keeps_discovered_games_when_full_week_refetch_fails(monkeypatch):
+    events_by_date = {
+        "20260910": [
+            _event(
+                event_id="discovered",
+                date="2026-09-10T23:20Z",
+                away="CHI",
+                home="GB",
+            ),
+        ],
+    }
+    _install_fake_session(monkeypatch, events_by_date)
+    nfl_scoreboard._NO_UPCOMING_GAMES_COOLDOWN.reset()
+    monkeypatch.setattr(nfl_scoreboard, "_fetch_week_from_start", lambda _start: [])
+
+    games = nfl_scoreboard._fetch_next_games(datetime.date(2026, 9, 8), max_days=6)
+
+    assert [game["id"] for game in games] == ["discovered"]
+
+
 def test_wednesday_morning_cutover_advances_to_the_upcoming_week(monkeypatch):
     events_by_date = {
         # This week's (Thu 8/20 - Mon 8/24) Monday night game -- should still show
