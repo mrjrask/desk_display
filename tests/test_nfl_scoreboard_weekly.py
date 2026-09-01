@@ -73,7 +73,7 @@ class _FakeResponse:
 
 
 class _FakeSession:
-    """Serves canned ESPN scoreboard payloads keyed by the ``dates=`` param."""
+    """Serves canned ESPN events for single-day or inclusive range queries."""
 
     def __init__(self, events_by_date: dict[str, list[dict]]):
         self._events_by_date = events_by_date
@@ -82,7 +82,14 @@ class _FakeSession:
     def get(self, url: str, timeout: float | None = None):
         date_key = url.rsplit("dates=", 1)[-1]
         self.requested_dates.append(date_key)
-        events = self._events_by_date.get(date_key, [])
+        start, _, end = date_key.partition("-")
+        end = end or start
+        events = [
+            event
+            for day, day_events in self._events_by_date.items()
+            if start <= day <= end
+            for event in day_events
+        ]
         return _FakeResponse({"events": events})
 
 
@@ -117,6 +124,22 @@ def test_fetch_games_for_week_returns_thursday_through_monday_games(monkeypatch)
     assert [game["id"] for game in games] == ["1", "2", "3"]
 
 
+def test_fetch_games_for_week_uses_one_complete_thursday_to_wednesday_range(monkeypatch):
+    events_by_date = {
+        "20260902": [
+            _event(event_id="wednesday", date="2026-09-03T00:15Z", away="DAL", home="NYG"),
+        ],
+    }
+    session = _install_fake_session(monkeypatch, events_by_date)
+
+    games = nfl_scoreboard._fetch_games_for_week(
+        datetime.datetime(2026, 9, 1, 12, 0, tzinfo=nfl_scoreboard.CENTRAL_TIME)
+    )
+
+    assert [game["id"] for game in games] == ["wednesday"]
+    assert session.requested_dates == ["20260827-20260902"]
+
+
 def test_fetch_games_for_week_empty_this_week_does_not_fabricate_games(monkeypatch):
     # Dead week between preseason and the regular season: no events on any day.
     _install_fake_session(monkeypatch, {})
@@ -143,6 +166,19 @@ def test_fetch_scoreboard_falls_back_to_next_games_when_week_is_empty(monkeypatc
     games = nfl_service.fetch_scoreboard(now=now)
 
     assert [game["id"] for game in games] == ["opener"]
+
+
+def test_next_games_fallback_returns_the_full_week(monkeypatch):
+    events_by_date = {
+        "20260910": [_event(event_id="thursday", date="2026-09-10T23:20Z", away="CHI", home="GB")],
+        "20260913": [_event(event_id="sunday", date="2026-09-13T17:00Z", away="MIN", home="DET")],
+    }
+    _install_fake_session(monkeypatch, events_by_date)
+    nfl_scoreboard._NO_UPCOMING_GAMES_COOLDOWN.reset()
+
+    games = nfl_scoreboard._fetch_next_games(datetime.date(2026, 9, 1), max_days=20)
+
+    assert [game["id"] for game in games] == ["thursday", "sunday"]
 
 
 def test_wednesday_morning_cutover_advances_to_the_upcoming_week(monkeypatch):

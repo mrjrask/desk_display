@@ -3,7 +3,7 @@
 nfl_scoreboard.py
 
 Render a scrolling NFL scoreboard mirroring the layout of the MLB board.
-Shows all games in the active NFL week (Thursday through Monday), including
+Shows all games in the active NFL display week (Thursday through Wednesday), including
 playoff weeks that can span January and February. During January and February,
 final scores persist until the playoff-aware cutoff time before advancing to
 the next week.
@@ -181,8 +181,10 @@ def _week_start_for_date(day: datetime.date) -> datetime.date:
     return day - datetime.timedelta(days=days_since_thursday)
 
 
-def _week_dates_from_start(start: datetime.date) -> list[datetime.date]:
-    return [start + datetime.timedelta(days=offset) for offset in range(5)]
+def _week_end_from_start(start: datetime.date) -> datetime.date:
+    """Return the Wednesday ending the NFL display week that starts Thursday."""
+
+    return start + datetime.timedelta(days=6)
 
 
 def _playoff_rules_active(now: datetime.datetime) -> bool:
@@ -484,8 +486,18 @@ def _is_pro_bowl_game(game: dict) -> bool:
     return False
 
 
-def _fetch_games_for_date(day: datetime.date) -> list[dict]:
-    cache_key = (day, "espn_nfl_scoreboard")
+def _fetch_games_for_range(start: datetime.date, end: datetime.date) -> list[dict]:
+    """Fetch and normalize every ESPN event in an inclusive date range.
+
+    ESPN supports a date range on its scoreboard endpoint.  Fetching the NFL
+    week in one request both returns the complete week and avoids five to seven
+    independent requests being cut short by the HTTP circuit breaker.
+    """
+
+    if end < start:
+        return []
+
+    cache_key = (start, f"espn_nfl_scoreboard:{end.isoformat()}")
     now = time.monotonic()
     cached = _GAMES_CACHE.get(cache_key)
     if cached and (now - cached[0]) < FETCH_CACHE_TTL_SECONDS:
@@ -493,7 +505,7 @@ def _fetch_games_for_date(day: datetime.date) -> list[dict]:
 
     url = (
         "https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard"
-        f"?dates={day.strftime('%Y%m%d')}"
+        f"?limit=100&dates={start.strftime('%Y%m%d')}-{end.strftime('%Y%m%d')}"
     )
     try:
         response = _SESSION.get(url, timeout=REQUEST_TIMEOUT)
@@ -507,7 +519,7 @@ def _fetch_games_for_date(day: datetime.date) -> list[dict]:
     for event in data.get("events", []) or []:
         event_date = event.get("date")
         local_start = _timestamp_to_local(event_date)
-        if local_start and local_start.date() != day:
+        if local_start and not (start <= local_start.date() <= end):
             continue
         competitions = event.get("competitions") or []
         if not competitions:
@@ -522,6 +534,16 @@ def _fetch_games_for_date(day: datetime.date) -> list[dict]:
     filtered_games = [game for game in games if not _is_pro_bowl_game(game)]
     _GAMES_CACHE[cache_key] = (now, filtered_games)
     return filtered_games
+
+
+def _fetch_games_for_date(day: datetime.date) -> list[dict]:
+    return _fetch_games_for_range(day, day)
+
+
+def _fetch_week_from_start(week_start: datetime.date) -> list[dict]:
+    games = _fetch_games_for_range(week_start, _week_end_from_start(week_start))
+    games.sort(key=_game_sort_key)
+    return games
 
 
 def _week_cutoff_datetime(week_start: datetime.date, game_count: int) -> datetime.datetime:
@@ -548,25 +570,15 @@ def _fetch_games_for_week(now: Optional[datetime.datetime] = None) -> list[dict]
     now = now or datetime.datetime.now(CENTRAL_TIME)
     if not _playoff_rules_active(now):
         week_start = _regular_week_start(now)
-        games = []
-        for day in _week_dates_from_start(week_start):
-            games.extend(_fetch_games_for_date(day))
-        games.sort(key=_game_sort_key)
-        return games
+        return _fetch_week_from_start(week_start)
 
     week_start = _week_start_for_date(now.date())
-    games = []
-    for day in _week_dates_from_start(week_start):
-        games.extend(_fetch_games_for_date(day))
-    games.sort(key=_game_sort_key)
+    games = _fetch_week_from_start(week_start)
 
     cutoff = _week_cutoff_datetime(week_start, len(games))
     if now >= cutoff:
         week_start = week_start + datetime.timedelta(days=7)
-        games = []
-        for day in _week_dates_from_start(week_start):
-            games.extend(_fetch_games_for_date(day))
-        games.sort(key=_game_sort_key)
+        games = _fetch_week_from_start(week_start)
     return games
 
 
@@ -578,12 +590,24 @@ def _fetch_next_games(
     if _NO_UPCOMING_GAMES_COOLDOWN.blocked():
         return []
 
-    for offset in range(max_days + 1):
-        day = start_date + datetime.timedelta(days=offset)
-        games = _fetch_games_for_date(day)
+    # Scan a week at a time.  When a window contains an event, return the
+    # complete NFL week containing it rather than only that first game's day.
+    for offset in range(0, max_days + 1, 7):
+        window_start = start_date + datetime.timedelta(days=offset)
+        window_end = min(
+            start_date + datetime.timedelta(days=max_days),
+            window_start + datetime.timedelta(days=6),
+        )
+        games = _fetch_games_for_range(window_start, window_end)
         if games:
             _NO_UPCOMING_GAMES_COOLDOWN.reset()
-            return games
+            first_start = games[0].get("_start_local")
+            first_day = (
+                first_start.date()
+                if isinstance(first_start, datetime.datetime)
+                else window_start
+            )
+            return _fetch_week_from_start(_week_start_for_date(first_day))
     _NO_UPCOMING_GAMES_COOLDOWN.mark_empty()
     logging.warning("NFL scoreboard could not find upcoming games after %s", start_date)
     return []
