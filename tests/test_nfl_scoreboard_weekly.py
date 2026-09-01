@@ -205,3 +205,33 @@ def test_wednesday_morning_cutover_advances_to_the_upcoming_week(monkeypatch):
 
     games_after = nfl_scoreboard._fetch_games_for_week(after_cutover)
     assert [game["id"] for game in games_after] == ["next-week"]
+
+
+def test_wednesday_game_prevents_morning_cutover(monkeypatch):
+    events_by_date = {
+        "20260826": [
+            _event(
+                event_id="wednesday-game",
+                date="2026-08-27T00:15Z",
+                away="DAL",
+                home="NYG",
+                state="pre",
+            ),
+        ],
+        "20260827": [
+            _event(
+                event_id="next-week",
+                date="2026-08-27T23:20Z",
+                away="ATL",
+                home="MIA",
+                state="pre",
+            ),
+        ],
+    }
+    session = _install_fake_session(monkeypatch, events_by_date)
+    after_cutover = datetime.datetime(2026, 8, 26, 12, 0, tzinfo=nfl_scoreboard.CENTRAL_TIME)
+
+    games = nfl_scoreboard._fetch_games_for_week(after_cutover)
+
+    assert [game["id"] for game in games] == ["wednesday-game"]
+    assert session.requested_dates == ["20260820-20260826"]

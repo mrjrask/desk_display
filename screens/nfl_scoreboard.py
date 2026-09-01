@@ -546,6 +546,14 @@ def _fetch_week_from_start(week_start: datetime.date) -> list[dict]:
     return games
 
 
+def _has_game_on_date(games: Iterable[dict], day: datetime.date) -> bool:
+    return any(
+        isinstance(game.get("_start_local"), datetime.datetime)
+        and game["_start_local"].date() == day
+        for game in games
+    )
+
+
 def _week_cutoff_datetime(week_start: datetime.date, game_count: int) -> datetime.datetime:
     def _localize(day: datetime.date, hour: int, minute: int) -> datetime.datetime:
         naive = datetime.datetime.combine(day, datetime.time(hour=hour, minute=minute))
@@ -569,6 +577,15 @@ def _week_cutoff_datetime(week_start: datetime.date, game_count: int) -> datetim
 def _fetch_games_for_week(now: Optional[datetime.datetime] = None) -> list[dict]:
     now = now or datetime.datetime.now(CENTRAL_TIME)
     if not _playoff_rules_active(now):
+        # The normal Wednesday 9 AM cutover should not hide a rescheduled or
+        # otherwise unusual Wednesday game before it is played.  Check the
+        # ending display week first and retain it for all of Wednesday when it
+        # actually contains a game that day.
+        if now.weekday() == 2 and now.hour >= 9:
+            ending_week_start = _week_start_for_date(now.date())
+            ending_week_games = _fetch_week_from_start(ending_week_start)
+            if _has_game_on_date(ending_week_games, now.date()):
+                return ending_week_games
         week_start = _regular_week_start(now)
         return _fetch_week_from_start(week_start)
 
