@@ -235,3 +235,40 @@ def test_wednesday_game_prevents_morning_cutover(monkeypatch):
 
     assert [game["id"] for game in games] == ["wednesday-game"]
     assert session.requested_dates == ["20260820-20260826"]
+
+
+def test_wednesday_game_prevents_playoff_month_cutover(monkeypatch):
+    events_by_date = {
+        "20260114": [
+            _event(
+                event_id="rescheduled-playoff",
+                date="2026-01-15T01:00Z",
+                away="BUF",
+                home="KC",
+                state="pre",
+            ),
+        ],
+        "20260115": [
+            _event(
+                event_id="following-week",
+                date="2026-01-16T01:00Z",
+                away="SF",
+                home="SEA",
+                state="pre",
+            ),
+        ],
+    }
+    session = _install_fake_session(monkeypatch, events_by_date)
+    wednesday_evening = datetime.datetime(
+        2026,
+        1,
+        14,
+        18,
+        0,
+        tzinfo=nfl_scoreboard.CENTRAL_TIME,
+    )
+
+    games = nfl_scoreboard._fetch_games_for_week(wednesday_evening)
+
+    assert [game["id"] for game in games] == ["rescheduled-playoff"]
+    assert session.requested_dates == ["20260108-20260114"]
