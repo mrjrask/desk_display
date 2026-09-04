@@ -74,8 +74,6 @@ TITLE_GAP           = _scale_y(8)
 BLOCK_SPACING       = _scale_y(10)
 SCORE_ROW_H         = _scale_y(56)
 STATUS_ROW_H        = _scale_y(18)
-REQUEST_TIMEOUT     = 10
-FETCH_CACHE_TTL_SECONDS = 60
 SUPER_BOWL_LOGO_GAP = _scale_y(6)
 SUPER_BOWL_DATE     = (2, 8)  # Feb 8
 
@@ -494,46 +492,18 @@ def _fetch_games_for_range(start: datetime.date, end: datetime.date) -> list[dic
     independent requests being cut short by the HTTP circuit breaker.
     """
 
-    if end < start:
-        return []
+    from services.sports.nfl import fetch_range
 
-    cache_key = (start, f"espn_nfl_scoreboard:{end.isoformat()}")
-    now = time.monotonic()
-    cached = _GAMES_CACHE.get(cache_key)
-    if cached and (now - cached[0]) < FETCH_CACHE_TTL_SECONDS:
-        return cached[1]
-
-    url = (
-        "https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard"
-        f"?limit=100&dates={start.strftime('%Y%m%d')}-{end.strftime('%Y%m%d')}"
+    games = _hydrate_games(
+        fetch_range(start, end, session=_SESSION, cache=_GAMES_CACHE)
     )
-    try:
-        response = _SESSION.get(url, timeout=REQUEST_TIMEOUT)
-        response.raise_for_status()
-        data = response.json()
-    except Exception as exc:
-        logging.error("Failed to fetch NFL scoreboard: %s", exc)
-        return []
-
-    raw_games: list[dict] = []
-    for event in data.get("events", []) or []:
-        event_date = event.get("date")
-        local_start = _timestamp_to_local(event_date)
-        if local_start and not (start <= local_start.date() <= end):
-            continue
-        competitions = event.get("competitions") or []
-        if not competitions:
-            continue
-        comp = competitions[0] or {}
-        comp = dict(comp)
-        comp["_event_date"] = event_date
-        comp["_event_name"] = event.get("name")
-        comp["_event_short_name"] = event.get("shortName")
-        raw_games.append(comp)
-    games = _hydrate_games(raw_games)
-    filtered_games = [game for game in games if not _is_pro_bowl_game(game)]
-    _GAMES_CACHE[cache_key] = (now, filtered_games)
-    return filtered_games
+    games = [
+        game
+        for game in games
+        if isinstance(game.get("_start_local"), datetime.datetime)
+        and start <= game["_start_local"].date() <= end
+    ]
+    return [game for game in games if not _is_pro_bowl_game(game)]
 
 
 def _fetch_games_for_date(day: datetime.date) -> list[dict]:

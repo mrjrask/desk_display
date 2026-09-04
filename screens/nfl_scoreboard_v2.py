@@ -234,9 +234,9 @@ def _draw_single_game(
     canvas: Image.Image, draw: ImageDraw.ImageDraw, game: dict, x_offset: int, top: int
 ):
     """Draw a single game within the dual-game layout."""
-    teams = (game or {}).get("teams", {})
-    away = teams.get("away", {})
-    home = teams.get("home", {})
+    competitors = (game or {}).get("competitors", [])
+    away = next((side for side in competitors if side.get("homeAway") == "away"), {})
+    home = next((side for side in competitors if side.get("homeAway") == "home"), {})
 
     show_scores = _should_display_scores(game)
     away_text = _score_text(away, show=show_scores)
