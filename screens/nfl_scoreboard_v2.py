@@ -230,13 +230,18 @@ def _score_fill(
     return (255, 255, 255)
 
 
+def _competitors_by_side(game: dict) -> tuple[dict, dict]:
+    competitors = (game or {}).get("competitors", []) or []
+    away = next((team for team in competitors if team.get("homeAway") == "away"), {})
+    home = next((team for team in competitors if team.get("homeAway") == "home"), {})
+    return away, home
+
+
 def _draw_single_game(
     canvas: Image.Image, draw: ImageDraw.ImageDraw, game: dict, x_offset: int, top: int
 ):
     """Draw a single game within the dual-game layout."""
-    teams = (game or {}).get("teams", {})
-    away = teams.get("away", {})
-    home = teams.get("home", {})
+    away, home = _competitors_by_side(game)
 
     show_scores = _should_display_scores(game)
     away_text = _score_text(away, show=show_scores)

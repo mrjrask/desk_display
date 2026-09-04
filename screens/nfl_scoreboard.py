@@ -486,18 +486,16 @@ def _is_pro_bowl_game(game: dict) -> bool:
     return False
 
 
-def _fetch_games_for_range(start: datetime.date, end: datetime.date) -> list[dict]:
-    """Fetch and normalize every ESPN event in an inclusive date range.
+def _fetch_games_for_date(day: datetime.date) -> list[dict]:
+    """Fetch one scoreboard date using ESPN's consistently supported form.
 
-    ESPN supports a date range on its scoreboard endpoint.  Fetching the NFL
-    week in one request both returns the complete week and avoids five to seven
-    independent requests being cut short by the HTTP circuit breaker.
+    Unlike the other ESPN scoreboards, the NFL endpoint has intermittently
+    returned an empty ``events`` array for inclusive ``YYYYMMDD-YYYYMMDD``
+    date ranges even when each individual date contains games.  Request the
+    scoreboard periods individually, then cache and aggregate them locally.
     """
 
-    if end < start:
-        return []
-
-    cache_key = (start, f"espn_nfl_scoreboard:{end.isoformat()}")
+    cache_key = (day, "espn_nfl_scoreboard")
     now = time.monotonic()
     cached = _GAMES_CACHE.get(cache_key)
     if cached and (now - cached[0]) < FETCH_CACHE_TTL_SECONDS:
@@ -505,7 +503,7 @@ def _fetch_games_for_range(start: datetime.date, end: datetime.date) -> list[dic
 
     url = (
         "https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard"
-        f"?limit=100&dates={start.strftime('%Y%m%d')}-{end.strftime('%Y%m%d')}"
+        f"?limit=100&dates={day.strftime('%Y%m%d')}"
     )
     try:
         response = _SESSION.get(url, timeout=REQUEST_TIMEOUT)
@@ -519,7 +517,7 @@ def _fetch_games_for_range(start: datetime.date, end: datetime.date) -> list[dic
     for event in data.get("events", []) or []:
         event_date = event.get("date")
         local_start = _timestamp_to_local(event_date)
-        if local_start and not (start <= local_start.date() <= end):
+        if local_start and local_start.date() != day:
             continue
         competitions = event.get("competitions") or []
         if not competitions:
@@ -536,8 +534,19 @@ def _fetch_games_for_range(start: datetime.date, end: datetime.date) -> list[dic
     return filtered_games
 
 
-def _fetch_games_for_date(day: datetime.date) -> list[dict]:
-    return _fetch_games_for_range(day, day)
+def _fetch_games_for_range(start: datetime.date, end: datetime.date) -> list[dict]:
+    """Fetch and normalize every ESPN event in an inclusive date range."""
+
+    if end < start:
+        return []
+
+    games: list[dict] = []
+    day = start
+    while day <= end:
+        games.extend(_fetch_games_for_date(day))
+        day += datetime.timedelta(days=1)
+    games.sort(key=_game_sort_key)
+    return games
 
 
 def _fetch_week_from_start(week_start: datetime.date) -> list[dict]:

@@ -73,7 +73,7 @@ class _FakeResponse:
 
 
 class _FakeSession:
-    """Serves canned ESPN events for single-day or inclusive range queries."""
+    """Serves canned ESPN events for single-day scoreboard queries."""
 
     def __init__(self, events_by_date: dict[str, list[dict]]):
         self._events_by_date = events_by_date
@@ -124,7 +124,7 @@ def test_fetch_games_for_week_returns_thursday_through_monday_games(monkeypatch)
     assert [game["id"] for game in games] == ["1", "2", "3"]
 
 
-def test_fetch_games_for_week_uses_one_complete_thursday_to_wednesday_range(monkeypatch):
+def test_fetch_games_for_week_requests_each_day_thursday_to_wednesday(monkeypatch):
     events_by_date = {
         "20260902": [
             _event(event_id="wednesday", date="2026-09-03T00:15Z", away="DAL", home="NYG"),
@@ -137,7 +137,15 @@ def test_fetch_games_for_week_uses_one_complete_thursday_to_wednesday_range(monk
     )
 
     assert [game["id"] for game in games] == ["wednesday"]
-    assert session.requested_dates == ["20260827-20260902"]
+    assert session.requested_dates == [
+        "20260827",
+        "20260828",
+        "20260829",
+        "20260830",
+        "20260831",
+        "20260901",
+        "20260902",
+    ]
 
 
 def test_fetch_games_for_week_empty_this_week_does_not_fabricate_games(monkeypatch):
@@ -254,7 +262,15 @@ def test_wednesday_game_prevents_morning_cutover(monkeypatch):
     games = nfl_scoreboard._fetch_games_for_week(after_cutover)
 
     assert [game["id"] for game in games] == ["wednesday-game"]
-    assert session.requested_dates == ["20260820-20260826"]
+    assert session.requested_dates == [
+        "20260820",
+        "20260821",
+        "20260822",
+        "20260823",
+        "20260824",
+        "20260825",
+        "20260826",
+    ]
 
 
 def test_wednesday_game_prevents_playoff_month_cutover(monkeypatch):
@@ -291,4 +307,12 @@ def test_wednesday_game_prevents_playoff_month_cutover(monkeypatch):
     games = nfl_scoreboard._fetch_games_for_week(wednesday_evening)
 
     assert [game["id"] for game in games] == ["rescheduled-playoff"]
-    assert session.requested_dates == ["20260108-20260114"]
+    assert session.requested_dates == [
+        "20260108",
+        "20260109",
+        "20260110",
+        "20260111",
+        "20260112",
+        "20260113",
+        "20260114",
+    ]
