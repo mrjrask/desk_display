@@ -21,9 +21,11 @@ NFLVERSE_URL = "https://raw.githubusercontent.com/nflverse/nfldata/master/data/g
 NFLVERSE_TIME_ZONE = ZoneInfo("America/New_York")
 REQUEST_TIMEOUT = 10
 FETCH_CACHE_TTL_SECONDS = 60
+NFLVERSE_CACHE_TTL_SECONDS = 60 * 60
 
 _SESSION = get_session("nfl")
 _RANGE_CACHE: dict[tuple[dt.date, dt.date], tuple[float, list[dict[str, Any]]]] = {}
+_NFLVERSE_CACHE_KEY = ("nfl_providers", "nflverse_games")
 
 
 class InvalidProviderPayload(ValueError):
@@ -146,31 +148,58 @@ def _games_in_range(
     return filtered
 
 
-def _nflverse_games(session: Any, start: dt.date, end: dt.date) -> list[dict[str, Any]]:
+def _nflverse_games(
+    session: Any,
+    start: dt.date,
+    end: dt.date,
+    *,
+    cache: dict | None = None,
+) -> list[dict[str, Any]]:
+    """Return nflverse games without repeatedly downloading its full dataset."""
+    now = time.monotonic()
+    cached = cache.get(_NFLVERSE_CACHE_KEY) if cache is not None else None
+    if cached and now - cached[0] < NFLVERSE_CACHE_TTL_SECONDS:
+        all_games = cached[1]
+        return [game for day, game in all_games if start <= day <= end]
+
     response = session.get(NFLVERSE_URL, timeout=REQUEST_TIMEOUT)
     response.raise_for_status()
     rows = csv.DictReader(io.StringIO(response.text))
     required_columns = {"game_id", "gameday", "away_team", "home_team", "result"}
     if not rows.fieldnames or not required_columns.issubset(rows.fieldnames):
         raise InvalidProviderPayload("nflverse games CSV has unexpected columns")
-    games: list[dict[str, Any]] = []
+    all_games: list[tuple[dt.date, dict[str, Any]]] = []
     for row in rows:
         try:
             day = dt.date.fromisoformat(row["gameday"])
+            kickoff_text = (row.get("gametime") or "").strip()
+            kickoff_tbd = not kickoff_text
+            # Midnight Eastern falls on the previous calendar date in Central
+            # time. Use noon as a date-safe placeholder while the status makes
+            # clear that the actual kickoff has not been announced.
+            kickoff_time = (
+                dt.time.fromisoformat(kickoff_text)
+                if kickoff_text
+                else dt.time(hour=12)
+            )
             local_start = dt.datetime.combine(
                 day,
-                dt.time.fromisoformat(row.get("gametime") or "00:00"),
+                kickoff_time,
                 tzinfo=NFLVERSE_TIME_ZONE,
             )
         except (TypeError, ValueError):
-            continue
-        if not start <= day <= end:
             continue
         # nflverse is intentionally not a live provider. Its result column is
         # the completion signal; ignore any transient scores until it is set.
         completed = bool((row.get("result") or "").strip())
         away_score = (row.get("away_score") or None) if completed else None
         home_score = (row.get("home_score") or None) if completed else None
+        if completed:
+            status_detail = "Final"
+        elif kickoff_tbd:
+            status_detail = "TBD"
+        else:
+            status_detail = "Scheduled"
         start_time = local_start.astimezone(dt.UTC).isoformat().replace("+00:00", "Z")
         event = {
             "id": row["game_id"],
@@ -194,15 +223,22 @@ def _nflverse_games(session: Any, start: dt.date, end: dt.date) -> list[dict[str
                 "status": {"type": {
                     "state": "post" if completed else "pre",
                     "completed": completed,
-                    "description": "Final" if completed else "Scheduled",
-                    "shortDetail": "Final" if completed else "Scheduled",
+                    "description": status_detail,
+                    "shortDetail": status_detail,
                 }},
             }],
         }
         game = _event_to_game(event)
         if game:
-            games.append(game)
-    return list({game["id"]: game for game in games}.values())
+            all_games.append((day, game))
+
+    # Cache the parsed dataset rather than an individual result range. Upcoming
+    # game discovery queries many non-overlapping empty windows, so range-only
+    # caching would still download and parse this large CSV for every window.
+    all_games = list({game["id"]: (day, game) for day, game in all_games}.values())
+    if cache is not None:
+        cache[_NFLVERSE_CACHE_KEY] = (now, all_games)
+    return [game for day, game in all_games if start <= day <= end]
 
 
 def fetch_range(start: dt.date, end: dt.date, *, session: Any = None,
@@ -224,7 +260,9 @@ def fetch_range(start: dt.date, end: dt.date, *, session: Any = None,
         ("ESPN CDN", lambda: _games_in_range(normalize_espn_cdn(_request_json(
             session, ESPN_CDN_URL, xhr=1, year=start.year,
             dates=f"{start:%Y%m%d}-{end:%Y%m%d}")), start, end)),
-        ("nflverse", lambda: _nflverse_games(session, start, end)),
+        ("nflverse", lambda: _nflverse_games(
+            session, start, end, cache=active_cache
+        )),
     )
     for name, provider in providers:
         try:
