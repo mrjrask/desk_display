@@ -218,12 +218,16 @@ def fetch_range(start: dt.date, end: dt.date, *, session: Any = None,
     if cached and now - cached[0] < FETCH_CACHE_TTL_SECONDS:
         return cached[1]
 
+    # ESPN treats an equal-bound range differently from its true single-day
+    # form.  In particular, ``YYYYMMDD-YYYYMMDD`` can return an empty events
+    # array even though ``YYYYMMDD`` returns that day's games.
+    dates = f"{start:%Y%m%d}" if start == end else f"{start:%Y%m%d}-{end:%Y%m%d}"
     providers = (
         ("ESPN Site", lambda: _games_in_range(normalize_espn_site(_request_json(
-            session, ESPN_SITE_URL, limit=100, dates=f"{start:%Y%m%d}-{end:%Y%m%d}")), start, end)),
+            session, ESPN_SITE_URL, limit=100, dates=dates)), start, end)),
         ("ESPN CDN", lambda: _games_in_range(normalize_espn_cdn(_request_json(
             session, ESPN_CDN_URL, xhr=1, year=start.year,
-            dates=f"{start:%Y%m%d}-{end:%Y%m%d}")), start, end)),
+            dates=dates)), start, end)),
         ("nflverse", lambda: _nflverse_games(session, start, end)),
     )
     for name, provider in providers:
