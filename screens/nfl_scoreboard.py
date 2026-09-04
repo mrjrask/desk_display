@@ -136,7 +136,7 @@ IN_GAME_STATUS_OVERRIDES = {
 _LOGO_CACHE: dict[tuple[str, int], Optional[Image.Image]] = {}
 _LEAGUE_LOGO_CACHE: dict[int, Optional[Image.Image]] = {}
 _SUPER_BOWL_LOGO_CACHE: dict[int, Optional[Image.Image]] = {}
-_GAMES_CACHE: dict[tuple[datetime.date, str], tuple[float, list[dict]]] = {}
+_GAMES_CACHE: dict[tuple[object, ...], tuple[float, list[dict]]] = {}
 NO_UPCOMING_GAMES_COOLDOWN_SECONDS = 30 * 60
 _NO_UPCOMING_GAMES_COOLDOWN = DayScanCooldown(NO_UPCOMING_GAMES_COOLDOWN_SECONDS)
 _SESSION = get_session("nfl")
@@ -484,12 +484,13 @@ def _is_pro_bowl_game(game: dict) -> bool:
     return False
 
 
-def _fetch_games_for_range(start: datetime.date, end: datetime.date) -> list[dict]:
-    """Fetch and normalize every ESPN event in an inclusive date range.
+def _fetch_games_for_date(day: datetime.date) -> list[dict]:
+    """Fetch one scoreboard date using ESPN's consistently supported form.
 
-    ESPN supports a date range on its scoreboard endpoint.  Fetching the NFL
-    week in one request both returns the complete week and avoids five to seven
-    independent requests being cut short by the HTTP circuit breaker.
+    Unlike the other ESPN scoreboards, the NFL endpoint has intermittently
+    returned an empty ``events`` array for inclusive ``YYYYMMDD-YYYYMMDD``
+    date ranges even when each individual date contains games.  Request the
+    scoreboard periods individually, then cache and aggregate them locally.
     """
 
     from services.sports.nfl import fetch_range
@@ -504,10 +505,112 @@ def _fetch_games_for_range(start: datetime.date, end: datetime.date) -> list[dic
         and start <= game["_start_local"].date() <= end
     ]
     return [game for game in games if not _is_pro_bowl_game(game)]
+    cache_key = (day, "espn_nfl_scoreboard")
+    now = time.monotonic()
+    cached = _GAMES_CACHE.get(cache_key)
+    if cached and (now - cached[0]) < FETCH_CACHE_TTL_SECONDS:
+        return cached[1]
+
+    url = (
+        "https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard"
+        f"?limit=100&dates={day.strftime('%Y%m%d')}"
+    )
+    try:
+        response = _SESSION.get(url, timeout=REQUEST_TIMEOUT)
+        response.raise_for_status()
+        data = response.json()
+    except Exception as exc:
+        logging.error("Failed to fetch NFL scoreboard: %s", exc)
+        return []
+
+    raw_games: list[dict] = []
+    for event in data.get("events", []) or []:
+        event_date = event.get("date")
+        local_start = _timestamp_to_local(event_date)
+        if local_start and local_start.date() != day:
+            continue
+        competitions = event.get("competitions") or []
+        if not competitions:
+            continue
+        comp = competitions[0] or {}
+        comp = dict(comp)
+        comp["_event_date"] = event_date
+        comp["_event_name"] = event.get("name")
+        comp["_event_short_name"] = event.get("shortName")
+        raw_games.append(comp)
+    games = _hydrate_games(raw_games)
+    filtered_games = [game for game in games if not _is_pro_bowl_game(game)]
+    _GAMES_CACHE[cache_key] = (now, filtered_games)
+    return filtered_games
 
 
-def _fetch_games_for_date(day: datetime.date) -> list[dict]:
-    return _fetch_games_for_range(day, day)
+def _fetch_games_for_bulk_range(
+    start: datetime.date,
+    end: datetime.date,
+) -> list[dict]:
+    """Fetch a range in one request for bounded long-horizon discovery.
+
+    ESPN's range responses are not reliable enough to render a display week,
+    so normal week loading still uses the per-day function above.  They are,
+    however, suitable for discovering the next scheduled week without making
+    hundreds of sequential requests during the year-long offseason fallback.
+    """
+
+    if end < start:
+        return []
+
+    cache_key = (start, end, "espn_nfl_scoreboard_bulk")
+    now = time.monotonic()
+    cached = _GAMES_CACHE.get(cache_key)
+    if cached and (now - cached[0]) < FETCH_CACHE_TTL_SECONDS:
+        return cached[1]
+
+    dates = f"{start.strftime('%Y%m%d')}-{end.strftime('%Y%m%d')}"
+    url = (
+        "https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard"
+        f"?limit=100&dates={dates}"
+    )
+    try:
+        response = _SESSION.get(url, timeout=REQUEST_TIMEOUT)
+        response.raise_for_status()
+        data = response.json()
+    except Exception as exc:
+        logging.error("Failed to fetch NFL scoreboard range: %s", exc)
+        return []
+
+    raw_games: list[dict] = []
+    for event in data.get("events", []) or []:
+        event_date = event.get("date")
+        local_start = _timestamp_to_local(event_date)
+        if not local_start or not start <= local_start.date() <= end:
+            continue
+        competitions = event.get("competitions") or []
+        if not competitions:
+            continue
+        comp = dict(competitions[0] or {})
+        comp["_event_date"] = event_date
+        comp["_event_name"] = event.get("name")
+        comp["_event_short_name"] = event.get("shortName")
+        raw_games.append(comp)
+
+    games = [game for game in _hydrate_games(raw_games) if not _is_pro_bowl_game(game)]
+    _GAMES_CACHE[cache_key] = (now, games)
+    return games
+
+
+def _fetch_games_for_range(start: datetime.date, end: datetime.date) -> list[dict]:
+    """Fetch and normalize every ESPN event in an inclusive date range."""
+
+    if end < start:
+        return []
+
+    games: list[dict] = []
+    day = start
+    while day <= end:
+        games.extend(_fetch_games_for_date(day))
+        day += datetime.timedelta(days=1)
+    games.sort(key=_game_sort_key)
+    return games
 
 
 def _fetch_week_from_start(week_start: datetime.date) -> list[dict]:
@@ -586,7 +689,10 @@ def _fetch_next_games(
             start_date + datetime.timedelta(days=max_days),
             window_start + datetime.timedelta(days=6),
         )
-        games = _fetch_games_for_range(window_start, window_end)
+        # Discovery can span more than a year after the season ends. Keep it
+        # to one request per seven-day window; once a game is found, the
+        # aligned display week is reloaded through the reliable daily path.
+        games = _fetch_games_for_bulk_range(window_start, window_end)
         if games:
             _NO_UPCOMING_GAMES_COOLDOWN.reset()
             first_start = games[0].get("_start_local")
