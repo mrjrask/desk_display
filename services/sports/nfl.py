@@ -22,6 +22,7 @@ _CDN_SCOREBOARD_URL = "https://cdn.espn.com/core/nfl/scoreboard"
 _NFLVERSE_SCHEDULE_URL = (
     "https://github.com/nflverse/nfldata/releases/download/schedules/games.csv"
 )
+_NFLVERSE_SCHEDULE_CACHE_KEY = ("nflverse", "complete_schedule")
 
 
 def _date_parameter(start: dt.date, end: dt.date) -> str:
@@ -85,7 +86,21 @@ def _nflverse_status(row: Mapping[str, str]) -> dict:
     }
 
 
-def _fetch_nflverse(start: dt.date, end: dt.date, *, session: Any) -> list[dict]:
+def _fetch_nflverse_schedule(
+    *,
+    session: Any,
+    cache: MutableMapping[tuple[object, ...], tuple[float, list[dict]]],
+) -> list[dict]:
+    """Download and parse the complete nflverse schedule, reusing it across ranges."""
+
+    now = time.monotonic()
+    cached = cache.get(_NFLVERSE_SCHEDULE_CACHE_KEY)
+    if cached and now - cached[0] < FETCH_CACHE_TTL_SECONDS:
+        # Use an idle TTL so a long discovery scan cannot expire the schedule
+        # while it is still making progress through consecutive weekly ranges.
+        cache[_NFLVERSE_SCHEDULE_CACHE_KEY] = (now, cached[1])
+        return cached[1]
+
     response = session.get(_NFLVERSE_SCHEDULE_URL, timeout=REQUEST_TIMEOUT)
     response.raise_for_status()
     games: list[dict] = []
@@ -93,8 +108,6 @@ def _fetch_nflverse(start: dt.date, end: dt.date, *, session: Any) -> list[dict]
         try:
             game_day = dt.date.fromisoformat(row.get("gameday") or "")
         except ValueError:
-            continue
-        if not start <= game_day <= end:
             continue
         game_time = (row.get("gametime") or "00:00").strip()
         event_date = f"{game_day.isoformat()}T{game_time}:00Z"
@@ -122,7 +135,23 @@ def _fetch_nflverse(start: dt.date, end: dt.date, *, session: Any) -> list[dict]
                 "_event_short_name": f"{away} @ {home}",
             }
         )
+    cache[_NFLVERSE_SCHEDULE_CACHE_KEY] = (now, games)
     return games
+
+
+def _fetch_nflverse(
+    start: dt.date,
+    end: dt.date,
+    *,
+    session: Any,
+    cache: MutableMapping[tuple[object, ...], tuple[float, list[dict]]],
+) -> list[dict]:
+    schedule = _fetch_nflverse_schedule(session=session, cache=cache)
+    return [
+        game
+        for game in schedule
+        if start.isoformat() <= str(game.get("_event_date", ""))[:10] <= end.isoformat()
+    ]
 
 
 def fetch_range(
@@ -151,7 +180,10 @@ def fetch_range(
                 _CDN_SCOREBOARD_URL + "?xhr=1", dates, session=session
             ),
         ),
-        ("nflverse", lambda: _fetch_nflverse(start, end, session=session)),
+        (
+            "nflverse",
+            lambda: _fetch_nflverse(start, end, session=session, cache=cache),
+        ),
     )
     for provider_name, fetch in providers:
         try:
