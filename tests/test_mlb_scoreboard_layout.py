@@ -104,7 +104,7 @@ def test_mlb_scroll_path_uses_profile_timing_for_small_connected_display(monkeyp
 
     assert captured["base_step"] == 4
     assert captured["min_frame_time"] == 0.060
-    assert "page_jump_mode" not in captured
+    assert captured["page_jump_mode"] is False
     assert "max_step" not in captured
     assert "min_frame_time_floor" not in captured
 
@@ -124,9 +124,27 @@ def test_mlb_scroll_path_keeps_scoreboard_delay_for_hyperpixel(monkeypatch):
 
     assert captured["base_step"] == 2
     assert captured["min_frame_time"] == 0.020
-    assert "page_jump_mode" not in captured
+    assert captured["page_jump_mode"] is True
     assert "max_step" not in captured
     assert "min_frame_time_floor" not in captured
+
+
+def test_mlb_v2_scroll_disables_page_jumps_for_small_connected_display(monkeypatch):
+    captured = {}
+
+    monkeypatch.setattr(mlb_scoreboard_v2, "_IS_SMALL_CONNECTED_SCOREBOARD_DISPLAY", True)
+    monkeypatch.setattr(
+        mlb_scoreboard_v2,
+        "scroll_vertical_content",
+        lambda **kwargs: captured.update(kwargs),
+    )
+
+    mlb_scoreboard_v2._scroll_display(
+        type("Display", (), {"image": lambda self, img: None})(),
+        Image.new("RGB", (10, 20)),
+    )
+
+    assert captured["page_jump_mode"] is False
 
 
 def _game(game_pk: int, game_date: str, away_team: dict, home_team: dict) -> dict:
@@ -193,5 +211,4 @@ def test_mlb_v2_render_shows_loading_message_when_games_not_hydrated(monkeypatch
 
     assert result.displayed is True
     assert display.last_image is not None
-
 
