@@ -485,67 +485,6 @@ def _is_pro_bowl_game(game: dict) -> bool:
 
 
 def _fetch_normalized_range(
-def _fetch_games_for_date(day: datetime.date) -> list[dict]:
-    """Fetch one scoreboard date using ESPN's consistently supported form.
-
-    Unlike the other ESPN scoreboards, the NFL endpoint has intermittently
-    returned an empty ``events`` array for inclusive ``YYYYMMDD-YYYYMMDD``
-    date ranges even when each individual date contains games.  Request the
-    scoreboard periods individually, then cache and aggregate them locally.
-    """
-
-    from services.sports.nfl import fetch_range
-
-    games = _hydrate_games(
-        fetch_range(start, end, session=_SESSION, cache=_GAMES_CACHE)
-    )
-    games = [
-        game
-        for game in games
-        if isinstance(game.get("_start_local"), datetime.datetime)
-        and start <= game["_start_local"].date() <= end
-    ]
-    return [game for game in games if not _is_pro_bowl_game(game)]
-    cache_key = (day, "espn_nfl_scoreboard")
-    now = time.monotonic()
-    cached = _GAMES_CACHE.get(cache_key)
-    if cached and (now - cached[0]) < FETCH_CACHE_TTL_SECONDS:
-        return cached[1]
-
-    url = (
-        "https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard"
-        f"?limit=100&dates={day.strftime('%Y%m%d')}"
-    )
-    try:
-        response = _SESSION.get(url, timeout=REQUEST_TIMEOUT)
-        response.raise_for_status()
-        data = response.json()
-    except Exception as exc:
-        logging.error("Failed to fetch NFL scoreboard: %s", exc)
-        return []
-
-    raw_games: list[dict] = []
-    for event in data.get("events", []) or []:
-        event_date = event.get("date")
-        local_start = _timestamp_to_local(event_date)
-        if local_start and local_start.date() != day:
-            continue
-        competitions = event.get("competitions") or []
-        if not competitions:
-            continue
-        comp = competitions[0] or {}
-        comp = dict(comp)
-        comp["_event_date"] = event_date
-        comp["_event_name"] = event.get("name")
-        comp["_event_short_name"] = event.get("shortName")
-        raw_games.append(comp)
-    games = _hydrate_games(raw_games)
-    filtered_games = [game for game in games if not _is_pro_bowl_game(game)]
-    _GAMES_CACHE[cache_key] = (now, filtered_games)
-    return filtered_games
-
-
-def _fetch_games_for_bulk_range(
     start: datetime.date,
     end: datetime.date,
 ) -> list[dict]:
