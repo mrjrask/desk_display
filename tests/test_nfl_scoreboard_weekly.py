@@ -189,6 +189,19 @@ def test_next_games_fallback_returns_the_full_week(monkeypatch):
     assert [game["id"] for game in games] == ["thursday", "sunday"]
 
 
+def test_next_games_year_long_fallback_uses_bounded_range_requests(monkeypatch):
+    session = _install_fake_session(monkeypatch, {})
+    nfl_scoreboard._NO_UPCOMING_GAMES_COOLDOWN.reset()
+
+    games = nfl_scoreboard._fetch_next_games(datetime.date(2026, 2, 9))
+
+    assert games == []
+    assert len(session.requested_dates) == 53
+    assert session.requested_dates[0] == "20260209-20260215"
+    assert session.requested_dates[-1] == "20270208-20270214"
+    assert all("-" in requested_range for requested_range in session.requested_dates)
+
+
 def test_next_games_keeps_discovered_games_when_full_week_refetch_fails(monkeypatch):
     events_by_date = {
         "20260910": [
