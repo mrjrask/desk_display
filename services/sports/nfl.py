@@ -8,7 +8,7 @@ import io
 import logging
 import time
 import urllib.parse
-from collections.abc import Iterable
+from collections.abc import Iterable, Mapping, MutableMapping
 from typing import Any
 from zoneinfo import ZoneInfo
 
