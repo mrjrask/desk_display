@@ -185,14 +185,20 @@ def fetch_range(
             lambda: _fetch_nflverse(start, end, session=session, cache=cache),
         ),
     )
+    successful_response = False
     for provider_name, fetch in providers:
         try:
             games = fetch()
         except Exception as exc:
             logging.warning("Failed to fetch NFL scoreboard from %s: %s", provider_name, exc)
             continue
-        cache[cache_key] = (now, games)
-        return games
+        successful_response = True
+        if games:
+            cache[cache_key] = (now, games)
+            return games
+        logging.info("NFL scoreboard from %s was empty; trying fallback", provider_name)
+    if successful_response:
+        cache[cache_key] = (now, [])
     return []
 
 

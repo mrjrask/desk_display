@@ -112,6 +112,33 @@ def test_nflverse_schedule_is_cached_across_long_range_scan(monkeypatch):
     assert session.calls == 1
 
 
+def test_nfl_range_falls_back_after_empty_espn_site_response(monkeypatch):
+    day = dt.date(2026, 9, 10)
+    calls = []
+
+    def _fake_fetch_espn(url, dates, *, session):
+        calls.append(url)
+        if url == nfl._SITE_SCOREBOARD_URL:
+            return []
+        return [{"id": "cdn-game"}]
+
+    monkeypatch.setattr(nfl, "_fetch_espn", _fake_fetch_espn)
+    monkeypatch.setattr(
+        nfl,
+        "_fetch_nflverse",
+        lambda *args, **kwargs: (_ for _ in ()).throw(
+            AssertionError("nflverse should not be used when the CDN has games")
+        ),
+    )
+
+    cache = {}
+    games = nfl.fetch_range(day, day, session=object(), cache=cache)
+
+    assert games == [{"id": "cdn-game"}]
+    assert calls == [nfl._SITE_SCOREBOARD_URL, nfl._CDN_SCOREBOARD_URL + "?xhr=1"]
+    assert cache[(day, day, "nfl_scoreboard_range")][1] == games
+
+
 def test_services_normalize_non_list_to_empty_list(monkeypatch):
     day = dt.date(2026, 3, 30)
 
