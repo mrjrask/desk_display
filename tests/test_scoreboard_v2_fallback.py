@@ -25,6 +25,15 @@ def test_nfl_v2_uses_v1_renderer_when_fewer_than_six_games(monkeypatch):
     assert result is sentinel
 
 
+def test_nfl_v2_reads_espn_competitors_by_home_away():
+    away = {"homeAway": "away", "team": {"abbreviation": "CHI"}}
+    home = {"homeAway": "home", "team": {"abbreviation": "GB"}}
+
+    assert nfl_scoreboard_v2._competitors_by_side(
+        {"competitors": [home, away]}
+    ) == (away, home)
+
+
 def test_nhl_v2_uses_v1_renderer_when_fewer_than_six_games(monkeypatch):
     sentinel = object()
 
