@@ -100,6 +100,20 @@ def _install_fake_session(monkeypatch, events_by_date: dict[str, list[dict]]) ->
     return fake_session
 
 
+def test_fetch_games_for_date_passes_requested_day_as_provider_range(monkeypatch):
+    requested_ranges = []
+
+    def fake_fetch_range(start, end, *, session, cache):
+        requested_ranges.append((start, end))
+        return []
+
+    monkeypatch.setattr(nfl_service, "fetch_range", fake_fetch_range)
+
+    day = datetime.date(2026, 9, 3)
+    assert nfl_scoreboard._fetch_games_for_date(day) == []
+    assert requested_ranges == [(day, day)]
+
+
 def test_fetch_games_for_week_returns_thursday_through_monday_games(monkeypatch):
     # Preseason week: Thu 8/20 - Mon 8/24, 2026.
     events_by_date = {

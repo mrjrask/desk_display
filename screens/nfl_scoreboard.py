@@ -496,13 +496,13 @@ def _fetch_games_for_date(day: datetime.date) -> list[dict]:
     from services.sports.nfl import fetch_range
 
     games = _hydrate_games(
-        fetch_range(start, end, session=_SESSION, cache=_GAMES_CACHE)
+        fetch_range(day, day, session=_SESSION, cache=_GAMES_CACHE)
     )
     games = [
         game
         for game in games
         if isinstance(game.get("_start_local"), datetime.datetime)
-        and start <= game["_start_local"].date() <= end
+        and game["_start_local"].date() == day
     ]
     return [game for game in games if not _is_pro_bowl_game(game)]
     cache_key = (day, "espn_nfl_scoreboard")
