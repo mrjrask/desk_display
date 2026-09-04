@@ -570,6 +570,12 @@ def _scroll_display(display, full_img: Image.Image):
         base_step=SCOREBOARD_SCROLL_STEP,
         pause_start=SCOREBOARD_SCROLL_PAUSE_TOP,
         pause_end=SCOREBOARD_SCROLL_PAUSE_BOTTOM,
+        # Before the morning rollover the board can contain both yesterday's
+        # finals and today's schedule.  That combined slate crosses the shared
+        # helper's "very tall" threshold and enables viewport-sized jumps,
+        # which race through the list on the small SPI-connected displays.
+        # Keep their scoreboard scroll line-by-line regardless of slate size.
+        page_jump_mode=not SMALL_CONNECTED_DISPLAY_PROFILE,
         min_frame_time=MLB_SCOREBOARD_SCROLL_DELAY,
     )
 
