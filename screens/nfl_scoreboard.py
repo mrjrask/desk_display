@@ -484,6 +484,7 @@ def _is_pro_bowl_game(game: dict) -> bool:
     return False
 
 
+def _fetch_normalized_range(
 def _fetch_games_for_date(day: datetime.date) -> list[dict]:
     """Fetch one scoreboard date using ESPN's consistently supported form.
 
@@ -548,73 +549,38 @@ def _fetch_games_for_bulk_range(
     start: datetime.date,
     end: datetime.date,
 ) -> list[dict]:
-    """Fetch a range in one request for bounded long-horizon discovery.
+    from services.sports.nfl import fetch_range
 
-    ESPN's range responses are not reliable enough to render a display week,
-    so normal week loading still uses the per-day function above.  They are,
-    however, suitable for discovering the next scheduled week without making
-    hundreds of sequential requests during the year-long offseason fallback.
-    """
-
-    if end < start:
-        return []
-
-    cache_key = (start, end, "espn_nfl_scoreboard_bulk")
-    now = time.monotonic()
-    cached = _GAMES_CACHE.get(cache_key)
-    if cached and (now - cached[0]) < FETCH_CACHE_TTL_SECONDS:
-        return cached[1]
-
-    dates = f"{start.strftime('%Y%m%d')}-{end.strftime('%Y%m%d')}"
-    url = (
-        "https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard"
-        f"?limit=100&dates={dates}"
+    games = _hydrate_games(
+        fetch_range(start, end, session=_SESSION, cache=_GAMES_CACHE)
     )
-    try:
-        response = _SESSION.get(url, timeout=REQUEST_TIMEOUT)
-        response.raise_for_status()
-        data = response.json()
-    except Exception as exc:
-        logging.error("Failed to fetch NFL scoreboard range: %s", exc)
-        return []
-
-    raw_games: list[dict] = []
-    for event in data.get("events", []) or []:
-        event_date = event.get("date")
-        local_start = _timestamp_to_local(event_date)
-        if not local_start or not start <= local_start.date() <= end:
-            continue
-        competitions = event.get("competitions") or []
-        if not competitions:
-            continue
-        comp = dict(competitions[0] or {})
-        comp["_event_date"] = event_date
-        comp["_event_name"] = event.get("name")
-        comp["_event_short_name"] = event.get("shortName")
-        raw_games.append(comp)
-
-    games = [game for game in _hydrate_games(raw_games) if not _is_pro_bowl_game(game)]
-    _GAMES_CACHE[cache_key] = (now, games)
-    return games
+    return [
+        game
+        for game in games
+        if isinstance(game.get("_start_local"), datetime.datetime)
+        and start <= game["_start_local"].date() <= end
+        and not _is_pro_bowl_game(game)
+    ]
 
 
-def _fetch_games_for_range(start: datetime.date, end: datetime.date) -> list[dict]:
-    """Fetch and normalize every ESPN event in an inclusive date range."""
+def _fetch_games_for_date(day: datetime.date) -> list[dict]:
+    return _fetch_normalized_range(day, day)
 
-    if end < start:
-        return []
 
-    games: list[dict] = []
-    day = start
-    while day <= end:
-        games.extend(_fetch_games_for_date(day))
-        day += datetime.timedelta(days=1)
-    games.sort(key=_game_sort_key)
-    return games
+def _fetch_games_for_bulk_range(
+    start: datetime.date,
+    end: datetime.date,
+) -> list[dict]:
+    return _fetch_normalized_range(start, end)
 
 
 def _fetch_week_from_start(week_start: datetime.date) -> list[dict]:
-    games = _fetch_games_for_range(week_start, _week_end_from_start(week_start))
+    games: list[dict] = []
+    day = week_start
+    week_end = _week_end_from_start(week_start)
+    while day <= week_end:
+        games.extend(_fetch_games_for_date(day))
+        day += datetime.timedelta(days=1)
     games.sort(key=_game_sort_key)
     return games
 
