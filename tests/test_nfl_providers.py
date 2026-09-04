@@ -83,6 +83,30 @@ def test_total_provider_failure_without_cache_returns_empty(dates):
     assert nfl.fetch_range(*dates, session=session, cache={}) == []
 
 
+def test_empty_ranges_reuse_parsed_nflverse_dataset():
+    csv_payload = (
+        "game_id,gameday,gametime,away_team,home_team,away_score,home_score,result\n"
+        "future,2026-09-20,13:00,CHI,GB,,,,\n"
+    )
+    session = Session([
+        Response({"events": []}),
+        Response({"content": {"schedule": {}}}),
+        Response(text=csv_payload),
+        Response({"events": []}),
+        Response({"content": {"schedule": {}}}),
+    ])
+    cache = {}
+
+    assert nfl.fetch_range(
+        dt.date(2026, 2, 9), dt.date(2026, 2, 15), session=session, cache=cache
+    ) == []
+    assert nfl.fetch_range(
+        dt.date(2026, 2, 16), dt.date(2026, 2, 22), session=session, cache=cache
+    ) == []
+
+    assert sum(url == nfl.NFLVERSE_URL for url in session.urls) == 1
+
+
 def test_nflverse_does_not_treat_unfinalized_scores_as_live_results():
     csv_payload = (
         "game_id,gameday,gametime,away_team,home_team,away_score,home_score,result\n"
@@ -95,3 +119,20 @@ def test_nflverse_does_not_treat_unfinalized_scores_as_live_results():
     )
     assert games[0]["status"]["type"]["state"] == "pre"
     assert games[0]["scores"] == {"away": None, "home": None}
+
+
+def test_nflverse_tbd_kickoff_stays_on_its_gameday():
+    csv_payload = (
+        "game_id,gameday,gametime,away_team,home_team,away_score,home_score,result\n"
+        "tbd,2026-09-10,,CHI,GB,,,\n"
+    )
+
+    games = nfl._nflverse_games(
+        Session([Response(text=csv_payload)]),
+        dt.date(2026, 9, 10),
+        dt.date(2026, 9, 10),
+    )
+
+    kickoff = dt.datetime.fromisoformat(games[0]["date"].replace("Z", "+00:00"))
+    assert kickoff.astimezone(nfl.CENTRAL_TIME).date() == dt.date(2026, 9, 10)
+    assert games[0]["status"]["type"]["description"] == "TBD"
