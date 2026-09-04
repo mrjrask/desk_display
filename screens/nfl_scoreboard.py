@@ -74,8 +74,6 @@ TITLE_GAP           = _scale_y(8)
 BLOCK_SPACING       = _scale_y(10)
 SCORE_ROW_H         = _scale_y(56)
 STATUS_ROW_H        = _scale_y(18)
-REQUEST_TIMEOUT     = 10
-FETCH_CACHE_TTL_SECONDS = 60
 SUPER_BOWL_LOGO_GAP = _scale_y(6)
 SUPER_BOWL_DATE     = (2, 8)  # Feb 8
 
@@ -495,6 +493,18 @@ def _fetch_games_for_date(day: datetime.date) -> list[dict]:
     scoreboard periods individually, then cache and aggregate them locally.
     """
 
+    from services.sports.nfl import fetch_range
+
+    games = _hydrate_games(
+        fetch_range(start, end, session=_SESSION, cache=_GAMES_CACHE)
+    )
+    games = [
+        game
+        for game in games
+        if isinstance(game.get("_start_local"), datetime.datetime)
+        and start <= game["_start_local"].date() <= end
+    ]
+    return [game for game in games if not _is_pro_bowl_game(game)]
     cache_key = (day, "espn_nfl_scoreboard")
     now = time.monotonic()
     cached = _GAMES_CACHE.get(cache_key)

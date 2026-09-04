@@ -199,9 +199,12 @@ Fields used include game status, clock/period, team IDs, team tricode values, sc
 | Use | Endpoint |
 | --- | --- |
 | ESPN NFL scoreboard | `https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard` |
+| ESPN Core/CDN schedule fallback | `https://cdn.espn.com/core/nfl/schedule` |
+| nflverse schedules/completed-results fallback | `https://raw.githubusercontent.com/nflverse/nfldata/master/data/games.csv` |
 | NFL standings CSV | `https://raw.githubusercontent.com/nflverse/nfldata/master/data/standings.csv` |
 
 Fields used include game status, team records, scores, standings ranks, wins, losses, ties, streaks, and split records.
+All NFL providers above are free and require no API key. nflverse is used only for schedules and completed results; live clocks and immediate score updates remain ESPN-sourced.
 
 ### NCAAM
 

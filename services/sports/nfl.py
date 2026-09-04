@@ -1,26 +1,257 @@
-"""NFL scoreboard fetch service."""
+"""Free, no-key NFL scoreboard providers and payload normalization."""
 
 from __future__ import annotations
 
+import csv
 import datetime as dt
+import io
+import logging
+import time
+import urllib.parse
+from collections.abc import Iterable
+from typing import Any
+from zoneinfo import ZoneInfo
 
 from config import CENTRAL_TIME
-from screens.nfl_scoreboard import _fetch_games_for_week, _fetch_next_games
+from services.http_client import get_session
+
+ESPN_SITE_URL = "https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard"
+ESPN_CDN_URL = "https://cdn.espn.com/core/nfl/schedule"
+NFLVERSE_URL = "https://raw.githubusercontent.com/nflverse/nfldata/master/data/games.csv"
+NFLVERSE_TIME_ZONE = ZoneInfo("America/New_York")
+REQUEST_TIMEOUT = 10
+FETCH_CACHE_TTL_SECONDS = 60
+
+_SESSION = get_session("nfl")
+_RANGE_CACHE: dict[tuple[dt.date, dt.date], tuple[float, list[dict[str, Any]]]] = {}
+
+
+class InvalidProviderPayload(ValueError):
+    """Raised when a provider responds, but not with its documented container."""
+
+
+def _request_json(session: Any, url: str, **params: Any) -> dict[str, Any]:
+    if params:
+        url = f"{url}?{urllib.parse.urlencode(params)}"
+    response = session.get(url, timeout=REQUEST_TIMEOUT)
+    response.raise_for_status()
+    payload = response.json()
+    if not isinstance(payload, dict):
+        raise InvalidProviderPayload(f"{url} returned a non-object payload")
+    return payload
+
+
+def _event_to_game(event: dict[str, Any]) -> dict[str, Any] | None:
+    """Convert a Site API/CDN event into the single renderer contract."""
+    competitions = event.get("competitions")
+    if (
+        not isinstance(competitions, list)
+        or not competitions
+        or not isinstance(competitions[0], dict)
+    ):
+        return None
+    competition = competitions[0]
+    competitors = competition.get("competitors")
+    status = competition.get("status") or event.get("status")
+    if not isinstance(competitors, list) or not isinstance(status, dict):
+        return None
+    event_id = event.get("id") or competition.get("id")
+    start = event.get("date") or competition.get("date")
+    if event_id is None or not isinstance(start, str):
+        return None
+
+    normalized_competitors: list[dict[str, Any]] = []
+    scores: dict[str, Any] = {}
+    for raw in competitors:
+        if not isinstance(raw, dict) or raw.get("homeAway") not in {"home", "away"}:
+            continue
+        side = dict(raw)
+        score = side.get("score")
+        if isinstance(score, dict):
+            score = score.get("displayValue") or score.get("value")
+        side["score"] = score
+        normalized_competitors.append(side)
+        scores[str(side["homeAway"])] = score
+    if len(normalized_competitors) < 2:
+        return None
+    return {
+        "event_id": str(event_id),
+        "id": str(event_id),
+        "start_time": start,
+        "date": start,
+        "event_name": event.get("name") or event.get("shortName") or "NFL game",
+        "name": event.get("name") or event.get("shortName") or "NFL game",
+        "shortName": event.get("shortName") or event.get("name") or "NFL game",
+        "competitors": normalized_competitors,
+        "scores": scores,
+        "status": status,
+        "_event_date": start,
+        "_event_name": event.get("name"),
+        "_event_short_name": event.get("shortName"),
+    }
+
+
+def normalize_espn_site(payload: dict[str, Any]) -> list[dict[str, Any]]:
+    events = payload.get("events")
+    if not isinstance(events, list):
+        raise InvalidProviderPayload("ESPN Site payload has no events list")
+    return _normalize_events(events)
+
+
+def normalize_espn_cdn(payload: dict[str, Any]) -> list[dict[str, Any]]:
+    """Normalize CDN schedule payloads (and its occasional events variant)."""
+    if isinstance(payload.get("events"), list):
+        return _normalize_events(payload["events"])
+    schedule = (payload.get("content") or {}).get("schedule")
+    if not isinstance(schedule, dict):
+        raise InvalidProviderPayload("ESPN CDN payload has no schedule")
+    events: list[dict[str, Any]] = []
+    for day in schedule.values():
+        if isinstance(day, dict):
+            # The CDN currently calls these ``games`` while older/alternate
+            # schedule responses call them ``events``. Support both shapes.
+            day_games = day.get("games")
+            if not isinstance(day_games, list):
+                day_games = day.get("events")
+            if isinstance(day_games, list):
+                events.extend(day_games)
+    return _normalize_events(events)
+
+
+def _normalize_events(events: Iterable[Any]) -> list[dict[str, Any]]:
+    unique: dict[str, dict[str, Any]] = {}
+    for event in events:
+        game = _event_to_game(event) if isinstance(event, dict) else None
+        if game is not None:
+            unique.setdefault(game["id"], game)
+    return list(unique.values())
+
+
+def _games_in_range(
+    games: Iterable[dict[str, Any]], start: dt.date, end: dt.date
+) -> list[dict[str, Any]]:
+    filtered: list[dict[str, Any]] = []
+    for game in games:
+        value = game.get("date")
+        try:
+            event_day = (
+                dt.datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+                .astimezone(CENTRAL_TIME)
+                .date()
+            )
+        except (TypeError, ValueError):
+            continue
+        if start <= event_day <= end:
+            filtered.append(game)
+    return filtered
+
+
+def _nflverse_games(session: Any, start: dt.date, end: dt.date) -> list[dict[str, Any]]:
+    response = session.get(NFLVERSE_URL, timeout=REQUEST_TIMEOUT)
+    response.raise_for_status()
+    rows = csv.DictReader(io.StringIO(response.text))
+    required_columns = {"game_id", "gameday", "away_team", "home_team", "result"}
+    if not rows.fieldnames or not required_columns.issubset(rows.fieldnames):
+        raise InvalidProviderPayload("nflverse games CSV has unexpected columns")
+    games: list[dict[str, Any]] = []
+    for row in rows:
+        try:
+            day = dt.date.fromisoformat(row["gameday"])
+            local_start = dt.datetime.combine(
+                day,
+                dt.time.fromisoformat(row.get("gametime") or "00:00"),
+                tzinfo=NFLVERSE_TIME_ZONE,
+            )
+        except (TypeError, ValueError):
+            continue
+        if not start <= day <= end:
+            continue
+        # nflverse is intentionally not a live provider. Its result column is
+        # the completion signal; ignore any transient scores until it is set.
+        completed = bool((row.get("result") or "").strip())
+        away_score = (row.get("away_score") or None) if completed else None
+        home_score = (row.get("home_score") or None) if completed else None
+        start_time = local_start.astimezone(dt.UTC).isoformat().replace("+00:00", "Z")
+        event = {
+            "id": row["game_id"],
+            "date": start_time,
+            "name": f"{row['away_team']} at {row['home_team']}",
+            "shortName": f"{row['away_team']} @ {row['home_team']}",
+            "competitions": [{
+                "id": row["game_id"],
+                "competitors": [
+                    {
+                        "homeAway": "away",
+                        "team": {"abbreviation": row["away_team"]},
+                        "score": away_score,
+                    },
+                    {
+                        "homeAway": "home",
+                        "team": {"abbreviation": row["home_team"]},
+                        "score": home_score,
+                    },
+                ],
+                "status": {"type": {
+                    "state": "post" if completed else "pre",
+                    "completed": completed,
+                    "description": "Final" if completed else "Scheduled",
+                    "shortDetail": "Final" if completed else "Scheduled",
+                }},
+            }],
+        }
+        game = _event_to_game(event)
+        if game:
+            games.append(game)
+    return list({game["id"]: game for game in games}.values())
+
+
+def fetch_range(start: dt.date, end: dt.date, *, session: Any = None,
+                cache: dict | None = None) -> list[dict[str, Any]]:
+    """Fetch a range in priority order, retaining stale success on total failure."""
+    if end < start:
+        return []
+    session = session or _SESSION
+    active_cache = _RANGE_CACHE if cache is None else cache
+    key = (start, end) if cache is None else (start, f"nfl_providers:{end.isoformat()}")
+    now = time.monotonic()
+    cached = active_cache.get(key)
+    if cached and now - cached[0] < FETCH_CACHE_TTL_SECONDS:
+        return cached[1]
+
+    providers = (
+        ("ESPN Site", lambda: _games_in_range(normalize_espn_site(_request_json(
+            session, ESPN_SITE_URL, limit=100, dates=f"{start:%Y%m%d}-{end:%Y%m%d}")), start, end)),
+        ("ESPN CDN", lambda: _games_in_range(normalize_espn_cdn(_request_json(
+            session, ESPN_CDN_URL, xhr=1, year=start.year,
+            dates=f"{start:%Y%m%d}-{end:%Y%m%d}")), start, end)),
+        ("nflverse", lambda: _nflverse_games(session, start, end)),
+    )
+    for name, provider in providers:
+        try:
+            games = provider()
+            if not games:
+                raise InvalidProviderPayload("unexpectedly returned no events")
+            active_cache[key] = (now, games)
+            return games
+        except Exception as exc:
+            logging.warning("NFL provider %s failed: %s", name, exc)
+    if cached:
+        logging.warning("All NFL providers failed; retaining stale cached range")
+        return cached[1]
+    return []
 
 
 def fetch_week_scoreboard(*, now: dt.datetime | None = None) -> list[dict]:
-    games = _fetch_games_for_week(now)
-    return games if isinstance(games, list) else []
+    from screens.nfl_scoreboard import _fetch_games_for_week
+    return _fetch_games_for_week(now)
 
 
 def fetch_next_scoreboard(*, start_date: dt.date, max_days: int = 370) -> list[dict]:
-    games = _fetch_next_games(start_date, max_days=max_days)
-    return games if isinstance(games, list) else []
+    from screens.nfl_scoreboard import _fetch_next_games
+    return _fetch_next_games(start_date, max_days=max_days)
 
 
 def fetch_scoreboard(*, now: dt.datetime | None = None) -> list[dict]:
     current_now = now or dt.datetime.now(CENTRAL_TIME)
     games = fetch_week_scoreboard(now=current_now)
-    if games:
-        return games
-    return fetch_next_scoreboard(start_date=current_now.date())
+    return games or fetch_next_scoreboard(start_date=current_now.date())
