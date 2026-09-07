@@ -382,7 +382,17 @@ def _fetch_nflverse_schedule(
         except ValueError:
             continue
         game_time = (row.get("gametime") or "00:00").strip()
-        event_date = f"{game_day.isoformat()}T{game_time}:00Z"
+        try:
+            local_start = dt.datetime.combine(
+                game_day,
+                dt.time.fromisoformat(game_time),
+                tzinfo=NFLVERSE_TIME_ZONE,
+            )
+        except ValueError:
+            continue
+        event_date = (
+            local_start.astimezone(dt.UTC).isoformat().replace("+00:00", "Z")
+        )
         away = (row.get("away_team") or "").strip()
         home = (row.get("home_team") or "").strip()
         game_id = row.get("game_id") or row.get("old_game_id")
@@ -436,11 +446,12 @@ def fetch_range(
 ) -> list[dict]:
     """Fetch an inclusive NFL range with ESPN CDN and nflverse fallbacks.
 
-    When ``failed_providers`` is supplied, providers that raise are added to
-    it and skipped on later calls.  Discovery scans can therefore share the
-    set across range windows instead of repeatedly waiting on an unavailable
-    fallback.  Empty responses remain eligible for later windows because an
-    empty week is a valid response, not a provider failure.
+    When ``failed_providers`` is supplied, fallback providers that raise are
+    added to it and skipped on later calls.  Discovery scans can therefore
+    share the set across range windows instead of repeatedly waiting on an
+    unavailable fallback.  The primary Site provider is retried in every
+    window, and empty responses remain eligible because an empty week is a
+    valid response rather than a provider failure.
     """
 
     if end < start:
@@ -476,7 +487,7 @@ def fetch_range(
             games = fetch()
         except Exception as exc:
             logging.warning("Failed to fetch NFL scoreboard from %s: %s", provider_name, exc)
-            if failed_providers is not None:
+            if failed_providers is not None and provider_name != "ESPN Site":
                 failed_providers.add(provider_name)
             continue
         successful_response = True

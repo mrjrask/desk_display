@@ -133,6 +133,49 @@ def test_range_skips_providers_that_failed_in_an_earlier_window(dates):
     assert session.urls[-1].startswith(nfl.ESPN_SITE_URL)
 
 
+def test_range_retries_primary_after_an_earlier_window_failure(dates):
+    failures = set()
+    session = Session(
+        [
+            Response(error=True),
+            Response({"events": []}),
+            Response(text=""),
+            Response(fixture("nfl_espn_site.json")),
+        ]
+    )
+
+    assert nfl.fetch_range(
+        *dates, session=session, cache={}, failed_providers=failures
+    ) == []
+    next_week = tuple(day + dt.timedelta(days=7) for day in dates)
+    games = nfl.fetch_range(
+        *next_week, session=session, cache={}, failed_providers=failures
+    )
+
+    assert [game["id"] for game in games] == ["401"]
+    assert failures == set()
+    assert session.urls[-1].startswith(nfl.ESPN_SITE_URL)
+
+
+def test_nflverse_schedule_converts_eastern_kickoff_to_utc():
+    schedule = nfl._fetch_nflverse_schedule(
+        session=Session(
+            [
+                Response(
+                    text=(
+                        "game_id,gameday,gametime,away_team,home_team,"
+                        "away_score,home_score\n"
+                        "week-one,2026-09-10,20:20,DAL,PHI,,\n"
+                    )
+                )
+            ]
+        ),
+        cache={},
+    )
+
+    assert schedule[0]["_event_date"] == "2026-09-11T00:20:00Z"
+
+
 def test_nflverse_does_not_treat_unfinalized_scores_as_live_results():
     csv_payload = (
         "game_id,gameday,gametime,away_team,home_team,away_score,home_score,result\n"
