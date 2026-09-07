@@ -132,6 +132,13 @@ def test_bears_next_game_reads_same_config_schedule_as_schedule_screen(monkeypat
     assert captured["schedule"] == schedule
 
 
+def test_bears_next_week_and_date_are_raised_ten_pixels():
+    bottom_h = 24
+    previous_bottom_y = config.HEIGHT - bottom_h - config.BEARS_BOTTOM_MARGIN
+
+    assert draw_bears_schedule._bears_next_bottom_y(bottom_h, False) == previous_bottom_y - 10
+
+
 def test_next_bears_game_uses_tbd_preseason_before_dated_regular_season():
     schedule = [
         {
