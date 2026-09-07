@@ -62,6 +62,15 @@
     #feed > img.is-copy-error {
       filter: brightness(0.6) saturate(3) hue-rotate(-50deg);
     }
+    #feed.is-stale > img {
+      filter: grayscale(100%);
+    }
+    #feed.is-stale > img.is-copy-success {
+      filter: grayscale(100%) brightness(1.5);
+    }
+    #feed.is-stale > img.is-copy-error {
+      filter: grayscale(100%) brightness(0.6);
+    }
   </style>
   {% include "_feed_ticker.html" %}
 </head>
@@ -96,7 +105,7 @@
       {{ service_status.summary }}
     {% endif %}
   </section>
-  <main id="feed">
+  <main id="feed"{% if display_status.is_stale %} class="is-stale"{% endif %}>
     {% for screen in screens %}
       {% if screen.ticker %}
       <div
@@ -152,6 +161,7 @@
           displayStatusBanner.textContent = "Display heartbeat unavailable.";
         }
         displayStatusBanner.classList.toggle("is-stale", Boolean(status.is_stale));
+        feed.classList.toggle("is-stale", Boolean(status.is_stale));
       }
       if (serviceStatusBanner && payload.service_status) {
         const serviceStatus = payload.service_status;

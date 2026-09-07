@@ -179,6 +179,10 @@
       height: auto;
       display: block;
     }
+    .preview-button.is-stale img,
+    #overlayImage.is-stale {
+      filter: grayscale(100%);
+    }
     .overlay {
       position: fixed;
       inset: 0;
@@ -344,7 +348,7 @@
       <div class="preview">
         {% if screen.path %}
           <button
-            class="preview-button"
+            class="preview-button{% if screen.is_stale %} is-stale{% endif %}"
             type="button"
             data-full-src="{{ url_for('screenshot_file', relative_path=screen.path) }}"
             data-base-src="{{ url_for('screenshot_file', relative_path=screen.path) }}"
@@ -402,6 +406,7 @@
       }
       currentOverlayIndex = normalized;
       overlayImage.src = source;
+      overlayImage.classList.toggle("is-stale", buttons[normalized].classList.contains("is-stale"));
       const singleImage = buttons.length <= 1;
       overlayPrev.classList.toggle("is-hidden", singleImage);
       overlayNext.classList.toggle("is-hidden", singleImage);
@@ -419,6 +424,7 @@
       overlay.classList.remove("is-visible");
       overlay.setAttribute("aria-hidden", "true");
       overlayImage.removeAttribute("src");
+      overlayImage.classList.remove("is-stale");
       currentOverlayIndex = -1;
     }
 
@@ -581,6 +587,7 @@
 
               if (button && image) {
                 button.dataset.fullSrc = fullSrc;
+                button.classList.toggle("is-stale", Boolean(entry.is_stale));
                 image.src = fullSrc;
                 bindPreviewButton(button);
               }

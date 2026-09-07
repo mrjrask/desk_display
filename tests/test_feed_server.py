@@ -105,6 +105,26 @@ def test_upload_then_feed_page_and_api_reflect_screenshot(monkeypatch, tmp_path)
     assert "1 screen" in index_html
 
 
+def test_feed_source_page_greyscales_screenshots_when_heartbeat_is_stale(monkeypatch, tmp_path):
+    feed_server = _reload_feed_server(monkeypatch, tmp_path)
+    current_dir = tmp_path / "hyper" / "current"
+    current_dir.mkdir(parents=True)
+    (current_dir / "date.png").write_bytes(_png_bytes())
+    monkeypatch.setattr(
+        feed_server,
+        "_load_source_display_status",
+        lambda _source: {"screen_id": "date", "is_stale": True},
+    )
+
+    response = feed_server.app.test_client().get("/feed/hyper")
+    html = response.get_data(as_text=True)
+
+    assert response.status_code == 200
+    assert '<main id="feed" class="is-stale">' in html
+    assert "#feed.is-stale > img" in html
+    assert 'feed.classList.toggle("is-stale", Boolean(status.is_stale));' in html
+
+
 def test_feed_sources_api_reflects_screen_count_and_heartbeat(monkeypatch, tmp_path):
     feed_server = _reload_feed_server(monkeypatch, tmp_path)
     client = feed_server.app.test_client()
