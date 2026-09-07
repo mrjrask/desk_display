@@ -515,33 +515,23 @@ def _fetch_games_for_bulk_range(
     if cached and (now - cached[0]) < FETCH_CACHE_TTL_SECONDS:
         return cached[1]
 
-    dates = f"{start.strftime('%Y%m%d')}-{end.strftime('%Y%m%d')}"
-    url = (
-        "https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard"
-        f"?limit=100&dates={dates}"
-    )
     try:
-        response = _SESSION.get(url, timeout=REQUEST_TIMEOUT)
-        response.raise_for_status()
-        data = response.json()
+        # Use the shared provider chain here too.  The Site API can return a
+        # valid but empty date-range response before the upcoming regular
+        # season (notably when Week 1 is the next NFL week).  Treating that as
+        # authoritative made the discovery scan miss games that were already
+        # available from ESPN's CDN or nflverse schedule.
+        from services.sports.nfl import fetch_range
+
+        raw_games = fetch_range(
+            start,
+            end,
+            session=_SESSION,
+            cache=_GAMES_CACHE,
+        )
     except Exception as exc:
         logging.error("Failed to fetch NFL scoreboard range: %s", exc)
         return []
-
-    raw_games: list[dict] = []
-    for event in data.get("events", []) or []:
-        event_date = event.get("date")
-        local_start = _timestamp_to_local(event_date)
-        if not local_start or not start <= local_start.date() <= end:
-            continue
-        competitions = event.get("competitions") or []
-        if not competitions:
-            continue
-        comp = dict(competitions[0] or {})
-        comp["_event_date"] = event_date
-        comp["_event_name"] = event.get("name")
-        comp["_event_short_name"] = event.get("shortName")
-        raw_games.append(comp)
 
     games = [game for game in _hydrate_games(raw_games) if not _is_pro_bowl_game(game)]
     _GAMES_CACHE[cache_key] = (now, games)
