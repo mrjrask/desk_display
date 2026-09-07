@@ -292,6 +292,31 @@ def test_next_games_uses_provider_fallback_when_site_range_is_empty(monkeypatch)
     assert [game["id"] for game in games] == ["week-one-opener"]
 
 
+def test_bulk_range_reuses_successful_cached_result(monkeypatch):
+    """A successful discovery range remains usable on the next refresh."""
+
+    calls = 0
+    discovered = [{"id": "cached-opener"}]
+
+    def fetch_range(start, end, *, session, cache):
+        nonlocal calls
+        calls += 1
+        return discovered
+
+    monkeypatch.setattr("services.sports.nfl.fetch_range", fetch_range)
+    monkeypatch.setattr(nfl_scoreboard, "_hydrate_games", lambda games: games)
+    monkeypatch.setattr(nfl_scoreboard, "_GAMES_CACHE", {})
+    start = datetime.date(2026, 9, 7)
+    end = datetime.date(2026, 9, 13)
+
+    first = nfl_scoreboard._fetch_games_for_bulk_range(start, end)
+    second = nfl_scoreboard._fetch_games_for_bulk_range(start, end)
+
+    assert first == discovered
+    assert second == discovered
+    assert calls == 1
+
+
 def test_next_games_year_long_fallback_uses_bounded_range_requests(monkeypatch):
     session = _install_fake_session(monkeypatch, {})
     nfl_scoreboard._NO_UPCOMING_GAMES_COOLDOWN.reset()

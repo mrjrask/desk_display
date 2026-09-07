@@ -51,6 +51,7 @@ from screens.scoreboard_components import (
     final_results as _final_results,
 )
 from services.http_client import DayScanCooldown, get_session
+from services.sports.nfl import FETCH_CACHE_TTL_SECONDS
 from utils import (
     ScreenImage,
     clear_display,
