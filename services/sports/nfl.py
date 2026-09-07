@@ -485,6 +485,18 @@ def fetch_week_scoreboard(*, now: dt.datetime | None = None) -> list[dict]:
     return _fetch_games_for_week(now)
 
 
+def fetch_week_scoreboard_result(*, now: dt.datetime | None = None) -> WeeklyResult:
+    """Return the selected display week together with its freshness metadata."""
+
+    from screens import nfl_scoreboard
+
+    games = nfl_scoreboard._fetch_games_for_week(now)
+    result = nfl_scoreboard._LAST_WEEKLY_RESULT
+    if isinstance(result, WeeklyResult) and result.games == games:
+        return result
+    return WeeklyResult(games=games)
+
+
 def fetch_next_scoreboard(*, start_date: dt.date, max_days: int = 370) -> list[dict]:
     from screens.nfl_scoreboard import _fetch_next_games
     return _fetch_next_games(start_date, max_days=max_days)

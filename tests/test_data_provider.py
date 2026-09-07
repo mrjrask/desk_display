@@ -3,6 +3,7 @@
 from concurrent.futures import ThreadPoolExecutor
 
 from services.data_provider import DataProvider
+from services.sports.nfl import WeeklyResult
 
 
 def test_read_cached_keeps_stale_value_when_fetch_returns_none():
@@ -39,7 +40,10 @@ def test_read_cached_does_not_cache_none_without_existing_value():
 def test_read_sports_payloads_excludes_wbc_scoreboard(monkeypatch):
     provider = DataProvider()
 
-    monkeypatch.setattr("services.data_provider.fetch_nfl_week_scoreboard", lambda now=None: [])
+    monkeypatch.setattr(
+        "services.data_provider.fetch_nfl_week_scoreboard_result",
+        lambda now=None: WeeklyResult(),
+    )
     monkeypatch.setattr("services.data_provider.fetch_nfl_next_scoreboard", lambda start_date, max_days=370: [{"league": "nfl"}])
     monkeypatch.setattr("services.data_provider.fetch_mlb_scoreboard", lambda day=None, now=None: [{"league": "mlb"}])
     monkeypatch.setattr("services.data_provider.fetch_nba_scoreboard", lambda day=None, now=None: [{"league": "nba"}])
@@ -63,7 +67,10 @@ def test_read_sports_payloads_fetches_only_requested_leagues(monkeypatch):
 
         return _fetch
 
-    monkeypatch.setattr("services.data_provider.fetch_nfl_week_scoreboard", _track("nfl"))
+    monkeypatch.setattr(
+        "services.data_provider.fetch_nfl_week_scoreboard_result",
+        lambda now=None: WeeklyResult(games=_track("nfl")()),
+    )
     monkeypatch.setattr("services.data_provider.fetch_nfl_next_scoreboard", _track("nfl"))
     monkeypatch.setattr("services.data_provider.fetch_mlb_scoreboard", _track("mlb"))
     monkeypatch.setattr("services.data_provider.fetch_nba_scoreboard", _track("nba"))
@@ -103,7 +110,10 @@ def test_read_weather_is_safe_under_concurrent_access(monkeypatch):
 def test_read_sports_payloads_is_safe_under_concurrent_access(monkeypatch):
     provider = DataProvider()
 
-    monkeypatch.setattr("services.data_provider.fetch_nfl_week_scoreboard", lambda now=None: [{"league": "nfl"}])
+    monkeypatch.setattr(
+        "services.data_provider.fetch_nfl_week_scoreboard_result",
+        lambda now=None: WeeklyResult(games=[{"league": "nfl"}]),
+    )
     monkeypatch.setattr("services.data_provider.fetch_nfl_next_scoreboard", lambda start_date, max_days=370: [])
     monkeypatch.setattr("services.data_provider.fetch_mlb_scoreboard", lambda day=None, now=None: [{"league": "mlb"}])
     monkeypatch.setattr("services.data_provider.fetch_nba_scoreboard", lambda day=None, now=None: [{"league": "nba"}])
@@ -116,3 +126,16 @@ def test_read_sports_payloads_is_safe_under_concurrent_access(monkeypatch):
 
     for payload in results:
         assert sorted(payload["scoreboards"].keys()) == ["mlb", "nba", "ncaam", "nfl", "nhl", "world_cup"]
+
+
+def test_read_sports_payloads_carries_nfl_stale_metadata(monkeypatch):
+    provider = DataProvider()
+    monkeypatch.setattr(
+        "services.data_provider.fetch_nfl_week_scoreboard_result",
+        lambda now=None: WeeklyResult(games=[{"id": "cached"}], stale=True),
+    )
+
+    payload = provider.read_sports_payloads(ttl_seconds=0, leagues={"nfl"})
+
+    assert payload["scoreboards"]["nfl"] == [{"id": "cached"}]
+    assert payload["scoreboard_metadata"]["nfl"] == {"stale": True}

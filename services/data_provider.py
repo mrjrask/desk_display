@@ -21,8 +21,9 @@ from services.sports.mlb import fetch_scoreboard as fetch_mlb_scoreboard
 from services.sports.nba import fetch_scoreboard as fetch_nba_scoreboard
 from services.sports.ncaam import fetch_scoreboard as fetch_ncaam_scoreboard
 from services.sports.nfl import (
+    WeeklyResult,
     fetch_next_scoreboard as fetch_nfl_next_scoreboard,
-    fetch_week_scoreboard as fetch_nfl_week_scoreboard,
+    fetch_week_scoreboard_result as fetch_nfl_week_scoreboard_result,
 )
 from services.sports.nhl import fetch_scoreboard as fetch_nhl_scoreboard
 from services.sports.world_cup import fetch_scoreboard as fetch_world_cup_scoreboard
@@ -121,7 +122,10 @@ class DataProvider:
             today = now.date()
 
             def _fetch_nfl() -> Any:
-                return fetch_nfl_week_scoreboard(now=now) or fetch_nfl_next_scoreboard(start_date=today)
+                weekly = fetch_nfl_week_scoreboard_result(now=now)
+                if weekly.games:
+                    return weekly
+                return WeeklyResult(games=fetch_nfl_next_scoreboard(start_date=today))
 
             all_tasks: dict[str, Callable[[], Any]] = {
                 "nfl": _fetch_nfl,
@@ -138,8 +142,12 @@ class DataProvider:
             tasks = {league: fetcher for league, fetcher in all_tasks.items() if league in selected_leagues}
 
             scoreboards: dict[str, Any] = {league: [] for league in all_tasks}
+            scoreboard_metadata: dict[str, dict[str, bool]] = {"nfl": {"stale": False}}
             if not tasks:
-                return {"scoreboards": scoreboards}
+                return {
+                    "scoreboards": scoreboards,
+                    "scoreboard_metadata": scoreboard_metadata,
+                }
 
             with ThreadPoolExecutor(max_workers=len(tasks)) as pool:
                 futures = {
@@ -150,7 +158,11 @@ class DataProvider:
                 for league, future in futures.items():
                     try:
                         result = future.result()
-                        scoreboards[league] = result or []
+                        if league == "nfl" and isinstance(result, WeeklyResult):
+                            scoreboards[league] = result.games
+                            scoreboard_metadata[league] = {"stale": result.stale}
+                        else:
+                            scoreboards[league] = result or []
                     except Exception as exc:
                         logging.error("Failed to fetch %s scoreboard payload: %s", league, exc)
 
@@ -163,6 +175,7 @@ class DataProvider:
                     "nhl": scoreboards["nhl"],
                     "world_cup": scoreboards["world_cup"],
                 },
+                "scoreboard_metadata": scoreboard_metadata,
             }
 
         return self._read_cached("sports_payloads", _fetch_payloads, ttl_seconds)

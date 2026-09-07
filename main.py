@@ -1910,6 +1910,7 @@ cache = {
     "cubs":    {"stand":None, "last":None, "last_alt":None, "live":None, "next":None, "next_alt":None, "current_series":None, "next_series":None, "next_home_series":None, "next_home":None, "schedule_covers_today":False},
     "sox":     {"stand":None, "last":None, "last_alt":None, "live":None, "next":None, "next_alt":None, "current_series":None, "next_series":None, "next_home_series":None, "next_home":None, "schedule_covers_today":False},
     "scoreboards": {"nfl": None, "mlb": None, "nba": None, "ncaam": None, "nhl": None},
+    "scoreboard_metadata": {"nfl": {"stale": False}},
 }
 
 _AIR_QUALITY_HISTORY_PATH = str(
@@ -2223,6 +2224,7 @@ def _refresh_scoreboards() -> None:
         leagues=_requested_scoreboard_leagues(),
     ) or {}
     cache["scoreboards"].update(sports_payloads.get("scoreboards") or {})
+    cache["scoreboard_metadata"].update(sports_payloads.get("scoreboard_metadata") or {})
 
 
 def _refresh_scoreboards_fresh() -> None:
@@ -2231,6 +2233,7 @@ def _refresh_scoreboards_fresh() -> None:
         leagues=_requested_scoreboard_leagues(),
     ) or {}
     cache["scoreboards"].update(sports_payloads.get("scoreboards") or {})
+    cache["scoreboard_metadata"].update(sports_payloads.get("scoreboard_metadata") or {})
 
 
 def _is_live_scoreboard_game(game: object) -> bool:
