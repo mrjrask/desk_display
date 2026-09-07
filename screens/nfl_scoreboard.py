@@ -140,6 +140,7 @@ _GAMES_CACHE: dict[tuple[object, ...], tuple[float, list[dict]]] = {}
 NO_UPCOMING_GAMES_COOLDOWN_SECONDS = 30 * 60
 _NO_UPCOMING_GAMES_COOLDOWN = DayScanCooldown(NO_UPCOMING_GAMES_COOLDOWN_SECONDS)
 _SESSION = get_session("nfl")
+_LAST_WEEKLY_RESULT = None
 
 
 def _apply_style_overrides() -> None:
@@ -484,105 +485,123 @@ def _is_pro_bowl_game(game: dict) -> bool:
     return False
 
 
-def _fetch_normalized_range(
-def _fetch_games_for_date(day: datetime.date) -> list[dict]:
-    """Fetch one scoreboard date using ESPN's consistently supported form.
+def _fetch_games_for_date(day: datetime.date):
+    """Return the structured result for one explicitly requested ESPN date."""
 
-    Unlike the other ESPN scoreboards, the NFL endpoint has intermittently
-    returned an empty ``events`` array for inclusive ``YYYYMMDD-YYYYMMDD``
-    date ranges even when each individual date contains games.  Request the
-    scoreboard periods individually, then cache and aggregate them locally.
+    from services.sports.nfl import fetch_week_dates
+
+    result = fetch_week_dates([day], session=_SESSION)
+    result.games = [game for game in _hydrate_games(result.games) if not _is_pro_bowl_game(game)]
+    return result
+
+
+def _fetch_games_for_bulk_range(
+    start: datetime.date,
+    end: datetime.date,
+) -> list[dict]:
+    """Fetch a range in one request for bounded long-horizon discovery.
+
+    ESPN's range responses are not reliable enough to render a display week,
+    so normal week loading still uses the per-day function above.  They are,
+    however, suitable for discovering the next scheduled week without making
+    hundreds of sequential requests during the year-long offseason fallback.
     """
 
-    from services.sports.nfl import fetch_range
+    if end < start:
+        return []
 
-    games = _hydrate_games(
-        fetch_range(start, end, session=_SESSION, cache=_GAMES_CACHE)
-    )
-    games = [
-        game
-        for game in games
-        if isinstance(game.get("_start_local"), datetime.datetime)
-        and start <= game["_start_local"].date() <= end
-    ]
-    return [game for game in games if not _is_pro_bowl_game(game)]
-    cache_key = (day, "espn_nfl_scoreboard")
+    cache_key = (start, end, "espn_nfl_scoreboard_bulk")
     now = time.monotonic()
     cached = _GAMES_CACHE.get(cache_key)
     if cached and (now - cached[0]) < FETCH_CACHE_TTL_SECONDS:
         return cached[1]
 
+    dates = f"{start.strftime('%Y%m%d')}-{end.strftime('%Y%m%d')}"
     url = (
         "https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard"
-        f"?limit=100&dates={day.strftime('%Y%m%d')}"
+        f"?limit=100&dates={dates}"
     )
     try:
         response = _SESSION.get(url, timeout=REQUEST_TIMEOUT)
         response.raise_for_status()
         data = response.json()
     except Exception as exc:
-        logging.error("Failed to fetch NFL scoreboard: %s", exc)
+        logging.error("Failed to fetch NFL scoreboard range: %s", exc)
         return []
 
     raw_games: list[dict] = []
     for event in data.get("events", []) or []:
         event_date = event.get("date")
         local_start = _timestamp_to_local(event_date)
-        if local_start and local_start.date() != day:
+        if not local_start or not start <= local_start.date() <= end:
             continue
         competitions = event.get("competitions") or []
         if not competitions:
             continue
-        comp = competitions[0] or {}
-        comp = dict(comp)
+        comp = dict(competitions[0] or {})
         comp["_event_date"] = event_date
         comp["_event_name"] = event.get("name")
         comp["_event_short_name"] = event.get("shortName")
         raw_games.append(comp)
-    games = _hydrate_games(raw_games)
-    filtered_games = [game for game in games if not _is_pro_bowl_game(game)]
-    _GAMES_CACHE[cache_key] = (now, filtered_games)
-    return filtered_games
+
+    games = [game for game in _hydrate_games(raw_games) if not _is_pro_bowl_game(game)]
+    _GAMES_CACHE[cache_key] = (now, games)
+    return games
 
 
-def _fetch_games_for_bulk_range(
-    start: datetime.date,
-    end: datetime.date,
-) -> list[dict]:
-    from services.sports.nfl import fetch_range
+def _fetch_week_result_from_start(week_start: datetime.date):
+    """Build a complete week, falling back atomically when any date failed."""
 
-    games = _hydrate_games(
-        fetch_range(start, end, session=_SESSION, cache=_GAMES_CACHE)
-    )
-    return [
-        game
-        for game in games
-        if isinstance(game.get("_start_local"), datetime.datetime)
-        and start <= game["_start_local"].date() <= end
-        and not _is_pro_bowl_game(game)
-    ]
+    from services.sports.nfl import WeeklyResult, fetch_espn_week, fetch_week_dates
 
+    global _LAST_WEEKLY_RESULT
+    week_end = _week_end_from_start(week_start)
+    days = [week_start + datetime.timedelta(days=offset) for offset in range(7)]
+    result = fetch_week_dates(days, session=_SESSION)
+    result.games = [game for game in _hydrate_games(result.games) if not _is_pro_bowl_game(game)]
+    cache_key = ("nfl", "last_complete_week")
 
-def _fetch_games_for_date(day: datetime.date) -> list[dict]:
-    return _fetch_normalized_range(day, day)
+    if result.failed_dates:
+        fallback = fetch_espn_week(week_start, week_end, session=_SESSION)
+        fallback.games = [
+            game for game in _hydrate_games(fallback.games) if not _is_pro_bowl_game(game)
+        ]
+        if fallback.failed_dates == 0 and fallback.games:
+            result = WeeklyResult(
+                games=fallback.games,
+                successful_dates=result.successful_dates,
+                failed_dates=result.failed_dates,
+                bye_teams=result.bye_teams,
+            )
+            cached_fallback = WeeklyResult(
+                games=list(fallback.games),
+                successful_dates=1,
+                bye_teams=fallback.bye_teams,
+            )
+            _GAMES_CACHE[cache_key] = (time.monotonic(), cached_fallback)
+        else:
+            cached = _GAMES_CACHE.get(cache_key)
+            if cached:
+                result = WeeklyResult(
+                    games=list(cached[1].games),
+                    successful_dates=result.successful_dates,
+                    failed_dates=result.failed_dates,
+                    bye_teams=cached[1].bye_teams,
+                    stale=True,
+                )
+            else:
+                result.stale = True
+    else:
+        _GAMES_CACHE[cache_key] = (time.monotonic(), result)
 
-
-def _fetch_games_for_bulk_range(
-    start: datetime.date,
-    end: datetime.date,
-) -> list[dict]:
-    return _fetch_normalized_range(start, end)
+    _LAST_WEEKLY_RESULT = result
+    return result
 
 
 def _fetch_week_from_start(week_start: datetime.date) -> list[dict]:
-    games: list[dict] = []
-    day = week_start
-    week_end = _week_end_from_start(week_start)
-    while day <= week_end:
-        games.extend(_fetch_games_for_date(day))
-        day += datetime.timedelta(days=1)
-    games.sort(key=_game_sort_key)
-    return games
+    """Compatibility wrapper for callers that consume only the game list."""
+
+    return _fetch_week_result_from_start(week_start).games
 
 
 def _has_game_on_date(games: Iterable[dict], day: datetime.date) -> bool:
@@ -615,6 +634,10 @@ def _week_cutoff_datetime(week_start: datetime.date, game_count: int) -> datetim
 
 def _fetch_games_for_week(now: Optional[datetime.datetime] = None) -> list[dict]:
     now = now or datetime.datetime.now(CENTRAL_TIME)
+    if now.tzinfo is None:
+        now = now.replace(tzinfo=CENTRAL_TIME)
+    else:
+        now = now.astimezone(CENTRAL_TIME)
     # Neither the regular-season Wednesday cutover nor the playoff-aware
     # game-count cutoff should hide a rescheduled Wednesday game.  Check the
     # ending display week first in every month and retain it for all of its
@@ -677,7 +700,9 @@ def _fetch_next_games(
     return []
 
 
-def _render_scoreboard(games: list[dict], *, show_super_bowl_logo: bool) -> Image.Image:
+def _render_scoreboard(
+    games: list[dict], *, show_super_bowl_logo: bool, stale_data: bool = False
+) -> Image.Image:
     canvas = _compose_canvas(games, show_super_bowl_logo=show_super_bowl_logo)
 
     dummy = Image.new("RGB", (WIDTH, 10), BACKGROUND_COLOR)
@@ -715,6 +740,8 @@ def _render_scoreboard(games: list[dict], *, show_super_bowl_logo: bool) -> Imag
         tx = (WIDTH - tw) // 2
         ty = title_top
     draw.text((tx, ty), TITLE, font=TITLE_FONT, fill=(255, 255, 255))
+    if stale_data:
+        draw.text((scale_value_width(4), title_top), "STALE", font=STATUS_FONT, fill=(255, 180, 0))
 
     img.paste(canvas, (0, content_top))
     return img
@@ -737,7 +764,9 @@ def _scroll_display(display, full_img: Image.Image):
 
 
 # ─── Public API ───────────────────────────────────────────────────────────────
-def render_nfl_scoreboard(display, games: list[dict], transition: bool = False) -> ScreenImage:
+def render_nfl_scoreboard(
+    display, games: list[dict], transition: bool = False, *, stale_data: bool = False
+) -> ScreenImage:
     games = games or []
     from screens.nfl_scoreboard_v2 import (
         MIN_GAMES_FOR_V2_LAYOUT,
@@ -745,7 +774,7 @@ def render_nfl_scoreboard(display, games: list[dict], transition: bool = False) 
         render_nfl_scoreboard_v2,
     )
 
-    if (WIDTH, HEIGHT) not in V2_DISABLED_RESOLUTIONS and len(games) >= MIN_GAMES_FOR_V2_LAYOUT:
+    if not stale_data and (WIDTH, HEIGHT) not in V2_DISABLED_RESOLUTIONS and len(games) >= MIN_GAMES_FOR_V2_LAYOUT:
         return render_nfl_scoreboard_v2(display, games, transition=transition)
 
     _apply_style_overrides()
@@ -771,6 +800,8 @@ def render_nfl_scoreboard(display, games: list[dict], transition: bool = False) 
             tx = (WIDTH - tw) // 2
             ty = title_top
         draw.text((tx, ty), TITLE, font=TITLE_FONT, fill=(255, 255, 255))
+        if stale_data:
+            draw.text((scale_value_width(4), title_top), "STALE", font=STATUS_FONT, fill=(255, 180, 0))
         msg_top = max(ty + th + _scale_y(8), title_top + th + _scale_y(8))
         _center_text(draw, "No games", STATUS_FONT, 0, WIDTH, msg_top, STATUS_ROW_H)
         if transition:
@@ -779,7 +810,9 @@ def render_nfl_scoreboard(display, games: list[dict], transition: bool = False) 
         time.sleep(SCOREBOARD_SCROLL_PAUSE_BOTTOM)
         return ScreenImage(img, displayed=True)
 
-    full_img = _render_scoreboard(games, show_super_bowl_logo=show_super_bowl_logo)
+    full_img = _render_scoreboard(
+        games, show_super_bowl_logo=show_super_bowl_logo, stale_data=stale_data
+    )
     if transition:
         _scroll_display(display, full_img)
         return ScreenImage(full_img, displayed=True)
@@ -797,7 +830,10 @@ def draw_nfl_scoreboard(display, transition: bool = False) -> ScreenImage:
     from services.sports.nfl import fetch_scoreboard
 
     games = fetch_scoreboard()
-    return render_nfl_scoreboard(display, games, transition=transition)
+    stale_data = bool(_LAST_WEEKLY_RESULT and _LAST_WEEKLY_RESULT.stale)
+    return render_nfl_scoreboard(
+        display, games, transition=transition, stale_data=stale_data
+    )
 
 
 if __name__ == "__main__":  # pragma: no cover

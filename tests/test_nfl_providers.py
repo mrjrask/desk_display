@@ -71,6 +71,34 @@ def test_duplicate_event_ids_are_removed():
     assert len(nfl.normalize_espn_site(payload)) == 1
 
 
+def test_weekly_dates_count_one_failure_without_discarding_successes(dates):
+    session = Session([
+        Response(fixture("nfl_espn_site.json")),
+        Response(error=True),
+        Response({"events": []}),
+    ])
+
+    result = nfl.fetch_week_dates(
+        [dates[0], dates[0] + dt.timedelta(days=1), dates[0] + dt.timedelta(days=2)],
+        session=session,
+    )
+
+    assert [game["id"] for game in result.games] == ["401"]
+    assert result.successful_dates == 2
+    assert result.failed_dates == 1
+
+
+def test_weekly_dates_treat_empty_events_as_success(dates):
+    result = nfl.fetch_week_dates(
+        [dates[0], dates[0] + dt.timedelta(days=1)],
+        session=Session([Response({"events": []}), Response({"events": []})]),
+    )
+
+    assert result.games == []
+    assert result.successful_dates == 2
+    assert result.failed_dates == 0
+
+
 def test_stale_cache_is_retained_when_every_provider_fails(dates):
     stale = [{"id": "cached"}]
     cache = {(dates[0], f"nfl_providers:{dates[1].isoformat()}"): (0.0, stale)}

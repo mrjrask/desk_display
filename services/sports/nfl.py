@@ -8,7 +8,8 @@ import io
 import logging
 import time
 import urllib.parse
-from collections.abc import Iterable
+from collections.abc import Iterable, Mapping, MutableMapping
+from dataclasses import dataclass, field
 from typing import Any
 from zoneinfo import ZoneInfo
 
@@ -28,6 +29,84 @@ _RANGE_CACHE: dict[tuple[dt.date, dt.date], tuple[float, list[dict[str, Any]]]] 
 
 class InvalidProviderPayload(ValueError):
     """Raised when a provider responds, but not with its documented container."""
+
+
+@dataclass
+class WeeklyResult:
+    """Outcome of assembling an NFL week from independently fetched dates."""
+
+    games: list[dict[str, Any]] = field(default_factory=list)
+    successful_dates: int = 0
+    failed_dates: int = 0
+    bye_teams: list[str] | None = None
+    stale: bool = False
+
+
+def _event_identity(event: dict[str, Any]) -> str | None:
+    value = event.get("id") or event.get("uid")
+    return str(value) if value is not None else None
+
+
+def _event_start(event: dict[str, Any]) -> float:
+    value = event.get("date")
+    try:
+        return dt.datetime.fromisoformat(str(value).replace("Z", "+00:00")).timestamp()
+    except (TypeError, ValueError):
+        return float("inf")
+
+
+def fetch_week_dates(
+    dates: Iterable[dt.date], *, session: Any = None
+) -> WeeklyResult:
+    """Fetch each ESPN scoreboard date once and report aggregate completeness."""
+
+    session = session or _SESSION
+    unique: dict[str, dict[str, Any]] = {}
+    successful_dates = failed_dates = 0
+    bye_teams: list[str] | None = None
+    for day in dates:
+        try:
+            payload = _request_json(session, ESPN_SITE_URL, dates=f"{day:%Y%m%d}")
+            events = payload.get("events")
+            if not isinstance(events, list):
+                raise InvalidProviderPayload("ESPN Site payload has no events list")
+            if not all(isinstance(event, dict) for event in events):
+                raise InvalidProviderPayload("ESPN Site events contained a non-object")
+            successful_dates += 1
+            if bye_teams is None and isinstance(payload.get("byeTeams"), list):
+                bye_teams = [str(team) for team in payload["byeTeams"]]
+            for event in events:
+                identity = _event_identity(event)
+                if identity is not None:
+                    unique.setdefault(identity, event)
+        except Exception as exc:
+            failed_dates += 1
+            logging.warning("NFL date %s failed: %s", day.isoformat(), exc)
+
+    events = sorted(unique.values(), key=lambda event: (_event_start(event), _event_identity(event) or ""))
+    return WeeklyResult(
+        games=[game for event in events if (game := _event_to_game(event)) is not None],
+        successful_dates=successful_dates,
+        failed_dates=failed_dates,
+        bye_teams=bye_teams,
+    )
+
+
+def fetch_espn_week(
+    start: dt.date, end: dt.date, *, session: Any = None
+) -> WeeklyResult:
+    """Fetch ESPN's explicit whole-week feed without accepting an invalid shape."""
+
+    session = session or _SESSION
+    try:
+        payload = _request_json(
+            session, ESPN_SITE_URL, limit=100, dates=f"{start:%Y%m%d}-{end:%Y%m%d}"
+        )
+        games = _games_in_range(normalize_espn_site(payload), start, end)
+    except Exception as exc:
+        logging.warning("NFL whole-week fallback failed: %s", exc)
+        return WeeklyResult(failed_dates=1)
+    return WeeklyResult(games=games, successful_dates=1)
 
 
 def _request_json(session: Any, url: str, **params: Any) -> dict[str, Any]:
@@ -205,53 +284,6 @@ def _nflverse_games(session: Any, start: dt.date, end: dt.date) -> list[dict[str
     return list({game["id"]: game for game in games}.values())
 
 
-def fetch_range(start: dt.date, end: dt.date, *, session: Any = None,
-                cache: dict | None = None) -> list[dict[str, Any]]:
-    """Fetch a range in priority order, retaining stale success on total failure."""
-    if end < start:
-        return []
-    session = session or _SESSION
-    active_cache = _RANGE_CACHE if cache is None else cache
-    key = (start, end) if cache is None else (start, f"nfl_providers:{end.isoformat()}")
-    now = time.monotonic()
-    cached = active_cache.get(key)
-    if cached and now - cached[0] < FETCH_CACHE_TTL_SECONDS:
-        return cached[1]
-
-    providers = (
-        ("ESPN Site", lambda: _games_in_range(normalize_espn_site(_request_json(
-            session, ESPN_SITE_URL, limit=100, dates=f"{start:%Y%m%d}-{end:%Y%m%d}")), start, end)),
-        ("ESPN CDN", lambda: _games_in_range(normalize_espn_cdn(_request_json(
-            session, ESPN_CDN_URL, xhr=1, year=start.year,
-            dates=f"{start:%Y%m%d}-{end:%Y%m%d}")), start, end)),
-        ("nflverse", lambda: _nflverse_games(session, start, end)),
-    )
-    for name, provider in providers:
-        try:
-            games = provider()
-            if not games:
-                raise InvalidProviderPayload("unexpectedly returned no events")
-            active_cache[key] = (now, games)
-            return games
-        except Exception as exc:
-            logging.warning("NFL provider %s failed: %s", name, exc)
-    if cached:
-        logging.warning("All NFL providers failed; retaining stale cached range")
-        return cached[1]
-    return []
-
-REQUEST_TIMEOUT = 10
-FETCH_CACHE_TTL_SECONDS = 60
-_SITE_SCOREBOARD_URL = (
-    "https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard"
-)
-_CDN_SCOREBOARD_URL = "https://cdn.espn.com/core/nfl/scoreboard"
-_NFLVERSE_SCHEDULE_URL = (
-    "https://github.com/nflverse/nfldata/releases/download/schedules/games.csv"
-)
-_NFLVERSE_SCHEDULE_CACHE_KEY = ("nflverse", "complete_schedule")
-
-
 def _date_parameter(start: dt.date, end: dt.date) -> str:
     first = start.strftime("%Y%m%d")
     return first if start == end else f"{first}-{end.strftime('%Y%m%d')}"
@@ -296,7 +328,10 @@ def _fetch_espn(url: str, dates: str, *, session: Any) -> list[dict]:
         timeout=REQUEST_TIMEOUT,
     )
     response.raise_for_status()
-    return _games_from_events(_events_from_payload(response.json()))
+    payload = response.json()
+    if url.startswith(ESPN_CDN_URL):
+        return normalize_espn_cdn(payload)
+    return _games_from_events(_events_from_payload(payload))
 
 
 def _nflverse_status(row: Mapping[str, str]) -> dict:
@@ -385,16 +420,19 @@ def fetch_range(
     start: dt.date,
     end: dt.date,
     *,
-    session: Any,
-    cache: MutableMapping[tuple[object, ...], tuple[float, list[dict]]],
+    session: Any = None,
+    cache: MutableMapping[tuple[object, ...], tuple[float, list[dict]]] | None = None,
 ) -> list[dict]:
     """Fetch an inclusive NFL range with ESPN CDN and nflverse fallbacks."""
 
     if end < start:
         return []
+    session = session or _SESSION
+    cache = _RANGE_CACHE if cache is None else cache
     cache_key = (start, end, "nfl_scoreboard_range")
+    legacy_cache_key = (start, f"nfl_providers:{end.isoformat()}")
     now = time.monotonic()
-    cached = cache.get(cache_key)
+    cached = cache.get(cache_key) or cache.get(legacy_cache_key)
     if cached and now - cached[0] < FETCH_CACHE_TTL_SECONDS:
         return cached[1]
 
@@ -426,6 +464,9 @@ def fetch_range(
         logging.info("NFL scoreboard from %s was empty; trying fallback", provider_name)
     if successful_response:
         cache[cache_key] = (now, [])
+    elif cached:
+        logging.warning("All NFL providers failed; retaining stale cached range")
+        return cached[1]
     return []
 
 
