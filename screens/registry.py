@@ -1081,12 +1081,16 @@ def build_screen_registry(context: ScreenContext) -> tuple[dict[str, ScreenDefin
     register("bears next", lambda: show_bears_next_game(context.display, transition=True))
     register("bears next season", lambda: show_bears_next_season(context.display, transition=True))
     register("bears next season sched", lambda: show_bears_next_season_sched(context.display, transition=True))
+    nfl_stale = bool(
+        ((context.cache.get("scoreboard_metadata") or {}).get("nfl") or {}).get("stale")
+    )
     register(
         "NFL Scoreboard",
         lambda: render_nfl_scoreboard(
             context.display,
             (context.cache.get("scoreboards") or {}).get("nfl") or [],
             transition=True,
+            stale_data=nfl_stale,
         ),
         available=scoreboards_available,
     )
@@ -1098,9 +1102,10 @@ def build_screen_registry(context: ScreenContext) -> tuple[dict[str, ScreenDefin
                     context.display,
                     (context.cache.get("scoreboards") or {}).get("nfl") or [],
                     transition=True,
+                    stale_data=nfl_stale,
                 )
             )
-            if adafruit_minipitft_layout or waveshare_oled_lcd_hat
+            if adafruit_minipitft_layout or waveshare_oled_lcd_hat or nfl_stale
             else (
                 lambda: render_nfl_scoreboard_v2(
                     context.display,

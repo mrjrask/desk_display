@@ -539,6 +539,34 @@ def test_adafruit_minipitft_routes_scoreboard_v2_ids_to_v1_renderers(monkeypatch
     assert calls == ["nfl_v1", "nhl_v1", "mlb_v1", "nba_v1"]
 
 
+def test_stale_nfl_v2_registration_uses_v1_renderer_with_indicator(monkeypatch):
+    now = datetime.datetime(2024, 7, 1, 12, 0, tzinfo=CENTRAL_TIME)
+    calls: list[tuple[str, dict]] = []
+
+    def _nfl_v1(*_args, **kwargs):
+        calls.append(("nfl_v1", kwargs))
+
+    def _nfl_v2(*_args, **kwargs):
+        calls.append(("nfl_v2", kwargs))
+
+    monkeypatch.setattr(registry_module, "render_nfl_scoreboard", _nfl_v1)
+    monkeypatch.setattr(registry_module, "render_nfl_scoreboard_v2", _nfl_v2)
+    registry, _ = build_screen_registry(
+        _make_context(
+            {"hourly": []},
+            now,
+            cache_updates={
+                "scoreboards": {"nfl": [{"id": "cached"}]},
+                "scoreboard_metadata": {"nfl": {"stale": True}},
+            },
+        )
+    )
+
+    registry["NFL Scoreboard v2"].render()
+
+    assert calls == [("nfl_v1", {"transition": True, "stale_data": True})]
+
+
 def test_waveshare_routes_scoreboard_v2_ids_to_v1_renderers_except_mlb(monkeypatch):
     now = datetime.datetime(2024, 7, 1, 12, 0, tzinfo=CENTRAL_TIME)
     weather = {"hourly": []}

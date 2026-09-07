@@ -53,7 +53,7 @@ def test_primary_success_uses_site_only(dates):
 def test_empty_or_http_failure_primary_uses_cdn(primary, dates):
     session = Session([primary, Response(fixture("nfl_espn_cdn.json"))])
     assert [game["id"] for game in nfl.fetch_range(*dates, session=session, cache={})] == ["402"]
-    assert session.urls[1].startswith(nfl.ESPN_CDN_URL)
+    assert session.urls[1].startswith(nfl._CDN_SCOREBOARD_URL)
 
 
 def test_both_espn_formats_normalize_to_same_contract():
@@ -69,6 +69,34 @@ def test_duplicate_event_ids_are_removed():
     payload = fixture("nfl_espn_site.json")
     payload["events"].append(payload["events"][0])
     assert len(nfl.normalize_espn_site(payload)) == 1
+
+
+def test_weekly_dates_count_one_failure_without_discarding_successes(dates):
+    session = Session([
+        Response(fixture("nfl_espn_site.json")),
+        Response(error=True),
+        Response({"events": []}),
+    ])
+
+    result = nfl.fetch_week_dates(
+        [dates[0], dates[0] + dt.timedelta(days=1), dates[0] + dt.timedelta(days=2)],
+        session=session,
+    )
+
+    assert [game["id"] for game in result.games] == ["401"]
+    assert result.successful_dates == 2
+    assert result.failed_dates == 1
+
+
+def test_weekly_dates_treat_empty_events_as_success(dates):
+    result = nfl.fetch_week_dates(
+        [dates[0], dates[0] + dt.timedelta(days=1)],
+        session=Session([Response({"events": []}), Response({"events": []})]),
+    )
+
+    assert result.games == []
+    assert result.successful_dates == 2
+    assert result.failed_dates == 0
 
 
 def test_stale_cache_is_retained_when_every_provider_fails(dates):

@@ -317,16 +317,22 @@ def _draw_game_pair(
         _draw_single_game(canvas, draw, game2, GAME_WIDTH, top)
 
 
+def _game_pairs(games: list[dict]) -> list[tuple[dict, Optional[dict]]]:
+    """Pair every game without limiting the result to viewport capacity."""
+
+    return [
+        (games[index], games[index + 1] if index + 1 < len(games) else None)
+        for index in range(0, len(games), 2)
+    ]
+
+
 def _compose_canvas(games: list[dict], *, show_super_bowl_logo: bool) -> Image.Image:
     if not games:
         return Image.new("RGB", (WIDTH, HEIGHT), BACKGROUND_COLOR)
 
-    # Calculate pairs
-    pairs = []
-    for i in range(0, len(games), 2):
-        game1 = games[i]
-        game2 = games[i + 1] if i + 1 < len(games) else None
-        pairs.append((game1, game2))
+    # Compose every chronological pair. The viewport is applied only later by
+    # ``scroll_vertical_content``; it must never limit this list.
+    pairs = _game_pairs(games)
 
     # Calculate canvas height
     pair_height = SCORE_ROW_H + STATUS_ROW_H
@@ -416,6 +422,10 @@ def _scroll_display(display, full_img: Image.Image):
 
 
 def render_nfl_scoreboard_v2(display, games: list[dict], transition: bool = False) -> ScreenImage:
+    # Snapshot the complete weekly list once. Do not slice it to the number of
+    # rows that happen to fit in the physical viewport; the full-height canvas
+    # below is responsible for retaining every matchup for scrolling.
+    games = list(games or [])
     if (WIDTH, HEIGHT) in V2_DISABLED_RESOLUTIONS:
         return render_nfl_scoreboard_v1(display, games, transition=transition)
 

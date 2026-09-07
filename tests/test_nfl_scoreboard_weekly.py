@@ -61,11 +61,14 @@ def _event(
 
 
 class _FakeResponse:
-    def __init__(self, payload: dict):
+    def __init__(self, payload: dict, *, error: bool = False):
         self._payload = payload
+        self._error = error
         self.status_code = 200
 
     def raise_for_status(self) -> None:
+        if self._error:
+            raise RuntimeError("HTTP 503")
         return None
 
     def json(self) -> dict:
@@ -157,6 +160,80 @@ def test_fetch_games_for_week_empty_this_week_does_not_fabricate_games(monkeypat
     games = nfl_scoreboard._fetch_games_for_week(now)
 
     assert games == []
+
+
+def test_fetch_games_for_date_preserves_list_contract(monkeypatch):
+    event = _event(
+        event_id="single-date",
+        date="2026-09-04T00:20Z",
+        away="DAL",
+        home="PHI",
+    )
+    _install_fake_session(monkeypatch, {"20260903": [event]})
+
+    games = nfl_scoreboard._fetch_games_for_date(datetime.date(2026, 9, 3))
+
+    assert isinstance(games, list)
+    assert [game["id"] for game in games] == ["single-date"]
+
+
+def test_incomplete_dates_use_nonempty_whole_week_fallback(monkeypatch):
+    event = _event(event_id="fallback", date="2026-09-04T00:20Z", away="DAL", home="PHI")
+
+    class Session:
+        def get(self, url, timeout=None):
+            if "dates=20260904" in url and "-" not in url.rsplit("dates=", 1)[-1]:
+                return _FakeResponse({}, error=True)
+            if "dates=20260903-20260909" in url:
+                return _FakeResponse({"events": [event]})
+            return _FakeResponse({"events": []})
+
+    monkeypatch.setattr(nfl_scoreboard, "_SESSION", Session())
+    monkeypatch.setattr(nfl_scoreboard, "_GAMES_CACHE", {})
+    result = nfl_scoreboard._fetch_week_result_from_start(datetime.date(2026, 9, 3))
+
+    assert [game["id"] for game in result.games] == ["fallback"]
+    assert result.failed_dates == 1
+    assert result.stale is False
+
+
+def test_incomplete_dates_ignore_empty_whole_week_fallback(monkeypatch):
+    class Session:
+        def get(self, url, timeout=None):
+            date_value = url.rsplit("dates=", 1)[-1]
+            if date_value == "20260904":
+                return _FakeResponse({}, error=True)
+            return _FakeResponse({"events": []})
+
+    monkeypatch.setattr(nfl_scoreboard, "_SESSION", Session())
+    monkeypatch.setattr(nfl_scoreboard, "_GAMES_CACHE", {})
+    result = nfl_scoreboard._fetch_week_result_from_start(datetime.date(2026, 9, 3))
+
+    assert result.games == []
+    assert result.stale is True
+
+
+def test_total_failure_retains_last_complete_week(monkeypatch):
+    week_start = datetime.date(2026, 9, 3)
+    cached_event = _event(
+        event_id="cached", date="2026-09-04T00:20Z", away="DAL", home="PHI"
+    )
+    session = _FakeSession({"20260903": [cached_event]})
+    monkeypatch.setattr(nfl_scoreboard, "_SESSION", session)
+    monkeypatch.setattr(nfl_scoreboard, "_GAMES_CACHE", {})
+    complete = nfl_scoreboard._fetch_week_result_from_start(week_start)
+    assert [game["id"] for game in complete.games] == ["cached"]
+
+    class FailedSession:
+        def get(self, url, timeout=None):
+            return _FakeResponse({}, error=True)
+
+    monkeypatch.setattr(nfl_scoreboard, "_SESSION", FailedSession())
+    stale = nfl_scoreboard._fetch_week_result_from_start(week_start)
+
+    assert [game["id"] for game in stale.games] == ["cached"]
+    assert stale.failed_dates == 7
+    assert stale.stale is True
 
 
 def test_fetch_scoreboard_falls_back_to_next_games_when_week_is_empty(monkeypatch):

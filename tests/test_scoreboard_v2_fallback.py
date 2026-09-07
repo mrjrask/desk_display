@@ -34,6 +34,49 @@ def test_nfl_v2_reads_espn_competitors_by_home_away():
     ) == (away, home)
 
 
+def test_nfl_v2_composes_and_scrolls_entire_16_game_week(monkeypatch):
+    games = [{"id": f"event-{index:02d}"} for index in range(16)]
+    composed_ids = []
+    canvas_heights = []
+    scroll_calls = []
+    original_compose = nfl_scoreboard_v2._compose_canvas
+
+    def record_pair(_canvas, _draw, first, second, _top):
+        composed_ids.append(first["id"])
+        if second is not None:
+            composed_ids.append(second["id"])
+
+    def record_compose(all_games, *, show_super_bowl_logo):
+        canvas = original_compose(
+            all_games, show_super_bowl_logo=show_super_bowl_logo
+        )
+        canvas_heights.append(canvas.height)
+        return canvas
+
+    monkeypatch.setattr(nfl_scoreboard_v2, "HEIGHT", 120)
+    monkeypatch.setattr(nfl_scoreboard_v2, "V2_DISABLED_RESOLUTIONS", set())
+    monkeypatch.setattr(nfl_scoreboard_v2, "_apply_style_overrides", lambda: None)
+    monkeypatch.setattr(nfl_scoreboard_v2, "_get_league_logo", lambda: None)
+    monkeypatch.setattr(nfl_scoreboard_v2, "_get_super_bowl_logo", lambda: None)
+    monkeypatch.setattr(nfl_scoreboard_v2, "_draw_game_pair", record_pair)
+    monkeypatch.setattr(nfl_scoreboard_v2, "_compose_canvas", record_compose)
+    monkeypatch.setattr(
+        nfl_scoreboard_v2,
+        "scroll_vertical_content",
+        lambda **kwargs: scroll_calls.append(kwargs),
+    )
+
+    result = nfl_scoreboard_v2.render_nfl_scoreboard_v2(
+        _DisplayStub(), games, transition=False
+    )
+
+    assert composed_ids == [game["id"] for game in games]
+    assert canvas_heights and canvas_heights[0] > nfl_scoreboard_v2.HEIGHT
+    assert result.image.height > nfl_scoreboard_v2.HEIGHT
+    assert len(scroll_calls) == 1
+    assert scroll_calls[0]["content_height"] == result.image.height
+
+
 def test_nhl_v2_uses_v1_renderer_when_fewer_than_six_games(monkeypatch):
     sentinel = object()
 

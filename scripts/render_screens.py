@@ -365,6 +365,7 @@ def build_cache() -> dict[str, object]:
             "ncaam": [],
             "nhl": [],
         },
+        "scoreboard_metadata": {"nfl": {"stale": False}},
         "bears": {"stand": None},
         "hawks": {"last": None, "live": None, "next": None, "next_home": None},
         "wolves": {"last": None, "live": None, "next": None, "next_home": None},
@@ -445,6 +446,7 @@ def build_cache() -> dict[str, object]:
 
     sports_payloads = data_provider.read_sports_payloads(ttl_seconds=0) or {}
     cache["scoreboards"].update(sports_payloads.get("scoreboards") or {})
+    cache["scoreboard_metadata"].update(sports_payloads.get("scoreboard_metadata") or {})
 
     return cache
 
