@@ -432,8 +432,16 @@ def fetch_range(
     *,
     session: Any = None,
     cache: MutableMapping[tuple[object, ...], tuple[float, list[dict]]] | None = None,
+    failed_providers: set[str] | None = None,
 ) -> list[dict]:
-    """Fetch an inclusive NFL range with ESPN CDN and nflverse fallbacks."""
+    """Fetch an inclusive NFL range with ESPN CDN and nflverse fallbacks.
+
+    When ``failed_providers`` is supplied, providers that raise are added to
+    it and skipped on later calls.  Discovery scans can therefore share the
+    set across range windows instead of repeatedly waiting on an unavailable
+    fallback.  Empty responses remain eligible for later windows because an
+    empty week is a valid response, not a provider failure.
+    """
 
     if end < start:
         return []
@@ -462,10 +470,14 @@ def fetch_range(
     )
     successful_response = False
     for provider_name, fetch in providers:
+        if failed_providers is not None and provider_name in failed_providers:
+            continue
         try:
             games = fetch()
         except Exception as exc:
             logging.warning("Failed to fetch NFL scoreboard from %s: %s", provider_name, exc)
+            if failed_providers is not None:
+                failed_providers.add(provider_name)
             continue
         successful_response = True
         if games:

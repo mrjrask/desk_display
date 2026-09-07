@@ -111,6 +111,28 @@ def test_total_provider_failure_without_cache_returns_empty(dates):
     assert nfl.fetch_range(*dates, session=session, cache={}) == []
 
 
+def test_range_skips_providers_that_failed_in_an_earlier_window(dates):
+    failures = set()
+    session = Session([
+        Response({"events": []}),
+        Response(error=True),
+        Response(error=True),
+        Response({"events": []}),
+    ])
+
+    assert nfl.fetch_range(
+        *dates, session=session, cache={}, failed_providers=failures
+    ) == []
+    next_week = tuple(day + dt.timedelta(days=7) for day in dates)
+    assert nfl.fetch_range(
+        *next_week, session=session, cache={}, failed_providers=failures
+    ) == []
+
+    assert failures == {"ESPN CDN", "nflverse"}
+    assert len(session.urls) == 4
+    assert session.urls[-1].startswith(nfl.ESPN_SITE_URL)
+
+
 def test_nflverse_does_not_treat_unfinalized_scores_as_live_results():
     csv_payload = (
         "game_id,gameday,gametime,away_team,home_team,away_score,home_score,result\n"

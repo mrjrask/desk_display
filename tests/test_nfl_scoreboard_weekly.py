@@ -298,7 +298,7 @@ def test_bulk_range_reuses_successful_cached_result(monkeypatch):
     calls = 0
     discovered = [{"id": "cached-opener"}]
 
-    def fetch_range(start, end, *, session, cache):
+    def fetch_range(start, end, *, session, cache, failed_providers=None):
         nonlocal calls
         calls += 1
         return discovered
@@ -315,6 +315,38 @@ def test_bulk_range_reuses_successful_cached_result(monkeypatch):
     assert first == discovered
     assert second == discovered
     assert calls == 1
+
+
+def test_next_games_disables_failed_fallbacks_for_remainder_of_scan(monkeypatch):
+    """A long scan must not retry an unavailable fallback in every window."""
+
+    class Session:
+        def __init__(self):
+            self.urls = []
+
+        def get(self, url, timeout=None):
+            self.urls.append(url)
+            if url.startswith("https://site.api.espn.com"):
+                return _FakeResponse({"events": []})
+            raise RuntimeError("provider unavailable")
+
+    session = Session()
+    monkeypatch.setattr(nfl_scoreboard, "_SESSION", session)
+    monkeypatch.setattr(nfl_scoreboard, "_GAMES_CACHE", {})
+    nfl_scoreboard._NO_UPCOMING_GAMES_COOLDOWN.reset()
+
+    games = nfl_scoreboard._fetch_next_games(
+        datetime.date(2026, 2, 9),
+        max_days=13,
+    )
+
+    assert games == []
+    site_urls = [url for url in session.urls if "site.api.espn.com" in url]
+    cdn_urls = [url for url in session.urls if "cdn.espn.com" in url]
+    nflverse_urls = [url for url in session.urls if "github.com/nflverse" in url]
+    assert len(site_urls) == 2
+    assert len(cdn_urls) == 1
+    assert len(nflverse_urls) == 1
 
 
 def test_next_games_year_long_fallback_uses_bounded_range_requests(monkeypatch):

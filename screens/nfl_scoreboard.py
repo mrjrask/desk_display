@@ -498,6 +498,8 @@ def _fetch_games_for_date(day: datetime.date) -> list[dict]:
 def _fetch_games_for_bulk_range(
     start: datetime.date,
     end: datetime.date,
+    *,
+    failed_providers: set[str] | None = None,
 ) -> list[dict]:
     """Fetch a range in one request for bounded long-horizon discovery.
 
@@ -529,6 +531,7 @@ def _fetch_games_for_bulk_range(
             end,
             session=_SESSION,
             cache=_GAMES_CACHE,
+            failed_providers=failed_providers,
         )
     except Exception as exc:
         logging.error("Failed to fetch NFL scoreboard range: %s", exc)
@@ -662,6 +665,7 @@ def _fetch_next_games(
 
     # Scan a week at a time.  When a window contains an event, return the
     # complete NFL week containing it rather than only that first game's day.
+    failed_providers: set[str] = set()
     for offset in range(0, max_days + 1, 7):
         window_start = start_date + datetime.timedelta(days=offset)
         window_end = min(
@@ -671,7 +675,11 @@ def _fetch_next_games(
         # Discovery can span more than a year after the season ends. Keep it
         # to one request per seven-day window; once a game is found, the
         # aligned display week is reloaded through the reliable daily path.
-        games = _fetch_games_for_bulk_range(window_start, window_end)
+        games = _fetch_games_for_bulk_range(
+            window_start,
+            window_end,
+            failed_providers=failed_providers,
+        )
         if games:
             _NO_UPCOMING_GAMES_COOLDOWN.reset()
             first_start = games[0].get("_start_local")
