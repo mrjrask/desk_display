@@ -221,6 +221,30 @@ def test_nflverse_schedule_does_not_expose_scores_before_result_is_final():
     assert [team["score"] for team in schedule[0]["competitors"]] == [None, None]
 
 
+def test_nflverse_schedule_retains_tbd_kickoff():
+    schedule = nfl._fetch_nflverse(
+        dt.date(2026, 12, 21),
+        dt.date(2026, 12, 27),
+        session=Session(
+            [
+                Response(
+                    text=(
+                        "game_id,gameday,gametime,away_team,home_team,"
+                        "away_score,home_score,result\n"
+                        "flex-game,2026-12-27,TBD,CHI,GB,,,\n"
+                    )
+                )
+            ]
+        ),
+        cache={},
+    )
+
+    assert [game["id"] for game in schedule] == ["flex-game"]
+    assert schedule[0]["_event_date"] is None
+    assert schedule[0]["_event_gameday"] == "2026-12-27"
+    assert schedule[0]["status"]["type"]["shortDetail"] == "TBD"
+
+
 def test_nflverse_does_not_treat_unfinalized_scores_as_live_results():
     csv_payload = (
         "game_id,gameday,gametime,away_team,home_team,away_score,home_score,result\n"

@@ -683,11 +683,16 @@ def _fetch_next_games(
         if games:
             _NO_UPCOMING_GAMES_COOLDOWN.reset()
             first_start = games[0].get("_start_local")
-            first_day = (
-                first_start.date()
-                if isinstance(first_start, datetime.datetime)
-                else window_start
-            )
+            first_day = window_start
+            if isinstance(first_start, datetime.datetime):
+                first_day = first_start.date()
+            else:
+                try:
+                    first_day = datetime.date.fromisoformat(
+                        str(games[0].get("_event_gameday") or "")
+                    )
+                except ValueError:
+                    pass
             full_week_games = _fetch_week_from_start(_week_start_for_date(first_day))
             # The scan already confirmed these games.  Do not throw them away
             # if the follow-up request for the aligned Thursday-Wednesday week

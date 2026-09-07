@@ -382,7 +382,7 @@ def _fetch_nflverse_schedule(
             game_day = dt.date.fromisoformat(row.get("gameday") or "")
         except ValueError:
             continue
-        game_time = (row.get("gametime") or "00:00").strip()
+        game_time = (row.get("gametime") or "").strip()
         try:
             local_start = dt.datetime.combine(
                 game_day,
@@ -390,14 +390,19 @@ def _fetch_nflverse_schedule(
                 tzinfo=NFLVERSE_TIME_ZONE,
             )
         except ValueError:
-            continue
-        event_date = (
-            local_start.astimezone(dt.UTC).isoformat().replace("+00:00", "Z")
-        )
+            local_start = None
+        event_date = None
+        if local_start is not None:
+            event_date = (
+                local_start.astimezone(dt.UTC).isoformat().replace("+00:00", "Z")
+            )
         away = (row.get("away_team") or "").strip()
         home = (row.get("home_team") or "").strip()
         game_id = row.get("game_id") or row.get("old_game_id")
         completed = bool((row.get("result") or "").strip())
+        status = _nflverse_status(row)
+        if local_start is None:
+            status["type"]["shortDetail"] = "TBD"
         games.append(
             {
                 "id": game_id,
@@ -413,7 +418,7 @@ def _fetch_nflverse_schedule(
                         "score": row.get("home_score") if completed else None,
                     },
                 ],
-                "status": _nflverse_status(row),
+                "status": status,
                 "_event_date": event_date,
                 "_event_gameday": game_day.isoformat(),
                 "_event_name": f"{away} at {home}",
