@@ -113,6 +113,7 @@ DROP_STAGGER = 0.25
 DROP_FRAME_DELAY = 0.01
 BEARS_TEAM_ABBR = "CHI"
 BEARS_SCOREBOARD_CACHE_TTL_SECONDS = 10 * 60
+BEARS_NEXT_BOTTOM_RAISE_PX = 10
 _BEAR_SCORE_CACHE: dict[datetime.date, tuple[float, list[dict[str, Any]]]] = {}
 
 DEFAULT_BEARS_NEXT_SEASON_HOME_OPPONENTS = ("det", "gb", "jax", "min", "ne", "no", "nyj", "phi", "tb")
@@ -259,6 +260,14 @@ def _bears_schedule_games() -> list[dict]:
     return list(config.BEARS_SCHEDULE)
 
 
+def _bears_next_bottom_y(bottom_h: int, hyperpixel_layout: bool) -> int:
+    """Position the week/date block with extra clearance from the bottom edge."""
+    bottom_margin = (
+        config.scale_value(BEARS_BOTTOM_MARGIN) if hyperpixel_layout else BEARS_BOTTOM_MARGIN
+    )
+    return config.HEIGHT - bottom_h - bottom_margin - BEARS_NEXT_BOTTOM_RAISE_PX
+
+
 def show_bears_next_game(display, transition=False):
     game = _next_bears_game_from_schedule(_bears_schedule_games())
     title = "Next for Da Bears:"
@@ -327,10 +336,7 @@ def show_bears_next_game(display, transition=False):
             bottom_h = sum(heights) + (bottom_line_gap * (len(bottom_lines) - 1))
         else:
             bottom_h = 0
-        bottom_margin = (
-            config.scale_value(BEARS_BOTTOM_MARGIN) if hyperpixel_layout else BEARS_BOTTOM_MARGIN
-        )
-        bottom_y = config.HEIGHT - bottom_h - bottom_margin  # keep on-screen
+        bottom_y = _bears_next_bottom_y(bottom_h, hyperpixel_layout)
 
         available_h = max(10, bottom_y - (y_txt + 2))
         if hyperpixel_layout:
