@@ -65,6 +65,7 @@ class _FakeResponse:
         self._payload = payload
         self._error = error
         self.status_code = 200
+        self.text = ""
 
     def raise_for_status(self) -> None:
         if self._error:
@@ -266,6 +267,88 @@ def test_next_games_fallback_returns_the_full_week(monkeypatch):
     assert [game["id"] for game in games] == ["thursday", "sunday"]
 
 
+def test_next_games_uses_provider_fallback_when_site_range_is_empty(monkeypatch):
+    """Week 1 may appear on ESPN's CDN before its Site date-range feed."""
+
+    opener = _event(
+        event_id="week-one-opener",
+        date="2026-09-11T00:20Z",
+        away="DAL",
+        home="PHI",
+    )
+
+    class Session:
+        def get(self, url, timeout=None):
+            if "cdn.espn.com/core/nfl/scoreboard" in url:
+                return _FakeResponse({"events": [opener]})
+            return _FakeResponse({"events": []})
+
+    monkeypatch.setattr(nfl_scoreboard, "_SESSION", Session())
+    monkeypatch.setattr(nfl_scoreboard, "_GAMES_CACHE", {})
+    nfl_scoreboard._NO_UPCOMING_GAMES_COOLDOWN.reset()
+
+    games = nfl_scoreboard._fetch_next_games(datetime.date(2026, 9, 7), max_days=6)
+
+    assert [game["id"] for game in games] == ["week-one-opener"]
+
+
+def test_bulk_range_reuses_successful_cached_result(monkeypatch):
+    """A successful discovery range remains usable on the next refresh."""
+
+    calls = 0
+    discovered = [{"id": "cached-opener"}]
+
+    def fetch_range(start, end, *, session, cache, failed_providers=None):
+        nonlocal calls
+        calls += 1
+        return discovered
+
+    monkeypatch.setattr("services.sports.nfl.fetch_range", fetch_range)
+    monkeypatch.setattr(nfl_scoreboard, "_hydrate_games", lambda games: games)
+    monkeypatch.setattr(nfl_scoreboard, "_GAMES_CACHE", {})
+    start = datetime.date(2026, 9, 7)
+    end = datetime.date(2026, 9, 13)
+
+    first = nfl_scoreboard._fetch_games_for_bulk_range(start, end)
+    second = nfl_scoreboard._fetch_games_for_bulk_range(start, end)
+
+    assert first == discovered
+    assert second == discovered
+    assert calls == 1
+
+
+def test_next_games_disables_failed_fallbacks_for_remainder_of_scan(monkeypatch):
+    """A long scan must not retry an unavailable fallback in every window."""
+
+    class Session:
+        def __init__(self):
+            self.urls = []
+
+        def get(self, url, timeout=None):
+            self.urls.append(url)
+            if url.startswith("https://site.api.espn.com"):
+                return _FakeResponse({"events": []})
+            raise RuntimeError("provider unavailable")
+
+    session = Session()
+    monkeypatch.setattr(nfl_scoreboard, "_SESSION", session)
+    monkeypatch.setattr(nfl_scoreboard, "_GAMES_CACHE", {})
+    nfl_scoreboard._NO_UPCOMING_GAMES_COOLDOWN.reset()
+
+    games = nfl_scoreboard._fetch_next_games(
+        datetime.date(2026, 2, 9),
+        max_days=13,
+    )
+
+    assert games == []
+    site_urls = [url for url in session.urls if "site.api.espn.com" in url]
+    cdn_urls = [url for url in session.urls if "cdn.espn.com" in url]
+    nflverse_urls = [url for url in session.urls if "github.com/nflverse" in url]
+    assert len(site_urls) == 2
+    assert len(cdn_urls) == 1
+    assert len(nflverse_urls) == 1
+
+
 def test_next_games_year_long_fallback_uses_bounded_range_requests(monkeypatch):
     session = _install_fake_session(monkeypatch, {})
     nfl_scoreboard._NO_UPCOMING_GAMES_COOLDOWN.reset()
@@ -273,10 +356,12 @@ def test_next_games_year_long_fallback_uses_bounded_range_requests(monkeypatch):
     games = nfl_scoreboard._fetch_next_games(datetime.date(2026, 2, 9))
 
     assert games == []
-    assert len(session.requested_dates) == 53
+    # Site and CDN each receive one bounded request per window; nflverse's
+    # complete schedule is downloaded once and then reused from the cache.
+    range_requests = [value for value in session.requested_dates if "-" in value]
+    assert len(range_requests) == 106
     assert session.requested_dates[0] == "20260209-20260215"
-    assert session.requested_dates[-1] == "20270208-20270214"
-    assert all("-" in requested_range for requested_range in session.requested_dates)
+    assert range_requests[-1] == "20270208-20270214"
 
 
 def test_next_games_keeps_discovered_games_when_full_week_refetch_fails(monkeypatch):

@@ -345,9 +345,10 @@ def _fetch_espn(url: str, dates: str, *, session: Any) -> list[dict]:
 
 
 def _nflverse_status(row: Mapping[str, str]) -> dict:
-    away_score = (row.get("away_score") or "").strip()
-    home_score = (row.get("home_score") or "").strip()
-    completed = bool(away_score and home_score)
+    # nflverse may publish scores while a game is still in progress.  Its
+    # result column is the authoritative completion signal, matching the
+    # older games.csv parser above.
+    completed = bool((row.get("result") or "").strip())
     return {
         "type": {
             "state": "post" if completed else "pre",
@@ -381,11 +382,27 @@ def _fetch_nflverse_schedule(
             game_day = dt.date.fromisoformat(row.get("gameday") or "")
         except ValueError:
             continue
-        game_time = (row.get("gametime") or "00:00").strip()
-        event_date = f"{game_day.isoformat()}T{game_time}:00Z"
+        game_time = (row.get("gametime") or "").strip()
+        try:
+            local_start = dt.datetime.combine(
+                game_day,
+                dt.time.fromisoformat(game_time),
+                tzinfo=NFLVERSE_TIME_ZONE,
+            )
+        except ValueError:
+            local_start = None
+        event_date = None
+        if local_start is not None:
+            event_date = (
+                local_start.astimezone(dt.UTC).isoformat().replace("+00:00", "Z")
+            )
         away = (row.get("away_team") or "").strip()
         home = (row.get("home_team") or "").strip()
         game_id = row.get("game_id") or row.get("old_game_id")
+        completed = bool((row.get("result") or "").strip())
+        status = _nflverse_status(row)
+        if local_start is None:
+            status["type"]["shortDetail"] = "TBD"
         games.append(
             {
                 "id": game_id,
@@ -393,16 +410,17 @@ def _fetch_nflverse_schedule(
                     {
                         "homeAway": "away",
                         "team": {"abbreviation": away},
-                        "score": row.get("away_score"),
+                        "score": row.get("away_score") if completed else None,
                     },
                     {
                         "homeAway": "home",
                         "team": {"abbreviation": home},
-                        "score": row.get("home_score"),
+                        "score": row.get("home_score") if completed else None,
                     },
                 ],
-                "status": _nflverse_status(row),
+                "status": status,
                 "_event_date": event_date,
+                "_event_gameday": game_day.isoformat(),
                 "_event_name": f"{away} at {home}",
                 "_event_short_name": f"{away} @ {home}",
             }
@@ -422,7 +440,7 @@ def _fetch_nflverse(
     return [
         game
         for game in schedule
-        if start.isoformat() <= str(game.get("_event_date", ""))[:10] <= end.isoformat()
+        if start.isoformat() <= str(game.get("_event_gameday", "")) <= end.isoformat()
     ]
 
 
@@ -432,8 +450,17 @@ def fetch_range(
     *,
     session: Any = None,
     cache: MutableMapping[tuple[object, ...], tuple[float, list[dict]]] | None = None,
+    failed_providers: set[str] | None = None,
 ) -> list[dict]:
-    """Fetch an inclusive NFL range with ESPN CDN and nflverse fallbacks."""
+    """Fetch an inclusive NFL range with ESPN CDN and nflverse fallbacks.
+
+    When ``failed_providers`` is supplied, fallback providers that raise are
+    added to it and skipped on later calls.  Discovery scans can therefore
+    share the set across range windows instead of repeatedly waiting on an
+    unavailable fallback.  The primary Site provider is retried in every
+    window, and empty responses remain eligible because an empty week is a
+    valid response rather than a provider failure.
+    """
 
     if end < start:
         return []
@@ -462,10 +489,14 @@ def fetch_range(
     )
     successful_response = False
     for provider_name, fetch in providers:
+        if failed_providers is not None and provider_name in failed_providers:
+            continue
         try:
             games = fetch()
         except Exception as exc:
             logging.warning("Failed to fetch NFL scoreboard from %s: %s", provider_name, exc)
+            if failed_providers is not None and provider_name != "ESPN Site":
+                failed_providers.add(provider_name)
             continue
         successful_response = True
         if games:

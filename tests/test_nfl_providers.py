@@ -111,6 +111,140 @@ def test_total_provider_failure_without_cache_returns_empty(dates):
     assert nfl.fetch_range(*dates, session=session, cache={}) == []
 
 
+def test_range_skips_providers_that_failed_in_an_earlier_window(dates):
+    failures = set()
+    session = Session([
+        Response({"events": []}),
+        Response(error=True),
+        Response(error=True),
+        Response({"events": []}),
+    ])
+
+    assert nfl.fetch_range(
+        *dates, session=session, cache={}, failed_providers=failures
+    ) == []
+    next_week = tuple(day + dt.timedelta(days=7) for day in dates)
+    assert nfl.fetch_range(
+        *next_week, session=session, cache={}, failed_providers=failures
+    ) == []
+
+    assert failures == {"ESPN CDN", "nflverse"}
+    assert len(session.urls) == 4
+    assert session.urls[-1].startswith(nfl.ESPN_SITE_URL)
+
+
+def test_range_retries_primary_after_an_earlier_window_failure(dates):
+    failures = set()
+    session = Session(
+        [
+            Response(error=True),
+            Response({"events": []}),
+            Response(text=""),
+            Response(fixture("nfl_espn_site.json")),
+        ]
+    )
+
+    assert nfl.fetch_range(
+        *dates, session=session, cache={}, failed_providers=failures
+    ) == []
+    next_week = tuple(day + dt.timedelta(days=7) for day in dates)
+    games = nfl.fetch_range(
+        *next_week, session=session, cache={}, failed_providers=failures
+    )
+
+    assert [game["id"] for game in games] == ["401"]
+    assert failures == set()
+    assert session.urls[-1].startswith(nfl.ESPN_SITE_URL)
+
+
+def test_nflverse_schedule_converts_eastern_kickoff_to_utc():
+    schedule = nfl._fetch_nflverse_schedule(
+        session=Session(
+            [
+                Response(
+                    text=(
+                        "game_id,gameday,gametime,away_team,home_team,"
+                        "away_score,home_score\n"
+                        "week-one,2026-09-10,20:20,DAL,PHI,,\n"
+                    )
+                )
+            ]
+        ),
+        cache={},
+    )
+
+    assert schedule[0]["_event_date"] == "2026-09-11T00:20:00Z"
+
+
+def test_nflverse_range_filters_utc_rollover_by_local_game_day():
+    cache = {}
+    session = Session(
+        [
+            Response(
+                text=(
+                    "game_id,gameday,gametime,away_team,home_team,"
+                    "away_score,home_score,result\n"
+                    "sunday-night,2026-09-13,20:20,CHI,GB,,,\n"
+                )
+            )
+        ]
+    )
+
+    games = nfl._fetch_nflverse(
+        dt.date(2026, 9, 7),
+        dt.date(2026, 9, 13),
+        session=session,
+        cache=cache,
+    )
+
+    assert [game["id"] for game in games] == ["sunday-night"]
+    assert games[0]["_event_date"] == "2026-09-14T00:20:00Z"
+
+
+def test_nflverse_schedule_does_not_expose_scores_before_result_is_final():
+    schedule = nfl._fetch_nflverse_schedule(
+        session=Session(
+            [
+                Response(
+                    text=(
+                        "game_id,gameday,gametime,away_team,home_team,"
+                        "away_score,home_score,result\n"
+                        "live,2026-09-13,13:00,CHI,GB,7,3,\n"
+                    )
+                )
+            ]
+        ),
+        cache={},
+    )
+
+    assert schedule[0]["status"]["type"]["state"] == "pre"
+    assert [team["score"] for team in schedule[0]["competitors"]] == [None, None]
+
+
+def test_nflverse_schedule_retains_tbd_kickoff():
+    schedule = nfl._fetch_nflverse(
+        dt.date(2026, 12, 21),
+        dt.date(2026, 12, 27),
+        session=Session(
+            [
+                Response(
+                    text=(
+                        "game_id,gameday,gametime,away_team,home_team,"
+                        "away_score,home_score,result\n"
+                        "flex-game,2026-12-27,TBD,CHI,GB,,,\n"
+                    )
+                )
+            ]
+        ),
+        cache={},
+    )
+
+    assert [game["id"] for game in schedule] == ["flex-game"]
+    assert schedule[0]["_event_date"] is None
+    assert schedule[0]["_event_gameday"] == "2026-12-27"
+    assert schedule[0]["status"]["type"]["shortDetail"] == "TBD"
+
+
 def test_nflverse_does_not_treat_unfinalized_scores_as_live_results():
     csv_payload = (
         "game_id,gameday,gametime,away_team,home_team,away_score,home_score,result\n"

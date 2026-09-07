@@ -51,6 +51,7 @@ from screens.scoreboard_components import (
     final_results as _final_results,
 )
 from services.http_client import DayScanCooldown, get_session
+from services.sports.nfl import FETCH_CACHE_TTL_SECONDS
 from utils import (
     ScreenImage,
     clear_display,
@@ -497,6 +498,8 @@ def _fetch_games_for_date(day: datetime.date) -> list[dict]:
 def _fetch_games_for_bulk_range(
     start: datetime.date,
     end: datetime.date,
+    *,
+    failed_providers: set[str] | None = None,
 ) -> list[dict]:
     """Fetch a range in one request for bounded long-horizon discovery.
 
@@ -515,33 +518,24 @@ def _fetch_games_for_bulk_range(
     if cached and (now - cached[0]) < FETCH_CACHE_TTL_SECONDS:
         return cached[1]
 
-    dates = f"{start.strftime('%Y%m%d')}-{end.strftime('%Y%m%d')}"
-    url = (
-        "https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard"
-        f"?limit=100&dates={dates}"
-    )
     try:
-        response = _SESSION.get(url, timeout=REQUEST_TIMEOUT)
-        response.raise_for_status()
-        data = response.json()
+        # Use the shared provider chain here too.  The Site API can return a
+        # valid but empty date-range response before the upcoming regular
+        # season (notably when Week 1 is the next NFL week).  Treating that as
+        # authoritative made the discovery scan miss games that were already
+        # available from ESPN's CDN or nflverse schedule.
+        from services.sports.nfl import fetch_range
+
+        raw_games = fetch_range(
+            start,
+            end,
+            session=_SESSION,
+            cache=_GAMES_CACHE,
+            failed_providers=failed_providers,
+        )
     except Exception as exc:
         logging.error("Failed to fetch NFL scoreboard range: %s", exc)
         return []
-
-    raw_games: list[dict] = []
-    for event in data.get("events", []) or []:
-        event_date = event.get("date")
-        local_start = _timestamp_to_local(event_date)
-        if not local_start or not start <= local_start.date() <= end:
-            continue
-        competitions = event.get("competitions") or []
-        if not competitions:
-            continue
-        comp = dict(competitions[0] or {})
-        comp["_event_date"] = event_date
-        comp["_event_name"] = event.get("name")
-        comp["_event_short_name"] = event.get("shortName")
-        raw_games.append(comp)
 
     games = [game for game in _hydrate_games(raw_games) if not _is_pro_bowl_game(game)]
     _GAMES_CACHE[cache_key] = (now, games)
@@ -671,6 +665,7 @@ def _fetch_next_games(
 
     # Scan a week at a time.  When a window contains an event, return the
     # complete NFL week containing it rather than only that first game's day.
+    failed_providers: set[str] = set()
     for offset in range(0, max_days + 1, 7):
         window_start = start_date + datetime.timedelta(days=offset)
         window_end = min(
@@ -680,15 +675,24 @@ def _fetch_next_games(
         # Discovery can span more than a year after the season ends. Keep it
         # to one request per seven-day window; once a game is found, the
         # aligned display week is reloaded through the reliable daily path.
-        games = _fetch_games_for_bulk_range(window_start, window_end)
+        games = _fetch_games_for_bulk_range(
+            window_start,
+            window_end,
+            failed_providers=failed_providers,
+        )
         if games:
             _NO_UPCOMING_GAMES_COOLDOWN.reset()
             first_start = games[0].get("_start_local")
-            first_day = (
-                first_start.date()
-                if isinstance(first_start, datetime.datetime)
-                else window_start
-            )
+            first_day = window_start
+            if isinstance(first_start, datetime.datetime):
+                first_day = first_start.date()
+            else:
+                try:
+                    first_day = datetime.date.fromisoformat(
+                        str(games[0].get("_event_gameday") or "")
+                    )
+                except ValueError:
+                    pass
             full_week_games = _fetch_week_from_start(_week_start_for_date(first_day))
             # The scan already confirmed these games.  Do not throw them away
             # if the follow-up request for the aligned Thursday-Wednesday week
