@@ -162,6 +162,21 @@ def test_fetch_games_for_week_empty_this_week_does_not_fabricate_games(monkeypat
     assert games == []
 
 
+def test_fetch_games_for_date_preserves_list_contract(monkeypatch):
+    event = _event(
+        event_id="single-date",
+        date="2026-09-04T00:20Z",
+        away="DAL",
+        home="PHI",
+    )
+    _install_fake_session(monkeypatch, {"20260903": [event]})
+
+    games = nfl_scoreboard._fetch_games_for_date(datetime.date(2026, 9, 3))
+
+    assert isinstance(games, list)
+    assert [game["id"] for game in games] == ["single-date"]
+
+
 def test_incomplete_dates_use_nonempty_whole_week_fallback(monkeypatch):
     event = _event(event_id="fallback", date="2026-09-04T00:20Z", away="DAL", home="PHI")
 

@@ -23,6 +23,16 @@ NFLVERSE_TIME_ZONE = ZoneInfo("America/New_York")
 REQUEST_TIMEOUT = 10
 FETCH_CACHE_TTL_SECONDS = 60
 
+# ``fetch_range`` uses the scoreboard endpoints (rather than the schedule
+# endpoint used by ``normalize_espn_cdn``) and the nflverse release asset.
+# Keep these provider-specific constants separate from the public URLs above.
+_SITE_SCOREBOARD_URL = ESPN_SITE_URL
+_CDN_SCOREBOARD_URL = "https://cdn.espn.com/core/nfl/scoreboard"
+_NFLVERSE_SCHEDULE_URL = (
+    "https://github.com/nflverse/nfldata/releases/download/schedules/games.csv"
+)
+_NFLVERSE_SCHEDULE_CACHE_KEY = ("nflverse", "complete_schedule")
+
 _SESSION = get_session("nfl")
 _RANGE_CACHE: dict[tuple[dt.date, dt.date], tuple[float, list[dict[str, Any]]]] = {}
 

@@ -485,14 +485,13 @@ def _is_pro_bowl_game(game: dict) -> bool:
     return False
 
 
-def _fetch_games_for_date(day: datetime.date):
-    """Return the structured result for one explicitly requested ESPN date."""
+def _fetch_games_for_date(day: datetime.date) -> list[dict]:
+    """Return games for one ESPN date, preserving the legacy list contract."""
 
     from services.sports.nfl import fetch_week_dates
 
     result = fetch_week_dates([day], session=_SESSION)
-    result.games = [game for game in _hydrate_games(result.games) if not _is_pro_bowl_game(game)]
-    return result
+    return [game for game in _hydrate_games(result.games) if not _is_pro_bowl_game(game)]
 
 
 def _fetch_games_for_bulk_range(
