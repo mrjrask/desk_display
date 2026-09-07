@@ -77,6 +77,9 @@ def test_screenshots_template_adds_stale_class(monkeypatch):
 
     assert response.status_code == 200
     assert 'class="timestamp is-stale"' in html
+    assert 'class="preview-button is-stale"' in html
+    assert '.preview-button.is-stale img' in html
+    assert 'button.classList.toggle("is-stale", Boolean(entry.is_stale));' in html
     assert "1d 2h 3m 4s ago" in html
     assert 'id="hideMissingScreens" checked' in html
     assert 'const hideMissingStorageKey = "deskDisplay.hideMissingScreens";' in html
@@ -167,6 +170,47 @@ def test_feed_page_renders_only_screens_with_screenshots(monkeypatch):
     assert 'role="button"' in html
     assert 'tabindex="0"' in html
     assert "Display heartbeat" in html
+
+
+def test_feed_page_greyscales_screenshots_when_heartbeat_is_stale(monkeypatch):
+    monkeypatch.setattr(
+        config_ui,
+        "_build_screenshot_entries",
+        lambda: [
+            {
+                "id": "date",
+                "path": "current/date.png",
+                "timestamp": "2025-01-01 00:00:00",
+                "elapsed": "0d 0h 1m 0s ago",
+                "version": int(datetime.now().timestamp()),
+                "is_stale": False,
+                "ticker": None,
+            }
+        ],
+    )
+    monkeypatch.setattr(
+        config_ui,
+        "_load_display_status",
+        lambda: {"screen_id": "date", "is_stale": True},
+    )
+    monkeypatch.setattr(
+        config_ui,
+        "_load_service_status",
+        lambda: {
+            "unit": "desk_display.service",
+            "summary": "active (running), enabled",
+            "is_active": True,
+            "error": None,
+        },
+    )
+
+    response = config_ui.app.test_client().get("/feed")
+    html = response.get_data(as_text=True)
+
+    assert response.status_code == 200
+    assert '<main id="feed" class="is-stale">' in html
+    assert "#feed.is-stale > img" in html
+    assert 'feed.classList.toggle("is-stale", Boolean(status.is_stale));' in html
 
 
 def test_feed_page_drops_screenshots_stale_beyond_twenty_minutes(monkeypatch):
