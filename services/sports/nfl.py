@@ -345,9 +345,10 @@ def _fetch_espn(url: str, dates: str, *, session: Any) -> list[dict]:
 
 
 def _nflverse_status(row: Mapping[str, str]) -> dict:
-    away_score = (row.get("away_score") or "").strip()
-    home_score = (row.get("home_score") or "").strip()
-    completed = bool(away_score and home_score)
+    # nflverse may publish scores while a game is still in progress.  Its
+    # result column is the authoritative completion signal, matching the
+    # older games.csv parser above.
+    completed = bool((row.get("result") or "").strip())
     return {
         "type": {
             "state": "post" if completed else "pre",
@@ -396,6 +397,7 @@ def _fetch_nflverse_schedule(
         away = (row.get("away_team") or "").strip()
         home = (row.get("home_team") or "").strip()
         game_id = row.get("game_id") or row.get("old_game_id")
+        completed = bool((row.get("result") or "").strip())
         games.append(
             {
                 "id": game_id,
@@ -403,16 +405,17 @@ def _fetch_nflverse_schedule(
                     {
                         "homeAway": "away",
                         "team": {"abbreviation": away},
-                        "score": row.get("away_score"),
+                        "score": row.get("away_score") if completed else None,
                     },
                     {
                         "homeAway": "home",
                         "team": {"abbreviation": home},
-                        "score": row.get("home_score"),
+                        "score": row.get("home_score") if completed else None,
                     },
                 ],
                 "status": _nflverse_status(row),
                 "_event_date": event_date,
+                "_event_gameday": game_day.isoformat(),
                 "_event_name": f"{away} at {home}",
                 "_event_short_name": f"{away} @ {home}",
             }
@@ -432,7 +435,7 @@ def _fetch_nflverse(
     return [
         game
         for game in schedule
-        if start.isoformat() <= str(game.get("_event_date", ""))[:10] <= end.isoformat()
+        if start.isoformat() <= str(game.get("_event_gameday", "")) <= end.isoformat()
     ]
 
 
