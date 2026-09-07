@@ -339,7 +339,7 @@ def _fetch_espn(url: str, dates: str, *, session: Any) -> list[dict]:
     )
     response.raise_for_status()
     payload = response.json()
-    if url.startswith(ESPN_CDN_URL):
+    if url.startswith(_CDN_SCOREBOARD_URL):
         return normalize_espn_cdn(payload)
     return _games_from_events(_events_from_payload(payload))
 

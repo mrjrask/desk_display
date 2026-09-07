@@ -53,7 +53,7 @@ def test_primary_success_uses_site_only(dates):
 def test_empty_or_http_failure_primary_uses_cdn(primary, dates):
     session = Session([primary, Response(fixture("nfl_espn_cdn.json"))])
     assert [game["id"] for game in nfl.fetch_range(*dates, session=session, cache={})] == ["402"]
-    assert session.urls[1].startswith(nfl.ESPN_CDN_URL)
+    assert session.urls[1].startswith(nfl._CDN_SCOREBOARD_URL)
 
 
 def test_both_espn_formats_normalize_to_same_contract():
