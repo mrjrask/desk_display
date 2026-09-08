@@ -283,12 +283,14 @@ def test_incomplete_dates_ignore_empty_whole_week_fallback(monkeypatch):
 
 def test_total_failure_retains_last_complete_week(monkeypatch):
     week_start = datetime.date(2026, 9, 3)
+    monotonic_time = [100.0]
     cached_event = _event(
         event_id="cached", date="2026-09-04T00:20Z", away="DAL", home="PHI"
     )
     session = _FakeSession({"20260903": [cached_event]})
     monkeypatch.setattr(nfl_scoreboard, "_SESSION", session)
     monkeypatch.setattr(nfl_scoreboard, "_GAMES_CACHE", {})
+    monkeypatch.setattr(nfl_scoreboard.time, "monotonic", lambda: monotonic_time[0])
     complete = nfl_scoreboard._fetch_week_result_from_start(week_start)
     assert [game["id"] for game in complete.games] == ["cached"]
 
@@ -297,6 +299,7 @@ def test_total_failure_retains_last_complete_week(monkeypatch):
             return _FakeResponse({}, error=True)
 
     monkeypatch.setattr(nfl_scoreboard, "_SESSION", FailedSession())
+    monotonic_time[0] += nfl_scoreboard.FETCH_CACHE_TTL_SECONDS + 1
     stale = nfl_scoreboard._fetch_week_result_from_start(week_start)
 
     assert [game["id"] for game in stale.games] == ["cached"]
