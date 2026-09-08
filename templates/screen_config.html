@@ -85,6 +85,18 @@
       padding: clamp(1.25rem, 2.5vw, 2rem);
       backdrop-filter: blur(12px);
     }
+    .diagnostic-controls {
+      max-width: 1100px;
+      margin: 0 auto 1rem;
+      padding: 1rem;
+      border: 1px solid rgba(56, 189, 248, 0.45);
+      border-radius: 14px;
+      background: rgba(14, 116, 144, 0.14);
+    }
+    .diagnostic-controls h2 { margin: 0 0 0.35rem; font-size: 1.05rem; }
+    .diagnostic-controls p { margin: 0 0 0.75rem; color: #cbd5e1; font-size: 0.88rem; }
+    .diagnostic-actions { display: flex; gap: 0.6rem; flex-wrap: wrap; }
+    .diagnostic-actions select { flex: 1 1 280px; padding: var(--field-padding); border-radius: var(--field-radius); }
     .toolbar,
     .footer-actions {
       display: flex;
@@ -517,6 +529,18 @@
       {{ service_status.summary }}
     {% endif %}
   </div>
+  <section class="diagnostic-controls" aria-labelledby="diagnosticHeading">
+    <h2 id="diagnosticHeading">Single-screen diagnostic playback</h2>
+    <p id="diagnosticStatus">{% if diagnostic_screen %}Looping <strong>{{ diagnostic_screen }}</strong>.{% else %}Normal rotation is active.{% endif %} Changes take effect after the current screen finishes.</p>
+    <div class="diagnostic-actions">
+      <select id="diagnosticScreen" aria-label="Screen to diagnose">
+        <option value="">Choose a screen…</option>
+        {% for screen_id in screen_ids %}<option value="{{ screen_id }}"{% if screen_id == diagnostic_screen %} selected{% endif %}>{{ screen_id }}</option>{% endfor %}
+      </select>
+      <button class="btn" id="startDiagnosticBtn" type="button">Loop selected screen</button>
+      <button class="btn-secondary" id="stopDiagnosticBtn" type="button">Resume rotation</button>
+    </div>
+  </section>
 
   <div class="panel">
     <div class="toolbar">
@@ -634,6 +658,10 @@
   <script>
     const screenTable = document.getElementById("screenTable");
     const saveBtn = document.getElementById("saveBtn");
+    const diagnosticScreen = document.getElementById("diagnosticScreen");
+    const diagnosticStatus = document.getElementById("diagnosticStatus");
+    const startDiagnosticBtn = document.getElementById("startDiagnosticBtn");
+    const stopDiagnosticBtn = document.getElementById("stopDiagnosticBtn");
     const loadDefaultsBtn = document.getElementById("loadDefaultsBtn");
     const defaultConfigSelect = document.getElementById("defaultConfigSelect");
     const exportBtn = document.getElementById("exportBtn");
@@ -1495,6 +1523,29 @@
         setButtonsDisabled(false);
       }
     }
+
+    async function setDiagnosticPlayback(screenId) {
+      clearError();
+      try {
+        const response = await fetch("/api/diagnostic-playback", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ screen_id: screenId }),
+        });
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error || "Unable to change diagnostic playback");
+        diagnosticScreen.value = data.screen_id || "";
+        diagnosticStatus.innerHTML = data.screen_id
+          ? `Looping <strong>${data.screen_id}</strong>. Changes take effect after the current screen finishes.`
+          : "Normal rotation is active. Changes take effect after the current screen finishes.";
+      } catch (err) { showError(err.message); }
+    }
+
+    startDiagnosticBtn.addEventListener("click", () => {
+      if (!diagnosticScreen.value) return showError("Choose a screen to diagnose first.");
+      setDiagnosticPlayback(diagnosticScreen.value);
+    });
+    stopDiagnosticBtn.addEventListener("click", () => setDiagnosticPlayback(null));
 
     saveBtn.addEventListener("click", saveConfiguration);
     saveBtnBottom.addEventListener("click", saveConfiguration);

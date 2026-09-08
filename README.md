@@ -302,7 +302,19 @@ python config_ui.py
 # Testing mode: loop a single scrolling screen so you can tune its scroll
 # speed slider in the config UI and watch the effect live
 DESK_DISPLAY_TEST_SCREEN="news headlines" python main.py
+
+# Choose a single screen from a numbered, searchable terminal menu
+python main.py --screen
+
+# Or select it directly (matching is case-insensitive)
+python main.py --screen "news headlines"
 ```
+
+The Rotation Config web page also has a **Single-screen diagnostic playback**
+selector. It switches the running renderer after the current screen finishes;
+use **Resume rotation** there to return to the saved schedule. This temporary
+choice does not modify the rotation configuration. A command-line or
+`DESK_DISPLAY_TEST_SCREEN` choice takes precedence over the web selector.
 
 At startup the app loads `.env` when `CONFIG_LOAD_DOTENV` is enabled, initializes display/profile settings, fetches startup data, and begins rotating enabled screens from the configured sequence.
 

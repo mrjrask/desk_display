@@ -36,6 +36,7 @@ from paths import (
 )
 from schedule import build_scheduler
 from screens_catalog import SCREEN_IDS, canonical_screen_id
+from diagnostic_playback import load_diagnostic_screen, save_diagnostic_screen
 
 # Config path precedence/fallback rules are centralized in paths.py.
 _screens_config_paths = resolve_screens_config_paths()
@@ -1210,6 +1211,7 @@ def screen_config() -> str:
         playlists=playlists,
         playlist_assignments=playlist_assignments,
         service_status=_load_service_status(),
+        diagnostic_screen=load_diagnostic_screen(),
     )
 
 
@@ -1295,6 +1297,20 @@ def get_screens() -> Any:
             "quad_pages": layouts_config.get("screens", {}).get("quad", {}).get("pages", []),
         }
     )
+
+
+@app.route("/api/diagnostic-playback", methods=["GET", "POST"])
+def diagnostic_playback() -> Any:
+    if request.method == "GET":
+        return jsonify({"screen_id": load_diagnostic_screen()})
+    payload = request.get_json(silent=True)
+    if not isinstance(payload, dict) or "screen_id" not in payload:
+        return jsonify({"error": "screen_id is required"}), 400
+    try:
+        selected = save_diagnostic_screen(payload["screen_id"])
+    except (OSError, ValueError) as exc:
+        return jsonify({"error": str(exc)}), 400
+    return jsonify({"status": "ok", "screen_id": selected})
 
 
 @app.get("/api/screens/defaults")

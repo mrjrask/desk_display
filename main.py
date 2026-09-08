@@ -13,6 +13,7 @@ Changes:
   the live screenshots/ folder structure.
 """
 import warnings
+import argparse
 
 try:
     from gpiozero.exc import NativePinFactoryFallback, PinFactoryFallback
@@ -132,6 +133,8 @@ from schedule import (
     sanitize_schedule_config,
 )
 from screens.registry import ScreenContext, ScreenDefinition, build_screen_registry
+from screens_catalog import SCREEN_IDS
+from diagnostic_playback import load_diagnostic_screen, normalize_screen_id
 
 # ─── Paths ───────────────────────────────────────────────────────────────────
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -218,6 +221,7 @@ _last_gc_collect_monotonic = 0.0
 # UI and its effect watched live without waiting for the rotation to come
 # back around. Enable with DESK_DISPLAY_TEST_SCREEN=<screen_id>.
 TEST_LOOP_SCREEN_ID = (os.environ.get("DESK_DISPLAY_TEST_SCREEN") or "").strip() or None
+_COMMAND_LINE_TEST_SCREEN_ID: Optional[str] = None
 try:
     TEST_LOOP_SCREEN_DELAY = max(
         0.0, float(os.environ.get("DESK_DISPLAY_TEST_SCREEN_DELAY", "0.5"))
@@ -1254,16 +1258,24 @@ def _select_entry_for_iteration(
     iteration if the requested screen id is missing or unavailable.
     """
 
-    if TEST_LOOP_SCREEN_ID:
-        entry = registry.get(TEST_LOOP_SCREEN_ID)
+    test_screen_id = _active_test_screen_id()
+    if test_screen_id:
+        entry = registry.get(test_screen_id)
         if entry is not None and entry.available:
             return entry
         logging.warning(
             "🧪 Testing mode: screen '%s' not found or unavailable; "
             "falling back to normal rotation for this iteration.",
-            TEST_LOOP_SCREEN_ID,
+            test_screen_id,
         )
     return _next_screen_from_registry(registry)
+
+
+def _active_test_screen_id() -> Optional[str]:
+    """Return the fixed CLI/env selection or the UI's current request."""
+
+    fixed = _COMMAND_LINE_TEST_SCREEN_ID or normalize_screen_id(TEST_LOOP_SCREEN_ID)
+    return fixed or load_diagnostic_screen()
 
 
 def _consume_normal_duration_override(screen_id: str) -> bool:
@@ -2651,13 +2663,14 @@ def main_loop():
     refresh_schedule_if_needed(force=True)
     screen_play_counts: Dict[str, int] = {}
 
-    if TEST_LOOP_SCREEN_ID:
+    active_test_screen_id = _active_test_screen_id()
+    if active_test_screen_id:
         logging.info(
             "🧪 Testing mode active: looping screen '%s' every %.1fs. "
             "Tweak its scroll speed slider in the config UI and the change "
             "will apply on the next pass. Unset DESK_DISPLAY_TEST_SCREEN to "
             "resume normal rotation.",
-            TEST_LOOP_SCREEN_ID,
+            active_test_screen_id,
             TEST_LOOP_SCREEN_DELAY,
         )
 
@@ -2932,7 +2945,7 @@ def main_loop():
                     _screen_history.append(sid)
                     if len(_screen_history) > _SCREEN_HISTORY_LIMIT:
                         _screen_history[:] = _screen_history[-_SCREEN_HISTORY_LIMIT:]
-                if TEST_LOOP_SCREEN_ID and sid == TEST_LOOP_SCREEN_ID:
+                if _active_test_screen_id() == sid:
                     wait_duration = 0.0 if consumed_delay else TEST_LOOP_SCREEN_DELAY
                 else:
                     extra_seconds = 0 if _consume_normal_duration_override(sid) else _extra_seconds_for_screen(sid)
@@ -2955,7 +2968,56 @@ def main_loop():
         _finalize_shutdown()
 
 
-def main() -> None:
+def _choose_screen_interactively() -> Optional[str]:
+    """Let an operator find a screen by typing a number or search text."""
+
+    matches = list(SCREEN_IDS)
+    while True:
+        print("\nChoose a screen to loop (type text to filter, q to cancel):")
+        for number, screen_id in enumerate(matches, 1):
+            print(f"  {number:>2}. {screen_id}")
+        choice = input("Screen: ").strip()
+        if choice.casefold() in {"q", "quit", "cancel"}:
+            return None
+        if choice.isdigit() and 1 <= int(choice) <= len(matches):
+            return matches[int(choice) - 1]
+        exact = normalize_screen_id(choice)
+        if exact:
+            return exact
+        filtered = [item for item in SCREEN_IDS if choice.casefold() in item.casefold()]
+        if filtered:
+            matches = filtered
+        else:
+            print(f"No screens match {choice!r}. Please try again.")
+
+
+def _parse_command_line(argv: Optional[List[str]] = None) -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description="Run the desk display rotation.")
+    parser.add_argument(
+        "--screen", nargs="?", const="", metavar="SCREEN_ID",
+        help="loop one screen; omit SCREEN_ID to choose from an interactive list",
+    )
+    parser.add_argument(
+        "--list-screens", action="store_true", help="print screen IDs and exit"
+    )
+    return parser.parse_args(argv)
+
+
+def main(argv: Optional[List[str]] = None) -> None:
+    global _COMMAND_LINE_TEST_SCREEN_ID
+    args = _parse_command_line(argv)
+    if args.list_screens:
+        print("\n".join(SCREEN_IDS))
+        return
+    if args.screen is not None:
+        selected = _choose_screen_interactively() if args.screen == "" else normalize_screen_id(args.screen)
+        if selected is None:
+            if args.screen:
+                raise SystemExit(f"Unknown screen: {args.screen}. Use --screen to choose from a list.")
+            print("No screen selected; exiting.")
+            return
+        _COMMAND_LINE_TEST_SCREEN_ID = selected
+
     init_runtime()
 
     try:
