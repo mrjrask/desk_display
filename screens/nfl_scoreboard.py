@@ -3,7 +3,7 @@
 nfl_scoreboard.py
 
 Render a scrolling NFL scoreboard mirroring the layout of the MLB board.
-Shows all games in the active NFL display week (Thursday through Wednesday), including
+Shows all games in the active NFL display week (Wednesday through Tuesday), including
 playoff weeks that can span January and February. During January and February,
 final scores persist until the playoff-aware cutoff time before advancing to
 the next week.
@@ -138,6 +138,7 @@ _LOGO_CACHE: dict[tuple[str, int], Optional[Image.Image]] = {}
 _LEAGUE_LOGO_CACHE: dict[int, Optional[Image.Image]] = {}
 _SUPER_BOWL_LOGO_CACHE: dict[int, Optional[Image.Image]] = {}
 _GAMES_CACHE: dict[tuple[object, ...], tuple[float, list[dict]]] = {}
+WEEK_FAILURE_RETRY_SECONDS = 5 * 60
 NO_UPCOMING_GAMES_COOLDOWN_SECONDS = 30 * 60
 _NO_UPCOMING_GAMES_COOLDOWN = DayScanCooldown(NO_UPCOMING_GAMES_COOLDOWN_SECONDS)
 _SESSION = get_session("nfl")
@@ -177,12 +178,12 @@ def _apply_style_overrides() -> None:
 
 # ─── Helpers ──────────────────────────────────────────────────────────────────
 def _week_start_for_date(day: datetime.date) -> datetime.date:
-    days_since_thursday = (day.weekday() - 3) % 7
-    return day - datetime.timedelta(days=days_since_thursday)
+    days_since_wednesday = (day.weekday() - 2) % 7
+    return day - datetime.timedelta(days=days_since_wednesday)
 
 
 def _week_end_from_start(start: datetime.date) -> datetime.date:
-    """Return the Wednesday ending the NFL display week that starts Thursday."""
+    """Return the Tuesday ending the NFL display week that starts Wednesday."""
 
     return start + datetime.timedelta(days=6)
 
@@ -192,12 +193,7 @@ def _playoff_rules_active(now: datetime.datetime) -> bool:
 
 
 def _regular_week_start(now: datetime.datetime) -> datetime.date:
-    if now.weekday() == 2:  # Wednesday
-        cutoff = now.replace(hour=9, minute=0, second=0, microsecond=0)
-        ref_date = now.date() + datetime.timedelta(days=1) if now >= cutoff else now.date()
-    else:
-        ref_date = now.date()
-    return _week_start_for_date(ref_date)
+    return _week_start_for_date(now.date())
 
 
 def _load_logo_cached(abbr: str) -> Optional[Image.Image]:
@@ -555,12 +551,19 @@ def _fetch_week_result_from_start(week_start: datetime.date):
 
     global _LAST_WEEKLY_RESULT
     week_end = _week_end_from_start(week_start)
-    failed_cache_key = ("nfl", "failed_week", week_start, week_end)
+    week_cache_key = ("nfl", "display_week", week_start, week_end)
     now = time.monotonic()
-    failed_cached = _GAMES_CACHE.get(failed_cache_key)
-    if failed_cached and now - failed_cached[0] < FETCH_CACHE_TTL_SECONDS:
-        _LAST_WEEKLY_RESULT = failed_cached[1]
-        return failed_cached[1]
+    week_cached = _GAMES_CACHE.get(week_cache_key)
+    if week_cached:
+        cached_result = week_cached[1]
+        ttl = (
+            WEEK_FAILURE_RETRY_SECONDS
+            if cached_result.failed_dates
+            else FETCH_CACHE_TTL_SECONDS
+        )
+        if now - week_cached[0] < ttl:
+            _LAST_WEEKLY_RESULT = cached_result
+            return cached_result
 
     days = [week_start + datetime.timedelta(days=offset) for offset in range(7)]
     result = fetch_week_dates(days, session=_SESSION)
@@ -608,13 +611,12 @@ def _fetch_week_result_from_start(week_start: datetime.date):
     else:
         _GAMES_CACHE[cache_key] = (time.monotonic(), result)
 
-    if result.stale:
-        # Cache an unsuccessful refresh too. Without negative caching, a test
-        # screen (or a short playlist) retries all providers every iteration,
-        # producing hundreds of identical warnings during an outage.
-        _GAMES_CACHE[failed_cache_key] = (time.monotonic(), result)
-    else:
-        _GAMES_CACHE.pop(failed_cache_key, None)
+    # Rendering can loop every couple of seconds in single-screen diagnostic
+    # playback. Cache every assembled week so rendering never drives network
+    # traffic. If any daily request failed, retain the fallback/stale result
+    # for a longer cooldown instead of repeatedly probing providers that are
+    # already rejecting or returning malformed responses.
+    _GAMES_CACHE[week_cache_key] = (time.monotonic(), result)
 
     _LAST_WEEKLY_RESULT = result
     return result
@@ -624,14 +626,6 @@ def _fetch_week_from_start(week_start: datetime.date) -> list[dict]:
     """Compatibility wrapper for callers that consume only the game list."""
 
     return _fetch_week_result_from_start(week_start).games
-
-
-def _has_game_on_date(games: Iterable[dict], day: datetime.date) -> bool:
-    return any(
-        isinstance(game.get("_start_local"), datetime.datetime)
-        and game["_start_local"].date() == day
-        for game in games
-    )
 
 
 def _week_cutoff_datetime(week_start: datetime.date, game_count: int) -> datetime.datetime:
@@ -648,10 +642,10 @@ def _week_cutoff_datetime(week_start: datetime.date, game_count: int) -> datetim
         if week_start <= super_bowl_date <= week_end:
             return _localize(super_bowl_date, 23, 59)
     if game_count == 6:
-        return _localize(week_start + datetime.timedelta(days=5), 15, 0)
+        return _localize(week_start + datetime.timedelta(days=6), 15, 0)
     if game_count in {2, 4}:
-        return _localize(week_start + datetime.timedelta(days=4), 15, 15)
-    return _localize(week_start + datetime.timedelta(days=6), 9, 0)
+        return _localize(week_start + datetime.timedelta(days=5), 15, 15)
+    return _localize(week_start + datetime.timedelta(days=7), 9, 0)
 
 
 def _fetch_games_for_week(now: Optional[datetime.datetime] = None) -> list[dict]:
@@ -660,16 +654,6 @@ def _fetch_games_for_week(now: Optional[datetime.datetime] = None) -> list[dict]
         now = now.replace(tzinfo=CENTRAL_TIME)
     else:
         now = now.astimezone(CENTRAL_TIME)
-    # Neither the regular-season Wednesday cutover nor the playoff-aware
-    # game-count cutoff should hide a rescheduled Wednesday game.  Check the
-    # ending display week first in every month and retain it for all of its
-    # Wednesday when it actually contains a game that day.
-    if now.weekday() == 2:
-        ending_week_start = _week_start_for_date(now.date())
-        ending_week_games = _fetch_week_from_start(ending_week_start)
-        if _has_game_on_date(ending_week_games, now.date()):
-            return ending_week_games
-
     if not _playoff_rules_active(now):
         week_start = _regular_week_start(now)
         return _fetch_week_from_start(week_start)
@@ -724,7 +708,7 @@ def _fetch_next_games(
                     pass
             full_week_games = _fetch_week_from_start(_week_start_for_date(first_day))
             # The scan already confirmed these games.  Do not throw them away
-            # if the follow-up request for the aligned Thursday-Wednesday week
+            # if the follow-up request for the aligned Wednesday-Tuesday week
             # is blocked or fails transiently.
             return full_week_games or games
     _NO_UPCOMING_GAMES_COOLDOWN.mark_empty()

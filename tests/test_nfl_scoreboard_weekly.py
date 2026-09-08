@@ -128,27 +128,30 @@ def test_fetch_games_for_week_returns_thursday_through_monday_games(monkeypatch)
     assert [game["id"] for game in games] == ["1", "2", "3"]
 
 
-def test_fetch_games_for_week_requests_each_day_thursday_to_wednesday(monkeypatch):
+def test_fetch_games_for_week_requests_each_day_wednesday_to_tuesday(monkeypatch):
     events_by_date = {
         "20260902": [
             _event(event_id="wednesday", date="2026-09-03T00:15Z", away="DAL", home="NYG"),
+        ],
+        "20260908": [
+            _event(event_id="tuesday", date="2026-09-08T23:15Z", away="CHI", home="GB"),
         ],
     }
     session = _install_fake_session(monkeypatch, events_by_date)
 
     games = nfl_scoreboard._fetch_games_for_week(
-        datetime.datetime(2026, 9, 1, 12, 0, tzinfo=nfl_scoreboard.CENTRAL_TIME)
+        datetime.datetime(2026, 9, 2, 12, 0, tzinfo=nfl_scoreboard.CENTRAL_TIME)
     )
 
-    assert [game["id"] for game in games] == ["wednesday"]
+    assert [game["id"] for game in games] == ["wednesday", "tuesday"]
     assert session.requested_dates == [
-        "20260827",
-        "20260828",
-        "20260829",
-        "20260830",
-        "20260831",
-        "20260901",
         "20260902",
+        "20260903",
+        "20260904",
+        "20260905",
+        "20260906",
+        "20260907",
+        "20260908",
     ]
 
 
@@ -323,6 +326,53 @@ def test_total_failure_is_negatively_cached_for_refresh_ttl(monkeypatch):
     assert session.calls == call_count
 
 
+def test_complete_week_is_cached_between_rapid_render_loops(monkeypatch):
+    event = _event(
+        event_id="cached-week", date="2026-09-10T23:20Z", away="CHI", home="GB"
+    )
+    session = _install_fake_session(monkeypatch, {"20260910": [event]})
+    week_start = datetime.date(2026, 9, 9)
+
+    first = nfl_scoreboard._fetch_week_result_from_start(week_start)
+    request_count = len(session.requested_dates)
+    second = nfl_scoreboard._fetch_week_result_from_start(week_start)
+
+    assert second is first
+    assert request_count == 7
+    assert len(session.requested_dates) == request_count
+
+
+def test_partial_failure_suppresses_all_provider_retries_for_five_minutes(monkeypatch):
+    event = _event(
+        event_id="fallback", date="2026-09-10T23:20Z", away="CHI", home="GB"
+    )
+
+    class Session:
+        def __init__(self):
+            self.calls = 0
+
+        def get(self, url, timeout=None):
+            self.calls += 1
+            if "dates=20260910" in url and "-" not in url.rsplit("dates=", 1)[-1]:
+                return _FakeResponse({}, error=True)
+            return _FakeResponse({"events": [event]})
+
+    session = Session()
+    clock = iter([100.0, 100.0, 100.0, 100.0, 399.0, 401.0, 401.0, 401.0])
+    monkeypatch.setattr(nfl_scoreboard, "_SESSION", session)
+    monkeypatch.setattr(nfl_scoreboard, "_GAMES_CACHE", {})
+    monkeypatch.setattr(nfl_scoreboard.time, "monotonic", lambda: next(clock))
+    week_start = datetime.date(2026, 9, 9)
+
+    first = nfl_scoreboard._fetch_week_result_from_start(week_start)
+    calls_after_failure = session.calls
+    cached = nfl_scoreboard._fetch_week_result_from_start(week_start)
+
+    assert first.failed_dates == 1
+    assert cached is first
+    assert session.calls == calls_after_failure
+
+
 def test_fetch_scoreboard_falls_back_to_next_games_when_week_is_empty(monkeypatch):
     # No games this week, but the regular season opener is a few days out.
     events_by_date = {
@@ -470,33 +520,35 @@ def test_next_games_keeps_discovered_games_when_full_week_refetch_fails(monkeypa
     assert [game["id"] for game in games] == ["discovered"]
 
 
-def test_wednesday_morning_cutover_advances_to_the_upcoming_week(monkeypatch):
+def test_wednesday_loads_the_entire_upcoming_nfl_week(monkeypatch):
     events_by_date = {
-        # This week's (Thu 8/20 - Mon 8/24) Monday night game -- should still show
-        # up to Wednesday morning, before the cutover advances the window.
-        "20260824": [
-            _event(event_id="this-week", date="2026-08-25T00:15Z", away="LAR", home="LV", state="post",
-                   away_score="20", home_score="13"),
+        "20260826": [
+            _event(event_id="wednesday", date="2026-08-27T00:15Z", away="NE", home="SEA"),
         ],
-        # Next week's (Thu 8/27 - Mon 8/31) Thursday game -- should appear only
-        # after the Wednesday 9am cutover.
         "20260827": [
-            _event(event_id="next-week", date="2026-08-27T23:20Z", away="ATL", home="MIA", state="pre"),
+            _event(event_id="thursday", date="2026-08-27T23:20Z", away="ATL", home="MIA"),
+        ],
+        "20260830": [
+            _event(event_id="sunday", date="2026-08-30T18:00Z", away="CHI", home="GB"),
+        ],
+        "20260831": [
+            _event(event_id="monday", date="2026-09-01T00:15Z", away="LAR", home="LV"),
         ],
     }
-    _install_fake_session(monkeypatch, events_by_date)
+    session = _install_fake_session(monkeypatch, events_by_date)
 
-    before_cutover = datetime.datetime(2026, 8, 26, 8, 59, tzinfo=nfl_scoreboard.CENTRAL_TIME)
-    after_cutover = datetime.datetime(2026, 8, 26, 9, 1, tzinfo=nfl_scoreboard.CENTRAL_TIME)
+    games = nfl_scoreboard._fetch_games_for_week(
+        datetime.datetime(2026, 8, 26, 8, 0, tzinfo=nfl_scoreboard.CENTRAL_TIME)
+    )
 
-    games_before = nfl_scoreboard._fetch_games_for_week(before_cutover)
-    assert [game["id"] for game in games_before] == ["this-week"]
+    assert [game["id"] for game in games] == ["wednesday", "thursday", "sunday", "monday"]
+    assert session.requested_dates == [
+        "20260826", "20260827", "20260828", "20260829",
+        "20260830", "20260831", "20260901",
+    ]
 
-    games_after = nfl_scoreboard._fetch_games_for_week(after_cutover)
-    assert [game["id"] for game in games_after] == ["next-week"]
 
-
-def test_wednesday_game_prevents_morning_cutover(monkeypatch):
+def test_wednesday_and_thursday_games_share_the_same_display_week(monkeypatch):
     events_by_date = {
         "20260826": [
             _event(
@@ -522,19 +574,19 @@ def test_wednesday_game_prevents_morning_cutover(monkeypatch):
 
     games = nfl_scoreboard._fetch_games_for_week(after_cutover)
 
-    assert [game["id"] for game in games] == ["wednesday-game"]
+    assert [game["id"] for game in games] == ["wednesday-game", "next-week"]
     assert session.requested_dates == [
-        "20260820",
-        "20260821",
-        "20260822",
-        "20260823",
-        "20260824",
-        "20260825",
         "20260826",
+        "20260827",
+        "20260828",
+        "20260829",
+        "20260830",
+        "20260831",
+        "20260901",
     ]
 
 
-def test_wednesday_game_prevents_playoff_month_cutover(monkeypatch):
+def test_playoff_week_also_starts_on_wednesday(monkeypatch):
     events_by_date = {
         "20260114": [
             _event(
@@ -567,13 +619,13 @@ def test_wednesday_game_prevents_playoff_month_cutover(monkeypatch):
 
     games = nfl_scoreboard._fetch_games_for_week(wednesday_evening)
 
-    assert [game["id"] for game in games] == ["rescheduled-playoff"]
+    assert [game["id"] for game in games] == ["rescheduled-playoff", "following-week"]
     assert session.requested_dates == [
-        "20260108",
-        "20260109",
-        "20260110",
-        "20260111",
-        "20260112",
-        "20260113",
         "20260114",
+        "20260115",
+        "20260116",
+        "20260117",
+        "20260118",
+        "20260119",
+        "20260120",
     ]
