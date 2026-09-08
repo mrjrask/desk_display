@@ -2067,7 +2067,9 @@ _FEED_REFRESH_INTERVALS: Dict[str, int] = {
     "bears": 1800,
     "cubs": 1800,
     "sox": 1800,
-    "scoreboards": 120,
+    # Game schedules change rarely. Live-window screen loads bypass this daily
+    # refresh interval below so scores are still fetched immediately.
+    "scoreboards": 24 * 60 * 60,
 }
 
 _SCOREBOARD_SCREEN_IDS = {
@@ -2286,6 +2288,12 @@ def _is_live_scoreboard_game(game: object) -> bool:
             value = status_blob.get(key)
             if value:
                 status_fields.append(str(value))
+        type_blob = status_blob.get("type")
+        if isinstance(type_blob, dict):
+            for key in ("state", "description", "detail", "shortDetail"):
+                value = type_blob.get(key)
+                if value:
+                    status_fields.append(str(value))
         coded = str(status_blob.get("codedGameState") or "").upper()
         status_code = str(status_blob.get("statusCode") or "").upper()
     else:
@@ -2315,9 +2323,24 @@ def _is_live_scoreboard_game(game: object) -> bool:
 
     if any(
         token in status_text
-        for token in ("live", "in progress", "in-progress", "intermission", "halftime", "quarter", "period", "ot", "top", "bottom")
+        for token in (
+            "live",
+            "in progress",
+            "in-progress",
+            "intermission",
+            "halftime",
+            "quarter",
+            "period",
+            "ot",
+            "top",
+            "bottom",
+        )
     ):
         return True
+
+    if isinstance(status_blob, dict) and isinstance(status_blob.get("type"), dict):
+        if str(status_blob["type"].get("state") or "").lower() == "in":
+            return True
 
     return coded == "I" or status_code in {"I", "2", "3"}
 
@@ -2336,10 +2359,64 @@ def _scoreboards_have_live_games(scoreboards: object) -> bool:
     return False
 
 
+_LIVE_GAME_WINDOW = datetime.timedelta(hours=4)
+
+
+def _scoreboard_game_start(game: object) -> Optional[datetime.datetime]:
+    """Return a scoreboard game's timezone-aware start time when available."""
+
+    if not isinstance(game, dict):
+        return None
+    raw_start = (
+        game.get("_start_local")
+        or game.get("_event_date")
+        or game.get("start_time")
+        or game.get("date")
+    )
+    if isinstance(raw_start, datetime.datetime):
+        parsed = raw_start
+    elif isinstance(raw_start, str) and raw_start.strip():
+        try:
+            parsed = datetime.datetime.fromisoformat(raw_start.strip().replace("Z", "+00:00"))
+        except ValueError:
+            return None
+    else:
+        return None
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=CENTRAL_TIME)
+    return parsed
+
+
+def _scoreboards_in_live_window(
+    scoreboards: object, *, now: Optional[datetime.datetime] = None
+) -> bool:
+    """Return true while cached games are live or within their expected play window."""
+
+    if _scoreboards_have_live_games(scoreboards):
+        return True
+    if not isinstance(scoreboards, dict):
+        return False
+    current = now or datetime.datetime.now(datetime.timezone.utc)
+    if current.tzinfo is None:
+        current = current.replace(tzinfo=datetime.timezone.utc)
+    for games in scoreboards.values():
+        if not isinstance(games, list):
+            continue
+        for game in games:
+            start = _scoreboard_game_start(game)
+            if start is not None and start <= current < start + _LIVE_GAME_WINDOW:
+                return True
+    return False
+
+
 def _should_force_refresh_scoreboards(screen_id: str, *, offline: bool) -> bool:
     """Return whether the current screen should trigger a fresh scoreboard pull."""
 
-    return screen_id in _SCOREBOARD_SCREEN_IDS and not offline
+    return (
+        screen_id in _SCOREBOARD_SCREEN_IDS
+        and not offline
+        and _scoreboards_in_live_window(cache.get("scoreboards"))
+    )
 
 
 def _feed_to_force_refresh_for_screen(screen_id: str, *, offline: bool) -> Optional[str]:
@@ -2348,7 +2425,7 @@ def _feed_to_force_refresh_for_screen(screen_id: str, *, offline: bool) -> Optio
     if offline:
         return None
 
-    if screen_id in _SCOREBOARD_SCREEN_IDS:
+    if _should_force_refresh_scoreboards(screen_id, offline=offline):
         return "scoreboards"
 
     return _LIVE_TEAM_SCREEN_TO_FEED.get(screen_id)
