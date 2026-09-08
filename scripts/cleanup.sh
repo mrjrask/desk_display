@@ -4,6 +4,11 @@ IFS=$'\n\t'
 
 # Ensure Unix line endings and executable bit:
 #   sed -i 's/\r$//' cleanup.sh && chmod +x cleanup.sh
+#
+# This is a manual maintenance utility. desk_display.service does not invoke
+# it during normal shutdown: systemd sends SIGTERM directly to main.py, whose
+# finalizer owns runtime and display shutdown. Run this script explicitly when
+# its cache removal, leftover-media archival, or extra hardware reset is wanted.
 
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &>/dev/null && pwd -P)"
 PROJECT_ROOT="$(cd -- "$SCRIPT_DIR/.." &>/dev/null && pwd -P)"

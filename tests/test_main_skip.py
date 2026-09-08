@@ -9,6 +9,7 @@ from typing import Optional
 import pytest
 
 import data_fetch
+import utils
 from screens.registry import ScreenDefinition
 from services import wifi_utils
 
@@ -130,6 +131,30 @@ def test_wait_with_button_checks_honors_pending_skip_event(main_module):
 
     assert main_module._wait_with_button_checks(5.0) is True
     assert main_module._manual_skip_event.is_set() is False
+
+
+def test_shutdown_interrupts_render_and_forces_deferred_clear(main_module):
+    class _Display:
+        def __init__(self):
+            self.clear_calls = 0
+            self.show_calls = 0
+
+        def clear(self):
+            self.clear_calls += 1
+
+        def show(self):
+            self.show_calls += 1
+
+    fake_display = _Display()
+    main_module.display = fake_display
+
+    with utils.defer_clear_display():
+        main_module.request_shutdown("SIGTERM test")
+
+    assert main_module._shutdown_event.is_set()
+    assert main_module._manual_skip_event.is_set()
+    assert fake_display.clear_calls == 1
+    assert fake_display.show_calls == 1
 
 
 def test_touch_double_tap_on_right_third_requests_next_screen(main_module):
