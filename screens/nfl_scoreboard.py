@@ -555,6 +555,13 @@ def _fetch_week_result_from_start(week_start: datetime.date):
 
     global _LAST_WEEKLY_RESULT
     week_end = _week_end_from_start(week_start)
+    failed_cache_key = ("nfl", "failed_week", week_start, week_end)
+    now = time.monotonic()
+    failed_cached = _GAMES_CACHE.get(failed_cache_key)
+    if failed_cached and now - failed_cached[0] < FETCH_CACHE_TTL_SECONDS:
+        _LAST_WEEKLY_RESULT = failed_cached[1]
+        return failed_cached[1]
+
     days = [week_start + datetime.timedelta(days=offset) for offset in range(7)]
     result = fetch_week_dates(days, session=_SESSION)
     result.games = [game for game in _hydrate_games(result.games) if not _is_pro_bowl_game(game)]
@@ -600,6 +607,14 @@ def _fetch_week_result_from_start(week_start: datetime.date):
                 result.stale = True
     else:
         _GAMES_CACHE[cache_key] = (time.monotonic(), result)
+
+    if result.stale:
+        # Cache an unsuccessful refresh too. Without negative caching, a test
+        # screen (or a short playlist) retries all providers every iteration,
+        # producing hundreds of identical warnings during an outage.
+        _GAMES_CACHE[failed_cache_key] = (time.monotonic(), result)
+    else:
+        _GAMES_CACHE.pop(failed_cache_key, None)
 
     _LAST_WEEKLY_RESULT = result
     return result

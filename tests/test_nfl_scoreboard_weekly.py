@@ -301,6 +301,28 @@ def test_total_failure_retains_last_complete_week(monkeypatch):
     assert stale.stale is True
 
 
+def test_total_failure_is_negatively_cached_for_refresh_ttl(monkeypatch):
+    class FailedSession:
+        def __init__(self):
+            self.calls = 0
+
+        def get(self, url, timeout=None):
+            self.calls += 1
+            return _FakeResponse({}, error=True)
+
+    session = FailedSession()
+    monkeypatch.setattr(nfl_scoreboard, "_SESSION", session)
+    monkeypatch.setattr(nfl_scoreboard, "_GAMES_CACHE", {})
+
+    first = nfl_scoreboard._fetch_week_result_from_start(datetime.date(2026, 9, 3))
+    call_count = session.calls
+    second = nfl_scoreboard._fetch_week_result_from_start(datetime.date(2026, 9, 3))
+
+    assert first.stale is True
+    assert second is first
+    assert session.calls == call_count
+
+
 def test_fetch_scoreboard_falls_back_to_next_games_when_week_is_empty(monkeypatch):
     # No games this week, but the regular season opener is a few days out.
     events_by_date = {

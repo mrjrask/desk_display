@@ -16,8 +16,9 @@ def fixture(name: str) -> dict:
 
 
 class Response:
-    def __init__(self, payload=None, *, error=False, text=""):
+    def __init__(self, payload=None, *, error=False, text="", status_code=200):
         self.payload, self.error, self.text = payload, error, text
+        self.status_code = status_code
 
     def raise_for_status(self):
         if self.error:
@@ -220,6 +221,24 @@ def test_nflverse_schedule_converts_eastern_kickoff_to_utc():
     )
 
     assert schedule[0]["_event_date"] == "2026-09-11T00:20:00Z"
+
+
+def test_nflverse_schedule_uses_repository_copy_when_release_asset_is_missing():
+    csv_text = (
+        "game_id,gameday,gametime,away_team,home_team,away_score,home_score,result\n"
+        "week-one,2026-09-10,20:20,DAL,PHI,,,\n"
+    )
+    session = Session(
+        [
+            Response(error=True, status_code=404),
+            Response(text=csv_text),
+        ]
+    )
+
+    schedule = nfl._fetch_nflverse_schedule(session=session, cache={})
+
+    assert [game["id"] for game in schedule] == ["week-one"]
+    assert session.urls == [nfl._NFLVERSE_SCHEDULE_URL, nfl._NFLVERSE_RAW_SCHEDULE_URL]
 
 
 def test_nflverse_range_filters_utc_rollover_by_local_game_day():
