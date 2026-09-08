@@ -531,7 +531,7 @@
   </div>
   <section class="diagnostic-controls" aria-labelledby="diagnosticHeading">
     <h2 id="diagnosticHeading">Single-screen diagnostic playback</h2>
-    <p id="diagnosticStatus">{% if diagnostic_screen %}Looping <strong>{{ diagnostic_screen }}</strong>.{% else %}Normal rotation is active.{% endif %} Changes take effect after the current screen finishes.</p>
+    <p id="diagnosticStatus">{% if diagnostic_screen %}Web playback request: <strong>{{ diagnostic_screen }}</strong>.{% else %}No web playback request; normal rotation is requested.{% endif %} Changes take effect after the current screen finishes. A fixed command-line or environment selection takes precedence.</p>
     <div class="diagnostic-actions">
       <select id="diagnosticScreen" aria-label="Screen to diagnose">
         <option value="">Choose a screen…</option>
@@ -1536,8 +1536,8 @@
         if (!response.ok) throw new Error(data.error || "Unable to change diagnostic playback");
         diagnosticScreen.value = data.screen_id || "";
         diagnosticStatus.innerHTML = data.screen_id
-          ? `Looping <strong>${data.screen_id}</strong>. Changes take effect after the current screen finishes.`
-          : "Normal rotation is active. Changes take effect after the current screen finishes.";
+          ? `Web playback request: <strong>${data.screen_id}</strong>. Changes take effect after the current screen finishes. A fixed command-line or environment selection takes precedence.`
+          : "No web playback request; normal rotation is requested. Changes take effect after the current screen finishes. A fixed command-line or environment selection takes precedence.";
       } catch (err) { showError(err.message); }
     }
 

@@ -131,6 +131,12 @@ def test_command_line_selection_takes_precedence_over_ui(main_module, monkeypatc
     assert main_module._active_test_screen_id() == "date"
 
 
+def test_registered_wolves_live_env_selection_is_preserved(main_module):
+    main_module.TEST_LOOP_SCREEN_ID = "wolves live"
+
+    assert main_module._active_test_screen_id() == "wolves live"
+
+
 def test_interactive_selector_can_filter_then_choose(main_module, monkeypatch):
     answers = iter(["headlines", "2"])
     monkeypatch.setattr("builtins.input", lambda _prompt: next(answers))

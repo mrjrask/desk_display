@@ -87,6 +87,7 @@ RAW_SCREEN_IDS = [
     "NHL Standings East v2",
     "wolves logo",
     "wolves last",
+    "wolves live",
     "wolves next",
     "wolves next home",
     "cubs logo",
