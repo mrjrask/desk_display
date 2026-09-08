@@ -24,6 +24,14 @@ def _other_playlist_steps(config: dict) -> list[str]:
     raise AssertionError("Other playlist missing")
 
 
+def _wolves_playlist_steps(config: dict) -> list[str]:
+    playlists = config["config"]["playlists"]
+    for playlist in playlists.values():
+        if playlist.get("label") == "wolves":
+            return [step["screen"] for step in playlist.get("steps", [])]
+    raise AssertionError("wolves playlist missing")
+
+
 def test_default_screen_configs_include_weather_alert_screen():
     for filename in ("default_screens_large.json", "default_screens_small.json"):
         config = _load_default_config(filename)
@@ -41,3 +49,11 @@ def test_default_screen_configs_include_adsb_screens_at_end_of_other():
         assert config["config"]["screens"].get("adsb live airlines") == 3
         other_steps = _other_playlist_steps(config)
         assert other_steps[-3:] == ["adsb stats", "adsb live", "adsb live airlines"]
+
+
+def test_default_screen_configs_place_wolves_live_after_logo():
+    for filename in ("default_screens_large.json", "default_screens_small.json"):
+        config = _load_default_config(filename)
+
+        wolves_steps = _wolves_playlist_steps(config)
+        assert wolves_steps[:2] == ["wolves logo", "wolves live"]
