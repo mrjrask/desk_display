@@ -848,7 +848,7 @@ def _clear_display_immediately(reason: Optional[str] = None) -> None:
 
     try:
         resume_display_updates()
-        clear_display(display)
+        clear_display(display, force=True)
         try:
             display.show()
         except (AttributeError, OSError, RuntimeError) as exc:
@@ -862,6 +862,11 @@ def _clear_display_immediately(reason: Optional[str] = None) -> None:
 
 def request_shutdown(reason: str) -> None:
     """Signal the main loop to exit and blank the screen immediately."""
+
+    # Long-running/self-timed renderers watch the display's registered skip
+    # event, not the scheduler's shutdown event. Wake them before attempting
+    # hardware cleanup so the main loop can promptly reach its finalizer.
+    _manual_skip_event.set()
 
     if _shutdown_event.is_set():
         _clear_display_immediately(reason)

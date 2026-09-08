@@ -2328,11 +2328,14 @@ class ScreenImage:
 
 # ─── Basic utilities ────────────────────────────────────────────────────────
 @log_call
-def clear_display(display):
+def clear_display(display, *, force: bool = False):
     """
     Clear the connected display, falling back to a blank frame.
+
+    ``force`` is reserved for shutdown cleanup, which must not be hidden by a
+    render's transition-oriented ``defer_clear_display`` context.
     """
-    if _DEFER_CLEAR_DISPLAY.is_set():
+    if _DEFER_CLEAR_DISPLAY.is_set() and not force:
         # When clears are deferred we should leave the current frame buffer
         # untouched so transitions can blend from the live image. Mutating the
         # in-memory buffer to black causes a visible blank fade between screens.
@@ -4578,5 +4581,4 @@ def time_strings(now: datetime.datetime) -> tuple[str, str]:
 def date_strings(now: datetime.datetime) -> tuple[str, str]:
     weekday = now.strftime("%A")
     return weekday, f"{now.strftime('%B')} {now.day}, {now.year}"
-
 
