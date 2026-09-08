@@ -176,7 +176,14 @@ def _apply_style_overrides() -> None:
     team_scale = get_screen_image_scale(STYLE_SCREEN_ID, "team_logo", 1.0)
     if _IS_1080P_LAYOUT:
         team_scale *= 1.2
-    LOGO_HEIGHT = max(1, int(round(TEAM_LOGO_BASE_HEIGHT * team_scale)))
+    target_logo_height = max(1, int(round(TEAM_LOGO_BASE_HEIGHT * team_scale)))
+    # A configured image scale may request a logo larger than the compact
+    # score cell. Keep every team mark inside both its row and column so wide
+    # weekly slates remain readable instead of logos covering scores/statuses.
+    logo_padding = scale_value_width(4)
+    max_row_fit = max(1, SCORE_ROW_H - logo_padding)
+    max_column_fit = max(1, min(GAME_COL_WIDTHS[1], GAME_COL_WIDTHS[3]) - logo_padding)
+    LOGO_HEIGHT = min(target_logo_height, max_row_fit, max_column_fit)
     if is_kernel_driven_display():
         LEAGUE_LOGO_HEIGHT = LOGO_HEIGHT
     else:
