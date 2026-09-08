@@ -55,6 +55,7 @@ def main_module(monkeypatch):
     main._skip_request_pending = False
     main._manual_skip_event.clear()
     main.TEST_LOOP_SCREEN_ID = None
+    main._last_ui_diagnostic_screen_id = None
 
     yield main
 
@@ -129,6 +130,29 @@ def test_command_line_selection_takes_precedence_over_ui(main_module, monkeypatc
     monkeypatch.setattr(main_module, "load_diagnostic_screen", lambda: "weather1")
 
     assert main_module._active_test_screen_id() == "date"
+
+
+def test_resuming_ui_diagnostic_reloads_saved_rotation(main_module, monkeypatch):
+    requested_screen = {"id": "inside"}
+    replacement_scheduler = _FakeScheduler(["date"])
+    reloads = []
+
+    monkeypatch.setattr(
+        main_module, "load_diagnostic_screen", lambda: requested_screen["id"]
+    )
+
+    def reload_schedule(*, force=False):
+        reloads.append(force)
+        main_module.screen_scheduler = replacement_scheduler
+
+    monkeypatch.setattr(main_module, "refresh_schedule_if_needed", reload_schedule)
+
+    assert main_module._active_test_screen_id() == "inside"
+
+    requested_screen["id"] = None
+    assert main_module._active_test_screen_id() is None
+    assert reloads == [True]
+    assert main_module.screen_scheduler is replacement_scheduler
 
 
 def test_registered_wolves_live_env_selection_is_preserved(main_module):

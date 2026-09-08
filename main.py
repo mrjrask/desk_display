@@ -222,6 +222,7 @@ _last_gc_collect_monotonic = 0.0
 # back around. Enable with DESK_DISPLAY_TEST_SCREEN=<screen_id>.
 TEST_LOOP_SCREEN_ID = (os.environ.get("DESK_DISPLAY_TEST_SCREEN") or "").strip() or None
 _COMMAND_LINE_TEST_SCREEN_ID: Optional[str] = None
+_last_ui_diagnostic_screen_id: Optional[str] = None
 try:
     TEST_LOOP_SCREEN_DELAY = max(
         0.0, float(os.environ.get("DESK_DISPLAY_TEST_SCREEN_DELAY", "0.5"))
@@ -1274,8 +1275,21 @@ def _select_entry_for_iteration(
 def _active_test_screen_id() -> Optional[str]:
     """Return the fixed CLI/env selection or the UI's current request."""
 
+    global _last_ui_diagnostic_screen_id
+
     fixed = _COMMAND_LINE_TEST_SCREEN_ID or normalize_screen_id(TEST_LOOP_SCREEN_ID)
-    return fixed or load_diagnostic_screen()
+    diagnostic_screen_id = load_diagnostic_screen()
+
+    # Rebuild from the saved configuration when web diagnostic playback ends.
+    # Besides returning the scheduler to the beginning of a clean rotation,
+    # this is important when configuration changes made during diagnostics
+    # disabled a formerly scheduled screen (frequency 0).  An in-memory
+    # scheduler created before that edit must not keep presenting the screen.
+    if _last_ui_diagnostic_screen_id is not None and diagnostic_screen_id is None:
+        refresh_schedule_if_needed(force=True)
+    _last_ui_diagnostic_screen_id = diagnostic_screen_id
+
+    return fixed or diagnostic_screen_id
 
 
 def _consume_normal_duration_override(screen_id: str) -> bool:
