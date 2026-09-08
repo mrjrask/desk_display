@@ -459,6 +459,8 @@ def fetch_range_result(
     avoid repeatedly waiting on an unavailable fallback.  Site failures are
     not added automatically, so discovery scans retry the primary provider in
     every window; callers that already know Site failed may explicitly skip it.
+    Supplying exclusions also bypasses a fresh range-cache hit because legacy
+    cache entries do not record which provider produced their games.
     """
 
     if end < start:
@@ -469,7 +471,7 @@ def fetch_range_result(
     legacy_cache_key = (start, f"nfl_providers:{end.isoformat()}")
     now = time.monotonic()
     cached = cache.get(cache_key) or cache.get(legacy_cache_key)
-    if cached and now - cached[0] < FETCH_CACHE_TTL_SECONDS:
+    if cached and not failed_providers and now - cached[0] < FETCH_CACHE_TTL_SECONDS:
         return WeeklyResult(games=cached[1])
 
     dates = _date_parameter(start, end)
