@@ -72,6 +72,49 @@ def test_should_force_refresh_scoreboards_during_scheduled_game_window():
     )
 
 
+def test_scoreboard_live_window_starts_before_scheduled_game():
+    main = _load_main()
+    start = datetime.datetime(2026, 9, 8, 20, 0, tzinfo=datetime.UTC)
+    scoreboards = {"nfl": [{"_event_date": start.isoformat()}]}
+
+    assert main._scoreboards_in_live_window(
+        scoreboards, now=start - datetime.timedelta(minutes=30)
+    )
+    assert not main._scoreboards_in_live_window(
+        scoreboards, now=start - datetime.timedelta(minutes=31)
+    )
+
+
+def test_scoreboard_refresh_is_due_when_provider_date_rolls_over(monkeypatch):
+    main = _load_main()
+    main._requested_screen_ids = {"MLB Scoreboard"}
+    main._last_scoreboard_refresh_dates.clear()
+    main._last_scoreboard_refresh_dates["mlb"] = datetime.date(2026, 9, 7)
+    monkeypatch.setattr(
+        main,
+        "_scoreboard_date_for_league",
+        lambda league, now=None: datetime.date(2026, 9, 8),
+    )
+
+    assert main._scoreboard_refresh_dates_changed()
+
+
+def test_record_scoreboard_refresh_dates_clears_rollover(monkeypatch):
+    main = _load_main()
+    main._requested_screen_ids = {"MLB Scoreboard"}
+    main._last_scoreboard_refresh_dates.clear()
+    monkeypatch.setattr(
+        main,
+        "_scoreboard_date_for_league",
+        lambda league, now=None: datetime.date(2026, 9, 8),
+    )
+
+    main._record_scoreboard_refresh_dates()
+
+    assert main._last_scoreboard_refresh_dates == {"mlb": datetime.date(2026, 9, 8)}
+    assert not main._scoreboard_refresh_dates_changed()
+
+
 def test_scoreboard_schedule_refresh_interval_is_daily():
     main = _load_main()
 

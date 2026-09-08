@@ -2104,6 +2104,7 @@ _LIVE_TEAM_SCREEN_TO_FEED: Dict[str, str] = {
 }
 
 _last_feed_refresh: Dict[str, float] = {}
+_last_scoreboard_refresh_dates: Dict[str, datetime.date] = {}
 
 _STARTUP_CRITICAL_FEEDS: Tuple[str, ...] = ("weather", "scoreboards", "air_quality")
 _STARTUP_CRITICAL_FEED_TIMEOUT_SECONDS = max(1.0, float(os.environ.get("STARTUP_CRITICAL_FEED_TIMEOUT_SECONDS", "8")))
@@ -2151,7 +2152,7 @@ def _refresh_startup_critical_feeds() -> None:
         for feed, future in futures.items():
             try:
                 future.result(timeout=_STARTUP_CRITICAL_FEED_TIMEOUT_SECONDS)
-                _last_feed_refresh[feed] = time.monotonic()
+                _mark_feed_refreshed(feed)
                 logging.info("✅ Startup critical feed ready: %s", feed)
             except FuturesTimeoutError:
                 logging.warning(
@@ -2249,6 +2250,61 @@ def _requested_scoreboard_leagues() -> Set[str]:
     for screen_id in _requested_screen_ids:
         requested.update(_SCOREBOARD_SCREEN_TO_LEAGUES.get(screen_id, set()))
     return requested
+
+
+def _scoreboard_date_for_league(
+    league: str, now: Optional[datetime.datetime] = None
+) -> datetime.date:
+    """Return the date currently selected by a league's scoreboard provider."""
+
+    current = now or datetime.datetime.now(CENTRAL_TIME)
+    if current.tzinfo is None:
+        current = current.replace(tzinfo=CENTRAL_TIME)
+
+    # These providers use league-specific morning cutoffs, rather than midnight,
+    # to keep late games attached to the preceding scoreboard day.
+    if league in {"mlb", "nba", "nhl", "ncaam", "world_cup"}:
+        from services.sports import mlb, nba, ncaam, nhl, world_cup
+
+        providers = {
+            "mlb": mlb,
+            "nba": nba,
+            "nhl": nhl,
+            "ncaam": ncaam,
+            "world_cup": world_cup,
+        }
+        return providers[league].scoreboard_date(current)
+    return current.astimezone(CENTRAL_TIME).date()
+
+
+def _scoreboard_refresh_dates_changed(
+    *, now: Optional[datetime.datetime] = None
+) -> bool:
+    """Return true when a requested provider has rolled to a new display date."""
+
+    leagues = _requested_scoreboard_leagues()
+    return any(
+        _last_scoreboard_refresh_dates.get(league)
+        != _scoreboard_date_for_league(league, now)
+        for league in leagues
+    )
+
+
+def _record_scoreboard_refresh_dates(
+    *, now: Optional[datetime.datetime] = None
+) -> None:
+    """Record provider dates covered by the latest successful scoreboard pull."""
+
+    for league in _requested_scoreboard_leagues():
+        _last_scoreboard_refresh_dates[league] = _scoreboard_date_for_league(league, now)
+
+
+def _mark_feed_refreshed(feed: str) -> None:
+    """Record a successful refresh, including scoreboard-date coverage."""
+
+    _last_feed_refresh[feed] = time.monotonic()
+    if feed == "scoreboards":
+        _record_scoreboard_refresh_dates()
 
 
 def _refresh_scoreboards() -> None:
@@ -2360,6 +2416,7 @@ def _scoreboards_have_live_games(scoreboards: object) -> bool:
 
 
 _LIVE_GAME_WINDOW = datetime.timedelta(hours=4)
+_LIVE_GAME_LEAD_IN = datetime.timedelta(minutes=30)
 
 
 def _scoreboard_game_start(game: object) -> Optional[datetime.datetime]:
@@ -2404,7 +2461,10 @@ def _scoreboards_in_live_window(
             continue
         for game in games:
             start = _scoreboard_game_start(game)
-            if start is not None and start <= current < start + _LIVE_GAME_WINDOW:
+            if (
+                start is not None
+                and start - _LIVE_GAME_LEAD_IN <= current < start + _LIVE_GAME_WINDOW
+            ):
                 return True
     return False
 
@@ -2554,7 +2614,8 @@ def refresh_all(force: bool = False) -> None:
         last_run = _last_feed_refresh.get(feed, 0.0)
         elapsed = now - last_run if last_run else float("inf")
 
-        if force or elapsed >= interval:
+        scoreboard_date_changed = feed == "scoreboards" and _scoreboard_refresh_dates_changed()
+        if force or elapsed >= interval or scoreboard_date_changed:
             due_feeds.add(feed)
         else:
             remaining = int(interval - elapsed)
@@ -2570,7 +2631,7 @@ def refresh_all(force: bool = False) -> None:
             continue
         try:
             refresher()
-            _last_feed_refresh[feed] = time.monotonic()
+            _mark_feed_refreshed(feed)
             _bump_registry_cache_nonce()
         except Exception as exc:
             logging.error("Failed to refresh %s feed: %s", feed, exc)
@@ -2628,7 +2689,7 @@ def _refresh_feeds_in_order(feeds: List[str]) -> None:
             continue
         try:
             refresher()
-            _last_feed_refresh[feed] = time.monotonic()
+            _mark_feed_refreshed(feed)
         except Exception as exc:
             logging.error("Failed to refresh %s feed: %s", feed, exc)
 
@@ -2874,7 +2935,7 @@ def main_loop():
             if force_refresh_feed == "scoreboards":
                 try:
                     _refresh_scoreboards_fresh()
-                    _last_feed_refresh["scoreboards"] = time.monotonic()
+                    _mark_feed_refreshed("scoreboards")
                     _bump_registry_cache_nonce()
                 except Exception as exc:
                     logging.error("Failed to force-refresh scoreboards for '%s': %s", sid, exc)
@@ -2883,7 +2944,7 @@ def main_loop():
                 if refresher:
                     try:
                         refresher()
-                        _last_feed_refresh[force_refresh_feed] = time.monotonic()
+                        _mark_feed_refreshed(force_refresh_feed)
                         _bump_registry_cache_nonce()
                     except Exception as exc:
                         logging.error(
