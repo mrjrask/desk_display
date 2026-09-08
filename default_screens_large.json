@@ -65,6 +65,7 @@
       "NHL Standings West v2": 0,
       "NHL Standings East v2": 0,
       "wolves logo": 0,
+      "wolves live": 0,
       "wolves last": 0,
       "wolves next": 0,
       "wolves next home": 0,
@@ -291,6 +292,9 @@
         "steps": [
           {
             "screen": "wolves logo"
+          },
+          {
+            "screen": "wolves live"
           },
           {
             "screen": "wolves last"
@@ -686,6 +690,9 @@
         "background": "#000000"
       },
       "wolves logo": {
+        "background": "#000000"
+      },
+      "wolves live": {
         "background": "#000000"
       },
       "wolves last": {
