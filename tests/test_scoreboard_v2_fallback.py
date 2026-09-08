@@ -48,7 +48,7 @@ def test_nfl_v2_caps_team_logos_to_compact_score_cell(monkeypatch):
 
     nfl_scoreboard_v2._apply_style_overrides()
 
-    assert nfl_scoreboard_v2.LOGO_HEIGHT == 26
+    assert nfl_scoreboard_v2.LOGO_HEIGHT == 20
 
 
 def test_nfl_v2_composes_and_scrolls_entire_16_game_week(monkeypatch):
