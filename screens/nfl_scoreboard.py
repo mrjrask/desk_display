@@ -55,6 +55,7 @@ from services.sports.nfl import FETCH_CACHE_TTL_SECONDS
 from utils import (
     ScreenImage,
     clear_display,
+    clone_font,
     load_team_logo,
     log_call,
     log_missing_team_logo,
@@ -96,7 +97,7 @@ TITLE_FONT = FONT_TITLE_SPORTS
 LOGO_DIR = os.path.join(IMAGES_DIR, "nfl")
 LEAGUE_LOGO_KEYS = ("NFL", "nfl")
 LEAGUE_LOGO_GAP = _scale_y(4)
-TEAM_LOGO_BASE_HEIGHT = scale_value_width(36) if HYPERPIXEL_LAYOUT else scale_value_width(52)
+TEAM_LOGO_BASE_HEIGHT = scale_value_width(30) if HYPERPIXEL_LAYOUT else scale_value_width(40)
 LEAGUE_LOGO_BASE_HEIGHT = int(round(TEAM_LOGO_BASE_HEIGHT * 0.8)) if (HYPERPIXEL_LAYOUT and not is_kernel_driven_display()) else TEAM_LOGO_BASE_HEIGHT
 if HYPERPIXEL_4_SQUARE:
     LEAGUE_LOGO_BASE_HEIGHT = min(LEAGUE_LOGO_BASE_HEIGHT, scale_value_width(40))
@@ -114,6 +115,7 @@ STATUS_FONT = get_screen_font(
     base_font=FONT_STATUS,
     default_size=28,
 )
+STALE_FONT = clone_font(FONT_STATUS, max(5, scale_value_width(8)))
 CENTER_FONT = get_screen_font(
     SCREEN_ID,
     "center",
@@ -168,7 +170,11 @@ def _apply_style_overrides() -> None:
     )
     BACKGROUND_COLOR = get_screen_background_color(SCREEN_ID, SCOREBOARD_BACKGROUND_COLOR)
     team_scale = get_screen_image_scale(SCREEN_ID, "team_logo", 1.0)
-    LOGO_HEIGHT = max(1, int(round(TEAM_LOGO_BASE_HEIGHT * team_scale)))
+    target_logo_height = max(1, int(round(TEAM_LOGO_BASE_HEIGHT * team_scale)))
+    logo_padding = scale_value_width(8)
+    max_row_fit = max(1, SCORE_ROW_H - logo_padding)
+    max_column_fit = max(1, min(COL_WIDTHS[1], COL_WIDTHS[3]) - logo_padding)
+    LOGO_HEIGHT = min(target_logo_height, max_row_fit, max_column_fit)
     if is_kernel_driven_display():
         LEAGUE_LOGO_HEIGHT = LOGO_HEIGHT
     else:
@@ -716,6 +722,27 @@ def _fetch_next_games(
     return []
 
 
+def _draw_stale_indicators(draw: ImageDraw.ImageDraw, image_height: int) -> None:
+    """Draw unobtrusive markers at both ends of a scrolling scoreboard."""
+
+    label = "stale"
+    padding = max(1, scale_value_width(2))
+    try:
+        left, top, right, bottom = draw.textbbox((0, 0), label, font=STALE_FONT)
+        width, height = right - left, bottom - top
+    except Exception:
+        width, height = draw.textsize(label, font=STALE_FONT)
+        left = top = 0
+    x = max(0, WIDTH - width - padding - left)
+    draw.text((x, padding - top), label, font=STALE_FONT, fill=(255, 180, 0))
+    draw.text(
+        (x, max(padding, image_height - height - padding - top)),
+        label,
+        font=STALE_FONT,
+        fill=(255, 180, 0),
+    )
+
+
 def _render_scoreboard(
     games: list[dict], *, show_super_bowl_logo: bool, stale_data: bool = False
 ) -> Image.Image:
@@ -756,10 +783,9 @@ def _render_scoreboard(
         tx = (WIDTH - tw) // 2
         ty = title_top
     draw.text((tx, ty), TITLE, font=TITLE_FONT, fill=(255, 255, 255))
-    if stale_data:
-        draw.text((scale_value_width(4), title_top), "STALE", font=STATUS_FONT, fill=(255, 180, 0))
-
     img.paste(canvas, (0, content_top))
+    if stale_data:
+        _draw_stale_indicators(draw, img.height)
     return img
 
 
@@ -817,7 +843,7 @@ def render_nfl_scoreboard(
             ty = title_top
         draw.text((tx, ty), TITLE, font=TITLE_FONT, fill=(255, 255, 255))
         if stale_data:
-            draw.text((scale_value_width(4), title_top), "STALE", font=STATUS_FONT, fill=(255, 180, 0))
+            _draw_stale_indicators(draw, img.height)
         msg_top = max(ty + th + _scale_y(8), title_top + th + _scale_y(8))
         _center_text(draw, "No games", STATUS_FONT, 0, WIDTH, msg_top, STATUS_ROW_H)
         if transition:
