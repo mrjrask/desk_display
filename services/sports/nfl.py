@@ -444,34 +444,35 @@ def _fetch_nflverse(
     ]
 
 
-def fetch_range(
+def fetch_range_result(
     start: dt.date,
     end: dt.date,
     *,
     session: Any = None,
     cache: MutableMapping[tuple[object, ...], tuple[float, list[dict]]] | None = None,
     failed_providers: set[str] | None = None,
-) -> list[dict]:
-    """Fetch an inclusive NFL range with ESPN CDN and nflverse fallbacks.
+) -> WeeklyResult:
+    """Fetch an inclusive NFL range and report whether returned games are stale.
 
-    When ``failed_providers`` is supplied, fallback providers that raise are
-    added to it and skipped on later calls.  Discovery scans can therefore
-    share the set across range windows instead of repeatedly waiting on an
-    unavailable fallback.  The primary Site provider is retried in every
-    window, and empty responses remain eligible because an empty week is a
-    valid response rather than a provider failure.
+    Providers already present in ``failed_providers`` are skipped.  Fallback
+    providers that raise are added to the set, allowing discovery scans to
+    avoid repeatedly waiting on an unavailable fallback.  Site failures are
+    not added automatically, so discovery scans retry the primary provider in
+    every window; callers that already know Site failed may explicitly skip it.
+    Supplying exclusions also bypasses a fresh range-cache hit because legacy
+    cache entries do not record which provider produced their games.
     """
 
     if end < start:
-        return []
+        return WeeklyResult()
     session = session or _SESSION
     cache = _RANGE_CACHE if cache is None else cache
     cache_key = (start, end, "nfl_scoreboard_range")
     legacy_cache_key = (start, f"nfl_providers:{end.isoformat()}")
     now = time.monotonic()
     cached = cache.get(cache_key) or cache.get(legacy_cache_key)
-    if cached and now - cached[0] < FETCH_CACHE_TTL_SECONDS:
-        return cached[1]
+    if cached and not failed_providers and now - cached[0] < FETCH_CACHE_TTL_SECONDS:
+        return WeeklyResult(games=cached[1])
 
     dates = _date_parameter(start, end)
     providers = (
@@ -501,14 +502,33 @@ def fetch_range(
         successful_response = True
         if games:
             cache[cache_key] = (now, games)
-            return games
+            return WeeklyResult(games=games)
         logging.info("NFL scoreboard from %s was empty; trying fallback", provider_name)
     if successful_response:
         cache[cache_key] = (now, [])
     elif cached:
         logging.warning("All NFL providers failed; retaining stale cached range")
-        return cached[1]
-    return []
+        return WeeklyResult(games=cached[1], stale=True)
+    return WeeklyResult()
+
+
+def fetch_range(
+    start: dt.date,
+    end: dt.date,
+    *,
+    session: Any = None,
+    cache: MutableMapping[tuple[object, ...], tuple[float, list[dict]]] | None = None,
+    failed_providers: set[str] | None = None,
+) -> list[dict]:
+    """Fetch an inclusive NFL range while preserving the legacy list contract."""
+
+    return fetch_range_result(
+        start,
+        end,
+        session=session,
+        cache=cache,
+        failed_providers=failed_providers,
+    ).games
 
 
 def fetch_week_scoreboard(*, now: dt.datetime | None = None) -> list[dict]:

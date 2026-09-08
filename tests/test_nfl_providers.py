@@ -56,6 +56,41 @@ def test_empty_or_http_failure_primary_uses_cdn(primary, dates):
     assert session.urls[1].startswith(nfl._CDN_SCOREBOARD_URL)
 
 
+def test_range_can_skip_known_failed_site_provider(dates):
+    session = Session([Response(fixture("nfl_espn_cdn.json"))])
+
+    games = nfl.fetch_range(
+        *dates,
+        session=session,
+        cache={},
+        failed_providers={"ESPN Site"},
+    )
+
+    assert [game["id"] for game in games] == ["402"]
+    assert len(session.urls) == 1
+    assert session.urls[0].startswith(nfl._CDN_SCOREBOARD_URL)
+
+
+def test_provider_exclusion_bypasses_fresh_range_cache(monkeypatch, dates):
+    partial_site_games = [{"id": "partial-site"}]
+    cache = {
+        (dates[0], dates[1], "nfl_scoreboard_range"): (9.0, partial_site_games)
+    }
+    session = Session([Response(fixture("nfl_espn_cdn.json"))])
+    monkeypatch.setattr(nfl.time, "monotonic", lambda: 10.0)
+
+    games = nfl.fetch_range(
+        *dates,
+        session=session,
+        cache=cache,
+        failed_providers={"ESPN Site"},
+    )
+
+    assert [game["id"] for game in games] == ["402"]
+    assert len(session.urls) == 1
+    assert session.urls[0].startswith(nfl._CDN_SCOREBOARD_URL)
+
+
 def test_both_espn_formats_normalize_to_same_contract():
     games = nfl.normalize_espn_site(fixture("nfl_espn_site.json")) + nfl.normalize_espn_cdn(fixture("nfl_espn_cdn.json"))
     for game in games:
@@ -104,6 +139,17 @@ def test_stale_cache_is_retained_when_every_provider_fails(dates):
     cache = {(dates[0], f"nfl_providers:{dates[1].isoformat()}"): (0.0, stale)}
     session = Session([Response(error=True), Response(error=True), Response(error=True)])
     assert nfl.fetch_range(*dates, session=session, cache=cache) == stale
+
+
+def test_range_result_marks_expired_cache_stale_when_every_provider_fails(dates):
+    stale = [{"id": "cached"}]
+    cache = {(dates[0], f"nfl_providers:{dates[1].isoformat()}"): (0.0, stale)}
+    session = Session([Response(error=True), Response(error=True), Response(error=True)])
+
+    result = nfl.fetch_range_result(*dates, session=session, cache=cache)
+
+    assert result.games == stale
+    assert result.stale is True
 
 
 def test_total_provider_failure_without_cache_returns_empty(dates):

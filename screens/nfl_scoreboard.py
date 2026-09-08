@@ -543,9 +543,15 @@ def _fetch_games_for_bulk_range(
 
 
 def _fetch_week_result_from_start(week_start: datetime.date):
-    """Build a complete week, falling back atomically when any date failed."""
+    """Build a complete week, falling back atomically when any date failed.
 
-    from services.sports.nfl import WeeklyResult, fetch_espn_week, fetch_week_dates
+    The daily requests are useful when ESPN returns incomplete range payloads,
+    but the fallback must not be another request to the same Site API host.
+    Use the shared provider chain so a Site API outage can actually reach the
+    ESPN CDN and nflverse schedule providers.
+    """
+
+    from services.sports.nfl import WeeklyResult, fetch_range_result, fetch_week_dates
 
     global _LAST_WEEKLY_RESULT
     week_end = _week_end_from_start(week_start)
@@ -555,23 +561,31 @@ def _fetch_week_result_from_start(week_start: datetime.date):
     cache_key = ("nfl", "last_complete_week")
 
     if result.failed_dates:
-        fallback = fetch_espn_week(week_start, week_end, session=_SESSION)
-        fallback.games = [
+        fallback = fetch_range_result(
+            week_start,
+            week_end,
+            session=_SESSION,
+            cache=_GAMES_CACHE,
+            failed_providers={"ESPN Site"},
+        )
+        fallback_games = [
             game for game in _hydrate_games(fallback.games) if not _is_pro_bowl_game(game)
         ]
-        if fallback.failed_dates == 0 and fallback.games:
+        if fallback_games:
             result = WeeklyResult(
-                games=fallback.games,
+                games=fallback_games,
                 successful_dates=result.successful_dates,
                 failed_dates=result.failed_dates,
                 bye_teams=result.bye_teams,
+                stale=fallback.stale,
             )
-            cached_fallback = WeeklyResult(
-                games=list(fallback.games),
-                successful_dates=1,
-                bye_teams=fallback.bye_teams,
-            )
-            _GAMES_CACHE[cache_key] = (time.monotonic(), cached_fallback)
+            if not fallback.stale:
+                cached_fallback = WeeklyResult(
+                    games=list(fallback_games),
+                    successful_dates=1,
+                    bye_teams=result.bye_teams,
+                )
+                _GAMES_CACHE[cache_key] = (time.monotonic(), cached_fallback)
         else:
             cached = _GAMES_CACHE.get(cache_key)
             if cached:

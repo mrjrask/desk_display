@@ -198,6 +198,70 @@ def test_incomplete_dates_use_nonempty_whole_week_fallback(monkeypatch):
     assert result.stale is False
 
 
+def test_incomplete_dates_use_shared_provider_chain(monkeypatch):
+    fallback = _event(
+        event_id="nflverse-fallback",
+        date="2026-09-04T00:20Z",
+        away="DAL",
+        home="PHI",
+    )["competitions"][0]
+    fallback["_event_date"] = "2026-09-04T00:20Z"
+
+    class FailedSession:
+        def get(self, url, timeout=None):
+            return _FakeResponse({}, error=True)
+
+    calls = []
+
+    def fake_fetch_range_result(start, end, **kwargs):
+        calls.append((start, end, kwargs))
+        return nfl_service.WeeklyResult(games=[fallback])
+
+    monkeypatch.setattr(nfl_scoreboard, "_SESSION", FailedSession())
+    monkeypatch.setattr(nfl_scoreboard, "_GAMES_CACHE", {})
+    monkeypatch.setattr(nfl_service, "fetch_range_result", fake_fetch_range_result)
+
+    result = nfl_scoreboard._fetch_week_result_from_start(datetime.date(2026, 9, 3))
+
+    assert [game["id"] for game in result.games] == ["nflverse-fallback"]
+    assert result.failed_dates == 7
+    assert result.stale is False
+    assert calls[0][:2] == (datetime.date(2026, 9, 3), datetime.date(2026, 9, 9))
+    assert calls[0][2]["failed_providers"] == {"ESPN Site"}
+
+
+def test_stale_range_fallback_remains_stale_and_does_not_replace_week_cache(monkeypatch):
+    fallback = _event(
+        event_id="stale-range",
+        date="2026-09-04T00:20Z",
+        away="DAL",
+        home="PHI",
+    )["competitions"][0]
+    fallback["_event_date"] = "2026-09-04T00:20Z"
+    last_complete = nfl_service.WeeklyResult(games=[{"id": "last-complete"}])
+    cache = {("nfl", "last_complete_week"): (10.0, last_complete)}
+
+    class FailedSession:
+        def get(self, url, timeout=None):
+            return _FakeResponse({}, error=True)
+
+    monkeypatch.setattr(nfl_scoreboard, "_SESSION", FailedSession())
+    monkeypatch.setattr(nfl_scoreboard, "_GAMES_CACHE", cache)
+    monkeypatch.setattr(
+        nfl_service,
+        "fetch_range_result",
+        lambda *args, **kwargs: nfl_service.WeeklyResult(
+            games=[fallback], stale=True
+        ),
+    )
+
+    result = nfl_scoreboard._fetch_week_result_from_start(datetime.date(2026, 9, 3))
+
+    assert [game["id"] for game in result.games] == ["stale-range"]
+    assert result.stale is True
+    assert cache[("nfl", "last_complete_week")][1] is last_complete
+
+
 def test_incomplete_dates_ignore_empty_whole_week_fallback(monkeypatch):
     class Session:
         def get(self, url, timeout=None):

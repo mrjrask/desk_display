@@ -1,5 +1,6 @@
 import textwrap
 
+from screens import nfl_standings
 from screens.nfl_standings import (
     CONFERENCE_AFC_KEY,
     CONFERENCE_NFC_KEY,
@@ -69,3 +70,19 @@ def test_parse_csv_standings_returns_empty_when_no_data():
     assert used_season is None
     assert standings[CONFERENCE_AFC_KEY] == {}
     assert standings[CONFERENCE_NFC_KEY] == {}
+
+
+def test_logo_loader_uses_string_filename_candidates(monkeypatch):
+    requested_paths = []
+
+    def fake_exists(path):
+        requested_paths.append(path)
+        return path.endswith("/BUF.png")
+
+    monkeypatch.setattr(nfl_standings.os.path, "exists", fake_exists)
+    monkeypatch.setattr(nfl_standings, "load_team_logo", lambda *args, **kwargs: "logo")
+
+    cache = {}
+    assert nfl_standings._load_logo_for_height("buf", 24, cache) == "logo"
+    assert requested_paths[0].endswith("/BUF.png")
+    assert cache[("BUF", 24)] == "logo"
