@@ -106,6 +106,17 @@ def test_stale_cache_is_retained_when_every_provider_fails(dates):
     assert nfl.fetch_range(*dates, session=session, cache=cache) == stale
 
 
+def test_range_result_marks_expired_cache_stale_when_every_provider_fails(dates):
+    stale = [{"id": "cached"}]
+    cache = {(dates[0], f"nfl_providers:{dates[1].isoformat()}"): (0.0, stale)}
+    session = Session([Response(error=True), Response(error=True), Response(error=True)])
+
+    result = nfl.fetch_range_result(*dates, session=session, cache=cache)
+
+    assert result.games == stale
+    assert result.stale is True
+
+
 def test_total_provider_failure_without_cache_returns_empty(dates):
     session = Session([Response(error=True), Response(error=True), Response(error=True)])
     assert nfl.fetch_range(*dates, session=session, cache={}) == []

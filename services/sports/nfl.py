@@ -444,15 +444,15 @@ def _fetch_nflverse(
     ]
 
 
-def fetch_range(
+def fetch_range_result(
     start: dt.date,
     end: dt.date,
     *,
     session: Any = None,
     cache: MutableMapping[tuple[object, ...], tuple[float, list[dict]]] | None = None,
     failed_providers: set[str] | None = None,
-) -> list[dict]:
-    """Fetch an inclusive NFL range with ESPN CDN and nflverse fallbacks.
+) -> WeeklyResult:
+    """Fetch an inclusive NFL range and report whether returned games are stale.
 
     When ``failed_providers`` is supplied, fallback providers that raise are
     added to it and skipped on later calls.  Discovery scans can therefore
@@ -463,7 +463,7 @@ def fetch_range(
     """
 
     if end < start:
-        return []
+        return WeeklyResult()
     session = session or _SESSION
     cache = _RANGE_CACHE if cache is None else cache
     cache_key = (start, end, "nfl_scoreboard_range")
@@ -471,7 +471,7 @@ def fetch_range(
     now = time.monotonic()
     cached = cache.get(cache_key) or cache.get(legacy_cache_key)
     if cached and now - cached[0] < FETCH_CACHE_TTL_SECONDS:
-        return cached[1]
+        return WeeklyResult(games=cached[1])
 
     dates = _date_parameter(start, end)
     providers = (
@@ -501,14 +501,33 @@ def fetch_range(
         successful_response = True
         if games:
             cache[cache_key] = (now, games)
-            return games
+            return WeeklyResult(games=games)
         logging.info("NFL scoreboard from %s was empty; trying fallback", provider_name)
     if successful_response:
         cache[cache_key] = (now, [])
     elif cached:
         logging.warning("All NFL providers failed; retaining stale cached range")
-        return cached[1]
-    return []
+        return WeeklyResult(games=cached[1], stale=True)
+    return WeeklyResult()
+
+
+def fetch_range(
+    start: dt.date,
+    end: dt.date,
+    *,
+    session: Any = None,
+    cache: MutableMapping[tuple[object, ...], tuple[float, list[dict]]] | None = None,
+    failed_providers: set[str] | None = None,
+) -> list[dict]:
+    """Fetch an inclusive NFL range while preserving the legacy list contract."""
+
+    return fetch_range_result(
+        start,
+        end,
+        session=session,
+        cache=cache,
+        failed_providers=failed_providers,
+    ).games
 
 
 def fetch_week_scoreboard(*, now: dt.datetime | None = None) -> list[dict]:

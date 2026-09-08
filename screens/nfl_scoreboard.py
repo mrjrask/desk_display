@@ -551,7 +551,7 @@ def _fetch_week_result_from_start(week_start: datetime.date):
     ESPN CDN and nflverse schedule providers.
     """
 
-    from services.sports.nfl import WeeklyResult, fetch_range, fetch_week_dates
+    from services.sports.nfl import WeeklyResult, fetch_range_result, fetch_week_dates
 
     global _LAST_WEEKLY_RESULT
     week_end = _week_end_from_start(week_start)
@@ -561,14 +561,14 @@ def _fetch_week_result_from_start(week_start: datetime.date):
     cache_key = ("nfl", "last_complete_week")
 
     if result.failed_dates:
-        fallback_games = fetch_range(
+        fallback = fetch_range_result(
             week_start,
             week_end,
             session=_SESSION,
             cache=_GAMES_CACHE,
         )
         fallback_games = [
-            game for game in _hydrate_games(fallback_games) if not _is_pro_bowl_game(game)
+            game for game in _hydrate_games(fallback.games) if not _is_pro_bowl_game(game)
         ]
         if fallback_games:
             result = WeeklyResult(
@@ -576,13 +576,15 @@ def _fetch_week_result_from_start(week_start: datetime.date):
                 successful_dates=result.successful_dates,
                 failed_dates=result.failed_dates,
                 bye_teams=result.bye_teams,
+                stale=fallback.stale,
             )
-            cached_fallback = WeeklyResult(
-                games=list(fallback_games),
-                successful_dates=1,
-                bye_teams=result.bye_teams,
-            )
-            _GAMES_CACHE[cache_key] = (time.monotonic(), cached_fallback)
+            if not fallback.stale:
+                cached_fallback = WeeklyResult(
+                    games=list(fallback_games),
+                    successful_dates=1,
+                    bye_teams=result.bye_teams,
+                )
+                _GAMES_CACHE[cache_key] = (time.monotonic(), cached_fallback)
         else:
             cached = _GAMES_CACHE.get(cache_key)
             if cached:
