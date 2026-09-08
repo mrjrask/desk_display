@@ -373,7 +373,7 @@ def _load_logo_for_height(
     if cache_key in cache:
         return cache[cache_key]
 
-    candidates = [cache_key, cache_key.lower(), cache_key.title()]
+    candidates = [key.upper(), key.lower(), key.title()]
     for candidate in candidates:
         path = os.path.join(LOGO_DIR, f"{candidate}.png")
         if os.path.exists(path):

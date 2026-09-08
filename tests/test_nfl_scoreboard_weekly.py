@@ -198,6 +198,37 @@ def test_incomplete_dates_use_nonempty_whole_week_fallback(monkeypatch):
     assert result.stale is False
 
 
+def test_incomplete_dates_use_shared_provider_chain(monkeypatch):
+    fallback = _event(
+        event_id="nflverse-fallback",
+        date="2026-09-04T00:20Z",
+        away="DAL",
+        home="PHI",
+    )["competitions"][0]
+    fallback["_event_date"] = "2026-09-04T00:20Z"
+
+    class FailedSession:
+        def get(self, url, timeout=None):
+            return _FakeResponse({}, error=True)
+
+    calls = []
+
+    def fake_fetch_range(start, end, **kwargs):
+        calls.append((start, end, kwargs))
+        return [fallback]
+
+    monkeypatch.setattr(nfl_scoreboard, "_SESSION", FailedSession())
+    monkeypatch.setattr(nfl_scoreboard, "_GAMES_CACHE", {})
+    monkeypatch.setattr(nfl_service, "fetch_range", fake_fetch_range)
+
+    result = nfl_scoreboard._fetch_week_result_from_start(datetime.date(2026, 9, 3))
+
+    assert [game["id"] for game in result.games] == ["nflverse-fallback"]
+    assert result.failed_dates == 7
+    assert result.stale is False
+    assert calls[0][:2] == (datetime.date(2026, 9, 3), datetime.date(2026, 9, 9))
+
+
 def test_incomplete_dates_ignore_empty_whole_week_fallback(monkeypatch):
     class Session:
         def get(self, url, timeout=None):
