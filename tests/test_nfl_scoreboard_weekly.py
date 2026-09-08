@@ -227,6 +227,7 @@ def test_incomplete_dates_use_shared_provider_chain(monkeypatch):
     assert result.failed_dates == 7
     assert result.stale is False
     assert calls[0][:2] == (datetime.date(2026, 9, 3), datetime.date(2026, 9, 9))
+    assert calls[0][2]["failed_providers"] == {"ESPN Site"}
 
 
 def test_stale_range_fallback_remains_stale_and_does_not_replace_week_cache(monkeypatch):

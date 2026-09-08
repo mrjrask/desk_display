@@ -56,6 +56,21 @@ def test_empty_or_http_failure_primary_uses_cdn(primary, dates):
     assert session.urls[1].startswith(nfl._CDN_SCOREBOARD_URL)
 
 
+def test_range_can_skip_known_failed_site_provider(dates):
+    session = Session([Response(fixture("nfl_espn_cdn.json"))])
+
+    games = nfl.fetch_range(
+        *dates,
+        session=session,
+        cache={},
+        failed_providers={"ESPN Site"},
+    )
+
+    assert [game["id"] for game in games] == ["402"]
+    assert len(session.urls) == 1
+    assert session.urls[0].startswith(nfl._CDN_SCOREBOARD_URL)
+
+
 def test_both_espn_formats_normalize_to_same_contract():
     games = nfl.normalize_espn_site(fixture("nfl_espn_site.json")) + nfl.normalize_espn_cdn(fixture("nfl_espn_cdn.json"))
     for game in games:

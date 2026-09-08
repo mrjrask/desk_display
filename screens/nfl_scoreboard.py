@@ -566,6 +566,7 @@ def _fetch_week_result_from_start(week_start: datetime.date):
             week_end,
             session=_SESSION,
             cache=_GAMES_CACHE,
+            failed_providers={"ESPN Site"},
         )
         fallback_games = [
             game for game in _hydrate_games(fallback.games) if not _is_pro_bowl_game(game)

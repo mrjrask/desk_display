@@ -454,12 +454,11 @@ def fetch_range_result(
 ) -> WeeklyResult:
     """Fetch an inclusive NFL range and report whether returned games are stale.
 
-    When ``failed_providers`` is supplied, fallback providers that raise are
-    added to it and skipped on later calls.  Discovery scans can therefore
-    share the set across range windows instead of repeatedly waiting on an
-    unavailable fallback.  The primary Site provider is retried in every
-    window, and empty responses remain eligible because an empty week is a
-    valid response rather than a provider failure.
+    Providers already present in ``failed_providers`` are skipped.  Fallback
+    providers that raise are added to the set, allowing discovery scans to
+    avoid repeatedly waiting on an unavailable fallback.  Site failures are
+    not added automatically, so discovery scans retry the primary provider in
+    every window; callers that already know Site failed may explicitly skip it.
     """
 
     if end < start:
