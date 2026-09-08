@@ -25,7 +25,7 @@ def _other_playlist_steps(config: dict) -> list[str]:
 
 
 def _wolves_playlist_steps(config: dict) -> list[str]:
-    playlists = config["config"]["playlists"]
+    playlists = config.get("config", config)["playlists"]
     for playlist in playlists.values():
         if playlist.get("label") == "wolves":
             return [step["screen"] for step in playlist.get("steps", [])]
@@ -52,8 +52,14 @@ def test_default_screen_configs_include_adsb_screens_at_end_of_other():
 
 
 def test_default_screen_configs_place_wolves_live_after_logo():
-    for filename in ("default_screens_large.json", "default_screens_small.json"):
+    for filename in (
+        "default_screens_large.json",
+        "default_screens_small.json",
+        "screens_config.json",
+    ):
         config = _load_default_config(filename)
+        rotation_config = config.get("config", config)
 
+        assert rotation_config["screens"].get("wolves live") == 0
         wolves_steps = _wolves_playlist_steps(config)
         assert wolves_steps[:2] == ["wolves logo", "wolves live"]
