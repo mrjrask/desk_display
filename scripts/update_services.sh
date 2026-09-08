@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
-# Patch stale script paths in already-installed desk_display systemd units
-# and restart them, without re-running the full hardware installer (no apt
-# packages, raspi-config, or Python dependency reinstall).
+# Patch project-managed settings in already-installed desk_display systemd
+# units and restart them, without re-running the full hardware installer (no
+# apt packages, raspi-config, or Python dependency reinstall).
 #
-# Installers bake absolute script paths (e.g. into ExecStart/ExecStop) into
+# Installers bake absolute script paths (e.g. into ExecStart) into
 # unit files at install time. When scripts are moved or renamed in the repo
 # (for example tools/maintenance/cleanup.sh -> scripts/cleanup.sh), an
 # already-installed unit keeps pointing at the old, now-missing path until
@@ -94,6 +94,24 @@ for unit_name in "${UNIT_NAMES[@]}"; do
     replacement=$(escape_sed_replacement "$PROJECT_DIR/$new_rel")
     patched_contents=$(printf '%s\n' "$patched_contents" | sed -E "s#${pattern}#${replacement}#g")
   done
+
+  if [[ "$unit_name" == "desk_display.service" ]]; then
+    # Let systemd deliver SIGTERM to main.py and give its own display-safe
+    # finalizer a bounded window to finish. Remove only the historical
+    # cleanup.sh handler; preserve any unrelated, operator-added ExecStop.
+    patched_contents=$(printf '%s\n' "$patched_contents" | sed -E \
+      '\#^[[:space:]]*ExecStop=.*cleanup\.sh['"'"']?[[:space:]]*$#d')
+    patched_contents=$(printf '%s\n' "$patched_contents" | awk '
+      /^TimeoutStopSec=/ { next }
+      /^KillSignal=/ { next }
+      /^\[Install\]$/ && !inserted {
+        print "TimeoutStopSec=10"
+        print "KillSignal=SIGTERM"
+        inserted=1
+      }
+      { print }
+    ')
+  fi
 
   if [[ "$patched_contents" == "$original_contents" ]]; then
     log "$unit_name already points at current script locations."

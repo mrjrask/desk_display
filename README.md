@@ -798,6 +798,20 @@ sudo journalctl -u desk_display_adsb_collector.service -f
 ./scripts/restart_services.sh
 ```
 
+On stop or reboot, systemd sends `SIGTERM` directly to `main.py`. The renderer
+stops scheduling screens, blanks the display, finalizes video output, stops its
+monitors, and exits through its single shutdown path. The unit allows at most
+10 seconds for that graceful shutdown before systemd applies its normal stop
+escalation. `Restart=always` still restarts unexpected exits, but systemd does
+not apply restart policy when the process exit is the result of a normal
+`systemctl stop` (including the stop transaction during reboot).
+
+`scripts/cleanup.sh` is retained as an optional maintenance utility. Run it
+manually only when you also want its extra hardware reset, `__pycache__`
+removal, and archival of leftover screenshots/videos; it is deliberately not
+an `ExecStop` handler because it signals the renderer and accesses display
+hardware independently of the renderer's own shutdown path.
+
 `./scripts/restart_services.sh` only ever acts on this project's own 8
 systemd services (never any other unit on the machine), restarting whichever
 of them are installed here one at a time, in dependency order (data
@@ -828,10 +842,13 @@ Useful operations helpers:
 ./scripts/uninstall_airplay.sh
 ```
 
-`./scripts/update_services.sh` patches any already-installed systemd unit
+`./scripts/update_services.sh` applies the current shutdown settings to an
+already-installed `desk_display.service` (removing the historical
+`cleanup.sh` `ExecStop` and setting the 10-second graceful-stop window) and
+also patches any project-managed systemd unit
 (`desk_display.service`, `config_ui_desk_display.service`,
 `desk_display_waveshare_oled.service`, `desk_display_adsb_collector.service`)
-whose `ExecStart`/`ExecStop` still points at a script path from before a
+whose command still points at a script path from before a
 repo-side script move/rename, then
 reloads systemd and restarts only the units it changed. It leaves every
 other unit setting (display profile, `Environment=` overrides, etc.)

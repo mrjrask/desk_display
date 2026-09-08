@@ -66,6 +66,8 @@ if [[ -n "$EXISTING_VENV" ]]; then
   VENV_DIR="$EXISTING_VENV"
 fi
 
+# cleanup.sh remains available as an operator-invoked maintenance utility, but
+# normal service shutdown is owned by main.py's SIGTERM/finalization path.
 ensure_executable "$PROJECT_DIR/scripts/cleanup.sh"
 ensure_executable "$PROJECT_DIR/scripts/reset_screenshots.sh"
 ensure_executable "$PROJECT_DIR/scripts/framebuffer_service.sh"
@@ -164,8 +166,9 @@ $(printf '%s\n' "${FRAMEBUFFER_PRESTART_LINES[@]}")
 $(printf '%s\n' "${KERNEL_PRESTART_LINES[@]}")
 $(printf '%s\n' "${KERNEL_ENV_OVERRIDE_LINES[@]}")
 ExecStart=$VENV_DIR/bin/python $PROJECT_DIR/main.py
-ExecStop=/bin/bash -lc '$PROJECT_DIR/scripts/cleanup.sh'
 $(printf '%s\n' "${FRAMEBUFFER_POSTSTOP_LINES[@]}")
+TimeoutStopSec=10
+KillSignal=SIGTERM
 Restart=always
 RestartSec=5
 User=$SERVICE_USER
