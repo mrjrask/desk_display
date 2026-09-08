@@ -14,7 +14,7 @@ from typing import Any
 from zoneinfo import ZoneInfo
 
 from config import CENTRAL_TIME
-from services.http_client import get_session
+from services.http_client import HostTemporarilyForbidden, get_session
 
 ESPN_SITE_URL = "https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard"
 ESPN_CDN_URL = "https://cdn.espn.com/core/nfl/schedule"
@@ -31,6 +31,7 @@ _CDN_SCOREBOARD_URL = "https://cdn.espn.com/core/nfl/scoreboard"
 _NFLVERSE_SCHEDULE_URL = (
     "https://github.com/nflverse/nfldata/releases/download/schedules/games.csv"
 )
+_NFLVERSE_RAW_SCHEDULE_URL = NFLVERSE_URL
 _NFLVERSE_SCHEDULE_CACHE_KEY = ("nflverse", "complete_schedule")
 
 _SESSION = get_session("nfl")
@@ -74,7 +75,8 @@ def fetch_week_dates(
     unique: dict[str, dict[str, Any]] = {}
     successful_dates = failed_dates = 0
     bye_teams: list[str] | None = None
-    for day in dates:
+    days = list(dates)
+    for index, day in enumerate(days):
         try:
             payload = _request_json(session, ESPN_SITE_URL, dates=f"{day:%Y%m%d}")
             events = payload.get("events")
@@ -92,6 +94,12 @@ def fetch_week_dates(
         except Exception as exc:
             failed_dates += 1
             logging.warning("NFL date %s failed: %s", day.isoformat(), exc)
+            # The shared NFL session already blocks the entire ESPN host after
+            # a 403.  Do not turn that host-level cooldown into six additional
+            # warnings for dates that were never requested.
+            if isinstance(exc, HostTemporarilyForbidden):
+                failed_dates += len(days) - index - 1
+                break
 
     events = sorted(unique.values(), key=lambda event: (_event_start(event), _event_identity(event) or ""))
     return WeeklyResult(
@@ -375,6 +383,12 @@ def _fetch_nflverse_schedule(
         return cached[1]
 
     response = session.get(_NFLVERSE_SCHEDULE_URL, timeout=REQUEST_TIMEOUT)
+    # The release asset has occasionally disappeared while nflverse
+    # republishes its schedules. Its repository copy has the same CSV
+    # contract and keeps the scoreboard useful during that window.
+    if getattr(response, "status_code", None) == 404:
+        logging.info("nflverse schedule release asset returned 404; trying repository copy")
+        response = session.get(_NFLVERSE_RAW_SCHEDULE_URL, timeout=REQUEST_TIMEOUT)
     response.raise_for_status()
     games: list[dict] = []
     for row in csv.DictReader(io.StringIO(response.text)):
