@@ -111,3 +111,34 @@ def test_select_entry_falls_back_when_test_screen_unavailable(main_module):
 
     assert entry is not None
     assert entry.id == "date"
+
+
+def test_select_entry_uses_ui_diagnostic_request(main_module, monkeypatch):
+    registry = _build_registry("date", "weather1")
+    main_module.screen_scheduler = _FakeScheduler(["date"])
+    monkeypatch.setattr(main_module, "load_diagnostic_screen", lambda: "weather1")
+
+    entry = main_module._select_entry_for_iteration(registry)
+
+    assert entry is not None
+    assert entry.id == "weather1"
+
+
+def test_command_line_selection_takes_precedence_over_ui(main_module, monkeypatch):
+    main_module._COMMAND_LINE_TEST_SCREEN_ID = "date"
+    monkeypatch.setattr(main_module, "load_diagnostic_screen", lambda: "weather1")
+
+    assert main_module._active_test_screen_id() == "date"
+
+
+def test_registered_wolves_live_env_selection_is_preserved(main_module):
+    main_module.TEST_LOOP_SCREEN_ID = "wolves live"
+
+    assert main_module._active_test_screen_id() == "wolves live"
+
+
+def test_interactive_selector_can_filter_then_choose(main_module, monkeypatch):
+    answers = iter(["headlines", "2"])
+    monkeypatch.setattr("builtins.input", lambda _prompt: next(answers))
+
+    assert main_module._choose_screen_interactively() == "news headlines 2"

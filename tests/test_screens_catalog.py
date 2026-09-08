@@ -8,6 +8,10 @@ def test_raw_screen_ids_are_unique():
     assert len(RAW_SCREEN_IDS) == len(set(RAW_SCREEN_IDS))
 
 
+def test_registered_wolves_live_screen_is_listed():
+    assert "wolves live" in RAW_SCREEN_IDS
+
+
 def test_weather_quad_screen_id_is_listed():
     assert "weather quad" in RAW_SCREEN_IDS
 
