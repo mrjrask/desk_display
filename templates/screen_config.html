@@ -703,6 +703,7 @@
     let playlists = [];
     let playlistAssignments = {};
     let collapsedPlaylists = {};
+    let scrollSettings = {{ scroll_settings | tojson }};
 
     function getDragAfterElement(container, y) {
       const draggableElements = [...container.querySelectorAll(".screen-row:not(.dragging)")];
@@ -1032,9 +1033,9 @@
     }
 
     function currentScrollSettings() {
-      return {
-        speed: {{ scroll_settings.speed | tojson }},
-        smoothness: {{ scroll_settings.smoothness | tojson }},
+      scrollSettings = {
+        speed: clampNumber(scrollSettings.speed, 1, 0.25, 3),
+        smoothness: clampNumber(scrollSettings.smoothness, 1, 0.5, 2),
         vertical_speed_adjustment: clampNumber(
           document.getElementById("verticalSpeedAdjustment")?.value,
           0,
@@ -1042,12 +1043,23 @@
           3,
         ),
       };
+      return { ...scrollSettings };
     }
 
     function applyScrollSettings(scroll) {
+      scrollSettings = {
+        speed: clampNumber(scroll?.speed, 1, 0.25, 3),
+        smoothness: clampNumber(scroll?.smoothness, 1, 0.5, 2),
+        vertical_speed_adjustment: clampNumber(
+          scroll?.vertical_speed_adjustment,
+          0,
+          -0.9,
+          3,
+        ),
+      };
       const input = document.getElementById("verticalSpeedAdjustment");
       if (input) {
-        input.value = clampNumber(scroll?.vertical_speed_adjustment, 0, -0.9, 3);
+        input.value = scrollSettings.vertical_speed_adjustment;
       }
     }
 
@@ -1224,6 +1236,7 @@
         playlists,
         assignments: playlistAssignments,
         collapsed: collapsedPlaylists,
+        scroll: currentScrollSettings(),
       };
       try {
         sessionStorage.setItem(draftStorageKey, JSON.stringify(payload));
@@ -1672,6 +1685,9 @@
             }
             if (draft.collapsed && typeof draft.collapsed === "object") {
               collapsedPlaylists = { ...draft.collapsed };
+            }
+            if (draft.scroll && typeof draft.scroll === "object") {
+              applyScrollSettings(draft.scroll);
             }
             savePlaylistState();
             isDirty = true;

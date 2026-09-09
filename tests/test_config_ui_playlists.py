@@ -56,6 +56,37 @@ def test_screen_config_page_bootstraps_server_playlist_state(monkeypatch):
     assert 'const serverPlaylistAssignments = {"date": "default"}' in html
     assert 'id="verticalSpeedAdjustment"' in html
     assert 'value="0.0"' in html
+    expected_scroll_state = (
+        'let scrollSettings = {"smoothness": 1.0, "speed": 1.0, '
+        '"vertical_speed_adjustment": 0.0}'
+    )
+    assert expected_scroll_state in html
+    assert "speed: clampNumber(scrollSettings.speed, 1, 0.25, 3)" in html
+
+
+def test_screen_config_draft_includes_and_restores_scroll_settings(monkeypatch):
+    monkeypatch.setattr(config_ui, "_load_active_config", lambda: {"screens": {"date": 1}})
+    monkeypatch.setattr(config_ui, "_load_active_style_config", lambda: {"screens": {}})
+    monkeypatch.setattr(
+        config_ui,
+        "_build_screen_entries",
+        lambda config, style: [
+            {
+                "id": "date",
+                "frequency": 1,
+                "background": "#000000",
+                "alt_screen": "",
+                "alt_frequency": "",
+            }
+        ],
+    )
+
+    response = config_ui.app.test_client().get("/")
+
+    assert response.status_code == 200
+    html = response.get_data(as_text=True)
+    assert "scroll: currentScrollSettings()," in html
+    assert "applyScrollSettings(draft.scroll);" in html
 
 
 def test_screen_config_page_renders_alt_screen_clear_control(monkeypatch):
