@@ -41,15 +41,16 @@ def test_compute_adaptive_scroll_params_increases_step_for_high_resolution():
     assert params.step > 1
 
 
-def test_compute_adaptive_scroll_params_enables_page_jump_for_very_tall_content():
+def test_compute_adaptive_scroll_params_can_enable_page_jump_without_changing_pacing():
     params = compute_adaptive_scroll_params(
         content_height=3200,
         viewport_height=320,
         viewport_width=320,
         base_step=1,
+        page_jump_mode=True,
     )
     assert params.use_page_jump is True
-    assert params.target_frame_time > 0.016
+    assert params.target_frame_time == 0.016
 
 
 def test_scroll_vertical_content_uses_adaptive_stride_when_page_jump_enabled():
@@ -64,6 +65,7 @@ def test_scroll_vertical_content_uses_adaptive_stride_when_page_jump_enabled():
         base_step=1,
         pause_start=0,
         pause_end=0,
+        page_jump_mode=True,
     )
 
     assert display.frames[0] == 0
@@ -181,7 +183,7 @@ def test_compute_adaptive_scroll_params_applies_min_frame_floor_after_overflow_s
     assert params.target_frame_time == 0.100
 
 
-def test_compute_adaptive_scroll_params_preserves_target_above_min_frame_floor(
+def test_compute_adaptive_scroll_params_keeps_content_independent_target_above_min_frame_floor(
     monkeypatch,
 ):
     monkeypatch.setitem(
@@ -199,9 +201,54 @@ def test_compute_adaptive_scroll_params_preserves_target_above_min_frame_floor(
         min_frame_time_floor=0.050,
     )
 
-    assert params.target_frame_time == pytest.approx(
-        0.100 * (1.0 + 2.0 * 0.6) / 3.0
+    assert params.target_frame_time == pytest.approx(0.100 / 3.0)
+
+
+def test_compute_adaptive_scroll_params_keeps_speed_equal_across_content_heights():
+    short = compute_adaptive_scroll_params(
+        content_height=480,
+        viewport_height=240,
+        viewport_width=320,
+        base_step=1,
     )
+    tall = compute_adaptive_scroll_params(
+        content_height=4800,
+        viewport_height=240,
+        viewport_width=320,
+        base_step=1,
+    )
+
+    assert tall.step == short.step
+    assert tall.target_frame_time == short.target_frame_time
+    assert tall.use_page_jump is short.use_page_jump is False
+
+
+@pytest.mark.parametrize(
+    ("adjustment", "expected_frame_time"),
+    [(0.25, 0.08), (-0.25, pytest.approx(0.1 / 0.75))],
+)
+def test_vertical_speed_adjustment_scales_only_vertical_frame_pacing(
+    monkeypatch, adjustment, expected_frame_time
+):
+    monkeypatch.setitem(
+        compute_adaptive_scroll_params.__globals__,
+        "get_global_scroll_settings",
+        lambda: {
+            "speed": 1.0,
+            "smoothness": 1.0,
+            "vertical_speed_adjustment": adjustment,
+        },
+    )
+
+    params = compute_adaptive_scroll_params(
+        content_height=720,
+        viewport_height=240,
+        viewport_width=320,
+        base_step=1,
+        min_frame_time=0.1,
+    )
+
+    assert params.target_frame_time == expected_frame_time
 
 
 def test_scroll_vertical_content_caps_page_jump_stride_with_max_step():
@@ -217,6 +264,7 @@ def test_scroll_vertical_content_caps_page_jump_stride_with_max_step():
         pause_start=0,
         pause_end=0,
         max_step=1,
+        page_jump_mode=True,
     )
 
     assert display.frames[:3] == [0, 1, 2]

@@ -1,6 +1,16 @@
 import config_ui
 
 
+def test_vertical_scroll_adjustment_normalizes_fractional_values():
+    assert config_ui._normalize_scroll_settings({"vertical_speed_adjustment": 0.25})[
+        "vertical_speed_adjustment"
+    ] == 0.25
+    assert config_ui._normalize_scroll_settings({"vertical_speed_adjustment": -0.25})[
+        "vertical_speed_adjustment"
+    ] == -0.25
+    assert config_ui._normalize_scroll_settings({})["vertical_speed_adjustment"] == 0.0
+
+
 def test_build_playlist_assignments_preserves_order_and_labels():
     playlists, assignments = config_ui._build_playlist_assignments(
         {
@@ -44,6 +54,8 @@ def test_screen_config_page_bootstraps_server_playlist_state(monkeypatch):
     assert '"date"' in html
     assert 'const serverPlaylists = [{"id": "default", "name": "Default"}]' in html
     assert 'const serverPlaylistAssignments = {"date": "default"}' in html
+    assert 'id="verticalSpeedAdjustment"' in html
+    assert 'value="0.0"' in html
 
 
 def test_screen_config_page_renders_alt_screen_clear_control(monkeypatch):

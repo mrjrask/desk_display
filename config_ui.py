@@ -28,6 +28,7 @@ from flask import (
 )
 
 import config
+from diagnostic_playback import load_diagnostic_screen, save_diagnostic_screen
 from paths import (
     resolve_layouts_config_path,
     resolve_screens_config_paths,
@@ -36,7 +37,6 @@ from paths import (
 )
 from schedule import build_scheduler
 from screens_catalog import SCREEN_IDS, canonical_screen_id
-from diagnostic_playback import load_diagnostic_screen, save_diagnostic_screen
 
 # Config path precedence/fallback rules are centralized in paths.py.
 _screens_config_paths = resolve_screens_config_paths()
@@ -126,11 +126,24 @@ def _normalize_scroll_smoothness(value: Any) -> float:
     return round(min(2.0, max(0.5, smoothness)), 2)
 
 
+def _normalize_vertical_speed_adjustment(value: Any) -> float:
+    try:
+        adjustment = float(value)
+    except (TypeError, ValueError):
+        adjustment = 0.0
+    # Keep the resulting multiplier positive while still allowing substantial
+    # per-device tuning in either direction.
+    return round(min(3.0, max(-0.9, adjustment)), 2)
+
+
 def _normalize_scroll_settings(value: Any) -> dict[str, float]:
     settings = value if isinstance(value, dict) else {}
     return {
         "speed": _normalize_scroll_speed(settings.get("speed", 1.0)),
         "smoothness": _normalize_scroll_smoothness(settings.get("smoothness", 1.0)),
+        "vertical_speed_adjustment": _normalize_vertical_speed_adjustment(
+            settings.get("vertical_speed_adjustment", 0.0)
+        ),
     }
 
 
@@ -1365,10 +1378,8 @@ def save_screens() -> Any:
             value = payload.get(key)
             if isinstance(value, expected_type):
                 config[key] = value
-        # The UI no longer exposes global scroll speed/smoothness controls
-        # (per-screen speed overrides replace them), so a save that doesn't
-        # include "scroll" should leave whatever is already on disk alone
-        # instead of resetting it to the 1.0/1.0 defaults.
+        # Preserve hidden legacy global speed/smoothness settings while the UI
+        # exposes only the synchronized vertical-screen adjustment.
         current_scroll = _load_active_config().get("scroll")
         config["scroll"] = _normalize_scroll_settings(payload.get("scroll", current_scroll))
         config, _ = _normalize_legacy_scoreboard_ids(config)

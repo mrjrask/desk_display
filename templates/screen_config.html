@@ -558,6 +558,24 @@
       </div>
     </div>
     <div class="error" id="errorBox"></div>
+    <div class="global-scroll-controls">
+      <div class="field">
+        <label for="verticalSpeedAdjustment">Synchronized vertical scroll adjustment</label>
+        <input
+          type="number"
+          id="verticalSpeedAdjustment"
+          min="-0.9"
+          max="3"
+          step="0.05"
+          value="{{ scroll_settings.vertical_speed_adjustment }}"
+        >
+      </div>
+      <div class="hint">
+        Device-wide fractional adjustment for standings, scoreboards, On This Day,
+        schedules, and playoffs. 0 is unchanged, 0.25 is 25% faster, and -0.25 is
+        25% slower. Horizontal tickers and logo animations are unaffected.
+      </div>
+    </div>
     <div class="playlist-controls">
       <div class="field">
         <input type="text" id="newPlaylistName" placeholder="Create a new playlist">
@@ -1013,6 +1031,26 @@
       return Math.min(max, Math.max(min, parsed));
     }
 
+    function currentScrollSettings() {
+      return {
+        speed: {{ scroll_settings.speed | tojson }},
+        smoothness: {{ scroll_settings.smoothness | tojson }},
+        vertical_speed_adjustment: clampNumber(
+          document.getElementById("verticalSpeedAdjustment")?.value,
+          0,
+          -0.9,
+          3,
+        ),
+      };
+    }
+
+    function applyScrollSettings(scroll) {
+      const input = document.getElementById("verticalSpeedAdjustment");
+      if (input) {
+        input.value = clampNumber(scroll?.vertical_speed_adjustment, 0, -0.9, 3);
+      }
+    }
+
     function showError(message) {
       errorBox.textContent = message;
       errorBox.style.display = "block";
@@ -1140,6 +1178,7 @@
         screens: screensPayload,
         playlists: buildPlaylistsPayload(screens),
         sequence: playlists.map((playlist) => ({ playlist: playlist.id })),
+        scroll: currentScrollSettings(),
       };
     }
 
@@ -1433,6 +1472,7 @@
             screens,
             playlists: buildPlaylistsPayload(screens),
             sequence: playlists.map((playlist) => ({ playlist: playlist.id })),
+            scroll: currentScrollSettings(),
           }),
         });
         const data = await response.json();
@@ -1478,6 +1518,7 @@
               : {};
           collapsedPlaylists = {};
         }
+        applyScrollSettings(data.scroll || data.config?.scroll);
         renderScreens(data.screens || []);
         markDirty();
       } catch (err) {
@@ -1515,6 +1556,7 @@
           throw new Error(data.error || "Unable to import configuration");
         }
         applyImportedPlaylists(payload.config);
+        applyScrollSettings(data.scroll || payload.config?.scroll);
         renderScreens(data.screens || []);
         markClean();
       } catch (err) {
@@ -1599,6 +1641,7 @@
         markDirty();
       }
     });
+    document.getElementById("verticalSpeedAdjustment")?.addEventListener("input", markDirty);
 
     screenTable.addEventListener("dragend", () => {
       markDirty();

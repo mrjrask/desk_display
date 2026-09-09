@@ -126,7 +126,7 @@ def test_on_this_day_year_items_wrap_within_remaining_card_width(monkeypatch):
             assert text_width <= 210
 
 
-def test_on_this_day_scroll_uses_smooth_readable_tuning(monkeypatch):
+def test_on_this_day_scroll_uses_shared_vertical_tuning(monkeypatch):
     monkeypatch.setattr("screens.on_this_day._wiki_items", lambda *args, **kwargs: [])
     monkeypatch.setattr(otd, "_jewish_holiday_items", lambda *args, **kwargs: [])
     monkeypatch.setattr(
@@ -145,8 +145,10 @@ def test_on_this_day_scroll_uses_smooth_readable_tuning(monkeypatch):
 
     assert screen.screenshot_image is not None
     assert screen.screenshot_image.height > screen.image.height
-    assert captured["base_step"] == 1
-    assert captured["min_frame_time"] == 0.030
+    assert captured["base_step"] == otd.config.SCOREBOARD_SCROLL_STEP
+    assert captured["min_frame_time"] == otd.config.SCOREBOARD_SCROLL_DELAY
+    assert captured["pause_start"] == otd.config.SCOREBOARD_SCROLL_PAUSE_TOP
+    assert captured["pause_end"] == otd.config.SCOREBOARD_SCROLL_PAUSE_BOTTOM
     assert captured["page_jump_mode"] is False
 
 

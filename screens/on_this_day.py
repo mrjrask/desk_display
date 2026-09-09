@@ -79,9 +79,6 @@ SECTION_FONT = clone_font(config.FONT_WEATHER_DETAILS_BOLD, _FONT_SIZES["section
 BODY_FONT = clone_font(config.FONT_WEATHER_DETAILS_SMALL, _FONT_SIZES["body"])
 YEAR_FONT = clone_font(config.FONT_WEATHER_DETAILS_SMALL_BOLD, _FONT_SIZES["year"])
 
-_SCROLL_FRAME_SECONDS = 0.030
-_SCROLL_START_PAUSE_SECONDS = 2.0
-_SCROLL_END_PAUSE_SECONDS = 3.0
 
 # Keep live Wikimedia content off the display hot path.  The Raspberry Pi Zero 2 W
 # can spend seconds fetching multiple feeds and thumbnails; caching by date means
@@ -1009,11 +1006,11 @@ def draw_on_this_day(
             viewport_width=W,
             viewport_height=H,
             render_at_offset=_show,
-            base_step=1,
-            pause_start=_SCROLL_START_PAUSE_SECONDS,
-            pause_end=_SCROLL_END_PAUSE_SECONDS,
+            base_step=config.SCOREBOARD_SCROLL_STEP,
+            pause_start=config.SCOREBOARD_SCROLL_PAUSE_TOP,
+            pause_end=config.SCOREBOARD_SCROLL_PAUSE_BOTTOM,
             page_jump_mode=False,
-            min_frame_time=_SCROLL_FRAME_SECONDS,
+            min_frame_time=config.SCOREBOARD_SCROLL_DELAY,
         )
         bottom_offset = max(0, full_img.height - H)
         bottom_frame = full_img.crop((0, bottom_offset, W, bottom_offset + H))
