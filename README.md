@@ -38,7 +38,7 @@ The project is optimized for desk-sized devices but also includes larger 800×48
 - Chicago-focused team screens for Bears, Blackhawks, Wolves, Bulls, Cubs, and White Sox.
 - MLB series screens for current, next, and next-home Cubs/Sox series.
 - NHL and NBA playoff bracket screens.
-- ADS-B receiver stats screen summarizing daily aircraft-tracking activity (unique aircraft, furthest catch, busiest hour) from up to two local dump1090-fa receivers, collected by a standalone service into a local SQLite database.
+- Two ADS-B dashboards: a daily/best-results view and a live receiver view, backed by a standalone collector and local SQLite database for up to two dump1090-fa receivers.
 - Optional screenshot capture and rolling video capture.
 - Flask/Waitress configuration UI with optional password protection and import/export support.
 - Installer scripts for Display HAT Mini, Adafruit miniPiTFT, Waveshare OLED/LCD HAT (A), HyperPixel/kernel display, Pi desktop window mode, macOS window mode, and Windows window mode.
@@ -104,7 +104,8 @@ Supported workflow profiles include:
 
 ### Runtime
 
-- Python 3.9+; project lint/tooling targets Python 3.11.
+- Python 3.10+; project lint/tooling targets Python 3.11. (The codebase uses
+  PEP 604 `X | Y` type unions, which require Python 3.10 or newer.)
 - A display target, SDL desktop session, framebuffer device, or headless mode.
 - Network access for live weather, map, finance, and sports feeds.
 - Optional API credentials for WeatherKit, OpenWeatherMap, Google Maps, Apple Maps, and travel routes.
@@ -492,13 +493,39 @@ Frequency values:
   - `frequency` is required.
   - `extra_seconds` adds hold time after the normal display duration.
   - `alt` can define an alternate screen and alternate frequency.
+  - `hide_after_enabled` plus an ISO-format `hide_after_at` date/time can retire
+    a temporary screen automatically.
+  - `scroll.speed` overrides the global scroll-speed multiplier for that screen
+    (`0.25` through `3.0`).
+
+Top-level `scroll` settings control vertical motion globally:
+
+- `speed` scales pixels moved per frame (`0.25` through `3.0`).
+- `smoothness` scales frame cadence (`0.5` through `2.0`).
+- `vertical_speed_adjustment` provides additional per-display pacing adjustment
+  (`-0.9` through `3.0`, corresponding to a positive `0.1×` through `4.0×`
+  frame-rate multiplier).
+
+The configuration UI exposes these controls and preserves them when loading a
+small or large default rotation. Per-screen speed overrides are also preserved
+through UI edits and import/export. Long vertical screens scroll continuously
+by default rather than jumping a page at a time.
 
 Example:
 
 ```json
 {
+  "scroll": {
+    "speed": 1.0,
+    "smoothness": 1.0,
+    "vertical_speed_adjustment": 0.0
+  },
   "screens": {
-    "weather1": { "frequency": 1, "extra_seconds": 5 },
+    "weather1": {
+      "frequency": 1,
+      "extra_seconds": 5,
+      "scroll": { "speed": 1.2 }
+    },
     "date": {
       "frequency": 1,
       "alt": { "screen": "inside", "frequency": 2 }
@@ -540,22 +567,36 @@ When `quad` or `weather quad` is shown on a touch-capable HyperPixel setup:
 - Both screens share the same stock ticker row (see below) and the same `NEWS_HEADLINES_DISPLAY_SECONDS` on-screen duration, so `news headlines 2` scrolls for exactly as long as `news headlines` each time it's shown.
 - Relevant environment variables: `ENABLE_NEWS_HEADLINES`, `ENABLE_NEWS_HEADLINES_2`, `NEWS_HEADLINES_SHOW_IMAGES`, `NEWS_TICKER_BASE_SPEED`, `NEWS_ARTICLE_FETCH_TIMEOUT_SECONDS`, `NEWS_HEADLINES_DISPLAY_SECONDS`, `NEWS_FEEDS_CONFIG_PATH`, `NEWS_FEEDS_CONFIG_PATH_2` (see the variable table below).
 
-### ADS-B stats screen
+### ADS-B dashboards
 
-`adsb stats` summarizes daily aircraft-receive activity from up to two local dump1090-fa receivers (e.g. PiAware devices), completely decoupled from the display process:
+`adsb stats` and `adsb live` present complementary views of activity from up to
+two local dump1090-fa receivers (for example, PiAware devices), completely
+decoupled from the display process:
 
 - **A standalone collector** (`scripts/adsb_collector.py`, installed as the `desk_display_adsb_collector.service` systemd unit — see [Installer workflows](#installer-workflows) and [Services and operations](#services-and-operations)) polls each configured receiver's `http://<host>/dump1090-fa/data/aircraft.json` (and best-effort `stats.json`) on `ADSB_POLL_INTERVAL_SECONDS` and writes sightings into a local SQLite database (`services/adsb.py`, default path `cache/adsb_stats.db`, overridable with `ADSB_DB_PATH`). A receiver being offline or unreachable only logs a warning and skips that device for the cycle — it never crashes the collector or blocks the display.
-- **The display screen only reads that database** at render time; it never talks to a receiver directly, so a slow or offline receiver cannot slow down or block screen rotation.
+- **The display screens only read that database** at render time; they never talk to a receiver directly, so a slow or offline receiver cannot slow down or block screen rotation.
 - Metrics reset at local midnight (`config.CENTRAL_TIME`) and are computed from raw per-aircraft sighting rows: `hex, callsign, device, first_seen, last_seen, max_distance_nm, max_altitude_ft`. Raw rows older than `ADSB_RETENTION_DAYS` (default 7) are pruned by the collector to keep the database small on a Pi's SD card.
-- Shown metrics: today's total unique aircraft (combined, deduplicated across both receivers, plus a per-receiver breakdown), the furthest catch (distance, callsign, receiver, and time — using the configured `ADSB_DISTANCE_UNIT`), and the busiest hour (most aircraft first-seen in a single hour). When available, it also shows highest altitude, live currently-tracked count, today's message count, and an all-time furthest-catch record that persists across daily resets and pruning.
-- Before any data has been collected yet (or if no receivers are configured/reachable), the screen shows a graceful "no data yet" state instead of an error.
+- `adsb stats` focuses on today's unique-aircraft total, busiest hour, furthest
+  catch, and the all-time furthest record that survives daily reset/pruning.
+- `adsb live` focuses on the currently tracked total and per-receiver live
+  counts, today's message count, aircraft-type/model breakdown, and airline
+  breakdown (using bundled airline logos when available).
+- Before any data has been collected yet (or if no receivers are
+  configured/reachable), both screens show a graceful "no data yet" state
+  instead of an error. Receiver status and counts reflect the collector's most
+  recent live snapshot rather than cumulative daily sightings.
 - Configure receivers, distance unit, poll interval, and retention with the `ADSB_*` variables in [ADS-B receiver variables](#ads-b-receiver-variables).
 
 ---
 
 ## Canonical screen IDs
 
-The authoritative list is `RAW_SCREEN_IDS` in `screens_catalog.py`. Legacy IDs are canonicalized automatically, including `time` → `nixie`, `sensors` → `inside`, and old `* v2` scoreboard aliases → current scoreboard IDs.
+The authoritative list is `RAW_SCREEN_IDS` in `screens_catalog.py`. Legacy IDs
+are canonicalized automatically, including `time` → `nixie`, `sensors` →
+`inside`, `adsb live airlines` → `adsb live`, and old `* v2` scoreboard
+aliases → current scoreboard IDs. Canonicalization applies to both the
+top-level screen map and playlist steps, so persisted rotations migrate during
+normal loading instead of silently dropping renamed screens.
 
 ### Core, weather, sensor, and finance
 
@@ -568,6 +609,7 @@ The authoritative list is `RAW_SCREEN_IDS` in `screens_catalog.py`. Legacy IDs a
 - `weather logo`
 - `weather1`
 - `weather2`
+- `air quality`
 - `weather alert`
 - `weather hourly`
 - `weather daily`
@@ -628,6 +670,7 @@ The authoritative list is `RAW_SCREEN_IDS` in `screens_catalog.py`. Legacy IDs a
 - `NHL Standings East v2`
 - `wolves logo`
 - `wolves last`
+- `wolves live`
 - `wolves next`
 - `wolves next home`
 
@@ -673,6 +716,7 @@ The authoritative list is `RAW_SCREEN_IDS` in `screens_catalog.py`. Legacy IDs a
 ### ADS-B
 
 - `adsb stats`
+- `adsb live`
 
 ---
 
@@ -695,6 +739,9 @@ The UI supports:
 - enabling and disabling screens,
 - editing screen frequencies,
 - editing per-screen `extra_seconds`,
+- setting global speed, smoothness, and vertical-speed adjustment plus optional
+  per-screen scroll-speed overrides,
+- setting optional hide-after date/times for temporary screens,
 - managing playlists and sequence order,
 - importing/exporting screen rotation payloads,
 - optional login protection with `SCREEN_UI_PASSWORD` and `SCREEN_UI_USERNAME`,
