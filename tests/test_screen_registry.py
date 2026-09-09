@@ -233,7 +233,7 @@ def test_adsb_stats_unavailable_when_no_devices_configured(monkeypatch):
 
     assert registry["adsb stats"].available is False
     assert registry["adsb live"].available is False
-    assert registry["adsb live airlines"].available is False
+    assert "adsb live airlines" not in registry
 
 
 def test_adsb_stats_available_when_devices_configured(monkeypatch):
@@ -252,15 +252,13 @@ def test_adsb_stats_available_when_devices_configured(monkeypatch):
 
     assert registry["adsb stats"].available is True
     assert registry["adsb live"].available is True
-    assert registry["adsb live airlines"].available is True
+    assert "adsb live airlines" not in registry
 
     registry["adsb stats"].render()
     registry["adsb live"].render()
-    registry["adsb live airlines"].render()
     assert captured == [
         {"transition": True, "variant": "best"},
         {"transition": True, "variant": "live"},
-        {"transition": True, "variant": "live airlines"},
     ]
 
 

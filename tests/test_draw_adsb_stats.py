@@ -113,10 +113,7 @@ def test_status_text_empty_when_no_devices_known(monkeypatch):
     assert _status_text(_stats(device_online={})) == ""
 
 
-def test_build_tiles_leads_with_furthest_and_by_receiver_on_every_variant():
-    for variant in ("best", "live", "live airlines"):
-        tiles = _build_tiles(_stats(), variant)
-        assert [tile["label"] for tile in tiles[:2]] == ["Furthest", "By Receiver"]
+def test_build_tiles_best_starts_with_furthest():
     tiles = _build_tiles(_stats(), "best")
     assert tiles[0]["value"] == "42.7 nm"
     assert "UAL123" in tiles[0]["caption"]
@@ -129,6 +126,20 @@ def test_build_tiles_by_receiver_carries_online_status_per_line():
     by_receiver = next(tile for tile in tiles if tile["label"] == "By Receiver")
     assert by_receiver["value"] == "Receiver 1: 8\nReceiver 2: 6"
     assert by_receiver["line_online"] == [True, False]
+
+
+def test_build_tiles_live_variant_uses_current_receiver_counts():
+    tiles = _build_tiles(
+        _stats(
+            total_by_device={"Receiver 1": 80, "Receiver 2": 60},
+            currently_tracked_by_device={"Receiver 1": 3, "Receiver 2": 2},
+        ),
+        "live",
+    )
+
+    by_receiver = tiles[1]
+    assert by_receiver["label"] == "By Receiver"
+    assert by_receiver["value"] == "Receiver 1: 3\nReceiver 2: 2"
 
 
 def test_build_tiles_shows_no_position_message_without_furthest():
@@ -152,25 +163,23 @@ def test_build_tiles_best_variant_shows_all_time_and_messages():
     )
     assert len(tiles) == 4
     labels = [tile["label"] for tile in tiles]
-    assert labels == ["Furthest", "By Receiver", "All-Time Best", "Messages"]
+    assert labels == ["Furthest", "All-Time Best", "By Receiver", "Messages"]
 
 
-def test_build_tiles_best_variant_omits_all_time_when_same_as_todays_furthest():
+def test_build_tiles_best_variant_keeps_all_time_when_same_as_todays_furthest():
     todays = FurthestCatch(
         hex="abc123", callsign="UAL123", device="Receiver 1", distance_nm=42.7, seen_at=1755000000.0
     )
     tiles = _build_tiles(_stats(furthest=todays, all_time_furthest=todays), "best")
-    assert "All-Time Best" not in [tile["label"] for tile in tiles]
+    assert [tile["label"] for tile in tiles] == [
+        "Furthest", "All-Time Best", "By Receiver", "Messages"
+    ]
 
 
-def test_build_tiles_best_variant_can_render_with_only_two_tiles():
-    """No all-time-best distinct from today's furthest and no messages
-    today: the grid should just show Furthest + By Receiver, never a
-    fallback 'Receivers' tile."""
-
+def test_build_tiles_best_variant_always_renders_four_tiles():
     tiles = _build_tiles(_empty_stats(messages_today_by_device={}), "best")
     labels = [tile["label"] for tile in tiles]
-    assert labels == ["Furthest", "By Receiver"]
+    assert labels == ["Furthest", "All-Time Best", "By Receiver", "Messages"]
     assert "Receivers" not in labels
 
 
@@ -180,8 +189,8 @@ def test_build_tiles_live_variant_shows_total_and_by_aircraft():
     )
     tiles = _build_tiles(stats, "live")
     labels = [tile["label"] for tile in tiles]
-    assert labels == ["Furthest", "By Receiver", "Live Now", "Live Now"]
-    total_tile, by_aircraft_tile = tiles[2], tiles[3]
+    assert labels == ["Live Now", "By Receiver", "Live Now", "Live Now"]
+    total_tile, by_aircraft_tile = tiles[0], tiles[3]
     assert total_tile["value"] == "5"
     assert total_tile["caption"] == "aircraft in range"
     assert by_aircraft_tile["value"] == "B738: 3\nA320: 2"
@@ -189,21 +198,23 @@ def test_build_tiles_live_variant_shows_total_and_by_aircraft():
     assert by_aircraft_tile["columns"] == 2
 
 
-def test_build_tiles_live_variant_omits_live_tiles_when_nothing_tracked():
+def test_build_tiles_live_variant_keeps_four_tiles_when_nothing_tracked():
     tiles = _build_tiles(_stats(currently_tracked_combined=0), "live")
-    assert [tile["label"] for tile in tiles] == ["Furthest", "By Receiver"]
+    assert [tile["label"] for tile in tiles] == [
+        "Live Now", "By Receiver", "Live Now", "Live Now"
+    ]
 
 
-def test_build_tiles_live_airlines_variant_shows_by_aircraft_and_by_airline():
+def test_build_tiles_live_variant_shows_by_aircraft_and_by_airline():
     stats = _stats(
         currently_tracked_combined=3,
         currently_tracked_by_model={"B738": 2, "A320": 1},
         currently_tracked_by_airline={"UAL": 2, "DAL": 1},
     )
-    tiles = _build_tiles(stats, "live airlines")
+    tiles = _build_tiles(stats, "live")
     labels = [tile["label"] for tile in tiles]
-    assert labels == ["Furthest", "By Receiver", "Live Now", "Live Now"]
-    by_aircraft_tile, by_airline_tile = tiles[2], tiles[3]
+    assert labels == ["Live Now", "By Receiver", "Live Now", "Live Now"]
+    by_airline_tile, by_aircraft_tile = tiles[2], tiles[3]
     assert by_aircraft_tile["caption"] == "by aircraft"
     assert by_aircraft_tile["columns"] == 2
     assert by_airline_tile["caption"] == "by airline"
@@ -211,11 +222,11 @@ def test_build_tiles_live_airlines_variant_shows_by_aircraft_and_by_airline():
     assert by_airline_tile["columns"] == 2
 
 
-def test_build_tiles_live_airlines_variant_omitted_when_no_airline_data():
+def test_build_tiles_live_variant_keeps_airline_tile_without_airline_data():
     stats = _stats(currently_tracked_combined=3, currently_tracked_by_model={"B738": 3})
-    tiles = _build_tiles(stats, "live airlines")
+    tiles = _build_tiles(stats, "live")
     labels = [tile["label"] for tile in tiles]
-    assert labels == ["Furthest", "By Receiver", "Live Now"]
+    assert labels == ["Live Now", "By Receiver", "Live Now", "Live Now"]
 
 
 def test_top_breakdown_items_sorts_and_folds_overflow_into_other():
@@ -313,6 +324,17 @@ def test_draw_airline_tile_two_columns_renders_without_error(tmp_path, monkeypat
     )
 
 
+def test_draw_airline_tile_renders_placeholder_when_rows_are_empty():
+    img = Image.new("RGB", (200, 150), (0, 0, 0))
+    draw = ImageDraw.Draw(img)
+
+    _draw_airline_tile(
+        img, draw, (0, 0, 200, 150), "Live Now", [], "by airline", (95, 220, 150), columns=2
+    )
+
+    assert img.getbbox() is not None
+
+
 def test_draw_live_variant_renders_with_many_aircraft_types():
     stats = _stats(
         currently_tracked_combined=20,
@@ -325,7 +347,7 @@ def test_draw_live_variant_renders_with_many_aircraft_types():
     assert result.image.size == (config.WIDTH, config.HEIGHT)
 
 
-def test_draw_live_airlines_variant_renders_with_many_airlines():
+def test_draw_live_variant_renders_with_many_airlines():
     stats = _stats(
         currently_tracked_combined=20,
         currently_tracked_by_model={"B738": 10, "A320": 10},
@@ -333,7 +355,7 @@ def test_draw_live_airlines_variant_renders_with_many_airlines():
             "UAL": 5, "AAL": 4, "DAL": 3, "SWA": 3, "JBU": 2, "Other": 3
         },
     )
-    result = draw_adsb_stats_screen(None, stats=stats, variant="live airlines")
+    result = draw_adsb_stats_screen(None, stats=stats, variant="live")
     assert isinstance(result, ScreenImage)
     assert result.image.size == (config.WIDTH, config.HEIGHT)
 
@@ -468,7 +490,7 @@ def test_draw_live_variant_returns_screen_image():
     assert result.image.size == (config.WIDTH, config.HEIGHT)
 
 
-def test_draw_live_airlines_variant_falls_back_to_text_without_logo_files(
+def test_draw_live_variant_falls_back_to_text_without_logo_files(
     tmp_path, monkeypatch
 ):
     monkeypatch.setattr(config, "AIR_IMAGES_DIR", str(tmp_path))
@@ -478,12 +500,12 @@ def test_draw_live_airlines_variant_falls_back_to_text_without_logo_files(
         currently_tracked_by_model={"B738": 2, "A320": 1},
         currently_tracked_by_airline={"UAL": 2, "DAL": 1},
     )
-    result = draw_adsb_stats_screen(None, stats=stats, variant="live airlines")
+    result = draw_adsb_stats_screen(None, stats=stats, variant="live")
     assert isinstance(result, ScreenImage)
     assert result.image.size == (config.WIDTH, config.HEIGHT)
 
 
-def test_draw_live_airlines_variant_pastes_logo_when_file_present(tmp_path, monkeypatch):
+def test_draw_live_variant_pastes_logo_when_file_present(tmp_path, monkeypatch):
     monkeypatch.setattr(config, "AIR_IMAGES_DIR", str(tmp_path))
     draw_adsb_stats_module._AIRLINE_LOGO_CACHE.clear()
     Image.new("RGBA", (40, 20), (200, 30, 30, 255)).save(tmp_path / "UAL.png")
@@ -492,6 +514,6 @@ def test_draw_live_airlines_variant_pastes_logo_when_file_present(tmp_path, monk
         currently_tracked_by_model={"B738": 2, "A320": 1},
         currently_tracked_by_airline={"UAL": 2, "DAL": 1},
     )
-    result = draw_adsb_stats_screen(None, stats=stats, variant="live airlines")
+    result = draw_adsb_stats_screen(None, stats=stats, variant="live")
     assert isinstance(result, ScreenImage)
     assert result.image.size == (config.WIDTH, config.HEIGHT)

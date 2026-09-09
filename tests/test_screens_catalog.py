@@ -1,11 +1,15 @@
 import json
 from pathlib import Path
 
-from screens_catalog import RAW_SCREEN_IDS
+from screens_catalog import RAW_SCREEN_IDS, canonical_screen_id
 
 
 def test_raw_screen_ids_are_unique():
     assert len(RAW_SCREEN_IDS) == len(set(RAW_SCREEN_IDS))
+
+
+def test_removed_adsb_airlines_screen_maps_to_consolidated_live_screen():
+    assert canonical_screen_id("adsb live airlines") == "adsb live"
 
 
 def test_registered_wolves_live_screen_is_listed():

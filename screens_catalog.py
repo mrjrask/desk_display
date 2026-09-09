@@ -15,6 +15,7 @@ LEGACY_SCREEN_ID_MAP = {
     # persisted configs continue to load after upgrades.
     "time": "nixie",
     "sensors": "inside",
+    "adsb live airlines": "adsb live",
 }
 
 
@@ -128,7 +129,6 @@ RAW_SCREEN_IDS = [
     "MLB NLWC Standings",
     "adsb stats",
     "adsb live",
-    "adsb live airlines",
 ]
 
 SCREEN_IDS = RAW_SCREEN_IDS

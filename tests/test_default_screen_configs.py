@@ -46,9 +46,9 @@ def test_default_screen_configs_include_adsb_screens_at_end_of_other():
 
         assert config["config"]["screens"].get("adsb stats") == 3
         assert config["config"]["screens"].get("adsb live") == 3
-        assert config["config"]["screens"].get("adsb live airlines") == 3
+        assert "adsb live airlines" not in config["config"]["screens"]
         other_steps = _other_playlist_steps(config)
-        assert other_steps[-3:] == ["adsb stats", "adsb live", "adsb live airlines"]
+        assert other_steps[-2:] == ["adsb stats", "adsb live"]
 
 
 def test_default_screen_configs_place_wolves_live_after_logo():
