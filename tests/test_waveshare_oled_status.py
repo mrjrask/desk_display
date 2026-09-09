@@ -6,7 +6,7 @@ import importlib.util
 import json
 import sys
 import types
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import pytest
@@ -647,7 +647,7 @@ def test_cubs_oled_frames_hides_stale_live_game(monkeypatch):
     mod = _load_module()
     game = {
         "gamePk": 248,
-        "officialDate": (datetime.now().date() - timedelta(days=2)).isoformat(),
+        "officialDate": TODAY,
         "status": {"abstractGameState": "Live", "detailedState": "Top 9th", "statusCode": "I"},
         "teams": {
             "away": {"team": {"id": 112, "name": "Chicago Cubs"}, "score": 3},
@@ -656,7 +656,12 @@ def test_cubs_oled_frames_hides_stale_live_game(monkeypatch):
         "linescore": {"inningState": "Top", "currentInningOrdinal": "9th", "outs": 1},
     }
 
-    monkeypatch.setattr(mod, "_read_display_status_payload", lambda: {"cubs": {"live_game": game}})
+    stale_time = datetime.now(timezone.utc) - timedelta(minutes=10)
+    monkeypatch.setattr(
+        mod,
+        "_read_display_status_payload",
+        lambda: {"rendered_at": stale_time.isoformat(), "cubs": {"live_game": game}},
+    )
     monkeypatch.setattr(mod, "_CUBS_FINAL_GAME_PK", None)
     monkeypatch.setattr(mod, "_CUBS_FINAL_HOLD_UNTIL_EPOCH", 0.0)
     monkeypatch.setattr(mod, "_load_cubs_final_state", lambda: (None, 0.0))
@@ -664,13 +669,30 @@ def test_cubs_oled_frames_hides_stale_live_game(monkeypatch):
     assert mod._cubs_oled_frames() is None
 
 
-def test_live_game_date_guard_allows_games_running_after_midnight():
+def test_cubs_oled_frames_allows_resumed_game_from_an_earlier_date(monkeypatch):
     mod = _load_module()
-    now = datetime(2026, 9, 9, 1, 30)
-    game = {"officialDate": "2026-09-08"}
+    game = {
+        "gamePk": 249,
+        "officialDate": "2026-08-01",
+        "status": {"abstractGameState": "Live", "detailedState": "In Progress", "statusCode": "I"},
+        "teams": {
+            "away": {"team": {"id": 112, "name": "Chicago Cubs"}, "score": 3},
+            "home": {"team": {"id": 121, "name": "New York Mets"}, "score": 2},
+        },
+        "linescore": {"inningState": "Top", "currentInningOrdinal": "9th", "outs": 1},
+    }
+    monkeypatch.setattr(
+        mod,
+        "_read_display_status_payload",
+        lambda: {"rendered_at": datetime.now(timezone.utc).isoformat(), "cubs": {"live_game": game}},
+    )
+    monkeypatch.setattr(mod, "_render_score_panel", lambda *_args, **_kwargs: object())
+    monkeypatch.setattr(mod, "_CUBS_FINAL_GAME_PK", None)
+    monkeypatch.setattr(mod, "_CUBS_FINAL_HOLD_UNTIL_EPOCH", 0.0)
+    monkeypatch.setattr(mod, "_load_cubs_final_state", lambda: (None, 0.0))
+    monkeypatch.setattr(mod, "_persist_cubs_final_state", lambda *_args, **_kwargs: None)
 
-    assert mod._game_is_current_for_live_display(game, now=now)
-    assert not mod._game_is_current_for_live_display(game, now=now.replace(hour=9))
+    assert mod._cubs_oled_frames() is not None
 
 
 def test_cubs_oled_frames_hides_final_from_an_earlier_date(monkeypatch):

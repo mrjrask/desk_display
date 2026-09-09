@@ -32,7 +32,7 @@ import signal
 import subprocess
 import time
 from collections.abc import Callable
-from datetime import datetime, time as datetime_time, timedelta, timezone
+from datetime import datetime, timedelta, timezone
 from functools import lru_cache
 from threading import Event
 from typing import Optional
@@ -64,6 +64,7 @@ TEMP_SOURCE = os.getenv("WAVESHARE_OLED_TEMP_SOURCE", "weather1").strip().lower(
 TEMP_COMMAND = os.getenv("WAVESHARE_OLED_TEMP_COMMAND", "")
 TEMP_UNIT = os.getenv("WAVESHARE_OLED_TEMP_UNIT", "C").strip().upper()
 REFRESH_SECONDS = max(1, _env_int("WAVESHARE_OLED_REFRESH_SECONDS", 5))
+STATUS_MAX_AGE_SECONDS = max(1, _env_int("WAVESHARE_OLED_STATUS_MAX_AGE_SECONDS", 300))
 SWAP_INTERVAL_MIN_SECONDS = max(1, _env_int("WAVESHARE_OLED_SWAP_INTERVAL_MIN_SECONDS", 60))
 SWAP_INTERVAL_MAX_SECONDS = max(
     SWAP_INTERVAL_MIN_SECONDS,
@@ -444,29 +445,30 @@ def _game_finished_today(game: dict) -> bool:
     return local_date is not None and local_date == datetime.now().date()
 
 
-def _game_is_current_for_live_display(game: dict, *, now: datetime | None = None) -> bool:
-    """Return whether a reported live game is recent enough for the OLED.
+def _display_status_is_fresh(payload: dict, *, now: datetime | None = None) -> bool:
+    """Return whether the main display heartbeat is recent enough to trust.
 
-    The OLED reads the Cubs game from ``display_status.json`` rather than
-    querying MLB itself.  If the producer stops refreshing near the end of a
-    game, that file can continue to contain a perfectly valid-looking ``Live``
-    payload indefinitely.  Restrict live/pending games to their official game
-    day, while allowing games that run past midnight through 6 AM local time.
+    Missing timestamps remain compatible with older heartbeat producers, but
+    once ``rendered_at`` is present an invalid or old timestamp is rejected.
+    This prevents an abandoned live-game payload from staying on the OLED
+    without making assumptions about the game's official date.  That matters
+    for suspended MLB games resumed on a later date.
     """
 
-    local_date = _game_local_date(game)
-    if local_date is None:
-        return False
-
-    current = now or datetime.now()
-    if current.tzinfo is not None:
-        current = current.astimezone()
-    if local_date == current.date():
+    raw_timestamp = str((payload or {}).get("rendered_at") or "").strip()
+    if not raw_timestamp:
         return True
-    return (
-        local_date == current.date() - timedelta(days=1)
-        and current.time().replace(tzinfo=None) < datetime_time(6)
-    )
+    try:
+        rendered_at = datetime.fromisoformat(raw_timestamp.replace("Z", "+00:00"))
+    except ValueError:
+        return False
+    if rendered_at.tzinfo is None:
+        rendered_at = rendered_at.replace(tzinfo=timezone.utc)
+    current = now or datetime.now(timezone.utc)
+    if current.tzinfo is None:
+        current = current.replace(tzinfo=timezone.utc)
+    age = current.astimezone(timezone.utc) - rendered_at.astimezone(timezone.utc)
+    return -timedelta(seconds=30) <= age <= timedelta(seconds=STATUS_MAX_AGE_SECONDS)
 
 
 def _mlb_game_phase(game: dict) -> str:
@@ -637,7 +639,7 @@ def _cubs_oled_frames() -> tuple[Image.Image, Image.Image] | None:
         _CUBS_FINAL_GAME_PK, _CUBS_FINAL_HOLD_UNTIL_EPOCH = _load_cubs_final_state()
     if isinstance(live_game, dict):
         phase = _mlb_game_phase(live_game)
-        if phase in ("live", "pending") and _game_is_current_for_live_display(live_game):
+        if phase in ("live", "pending") and _display_status_is_fresh(payload):
             selected_game = live_game
             live_phase = phase
             is_final = False
