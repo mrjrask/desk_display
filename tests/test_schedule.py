@@ -75,6 +75,15 @@ def test_sanitize_schedule_config_canonicalizes_legacy_screen_ids():
     assert sanitized["screens"] == {"nixie": 1, "inside": {"frequency": 2}}
 
 
+def test_sanitize_schedule_config_migrates_removed_adsb_screen():
+    sanitized, removed = sanitize_schedule_config(
+        {"screens": {"adsb live airlines": 1}}
+    )
+
+    assert removed == []
+    assert sanitized["screens"] == {"adsb live": 1}
+
+
 def test_build_scheduler_accepts_legacy_screen_ids():
     scheduler = build_scheduler({"screens": {"time": 1, "sensors": 1}})
 

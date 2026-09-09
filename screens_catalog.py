@@ -15,6 +15,7 @@ LEGACY_SCREEN_ID_MAP = {
     # persisted configs continue to load after upgrades.
     "time": "nixie",
     "sensors": "inside",
+    "adsb live airlines": "adsb live",
 }
 
 

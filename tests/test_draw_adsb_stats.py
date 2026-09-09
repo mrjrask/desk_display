@@ -310,6 +310,17 @@ def test_draw_airline_tile_two_columns_renders_without_error(tmp_path, monkeypat
     )
 
 
+def test_draw_airline_tile_renders_placeholder_when_rows_are_empty():
+    img = Image.new("RGB", (200, 150), (0, 0, 0))
+    draw = ImageDraw.Draw(img)
+
+    _draw_airline_tile(
+        img, draw, (0, 0, 200, 150), "Live Now", [], "by airline", (95, 220, 150), columns=2
+    )
+
+    assert img.getbbox() is not None
+
+
 def test_draw_live_variant_renders_with_many_aircraft_types():
     stats = _stats(
         currently_tracked_combined=20,

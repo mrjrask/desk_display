@@ -618,7 +618,10 @@ def _draw_airline_tile(
 
     x0, y0, x1, y1 = rect
     width, height = x1 - x0, y1 - y0
-    if width <= 0 or height <= 0 or not rows:
+    if width <= 0 or height <= 0:
+        return
+    if not rows:
+        _draw_stat_tile(draw, rect, label, "--", caption, accent, columns=columns)
         return
 
     radius = max(6, min(16, min(width, height) // 5))
