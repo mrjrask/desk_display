@@ -130,8 +130,7 @@
       "quad": 0,
       "World Cup Scoreboard": 0,
       "adsb stats": 3,
-      "adsb live": 3,
-      "adsb live airlines": 3
+      "adsb live": 3
     },
     "playlists": {
       "playlist-1771301244817-427": {
@@ -512,9 +511,6 @@
           },
           {
             "screen": "adsb live"
-          },
-          {
-            "screen": "adsb live airlines"
           }
         ]
       }

@@ -63,13 +63,10 @@ _MIN_GRID_ROW_H = 16
 # tile falls back to plain "CODE: count" text instead of icon + count.
 _MIN_ICON_DIM = 16
 
-# The ADS-B dashboard is three separate registered screens (see
-# screens/registry.py) rather than one screen that rotates through every
-# tile combination: Furthest and By Receiver always lead, and each variant
-# supplies a fixed pair of tiles for the remaining two slots.
+# The ADS-B dashboard is two separate registered screens (see
+# screens/registry.py), each with a fixed four-tile layout.
 _VARIANT_BEST = "best"
 _VARIANT_LIVE = "live"
-_VARIANT_LIVE_AIRLINES = "live airlines"
 
 _AIRLINE_LOGO_EXTENSIONS = (".png", ".jpg", ".jpeg")
 _AIRLINE_LOGO_CACHE: dict[tuple[str, int], Optional[Image.Image]] = {}
@@ -822,14 +819,14 @@ def _tile_by_receiver(stats: DailyStats) -> dict[str, Any]:
     }
 
 
-def _tile_all_time_best(stats: DailyStats) -> Optional[dict[str, Any]]:
-    show_all_time = stats.all_time_furthest is not None and (
-        stats.furthest is None
-        or stats.all_time_furthest.hex != stats.furthest.hex
-        or stats.all_time_furthest.distance_nm != stats.furthest.distance_nm
-    )
-    if not show_all_time:
-        return None
+def _tile_all_time_best(stats: DailyStats) -> dict[str, Any]:
+    if stats.all_time_furthest is None:
+        return {
+            "label": "All-Time Best",
+            "value": "--",
+            "caption": "No position data yet",
+            "accent": _ACCENT_ALL_TIME,
+        }
     at = stats.all_time_furthest
     return {
         "label": "All-Time Best",
@@ -839,10 +836,8 @@ def _tile_all_time_best(stats: DailyStats) -> Optional[dict[str, Any]]:
     }
 
 
-def _tile_messages(stats: DailyStats) -> Optional[dict[str, Any]]:
+def _tile_messages(stats: DailyStats) -> dict[str, Any]:
     total_messages = sum(stats.messages_today_by_device.values())
-    if not total_messages:
-        return None
     return {
         "label": "Messages",
         "value": _format_count(total_messages),
@@ -851,9 +846,7 @@ def _tile_messages(stats: DailyStats) -> Optional[dict[str, Any]]:
     }
 
 
-def _tile_live_total(stats: DailyStats) -> Optional[dict[str, Any]]:
-    if not stats.currently_tracked_combined:
-        return None
+def _tile_live_total(stats: DailyStats) -> dict[str, Any]:
     return {
         "label": "Live Now",
         "value": str(stats.currently_tracked_combined),
@@ -862,29 +855,22 @@ def _tile_live_total(stats: DailyStats) -> Optional[dict[str, Any]]:
     }
 
 
-def _tile_live_by_aircraft(stats: DailyStats) -> Optional[dict[str, Any]]:
-    if not stats.currently_tracked_combined:
-        return None
+def _tile_live_by_aircraft(stats: DailyStats) -> dict[str, Any]:
     lines = _live_now_breakdown_lines(stats.currently_tracked_by_model, max_lines=6)
-    if not lines:
-        return None
     return {
         "label": "Live Now",
-        "value": "\n".join(lines),
+        "value": "\n".join(lines) if lines else "--",
         "caption": "by aircraft",
         "accent": _ACCENT_LIVE,
         "columns": 2,
     }
 
 
-def _tile_live_by_airline(stats: DailyStats) -> Optional[dict[str, Any]]:
-    if not stats.currently_tracked_combined:
-        return None
+def _tile_live_by_airline(stats: DailyStats) -> dict[str, Any]:
     rows = _top_breakdown_items(stats.currently_tracked_by_airline, max_lines=6)
-    if not rows:
-        return None
     return {
         "label": "Live Now",
+        "value": "--",
         "caption": "by airline",
         "accent": _ACCENT_LIVE,
         "airline_rows": rows,
@@ -893,22 +879,23 @@ def _tile_live_by_airline(stats: DailyStats) -> Optional[dict[str, Any]]:
 
 
 def _build_tiles(stats: DailyStats, variant: str) -> list[dict[str, Any]]:
-    """Furthest and By Receiver always lead; the other two slots are a
-    fixed pair of tiles for *variant* (one of ``_VARIANT_BEST``,
-    ``_VARIANT_LIVE``, ``_VARIANT_LIVE_AIRLINES``) rather than a rotating
-    selection, since each variant is its own registered screen."""
-
-    tiles: list[dict[str, Any]] = [_tile_furthest(stats), _tile_by_receiver(stats)]
-
+    """Return the fixed row-major tile layout for either ADS-B screen."""
     if variant == _VARIANT_LIVE:
-        extras = [_tile_live_total(stats), _tile_live_by_aircraft(stats)]
-    elif variant == _VARIANT_LIVE_AIRLINES:
-        extras = [_tile_live_by_aircraft(stats), _tile_live_by_airline(stats)]
-    else:
-        extras = [_tile_all_time_best(stats), _tile_messages(stats)]
-
-    tiles.extend(tile for tile in extras if tile is not None)
-    return tiles
+        # Clockwise: total (upper left), receiver (upper right), aircraft
+        # (lower right), airline (lower left). Rendering consumes row-major.
+        return [
+            _tile_live_total(stats),
+            _tile_by_receiver(stats),
+            _tile_live_by_airline(stats),
+            _tile_live_by_aircraft(stats),
+        ]
+    # Clockwise: furthest, all-time best, messages, receiver.
+    return [
+        _tile_furthest(stats),
+        _tile_all_time_best(stats),
+        _tile_by_receiver(stats),
+        _tile_messages(stats),
+    ]
 
 
 def _render_no_data(stats: Optional[DailyStats]) -> Image.Image:
@@ -1142,8 +1129,9 @@ def draw_adsb_stats_screen(
 ):
     """Draw today's ADS-B receive stats, or a graceful "no data yet" state.
 
-    *variant* selects the fixed extra-tile pair (see ``_build_tiles``);
-    each variant is registered as its own screen in ``screens/registry.py``.
+    *variant* selects one of the two fixed four-tile layouts (see
+    ``_build_tiles``); each variant is registered as its own screen in
+    ``screens/registry.py``.
     """
 
     if stats is None:

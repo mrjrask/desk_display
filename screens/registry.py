@@ -1849,12 +1849,4 @@ def build_screen_registry(context: ScreenContext) -> tuple[dict[str, ScreenDefin
         lambda: draw_adsb_stats_screen(context.display, transition=True, variant="live"),
         available=config.ENABLE_ADSB,
     )
-    register(
-        "adsb live airlines",
-        lambda: draw_adsb_stats_screen(
-            context.display, transition=True, variant="live airlines"
-        ),
-        available=config.ENABLE_ADSB,
-    )
-
     return registry, metadata
