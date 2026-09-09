@@ -1,6 +1,16 @@
 import config_ui
 
 
+def test_vertical_scroll_adjustment_normalizes_fractional_values():
+    assert config_ui._normalize_scroll_settings({"vertical_speed_adjustment": 0.25})[
+        "vertical_speed_adjustment"
+    ] == 0.25
+    assert config_ui._normalize_scroll_settings({"vertical_speed_adjustment": -0.25})[
+        "vertical_speed_adjustment"
+    ] == -0.25
+    assert config_ui._normalize_scroll_settings({})["vertical_speed_adjustment"] == 0.0
+
+
 def test_build_playlist_assignments_preserves_order_and_labels():
     playlists, assignments = config_ui._build_playlist_assignments(
         {
@@ -44,6 +54,57 @@ def test_screen_config_page_bootstraps_server_playlist_state(monkeypatch):
     assert '"date"' in html
     assert 'const serverPlaylists = [{"id": "default", "name": "Default"}]' in html
     assert 'const serverPlaylistAssignments = {"date": "default"}' in html
+    assert 'id="verticalSpeedAdjustment"' in html
+    assert 'value="0.0"' in html
+    expected_scroll_state = (
+        'let scrollSettings = {"smoothness": 1.0, "speed": 1.0, '
+        '"vertical_speed_adjustment": 0.0}'
+    )
+    assert expected_scroll_state in html
+    assert "speed: clampNumber(scrollSettings.speed, 1, 0.25, 3)" in html
+
+
+def test_screen_config_draft_includes_and_restores_scroll_settings(monkeypatch):
+    monkeypatch.setattr(config_ui, "_load_active_config", lambda: {"screens": {"date": 1}})
+    monkeypatch.setattr(config_ui, "_load_active_style_config", lambda: {"screens": {}})
+    monkeypatch.setattr(
+        config_ui,
+        "_build_screen_entries",
+        lambda config, style: [
+            {
+                "id": "date",
+                "frequency": 1,
+                "background": "#000000",
+                "alt_screen": "",
+                "alt_frequency": "",
+            }
+        ],
+    )
+
+    response = config_ui.app.test_client().get("/")
+
+    assert response.status_code == 200
+    html = response.get_data(as_text=True)
+    assert "scroll: currentScrollSettings()," in html
+    assert "applyScrollSettings(draft.scroll);" in html
+
+
+def test_load_defaults_preserves_scroll_without_explicit_default_settings(monkeypatch):
+    monkeypatch.setattr(
+        config_ui,
+        "_load_default_screens_bundle",
+        lambda profile: (
+            {"screens": {"date": 1}, "scroll": config_ui._normalize_scroll_settings(None)},
+            {"screens": {}},
+            {"screens": {}},
+            False,
+        ),
+    )
+
+    response = config_ui.app.test_client().get("/api/screens/defaults?profile=large")
+
+    assert response.status_code == 200
+    assert response.get_json()["has_explicit_scroll"] is False
 
 
 def test_screen_config_page_renders_alt_screen_clear_control(monkeypatch):

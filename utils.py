@@ -2631,7 +2631,7 @@ MANUAL_SCROLL_RESUME_DELAY_SECONDS = 1.0
 _SCROLL_SETTINGS_CACHE: Dict[str, Any] = {
     "path": None,
     "mtime": None,
-    "settings": {"speed": 1.0, "smoothness": 1.0},
+    "settings": {"speed": 1.0, "smoothness": 1.0, "vertical_speed_adjustment": 0.0},
     "screens": {},
 }
 _SCROLL_SETTINGS_LOCK = threading.Lock()
@@ -2672,6 +2672,10 @@ def _clamp_float(value: Any, default: float, minimum: float, maximum: float) -> 
     return min(maximum, max(minimum, parsed))
 
 
+def _default_scroll_settings() -> Dict[str, float]:
+    return {"speed": 1.0, "smoothness": 1.0, "vertical_speed_adjustment": 0.0}
+
+
 def _parse_screen_scroll_override(raw: Any) -> Dict[str, float]:
     """Parse a per-screen ``scroll`` spec, keeping only the keys it sets."""
 
@@ -2694,10 +2698,10 @@ def _load_scroll_config() -> Dict[str, Any]:
         config_path = str(resolve_screens_config_paths().active_path)
         mtime = os.path.getmtime(config_path)
     except OSError:
-        return {"settings": {"speed": 1.0, "smoothness": 1.0}, "screens": {}}
+        return {"settings": _default_scroll_settings(), "screens": {}}
     except Exception:
         logging.debug("Unable to resolve global scroll settings.", exc_info=True)
-        return {"settings": {"speed": 1.0, "smoothness": 1.0}, "screens": {}}
+        return {"settings": _default_scroll_settings(), "screens": {}}
 
     with _SCROLL_SETTINGS_LOCK:
         if _SCROLL_SETTINGS_CACHE.get("path") == config_path and _SCROLL_SETTINGS_CACHE.get("mtime") == mtime:
@@ -2710,7 +2714,7 @@ def _load_scroll_config() -> Dict[str, Any]:
                 payload = json.load(fh)
         except Exception:
             logging.debug("Unable to read global scroll settings from %s.", config_path, exc_info=True)
-            settings = {"speed": 1.0, "smoothness": 1.0}
+            settings = _default_scroll_settings()
             screen_overrides: Dict[str, Dict[str, float]] = {}
         else:
             raw = payload.get("scroll") if isinstance(payload, dict) else {}
@@ -2719,6 +2723,9 @@ def _load_scroll_config() -> Dict[str, Any]:
             settings = {
                 "speed": _clamp_float(raw.get("speed"), 1.0, 0.25, 3.0),
                 "smoothness": _clamp_float(raw.get("smoothness"), 1.0, 0.5, 2.0),
+                "vertical_speed_adjustment": _clamp_float(
+                    raw.get("vertical_speed_adjustment"), 0.0, -0.9, 3.0
+                ),
             }
             screen_overrides = {}
             screens_raw = payload.get("screens") if isinstance(payload, dict) else {}
@@ -2769,28 +2776,32 @@ def compute_adaptive_scroll_params(
     viewport_width: int,
     base_step: int,
     min_frame_time: float = 0.016,
-    page_jump_mode: bool = True,
+    page_jump_mode: bool = False,
     page_jump_threshold_ratio: float = 8.0,
     max_step: int | None = None,
     min_frame_time_floor: float | None = None,
 ) -> AdaptiveScrollParams:
     """Compute resolution-aware scroll step and frame pacing.
 
-    Larger displays can scroll farther per frame, while very tall boards run at
-    a lower FPS target to keep motion readable and reduce frame churn.
+    Larger displays can scroll farther per frame. Frame pacing deliberately
+    does not vary with content height: two vertical screens using the same
+    settings must move at the same pixels-per-second rate, regardless of how
+    many rows they contain.
 
     Page-jump mode is intentionally conservative so long scoreboards keep a
     readable line-by-line cadence instead of skipping most rows.
 
     ``min_frame_time_floor`` is an optional lower bound, in seconds, on the
-    final adaptive frame time. It is applied after ``min_frame_time`` has been
-    adjusted for global smoothness and content overflow, so it neither caps nor
-    replaces an adaptive target that is already higher than the floor.
+    final frame time after the global smoothness setting is applied.
     """
 
     settings = _effective_scroll_settings()
     safe_base_step = max(1, int(round(int(base_step) * settings["speed"])))
-    min_frame_time = max(0.001, float(min_frame_time) / settings["smoothness"])
+    vertical_speed_multiplier = 1.0 + settings.get("vertical_speed_adjustment", 0.0)
+    min_frame_time = max(
+        0.001,
+        float(min_frame_time) / settings["smoothness"] / vertical_speed_multiplier,
+    )
     max_dimension = max(int(viewport_width), int(viewport_height), 1)
     resolution_scale = max(1.0, max_dimension / 320.0)
     step = max(safe_base_step, int(round(safe_base_step * resolution_scale)))
@@ -2799,15 +2810,9 @@ def compute_adaptive_scroll_params(
 
     overflow = max(0, int(content_height) - int(viewport_height))
     overflow_ratio = overflow / max(1, int(viewport_height))
-    # For very tall content increase frame time (lower FPS).
-    adaptive_target_frame_time = min_frame_time * (
-        1.0 + min(2.0, overflow_ratio * 0.6)
-    )
-    target_frame_time = adaptive_target_frame_time
+    target_frame_time = min_frame_time
     if min_frame_time_floor is not None:
-        target_frame_time = max(
-            adaptive_target_frame_time, float(min_frame_time_floor)
-        )
+        target_frame_time = max(target_frame_time, float(min_frame_time_floor))
 
     return AdaptiveScrollParams(
         step=step,
@@ -3034,7 +3039,7 @@ def scroll_vertical_content(
     pause_start: float,
     pause_end: float,
     reverse: bool = False,
-    page_jump_mode: bool = True,
+    page_jump_mode: bool = False,
     min_frame_time: float = 0.016,
     max_step: int | None = None,
     min_frame_time_floor: float | None = None,
@@ -4581,4 +4586,3 @@ def time_strings(now: datetime.datetime) -> tuple[str, str]:
 def date_strings(now: datetime.datetime) -> tuple[str, str]:
     weekday = now.strftime("%A")
     return weekday, f"{now.strftime('%B')} {now.day}, {now.year}"
-

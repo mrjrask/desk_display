@@ -89,14 +89,13 @@ def test_nhl_v2_logo_height_is_capped_to_score_row(monkeypatch):
     assert nhl_scoreboard_v2.LOGO_HEIGHT == 26
 
 
-def test_mlb_scroll_path_uses_profile_timing_for_small_connected_display(monkeypatch):
+def test_mlb_scroll_path_uses_shared_timing(monkeypatch):
     captured = {}
 
     def fake_scroll_vertical_content(**kwargs):
         captured.update(kwargs)
 
-    monkeypatch.setattr(mlb_scoreboard, "SMALL_CONNECTED_DISPLAY_PROFILE", True)
-    monkeypatch.setattr(mlb_scoreboard, "MLB_SCOREBOARD_SCROLL_DELAY", 0.060)
+    monkeypatch.setattr(mlb_scoreboard, "SCOREBOARD_SCROLL_DELAY", 0.060)
     monkeypatch.setattr(mlb_scoreboard, "SCOREBOARD_SCROLL_STEP", 4)
     monkeypatch.setattr(mlb_scoreboard, "scroll_vertical_content", fake_scroll_vertical_content)
 
@@ -109,14 +108,13 @@ def test_mlb_scroll_path_uses_profile_timing_for_small_connected_display(monkeyp
     assert "min_frame_time_floor" not in captured
 
 
-def test_mlb_scroll_path_keeps_scoreboard_delay_for_hyperpixel(monkeypatch):
+def test_mlb_scroll_path_keeps_shared_speed_for_hyperpixel(monkeypatch):
     captured = {}
 
     def fake_scroll_vertical_content(**kwargs):
         captured.update(kwargs)
 
-    monkeypatch.setattr(mlb_scoreboard, "SMALL_CONNECTED_DISPLAY_PROFILE", False)
-    monkeypatch.setattr(mlb_scoreboard, "MLB_SCOREBOARD_SCROLL_DELAY", 0.020)
+    monkeypatch.setattr(mlb_scoreboard, "SCOREBOARD_SCROLL_DELAY", 0.020)
     monkeypatch.setattr(mlb_scoreboard, "SCOREBOARD_SCROLL_STEP", 2)
     monkeypatch.setattr(mlb_scoreboard, "scroll_vertical_content", fake_scroll_vertical_content)
 
@@ -124,7 +122,7 @@ def test_mlb_scroll_path_keeps_scoreboard_delay_for_hyperpixel(monkeypatch):
 
     assert captured["base_step"] == 2
     assert captured["min_frame_time"] == 0.020
-    assert captured["page_jump_mode"] is True
+    assert captured["page_jump_mode"] is False
     assert "max_step" not in captured
     assert "min_frame_time_floor" not in captured
 
@@ -211,4 +209,3 @@ def test_mlb_v2_render_shows_loading_message_when_games_not_hydrated(monkeypatch
 
     assert result.displayed is True
     assert display.last_image is not None
-

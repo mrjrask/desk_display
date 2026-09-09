@@ -33,11 +33,11 @@ from config import (
     FONT_TITLE_SPORTS,
     HEIGHT,
     IMAGES_DIR,
-    MLB_SCOREBOARD_SCROLL_DELAY,
     SCOREBOARD_BACKGROUND_COLOR,
     SCOREBOARD_FINAL_LOSING_SCORE_COLOR,
     SCOREBOARD_FINAL_WINNING_SCORE_COLOR,
     SCOREBOARD_IN_PROGRESS_SCORE_COLOR,
+    SCOREBOARD_SCROLL_DELAY,
     SCOREBOARD_SCROLL_PAUSE_BOTTOM,
     SCOREBOARD_SCROLL_PAUSE_TOP,
     SCOREBOARD_SCROLL_STEP,
@@ -48,7 +48,6 @@ from config import (
     get_screen_image_scale,
     is_hyperpixel_4_square_layout,
     is_hyperpixel_next_layout,
-    is_small_connected_scoreboard_display,
     scale_value,
     scale_value_width,
 )
@@ -71,7 +70,6 @@ from utils import (
 # ─── Constants ────────────────────────────────────────────────────────────────
 HYPERPIXEL_LAYOUT = is_hyperpixel_next_layout()
 HYPERPIXEL_4_SQUARE_LAYOUT = is_hyperpixel_4_square_layout()
-SMALL_CONNECTED_DISPLAY_PROFILE = is_small_connected_scoreboard_display()
 
 
 def _scale_width(value: int) -> int:
@@ -570,13 +568,8 @@ def _scroll_display(display, full_img: Image.Image):
         base_step=SCOREBOARD_SCROLL_STEP,
         pause_start=SCOREBOARD_SCROLL_PAUSE_TOP,
         pause_end=SCOREBOARD_SCROLL_PAUSE_BOTTOM,
-        # Before the morning rollover the board can contain both yesterday's
-        # finals and today's schedule.  That combined slate crosses the shared
-        # helper's "very tall" threshold and enables viewport-sized jumps,
-        # which race through the list on the small SPI-connected displays.
-        # Keep their scoreboard scroll line-by-line regardless of slate size.
-        page_jump_mode=not SMALL_CONNECTED_DISPLAY_PROFILE,
-        min_frame_time=MLB_SCOREBOARD_SCROLL_DELAY,
+        page_jump_mode=False,
+        min_frame_time=SCOREBOARD_SCROLL_DELAY,
     )
 
 
