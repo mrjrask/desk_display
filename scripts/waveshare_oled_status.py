@@ -32,7 +32,7 @@ import signal
 import subprocess
 import time
 from collections.abc import Callable
-from datetime import datetime, timezone
+from datetime import datetime, time as datetime_time, timedelta, timezone
 from functools import lru_cache
 from threading import Event
 from typing import Optional
@@ -444,6 +444,31 @@ def _game_finished_today(game: dict) -> bool:
     return local_date is not None and local_date == datetime.now().date()
 
 
+def _game_is_current_for_live_display(game: dict, *, now: datetime | None = None) -> bool:
+    """Return whether a reported live game is recent enough for the OLED.
+
+    The OLED reads the Cubs game from ``display_status.json`` rather than
+    querying MLB itself.  If the producer stops refreshing near the end of a
+    game, that file can continue to contain a perfectly valid-looking ``Live``
+    payload indefinitely.  Restrict live/pending games to their official game
+    day, while allowing games that run past midnight through 6 AM local time.
+    """
+
+    local_date = _game_local_date(game)
+    if local_date is None:
+        return False
+
+    current = now or datetime.now()
+    if current.tzinfo is not None:
+        current = current.astimezone()
+    if local_date == current.date():
+        return True
+    return (
+        local_date == current.date() - timedelta(days=1)
+        and current.time().replace(tzinfo=None) < datetime_time(6)
+    )
+
+
 def _mlb_game_phase(game: dict) -> str:
     """Classify an MLB game's status the way the MLB scoreboard does.
 
@@ -612,7 +637,7 @@ def _cubs_oled_frames() -> tuple[Image.Image, Image.Image] | None:
         _CUBS_FINAL_GAME_PK, _CUBS_FINAL_HOLD_UNTIL_EPOCH = _load_cubs_final_state()
     if isinstance(live_game, dict):
         phase = _mlb_game_phase(live_game)
-        if phase in ("live", "pending"):
+        if phase in ("live", "pending") and _game_is_current_for_live_display(live_game):
             selected_game = live_game
             live_phase = phase
             is_final = False
