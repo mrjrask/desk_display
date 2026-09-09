@@ -34,21 +34,20 @@ def test_nfl_v2_reads_espn_competitors_by_home_away():
     ) == (away, home)
 
 
-def test_nfl_v2_caps_team_logos_to_compact_score_cell(monkeypatch):
-    monkeypatch.setattr(nfl_scoreboard_v2, "TEAM_LOGO_BASE_HEIGHT", 100)
-    monkeypatch.setattr(nfl_scoreboard_v2, "SCORE_ROW_H", 80)
-    monkeypatch.setattr(nfl_scoreboard_v2, "GAME_COL_WIDTHS", [44, 30, 12, 30, 44])
-    monkeypatch.setattr(nfl_scoreboard_v2, "scale_value_width", lambda value: value)
+def test_nfl_v2_matches_mlb_compact_logo_size(monkeypatch):
+    monkeypatch.setattr(nfl_scoreboard_v2, "TEAM_LOGO_BASE_HEIGHT", 80)
+    monkeypatch.setattr(nfl_scoreboard_v2, "SCORE_ROW_H", 30)
+    monkeypatch.setattr(nfl_scoreboard_v2, "scale_value", lambda value: value)
     monkeypatch.setattr(
         nfl_scoreboard_v2,
         "get_screen_image_scale",
-        lambda _screen, image, default: 3.0 if image == "team_logo" else default,
+        lambda *_args, **_kwargs: 1.0,
     )
     monkeypatch.setattr(nfl_scoreboard_v2, "is_kernel_driven_display", lambda: False)
 
     nfl_scoreboard_v2._apply_style_overrides()
 
-    assert nfl_scoreboard_v2.LOGO_HEIGHT == 20
+    assert nfl_scoreboard_v2.LOGO_HEIGHT == 26
 
 
 def test_nfl_v2_composes_and_scrolls_entire_16_game_week(monkeypatch):

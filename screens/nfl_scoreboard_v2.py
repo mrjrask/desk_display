@@ -66,6 +66,8 @@ from utils import (
     log_call,
     log_missing_team_logo,
     scroll_vertical_content,
+    standard_scoreboard_league_logo_height,
+    standard_scoreboard_team_logo_height,
 )
 
 # ─── Constants ────────────────────────────────────────────────────────────────
@@ -106,8 +108,8 @@ STYLE_SCREEN_ID = "NFL Scoreboard"
 MIN_GAMES_FOR_V2_LAYOUT = 6
 V2_DISABLED_RESOLUTIONS = {(320, 240), (240, 320), (135, 240)}
 TITLE_FONT = FONT_TITLE_SPORTS
-TEAM_LOGO_BASE_HEIGHT = scale_value_width(18)
-LEAGUE_LOGO_BASE_HEIGHT = TEAM_LOGO_BASE_HEIGHT
+TEAM_LOGO_BASE_HEIGHT = standard_scoreboard_team_logo_height(HEIGHT, compact=True)
+LEAGUE_LOGO_BASE_HEIGHT = standard_scoreboard_league_logo_height(TEAM_LOGO_BASE_HEIGHT)
 LOGO_HEIGHT = TEAM_LOGO_BASE_HEIGHT
 LEAGUE_LOGO_HEIGHT = LEAGUE_LOGO_BASE_HEIGHT
 SCORE_FONT = get_screen_font(
@@ -177,16 +179,9 @@ def _apply_style_overrides() -> None:
     if _IS_1080P_LAYOUT:
         team_scale *= 1.2
     target_logo_height = max(1, int(round(TEAM_LOGO_BASE_HEIGHT * team_scale)))
-    # A configured image scale may request a logo larger than the compact
-    # score cell. Keep every team mark inside both its row and column so wide
-    # weekly slates remain readable instead of logos covering scores/statuses.
-    # Leave substantial breathing room around each compact-layout mark. Wide
-    # NFL logos otherwise visually run into the score and center columns even
-    # when their square image boxes technically fit inside the logo columns.
-    logo_padding = scale_value_width(10)
-    max_row_fit = max(1, SCORE_ROW_H - logo_padding)
-    max_column_fit = max(1, min(GAME_COL_WIDTHS[1], GAME_COL_WIDTHS[3]) - logo_padding)
-    LOGO_HEIGHT = min(target_logo_height, max_row_fit, max_column_fit)
+    # Match the MLB v2 team-logo sizing while keeping the mark inside its row.
+    max_row_fit = max(1, SCORE_ROW_H - scale_value(4))
+    LOGO_HEIGHT = min(target_logo_height, max_row_fit)
     if is_kernel_driven_display():
         LEAGUE_LOGO_HEIGHT = LOGO_HEIGHT
     else:
