@@ -89,6 +89,24 @@ def test_screen_config_draft_includes_and_restores_scroll_settings(monkeypatch):
     assert "applyScrollSettings(draft.scroll);" in html
 
 
+def test_load_defaults_preserves_scroll_without_explicit_default_settings(monkeypatch):
+    monkeypatch.setattr(
+        config_ui,
+        "_load_default_screens_bundle",
+        lambda profile: (
+            {"screens": {"date": 1}, "scroll": config_ui._normalize_scroll_settings(None)},
+            {"screens": {}},
+            {"screens": {}},
+            False,
+        ),
+    )
+
+    response = config_ui.app.test_client().get("/api/screens/defaults?profile=large")
+
+    assert response.status_code == 200
+    assert response.get_json()["has_explicit_scroll"] is False
+
+
 def test_screen_config_page_renders_alt_screen_clear_control(monkeypatch):
     monkeypatch.setattr(config_ui, "_load_active_config", lambda: {"screens": {"date": 1}})
     monkeypatch.setattr(config_ui, "_load_active_style_config", lambda: {"screens": {}})

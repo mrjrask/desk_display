@@ -559,7 +559,9 @@ def _resolve_default_screens_path(profile: Optional[str] = None) -> str:
     raise ValueError("Unknown default configuration. Choose large or small.")
 
 
-def _load_default_screens_bundle(profile: Optional[str] = None) -> tuple[dict[str, Any], dict[str, Any], dict[str, Any]]:
+def _load_default_screens_bundle(
+    profile: Optional[str] = None,
+) -> tuple[dict[str, Any], dict[str, Any], dict[str, Any], bool]:
     """Load the repo-backed defaults used by the web UI Load Defaults button."""
 
     default_screens_path = _resolve_default_screens_path(profile)
@@ -573,6 +575,7 @@ def _load_default_screens_bundle(profile: Optional[str] = None) -> tuple[dict[st
         raise ValueError("Default screens file must be a JSON object")
 
     config_payload = payload.get("config") if isinstance(payload.get("config"), dict) else payload
+    has_explicit_scroll = "scroll" in config_payload
     config = _validate_config_payload(config_payload)
     config, _ = _normalize_legacy_scoreboard_ids(config)
 
@@ -584,7 +587,7 @@ def _load_default_screens_bundle(profile: Optional[str] = None) -> tuple[dict[st
     else:
         layouts_config = _load_layouts_config(LAYOUTS_CONFIG_PATH)
 
-    return config, style_config, layouts_config
+    return config, style_config, layouts_config, has_explicit_scroll
 
 def _load_active_config() -> dict[str, Any]:
     if os.path.exists(LOCAL_CONFIG_PATH):
@@ -1330,7 +1333,9 @@ def diagnostic_playback() -> Any:
 def get_default_screens() -> Any:
     profile = request.args.get("profile", DEFAULT_SCREEN_PROFILE)
     try:
-        config, style_config, layouts_config = _load_default_screens_bundle(profile)
+        config, style_config, layouts_config, has_explicit_scroll = _load_default_screens_bundle(
+            profile
+        )
     except Exception as exc:
         return jsonify({"error": str(exc)}), 400
 
@@ -1342,6 +1347,7 @@ def get_default_screens() -> Any:
         "screens": _build_screen_entries(config, style_config),
         "playlists": playlists,
         "scroll": _normalize_scroll_settings(config.get("scroll")),
+        "has_explicit_scroll": has_explicit_scroll,
         "playlist_assignments": playlist_assignments,
         "quad_enabled": bool(layouts_config.get("screens", {}).get("quad", {}).get("enabled", False)),
         "quad_scroll_speed": _normalize_quad_scroll_speed(layouts_config.get("screens", {}).get("quad", {}).get("scroll_speed", 1.0)),

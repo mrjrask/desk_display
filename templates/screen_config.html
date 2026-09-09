@@ -1531,7 +1531,9 @@
               : {};
           collapsedPlaylists = {};
         }
-        applyScrollSettings(data.scroll || data.config?.scroll);
+        if (data.has_explicit_scroll) {
+          applyScrollSettings(data.scroll || data.config?.scroll);
+        }
         renderScreens(data.screens || []);
         markDirty();
       } catch (err) {
