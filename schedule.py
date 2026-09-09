@@ -294,6 +294,34 @@ def sanitize_schedule_config(config: dict[str, Any]) -> tuple[dict[str, Any], li
             cleaned_screens[canonical_id] = cleaned_raw
 
     sanitized["screens"] = cleaned_screens
+
+    playlists = config.get("playlists")
+    if isinstance(playlists, dict):
+        cleaned_playlists = dict(playlists)
+        for playlist_id, playlist in playlists.items():
+            if not isinstance(playlist, dict) or not isinstance(playlist.get("steps"), list):
+                continue
+
+            cleaned_steps: list[Any] = []
+            seen_step_screens: set[str] = set()
+            for step in playlist["steps"]:
+                if not isinstance(step, dict) or not isinstance(step.get("screen"), str):
+                    cleaned_steps.append(step)
+                    continue
+
+                cleaned_step = dict(step)
+                canonical_id = canonical_screen_id(step["screen"])
+                if canonical_id in seen_step_screens:
+                    continue
+                cleaned_step["screen"] = canonical_id
+                cleaned_steps.append(cleaned_step)
+                seen_step_screens.add(canonical_id)
+
+            cleaned_playlist = dict(playlist)
+            cleaned_playlist["steps"] = cleaned_steps
+            cleaned_playlists[playlist_id] = cleaned_playlist
+        sanitized["playlists"] = cleaned_playlists
+
     return sanitized, removed
 
 

@@ -77,11 +77,46 @@ def test_sanitize_schedule_config_canonicalizes_legacy_screen_ids():
 
 def test_sanitize_schedule_config_migrates_removed_adsb_screen():
     sanitized, removed = sanitize_schedule_config(
-        {"screens": {"adsb live airlines": 1}}
+        {
+            "screens": {"adsb live airlines": 1},
+            "playlists": {
+                "other": {
+                    "steps": [
+                        {"screen": "date"},
+                        {"screen": "adsb live airlines"},
+                        {"screen": "adsb live"},
+                    ]
+                }
+            },
+        }
     )
 
     assert removed == []
     assert sanitized["screens"] == {"adsb live": 1}
+    assert sanitized["playlists"]["other"]["steps"] == [
+        {"screen": "date"},
+        {"screen": "adsb live"},
+    ]
+
+
+def test_build_scheduler_keeps_migrated_adsb_screen_in_playlist_position():
+    scheduler = build_scheduler(
+        {
+            "screens": {"date": 1, "adsb live airlines": 1, "inside": 1},
+            "playlists": {
+                "other": {
+                    "steps": [
+                        {"screen": "date"},
+                        {"screen": "adsb live airlines"},
+                        {"screen": "inside"},
+                    ]
+                }
+            },
+        }
+    )
+
+    assert scheduler.requested_ids == {"date", "adsb live", "inside"}
+    assert scheduler.preview_scheduled_ids(3) == ["date", "adsb live", "inside"]
 
 
 def test_build_scheduler_accepts_legacy_screen_ids():
