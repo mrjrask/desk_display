@@ -128,6 +128,20 @@ def test_build_tiles_by_receiver_carries_online_status_per_line():
     assert by_receiver["line_online"] == [True, False]
 
 
+def test_build_tiles_live_variant_uses_current_receiver_counts():
+    tiles = _build_tiles(
+        _stats(
+            total_by_device={"Receiver 1": 80, "Receiver 2": 60},
+            currently_tracked_by_device={"Receiver 1": 3, "Receiver 2": 2},
+        ),
+        "live",
+    )
+
+    by_receiver = tiles[1]
+    assert by_receiver["label"] == "By Receiver"
+    assert by_receiver["value"] == "Receiver 1: 3\nReceiver 2: 2"
+
+
 def test_build_tiles_shows_no_position_message_without_furthest():
     tiles = _build_tiles(_stats(furthest=None), "best")
     assert tiles[0]["value"] == "--"

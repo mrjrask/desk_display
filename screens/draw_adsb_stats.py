@@ -183,13 +183,16 @@ def _catch_detail(catch: FurthestCatch, *, when: str) -> Optional[str]:
     return "\n".join(lines) if lines else None
 
 
-def _by_receiver_lines(stats: DailyStats) -> list[tuple[str, bool]]:
+def _by_receiver_lines(
+    stats: DailyStats, counts: Optional[dict[str, int]] = None
+) -> list[tuple[str, bool]]:
     """One ``"label: count"`` line per receiver, paired with whether that
     receiver is currently online (for the status dot drawn beside it)."""
 
-    labels = [device["label"] for device in config.ADSB_DEVICES] or sorted(stats.total_by_device)
+    receiver_counts = stats.total_by_device if counts is None else counts
+    labels = [device["label"] for device in config.ADSB_DEVICES] or sorted(receiver_counts)
     return [
-        (f"{label}: {stats.total_by_device.get(label, 0)}", bool(stats.device_online.get(label)))
+        (f"{label}: {receiver_counts.get(label, 0)}", bool(stats.device_online.get(label)))
         for label in labels
     ]
 
@@ -811,8 +814,10 @@ def _tile_furthest(stats: DailyStats) -> dict[str, Any]:
     }
 
 
-def _tile_by_receiver(stats: DailyStats) -> dict[str, Any]:
-    receiver_lines = _by_receiver_lines(stats)
+def _tile_by_receiver(
+    stats: DailyStats, counts: Optional[dict[str, int]] = None
+) -> dict[str, Any]:
+    receiver_lines = _by_receiver_lines(stats, counts)
     return {
         "label": "By Receiver",
         "value": "\n".join(text for text, _ in receiver_lines) if receiver_lines else "--",
@@ -888,7 +893,7 @@ def _build_tiles(stats: DailyStats, variant: str) -> list[dict[str, Any]]:
         # (lower right), airline (lower left). Rendering consumes row-major.
         return [
             _tile_live_total(stats),
-            _tile_by_receiver(stats),
+            _tile_by_receiver(stats, stats.currently_tracked_by_device),
             _tile_live_by_airline(stats),
             _tile_live_by_aircraft(stats),
         ]
