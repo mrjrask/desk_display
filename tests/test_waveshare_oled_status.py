@@ -6,7 +6,7 @@ import importlib.util
 import json
 import sys
 import types
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import pytest
@@ -490,6 +490,7 @@ def test_cubs_oled_frames_prefers_live_game(monkeypatch):
     rendered = []
     game = {
         "gamePk": 123,
+        "officialDate": TODAY,
         "status": {"abstractGameState": "Live", "detailedState": "In Progress", "statusCode": "I"},
         "teams": {
             "away": {"team": {"id": 112, "name": "Chicago Cubs", "abbreviation": "CHC"}, "score": 3},
@@ -523,6 +524,7 @@ def test_cubs_oled_frames_footer_layout_is_consistent_regardless_of_batter(monke
     rendered = []
     game = {
         "gamePk": 321,
+        "officialDate": TODAY,
         "status": {"abstractGameState": "Live", "detailedState": "In Progress", "statusCode": "I"},
         "teams": {
             "away": {"team": {"id": 112, "name": "Chicago Cubs", "abbreviation": "CHC"}, "score": 1},
@@ -592,6 +594,7 @@ def test_cubs_oled_frames_shows_non_inning_statuses(monkeypatch, detailed, expec
     rendered = []
     game = {
         "gamePk": 246,
+        "officialDate": TODAY,
         "status": {"abstractGameState": "Preview", "detailedState": detailed, "statusCode": ""},
         "teams": {
             "away": {"team": {"id": 112, "name": "Chicago Cubs", "abbreviation": "CHC"}, "score": 0},
@@ -637,6 +640,59 @@ def test_cubs_oled_frames_hides_plain_pregame_status(monkeypatch):
     monkeypatch.setattr(mod, "_persist_cubs_final_state", lambda *_args, **_kwargs: None)
 
     assert mod._cubs_oled_frames() is None
+
+
+def test_cubs_oled_frames_hides_stale_live_game(monkeypatch):
+    """A cached Live status must not leave yesterday's inning on the OLED."""
+    mod = _load_module()
+    game = {
+        "gamePk": 248,
+        "officialDate": TODAY,
+        "status": {"abstractGameState": "Live", "detailedState": "Top 9th", "statusCode": "I"},
+        "teams": {
+            "away": {"team": {"id": 112, "name": "Chicago Cubs"}, "score": 3},
+            "home": {"team": {"id": 121, "name": "New York Mets"}, "score": 2},
+        },
+        "linescore": {"inningState": "Top", "currentInningOrdinal": "9th", "outs": 1},
+    }
+
+    stale_time = datetime.now(timezone.utc) - timedelta(minutes=10)
+    monkeypatch.setattr(
+        mod,
+        "_read_display_status_payload",
+        lambda: {"rendered_at": stale_time.isoformat(), "cubs": {"live_game": game}},
+    )
+    monkeypatch.setattr(mod, "_CUBS_FINAL_GAME_PK", None)
+    monkeypatch.setattr(mod, "_CUBS_FINAL_HOLD_UNTIL_EPOCH", 0.0)
+    monkeypatch.setattr(mod, "_load_cubs_final_state", lambda: (None, 0.0))
+
+    assert mod._cubs_oled_frames() is None
+
+
+def test_cubs_oled_frames_allows_resumed_game_from_an_earlier_date(monkeypatch):
+    mod = _load_module()
+    game = {
+        "gamePk": 249,
+        "officialDate": "2026-08-01",
+        "status": {"abstractGameState": "Live", "detailedState": "In Progress", "statusCode": "I"},
+        "teams": {
+            "away": {"team": {"id": 112, "name": "Chicago Cubs"}, "score": 3},
+            "home": {"team": {"id": 121, "name": "New York Mets"}, "score": 2},
+        },
+        "linescore": {"inningState": "Top", "currentInningOrdinal": "9th", "outs": 1},
+    }
+    monkeypatch.setattr(
+        mod,
+        "_read_display_status_payload",
+        lambda: {"rendered_at": datetime.now(timezone.utc).isoformat(), "cubs": {"live_game": game}},
+    )
+    monkeypatch.setattr(mod, "_render_score_panel", lambda *_args, **_kwargs: object())
+    monkeypatch.setattr(mod, "_CUBS_FINAL_GAME_PK", None)
+    monkeypatch.setattr(mod, "_CUBS_FINAL_HOLD_UNTIL_EPOCH", 0.0)
+    monkeypatch.setattr(mod, "_load_cubs_final_state", lambda: (None, 0.0))
+    monkeypatch.setattr(mod, "_persist_cubs_final_state", lambda *_args, **_kwargs: None)
+
+    assert mod._cubs_oled_frames() is not None
 
 
 def test_cubs_oled_frames_hides_final_from_an_earlier_date(monkeypatch):
