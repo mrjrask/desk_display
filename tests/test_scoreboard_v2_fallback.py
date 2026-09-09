@@ -50,6 +50,23 @@ def test_nfl_v2_matches_mlb_compact_logo_size(monkeypatch):
     assert nfl_scoreboard_v2.LOGO_HEIGHT == 26
 
 
+def test_nfl_v2_caps_logo_size_to_team_columns(monkeypatch):
+    monkeypatch.setattr(nfl_scoreboard_v2, "TEAM_LOGO_BASE_HEIGHT", 220)
+    monkeypatch.setattr(nfl_scoreboard_v2, "SCORE_ROW_H", 208)
+    monkeypatch.setattr(nfl_scoreboard_v2, "GAME_COL_WIDTHS", [264, 180, 72, 180, 264])
+    monkeypatch.setattr(nfl_scoreboard_v2, "scale_value", lambda value: value)
+    monkeypatch.setattr(
+        nfl_scoreboard_v2,
+        "get_screen_image_scale",
+        lambda *_args, **_kwargs: 1.0,
+    )
+    monkeypatch.setattr(nfl_scoreboard_v2, "is_kernel_driven_display", lambda: False)
+
+    nfl_scoreboard_v2._apply_style_overrides()
+
+    assert nfl_scoreboard_v2.LOGO_HEIGHT == 180
+
+
 def test_nfl_v2_composes_and_scrolls_entire_16_game_week(monkeypatch):
     games = [{"id": f"event-{index:02d}"} for index in range(16)]
     composed_ids = []

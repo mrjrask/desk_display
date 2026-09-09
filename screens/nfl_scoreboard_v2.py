@@ -179,9 +179,13 @@ def _apply_style_overrides() -> None:
     if _IS_1080P_LAYOUT:
         team_scale *= 1.2
     target_logo_height = max(1, int(round(TEAM_LOGO_BASE_HEIGHT * team_scale)))
-    # Match the MLB v2 team-logo sizing while keeping the mark inside its row.
+    # Match the MLB v2 team-logo sizing while keeping the mark inside its row
+    # and its dedicated column. On wide displays the row grows taller than the
+    # logo columns are wide, so the column cap prevents square/wide marks from
+    # overlapping the adjacent score and center columns.
     max_row_fit = max(1, SCORE_ROW_H - scale_value(4))
-    LOGO_HEIGHT = min(target_logo_height, max_row_fit)
+    max_column_fit = max(1, min(GAME_COL_WIDTHS[1], GAME_COL_WIDTHS[3]))
+    LOGO_HEIGHT = min(target_logo_height, max_row_fit, max_column_fit)
     if is_kernel_driven_display():
         LEAGUE_LOGO_HEIGHT = LOGO_HEIGHT
     else:
