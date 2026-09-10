@@ -37,6 +37,7 @@ from config import (
     get_screen_image_scale,
     is_display_profile,
     is_hdmi_1080p_layout,
+    is_hyperpixel_4_square_layout,
     is_hyperpixel_next_layout,
     is_kernel_driven_display,
     scale_value,
@@ -75,6 +76,7 @@ HYPERPIXEL_LAYOUT = is_hyperpixel_next_layout()
 _IS_1080P_LAYOUT = is_hdmi_1080p_layout()
 _HD_LAYOUT_TEXT_BOOST = 1.25 if _IS_1080P_LAYOUT else 1.0
 _IS_HYPERPIXEL_4_PROFILE = is_display_profile("hyperpixel4") or is_display_profile("hyperpixel4_square")
+_IS_HYPERPIXEL_4_SQUARE_LAYOUT = is_hyperpixel_4_square_layout()
 
 
 def _scale_y(value: int) -> int:
@@ -89,15 +91,16 @@ SCORE_ROW_H = max(1, int(round(_scale_y(30) * _HD_LAYOUT_TEXT_BOOST)))
 STATUS_ROW_H = max(1, int(round(_scale_y(14) * _HD_LAYOUT_TEXT_BOOST)))
 SUPER_BOWL_LOGO_GAP = _scale_y(6)
 
-# Dual-game column layout (per game, 160px wide)
-# [Score 44][Logo 30][@ 12][Logo 30][Score 44] = 160
-GAME_COL_WIDTHS = [
-    scale_value_width(44),
-    scale_value_width(30),
-    scale_value_width(12),
-    scale_value_width(30),
-    scale_value_width(44),
-]
+def _game_column_widths() -> list[int]:
+    """Keep the logo-to-@ spacing aligned with the MLB scoreboard."""
+    base_widths = [44, 30, 12, 30, 44]
+    if _IS_HYPERPIXEL_4_SQUARE_LAYOUT:
+        base_widths = [42, 30, 16, 30, 42]
+    return [scale_value_width(width) for width in base_widths]
+
+
+# Dual-game column layout (per game, 160px wide).
+GAME_COL_WIDTHS = _game_column_widths()
 GAME_WIDTH = sum(GAME_COL_WIDTHS)
 GAME_COL_X = [0]
 for w in GAME_COL_WIDTHS:
