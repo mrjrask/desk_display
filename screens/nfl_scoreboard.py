@@ -79,13 +79,15 @@ STATUS_ROW_H        = _scale_y(18)
 SUPER_BOWL_LOGO_GAP = _scale_y(6)
 SUPER_BOWL_DATE     = (2, 8)  # Feb 8
 
-COL_WIDTHS = [
-    scale_value_width(80),
-    scale_value_width(60),
-    scale_value_width(40),
-    scale_value_width(60),
-    scale_value_width(80),
-]
+def _scoreboard_column_widths() -> list[int]:
+    """Keep the logo-to-@ spacing aligned with the MLB scoreboard."""
+    base_widths = [80, 60, 40, 60, 80]
+    if HYPERPIXEL_4_SQUARE:
+        base_widths = [76, 60, 48, 60, 76]
+    return [scale_value_width(width) for width in base_widths]
+
+
+COL_WIDTHS = _scoreboard_column_widths()
 _TOTAL_COL_WIDTH = sum(COL_WIDTHS)
 _COL_LEFT = max(0, (WIDTH - _TOTAL_COL_WIDTH) // 2)
 COL_X = [_COL_LEFT]
