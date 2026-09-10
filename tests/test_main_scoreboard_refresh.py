@@ -121,6 +121,26 @@ def test_scoreboard_schedule_refresh_interval_is_daily():
     assert main._FEED_REFRESH_INTERVALS["scoreboards"] == 24 * 60 * 60
 
 
+def test_fresh_scoreboard_refresh_bypasses_league_cache(monkeypatch):
+    main = _load_main()
+    calls = []
+    monkeypatch.setattr(
+        main.data_provider,
+        "read_sports_payloads",
+        lambda **kwargs: calls.append(kwargs) or {"scoreboards": {}},
+    )
+
+    main._refresh_scoreboards_fresh()
+
+    assert calls == [
+        {
+            "ttl_seconds": 0,
+            "leagues": main._requested_scoreboard_leagues(),
+            "force_refresh": True,
+        }
+    ]
+
+
 def test_feed_to_force_refresh_for_screen_handles_scoreboards_and_live_team_screens():
     main = _load_main()
     main.cache["scoreboards"]["mlb"] = [{"status": {"abstractGameState": "Live"}}]

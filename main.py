@@ -2320,6 +2320,7 @@ def _refresh_scoreboards_fresh() -> None:
     sports_payloads = data_provider.read_sports_payloads(
         ttl_seconds=0,
         leagues=_requested_scoreboard_leagues(),
+        force_refresh=True,
     ) or {}
     cache["scoreboards"].update(sports_payloads.get("scoreboards") or {})
     cache["scoreboard_metadata"].update(sports_payloads.get("scoreboard_metadata") or {})
