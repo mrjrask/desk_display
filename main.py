@@ -2317,10 +2317,16 @@ def _refresh_scoreboards() -> None:
 
 
 def _refresh_scoreboards_fresh() -> None:
+    nfl_games = (cache.get("scoreboards") or {}).get("nfl") or []
+    force_refresh_leagues = (
+        {"nfl"}
+        if _scoreboards_in_live_window({"nfl": nfl_games})
+        else set()
+    )
     sports_payloads = data_provider.read_sports_payloads(
         ttl_seconds=0,
         leagues=_requested_scoreboard_leagues(),
-        force_refresh=True,
+        force_refresh_leagues=force_refresh_leagues,
     ) or {}
     cache["scoreboards"].update(sports_payloads.get("scoreboards") or {})
     cache["scoreboard_metadata"].update(sports_payloads.get("scoreboard_metadata") or {})

@@ -564,14 +564,20 @@ def _fetch_week_result_from_start(
     week_cache_key = ("nfl", "display_week", week_start, week_end)
     now = time.monotonic()
     week_cached = _GAMES_CACHE.get(week_cache_key)
-    if week_cached and not force_refresh:
+    if week_cached:
         cached_result = week_cached[1]
         ttl = (
             WEEK_FAILURE_RETRY_SECONDS
             if cached_result.failed_dates
             else FETCH_CACHE_TTL_SECONDS
         )
-        if now - week_cached[0] < ttl:
+        # A live refresh must bypass a successful snapshot so scores advance,
+        # but a recently failed refresh retains its longer retry cooldown. This
+        # prevents every presentation from hammering all seven daily endpoints
+        # (and their fallbacks) while an upstream provider is unavailable.
+        if now - week_cached[0] < ttl and (
+            not force_refresh or cached_result.failed_dates
+        ):
             _LAST_WEEKLY_RESULT = cached_result
             return cached_result
 

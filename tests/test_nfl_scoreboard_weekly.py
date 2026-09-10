@@ -369,6 +369,33 @@ def test_force_refresh_bypasses_complete_week_cache(monkeypatch):
     assert len(session.requested_dates) > request_count
 
 
+def test_force_refresh_honors_failed_week_retry_cooldown(monkeypatch):
+    class FailedSession:
+        def __init__(self):
+            self.calls = 0
+
+        def get(self, url, timeout=None):
+            self.calls += 1
+            return _FakeResponse({}, error=True)
+
+    session = FailedSession()
+    monkeypatch.setattr(nfl_scoreboard, "_SESSION", session)
+    monkeypatch.setattr(nfl_scoreboard, "_GAMES_CACHE", {})
+    week_start = datetime.date(2026, 9, 9)
+
+    first = nfl_scoreboard._fetch_week_result_from_start(
+        week_start, force_refresh=True
+    )
+    call_count = session.calls
+    second = nfl_scoreboard._fetch_week_result_from_start(
+        week_start, force_refresh=True
+    )
+
+    assert first.failed_dates == 7
+    assert second is first
+    assert session.calls == call_count
+
+
 def test_partial_failure_suppresses_all_provider_retries_for_five_minutes(monkeypatch):
     event = _event(
         event_id="fallback", date="2026-09-10T23:20Z", away="CHI", home="GB"
