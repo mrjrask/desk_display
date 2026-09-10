@@ -456,7 +456,9 @@ def fetch_all_headlines(*, force: bool = False) -> dict[str, list[NewsHeadline]]
                 if items or topic_id not in merged_cache:
                     merged_cache[topic_id] = items
             _headlines_cache_value = merged_cache
-            if not cache_is_fresh or _cache_covers_topics(merged_cache, topics):
+            # A retry that completes a partial cache must not extend the
+            # original full-refresh deadline for the older topic entries.
+            if not cache_is_fresh:
                 _headlines_cache_time = time.monotonic()
         elif not _headlines_cache_value:
             _headlines_cache_time = time.monotonic()
@@ -499,7 +501,9 @@ def fetch_all_headlines_2(*, force: bool = False) -> dict[str, list[NewsHeadline
                 if items or topic_id not in merged_cache:
                     merged_cache[topic_id] = items
             _headlines_cache_value_2 = merged_cache
-            if not cache_is_fresh or _cache_covers_topics(merged_cache, topics):
+            # Preserve the age of entries from the original refresh when a
+            # missing topic recovers inside the current refresh window.
+            if not cache_is_fresh:
                 _headlines_cache_time_2 = time.monotonic()
         elif not _headlines_cache_value_2:
             _headlines_cache_time_2 = time.monotonic()

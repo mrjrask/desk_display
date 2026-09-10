@@ -290,6 +290,68 @@ def test_fetch_all_headlines_2_retries_only_missing_topics_in_partial_cache(monk
     assert second["tribune"][0].title == "tribune headline"
 
 
+def test_partial_cache_recovery_preserves_primary_refresh_deadline(monkeypatch):
+    nf.clear_headline_cache_for_tests()
+    topics = [
+        NewsTopic(id="local", label="Local", name="Local", url="https://example.com/local.xml"),
+        NewsTopic(id="sports", label="Sports", name="Sports", url="https://example.com/sports.xml"),
+    ]
+    monkeypatch.setattr(nf, "load_news_feed_config", lambda: (topics, 5, 20))
+
+    original_refresh_time = time.monotonic() - 19 * 60
+    with nf._headlines_cache_lock:
+        nf._headlines_cache_value = {
+            "local": [nf.NewsHeadline(topic_id="local", title="Local headline", link="https://example.com/local")],
+            "sports": [],
+        }
+        nf._headlines_cache_time = original_refresh_time
+
+    monkeypatch.setattr(
+        nf,
+        "_fetch_topics_parallel",
+        lambda topics_to_fetch, _limit: {
+            topic.id: [nf.NewsHeadline(topic_id=topic.id, title="Sports headline", link="https://example.com/sports")]
+            for topic in topics_to_fetch
+        },
+    )
+
+    result = nf.fetch_all_headlines()
+
+    assert result["sports"][0].title == "Sports headline"
+    assert nf._headlines_cache_time == original_refresh_time
+
+
+def test_partial_cache_recovery_preserves_secondary_refresh_deadline(monkeypatch):
+    nf.clear_headline_cache_for_tests()
+    topics = [
+        NewsTopic(id="cnn", label="CNN", name="CNN", url="https://example.com/cnn.xml"),
+        NewsTopic(id="tribune", label="Tribune", name="Tribune", url="https://example.com/tribune.xml"),
+    ]
+    monkeypatch.setattr(nf, "load_news_feed_config_2", lambda: (topics, 5, 20))
+
+    original_refresh_time = time.monotonic() - 19 * 60
+    with nf._headlines_cache_lock:
+        nf._headlines_cache_value_2 = {
+            "cnn": [nf.NewsHeadline(topic_id="cnn", title="CNN headline", link="https://example.com/cnn")],
+            "tribune": [],
+        }
+        nf._headlines_cache_time_2 = original_refresh_time
+
+    monkeypatch.setattr(
+        nf,
+        "_fetch_topics_parallel",
+        lambda topics_to_fetch, _limit: {
+            topic.id: [nf.NewsHeadline(topic_id=topic.id, title="Tribune headline", link="https://example.com/tribune")]
+            for topic in topics_to_fetch
+        },
+    )
+
+    result = nf.fetch_all_headlines_2()
+
+    assert result["tribune"][0].title == "Tribune headline"
+    assert nf._headlines_cache_time_2 == original_refresh_time
+
+
 def test_fetch_all_headlines_caches_until_refresh_interval_elapses(monkeypatch):
     # Deliberately avoids patching time.monotonic: concurrent.futures.wait()
     # calls the real time module internally during fetch_all_headlines, and a
