@@ -465,6 +465,7 @@ def fetch_range_result(
     session: Any = None,
     cache: MutableMapping[tuple[object, ...], tuple[float, list[dict]]] | None = None,
     failed_providers: set[str] | None = None,
+    force_refresh: bool = False,
 ) -> WeeklyResult:
     """Fetch an inclusive NFL range and report whether returned games are stale.
 
@@ -485,7 +486,12 @@ def fetch_range_result(
     legacy_cache_key = (start, f"nfl_providers:{end.isoformat()}")
     now = time.monotonic()
     cached = cache.get(cache_key) or cache.get(legacy_cache_key)
-    if cached and not failed_providers and now - cached[0] < FETCH_CACHE_TTL_SECONDS:
+    if (
+        cached
+        and not force_refresh
+        and not failed_providers
+        and now - cached[0] < FETCH_CACHE_TTL_SECONDS
+    ):
         return WeeklyResult(games=cached[1])
 
     dates = _date_parameter(start, end)
@@ -550,12 +556,14 @@ def fetch_week_scoreboard(*, now: dt.datetime | None = None) -> list[dict]:
     return _fetch_games_for_week(now)
 
 
-def fetch_week_scoreboard_result(*, now: dt.datetime | None = None) -> WeeklyResult:
+def fetch_week_scoreboard_result(
+    *, now: dt.datetime | None = None, force_refresh: bool = False
+) -> WeeklyResult:
     """Return the selected display week together with its freshness metadata."""
 
     from screens import nfl_scoreboard
 
-    games = nfl_scoreboard._fetch_games_for_week(now)
+    games = nfl_scoreboard._fetch_games_for_week(now, force_refresh=force_refresh)
     result = nfl_scoreboard._LAST_WEEKLY_RESULT
     if isinstance(result, WeeklyResult) and result.games == games:
         return result

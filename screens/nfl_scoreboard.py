@@ -546,7 +546,9 @@ def _fetch_games_for_bulk_range(
     return games
 
 
-def _fetch_week_result_from_start(week_start: datetime.date):
+def _fetch_week_result_from_start(
+    week_start: datetime.date, *, force_refresh: bool = False
+):
     """Build a complete week, falling back atomically when any date failed.
 
     The daily requests are useful when ESPN returns incomplete range payloads,
@@ -569,7 +571,13 @@ def _fetch_week_result_from_start(week_start: datetime.date):
             if cached_result.failed_dates
             else FETCH_CACHE_TTL_SECONDS
         )
-        if now - week_cached[0] < ttl:
+        # A live refresh must bypass a successful snapshot so scores advance,
+        # but a recently failed refresh retains its longer retry cooldown. This
+        # prevents every presentation from hammering all seven daily endpoints
+        # (and their fallbacks) while an upstream provider is unavailable.
+        if now - week_cached[0] < ttl and (
+            not force_refresh or cached_result.failed_dates
+        ):
             _LAST_WEEKLY_RESULT = cached_result
             return cached_result
 
@@ -585,6 +593,7 @@ def _fetch_week_result_from_start(week_start: datetime.date):
             session=_SESSION,
             cache=_GAMES_CACHE,
             failed_providers={"ESPN Site"},
+            force_refresh=force_refresh,
         )
         fallback_games = [
             game for game in _hydrate_games(fallback.games) if not _is_pro_bowl_game(game)
@@ -656,7 +665,9 @@ def _week_cutoff_datetime(week_start: datetime.date, game_count: int) -> datetim
     return _localize(week_start + datetime.timedelta(days=7), 9, 0)
 
 
-def _fetch_games_for_week(now: Optional[datetime.datetime] = None) -> list[dict]:
+def _fetch_games_for_week(
+    now: Optional[datetime.datetime] = None, *, force_refresh: bool = False
+) -> list[dict]:
     now = now or datetime.datetime.now(CENTRAL_TIME)
     if now.tzinfo is None:
         now = now.replace(tzinfo=CENTRAL_TIME)
@@ -664,15 +675,21 @@ def _fetch_games_for_week(now: Optional[datetime.datetime] = None) -> list[dict]
         now = now.astimezone(CENTRAL_TIME)
     if not _playoff_rules_active(now):
         week_start = _regular_week_start(now)
-        return _fetch_week_from_start(week_start)
+        return _fetch_week_result_from_start(
+            week_start, force_refresh=force_refresh
+        ).games
 
     week_start = _week_start_for_date(now.date())
-    games = _fetch_week_from_start(week_start)
+    games = _fetch_week_result_from_start(
+        week_start, force_refresh=force_refresh
+    ).games
 
     cutoff = _week_cutoff_datetime(week_start, len(games))
     if now >= cutoff:
         week_start = week_start + datetime.timedelta(days=7)
-        games = _fetch_week_from_start(week_start)
+        games = _fetch_week_result_from_start(
+            week_start, force_refresh=force_refresh
+        ).games
     return games
 
 

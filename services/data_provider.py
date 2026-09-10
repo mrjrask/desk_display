@@ -116,13 +116,20 @@ class DataProvider:
         *,
         ttl_seconds: int = 120,
         leagues: Optional[set[str]] = None,
+        force_refresh_leagues: Optional[set[str]] = None,
     ) -> dict[str, Any]:
         def _fetch_payloads() -> dict[str, Any]:
             now = dt.datetime.now(CENTRAL_TIME)
             today = now.date()
 
             def _fetch_nfl() -> Any:
-                weekly = fetch_nfl_week_scoreboard_result(now=now)
+                if "nfl" in (force_refresh_leagues or set()):
+                    weekly = fetch_nfl_week_scoreboard_result(
+                        now=now,
+                        force_refresh=True,
+                    )
+                else:
+                    weekly = fetch_nfl_week_scoreboard_result(now=now)
                 if weekly.games:
                     return weekly
                 return WeeklyResult(games=fetch_nfl_next_scoreboard(start_date=today))
