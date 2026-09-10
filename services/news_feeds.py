@@ -371,6 +371,14 @@ _headlines_cache_refresh_seconds_2: float = _DEFAULT_REFRESH_MINUTES * 60
 _FEED_FETCH_TIMEOUT_BUDGET_SECONDS = 6.0
 
 
+def _cache_covers_topics(
+    cache: dict[str, list[NewsHeadline]], topics: list[NewsTopic]
+) -> bool:
+    """Return whether every configured topic has usable cached headlines."""
+
+    return all(cache.get(topic.id) for topic in topics)
+
+
 def _fetch_topics_parallel(
     topics: list[NewsTopic], headline_count: int
 ) -> dict[str, list[NewsHeadline]]:
@@ -414,18 +422,28 @@ def fetch_all_headlines(*, force: bool = False) -> dict[str, list[NewsHeadline]]
 
     now = time.monotonic()
     with _headlines_cache_lock:
-        if (
+        cache_is_fresh = (
             not force
             and _headlines_cache_time is not None
             and (now - _headlines_cache_time) < _headlines_cache_refresh_seconds
-            and _headlines_cache_value
-        ):
+        )
+        if cache_is_fresh and _cache_covers_topics(_headlines_cache_value, topics):
             return {topic_id: list(items) for topic_id, items in _headlines_cache_value.items()}
+
+        # A single fast feed used to make the entire cache look fresh, so
+        # feeds that failed or missed the shared timeout budget disappeared
+        # until the full refresh interval elapsed. During that interval only
+        # retry the missing topics; keep successful feeds cached.
+        topics_to_fetch = (
+            [topic for topic in topics if not _headlines_cache_value.get(topic.id)]
+            if cache_is_fresh
+            else topics
+        )
 
     if not topics:
         return {}
 
-    results = _fetch_topics_parallel(topics, headline_count)
+    results = _fetch_topics_parallel(topics_to_fetch, headline_count)
 
     with _headlines_cache_lock:
         if results:
@@ -438,7 +456,8 @@ def fetch_all_headlines(*, force: bool = False) -> dict[str, list[NewsHeadline]]
                 if items or topic_id not in merged_cache:
                     merged_cache[topic_id] = items
             _headlines_cache_value = merged_cache
-            _headlines_cache_time = time.monotonic()
+            if not cache_is_fresh or _cache_covers_topics(merged_cache, topics):
+                _headlines_cache_time = time.monotonic()
         elif not _headlines_cache_value:
             _headlines_cache_time = time.monotonic()
         return {topic_id: list(items) for topic_id, items in _headlines_cache_value.items()}
@@ -454,18 +473,24 @@ def fetch_all_headlines_2(*, force: bool = False) -> dict[str, list[NewsHeadline
 
     now = time.monotonic()
     with _headlines_cache_lock:
-        if (
+        cache_is_fresh = (
             not force
             and _headlines_cache_time_2 is not None
             and (now - _headlines_cache_time_2) < _headlines_cache_refresh_seconds_2
-            and _headlines_cache_value_2
-        ):
+        )
+        if cache_is_fresh and _cache_covers_topics(_headlines_cache_value_2, topics):
             return {topic_id: list(items) for topic_id, items in _headlines_cache_value_2.items()}
+
+        topics_to_fetch = (
+            [topic for topic in topics if not _headlines_cache_value_2.get(topic.id)]
+            if cache_is_fresh
+            else topics
+        )
 
     if not topics:
         return {}
 
-    results = _fetch_topics_parallel(topics, headline_count)
+    results = _fetch_topics_parallel(topics_to_fetch, headline_count)
 
     with _headlines_cache_lock:
         if results:
@@ -474,7 +499,8 @@ def fetch_all_headlines_2(*, force: bool = False) -> dict[str, list[NewsHeadline
                 if items or topic_id not in merged_cache:
                     merged_cache[topic_id] = items
             _headlines_cache_value_2 = merged_cache
-            _headlines_cache_time_2 = time.monotonic()
+            if not cache_is_fresh or _cache_covers_topics(merged_cache, topics):
+                _headlines_cache_time_2 = time.monotonic()
         elif not _headlines_cache_value_2:
             _headlines_cache_time_2 = time.monotonic()
         return {topic_id: list(items) for topic_id, items in _headlines_cache_value_2.items()}

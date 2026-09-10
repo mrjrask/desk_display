@@ -250,6 +250,46 @@ def test_fetch_all_headlines_2_caches_independently_of_primary(monkeypatch):
     assert calls == []
 
 
+def test_fetch_all_headlines_2_retries_only_missing_topics_in_partial_cache(monkeypatch):
+    nf.clear_headline_cache_for_tests()
+    topics = [
+        NewsTopic(id="cnn", label="CNN", name="CNN", url="https://example.com/cnn.xml"),
+        NewsTopic(
+            id="tribune",
+            label="Tribune",
+            name="Tribune",
+            url="https://example.com/tribune.xml",
+        ),
+    ]
+    monkeypatch.setattr(nf, "load_news_feed_config_2", lambda: (topics, 5, 20))
+
+    calls = []
+
+    def fake_fetch(topic, limit, timeout=5.0):
+        calls.append(topic.id)
+        if topic.id == "tribune" and calls.count("tribune") == 1:
+            return []
+        return [
+            nf.NewsHeadline(
+                topic_id=topic.id,
+                title=f"{topic.id} headline",
+                link="https://example.com/x",
+            )
+        ]
+
+    monkeypatch.setattr(nf, "fetch_topic_headlines", fake_fetch)
+
+    first = nf.fetch_all_headlines_2()
+    second = nf.fetch_all_headlines_2()
+
+    assert first["cnn"]
+    assert first["tribune"] == []
+    assert set(calls[:2]) == {"cnn", "tribune"}
+    assert calls[2:] == ["tribune"]
+    assert second["cnn"][0].title == "cnn headline"
+    assert second["tribune"][0].title == "tribune headline"
+
+
 def test_fetch_all_headlines_caches_until_refresh_interval_elapses(monkeypatch):
     # Deliberately avoids patching time.monotonic: concurrent.futures.wait()
     # calls the real time module internally during fetch_all_headlines, and a
