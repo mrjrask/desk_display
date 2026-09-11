@@ -147,6 +147,23 @@ def test_nhl_live_status_code_is_not_confused_with_nba_final_code():
     )
 
 
+def test_suspended_game_keeps_refreshing_so_resumption_is_detected():
+    main = _load_main()
+    start = datetime.datetime(2026, 9, 10, 20, 0, tzinfo=datetime.UTC)
+    game = {
+        "_event_date": start.isoformat(),
+        "status": {
+            "abstractGameState": "Live",
+            "detailedState": "Suspended",
+        },
+    }
+
+    assert not main._is_terminal_scoreboard_game(game, league="mlb")
+    assert main._scoreboards_in_live_window(
+        {"mlb": [game]}, now=start + datetime.timedelta(hours=8)
+    )
+
+
 def test_scoreboard_live_window_starts_before_scheduled_game():
     main = _load_main()
     start = datetime.datetime(2026, 9, 8, 20, 0, tzinfo=datetime.UTC)

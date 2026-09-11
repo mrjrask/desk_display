@@ -2499,7 +2499,6 @@ def _is_terminal_scoreboard_game(
             "postponed",
             "canceled",
             "cancelled",
-            "suspended",
             "forfeit",
         )
     ) or "POST" in normalized_values
