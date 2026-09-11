@@ -2422,8 +2422,58 @@ def _scoreboards_have_live_games(scoreboards: object) -> bool:
     return False
 
 
-_LIVE_GAME_WINDOW = datetime.timedelta(hours=4)
 _LIVE_GAME_LEAD_IN = datetime.timedelta(minutes=30)
+
+
+def _is_terminal_scoreboard_game(game: object) -> bool:
+    """Return whether a game no longer needs score updates."""
+
+    if not isinstance(game, dict):
+        return False
+
+    values: list[str] = []
+    status = game.get("status")
+    if isinstance(status, dict):
+        for key in (
+            "detailedState",
+            "abstractGameState",
+            "gameStatus",
+            "gameStatusText",
+            "state",
+            "gameState",
+        ):
+            if status.get(key) is not None:
+                values.append(str(status[key]))
+        status_type = status.get("type")
+        if isinstance(status_type, dict):
+            if status_type.get("completed") is True:
+                return True
+            for key in ("state", "description", "detail", "shortDetail"):
+                if status_type.get(key) is not None:
+                    values.append(str(status_type[key]))
+
+    for key in (
+        "gameStatusText",
+        "gameStatus",
+        "detailedState",
+        "abstractGameState",
+        "gameState",
+    ):
+        if game.get(key) is not None:
+            values.append(str(game[key]))
+
+    status_text = " ".join(values).lower()
+    return any(
+        token in status_text
+        for token in (
+            "final",
+            "postponed",
+            "canceled",
+            "cancelled",
+            "suspended",
+            "forfeit",
+        )
+    ) or any(value.strip().lower() == "post" for value in values)
 
 
 def _scoreboard_game_start(game: object) -> Optional[datetime.datetime]:
@@ -2454,7 +2504,13 @@ def _scoreboard_game_start(game: object) -> Optional[datetime.datetime]:
 def _scoreboards_in_live_window(
     scoreboards: object, *, now: Optional[datetime.datetime] = None
 ) -> bool:
-    """Return true while cached games are live or within their expected play window."""
+    """Return true from shortly before kickoff until every game is terminal.
+
+    A fixed expected-duration cutoff can strand a cached scheduled or in-progress
+    score when a game is delayed or runs long.  Once kickoff has passed, continue
+    refreshing that game until its provider explicitly marks it final (or another
+    terminal state), regardless of which day of the week it is played.
+    """
 
     if _scoreboards_have_live_games(scoreboards):
         return True
@@ -2470,7 +2526,8 @@ def _scoreboards_in_live_window(
             start = _scoreboard_game_start(game)
             if (
                 start is not None
-                and start - _LIVE_GAME_LEAD_IN <= current < start + _LIVE_GAME_WINDOW
+                and start - _LIVE_GAME_LEAD_IN <= current
+                and not _is_terminal_scoreboard_game(game)
             ):
                 return True
     return False
