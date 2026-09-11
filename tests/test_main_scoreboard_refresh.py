@@ -112,6 +112,41 @@ def test_final_game_stops_refreshing():
     )
 
 
+@pytest.mark.parametrize(
+    ("league", "game"),
+    [
+        ("nba", {"status": {"statusCode": "3"}}),
+        ("nhl", {"status": {"statusCode": "4"}}),
+        ("mlb", {"status": {"statusCode": "F"}}),
+        ("mlb", {"statusCode": "F"}),
+        ("nfl", {"status": "Final"}),
+    ],
+)
+def test_terminal_status_encodings_stop_refreshing(league, game):
+    main = _load_main()
+    start = datetime.datetime(2026, 9, 10, 20, 0, tzinfo=datetime.UTC)
+    game["_event_date"] = start.isoformat()
+
+    assert main._is_terminal_scoreboard_game(game, league=league)
+    assert not main._scoreboards_in_live_window(
+        {league: [game]}, now=start + datetime.timedelta(hours=8)
+    )
+
+
+def test_nhl_live_status_code_is_not_confused_with_nba_final_code():
+    main = _load_main()
+    start = datetime.datetime(2026, 9, 10, 20, 0, tzinfo=datetime.UTC)
+    game = {
+        "_event_date": start.isoformat(),
+        "status": {"statusCode": "3"},
+    }
+
+    assert not main._is_terminal_scoreboard_game(game, league="nhl")
+    assert main._scoreboards_in_live_window(
+        {"nhl": [game]}, now=start + datetime.timedelta(hours=8)
+    )
+
+
 def test_scoreboard_live_window_starts_before_scheduled_game():
     main = _load_main()
     start = datetime.datetime(2026, 9, 8, 20, 0, tzinfo=datetime.UTC)
