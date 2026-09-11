@@ -4,6 +4,8 @@ import datetime
 import importlib
 import sys
 
+import pytest
+
 
 def _load_main():
     sys.modules.pop("main", None)
@@ -67,8 +69,98 @@ def test_should_force_refresh_scoreboards_during_scheduled_game_window():
     }
 
     assert main._scoreboards_in_live_window(scoreboards, now=now)
-    assert not main._scoreboards_in_live_window(
+    assert main._scoreboards_in_live_window(
         scoreboards, now=now + datetime.timedelta(hours=4)
+    )
+
+
+@pytest.mark.parametrize("days_after_thursday", range(7))
+def test_nonfinal_game_keeps_refreshing_after_kickoff_on_every_weekday(
+    days_after_thursday,
+):
+    main = _load_main()
+    start = datetime.datetime(2026, 9, 10, 20, 0, tzinfo=datetime.UTC)
+    start += datetime.timedelta(days=days_after_thursday)
+    scoreboards = {
+        "nfl": [
+            {
+                "_event_date": start.isoformat(),
+                "status": {"type": {"state": "pre"}},
+            }
+        ]
+    }
+
+    assert main._scoreboards_in_live_window(
+        scoreboards, now=start + datetime.timedelta(hours=8)
+    )
+
+
+def test_final_game_stops_refreshing():
+    main = _load_main()
+    start = datetime.datetime(2026, 9, 10, 20, 0, tzinfo=datetime.UTC)
+    scoreboards = {
+        "nfl": [
+            {
+                "_event_date": start.isoformat(),
+                "status": {"type": {"state": "post", "completed": True}},
+            }
+        ]
+    }
+
+    assert not main._scoreboards_in_live_window(
+        scoreboards, now=start + datetime.timedelta(hours=8)
+    )
+
+
+@pytest.mark.parametrize(
+    ("league", "game"),
+    [
+        ("nba", {"status": {"statusCode": "3"}}),
+        ("nhl", {"status": {"statusCode": "4"}}),
+        ("mlb", {"status": {"statusCode": "F"}}),
+        ("mlb", {"statusCode": "F"}),
+        ("nfl", {"status": "Final"}),
+    ],
+)
+def test_terminal_status_encodings_stop_refreshing(league, game):
+    main = _load_main()
+    start = datetime.datetime(2026, 9, 10, 20, 0, tzinfo=datetime.UTC)
+    game["_event_date"] = start.isoformat()
+
+    assert main._is_terminal_scoreboard_game(game, league=league)
+    assert not main._scoreboards_in_live_window(
+        {league: [game]}, now=start + datetime.timedelta(hours=8)
+    )
+
+
+def test_nhl_live_status_code_is_not_confused_with_nba_final_code():
+    main = _load_main()
+    start = datetime.datetime(2026, 9, 10, 20, 0, tzinfo=datetime.UTC)
+    game = {
+        "_event_date": start.isoformat(),
+        "status": {"statusCode": "3"},
+    }
+
+    assert not main._is_terminal_scoreboard_game(game, league="nhl")
+    assert main._scoreboards_in_live_window(
+        {"nhl": [game]}, now=start + datetime.timedelta(hours=8)
+    )
+
+
+def test_suspended_game_keeps_refreshing_so_resumption_is_detected():
+    main = _load_main()
+    start = datetime.datetime(2026, 9, 10, 20, 0, tzinfo=datetime.UTC)
+    game = {
+        "_event_date": start.isoformat(),
+        "status": {
+            "abstractGameState": "Live",
+            "detailedState": "Suspended",
+        },
+    }
+
+    assert not main._is_terminal_scoreboard_game(game, league="mlb")
+    assert main._scoreboards_in_live_window(
+        {"mlb": [game]}, now=start + datetime.timedelta(hours=8)
     )
 
 

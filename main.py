@@ -2422,8 +2422,86 @@ def _scoreboards_have_live_games(scoreboards: object) -> bool:
     return False
 
 
-_LIVE_GAME_WINDOW = datetime.timedelta(hours=4)
 _LIVE_GAME_LEAD_IN = datetime.timedelta(minutes=30)
+
+
+def _is_terminal_scoreboard_game(
+    game: object, *, league: Optional[str] = None
+) -> bool:
+    """Return whether a game no longer needs score updates."""
+
+    if not isinstance(game, dict):
+        return False
+
+    values: list[str] = []
+    status = game.get("status")
+    if isinstance(status, dict):
+        if status.get("completed") is True:
+            return True
+        for key in (
+            "detailedState",
+            "abstractGameState",
+            "gameStatus",
+            "gameStatusText",
+            "state",
+            "gameState",
+            "statusCode",
+            "codedGameState",
+        ):
+            if status.get(key) is not None:
+                values.append(str(status[key]))
+        status_type = status.get("type")
+        if isinstance(status_type, dict):
+            if status_type.get("completed") is True:
+                return True
+            for key in ("state", "description", "detail", "shortDetail"):
+                if status_type.get(key) is not None:
+                    values.append(str(status_type[key]))
+    elif status is not None:
+        values.append(str(status))
+
+    for key in (
+        "gameStatusText",
+        "gameStatus",
+        "detailedState",
+        "abstractGameState",
+        "gameState",
+        "gameScheduleState",
+        "state",
+        "statusType",
+        "statusCode",
+        "codedGameState",
+    ):
+        if game.get(key) is not None:
+            values.append(str(game[key]))
+    if game.get("completed") is True:
+        return True
+
+    normalized_values = {value.strip().upper() for value in values}
+    terminal_codes = {
+        "nba": {"3"},
+        "nhl": {"4"},
+        "mlb": {"F", "O"},
+    }
+    # With no league context, recognize every terminal encoding supported by
+    # the scoreboard providers. Callers iterating scoreboards should supply the
+    # league because numeric codes overlap (NHL uses NBA's final code for live).
+    supported_codes = (
+        terminal_codes.get(league, set())
+        if league is not None
+        else set().union(*terminal_codes.values())
+    )
+    status_text = " ".join(values).lower()
+    return bool(normalized_values & supported_codes) or any(
+        token in status_text
+        for token in (
+            "final",
+            "postponed",
+            "canceled",
+            "cancelled",
+            "forfeit",
+        )
+    ) or "POST" in normalized_values
 
 
 def _scoreboard_game_start(game: object) -> Optional[datetime.datetime]:
@@ -2454,23 +2532,31 @@ def _scoreboard_game_start(game: object) -> Optional[datetime.datetime]:
 def _scoreboards_in_live_window(
     scoreboards: object, *, now: Optional[datetime.datetime] = None
 ) -> bool:
-    """Return true while cached games are live or within their expected play window."""
+    """Return true from shortly before kickoff until every game is terminal.
 
-    if _scoreboards_have_live_games(scoreboards):
-        return True
+    A fixed expected-duration cutoff can strand a cached scheduled or in-progress
+    score when a game is delayed or runs long.  Once kickoff has passed, continue
+    refreshing that game until its provider explicitly marks it final (or another
+    terminal state), regardless of which day of the week it is played.
+    """
+
     if not isinstance(scoreboards, dict):
         return False
     current = now or datetime.datetime.now(datetime.timezone.utc)
     if current.tzinfo is None:
         current = current.replace(tzinfo=datetime.timezone.utc)
-    for games in scoreboards.values():
+    for league, games in scoreboards.items():
         if not isinstance(games, list):
             continue
         for game in games:
+            if _is_terminal_scoreboard_game(game, league=str(league)):
+                continue
+            if _is_live_scoreboard_game(game):
+                return True
             start = _scoreboard_game_start(game)
             if (
                 start is not None
-                and start - _LIVE_GAME_LEAD_IN <= current < start + _LIVE_GAME_WINDOW
+                and start - _LIVE_GAME_LEAD_IN <= current
             ):
                 return True
     return False
