@@ -550,7 +550,7 @@ def _fetch_week_result_from_start(
     week_start: datetime.date,
     *,
     force_refresh: bool = False,
-    refresh_date: datetime.date | None = None,
+    refresh_dates: tuple[datetime.date, ...] = (),
 ):
     """Build a complete week, falling back atomically when any date failed.
 
@@ -584,44 +584,45 @@ def _fetch_week_result_from_start(
             _LAST_WEEKLY_RESULT = cached_result
             return cached_result
 
-        if force_refresh and refresh_date is not None and not cached_result.failed_dates:
-            # The complete display week takes seven requests to assemble. During
-            # a live game only today's ESPN payload can have changed, so refresh
-            # that payload and merge it into the known-good schedule. Besides
-            # reducing latency, this avoids turning repeated seven-request live
-            # polls into provider throttling and a non-live nflverse fallback.
-            live_result = fetch_week_dates([refresh_date], session=_SESSION)
-            if not live_result.failed_dates:
-                refreshed_games = [
+        if force_refresh and refresh_dates and not cached_result.failed_dates:
+            successful_refresh_dates: set[datetime.date] = set()
+            refreshed_games: list[dict] = []
+            successful_dates = failed_dates = 0
+            bye_teams = cached_result.bye_teams
+            for refresh_date in refresh_dates:
+                focused = fetch_week_dates([refresh_date], session=_SESSION)
+                successful_dates += focused.successful_dates
+                failed_dates += focused.failed_dates
+                if focused.failed_dates:
+                    continue
+                successful_refresh_dates.add(refresh_date)
+                if focused.bye_teams:
+                    bye_teams = focused.bye_teams
+                refreshed_games.extend(
                     game
-                    for game in _hydrate_games(live_result.games)
+                    for game in _hydrate_games(focused.games)
                     if not _is_pro_bowl_game(game)
-                ]
-                games_by_id = {
-                    str(game.get("id") or game.get("uid")): game
-                    for game in cached_result.games
-                }
-                for game in refreshed_games:
-                    games_by_id[str(game.get("id") or game.get("uid"))] = game
-                result = WeeklyResult(
-                    games=sorted(games_by_id.values(), key=_game_sort_key),
-                    successful_dates=1,
-                    bye_teams=cached_result.bye_teams,
                 )
-                _GAMES_CACHE[week_cache_key] = (time.monotonic(), result)
-                _GAMES_CACHE[("nfl", "last_complete_week")] = (
-                    time.monotonic(),
-                    result,
-                )
-                _LAST_WEEKLY_RESULT = result
-                return result
 
-            logging.warning(
-                "NFL live refresh for %s failed; retaining the complete cached week",
-                refresh_date.isoformat(),
+            merged_games = [
+                game
+                for game in cached_result.games
+                if _game_scheduled_date(game) not in successful_refresh_dates
+            ]
+            merged_games.extend(refreshed_games)
+            result = WeeklyResult(
+                games=sorted(merged_games, key=_game_sort_key),
+                successful_dates=successful_dates,
+                failed_dates=failed_dates,
+                bye_teams=bye_teams,
+                stale=bool(failed_dates),
             )
-            _LAST_WEEKLY_RESULT = cached_result
-            return cached_result
+            cache_time = time.monotonic()
+            _GAMES_CACHE[week_cache_key] = (cache_time, result)
+            if not failed_dates:
+                _GAMES_CACHE[("nfl", "last_complete_week")] = (cache_time, result)
+            _LAST_WEEKLY_RESULT = result
+            return result
 
     days = [week_start + datetime.timedelta(days=offset) for offset in range(7)]
     result = fetch_week_dates(days, session=_SESSION)
@@ -707,6 +708,38 @@ def _week_cutoff_datetime(week_start: datetime.date, game_count: int) -> datetim
     return _localize(week_start + datetime.timedelta(days=7), 9, 0)
 
 
+def _game_scheduled_date(game: dict) -> datetime.date | None:
+    """Return a game's provider date in Central time when it is available."""
+
+    start = game.get("_start_local")
+    if not isinstance(start, datetime.datetime):
+        start = _timestamp_to_local(game.get("_event_date"))
+    return start.date() if isinstance(start, datetime.datetime) else None
+
+
+def _live_refresh_dates(
+    week_start: datetime.date, now: datetime.datetime
+) -> tuple[datetime.date, ...]:
+    """Return every scheduled date containing a started, nonfinal cached game."""
+
+    week_end = _week_end_from_start(week_start)
+    cached = _GAMES_CACHE.get(("nfl", "display_week", week_start, week_end))
+    if not cached:
+        return ()
+
+    dates: set[datetime.date] = set()
+    for game in cached[1].games:
+        if _is_game_final(game):
+            continue
+        start = game.get("_start_local")
+        if isinstance(start, datetime.datetime) and start <= now:
+            dates.add(start.date())
+
+    # Provider date keys remain tied to scheduled dates even when delayed or
+    # suspended games overlap later game days.
+    return tuple(sorted(dates))
+
+
 def _fetch_games_for_week(
     now: Optional[datetime.datetime] = None, *, force_refresh: bool = False
 ) -> list[dict]:
@@ -717,13 +750,15 @@ def _fetch_games_for_week(
         now = now.astimezone(CENTRAL_TIME)
     if not _playoff_rules_active(now):
         week_start = _regular_week_start(now)
+        refresh_dates = _live_refresh_dates(week_start, now) if force_refresh else ()
         return _fetch_week_result_from_start(
-            week_start, force_refresh=force_refresh, refresh_date=now.date()
+            week_start, force_refresh=force_refresh, refresh_dates=refresh_dates
         ).games
 
     week_start = _week_start_for_date(now.date())
+    refresh_dates = _live_refresh_dates(week_start, now) if force_refresh else ()
     games = _fetch_week_result_from_start(
-        week_start, force_refresh=force_refresh, refresh_date=now.date()
+        week_start, force_refresh=force_refresh, refresh_dates=refresh_dates
     ).games
 
     cutoff = _week_cutoff_datetime(week_start, len(games))
