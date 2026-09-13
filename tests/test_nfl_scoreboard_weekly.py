@@ -458,6 +458,56 @@ def test_focused_refresh_uses_scheduled_date_after_midnight(monkeypatch):
     assert session.requested_dates == ["20260910"]
 
 
+def test_successful_focused_refresh_replaces_all_games_on_requested_date(monkeypatch):
+    event = _event(
+        event_id="removed-game",
+        date="2026-09-11T00:20Z",
+        away="CHI",
+        home="GB",
+        state="in",
+    )
+    session = _install_fake_session(monkeypatch, {"20260910": [event]})
+    week_start = datetime.date(2026, 9, 9)
+    nfl_scoreboard._fetch_week_result_from_start(week_start)
+    session._events_by_date.clear()
+    now = datetime.datetime(2026, 9, 10, 20, 0, tzinfo=nfl_scoreboard.CENTRAL_TIME)
+
+    games = nfl_scoreboard._fetch_games_for_week(now, force_refresh=True)
+
+    assert games == []
+    assert session.requested_dates[-1] == "20260910"
+
+
+def test_successful_focused_refresh_updates_last_complete_week(monkeypatch):
+    live = _event(
+        event_id="finishing-game",
+        date="2026-09-11T00:20Z",
+        away="CHI",
+        home="GB",
+        state="in",
+    )
+    final = _event(
+        event_id="finishing-game",
+        date="2026-09-11T00:20Z",
+        away="CHI",
+        home="GB",
+        away_score="20",
+        home_score="24",
+        state="post",
+    )
+    session = _install_fake_session(monkeypatch, {"20260910": [live]})
+    week_start = datetime.date(2026, 9, 9)
+    nfl_scoreboard._fetch_week_result_from_start(week_start)
+    session._events_by_date["20260910"] = [final]
+    now = datetime.datetime(2026, 9, 10, 20, 0, tzinfo=nfl_scoreboard.CENTRAL_TIME)
+
+    nfl_scoreboard._fetch_games_for_week(now, force_refresh=True)
+
+    last_complete = nfl_scoreboard._GAMES_CACHE[("nfl", "last_complete_week")][1]
+    assert last_complete.games[0]["status"]["type"]["state"] == "post"
+    assert last_complete.games[0]["scores"] == {"away": "20", "home": "24"}
+
+
 def test_partial_failure_suppresses_all_provider_retries_for_five_minutes(monkeypatch):
     event = _event(
         event_id="fallback", date="2026-09-10T23:20Z", away="CHI", home="GB"

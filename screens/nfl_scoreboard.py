@@ -606,11 +606,10 @@ def _fetch_week_result_from_start(
                 for game in _hydrate_games(focused.games)
                 if not _is_pro_bowl_game(game)
             ]
-            refreshed_ids = {str(game.get("id")) for game in refreshed_games}
             merged_games = [
                 game
                 for game in cached_result.games
-                if str(game.get("id")) not in refreshed_ids
+                if _game_scheduled_date(game) != refresh_date
             ]
             merged_games.extend(refreshed_games)
             result = WeeklyResult(
@@ -618,7 +617,9 @@ def _fetch_week_result_from_start(
                 successful_dates=focused.successful_dates,
                 bye_teams=focused.bye_teams or cached_result.bye_teams,
             )
-            _GAMES_CACHE[week_cache_key] = (time.monotonic(), result)
+            cache_time = time.monotonic()
+            _GAMES_CACHE[week_cache_key] = (cache_time, result)
+            _GAMES_CACHE[("nfl", "last_complete_week")] = (cache_time, result)
             _LAST_WEEKLY_RESULT = result
             return result
 
@@ -704,6 +705,15 @@ def _week_cutoff_datetime(week_start: datetime.date, game_count: int) -> datetim
     if game_count in {2, 4}:
         return _localize(week_start + datetime.timedelta(days=5), 15, 15)
     return _localize(week_start + datetime.timedelta(days=7), 9, 0)
+
+
+def _game_scheduled_date(game: dict) -> datetime.date | None:
+    """Return a game's provider date in Central time when it is available."""
+
+    start = game.get("_start_local")
+    if not isinstance(start, datetime.datetime):
+        start = _timestamp_to_local(game.get("_event_date"))
+    return start.date() if isinstance(start, datetime.datetime) else None
 
 
 def _live_refresh_date(
