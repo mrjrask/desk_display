@@ -361,12 +361,48 @@ def test_force_refresh_bypasses_complete_week_cache(monkeypatch):
 
     first = nfl_scoreboard._fetch_games_for_week(now)
     request_count = len(session.requested_dates)
-    session.events_by_date["20260910"] = [live]
+    session._events_by_date["20260910"] = [live]
     refreshed = nfl_scoreboard._fetch_games_for_week(now, force_refresh=True)
 
     assert first[0]["status"]["type"]["state"] == "pre"
     assert refreshed[0]["status"]["type"]["state"] == "in"
-    assert len(session.requested_dates) > request_count
+    assert session.requested_dates[request_count:] == ["20260910"]
+
+
+def test_live_refresh_merges_todays_scores_into_complete_week(monkeypatch):
+    thursday = _event(
+        event_id="thursday", date="2026-09-10T23:20Z", away="CHI", home="GB"
+    )
+    sunday = _event(
+        event_id="sunday", date="2026-09-13T17:00Z", away="DET", home="MIN"
+    )
+    session = _install_fake_session(
+        monkeypatch,
+        {"20260910": [thursday], "20260913": [sunday]},
+    )
+    initial = nfl_scoreboard._fetch_games_for_week(
+        datetime.datetime(2026, 9, 10, 18, 0, tzinfo=nfl_scoreboard.CENTRAL_TIME)
+    )
+    session._events_by_date["20260910"] = [
+        _event(
+            event_id="thursday",
+            date="2026-09-10T23:20Z",
+            away="CHI",
+            home="GB",
+            away_score="7",
+            home_score="3",
+            state="in",
+        )
+    ]
+
+    refreshed = nfl_scoreboard._fetch_games_for_week(
+        datetime.datetime(2026, 9, 10, 19, 0, tzinfo=nfl_scoreboard.CENTRAL_TIME),
+        force_refresh=True,
+    )
+
+    assert [game["id"] for game in initial] == ["thursday", "sunday"]
+    assert [game["id"] for game in refreshed] == ["thursday", "sunday"]
+    assert refreshed[0]["scores"] == {"away": "7", "home": "3"}
 
 
 def test_force_refresh_honors_failed_week_retry_cooldown(monkeypatch):
