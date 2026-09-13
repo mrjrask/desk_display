@@ -765,7 +765,7 @@ def _fetch_games_for_week(
     if now >= cutoff:
         week_start = week_start + datetime.timedelta(days=7)
         games = _fetch_week_result_from_start(
-            week_start, force_refresh=force_refresh, refresh_date=now.date()
+            week_start, force_refresh=force_refresh
         ).games
     return games
 

@@ -890,6 +890,47 @@ def test_wednesday_and_thursday_games_share_the_same_display_week(monkeypatch):
     ]
 
 
+def test_force_refresh_after_playoff_cutoff_loads_next_week(monkeypatch):
+    events_by_date = {
+        "20260117": [
+            _event(
+                event_id="divisional-one",
+                date="2026-01-18T01:00Z",
+                away="HOU",
+                home="DEN",
+                state="post",
+            ),
+        ],
+        "20260118": [
+            _event(
+                event_id="divisional-two",
+                date="2026-01-19T01:00Z",
+                away="LAR",
+                home="SEA",
+                state="post",
+            ),
+        ],
+        "20260121": [
+            _event(
+                event_id="conference-championship",
+                date="2026-01-22T01:00Z",
+                away="BUF",
+                home="KC",
+                state="pre",
+            ),
+        ],
+    }
+    session = _install_fake_session(monkeypatch, events_by_date)
+    after_cutoff = datetime.datetime(
+        2026, 1, 19, 16, 0, tzinfo=nfl_scoreboard.CENTRAL_TIME
+    )
+
+    games = nfl_scoreboard._fetch_games_for_week(after_cutoff, force_refresh=True)
+
+    assert [game["id"] for game in games] == ["conference-championship"]
+    assert "20260121" in session.requested_dates
+
+
 def test_playoff_week_also_starts_on_wednesday(monkeypatch):
     events_by_date = {
         "20260114": [
