@@ -585,41 +585,42 @@ def _fetch_week_result_from_start(
             return cached_result
 
         if force_refresh and refresh_dates and not cached_result.failed_dates:
-            focused = fetch_week_dates(refresh_dates, session=_SESSION)
-            if focused.failed_dates:
-                # Preserve the last usable snapshot, but cache the failed
-                # attempt itself so another forced presentation observes the
-                # provider-failure cooldown instead of immediately retrying.
-                result = WeeklyResult(
-                    games=list(cached_result.games),
-                    successful_dates=focused.successful_dates,
-                    failed_dates=focused.failed_dates,
-                    bye_teams=cached_result.bye_teams,
-                    stale=True,
+            successful_refresh_dates: set[datetime.date] = set()
+            refreshed_games: list[dict] = []
+            successful_dates = failed_dates = 0
+            bye_teams = cached_result.bye_teams
+            for refresh_date in refresh_dates:
+                focused = fetch_week_dates([refresh_date], session=_SESSION)
+                successful_dates += focused.successful_dates
+                failed_dates += focused.failed_dates
+                if focused.failed_dates:
+                    continue
+                successful_refresh_dates.add(refresh_date)
+                if focused.bye_teams:
+                    bye_teams = focused.bye_teams
+                refreshed_games.extend(
+                    game
+                    for game in _hydrate_games(focused.games)
+                    if not _is_pro_bowl_game(game)
                 )
-                _GAMES_CACHE[week_cache_key] = (time.monotonic(), result)
-                _LAST_WEEKLY_RESULT = result
-                return result
 
-            refreshed_games = [
-                game
-                for game in _hydrate_games(focused.games)
-                if not _is_pro_bowl_game(game)
-            ]
             merged_games = [
                 game
                 for game in cached_result.games
-                if _game_scheduled_date(game) not in refresh_dates
+                if _game_scheduled_date(game) not in successful_refresh_dates
             ]
             merged_games.extend(refreshed_games)
             result = WeeklyResult(
                 games=sorted(merged_games, key=_game_sort_key),
-                successful_dates=focused.successful_dates,
-                bye_teams=focused.bye_teams or cached_result.bye_teams,
+                successful_dates=successful_dates,
+                failed_dates=failed_dates,
+                bye_teams=bye_teams,
+                stale=bool(failed_dates),
             )
             cache_time = time.monotonic()
             _GAMES_CACHE[week_cache_key] = (cache_time, result)
-            _GAMES_CACHE[("nfl", "last_complete_week")] = (cache_time, result)
+            if not failed_dates:
+                _GAMES_CACHE[("nfl", "last_complete_week")] = (cache_time, result)
             _LAST_WEEKLY_RESULT = result
             return result
 
