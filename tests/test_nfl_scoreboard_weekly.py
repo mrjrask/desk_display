@@ -933,3 +933,27 @@ def test_playoff_week_also_starts_on_wednesday(monkeypatch):
         "20260119",
         "20260120",
     ]
+
+
+def test_playoff_rollover_uses_refresh_dates_contract(monkeypatch):
+    calls = []
+
+    class Result:
+        def __init__(self, games):
+            self.games = games
+
+    def fetch_week(week_start, **kwargs):
+        calls.append((week_start, kwargs))
+        return Result([{}] * 6 if len(calls) == 1 else [])
+
+    monkeypatch.setattr(nfl_scoreboard, "_fetch_week_result_from_start", fetch_week)
+    after_cutoff = datetime.datetime(
+        2026, 1, 20, 16, 0, tzinfo=nfl_scoreboard.CENTRAL_TIME
+    )
+
+    nfl_scoreboard._fetch_games_for_week(after_cutoff, force_refresh=True)
+
+    assert calls[1] == (
+        datetime.date(2026, 1, 21),
+        {"force_refresh": True, "refresh_dates": (datetime.date(2026, 1, 20),)},
+    )
