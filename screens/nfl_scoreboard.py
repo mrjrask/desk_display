@@ -547,7 +547,10 @@ def _fetch_games_for_bulk_range(
 
 
 def _fetch_week_result_from_start(
-    week_start: datetime.date, *, force_refresh: bool = False
+    week_start: datetime.date,
+    *,
+    force_refresh: bool = False,
+    refresh_date: datetime.date | None = None,
 ):
     """Build a complete week, falling back atomically when any date failed.
 
@@ -578,6 +581,45 @@ def _fetch_week_result_from_start(
         if now - week_cached[0] < ttl and (
             not force_refresh or cached_result.failed_dates
         ):
+            _LAST_WEEKLY_RESULT = cached_result
+            return cached_result
+
+        if force_refresh and refresh_date is not None and not cached_result.failed_dates:
+            # The complete display week takes seven requests to assemble. During
+            # a live game only today's ESPN payload can have changed, so refresh
+            # that payload and merge it into the known-good schedule. Besides
+            # reducing latency, this avoids turning repeated seven-request live
+            # polls into provider throttling and a non-live nflverse fallback.
+            live_result = fetch_week_dates([refresh_date], session=_SESSION)
+            if not live_result.failed_dates:
+                refreshed_games = [
+                    game
+                    for game in _hydrate_games(live_result.games)
+                    if not _is_pro_bowl_game(game)
+                ]
+                games_by_id = {
+                    str(game.get("id") or game.get("uid")): game
+                    for game in cached_result.games
+                }
+                for game in refreshed_games:
+                    games_by_id[str(game.get("id") or game.get("uid"))] = game
+                result = WeeklyResult(
+                    games=sorted(games_by_id.values(), key=_game_sort_key),
+                    successful_dates=1,
+                    bye_teams=cached_result.bye_teams,
+                )
+                _GAMES_CACHE[week_cache_key] = (time.monotonic(), result)
+                _GAMES_CACHE[("nfl", "last_complete_week")] = (
+                    time.monotonic(),
+                    result,
+                )
+                _LAST_WEEKLY_RESULT = result
+                return result
+
+            logging.warning(
+                "NFL live refresh for %s failed; retaining the complete cached week",
+                refresh_date.isoformat(),
+            )
             _LAST_WEEKLY_RESULT = cached_result
             return cached_result
 
@@ -676,19 +718,19 @@ def _fetch_games_for_week(
     if not _playoff_rules_active(now):
         week_start = _regular_week_start(now)
         return _fetch_week_result_from_start(
-            week_start, force_refresh=force_refresh
+            week_start, force_refresh=force_refresh, refresh_date=now.date()
         ).games
 
     week_start = _week_start_for_date(now.date())
     games = _fetch_week_result_from_start(
-        week_start, force_refresh=force_refresh
+        week_start, force_refresh=force_refresh, refresh_date=now.date()
     ).games
 
     cutoff = _week_cutoff_datetime(week_start, len(games))
     if now >= cutoff:
         week_start = week_start + datetime.timedelta(days=7)
         games = _fetch_week_result_from_start(
-            week_start, force_refresh=force_refresh
+            week_start, force_refresh=force_refresh, refresh_date=now.date()
         ).games
     return games
 
