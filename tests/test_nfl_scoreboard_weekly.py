@@ -396,6 +396,68 @@ def test_force_refresh_honors_failed_week_retry_cooldown(monkeypatch):
     assert session.calls == call_count
 
 
+def test_failed_focused_refresh_is_cached_for_retry_cooldown(monkeypatch):
+    event = _event(
+        event_id="live-game",
+        date="2026-09-11T00:20Z",
+        away="CHI",
+        home="GB",
+        state="in",
+    )
+    clock = [100.0]
+    _install_fake_session(monkeypatch, {"20260910": [event]})
+    monkeypatch.setattr(nfl_scoreboard.time, "monotonic", lambda: clock[0])
+    week_start = datetime.date(2026, 9, 9)
+    nfl_scoreboard._fetch_week_result_from_start(week_start)
+
+    class FailedSession:
+        def __init__(self):
+            self.calls = 0
+
+        def get(self, url, timeout=None):
+            self.calls += 1
+            return _FakeResponse({}, error=True)
+
+    failed_session = FailedSession()
+    monkeypatch.setattr(nfl_scoreboard, "_SESSION", failed_session)
+    clock[0] += nfl_scoreboard.FETCH_CACHE_TTL_SECONDS + 1
+    now = datetime.datetime(2026, 9, 10, 20, 0, tzinfo=nfl_scoreboard.CENTRAL_TIME)
+
+    first = nfl_scoreboard._fetch_games_for_week(now, force_refresh=True)
+    calls_after_failure = failed_session.calls
+    second = nfl_scoreboard._fetch_games_for_week(now, force_refresh=True)
+
+    cached_result = nfl_scoreboard._GAMES_CACHE[
+        ("nfl", "display_week", week_start, datetime.date(2026, 9, 15))
+    ][1]
+    assert first == second
+    assert cached_result.failed_dates == 1
+    assert cached_result.stale is True
+    assert failed_session.calls == calls_after_failure == 1
+
+
+def test_focused_refresh_uses_scheduled_date_after_midnight(monkeypatch):
+    event = _event(
+        event_id="long-game",
+        date="2026-09-11T00:20Z",
+        away="CHI",
+        home="GB",
+        state="in",
+    )
+    session = _install_fake_session(monkeypatch, {"20260910": [event]})
+    week_start = datetime.date(2026, 9, 9)
+    nfl_scoreboard._fetch_week_result_from_start(week_start)
+    session.requested_dates.clear()
+    after_midnight = datetime.datetime(
+        2026, 9, 11, 1, 0, tzinfo=nfl_scoreboard.CENTRAL_TIME
+    )
+
+    games = nfl_scoreboard._fetch_games_for_week(after_midnight, force_refresh=True)
+
+    assert [game["id"] for game in games] == ["long-game"]
+    assert session.requested_dates == ["20260910"]
+
+
 def test_partial_failure_suppresses_all_provider_retries_for_five_minutes(monkeypatch):
     event = _event(
         event_id="fallback", date="2026-09-10T23:20Z", away="CHI", home="GB"
