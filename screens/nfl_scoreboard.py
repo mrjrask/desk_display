@@ -550,7 +550,7 @@ def _fetch_week_result_from_start(
     week_start: datetime.date,
     *,
     force_refresh: bool = False,
-    refresh_date: datetime.date | None = None,
+    refresh_dates: tuple[datetime.date, ...] = (),
 ):
     """Build a complete week, falling back atomically when any date failed.
 
@@ -584,8 +584,8 @@ def _fetch_week_result_from_start(
             _LAST_WEEKLY_RESULT = cached_result
             return cached_result
 
-        if force_refresh and refresh_date is not None and not cached_result.failed_dates:
-            focused = fetch_week_dates([refresh_date], session=_SESSION)
+        if force_refresh and refresh_dates and not cached_result.failed_dates:
+            focused = fetch_week_dates(refresh_dates, session=_SESSION)
             if focused.failed_dates:
                 # Preserve the last usable snapshot, but cache the failed
                 # attempt itself so another forced presentation observes the
@@ -609,7 +609,7 @@ def _fetch_week_result_from_start(
             merged_games = [
                 game
                 for game in cached_result.games
-                if _game_scheduled_date(game) != refresh_date
+                if _game_scheduled_date(game) not in refresh_dates
             ]
             merged_games.extend(refreshed_games)
             result = WeeklyResult(
@@ -716,30 +716,27 @@ def _game_scheduled_date(game: dict) -> datetime.date | None:
     return start.date() if isinstance(start, datetime.datetime) else None
 
 
-def _live_refresh_date(
+def _live_refresh_dates(
     week_start: datetime.date, now: datetime.datetime
-) -> datetime.date | None:
-    """Return the scheduled date of the cached game that needs live updates."""
+) -> tuple[datetime.date, ...]:
+    """Return every scheduled date containing a started, nonfinal cached game."""
 
     week_end = _week_end_from_start(week_start)
     cached = _GAMES_CACHE.get(("nfl", "display_week", week_start, week_end))
     if not cached:
-        return None
+        return ()
 
-    candidates: list[datetime.datetime] = []
+    dates: set[datetime.date] = set()
     for game in cached[1].games:
         if _is_game_final(game):
             continue
         start = game.get("_start_local")
         if isinstance(start, datetime.datetime) and start <= now:
-            candidates.append(start)
-    if not candidates:
-        return None
+            dates.add(start.date())
 
-    # The latest game to have kicked off is the most likely reason the caller
-    # requested a forced refresh. Its scheduled date remains the provider key
-    # even when a delay or suspension carries play past midnight Central.
-    return max(candidates).date()
+    # Provider date keys remain tied to scheduled dates even when delayed or
+    # suspended games overlap later game days.
+    return tuple(sorted(dates))
 
 
 def _fetch_games_for_week(
@@ -752,15 +749,15 @@ def _fetch_games_for_week(
         now = now.astimezone(CENTRAL_TIME)
     if not _playoff_rules_active(now):
         week_start = _regular_week_start(now)
-        refresh_date = _live_refresh_date(week_start, now) if force_refresh else None
+        refresh_dates = _live_refresh_dates(week_start, now) if force_refresh else ()
         return _fetch_week_result_from_start(
-            week_start, force_refresh=force_refresh, refresh_date=refresh_date
+            week_start, force_refresh=force_refresh, refresh_dates=refresh_dates
         ).games
 
     week_start = _week_start_for_date(now.date())
-    refresh_date = _live_refresh_date(week_start, now) if force_refresh else None
+    refresh_dates = _live_refresh_dates(week_start, now) if force_refresh else ()
     games = _fetch_week_result_from_start(
-        week_start, force_refresh=force_refresh, refresh_date=refresh_date
+        week_start, force_refresh=force_refresh, refresh_dates=refresh_dates
     ).games
 
     cutoff = _week_cutoff_datetime(week_start, len(games))

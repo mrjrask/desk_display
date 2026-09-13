@@ -458,6 +458,46 @@ def test_focused_refresh_uses_scheduled_date_after_midnight(monkeypatch):
     assert session.requested_dates == ["20260910"]
 
 
+def test_focused_refresh_requests_every_active_game_date(monkeypatch):
+    events = {
+        "20260910": [
+            _event(
+                event_id="suspended-thursday",
+                date="2026-09-11T00:20Z",
+                away="CHI",
+                home="GB",
+                state="in",
+            )
+        ],
+        "20260913": [
+            _event(
+                event_id="live-sunday",
+                date="2026-09-13T17:00Z",
+                away="DET",
+                home="MIN",
+                state="in",
+            )
+        ],
+    }
+    session = _install_fake_session(monkeypatch, events)
+    week_start = datetime.date(2026, 9, 9)
+    nfl_scoreboard._fetch_week_result_from_start(week_start)
+    session.requested_dates.clear()
+    sunday_afternoon = datetime.datetime(
+        2026, 9, 13, 14, 0, tzinfo=nfl_scoreboard.CENTRAL_TIME
+    )
+
+    games = nfl_scoreboard._fetch_games_for_week(
+        sunday_afternoon, force_refresh=True
+    )
+
+    assert {game["id"] for game in games} == {
+        "suspended-thursday",
+        "live-sunday",
+    }
+    assert session.requested_dates == ["20260910", "20260913"]
+
+
 def test_successful_focused_refresh_replaces_all_games_on_requested_date(monkeypatch):
     event = _event(
         event_id="removed-game",
