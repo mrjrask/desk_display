@@ -39,6 +39,7 @@ class _ScheduleEntry:
     screen_id: str
     frequency: int
     cycle_count: int = 0
+    presentation_count: int = 0
     initial_cycle_seen: bool = False
     extra_seconds: int = 0
     hide_after: Optional[datetime] = None
@@ -110,6 +111,7 @@ class ScreenScheduler:
                     screen_id=entry.screen_id,
                     frequency=entry.frequency,
                     cycle_count=entry.cycle_count,
+                    presentation_count=entry.presentation_count,
                     initial_cycle_seen=entry.initial_cycle_seen,
                     extra_seconds=entry.extra_seconds,
                     hide_after=entry.hide_after,
@@ -147,14 +149,19 @@ class ScreenScheduler:
             entry.cycle_count += 1
             if not entry.initial_cycle_seen:
                 entry.initial_cycle_seen = True
+                entry.presentation_count += 1
                 return entry.screen_id
 
             if entry.cycle_count % entry.frequency != 0:
                 continue
 
-            if entry.alternate and entry.alternate.frequency > 0:
-                if entry.cycle_count % entry.alternate.frequency == 0:
-                    return entry.alternate.next_screen_id()
+            entry.presentation_count += 1
+            if (
+                entry.alternate
+                and entry.alternate.frequency > 0
+                and entry.presentation_count % entry.alternate.frequency == 0
+            ):
+                return entry.alternate.next_screen_id()
 
             return entry.screen_id
 
@@ -178,6 +185,7 @@ class ScreenScheduler:
             entry.cycle_count += 1
             if not entry.initial_cycle_seen:
                 entry.initial_cycle_seen = True
+                entry.presentation_count += 1
                 definition = registry.get(entry.screen_id)
                 if definition and definition.available:
                     return definition
@@ -186,15 +194,19 @@ class ScreenScheduler:
             if entry.cycle_count % entry.frequency != 0:
                 continue
 
+            entry.presentation_count += 1
             candidate_id = entry.screen_id
-            if entry.alternate and entry.alternate.frequency > 0:
-                if entry.cycle_count % entry.alternate.frequency == 0:
-                    alternate = entry.alternate
-                    for _ in range(len(alternate.screen_ids)):
-                        alt_id = alternate.next_screen_id()
-                        alt_def = registry.get(alt_id)
-                        if alt_def and alt_def.available:
-                            return alt_def
+            if (
+                entry.alternate
+                and entry.alternate.frequency > 0
+                and entry.presentation_count % entry.alternate.frequency == 0
+            ):
+                alternate = entry.alternate
+                for _ in range(len(alternate.screen_ids)):
+                    alt_id = alternate.next_screen_id()
+                    alt_def = registry.get(alt_id)
+                    if alt_def and alt_def.available:
+                        return alt_def
 
             definition = registry.get(candidate_id)
             if definition and definition.available:
