@@ -40,6 +40,18 @@ def test_default_screen_configs_include_weather_alert_screen():
         assert "weather alert" in _weather_playlist_steps(config)
 
 
+def test_default_screen_configs_alternate_news_headline_feeds():
+    for filename in ("default_screens_large.json", "default_screens_small.json"):
+        config = _load_default_config(filename)
+        screens = config["config"]["screens"]
+
+        assert screens["news headlines"] == {
+            "frequency": 1,
+            "alt": {"screen": "news headlines 2", "frequency": 2},
+        }
+        assert screens["news headlines 2"] == 0
+
+
 def test_default_screen_configs_include_adsb_screens_at_end_of_other():
     for filename in ("default_screens_large.json", "default_screens_small.json"):
         config = _load_default_config(filename)
