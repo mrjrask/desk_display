@@ -51,6 +51,22 @@ def test_default_screen_configs_include_adsb_screens_at_end_of_other():
         assert other_steps[-2:] == ["adsb stats", "adsb live"]
 
 
+def test_default_screen_configs_rotate_nfl_overviews_with_conference_standings():
+    for filename in ("default_screens_large.json", "default_screens_small.json"):
+        config = _load_default_config(filename)
+        screens = config["config"]["screens"]
+
+        for conference in ("AFC", "NFC"):
+            assert screens[f"NFL Overview {conference}"] == {
+                "frequency": 4,
+                "extra_seconds": 0,
+                "alt": {
+                    "screen": f"NFL Standings {conference}",
+                    "frequency": 3,
+                },
+            }
+
+
 def test_default_screen_configs_place_wolves_live_after_logo():
     for filename in (
         "default_screens_large.json",
