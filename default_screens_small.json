@@ -95,7 +95,7 @@
             "MLB NL Standings",
             "MLB NLWC Standings"
           ],
-          "frequency": 2
+          "frequency": 4
         }
       },
       "AL Overview+WC": {
@@ -105,7 +105,7 @@
             "MLB AL Standings",
             "MLB ALWC Standings"
           ],
-          "frequency": 2
+          "frequency": 4
         }
       },
       "bears logo": 3,

@@ -67,6 +67,24 @@ def test_default_screen_configs_rotate_nfl_overviews_with_conference_standings()
             }
 
 
+def test_default_screen_configs_rotate_mlb_overviews_with_league_standings():
+    for filename in ("default_screens_large.json", "default_screens_small.json"):
+        config = _load_default_config(filename)
+        screens = config["config"]["screens"]
+
+        for league in ("NL", "AL"):
+            assert screens[f"{league} Overview+WC"] == {
+                "frequency": 2,
+                "alt": {
+                    "screen": [
+                        f"MLB {league} Standings",
+                        f"MLB {league}WC Standings",
+                    ],
+                    "frequency": 4,
+                },
+            }
+
+
 def test_default_screen_configs_place_wolves_live_after_logo():
     for filename in (
         "default_screens_large.json",
