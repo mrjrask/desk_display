@@ -636,6 +636,9 @@
           <div class="alt-screen-field">
             <select class="alt-screen-input">
               <option value="">No alternate</option>
+              {% if ',' in screen.alt_screen %}
+              <option value="{{ screen.alt_screen }}" selected>Multiple</option>
+              {% endif %}
               {% for screen_id in screen_ids %}
               {% if screen_id != screen.id %}
               <option value="{{ screen_id }}" {% if screen.alt_screen == screen_id %}selected{% endif %}>{{ screen_id }}</option>
@@ -1122,6 +1125,9 @@
 
     function buildAltScreenOptions(screenId, selectedValue) {
       const options = ['<option value="">No alternate</option>'];
+      if (parseAltScreen(selectedValue).length > 1) {
+        options.push(`<option value="${selectedValue}" selected>Multiple</option>`);
+      }
       selectableScreenIds
         .filter((id) => id !== screenId)
         .forEach((id) => {
