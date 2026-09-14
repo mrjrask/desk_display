@@ -150,6 +150,12 @@ class ScreenScheduler:
             if not entry.initial_cycle_seen:
                 entry.initial_cycle_seen = True
                 entry.presentation_count += 1
+                if (
+                    entry.alternate
+                    and entry.alternate.frequency > 0
+                    and entry.presentation_count % entry.alternate.frequency == 0
+                ):
+                    return entry.alternate.next_screen_id()
                 return entry.screen_id
 
             if entry.cycle_count % entry.frequency != 0:
@@ -186,6 +192,17 @@ class ScreenScheduler:
             if not entry.initial_cycle_seen:
                 entry.initial_cycle_seen = True
                 entry.presentation_count += 1
+                if (
+                    entry.alternate
+                    and entry.alternate.frequency > 0
+                    and entry.presentation_count % entry.alternate.frequency == 0
+                ):
+                    alternate = entry.alternate
+                    for _ in range(len(alternate.screen_ids)):
+                        alt_id = alternate.next_screen_id()
+                        alt_def = registry.get(alt_id)
+                        if alt_def and alt_def.available:
+                            return alt_def
                 definition = registry.get(entry.screen_id)
                 if definition and definition.available:
                     return definition

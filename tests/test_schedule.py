@@ -149,6 +149,41 @@ def test_scheduler_with_alternate_screen():
     ]
 
 
+def test_frequency_one_alternate_is_used_on_first_presentation():
+    config = {
+        "screens": {
+            "NFL Overview NFC": {
+                "frequency": 4,
+                "alt": {"screen": "NFL Standings NFC", "frequency": 1},
+            }
+        }
+    }
+    scheduler = build_scheduler(config)
+    registry = make_registry(
+        {"NFL Overview NFC": True, "NFL Standings NFC": True}
+    )
+
+    assert scheduler.preview_scheduled_ids(1) == ["NFL Standings NFC"]
+    assert scheduler.next_available(registry).id == "NFL Standings NFC"
+
+
+def test_unavailable_frequency_one_alternate_falls_back_on_first_presentation():
+    config = {
+        "screens": {
+            "NFL Overview NFC": {
+                "frequency": 4,
+                "alt": {"screen": "NFL Standings NFC", "frequency": 1},
+            }
+        }
+    }
+    scheduler = build_scheduler(config)
+    registry = make_registry(
+        {"NFL Overview NFC": True, "NFL Standings NFC": False}
+    )
+
+    assert scheduler.next_available(registry).id == "NFL Overview NFC"
+
+
 def test_alternate_frequency_counts_scheduled_appearances_not_raw_passes():
     config = {
         "screens": {
