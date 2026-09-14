@@ -11,8 +11,14 @@
       },
       "nixie": 0,
       "on this day": 6,
-      "news headlines": 1,
-      "news headlines 2": 1,
+      "news headlines": {
+        "frequency": 1,
+        "alt": {
+          "screen": "news headlines 2",
+          "frequency": 2
+        }
+      },
+      "news headlines 2": 0,
       "weather logo": 0,
       "weather1": 1,
       "weather2": 1,
