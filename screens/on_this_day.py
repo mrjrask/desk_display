@@ -118,6 +118,10 @@ _INCOMPLETE_FEED_RETRY_SECONDS = max(
 _LIVE_THUMBNAILS_ENABLED = os.environ.get(
     "ON_THIS_DAY_LIVE_THUMBNAILS", "0"
 ).strip().lower() in {"1", "true", "yes", "on"}
+_WIKIMEDIA_USER_AGENT = os.environ.get(
+    "WIKIMEDIA_USER_AGENT",
+    "DeskDisplay/1.0 (https://github.com/mrjrask/desk_display)",
+).strip()
 
 _EMOJI_PREFIX_RE = re.compile(r"^[^\w#]+\s*")
 
@@ -239,43 +243,18 @@ def _clean_text(text: str) -> str:
     return " ".join(str(text or "").replace("\n", " ").split())
 
 
-def _wiki_items(
+def _parse_wiki_items(
+    payload: object,
     feed_type: str,
-    month: int,
-    day: int,
-    limit: int = 3,
+    limit: int,
     include_page_extract: bool = False,
 ) -> list[DayItem]:
-    url = f"https://api.wikimedia.org/feed/v1/wikipedia/en/onthisday/{feed_type}/{month}/{day}"
-    try:
-        response = http_get(url, timeout=3.0)
-        response.raise_for_status()
-        payload = response.json()
-    except Exception as exc:
-        status_code = getattr(getattr(exc, "response", None), "status_code", None)
-        logging.warning(
-            "on_this_day: Wikimedia '%s' feed failed (%s) url=%s status=%s: %s",
-            feed_type,
-            type(exc).__name__,
-            url,
-            status_code,
-            exc,
-        )
-        return []
+    """Extract one category from an On This Day response."""
 
     include_page_extract = include_page_extract or feed_type == "holidays"
-
-    if not isinstance(payload, dict) or feed_type not in payload:
-        logging.warning(
-            "on_this_day: Wikimedia '%s' feed returned an unexpected payload shape "
-            "url=%s keys=%s",
-            feed_type,
-            url,
-            list(payload.keys()) if isinstance(payload, dict) else type(payload).__name__,
-        )
-
     items: list[DayItem] = []
-    for raw in payload.get(feed_type, []) if isinstance(payload, dict) else []:
+    raw_items = payload.get(feed_type, []) if isinstance(payload, dict) else []
+    for raw in raw_items:
         if not isinstance(raw, dict):
             continue
         text = _clean_text(raw.get("text", ""))
@@ -311,13 +290,67 @@ def _wiki_items(
         )
         if len(items) >= limit:
             break
-    logging.info(
-        "on_this_day: Wikimedia '%s' feed returned %d item(s) (requested up to %d).",
-        feed_type,
-        len(items),
-        limit,
-    )
     return items
+
+
+def _wiki_daily_items(month: int, day: int) -> dict[str, list[DayItem]]:
+    """Fetch every Wikimedia category in one policy-friendly request."""
+
+    url = f"https://api.wikimedia.org/feed/v1/wikipedia/en/onthisday/all/{month}/{day}"
+    try:
+        response = http_get(
+            url,
+            timeout=3.0,
+            headers={"User-Agent": _WIKIMEDIA_USER_AGENT},
+        )
+        response.raise_for_status()
+        payload = response.json()
+    except Exception as exc:
+        status_code = getattr(getattr(exc, "response", None), "status_code", None)
+        logging.warning(
+            "on_this_day: Wikimedia '%s' feed failed (%s) url=%s status=%s: %s",
+            "all",
+            type(exc).__name__,
+            url,
+            status_code,
+            exc,
+        )
+        return {}
+
+    expected = {"events", "births", "deaths", "holidays"}
+    if not isinstance(payload, dict) or not expected.intersection(payload):
+        logging.warning(
+            "on_this_day: Wikimedia 'all' feed returned an unexpected payload shape "
+            "url=%s keys=%s",
+            url,
+            list(payload.keys()) if isinstance(payload, dict) else type(payload).__name__,
+        )
+        return {}
+
+    limits = {"events": 4, "births": 3, "deaths": 2, "holidays": 2}
+    result = {
+        feed_type: _parse_wiki_items(payload, feed_type, limit)
+        for feed_type, limit in limits.items()
+    }
+    logging.info(
+        "on_this_day: Wikimedia 'all' feed returned category counts %s.",
+        {feed_type: len(items) for feed_type, items in result.items()},
+    )
+    return result
+
+
+def _wiki_items(
+    feed_type: str,
+    month: int,
+    day: int,
+    limit: int = 3,
+    include_page_extract: bool = False,
+) -> list[DayItem]:
+    """Compatibility helper for callers that need one Wikimedia category."""
+
+    # The bulk response is already parsed (including holiday extracts). Keep
+    # this small wrapper for tests and third-party imports of the old helper.
+    return _wiki_daily_items(month, day).get(feed_type, [])[:limit]
 
 
 def _unfold_ics_lines(text: str) -> list[str]:
@@ -557,20 +590,15 @@ def _build_sections_uncached(today: dt.date) -> dict[str, list[DayItem]]:
         )
         return {title: list(items) for title, items in fallback.items() if items}
 
-    # Keep On This Day off the rotation hot path.  Fetching four Wikimedia feeds
-    # plus Hebcal serially can hold the previous screen for 10+ seconds on a Pi
-    # Zero 2 W when DNS, Wi-Fi, or the upstream API is slow.  Start the feeds in
-    # parallel, collect only the calls that finish within a small overall budget,
-    # and let the screen render with whichever sections are ready.
-    task_specs: dict[str, tuple[str, Callable[[], list[DayItem]]]] = {
-        "🌎 General History": ("events", lambda: _wiki_items("events", month, day, 4)),
-        "🎂 Famous Birthdays": ("births", lambda: _wiki_items("births", month, day, 3)),
-        "🕯️ Notable Lives": ("deaths", lambda: _wiki_items("deaths", month, day, 2)),
+    # Keep On This Day off the rotation hot path. Fetch Wikimedia's combined
+    # endpoint and Hebcal in parallel, collect only calls that finish within a
+    # small overall budget, and render whichever sections are ready.
+    task_specs: dict[str, tuple[str, Callable[[], object]]] = {
+        "wikimedia": ("all", lambda: _wiki_daily_items(month, day)),
         "jewish_holidays": ("jewish_holidays", lambda: _jewish_holiday_items(today)),
-        "wiki_holidays": ("holidays", lambda: _wiki_items("holidays", month, day, 2)),
     }
 
-    completed: dict[str, list[DayItem]] = {}
+    completed: dict[str, object] = {}
     executor = ThreadPoolExecutor(max_workers=len(task_specs))
     future_to_title = {
         executor.submit(fetcher): title
@@ -584,7 +612,7 @@ def _build_sections_uncached(today: dt.date) -> dict[str, list[DayItem]]:
         title = future_to_title[future]
         feed_name = task_specs[title][0]
         try:
-            completed[title] = future.result() or []
+            completed[title] = future.result() or {}
         except Exception as exc:
             logging.warning(
                 "on_this_day: feed '%s' (section=%s) raised %s: %s",
@@ -606,13 +634,15 @@ def _build_sections_uncached(today: dt.date) -> dict[str, list[DayItem]]:
             future.cancel()
     executor.shutdown(wait=False, cancel_futures=True)
 
-    holiday_items = (completed.get("jewish_holidays") or []) + (
-        completed.get("wiki_holidays") or []
-    )
+    wiki = completed.get("wikimedia")
+    wiki = wiki if isinstance(wiki, dict) else {}
+    jewish_holidays = completed.get("jewish_holidays")
+    jewish_holidays = jewish_holidays if isinstance(jewish_holidays, list) else []
+    holiday_items = jewish_holidays + wiki.get("holidays", [])
     sections = {
-        "🌎 General History": completed.get("🌎 General History") or [],
-        "🎂 Famous Birthdays": completed.get("🎂 Famous Birthdays") or [],
-        "🕯️ Notable Lives": completed.get("🕯️ Notable Lives") or [],
+        "🌎 General History": wiki.get("events", []),
+        "🎂 Famous Birthdays": wiki.get("births", []),
+        "🕯️ Notable Lives": wiki.get("deaths", []),
         "🎉 Holidays & Culture": holiday_items,
     }
 
