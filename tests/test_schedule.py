@@ -149,6 +149,41 @@ def test_scheduler_with_alternate_screen():
     ]
 
 
+def test_alternate_frequency_counts_scheduled_appearances_not_raw_passes():
+    config = {
+        "screens": {
+            "NFL Overview NFC": {
+                "frequency": 4,
+                "alt": {"screen": "NFL Standings NFC", "frequency": 3},
+            },
+            "NFL Overview AFC": {
+                "frequency": 4,
+                "alt": {"screen": "NFL Standings AFC", "frequency": 3},
+            },
+        }
+    }
+    scheduler = build_scheduler(config)
+    registry = make_registry(
+        {
+            "NFL Overview NFC": True,
+            "NFL Overview AFC": True,
+            "NFL Standings NFC": True,
+            "NFL Standings AFC": True,
+        }
+    )
+
+    sequence = collect_played_ids(scheduler, registry, 6)
+
+    assert sequence == [
+        "NFL Overview NFC",
+        "NFL Overview AFC",
+        "NFL Overview NFC",
+        "NFL Overview AFC",
+        "NFL Standings NFC",
+        "NFL Standings AFC",
+    ]
+
+
 def test_scheduler_with_multiple_alternates():
     config = {
         "screens": {
