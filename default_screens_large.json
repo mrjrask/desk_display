@@ -133,8 +133,22 @@
           "frequency": 1
         }
       },
-      "NFL Overview NFC": 0,
-      "NFL Overview AFC": 0,
+      "NFL Overview NFC": {
+        "frequency": 4,
+        "extra_seconds": 0,
+        "alt": {
+          "screen": "NFL Standings NFC",
+          "frequency": 3
+        }
+      },
+      "NFL Overview AFC": {
+        "frequency": 4,
+        "extra_seconds": 0,
+        "alt": {
+          "screen": "NFL Standings AFC",
+          "frequency": 3
+        }
+      },
       "NFL Standings NFC": 0,
       "NFL Standings AFC": 0,
       "bulls logo": 0,
