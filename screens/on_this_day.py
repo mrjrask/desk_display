@@ -293,8 +293,8 @@ def _parse_wiki_items(
     return items
 
 
-def _wiki_daily_items(month: int, day: int) -> dict[str, list[DayItem]]:
-    """Fetch every Wikimedia category in one policy-friendly request."""
+def _fetch_wiki_daily_payload(month: int, day: int) -> dict[str, object]:
+    """Fetch the combined Wikimedia response for a calendar day."""
 
     url = f"https://api.wikimedia.org/feed/v1/wikipedia/en/onthisday/all/{month}/{day}"
     try:
@@ -327,6 +327,13 @@ def _wiki_daily_items(month: int, day: int) -> dict[str, list[DayItem]]:
         )
         return {}
 
+    return payload
+
+
+def _wiki_daily_items(month: int, day: int) -> dict[str, list[DayItem]]:
+    """Fetch every Wikimedia category in one policy-friendly request."""
+
+    payload = _fetch_wiki_daily_payload(month, day)
     limits = {"events": 4, "births": 3, "deaths": 2, "holidays": 2}
     result = {
         feed_type: _parse_wiki_items(payload, feed_type, limit)
@@ -348,9 +355,11 @@ def _wiki_items(
 ) -> list[DayItem]:
     """Compatibility helper for callers that need one Wikimedia category."""
 
-    # The bulk response is already parsed (including holiday extracts). Keep
-    # this small wrapper for tests and third-party imports of the old helper.
-    return _wiki_daily_items(month, day).get(feed_type, [])[:limit]
+    # Fetch through the combined endpoint, but parse the requested category
+    # separately so this compatibility API retains its original limit and
+    # include_page_extract behavior for every feed type.
+    payload = _fetch_wiki_daily_payload(month, day)
+    return _parse_wiki_items(payload, feed_type, limit, include_page_extract)
 
 
 def _unfold_ics_lines(text: str) -> list[str]:

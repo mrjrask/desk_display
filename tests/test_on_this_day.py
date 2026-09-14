@@ -388,6 +388,38 @@ def test_on_this_day_skips_wikimedia_holiday_descriptions_for_grouped_rows(monke
     ]
 
 
+def test_on_this_day_compatibility_helper_includes_non_holiday_extract(monkeypatch):
+    class FakeResponse:
+        def raise_for_status(self):
+            pass
+
+        def json(self):
+            return {
+                "events": [
+                    {
+                        "year": 2001,
+                        "text": "A notable event",
+                        "pages": [
+                            {
+                                "extract": "More context about the notable event.",
+                            }
+                        ],
+                    }
+                ]
+            }
+
+    monkeypatch.setattr(otd, "http_get", lambda *args, **kwargs: FakeResponse())
+
+    items = otd._wiki_items("events", 7, 7, 1, include_page_extract=True)
+
+    assert items == [
+        otd.DayItem(
+            2001,
+            "A notable event: More context about the notable event.",
+        )
+    ]
+
+
 def test_on_this_day_parses_hebrew_calendar_holiday_descriptions():
     ics = """BEGIN:VCALENDAR
 BEGIN:VEVENT
