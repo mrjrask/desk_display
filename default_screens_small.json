@@ -84,12 +84,30 @@
       "MLB Scoreboard": 2,
       "NL Overview": 0,
       "AL Overview": 0,
-      "MLB AL Standings": 2,
-      "MLB ALWC Standings": 2,
-      "MLB NL Standings": 2,
-      "MLB NLWC Standings": 2,
-      "NL Overview+WC": 5,
-      "AL Overview+WC": 5,
+      "MLB AL Standings": 0,
+      "MLB ALWC Standings": 0,
+      "MLB NL Standings": 0,
+      "MLB NLWC Standings": 0,
+      "NL Overview+WC": {
+        "frequency": 2,
+        "alt": {
+          "screen": [
+            "MLB NL Standings",
+            "MLB NLWC Standings"
+          ],
+          "frequency": 2
+        }
+      },
+      "AL Overview+WC": {
+        "frequency": 2,
+        "alt": {
+          "screen": [
+            "MLB AL Standings",
+            "MLB ALWC Standings"
+          ],
+          "frequency": 2
+        }
+      },
       "bears logo": 3,
       "bears stand1": 0,
       "bears stand2": 0,

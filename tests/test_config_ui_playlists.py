@@ -161,6 +161,32 @@ def test_screen_config_page_renders_alt_screen_dropdown(monkeypatch):
     assert '<input type="text" list="screenIds"' not in html
 
 
+def test_screen_config_page_labels_multiple_alternate_screens(monkeypatch):
+    monkeypatch.setattr(config_ui, "_load_active_config", lambda: {"screens": {"date": 1}})
+    monkeypatch.setattr(config_ui, "_load_active_style_config", lambda: {"screens": {}})
+    monkeypatch.setattr(
+        config_ui,
+        "_build_screen_entries",
+        lambda config, style: [
+            {
+                "id": "date",
+                "frequency": 1,
+                "background": "#000000",
+                "alt_screen": "inside, weather1",
+                "alt_frequency": "2",
+            }
+        ],
+    )
+
+    client = config_ui.app.test_client()
+    response = client.get("/")
+
+    assert response.status_code == 200
+    html = response.get_data(as_text=True)
+    assert '<option value="inside, weather1" selected>Multiple</option>' in html
+    assert 'options.push(`<option value="${selectedValue}" selected>Multiple</option>`)' in html
+
+
 def test_screen_config_page_no_longer_renders_quad_mode_controls(monkeypatch):
     monkeypatch.setattr(config_ui, "_load_active_config", lambda: {"screens": {"date": 1}})
     monkeypatch.setattr(config_ui, "_load_active_style_config", lambda: {"screens": {}})
