@@ -156,11 +156,14 @@ def test_on_this_day_sections_cache_checks_wikimedia_once_per_date(monkeypatch):
     otd._clear_caches_for_tests()
     calls = []
 
-    def fake_wiki(feed_type, month, day, limit=3):
-        calls.append((feed_type, month, day, limit))
-        return [otd.DayItem(2000, f"{feed_type} item")]
+    def fake_wiki(month, day):
+        calls.append((month, day))
+        return {
+            feed_type: [otd.DayItem(2000, f"{feed_type} item")]
+            for feed_type in ("events", "births", "deaths", "holidays")
+        }
 
-    monkeypatch.setattr(otd, "_wiki_items", fake_wiki)
+    monkeypatch.setattr(otd, "_wiki_daily_items", fake_wiki)
     monkeypatch.setattr(otd, "_jewish_holiday_items", lambda *args, **kwargs: [])
 
     first = otd._build_sections(dt.date(2026, 7, 7))
@@ -169,19 +172,21 @@ def test_on_this_day_sections_cache_checks_wikimedia_once_per_date(monkeypatch):
 
     assert first == second
     assert next_day
-    assert len(calls) == 8
-    assert [call[2] for call in calls] == [7, 7, 7, 7, 8, 8, 8, 8]
+    assert calls == [(7, 7), (7, 8)]
 
 
 def test_on_this_day_builds_live_sections_in_parallel(monkeypatch):
     otd._clear_caches_for_tests()
     calls = []
 
-    def fake_wiki(feed_type, month, day, limit=3):
-        calls.append((feed_type, month, day, limit))
-        return [otd.DayItem(2000, f"{feed_type} item")]
+    def fake_wiki(month, day):
+        calls.append((month, day))
+        return {
+            feed_type: [otd.DayItem(2000, f"{feed_type} item")]
+            for feed_type in ("events", "births", "deaths", "holidays")
+        }
 
-    monkeypatch.setattr(otd, "_wiki_items", fake_wiki)
+    monkeypatch.setattr(otd, "_wiki_daily_items", fake_wiki)
     monkeypatch.setattr(
         otd,
         "_jewish_holiday_items",
@@ -192,12 +197,12 @@ def test_on_this_day_builds_live_sections_in_parallel(monkeypatch):
 
     assert "🌎 General History" in sections
     assert "🎉 Holidays & Culture" in sections
-    assert {call[0] for call in calls} == {"events", "births", "deaths", "holidays"}
+    assert calls == [(7, 8)]
 
 
 def test_on_this_day_renders_non_empty_fallback_when_live_feeds_are_empty(monkeypatch):
     otd._clear_caches_for_tests()
-    monkeypatch.setattr(otd, "_wiki_items", lambda *args, **kwargs: [])
+    monkeypatch.setattr(otd, "_wiki_daily_items", lambda *args, **kwargs: {})
     monkeypatch.setattr(otd, "_jewish_holiday_items", lambda *args, **kwargs: [])
 
     sections = otd._build_sections(dt.date(2026, 7, 10))
@@ -283,7 +288,7 @@ def test_on_this_day_includes_jewish_holidays_in_holidays_and_culture(monkeypatc
             pass
 
     monkeypatch.setattr(otd, "http_get", lambda *args, **kwargs: FakeResponse())
-    monkeypatch.setattr(otd, "_wiki_items", lambda *args, **kwargs: [])
+    monkeypatch.setattr(otd, "_wiki_daily_items", lambda *args, **kwargs: {})
 
     sections = otd._build_sections(dt.date(2026, 7, 7))
 
@@ -293,6 +298,8 @@ def test_on_this_day_includes_jewish_holidays_in_holidays_and_culture(monkeypatc
 
 
 def test_on_this_day_adds_wikimedia_holiday_descriptions(monkeypatch):
+    requests = []
+
     class FakeResponse:
         def raise_for_status(self):
             pass
@@ -314,7 +321,11 @@ def test_on_this_day_adds_wikimedia_holiday_descriptions(monkeypatch):
                 ]
             }
 
-    monkeypatch.setattr(otd, "http_get", lambda *args, **kwargs: FakeResponse())
+    def fake_get(url, **kwargs):
+        requests.append((url, kwargs))
+        return FakeResponse()
+
+    monkeypatch.setattr(otd, "http_get", fake_get)
 
     items = otd._wiki_items("holidays", 7, 7, 1)
 
@@ -323,6 +334,15 @@ def test_on_this_day_adds_wikimedia_holiday_descriptions(monkeypatch):
             None,
             "Test Holiday: A day for testing holiday descriptions.",
             "https://example.com/holiday.jpg",
+        )
+    ]
+    assert requests == [
+        (
+            "https://api.wikimedia.org/feed/v1/wikipedia/en/onthisday/all/7/7",
+            {
+                "timeout": 3.0,
+                "headers": {"User-Agent": otd._WIKIMEDIA_USER_AGENT},
+            },
         )
     ]
 
@@ -364,6 +384,38 @@ def test_on_this_day_skips_wikimedia_holiday_descriptions_for_grouped_rows(monke
             None,
             "Holiday One; Holiday Two",
             "https://example.com/first.jpg",
+        )
+    ]
+
+
+def test_on_this_day_compatibility_helper_includes_non_holiday_extract(monkeypatch):
+    class FakeResponse:
+        def raise_for_status(self):
+            pass
+
+        def json(self):
+            return {
+                "events": [
+                    {
+                        "year": 2001,
+                        "text": "A notable event",
+                        "pages": [
+                            {
+                                "extract": "More context about the notable event.",
+                            }
+                        ],
+                    }
+                ]
+            }
+
+    monkeypatch.setattr(otd, "http_get", lambda *args, **kwargs: FakeResponse())
+
+    items = otd._wiki_items("events", 7, 7, 1, include_page_extract=True)
+
+    assert items == [
+        otd.DayItem(
+            2001,
+            "A notable event: More context about the notable event.",
         )
     ]
 

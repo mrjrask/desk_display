@@ -413,6 +413,8 @@ See [ADS-B stats screen](#ads-b-stats-screen) below for how the collector, datab
 | `SMALL_RESULT_FLAG_H` | Small flag height for MLB result/schedule renderers. |
 | `ON_THIS_DAY_INCOMPLETE_FEED_RETRY_SECONDS` | Retry interval for incomplete Wikimedia daily results; defaults to 300 seconds. |
 | `ON_THIS_DAY_OFFLINE_FALLBACK_RETRY_SECONDS` | Retry interval after all On This Day feeds fail; defaults to 900 seconds. |
+| `ON_THIS_DAY_CACHE_PATH` | Optional path for the daily On This Day disk cache; defaults to the application cache directory. Wikimedia categories are fetched together once and successful results survive restarts. |
+| `WIKIMEDIA_USER_AGENT` | Descriptive user agent sent to Wikimedia; defaults to the DeskDisplay project URL. Set this to include your own contact URL or email when redistributing the application. |
 | `AHL_API_BASE_URL`, `AHL_API_KEY`, `AHL_CLIENT_CODE`, `AHL_LEAGUE_ID`, `AHL_SITE_ID`, `AHL_SEASON_ID`, `AHL_TEAM_ID`, `AHL_TEAM_TRICODE`, `AHL_TEAM_NAME`, `AHL_SCHEDULE_ICS_URL` | AHL/Wolves feed configuration. |
 
 ### News headlines variables
