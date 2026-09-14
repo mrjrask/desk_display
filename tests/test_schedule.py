@@ -172,7 +172,7 @@ def test_alternate_frequency_counts_scheduled_appearances_not_raw_passes():
         }
     )
 
-    sequence = collect_played_ids(scheduler, registry, 6)
+    sequence = collect_played_ids(scheduler, registry, 10)
 
     assert sequence == [
         "NFL Overview NFC",
