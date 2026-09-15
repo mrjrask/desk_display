@@ -3,14 +3,21 @@ import json
 import config_ui
 
 
+def _capture_bundle(saved):
+    def save(config, layouts):
+        saved.setdefault("config", config)
+        saved.setdefault("layouts", layouts)
+
+    return save
+
+
 def test_import_screens_accepts_entries_payload(monkeypatch):
     saved = {}
 
     monkeypatch.setattr(config_ui, "_load_active_style_config", lambda: {"screens": {}})
     monkeypatch.setattr(config_ui, "_load_active_layouts_config", lambda: {"screens": {"quad": {"enabled": False, "scroll_speed": 1.0, "pages": [{"tiles": ["date", "weather1", "weather hourly", "inside"]}]}}})
     monkeypatch.setattr(config_ui, "build_scheduler", lambda config: None)
-    monkeypatch.setattr(config_ui, "_save_config", lambda config: saved.setdefault("config", config))
-    monkeypatch.setattr(config_ui, "_save_layouts_config", lambda layouts: saved.setdefault("layouts", layouts))
+    monkeypatch.setattr(config_ui, "_save_config_bundle", _capture_bundle(saved))
     monkeypatch.setattr(
         config_ui,
         "_build_screen_entries",
@@ -73,8 +80,7 @@ def test_import_screens_accepts_export_payload_with_string_frequencies(monkeypat
     monkeypatch.setattr(config_ui, "_load_active_style_config", lambda: {"screens": {}})
     monkeypatch.setattr(config_ui, "_load_active_layouts_config", lambda: {"screens": {"quad": {"enabled": False, "scroll_speed": 1.0, "pages": [{"tiles": ["date", "weather1", "weather hourly", "inside"]}]}}})
     monkeypatch.setattr(config_ui, "build_scheduler", lambda config: None)
-    monkeypatch.setattr(config_ui, "_save_config", lambda config: saved.setdefault("config", config))
-    monkeypatch.setattr(config_ui, "_save_layouts_config", lambda layouts: saved.setdefault("layouts", layouts))
+    monkeypatch.setattr(config_ui, "_save_config_bundle", _capture_bundle(saved))
     monkeypatch.setattr(
         config_ui,
         "_build_screen_entries",
@@ -129,8 +135,7 @@ def test_import_screens_preserves_hide_after_fields(monkeypatch):
     monkeypatch.setattr(config_ui, "_load_active_style_config", lambda: {"screens": {}})
     monkeypatch.setattr(config_ui, "_load_active_layouts_config", lambda: {"screens": {"quad": {"enabled": False, "scroll_speed": 1.0, "pages": [{"tiles": ["date", "weather1", "weather hourly", "inside"]}]}}})
     monkeypatch.setattr(config_ui, "build_scheduler", lambda config: None)
-    monkeypatch.setattr(config_ui, "_save_config", lambda config: saved.setdefault("config", config))
-    monkeypatch.setattr(config_ui, "_save_layouts_config", lambda layouts: saved.setdefault("layouts", layouts))
+    monkeypatch.setattr(config_ui, "_save_config_bundle", _capture_bundle(saved))
     monkeypatch.setattr(
         config_ui,
         "_build_screen_entries",
@@ -166,8 +171,7 @@ def test_save_screens_persists_quad_pages(monkeypatch):
 
     monkeypatch.setattr(config_ui, "_load_active_style_config", lambda: {"screens": {}})
     monkeypatch.setattr(config_ui, "build_scheduler", lambda config: None)
-    monkeypatch.setattr(config_ui, "_save_config", lambda config: saved.setdefault("config", config))
-    monkeypatch.setattr(config_ui, "_save_layouts_config", lambda layouts: saved.setdefault("layouts", layouts))
+    monkeypatch.setattr(config_ui, "_save_config_bundle", _capture_bundle(saved))
     monkeypatch.setattr(
         config_ui,
         "_build_screen_entries",
@@ -239,8 +243,7 @@ def test_save_screens_persists_playlists_and_sequence(monkeypatch):
 
     monkeypatch.setattr(config_ui, "_load_active_style_config", lambda: {"screens": {}})
     monkeypatch.setattr(config_ui, "build_scheduler", lambda config: None)
-    monkeypatch.setattr(config_ui, "_save_config", lambda config: saved.setdefault("config", config))
-    monkeypatch.setattr(config_ui, "_save_layouts_config", lambda layouts: saved.setdefault("layouts", layouts))
+    monkeypatch.setattr(config_ui, "_save_config_bundle", _capture_bundle(saved))
     monkeypatch.setattr(
         config_ui,
         "_build_screen_entries",
@@ -301,8 +304,7 @@ def test_save_screens_preserves_existing_layouts_when_quad_payload_missing(monke
     monkeypatch.setattr(config_ui, "_load_active_style_config", lambda: {"screens": {}})
     monkeypatch.setattr(config_ui, "_load_active_layouts_config", lambda: existing_layouts)
     monkeypatch.setattr(config_ui, "build_scheduler", lambda config: None)
-    monkeypatch.setattr(config_ui, "_save_config", lambda config: saved.setdefault("config", config))
-    monkeypatch.setattr(config_ui, "_save_layouts_config", lambda layouts: saved.setdefault("layouts", layouts))
+    monkeypatch.setattr(config_ui, "_save_config_bundle", _capture_bundle(saved))
     monkeypatch.setattr(
         config_ui,
         "_build_screen_entries",
@@ -344,8 +346,7 @@ def test_save_screens_preserves_nhl_standings_v2_playlist_assignments(monkeypatc
 
     monkeypatch.setattr(config_ui, "_load_active_style_config", lambda: {"screens": {}})
     monkeypatch.setattr(config_ui, "build_scheduler", lambda config: None)
-    monkeypatch.setattr(config_ui, "_save_config", lambda config: saved.setdefault("config", config))
-    monkeypatch.setattr(config_ui, "_save_layouts_config", lambda layouts: saved.setdefault("layouts", layouts))
+    monkeypatch.setattr(config_ui, "_save_config_bundle", _capture_bundle(saved))
     monkeypatch.setattr(
         config_ui,
         "_build_screen_entries",
