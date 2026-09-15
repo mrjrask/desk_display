@@ -89,6 +89,9 @@ HIDDEN_CONFIG_SCREEN_IDS = {
     "sox last 2",
 }
 _CONFIG_SAVE_LOCK = threading.RLock()
+_SERVICE_STATUS_CACHE_TTL_SECONDS = 5.0
+_SERVICE_STATUS_CACHE_LOCK = threading.Lock()
+_SERVICE_STATUS_CACHE: dict[str, tuple[float, dict[str, Any]]] = {}
 
 
 def _canonicalize_screen_reference(value: Any) -> Any:
@@ -957,7 +960,7 @@ def _build_screenshot_entry(
     return entry
 
 
-def _build_screenshot_entries() -> list[dict[str, Any]]:
+def _build_screenshot_entries(*, search_history: bool = True) -> list[dict[str, Any]]:
     storage_paths = resolve_storage_paths()
     screenshot_dir = storage_paths.screenshot_dir
     current_dir = storage_paths.current_screenshot_dir
@@ -967,7 +970,12 @@ def _build_screenshot_entries() -> list[dict[str, Any]]:
     playlists, playlist_assignments = _build_playlist_assignments(config)
     ordered_screen_ids = _apply_playlist_grouping(ordered_screen_ids, playlists, playlist_assignments)
     entries = [
-        _build_screenshot_entry(screen_id, screenshot_dir, current_dir)
+        _build_screenshot_entry(
+            screen_id,
+            screenshot_dir,
+            current_dir,
+            search_history=search_history,
+        )
         for screen_id in ordered_screen_ids
     ]
 
@@ -993,7 +1001,7 @@ def _build_feed_screenshot_entries() -> list[dict[str, Any]]:
     """
 
     now = datetime.now().timestamp()
-    entries = _build_screenshot_entries()
+    entries = _build_screenshot_entries(search_history=False)
     for entry in entries:
         version = entry.get("version")
         if entry.get("path") and (version is None or now - version > FEED_SCREEN_STALE_SECONDS):
@@ -1083,7 +1091,7 @@ def _load_display_status() -> dict[str, Any]:
     return status
 
 
-def _load_service_status(unit_name: str = "desk_display.service") -> dict[str, Any]:
+def _query_service_status(unit_name: str) -> dict[str, Any]:
     status: dict[str, Any] = {
         "unit": unit_name,
         "active_state": "unknown",
@@ -1137,6 +1145,21 @@ def _load_service_status(unit_name: str = "desk_display.service") -> dict[str, A
     enabled = status["unit_file_state"]
     status["summary"] = f"{active} ({sub}), {enabled}"
     return status
+
+
+def _load_service_status(unit_name: str = "desk_display.service") -> dict[str, Any]:
+    """Return a short-lived shared service status without subprocess stampedes."""
+
+    with _SERVICE_STATUS_CACHE_LOCK:
+        now = time.monotonic()
+        cached = _SERVICE_STATUS_CACHE.get(unit_name)
+        if cached is not None and now - cached[0] < _SERVICE_STATUS_CACHE_TTL_SECONDS:
+            return dict(cached[1])
+
+        status = _query_service_status(unit_name)
+        _SERVICE_STATUS_CACHE[unit_name] = (time.monotonic(), status)
+        return dict(status)
+
 
 def _ordered_screen_ids(
     screens_config: Any,
