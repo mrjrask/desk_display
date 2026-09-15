@@ -8,6 +8,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any, Optional
 
+from config import CENTRAL_TIME
 from screens_catalog import SCREEN_IDS, canonical_screen_id
 
 if TYPE_CHECKING:
@@ -526,7 +527,7 @@ def build_scheduler(config: dict[str, Any]) -> ScreenScheduler:
                         f"Hide-after date/time for '{screen_id}' must be a valid ISO date/time string"
                     ) from exc
                 if hide_after_value.tzinfo is None:
-                    hide_after_value = hide_after_value.astimezone()
+                    hide_after_value = hide_after_value.replace(tzinfo=CENTRAL_TIME)
                 hide_after = hide_after_value.astimezone(UTC)
 
             alt_spec = raw.get("alt")
