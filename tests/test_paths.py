@@ -116,6 +116,29 @@ def test_resolve_cache_history_path_preserves_existing_canonical_file(
     assert "preserving both files" in caplog.text
 
 
+def test_history_migration_does_not_clobber_canonical_file_created_concurrently(
+    tmp_path, monkeypatch, caplog
+):
+    legacy = tmp_path / "pressure_history.json"
+    canonical = tmp_path / "cache" / "pressure_history.json"
+    canonical.parent.mkdir()
+    legacy.write_text('{"source": "legacy"}', encoding="utf-8")
+    real_link = paths.os.link
+
+    def create_canonical_then_link(source, destination):
+        canonical.write_text('{"source": "concurrent writer"}', encoding="utf-8")
+        real_link(source, destination)
+
+    monkeypatch.setattr(paths.os, "link", create_canonical_then_link)
+
+    with caplog.at_level(logging.WARNING, logger=paths.__name__):
+        paths._migrate_legacy_root_history(legacy, canonical)
+
+    assert canonical.read_text(encoding="utf-8") == '{"source": "concurrent writer"}'
+    assert legacy.read_text(encoding="utf-8") == '{"source": "legacy"}'
+    assert "preserving both files" in caplog.text
+
+
 @pytest.mark.parametrize(("env_var", "filename"), HISTORY_PATHS)
 def test_resolve_cache_history_path_honors_environment_override_without_migration(
     tmp_path, monkeypatch, env_var, filename

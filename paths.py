@@ -9,7 +9,6 @@ from __future__ import annotations
 
 import logging
 import os
-import shutil
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional
@@ -162,18 +161,21 @@ def _migrate_legacy_root_history(legacy_path: Path, canonical_path: Path) -> Non
 
     try:
         canonical_path.parent.mkdir(parents=True, exist_ok=True)
-        # Recheck after creating the directory so a concurrent initializer
-        # cannot cause us to overwrite its canonical history.
-        if canonical_path.exists():
-            logger.warning(
-                "Legacy history file %s was not migrated because canonical history "
-                "file %s already exists; preserving both files.",
-                legacy_path,
-                canonical_path,
-            )
-            return
-        shutil.move(str(legacy_path), str(canonical_path))
+        # A hard link publishes the complete legacy file atomically and, unlike
+        # rename/shutil.move on POSIX, fails rather than replacing a destination
+        # created by another process after the exists() check above. Both paths
+        # are within the project filesystem; unlinking the old name completes
+        # the move while retaining the same file contents and metadata.
+        os.link(legacy_path, canonical_path)
+        legacy_path.unlink()
         logger.info("Migrated legacy history file %s to %s.", legacy_path, canonical_path)
+    except FileExistsError:
+        logger.warning(
+            "Legacy history file %s was not migrated because canonical history "
+            "file %s already exists; preserving both files.",
+            legacy_path,
+            canonical_path,
+        )
     except OSError as exc:
         logger.warning(
             "Could not migrate legacy history file %s to %s: %s",
