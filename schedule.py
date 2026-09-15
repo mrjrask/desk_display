@@ -205,6 +205,10 @@ class ScreenScheduler:
 
         if not self._entries or not self._synchronize_alternate_passes:
             return
+        # A zero start index means the selected entry was the final item and the
+        # cursor wrapped. There are no unvisited entries left in this linear pass.
+        if start_index == 0:
+            return
         # Only entries after the selected entry in the current linear pass are
         # unvisited. Wrapping to index zero here would advance entries that the
         # scheduler visited on an earlier call and could continually move the
