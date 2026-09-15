@@ -85,7 +85,7 @@ def test_default_screen_configs_do_not_alternate_nfl_logo_or_scoreboard():
         screens = config["config"]["screens"]
 
         assert screens["nfl logo"] == 0
-        assert screens["NFL Scoreboard"] == 1
+        assert screens["NFL Scoreboard"] == 2
 
 
 def test_default_screen_configs_rotate_mlb_overviews_with_league_standings():
