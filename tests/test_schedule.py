@@ -1,3 +1,4 @@
+import time
 from datetime import UTC, datetime
 
 import pytest
@@ -590,6 +591,29 @@ def test_scheduler_skips_screen_after_hide_after_datetime(monkeypatch):
     monkeypatch.setattr("schedule.datetime", _FutureDateTime)
     sequence = collect_sequence(scheduler, registry, 4)
     assert sequence == ["inside", "inside", "inside", "inside"]
+
+
+def test_naive_hide_after_uses_central_time_regardless_of_host_timezone(monkeypatch):
+    if not hasattr(time, "tzset"):
+        pytest.skip("Changing the process timezone is not supported on this platform")
+
+    with monkeypatch.context() as host_timezone:
+        host_timezone.setenv("TZ", "Pacific/Honolulu")
+        time.tzset()
+        scheduler = build_scheduler(
+            {
+                "screens": {
+                    "date": {
+                        "frequency": 1,
+                        "hide_after_enabled": True,
+                        "hide_after_at": "2026-07-01T12:00",
+                    }
+                }
+            }
+        )
+    time.tzset()
+
+    assert scheduler._entries[0].hide_after == datetime(2026, 7, 1, 17, 0, tzinfo=UTC)
 
 
 def test_scheduler_rejects_hide_after_when_enabled_without_datetime():
