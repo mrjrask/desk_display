@@ -1,5 +1,7 @@
 """Tests for data provider stale fallback behavior."""
 
+import threading
+import time
 from concurrent.futures import ThreadPoolExecutor
 
 from services.data_provider import DataProvider
@@ -121,17 +123,24 @@ def test_read_weather_is_safe_under_concurrent_access(monkeypatch):
     provider = DataProvider()
     calls = {"count": 0}
 
+    callers_ready = threading.Barrier(8)
+
     def fake_fetch_weather(*, force_refresh=True):
         calls["count"] += 1
+        time.sleep(0.05)
         return {"temp": 72}
 
     monkeypatch.setattr("services.data_provider.data_fetch.fetch_weather", fake_fetch_weather)
 
     with ThreadPoolExecutor(max_workers=8) as pool:
-        results = list(pool.map(lambda _: provider.read_weather(ttl_seconds=60), range(40)))
+        def read_weather(_):
+            callers_ready.wait()
+            return provider.read_weather(ttl_seconds=60)
+
+        results = list(pool.map(read_weather, range(8)))
 
     assert all(result == {"temp": 72} for result in results)
-    assert calls["count"] >= 1
+    assert calls["count"] == 1
 
 
 def test_read_sports_payloads_is_safe_under_concurrent_access(monkeypatch):

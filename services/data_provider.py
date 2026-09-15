@@ -35,6 +35,14 @@ class _Entry:
     fetched_at: float
 
 
+@dataclass
+class _Flight:
+    lock: threading.Lock
+    generation: int = 0
+    result: Any = None
+    error: Optional[Exception] = None
+
+
 def _payload_source_label(key: str, value: Any) -> Optional[str]:
     """Return a human-readable upstream source label for payload logging."""
 
@@ -51,6 +59,7 @@ class DataProvider:
     def __init__(self) -> None:
         self._cache: dict[str, _Entry] = {}
         self._cache_lock = threading.RLock()
+        self._flights: dict[str, _Flight] = {}
 
     def _read_cached(
         self,
@@ -61,6 +70,8 @@ class DataProvider:
         now = time.monotonic()
         with self._cache_lock:
             cached = self._cache.get(key)
+            flight = self._flights.setdefault(key, _Flight(lock=threading.Lock()))
+            observed_generation = flight.generation
         if cached and now - cached.fetched_at < ttl_seconds:
             source = _payload_source_label(key, cached.value)
             if source:
@@ -73,36 +84,68 @@ class DataProvider:
                 )
             return cached.value
 
-        try:
-            value = fetcher()
-            if value is None:
+        with flight.lock:
+            now = time.monotonic()
+            with self._cache_lock:
+                cached = self._cache.get(key)
+            if cached and now - cached.fetched_at < ttl_seconds:
+                return cached.value
+            if flight.generation != observed_generation:
+                if flight.error is not None:
+                    raise flight.error
+                return flight.result
+
+            try:
+                value = fetcher()
+                if value is None:
+                    with self._cache_lock:
+                        stale = self._cache.get(key)
+                    if stale is not None:
+                        source = _payload_source_label(key, stale.value)
+                        if source:
+                            logging.warning(
+                                "Using stale %s payload from %s after empty fetch result",
+                                key,
+                                source,
+                            )
+                        else:
+                            logging.warning("Using stale %s payload after empty fetch result", key)
+                        result = stale.value
+                    else:
+                        result = None
+                else:
+                    fetched_at = time.monotonic()
+                    with self._cache_lock:
+                        self._cache[key] = _Entry(value=value, fetched_at=fetched_at)
+                    source = _payload_source_label(key, value)
+                    if source:
+                        logging.info("Fetched %s payload from %s", key, source)
+                    result = value
+            except Exception as exc:
                 with self._cache_lock:
                     stale = self._cache.get(key)
                 if stale is not None:
                     source = _payload_source_label(key, stale.value)
                     if source:
-                        logging.warning("Using stale %s payload from %s after empty fetch result", key, source)
+                        logging.warning(
+                            "Using stale %s payload from %s after fetch failure: %s",
+                            key,
+                            source,
+                            exc,
+                        )
                     else:
-                        logging.warning("Using stale %s payload after empty fetch result", key)
-                    return stale.value
-                return None
-            with self._cache_lock:
-                self._cache[key] = _Entry(value=value, fetched_at=now)
-            source = _payload_source_label(key, value)
-            if source:
-                logging.info("Fetched %s payload from %s", key, source)
-            return value
-        except Exception as exc:
-            with self._cache_lock:
-                stale = self._cache.get(key)
-            if stale is not None:
-                source = _payload_source_label(key, stale.value)
-                if source:
-                    logging.warning("Using stale %s payload from %s after fetch failure: %s", key, source, exc)
+                        logging.warning("Using stale %s payload after fetch failure: %s", key, exc)
+                    result = stale.value
                 else:
-                    logging.warning("Using stale %s payload after fetch failure: %s", key, exc)
-                return stale.value
-            raise
+                    flight.result = None
+                    flight.error = exc
+                    flight.generation += 1
+                    raise
+
+            flight.result = result
+            flight.error = None
+            flight.generation += 1
+            return result
 
     def read_weather(self, *, ttl_seconds: int = 300) -> Any:
         return self._read_cached(
