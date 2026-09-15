@@ -205,17 +205,16 @@ class ScreenScheduler:
 
         if not self._entries or not self._synchronize_alternate_passes:
             return
-        index = start_index
-        selected_index = (self._cursor - 1) % len(self._entries)
-        while index != selected_index:
+        # Only entries after the selected entry in the current linear pass are
+        # unvisited. Wrapping to index zero here would advance entries that the
+        # scheduler visited on an earlier call and could continually move the
+        # cursor behind entries near the end of the schedule.
+        for index in range(start_index, len(self._entries)):
             entry = self._entries[index]
             if entry.initial_cycle_seen and entry.frequency > 0:
                 entry.cycle_count += 1
                 if entry.cycle_count % entry.frequency == 0:
                     self._pending_indices.append(index)
-            index = (index + 1) % len(self._entries)
-            if index == start_index:
-                break
 
     def next_available(self, registry: dict[str, ScreenDefinition]) -> Optional[ScreenDefinition]:
         if not self._entries:

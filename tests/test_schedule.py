@@ -219,6 +219,49 @@ def test_alternate_frequency_counts_scheduled_appearances_not_raw_passes():
     ]
 
 
+def test_multiple_alternate_entries_do_not_starve_later_screens():
+    config = {
+        "screens": {
+            "date": {
+                "frequency": 1,
+                "alt": {"screen": "nixie", "frequency": 1},
+            },
+            "inside": {
+                "frequency": 1,
+                "alt": {"screen": "weather2", "frequency": 1},
+            },
+            "weather1": 1,
+        }
+    }
+    scheduler = build_scheduler(config)
+    registry = make_registry(
+        {
+            "date": True,
+            "nixie": True,
+            "inside": True,
+            "weather2": True,
+            "weather1": True,
+        }
+    )
+
+    assert scheduler.preview_scheduled_ids(6) == [
+        "nixie",
+        "weather2",
+        "weather1",
+        "nixie",
+        "weather2",
+        "weather1",
+    ]
+    assert collect_sequence(scheduler, registry, 6) == [
+        "nixie",
+        "weather2",
+        "weather1",
+        "nixie",
+        "weather2",
+        "weather1",
+    ]
+
+
 def test_scheduler_with_multiple_alternates():
     config = {
         "screens": {
