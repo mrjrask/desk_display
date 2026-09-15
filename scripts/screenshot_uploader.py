@@ -25,16 +25,19 @@ if __name__ == "__main__":
 import json
 import logging
 import os
+import random
 import signal
 import socket
+import time
+from collections.abc import Iterator
 from threading import Event
-from typing import Iterator, Optional
+from typing import Optional
 
 import requests
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from paths import resolve_storage_paths  # noqa: E402
+from paths import resolve_storage_paths
 
 LOGGER = logging.getLogger("desk_display.screenshot_uploader")
 _STOP_EVENT = Event()
@@ -57,6 +60,37 @@ FEED_UPLOAD_TOKEN = os.environ.get("FEED_UPLOAD_TOKEN", "").strip()
 FEED_SOURCE_NAME = os.environ.get("FEED_SOURCE_NAME", "").strip() or socket.gethostname()
 FEED_UPLOAD_INTERVAL_SECONDS = max(1.0, _env_float("FEED_UPLOAD_INTERVAL_SECONDS", 5.0))
 FEED_UPLOAD_TIMEOUT_SECONDS = max(1.0, _env_float("FEED_UPLOAD_TIMEOUT_SECONDS", 10.0))
+FEED_UPLOAD_CYCLE_TIMEOUT_SECONDS = max(
+    1.0,
+    _env_float("FEED_UPLOAD_CYCLE_TIMEOUT_SECONDS", 30.0),
+)
+FEED_UPLOAD_MAX_BACKOFF_SECONDS = max(
+    FEED_UPLOAD_INTERVAL_SECONDS,
+    _env_float("FEED_UPLOAD_MAX_BACKOFF_SECONDS", 300.0),
+)
+
+
+def _request_timeout(session: requests.Session) -> float:
+    return max(
+        0.1,
+        min(
+            FEED_UPLOAD_TIMEOUT_SECONDS,
+            float(getattr(session, "_feed_request_timeout", FEED_UPLOAD_TIMEOUT_SECONDS)),
+        ),
+    )
+
+
+def _record_request_failure(session: requests.Session, exc: requests.RequestException) -> None:
+    if isinstance(exc, (requests.ConnectionError, requests.Timeout)):
+        session._feed_connection_failed = True
+
+
+def _prepare_request(session: requests.Session, cycle_deadline: float) -> bool:
+    remaining = cycle_deadline - time.monotonic()
+    if remaining <= 0:
+        return False
+    session._feed_request_timeout = remaining
+    return True
 
 
 def _request_stop(signum: int, _frame: object) -> None:
@@ -100,9 +134,10 @@ def _upload_file(session: requests.Session, path: Path) -> bool:
                 headers=headers,
                 data={"screen_id": screen_id},
                 files={"file": (path.name, fh, _content_type_for(path))},
-                timeout=FEED_UPLOAD_TIMEOUT_SECONDS,
+                timeout=_request_timeout(session),
             )
     except requests.RequestException as exc:
+        _record_request_failure(session, exc)
         LOGGER.warning("Feed upload for '%s' failed: %s", screen_id, exc)
         return False
 
@@ -129,7 +164,7 @@ def _upload_ticker(session: requests.Session, path: Path) -> bool:
     url = f"{FEED_UPLOAD_URL}/api/feed/{FEED_SOURCE_NAME}/upload_ticker"
     headers = {"Authorization": f"Bearer {FEED_UPLOAD_TOKEN}"} if FEED_UPLOAD_TOKEN else {}
     try:
-        with open(path, "r", encoding="utf-8") as fh:
+        with open(path, encoding="utf-8") as fh:
             ticker = json.load(fh)
     except (OSError, ValueError) as exc:
         LOGGER.warning("Failed to read ticker data for '%s': %s", screen_id, exc)
@@ -140,9 +175,10 @@ def _upload_ticker(session: requests.Session, path: Path) -> bool:
             url,
             headers=headers,
             json={"screen_id": screen_id, "ticker": ticker},
-            timeout=FEED_UPLOAD_TIMEOUT_SECONDS,
+            timeout=_request_timeout(session),
         )
     except requests.RequestException as exc:
+        _record_request_failure(session, exc)
         LOGGER.warning("Feed ticker upload for '%s' failed: %s", screen_id, exc)
         return False
 
@@ -168,15 +204,21 @@ def _upload_status(session: requests.Session, path: Path) -> bool:
     url = f"{FEED_UPLOAD_URL}/api/feed/{FEED_SOURCE_NAME}/status"
     headers = {"Authorization": f"Bearer {FEED_UPLOAD_TOKEN}"} if FEED_UPLOAD_TOKEN else {}
     try:
-        with open(path, "r", encoding="utf-8") as fh:
+        with open(path, encoding="utf-8") as fh:
             payload = json.load(fh)
     except (OSError, ValueError) as exc:
         LOGGER.warning("Failed to read display status for upload: %s", exc)
         return False
 
     try:
-        response = session.post(url, headers=headers, json=payload, timeout=FEED_UPLOAD_TIMEOUT_SECONDS)
+        response = session.post(
+            url,
+            headers=headers,
+            json=payload,
+            timeout=_request_timeout(session),
+        )
     except requests.RequestException as exc:
+        _record_request_failure(session, exc)
         LOGGER.warning("Feed status upload failed: %s", exc)
         return False
 
@@ -224,9 +266,15 @@ def run_loop() -> int:
     last_uploaded_ticker_mtimes: dict[str, float] = {}
     last_status_mtime: Optional[float] = None
     session = requests.Session()
+    consecutive_connection_failures = 0
 
     while not _STOP_EVENT.is_set():
+        cycle_deadline = time.monotonic() + FEED_UPLOAD_CYCLE_TIMEOUT_SECONDS
+        session._feed_connection_failed = False
+
         for path in _iter_current_screenshots(current_dir):
+            if not _prepare_request(session, cycle_deadline):
+                break
             try:
                 mtime = path.stat().st_mtime
             except OSError:
@@ -236,8 +284,16 @@ def run_loop() -> int:
                 continue
             if _upload_file(session, path):
                 last_uploaded_mtimes[key] = mtime
+            if getattr(session, "_feed_connection_failed", False):
+                break
 
-        for path in _iter_current_ticker_files(current_dir):
+        if not getattr(session, "_feed_connection_failed", False):
+            ticker_files = _iter_current_ticker_files(current_dir)
+        else:
+            ticker_files = ()
+        for path in ticker_files:
+            if not _prepare_request(session, cycle_deadline):
+                break
             try:
                 mtime = path.stat().st_mtime
             except OSError:
@@ -247,16 +303,37 @@ def run_loop() -> int:
                 continue
             if _upload_ticker(session, path):
                 last_uploaded_ticker_mtimes[key] = mtime
+            if getattr(session, "_feed_connection_failed", False):
+                break
 
         try:
             status_mtime = status_path.stat().st_mtime
         except OSError:
             status_mtime = None
-        if status_mtime is not None and last_status_mtime != status_mtime:
-            if _upload_status(session, status_path):
-                last_status_mtime = status_mtime
+        if (
+            not getattr(session, "_feed_connection_failed", False)
+            and status_mtime is not None
+            and last_status_mtime != status_mtime
+            and _prepare_request(session, cycle_deadline)
+            and _upload_status(session, status_path)
+        ):
+            last_status_mtime = status_mtime
 
-        _STOP_EVENT.wait(FEED_UPLOAD_INTERVAL_SECONDS)
+        if getattr(session, "_feed_connection_failed", False):
+            consecutive_connection_failures += 1
+            exponent = min(consecutive_connection_failures - 1, 20)
+            base_delay = min(
+                FEED_UPLOAD_MAX_BACKOFF_SECONDS,
+                FEED_UPLOAD_INTERVAL_SECONDS * (2**exponent),
+            )
+            wait_seconds = min(
+                FEED_UPLOAD_MAX_BACKOFF_SECONDS,
+                base_delay + random.uniform(0.0, min(1.0, base_delay * 0.2)),
+            )
+        else:
+            consecutive_connection_failures = 0
+            wait_seconds = FEED_UPLOAD_INTERVAL_SECONDS
+        _STOP_EVENT.wait(wait_seconds)
 
     return 0
 
