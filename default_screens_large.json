@@ -141,22 +141,8 @@
       "bears next": 3,
       "bears next season": 0,
       "bears next season sched": 0,
-      "nfl logo": {
-        "frequency": 0,
-        "extra_seconds": 0,
-        "alt": {
-          "screen": "NFL Standings NFC",
-          "frequency": 1
-        }
-      },
-      "NFL Scoreboard": {
-        "frequency": 1,
-        "extra_seconds": 0,
-        "alt": {
-          "screen": "NFL Standings AFC",
-          "frequency": 1
-        }
-      },
+      "nfl logo": 0,
+      "NFL Scoreboard": 2,
       "NFL Overview NFC": {
         "frequency": 4,
         "extra_seconds": 0,
