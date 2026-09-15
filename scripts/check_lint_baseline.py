@@ -56,14 +56,19 @@ BASELINE = {
 }
 
 
-def find_baseline_growth(configured: dict[str, list[str]]) -> list[str]:
-    """Return suppressions that are not in the approved baseline."""
+def find_baseline_drift(configured: dict[str, list[str]]) -> list[str]:
+    """Return additions or removals that are not reflected on both sides."""
 
-    growth = []
-    for module, rules in configured.items():
+    drift = []
+    configured_sets = {module: set(rules) for module, rules in configured.items()}
+    for module in BASELINE.keys() | configured_sets.keys():
         approved = BASELINE.get(module, set())
-        growth.extend(f"{module}: {rule}" for rule in rules if rule not in approved)
-    return sorted(growth)
+        current = configured_sets.get(module, set())
+        drift.extend(f"{module}: added {rule}" for rule in current - approved)
+        drift.extend(
+            f"{module}: baseline still contains removed {rule}" for rule in approved - current
+        )
+    return sorted(drift)
 
 
 def _parse_per_file_ignores(config_text: str) -> dict[str, list[str]]:
@@ -113,13 +118,13 @@ def load_per_file_ignores(config_path: Path) -> dict[str, list[str]]:
 
 def main() -> int:
     configured = load_per_file_ignores(REPO_ROOT / "pyproject.toml")
-    growth = find_baseline_growth(configured)
-    if growth:
-        print("Ruff suppression baseline grew:", file=sys.stderr)
-        for item in growth:
+    drift = find_baseline_drift(configured)
+    if drift:
+        print("Ruff suppression config and baseline differ:", file=sys.stderr)
+        for item in drift:
             print(f"- {item}", file=sys.stderr)
         return 1
-    print("Ruff suppression baseline did not grow.")
+    print("Ruff suppression config matches its baseline.")
     return 0
 
 

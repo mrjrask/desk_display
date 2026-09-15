@@ -88,9 +88,16 @@ def test_lint_cleanup_report_groups_findings_by_module_and_rule():
     assert grouped["utils.py"] == {"UP006": 1}
 
 
-def test_lint_baseline_allows_reductions_but_rejects_growth():
-    assert lint_baseline.find_baseline_growth({"main.py": ["RUF001"]}) == []
-    assert lint_baseline.find_baseline_growth({"main.py": ["RUF001", "B018"]}) == ["main.py: B018"]
+def test_lint_baseline_requires_config_and_baseline_to_match(monkeypatch):
+    monkeypatch.setattr(lint_baseline, "BASELINE", {"main.py": {"RUF001", "SIM102"}})
+
+    assert lint_baseline.find_baseline_drift({"main.py": ["RUF001", "SIM102"]}) == []
+    assert lint_baseline.find_baseline_drift({"main.py": ["RUF001", "SIM102", "B018"]}) == [
+        "main.py: added B018"
+    ]
+    assert lint_baseline.find_baseline_drift({"main.py": ["RUF001"]}) == [
+        "main.py: baseline still contains removed SIM102"
+    ]
 
 
 def test_lint_baseline_python_310_fallback_parses_per_file_ignores(tmp_path, monkeypatch):
