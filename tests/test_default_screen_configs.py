@@ -79,6 +79,15 @@ def test_default_screen_configs_rotate_nfl_overviews_with_conference_standings()
             }
 
 
+def test_default_screen_configs_do_not_alternate_nfl_logo_or_scoreboard():
+    for filename in ("default_screens_large.json", "default_screens_small.json"):
+        config = _load_default_config(filename)
+        screens = config["config"]["screens"]
+
+        assert screens["nfl logo"] == 0
+        assert screens["NFL Scoreboard"] == 1
+
+
 def test_default_screen_configs_rotate_mlb_overviews_with_league_standings():
     for filename in ("default_screens_large.json", "default_screens_small.json"):
         config = _load_default_config(filename)
