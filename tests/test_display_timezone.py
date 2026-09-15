@@ -96,7 +96,7 @@ def test_wolves_labels_and_game_time_use_central_at_midnight(monkeypatch):
     )
     assert (
         draw_wolves_schedule._format_next_bottom("", "2025-01-03T05:30:00Z")
-        == "Today • 11:30 PM"
+        == "Tonight • 11:30 PM"
     )
     assert (
         draw_wolves_schedule._format_next_bottom("", "2025-01-03T06:30:00Z")
