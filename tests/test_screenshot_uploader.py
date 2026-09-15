@@ -1,6 +1,8 @@
 import importlib
-import time
 from types import SimpleNamespace
+
+import pytest
+import requests
 
 
 def _reload_uploader(monkeypatch, **env):
@@ -9,6 +11,9 @@ def _reload_uploader(monkeypatch, **env):
         "FEED_UPLOAD_TOKEN",
         "FEED_SOURCE_NAME",
         "FEED_UPLOAD_INTERVAL_SECONDS",
+        "FEED_UPLOAD_TIMEOUT_SECONDS",
+        "FEED_UPLOAD_CYCLE_TIMEOUT_SECONDS",
+        "FEED_UPLOAD_MAX_BACKOFF_SECONDS",
     ):
         monkeypatch.delenv(key, raising=False)
     for key, value in env.items():
@@ -31,7 +36,14 @@ class _FakeSession:
 
     def post(self, url, headers=None, data=None, files=None, json=None, timeout=None):
         self.calls.append(
-            SimpleNamespace(url=url, headers=headers, data=data, files=files, json=json, timeout=timeout)
+            SimpleNamespace(
+                url=url,
+                headers=headers,
+                data=data,
+                files=files,
+                json=json,
+                timeout=timeout,
+            )
         )
         if self._exc is not None:
             raise self._exc
@@ -143,8 +155,6 @@ def test_upload_file_returns_false_on_error_status(monkeypatch, tmp_path):
 
 
 def test_upload_file_returns_false_on_request_exception(monkeypatch, tmp_path):
-    import requests
-
     uploader = _reload_uploader(
         monkeypatch,
         FEED_UPLOAD_URL="http://192.168.1.200:5003",
@@ -255,3 +265,39 @@ def test_run_loop_uploads_changed_display_status_and_skips_unchanged(monkeypatch
     # Uploaded once on the first pass; unchanged mtime on the second pass
     # (before the stop event trips) means no duplicate upload.
     assert status_calls == ["display_status.json"]
+
+
+@pytest.mark.parametrize("request_error", [requests.ConnectionError("refused"), requests.Timeout()])
+def test_run_loop_aborts_cycle_after_connection_failure(monkeypatch, tmp_path, request_error):
+    uploader = _reload_uploader(
+        monkeypatch,
+        FEED_UPLOAD_URL="http://192.168.1.200:5003",
+        FEED_SOURCE_NAME="hyper",
+        FEED_UPLOAD_INTERVAL_SECONDS="1",
+    )
+    current_dir = tmp_path / "current"
+    current_dir.mkdir()
+    for name in ("date.png", "inside.png", "weather.png"):
+        (current_dir / name).write_bytes(b"image")
+
+    monkeypatch.setattr(
+        uploader,
+        "resolve_storage_paths",
+        lambda: SimpleNamespace(current_screenshot_dir=current_dir),
+    )
+    session = _FakeSession(exc=request_error)
+    monkeypatch.setattr(uploader.requests, "Session", lambda: session)
+    monkeypatch.setattr(uploader.random, "uniform", lambda *_args: 0.0)
+    waits = []
+
+    def stop_after_wait(seconds):
+        waits.append(seconds)
+        uploader._STOP_EVENT.set()
+
+    uploader._STOP_EVENT.clear()
+    monkeypatch.setattr(uploader._STOP_EVENT, "wait", stop_after_wait)
+
+    uploader.run_loop()
+
+    assert len(session.calls) == 1
+    assert waits == [1.0]
