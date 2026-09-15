@@ -43,3 +43,49 @@ def test_config_store_rollback(tmp_path):
     assert rolled["screens"]["date"] == 20
     persisted = json.loads(config_path.read_text())
     assert persisted["screens"]["date"] == 20
+
+
+def test_load_only_treats_missing_file_as_empty(tmp_path):
+    config_path = tmp_path / "screens_config.json"
+    store = ConfigStore(str(config_path))
+
+    assert store.load() == {}
+
+    config_path.write_text("{not json", encoding="utf-8")
+    with pytest.raises(json.JSONDecodeError):
+        store.load()
+
+    config_path.write_text("[]", encoding="utf-8")
+    with pytest.raises(ValueError, match="JSON object"):
+        store.load()
+
+
+def test_load_propagates_io_errors(tmp_path, monkeypatch):
+    config_path = tmp_path / "screens_config.json"
+    config_path.write_text("{}", encoding="utf-8")
+    store = ConfigStore(str(config_path))
+
+    def fail_open(*args, **kwargs):
+        raise PermissionError("denied")
+
+    monkeypatch.setattr(type(store.config_path), "open", fail_open)
+    with pytest.raises(PermissionError, match="denied"):
+        store.load()
+
+
+def test_version_record_failure_restores_active_configuration(tmp_path, monkeypatch):
+    config_path = tmp_path / "screens_config.json"
+    store = ConfigStore(str(config_path))
+    original = make_config(1)
+    store.save(original, actor="tester")
+
+    def fail_record(*args, **kwargs):
+        raise sqlite3.OperationalError("history unavailable")
+
+    import sqlite3
+
+    monkeypatch.setattr(store, "_record_version", fail_record)
+    with pytest.raises(sqlite3.OperationalError, match="history unavailable"):
+        store.save(make_config(2), actor="tester")
+
+    assert store.load() == original
