@@ -90,6 +90,33 @@ def test_read_sports_payloads_fetches_only_requested_leagues(monkeypatch):
     assert calls["world_cup"] == 0
 
 
+def test_sports_cache_does_not_cross_contaminate_league_queries(monkeypatch):
+    provider = DataProvider()
+    calls = {"mlb": 0, "nba": 0}
+
+    def fetch_mlb(*args, **kwargs):
+        calls["mlb"] += 1
+        return [{"league": "mlb"}]
+
+    def fetch_nba(*args, **kwargs):
+        calls["nba"] += 1
+        return [{"league": "nba"}]
+
+    monkeypatch.setattr("services.data_provider.fetch_mlb_scoreboard", fetch_mlb)
+    monkeypatch.setattr("services.data_provider.fetch_nba_scoreboard", fetch_nba)
+
+    mlb_payload = provider.read_sports_payloads(ttl_seconds=60, leagues={"mlb"})
+    nba_payload = provider.read_sports_payloads(ttl_seconds=60, leagues={"nba"})
+    cached_mlb_payload = provider.read_sports_payloads(ttl_seconds=60, leagues={"mlb"})
+
+    assert mlb_payload["scoreboards"]["mlb"] == [{"league": "mlb"}]
+    assert mlb_payload["scoreboards"]["nba"] == []
+    assert nba_payload["scoreboards"]["nba"] == [{"league": "nba"}]
+    assert nba_payload["scoreboards"]["mlb"] == []
+    assert cached_mlb_payload == mlb_payload
+    assert calls == {"mlb": 1, "nba": 1}
+
+
 def test_read_weather_is_safe_under_concurrent_access(monkeypatch):
     provider = DataProvider()
     calls = {"count": 0}
