@@ -839,7 +839,7 @@ def _normalise_weatherkit_response(data: dict[str, Any]) -> Optional[dict[str, A
     is_daylight = current_raw.get("isDaylight")
     humidity_raw = current_raw.get("humidity")
     try:
-        humidity_pct = int(round(float(humidity_raw) * 100)) if humidity_raw is not None else None
+        humidity_pct = round(float(humidity_raw) * 100) if humidity_raw is not None else None
     except Exception:
         humidity_pct = None
 
@@ -873,7 +873,7 @@ def _normalise_weatherkit_response(data: dict[str, Any]) -> Optional[dict[str, A
         "sunrise": sunrise,
         "sunset": sunset,
         "dt": _parse_iso_timestamp(current_raw.get("asOf")),
-        "clouds": int(round(float(current_raw.get("cloudCover")) * 100)) if current_raw.get("cloudCover") is not None else None,
+        "clouds": round(float(current_raw.get("cloudCover")) * 100) if current_raw.get("cloudCover") is not None else None,
         "precipitation_intensity": _measurement_value(current_raw.get("precipitationIntensity")),
         "visibility": _measurement_value(current_raw.get("visibility")),
     }
@@ -2973,7 +2973,7 @@ def _ahl_request(view: str, *, feed: str = "statviewfeed", **extra_params):
                     )
                     return None
                 logging.error(
-                    "Error parsing AHL %s data (status %s, content-type %s): %s",  # noqa: B950
+                    "Error parsing AHL %s data (status %s, content-type %s): %s",
                     view,
                     resp.status_code,
                     resp.headers.get("content-type"),

@@ -15,6 +15,10 @@ def _load_script_module(name: str, filename: str):
 
 
 test_all = _load_script_module("desk_display_test_all_script", "test_all.py")
+lint_cleanup_report = _load_script_module(
+    "desk_display_lint_cleanup_report", "lint_cleanup_report.py"
+)
+lint_baseline = _load_script_module("desk_display_lint_baseline", "check_lint_baseline.py")
 
 
 def test_discover_standalone_scripts_excludes_aggregate_runner():
@@ -27,9 +31,10 @@ def test_discover_standalone_scripts_excludes_aggregate_runner():
 def test_build_commands_runs_pytest_before_standalone_scripts():
     commands = test_all._build_commands(["-q"])
 
-    assert commands[0].name == "pytest suite"
-    assert commands[0].command[-1] == "-q"
-    assert any("scripts/test_api_connections.py" in command.command for command in commands[1:])
+    assert commands[0].name == "Ruff suppression baseline"
+    assert commands[1].name == "pytest suite"
+    assert commands[1].command[-1] == "-q"
+    assert any("scripts/test_api_connections.py" in command.command for command in commands[2:])
 
 
 def test_main_forwards_dash_prefixed_pytest_args_without_separator(monkeypatch, capsys):
@@ -67,8 +72,22 @@ def test_lint_cleanup_option_adds_report_only_ruff_command():
 
     lint_command = commands[-1]
     assert lint_command.name == "staged Ruff cleanup report"
-    assert "--isolated" in lint_command.command
-    assert "--select" in lint_command.command
-    assert lint_command.command[lint_command.command.index("--exclude") + 1] == "vendor"
-    assert "B,C4,PIE,RUF,SIM,UP,PLC,PLE,PLW" in lint_command.command
-    assert lint_command.command[-2:] == ("--exit-zero", "--statistics")
+    assert lint_command.command[-1] == "scripts/lint_cleanup_report.py"
+
+
+def test_lint_cleanup_report_groups_findings_by_module_and_rule():
+    grouped = lint_cleanup_report._group_findings(
+        [
+            {"filename": "/repo/main.py", "code": "RUF001"},
+            {"filename": "/repo/main.py", "code": "RUF001"},
+            {"filename": "/repo/utils.py", "code": "UP006"},
+        ]
+    )
+
+    assert grouped["main.py"] == {"RUF001": 2}
+    assert grouped["utils.py"] == {"UP006": 1}
+
+
+def test_lint_baseline_allows_reductions_but_rejects_growth():
+    assert lint_baseline.find_baseline_growth({"main.py": ["RUF001"]}) == []
+    assert lint_baseline.find_baseline_growth({"main.py": ["RUF001", "B018"]}) == ["main.py: B018"]
