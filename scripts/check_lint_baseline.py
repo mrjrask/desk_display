@@ -3,9 +3,12 @@
 
 from __future__ import annotations
 
+import ast
+import importlib
 import sys
-import tomllib
 from pathlib import Path
+
+tomllib = importlib.import_module("tomllib") if sys.version_info >= (3, 11) else None
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 BASELINE = {
@@ -63,10 +66,53 @@ def find_baseline_growth(configured: dict[str, list[str]]) -> list[str]:
     return sorted(growth)
 
 
-def main() -> int:
-    with (REPO_ROOT / "pyproject.toml").open("rb") as config_file:
+def _parse_per_file_ignores(config_text: str) -> dict[str, list[str]]:
+    """Parse the simple string-list entries in Ruff's per-file-ignore table.
+
+    This dependency-free fallback keeps the check runnable on Python 3.10,
+    where the standard-library ``tomllib`` module is not available.
+    """
+
+    section_name = "[tool.ruff.lint.per-file-ignores]"
+    in_section = False
+    configured = {}
+    for raw_line in config_text.splitlines():
+        line = raw_line.strip()
+        if line == section_name:
+            in_section = True
+            continue
+        if in_section and line.startswith("["):
+            break
+        if not in_section or not line or line.startswith("#"):
+            continue
+
+        key_text, separator, rules_text = line.partition("=")
+        if not separator:
+            raise ValueError(f"Invalid per-file-ignore entry: {raw_line}")
+        module = ast.literal_eval(key_text.strip())
+        rules = ast.literal_eval(rules_text.strip())
+        if (
+            not isinstance(module, str)
+            or not isinstance(rules, list)
+            or not all(isinstance(rule, str) for rule in rules)
+        ):
+            raise ValueError(f"Invalid per-file-ignore entry: {raw_line}")
+        configured[module] = rules
+    return configured
+
+
+def load_per_file_ignores(config_path: Path) -> dict[str, list[str]]:
+    """Load Ruff per-file ignores with a Python 3.10-compatible fallback."""
+
+    if tomllib is None:
+        return _parse_per_file_ignores(config_path.read_text(encoding="utf-8"))
+    with config_path.open("rb") as config_file:
         config = tomllib.load(config_file)
-    configured = config["tool"]["ruff"]["lint"].get("per-file-ignores", {})
+    return config["tool"]["ruff"]["lint"].get("per-file-ignores", {})
+
+
+def main() -> int:
+    configured = load_per_file_ignores(REPO_ROOT / "pyproject.toml")
     growth = find_baseline_growth(configured)
     if growth:
         print("Ruff suppression baseline grew:", file=sys.stderr)

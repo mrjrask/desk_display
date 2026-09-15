@@ -91,3 +91,24 @@ def test_lint_cleanup_report_groups_findings_by_module_and_rule():
 def test_lint_baseline_allows_reductions_but_rejects_growth():
     assert lint_baseline.find_baseline_growth({"main.py": ["RUF001"]}) == []
     assert lint_baseline.find_baseline_growth({"main.py": ["RUF001", "B018"]}) == ["main.py: B018"]
+
+
+def test_lint_baseline_python_310_fallback_parses_per_file_ignores(tmp_path, monkeypatch):
+    config_path = tmp_path / "pyproject.toml"
+    config_path.write_text(
+        """
+[tool.ruff.lint.per-file-ignores]
+"main.py" = ["RUF001", "SIM102"]
+"utils.py" = ["UP006"]
+
+[tool.ruff.lint.isort]
+combine-as-imports = true
+""",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(lint_baseline, "tomllib", None)
+
+    assert lint_baseline.load_per_file_ignores(config_path) == {
+        "main.py": ["RUF001", "SIM102"],
+        "utils.py": ["UP006"],
+    }
