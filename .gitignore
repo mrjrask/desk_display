@@ -4,7 +4,6 @@ screenshot_archive/
 screenshots/
 feed_uploads/
 .runtime/
-scripts/pressure_history.json
 screens_style.json
 
 # Byte-compiled / optimized / DLL files

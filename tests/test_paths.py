@@ -1,4 +1,14 @@
+import errno
+import logging
+
+import pytest
+
 import paths
+
+HISTORY_PATHS = (
+    ("PRESSURE_HISTORY_PATH", "pressure_history.json"),
+    ("WEATHER_METRIC_HISTORY_PATH", "weather_metric_history.json"),
+)
 
 
 def test_resolve_storage_paths_uses_project_root(tmp_path, monkeypatch):
@@ -57,3 +67,129 @@ def test_resolve_config_path_helpers_honor_environment_precedence(tmp_path, monk
     assert resolved.active_path == paths.Path("/tmp/custom_screens_config.json")
     assert paths.resolve_style_config_path() == paths.Path("/tmp/custom_style.json")
     assert paths.resolve_layouts_config_path() == paths.Path("/tmp/custom_layouts.json")
+
+
+@pytest.mark.parametrize(("env_var", "filename"), HISTORY_PATHS)
+def test_resolve_cache_history_path_on_clean_install(tmp_path, monkeypatch, env_var, filename):
+    monkeypatch.setattr(paths, "_project_root", lambda: tmp_path)
+    monkeypatch.delenv(env_var, raising=False)
+
+    resolved = paths.resolve_cache_file_path(env_var, filename)
+
+    assert resolved == tmp_path / "cache" / filename
+    assert not resolved.exists()
+    assert not resolved.parent.exists()
+
+
+@pytest.mark.parametrize(("env_var", "filename"), HISTORY_PATHS)
+def test_resolve_cache_history_path_migrates_legacy_root_file(
+    tmp_path, monkeypatch, env_var, filename
+):
+    monkeypatch.setattr(paths, "_project_root", lambda: tmp_path)
+    monkeypatch.delenv(env_var, raising=False)
+    legacy = tmp_path / filename
+    legacy.write_text('{"legacy": true}', encoding="utf-8")
+
+    resolved = paths.resolve_cache_file_path(env_var, filename)
+
+    assert resolved.read_text(encoding="utf-8") == '{"legacy": true}'
+    assert not legacy.exists()
+
+
+@pytest.mark.parametrize(("env_var", "filename"), HISTORY_PATHS)
+def test_resolve_cache_history_path_preserves_existing_canonical_file(
+    tmp_path, monkeypatch, caplog, env_var, filename
+):
+    monkeypatch.setattr(paths, "_project_root", lambda: tmp_path)
+    monkeypatch.delenv(env_var, raising=False)
+    legacy = tmp_path / filename
+    canonical = tmp_path / "cache" / filename
+    canonical.parent.mkdir()
+    legacy.write_text('{"source": "legacy"}', encoding="utf-8")
+    canonical.write_text('{"source": "canonical"}', encoding="utf-8")
+
+    with caplog.at_level(logging.WARNING, logger=paths.__name__):
+        resolved = paths.resolve_cache_file_path(env_var, filename)
+
+    assert resolved == canonical
+    assert canonical.read_text(encoding="utf-8") == '{"source": "canonical"}'
+    assert legacy.read_text(encoding="utf-8") == '{"source": "legacy"}'
+    assert "preserving both files" in caplog.text
+
+
+def test_history_migration_does_not_clobber_canonical_file_created_concurrently(
+    tmp_path, monkeypatch, caplog
+):
+    legacy = tmp_path / "pressure_history.json"
+    canonical = tmp_path / "cache" / "pressure_history.json"
+    canonical.parent.mkdir()
+    legacy.write_text('{"source": "legacy"}', encoding="utf-8")
+    real_link = paths.os.link
+
+    def create_canonical_then_link(source, destination):
+        canonical.write_text('{"source": "concurrent writer"}', encoding="utf-8")
+        real_link(source, destination)
+
+    monkeypatch.setattr(paths.os, "link", create_canonical_then_link)
+
+    with caplog.at_level(logging.WARNING, logger=paths.__name__):
+        paths._migrate_legacy_root_history(legacy, canonical)
+
+    assert canonical.read_text(encoding="utf-8") == '{"source": "concurrent writer"}'
+    assert legacy.read_text(encoding="utf-8") == '{"source": "legacy"}'
+    assert "preserving both files" in caplog.text
+
+
+@pytest.mark.parametrize("link_error", (errno.EXDEV, errno.EPERM))
+def test_history_migration_copies_exclusively_when_hard_links_are_unavailable(
+    tmp_path, monkeypatch, link_error
+):
+    legacy = tmp_path / "pressure_history.json"
+    canonical = tmp_path / "cache" / "pressure_history.json"
+    canonical.parent.mkdir()
+    legacy.write_text('{"source": "legacy"}', encoding="utf-8")
+
+    def reject_hard_link(source, destination):
+        raise OSError(link_error, "hard links unavailable")
+
+    monkeypatch.setattr(paths.os, "link", reject_hard_link)
+
+    paths._migrate_legacy_root_history(legacy, canonical)
+
+    assert canonical.read_text(encoding="utf-8") == '{"source": "legacy"}'
+    assert not legacy.exists()
+
+
+def test_history_copy_fallback_is_not_visible_until_complete(tmp_path, monkeypatch):
+    legacy = tmp_path / "pressure_history.json"
+    canonical = tmp_path / "cache" / "pressure_history.json"
+    canonical.parent.mkdir()
+    legacy.write_text('{"source": "legacy"}', encoding="utf-8")
+    real_copyfileobj = paths.shutil.copyfileobj
+
+    def assert_private_staging(source, destination):
+        assert not canonical.exists()
+        assert paths.Path(destination.name).exists()
+        real_copyfileobj(source, destination)
+
+    monkeypatch.setattr(paths.shutil, "copyfileobj", assert_private_staging)
+
+    paths._copy_history_staged(legacy, canonical)
+
+    assert canonical.read_text(encoding="utf-8") == '{"source": "legacy"}'
+
+
+@pytest.mark.parametrize(("env_var", "filename"), HISTORY_PATHS)
+def test_resolve_cache_history_path_honors_environment_override_without_migration(
+    tmp_path, monkeypatch, env_var, filename
+):
+    monkeypatch.setattr(paths, "_project_root", lambda: tmp_path)
+    monkeypatch.setenv(env_var, f"custom/{filename}")
+    legacy = tmp_path / filename
+    legacy.write_text('{"legacy": true}', encoding="utf-8")
+
+    resolved = paths.resolve_cache_file_path(env_var, filename)
+
+    assert resolved == tmp_path / "custom" / filename
+    assert legacy.exists()
+    assert not (tmp_path / "cache" / filename).exists()
