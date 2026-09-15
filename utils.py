@@ -1751,6 +1751,14 @@ class Display:
         """Create and configure a Display HAT Mini driver instance."""
 
         display = DisplayHATMini(initial_buffer)
+
+        # Do not rely on the driver's process-wide GPIO state or constructor
+        # default here.  A previous service instance (or cleanup utility) may
+        # have left the backlight PWM at zero, and some driver versions retain
+        # that state when a new instance is created.  Explicitly applying our
+        # tracked level also makes initial startup consistent with the
+        # periodic reinitialization path below.
+        display.set_backlight(self._backlight_level)
         display_module = None
         try:
             display_module = __import__(display.__class__.__module__, fromlist=["_"])
