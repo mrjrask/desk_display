@@ -221,7 +221,7 @@
     }
 
     function refreshFeed() {
-      fetch(feedApiUrl, { cache: "no-store" })
+      return fetch(feedApiUrl, { cache: "no-store" })
         .then((response) => {
           if (!response.ok) {
             throw new Error("Failed to fetch screenshots");
@@ -268,10 +268,13 @@
         })
         .catch(() => {
           // Ignore refresh failures; next polling attempt will retry.
+        })
+        .finally(() => {
+          setTimeout(refreshFeed, 5000);
         });
     }
 
-    setInterval(refreshFeed, 5000);
+    setTimeout(refreshFeed, 5000);
 
     function toPngBlob(blob) {
       if (blob.type === "image/png") {

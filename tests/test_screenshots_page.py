@@ -1,5 +1,7 @@
 import os
+import subprocess
 from datetime import UTC, datetime, timedelta
+from pathlib import Path
 from types import SimpleNamespace
 
 import config_ui
@@ -40,7 +42,7 @@ def test_screenshots_template_adds_stale_class(monkeypatch):
     monkeypatch.setattr(
         config_ui,
         "_build_screenshot_entries",
-        lambda: [
+        lambda **_kwargs: [
             {
                 "id": "date",
                 "path": "current/date.png",
@@ -131,7 +133,7 @@ def test_feed_page_renders_only_screens_with_screenshots(monkeypatch):
     monkeypatch.setattr(
         config_ui,
         "_build_screenshot_entries",
-        lambda: [
+        lambda **_kwargs: [
             {
                 "id": "date",
                 "path": "current/date.png",
@@ -176,7 +178,7 @@ def test_feed_page_greyscales_screenshots_when_heartbeat_is_stale(monkeypatch):
     monkeypatch.setattr(
         config_ui,
         "_build_screenshot_entries",
-        lambda: [
+        lambda **_kwargs: [
             {
                 "id": "date",
                 "path": "current/date.png",
@@ -218,7 +220,7 @@ def test_feed_page_drops_screenshots_stale_beyond_twenty_minutes(monkeypatch):
     monkeypatch.setattr(
         config_ui,
         "_build_screenshot_entries",
-        lambda: [
+        lambda **_kwargs: [
             {
                 "id": "date",
                 "path": "current/date.png",
@@ -246,7 +248,7 @@ def test_feed_page_drops_screenshots_stale_beyond_twenty_minutes(monkeypatch):
 
 
 def test_feed_screenshots_api_returns_display_status(monkeypatch):
-    monkeypatch.setattr(config_ui, "_build_screenshot_entries", lambda: [])
+    monkeypatch.setattr(config_ui, "_build_screenshot_entries", lambda **_kwargs: [])
     monkeypatch.setattr(
         config_ui,
         "_load_display_status",
@@ -272,6 +274,61 @@ def test_layout_editor_routes_removed():
 
     assert client.get("/layouts").status_code == 404
     assert client.get("/api/layouts").status_code == 404
+
+
+def test_feed_uses_current_screenshots_without_history_fallback(monkeypatch, tmp_path):
+    current_dir = tmp_path / "current"
+    history_dir = tmp_path / "date"
+    current_dir.mkdir()
+    history_dir.mkdir()
+    (history_dir / "date_20260101_120000.png").write_bytes(b"old")
+
+    monkeypatch.setattr(config_ui, "SCREEN_IDS", ("date",))
+    monkeypatch.setattr(config_ui, "OLED_SCREEN_IDS", ())
+    monkeypatch.setattr(config_ui, "_load_active_config", lambda: {"screens": {"date": {}}})
+    monkeypatch.setattr(
+        config_ui,
+        "resolve_storage_paths",
+        lambda: SimpleNamespace(screenshot_dir=tmp_path, current_screenshot_dir=current_dir),
+    )
+
+    assert config_ui._build_screenshot_entries()[0]["path"] is not None
+    assert config_ui._build_feed_screenshot_entries()[0]["path"] is None
+
+
+def test_service_status_is_cached_across_pollers(monkeypatch):
+    calls = []
+
+    def fake_run(*args, **kwargs):
+        calls.append((args, kwargs))
+        return subprocess.CompletedProcess(
+            args=args[0],
+            returncode=0,
+            stdout="ActiveState=active\nSubState=running\nUnitFileState=enabled\n",
+            stderr="",
+        )
+
+    config_ui._SERVICE_STATUS_CACHE.clear()
+    monkeypatch.setattr(config_ui.subprocess, "run", fake_run)
+
+    first = config_ui._load_service_status("desk-display-cache-test.service")
+    second = config_ui._load_service_status("desk-display-cache-test.service")
+
+    assert first == second
+    assert first["is_active"] is True
+    assert len(calls) == 1
+
+
+def test_web_polling_waits_for_previous_request_to_finish():
+    template_dir = Path(config_ui.app.template_folder)
+    for template_name, refresh_function in (
+        ("feed.html", "refreshFeed"),
+        ("screenshots.html", "refreshScreenshots"),
+    ):
+        source = (template_dir / template_name).read_text(encoding="utf-8")
+        assert f"setInterval({refresh_function}" not in source
+        assert ".finally(() => {" in source
+        assert f"setTimeout({refresh_function}, 5000);" in source
 
 
 def test_screenshots_template_removes_layout_editor_nav_link(monkeypatch):
