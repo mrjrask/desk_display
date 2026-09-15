@@ -1,5 +1,7 @@
 import importlib
 
+import pytest
+
 
 def _reload_config_ui(monkeypatch):
     module = importlib.import_module("config_ui")
@@ -132,3 +134,14 @@ def test_login_rejects_scheme_relative_next_url(monkeypatch):
     )
     assert post_response.status_code == 302
     assert post_response.headers["Location"].endswith("/")
+
+
+
+def test_run_config_ui_fails_fast_when_auth_enabled_without_password(monkeypatch):
+    monkeypatch.delenv("SCREEN_UI_USERNAME", raising=False)
+    monkeypatch.delenv("SCREEN_UI_PASSWORD", raising=False)
+    monkeypatch.setenv("SCREEN_AUTH_ENABLED", "1")
+    config_ui = _reload_config_ui(monkeypatch)
+
+    with pytest.raises(RuntimeError, match="SCREEN_AUTH_ENABLED.*SCREEN_UI_PASSWORD"):
+        config_ui.run_config_ui()
