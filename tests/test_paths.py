@@ -1,3 +1,4 @@
+import errno
 import logging
 
 import pytest
@@ -137,6 +138,26 @@ def test_history_migration_does_not_clobber_canonical_file_created_concurrently(
     assert canonical.read_text(encoding="utf-8") == '{"source": "concurrent writer"}'
     assert legacy.read_text(encoding="utf-8") == '{"source": "legacy"}'
     assert "preserving both files" in caplog.text
+
+
+@pytest.mark.parametrize("link_error", (errno.EXDEV, errno.EPERM))
+def test_history_migration_copies_exclusively_when_hard_links_are_unavailable(
+    tmp_path, monkeypatch, link_error
+):
+    legacy = tmp_path / "pressure_history.json"
+    canonical = tmp_path / "cache" / "pressure_history.json"
+    canonical.parent.mkdir()
+    legacy.write_text('{"source": "legacy"}', encoding="utf-8")
+
+    def reject_hard_link(source, destination):
+        raise OSError(link_error, "hard links unavailable")
+
+    monkeypatch.setattr(paths.os, "link", reject_hard_link)
+
+    paths._migrate_legacy_root_history(legacy, canonical)
+
+    assert canonical.read_text(encoding="utf-8") == '{"source": "legacy"}'
+    assert not legacy.exists()
 
 
 @pytest.mark.parametrize(("env_var", "filename"), HISTORY_PATHS)
