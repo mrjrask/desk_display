@@ -22,7 +22,7 @@ def _load_main():
     return importlib.import_module("main")
 
 
-def test_init_runtime_starts_startup_refresh_thread(monkeypatch):
+def test_init_runtime_starts_startup_refresh_thread(monkeypatch, tmp_path):
     main = _load_main()
 
     started_targets = []
@@ -44,11 +44,13 @@ def test_init_runtime_starts_startup_refresh_thread(monkeypatch):
     monkeypatch.setattr(main, "clear_update_indicator", lambda _display: None)
     monkeypatch.setattr(main, "_start_config_ui", lambda: None)
     monkeypatch.setattr(main, "resolve_storage_paths", lambda logger=None: type("_P", (), {
-        "screenshot_dir": "/tmp",
-        "current_screenshot_dir": "/tmp",
-        "archive_base": "/tmp",
+        "screenshot_dir": tmp_path / "screenshots",
+        "current_screenshot_dir": tmp_path / "screenshots" / "current",
+        "archive_base": tmp_path / "archive",
     })())
+    monkeypatch.setattr(main, "initialise_runtime_probes", lambda: None)
     monkeypatch.setattr(main, "refresh_schedule_if_needed", lambda force=False: None)
+    monkeypatch.setattr(main, "_refresh_startup_critical_feeds", lambda: None)
     monkeypatch.setattr(main.threading, "Thread", _thread_factory)
 
     main._runtime_initialized = False

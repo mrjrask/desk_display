@@ -59,6 +59,7 @@ WantedBy=multi-user.target
             "PATH": f"{fake_bin}:{env['PATH']}",
             "PROJECT_DIR": str(ROOT),
             "SYSTEMD_UNIT_DIR": str(unit_dir),
+            "SYSTEMCTL": str(fake_bin / "systemctl"),
         }
     )
     subprocess.run([str(UPDATE_SERVICES)], check=True, env=env, capture_output=True, text=True)

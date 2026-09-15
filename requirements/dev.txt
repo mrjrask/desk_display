@@ -1,5 +1,6 @@
--r base.txt
+-r test.txt
 
-# Development/test dependency layer. Add local-only tooling here.
+# Development dependency layer. Test tooling comes from test.txt; optional
+# physical sensor drivers remain available for hardware development.
 -r sensors-adafruit.txt
 -r sensors-pimoroni.txt

@@ -18,6 +18,7 @@ SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 PROJECT_DIR="${PROJECT_DIR:-$(cd -- "$SCRIPT_DIR/.." && pwd)}"
 COMMON_SCRIPT="$SCRIPT_DIR/helpers/common.sh"
 SYSTEMD_UNIT_DIR="${SYSTEMD_UNIT_DIR:-/etc/systemd/system}"
+SYSTEMCTL="${SYSTEMCTL:-systemctl}"
 
 if [[ ! -f "$COMMON_SCRIPT" ]]; then
   echo "[ERROR] Missing helper script: $COMMON_SCRIPT" >&2
@@ -132,10 +133,10 @@ if [[ ${#UPDATED_UNITS[@]} -eq 0 ]]; then
 fi
 
 log "Reloading systemd and restarting updated units."
-$SUDO systemctl daemon-reload
+$SUDO "$SYSTEMCTL" daemon-reload
 
 for unit_name in "${UPDATED_UNITS[@]}"; do
-  $SUDO systemctl restart "$unit_name"
+  $SUDO "$SYSTEMCTL" restart "$unit_name"
   log "Restarted $unit_name"
-  $SUDO systemctl status --no-pager "$unit_name" || true
+  $SUDO "$SYSTEMCTL" status --no-pager "$unit_name" || true
 done

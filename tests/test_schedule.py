@@ -219,6 +219,138 @@ def test_alternate_frequency_counts_scheduled_appearances_not_raw_passes():
     ]
 
 
+def test_multiple_alternate_entries_do_not_starve_later_screens():
+    config = {
+        "screens": {
+            "date": {
+                "frequency": 1,
+                "alt": {"screen": "nixie", "frequency": 1},
+            },
+            "inside": {
+                "frequency": 1,
+                "alt": {"screen": "weather2", "frequency": 1},
+            },
+            "weather1": 1,
+        }
+    }
+    scheduler = build_scheduler(config)
+    registry = make_registry(
+        {
+            "date": True,
+            "nixie": True,
+            "inside": True,
+            "weather2": True,
+            "weather1": True,
+        }
+    )
+
+    assert scheduler.preview_scheduled_ids(6) == [
+        "nixie",
+        "weather2",
+        "weather1",
+        "nixie",
+        "weather2",
+        "weather1",
+    ]
+    assert collect_sequence(scheduler, registry, 6) == [
+        "nixie",
+        "weather2",
+        "weather1",
+        "nixie",
+        "weather2",
+        "weather1",
+    ]
+
+
+def test_queued_entry_is_skipped_after_hide_after_deadline(monkeypatch):
+    scheduler = build_scheduler(
+        {
+            "screens": {
+                "date": {
+                    "frequency": 1,
+                    "alt": {"screen": "nixie", "frequency": 2},
+                },
+                "inside": {
+                    "frequency": 1,
+                    "hide_after_enabled": True,
+                    "hide_after_at": "2026-04-06T00:01+00:00",
+                    "alt": {"screen": "weather2", "frequency": 2},
+                },
+                "weather1": 1,
+            }
+        }
+    )
+    registry = make_registry(
+        {
+            "date": True,
+            "nixie": True,
+            "inside": True,
+            "weather2": True,
+            "weather1": True,
+        }
+    )
+
+    class _BeforeDeadline:
+        @staticmethod
+        def now(tz=None):
+            return datetime(2026, 4, 6, 0, 0, tzinfo=UTC)
+
+    class _AfterDeadline:
+        @staticmethod
+        def now(tz=None):
+            return datetime(2026, 4, 6, 0, 2, tzinfo=UTC)
+
+    monkeypatch.setattr("schedule.datetime", _BeforeDeadline)
+    assert collect_sequence(scheduler, registry, 4) == [
+        "date",
+        "inside",
+        "weather1",
+        "nixie",
+    ]
+
+    monkeypatch.setattr("schedule.datetime", _AfterDeadline)
+    assert scheduler.next_available(registry).id == "weather1"
+
+
+def test_queued_entry_tries_all_alternates_before_base_fallback():
+    scheduler = build_scheduler(
+        {
+            "screens": {
+                "date": {
+                    "frequency": 1,
+                    "alt": {"screen": "nixie", "frequency": 2},
+                },
+                "inside": {
+                    "frequency": 1,
+                    "alt": {
+                        "screen": ["weather2", "weather1"],
+                        "frequency": 2,
+                    },
+                },
+                "on this day": 1,
+            }
+        }
+    )
+    registry = make_registry(
+        {
+            "date": True,
+            "nixie": True,
+            "inside": True,
+            "weather2": False,
+            "weather1": True,
+            "on this day": True,
+        }
+    )
+
+    assert collect_sequence(scheduler, registry, 5) == [
+        "date",
+        "inside",
+        "on this day",
+        "nixie",
+        "weather1",
+    ]
+
+
 def test_scheduler_with_multiple_alternates():
     config = {
         "screens": {

@@ -2789,16 +2789,18 @@ def compute_adaptive_scroll_params(
     Page-jump mode is intentionally conservative so long scoreboards keep a
     readable line-by-line cadence instead of skipping most rows.
 
-    ``min_frame_time_floor`` is an optional lower bound, in seconds, on the
-    final frame time after the global smoothness setting is applied.
+    ``min_frame_time_floor`` preserves a caller's baseline cadence when it is
+    at least as large as ``min_frame_time``. A lower legacy floor must not
+    override a faster cadence explicitly requested through smoothness.
     """
 
     settings = _effective_scroll_settings()
     safe_base_step = max(1, round(int(base_step) * settings["speed"]))
     vertical_speed_multiplier = 1.0 + settings.get("vertical_speed_adjustment", 0.0)
+    requested_min_frame_time = float(min_frame_time)
     min_frame_time = max(
         0.001,
-        float(min_frame_time) / settings["smoothness"] / vertical_speed_multiplier,
+        requested_min_frame_time / settings["smoothness"] / vertical_speed_multiplier,
     )
     max_dimension = max(int(viewport_width), int(viewport_height), 1)
     resolution_scale = max(1.0, max_dimension / 320.0)
@@ -2809,7 +2811,10 @@ def compute_adaptive_scroll_params(
     overflow = max(0, int(content_height) - int(viewport_height))
     overflow_ratio = overflow / max(1, int(viewport_height))
     target_frame_time = min_frame_time
-    if min_frame_time_floor is not None:
+    if (
+        min_frame_time_floor is not None
+        and float(min_frame_time_floor) >= requested_min_frame_time
+    ):
         target_frame_time = max(target_frame_time, float(min_frame_time_floor))
 
     return AdaptiveScrollParams(

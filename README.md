@@ -932,16 +932,23 @@ the virtual environment and again before deleting the project directory.
 ### Common checks
 
 ```bash
-# Full test suite
-pytest
+# Create a clean environment with the same Python version and dependencies as CI
+python3.11 -m venv .venv
+source .venv/bin/activate
+python -m pip install -r requirements/test.txt
+
+# Canonical CI-safe static and unit checks (Ruff, then pytest)
+python scripts/test_all.py
 
 # Focused registry/config checks
-pytest -q tests/test_screens_catalog.py tests/test_screen_registry.py tests/test_config_flags.py
+python -m pytest -q tests/test_screens_catalog.py tests/test_screen_registry.py tests/test_config_flags.py
 
 # Validate required files
 python scripts/validate_required_files.py
 
-# Validate external API connectivity and configured credentials
+# Opt-in diagnostics; these are not run by CI and may require network access,
+# configured credentials, or connected hardware
+python scripts/test_all.py --diagnostics
 python scripts/test_api_connections.py
 python scripts/test_api_connections.py --json
 
@@ -964,7 +971,12 @@ python scripts/load_default_screen_config.py small --dry-run  # preview only
 
 ### Style/lint context
 
-`pyproject.toml` configures Ruff for Python 3.11 with `E`, `F`, and `I` rules and a line length of 100.
+`pyproject.toml` configures Ruff for Python 3.11 with the repository's staged lint
+rules and a line length of 100. CI blocks on Ruff's Pyflakes correctness checks;
+existing unused-import and unused-assignment cleanup remains staged. Run
+`python -m ruff check . --select F --ignore F401,F841` to reproduce the blocking
+static check, `python scripts/test_all.py --lint-cleanup` for the report-only staged
+cleanup rules, or `python -m pytest` to execute only the unit tests.
 
 ---
 
