@@ -1758,7 +1758,13 @@ class Display:
         # that state when a new instance is created.  Explicitly applying our
         # tracked level also makes initial startup consistent with the
         # periodic reinitialization path below.
-        display.set_backlight(self._backlight_level)
+        try:
+            display.set_backlight(self._backlight_level)
+        except Exception as exc:  # pragma: no cover - hardware import
+            # A GPIO/PWM failure should not discard an otherwise usable display
+            # driver.  Backlight restoration is best-effort here, just as it is
+            # after periodic display reinitialization below.
+            logging.debug("Failed to restore backlight during display initialization: %s", exc)
         display_module = None
         try:
             display_module = __import__(display.__class__.__module__, fromlist=["_"])
