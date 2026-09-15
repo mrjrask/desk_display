@@ -220,19 +220,31 @@ class ScreenScheduler:
         if not self._entries:
             return None
 
+        now_utc = datetime.now(UTC)
         while self._pending_indices:
             entry_index = self._pending_indices.pop(0)
             self._cursor = (entry_index + 1) % len(self._entries)
             entry = self._entries[entry_index]
-            candidate_id = self._scheduled_id_for(entry)
-            definition = registry.get(candidate_id)
+            if entry.hide_after is not None and now_utc >= entry.hide_after:
+                continue
+
+            entry.presentation_count += 1
+            if (
+                entry.alternate
+                and entry.alternate.frequency > 0
+                and entry.presentation_count % entry.alternate.frequency == 0
+            ):
+                alternate = entry.alternate
+                for _ in range(len(alternate.screen_ids)):
+                    alt_id = alternate.next_screen_id()
+                    alt_def = registry.get(alt_id)
+                    if alt_def and alt_def.available:
+                        return alt_def
+
+            definition = registry.get(entry.screen_id)
             if definition and definition.available:
                 return definition
-            fallback = registry.get(entry.screen_id)
-            if fallback and fallback.available:
-                return fallback
 
-        now_utc = datetime.now(UTC)
         for _ in range(len(self._entries)):
             entry = self._entries[self._cursor]
             self._cursor = (self._cursor + 1) % len(self._entries)
