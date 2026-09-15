@@ -26,8 +26,12 @@ def non_central_host_timezone(monkeypatch):
 
 
 def test_display_datetime_handles_central_dst_boundary():
-    before = config.display_datetime(dt.datetime(2025, 3, 9, 7, 30, tzinfo=dt.UTC))
-    after = config.display_datetime(dt.datetime(2025, 3, 9, 8, 30, tzinfo=dt.UTC))
+    before = config.display_datetime(
+        dt.datetime(2025, 3, 9, 7, 30, tzinfo=dt.timezone.utc)
+    )
+    after = config.display_datetime(
+        dt.datetime(2025, 3, 9, 8, 30, tzinfo=dt.timezone.utc)
+    )
 
     assert (before.strftime("%H:%M"), before.utcoffset()) == (
         "01:30",
@@ -40,7 +44,9 @@ def test_display_datetime_handles_central_dst_boundary():
 
 
 def test_date_time_frame_uses_central_date_across_midnight(monkeypatch):
-    instant = dt.datetime(2025, 1, 2, 5, 30, tzinfo=dt.UTC)  # Jan 1, 11:30 PM CT
+    instant = dt.datetime(
+        2025, 1, 2, 5, 30, tzinfo=dt.timezone.utc
+    )  # Jan 1, 11:30 PM CT
     seen = {}
     monkeypatch.setattr(
         draw_date_time, "display_datetime", lambda: config.display_datetime(instant)
@@ -65,7 +71,9 @@ def test_date_time_frame_uses_central_date_across_midnight(monkeypatch):
 
 
 def test_nixie_injected_instant_is_rendered_in_central_time():
-    instant = dt.datetime(2025, 11, 2, 7, 30, 45, tzinfo=dt.UTC)  # 1:30:45 CST
+    instant = dt.datetime(
+        2025, 11, 2, 7, 30, 45, tzinfo=dt.timezone.utc
+    )  # 1:30:45 CST
     expected = dt.datetime(2025, 11, 2, 1, 30, 45, tzinfo=config.CENTRAL_TIME)
 
     assert draw_nixie.nixie_frame(instant).tobytes() == draw_nixie.nixie_frame(
@@ -74,7 +82,9 @@ def test_nixie_injected_instant_is_rendered_in_central_time():
 
 
 def test_wolves_labels_and_game_time_use_central_at_midnight(monkeypatch):
-    now = dt.datetime(2025, 1, 2, 6, 15, tzinfo=dt.UTC)  # Jan 2, 12:15 AM CT
+    now = dt.datetime(
+        2025, 1, 2, 6, 15, tzinfo=dt.timezone.utc
+    )  # Jan 2, 12:15 AM CT
     monkeypatch.setattr(
         draw_wolves_schedule, "display_datetime", lambda: config.display_datetime(now)
     )
@@ -95,5 +105,7 @@ def test_wolves_labels_and_game_time_use_central_at_midnight(monkeypatch):
 
 
 def test_config_ui_timestamp_uses_central_timezone_at_dst_boundary():
-    timestamp = dt.datetime(2025, 3, 9, 8, 30, tzinfo=dt.UTC).timestamp()
+    timestamp = dt.datetime(
+        2025, 3, 9, 8, 30, tzinfo=dt.timezone.utc
+    ).timestamp()
     assert config_ui._format_timestamp(timestamp) == "2025-03-09 03:30:00"
