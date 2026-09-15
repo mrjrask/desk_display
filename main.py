@@ -1586,7 +1586,8 @@ def _refresh_alt_screenshots(sid: str) -> None:
 
 
 def _save_screenshot(sid: str, img: Image.Image) -> Optional[Tuple[str, bool, int]]:
-    ts = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+    # Screenshot filenames are operational artifacts and intentionally use UTC.
+    ts = datetime.datetime.now(datetime.timezone.utc).strftime("%Y%m%d_%H%M%S")
     folder = _sanitize_directory_name(sid)
     prefix = _sanitize_filename_prefix(sid)
     target_dir = os.path.join(SCREENSHOT_DIR, folder)

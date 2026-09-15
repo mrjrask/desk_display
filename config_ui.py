@@ -689,7 +689,9 @@ def _current_screenshot_dir() -> Path:
 
 
 def _format_timestamp(timestamp: float) -> str:
-    return datetime.fromtimestamp(timestamp).strftime("%Y-%m-%d %H:%M:%S")
+    return datetime.fromtimestamp(timestamp, tz=config.CENTRAL_TIME).strftime(
+        "%Y-%m-%d %H:%M:%S"
+    )
 
 
 def _format_elapsed_since(timestamp: float) -> str:
