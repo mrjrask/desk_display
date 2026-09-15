@@ -106,6 +106,74 @@ def _canonicalize_screen_reference(value: Any) -> Any:
     return value
 
 
+def _require_known_screen_id(value: Any, *, field: str) -> str:
+    if not isinstance(value, str) or not value.strip():
+        raise ValueError(f"{field} must be a non-empty string")
+    screen_id = canonical_screen_id(value.strip())
+    if screen_id not in SCREEN_IDS:
+        raise ValueError(f"Unknown screen id '{value}' in {field}")
+    return screen_id
+
+
+def _validate_config_screen_references(config_data: dict[str, Any]) -> dict[str, Any]:
+    """Return a copy whose stored screen references are known canonical IDs."""
+
+    validated = dict(config_data)
+    screens = config_data.get("screens")
+    if not isinstance(screens, dict):
+        raise ValueError("Configuration must include a 'screens' mapping")
+
+    validated_screens: dict[str, Any] = {}
+    for raw_screen_id, raw_spec in screens.items():
+        screen_id = _require_known_screen_id(raw_screen_id, field="screens")
+        spec = dict(raw_spec) if isinstance(raw_spec, dict) else raw_spec
+        if isinstance(spec, dict) and isinstance(spec.get("alt"), dict):
+            alt = dict(spec["alt"])
+            raw_alternates = alt.get("screen")
+            if isinstance(raw_alternates, (list, tuple)):
+                alternates = [
+                    _require_known_screen_id(item, field=f"screens.{screen_id}.alt.screen")
+                    for item in raw_alternates
+                ]
+                if not alternates:
+                    raise ValueError(f"screens.{screen_id}.alt.screen must not be empty")
+                alt["screen"] = alternates
+            else:
+                alt["screen"] = _require_known_screen_id(
+                    raw_alternates,
+                    field=f"screens.{screen_id}.alt.screen",
+                )
+            spec["alt"] = alt
+        validated_screens[screen_id] = spec
+    validated["screens"] = validated_screens
+
+    playlists = config_data.get("playlists")
+    if isinstance(playlists, dict):
+        validated_playlists: dict[str, Any] = {}
+        for playlist_id, playlist in playlists.items():
+            if not isinstance(playlist, dict):
+                validated_playlists[playlist_id] = playlist
+                continue
+            validated_playlist = dict(playlist)
+            steps = playlist.get("steps")
+            if isinstance(steps, list):
+                validated_steps: list[Any] = []
+                for index, step in enumerate(steps):
+                    if not isinstance(step, dict) or "screen" not in step:
+                        validated_steps.append(step)
+                        continue
+                    validated_step = dict(step)
+                    validated_step["screen"] = _require_known_screen_id(
+                        step["screen"],
+                        field=f"playlists.{playlist_id}.steps[{index}].screen",
+                    )
+                    validated_steps.append(validated_step)
+                validated_playlist["steps"] = validated_steps
+            validated_playlists[playlist_id] = validated_playlist
+        validated["playlists"] = validated_playlists
+    return validated
+
+
 def _coerce_frequency(value: Any) -> Optional[int]:
     try:
         return int(value)
@@ -409,7 +477,7 @@ def _normalize_import_config_payload(data: dict[str, Any]) -> dict[str, Any]:
     result["screens"] = normalized_screens
     result["scroll"] = _normalize_scroll_settings(result.get("scroll"))
     cleaned, _ = _normalize_legacy_scoreboard_ids(result)
-    return cleaned
+    return _validate_config_screen_references(cleaned)
 
 
 
@@ -1173,11 +1241,15 @@ def _build_selectable_screen_ids(entries: list[dict[str, Any]]) -> list[str]:
 def _build_config(entries: list[dict[str, Any]]) -> dict[str, Any]:
     screens: dict[str, Any] = {}
     for entry in entries:
-        screen_id = canonical_screen_id(str(entry.get("id", "")).strip())
-        if not screen_id:
+        raw_screen_id = entry.get("id")
+        canonical_id = (
+            canonical_screen_id(raw_screen_id.strip())
+            if isinstance(raw_screen_id, str)
+            else raw_screen_id
+        )
+        if canonical_id in HIDDEN_CONFIG_SCREEN_IDS:
             continue
-        if screen_id in HIDDEN_CONFIG_SCREEN_IDS:
-            continue
+        screen_id = _require_known_screen_id(raw_screen_id, field="screens")
         frequency = int(entry.get("frequency", 0))
         extra_seconds = int(entry.get("extra_seconds", 0))
         if extra_seconds < 0:
@@ -1199,7 +1271,10 @@ def _build_config(entries: list[dict[str, Any]]) -> dict[str, Any]:
 
         spec: dict[str, Any] = {"frequency": frequency}
         if alt_screen:
-            alt_screen = [canonical_screen_id(item) for item in alt_screen]
+            alt_screen = [
+                _require_known_screen_id(item, field=f"screens.{screen_id}.alt.screen")
+                for item in alt_screen
+            ]
             alt_frequency_int = int(alt_frequency) if alt_frequency not in ("", None) else 1
             spec["alt"] = {
                 "screen": alt_screen[0] if len(alt_screen) == 1 else alt_screen,
@@ -1215,7 +1290,7 @@ def _build_config(entries: list[dict[str, Any]]) -> dict[str, Any]:
 
         screens[screen_id] = frequency if spec.keys() == {"frequency"} else spec
     cleaned, _ = _normalize_legacy_scoreboard_ids({"screens": screens})
-    return cleaned
+    return _validate_config_screen_references(cleaned)
 
 
 def _save_config(config: dict[str, Any]) -> None:
@@ -1488,6 +1563,7 @@ def save_screens() -> Any:
         current_scroll = _load_active_config().get("scroll")
         config["scroll"] = _normalize_scroll_settings(payload.get("scroll", current_scroll))
         config, _ = _normalize_legacy_scoreboard_ids(config)
+        config = _validate_config_screen_references(config)
         if any(key in payload for key in ("quad_enabled", "quad_pages", "quad_tiles", "quad_scroll_speed")):
             layouts = _build_layouts(payload)
         else:
@@ -1528,6 +1604,7 @@ def import_screens() -> Any:
             current_scroll = _load_active_config().get("scroll")
             config["scroll"] = _normalize_scroll_settings(config_payload.get("scroll", current_scroll))
             config, _ = _normalize_legacy_scoreboard_ids(config)
+            config = _validate_config_screen_references(config)
             quad_pages_payload = payload.get("quad_pages") if isinstance(payload, dict) else None
             quad_enabled_payload = payload.get("quad_enabled") if isinstance(payload, dict) else False
             if isinstance(quad_pages_payload, list):
@@ -1535,6 +1612,7 @@ def import_screens() -> Any:
         else:
             config = _normalize_import_config_payload(config_payload)
             config, _ = _normalize_legacy_scoreboard_ids(config)
+            config = _validate_config_screen_references(config)
         build_scheduler(config)
     except Exception as exc:
         return jsonify({"error": str(exc)}), 400
