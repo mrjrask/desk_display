@@ -6,6 +6,8 @@ import datetime as _dt
 import json
 import os
 import sqlite3
+import tempfile
+import threading
 from pathlib import Path
 from typing import Any, Optional
 
@@ -27,6 +29,7 @@ class ConfigStore:
         self.db_path = Path(db_path) if db_path else self.config_path.with_suffix(".history.sqlite3")
         self.archive_dir = Path(archive_dir) if archive_dir else self.config_path.parent / "config_versions"
         self.retention = max(1, retention)
+        self._save_lock = threading.Lock()
         self._ensure_database()
 
     # ------------------------------------------------------------------
@@ -35,11 +38,11 @@ class ConfigStore:
         try:
             with self.config_path.open("r", encoding="utf-8") as fh:
                 data = json.load(fh)
-            if not isinstance(data, dict):
-                raise ValueError
-            return data
-        except Exception:
+        except FileNotFoundError:
             return {}
+        if not isinstance(data, dict):
+            raise ValueError("Configuration must be a JSON object")
+        return data
 
     def save(
         self,
@@ -49,15 +52,36 @@ class ConfigStore:
         summary: Optional[str] = None,
         metadata: Optional[dict[str, Any]] = None,
     ) -> int:
-        current = self.load()
-        summary = summary or summarise_diff(current, config)
-        metadata = metadata or {}
-        metadata.setdefault("actor", actor)
+        with self._save_lock:
+            current = self.load()
+            summary = summary or summarise_diff(current, config)
+            metadata = metadata or {}
+            metadata.setdefault("actor", actor)
+            try:
+                previous_bytes = self.config_path.read_bytes()
+            except FileNotFoundError:
+                previous_bytes = None
 
-        self._write_config(config)
-        version_id = self._record_version(config, actor=actor, summary=summary, metadata=metadata)
-        self._prune_history()
-        return version_id
+            self._write_config(config)
+            try:
+                version_id = self._record_version(
+                    config,
+                    actor=actor,
+                    summary=summary,
+                    metadata=metadata,
+                )
+            except Exception:
+                if previous_bytes is None:
+                    self.config_path.unlink(missing_ok=True)
+                else:
+                    self._write_bytes(previous_bytes)
+                raise
+
+            try:
+                self._prune_history()
+            except OSError:
+                pass
+            return version_id
 
     def list_versions(self, limit: int = 20) -> list[dict[str, Any]]:
         query = """
@@ -117,11 +141,28 @@ class ConfigStore:
         os.makedirs(self.archive_dir, exist_ok=True)
 
     def _write_config(self, config: dict[str, Any]) -> None:
-        tmp_path = self.config_path.with_suffix(".tmp")
-        with tmp_path.open("w", encoding="utf-8") as fh:
-            json.dump(config, fh, indent=2, sort_keys=False)
-            fh.write("\n")
-        tmp_path.replace(self.config_path)
+        payload = json.dumps(config, indent=2, sort_keys=False) + "\n"
+        self._write_bytes(payload.encode("utf-8"))
+
+    def _write_bytes(self, payload: bytes) -> None:
+        self.config_path.parent.mkdir(parents=True, exist_ok=True)
+        staged_path: Optional[Path] = None
+        try:
+            with tempfile.NamedTemporaryFile(
+                mode="wb",
+                dir=self.config_path.parent,
+                prefix=f".{self.config_path.name}.",
+                suffix=".tmp",
+                delete=False,
+            ) as staged:
+                staged_path = Path(staged.name)
+                staged.write(payload)
+                staged.flush()
+                os.fsync(staged.fileno())
+            os.replace(staged_path, self.config_path)
+        finally:
+            if staged_path is not None:
+                staged_path.unlink(missing_ok=True)
 
     def _record_version(
         self,
@@ -135,20 +176,25 @@ class ConfigStore:
         metadata_json = json.dumps(metadata, sort_keys=True)
         created_at = _dt.datetime.now(_dt.UTC).isoformat(timespec="seconds").replace("+00:00", "Z")
 
-        with sqlite3.connect(self.db_path) as conn:
-            cursor = conn.execute(
-                """
-                INSERT INTO config_versions (created_at, actor, summary, config_json, metadata_json)
-                VALUES (?, ?, ?, ?, ?)
-                """,
-                (created_at, actor, summary, payload, metadata_json),
-            )
-            version_id = cursor.lastrowid
-            conn.commit()
-
-        archive_path = self.archive_dir / f"{version_id:06d}.json"
-        with archive_path.open("w", encoding="utf-8") as fh:
-            fh.write(payload)
+        archive_path: Optional[Path] = None
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                cursor = conn.execute(
+                    """
+                    INSERT INTO config_versions (created_at, actor, summary, config_json, metadata_json)
+                    VALUES (?, ?, ?, ?, ?)
+                    """,
+                    (created_at, actor, summary, payload, metadata_json),
+                )
+                version_id = cursor.lastrowid
+                archive_path = self.archive_dir / f"{version_id:06d}.json"
+                with archive_path.open("w", encoding="utf-8") as fh:
+                    fh.write(payload)
+                conn.commit()
+        except Exception:
+            if archive_path is not None:
+                archive_path.unlink(missing_ok=True)
+            raise
 
         return int(version_id)
 
