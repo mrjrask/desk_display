@@ -1,9 +1,11 @@
 #!/usr/bin/env python3
-"""Run the full desk_display test suite.
+"""Run the hardware-independent desk_display quality suite.
 
-This aggregates the regular pytest suite plus standalone diagnostic test scripts
-under ``scripts/`` whose names match ``test_*.py``. New individual scripts added
-with that naming convention are picked up automatically.
+The default command runs Ruff and pytest and is safe for local machines and CI
+without physical display or sensor hardware. Standalone diagnostic scripts under
+``scripts/`` whose names match ``test_*.py`` are available only when explicitly
+requested with ``--diagnostics`` because they can require credentials, network
+access, or connected hardware.
 """
 
 from __future__ import annotations
@@ -44,22 +46,40 @@ def _discover_standalone_scripts() -> list[Path]:
 
 
 def _build_commands(pytest_args: Sequence[str]) -> list[TestCommand]:
-    commands = [
+    return [
+        TestCommand(
+            name="Ruff static checks",
+            # Block new correctness errors while the repository's existing unused
+            # imports and assignments remain part of the staged lint cleanup.
+            command=(
+                sys.executable,
+                "-m",
+                "ruff",
+                "check",
+                ".",
+                "--select",
+                "F",
+                "--ignore",
+                "F401,F841",
+            ),
+        ),
         TestCommand(
             name="pytest suite",
             command=(sys.executable, "-m", "pytest", *pytest_args),
-        )
+        ),
     ]
 
-    for script in _discover_standalone_scripts():
-        commands.append(
-            TestCommand(
-                name=f"standalone script: {script.relative_to(REPO_ROOT)}",
-                command=(sys.executable, str(script.relative_to(REPO_ROOT))),
-            )
-        )
 
-    return commands
+def _build_diagnostic_commands() -> list[TestCommand]:
+    """Return opt-in commands that may access external services or hardware."""
+
+    return [
+        TestCommand(
+            name=f"standalone script: {script.relative_to(REPO_ROOT)}",
+            command=(sys.executable, str(script.relative_to(REPO_ROOT))),
+        )
+        for script in _discover_standalone_scripts()
+    ]
 
 
 def _build_lint_cleanup_command() -> TestCommand:
@@ -112,6 +132,14 @@ def _run_command(command: TestCommand) -> int:
 def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
+        "--diagnostics",
+        action="store_true",
+        help=(
+            "Also run standalone diagnostic scripts, which may require network "
+            "access, credentials, or physical hardware."
+        ),
+    )
+    parser.add_argument(
         "--continue-on-error",
         action="store_true",
         help="Run remaining test commands even after one fails.",
@@ -142,6 +170,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         pytest_args = pytest_args[1:]
 
     commands = _build_commands(pytest_args)
+    if args.diagnostics:
+        commands.extend(_build_diagnostic_commands())
     if args.lint_cleanup:
         commands.append(_build_lint_cleanup_command())
 

@@ -24,12 +24,20 @@ def test_discover_standalone_scripts_excludes_aggregate_runner():
     assert "test_all.py" not in discovered
 
 
-def test_build_commands_runs_pytest_before_standalone_scripts():
+def test_build_commands_runs_only_hardware_independent_quality_checks():
     commands = test_all._build_commands(["-q"])
 
-    assert commands[0].name == "pytest suite"
-    assert commands[0].command[-1] == "-q"
-    assert any("scripts/test_api_connections.py" in command.command for command in commands[1:])
+    assert [command.name for command in commands] == ["Ruff static checks", "pytest suite"]
+    assert commands[0].command[2:5] == ("ruff", "check", ".")
+    assert commands[0].command[-4:] == ("--select", "F", "--ignore", "F401,F841")
+    assert commands[1].command[-1] == "-q"
+    assert not any("scripts/test_api_connections.py" in command.command for command in commands)
+
+
+def test_diagnostic_commands_include_standalone_scripts():
+    commands = test_all._build_diagnostic_commands()
+
+    assert any("scripts/test_api_connections.py" in command.command for command in commands)
 
 
 def test_main_forwards_dash_prefixed_pytest_args_without_separator(monkeypatch, capsys):
