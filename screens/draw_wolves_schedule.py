@@ -45,12 +45,14 @@ from config import (
     AHL_TEAM_ID,
     AHL_TEAM_NAME,
     AHL_TEAM_TRICODE,
+    CENTRAL_TIME,
     FONT_DATE_SPORTS,
     FONT_TEAM_SPORTS,
     FONT_TITLE_SPORTS,
     HEIGHT,
     TIMES_SQUARE_FONT_PATH,
     WIDTH,
+    display_datetime,
 )
 from utils import (
     LED_INDICATOR_LEVEL,
@@ -686,11 +688,11 @@ def _format_last_date_bottom(game_date_iso: str) -> str:
     """Return 'Yesterday' or 'Wed Sep 24' (no year)."""
     try:
         dt_utc = dt.datetime.fromisoformat(game_date_iso.replace("Z","+00:00"))
-        local  = dt_utc.astimezone()
+        local = dt_utc.astimezone(CENTRAL_TIME)
         gdate  = local.date()
     except Exception:
         return ""
-    today = dt.datetime.now().astimezone().date()
+    today = display_datetime().date()
     delta = (today - gdate).days
     if delta == 1:
         return "Yesterday"
@@ -750,7 +752,9 @@ def _format_next_bottom(
     local = None
     if game_date_iso:
         try:
-            local = dt.datetime.fromisoformat(game_date_iso.replace("Z", "+00:00")).astimezone()
+            local = dt.datetime.fromisoformat(
+                game_date_iso.replace("Z", "+00:00")
+            ).astimezone(CENTRAL_TIME)
         except Exception:
             local = None
 
@@ -770,7 +774,7 @@ def _format_next_bottom(
     if not start and game_date_iso:
         try:
             dt_utc = dt.datetime.fromisoformat(game_date_iso.replace("Z", "+00:00"))
-            start_local = dt_utc.astimezone()
+            start_local = dt_utc.astimezone(CENTRAL_TIME)
             start = (
                 start_local.strftime("%-I:%M %p")
                 if os.name != "nt"
@@ -786,14 +790,16 @@ def _format_next_bottom(
     if local is None and official:
         try:
             d = dt.datetime.strptime(official[:10], "%Y-%m-%d").date()
-            local = dt.datetime.combine(d, dt.time(19, 0)).astimezone()  # default 7pm if time missing
+            # This fallback is a Central wall time; do not reinterpret it via
+            # the host timezone before relative-date comparisons.
+            local = dt.datetime.combine(d, dt.time(19, 0), tzinfo=CENTRAL_TIME)
         except Exception:
             local = None
 
     if not local:
         return ""
 
-    today = dt.datetime.now().astimezone()
+    today = display_datetime()
     today_d = today.date()
     game_d = local.date()
     time_str = (

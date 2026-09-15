@@ -18,7 +18,6 @@ Options:
 """
 
 import contextlib
-import datetime
 import logging
 import threading
 import time
@@ -42,6 +41,7 @@ from config import (
     IP_WITH_TIME,
     SCREEN_DELAY,
     WIDTH,
+    display_datetime,
     get_display_profile_id,
     get_screen_background_color,
     is_hyperpixel_4_square_layout,
@@ -135,7 +135,7 @@ def _compose_frame(
     img  = Image.new("RGB", (WIDTH, HEIGHT), background)
     draw = ImageDraw.Draw(img)
 
-    now = datetime.datetime.now()
+    now = display_datetime()
     weekday, date_str = date_strings(now)
     time_str, ampm = time_strings(now)
 
@@ -453,4 +453,3 @@ def draw_date(display, transition: bool=False):
     )
     _start_color_cycle(display, "date_time", gh_state, "date", frame_state)
     return ScreenImage(img, displayed=True)
-

@@ -1441,6 +1441,20 @@ class LocalizableZoneInfo(datetime.tzinfo):
 
 CENTRAL_TIME = LocalizableZoneInfo("America/Chicago")
 
+
+def display_datetime(moment: Optional[datetime.datetime] = None) -> datetime.datetime:
+    """Return *moment* in the display timezone, or the current display time.
+
+    Naive injected values are interpreted as display-local wall times. This keeps
+    renderer test hooks deterministic without allowing the host timezone to leak
+    into user-facing dates and times.
+    """
+    if moment is None:
+        return datetime.datetime.now(CENTRAL_TIME)
+    if moment.tzinfo is None:
+        return moment.replace(tzinfo=CENTRAL_TIME)
+    return moment.astimezone(CENTRAL_TIME)
+
 # ─── Fonts ────────────────────────────────────────────────────────────────────
 # Drop your TimesSquare-m105.ttf, DejaVuSans.ttf, and DejaVuSans-Bold.ttf into
 # a folder named `fonts` alongside this file. Emoji glyphs are provided by the
