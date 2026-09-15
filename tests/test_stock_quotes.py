@@ -1,4 +1,5 @@
 import time
+from threading import Event
 
 import pandas as pd
 import pytest
@@ -147,3 +148,33 @@ def test_fetch_stock_quotes_keeps_stale_quote_when_refetch_fails(monkeypatch):
 
 def test_fetch_stock_quotes_handles_empty_symbol_list():
     assert sq.fetch_stock_quotes([]) == []
+
+
+def test_fetch_stock_quotes_returns_within_budget_when_fetch_blocks(monkeypatch):
+    started = Event()
+    release = Event()
+
+    def blocked_fetch(symbol):
+        started.set()
+        release.wait(timeout=1)
+        return sq.StockQuote(
+            symbol=symbol,
+            label=symbol,
+            price=1.0,
+            change=0.0,
+            change_pct=0.0,
+        )
+
+    monkeypatch.setattr(sq, "fetch_quote", blocked_fetch)
+    monkeypatch.setattr(sq, "_FETCH_TIMEOUT_BUDGET_SECONDS", 0.05)
+
+    before = time.monotonic()
+    try:
+        result = sq.fetch_stock_quotes(["BLOCKED"], force=True)
+        elapsed = time.monotonic() - before
+    finally:
+        release.set()
+
+    assert started.is_set()
+    assert result == []
+    assert elapsed < 0.25
