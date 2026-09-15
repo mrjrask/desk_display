@@ -1842,11 +1842,11 @@ IMAGES_DIR = os.path.join(SCRIPT_DIR, "images")
 _logo_height_limit = HEIGHT - 30
 if WIDTH >= 1280 or HEIGHT >= 720:
     short_edge = max(1, min(WIDTH, HEIGHT))
-    _logo_height_limit = min(_logo_height_limit, int(round(short_edge * 0.55)))
+    _logo_height_limit = min(_logo_height_limit, round(short_edge * 0.55))
 
 LOGO_SCREEN_HEIGHT = max(1, _logo_height_limit)
 TEAM_LOGO_HEIGHT   = LOGO_SCREEN_HEIGHT
-LOGO_SCREEN_WIDTH = max(1, min(WIDTH, int(round(LOGO_SCREEN_HEIGHT * 1.5))))
+LOGO_SCREEN_WIDTH = max(1, min(WIDTH, round(LOGO_SCREEN_HEIGHT * 1.5)))
 
 
 def load_logo(fn, height=LOGO_SCREEN_HEIGHT, width=LOGO_SCREEN_WIDTH):
@@ -1867,8 +1867,8 @@ def load_logo(fn, height=LOGO_SCREEN_HEIGHT, width=LOGO_SCREEN_WIDTH):
             height_ratio = target_height / img.height
             scale = min(width_ratio, height_ratio)
             resized_size = (
-                max(1, int(round(img.width * scale))),
-                max(1, int(round(img.height * scale))),
+                max(1, round(img.width * scale)),
+                max(1, round(img.height * scale)),
             )
             resized = img.resize(resized_size, Image.ANTIALIAS)
             if resized_size == (target_width, target_height):

@@ -22,13 +22,14 @@ extend-ignore = [
 ]
 
 [tool.ruff.lint.per-file-ignores]
-# Legacy runtime modules are intentionally staged: report the broader rule families with
-# `python scripts/test_all.py --lint-cleanup` first, then shrink these ignores as they split.
-"utils.py" = ["B", "C4", "PIE", "RUF", "SIM", "UP", "PLC", "PLE", "PLW"]
-"data_fetch.py" = ["B", "C4", "PIE", "RUF", "SIM", "UP", "PLC", "PLE", "PLW"]
-"main.py" = ["B", "C4", "PIE", "RUF", "SIM", "UP", "PLC", "PLE", "PLW"]
+# Legacy runtime modules are intentionally staged. Correctness-oriented B, PLE, and RUF
+# findings are clean except for the explicitly retained typography checks. Keep SIM and UP
+# migrations separate from bug-detection cleanup to avoid high-churn reviews.
+"utils.py" = ["C420", "PLC0415", "RUF002", "SIM102", "SIM105", "UP006", "UP015", "UP035"]
+"data_fetch.py" = ["PIE808", "RUF001", "SIM102", "SIM105", "UP006", "UP015", "UP017", "UP028", "UP031", "UP034", "UP035"]
+"main.py" = ["C420", "PLC0415", "PLW0602", "PLW2901", "RUF001", "SIM102", "SIM103", "SIM105", "UP006", "UP017", "UP035"]
 # Vendored sensor libraries are kept close to upstream and not migrated with app linting.
-"vendor/**/*.py" = ["B", "C4", "PIE", "RUF", "SIM", "UP", "PLC", "PLE", "PLW"]
+"vendor/**/*.py" = ["B007", "B904", "PLC0415", "RUF100", "SIM105", "SIM118", "UP024", "UP030", "UP032", "UP034"]
 # Hardware probes and diagnostic scripts deliberately use broad runtime guards.
 "scripts/waveshare_oled_status.py" = ["BLE001"]
 "scripts/test_api_connections.py" = ["BLE001"]
