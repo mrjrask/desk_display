@@ -74,6 +74,8 @@ CREATE TABLE IF NOT EXISTS message_baseline (
     day TEXT NOT NULL,
     device TEXT NOT NULL,
     baseline INTEGER NOT NULL,
+    last_total INTEGER,
+    accumulated INTEGER NOT NULL DEFAULT 0,
     PRIMARY KEY (day, device)
 );
 
@@ -361,12 +363,19 @@ def poll_device(
     )
     stats_path = _STATS_JSON_PATHS[path_index]
     stats_payload, _stats_error = _get_json(stats_path, f"{base}{stats_path}", timeout=timeout)
+    messages_total = _extract_messages_total(stats_payload)
+    if messages_total is None:
+        # dump1090/readsb also expose the cumulative decoder count at the top
+        # level of aircraft.json.  Some installations do not publish
+        # stats.json (or publish it under a different web alias), so treating
+        # that optional request as the sole source made the screen report 0.
+        messages_total = _extract_messages_total(aircraft_payload)
     return PollResult(
         device=device,
         ok=True,
         error=None,
         sightings=sightings,
-        messages_total=_extract_messages_total(stats_payload),
+        messages_total=messages_total,
     )
 
 
@@ -384,6 +393,10 @@ class AdsbStore:
             self._conn.executescript(_SCHEMA_SQL)
             self._ensure_column("device_status", "tracked_types", "TEXT")
             self._ensure_column("device_status", "tracked_callsigns", "TEXT")
+            self._ensure_column("message_baseline", "last_total", "INTEGER")
+            self._ensure_column(
+                "message_baseline", "accumulated", "INTEGER NOT NULL DEFAULT 0"
+            )
 
     def _ensure_column(self, table: str, column: str, coltype: str) -> None:
         """Add *column* to *table* if it's missing (for DBs created by an
@@ -522,10 +535,25 @@ class AdsbStore:
             if result.messages_total is not None:
                 self._conn.execute(
                     """
-                    INSERT OR IGNORE INTO message_baseline (day, device, baseline)
-                    VALUES (?, ?, ?)
+                    INSERT INTO message_baseline (
+                        day, device, baseline, last_total, accumulated
+                    ) VALUES (?, ?, ?, ?, 0)
+                    ON CONFLICT(day, device) DO UPDATE SET
+                        accumulated = message_baseline.accumulated + CASE
+                            WHEN message_baseline.last_total IS NULL THEN
+                                MAX(0, excluded.last_total - message_baseline.baseline)
+                            WHEN excluded.last_total >= message_baseline.last_total THEN
+                                excluded.last_total - message_baseline.last_total
+                            ELSE excluded.last_total
+                        END,
+                        last_total = excluded.last_total
                     """,
-                    (day, device_label, result.messages_total),
+                    (
+                        day,
+                        device_label,
+                        result.messages_total,
+                        result.messages_total,
+                    ),
                 )
 
     def _maybe_update_all_time(
@@ -584,8 +612,12 @@ class AdsbStore:
                 FROM device_status
                 """
             ).fetchall()
-            baseline_rows = self._conn.execute(
-                "SELECT device, baseline FROM message_baseline WHERE day = ?", (day,)
+            message_rows = self._conn.execute(
+                """
+                SELECT device, baseline, last_total, accumulated
+                FROM message_baseline WHERE day = ?
+                """,
+                (day,),
             ).fetchall()
             all_time_row = self._conn.execute(
                 """
@@ -692,12 +724,15 @@ class AdsbStore:
             airline = _airline_code(callsign_by_hex.get(hex_id))
             currently_tracked_by_airline[airline] = currently_tracked_by_airline.get(airline, 0) + 1
 
-        baseline_by_device = dict(baseline_rows)
         messages_today_by_device: dict[str, int] = {}
-        for device, total in messages_total_by_device.items():
-            baseline = baseline_by_device.get(device)
-            if baseline is not None:
-                messages_today_by_device[device] = max(0, total - baseline)
+        for device, baseline, last_total, accumulated in message_rows:
+            # ``last_total`` is NULL only for a database created by an older
+            # release that has not received a poll since migration.
+            total = messages_total_by_device.get(device)
+            message_count = accumulated or 0
+            if last_total is None and total is not None:
+                message_count = max(0, total - baseline)
+            messages_today_by_device[device] = max(0, message_count)
 
         all_time_furthest = None
         if all_time_row and all_time_row[3] is not None:
