@@ -1123,18 +1123,16 @@
         .filter(Boolean);
     }
 
-    function buildAltScreenOptions(screenId, selectedValue) {
-      const options = ['<option value="">No alternate</option>'];
+    function populateAltScreenOptions(select, screenId, selectedValue) {
+      select.appendChild(new Option("No alternate", ""));
       if (parseAltScreen(selectedValue).length > 1) {
-        options.push(`<option value="${selectedValue}" selected>Multiple</option>`);
+        select.appendChild(new Option("Multiple", selectedValue, true, true));
       }
       selectableScreenIds
         .filter((id) => id !== screenId)
         .forEach((id) => {
-          const selected = selectedValue === id ? " selected" : "";
-          options.push(`<option value="${id}"${selected}>${id}</option>`);
+          select.appendChild(new Option(id, id, selectedValue === id, selectedValue === id));
         });
-      return options.join("");
     }
 
     function moveScreenToPlaylistEnd(screens, screenId, playlistId) {
@@ -1367,58 +1365,117 @@
       row.className = "row screen-row";
       row.draggable = true;
       row.dataset.screenId = screen.id;
-      row.innerHTML = `
-        <div class="handle">☰</div>
-        <div>
-          <div class="screen-id">${screen.id}</div>
-        </div>
-        <div>
-          <select class="playlist-select"></select>
-          <div class="hint">Assign to a playlist.</div>
-        </div>
-        <div>
-          <input type="number" min="0" step="1" value="${screen.frequency ?? 0}" class="freq-input compact-number-input">
-          <div class="hint">0 disables. 1=every pass, 2=every other pass.</div>
-        </div>
-        <div>
-          <div class="screen-speed-field">
-            <label class="screen-speed-toggle">
-              <input type="checkbox" class="screen-speed-enabled-input" ${screen.scroll_speed_enabled ? "checked" : ""} aria-label="Override scroll speed for ${screen.id}">
-            </label>
-            <input type="range" min="0.25" max="3" step="0.1" value="${screen.scroll_speed ?? 1}" class="screen-speed-input" ${screen.scroll_speed_enabled ? "" : "disabled"}>
-            <output class="screen-speed-value">${Number(screen.scroll_speed ?? 1).toFixed(1)}×</output>
-          </div>
-          <div class="hint">When checked, overrides this screen's scroll speed.</div>
-        </div>
-        <div>
-          <div class="hide-after-field">
-            <input type="checkbox" class="hide-after-enabled-input" ${screen.hide_after_enabled ? "checked" : ""} aria-label="Enable hide-after date for ${screen.id}">
-            <input type="datetime-local" class="hide-after-input" value="${screen.hide_after_at ?? ""}" ${screen.hide_after_enabled ? "" : "hidden"}>
-          </div>
-          <div class="hint">When checked, hide after this date/time.</div>
-        </div>
-        <div>
-          <div class="alt-screen-field">
-            <select class="alt-screen-input">
-              ${buildAltScreenOptions(screen.id, screen.alt_screen ?? "")}
-            </select>
-            <button type="button" class="alt-screen-clear" aria-label="Clear alternate screens" title="Clear alternate screens">×</button>
-          </div>
-          <div class="hint">Select one alternate screen.</div>
-        </div>
-        <div>
-          <input type="number" min="0" step="1" value="${screen.extra_seconds ?? 0}" class="extra-seconds-input compact-number-input">
-          <div class="hint">Add seconds to this screen's display time.</div>
-        </div>
-        <div>
-          <input type="number" min="0" step="1" placeholder="1" value="${screen.alt_frequency ?? ""}" class="alt-frequency-input compact-number-input">
-          <div class="hint">Frequency for alternate.</div>
-        </div>
-      `;
-      const select = row.querySelector(".playlist-select");
-      if (!select) {
-        return row;
-      }
+
+      const makeElement = (tag, className, text) => {
+        const element = document.createElement(tag);
+        if (className) element.className = className;
+        if (text !== undefined) element.textContent = text;
+        return element;
+      };
+      const makeInput = (type, className, value) => {
+        const input = makeElement("input", className);
+        input.type = type;
+        input.value = value ?? "";
+        return input;
+      };
+      const addHint = (cell, text) => cell.appendChild(makeElement("div", "hint", text));
+
+      row.appendChild(makeElement("div", "handle", "☰"));
+
+      const idCell = makeElement("div");
+      idCell.appendChild(makeElement("div", "screen-id", screen.id));
+      row.appendChild(idCell);
+
+      const playlistCell = makeElement("div");
+      const select = makeElement("select", "playlist-select");
+      playlistCell.appendChild(select);
+      addHint(playlistCell, "Assign to a playlist.");
+      row.appendChild(playlistCell);
+
+      const frequencyCell = makeElement("div");
+      const frequencyInput = makeInput(
+        "number",
+        "freq-input compact-number-input",
+        screen.frequency ?? 0
+      );
+      frequencyInput.min = "0";
+      frequencyInput.step = "1";
+      frequencyCell.appendChild(frequencyInput);
+      addHint(frequencyCell, "0 disables. 1=every pass, 2=every other pass.");
+      row.appendChild(frequencyCell);
+
+      const speedCell = makeElement("div");
+      const speedField = makeElement("div", "screen-speed-field");
+      const speedLabel = makeElement("label", "screen-speed-toggle");
+      const speedEnabled = makeInput("checkbox", "screen-speed-enabled-input");
+      speedEnabled.checked = Boolean(screen.scroll_speed_enabled);
+      speedEnabled.setAttribute("aria-label", `Override scroll speed for ${screen.id}`);
+      speedLabel.appendChild(speedEnabled);
+      const speedInput = makeInput("range", "screen-speed-input", screen.scroll_speed ?? 1);
+      speedInput.min = "0.25";
+      speedInput.max = "3";
+      speedInput.step = "0.1";
+      speedInput.disabled = !screen.scroll_speed_enabled;
+      const speedValue = makeElement(
+        "output",
+        "screen-speed-value",
+        `${Number(screen.scroll_speed ?? 1).toFixed(1)}×`
+      );
+      speedField.append(speedLabel, speedInput, speedValue);
+      speedCell.appendChild(speedField);
+      addHint(speedCell, "When checked, overrides this screen's scroll speed.");
+      row.appendChild(speedCell);
+
+      const hideCell = makeElement("div");
+      const hideField = makeElement("div", "hide-after-field");
+      const hideEnabled = makeInput("checkbox", "hide-after-enabled-input");
+      hideEnabled.checked = Boolean(screen.hide_after_enabled);
+      hideEnabled.setAttribute("aria-label", `Enable hide-after date for ${screen.id}`);
+      const hideInput = makeInput("datetime-local", "hide-after-input", screen.hide_after_at ?? "");
+      hideInput.hidden = !screen.hide_after_enabled;
+      hideField.append(hideEnabled, hideInput);
+      hideCell.appendChild(hideField);
+      addHint(hideCell, "When checked, hide after this date/time.");
+      row.appendChild(hideCell);
+
+      const alternateCell = makeElement("div");
+      const alternateField = makeElement("div", "alt-screen-field");
+      const alternateSelect = makeElement("select", "alt-screen-input");
+      populateAltScreenOptions(alternateSelect, screen.id, screen.alt_screen ?? "");
+      const clearAlternate = makeElement("button", "alt-screen-clear", "×");
+      clearAlternate.type = "button";
+      clearAlternate.setAttribute("aria-label", "Clear alternate screens");
+      clearAlternate.title = "Clear alternate screens";
+      alternateField.append(alternateSelect, clearAlternate);
+      alternateCell.appendChild(alternateField);
+      addHint(alternateCell, "Select one alternate screen.");
+      row.appendChild(alternateCell);
+
+      const extraCell = makeElement("div");
+      const extraInput = makeInput(
+        "number",
+        "extra-seconds-input compact-number-input",
+        screen.extra_seconds ?? 0
+      );
+      extraInput.min = "0";
+      extraInput.step = "1";
+      extraCell.appendChild(extraInput);
+      addHint(extraCell, "Add seconds to this screen's display time.");
+      row.appendChild(extraCell);
+
+      const alternateFrequencyCell = makeElement("div");
+      const alternateFrequencyInput = makeInput(
+        "number",
+        "alt-frequency-input compact-number-input",
+        screen.alt_frequency ?? ""
+      );
+      alternateFrequencyInput.min = "0";
+      alternateFrequencyInput.step = "1";
+      alternateFrequencyInput.placeholder = "1";
+      alternateFrequencyCell.appendChild(alternateFrequencyInput);
+      addHint(alternateFrequencyCell, "Frequency for alternate.");
+      row.appendChild(alternateFrequencyCell);
+
       const ungrouped = new Option("Ungrouped", "");
       select.appendChild(ungrouped);
       playlists.forEach((playlist) => {

@@ -184,7 +184,7 @@ def test_screen_config_page_labels_multiple_alternate_screens(monkeypatch):
     assert response.status_code == 200
     html = response.get_data(as_text=True)
     assert '<option value="inside, weather1" selected>Multiple</option>' in html
-    assert 'options.push(`<option value="${selectedValue}" selected>Multiple</option>`)' in html
+    assert 'new Option("Multiple", selectedValue, true, true)' in html
 
 
 def test_screen_config_page_no_longer_renders_quad_mode_controls(monkeypatch):
