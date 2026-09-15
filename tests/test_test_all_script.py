@@ -15,6 +15,10 @@ def _load_script_module(name: str, filename: str):
 
 
 test_all = _load_script_module("desk_display_test_all_script", "test_all.py")
+lint_cleanup_report = _load_script_module(
+    "desk_display_lint_cleanup_report", "lint_cleanup_report.py"
+)
+lint_baseline = _load_script_module("desk_display_lint_baseline", "check_lint_baseline.py")
 
 
 def test_discover_standalone_scripts_excludes_aggregate_runner():
@@ -75,8 +79,50 @@ def test_lint_cleanup_option_adds_report_only_ruff_command():
 
     lint_command = commands[-1]
     assert lint_command.name == "staged Ruff cleanup report"
-    assert "--isolated" in lint_command.command
-    assert "--select" in lint_command.command
-    assert lint_command.command[lint_command.command.index("--exclude") + 1] == "vendor"
-    assert "B,C4,PIE,RUF,SIM,UP,PLC,PLE,PLW" in lint_command.command
-    assert lint_command.command[-2:] == ("--exit-zero", "--statistics")
+    assert lint_command.command[-1] == "scripts/lint_cleanup_report.py"
+
+
+def test_lint_cleanup_report_groups_findings_by_module_and_rule():
+    grouped = lint_cleanup_report._group_findings(
+        [
+            {"filename": "/repo/main.py", "code": "RUF001"},
+            {"filename": "/repo/main.py", "code": "RUF001"},
+            {"filename": "/repo/utils.py", "code": "UP006"},
+        ]
+    )
+
+    assert grouped["main.py"] == {"RUF001": 2}
+    assert grouped["utils.py"] == {"UP006": 1}
+
+
+def test_lint_baseline_requires_config_and_baseline_to_match(monkeypatch):
+    monkeypatch.setattr(lint_baseline, "BASELINE", {"main.py": {"RUF001", "SIM102"}})
+
+    assert lint_baseline.find_baseline_drift({"main.py": ["RUF001", "SIM102"]}) == []
+    assert lint_baseline.find_baseline_drift({"main.py": ["RUF001", "SIM102", "B018"]}) == [
+        "main.py: added B018"
+    ]
+    assert lint_baseline.find_baseline_drift({"main.py": ["RUF001"]}) == [
+        "main.py: baseline still contains removed SIM102"
+    ]
+
+
+def test_lint_baseline_python_310_fallback_parses_per_file_ignores(tmp_path, monkeypatch):
+    config_path = tmp_path / "pyproject.toml"
+    config_path.write_text(
+        """
+[tool.ruff.lint.per-file-ignores]
+"main.py" = ["RUF001", "SIM102"]
+"utils.py" = ["UP006"]
+
+[tool.ruff.lint.isort]
+combine-as-imports = true
+""",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(lint_baseline, "tomllib", None)
+
+    assert lint_baseline.load_per_file_ignores(config_path) == {
+        "main.py": ["RUF001", "SIM102"],
+        "utils.py": ["UP006"],
+    }

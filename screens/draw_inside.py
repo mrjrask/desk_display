@@ -24,7 +24,7 @@ import tempfile
 import threading
 import time
 from collections.abc import Callable, Sequence
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Optional
 
@@ -1449,7 +1449,9 @@ def _log_sensor_data(provider: Optional[str], data: dict[str, Optional[float]]) 
         home_dir = Path.home()
         log_file = home_dir / "sensor_data.log"
 
-        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        # Sensor logs are operational artifacts, so use unambiguous UTC rather
+        # than the human-facing display timezone.
+        timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
 
         # Format the sensor readings
         readings = []

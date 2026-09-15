@@ -25,6 +25,7 @@ from config import (
     SCREEN_DELAY,
     TIMES_SQUARE_FONT_PATH,
     WIDTH,
+    display_datetime,
     get_screen_background_color,
 )
 from services.wifi_utils import get_assigned_ipv4
@@ -355,7 +356,7 @@ def _colon_image(height: int) -> Image.Image:
 
 
 def _compose_frame(now: dt.datetime | None = None, *, gh_on: bool = False) -> Image.Image:
-    now = now or dt.datetime.now()
+    now = display_datetime(now)
 
     # Format time according to user preference (12 or 24 hour)
     time_format = _get_time_format()
@@ -475,7 +476,7 @@ def _start_live_updates(display, *, expected_frame_id: int | None = None) -> Non
                 except Exception:
                     return
 
-            now = dt.datetime.now()
+            now = display_datetime()
             if now.second != last_second:
                 last_second = now.second
                 frame = _compose_frame(now, gh_on=gh_on)

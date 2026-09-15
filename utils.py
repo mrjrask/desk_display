@@ -47,9 +47,7 @@ if not hasattr(_ID.ImageDraw, "textsize"):
         return (bbox[2] - bbox[0], bbox[3] - bbox[1])
     _ID.ImageDraw.textsize = _textsize
 # Compatibility for ANTIALIAS (Pillow ≥11)
-try:
-    Image.ANTIALIAS
-except AttributeError:
+if not hasattr(Image, "ANTIALIAS"):
     Image.ANTIALIAS = Image.Resampling.LANCZOS
 
 # Display HAT Mini driver (optional at import time)
@@ -641,7 +639,7 @@ def _convert_argb8888(image: Image.Image, *, order: str = "rgb") -> bytes:
     import numpy as np
 
     rgba = np.array(image.convert("RGBA"), dtype=np.uint8)
-    alpha = np.full(rgba.shape[:2] + (1,), 255, dtype=np.uint8)
+    alpha = np.full((*rgba.shape[:2], 1), 255, dtype=np.uint8)
     rgb = rgba[..., :3]
     if order == "bgr":
         rgb = rgb[..., ::-1]
@@ -696,8 +694,8 @@ class _FrameBufferDevice:
                 self.width / image.width if image.width else 1.0,
                 self.height / image.height if image.height else 1.0,
             )
-            target_w = max(1, int(round(image.width * scale)))
-            target_h = max(1, int(round(image.height * scale)))
+            target_w = max(1, round(image.width * scale))
+            target_h = max(1, round(image.height * scale))
             resized = image.resize((target_w, target_h), Image.Resampling.LANCZOS)
             canvas = Image.new("RGB", (self.width, self.height), "black")
             offset_x = (self.width - target_w) // 2
@@ -845,12 +843,12 @@ class _KernelDisplay:
                 float(
                     os.environ.get(
                         "DESK_DISPLAY_WINDOW_SCALE",
-                        "1.0" if self.window_mode else "1.0",
+                        "1.0",
                     )
                 ),
             )
         except (TypeError, ValueError):
-            self._window_scale = 1.0 if self.window_mode else 1.0
+            self._window_scale = 1.0
         self._window_resizable = os.environ.get(
             "DESK_DISPLAY_WINDOW_RESIZABLE",
             "1",
@@ -1016,8 +1014,8 @@ class _KernelDisplay:
             if self._window_resizable:
                 flags |= self._pygame.RESIZABLE
             requested_size = (
-                max(1, int(round(self.render_width * self._window_scale))),
-                max(1, int(round(self.render_height * self._window_scale))),
+                max(1, round(self.render_width * self._window_scale)),
+                max(1, round(self.render_height * self._window_scale)),
             )
         self._window_flags = flags
         errors: List[str] = []
@@ -1077,8 +1075,8 @@ class _KernelDisplay:
                 self.screen_height / self.render_height,
             )
             target_size = (
-                max(1, int(round(self.render_width * scale_factor))),
-                max(1, int(round(self.render_height * scale_factor))),
+                max(1, round(self.render_width * scale_factor)),
+                max(1, round(self.render_height * scale_factor)),
             )
             surface = self._scale_surface_to_target(surface, target_size)
             self._screen.fill((0, 0, 0))
@@ -1235,7 +1233,7 @@ def _clamp_led_level(value: float) -> float:
 def _normalized_led_to_driver_channel(value: float) -> int:
     """Convert a normalized LED value to the Display HAT Mini 8-bit channel range."""
 
-    return int(round(_clamp_led_level(value) * 255))
+    return round(_clamp_led_level(value) * 255)
 
 
 def _get_led_indicator_level() -> float:
@@ -1780,10 +1778,10 @@ class Display:
         """Create and configure an Adafruit miniPiTFT 1.14 display driver instance."""
 
         spi = board.SPI()
-        cs = digitalio.DigitalInOut(getattr(board, "CE0"))
-        dc = digitalio.DigitalInOut(getattr(board, "D25"))
-        rst = digitalio.DigitalInOut(getattr(board, "D27"))
-        backlight = digitalio.DigitalInOut(getattr(board, "D22"))
+        cs = digitalio.DigitalInOut(board.CE0)
+        dc = digitalio.DigitalInOut(board.D25)
+        rst = digitalio.DigitalInOut(board.D27)
+        backlight = digitalio.DigitalInOut(board.D22)
         backlight.switch_to_output(value=True)
 
         baudrate = int(os.environ.get("MINIPITFT_BAUDRATE", "64000000"))
@@ -2177,9 +2175,9 @@ class Display:
         if value <= 0:
             return 0
         if LED_INDICATOR_LEVEL <= 0:
-            return min(255, int(round(value * 255)))
+            return min(255, round(value * 255))
         normalized = value / LED_INDICATOR_LEVEL
-        return max(1, min(255, int(round(normalized * 255))))
+        return max(1, min(255, round(normalized * 255)))
 
     def is_button_pressed(self, name: str) -> bool:
         """Return True if the named button is currently pressed."""
@@ -2587,7 +2585,7 @@ def animate_scroll(display: Display, image: Image.Image, speed=3.0, y_offset=Non
             return
         frame_start = time.time()
 
-        x_pos = int(round(x))
+        x_pos = round(x)
         frame = Image.new(frame_mode, (w, h), background_color)
         if has_alpha:
             frame.paste(image, (x_pos, y), image)
@@ -2797,7 +2795,7 @@ def compute_adaptive_scroll_params(
     """
 
     settings = _effective_scroll_settings()
-    safe_base_step = max(1, int(round(int(base_step) * settings["speed"])))
+    safe_base_step = max(1, round(int(base_step) * settings["speed"]))
     vertical_speed_multiplier = 1.0 + settings.get("vertical_speed_adjustment", 0.0)
     requested_min_frame_time = float(min_frame_time)
     min_frame_time = max(
@@ -2806,7 +2804,7 @@ def compute_adaptive_scroll_params(
     )
     max_dimension = max(int(viewport_width), int(viewport_height), 1)
     resolution_scale = max(1.0, max_dimension / 320.0)
-    step = max(safe_base_step, int(round(safe_base_step * resolution_scale)))
+    step = max(safe_base_step, round(safe_base_step * resolution_scale))
     if max_step is not None:
         step = min(step, max(1, int(max_step)))
 
@@ -2991,7 +2989,7 @@ def _read_scroll_drag_events(
         if isinstance(pos, tuple) and len(pos) >= 2:
             return max(0.0, min(display_height, float(pos[1])))
         if hasattr(event, "y"):
-            return max(0.0, min(display_height, float(getattr(event, "y"))))
+            return max(0.0, min(display_height, float(event.y)))
         return None
 
     fingerdown = getattr(pygame_module, "FINGERDOWN", None)
@@ -3084,7 +3082,7 @@ def scroll_vertical_content(
                 continue
             delta_y = drag_event.y - last_drag_y
             last_drag_y = drag_event.y
-            next_offset = max(0, min(max_offset, int(round(updated_offset - delta_y))))
+            next_offset = max(0, min(max_offset, round(updated_offset - delta_y)))
             last_manual_movement = time.monotonic()
             if next_offset == updated_offset:
                 continue
@@ -3416,7 +3414,7 @@ def standard_next_game_logo_height_for_space(
 ) -> int:
     """Return a shared next-game logo height constrained by available space."""
     clamped_scale = max(0.5, min(float(scale or 1.0), 1.2))
-    desired = max(1, int(round(standard_next_game_logo_height(panel_height) * clamped_scale)))
+    desired = max(1, round(standard_next_game_logo_height(panel_height) * clamped_scale))
     return max(1, min(desired, max(1, available_height)))
 
 
@@ -3431,7 +3429,7 @@ def standard_scoreboard_team_logo_height(panel_height: int, *, compact: bool = F
 
 def standard_scoreboard_league_logo_height(team_logo_height: int) -> int:
     """Return the shared scoreboard league logo height for the given team logo height."""
-    return int(round(max(1, team_logo_height) * 1.25))
+    return round(max(1, team_logo_height) * 1.25)
 
 
 def standard_next_game_logo_frame_width(
@@ -3444,7 +3442,7 @@ def standard_next_game_logo_frame_width(
     """
 
     # Slightly wider than tall to give horizontally oriented marks breathing room.
-    min_width = int(round(max(1, logo_height) * 1.1))
+    min_width = round(max(1, logo_height) * 1.1)
     max_logo_width = max((logo.width for logo in logos if logo), default=0)
     return max(min_width, max_logo_width)
 
@@ -3457,8 +3455,8 @@ def fit_logo_to_box(logo: Image.Image | None, box_size: int) -> Image.Image | No
     if width <= 0 or height <= 0:
         return logo
     scale = min(box_size / float(width), box_size / float(height))
-    new_width = max(1, int(round(width * scale)))
-    new_height = max(1, int(round(height * scale)))
+    new_width = max(1, round(width * scale))
+    new_height = max(1, round(height * scale))
     if new_width == width and new_height == height:
         return logo
     return logo.resize((new_width, new_height), Image.LANCZOS)
@@ -4365,7 +4363,7 @@ def _render_wind(size: int) -> Image.Image:
     icon = Image.new("RGBA", (size, size), (0, 0, 0, 0))
     draw = ImageDraw.Draw(icon)
     y = size * 0.35
-    for idx in range(3):
+    for _idx in range(3):
         draw.arc((size * 0.18, y - size * 0.05, size * 0.9, y + size * 0.25), start=200, end=350, fill=(180, 220, 255, 255), width=max(2, size // 24))
         y += size * 0.18
     return icon
@@ -4566,7 +4564,7 @@ def load_github_icon(size: int, invert: bool, paths: list[str]) -> Image.Image |
         icon = Image.open(path).convert("RGBA")
         if icon.height != size:
             ratio = size / float(icon.height)
-            icon = icon.resize((max(1, int(round(icon.width * ratio))), size), Image.ANTIALIAS)
+            icon = icon.resize((max(1, round(icon.width * ratio)), size), Image.ANTIALIAS)
 
         if invert:
             r, g, b, a = icon.split()

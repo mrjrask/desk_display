@@ -22,9 +22,6 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 SCRIPTS_DIR = REPO_ROOT / "scripts"
 THIS_FILE = Path(__file__).resolve()
 
-STAGED_RUFF_CLEANUP_RULES = ("B", "C4", "PIE", "RUF", "SIM", "UP", "PLC", "PLE", "PLW")
-STAGED_RUFF_CLEANUP_IGNORES = ("B008", "PLW0603")
-
 
 @dataclass(frozen=True)
 class TestCommand:
@@ -64,6 +61,10 @@ def _build_commands(pytest_args: Sequence[str]) -> list[TestCommand]:
             ),
         ),
         TestCommand(
+            name="Ruff suppression baseline",
+            command=(sys.executable, "scripts/check_lint_baseline.py"),
+        ),
+        TestCommand(
             name="pytest suite",
             command=(sys.executable, "-m", "pytest", *pytest_args),
         ),
@@ -85,32 +86,15 @@ def _build_diagnostic_commands() -> list[TestCommand]:
 def _build_lint_cleanup_command() -> TestCommand:
     """Return the report-only Ruff command for staged lint cleanup.
 
-    Run isolated from pyproject so per-file ignores for staged legacy modules
-    do not hide the violations this cleanup report is intended to surface. Vendored
-    sensor libraries stay excluded because they are not part of the cleanup migration.
+    The helper runs isolated from pyproject so staged per-file ignores do not hide
+    findings, then groups its report by target module and exact rule code.
     """
 
     return TestCommand(
         name="staged Ruff cleanup report",
         command=(
             sys.executable,
-            "-m",
-            "ruff",
-            "check",
-            ".",
-            "--isolated",
-            "--target-version",
-            "py311",
-            "--line-length",
-            "100",
-            "--exclude",
-            "vendor",
-            "--select",
-            ",".join(STAGED_RUFF_CLEANUP_RULES),
-            "--ignore",
-            ",".join(STAGED_RUFF_CLEANUP_IGNORES),
-            "--exit-zero",
-            "--statistics",
+            "scripts/lint_cleanup_report.py",
         ),
     )
 
@@ -123,9 +107,7 @@ def _print_command(command: TestCommand) -> None:
 
 def _run_command(command: TestCommand) -> int:
     _print_command(command)
-    completed = subprocess.run(
-        command.command, cwd=REPO_ROOT, env=os.environ.copy(), check=False
-    )
+    completed = subprocess.run(command.command, cwd=REPO_ROOT, env=os.environ.copy(), check=False)
     return completed.returncode
 
 
