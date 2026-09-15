@@ -207,7 +207,11 @@ def test_alternate_frequency_counts_scheduled_appearances_not_raw_passes():
         }
     )
 
-    sequence = collect_played_ids(scheduler, registry, 10)
+    # The second entry becomes due in the same scheduler pass as the first, but
+    # is returned on the following call from the pending queue.  Observe that
+    # call so both third presentations are included without re-advancing a new
+    # pass after the cursor wraps.
+    sequence = collect_played_ids(scheduler, registry, 11)
 
     assert sequence == [
         "NFL Overview NFC",
