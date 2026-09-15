@@ -8,6 +8,8 @@ import logging
 import os
 import socket
 import subprocess
+import tempfile
+import threading
 import time
 from datetime import datetime
 from pathlib import Path
@@ -86,6 +88,7 @@ HIDDEN_CONFIG_SCREEN_IDS = {
     "cubs last 2",
     "sox last 2",
 }
+_CONFIG_SAVE_LOCK = threading.RLock()
 
 
 def _canonicalize_screen_reference(value: Any) -> Any:
@@ -499,12 +502,101 @@ def _load_active_layouts_config() -> dict[str, Any]:
     return _load_layouts_config(LAYOUTS_CONFIG_PATH)
 
 
+def _stage_json_file(target: Path, payload: dict[str, Any]) -> Path:
+    """Write *payload* to a unique, durable temporary file beside *target*."""
+
+    target.parent.mkdir(parents=True, exist_ok=True)
+    staged_path: Optional[Path] = None
+    try:
+        with tempfile.NamedTemporaryFile(
+            mode="w",
+            encoding="utf-8",
+            dir=target.parent,
+            prefix=f".{target.name}.",
+            suffix=".tmp",
+            delete=False,
+        ) as fh:
+            staged_path = Path(fh.name)
+            json.dump(payload, fh, indent=2)
+            fh.write("\n")
+            fh.flush()
+            os.fsync(fh.fileno())
+        return staged_path
+    except Exception:
+        if staged_path is not None:
+            staged_path.unlink(missing_ok=True)
+        raise
+
+
+def _stage_backup(target: Path) -> Optional[Path]:
+    """Stage the current bytes of *target* for rollback, if it exists."""
+
+    if not target.exists():
+        return None
+    backup_path: Optional[Path] = None
+    try:
+        with target.open("rb") as source, tempfile.NamedTemporaryFile(
+            mode="wb",
+            dir=target.parent,
+            prefix=f".{target.name}.",
+            suffix=".bak",
+            delete=False,
+        ) as backup:
+            backup_path = Path(backup.name)
+            while chunk := source.read(1024 * 1024):
+                backup.write(chunk)
+            backup.flush()
+            os.fsync(backup.fileno())
+        return backup_path
+    except Exception:
+        if backup_path is not None:
+            backup_path.unlink(missing_ok=True)
+        raise
+
+
+def _save_json_files(files: list[tuple[Path, dict[str, Any]]]) -> None:
+    """Persist related JSON files as one serialized, rollback-safe operation."""
+
+    with _CONFIG_SAVE_LOCK:
+        staged: dict[Path, Path] = {}
+        backups: dict[Path, Optional[Path]] = {}
+        committed: list[Path] = []
+        try:
+            for target, payload in files:
+                staged[target] = _stage_json_file(target, payload)
+            for target, _payload in files:
+                backups[target] = _stage_backup(target)
+
+            for target, _payload in files:
+                os.replace(staged[target], target)
+                committed.append(target)
+        except Exception:
+            rollback_errors: list[OSError] = []
+            for target in reversed(committed):
+                backup = backups.get(target)
+                try:
+                    if backup is None:
+                        target.unlink(missing_ok=True)
+                    else:
+                        os.replace(backup, target)
+                except OSError as exc:
+                    rollback_errors.append(exc)
+            if rollback_errors:
+                raise RuntimeError(
+                    "Configuration save failed and rollback was incomplete"
+                ) from rollback_errors[0]
+            raise
+        finally:
+            temporary_files = (
+                *staged.values(),
+                *(path for path in backups.values() if path is not None),
+            )
+            for temporary in temporary_files:
+                temporary.unlink(missing_ok=True)
+
+
 def _save_layouts_config(config: dict[str, Any]) -> None:
-    tmp_path = f"{LAYOUTS_CONFIG_PATH}.tmp"
-    with open(tmp_path, "w", encoding="utf-8") as fh:
-        json.dump(config, fh, indent=2)
-        fh.write("\n")
-    os.replace(tmp_path, LAYOUTS_CONFIG_PATH)
+    _save_json_files([(Path(LAYOUTS_CONFIG_PATH), config)])
 
 
 def _build_layouts(entries: dict[str, Any]) -> dict[str, Any]:
@@ -1127,11 +1219,16 @@ def _build_config(entries: list[dict[str, Any]]) -> dict[str, Any]:
 
 
 def _save_config(config: dict[str, Any]) -> None:
-    tmp_path = f"{LOCAL_CONFIG_PATH}.tmp"
-    with open(tmp_path, "w", encoding="utf-8") as fh:
-        json.dump(config, fh, indent=2)
-        fh.write("\n")
-    os.replace(tmp_path, LOCAL_CONFIG_PATH)
+    _save_json_files([(Path(LOCAL_CONFIG_PATH), config)])
+
+
+def _save_config_bundle(config: dict[str, Any], layouts: dict[str, Any]) -> None:
+    _save_json_files(
+        [
+            (Path(LOCAL_CONFIG_PATH), config),
+            (Path(LAYOUTS_CONFIG_PATH), layouts),
+        ]
+    )
 
 
 def run_config_ui(host: str = SCREEN_CONFIG_HOST, port: int = SCREEN_CONFIG_PORT) -> None:
@@ -1399,8 +1496,7 @@ def save_screens() -> Any:
     except Exception as exc:
         return jsonify({"error": str(exc)}), 400
 
-    _save_config(config)
-    _save_layouts_config(layouts)
+    _save_config_bundle(config, layouts)
     return jsonify(
         {
             "status": "ok",
@@ -1451,8 +1547,7 @@ def import_screens() -> Any:
     else:
         layouts_config = _load_active_layouts_config()
 
-    _save_config(config)
-    _save_layouts_config(layouts_config)
+    _save_config_bundle(config, layouts_config)
     entries = _build_screen_entries(config, _load_active_style_config())
     return jsonify(
         {
