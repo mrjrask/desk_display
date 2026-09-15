@@ -52,6 +52,10 @@ class ScreenScheduler:
     def __init__(self, entries: Sequence[_ScheduleEntry]):
         self._entries: list[_ScheduleEntry] = list(entries)
         self._cursor: int = 0
+        self._pending_indices: list[int] = []
+        self._synchronize_alternate_passes = sum(
+            entry.alternate is not None for entry in self._entries
+        ) > 1
         self._extra_seconds_by_id: dict[str, int] = {}
         requested: set[str] = set()
         for entry in self._entries:
@@ -121,6 +125,7 @@ class ScreenScheduler:
 
         preview = ScreenScheduler(cloned_entries)
         preview._cursor = self._cursor
+        preview._pending_indices = self._pending_indices.copy()
 
         scheduled_ids: list[str] = []
         for _ in range(limit):
@@ -136,6 +141,11 @@ class ScreenScheduler:
 
         if not self._entries:
             return None
+
+        if self._pending_indices:
+            entry_index = self._pending_indices.pop(0)
+            self._cursor = (entry_index + 1) % len(self._entries)
+            return self._scheduled_id_for(self._entries[entry_index])
 
         now_utc = datetime.now(UTC)
         for _ in range(len(self._entries)):
@@ -155,8 +165,11 @@ class ScreenScheduler:
                     and entry.alternate.frequency > 0
                     and entry.presentation_count % entry.alternate.frequency == 0
                 ):
-                    return entry.alternate.next_screen_id()
-                return entry.screen_id
+                    result = entry.alternate.next_screen_id()
+                else:
+                    result = entry.screen_id
+                self._queue_due_unvisited_entries(self._cursor)
+                return result
 
             if entry.cycle_count % entry.frequency != 0:
                 continue
@@ -167,15 +180,58 @@ class ScreenScheduler:
                 and entry.alternate.frequency > 0
                 and entry.presentation_count % entry.alternate.frequency == 0
             ):
-                return entry.alternate.next_screen_id()
-
-            return entry.screen_id
+                result = entry.alternate.next_screen_id()
+            else:
+                result = entry.screen_id
+            self._queue_due_unvisited_entries(self._cursor)
+            return result
 
         return None
+
+    def _scheduled_id_for(self, entry: _ScheduleEntry) -> str:
+        """Resolve one already-due entry and advance its presentation count."""
+
+        entry.presentation_count += 1
+        if (
+            entry.alternate
+            and entry.alternate.frequency > 0
+            and entry.presentation_count % entry.alternate.frequency == 0
+        ):
+            return entry.alternate.next_screen_id()
+        return entry.screen_id
+
+    def _queue_due_unvisited_entries(self, start_index: int) -> None:
+        """Advance the rest of this scheduler pass without losing due entries."""
+
+        if not self._entries or not self._synchronize_alternate_passes:
+            return
+        index = start_index
+        selected_index = (self._cursor - 1) % len(self._entries)
+        while index != selected_index:
+            entry = self._entries[index]
+            if entry.initial_cycle_seen and entry.frequency > 0:
+                entry.cycle_count += 1
+                if entry.cycle_count % entry.frequency == 0:
+                    self._pending_indices.append(index)
+            index = (index + 1) % len(self._entries)
+            if index == start_index:
+                break
 
     def next_available(self, registry: dict[str, ScreenDefinition]) -> Optional[ScreenDefinition]:
         if not self._entries:
             return None
+
+        while self._pending_indices:
+            entry_index = self._pending_indices.pop(0)
+            self._cursor = (entry_index + 1) % len(self._entries)
+            entry = self._entries[entry_index]
+            candidate_id = self._scheduled_id_for(entry)
+            definition = registry.get(candidate_id)
+            if definition and definition.available:
+                return definition
+            fallback = registry.get(entry.screen_id)
+            if fallback and fallback.available:
+                return fallback
 
         now_utc = datetime.now(UTC)
         for _ in range(len(self._entries)):
@@ -202,9 +258,11 @@ class ScreenScheduler:
                         alt_id = alternate.next_screen_id()
                         alt_def = registry.get(alt_id)
                         if alt_def and alt_def.available:
+                            self._queue_due_unvisited_entries(self._cursor)
                             return alt_def
                 definition = registry.get(entry.screen_id)
                 if definition and definition.available:
+                    self._queue_due_unvisited_entries(self._cursor)
                     return definition
                 continue
 
@@ -223,10 +281,12 @@ class ScreenScheduler:
                     alt_id = alternate.next_screen_id()
                     alt_def = registry.get(alt_id)
                     if alt_def and alt_def.available:
+                        self._queue_due_unvisited_entries(self._cursor)
                         return alt_def
 
             definition = registry.get(candidate_id)
             if definition and definition.available:
+                self._queue_due_unvisited_entries(self._cursor)
                 return definition
 
         return None
