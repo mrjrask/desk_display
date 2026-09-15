@@ -118,6 +118,13 @@ class DataProvider:
         leagues: Optional[set[str]] = None,
         force_refresh_leagues: Optional[set[str]] = None,
     ) -> dict[str, Any]:
+        supported_leagues = {"nfl", "mlb", "nba", "ncaam", "nhl", "world_cup"}
+        selected_leagues = frozenset(
+            league
+            for league in (leagues or supported_leagues)
+            if league in supported_leagues
+        )
+
         def _fetch_payloads() -> dict[str, Any]:
             now = dt.datetime.now(CENTRAL_TIME)
             today = now.date()
@@ -143,9 +150,6 @@ class DataProvider:
                 "world_cup": lambda: fetch_world_cup_scoreboard(now=now),
             }
 
-            selected_leagues = {
-                league for league in (leagues or set(all_tasks.keys())) if league in all_tasks
-            }
             tasks = {league: fetcher for league, fetcher in all_tasks.items() if league in selected_leagues}
 
             scoreboards: dict[str, Any] = {league: [] for league in all_tasks}
@@ -185,7 +189,13 @@ class DataProvider:
                 "scoreboard_metadata": scoreboard_metadata,
             }
 
-        return self._read_cached("sports_payloads", _fetch_payloads, ttl_seconds)
+        cache_key = "sports_payloads:" + ",".join(sorted(selected_leagues))
+        force_refresh = bool(selected_leagues.intersection(force_refresh_leagues or set()))
+        return self._read_cached(
+            cache_key,
+            _fetch_payloads,
+            0 if force_refresh else ttl_seconds,
+        )
 
 
 provider = DataProvider()
