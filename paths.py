@@ -161,7 +161,7 @@ def _migrate_legacy_root_history(legacy_path: Path, canonical_path: Path) -> Non
         return
     try:
         canonical_path.parent.mkdir(parents=True, exist_ok=True)
-        with _migration_lock(canonical_path.parent / ".history_migration.lock"):
+        with cache_file_lock(canonical_path):
             _migrate_legacy_root_history_locked(legacy_path, canonical_path)
     except OSError as exc:
         logger.warning(
@@ -242,9 +242,11 @@ def _copy_history_staged(legacy_path: Path, canonical_path: Path) -> None:
 
 
 @contextmanager
-def _migration_lock(lock_path: Path):
-    """Hold an interprocess lock while checking and publishing history."""
+def cache_file_lock(cache_path: Path | str):
+    """Serialize migration and atomic replacement of a cache file."""
 
+    lock_path = Path(cache_path).parent / ".history_migration.lock"
+    lock_path.parent.mkdir(parents=True, exist_ok=True)
     with lock_path.open("a+b") as lock_file:
         if os.name == "nt":
             lock_file.seek(0)

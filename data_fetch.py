@@ -66,7 +66,7 @@ from config import (
     WEATHERKIT_TIMEZONE,
     WEATHERKIT_URL_TEMPLATE,
 )
-from paths import resolve_cache_file_path
+from paths import cache_file_lock, resolve_cache_file_path
 from services.http_client import NHL_HEADERS, get_session
 from services.sports.nba import fetch_team_schedule as _nba_fetch_team_schedule
 
@@ -241,7 +241,8 @@ def _save_pressure_history(now_ts: float) -> None:
             ) as fh:
                 tmp_path = fh.name
                 json.dump(payload, fh)
-            os.replace(tmp_path, path)
+            with cache_file_lock(path):
+                os.replace(tmp_path, path)
             _PRESSURE_HISTORY_LAST_SAVE = now_ts
         except Exception as exc:
             logging.warning("Unable to save pressure history to %s: %s", path, exc)
@@ -309,7 +310,8 @@ def _save_weather_metric_history() -> None:
             ) as fh:
                 tmp_path = fh.name
                 json.dump(payload, fh)
-            os.replace(tmp_path, path)
+            with cache_file_lock(path):
+                os.replace(tmp_path, path)
         except Exception as exc:
             logging.warning("Unable to save weather metric history to %s: %s", path, exc)
             if tmp_path:
