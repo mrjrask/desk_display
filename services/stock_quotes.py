@@ -33,6 +33,11 @@ INDEX_LABELS: dict[str, str] = {
 TOP_MARKET_CAP_SYMBOLS: list[str] = ["NVDA", "AAPL", "MSFT", "GOOGL", "AMZN"]
 
 _FETCH_TIMEOUT_BUDGET_SECONDS = 8.0
+_QUOTE_WORKER_COUNT = 12
+_QUOTE_EXECUTOR = ThreadPoolExecutor(
+    max_workers=_QUOTE_WORKER_COUNT,
+    thread_name_prefix="stock-quote",
+)
 
 
 def default_symbol_order() -> list[str]:
@@ -144,17 +149,16 @@ def fetch_stock_quotes(
             return [_quotes_cache_value[symbol] for symbol in symbols]
 
     results: dict[str, StockQuote] = {}
-    with ThreadPoolExecutor(max_workers=max(1, len(symbols))) as executor:
-        future_to_symbol = {executor.submit(fetch_quote, symbol): symbol for symbol in symbols}
-        done, pending = wait(future_to_symbol, timeout=_FETCH_TIMEOUT_BUDGET_SECONDS)
-        for future in done:
-            symbol = future_to_symbol[future]
-            try:
-                results[symbol] = future.result()
-            except Exception as exc:
-                logging.debug("stock_quotes: symbol %s raised: %s", symbol, exc)
-        for future in pending:
-            future.cancel()
+    future_to_symbol = {_QUOTE_EXECUTOR.submit(fetch_quote, symbol): symbol for symbol in symbols}
+    done, pending = wait(future_to_symbol, timeout=_FETCH_TIMEOUT_BUDGET_SECONDS)
+    for future in done:
+        symbol = future_to_symbol[future]
+        try:
+            results[symbol] = future.result()
+        except Exception as exc:
+            logging.debug("stock_quotes: symbol %s raised: %s", symbol, exc)
+    for future in pending:
+        future.cancel()
 
     with _quotes_cache_lock:
         for symbol, quote in results.items():
