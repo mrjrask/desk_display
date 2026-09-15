@@ -363,6 +363,13 @@ def _get_auth_password() -> str:
     return os.environ.get("SCREEN_UI_PASSWORD", SCREEN_UI_PASSWORD)
 
 
+def _validate_auth_configuration() -> None:
+    if _is_auth_enabled() and not _get_auth_password():
+        raise RuntimeError(
+            "SCREEN_AUTH_ENABLED requires SCREEN_UI_PASSWORD to be configured"
+        )
+
+
 def _is_authenticated() -> bool:
     return bool(session.get("screen_ui_authenticated"))
 
@@ -1330,6 +1337,7 @@ def _save_config_bundle(config: dict[str, Any], layouts: dict[str, Any]) -> None
 
 
 def run_config_ui(host: str = SCREEN_CONFIG_HOST, port: int = SCREEN_CONFIG_PORT) -> None:
+    _validate_auth_configuration()
     if not logging.getLogger().handlers:
         logging.basicConfig(
             level=logging.INFO,
