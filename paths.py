@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 """Shared helpers for locating project runtime/config paths.
 
 Centralizing path resolution here keeps environment variable precedence and
@@ -7,13 +5,22 @@ fallback behavior consistent across CLI code, background services, and the web
 configuration UI.
 """
 
+from __future__ import annotations
+
+import logging
 import os
+import shutil
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional
 
 APP_DIR_NAME = "desk_display_display_hat_mini"
 _SHARED_HINT_PATH = Path(__file__).resolve().parent / ".data_dir_hint"
+_LEGACY_ROOT_HISTORY_FILES = frozenset(
+    {"pressure_history.json", "weather_metric_history.json"}
+)
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -84,7 +91,9 @@ def resolve_layouts_config_path() -> Path:
     """Resolve the layouts config path from env or project default."""
 
     base_dir = _project_root()
-    return _resolve_env_path("SCREENS_LAYOUTS_PATH", base_dir) or (base_dir / "screens_layouts.json")
+    return _resolve_env_path("SCREENS_LAYOUTS_PATH", base_dir) or (
+        base_dir / "screens_layouts.json"
+    )
 
 
 def resolve_news_feeds_config_path() -> Path:
@@ -108,7 +117,9 @@ def resolve_news_feeds_config_path_2() -> Path:
     """
 
     base_dir = _project_root()
-    return _resolve_env_path("NEWS_FEEDS_CONFIG_PATH_2", base_dir) or (base_dir / "news_feeds_2.json")
+    return _resolve_env_path("NEWS_FEEDS_CONFIG_PATH_2", base_dir) or (
+        base_dir / "news_feeds_2.json"
+    )
 
 
 def resolve_cache_file_path(env_var: str, filename: str) -> Path:
@@ -118,13 +129,58 @@ def resolve_cache_file_path(env_var: str, filename: str) -> Path:
     1. ``env_var`` override (absolute, or relative to the project root).
     2. Project-root default: ``cache/<filename>``.
 
-    Callers (pressure/weather/air-quality/inside history, on-this-day cache)
-    create the parent directory themselves on write, so this only resolves
-    the path.
+    The two weather history files formerly stored at the project root are
+    migrated to ``cache/`` when their default paths are resolved. Explicit
+    environment overrides are returned unchanged and never trigger migration.
+    Other callers create the parent directory themselves on write.
     """
 
     base_dir = _project_root()
-    return _resolve_env_path(env_var, base_dir) or (base_dir / "cache" / filename)
+    override = _resolve_env_path(env_var, base_dir)
+    if override is not None:
+        return override
+
+    canonical_path = base_dir / "cache" / filename
+    if filename in _LEGACY_ROOT_HISTORY_FILES:
+        _migrate_legacy_root_history(base_dir / filename, canonical_path)
+    return canonical_path
+
+
+def _migrate_legacy_root_history(legacy_path: Path, canonical_path: Path) -> None:
+    """Move a legacy root history file without replacing canonical data."""
+
+    if not legacy_path.exists():
+        return
+    if canonical_path.exists():
+        logger.warning(
+            "Legacy history file %s was not migrated because canonical history "
+            "file %s already exists; preserving both files.",
+            legacy_path,
+            canonical_path,
+        )
+        return
+
+    try:
+        canonical_path.parent.mkdir(parents=True, exist_ok=True)
+        # Recheck after creating the directory so a concurrent initializer
+        # cannot cause us to overwrite its canonical history.
+        if canonical_path.exists():
+            logger.warning(
+                "Legacy history file %s was not migrated because canonical history "
+                "file %s already exists; preserving both files.",
+                legacy_path,
+                canonical_path,
+            )
+            return
+        shutil.move(str(legacy_path), str(canonical_path))
+        logger.info("Migrated legacy history file %s to %s.", legacy_path, canonical_path)
+    except OSError as exc:
+        logger.warning(
+            "Could not migrate legacy history file %s to %s: %s",
+            legacy_path,
+            canonical_path,
+            exc,
+        )
 
 
 def resolve_storage_paths(*, logger: Optional[object] = None) -> StoragePaths:

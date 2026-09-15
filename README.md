@@ -385,6 +385,13 @@ Configuration is environment-driven. Put local values in `.env` for development 
 | `OWM_API_KEY`, `OWM_UNITS`, `OWM_LANGUAGE` | OpenWeatherMap fallback settings. |
 | `INSIDE_SENSOR`, `INSIDE_I2C_BUSES` | Indoor sensor selection and I2C bus probing. |
 | `PRESSURE_HISTORY_PATH` | Pressure history cache path for trend display. Defaults to `cache/pressure_history.json`. |
+| `WEATHER_METRIC_HISTORY_PATH` | Weather metric chart history path. Defaults to `cache/weather_metric_history.json`. |
+
+On startup, legacy `pressure_history.json` and `weather_metric_history.json`
+files at the project root are moved into `cache/` when the corresponding path
+override is unset. If both a legacy and canonical file exist, the canonical
+file is preserved and a warning is logged; the legacy file is left in place
+for manual reconciliation.
 
 Set `INSIDE_SENSOR` to `adafruit_bme280`, `adafruit_bme680`, or `adafruit_sht4x` before running an installer when you need optional Adafruit/CircuitPython sensor drivers. Set it to `pimoroni_bme280`, `pimoroni_bme680`, or `pimoroni_bme68x` when you need the optional vendored Pimoroni sensor drivers. If those optional drivers are absent, the inside screen keeps its normal fallback behavior and is skipped when no supported sensor can be probed.
 
