@@ -160,6 +160,25 @@ def test_history_migration_copies_exclusively_when_hard_links_are_unavailable(
     assert not legacy.exists()
 
 
+def test_history_copy_fallback_is_not_visible_until_complete(tmp_path, monkeypatch):
+    legacy = tmp_path / "pressure_history.json"
+    canonical = tmp_path / "cache" / "pressure_history.json"
+    canonical.parent.mkdir()
+    legacy.write_text('{"source": "legacy"}', encoding="utf-8")
+    real_copyfileobj = paths.shutil.copyfileobj
+
+    def assert_private_staging(source, destination):
+        assert not canonical.exists()
+        assert paths.Path(destination.name).exists()
+        real_copyfileobj(source, destination)
+
+    monkeypatch.setattr(paths.shutil, "copyfileobj", assert_private_staging)
+
+    paths._copy_history_staged(legacy, canonical)
+
+    assert canonical.read_text(encoding="utf-8") == '{"source": "legacy"}'
+
+
 @pytest.mark.parametrize(("env_var", "filename"), HISTORY_PATHS)
 def test_resolve_cache_history_path_honors_environment_override_without_migration(
     tmp_path, monkeypatch, env_var, filename

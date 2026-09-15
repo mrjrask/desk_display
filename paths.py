@@ -11,9 +11,16 @@ import errno
 import logging
 import os
 import shutil
+import tempfile
+from contextlib import contextmanager, suppress
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional
+
+if os.name == "nt":
+    import msvcrt
+else:
+    import fcntl
 
 APP_DIR_NAME = "desk_display_display_hat_mini"
 _SHARED_HINT_PATH = Path(__file__).resolve().parent / ".data_dir_hint"
@@ -152,6 +159,24 @@ def _migrate_legacy_root_history(legacy_path: Path, canonical_path: Path) -> Non
 
     if not legacy_path.exists():
         return
+    try:
+        canonical_path.parent.mkdir(parents=True, exist_ok=True)
+        with _migration_lock(canonical_path.parent / ".history_migration.lock"):
+            _migrate_legacy_root_history_locked(legacy_path, canonical_path)
+    except OSError as exc:
+        logger.warning(
+            "Could not migrate legacy history file %s to %s: %s",
+            legacy_path,
+            canonical_path,
+            exc,
+        )
+
+
+def _migrate_legacy_root_history_locked(legacy_path: Path, canonical_path: Path) -> None:
+    """Perform migration while other startup migrations are excluded."""
+
+    if not legacy_path.exists():
+        return
     if canonical_path.exists():
         logger.warning(
             "Legacy history file %s was not migrated because canonical history "
@@ -162,12 +187,11 @@ def _migrate_legacy_root_history(legacy_path: Path, canonical_path: Path) -> Non
         return
 
     try:
-        canonical_path.parent.mkdir(parents=True, exist_ok=True)
         # Prefer a hard link because it publishes the complete legacy file
         # atomically and, unlike rename/shutil.move on POSIX, cannot replace a
         # destination created after the exists() check. Some cache mounts do
         # not share a filesystem or permit hard links, so fall back to an
-        # exclusive copy there. Unlinking the old name completes the move.
+        # staged copy there. Unlinking the old name completes the move.
         try:
             os.link(legacy_path, canonical_path)
         except OSError as exc:
@@ -178,7 +202,7 @@ def _migrate_legacy_root_history(legacy_path: Path, canonical_path: Path) -> Non
                 errno.ENOTSUP,
             }:
                 raise
-            _copy_history_exclusive(legacy_path, canonical_path)
+            _copy_history_staged(legacy_path, canonical_path)
         legacy_path.unlink()
         logger.info("Migrated legacy history file %s to %s.", legacy_path, canonical_path)
     except FileExistsError:
@@ -197,26 +221,48 @@ def _migrate_legacy_root_history(legacy_path: Path, canonical_path: Path) -> Non
         )
 
 
-def _copy_history_exclusive(legacy_path: Path, canonical_path: Path) -> None:
-    """Copy history to a newly created destination without replacing a file."""
+def _copy_history_staged(legacy_path: Path, canonical_path: Path) -> None:
+    """Copy history privately, then atomically publish it under the held lock."""
 
-    destination_inode: Optional[int] = None
+    temporary_path: Optional[Path] = None
     try:
-        with legacy_path.open("rb") as source, canonical_path.open("xb") as destination:
-            destination_inode = os.fstat(destination.fileno()).st_ino
+        with legacy_path.open("rb") as source, tempfile.NamedTemporaryFile(
+            mode="wb", dir=canonical_path.parent, prefix=f".{canonical_path.name}.", delete=False
+        ) as destination:
+            temporary_path = Path(destination.name)
             shutil.copyfileobj(source, destination)
             destination.flush()
             os.fsync(destination.fileno())
-    except Exception:
-        if destination_inode is not None:
-            # Remove only the incomplete file created by this attempt. A
-            # concurrent os.replace may have installed a different inode.
-            try:
-                if canonical_path.stat().st_ino == destination_inode:
-                    canonical_path.unlink()
-            except OSError:
-                pass
-        raise
+        os.replace(temporary_path, canonical_path)
+        temporary_path = None
+    finally:
+        if temporary_path is not None:
+            with suppress(OSError):
+                temporary_path.unlink()
+
+
+@contextmanager
+def _migration_lock(lock_path: Path):
+    """Hold an interprocess lock while checking and publishing history."""
+
+    with lock_path.open("a+b") as lock_file:
+        if os.name == "nt":
+            lock_file.seek(0)
+            if not lock_file.read(1):
+                lock_file.write(b"\0")
+                lock_file.flush()
+            lock_file.seek(0)
+            msvcrt.locking(lock_file.fileno(), msvcrt.LK_LOCK, 1)
+        else:
+            fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX)
+        try:
+            yield
+        finally:
+            if os.name == "nt":
+                lock_file.seek(0)
+                msvcrt.locking(lock_file.fileno(), msvcrt.LK_UNLCK, 1)
+            else:
+                fcntl.flock(lock_file.fileno(), fcntl.LOCK_UN)
 
 
 def resolve_storage_paths(*, logger: Optional[object] = None) -> StoragePaths:
