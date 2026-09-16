@@ -37,11 +37,6 @@ _AIRCRAFT_JSON_PATHS: tuple[str, ...] = (
     "/skyaware/data/aircraft.json",
     "/data/aircraft.json",
 )
-_STATS_JSON_PATHS: tuple[str, ...] = (
-    "/dump1090-fa/data/stats.json",
-    "/skyaware/data/stats.json",
-    "/data/stats.json",
-)
 _working_path_index: dict[str, int] = {}
 
 _SCHEMA_SQL = """
@@ -259,13 +254,13 @@ def _fill_missing_types(sightings: list[AircraftSighting]) -> list[AircraftSight
     return filled
 
 
-def _extract_messages_total(stats_payload: Any) -> Optional[int]:
-    if not isinstance(stats_payload, dict):
+def _extract_messages_total(payload: Any) -> Optional[int]:
+    if not isinstance(payload, dict):
         return None
-    total_section = stats_payload.get("total")
+    total_section = payload.get("total")
     messages = total_section.get("messages") if isinstance(total_section, dict) else None
     if messages is None:
-        messages = stats_payload.get("messages")
+        messages = payload.get("messages")
     try:
         return int(messages) if messages is not None else None
     except (TypeError, ValueError):
@@ -334,7 +329,7 @@ def poll_device(
     unit: str = "nm",
     timeout: float = 5.0,
 ) -> PollResult:
-    """Poll one receiver's aircraft.json (and best-effort stats.json).
+    """Poll one receiver's aircraft.json.
 
     dump1090-fa's web path has varied across PiAware image versions
     (``/dump1090-fa/data/...`` vs. ``/skyaware/data/...`` vs. plain
@@ -361,15 +356,11 @@ def poll_device(
             )
         )
     )
-    stats_path = _STATS_JSON_PATHS[path_index]
-    stats_payload, _stats_error = _get_json(stats_path, f"{base}{stats_path}", timeout=timeout)
-    messages_total = _extract_messages_total(stats_payload)
-    if messages_total is None:
-        # dump1090/readsb also expose the cumulative decoder count at the top
-        # level of aircraft.json.  Some installations do not publish
-        # stats.json (or publish it under a different web alias), so treating
-        # that optional request as the sole source made the screen report 0.
-        messages_total = _extract_messages_total(aircraft_payload)
+    # Keep the accumulated series on one counter source. Switching between
+    # stats.json and aircraft.json when the optional stats request briefly
+    # fails can look like a receiver reset and add a lifetime total to today's
+    # count because the two snapshots are produced at slightly different times.
+    messages_total = _extract_messages_total(aircraft_payload)
     return PollResult(
         device=device,
         ok=True,
