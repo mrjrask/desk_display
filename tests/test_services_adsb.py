@@ -235,6 +235,22 @@ def test_messages_today_uses_first_poll_of_day_as_baseline(tmp_path):
     assert stats.messages_today_by_device == {"Receiver 1": 500}
 
 
+def test_messages_today_survives_receiver_counter_reset(tmp_path):
+    store = _store(tmp_path)
+    device = AdsbDevice(host="1.2.3.4", label="Receiver 1")
+    day = "2026-08-17"
+
+    for now, total in ((1000.0, 10_000), (2000.0, 10_500), (3000.0, 25), (4000.0, 75)):
+        store.record_poll(
+            PollResult(device=device, ok=True, error=None, sightings=(), messages_total=total),
+            now=now,
+            day=day,
+        )
+
+    stats = store.compute_daily_stats(day=day, tz=UTC)
+    assert stats.messages_today_by_device == {"Receiver 1": 575}
+
+
 def test_currently_tracked_reflects_latest_poll_snapshot(tmp_path):
     store = _store(tmp_path)
     device_a = AdsbDevice(host="1.2.3.4", label="Receiver 1")
@@ -521,8 +537,6 @@ def test_poll_device_reuses_cached_working_path_on_next_poll(monkeypatch):
         requested_urls.append(url)
         if url.endswith("/skyaware/data/aircraft.json"):
             return _FakeResponse(200, {"aircraft": []})
-        if url.endswith("/skyaware/data/stats.json"):
-            return _FakeResponse(200, {"total": {"messages": 5}})
         return _FakeResponse(404)
 
     monkeypatch.setattr(adsb_module, "http_get", _fake_http_get)
@@ -535,6 +549,27 @@ def test_poll_device_reuses_cached_working_path_on_next_poll(monkeypatch):
     assert second.ok is True
     aircraft_requests = [u for u in requested_urls if "aircraft.json" in u]
     assert aircraft_requests == [f"http://{device.host}/skyaware/data/aircraft.json"]
+
+
+def test_poll_device_uses_aircraft_message_count_as_consistent_source(monkeypatch):
+    device = AdsbDevice(host="192.168.1.50", label="Attic")
+    requested_urls = []
+
+    def _fake_http_get(url, *, timeout=10.0, **kwargs):
+        requested_urls.append(url)
+        if url.endswith("/dump1090-fa/data/aircraft.json"):
+            return _FakeResponse(200, {"messages": 12_345, "aircraft": []})
+        if url.endswith("/dump1090-fa/data/stats.json"):
+            return _FakeResponse(200, {"total": {"messages": 12_000}})
+        return _FakeResponse(404)
+
+    monkeypatch.setattr(adsb_module, "http_get", _fake_http_get)
+
+    result = poll_device(device, home_lat=None, home_lon=None, timeout=1.0)
+
+    assert result.ok is True
+    assert result.messages_total == 12_345
+    assert not any(url.endswith("stats.json") for url in requested_urls)
 
 
 def test_poll_device_reports_detail_when_every_path_fails(monkeypatch):
