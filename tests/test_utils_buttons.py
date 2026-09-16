@@ -1,8 +1,10 @@
 """Tests for Display HAT Mini button handling utilities."""
 
 import subprocess
+import sys
 import threading
 import time
+from enum import Enum
 from types import SimpleNamespace
 
 import utils
@@ -83,6 +85,71 @@ def test_create_display_hat_mini_reads_button_pins_from_class(monkeypatch):
     assert isinstance(created, _FakeDisplay)
     assert created.backlight_levels == [1.0]
     assert display._button_pins == {"A": 17, "B": 18, "X": 19, "Y": 20}
+
+
+def test_display_hat_mini_uses_rpi_gpio_for_shared_dc_pin(monkeypatch):
+    gpio_calls = []
+
+    class _FakeGPIO:
+        OUT = "out"
+
+        @staticmethod
+        def setup(pin, mode):
+            gpio_calls.append(("setup", pin, mode))
+
+        @staticmethod
+        def output(pin, value):
+            gpio_calls.append(("output", pin, value))
+
+    fallback_calls = []
+    fake_gpiodevice = SimpleNamespace(
+        get_pin=lambda *args: fallback_calls.append(args) or ("line", args[0])
+    )
+    fake_st7789_module = SimpleNamespace(gpiodevice=fake_gpiodevice)
+
+    class _FakeST7789:
+        __module__ = "fake_st7789"
+
+    class _FakeDisplay:
+        __module__ = "fake_displayhatmini"
+        SPI_DC = 9
+
+    fake_driver_module = SimpleNamespace(ST7789=_FakeST7789, GPIO=_FakeGPIO)
+    monkeypatch.setitem(sys.modules, "fake_st7789", fake_st7789_module)
+    monkeypatch.setitem(sys.modules, "fake_displayhatmini", fake_driver_module)
+    monkeypatch.setattr(utils, "DisplayHATMini", _FakeDisplay)
+
+    original_get_pin = fake_gpiodevice.get_pin
+    with utils._display_hat_mini_dc_pin_compat():
+        dc_request = fake_gpiodevice.get_pin(9, "st7789-dc", object())
+        other_request = fake_gpiodevice.get_pin(13, "st7789-bl", object())
+        class _Value(Enum):
+            INACTIVE = 0
+            ACTIVE = 1
+
+        dc_request[0].set_value(dc_request[1], _Value.INACTIVE)
+        dc_request[0].set_value(dc_request[1], _Value.ACTIVE)
+
+    assert gpio_calls == [
+        ("setup", 9, "out"),
+        ("output", 9, False),
+        ("output", 9, True),
+    ]
+    assert other_request == ("line", 13)
+    assert len(fallback_calls) == 1
+    assert fake_gpiodevice.get_pin is original_get_pin
+
+
+def test_exception_diagnostic_includes_symbolic_errno():
+    diagnostic = utils._exception_diagnostic(OSError(22, "Invalid argument"))
+
+    assert diagnostic == "OSError: [Errno 22] Invalid argument; errno=22 (EINVAL)"
+
+
+def test_exception_diagnostic_handles_gpiod_value_error():
+    diagnostic = utils._exception_diagnostic(ValueError((22, "Invalid argument")))
+
+    assert diagnostic == "ValueError: (22, 'Invalid argument'); errno=22 (EINVAL)"
 
 
 def test_create_display_hat_mini_restores_tracked_backlight_level(monkeypatch):

@@ -1304,6 +1304,84 @@ def _is_device_busy_error(exc: BaseException) -> bool:
         current = current.__cause__ or current.__context__
     return False
 
+
+def _exception_diagnostic(exc: BaseException) -> str:
+    """Return an actionable exception description for hardware startup logs."""
+
+    details = [f"{type(exc).__name__}: {exc}"]
+    error_number = exc.errno if isinstance(exc, OSError) else None
+    if error_number is None and exc.args:
+        first_arg = exc.args[0]
+        if isinstance(first_arg, tuple) and first_arg:
+            first_arg = first_arg[0]
+        if isinstance(first_arg, int):
+            error_number = first_arg
+    if error_number is not None:
+        error_name = errno.errorcode.get(error_number)
+        if error_name:
+            details.append(f"errno={error_number} ({error_name})")
+    return "; ".join(details)
+
+
+class _RPiGPIOPinRequest:
+    """Small LineRequest-compatible adapter backed by RPi.GPIO."""
+
+    def __init__(self, gpio: Any):
+        self._gpio = gpio
+
+    def set_value(self, pin: int, value: Any) -> None:
+        # python-gpiod uses an Enum whose INACTIVE member is truthy, so a
+        # plain bool(value) would incorrectly drive both states high.
+        value_name = getattr(value, "name", None)
+        if value_name in {"ACTIVE", "INACTIVE"}:
+            value = value_name == "ACTIVE"
+        self._gpio.output(pin, bool(value))
+
+
+@contextmanager
+def _display_hat_mini_dc_pin_compat():
+    """Let ST7789 drive the HAT's shared SPI-MISO/DC pin via RPi.GPIO.
+
+    Display HAT Mini assigns GPIO9 to D/C even though the standard Raspberry
+    Pi SPI overlay claims that line as MISO.  New ST7789 releases use the
+    character-device GPIO API, which correctly refuses the second line
+    request with EINVAL.  The display is write-only, so its established
+    RPi.GPIO driver can safely switch GPIO9 to output as older releases did.
+    """
+
+    driver_module = None
+    st7789_module = None
+    gpiodevice_module = None
+    original_get_pin = None
+    try:
+        driver_module = __import__(DisplayHATMini.__module__, fromlist=["ST7789"])
+        st7789_class = getattr(driver_module, "ST7789", None)
+        gpio = getattr(driver_module, "GPIO", None)
+        dc_pin = getattr(DisplayHATMini, "SPI_DC", None)
+        if st7789_class is None or gpio is None or not isinstance(dc_pin, int):
+            yield
+            return
+
+        st7789_module = __import__(st7789_class.__module__, fromlist=["gpiodevice"])
+        gpiodevice_module = getattr(st7789_module, "gpiodevice", None)
+        original_get_pin = getattr(gpiodevice_module, "get_pin", None)
+        if not callable(original_get_pin):
+            yield
+            return
+
+        def get_pin(pin, label, settings):
+            if pin == dc_pin and label == "st7789-dc":
+                gpio.setup(dc_pin, gpio.OUT)
+                return _RPiGPIOPinRequest(gpio), dc_pin
+            return original_get_pin(pin, label, settings)
+
+        gpiodevice_module.get_pin = get_pin
+        yield
+    finally:
+        if gpiodevice_module is not None and original_get_pin is not None:
+            gpiodevice_module.get_pin = original_get_pin
+
+
 # ─── Display wrapper ────────────────────────────────────────────────────────
 class Display:
     """Wrapper around the Pimoroni Display HAT Mini (320×240 LCD)."""
@@ -1414,7 +1492,8 @@ class Display:
                         self._display = None
                         logging.warning(
                             "Failed to initialize Display HAT Mini hardware in auto mode (%s); trying framebuffer fallback.",
-                            exc,
+                            _exception_diagnostic(exc),
+                            exc_info=logging.getLogger().isEnabledFor(logging.DEBUG),
                         )
                         self._framebuffer = _init_framebuffer_output(
                             requested_size=(self.width, self.height),
@@ -1538,7 +1617,8 @@ class Display:
                 if output == "displayhatmini":
                     logging.warning(
                         "Failed to initialize Display HAT Mini hardware; running headless (%s)",
-                        exc,
+                        _exception_diagnostic(exc),
+                        exc_info=logging.getLogger().isEnabledFor(logging.DEBUG),
                     )
             else:  # pragma: no cover - hardware import
                 self._display_driver = "displayhatmini"
@@ -1750,7 +1830,12 @@ class Display:
     def _create_display_hat_mini(self, initial_buffer: Image.Image):
         """Create and configure a Display HAT Mini driver instance."""
 
-        display = DisplayHATMini(initial_buffer)
+        # Modern ST7789/gpiodevice releases cannot claim the HAT's GPIO9 D/C
+        # pin because the kernel SPI overlay also reserves it as MISO.  Route
+        # this one write-only control pin through the RPi.GPIO backend already
+        # used by the upstream Display HAT Mini driver.
+        with _display_hat_mini_dc_pin_compat():
+            display = DisplayHATMini(initial_buffer)
 
         # Do not rely on the driver's process-wide GPIO state or constructor
         # default here.  A previous service instance (or cleanup utility) may
