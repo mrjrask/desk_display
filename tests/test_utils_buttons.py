@@ -117,9 +117,10 @@ def test_display_hat_mini_uses_rpi_gpio_for_shared_dc_pin(monkeypatch):
 
     class _FakeDisplay:
         __module__ = "fake_displayhatmini"
-        SPI_DC = 9
 
-    fake_driver_module = SimpleNamespace(ST7789=_FakeST7789, GPIO=_FakeGPIO)
+    fake_driver_module = SimpleNamespace(
+        ST7789=_FakeST7789, GPIO=_FakeGPIO, SPI_DC=9
+    )
     monkeypatch.setitem(sys.modules, "fake_st7789", fake_st7789_module)
     monkeypatch.setitem(sys.modules, "fake_displayhatmini", fake_driver_module)
     monkeypatch.setattr(utils, "DisplayHATMini", _FakeDisplay)
@@ -144,6 +145,8 @@ def test_display_hat_mini_uses_rpi_gpio_for_shared_dc_pin(monkeypatch):
     assert other_request == ("line", 13)
     assert len(fallback_calls) == 1
     assert fake_gpiodevice.get_pin is original_get_pin
+
+
 def test_create_display_hat_mini_disables_driver_software_pwm(monkeypatch):
     constructor_calls = []
 

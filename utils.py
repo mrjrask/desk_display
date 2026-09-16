@@ -1357,7 +1357,11 @@ def _display_hat_mini_dc_pin_compat():
         driver_module = __import__(DisplayHATMini.__module__, fromlist=["ST7789"])
         st7789_class = getattr(driver_module, "ST7789", None)
         gpio = getattr(driver_module, "GPIO", None)
-        dc_pin = getattr(DisplayHATMini, "SPI_DC", None)
+        # displayhatmini exposes SPI_DC at module scope.  Retain the class
+        # lookup as a fallback for older or third-party driver variants.
+        dc_pin = getattr(
+            driver_module, "SPI_DC", getattr(DisplayHATMini, "SPI_DC", None)
+        )
         if st7789_class is None or gpio is None or not isinstance(dc_pin, int):
             yield
             return
