@@ -85,6 +85,48 @@ def test_create_display_hat_mini_reads_button_pins_from_class(monkeypatch):
     assert display._button_pins == {"A": 17, "B": 18, "X": 19, "Y": 20}
 
 
+def test_create_display_hat_mini_disables_driver_software_pwm(monkeypatch):
+    constructor_calls = []
+
+    class _FakeDisplay:
+        def __init__(self, _buffer, *, backlight_pwm=True):
+            constructor_calls.append(backlight_pwm)
+
+        def set_backlight(self, _level):
+            pass
+
+    display = utils.Display()
+    monkeypatch.setattr(utils, "DisplayHATMini", _FakeDisplay)
+
+    display._create_display_hat_mini(display._buffer)
+
+    assert constructor_calls == [False]
+
+
+def test_create_display_hat_mini_supports_legacy_constructor(monkeypatch):
+    constructor_calls = []
+
+    class _FakeDisplay:
+        def __init__(self, _buffer):
+            constructor_calls.append(1)
+
+        def set_backlight(self, _level):
+            pass
+
+    display = utils.Display()
+    monkeypatch.setattr(utils, "DisplayHATMini", _FakeDisplay)
+
+    display._create_display_hat_mini(display._buffer)
+
+    assert constructor_calls == [1]
+
+
+def test_exception_diagnostic_includes_symbolic_errno():
+    diagnostic = utils._exception_diagnostic(OSError(22, "Invalid argument"))
+
+    assert diagnostic == "OSError: [Errno 22] Invalid argument; errno=22 (EINVAL)"
+
+
 def test_create_display_hat_mini_restores_tracked_backlight_level(monkeypatch):
     class _FakeDisplay:
         def __init__(self, _buffer):
