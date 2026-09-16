@@ -1304,6 +1304,17 @@ def _is_device_busy_error(exc: BaseException) -> bool:
         current = current.__cause__ or current.__context__
     return False
 
+
+def _exception_diagnostic(exc: BaseException) -> str:
+    """Return an actionable exception description for hardware startup logs."""
+
+    details = [f"{type(exc).__name__}: {exc}"]
+    if isinstance(exc, OSError) and exc.errno is not None:
+        error_name = errno.errorcode.get(exc.errno)
+        if error_name:
+            details.append(f"errno={exc.errno} ({error_name})")
+    return "; ".join(details)
+
 # ─── Display wrapper ────────────────────────────────────────────────────────
 class Display:
     """Wrapper around the Pimoroni Display HAT Mini (320×240 LCD)."""
@@ -1414,7 +1425,8 @@ class Display:
                         self._display = None
                         logging.warning(
                             "Failed to initialize Display HAT Mini hardware in auto mode (%s); trying framebuffer fallback.",
-                            exc,
+                            _exception_diagnostic(exc),
+                            exc_info=logging.getLogger().isEnabledFor(logging.DEBUG),
                         )
                         self._framebuffer = _init_framebuffer_output(
                             requested_size=(self.width, self.height),
@@ -1538,7 +1550,8 @@ class Display:
                 if output == "displayhatmini":
                     logging.warning(
                         "Failed to initialize Display HAT Mini hardware; running headless (%s)",
-                        exc,
+                        _exception_diagnostic(exc),
+                        exc_info=logging.getLogger().isEnabledFor(logging.DEBUG),
                     )
             else:  # pragma: no cover - hardware import
                 self._display_driver = "displayhatmini"
@@ -1750,7 +1763,22 @@ class Display:
     def _create_display_hat_mini(self, initial_buffer: Image.Image):
         """Create and configure a Display HAT Mini driver instance."""
 
-        display = DisplayHATMini(initial_buffer)
+        # The upstream driver defaults to software PWM for the backlight.  On
+        # current Raspberry Pi GPIO stacks that PWM setup can fail with the
+        # otherwise opaque ``OSError: [Errno 22] Invalid argument`` and abort
+        # the entire display constructor.  The driver explicitly supports
+        # disabling PWM; it then controls the backlight as an ordinary GPIO
+        # output.  Prefer that reliable mode, while retaining compatibility
+        # with older driver releases which did not expose the keyword.
+        try:
+            display = DisplayHATMini(initial_buffer, backlight_pwm=False)
+        except TypeError as exc:
+            if "backlight_pwm" not in str(exc):
+                raise
+            logging.debug(
+                "Display HAT Mini driver does not support backlight_pwm; using its default."
+            )
+            display = DisplayHATMini(initial_buffer)
 
         # Do not rely on the driver's process-wide GPIO state or constructor
         # default here.  A previous service instance (or cleanup utility) may
