@@ -1371,6 +1371,7 @@ def _display_hat_mini_dc_pin_compat():
 
         def get_pin(pin, label, settings):
             if pin == dc_pin and label == "st7789-dc":
+                gpio.setmode(gpio.BCM)
                 gpio.setup(dc_pin, gpio.OUT)
                 return _RPiGPIOPinRequest(gpio), dc_pin
             return original_get_pin(pin, label, settings)

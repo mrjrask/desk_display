@@ -91,7 +91,12 @@ def test_display_hat_mini_uses_rpi_gpio_for_shared_dc_pin(monkeypatch):
     gpio_calls = []
 
     class _FakeGPIO:
+        BCM = "bcm"
         OUT = "out"
+
+        @staticmethod
+        def setmode(mode):
+            gpio_calls.append(("setmode", mode))
 
         @staticmethod
         def setup(pin, mode):
@@ -131,6 +136,7 @@ def test_display_hat_mini_uses_rpi_gpio_for_shared_dc_pin(monkeypatch):
         dc_request[0].set_value(dc_request[1], _Value.ACTIVE)
 
     assert gpio_calls == [
+        ("setmode", "bcm"),
         ("setup", 9, "out"),
         ("output", 9, False),
         ("output", 9, True),
