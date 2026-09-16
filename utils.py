@@ -1383,6 +1383,12 @@ def _display_hat_mini_dc_pin_compat():
             gpiodevice_module.get_pin = original_get_pin
 
 
+    if isinstance(exc, OSError) and exc.errno is not None:
+        error_name = errno.errorcode.get(exc.errno)
+        if error_name:
+            details.append(f"errno={exc.errno} ({error_name})")
+    return "; ".join(details)
+
 # ─── Display wrapper ────────────────────────────────────────────────────────
 class Display:
     """Wrapper around the Pimoroni Display HAT Mini (320×240 LCD)."""
@@ -1836,6 +1842,21 @@ class Display:
         # this one write-only control pin through the RPi.GPIO backend already
         # used by the upstream Display HAT Mini driver.
         with _display_hat_mini_dc_pin_compat():
+        # The upstream driver defaults to software PWM for the backlight.  On
+        # current Raspberry Pi GPIO stacks that PWM setup can fail with the
+        # otherwise opaque ``OSError: [Errno 22] Invalid argument`` and abort
+        # the entire display constructor.  The driver explicitly supports
+        # disabling PWM; it then controls the backlight as an ordinary GPIO
+        # output.  Prefer that reliable mode, while retaining compatibility
+        # with older driver releases which did not expose the keyword.
+        try:
+            display = DisplayHATMini(initial_buffer, backlight_pwm=False)
+        except TypeError as exc:
+            if "backlight_pwm" not in str(exc):
+                raise
+            logging.debug(
+                "Display HAT Mini driver does not support backlight_pwm; using its default."
+            )
             display = DisplayHATMini(initial_buffer)
 
         # Do not rely on the driver's process-wide GPIO state or constructor

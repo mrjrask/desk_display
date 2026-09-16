@@ -144,6 +144,40 @@ def test_display_hat_mini_uses_rpi_gpio_for_shared_dc_pin(monkeypatch):
     assert other_request == ("line", 13)
     assert len(fallback_calls) == 1
     assert fake_gpiodevice.get_pin is original_get_pin
+def test_create_display_hat_mini_disables_driver_software_pwm(monkeypatch):
+    constructor_calls = []
+
+    class _FakeDisplay:
+        def __init__(self, _buffer, *, backlight_pwm=True):
+            constructor_calls.append(backlight_pwm)
+
+        def set_backlight(self, _level):
+            pass
+
+    display = utils.Display()
+    monkeypatch.setattr(utils, "DisplayHATMini", _FakeDisplay)
+
+    display._create_display_hat_mini(display._buffer)
+
+    assert constructor_calls == [False]
+
+
+def test_create_display_hat_mini_supports_legacy_constructor(monkeypatch):
+    constructor_calls = []
+
+    class _FakeDisplay:
+        def __init__(self, _buffer):
+            constructor_calls.append(1)
+
+        def set_backlight(self, _level):
+            pass
+
+    display = utils.Display()
+    monkeypatch.setattr(utils, "DisplayHATMini", _FakeDisplay)
+
+    display._create_display_hat_mini(display._buffer)
+
+    assert constructor_calls == [1]
 
 
 def test_exception_diagnostic_includes_symbolic_errno():
