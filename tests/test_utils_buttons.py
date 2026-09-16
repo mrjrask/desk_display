@@ -70,7 +70,10 @@ def test_create_display_hat_mini_reads_button_pins_from_class(monkeypatch):
         BUTTON_Y = 20
 
         def __init__(self, _buffer):
-            pass
+            self.backlight_levels = []
+
+        def set_backlight(self, level):
+            self.backlight_levels.append(level)
 
     display = utils.Display()
     monkeypatch.setattr(utils, "DisplayHATMini", _FakeDisplay)
@@ -78,7 +81,44 @@ def test_create_display_hat_mini_reads_button_pins_from_class(monkeypatch):
     created = display._create_display_hat_mini(display._buffer)
 
     assert isinstance(created, _FakeDisplay)
+    assert created.backlight_levels == [1.0]
     assert display._button_pins == {"A": 17, "B": 18, "X": 19, "Y": 20}
+
+
+def test_create_display_hat_mini_restores_tracked_backlight_level(monkeypatch):
+    class _FakeDisplay:
+        def __init__(self, _buffer):
+            self.backlight_levels = []
+
+        def set_backlight(self, level):
+            self.backlight_levels.append(level)
+
+    display = utils.Display()
+    display._backlight_level = 0.35
+    monkeypatch.setattr(utils, "DisplayHATMini", _FakeDisplay)
+
+    created = display._create_display_hat_mini(display._buffer)
+
+    assert created.backlight_levels == [0.35]
+
+
+def test_create_display_hat_mini_keeps_driver_when_backlight_restore_fails(monkeypatch):
+    class _FakeDisplay:
+        BUTTON_A = 17
+
+        def __init__(self, _buffer):
+            pass
+
+        def set_backlight(self, _level):
+            raise RuntimeError("PWM unavailable")
+
+    display = utils.Display()
+    monkeypatch.setattr(utils, "DisplayHATMini", _FakeDisplay)
+
+    created = display._create_display_hat_mini(display._buffer)
+
+    assert isinstance(created, _FakeDisplay)
+    assert display._button_pins["A"] == 17
 
 
 def test_minipitft_output_uses_script_writer(monkeypatch):
