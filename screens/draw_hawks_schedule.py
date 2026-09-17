@@ -1050,9 +1050,15 @@ def _clean_team_display_name(value: object) -> Optional[str]:
     # zero-width character.  TimesSquare cannot render those code points and
     # displays its missing-glyph box instead, so retain only characters that
     # can legitimately occur in an NHL team name.
+    # Drop symbols before compatibility normalization.  Otherwise NFKC can
+    # turn decorations such as ``™`` into allowed ASCII text (``TM``), which
+    # would make a feed-only icon part of the displayed opponent name.
+    value_without_symbols = "".join(
+        char for char in value if unicodedata.category(char)[0] not in {"C", "S"}
+    )
     cleaned = "".join(
         char
-        for char in unicodedata.normalize("NFKC", value)
+        for char in unicodedata.normalize("NFKC", value_without_symbols)
         if char.isspace()
         or unicodedata.category(char)[0] in {"L", "N"}
         or char in ".&'-"
