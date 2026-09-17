@@ -108,18 +108,8 @@ if HYPERPIXEL_4_SQUARE:
 LOGO_HEIGHT = PLAYOFF_LOGO_BASE_HEIGHT
 LEAGUE_LOGO_GAP = _scale_y(4)
 
-# The 2026 NBA Playoffs screen is intentionally pinned to the active Finals
-# matchup so stale conference finals records from upstream bracket feeds do not
-# keep rendering alongside the championship series.
-CURRENT_FINALS_TEAM_ABBRS = frozenset({"NY", "SA"})
-_CURRENT_FINALS_ABBR_ALIASES = {
-    "NYK": "NY",
-    "NY": "NY",
-    "SAS": "SA",
-    "SA": "SA",
-}
-
 _SESSION = get_session()
+
 
 def _scoreboard_fonts() -> tuple:
     small_display = _use_single_series_per_row_layout()
@@ -888,45 +878,32 @@ def _has_distinct_opponents(series: dict) -> bool:
     return bool(away_abbr and home_abbr and away_abbr != home_abbr)
 
 
-def _current_finals_team_key(team: dict) -> str:
-    abbr = _team_logo_abbr(team)
-    mapped = _CURRENT_FINALS_ABBR_ALIASES.get(abbr)
-    if mapped:
-        return mapped
-
-    if not isinstance(team, dict):
-        return ""
-    text_parts = [
-        str(team.get(key) or "")
-        for key in ("teamCity", "city", "teamName", "name", "nickname")
-    ]
-    profile = team.get("profile")
-    if isinstance(profile, dict):
-        text_parts.extend(
-            str(profile.get(key) or "") for key in ("city", "name", "nickname")
-        )
-    normalized_text = " ".join(text_parts).strip().lower()
-    if "knicks" in normalized_text or "new york" in normalized_text:
-        return "NY"
-    if "spurs" in normalized_text or "san antonio" in normalized_text:
-        return "SA"
-    return ""
-
-
-def _is_current_finals_matchup(series: dict) -> bool:
+def _series_team_abbrs(series: dict) -> frozenset[str]:
     teams = (series or {}).get("teams") or {}
     away_team = ((teams.get("away") or {}).get("team") or {})
     home_team = ((teams.get("home") or {}).get("team") or {})
-    team_keys = {_current_finals_team_key(away_team), _current_finals_team_key(home_team)}
-    return team_keys == CURRENT_FINALS_TEAM_ABBRS
+    return frozenset((_team_logo_abbr(away_team), _team_logo_abbr(home_team)))
 
 
-def _filter_current_finals_series(series: list[dict]) -> list[dict]:
-    return [
-        item
-        for item in (series or [])
-        if _has_distinct_opponents(item) and _is_current_finals_matchup(item)
-    ]
+def _conference_final_winners(series: list[dict]) -> frozenset[str]:
+    """Return the two teams that won completed conference-final series."""
+    winners: set[str] = set()
+    for item in series:
+        round_rank = _as_int(item.get("round_rank"))
+        if round_rank is None:
+            round_rank = _round_rank_from_text(item.get("status_text"))
+        if round_rank != 3 or not _is_completed_series(item):
+            continue
+        teams = item.get("teams") or {}
+        away = teams.get("away") or {}
+        home = teams.get("home") or {}
+        away_wins = _as_int(away.get("score")) or 0
+        home_wins = _as_int(home.get("score")) or 0
+        winner = away if away_wins > home_wins else home
+        abbr = _team_logo_abbr(winner.get("team") or {})
+        if abbr:
+            winners.add(abbr)
+    return frozenset(winners) if len(winners) == 2 else frozenset()
 
 
 def _is_completed_series(series: dict) -> bool:
@@ -1030,7 +1007,9 @@ def _conference_buckets(series: list[dict]) -> tuple[list[dict], list[dict]]:
 
 
 def _is_finals_series(series: dict) -> bool:
-    return _as_int((series or {}).get("round_rank")) == 4
+    if _as_int((series or {}).get("round_rank")) == 4:
+        return True
+    return _round_rank_from_text((series or {}).get("status_text")) == 4
 
 
 def _select_current_round_series(series: list[dict]) -> list[dict]:
@@ -1038,7 +1017,16 @@ def _select_current_round_series(series: list[dict]) -> list[dict]:
         return []
     with_opponents = [item for item in series if _has_both_opponents(item) and _has_distinct_opponents(item)]
     ranked = [item for item in with_opponents if _as_int(item.get("round_rank")) is not None]
-    finals_series = [item for item in ranked if _is_finals_series(item)]
+    finals_series = [item for item in with_opponents if _is_finals_series(item)]
+    if not finals_series:
+        conference_champions = _conference_final_winners(ranked)
+        if conference_champions:
+            finals_series = [
+                item
+                for item in with_opponents
+                if _series_team_abbrs(item) == conference_champions
+                and _as_int(item.get("round_rank")) != 3
+            ]
     if finals_series:
         current_finals = [item for item in finals_series if not _is_completed_series(item)]
         return current_finals or finals_series

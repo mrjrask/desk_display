@@ -1,5 +1,7 @@
 import datetime
 
+import pytest
+
 from config import CENTRAL_TIME
 from screens import nba_playoffs
 
@@ -434,8 +436,9 @@ def test_select_current_round_series_drops_unset_or_duplicate_matchups():
     assert selected[0]["teams"]["away"]["team"]["abbreviation"] == "BOS"
 
 
-def test_filter_current_finals_series_only_keeps_knicks_spurs_matchup():
-    series = [
+@pytest.fixture
+def finals_2026_series():
+    return [
         {
             "teams": {
                 "away": {"team": {"abbreviation": "BOS"}, "score": 3},
@@ -448,29 +451,51 @@ def test_filter_current_finals_series_only_keeps_knicks_spurs_matchup():
                 "away": {"team": {"abbreviation": "SAS"}, "score": 1},
                 "home": {"team": {"abbreviation": "NYK"}, "score": 1},
             },
-            "round_rank": 4,
+            "status_text": "NBA Finals - Series tied 1-1",
         },
     ]
 
-    selected = nba_playoffs._filter_current_finals_series(series)
 
-    assert selected == [series[1]]
-
-
-def test_filter_current_finals_series_matches_team_names_when_abbreviation_missing():
-    series = [
+@pytest.fixture
+def finals_2027_series():
+    return [
         {
             "teams": {
-                "away": {"team": {"teamCity": "San Antonio", "teamName": "Spurs"}, "score": 0},
-                "home": {"team": {"teamCity": "New York", "teamName": "Knicks"}, "score": 0},
+                "away": {"team": {"abbreviation": "DEN"}, "score": 4},
+                "home": {"team": {"abbreviation": "DAL"}, "score": 2},
             },
-            "round_rank": 4,
-        }
+            "round_rank": 3,
+        },
+        {
+            "teams": {
+                "away": {"team": {"abbreviation": "CLE"}, "score": 4},
+                "home": {"team": {"abbreviation": "MIA"}, "score": 3},
+            },
+            "round_rank": 3,
+        },
+        {
+            "teams": {
+                "away": {"team": {"abbreviation": "DEN"}, "score": 2},
+                "home": {"team": {"abbreviation": "CLE"}, "score": 1},
+            },
+            # Some upstream feeds omit round metadata from the new matchup.
+            "status_text": "Series",
+        },
     ]
 
-    selected = nba_playoffs._filter_current_finals_series(series)
 
-    assert selected == series
+def test_selects_2026_finals_from_status_and_excludes_stale_conference_final(
+    finals_2026_series,
+):
+    selected = nba_playoffs._select_current_round_series(finals_2026_series)
+
+    assert selected == [finals_2026_series[1]]
+
+
+def test_selects_different_2027_finals_from_conference_champions(finals_2027_series):
+    selected = nba_playoffs._select_current_round_series(finals_2027_series)
+
+    assert selected == [finals_2027_series[2]]
 
 
 def test_select_current_round_series_prefers_finals_over_stale_incomplete_prior_rounds():
