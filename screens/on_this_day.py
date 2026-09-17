@@ -296,7 +296,13 @@ def _parse_wiki_items(
 def _fetch_wiki_daily_payload(month: int, day: int) -> dict[str, object]:
     """Fetch the combined Wikimedia response for a calendar day."""
 
-    url = f"https://api.wikimedia.org/feed/v1/wikipedia/en/onthisday/all/{month}/{day}"
+    # The Feed API route expects the calendar components in MM/DD form.  Using
+    # an unpadded month (for example, ``9/17``) does not match the route and
+    # Wikimedia returns 404 even though that date has On This Day content.
+    url = (
+        "https://api.wikimedia.org/feed/v1/wikipedia/en/onthisday/all/"
+        f"{month:02d}/{day:02d}"
+    )
     try:
         response = http_get(
             url,

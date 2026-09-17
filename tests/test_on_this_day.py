@@ -338,7 +338,7 @@ def test_on_this_day_adds_wikimedia_holiday_descriptions(monkeypatch):
     ]
     assert requests == [
         (
-            "https://api.wikimedia.org/feed/v1/wikipedia/en/onthisday/all/7/7",
+            "https://api.wikimedia.org/feed/v1/wikipedia/en/onthisday/all/07/07",
             {
                 "timeout": 3.0,
                 "headers": {"User-Agent": otd._WIKIMEDIA_USER_AGENT},
