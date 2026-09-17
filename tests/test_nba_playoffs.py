@@ -646,6 +646,67 @@ def test_render_uses_recent_finals_when_bracket_only_has_stale_conference_final(
     assert rendered == [recent_finals]
 
 
+def test_render_narrows_unranked_completed_recent_series_to_latest_matchup(monkeypatch):
+    recent_games = [
+        {
+            "gamePk": "401999901",
+            "seasonType": "3",
+            "gameDate": "2026-06-01T00:00:00Z",
+            "status": {"statusCode": "3", "detailedState": "BOS wins series 4-2"},
+            "teams": {
+                "away": {"team": {"abbreviation": "BOS"}, "score": 110},
+                "home": {"team": {"abbreviation": "NYK"}, "score": 101},
+            },
+        },
+        {
+            "gamePk": "401999902",
+            "seasonType": "3",
+            "gameDate": "2026-06-02T00:00:00Z",
+            "status": {"statusCode": "3", "detailedState": "SAS wins series 4-1"},
+            "teams": {
+                "away": {"team": {"abbreviation": "SAS"}, "score": 108},
+                "home": {"team": {"abbreviation": "OKC"}, "score": 99},
+            },
+        },
+        {
+            "gamePk": "401999903",
+            "seasonType": "3",
+            "gameDate": "2026-06-18T00:00:00Z",
+            "status": {"statusCode": "3", "detailedState": "SAS wins series 4-2"},
+            "teams": {
+                "away": {"team": {"abbreviation": "SAS"}, "score": 112},
+                "home": {"team": {"abbreviation": "BOS"}, "score": 105},
+            },
+        },
+    ]
+    recent_series = nba_playoffs._derive_playoff_matchups_from_games(recent_games)
+    rendered = []
+
+    assert all(item.get("round_rank") is None for item in recent_series)
+
+    monkeypatch.setattr(nba_playoffs, "_fetch_playoff_matchups", lambda: [])
+    monkeypatch.setattr(
+        nba_playoffs,
+        "_derive_playoff_matchups_from_recent_games",
+        lambda: recent_series,
+    )
+    monkeypatch.setattr(
+        nba_playoffs,
+        "_render_playoff_screen",
+        lambda series: rendered.extend(series) or nba_playoffs.Image.new("RGB", (1, 1)),
+    )
+    monkeypatch.setattr(nba_playoffs.time, "sleep", lambda _seconds: None)
+
+    class Display:
+        def image(self, _image):
+            pass
+
+    nba_playoffs.render_nba_playoffs(Display(), [])
+
+    assert len(rendered) == 1
+    assert nba_playoffs._series_team_abbrs(rendered[0]) == {"BOS", "SAS"}
+
+
 def test_render_checks_supplied_games_when_earlier_sources_only_have_stale_rounds(monkeypatch):
     stale_conference_final = {
         "teams": {

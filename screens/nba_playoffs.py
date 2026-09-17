@@ -852,6 +852,11 @@ def _derive_playoff_matchups_from_games(games: list[dict]) -> list[dict]:
             existing["status_text"] = detailed
 
         game_dt = _extract_next_game_dt(game.get("gameDate"))
+        if game_dt and (
+            not isinstance(existing.get("latest_game_datetime"), datetime.datetime)
+            or game_dt > existing["latest_game_datetime"]
+        ):
+            existing["latest_game_datetime"] = game_dt
         if game_dt and game_dt >= datetime.datetime.now(CENTRAL_TIME):
             existing["next_text"] = f"{_next_game_day_label(game_dt)} {game_dt.strftime('%-I:%M %p')}"
         if _is_live_game(game):
@@ -1043,6 +1048,33 @@ def _find_finals_series(series: list[dict]) -> list[dict]:
         current_finals = [item for item in finals_series if not _is_completed_series(item)]
         return current_finals or finals_series
     return []
+
+
+def _find_latest_completed_series(series: list[dict]) -> list[dict]:
+    """Narrow an unranked, completed game history to its latest matchup."""
+    candidates = [
+        item
+        for item in series
+        if _has_both_opponents(item)
+        and _has_distinct_opponents(item)
+        and _is_completed_series(item)
+        and _as_int(item.get("round_rank")) is None
+        and isinstance(item.get("latest_game_datetime"), datetime.datetime)
+    ]
+    if len(candidates) < 3:
+        return []
+    latest = max(candidates, key=lambda item: item["latest_game_datetime"])
+    earlier_teams = set().union(
+        *(
+            _series_team_abbrs(item)
+            for item in candidates
+            if item is not latest
+            and item["latest_game_datetime"] < latest["latest_game_datetime"]
+        )
+    )
+    if not _series_team_abbrs(latest).issubset(earlier_teams):
+        return []
+    return [latest]
 
 
 def _select_current_round_series(series: list[dict]) -> list[dict]:
@@ -1248,7 +1280,9 @@ def render_nba_playoffs(display, games: list[dict], transition: bool = False) ->
     )
     if not series and bracket_may_be_stale:
         recent_series = _derive_playoff_matchups_from_recent_games()
-        series = _find_finals_series(recent_series)
+        series = _find_finals_series(recent_series) or _find_latest_completed_series(
+            recent_series
+        )
     if not series:
         series = fetched_selection
     if not series:
