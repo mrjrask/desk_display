@@ -757,6 +757,19 @@ def test_unranked_completed_fallback_rejects_generic_playoff_ancestry():
     assert nba_playoffs._find_latest_completed_series(history) == []
 
 
+@pytest.mark.parametrize("east_abbr", ["NYK", "WAS"])
+def test_unranked_completed_fallback_accepts_normalized_east_aliases(east_abbr):
+    finals = {
+        "teams": {
+            "away": {"team": {"abbreviation": "SAS"}, "score": 4},
+            "home": {"team": {"abbreviation": east_abbr}, "score": 2},
+        },
+        "latest_game_datetime": datetime.datetime(2026, 6, 18, tzinfo=CENTRAL_TIME),
+    }
+
+    assert nba_playoffs._find_latest_completed_series([finals]) == [finals]
+
+
 def test_render_checks_supplied_games_when_earlier_sources_only_have_stale_rounds(monkeypatch):
     stale_conference_final = {
         "teams": {
