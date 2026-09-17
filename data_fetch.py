@@ -3116,6 +3116,11 @@ def _ahl_season_start_year(row: Dict) -> Optional[int]:
             return int(match.group(1))
 
     text = " ".join(str(value) for value in row.values() if value not in (None, ""))
+    match = re.search(
+        r"(?<!\d)((?:19|20)\d{2})\D+((?:19|20)\d{2})(?!\d)", text
+    )
+    if match:
+        return int(match.group(1))
     match = re.search(r"(?<!\d)((?:19|20)\d{2})\D+(\d{2})(?!\d)", text)
     if match:
         return int(match.group(1))
