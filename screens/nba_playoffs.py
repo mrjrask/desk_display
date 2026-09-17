@@ -108,18 +108,8 @@ if HYPERPIXEL_4_SQUARE:
 LOGO_HEIGHT = PLAYOFF_LOGO_BASE_HEIGHT
 LEAGUE_LOGO_GAP = _scale_y(4)
 
-# The 2026 NBA Playoffs screen is intentionally pinned to the active Finals
-# matchup so stale conference finals records from upstream bracket feeds do not
-# keep rendering alongside the championship series.
-CURRENT_FINALS_TEAM_ABBRS = frozenset({"NY", "SA"})
-_CURRENT_FINALS_ABBR_ALIASES = {
-    "NYK": "NY",
-    "NY": "NY",
-    "SAS": "SA",
-    "SA": "SA",
-}
-
 _SESSION = get_session()
+
 
 def _scoreboard_fonts() -> tuple:
     small_display = _use_single_series_per_row_layout()
@@ -705,6 +695,13 @@ def _looks_like_playoff_game(game: dict) -> bool:
     return "series" in status_text and ("lead" in status_text or "tied" in status_text)
 
 
+def _round_rank_from_game_id(game: dict) -> Optional[int]:
+    """Extract the playoff round encoded in an NBA game identifier."""
+    game_id = str(game.get("gamePk") or game.get("id") or game.get("gameId") or "").strip()
+    match = re.fullmatch(r"004\d{2}00([1-4])\d{2}", game_id)
+    return int(match.group(1)) if match else None
+
+
 # NBA playoffs (play-in through Finals) run mid-April to mid-June. Outside
 # that window this fallback can't find anything real, so skip its ~23-day
 # day-by-day ESPN scoreboard scan entirely rather than burning it every
@@ -834,6 +831,10 @@ def _derive_playoff_matchups_from_games(games: list[dict]) -> list[dict]:
             }
             result_by_pair[key] = existing
 
+        game_round_rank = _round_rank_from_game_id(game)
+        if game_round_rank is not None:
+            existing["round_rank"] = game_round_rank
+
         if _is_final_game(game):
             away_score = _as_int(((game.get("teams") or {}).get("away") or {}).get("score"))
             home_score = _as_int(((game.get("teams") or {}).get("home") or {}).get("score"))
@@ -851,6 +852,11 @@ def _derive_playoff_matchups_from_games(games: list[dict]) -> list[dict]:
             existing["status_text"] = detailed
 
         game_dt = _extract_next_game_dt(game.get("gameDate"))
+        if game_dt and (
+            not isinstance(existing.get("latest_game_datetime"), datetime.datetime)
+            or game_dt > existing["latest_game_datetime"]
+        ):
+            existing["latest_game_datetime"] = game_dt
         if game_dt and game_dt >= datetime.datetime.now(CENTRAL_TIME):
             existing["next_text"] = f"{_next_game_day_label(game_dt)} {game_dt.strftime('%-I:%M %p')}"
         if _is_live_game(game):
@@ -888,45 +894,32 @@ def _has_distinct_opponents(series: dict) -> bool:
     return bool(away_abbr and home_abbr and away_abbr != home_abbr)
 
 
-def _current_finals_team_key(team: dict) -> str:
-    abbr = _team_logo_abbr(team)
-    mapped = _CURRENT_FINALS_ABBR_ALIASES.get(abbr)
-    if mapped:
-        return mapped
-
-    if not isinstance(team, dict):
-        return ""
-    text_parts = [
-        str(team.get(key) or "")
-        for key in ("teamCity", "city", "teamName", "name", "nickname")
-    ]
-    profile = team.get("profile")
-    if isinstance(profile, dict):
-        text_parts.extend(
-            str(profile.get(key) or "") for key in ("city", "name", "nickname")
-        )
-    normalized_text = " ".join(text_parts).strip().lower()
-    if "knicks" in normalized_text or "new york" in normalized_text:
-        return "NY"
-    if "spurs" in normalized_text or "san antonio" in normalized_text:
-        return "SA"
-    return ""
-
-
-def _is_current_finals_matchup(series: dict) -> bool:
+def _series_team_abbrs(series: dict) -> frozenset[str]:
     teams = (series or {}).get("teams") or {}
     away_team = ((teams.get("away") or {}).get("team") or {})
     home_team = ((teams.get("home") or {}).get("team") or {})
-    team_keys = {_current_finals_team_key(away_team), _current_finals_team_key(home_team)}
-    return team_keys == CURRENT_FINALS_TEAM_ABBRS
+    return frozenset((_team_logo_abbr(away_team), _team_logo_abbr(home_team)))
 
 
-def _filter_current_finals_series(series: list[dict]) -> list[dict]:
-    return [
-        item
-        for item in (series or [])
-        if _has_distinct_opponents(item) and _is_current_finals_matchup(item)
-    ]
+def _conference_final_winners(series: list[dict]) -> frozenset[str]:
+    """Return the two teams that won completed conference-final series."""
+    winners: set[str] = set()
+    for item in series:
+        round_rank = _as_int(item.get("round_rank"))
+        if round_rank is None:
+            round_rank = _round_rank_from_text(item.get("status_text"))
+        if round_rank != 3 or not _is_completed_series(item):
+            continue
+        teams = item.get("teams") or {}
+        away = teams.get("away") or {}
+        home = teams.get("home") or {}
+        away_wins = _as_int(away.get("score")) or 0
+        home_wins = _as_int(home.get("score")) or 0
+        winner = away if away_wins > home_wins else home
+        abbr = _team_logo_abbr(winner.get("team") or {})
+        if abbr:
+            winners.add(abbr)
+    return frozenset(winners) if len(winners) == 2 else frozenset()
 
 
 def _is_completed_series(series: dict) -> bool:
@@ -1030,18 +1023,70 @@ def _conference_buckets(series: list[dict]) -> tuple[list[dict], list[dict]]:
 
 
 def _is_finals_series(series: dict) -> bool:
-    return _as_int((series or {}).get("round_rank")) == 4
+    if _as_int((series or {}).get("round_rank")) == 4:
+        return True
+    return _round_rank_from_text((series or {}).get("status_text")) == 4
+
+
+def _find_finals_series(series: list[dict]) -> list[dict]:
+    """Return an explicit or conference-champion-inferred Finals matchup."""
+    with_opponents = [
+        item for item in series if _has_both_opponents(item) and _has_distinct_opponents(item)
+    ]
+    ranked = [item for item in with_opponents if _as_int(item.get("round_rank")) is not None]
+    finals_series = [item for item in with_opponents if _is_finals_series(item)]
+    if not finals_series:
+        conference_champions = _conference_final_winners(ranked)
+        if conference_champions:
+            finals_series = [
+                item
+                for item in with_opponents
+                if _series_team_abbrs(item) == conference_champions
+                and _as_int(item.get("round_rank")) != 3
+            ]
+    if finals_series:
+        current_finals = [item for item in finals_series if not _is_completed_series(item)]
+        return current_finals or finals_series
+    return []
+
+
+def _find_latest_completed_series(series: list[dict]) -> list[dict]:
+    """Narrow an unranked, completed game history to its latest matchup."""
+    candidates = [
+        item
+        for item in series
+        if _has_both_opponents(item)
+        and _has_distinct_opponents(item)
+        and _is_completed_series(item)
+        and _as_int(item.get("round_rank")) is None
+        and isinstance(item.get("latest_game_datetime"), datetime.datetime)
+    ]
+    if len(candidates) < 3:
+        return []
+    latest = max(candidates, key=lambda item: item["latest_game_datetime"])
+    earlier_teams = set().union(
+        *(
+            _series_team_abbrs(item)
+            for item in candidates
+            if item is not latest
+            and item["latest_game_datetime"] < latest["latest_game_datetime"]
+        )
+    )
+    if not _series_team_abbrs(latest).issubset(earlier_teams):
+        return []
+    return [latest]
 
 
 def _select_current_round_series(series: list[dict]) -> list[dict]:
     if not series:
         return []
-    with_opponents = [item for item in series if _has_both_opponents(item) and _has_distinct_opponents(item)]
+    with_opponents = [
+        item for item in series if _has_both_opponents(item) and _has_distinct_opponents(item)
+    ]
     ranked = [item for item in with_opponents if _as_int(item.get("round_rank")) is not None]
-    finals_series = [item for item in ranked if _is_finals_series(item)]
+    finals_series = _find_finals_series(series)
     if finals_series:
-        current_finals = [item for item in finals_series if not _is_completed_series(item)]
-        return current_finals or finals_series
+        return finals_series
     if not ranked:
         current_only = [item for item in with_opponents if not _is_completed_series(item)]
         return current_only or with_opponents
@@ -1220,13 +1265,28 @@ def render_nba_playoffs(display, games: list[dict], transition: bool = False) ->
     merged_games = list(games or [])
 
     fetched_series = _fetch_playoff_matchups()
-    series = _filter_current_finals_series(fetched_series)
-    if not series:
+    fetched_selection = _select_current_round_series(fetched_series)
+    series = _find_finals_series(fetched_series)
+    game_series = _derive_playoff_matchups_from_games(merged_games)
+    game_finals = _find_finals_series(game_series)
+    if not series and game_finals:
+        series = game_finals
+
+    # A missing Finals entry is normal in rounds 1-3, not evidence that the
+    # bracket is unusable. Keep the authoritative selection (and avoid the
+    # costly recent-games scan) while it still contains an active series.
+    bracket_may_be_stale = not fetched_selection or all(
+        _is_completed_series(item) for item in fetched_selection
+    )
+    if not series and bracket_may_be_stale:
         recent_series = _derive_playoff_matchups_from_recent_games()
-        series = _filter_current_finals_series(recent_series)
+        series = _find_finals_series(recent_series) or _find_latest_completed_series(
+            recent_series
+        )
     if not series:
-        game_series = _derive_playoff_matchups_from_games(merged_games)
-        series = _filter_current_finals_series(game_series)
+        series = fetched_selection
+    if not series:
+        series = _select_current_round_series(game_series)
 
     for item in series:
         item["has_live_game"] = _series_has_live_game_from_games(item, merged_games)
