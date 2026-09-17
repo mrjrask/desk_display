@@ -3115,18 +3115,17 @@ def _ahl_season_start_year(row: Dict) -> Optional[int]:
         if match:
             return int(match.group(1))
 
-    text = " ".join(str(value) for value in row.values() if value not in (None, ""))
-    match = re.search(
-        r"(?<!\d)((?:19|20)\d{2})\D+((?:19|20)\d{2})(?!\d)", text
+    values = [str(value) for value in row.values() if value not in (None, "")]
+    range_patterns = (
+        r"(?<!\d)((?:19|20)\d{2})\D+((?:19|20)\d{2})(?!\d)",
+        r"(?<!\d)((?:19|20)\d{2})\D+(\d{2})(?!\d)",
+        r"(?<!\d)((?:19|20)\d{2})(?:19|20)\d{2}(?!\d)",
     )
-    if match:
-        return int(match.group(1))
-    match = re.search(r"(?<!\d)((?:19|20)\d{2})\D+(\d{2})(?!\d)", text)
-    if match:
-        return int(match.group(1))
-    match = re.search(r"(?<!\d)((?:19|20)\d{2})(?:19|20)\d{2}(?!\d)", text)
-    if match:
-        return int(match.group(1))
+    for pattern in range_patterns:
+        for value in values:
+            match = re.search(pattern, value)
+            if match:
+                return int(match.group(1))
 
     for key, value in row.items():
         if value in (None, "") or "end" not in key.lower():
@@ -3135,6 +3134,7 @@ def _ahl_season_start_year(row: Dict) -> Optional[int]:
         if match:
             return int(match.group(1)) - 1
 
+    text = " ".join(values)
     years = re.findall(r"(?<!\d)((?:19|20)\d{2})(?!\d)", text)
     return int(years[0]) if len(years) == 1 else None
 
