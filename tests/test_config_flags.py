@@ -300,6 +300,13 @@ def test_display_hat_mini_io_timeout_default_env_and_invalid(monkeypatch):
     module = _reload_config(monkeypatch, DISPLAY_HAT_MINI_IO_TIMEOUT_SECONDS="bad")
     assert module.DISPLAY_HAT_MINI_IO_TIMEOUT_SECONDS == 15.0
 
+    for non_finite in ("nan", "inf", "-inf"):
+        module = _reload_config(
+            monkeypatch,
+            DISPLAY_HAT_MINI_IO_TIMEOUT_SECONDS=non_finite,
+        )
+        assert module.DISPLAY_HAT_MINI_IO_TIMEOUT_SECONDS == 15.0
+
     module = _reload_config(monkeypatch, DISPLAY_HAT_MINI_IO_TIMEOUT_SECONDS="-1")
     assert module.DISPLAY_HAT_MINI_IO_TIMEOUT_SECONDS == 0.0
 

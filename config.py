@@ -5,6 +5,7 @@ import datetime
 import glob
 import inspect
 import logging
+import math
 import os
 import platform
 import random
@@ -807,7 +808,12 @@ except (TypeError, ValueError):
     )
     DISPLAY_HAT_MINI_IO_TIMEOUT_SECONDS = 15.0
 
-if DISPLAY_HAT_MINI_IO_TIMEOUT_SECONDS < 0:
+if not math.isfinite(DISPLAY_HAT_MINI_IO_TIMEOUT_SECONDS):
+    logging.warning(
+        "DISPLAY_HAT_MINI_IO_TIMEOUT_SECONDS must be finite; defaulting to 15 seconds."
+    )
+    DISPLAY_HAT_MINI_IO_TIMEOUT_SECONDS = 15.0
+elif DISPLAY_HAT_MINI_IO_TIMEOUT_SECONDS < 0:
     logging.warning(
         "DISPLAY_HAT_MINI_IO_TIMEOUT_SECONDS must be >= 0; clamping to 0 (disabled)."
     )
