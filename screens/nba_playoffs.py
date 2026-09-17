@@ -1012,10 +1012,11 @@ def _is_finals_series(series: dict) -> bool:
     return _round_rank_from_text((series or {}).get("status_text")) == 4
 
 
-def _select_current_round_series(series: list[dict]) -> list[dict]:
-    if not series:
-        return []
-    with_opponents = [item for item in series if _has_both_opponents(item) and _has_distinct_opponents(item)]
+def _find_finals_series(series: list[dict]) -> list[dict]:
+    """Return an explicit or conference-champion-inferred Finals matchup."""
+    with_opponents = [
+        item for item in series if _has_both_opponents(item) and _has_distinct_opponents(item)
+    ]
     ranked = [item for item in with_opponents if _as_int(item.get("round_rank")) is not None]
     finals_series = [item for item in with_opponents if _is_finals_series(item)]
     if not finals_series:
@@ -1030,6 +1031,19 @@ def _select_current_round_series(series: list[dict]) -> list[dict]:
     if finals_series:
         current_finals = [item for item in finals_series if not _is_completed_series(item)]
         return current_finals or finals_series
+    return []
+
+
+def _select_current_round_series(series: list[dict]) -> list[dict]:
+    if not series:
+        return []
+    with_opponents = [
+        item for item in series if _has_both_opponents(item) and _has_distinct_opponents(item)
+    ]
+    ranked = [item for item in with_opponents if _as_int(item.get("round_rank")) is not None]
+    finals_series = _find_finals_series(series)
+    if finals_series:
+        return finals_series
     if not ranked:
         current_only = [item for item in with_opponents if not _is_completed_series(item)]
         return current_only or with_opponents
@@ -1208,13 +1222,20 @@ def render_nba_playoffs(display, games: list[dict], transition: bool = False) ->
     merged_games = list(games or [])
 
     fetched_series = _fetch_playoff_matchups()
-    series = _select_current_round_series(fetched_series)
+    fetched_selection = _select_current_round_series(fetched_series)
+    series = _find_finals_series(fetched_series)
     if not series:
         recent_series = _derive_playoff_matchups_from_recent_games()
-        series = _select_current_round_series(recent_series)
-    if not series:
+        recent_selection = _select_current_round_series(recent_series)
         game_series = _derive_playoff_matchups_from_games(merged_games)
-        series = _select_current_round_series(game_series)
+        game_selection = _select_current_round_series(game_series)
+        series = (
+            _find_finals_series(recent_series)
+            or _find_finals_series(game_series)
+            or game_selection
+            or recent_selection
+            or fetched_selection
+        )
 
     for item in series:
         item["has_live_game"] = _series_has_live_game_from_games(item, merged_games)
