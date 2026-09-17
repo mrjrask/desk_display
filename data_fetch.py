@@ -2864,6 +2864,7 @@ def fetch_sox_standings():
 # AHL — Chicago Wolves schedule + scores (HockeyTech / AHL stats feed)
 # -----------------------------------------------------------------------------
 _AHL_SEASON_CACHE: Optional[str] = None
+_AHL_SEASON_CACHE_YEAR: Optional[int] = None
 _ahl_season_cache_lock = threading.Lock()
 _AHL_DEFAULT_BASE = "https://lscluster.hockeytech.com/feed/index.php"
 
@@ -3058,13 +3059,61 @@ def _extract_rows(payload: Optional[Dict], *keys: str) -> List[Dict]:
     return rows
 
 
+def _expected_ahl_season_year(now: Optional[datetime.datetime] = None) -> int:
+    """Return the starting year of the hockey season containing *now*."""
+    now = now or datetime.datetime.now(pytz.UTC)
+    return now.year if now.month >= 7 else now.year - 1
+
+
+def _ahl_season_id(row: Dict) -> Optional[str]:
+    season_id = row.get("season_id") or row.get("seasonId") or row.get("id")
+    return str(season_id) if season_id not in (None, "") else None
+
+
+def _ahl_season_sort_key(row: Dict) -> Tuple[int, int, str]:
+    """Sort seasons chronologically, tolerating the feed's varying schemas."""
+    date_values: List[Tuple[int, int]] = []
+    for key, value in row.items():
+        if not value or not any(token in key.lower() for token in ("start", "end", "date")):
+            continue
+        text = str(value).strip().replace("Z", "+00:00")
+        try:
+            parsed_date = datetime.datetime.fromisoformat(text)
+            date_values.append((parsed_date.year, parsed_date.toordinal()))
+        except ValueError:
+            try:
+                parsed_date = datetime.datetime.strptime(text[:10], "%Y-%m-%d")
+                date_values.append((parsed_date.year, parsed_date.toordinal()))
+            except ValueError:
+                continue
+
+    if date_values:
+        newest = max(date_values)
+        return *newest, _ahl_season_id(row) or ""
+
+    # Names and identifiers commonly look like "2025-26" or "20252026".
+    text = " ".join(str(value) for value in row.values() if value not in (None, ""))
+    years = [int(year) for year in re.findall(r"(?<!\d)(?:19|20)\d{2}(?!\d)", text)]
+    for start, end in re.findall(r"((?:19|20)\d{2})\D+(\d{2})(?!\d)", text):
+        years.extend((int(start), int(start[:2] + end)))
+    if not years:
+        years = [int(year) for year in re.findall(r"(?:19|20)\d{2}", text)]
+    if years:
+        return max(years), 0, _ahl_season_id(row) or ""
+
+    season_id = _ahl_season_id(row) or ""
+    numeric_id = int(season_id) if season_id.isdigit() else -1
+    return numeric_id, 0, season_id
+
+
 def _current_ahl_season_id() -> Optional[str]:
     if AHL_SEASON_ID:
         return str(AHL_SEASON_ID)
 
-    global _AHL_SEASON_CACHE
+    expected_year = _expected_ahl_season_year()
+    global _AHL_SEASON_CACHE, _AHL_SEASON_CACHE_YEAR
     with _ahl_season_cache_lock:
-        if _AHL_SEASON_CACHE:
+        if _AHL_SEASON_CACHE and expected_year == _AHL_SEASON_CACHE_YEAR:
             return _AHL_SEASON_CACHE
 
     data = _ahl_request("season")
@@ -3075,17 +3124,19 @@ def _current_ahl_season_id() -> Optional[str]:
     for row in rows:
         flag = row.get("is_current") or row.get("isCurrent") or row.get("current")
         if str(flag).lower() in {"1", "true", "yes"}:
-            season_id = row.get("season_id") or row.get("seasonId") or row.get("id")
+            season_id = _ahl_season_id(row)
             if season_id:
                 with _ahl_season_cache_lock:
-                    _AHL_SEASON_CACHE = str(season_id)
+                    _AHL_SEASON_CACHE = season_id
+                    _AHL_SEASON_CACHE_YEAR = expected_year
                     return _AHL_SEASON_CACHE
 
     if rows:
-        season_id = rows[0].get("season_id") or rows[0].get("seasonId") or rows[0].get("id")
+        season_id = _ahl_season_id(max(rows, key=_ahl_season_sort_key))
         if season_id:
             with _ahl_season_cache_lock:
-                _AHL_SEASON_CACHE = str(season_id)
+                _AHL_SEASON_CACHE = season_id
+                _AHL_SEASON_CACHE_YEAR = expected_year
                 return _AHL_SEASON_CACHE
 
     logging.warning("Unable to determine current AHL season id from feed")
@@ -3317,18 +3368,13 @@ def _fetch_ahl_schedule() -> List[Dict]:
             rows = _extract_rows(alt, "Schedule", "TeamSchedule")
         return rows
 
-    rows: List[Dict] = []
-
-    if AHL_SEASON_ID:
-        rows = _fetch_rows(str(AHL_SEASON_ID))
-
+    # Resolve the season first. An explicit configuration value still bypasses
+    # discovery, while an empty season-specific response falls back to the
+    # feed's unqualified schedule for compatibility with older deployments.
+    season_id = str(AHL_SEASON_ID) if AHL_SEASON_ID else _current_ahl_season_id()
+    rows = _fetch_rows(season_id) if season_id else []
     if not rows:
         rows = _fetch_rows(None)
-
-    if not rows:
-        season_id = _current_ahl_season_id()
-        if season_id:
-            rows = _fetch_rows(season_id)
 
     if not rows:
         return []
