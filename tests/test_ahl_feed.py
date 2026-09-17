@@ -85,6 +85,33 @@ def test_current_ahl_season_cache_expires_at_hockey_year_rollover(monkeypatch):
     assert requests == 2
 
 
+def test_current_ahl_season_does_not_cache_stale_rollover_flag(monkeypatch):
+    monkeypatch.setattr(data_fetch, "AHL_SEASON_ID", "")
+    monkeypatch.setattr(data_fetch, "_AHL_SEASON_CACHE", None)
+    monkeypatch.setattr(data_fetch, "_AHL_SEASON_CACHE_YEAR", None)
+    monkeypatch.setattr(data_fetch, "_expected_ahl_season_year", lambda: 2026)
+    responses = iter(
+        [
+            _season_payload(
+                [{"id": "outgoing", "name": "2025-26", "current": "yes"}]
+            ),
+            _season_payload(
+                [
+                    {"id": "outgoing", "name": "2025-26", "current": "yes"},
+                    {"id": "new", "name": "2026-27"},
+                ]
+            ),
+        ]
+    )
+    monkeypatch.setattr(data_fetch, "_ahl_request", lambda *args, **kwargs: next(responses))
+
+    assert data_fetch._current_ahl_season_id() == "outgoing"
+    assert data_fetch._AHL_SEASON_CACHE is None
+    assert data_fetch._current_ahl_season_id() == "new"
+    assert data_fetch._AHL_SEASON_CACHE == "new"
+    assert data_fetch._AHL_SEASON_CACHE_YEAR == 2026
+
+
 def test_fetch_ahl_schedule_discovers_season_then_falls_back_when_empty(monkeypatch):
     monkeypatch.setattr(data_fetch, "AHL_SEASON_ID", "")
     monkeypatch.setattr(data_fetch, "_current_ahl_season_id", lambda: "discovered")

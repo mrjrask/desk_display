@@ -3106,6 +3106,34 @@ def _ahl_season_sort_key(row: Dict) -> Tuple[int, int, str]:
     return numeric_id, 0, season_id
 
 
+def _ahl_season_start_year(row: Dict) -> Optional[int]:
+    """Return a season's starting year when the feed provides enough context."""
+    for key, value in row.items():
+        if value in (None, "") or "start" not in key.lower():
+            continue
+        match = re.search(r"(?<!\d)((?:19|20)\d{2})(?!\d)", str(value))
+        if match:
+            return int(match.group(1))
+
+    text = " ".join(str(value) for value in row.values() if value not in (None, ""))
+    match = re.search(r"(?<!\d)((?:19|20)\d{2})\D+(\d{2})(?!\d)", text)
+    if match:
+        return int(match.group(1))
+    match = re.search(r"(?<!\d)((?:19|20)\d{2})(?:19|20)\d{2}(?!\d)", text)
+    if match:
+        return int(match.group(1))
+
+    for key, value in row.items():
+        if value in (None, "") or "end" not in key.lower():
+            continue
+        match = re.search(r"(?<!\d)((?:19|20)\d{2})(?!\d)", str(value))
+        if match:
+            return int(match.group(1)) - 1
+
+    years = re.findall(r"(?<!\d)((?:19|20)\d{2})(?!\d)", text)
+    return int(years[0]) if len(years) == 1 else None
+
+
 def _current_ahl_season_id() -> Optional[str]:
     if AHL_SEASON_ID:
         return str(AHL_SEASON_ID)
@@ -3121,23 +3149,36 @@ def _current_ahl_season_id() -> Optional[str]:
     if not rows:
         alt = _ahl_request("season", feed="modulekit")
         rows = _extract_rows(alt, "Seasons", "Season")
-    for row in rows:
+
+    matching_rows = [
+        row for row in rows if _ahl_season_start_year(row) == expected_year
+    ]
+    candidates = matching_rows or rows
+    selected_row = None
+    for row in candidates:
         flag = row.get("is_current") or row.get("isCurrent") or row.get("current")
         if str(flag).lower() in {"1", "true", "yes"}:
-            season_id = _ahl_season_id(row)
-            if season_id:
+            selected_row = row
+            break
+
+    if selected_row is None and candidates:
+        selected_row = max(candidates, key=_ahl_season_sort_key)
+
+    if selected_row is not None:
+        season_id = _ahl_season_id(selected_row)
+        if season_id:
+            if _ahl_season_start_year(selected_row) == expected_year:
                 with _ahl_season_cache_lock:
                     _AHL_SEASON_CACHE = season_id
                     _AHL_SEASON_CACHE_YEAR = expected_year
-                    return _AHL_SEASON_CACHE
-
-    if rows:
-        season_id = _ahl_season_id(max(rows, key=_ahl_season_sort_key))
-        if season_id:
-            with _ahl_season_cache_lock:
-                _AHL_SEASON_CACHE = season_id
-                _AHL_SEASON_CACHE_YEAR = expected_year
-                return _AHL_SEASON_CACHE
+            else:
+                logging.info(
+                    "AHL season %s does not match expected season year %s; "
+                    "using it without caching",
+                    season_id,
+                    expected_year,
+                )
+            return season_id
 
     logging.warning("Unable to determine current AHL season id from feed")
     return None
