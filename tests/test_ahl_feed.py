@@ -87,6 +87,25 @@ def test_current_ahl_season_excludes_future_unflagged_season(monkeypatch):
     assert data_fetch._AHL_SEASON_CACHE_YEAR == 2025
 
 
+def test_current_ahl_season_parses_four_digit_year_ranges(monkeypatch):
+    monkeypatch.setattr(data_fetch, "AHL_SEASON_ID", "")
+    monkeypatch.setattr(data_fetch, "_AHL_SEASON_CACHE", None)
+    monkeypatch.setattr(data_fetch, "_AHL_SEASON_CACHE_YEAR", None)
+    monkeypatch.setattr(data_fetch, "_expected_ahl_season_year", lambda: 2025)
+    monkeypatch.setattr(
+        data_fetch,
+        "_ahl_request",
+        lambda *args, **kwargs: _season_payload(
+            [
+                {"id": "active", "name": "2025-2026"},
+                {"id": "future", "name": "2026-2027"},
+            ]
+        ),
+    )
+
+    assert data_fetch._current_ahl_season_id() == "active"
+
+
 def test_current_ahl_season_cache_expires_at_hockey_year_rollover(monkeypatch):
     monkeypatch.setattr(data_fetch, "AHL_SEASON_ID", "")
     monkeypatch.setattr(data_fetch, "_AHL_SEASON_CACHE", None)
