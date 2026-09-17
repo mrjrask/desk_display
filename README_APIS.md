@@ -135,7 +135,7 @@ Weather radar/map rendering may also use:
 | Use | Endpoint |
 | --- | --- |
 | Blackhawks schedule calendar | `NHL_SCHEDULE_ICS_URL`; defaults to `webcal://ics.ecal.com/ecal-sub/6a5e38cbff3cfc0002c15087/NHL.ics` and is converted to HTTPS for fetching. |
-| Blackhawks API fallback schedule | `https://api-web.nhle.com/v1/club-schedule-season/CHI/20252026` |
+| Blackhawks API fallback schedule | `https://api-web.nhle.com/v1/club-schedule-season/CHI/now` |
 | Team month schedule | `https://api-web.nhle.com/v1/club-schedule/{tric}/month/now` |
 | Team season schedule | `https://api-web.nhle.com/v1/club-schedule-season/{tric}/now` |
 | Game landing | `https://api-web.nhle.com/v1/gamecenter/{gid}/landing` |
