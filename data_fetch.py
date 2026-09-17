@@ -3511,6 +3511,11 @@ _AHL_TEAM_ABBR_OVERRIDES = {
     "wilkes barre scranton penguins": "WBS",
 }
 
+# Abbreviations listed here may intentionally use AHL_FALLBACK_LOGO instead of
+# a club-specific image. Keep the value as a non-empty explanation so each
+# exception is documented and can be reviewed when assets are updated.
+_AHL_FALLBACK_ONLY_ABBRS: Dict[str, str] = {}
+
 
 def _derive_team_abbr(name: str) -> str:
     cleaned = re.sub(r"[^A-Za-z0-9 ]+", "", name or "").strip()
