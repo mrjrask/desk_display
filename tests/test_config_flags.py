@@ -290,6 +290,20 @@ def test_display_hat_mini_reinit_seconds_invalid_and_negative(monkeypatch):
     assert module.DISPLAY_HAT_MINI_REINIT_SECONDS == 0
 
 
+def test_display_hat_mini_io_timeout_default_env_and_invalid(monkeypatch):
+    module = _reload_config(monkeypatch, DISPLAY_HAT_MINI_IO_TIMEOUT_SECONDS=None)
+    assert module.DISPLAY_HAT_MINI_IO_TIMEOUT_SECONDS == 15.0
+
+    module = _reload_config(monkeypatch, DISPLAY_HAT_MINI_IO_TIMEOUT_SECONDS="2.5")
+    assert module.DISPLAY_HAT_MINI_IO_TIMEOUT_SECONDS == 2.5
+
+    module = _reload_config(monkeypatch, DISPLAY_HAT_MINI_IO_TIMEOUT_SECONDS="bad")
+    assert module.DISPLAY_HAT_MINI_IO_TIMEOUT_SECONDS == 15.0
+
+    module = _reload_config(monkeypatch, DISPLAY_HAT_MINI_IO_TIMEOUT_SECONDS="-1")
+    assert module.DISPLAY_HAT_MINI_IO_TIMEOUT_SECONDS == 0.0
+
+
 def test_scoreboard_scroll_step_doubles_only_on_1080p(monkeypatch):
     module = _reload_config(monkeypatch, DISPLAY_WIDTH="1920", DISPLAY_HEIGHT="1080")
     assert module.SCOREBOARD_SCROLL_STEP == 2

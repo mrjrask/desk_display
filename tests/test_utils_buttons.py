@@ -7,6 +7,8 @@ import time
 from enum import Enum
 from types import SimpleNamespace
 
+import pytest
+
 import utils
 
 
@@ -878,6 +880,41 @@ def test_display_lock_serializes_refresh_and_button_reads():
 
     assert reader.is_alive() is False
     assert errors == []
+
+
+def test_display_io_watchdog_exits_when_hardware_call_stalls(monkeypatch):
+    display = utils.Display()
+    display._display_io_timeout_seconds = 5.0
+    display._display_io_started_at = 10.0
+
+    class _OnePoll:
+        def wait(self, _timeout):
+            return False
+
+    display._display_io_watchdog_stop = _OnePoll()
+    monkeypatch.setattr(utils.time, "monotonic", lambda: 16.0)
+
+    exits = []
+
+    def _exit(code):
+        exits.append(code)
+        raise SystemExit(code)
+
+    monkeypatch.setattr(utils.os, "_exit", _exit)
+
+    with pytest.raises(SystemExit):
+        display._monitor_display_io()
+
+    assert exits == [1]
+
+
+def test_display_io_watchdog_can_be_disabled():
+    display = utils.Display()
+    display._display_io_timeout_seconds = 0
+
+    display._start_display_io_watchdog()
+
+    assert display._display_io_watchdog_thread is None
 
 
 def test_set_led_clamps_channels_to_normalized_range():

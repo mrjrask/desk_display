@@ -1262,6 +1262,7 @@ from config import (
     DISPLAY_FADE_IN_DISPLAY_HAT_MINI_STEPS,
     DISPLAY_FADE_IN_ENABLED,
     DISPLAY_FADE_IN_STEPS_BY_PROFILE,
+    DISPLAY_HAT_MINI_IO_TIMEOUT_SECONDS,
     DISPLAY_HAT_MINI_LED_ENABLED,
     DISPLAY_HAT_MINI_LED_INDICATOR_BORDER_ENABLED,  # noqa: F401 -- legacy flag, kept for test monkeypatching
     DISPLAY_HAT_MINI_REINIT_SECONDS,
@@ -1434,6 +1435,10 @@ class Display:
         self._display_reinit_disabled = False
         self._display_reinit_lock = threading.Lock()
         self._display_io_lock = threading.RLock()
+        self._display_io_timeout_seconds = DISPLAY_HAT_MINI_IO_TIMEOUT_SECONDS
+        self._display_io_started_at: Optional[float] = None
+        self._display_io_watchdog_stop = threading.Event()
+        self._display_io_watchdog_thread: Optional[threading.Thread] = None
         self._rotation_requires_expand = self.rotation in (90, 270)
         self._frame_transform: Callable[[Image.Image], Image.Image] = lambda img: img
         self._frame_writer: Callable[[Image.Image], None] = lambda img: None
@@ -1747,6 +1752,8 @@ class Display:
             return
 
         with self._display_io_lock:
+            self._start_display_io_watchdog()
+            self._display_io_started_at = time.monotonic()
             try:
                 self._maybe_reinitialize_display_hat_mini()
                 if self._display is None:
@@ -1755,6 +1762,47 @@ class Display:
                 self._display.display()
             except Exception as exc:  # pragma: no cover - hardware import
                 logging.warning("Display refresh failed: %s", exc)
+            finally:
+                self._display_io_started_at = None
+
+    def _start_display_io_watchdog(self) -> None:
+        """Start a daemon that terminates the process when an SPI write hangs.
+
+        The ST7789 stack normally raises on an I/O error, but a wedged kernel
+        SPI transaction can block forever.  In that state the main loop cannot
+        reach the periodic driver reinitialization and systemd still considers
+        the process healthy, leaving the last frame on screen indefinitely.
+        Exiting lets the service's existing ``Restart=always`` policy reopen
+        SPI and reset the panel.
+        """
+
+        if self._display_io_timeout_seconds <= 0:
+            return
+        if self._display_io_watchdog_thread is not None:
+            return
+
+        thread = threading.Thread(
+            target=self._monitor_display_io,
+            name="display-hat-mini-io-watchdog",
+            daemon=True,
+        )
+        self._display_io_watchdog_thread = thread
+        thread.start()
+
+    def _monitor_display_io(self) -> None:
+        poll_seconds = min(1.0, max(0.05, self._display_io_timeout_seconds / 4.0))
+        while not self._display_io_watchdog_stop.wait(poll_seconds):
+            started_at = self._display_io_started_at
+            if started_at is None:
+                continue
+            elapsed = time.monotonic() - started_at
+            if elapsed < self._display_io_timeout_seconds:
+                continue
+            logging.critical(
+                "Display HAT Mini I/O has been blocked for %.1fs; exiting so the service can recover.",
+                elapsed,
+            )
+            os._exit(1)
 
     def _write_adafruit_minipitft_frame(self, buffer_to_display: Image.Image) -> None:
         """Push a frame to Adafruit miniPiTFT."""
