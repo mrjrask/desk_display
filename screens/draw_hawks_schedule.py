@@ -35,6 +35,7 @@ import contextlib
 import datetime as dt
 import logging
 import os
+import unicodedata
 from typing import Optional
 
 from PIL import Image, ImageDraw, ImageFont
@@ -1040,10 +1041,30 @@ def _format_last_bottom_line(game: dict, feed: Optional[dict] = None) -> str:
 # ─────────────────────────────────────────────────────────────────────────────
 # Next-game helpers (names, local PNG logos, centered bigger logos)
 
+def _clean_team_display_name(value: object) -> Optional[str]:
+    """Return an NHL team name without feed-only icons or hidden characters."""
+    if not isinstance(value, str):
+        return None
+
+    # Calendar feeds occasionally decorate matchup names with an emoji or a
+    # zero-width character.  TimesSquare cannot render those code points and
+    # displays its missing-glyph box instead, so retain only characters that
+    # can legitimately occur in an NHL team name.
+    cleaned = "".join(
+        char
+        for char in unicodedata.normalize("NFKC", value)
+        if char.isspace()
+        or unicodedata.category(char)[0] in {"L", "N"}
+        or char in ".&'-"
+    )
+    cleaned = " ".join(cleaned.split())
+    return cleaned or None
+
+
 def _team_full_name(team_like: dict) -> Optional[str]:
-    """Extract a full team name from a 'homeTeam'/'awayTeam' shape."""
+    """Extract and clean a full team name from a team payload."""
     info = _team_obj_from_any(team_like)
-    return info.get("name") or info.get("abbrev")
+    return _clean_team_display_name(info.get("name") or info.get("abbrev"))
 
 def _format_next_bottom(
     official_date: str,
