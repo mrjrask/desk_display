@@ -48,7 +48,31 @@ def test_fetch_blackhawks_next_game_prefers_ics_schedule(monkeypatch):
     result = data_fetch.fetch_blackhawks_next_game()
 
     assert result is games[0]
-    assert result["startTimeCentral"] == now.replace(month=9, day=30, hour=19).strftime("%I:%M %p").lstrip("0")
+    assert result["startTimeCentral"] == (
+        now.replace(month=9, day=30, hour=19).strftime("%I:%M %p").lstrip("0")
+    )
+
+
+def test_fetch_blackhawks_schedule_fallback_does_not_use_expired_season(monkeypatch):
+    requested_urls = []
+
+    class Response:
+        def raise_for_status(self):
+            pass
+
+        def json(self):
+            return {"games": []}
+
+    def fake_get(url, **_kwargs):
+        requested_urls.append(url)
+        return Response()
+
+    monkeypatch.setattr(data_fetch, "_fetch_blackhawks_ics_schedule", list)
+    monkeypatch.setattr(data_fetch._session, "get", fake_get)
+
+    assert data_fetch._fetch_blackhawks_schedule_games() == []
+    assert requested_urls == [data_fetch.NHL_API_URL]
+    assert "20252026" not in requested_urls[0]
 
 
 def test_fetch_blackhawks_live_game_treats_crit_as_live(monkeypatch):

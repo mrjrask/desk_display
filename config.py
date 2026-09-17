@@ -1411,7 +1411,7 @@ SCOREBOARD_STANDINGS_BOTTOM_PADDING = _get_non_negative_int_env(
 WEATHERKIT_URL_TEMPLATE = (
     "https://weatherkit.apple.com/api/v1/weather/{language}/{lat}/{lon}"
 )
-NHL_API_URL        = "https://api-web.nhle.com/v1/club-schedule-season/CHI/20252026"
+NHL_API_URL        = "https://api-web.nhle.com/v1/club-schedule-season/CHI/now"
 NHL_SCHEDULE_ICS_URL = os.environ.get(
     "NHL_SCHEDULE_ICS_URL",
     "webcal://ics.ecal.com/ecal-sub/6a5e38cbff3cfc0002c15087/NHL.ics",
