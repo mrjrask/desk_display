@@ -695,6 +695,13 @@ def _looks_like_playoff_game(game: dict) -> bool:
     return "series" in status_text and ("lead" in status_text or "tied" in status_text)
 
 
+def _round_rank_from_game_id(game: dict) -> Optional[int]:
+    """Extract the playoff round encoded in an NBA game identifier."""
+    game_id = str(game.get("gamePk") or game.get("id") or game.get("gameId") or "").strip()
+    match = re.fullmatch(r"004\d{2}00([1-4])\d{2}", game_id)
+    return int(match.group(1)) if match else None
+
+
 # NBA playoffs (play-in through Finals) run mid-April to mid-June. Outside
 # that window this fallback can't find anything real, so skip its ~23-day
 # day-by-day ESPN scoreboard scan entirely rather than burning it every
@@ -823,6 +830,10 @@ def _derive_playoff_matchups_from_games(games: list[dict]) -> list[dict]:
                 "has_live_game": False,
             }
             result_by_pair[key] = existing
+
+        game_round_rank = _round_rank_from_game_id(game)
+        if game_round_rank is not None:
+            existing["round_rank"] = game_round_rank
 
         if _is_final_game(game):
             away_score = _as_int(((game.get("teams") or {}).get("away") or {}).get("score"))
@@ -1224,18 +1235,24 @@ def render_nba_playoffs(display, games: list[dict], transition: bool = False) ->
     fetched_series = _fetch_playoff_matchups()
     fetched_selection = _select_current_round_series(fetched_series)
     series = _find_finals_series(fetched_series)
-    if not series:
+    game_series = _derive_playoff_matchups_from_games(merged_games)
+    game_finals = _find_finals_series(game_series)
+    if not series and game_finals:
+        series = game_finals
+
+    # A missing Finals entry is normal in rounds 1-3, not evidence that the
+    # bracket is unusable. Keep the authoritative selection (and avoid the
+    # costly recent-games scan) while it still contains an active series.
+    bracket_may_be_stale = not fetched_selection or all(
+        _is_completed_series(item) for item in fetched_selection
+    )
+    if not series and bracket_may_be_stale:
         recent_series = _derive_playoff_matchups_from_recent_games()
-        recent_selection = _select_current_round_series(recent_series)
-        game_series = _derive_playoff_matchups_from_games(merged_games)
-        game_selection = _select_current_round_series(game_series)
-        series = (
-            _find_finals_series(recent_series)
-            or _find_finals_series(game_series)
-            or game_selection
-            or recent_selection
-            or fetched_selection
-        )
+        series = _find_finals_series(recent_series)
+    if not series:
+        series = fetched_selection
+    if not series:
+        series = _select_current_round_series(game_series)
 
     for item in series:
         item["has_live_game"] = _series_has_live_game_from_games(item, merged_games)

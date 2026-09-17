@@ -564,10 +564,53 @@ def test_render_selects_current_round_from_fetched_series(monkeypatch):
     assert rendered == [finals]
 
 
+@pytest.mark.parametrize("round_rank", [1, 2, 3])
+def test_render_preserves_complete_pre_finals_bracket_selection(monkeypatch, round_rank):
+    first_round = [
+        {
+            "teams": {
+                "away": {"team": {"abbreviation": away}, "score": 1},
+                "home": {"team": {"abbreviation": home}, "score": 1},
+            },
+            "round_rank": round_rank,
+        }
+        for away, home in (("BOS", "MIA"), ("NYK", "DET"))
+    ]
+    todays_game = {
+        "gamePk": "0042600101",
+        "teams": {
+            "away": {"team": {"abbreviation": "BOS"}},
+            "home": {"team": {"abbreviation": "MIA"}},
+        },
+    }
+    rendered = []
+
+    monkeypatch.setattr(nba_playoffs, "_fetch_playoff_matchups", lambda: first_round)
+    monkeypatch.setattr(
+        nba_playoffs,
+        "_derive_playoff_matchups_from_recent_games",
+        lambda: pytest.fail("valid pre-Finals brackets must not trigger the recent-games scan"),
+    )
+    monkeypatch.setattr(
+        nba_playoffs,
+        "_render_playoff_screen",
+        lambda series: rendered.extend(series) or nba_playoffs.Image.new("RGB", (1, 1)),
+    )
+    monkeypatch.setattr(nba_playoffs.time, "sleep", lambda _seconds: None)
+
+    class Display:
+        def image(self, _image):
+            pass
+
+    nba_playoffs.render_nba_playoffs(Display(), [todays_game])
+
+    assert rendered == first_round
+
+
 def test_render_uses_recent_finals_when_bracket_only_has_stale_conference_final(monkeypatch):
     stale_conference_final = {
         "teams": {
-            "away": {"team": {"abbreviation": "BOS"}, "score": 3},
+            "away": {"team": {"abbreviation": "BOS"}, "score": 4},
             "home": {"team": {"abbreviation": "NYK"}, "score": 3},
         },
         "round_rank": 3,
@@ -577,7 +620,7 @@ def test_render_uses_recent_finals_when_bracket_only_has_stale_conference_final(
             "away": {"team": {"abbreviation": "SAS"}, "score": 1},
             "home": {"team": {"abbreviation": "NYK"}, "score": 1},
         },
-        "status_text": "Series tied 1-1",
+        "status_text": "NBA Finals tied 1-1",
     }
     rendered = []
 
