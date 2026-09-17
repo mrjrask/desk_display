@@ -684,7 +684,7 @@ def test_render_narrows_unranked_completed_recent_series_to_latest_matchup(monke
 
     assert all(item.get("round_rank") is None for item in recent_series)
 
-    monkeypatch.setattr(nba_playoffs, "_fetch_playoff_matchups", lambda: [])
+    monkeypatch.setattr(nba_playoffs, "_fetch_playoff_matchups", list)
     monkeypatch.setattr(
         nba_playoffs,
         "_derive_playoff_matchups_from_recent_games",
@@ -705,6 +705,56 @@ def test_render_narrows_unranked_completed_recent_series_to_latest_matchup(monke
 
     assert len(rendered) == 1
     assert nba_playoffs._series_team_abbrs(rendered[0]) == {"BOS", "SAS"}
+
+
+def test_render_recovers_completed_unranked_finals_without_precursor_series(monkeypatch):
+    finals = {
+        "teams": {
+            "away": {"team": {"abbreviation": "SAS"}, "score": 4},
+            "home": {"team": {"abbreviation": "BOS"}, "score": 2},
+        },
+        "status_text": "SAS wins series 4-2",
+        "latest_game_datetime": datetime.datetime(2026, 6, 18, tzinfo=CENTRAL_TIME),
+    }
+    rendered = []
+
+    monkeypatch.setattr(nba_playoffs, "_fetch_playoff_matchups", list)
+    monkeypatch.setattr(
+        nba_playoffs, "_derive_playoff_matchups_from_recent_games", lambda: [finals]
+    )
+    monkeypatch.setattr(
+        nba_playoffs,
+        "_render_playoff_screen",
+        lambda series: rendered.extend(series) or nba_playoffs.Image.new("RGB", (1, 1)),
+    )
+    monkeypatch.setattr(nba_playoffs.time, "sleep", lambda _seconds: None)
+
+    class Display:
+        def image(self, _image):
+            pass
+
+    nba_playoffs.render_nba_playoffs(Display(), [])
+
+    assert rendered == [finals]
+
+
+def test_unranked_completed_fallback_rejects_generic_playoff_ancestry():
+    def completed(away, home, day):
+        return {
+            "teams": {
+                "away": {"team": {"abbreviation": away}, "score": 4},
+                "home": {"team": {"abbreviation": home}, "score": 2},
+            },
+            "latest_game_datetime": datetime.datetime(2026, 5, day, tzinfo=CENTRAL_TIME),
+        }
+
+    history = [
+        completed("BOS", "CLE", 10),
+        completed("NYK", "IND", 11),
+        completed("BOS", "NYK", 20),
+    ]
+
+    assert nba_playoffs._find_latest_completed_series(history) == []
 
 
 def test_render_checks_supplied_games_when_earlier_sources_only_have_stale_rounds(monkeypatch):
