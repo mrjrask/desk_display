@@ -1,6 +1,18 @@
 """Tests for Hawks schedule helpers."""
 
-from screens.draw_hawks_schedule import _last_game_result_prefix
+from screens.draw_hawks_schedule import _last_game_result_prefix, _team_full_name
+
+
+def test_team_full_name_removes_feed_icons_and_hidden_characters():
+    team = {"name": {"default": "\u200b🏒\u00a0Minnesota Wild™"}}
+
+    assert _team_full_name(team) == "Minnesota Wild"
+
+
+def test_team_full_name_preserves_valid_name_punctuation():
+    team = {"name": {"default": "St. John's A&M"}}
+
+    assert _team_full_name(team) == "St. John's A&M"
 
 
 def test_last_game_result_overtime_from_outcome():
