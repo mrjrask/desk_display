@@ -35,17 +35,15 @@
       "inside": 1,
       "verano logo": 0,
       "vrnof": 3,
-      "hawks logo": 0,
+      "hawks logo": 1,
       "hawks stand1": 0,
-      "hawks last": 0,
+      "hawks last": 1,
       "hawks live": 1,
-      "hawks next": 0,
-      "hawks next home": 0,
+      "hawks next": 1,
+      "hawks next home": 1,
       "hawks schedule quad": {
         "frequency": 0,
-        "extra_seconds": 3,
-        "hide_after_enabled": true,
-        "hide_after_at": "2026-04-16T10:00"
+        "extra_seconds": 3
       },
       "nhl logo": 0,
       "NHL Scoreboard": 0,

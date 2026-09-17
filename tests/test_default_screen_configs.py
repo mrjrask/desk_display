@@ -52,6 +52,22 @@ def test_default_screen_configs_alternate_news_headline_feeds():
         assert screens["news headlines 2"] == 0
 
 
+def test_default_screen_configs_enable_hawks_screens_without_schedule_expiration():
+    enabled_screens = ("hawks logo", "hawks last", "hawks next", "hawks next home")
+
+    for filename in ("default_screens_large.json", "default_screens_small.json"):
+        config = _load_default_config(filename)
+        screens = config["config"]["screens"]
+
+        for screen in enabled_screens:
+            assert screens[screen] == 1
+
+        schedule_quad = screens["hawks schedule quad"]
+        if isinstance(schedule_quad, dict):
+            assert "hide_after_enabled" not in schedule_quad
+            assert "hide_after_at" not in schedule_quad
+
+
 def test_default_screen_configs_include_adsb_screens_at_end_of_other():
     for filename in ("default_screens_large.json", "default_screens_small.json"):
         config = _load_default_config(filename)
