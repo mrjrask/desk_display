@@ -30,6 +30,7 @@ def test_current_ahl_season_prefers_current_flag(monkeypatch):
     monkeypatch.setattr(data_fetch, "AHL_SEASON_ID", "")
     monkeypatch.setattr(data_fetch, "_AHL_SEASON_CACHE", None)
     monkeypatch.setattr(data_fetch, "_AHL_SEASON_CACHE_YEAR", None)
+    monkeypatch.setattr(data_fetch, "_expected_ahl_season_year", lambda: 2025)
     monkeypatch.setattr(
         data_fetch,
         "_ahl_request",
@@ -48,6 +49,7 @@ def test_current_ahl_season_sorts_unordered_rows_by_dates_or_identifier(monkeypa
     monkeypatch.setattr(data_fetch, "AHL_SEASON_ID", "")
     monkeypatch.setattr(data_fetch, "_AHL_SEASON_CACHE", None)
     monkeypatch.setattr(data_fetch, "_AHL_SEASON_CACHE_YEAR", None)
+    monkeypatch.setattr(data_fetch, "_expected_ahl_season_year", lambda: 2025)
     monkeypatch.setattr(
         data_fetch,
         "_ahl_request",
@@ -61,6 +63,28 @@ def test_current_ahl_season_sorts_unordered_rows_by_dates_or_identifier(monkeypa
     )
 
     assert data_fetch._current_ahl_season_id() == "new"
+
+
+def test_current_ahl_season_excludes_future_unflagged_season(monkeypatch):
+    monkeypatch.setattr(data_fetch, "AHL_SEASON_ID", "")
+    monkeypatch.setattr(data_fetch, "_AHL_SEASON_CACHE", None)
+    monkeypatch.setattr(data_fetch, "_AHL_SEASON_CACHE_YEAR", None)
+    monkeypatch.setattr(data_fetch, "_expected_ahl_season_year", lambda: 2025)
+    monkeypatch.setattr(
+        data_fetch,
+        "_ahl_request",
+        lambda *args, **kwargs: _season_payload(
+            [
+                {"id": "active", "name": "2025-26"},
+                {"id": "future", "name": "2026-27"},
+                {"id": "old", "name": "2024-25"},
+            ]
+        ),
+    )
+
+    assert data_fetch._current_ahl_season_id() == "active"
+    assert data_fetch._AHL_SEASON_CACHE == "active"
+    assert data_fetch._AHL_SEASON_CACHE_YEAR == 2025
 
 
 def test_current_ahl_season_cache_expires_at_hockey_year_rollover(monkeypatch):

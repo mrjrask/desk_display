@@ -3150,10 +3150,15 @@ def _current_ahl_season_id() -> Optional[str]:
         alt = _ahl_request("season", feed="modulekit")
         rows = _extract_rows(alt, "Seasons", "Season")
 
-    matching_rows = [
-        row for row in rows if _ahl_season_start_year(row) == expected_year
+    rows_with_years = [(row, _ahl_season_start_year(row)) for row in rows]
+    matching_rows = [row for row, year in rows_with_years if year == expected_year]
+    previous_rows = [
+        row for row, year in rows_with_years if year is not None and year < expected_year
     ]
-    candidates = matching_rows or rows
+    unknown_rows = [row for row, year in rows_with_years if year is None]
+    # Feeds can publish next season before it becomes active. Never let that
+    # future row win the unflagged newest-season fallback.
+    candidates = matching_rows or previous_rows or unknown_rows
     selected_row = None
     for row in candidates:
         flag = row.get("is_current") or row.get("isCurrent") or row.get("current")
