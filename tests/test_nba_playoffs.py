@@ -520,6 +520,50 @@ def test_select_current_round_series_prefers_finals_over_stale_incomplete_prior_
     assert selected[0]["round_rank"] == 4
 
 
+def test_render_selects_current_round_from_fetched_series(monkeypatch):
+    conference_final = {
+        "teams": {
+            "away": {"team": {"abbreviation": "BOS"}, "score": 4},
+            "home": {"team": {"abbreviation": "NYK"}, "score": 2},
+        },
+        "round_rank": 3,
+    }
+    finals = {
+        "teams": {
+            "away": {"team": {"abbreviation": "SAS"}, "score": 1},
+            "home": {"team": {"abbreviation": "BOS"}, "score": 1},
+        },
+        "round_rank": 4,
+    }
+    rendered = []
+
+    monkeypatch.setattr(
+        nba_playoffs,
+        "_fetch_playoff_matchups",
+        lambda: [conference_final, finals],
+    )
+    monkeypatch.setattr(
+        nba_playoffs,
+        "_derive_playoff_matchups_from_recent_games",
+        lambda: pytest.fail("recent-games fallback should not be used"),
+    )
+    monkeypatch.setattr(
+        nba_playoffs,
+        "_render_playoff_screen",
+        lambda series: rendered.extend(series)
+        or nba_playoffs.Image.new("RGB", (1, 1)),
+    )
+    monkeypatch.setattr(nba_playoffs.time, "sleep", lambda _seconds: None)
+
+    class Display:
+        def image(self, _image):
+            pass
+
+    nba_playoffs.render_nba_playoffs(Display(), [])
+
+    assert rendered == [finals]
+
+
 def test_derive_playoff_matchups_from_recent_games_skips_espn_scan_outside_playoff_season(monkeypatch):
     """Regression test: outside the April-June playoff window this fallback
     must not hit ESPN at all. Scanning the ~23-day window every rotation

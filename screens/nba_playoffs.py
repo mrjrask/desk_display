@@ -1208,13 +1208,13 @@ def render_nba_playoffs(display, games: list[dict], transition: bool = False) ->
     merged_games = list(games or [])
 
     fetched_series = _fetch_playoff_matchups()
-    series = _filter_current_finals_series(fetched_series)
+    series = _select_current_round_series(fetched_series)
     if not series:
         recent_series = _derive_playoff_matchups_from_recent_games()
-        series = _filter_current_finals_series(recent_series)
+        series = _select_current_round_series(recent_series)
     if not series:
         game_series = _derive_playoff_matchups_from_games(merged_games)
-        series = _filter_current_finals_series(game_series)
+        series = _select_current_round_series(game_series)
 
     for item in series:
         item["has_live_game"] = _series_has_live_game_from_games(item, merged_games)
