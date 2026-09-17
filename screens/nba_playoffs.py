@@ -712,6 +712,17 @@ def _round_rank_from_game_id(game: dict) -> Optional[int]:
 # kept showing "No games" even with real games that week.
 _PLAYOFF_SEASON_MONTHS = {4, 5, 6}
 
+# An unranked matchup can still be identified as the Finals because it is the
+# only playoff round in which opponents come from different conferences.  Keep
+# this local rather than relying on the optional conference fields in ESPN's
+# scoreboard payloads; those fields are not consistently present on teams.
+_EASTERN_CONFERENCE_ABBRS = frozenset(
+    "ATL BOS BKN BRK CHA CHI CLE DET IND MIA MIL NY NYK ORL PHI TOR WAS WSH".split()
+)
+_WESTERN_CONFERENCE_ABBRS = frozenset(
+    "DAL DEN GS GSW HOU LAC LAL MEM MIN NO NOP OKC PHX POR SAC SA SAS UTA".split()
+)
+
 # Even inside the playoff window (e.g. the first few days of April, before
 # the play-in games are actually scheduled), a scan that comes up empty
 # would otherwise re-run in full every rotation cycle. Cool down after an
@@ -1051,7 +1062,12 @@ def _find_finals_series(series: list[dict]) -> list[dict]:
 
 
 def _find_latest_completed_series(series: list[dict]) -> list[dict]:
-    """Narrow an unranked, completed game history to its latest matchup."""
+    """Return the latest completed, unranked cross-conference matchup.
+
+    Cross-conference opponents are Finals-specific evidence.  Merely finding
+    both teams in older series is insufficient: that pattern also occurs when
+    a conference semifinal winner completes its conference final.
+    """
     candidates = [
         item
         for item in series
@@ -1061,20 +1077,19 @@ def _find_latest_completed_series(series: list[dict]) -> list[dict]:
         and _as_int(item.get("round_rank")) is None
         and isinstance(item.get("latest_game_datetime"), datetime.datetime)
     ]
-    if len(candidates) < 3:
+    if not candidates:
         return []
-    latest = max(candidates, key=lambda item: item["latest_game_datetime"])
-    earlier_teams = set().union(
-        *(
-            _series_team_abbrs(item)
-            for item in candidates
-            if item is not latest
-            and item["latest_game_datetime"] < latest["latest_game_datetime"]
-        )
-    )
-    if not _series_team_abbrs(latest).issubset(earlier_teams):
+
+    cross_conference = []
+    for item in candidates:
+        teams = _series_team_abbrs(item)
+        has_east = bool(teams & _EASTERN_CONFERENCE_ABBRS)
+        has_west = bool(teams & _WESTERN_CONFERENCE_ABBRS)
+        if len(teams) == 2 and has_east and has_west:
+            cross_conference.append(item)
+    if not cross_conference:
         return []
-    return [latest]
+    return [max(cross_conference, key=lambda item: item["latest_game_datetime"])]
 
 
 def _select_current_round_series(series: list[dict]) -> list[dict]:
