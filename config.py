@@ -743,7 +743,13 @@ DISPLAY_HAT_MINI_LED_ENABLED = _get_bool_env(
 )
 
 DISPLAY_HAT_MINI_REINIT_SECONDS = max(
-    0, env_int("DISPLAY_HAT_MINI_REINIT_SECONDS", 1800)
+    # Reconstructing the driver tears down and reclaims the same GPIO/SPI
+    # resources while the process is live. On some driver/kernel versions
+    # that reset leaves the panel black until the process reopens the device.
+    # The watchdog and refresh-failure limit below provide a safer recovery
+    # path by letting systemd restart the whole process, so hot reinitialization
+    # is now opt-in rather than happening every 30 minutes by default.
+    0, env_int("DISPLAY_HAT_MINI_REINIT_SECONDS", 0)
 )
 DISPLAY_HAT_MINI_IO_TIMEOUT_SECONDS = max(
     0.0, env_float("DISPLAY_HAT_MINI_IO_TIMEOUT_SECONDS", 15.0)

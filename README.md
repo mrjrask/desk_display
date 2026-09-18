@@ -363,7 +363,7 @@ Configuration is environment-driven. Put local values in `.env` for development 
 | `DISPLAY_FADE_IN_DISPLAY_HAT_MINI_STEPS` | Fade-in step count for Display HAT Mini. |
 | `DISPLAY_FADE_IN_HYPERPIXEL_STEPS` | Fade-in step count for HyperPixel-style profiles. |
 | `DISPLAY_FADE_IN_HDMI_1080P_STEPS` | Fade-in step count for HDMI/1080p-style profiles. |
-| `DISPLAY_HAT_MINI_REINIT_SECONDS` | Periodic Display HAT Mini reinitialization interval; `0` disables. |
+| `DISPLAY_HAT_MINI_REINIT_SECONDS` | Periodic Display HAT Mini hot-reinitialization interval; defaults to `0` (disabled) because live GPIO/SPI teardown can leave some panels black. The watchdog settings below are the preferred recovery mechanism. |
 | `DISPLAY_HAT_MINI_IO_TIMEOUT_SECONDS` | Maximum seconds an LCD SPI operation may block before the process exits for systemd recovery; defaults to `15`, and `0` disables the watchdog. |
 | `DISPLAY_HAT_MINI_MAX_REFRESH_FAILURES` | Consecutive LCD refresh errors allowed before exiting for systemd recovery; defaults to `3`, and `0` disables this recovery. |
 | `DISPLAY_HAT_MINI_LED_ENABLED` | Enables Display HAT Mini LED behavior. |
