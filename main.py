@@ -1161,14 +1161,6 @@ def _monitor_control_buttons() -> None:
         logging.debug("Control button monitor thread exiting.")
 
 
-_button_monitor_thread = threading.Thread(
-    target=_monitor_control_buttons,
-    name="control-button-monitor",
-    daemon=True,
-)
-_button_monitor_thread.start()
-
-
 def _next_screen_from_registry(
     registry: Dict[str, ScreenDefinition]
 ) -> Optional[ScreenDefinition]:
@@ -1827,7 +1819,6 @@ def _handle_sigterm(signum, frame):
     logging.info("✋ SIGTERM caught—requesting shutdown…")
     request_shutdown("SIGTERM")
 
-signal.signal(signal.SIGTERM, _handle_sigterm)
 
 # ─── Logos ───────────────────────────────────────────────────────────────────
 IMAGES_DIR = os.path.join(SCRIPT_DIR, "images")
@@ -2814,10 +2805,21 @@ def init_runtime() -> None:
     global DISPLAY_STATUS_PATH
     global SCREENSHOT_ARCHIVE_MIRROR, _storage_paths, display, video_out
     global _background_refresh_thread, _startup_refresh_thread
+    global _button_monitor_thread
     global _runtime_initialized, _wifi_monitor_enabled
 
     if _runtime_initialized:
         return
+
+    signal.signal(signal.SIGTERM, _handle_sigterm)
+
+    if _button_monitor_thread is None or not _button_monitor_thread.is_alive():
+        _button_monitor_thread = threading.Thread(
+            target=_monitor_control_buttons,
+            name="control-button-monitor",
+            daemon=True,
+        )
+        _button_monitor_thread.start()
 
     logging.basicConfig(
         level=logging.INFO,
