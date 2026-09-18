@@ -491,28 +491,31 @@ def layout_row_entries(
 
 @dataclass
 class _PreparedTickerRow:
-    """Static pixels and geometry for a row, built once per ticker run."""
+    """Static geometry and bounded entry assets for a ticker row."""
 
     row: _TickerRow
     top: int
     lane_x0: int
     lane_width: int
-    cycle: Image.Image
     entry_widths: list[float]
+    entry_images: list[Optional[Image.Image]]
+
+
+# Limit cached headline pixels to two full screen buffers. Entries wider than
+# four lanes are rendered only while visible, preventing a malformed feed title
+# from creating an enormous image on memory-constrained Raspberry Pi devices.
+_ENTRY_CACHE_SCREEN_MULTIPLIER = 2
+_ENTRY_CACHE_MAX_LANE_MULTIPLIER = 4
 
 
 class _TickerRenderer:
-    """Render moving frames without rasterizing every headline every time.
-
-    Text rendering and thumbnail composition are relatively expensive on a
-    Raspberry Pi Zero. The ticker contents do not change during a run, so
-    keep one pre-rendered strip per row and only copy the visible segments.
-    """
+    """Render frames while caching only a bounded amount of static content."""
 
     def __init__(self, rows: list[_TickerRow], row_height: int, row_tops: list[int]):
         self.row_height = row_height
         self.base = Image.new("RGB", (WIDTH, HEIGHT), (0, 0, 0))
         self.prepared: list[_PreparedTickerRow] = []
+        cache_pixels_remaining = WIDTH * HEIGHT * _ENTRY_CACHE_SCREEN_MULTIPLIER
         draw = ImageDraw.Draw(self.base)
         label_pad_x = 10
 
@@ -538,27 +541,41 @@ class _TickerRenderer:
                 fill=row.theme["bg"],
             )
             entry_widths = [float(entry.width) for entry in row.entries]
-            cycle_width = max(1, int(sum(entry_widths)))
-            cycle = Image.new("RGB", (cycle_width, row_height), row.theme["bg"])
-            cycle_draw = ImageDraw.Draw(cycle)
-            x = 0
+            entry_images: list[Optional[Image.Image]] = []
+            max_cached_width = lane_width * _ENTRY_CACHE_MAX_LANE_MULTIPLIER
             for entry in row.entries:
-                content_x = x
-                if entry.thumb is not None:
-                    thumb_y = (row_height - entry.thumb_size) // 2
-                    cycle.paste(entry.thumb, (content_x, thumb_y))
-                    content_x += entry.thumb_size + 8
-                text_h = measure_text(cycle_draw, entry.text, HEADLINE_FONT)[1]
-                cycle_draw.text(
-                    (content_x, (row_height - text_h) // 2),
-                    entry.text,
-                    font=HEADLINE_FONT,
-                    fill=entry.text_color or row.theme["text"],
-                )
-                x += entry.width
+                pixel_count = entry.width * row_height
+                if entry.width > max_cached_width or pixel_count > cache_pixels_remaining:
+                    entry_images.append(None)
+                    continue
+                entry_image = Image.new("RGB", (entry.width, row_height), row.theme["bg"])
+                self._draw_entry(entry_image, ImageDraw.Draw(entry_image), entry, 0, row)
+                entry_images.append(entry_image)
+                cache_pixels_remaining -= pixel_count
             self.prepared.append(
-                _PreparedTickerRow(row, top, lane_x0, lane_width, cycle, entry_widths)
+                _PreparedTickerRow(row, top, lane_x0, lane_width, entry_widths, entry_images)
             )
+
+    def _draw_entry(
+        self,
+        image: Image.Image,
+        draw: ImageDraw.ImageDraw,
+        entry: _TickerEntry,
+        x: int,
+        row: _TickerRow,
+    ) -> None:
+        content_x = x
+        if entry.thumb is not None:
+            thumb_y = (self.row_height - entry.thumb_size) // 2
+            image.paste(entry.thumb, (content_x, thumb_y))
+            content_x += entry.thumb_size + 8
+        text_h = measure_text(draw, entry.text, HEADLINE_FONT)[1]
+        draw.text(
+            (content_x, (self.row_height - text_h) // 2),
+            entry.text,
+            font=HEADLINE_FONT,
+            fill=entry.text_color or row.theme["text"],
+        )
 
     def render(self) -> tuple[Image.Image, list[tuple[int, int, int, int, NewsHeadline]]]:
         img = self.base.copy()
@@ -566,30 +583,35 @@ class _TickerRenderer:
 
         for prepared in self.prepared:
             row = prepared.row
-            cycle_width = prepared.cycle.width
-            source_x = int(row.offset % cycle_width)
-            dest_x = prepared.lane_x0
-            remaining = prepared.lane_width
-            while remaining > 0:
-                copy_width = min(cycle_width - source_x, remaining)
-                segment = prepared.cycle.crop((source_x, 0, source_x + copy_width, self.row_height))
-                img.paste(segment, (dest_x, prepared.top))
-                dest_x += copy_width
-                remaining -= copy_width
-                source_x = 0
-
+            lane = Image.new("RGB", (prepared.lane_width, self.row_height), row.theme["bg"])
+            lane_draw: Optional[ImageDraw.ImageDraw] = None
             for x0, x1, index in layout_row_entries(
                 prepared.entry_widths, row.offset, prepared.lane_width
             ):
-                headline = row.entries[index].headline
-                if headline is None:
+                entry = row.entries[index]
+                entry_image = prepared.entry_images[index]
+                if entry_image is not None:
+                    lane.paste(entry_image, (int(x0), 0))
+                else:
+                    if lane_draw is None:
+                        lane_draw = ImageDraw.Draw(lane)
+                    self._draw_entry(lane, lane_draw, entry, int(x0), row)
+
+                if entry.headline is None:
                     continue
                 hit_x0 = prepared.lane_x0 + max(0, int(x0))
                 hit_x1 = prepared.lane_x0 + min(prepared.lane_width, int(x1))
                 if hit_x1 > hit_x0:
                     hit_rects.append(
-                        (hit_x0, prepared.top, hit_x1, prepared.top + self.row_height, headline)
+                        (
+                            hit_x0,
+                            prepared.top,
+                            hit_x1,
+                            prepared.top + self.row_height,
+                            entry.headline,
+                        )
                     )
+            img.paste(lane, (prepared.lane_x0, prepared.top))
 
         return img, hit_rects
 
@@ -916,6 +938,13 @@ def _show_reader_overlay(display, headline: NewsHeadline, pygame_module) -> None
 # ─── Main ticker loop ───────────────────────────────────────────────────────
 
 
+def _ticker_offset_step(speed: float, frame_seconds: float) -> float:
+    """Advance at least one nominal frame, scaling up for genuinely slow frames."""
+
+    elapsed_frames = max(1.0, frame_seconds / _FRAME_INTERVAL_SECONDS)
+    return speed * elapsed_frames
+
+
 def _run_ticker(
     display, rows: list[_TickerRow], ticker_data: Optional[dict[str, Any]] = None
 ) -> ScreenImage:
@@ -964,7 +993,7 @@ def _run_ticker(
         # needed instead of making the ticker itself run in slow motion.
         frame_seconds = time.monotonic() - frame_start
         for row in rows:
-            row.offset += row.speed * frame_seconds / _FRAME_INTERVAL_SECONDS
+            row.offset += _ticker_offset_step(row.speed, frame_seconds)
 
     if last_frame is None:
         last_frame, _hit_rects = renderer.render()

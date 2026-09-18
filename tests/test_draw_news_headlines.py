@@ -173,6 +173,64 @@ def test_ticker_renderer_rasterizes_text_only_during_setup(monkeypatch):
     assert measure_calls == setup_calls
 
 
+def test_ticker_renderer_does_not_cache_oversized_entry():
+    row_height, row_tops = dnh._compute_row_layout(1)
+    oversized_width = dnh.WIDTH * 100
+    entry = dnh._TickerEntry(
+        headline=NewsHeadline(
+            topic_id="local", title="Oversized", link="https://example.com/oversized"
+        ),
+        text="Oversized headline",
+        width=oversized_width,
+        thumb=None,
+        thumb_size=0,
+    )
+    row = dnh._TickerRow(
+        topic=_topics(["local"])[0],
+        theme=dnh._FALLBACK_THEME,
+        entries=[entry],
+        speed=1.0,
+    )
+
+    renderer = dnh._TickerRenderer([row], row_height, row_tops)
+
+    prepared = renderer.prepared[0]
+    assert prepared.entry_images == [None]
+    assert prepared.entry_widths == [float(oversized_width)]
+    image, hit_rects = renderer.render()
+    assert image.size == (dnh.WIDTH, dnh.HEIGHT)
+    assert hit_rects
+
+
+def test_ticker_renderer_bounds_total_cached_pixels():
+    row_height, row_tops = dnh._compute_row_layout(1)
+    entry_width = 100
+    entries = [
+        dnh._TickerEntry(None, f"Entry {index}", entry_width, None, 0) for index in range(100)
+    ]
+    row = dnh._TickerRow(
+        topic=_topics(["markets"])[0],
+        theme=dnh._FALLBACK_THEME,
+        entries=entries,
+        speed=1.0,
+    )
+
+    renderer = dnh._TickerRenderer([row], row_height, row_tops)
+
+    cached_pixels = sum(
+        image.width * image.height
+        for image in renderer.prepared[0].entry_images
+        if image is not None
+    )
+    assert cached_pixels <= dnh.WIDTH * dnh.HEIGHT * dnh._ENTRY_CACHE_SCREEN_MULTIPLIER
+
+
+def test_ticker_offset_step_has_nominal_minimum_and_scales_for_slow_frames():
+    assert dnh._ticker_offset_step(2.0, 0.0) == 2.0
+    assert dnh._ticker_offset_step(2.0, dnh._FRAME_INTERVAL_SECONDS / 2) == 2.0
+    assert dnh._ticker_offset_step(2.0, dnh._FRAME_INTERVAL_SECONDS * 3) == 6.0
+
+
 def test_hit_test_returns_headline_for_matching_point_and_none_otherwise():
     headline = NewsHeadline(topic_id="local", title="Hit me", link="https://example.com/1")
     rects = [(10, 20, 110, 60, headline)]
