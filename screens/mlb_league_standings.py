@@ -487,7 +487,6 @@ def _column_layout(
         record_right = min(record_right, gb_right - stat_widths["streak"] - stat_widths["record"])
         recent_right = min(recent_right, gb_right - max(2, scale_value(2)))
 
-        record_left = record_right - stat_widths["record"]
         recent_left = recent_right - stat_widths["streak"]
         gb_left = gb_right - stat_widths["gb"]
 

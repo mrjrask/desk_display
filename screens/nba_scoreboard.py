@@ -485,7 +485,7 @@ def _draw_game_block(
             fill = (255, 255, 255)
         _center_text(draw, text, font, COL_X[idx], COL_WIDTHS[idx], score_top, SCORE_ROW_H, fill=fill)
 
-    for idx, team_side, team_key in ((1, away, "away"), (3, home, "home")):
+    for idx, team_side, _team_key in ((1, away, "away"), (3, home, "home")):
         team_obj = (team_side or {}).get("team", {})
         abbr = _team_logo_abbr(team_obj)
         logo = _load_logo_cached(abbr) if abbr else None

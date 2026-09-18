@@ -232,7 +232,7 @@ def _animate_logo_drop(display, base: Image.Image, row_positions):
         for logo, x0, y0 in placed:
             frame.paste(logo, (x0, y0), logo)
 
-        for idx, (start, drops) in enumerate(schedule):
+        for _idx, (start, drops) in enumerate(schedule):
             progress = current_step - start
             if progress < 0 or progress >= steps:
                 continue

@@ -1933,7 +1933,7 @@ def _draw_metric_rows(
     count = len(metrics)
     cell_rects = list(cells) if cells is not None else _metric_grid_cells(rect, count)
 
-    for metric, cell_rect in zip(metrics, cell_rects):
+    for metric, cell_rect in zip(metrics, cell_rects, strict=False):
         _draw_metric_row(
             draw,
             cell_rect,

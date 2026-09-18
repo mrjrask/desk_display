@@ -560,7 +560,7 @@ def test_focused_refresh_preserves_updates_when_another_date_fails(monkeypatch):
         home_score="3",
         state="in",
     )
-    session = _install_fake_session(
+    _install_fake_session(
         monkeypatch,
         {"20260910": [thursday], "20260913": [sunday_live]},
     )

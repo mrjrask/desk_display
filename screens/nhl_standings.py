@@ -607,7 +607,7 @@ def _build_column_layout(max_team_name_width: int) -> tuple[dict[str, int], int]
                 if positions[idx] < target:
                     positions[idx] = target
 
-        for key, pos in zip(STATS_COLUMNS, positions):
+        for key, pos in zip(STATS_COLUMNS, positions, strict=True):
             layout[key] = pos
 
     first_stat_left = first_column - first_column_left_extent
@@ -1934,10 +1934,10 @@ def _animate_overview_drop(
         frame = base.copy()
         dynamic: list[Placement] = []
 
-        for abbr, logo, x0, y0 in placed:
+        for _abbr, logo, x0, y0 in placed:
             frame.paste(logo, (x0, y0), logo)
 
-        for idx, (start, drops) in enumerate(schedule):
+        for _idx, (start, drops) in enumerate(schedule):
             progress = current_step - start
             if progress < 0 or progress >= steps:
                 continue

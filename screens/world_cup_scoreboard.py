@@ -198,7 +198,7 @@ def _center_score_text(draw: ImageDraw.ImageDraw, team: dict, *, show: bool, x: 
     total_width = sum(r - l for l, _t, r, _b in measurements)
     max_height = max((b - t for _l, t, _r, b in measurements), default=0)
     current_x = x + (width - total_width) // 2
-    for (text, font), (l, t, r, b) in zip(segments, measurements):
+    for (text, font), (l, t, r, b) in zip(segments, measurements, strict=True):
         segment_width = r - l
         segment_height = b - t
         tx = current_x - l

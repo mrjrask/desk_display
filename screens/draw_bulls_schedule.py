@@ -612,7 +612,7 @@ def _draw_scoreboard_table(
     row_count = len(rows)
     col1_w = min(WIDTH - 24, max(84, int(WIDTH * 0.72)))
     col2_w = max(20, WIDTH - col1_w)
-    x0, x1, x2 = 0, col1_w, WIDTH
+    x1 = col1_w
 
     header_h = 0  # removed
     table_top = top_y
@@ -627,7 +627,7 @@ def _draw_scoreboard_table(
     y = table_top + header_h  # header_h = 0
 
     # Rows
-    for i, r in enumerate(rows):
+    for _i, r in enumerate(rows):
         top = y
         h = row_h
         label = _str_or_blank(r.get("label") or "")

@@ -978,7 +978,7 @@ def _parse_standings(data: Any) -> dict[str, dict[str, list[dict]]]:
 
     # Sort each division by rank fallback to record
     for conference in standings.values():
-        for division, teams in conference.items():
+        for _division, teams in conference.items():
             teams.sort(
                 key=lambda item: (
                     item.get("order", 999),
@@ -1104,7 +1104,7 @@ def _render_conference(title: str, division_order: list[str], standings: dict[st
 
     column_layout = _build_column_layout(team_names)
 
-    for division, section_height in zip(division_order, sections):
+    for division, section_height in zip(division_order, sections, strict=True):
         teams = standings.get(division, [])
 
         # Division header
@@ -1395,7 +1395,7 @@ def _render_overview(
                 _paste_overview_logos(frame, placed)
 
             animated: list[dict[str, Any]] = []
-            for idx, (start, drops) in enumerate(schedule):
+            for _idx, (start, drops) in enumerate(schedule):
                 progress = current_step - start
                 if progress < 0 or progress >= steps:
                     continue
@@ -1477,7 +1477,7 @@ def _render_overview_fallback(
             mx = (WIDTH - max_width) // 2
             my = (HEIGHT - total_height) // 2
             line_y = my
-            for line, (line_w, line_h) in zip(lines, line_sizes):
+            for line, (line_w, line_h) in zip(lines, line_sizes, strict=True):
                 line_x = (WIDTH - line_w) // 2
                 draw.text((line_x, line_y), line, font=ROW_FONT, fill=WHITE)
                 line_y += line_h + 2
@@ -1557,7 +1557,7 @@ def _render_and_display(
                 tx = (WIDTH - max_width) // 2
                 ty = (HEIGHT - total_height) // 2
                 line_y = ty
-                for line, (line_w, line_h) in zip(lines, line_sizes):
+                for line, (line_w, line_h) in zip(lines, line_sizes, strict=True):
                     line_x = (WIDTH - line_w) // 2
                     draw.text((line_x, line_y), line, font=ROW_FONT, fill=WHITE)
                     line_y += line_h + 2

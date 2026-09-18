@@ -279,9 +279,7 @@ def _map_game(game: dict[str, Any]) -> dict[str, Any]:
 
     linescore: dict[str, Any] = {}
     if period_number is not None:
-        is_ot = False
         if period_number > 4 or period_type in {"OT", "OVERTIME"}:
-            is_ot = True
             ot_number = period_number - 4 if period_number > 4 else period_number
             linescore["currentPeriodOrdinal"] = _ordinal_from_number(ot_number, is_overtime=True)
         else:

@@ -2973,12 +2973,12 @@ def main_loop():
             # Wi-Fi outage handling
             if _wifi_monitor_enabled and hasattr(wifi_utils, "get_wifi_state"):
                 try:
-                    wifi_state, wifi_ssid = wifi_utils.get_wifi_state()
+                    wifi_state, _ = wifi_utils.get_wifi_state()
                 except Exception as exc:
                     logging.debug("Wi-Fi state unavailable: %s", exc)
-                    wifi_state, wifi_ssid = ("ok", None)
+                    wifi_state = "ok"
             else:
-                wifi_state, wifi_ssid = ("ok", None)
+                wifi_state = "ok"
 
             if _wifi_monitor_enabled:
                 _update_wifi_outage_state(wifi_state)
