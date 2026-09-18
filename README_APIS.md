@@ -292,11 +292,19 @@ Both news headlines screens (`screens/draw_news_headlines.py`: `draw_news_headli
 
 | Use | Endpoint/config |
 | --- | --- |
-| Schedule calendar | `AHL_SCHEDULE_ICS_URL`; defaults to the bundled Stanza Chicago Wolves webcal URL converted to HTTPS as needed. |
+| Schedule calendar | `AHL_SCHEDULE_ICS_URL`; set this environment variable to a StanzaCal or compatible ICS URL (`webcal://` is converted to HTTPS). It has no source default. |
 | HockeyTech feed base | `AHL_API_BASE_URL`; default family is `https://lscluster.hockeytech.com/feed/` / `https://lscluster.hockeytech.com/feed/index.php`. |
 | HockeyTech params | `AHL_API_KEY`, `AHL_CLIENT_CODE`, `AHL_LEAGUE_ID`, `AHL_SITE_ID`, `AHL_SEASON_ID`, `AHL_TEAM_ID`, `AHL_TEAM_TRICODE`, `AHL_TEAM_NAME`. |
 
 Fields used include game dates, opponent, home/away flags, final scores, recent scoring details, and schedule metadata. Responses are cached by helpers where useful for redraw performance.
+
+`AHL_API_KEY` and `AHL_SCHEDULE_ICS_URL` are optional, secret environment
+configuration and intentionally default to empty. Put local values in `.env`
+(which must not be committed) or export them in the service environment. When
+the API key is absent, HockeyTech requests are skipped rather than attempted
+without authentication. When the calendar URL is absent, the ICS fetch returns
+an empty schedule safely. Both cases emit an actionable warning and the Wolves
+screen continues with empty data.
 
 ---
 

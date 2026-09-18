@@ -2048,14 +2048,14 @@ NHL_TEAM_TRICODE = "CHI"
 NHL_FALLBACK_LOGO = os.path.join(NHL_IMAGES_DIR, "NHL.jpg")
 
 AHL_API_BASE_URL   = os.environ.get("AHL_API_BASE_URL", "https://lscluster.hockeytech.com/feed/")
-AHL_API_KEY        = os.environ.get("AHL_API_KEY", "50c4cd9b5df2e390")
+AHL_API_KEY        = os.environ.get("AHL_API_KEY", "")
 AHL_CLIENT_CODE    = os.environ.get("AHL_CLIENT_CODE", "ahl")
 AHL_LEAGUE_ID      = os.environ.get("AHL_LEAGUE_ID", "4")
 AHL_SITE_ID        = os.environ.get("AHL_SITE_ID", "1")
 AHL_SEASON_ID      = os.environ.get("AHL_SEASON_ID")
 AHL_SCHEDULE_ICS_URL = os.environ.get(
     "AHL_SCHEDULE_ICS_URL",
-    "https://app.stanzacal.com/api/calendar/webcal/ahl-chicagowolves/55db9bc32a0c4b9e35d487c5/67191f4120dfd9eadf697a35.ics",
+    "",
 )
 try:
     AHL_TEAM_ID = int(os.environ.get("AHL_TEAM_ID", "624"))
