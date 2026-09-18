@@ -448,6 +448,7 @@ See [ADS-B stats screen](#ads-b-stats-screen) below for how the collector, datab
 | `DEFAULT_SCREENS_PATH`, `DEFAULT_SCREENS_LARGE_PATH`, `DEFAULT_SCREENS_SMALL_PATH` | Optional paths for UI defaults and import/reset workflows. |
 | `SCREEN_UI_PASSWORD` | Enables password-protected UI when set. |
 | `SCREEN_UI_USERNAME` | Optional username. |
+| `SCREEN_SESSION_SECRET` | Optional dedicated Flask session-signing secret. It takes precedence over `SCREEN_UI_PASSWORD`; when both are unset, each Config UI process generates a non-persistent random secret, so sessions do not survive a restart. |
 | `SCREEN_AUTH_ENABLED` | Force auth behavior. |
 
 ### Capture and artifacts

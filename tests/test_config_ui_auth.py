@@ -8,6 +8,33 @@ def _reload_config_ui(monkeypatch):
     return importlib.reload(module)
 
 
+def test_dedicated_session_secret_preserves_password_authentication(monkeypatch):
+    monkeypatch.setenv("SCREEN_SESSION_SECRET", "signing-secret")
+    monkeypatch.setenv("SCREEN_UI_PASSWORD", "login-secret")
+    monkeypatch.delenv("SCREEN_AUTH_ENABLED", raising=False)
+    config_ui = _reload_config_ui(monkeypatch)
+
+    assert config_ui.app.secret_key == "signing-secret"
+
+    client = config_ui.app.test_client()
+    login_response = client.post(
+        "/login", data={"password": "login-secret"}, follow_redirects=False
+    )
+
+    assert login_response.status_code == 302
+    assert client.get("/").status_code == 200
+
+
+def test_session_secret_alone_does_not_enable_authentication(monkeypatch):
+    monkeypatch.setenv("SCREEN_SESSION_SECRET", "signing-secret")
+    monkeypatch.delenv("SCREEN_UI_USERNAME", raising=False)
+    monkeypatch.delenv("SCREEN_UI_PASSWORD", raising=False)
+    monkeypatch.delenv("SCREEN_AUTH_ENABLED", raising=False)
+    config_ui = _reload_config_ui(monkeypatch)
+
+    assert config_ui.app.test_client().get("/").status_code == 200
+
+
 def test_root_page_redirects_to_login_when_password_set(monkeypatch):
     monkeypatch.setenv("SCREEN_UI_PASSWORD", "secret")
     monkeypatch.delenv("SCREEN_AUTH_ENABLED", raising=False)
@@ -143,5 +170,5 @@ def test_run_config_ui_fails_fast_when_auth_enabled_without_password(monkeypatch
     monkeypatch.setenv("SCREEN_AUTH_ENABLED", "1")
     config_ui = _reload_config_ui(monkeypatch)
 
-    with pytest.raises(RuntimeError, match="SCREEN_AUTH_ENABLED.*SCREEN_UI_PASSWORD"):
+    with pytest.raises(RuntimeError, match=r"SCREEN_AUTH_ENABLED.*SCREEN_UI_PASSWORD"):
         config_ui.run_config_ui()
