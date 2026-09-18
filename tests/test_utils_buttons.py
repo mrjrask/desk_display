@@ -675,6 +675,32 @@ def test_reinitialize_display_releases_previous_driver(monkeypatch):
     assert released == [old_display]
 
 
+def test_reinitialize_keeps_retired_driver_destructor_from_resetting_new_gpio(monkeypatch):
+    events = []
+
+    class _OldDisplay:
+        def __del__(self):
+            events.append("old destructor")
+
+    display = utils.Display()
+    display._display_reinit_seconds = 1
+    display._last_display_reinit = 0
+    display._display = _OldDisplay()
+
+    monkeypatch.setattr(display, "_release_display_hat_mini", lambda _driver: None)
+    monkeypatch.setattr(
+        display,
+        "_create_display_hat_mini",
+        lambda _buffer: events.append("new driver") or object(),
+    )
+    monkeypatch.setattr(utils.time, "monotonic", lambda: 10)
+
+    display._maybe_reinitialize_display_hat_mini()
+
+    assert events == ["new driver"]
+    assert display._retired_display_hat_mini is not None
+
+
 def test_check_github_updates_clears_status_when_not_git_repo(monkeypatch):
     monkeypatch.setattr(
         utils,

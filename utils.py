@@ -1434,6 +1434,12 @@ class Display:
         self._next_display_reinit_retry = 0.0
         self._display_reinit_disabled = False
         self._display_reinit_lock = threading.Lock()
+        # Keep the most recently retired driver alive until the next refresh.
+        # Some displayhatmini releases implement ``__del__`` with a global
+        # GPIO.cleanup().  Letting that destructor run after its replacement
+        # has been initialized resets RPi.GPIO's numbering mode and breaks
+        # every subsequent SPI D/C write.
+        self._retired_display_hat_mini = None
         self._display_io_lock = threading.RLock()
         self._display_io_timeout_seconds = DISPLAY_HAT_MINI_IO_TIMEOUT_SECONDS
         self._display_io_started_at: Optional[float] = None
@@ -2072,6 +2078,12 @@ class Display:
 
             with self._display_io_lock:
                 self._release_display_hat_mini_compat(old_display, call_destructor=False)
+
+            # Do not let the old driver's automatic destructor run after the
+            # replacement has configured GPIO.  Replacing this reference on a
+            # later reinitialization disposes the previously retired driver
+            # before the next replacement is constructed.
+            self._retired_display_hat_mini = old_display
 
             try:
                 new_display = self._create_display_hat_mini(self._buffer)
