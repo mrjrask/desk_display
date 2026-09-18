@@ -86,6 +86,7 @@ from config import (
     is_within_dark_hours,
 )
 from image_compat import LANCZOS
+from env_config import env_float
 from services.air_quality import fetch_air_quality
 from services.data_provider import provider as data_provider
 from utils import (
@@ -214,7 +215,7 @@ _wifi_outage_started_at: Optional[datetime.datetime] = None
 _wifi_outage_live_games = False
 _wifi_monitor_enabled = ENABLE_WIFI_MONITOR
 
-GC_COLLECT_INTERVAL = max(5.0, float(os.environ.get("DESK_DISPLAY_GC_INTERVAL_SECONDS", "30")))
+GC_COLLECT_INTERVAL = env_float("DESK_DISPLAY_GC_INTERVAL_SECONDS", 30.0, minimum=5.0)
 _last_gc_collect_monotonic = 0.0
 
 # Testing mode: repeatedly present a single screen instead of rotating through
@@ -224,19 +225,12 @@ _last_gc_collect_monotonic = 0.0
 TEST_LOOP_SCREEN_ID = (os.environ.get("DESK_DISPLAY_TEST_SCREEN") or "").strip() or None
 _COMMAND_LINE_TEST_SCREEN_ID: Optional[str] = None
 _last_ui_diagnostic_screen_id: Optional[str] = None
-try:
-    TEST_LOOP_SCREEN_DELAY = max(
-        0.0, float(os.environ.get("DESK_DISPLAY_TEST_SCREEN_DELAY", "0.5"))
-    )
-except (TypeError, ValueError):
-    TEST_LOOP_SCREEN_DELAY = 0.5
-_TOUCH_DOUBLE_TAP_MAX_INTERVAL_SECONDS = max(
-    0.1, float(os.environ.get("TOUCH_DOUBLE_TAP_MAX_INTERVAL_SECONDS", "0.45"))
+TEST_LOOP_SCREEN_DELAY = env_float("DESK_DISPLAY_TEST_SCREEN_DELAY", 0.5, minimum=0.0)
+_TOUCH_DOUBLE_TAP_MAX_INTERVAL_SECONDS = env_float(
+    "TOUCH_DOUBLE_TAP_MAX_INTERVAL_SECONDS", 0.45, minimum=0.1
 )
 _last_touch_tap_monotonic = 0.0
-_ESC_DOUBLE_PRESS_MAX_INTERVAL_SECONDS = max(
-    0.1, float(os.environ.get("ESC_DOUBLE_PRESS_MAX_INTERVAL_SECONDS", "1.0"))
-)
+_ESC_DOUBLE_PRESS_MAX_INTERVAL_SECONDS = env_float("ESC_DOUBLE_PRESS_MAX_INTERVAL_SECONDS", 1.0, minimum=0.1)
 _ESC_DOUBLE_PRESS_ACTION = os.environ.get("ESC_DOUBLE_PRESS_ACTION", "stop").strip().lower()
 if _ESC_DOUBLE_PRESS_ACTION not in {"stop", "restart", "toggle"}:
     _ESC_DOUBLE_PRESS_ACTION = "stop"
@@ -2109,7 +2103,9 @@ _last_feed_refresh: Dict[str, float] = {}
 _last_scoreboard_refresh_dates: Dict[str, datetime.date] = {}
 
 _STARTUP_CRITICAL_FEEDS: Tuple[str, ...] = ("weather", "scoreboards", "air_quality")
-_STARTUP_CRITICAL_FEED_TIMEOUT_SECONDS = max(1.0, float(os.environ.get("STARTUP_CRITICAL_FEED_TIMEOUT_SECONDS", "8")))
+_STARTUP_CRITICAL_FEED_TIMEOUT_SECONDS = env_float(
+    "STARTUP_CRITICAL_FEED_TIMEOUT_SECONDS", 8.0, minimum=1.0
+)
 
 
 def _startup_critical_feeds() -> List[str]:

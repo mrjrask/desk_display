@@ -38,6 +38,7 @@ import PIL.ImageDraw as _ID
 from PIL import Image, ImageDraw, ImageEnhance, ImageFont, ImageOps
 
 from image_compat import LANCZOS
+from env_config import env_float, env_int
 from services.http_client import http_get
 
 # ─── Pillow compatibility shim ─────────────────────────────────────────────
@@ -834,18 +835,7 @@ class _KernelDisplay:
             "no",
             "off",
         }
-        try:
-            self._window_scale = max(
-                1.0,
-                float(
-                    os.environ.get(
-                        "DESK_DISPLAY_WINDOW_SCALE",
-                        "1.0",
-                    )
-                ),
-            )
-        except (TypeError, ValueError):
-            self._window_scale = 1.0
+        self._window_scale = env_float("DESK_DISPLAY_WINDOW_SCALE", 1.0, minimum=1.0)
         self._window_resizable = os.environ.get(
             "DESK_DISPLAY_WINDOW_RESIZABLE",
             "1",
@@ -1974,12 +1964,12 @@ class Display:
         backlight = digitalio.DigitalInOut(board.D22)
         backlight.switch_to_output(value=True)
 
-        baudrate = int(os.environ.get("MINIPITFT_BAUDRATE", "64000000"))
-        rotation = int(os.environ.get("MINIPITFT_DRIVER_ROTATION", "90"))
-        width = int(os.environ.get("MINIPITFT_DRIVER_WIDTH", "135"))
-        height = int(os.environ.get("MINIPITFT_DRIVER_HEIGHT", "240"))
-        x_offset = int(os.environ.get("MINIPITFT_X_OFFSET", "53"))
-        y_offset = int(os.environ.get("MINIPITFT_Y_OFFSET", "40"))
+        baudrate = env_int("MINIPITFT_BAUDRATE", 64000000, minimum=1)
+        rotation = env_int("MINIPITFT_DRIVER_ROTATION", 90)
+        width = env_int("MINIPITFT_DRIVER_WIDTH", 135, minimum=1)
+        height = env_int("MINIPITFT_DRIVER_HEIGHT", 240, minimum=1)
+        x_offset = env_int("MINIPITFT_X_OFFSET", 53)
+        y_offset = env_int("MINIPITFT_Y_OFFSET", 40)
 
         display = st7789.ST7789(
             spi,

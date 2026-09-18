@@ -573,7 +573,7 @@ def test_config_import_loads_dotenv_before_weather_constants(tmp_path, monkeypat
     ):
         monkeypatch.delenv(key, raising=False)
 
-    module = _reload_config(monkeypatch)
+    module = _reload_config(monkeypatch, CONFIG_LOAD_DOTENV="1")
 
     assert module.WEATHERKIT_TEAM_ID == "team_123"
     assert module.WEATHERKIT_KEY_ID == "key_123"
