@@ -1705,7 +1705,7 @@ def draw_series_screen(display, games, title, transition=False, screen_id: Optio
         rows_fit = max(1, (HEIGHT - bottom_margin - rows_top) // max(1, row_height))
         return text_h, row_height, rows_fit
 
-    row_text_h, row_h, available_rows = _row_metrics(row_font)
+    _, row_h, available_rows = _row_metrics(row_font)
     if target_rows > available_rows and hasattr(row_font, "font_variant"):
         base_size = int(getattr(row_font, "size", 30) or 30)
         min_size = max(10, int(round(base_size * 0.6)))
@@ -1714,7 +1714,7 @@ def draw_series_screen(display, games, title, transition=False, screen_id: Optio
             cand_text_h, cand_row_h, cand_available_rows = _row_metrics(candidate_font)
             if cand_available_rows >= target_rows:
                 row_font = candidate_font
-                row_text_h, row_h, available_rows = cand_text_h, cand_row_h, cand_available_rows
+                _, row_h, available_rows = cand_text_h, cand_row_h, cand_available_rows
                 break
 
     display_rows = min(target_rows, available_rows)

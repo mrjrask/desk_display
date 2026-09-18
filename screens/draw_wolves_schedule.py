@@ -486,7 +486,7 @@ def _draw_scoreboard(
     # Column widths: first column dominates for logo + name, second column for score
     col1_w = min(WIDTH - 32, max(84, int(WIDTH * 0.72)))
     col2_w = WIDTH - col1_w
-    x0, x1, x2 = 0, col1_w, WIDTH
+    x0, x1 = 0, col1_w
 
     y = top_y
 
@@ -586,7 +586,6 @@ def _draw_scoreboard(
     def _draw_row(spec: dict):
         y_top = spec["top"]
         row_height = spec["height"]
-        tri = spec["tri"]
         score = spec["score"]
         text = spec["base_text"]
         logo = spec["logo"]

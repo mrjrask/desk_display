@@ -574,7 +574,7 @@ def _draw_stat_tile(
         flags = list(line_online[: len(lines)]) + [False] * max(0, len(lines) - len(line_online))
         text_x = x0 + pad_x + dot_reserve
         y = value_draw_top
-        for line_text, online in zip(lines, flags):
+        for line_text, online in zip(lines, flags, strict=True):
             top_offset, line_h = _text_extent(draw, line_text, value_font)
             dot_d = max(5, min(dot_reserve - 4, line_h - 2))
             dot_cy = y + line_h // 2

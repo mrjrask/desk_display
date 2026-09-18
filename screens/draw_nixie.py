@@ -403,7 +403,7 @@ def _compose_frame(now: dt.datetime | None = None, *, gh_on: bool = False) -> Im
 
     frame = Image.new("RGB", (WIDTH, HEIGHT), BACKGROUND_COLOR)
 
-    for item, width_px in zip(elements, element_widths):
+    for item, width_px in zip(elements, element_widths, strict=True):
         if item == ":":
             # Center colons vertically with respect to digit height
             colon_y_offset = (target_height - colon_img.height) // 2

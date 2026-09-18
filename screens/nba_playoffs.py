@@ -717,10 +717,16 @@ _PLAYOFF_SEASON_MONTHS = {4, 5, 6}
 # this local rather than relying on the optional conference fields in ESPN's
 # scoreboard payloads; those fields are not consistently present on teams.
 _EASTERN_CONFERENCE_ABBRS = frozenset(
-    "ATL BOS BKN BRK CHA CHI CLE DET IND MIA MIL NY NYK ORL PHI TOR WAS WSH".split()
+    {
+        "ATL", "BOS", "BKN", "BRK", "CHA", "CHI", "CLE", "DET", "IND",
+        "MIA", "MIL", "NY", "NYK", "ORL", "PHI", "TOR", "WAS", "WSH",
+    }
 )
 _WESTERN_CONFERENCE_ABBRS = frozenset(
-    "DAL DEN GS GSW HOU LAC LAL MEM MIN NO NOP OKC PHX POR SAC SA SAS UTA".split()
+    {
+        "DAL", "DEN", "GS", "GSW", "HOU", "LAC", "LAL", "MEM", "MIN",
+        "NO", "NOP", "OKC", "PHX", "POR", "SAC", "SA", "SAS", "UTA",
+    }
 )
 
 # Even inside the playoff window (e.g. the first few days of April, before

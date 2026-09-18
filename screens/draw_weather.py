@@ -361,7 +361,7 @@ def _render_stat_text(parts):
     draw = ImageDraw.Draw(result)
 
     x = padding_x
-    for (text, font, color), w in zip(parts, widths):
+    for (text, font, color), w in zip(parts, widths, strict=True):
         y = padding_y - min_y
         draw.text((x, y), text, font=font, fill=color)
         x += w
@@ -391,7 +391,7 @@ def _temperature_chart_color(temp_f: float | int | None) -> tuple[int, int, int]
             alpha = (value - low_temp) / span
             return tuple(
                 int(round(low + (high - low) * alpha))
-                for low, high in zip(low_color, high_color)
+                for low, high in zip(low_color, high_color, strict=True)
             )
 
     return stops[-1][1]
@@ -905,8 +905,6 @@ def draw_weather_screen_1(display, weather, transition=False):
     if pop_pct is None:
         pop_pct = _pop_pct_from(daily)
 
-    daily_weather_list = daily.get("weather") if isinstance(daily.get("weather"), list) else []
-    daily_weather = (daily_weather_list or [{}])[0]
     is_snow = _is_snow_condition(daily) or _is_snow_condition(current)
     if not is_snow and next_hour:
         is_snow = _is_snow_condition(next_hour)
@@ -936,7 +934,7 @@ def draw_weather_screen_1(display, weather, transition=False):
     val_colors = [feels_col, (255, 0, 0), WEATHER_LO_TEMP_COLOR]
 
     groups = []
-    for lbl, val in zip(labels, values):
+    for lbl, val in zip(labels, values, strict=True):
         lw, lh = draw.textsize(lbl, font=FONT_WEATHER_LABEL)
         vw, vh = draw.textsize(val, font=FONT_WEATHER_DETAILS)
         gw = max(lw, vw)
@@ -1058,7 +1056,7 @@ def draw_weather_screen_1(display, weather, transition=False):
 
     # draw groups
     x = x0
-    for idx, (lbl, lw, lh, val, vw, vh, gw) in enumerate(groups):
+    for idx, (lbl, lw, _lh, val, vw, _vh, gw) in enumerate(groups):
         cx = x + gw//2
         draw.text((cx - lw//2, y_lbl), lbl, font=FONT_WEATHER_LABEL,      fill=(255,255,255))
         draw.text((cx - vw//2, y_val), val, font=FONT_WEATHER_DETAILS,     fill=val_colors[idx])
@@ -1212,7 +1210,6 @@ def _gather_hourly_forecast(
 
         # Detect if precipitation is snow or rain
         weather_list = hour.get("weather") if isinstance(hour.get("weather"), list) else []
-        hourly_weather = (weather_list or [{}])[0]
         is_snow = _is_snow_condition(hour)
 
         feels_like_val = None

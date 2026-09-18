@@ -693,7 +693,7 @@ def _draw_scoreboard(
     # Ensure we account for rounding adjustments.
     if col1_w + col2_w + col3_w != WIDTH:
         col3_w = WIDTH - col1_w - col2_w
-    x0, x1, x2, x3 = 0, col1_w, col1_w + col2_w, WIDTH
+    x0, x1, x2 = 0, col1_w, col1_w + col2_w
 
     y = top_y
 
@@ -828,7 +828,6 @@ def _draw_scoreboard(
     def _draw_row(spec: dict):
         y_top = spec["top"]
         row_height = spec["height"]
-        tri = spec["tri"]
         score = spec["score"]
         sog = spec["sog"]
         text = spec["base_text"]
