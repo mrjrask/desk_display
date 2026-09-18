@@ -1,6 +1,8 @@
 import json
 
 import config_ui
+from screens_catalog import LEGACY_RETIRED_SCREEN_IDS
+from scripts import import_screen_rotation_config
 
 
 def _capture_bundle(saved):
@@ -54,7 +56,7 @@ def test_import_screens_accepts_entries_payload(monkeypatch):
     assert saved["config"]["sequence"] == [{"playlist": "default"}]
 
 
-def test_hidden_doubleheader_screens_are_not_configurable():
+def test_historical_import_omits_retired_doubleheader_screens():
     entries = config_ui._build_screen_entries(
         {"screens": {"date": 1, "cubs next 2": 5, "sox last 2": 5}},
         {"screens": {}},
@@ -71,6 +73,26 @@ def test_hidden_doubleheader_screens_are_not_configurable():
             {"id": "cubs next 2", "frequency": 5, "alt_screen": "", "alt_frequency": ""},
         ]
     )
+    assert config["screens"] == {"date": 1}
+    assert LEGACY_RETIRED_SCREEN_IDS == frozenset(
+        {"cubs next 2", "sox next 2", "cubs last 2", "sox last 2"}
+    )
+
+
+def test_retired_screen_ids_have_one_shared_compatibility_definition():
+    assert config_ui.LEGACY_RETIRED_SCREEN_IDS is LEGACY_RETIRED_SCREEN_IDS
+    assert import_screen_rotation_config.LEGACY_RETIRED_SCREEN_IDS is LEGACY_RETIRED_SCREEN_IDS
+
+
+def test_historical_file_import_omits_retired_doubleheader_screens():
+    config = import_screen_rotation_config._build_config(
+        [
+            {"id": "date", "frequency": 1},
+            {"id": "sox next 2", "frequency": 5},
+            {"id": "cubs last 2", "frequency": 5},
+        ]
+    )
+
     assert config["screens"] == {"date": 1}
 
 

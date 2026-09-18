@@ -40,7 +40,7 @@ from paths import (
     resolve_style_config_path,
 )
 from schedule import build_scheduler
-from screens_catalog import SCREEN_IDS, canonical_screen_id
+from screens_catalog import LEGACY_RETIRED_SCREEN_IDS, SCREEN_IDS, canonical_screen_id
 
 # Config path precedence/fallback rules are centralized in paths.py.
 _screens_config_paths = resolve_screens_config_paths()
@@ -85,12 +85,6 @@ OLED_SCREEN_IDS = ("oled left", "oled right")
 app = Flask(__name__)
 app.secret_key = SCREEN_SESSION_SECRET or SCREEN_UI_PASSWORD or secrets.token_urlsafe()
 WEB_LOGGER = logging.getLogger("desk_display.web")
-HIDDEN_CONFIG_SCREEN_IDS = {
-    "cubs next 2",
-    "sox next 2",
-    "cubs last 2",
-    "sox last 2",
-}
 _CONFIG_SAVE_LOCK = threading.RLock()
 _SERVICE_STATUS_CACHE_TTL_SECONDS = 5.0
 _SERVICE_STATUS_CACHE_LOCK = threading.Lock()
@@ -1206,7 +1200,7 @@ def _build_screen_entries(
     if not isinstance(screens, dict):
         return []
 
-    ordered_screen_ids = _ordered_screen_ids(screens, exclude=HIDDEN_CONFIG_SCREEN_IDS)
+    ordered_screen_ids = _ordered_screen_ids(screens, exclude=LEGACY_RETIRED_SCREEN_IDS)
 
     entries: list[dict[str, Any]] = []
     for screen_id in ordered_screen_ids:
@@ -1257,13 +1251,13 @@ def _build_selectable_screen_ids(entries: list[dict[str, Any]]) -> list[str]:
         screen_id = entry.get("id")
         if not isinstance(screen_id, str):
             continue
-        if screen_id in HIDDEN_CONFIG_SCREEN_IDS:
+        if screen_id in LEGACY_RETIRED_SCREEN_IDS:
             continue
         if screen_id not in ordered_screen_ids:
             ordered_screen_ids.append(screen_id)
 
     for screen_id in SCREEN_IDS:
-        if screen_id in HIDDEN_CONFIG_SCREEN_IDS:
+        if screen_id in LEGACY_RETIRED_SCREEN_IDS:
             continue
         if screen_id not in ordered_screen_ids:
             ordered_screen_ids.append(screen_id)
@@ -1280,7 +1274,7 @@ def _build_config(entries: list[dict[str, Any]]) -> dict[str, Any]:
             if isinstance(raw_screen_id, str)
             else raw_screen_id
         )
-        if canonical_id in HIDDEN_CONFIG_SCREEN_IDS:
+        if canonical_id in LEGACY_RETIRED_SCREEN_IDS:
             continue
         screen_id = _require_known_screen_id(raw_screen_id, field="screens")
         frequency = int(entry.get("frequency", 0))

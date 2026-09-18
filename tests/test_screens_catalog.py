@@ -1,11 +1,20 @@
 import json
 from pathlib import Path
 
-from screens_catalog import RAW_SCREEN_IDS, canonical_screen_id
+from screens_catalog import (
+    LEGACY_RETIRED_SCREEN_IDS,
+    RAW_SCREEN_IDS,
+    SCREEN_IDS,
+    canonical_screen_id,
+)
 
 
 def test_raw_screen_ids_are_unique():
     assert len(RAW_SCREEN_IDS) == len(set(RAW_SCREEN_IDS))
+
+
+def test_canonical_catalog_excludes_retired_screen_ids():
+    assert LEGACY_RETIRED_SCREEN_IDS.isdisjoint(SCREEN_IDS)
 
 
 def test_removed_adsb_airlines_screen_maps_to_consolidated_live_screen():
