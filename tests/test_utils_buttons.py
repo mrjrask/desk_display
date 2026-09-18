@@ -736,10 +736,39 @@ def test_failed_reinitialize_keeps_earlier_retired_driver_alive(monkeypatch):
 
     assert display._display.name == "second"
     assert events == ["second restored"]
-    assert [driver.name for driver in display._retired_display_hat_mini_drivers] == [
-        "first",
-        "second",
-    ]
+    assert display._retired_display_hat_mini.name == "first"
+
+
+def test_successful_reinitialize_safely_releases_earlier_retired_driver(monkeypatch):
+    events = []
+
+    class _Display:
+        def __init__(self, name):
+            self.name = name
+
+        def __del__(self):
+            events.append(f"{self.name} destructor")
+
+        def set_backlight(self, _level):
+            pass
+
+    display = utils.Display()
+    display._display_reinit_seconds = 1
+    display._last_display_reinit = 0
+    display._display = _Display("first")
+    replacements = iter([_Display("second"), _Display("third")])
+
+    monkeypatch.setattr(display, "_release_display_hat_mini", lambda _driver: None)
+    monkeypatch.setattr(display, "_create_display_hat_mini", lambda _buffer: next(replacements))
+    monkeypatch.setattr(utils.time, "monotonic", lambda: 10)
+
+    display._maybe_reinitialize_display_hat_mini()
+    display._last_display_reinit = 0
+    display._maybe_reinitialize_display_hat_mini()
+
+    assert display._display.name == "third"
+    assert display._retired_display_hat_mini.name == "second"
+    assert events == []
 
 
 def test_check_github_updates_clears_status_when_not_git_repo(monkeypatch):

@@ -1434,14 +1434,12 @@ class Display:
         self._next_display_reinit_retry = 0.0
         self._display_reinit_disabled = False
         self._display_reinit_lock = threading.Lock()
-        # Keep retired drivers alive for the lifetime of this wrapper.
+        # Keep the most recently retired driver alive until a replacement has
+        # been constructed successfully.
         # Some displayhatmini releases implement ``__del__`` with a global
         # GPIO.cleanup().  Letting that destructor run after its replacement
         # has been initialized resets RPi.GPIO's numbering mode and breaks
-        # every subsequent SPI D/C write.  A collection is necessary because
-        # dropping an older retired driver before a replacement attempt would
-        # also leave the current driver unusable if that attempt then failed.
-        self._retired_display_hat_mini_drivers = []
+        # every subsequent SPI D/C write.
         self._retired_display_hat_mini = None
         self._display_io_lock = threading.RLock()
         self._display_io_timeout_seconds = DISPLAY_HAT_MINI_IO_TIMEOUT_SECONDS
@@ -2048,7 +2046,25 @@ class Display:
                 raise
             self._release_display_hat_mini(display)
 
+    @staticmethod
+    def _suppress_display_hat_mini_destructor(display) -> None:
+        """Make a retired pure-Python driver safe to release.
 
+        Its normal cleanup hooks have already run.  Replacing only its finalizer
+        prevents a later process-wide GPIO cleanup without keeping every retired
+        instance (and its frame buffer) alive indefinitely.
+        """
+
+        if display is None or not callable(getattr(type(display), "__del__", None)):
+            return
+
+        driver_class = type(display)
+        retired_class = type(
+            f"_Retired{driver_class.__name__}",
+            (driver_class,),
+            {"__del__": lambda self: None},
+        )
+        display.__class__ = retired_class
 
     def _maybe_reinitialize_display_hat_mini(self) -> None:
         """Periodically recreate the Display HAT Mini driver to avoid long-run stalls."""
@@ -2081,14 +2097,6 @@ class Display:
 
             with self._display_io_lock:
                 self._release_display_hat_mini_compat(old_display, call_destructor=False)
-
-            # Do not let any retired driver's automatic destructor run while
-            # this wrapper is active.  In particular, retain earlier drivers
-            # across a failed replacement attempt: their process-wide
-            # GPIO.cleanup() would otherwise clear the restored driver's GPIO
-            # configuration after it has been put back into service.
-            self._retired_display_hat_mini_drivers.append(old_display)
-            self._retired_display_hat_mini = old_display
 
             try:
                 new_display = self._create_display_hat_mini(self._buffer)
@@ -2127,6 +2135,15 @@ class Display:
                     exc,
                 )
                 return
+
+            # Only discard the previous retired driver after construction has
+            # succeeded.  Failed attempts therefore leave it retained, while
+            # successful attempts suppress its unsafe finalizer before the
+            # reference is replaced.  Retention remains bounded to one driver.
+            self._suppress_display_hat_mini_destructor(
+                self._retired_display_hat_mini
+            )
+            self._retired_display_hat_mini = old_display
 
             with self._display_io_lock:
                 self._display = new_display
