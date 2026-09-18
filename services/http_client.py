@@ -13,6 +13,8 @@ import requests
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 
+from env_config import non_negative_env_float
+
 DEFAULT_HEADERS: dict[str, str] = {
     "User-Agent": (
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
@@ -52,8 +54,8 @@ _USE_SYSTEM_PROXIES = (
 # host returns 403, short-circuit further requests to it for a cooldown
 # window instead of hammering it -- this fails fast (no network I/O) and
 # gives the block a chance to clear.
-FORBIDDEN_COOLDOWN_SECONDS = float(
-    os.environ.get("HTTP_CLIENT_FORBIDDEN_COOLDOWN_SECONDS", "300")
+FORBIDDEN_COOLDOWN_SECONDS = non_negative_env_float(
+    "HTTP_CLIENT_FORBIDDEN_COOLDOWN_SECONDS", 300.0
 )
 
 

@@ -36,16 +36,18 @@ from flask import (
 )
 from PIL import Image, UnidentifiedImageError
 
+from env_config import non_negative_env_int
+
 FEED_SERVER_HOST = os.environ.get("FEED_SERVER_HOST", "0.0.0.0")
-FEED_SERVER_PORT = int(os.environ.get("FEED_SERVER_PORT", "5003"))
+FEED_SERVER_PORT = non_negative_env_int("FEED_SERVER_PORT", 5003)
 FEED_UPLOAD_TOKEN = os.environ.get("FEED_UPLOAD_TOKEN", "").strip()
-FEED_MAX_UPLOAD_BYTES = int(os.environ.get("FEED_MAX_UPLOAD_BYTES", str(8 * 1024 * 1024)))
-FEED_STALE_SECONDS = int(os.environ.get("FEED_STALE_SECONDS", str(2 * 60)))
+FEED_MAX_UPLOAD_BYTES = non_negative_env_int("FEED_MAX_UPLOAD_BYTES", 8 * 1024 * 1024)
+FEED_STALE_SECONDS = non_negative_env_int("FEED_STALE_SECONDS", 2 * 60)
 # A source's screenshot page (unlike the source list, which just flags a
 # source as stale) drops a screen entirely once it hasn't been re-uploaded
 # within this window, so a Pi that's stopped pushing frames doesn't linger.
-FEED_SCREEN_STALE_SECONDS = int(os.environ.get("FEED_SCREEN_STALE_SECONDS", str(20 * 60)))
-FEED_HEARTBEAT_STALE_SECONDS = int(os.environ.get("FEED_HEARTBEAT_STALE_SECONDS", str(10 * 60)))
+FEED_SCREEN_STALE_SECONDS = non_negative_env_int("FEED_SCREEN_STALE_SECONDS", 20 * 60)
+FEED_HEARTBEAT_STALE_SECONDS = non_negative_env_int("FEED_HEARTBEAT_STALE_SECONDS", 10 * 60)
 ALLOWED_SCREEN_EXTS = (".png", ".jpg", ".jpeg")
 
 _PROJECT_ROOT = Path(__file__).resolve().parent

@@ -25,6 +25,7 @@ from urllib.parse import unquote
 from PIL import Image, ImageDraw, ImageOps
 
 import config
+from env_config import env_float
 from paths import resolve_cache_file_path
 from services.http_client import http_get
 from utils import (
@@ -106,14 +107,14 @@ _HEBCAL_JEWISH_HOLIDAYS_ICS_URL = (
     "https://download.hebcal.com/ical/jewish-holidays-all-v2.ics"
 )
 _JEWISH_HOLIDAY_LIMIT = 3
-_FEED_BUILD_TIMEOUT_SECONDS = max(
-    0.5, float(os.environ.get("ON_THIS_DAY_FEED_BUILD_TIMEOUT_SECONDS", "3.5"))
+_FEED_BUILD_TIMEOUT_SECONDS = env_float(
+    "ON_THIS_DAY_FEED_BUILD_TIMEOUT_SECONDS", 3.5, minimum=0.5
 )
-_OFFLINE_FALLBACK_RETRY_SECONDS = max(
-    60.0, float(os.environ.get("ON_THIS_DAY_OFFLINE_FALLBACK_RETRY_SECONDS", "900"))
+_OFFLINE_FALLBACK_RETRY_SECONDS = env_float(
+    "ON_THIS_DAY_OFFLINE_FALLBACK_RETRY_SECONDS", 900.0, minimum=60.0
 )
-_INCOMPLETE_FEED_RETRY_SECONDS = max(
-    30.0, float(os.environ.get("ON_THIS_DAY_INCOMPLETE_FEED_RETRY_SECONDS", "300"))
+_INCOMPLETE_FEED_RETRY_SECONDS = env_float(
+    "ON_THIS_DAY_INCOMPLETE_FEED_RETRY_SECONDS", 300.0, minimum=30.0
 )
 _LIVE_THUMBNAILS_ENABLED = os.environ.get(
     "ON_THIS_DAY_LIVE_THUMBNAILS", "0"

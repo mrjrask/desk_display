@@ -34,6 +34,7 @@ from config import (
     is_hyperpixel_next_layout,
 )
 from display_profiles import DISPLAY_PROFILE_DISPLAY_HAT_MINI, DISPLAY_PROFILE_HYPERPIXEL4
+from env_config import non_negative_env_int
 from utils import (
     LED_INDICATOR_LEVEL,
     ScreenImage,
@@ -79,7 +80,7 @@ GRID_BG                 = (14, 36, 22)  # dark forest green
 NEXT_GAME_LOGO_SCALE    = 0.874      # reduce Cubs/Sox next-game logos an additional 5%
 
 # Cubs mini-flag sizing/reservation
-SMALL_RESULT_FLAG_H     = int(os.environ.get("SMALL_RESULT_FLAG_H", "48"))
+SMALL_RESULT_FLAG_H     = non_negative_env_int("SMALL_RESULT_FLAG_H", 48)
 FLAG_BLOCK_PAD          = 6
 FLAG_BLOCK_H            = SMALL_RESULT_FLAG_H + FLAG_BLOCK_PAD  # reserved area (always)
 
