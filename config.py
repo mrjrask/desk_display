@@ -14,7 +14,7 @@ from pathlib import Path
 from typing import Any, Optional
 from zoneinfo import ZoneInfo
 
-from env_config import env_int, non_negative_env_float, non_negative_env_int
+from env_config import env_float, env_int, non_negative_env_float, non_negative_env_int
 from screens_catalog import canonical_screen_id
 
 # ─── Environment helpers ───────────────────────────────────────────────────────
@@ -745,14 +745,14 @@ DISPLAY_HAT_MINI_LED_ENABLED = _get_bool_env(
     True,
 )
 
-DISPLAY_HAT_MINI_REINIT_SECONDS = non_negative_env_int(
-    "DISPLAY_HAT_MINI_REINIT_SECONDS", 1800
+DISPLAY_HAT_MINI_REINIT_SECONDS = max(
+    0, env_int("DISPLAY_HAT_MINI_REINIT_SECONDS", 1800)
 )
-DISPLAY_HAT_MINI_IO_TIMEOUT_SECONDS = non_negative_env_float(
-    "DISPLAY_HAT_MINI_IO_TIMEOUT_SECONDS", 15.0
+DISPLAY_HAT_MINI_IO_TIMEOUT_SECONDS = max(
+    0.0, env_float("DISPLAY_HAT_MINI_IO_TIMEOUT_SECONDS", 15.0)
 )
-DISPLAY_HAT_MINI_MAX_REFRESH_FAILURES = non_negative_env_int(
-    "DISPLAY_HAT_MINI_MAX_REFRESH_FAILURES", 3
+DISPLAY_HAT_MINI_MAX_REFRESH_FAILURES = max(
+    0, env_int("DISPLAY_HAT_MINI_MAX_REFRESH_FAILURES", 3)
 )
 HYPERPIXEL_LED_INDICATOR_BORDER_WIDTH = env_int(
     "HYPERPIXEL_LED_INDICATOR_BORDER_WIDTH", 2, minimum=1
