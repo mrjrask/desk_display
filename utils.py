@@ -1434,11 +1434,14 @@ class Display:
         self._next_display_reinit_retry = 0.0
         self._display_reinit_disabled = False
         self._display_reinit_lock = threading.Lock()
-        # Keep the most recently retired driver alive until the next refresh.
+        # Keep retired drivers alive for the lifetime of this wrapper.
         # Some displayhatmini releases implement ``__del__`` with a global
         # GPIO.cleanup().  Letting that destructor run after its replacement
         # has been initialized resets RPi.GPIO's numbering mode and breaks
-        # every subsequent SPI D/C write.
+        # every subsequent SPI D/C write.  A collection is necessary because
+        # dropping an older retired driver before a replacement attempt would
+        # also leave the current driver unusable if that attempt then failed.
+        self._retired_display_hat_mini_drivers = []
         self._retired_display_hat_mini = None
         self._display_io_lock = threading.RLock()
         self._display_io_timeout_seconds = DISPLAY_HAT_MINI_IO_TIMEOUT_SECONDS
@@ -2079,10 +2082,12 @@ class Display:
             with self._display_io_lock:
                 self._release_display_hat_mini_compat(old_display, call_destructor=False)
 
-            # Do not let the old driver's automatic destructor run after the
-            # replacement has configured GPIO.  Replacing this reference on a
-            # later reinitialization disposes the previously retired driver
-            # before the next replacement is constructed.
+            # Do not let any retired driver's automatic destructor run while
+            # this wrapper is active.  In particular, retain earlier drivers
+            # across a failed replacement attempt: their process-wide
+            # GPIO.cleanup() would otherwise clear the restored driver's GPIO
+            # configuration after it has been put back into service.
+            self._retired_display_hat_mini_drivers.append(old_display)
             self._retired_display_hat_mini = old_display
 
             try:

@@ -701,6 +701,47 @@ def test_reinitialize_keeps_retired_driver_destructor_from_resetting_new_gpio(mo
     assert display._retired_display_hat_mini is not None
 
 
+def test_failed_reinitialize_keeps_earlier_retired_driver_alive(monkeypatch):
+    events = []
+
+    class _Display:
+        def __init__(self, name):
+            self.name = name
+
+        def __del__(self):
+            events.append(f"{self.name} destructor")
+
+        def set_backlight(self, _level):
+            events.append(f"{self.name} restored")
+
+    display = utils.Display()
+    display._display_reinit_seconds = 1
+    display._last_display_reinit = 0
+    display._display = _Display("first")
+    replacements = iter([_Display("second"), RuntimeError("busy")])
+
+    def _create(_buffer):
+        replacement = next(replacements)
+        if isinstance(replacement, Exception):
+            raise replacement
+        return replacement
+
+    monkeypatch.setattr(display, "_release_display_hat_mini", lambda _driver: None)
+    monkeypatch.setattr(display, "_create_display_hat_mini", _create)
+    monkeypatch.setattr(utils.time, "monotonic", lambda: 10)
+
+    display._maybe_reinitialize_display_hat_mini()
+    display._last_display_reinit = 0
+    display._maybe_reinitialize_display_hat_mini()
+
+    assert display._display.name == "second"
+    assert events == ["second restored"]
+    assert [driver.name for driver in display._retired_display_hat_mini_drivers] == [
+        "first",
+        "second",
+    ]
+
+
 def test_check_github_updates_clears_status_when_not_git_repo(monkeypatch):
     monkeypatch.setattr(
         utils,
