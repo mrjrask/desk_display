@@ -1,11 +1,12 @@
+import importlib
 from pathlib import Path
 
 import pytest
 
 import config_ui
 
-
 MALICIOUS_ID = '<img src=x onerror="window.pwned=true">'
+HISTORICAL_SESSION_SECRET = "desk-display-config-ui"
 
 
 def _prepare_import_request(monkeypatch):
@@ -13,6 +14,28 @@ def _prepare_import_request(monkeypatch):
     monkeypatch.setattr(config_ui, "_load_active_layouts_config", lambda: {"screens": {}})
     monkeypatch.setattr(config_ui, "_save_config_bundle", lambda *args: saved.append(args))
     return config_ui.app.test_client(), saved
+
+
+def test_password_remains_session_secret_fallback(monkeypatch):
+    monkeypatch.delenv("SCREEN_SESSION_SECRET", raising=False)
+    monkeypatch.setenv("SCREEN_UI_PASSWORD", "configured-password")
+
+    reloaded = importlib.reload(config_ui)
+
+    assert reloaded.app.secret_key == "configured-password"
+
+
+def test_generated_session_secret_is_non_empty_random_and_stable(monkeypatch):
+    monkeypatch.delenv("SCREEN_SESSION_SECRET", raising=False)
+    monkeypatch.delenv("SCREEN_UI_PASSWORD", raising=False)
+
+    reloaded = importlib.reload(config_ui)
+    generated_secret = reloaded.app.secret_key
+    reloaded.app.test_client().get("/")
+
+    assert generated_secret
+    assert generated_secret != HISTORICAL_SESSION_SECRET
+    assert reloaded.app.secret_key == generated_secret
 
 
 def test_build_config_rejects_unknown_primary_screen_id():

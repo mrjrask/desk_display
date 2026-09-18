@@ -6,6 +6,7 @@ import contextlib
 import json
 import logging
 import os
+import secrets
 import socket
 import subprocess
 import tempfile
@@ -69,6 +70,7 @@ SCREEN_CONFIG_HOST = os.environ.get("SCREEN_CONFIG_HOST", "0.0.0.0")
 SCREEN_CONFIG_PORT = non_negative_env_int("SCREEN_CONFIG_PORT", 5002)
 SCREEN_UI_USERNAME = os.environ.get("SCREEN_UI_USERNAME", "")
 SCREEN_UI_PASSWORD = os.environ.get("SCREEN_UI_PASSWORD", "")
+SCREEN_SESSION_SECRET = os.environ.get("SCREEN_SESSION_SECRET", "")
 ALLOWED_SCREEN_EXTS = (".png", ".jpg", ".jpeg")
 # The Feed page (unlike Screenshots, which flags-but-still-shows old frames)
 # drops a screen entirely once its screenshot hasn't been refreshed within
@@ -81,7 +83,7 @@ FEED_SCREEN_STALE_SECONDS = non_negative_env_int("FEED_SCREEN_STALE_SECONDS", 20
 # desks without the OLED HAT don't show two permanently-empty cards.
 OLED_SCREEN_IDS = ("oled left", "oled right")
 app = Flask(__name__)
-app.secret_key = SCREEN_UI_PASSWORD or "desk-display-config-ui"
+app.secret_key = SCREEN_SESSION_SECRET or SCREEN_UI_PASSWORD or secrets.token_urlsafe()
 WEB_LOGGER = logging.getLogger("desk_display.web")
 HIDDEN_CONFIG_SCREEN_IDS = {
     "cubs next 2",
