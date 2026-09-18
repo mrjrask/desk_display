@@ -675,6 +675,52 @@ def test_reinitialize_display_releases_previous_driver(monkeypatch):
     assert released == [old_display]
 
 
+def test_display_refresh_exits_after_consecutive_driver_errors(monkeypatch):
+    class _FailingDisplay:
+        buffer = None
+
+        def display(self):
+            raise OSError("SPI unavailable")
+
+    display = utils.Display()
+    display._display = _FailingDisplay()
+    display._display_reinit_seconds = 0
+    display._display_io_timeout_seconds = 0
+    display._display_max_refresh_failures = 3
+    exits = []
+    monkeypatch.setattr(utils.os, "_exit", exits.append)
+
+    for _ in range(3):
+        display._write_display_hat_mini_frame(display._buffer)
+
+    assert exits == [1]
+
+
+def test_successful_display_refresh_resets_driver_error_count():
+    class _SometimesFailingDisplay:
+        buffer = None
+
+        def __init__(self):
+            self.fail = True
+
+        def display(self):
+            if self.fail:
+                raise OSError("SPI unavailable")
+
+    driver = _SometimesFailingDisplay()
+    display = utils.Display()
+    display._display = driver
+    display._display_reinit_seconds = 0
+    display._display_io_timeout_seconds = 0
+    display._display_max_refresh_failures = 3
+
+    display._write_display_hat_mini_frame(display._buffer)
+    driver.fail = False
+    display._write_display_hat_mini_frame(display._buffer)
+
+    assert display._display_refresh_failures == 0
+
+
 def test_reinitialize_keeps_retired_driver_destructor_from_resetting_new_gpio(monkeypatch):
     events = []
 

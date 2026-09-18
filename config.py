@@ -820,6 +820,23 @@ elif DISPLAY_HAT_MINI_IO_TIMEOUT_SECONDS < 0:
     DISPLAY_HAT_MINI_IO_TIMEOUT_SECONDS = 0.0
 
 try:
+    DISPLAY_HAT_MINI_MAX_REFRESH_FAILURES = int(
+        os.environ.get("DISPLAY_HAT_MINI_MAX_REFRESH_FAILURES", "3")
+    )
+except (TypeError, ValueError):
+    logging.warning(
+        "Invalid DISPLAY_HAT_MINI_MAX_REFRESH_FAILURES value; defaulting to 3."
+    )
+    DISPLAY_HAT_MINI_MAX_REFRESH_FAILURES = 3
+
+if DISPLAY_HAT_MINI_MAX_REFRESH_FAILURES < 0:
+    logging.warning(
+        "DISPLAY_HAT_MINI_MAX_REFRESH_FAILURES must be >= 0; "
+        "clamping to 0 (disabled)."
+    )
+    DISPLAY_HAT_MINI_MAX_REFRESH_FAILURES = 0
+
+try:
     HYPERPIXEL_LED_INDICATOR_BORDER_WIDTH = int(
         os.environ.get("HYPERPIXEL_LED_INDICATOR_BORDER_WIDTH", "2")
     )

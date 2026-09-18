@@ -1263,6 +1263,7 @@ from config import (
     DISPLAY_FADE_IN_ENABLED,
     DISPLAY_FADE_IN_STEPS_BY_PROFILE,
     DISPLAY_HAT_MINI_IO_TIMEOUT_SECONDS,
+    DISPLAY_HAT_MINI_MAX_REFRESH_FAILURES,
     DISPLAY_HAT_MINI_LED_ENABLED,
     DISPLAY_HAT_MINI_LED_INDICATOR_BORDER_ENABLED,  # noqa: F401 -- legacy flag, kept for test monkeypatching
     DISPLAY_HAT_MINI_REINIT_SECONDS,
@@ -1443,6 +1444,8 @@ class Display:
         self._retired_display_hat_mini = None
         self._display_io_lock = threading.RLock()
         self._display_io_timeout_seconds = DISPLAY_HAT_MINI_IO_TIMEOUT_SECONDS
+        self._display_max_refresh_failures = DISPLAY_HAT_MINI_MAX_REFRESH_FAILURES
+        self._display_refresh_failures = 0
         self._display_io_started_at: Optional[float] = None
         self._display_io_watchdog_stop = threading.Event()
         self._display_io_watchdog_thread: Optional[threading.Thread] = None
@@ -1767,8 +1770,24 @@ class Display:
                     return
                 self._display.buffer = buffer_to_display
                 self._display.display()
+                self._display_refresh_failures = 0
             except Exception as exc:  # pragma: no cover - hardware import
-                logging.warning("Display refresh failed: %s", exc)
+                self._display_refresh_failures += 1
+                failure_limit = self._display_max_refresh_failures
+                if failure_limit > 0 and self._display_refresh_failures >= failure_limit:
+                    logging.critical(
+                        "Display HAT Mini refresh failed %d consecutive times; "
+                        "exiting so the service can reopen SPI and reset the panel (%s)",
+                        self._display_refresh_failures,
+                        exc,
+                    )
+                    os._exit(1)
+                logging.warning(
+                    "Display refresh failed (%d%s): %s",
+                    self._display_refresh_failures,
+                    f"/{failure_limit}" if failure_limit > 0 else "",
+                    exc,
+                )
             finally:
                 self._display_io_started_at = None
 
