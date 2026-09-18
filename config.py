@@ -1,11 +1,8 @@
 # config.py
-
-#!/usr/bin/env python3
 import datetime
 import glob
 import inspect
 import logging
-import math
 import os
 import platform
 import random
@@ -17,6 +14,7 @@ from pathlib import Path
 from typing import Any, Optional
 from zoneinfo import ZoneInfo
 
+from env_config import env_int, non_negative_env_float, non_negative_env_int
 from screens_catalog import canonical_screen_id
 
 # ─── Environment helpers ───────────────────────────────────────────────────────
@@ -149,20 +147,6 @@ def _is_truthy_env_marker(name: str) -> bool:
     if raw is None:
         return False
     return raw.strip().lower() not in {"", "0", "false", "no", "off"}
-
-
-def _get_int_env(name: str, default: int) -> int:
-    """Parse integer config values from environment variables."""
-
-    raw = os.environ.get(name)
-    if raw is None:
-        return default
-
-    try:
-        return int(raw)
-    except (TypeError, ValueError):
-        logging.warning("Invalid %s value %r; defaulting to %d.", name, raw, default)
-        return default
 
 
 def _get_required_env_var(*names: str) -> str:
@@ -458,18 +442,9 @@ ADSB_HOME_LATITUDE, ADSB_HOME_LONGITUDE = _resolve_adsb_home_coordinates()
 ADSB_DISTANCE_UNIT = os.environ.get("ADSB_DISTANCE_UNIT", "nm").strip().lower()
 if ADSB_DISTANCE_UNIT not in {"nm", "mi"}:
     ADSB_DISTANCE_UNIT = "nm"
-try:
-    ADSB_POLL_INTERVAL_SECONDS = float(os.environ.get("ADSB_POLL_INTERVAL_SECONDS", "10"))
-except (TypeError, ValueError):
-    ADSB_POLL_INTERVAL_SECONDS = 10.0
-try:
-    ADSB_REQUEST_TIMEOUT_SECONDS = float(os.environ.get("ADSB_REQUEST_TIMEOUT_SECONDS", "5"))
-except (TypeError, ValueError):
-    ADSB_REQUEST_TIMEOUT_SECONDS = 5.0
-try:
-    ADSB_RETENTION_DAYS = int(os.environ.get("ADSB_RETENTION_DAYS", "7"))
-except (TypeError, ValueError):
-    ADSB_RETENTION_DAYS = 7
+ADSB_POLL_INTERVAL_SECONDS = non_negative_env_float("ADSB_POLL_INTERVAL_SECONDS", 10.0)
+ADSB_REQUEST_TIMEOUT_SECONDS = non_negative_env_float("ADSB_REQUEST_TIMEOUT_SECONDS", 5.0)
+ADSB_RETENTION_DAYS = non_negative_env_int("ADSB_RETENTION_DAYS", 7)
 ENABLE_ADSB = bool(ADSB_DEVICES)
 
 # Airline logos for the "Live Now (by airline)" tile: images/air/<CODE>.png
@@ -495,10 +470,7 @@ ADSB_TYPE_DB_URL = os.environ.get(
     "ADSB_TYPE_DB_URL",
     "https://raw.githubusercontent.com/wiedehopf/tar1090-db/csv/aircraft.csv.gz",
 ).strip()
-try:
-    ADSB_TYPE_DB_REFRESH_DAYS = int(os.environ.get("ADSB_TYPE_DB_REFRESH_DAYS", "30"))
-except (TypeError, ValueError):
-    ADSB_TYPE_DB_REFRESH_DAYS = 30
+ADSB_TYPE_DB_REFRESH_DAYS = non_negative_env_int("ADSB_TYPE_DB_REFRESH_DAYS", 30)
 
 # ─── News headlines ticker ──────────────────────────────────────────────────
 # Feed sources (name + URL) live in news_feeds.json, not here — see
@@ -508,25 +480,25 @@ ENABLE_NEWS_HEADLINES = _get_bool_env("ENABLE_NEWS_HEADLINES", True)
 # its feeds live in news_feeds_2.json (paths.resolve_news_feeds_config_path_2).
 ENABLE_NEWS_HEADLINES_2 = _get_bool_env("ENABLE_NEWS_HEADLINES_2", True)
 NEWS_HEADLINES_SHOW_IMAGES = _get_bool_env("NEWS_HEADLINES_SHOW_IMAGES", True)
-NEWS_TICKER_BASE_SPEED = float(os.environ.get("NEWS_TICKER_BASE_SPEED", "2.3") or 2.3)
-NEWS_ARTICLE_FETCH_TIMEOUT_SECONDS = float(
-    os.environ.get("NEWS_ARTICLE_FETCH_TIMEOUT_SECONDS", "6.0") or 6.0
+NEWS_TICKER_BASE_SPEED = non_negative_env_float("NEWS_TICKER_BASE_SPEED", 2.3)
+NEWS_ARTICLE_FETCH_TIMEOUT_SECONDS = non_negative_env_float(
+    "NEWS_ARTICLE_FETCH_TIMEOUT_SECONDS", 6.0
 )
 # The ticker keeps scrolling for this whole window every time the screen is
 # shown, instead of the (much shorter) generic SCREEN_DELAY used by static
 # screens. Without this, the marquee only animates for SCREEN_DELAY seconds
 # and then sits frozen mid-scroll (looking stuck, with headlines cut off at
 # the lane edge) for the remainder of its scheduled on-screen time.
-NEWS_HEADLINES_DISPLAY_SECONDS = float(
-    os.environ.get("NEWS_HEADLINES_DISPLAY_SECONDS", "30.0") or 30.0
+NEWS_HEADLINES_DISPLAY_SECONDS = non_negative_env_float(
+    "NEWS_HEADLINES_DISPLAY_SECONDS", 30.0
 )
 
 # Adds a bottom ticker lane to the news headlines screen showing major index
 # levels plus a handful of individual stock quotes (see
 # services/stock_quotes.py). Uses the same yfinance source as the VRNO screen.
 ENABLE_STOCK_TICKER = _get_bool_env("ENABLE_STOCK_TICKER", True)
-STOCK_TICKER_CACHE_TTL_SECONDS = int(
-    os.environ.get("STOCK_TICKER_CACHE_TTL_SECONDS", "900") or 900
+STOCK_TICKER_CACHE_TTL_SECONDS = non_negative_env_int(
+    "STOCK_TICKER_CACHE_TTL_SECONDS", 900
 )
 
 WEATHERKIT_TEAM_ID     = os.environ.get("WEATHERKIT_TEAM_ID")
@@ -752,17 +724,8 @@ def _read_kernel_overlay_rotation() -> Optional[int]:
 _display_width_set = "DISPLAY_WIDTH" in os.environ
 _display_height_set = "DISPLAY_HEIGHT" in os.environ
 
-try:
-    WIDTH = int(os.environ.get("DISPLAY_WIDTH", str(BASE_WIDTH)))
-except (TypeError, ValueError):
-    logging.warning("Invalid DISPLAY_WIDTH value; defaulting to %s.", BASE_WIDTH)
-    WIDTH = BASE_WIDTH
-
-try:
-    HEIGHT = int(os.environ.get("DISPLAY_HEIGHT", str(BASE_HEIGHT)))
-except (TypeError, ValueError):
-    logging.warning("Invalid DISPLAY_HEIGHT value; defaulting to %s.", BASE_HEIGHT)
-    HEIGHT = BASE_HEIGHT
+WIDTH = env_int("DISPLAY_WIDTH", BASE_WIDTH, minimum=1)
+HEIGHT = env_int("DISPLAY_HEIGHT", BASE_HEIGHT, minimum=1)
 
 _hyperpixel_panel = os.environ.get("HYPERPIXEL_PANEL", "").strip().lower()
 
@@ -782,75 +745,19 @@ DISPLAY_HAT_MINI_LED_ENABLED = _get_bool_env(
     True,
 )
 
-try:
-    DISPLAY_HAT_MINI_REINIT_SECONDS = int(
-        os.environ.get("DISPLAY_HAT_MINI_REINIT_SECONDS", "1800")
-    )
-except (TypeError, ValueError):
-    logging.warning(
-        "Invalid DISPLAY_HAT_MINI_REINIT_SECONDS value; defaulting to 1800 seconds."
-    )
-    DISPLAY_HAT_MINI_REINIT_SECONDS = 1800
+DISPLAY_HAT_MINI_REINIT_SECONDS = non_negative_env_int(
+    "DISPLAY_HAT_MINI_REINIT_SECONDS", 1800
+)
+DISPLAY_HAT_MINI_IO_TIMEOUT_SECONDS = non_negative_env_float(
+    "DISPLAY_HAT_MINI_IO_TIMEOUT_SECONDS", 15.0
+)
+DISPLAY_HAT_MINI_MAX_REFRESH_FAILURES = non_negative_env_int(
+    "DISPLAY_HAT_MINI_MAX_REFRESH_FAILURES", 3
+)
+HYPERPIXEL_LED_INDICATOR_BORDER_WIDTH = env_int(
+    "HYPERPIXEL_LED_INDICATOR_BORDER_WIDTH", 2, minimum=1
+)
 
-if DISPLAY_HAT_MINI_REINIT_SECONDS < 0:
-    logging.warning(
-        "DISPLAY_HAT_MINI_REINIT_SECONDS must be >= 0; clamping to 0 (disabled)."
-    )
-    DISPLAY_HAT_MINI_REINIT_SECONDS = 0
-
-try:
-    DISPLAY_HAT_MINI_IO_TIMEOUT_SECONDS = float(
-        os.environ.get("DISPLAY_HAT_MINI_IO_TIMEOUT_SECONDS", "15")
-    )
-except (TypeError, ValueError):
-    logging.warning(
-        "Invalid DISPLAY_HAT_MINI_IO_TIMEOUT_SECONDS value; defaulting to 15 seconds."
-    )
-    DISPLAY_HAT_MINI_IO_TIMEOUT_SECONDS = 15.0
-
-if not math.isfinite(DISPLAY_HAT_MINI_IO_TIMEOUT_SECONDS):
-    logging.warning(
-        "DISPLAY_HAT_MINI_IO_TIMEOUT_SECONDS must be finite; defaulting to 15 seconds."
-    )
-    DISPLAY_HAT_MINI_IO_TIMEOUT_SECONDS = 15.0
-elif DISPLAY_HAT_MINI_IO_TIMEOUT_SECONDS < 0:
-    logging.warning(
-        "DISPLAY_HAT_MINI_IO_TIMEOUT_SECONDS must be >= 0; clamping to 0 (disabled)."
-    )
-    DISPLAY_HAT_MINI_IO_TIMEOUT_SECONDS = 0.0
-
-try:
-    DISPLAY_HAT_MINI_MAX_REFRESH_FAILURES = int(
-        os.environ.get("DISPLAY_HAT_MINI_MAX_REFRESH_FAILURES", "3")
-    )
-except (TypeError, ValueError):
-    logging.warning(
-        "Invalid DISPLAY_HAT_MINI_MAX_REFRESH_FAILURES value; defaulting to 3."
-    )
-    DISPLAY_HAT_MINI_MAX_REFRESH_FAILURES = 3
-
-if DISPLAY_HAT_MINI_MAX_REFRESH_FAILURES < 0:
-    logging.warning(
-        "DISPLAY_HAT_MINI_MAX_REFRESH_FAILURES must be >= 0; "
-        "clamping to 0 (disabled)."
-    )
-    DISPLAY_HAT_MINI_MAX_REFRESH_FAILURES = 0
-
-try:
-    HYPERPIXEL_LED_INDICATOR_BORDER_WIDTH = int(
-        os.environ.get("HYPERPIXEL_LED_INDICATOR_BORDER_WIDTH", "2")
-    )
-except (TypeError, ValueError):
-    logging.warning(
-        "Invalid HYPERPIXEL_LED_INDICATOR_BORDER_WIDTH value; defaulting to 2."
-    )
-    HYPERPIXEL_LED_INDICATOR_BORDER_WIDTH = 2
-
-if HYPERPIXEL_LED_INDICATOR_BORDER_WIDTH < 1:
-    logging.warning(
-        "HYPERPIXEL_LED_INDICATOR_BORDER_WIDTH must be >= 1; clamping to 1."
-    )
-    HYPERPIXEL_LED_INDICATOR_BORDER_WIDTH = 1
 
 def _compute_display_scale(
     base_width: int,
@@ -957,15 +864,15 @@ def is_kernel_driven_display() -> bool:
 DISPLAY_FADE_IN_ENABLED = _get_bool_env("DISPLAY_FADE_IN_ENABLED", True)
 DISPLAY_FADE_IN_DISPLAY_HAT_MINI_STEPS = max(
     0,
-    _get_int_env("DISPLAY_FADE_IN_DISPLAY_HAT_MINI_STEPS", 10),
+    non_negative_env_int("DISPLAY_FADE_IN_DISPLAY_HAT_MINI_STEPS", 10),
 )
 DISPLAY_FADE_IN_HYPERPIXEL_STEPS = max(
     0,
-    _get_int_env("DISPLAY_FADE_IN_HYPERPIXEL_STEPS", 0),
+    non_negative_env_int("DISPLAY_FADE_IN_HYPERPIXEL_STEPS", 0),
 )
 DISPLAY_FADE_IN_HDMI_1080P_STEPS = max(
     0,
-    _get_int_env("DISPLAY_FADE_IN_HDMI_1080P_STEPS", 0),
+    non_negative_env_int("DISPLAY_FADE_IN_HDMI_1080P_STEPS", 0),
 )
 DISPLAY_FADE_IN_STEPS_BY_PROFILE: dict[str, int] = {
     "display_hat_mini": DISPLAY_FADE_IN_DISPLAY_HAT_MINI_STEPS,
@@ -983,39 +890,11 @@ DISPLAY_FADE_IN_DEFAULT_STEPS = DISPLAY_FADE_IN_STEPS_BY_PROFILE.get(
 DISPLAY_PROFILE_LOGO_SCALE_CAP = ACTIVE_DISPLAY_PROFILE.logo_scale_cap
 DISPLAY_PROFILE_ANIMATION_DELAY = ACTIVE_DISPLAY_PROFILE.animation_delay
 SCREEN_DELAY             = 4
-try:
-    HOURLY_FORECAST_HOURS = int(os.environ.get("HOURLY_FORECAST_HOURS", "5"))
-    if HOURLY_FORECAST_HOURS < 1:
-        HOURLY_FORECAST_HOURS = 1
-except (TypeError, ValueError):
-    logging.warning(
-        "Invalid HOURLY_FORECAST_HOURS value; defaulting to 5 hours."
-    )
-    HOURLY_FORECAST_HOURS = 5
-if HOURLY_FORECAST_HOURS > 12:
-    HOURLY_FORECAST_HOURS = 12
-
-try:
-    WEATHER_REFRESH_SECONDS = int(os.environ.get("WEATHER_REFRESH_SECONDS", "1800"))
-    if WEATHER_REFRESH_SECONDS < 600:
-        logging.warning(
-            "WEATHER_REFRESH_SECONDS too low; clamping to 600 seconds to limit API usage."
-        )
-        WEATHER_REFRESH_SECONDS = 600
-except (TypeError, ValueError):
-    logging.warning(
-        "Invalid WEATHER_REFRESH_SECONDS value; defaulting to 1800 seconds."
-    )
-    WEATHER_REFRESH_SECONDS = 1800
-try:
-    TEAM_STANDINGS_DISPLAY_SECONDS = int(
-        os.environ.get("TEAM_STANDINGS_DISPLAY_SECONDS", "5")
-    )
-except (TypeError, ValueError):
-    logging.warning(
-        "Invalid TEAM_STANDINGS_DISPLAY_SECONDS value; defaulting to 5 seconds."
-    )
-    TEAM_STANDINGS_DISPLAY_SECONDS = 5
+HOURLY_FORECAST_HOURS = min(env_int("HOURLY_FORECAST_HOURS", 5, minimum=1), 12)
+WEATHER_REFRESH_SECONDS = env_int("WEATHER_REFRESH_SECONDS", 1800, minimum=600)
+TEAM_STANDINGS_DISPLAY_SECONDS = non_negative_env_int(
+    "TEAM_STANDINGS_DISPLAY_SECONDS", 5
+)
 SCHEDULE_UPDATE_INTERVAL = 600
 
 _use_kernel_rotation_source = (
@@ -1373,35 +1252,6 @@ def is_within_dark_hours(moment: Optional[datetime.datetime] = None) -> bool:
 # ─── Scoreboard appearance ────────────────────────────────────────────────────
 
 
-def _get_non_negative_int_env(name: str, default: int) -> int:
-    raw = os.environ.get(name)
-    if raw is None:
-        return default
-    try:
-        value = int(raw)
-    except ValueError:
-        logging.warning("Invalid %s value %r; defaulting to %s.", name, raw, default)
-        return default
-    if value < 0:
-        logging.warning("Negative %s value %r; defaulting to %s.", name, raw, default)
-        return default
-    return value
-
-
-def _get_non_negative_float_env(name: str, default: float) -> float:
-    raw = os.environ.get(name)
-    if raw is None:
-        return default
-    try:
-        value = float(raw)
-    except ValueError:
-        logging.warning("Invalid %s value %r; defaulting to %s.", name, raw, default)
-        return default
-    if value < 0:
-        logging.warning("Negative %s value %r; defaulting to %s.", name, raw, default)
-        return default
-    return value
-
 # All screens render on a fixed black background; this is not configurable.
 SCOREBOARD_BACKGROUND_COLOR = (0, 0, 0)
 
@@ -1413,13 +1263,13 @@ SCOREBOARD_FINAL_LOSING_SCORE_COLOR = (200, 200, 200)
 # ─── Scoreboard scrolling configuration ───────────────────────────────────────
 SCOREBOARD_SCROLL_STEP         = ACTIVE_DISPLAY_PROFILE.scoreboard_scroll_step
 SCOREBOARD_SCROLL_DELAY        = ACTIVE_DISPLAY_PROFILE.scoreboard_scroll_delay
-MLB_SCOREBOARD_SCROLL_DELAY    = _get_non_negative_float_env(
+MLB_SCOREBOARD_SCROLL_DELAY    = non_negative_env_float(
     "MLB_SCOREBOARD_SCROLL_DELAY",
     SCOREBOARD_SCROLL_DELAY,
 )
 SCOREBOARD_SCROLL_PAUSE_TOP    = 0.75
 SCOREBOARD_SCROLL_PAUSE_BOTTOM = 0.5
-SCOREBOARD_STANDINGS_BOTTOM_PADDING = _get_non_negative_int_env(
+SCOREBOARD_STANDINGS_BOTTOM_PADDING = non_negative_env_int(
     "SCOREBOARD_STANDINGS_BOTTOM_PADDING",
     30,
 )
@@ -2057,11 +1907,7 @@ AHL_SCHEDULE_ICS_URL = os.environ.get(
     "AHL_SCHEDULE_ICS_URL",
     "",
 )
-try:
-    AHL_TEAM_ID = int(os.environ.get("AHL_TEAM_ID", "624"))
-except (TypeError, ValueError):
-    logging.warning("Invalid AHL_TEAM_ID value; defaulting to 624")
-    AHL_TEAM_ID = 624
+AHL_TEAM_ID = non_negative_env_int("AHL_TEAM_ID", 624)
 AHL_TEAM_TRICODE   = os.environ.get("AHL_TEAM_TRICODE", "CHI")
 AHL_FALLBACK_LOGO  = os.path.join(AHL_IMAGES_DIR, "AHL.png")
 AHL_TEAM_NAME      = os.environ.get("AHL_TEAM_NAME", "Chicago Wolves")

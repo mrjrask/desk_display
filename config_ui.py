@@ -31,6 +31,7 @@ from flask import (
 
 import config
 from diagnostic_playback import load_diagnostic_screen, save_diagnostic_screen
+from env_config import non_negative_env_int
 from paths import (
     resolve_layouts_config_path,
     resolve_screens_config_paths,
@@ -65,14 +66,14 @@ STYLE_CONFIG_PATH = str(resolve_style_config_path())
 LAYOUTS_CONFIG_PATH = str(resolve_layouts_config_path())
 
 SCREEN_CONFIG_HOST = os.environ.get("SCREEN_CONFIG_HOST", "0.0.0.0")
-SCREEN_CONFIG_PORT = int(os.environ.get("SCREEN_CONFIG_PORT", "5002"))
+SCREEN_CONFIG_PORT = non_negative_env_int("SCREEN_CONFIG_PORT", 5002)
 SCREEN_UI_USERNAME = os.environ.get("SCREEN_UI_USERNAME", "")
 SCREEN_UI_PASSWORD = os.environ.get("SCREEN_UI_PASSWORD", "")
 ALLOWED_SCREEN_EXTS = (".png", ".jpg", ".jpeg")
 # The Feed page (unlike Screenshots, which flags-but-still-shows old frames)
 # drops a screen entirely once its screenshot hasn't been refreshed within
 # this window, so a Pi that's stopped rendering doesn't linger on the feed.
-FEED_SCREEN_STALE_SECONDS = int(os.environ.get("FEED_SCREEN_STALE_SECONDS", str(20 * 60)))
+FEED_SCREEN_STALE_SECONDS = non_negative_env_int("FEED_SCREEN_STALE_SECONDS", 20 * 60)
 # The Waveshare OLED/LCD HAT is a separate pair of small hardware displays
 # driven by scripts/waveshare_oled_status.py, not a rotation "screen" from
 # screens_config.json. They're appended to the screenshots page (rather than
