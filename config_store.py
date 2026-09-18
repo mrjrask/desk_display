@@ -1,4 +1,5 @@
 """Configuration storage with versioning, rollback, and pruning."""
+
 from __future__ import annotations
 
 import contextlib
@@ -26,8 +27,12 @@ class ConfigStore:
         retention: int = DEFAULT_RETENTION,
     ) -> None:
         self.config_path = Path(config_path)
-        self.db_path = Path(db_path) if db_path else self.config_path.with_suffix(".history.sqlite3")
-        self.archive_dir = Path(archive_dir) if archive_dir else self.config_path.parent / "config_versions"
+        self.db_path = (
+            Path(db_path) if db_path else self.config_path.with_suffix(".history.sqlite3")
+        )
+        self.archive_dir = (
+            Path(archive_dir) if archive_dir else self.config_path.parent / "config_versions"
+        )
         self.retention = max(1, retention)
         self._save_lock = threading.Lock()
         self._ensure_database()
@@ -77,10 +82,8 @@ class ConfigStore:
                     self._write_bytes(previous_bytes)
                 raise
 
-            try:
+            with contextlib.suppress(OSError):
                 self._prune_history()
-            except OSError:
-                pass
             return version_id
 
     def list_versions(self, limit: int = 20) -> list[dict[str, Any]]:
@@ -90,18 +93,18 @@ class ConfigStore:
             ORDER BY id DESC
             LIMIT ?
         """
-        with sqlite3.connect(self.db_path) as conn:
+        with contextlib.closing(sqlite3.connect(self.db_path)) as conn, conn:
             conn.row_factory = sqlite3.Row
             rows = conn.execute(query, (max(1, limit),)).fetchall()
         return [dict(row) for row in rows]
 
     def latest_version_id(self) -> Optional[int]:
-        with sqlite3.connect(self.db_path) as conn:
+        with contextlib.closing(sqlite3.connect(self.db_path)) as conn, conn:
             row = conn.execute("SELECT id FROM config_versions ORDER BY id DESC LIMIT 1").fetchone()
         return int(row[0]) if row else None
 
     def load_version(self, version_id: int) -> dict[str, Any]:
-        with sqlite3.connect(self.db_path) as conn:
+        with contextlib.closing(sqlite3.connect(self.db_path)) as conn, conn:
             conn.row_factory = sqlite3.Row
             row = conn.execute(
                 "SELECT config_json FROM config_versions WHERE id = ?",
@@ -124,18 +127,18 @@ class ConfigStore:
     # Internal helpers
     def _ensure_database(self) -> None:
         os.makedirs(self.db_path.parent, exist_ok=True)
-        with sqlite3.connect(self.db_path) as conn:
+        with contextlib.closing(sqlite3.connect(self.db_path)) as conn, conn:
             conn.execute(
                 """
-                CREATE TABLE IF NOT EXISTS config_versions (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    created_at TEXT NOT NULL,
-                    actor TEXT NOT NULL,
-                    summary TEXT NOT NULL,
-                    config_json TEXT NOT NULL,
-                    metadata_json TEXT
-                )
-                """
+                    CREATE TABLE IF NOT EXISTS config_versions (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        created_at TEXT NOT NULL,
+                        actor TEXT NOT NULL,
+                        summary TEXT NOT NULL,
+                        config_json TEXT NOT NULL,
+                        metadata_json TEXT
+                    )
+                    """
             )
             conn.commit()
         os.makedirs(self.archive_dir, exist_ok=True)
@@ -178,12 +181,12 @@ class ConfigStore:
 
         archive_path: Optional[Path] = None
         try:
-            with sqlite3.connect(self.db_path) as conn:
+            with contextlib.closing(sqlite3.connect(self.db_path)) as conn, conn:
                 cursor = conn.execute(
-                    """
-                    INSERT INTO config_versions (created_at, actor, summary, config_json, metadata_json)
-                    VALUES (?, ?, ?, ?, ?)
-                    """,
+                    """INSERT INTO config_versions
+                        (created_at, actor, summary, config_json, metadata_json)
+                        VALUES (?, ?, ?, ?, ?)
+                        """,
                     (created_at, actor, summary, payload, metadata_json),
                 )
                 version_id = cursor.lastrowid
@@ -199,7 +202,7 @@ class ConfigStore:
         return int(version_id)
 
     def _prune_history(self) -> None:
-        with sqlite3.connect(self.db_path) as conn:
+        with contextlib.closing(sqlite3.connect(self.db_path)) as conn, conn:
             conn.row_factory = sqlite3.Row
             rows = conn.execute(
                 "SELECT id FROM config_versions ORDER BY id DESC LIMIT -1 OFFSET ?",
@@ -207,10 +210,12 @@ class ConfigStore:
             ).fetchall()
             stale_ids = [row["id"] for row in rows]
             if stale_ids:
-                conn.executemany("DELETE FROM config_versions WHERE id = ?", [(vid,) for vid in stale_ids])
+                conn.executemany(
+                    "DELETE FROM config_versions WHERE id = ?", [(vid,) for vid in stale_ids]
+                )
                 conn.commit()
 
-        for archive_file in sorted(self.archive_dir.glob("*.json"))[:-self.retention]:
+        for archive_file in sorted(self.archive_dir.glob("*.json"))[: -self.retention]:
             with contextlib.suppress(OSError):
                 archive_file.unlink()
 
