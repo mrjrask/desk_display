@@ -262,6 +262,8 @@ def check_nfl_standings_csv() -> tuple[str, str]:
 
 
 def check_ahl_ics() -> tuple[str, str]:
+    if not AHL_SCHEDULE_ICS_URL:
+        return _skip("AHL_SCHEDULE_ICS_URL is not configured")
     response = requests.get(AHL_SCHEDULE_ICS_URL, timeout=12)
     response.raise_for_status()
     text = response.text

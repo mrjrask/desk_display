@@ -2910,6 +2910,15 @@ def _sanitize_ahl_payload(raw_text: str) -> str:
 
 
 def _ahl_request(view: str, *, feed: str = "statviewfeed", **extra_params):
+    api_key = (AHL_API_KEY or "").strip()
+    if not api_key:
+        logging.warning(
+            "AHL_API_KEY is not configured; skipping HockeyTech %s request. "
+            "Set AHL_API_KEY in the environment to enable HockeyTech data.",
+            view,
+        )
+        return None
+
     params: Dict[str, object] = {
         "feed": feed,
         "view": view,
@@ -2923,11 +2932,6 @@ def _ahl_request(view: str, *, feed: str = "statviewfeed", **extra_params):
         if value is not None:
             params[key] = value
 
-    use_key = bool(AHL_API_KEY)
-    no_key_attempted = False
-    if not use_key:
-        logging.warning("AHL API key missing; attempting request without authentication")
-
     endpoint = _ahl_endpoint()
 
     headers = {
@@ -2937,56 +2941,44 @@ def _ahl_request(view: str, *, feed: str = "statviewfeed", **extra_params):
         "Referer": "https://theahl.com/stats/",
         "X-Requested-With": "XMLHttpRequest",
     }
-    while True:
-        attempt_params = dict(params)
-        if use_key:
-            attempt_params["key"] = AHL_API_KEY
-        else:
-            if not no_key_attempted:
-                no_key_attempted = True
-
-        try:
-            resp = _session.get(endpoint, params=attempt_params, headers=headers, timeout=10)
-            resp.raise_for_status()
-            payload = _sanitize_ahl_payload(resp.text)
-            if not payload:
-                logging.error(
-                    "Empty response when fetching AHL %s data (status %s)",
-                    view,
-                    resp.status_code,
-                )
-                return None
-            try:
-                return json.loads(payload)
-            except json.JSONDecodeError:  # pragma: no cover - depends on upstream
-                snippet = payload[:200].replace("\n", " ").replace("\r", " ")
-                snippet_lower = snippet.lower()
-                if "invalid key" in snippet_lower:
-                    if use_key and not no_key_attempted:
-                        logging.info(
-                            "AHL API rejected the configured key for %s; retrying without a key",
-                            view,
-                        )
-                        use_key = False
-                        continue
-                    logging.debug(
-                        "AHL feed for %s responded with 'Invalid key' (feed=%s); skipping",
-                        view,
-                        feed,
-                    )
-                    return None
-                logging.error(
-                    "Error parsing AHL %s data (status %s, content-type %s): %s",
-                    view,
-                    resp.status_code,
-                    resp.headers.get("content-type"),
-                    snippet,
-                )
-                logging.debug("Full AHL %s payload: %s", view, payload)
-                return None
-        except Exception as exc:
-            logging.error("Error fetching AHL %s data: %s", view, exc)
+    attempt_params = dict(params)
+    attempt_params["key"] = api_key
+    try:
+        resp = _session.get(endpoint, params=attempt_params, headers=headers, timeout=10)
+        resp.raise_for_status()
+        payload = _sanitize_ahl_payload(resp.text)
+        if not payload:
+            logging.error(
+                "Empty response when fetching AHL %s data (status %s)",
+                view,
+                resp.status_code,
+            )
             return None
+        try:
+            return json.loads(payload)
+        except json.JSONDecodeError:  # pragma: no cover - depends on upstream
+            snippet = payload[:200].replace("\n", " ").replace("\r", " ")
+            snippet_lower = snippet.lower()
+            if "invalid key" in snippet_lower:
+                logging.warning(
+                    "AHL_API_KEY was rejected for %s (feed=%s); rotate or "
+                    "replace the environment value. Skipping HockeyTech data.",
+                    view,
+                    feed,
+                )
+                return None
+            logging.error(
+                "Error parsing AHL %s data (status %s, content-type %s): %s",
+                view,
+                resp.status_code,
+                resp.headers.get("content-type"),
+                snippet,
+            )
+            logging.debug("Full AHL %s payload: %s", view, payload)
+            return None
+    except Exception as exc:
+        logging.error("Error fetching AHL %s data: %s", view, exc)
+        return None
 
 
 def _dict_rows(value) -> List[Dict]:
@@ -3807,7 +3799,11 @@ def _normalize_wolves_ics_game(event: Dict[str, Any]) -> Optional[Dict[str, Any]
 def _fetch_wolves_ics_games() -> List[Dict[str, Any]]:
     url = _wolves_schedule_url()
     if not url:
-        logging.warning("AHL schedule ICS URL not configured")
+        logging.warning(
+            "AHL_SCHEDULE_ICS_URL is not configured; skipping the Wolves "
+            "schedule calendar. Set AHL_SCHEDULE_ICS_URL in the environment "
+            "to enable schedule data."
+        )
         return []
     headers = {
         "User-Agent": "desk-display/1.0",
