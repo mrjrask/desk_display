@@ -30,18 +30,12 @@ from paths import (
     resolve_style_config_path,
 )
 from schedule import build_scheduler
-from screens_catalog import SCREEN_IDS, canonical_screen_id
+from screens_catalog import LEGACY_RETIRED_SCREEN_IDS, SCREEN_IDS, canonical_screen_id
 
 _screens_config_paths = resolve_screens_config_paths()
 LOCAL_CONFIG_PATH = str(_screens_config_paths.local_override_path)
 STYLE_CONFIG_PATH = str(resolve_style_config_path())
 LAYOUTS_CONFIG_PATH = str(resolve_layouts_config_path())
-HIDDEN_CONFIG_SCREEN_IDS = {
-    "cubs next 2",
-    "sox next 2",
-    "cubs last 2",
-    "sox last 2",
-}
 
 
 def _coerce_frequency(value: Any) -> Optional[int]:
@@ -387,9 +381,11 @@ def _build_screen_entries(config: dict[str, Any], style_config: dict[str, Any]) 
     style_screens = style_config.get("screens", {})
     if not isinstance(style_screens, dict):
         style_screens = {}
-    ordered_screen_ids: list[str] = [screen_id for screen_id in screens.keys() if screen_id not in HIDDEN_CONFIG_SCREEN_IDS]
+    ordered_screen_ids: list[str] = [
+        screen_id for screen_id in screens.keys() if screen_id not in LEGACY_RETIRED_SCREEN_IDS
+    ]
     for screen_id in SCREEN_IDS:
-        if screen_id not in HIDDEN_CONFIG_SCREEN_IDS and screen_id not in ordered_screen_ids:
+        if screen_id not in LEGACY_RETIRED_SCREEN_IDS and screen_id not in ordered_screen_ids:
             ordered_screen_ids.append(screen_id)
     entries: list[dict[str, Any]] = []
     for screen_id in ordered_screen_ids:
@@ -431,7 +427,7 @@ def _build_config(entries: list[dict[str, Any]]) -> dict[str, Any]:
     screens: dict[str, Any] = {}
     for entry in entries:
         screen_id = canonical_screen_id(str(entry.get("id", "")).strip())
-        if not screen_id or screen_id in HIDDEN_CONFIG_SCREEN_IDS:
+        if not screen_id or screen_id in LEGACY_RETIRED_SCREEN_IDS:
             continue
         frequency = int(entry.get("frequency", 0))
         extra_seconds = int(entry.get("extra_seconds", 0))

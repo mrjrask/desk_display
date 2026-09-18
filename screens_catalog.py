@@ -18,6 +18,18 @@ LEGACY_SCREEN_ID_MAP = {
     "adsb live airlines": "adsb live",
 }
 
+# Compatibility-only IDs retained so historical persisted configurations can
+# be discarded during import. These obsolete IDs must never be added to the
+# canonical active ``SCREEN_IDS`` catalog.
+LEGACY_RETIRED_SCREEN_IDS = frozenset(
+    {
+        "cubs next 2",
+        "sox next 2",
+        "cubs last 2",
+        "sox last 2",
+    }
+)
+
 
 def canonical_screen_id(screen_id: str) -> str:
     mapped_id = LEGACY_SCOREBOARD_V2_SCREEN_MAP.get(screen_id, screen_id)
