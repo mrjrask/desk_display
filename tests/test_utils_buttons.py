@@ -260,6 +260,7 @@ def test_minipitft_output_uses_script_writer(monkeypatch):
         def image(self, image):
             writes.append(image.size)
 
+    monkeypatch.setattr(utils, "_FORCE_HEADLESS", False)
     monkeypatch.setattr(utils, "_DISPLAY_OUTPUT", "minipitft")
     monkeypatch.setattr(utils, "board", _FakeBoard)
     monkeypatch.setattr(utils, "digitalio", SimpleNamespace(DigitalInOut=_FakePin))
