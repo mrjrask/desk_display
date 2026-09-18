@@ -4,6 +4,7 @@ import subprocess
 import sys
 import threading
 import time
+import weakref
 from enum import Enum
 from types import SimpleNamespace
 
@@ -723,49 +724,70 @@ def test_successful_display_refresh_resets_driver_error_count():
 
 
 def test_reinitialize_keeps_retired_driver_destructor_from_resetting_new_gpio(monkeypatch):
-    events = []
+    destroyed = []
 
-    class _OldDisplay:
-        def __del__(self):
-            events.append("old destructor")
-
-    display = utils.Display()
-    display._display_reinit_seconds = 1
-    display._last_display_reinit = 0
-    display._display = _OldDisplay()
-
-    monkeypatch.setattr(display, "_release_display_hat_mini", lambda _driver: None)
-    monkeypatch.setattr(
-        display,
-        "_create_display_hat_mini",
-        lambda _buffer: events.append("new driver") or object(),
-    )
-    monkeypatch.setattr(utils.time, "monotonic", lambda: 10)
-
-    display._maybe_reinitialize_display_hat_mini()
-
-    assert events == ["new driver"]
-    assert display._retired_display_hat_mini is not None
-
-
-def test_failed_reinitialize_keeps_earlier_retired_driver_alive(monkeypatch):
-    events = []
-
-    class _Display:
+    class _FakeDisplay:
         def __init__(self, name):
             self.name = name
 
         def __del__(self):
-            events.append(f"{self.name} destructor")
+            destroyed.append(self.name)
 
         def set_backlight(self, _level):
-            events.append(f"{self.name} restored")
+            pass
+
+        def display(self):
+            return f"{self.name} displayed"
 
     display = utils.Display()
     display._display_reinit_seconds = 1
     display._last_display_reinit = 0
-    display._display = _Display("first")
-    replacements = iter([_Display("second"), RuntimeError("busy")])
+    old_display = _FakeDisplay("old")
+    old_display_ref = weakref.ref(old_display)
+    display._display = old_display
+    del old_display
+
+    replacement = _FakeDisplay("replacement")
+
+    monkeypatch.setattr(display, "_release_display_hat_mini", lambda _driver: None)
+    monkeypatch.setattr(display, "_create_display_hat_mini", lambda _buffer: replacement)
+    monkeypatch.setattr(utils.time, "monotonic", lambda: 10)
+
+    display._maybe_reinitialize_display_hat_mini()
+
+    assert old_display_ref() is display._retired_display_hat_mini
+    assert destroyed == []
+    assert callable(display._display.display)
+    assert display._display.display() == "replacement displayed"
+
+
+def test_failed_reinitialize_keeps_earlier_retired_driver_alive(monkeypatch):
+    destroyed = []
+
+    class _Display:
+        def __init__(self, name):
+            self.name = name
+            self.backlight_levels = []
+
+        def __del__(self):
+            destroyed.append(self.name)
+
+        def set_backlight(self, level):
+            self.backlight_levels.append(level)
+
+        def display(self):
+            return f"{self.name} displayed"
+
+    display = utils.Display()
+    display._display_reinit_seconds = 1
+    display._last_display_reinit = 0
+    first = _Display("first")
+    first_ref = weakref.ref(first)
+    display._display = first
+    del first
+
+    second = _Display("second")
+    replacements = iter([second, RuntimeError("busy")])
 
     def _create(_buffer):
         replacement = next(replacements)
@@ -778,12 +800,16 @@ def test_failed_reinitialize_keeps_earlier_retired_driver_alive(monkeypatch):
     monkeypatch.setattr(utils.time, "monotonic", lambda: 10)
 
     display._maybe_reinitialize_display_hat_mini()
+    second.backlight_levels.clear()
     display._last_display_reinit = 0
     display._maybe_reinitialize_display_hat_mini()
 
-    assert display._display.name == "second"
-    assert events == ["second restored"]
-    assert display._retired_display_hat_mini.name == "first"
+    assert first_ref() is display._retired_display_hat_mini
+    assert destroyed == []
+    assert display._display is second
+    assert display._backlight_level in second.backlight_levels
+    assert callable(display._display.display)
+    assert display._display.display() == "second displayed"
 
 
 def test_successful_reinitialize_safely_releases_earlier_retired_driver(monkeypatch):
