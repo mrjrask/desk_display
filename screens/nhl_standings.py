@@ -35,6 +35,7 @@ from config import (
     scale_value_width,
 )
 from display_profiles import DISPLAY_PROFILE_ADAFRUIT_MINIPITFT_114
+from image_compat import LANCZOS
 from services.http_client import NHL_HEADERS, get_session
 from utils import (
     ScreenImage,
@@ -720,7 +721,7 @@ def _load_conference_logo(conference_key: str) -> Optional[Image.Image]:
         if logo.height > 0 and height > 0:
             scale = height / float(logo.height)
             new_width = max(1, int(round(logo.width * scale)))
-            logo = logo.resize((new_width, height), Image.LANCZOS)
+            logo = logo.resize((new_width, height), LANCZOS)
     except Exception as exc:  # pragma: no cover - defensive guard
         logging.debug("NHL conference logo load failed for %s: %s", key, exc)
         logo = None
@@ -776,7 +777,7 @@ def _fit_logo_to_box(logo: Optional[Image.Image], box_size: int) -> Optional[Ima
     scale = min(box_size / float(width), box_size / float(height))
     new_width = max(1, int(round(width * scale)))
     new_height = max(1, int(round(height * scale)))
-    return logo.resize((new_width, new_height), Image.LANCZOS)
+    return logo.resize((new_width, new_height), LANCZOS)
 
 
 def _square_logo(logo: Optional[Image.Image], box_size: int) -> Optional[Image.Image]:

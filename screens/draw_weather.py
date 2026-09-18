@@ -54,6 +54,7 @@ from config import (
     is_hyperpixel_4_square_layout,
     is_hyperpixel_next_layout,
 )
+from image_compat import LANCZOS
 from services.http_client import http_get
 from utils import (
     LED_INDICATOR_LEVEL,
@@ -1516,7 +1517,7 @@ def draw_weather_hourly(display, weather, transition: bool = False, hours: int =
             if precip_icon.height != target_icon_size and precip_icon.height > 0:
                 scale = target_icon_size / precip_icon.height
                 resized_w = max(1, int(round(precip_icon.width * scale)))
-                precip_icon = precip_icon.resize((resized_w, target_icon_size), Image.Resampling.LANCZOS)
+                precip_icon = precip_icon.resize((resized_w, target_icon_size), LANCZOS)
             stat_items.append((pop_text, FONT_WEATHER_DETAILS_TINY_LARGE, precip_color, precip_icon))
 
         uvi_val = hour.get("uvi")
@@ -1721,7 +1722,7 @@ def draw_weather_daily(display, weather, transition: bool = False, days: int = 5
             if precip_icon.height != target_icon_size and precip_icon.height > 0:
                 scale = target_icon_size / precip_icon.height
                 resized_w = max(1, int(round(precip_icon.width * scale)))
-                precip_icon = precip_icon.resize((resized_w, target_icon_size), Image.Resampling.LANCZOS)
+                precip_icon = precip_icon.resize((resized_w, target_icon_size), LANCZOS)
 
         wind_speed_raw = day.get("wind_speed")
         try:
@@ -2491,7 +2492,7 @@ def _fetch_rainviewer_frames(zoom: int = 7, max_frames: int = RADAR_MAX_FRAMES) 
 
         frame_img = Image.new("RGBA", tile.size, (0, 0, 0, 255))
         frame_img.alpha_composite(tile)
-        final_frame = frame_img.resize((WIDTH, HEIGHT), Image.LANCZOS).convert("RGBA")
+        final_frame = frame_img.resize((WIDTH, HEIGHT), LANCZOS).convert("RGBA")
         return RadarFrame(final_frame, timestamp)
 
     # Each tile is an independent network fetch; on flaky/weak Wi-Fi hardware
@@ -2519,7 +2520,7 @@ def _fetch_iem_radar_fallback_frames(zoom: int = 7) -> list[RadarFrame]:
         logging.warning("IEM radar fallback fetch failed: %s", exc)
         return []
 
-    final_frame = tile.resize((WIDTH, HEIGHT), Image.LANCZOS).convert("RGBA")
+    final_frame = tile.resize((WIDTH, HEIGHT), LANCZOS).convert("RGBA")
     return [RadarFrame(final_frame, int(datetime.datetime.now(datetime.UTC).timestamp()))]
 
 
@@ -2573,7 +2574,7 @@ def draw_weather_radar(display, weather=None, transition: bool = False):
 
     map_section = None
     if base_map:
-        map_section = base_map.copy().resize((WIDTH, HEIGHT), Image.LANCZOS).convert("RGBA")
+        map_section = base_map.copy().resize((WIDTH, HEIGHT), LANCZOS).convert("RGBA")
     else:
         map_section = Image.new("RGBA", (WIDTH, HEIGHT), background + (255,))
 
@@ -2582,7 +2583,7 @@ def draw_weather_radar(display, weather=None, transition: bool = False):
         if radar_image.size != (WIDTH, HEIGHT):
             # Frames are pre-resized when fetched; this only triggers for
             # stale cached frames from a previous, differently-sized layout.
-            radar_image = radar_image.resize((WIDTH, HEIGHT), Image.LANCZOS)
+            radar_image = radar_image.resize((WIDTH, HEIGHT), LANCZOS)
         radar_resized = radar_image.convert("RGBA")
         radar_opacity = 0.6
         if radar_opacity < 1.0:

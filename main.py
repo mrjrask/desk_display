@@ -85,6 +85,7 @@ from config import (
     initialise_runtime_probes,
     is_within_dark_hours,
 )
+from image_compat import LANCZOS
 from env_config import env_float
 from services.air_quality import fetch_air_quality
 from services.data_provider import provider as data_provider
@@ -1864,7 +1865,7 @@ def load_logo(fn, height=LOGO_SCREEN_HEIGHT, width=LOGO_SCREEN_WIDTH):
                 max(1, round(img.width * scale)),
                 max(1, round(img.height * scale)),
             )
-            resized = img.resize(resized_size, Image.ANTIALIAS)
+            resized = img.resize(resized_size, LANCZOS)
             if resized_size == (target_width, target_height):
                 return resized
             background = (0, 0, 0, 0) if has_transparency else (0, 0, 0)

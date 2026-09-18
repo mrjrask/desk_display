@@ -31,6 +31,7 @@ from config import (
     WIDTH,
     get_screen_background_color,
 )
+from image_compat import LANCZOS
 from services.adsb import AdsbStore, DailyStats, FurthestCatch, today_key
 from utils import ScreenImage, clone_font, fit_font, log_call, measure_text
 
@@ -269,7 +270,7 @@ def _airline_logo(code: str, height: int) -> Optional[Image.Image]:
         try:
             opened = Image.open(path).convert("RGBA")
             ratio = height / opened.height
-            logo = opened.resize((max(1, round(opened.width * ratio)), height), Image.ANTIALIAS)
+            logo = opened.resize((max(1, round(opened.width * ratio)), height), LANCZOS)
         except Exception:
             logging.exception("ADS-B: failed to load airline logo '%s'", path)
             logo = None

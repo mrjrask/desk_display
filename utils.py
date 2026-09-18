@@ -37,6 +37,7 @@ from typing import Any, Callable, Dict, Iterable, List, Optional, Tuple
 import PIL.ImageDraw as _ID
 from PIL import Image, ImageDraw, ImageEnhance, ImageFont, ImageOps
 
+from image_compat import LANCZOS
 from env_config import env_float, env_int
 from services.http_client import http_get
 
@@ -47,10 +48,6 @@ if not hasattr(_ID.ImageDraw, "textsize"):
         bbox = self.textbbox((0, 0), text, font=font)
         return (bbox[2] - bbox[0], bbox[3] - bbox[1])
     _ID.ImageDraw.textsize = _textsize
-# Compatibility for ANTIALIAS (Pillow ≥11)
-if not hasattr(Image, "ANTIALIAS"):
-    Image.ANTIALIAS = Image.Resampling.LANCZOS
-
 # Display HAT Mini driver (optional at import time)
 try:  # pragma: no cover - hardware import
     from displayhatmini import DisplayHATMini  # type: ignore
@@ -697,7 +694,7 @@ class _FrameBufferDevice:
             )
             target_w = max(1, round(image.width * scale))
             target_h = max(1, round(image.height * scale))
-            resized = image.resize((target_w, target_h), Image.Resampling.LANCZOS)
+            resized = image.resize((target_w, target_h), LANCZOS)
             canvas = Image.new("RGB", (self.width, self.height), "black")
             offset_x = (self.width - target_w) // 2
             offset_y = (self.height - target_h) // 2
@@ -1702,7 +1699,7 @@ class Display:
                     expand=self._rotation_requires_expand,
                 )
             if resize_to_display and transformed.size != (self.width, self.height):
-                transformed = transformed.resize((self.width, self.height), Image.ANTIALIAS)
+                transformed = transformed.resize((self.width, self.height), LANCZOS)
             return transformed
 
         return _transform
@@ -2199,7 +2196,7 @@ class Display:
         pil_img = self._apply_bottom_safe_buffer(pil_img)
         pil_img = self._apply_indicator_bottom_safe_buffer(pil_img)
         if pil_img.size != (self.width, self.height):
-            pil_img = pil_img.resize((self.width, self.height), Image.ANTIALIAS)
+            pil_img = pil_img.resize((self.width, self.height), LANCZOS)
         if pil_img.mode != "RGB":
             pil_img = pil_img.convert("RGB")
         self._buffer = pil_img.copy()
@@ -2223,7 +2220,7 @@ class Display:
         if source.mode != "RGB":
             source = source.convert("RGB")
         if source.size != (self.width, self.height):
-            source = source.resize((self.width, self.height), Image.ANTIALIAS)
+            source = source.resize((self.width, self.height), LANCZOS)
 
         buffered_img = source.copy()
         ImageDraw.Draw(buffered_img).rectangle(
@@ -2246,7 +2243,7 @@ class Display:
         if source.mode != "RGB":
             source = source.convert("RGB")
         if source.size != (self.width, self.height):
-            source = source.resize((self.width, self.height), Image.ANTIALIAS)
+            source = source.resize((self.width, self.height), LANCZOS)
 
         buffered_img = source.copy()
         ImageDraw.Draw(buffered_img).rectangle(
@@ -2730,7 +2727,7 @@ def animate_fade_in(
 
     base = base.convert("RGB")
     if base.size != new_image.size:
-        base = base.resize(new_image.size, Image.ANTIALIAS)
+        base = base.resize(new_image.size, LANCZOS)
 
     target = new_image.convert("RGB")
 
@@ -3669,7 +3666,7 @@ def fit_logo_to_box(logo: Image.Image | None, box_size: int) -> Image.Image | No
     new_height = max(1, round(height * scale))
     if new_width == width and new_height == height:
         return logo
-    return logo.resize((new_width, new_height), Image.LANCZOS)
+    return logo.resize((new_width, new_height), LANCZOS)
 
 
 MLB_LOGO_FILE_ALIASES = {
@@ -3771,7 +3768,7 @@ def load_team_logo(
                 logo = fit_logo_to_box(logo, box_size)
             else:
                 ratio = height / logo.height
-                logo = logo.resize((int(logo.width * ratio), height), Image.ANTIALIAS)
+                logo = logo.resize((int(logo.width * ratio), height), LANCZOS)
             _TEAM_LOGO_CACHE[cache_key] = logo
             return logo.copy()
         except Exception as exc:  # pragma: no cover - rare file corruption
@@ -4670,7 +4667,7 @@ def load_weather_icon(
         try:
             icon = Image.open(candidate).convert("RGBA")
             if icon.size != (size, size):
-                icon = icon.resize((size, size), Image.ANTIALIAS)
+                icon = icon.resize((size, size), LANCZOS)
         except Exception as exc:  # pragma: no cover - drawing failures are non-fatal
             logging.warning("Weather icon load failed for %s: %s", candidate, exc)
             _WEATHER_ICON_CACHE[cache_key] = _WEATHER_ICON_NOT_FOUND
@@ -4774,7 +4771,7 @@ def load_github_icon(size: int, invert: bool, paths: list[str]) -> Image.Image |
         icon = Image.open(path).convert("RGBA")
         if icon.height != size:
             ratio = size / float(icon.height)
-            icon = icon.resize((max(1, round(icon.width * ratio)), size), Image.ANTIALIAS)
+            icon = icon.resize((max(1, round(icon.width * ratio)), size), LANCZOS)
 
         if invert:
             r, g, b, a = icon.split()

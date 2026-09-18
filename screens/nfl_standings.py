@@ -36,6 +36,7 @@ from config import (
     scale_value_width,
 )
 from display_profiles import DISPLAY_PROFILE_ADAFRUIT_MINIPITFT_114
+from image_compat import LANCZOS
 from services.http_client import get_session
 from utils import (
     ScreenImage,
@@ -1288,7 +1289,7 @@ def _prepare_overview_columns(
                     max(1, int(logo.width * ratio)),
                     max(1, int(logo.height * ratio)),
                 )
-                logo = logo.resize(new_size, Image.LANCZOS)
+                logo = logo.resize(new_size, LANCZOS)
 
             center_y = start_center + rank * vertical_step
             y_target = int(center_y - logo.height / 2)

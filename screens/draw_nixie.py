@@ -28,6 +28,7 @@ from config import (
     display_datetime,
     get_screen_background_color,
 )
+from image_compat import LANCZOS
 from services.wifi_utils import get_assigned_ipv4
 from utils import (
     ScreenImage,
@@ -197,7 +198,7 @@ def _load_and_scale(path: Path, height: int) -> Image.Image:
 
     target_height = max(1, height)
     target_width = max(1, int(round(image.width * (target_height / image.height))))
-    return image.resize((target_width, target_height), Image.LANCZOS)
+    return image.resize((target_width, target_height), LANCZOS)
 
 
 @lru_cache(maxsize=32)

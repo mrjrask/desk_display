@@ -31,10 +31,7 @@ if str(PROJECT_ROOT) not in sys.path:
 
 from PIL import Image, ImageDraw
 
-try:
-    RESAMPLE_LANCZOS = Image.Resampling.LANCZOS
-except AttributeError:  # Pillow<9 compatibility
-    RESAMPLE_LANCZOS = Image.LANCZOS
+from image_compat import LANCZOS
 
 # Ensure the shared .env file is loaded before importing project modules so that
 # configuration values (API keys, flags, etc.) are available to the renderer.
@@ -309,7 +306,7 @@ def load_logo(
                 max(1, int(round(img.width * scale))),
                 max(1, int(round(img.height * scale))),
             )
-            resized = img.resize(resized_size, RESAMPLE_LANCZOS)
+            resized = img.resize(resized_size, LANCZOS)
             if resized_size == (target_width, target_height):
                 return resized
             background = (0, 0, 0, 0) if has_transparency else (0, 0, 0)

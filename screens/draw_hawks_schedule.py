@@ -57,6 +57,7 @@ from config import (
     is_hyperpixel_4_square_layout,
     is_hyperpixel_next_layout,
 )
+from image_compat import LANCZOS
 from services.http_client import NHL_HEADERS, get_session, request_json
 from utils import (
     LED_INDICATOR_LEVEL,
@@ -1286,7 +1287,7 @@ def _draw_next_card(
             if logo and logo.width > frame_w:
                 ratio = frame_w / logo.width
                 new_h = max(1, int(round(logo.height * ratio)))
-                return logo.resize((frame_w, new_h), Image.ANTIALIAS)
+                return logo.resize((frame_w, new_h), LANCZOS)
             return logo
 
         away_logo = _fit_logo(away_logo)

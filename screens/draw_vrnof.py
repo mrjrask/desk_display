@@ -29,6 +29,7 @@ from config import (
     is_hyperpixel_4_square_layout,
     is_hyperpixel_next_layout,
 )
+from image_compat import LANCZOS
 from utils import (
     LED_INDICATOR_LEVEL,
     ScreenImage,
@@ -74,7 +75,7 @@ def _get_logo() -> Image.Image | None:
         ratio = target_height / logo.height
         width = max(1, int(round(logo.width * ratio)))
         height = target_height
-        _LOGO = logo.resize((width, height), Image.ANTIALIAS)
+        _LOGO = logo.resize((width, height), LANCZOS)
     except Exception as exc:
         logging.warning("VRNO: failed to load logo at %s: %s", LOGO_PATH, exc)
         _LOGO = None

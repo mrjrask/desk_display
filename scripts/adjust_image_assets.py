@@ -19,6 +19,10 @@ if __name__ == "__main__":
         from _venv_bootstrap import reexec_with_project_venv
     reexec_with_project_venv()
 
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
+
 import argparse
 from collections.abc import Iterable
 from dataclasses import dataclass
@@ -26,7 +30,8 @@ from io import BytesIO
 
 from PIL import Image
 
-PROJECT_ROOT = Path(__file__).resolve().parents[1]
+from image_compat import LANCZOS
+
 DEFAULT_IMAGE_ROOT = PROJECT_ROOT / "images"
 DEFAULT_OUTPUT_ROOT = Path.home() / f"{PROJECT_ROOT.name}_converted_images"
 DEFAULT_MAX_DIMENSION = 128
@@ -145,7 +150,7 @@ def adjust_image(
         adjusted_size = _target_size(original_size, max_dimension)
         adjusted = image
         if adjusted_size != original_size:
-            adjusted = image.resize(adjusted_size, Image.Resampling.LANCZOS)
+            adjusted = image.resize(adjusted_size, LANCZOS)
 
         save_kwargs = _save_kwargs(source_path)
         if source_path.suffix.lower() in {".jpg", ".jpeg"} and adjusted.mode in {"RGBA", "LA", "P"}:
