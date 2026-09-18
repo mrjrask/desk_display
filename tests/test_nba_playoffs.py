@@ -41,6 +41,10 @@ def test_extract_series_reads_matchups_key():
     assert len(extracted) == 1
     assert extracted[0]["teams"]["away"]["team"]["teamTricode"] == "NYK"
     assert extracted[0]["teams"]["home"]["team"]["teamTricode"] == "DET"
+    assert (
+        nba_playoffs._team_logo_abbr(extracted[0]["teams"]["away"]["team"])
+        == "NY"
+    )
 
 
 def test_extract_series_ignores_non_series_matchups_without_playoff_shape():
@@ -704,7 +708,7 @@ def test_render_narrows_unranked_completed_recent_series_to_latest_matchup(monke
     nba_playoffs.render_nba_playoffs(Display(), [])
 
     assert len(rendered) == 1
-    assert nba_playoffs._series_team_abbrs(rendered[0]) == {"BOS", "SAS"}
+    assert nba_playoffs._series_team_abbrs(rendered[0]) == {"BOS", "SA"}
 
 
 def test_render_recovers_completed_unranked_finals_without_precursor_series(monkeypatch):
@@ -757,8 +761,13 @@ def test_unranked_completed_fallback_rejects_generic_playoff_ancestry():
     assert nba_playoffs._find_latest_completed_series(history) == []
 
 
-@pytest.mark.parametrize("east_abbr", ["NYK", "WAS"])
-def test_unranked_completed_fallback_accepts_normalized_east_aliases(east_abbr):
+@pytest.mark.parametrize(
+    ("east_abbr", "canonical_abbr"),
+    [("NYK", "NY"), ("BKN", "BRK"), ("WAS", "WSH")],
+)
+def test_unranked_completed_fallback_accepts_normalized_east_aliases(
+    east_abbr, canonical_abbr
+):
     finals = {
         "teams": {
             "away": {"team": {"abbreviation": "SAS"}, "score": 4},
@@ -768,6 +777,7 @@ def test_unranked_completed_fallback_accepts_normalized_east_aliases(east_abbr):
     }
 
     assert nba_playoffs._find_latest_completed_series([finals]) == [finals]
+    assert nba_playoffs._series_team_abbrs(finals) == {"SA", canonical_abbr}
 
 
 def test_render_checks_supplied_games_when_earlier_sources_only_have_stale_rounds(monkeypatch):
@@ -807,7 +817,7 @@ def test_render_checks_supplied_games_when_earlier_sources_only_have_stale_round
     nba_playoffs.render_nba_playoffs(Display(), [finals_game])
 
     assert len(rendered) == 1
-    assert nba_playoffs._series_team_abbrs(rendered[0]) == {"NYK", "SAS"}
+    assert nba_playoffs._series_team_abbrs(rendered[0]) == {"NY", "SA"}
 
 
 def test_derive_playoff_matchups_from_recent_games_skips_espn_scan_outside_playoff_season(monkeypatch):

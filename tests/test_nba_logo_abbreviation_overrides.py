@@ -1,3 +1,5 @@
+import pytest
+
 from screens import draw_bulls_schedule, nba_scoreboard
 
 
@@ -8,13 +10,14 @@ def test_bulls_logo_override_maps_washington_and_brooklyn_to_expected_files():
     assert overrides["BKN"] == "BRK"
 
 
-def test_nba_scoreboard_logo_abbreviation_override_maps_common_feed_codes_to_logo_files():
-    team_washington = {"teamTricode": "WAS"}
-    team_brooklyn = {"teamTricode": "BKN"}
-    team_new_york = {"teamTricode": "NYK"}
-    team_san_antonio = {"teamTricode": "SAS"}
+@pytest.mark.parametrize(
+    ("upstream_abbr", "canonical_logo_abbr"),
+    [("SAS", "SA"), ("NYK", "NY"), ("BKN", "BRK"), ("WAS", "WSH")],
+)
+def test_nba_scoreboard_converts_upstream_feed_codes_to_canonical_logo_codes(
+    upstream_abbr, canonical_logo_abbr
+):
+    upstream_team = {"teamTricode": upstream_abbr}
 
-    assert nba_scoreboard._team_logo_abbr(team_washington) == "WSH"
-    assert nba_scoreboard._team_logo_abbr(team_brooklyn) == "BRK"
-    assert nba_scoreboard._team_logo_abbr(team_new_york) == "NY"
-    assert nba_scoreboard._team_logo_abbr(team_san_antonio) == "SA"
+    assert upstream_team["teamTricode"] == upstream_abbr
+    assert nba_scoreboard._team_logo_abbr(upstream_team) == canonical_logo_abbr
