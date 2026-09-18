@@ -12,8 +12,8 @@ import threading
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Optional
-from zoneinfo import ZoneInfo
 
+from display_time import CENTRAL_TIME
 from env_config import env_float, env_int, non_negative_env_float, non_negative_env_int
 from screens_catalog import canonical_screen_id
 
@@ -1299,40 +1299,6 @@ NBA_FALLBACK_LOGO  = os.path.join(NBA_IMAGES_DIR, "NBA.png")
 # top25 (default): AP Top 25 scoreboard
 # tournament: NCAA tournament games
 NCAAM_SCOREBOARD_MODE = os.environ.get("NCAAM_SCOREBOARD_MODE", "top25").strip().lower()
-
-class LocalizableZoneInfo(datetime.tzinfo):
-    """ZoneInfo wrapper that provides a pytz-compatible ``localize`` helper."""
-
-    def __init__(self, key: str) -> None:
-        self._zone = ZoneInfo(key)
-
-    def _coerce(self, dt: Optional[datetime.datetime]) -> Optional[datetime.datetime]:
-        if dt is None:
-            return None
-        return dt.replace(tzinfo=self._zone)
-
-    def utcoffset(self, dt: Optional[datetime.datetime]) -> Optional[datetime.timedelta]:
-        return self._zone.utcoffset(self._coerce(dt))
-
-    def dst(self, dt: Optional[datetime.datetime]) -> Optional[datetime.timedelta]:
-        return self._zone.dst(self._coerce(dt))
-
-    def tzname(self, dt: Optional[datetime.datetime]) -> Optional[str]:
-        return self._zone.tzname(self._coerce(dt))
-
-    def fromutc(self, dt: datetime.datetime) -> datetime.datetime:
-        coerced = dt.replace(tzinfo=self._zone)
-        converted = self._zone.fromutc(coerced)
-        return converted.replace(tzinfo=self)
-
-    def localize(self, dt: datetime.datetime) -> datetime.datetime:
-        if dt.tzinfo is not None:
-            return dt.astimezone(self)
-        return dt.replace(tzinfo=self)
-
-
-CENTRAL_TIME = LocalizableZoneInfo("America/Chicago")
-
 
 def display_datetime(moment: Optional[datetime.datetime] = None) -> datetime.datetime:
     """Return *moment* in the display timezone, or the current display time.

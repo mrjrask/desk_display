@@ -8,7 +8,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any, Optional
 
-from config import CENTRAL_TIME
+from display_time import CENTRAL_TIME
 from screens_catalog import SCREEN_IDS, canonical_screen_id
 
 if TYPE_CHECKING:
