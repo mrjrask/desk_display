@@ -2829,13 +2829,16 @@ def fetch_sox_games():
 # -----------------------------------------------------------------------------
 # MLB — standings helper + Cubs/Sox wrappers
 # -----------------------------------------------------------------------------
-def _fetch_mlb_standings(league_id, division_id, team_id):
+def _fetch_mlb_standings(league_id, division_id, team_id, current_date=None):
     try:
-        url = (
-            "https://statsapi.mlb.com/api/v1/standings"
-            f"?season=2026&leagueId={league_id}&divisionId={division_id}"
-        )
-        r = _session.get(url, timeout=10)
+        applicable_date = current_date or datetime.datetime.now(CENTRAL_TIME).date()
+        url = "https://statsapi.mlb.com/api/v1/standings"
+        params = {
+            "season": applicable_date.year,
+            "leagueId": league_id,
+            "divisionId": division_id,
+        }
+        r = _session.get(url, params=params, timeout=10)
         r.raise_for_status()
         data = r.json()
 
