@@ -766,12 +766,13 @@ def test_failed_reinitialize_keeps_earlier_retired_driver_alive(monkeypatch):
     class _Display:
         def __init__(self, name):
             self.name = name
+            self.backlight_levels = []
 
         def __del__(self):
             destroyed.append(self.name)
 
-        def set_backlight(self, _level):
-            pass
+        def set_backlight(self, level):
+            self.backlight_levels.append(level)
 
         def display(self):
             return f"{self.name} displayed"
@@ -798,12 +799,14 @@ def test_failed_reinitialize_keeps_earlier_retired_driver_alive(monkeypatch):
     monkeypatch.setattr(utils.time, "monotonic", lambda: 10)
 
     display._maybe_reinitialize_display_hat_mini()
+    second.backlight_levels.clear()
     display._last_display_reinit = 0
     display._maybe_reinitialize_display_hat_mini()
 
     assert first_ref() is display._retired_display_hat_mini
     assert destroyed == []
     assert display._display is second
+    assert display._backlight_level in second.backlight_levels
     assert callable(display._display.display)
     assert display._display.display() == "second displayed"
 
