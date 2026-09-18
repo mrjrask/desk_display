@@ -31,6 +31,7 @@ from config import (
     SCOREBOARD_SCROLL_STEP,
     get_screen_background_color,
 )
+from image_compat import LANCZOS
 from utils import (
     ScreenImage,
     load_team_logo,
@@ -384,7 +385,7 @@ def show_bears_next_game(display, transition=False):
                 if logo and logo.width > frame_w:
                     ratio = frame_w / logo.width
                     new_h = max(1, int(round(logo.height * ratio)))
-                    return logo.resize((frame_w, new_h), Image.ANTIALIAS)
+                    return logo.resize((frame_w, new_h), LANCZOS)
                 return logo
 
             logo_away = _fit_logo(logo_away)
@@ -959,7 +960,7 @@ def show_bears_next_season(display, transition=False):
     static_img = _cached_bears_next_season_static_image(config.WIDTH, config.HEIGHT)
 
     if static_img is not None:
-        final_img = static_img.copy().resize((config.WIDTH, config.HEIGHT), Image.LANCZOS)
+        final_img = static_img.copy().resize((config.WIDTH, config.HEIGHT), LANCZOS)
     else:
         # Fallback to dynamic rendering if no static image assets are available.
         background_key = tuple(background)

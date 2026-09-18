@@ -25,6 +25,7 @@ from urllib.parse import unquote
 from PIL import Image, ImageDraw, ImageOps
 
 import config
+from image_compat import LANCZOS
 from paths import resolve_cache_file_path
 from services.http_client import http_get
 from utils import (
@@ -834,7 +835,7 @@ def _download_thumbnail(url: str | None, size: int) -> Image.Image | None:
         response = http_get(url, timeout=2.5)
         response.raise_for_status()
         img = Image.open(BytesIO(response.content)).convert("RGB")
-        img = ImageOps.fit(img, (size, size), method=Image.Resampling.LANCZOS)
+        img = ImageOps.fit(img, (size, size), method=LANCZOS)
     except Exception:
         img = None
 

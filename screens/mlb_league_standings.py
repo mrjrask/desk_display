@@ -28,6 +28,7 @@ from config import (
     scale_value,
 )
 from display_profiles import DISPLAY_PROFILE_ADAFRUIT_MINIPITFT_114, DISPLAY_PROFILE_HYPERPIXEL4
+from image_compat import LANCZOS
 from services.http_client import get_session
 from utils import (
     ScreenImage,
@@ -164,7 +165,7 @@ def _fit_logo(img: Image.Image, target: int) -> Image.Image:
     if w <= 0 or h <= 0:
         return img
     scale = min(target / w, target / h)
-    return img.resize((max(1, int(round(w * scale))), max(1, int(round(h * scale)))), Image.LANCZOS)
+    return img.resize((max(1, int(round(w * scale))), max(1, int(round(h * scale)))), LANCZOS)
 
 
 def _load_logo(abbr: str, *, team_name: str = "", box_size: int = LOGO_SIZE) -> Image.Image | None:

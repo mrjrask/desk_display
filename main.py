@@ -12,8 +12,8 @@ Changes:
 - Sort archived screenshots inside screenshot_archive/<screen>/ so they mirror
   the live screenshots/ folder structure.
 """
-import warnings
 import argparse
+import warnings
 
 try:
     from gpiozero.exc import NativePinFactoryFallback, PinFactoryFallback
@@ -85,6 +85,7 @@ from config import (
     initialise_runtime_probes,
     is_within_dark_hours,
 )
+from image_compat import LANCZOS
 from services.air_quality import fetch_air_quality
 from services.data_provider import provider as data_provider
 from utils import (
@@ -125,6 +126,7 @@ except Exception as exc:
             return "ok", None
 
     wifi_utils = _WifiUtilsFallback()
+from diagnostic_playback import load_diagnostic_screen, normalize_screen_id
 from paths import resolve_cache_file_path, resolve_screens_config_paths, resolve_storage_paths
 from schedule import (
     ScreenScheduler,
@@ -134,7 +136,6 @@ from schedule import (
 )
 from screens.registry import ScreenContext, ScreenDefinition, build_screen_registry
 from screens_catalog import SCREEN_IDS
-from diagnostic_playback import load_diagnostic_screen, normalize_screen_id
 
 # ─── Paths ───────────────────────────────────────────────────────────────────
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -1870,7 +1871,7 @@ def load_logo(fn, height=LOGO_SCREEN_HEIGHT, width=LOGO_SCREEN_WIDTH):
                 max(1, round(img.width * scale)),
                 max(1, round(img.height * scale)),
             )
-            resized = img.resize(resized_size, Image.ANTIALIAS)
+            resized = img.resize(resized_size, LANCZOS)
             if resized_size == (target_width, target_height):
                 return resized
             background = (0, 0, 0, 0) if has_transparency else (0, 0, 0)

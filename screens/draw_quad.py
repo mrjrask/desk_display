@@ -9,6 +9,7 @@ from typing import Optional
 from PIL import Image, ImageDraw, ImageFont
 
 from config import HEIGHT, SCREEN_DELAY, WIDTH
+from image_compat import LANCZOS
 from utils import ScreenImage
 
 RenderResult = Optional[Image.Image | ScreenImage | list[Image.Image]]
@@ -77,7 +78,7 @@ def draw_quad_screen(
             except Exception:
                 sources = []
             if sources:
-                tile_imgs = [source.resize(region_size, Image.Resampling.LANCZOS) for source in sources]
+                tile_imgs = [source.resize(region_size, LANCZOS) for source in sources]
             else:
                 tile_imgs = [_error_tile(region_size, tile.label)]
 

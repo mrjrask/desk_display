@@ -34,6 +34,7 @@ from config import (
     is_hyperpixel_next_layout,
 )
 from display_profiles import DISPLAY_PROFILE_DISPLAY_HAT_MINI, DISPLAY_PROFILE_HYPERPIXEL4
+from image_compat import LANCZOS
 from utils import (
     LED_INDICATOR_LEVEL,
     ScreenImage,
@@ -101,7 +102,7 @@ def _fit_logo_image(logo: Image.Image, max_width: int, max_height: int) -> Image
     if scale >= 1.0:
         return logo
     new_size = (max(1, int(round(logo.width * scale))), max(1, int(round(logo.height * scale))))
-    return logo.resize(new_size, Image.LANCZOS)
+    return logo.resize(new_size, LANCZOS)
 
 
 @log_call
@@ -313,7 +314,7 @@ def _fit_image_within_box(image: Image.Image, box_size: int) -> Image.Image:
     new_size = (max(1, int(round(width * scale))), max(1, int(round(height * scale))))
     if new_size == image.size:
         return image
-    return image.resize(new_size, Image.LANCZOS)
+    return image.resize(new_size, LANCZOS)
 
 
 def _extract_probable_pitcher(team_block: dict, game: dict | None = None, side: str = "") -> tuple[str, str, str]:
@@ -801,7 +802,7 @@ def _draw_left_team_cell_with_logo(
                 if fh > 0:
                     flag_img = flag_img.resize(
                         (max(1, int(round(fw * (logo_size / float(fh))))), logo_size),
-                        Image.ANTIALIAS,
+                        LANCZOS,
                     )
             except Exception:
                 flag_img = None
@@ -1092,7 +1093,7 @@ def _draw_boxscore_table(img: Image.Image, draw: ImageDraw.ImageDraw, title: str
                 flag = Image.open(flag_path).convert("RGBA")
                 w0, h0 = flag.size
                 ratio  = flag_h / float(h0)
-                flag   = flag.resize((max(1, int(w0*ratio)), flag_h), Image.ANTIALIAS)
+                flag   = flag.resize((max(1, int(w0*ratio)), flag_h), LANCZOS)
                 fx     = (WIDTH - flag.width)//2
                 fy     = block_top + (block_h - flag.height)//2
                 img.paste(flag, (fx, fy), flag)
@@ -1435,7 +1436,7 @@ def draw_sports_screen(display, game, title, transition=False, screen_id: Option
             return logo
         new_width = max(1, int(round(width * scale)))
         new_height = max(1, int(round(height * scale)))
-        return logo.resize((new_width, new_height), Image.LANCZOS)
+        return logo.resize((new_width, new_height), LANCZOS)
 
     def _draw_logo_box(frame_x: int) -> None:
         return None
@@ -1806,7 +1807,7 @@ def draw_series_screen(display, games, title, transition=False, screen_id: Optio
                         scale = min(1.0, row_h / float(icon.height))
                         icon = icon.resize(
                             (max(1, int(round(icon.width * scale))), max(1, int(round(icon.height * scale)))),
-                            Image.LANCZOS,
+                            LANCZOS,
                         )
                 except Exception:
                     icon = None

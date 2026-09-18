@@ -19,6 +19,10 @@ if __name__ == "__main__":
         from _venv_bootstrap import reexec_with_project_venv
     reexec_with_project_venv()
 
+_project_root = Path(__file__).resolve().parents[1]
+if str(_project_root) not in sys.path:
+    sys.path.insert(0, str(_project_root))
+
 import argparse
 from collections.abc import Iterable
 from dataclasses import dataclass
@@ -32,6 +36,8 @@ from check_image_assets import (
     policy_for,
 )
 from PIL import Image
+
+from image_compat import LANCZOS
 
 DEFAULT_OUTPUT_ROOT = Path.home() / f"{PROJECT_ROOT.name}_corrected_images"
 
@@ -153,7 +159,7 @@ def _resize_to_fit_policy(image: Image.Image, path: Path, policy: Policy) -> tup
 
     while True:
         if target_size != image.size:
-            candidate = image.resize(target_size, Image.Resampling.LANCZOS)
+            candidate = image.resize(target_size, LANCZOS)
         else:
             candidate = image.copy()
         candidate = _prepare_for_save(candidate, path)

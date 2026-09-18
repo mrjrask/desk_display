@@ -38,6 +38,7 @@ from config import (
     get_screen_background_color,
     is_hyperpixel_4_square_layout,
 )
+from image_compat import LANCZOS
 from utils import (
     LED_INDICATOR_LEVEL,
     ScreenImage,
@@ -814,7 +815,7 @@ def _render_next_game(game: dict, *, title: str, logo_scale: float = 1.0) -> Ima
             if logo and logo.width > frame_w:
                 ratio = frame_w / logo.width
                 new_h = max(1, int(round(logo.height * ratio)))
-                return logo.resize((frame_w, new_h), Image.ANTIALIAS)
+                return logo.resize((frame_w, new_h), LANCZOS)
             return logo
 
         logo_left = _fit_logo(logo_left)

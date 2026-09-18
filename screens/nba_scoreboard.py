@@ -20,11 +20,6 @@ from typing import Any, Optional
 
 from PIL import Image, ImageDraw
 
-try:
-    RESAMPLE = Image.ANTIALIAS
-except AttributeError:  # Pillow ≥11
-    RESAMPLE = Image.Resampling.LANCZOS
-
 from config import (
     FONT_STATUS,
     FONT_TEAM_SPORTS,
@@ -50,6 +45,7 @@ from config import (
     scale_value,
     scale_value_width,
 )
+from image_compat import LANCZOS
 from screens.scoreboard_components import (
     center_text as _center_text,
     final_results as _final_results,
@@ -233,7 +229,7 @@ def _render_intro_frame(logo: Image.Image, scale: float) -> Image.Image:
 
     w = max(1, int(round(logo.width * effective_scale)))
     h = max(1, int(round(logo.height * effective_scale)))
-    resized = logo.resize((w, h), RESAMPLE)
+    resized = logo.resize((w, h), LANCZOS)
     frame = Image.new("RGBA", (WIDTH, HEIGHT), BACKGROUND_COLOR_RGBA)
     x = (WIDTH - resized.width) // 2
     y = (HEIGHT - resized.height) // 2

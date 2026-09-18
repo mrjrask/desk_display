@@ -22,6 +22,7 @@ from PIL import Image, ImageDraw, ImageOps
 
 import config
 from config import HEIGHT, NEWS_HEADLINES_DISPLAY_SECONDS, WIDTH
+from image_compat import LANCZOS
 from services.http_client import http_get
 from services.news_feeds import (
     ArticleContent,
@@ -214,7 +215,7 @@ def _download_thumbnail(url: Optional[str], size: int) -> Optional[Image.Image]:
         response = http_get(url, timeout=3.0)
         response.raise_for_status()
         img = Image.open(BytesIO(response.content)).convert("RGB")
-        img = ImageOps.fit(img, (size, size), method=Image.Resampling.LANCZOS)
+        img = ImageOps.fit(img, (size, size), method=LANCZOS)
     except Exception as exc:
         logging.debug("news_headlines: thumbnail download failed for %s: %s", url, exc)
         img = None
@@ -239,7 +240,7 @@ def _download_hero_image(url: Optional[str], max_width: int) -> Optional[Image.I
         img = Image.open(BytesIO(response.content)).convert("RGB")
         if img.width > max_width:
             ratio = max_width / float(img.width)
-            img = img.resize((max_width, max(1, int(img.height * ratio))), Image.Resampling.LANCZOS)
+            img = img.resize((max_width, max(1, int(img.height * ratio))), LANCZOS)
         if img.height > HEIGHT:
             img = img.crop((0, 0, img.width, HEIGHT))
     except Exception as exc:
@@ -370,7 +371,7 @@ def _load_company_logo(symbol: str, size: int) -> Optional[Image.Image]:
         raw = Image.open(path).convert("RGBA")
         ratio = min(size / raw.width, size / raw.height)
         new_size = (max(1, round(raw.width * ratio)), max(1, round(raw.height * ratio)))
-        resized = raw.resize(new_size, Image.Resampling.LANCZOS)
+        resized = raw.resize(new_size, LANCZOS)
         logo = Image.new("RGB", (size, size), _STOCK_THEME["bg"])
         logo.paste(resized, ((size - new_size[0]) // 2, (size - new_size[1]) // 2), resized)
     except Exception as exc:

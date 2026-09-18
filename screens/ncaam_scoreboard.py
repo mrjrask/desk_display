@@ -13,11 +13,6 @@ from typing import Any, Optional
 
 from PIL import Image, ImageDraw
 
-try:
-    RESAMPLE = Image.ANTIALIAS
-except AttributeError:
-    RESAMPLE = Image.Resampling.LANCZOS
-
 from config import (
     CENTRAL_TIME,
     FONT_STATUS,
@@ -44,6 +39,7 @@ from config import (
     scale_value,
     scale_value_width,
 )
+from image_compat import LANCZOS
 from screens.scoreboard_components import center_text as _center_text
 from services.http_client import get_session
 from utils import ScreenImage, clear_display, log_call, scroll_vertical_content
@@ -373,7 +369,7 @@ def _load_remote_logo(url: str, height: int) -> Optional[Image.Image]:
         resp.raise_for_status()
         img = Image.open(io.BytesIO(resp.content)).convert("RGBA")
         ratio = height / max(1, img.height)
-        resized = img.resize((max(1, int(round(img.width * ratio))), height), RESAMPLE)
+        resized = img.resize((max(1, int(round(img.width * ratio))), height), LANCZOS)
         _REMOTE_LOGO_CACHE[cache_key] = resized
         return resized
     except Exception as exc:
@@ -484,7 +480,7 @@ def _get_league_logo(mode: Optional[str] = None) -> Optional[Image.Image]:
     try:
         img = Image.open(path).convert("RGBA")
         ratio = h / max(1, img.height)
-        resized = img.resize((max(1, int(round(img.width * ratio))), h), RESAMPLE)
+        resized = img.resize((max(1, int(round(img.width * ratio))), h), LANCZOS)
         _LEAGUE_LOGO_CACHE[cache_key] = resized
         return resized
     except Exception:

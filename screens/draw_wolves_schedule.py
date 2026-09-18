@@ -54,6 +54,7 @@ from config import (
     WIDTH,
     display_datetime,
 )
+from image_compat import LANCZOS
 from utils import (
     LED_INDICATOR_LEVEL,
     ScreenImage,
@@ -237,7 +238,7 @@ def _load_logo_png(abbr: str, height: int) -> Optional[Image.Image]:
                 img = Image.open(png_path).convert("RGBA")
                 w0, h0 = img.size
                 r = height / float(h0) if h0 else 1.0
-                return img.resize((max(1, int(w0*r)), height), Image.LANCZOS)
+                return img.resize((max(1, int(w0*r)), height), LANCZOS)
         except Exception:
             pass
 
@@ -247,7 +248,7 @@ def _load_logo_png(abbr: str, height: int) -> Optional[Image.Image]:
             img = Image.open(FALLBACK_LOGO).convert("RGBA")
             w0, h0 = img.size
             r = height / float(h0) if h0 else 1.0
-            return img.resize((max(1, int(w0*r)), height), Image.LANCZOS)
+            return img.resize((max(1, int(w0*r)), height), LANCZOS)
     except Exception:
         pass
     return None

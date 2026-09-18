@@ -34,6 +34,7 @@ from config import (
     scale_value,
     scale_value_width,
 )
+from image_compat import LANCZOS
 from utils import clear_display, clone_font, fit_logo_to_box, log_call
 
 # Constants
@@ -232,7 +233,7 @@ def _load_marker_icon(letter: str, target_height: int):
         if ih <= 0:
             return None
         scale = max(1, int(round(target_height))) / float(ih)
-        return icon.resize((max(1, int(round(iw * scale))), max(1, int(round(ih * scale)))), Image.ANTIALIAS)
+        return icon.resize((max(1, int(round(iw * scale))), max(1, int(round(ih * scale)))), LANCZOS)
     except Exception:
         return None
 

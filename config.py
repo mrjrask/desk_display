@@ -221,6 +221,8 @@ DESK_DISPLAY_LOW_POWER_AUTO_DETECTED = _detect_low_power_hardware()
 
 from PIL import Image, ImageDraw, ImageFont
 
+from image_compat import LANCZOS
+
 
 def _supports_embedded_color() -> bool:
     try:
@@ -241,11 +243,6 @@ from display_profiles import (
     resolve_display_profile,
     resolve_display_profile_by_id,
 )
-
-try:
-    _RESAMPLE_LANCZOS = Image.Resampling.LANCZOS  # Pillow >= 9.1
-except AttributeError:  # pragma: no cover - fallback for older Pillow
-    _RESAMPLE_LANCZOS = Image.LANCZOS
 
 # ─── Project paths ────────────────────────────────────────────────────────────
 IMAGES_DIR  = os.path.join(SCRIPT_DIR, "images")
@@ -1592,7 +1589,7 @@ class _BitmapEmojiFont(ImageFont.ImageFont):
                 max(1, int(round(base.width * self._scale))),
                 max(1, int(round(base.height * self._scale))),
             ),
-            resample=_RESAMPLE_LANCZOS,
+            resample=LANCZOS,
         )
 
         if mode == "1":
