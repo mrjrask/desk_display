@@ -515,11 +515,16 @@ class _TickerRenderer:
         self.row_height = row_height
         self.base = Image.new("RGB", (WIDTH, HEIGHT), (0, 0, 0))
         self.prepared: list[_PreparedTickerRow] = []
-        cache_pixels_remaining = WIDTH * HEIGHT * _ENTRY_CACHE_SCREEN_MULTIPLIER
+        total_cache_pixels = WIDTH * HEIGHT * _ENTRY_CACHE_SCREEN_MULTIPLIER
+        visible_row_count = min(len(rows), len(row_tops))
+        cache_pixels_per_row = total_cache_pixels // max(1, visible_row_count)
         draw = ImageDraw.Draw(self.base)
         label_pad_x = 10
 
         for row, top in zip(rows, row_tops, strict=True):
+            # Keep a busy first topic from consuming the cache intended for
+            # every lane that is visible during this ticker run.
+            cache_pixels_remaining = cache_pixels_per_row
             label_text = row.topic.label.upper()
             label_w, label_h = measure_text(draw, label_text, LABEL_FONT)
             label_box_w = max(1, min(WIDTH - 20, label_w + label_pad_x * 2))

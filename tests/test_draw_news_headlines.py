@@ -225,6 +225,26 @@ def test_ticker_renderer_bounds_total_cached_pixels():
     assert cached_pixels <= dnh.WIDTH * dnh.HEIGHT * dnh._ENTRY_CACHE_SCREEN_MULTIPLIER
 
 
+def test_ticker_renderer_reserves_cache_for_each_visible_row():
+    row_height, row_tops = dnh._compute_row_layout(2)
+    entry_width = 100
+
+    def make_row(topic_id):
+        entries = [
+            dnh._TickerEntry(None, f"Entry {index}", entry_width, None, 0) for index in range(100)
+        ]
+        return dnh._TickerRow(
+            topic=_topics([topic_id])[0],
+            theme=dnh._FALLBACK_THEME,
+            entries=entries,
+            speed=1.0,
+        )
+
+    renderer = dnh._TickerRenderer([make_row("local"), make_row("sports")], row_height, row_tops)
+
+    assert all(any(image is not None for image in row.entry_images) for row in renderer.prepared)
+
+
 def test_ticker_offset_step_has_nominal_minimum_and_scales_for_slow_frames():
     assert dnh._ticker_offset_step(2.0, 0.0) == 2.0
     assert dnh._ticker_offset_step(2.0, dnh._FRAME_INTERVAL_SECONDS / 2) == 2.0
