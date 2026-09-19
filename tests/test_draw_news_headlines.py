@@ -30,7 +30,11 @@ def _topics(ids):
 def _headlines_for(topics, count=2):
     return {
         topic.id: [
-            NewsHeadline(topic_id=topic.id, title=f"{topic.label} sample {i}", link=f"https://example.com/{topic.id}/{i}")
+            NewsHeadline(
+                topic_id=topic.id,
+                title=f"{topic.label} sample {i}",
+                link=f"https://example.com/{topic.id}/{i}",
+            )
             for i in range(1, count + 1)
         ]
         for topic in topics
@@ -105,7 +109,13 @@ def test_theme_for_topic_falls_back_for_unknown_topic():
 def test_build_rows_skips_topics_with_no_headlines(monkeypatch):
     monkeypatch.setattr(dnh, "_download_thumbnail", lambda *args, **kwargs: None)
     topics = _topics(["local", "sports"])
-    headlines = {"local": [NewsHeadline(topic_id="local", title="Only local headline", link="https://example.com/1")]}
+    headlines = {
+        "local": [
+            NewsHeadline(
+                topic_id="local", title="Only local headline", link="https://example.com/1"
+            )
+        ]
+    }
 
     rows = dnh._build_rows(topics, headlines, row_height=40)
 
@@ -136,6 +146,109 @@ def test_render_frame_produces_full_size_image_and_hit_rects(monkeypatch):
         assert 0 <= x0 < x1 <= dnh.WIDTH
         assert 0 <= y0 < y1 <= dnh.HEIGHT
         assert isinstance(headline, NewsHeadline)
+
+
+def test_ticker_renderer_rasterizes_text_only_during_setup(monkeypatch):
+    monkeypatch.setattr(dnh, "_download_thumbnail", lambda *args, **kwargs: None)
+    topics = _topics(["local"])
+    row_height, row_tops = dnh._compute_row_layout(1)
+    rows = dnh._build_rows(topics, _headlines_for(topics), row_height)
+    real_measure_text = dnh.measure_text
+    measure_calls = 0
+
+    def counting_measure_text(*args, **kwargs):
+        nonlocal measure_calls
+        measure_calls += 1
+        return real_measure_text(*args, **kwargs)
+
+    monkeypatch.setattr(dnh, "measure_text", counting_measure_text)
+    renderer = dnh._TickerRenderer(rows, row_height, row_tops)
+    setup_calls = measure_calls
+
+    renderer.render()
+    rows[0].offset += 10
+    renderer.render()
+
+    assert setup_calls > 0
+    assert measure_calls == setup_calls
+
+
+def test_ticker_renderer_does_not_cache_oversized_entry():
+    row_height, row_tops = dnh._compute_row_layout(1)
+    oversized_width = dnh.WIDTH * 100
+    entry = dnh._TickerEntry(
+        headline=NewsHeadline(
+            topic_id="local", title="Oversized", link="https://example.com/oversized"
+        ),
+        text="Oversized headline",
+        width=oversized_width,
+        thumb=None,
+        thumb_size=0,
+    )
+    row = dnh._TickerRow(
+        topic=_topics(["local"])[0],
+        theme=dnh._FALLBACK_THEME,
+        entries=[entry],
+        speed=1.0,
+    )
+
+    renderer = dnh._TickerRenderer([row], row_height, row_tops)
+
+    prepared = renderer.prepared[0]
+    assert prepared.entry_images == [None]
+    assert prepared.entry_widths == [float(oversized_width)]
+    image, hit_rects = renderer.render()
+    assert image.size == (dnh.WIDTH, dnh.HEIGHT)
+    assert hit_rects
+
+
+def test_ticker_renderer_bounds_total_cached_pixels():
+    row_height, row_tops = dnh._compute_row_layout(1)
+    entry_width = 100
+    entries = [
+        dnh._TickerEntry(None, f"Entry {index}", entry_width, None, 0) for index in range(100)
+    ]
+    row = dnh._TickerRow(
+        topic=_topics(["markets"])[0],
+        theme=dnh._FALLBACK_THEME,
+        entries=entries,
+        speed=1.0,
+    )
+
+    renderer = dnh._TickerRenderer([row], row_height, row_tops)
+
+    cached_pixels = sum(
+        image.width * image.height
+        for image in renderer.prepared[0].entry_images
+        if image is not None
+    )
+    assert cached_pixels <= dnh.WIDTH * dnh.HEIGHT * dnh._ENTRY_CACHE_SCREEN_MULTIPLIER
+
+
+def test_ticker_renderer_reserves_cache_for_each_visible_row():
+    row_height, row_tops = dnh._compute_row_layout(2)
+    entry_width = 100
+
+    def make_row(topic_id):
+        entries = [
+            dnh._TickerEntry(None, f"Entry {index}", entry_width, None, 0) for index in range(100)
+        ]
+        return dnh._TickerRow(
+            topic=_topics([topic_id])[0],
+            theme=dnh._FALLBACK_THEME,
+            entries=entries,
+            speed=1.0,
+        )
+
+    renderer = dnh._TickerRenderer([make_row("local"), make_row("sports")], row_height, row_tops)
+
+    assert all(any(image is not None for image in row.entry_images) for row in renderer.prepared)
+
+
+def test_ticker_offset_step_has_nominal_minimum_and_scales_for_slow_frames():
+    assert dnh._ticker_offset_step(2.0, 0.0) == 2.0
+    assert dnh._ticker_offset_step(2.0, dnh._FRAME_INTERVAL_SECONDS / 2) == 2.0
+    assert dnh._ticker_offset_step(2.0, dnh._FRAME_INTERVAL_SECONDS * 3) == 6.0
 
 
 def test_hit_test_returns_headline_for_matching_point_and_none_otherwise():
@@ -427,7 +540,9 @@ def test_run_ticker_opens_reader_overlay_on_headline_tap(monkeypatch):
 
 def test_filter_recent_headlines_drops_old_but_keeps_undated():
     now = dt.datetime.now(dt.UTC)
-    fresh = NewsHeadline(topic_id="local", title="Fresh", link="https://example.com/1", published=now)
+    fresh = NewsHeadline(
+        topic_id="local", title="Fresh", link="https://example.com/1", published=now
+    )
     stale = NewsHeadline(
         topic_id="local",
         title="Stale",
