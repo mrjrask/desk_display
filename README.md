@@ -374,9 +374,10 @@ Configuration is environment-driven. Put local values in `.env` for development 
 | `DISPLAY_HAT_MINI_REINIT_SECONDS` | Periodic Display HAT Mini hot-reinitialization interval; defaults to `0` (disabled) because live GPIO/SPI teardown can leave some panels black. The watchdog settings below are the preferred recovery mechanism. |
 | `DISPLAY_HAT_MINI_IO_TIMEOUT_SECONDS` | Maximum seconds an LCD SPI operation may block before the process exits for systemd recovery; defaults to `15`, and `0` disables the watchdog. |
 | `DISPLAY_HAT_MINI_MAX_REFRESH_FAILURES` | Consecutive LCD refresh errors allowed before exiting for systemd recovery; defaults to `3`, and `0` disables this recovery. |
-| `DISPLAY_HAT_MINI_LED_ENABLED` | Enables Display HAT Mini LED behavior. |
+| `LED_INDICATOR_ENABLED` | Enables the physical RGB status LED. Only the Pimoroni Display HAT Mini has this LED, so this is a no-op on every other display type. Defaults to `1`. |
 | `DISPLAY_HAT_MINI_LED_LEVEL` | Display HAT Mini LED level. |
-| `HYPERPIXEL_LED_INDICATOR_BORDER_WIDTH` | Indicator border width; the LED indicator border is enabled by default on all display sizes. When enabled (`HYPERPIXEL_LED_INDICATOR_BORDER_ENABLED` / `DISPLAY_HAT_MINI_LED_INDICATOR_BORDER_ENABLED`) and a notification color is active, the same border is also drawn onto saved screenshots so the Screenshots/Feed pages reflect what's actually on the panel. |
+| `LED_INDICATOR_BORDER_ENABLED` | Enables drawing the notification color as a border around the rendered frame. Works on any display type, independently of `LED_INDICATOR_ENABLED`. Defaults to `1`. |
+| `LED_INDICATOR_BORDER_WIDTH` | Indicator border width in pixels. When a notification color is active, the same border is also drawn onto saved screenshots so the Screenshots/Feed pages reflect what's actually on the panel. |
 | `IP_WITH_TIME` | Include IP/status text with the time display where supported. |
 | `NIXIE_TIME_FORMAT` | Nixie/time screen clock format; defaults to 12-hour mode. |
 | `DESK_DISPLAY_TEST_SCREEN` | Testing mode: set to a [canonical screen ID](#canonical-screen-ids) (e.g. `news headlines`) to repeatedly present just that screen instead of rotating through the normal schedule. Handy for tuning a screen's scroll speed slider in the config UI and watching the effect immediately on the next pass. Leave unset for normal rotation. |

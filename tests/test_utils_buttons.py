@@ -382,9 +382,7 @@ def test_update_display_resizes_rotated_hardware_buffer_to_native_size():
     assert captured["size"] == (display.width, display.height)
 
 
-def test_hyperpixel_indicator_border_renders_led_color(monkeypatch):
-    monkeypatch.setattr(utils, "is_hyperpixel_next_layout", lambda w, h: True)
-
+def test_indicator_border_renders_led_color():
     display = utils.Display()
     display._buffer = utils.Image.new("RGB", (display.width, display.height), "black")
 
@@ -394,9 +392,7 @@ def test_hyperpixel_indicator_border_renders_led_color(monkeypatch):
     assert pixel == (0, 0, 255)
 
 
-def test_apply_indicator_border_overlays_arbitrary_image(monkeypatch):
-    monkeypatch.setattr(utils, "is_hyperpixel_next_layout", lambda w, h: True)
-
+def test_apply_indicator_border_overlays_arbitrary_image():
     display = utils.Display()
     display.set_led(r=0.0, g=0.0, b=utils.LED_INDICATOR_LEVEL)
 
@@ -410,14 +406,10 @@ def test_apply_indicator_border_overlays_arbitrary_image(monkeypatch):
     assert bordered.getpixel((0, 0)) == (0, 0, 255)
 
 
-def test_apply_indicator_border_is_noop_when_disabled(monkeypatch):
-    monkeypatch.setattr(utils, "is_hyperpixel_next_layout", lambda w, h: False)
-    monkeypatch.setattr(utils, "HYPERPIXEL_LED_INDICATOR_BORDER_ENABLED", False)
-    monkeypatch.setattr(utils, "DISPLAY_HAT_MINI_LED_INDICATOR_BORDER_ENABLED", False)
+def test_apply_indicator_border_is_noop_when_disabled_via_config(monkeypatch):
+    monkeypatch.setattr(utils, "LED_INDICATOR_BORDER_ENABLED", False)
 
     display = utils.Display()
-    display._hyperpixel_indicator_border = False
-    display._display_hat_mini_indicator_border = False
     display.set_led(r=0.0, g=0.0, b=utils.LED_INDICATOR_LEVEL)
 
     screenshot = utils.Image.new("RGB", (display.width, display.height), "black")
@@ -426,9 +418,7 @@ def test_apply_indicator_border_is_noop_when_disabled(monkeypatch):
     assert bordered is screenshot
 
 
-def test_apply_indicator_border_is_noop_when_led_off(monkeypatch):
-    monkeypatch.setattr(utils, "is_hyperpixel_next_layout", lambda w, h: True)
-
+def test_apply_indicator_border_is_noop_when_led_off():
     display = utils.Display()
     display.set_led(r=0.0, g=0.0, b=0.0)
 
@@ -438,9 +428,7 @@ def test_apply_indicator_border_is_noop_when_led_off(monkeypatch):
     assert bordered is screenshot
 
 
-def test_indicator_buffer_returns_fresh_frame_when_border_enabled(monkeypatch):
-    monkeypatch.setattr(utils, "is_hyperpixel_next_layout", lambda w, h: True)
-
+def test_indicator_buffer_returns_fresh_frame_when_border_enabled():
     display = utils.Display()
     display._buffer = utils.Image.new("RGB", (display.width, display.height), "black")
     display.set_led(r=utils.LED_INDICATOR_LEVEL, g=0.0, b=0.0)
@@ -451,21 +439,7 @@ def test_indicator_buffer_returns_fresh_frame_when_border_enabled(monkeypatch):
     assert frame_a is not frame_b
 
 
-def test_indicator_border_renders_led_color_for_non_hyperpixel_layout(monkeypatch):
-    monkeypatch.setattr(utils, "is_hyperpixel_next_layout", lambda w, h: False)
-    monkeypatch.setattr(utils, "HYPERPIXEL_LED_INDICATOR_BORDER_ENABLED", True)
-
-    display = utils.Display()
-    display._buffer = utils.Image.new("RGB", (display.width, display.height), "black")
-
-    display.set_led(r=utils.LED_INDICATOR_LEVEL, g=0.0, b=0.0)
-
-    pixel = display._indicator_buffer().getpixel((0, 0))
-    assert pixel == (255, 0, 0)
-
-def test_hyperpixel_indicator_border_clears_when_led_is_off(monkeypatch):
-    monkeypatch.setattr(utils, "is_hyperpixel_next_layout", lambda w, h: True)
-
+def test_indicator_border_clears_when_led_is_off():
     display = utils.Display()
     display._buffer = utils.Image.new("RGB", (display.width, display.height), "black")
 
@@ -475,54 +449,12 @@ def test_hyperpixel_indicator_border_clears_when_led_is_off(monkeypatch):
     assert pixel == (0, 0, 0)
 
 
-def test_indicator_border_stays_enabled_when_legacy_flags_are_disabled(monkeypatch):
-    monkeypatch.setattr(utils, "is_hyperpixel_next_layout", lambda w, h: True)
-    monkeypatch.setattr(utils, "HYPERPIXEL_LED_INDICATOR_BORDER_ENABLED", False)
-    monkeypatch.setattr(utils, "DISPLAY_HAT_MINI_LED_INDICATOR_BORDER_ENABLED", False)
+def test_indicator_border_works_regardless_of_display_size(monkeypatch):
+    """LED_INDICATOR_BORDER_ENABLED applies to any screen type/size, not just
+    the Display HAT Mini's native resolution."""
 
-    display = utils.Display()
-    display._buffer = utils.Image.new("RGB", (display.width, display.height), "black")
-    display.set_led(r=0.0, g=0.0, b=utils.LED_INDICATOR_LEVEL)
-
-    pixel = display._indicator_buffer().getpixel((0, 0))
-    assert pixel == (0, 0, 255)
-
-
-def test_display_hat_mini_indicator_border_renders_led_color(monkeypatch):
-    monkeypatch.setattr(utils, "WIDTH", 320)
-    monkeypatch.setattr(utils, "HEIGHT", 240)
-    monkeypatch.setattr(utils, "DISPLAY_HAT_MINI_LED_INDICATOR_BORDER_ENABLED", True)
-
-    display = utils.Display()
-    display._buffer = utils.Image.new("RGB", (display.width, display.height), "black")
-    display._display_hat_mini_indicator_border = True
-
-    display.set_led(r=0.0, g=0.0, b=utils.LED_INDICATOR_LEVEL)
-
-    pixel = display._indicator_buffer().getpixel((0, 0))
-    assert pixel == (0, 0, 255)
-
-
-def test_display_hat_mini_indicator_border_renders_led_color_when_rotated(monkeypatch):
-    monkeypatch.setattr(utils, "WIDTH", 240)
-    monkeypatch.setattr(utils, "HEIGHT", 320)
-    monkeypatch.setattr(utils, "DISPLAY_HAT_MINI_LED_INDICATOR_BORDER_ENABLED", True)
-
-    display = utils.Display()
-    display._buffer = utils.Image.new("RGB", (display.width, display.height), "black")
-    display._display_hat_mini_indicator_border = True
-
-    display.set_led(r=0.0, g=0.0, b=utils.LED_INDICATOR_LEVEL)
-
-    pixel = display._indicator_buffer().getpixel((0, 0))
-    assert pixel == (0, 0, 255)
-
-
-def test_hyperpixel_indicator_border_renders_led_color_for_hyperpixel_size(monkeypatch):
     monkeypatch.setattr(utils, "WIDTH", 800)
     monkeypatch.setattr(utils, "HEIGHT", 480)
-    monkeypatch.setattr(utils, "DISPLAY_HAT_MINI_LED_INDICATOR_BORDER_ENABLED", True)
-    monkeypatch.setattr(utils, "HYPERPIXEL_LED_INDICATOR_BORDER_ENABLED", True)
 
     display = utils.Display()
     display._buffer = utils.Image.new("RGB", (display.width, display.height), "black")
@@ -533,40 +465,7 @@ def test_hyperpixel_indicator_border_renders_led_color_for_hyperpixel_size(monke
     assert pixel == (0, 255, 0)
 
 
-def test_display_hat_mini_led_updates_for_default_indicator_border(monkeypatch):
-    monkeypatch.setattr(utils, "WIDTH", 320)
-    monkeypatch.setattr(utils, "HEIGHT", 240)
-    monkeypatch.setattr(utils, "DISPLAY_HAT_MINI_LED_ENABLED", False)
-
-    class _FakeHardwareDisplay:
-        def __init__(self):
-            self.called = False
-            self.color = None
-
-        def display(self, _buffer):
-            pass
-
-        def set_led(self, **kwargs):
-            self.called = True
-            self.color = kwargs
-
-    display = utils.Display()
-    fake_display = _FakeHardwareDisplay()
-    display._display = fake_display
-    display._display_hat_mini_indicator_border = True
-
-    display.set_led(r=0.1, g=0.2, b=0.3)
-
-    assert fake_display.called is True
-    assert fake_display.color == {"r": 255, "g": 255, "b": 255}
-
-
-def test_display_hat_mini_led_is_still_updated_when_indicator_border_is_enabled(monkeypatch):
-    monkeypatch.setattr(utils, "WIDTH", 320)
-    monkeypatch.setattr(utils, "HEIGHT", 240)
-    monkeypatch.setattr(utils, "DISPLAY_HAT_MINI_LED_ENABLED", False)
-    monkeypatch.setattr(utils, "DISPLAY_HAT_MINI_LED_INDICATOR_BORDER_ENABLED", True)
-
+def test_led_indicator_enabled_drives_hardware_led():
     class _FakeHardwareDisplay:
         def __init__(self):
             self.called = False
@@ -579,12 +478,56 @@ def test_display_hat_mini_led_is_still_updated_when_indicator_border_is_enabled(
     display = utils.Display()
     fake_display = _FakeHardwareDisplay()
     display._display = fake_display
-    display._display_hat_mini_indicator_border = True
 
     display.set_led(r=0.1, g=0.2, b=0.3)
 
     assert fake_display.called is True
-    assert fake_display.color == {"r": 255, "g": 255, "b": 255}
+    assert fake_display.color == {"r": 26, "g": 51, "b": 76}
+
+
+def test_led_indicator_disabled_skips_hardware_led(monkeypatch):
+    monkeypatch.setattr(utils, "LED_INDICATOR_ENABLED", False)
+
+    class _FakeHardwareDisplay:
+        def __init__(self):
+            self.called = False
+
+        def set_led(self, **kwargs):
+            self.called = True
+
+    display = utils.Display()
+    fake_display = _FakeHardwareDisplay()
+    display._display = fake_display
+
+    display.set_led(r=0.1, g=0.2, b=0.3)
+
+    assert fake_display.called is False
+
+
+def test_led_indicator_and_border_flags_are_independent(monkeypatch):
+    """Disabling the on-screen border must not stop the physical LED, and
+    disabling the physical LED must not stop the on-screen border."""
+
+    monkeypatch.setattr(utils, "LED_INDICATOR_BORDER_ENABLED", False)
+
+    class _FakeHardwareDisplay:
+        def __init__(self):
+            self.called = False
+
+        def set_led(self, **kwargs):
+            self.called = True
+
+    display = utils.Display()
+    fake_display = _FakeHardwareDisplay()
+    display._display = fake_display
+    display._buffer = utils.Image.new("RGB", (display.width, display.height), "black")
+
+    display.set_led(r=0.1, g=0.2, b=0.3)
+
+    assert fake_display.called is True
+
+    screenshot = utils.Image.new("RGB", (display.width, display.height), "black")
+    assert display.apply_indicator_border(screenshot) is screenshot
 
 
 def test_image_always_applies_bottom_safe_buffer(monkeypatch):
@@ -914,8 +857,7 @@ def test_refresh_led_indicator_uses_static_color_for_indicator_border(monkeypatc
             self.stopped = True
 
     class _FakeDisplay:
-        _hyperpixel_indicator_border = True
-        _display_hat_mini_indicator_border = False
+        _indicator_border_enabled = True
 
         def __init__(self):
             self.calls = []
@@ -938,8 +880,7 @@ def test_refresh_led_indicator_uses_static_color_for_indicator_border(monkeypatc
 
 def test_set_update_indicator_enabled_clears_led_when_disabled(monkeypatch):
     class _FakeDisplay:
-        _hyperpixel_indicator_border = False
-        _display_hat_mini_indicator_border = False
+        _indicator_border_enabled = False
 
         def __init__(self):
             self.calls = []

@@ -1250,14 +1250,13 @@ from config import (
     DISPLAY_FADE_IN_ENABLED,
     DISPLAY_FADE_IN_STEPS_BY_PROFILE,
     DISPLAY_HAT_MINI_IO_TIMEOUT_SECONDS,
-    DISPLAY_HAT_MINI_LED_ENABLED,
-    DISPLAY_HAT_MINI_LED_INDICATOR_BORDER_ENABLED,  # noqa: F401 -- legacy flag, kept for test monkeypatching
     DISPLAY_HAT_MINI_MAX_REFRESH_FAILURES,
     DISPLAY_HAT_MINI_REINIT_SECONDS,
     DISPLAY_ROTATION,
     HEIGHT,
-    HYPERPIXEL_LED_INDICATOR_BORDER_ENABLED,  # noqa: F401 -- legacy flag, kept for test monkeypatching
-    HYPERPIXEL_LED_INDICATOR_BORDER_WIDTH,
+    LED_INDICATOR_BORDER_ENABLED,
+    LED_INDICATOR_BORDER_WIDTH,
+    LED_INDICATOR_ENABLED,
     WIDTH,
     get_display_profile_id,
     is_hyperpixel_next_layout,
@@ -1411,11 +1410,10 @@ class Display:
         self._frame_id = 0
         self._frame_lock = threading.Lock()
         self._led_color: Tuple[float, float, float] = (0.0, 0.0, 0.0)
-        # The in-frame LED indicator border is the default for every display
-        # profile; Display HAT Mini hardware-specific LED scaling is tracked
-        # separately below.
-        self._hyperpixel_indicator_border = True
-        self._display_hat_mini_indicator_border = False
+        # The in-frame LED indicator border works the same way on every
+        # display type; only the physical LED (Display HAT Mini only) has
+        # its own separate enable flag, handled in set_led().
+        self._indicator_border_enabled = LED_INDICATOR_BORDER_ENABLED
         self._uses_kernel_output = False
         self._display_reinit_seconds = DISPLAY_HAT_MINI_REINIT_SECONDS
         self._last_display_reinit = time.monotonic()
@@ -1644,22 +1642,16 @@ class Display:
     def _configure_output_strategy(self) -> None:
         """Select frame transform/output handlers once during initialization."""
 
-        display_hat_indicator_eligible = (
-            (self.width, self.height) in {(320, 240), (240, 320)}
-        )
-
         if self._framebuffer is not None:
             self._frame_transform = self._build_rotation_transform()
             self._frame_writer = self._framebuffer.write_image
             self._output_strategy = "framebuffer"
-            self._display_hat_mini_indicator_border = False
             return
 
         if self._kernel_display is not None:
             self._frame_transform = self._build_rotation_transform()
             self._frame_writer = self._kernel_display.write_image
             self._output_strategy = "kernel"
-            self._display_hat_mini_indicator_border = False
             return
 
         if self._display is not None:
@@ -1669,17 +1661,14 @@ class Display:
             if self._display_driver == "minipitft":
                 self._frame_writer = self._write_adafruit_minipitft_frame
                 self._output_strategy = "minipitft"
-                self._display_hat_mini_indicator_border = False
             else:
                 self._frame_writer = self._write_display_hat_mini_frame
                 self._output_strategy = "display_hat_mini"
-                self._display_hat_mini_indicator_border = display_hat_indicator_eligible
             return
 
         self._frame_transform = lambda img: img
         self._frame_writer = lambda img: None
         self._output_strategy = "headless"
-        self._display_hat_mini_indicator_border = False
 
     def _build_rotation_transform(
         self,
@@ -2112,10 +2101,7 @@ class Display:
                 try:  # pragma: no cover - hardware import
                     with self._display_io_lock:
                         old_display.set_backlight(self._backlight_level)
-                        if (
-                            DISPLAY_HAT_MINI_LED_ENABLED
-                            or self._display_hat_mini_indicator_border
-                        ) and any(self._led_color):
+                        if LED_INDICATOR_ENABLED and any(self._led_color):
                             old_display.set_led(
                                 r=_normalized_led_to_driver_channel(self._led_color[0]),
                                 g=_normalized_led_to_driver_channel(self._led_color[1]),
@@ -2163,10 +2149,7 @@ class Display:
             except Exception as exc:  # pragma: no cover - hardware import
                 logging.debug("Failed to restore backlight after display reinit: %s", exc)
 
-            if (
-                DISPLAY_HAT_MINI_LED_ENABLED
-                or self._display_hat_mini_indicator_border
-            ) and any(self._led_color):
+            if LED_INDICATOR_ENABLED and any(self._led_color):
                 try:
                     with self._display_io_lock:
                         new_display.set_led(
@@ -2207,9 +2190,7 @@ class Display:
         """Always clear the bottom safety strip so content never touches the edge."""
 
         bottom_buffer = self._BOTTOM_SAFE_BUFFER_PX
-        if self._uses_kernel_output and not (
-            self._hyperpixel_indicator_border or self._display_hat_mini_indicator_border
-        ):
+        if self._uses_kernel_output and not self._indicator_border_enabled:
             bottom_buffer = self._KERNEL_BOTTOM_SAFE_BUFFER_PX
 
         bottom_buffer = max(0, bottom_buffer)
@@ -2232,7 +2213,7 @@ class Display:
     def _apply_indicator_bottom_safe_buffer(self, pil_img: Image.Image) -> Image.Image:
         """Clear a bottom buffer to avoid indicator border overlap, when enabled."""
 
-        if not (self._hyperpixel_indicator_border or self._display_hat_mini_indicator_border):
+        if not self._indicator_border_enabled:
             return pil_img
 
         bottom_buffer = max(0, self._INDICATOR_BOTTOM_SAFE_BUFFER_PX)
@@ -2310,29 +2291,18 @@ class Display:
         g = _clamp_led_level(g)
         b = _clamp_led_level(b)
         self._led_color = (r, g, b)
-        if self._hyperpixel_indicator_border or self._display_hat_mini_indicator_border:
+        if self._indicator_border_enabled:
             self._update_display()
 
-        should_drive_hardware_led = (
-            DISPLAY_HAT_MINI_LED_ENABLED or self._display_hat_mini_indicator_border
-        )
-        if self._display is None or not should_drive_hardware_led:  # pragma: no cover - hardware import
+        if self._display is None or not LED_INDICATOR_ENABLED:  # pragma: no cover - hardware import
             return
         try:  # pragma: no cover - hardware import
-            if self._display_hat_mini_indicator_border:
-                led_kwargs = {
-                    "r": self._indicator_channel_to_pixel(r),
-                    "g": self._indicator_channel_to_pixel(g),
-                    "b": self._indicator_channel_to_pixel(b),
-                }
-            else:
-                led_kwargs = {
-                    "r": _normalized_led_to_driver_channel(r),
-                    "g": _normalized_led_to_driver_channel(g),
-                    "b": _normalized_led_to_driver_channel(b),
-                }
             with self._display_io_lock:
-                self._display.set_led(**led_kwargs)
+                self._display.set_led(
+                    r=_normalized_led_to_driver_channel(r),
+                    g=_normalized_led_to_driver_channel(g),
+                    b=_normalized_led_to_driver_channel(b),
+                )
         except Exception as exc:  # pragma: no cover - hardware import
             logging.debug("Display LED update failed: %s", exc)
 
@@ -2355,10 +2325,7 @@ class Display:
         should route the image through here before writing it to disk.
         """
 
-        if not (
-            self._hyperpixel_indicator_border
-            or self._display_hat_mini_indicator_border
-        ):
+        if not self._indicator_border_enabled:
             return img
 
         color = tuple(self._indicator_channel_to_pixel(value) for value in self._led_color)
@@ -2372,7 +2339,7 @@ class Display:
         ImageDraw.Draw(bordered).rectangle(
             [(0, 0), (width - 1, height - 1)],
             outline=color,
-            width=HYPERPIXEL_LED_INDICATOR_BORDER_WIDTH,
+            width=LED_INDICATOR_BORDER_WIDTH,
         )
         return bordered
 
@@ -3916,10 +3883,7 @@ def _refresh_led_indicator(display: Optional["Display"] = None) -> None:
 
     pattern, interval = _led_pattern(status)
 
-    indicator_border_enabled = bool(
-        getattr(display, "_hyperpixel_indicator_border", False)
-        or getattr(display, "_display_hat_mini_indicator_border", False)
-    )
+    indicator_border_enabled = bool(getattr(display, "_indicator_border_enabled", False))
 
     if not _UPDATE_INDICATOR_ENABLED:
         if _LED_INDICATOR_ANIMATOR is not None:
