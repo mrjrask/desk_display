@@ -482,7 +482,33 @@ def test_led_indicator_enabled_drives_hardware_led():
     display.set_led(r=0.1, g=0.2, b=0.3)
 
     assert fake_display.called is True
-    assert fake_display.color == {"r": 26, "g": 51, "b": 76}
+    assert fake_display.color == {"r": 0.1, "g": 0.2, "b": 0.3}
+
+
+def test_led_indicator_survives_real_driver_range_validation(caplog):
+    """Regression test: the real ``displayhatmini`` package's set_led()
+    raises ValueError for any r/g/b outside 0.0-1.0. Passing an out-of-range
+    value (e.g. an old 0-255 scaled channel) must not happen, or the call
+    silently fails and the physical LED never lights."""
+
+    class _RealDriverLikeDisplay:
+        def __init__(self):
+            self.calls = []
+
+        def set_led(self, r=0.0, g=0.0, b=0.0):
+            if r < 0.0 or r > 1.0 or g < 0.0 or g > 1.0 or b < 0.0 or b > 1.0:
+                raise ValueError("r, g, and b must be in the range 0.0 to 1.0")
+            self.calls.append((r, g, b))
+
+    display = utils.Display()
+    fake_display = _RealDriverLikeDisplay()
+    display._display = fake_display
+
+    with caplog.at_level("WARNING"):
+        display.set_led(r=1.0, g=0.5, b=0.0)
+
+    assert fake_display.calls == [(1.0, 0.5, 0.0)]
+    assert "Display LED update failed" not in caplog.text
 
 
 def test_led_indicator_disabled_skips_hardware_led(monkeypatch):
@@ -1040,10 +1066,15 @@ def test_indicator_channel_to_pixel_clamps_out_of_range_values():
     assert utils.Display._indicator_channel_to_pixel(-0.2) == 0
 
 
-def test_normalized_led_to_driver_channel_scales_to_8_bit():
-    assert utils._normalized_led_to_driver_channel(0.0) == 0
-    assert utils._normalized_led_to_driver_channel(0.5) == 128
-    assert utils._normalized_led_to_driver_channel(1.0) == 255
+def test_normalized_led_to_driver_channel_passes_through_0_to_1_float():
+    """The displayhatmini driver's set_led() takes floats in 0.0-1.0 directly
+    and raises ValueError outside that range -- it is not an 8-bit channel."""
+
+    assert utils._normalized_led_to_driver_channel(0.0) == 0.0
+    assert utils._normalized_led_to_driver_channel(0.5) == 0.5
+    assert utils._normalized_led_to_driver_channel(1.0) == 1.0
+    assert utils._normalized_led_to_driver_channel(1.5) == 1.0
+    assert utils._normalized_led_to_driver_channel(-0.5) == 0.0
 
 
 def test_get_led_indicator_level_from_env(monkeypatch):
