@@ -1217,10 +1217,15 @@ def _clamp_led_level(value: float) -> float:
     return max(0.0, min(1.0, value))
 
 
-def _normalized_led_to_driver_channel(value: float) -> int:
-    """Convert a normalized LED value to the Display HAT Mini 8-bit channel range."""
+def _normalized_led_to_driver_channel(value: float) -> float:
+    """Clamp a normalized LED value for the Display HAT Mini driver.
 
-    return round(_clamp_led_level(value) * 255)
+    The ``displayhatmini`` package's ``set_led()`` takes floats in the
+    0.0-1.0 range directly (it raises ``ValueError`` outside that range) —
+    it does not take an 8-bit 0-255 channel value.
+    """
+
+    return _clamp_led_level(value)
 
 
 def _get_led_indicator_level() -> float:
@@ -2304,7 +2309,7 @@ class Display:
                     b=_normalized_led_to_driver_channel(b),
                 )
         except Exception as exc:  # pragma: no cover - hardware import
-            logging.debug("Display LED update failed: %s", exc)
+            logging.warning("Display LED update failed: %s", exc)
 
     def _indicator_buffer(self) -> Image.Image:
         """Return a frame with the border LED indicator overlay when enabled."""
