@@ -928,6 +928,134 @@ def test_mlb_schedule_quads_remain_available_on_no_game_days(monkeypatch):
         ],
     ]
 
+def _mlb_home_game(gamepk: int, official_date: str, team_id) -> dict:
+    return {
+        "gamePk": gamepk,
+        "officialDate": official_date,
+        "teams": {
+            "home": {"team": {"id": int(team_id)}},
+            "away": {"team": {"id": 999}},
+        },
+    }
+
+
+def _mlb_away_game(gamepk: int, official_date: str, team_id) -> dict:
+    return {
+        "gamePk": gamepk,
+        "officialDate": official_date,
+        "teams": {
+            "home": {"team": {"id": 999}},
+            "away": {"team": {"id": int(team_id)}},
+        },
+    }
+
+
+def test_cubs_next_home_falls_back_to_next_when_next_game_is_home():
+    now = datetime.datetime(2024, 7, 1, 12, 0, tzinfo=CENTRAL_TIME)
+    weather = {"hourly": []}
+    cubs_next_game = _mlb_home_game(1, "2024-07-01", MLB_CUBS_TEAM_ID)
+    context = _make_context(
+        weather,
+        now,
+        cache_updates={"cubs": {"next": cubs_next_game, "next_home": None}},
+    )
+
+    registry, _ = build_screen_registry(context)
+
+    assert registry["cubs next home"].available is True
+
+
+def test_sox_next_home_falls_back_to_next_when_next_game_is_home():
+    now = datetime.datetime(2024, 7, 1, 12, 0, tzinfo=CENTRAL_TIME)
+    weather = {"hourly": []}
+    sox_next_game = _mlb_home_game(1, "2024-07-01", MLB_SOX_TEAM_ID)
+    context = _make_context(
+        weather,
+        now,
+        cache_updates={"sox": {"next": sox_next_game, "next_home": None}},
+    )
+
+    registry, _ = build_screen_registry(context)
+
+    assert registry["sox next home"].available is True
+
+
+def test_cubs_next_home_available_without_game_today():
+    now = datetime.datetime(2024, 7, 1, 12, 0, tzinfo=CENTRAL_TIME)
+    weather = {"hourly": []}
+    context = _make_context(
+        weather,
+        now,
+        cache_updates={
+            "cubs": {
+                "next": _mlb_away_game(1, "2024-07-03", MLB_CUBS_TEAM_ID),
+                "next_home": _mlb_home_game(2, "2024-07-05", MLB_CUBS_TEAM_ID),
+            }
+        },
+    )
+
+    registry, _ = build_screen_registry(context)
+
+    assert registry["cubs next home"].available is True
+
+
+def test_sox_next_home_available_without_game_today():
+    now = datetime.datetime(2024, 7, 1, 12, 0, tzinfo=CENTRAL_TIME)
+    weather = {"hourly": []}
+    context = _make_context(
+        weather,
+        now,
+        cache_updates={
+            "sox": {
+                "next": _mlb_away_game(1, "2024-07-03", MLB_SOX_TEAM_ID),
+                "next_home": _mlb_home_game(2, "2024-07-05", MLB_SOX_TEAM_ID),
+            }
+        },
+    )
+
+    registry, _ = build_screen_registry(context)
+
+    assert registry["sox next home"].available is True
+
+
+def test_cubs_next_home_series_falls_back_to_next_series_when_home():
+    now = datetime.datetime(2024, 7, 1, 12, 0, tzinfo=CENTRAL_TIME)
+    weather = {"hourly": []}
+    context = _make_context(
+        weather,
+        now,
+        cache_updates={
+            "cubs": {
+                "next_series": [_mlb_home_game(1, "2024-07-05", MLB_CUBS_TEAM_ID)],
+                "next_home_series": None,
+            }
+        },
+    )
+
+    registry, _ = build_screen_registry(context)
+
+    assert registry["cubs next home series"].available is True
+
+
+def test_sox_next_home_series_falls_back_to_next_series_when_home():
+    now = datetime.datetime(2024, 7, 1, 12, 0, tzinfo=CENTRAL_TIME)
+    weather = {"hourly": []}
+    context = _make_context(
+        weather,
+        now,
+        cache_updates={
+            "sox": {
+                "next_series": [_mlb_home_game(1, "2024-07-05", MLB_SOX_TEAM_ID)],
+                "next_home_series": None,
+            }
+        },
+    )
+
+    registry, _ = build_screen_registry(context)
+
+    assert registry["sox next home series"].available is True
+
+
 def _crosstown_series_game(gamepk: int, official_date: str) -> dict:
     return {
         "gamePk": gamepk,
