@@ -1414,10 +1414,48 @@ def _fetch_blackhawks_schedule_games() -> List[Dict[str, Any]]:
         return [game for day in data["dates"] for game in day.get("games", [])]
     return data.get("games", [])
 
+
+# ICS calendar entries carry no live-result data, so ``_normalize_blackhawks_ics_game``
+# always tags them ``gameState: "FUT"`` even once the game has been played. Cross-check
+# that reported state against the actual start time so games advance from
+# next -> last as they occur instead of getting stuck as perpetually "upcoming".
+_BLACKHAWKS_GAME_DURATION = datetime.timedelta(hours=3, minutes=30)
+
+
+def _blackhawks_game_start_utc(game: Dict[str, Any]) -> Optional[datetime.datetime]:
+    for key in ("startTimeUTC", "gameDate"):
+        value = game.get(key)
+        if not value:
+            continue
+        try:
+            parsed = datetime.datetime.strptime(value, "%Y-%m-%dT%H:%M:%SZ")
+        except (TypeError, ValueError):
+            continue
+        return parsed.replace(tzinfo=pytz.utc)
+    return None
+
+
+def _blackhawks_game_is_future(game: Dict[str, Any], now: Optional[datetime.datetime] = None) -> bool:
+    now = now or datetime.datetime.now(pytz.UTC)
+    start = _blackhawks_game_start_utc(game)
+    if start is not None:
+        return start > now
+    return game.get("gameState") == "FUT"
+
+
+def _blackhawks_game_is_past(game: Dict[str, Any], now: Optional[datetime.datetime] = None) -> bool:
+    now = now or datetime.datetime.now(pytz.UTC)
+    start = _blackhawks_game_start_utc(game)
+    if start is not None:
+        return (start + _BLACKHAWKS_GAME_DURATION) <= now
+    return game.get("gameState") == "OFF"
+
+
 def fetch_blackhawks_next_game():
     try:
         games = _fetch_blackhawks_schedule_games()
-        fut   = [g for g in games if g.get("gameState") == "FUT"]
+        now = datetime.datetime.now(pytz.UTC)
+        fut = [g for g in games if _blackhawks_game_is_future(g, now)]
 
         for g in fut:
             if not g.get("startTimeCentral"):
@@ -2263,11 +2301,12 @@ def fetch_blackhawks_next_home_game():
     try:
         next_game = fetch_blackhawks_next_game()
         games = _fetch_blackhawks_schedule_games()
+        now = datetime.datetime.now(pytz.UTC)
         home  = []
         skipped_duplicate = False
 
         for g in games:
-            if g.get("gameState") != "FUT":
+            if not _blackhawks_game_is_future(g, now):
                 continue
             team = g.get("homeTeam", {}) or g.get("home_team", {})
             if _is_blackhawks_team(team):
@@ -2301,8 +2340,9 @@ def fetch_blackhawks_next_home_game():
 def fetch_blackhawks_last_game():
     try:
         games = _fetch_blackhawks_schedule_games()
+        now = datetime.datetime.now(pytz.UTC)
 
-        offs = [g for g in games if g.get("gameState") == "OFF"]
+        offs = [g for g in games if _blackhawks_game_is_past(g, now)]
         if offs:
             offs.sort(key=lambda g: g.get("gameDate", ""))
             return offs[-1]
