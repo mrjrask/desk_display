@@ -1,5 +1,7 @@
 import datetime as dt
 
+import pytest
+
 import screens.draw_news_headlines as dnh
 from services.news_feeds import NewsHeadline, NewsTopic
 from services.stock_quotes import StockQuote
@@ -248,7 +250,7 @@ def test_ticker_renderer_reserves_cache_for_each_visible_row():
 def test_ticker_offset_step_has_nominal_minimum_and_scales_for_slow_frames():
     assert dnh._ticker_offset_step(2.0, 0.0) == 2.0
     assert dnh._ticker_offset_step(2.0, dnh._FRAME_INTERVAL_SECONDS / 2) == 2.0
-    assert dnh._ticker_offset_step(2.0, dnh._FRAME_INTERVAL_SECONDS * 3) == 6.0
+    assert dnh._ticker_offset_step(2.0, dnh._FRAME_INTERVAL_SECONDS * 3) == pytest.approx(6.0)
 
 
 def test_hit_test_returns_headline_for_matching_point_and_none_otherwise():

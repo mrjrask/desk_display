@@ -135,14 +135,28 @@ def test_weekly_dates_treat_empty_events_as_success(dates):
     assert result.failed_dates == 0
 
 
-def test_stale_cache_is_retained_when_every_provider_fails(dates):
+@pytest.fixture
+def expired_clock(monkeypatch):
+    """Pin the cache clock past the TTL so ``(0.0, ...)`` entries are expired.
+
+    ``time.monotonic()`` counts from boot, so on a freshly started machine the
+    ambient value is below ``FETCH_CACHE_TTL_SECONDS`` and a cache entry
+    stamped 0.0 would still read as fresh.
+    """
+
+    monkeypatch.setattr(
+        nfl.time, "monotonic", lambda: nfl.FETCH_CACHE_TTL_SECONDS + 1.0
+    )
+
+
+def test_stale_cache_is_retained_when_every_provider_fails(dates, expired_clock):
     stale = [{"id": "cached"}]
     cache = {(dates[0], f"nfl_providers:{dates[1].isoformat()}"): (0.0, stale)}
     session = Session([Response(error=True), Response(error=True), Response(error=True)])
     assert nfl.fetch_range(*dates, session=session, cache=cache) == stale
 
 
-def test_range_result_marks_expired_cache_stale_when_every_provider_fails(dates):
+def test_range_result_marks_expired_cache_stale_when_every_provider_fails(dates, expired_clock):
     stale = [{"id": "cached"}]
     cache = {(dates[0], f"nfl_providers:{dates[1].isoformat()}"): (0.0, stale)}
     session = Session([Response(error=True), Response(error=True), Response(error=True)])
