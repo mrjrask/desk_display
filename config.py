@@ -734,13 +734,15 @@ if (WIDTH, HEIGHT) == (480, 800) and (
     )
     WIDTH, HEIGHT = 800, 480
 
-HYPERPIXEL_LED_INDICATOR_BORDER_ENABLED = True
-DISPLAY_HAT_MINI_LED_INDICATOR_BORDER_ENABLED = True
+# LED_INDICATOR_ENABLED drives the physical RGB status LED. Only the
+# Pimoroni Display HAT Mini has this LED, so the flag is a no-op on every
+# other display type.
+LED_INDICATOR_ENABLED = _get_bool_env("LED_INDICATOR_ENABLED", True)
 
-DISPLAY_HAT_MINI_LED_ENABLED = _get_bool_env(
-    "DISPLAY_HAT_MINI_LED_ENABLED",
-    True,
-)
+# LED_INDICATOR_BORDER_ENABLED draws the same notification color as a border
+# around the rendered frame. It works on any display type, independently of
+# LED_INDICATOR_ENABLED.
+LED_INDICATOR_BORDER_ENABLED = _get_bool_env("LED_INDICATOR_BORDER_ENABLED", True)
 
 DISPLAY_HAT_MINI_REINIT_SECONDS = max(
     # Reconstructing the driver tears down and reclaims the same GPIO/SPI
@@ -757,8 +759,8 @@ DISPLAY_HAT_MINI_IO_TIMEOUT_SECONDS = max(
 DISPLAY_HAT_MINI_MAX_REFRESH_FAILURES = max(
     0, env_int("DISPLAY_HAT_MINI_MAX_REFRESH_FAILURES", 3)
 )
-HYPERPIXEL_LED_INDICATOR_BORDER_WIDTH = env_int(
-    "HYPERPIXEL_LED_INDICATOR_BORDER_WIDTH", 2, minimum=1
+LED_INDICATOR_BORDER_WIDTH = env_int(
+    "LED_INDICATOR_BORDER_WIDTH", 2, minimum=1
 )
 
 
