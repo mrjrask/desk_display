@@ -5,8 +5,19 @@ import sys
 
 
 class _FakeThread:
-    def __init__(self, target=None, daemon=None):
+    """Stand-in for ``threading.Thread`` used to observe runtime workers.
+
+    The signature mirrors ``threading.Thread`` so production code can pass any
+    of the real constructor arguments (``name``, ``args``, ...) without this
+    double having to be updated in lockstep.
+    """
+
+    def __init__(self, group=None, target=None, name=None, args=(), kwargs=None, *, daemon=None):
+        self.group = group
         self.target = target
+        self.name = name
+        self.args = args
+        self.kwargs = kwargs or {}
         self.daemon = daemon
         self.started = False
 
@@ -27,8 +38,9 @@ def test_init_runtime_starts_startup_refresh_thread(monkeypatch, tmp_path):
 
     started_targets = []
 
-    def _thread_factory(*, target, daemon):
-        thread = _FakeThread(target=target, daemon=daemon)
+    def _thread_factory(*args, **kwargs):
+        thread = _FakeThread(*args, **kwargs)
+        target = thread.target
 
         def _start():
             started_targets.append(target)
