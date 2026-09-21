@@ -208,10 +208,14 @@ bash ./Installers/install.sh
 After the hardware installer finishes, it also prompts for which default
 screen rotation to load — `small` or `large` (via
 `scripts/load_default_screen_config.py`, documented under
-[Import/export helpers](#importexport-helpers) below).
+[Import/export helpers](#importexport-helpers) below) — and then prompts
+whether to install the ADS-B collector service
+(`Installers/install_adsb_collector_service.sh`; requires
+`ADSB_DEVICE_1_HOST`, and optionally `ADSB_DEVICE_2_HOST`, in `.env`). It
+defaults to skipping the ADS-B collector service if you just press Enter.
 
-You can pass a profile, and optionally a screen-defaults choice, to skip
-prompts:
+You can pass a profile, a screen-defaults choice, and an ADS-B install
+choice (`y`/`n`) to skip prompts:
 
 ```bash
 bash ./Installers/install.sh display_hat_mini
@@ -226,6 +230,10 @@ bash ./Installers/install.sh waveshare_oled_lcd_hat_a
 # Skip both prompts by also passing the screen defaults profile
 bash ./Installers/install.sh display_hat_mini small
 bash ./Installers/install.sh display_hat_mini large
+
+# Skip all three prompts by also passing the ADS-B install choice
+bash ./Installers/install.sh display_hat_mini large y
+bash ./Installers/install.sh display_hat_mini large n
 ```
 
 ### Hardware/display-specific installers
