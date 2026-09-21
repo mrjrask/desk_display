@@ -509,6 +509,17 @@ def _is_bulls_home_game(game: Any) -> bool:
     return tricode == (NBA_TEAM_TRICODE or "CHI").upper()
 
 
+def _is_mlb_team_home_game(game: Any, team_id: Any) -> bool:
+    if not isinstance(game, dict):
+        return False
+    teams = game.get("teams") or {}
+    home_id = _extract_team_id(teams.get("home"))
+    try:
+        return int(home_id) == int(team_id)
+    except (TypeError, ValueError):
+        return False
+
+
 def _format_time(value: Optional[_dt.time]) -> str:
     if isinstance(value, _dt.time):
         return value.strftime("%I:%M %p").lstrip("0").replace(" 0", " ")
@@ -1312,9 +1323,22 @@ def build_screen_registry(context: ScreenContext) -> tuple[dict[str, ScreenDefin
         cubs_current_series_vs_sox = _series_is_cubs_vs_sox(cubs_current_series)
         cubs_next_series = cubs.get("next_series")
         cubs_next_home_series = cubs.get("next_home_series")
+        if not cubs_next_home_series and _is_mlb_team_home_game(
+            next(iter(cubs_next_series), None) if cubs_next_series else None,
+            config.MLB_CUBS_TEAM_ID,
+        ):
+            # Fall back to the next series itself when it's already a home
+            # series so the "next home series" / schedule quad screens aren't
+            # dropped from rotation (mirrors the "next home" fix above).
+            cubs_next_home_series = cubs_next_series
         cubs_next_home = cubs.get("next_home")
         if _games_match(cubs_next_home, cubs_next):
             cubs_next_home = None
+        if not cubs_next_home and _is_mlb_team_home_game(cubs_next, config.MLB_CUBS_TEAM_ID):
+            # Always show the Cubs "next home" card, even if the next game is at
+            # home. This avoids dropping the screen when the next home matchup
+            # matches the general "next" game entry (mirrors the Bulls fix).
+            cubs_next_home = cubs_next
         cubs_has_game_today = _mlb_team_has_game_dated_today(cubs)
 
         register(
@@ -1410,7 +1434,7 @@ def build_screen_registry(context: ScreenContext) -> tuple[dict[str, ScreenDefin
             available=cubs_no_game_today or (cubs_has_game_today and bool(cubs_next or cubs_next_alt)),
             replaces_with="cubs no game" if cubs_no_game_today else None,
         )
-        if cubs_has_game_today and cubs_next_home:
+        if cubs_next_home:
             register(
                 "cubs next home",
                 lambda data=cubs_next_home: draw_next_home_game(
@@ -1490,9 +1514,22 @@ def build_screen_registry(context: ScreenContext) -> tuple[dict[str, ScreenDefin
         sox_current_series = sox.get("current_series")
         sox_next_series = sox.get("next_series")
         sox_next_home_series = sox.get("next_home_series")
+        if not sox_next_home_series and _is_mlb_team_home_game(
+            next(iter(sox_next_series), None) if sox_next_series else None,
+            config.MLB_SOX_TEAM_ID,
+        ):
+            # Fall back to the next series itself when it's already a home
+            # series so the "next home series" / schedule quad screens aren't
+            # dropped from rotation (mirrors the "next home" fix above).
+            sox_next_home_series = sox_next_series
         sox_next_home = sox.get("next_home")
         if _games_match(sox_next_home, sox_next):
             sox_next_home = None
+        if not sox_next_home and _is_mlb_team_home_game(sox_next, config.MLB_SOX_TEAM_ID):
+            # Always show the Sox "next home" card, even if the next game is at
+            # home. This avoids dropping the screen when the next home matchup
+            # matches the general "next" game entry (mirrors the Bulls fix).
+            sox_next_home = sox_next
         sox_has_game_today = _mlb_team_has_game_dated_today(sox)
 
         register(
@@ -1591,7 +1628,7 @@ def build_screen_registry(context: ScreenContext) -> tuple[dict[str, ScreenDefin
             and not cubs_current_series_vs_sox,
             replaces_with="sox no game" if sox_no_game_today else None,
         )
-        if sox_has_game_today and sox_next_home:
+        if sox_next_home:
             register(
                 "sox next home",
                 lambda data=sox_next_home: draw_next_home_game(
