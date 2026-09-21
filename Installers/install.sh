@@ -7,7 +7,7 @@ PROJECT_DIR="${PROJECT_DIR:-$(cd -- "$SCRIPT_DIR/.." && pwd)}"
 print_usage() {
   cat <<'USAGE'
 Usage:
-  bash ./Installers/install.sh [profile] [screen_defaults]
+  bash ./Installers/install.sh [profile] [screen_defaults] [install_adsb]
 
 Profiles:
   display_hat_mini   (default)
@@ -22,6 +22,10 @@ Profiles:
 Screen defaults:
   small
   large               (default)
+
+Install ADS-B collector service:
+  y / yes
+  n / no              (default)
 USAGE
 }
 
@@ -97,8 +101,18 @@ MENU
   esac
 }
 
+prompt_install_adsb() {
+  read -r -p "Install the ADS-B collector service (requires ADSB_DEVICE_1_HOST in .env)? [y/N]: " choice
+  case "$choice" in
+    y|Y|yes|Yes|YES) echo "yes" ;;
+    ""|n|N|no|No|NO) echo "no" ;;
+    *) return 1 ;;
+  esac
+}
+
 profile="${1:-}"
 screen_defaults="${2:-}"
+install_adsb="${3:-}"
 
 if [[ -z "$profile" && -t 0 ]]; then
   profile=$(prompt_profile) || {
@@ -135,3 +149,24 @@ if [[ -n "$screen_defaults" ]]; then
 else
   echo "[INFO] Skipping screen rotation defaults (no selection made)."
 fi
+
+if [[ -z "$install_adsb" && -t 0 ]]; then
+  install_adsb=$(prompt_install_adsb) || {
+    echo "[WARN] Invalid selection; skipping ADS-B collector service install." >&2
+    install_adsb="no"
+  }
+fi
+
+case "$install_adsb" in
+  y|Y|yes|Yes|YES)
+    adsb_installer="$PROJECT_DIR/Installers/install_adsb_collector_service.sh"
+    if [[ ! -x "$adsb_installer" ]]; then
+      chmod +x "$adsb_installer"
+    fi
+    echo "[INFO] Running installer: $adsb_installer"
+    "$adsb_installer"
+    ;;
+  *)
+    echo "[INFO] Skipping ADS-B collector service install."
+    ;;
+esac
