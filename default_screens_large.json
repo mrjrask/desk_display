@@ -10,15 +10,6 @@
         }
       },
       "nixie": 0,
-      "on this day": 6,
-      "news headlines": {
-        "frequency": 1,
-        "alt": {
-          "screen": "news headlines 2",
-          "frequency": 2
-        }
-      },
-      "news headlines 2": 0,
       "weather logo": 0,
       "weather1": 1,
       "weather2": 1,
@@ -33,20 +24,28 @@
       "weather radar": 1,
       "astronomical": 0,
       "inside": 1,
+      "news headlines": {
+        "frequency": 1,
+        "alt": {
+          "screen": "news headlines 2",
+          "frequency": 2
+        }
+      },
+      "news headlines 2": 0,
       "verano logo": 0,
       "vrnof": 3,
-      "hawks logo": 1,
+      "hawks logo": 2,
       "hawks stand1": 0,
-      "hawks last": 1,
-      "hawks live": 1,
-      "hawks next": 1,
-      "hawks next home": 1,
+      "hawks last": 2,
+      "hawks live": 2,
+      "hawks next": 2,
+      "hawks next home": 2,
       "hawks schedule quad": {
-        "frequency": 0,
+        "frequency": 2,
         "extra_seconds": 3
       },
       "nhl logo": 0,
-      "NHL Scoreboard": 0,
+      "NHL Scoreboard": 2,
       "NHL Playoffs": 0,
       "NHL Standings West": {
         "frequency": 0,
@@ -172,6 +171,7 @@
       "nba logo": 0,
       "NBA Scoreboard": 0,
       "NBA Playoffs": 0,
+      "on this day": 6,
       "NCAAM Scoreboard": 0,
       "quad": 0,
       "World Cup Scoreboard": 0,
@@ -203,6 +203,9 @@
             "screen": "weather2"
           },
           {
+            "screen": "air quality"
+          },
+          {
             "screen": "weather alert"
           },
           {
@@ -216,9 +219,6 @@
           },
           {
             "screen": "weather radar"
-          },
-          {
-            "screen": "air quality"
           },
           {
             "screen": "astronomical"
@@ -237,16 +237,16 @@
         "label": "news & stocks",
         "steps": [
           {
-            "screen": "verano logo"
-          },
-          {
-            "screen": "vrnof"
-          },
-          {
             "screen": "news headlines"
           },
           {
             "screen": "news headlines 2"
+          },
+          {
+            "screen": "verano logo"
+          },
+          {
+            "screen": "vrnof"
           }
         ]
       },
@@ -541,6 +541,9 @@
         "label": "Other",
         "steps": [
           {
+            "screen": "on this day"
+          },
+          {
             "screen": "NCAAM Scoreboard"
           },
           {
@@ -548,9 +551,6 @@
           },
           {
             "screen": "World Cup Scoreboard"
-          },
-          {
-            "screen": "on this day"
           },
           {
             "screen": "adsb stats"

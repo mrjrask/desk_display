@@ -54,13 +54,17 @@ def test_default_screen_configs_alternate_news_headline_feeds():
 
 def test_default_screen_configs_enable_hawks_screens_without_schedule_expiration():
     enabled_screens = ("hawks logo", "hawks last", "hawks next", "hawks next home")
+    expected_frequencies = {
+        "default_screens_large.json": 2,
+        "default_screens_small.json": 1,
+    }
 
-    for filename in ("default_screens_large.json", "default_screens_small.json"):
+    for filename, expected_frequency in expected_frequencies.items():
         config = _load_default_config(filename)
         screens = config["config"]["screens"]
 
         for screen in enabled_screens:
-            assert screens[screen] == 1
+            assert screens[screen] == expected_frequency
 
         schedule_quad = screens["hawks schedule quad"]
         if isinstance(schedule_quad, dict):
@@ -134,3 +138,57 @@ def test_default_screen_configs_place_wolves_live_after_logo():
         assert rotation_config["screens"].get("wolves live") == 0
         wolves_steps = _wolves_playlist_steps(config)
         assert wolves_steps[:2] == ["wolves logo", "wolves live"]
+
+
+def test_default_screens_large_screen_order_and_frequencies():
+    """The large defaults match the rotation the user tuned in the web UI.
+
+    The order/frequencies in ``screens_config.export-4.json`` (downloaded via
+    the Screens export) were adopted as the repo-backed defaults in 2026-09:
+    the news feeds moved to follow the weather/sensors block, "on this day"
+    moved to the front of the "Other" rotation, and the hawks screens plus
+    the NHL Scoreboard were re-weighted.
+    """
+    config = _load_default_config("default_screens_large.json")
+    screens = config["config"]["screens"]
+    screen_ids = list(screens)
+
+    # Screens dict order: news feeds follow "inside"; "on this day" sits just
+    # before the miscellaneous end-of-rotation screens.
+    assert screen_ids.index("news headlines") == screen_ids.index("inside") + 1
+    assert screen_ids.index("news headlines 2") == screen_ids.index("news headlines") + 1
+    assert screen_ids.index("on this day") == screen_ids.index("NBA Playoffs") + 1
+
+    assert screens["hawks logo"] == 2
+    assert screens["hawks schedule quad"] == {"frequency": 2, "extra_seconds": 3}
+    assert screens["NHL Scoreboard"] == 2
+
+
+def test_default_screens_large_playlist_step_order():
+    config = _load_default_config("default_screens_large.json")
+    playlists = {
+        playlist["label"]: [step["screen"] for step in playlist["steps"]]
+        for playlist in config["config"]["playlists"].values()
+    }
+
+    assert playlists["weather"] == [
+        "weather logo",
+        "weather1",
+        "weather2",
+        "air quality",
+        "weather alert",
+        "weather hourly",
+        "weather daily",
+        "weather quad",
+        "weather radar",
+        "astronomical",
+    ]
+    assert playlists["news & stocks"] == [
+        "news headlines",
+        "news headlines 2",
+        "verano logo",
+        "vrnof",
+    ]
+    other = playlists["Other"]
+    assert other[0] == "on this day"
+    assert other[-2:] == ["adsb stats", "adsb live"]
