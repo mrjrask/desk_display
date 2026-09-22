@@ -4,6 +4,8 @@ Desk Display is a Python dashboard for always-on Raspberry Pi, Linux, macOS, and
 
 The project is optimized for desk-sized devices but also includes larger 800×480 and 1080p display profiles, a browser-based screen configuration UI, install scripts for common Raspberry Pi hardware, diagnostics for external feeds, and maintenance tools for screenshot/render validation.
 
+For a short operator-focused walkthrough — how the display runs on the Pi, installing it, restarting it, and adding a new screen — see [OPERATIONS.md](OPERATIONS.md). This README is the full reference.
+
 ---
 
 ## Table of contents
@@ -77,6 +79,7 @@ Supported workflow profiles include:
 
 | Path | Purpose |
 | --- | --- |
+| `OPERATIONS.md` | Short operator guide: running the display on the Pi, installing, restarting, and adding a new screen. |
 | `main.py` | Runtime loop, refresh orchestration, transitions, capture, touch/button handling, and display writes. |
 | `config.py` | Environment parsing, defaults, display profile detection, style config, API credentials, and runtime constants. |
 | `config_ui.py` | Flask/Waitress screen configuration web app. |
