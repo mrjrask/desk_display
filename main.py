@@ -47,7 +47,6 @@ import tempfile
 import threading
 import time
 from collections import deque
-from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeoutError
 from contextlib import nullcontext
 from dataclasses import replace
 from pathlib import Path
@@ -2131,26 +2130,58 @@ def _refresh_startup_critical_feeds() -> None:
         ", ".join(critical_feeds),
     )
 
-    with ThreadPoolExecutor(max_workers=len(critical_feeds)) as pool:
-        futures = {
-            feed: pool.submit(_FEED_REFRESHERS[feed])
-            for feed in critical_feeds
-            if _FEED_REFRESHERS.get(feed)
-        }
+    # A regular ThreadPoolExecutor is deliberately not used here. Its context
+    # manager waits for every worker during __exit__, which turns the per-feed
+    # timeout into a log message rather than a real startup deadline when a
+    # provider call hangs. Daemon workers let the display loop continue while a
+    # non-cooperative provider eventually unwinds in the background.
+    results: Dict[str, Tuple[Optional[BaseException], bool]] = {}
+    results_lock = threading.Lock()
+    workers: Dict[str, threading.Thread] = {}
 
-        for feed, future in futures.items():
-            try:
-                future.result(timeout=_STARTUP_CRITICAL_FEED_TIMEOUT_SECONDS)
-                _mark_feed_refreshed(feed)
-                logging.info("✅ Startup critical feed ready: %s", feed)
-            except FuturesTimeoutError:
-                logging.warning(
-                    "⏱️  Startup critical feed timed out after %ss: %s",
-                    int(_STARTUP_CRITICAL_FEED_TIMEOUT_SECONDS),
-                    feed,
-                )
-            except Exception as exc:
-                logging.error("Failed startup critical feed refresh %s: %s", feed, exc)
+    def _refresh_one(feed: str, refresher: Callable[[], None]) -> None:
+        error: Optional[BaseException] = None
+        try:
+            refresher()
+        except BaseException as exc:  # keep startup alive for provider failures
+            error = exc
+        with results_lock:
+            results[feed] = (error, error is None)
+
+    deadline = time.monotonic() + _STARTUP_CRITICAL_FEED_TIMEOUT_SECONDS
+    for feed in critical_feeds:
+        refresher = _FEED_REFRESHERS.get(feed)
+        if refresher is None:
+            continue
+        worker = threading.Thread(
+            target=_refresh_one,
+            args=(feed, refresher),
+            name=f"startup-feed-{feed}",
+            daemon=True,
+        )
+        workers[feed] = worker
+        worker.start()
+
+    for feed, worker in workers.items():
+        remaining = max(0.0, deadline - time.monotonic())
+        worker.join(timeout=remaining)
+        with results_lock:
+            result = results.get(feed)
+
+        if worker.is_alive() or result is None:
+            logging.warning(
+                "⏱️  Startup critical feed timed out after %ss: %s",
+                int(_STARTUP_CRITICAL_FEED_TIMEOUT_SECONDS),
+                feed,
+            )
+            continue
+
+        error, succeeded = result
+        if succeeded:
+            _mark_feed_refreshed(feed)
+            logging.info("✅ Startup critical feed ready: %s", feed)
+        elif error is not None:
+            logging.error("Failed startup critical feed refresh %s: %s", feed, error)
 
 
 def _requested_data_feeds() -> Set[str]:
