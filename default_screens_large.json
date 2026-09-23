@@ -3,7 +3,6 @@
     "screens": {
       "date": {
         "frequency": 1,
-        "extra_seconds": 0,
         "alt": {
           "screen": "nixie",
           "frequency": 3
@@ -13,7 +12,7 @@
       "weather logo": 0,
       "weather1": 1,
       "weather2": 1,
-      "air quality": 1,
+      "air quality": 2,
       "weather alert": 1,
       "weather hourly": 1,
       "weather daily": 3,
@@ -22,7 +21,7 @@
         "extra_seconds": 5
       },
       "weather radar": 1,
-      "astronomical": 0,
+      "astronomical": 2,
       "inside": 1,
       "news headlines": {
         "frequency": 1,
@@ -49,7 +48,6 @@
       "NHL Playoffs": 0,
       "NHL Standings West": {
         "frequency": 0,
-        "extra_seconds": 0,
         "alt": {
           "screen": "NHL Standings West v2",
           "frequency": 2
@@ -57,7 +55,6 @@
       },
       "NHL Standings East": {
         "frequency": 0,
-        "extra_seconds": 0,
         "alt": {
           "screen": "NHL Standings East v2",
           "frequency": 2
@@ -67,11 +64,11 @@
       "NHL Standings Overview East": 0,
       "NHL Standings West v2": 0,
       "NHL Standings East v2": 0,
-      "wolves logo": 0,
+      "wolves logo": 8,
       "wolves live": 0,
       "wolves last": 0,
       "wolves next": 0,
-      "wolves next home": 0,
+      "wolves next home": 8,
       "cubs logo": 2,
       "cubs stand1": 0,
       "cubs stand2": 0,
@@ -142,7 +139,6 @@
       "NFL Scoreboard": 2,
       "NFL Overview NFC": {
         "frequency": 4,
-        "extra_seconds": 0,
         "alt": {
           "screen": "NFL Standings NFC",
           "frequency": 3
@@ -150,7 +146,6 @@
       },
       "NFL Overview AFC": {
         "frequency": 4,
-        "extra_seconds": 0,
         "alt": {
           "screen": "NFL Standings AFC",
           "frequency": 3
