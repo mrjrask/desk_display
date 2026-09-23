@@ -1,3 +1,6 @@
+from pathlib import Path
+from types import SimpleNamespace
+
 from PIL import Image
 
 import utils
@@ -72,16 +75,24 @@ def test_load_team_logo_caches_misses(monkeypatch, tmp_path):
 def test_load_team_logo_continues_after_cached_corrupt_variant(monkeypatch, tmp_path):
     corrupt_logo_path = tmp_path / "chc.png"
     valid_logo_path = tmp_path / "CHC.png"
-    corrupt_logo_path.write_bytes(b"not a real png")
-    _write_logo(valid_logo_path)
+    valid_payload_path = tmp_path / "valid-payload.png"
+    _write_logo(valid_payload_path)
     utils._TEAM_LOGO_CACHE.clear()
     real_open = Image.open
     opened = []
 
+    def fake_stat(path):
+        if Path(path).name in {corrupt_logo_path.name, valid_logo_path.name}:
+            return SimpleNamespace(st_mtime_ns=1)
+        raise FileNotFoundError(path)
+
     def tracked_open(path, *args, **kwargs):
         opened.append(path)
-        return real_open(path, *args, **kwargs)
+        if Path(path).name == corrupt_logo_path.name:
+            raise OSError("corrupt logo")
+        return real_open(valid_payload_path, *args, **kwargs)
 
+    monkeypatch.setattr(utils.os, "stat", fake_stat)
     monkeypatch.setattr(utils.Image, "open", tracked_open)
 
     first = load_team_logo(str(tmp_path), "chc", height=12)

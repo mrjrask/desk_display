@@ -68,6 +68,7 @@ def test_wiggle_mouse_cursor_noops_for_nonpositive_distance():
 def test_schedule_mouse_cursor_wiggle_starts_daemon_timer(monkeypatch):
     fake_pygame = _FakePygame()
     captured = {}
+    monkeypatch.setattr(utils.sys, "platform", "linux")
 
     class _FakeTimer:
         def __init__(self, interval, callback):
@@ -123,6 +124,7 @@ def test_park_mouse_cursor_moves_pointer_to_bottom_right():
 def test_schedule_mouse_cursor_wiggle_repeat_rearms_timer(monkeypatch):
     fake_pygame = _FakePygame()
     captured_callbacks = []
+    monkeypatch.setattr(utils.sys, "platform", "linux")
 
     class _FakeTimer:
         def __init__(self, _interval, callback):
