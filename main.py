@@ -1357,6 +1357,11 @@ def _finalize_shutdown() -> None:
         _config_ui_process = None
 
     clear_update_indicator(display)
+    if display is not None and hasattr(display, "close"):
+        try:
+            display.close()
+        except Exception as exc:
+            logging.debug("Display resource cleanup skipped: %s", exc)
     _shutdown_complete.set()
     logging.info("👋 Shutdown cleanup finished.")
 
