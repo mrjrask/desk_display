@@ -28,10 +28,12 @@ fi
 # shellcheck source=/dev/null
 source "$COMMON_SCRIPT"
 
-if [[ $EUID -ne 0 ]]; then
-  SUDO="sudo"
-else
-  SUDO=""
+if [[ -z "${SUDO+x}" ]]; then
+  if [[ $EUID -ne 0 ]]; then
+    SUDO="sudo"
+  else
+    SUDO=""
+  fi
 fi
 
 # Known project-managed unit names. Not all of these will be installed on

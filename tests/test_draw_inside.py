@@ -353,6 +353,7 @@ def test_i2cdetect_bus_has_known_sensor_ignores_noisy_bus(monkeypatch):
 def test_probe_sensor_uses_pimoroni_bme68x_without_blinka(monkeypatch):
     import screens.draw_inside as draw_inside_module
 
+    monkeypatch.setattr(draw_inside_module.platform, "system", lambda: "Linux")
     monkeypatch.setenv("INSIDE_SENSOR", "pimoroni_bme68x")
     monkeypatch.setattr(draw_inside_module, "board", None)
     monkeypatch.setattr(draw_inside_module, "busio", None)
@@ -375,6 +376,7 @@ def test_probe_sensor_uses_pimoroni_bme68x_without_blinka(monkeypatch):
 def test_probe_sensor_falls_back_to_auto_detect_when_preference_fails(monkeypatch):
     import screens.draw_inside as draw_inside_module
 
+    monkeypatch.setattr(draw_inside_module.platform, "system", lambda: "Linux")
     monkeypatch.setenv("INSIDE_SENSOR", "pimoroni_bme68x")
     monkeypatch.setattr(draw_inside_module, "board", None)
     monkeypatch.setattr(draw_inside_module, "busio", None)
@@ -396,6 +398,7 @@ def test_probe_sensor_falls_back_to_auto_detect_when_preference_fails(monkeypatc
 def test_probe_sensor_attempts_smbus_probes_without_blinka(monkeypatch):
     import screens.draw_inside as draw_inside_module
 
+    monkeypatch.setattr(draw_inside_module.platform, "system", lambda: "Linux")
     monkeypatch.delenv("INSIDE_SENSOR", raising=False)
     monkeypatch.setattr(draw_inside_module, "board", None)
     monkeypatch.setattr(draw_inside_module, "busio", None)

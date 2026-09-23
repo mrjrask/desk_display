@@ -5,8 +5,13 @@ from pathlib import Path
 
 import pytest
 
+from conftest import HOST_ONLY_ENV
+
 
 def _reload_config(monkeypatch, **env):
+    for key in HOST_ONLY_ENV:
+        if key not in env:
+            monkeypatch.delenv(key, raising=False)
     for key, value in env.items():
         if value is None:
             monkeypatch.delenv(key, raising=False)
