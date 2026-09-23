@@ -1243,7 +1243,9 @@ def _normalized_led_to_driver_channel(value: float) -> float:
 def _get_led_indicator_level() -> float:
     """Return the normalized indicator LED level from environment config."""
 
-    default_level = 0.08
+    # The physical RGB LED is run at half brightness (0.04, half of the prior
+    # 0.08 default) so status notifications stay visible but unobtrusive.
+    default_level = 0.04
     raw = os.environ.get("DISPLAY_HAT_MINI_LED_LEVEL")
     if raw is None:
         return default_level
