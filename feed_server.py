@@ -37,6 +37,7 @@ from flask import (
 from PIL import Image, UnidentifiedImageError
 
 from env_config import non_negative_env_int
+from feed_ids import sanitize_feed_id
 
 FEED_SERVER_HOST = os.environ.get("FEED_SERVER_HOST", "0.0.0.0")
 FEED_SERVER_PORT = non_negative_env_int("FEED_SERVER_PORT", 5003)
@@ -64,10 +65,7 @@ WEB_LOGGER = logging.getLogger("desk_display.feed_server")
 def _sanitize_id(value: str) -> str:
     """Return a filesystem-safe identifier for a source name or screen id."""
 
-    safe = value.strip().replace("/", "-").replace("\\", "-")
-    safe = safe.replace(" ", "_")
-    safe = "".join(ch for ch in safe if ch.isalnum() or ch in ("_", "-"))
-    return safe or "unknown"
+    return sanitize_feed_id(value)
 
 
 def _load_large_screen_order() -> list[str]:

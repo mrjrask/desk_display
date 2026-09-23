@@ -38,6 +38,7 @@ import requests
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from paths import resolve_storage_paths
+from feed_ids import sanitize_feed_id
 
 LOGGER = logging.getLogger("desk_display.screenshot_uploader")
 _STOP_EVENT = Event()
@@ -58,6 +59,7 @@ def _env_float(name: str, default: float) -> float:
 FEED_UPLOAD_URL = os.environ.get("FEED_UPLOAD_URL", "").strip().rstrip("/")
 FEED_UPLOAD_TOKEN = os.environ.get("FEED_UPLOAD_TOKEN", "").strip()
 FEED_SOURCE_NAME = os.environ.get("FEED_SOURCE_NAME", "").strip() or socket.gethostname()
+FEED_SOURCE_ID = sanitize_feed_id(FEED_SOURCE_NAME)
 FEED_UPLOAD_INTERVAL_SECONDS = max(1.0, _env_float("FEED_UPLOAD_INTERVAL_SECONDS", 5.0))
 FEED_UPLOAD_TIMEOUT_SECONDS = max(1.0, _env_float("FEED_UPLOAD_TIMEOUT_SECONDS", 10.0))
 FEED_UPLOAD_CYCLE_TIMEOUT_SECONDS = max(
@@ -125,7 +127,7 @@ def _content_type_for(path: Path) -> str:
 
 def _upload_file(session: requests.Session, path: Path) -> bool:
     screen_id = path.stem
-    url = f"{FEED_UPLOAD_URL}/api/feed/{FEED_SOURCE_NAME}/upload"
+    url = f"{FEED_UPLOAD_URL}/api/feed/{FEED_SOURCE_ID}/upload"
     headers = {"Authorization": f"Bearer {FEED_UPLOAD_TOKEN}"} if FEED_UPLOAD_TOKEN else {}
     try:
         with open(path, "rb") as fh:
@@ -161,7 +163,7 @@ def _upload_ticker(session: requests.Session, path: Path) -> bool:
     instead of showing the frozen screenshot uploaded alongside it.
     """
     screen_id = path.name[: -len(".ticker.json")]
-    url = f"{FEED_UPLOAD_URL}/api/feed/{FEED_SOURCE_NAME}/upload_ticker"
+    url = f"{FEED_UPLOAD_URL}/api/feed/{FEED_SOURCE_ID}/upload_ticker"
     headers = {"Authorization": f"Bearer {FEED_UPLOAD_TOKEN}"} if FEED_UPLOAD_TOKEN else {}
     try:
         with open(path, encoding="utf-8") as fh:
@@ -201,7 +203,7 @@ def _upload_status(session: requests.Session, path: Path) -> bool:
     Lets the Feed server show the same "Display heartbeat" banner for a
     remote source that the local Screenshots/Feed pages show for this Pi.
     """
-    url = f"{FEED_UPLOAD_URL}/api/feed/{FEED_SOURCE_NAME}/status"
+    url = f"{FEED_UPLOAD_URL}/api/feed/{FEED_SOURCE_ID}/status"
     headers = {"Authorization": f"Bearer {FEED_UPLOAD_TOKEN}"} if FEED_UPLOAD_TOKEN else {}
     try:
         with open(path, encoding="utf-8") as fh:
@@ -257,7 +259,7 @@ def run_loop() -> int:
         "Uploading screenshots from %s to %s as source '%s' every %.1fs",
         current_dir,
         FEED_UPLOAD_URL,
-        FEED_SOURCE_NAME,
+        FEED_SOURCE_ID,
         FEED_UPLOAD_INTERVAL_SECONDS,
     )
 
