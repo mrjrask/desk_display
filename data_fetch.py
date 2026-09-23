@@ -69,6 +69,7 @@ from config import (
 from paths import cache_file_lock, resolve_cache_file_path
 from services.http_client import NHL_HEADERS, get_session
 from services.sports.nba import fetch_team_schedule as _nba_fetch_team_schedule
+from services.sports.seasons import nba_season_year, nfl_season_year
 
 # ─── Shared HTTP session ─────────────────────────────────────────────────────
 _session = get_session()
@@ -1852,7 +1853,20 @@ def _fetch_nfl_team_standings(team_abbr: str):
             logging.warning("Team %s not found in NFL standings", team_abbr)
             return None
 
-        latest = max(entries, key=lambda r: r.get("season", "0"))
+        expected_season = nfl_season_year(datetime.datetime.now(CENTRAL_TIME))
+        eligible = []
+        for row in entries:
+            try:
+                season = int(row.get("season", 0))
+            except (TypeError, ValueError):
+                continue
+            if season <= expected_season:
+                eligible.append((season, row))
+        # Do not let a prematurely published future row replace the season that
+        # corresponds to today's date.  If the current row is not published
+        # yet, retain the newest available prior season instead of returning no
+        # standings.
+        latest = max(eligible, key=lambda item: item[0])[1] if eligible else entries[-1]
         wins = _safe_int(latest.get("wins"))
         losses = _safe_int(latest.get("losses"))
         ties = _safe_int(latest.get("ties"))
@@ -2251,7 +2265,11 @@ def _fetch_nba_team_standings_espn() -> Optional[dict]:
         return default
 
     try:
-        url = "https://site.web.api.espn.com/apis/v2/sports/basketball/nba/standings"
+        season = nba_season_year(datetime.datetime.now(CENTRAL_TIME))
+        url = (
+            "https://site.web.api.espn.com/apis/v2/sports/basketball/nba/standings"
+            f"?season={season}"
+        )
         resp = _session.get(url, timeout=_TEAM_STANDINGS_TIMEOUT)
         resp.raise_for_status()
         data = resp.json() or {}

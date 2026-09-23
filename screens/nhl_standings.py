@@ -936,13 +936,14 @@ def _fetch_standings_data() -> dict[str, dict[str, list[dict]]]:
 
     standings: Optional[dict[str, dict[str, list[dict]]]] = None
 
-    if _statsapi_available():
-        standings = _fetch_standings_statsapi()
-    else:
-        logging.debug("Using api-web NHL standings endpoint (statsapi DNS failure)")
+    # ``standings/now`` is the NHL's supported rolling endpoint and follows the
+    # active season automatically.  Keep the retired StatsAPI only as a legacy
+    # fallback; making it primary could leave every NHL standings screen on an
+    # old season when that host still responds with stale data.
+    standings = _fetch_standings_api_web()
 
-    if not standings:
-        standings = _fetch_standings_api_web()
+    if not standings and _statsapi_available():
+        standings = _fetch_standings_statsapi()
 
     if standings:
         _STANDINGS_CACHE["timestamp"] = now

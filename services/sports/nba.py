@@ -15,6 +15,7 @@ from services.sports.scoreboard_window import (
     before_scoreboard_update,
     compose_pre_update_scoreboard,
 )
+from services.sports.seasons import nba_season_year
 
 REQUEST_TIMEOUT = 10
 _SESSION = get_session()
@@ -458,7 +459,7 @@ def _map_espn_game(
 def _fetch_games_from_espn(day: datetime.date) -> Optional[list[dict]]:
     url = (
         "https://site.api.espn.com/apis/site/v2/sports/basketball/nba/scoreboard"
-        f"?dates={day.strftime('%Y%m%d')}"
+        f"?dates={day.strftime('%Y%m%d')}&season={nba_season_year(day)}"
     )
     try:
         response = _SESSION.get(url, timeout=REQUEST_TIMEOUT)
@@ -485,7 +486,9 @@ _TEAM_SCHEDULE_CACHE_TTL_SECONDS = 30 * 60
 _team_schedule_cache: dict[str, tuple[float, list[dict]]] = {}
 
 
-def _fetch_team_schedule_from_espn(team_id: str) -> list[dict]:
+def _fetch_team_schedule_from_espn(
+    team_id: str, now: Optional[datetime.datetime] = None
+) -> list[dict]:
     """Fetch a team's full schedule in one request instead of scanning day by day.
 
     Bulls next/last/home-game lookups used to scan up to 120 individual
@@ -497,7 +500,12 @@ def _fetch_team_schedule_from_espn(team_id: str) -> list[dict]:
     memory instead of hammering the scoreboard endpoint.
     """
 
-    url = f"https://site.api.espn.com/apis/site/v2/sports/basketball/nba/teams/{team_id}/schedule"
+    now = now or datetime.datetime.now(CENTRAL_TIME)
+    season = nba_season_year(now)
+    url = (
+        f"https://site.api.espn.com/apis/site/v2/sports/basketball/nba/teams/{team_id}/schedule"
+        f"?season={season}"
+    )
     try:
         response = _SESSION.get(url, timeout=REQUEST_TIMEOUT)
         response.raise_for_status()
