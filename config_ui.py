@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import contextlib
 import json
-import ipaddress
 import logging
 import os
 import secrets
@@ -67,7 +66,7 @@ DEFAULT_SCREEN_PROFILE = "large"
 STYLE_CONFIG_PATH = str(resolve_style_config_path())
 LAYOUTS_CONFIG_PATH = str(resolve_layouts_config_path())
 
-SCREEN_CONFIG_HOST = os.environ.get("SCREEN_CONFIG_HOST", "127.0.0.1")
+SCREEN_CONFIG_HOST = os.environ.get("SCREEN_CONFIG_HOST", "0.0.0.0")
 SCREEN_CONFIG_PORT = non_negative_env_int("SCREEN_CONFIG_PORT", 5002)
 SCREEN_UI_USERNAME = os.environ.get("SCREEN_UI_USERNAME", "")
 SCREEN_UI_PASSWORD = os.environ.get("SCREEN_UI_PASSWORD", "")
@@ -361,25 +360,10 @@ def _get_auth_password() -> str:
     return os.environ.get("SCREEN_UI_PASSWORD", SCREEN_UI_PASSWORD)
 
 
-def _is_loopback_host(host: str) -> bool:
-    normalized = (host or "").strip().lower()
-    if normalized == "localhost":
-        return True
-    try:
-        return ipaddress.ip_address(normalized).is_loopback
-    except ValueError:
-        return False
-
-
-def _validate_auth_configuration(host: Optional[str] = None) -> None:
-    bind_host = SCREEN_CONFIG_HOST if host is None else host
+def _validate_auth_configuration() -> None:
     if _is_auth_enabled() and not _get_auth_password():
         raise RuntimeError(
             "SCREEN_AUTH_ENABLED requires SCREEN_UI_PASSWORD to be configured"
-        )
-    if not _is_loopback_host(bind_host) and not _get_auth_password():
-        raise RuntimeError(
-            "Non-loopback SCREEN_CONFIG_HOST requires SCREEN_UI_PASSWORD to be configured"
         )
 
 

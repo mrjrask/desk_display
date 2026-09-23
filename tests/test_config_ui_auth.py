@@ -88,21 +88,20 @@ def test_auth_not_required_without_password(monkeypatch):
     assert response.status_code == 200
 
 
-def test_config_ui_defaults_to_loopback(monkeypatch):
+def test_config_ui_defaults_to_all_network_interfaces(monkeypatch):
     monkeypatch.delenv("SCREEN_CONFIG_HOST", raising=False)
     config_ui = _reload_config_ui(monkeypatch)
 
-    assert config_ui.SCREEN_CONFIG_HOST == "127.0.0.1"
+    assert config_ui.SCREEN_CONFIG_HOST == "0.0.0.0"
 
 
-def test_non_loopback_config_ui_requires_password(monkeypatch):
+def test_non_loopback_config_ui_allows_optional_password(monkeypatch):
     monkeypatch.setenv("SCREEN_CONFIG_HOST", "0.0.0.0")
     monkeypatch.delenv("SCREEN_UI_PASSWORD", raising=False)
     monkeypatch.delenv("SCREEN_AUTH_ENABLED", raising=False)
     config_ui = _reload_config_ui(monkeypatch)
 
-    with pytest.raises(RuntimeError, match="Non-loopback SCREEN_CONFIG_HOST"):
-        config_ui._validate_auth_configuration()
+    config_ui._validate_auth_configuration()
 
 
 def test_non_loopback_config_ui_accepts_password(monkeypatch):
