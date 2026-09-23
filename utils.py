@@ -844,6 +844,7 @@ class _KernelDisplay:
         self._sdl_driver: Optional[str] = None
         self._screen = self._init_display_surface()
         self.screen_width, self.screen_height = self._screen.get_size()
+        self._closed = False
         self._scale_to_screen = (self.screen_width, self.screen_height) != (
             self.render_width,
             self.render_height,
@@ -1077,6 +1078,17 @@ class _KernelDisplay:
         self._pygame.display.flip()
         self._drain_window_resize_events()
         self._pygame.event.pump()
+
+    def close(self) -> None:
+        """Release the SDL display surface and make repeated cleanup harmless."""
+
+        if self._closed:
+            return
+        self._closed = True
+        try:
+            self._pygame.display.quit()
+        except Exception as exc:
+            logging.debug("SDL display cleanup failed: %s", exc)
 
 
 def _wiggle_mouse_cursor(pygame_module: Any, *, distance: int = 1) -> None:
@@ -1439,6 +1451,7 @@ class Display:
         self._display_io_started_at: Optional[float] = None
         self._display_io_watchdog_stop = threading.Event()
         self._display_io_watchdog_thread: Optional[threading.Thread] = None
+        self._closed = False
         self._rotation_requires_expand = self.rotation in (90, 270)
         self._frame_transform: Callable[[Image.Image], Image.Image] = lambda img: img
         self._frame_writer: Callable[[Image.Image], None] = lambda img: None
@@ -2461,6 +2474,93 @@ class Display:
             callback(name)
         except Exception as exc:
             logging.debug("Button callback raised %s", exc)
+
+    def close(self) -> None:
+        """Release all display, GPIO, and console resources exactly once."""
+
+        global _ACTIVE_DISPLAY
+
+        if self._closed:
+            return
+        self._closed = True
+        self._button_callback = None
+        self._display_io_watchdog_stop.set()
+        watchdog = self._display_io_watchdog_thread
+        if watchdog is not None and watchdog.is_alive() and watchdog is not threading.current_thread():
+            watchdog.join(timeout=1.0)
+        self._display_io_watchdog_thread = None
+
+        for button in tuple(self._gpio_buttons.values()):
+            close = getattr(button, "close", None)
+            if callable(close):
+                try:
+                    close()
+                except Exception as exc:
+                    logging.debug("GPIO button cleanup failed: %s", exc)
+        self._gpio_buttons.clear()
+
+        display_driver = self._display
+        self._display = None
+        if display_driver is not None:
+            if self._display_driver == "displayhatmini":
+                with self._display_io_lock:
+                    self._release_display_hat_mini_compat(
+                        display_driver,
+                        call_destructor=True,
+                    )
+            else:
+                for method_name in ("deinit", "close", "cleanup"):
+                    method = getattr(display_driver, method_name, None)
+                    if not callable(method):
+                        continue
+                    try:
+                        method()
+                    except Exception as exc:
+                        logging.debug(
+                            "Display driver %s cleanup failed: %s",
+                            method_name,
+                            exc,
+                        )
+                    break
+
+        retired = self._retired_display_hat_mini
+        self._retired_display_hat_mini = None
+        if retired is not None:
+            self._suppress_display_hat_mini_destructor(retired)
+
+        backlight = self._minipitft_backlight
+        self._minipitft_backlight = None
+        if backlight is not None:
+            for method_name in ("deinit", "close"):
+                method = getattr(backlight, method_name, None)
+                if not callable(method):
+                    continue
+                try:
+                    method()
+                except Exception as exc:
+                    logging.debug("miniPiTFT backlight cleanup failed: %s", exc)
+                break
+
+        kernel_display = self._kernel_display
+        self._kernel_display = None
+        if kernel_display is not None:
+            try:
+                kernel_display.close()
+            except Exception as exc:
+                logging.debug("Kernel display cleanup failed: %s", exc)
+
+        framebuffer = self._framebuffer
+        self._framebuffer = None
+        if framebuffer is not None:
+            try:
+                framebuffer.close()
+            except Exception as exc:
+                logging.debug("Framebuffer cleanup failed: %s", exc)
+
+        self._frame_writer = lambda _image: None
+        self._output_strategy = "headless"
+        if _ACTIVE_DISPLAY is self:
+            _ACTIVE_DISPLAY = None
 
 
 def get_active_display() -> Optional["Display"]:
