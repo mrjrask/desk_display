@@ -89,14 +89,16 @@ def test_default_screen_configs_rotate_nfl_overviews_with_conference_standings()
         screens = config["config"]["screens"]
 
         for conference in ("AFC", "NFC"):
-            assert screens[f"NFL Overview {conference}"] == {
+            expected = {
                 "frequency": 4,
-                "extra_seconds": 0,
                 "alt": {
                     "screen": f"NFL Standings {conference}",
                     "frequency": 3,
                 },
             }
+            if filename == "default_screens_small.json":
+                expected["extra_seconds"] = 0
+            assert screens[f"NFL Overview {conference}"] == expected
 
 
 def test_default_screen_configs_do_not_alternate_nfl_logo_or_scoreboard():
@@ -162,6 +164,10 @@ def test_default_screens_large_screen_order_and_frequencies():
     assert screens["hawks logo"] == 2
     assert screens["hawks schedule quad"] == {"frequency": 2, "extra_seconds": 3}
     assert screens["NHL Scoreboard"] == 2
+    assert screens["air quality"] == 2
+    assert screens["astronomical"] == 2
+    assert screens["wolves logo"] == 8
+    assert screens["wolves next home"] == 8
 
 
 def test_default_screens_large_playlist_step_order():
