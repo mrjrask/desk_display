@@ -406,7 +406,11 @@ def build_scheduler(config: dict[str, Any]) -> ScreenScheduler:
                 if not isinstance(step, dict):
                     continue
                 screen_id = step.get("screen")
-                if isinstance(screen_id, str) and screen_id in screens:
+                if (
+                    isinstance(screen_id, str)
+                    and screen_id in screens
+                    and screen_id not in playlist_assignments
+                ):
                     playlist_assignments[screen_id] = playlist_id
 
         # Match the Config page exactly: its first group is Ungrouped, followed

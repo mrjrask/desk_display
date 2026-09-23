@@ -503,6 +503,24 @@ def test_scheduler_hydrates_each_frequency_pass_in_config_page_order():
         "date",
     ]
 
+
+def test_scheduler_uses_first_playlist_assignment_for_duplicate_screen():
+    config = {
+        "screens": {"inside": 1, "date": 1, "weather1": 1},
+        "playlists": {
+            "first": {"steps": [{"screen": "date"}]},
+            "second": {
+                "steps": [{"screen": "date"}, {"screen": "inside"}],
+            },
+        },
+        "sequence": [{"playlist": "first"}, {"playlist": "second"}],
+    }
+    scheduler = build_scheduler(config)
+    registry = make_registry({"date": True, "inside": True, "weather1": True})
+
+    assert collect_sequence(scheduler, registry, 3) == ["weather1", "date", "inside"]
+
+
 def test_invalid_configuration_shapes():
     with pytest.raises(ValueError):
         build_scheduler({})
