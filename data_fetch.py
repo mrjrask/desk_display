@@ -2800,21 +2800,9 @@ def _fetch_mlb_schedule(team_id):
                 if next_games:
                     result["next_series_games"] = next_games
 
-                next_series_pks = {
-                    (row.get("game") or {}).get("gamePk")
-                    for row in next_rows
-                    if (row.get("game") or {}).get("gamePk") is not None
-                }
                 for idx in range(next_series_block_idx, len(series_blocks)):
                     block_rows = _expand_rows_to_declared_series_length((series_blocks[idx].get("rows") or []))
                     if not any(bool(row.get("is_home")) for row in block_rows):
-                        continue
-                    block_pks = {
-                        (row.get("game") or {}).get("gamePk")
-                        for row in block_rows
-                        if (row.get("game") or {}).get("gamePk") is not None
-                    }
-                    if next_series_pks and block_pks and block_pks == next_series_pks:
                         continue
                     home_series_games = [
                         (row.get("game") or {})
