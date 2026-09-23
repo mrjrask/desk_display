@@ -2127,6 +2127,8 @@ _LIVE_TEAM_SCREEN_TO_FEED: Dict[str, str] = {
 
 _last_feed_refresh: Dict[str, float] = {}
 _last_scoreboard_refresh_dates: Dict[str, datetime.date] = {}
+_startup_feeds_in_flight: Set[str] = set()
+_startup_feeds_lock = threading.Lock()
 
 _STARTUP_CRITICAL_FEEDS: Tuple[str, ...] = ("weather", "scoreboards", "air_quality")
 _STARTUP_CRITICAL_FEED_TIMEOUT_SECONDS = env_float(
@@ -2135,14 +2137,23 @@ _STARTUP_CRITICAL_FEED_TIMEOUT_SECONDS = env_float(
 
 
 def _startup_critical_feeds() -> List[str]:
-    """Return critical startup feeds requested by the active schedule."""
+    """Return every requested feed, with display-critical feeds first.
+
+    The initial implementation only waited for weather and scoreboards.  On a
+    large schedule that allowed the scheduler to skip all of the still-empty
+    team screens and jump from a team logo to whichever scoreboard happened to
+    be ready.  Fetch all requested feeds concurrently before the first frame so
+    availability is stable when the scheduler begins its first pass.
+    """
 
     requested = _requested_data_feeds()
-    return [feed for feed in _STARTUP_CRITICAL_FEEDS if feed in requested]
+    ordered = [feed for feed in _STARTUP_CRITICAL_FEEDS if feed in requested]
+    ordered.extend(sorted(requested.difference(ordered)))
+    return ordered
 
 
 def _refresh_startup_critical_feeds() -> None:
-    """Attempt to fetch weather/scoreboard/air-quality data before entering the main loop.
+    """Attempt to fetch all scheduled data before entering the main loop.
 
     Air quality is included here (rather than only via the best-effort async
     startup wave) because the "air quality" screen's registry entry falls
@@ -2156,14 +2167,14 @@ def _refresh_startup_critical_feeds() -> None:
         logging.info("⏭️  Skipping startup critical refresh during Wi‑Fi outage.")
         return
 
-    critical_feeds = _startup_critical_feeds()
-    if not critical_feeds:
+    startup_feeds = _startup_critical_feeds()
+    if not startup_feeds:
         return
 
     logging.info(
-        "⚡ Startup critical refresh (timeout=%ss): %s",
+        "⚡ Initial data load (timeout=%ss): %s",
         int(_STARTUP_CRITICAL_FEED_TIMEOUT_SECONDS),
-        ", ".join(critical_feeds),
+        ", ".join(startup_feeds),
     )
 
     # A regular ThreadPoolExecutor is deliberately not used here. Its context
@@ -2179,16 +2190,23 @@ def _refresh_startup_critical_feeds() -> None:
         error: Optional[BaseException] = None
         try:
             refresher()
+            _mark_feed_refreshed(feed)
+            _bump_registry_cache_nonce()
         except BaseException as exc:  # keep startup alive for provider failures
             error = exc
+        finally:
+            with _startup_feeds_lock:
+                _startup_feeds_in_flight.discard(feed)
         with results_lock:
             results[feed] = (error, error is None)
 
     deadline = time.monotonic() + _STARTUP_CRITICAL_FEED_TIMEOUT_SECONDS
-    for feed in critical_feeds:
+    for feed in startup_feeds:
         refresher = _FEED_REFRESHERS.get(feed)
         if refresher is None:
             continue
+        with _startup_feeds_lock:
+            _startup_feeds_in_flight.add(feed)
         worker = threading.Thread(
             target=_refresh_one,
             args=(feed, refresher),
@@ -2214,8 +2232,7 @@ def _refresh_startup_critical_feeds() -> None:
 
         error, succeeded = result
         if succeeded:
-            _mark_feed_refreshed(feed)
-            logging.info("✅ Startup critical feed ready: %s", feed)
+            logging.info("✅ Initial feed ready: %s", feed)
         elif error is not None:
             logging.error("Failed startup critical feed refresh %s: %s", feed, error)
 
@@ -2804,7 +2821,13 @@ def _scheduled_startup_feed_order(limit: int = 4) -> List[str]:
     """Return feed names ordered by startup priority and schedule proximity."""
 
     requested = _requested_data_feeds()
-    critical_feeds = [feed for feed in _startup_critical_feeds() if feed in requested]
+    with _startup_feeds_lock:
+        in_flight = set(_startup_feeds_in_flight)
+    requested = {
+        feed for feed in requested
+        if feed not in _last_feed_refresh and feed not in in_flight
+    }
+    critical_feeds = [feed for feed in _STARTUP_CRITICAL_FEEDS if feed in requested]
 
     scheduler = screen_scheduler
     if scheduler is None:

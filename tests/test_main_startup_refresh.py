@@ -126,6 +126,33 @@ def test_startup_critical_feeds_includes_air_quality_when_requested(monkeypatch)
     assert main._startup_critical_feeds() == ["weather", "scoreboards", "air_quality"]
 
 
+def test_startup_feeds_include_team_data_for_stable_first_schedule(monkeypatch):
+    main = _load_main()
+
+    monkeypatch.setattr(
+        main,
+        "_requested_data_feeds",
+        lambda: {"weather", "scoreboards", "hawks", "cubs"},
+    )
+
+    assert main._startup_critical_feeds() == [
+        "weather",
+        "scoreboards",
+        "cubs",
+        "hawks",
+    ]
+
+
+def test_async_startup_skips_feeds_loaded_before_first_frame(monkeypatch):
+    main = _load_main()
+
+    monkeypatch.setattr(main, "_requested_data_feeds", lambda: {"weather", "hawks"})
+    main._last_feed_refresh.clear()
+    main._last_feed_refresh["weather"] = time.monotonic()
+
+    assert main._scheduled_startup_feed_order() == ["hawks"]
+
+
 def test_refresh_startup_critical_feeds_fetches_air_quality_before_main_loop(monkeypatch):
     """AQI must be primed alongside weather/scoreboards so the "air quality"
     screen's registry entry never falls back to a synchronous, blocking
