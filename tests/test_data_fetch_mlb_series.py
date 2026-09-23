@@ -117,7 +117,7 @@ def test_next_series_advances_when_current_series_uses_next_block(monkeypatch):
     assert result["next_home_series_games"] is None
 
 
-def test_next_home_series_advances_when_matching_next_series(monkeypatch):
+def test_next_home_series_uses_next_series_when_it_is_home(monkeypatch):
     monkeypatch.setattr(data_fetch.datetime, "datetime", _FrozenDateTime)
 
     payload = {
@@ -151,7 +151,7 @@ def test_next_home_series_advances_when_matching_next_series(monkeypatch):
 
     assert [g["gamePk"] for g in (result["current_series_games"] or [])] == [20, 21]
     assert [g["gamePk"] for g in (result["next_series_games"] or [])] == [22]
-    assert [g["gamePk"] for g in (result["next_home_series_games"] or [])] == [24]
+    assert [g["gamePk"] for g in (result["next_home_series_games"] or [])] == [22]
 
 
 def test_next_home_series_keeps_all_games_when_opponent_stays_same_but_venue_changes(monkeypatch):

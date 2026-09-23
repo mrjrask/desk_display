@@ -1472,7 +1472,7 @@ def build_screen_registry(context: ScreenContext) -> tuple[dict[str, ScreenDefin
             lambda data=cubs_next_home_series: draw_series_screen(
                 context.display,
                 data,
-                _mlb_series_title("Cubs", "Following Home Series"),
+                _mlb_series_title("Cubs", "Next Home Series"),
                 screen_id="cubs next home series",
                 transition=True,
             ),
@@ -1666,7 +1666,7 @@ def build_screen_registry(context: ScreenContext) -> tuple[dict[str, ScreenDefin
             lambda data=sox_next_home_series: draw_series_screen(
                 context.display,
                 data,
-                _mlb_series_title("Sox", "Following Home Series"),
+                _mlb_series_title("Sox", "Next Home Series"),
                 screen_id="sox next home series",
                 transition=True,
             ),
