@@ -3386,12 +3386,19 @@ def _normalize_status(raw_status: Optional[str]) -> str:
     text = str(raw_status).strip().upper()
     if not text:
         return "FUT"
-    if "FINAL" in text or text.startswith("F"):
+    # HockeyTech uses both FUT and Future.  Check those values before final
+    # states so their shared "F" prefix cannot turn scheduled games into
+    # completed games.
+    if any(token in text for token in ("PREGAME", "SCHEDULED", "FUT", "PRE")):
+        return "FUT"
+    if any(token in text for token in ("CANCEL", "CANCELLED")):
+        return "CANCELED"
+    if any(token in text for token in ("POSTPONED", "POSTPONE", "PPD")):
+        return "POSTPONED"
+    if "FINAL" in text or text in {"F", "FIN"}:
         return "FINAL"
     if any(token in text for token in ("LIVE", "IN PROGRESS", "INPROGRESS", "CRIT")):
         return "LIVE"
-    if any(token in text for token in ("PREGAME", "SCHEDULED", "FUT", "PRE")):
-        return "FUT"
     return text
 
 
@@ -3449,7 +3456,7 @@ def _normalize_ahl_game(row: Dict) -> Optional[Dict]:
 
 
 def _fetch_ahl_schedule() -> List[Dict]:
-    def _fetch_rows(season_id: Optional[str]) -> List[Dict]:
+    def _fetch_rows(season_id: Optional[str]) -> Tuple[List[Dict], bool]:
         params: Dict[str, Optional[str]] = {"team_id": AHL_TEAM_ID}
         if season_id:
             params["season_id"] = season_id
@@ -3458,17 +3465,21 @@ def _fetch_ahl_schedule() -> List[Dict]:
         if not rows:
             alt = _ahl_request("schedule", feed="modulekit", **params)
             rows = _extract_rows(alt, "Schedule", "TeamSchedule")
-        return rows
+            return rows, data is not None or alt is not None
+        return rows, True
 
     # Resolve the season first. An explicit configuration value still bypasses
     # discovery, while an empty season-specific response falls back to the
     # feed's unqualified schedule for compatibility with older deployments.
     season_id = str(AHL_SEASON_ID) if AHL_SEASON_ID else _current_ahl_season_id()
-    rows = _fetch_rows(season_id) if season_id else []
+    rows, refresh_succeeded = _fetch_rows(season_id) if season_id else ([], False)
     if not rows:
-        rows = _fetch_rows(None)
+        rows, fallback_succeeded = _fetch_rows(None)
+        refresh_succeeded = refresh_succeeded or fallback_succeeded
 
     if not rows:
+        if not refresh_succeeded:
+            raise RuntimeError("HockeyTech schedule refresh failed")
         return []
 
     games: List[Dict] = []
@@ -3489,6 +3500,8 @@ def _classify_wolves_games(games: List[Dict]) -> Dict[str, Optional[Dict]]:
     for game in games:
         start = game.get("start_utc") or now
         state = (game.get("status") or {}).get("state", "").upper()
+        if state in {"CANCELED", "CANCELLED", "POSTPONED", "PPD"}:
+            continue
         if state.startswith("FIN"):
             if not last_final or start > last_final.get("start_utc", start):
                 last_final = game
@@ -3984,6 +3997,11 @@ def fetch_wolves_games(force_refresh: bool = False) -> Dict[str, Optional[Dict]]
                         classified[key] = game
         except Exception as exc:
             logging.error("Error fetching Wolves HockeyTech schedule: %s", exc)
+            # Live games deliberately bypass the normal cache TTL so scores
+            # refresh quickly.  A transient failed refresh must not erase the
+            # last known live score with calendar-only (or empty) data.
+            if isinstance(cached, dict) and cached.get("live_game") is not None:
+                return cached
 
     payload = classified
     with _wolves_cache_lock:
