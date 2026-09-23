@@ -253,3 +253,34 @@ def test_fetch_wolves_games_does_not_probe_hockeytech_without_key(monkeypatch):
     )
 
     assert data_fetch.fetch_wolves_games(force_refresh=True) == _empty_classification()
+
+
+def test_fetch_wolves_games_bypasses_cache_during_live_game(monkeypatch):
+    monkeypatch.setattr(data_fetch, "AHL_API_KEY", "configured-key")
+    monkeypatch.setattr(data_fetch, "_fetch_wolves_ics_games", list)
+    monkeypatch.setattr(data_fetch.time, "time", lambda: 100.0)
+    cached = {
+        **_empty_classification(),
+        "live_game": {"status": {"state": "LIVE"}, "away_score": 1},
+    }
+    monkeypatch.setattr(
+        data_fetch,
+        "_wolves_cache",
+        {"expires": 100.0 + data_fetch._WOLVES_CACHE_TTL, "data": cached},
+    )
+    refreshed = {
+        **_empty_classification(),
+        "live_game": {"status": {"state": "LIVE"}, "away_score": 2},
+    }
+    requests = 0
+
+    def fetch_schedule():
+        nonlocal requests
+        requests += 1
+        return [{"source": "api"}]
+
+    monkeypatch.setattr(data_fetch, "_fetch_ahl_schedule", fetch_schedule)
+    monkeypatch.setattr(data_fetch, "_classify_wolves_games", lambda games: refreshed)
+
+    assert data_fetch.fetch_wolves_games() == refreshed
+    assert requests == 1

@@ -3928,6 +3928,9 @@ def fetch_wolves_games(force_refresh: bool = False) -> Dict[str, Optional[Dict]]
         not force_refresh
         and isinstance(expires, (int, float))
         and isinstance(cached, dict)
+        # Do not let the schedule cache hide score, shot, period, or clock
+        # updates once HockeyTech has identified a live Wolves game.
+        and cached.get("live_game") is None
         and now < float(expires)
     ):
         return cached
