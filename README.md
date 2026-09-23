@@ -455,13 +455,17 @@ See [ADS-B stats screen](#ads-b-stats-screen) below for how the collector, datab
 
 | Variable | Description |
 | --- | --- |
-| `SCREEN_CONFIG_HOST` | Config UI bind host; default is `0.0.0.0`. |
+| `SCREEN_CONFIG_HOST` | Config UI bind host; default is `127.0.0.1`. Non-loopback binds require `SCREEN_UI_PASSWORD`. |
 | `SCREEN_CONFIG_PORT` | Config UI port; default is `5002`. |
 | `DEFAULT_SCREENS_PATH`, `DEFAULT_SCREENS_LARGE_PATH`, `DEFAULT_SCREENS_SMALL_PATH` | Optional paths for UI defaults and import/reset workflows. |
-| `SCREEN_UI_PASSWORD` | Enables password-protected UI when set. |
+| `SCREEN_UI_PASSWORD` | Enables password-protected UI when set; required when the Config UI binds beyond loopback. |
 | `SCREEN_UI_USERNAME` | Optional username. |
 | `SCREEN_SESSION_SECRET` | Optional dedicated Flask session-signing secret. It takes precedence over `SCREEN_UI_PASSWORD`; when both are unset, each Config UI process generates a non-persistent random secret, so sessions do not survive a restart. |
 | `SCREEN_AUTH_ENABLED` | Force auth behavior. |
+
+The Config UI defaults to loopback for safety. If it must be reachable from
+another device, set `SCREEN_CONFIG_HOST` explicitly and configure
+`SCREEN_UI_PASSWORD`.
 
 ### Capture and artifacts
 
@@ -768,7 +772,7 @@ The UI supports:
 - setting optional hide-after date/times for temporary screens,
 - managing playlists and sequence order,
 - importing/exporting screen rotation payloads,
-- optional login protection with `SCREEN_UI_PASSWORD` and `SCREEN_UI_USERNAME`,
+- optional login protection on loopback, or required login protection for non-loopback binds, with `SCREEN_UI_PASSWORD` and `SCREEN_UI_USERNAME`,
 - screenshot browsing via the included screenshots template where capture is enabled.
 
 Install only the config UI service for an existing deployment with:
