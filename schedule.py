@@ -54,9 +54,6 @@ class ScreenScheduler:
         self._entries: list[_ScheduleEntry] = list(entries)
         self._cursor: int = 0
         self._pending_indices: list[int] = []
-        self._synchronize_alternate_passes = sum(
-            entry.alternate is not None for entry in self._entries
-        ) > 1
         self._extra_seconds_by_id: dict[str, int] = {}
         requested: set[str] = set()
         for entry in self._entries:
@@ -143,51 +140,14 @@ class ScreenScheduler:
         if not self._entries:
             return None
 
-        if self._pending_indices:
-            entry_index = self._pending_indices.pop(0)
-            self._cursor = (entry_index + 1) % len(self._entries)
-            return self._scheduled_id_for(self._entries[entry_index])
+        if not self._pending_indices:
+            self._hydrate_next_pass(datetime.now(UTC))
+        if not self._pending_indices:
+            return None
 
-        now_utc = datetime.now(UTC)
-        for _ in range(len(self._entries)):
-            entry = self._entries[self._cursor]
-            self._cursor = (self._cursor + 1) % len(self._entries)
-            if entry.hide_after is not None and now_utc >= entry.hide_after:
-                if not entry.initial_cycle_seen:
-                    entry.initial_cycle_seen = True
-                continue
-
-            entry.cycle_count += 1
-            if not entry.initial_cycle_seen:
-                entry.initial_cycle_seen = True
-                entry.presentation_count += 1
-                if (
-                    entry.alternate
-                    and entry.alternate.frequency > 0
-                    and entry.presentation_count % entry.alternate.frequency == 0
-                ):
-                    result = entry.alternate.next_screen_id()
-                else:
-                    result = entry.screen_id
-                self._queue_due_unvisited_entries(self._cursor)
-                return result
-
-            if entry.cycle_count % entry.frequency != 0:
-                continue
-
-            entry.presentation_count += 1
-            if (
-                entry.alternate
-                and entry.alternate.frequency > 0
-                and entry.presentation_count % entry.alternate.frequency == 0
-            ):
-                result = entry.alternate.next_screen_id()
-            else:
-                result = entry.screen_id
-            self._queue_due_unvisited_entries(self._cursor)
-            return result
-
-        return None
+        entry_index = self._pending_indices.pop(0)
+        self._cursor = (entry_index + 1) % len(self._entries)
+        return self._scheduled_id_for(self._entries[entry_index])
 
     def _scheduled_id_for(self, entry: _ScheduleEntry) -> str:
         """Resolve one already-due entry and advance its presentation count."""
@@ -201,108 +161,74 @@ class ScreenScheduler:
             return entry.alternate.next_screen_id()
         return entry.screen_id
 
-    def _queue_due_unvisited_entries(self, start_index: int) -> None:
-        """Advance the rest of this scheduler pass without losing due entries."""
+    def _hydrate_next_pass(self, now_utc: datetime) -> None:
+        """Queue every due entry for one complete, configuration-ordered pass.
 
-        if not self._entries or not self._synchronize_alternate_passes:
-            return
-        # A zero start index means the selected entry was the final item and the
-        # cursor wrapped. There are no unvisited entries left in this linear pass.
-        if start_index == 0:
-            return
-        # Only entries after the selected entry in the current linear pass are
-        # unvisited. Wrapping to index zero here would advance entries that the
-        # scheduler visited on an earlier call and could continually move the
-        # cursor behind entries near the end of the schedule.
-        for index in range(start_index, len(self._entries)):
-            entry = self._entries[index]
-            if entry.initial_cycle_seen and entry.frequency > 0:
-                entry.cycle_count += 1
-                if entry.cycle_count % entry.frequency == 0:
-                    self._pending_indices.append(index)
+        Building the whole pass before returning its first screen prevents later
+        calls from interleaving entries from different frequency passes.  The
+        queue is also retained while registry data is refreshed, so rebuilding
+        screen definitions cannot alter the configured playback order.
+        """
+
+        self._pending_indices.clear()
+        for index, entry in enumerate(self._entries):
+            if entry.hide_after is not None and now_utc >= entry.hide_after:
+                entry.initial_cycle_seen = True
+                continue
+
+            entry.cycle_count += 1
+            if not entry.initial_cycle_seen:
+                entry.initial_cycle_seen = True
+                self._pending_indices.append(index)
+            elif entry.cycle_count % entry.frequency == 0:
+                self._pending_indices.append(index)
+
+        self._cursor = 0
+
+    def _next_available_from_entry(
+        self,
+        entry: _ScheduleEntry,
+        registry: dict[str, ScreenDefinition],
+    ) -> Optional[ScreenDefinition]:
+        """Resolve a hydrated entry against the latest registry state."""
+
+        entry.presentation_count += 1
+        if (
+            entry.alternate
+            and entry.alternate.frequency > 0
+            and entry.presentation_count % entry.alternate.frequency == 0
+        ):
+            alternate = entry.alternate
+            for _ in range(len(alternate.screen_ids)):
+                alt_id = alternate.next_screen_id()
+                alt_def = registry.get(alt_id)
+                if alt_def and alt_def.available:
+                    return alt_def
+
+        definition = registry.get(entry.screen_id)
+        if definition and definition.available:
+            return definition
+        return None
 
     def next_available(self, registry: dict[str, ScreenDefinition]) -> Optional[ScreenDefinition]:
         if not self._entries:
             return None
 
         now_utc = datetime.now(UTC)
-        while self._pending_indices:
+        if not self._pending_indices:
+            self._hydrate_next_pass(now_utc)
+
+        # Drain exactly one hydrated pass. Unavailable screens remain in their
+        # configured slots rather than causing a second pass to be mixed in.
+        pending_count = len(self._pending_indices)
+        for _ in range(pending_count):
             entry_index = self._pending_indices.pop(0)
             self._cursor = (entry_index + 1) % len(self._entries)
             entry = self._entries[entry_index]
             if entry.hide_after is not None and now_utc >= entry.hide_after:
                 continue
-
-            entry.presentation_count += 1
-            if (
-                entry.alternate
-                and entry.alternate.frequency > 0
-                and entry.presentation_count % entry.alternate.frequency == 0
-            ):
-                alternate = entry.alternate
-                for _ in range(len(alternate.screen_ids)):
-                    alt_id = alternate.next_screen_id()
-                    alt_def = registry.get(alt_id)
-                    if alt_def and alt_def.available:
-                        return alt_def
-
-            definition = registry.get(entry.screen_id)
-            if definition and definition.available:
-                return definition
-
-        for _ in range(len(self._entries)):
-            entry = self._entries[self._cursor]
-            self._cursor = (self._cursor + 1) % len(self._entries)
-            if entry.hide_after is not None and now_utc >= entry.hide_after:
-                if not entry.initial_cycle_seen:
-                    entry.initial_cycle_seen = True
-                continue
-
-            # A frequency of ``n`` means the screen is shown on every
-            # ``n``th scheduler pass for that entry.
-            entry.cycle_count += 1
-            if not entry.initial_cycle_seen:
-                entry.initial_cycle_seen = True
-                entry.presentation_count += 1
-                if (
-                    entry.alternate
-                    and entry.alternate.frequency > 0
-                    and entry.presentation_count % entry.alternate.frequency == 0
-                ):
-                    alternate = entry.alternate
-                    for _ in range(len(alternate.screen_ids)):
-                        alt_id = alternate.next_screen_id()
-                        alt_def = registry.get(alt_id)
-                        if alt_def and alt_def.available:
-                            self._queue_due_unvisited_entries(self._cursor)
-                            return alt_def
-                definition = registry.get(entry.screen_id)
-                if definition and definition.available:
-                    self._queue_due_unvisited_entries(self._cursor)
-                    return definition
-                continue
-
-            if entry.cycle_count % entry.frequency != 0:
-                continue
-
-            entry.presentation_count += 1
-            candidate_id = entry.screen_id
-            if (
-                entry.alternate
-                and entry.alternate.frequency > 0
-                and entry.presentation_count % entry.alternate.frequency == 0
-            ):
-                alternate = entry.alternate
-                for _ in range(len(alternate.screen_ids)):
-                    alt_id = alternate.next_screen_id()
-                    alt_def = registry.get(alt_id)
-                    if alt_def and alt_def.available:
-                        self._queue_due_unvisited_entries(self._cursor)
-                        return alt_def
-
-            definition = registry.get(candidate_id)
-            if definition and definition.available:
-                self._queue_due_unvisited_entries(self._cursor)
+            definition = self._next_available_from_entry(entry, registry)
+            if definition is not None:
                 return definition
 
         return None
@@ -460,10 +386,15 @@ def build_scheduler(config: dict[str, Any]) -> ScreenScheduler:
                 ):
                     ordered_playlist_ids.append(playlist_id)
 
-        for playlist_id in playlists.keys():
-            if isinstance(playlist_id, str) and playlist_id and playlist_id not in ordered_playlist_ids:
+        for playlist_id in playlists:
+            if (
+                isinstance(playlist_id, str)
+                and playlist_id
+                and playlist_id not in ordered_playlist_ids
+            ):
                 ordered_playlist_ids.append(playlist_id)
 
+        playlist_assignments: dict[str, str] = {}
         for playlist_id in ordered_playlist_ids:
             playlist = playlists.get(playlist_id)
             if not isinstance(playlist, dict):
@@ -478,10 +409,22 @@ def build_scheduler(config: dict[str, Any]) -> ScreenScheduler:
                 if (
                     isinstance(screen_id, str)
                     and screen_id in screens
-                    and screen_id not in seen_screen_ids
+                    and screen_id not in playlist_assignments
                 ):
-                    ordered_screens.append((screen_id, screens[screen_id]))
-                    seen_screen_ids.add(screen_id)
+                    playlist_assignments[screen_id] = playlist_id
+
+        # Match the Config page exactly: its first group is Ungrouped, followed
+        # by playlists in sequence order. Within each group, drag-and-drop order
+        # is the insertion order of the saved screens mapping.
+        group_ids = ["", *ordered_playlist_ids]
+        for group_id in group_ids:
+            for screen_id, raw in screens.items():
+                if playlist_assignments.get(screen_id, "") != group_id:
+                    continue
+                if screen_id in seen_screen_ids:
+                    continue
+                ordered_screens.append((screen_id, raw))
+                seen_screen_ids.add(screen_id)
 
     for screen_id, raw in screens.items():
         if screen_id in seen_screen_ids:
@@ -489,12 +432,13 @@ def build_scheduler(config: dict[str, Any]) -> ScreenScheduler:
         ordered_screens.append((screen_id, raw))
 
     entries: list[_ScheduleEntry] = []
-    for screen_id, raw in ordered_screens:
-        screen_id = canonical_screen_id(screen_id)
-        if not isinstance(screen_id, str):
+    for raw_screen_id, raw in ordered_screens:
+        canonical_id = canonical_screen_id(raw_screen_id)
+        if not isinstance(canonical_id, str):
             raise ValueError("Screen identifiers must be strings")
-        if screen_id not in KNOWN_SCREENS:
-            raise ValueError(f"Unknown screen id '{screen_id}'")
+        if canonical_id not in KNOWN_SCREENS:
+            raise ValueError(f"Unknown screen id '{canonical_id}'")
+        screen_id = canonical_id
         alternate: Optional[_AlternateSchedule] = None
         hide_after: Optional[datetime] = None
 
@@ -519,12 +463,15 @@ def build_scheduler(config: dict[str, Any]) -> ScreenScheduler:
             hide_after_raw = raw.get("hide_after_at")
             if hide_after_enabled:
                 if not isinstance(hide_after_raw, str) or not hide_after_raw.strip():
-                    raise ValueError(f"Hide-after date/time for '{screen_id}' must be provided when enabled")
+                    raise ValueError(
+                        f"Hide-after date/time for '{screen_id}' must be provided when enabled"
+                    )
                 try:
                     hide_after_value = datetime.fromisoformat(hide_after_raw.strip())
                 except ValueError as exc:
                     raise ValueError(
-                        f"Hide-after date/time for '{screen_id}' must be a valid ISO date/time string"
+                        f"Hide-after date/time for '{screen_id}' must be a valid ISO "
+                        "date/time string"
                     ) from exc
                 if hide_after_value.tzinfo is None:
                     hide_after_value = hide_after_value.replace(tzinfo=CENTRAL_TIME)
