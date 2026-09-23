@@ -208,6 +208,47 @@ def test_fetch_ahl_schedule_discovers_season_then_falls_back_when_empty(monkeypa
     ]
 
 
+def test_fetch_ahl_schedule_raises_when_all_schedule_requests_fail(monkeypatch):
+    monkeypatch.setattr(data_fetch, "AHL_SEASON_ID", "current")
+    monkeypatch.setattr(data_fetch, "_ahl_request", lambda *args, **kwargs: None)
+
+    try:
+        data_fetch._fetch_ahl_schedule()
+    except RuntimeError as exc:
+        assert "schedule refresh failed" in str(exc)
+    else:
+        raise AssertionError("failed schedule requests should not look like an empty feed")
+
+
+def test_normalize_ahl_future_statuses_before_final_prefix():
+    assert data_fetch._normalize_status("FUT") == "FUT"
+    assert data_fetch._normalize_status("Future") == "FUT"
+    assert data_fetch._normalize_status("Final") == "FINAL"
+
+
+def test_classify_wolves_games_excludes_canceled_and_postponed_fixtures(monkeypatch):
+    now = data_fetch.datetime.datetime(2026, 1, 1, tzinfo=data_fetch.pytz.UTC)
+
+    class FixedDatetime(data_fetch.datetime.datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return now
+
+    monkeypatch.setattr(data_fetch.datetime, "datetime", FixedDatetime)
+    future = now + data_fetch.datetime.timedelta(days=1)
+    later = now + data_fetch.datetime.timedelta(days=2)
+    games = [
+        {"start_utc": future, "status": {"state": "CANCELED"}, "is_home": True},
+        {"start_utc": future, "status": {"state": "POSTPONED"}, "is_home": False},
+        {"start_utc": later, "status": {"state": "FUT"}, "is_home": True},
+    ]
+
+    classified = data_fetch._classify_wolves_games(games)
+
+    assert classified["next_game"] is games[2]
+    assert classified["next_home_game"] is games[2]
+
+
 def test_fetch_wolves_games_uses_hockeytech_when_calendar_is_unconfigured(monkeypatch):
     monkeypatch.setattr(data_fetch, "AHL_API_KEY", "configured-key")
     monkeypatch.setattr(data_fetch, "_fetch_wolves_ics_games", list)
@@ -284,3 +325,35 @@ def test_fetch_wolves_games_bypasses_cache_during_live_game(monkeypatch):
 
     assert data_fetch.fetch_wolves_games() == refreshed
     assert requests == 1
+
+
+def test_fetch_wolves_games_preserves_cached_live_game_when_refresh_fails(monkeypatch):
+    monkeypatch.setattr(data_fetch, "AHL_API_KEY", "configured-key")
+    monkeypatch.setattr(data_fetch.time, "time", lambda: 100.0)
+    cached = {
+        **_empty_classification(),
+        "live_game": {"status": {"state": "LIVE"}, "away_score": 3},
+    }
+    monkeypatch.setattr(
+        data_fetch,
+        "_wolves_cache",
+        {"expires": 100.0 + data_fetch._WOLVES_CACHE_TTL, "data": cached},
+    )
+    monkeypatch.setattr(
+        data_fetch,
+        "_fetch_wolves_ics_games",
+        lambda: [{"source": "calendar"}],
+    )
+    monkeypatch.setattr(
+        data_fetch,
+        "_classify_wolves_ics_games",
+        lambda games: {**_empty_classification(), "next_game": games[0]},
+    )
+    monkeypatch.setattr(
+        data_fetch,
+        "_fetch_ahl_schedule",
+        lambda: (_ for _ in ()).throw(RuntimeError("temporary failure")),
+    )
+
+    assert data_fetch.fetch_wolves_games() is cached
+    assert data_fetch._wolves_cache["data"] is cached
