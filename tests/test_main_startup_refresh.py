@@ -2,6 +2,8 @@
 
 import importlib
 import sys
+import threading
+import time
 
 
 class _FakeThread:
@@ -144,3 +146,21 @@ def test_refresh_startup_critical_feeds_fetches_air_quality_before_main_loop(mon
 
     assert set(called) == {"weather", "scoreboards", "air_quality"}
     assert "air_quality" in main._last_feed_refresh
+
+
+def test_refresh_startup_critical_feeds_returns_after_timeout_for_hung_worker(monkeypatch):
+    main = _load_main()
+
+    release = threading.Event()
+    monkeypatch.setattr(main, "_wifi_outage_active", False)
+    monkeypatch.setattr(main, "_requested_data_feeds", lambda: {"weather"})
+    monkeypatch.setattr(main, "_STARTUP_CRITICAL_FEED_TIMEOUT_SECONDS", 0.05)
+    monkeypatch.setitem(main._FEED_REFRESHERS, "weather", lambda: release.wait())
+
+    started_at = time.monotonic()
+    try:
+        main._refresh_startup_critical_feeds()
+        elapsed = time.monotonic() - started_at
+        assert elapsed < 0.5
+    finally:
+        release.set()
