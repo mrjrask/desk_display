@@ -476,7 +476,32 @@ def test_scheduler_respects_playlist_sequence_order():
     registry = make_registry({"date": True, "inside": True, "weather1": True})
 
     sequence = collect_sequence(scheduler, registry, 6)
-    assert sequence == ["date", "inside", "weather1", "date", "inside", "weather1"]
+    # The Config page renders Ungrouped first, then playlists in sequence order.
+    assert sequence == ["weather1", "date", "inside", "weather1", "date", "inside"]
+
+
+def test_scheduler_hydrates_each_frequency_pass_in_config_page_order():
+    config = {
+        "screens": {"inside": 2, "weather1": 1, "date": 1},
+        "playlists": {
+            "second": {"steps": [{"screen": "inside"}]},
+            "first": {"steps": [{"screen": "date"}]},
+        },
+        "sequence": [{"playlist": "first"}, {"playlist": "second"}],
+    }
+    scheduler = build_scheduler(config)
+    registry = make_registry({"date": True, "inside": True, "weather1": True})
+
+    assert collect_sequence(scheduler, registry, 8) == [
+        "weather1",
+        "date",
+        "inside",
+        "weather1",
+        "date",
+        "inside",
+        "weather1",
+        "date",
+    ]
 
 def test_invalid_configuration_shapes():
     with pytest.raises(ValueError):
