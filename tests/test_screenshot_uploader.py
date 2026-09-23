@@ -100,6 +100,33 @@ def test_upload_file_posts_expected_request(monkeypatch, tmp_path):
     assert call.files["file"][0] == "date.png"
 
 
+@pytest.mark.parametrize(
+    ("source_name", "source_id"),
+    [
+        ("desk/office", "desk-office"),
+        ("desk?office#1", "deskoffice1"),
+        ("desk office", "desk_office"),
+        ("café", "café"),
+    ],
+)
+def test_upload_file_uses_canonical_source_id(monkeypatch, tmp_path, source_name, source_id):
+    uploader = _reload_uploader(
+        monkeypatch,
+        FEED_UPLOAD_URL="http://192.168.1.200:5003",
+        FEED_UPLOAD_TOKEN="secret-token",
+        FEED_SOURCE_NAME=source_name,
+    )
+
+    screenshot = tmp_path / "date.png"
+    screenshot.write_bytes(b"fake-png-bytes")
+    session = _FakeSession()
+
+    assert uploader._upload_file(session, screenshot) is True
+    assert session.calls[0].url == (
+        f"http://192.168.1.200:5003/api/feed/{source_id}/upload"
+    )
+
+
 def test_upload_status_posts_json_body(monkeypatch, tmp_path):
     uploader = _reload_uploader(
         monkeypatch,
