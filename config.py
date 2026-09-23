@@ -913,17 +913,38 @@ DISPLAY_ROTATION_STRICT = _get_bool_env(
 )
 _display_rotation_raw = os.environ.get("DISPLAY_ROTATION")
 
-if _display_rotation_raw is not None:
+def _parse_display_rotation(raw_value: Optional[str], *, strict: bool) -> int:
+    """Parse the documented rotation forms and optionally reject bad values."""
+
+    if raw_value is None:
+        return 0
+
     try:
-        _parsed_display_rotation = int(_display_rotation_raw)
-        if _parsed_display_rotation in (0, 1, 2, 3):
-            _parsed_display_rotation *= 90
-        DISPLAY_ROTATION = _parsed_display_rotation
+        parsed = int(raw_value)
     except (TypeError, ValueError):
+        if strict:
+            raise ValueError(
+                f"Invalid DISPLAY_ROTATION value {raw_value!r}; expected 0, 90, 180, 270, or 0-3"
+            )
         logging.warning("Invalid DISPLAY_ROTATION value; defaulting to 0°.")
-        DISPLAY_ROTATION = 0
-else:
-    DISPLAY_ROTATION = 0
+        return 0
+
+    if parsed in (0, 1, 2, 3):
+        parsed *= 90
+    if parsed not in (0, 90, 180, 270):
+        if strict:
+            raise ValueError(
+                f"Invalid DISPLAY_ROTATION value {raw_value!r}; expected 0, 90, 180, 270, or 0-3"
+            )
+        logging.warning("Invalid DISPLAY_ROTATION value; defaulting to 0°.")
+        return 0
+    return parsed
+
+
+DISPLAY_ROTATION = _parse_display_rotation(
+    _display_rotation_raw,
+    strict=DISPLAY_ROTATION_STRICT,
+)
 
 if _kernel_overlay_rotation is not None:
     if DISPLAY_ROTATION and DISPLAY_ROTATION_STRICT:
