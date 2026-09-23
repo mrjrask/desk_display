@@ -3,6 +3,8 @@ import io
 import platform
 from pathlib import Path
 
+import pytest
+
 
 def _reload_config(monkeypatch, **env):
     for key, value in env.items():
@@ -249,6 +251,26 @@ def test_display_rotation_defaults_to_0_when_env_missing_even_if_overlay_exists(
 def test_display_rotation_shorthand_values_expand_to_degrees(monkeypatch):
     module = _reload_config(monkeypatch, DISPLAY_ROTATION="2")
     assert module.DISPLAY_ROTATION == 180
+
+
+@pytest.mark.parametrize("rotation", ["45", "bad"])
+def test_strict_display_rotation_rejects_invalid_values(monkeypatch, rotation):
+    with pytest.raises(ValueError, match="Invalid DISPLAY_ROTATION"):
+        _reload_config(
+            monkeypatch,
+            DISPLAY_ROTATION=rotation,
+            DISPLAY_ROTATION_STRICT="1",
+        )
+
+
+def test_non_strict_display_rotation_falls_back_for_invalid_value(monkeypatch):
+    module = _reload_config(
+        monkeypatch,
+        DISPLAY_ROTATION="45",
+        DISPLAY_ROTATION_STRICT="0",
+    )
+
+    assert module.DISPLAY_ROTATION == 0
 
 
 def test_kernel_overlay_rotate_shorthand_is_parsed_for_logging(monkeypatch):
