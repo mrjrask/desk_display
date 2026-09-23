@@ -1,6 +1,15 @@
 import data_fetch
 
 
+def _empty_classification():
+    return {
+        "last_game": None,
+        "live_game": None,
+        "next_game": None,
+        "next_home_game": None,
+    }
+
+
 def _season_payload(rows):
     return {"SiteKit": {"Seasons": {"rows": rows}}}
 
@@ -197,3 +206,81 @@ def test_fetch_ahl_schedule_discovers_season_then_falls_back_when_empty(monkeypa
         ("schedule", "modulekit", "discovered"),
         ("schedule", "statviewfeed", None),
     ]
+
+
+def test_fetch_wolves_games_uses_hockeytech_when_calendar_is_unconfigured(monkeypatch):
+    monkeypatch.setattr(data_fetch, "AHL_API_KEY", "configured-key")
+    monkeypatch.setattr(data_fetch, "_fetch_wolves_ics_games", list)
+    monkeypatch.setattr(data_fetch, "_fetch_ahl_schedule", lambda: [{"source": "api"}])
+    expected = {**_empty_classification(), "next_game": {"source": "api"}}
+    monkeypatch.setattr(data_fetch, "_classify_wolves_games", lambda games: expected)
+
+    assert data_fetch.fetch_wolves_games(force_refresh=True) == expected
+
+
+def test_fetch_wolves_games_prefers_authoritative_api_fields(monkeypatch):
+    monkeypatch.setattr(data_fetch, "AHL_API_KEY", "configured-key")
+    monkeypatch.setattr(data_fetch, "_fetch_wolves_ics_games", lambda: [{"source": "ics"}])
+    monkeypatch.setattr(data_fetch, "_fetch_ahl_schedule", lambda: [{"source": "api"}])
+    calendar = {
+        **_empty_classification(),
+        "last_game": {"source": "ics"},
+        "next_game": {"source": "ics"},
+    }
+    api = {
+        **_empty_classification(),
+        "last_game": {"source": "api"},
+        "live_game": {"source": "api"},
+    }
+    monkeypatch.setattr(data_fetch, "_classify_wolves_ics_games", lambda games: calendar)
+    monkeypatch.setattr(data_fetch, "_classify_wolves_games", lambda games: api)
+
+    assert data_fetch.fetch_wolves_games(force_refresh=True) == {
+        **_empty_classification(),
+        "last_game": {"source": "api"},
+        "live_game": {"source": "api"},
+        "next_game": {"source": "ics"},
+    }
+
+
+def test_fetch_wolves_games_does_not_probe_hockeytech_without_key(monkeypatch):
+    monkeypatch.setattr(data_fetch, "AHL_API_KEY", "")
+    monkeypatch.setattr(data_fetch, "_fetch_wolves_ics_games", list)
+    monkeypatch.setattr(
+        data_fetch,
+        "_fetch_ahl_schedule",
+        lambda: (_ for _ in ()).throw(AssertionError("unexpected API request")),
+    )
+
+    assert data_fetch.fetch_wolves_games(force_refresh=True) == _empty_classification()
+
+
+def test_fetch_wolves_games_bypasses_cache_during_live_game(monkeypatch):
+    monkeypatch.setattr(data_fetch, "AHL_API_KEY", "configured-key")
+    monkeypatch.setattr(data_fetch, "_fetch_wolves_ics_games", list)
+    monkeypatch.setattr(data_fetch.time, "time", lambda: 100.0)
+    cached = {
+        **_empty_classification(),
+        "live_game": {"status": {"state": "LIVE"}, "away_score": 1},
+    }
+    monkeypatch.setattr(
+        data_fetch,
+        "_wolves_cache",
+        {"expires": 100.0 + data_fetch._WOLVES_CACHE_TTL, "data": cached},
+    )
+    refreshed = {
+        **_empty_classification(),
+        "live_game": {"status": {"state": "LIVE"}, "away_score": 2},
+    }
+    requests = 0
+
+    def fetch_schedule():
+        nonlocal requests
+        requests += 1
+        return [{"source": "api"}]
+
+    monkeypatch.setattr(data_fetch, "_fetch_ahl_schedule", fetch_schedule)
+    monkeypatch.setattr(data_fetch, "_classify_wolves_games", lambda games: refreshed)
+
+    assert data_fetch.fetch_wolves_games() == refreshed
+    assert requests == 1

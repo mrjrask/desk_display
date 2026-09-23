@@ -303,8 +303,11 @@ configuration and intentionally default to empty. Put local values in `.env`
 (which must not be committed) or export them in the service environment. When
 the API key is absent, HockeyTech requests are skipped rather than attempted
 without authentication. When the calendar URL is absent, the ICS fetch returns
-an empty schedule safely. Both cases emit an actionable warning and the Wolves
-screen continues with empty data.
+an empty schedule safely. Configure either source to populate upcoming Wolves
+games. When both are configured, the league feed supplies authoritative live
+and final data while calendar results remain available as a fallback. Both
+missing-configuration cases emit actionable warnings and the Wolves screens
+continue safely with empty data.
 
 ---
 

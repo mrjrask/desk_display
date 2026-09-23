@@ -3946,32 +3946,46 @@ def fetch_wolves_games(force_refresh: bool = False) -> Dict[str, Optional[Dict]]
         not force_refresh
         and isinstance(expires, (int, float))
         and isinstance(cached, dict)
+        # Do not let the schedule cache hide score, shot, period, or clock
+        # updates once HockeyTech has identified a live Wolves game.
+        and cached.get("live_game") is None
         and now < float(expires)
     ):
         return cached
 
-    last_game: Optional[Dict] = None
-    live_game: Optional[Dict] = None
-    next_game: Optional[Dict] = None
-    next_home: Optional[Dict] = None
+    # The calendar is useful as a credential-independent schedule source, but
+    # it generally cannot provide a trustworthy live state, shots, or final
+    # scores.  Start with it, then let HockeyTech fill/replace each available
+    # slot with the league's authoritative feed.  Previously the fully
+    # implemented HockeyTech path was never called here, which meant users who
+    # configured AHL_API_KEY still received four empty Wolves screens whenever
+    # an ICS URL was absent or unavailable.
+    classified: Dict[str, Optional[Dict]] = {
+        "last_game": None,
+        "live_game": None,
+        "next_game": None,
+        "next_home_game": None,
+    }
 
     try:
         ics_games = _fetch_wolves_ics_games()
         if ics_games:
-            classified_ics = _classify_wolves_ics_games(ics_games)
-            last_game = classified_ics.get("last_game")
-            live_game = classified_ics.get("live_game")
-            next_game = classified_ics.get("next_game")
-            next_home = classified_ics.get("next_home_game")
+            classified.update(_classify_wolves_ics_games(ics_games))
     except Exception as exc:
         logging.error("Error parsing Wolves ICS schedule: %s", exc)
 
-    payload = {
-        "last_game": last_game,
-        "live_game": live_game,
-        "next_game": next_game,
-        "next_home_game": next_home,
-    }
+    if (AHL_API_KEY or "").strip():
+        try:
+            api_games = _fetch_ahl_schedule()
+            if api_games:
+                classified_api = _classify_wolves_games(api_games)
+                for key, game in classified_api.items():
+                    if game is not None:
+                        classified[key] = game
+        except Exception as exc:
+            logging.error("Error fetching Wolves HockeyTech schedule: %s", exc)
+
+    payload = classified
     with _wolves_cache_lock:
         _wolves_cache["data"] = payload
         _wolves_cache["expires"] = now + _WOLVES_CACHE_TTL
