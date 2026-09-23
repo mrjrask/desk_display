@@ -39,6 +39,7 @@ import hashlib
 import json
 import logging
 import os
+import queue
 import shutil
 import signal
 import subprocess
@@ -201,6 +202,7 @@ _BUTTON_NOISE_WARNING_THRESHOLD = 5
 _BUTTON_NOISE_TIMESTAMPS = deque(maxlen=32)
 _manual_skip_event = threading.Event()
 _button_monitor_thread: Optional[threading.Thread] = None
+_deferred_button_actions: queue.Queue[str] = queue.Queue()
 _pending_previous_screen_id: Optional[str] = None
 _SCREEN_HISTORY_LIMIT = 50
 _screen_history = []
@@ -559,11 +561,15 @@ def _is_desk_display_service_active() -> bool:
     return result.returncode == 0
 
 
-def _handle_button_down(name: str) -> bool:
+def _handle_button_down(name: str, *, defer_display_actions: bool = False) -> bool:
     """React to a newly pressed control button."""
 
     name = name.upper()
     if display is None:
+        return False
+    if defer_display_actions:
+        _deferred_button_actions.put(name)
+        logging.debug("Queued button action %s for main-thread execution.", name)
         return False
     if name == "X":
         _toggle_update_indicator()
@@ -577,6 +583,23 @@ def _handle_button_down(name: str) -> bool:
         _restart_desk_display_service()
         return False
     return False
+
+
+def _drain_deferred_button_actions() -> bool:
+    """Run button actions queued by the background poller on the main thread."""
+
+    if threading.current_thread() is not threading.main_thread():
+        return False
+
+    skip_requested = False
+    while not _shutdown_event.is_set():
+        try:
+            name = _deferred_button_actions.get_nowait()
+        except queue.Empty:
+            break
+        if _handle_button_down(name):
+            skip_requested = True
+    return skip_requested
 
 
 def _toggle_update_indicator() -> bool:
@@ -961,6 +984,7 @@ def _check_control_buttons(
     current_screen_id: Optional[str] = None,
     current_quad_tiles: Optional[List[str]] = None,
     enable_touch: bool = True,
+    defer_display_actions: bool = False,
 ) -> bool:
     """Handle Display HAT Mini control buttons.
 
@@ -974,6 +998,9 @@ def _check_control_buttons(
 
     if _shutdown_event.is_set():
         return False
+
+    if not defer_display_actions and _drain_deferred_button_actions():
+        return True
 
     if _check_keyboard_shutdown_request():
         return False
@@ -1027,7 +1054,11 @@ def _check_control_buttons(
             continue
 
         _BUTTON_PRESS_HANDLED[name] = True
-        if _handle_button_down(name):
+        if defer_display_actions:
+            handled = _handle_button_down(name, defer_display_actions=True)
+        else:
+            handled = _handle_button_down(name)
+        if handled:
             skip_requested = True
 
     if skip_requested or _manual_skip_event.is_set():
@@ -1150,7 +1181,7 @@ def _monitor_control_buttons() -> None:
     try:
         while not _shutdown_event.is_set():
             try:
-                _check_control_buttons(enable_touch=False)
+                _check_control_buttons(enable_touch=False, defer_display_actions=True)
             except Exception as exc:
                 logging.debug("Button monitor loop failed: %s", exc)
 

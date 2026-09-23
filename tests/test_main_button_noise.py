@@ -42,6 +42,8 @@ def main_for_buttons(monkeypatch):
     main._BUTTON_STATE = dict.fromkeys(main._BUTTON_NAMES, False)
     main._BUTTON_PRESS_STARTED_AT = dict.fromkeys(main._BUTTON_NAMES, 0.0)
     main._BUTTON_PRESS_HANDLED = dict.fromkeys(main._BUTTON_NAMES, False)
+    while not main._deferred_button_actions.empty():
+        main._deferred_button_actions.get_nowait()
     main._manual_display_off = False
     main.resume_display_updates()
 
@@ -153,6 +155,22 @@ def test_x_button_toggles_update_indicator(main_for_buttons, monkeypatch):
 
     assert main_for_buttons._handle_button_down("X") is False
     assert called["set"] == [(False, main_for_buttons.display)]
+
+
+def test_background_button_actions_are_drained_on_main_thread(main_for_buttons, monkeypatch):
+    main_for_buttons.display = object()
+    calls = []
+
+    main_for_buttons._handle_button_down("X", defer_display_actions=True)
+
+    monkeypatch.setattr(
+        main_for_buttons,
+        "_handle_button_down",
+        lambda name, **kwargs: calls.append((name, kwargs.get("defer_display_actions"))) or False,
+    )
+
+    assert main_for_buttons._drain_deferred_button_actions() is False
+    assert calls == [("X", None)]
 
 
 def test_b_button_toggles_display(main_for_buttons, monkeypatch):
