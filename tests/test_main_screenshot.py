@@ -2,6 +2,7 @@ from PIL import Image
 
 import main
 from schedule import build_scheduler
+from screens.registry import ScreenDefinition
 
 
 class _FakeDisplay:
@@ -40,6 +41,113 @@ def test_refresh_alt_screenshots_saves_configured_alternate(monkeypatch):
     main._refresh_alt_screenshots("date")
 
     assert saved_calls == [("nixie", frame)]
+
+
+def test_refresh_alt_screenshots_does_not_advance_alternate_schedule(monkeypatch):
+    scheduler = build_scheduler(
+        {
+            "screens": {
+                "date": {
+                    "frequency": 1,
+                    "alt": {"screen": ["nixie", "weather1"], "frequency": 2},
+                },
+                "nixie": 0,
+                "weather1": 0,
+            }
+        }
+    )
+    entry = scheduler._entries[0]
+    alternate = entry.alternate
+    assert alternate is not None
+    monkeypatch.setattr(main, "screen_scheduler", scheduler)
+    monkeypatch.setattr(main, "ENABLE_SCREENSHOTS", True)
+    monkeypatch.setattr(main, "display", _FakeDisplay())
+    monkeypatch.setattr(
+        main,
+        "_ALT_SCREENSHOT_REFRESHERS",
+        {
+            "nixie": lambda: Image.new("RGB", (10, 10), "black"),
+            "weather1": lambda: Image.new("RGB", (10, 10), "blue"),
+        },
+    )
+    monkeypatch.setattr(main, "_save_screenshot", lambda *_args: ("screen", False, 0))
+
+    state_before = (entry.presentation_count, alternate.cursor, scheduler._pass_number)
+    main._refresh_alt_screenshots("date")
+
+    assert (entry.presentation_count, alternate.cursor, scheduler._pass_number) == state_before
+
+
+def _registry(*screen_ids):
+    colors = {"date": "red", "nixie": "black", "weather1": "blue", "inside": "green"}
+    return {
+        screen_id: ScreenDefinition(
+            id=screen_id,
+            render=lambda screen_id=screen_id: Image.new(
+                "RGB", (2, 2), colors.get(screen_id, "white")
+            ),
+        )
+        for screen_id in screen_ids
+    }
+
+
+def test_startup_hydration_can_capture_every_available_positive_frequency_base(monkeypatch):
+    scheduler = build_scheduler(
+        {
+            "screens": {
+                "date": {"frequency": 1, "alt": {"screen": "nixie", "frequency": 1}},
+                "nixie": 0,
+                "weather1": 3,
+                "inside": 2,
+            }
+        }
+    )
+    registry = _registry("date", "nixie", "weather1", "inside")
+    captures = []
+    monkeypatch.setattr(main, "_save_screenshot", lambda sid, image: captures.append((sid, image)))
+
+    for _ in range(3):
+        entry = scheduler.next_available(registry)
+        assert entry is not None
+        main._save_screenshot(entry.id, entry.render())
+
+    assert [screen_id for screen_id, _image in captures] == ["date", "weather1", "inside"]
+    assert [image.getpixel((0, 0)) for _screen_id, image in captures] == [
+        (255, 0, 0),
+        (0, 0, 255),
+        (0, 128, 0),
+    ]
+    assert scheduler._pass_number == 0
+
+
+def test_frequency_zero_alternate_does_not_replace_base_during_hydration():
+    scheduler = build_scheduler(
+        {
+            "screens": {
+                "date": {"frequency": 1, "alt": {"screen": "nixie", "frequency": 1}},
+                "nixie": 0,
+            }
+        }
+    )
+
+    first = scheduler.next_available(_registry("date", "nixie"))
+
+    assert first is not None
+    assert first.id == "date"
+    assert scheduler._entries[0].presentation_count == 0
+
+
+def test_unavailable_hydration_screen_does_not_block_later_screenshot():
+    scheduler = build_scheduler({"screens": {"date": 1, "weather1": 1, "inside": 1}})
+    registry = _registry("date", "weather1", "inside")
+    registry["date"].available = False
+
+    first = scheduler.next_available(registry)
+    second = scheduler.next_available(registry)
+
+    assert first is not None and first.id == "weather1"
+    assert second is not None and second.id == "inside"
+    assert scheduler._pass_number == 0
 
 
 def test_refresh_alt_screenshots_noop_without_alt_config(monkeypatch):

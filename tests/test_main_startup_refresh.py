@@ -169,6 +169,44 @@ def test_config_reload_constructs_scheduler_with_new_hydration(monkeypatch):
     assert replacement._pass_number == 0
 
 
+def test_bases_are_not_rehydrated_until_saved_config_rebuilds_scheduler(monkeypatch):
+    main = _load_main()
+    config_mtime = {"value": 10.0}
+    config = {"screens": {"date": 1, "inside": 1}}
+    monkeypatch.setattr(main, "_active_config_path", lambda: "/tmp/screens.json")
+    monkeypatch.setattr(main.os.path, "getmtime", lambda _path: config_mtime["value"])
+    monkeypatch.setattr(main, "load_schedule_config", lambda _path: config)
+    registry = {
+        screen_id: ScreenDefinition(id=screen_id, render=lambda: None)
+        for screen_id in ("date", "inside")
+    }
+
+    main.screen_scheduler = None
+    main._screen_config_mtime = None
+    main._screen_config_path = None
+    main.refresh_schedule_if_needed()
+    scheduler = main.screen_scheduler
+
+    assert [scheduler.next_available(registry).id for _ in range(2)] == ["date", "inside"]
+    assert scheduler.preview_scheduled_entries(2)[0].phase == "normal"
+
+    main.refresh_schedule_if_needed()
+
+    assert main.screen_scheduler is scheduler
+    assert scheduler.preview_scheduled_entries(2)[0].phase == "normal"
+
+    config_mtime["value"] += 1
+    main.refresh_schedule_if_needed()
+
+    rebuilt = main.screen_scheduler
+    assert rebuilt is not scheduler
+    preview = rebuilt.preview_scheduled_entries(2)
+    assert [(entry.screen_id, entry.phase) for entry in preview] == [
+        ("date", "startup"),
+        ("inside", "startup"),
+    ]
+
+
 def test_startup_refresh_runs_first_wave_before_background(monkeypatch):
     main = _load_main()
 
