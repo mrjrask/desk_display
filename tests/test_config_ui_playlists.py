@@ -71,6 +71,14 @@ def test_default_profile_api_import_export_round_trip_preserves_schedule(
         )
         assert isinstance(exported_frequency, int)
         assert exported_frequency == source_frequency
+        source_extra_seconds = (
+            source_spec.get("extra_seconds", 0) if isinstance(source_spec, dict) else 0
+        )
+        exported_extra_seconds = (
+            exported_spec.get("extra_seconds", 0) if isinstance(exported_spec, dict) else 0
+        )
+        assert isinstance(exported_extra_seconds, int)
+        assert exported_extra_seconds == source_extra_seconds
         if isinstance(source_spec, dict) and "alt" in source_spec:
             assert isinstance(exported_spec["alt"]["frequency"], int)
             assert exported_spec["alt"]["frequency"] == source_spec["alt"]["frequency"]
