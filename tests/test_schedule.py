@@ -144,11 +144,11 @@ def test_scheduler_with_alternate_screen():
     sequence = collect_sequence(scheduler, registry, 6)
     assert sequence == [
         "date",
-        "date",
         "inside",
         "date",
         "inside",
         "date",
+        "inside",
     ]
 
 
@@ -164,12 +164,11 @@ def test_frequency_one_alternate_is_used_on_first_normal_presentation():
     scheduler = build_scheduler(config)
     registry = make_registry({"NFL Overview NFC": True, "NFL Standings NFC": True})
 
-    # Startup always hydrates the base screen without advancing normal state.
+    # Cycle 1 always presents the base screen.
     assert scheduler.preview_scheduled_ids(1) == ["NFL Overview NFC"]
     assert scheduler.next_available(registry).id == "NFL Overview NFC"
 
-    # Frequency four is still measured from the first normal pass, and the
-    # alternate is selected when that entry receives its first presentation.
+    # The next eligible cycle may select the configured alternate.
     assert scheduler.next_available(registry).id == "NFL Standings NFC"
 
 
@@ -204,15 +203,15 @@ def test_unavailable_alternate_consumes_its_scheduled_occurrence():
     available_registry = make_registry({"date": True, "inside": True})
 
     assert collect_sequence(scheduler, unavailable_registry, 4) == [
-        "date",  # Startup hydration.
+        "date",  # Cycle 1 always presents the base.
         "date",
         "date",
         "date",  # The unavailable alternate's occurrence is consumed.
     ]
     assert collect_sequence(scheduler, available_registry, 3) == [
         "date",
-        "date",
         "inside",
+        "date",
     ]
 
 
@@ -250,10 +249,10 @@ def test_alternate_frequency_counts_scheduled_appearances_not_raw_passes():
         "NFL Overview AFC",
         "NFL Overview NFC",
         "NFL Overview AFC",
-        "NFL Overview NFC",
-        "NFL Overview AFC",
         "NFL Standings NFC",
         "NFL Standings AFC",
+        "NFL Overview NFC",
+        "NFL Overview AFC",
     ]
 
 
@@ -343,7 +342,7 @@ def test_queued_entry_is_skipped_after_hide_after_deadline(monkeypatch):
         "date",
         "inside",
         "weather1",
-        "date",
+        "nixie",
     ]
 
     monkeypatch.setattr("schedule.datetime", _AfterDeadline)
@@ -384,8 +383,8 @@ def test_queued_entry_tries_all_alternates_before_base_fallback():
         "date",
         "inside",
         "on this day",
-        "date",
-        "inside",
+        "nixie",
+        "weather1",
     ]
 
 
@@ -406,12 +405,12 @@ def test_scheduler_with_multiple_alternates():
     sequence = collect_sequence(scheduler, registry, 7)
     assert sequence == [
         "date",
-        "date",
         "inside",
         "date",
         "weather1",
         "date",
         "inside",
+        "date",
     ]
 
 
@@ -432,11 +431,11 @@ def test_frequency_zero_screen_is_only_scheduled_as_an_alternate():
     assert collect_sequence(scheduler, registry, 7) == [
         "date",
         "date",
-        "date",
         "inside",
         "date",
         "date",
         "inside",
+        "date",
     ]
 
 
@@ -496,8 +495,7 @@ def test_scheduler_frequency_interval_matches_configuration():
     registry = make_registry({"date": True, "inside": True})
 
     sequence = collect_sequence(scheduler, registry, 12)
-    # Startup hydration is separate; normal rotation then begins with pass 1.
-    # ``inside`` appears once during startup, then on every fourth normal pass.
+    # ``inside`` appears in cycle 1, then every fourth cycle after that.
     assert sequence == [
         "date",
         "inside",
@@ -569,7 +567,7 @@ def test_scheduler_jumps_across_empty_normal_passes():
 
     assert scheduler.next_available(registry).id == "date"
     assert scheduler.next_available(registry).id == "date"
-    assert scheduler._pass_number == 1_000_000_000
+    assert scheduler._cycle_number == 1_000_000_001
 
 
 def test_scheduler_uses_first_playlist_assignment_for_duplicate_screen():
@@ -658,13 +656,12 @@ def test_preview_scheduled_ids_keeps_scheduler_state():
     assert first_preview == second_preview
 
 
-def test_preview_scheduled_entries_identifies_startup_and_exact_normal_passes():
+def test_preview_scheduled_entries_identifies_cycle_one_and_exact_later_cycles():
     scheduler = build_scheduler({"screens": {"date": 2, "inside": 3, "weather1": 4}})
 
     preview = scheduler.preview_scheduled_entries(9)
 
-    startup = [entry.screen_id for entry in preview if entry.phase == "startup"]
-    normal = {(entry.pass_number, entry.screen_id) for entry in preview if entry.phase == "normal"}
+    normal = {(entry.pass_number, entry.screen_id) for entry in preview}
     spreadsheet = {
         screen_id: [
             screen_id if (pass_number, screen_id) in normal else None for pass_number in range(1, 7)
@@ -672,11 +669,10 @@ def test_preview_scheduled_entries_identifies_startup_and_exact_normal_passes():
         for screen_id in ("date", "inside", "weather1")
     }
 
-    assert startup == ["date", "inside", "weather1"]
     assert spreadsheet == {
-        "date": [None, "date", None, "date", None, "date"],
-        "inside": [None, None, "inside", None, None, "inside"],
-        "weather1": [None, None, None, "weather1", None, None],
+        "date": ["date", None, "date", None, "date", None],
+        "inside": ["inside", None, None, "inside", None, None],
+        "weather1": ["weather1", None, None, None, "weather1", None],
     }
 
 

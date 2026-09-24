@@ -39,14 +39,14 @@ def test_final_entry_wrap_does_not_readvance_completed_pass():
         }
     )
 
+    assert scheduler._cycle_number == 1
     assert [scheduler.next_available(registry).id for _ in range(3)] == [
         "date",
         "inside",
         "weather1",
     ]
 
-    # Selecting the final startup entry wraps the cursor to zero. Startup is a
-    # separate hydration phase, so it must not advance or queue a normal pass.
+    # Selecting the final cycle-1 entry wraps the cursor without advancing again.
     assert scheduler._cursor == 0
     assert scheduler._pending_indices == []
-    assert scheduler._pass_number == 0
+    assert scheduler._cycle_number == 1

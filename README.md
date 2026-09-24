@@ -510,32 +510,32 @@ Top-level fields:
 | `playlists` | Named groups of screen steps. |
 | `sequence` | Ordered list of playlist references to rotate through. |
 
-### Frequency and startup semantics
+### Frequency and cycle semantics
 
-The scheduler treats startup hydration separately from its numbered normal
-passes:
+The scheduler starts at cycle 1; startup is part of the numbered rotation
+rather than a separate hydration phase:
 
 - A base screen with frequency `0` is disabled as an independent playlist
-  slot. It receives no startup hydration display and is never due in a normal
-  pass. A frequency-`0` screen can still be shown when it is configured as the
-  alternate of an enabled base screen.
-- Every base screen with a positive frequency is scheduled once for startup
-  hydration, subject to availability. A hydration slot shows the base screen
-  (never its alternate) and neither counts as a normal pass nor increments the
-  base screen's presentation count for alternate selection. A base screen that
-  is unavailable in the screen registry when its slot comes up, or whose
-  `hide_after` deadline has passed, is skipped and receives no startup display;
-  a retired screen is also never due in later normal passes.
-- After hydration, a positive base frequency `N` makes that entry due on
-  normal passes `N`, `2N`, `3N`, and so on. Thus `1` means every normal pass,
-  `2` means passes 2, 4, 6, and so on, and larger integers show less often.
-- An alternate frequency counts the **due normal presentations of its base
-  entry**, not global pass numbers. For example, an alternate frequency of `2`
-  replaces every second time its base entry is due after hydration.
+  slot and is never due in a cycle. A frequency-`0` screen can still be shown
+  when it is configured as the alternate of an enabled base screen.
+- Every base screen with a positive frequency is scheduled once in cycle 1,
+  subject to availability. Cycle 1 always selects the base screen rather than
+  its alternate, and this scheduled presentation increments the base screen's
+  presentation count for alternate selection. A base screen that is unavailable
+  in the screen registry when its slot comes up, or whose `hide_after` deadline
+  has passed, is skipped; a retired screen is also never due in later cycles.
+- A positive base frequency `N` makes that entry due on cycles `1`, `1 + N`,
+  `1 + 2N`, and so on. Thus `1` means every cycle, `2` means cycles 1, 3, 5,
+  and so on, and larger integers show less often.
+- An alternate frequency counts the **scheduled presentations of its base
+  entry**, not global cycle numbers. Because the forced base presentation in
+  cycle 1 is included in that count, an alternate frequency of `2` replaces
+  the base on its next due presentation, then every second due presentation
+  after that.
 - The Config page's saved playlist/config order is the display order both
-  during startup hydration and within each normal pass.
+  in cycle 1 and within every later cycle.
 - Loading or reloading saved schedule configuration constructs a new scheduler
-  and begins a fresh startup hydration phase.
+  and restarts the rotation at cycle 1.
 
 These rules are runtime semantics for the existing numeric frequency fields;
 they require no configuration schema change. Migrated legacy configurations

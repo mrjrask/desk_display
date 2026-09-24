@@ -72,10 +72,10 @@ def test_refresh_alt_screenshots_does_not_advance_alternate_schedule(monkeypatch
     )
     monkeypatch.setattr(main, "_save_screenshot", lambda *_args: ("screen", False, 0))
 
-    state_before = (entry.presentation_count, alternate.cursor, scheduler._pass_number)
+    state_before = (entry.presentation_count, alternate.cursor, scheduler._cycle_number)
     main._refresh_alt_screenshots("date")
 
-    assert (entry.presentation_count, alternate.cursor, scheduler._pass_number) == state_before
+    assert (entry.presentation_count, alternate.cursor, scheduler._cycle_number) == state_before
 
 
 def _registry(*screen_ids):
@@ -91,7 +91,7 @@ def _registry(*screen_ids):
     }
 
 
-def test_startup_hydration_can_capture_every_available_positive_frequency_base(monkeypatch):
+def test_cycle_one_can_capture_every_available_positive_frequency_base(monkeypatch):
     scheduler = build_scheduler(
         {
             "screens": {
@@ -117,10 +117,10 @@ def test_startup_hydration_can_capture_every_available_positive_frequency_base(m
         (0, 0, 255),
         (0, 128, 0),
     ]
-    assert scheduler._pass_number == 0
+    assert scheduler._cycle_number == 1
 
 
-def test_frequency_zero_alternate_does_not_replace_base_during_hydration():
+def test_frequency_zero_alternate_does_not_replace_base_during_cycle_one():
     scheduler = build_scheduler(
         {
             "screens": {
@@ -134,10 +134,10 @@ def test_frequency_zero_alternate_does_not_replace_base_during_hydration():
 
     assert first is not None
     assert first.id == "date"
-    assert scheduler._entries[0].presentation_count == 0
+    assert scheduler._entries[0].presentation_count == 1
 
 
-def test_unavailable_hydration_screen_does_not_block_later_screenshot():
+def test_unavailable_cycle_one_screen_does_not_block_later_screenshot():
     scheduler = build_scheduler({"screens": {"date": 1, "weather1": 1, "inside": 1}})
     registry = _registry("date", "weather1", "inside")
     registry["date"].available = False
@@ -147,7 +147,7 @@ def test_unavailable_hydration_screen_does_not_block_later_screenshot():
 
     assert first is not None and first.id == "weather1"
     assert second is not None and second.id == "inside"
-    assert scheduler._pass_number == 0
+    assert scheduler._cycle_number == 1
 
 
 def test_refresh_alt_screenshots_noop_without_alt_config(monkeypatch):

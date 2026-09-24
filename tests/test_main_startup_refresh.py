@@ -97,7 +97,7 @@ def test_scheduled_startup_feed_order_prioritizes_upcoming_screens(monkeypatch):
     assert ordered[-1] == "bears"
 
 
-def test_startup_feed_preview_does_not_consume_scheduler_hydration(monkeypatch):
+def test_startup_feed_preview_does_not_consume_scheduler_cycle(monkeypatch):
     main = _load_main()
     scheduler = build_scheduler({"screens": {"weather1": 1, "date": 1}})
     registry = {
@@ -112,10 +112,10 @@ def test_startup_feed_preview_does_not_consume_scheduler_hydration(monkeypatch):
     assert main._scheduled_startup_feed_order() == ["weather"]
     assert scheduler.next_available(registry).id == "weather1"
     assert scheduler.next_available(registry).id == "date"
-    assert scheduler._pass_number == 0
+    assert scheduler._cycle_number == 1
 
 
-def test_routine_refresh_preserves_scheduler_and_pending_hydration(monkeypatch):
+def test_routine_refresh_preserves_scheduler_and_pending_cycle(monkeypatch):
     main = _load_main()
     config = {"screens": {"date": 1, "inside": 1}}
     monkeypatch.setattr(main, "_active_config_path", lambda: "/tmp/screens.json")
@@ -138,10 +138,10 @@ def test_routine_refresh_preserves_scheduler_and_pending_hydration(monkeypatch):
 
     assert main.screen_scheduler is scheduler
     assert scheduler.next_available(registry).id == "inside"
-    assert scheduler._pass_number == 0
+    assert scheduler._cycle_number == 1
 
 
-def test_config_reload_constructs_scheduler_with_new_hydration(monkeypatch):
+def test_config_reload_constructs_scheduler_at_cycle_one(monkeypatch):
     main = _load_main()
     config_mtime = {"value": 10.0}
     config = {"screens": {"date": 1, "inside": 1}}
@@ -166,7 +166,7 @@ def test_config_reload_constructs_scheduler_with_new_hydration(monkeypatch):
     replacement = main.screen_scheduler
     assert replacement is not original
     assert replacement.next_available(registry).id == "date"
-    assert replacement._pass_number == 0
+    assert replacement._cycle_number == 1
 
 
 def test_bases_are_not_rehydrated_until_saved_config_rebuilds_scheduler(monkeypatch):
@@ -202,8 +202,8 @@ def test_bases_are_not_rehydrated_until_saved_config_rebuilds_scheduler(monkeypa
     assert rebuilt is not scheduler
     preview = rebuilt.preview_scheduled_entries(2)
     assert [(entry.screen_id, entry.phase) for entry in preview] == [
-        ("date", "startup"),
-        ("inside", "startup"),
+        ("date", "normal"),
+        ("inside", "normal"),
     ]
 
 
