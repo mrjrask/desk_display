@@ -55,8 +55,10 @@ def test_travel_screen_is_not_known():
 def test_travel_v2_screen_is_not_known():
     assert "travel v2" not in KNOWN_SCREENS
 
+
 def test_travel_map_screen_is_not_known():
     assert "travel map" not in KNOWN_SCREENS
+
 
 def test_travel_map_v2_screen_is_not_known():
     assert "travel map v2" not in KNOWN_SCREENS
@@ -160,9 +162,7 @@ def test_frequency_one_alternate_is_used_on_first_normal_presentation():
         }
     }
     scheduler = build_scheduler(config)
-    registry = make_registry(
-        {"NFL Overview NFC": True, "NFL Standings NFC": True}
-    )
+    registry = make_registry({"NFL Overview NFC": True, "NFL Standings NFC": True})
 
     # Startup always hydrates the base screen without advancing normal state.
     assert scheduler.preview_scheduled_ids(1) == ["NFL Overview NFC"]
@@ -183,9 +183,7 @@ def test_unavailable_frequency_one_alternate_falls_back_on_first_presentation():
         }
     }
     scheduler = build_scheduler(config)
-    registry = make_registry(
-        {"NFL Overview NFC": True, "NFL Standings NFC": False}
-    )
+    registry = make_registry({"NFL Overview NFC": True, "NFL Standings NFC": False})
 
     assert scheduler.next_available(registry).id == "NFL Overview NFC"
     assert scheduler.next_available(registry).id == "NFL Overview NFC"
@@ -523,7 +521,6 @@ def test_scheduler_skips_unavailable_screen():
     assert scheduler.next_available(registry) is None
 
 
-
 def test_scheduler_respects_playlist_sequence_order():
     config = {
         "screens": {"inside": 1, "date": 1, "weather1": 1},
@@ -602,9 +599,7 @@ def test_invalid_configuration_shapes():
     with pytest.raises(ValueError):
         build_scheduler({"screens": {"date": "oops"}})
     with pytest.raises(ValueError):
-        build_scheduler(
-            {"screens": {"date": {"frequency": 1, "alt": {"screen": "inside"}}}}
-        )
+        build_scheduler({"screens": {"date": {"frequency": 1, "alt": {"screen": "inside"}}}})
     with pytest.raises(ValueError):
         build_scheduler(
             {
@@ -661,6 +656,36 @@ def test_preview_scheduled_ids_keeps_scheduler_state():
     second_preview = scheduler.preview_scheduled_ids(4)
 
     assert first_preview == second_preview
+
+
+def test_preview_scheduled_entries_identifies_startup_and_exact_normal_passes():
+    scheduler = build_scheduler({"screens": {"date": 2, "inside": 3, "weather1": 4}})
+
+    preview = scheduler.preview_scheduled_entries(9)
+
+    startup = [entry.screen_id for entry in preview if entry.phase == "startup"]
+    normal = {(entry.pass_number, entry.screen_id) for entry in preview if entry.phase == "normal"}
+    spreadsheet = {
+        screen_id: [
+            screen_id if (pass_number, screen_id) in normal else None for pass_number in range(1, 7)
+        ]
+        for screen_id in ("date", "inside", "weather1")
+    }
+
+    assert startup == ["date", "inside", "weather1"]
+    assert spreadsheet == {
+        "date": [None, "date", None, "date", None, "date"],
+        "inside": [None, None, "inside", None, None, "inside"],
+        "weather1": [None, None, None, "weather1", None, None],
+    }
+
+
+def test_pass_aware_preview_does_not_mutate_scheduler_state():
+    scheduler = build_scheduler({"screens": {"date": 1, "inside": 2}})
+
+    annotated_ids = [entry.screen_id for entry in scheduler.preview_scheduled_entries(6)]
+
+    assert annotated_ids == scheduler.preview_scheduled_ids(6)
 
 
 def test_scheduler_tracks_extra_seconds_per_screen():

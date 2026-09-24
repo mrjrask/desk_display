@@ -1,4 +1,5 @@
 """Simple frequency-based screen scheduler."""
+
 from __future__ import annotations
 
 import contextlib
@@ -6,7 +7,7 @@ import json
 from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING, Any, Optional
+from typing import TYPE_CHECKING, Any, Literal, Optional
 
 from display_time import CENTRAL_TIME
 from screens_catalog import SCREEN_IDS, canonical_screen_id
@@ -17,7 +18,6 @@ if TYPE_CHECKING:
 
 KNOWN_SCREENS: set[str] = set(SCREEN_IDS)
 REPLACEMENT_ONLY_SCREENS: set[str] = {"cubs no game", "sox no game"}
-
 
 
 @dataclass
@@ -43,6 +43,21 @@ class _ScheduleEntry:
     extra_seconds: int = 0
     hide_after: Optional[datetime] = None
     alternate: Optional[_AlternateSchedule] = None
+
+
+@dataclass(frozen=True)
+class ScheduledPreviewEntry:
+    """One non-mutating preview result with its scheduling context.
+
+    ``pass_number`` is ``None`` for startup hydration.  Normal rotation passes
+    are numbered starting at one; gaps in their numbers identify passes where
+    no configured entry was due, even though those empty passes produce no
+    result of their own.
+    """
+
+    screen_id: str
+    phase: Literal["startup", "normal"]
+    pass_number: Optional[int]
 
 
 class ScreenScheduler:
@@ -98,6 +113,16 @@ class ScreenScheduler:
     def preview_scheduled_ids(self, limit: int) -> list[str]:
         """Return upcoming scheduled screen IDs without mutating scheduler state."""
 
+        return [entry.screen_id for entry in self.preview_scheduled_entries(limit)]
+
+    def preview_scheduled_entries(self, limit: int) -> list[ScheduledPreviewEntry]:
+        """Return upcoming IDs annotated with startup/normal pass information.
+
+        This pass-aware form is intended for diagnostics and scheduler tests.
+        Production callers that only need IDs should use
+        :meth:`preview_scheduled_ids`.
+        """
+
         if limit <= 0 or not self._entries:
             return []
 
@@ -129,14 +154,21 @@ class ScreenScheduler:
         preview._pass_number = self._pass_number
         preview._startup_hydrated = self._startup_hydrated
 
-        scheduled_ids: list[str] = []
+        scheduled_entries: list[ScheduledPreviewEntry] = []
         for _ in range(limit):
             next_id = preview._next_scheduled_id()
             if next_id is None:
                 break
-            scheduled_ids.append(next_id)
+            normal_pass_number = preview._pass_number or None
+            scheduled_entries.append(
+                ScheduledPreviewEntry(
+                    screen_id=next_id,
+                    phase="normal" if normal_pass_number is not None else "startup",
+                    pass_number=normal_pass_number,
+                )
+            )
 
-        return scheduled_ids
+        return scheduled_entries
 
     def _next_scheduled_id(self) -> Optional[str]:
         """Return the next scheduled ID without availability checks."""
@@ -201,9 +233,7 @@ class ScreenScheduler:
             if entry.hide_after is not None and now_utc >= entry.hide_after:
                 continue
 
-            if startup_hydration:
-                self._pending_indices.append(index)
-            elif self._pass_number % entry.frequency == 0:
+            if startup_hydration or self._pass_number % entry.frequency == 0:
                 self._pending_indices.append(index)
 
         self._cursor = 0
@@ -218,8 +248,7 @@ class ScreenScheduler:
         active_frequencies = [
             entry.frequency
             for entry in self._entries
-            if entry.frequency > 0
-            and (entry.hide_after is None or now_utc < entry.hide_after)
+            if entry.frequency > 0 and (entry.hide_after is None or now_utc < entry.hide_after)
         ]
         if not active_frequencies:
             return False
@@ -229,8 +258,7 @@ class ScreenScheduler:
         # _hydrate_next_pass() remains the single place that increments the
         # scheduler-wide counter and queues the selected pass.
         next_due_pass = min(
-            (self._pass_number // frequency + 1) * frequency
-            for frequency in active_frequencies
+            (self._pass_number // frequency + 1) * frequency for frequency in active_frequencies
         )
         self._pass_number = next_due_pass - 1
         self._hydrate_next_pass(now_utc)
@@ -507,9 +535,7 @@ def build_scheduler(config: dict[str, Any]) -> ScreenScheduler:
             try:
                 frequency = int(raw["frequency"])
             except (TypeError, ValueError) as exc:
-                raise ValueError(
-                    f"Frequency for '{screen_id}' must be an integer"
-                ) from exc
+                raise ValueError(f"Frequency for '{screen_id}' must be an integer") from exc
             try:
                 extra_seconds = int(raw.get("extra_seconds", 0))
             except (TypeError, ValueError) as exc:
@@ -539,9 +565,7 @@ def build_scheduler(config: dict[str, Any]) -> ScreenScheduler:
             alt_spec = raw.get("alt")
             if alt_spec is not None:
                 if not isinstance(alt_spec, dict):
-                    raise ValueError(
-                        f"Alternate configuration for '{screen_id}' must be an object"
-                    )
+                    raise ValueError(f"Alternate configuration for '{screen_id}' must be an object")
                 alt_screen_value = alt_spec.get("screen")
                 alt_frequency = alt_spec.get("frequency")
 
@@ -561,9 +585,7 @@ def build_scheduler(config: dict[str, Any]) -> ScreenScheduler:
                     )
 
                 if not alt_screen_ids:
-                    raise ValueError(
-                        f"Alternate screen list for '{screen_id}' cannot be empty"
-                    )
+                    raise ValueError(f"Alternate screen list for '{screen_id}' cannot be empty")
 
                 for alt_screen in alt_screen_ids:
                     if alt_screen not in KNOWN_SCREENS:
@@ -581,9 +603,7 @@ def build_scheduler(config: dict[str, Any]) -> ScreenScheduler:
                     raise ValueError(
                         f"Alternate frequency for '{screen_id}' must be greater than zero"
                     )
-                alternate = _AlternateSchedule(
-                    tuple(alt_screen_ids), alt_frequency_int
-                )
+                alternate = _AlternateSchedule(tuple(alt_screen_ids), alt_frequency_int)
         else:
             try:
                 frequency = int(raw)
