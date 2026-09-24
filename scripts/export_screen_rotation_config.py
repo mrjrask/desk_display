@@ -36,7 +36,12 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-from config_ui import _build_screen_entries, _load_active_config, _load_active_style_config
+from config_ui import (
+    _build_screen_entries,
+    _load_active_config,
+    _load_active_style_config,
+    _normalize_scroll_settings,
+)
 
 
 def _parse_alt_screen(value: str) -> list[str]:
@@ -114,6 +119,8 @@ def _build_config_payload(screens: list[dict[str, Any]], config: dict[str, Any])
         if hide_after_enabled:
             base_spec["hide_after_enabled"] = True
             base_spec["hide_after_at"] = hide_after_at
+        if screen.get("scroll_speed_enabled"):
+            base_spec["scroll"] = {"speed": screen.get("scroll_speed", 1.0)}
 
         if alt_screens:
             alt_frequency_raw = screen.get("alt_frequency")
@@ -149,6 +156,7 @@ def _build_config_payload(screens: list[dict[str, Any]], config: dict[str, Any])
         "screens": screens_payload,
         "playlists": playlists_payload,
         "sequence": [{"playlist": playlist["id"]} for playlist in playlists],
+        "scroll": _normalize_scroll_settings(config.get("scroll")),
     }
 
 
