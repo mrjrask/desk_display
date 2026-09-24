@@ -1,10 +1,19 @@
 {
   "config": {
     "screens": {
-      "air quality": 1,
       "date": 1,
       "nixie": 0,
-      "on this day": 6,
+      "weather logo": 0,
+      "weather1": 1,
+      "weather2": 1,
+      "air quality": 1,
+      "weather alert": 1,
+      "weather hourly": 1,
+      "weather daily": 1,
+      "weather quad": 0,
+      "weather radar": 1,
+      "astronomical": 2,
+      "inside": 1,
       "news headlines": {
         "frequency": 1,
         "alt": {
@@ -13,16 +22,6 @@
         }
       },
       "news headlines 2": 0,
-      "weather logo": 0,
-      "weather1": 1,
-      "weather2": 1,
-      "weather alert": 1,
-      "weather hourly": 1,
-      "weather daily": 1,
-      "weather quad": 0,
-      "weather radar": 1,
-      "astronomical": 2,
-      "inside": 1,
       "verano logo": 0,
       "vrnof": 3,
       "hawks logo": 1,
@@ -90,10 +89,6 @@
       "MLB Scoreboard": 2,
       "NL Overview": 0,
       "AL Overview": 0,
-      "MLB AL Standings": 0,
-      "MLB ALWC Standings": 0,
-      "MLB NL Standings": 0,
-      "MLB NLWC Standings": 0,
       "NL Overview+WC": {
         "frequency": 2,
         "alt": {
@@ -114,6 +109,10 @@
           "frequency": 4
         }
       },
+      "MLB AL Standings": 0,
+      "MLB ALWC Standings": 0,
+      "MLB NL Standings": 0,
+      "MLB NLWC Standings": 0,
       "bears logo": 3,
       "bears stand1": 0,
       "bears stand2": 0,
@@ -150,6 +149,7 @@
       "nba logo": 0,
       "NBA Scoreboard": 0,
       "NBA Playoffs": 0,
+      "on this day": 6,
       "NCAAM Scoreboard": 0,
       "quad": 0,
       "World Cup Scoreboard": 0,
@@ -181,6 +181,9 @@
             "screen": "weather2"
           },
           {
+            "screen": "air quality"
+          },
+          {
             "screen": "weather alert"
           },
           {
@@ -194,9 +197,6 @@
           },
           {
             "screen": "weather radar"
-          },
-          {
-            "screen": "air quality"
           },
           {
             "screen": "astronomical"
@@ -215,16 +215,16 @@
         "label": "news & stocks",
         "steps": [
           {
-            "screen": "verano logo"
-          },
-          {
-            "screen": "vrnof"
-          },
-          {
             "screen": "news headlines"
           },
           {
             "screen": "news headlines 2"
+          },
+          {
+            "screen": "verano logo"
+          },
+          {
+            "screen": "vrnof"
           }
         ]
       },
@@ -258,16 +258,19 @@
         "label": "nhl",
         "steps": [
           {
-            "screen": "NHL Standings West"
-          },
-          {
-            "screen": "NHL Standings East"
-          },
-          {
             "screen": "nhl logo"
           },
           {
             "screen": "NHL Scoreboard"
+          },
+          {
+            "screen": "NHL Playoffs"
+          },
+          {
+            "screen": "NHL Standings West"
+          },
+          {
+            "screen": "NHL Standings East"
           },
           {
             "screen": "NHL Standings Overview West"
@@ -280,9 +283,6 @@
           },
           {
             "screen": "NHL Standings East v2"
-          },
-          {
-            "screen": "NHL Playoffs"
           }
         ]
       },
@@ -334,13 +334,13 @@
             "screen": "cubs next home"
           },
           {
+            "screen": "cubs current series"
+          },
+          {
             "screen": "cubs next series"
           },
           {
             "screen": "cubs next home series"
-          },
-          {
-            "screen": "cubs current series"
           },
           {
             "screen": "cubs schedule quad"
@@ -378,13 +378,13 @@
             "screen": "sox next home"
           },
           {
+            "screen": "sox current series"
+          },
+          {
             "screen": "sox next series"
           },
           {
             "screen": "sox next home series"
-          },
-          {
-            "screen": "sox current series"
           },
           {
             "screen": "sox schedule quad"
@@ -445,10 +445,10 @@
             "screen": "bears next"
           },
           {
-            "screen": "bears next season sched"
+            "screen": "bears next season"
           },
           {
-            "screen": "bears next season"
+            "screen": "bears next season sched"
           }
         ]
       },
@@ -519,6 +519,9 @@
         "label": "Other",
         "steps": [
           {
+            "screen": "on this day"
+          },
+          {
             "screen": "NCAAM Scoreboard"
           },
           {
@@ -526,9 +529,6 @@
           },
           {
             "screen": "World Cup Scoreboard"
-          },
-          {
-            "screen": "on this day"
           },
           {
             "screen": "adsb stats"
@@ -589,16 +589,10 @@
   },
   "style": {
     "screens": {
-      "air quality": {
-        "background": "#000000"
-      },
       "date": {
         "background": "#000000"
       },
       "nixie": {
-        "background": "#000000"
-      },
-      "on this day": {
         "background": "#000000"
       },
       "weather logo": {
@@ -608,6 +602,9 @@
         "background": "#000000"
       },
       "weather2": {
+        "background": "#000000"
+      },
+      "air quality": {
         "background": "#000000"
       },
       "weather alert": {
@@ -790,6 +787,12 @@
       "AL Overview": {
         "background": "#000000"
       },
+      "NL Overview+WC": {
+        "background": "#000000"
+      },
+      "AL Overview+WC": {
+        "background": "#000000"
+      },
       "MLB AL Standings": {
         "background": "#000000"
       },
@@ -800,12 +803,6 @@
         "background": "#000000"
       },
       "MLB NLWC Standings": {
-        "background": "#000000"
-      },
-      "NL Overview+WC": {
-        "background": "#000000"
-      },
-      "AL Overview+WC": {
         "background": "#000000"
       },
       "bears logo": {
@@ -872,6 +869,9 @@
         "background": "#000000"
       },
       "NBA Playoffs": {
+        "background": "#000000"
+      },
+      "on this day": {
         "background": "#000000"
       },
       "NCAAM Scoreboard": {
