@@ -799,18 +799,26 @@ def _projected_matchups_from_standings(standings: list[dict]) -> list[dict]:
         first_top = top_three_by_div[first_division]
         second_top = top_three_by_div[second_division]
 
+        # NHL playoff seeding: the division winner with the better regular
+        # season record gets the weaker wild card (WC2, seed 7); the other
+        # division winner plays the stronger wild card (WC1, seed 8).
+        if _ranking_tuple(first_top[0]) >= _ranking_tuple(second_top[0]):
+            better_seed_winner, other_division_winner = first_top[0], second_top[0]
+        else:
+            better_seed_winner, other_division_winner = second_top[0], first_top[0]
+
         matchups.extend(
             [
                 _projected_series(
-                    first_top[0],
-                    wc1,
+                    better_seed_winner,
+                    wc2,
                     conference=conference,
                     higher_seed_rank=1,
                     lower_seed_rank=8,
                 ),
                 _projected_series(
-                    second_top[0],
-                    wc2,
+                    other_division_winner,
+                    wc1,
                     conference=conference,
                     higher_seed_rank=2,
                     lower_seed_rank=7,

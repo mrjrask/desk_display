@@ -42,13 +42,17 @@ def test_projected_matchups_from_standings_builds_first_round_bracket():
     assert len(projected) == 8
     assert all(item.get("status_text") == "" for item in projected)
 
-    east_atlantic_top_vs_wc1 = projected[0]
-    assert east_atlantic_top_vs_wc1["teams"]["home"]["team"]["abbreviation"] == "TOR"
-    assert east_atlantic_top_vs_wc1["teams"]["away"]["team"]["abbreviation"] == "OTT"
+    # CAR (111 pts) has the better record of the two East division winners,
+    # so it gets the weaker wild card (WC2 = DET); TOR (110 pts) plays the
+    # stronger wild card (WC1 = OTT). See nhl_playoffs._projected_matchups_
+    # from_standings.
+    east_better_seed_vs_wc2 = projected[0]
+    assert east_better_seed_vs_wc2["teams"]["home"]["team"]["abbreviation"] == "CAR"
+    assert east_better_seed_vs_wc2["teams"]["away"]["team"]["abbreviation"] == "DET"
 
-    east_metro_top_vs_wc2 = projected[1]
-    assert east_metro_top_vs_wc2["teams"]["home"]["team"]["abbreviation"] == "CAR"
-    assert east_metro_top_vs_wc2["teams"]["away"]["team"]["abbreviation"] == "DET"
+    east_other_division_vs_wc1 = projected[1]
+    assert east_other_division_vs_wc1["teams"]["home"]["team"]["abbreviation"] == "TOR"
+    assert east_other_division_vs_wc1["teams"]["away"]["team"]["abbreviation"] == "OTT"
 
     assert projected[0]["higher_seed"] == 1
     assert projected[1]["higher_seed"] == 2

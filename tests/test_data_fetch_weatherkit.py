@@ -61,17 +61,21 @@ def test_weatherkit_measurements_extract_wind_gust_and_speed():
 
     normalized = _normalise_weatherkit_response(data)
 
+    # WeatherKit reports wind speed/gust in km/h; the normalizer converts to
+    # mph since every screen that renders these values labels them "mph".
+    KMH_TO_MPH = 1 / 1.609344
+
     assert normalized is not None
-    assert normalized["current"]["wind_speed"] == pytest.approx(4.2)
-    assert normalized["current"]["wind_gust"] == pytest.approx(9.6)
+    assert normalized["current"]["wind_speed"] == pytest.approx(4.2 * KMH_TO_MPH)
+    assert normalized["current"]["wind_gust"] == pytest.approx(9.6 * KMH_TO_MPH)
     assert normalized["current"]["precipitation_intensity"] == pytest.approx(2.54)
     assert normalized["current"]["visibility"] == pytest.approx(16093.44)
 
     hourly = normalized["hourly"][0]
-    assert hourly["wind_speed"] == pytest.approx(5.1)
-    assert hourly["wind_gust"] == pytest.approx(11.2)
+    assert hourly["wind_speed"] == pytest.approx(5.1 * KMH_TO_MPH)
+    assert hourly["wind_gust"] == pytest.approx(11.2 * KMH_TO_MPH)
     daily = normalized["daily"][0]
-    assert daily["wind_speed"] == pytest.approx(6.8)
+    assert daily["wind_speed"] == pytest.approx(6.8 * KMH_TO_MPH)
     assert daily["wind_deg"] == 225
     assert daily["uvi"] == 5
 

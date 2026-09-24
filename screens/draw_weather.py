@@ -2255,7 +2255,7 @@ def draw_weather_screen_2(display, weather, transition=False):
     items = [(next_label, next_time.strftime("%-I:%M %p"))] if next_label and next_time else []
 
     # Other details
-    wind_speed = round(current.get('wind_speed', 0))
+    wind_speed = round(current.get('wind_speed') or 0)
     wind_dir = wind_direction(current.get('wind_deg'))
     wind_value = f"{wind_speed} mph"
     if wind_dir:
@@ -2265,7 +2265,7 @@ def draw_weather_screen_2(display, weather, transition=False):
     pressure_inhg = None
     if pressure_raw is not None:
         try:
-            pressure_inhg = float(pressure_raw) * 0.0338639
+            pressure_inhg = float(pressure_raw) * 0.02953
         except (TypeError, ValueError):
             pressure_inhg = None
     pressure_text = f"{pressure_inhg:.2f} inHg" if pressure_inhg is not None else "—"
@@ -2279,12 +2279,12 @@ def draw_weather_screen_2(display, weather, transition=False):
 
     items += [
         ("Wind",     wind_value, None, "wind_speed"),
-        ("Gust",     f"{round(current.get('wind_gust',0))} mph", None, "wind_gust"),
-        ("Humidity", f"{current.get('humidity',0)}%", None, "humidity"),
+        ("Gust",     f"{round(current.get('wind_gust') or 0)} mph", None, "wind_gust"),
+        ("Humidity", f"{current.get('humidity') or 0}%", None, "humidity"),
         ("Pressure", pressure_value, pressure_color, "pressure"),
     ]
 
-    uvi = round(current.get("uvi", 0))
+    uvi = round(current.get("uvi") or 0)
     uv_col = uv_index_color(uvi)
     items.append(("UV Index", str(uvi), uv_col, "uvi"))
 
