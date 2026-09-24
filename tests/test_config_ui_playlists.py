@@ -63,6 +63,17 @@ def test_screen_config_page_bootstraps_server_playlist_state(monkeypatch):
     assert expected_scroll_state in html
     assert "speed: clampNumber(scrollSettings.speed, 1, 0.25, 3)" in html
 
+    frequency_help = (
+        "0 disables the base screen. Enabled screens display once at startup. "
+        "After startup: 1 = every pass, 2 = every second pass."
+    )
+    alternate_frequency_help = (
+        "Counts the base screen's normal scheduled appearances; startup hydration is excluded."
+    )
+    # Each hint is rendered for initial rows and retained in the client-side row builder.
+    assert html.count(frequency_help) == 2
+    assert html.count(alternate_frequency_help) == 2
+
 
 def test_screen_config_draft_includes_and_restores_scroll_settings(monkeypatch):
     monkeypatch.setattr(config_ui, "_load_active_config", lambda: {"screens": {"date": 1}})
