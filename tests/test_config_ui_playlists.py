@@ -14,8 +14,7 @@ def _preview_through_pass(config, last_pass=12):
     return [
         entry
         for entry in entries
-        if entry.phase == "startup"
-        or (entry.pass_number is not None and entry.pass_number <= last_pass)
+        if entry.pass_number <= last_pass
     ]
 
 
@@ -149,12 +148,11 @@ def test_screen_config_page_bootstraps_server_playlist_state(monkeypatch):
     assert "speed: clampNumber(scrollSettings.speed, 1, 0.25, 3)" in html
 
     frequency_help = (
-        "0 disables the base screen. When the scheduler initializes or reloads, enabled screens "
-        "are scheduled once for hydration, subject to availability. After hydration: 1 = every "
-        "pass, 2 = every second pass."
+        "0 disables the base screen. All enabled screens play in cycle 1, subject to "
+        "availability. 1 = every cycle; 2 = cycles 1, 3, 5; 3 = cycles 1, 4, 7."
     )
     alternate_frequency_help = (
-        "Counts the base screen's normal scheduled appearances; startup hydration is excluded."
+        "Counts the base screen's scheduled appearances, including cycle 1."
     )
     # Each hint is rendered for initial rows and retained in the client-side row builder.
     assert html.count(frequency_help) == 2

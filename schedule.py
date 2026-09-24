@@ -1,13 +1,12 @@
-"""Frequency-based screen scheduling with a distinct startup hydration phase.
+"""Frequency-based screen scheduling in numbered cycles.
 
-Each positive-frequency base entry is emitted once during startup hydration,
-without advancing normal-pass or alternate-presentation counters.  Thereafter,
-frequency ``N`` is due on normal passes ``N``, ``2N``, ``3N``, and so on, while
-an alternate's frequency counts only the due presentations of its base entry.
+Each positive-frequency base entry is emitted in cycle 1.  Thereafter,
+frequency ``N`` is due on cycles ``1 + N``, ``1 + 2N``, and so on, while an
+alternate's frequency counts only the due presentations of its base entry.
 Frequency-zero entries have no independent slot, although their screen IDs may
-still be referenced as alternates.  Entry order is preserved in hydration and
-normal passes, and constructing a new scheduler (including after a config
-reload) starts a new hydration phase.
+still be referenced as alternates. Entry order is preserved within every cycle.
+Constructing a new scheduler, including after a config reload, starts again at
+cycle 1.
 """
 
 from __future__ import annotations
@@ -65,36 +64,35 @@ class _ScheduleEntry:
 class ScheduledPreviewEntry:
     """One non-mutating preview result with its scheduling context.
 
-    ``pass_number`` is ``None`` for startup hydration.  Normal rotation passes
-    are numbered starting at one; gaps in their numbers identify passes where
-    no configured entry was due, even though those empty passes produce no
-    result of their own.
+    Rotation cycles are numbered starting at one; gaps in their numbers identify
+    cycles where no configured entry was due, even though those empty cycles
+    produce no result of their own.
     """
 
     screen_id: str
-    phase: Literal["startup", "normal"]
-    pass_number: Optional[int]
+    cycle_number: int
+
+    @property
+    def pass_number(self) -> int:
+        """Backward-compatible alias for callers that still call cycles passes."""
+
+        return self.cycle_number
+
+    @property
+    def phase(self) -> Literal["normal"]:
+        """Backward-compatible phase marker; startup is no longer separate."""
+
+        return "normal"
 
 
 class ScreenScheduler:
-    """Yield screens in ordered hydration and frequency-based normal passes.
-
-    Instantiation begins a fresh startup hydration phase.  Hydration queues
-    every positive-frequency base once in configuration order without counting
-    a normal pass or an alternate presentation.  Normal frequency ``N`` then
-    selects passes ``N``, ``2N``, ``3N``, etc.; alternate frequency is measured
-    against those due presentations of the individual base entry.
-    """
+    """Yield screens in ordered, frequency-based cycles starting at cycle 1."""
 
     def __init__(self, entries: Sequence[_ScheduleEntry]):
         self._entries: list[_ScheduleEntry] = list(entries)
         self._cursor: int = 0
-        self._startup_indices: list[int] = [
-            index for index, entry in enumerate(self._entries) if entry.frequency >= 1
-        ]
-        self._pending_indices: list[int] = []
-        self._pass_number: int = 0
-        self._startup_hydrated: bool = False
+        self._pending_indices: Optional[list[int]] = None
+        self._cycle_number: int = 1
         self._extra_seconds_by_id: dict[str, int] = {}
         requested: set[str] = set()
         for entry in self._entries:
@@ -139,9 +137,9 @@ class ScreenScheduler:
         return [entry.screen_id for entry in self.preview_scheduled_entries(limit)]
 
     def preview_scheduled_entries(self, limit: int) -> list[ScheduledPreviewEntry]:
-        """Return upcoming IDs annotated with startup/normal pass information.
+        """Return upcoming IDs annotated with normal cycle information.
 
-        This pass-aware form is intended for diagnostics and scheduler tests.
+        This cycle-aware form is intended for diagnostics and scheduler tests.
         Production callers that only need IDs should use
         :meth:`preview_scheduled_ids`.
         """
@@ -172,22 +170,20 @@ class ScreenScheduler:
 
         preview = ScreenScheduler(cloned_entries)
         preview._cursor = self._cursor
-        preview._startup_indices = self._startup_indices.copy()
-        preview._pending_indices = self._pending_indices.copy()
-        preview._pass_number = self._pass_number
-        preview._startup_hydrated = self._startup_hydrated
+        preview._pending_indices = (
+            None if self._pending_indices is None else self._pending_indices.copy()
+        )
+        preview._cycle_number = self._cycle_number
 
         scheduled_entries: list[ScheduledPreviewEntry] = []
         for _ in range(limit):
             next_id = preview._next_scheduled_id()
             if next_id is None:
                 break
-            normal_pass_number = preview._pass_number or None
             scheduled_entries.append(
                 ScheduledPreviewEntry(
                     screen_id=next_id,
-                    phase="normal" if normal_pass_number is not None else "startup",
-                    pass_number=normal_pass_number,
+                    cycle_number=preview._cycle_number,
                 )
             )
 
@@ -196,68 +192,55 @@ class ScreenScheduler:
     def _next_scheduled_id(self) -> Optional[str]:
         """Return the next ordered ID without availability checks.
 
-        Startup returns only base IDs and leaves presentation counters alone;
-        normal passes may resolve a due base entry to its alternate.
+        Cycle 1 returns every enabled base ID; later cycles may use alternates.
         """
 
         if not self._entries:
             return None
 
-        if not self._pending_indices and not self._hydrate_until_pending(datetime.now(UTC)):
+        if self._pending_indices is None:
+            self._queue_current_cycle(datetime.now(UTC))
+        if not self._pending_indices and not self._advance_until_pending(datetime.now(UTC)):
             return None
 
+        assert self._pending_indices is not None
         entry_index = self._pending_indices.pop(0)
         self._cursor = (entry_index + 1) % len(self._entries)
         return self._scheduled_id_for(
             self._entries[entry_index],
-            advance_presentation=self._pass_number > 0,
+            force_base=self._cycle_number == 1,
         )
 
     def _scheduled_id_for(
         self,
         entry: _ScheduleEntry,
         *,
-        advance_presentation: bool = True,
+        force_base: bool = False,
     ) -> str:
-        """Resolve a due entry and count only normal passes as presentations.
-
-        ``advance_presentation`` is false during startup hydration, ensuring it
-        neither selects an alternate nor changes when one will next be due.
-        """
-
-        if not advance_presentation:
-            return entry.screen_id
-
+        """Resolve a due entry, always showing its base in cycle 1."""
         entry.presentation_count += 1
         if (
-            entry.alternate
+            not force_base
+            and entry.alternate
             and entry.alternate.frequency > 0
             and entry.presentation_count % entry.alternate.frequency == 0
         ):
             return entry.alternate.next_screen_id()
         return entry.screen_id
 
-    def _hydrate_next_pass(self, now_utc: datetime) -> None:
-        """Queue every due entry for one complete, configuration-ordered pass.
+    def _queue_current_cycle(self, now_utc: datetime) -> None:
+        """Queue every due entry for the current configuration-ordered cycle.
 
-        Startup hydration queues each positive-frequency base exactly once in
-        configuration order and is a separate initial traversal, not ``pass 1``.
-        Normal pass numbering begins with pass 1 after startup hydration has
-        completed, and the scheduler-wide pass counter advances once here for
-        each such pass.
+        Cycle 1 queues each positive-frequency base exactly once in configuration
+        order.
 
-        Building the whole pass before returning its first screen prevents later
-        calls from interleaving entries from different frequency passes.  The
+        Building the whole cycle before returning its first screen prevents later
+        calls from interleaving entries from different frequency cycles.  The
         queue is also retained while registry data is refreshed, so rebuilding
         screen definitions cannot alter the configured playback order.
         """
 
-        self._pending_indices.clear()
-        startup_hydration = not self._startup_hydrated
-        if startup_hydration:
-            self._startup_hydrated = True
-        else:
-            self._pass_number += 1
+        self._pending_indices = []
 
         for index, entry in enumerate(self._entries):
             if entry.frequency == 0:
@@ -265,15 +248,16 @@ class ScreenScheduler:
             if entry.hide_after is not None and now_utc >= entry.hide_after:
                 continue
 
-            if startup_hydration or self._pass_number % entry.frequency == 0:
+            if (self._cycle_number - 1) % entry.frequency == 0:
                 self._pending_indices.append(index)
 
         self._cursor = 0
 
-    def _hydrate_until_pending(self, now_utc: datetime) -> bool:
-        """Queue the next nonempty ordered pass, skipping empty pass ranges."""
+    def _advance_until_pending(self, now_utc: datetime) -> bool:
+        """Advance to the next nonempty ordered cycle, skipping empty ranges."""
 
-        self._hydrate_next_pass(now_utc)
+        self._cycle_number += 1
+        self._queue_current_cycle(now_utc)
         if self._pending_indices:
             return True
 
@@ -285,15 +269,15 @@ class ScreenScheduler:
         if not active_frequencies:
             return False
 
-        # The pass just hydrated was empty. Jump to immediately before the
-        # nearest future multiple rather than scanning every intervening pass;
-        # _hydrate_next_pass() remains the single place that increments the
-        # scheduler-wide counter and queues the selected pass.
-        next_due_pass = min(
-            (self._pass_number // frequency + 1) * frequency for frequency in active_frequencies
+        # The cycle just queued was empty. Jump to immediately before the
+        # nearest future match rather than scanning every intervening cycle;
+        # Then queue that selected cycle directly.
+        next_due_cycle = min(
+            self._cycle_number + (frequency - ((self._cycle_number - 1) % frequency))
+            for frequency in active_frequencies
         )
-        self._pass_number = next_due_pass - 1
-        self._hydrate_next_pass(now_utc)
+        self._cycle_number = next_due_cycle
+        self._queue_current_cycle(now_utc)
         return bool(self._pending_indices)
 
     def _next_available_from_entry(
@@ -301,14 +285,13 @@ class ScreenScheduler:
         entry: _ScheduleEntry,
         registry: dict[str, ScreenDefinition],
         *,
-        advance_presentation: bool = True,
+        force_base: bool = False,
     ) -> Optional[ScreenDefinition]:
-        """Resolve a queued entry, counting alternates only on normal passes."""
+        """Resolve a queued entry, always showing its base in cycle 1."""
 
-        if advance_presentation:
-            entry.presentation_count += 1
+        entry.presentation_count += 1
         if (
-            advance_presentation
+            not force_base
             and entry.alternate
             and entry.alternate.frequency > 0
             and entry.presentation_count % entry.alternate.frequency == 0
@@ -326,21 +309,24 @@ class ScreenScheduler:
         return None
 
     def next_available(self, registry: dict[str, ScreenDefinition]) -> Optional[ScreenDefinition]:
-        """Return the next available definition from one ordered queued pass.
+        """Return the next available definition from one ordered queued cycle.
 
-        The method never mixes a later pass into the currently queued pass.
-        Rebuilding the scheduler, as config reload does, restarts hydration.
+        The method never mixes a later cycle into the currently queued cycle.
+        Rebuilding the scheduler, as config reload does, restarts at cycle 1.
         """
 
         if not self._entries:
             return None
 
         now_utc = datetime.now(UTC)
-        if not self._pending_indices and not self._hydrate_until_pending(now_utc):
+        if self._pending_indices is None:
+            self._queue_current_cycle(now_utc)
+        if not self._pending_indices and not self._advance_until_pending(now_utc):
             return None
 
-        # Drain exactly one hydrated pass. Unavailable screens remain in their
-        # configured slots rather than causing a second pass to be mixed in.
+        # Drain exactly one queued cycle. Unavailable screens remain in their
+        # configured slots rather than causing a second cycle to be mixed in.
+        assert self._pending_indices is not None
         pending_count = len(self._pending_indices)
         for _ in range(pending_count):
             entry_index = self._pending_indices.pop(0)
@@ -351,7 +337,7 @@ class ScreenScheduler:
             definition = self._next_available_from_entry(
                 entry,
                 registry,
-                advance_presentation=self._pass_number > 0,
+                force_base=self._cycle_number == 1,
             )
             if definition is not None:
                 return definition
@@ -482,11 +468,11 @@ def sanitize_schedule_config(config: dict[str, Any]) -> tuple[dict[str, Any], li
 
 
 def build_scheduler(config: dict[str, Any]) -> ScreenScheduler:
-    """Build a freshly hydrating scheduler in saved playlist/config-page order.
+    """Build a scheduler at cycle 1 in saved playlist/config-page order.
 
     Frequency values are interpreted directly: zero removes the independent
-    base slot, while positive ``N`` means normal passes ``N``, ``2N``, and so
-    on after one startup hydration display.  A zero-frequency screen ID remains
+    base slot, while positive ``N`` means cycles ``1``, ``1 + N``, ``1 + 2N``,
+    and so on. A zero-frequency screen ID remains
     valid as an alternate referenced by another enabled entry.
     """
 

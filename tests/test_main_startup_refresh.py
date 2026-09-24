@@ -202,8 +202,8 @@ def test_bases_are_not_rehydrated_until_saved_config_rebuilds_scheduler(monkeypa
     assert rebuilt is not scheduler
     preview = rebuilt.preview_scheduled_entries(2)
     assert [(entry.screen_id, entry.phase) for entry in preview] == [
-        ("date", "startup"),
-        ("inside", "startup"),
+        ("date", "normal"),
+        ("inside", "normal"),
     ]
 
 
