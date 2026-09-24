@@ -9,20 +9,8 @@
         }
       },
       "nixie": 0,
-      "weather logo": 0,
-      "weather1": 1,
-      "weather2": 1,
-      "air quality": 2,
-      "weather alert": 1,
-      "weather hourly": 1,
-      "weather daily": 3,
-      "weather quad": {
-        "frequency": 1,
-        "extra_seconds": 5
-      },
-      "weather radar": 1,
-      "astronomical": 2,
-      "inside": 1,
+      "quad": 0,
+      "on this day": 6,
       "news headlines": {
         "frequency": 1,
         "alt": {
@@ -31,8 +19,61 @@
         }
       },
       "news headlines 2": 0,
+      "weather logo": 0,
+      "weather1": 1,
+      "weather2": 1,
+      "air quality": 2,
+      "weather alert": 1,
+      "weather hourly": 1,
+      "weather daily": 3,
+      "astronomical": 2,
+      "weather quad": {
+        "frequency": 1,
+        "extra_seconds": 5
+      },
+      "weather radar": 1,
+      "inside": 1,
       "verano logo": 0,
       "vrnof": 3,
+      "bears logo": 3,
+      "bears stand1": 0,
+      "bears stand2": 0,
+      "bears next": 3,
+      "bears next season": 0,
+      "bears next season sched": 0,
+      "nfl logo": 0,
+      "NFL Scoreboard": 2,
+      "NFL Overview NFC": {
+        "frequency": 4,
+        "alt": {
+          "screen": "NFL Standings NFC",
+          "frequency": 3
+        }
+      },
+      "NFL Overview AFC": {
+        "frequency": 4,
+        "alt": {
+          "screen": "NFL Standings AFC",
+          "frequency": 3
+        }
+      },
+      "NFL Standings NFC": 0,
+      "NFL Standings AFC": 0,
+      "nba logo": 0,
+      "NBA Scoreboard": 0,
+      "NBA Playoffs": 0,
+      "NCAAM Scoreboard": 0,
+      "World Cup Scoreboard": 0,
+      "bulls logo": 0,
+      "bulls stand1": 0,
+      "bulls last": 0,
+      "bulls live": 0,
+      "bulls next": 0,
+      "bulls next home": 0,
+      "bulls schedule quad": {
+        "frequency": 0,
+        "extra_seconds": 2
+      },
       "hawks logo": 2,
       "hawks stand1": 0,
       "hawks last": 2,
@@ -46,6 +87,8 @@
       "nhl logo": 0,
       "NHL Scoreboard": 2,
       "NHL Playoffs": 0,
+      "NHL Standings Overview West": 0,
+      "NHL Standings Overview East": 0,
       "NHL Standings West": {
         "frequency": 0,
         "alt": {
@@ -53,6 +96,7 @@
           "frequency": 2
         }
       },
+      "NHL Standings West v2": 0,
       "NHL Standings East": {
         "frequency": 0,
         "alt": {
@@ -60,13 +104,10 @@
           "frequency": 2
         }
       },
-      "NHL Standings Overview West": 0,
-      "NHL Standings Overview East": 0,
-      "NHL Standings West v2": 0,
       "NHL Standings East v2": 0,
       "wolves logo": 0,
-      "wolves live": 0,
       "wolves last": 0,
+      "wolves live": 0,
       "wolves next": 0,
       "wolves next home": 0,
       "cubs logo": 2,
@@ -75,6 +116,7 @@
       "cubs stand3": 2,
       "cubs last": 2,
       "cubs live": 1,
+      "cubs no game": 0,
       "cubs next": 3,
       "cubs next home": 3,
       "cubs current series": 3,
@@ -84,13 +126,13 @@
         "frequency": 2,
         "extra_seconds": 3
       },
-      "cubs no game": 0,
       "sox logo": 5,
       "sox stand1": 0,
       "sox stand2": 0,
       "sox stand3": 5,
       "sox last": 5,
       "sox live": 1,
+      "sox no game": 0,
       "sox next": 7,
       "sox next home": 7,
       "sox current series": 7,
@@ -100,7 +142,6 @@
         "frequency": 5,
         "extra_seconds": 3
       },
-      "sox no game": 0,
       "mlb logo": 0,
       "MLB Scoreboard": 2,
       "NL Overview": 0,
@@ -129,47 +170,6 @@
       "MLB ALWC Standings": 0,
       "MLB NL Standings": 0,
       "MLB NLWC Standings": 0,
-      "bears logo": 3,
-      "bears stand1": 0,
-      "bears stand2": 0,
-      "bears next": 3,
-      "bears next season": 0,
-      "bears next season sched": 0,
-      "nfl logo": 0,
-      "NFL Scoreboard": 2,
-      "NFL Overview NFC": {
-        "frequency": 4,
-        "alt": {
-          "screen": "NFL Standings NFC",
-          "frequency": 3
-        }
-      },
-      "NFL Overview AFC": {
-        "frequency": 4,
-        "alt": {
-          "screen": "NFL Standings AFC",
-          "frequency": 3
-        }
-      },
-      "NFL Standings NFC": 0,
-      "NFL Standings AFC": 0,
-      "bulls logo": 0,
-      "bulls stand1": 0,
-      "bulls last": 0,
-      "bulls live": 0,
-      "bulls next": 0,
-      "bulls next home": 0,
-      "bulls schedule quad": {
-        "frequency": 0,
-        "extra_seconds": 2
-      },
-      "nba logo": 0,
-      "NBA Scoreboard": 0,
-      "NBA Playoffs": 0,
-      "on this day": 6,
-      "NCAAM Scoreboard": 0,
-      "quad": 0,
-      "World Cup Scoreboard": 0,
       "adsb stats": 3,
       "adsb live": 3
     },
@@ -210,13 +210,13 @@
             "screen": "weather daily"
           },
           {
+            "screen": "astronomical"
+          },
+          {
             "screen": "weather quad"
           },
           {
             "screen": "weather radar"
-          },
-          {
-            "screen": "astronomical"
           }
         ]
       },
@@ -284,19 +284,19 @@
             "screen": "NHL Playoffs"
           },
           {
-            "screen": "NHL Standings West"
-          },
-          {
-            "screen": "NHL Standings East"
-          },
-          {
             "screen": "NHL Standings Overview West"
           },
           {
             "screen": "NHL Standings Overview East"
           },
           {
+            "screen": "NHL Standings West"
+          },
+          {
             "screen": "NHL Standings West v2"
+          },
+          {
+            "screen": "NHL Standings East"
           },
           {
             "screen": "NHL Standings East v2"
@@ -310,10 +310,10 @@
             "screen": "wolves logo"
           },
           {
-            "screen": "wolves live"
+            "screen": "wolves last"
           },
           {
-            "screen": "wolves last"
+            "screen": "wolves live"
           },
           {
             "screen": "wolves next"
@@ -345,6 +345,9 @@
             "screen": "cubs live"
           },
           {
+            "screen": "cubs no game"
+          },
+          {
             "screen": "cubs next"
           },
           {
@@ -361,9 +364,6 @@
           },
           {
             "screen": "cubs schedule quad"
-          },
-          {
-            "screen": "cubs no game"
           }
         ]
       },
@@ -389,6 +389,9 @@
             "screen": "sox live"
           },
           {
+            "screen": "sox no game"
+          },
+          {
             "screen": "sox next"
           },
           {
@@ -405,9 +408,6 @@
           },
           {
             "screen": "sox schedule quad"
-          },
-          {
-            "screen": "sox no game"
           }
         ]
       },
@@ -536,13 +536,13 @@
         "label": "Other",
         "steps": [
           {
+            "screen": "quad"
+          },
+          {
             "screen": "on this day"
           },
           {
             "screen": "NCAAM Scoreboard"
-          },
-          {
-            "screen": "quad"
           },
           {
             "screen": "World Cup Scoreboard"
@@ -561,13 +561,28 @@
         "playlist": "playlist-1771301244817-427"
       },
       {
+        "playlist": "playlist-1771301555724-243"
+      },
+      {
+        "playlist": "playlist-1771301274262-66"
+      },
+      {
         "playlist": "playlist-1771301254299-679"
       },
       {
         "playlist": "playlist-1771301264049-358"
       },
       {
-        "playlist": "playlist-1771301274262-66"
+        "playlist": "playlist-1771301277697-679"
+      },
+      {
+        "playlist": "playlist-1771301476392-441"
+      },
+      {
+        "playlist": "playlist-1771301509551-198"
+      },
+      {
+        "playlist": "playlist-1771301321201-767"
       },
       {
         "playlist": "playlist-1771301317973-519"
@@ -586,21 +601,6 @@
       },
       {
         "playlist": "playlist-1771301520113-753"
-      },
-      {
-        "playlist": "playlist-1771301277697-679"
-      },
-      {
-        "playlist": "playlist-1771301476392-441"
-      },
-      {
-        "playlist": "playlist-1771301321201-767"
-      },
-      {
-        "playlist": "playlist-1771301509551-198"
-      },
-      {
-        "playlist": "playlist-1771301555724-243"
       }
     ]
   },

@@ -1,6 +1,9 @@
 import json
 from pathlib import Path
 
+import config_ui
+from schedule import build_scheduler
+
 ROOT = Path(__file__).resolve().parents[1]
 
 
@@ -128,73 +131,283 @@ def test_default_screen_configs_rotate_mlb_overviews_with_league_standings():
             }
 
 
-def test_default_screen_configs_place_wolves_live_after_logo():
-    for filename in (
-        "default_screens_large.json",
-        "default_screens_small.json",
-        "screens_config.json",
-    ):
+def test_default_screen_configs_include_wolves_live_in_approved_position():
+    expected_prefixes = {
+        "default_screens_large.json": ["wolves logo", "wolves last", "wolves live"],
+        "default_screens_small.json": ["wolves logo", "wolves live"],
+        "screens_config.json": ["wolves logo", "wolves live"],
+    }
+    for filename, expected_prefix in expected_prefixes.items():
         config = _load_default_config(filename)
         rotation_config = config.get("config", config)
 
         assert rotation_config["screens"].get("wolves live") == 0
-        wolves_steps = _wolves_playlist_steps(config)
-        assert wolves_steps[:2] == ["wolves logo", "wolves live"]
+        assert _wolves_playlist_steps(config)[: len(expected_prefix)] == expected_prefix
 
 
-def test_default_screens_large_screen_order_and_frequencies():
-    """The large defaults match the rotation the user tuned in the web UI.
+LARGE_SPREADSHEET_SEQUENCE = ['date',
+ 'nixie',
+ 'quad',
+ 'on this day',
+ 'news headlines',
+ 'news headlines 2',
+ 'weather logo',
+ 'weather1',
+ 'weather2',
+ 'air quality',
+ 'weather alert',
+ 'weather hourly',
+ 'weather daily',
+ 'astronomical',
+ 'weather quad',
+ 'weather radar',
+ 'inside',
+ 'verano logo',
+ 'vrnof',
+ 'bears logo',
+ 'bears stand1',
+ 'bears stand2',
+ 'bears next',
+ 'bears next season',
+ 'bears next season sched',
+ 'nfl logo',
+ 'NFL Scoreboard',
+ 'NFL Overview NFC',
+ 'NFL Overview AFC',
+ 'NFL Standings NFC',
+ 'NFL Standings AFC',
+ 'nba logo',
+ 'NBA Scoreboard',
+ 'NBA Playoffs',
+ 'NCAAM Scoreboard',
+ 'World Cup Scoreboard',
+ 'bulls logo',
+ 'bulls stand1',
+ 'bulls last',
+ 'bulls live',
+ 'bulls next',
+ 'bulls next home',
+ 'bulls schedule quad',
+ 'hawks logo',
+ 'hawks stand1',
+ 'hawks last',
+ 'hawks live',
+ 'hawks next',
+ 'hawks next home',
+ 'hawks schedule quad',
+ 'nhl logo',
+ 'NHL Scoreboard',
+ 'NHL Playoffs',
+ 'NHL Standings Overview West',
+ 'NHL Standings Overview East',
+ 'NHL Standings West',
+ 'NHL Standings West v2',
+ 'NHL Standings East',
+ 'NHL Standings East v2',
+ 'wolves logo',
+ 'wolves last',
+ 'wolves live',
+ 'wolves next',
+ 'wolves next home',
+ 'cubs logo',
+ 'cubs stand1',
+ 'cubs stand2',
+ 'cubs stand3',
+ 'cubs last',
+ 'cubs live',
+ 'cubs no game',
+ 'cubs next',
+ 'cubs next home',
+ 'cubs current series',
+ 'cubs next series',
+ 'cubs next home series',
+ 'cubs schedule quad',
+ 'sox logo',
+ 'sox stand1',
+ 'sox stand2',
+ 'sox stand3',
+ 'sox last',
+ 'sox live',
+ 'sox no game',
+ 'sox next',
+ 'sox next home',
+ 'sox current series',
+ 'sox next series',
+ 'sox next home series',
+ 'sox schedule quad',
+ 'mlb logo',
+ 'MLB Scoreboard',
+ 'NL Overview',
+ 'AL Overview',
+ 'NL Overview+WC',
+ 'AL Overview+WC',
+ 'MLB AL Standings',
+ 'MLB ALWC Standings',
+ 'MLB NL Standings',
+ 'MLB NLWC Standings',
+ 'adsb stats',
+ 'adsb live']
 
-    The order/frequencies in ``screens_config.export-4.json`` (downloaded via
-    the Screens export) were adopted as the repo-backed defaults in 2026-09:
-    the news feeds moved to follow the weather/sensors block, "on this day"
-    moved to the front of the "Other" rotation, and the hawks screens plus
-    the NHL Scoreboard were re-weighted.
-    """
-    config = _load_default_config("default_screens_large.json")
-    screens = config["config"]["screens"]
-    screen_ids = list(screens)
 
-    # Screens dict order: news feeds follow "inside"; "on this day" sits just
-    # before the miscellaneous end-of-rotation screens.
-    assert screen_ids.index("news headlines") == screen_ids.index("inside") + 1
-    assert screen_ids.index("news headlines 2") == screen_ids.index("news headlines") + 1
-    assert screen_ids.index("on this day") == screen_ids.index("NBA Playoffs") + 1
-
-    assert screens["hawks logo"] == 2
-    assert screens["hawks schedule quad"] == {"frequency": 2, "extra_seconds": 3}
-    assert screens["NHL Scoreboard"] == 2
-    assert screens["air quality"] == 2
-    assert screens["astronomical"] == 2
-    assert screens["wolves logo"] == 8
-    assert screens["wolves next home"] == 8
+LARGE_PLAYLIST_SEQUENCE = ['starter',
+ 'Other',
+ 'news & stocks',
+ 'weather',
+ 'sensors',
+ 'bears',
+ 'nfl',
+ 'nba',
+ 'bulls',
+ 'hawks',
+ 'nhl',
+ 'wolves',
+ 'cubs',
+ 'sox',
+ 'mlb']
 
 
-def test_default_screens_large_playlist_step_order():
-    config = _load_default_config("default_screens_large.json")
-    playlists = {
-        playlist["label"]: [step["screen"] for step in playlist["steps"]]
-        for playlist in config["config"]["playlists"].values()
-    }
+LARGE_RESOLVED_ORDER = ['date',
+ 'nixie',
+ 'quad',
+ 'on this day',
+ 'NCAAM Scoreboard',
+ 'World Cup Scoreboard',
+ 'adsb stats',
+ 'adsb live',
+ 'news headlines',
+ 'news headlines 2',
+ 'verano logo',
+ 'vrnof',
+ 'weather logo',
+ 'weather1',
+ 'weather2',
+ 'air quality',
+ 'weather alert',
+ 'weather hourly',
+ 'weather daily',
+ 'astronomical',
+ 'weather quad',
+ 'weather radar',
+ 'inside',
+ 'bears logo',
+ 'bears stand1',
+ 'bears stand2',
+ 'bears next',
+ 'bears next season',
+ 'bears next season sched',
+ 'nfl logo',
+ 'NFL Scoreboard',
+ 'NFL Overview NFC',
+ 'NFL Overview AFC',
+ 'NFL Standings NFC',
+ 'NFL Standings AFC',
+ 'nba logo',
+ 'NBA Scoreboard',
+ 'NBA Playoffs',
+ 'bulls logo',
+ 'bulls stand1',
+ 'bulls last',
+ 'bulls live',
+ 'bulls next',
+ 'bulls next home',
+ 'bulls schedule quad',
+ 'hawks logo',
+ 'hawks stand1',
+ 'hawks last',
+ 'hawks live',
+ 'hawks next',
+ 'hawks next home',
+ 'hawks schedule quad',
+ 'nhl logo',
+ 'NHL Scoreboard',
+ 'NHL Playoffs',
+ 'NHL Standings Overview West',
+ 'NHL Standings Overview East',
+ 'NHL Standings West',
+ 'NHL Standings West v2',
+ 'NHL Standings East',
+ 'NHL Standings East v2',
+ 'wolves logo',
+ 'wolves last',
+ 'wolves live',
+ 'wolves next',
+ 'wolves next home',
+ 'cubs logo',
+ 'cubs stand1',
+ 'cubs stand2',
+ 'cubs stand3',
+ 'cubs last',
+ 'cubs live',
+ 'cubs no game',
+ 'cubs next',
+ 'cubs next home',
+ 'cubs current series',
+ 'cubs next series',
+ 'cubs next home series',
+ 'cubs schedule quad',
+ 'sox logo',
+ 'sox stand1',
+ 'sox stand2',
+ 'sox stand3',
+ 'sox last',
+ 'sox live',
+ 'sox no game',
+ 'sox next',
+ 'sox next home',
+ 'sox current series',
+ 'sox next series',
+ 'sox next home series',
+ 'sox schedule quad',
+ 'mlb logo',
+ 'MLB Scoreboard',
+ 'NL Overview',
+ 'AL Overview',
+ 'NL Overview+WC',
+ 'AL Overview+WC',
+ 'MLB AL Standings',
+ 'MLB ALWC Standings',
+ 'MLB NL Standings',
+ 'MLB NLWC Standings']
 
-    assert playlists["weather"] == [
-        "weather logo",
-        "weather1",
-        "weather2",
-        "air quality",
-        "weather alert",
-        "weather hourly",
-        "weather daily",
-        "weather quad",
-        "weather radar",
-        "astronomical",
-    ]
-    assert playlists["news & stocks"] == [
-        "news headlines",
-        "news headlines 2",
-        "verano logo",
-        "vrnof",
-    ]
-    other = playlists["Other"]
-    assert other[0] == "on this day"
-    assert other[-2:] == ["adsb stats", "adsb live"]
+
+def test_default_screens_large_matches_complete_approved_sequence():
+    config = _load_default_config("default_screens_large.json")["config"]
+    position = {screen_id: index for index, screen_id in enumerate(LARGE_SPREADSHEET_SEQUENCE)}
+
+    assert list(config["screens"]) == LARGE_SPREADSHEET_SEQUENCE
+
+    playlist_labels = []
+    playlist_screen_ids = set()
+    for sequence_item in config["sequence"]:
+        playlist = config["playlists"][sequence_item["playlist"]]
+        steps = [step["screen"] for step in playlist["steps"]]
+        playlist_labels.append(playlist["label"])
+        playlist_screen_ids.update(steps)
+        assert steps == sorted(steps, key=position.__getitem__)
+
+    assert playlist_labels == LARGE_PLAYLIST_SEQUENCE
+    assert playlist_screen_ids == set(LARGE_SPREADSHEET_SEQUENCE)
+
+
+def test_large_config_screenshots_and_scheduler_resolve_identical_complete_order():
+    config = _load_default_config("default_screens_large.json")["config"]
+    ordered_ids = config_ui._ordered_screen_ids(
+        config["screens"], exclude=config_ui.LEGACY_RETIRED_SCREEN_IDS
+    )
+    playlists, assignments = config_ui._build_playlist_assignments(config)
+
+    # The Config page groups its ordered entries client-side with the same playlist
+    # data. The Screenshots page calls this helper directly before rendering cards.
+    config_page_order = config_ui._apply_playlist_grouping(
+        [entry["id"] for entry in config_ui._build_screen_entries(config, {})],
+        playlists,
+        assignments,
+    )
+    screenshots_page_order = config_ui._apply_playlist_grouping(
+        ordered_ids, playlists, assignments
+    )
+    runtime_order = [entry.screen_id for entry in build_scheduler(config)._entries]
+
+    assert config_page_order == LARGE_RESOLVED_ORDER
+    assert screenshots_page_order == LARGE_RESOLVED_ORDER
+    assert runtime_order == LARGE_RESOLVED_ORDER
