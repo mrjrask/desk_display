@@ -428,7 +428,7 @@ def test_scheduler_respects_frequency():
     registry = make_registry({"date": True, "inside": True})
 
     sequence = collect_sequence(scheduler, registry, 6)
-    assert sequence == ["date", "inside", "date", "inside", "date", "date"]
+    assert sequence == ["date", "inside", "date", "date", "inside", "date"]
 
 
 def test_scheduler_frequency_interval_matches_configuration():
@@ -437,20 +437,20 @@ def test_scheduler_frequency_interval_matches_configuration():
     registry = make_registry({"date": True, "inside": True})
 
     sequence = collect_sequence(scheduler, registry, 12)
-    # ``inside`` appears once during the initial loop, then on every fourth pass.
+    # Startup hydration is separate; normal rotation then begins with pass 1.
     assert sequence == [
         "date",
         "inside",
         "date",
         "date",
         "date",
-        "inside",
-        "date",
-        "date",
-        "date",
         "date",
         "inside",
         "date",
+        "date",
+        "date",
+        "date",
+        "inside",
     ]
 
 
@@ -498,10 +498,19 @@ def test_scheduler_hydrates_each_frequency_pass_in_config_page_order():
         "inside",
         "weather1",
         "date",
-        "inside",
         "weather1",
         "date",
+        "inside",
     ]
+
+
+def test_scheduler_advances_across_empty_normal_passes_iteratively():
+    scheduler = build_scheduler({"screens": {"date": 3}})
+    registry = make_registry({"date": True})
+
+    assert scheduler.next_available(registry).id == "date"
+    assert scheduler.next_available(registry).id == "date"
+    assert scheduler._pass_number == 3
 
 
 def test_scheduler_uses_first_playlist_assignment_for_duplicate_screen():

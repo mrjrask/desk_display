@@ -50,4 +50,4 @@ def test_final_entry_wrap_does_not_readvance_completed_pass():
     # from the pass that just completed.
     assert scheduler._cursor == 0
     assert scheduler._pending_indices == []
-    assert [entry.cycle_count for entry in scheduler._entries] == [1, 1, 1]
+    assert scheduler._pass_number == 0
