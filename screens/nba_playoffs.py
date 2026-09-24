@@ -875,7 +875,14 @@ def _derive_playoff_matchups_from_games(games: list[dict]) -> list[dict]:
         ):
             existing["latest_game_datetime"] = game_dt
         if game_dt and game_dt >= datetime.datetime.now(CENTRAL_TIME):
-            existing["next_text"] = f"{_next_game_day_label(game_dt)} {game_dt.strftime('%-I:%M %p')}"
+            # A series can list several not-yet-played games at once (e.g.
+            # Games 5, 6, 7 all scheduled ahead of time); next_text should
+            # be the soonest of them, not whichever happens to be iterated
+            # last.
+            next_game_dt = existing.get("next_game_datetime")
+            if not isinstance(next_game_dt, datetime.datetime) or game_dt < next_game_dt:
+                existing["next_game_datetime"] = game_dt
+                existing["next_text"] = f"{_next_game_day_label(game_dt)} {game_dt.strftime('%-I:%M %p')}"
         if _is_live_game(game):
             existing["has_live_game"] = True
 

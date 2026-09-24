@@ -1477,6 +1477,12 @@ def _is_postponed_game(game: dict) -> bool:
 
 
 def _is_final_game(game: dict) -> bool:
+    # A postponed game that MLB isn't going to make up can be reported with
+    # abstractGameState "Final" (or a detailedState containing both "final"
+    # and "postponed", e.g. "Final: Postponed"), so postponed must be
+    # checked first or these games show up as if they were actually played.
+    if _is_postponed_game(game):
+        return False
     status = (game or {}).get("status") or {}
     detailed = str(status.get("detailedState") or "").lower()
     abstract = str(status.get("abstractGameState") or "").lower()
@@ -1521,6 +1527,9 @@ def _series_line(game: dict, focus_id: Optional[int]) -> str:
         if isinstance(away_score, int) and isinstance(home_score, int):
             return f"{date_label} • Final {away_score}-{home_score}"
         return f"{date_label} • Final"
+
+    if _is_postponed_game(game):
+        return f"{_rel_date_only(raw_date)} • Postponed"
 
     raw_time = game.get("startTimeCentral", "TBD")
     return _format_game_label(raw_date, raw_time)

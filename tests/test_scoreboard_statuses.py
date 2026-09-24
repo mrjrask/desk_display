@@ -70,6 +70,24 @@ def test_nfl_in_game_status_overrides_clock(short_detail: str):
     assert nfl_format_status(game) == short_detail
 
 
+def test_nfl_overtime_period_shows_ot_not_q5():
+    # Regression: ESPN numbers periods 1-4 as quarters and 5+ as overtime,
+    # but _format_status built "Q{period}" unconditionally, so overtime
+    # displayed as "Q5" instead of "OT".
+    game = _nfl_game(state="in", short="", detail="", clock="8:32", period=5)
+    assert nfl_format_status(game) == "8:32 OT"
+
+
+def test_nfl_double_overtime_period_shows_2ot():
+    game = _nfl_game(state="in", short="", detail="", clock="4:15", period=6)
+    assert nfl_format_status(game) == "4:15 2OT"
+
+
+def test_nfl_regular_quarter_is_unaffected():
+    game = _nfl_game(state="in", short="", detail="", clock="10:00", period=3)
+    assert nfl_format_status(game) == "10:00 Q3"
+
+
 def test_mlb_scoreboard_date_uses_temporary_override_window():
     now = datetime.datetime(2026, 2, 19, 12, 0, tzinfo=CENTRAL_TIME)
     assert mlb_scoreboard_date(now) == datetime.date(2026, 2, 20)

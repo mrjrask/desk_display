@@ -999,13 +999,29 @@ def _in_offseason(today: Optional[datetime.date] = None) -> bool:
     return start <= today < end
 
 
-def _fetch_standings_data() -> tuple[dict[str, dict[str, list[dict]]], Optional[str]]:
+def _title_with_season_note(title: str, season_note: Optional[str]) -> str:
+    """Append a season indicator to *title* so real-but-stale-season data
+    isn't shown as if it were the current season (see _fetch_standings_data)."""
+
+    return f"{title} ({season_note})" if season_note else title
+
+
+def _fetch_standings_data() -> tuple[dict[str, dict[str, list[dict]]], Optional[str], Optional[str]]:
+    """Return (standings, fallback_message, season_note).
+
+    ``season_note`` is set whenever real standings data is being shown but
+    it's from a season other than the intended one (the CSV source lags
+    behind at the start of a new season), so the title can say so instead
+    of silently passing off old data as current.
+    """
+
     now = time.time()
     cached = _STANDINGS_CACHE.get("data")
     timestamp = float(_STANDINGS_CACHE.get("timestamp", 0.0))
     cached_message = _STANDINGS_CACHE.get("message")
+    cached_season_note = _STANDINGS_CACHE.get("season_note")
     if cached and now - timestamp < CACHE_TTL:
-        return cached, cached_message  # type: ignore[return-value]
+        return cached, cached_message, cached_season_note  # type: ignore[return-value]
 
     if _in_offseason():
         standings = {
@@ -1015,8 +1031,9 @@ def _fetch_standings_data() -> tuple[dict[str, dict[str, list[dict]]], Optional[
         _STANDINGS_CACHE["data"] = standings
         _STANDINGS_CACHE["timestamp"] = now
         _STANDINGS_CACHE["message"] = FALLBACK_MESSAGE_OFFSEASON
+        _STANDINGS_CACHE["season_note"] = None
         logging.info("NFL standings offseason fallback engaged; suppressing data display")
-        return standings, FALLBACK_MESSAGE_OFFSEASON
+        return standings, FALLBACK_MESSAGE_OFFSEASON, None
 
     try:
         response = _SESSION.get(STANDINGS_URL, timeout=REQUEST_TIMEOUT)
@@ -1027,7 +1044,7 @@ def _fetch_standings_data() -> tuple[dict[str, dict[str, list[dict]]], Optional[
         if isinstance(cached, dict):
             _STANDINGS_CACHE["timestamp"] = now
             _STANDINGS_CACHE["message"] = cached_message or FALLBACK_MESSAGE_UNAVAILABLE
-            return cached, _STANDINGS_CACHE["message"]  # type: ignore[return-value]
+            return cached, _STANDINGS_CACHE["message"], cached_season_note  # type: ignore[return-value]
         standings = {
             CONFERENCE_NFC_KEY: {},
             CONFERENCE_AFC_KEY: {},
@@ -1035,16 +1052,23 @@ def _fetch_standings_data() -> tuple[dict[str, dict[str, list[dict]]], Optional[
         _STANDINGS_CACHE["data"] = standings
         _STANDINGS_CACHE["timestamp"] = now
         _STANDINGS_CACHE["message"] = FALLBACK_MESSAGE_UNAVAILABLE
-        return standings, FALLBACK_MESSAGE_UNAVAILABLE
+        _STANDINGS_CACHE["season_note"] = None
+        return standings, FALLBACK_MESSAGE_UNAVAILABLE, None
 
     target_season = _target_season_year()
     standings, used_season = _parse_csv_standings(payload_text, target_season)
+    season_note = None
     if used_season and used_season != target_season:
         logging.info(
             "NFL standings using fallback season %s instead of %s",
             used_season,
             target_season,
         )
+        if any(standings.values()):
+            # Real data is being shown, just not for the intended season --
+            # say so in the title instead of silently passing it off as
+            # current (see _render_overview/_render_and_display).
+            season_note = f"{used_season} season"
 
     _STANDINGS_CACHE["data"] = standings
     _STANDINGS_CACHE["timestamp"] = now
@@ -1052,7 +1076,8 @@ def _fetch_standings_data() -> tuple[dict[str, dict[str, list[dict]]], Optional[
     if not any(standings.values()) or used_season is None:
         fallback_message = FALLBACK_MESSAGE_UNAVAILABLE
     _STANDINGS_CACHE["message"] = fallback_message
-    return standings, fallback_message
+    _STANDINGS_CACHE["season_note"] = season_note
+    return standings, fallback_message, season_note
 
 
 def _division_section_height(team_count: int) -> int:
@@ -1592,12 +1617,12 @@ def _render_and_display(
 # ─── Public API ───────────────────────────────────────────────────────────────
 @log_call
 def draw_nfl_overview_nfc(display, transition: bool = False) -> ScreenImage:
-    standings_by_conf, fallback_message = _fetch_standings_data()
+    standings_by_conf, fallback_message, season_note = _fetch_standings_data()
     _apply_style_overrides("NFL Overview NFC")
     conference = standings_by_conf.get(CONFERENCE_NFC_KEY, {})
     return _render_overview(
         display,
-        "NFC Overview",
+        _title_with_season_note("NFC Overview", season_note),
         DIVISION_ORDER_NFC,
         conference,
         transition,
@@ -1607,12 +1632,12 @@ def draw_nfl_overview_nfc(display, transition: bool = False) -> ScreenImage:
 
 @log_call
 def draw_nfl_overview_afc(display, transition: bool = False) -> ScreenImage:
-    standings_by_conf, fallback_message = _fetch_standings_data()
+    standings_by_conf, fallback_message, season_note = _fetch_standings_data()
     _apply_style_overrides("NFL Overview AFC")
     conference = standings_by_conf.get(CONFERENCE_AFC_KEY, {})
     return _render_overview(
         display,
-        "AFC Overview",
+        _title_with_season_note("AFC Overview", season_note),
         DIVISION_ORDER_AFC,
         conference,
         transition,
@@ -1622,12 +1647,12 @@ def draw_nfl_overview_afc(display, transition: bool = False) -> ScreenImage:
 
 @log_call
 def draw_nfl_standings_nfc(display, transition: bool = False) -> ScreenImage:
-    standings_by_conf, fallback_message = _fetch_standings_data()
+    standings_by_conf, fallback_message, season_note = _fetch_standings_data()
     _apply_style_overrides("NFL Standings NFC")
     conference = standings_by_conf.get(CONFERENCE_NFC_KEY, {})
     return _render_and_display(
         display,
-        TITLE_NFC,
+        _title_with_season_note(TITLE_NFC, season_note),
         DIVISION_ORDER_NFC,
         conference,
         transition,
@@ -1637,12 +1662,12 @@ def draw_nfl_standings_nfc(display, transition: bool = False) -> ScreenImage:
 
 @log_call
 def draw_nfl_standings_afc(display, transition: bool = False) -> ScreenImage:
-    standings_by_conf, fallback_message = _fetch_standings_data()
+    standings_by_conf, fallback_message, season_note = _fetch_standings_data()
     _apply_style_overrides("NFL Standings AFC")
     conference = standings_by_conf.get(CONFERENCE_AFC_KEY, {})
     return _render_and_display(
         display,
-        TITLE_AFC,
+        _title_with_season_note(TITLE_AFC, season_note),
         DIVISION_ORDER_AFC,
         conference,
         transition,

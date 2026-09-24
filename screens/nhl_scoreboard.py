@@ -572,12 +572,23 @@ def _map_api_web_game(game: dict[str, Any], day: datetime.date) -> dict[str, Any
     if isinstance(outcome.get("lastPeriodType"), str) and outcome["lastPeriodType"].strip().upper() == "SO":
         has_shootout = True
 
-    game_state = (game.get("gameState") or game.get("gameScheduleState") or "").upper()
+    # gameState (e.g. "FUT") and gameScheduleState (e.g. "PPD") are two
+    # independent fields; the API can report a not-yet-started game as
+    # gameState "FUT" *and* gameScheduleState "PPD" at the same time. A
+    # bare `or` between them only ever looked at gameState when it was
+    # truthy, so a postponement recorded solely via gameScheduleState was
+    # silently ignored and the game showed as a normal scheduled game.
+    game_state = (game.get("gameState") or "").upper()
+    schedule_state = (game.get("gameScheduleState") or "").upper()
     detailed_state = (game.get("gameStatus") or "").strip()
     abstract_state = ""
     status_code = ""
 
-    if game_state in {"LIVE", "CRIT"}:
+    if schedule_state in {"POSTP", "POSTPONED", "PPD"} or game_state in {"POSTP", "POSTPONED", "PPD"}:
+        abstract_state = "preview"
+        status_code = "1"
+        detailed_state = "Postponed"
+    elif game_state in {"LIVE", "CRIT"}:
         abstract_state = "live"
         status_code = "3"
         detailed_state = detailed_state or "In Progress"
@@ -589,12 +600,8 @@ def _map_api_web_game(game: dict[str, Any], day: datetime.date) -> dict[str, Any
         abstract_state = "preview"
         status_code = "1"
         detailed_state = detailed_state or "Scheduled"
-    elif game_state in {"POSTP", "POSTPONED"}:
-        abstract_state = "preview"
-        status_code = "1"
-        detailed_state = "Postponed"
     else:
-        detailed_state = detailed_state or game_state or "Scheduled"
+        detailed_state = detailed_state or game_state or schedule_state or "Scheduled"
 
     linescore = {}
     if period_ord:
