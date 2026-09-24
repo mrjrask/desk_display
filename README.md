@@ -519,10 +519,13 @@ passes:
   slot. It receives no startup hydration display and is never due in a normal
   pass. A frequency-`0` screen can still be shown when it is configured as the
   alternate of an enabled base screen.
-- Every base screen with a positive frequency receives one startup hydration
-  display. Hydration always shows the base screen: it neither counts as a
-  normal pass nor increments the base screen's presentation count for
-  alternate selection.
+- Every base screen with a positive frequency is scheduled once for startup
+  hydration, subject to availability. A hydration slot shows the base screen
+  (never its alternate) and neither counts as a normal pass nor increments the
+  base screen's presentation count for alternate selection. A base screen that
+  is unavailable in the screen registry when its slot comes up, or whose
+  `hide_after` deadline has passed, is skipped and receives no startup display;
+  a retired screen is also never due in later normal passes.
 - After hydration, a positive base frequency `N` makes that entry due on
   normal passes `N`, `2N`, `3N`, and so on. Thus `1` means every normal pass,
   `2` means passes 2, 4, 6, and so on, and larger integers show less often.
