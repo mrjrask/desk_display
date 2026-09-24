@@ -170,12 +170,7 @@ def test_frequency_one_alternate_is_used_on_first_normal_presentation():
 
     # Frequency four is still measured from the first normal pass, and the
     # alternate is selected when that entry receives its first presentation.
-    assert collect_sequence(scheduler, registry, 4) == [
-        None,
-        None,
-        None,
-        "NFL Standings NFC",
-    ]
+    assert scheduler.next_available(registry).id == "NFL Standings NFC"
 
 
 def test_unavailable_frequency_one_alternate_falls_back_on_first_presentation():
@@ -193,6 +188,34 @@ def test_unavailable_frequency_one_alternate_falls_back_on_first_presentation():
     )
 
     assert scheduler.next_available(registry).id == "NFL Overview NFC"
+    assert scheduler.next_available(registry).id == "NFL Overview NFC"
+
+
+def test_unavailable_alternate_consumes_its_scheduled_occurrence():
+    scheduler = build_scheduler(
+        {
+            "screens": {
+                "date": {
+                    "frequency": 1,
+                    "alt": {"screen": "inside", "frequency": 3},
+                }
+            }
+        }
+    )
+    unavailable_registry = make_registry({"date": True, "inside": False})
+    available_registry = make_registry({"date": True, "inside": True})
+
+    assert collect_sequence(scheduler, unavailable_registry, 4) == [
+        "date",  # Startup hydration.
+        "date",
+        "date",
+        "date",  # The unavailable alternate's occurrence is consumed.
+    ]
+    assert collect_sequence(scheduler, available_registry, 3) == [
+        "date",
+        "date",
+        "inside",
+    ]
 
 
 def test_alternate_frequency_counts_scheduled_appearances_not_raw_passes():
@@ -222,7 +245,7 @@ def test_alternate_frequency_counts_scheduled_appearances_not_raw_passes():
     # is returned on the following call from the pending queue.  Observe that
     # call so both third presentations are included without re-advancing a new
     # pass after the cursor wraps.
-    sequence = collect_played_ids(scheduler, registry, 17)
+    sequence = collect_played_ids(scheduler, registry, 8)
 
     assert sequence == [
         "NFL Overview NFC",
@@ -382,7 +405,7 @@ def test_scheduler_with_multiple_alternates():
     assert scheduler.requested_ids == {"date", "inside", "weather1"}
 
     registry = make_registry({"date": True, "inside": True, "weather1": True})
-    sequence = collect_sequence(scheduler, registry, 6)
+    sequence = collect_sequence(scheduler, registry, 7)
     assert sequence == [
         "date",
         "date",
@@ -390,6 +413,32 @@ def test_scheduler_with_multiple_alternates():
         "date",
         "weather1",
         "date",
+        "inside",
+    ]
+
+
+def test_frequency_zero_screen_is_only_scheduled_as_an_alternate():
+    scheduler = build_scheduler(
+        {
+            "screens": {
+                "date": {
+                    "frequency": 1,
+                    "alt": {"screen": "inside", "frequency": 3},
+                },
+                "inside": 0,
+            }
+        }
+    )
+    registry = make_registry({"date": True, "inside": True})
+
+    assert collect_sequence(scheduler, registry, 7) == [
+        "date",
+        "date",
+        "date",
+        "inside",
+        "date",
+        "date",
+        "inside",
     ]
 
 

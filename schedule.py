@@ -149,10 +149,21 @@ class ScreenScheduler:
 
         entry_index = self._pending_indices.pop(0)
         self._cursor = (entry_index + 1) % len(self._entries)
-        return self._scheduled_id_for(self._entries[entry_index])
+        return self._scheduled_id_for(
+            self._entries[entry_index],
+            advance_presentation=self._pass_number > 0,
+        )
 
-    def _scheduled_id_for(self, entry: _ScheduleEntry) -> str:
-        """Resolve one already-due entry and advance its presentation count."""
+    def _scheduled_id_for(
+        self,
+        entry: _ScheduleEntry,
+        *,
+        advance_presentation: bool = True,
+    ) -> str:
+        """Resolve one due entry, counting only normal-rotation presentations."""
+
+        if not advance_presentation:
+            return entry.screen_id
 
         entry.presentation_count += 1
         if (
@@ -229,12 +240,16 @@ class ScreenScheduler:
         self,
         entry: _ScheduleEntry,
         registry: dict[str, ScreenDefinition],
+        *,
+        advance_presentation: bool = True,
     ) -> Optional[ScreenDefinition]:
         """Resolve a hydrated entry against the latest registry state."""
 
-        entry.presentation_count += 1
+        if advance_presentation:
+            entry.presentation_count += 1
         if (
-            entry.alternate
+            advance_presentation
+            and entry.alternate
             and entry.alternate.frequency > 0
             and entry.presentation_count % entry.alternate.frequency == 0
         ):
@@ -267,7 +282,11 @@ class ScreenScheduler:
             entry = self._entries[entry_index]
             if entry.hide_after is not None and now_utc >= entry.hide_after:
                 continue
-            definition = self._next_available_from_entry(entry, registry)
+            definition = self._next_available_from_entry(
+                entry,
+                registry,
+                advance_presentation=self._pass_number > 0,
+            )
             if definition is not None:
                 return definition
 
