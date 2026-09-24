@@ -24,6 +24,7 @@ import time
 from concurrent.futures import ThreadPoolExecutor
 from io import BytesIO
 from typing import Any, NamedTuple, Optional
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from PIL import Image, ImageDraw, ImageFont
 
@@ -84,6 +85,22 @@ ALERT_ICON_COLORS = {
     "watch": (255, 165, 0),
     "hazard": (255, 215, 0),
 }
+
+
+def _weather_timezone() -> datetime.tzinfo:
+    """Return the configured forecast-location timezone, with a safe fallback."""
+
+    timezone_name = str(getattr(config, "WEATHERKIT_TIMEZONE", "")).strip()
+    try:
+        return ZoneInfo(timezone_name) if timezone_name else CENTRAL_TIME
+    except (ZoneInfoNotFoundError, ValueError):
+        logging.warning(
+            "Invalid WEATHERKIT_TIMEZONE %r; using the display timezone",
+            timezone_name,
+        )
+        return CENTRAL_TIME
+
+
 SUN_EVENT_GRACE = datetime.timedelta(minutes=20)
 PRESSURE_TREND_SYMBOLS = {
     "rising": ("↑", (0, 255, 0)),
@@ -450,16 +467,29 @@ def _normalise_alerts(weather: object) -> list:
             alerts = [alert for alert in inner if isinstance(alert, dict)]
         else:
             alerts = [raw_alerts]
-    return alerts
+    return [alert for alert in alerts if not _alert_is_expired(alert)]
+
+
+def _alert_is_expired(alert: dict) -> bool:
+    raw_end = next(
+        (alert.get(key) for key in ("end", "expires", "expireTime", "expirationTime") if alert.get(key)),
+        None,
+    )
+    if raw_end is None:
+        return False
+    try:
+        if isinstance(raw_end, (int, float)):
+            end = datetime.datetime.fromtimestamp(raw_end, datetime.timezone.utc)
+        else:
+            end = datetime.datetime.fromisoformat(str(raw_end).replace("Z", "+00:00"))
+        if end.tzinfo is None:
+            end = end.replace(tzinfo=datetime.timezone.utc)
+        return end <= datetime.datetime.now(datetime.timezone.utc)
+    except (TypeError, ValueError, OSError):
+        return False
 
 
 def _classify_alert(alert: dict) -> Optional[str]:
-    provider_severity = alert.get("severity")
-    if isinstance(provider_severity, str):
-        mapped_severity = ALERT_PROVIDER_SEVERITY_LEVELS.get(provider_severity.strip().lower())
-        if mapped_severity:
-            return mapped_severity
-
     texts = []
     for key in ("event", "title", "headline"):
         value = alert.get(key)
@@ -481,6 +511,9 @@ def _classify_alert(alert: dict) -> Optional[str]:
     for text in texts:
         if any(token in text for token in ("hazard", "alert", "advisory")):
             return "hazard"
+    provider_severity = alert.get("severity")
+    if isinstance(provider_severity, str):
+        return ALERT_PROVIDER_SEVERITY_LEVELS.get(provider_severity.strip().lower())
     return None
 
 
@@ -840,15 +873,33 @@ def draw_weather_screen_1(display, weather, transition=False):
     led_color = ALERT_LED_COLORS.get(severity)
 
     current = weather.get("current", {})
-    daily   = weather.get("daily", [{}])[0]
+    daily_entries = weather.get("daily") if isinstance(weather.get("daily"), list) else []
+    weather_timezone = _weather_timezone()
+    today = datetime.datetime.now(weather_timezone).date()
+    daily = next(
+        (
+            day
+            for day in daily_entries
+            if isinstance(day, dict)
+            and (day_dt := timestamp_to_datetime(day.get("dt"), weather_timezone))
+            and day_dt.date() == today
+        ),
+        {},
+    )
     hourly  = weather.get("hourly") if isinstance(weather.get("hourly"), list) else None
 
     temp  = round(current.get("temp", 0))
     desc  = current.get("weather", [{}])[0].get("description", "").title()
 
     feels = round(current.get("feels_like", 0))
-    hi    = round(daily.get("temp", {}).get("max", 0))
-    lo    = round(daily.get("temp", {}).get("min", 0))
+    def _temperature_or_current(value):
+        try:
+            return round(float(value))
+        except (TypeError, ValueError):
+            return temp
+
+    hi = _temperature_or_current(daily.get("temp", {}).get("max"))
+    lo = _temperature_or_current(daily.get("temp", {}).get("min"))
 
     img  = Image.new("RGB", (WIDTH, HEIGHT), background)
     draw = ImageDraw.Draw(img)
@@ -1086,9 +1137,18 @@ def _normalise_condition(hour: dict) -> str:
     return ""
 
 
-def _format_day_label(timestamp: Optional[int], *, index: int) -> str:
-    dt = timestamp_to_datetime(timestamp, CENTRAL_TIME)
-    if index == 1:
+def _format_day_label(
+    timestamp: Optional[int], *, index: int, now: Optional[datetime.datetime] = None
+) -> str:
+    weather_timezone = _weather_timezone()
+    dt = timestamp_to_datetime(timestamp, weather_timezone)
+    reference = now or datetime.datetime.now(weather_timezone)
+    if reference.tzinfo is None:
+        reference = reference.replace(tzinfo=weather_timezone)
+    else:
+        reference = reference.astimezone(weather_timezone)
+    tomorrow = reference.date() + datetime.timedelta(days=1)
+    if dt and dt.date() == tomorrow:
         return "Tmrw"
     if dt:
         return dt.strftime("%a")
@@ -1239,7 +1299,9 @@ def _gather_hourly_forecast(
     return forecast
 
 
-def _gather_daily_forecast(weather: object, days: int) -> list[dict]:
+def _gather_daily_forecast(
+    weather: object, days: int, *, now: Optional[datetime.datetime] = None
+) -> list[dict]:
     if not isinstance(weather, dict):
         return []
     daily = weather.get("daily") if isinstance(weather.get("daily"), list) else []
@@ -1247,17 +1309,29 @@ def _gather_daily_forecast(weather: object, days: int) -> list[dict]:
     if not daily:
         return []
 
+    weather_timezone = _weather_timezone()
+    reference = now or datetime.datetime.now(weather_timezone)
+    if reference.tzinfo is None:
+        reference = reference.replace(tzinfo=weather_timezone)
+    else:
+        reference = reference.astimezone(weather_timezone)
     hourly_by_day: dict[datetime.date, list[dict]] = {}
     for hour in hourly:
         if not isinstance(hour, dict):
             continue
-        hour_dt = timestamp_to_datetime(hour.get("dt"), CENTRAL_TIME)
+        hour_dt = timestamp_to_datetime(hour.get("dt"), weather_timezone)
         if not hour_dt:
             continue
         hourly_by_day.setdefault(hour_dt.date(), []).append(hour)
 
-    start_idx = 1 if len(daily) > 1 else 0
-    entries = daily[start_idx : start_idx + days]
+    today = reference.date()
+    entries = [
+        day
+        for day in daily
+        if isinstance(day, dict)
+        and (day_dt := timestamp_to_datetime(day.get("dt"), weather_timezone))
+        and day_dt.date() > today
+    ][:days]
     forecast = []
 
     for idx, day in enumerate(entries):
@@ -1275,7 +1349,7 @@ def _gather_daily_forecast(weather: object, days: int) -> list[dict]:
         except Exception:
             lo_val = None
 
-        day_dt = timestamp_to_datetime(day.get("dt"), CENTRAL_TIME)
+        day_dt = timestamp_to_datetime(day.get("dt"), weather_timezone)
         day_hours = hourly_by_day.get(day_dt.date(), []) if day_dt else []
 
         daily_wind_speed = day.get("wind_speed")
@@ -1310,7 +1384,7 @@ def _gather_daily_forecast(weather: object, days: int) -> list[dict]:
                 daily_uvi = max(uv_values)
 
         entry = {
-            "day": _format_day_label(day.get("dt"), index=idx + 1),
+            "day": _format_day_label(day.get("dt"), index=idx + 1, now=reference),
             "hi": hi_val,
             "lo": lo_val,
             "pop": _pop_pct_from(day),

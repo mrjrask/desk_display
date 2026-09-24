@@ -79,6 +79,8 @@ _weather_cache: Optional[dict[str, Any]] = None
 _weather_cache_fetched_at: Optional[datetime.datetime] = None
 _weather_cache_source: Optional[str] = None
 _weather_cache_lock = threading.Lock()
+_weather_fetch_lock = threading.Lock()
+_weather_last_attempt_at: Optional[datetime.datetime] = None
 _weatherkit_token: Optional[str] = None
 _weatherkit_token_exp: Optional[datetime.datetime] = None
 _weatherkit_key_cache: Optional[Any] = None
@@ -867,7 +869,9 @@ def _normalise_weatherkit_response(data: dict[str, Any]) -> Optional[dict[str, A
         return kmh / 1.609344 if kmh is not None else None
 
     current_temp_c = current_raw.get("temperature")
-    current_feels_c = current_raw.get("temperatureApparent") or current_temp_c
+    current_feels_c = current_raw.get("temperatureApparent")
+    if current_feels_c is None:
+        current_feels_c = current_temp_c
 
     current: dict[str, Any] = {
         "temp": _to_fahrenheit(current_temp_c),
@@ -943,7 +947,11 @@ def _normalise_weatherkit_response(data: dict[str, Any]) -> Optional[dict[str, A
             {
                 "dt": _parse_iso_timestamp(hour.get("forecastStart")),
                 "temp": _to_fahrenheit(hour.get("temperature")),
-                "feels_like": _to_fahrenheit(hour.get("temperatureApparent") or hour.get("temperature")),
+                "feels_like": _to_fahrenheit(
+                    hour.get("temperature")
+                    if hour.get("temperatureApparent") is None
+                    else hour.get("temperatureApparent")
+                ),
                 "pop": hour.get("precipitationChance"),
                 "wind_speed": _wind_measurement_mph(hour.get("windSpeed")),
                 "wind_gust": _wind_measurement_mph(hour.get("windGust")),
@@ -1251,7 +1259,13 @@ def fetch_weather(force_refresh: bool = False):
         force_refresh: If True, bypass the local cache TTL and fetch new data.
     """
 
+    with _weather_fetch_lock:
+        return _fetch_weather_locked(force_refresh)
+
+
+def _fetch_weather_locked(force_refresh: bool = False):
     global _weather_cache, _weather_cache_fetched_at, _weather_cache_source
+    global _weather_last_attempt_at
     now = datetime.datetime.now(datetime.timezone.utc)
 
     cache_age = None
@@ -1270,6 +1284,14 @@ def fetch_weather(force_refresh: bool = False):
                 WEATHER_REFRESH_SECONDS,
             )
             return cached
+
+    if (
+        not force_refresh
+        and _weather_last_attempt_at is not None
+        and (now - _weather_last_attempt_at).total_seconds() < WEATHER_REFRESH_SECONDS
+    ):
+        return cached
+    _weather_last_attempt_at = now
 
     normalized = None
     if _weatherkit_configured():
@@ -2192,8 +2214,7 @@ def _fetch_nba_team_standings(team_tricode: str):
         except Exception as exc:
             logging.debug("NBA CDN standings unavailable: %s", exc)
 
-        logging.debug("Using ESPN NBA standings fallback")
-        return _fetch_nba_team_standings_espn()
+        return None
 
     payload = _load_json() or {}
     teams = payload.get("league", {}).get("standard", {}).get("teams", [])
@@ -2202,8 +2223,14 @@ def _fetch_nba_team_standings(team_tricode: str):
         entry = next((row for row in teams if row.get("teamTricode") == team_tricode), None)
         if entry:
             record = {
-                "wins": _safe_int(entry.get("wins") or entry.get("win")),
-                "losses": _safe_int(entry.get("losses") or entry.get("loss")),
+                "wins": _safe_int(
+                    entry.get("wins") if entry.get("wins") is not None else entry.get("win")
+                ),
+                "losses": _safe_int(
+                    entry.get("losses")
+                    if entry.get("losses") is not None
+                    else entry.get("loss")
+                ),
                 "pct": entry.get("winPct"),
             }
 
@@ -3351,15 +3378,15 @@ def _parse_datetime_candidates(row: Dict) -> Optional[datetime.datetime]:
         return naive_dt.replace(tzinfo=CENTRAL_TIME)
 
     candidates = [
-        row.get("game_date_time"),
-        row.get("game_date_time_local"),
-        row.get("game_date_time_utc"),
-        row.get("game_date_utc"),
-        row.get("game_time_utc"),
-        row.get("gameTimeUTC"),
-        row.get("gameDate"),
+        (row.get("game_date_time"), False),
+        (row.get("game_date_time_local"), False),
+        (row.get("game_date_time_utc"), True),
+        (row.get("game_date_utc"), True),
+        (row.get("game_time_utc"), True),
+        (row.get("gameTimeUTC"), True),
+        (row.get("gameDate"), False),
     ]
-    for text in candidates:
+    for text, assumes_utc in candidates:
         if not isinstance(text, str):
             continue
         cleaned = text.strip()
@@ -3372,7 +3399,7 @@ def _parse_datetime_candidates(row: Dict) -> Optional[datetime.datetime]:
                 cleaned = f"{cleaned[:-2]}:{cleaned[-2:]}"
             dt_obj = datetime.datetime.fromisoformat(cleaned)
             if dt_obj.tzinfo is None:
-                return pytz.UTC.localize(dt_obj)
+                return pytz.UTC.localize(dt_obj) if assumes_utc else _to_central(dt_obj)
             return dt_obj
         except (TypeError, ValueError):
             # Intentionally continue: inputs arrive in several formats, and we
@@ -3449,7 +3476,7 @@ def _normalize_ahl_game(row: Dict) -> Optional[Dict]:
 
     start_utc = start.astimezone(pytz.UTC)
     central = start.astimezone(CENTRAL_TIME)
-    official_date = start.date().isoformat()
+    official_date = central.date().isoformat()
 
     return {
         "game_id": str(game_id) if game_id else None,
@@ -3862,7 +3889,7 @@ def _normalize_wolves_ics_game(event: Dict[str, Any]) -> Optional[Dict[str, Any]
         "start_utc": start_utc,
         "start_iso": start_utc.isoformat(),
         "start_time_central": _format_local_time(start_central),
-        "official_date": start.date().isoformat(),
+        "official_date": start_central.date().isoformat(),
         "status": {
             "state": status_state,
             "detail": status_detail,

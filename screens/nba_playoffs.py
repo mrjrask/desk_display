@@ -729,23 +729,30 @@ _WESTERN_CONFERENCE_ABBRS = frozenset(
     }
 )
 
-# Even inside the playoff window (e.g. the first few days of April, before
-# the play-in games are actually scheduled), a scan that comes up empty
-# would otherwise re-run in full every rotation cycle. Cool down after an
-# empty scan so a dry spell doesn't turn into the same repeated-burst
-# problem the month gate above exists to prevent.
+# Even inside the playoff window, walking every postseason date is expensive.
+# Cool down after every completed scan, whether or not games were found, so
+# each render cannot repeat the full request burst.
 _RECENT_GAMES_SCAN_COOLDOWN = DayScanCooldown(30 * 60)
+_RECENT_GAMES_SCAN_DAY: Optional[datetime.date] = None
+_RECENT_GAMES_SCAN_RESULT: list[dict] = []
 
 
 def _derive_playoff_matchups_from_recent_games(now: Optional[datetime.datetime] = None) -> list[dict]:
+    global _RECENT_GAMES_SCAN_DAY, _RECENT_GAMES_SCAN_RESULT
+
     reference = now or datetime.datetime.now(CENTRAL_TIME)
     if reference.month not in _PLAYOFF_SEASON_MONTHS:
         return []
-    if _RECENT_GAMES_SCAN_COOLDOWN.blocked():
-        return []
 
     base_day = _scoreboard_date(now)
-    recent_days = [base_day - datetime.timedelta(days=offset) for offset in range(14, -1, -1)]
+    if _RECENT_GAMES_SCAN_COOLDOWN.blocked() and _RECENT_GAMES_SCAN_DAY == base_day:
+        return list(_RECENT_GAMES_SCAN_RESULT)
+    postseason_start = datetime.date(base_day.year, 4, 1)
+    lookback_days = max(14, min(75, (base_day - postseason_start).days))
+    recent_days = [
+        base_day - datetime.timedelta(days=offset)
+        for offset in range(lookback_days, -1, -1)
+    ]
     upcoming_days = [base_day + datetime.timedelta(days=offset) for offset in range(8)]
 
     all_games: list[dict] = []
@@ -764,12 +771,12 @@ def _derive_playoff_matchups_from_recent_games(now: Optional[datetime.datetime] 
                 seen_ids.add(game_id)
             all_games.append(game)
 
-    if all_games:
-        _RECENT_GAMES_SCAN_COOLDOWN.reset()
-    else:
-        _RECENT_GAMES_SCAN_COOLDOWN.mark_empty()
+    result = _derive_playoff_matchups_from_games(all_games)
+    _RECENT_GAMES_SCAN_DAY = base_day
+    _RECENT_GAMES_SCAN_RESULT = result
+    _RECENT_GAMES_SCAN_COOLDOWN.mark_empty()
 
-    return _derive_playoff_matchups_from_games(all_games)
+    return list(result)
 
 
 def _is_live_game(game: dict) -> bool:

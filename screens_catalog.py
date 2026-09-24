@@ -2,10 +2,6 @@
 # A single source of truth for all of your possible screen IDs.
 
 LEGACY_SCOREBOARD_V2_SCREEN_MAP = {
-    "NFL Scoreboard v2": "NFL Scoreboard",
-    "NHL Scoreboard v2": "NHL Scoreboard",
-    "NBA Scoreboard v2": "NBA Scoreboard",
-    "MLB Scoreboard v2": "MLB Scoreboard",
     "NHL Standings Overview v2 West": "NHL Standings Overview West",
     "NHL Standings Overview v2 East": "NHL Standings Overview East",
 }
@@ -66,12 +62,14 @@ RAW_SCREEN_IDS = [
     "bears next season sched",
     "nfl logo",
     "NFL Scoreboard",
+    "NFL Scoreboard v2",
     "NFL Overview NFC",
     "NFL Overview AFC",
     "NFL Standings NFC",
     "NFL Standings AFC",
     "nba logo",
     "NBA Scoreboard",
+    "NBA Scoreboard v2",
     "NBA Playoffs",
     "NCAAM Scoreboard",
     "World Cup Scoreboard",
@@ -91,6 +89,7 @@ RAW_SCREEN_IDS = [
     "hawks schedule quad",
     "nhl logo",
     "NHL Scoreboard",
+    "NHL Scoreboard v2",
     "NHL Playoffs",
     "NHL Standings Overview West",
     "NHL Standings Overview East",
@@ -131,6 +130,7 @@ RAW_SCREEN_IDS = [
     "sox schedule quad",
     "mlb logo",
     "MLB Scoreboard",
+    "MLB Scoreboard v2",
     "NL Overview",
     "AL Overview",
     "NL Overview+WC",

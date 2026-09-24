@@ -1,5 +1,7 @@
 import datetime
+from zoneinfo import ZoneInfo
 
+import config
 from config import CENTRAL_TIME
 from screens.draw_weather import (
     _gather_daily_forecast,
@@ -105,7 +107,7 @@ def test_gather_daily_forecast_includes_icon_metadata():
         ]
     }
 
-    forecast = _gather_daily_forecast(weather, 1)
+    forecast = _gather_daily_forecast(weather, 1, now=now)
 
     assert forecast == [
         {
@@ -152,11 +154,33 @@ def test_gather_daily_forecast_falls_back_to_hourly_wind_and_uv():
     weather["hourly"][1]["wind_deg"] = 180
     weather["hourly"][1]["uvi"] = 6
 
-    forecast = _gather_daily_forecast(weather, 1)
+    forecast = _gather_daily_forecast(weather, 1, now=now)
 
     assert forecast[0]["wind_speed"] == 12
     assert forecast[0]["wind_dir"] in {"↘", "SE"}
     assert forecast[0]["uvi"] == 6
+
+
+def test_gather_daily_forecast_uses_configured_weather_timezone(monkeypatch):
+    monkeypatch.setattr(config, "WEATHERKIT_TIMEZONE", "America/Los_Angeles")
+    pacific = ZoneInfo("America/Los_Angeles")
+    now = datetime.datetime(2026, 6, 2, 5, 0, tzinfo=datetime.timezone.utc)
+
+    weather = {
+        "daily": [
+            {
+                "dt": int(datetime.datetime(2026, 6, day, 12, tzinfo=pacific).timestamp()),
+                "temp": {"max": 70 + day, "min": 50 + day},
+                "weather": [{"main": "Clear"}],
+            }
+            for day in (1, 2, 3)
+        ]
+    }
+
+    forecast = _gather_daily_forecast(weather, 1, now=now)
+
+    assert forecast[0]["day"] == "Tmrw"
+    assert forecast[0]["hi"] == 72
 
 
 def test_temperature_chart_color_uses_expected_band_colors():

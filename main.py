@@ -202,6 +202,7 @@ _BUTTON_MIN_HOLD_SECONDS = {"B": 0.6}
 _BUTTON_NOISE_WINDOW_SECONDS = 15.0
 _BUTTON_NOISE_WARNING_THRESHOLD = 5
 _BUTTON_NOISE_TIMESTAMPS = deque(maxlen=32)
+_BUTTON_CHECK_LOCK = threading.Lock()
 _manual_skip_event = threading.Event()
 _button_monitor_thread: Optional[threading.Thread] = None
 _deferred_button_actions: queue.Queue[str] = queue.Queue()
@@ -815,11 +816,13 @@ def refresh_schedule_if_needed(force: bool = False) -> None:
     config_unchanged = (
         config_path == _screen_config_path and mtime == _screen_config_mtime
     )
-    if not force and config_unchanged and screen_scheduler is not None:
+    if not force and config_unchanged:
         return
 
     scheduler = _load_scheduler_from_config()
     if scheduler is None:
+        _screen_config_mtime = mtime
+        _screen_config_path = config_path
         return
 
     screen_scheduler = scheduler
@@ -1031,6 +1034,15 @@ def _start_config_ui() -> None:
 
 
 def _check_control_buttons(
+    **kwargs,
+) -> bool:
+    """Serialize button polling shared by the render and monitor threads."""
+
+    with _BUTTON_CHECK_LOCK:
+        return _check_control_buttons_locked(**kwargs)
+
+
+def _check_control_buttons_locked(
     *,
     current_screen_id: Optional[str] = None,
     current_quad_tiles: Optional[List[str]] = None,

@@ -164,7 +164,7 @@ detect_drm_resolution() {
   local status_path
   for status_path in /sys/class/drm/card*-*/status; do
     [[ -r "$status_path" ]] || continue
-    if grep -q "connected" "$status_path"; then
+    if grep -qx "connected" "$status_path"; then
       local modes_path="${status_path%/status}/modes"
       if [[ -r "$modes_path" ]]; then
         local mode

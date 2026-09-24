@@ -69,6 +69,7 @@ def draw_nfl_standings_screen1(
         record_font=FONT_STAND1_WL_LARGE,
         show_games_back=False,
         show_wild_card=False,
+        division_last_rank=4,
         font_size_offset=(30 if _IS_1080P_LAYOUT else 0),
         screen_id=screen_id,
         transition=transition,
