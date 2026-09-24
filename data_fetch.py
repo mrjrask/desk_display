@@ -2128,26 +2128,26 @@ def _fetch_nhl_team_standings_statsapi(team_abbr: str):
                         {"type": split.get("type"), "wins": wins, "losses": losses}
                     )
 
-            logging.info("Using statsapi NHL standings fallback for %s", team_abbr)
-            return {
-                "leagueRecord": {
-                    "wins": _safe_int(league_record.get("wins")),
-                    "losses": _safe_int(league_record.get("losses")),
-                    "ot": _safe_int(league_record.get("ot")),
-                    "pct": league_record.get("pct") or league_record.get("pointsPercentage"),
-                },
-                "divisionRank": team.get("divisionRank"),
-                "divisionGamesBack": team.get("divisionGamesBack"),
-                "wildCardGamesBack": team.get("wildCardRank"),
-                "streak": {"streakCode": streak_code or "-"},
-                "records": {"splitRecords": split_records},
-                "points": team.get("points"),
-                "conferenceRank": team.get("conferenceRank"),
-                "conferenceName": (team.get("conference") or {}).get("name")
-                or (team.get("conference") or {}).get("abbreviation"),
-                "divisionName": (team.get("division") or {}).get("name")
-                or (team.get("division") or {}).get("abbreviation"),
-            }
+                logging.info("Using statsapi NHL standings fallback for %s", team_abbr)
+                return {
+                    "leagueRecord": {
+                        "wins": _safe_int(league_record.get("wins")),
+                        "losses": _safe_int(league_record.get("losses")),
+                        "ot": _safe_int(league_record.get("ot")),
+                        "pct": league_record.get("pct") or league_record.get("pointsPercentage"),
+                    },
+                    "divisionRank": team.get("divisionRank"),
+                    "divisionGamesBack": team.get("divisionGamesBack"),
+                    "wildCardGamesBack": team.get("wildCardRank"),
+                    "streak": {"streakCode": streak_code or "-"},
+                    "records": {"splitRecords": split_records},
+                    "points": team.get("points"),
+                    "conferenceRank": team.get("conferenceRank"),
+                    "conferenceName": (team.get("conference") or {}).get("name")
+                    or (team.get("conference") or {}).get("abbreviation"),
+                    "divisionName": (team.get("division") or {}).get("name")
+                    or (team.get("division") or {}).get("abbreviation"),
+                }
         logging.error("Team %s not found in NHL standings (statsapi fallback)", team_abbr)
     except Exception as exc:
         logging.error("Error fetching NHL standings (statsapi) for %s: %s", team_abbr, exc)
@@ -2563,11 +2563,15 @@ def _fetch_mlb_schedule(team_id):
                 if is_live or is_pending_today:
                     result["live_game"] = g
 
-                # Next game (today scheduled)
+                # Next game (today scheduled). Games today are collected here
+                # and resolved to the earliest one below (see "Split-squad /
+                # doubleheader support"); a doubleheader's Game 2 must not
+                # overwrite Game 1 just because it's later in iteration order.
                 if day == today and is_scheduled:
-                    result["next_game"] = g
                     if local_dt:
                         scheduled_today.append((local_dt, g))
+                    elif not result["next_game"]:
+                        result["next_game"] = g
 
                 # Finished up to today
                 if day <= today and is_game_over:
@@ -4005,8 +4009,15 @@ def fetch_wolves_games(force_refresh: bool = False) -> Dict[str, Optional[Dict]]
             api_games = _fetch_ahl_schedule()
             if api_games:
                 classified_api = _classify_wolves_games(api_games)
+                # HockeyTech is the authoritative source for live state: a
+                # game the ICS calendar still shows as live_game must be
+                # cleared once HockeyTech reports it's no longer live,
+                # otherwise the stale live_game never clears and permanently
+                # bypasses the cache TTL above (which skips the cache
+                # whenever live_game is set).
+                classified["live_game"] = classified_api.get("live_game")
                 for key, game in classified_api.items():
-                    if game is not None:
+                    if key != "live_game" and game is not None:
                         classified[key] = game
         except Exception as exc:
             logging.error("Error fetching Wolves HockeyTech schedule: %s", exc)

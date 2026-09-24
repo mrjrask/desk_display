@@ -389,7 +389,8 @@ def _fetch_topics_parallel(
     """
 
     results: dict[str, list[NewsHeadline]] = {}
-    with ThreadPoolExecutor(max_workers=max(1, len(topics))) as executor:
+    executor = ThreadPoolExecutor(max_workers=max(1, len(topics)))
+    try:
         future_to_topic = {
             executor.submit(fetch_topic_headlines, topic, headline_count): topic
             for topic in topics
@@ -403,6 +404,15 @@ def _fetch_topics_parallel(
                 logging.debug("news_feeds: topic %s raised: %s", topic.id, exc)
         for future in pending:
             future.cancel()
+    finally:
+        # cancel() is a no-op on a future whose thread has already started, so
+        # a still-running fetch would otherwise keep this function blocked
+        # past the shared budget above: a plain `with ThreadPoolExecutor(...)`
+        # calls shutdown(wait=True) on exit, which waits for every submitted
+        # thread to finish. Shut down without waiting so a stuck feed can't
+        # stall the whole screen; the thread finishes on its own in the
+        # background and its result is simply discarded.
+        executor.shutdown(wait=False, cancel_futures=True)
     return results
 
 
