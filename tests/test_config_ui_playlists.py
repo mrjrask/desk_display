@@ -323,6 +323,32 @@ def test_build_screen_entries_includes_extra_seconds():
     assert date_entry["extra_seconds"] == 3
 
 
+def test_build_screen_entries_converts_hide_after_at_to_central_time():
+    """Regression test: _build_screen_entries used to reformat a tz-aware
+    hide_after_at by dropping its UTC offset outright (strftime with no
+    tzinfo), rather than converting to Central time first. Since
+    schedule.py interprets a naive hide_after_at as Central time, that
+    silently shifted the hidden-after moment by the UTC offset (5-6 hours)
+    on the very next Save."""
+
+    entries = config_ui._build_screen_entries(
+        {
+            "screens": {
+                "date": {
+                    "frequency": 1,
+                    "hide_after_enabled": True,
+                    # 10:00 UTC == 05:00 Central (CDT, UTC-5) in April.
+                    "hide_after_at": "2026-04-06T10:00:00+00:00",
+                }
+            }
+        },
+        {"screens": {}},
+    )
+
+    date_entry = next(entry for entry in entries if entry["id"] == "date")
+    assert date_entry["hide_after_at"] == "2026-04-06T05:00"
+
+
 def test_build_config_persists_extra_seconds():
     config = config_ui._build_config(
         [

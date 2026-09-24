@@ -45,6 +45,53 @@ def _coerce_frequency(value: Any) -> Optional[int]:
         return None
 
 
+def _normalize_scroll_speed(value: Any) -> float:
+    try:
+        speed = float(value)
+    except (TypeError, ValueError):
+        speed = 1.0
+    return round(min(3.0, max(0.25, speed)), 2)
+
+
+def _normalize_scroll_smoothness(value: Any) -> float:
+    try:
+        smoothness = float(value)
+    except (TypeError, ValueError):
+        smoothness = 1.0
+    return round(min(2.0, max(0.5, smoothness)), 2)
+
+
+def _normalize_vertical_speed_adjustment(value: Any) -> float:
+    try:
+        adjustment = float(value)
+    except (TypeError, ValueError):
+        adjustment = 0.0
+    return round(min(3.0, max(-0.9, adjustment)), 2)
+
+
+def _normalize_scroll_settings(value: Any) -> dict[str, float]:
+    """Mirrors config_ui._normalize_scroll_settings for the standalone CLI,
+    which avoids importing config_ui (and its Flask dependency)."""
+
+    settings = value if isinstance(value, dict) else {}
+    return {
+        "speed": _normalize_scroll_speed(settings.get("speed", 1.0)),
+        "smoothness": _normalize_scroll_smoothness(settings.get("smoothness", 1.0)),
+        "vertical_speed_adjustment": _normalize_vertical_speed_adjustment(
+            settings.get("vertical_speed_adjustment", 0.0)
+        ),
+    }
+
+
+def _normalize_screen_scroll_override(value: Any) -> Optional[dict[str, float]]:
+    """Mirrors config_ui._normalize_screen_scroll_override; only speed is
+    exposed per-screen (smoothness stays a global-only knob)."""
+
+    if not isinstance(value, dict) or "speed" not in value:
+        return None
+    return {"speed": _normalize_scroll_speed(value.get("speed"))}
+
+
 def _merge_screen_specs(existing: Any, incoming: Any) -> Any:
     if existing is None:
         return incoming
@@ -151,6 +198,7 @@ def _validate_config_payload(data: Any) -> dict[str, Any]:
     screens = data.get("screens")
     if not isinstance(screens, dict):
         raise ValueError("Configuration must include a 'screens' mapping")
+    data["scroll"] = _normalize_scroll_settings(data.get("scroll"))
     return data
 
 
@@ -187,6 +235,8 @@ def _normalize_import_config_payload(data: dict[str, Any]) -> dict[str, Any]:
                     with contextlib.suppress(TypeError, ValueError):
                         alt_payload["frequency"] = int(alt_frequency)
 
+            scroll_override = _normalize_screen_scroll_override(raw.get("scroll"))
+
             normalized_spec: dict[str, Any] = {"frequency": frequency_int}
             if isinstance(extra_seconds, int) and extra_seconds > 0:
                 normalized_spec["extra_seconds"] = extra_seconds
@@ -195,6 +245,8 @@ def _normalize_import_config_payload(data: dict[str, Any]) -> dict[str, Any]:
             if hide_after_enabled and hide_after_at:
                 normalized_spec["hide_after_enabled"] = True
                 normalized_spec["hide_after_at"] = hide_after_at
+            if scroll_override is not None:
+                normalized_spec["scroll"] = scroll_override
             normalized_screens[canonical_id] = _merge_screen_specs(normalized_screens.get(canonical_id), normalized_spec)
             continue
         try:
@@ -304,6 +356,23 @@ def _build_layouts(entries: dict[str, Any]) -> dict[str, Any]:
     return {"screens": {"quad": {"enabled": quad_enabled, "scroll_speed": quad_scroll_speed, "pages": pages}}}
 
 
+def _load_active_config() -> dict[str, Any]:
+    """Load the currently active schedule config (local override if present,
+    else the default), mirroring config_ui._load_active_config."""
+
+    active_path = LOCAL_CONFIG_PATH if os.path.exists(LOCAL_CONFIG_PATH) else str(
+        _screens_config_paths.default_path
+    )
+    try:
+        with open(active_path, encoding="utf-8") as fh:
+            data = json.load(fh)
+    except FileNotFoundError:
+        return {"screens": {}}
+    if not isinstance(data, dict):
+        raise ValueError("Configuration must be a JSON object")
+    return data
+
+
 def _load_active_style_config() -> dict[str, Any]:
     try:
         with open(STYLE_CONFIG_PATH, encoding="utf-8") as fh:
@@ -398,6 +467,8 @@ def _build_screen_entries(config: dict[str, Any], style_config: dict[str, Any]) 
             "alt_frequency": "",
             "hide_after_at": "",
             "hide_after_enabled": False,
+            "scroll_speed_enabled": False,
+            "scroll_speed": 1.0,
             "background": _rgb_to_hex(_default_background_for_screen(screen_id)),
         }
         if isinstance(raw, dict):
@@ -405,6 +476,10 @@ def _build_screen_entries(config: dict[str, Any], style_config: dict[str, Any]) 
             entry["extra_seconds"] = raw.get("extra_seconds", 0)
             entry["hide_after_at"] = raw.get("hide_after_at", "") if isinstance(raw.get("hide_after_at"), str) else ""
             entry["hide_after_enabled"] = bool(raw.get("hide_after_enabled", False))
+            scroll_override = _normalize_screen_scroll_override(raw.get("scroll"))
+            if scroll_override is not None:
+                entry["scroll_speed_enabled"] = True
+                entry["scroll_speed"] = scroll_override["speed"]
             alt = raw.get("alt") if isinstance(raw.get("alt"), dict) else None
             if alt:
                 alt_screen = alt.get("screen")
@@ -441,6 +516,8 @@ def _build_config(entries: list[dict[str, Any]]) -> dict[str, Any]:
         if hide_after_enabled and hide_after_at:
             spec["hide_after_enabled"] = True
             spec["hide_after_at"] = hide_after_at
+        if entry.get("scroll_speed_enabled"):
+            spec["scroll"] = {"speed": _normalize_scroll_speed(entry.get("scroll_speed", 1.0))}
         alt_screen_raw = str(entry.get("alt_screen", "")).strip()
         if alt_screen_raw:
             alt_screens = [canonical_screen_id(item.strip()) for item in alt_screen_raw.split(",") if item.strip()]
@@ -560,6 +637,8 @@ def _resolve_import(payload: dict[str, Any]) -> tuple[dict[str, Any], dict[str, 
             value = config_payload.get(key)
             if value is not None:
                 config[key] = value
+        current_scroll = _load_active_config().get("scroll")
+        config["scroll"] = _normalize_scroll_settings(config_payload.get("scroll", current_scroll))
         config, _ = _normalize_legacy_scoreboard_ids(config)
         derived_style_payload = _build_style_config(entries, _load_active_style_config())
 

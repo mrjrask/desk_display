@@ -33,6 +33,7 @@ warnings.filterwarnings(
     module=r"pygame\.pkgdata",
 )
 
+import contextlib
 import datetime
 import glob
 import hashlib
@@ -721,8 +722,38 @@ def _button_press_can_fire(name: str, now: float) -> bool:
     return pressed_for >= hold_seconds
 
 
+def _atomic_write_json(path: str, data: Any) -> None:
+    """Write *data* to *path* as JSON via a same-directory temp file + rename.
+
+    ``os.replace`` is an atomic filesystem operation, so a reader (or a
+    power loss) never observes a partially written/truncated file the way a
+    plain ``open(path, "w")`` can leave one.
+    """
+
+    directory = os.path.dirname(path) or "."
+    fd, tmp_path = tempfile.mkstemp(
+        prefix=f".{os.path.basename(path)}.", suffix=".tmp", dir=directory
+    )
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as fh:
+            json.dump(data, fh, indent=2)
+            fh.write("\n")
+            fh.flush()
+            os.fsync(fh.fileno())
+        os.replace(tmp_path, path)
+    except BaseException:
+        with contextlib.suppress(OSError):
+            os.unlink(tmp_path)
+        raise
+
+
 def _load_scheduler_from_config() -> Optional[ScreenScheduler]:
     config_path = _active_config_path()
+
+    try:
+        pre_read_mtime = os.path.getmtime(config_path)
+    except OSError:
+        pre_read_mtime = None
 
     try:
         config_data = load_schedule_config(config_path)
@@ -733,16 +764,31 @@ def _load_scheduler_from_config() -> Optional[ScreenScheduler]:
     sanitized_config, removed_ids = sanitize_schedule_config(config_data)
     if removed_ids:
         try:
-            with open(config_path, "w", encoding="utf-8") as fh:
-                json.dump(sanitized_config, fh, indent=2)
-                fh.write("\n")
+            current_mtime = os.path.getmtime(config_path)
+        except OSError:
+            current_mtime = None
+        if pre_read_mtime is not None and current_mtime != pre_read_mtime:
+            # The config UI (or another writer) saved a new version of this
+            # file between our read and now. Writing our sanitized copy
+            # back would silently discard that concurrent edit (a lost
+            # update), so skip persisting and let the next load re-sanitize
+            # whatever is on disk.
             logging.info(
-                "Removed %d deprecated/unknown screen id(s) from schedule configuration.",
-                len(removed_ids),
+                "Schedule configuration changed on disk since it was read; "
+                "skipping sanitized write-back to avoid overwriting a "
+                "concurrent edit."
             )
             config_data = sanitized_config
-        except OSError as exc:
-            logging.warning("Could not persist cleaned schedule configuration: %s", exc)
+        else:
+            try:
+                _atomic_write_json(config_path, sanitized_config)
+                logging.info(
+                    "Removed %d deprecated/unknown screen id(s) from schedule configuration.",
+                    len(removed_ids),
+                )
+                config_data = sanitized_config
+            except OSError as exc:
+                logging.warning("Could not persist cleaned schedule configuration: %s", exc)
 
     try:
         scheduler = build_scheduler(config_data)
@@ -1018,6 +1064,13 @@ def _check_control_buttons(
 
     new_presses = []
     skip_requested = False
+    # A press shorter than BUTTON_POLL_INTERVAL can be recorded by the
+    # hardware interrupt callback (_button_event_callback) and already be
+    # physically released again by the time this poll runs. Without
+    # tracking that separately, the "release" branch below would clear the
+    # pending press before the fire-check loop ever saw it as pressed,
+    # silently dropping the tap.
+    brief_releases: List[str] = []
 
     for name in _BUTTON_NAMES:
         try:
@@ -1034,6 +1087,8 @@ def _check_control_buttons(
             _BUTTON_PRESS_HANDLED[name] = False
         elif not pressed and previously_pressed:
             logging.debug("Button %s released.", name)
+            if not _BUTTON_PRESS_HANDLED[name]:
+                brief_releases.append(name)
             _BUTTON_PRESS_STARTED_AT[name] = 0.0
             _BUTTON_PRESS_HANDLED[name] = False
 
@@ -1059,6 +1114,19 @@ def _check_control_buttons(
             continue
 
         _BUTTON_PRESS_HANDLED[name] = True
+        if defer_display_actions:
+            handled = _handle_button_down(name, defer_display_actions=True)
+        else:
+            handled = _handle_button_down(name)
+        if handled:
+            skip_requested = True
+
+    for name in brief_releases:
+        # A hold-to-trigger action can't be satisfied by a tap shorter than
+        # the poll interval, so those still correctly drop rather than
+        # misfiring on release.
+        if _BUTTON_MIN_HOLD_SECONDS.get(name, 0.0) > 0:
+            continue
         if defer_display_actions:
             handled = _handle_button_down(name, defer_display_actions=True)
         else:

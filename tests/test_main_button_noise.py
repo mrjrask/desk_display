@@ -112,6 +112,60 @@ def test_single_press_still_processed(main_for_buttons, monkeypatch):
     assert main_for_buttons._BUTTON_STATE["X"] is False
 
 
+def test_brief_tap_shorter_than_poll_interval_still_fires(main_for_buttons, monkeypatch):
+    """Regression test: a press caught by the hardware interrupt callback
+    (_button_event_callback) that is already released again by the time the
+    next poll runs used to be silently dropped -- the poll's "release"
+    branch cleared the pending press before the fire-check loop ever saw it
+    as pressed."""
+
+    # No button is physically down at poll time; this simulates the pin
+    # having already released.
+    fake_display = _FakeDisplay(set())
+    main_for_buttons.display = fake_display
+
+    # Simulate the hardware interrupt callback recording a brief press of A
+    # in between polls.
+    main_for_buttons._button_event_callback("A")
+    assert main_for_buttons._BUTTON_STATE["A"] is True
+    assert main_for_buttons._BUTTON_PRESS_HANDLED["A"] is False
+
+    handled = []
+
+    def fake_handle(name: str) -> bool:
+        handled.append(name)
+        return name == "A"
+
+    monkeypatch.setattr(main_for_buttons, "_handle_button_down", fake_handle)
+
+    result = main_for_buttons._check_control_buttons()
+
+    assert handled == ["A"]
+    assert result is True
+    assert main_for_buttons._BUTTON_STATE["A"] is False
+
+
+def test_brief_tap_of_hold_to_trigger_button_does_not_misfire(main_for_buttons, monkeypatch):
+    """A tap shorter than the poll interval can't satisfy button B's
+    minimum-hold requirement, so it must still be dropped rather than
+    firing immediately on release."""
+
+    fake_display = _FakeDisplay(set())
+    main_for_buttons.display = fake_display
+
+    main_for_buttons._button_event_callback("B")
+
+    handled = []
+    monkeypatch.setattr(
+        main_for_buttons, "_handle_button_down", lambda name: handled.append(name) or False
+    )
+
+    result = main_for_buttons._check_control_buttons()
+
+    assert handled == []
+    assert result is False
+
+
 def test_b_button_requires_hold_before_trigger(main_for_buttons, monkeypatch):
     fake_display = _FakeDisplay({"B"})
     main_for_buttons.display = fake_display

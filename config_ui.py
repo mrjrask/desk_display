@@ -31,6 +31,7 @@ from flask import (
 )
 
 import config
+from config import CENTRAL_TIME
 from diagnostic_playback import load_diagnostic_screen, save_diagnostic_screen
 from env_config import non_negative_env_int
 from paths import (
@@ -1231,6 +1232,14 @@ def _build_screen_entries(
             if isinstance(hide_after_at, str):
                 try:
                     parsed_hide_after = datetime.fromisoformat(hide_after_at.strip())
+                    # schedule.py interprets a naive hide_after_at as Central
+                    # time (see build_scheduler). Convert any tz-aware value
+                    # to Central before dropping the offset for the
+                    # datetime-local form field, so the next Save round
+                    # trips to the same moment instead of silently shifting
+                    # it by the UTC offset (e.g. 5-6 hours off from UTC).
+                    if parsed_hide_after.tzinfo is not None:
+                        parsed_hide_after = parsed_hide_after.astimezone(CENTRAL_TIME)
                     entry["hide_after_at"] = parsed_hide_after.strftime("%Y-%m-%dT%H:%M")
                 except ValueError:
                     entry["hide_after_at"] = hide_after_at
