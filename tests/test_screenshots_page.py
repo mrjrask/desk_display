@@ -4,6 +4,8 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from types import SimpleNamespace
 
+import pytest
+
 import config_ui
 
 
@@ -468,6 +470,37 @@ def test_screenshot_order_matches_playlist_grouped_config_order(monkeypatch, tmp
     # though "on this day" and "news headlines" come earlier in the raw
     # screens dict.
     assert order == ["date", "nixie", "weather logo", "weather1", "on this day", "news headlines"]
+
+
+@pytest.mark.parametrize("profile", ["large", "small"])
+def test_screenshot_and_feed_order_match_selected_default_profile(
+    monkeypatch, tmp_path, profile
+):
+    current_dir = tmp_path / "current"
+    current_dir.mkdir()
+    config, _styles, _layouts, _has_scroll = config_ui._load_default_screens_bundle(profile)
+    screen_ids = list(config["screens"])
+    for screen_id in screen_ids:
+        prefix = config_ui._sanitize_filename_prefix(screen_id)
+        (current_dir / f"{prefix}.png").write_bytes(b"x")
+
+    monkeypatch.setattr(
+        config_ui,
+        "resolve_storage_paths",
+        lambda **kwargs: SimpleNamespace(
+            screenshot_dir=tmp_path, current_screenshot_dir=current_dir
+        ),
+    )
+    monkeypatch.setattr(config_ui, "_load_active_config", lambda: config)
+    monkeypatch.setattr(config_ui, "FEED_SCREEN_STALE_SECONDS", float("inf"))
+
+    playlists, assignments = config_ui._build_playlist_assignments(config)
+    expected = config_ui._apply_playlist_grouping(screen_ids, playlists, assignments)
+    screenshot_order = [entry["id"] for entry in config_ui._build_screenshot_entries()]
+    feed_order = [entry["id"] for entry in config_ui._build_feed_screenshot_entries()]
+
+    assert screenshot_order[: len(expected)] == expected
+    assert feed_order[: len(expected)] == expected
 
 
 def test_build_screenshot_entries_includes_oled_when_present(monkeypatch, tmp_path):
