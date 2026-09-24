@@ -449,6 +449,7 @@ def test_scheduler_frequency_interval_matches_configuration():
     registry = make_registry({"date": True, "inside": True})
 
     sequence = collect_sequence(scheduler, registry, 12)
+    # Startup hydration is separate; normal rotation then begins with pass 1.
     # ``inside`` appears once during startup, then on every fourth normal pass.
     assert sequence == [
         "date",
@@ -514,6 +515,15 @@ def test_scheduler_hydrates_each_frequency_pass_in_config_page_order():
         "date",
         "inside",
     ]
+
+
+def test_scheduler_jumps_across_empty_normal_passes():
+    scheduler = build_scheduler({"screens": {"date": 1_000_000_000}})
+    registry = make_registry({"date": True})
+
+    assert scheduler.next_available(registry).id == "date"
+    assert scheduler.next_available(registry).id == "date"
+    assert scheduler._pass_number == 1_000_000_000
 
 
 def test_scheduler_uses_first_playlist_assignment_for_duplicate_screen():

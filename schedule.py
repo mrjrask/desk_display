@@ -39,7 +39,6 @@ class _AlternateSchedule:
 class _ScheduleEntry:
     screen_id: str
     frequency: int
-    cycle_count: int = 0
     presentation_count: int = 0
     extra_seconds: int = 0
     hide_after: Optional[datetime] = None
@@ -56,6 +55,8 @@ class ScreenScheduler:
             index for index, entry in enumerate(self._entries) if entry.frequency >= 1
         ]
         self._pending_indices: list[int] = []
+        self._pass_number: int = 0
+        self._startup_hydrated: bool = False
         self._extra_seconds_by_id: dict[str, int] = {}
         requested: set[str] = set()
         for entry in self._entries:
@@ -114,7 +115,6 @@ class ScreenScheduler:
                 _ScheduleEntry(
                     screen_id=entry.screen_id,
                     frequency=entry.frequency,
-                    cycle_count=entry.cycle_count,
                     presentation_count=entry.presentation_count,
                     extra_seconds=entry.extra_seconds,
                     hide_after=entry.hide_after,
@@ -126,6 +126,8 @@ class ScreenScheduler:
         preview._cursor = self._cursor
         preview._startup_indices = self._startup_indices.copy()
         preview._pending_indices = self._pending_indices.copy()
+        preview._pass_number = self._pass_number
+        preview._startup_hydrated = self._startup_hydrated
 
         scheduled_ids: list[str] = []
         for _ in range(limit):
@@ -142,17 +144,7 @@ class ScreenScheduler:
         if not self._entries:
             return None
 
-        while self._startup_indices:
-            entry_index = self._startup_indices.pop(0)
-            self._cursor = (entry_index + 1) % len(self._entries)
-            entry = self._entries[entry_index]
-            if entry.hide_after is not None and datetime.now(UTC) >= entry.hide_after:
-                continue
-            return entry.screen_id
-
-        if not self._pending_indices:
-            self._hydrate_next_pass(datetime.now(UTC))
-        if not self._pending_indices:
+        if not self._pending_indices and not self._hydrate_until_pending(datetime.now(UTC)):
             return None
 
         entry_index = self._pending_indices.pop(0)
@@ -174,6 +166,11 @@ class ScreenScheduler:
     def _hydrate_next_pass(self, now_utc: datetime) -> None:
         """Queue every due entry for one complete, configuration-ordered pass.
 
+        Startup hydration is a separate initial traversal, not ``pass 1``.
+        Normal pass numbering begins with pass 1 after startup hydration has
+        completed, and the scheduler-wide pass counter advances once here for
+        each such pass.
+
         Building the whole pass before returning its first screen prevents later
         calls from interleaving entries from different frequency passes.  The
         queue is also retained while registry data is refreshed, so rebuilding
@@ -181,15 +178,52 @@ class ScreenScheduler:
         """
 
         self._pending_indices.clear()
+        startup_hydration = not self._startup_hydrated
+        if startup_hydration:
+            self._startup_hydrated = True
+        else:
+            self._pass_number += 1
+
         for index, entry in enumerate(self._entries):
+            if entry.frequency == 0:
+                continue
             if entry.hide_after is not None and now_utc >= entry.hide_after:
                 continue
 
-            entry.cycle_count += 1
-            if entry.cycle_count % entry.frequency == 0:
+            if startup_hydration:
+                self._pending_indices.append(index)
+            elif self._pass_number % entry.frequency == 0:
                 self._pending_indices.append(index)
 
         self._cursor = 0
+
+    def _hydrate_until_pending(self, now_utc: datetime) -> bool:
+        """Hydrate the next pass with work, skipping empty pass ranges."""
+
+        self._hydrate_next_pass(now_utc)
+        if self._pending_indices:
+            return True
+
+        active_frequencies = [
+            entry.frequency
+            for entry in self._entries
+            if entry.frequency > 0
+            and (entry.hide_after is None or now_utc < entry.hide_after)
+        ]
+        if not active_frequencies:
+            return False
+
+        # The pass just hydrated was empty. Jump to immediately before the
+        # nearest future multiple rather than scanning every intervening pass;
+        # _hydrate_next_pass() remains the single place that increments the
+        # scheduler-wide counter and queues the selected pass.
+        next_due_pass = min(
+            (self._pass_number // frequency + 1) * frequency
+            for frequency in active_frequencies
+        )
+        self._pass_number = next_due_pass - 1
+        self._hydrate_next_pass(now_utc)
+        return bool(self._pending_indices)
 
     def _next_available_from_entry(
         self,
@@ -221,24 +255,8 @@ class ScreenScheduler:
             return None
 
         now_utc = datetime.now(UTC)
-        if self._startup_indices:
-            # Startup hydration is a separate, one-time phase.  Drain only its
-            # configured base screens, leaving normal pass and presentation
-            # counters untouched until a later call begins regular rotation.
-            startup_count = len(self._startup_indices)
-            for _ in range(startup_count):
-                entry_index = self._startup_indices.pop(0)
-                self._cursor = (entry_index + 1) % len(self._entries)
-                entry = self._entries[entry_index]
-                if entry.hide_after is not None and now_utc >= entry.hide_after:
-                    continue
-                definition = registry.get(entry.screen_id)
-                if definition is not None and definition.available:
-                    return definition
+        if not self._pending_indices and not self._hydrate_until_pending(now_utc):
             return None
-
-        if not self._pending_indices:
-            self._hydrate_next_pass(now_utc)
 
         # Drain exactly one hydrated pass. Unavailable screens remain in their
         # configured slots rather than causing a second pass to be mixed in.

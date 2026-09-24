@@ -49,4 +49,4 @@ def test_final_entry_wrap_does_not_readvance_completed_pass():
     # separate hydration phase, so it must not advance or queue a normal pass.
     assert scheduler._cursor == 0
     assert scheduler._pending_indices == []
-    assert [entry.cycle_count for entry in scheduler._entries] == [0, 0, 0]
+    assert scheduler._pass_number == 0
