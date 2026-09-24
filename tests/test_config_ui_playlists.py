@@ -1,4 +1,81 @@
+import json
+from pathlib import Path
+
+import pytest
+
 import config_ui
+from schedule import build_scheduler
+
+ROOT = Path(__file__).resolve().parents[1]
+
+
+def _preview_through_pass(config, last_pass=12):
+    entries = build_scheduler(config).preview_scheduled_entries(2_000)
+    return [
+        entry
+        for entry in entries
+        if entry.phase == "startup"
+        or (entry.pass_number is not None and entry.pass_number <= last_pass)
+    ]
+
+
+@pytest.mark.parametrize("profile", ["large", "small"])
+def test_default_profile_api_import_export_round_trip_preserves_schedule(
+    profile, tmp_path, monkeypatch
+):
+    """Defaults remain lossless through the same import/export path used by the UI."""
+
+    default_path = ROOT / f"default_screens_{profile}.json"
+    source_bundle = json.loads(default_path.read_text(encoding="utf-8"))
+    source_config = source_bundle["config"]
+
+    local_config_path = tmp_path / "screens_config.json"
+    layouts_path = tmp_path / "screens_layouts.json"
+    monkeypatch.setattr(config_ui, "LOCAL_CONFIG_PATH", str(local_config_path))
+    monkeypatch.setattr(config_ui, "LAYOUTS_CONFIG_PATH", str(layouts_path))
+
+    client = config_ui.app.test_client()
+    defaults_response = client.get(f"/api/screens/defaults?profile={profile}")
+
+    assert defaults_response.status_code == 200
+    defaults = defaults_response.get_json()
+    assert defaults["selected_default_profile"] == profile
+    assert defaults["config"]["screens"] == source_config["screens"]
+    assert defaults["config"]["playlists"] == source_config["playlists"]
+    assert defaults["config"]["sequence"] == source_config["sequence"]
+    assert [entry["id"] for entry in defaults["screens"][: len(source_config["screens"])]] == list(
+        source_config["screens"]
+    )
+
+    expected_playlists, expected_assignments = config_ui._build_playlist_assignments(source_config)
+    assert defaults["playlists"] == expected_playlists
+    assert defaults["playlist_assignments"] == expected_assignments
+
+    import_response = client.post("/api/screens/import", json={"config": defaults["config"]})
+    assert import_response.status_code == 200
+    export_response = client.get("/api/screens/export")
+    assert export_response.status_code == 200
+    round_tripped = json.loads(export_response.get_data(as_text=True))
+
+    assert list(round_tripped["screens"]) == list(source_config["screens"])
+    assert round_tripped["playlists"] == source_config["playlists"]
+    assert round_tripped["sequence"] == source_config["sequence"]
+
+    for screen_id, source_spec in source_config["screens"].items():
+        exported_spec = round_tripped["screens"][screen_id]
+        source_frequency = (
+            source_spec["frequency"] if isinstance(source_spec, dict) else source_spec
+        )
+        exported_frequency = (
+            exported_spec["frequency"] if isinstance(exported_spec, dict) else exported_spec
+        )
+        assert isinstance(exported_frequency, int)
+        assert exported_frequency == source_frequency
+        if isinstance(source_spec, dict) and "alt" in source_spec:
+            assert isinstance(exported_spec["alt"]["frequency"], int)
+            assert exported_spec["alt"]["frequency"] == source_spec["alt"]["frequency"]
+
+    assert _preview_through_pass(round_tripped) == _preview_through_pass(source_config)
 
 
 def test_vertical_scroll_adjustment_normalizes_fractional_values():
