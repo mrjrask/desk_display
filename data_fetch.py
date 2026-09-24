@@ -853,6 +853,19 @@ def _normalise_weatherkit_response(data: dict[str, Any]) -> Optional[dict[str, A
             return None
         return numeric * 9 / 5 + 32
 
+    def _wind_measurement_mph(value: Any) -> Optional[float]:
+        """Extract a WeatherKit wind measurement and convert km/h to mph.
+
+        WeatherKit's REST API always reports wind speed/gust in km/h (it has
+        no units parameter), while every screen that renders these values
+        labels them "mph". Every other provider in this module (OpenWeatherMap)
+        is requested with imperial units, so this conversion keeps the two
+        providers consistent.
+        """
+
+        kmh = _measurement_value(value)
+        return kmh / 1.609344 if kmh is not None else None
+
     current_temp_c = current_raw.get("temperature")
     current_feels_c = current_raw.get("temperatureApparent") or current_temp_c
 
@@ -867,8 +880,8 @@ def _normalise_weatherkit_response(data: dict[str, Any]) -> Optional[dict[str, A
             }
         ],
         "is_daylight": is_daylight,
-        "wind_speed": _measurement_value(current_raw.get("windSpeed")),
-        "wind_gust": _measurement_value(current_raw.get("windGust")),
+        "wind_speed": _wind_measurement_mph(current_raw.get("windSpeed")),
+        "wind_gust": _wind_measurement_mph(current_raw.get("windGust")),
         "wind_deg": current_raw.get("windDirection"),
         "humidity": humidity_pct,
         "pressure": _measurement_value(current_raw.get("pressure")),
@@ -907,7 +920,7 @@ def _normalise_weatherkit_response(data: dict[str, Any]) -> Optional[dict[str, A
                 "moonset": _parse_iso_timestamp(day.get("moonset")),
                 "moonPhase": day.get("moonPhase"),
                 "pop": day.get("precipitationChance"),
-                "wind_speed": _measurement_value(day.get("windSpeed")),
+                "wind_speed": _wind_measurement_mph(day.get("windSpeed")),
                 "wind_deg": day.get("windDirection"),
                 "uvi": day.get("uvIndex"),
                 "weather": [
@@ -932,8 +945,8 @@ def _normalise_weatherkit_response(data: dict[str, Any]) -> Optional[dict[str, A
                 "temp": _to_fahrenheit(hour.get("temperature")),
                 "feels_like": _to_fahrenheit(hour.get("temperatureApparent") or hour.get("temperature")),
                 "pop": hour.get("precipitationChance"),
-                "wind_speed": _measurement_value(hour.get("windSpeed")),
-                "wind_gust": _measurement_value(hour.get("windGust")),
+                "wind_speed": _wind_measurement_mph(hour.get("windSpeed")),
+                "wind_gust": _wind_measurement_mph(hour.get("windGust")),
                 "wind_deg": hour.get("windDirection"),
                 "uvi": hour.get("uvIndex"),
                 "weather": [

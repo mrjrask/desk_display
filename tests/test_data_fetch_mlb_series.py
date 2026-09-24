@@ -114,7 +114,10 @@ def test_next_series_advances_when_current_series_uses_next_block(monkeypatch):
 
     assert [g["gamePk"] for g in (result["current_series_games"] or [])] == [10, 11]
     assert [g["gamePk"] for g in (result["next_series_games"] or [])] == [12]
-    assert result["next_home_series_games"] is None
+    # Game 12 is a home game (team 112 vs away 118), so per "Keep Cubs next
+    # home series in rotation" (ddf0e82), next_home_series_games matches
+    # next_series_games rather than being cleared.
+    assert [g["gamePk"] for g in (result["next_home_series_games"] or [])] == [12]
 
 
 def test_next_home_series_uses_next_series_when_it_is_home(monkeypatch):

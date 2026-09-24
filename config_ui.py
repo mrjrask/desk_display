@@ -84,6 +84,10 @@ FEED_SCREEN_STALE_SECONDS = non_negative_env_int("FEED_SCREEN_STALE_SECONDS", 20
 OLED_SCREEN_IDS = ("oled left", "oled right")
 app = Flask(__name__)
 app.secret_key = SCREEN_SESSION_SECRET or SCREEN_UI_PASSWORD or secrets.token_urlsafe()
+# Screen key order is significant (it drives rotation order), so JSON
+# responses must preserve insertion order instead of Flask's default
+# alphabetical key sort.
+app.json.sort_keys = False
 WEB_LOGGER = logging.getLogger("desk_display.web")
 _CONFIG_SAVE_LOCK = threading.RLock()
 _SERVICE_STATUS_CACHE_TTL_SECONDS = 5.0

@@ -996,7 +996,14 @@ def test_config_ui_small_defaults_match_scheduler_configuration():
 
     assert response.status_code == 200
     payload = response.get_json()
-    assert payload["config"] == _small_config()
+    # The defaults endpoint always injects a normalized "scroll" block (see
+    # has_explicit_scroll / _validate_config_payload), even when the source
+    # file omits one, so compare it separately from the rest of the config.
+    expected_config = _small_config()
+    expected_config["scroll"] = config_ui._normalize_scroll_settings(
+        expected_config.get("scroll")
+    )
+    assert payload["config"] == expected_config
     assert build_scheduler(payload["config"]).preview_scheduled_entries(1_000) == (
-        build_scheduler(_small_config()).preview_scheduled_entries(1_000)
+        build_scheduler(expected_config).preview_scheduled_entries(1_000)
     )

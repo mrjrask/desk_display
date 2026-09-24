@@ -1118,8 +1118,11 @@ def _wait_with_button_checks(
     Returns True if the caller should skip the rest of the current screen.
     """
 
+    global _skip_request_pending
+
     if _manual_skip_event.is_set() or _skip_request_pending:
         _manual_skip_event.clear()
+        _skip_request_pending = False
         return True
 
     end = time.monotonic() + duration
@@ -1135,6 +1138,7 @@ def _wait_with_button_checks(
     while not _shutdown_event.is_set():
         if _manual_skip_event.is_set() or _skip_request_pending:
             _manual_skip_event.clear()
+            _skip_request_pending = False
             return True
 
         try:
