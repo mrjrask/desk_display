@@ -422,8 +422,8 @@ def draw_date(display, transition: bool=False):
     Screen A: DATE on top, TIME on bottom.
     When transition=True (used by main.py), returns a single static frame
     to avoid any initial flash. No cycling occurs in transition mode.
-    When transition=False, we show the first frame immediately and keep the
-    colors stable for the rest of the screen's dwell time.
+    When transition=False, we show the first frame immediately; background
+    update checks may refresh its colors during the screen's dwell time.
     """
     col_top    = bright_color()
     col_bottom = bright_color()

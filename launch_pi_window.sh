@@ -19,7 +19,7 @@ expand_home_path_var() {
   local name="$1"
   local raw="${!name:-}"
   if [[ "$raw" == "~/"* ]]; then
-    export "$name=$HOME/${raw#~/}"
+    export "$name=$HOME/${raw#\~/}"
   fi
 }
 

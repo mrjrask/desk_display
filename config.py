@@ -236,10 +236,11 @@ IMAGES_DIR  = os.path.join(SCRIPT_DIR, "images")
 # extension; filename case doesn't matter, e.g. "AAPL.png" or "aapl.png").
 COMPANY_LOGOS_DIR = os.path.join(IMAGES_DIR, "company")
 
-STYLE_CONFIG_PATH = os.environ.get(
-    "SCREENS_STYLE_PATH", os.path.join(SCRIPT_DIR, "screens_style.json")
-)
-_STYLE_CONFIG_STORE = ConfigStore(STYLE_CONFIG_PATH)
+_style_config_path = Path(os.environ.get("SCREENS_STYLE_PATH", "screens_style.json")).expanduser()
+if not _style_config_path.is_absolute():
+    _style_config_path = Path(SCRIPT_DIR) / _style_config_path
+STYLE_CONFIG_PATH = str(_style_config_path)
+_STYLE_CONFIG_STORE = ConfigStore(STYLE_CONFIG_PATH, initialize=False)
 _STYLE_CONFIG_CACHE: dict[str, Any] = {"screens": {}}
 _STYLE_CONFIG_MTIME: Optional[float] = None
 _STYLE_CONFIG_LOCK = threading.Lock()
@@ -710,7 +711,9 @@ def _read_kernel_overlay_rotation() -> Optional[int]:
                         config_path,
                     )
                     break
-                if parsed in (0, 1, 2, 3):
+                if parsed == 0:
+                    continue
+                if parsed in (1, 2, 3):
                     return parsed * 90
                 return parsed
                 break

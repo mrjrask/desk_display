@@ -96,7 +96,9 @@ is_known() {
 
 is_installed() {
   local svc="$1"
-  systemctl list-unit-files --type=service --no-legend 2>/dev/null | awk '{print $1}' | grep -qx "$svc"
+  local unit_line
+  unit_line="$(systemctl list-unit-files "$svc" --type=service --no-legend 2>/dev/null || true)"
+  [[ "${unit_line%%[[:space:]]*}" == "$svc" ]]
 }
 
 restart_service() {

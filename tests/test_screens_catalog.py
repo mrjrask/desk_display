@@ -74,3 +74,15 @@ def test_nba_nhl_schedule_quad_screen_ids_are_listed():
 
 def test_world_cup_scoreboard_screen_id_is_listed():
     assert "World Cup Scoreboard" in RAW_SCREEN_IDS
+
+
+def test_active_v2_scoreboard_screen_ids_are_listed_and_not_canonicalized():
+    screen_ids = {
+        "NFL Scoreboard v2",
+        "NHL Scoreboard v2",
+        "NBA Scoreboard v2",
+        "MLB Scoreboard v2",
+    }
+
+    assert screen_ids <= set(RAW_SCREEN_IDS)
+    assert {canonical_screen_id(screen_id) for screen_id in screen_ids} == screen_ids

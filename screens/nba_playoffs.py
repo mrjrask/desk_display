@@ -745,7 +745,12 @@ def _derive_playoff_matchups_from_recent_games(now: Optional[datetime.datetime] 
         return []
 
     base_day = _scoreboard_date(now)
-    recent_days = [base_day - datetime.timedelta(days=offset) for offset in range(14, -1, -1)]
+    postseason_start = datetime.date(base_day.year, 4, 1)
+    lookback_days = max(14, min(75, (base_day - postseason_start).days))
+    recent_days = [
+        base_day - datetime.timedelta(days=offset)
+        for offset in range(lookback_days, -1, -1)
+    ]
     upcoming_days = [base_day + datetime.timedelta(days=offset) for offset in range(8)]
 
     all_games: list[dict] = []

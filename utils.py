@@ -163,39 +163,35 @@ def _maybe_configure_desktop_env() -> None:
     if not os.environ.get("XDG_RUNTIME_DIR") and Path(runtime_dir).is_dir():
         os.environ["XDG_RUNTIME_DIR"] = runtime_dir
 
-    if user:
+    def _run_loginctl(*args: str) -> Optional[subprocess.CompletedProcess[str]]:
         try:
-            result = subprocess.run(
-                ["loginctl", "show-user", user, "-p", "Sessions", "--value"],
+            return subprocess.run(
+                ["loginctl", *args],
                 check=False,
                 capture_output=True,
                 text=True,
+                timeout=5,
             )
+        except (OSError, subprocess.TimeoutExpired):
+            return None
+
+    if user:
+        try:
+            result = _run_loginctl("show-user", user, "-p", "Sessions", "--value")
         except OSError:
             result = None
         if result and result.returncode == 0:
             sessions = result.stdout.strip().split()
             for session in sessions:
-                active = subprocess.run(
-                    ["loginctl", "show-session", session, "-p", "Active", "--value"],
-                    check=False,
-                    capture_output=True,
-                    text=True,
-                )
-                if active.stdout.strip() != "yes":
+                active = _run_loginctl("show-session", session, "-p", "Active", "--value")
+                if active is None or active.stdout.strip() != "yes":
                     continue
-                session_type = subprocess.run(
-                    ["loginctl", "show-session", session, "-p", "Type", "--value"],
-                    check=False,
-                    capture_output=True,
-                    text=True,
-                ).stdout.strip()
-                display = subprocess.run(
-                    ["loginctl", "show-session", session, "-p", "Display", "--value"],
-                    check=False,
-                    capture_output=True,
-                    text=True,
-                ).stdout.strip()
+                type_result = _run_loginctl("show-session", session, "-p", "Type", "--value")
+                display_result = _run_loginctl(
+                    "show-session", session, "-p", "Display", "--value"
+                )
+                session_type = type_result.stdout.strip() if type_result else ""
+                display = display_result.stdout.strip() if display_result else ""
                 if session_type == "x11" and display and not os.environ.get("DISPLAY"):
                     os.environ["DISPLAY"] = display
                 if session_type == "wayland":
@@ -4271,7 +4267,17 @@ def check_github_updates() -> bool:
         )
         return _github_check_failed()
 
-    updated = (local_sha != remote_sha)
+    try:
+        local_is_behind = subprocess.call(
+            ["git", "merge-base", "--is-ancestor", local_sha, remote_sha],
+            cwd=repo_dir,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            timeout=_GIT_COMMAND_TIMEOUT,
+        ) == 0
+    except (subprocess.TimeoutExpired, OSError):
+        local_is_behind = False
+    updated = local_sha != remote_sha and local_is_behind
     logging.info(f"check_github_updates: updates available = {updated}")
     _set_update_status(github=updated)
 
@@ -4793,16 +4799,16 @@ def fetch_weather_icon(
     )
 
 
-def uv_index_color(uvi: int) -> tuple[int, int, int]:
-    if uvi <= 1:
+def uv_index_color(uvi: float) -> tuple[int, int, int]:
+    if uvi < 2:
         return (0, 255, 0)
-    if uvi == 2:
+    if uvi < 3:
         return (200, 120, 255)
-    if 3 <= uvi <= 5:
+    if uvi < 6:
         return (255, 255, 0)
-    if 6 <= uvi <= 7:
+    if uvi < 8:
         return (255, 165, 0)
-    if 8 <= uvi <= 10:
+    if uvi < 11:
         return (255, 0, 0)
     return (128, 0, 128)
 

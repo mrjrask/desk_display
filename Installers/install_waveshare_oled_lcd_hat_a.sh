@@ -534,6 +534,7 @@ log "Writing Waveshare OLED helper service to $WAVESHARE_OLED_SERVICE_PATH"
 $SUDO tee "$WAVESHARE_OLED_SERVICE_PATH" >/dev/null <<SERVICE
 [Unit]
 Description=Desk Display Waveshare OLED status helper
+Wants=network-online.target
 After=network-online.target
 
 [Service]

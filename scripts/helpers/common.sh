@@ -487,7 +487,7 @@ prepend_env_vars() {
   fi
 
   if [[ -z "$target_mode" ]]; then
-    target_mode="644"
+    target_mode="600"
   fi
 
   if [[ -n "${SUDO:-}" ]]; then

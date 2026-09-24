@@ -114,7 +114,7 @@
       }
       const status = payload.display_status;
       if (status.screen_id) {
-        let summary = `Display heartbeat: <strong>${status.screen_id}</strong>`;
+        let summary = `Display heartbeat: ${status.screen_id}`;
         if (status.rendered_at) {
           const elapsed = status.elapsed ? ` (${status.elapsed})` : "";
           summary += ` — ${status.rendered_at}${elapsed}`;
@@ -131,7 +131,7 @@
           const height = status.display.height || "?";
           summary += ` — ${profileId} (${width}×${height})`;
         }
-        displayStatusBanner.innerHTML = summary;
+        displayStatusBanner.textContent = summary;
       } else {
         displayStatusBanner.textContent = "Display heartbeat unavailable.";
       }
