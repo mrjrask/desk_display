@@ -166,6 +166,7 @@ SCREENSHOT_ARCHIVE_MIRROR = ""
 DISPLAY_STATUS_PATH = ""
 
 _screen_config_mtime: Optional[float] = None
+_screen_config_path: Optional[str] = None
 screen_scheduler: Optional[ScreenScheduler] = None
 _requested_screen_ids: Set[str] = set()
 _registry_cache_key: Optional[
@@ -753,7 +754,7 @@ def _load_scheduler_from_config() -> Optional[ScreenScheduler]:
 
 
 def refresh_schedule_if_needed(force: bool = False) -> None:
-    global _screen_config_mtime, screen_scheduler, _requested_screen_ids
+    global _screen_config_mtime, _screen_config_path, screen_scheduler, _requested_screen_ids
     global _registry_cache_key, _registry_cache_value
     global _last_screen_id, _skip_request_pending, _pending_previous_screen_id
     global _pending_touch_focus_screen_id, _pending_touch_return_screen_id
@@ -765,7 +766,10 @@ def refresh_schedule_if_needed(force: bool = False) -> None:
     except OSError:
         mtime = None
 
-    if not force and mtime == _screen_config_mtime and screen_scheduler is not None:
+    config_unchanged = (
+        config_path == _screen_config_path and mtime == _screen_config_mtime
+    )
+    if not force and config_unchanged and screen_scheduler is not None:
         return
 
     scheduler = _load_scheduler_from_config()
@@ -775,6 +779,7 @@ def refresh_schedule_if_needed(force: bool = False) -> None:
     screen_scheduler = scheduler
     _requested_screen_ids = scheduler.requested_ids
     _screen_config_mtime = mtime
+    _screen_config_path = config_path
     _last_screen_id = None
     _skip_request_pending = False
     _pending_previous_screen_id = None
@@ -1302,13 +1307,11 @@ def _active_test_screen_id() -> Optional[str]:
     fixed = _COMMAND_LINE_TEST_SCREEN_ID or normalize_screen_id(TEST_LOOP_SCREEN_ID)
     diagnostic_screen_id = load_diagnostic_screen()
 
-    # Rebuild from the saved configuration when web diagnostic playback ends.
-    # Besides returning the scheduler to the beginning of a clean rotation,
-    # this is important when configuration changes made during diagnostics
-    # disabled a formerly scheduled screen (frequency 0).  An in-memory
-    # scheduler created before that edit must not keep presenting the screen.
+    # Check for saved configuration changes when web diagnostic playback ends.
+    # Keep the existing scheduler when the configuration is unchanged so
+    # diagnostic/manual navigation cannot restart startup hydration.
     if _last_ui_diagnostic_screen_id is not None and diagnostic_screen_id is None:
-        refresh_schedule_if_needed(force=True)
+        refresh_schedule_if_needed()
     _last_ui_diagnostic_screen_id = diagnostic_screen_id
 
     return fixed or diagnostic_screen_id
@@ -3000,7 +3003,10 @@ loop_count = 0
 def main_loop():
     global loop_count, _last_screen_id, _dark_hours_active
 
-    refresh_schedule_if_needed(force=True)
+    # ``init_runtime`` normally constructed the scheduler already.  Recheck the
+    # configuration without forcing a rebuild so startup hydration is consumed
+    # exactly once by the long-lived scheduler instance.
+    refresh_schedule_if_needed()
     screen_play_counts: Dict[str, int] = {}
 
     active_test_screen_id = _active_test_screen_id()
