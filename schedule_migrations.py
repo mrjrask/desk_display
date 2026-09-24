@@ -1,9 +1,10 @@
 """Helpers for structural migration of schedule configurations to schema v2.
 
-Migration preserves numeric frequency values.  Startup hydration, normal-pass
-multiples, and base-presentation-based alternate intervals are runtime
-scheduler semantics, so legacy data acquires them without another schema
-version or any frequency rewriting.
+Migration is structural and preserves numeric ``every`` values by copying them
+into playlist rule steps.  It does not produce the scheduler's top-level
+``screens`` mapping, and the scheduler does not interpret playlist rule steps,
+so migrated legacy data does not gain the runtime frequency, startup hydration,
+or alternate semantics that ``schedule.build_scheduler`` applies to ``screens``.
 """
 from __future__ import annotations
 
@@ -32,8 +33,8 @@ class MigrationResult:
 def migrate_config(data: dict[str, Any], *, source: str | None = None) -> MigrationResult:
     """Return schema v2 data without changing existing numeric rule values.
 
-    The migration is structural only.  The scheduler applies current hydration
-    and frequency semantics when it later builds from the resulting config.
+    The migration is structural only: legacy ``every`` values are kept inside
+    playlist rule steps, not converted into the scheduler's ``screens`` format.
     """
 
     if not isinstance(data, dict):
