@@ -41,7 +41,6 @@ class _ScheduleEntry:
     frequency: int
     cycle_count: int = 0
     presentation_count: int = 0
-    initial_cycle_seen: bool = False
     extra_seconds: int = 0
     hide_after: Optional[datetime] = None
     alternate: Optional[_AlternateSchedule] = None
@@ -53,6 +52,9 @@ class ScreenScheduler:
     def __init__(self, entries: Sequence[_ScheduleEntry]):
         self._entries: list[_ScheduleEntry] = list(entries)
         self._cursor: int = 0
+        self._startup_indices: list[int] = [
+            index for index, entry in enumerate(self._entries) if entry.frequency >= 1
+        ]
         self._pending_indices: list[int] = []
         self._extra_seconds_by_id: dict[str, int] = {}
         requested: set[str] = set()
@@ -114,7 +116,6 @@ class ScreenScheduler:
                     frequency=entry.frequency,
                     cycle_count=entry.cycle_count,
                     presentation_count=entry.presentation_count,
-                    initial_cycle_seen=entry.initial_cycle_seen,
                     extra_seconds=entry.extra_seconds,
                     hide_after=entry.hide_after,
                     alternate=cloned_alt,
@@ -123,6 +124,7 @@ class ScreenScheduler:
 
         preview = ScreenScheduler(cloned_entries)
         preview._cursor = self._cursor
+        preview._startup_indices = self._startup_indices.copy()
         preview._pending_indices = self._pending_indices.copy()
 
         scheduled_ids: list[str] = []
@@ -139,6 +141,14 @@ class ScreenScheduler:
 
         if not self._entries:
             return None
+
+        while self._startup_indices:
+            entry_index = self._startup_indices.pop(0)
+            self._cursor = (entry_index + 1) % len(self._entries)
+            entry = self._entries[entry_index]
+            if entry.hide_after is not None and datetime.now(UTC) >= entry.hide_after:
+                continue
+            return entry.screen_id
 
         if not self._pending_indices:
             self._hydrate_next_pass(datetime.now(UTC))
@@ -173,14 +183,10 @@ class ScreenScheduler:
         self._pending_indices.clear()
         for index, entry in enumerate(self._entries):
             if entry.hide_after is not None and now_utc >= entry.hide_after:
-                entry.initial_cycle_seen = True
                 continue
 
             entry.cycle_count += 1
-            if not entry.initial_cycle_seen:
-                entry.initial_cycle_seen = True
-                self._pending_indices.append(index)
-            elif entry.cycle_count % entry.frequency == 0:
+            if entry.cycle_count % entry.frequency == 0:
                 self._pending_indices.append(index)
 
         self._cursor = 0
@@ -215,6 +221,22 @@ class ScreenScheduler:
             return None
 
         now_utc = datetime.now(UTC)
+        if self._startup_indices:
+            # Startup hydration is a separate, one-time phase.  Drain only its
+            # configured base screens, leaving normal pass and presentation
+            # counters untouched until a later call begins regular rotation.
+            startup_count = len(self._startup_indices)
+            for _ in range(startup_count):
+                entry_index = self._startup_indices.pop(0)
+                self._cursor = (entry_index + 1) % len(self._entries)
+                entry = self._entries[entry_index]
+                if entry.hide_after is not None and now_utc >= entry.hide_after:
+                    continue
+                definition = registry.get(entry.screen_id)
+                if definition is not None and definition.available:
+                    return definition
+            return None
+
         if not self._pending_indices:
             self._hydrate_next_pass(now_utc)
 
