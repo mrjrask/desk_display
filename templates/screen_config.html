@@ -613,7 +613,7 @@
         </div>
         <div>
           <input type="number" min="0" step="1" value="{{ screen.frequency }}" class="freq-input compact-number-input">
-          <div class="hint">0 disables. 1=every pass, 2=every other pass.</div>
+          <div class="hint">0 disables the base screen. When the scheduler initializes or reloads, enabled screens are scheduled once for hydration, subject to availability. After hydration: 1 = every pass, 2 = every second pass.</div>
         </div>
         <div>
           <div class="screen-speed-field">
@@ -655,7 +655,7 @@
         </div>
         <div>
           <input type="number" min="0" step="1" placeholder="1" value="{{ screen.alt_frequency }}" class="alt-frequency-input compact-number-input">
-          <div class="hint">Frequency for alternate.</div>
+          <div class="hint">Counts the base screen's normal scheduled appearances; startup hydration is excluded.</div>
         </div>
       </div>
       {% endfor %}
@@ -1401,7 +1401,7 @@
       frequencyInput.min = "0";
       frequencyInput.step = "1";
       frequencyCell.appendChild(frequencyInput);
-      addHint(frequencyCell, "0 disables. 1=every pass, 2=every other pass.");
+      addHint(frequencyCell, "0 disables the base screen. When the scheduler initializes or reloads, enabled screens are scheduled once for hydration, subject to availability. After hydration: 1 = every pass, 2 = every second pass.");
       row.appendChild(frequencyCell);
 
       const speedCell = makeElement("div");
@@ -1473,7 +1473,7 @@
       alternateFrequencyInput.step = "1";
       alternateFrequencyInput.placeholder = "1";
       alternateFrequencyCell.appendChild(alternateFrequencyInput);
-      addHint(alternateFrequencyCell, "Frequency for alternate.");
+      addHint(alternateFrequencyCell, "Counts the base screen's normal scheduled appearances; startup hydration is excluded.");
       row.appendChild(alternateFrequencyCell);
 
       const ungrouped = new Option("Ungrouped", "");
