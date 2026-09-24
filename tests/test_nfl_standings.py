@@ -72,6 +72,51 @@ def test_parse_csv_standings_returns_empty_when_no_data():
     assert standings[CONFERENCE_NFC_KEY] == {}
 
 
+class _FakeCsvResponse:
+    def __init__(self, text: str):
+        self.text = text
+
+    def raise_for_status(self):
+        return None
+
+
+def test_fetch_standings_data_flags_previous_season_fallback(monkeypatch):
+    # Regression: falling back to a previous season's standings (the CSV
+    # source lags behind at the start of a new season) was completely
+    # silent -- the screen showed old data with nothing to tell the viewer
+    # it wasn't current.
+    monkeypatch.setattr(nfl_standings, "_STANDINGS_CACHE", {"timestamp": 0.0, "data": None, "message": None})
+    monkeypatch.setattr(nfl_standings, "_in_offseason", lambda *args, **kwargs: False)
+    monkeypatch.setattr(nfl_standings, "_target_season_year", lambda *args, **kwargs: 2024)
+    monkeypatch.setattr(
+        nfl_standings._SESSION, "get", lambda *args, **kwargs: _FakeCsvResponse(CSV_PREVIOUS_SEASON)
+    )
+
+    standings, fallback_message, season_note = nfl_standings._fetch_standings_data()
+
+    assert fallback_message is None  # real data, so no "unavailable" replacement
+    assert season_note == "2023 season"
+    assert standings[CONFERENCE_AFC_KEY]["AFC East"]
+
+    assert nfl_standings._title_with_season_note("AFC Standings", season_note) == (
+        "AFC Standings (2023 season)"
+    )
+    assert nfl_standings._title_with_season_note("AFC Standings", None) == "AFC Standings"
+
+
+def test_fetch_standings_data_no_season_note_for_current_season(monkeypatch):
+    monkeypatch.setattr(nfl_standings, "_STANDINGS_CACHE", {"timestamp": 0.0, "data": None, "message": None})
+    monkeypatch.setattr(nfl_standings, "_in_offseason", lambda *args, **kwargs: False)
+    monkeypatch.setattr(nfl_standings, "_target_season_year", lambda *args, **kwargs: 2024)
+    monkeypatch.setattr(
+        nfl_standings._SESSION, "get", lambda *args, **kwargs: _FakeCsvResponse(CSV_SAMPLE)
+    )
+
+    _standings, _fallback_message, season_note = nfl_standings._fetch_standings_data()
+
+    assert season_note is None
+
+
 def test_logo_loader_uses_string_filename_candidates(monkeypatch):
     requested_paths = []
 

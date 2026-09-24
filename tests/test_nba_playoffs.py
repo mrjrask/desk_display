@@ -158,6 +158,45 @@ def test_derive_playoff_matchups_counts_wins_from_finals():
     assert derived[0]["teams"]["home"]["score"] == 1
 
 
+def test_derive_playoff_matchups_next_text_uses_earliest_future_game(monkeypatch):
+    # Regression: next_text was overwritten by every future game encountered,
+    # so a series listing Games 5, 6 and 7 as scheduled (common once a
+    # series clinches its format ahead of time) showed the *last* game's
+    # date/time instead of the very next one to be played.
+    class _FixedNow(datetime.datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return cls(2026, 4, 20, 10, 0, tzinfo=tz)
+
+    monkeypatch.setattr(nba_playoffs.datetime, "datetime", _FixedNow)
+
+    games = [
+        {
+            "gamePk": "0042600105",
+            "gameDate": "2026-04-26T00:00:00Z",
+            "status": {"statusCode": "1", "detailedState": "Scheduled"},
+            "teams": {
+                "away": {"team": {"abbreviation": "BOS"}},
+                "home": {"team": {"abbreviation": "NYK"}},
+            },
+        },
+        {
+            "gamePk": "0042600104",
+            "gameDate": "2026-04-22T00:00:00Z",
+            "status": {"statusCode": "1", "detailedState": "Scheduled"},
+            "teams": {
+                "away": {"team": {"abbreviation": "BOS"}},
+                "home": {"team": {"abbreviation": "NYK"}},
+            },
+        },
+    ]
+
+    derived = nba_playoffs._derive_playoff_matchups_from_games(games)
+
+    assert len(derived) == 1
+    assert derived[0]["next_text"] == "Tomorrow 7:00 PM"
+
+
 def test_parse_series_record_ignores_non_series_score_text():
     assert nba_playoffs._parse_series_record_from_text("Final 117-99") is None
 

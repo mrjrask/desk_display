@@ -338,7 +338,16 @@ def _format_status(game: dict) -> str:
         clock = status.get("displayClock") or ""
         period = status.get("period")
         if clock and period:
-            return f"{clock} Q{period}"
+            # ESPN numbers periods 1-4 as the quarters and 5+ as overtime
+            # (regular season has one OT period; the postseason can have
+            # more), so period 5 must read "OT" (and 6, 7, ... "2OT", "3OT",
+            # ...), not "Q5", "Q6", ...
+            if isinstance(period, int) and period >= 5:
+                ot_number = period - 4
+                period_label = "OT" if ot_number == 1 else f"{ot_number}OT"
+            else:
+                period_label = f"Q{period}"
+            return f"{clock} {period_label}"
         return short_detail or detail or "In Progress"
 
     if state == "pre":
