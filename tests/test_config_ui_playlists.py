@@ -64,8 +64,9 @@ def test_screen_config_page_bootstraps_server_playlist_state(monkeypatch):
     assert "speed: clampNumber(scrollSettings.speed, 1, 0.25, 3)" in html
 
     frequency_help = (
-        "0 disables the base screen. Enabled screens display once at startup. "
-        "After startup: 1 = every pass, 2 = every second pass."
+        "0 disables the base screen. When the scheduler initializes or reloads, enabled screens "
+        "are scheduled once for hydration, subject to availability. After hydration: 1 = every "
+        "pass, 2 = every second pass."
     )
     alternate_frequency_help = (
         "Counts the base screen's normal scheduled appearances; startup hydration is excluded."

@@ -613,7 +613,7 @@
         </div>
         <div>
           <input type="number" min="0" step="1" value="{{ screen.frequency }}" class="freq-input compact-number-input">
-          <div class="hint">0 disables the base screen. Enabled screens display once at startup. After startup: 1 = every pass, 2 = every second pass.</div>
+          <div class="hint">0 disables the base screen. When the scheduler initializes or reloads, enabled screens are scheduled once for hydration, subject to availability. After hydration: 1 = every pass, 2 = every second pass.</div>
         </div>
         <div>
           <div class="screen-speed-field">
@@ -1401,7 +1401,7 @@
       frequencyInput.min = "0";
       frequencyInput.step = "1";
       frequencyCell.appendChild(frequencyInput);
-      addHint(frequencyCell, "0 disables the base screen. Enabled screens display once at startup. After startup: 1 = every pass, 2 = every second pass.");
+      addHint(frequencyCell, "0 disables the base screen. When the scheduler initializes or reloads, enabled screens are scheduled once for hydration, subject to availability. After hydration: 1 = every pass, 2 = every second pass.");
       row.appendChild(frequencyCell);
 
       const speedCell = makeElement("div");
