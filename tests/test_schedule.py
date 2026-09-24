@@ -142,15 +142,15 @@ def test_scheduler_with_alternate_screen():
     sequence = collect_sequence(scheduler, registry, 6)
     assert sequence == [
         "date",
-        "inside",
         "date",
         "inside",
         "date",
         "inside",
+        "date",
     ]
 
 
-def test_frequency_one_alternate_is_used_on_first_presentation():
+def test_frequency_one_alternate_is_used_on_first_normal_presentation():
     config = {
         "screens": {
             "NFL Overview NFC": {
@@ -164,8 +164,18 @@ def test_frequency_one_alternate_is_used_on_first_presentation():
         {"NFL Overview NFC": True, "NFL Standings NFC": True}
     )
 
-    assert scheduler.preview_scheduled_ids(1) == ["NFL Standings NFC"]
-    assert scheduler.next_available(registry).id == "NFL Standings NFC"
+    # Startup always hydrates the base screen without advancing normal state.
+    assert scheduler.preview_scheduled_ids(1) == ["NFL Overview NFC"]
+    assert scheduler.next_available(registry).id == "NFL Overview NFC"
+
+    # Frequency four is still measured from the first normal pass, and the
+    # alternate is selected when that entry receives its first presentation.
+    assert collect_sequence(scheduler, registry, 4) == [
+        None,
+        None,
+        None,
+        "NFL Standings NFC",
+    ]
 
 
 def test_unavailable_frequency_one_alternate_falls_back_on_first_presentation():
@@ -212,9 +222,11 @@ def test_alternate_frequency_counts_scheduled_appearances_not_raw_passes():
     # is returned on the following call from the pending queue.  Observe that
     # call so both third presentations are included without re-advancing a new
     # pass after the cursor wraps.
-    sequence = collect_played_ids(scheduler, registry, 11)
+    sequence = collect_played_ids(scheduler, registry, 17)
 
     assert sequence == [
+        "NFL Overview NFC",
+        "NFL Overview AFC",
         "NFL Overview NFC",
         "NFL Overview AFC",
         "NFL Overview NFC",
@@ -250,16 +262,16 @@ def test_multiple_alternate_entries_do_not_starve_later_screens():
     )
 
     assert scheduler.preview_scheduled_ids(6) == [
-        "nixie",
-        "weather2",
+        "date",
+        "inside",
         "weather1",
         "nixie",
         "weather2",
         "weather1",
     ]
     assert collect_sequence(scheduler, registry, 6) == [
-        "nixie",
-        "weather2",
+        "date",
+        "inside",
         "weather1",
         "nixie",
         "weather2",
@@ -310,7 +322,7 @@ def test_queued_entry_is_skipped_after_hide_after_deadline(monkeypatch):
         "date",
         "inside",
         "weather1",
-        "nixie",
+        "date",
     ]
 
     monkeypatch.setattr("schedule.datetime", _AfterDeadline)
@@ -351,8 +363,8 @@ def test_queued_entry_tries_all_alternates_before_base_fallback():
         "date",
         "inside",
         "on this day",
-        "nixie",
-        "weather1",
+        "date",
+        "inside",
     ]
 
 
@@ -373,11 +385,11 @@ def test_scheduler_with_multiple_alternates():
     sequence = collect_sequence(scheduler, registry, 6)
     assert sequence == [
         "date",
+        "date",
         "inside",
         "date",
         "weather1",
         "date",
-        "inside",
     ]
 
 
@@ -438,6 +450,7 @@ def test_scheduler_frequency_interval_matches_configuration():
 
     sequence = collect_sequence(scheduler, registry, 12)
     # Startup hydration is separate; normal rotation then begins with pass 1.
+    # ``inside`` appears once during startup, then on every fourth normal pass.
     assert sequence == [
         "date",
         "inside",

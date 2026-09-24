@@ -40,14 +40,13 @@ def test_final_entry_wrap_does_not_readvance_completed_pass():
     )
 
     assert [scheduler.next_available(registry).id for _ in range(3)] == [
-        "nixie",
-        "weather2",
+        "date",
+        "inside",
         "weather1",
     ]
 
-    # Selecting the final entry wraps the cursor to zero. That marks the end of
-    # the current pass, so synchronization must not advance or queue any entry
-    # from the pass that just completed.
+    # Selecting the final startup entry wraps the cursor to zero. Startup is a
+    # separate hydration phase, so it must not advance or queue a normal pass.
     assert scheduler._cursor == 0
     assert scheduler._pending_indices == []
     assert scheduler._pass_number == 0

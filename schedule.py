@@ -51,6 +51,9 @@ class ScreenScheduler:
     def __init__(self, entries: Sequence[_ScheduleEntry]):
         self._entries: list[_ScheduleEntry] = list(entries)
         self._cursor: int = 0
+        self._startup_indices: list[int] = [
+            index for index, entry in enumerate(self._entries) if entry.frequency >= 1
+        ]
         self._pending_indices: list[int] = []
         self._pass_number: int = 0
         self._startup_hydrated: bool = False
@@ -121,6 +124,7 @@ class ScreenScheduler:
 
         preview = ScreenScheduler(cloned_entries)
         preview._cursor = self._cursor
+        preview._startup_indices = self._startup_indices.copy()
         preview._pending_indices = self._pending_indices.copy()
         preview._pass_number = self._pass_number
         preview._startup_hydrated = self._startup_hydrated
