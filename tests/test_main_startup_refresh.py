@@ -5,6 +5,9 @@ import sys
 import threading
 import time
 
+from schedule import build_scheduler
+from screens.registry import ScreenDefinition
+
 
 class _FakeThread:
     """Stand-in for ``threading.Thread`` used to observe runtime workers.
@@ -92,6 +95,78 @@ def test_scheduled_startup_feed_order_prioritizes_upcoming_screens(monkeypatch):
 
     assert ordered[:2] == ["weather", "hawks"]
     assert ordered[-1] == "bears"
+
+
+def test_startup_feed_preview_does_not_consume_scheduler_hydration(monkeypatch):
+    main = _load_main()
+    scheduler = build_scheduler({"screens": {"weather1": 1, "date": 1}})
+    registry = {
+        screen_id: ScreenDefinition(id=screen_id, render=lambda: None)
+        for screen_id in ("weather1", "date")
+    }
+
+    monkeypatch.setattr(main, "screen_scheduler", scheduler)
+    monkeypatch.setattr(main, "_requested_data_feeds", lambda: {"weather"})
+    main._last_feed_refresh.clear()
+
+    assert main._scheduled_startup_feed_order() == ["weather"]
+    assert scheduler.next_available(registry).id == "weather1"
+    assert scheduler.next_available(registry).id == "date"
+    assert scheduler._pass_number == 0
+
+
+def test_routine_refresh_preserves_scheduler_and_pending_hydration(monkeypatch):
+    main = _load_main()
+    config = {"screens": {"date": 1, "inside": 1}}
+    monkeypatch.setattr(main, "_active_config_path", lambda: "/tmp/screens.json")
+    monkeypatch.setattr(main.os.path, "getmtime", lambda _path: 10.0)
+    monkeypatch.setattr(main, "load_schedule_config", lambda _path: config)
+
+    main.screen_scheduler = None
+    main._screen_config_mtime = None
+    main._screen_config_path = None
+    main.refresh_schedule_if_needed()
+    scheduler = main.screen_scheduler
+    registry = {
+        screen_id: ScreenDefinition(id=screen_id, render=lambda: None)
+        for screen_id in ("date", "inside")
+    }
+
+    assert scheduler.next_available(registry).id == "date"
+    main._bump_registry_cache_nonce()
+    main.refresh_schedule_if_needed()
+
+    assert main.screen_scheduler is scheduler
+    assert scheduler.next_available(registry).id == "inside"
+    assert scheduler._pass_number == 0
+
+
+def test_config_reload_constructs_scheduler_with_new_hydration(monkeypatch):
+    main = _load_main()
+    config_mtime = {"value": 10.0}
+    config = {"screens": {"date": 1, "inside": 1}}
+    monkeypatch.setattr(main, "_active_config_path", lambda: "/tmp/screens.json")
+    monkeypatch.setattr(main.os.path, "getmtime", lambda _path: config_mtime["value"])
+    monkeypatch.setattr(main, "load_schedule_config", lambda _path: config)
+    registry = {
+        screen_id: ScreenDefinition(id=screen_id, render=lambda: None)
+        for screen_id in ("date", "inside")
+    }
+
+    main.screen_scheduler = None
+    main._screen_config_mtime = None
+    main._screen_config_path = None
+    main.refresh_schedule_if_needed()
+    original = main.screen_scheduler
+    assert original.next_available(registry).id == "date"
+
+    config_mtime["value"] = 11.0
+    main.refresh_schedule_if_needed()
+
+    replacement = main.screen_scheduler
+    assert replacement is not original
+    assert replacement.next_available(registry).id == "date"
+    assert replacement._pass_number == 0
 
 
 def test_startup_refresh_runs_first_wave_before_background(monkeypatch):
