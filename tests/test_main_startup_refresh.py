@@ -304,3 +304,39 @@ def test_refresh_startup_critical_feeds_returns_after_timeout_for_hung_worker(mo
         assert elapsed < 0.5
     finally:
         release.set()
+
+
+def test_refresh_feeds_in_order_bumps_registry_cache_nonce(monkeypatch):
+    """Regression test: _refresh_feeds_in_order (used by the async startup
+    refresh's background wave) never bumped the registry cache nonce, so a
+    feed that failed in the first critical fetch and later succeeded here
+    stayed hidden from the registry until an unrelated refresh bumped it."""
+
+    main = _load_main()
+
+    monkeypatch.setitem(main._FEED_REFRESHERS, "hawks", lambda: None)
+    starting_nonce = main._registry_cache_nonce
+
+    main._refresh_feeds_in_order(["hawks"])
+
+    assert main._registry_cache_nonce != starting_nonce
+    assert "hawks" in main._last_feed_refresh
+
+
+def test_refresh_feeds_in_order_still_bumps_nonce_after_a_failed_feed(monkeypatch):
+    main = _load_main()
+
+    def _boom():
+        raise RuntimeError("feed failed")
+
+    monkeypatch.setitem(main._FEED_REFRESHERS, "hawks", _boom)
+    monkeypatch.setitem(main._FEED_REFRESHERS, "wolves", lambda: None)
+    starting_nonce = main._registry_cache_nonce
+
+    main._refresh_feeds_in_order(["hawks", "wolves"])
+
+    # The failed feed must not stop the successful one from still bumping
+    # the nonce (and must not itself be recorded as refreshed).
+    assert main._registry_cache_nonce != starting_nonce
+    assert "hawks" not in main._last_feed_refresh
+    assert "wolves" in main._last_feed_refresh

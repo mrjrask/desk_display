@@ -6,6 +6,7 @@ import importlib
 import json
 import logging
 import os
+import re
 import threading
 from collections.abc import Callable
 from dataclasses import dataclass, field
@@ -191,7 +192,12 @@ def _quad_layout_from_layouts() -> tuple[bool, float, list[list[str]]]:
             if not isinstance(raw_tile, str):
                 continue
             tile = raw_tile.strip()
-            if not tile or tile == "quad":
+            # Every quad-composite screen ("quad" itself, "weather quad",
+            # "hawks schedule quad", ...) ends in the word "quad". Nesting
+            # one inside another quad page busy-loops for a full screen
+            # duration rendering the inner composite before the outer page
+            # even starts, so exclude all of them as tiles, not just "quad".
+            if not tile or tile == "quad" or tile.endswith(" quad"):
                 continue
             tiles.append(tile)
             if len(tiles) >= 4:
@@ -906,6 +912,7 @@ def build_screen_registry(context: ScreenContext) -> tuple[dict[str, ScreenDefin
             "preview",
             "schedule",
             "pregame",
+            "not started",
         )
         if any(word in status_text for word in negative_keywords) and not warmup:
             return False
@@ -926,7 +933,7 @@ def build_screen_registry(context: ScreenContext) -> tuple[dict[str, ScreenDefin
                 "7th",
                 "8th",
                 "9th",
-                "ot",
+                "crit",
                 "quarter",
                 "period",
                 "half",
@@ -934,7 +941,7 @@ def build_screen_registry(context: ScreenContext) -> tuple[dict[str, ScreenDefin
                 "bottom",
                 "warmup",
             )
-        )
+        ) or bool(re.search(r"\bot\b", status_text))
 
         if warmup:
             positive = True
@@ -1153,7 +1160,7 @@ def build_screen_registry(context: ScreenContext) -> tuple[dict[str, ScreenDefin
                 ),
                 available=True,
             )
-            register(
+        register(
             "hawks last",
             lambda data=hawks.get("last"): draw_last_hawks_game(
                 context.display, data, transition=True
@@ -1210,70 +1217,70 @@ def build_screen_registry(context: ScreenContext) -> tuple[dict[str, ScreenDefin
             ],
         )
 
-        register_logo("nhl logo")
-        register(
-            "NHL Scoreboard",
-            lambda: render_nhl_scoreboard(
-                context.display,
-                nhl_scoreboard_games,
-                transition=True,
-            ),
-            available=nhl_scoreboards_available,
-        )
-        register(
-            "NHL Scoreboard v2",
+    register_logo("nhl logo")
+    register(
+        "NHL Scoreboard",
+        lambda: render_nhl_scoreboard(
+            context.display,
+            nhl_scoreboard_games,
+            transition=True,
+        ),
+        available=nhl_scoreboards_available,
+    )
+    register(
+        "NHL Scoreboard v2",
+        (
             (
-                (
-                    lambda: render_nhl_scoreboard(
-                        context.display,
-                        nhl_scoreboard_games,
-                        transition=True,
-                    )
+                lambda: render_nhl_scoreboard(
+                    context.display,
+                    nhl_scoreboard_games,
+                    transition=True,
                 )
-                if adafruit_minipitft_layout or waveshare_oled_lcd_hat
-                else (
-                    lambda: render_nhl_scoreboard_v2(
-                        context.display,
-                        nhl_scoreboard_games,
-                        transition=True,
-                    )
+            )
+            if adafruit_minipitft_layout or waveshare_oled_lcd_hat
+            else (
+                lambda: render_nhl_scoreboard_v2(
+                    context.display,
+                    nhl_scoreboard_games,
+                    transition=True,
                 )
-            ),
-            available=nhl_scoreboards_available,
-        )
-        register(
-            "NHL Playoffs",
-            lambda: render_nhl_playoffs(
-                context.display,
-                nhl_scoreboard_games,
-                transition=True,
-            ),
-            available=nhl_scoreboards_available,
-        )
-        register(
-            "NHL Standings Overview West",
-            lambda: draw_nhl_standings_overview_west(context.display, transition=True),
-        )
-        register(
-            "NHL Standings Overview East",
-            lambda: draw_nhl_standings_overview_east(context.display, transition=True),
-        )
-        register(
-            "NHL Standings West",
-            lambda: draw_nhl_standings_west(context.display, transition=True),
-        )
-        register(
-            "NHL Standings East",
-            lambda: draw_nhl_standings_east(context.display, transition=True),
-        )
-        register(
-            "NHL Standings West v2",
-            lambda: draw_nhl_standings_west_v2(context.display, transition=True),
-        )
-        register(
-            "NHL Standings East v2",
-            lambda: draw_nhl_standings_east_v2(context.display, transition=True),
-        )
+            )
+        ),
+        available=nhl_scoreboards_available,
+    )
+    register(
+        "NHL Playoffs",
+        lambda: render_nhl_playoffs(
+            context.display,
+            nhl_scoreboard_games,
+            transition=True,
+        ),
+        available=nhl_scoreboards_available,
+    )
+    register(
+        "NHL Standings Overview West",
+        lambda: draw_nhl_standings_overview_west(context.display, transition=True),
+    )
+    register(
+        "NHL Standings Overview East",
+        lambda: draw_nhl_standings_overview_east(context.display, transition=True),
+    )
+    register(
+        "NHL Standings West",
+        lambda: draw_nhl_standings_west(context.display, transition=True),
+    )
+    register(
+        "NHL Standings East",
+        lambda: draw_nhl_standings_east(context.display, transition=True),
+    )
+    register(
+        "NHL Standings West v2",
+        lambda: draw_nhl_standings_west_v2(context.display, transition=True),
+    )
+    register(
+        "NHL Standings East v2",
+        lambda: draw_nhl_standings_east_v2(context.display, transition=True),
+    )
 
     wolves = context.cache.get("wolves") or {}
     if any(wolves.values()):
@@ -1815,7 +1822,7 @@ def build_screen_registry(context: ScreenContext) -> tuple[dict[str, ScreenDefin
                 context.display,
                 data,
                 os.path.join(context.image_dir, "nba/CHI.png"),
-                "Western conf.",
+                "Eastern conf.",
                 logo_scale=1.0,
                 screen_id="bulls stand1",
                 transition=True,

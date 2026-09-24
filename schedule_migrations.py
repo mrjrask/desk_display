@@ -14,8 +14,6 @@ import os
 from dataclasses import dataclass
 from typing import Any
 
-from schedule import build_scheduler
-
 LEGACY_VERSION = 1
 TARGET_VERSION = 2
 
@@ -46,9 +44,11 @@ def migrate_config(data: dict[str, Any], *, source: str | None = None) -> Migrat
     if "playlists" in data and "sequence" in data:
         migrated = data.get("version") != TARGET_VERSION
         result = dict(data)
-        result.setdefault("version", TARGET_VERSION)
-        result.setdefault("metadata", {})
-        result["metadata"].setdefault("migrated_from", data.get("version", LEGACY_VERSION))
+        result["version"] = TARGET_VERSION
+        existing_metadata = data.get("metadata")
+        metadata = dict(existing_metadata) if isinstance(existing_metadata, dict) else {}
+        metadata.setdefault("migrated_from", data.get("version", LEGACY_VERSION))
+        result["metadata"] = metadata
         return MigrationResult(result, migrated)
 
     sequence = data.get("sequence")
@@ -73,8 +73,9 @@ def migrate_config(data: dict[str, Any], *, source: str | None = None) -> Migrat
         "sequence": [{"playlist": "main"}],
     }
 
-    # Ensure the migrated config parses in the scheduler.
-    build_scheduler(config_v2)
+    # Note: this migration is structural only and does not produce the
+    # scheduler's top-level "screens" mapping (see module docstring), so
+    # config_v2 cannot be validated with schedule.build_scheduler here.
 
     return MigrationResult(config_v2, True)
 
@@ -140,8 +141,10 @@ def load_json(path: str) -> dict[str, Any]:
 
 
 def write_json(path: str, data: dict[str, Any]) -> None:
+    # Screen key order is significant (it drives rotation order), so
+    # preserve insertion order instead of alphabetizing keys.
     with open(path, "w", encoding="utf-8") as fh:
-        json.dump(data, fh, indent=2, sort_keys=True)
+        json.dump(data, fh, indent=2, sort_keys=False)
         fh.write("\n")
 
 

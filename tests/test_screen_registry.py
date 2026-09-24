@@ -1196,6 +1196,163 @@ def test_hawks_schedule_quad_uses_blank_tile_when_next_home_missing(monkeypatch)
     ]
 
 
+def test_nhl_league_screens_available_without_hawks_data():
+    """League-wide NHL screens must not depend on the Blackhawks cache.
+
+    Regression test: these were previously nested inside
+    ``if any(hawks.values()):`` and disappeared entirely whenever the Hawks
+    fetch returned nothing (e.g. off-season), even with valid NHL scoreboard
+    data available.
+    """
+
+    now = datetime.datetime(2024, 1, 1, 12, 0, tzinfo=CENTRAL_TIME)
+    weather = {"hourly": []}
+
+    registry, _ = build_screen_registry(
+        _make_context(weather, now, cache_updates={"hawks": {}})
+    )
+
+    for screen_id in (
+        "NHL Scoreboard",
+        "NHL Scoreboard v2",
+        "NHL Playoffs",
+        "NHL Standings Overview West",
+        "NHL Standings Overview East",
+        "NHL Standings West",
+        "NHL Standings East",
+        "NHL Standings West v2",
+        "NHL Standings East v2",
+    ):
+        assert screen_id in registry, screen_id
+    assert registry["NHL Scoreboard"].available is True
+
+    # Hawks-specific screens still correctly stay absent without Hawks data.
+    assert "hawks last" not in registry
+    assert "hawks stand1" not in registry
+
+
+def test_hawks_last_registered_without_hawks_standings():
+    """"hawks last" must not depend on Hawks standings being present.
+
+    Regression test: a misindented register() call previously nested this
+    inside ``if hawks.get("stand"):``, so the last-game screen disappeared
+    whenever standings data was missing even though hawks.last was present.
+    """
+
+    now = datetime.datetime(2024, 1, 1, 12, 0, tzinfo=CENTRAL_TIME)
+    weather = {"hourly": []}
+
+    registry, _ = build_screen_registry(
+        _make_context(
+            weather,
+            now,
+            cache_updates={"hawks": {"last": {"id": 10}}},
+        )
+    )
+
+    assert "hawks stand1" not in registry
+    assert registry["hawks last"].available is True
+
+
+def test_bulls_stand1_uses_eastern_conference_label(monkeypatch):
+    """Regression test: this label previously said "Western conf." even
+    though the Bulls play in the Eastern Conference."""
+
+    now = datetime.datetime(2024, 1, 1, 12, 0, tzinfo=CENTRAL_TIME)
+    weather = {"hourly": []}
+    context = _make_context(
+        weather,
+        now,
+        cache_updates={"bulls": {"stand": [{"team": {"id": 5}}]}},
+    )
+
+    captured = {}
+
+    def _fake_draw_nba_standings_screen1(
+        _display, _data, _logo_path, conference_label, **_kwargs
+    ):
+        captured["conference_label"] = conference_label
+        return Image.new("RGB", (10, 10))
+
+    monkeypatch.setattr(
+        registry_module, "draw_nba_standings_screen1", _fake_draw_nba_standings_screen1
+    )
+
+    registry, _ = build_screen_registry(context)
+    registry["bulls stand1"].render()
+
+    assert captured["conference_label"] == "Eastern conf."
+
+
+@pytest.mark.parametrize(
+    ("status", "expected_live"),
+    [
+        ({"gameState": "CRIT"}, True),
+        ({"detailedState": "Not Started"}, False),
+        ({"detailedState": "In Progress", "period": "3rd"}, True),
+    ],
+)
+def test_hawks_live_status_token_matching(status, expected_live):
+    """Regression test for _is_live_game_today:
+
+    - NHL "CRIT" (late 3rd/OT) previously matched no positive token, so a
+      close live game dropped off "hawks live" right before it ended.
+    - The "ot" substring token previously matched inside "Not Started",
+      marking a game that hasn't started yet as live.
+    """
+
+    now = datetime.datetime(2024, 1, 1, 12, 0, tzinfo=CENTRAL_TIME)
+    weather = {"hourly": []}
+    game = {"status": status, "officialDate": "2024-01-01"}
+
+    registry, _ = build_screen_registry(
+        _make_context(weather, now, cache_updates={"hawks": {"live": game}})
+    )
+
+    assert registry["hawks live"].available is expected_live
+
+
+def test_quad_layout_excludes_nested_quad_composite_tiles(monkeypatch):
+    """Regression test: only the literal "quad" tile id was excluded from a
+    configurable quad page, so nesting e.g. "weather quad" or another team's
+    schedule quad inside a quad page would busy-loop rendering the inner
+    composite for a full screen duration before the outer page even starts.
+    """
+
+    monkeypatch.setattr(
+        registry_module,
+        "_load_layouts_payload",
+        lambda: {
+            "screens": {
+                "quad": {
+                    "enabled": True,
+                    "scroll_speed": 1.0,
+                    "pages": [
+                        {
+                            "tiles": [
+                                "weather quad",
+                                "hawks schedule quad",
+                                "nixie",
+                                "quad",
+                            ]
+                        }
+                    ],
+                }
+            }
+        },
+    )
+
+    enabled, _scroll_speed, pages = registry_module._quad_layout_from_layouts()
+
+    assert enabled is True
+    assert len(pages) == 1
+    # The two nested quad composites and the literal "quad" tile were
+    # dropped; only "nixie" survives, padded out with the page's own default
+    # tiles rather than another quad.
+    assert pages[0][0] == "nixie"
+    assert all(not tile.endswith("quad") for tile in pages[0])
+
+
 def test_bulls_schedule_quad_uses_expected_tile_selection(monkeypatch):
     now = datetime.datetime(2024, 1, 1, 12, 0, tzinfo=CENTRAL_TIME)
     weather = {"hourly": []}
