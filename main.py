@@ -2869,6 +2869,7 @@ def _refresh_feeds_in_order(feeds: List[str]) -> None:
         try:
             refresher()
             _mark_feed_refreshed(feed)
+            _bump_registry_cache_nonce()
         except Exception as exc:
             logging.error("Failed to refresh %s feed: %s", feed, exc)
 
