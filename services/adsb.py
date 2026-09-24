@@ -408,14 +408,25 @@ class AdsbStore:
         device_label = result.device.label
         with self._lock, self._conn:
             if not result.ok:
+                # A failed poll saw no aircraft, so the tracked_* columns
+                # (which compute_daily_stats reads as "currently tracked")
+                # must be cleared too, not just left at whatever the last
+                # successful poll wrote — otherwise a device stuck offline
+                # keeps reporting the same stale aircraft indefinitely.
                 self._conn.execute(
                     """
-                    INSERT INTO device_status (device, last_poll_at, online, error)
-                    VALUES (?, ?, 0, ?)
+                    INSERT INTO device_status (
+                        device, last_poll_at, online, error,
+                        tracked_hexes, tracked_types, tracked_callsigns
+                    )
+                    VALUES (?, ?, 0, ?, '', '', '')
                     ON CONFLICT(device) DO UPDATE SET
                         last_poll_at = excluded.last_poll_at,
                         online = 0,
-                        error = excluded.error
+                        error = excluded.error,
+                        tracked_hexes = '',
+                        tracked_types = '',
+                        tracked_callsigns = ''
                     """,
                     (device_label, now, result.error),
                 )
