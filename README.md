@@ -510,12 +510,36 @@ Top-level fields:
 | `playlists` | Named groups of screen steps. |
 | `sequence` | Ordered list of playlist references to rotate through. |
 
-Frequency values:
+### Frequency and startup semantics
 
-- `1` means show every pass.
-- `2` means show every other pass.
-- Larger integers show less often.
-- `0` disables a screen.
+The scheduler treats startup hydration separately from its numbered normal
+passes:
+
+- A base screen with frequency `0` is disabled as an independent playlist
+  slot. It receives no startup hydration display and is never due in a normal
+  pass. A frequency-`0` screen can still be shown when it is configured as the
+  alternate of an enabled base screen.
+- Every base screen with a positive frequency receives one startup hydration
+  display. Hydration always shows the base screen: it neither counts as a
+  normal pass nor increments the base screen's presentation count for
+  alternate selection.
+- After hydration, a positive base frequency `N` makes that entry due on
+  normal passes `N`, `2N`, `3N`, and so on. Thus `1` means every normal pass,
+  `2` means passes 2, 4, 6, and so on, and larger integers show less often.
+- An alternate frequency counts the **due normal presentations of its base
+  entry**, not global pass numbers. For example, an alternate frequency of `2`
+  replaces every second time its base entry is due after hydration.
+- The Config page's saved playlist/config order is the display order both
+  during startup hydration and within each normal pass.
+- Loading or reloading saved schedule configuration constructs a new scheduler
+  and begins a fresh startup hydration phase.
+
+These rules are runtime semantics for the existing numeric frequency fields;
+they require no configuration schema change. Migrated legacy configurations
+retain their frequency numbers and use these same rules when scheduled.
+
+Frequency configuration:
+
 - Object form enables extended metadata:
   - `frequency` is required.
   - `extra_seconds` adds hold time after the normal display duration.

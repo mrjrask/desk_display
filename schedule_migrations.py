@@ -1,4 +1,10 @@
-"""Helpers for migrating schedule configuration files to schema v2."""
+"""Helpers for structural migration of schedule configurations to schema v2.
+
+Migration preserves numeric frequency values.  Startup hydration, normal-pass
+multiples, and base-presentation-based alternate intervals are runtime
+scheduler semantics, so legacy data acquires them without another schema
+version or any frequency rewriting.
+"""
 from __future__ import annotations
 
 import argparse
@@ -24,7 +30,11 @@ class MigrationResult:
 
 
 def migrate_config(data: dict[str, Any], *, source: str | None = None) -> MigrationResult:
-    """Return a schema v2 configuration, migrating legacy payloads when needed."""
+    """Return schema v2 data without changing existing numeric rule values.
+
+    The migration is structural only.  The scheduler applies current hydration
+    and frequency semantics when it later builds from the resulting config.
+    """
 
     if not isinstance(data, dict):
         raise MigrationError("Configuration must be a JSON object")
@@ -69,7 +79,7 @@ def migrate_config(data: dict[str, Any], *, source: str | None = None) -> Migrat
 
 
 def legacy_item_to_step(entry: Any) -> dict[str, Any]:
-    """Convert legacy sequence entries into playlist step descriptors."""
+    """Convert a legacy entry while preserving every ``every`` frequency value."""
 
     if isinstance(entry, str):
         return {"screen": entry}
@@ -92,7 +102,12 @@ def legacy_item_to_step(entry: Any) -> dict[str, Any]:
         children = entry["cycle"]
         if not isinstance(children, list) or not children:
             raise MigrationError("cycle entries must be non-empty lists")
-        return {"rule": {"type": "cycle", "items": [legacy_item_to_step(child) for child in children]}}
+        return {
+            "rule": {
+                "type": "cycle",
+                "items": [legacy_item_to_step(child) for child in children],
+            }
+        }
 
     if "every" in entry:
         try:
@@ -150,8 +165,12 @@ def _build_cli() -> argparse.ArgumentParser:
     sub = parser.add_subparsers(dest="command", required=True)
 
     migrate_parser = sub.add_parser("migrate", help="migrate a configuration file to schema v2")
-    migrate_parser.add_argument("--input", required=True, help="Path to the existing configuration JSON")
-    migrate_parser.add_argument("--output", help="Optional output path; defaults to in-place overwrite")
+    migrate_parser.add_argument(
+        "--input", required=True, help="Path to the existing configuration JSON"
+    )
+    migrate_parser.add_argument(
+        "--output", help="Optional output path; defaults to in-place overwrite"
+    )
     migrate_parser.set_defaults(func=_cmd_migrate)
 
     return parser
