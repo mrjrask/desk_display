@@ -926,6 +926,34 @@ def test_derive_playoff_matchups_from_recent_games_cools_down_after_empty_scan(m
     nba_playoffs._RECENT_GAMES_SCAN_COOLDOWN.reset()
 
 
+def test_derive_playoff_matchups_from_recent_games_cools_down_after_success(monkeypatch):
+    nba_playoffs._RECENT_GAMES_SCAN_COOLDOWN.reset()
+    calls = []
+
+    def _fake_fetch(day):
+        calls.append(day)
+        return [{"id": "game-1"}]
+
+    monkeypatch.setattr(nba_playoffs, "_fetch_games_for_date", _fake_fetch)
+    monkeypatch.setattr(
+        nba_playoffs,
+        "_derive_playoff_matchups_from_games",
+        lambda games: [{"game_count": len(games)}],
+    )
+
+    april_now = datetime.datetime(2026, 4, 20, 12, 0, tzinfo=CENTRAL_TIME)
+    first = nba_playoffs._derive_playoff_matchups_from_recent_games(now=april_now)
+    assert first
+    assert len(calls) == 23
+
+    calls.clear()
+    second = nba_playoffs._derive_playoff_matchups_from_recent_games(now=april_now)
+
+    assert second == first
+    assert calls == []
+    nba_playoffs._RECENT_GAMES_SCAN_COOLDOWN.reset()
+
+
 def test_compose_canvas_centers_single_series_on_display(monkeypatch):
     monkeypatch.setattr(nba_playoffs, "_use_single_series_per_row_layout", lambda: False)
 
