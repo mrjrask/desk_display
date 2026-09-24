@@ -1,4 +1,14 @@
-"""Simple frequency-based screen scheduler."""
+"""Frequency-based screen scheduling with a distinct startup hydration phase.
+
+Each positive-frequency base entry is emitted once during startup hydration,
+without advancing normal-pass or alternate-presentation counters.  Thereafter,
+frequency ``N`` is due on normal passes ``N``, ``2N``, ``3N``, and so on, while
+an alternate's frequency counts only the due presentations of its base entry.
+Frequency-zero entries have no independent slot, although their screen IDs may
+still be referenced as alternates.  Entry order is preserved in hydration and
+normal passes, and constructing a new scheduler (including after a config
+reload) starts a new hydration phase.
+"""
 
 from __future__ import annotations
 
@@ -22,11 +32,15 @@ REPLACEMENT_ONLY_SCREENS: set[str] = {"cubs no game", "sox no game"}
 
 @dataclass
 class _AlternateSchedule:
+    """Round-robin alternate IDs and their base-presentation interval."""
+
     screen_ids: tuple[str, ...]
     frequency: int
     cursor: int = 0
 
     def next_screen_id(self) -> str:
+        """Return the next alternate ID and advance the round-robin cursor."""
+
         if not self.screen_ids:
             raise ValueError("Alternate schedule requires at least one screen id")
 
@@ -37,6 +51,8 @@ class _AlternateSchedule:
 
 @dataclass
 class _ScheduleEntry:
+    """Runtime state for one enabled, independently scheduled base screen."""
+
     screen_id: str
     frequency: int
     presentation_count: int = 0
@@ -61,7 +77,14 @@ class ScheduledPreviewEntry:
 
 
 class ScreenScheduler:
-    """Iterator that yields the next available screen based on frequencies."""
+    """Yield screens in ordered hydration and frequency-based normal passes.
+
+    Instantiation begins a fresh startup hydration phase.  Hydration queues
+    every positive-frequency base once in configuration order without counting
+    a normal pass or an alternate presentation.  Normal frequency ``N`` then
+    selects passes ``N``, ``2N``, ``3N``, etc.; alternate frequency is measured
+    against those due presentations of the individual base entry.
+    """
 
     def __init__(self, entries: Sequence[_ScheduleEntry]):
         self._entries: list[_ScheduleEntry] = list(entries)
@@ -171,7 +194,11 @@ class ScreenScheduler:
         return scheduled_entries
 
     def _next_scheduled_id(self) -> Optional[str]:
-        """Return the next scheduled ID without availability checks."""
+        """Return the next ordered ID without availability checks.
+
+        Startup returns only base IDs and leaves presentation counters alone;
+        normal passes may resolve a due base entry to its alternate.
+        """
 
         if not self._entries:
             return None
@@ -192,7 +219,11 @@ class ScreenScheduler:
         *,
         advance_presentation: bool = True,
     ) -> str:
-        """Resolve one due entry, counting only normal-rotation presentations."""
+        """Resolve a due entry and count only normal passes as presentations.
+
+        ``advance_presentation`` is false during startup hydration, ensuring it
+        neither selects an alternate nor changes when one will next be due.
+        """
 
         if not advance_presentation:
             return entry.screen_id
@@ -209,7 +240,8 @@ class ScreenScheduler:
     def _hydrate_next_pass(self, now_utc: datetime) -> None:
         """Queue every due entry for one complete, configuration-ordered pass.
 
-        Startup hydration is a separate initial traversal, not ``pass 1``.
+        Startup hydration queues each positive-frequency base exactly once in
+        configuration order and is a separate initial traversal, not ``pass 1``.
         Normal pass numbering begins with pass 1 after startup hydration has
         completed, and the scheduler-wide pass counter advances once here for
         each such pass.
@@ -239,7 +271,7 @@ class ScreenScheduler:
         self._cursor = 0
 
     def _hydrate_until_pending(self, now_utc: datetime) -> bool:
-        """Hydrate the next pass with work, skipping empty pass ranges."""
+        """Queue the next nonempty ordered pass, skipping empty pass ranges."""
 
         self._hydrate_next_pass(now_utc)
         if self._pending_indices:
@@ -271,7 +303,7 @@ class ScreenScheduler:
         *,
         advance_presentation: bool = True,
     ) -> Optional[ScreenDefinition]:
-        """Resolve a hydrated entry against the latest registry state."""
+        """Resolve a queued entry, counting alternates only on normal passes."""
 
         if advance_presentation:
             entry.presentation_count += 1
@@ -294,6 +326,12 @@ class ScreenScheduler:
         return None
 
     def next_available(self, registry: dict[str, ScreenDefinition]) -> Optional[ScreenDefinition]:
+        """Return the next available definition from one ordered queued pass.
+
+        The method never mixes a later pass into the currently queued pass.
+        Rebuilding the scheduler, as config reload does, restarts hydration.
+        """
+
         if not self._entries:
             return None
 
@@ -444,6 +482,14 @@ def sanitize_schedule_config(config: dict[str, Any]) -> tuple[dict[str, Any], li
 
 
 def build_scheduler(config: dict[str, Any]) -> ScreenScheduler:
+    """Build a freshly hydrating scheduler in saved playlist/config-page order.
+
+    Frequency values are interpreted directly: zero removes the independent
+    base slot, while positive ``N`` means normal passes ``N``, ``2N``, and so
+    on after one startup hydration display.  A zero-frequency screen ID remains
+    valid as an alternate referenced by another enabled entry.
+    """
+
     if not isinstance(config, dict):
         raise ValueError("Schedule configuration must be a JSON object")
 
