@@ -56,7 +56,7 @@ get_display_state() {
   # DRM/KMS path (preferred for HyperPixel kernel output)
   for status_path in /sys/class/drm/card*-*/status; do
     [[ -r "$status_path" ]] || continue
-    if grep -q "connected" "$status_path"; then
+    if grep -qx "connected" "$status_path"; then
       modes_path="${status_path%/status}/modes"
       if [[ -r "$modes_path" ]] && [[ -s "$modes_path" ]]; then
         connector="${status_path%/status}"

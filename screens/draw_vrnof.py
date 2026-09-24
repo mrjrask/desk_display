@@ -104,7 +104,7 @@ def _fetch_price(symbol: str) -> bool:
         tk = yf.Ticker(symbol)
         info = tk.info
         prev = info.get("previousClose")
-        cand = info.get("regularMarketPrice") or prev
+        cand = info.get("regularMarketPrice")
         if cand is not None:
             price = float(cand)
             change_val, change_pct = _derive_change(price, float(prev) if prev is not None else None)

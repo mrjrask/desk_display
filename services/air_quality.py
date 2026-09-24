@@ -14,6 +14,7 @@ _AIRNOW_PARAMETER_LABELS = {
     "PM2.5": "PM2.5",
     "PM10": "PM10",
     "OZONE": "Ozone",
+    "O3": "Ozone",
 }
 _OPEN_METEO_COMPONENT_KEYS = (
     "us_aqi_pm2_5",

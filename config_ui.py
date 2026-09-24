@@ -260,6 +260,9 @@ def _normalize_legacy_scoreboard_ids(config: dict[str, Any]) -> tuple[dict[str, 
             if not isinstance(raw_screen_id, str):
                 continue
             screen_id = canonical_screen_id(raw_screen_id)
+            if screen_id in LEGACY_RETIRED_SCREEN_IDS:
+                changed = True
+                continue
             if screen_id != raw_screen_id:
                 changed = True
 
@@ -312,6 +315,9 @@ def _normalize_legacy_scoreboard_ids(config: dict[str, Any]) -> tuple[dict[str, 
                     step_screen = step_copy.get("screen")
                     if isinstance(step_screen, str):
                         mapped = canonical_screen_id(step_screen)
+                        if mapped in LEGACY_RETIRED_SCREEN_IDS:
+                            changed = True
+                            continue
                         if mapped != step_screen:
                             changed = True
                             step_copy["screen"] = mapped

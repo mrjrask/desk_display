@@ -62,6 +62,14 @@ app.config["MAX_CONTENT_LENGTH"] = FEED_MAX_UPLOAD_BYTES
 WEB_LOGGER = logging.getLogger("desk_display.feed_server")
 
 
+def _token_matches(provided: str) -> bool:
+    """Compare upload tokens without rejecting non-ASCII header values."""
+
+    return bool(provided) and hmac.compare_digest(
+        provided.encode("utf-8"), FEED_UPLOAD_TOKEN.encode("utf-8")
+    )
+
+
 def _sanitize_id(value: str) -> str:
     """Return a filesystem-safe identifier for a source name or screen id."""
 
@@ -86,6 +94,9 @@ def _load_large_screen_order() -> list[str]:
         playlists = config["playlists"]
         sequence = config["sequence"]
     except (OSError, json.JSONDecodeError, KeyError, TypeError):
+        return []
+
+    if not isinstance(playlists, dict) or not isinstance(sequence, list):
         return []
 
     order: list[str] = []
@@ -381,7 +392,7 @@ def upload_screenshot(source: str) -> Any:
 
     auth_header = request.headers.get("Authorization", "")
     provided = auth_header[7:] if auth_header.startswith("Bearer ") else ""
-    if not provided or not hmac.compare_digest(provided, FEED_UPLOAD_TOKEN):
+    if not _token_matches(provided):
         return jsonify({"error": "Unauthorized"}), 401
 
     screen_id_raw = request.form.get("screen_id", "").strip()
@@ -410,10 +421,6 @@ def upload_screenshot(source: str) -> Any:
     target_dir = _source_current_dir(source_id)
     target_dir.mkdir(parents=True, exist_ok=True)
 
-    for existing in target_dir.glob(f"{screen_id}.*"):
-        if existing.suffix.lower() in ALLOWED_SCREEN_EXTS:
-            existing.unlink(missing_ok=True)
-
     target_path = target_dir / f"{screen_id}.png"
     tmp_fd, tmp_name = tempfile.mkstemp(
         prefix=f".{screen_id}.", suffix=".png.tmp", dir=target_dir
@@ -423,6 +430,9 @@ def upload_screenshot(source: str) -> Any:
         with os.fdopen(tmp_fd, "wb") as tmp_file:
             image.save(tmp_file, format="PNG")
         os.replace(tmp_path, target_path)
+        for existing in target_dir.glob(f"{screen_id}.*"):
+            if existing != target_path and existing.suffix.lower() in ALLOWED_SCREEN_EXTS:
+                existing.unlink(missing_ok=True)
     except OSError as exc:
         WEB_LOGGER.warning("Failed to persist upload for %s/%s: %s", source_id, screen_id, exc)
         tmp_path.unlink(missing_ok=True)
@@ -445,7 +455,7 @@ def upload_ticker(source: str) -> Any:
 
     auth_header = request.headers.get("Authorization", "")
     provided = auth_header[7:] if auth_header.startswith("Bearer ") else ""
-    if not provided or not hmac.compare_digest(provided, FEED_UPLOAD_TOKEN):
+    if not _token_matches(provided):
         return jsonify({"error": "Unauthorized"}), 401
 
     payload = request.get_json(silent=True)
@@ -488,7 +498,7 @@ def upload_display_status(source: str) -> Any:
 
     auth_header = request.headers.get("Authorization", "")
     provided = auth_header[7:] if auth_header.startswith("Bearer ") else ""
-    if not provided or not hmac.compare_digest(provided, FEED_UPLOAD_TOKEN):
+    if not _token_matches(provided):
         return jsonify({"error": "Unauthorized"}), 401
 
     payload = request.get_json(silent=True)

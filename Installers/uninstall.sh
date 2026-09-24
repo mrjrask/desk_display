@@ -10,13 +10,25 @@ SERVICE_NAME="desk_display.service"
 # installs from before the rename get cleaned up too.
 LEGACY_KERNEL_USER_SERVICE_NAME="desk_display-kernel.service"
 CONFIG_UI_SERVICE_NAME="config_ui_desk_display.service"
+FEED_SERVER_SERVICE_NAME="feed_server_desk_display.service"
+SCREENSHOT_UPLOADER_SERVICE_NAME="screenshot_uploader_desk_display.service"
+ADSB_COLLECTOR_SERVICE_NAME="desk_display_adsb_collector.service"
+AIRPLAY_SERVICE_NAME="airplay_desk_display.service"
 WAVESHARE_OLED_SERVICE_NAME="desk_display_waveshare_oled.service"
 WAVESHARE_FBCP_SERVICE_NAME="waveshare-fbcp.service"
 
 SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 PROJECT_DIR="${PROJECT_DIR:-$(cd -- "$SCRIPT_DIR/.." && pwd)}"
-SERVICE_PATH="/etc/systemd/system/$SERVICE_NAME"
-CONFIG_UI_SERVICE_PATH="/etc/systemd/system/$CONFIG_UI_SERVICE_NAME"
+MANAGED_SYSTEM_SERVICES=(
+  "$SERVICE_NAME"
+  "$CONFIG_UI_SERVICE_NAME"
+  "$FEED_SERVER_SERVICE_NAME"
+  "$SCREENSHOT_UPLOADER_SERVICE_NAME"
+  "$ADSB_COLLECTOR_SERVICE_NAME"
+  "$AIRPLAY_SERVICE_NAME"
+  "$WAVESHARE_OLED_SERVICE_NAME"
+  "$WAVESHARE_FBCP_SERVICE_NAME"
+)
 COMMON_SCRIPT="$PROJECT_DIR/scripts/helpers/common.sh"
 
 # Any live foreground launcher (scripts/launch_kernel_display.sh) restarts
@@ -194,26 +206,13 @@ if command -v pkill >/dev/null 2>&1; then
   kill_stray_processes "$PROJECT_DIR/main.py"
   kill_stray_processes "$PROJECT_DIR/scripts/launch_kernel_display.sh"
   kill_stray_processes "$PROJECT_DIR/scripts/launch_framebuffer.sh"
-  for service_user in "${kernel_service_users[@]}"; do
-    kill_stray_processes "main.py" "$service_user"
-    kill_stray_processes "launch_kernel_display.sh" "$service_user"
-    kill_stray_processes "launch_framebuffer.sh" "$service_user"
-  done
 fi
 
 if command -v systemctl >/dev/null 2>&1; then
-  log "Stopping $SERVICE_NAME"
-  $SUDO systemctl stop "$SERVICE_NAME" || warn "Failed to stop $SERVICE_NAME"
-  log "Stopping $CONFIG_UI_SERVICE_NAME"
-  $SUDO systemctl stop "$CONFIG_UI_SERVICE_NAME" || warn "Failed to stop $CONFIG_UI_SERVICE_NAME"
-  if systemctl list-unit-files | grep -q "^$WAVESHARE_OLED_SERVICE_NAME"; then
-    log "Stopping $WAVESHARE_OLED_SERVICE_NAME"
-    $SUDO systemctl stop "$WAVESHARE_OLED_SERVICE_NAME" || warn "Failed to stop $WAVESHARE_OLED_SERVICE_NAME"
-  fi
-  if systemctl list-unit-files | grep -q "^$WAVESHARE_FBCP_SERVICE_NAME"; then
-    log "Stopping $WAVESHARE_FBCP_SERVICE_NAME"
-    $SUDO systemctl stop "$WAVESHARE_FBCP_SERVICE_NAME" || warn "Failed to stop $WAVESHARE_FBCP_SERVICE_NAME"
-  fi
+  for managed_service in "${MANAGED_SYSTEM_SERVICES[@]}"; do
+    log "Stopping $managed_service"
+    $SUDO systemctl stop "$managed_service" || warn "Failed to stop $managed_service"
+  done
 fi
 
 remove_desktop_entries() {
@@ -248,40 +247,16 @@ done
 log "Starting uninstall for $PROJECT_DIR"
 
 if command -v systemctl >/dev/null 2>&1; then
-  if systemctl list-unit-files | grep -q "^$SERVICE_NAME"; then
-    log "Disabling $SERVICE_NAME"
-    $SUDO systemctl disable "$SERVICE_NAME" || warn "Failed to disable $SERVICE_NAME"
-  else
-    warn "$SERVICE_NAME not registered with systemd"
-  fi
-  if systemctl list-unit-files | grep -q "^$CONFIG_UI_SERVICE_NAME"; then
-    log "Disabling $CONFIG_UI_SERVICE_NAME"
-    $SUDO systemctl disable "$CONFIG_UI_SERVICE_NAME" || warn "Failed to disable $CONFIG_UI_SERVICE_NAME"
-  else
-    warn "$CONFIG_UI_SERVICE_NAME not registered with systemd"
-  fi
-  if systemctl list-unit-files | grep -q "^$WAVESHARE_OLED_SERVICE_NAME"; then
-    log "Disabling $WAVESHARE_OLED_SERVICE_NAME"
-    $SUDO systemctl disable "$WAVESHARE_OLED_SERVICE_NAME" || warn "Failed to disable $WAVESHARE_OLED_SERVICE_NAME"
-  fi
-  if systemctl list-unit-files | grep -q "^$WAVESHARE_FBCP_SERVICE_NAME"; then
-    log "Disabling $WAVESHARE_FBCP_SERVICE_NAME"
-    $SUDO systemctl disable "$WAVESHARE_FBCP_SERVICE_NAME" || warn "Failed to disable $WAVESHARE_FBCP_SERVICE_NAME"
-  fi
+  for managed_service in "${MANAGED_SYSTEM_SERVICES[@]}"; do
+    log "Disabling $managed_service"
+    $SUDO systemctl disable "$managed_service" 2>/dev/null || true
 
-  if [[ -f "$SERVICE_PATH" ]]; then
-    log "Removing systemd unit at $SERVICE_PATH"
-    $SUDO rm -f "$SERVICE_PATH"
-  else
-    warn "No systemd unit found at $SERVICE_PATH"
-  fi
-
-  if [[ -f "$CONFIG_UI_SERVICE_PATH" ]]; then
-    log "Removing systemd unit at $CONFIG_UI_SERVICE_PATH"
-    $SUDO rm -f "$CONFIG_UI_SERVICE_PATH"
-  else
-    warn "No systemd unit found at $CONFIG_UI_SERVICE_PATH"
-  fi
+    managed_service_path="/etc/systemd/system/$managed_service"
+    if [[ -e "$managed_service_path" || -L "$managed_service_path" ]]; then
+      log "Removing systemd unit at $managed_service_path"
+      $SUDO rm -f "$managed_service_path"
+    fi
+  done
 
   for service_user in "${kernel_service_users[@]}"; do
     remove_desktop_entries "$service_user"
@@ -350,15 +325,11 @@ log "Sensitive files (.env, keys) copied to $BACKUP_DIR if present"
 log "Verifying nothing has respawned before removing the project directory"
 if command -v pkill >/dev/null 2>&1; then
   kill_stray_processes "$PROJECT_DIR/main.py"
-  for service_user in "${kernel_service_users[@]}"; do
-    kill_stray_processes "main.py" "$service_user"
-  done
 fi
 if command -v systemctl >/dev/null 2>&1; then
-  $SUDO systemctl stop "$SERVICE_NAME" >/dev/null 2>&1 || true
-  $SUDO systemctl stop "$CONFIG_UI_SERVICE_NAME" >/dev/null 2>&1 || true
-  $SUDO systemctl stop "$WAVESHARE_OLED_SERVICE_NAME" >/dev/null 2>&1 || true
-  $SUDO systemctl stop "$WAVESHARE_FBCP_SERVICE_NAME" >/dev/null 2>&1 || true
+  for managed_service in "${MANAGED_SYSTEM_SERVICES[@]}"; do
+    $SUDO systemctl stop "$managed_service" >/dev/null 2>&1 || true
+  done
   for service_user in "${kernel_service_users[@]}"; do
     disable_legacy_kernel_user_service "$service_user" "$SERVICE_NAME" >/dev/null 2>&1 || true
   done

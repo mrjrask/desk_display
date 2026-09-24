@@ -139,7 +139,7 @@
       if (displayStatusBanner && payload.display_status) {
         const status = payload.display_status;
         if (status.screen_id) {
-          let summary = `Display heartbeat: <strong>${status.screen_id}</strong>`;
+          let summary = `Display heartbeat: ${status.screen_id}`;
           if (status.rendered_at) {
             const elapsed = status.elapsed ? ` (${status.elapsed})` : "";
             summary += ` — ${status.rendered_at}${elapsed}`;
@@ -156,7 +156,7 @@
             const height = status.display.height || "?";
             summary += ` — ${profileId} (${width}×${height})`;
           }
-          displayStatusBanner.innerHTML = summary;
+          displayStatusBanner.textContent = summary;
         } else {
           displayStatusBanner.textContent = "Display heartbeat unavailable.";
         }
@@ -167,10 +167,10 @@
         const serviceStatus = payload.service_status;
         const unitName = serviceStatus.unit || "desk_display.service";
         if (serviceStatus.error) {
-          serviceStatusBanner.innerHTML = `Service <strong>${unitName}</strong>: unavailable — ${serviceStatus.error}`;
+          serviceStatusBanner.textContent = `Service ${unitName}: unavailable — ${serviceStatus.error}`;
         } else {
           const summary = serviceStatus.summary || "unknown";
-          serviceStatusBanner.innerHTML = `Service <strong>${unitName}</strong>: ${summary}`;
+          serviceStatusBanner.textContent = `Service ${unitName}: ${summary}`;
         }
         serviceStatusBanner.classList.toggle("is-unavailable", Boolean(serviceStatus.error));
         serviceStatusBanner.classList.toggle("is-inactive", !serviceStatus.error && !Boolean(serviceStatus.is_active));

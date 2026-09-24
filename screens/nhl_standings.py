@@ -858,8 +858,9 @@ def _normalize_int(value) -> int:
         return 0
 
 
-def _division_sort_key(team: dict) -> tuple[int, int, int, int, int, int, str]:
+def _division_sort_key(team: dict) -> tuple[int, int, int, int, int, int, int, str]:
     points = _normalize_int(team.get("points"))
+    games_played = _normalize_int(team.get("gamesPlayed"))
     regulation_wins = _normalize_int(team.get("regulationWins"))
     regulation_plus_overtime_wins = _normalize_int(
         team.get("regulationPlusOvertimeWins", team.get("row", team.get("wins")))
@@ -870,10 +871,28 @@ def _division_sort_key(team: dict) -> tuple[int, int, int, int, int, int, str]:
     abbr = str(team.get("abbr", ""))
     if 0 < rank < 99:
         # If the API provides an explicit rank, honor it first.
-        return (rank, -points, -regulation_wins, -regulation_plus_overtime_wins, -wins, ot, abbr)
+        return (
+            rank,
+            -points,
+            games_played,
+            -regulation_wins,
+            -regulation_plus_overtime_wins,
+            -wins,
+            ot,
+            abbr,
+        )
     # Sort by points (desc), regulation wins (desc), regulation+OT wins (desc),
     # overall wins (desc), overtime losses (asc), then fallback rank and abbr.
-    return (-points, -regulation_wins, -regulation_plus_overtime_wins, -wins, ot, rank, abbr)
+    return (
+        -points,
+        games_played,
+        -regulation_wins,
+        -regulation_plus_overtime_wins,
+        -wins,
+        ot,
+        rank,
+        abbr,
+    )
 
 
 def _normalize_conference_name(name: object) -> str:
@@ -1132,7 +1151,7 @@ def _wildcard_sort_key(team: dict) -> tuple[int, int, int, int, str]:
     abbr = str(team.get("abbr", ""))
     # Sort by points (desc), regulation wins (desc), regulation+OT wins (desc),
     # overall wins (desc), games played (asc), then abbreviation for determinism.
-    return (-points, -regulation_wins, -regulation_plus_overtime_wins, -wins, games_played, abbr)
+    return (-points, games_played, -regulation_wins, -regulation_plus_overtime_wins, -wins, abbr)
 
 
 def _division_sequence_sort_key(team: dict) -> tuple:

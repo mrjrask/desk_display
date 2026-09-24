@@ -107,7 +107,7 @@
       if (!status || !status.screen_id) {
         return "Display heartbeat unavailable.";
       }
-      let html = `Display heartbeat: <strong>${status.screen_id}</strong>`;
+      let html = `Display heartbeat: ${status.screen_id}`;
       if (status.elapsed) {
         html += ` (${status.elapsed})`;
       }
@@ -170,9 +170,9 @@
             const card = ensureCard(source);
             const heartbeat = card.querySelector('[data-role="heartbeat"]');
             const meta = card.querySelector('[data-role="meta"]');
-            heartbeat.innerHTML = heartbeatHtml(source.display_status);
+            heartbeat.textContent = heartbeatHtml(source.display_status);
             heartbeat.classList.toggle("is-stale", Boolean(source.display_status && source.display_status.is_stale));
-            meta.innerHTML = metaHtml(source);
+            meta.textContent = metaHtml(source);
             meta.classList.toggle("is-stale", Boolean(source.is_stale));
           });
         })

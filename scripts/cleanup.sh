@@ -108,6 +108,14 @@ fi
 
 # 1) Clear the display before touching the filesystem
 echo "    → Clearing display…"
+# Make the same .env-backed profile values used by the shell check available
+# to the embedded Python cleanup process.
+for config_name in \
+  WAVESHARE_OLED_LCD_HAT_A_INSTALLED DESK_DISPLAY_OUTPUT HYPERPIXEL_PANEL \
+  WAVESHARE_OLED_MAX_VALUE_FONT_SIZE WAVESHARE_OLED_MAX_TIME_FONT_SIZE \
+  WAVESHARE_OLED_CLEANUP; do
+  export "$config_name=$(lookup_config_value "$config_name")"
+done
 # Intentionally avoid forcing headless mode here: cleanup should blank the
 # physical Display HAT Mini panel when hardware output is available.
 "${python_bin}" - <<'PY'

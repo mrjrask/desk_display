@@ -43,6 +43,7 @@ log "Writing systemd service to $SERVICE_PATH"
 $SUDO tee "$SERVICE_PATH" >/dev/null <<SERVICE
 [Unit]
 Description=Desk Display Service - config UI
+Wants=network-online.target
 After=network-online.target
 
 [Service]

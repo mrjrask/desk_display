@@ -25,6 +25,7 @@ class ConfigStore:
         db_path: Optional[str] = None,
         archive_dir: Optional[str] = None,
         retention: int = DEFAULT_RETENTION,
+        initialize: bool = True,
     ) -> None:
         self.config_path = Path(config_path)
         self.db_path = (
@@ -35,7 +36,8 @@ class ConfigStore:
         )
         self.retention = max(1, retention)
         self._save_lock = threading.Lock()
-        self._ensure_database()
+        if initialize:
+            self._ensure_database()
 
     # ------------------------------------------------------------------
     # Public API
@@ -58,6 +60,7 @@ class ConfigStore:
         metadata: Optional[dict[str, Any]] = None,
     ) -> int:
         with self._save_lock:
+            self._ensure_database()
             current = self.load()
             summary = summary or summarise_diff(current, config)
             metadata = metadata or {}
@@ -87,6 +90,7 @@ class ConfigStore:
             return version_id
 
     def list_versions(self, limit: int = 20) -> list[dict[str, Any]]:
+        self._ensure_database()
         query = """
             SELECT id, created_at, actor, summary
             FROM config_versions
@@ -99,11 +103,13 @@ class ConfigStore:
         return [dict(row) for row in rows]
 
     def latest_version_id(self) -> Optional[int]:
+        self._ensure_database()
         with contextlib.closing(sqlite3.connect(self.db_path)) as conn, conn:
             row = conn.execute("SELECT id FROM config_versions ORDER BY id DESC LIMIT 1").fetchone()
         return int(row[0]) if row else None
 
     def load_version(self, version_id: int) -> dict[str, Any]:
+        self._ensure_database()
         with contextlib.closing(sqlite3.connect(self.db_path)) as conn, conn:
             conn.row_factory = sqlite3.Row
             row = conn.execute(

@@ -2,10 +2,6 @@
 # A single source of truth for all of your possible screen IDs.
 
 LEGACY_SCOREBOARD_V2_SCREEN_MAP = {
-    "NFL Scoreboard v2": "NFL Scoreboard",
-    "NHL Scoreboard v2": "NHL Scoreboard",
-    "NBA Scoreboard v2": "NBA Scoreboard",
-    "MLB Scoreboard v2": "MLB Scoreboard",
     "NHL Standings Overview v2 West": "NHL Standings Overview West",
     "NHL Standings Overview v2 East": "NHL Standings Overview East",
 }
