@@ -201,11 +201,30 @@ kill_stray_processes() {
   fi
 }
 
+# Window launchers change into the project directory before executing
+# ``python main.py``, so their command lines contain only the relative script
+# name. Match those processes by both command line and cwd to avoid killing an
+# unrelated application whose entrypoint also happens to be named main.py.
+kill_project_relative_main_processes() {
+  local user="$1"
+  local pid cwd
+  while read -r pid; do
+    [[ -n "$pid" ]] || continue
+    cwd=$(readlink -f "/proc/$pid/cwd" 2>/dev/null || true)
+    if [[ "$cwd" == "$PROJECT_DIR" ]]; then
+      kill -9 "$pid" 2>/dev/null || true
+    fi
+  done < <(pgrep -u "$user" -f '(^|[[:space:]])main\.py([[:space:]]|$)' 2>/dev/null || true)
+}
+
 if command -v pkill >/dev/null 2>&1; then
   log "Killing any running Desk Display processes"
   kill_stray_processes "$PROJECT_DIR/main.py"
   kill_stray_processes "$PROJECT_DIR/scripts/launch_kernel_display.sh"
   kill_stray_processes "$PROJECT_DIR/scripts/launch_framebuffer.sh"
+  for service_user in "${kernel_service_users[@]}"; do
+    kill_project_relative_main_processes "$service_user"
+  done
 fi
 
 if command -v systemctl >/dev/null 2>&1; then
@@ -325,6 +344,9 @@ log "Sensitive files (.env, keys) copied to $BACKUP_DIR if present"
 log "Verifying nothing has respawned before removing the project directory"
 if command -v pkill >/dev/null 2>&1; then
   kill_stray_processes "$PROJECT_DIR/main.py"
+  for service_user in "${kernel_service_users[@]}"; do
+    kill_project_relative_main_processes "$service_user"
+  done
 fi
 if command -v systemctl >/dev/null 2>&1; then
   for managed_service in "${MANAGED_SYSTEM_SERVICES[@]}"; do

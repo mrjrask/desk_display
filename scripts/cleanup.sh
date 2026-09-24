@@ -175,7 +175,7 @@ def _truthy_env(name):
 
 def _waveshare_oled_cleanup_enabled():
     marker = os.environ.get("WAVESHARE_OLED_LCD_HAT_A_INSTALLED")
-    if marker is not None:
+    if marker is not None and marker.strip():
         return marker.strip().lower() not in FALSEY_ENV_VALUES
 
     display_output = os.environ.get("DESK_DISPLAY_OUTPUT", "").strip().lower()
