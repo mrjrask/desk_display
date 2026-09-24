@@ -194,20 +194,32 @@ class ScreenScheduler:
         self._cursor = 0
 
     def _hydrate_until_pending(self, now_utc: datetime) -> bool:
-        """Hydrate iteratively until a pass has work or no entry can recur."""
+        """Hydrate the next pass with work, skipping empty pass ranges."""
 
         self._hydrate_next_pass(now_utc)
-        while not self._pending_indices:
-            active_frequencies = [
-                entry.frequency
-                for entry in self._entries
-                if entry.frequency > 0
-                and (entry.hide_after is None or now_utc < entry.hide_after)
-            ]
-            if not active_frequencies:
-                return False
-            self._hydrate_next_pass(now_utc)
-        return True
+        if self._pending_indices:
+            return True
+
+        active_frequencies = [
+            entry.frequency
+            for entry in self._entries
+            if entry.frequency > 0
+            and (entry.hide_after is None or now_utc < entry.hide_after)
+        ]
+        if not active_frequencies:
+            return False
+
+        # The pass just hydrated was empty. Jump to immediately before the
+        # nearest future multiple rather than scanning every intervening pass;
+        # _hydrate_next_pass() remains the single place that increments the
+        # scheduler-wide counter and queues the selected pass.
+        next_due_pass = min(
+            (self._pass_number // frequency + 1) * frequency
+            for frequency in active_frequencies
+        )
+        self._pass_number = next_due_pass - 1
+        self._hydrate_next_pass(now_utc)
+        return bool(self._pending_indices)
 
     def _next_available_from_entry(
         self,

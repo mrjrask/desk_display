@@ -504,13 +504,13 @@ def test_scheduler_hydrates_each_frequency_pass_in_config_page_order():
     ]
 
 
-def test_scheduler_advances_across_empty_normal_passes_iteratively():
-    scheduler = build_scheduler({"screens": {"date": 3}})
+def test_scheduler_jumps_across_empty_normal_passes():
+    scheduler = build_scheduler({"screens": {"date": 1_000_000_000}})
     registry = make_registry({"date": True})
 
     assert scheduler.next_available(registry).id == "date"
     assert scheduler.next_available(registry).id == "date"
-    assert scheduler._pass_number == 3
+    assert scheduler._pass_number == 1_000_000_000
 
 
 def test_scheduler_uses_first_playlist_assignment_for_duplicate_screen():
