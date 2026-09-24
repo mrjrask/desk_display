@@ -2,7 +2,7 @@ import json
 from pathlib import Path
 
 import config_ui
-from schedule import build_scheduler
+from schedule import REPLACEMENT_ONLY_SCREENS, build_scheduler
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -389,7 +389,7 @@ def test_default_screens_large_matches_complete_approved_sequence():
     assert playlist_screen_ids == set(LARGE_SPREADSHEET_SEQUENCE)
 
 
-def test_large_config_screenshots_and_scheduler_resolve_identical_complete_order():
+def test_large_config_ui_resolves_complete_order_and_scheduler_resolves_enabled_order():
     config = _load_default_config("default_screens_large.json")["config"]
     ordered_ids = config_ui._ordered_screen_ids(
         config["screens"], exclude=config_ui.LEGACY_RETIRED_SCREEN_IDS
@@ -407,7 +407,18 @@ def test_large_config_screenshots_and_scheduler_resolve_identical_complete_order
         ordered_ids, playlists, assignments
     )
     runtime_order = [entry.screen_id for entry in build_scheduler(config)._entries]
+    expected_runtime_order = [
+        screen_id
+        for screen_id in LARGE_RESOLVED_ORDER
+        if screen_id not in REPLACEMENT_ONLY_SCREENS
+        and (
+            config["screens"][screen_id].get("frequency", 0)
+            if isinstance(config["screens"][screen_id], dict)
+            else config["screens"][screen_id]
+        )
+        > 0
+    ]
 
     assert config_page_order == LARGE_RESOLVED_ORDER
     assert screenshots_page_order == LARGE_RESOLVED_ORDER
-    assert runtime_order == LARGE_RESOLVED_ORDER
+    assert runtime_order == expected_runtime_order
