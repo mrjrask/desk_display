@@ -1,0 +1,59 @@
+"""The hardware boundary for final presentation and local input."""
+from __future__ import annotations
+
+from collections.abc import Callable
+from typing import Any
+
+from PIL import Image
+
+from display_profiles import RenderProfile
+from rendering.screen_renderer import RenderArtifact
+
+
+class HardwarePresenter:
+    """Adapt profile-native artifacts to a physical ``utils.Display``."""
+
+    def __init__(self, display: Any | None = None, *, profile: RenderProfile | None = None) -> None:
+        if display is None:
+            from utils import Display
+
+            display = Display()
+        self.display = display
+        self.profile = profile
+
+    def convert(self, image: Image.Image) -> Image.Image:
+        profile = self.profile
+        if profile is None:
+            return image.copy()
+        converted = image.resize((profile.width, profile.height)).convert(profile.color_mode)
+        rotation = int(profile.constraints.physical_rotation or 0) % 360
+        return converted.rotate(-rotation, expand=True) if rotation else converted
+
+    def present(self, artifact: RenderArtifact | Image.Image) -> Image.Image:
+        image = artifact.image if isinstance(artifact, RenderArtifact) else artifact
+        converted = self.convert(image)
+        self.display.image(converted)
+        show = getattr(self.display, "show", None)
+        if callable(show):
+            show()
+        return converted
+
+    def set_backlight(self, level: float) -> float:
+        return float(self.display.set_backlight(level))
+
+    def is_button_pressed(self, name: str) -> bool:
+        return bool(self.display.is_button_pressed(name))
+
+    def set_button_callback(self, callback: Callable[[str], None] | None) -> None:
+        self.display.set_button_callback(callback)
+
+    def poll_touch(self) -> Any:
+        poll = getattr(self.display, "poll_touch", None)
+        return poll() if callable(poll) else None
+
+    def close(self) -> None:
+        for name in ("cleanup", "close"):
+            method = getattr(self.display, name, None)
+            if callable(method):
+                method()
+                return
