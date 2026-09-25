@@ -2143,8 +2143,8 @@ def _scroll_vertical(display, image: Image.Image) -> None:
 
 # ─── Public API ───────────────────────────────────────────────────────────────
 @log_call
-def draw_nhl_standings_overview_west(display, transition: bool = False) -> ScreenImage:
-    standings_by_conf = _fetch_standings_data()
+def draw_nhl_standings_overview_west(display, transition: bool = False, standings=None) -> ScreenImage:
+    standings_by_conf = _fetch_standings_data() if standings is None else standings
     _apply_style_overrides("NHL Standings Overview West")
 
     conference = standings_by_conf.get(CONFERENCE_WEST_KEY, {})
@@ -2175,8 +2175,8 @@ def draw_nhl_standings_overview_west(display, transition: bool = False) -> Scree
 
 
 @log_call
-def draw_nhl_standings_overview_east(display, transition: bool = False) -> ScreenImage:
-    standings_by_conf = _fetch_standings_data()
+def draw_nhl_standings_overview_east(display, transition: bool = False, standings=None) -> ScreenImage:
+    standings_by_conf = _fetch_standings_data() if standings is None else standings
     _apply_style_overrides("NHL Standings Overview East")
 
     conference = standings_by_conf.get(CONFERENCE_EAST_KEY, {})
@@ -2207,8 +2207,8 @@ def draw_nhl_standings_overview_east(display, transition: bool = False) -> Scree
 
 
 @log_call
-def draw_nhl_standings_west(display, transition: bool = False) -> ScreenImage:
-    standings_by_conf = _fetch_standings_data()
+def draw_nhl_standings_west(display, transition: bool = False, standings=None) -> ScreenImage:
+    standings_by_conf = _fetch_standings_data() if standings is None else standings
     _apply_style_overrides("NHL Standings West")
     conference = standings_by_conf.get(CONFERENCE_WEST_KEY, {})
     divisions = [d for d in DIVISION_ORDER_WEST if conference.get(d)]
@@ -2246,8 +2246,8 @@ def draw_nhl_standings_west(display, transition: bool = False) -> ScreenImage:
 
 
 @log_call
-def draw_nhl_standings_east(display, transition: bool = False) -> ScreenImage:
-    standings_by_conf = _fetch_standings_data()
+def draw_nhl_standings_east(display, transition: bool = False, standings=None) -> ScreenImage:
+    standings_by_conf = _fetch_standings_data() if standings is None else standings
     _apply_style_overrides("NHL Standings East")
     conference = standings_by_conf.get(CONFERENCE_EAST_KEY, {})
     divisions = [d for d in DIVISION_ORDER_EAST if conference.get(d)]

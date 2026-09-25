@@ -1616,8 +1616,10 @@ def _render_and_display(
 
 # ─── Public API ───────────────────────────────────────────────────────────────
 @log_call
-def draw_nfl_overview_nfc(display, transition: bool = False) -> ScreenImage:
-    standings_by_conf, fallback_message, season_note = _fetch_standings_data()
+def draw_nfl_overview_nfc(display, transition: bool = False, standings=None) -> ScreenImage:
+    standings_by_conf, fallback_message, season_note = (
+        _fetch_standings_data() if standings is None else (standings, None, None)
+    )
     _apply_style_overrides("NFL Overview NFC")
     conference = standings_by_conf.get(CONFERENCE_NFC_KEY, {})
     return _render_overview(
@@ -1631,8 +1633,10 @@ def draw_nfl_overview_nfc(display, transition: bool = False) -> ScreenImage:
 
 
 @log_call
-def draw_nfl_overview_afc(display, transition: bool = False) -> ScreenImage:
-    standings_by_conf, fallback_message, season_note = _fetch_standings_data()
+def draw_nfl_overview_afc(display, transition: bool = False, standings=None) -> ScreenImage:
+    standings_by_conf, fallback_message, season_note = (
+        _fetch_standings_data() if standings is None else (standings, None, None)
+    )
     _apply_style_overrides("NFL Overview AFC")
     conference = standings_by_conf.get(CONFERENCE_AFC_KEY, {})
     return _render_overview(
@@ -1646,8 +1650,10 @@ def draw_nfl_overview_afc(display, transition: bool = False) -> ScreenImage:
 
 
 @log_call
-def draw_nfl_standings_nfc(display, transition: bool = False) -> ScreenImage:
-    standings_by_conf, fallback_message, season_note = _fetch_standings_data()
+def draw_nfl_standings_nfc(display, transition: bool = False, standings=None) -> ScreenImage:
+    standings_by_conf, fallback_message, season_note = (
+        _fetch_standings_data() if standings is None else (standings, None, None)
+    )
     _apply_style_overrides("NFL Standings NFC")
     conference = standings_by_conf.get(CONFERENCE_NFC_KEY, {})
     return _render_and_display(
@@ -1661,8 +1667,10 @@ def draw_nfl_standings_nfc(display, transition: bool = False) -> ScreenImage:
 
 
 @log_call
-def draw_nfl_standings_afc(display, transition: bool = False) -> ScreenImage:
-    standings_by_conf, fallback_message, season_note = _fetch_standings_data()
+def draw_nfl_standings_afc(display, transition: bool = False, standings=None) -> ScreenImage:
+    standings_by_conf, fallback_message, season_note = (
+        _fetch_standings_data() if standings is None else (standings, None, None)
+    )
     _apply_style_overrides("NFL Standings AFC")
     conference = standings_by_conf.get(CONFERENCE_AFC_KEY, {})
     return _render_and_display(

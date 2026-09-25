@@ -53,6 +53,17 @@ DIVISION_IDS = {
     NL_LEAGUE_ID: {"East": 204, "Central": 205, "West": 203},
 }
 
+
+def _standings_for_league(standings, league_id: int):
+    """Return one league from either live data or a serialized snapshot."""
+
+    if not standings:
+        return {}
+    if league_id in standings:
+        return standings[league_id]
+    return standings.get(str(league_id), {})
+
+
 TITLE_MARGIN_TOP = scale_value(2)
 TITLE_GAP = scale_value(3)
 DIVISION_GAP_TOP = scale_value(6)
@@ -367,9 +378,15 @@ def _streak_with_last10_width(draw: ImageDraw.ImageDraw, streak_text: str, last1
     return streak_w + scale_value(4) + last10_w
 
 
-def _fetch_league_standings() -> dict[int, dict[str, list[dict[str, Any]]]]:
+def _fetch_league_standings(
+    *, force: bool = False
+) -> dict[int, dict[str, list[dict[str, Any]]]]:
     now = time.time()
-    if _STANDINGS_CACHE.get("data") and now - float(_STANDINGS_CACHE.get("timestamp", 0.0)) < CACHE_TTL:
+    if (
+        not force
+        and _STANDINGS_CACHE.get("data")
+        and now - float(_STANDINGS_CACHE.get("timestamp", 0.0)) < CACHE_TTL
+    ):
         return _STANDINGS_CACHE["data"]
 
     url = "https://statsapi.mlb.com/api/v1/standings"
@@ -782,7 +799,9 @@ def draw_overview(display, title: str, league_id: int, transition: bool = False,
         col_centers = [margin_x * (i + 1) + col_w * i + col_w / 2 for i in range(ov_cols)]
         logo_box = col_w
 
-    standings = (standings if standings is not None else _fetch_league_standings()).get(league_id, {})
+    standings = _standings_for_league(
+        standings if standings is not None else _fetch_league_standings(), league_id
+    )
     logos_per_div: dict[str, list[Image.Image | None]] = {}
     wild_card_rows = _wild_card_rows(standings) if include_wc else []
     draw_wild_card_cut_line = _should_draw_wild_card_cut_line(wild_card_rows)
@@ -911,7 +930,9 @@ def _draw_league_screen(
     standings=None,
 ) -> Image.Image:
     bg = get_screen_background_color(screen_id, SCOREBOARD_BACKGROUND_COLOR)
-    standings = (standings if standings is not None else _fetch_league_standings()).get(league_id, {})
+    standings = _standings_for_league(
+        standings if standings is not None else _fetch_league_standings(), league_id
+    )
     league_abbr = "AL" if league_id == AL_LEAGUE_ID else "NL"
 
     if wild_card_only:

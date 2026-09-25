@@ -20,7 +20,7 @@ from services.data_provider import DataProvider, provider
 
 def _freeze(value: Any) -> Any:
     if isinstance(value, Mapping):
-        return MappingProxyType({str(key): _freeze(item) for key, item in value.items()})
+        return MappingProxyType({key: _freeze(item) for key, item in value.items()})
     if isinstance(value, list):
         return tuple(_freeze(item) for item in value)
     if isinstance(value, tuple):
@@ -177,8 +177,11 @@ class DataCoordinator:
 
         from screens.mlb_league_standings import _fetch_league_standings
 
+        def fetch() -> dict[int, dict[str, list[dict[str, Any]]]]:
+            return _fetch_league_standings(force=force)
+
         value = self.provider.read(
-            "mlb_league_standings", _fetch_league_standings,
+            "mlb_league_standings", fetch,
             ttl_seconds=ttl_seconds, force=force,
         )
         self.publish("mlb_league_standings", value)
