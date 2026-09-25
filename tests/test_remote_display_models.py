@@ -207,7 +207,7 @@ def test_malformed_demand_is_rejected(changes, path):
         ({"cache_age_seconds": -1}, "cache_age_seconds"),
         ({"accepted_revisions": {"manifest_revision": "a b"}}, "accepted_revisions.manifest_revision"),
         ({"recent_errors": [{"code": "x", "message": "m"}] * 11}, "recent_errors"),
-        ({"recent_errors": [{"code": "x", "message": "m", "count": 0}]}, "recent_errors.count"),
+        ({"recent_errors": [{"code": "x", "message": "m", "count": 0}]}, "recent_errors[0].count"),
         ({"recent_errors": ["boom"]}, "recent_errors[0]"),
     ],
 )

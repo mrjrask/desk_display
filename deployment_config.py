@@ -26,6 +26,7 @@ example/docs generators.
 from __future__ import annotations
 
 import argparse
+import hmac
 import ipaddress
 import json
 import logging
@@ -207,6 +208,10 @@ SETTINGS: tuple[Setting, ...] = (
     _s("DESK_DISPLAY_SERVER_AUTH_TOKEN", "str", _SERVER_ONLY, "server",
        f"Shared bearer token every client must present (at least {_MIN_SERVER_TOKEN_LENGTH} "
        "characters). Generate one with: python3 -c 'import secrets; print(secrets.token_urlsafe(32))'",
+       secret=True),
+    _s("DESK_DISPLAY_SERVER_ADMIN_TOKEN", "str", _SERVER_ONLY, "server",
+       f"Bearer token for the /api/v1/admin endpoints (at least {_MIN_SERVER_TOKEN_LENGTH} "
+       "characters). The admin API is disabled when empty. Never give it to clients.",
        secret=True),
     _s("DESK_DISPLAY_SERVER_ALLOW_UNAUTHENTICATED", "bool", _SERVER_ONLY, "server",
        "Accept clients without a token. Only allowed while the server is bound "
@@ -1136,6 +1141,18 @@ def _validate_server(report: ValidationReport, get, *, check_files: bool) -> Non
         report.error(
             "DESK_DISPLAY_SERVER_AUTH_TOKEN",
             f"insecure: use at least {_MIN_SERVER_TOKEN_LENGTH} random characters",
+        )
+
+    admin = get("DESK_DISPLAY_SERVER_ADMIN_TOKEN")
+    if admin and len(admin) < _MIN_SERVER_TOKEN_LENGTH:
+        report.error(
+            "DESK_DISPLAY_SERVER_ADMIN_TOKEN",
+            f"insecure: use at least {_MIN_SERVER_TOKEN_LENGTH} random characters",
+        )
+    elif admin and token and hmac.compare_digest(admin, token):
+        report.error(
+            "DESK_DISPLAY_SERVER_ADMIN_TOKEN",
+            "must differ from DESK_DISPLAY_SERVER_AUTH_TOKEN, which every client knows",
         )
 
     cert, key = get("DESK_DISPLAY_SERVER_TLS_CERT"), get("DESK_DISPLAY_SERVER_TLS_KEY")

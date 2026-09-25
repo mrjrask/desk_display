@@ -113,6 +113,7 @@ Supported workflow profiles include:
 | `main.py` | Runtime loop, refresh orchestration, transitions, capture, touch/button handling, and display writes. |
 | `config.py` | Environment parsing, defaults, display profile detection, style config, API credentials, and runtime constants. |
 | `config_ui.py` | Flask/Waitress screen configuration web app. |
+| `display_server.py` | Render server API (`/api/v1`) for remote display clients: registration, leases, heartbeats, and demand discovery. Separate from the Feed server; see [CONFIGURATION.md](CONFIGURATION.md#render-server-api). |
 | `feed_server.py` | Standalone Flask/Waitress app that hosts `/feed/<source>` pages built from screenshots uploaded by other desk_display Pis. Install by itself with `Installers/install_feed_server.sh`. |
 | `screens/` | Screen renderer modules and registry integration. |
 | `screens/registry.py` | Screen registration, playlist config loading, layout config loading, aliases, and special display helpers. |
