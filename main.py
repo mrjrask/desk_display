@@ -105,6 +105,7 @@ from utils import (
     temporary_display_led,
     update_indicator_enabled,
 )
+from version import __version__
 
 try:
     from services import wifi_utils as _wifi_utils
@@ -3424,6 +3425,7 @@ def _choose_screen_interactively() -> Optional[str]:
 
 def _parse_command_line(argv: Optional[List[str]] = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Run the desk display rotation.")
+    parser.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
     parser.add_argument(
         "--screen", nargs="?", const="", metavar="SCREEN_ID",
         help="loop one screen; omit SCREEN_ID to choose from an interactive list",
