@@ -197,7 +197,7 @@ class DataCoordinator:
         from screens.nfl_standings import _fetch_standings_data
 
         def fetch() -> dict[str, Any]:
-            standings, fallback_message, season_note = _fetch_standings_data()
+            standings, fallback_message, season_note = _fetch_standings_data(force=force)
             return {
                 "standings": standings,
                 "meta": {
@@ -229,7 +229,7 @@ class DataCoordinator:
         )
 
         value = self.provider.read(
-            "nhl_standings", _fetch_standings_data,
+            "nhl_standings", lambda: _fetch_standings_data(force=force),
             ttl_seconds=ttl_seconds, force=force,
         )
         self.publish("nhl_standings", value)
