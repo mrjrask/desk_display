@@ -6,29 +6,35 @@
 #                                               main.py's screens read.
 #   2. feed_server_desk_display.service      - serves/collects screenshot
 #                                               data other services push to.
-#   3. desk_display.service                  - the main renderer; reads the
-#                                               caches above and draws to the
-#                                               framebuffer/screenshot dir.
-#   4. waveshare-fbcp.service                - mirrors desk_display's
+#   3. desk_display_server.service           - render server for display
+#                                               clients (server/combined).
+#   4. desk_display.service                  - the standalone renderer; reads
+#                                               the caches above and draws to
+#                                               the framebuffer/screenshot dir.
+#   5. desk_display_client.service           - display client (client/
+#                                               combined); plays from its
+#                                               cache, so it never needs to
+#                                               restart with the server.
+#   6. waveshare-fbcp.service                - mirrors desk_display's
 #                                               framebuffer onto the physical
 #                                               panel, so it should come back
 #                                               after desk_display has fresh
 #                                               frames to copy.
-#   5. desk_display_waveshare_oled.service   - side status OLED helper for
+#   7. desk_display_waveshare_oled.service   - side status OLED helper for
 #                                               the Waveshare HAT; independent
 #                                               of the framebuffer but part of
 #                                               the same display stack.
-#   6. screenshot_uploader_desk_display.service - watches the screenshot dir
+#   8. screenshot_uploader_desk_display.service - watches the screenshot dir
 #                                               desk_display writes and POSTs
 #                                               changes to the feed server.
-#   7. config_ui_desk_display.service        - web config UI; independent,
+#   9. config_ui_desk_display.service        - web config UI; independent,
 #                                               safe to cycle any time.
-#   8. airplay_desk_display.service          - AirPlay receiver add-on;
+#  10. airplay_desk_display.service          - AirPlay receiver add-on;
 #                                               independent, least urgent.
 #
-# This script only ever touches the 8 services listed above (ORDERED_SERVICES
+# This script only ever touches the 10 services listed above (ORDERED_SERVICES
 # below) — it never queries or restarts any other systemd unit on the
-# machine. Of those 8, only the ones actually installed here are restarted;
+# machine. Of those 10, only the ones actually installed here are restarted;
 # the rest are skipped. By default every installed one of these project
 # services is restarted in the order above. Pass one or more service names
 # to restart just those (still one at a time, in the order given below
@@ -43,7 +49,9 @@ fi
 ORDERED_SERVICES=(
   desk_display_adsb_collector.service
   feed_server_desk_display.service
+  desk_display_server.service
   desk_display.service
+  desk_display_client.service
   waveshare-fbcp.service
   desk_display_waveshare_oled.service
   screenshot_uploader_desk_display.service

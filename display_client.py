@@ -513,6 +513,7 @@ def main() -> None:  # pragma: no cover - exercised on hardware
     os.environ.setdefault(deployment_config.ROLE_ENV, "client")
     logging.basicConfig(level=deployment_config.resolve_log_level())
     deployment_config.install_secret_log_redaction()
+    deployment_config.require_role("display_client.py", deployment_config.Role.CLIENT)
     deployment_config.startup_check("display client")
     settings = deployment_config.load_settings(deployment_config.Role.CLIENT)
     client = build_client(settings)

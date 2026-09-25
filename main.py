@@ -3024,6 +3024,8 @@ def main(argv: Optional[List[str]] = None) -> None:
             return
         _COMMAND_LINE_TEST_SCREEN_ID = selected
 
+    # Server and client installations never draw renderer output here.
+    deployment_config.require_role("main.py", deployment_config.Role.STANDALONE)
     init_runtime()
 
     try:
