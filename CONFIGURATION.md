@@ -212,6 +212,34 @@ render keys, the queue and running renders, each screen's state, last
 success, failures and durations, data health, artifact disk use, and each
 client's playlist delivery and acknowledgment.
 
+### Screen classes and render packages
+
+Every screen has a remote-mode class (`rendering/screen_classes.py`), shown
+as `remote_class` on its manifest entry:
+
+| Class | Screens (examples) | What the client gets |
+| --- | --- | --- |
+| `static` | weather, next game, standings cards | the still image |
+| `periodic` | live games, live aircraft | the still image, refreshed every minute |
+| `scrolling_canvas` | scoreboards, standings tables, On This Day | the whole canvas plus scroll timing |
+| `ticker_overlay` | news headlines | a base image plus one looping strip per lane |
+| `finite_animation` | team logos, radar, standings drop-ins | a logo sprite and speed, or at most 24 frames with durations |
+| `composite` | team schedule quads | tile bounds and up to 10 frames per tile |
+| `interactive_focus` | `quad`, `weather quad` | as `composite`, plus which screen each tile opens |
+| `client_timed` | `date`, `nixie` | a background and layout; the client draws the time |
+| `unsupported` | `inside` (reads a sensor on the display) | not served remotely yet |
+
+A screen that moves also gets a render package
+(`application/vnd.desk-display.render-package+json`, schema version 1,
+described in `remote_display/render_package.py`). It is published next to
+the still image, listed as the artifact entry's `package` (URL, SHA-256,
+length and kind), and retained and garbage-collected with it, so a client
+animates locally and never downloads a frame per step. A screen whose
+content fits the display, or that did not move, has no package. Clients
+with a touchscreen automatically demand the tiles of their interactive
+quads as touch dependencies, so a tapped tile opens at once. Clock packages
+never carry the server's IP address or update indicator.
+
 Each screen keeps its current and three previous good artifacts. Artifacts
 listed in any client's current or previous manifest are never deleted;
 others are deleted `DESK_DISPLAY_ARTIFACT_RETENTION_HOURS` after they stop

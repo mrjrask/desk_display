@@ -62,6 +62,7 @@ from utils import (
     ScreenImage,
     fetch_weather_icon,
     log_call,
+    package_capture,
     timestamp_to_datetime,
     uv_index_color,
     wind_direction,
@@ -2691,6 +2692,11 @@ def draw_weather_radar(display, weather=None, transition: bool = False):
             return
         if hasattr(display, "display"):
             display.display(frame_image)
+
+    capture = package_capture(display, "capture_frames")
+    if capture is not None and len(composed_frames) > 1:
+        capture(composed_frames, frame_seconds=RADAR_ANIMATION_FRAME_DELAY_SECONDS, loops=RADAR_ANIMATION_LOOPS)
+        return ScreenImage(composed_frames[-1], displayed=True)
 
     if transition and len(composed_frames) > 1:
         for _ in range(RADAR_ANIMATION_LOOPS):

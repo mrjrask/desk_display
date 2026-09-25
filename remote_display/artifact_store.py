@@ -277,15 +277,21 @@ class ArtifactStore:
         expected_sha256: str | None = None,
         refresh_seconds: float = DEFAULT_REFRESH_SECONDS,
         metadata: Mapping[str, Any] | None = None,
+        package: Mapping[str, Any] | None = None,
     ) -> ArtifactRecord:
         """Validate *data* for *key* and publish it as the lineage's current output.
+
+        *package* is an optional render package for the same key; it is
+        validated, stored as its own immutable object first, and referenced
+        from the record's ``metadata["package"]``, so it is published and
+        retained together with the still image.
 
         Raises :class:`InvalidArtifactError` (and records the failure, keeping
         the previous good output) when the output is unusable.
         """
 
         try:
-            return self._publish(key, data, media_type, expected_sha256, refresh_seconds, metadata or {})
+            return self._publish(key, data, media_type, expected_sha256, refresh_seconds, metadata or {}, package)
         except InvalidArtifactError as exc:
             self.record_failure(key, exc.code, exc.message)
             raise
@@ -305,6 +311,7 @@ class ArtifactStore:
         expected_sha256: str | None,
         refresh_seconds: float,
         metadata: Mapping[str, Any],
+        package: Mapping[str, Any] | None = None,
     ) -> ArtifactRecord:
         if not isinstance(key, RenderKey):
             raise InvalidArtifactError("invalid_render_key", "render key must be a RenderKey")
@@ -327,6 +334,8 @@ class ArtifactStore:
         except (TypeError, ValueError):
             raise InvalidArtifactError("invalid_metadata", "metadata must be JSON-serializable") from None
 
+        if package is not None:
+            metadata = {**metadata, "package": self._store_package(key, package)}
         self._staging.mkdir(parents=True, exist_ok=True)
         tmp = self._staging / f"{secrets.token_hex(8)}.part"
         try:
@@ -382,11 +391,55 @@ class ArtifactStore:
                 })
                 self._write_json(self._lineages / f"{lineage}.json", slot)
                 if evicted:
-                    self._release_hashes({e["sha256"] for e in evicted}, now)
+                    self._release_hashes({h for e in evicted for h in record_hashes(e)}, now)
             return record
         finally:
             with contextlib.suppress(FileNotFoundError):
                 os.unlink(tmp)
+
+    def _store_package(self, key: RenderKey, package: Mapping[str, Any]) -> dict[str, Any]:
+        """Validate and store *key*'s render package; return its reference."""
+
+        from remote_display.render_package import (
+            MAX_PACKAGE_BYTES,
+            RENDER_PACKAGE_MEDIA_TYPE,
+            PackageError,
+            package_bytes,
+            validate_package,
+        )
+
+        try:
+            document = validate_package(package, key=key)
+        except PackageError as exc:
+            raise InvalidArtifactError("invalid_package", exc.message) from None
+        data = package_bytes(document)
+        if len(data) > MAX_PACKAGE_BYTES:
+            raise InvalidArtifactError("too_large", f"render package exceeds {MAX_PACKAGE_BYTES} bytes")
+        sha256 = hashlib.sha256(data).hexdigest()
+        self._staging.mkdir(parents=True, exist_ok=True)
+        tmp = self._staging / f"{secrets.token_hex(8)}.part"
+        try:
+            with open(tmp, "wb") as handle:
+                handle.write(data)
+                handle.flush()
+                os.fsync(handle.fileno())
+            with self._locked():
+                target = self._object_path(object_name(sha256, RENDER_PACKAGE_MEDIA_TYPE))
+                target.parent.mkdir(parents=True, exist_ok=True)
+                if not target.exists():
+                    os.replace(tmp, target)
+                    _fsync_dir(target.parent)
+        finally:
+            with contextlib.suppress(FileNotFoundError):
+                os.unlink(tmp)
+        return {
+            "sha256": sha256,
+            "length": len(data),
+            "media_type": RENDER_PACKAGE_MEDIA_TYPE,
+            "kind": document["kind"],
+            "classification": document["classification"],
+            "render_package_schema_version": document["render_package_schema_version"],
+        }
 
     def record_failure(self, key: RenderKey, code: str, message: str) -> None:
         """Remember that rendering *key* failed; the previous output stays current."""
@@ -579,8 +632,8 @@ class ArtifactStore:
             for path in self._lineages.glob("*.json"):
                 slot = self._read_json(path, {})
                 for entry in [slot.get("current")] + list(slot.get("previous") or []):
-                    if entry and entry.get("sha256"):
-                        protected.add(entry["sha256"])
+                    if entry:
+                        protected.update(record_hashes(entry))
         for entry in self._read_refs()["holders"].values():
             protected.update(entry.get("current", []))
             protected.update(entry.get("previous", []))
@@ -621,6 +674,18 @@ class ArtifactStore:
                     path.unlink()
 
 
+def record_hashes(record: Mapping[str, Any] | ArtifactRecord) -> set[str]:
+    """Objects a record keeps alive: its still image and any render package."""
+
+    if isinstance(record, ArtifactRecord):
+        record = record.to_dict()
+    hashes = {str(record["sha256"])} if record.get("sha256") else set()
+    package = (record.get("metadata") or {}).get("package")
+    if isinstance(package, Mapping) and _SHA_RE.match(str(package.get("sha256") or "")):
+        hashes.add(package["sha256"])
+    return hashes
+
+
 def _inspect(data: bytes, media_type: str, key: RenderKey) -> tuple[int, int, str]:
     """Validate output against its render key and return ``(width, height, mode)``."""
 
@@ -646,12 +711,13 @@ def _inspect(data: bytes, media_type: str, key: RenderKey) -> tuple[int, int, st
         if mode != key.color_mode:
             raise InvalidArtifactError("wrong_color_mode", f"output is {mode}, expected {key.color_mode}")
         return width, height, mode
+    from remote_display.render_package import PackageError, validate_package
+
     try:
-        document = json.loads(data.decode("utf-8"))
-    except (UnicodeDecodeError, ValueError) as exc:
-        raise InvalidArtifactError("invalid_media", f"render package is not valid JSON: {exc}") from None
-    if not isinstance(document, dict) or not isinstance(document.get("render_package_schema_version"), int):
-        raise InvalidArtifactError("invalid_schema", "render package has no render_package_schema_version")
+        validate_package(data, key=key)
+    except PackageError as exc:
+        code = "invalid_media" if exc.code == "invalid_json" else "invalid_schema"
+        raise InvalidArtifactError(code, f"invalid render package: {exc.message}") from None
     return key.width, key.height, key.color_mode
 
 
@@ -674,4 +740,5 @@ __all__ = [
     "ResolvedArtifact",
     "lineage_id",
     "object_name",
+    "record_hashes",
 ]

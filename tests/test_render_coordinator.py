@@ -449,14 +449,20 @@ def test_server_rendering_renders_through_screen_renderer(monkeypatch):
     seen = {}
 
     class Stub:
-        def render(self, screen, profile, preferences, data):
+        def render(self, screen, profile, preferences, data, **kwargs):
             seen.update(screen=screen, profile=profile.profile_id, revision=data.revision)
             image = Image.new(profile.color_mode, (profile.width, profile.height))
             return type("A", (), {"image": image, "metadata": {"animation": {"frames": 2}, "secret": "x"}})
 
     monkeypatch.setattr(screen_renderer, "ScreenRenderer", Stub)
     rendering = ServerRendering(DataCoordinator())
-    key = RenderKey.for_screen("date", "hyperpixel4", ScreenRevisions("s", "d0", "r"))
+    key = RenderKey.for_screen("weather1", "hyperpixel4", ScreenRevisions("s", "d0", "r"))
     output = rendering.render(key)
-    assert seen == {"screen": "date", "profile": "hyperpixel4", "revision": 0}
-    assert output.refresh_seconds == 60 and output.metadata == {"animation": {"frames": 2}}
+    assert seen == {"screen": "weather1", "profile": "hyperpixel4", "revision": 0}
+    assert output.refresh_seconds == 300 and output.metadata == {"animation": {"frames": 2}}
+    assert output.package is None
+
+    # Clocks are drawn by the client; the server never runs the clock screen.
+    seen.clear()
+    clock = rendering.render(RenderKey.for_screen("date", "hyperpixel4", ScreenRevisions("s", "d0", "r")))
+    assert seen == {} and clock.refresh_seconds == 60 and clock.package["kind"] == "clock"

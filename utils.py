@@ -2767,6 +2767,21 @@ def _resolve_fade_steps(display: Display, steps: int | None) -> int:
     )
 
 
+def package_capture(display: Any, hook: str) -> Optional[Callable[..., Any]]:
+    """Return *display*'s render-package capture hook, if it composes packages.
+
+    Only the server's artifact capture display sets ``render_only = True``;
+    it records a scroll, slide or frame sequence as data instead of playing
+    it (see rendering/screen_renderer.py). Real displays and test doubles
+    return ``None`` and animate as before.
+    """
+
+    if getattr(display, "render_only", False) is not True:
+        return None
+    capture = getattr(display, hook, None)
+    return capture if callable(capture) else None
+
+
 @log_call
 def animate_fade_in(
     display: Display,
@@ -2855,6 +2870,16 @@ def animate_scroll(display: Display, image: Image.Image, speed=3.0, y_offset=Non
             return bool(wait_for_skip(duration))
         time.sleep(duration)
         return _should_skip()
+
+    capture = package_capture(display, "capture_slide")
+    if capture is not None:
+        capture(
+            sprite=image,
+            y=y,
+            speed_px_per_second=abs(speed) / target_frame_time,
+            background=background_color,
+        )
+        return
 
     x = float(start)
     while (x <= end if step > 0 else x >= end):
@@ -3414,6 +3439,20 @@ def scroll_vertical_content(
         stride = min(stride, max(1, int(max_step)))
 
     start_offset = max_offset if reverse else 0
+    capture = package_capture(display, "capture_scroll")
+    if capture is not None:
+        capture(
+            content_height=int(content_height),
+            viewport_width=int(viewport_width),
+            viewport_height=int(viewport_height),
+            render_at_offset=render_at_offset,
+            step_px=int(stride),
+            frame_seconds=float(params.target_frame_time),
+            pause_start_seconds=float(pause_start),
+            pause_end_seconds=float(pause_end),
+            reverse=bool(reverse),
+        )
+        return
     current_offset_state = [start_offset]
     last_drag_y: Optional[float] = None
     dragging = False

@@ -65,6 +65,9 @@ class RenderOutput:
     media_type: str = "image/png"
     refresh_seconds: float = 300
     metadata: Mapping[str, Any] = field(default_factory=dict)
+    # Optional render package (remote_display/render_package.py) published
+    # alongside the still image for screens that move.
+    package: Mapping[str, Any] | None = None
 
 
 Renderer = Callable[[RenderKey], RenderOutput]
@@ -276,7 +279,8 @@ class RenderCoordinator:
             discard = job.cancelled or job.timed_out
         if discard:
             return None
-        kwargs = {"refresh_seconds": output.refresh_seconds, "metadata": output.metadata}
+        kwargs = {"refresh_seconds": output.refresh_seconds, "metadata": output.metadata,
+                  "package": output.package}
         if output.image is not None:
             return self.store.publish_image(job.key, output.image, **kwargs)
         return self.store.publish(job.key, output.data or b"", media_type=output.media_type, **kwargs)

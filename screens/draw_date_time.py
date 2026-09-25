@@ -126,16 +126,24 @@ def _compose_frame(
     col_bottom: tuple[int,int,int],
     gh_on: bool,
     screen_id: str,
+    *,
+    now=None,
+    show_ip: bool | None = None,
+    ip_text: str | None = None,
 ) -> Image.Image:
     """
     Build a single static frame with the requested order.
     Top block and bottom block are vertically centered within their halves.
+
+    ``now``, ``show_ip`` and ``ip_text`` let a display client draw the
+    time itself from a render package (rendering/clock_faces.py); the
+    defaults read the local clock and configuration as before.
     """
     background = get_screen_background_color(screen_id, (0, 0, 0))
     img  = Image.new("RGB", (WIDTH, HEIGHT), background)
     draw = ImageDraw.Draw(img)
 
-    now = display_datetime()
+    now = display_datetime() if now is None else display_datetime(now)
     weekday, date_str = date_strings(now)
     time_str, ampm = time_strings(now)
 
@@ -191,8 +199,8 @@ def _compose_frame(
         draw_date_block(bottom_box, col_bottom)
 
     # Assigned IPv4 indicator (bottom-left)
-    if IP_WITH_TIME:
-        ip_text = _assigned_ip_overlay_text()
+    if IP_WITH_TIME if show_ip is None else show_ip:
+        ip_text = ip_text or _assigned_ip_overlay_text()
         ip_font = _ip_overlay_font()
         left, top, right, bottom = draw.textbbox((0, 0), ip_text, font=ip_font)
         ip_x = 2 - left

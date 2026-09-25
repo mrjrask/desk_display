@@ -45,6 +45,7 @@ from utils import (
     clone_font,
     log_call,
     measure_text,
+    package_capture,
     wrap_text,
 )
 
@@ -104,6 +105,8 @@ _ENTRY_SEPARATOR = "     •     "
 _MIN_ROW_HEIGHT = 20
 _FRAME_INTERVAL_SECONDS = 0.045
 _OVERLAY_MAX_SECONDS = 45.0
+# Widest looping strip one ticker lane ships in a render package.
+_PACKAGE_STRIP_MAX_WIDTH = 16384
 _OVERLAY_FRAME_INTERVAL_SECONDS = 0.03
 _OVERLAY_SCROLL_STEP = 1
 
@@ -582,6 +585,45 @@ class _TickerRenderer:
             fill=entry.text_color or row.theme["text"],
         )
 
+    def lane_strips(self) -> list[dict[str, Any]]:
+        """Each lane's whole marquee as one looping strip, for render packages.
+
+        A client scrolls the strip itself, so the server never streams
+        ticker frames. Strips are capped at whole entries within
+        ``_PACKAGE_STRIP_MAX_WIDTH``; the loop then wraps at that point.
+        """
+
+        lanes: list[dict[str, Any]] = []
+        for prepared in self.prepared:
+            row = prepared.row
+            widths: list[int] = []
+            for width in prepared.entry_widths:
+                if widths and sum(widths) + int(width) > _PACKAGE_STRIP_MAX_WIDTH:
+                    break
+                widths.append(max(1, min(int(width), _PACKAGE_STRIP_MAX_WIDTH)))
+            if not widths:
+                continue
+            strip = Image.new("RGB", (sum(widths), self.row_height), row.theme["bg"])
+            strip_draw = ImageDraw.Draw(strip)
+            x = 0
+            for index, width in enumerate(widths):
+                cached = prepared.entry_images[index]
+                if cached is not None:
+                    strip.paste(cached, (x, 0))
+                else:
+                    self._draw_entry(strip, strip_draw, row.entries[index], x, row)
+                x += width
+            lanes.append({
+                "bounds": (prepared.lane_x0, prepared.top, prepared.lane_x0 + prepared.lane_width,
+                           prepared.top + self.row_height),
+                "strip": strip,
+                "speed_px_per_second": row.speed / _FRAME_INTERVAL_SECONDS,
+                "offset_px": float(row.offset) % strip.width,
+                "background": tuple(row.theme["bg"]),
+                "truncated": len(widths) < len(prepared.entry_widths),
+            })
+        return lanes
+
     def render(self) -> tuple[Image.Image, list[tuple[int, int, int, int, NewsHeadline]]]:
         img = self.base.copy()
         hit_rects: list[tuple[int, int, int, int, NewsHeadline]] = []
@@ -960,6 +1002,13 @@ def _run_ticker(
     row_height, row_tops = _compute_row_layout(len(rows))
     rows = rows[: len(row_tops)]
     renderer = _TickerRenderer(rows, row_height, row_tops)
+    capture = package_capture(display, "capture_ticker")
+    if capture is not None:
+        capture(
+            base=renderer.base.copy(),
+            lanes=renderer.lane_strips(),
+            duration_seconds=float(NEWS_HEADLINES_DISPLAY_SECONDS),
+        )
 
     skip_requested = getattr(display, "skip_requested", None)
     has_wait_for_skip = callable(getattr(display, "wait_for_skip", None))

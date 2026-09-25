@@ -10,7 +10,7 @@ from PIL import Image, ImageDraw, ImageFont
 
 from config import HEIGHT, SCREEN_DELAY, WIDTH
 from image_compat import LANCZOS
-from utils import ScreenImage
+from utils import ScreenImage, package_capture
 
 RenderResult = Optional[Image.Image | ScreenImage | list[Image.Image]]
 RenderFunc = Callable[[], RenderResult]
@@ -118,6 +118,18 @@ def draw_quad_screen(
         and not getattr(display, "render_only", False)
         and any(len(seq) > 1 for seq in tile_sequences)
     )
+    capture = package_capture(display, "capture_composite")
+    if capture is not None:
+        capture(
+            tiles=[
+                {"label": tiles[i].label if i < len(tiles) and tiles[i] is not None else None,
+                 "bounds": tile_regions[i],
+                 "frames": list(tile_sequences[i])}
+                for i in range(len(tile_sequences))
+            ],
+            frame_seconds=target_frame_time,
+            duration_seconds=float(SCREEN_DELAY),
+        )
     displayed_frame = _render_composite(0)
     display.image(displayed_frame)
     if transition:
