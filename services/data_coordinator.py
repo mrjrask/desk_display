@@ -187,6 +187,48 @@ class DataCoordinator:
         self.publish("mlb_league_standings", value)
         return value
 
+    def read_nfl_league_standings(
+        self, *, ttl_seconds: int = 300, force: bool = False
+    ) -> dict[str, dict[str, list[dict[str, Any]]]]:
+        """Acquire NFL conference standings before snapshot-based rendering."""
+
+        from screens.nfl_standings import _fetch_standings_data
+
+        def fetch() -> dict[str, dict[str, list[dict[str, Any]]]]:
+            standings, _season_label, _season_type = _fetch_standings_data()
+            return standings
+
+        value = self.provider.read(
+            "nfl_standings", fetch,
+            ttl_seconds=ttl_seconds, force=force,
+        )
+        self.publish("nfl_standings", value)
+        return value
+
+    def read_nhl_league_standings(
+        self, *, ttl_seconds: int = 300, force: bool = False,
+        include_wildcard_order: bool = False,
+    ) -> dict[str, dict[str, list[dict[str, Any]]]]:
+        """Acquire NHL standings, plus wildcard order when a v2 screen needs it."""
+
+        from screens.nhl_standings import (
+            _fetch_standings_data,
+            _fetch_wildcard_order_api_web,
+        )
+
+        value = self.provider.read(
+            "nhl_standings", _fetch_standings_data,
+            ttl_seconds=ttl_seconds, force=force,
+        )
+        self.publish("nhl_standings", value)
+        if include_wildcard_order:
+            wildcard_order = self.provider.read(
+                "nhl_wildcard_order", _fetch_wildcard_order_api_web,
+                ttl_seconds=ttl_seconds, force=force,
+            )
+            self.publish("nhl_wildcard_order", wildcard_order)
+        return value
+
     @staticmethod
     def weather_cache_timestamp() -> datetime | None:
         return data_fetch.get_weather_cache_timestamp()
