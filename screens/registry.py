@@ -15,7 +15,8 @@ from typing import Any, Optional
 from PIL import Image
 
 import config
-from config import CENTRAL_TIME, HEIGHT, NBA_TEAM_TRICODE, WIDTH, is_display_profile
+from config import CENTRAL_TIME, NBA_TEAM_TRICODE
+from display_profiles import RenderProfile
 from paths import resolve_layouts_config_path, resolve_screens_config_paths
 from screens.draw_quad import _TileSpec
 from screens.draw_weather import _pop_pct_from, _selected_alert
@@ -396,9 +397,6 @@ def _logo_scroll_speed_for_layout(width: int, height: int) -> float:
     return base_speed * (2.0 if _is_1080p_or_higher(width, height) else 1.0)
 
 
-_LOGO_SCROLL_SPEED = _logo_scroll_speed_for_layout(WIDTH, HEIGHT)
-
-
 @dataclass
 class ScreenDefinition:
     """Represents one renderable screen."""
@@ -422,10 +420,40 @@ class ScreenContext:
     offline: bool
     weather_fetched_at: Optional[_dt.datetime]
     skip_scoreboards: bool
+    render_profile: RenderProfile
+
+    def __post_init__(self) -> None:
+        """Give renderers a profile-sized, profile-colored display surface."""
+        if not isinstance(self.display, _ProfileDisplay):
+            self.display = _ProfileDisplay(self.display, self.render_profile)
 
 
-def _show_logo(display, image: Image.Image) -> Image.Image:
-    animate_scroll(display, image, speed=_LOGO_SCROLL_SPEED)
+class _ProfileDisplay:
+    """Context-local output adapter; it never changes process configuration."""
+
+    def __init__(self, display: Any, profile: RenderProfile):
+        self._display = display
+        self.profile = profile
+        self.width = profile.width
+        self.height = profile.height
+
+    def image(self, image: Image.Image) -> Any:
+        if image.size != (self.width, self.height):
+            image = image.resize((self.width, self.height), Image.Resampling.LANCZOS)
+        if image.mode != self.profile.color_mode:
+            image = image.convert(self.profile.color_mode)
+        return self._display.image(image)
+
+    def __getattr__(self, name: str) -> Any:
+        return getattr(self._display, name)
+
+
+def _show_logo(display, image: Image.Image, profile: RenderProfile) -> Image.Image:
+    animate_scroll(
+        display,
+        image,
+        speed=_logo_scroll_speed_for_layout(profile.width, profile.height),
+    )
     return image
 
 
@@ -593,9 +621,11 @@ def build_screen_registry(context: ScreenContext) -> tuple[dict[str, ScreenDefin
 
     registry: dict[str, ScreenDefinition] = {}
     metadata: dict[str, Any] = {}
-    adafruit_minipitft_layout = _is_adafruit_minipitft_layout(WIDTH, HEIGHT)
-    waveshare_oled_lcd_hat = _is_waveshare_oled_lcd_hat()
-    hyperpixel4_layout = is_display_profile("hyperpixel4", WIDTH, HEIGHT)
+    profile = context.render_profile
+    width, height = profile.width, profile.height
+    adafruit_minipitft_layout = profile.profile_id == "adafruit_minipitft_114"
+    waveshare_oled_lcd_hat = profile.profile_id.startswith("waveshare_")
+    hyperpixel4_layout = profile.profile_id == "hyperpixel4"
 
     def _mlb_series_title(team_name: str, short_title: str) -> str:
         if hyperpixel4_layout:
@@ -646,8 +676,8 @@ def build_screen_registry(context: ScreenContext) -> tuple[dict[str, ScreenDefin
 
     class _QuadCaptureDisplay:
         def __init__(self, *, frame_limit: Optional[int] = None):
-            self.width = WIDTH
-            self.height = HEIGHT
+            self.width = width
+            self.height = height
             self._last: Optional[Image.Image] = None
             self._frame_id = 0
             self._frame_limit = frame_limit
@@ -731,7 +761,7 @@ def build_screen_registry(context: ScreenContext) -> tuple[dict[str, ScreenDefin
         return capture.last_image
 
     def _render_black_quad_tile() -> Image.Image:
-        return Image.new("RGB", (WIDTH, HEIGHT), "black")
+        return Image.new(profile.color_mode, (width, height), "black")
 
     weather_logo = context.logos.get("weather logo")
     # Keep weather screens visible whenever cached forecast data exists.
@@ -751,7 +781,7 @@ def build_screen_registry(context: ScreenContext) -> tuple[dict[str, ScreenDefin
     if weather_logo is not None:
         register(
             "weather logo",
-            lambda img=weather_logo: _show_logo(context.display, img),
+            lambda img=weather_logo: _show_logo(context.display, img, profile),
             available=True,
         )
     register(
@@ -840,7 +870,7 @@ def build_screen_registry(context: ScreenContext) -> tuple[dict[str, ScreenDefin
     if verano_logo is not None:
         register(
             "verano logo",
-            lambda img=verano_logo: _show_logo(context.display, img),
+            lambda img=verano_logo: _show_logo(context.display, img, profile),
             available=True,
         )
     register("vrnof", lambda: draw_vrnof_screen(context.display, transition=True))
@@ -1057,7 +1087,7 @@ def build_screen_registry(context: ScreenContext) -> tuple[dict[str, ScreenDefin
         image = context.logos.get(screen_id)
         if image is None:
             return
-        register(screen_id, lambda img=image: _show_logo(context.display, img), available=True)
+        register(screen_id, lambda img=image: _show_logo(context.display, img, profile), available=True)
 
     for base_logo in (
         "bears logo",

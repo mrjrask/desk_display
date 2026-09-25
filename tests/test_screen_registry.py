@@ -6,6 +6,7 @@ from PIL import Image
 
 import screens.registry as registry_module
 from config import CENTRAL_TIME, MLB_CUBS_TEAM_ID, MLB_SOX_TEAM_ID
+from display_profiles import resolve_display_profile
 from screens.registry import (
     ScreenContext,
     _is_1080p_or_higher,
@@ -55,6 +56,7 @@ def _make_context(
         offline=offline,
         weather_fetched_at=weather_fetched_at,
         skip_scoreboards=False,
+        render_profile=resolve_display_profile(320, 240),
     )
 
 

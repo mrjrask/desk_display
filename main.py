@@ -3189,6 +3189,7 @@ def main_loop():
                 offline=offline,
                 weather_fetched_at=weather_fetched_at,
                 skip_scoreboards=offline and _wifi_outage_live_games,
+                render_profile=config.get_display_profile(),
             )
             registry, _metadata = _build_registry_if_needed(context)
 
