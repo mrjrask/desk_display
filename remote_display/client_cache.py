@@ -302,11 +302,13 @@ class ClientCache:
             raise PlaylistRejected("artifacts_unavailable", "artifacts not yet usable: " + ", ".join(missing))
         with self._lock:
             current = self._load_file(self._current)
-            if current is not None and current.playlist_revision == playlist.playlist_revision \
-                    and current.playlist_id == playlist.playlist_id \
-                    and current.manifest_revision == playlist.manifest_revision:
+            same = current is not None and (current.playlist_id, current.playlist_revision) == (
+                playlist.playlist_id, playlist.playlist_revision)
+            if same and current.manifest_revision == playlist.manifest_revision:
                 return current
-            if current is not None:
+            if current is not None and not same:
+                # Only a different playlist becomes the rollback copy; a new
+                # manifest for the same playlist just updates it in place.
                 self._write(self._previous, current.to_dict())
             self._write(self._current, playlist.to_dict())
         LOGGER.info("Activated playlist %s revision %s", playlist.playlist_id, playlist.playlist_revision)
