@@ -124,9 +124,19 @@ def canonical_json(value: Any) -> str:
 
 
 def document_revision(document: Mapping[str, Any]) -> str:
-    """Content revision: identical documents always share a revision."""
+    """Content revision: identical documents always share a revision.
 
-    return "r-" + hashlib.sha256(canonical_json(document).encode("utf-8")).hexdigest()[:20]
+    Screen and playlist order is part of the content (the scheduler plays
+    screens in the order the ``screens`` mapping lists them), so reordering
+    changes the revision while key order inside each entry does not.
+    """
+
+    order = {
+        name: list(document.get(name) or {}) if isinstance(document.get(name), Mapping) else None
+        for name in ("screens", "playlists")
+    }
+    basis = {"order": order, "document": document}
+    return "r-" + hashlib.sha256(canonical_json(basis).encode("utf-8")).hexdigest()[:20]
 
 
 def _name(value: Any) -> str:
@@ -282,6 +292,10 @@ class PlaylistStore:
             raise PlaylistStoreError(f"unsupported playlist store schema in {self.path}")
         for key, default in self._empty().items():
             data.setdefault(key, default)
+        for playlist in data["playlists"].values():
+            # Revisions from before play order counted are recomputed.
+            if isinstance(playlist, dict) and isinstance(playlist.get("document"), dict):
+                playlist["revision"] = document_revision(playlist["document"])
         self._cache = (stat.st_mtime, stat.st_size, data)
         return copy.deepcopy(data)
 
@@ -309,7 +323,8 @@ class PlaylistStore:
         fd, tmp_name = tempfile.mkstemp(prefix=f".{self.path.name}.", suffix=".tmp", dir=self.path.parent)
         try:
             with os.fdopen(fd, "w", encoding="utf-8") as handle:
-                json.dump(data, handle, indent=2, sort_keys=True)
+                # Keep key order: screen order in a document is its play order.
+                json.dump(data, handle, indent=2)
                 handle.write("\n")
                 handle.flush()
                 os.fsync(handle.fileno())

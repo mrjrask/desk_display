@@ -48,7 +48,6 @@ from protocol_versions import PLAYLIST_SCHEMA_VERSION
 from remote_display.models import AcceptedRevisions, ModelValidationError, identifier, revision
 from remote_display.playlist_store import (
     PlaylistValidationError,
-    _is_enabled,
     document_revision,
     document_screens,
     validate_document,
@@ -124,6 +123,8 @@ class PlaybackState:
     hold: Mapping[str, Any] | None = None
     focus_return: str | None = None
     history: list[str] = field(default_factory=list)
+    # ScreenScheduler.export_state(): cycle, queue and alternate positions.
+    scheduler: Mapping[str, Any] | None = None
 
     def remember(self, screen: str) -> None:
         self.history.append(screen)
@@ -131,30 +132,14 @@ class PlaybackState:
 
 
 def playback_order(document: Mapping[str, Any]) -> tuple[str, ...]:
-    """Screens in the order a playlist plays them, without duplicates.
+    """Enabled screens in the order the scheduler first plays them."""
 
-    ``sequence`` entries come first in their order; the remaining enabled
-    screens follow by ID, since the server stores documents with sorted keys
-    and object order carries no meaning on the wire.
-    """
+    from schedule import build_scheduler
 
-    order: list[str] = []
-    playlists = document.get("playlists") or {}
-    for entry in document.get("sequence") or ():
-        if not isinstance(entry, Mapping):
-            continue
-        if entry.get("playlist") in playlists:
-            for step in playlists[entry["playlist"]].get("steps") or ():
-                if isinstance(step, Mapping) and step.get("screen"):
-                    order.append(step["screen"])
-        elif entry.get("screen"):
-            order.append(entry["screen"])
-    for screen, spec in sorted((document.get("screens") or {}).items()):
-        if _is_enabled(_thaw(spec)):
-            order.append(screen)
-    seen: set[str] = set()
-    return tuple(s for s in order if not (s in seen or seen.add(s)))
-
+    try:
+        return build_scheduler(_thaw(document)).enabled_ids
+    except ValueError:
+        return ()
 
 def validate_playlist(payload: Mapping[str, Any]) -> CachedPlaylist:
     """Validate a server playlist payload; raise :class:`PlaylistRejected`."""
@@ -224,7 +209,7 @@ class ClientCache:
         tmp = staging / f"{path.name}.{secrets.token_hex(6)}.tmp"
         try:
             with open(tmp, "w", encoding="utf-8") as handle:
-                json.dump(data, handle, sort_keys=True)
+                json.dump(data, handle)  # key order is play order
                 handle.flush()
                 os.fsync(handle.fileno())
             os.replace(tmp, path)
@@ -372,6 +357,8 @@ class ClientCache:
                 setattr(state, name, data[name])
         if isinstance(data.get("hold"), dict):
             state.hold = data["hold"]
+        if isinstance(data.get("scheduler"), dict):
+            state.scheduler = data["scheduler"]
         if isinstance(data.get("history"), list):
             state.history = [s for s in data["history"] if isinstance(s, str)][-MAX_HISTORY:]
         return state
@@ -379,6 +366,7 @@ class ClientCache:
     def save_playback(self, state: PlaybackState) -> None:
         data = asdict(state)
         data["hold"] = None if state.hold is None else dict(state.hold)
+        data["scheduler"] = None if state.scheduler is None else dict(state.scheduler)
         data["cache_schema_version"] = CACHE_SCHEMA_VERSION
         self._write(self._playback, data)
 
@@ -402,6 +390,8 @@ def reconcile_playback(state: PlaybackState, playlist: CachedPlaylist) -> Playba
         step_index=state.step_index if same_playlist else 0,
         history=[s for s in state.history if s in valid][-MAX_HISTORY:],
         focus_return=state.focus_return if state.focus_return in valid else None,
+        # A scheduler position only means something for the same playlist revision.
+        scheduler=state.scheduler if same_playlist else None,
     )
     if state.current_screen in valid:
         result.current_screen = state.current_screen

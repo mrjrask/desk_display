@@ -48,7 +48,7 @@ def cache(tmp_path):
 
 def test_valid_playlist_is_read_only(cache):
     playlist = cache.offer(payload(DOC_A), artifact_usable=everything)
-    assert playlist.screens == ("cubs last", "date", "weather1")
+    assert playlist.screens == ("date", "weather1", "cubs last")
     with pytest.raises(TypeError):
         playlist.document["screens"]["date"] = 5
 
@@ -240,14 +240,27 @@ def test_reconcile_on_the_same_revision_keeps_position(cache):
     assert reconcile_playback(state, playlist) == state
 
 
-def test_playback_order_follows_sequence_then_screens():
+def test_playback_order_follows_the_scheduler():
     document = {
-        "screens": {"date": 1, "weather1": 0},
-        "playlists": {"morning": {"steps": [{"screen": "news headlines"}, {"screen": "date"}]}},
+        "screens": {"date": 1, "weather1": 0, "news headlines": 1, "cubs last": 1},
+        "playlists": {"morning": {"steps": [{"screen": "cubs last"}]}},
         "sequence": [{"playlist": "morning"}],
     }
-    assert playback_order(document) == ("news headlines", "date")
+    # Ungrouped screens first in saved order, then each playlist's screens.
+    assert playback_order(document) == ("date", "news headlines", "cubs last")
 
+
+def test_screen_order_survives_the_cache(cache, tmp_path):
+    document = {"screens": {"weather1": 1, "date": 1, "cubs last": 1}, "sequence": []}
+    cache.offer(payload(document), artifact_usable=everything)
+    assert ClientCache(tmp_path / "cache").load().screens == ("weather1", "date", "cubs last")
+
+
+def test_reordering_screens_changes_the_revision():
+    reordered = {"screens": {"weather1": 1, "date": 1, "cubs last": 1}, "sequence": []}
+    assert document_revision(reordered) != document_revision(DOC_A)
+    same = {"sequence": [], "screens": {"date": 1, "weather1": 1, "cubs last": 1}}
+    assert document_revision(same) == document_revision(DOC_A)
 
 # ── Server config response ──────────────────────────────────────────────────
 
@@ -283,7 +296,7 @@ def test_server_config_carries_the_assigned_playlist(tmp_path):
 
     cache = ClientCache(tmp_path / "client")
     playlist = cache.offer(body["playlist"], artifact_usable=everything)
-    assert playlist.screens == ("cubs last", "date", "weather1")
+    assert playlist.screens == ("date", "weather1", "cubs last")
 
     store.assign("office", None, expected_playlist_id=created["id"], actor="test")
     body = api.get("/api/v1/clients/office/config", headers={"Authorization": f"Bearer {credential}"}).get_json()

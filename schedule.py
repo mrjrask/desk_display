@@ -110,6 +110,18 @@ class ScreenScheduler:
         return len(self._entries)
 
     @property
+    def entry_ids(self) -> tuple[str, ...]:
+        """Base screen IDs in play order, including zero-frequency entries."""
+
+        return tuple(entry.screen_id for entry in self._entries)
+
+    @property
+    def enabled_ids(self) -> tuple[str, ...]:
+        """Base screen IDs with a positive frequency, in play order."""
+
+        return tuple(entry.screen_id for entry in self._entries if entry.frequency > 0)
+
+    @property
     def requested_ids(self) -> set[str]:
         return set(self._requested)
 
@@ -307,6 +319,75 @@ class ScreenScheduler:
         if definition and definition.available:
             return definition
         return None
+
+    # ── Position persistence (display clients) ─────────────────────────────
+
+    def _signature(self) -> list[Any]:
+        return [
+            [e.screen_id, e.frequency, list(e.alternate.screen_ids) if e.alternate else None]
+            for e in self._entries
+        ]
+
+    def export_state(self) -> dict[str, Any]:
+        """Return the playback position as JSON-safe data."""
+
+        return {
+            "signature": self._signature(),
+            "cycle": self._cycle_number,
+            "cursor": self._cursor,
+            "pending": None if self._pending_indices is None else list(self._pending_indices),
+            "counts": [e.presentation_count for e in self._entries],
+            "alternate_cursors": [e.alternate.cursor if e.alternate else 0 for e in self._entries],
+        }
+
+    def restore_state(self, state: Any) -> bool:
+        """Resume from :meth:`export_state` output for the same schedule.
+
+        Returns ``False`` and leaves the scheduler at cycle 1 when the state
+        belongs to a different schedule or is malformed.
+        """
+
+        try:
+            if not isinstance(state, dict) or state.get("signature") != self._signature():
+                return False
+            count = len(self._entries)
+            cycle, cursor = int(state["cycle"]), int(state["cursor"])
+            pending = state.get("pending")
+            counts = [int(v) for v in state["counts"]]
+            cursors = [int(v) for v in state["alternate_cursors"]]
+            if cycle < 1 or not 0 <= cursor <= max(0, count - 1) or len(counts) != count or len(cursors) != count:
+                return False
+            if pending is not None:
+                pending = [int(i) for i in pending]
+                if any(not 0 <= i < count for i in pending):
+                    return False
+        except (KeyError, TypeError, ValueError):
+            return False
+        self._cycle_number, self._cursor, self._pending_indices = cycle, cursor, pending
+        for entry, presentations, alt_cursor in zip(self._entries, counts, cursors, strict=True):
+            entry.presentation_count = max(0, presentations)
+            if entry.alternate:
+                entry.alternate.cursor = max(0, alt_cursor)
+        return True
+
+    def seek_after(self, screen_id: str) -> bool:
+        """Continue after *screen_id*'s slot in the first cycle, if it has one.
+
+        Used when a new playlist still contains the screen being shown, so a
+        configuration update does not restart playback from the top.
+        """
+
+        if not self._entries:
+            return False
+        if self._pending_indices is None:
+            self._queue_current_cycle(datetime.now(UTC))
+        pending = self._pending_indices or []
+        for position, index in enumerate(pending):
+            if self._entries[index].screen_id == screen_id:
+                del pending[: position + 1]
+                self._cursor = (index + 1) % len(self._entries)
+                return True
+        return False
 
     def next_available(self, registry: dict[str, ScreenDefinition]) -> Optional[ScreenDefinition]:
         """Return the next available definition from one ordered queued cycle.

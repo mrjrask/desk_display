@@ -205,6 +205,8 @@ def create_app(
         clock=clock,
     )
     app = Flask(__name__)
+    # Playlist documents are ordered: screen order is play order.
+    app.json.sort_keys = False
     app.config["MAX_CONTENT_LENGTH"] = MAX_REQUEST_BYTES
     app.extensions["desk_display_registry"] = registry
     app.extensions["desk_display_config"] = config
