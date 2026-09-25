@@ -19,8 +19,9 @@ Endpoints
     ``POST /api/v1/register``                      register or renew a lease
     ``POST /api/v1/clients/<id>/heartbeat``        report status, renew lease
     ``GET  /api/v1/clients/<id>/config``           client configuration
-    ``GET  /api/v1/clients/<id>/manifest``         current manifest
-    ``GET  /api/v1/clients/<id>/assets/<path>``    rendered artifact
+    ``GET  /api/v1/clients/<id>/manifest``         current manifest (ETag)
+    ``GET  /api/v1/clients/<id>/artifacts/<sha256>.<ext>``
+                                                   immutable artifact (ETag, Range)
     ``GET  /api/v1/health``                        liveness
     ``GET  /api/v1/admin/status``                  clients, leases and demand
     ``PUT|DELETE /api/v1/admin/prerender/<name>``  explicit pre-render demand
@@ -28,12 +29,10 @@ Endpoints
 """
 from __future__ import annotations
 
-import hashlib
 import hmac
-import json
 import logging
 import os
-import re
+import threading
 import time
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
@@ -50,10 +49,11 @@ from protocol import (
     CLIENT_SUPPORTED_RENDER_PACKAGE_SCHEMA_VERSIONS,
     SERVER_ACCEPTED_CLIENT_PROTOCOL_VERSIONS,
     IncompatibleClientError,
-    build_manifest,
     registration_response,
 )
 from protocol_versions import CLIENT_CONFIG_SCHEMA_VERSION
+from remote_display.artifact_store import ArtifactStore
+from remote_display.manifest import build_client_manifest, referenced_hashes
 from remote_display.models import (
     ClientCapabilities,
     ClientDemand,
@@ -73,8 +73,8 @@ from remote_display.registry import (
 )
 
 MAX_REQUEST_BYTES = 64 * 1024
-_ASSET_SEGMENT_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
-_MAX_ASSET_DEPTH = 4
+IMMUTABLE_MAX_AGE_SECONDS = 365 * 24 * 3600
+MAINTENANCE_INTERVAL_SECONDS = 600
 _PROJECT_ROOT = Path(__file__).resolve().parent
 
 WEB_LOGGER = logging.getLogger("desk_display.display_server")
@@ -89,6 +89,8 @@ class DisplayServerConfig:
     sync_interval_seconds: int = 30
     static_clients: Mapping[str, str] = field(default_factory=dict)
     artifact_dir: Path = _PROJECT_ROOT / "cache" / "artifacts"
+    artifact_retention_seconds: float = 24 * 3600
+    artifact_max_bytes: int | None = None
     public_url: str | None = None
     playlist_store_path: Path | None = None
     registry_snapshot_path: Path | None = None
@@ -103,6 +105,8 @@ class DisplayServerConfig:
             lease_seconds=settings["DESK_DISPLAY_CLIENT_LEASE_SECONDS"],
             static_clients=settings["DESK_DISPLAY_STATIC_CLIENTS"] or {},
             artifact_dir=Path(settings["DESK_DISPLAY_ARTIFACT_DIR"] or _PROJECT_ROOT / "cache" / "artifacts").expanduser(),
+            artifact_retention_seconds=float(settings["DESK_DISPLAY_ARTIFACT_RETENTION_HOURS"]) * 3600,
+            artifact_max_bytes=int(settings["DESK_DISPLAY_ARTIFACT_MAX_MB"]) * 1024 * 1024,
             public_url=settings["DESK_DISPLAY_SERVER_PUBLIC_URL"],
             playlist_store_path=store_path(env),
             registry_snapshot_path=registry_snapshot_path(env),
@@ -157,7 +161,7 @@ def create_app(
             stored = store.assignment_for(client_id)
             if stored is None:
                 return None
-            return Assignment(stored.playlist_id, stored.playlist_revision, stored.screens)
+            return Assignment(stored.playlist_id, stored.playlist_revision, stored.screens, stored.alternates)
 
     registry = ClientRegistry(
         lease_seconds=config.lease_seconds,
@@ -166,10 +170,28 @@ def create_app(
         assignments=assignments or (lambda _client_id: None),
         clock=clock,
     )
+    artifacts = ArtifactStore(
+        config.artifact_dir,
+        grace_seconds=config.artifact_retention_seconds,
+        max_bytes=config.artifact_max_bytes,
+        clock=clock,
+    )
     app = Flask(__name__)
     app.config["MAX_CONTENT_LENGTH"] = MAX_REQUEST_BYTES
     app.extensions["desk_display_registry"] = registry
     app.extensions["desk_display_config"] = config
+    app.extensions["desk_display_artifacts"] = artifacts
+
+    def maintenance() -> list[str]:
+        """Release references of clients that went away, then collect garbage."""
+
+        registry.expire()
+        now = clock()
+        keep = {r.client_id for r in registry.records() if r.lease_state(now) in {"active", "static"}}
+        artifacts.prune_holders(keep)
+        return artifacts.collect_garbage()
+
+    app.extensions["desk_display_maintenance"] = maintenance
 
     # ── Plumbing ───────────────────────────────────────────────────────────
 
@@ -196,7 +218,7 @@ def create_app(
             response.status_code < 400
             and request.path.startswith("/api/v1/")
             and request.path != "/api/v1/health"
-            and "/assets/" not in request.path
+            and "/artifacts/" not in request.path
             and request.path != "/api/v1/admin/status"
         ):
             _publish_snapshot()
@@ -256,15 +278,36 @@ def create_app(
     def _assignment(client_id: str) -> Assignment | None:
         return registry.assignments(client_id)
 
-    def _manifest_revision(record: ClientRecord) -> str:
+    def _manifest(record: ClientRecord) -> dict[str, Any]:
+        """Build *record*'s manifest and note which artifacts it references."""
+
+        demand = record.demand
         assignment = _assignment(record.client_id)
-        basis = {
-            "profile": record.capabilities.display_profile,
-            "assignment": None if assignment is None else [assignment.playlist_id, assignment.playlist_revision],
-            "screens": [] if record.demand is None else list(record.demand.all_screens),
-        }
-        digest = hashlib.sha256(json.dumps(basis, sort_keys=True).encode("utf-8")).hexdigest()
-        return f"m-{digest[:20]}"
+        if demand is not None:
+            requested = set(demand.required_screens) | set(demand.alternate_screens)
+            interactive = set(demand.touch_targets)
+        elif assignment is not None:
+            requested, interactive = set(assignment.screens) | set(assignment.alternates), set()
+        else:
+            requested, interactive = set(), set()
+        client_id = record.client_id
+        manifest = build_client_manifest(
+            artifacts,
+            client_id=client_id,
+            display_profile=record.capabilities.display_profile,
+            requested_screens=requested,
+            interactive_screens=interactive,
+            assignment=_assignment_payload(client_id, delivered=True),
+            configuration={
+                "lease_seconds": registry.lease_seconds,
+                "heartbeat_interval_seconds": registry.heartbeat_interval_seconds,
+                "sync_interval_seconds": registry.sync_interval_seconds,
+            },
+            artifact_url=lambda name: f"/api/v1/clients/{client_id}/artifacts/{name}",
+            now=clock(),
+        )
+        artifacts.reference(client_id, referenced_hashes(manifest))
+        return manifest
 
     def _lease(record: ClientRecord) -> dict[str, Any]:
         return {
@@ -338,7 +381,7 @@ def create_app(
             "static_client": record.static,
             "renewed": registration.renewed,
             **_assignment_payload(record.client_id, delivered=True),
-            "manifest_revision": _manifest_revision(record),
+            "manifest_revision": _manifest(record)["manifest_revision"],
             **_lease(record),
             "client_credential": registration.credential,
         }
@@ -359,7 +402,7 @@ def create_app(
         return jsonify({
             "client_id": record.client_id,
             **_assignment_payload(record.client_id, delivered=True),
-            "manifest_revision": _manifest_revision(record),
+            "manifest_revision": _manifest(record)["manifest_revision"],
             **_lease(record),
         })
 
@@ -377,31 +420,35 @@ def create_app(
     @app.get("/api/v1/clients/<client_id>/manifest")
     def client_manifest(client_id: str):
         record = _client()
-        manifest = build_manifest(
-            client_id=record.client_id,
-            manifest_revision=_manifest_revision(record),
-            display_profile=record.capabilities.display_profile,
-            logical_width=record.capabilities.logical_width,
-            logical_height=record.capabilities.logical_height,
-            **_assignment_payload(record.client_id, delivered=True),
-            requested_screens=[] if record.demand is None else list(record.demand.all_screens),
-            artifacts=[],
-            cache_complete=False,
-        )
-        return jsonify(manifest)
-
-    @app.get("/api/v1/clients/<client_id>/assets/<path:asset>")
-    def client_asset(client_id: str, asset: str):
-        _client()
-        segments = asset.split("/")
-        if len(segments) > _MAX_ASSET_DEPTH or not all(_ASSET_SEGMENT_RE.match(s) and ".." not in s for s in segments):
-            return _error(404, "not_found", "no such asset")
-        root = config.artifact_dir.resolve()
-        path = root.joinpath(*segments).resolve()
-        if root not in path.parents or not path.is_file():
-            return _error(404, "not_found", "no such asset")
-        response = send_file(path, conditional=True, etag=True, max_age=0)
+        manifest = _manifest(record)
+        etag = manifest["manifest_revision"]
+        if request.if_none_match.contains(etag):
+            response = app.response_class(status=304)
+        else:
+            response = jsonify(manifest)
+        response.set_etag(etag)
         response.headers["Cache-Control"] = "private, no-cache"
+        return response
+
+    @app.get("/api/v1/clients/<client_id>/artifacts/<name>")
+    def client_artifact(client_id: str, name: str):
+        """Serve an immutable artifact this client's manifests referenced."""
+
+        record = _client()
+        found = artifacts.open_object(name)
+        sha = name.split(".", 1)[0]
+        if found is None or sha not in artifacts.referenced_by(record.client_id):
+            return _error(404, "not_found", "no such artifact")
+        path, media_type = found
+        if request.if_none_match.contains(sha):
+            response = app.response_class(status=304)
+            response.set_etag(sha)
+        else:
+            # conditional=True answers Range and If-Range, so an interrupted
+            # download can resume from where it stopped.
+            response = send_file(path, mimetype=media_type, conditional=True, etag=sha,
+                                 max_age=IMMUTABLE_MAX_AGE_SECONDS, last_modified=None)
+        response.headers["Cache-Control"] = f"private, max-age={IMMUTABLE_MAX_AGE_SECONDS}, immutable"
         return response
 
     # ── Admin ──────────────────────────────────────────────────────────────
@@ -439,6 +486,7 @@ def create_app(
             "lease_seconds": registry.lease_seconds,
             "clients": clients,
             "demand": demand,
+            "artifacts": artifacts.stats(),
         }))
 
     @app.put("/api/v1/admin/prerender/<name>")
@@ -491,6 +539,7 @@ def run_display_server() -> None:
     deployment_config.startup_check("display server")
     settings = deployment_config.load_settings(Role.SERVER)
     app = create_app(DisplayServerConfig.from_env())
+    _start_maintenance(app.extensions["desk_display_maintenance"])
     host, port = settings["DESK_DISPLAY_SERVER_HOST"], settings["DESK_DISPLAY_SERVER_PORT"]
     cert, key = settings["DESK_DISPLAY_SERVER_TLS_CERT"], settings["DESK_DISPLAY_SERVER_TLS_KEY"]
     WEB_LOGGER.info("Display server listening on %s:%s", host, port)
@@ -502,6 +551,22 @@ def run_display_server() -> None:
     from waitress import serve
 
     serve(app, host=host, port=port, threads=8)
+
+
+def _start_maintenance(maintenance: Callable[[], list[str]]) -> threading.Thread:
+    """Collect unreferenced artifacts periodically in the background."""
+
+    def loop() -> None:
+        while True:
+            try:
+                maintenance()
+            except Exception:  # pragma: no cover - logged and retried
+                WEB_LOGGER.exception("Artifact maintenance failed")
+            time.sleep(MAINTENANCE_INTERVAL_SECONDS)
+
+    thread = threading.Thread(target=loop, name="artifact-maintenance", daemon=True)
+    thread.start()
+    return thread
 
 
 def _load_dotenv() -> None:

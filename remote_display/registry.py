@@ -107,6 +107,7 @@ class Assignment:
     playlist_id: str
     playlist_revision: str
     screens: tuple[str, ...] = ()
+    alternates: tuple[str, ...] = ()
 
 
 AssignmentLookup = Callable[[str], "Assignment | None"]
@@ -397,7 +398,10 @@ class ClientRegistry:
                 if assignment is None or not assignment.screens:
                     continue
                 demand = _demand_for(
-                    record.capabilities, assignment.screens, revision=assignment.playlist_revision
+                    record.capabilities,
+                    assignment.screens,
+                    revision=assignment.playlist_revision,
+                    alternates=assignment.alternates,
                 )
             source = "dynamic" if state == "active" else "static"
             entries.append(DemandEntry(source, record.client_id, record.capabilities, demand))
@@ -464,12 +468,19 @@ def synthetic_capabilities(client_id: str, profile: str) -> ClientCapabilities:
     )
 
 
-def _demand_for(capabilities: ClientCapabilities, screens: Iterable[str], *, revision: str) -> ClientDemand:
+def _demand_for(
+    capabilities: ClientCapabilities,
+    screens: Iterable[str],
+    *,
+    revision: str,
+    alternates: Iterable[str] = (),
+) -> ClientDemand:
     screens = [screen_id(s, "screens") for s in screens]
     return ClientDemand(
         client_id=capabilities.client_id,
         playlist_revision=revision,
         required_screens=tuple(screens),
+        alternate_screens=tuple(screen_id(s, "alternates") for s in alternates),
         package_capabilities=PackageCapabilities(
             render_package_versions=capabilities.render_package_versions,
             image_formats=tuple(

@@ -7,7 +7,7 @@ pytest.importorskip("flask")
 
 import display_server  # noqa: E402
 from display_profiles import PROFILE_PRESETS  # noqa: E402
-from remote_display.models import ScreenRevisions  # noqa: E402
+from remote_display.models import RenderKey, ScreenRevisions  # noqa: E402
 from remote_display.registry import Assignment, ClientRegistry  # noqa: E402
 
 SERVER_TOKEN = "server-token-" + "s" * 32
@@ -246,7 +246,7 @@ def test_duplicate_id_can_register_after_expiry(api, clock):
 # ── Cross-client access and traversal ───────────────────────────────────────
 
 
-@pytest.mark.parametrize("endpoint", ["config", "manifest", "assets/x.png"])
+@pytest.mark.parametrize("endpoint", ["config", "manifest", "artifacts/" + "a" * 64 + ".png"])
 def test_client_cannot_read_another_client(api, endpoint):
     office = registered(api, "office")
     registered(api, "kitchen")
@@ -275,22 +275,117 @@ def test_client_endpoints_do_not_expose_credentials(api):
     assert credential not in text and "credential" not in text
 
 
-def test_asset_serving_and_traversal(api, server):
-    root = server.extensions["desk_display_config"].artifact_dir
-    (root / "ab").mkdir(parents=True)
-    (root / "ab" / "abc123.png").write_bytes(b"\x89PNG artifact")
-    (root.parent / "secret.txt").write_text("private", encoding="utf-8")
+def publish(server, screen="date", profile="hyperpixel4", *, color=0, **kwargs):
+    from PIL import Image
+
+    preset = PROFILE_PRESETS[profile]
+    key = RenderKey.for_screen(screen, profile, ScreenRevisions("s1", f"d{color}", "r1"))
+    image = Image.new(preset.color_mode, (preset.width, preset.height), color)
+    return server.extensions["desk_display_artifacts"].publish_image(key, image, **kwargs)
+
+
+def test_manifest_lists_immutable_artifacts(api, server, clock):
+    record = publish(server, "date")
+    credential = registered(api, demand=demand(screens=("date", "weather1")))
+    response = api.get("/api/v1/clients/office/manifest", headers=bearer(credential))
+    assert response.status_code == 200
+    manifest = response.get_json()
+    assert manifest["type"] == "client_manifest" and manifest["manifest_schema_version"] == 1
+    assert manifest["client_id"] == "office" and manifest["display_profile"] == "hyperpixel4"
+    assert (manifest["logical_width"], manifest["logical_height"]) == (800, 480)
+    assert manifest["assigned_playlist"] == {"playlist_id": "default", "playlist_revision": "rev-9"}
+    assert manifest["requested_screens"] == ["date", "weather1"]
+    assert manifest["missing_screens"] == ["weather1"]
+    assert manifest["cache_complete"] is False and manifest["state"] == "incomplete"
+    (entry,) = manifest["artifacts"]
+    assert entry["url"] == f"/api/v1/clients/office/artifacts/{record.sha256}.png"
+    assert entry["sha256"] == record.sha256 and entry["length"] == record.length
+    assert entry["media_type"] == "image/png" and entry["artifact_type"] == "static_image"
+    assert entry["state"] == "fresh" and entry["stale"] is False
+    assert response.headers["ETag"].strip('"') == manifest["manifest_revision"]
+
+    # Unchanged content: the manifest revision and ETag stay put.
+    clock.advance(1)
+    again = api.get("/api/v1/clients/office/manifest",
+                    headers={**bearer(credential), "If-None-Match": response.headers["ETag"]})
+    assert again.status_code == 304
+
+    # The heartbeat and registration report the same revision.
+    beat = api.post("/api/v1/clients/office/heartbeat", json={"status": status()}, headers=bearer(credential))
+    assert beat.get_json()["manifest_revision"] == manifest["manifest_revision"]
+
+    publish(server, "weather1")
+    changed = api.get("/api/v1/clients/office/manifest",
+                      headers={**bearer(credential), "If-None-Match": response.headers["ETag"]})
+    assert changed.status_code == 200 and changed.get_json()["cache_complete"] is True
+
+
+def test_manifest_uses_assignment_when_client_reports_no_demand(api, server):
+    publish(server, "date")
+    credential = registered(api)
+    manifest = api.get("/api/v1/clients/office/manifest", headers=bearer(credential)).get_json()
+    assert manifest["requested_screens"] == ["date"] and manifest["state"] == "fresh"
+
+
+def test_artifact_download_is_immutable_conditional_and_resumable(api, server):
+    record = publish(server, "date")
     credential = registered(api)
     headers = bearer(credential)
-    response = api.get("/api/v1/clients/office/assets/ab/abc123.png", headers=headers)
-    assert response.status_code == 200 and response.data == b"\x89PNG artifact"
-    assert response.headers["ETag"]
-    again = api.get("/api/v1/clients/office/assets/ab/abc123.png",
-                    headers={**headers, "If-None-Match": response.headers["ETag"]})
-    assert again.status_code == 304
-    for path in ("../secret.txt", "ab/../../secret.txt", "..%2Fsecret.txt", "%2e%2e/secret.txt",
-                 ".hidden", "ab/missing.png", "a/b/c/d/e.png", "ab"):
-        assert api.get(f"/api/v1/clients/office/assets/{path}", headers=headers).status_code == 404, path
+    manifest = api.get("/api/v1/clients/office/manifest", headers=headers).get_json()
+    url = manifest["artifacts"][0]["url"]
+    response = api.get(url, headers=headers)
+    assert response.status_code == 200 and len(response.data) == record.length
+    assert response.headers["Content-Type"] == "image/png"
+    assert response.headers["ETag"].strip('"') == record.sha256
+    assert "immutable" in response.headers["Cache-Control"]
+    assert api.get(url, headers={**headers, "If-None-Match": f'"{record.sha256}"'}).status_code == 304
+    partial = api.get(url, headers={**headers, "Range": "bytes=10-"})
+    assert partial.status_code == 206 and partial.data == response.data[10:]
+
+
+def test_artifact_access_is_limited_to_referenced_objects(api, server, tmp_path):
+    publish(server, "date")
+    other = publish(server, "weather1", color=77)
+    (tmp_path / "secret.txt").write_text("private", encoding="utf-8")
+    credential = registered(api)
+    headers = bearer(credential)
+    api.get("/api/v1/clients/office/manifest", headers=headers)
+    # Published but not in this client's manifest.
+    assert api.get(f"/api/v1/clients/office/artifacts/{other.name}", headers=headers).status_code == 404
+    for name in ("../secret.txt", "..%2Fsecret.txt", "%2e%2e/secret.txt", "x.png", other.sha256,
+                 other.sha256 + ".txt", "a/b/c.png"):
+        assert api.get(f"/api/v1/clients/office/artifacts/{name}", headers=headers).status_code == 404, name
+
+
+def test_manifest_reports_render_failure_fallback(api, server):
+    good = publish(server, "date")
+    key = RenderKey.for_screen("date", "hyperpixel4", ScreenRevisions("s1", "d9", "r1"))
+    server.extensions["desk_display_artifacts"].record_failure(key, "provider_down", "weather API timed out")
+    credential = registered(api)
+    manifest = api.get("/api/v1/clients/office/manifest", headers=bearer(credential)).get_json()
+    (entry,) = manifest["artifacts"]
+    assert entry["sha256"] == good.sha256
+    assert entry["state"] == "fallback" and entry["stale"] is True
+    assert entry["failure"]["code"] == "provider_down"
+    assert manifest["state"] == "stale" and manifest["cache_complete"] is True
+
+
+def test_maintenance_collects_objects_after_clients_leave(api, server, clock):
+    store = server.extensions["desk_display_artifacts"]
+    store.previous_revisions = 0
+    held = publish(server, "date")
+    credential = registered(api)
+    api.get("/api/v1/clients/office/manifest", headers=bearer(credential))
+    publish(server, "date", color=255)  # replaces the lineage's output; office still holds the old one
+    maintenance = server.extensions["desk_display_maintenance"]
+    clock.advance(2 * 24 * 3600)
+    # The office lease lapsed, so its references are released now and the
+    # grace period starts from this moment rather than from publication.
+    assert maintenance() == []
+    assert store.open_object(held.name) is not None
+    clock.advance(store.grace_seconds + 1)
+    assert maintenance() == [held.name]
+    assert store.open_object(held.name) is None
 
 
 def test_invalid_client_id_in_path(api):
