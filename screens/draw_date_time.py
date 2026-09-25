@@ -143,7 +143,7 @@ def _compose_frame(
     img  = Image.new("RGB", (WIDTH, HEIGHT), background)
     draw = ImageDraw.Draw(img)
 
-    now = display_datetime(now)
+    now = display_datetime() if now is None else display_datetime(now)
     weekday, date_str = date_strings(now)
     time_str, ampm = time_strings(now)
 

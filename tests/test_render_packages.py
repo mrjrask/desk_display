@@ -90,7 +90,10 @@ def test_expected_classes_for_representative_screens():
 
 
 def test_focus_targets_for_interactive_quads(monkeypatch):
-    import screens.registry as registry
+    import importlib
+
+    # Other tests may reload screens.registry; patch the module sys.modules holds.
+    registry = importlib.import_module("screens.registry")
 
     assert screen_classes.focus_targets("weather quad") == ("weather1", "air quality", "weather hourly",
                                                             "weather daily")
