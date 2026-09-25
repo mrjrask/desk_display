@@ -9,6 +9,7 @@ from typing import Any, Callable
 
 from PIL import Image
 
+from config import CENTRAL_TIME
 from display_profiles import RenderProfile
 from services.data_coordinator import DataSnapshot
 from utils import ScreenImage
@@ -102,17 +103,19 @@ class ScreenRenderer:
         if self._registry_factory is None:
             from screens.registry import ScreenContext, build_screen_registry
 
+            now = datetime.now(CENTRAL_TIME)
             context = ScreenContext(
                 display=capture,
                 cache=_thaw_legacy_data(data.values),
                 logos=preferences.values.get("logos", {}),
                 image_dir=str(preferences.values.get("image_dir", "images")),
-                now=datetime.now().astimezone(),
-                now_utc=datetime.now(UTC),
+                now=now,
+                now_utc=now.astimezone(UTC),
                 offline=bool(preferences.values.get("offline", False)),
                 weather_fetched_at=preferences.values.get("weather_fetched_at"),
                 skip_scoreboards=bool(preferences.values.get("skip_scoreboards", False)),
                 render_profile=profile,
+                allow_upstream_requests=False,
             )
             registry, _ = build_screen_registry(context)
         else:

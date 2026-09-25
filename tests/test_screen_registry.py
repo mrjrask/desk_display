@@ -45,6 +45,7 @@ def _make_context(
     *,
     offline: bool = False,
     weather_fetched_at: datetime.datetime | None = None,
+    allow_upstream_requests: bool = True,
 ) -> ScreenContext:
     cache = {"weather": weather}
     if cache_updates:
@@ -60,7 +61,28 @@ def _make_context(
         weather_fetched_at=weather_fetched_at,
         skip_scoreboards=False,
         render_profile=resolve_display_profile(320, 240),
+        allow_upstream_requests=allow_upstream_requests,
     )
+
+
+def test_snapshot_mlb_standings_screen_uses_context_data(monkeypatch):
+    now = datetime.datetime(2026, 9, 25, tzinfo=CENTRAL_TIME)
+    standings = {103: {"East": [{"abbr": "NYY"}]}}
+    received = []
+    context = _make_context(
+        {}, now, {"mlb_league_standings": standings},
+        allow_upstream_requests=False,
+    )
+    monkeypatch.setattr(
+        registry_module,
+        "draw_mlb_al_standings",
+        lambda display, **kwargs: received.append(kwargs["standings"]),
+    )
+
+    registry, _ = build_screen_registry(context)
+    registry["MLB AL Standings"].render()
+
+    assert received == [standings]
 
 
 def _ts(dt: datetime.datetime) -> int:

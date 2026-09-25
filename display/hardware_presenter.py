@@ -25,9 +25,10 @@ class HardwarePresenter:
         profile = self.profile
         if profile is None:
             return image.copy()
-        converted = image.resize((profile.width, profile.height)).convert(profile.color_mode)
-        rotation = int(profile.constraints.physical_rotation or 0) % 360
-        return converted.rotate(-rotation, expand=True) if rotation else converted
+        # ``utils.Display`` owns the physical output transform. Frames passed
+        # here must remain at logical dimensions to avoid resize and rotation
+        # being applied a second time by the selected output driver.
+        return image.resize((profile.width, profile.height)).convert(profile.color_mode)
 
     def present(self, artifact: RenderArtifact | Image.Image) -> Image.Image:
         image = artifact.image if isinstance(artifact, RenderArtifact) else artifact

@@ -736,7 +736,8 @@ def _draw_wild_card_cut_line(draw: ImageDraw.ImageDraw, center_x: float, col_wid
 
 
 @log_call
-def draw_overview(display, title: str, league_id: int, transition: bool = False, include_wc: bool = False):
+def draw_overview(display, title: str, league_id: int, transition: bool = False,
+                  include_wc: bool = False, standings=None):
     wait_for_skip = getattr(display, "wait_for_skip", None)
     skip_requested = getattr(display, "skip_requested", None)
 
@@ -781,7 +782,7 @@ def draw_overview(display, title: str, league_id: int, transition: bool = False,
         col_centers = [margin_x * (i + 1) + col_w * i + col_w / 2 for i in range(ov_cols)]
         logo_box = col_w
 
-    standings = _fetch_league_standings().get(league_id, {})
+    standings = (standings if standings is not None else _fetch_league_standings()).get(league_id, {})
     logos_per_div: dict[str, list[Image.Image | None]] = {}
     wild_card_rows = _wild_card_rows(standings) if include_wc else []
     draw_wild_card_cut_line = _should_draw_wild_card_cut_line(wild_card_rows)
@@ -907,9 +908,10 @@ def _draw_league_screen(
     screen_id: str,
     *,
     wild_card_only: bool = False,
+    standings=None,
 ) -> Image.Image:
     bg = get_screen_background_color(screen_id, SCOREBOARD_BACKGROUND_COLOR)
-    standings = _fetch_league_standings().get(league_id, {})
+    standings = (standings if standings is not None else _fetch_league_standings()).get(league_id, {})
     league_abbr = "AL" if league_id == AL_LEAGUE_ID else "NL"
 
     if wild_card_only:
@@ -1007,8 +1009,10 @@ def _render_screen(
     screen_id: str,
     *,
     wild_card_only: bool = False,
+    standings=None,
 ) -> ScreenImage:
-    image = _draw_league_screen(title, league_id, screen_id, wild_card_only=wild_card_only)
+    image = _draw_league_screen(title, league_id, screen_id,
+                                wild_card_only=wild_card_only, standings=standings)
     clear_display(display)
 
     scroll_vertical_content(
@@ -1026,51 +1030,57 @@ def _render_screen(
 
 
 @log_call
-def draw_mlb_al_standings(display, transition: bool = False) -> ScreenImage:
+def draw_mlb_al_standings(display, transition: bool = False, standings=None) -> ScreenImage:
     _ = transition
-    return _render_screen(display, "MLB AL Standings", AL_LEAGUE_ID, "MLB AL Standings")
+    return _render_screen(display, "MLB AL Standings", AL_LEAGUE_ID,
+                          "MLB AL Standings", standings=standings)
 
 
 @log_call
-def draw_mlb_al_wc_standings(display, transition: bool = False) -> ScreenImage:
+def draw_mlb_al_wc_standings(display, transition: bool = False, standings=None) -> ScreenImage:
     _ = transition
     return _render_screen(
-        display, "MLB ALWC Standings", AL_LEAGUE_ID, "MLB ALWC Standings", wild_card_only=True
+        display, "MLB ALWC Standings", AL_LEAGUE_ID, "MLB ALWC Standings",
+        wild_card_only=True, standings=standings,
     )
 
 
 @log_call
-def draw_mlb_nl_standings(display, transition: bool = False) -> ScreenImage:
+def draw_mlb_nl_standings(display, transition: bool = False, standings=None) -> ScreenImage:
     _ = transition
-    return _render_screen(display, "MLB NL Standings", NL_LEAGUE_ID, "MLB NL Standings")
+    return _render_screen(display, "MLB NL Standings", NL_LEAGUE_ID,
+                          "MLB NL Standings", standings=standings)
 
 
 @log_call
-def draw_mlb_nl_wc_standings(display, transition: bool = False) -> ScreenImage:
+def draw_mlb_nl_wc_standings(display, transition: bool = False, standings=None) -> ScreenImage:
     _ = transition
     return _render_screen(
-        display, "MLB NLWC Standings", NL_LEAGUE_ID, "MLB NLWC Standings", wild_card_only=True
+        display, "MLB NLWC Standings", NL_LEAGUE_ID, "MLB NLWC Standings",
+        wild_card_only=True, standings=standings,
     )
 
 
 @log_call
-def draw_NL_Overview(display, transition: bool = False):
-    return draw_overview(display, "NL Overview", NL_LEAGUE_ID, transition)
+def draw_NL_Overview(display, transition: bool = False, standings=None):
+    return draw_overview(display, "NL Overview", NL_LEAGUE_ID, transition, standings=standings)
 
 
 @log_call
-def draw_AL_Overview(display, transition: bool = False):
-    return draw_overview(display, "AL Overview", AL_LEAGUE_ID, transition)
+def draw_AL_Overview(display, transition: bool = False, standings=None):
+    return draw_overview(display, "AL Overview", AL_LEAGUE_ID, transition, standings=standings)
 
 
 @log_call
-def draw_NL_Overview_WC(display, transition: bool = False):
-    return draw_overview(display, "NL Overview+WC", NL_LEAGUE_ID, transition, include_wc=True)
+def draw_NL_Overview_WC(display, transition: bool = False, standings=None):
+    return draw_overview(display, "NL Overview+WC", NL_LEAGUE_ID, transition,
+                         include_wc=True, standings=standings)
 
 
 @log_call
-def draw_AL_Overview_WC(display, transition: bool = False):
-    return draw_overview(display, "AL Overview+WC", AL_LEAGUE_ID, transition, include_wc=True)
+def draw_AL_Overview_WC(display, transition: bool = False, standings=None):
+    return draw_overview(display, "AL Overview+WC", AL_LEAGUE_ID, transition,
+                         include_wc=True, standings=standings)
 
 
 __all__ = [

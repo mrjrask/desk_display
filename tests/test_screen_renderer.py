@@ -4,6 +4,7 @@ from types import SimpleNamespace
 
 from PIL import Image
 
+from config import CENTRAL_TIME
 from display_profiles import DISPLAY_PROFILE_DISPLAY_HAT_MINI, PROFILE_PRESETS
 from rendering.screen_renderer import ScreenRenderer, ServerPreferenceSnapshot
 from services.data_coordinator import DataCoordinator
@@ -22,6 +23,8 @@ def test_default_renderer_thaws_snapshot_for_legacy_screens(monkeypatch):
 
     def fake_build_screen_registry(context):
         received["cache"] = context.cache
+        received["now"] = context.now
+        received["now_utc"] = context.now_utc
         context.cache["weather"]["hourly"][0]["temperature"] = 0
         definition = SimpleNamespace(
             available=True,
@@ -47,3 +50,5 @@ def test_default_renderer_thaws_snapshot_for_legacy_screens(monkeypatch):
     assert isinstance(weather["hourly"][0], dict)
     assert isinstance(weather["alerts"], set)
     assert snapshot["weather"]["hourly"][0]["temperature"] == 72
+    assert received["now"].tzinfo is CENTRAL_TIME
+    assert received["now_utc"] == received["now"].astimezone(received["now_utc"].tzinfo)
