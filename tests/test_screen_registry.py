@@ -1,5 +1,6 @@
 import datetime
 import sys
+import types
 
 import pytest
 from PIL import Image
@@ -15,6 +16,7 @@ from screens.registry import (
     build_screen_registry,
 )
 from utils import ScreenImage
+from utils import log_call
 
 
 def _reset_quad_scroll_state():
@@ -80,6 +82,48 @@ def test_profile_is_applied_while_composing_legacy_renderer_frames():
     )
 
     assert frame.size == (800, 480)
+
+
+def test_profile_globals_follow_wrapped_renderer_and_fonts_are_scaled_under_lock(
+    monkeypatch,
+):
+    renderer_module = types.ModuleType("test_profile_renderer")
+    renderer_module.__dict__.update(
+        WIDTH=320,
+        HEIGHT=240,
+        FONT_TEST=object(),
+        log_call=log_call,
+    )
+    exec(
+        "@log_call\n"
+        "def render():\n"
+        "    return WIDTH, HEIGHT, FONT_TEST\n",
+        renderer_module.__dict__,
+    )
+    scaled_font = object()
+    lock_state = {"held": False}
+
+    class TrackingLock:
+        def __enter__(self):
+            lock_state["held"] = True
+
+        def __exit__(self, exc_type, exc_value, traceback):
+            lock_state["held"] = False
+
+    def assert_locked(font, scale):
+        assert lock_state["held"] is True
+        assert font is renderer_module.FONT_TEST
+        return scaled_font
+
+    monkeypatch.setattr(registry_module, "_PROFILE_COMPOSITION_LOCK", TrackingLock())
+    monkeypatch.setattr(registry_module, "_scaled_font", assert_locked)
+    result = _invoke_for_profile(
+        renderer_module.render,
+        resolve_display_profile(800, 480),
+    )
+
+    assert result == (800, 480, scaled_font)
+    assert (renderer_module.WIDTH, renderer_module.HEIGHT) == (320, 240)
 
 
 def test_weather_radar_available_with_precipitation():

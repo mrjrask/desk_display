@@ -5,6 +5,7 @@ import contextlib
 import contextvars
 import datetime as _dt
 import importlib
+import inspect
 import json
 import logging
 import os
@@ -54,34 +55,41 @@ def _profile_composition_globals(func: Callable[..., Any], profile: RenderProfil
     size without mutating process-wide configuration or leaking state between
     concurrent contexts.
     """
-    module_globals = getattr(func, "__globals__", None)
+    # Decorators such as ``log_call`` use functools.wraps, so their public
+    # callable has the decorator module's globals rather than the renderer's.
+    # Patch the globals in which the renderer itself was defined while still
+    # invoking the decorated callable below.
+    module_globals = getattr(inspect.unwrap(func), "__globals__", None)
     if not isinstance(module_globals, dict):
         yield
         return
 
-    replacements: dict[str, Any] = {
-        "WIDTH": profile.width,
-        "HEIGHT": profile.height,
-        "ACTIVE_DISPLAY_PROFILE": profile,
-        "DISPLAY_PROFILE_ID": profile.profile_id,
-        "DISPLAY_PROFILE_LOGO_SCALE_CAP": profile.logo_scale_cap,
-        "DISPLAY_PROFILE_ANIMATION_DELAY": profile.animation_delay,
-        "SCOREBOARD_SCROLL_STEP": profile.scoreboard_scroll_step,
-        "SCOREBOARD_SCROLL_DELAY": profile.scoreboard_scroll_delay,
-        "get_display_profile_id": lambda *_args, **_kwargs: profile.profile_id,
-        "get_display_profile": lambda *_args, **_kwargs: profile,
-        "is_display_profile": lambda profile_id, *_args, **_kwargs: profile.profile_id == profile_id,
-        "is_hyperpixel_next_layout": lambda *_args, **_kwargs: profile.is_hyperpixel_next_layout,
-        "is_hyperpixel_4_square_layout": lambda *_args, **_kwargs: profile.is_hyperpixel_4_square_layout,
-        "is_kernel_driven_display": lambda: profile.constraints.framebuffer,
-    }
-    base_scale = max(float(config.ACTIVE_DISPLAY_PROFILE.font_scale), 0.01)
-    scale = profile.font_scale / base_scale
-    for name, value in module_globals.items():
-        if name.startswith("FONT_"):
-            replacements[name] = _scaled_font(value, scale)
-
     with _PROFILE_COMPOSITION_LOCK:
+        # Both config and renderer globals are temporarily changed by other
+        # compositions.  Read them and derive fonts only after taking the lock
+        # so a waiting context cannot capture another context's profile state.
+        replacements: dict[str, Any] = {
+            "WIDTH": profile.width,
+            "HEIGHT": profile.height,
+            "ACTIVE_DISPLAY_PROFILE": profile,
+            "DISPLAY_PROFILE_ID": profile.profile_id,
+            "DISPLAY_PROFILE_LOGO_SCALE_CAP": profile.logo_scale_cap,
+            "DISPLAY_PROFILE_ANIMATION_DELAY": profile.animation_delay,
+            "SCOREBOARD_SCROLL_STEP": profile.scoreboard_scroll_step,
+            "SCOREBOARD_SCROLL_DELAY": profile.scoreboard_scroll_delay,
+            "get_display_profile_id": lambda *_args, **_kwargs: profile.profile_id,
+            "get_display_profile": lambda *_args, **_kwargs: profile,
+            "is_display_profile": lambda profile_id, *_args, **_kwargs: profile.profile_id == profile_id,
+            "is_hyperpixel_next_layout": lambda *_args, **_kwargs: profile.is_hyperpixel_next_layout,
+            "is_hyperpixel_4_square_layout": lambda *_args, **_kwargs: profile.is_hyperpixel_4_square_layout,
+            "is_kernel_driven_display": lambda: profile.constraints.framebuffer,
+        }
+        base_scale = max(float(config.ACTIVE_DISPLAY_PROFILE.font_scale), 0.01)
+        scale = profile.font_scale / base_scale
+        for name, value in module_globals.items():
+            if name.startswith("FONT_"):
+                replacements[name] = _scaled_font(value, scale)
+
         original = {name: module_globals[name] for name in replacements if name in module_globals}
         config_original = {name: getattr(config, name) for name in replacements if hasattr(config, name)}
         module_globals.update({name: value for name, value in replacements.items() if name in module_globals})
