@@ -167,6 +167,30 @@ python3 -m service_units --mode combined --output /tmp/units --user "$USER"
 Copy them into `/etc/systemd/system`, then disable the services the
 command lists under `disable:`. The Phase 19 installers do this for you.
 
+### Moving a standalone rotation onto the server
+
+`scripts/migrate_standalone_config.py` turns the rotation this display
+already plays into a shared server playlist, so nothing has to be rebuilt
+by hand. It reads the active screen config (the local override when there
+is one) and never changes it:
+
+```bash
+python3 scripts/migrate_standalone_config.py --assign office          # preview
+python3 scripts/migrate_standalone_config.py --assign office --apply  # do it
+```
+
+The preview lists every change before anything happens: legacy screen IDs
+that were renamed, retired or unknown screens that are dropped, settings
+with no server equivalent, screens remote clients cannot show, and clients
+already playing another playlist (those are only reassigned with
+`--force-assign`). Frequencies, extra seconds, alternates, playlists and
+sequence carry over unchanged. `--install-style` also installs the
+migrated style and quad layouts. Each run leaves a bundle in
+`.runtime/server/migrations/` that holds the original files and what was
+changed. `--export FILE` writes one as a backup without changing anything,
+and `--rollback BUNDLE` undoes an applied run. Rerunning is safe: an
+already-migrated rotation is reused, never duplicated.
+
 ## Running, restarting, and logs
 
 The ordinary systemd commands work:
