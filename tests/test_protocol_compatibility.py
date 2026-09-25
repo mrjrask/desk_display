@@ -30,6 +30,12 @@ def test_compatible_registration_advertises_all_versions():
     assert response["playlist_schema_version"] == 2
 
 
+@pytest.mark.parametrize("software_version", [None, "", "   ", 1, True])
+def test_client_registration_rejects_invalid_software_version(software_version):
+    with pytest.raises(ValueError, match="software_version must not be empty"):
+        protocol.client_registration("display-1", software_version=software_version)
+
+
 @pytest.mark.parametrize(
     "protocol_version", [NETWORK_PROTOCOL_VERSION - 1, NETWORK_PROTOCOL_VERSION + 1]
 )

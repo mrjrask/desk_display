@@ -54,6 +54,8 @@ def client_registration(client_id: str, *, software_version: str = APPLICATION_V
 
     if not isinstance(client_id, str) or not client_id.strip():
         raise ValueError("client_id must not be empty")
+    if not isinstance(software_version, str) or not software_version.strip():
+        raise ValueError("software_version must not be empty")
     return {
         "client_id": client_id,
         "protocol_version": NETWORK_PROTOCOL_VERSION,
@@ -77,7 +79,7 @@ def registration_response(registration: Mapping[str, Any]) -> dict[str, Any]:
             protocol_version if type(protocol_version) is int else -1
         )
     software_version = registration.get("client_software_version")
-    if not isinstance(software_version, str) or not software_version:
+    if not isinstance(software_version, str) or not software_version.strip():
         raise ValueError("client_software_version is required")
     client_id = registration.get("client_id")
     if not isinstance(client_id, str) or not client_id.strip():
