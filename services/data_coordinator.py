@@ -115,6 +115,21 @@ class DataCoordinator:
             self._revision += 1
             return self.snapshot()
 
+    def restore(self, saved: Mapping[str, tuple[Any, int]]) -> DataSnapshot:
+        """Load saved ``{name: (value, source_revision)}`` at start-up.
+
+        Keeping each source's saved revision keeps data revisions, and so
+        render keys, the same across a restart.
+        """
+
+        with self._lock:
+            for name, (value, source_revision) in saved.items():
+                self._values[name] = value
+                self._source_revisions[name] = max(int(source_revision), self._source_revisions.get(name, 0))
+            if saved:
+                self._revision += 1
+            return self.snapshot()
+
     def snapshot(self) -> DataSnapshot:
         with self._lock:
             return DataSnapshot(
