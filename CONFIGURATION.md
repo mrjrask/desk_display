@@ -128,7 +128,11 @@ hold playlists or assignments. Playlists use the same document format as the
 rotation config (frequency, extra seconds, alternate screens, playlists and
 sequence), are validated against `screens_catalog.py` and the scheduler, and
 are stored with stable `pl-…` IDs and content revisions in
-`DESK_DISPLAY_PLAYLIST_STORE_PATH`. Writes are atomic and locked, every
+`DESK_DISPLAY_PLAYLIST_STORE_PATH`. Screen order is play order, as on the
+config page, so it is kept exactly and reordering changes the revision. Each
+client plays its playlist independently: skip, previous and touch affect only
+that display, it resumes its own position after a restart, and a playlist
+update continues after the screen it was showing instead of starting over. Writes are atomic and locked, every
 change is recorded in an audit log, and every edit, rename, reorder, delete,
 and assignment must name the revision (or current playlist) it was based on,
 so a concurrent change is refused with `409 revision_conflict` instead of

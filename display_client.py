@@ -173,7 +173,13 @@ class DisplayClient:
         except ValueError as exc:
             LOGGER.error("Cached manifest is not playable: %s", exc)
             return
+        previous_screen = self.playback.current_screen
         self.playback = reconcile_playback(self.playback, playlist)
+        # A playlist update is configuration, not a command: resume this
+        # client's own position, or continue after the screen it was showing.
+        resumed = bool(self.playback.scheduler) and scheduler.restore_state(self.playback.scheduler)
+        if not resumed and previous_screen in playlist.screens:
+            scheduler.seek_after(previous_screen)
         player.history = list(self.playback.history)
         self._player = player
 
@@ -239,6 +245,7 @@ class DisplayClient:
         self.presenter.present(frame)
         self.playback.current_screen = item.screen_id
         self.playback.remember(item.screen_id)
+        self.playback.scheduler = player.scheduler.export_state()
         if content.playlist is not None:
             self.playback.playlist_id = content.playlist.playlist_id
             self.playback.playlist_revision = content.playlist.playlist_revision
