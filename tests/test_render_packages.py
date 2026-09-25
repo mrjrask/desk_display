@@ -406,7 +406,7 @@ def test_touch_clients_demand_quad_focus_targets(tmp_path):
     from display.rotation import RotationDecision
 
     token = "server-token-" + "s" * 32
-    app = display_server.create_app(display_server.DisplayServerConfig(auth_token=token,
+    app = display_server.create_app(display_server.DisplayServerConfig(enrollment="shared", auth_token=token,
                                                                         artifact_dir=tmp_path / "a"))
     api = app.test_client()
     registry = app.extensions["desk_display_registry"]

@@ -115,7 +115,7 @@ def test_differently_mounted_clients_share_artifacts(tmp_path):
     from remote_display.registry import Assignment
 
     token = "server-token-" + "s" * 32
-    config = display_server.DisplayServerConfig(auth_token=token, artifact_dir=tmp_path / "a")
+    config = display_server.DisplayServerConfig(enrollment="shared", auth_token=token, artifact_dir=tmp_path / "a")
     assignments = {cid: Assignment("default", "rev-1", ("date",)) for cid in ("upright", "sideways")}
     app = display_server.create_app(config, assignments=assignments.get)
     profile = PROFILE_PRESETS["hyperpixel4"]

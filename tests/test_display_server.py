@@ -77,7 +77,7 @@ def clock():
 
 @pytest.fixture
 def server(tmp_path, clock):
-    config = display_server.DisplayServerConfig(
+    config = display_server.DisplayServerConfig(enrollment="shared",
         auth_token=SERVER_TOKEN,
         admin_token=ADMIN_TOKEN,
         lease_seconds=60,
@@ -154,7 +154,7 @@ def test_registration_bad_credentials(api, token):
 
 
 def test_unauthenticated_mode_still_issues_client_credentials(tmp_path, clock):
-    config = display_server.DisplayServerConfig(allow_unauthenticated=True, artifact_dir=tmp_path)
+    config = display_server.DisplayServerConfig(enrollment="shared", allow_unauthenticated=True, artifact_dir=tmp_path)
     api = display_server.create_app(config, clock=clock).test_client()
     response = api.post("/api/v1/register", json={"capabilities": caps()})
     assert response.status_code == 201
@@ -536,7 +536,7 @@ def test_admin_rejects_client_credentials(api):
 
 
 def test_admin_disabled_without_token(tmp_path, clock):
-    config = display_server.DisplayServerConfig(auth_token=SERVER_TOKEN, artifact_dir=tmp_path)
+    config = display_server.DisplayServerConfig(enrollment="shared", auth_token=SERVER_TOKEN, artifact_dir=tmp_path)
     api = display_server.create_app(config, clock=clock).test_client()
     response = api.get("/api/v1/admin/status", headers=bearer(SERVER_TOKEN))
     assert response.status_code == 403 and response.get_json()["error"] == "admin_disabled"

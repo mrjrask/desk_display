@@ -130,6 +130,8 @@ class ClientRecord:
     status: ClientStatus | None = None
     disabled: bool = False
     delivered_playlist_revision: str | None = None
+    # The provisioned credential this lease was issued under (None in shared mode).
+    enrollment_id: str | None = None
 
     def lease_state(self, now: float) -> str:
         if self.disabled:
@@ -194,6 +196,7 @@ class ClientRegistry:
         demand: ClientDemand | None = None,
         *,
         credential: str | None = None,
+        enrollment_id: str | None = None,
     ) -> Registration:
         if demand is not None:
             demand.matches(capabilities)
@@ -229,6 +232,7 @@ class ClientRegistry:
                 demand=demand if demand is not None else (record.demand if renewed and record else None),
                 status=record.status if record else None,
                 delivered_playlist_revision=record.delivered_playlist_revision if record else None,
+                enrollment_id=enrollment_id,
             )
             self._clients[record.client_id] = record
             return Registration(record=replace(record), credential=new_credential, renewed=renewed)
@@ -283,6 +287,18 @@ class ClientRegistry:
                     # Static clients keep their configured demand; only the lease ends.
                     record.lease_expires_at = None
         return expired
+
+    def end_lease(self, client_id: str) -> None:
+        """End *client_id*'s lease now (its credential was rotated or revoked)."""
+
+        with self._lock:
+            record = self._clients.get(client_id)
+            if record is not None and record.lease_expires_at is not None:
+                record.credential_hash = None
+                record.lease_expires_at = None
+                record.enrollment_id = None
+                if not record.static:
+                    record.demand = None
 
     def set_disabled(self, client_id: str, disabled: bool) -> ClientRecord:
         client_id = identifier(client_id)

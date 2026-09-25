@@ -276,7 +276,7 @@ def test_server_config_carries_the_assigned_playlist(tmp_path):
     created = store.create("Office", DOC_A, actor="test")
     store.assign("office", created["id"], expected_playlist_id=None, actor="test")
     token = "server-token-" + "s" * 32
-    config = display_server.DisplayServerConfig(
+    config = display_server.DisplayServerConfig(enrollment="shared",
         auth_token=token, admin_token="admin-token-" + "a" * 32,
         artifact_dir=tmp_path / "artifacts", playlist_store_path=store_file,
     )

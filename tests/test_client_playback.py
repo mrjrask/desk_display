@@ -76,7 +76,7 @@ def world(tmp_path):
     def revisions(screens):
         return {s: ScreenRevisions("s1", "d1", "r1") for s in screens}
 
-    config = display_server.DisplayServerConfig(
+    config = display_server.DisplayServerConfig(enrollment="shared",
         auth_token=TOKEN, lease_seconds=100_000, artifact_dir=tmp_path / "artifacts",
         playlist_store_path=store_path, render_min_interval_seconds=0,
     )

@@ -6,9 +6,13 @@ whose endpoints and semantics are unchanged.  Run it with
 ``DESK_DISPLAY_ROLE=server python3 display_server.py``.
 
 Authentication
-    ``POST /api/v1/register`` needs ``Authorization: Bearer <server token>``
-    (``DESK_DISPLAY_SERVER_AUTH_TOKEN``).  A successful registration returns a
-    per-client ``client_credential``; every ``/api/v1/clients/<id>/...``
+    ``POST /api/v1/register`` needs ``Authorization: Bearer <enrollment
+    credential>``.  By default (``DESK_DISPLAY_SERVER_ENROLLMENT=provisioned``)
+    that is the client's own provisioned credential (see
+    ``remote_display/provisioning.py``), so each client can be rotated,
+    revoked or disabled on its own; ``shared`` mode instead accepts the one
+    ``DESK_DISPLAY_SERVER_AUTH_TOKEN`` every client knows.  A successful
+    registration returns a short-lived lease ``client_credential``; every ``/api/v1/clients/<id>/...``
     endpoint needs ``Authorization: Bearer <client credential>`` for *that*
     client ID, so one client can never read another's configuration, status
     or manifest.  ``/api/v1/admin/...`` needs ``DESK_DISPLAY_SERVER_ADMIN_TOKEN``
@@ -25,7 +29,12 @@ Endpoints
     ``GET  /api/v1/health``                        liveness
     ``GET  /api/v1/admin/status``                  clients, leases and demand
     ``PUT|DELETE /api/v1/admin/prerender/<name>``  explicit pre-render demand
-    ``POST /api/v1/admin/clients/<id>/disable|enable``
+    ``POST /api/v1/admin/clients/<id>/disable|enable|rotate|revoke``
+    ``POST /api/v1/admin/clients``                 provision a client (credential shown once)
+    ``GET  /api/v1/admin/clients``                 provisioned clients, never their credentials
+
+Requests are rate limited per client and per address (``429`` with
+``Retry-After``); see ``remote_display/rate_limit.py``.
     ``GET  /api/v1/admin/render-status``           queue, render and data health
 """
 from __future__ import annotations
@@ -65,12 +74,21 @@ from remote_display.models import (
     identifier,
 )
 from remote_display.playlist_store import PlaylistStore, registry_snapshot_path, store_path
+from remote_display.provisioning import (
+    ProvisioningError,
+    ProvisioningStore,
+    client_env,
+    provisioning_path,
+)
+from remote_display.rate_limit import RateLimiter
 from remote_display.registry import (
     Assignment,
     AssignmentLookup,
     ClientRecord,
     ClientRegistry,
+    ClientDisabledError,
     RegistryError,
+    UnknownClientError,
     UnknownLeaseError,
 )
 
@@ -99,6 +117,11 @@ class DisplayServerConfig:
     public_url: str | None = None
     playlist_store_path: Path | None = None
     registry_snapshot_path: Path | None = None
+    # "provisioned": each client registers with its own credential from the
+    # provisioning store. "shared": every client presents auth_token.
+    enrollment: str = "provisioned"
+    clients_path: Path | None = None
+    rate_limits: bool = True
 
     @classmethod
     def from_env(cls, env: Mapping[str, str] | None = None) -> DisplayServerConfig:
@@ -118,6 +141,9 @@ class DisplayServerConfig:
             public_url=settings["DESK_DISPLAY_SERVER_PUBLIC_URL"],
             playlist_store_path=store_path(env),
             registry_snapshot_path=registry_snapshot_path(env),
+            enrollment=settings["DESK_DISPLAY_SERVER_ENROLLMENT"],
+            clients_path=provisioning_path(env),
+            rate_limits=bool(settings["DESK_DISPLAY_SERVER_RATE_LIMITS"]),
         )
 
 
@@ -231,6 +257,11 @@ def create_app(
     app.extensions["desk_display_registry"] = registry
     app.extensions["desk_display_config"] = config
     app.extensions["desk_display_artifacts"] = artifacts
+    provisioning = None if config.clients_path is None else ProvisioningStore(config.clients_path, clock=clock)
+    app.extensions["desk_display_provisioning"] = provisioning
+    limiter = RateLimiter() if config.rate_limits else None
+    app.extensions["desk_display_rate_limiter"] = limiter
+    provisioned = config.enrollment == "provisioned"
     coordinator = None
     if renderer is not None and revisions is not None:
         coordinator = RenderCoordinator(
@@ -311,7 +342,40 @@ def create_app(
 
     @app.errorhandler(RegistryError)
     def _registry_error(exc: RegistryError):
+        if exc.status == 401:
+            _auth_failed()
         return jsonify(exc.as_response()), exc.status
+
+    @app.errorhandler(ProvisioningError)
+    def _provisioning_error(exc: ProvisioningError):
+        return jsonify(exc.as_response()), exc.status
+
+    class _RateLimited(Exception):
+        def __init__(self, seconds: float) -> None:
+            super().__init__("rate limited")
+            self.seconds = seconds
+
+    @app.errorhandler(_RateLimited)
+    def _rate_limited(exc: _RateLimited):
+        response, status = _error(429, "rate_limited", "too many requests; retry later",
+                                  retry_after_seconds=max(1, int(exc.seconds + 0.999)))
+        response.headers["Retry-After"] = str(max(1, int(exc.seconds + 0.999)))
+        return response, status
+
+    def _remote() -> str:
+        return request.remote_addr or "unknown"
+
+    def _limit(kind: str, key: str) -> None:
+        if limiter is not None and (wait := limiter.hit(kind, key)) > 0:
+            raise _RateLimited(wait)
+
+    def _auth_failed() -> None:
+        if limiter is not None:
+            limiter.hit("auth_failure", _remote())
+
+    def _check_auth_lockout() -> None:
+        if limiter is not None and (wait := limiter.retry_after("auth_failure", _remote())) > 0:
+            raise _RateLimited(wait)
 
     @app.errorhandler(HTTPException)
     def _http_error(exc: HTTPException):
@@ -324,19 +388,36 @@ def create_app(
         except ModelValidationError:
             raise UnknownLeaseError("unknown client or credential") from None
 
-    def _client() -> ClientRecord:
-        """Authenticate the per-client credential for the client ID in the URL."""
+    _LIMIT_KIND = {"heartbeat": "heartbeat", "client_config": "manifest", "client_manifest": "manifest",
+                   "client_artifact": "artifact"}
 
+    def _client() -> ClientRecord:
+        """Authenticate the per-client credential for the client ID in the URL.
+
+        A lease issued under a provisioned credential that has since been
+        rotated, revoked or disabled is refused at once.
+        """
+
+        _check_auth_lockout()
         client_id = _client_id(request.view_args["client_id"])
         credential = _bearer()
         if credential is None:
             raise UnknownLeaseError("missing client credential")
-        return registry.authenticate(client_id, credential)
+        record = registry.authenticate(client_id, credential)
+        if provisioned and not config.allow_unauthenticated:
+            current = None if provisioning is None else provisioning.current_credential_id(client_id)
+            if current is None or record.enrollment_id != current:
+                registry.end_lease(client_id)
+                raise UnknownLeaseError("this client's credential was rotated, revoked or disabled")
+        _limit(_LIMIT_KIND.get(request.endpoint or "", "manifest"), client_id)
+        return record
 
     def _require_admin():
+        _check_auth_lockout()
         if not config.admin_token:
             return _error(403, "admin_disabled", "the admin API is disabled; set DESK_DISPLAY_SERVER_ADMIN_TOKEN")
         if not _token_matches(_bearer(), config.admin_token):
+            _auth_failed()
             return _error(401, "unauthorized", "admin token required")
         return None
 
@@ -408,8 +489,8 @@ def create_app(
 
     @app.post("/api/v1/register")
     def register():
-        if not config.allow_unauthenticated and not _token_matches(_bearer(), config.auth_token):
-            return _error(401, "unauthorized", "server token required")
+        _check_auth_lockout()
+        _limit("register", _remote())
         payload = _json_body()
         unknown = sorted(set(payload) - {"capabilities", "demand", "client_credential"})
         if unknown:
@@ -424,6 +505,23 @@ def create_app(
             "client_id": raw_caps.get("client_id") or "unknown",
         })
         capabilities = ClientCapabilities.from_wire(raw_caps, path="capabilities")
+        enrollment_id = None
+        if config.allow_unauthenticated:
+            pass
+        elif provisioned:
+            enrollment_id = None if provisioning is None else provisioning.verify(capabilities.client_id, _bearer())
+            if enrollment_id is None:
+                _auth_failed()
+                state = None if provisioning is None else (provisioning.get(capabilities.client_id) or {}).get("state")
+                if state == "disabled":
+                    raise ClientDisabledError("this client has been disabled by an administrator")
+                return _error(401, "unauthorized", "this client's provisioned credential is required")
+            existing = registry.get(capabilities.client_id)
+            if existing is not None and existing.enrollment_id not in (None, enrollment_id):
+                registry.end_lease(capabilities.client_id)  # issued under a rotated credential
+        elif not _token_matches(_bearer(), config.auth_token):
+            _auth_failed()
+            return _error(401, "unauthorized", "server token required")
         demand = None
         if payload.get("demand") is not None:
             demand = _with_interaction_targets(ClientDemand.from_wire(payload["demand"], path="demand"),
@@ -431,7 +529,8 @@ def create_app(
         credential = payload.get("client_credential")
         if credential is not None and not isinstance(credential, str):
             raise ModelValidationError("client_credential", "must be a string")
-        registration = registry.register(capabilities, demand, credential=credential)
+        registration = registry.register(capabilities, demand, credential=credential,
+                                         enrollment_id=enrollment_id)
         record = registration.record
         WEB_LOGGER.info(
             "client %s %s (profile %s)",
@@ -612,13 +711,76 @@ def create_app(
             return _error(404, "not_found", "no such pre-render entry")
         return "", 204
 
+    def _provisioning_store() -> ProvisioningStore:
+        if provisioning is None:
+            raise ProvisioningError("no provisioning store is configured (DESK_DISPLAY_SERVER_CLIENTS_PATH)")
+        return provisioning
+
+    def _issued(issued, status: int):
+        text, warnings = client_env(issued, config.public_url)
+        response = jsonify({
+            "client_id": issued.client_id,
+            "display_profile": issued.display_profile,
+            "client_credential": issued.credential,
+            "client_env": text,
+            "warnings": warnings,
+            "note": "The credential is shown only now; store it on the client.",
+        })
+        # The one response allowed to carry a secret: never cached, never logged.
+        response.headers["Cache-Control"] = "no-store"
+        return response, status
+
+    @app.get("/api/v1/admin/clients")
+    def admin_list_clients():
+        if (denied := _require_admin()) is not None:
+            return denied
+        return jsonify({"enrollment": config.enrollment, "clients": _provisioning_store().records()})
+
+    @app.post("/api/v1/admin/clients")
+    def admin_provision_client():
+        if (denied := _require_admin()) is not None:
+            return denied
+        payload = _json_body()
+        unknown = sorted(set(payload) - {"client_id", "display_profile", "playlist_id"})
+        if unknown:
+            raise ModelValidationError(unknown[0], "unknown field")
+        playlist_id = payload.get("playlist_id")
+        if playlist_id is not None and config.playlist_store_path is None:
+            raise ModelValidationError("playlist_id", "this server has no playlist store")
+        if playlist_id is not None and playlist_id not in PlaylistStore(config.playlist_store_path).snapshot()["playlists"]:
+            raise ModelValidationError("playlist_id", "unknown playlist")
+        issued = _provisioning_store().provision(payload.get("client_id"), payload.get("display_profile"),
+                                                 actor="admin-api")
+        if playlist_id is not None:
+            PlaylistStore(config.playlist_store_path).assign(issued.client_id, playlist_id,
+                                                             expected_playlist_id=None, actor="admin-api")
+        return _issued(issued, 201)
+
     @app.post("/api/v1/admin/clients/<client_id>/<action>")
     def admin_client_action(client_id: str, action: str):
         if (denied := _require_admin()) is not None:
             return denied
-        if action not in {"disable", "enable"}:
+        if action not in {"disable", "enable", "rotate", "revoke"}:
             return _error(404, "not_found", "unknown action")
-        record = registry.set_disabled(client_id, action == "disable")
+        client_id = _client_id(client_id)
+        known = provisioning is not None and provisioning.get(client_id) is not None
+        if action == "rotate":
+            issued = _provisioning_store().rotate(client_id, actor="admin-api")
+            registry.end_lease(client_id)
+            return _issued(issued, 200)
+        if action == "revoke":
+            record = _provisioning_store().revoke(client_id, actor="admin-api")
+            registry.end_lease(client_id)
+            return jsonify({"client_id": client_id, "state": record["state"]})
+        disabled = action == "disable"
+        if known:
+            provisioning.set_disabled(client_id, disabled, actor="admin-api")
+        try:
+            record = registry.set_disabled(client_id, disabled)
+        except UnknownClientError:
+            if not known:
+                raise
+            return jsonify({"client_id": client_id, "disabled": disabled})
         return jsonify({"client_id": record.client_id, "disabled": record.disabled})
 
     return app

@@ -132,8 +132,10 @@ def test_client_example_validates_once_token_is_filled():
     assert not report.warnings
 
 
-def test_server_example_validates_once_token_is_filled():
+def test_server_example_validates_with_provisioned_clients():
     env = dc.parse_env_file(ROOT / ".env.server.example")
+    assert dc.validate(Role.SERVER, env).ok  # per-client credentials need no shared token
+    env["DESK_DISPLAY_SERVER_ENROLLMENT"] = "shared"
     assert set(_errors(dc.validate(Role.SERVER, env))) == {"DESK_DISPLAY_SERVER_AUTH_TOKEN"}
     env["DESK_DISPLAY_SERVER_AUTH_TOKEN"] = SERVER_TOKEN
     assert dc.validate(Role.SERVER, env).ok
@@ -349,11 +351,17 @@ def test_client_missing_ca_bundle(tmp_path):
 
 
 def test_server_authentication_rules():
-    missing = _errors(dc.validate(Role.SERVER, {"DESK_DISPLAY_ROLE": "server"}))
+    local = {"DESK_DISPLAY_ROLE": "server", "SCREEN_CONFIG_HOST": "127.0.0.1"}
+    assert dc.validate(Role.SERVER, local).ok  # provisioned by default: no shared token
+    shared = {**local, "DESK_DISPLAY_SERVER_ENROLLMENT": "shared"}
+    missing = _errors(dc.validate(Role.SERVER, shared))
     assert "required" in missing["DESK_DISPLAY_SERVER_AUTH_TOKEN"]
 
-    short = _errors(dc.validate(Role.SERVER, {**SERVER_OK, "DESK_DISPLAY_SERVER_AUTH_TOKEN": "short"}))
+    short = _errors(dc.validate(Role.SERVER, {**SERVER_OK, **shared, "DESK_DISPLAY_SERVER_AUTH_TOKEN": "short"}))
     assert "insecure" in short["DESK_DISPLAY_SERVER_AUTH_TOKEN"]
+
+    ignored = dc.validate(Role.SERVER, SERVER_OK)
+    assert ignored.ok and any(w.name == "DESK_DISPLAY_SERVER_AUTH_TOKEN" for w in ignored.warnings)
 
     loopback_open = {"DESK_DISPLAY_SERVER_ALLOW_UNAUTHENTICATED": "1", "SCREEN_CONFIG_HOST": "127.0.0.1"}
     assert dc.validate(Role.SERVER, loopback_open).ok

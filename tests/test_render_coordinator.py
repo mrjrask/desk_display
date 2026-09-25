@@ -395,7 +395,7 @@ def test_admin_render_status_endpoint(tmp_path):
     pytest.importorskip("flask")
     import display_server
 
-    config = display_server.DisplayServerConfig(
+    config = display_server.DisplayServerConfig(enrollment="shared",
         auth_token="server-token-" + "s" * 32, admin_token="admin-token-" + "a" * 32,
         artifact_dir=tmp_path / "artifacts", render_workers=1,
     )

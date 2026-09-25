@@ -143,10 +143,15 @@ def combined(tmp_path):
     playlist = store.create("Desk", {"screens": {"date": 1, "weather1": 1}, "sequence": []}, actor="test")
     store.assign("desk-panel", playlist["id"], expected_playlist_id=None, actor="test")
     clock = Clock()
+    # The panel is provisioned like any other client: its own credential.
+    from remote_display.provisioning import ProvisioningStore
+
+    clients_path = tmp_path / "provisioned_clients.json"
+    panel_token = ProvisioningStore(clients_path).provision("desk-panel", PROFILE.profile_id).credential
 
     def start_server():
         config = display_server.DisplayServerConfig(
-            auth_token=TOKEN, admin_token="admin-token-" + "a" * 32, lease_seconds=300,
+            admin_token="admin-token-" + "a" * 32, lease_seconds=300, clients_path=clients_path,
             artifact_dir=tmp_path / "server-artifacts", playlist_store_path=store_path,
         )
         app = display_server.create_app(config, clock=clock)
@@ -159,7 +164,7 @@ def combined(tmp_path):
             "DESK_DISPLAY_PROFILE": PROFILE.profile_id,
             "DESK_DISPLAY_CLIENT_ID": "desk-panel",
             "DESK_DISPLAY_SERVER_URL": "http://127.0.0.1:8765",
-            "DESK_DISPLAY_CLIENT_TOKEN": TOKEN,
+            "DESK_DISPLAY_CLIENT_TOKEN": panel_token,
             "DESK_DISPLAY_CLIENT_CACHE_DIR": str(tmp_path / "client"),
         }
         client = display_client.build_client(settings, presenter=Presenter(), transport=loopback)
