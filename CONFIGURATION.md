@@ -147,6 +147,16 @@ only when that content changes. The manifest and artifacts both return an
 with `Cache-Control: immutable`, so a client downloads only artifacts it has
 not seen.
 
+The render server also collects upstream data itself; it does not need
+`main.py` running. Every 30 seconds it refreshes the feeds that demanded
+screens use (weather, air quality, team feeds, and scoreboards), on the same
+intervals and live-game rules as the standalone display loop, and keeps the
+last good data when a refresh fails. Each feed has its own revision, so a
+weather update rerenders only screens that show weather; a screen that no
+catalogued feed serves rerenders on any data change. The render-status
+endpoint's `data_health.feeds` shows each feed's last success, failures and
+staleness.
+
 The render server renders only what current demand needs: screens of
 connected clients, of static clients (from their assigned playlist), of
 administrator pre-render entries, and their touch dependencies. Equal

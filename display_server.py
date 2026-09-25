@@ -580,8 +580,10 @@ def run_display_server() -> None:
     deployment_config.startup_check("display server")
     settings = deployment_config.load_settings(Role.SERVER)
     from remote_display.server_rendering import ServerRendering
+    from services.server_feeds import ServerFeedService
 
-    rendering = ServerRendering()
+    feeds = ServerFeedService()
+    rendering = ServerRendering(feeds=feeds)
     app = create_app(
         DisplayServerConfig.from_env(),
         renderer=rendering.render,
@@ -589,6 +591,8 @@ def run_display_server() -> None:
         data_health=rendering.health,
     )
     _start_maintenance(app.extensions["desk_display_maintenance"])
+    registry = app.extensions["desk_display_registry"]
+    feeds.start(lambda: {s for entry in registry.demand_entries() for s in entry.demand.all_screens})
     app.extensions["desk_display_render_coordinator"].start()
     host, port = settings["DESK_DISPLAY_SERVER_HOST"], settings["DESK_DISPLAY_SERVER_PORT"]
     cert, key = settings["DESK_DISPLAY_SERVER_TLS_CERT"], settings["DESK_DISPLAY_SERVER_TLS_KEY"]
