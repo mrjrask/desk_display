@@ -52,7 +52,7 @@ from protocol import (
     IncompatibleClientError,
     registration_response,
 )
-from protocol_versions import CLIENT_CONFIG_SCHEMA_VERSION
+from protocol_versions import CLIENT_CONFIG_SCHEMA_VERSION, PLAYLIST_SCHEMA_VERSION
 from remote_display.artifact_store import ArtifactStore
 from remote_display.manifest import build_client_manifest, referenced_hashes
 from remote_display.render_coordinator import RenderCoordinator, Renderer, RevisionSource
@@ -162,10 +162,13 @@ def create_app(
     revisions: RevisionSource | None = None,
     data_health: Callable[[], Mapping[str, Any]] | None = None,
     render_executor: Any = None,
+    playlist_documents: Callable[[str, str], Mapping[str, Any] | None] | None = None,
 ) -> Flask:
     """Build the API.
 
-    ``assignments`` looks up each client's assigned playlist.  With a
+    ``assignments`` looks up each client's assigned playlist and
+    ``playlist_documents(playlist_id, revision)`` its document, which the
+    config response carries for the client's playlist cache.  With a
     ``renderer`` and ``revisions`` source the app also owns a
     :class:`RenderCoordinator` (``app.extensions["desk_display_render_coordinator"]``)
     that the caller ticks or starts.
@@ -180,6 +183,13 @@ def create_app(
             if stored is None:
                 return None
             return Assignment(stored.playlist_id, stored.playlist_revision, stored.screens, stored.alternates)
+
+        if playlist_documents is None:
+            def playlist_documents(playlist_id: str, playlist_revision: str) -> Mapping[str, Any] | None:
+                playlist = store.snapshot()["playlists"].get(playlist_id)
+                if playlist is None or playlist.get("revision") != playlist_revision:
+                    return None
+                return playlist["document"]
 
     registry = ClientRegistry(
         lease_seconds=config.lease_seconds,
@@ -439,16 +449,38 @@ def create_app(
             **_lease(record),
         })
 
+    def _playlist_payload(assignment_payload: Mapping[str, Any]) -> dict[str, Any] | None:
+        """The assigned playlist document, for the client's playlist cache."""
+
+        assigned = assignment_payload.get("assigned_playlist")
+        if not assigned or playlist_documents is None:
+            return None
+        document = playlist_documents(assigned["playlist_id"], assigned["playlist_revision"])
+        if document is None:
+            return None
+        return {
+            "playlist_id": assigned["playlist_id"],
+            "playlist_revision": assigned["playlist_revision"],
+            "playlist_schema_version": PLAYLIST_SCHEMA_VERSION,
+            "document": document,
+        }
+
     @app.get("/api/v1/clients/<client_id>/config")
     def client_config(client_id: str):
         record = _client()
-        return jsonify(deployment_config.scrub_secrets({
-            "client_config_schema_version": CLIENT_CONFIG_SCHEMA_VERSION,
-            "client_id": record.client_id,
-            "display_profile": record.capabilities.display_profile,
-            **_assignment_payload(record.client_id, delivered=True),
-            **_lease(record),
-        }))
+        assignment = _assignment_payload(record.client_id, delivered=True)
+        return jsonify({
+            **deployment_config.scrub_secrets({
+                "client_config_schema_version": CLIENT_CONFIG_SCHEMA_VERSION,
+                "client_id": record.client_id,
+                "display_profile": record.capabilities.display_profile,
+                **assignment,
+                **_lease(record),
+            }),
+            # Playlist documents hold only screen IDs and scheduling; they are
+            # validated on save and never carry settings or credentials.
+            "playlist": _playlist_payload(assignment),
+        })
 
     @app.get("/api/v1/clients/<client_id>/manifest")
     def client_manifest(client_id: str):
