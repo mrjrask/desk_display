@@ -36,6 +36,7 @@ from flask import (
 )
 from PIL import Image, UnidentifiedImageError
 
+import deployment_config
 from env_config import non_negative_env_int
 from feed_ids import sanitize_feed_id
 
@@ -142,6 +143,11 @@ def _is_stale(timestamp: float) -> bool:
 @app.before_request
 def _capture_request_start_time() -> None:
     g.request_started_at = time.perf_counter()
+
+
+@app.after_request
+def _redact_secrets(response: Any) -> Any:
+    return deployment_config.redact_response(response)
 
 
 @app.after_request
@@ -516,7 +522,7 @@ def upload_display_status(source: str) -> Any:
     tmp_path = Path(tmp_name)
     try:
         with os.fdopen(tmp_fd, "w", encoding="utf-8") as tmp_file:
-            json.dump(payload, tmp_file)
+            json.dump(deployment_config.scrub_secrets(payload), tmp_file)
         os.replace(tmp_path, target_path)
     except OSError as exc:
         WEB_LOGGER.warning("Failed to persist display status for %s: %s", source_id, exc)
@@ -529,10 +535,12 @@ def upload_display_status(source: str) -> Any:
 def run_feed_server(host: str = FEED_SERVER_HOST, port: int = FEED_SERVER_PORT) -> None:
     if not logging.getLogger().handlers:
         logging.basicConfig(
-            level=logging.INFO,
+            level=deployment_config.resolve_log_level(),
             format="%(asctime)s %(levelname)-8s %(message)s",
             datefmt="%H:%M:%S",
         )
+    deployment_config.install_secret_log_redaction()
+    deployment_config.startup_check("feed server")
     if not FEED_UPLOAD_TOKEN:
         WEB_LOGGER.warning(
             "FEED_UPLOAD_TOKEN is not set; uploads will be rejected until it is configured."

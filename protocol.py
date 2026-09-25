@@ -10,6 +10,7 @@ from collections.abc import Collection, Mapping
 from dataclasses import dataclass
 from typing import Any
 
+from deployment_config import scrub_secrets
 from protocol_versions import (
     APPLICATION_VERSION,
     CLIENT_CONFIG_SCHEMA_VERSION,
@@ -97,10 +98,14 @@ def registration_response(registration: Mapping[str, Any]) -> dict[str, Any]:
 
 
 def build_manifest(**contents: Any) -> dict[str, Any]:
-    """Return a manifest with all versions needed to interpret its contents."""
+    """Return a manifest with all versions needed to interpret its contents.
+
+    Server API credentials never reach a client: keys named after a secret
+    setting are dropped and configured secret values are redacted.
+    """
 
     return {
-        **contents,
+        **scrub_secrets(contents),
         "server_software_version": APPLICATION_VERSION,
         "manifest_schema_version": MANIFEST_SCHEMA_VERSION,
         "render_package_schema_version": RENDER_PACKAGE_SCHEMA_VERSION,

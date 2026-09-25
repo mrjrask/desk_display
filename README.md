@@ -366,6 +366,8 @@ At startup the app loads `.env` when `CONFIG_LOAD_DOTENV` is enabled, initialize
 
 Configuration is environment-driven. Put local values in `.env` for development and most installs, or configure them in systemd service environment files for long-running deployments.
 
+Settings are grouped by deployment role. `.env.example` documents the standalone install described here; `.env.server.example` and `.env.client.example` cover the split render server and display client. See [CONFIGURATION.md](CONFIGURATION.md) for the role split, startup validation (`python3 -m deployment_config check --env-file .env`), secret handling, and which settings hot-reload versus need a restart.
+
 ### Core display variables
 
 | Variable | Description |

@@ -31,6 +31,7 @@ from flask import (
 )
 
 import config
+import deployment_config
 from config import CENTRAL_TIME
 from diagnostic_playback import load_diagnostic_screen, save_diagnostic_screen
 from env_config import non_negative_env_int
@@ -332,6 +333,11 @@ def _normalize_legacy_scoreboard_ids(config: dict[str, Any]) -> tuple[dict[str, 
 @app.before_request
 def _capture_request_start_time() -> None:
     g.request_started_at = time.perf_counter()
+
+
+@app.after_request
+def _redact_secrets(response: Any) -> Any:
+    return deployment_config.redact_response(response)
 
 
 @app.after_request
@@ -1356,10 +1362,12 @@ def run_config_ui(host: str = SCREEN_CONFIG_HOST, port: int = SCREEN_CONFIG_PORT
     _validate_auth_configuration()
     if not logging.getLogger().handlers:
         logging.basicConfig(
-            level=logging.INFO,
+            level=deployment_config.resolve_log_level(),
             format="%(asctime)s %(levelname)-8s %(message)s",
             datefmt="%H:%M:%S",
         )
+    deployment_config.install_secret_log_redaction()
+    deployment_config.startup_check("config UI")
     from waitress import serve
 
     serve(app, host=host, port=port, threads=8)
