@@ -45,23 +45,6 @@ CSRF_HEADER = "X-Requested-With"
 CSRF_VALUE = "desk-display"
 AUDIT_LIMIT = 100
 
-# Screens that scroll or animate on the display.  Phase 10 replaces this
-# heuristic with an explicit remote-mode classification for every screen.
-ANIMATED_SCREENS = frozenset({
-    "news headlines",
-    "news headlines 2",
-    "weather radar",
-    "MLB Scoreboard",
-    "MLB Scoreboard v2",
-    "quad",
-    "weather quad",
-    "cubs schedule quad",
-    "sox schedule quad",
-})
-TOUCH_EXPANDABLE_SCREENS = frozenset({"quad", "weather quad", "cubs schedule quad", "sox schedule quad"})
-COLOR_DEPENDENT_SCREENS = frozenset({"weather radar", "air quality"})
-
-
 def _iso_now() -> str:
     return datetime.now(timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z")
 
@@ -111,20 +94,21 @@ def capability_warnings(document: Mapping[str, Any], client: Mapping[str, Any]) 
     state = client.get("state")
     if state in {"disabled", "expired"}:
         warn("client_inactive", f"client is {state}; it will not receive this playlist until it reconnects")
-    if not caps.get("supports_animation"):
-        animated = sorted(screens & ANIMATED_SCREENS)
-        if animated:
-            warn("no_animation", "client cannot animate; these screens fall back to still images: " + ", ".join(animated))
-    if not caps.get("has_touch"):
-        expandable = sorted(screens & TOUCH_EXPANDABLE_SCREENS)
-        if expandable:
-            warn("no_touch", "client has no touch input, so quad tiles cannot expand: " + ", ".join(expandable), "info")
-    if profile.color_mode == "1":
-        mono = sorted(screens & COLOR_DEPENDENT_SCREENS)
-        if mono:
-            warn("monochrome", f"{profile.profile_id} is 1-bit monochrome; colour-coded detail is lost on: " + ", ".join(mono))
+    # Phase 10b: the same deterministic fallbacks the client applies.
+    from remote_display.fallbacks import plan
+
+    grouped: dict[tuple[str, str, str], list[str]] = {}
+    for screen, fallback in plan(screens, supports_animation=bool(caps.get("supports_animation")),
+                                 has_touch=bool(caps.get("has_touch")), color_mode=profile.color_mode).items():
+        for note in fallback.notes:
+            grouped.setdefault(note, []).append(screen)
+    for (code, severity, message), affected in sorted(grouped.items()):
+        warn(code, f"{message}: " + ", ".join(sorted(affected)), severity)
     if min(profile.width, profile.height) < 200:
-        quads = sorted(screens & TOUCH_EXPANDABLE_SCREENS)
+        from rendering.screen_classes import CLASSIFICATIONS, COMPOSITE, INTERACTIVE_FOCUS
+
+        quads = sorted(s for s in screens if getattr(CLASSIFICATIONS.get(s), "kind", None)
+                       in (COMPOSITE, INTERACTIVE_FOCUS))
         if quads:
             warn("small_display", f"{profile.width}x{profile.height} tiles are very small for: " + ", ".join(quads))
     versions = caps.get("render_package_versions") or []

@@ -30,6 +30,7 @@ from PIL import Image, ImageDraw, ImageFont
 from display.rotation import RotationDecision, parse_rotation, resolve_rotation, to_logical
 from display_profiles import RenderProfile, resolve_display_profile_by_id
 from playback.client_player import ClientPlayer
+from playback.package_player import PackagePlayback
 from protocol import CLIENT_SUPPORTED_RENDER_PACKAGE_SCHEMA_VERSIONS
 from protocol_versions import APPLICATION_VERSION, NETWORK_PROTOCOL_VERSION
 from remote_display.client_cache import ClientCache, reconcile_playback
@@ -59,7 +60,8 @@ def _rotation(value: Any) -> int:
 
 def capabilities_for(client_id: str, profile: RenderProfile, *, has_touch: bool = False,
                      buttons: tuple[str, ...] = (),
-                     rotation: RotationDecision | None = None) -> ClientCapabilities:
+                     rotation: RotationDecision | None = None,
+                     supports_animation: bool = True) -> ClientCapabilities:
     """Capabilities in canonical logical orientation; rotation is diagnostic only."""
 
     return ClientCapabilities(
@@ -72,6 +74,7 @@ def capabilities_for(client_id: str, profile: RenderProfile, *, has_touch: bool 
         image_formats=("PNG",),
         color_modes=(profile.color_mode,),
         render_package_versions=tuple(sorted(CLIENT_SUPPORTED_RENDER_PACKAGE_SCHEMA_VERSIONS)),
+        supports_animation=supports_animation,
         has_touch=has_touch,
         buttons=buttons,
         hardware=None if rotation is None else HardwareDescription(driver=rotation.describe()),
@@ -113,6 +116,8 @@ class Controls:
 
     skip: bool = False
     back: bool = False
+    focus: str | None = None  # a quad tile's screen to open full screen
+    unfocus: bool = False  # leave a focused tile and return to its quad
 
 
 class DisplayClient:
@@ -131,6 +136,8 @@ class DisplayClient:
         screen_seconds: float = DEFAULT_SCREEN_SECONDS,
         offline_max_age_seconds: float = 0,
         monotonic: Callable[[], float] = time.monotonic,
+        clock: Callable[[], Any] | None = None,
+        ip_text: Callable[[], str | None] | None = None,
     ) -> None:
         self.profile = profile
         self.presenter = presenter
@@ -149,6 +156,16 @@ class DisplayClient:
         self.report = PlaybackReport(physical_rotation=physical_rotation)
         self._stop = threading.Event()
         sync.report = lambda: self.report
+        caps = sync.capabilities
+        self.has_touch = bool(caps.has_touch)
+        self.supports_animation = bool(caps.supports_animation)
+        self.animation: PackagePlayback | None = None
+        self._shown_at = 0.0
+        self._current: str | None = None
+        self._focus_return: str | None = None  # quad to return to after a focused tile
+        self._returning = False
+        self._clock = clock
+        self._ip_text = ip_text
 
     # Playback
 
@@ -205,32 +222,89 @@ class DisplayClient:
         ]
         return diagnostic_image(self.profile, lines)
 
+    def _next_item(self, player: ClientPlayer | None) -> Any:
+        """The next screen: a tapped tile, the quad it returns to, or the rotation."""
+
+        controls = self.controls
+        focus, unfocus, back = controls.focus, controls.unfocus, controls.back
+        controls.back = controls.skip = controls.unfocus = False
+        controls.focus = None
+        self._returning = False
+        if player is None:
+            return None
+        if focus is not None and self._current is not None:
+            item = player.item_for(focus)
+            if item is not None:
+                # Opening a tile never moves the rotation: the quad resumes after.
+                self._focus_return = self._current
+                self.playback.focus_return = self._current
+                return item
+        if self._focus_return is not None:
+            returning, self._focus_return = self._focus_return, None
+            self.playback.focus_return = None
+            if unfocus or not back:
+                item = player.item_for(returning)
+                if item is not None:
+                    self._returning = True
+                    return item
+        item = player.previous() if back else None
+        return item if item is not None else player.next()
+
+    def _fallback(self, screen: str) -> Any:
+        from remote_display.fallbacks import playback_mode
+
+        return playback_mode(screen, supports_animation=self.supports_animation, has_touch=self.has_touch,
+                             color_mode=self.profile.color_mode)
+
+    def _animation_for(self, item: Any) -> PackagePlayback | None:
+        """Local playback of the screen's render package, when it applies."""
+
+        if item.package is None or not self._fallback(item.screen_id).animated:
+            return None
+        package = self.artifacts.read_package(item.package)
+        if package is None:
+            return None
+        kwargs: dict[str, Any] = {"hold_seconds": item.duration}
+        if self._clock is not None:
+            kwargs["clock"] = self._clock
+        if self._ip_text is not None:
+            kwargs["ip_text"] = self._ip_text
+        try:
+            return PackagePlayback(package, self.profile, **kwargs)
+        except (KeyError, TypeError, ValueError, OSError) as exc:
+            LOGGER.warning("Render package for %s is not playable; showing its still: %s", item.screen_id, exc)
+            return None
+
     def step(self) -> tuple[str | None, float]:
-        """Present one frame; return ``(screen_id, seconds to show it)``."""
+        """Present a screen's first frame; return ``(screen_id, seconds to show it)``."""
 
         content = self.sync.active()
         if content.revision != self._content_revision:
             self._rebuild(content)
         player = self._player
-        back = self.controls.back
-        self.controls.back = self.controls.skip = False
-        item = None
-        if player is not None:
-            if back:
-                item = player.previous()
-            if item is None:
-                item = player.next()
+        item = self._next_item(player)
         frame = None
+        self.animation = None
         too_old = self._too_old()
         if item is not None and item.package is not None and not too_old:
-            data = self.artifacts.read(item.package)
-            if data is not None:
-                import io
+            self.animation = self._animation_for(item)
+            if self.animation is not None:
+                try:
+                    frame = self.animation.frame_at(0.0)
+                except (KeyError, TypeError, ValueError, OSError) as exc:
+                    LOGGER.warning("Render package for %s failed; showing its still: %s", item.screen_id, exc)
+                    self.animation = None
+            if frame is None:
+                data = self.artifacts.read(item.package)
+                if data is not None:
+                    import io
 
-                with Image.open(io.BytesIO(data)) as image:
-                    image.load()
-                    frame = image.copy()
+                    with Image.open(io.BytesIO(data)) as image:
+                        image.load()
+                        frame = image.copy()
         if frame is None:
+            self.animation = None
+            self._current = None
             state = "waiting for first sync" if content.playlist is None else "cached content unavailable"
             if not self.sync.connected and content.playlist is None:
                 state = "server unreachable"
@@ -243,8 +317,11 @@ class DisplayClient:
         self.report.playback_state = "playing" if self.sync.connected else "offline"
         self.report.current_screen = item.screen_id
         self.presenter.present(frame)
+        self._shown_at = self._monotonic()
+        self._current = item.screen_id
         self.playback.current_screen = item.screen_id
-        self.playback.remember(item.screen_id)
+        if self._focus_return is None and not self._returning:
+            self.playback.remember(item.screen_id)
         self.playback.scheduler = player.scheduler.export_state()
         if content.playlist is not None:
             self.playback.playlist_id = content.playlist.playlist_id
@@ -253,24 +330,62 @@ class DisplayClient:
             self.cache.save_playback(self.playback)
         except OSError as exc:
             LOGGER.warning("Could not save playback state: %s", exc)
-        return item.screen_id, item.duration
+        seconds = self.animation.duration if self.animation is not None else item.duration
+        return item.screen_id, seconds
+
+    def _controls_pending(self) -> bool:
+        c = self.controls
+        return c.skip or c.back or c.focus is not None or c.unfocus
+
+    def _poll_taps(self) -> None:
+        poll = getattr(self.presenter, "poll_taps", None)
+        if not self.has_touch or not callable(poll):
+            return
+        try:
+            taps = poll() or ()
+        except Exception:  # noqa: BLE001 - input trouble must never stop playback
+            LOGGER.debug("Touch polling failed", exc_info=True)
+            return
+        for x, y in taps:
+            self.on_touch(x, y)
 
     def wait(self, seconds: float) -> None:
-        """Hold the current frame, returning early on a control or stop."""
+        """Hold or animate the current screen, returning early on a control or stop.
+
+        Motion is drawn from the cached package on this device; nothing here
+        waits on the network.
+        """
 
         deadline = self._monotonic() + seconds
         while not self._stop.is_set() and self._monotonic() < deadline:
-            if self.controls.skip or self.controls.back:
+            self._poll_taps()
+            if self._controls_pending():
                 return
             if self.sync.active().revision != self._content_revision and self._player is None:
                 return
-            self._stop.wait(POLL_SECONDS)
+            interval = POLL_SECONDS
+            animation = self.animation
+            if animation is not None:
+                elapsed = self._monotonic() - self._shown_at
+                key = animation.key_at(elapsed)
+                if key != getattr(self, "_presented_key", None):
+                    try:
+                        self.presenter.present(animation.frame_at(elapsed))
+                    except (KeyError, TypeError, ValueError, OSError) as exc:
+                        LOGGER.warning("Animation stopped; holding the last frame: %s", exc)
+                        self.animation = None
+                    self._presented_key = key
+                interval = min(POLL_SECONDS, animation.frame_seconds)
+            self._stop.wait(interval)
 
     def on_touch(self, x: float, y: float) -> tuple[int, int]:
-        """Handle a tap in panel coordinates; left half goes back, right half skips.
+        """Handle a tap in panel coordinates, entirely on this device.
 
         The point is mapped into logical coordinates first, so the gesture is
-        the same however the panel is mounted.
+        the same however the panel is mounted. On an interactive quad a tap
+        opens the tile's screen full screen from the cache; on a focused tile
+        a tap returns to the quad. Elsewhere the left half goes back and the
+        right half skips.
         """
 
         mapper = getattr(self.presenter, "touch_to_logical", None)
@@ -278,11 +393,28 @@ class DisplayClient:
             lx, ly = mapper(x, y)
         else:
             lx, ly = to_logical(x, y, self.profile.width, self.profile.height, self.physical_rotation)
-        if lx < self.profile.width // 2:
+        if self._focus_return is not None:
+            self.controls.unfocus = True
+            return lx, ly
+        target = self._tile_at(lx, ly)
+        if target is not None:
+            self.controls.focus = target
+        elif lx < self.profile.width // 2:
             self.controls.back = True
         else:
             self.controls.skip = True
         return lx, ly
+
+    def _tile_at(self, x: int, y: int) -> str | None:
+        from display.rotation import hit_test
+
+        animation, player = self.animation, self._player
+        if animation is None or player is None or self._current is None:
+            return None
+        if not self._fallback(self._current).expands:
+            return None
+        target = hit_test(animation.focus_targets(), x, y)
+        return target if target is not None and player.item_for(target) is not None else None
 
     def on_button(self, name: str) -> None:
         if name in {"B", "Y", "right", "next"}:
@@ -320,6 +452,12 @@ def _load_env_files() -> None:
             return
 
 
+def _truthy(value: Any) -> bool:
+    if isinstance(value, str):
+        return value.strip().lower() not in {"0", "false", "no", "off", ""}
+    return bool(value)
+
+
 def build_client(settings: dict[str, Any], *, presenter: Any = None, transport: Any = None) -> DisplayClient:
     profile = resolve_display_profile_by_id(settings["DESK_DISPLAY_PROFILE"])
     if profile is None:
@@ -348,8 +486,12 @@ def build_client(settings: dict[str, Any], *, presenter: Any = None, transport: 
         if verify and settings.get("DESK_DISPLAY_SERVER_CA_BUNDLE"):
             verify = str(settings["DESK_DISPLAY_SERVER_CA_BUNDLE"])
         transport = RequestsTransport(server_url, verify=verify)
+    touch = str(settings.get("DESK_DISPLAY_CLIENT_TOUCH") or "auto").strip().lower()
+    has_touch = touch == "on" or (touch == "auto" and "hyperpixel" in profile.profile_id.lower())
+    animation = settings.get("DESK_DISPLAY_CLIENT_ANIMATION", True)
     sync = ClientSync(
-        capabilities_for(settings["DESK_DISPLAY_CLIENT_ID"], profile, rotation=decision),
+        capabilities_for(settings["DESK_DISPLAY_CLIENT_ID"], profile, rotation=decision, has_touch=has_touch,
+                         supports_animation=_truthy(animation)),
         transport,
         cache,
         artifacts,
