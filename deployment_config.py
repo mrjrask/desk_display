@@ -1293,6 +1293,32 @@ def startup_check(
     return report
 
 
+_ROLE_PROCESSES = {
+    Role.SERVER: "display_server.py",
+    Role.CLIENT: "display_client.py",
+    Role.STANDALONE: "main.py",
+}
+
+
+def require_role(component: str, expected: Role, env: Mapping[str, str] | None = None) -> None:
+    """Exit unless the configured role is *expected*.
+
+    main.py draws renderer output straight to the attached panel, so it runs
+    only as the standalone role; with a server or client role the panel is
+    driven by display_client.py from the server's manifests instead.
+    """
+
+    try:
+        role = resolve_role(env)
+    except ValueError as exc:
+        raise SystemExit(str(exc)) from None
+    if role is not expected:
+        raise SystemExit(
+            f"{component} runs only with {ROLE_ENV}={expected.value}, but this installation is "
+            f"{role.value}; run {_ROLE_PROCESSES[role]} instead"
+        )
+
+
 # ─── Secret exclusion ───────────────────────────────────────────────────────
 
 

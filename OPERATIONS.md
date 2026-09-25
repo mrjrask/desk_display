@@ -134,6 +134,39 @@ run the installer with your normal login and let it call `sudo` itself.
 
 ---
 
+## Installation modes (server and client)
+
+Besides the standalone display, Desk Display can run as a render server,
+a display client, or both on one machine. `service_units.py` defines the
+systemd services for each mode:
+
+| Mode | Services | Env file |
+| --- | --- | --- |
+| standalone | `desk_display.service` (main.py), config UI | `.env` |
+| server | `desk_display_server.service`, config UI | `.env` |
+| client | `desk_display_client.service` | `.env.client` |
+| combined | server, client and config UI | `.env` (server), `.env.client` (panel) |
+
+In a combined installation the attached panel is an ordinary client of
+its own server on the loopback address. It has its own client ID,
+profile, assigned playlist, cache, rotation and touch settings in
+`.env.client`, for example
+`DESK_DISPLAY_SERVER_URL=http://127.0.0.1:8765` (plain HTTP is allowed on
+loopback). The client unit does not depend on the server unit, so it
+starts from its cache before the server is up, and restarting the server
+leaves the panel playing. `main.py` refuses to start with a server or
+client role, and `desk_display.service` conflicts with the client service,
+so nothing draws to the panel outside the manifests.
+
+To write the unit files for a mode:
+
+```bash
+python3 -m service_units --mode combined --output /tmp/units --user "$USER"
+```
+
+Copy them into `/etc/systemd/system`, then disable the services the
+command lists under `disable:`. The Phase 19 installers do this for you.
+
 ## Running, restarting, and logs
 
 The ordinary systemd commands work:
