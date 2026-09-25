@@ -68,6 +68,41 @@ class HardwarePresenter:
         poll = getattr(self.display, "poll_touch", None)
         return poll() if callable(poll) else None
 
+    def poll_taps(self) -> list[tuple[float, float]]:
+        """Taps since the last poll, as panel (physical) pixel points.
+
+        Reads the SDL event queue of window and kernel outputs; SPI panels
+        without a touch layer report nothing.
+        """
+
+        display = self.display
+        pygame = getattr(display, "_pygame", None)
+        event_api = getattr(pygame, "event", None)
+        get = getattr(event_api, "get", None)
+        finger = getattr(pygame, "FINGERDOWN", None)
+        mouse = getattr(pygame, "MOUSEBUTTONDOWN", None)
+        types = [t for t in (finger, mouse) if isinstance(t, int)]
+        if not callable(get) or not types:
+            return []
+        try:
+            events = get(types)
+        except Exception:  # noqa: BLE001 - a closed or headless SDL session has no input
+            return []
+        panel_w = float(getattr(display, "render_width", 0) or getattr(display, "width", 0) or 1)
+        panel_h = float(getattr(display, "render_height", 0) or getattr(display, "height", 0) or 1)
+        window_w = float(getattr(display, "screen_width", 0) or panel_w)
+        window_h = float(getattr(display, "screen_height", 0) or panel_h)
+        taps: list[tuple[float, float]] = []
+        for event in events or ():
+            kind = getattr(event, "type", None)
+            if finger is not None and kind == finger:
+                taps.append((float(getattr(event, "x", 0.0)) * panel_w, float(getattr(event, "y", 0.0)) * panel_h))
+            elif mouse is not None and kind == mouse and getattr(event, "button", 1) == 1:
+                pos = getattr(event, "pos", None)
+                if pos is not None and len(pos) >= 2:
+                    taps.append((float(pos[0]) * panel_w / window_w, float(pos[1]) * panel_h / window_h))
+        return taps
+
     def close(self) -> None:
         for name in ("cleanup", "close"):
             method = getattr(self.display, name, None)

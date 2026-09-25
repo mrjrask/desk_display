@@ -96,6 +96,11 @@ class ClientPlayer:
         self.started_at = time.monotonic()
         return self._item(self.current_id)
 
+    def item_for(self, screen_id: str) -> PlaybackItem | None:
+        """An item for a cached screen outside the rotation (a focused tile)."""
+
+        return self._item(screen_id) if screen_id in self.packages else None
+
     def _item(self, screen_id: str) -> PlaybackItem:
         spec = self.playlist.get(screen_id, {})
         duration = float(

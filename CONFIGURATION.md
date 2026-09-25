@@ -240,6 +240,19 @@ with a touchscreen automatically demand the tiles of their interactive
 quads as touch dependencies, so a tapped tile opens at once. Clock packages
 never carry the server's IP address or update indicator.
 
+The client plays packages itself (`playback/package_player.py`): scrolls,
+logo slides and frames play once and then hold for the playlist's time;
+tickers and quads run for their own window; clocks tick from the client's
+own time. On a touch client (`DESK_DISPLAY_CLIENT_TOUCH`, `auto` for
+HyperPixel profiles) a tap on an interactive quad's tile opens that screen
+full screen from the cache, and a second tap, or the tile's time running
+out, returns to the quad without moving the rotation. A quad is not
+accepted until every tile the server has rendered is cached, so this works
+offline. `DESK_DISPLAY_CLIENT_ANIMATION=0` shows stills only and skips
+package downloads (clocks still tick). What each client will actually do is
+decided by `remote_display/fallbacks.py`, which the playlist assignment page
+uses for its warnings, so a warning always matches the display.
+
 Each screen keeps its current and three previous good artifacts. Artifacts
 listed in any client's current or previous manifest are never deleted;
 others are deleted `DESK_DISPLAY_ARTIFACT_RETENTION_HOURS` after they stop
@@ -291,7 +304,6 @@ on the display without a restart.
 "Provider" marks an upstream data provider setting: servers and standalone
 installs only, never clients.
 
-<!-- BEGIN GENERATED SETTINGS REFERENCE -->
 <!-- BEGIN GENERATED SETTINGS REFERENCE -->
 | Setting | Roles | Takes effect | Secret |
 | --- | --- | --- | --- |
@@ -479,6 +491,8 @@ installs only, never clients.
 | `BUTTON_X` | client, standalone | restart |  |
 | `BUTTON_Y` | client, standalone | restart |  |
 | `DESK_DISPLAY_RPI_GPIO_FALLBACK` | client, standalone | restart |  |
+| `DESK_DISPLAY_CLIENT_TOUCH` | client | restart |  |
+| `DESK_DISPLAY_CLIENT_ANIMATION` | client | restart |  |
 | `TOUCH_DOUBLE_TAP_MAX_INTERVAL_SECONDS` | client, standalone | restart |  |
 | `ESC_DOUBLE_PRESS_ACTION` | client, standalone | restart |  |
 | `ESC_DOUBLE_PRESS_MAX_INTERVAL_SECONDS` | client, standalone | restart |  |
@@ -547,7 +561,4 @@ installs only, never clients.
 | `RES_OPTIONS` | server, client, standalone | restart |  |
 | `LOCALDOMAIN` | server, client, standalone | restart |  |
 | `HOSTALIASES` | server, client, standalone | restart |  |
-<!-- END GENERATED SETTINGS REFERENCE -->
-<!-- END GENERATED SETTINGS REFERENCE -->
-<!-- END GENERATED SETTINGS REFERENCE -->
 <!-- END GENERATED SETTINGS REFERENCE -->

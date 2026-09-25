@@ -58,7 +58,7 @@ LOGGER = logging.getLogger("desk_display.client_sync")
 
 STATIC_IMAGE = "static_image"
 SUPPORTED_ARTIFACT_TYPES = frozenset({STATIC_IMAGE})
-MEDIA_EXTENSIONS = {"image/png": "png"}
+MEDIA_EXTENSIONS = {"image/png": "png", "application/vnd.desk-display.render-package+json": "json"}
 MAX_ARTIFACT_BYTES = 16 * 1024 * 1024
 # Decoded pixels are bounded separately from the download, so a small,
 # highly compressed image cannot expand into an oversized bitmap.
@@ -321,6 +321,50 @@ class ArtifactCache:
             os.utime(path)
         return data
 
+    # Render packages (Phase 10b): stored beside the images, by hash
+
+    @staticmethod
+    def package_ref(entry: Mapping[str, Any]) -> Mapping[str, Any] | None:
+        ref = entry.get("package")
+        return ref if isinstance(ref, Mapping) and ref.get("sha256") else None
+
+    def store_package(self, entry: Mapping[str, Any], data: bytes, profile: Mapping[str, Any]) -> Path:
+        """Verify a downloaded package against its manifest entry and keep it."""
+
+        from remote_display.render_package import PackageError, validate_package
+
+        ref = self.package_ref(entry)
+        if ref is None:
+            raise InvalidArtifact("invalid_manifest", "artifact entry has no package")
+        if len(data) != ref.get("length"):
+            raise InvalidArtifact("length_mismatch", f"downloaded {len(data)} bytes, expected {ref.get('length')}")
+        if hashlib.sha256(data).hexdigest() != ref.get("sha256"):
+            raise InvalidArtifact("checksum_mismatch", "package checksum does not match the manifest")
+        try:
+            package = validate_package(data)
+        except PackageError as exc:
+            raise InvalidArtifact("invalid_package", exc.message) from None
+        if (package["screen_id"], package["render_profile"]) != (entry.get("screen_id"),
+                                                                  profile.get("display_profile")):
+            raise InvalidArtifact("invalid_package", "package is for another screen or display profile")
+        path = self.path_for(ref)
+        with self._lock:
+            _atomic_write(path, data, self._staging)
+        return path
+
+    def read_package(self, entry: Mapping[str, Any]) -> dict[str, Any] | None:
+        """The verified package for *entry*, or ``None`` when absent or corrupt."""
+
+        ref = self.package_ref(entry)
+        data = None if ref is None else self.read(ref)
+        if data is None:
+            return None
+        try:
+            package = json.loads(data)
+        except ValueError:
+            return None
+        return package if isinstance(package, dict) else None
+
     # Manifests (index 0 is active; higher indexes are older)
 
     def _manifest_path(self, index: int) -> Path:
@@ -369,6 +413,10 @@ class ArtifactCache:
             for entry in manifest.get("artifacts") or ():
                 with contextlib.suppress(SyncError):
                     names.add(self.object_name(entry))
+                ref = self.package_ref(entry)
+                if ref is not None:
+                    with contextlib.suppress(SyncError):
+                        names.add(self.object_name(ref))
         return names
 
     def size(self) -> int:
@@ -678,26 +726,41 @@ class ClientSync:
         self.artifacts.evict()
         return self.active()
 
+    def wants_package(self, ref: Mapping[str, Any] | None) -> bool:
+        """Packages this client plays: all when it animates, clocks always."""
+
+        return ref is not None and (bool(self.capabilities.supports_animation) or ref.get("kind") == "clock")
+
+    def _fetch(self, entry: Mapping[str, Any], ref: Mapping[str, Any], what: str) -> bytes | None:
+        url = str(ref.get("url") or "")
+        if urlsplit(url).netloc or not url.startswith(f"/api/v1/clients/{self.client_id}/artifacts/"):
+            self.errors.record("invalid_manifest", f"{what} URL is outside this client's API")
+            return None
+        length = ref.get("length")
+        if type(length) is not int or not 0 < length <= MAX_ARTIFACT_BYTES:
+            self.errors.record("too_large", f"{what} for {entry.get('screen_id')} is too large")
+            return None
+        response = self._client_request("GET", url, max_bytes=length)
+        if response.status != 200:
+            raise self._fail(response, f"{what} download")
+        return response.body
+
     def _download(self, manifest: Mapping[str, Any]) -> None:
         profile = manifest
         for entry in manifest.get("artifacts") or ():
             if not entry.get("sha256") or entry.get("artifact_type") not in SUPPORTED_ARTIFACT_TYPES:
                 continue
-            if self.artifacts.has(entry):
-                continue
-            url = str(entry.get("url") or "")
-            if urlsplit(url).netloc or not url.startswith(f"/api/v1/clients/{self.client_id}/artifacts/"):
-                self.errors.record("invalid_manifest", "artifact URL is outside this client's API")
-                continue
-            length = entry.get("length")
-            if type(length) is not int or not 0 < length <= MAX_ARTIFACT_BYTES:
-                self.errors.record("too_large", f"artifact for {entry.get('screen_id')} is too large")
-                continue
             try:
-                response = self._client_request("GET", url, max_bytes=length)
-                if response.status != 200:
-                    raise self._fail(response, "artifact download")
-                self.artifacts.store(entry, response.body, profile)
+                if not self.artifacts.has(entry):
+                    data = self._fetch(entry, entry, "artifact")
+                    if data is None:
+                        continue
+                    self.artifacts.store(entry, data, profile)
+                ref = self.artifacts.package_ref(entry)
+                if self.wants_package(ref) and not self.artifacts.has(ref):
+                    data = self._fetch(entry, ref, "render package")
+                    if data is not None:
+                        self.artifacts.store_package(entry, data, profile)
             except SyncError as exc:
                 if exc.code == "server_unreachable":
                     raise
@@ -705,12 +768,33 @@ class ClientSync:
                 LOGGER.warning("Artifact for %s rejected: %s", entry.get("screen_id"), exc.message)
 
     def _usable(self, manifest: Mapping[str, Any]) -> Callable[[str], bool]:
+        """Whether everything a screen needs is cached.
+
+        That is its still image, its render package when this client plays
+        packages, and, for an interactive quad on a touch client, every
+        interaction dependency, so a tapped tile never needs the network.
+        """
+
         content = ActiveContent(None, manifest)
+
+        def cached(entry: Mapping[str, Any] | None) -> bool:
+            if entry is None or entry.get("artifact_type") not in SUPPORTED_ARTIFACT_TYPES:
+                return False
+            if not self.artifacts.has(entry):
+                return False
+            ref = self.artifacts.package_ref(entry)
+            return not self.wants_package(ref) or self.artifacts.has(ref)
 
         def usable(screen: str) -> bool:
             entry = content.entry(screen)
-            return entry is not None and entry.get("artifact_type") in SUPPORTED_ARTIFACT_TYPES \
-                and self.artifacts.has(entry)
+            if not cached(entry):
+                return False
+            if entry.get("remote_class") == "interactive_focus" and self.capabilities.has_touch:
+                # A dependency the server has no output for cannot block
+                # the playlist; its tile simply does not open.
+                deps = [content.entry(dep) for dep in manifest.get("interactive_dependency_screens") or ()]
+                return all(cached(dep) for dep in deps if dep is not None)
+            return True
 
         return usable
 

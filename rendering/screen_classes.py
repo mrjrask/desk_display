@@ -175,6 +175,9 @@ for _logo in _LOGOS:
 CLASSIFICATIONS: Mapping[str, ScreenClass] = {
     screen: ScreenClass(screen, kind, note) for screen, (kind, note) in _TABLE.items()
 }
+# Screens whose meaning depends on colour (radar echoes, AQI bands); a
+# one-bit display shows them, but loses information.
+COLOR_DEPENDENT = frozenset({"weather radar", "air quality"})
 # Tiles of the fixed interactive quads, as registered in screens/registry.py.
 _FIXED_FOCUS_TILES: Mapping[str, tuple[str, ...]] = {
     "weather quad": ("weather1", "air quality", "weather hourly", "weather daily"),
@@ -215,6 +218,7 @@ def interaction_targets(screens: Iterable[str]) -> set[str]:
 __all__ = [
     "CLASSES",
     "CLASSIFICATIONS",
+    "COLOR_DEPENDENT",
     "PACKAGE_KINDS",
     "PERIODIC_REFRESH_SECONDS",
     "ScreenClass",
