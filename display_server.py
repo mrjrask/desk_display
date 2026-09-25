@@ -62,6 +62,7 @@ from remote_display.models import (
     UnsupportedCapabilitiesError,
     identifier,
 )
+from remote_display.playlist_store import PlaylistStore, registry_snapshot_path, store_path
 from remote_display.registry import (
     Assignment,
     AssignmentLookup,
@@ -89,6 +90,8 @@ class DisplayServerConfig:
     static_clients: Mapping[str, str] = field(default_factory=dict)
     artifact_dir: Path = _PROJECT_ROOT / "cache" / "artifacts"
     public_url: str | None = None
+    playlist_store_path: Path | None = None
+    registry_snapshot_path: Path | None = None
 
     @classmethod
     def from_env(cls, env: Mapping[str, str] | None = None) -> DisplayServerConfig:
@@ -101,6 +104,8 @@ class DisplayServerConfig:
             static_clients=settings["DESK_DISPLAY_STATIC_CLIENTS"] or {},
             artifact_dir=Path(settings["DESK_DISPLAY_ARTIFACT_DIR"] or _PROJECT_ROOT / "cache" / "artifacts").expanduser(),
             public_url=settings["DESK_DISPLAY_SERVER_PUBLIC_URL"],
+            playlist_store_path=store_path(env),
+            registry_snapshot_path=registry_snapshot_path(env),
         )
 
 
@@ -145,6 +150,15 @@ def create_app(
     """Build the API.  ``assignments`` looks up each client's assigned playlist."""
 
     config = config or DisplayServerConfig.from_env()
+    if assignments is None and config.playlist_store_path is not None:
+        store = PlaylistStore(config.playlist_store_path)
+
+        def assignments(client_id: str) -> Assignment | None:
+            stored = store.assignment_for(client_id)
+            if stored is None:
+                return None
+            return Assignment(stored.playlist_id, stored.playlist_revision, stored.screens)
+
     registry = ClientRegistry(
         lease_seconds=config.lease_seconds,
         sync_interval_seconds=config.sync_interval_seconds,
@@ -164,8 +178,28 @@ def create_app(
         g.started = time.perf_counter()
         registry.expire()
 
+    def _publish_snapshot() -> None:
+        if config.registry_snapshot_path is None:
+            return
+        try:
+            registry.write_snapshot(config.registry_snapshot_path)
+        except OSError as exc:
+            WEB_LOGGER.warning("Could not write client registry snapshot: %s", exc)
+
+    _publish_snapshot()
+
     @app.after_request
     def _finish(response):
+        # Registrations, heartbeats, deliveries and admin changes alter what the
+        # config UI shows; health checks and asset downloads do not.
+        if (
+            response.status_code < 400
+            and request.path.startswith("/api/v1/")
+            and request.path != "/api/v1/health"
+            and "/assets/" not in request.path
+            and request.path != "/api/v1/admin/status"
+        ):
+            _publish_snapshot()
         response.headers.setdefault("Cache-Control", "no-store")
         response.headers["X-Content-Type-Options"] = "nosniff"
         deployment_config.redact_response(response)
@@ -240,8 +274,12 @@ def create_app(
             "sync_interval_seconds": registry.sync_interval_seconds,
         }
 
-    def _assignment_payload(client_id: str) -> dict[str, Any]:
+    def _assignment_payload(client_id: str, *, delivered: bool = False) -> dict[str, Any]:
+        """Assignment fields for a response; ``delivered`` records the send."""
+
         assignment = _assignment(client_id)
+        if delivered:
+            registry.mark_delivered(client_id, None if assignment is None else assignment.playlist_revision)
         if assignment is None:
             return {"assignment_state": "unassigned", "assigned_playlist": None}
         return {
@@ -299,7 +337,7 @@ def create_app(
             "client_id": record.client_id,
             "static_client": record.static,
             "renewed": registration.renewed,
-            **_assignment_payload(record.client_id),
+            **_assignment_payload(record.client_id, delivered=True),
             "manifest_revision": _manifest_revision(record),
             **_lease(record),
             "client_credential": registration.credential,
@@ -320,7 +358,7 @@ def create_app(
         record = registry.heartbeat(record.client_id, _bearer() or "", status, demand)
         return jsonify({
             "client_id": record.client_id,
-            **_assignment_payload(record.client_id),
+            **_assignment_payload(record.client_id, delivered=True),
             "manifest_revision": _manifest_revision(record),
             **_lease(record),
         })
@@ -332,7 +370,7 @@ def create_app(
             "client_config_schema_version": CLIENT_CONFIG_SCHEMA_VERSION,
             "client_id": record.client_id,
             "display_profile": record.capabilities.display_profile,
-            **_assignment_payload(record.client_id),
+            **_assignment_payload(record.client_id, delivered=True),
             **_lease(record),
         }))
 
@@ -345,7 +383,7 @@ def create_app(
             display_profile=record.capabilities.display_profile,
             logical_width=record.capabilities.logical_width,
             logical_height=record.capabilities.logical_height,
-            **_assignment_payload(record.client_id),
+            **_assignment_payload(record.client_id, delivered=True),
             requested_screens=[] if record.demand is None else list(record.demand.all_screens),
             artifacts=[],
             cache_complete=False,

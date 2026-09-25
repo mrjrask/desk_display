@@ -32,6 +32,7 @@ from flask import (
 
 import config
 import deployment_config
+import remote_playlists_ui
 from config import CENTRAL_TIME
 from diagnostic_playback import load_diagnostic_screen, save_diagnostic_screen
 from env_config import non_negative_env_int
@@ -1694,6 +1695,22 @@ def import_screens() -> Any:
     )
 
 
+
+
+def _playlist_actor() -> str:
+    """Name recorded in playlist audit entries for the current request."""
+
+    if not _is_auth_enabled():
+        return "anonymous (UI authentication disabled)"
+    return (_get_auth_username() or "admin") if _is_authenticated() else "unauthenticated"
+
+
+def _active_playlist_document() -> dict[str, Any]:
+    config = _load_active_config()
+    return {key: config[key] for key in ("screens", "playlists", "sequence", "scroll") if key in config}
+
+
+remote_playlists_ui.register(app, actor=_playlist_actor, active_document=_active_playlist_document)
 
 
 if __name__ == "__main__":

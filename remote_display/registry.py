@@ -26,13 +26,19 @@ is returned once, at registration, and only its SHA-256 is stored.
 """
 from __future__ import annotations
 
+import contextlib
 import hashlib
 import hmac
+import json
+import os
 import secrets
+import tempfile
 import threading
 import time
 from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass, field, replace
+from datetime import datetime, timezone
+from pathlib import Path
 from typing import Any
 
 from display_profiles import PROFILE_PRESETS
@@ -122,6 +128,7 @@ class ClientRecord:
     demand: ClientDemand | None = None
     status: ClientStatus | None = None
     disabled: bool = False
+    delivered_playlist_revision: str | None = None
 
     def lease_state(self, now: float) -> str:
         if self.disabled:
@@ -219,7 +226,8 @@ class ClientRegistry:
                 last_seen=now,
                 lease_expires_at=now + self.lease_seconds,
                 demand=demand if demand is not None else (record.demand if renewed and record else None),
-                status=record.status if renewed and record else None,
+                status=record.status if record else None,
+                delivered_playlist_revision=record.delivered_playlist_revision if record else None,
             )
             self._clients[record.client_id] = record
             return Registration(record=replace(record), credential=new_credential, renewed=renewed)
@@ -287,6 +295,57 @@ class ClientRegistry:
                 record.lease_expires_at = None
                 record.demand = None
             return replace(record)
+
+    def mark_delivered(self, client_id: str, playlist_revision: str | None) -> None:
+        """Record the playlist revision the server last sent to *client_id*."""
+
+        with self._lock:
+            record = self._clients.get(client_id)
+            if record is not None:
+                record.delivered_playlist_revision = playlist_revision
+
+    def snapshot(self) -> dict[str, Any]:
+        """Credential-free view of every client, for the configuration UI."""
+
+        now = self.clock()
+        clients = {}
+        for record in self.records():
+            clients[record.client_id] = {
+                "client_id": record.client_id,
+                "static": record.static,
+                "disabled": record.disabled,
+                "lease_state": record.lease_state(now),
+                "registered_at": _iso(record.registered_at),
+                "last_seen": _iso(record.last_seen),
+                "lease_expires_at": _iso(record.lease_expires_at),
+                "capabilities": record.capabilities.to_wire(),
+                "status": None if record.status is None else record.status.to_wire(),
+                "delivered_playlist_revision": record.delivered_playlist_revision,
+            }
+        return {
+            "schema_version": 1,
+            "generated_at": _iso(now),
+            "lease_seconds": self.lease_seconds,
+            "heartbeat_interval_seconds": self.heartbeat_interval_seconds,
+            "clients": clients,
+        }
+
+    def write_snapshot(self, path: str | os.PathLike[str]) -> None:
+        """Atomically publish :meth:`snapshot` to *path*."""
+
+        target = Path(path).expanduser()
+        target.parent.mkdir(parents=True, exist_ok=True)
+        fd, tmp = tempfile.mkstemp(prefix=f".{target.name}.", suffix=".tmp", dir=target.parent)
+        try:
+            with os.fdopen(fd, "w", encoding="utf-8") as handle:
+                json.dump(self.snapshot(), handle, indent=2, sort_keys=True)
+                handle.flush()
+                os.fsync(handle.fileno())
+            os.replace(tmp, target)
+        except BaseException:
+            with contextlib.suppress(FileNotFoundError):
+                os.unlink(tmp)
+            raise
 
     def get(self, client_id: str) -> ClientRecord | None:
         with self._lock:
@@ -364,6 +423,24 @@ class ClientRegistry:
         if not record.credential_hash or not isinstance(credential, str) or not credential:
             return False
         return hmac.compare_digest(_hash(credential), record.credential_hash)
+
+
+def _iso(timestamp: float | None) -> str | None:
+    if timestamp is None:
+        return None
+    return datetime.fromtimestamp(timestamp, timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z")
+
+
+def read_snapshot(path: str | os.PathLike[str]) -> dict[str, Any]:
+    """Read a registry snapshot; a missing or unreadable file means no clients."""
+
+    try:
+        data = json.loads(Path(path).expanduser().read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {"schema_version": 1, "clients": {}}
+    if not isinstance(data, dict) or not isinstance(data.get("clients"), dict):
+        return {"schema_version": 1, "clients": {}}
+    return data
 
 
 def _hash(credential: str) -> str:
