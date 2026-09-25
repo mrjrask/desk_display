@@ -104,7 +104,7 @@ def _profile(profile_id: str, width: int, height: int, *, compact: bool,
 
 
 PROFILE_PRESETS: dict[str, RenderProfile] = {
-    DISPLAY_PROFILE_DISPLAY_HAT_MINI: _profile(DISPLAY_PROFILE_DISPLAY_HAT_MINI, 320, 240, compact=False, fade=10, scroll_step=1, scroll_delay=.020, logo_cap=1., animation_delay=.06, constraints=HardwareRenderingConstraints(max_refresh_hz=30, framebuffer=True)),
+    DISPLAY_PROFILE_DISPLAY_HAT_MINI: _profile(DISPLAY_PROFILE_DISPLAY_HAT_MINI, 320, 240, compact=False, fade=10, scroll_step=1, scroll_delay=.020, logo_cap=1., animation_delay=.06, constraints=HardwareRenderingConstraints(max_refresh_hz=30)),
     DISPLAY_PROFILE_ADAFRUIT_MINIPITFT_114: _profile(DISPLAY_PROFILE_ADAFRUIT_MINIPITFT_114, 240, 135, compact=True, fade=6, scroll_step=1, scroll_delay=.028, logo_cap=1.1, animation_delay=.06, font_scale=.75, logo_scale=.75, constraints=HardwareRenderingConstraints(max_refresh_hz=30)),
     DISPLAY_PROFILE_HYPERPIXEL4: _profile(DISPLAY_PROFILE_HYPERPIXEL4, 800, 480, compact=True, fade=6, scroll_step=1, scroll_delay=.030, logo_cap=3., animation_delay=.05, font_scale=2., logo_scale=2., constraints=HardwareRenderingConstraints(max_refresh_hz=60, framebuffer=True)),
     DISPLAY_PROFILE_HYPERPIXEL4_SQUARE: _profile(DISPLAY_PROFILE_HYPERPIXEL4_SQUARE, 720, 720, compact=True, fade=6, scroll_step=1, scroll_delay=.030, logo_cap=3., animation_delay=.05, font_scale=2.25, logo_scale=2.25, constraints=HardwareRenderingConstraints(max_refresh_hz=60, framebuffer=True)),

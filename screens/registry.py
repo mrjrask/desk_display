@@ -71,6 +71,16 @@ def _profile_composition_globals(func: Callable[..., Any], profile: RenderProfil
         replacements: dict[str, Any] = {
             "WIDTH": profile.width,
             "HEIGHT": profile.height,
+            "DISPLAY_SCALE": config._compute_display_scale(
+                config.BASE_WIDTH,
+                config.BASE_HEIGHT,
+                profile.width,
+                profile.height,
+            ),
+            "DISPLAY_SCALE_WIDTH": max(
+                0.1,
+                profile.width / config.BASE_WIDTH,
+            ) if config.BASE_WIDTH > 0 else 1.0,
             "ACTIVE_DISPLAY_PROFILE": profile,
             "DISPLAY_PROFILE_ID": profile.profile_id,
             "DISPLAY_PROFILE_LOGO_SCALE_CAP": profile.logo_scale_cap,
@@ -98,6 +108,19 @@ def _profile_composition_globals(func: Callable[..., Any], profile: RenderProfil
         for name, value in replacements.items():
             if hasattr(config, name):
                 setattr(config, name, value)
+
+        # Modules with import-time layout constants can provide values derived
+        # from the now-installed profile globals.  Keep the hook explicit: it
+        # avoids reloading modules (and repeating their import side effects)
+        # while allowing all derived state to be restored after composition.
+        profile_globals_factory = module_globals.get("_render_profile_globals")
+        if callable(profile_globals_factory):
+            derived_replacements = profile_globals_factory(profile)
+            if isinstance(derived_replacements, dict):
+                for name, value in derived_replacements.items():
+                    if name in module_globals and name not in original:
+                        original[name] = module_globals[name]
+                    module_globals[name] = value
         try:
             yield
         finally:

@@ -804,6 +804,24 @@ def test_date_background_composition_keeps_context_profile(monkeypatch):
     assert deferred[0]() == (800, 480)
 
 
+def test_nfl_scoreboard_recomputes_import_time_layout_for_profile():
+    from screens import nfl_scoreboard
+
+    original_row_height = nfl_scoreboard.SCORE_ROW_H
+    profile = resolve_display_profile(800, 480)
+    layout = _invoke_for_profile(
+        nfl_scoreboard._render_profile_globals,
+        profile,
+        profile,
+    )
+
+    assert layout["HYPERPIXEL_LAYOUT"] is True
+    assert layout["SCORE_ROW_H"] == 126
+    assert sum(layout["COL_WIDTHS"]) == 800
+    assert layout["COL_X"] == [0, 200, 350, 450, 600, 800]
+    assert nfl_scoreboard.SCORE_ROW_H == original_row_height
+
+
 def test_quad_screen_is_registered(monkeypatch):
     now = datetime.datetime(2024, 1, 1, 12, 0, tzinfo=CENTRAL_TIME)
     weather = {"hourly": []}

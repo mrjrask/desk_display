@@ -105,6 +105,76 @@ if HYPERPIXEL_4_SQUARE:
     LEAGUE_LOGO_BASE_HEIGHT = min(LEAGUE_LOGO_BASE_HEIGHT, scale_value_width(40))
 LOGO_HEIGHT = TEAM_LOGO_BASE_HEIGHT
 LEAGUE_LOGO_HEIGHT = LEAGUE_LOGO_BASE_HEIGHT
+
+
+def _render_profile_globals(_profile) -> dict[str, object]:
+    """Build import-time layout constants for the installed render profile."""
+
+    hyperpixel_layout = is_hyperpixel_next_layout()
+    hyperpixel_square = is_hyperpixel_4_square_layout()
+
+    def scale_y(value: int) -> int:
+        return scale_value(value) if hyperpixel_layout else scale_value_width(value)
+
+    base_widths = [76, 60, 48, 60, 76] if hyperpixel_square else [80, 60, 40, 60, 80]
+    column_widths = [scale_value_width(width) for width in base_widths]
+    total_column_width = sum(column_widths)
+    column_left = max(0, (WIDTH - total_column_width) // 2)
+    column_x = [column_left]
+    for width in column_widths:
+        column_x.append(column_x[-1] + width)
+
+    team_logo_height = scale_value_width(30 if hyperpixel_layout else 40)
+    league_logo_height = team_logo_height
+    if hyperpixel_layout and not is_kernel_driven_display():
+        league_logo_height = int(round(team_logo_height * 0.8))
+    if hyperpixel_square:
+        league_logo_height = min(league_logo_height, scale_value_width(40))
+
+    score_font = get_screen_font(
+        SCREEN_ID,
+        "score",
+        base_font=FONT_TEAM_SPORTS,
+        default_size=39,
+    )
+    status_font = get_screen_font(
+        SCREEN_ID,
+        "status",
+        base_font=FONT_STATUS,
+        default_size=28,
+    )
+
+    return {
+        "HYPERPIXEL_LAYOUT": hyperpixel_layout,
+        "HYPERPIXEL_4_SQUARE": hyperpixel_square,
+        "TITLE_GAP": scale_y(8),
+        "BLOCK_SPACING": scale_y(10),
+        "SCORE_ROW_H": scale_y(56),
+        "STATUS_ROW_H": scale_y(18),
+        "SUPER_BOWL_LOGO_GAP": scale_y(6),
+        "COL_WIDTHS": column_widths,
+        "_TOTAL_COL_WIDTH": total_column_width,
+        "_COL_LEFT": column_left,
+        "COL_X": column_x,
+        "LEAGUE_LOGO_GAP": scale_y(4),
+        "TEAM_LOGO_BASE_HEIGHT": team_logo_height,
+        "LEAGUE_LOGO_BASE_HEIGHT": league_logo_height,
+        "LOGO_HEIGHT": team_logo_height,
+        "LEAGUE_LOGO_HEIGHT": league_logo_height,
+        "SCORE_FONT": score_font,
+        "STATUS_FONT": status_font,
+        "STALE_FONT": clone_font(FONT_STATUS, max(5, scale_value_width(8))),
+        "CENTER_FONT": get_screen_font(
+            SCREEN_ID,
+            "center",
+            base_font=FONT_STATUS,
+            default_size=28,
+        ),
+        "BACKGROUND_COLOR": get_screen_background_color(
+            SCREEN_ID,
+            SCOREBOARD_BACKGROUND_COLOR,
+        ),
+    }
 SCORE_FONT = get_screen_font(
     SCREEN_ID,
     "score",

@@ -64,3 +64,9 @@ def test_custom_fallback_dimensions_do_not_leak_between_profiles():
     assert (second.width, second.height) == (1366, 768)
     assert first == third
     assert first is not third
+
+
+def test_display_hat_mini_is_not_kernel_driven():
+    profile = PROFILE_PRESETS[DISPLAY_PROFILE_DISPLAY_HAT_MINI]
+
+    assert profile.constraints.framebuffer is False
