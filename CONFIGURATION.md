@@ -116,7 +116,7 @@ removes the least recently used artifacts first and never removes anything
 the active manifest or the two previous (last-known-good) manifests use. With
 nothing cached, the client draws a local status screen showing its ID, the
 server host, and its sync state; it never shows a token or credential.
-`DISPLAY_ROTATION` is applied only when a frame is presented. A client holds
+`DISPLAY_ROTATION` is applied only when a frame is presented, never in render keys, so identical displays mounted differently share artifacts; touches are mapped back to logical coordinates before gestures and hit tests, and the kernel-overlay double-rotation guard (`DISPLAY_ROTATION_STRICT`) still applies. The client reports its configured, kernel and applied rotation to the server for diagnostics. A client holds
 no upstream provider credentials: all data is fetched and rendered by the
 server.
 

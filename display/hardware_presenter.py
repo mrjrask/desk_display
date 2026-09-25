@@ -48,6 +48,22 @@ class HardwarePresenter:
     def set_button_callback(self, callback: Callable[[str], None] | None) -> None:
         self.display.set_button_callback(callback)
 
+    @property
+    def rotation(self) -> int:
+        """The rotation the output driver applies (after the double-rotation guard)."""
+
+        return int(getattr(self.display, "rotation", 0) or 0) % 360
+
+    def touch_to_logical(self, x: float, y: float) -> tuple[int, int]:
+        """Map a panel touch point into the profile's logical coordinates."""
+
+        from display.rotation import to_logical
+
+        profile = self.profile
+        if profile is None:
+            return int(x), int(y)
+        return to_logical(x, y, profile.width, profile.height, self.rotation)
+
     def poll_touch(self) -> Any:
         poll = getattr(self.display, "poll_touch", None)
         return poll() if callable(poll) else None
