@@ -1,5 +1,6 @@
 """Tests for the hardware-free rendering boundary."""
 
+import importlib
 from types import SimpleNamespace
 
 from PIL import Image
@@ -36,7 +37,10 @@ def test_default_renderer_thaws_snapshot_for_legacy_screens(monkeypatch):
         )
         return {"weather_hourly": definition}, None
 
-    monkeypatch.setattr("screens.registry.build_screen_registry", fake_build_screen_registry)
+    # Patch the module the renderer will import: other tests drop
+    # screens.registry from sys.modules, leaving the package attribute stale.
+    registry_module = importlib.import_module("screens.registry")
+    monkeypatch.setattr(registry_module, "build_screen_registry", fake_build_screen_registry)
 
     renderer = ScreenRenderer()
     renderer.render(

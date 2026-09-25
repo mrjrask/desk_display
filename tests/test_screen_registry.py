@@ -7,7 +7,7 @@ from PIL import Image
 
 import screens.registry as registry_module
 from config import CENTRAL_TIME, MLB_CUBS_TEAM_ID, MLB_SOX_TEAM_ID
-from display_profiles import resolve_display_profile
+from display_profiles import resolve_display_profile, resolve_display_profile_by_id
 from screens.registry import (
     ScreenContext,
     _invoke_for_profile,
@@ -45,6 +45,7 @@ def _make_context(
     offline: bool = False,
     weather_fetched_at: datetime.datetime | None = None,
     allow_upstream_requests: bool = True,
+    render_profile=None,
 ) -> ScreenContext:
     cache = {"weather": weather}
     if cache_updates:
@@ -59,7 +60,7 @@ def _make_context(
         offline=offline,
         weather_fetched_at=weather_fetched_at,
         skip_scoreboards=False,
-        render_profile=resolve_display_profile(320, 240),
+        render_profile=render_profile or resolve_display_profile(320, 240),
         allow_upstream_requests=allow_upstream_requests,
     )
 
@@ -189,9 +190,9 @@ def test_profile_globals_follow_wrapped_renderer_and_fonts_are_scaled_under_lock
 
     def assert_locked(font, scale):
         assert lock_state["held"] is True
-        assert font is renderer_module.FONT_TEST
         assert scale == pytest.approx(2 / 2.85)
-        return scaled_font
+        # config.FONT_* are scaled too; only the renderer's own font is checked.
+        return scaled_font if font is renderer_module.FONT_TEST else font
 
     monkeypatch.setattr(registry_module, "_PROFILE_COMPOSITION_LOCK", TrackingLock())
     monkeypatch.setattr(registry_module, "_scaled_font", assert_locked)
@@ -489,7 +490,6 @@ def test_mlb_next_home_series_uses_next_home_series_title(monkeypatch):
         titles.append(title)
 
     monkeypatch.setattr(registry_module, "draw_series_screen", _fake_draw_series_screen)
-    monkeypatch.setattr(registry_module, "is_display_profile", lambda *args, **kwargs: False)
 
     cache_updates = {
         "cubs": {"next_home_series": [{"gamePk": 5001}]},
@@ -514,17 +514,19 @@ def test_mlb_series_titles_keep_team_name_on_hyperpixel4(monkeypatch):
         titles.append(title)
 
     monkeypatch.setattr(registry_module, "draw_series_screen", _fake_draw_series_screen)
-    monkeypatch.setattr(
-        registry_module,
-        "is_display_profile",
-        lambda profile_id, *_args, **_kwargs: profile_id == "hyperpixel4",
-    )
 
     cache_updates = {
         "cubs": {"next_series": [{"gamePk": 5001}]},
         "sox": {"next_series": [{"gamePk": 6001}]},
     }
-    registry, _ = build_screen_registry(_make_context(weather, now, cache_updates=cache_updates))
+    registry, _ = build_screen_registry(
+        _make_context(
+            weather,
+            now,
+            cache_updates=cache_updates,
+            render_profile=resolve_display_profile_by_id("hyperpixel4"),
+        )
+    )
 
     registry["cubs next series"].render()
     registry["sox next series"].render()
@@ -650,8 +652,6 @@ def test_adafruit_minipitft_routes_scoreboard_v2_ids_to_v1_renderers(monkeypatch
 
         return _renderer
 
-    monkeypatch.setattr(registry_module, "WIDTH", 240)
-    monkeypatch.setattr(registry_module, "HEIGHT", 135)
     monkeypatch.setattr(registry_module, "render_nfl_scoreboard", _mark("nfl_v1"))
     monkeypatch.setattr(registry_module, "render_nfl_scoreboard_v2", _mark("nfl_v2"))
     monkeypatch.setattr(registry_module, "render_nhl_scoreboard", _mark("nhl_v1"))
@@ -669,6 +669,7 @@ def test_adafruit_minipitft_routes_scoreboard_v2_ids_to_v1_renderers(monkeypatch
                 "hawks": {"next": {"id": 1}},
                 "scoreboards": {"nfl": [{}], "nhl": [{}], "mlb": [{}], "nba": [{}]},
             },
+            render_profile=resolve_display_profile_by_id("adafruit_minipitft_114"),
         )
     )
 
@@ -868,7 +869,12 @@ def test_date_background_composition_keeps_context_profile(monkeypatch):
     context = _make_context({"hourly": []}, now)
     context.render_profile = resolve_display_profile(800, 480)
     renderer_module = types.ModuleType("test_background_renderer")
-    exec("def compose():\n    return WIDTH, HEIGHT\n", renderer_module.__dict__)
+    exec(
+        "WIDTH, HEIGHT = 320, 240\n"
+        "def compose():\n"
+        "    return WIDTH, HEIGHT\n",
+        renderer_module.__dict__,
+    )
     deferred = []
 
     def _fake_draw_date(_display, transition=False, profile_invoker=None):
