@@ -71,6 +71,11 @@ def _profile_composition_globals(func: Callable[..., Any], profile: RenderProfil
         replacements: dict[str, Any] = {
             "WIDTH": profile.width,
             "HEIGHT": profile.height,
+            # A few older renderers cache config.WIDTH/config.HEIGHT under
+            # short names at import time rather than importing the canonical
+            # names directly.
+            "W": profile.width,
+            "H": profile.height,
             "DISPLAY_SCALE": config._compute_display_scale(
                 config.BASE_WIDTH,
                 config.BASE_HEIGHT,
@@ -102,12 +107,26 @@ def _profile_composition_globals(func: Callable[..., Any], profile: RenderProfil
             if name.startswith("FONT_"):
                 replacements[name] = _scaled_font(value, scale)
 
+        # Renderers which use ``import config`` dereference fonts on the
+        # config module at draw time and consequently have no FONT_* globals
+        # for the loop above to discover.  Install scaled copies there too.
+        config_font_replacements = {
+            name: _scaled_font(value, scale)
+            for name, value in vars(config).items()
+            if name.startswith("FONT_")
+        }
+
         original = {name: module_globals[name] for name in replacements if name in module_globals}
-        config_original = {name: getattr(config, name) for name in replacements if hasattr(config, name)}
+        config_replacements = {
+            name: value for name, value in replacements.items() if hasattr(config, name)
+        }
+        config_replacements.update(config_font_replacements)
+        config_original = {
+            name: getattr(config, name) for name in config_replacements
+        }
         module_globals.update({name: value for name, value in replacements.items() if name in module_globals})
-        for name, value in replacements.items():
-            if hasattr(config, name):
-                setattr(config, name, value)
+        for name, value in config_replacements.items():
+            setattr(config, name, value)
 
         # Modules with import-time layout constants can provide values derived
         # from the now-installed profile globals.  Keep the hook explicit: it

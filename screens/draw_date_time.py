@@ -222,16 +222,26 @@ def _cycle_colors_after_load(
     screen_id: str,
     frame_state: dict | None = None,
     compose_frame: Callable[..., Image.Image] | None = None,
+    profile_invoker: Callable[..., object] | None = None,
 ):
     """
     Optional subtle color-cycle that runs AFTER the first full static frame is already shown.
     Only used when transition=False (direct rendering).
     """
     # small delay so the initial frame is already visible
-    hyperpixel_layout = is_hyperpixel_next_layout()
-    hyperpixel_square = is_hyperpixel_4_square_layout()
-    kernel_driven = is_kernel_driven_display()
-    display_profile_id = get_display_profile_id()
+    def _profile_dependent_setup():
+        return (
+            is_hyperpixel_next_layout(),
+            is_hyperpixel_4_square_layout(),
+            is_kernel_driven_display(),
+            get_display_profile_id(),
+        )
+
+    if profile_invoker is not None:
+        profile_state = profile_invoker(_profile_dependent_setup)
+    else:
+        profile_state = _profile_dependent_setup()
+    hyperpixel_layout, hyperpixel_square, kernel_driven, display_profile_id = profile_state
     initial_delay, color_cycle_interval, steps = _color_cycle_profile(
         kernel_driven=kernel_driven,
         display_profile_id=display_profile_id,
@@ -402,6 +412,7 @@ def _start_color_cycle(
     screen_id: str,
     frame_state: dict,
     compose_frame: Callable[..., Image.Image] | None = None,
+    profile_invoker: Callable[..., object] | None = None,
 ):
     """Run the date/time color animation in a background worker."""
 
@@ -414,6 +425,7 @@ def _start_color_cycle(
                 screen_id,
                 frame_state,
                 compose_frame,
+                profile_invoker,
             )
         except Exception:
             logging.exception("Date/time color cycle failed")
@@ -482,5 +494,6 @@ def draw_date(
         "date",
         frame_state,
         compose_frame=compose_frame,
+        profile_invoker=profile_invoker,
     )
     return ScreenImage(img, displayed=True)

@@ -804,6 +804,34 @@ def test_date_background_composition_keeps_context_profile(monkeypatch):
     assert deferred[0]() == (800, 480)
 
 
+def test_profile_composition_updates_cached_dimensions_and_config_fonts(monkeypatch):
+    renderer_module = types.ModuleType("test_config_renderer")
+    renderer_module.__dict__["config"] = registry_module.config
+    exec(
+        "W, H = config.WIDTH, config.HEIGHT\n"
+        "def compose():\n"
+        "    return W, H, config.FONT_TITLE_SPORTS\n",
+        renderer_module.__dict__,
+    )
+    original_font = registry_module.config.FONT_TITLE_SPORTS
+    scaled_font = object()
+    monkeypatch.setattr(
+        registry_module,
+        "_scaled_font",
+        lambda font, scale: scaled_font if font is original_font else font,
+    )
+
+    result = _invoke_for_profile(
+        renderer_module.compose,
+        resolve_display_profile(800, 480),
+    )
+
+    assert result == (800, 480, scaled_font)
+    assert renderer_module.W == registry_module.config.WIDTH
+    assert renderer_module.H == registry_module.config.HEIGHT
+    assert registry_module.config.FONT_TITLE_SPORTS is original_font
+
+
 def test_nfl_scoreboard_recomputes_import_time_layout_for_profile():
     from screens import nfl_scoreboard
 
