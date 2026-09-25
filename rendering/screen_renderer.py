@@ -1,6 +1,7 @@
 """Hardware-free screen rendering."""
 from __future__ import annotations
 
+import copy
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
@@ -11,6 +12,23 @@ from PIL import Image
 from display_profiles import RenderProfile
 from services.data_coordinator import DataSnapshot
 from utils import ScreenImage
+
+
+def _thaw_legacy_data(value: Any) -> Any:
+    """Return a mutable copy using the container types legacy screens expect."""
+
+    if isinstance(value, Mapping):
+        return {key: _thaw_legacy_data(item) for key, item in value.items()}
+    if isinstance(value, tuple):
+        return [_thaw_legacy_data(item) for item in value]
+    if isinstance(value, frozenset):
+        return {_thaw_legacy_data(item) for item in value}
+    # Keep the immutable snapshot isolated from mutations to any custom values
+    # performed by a legacy renderer.
+    try:
+        return copy.deepcopy(value)
+    except (TypeError, ValueError):
+        return value
 
 
 @dataclass(frozen=True)
@@ -86,7 +104,7 @@ class ScreenRenderer:
 
             context = ScreenContext(
                 display=capture,
-                cache=dict(data.values),
+                cache=_thaw_legacy_data(data.values),
                 logos=preferences.values.get("logos", {}),
                 image_dir=str(preferences.values.get("image_dir", "images")),
                 now=datetime.now().astimezone(),
