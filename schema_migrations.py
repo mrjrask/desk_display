@@ -65,6 +65,8 @@ def migrate_playlist(document: Mapping[str, Any]) -> dict[str, Any]:
     """Upgrade legacy playlists sequentially and expose a schema_version key."""
 
     version = document.get("schema_version", document.get("version", 1))
+    if type(version) is not int:
+        raise UnsupportedSchemaVersion(f"unsupported playlist schema version {version!r}")
     if version == PLAYLIST_SCHEMA_VERSION:
         result = dict(document)
     elif version == 1:

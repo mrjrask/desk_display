@@ -2,7 +2,12 @@ import pytest
 
 import protocol
 from protocol_versions import NETWORK_PROTOCOL_VERSION
-from schema_migrations import migrate_client_config, migrate_server_config
+from schema_migrations import (
+    UnsupportedSchemaVersion,
+    migrate_client_config,
+    migrate_playlist,
+    migrate_server_config,
+)
 
 
 def test_compatible_registration_advertises_all_versions():
@@ -40,6 +45,18 @@ def test_unsupported_old_and_new_clients_are_rejected(protocol_version):
     assert caught.value.as_response()["accepted_protocol_versions"] == [NETWORK_PROTOCOL_VERSION]
 
 
+@pytest.mark.parametrize("client_id", [None, "", "   ", 42])
+def test_registration_rejects_missing_or_invalid_client_id(client_id):
+    registration = {
+        "client_id": client_id,
+        "protocol_version": NETWORK_PROTOCOL_VERSION,
+        "client_software_version": "test",
+    }
+
+    with pytest.raises(ValueError, match="client_id is required"):
+        protocol.registration_response(registration)
+
+
 def test_cached_offline_operation_survives_server_upgrade():
     cached = protocol.build_manifest(cache_complete=True, package_url="package.zip")
     cached["server_software_version"] = "99.0"
@@ -51,6 +68,13 @@ def test_cached_offline_operation_survives_server_upgrade():
     )
 
 
+@pytest.mark.parametrize("cache_complete", ["true", "false", 1, 0, None, [], {}])
+def test_cached_offline_operation_requires_literal_true(cache_complete):
+    cached = protocol.build_manifest(cache_complete=cache_complete)
+
+    assert not protocol.cached_manifest_usable_offline(cached)
+
+
 def test_standalone_v01_configs_migrate_losslessly():
     standalone = {"display": {"width": 320}, "server_url": "http://desk.local"}
 
@@ -59,3 +83,9 @@ def test_standalone_v01_configs_migrate_losslessly():
         assert migrated["server_url"] == standalone["server_url"]
         assert migrated["schema_version"] == 1
         assert migrated["migrated_from"] == "standalone-v0.1"
+
+
+@pytest.mark.parametrize("schema_version", [True, False, 1.0, 2.0, "2"])
+def test_playlist_migration_rejects_non_integer_schema_versions(schema_version):
+    with pytest.raises(UnsupportedSchemaVersion):
+        migrate_playlist({"schema_version": schema_version, "playlists": {}, "sequence": []})

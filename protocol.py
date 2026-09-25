@@ -52,7 +52,7 @@ class IncompatibleClientError(ValueError):
 def client_registration(client_id: str, *, software_version: str = APPLICATION_VERSION) -> dict:
     """Build the required client registration fields."""
 
-    if not client_id:
+    if not isinstance(client_id, str) or not client_id.strip():
         raise ValueError("client_id must not be empty")
     return {
         "client_id": client_id,
@@ -79,6 +79,9 @@ def registration_response(registration: Mapping[str, Any]) -> dict[str, Any]:
     software_version = registration.get("client_software_version")
     if not isinstance(software_version, str) or not software_version:
         raise ValueError("client_software_version is required")
+    client_id = registration.get("client_id")
+    if not isinstance(client_id, str) or not client_id.strip():
+        raise ValueError("client_id is required")
     return {
         "accepted": True,
         "protocol_version": NETWORK_PROTOCOL_VERSION,
@@ -137,4 +140,4 @@ def cached_manifest_usable_offline(
         manifest,
         manifest_versions=manifest_versions,
         render_package_versions=render_package_versions,
-    ) and bool(manifest.get("cache_complete"))
+    ) and manifest.get("cache_complete") is True
