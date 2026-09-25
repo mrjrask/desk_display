@@ -66,6 +66,7 @@ gc = __import__('gc')
 from PIL import Image
 
 import config
+import deployment_config
 from config import (
     AHL_TEAM_TRICODE,
     CENTRAL_TIME,
@@ -2955,13 +2956,15 @@ def init_runtime() -> None:
         _button_monitor_thread.start()
 
     logging.basicConfig(
-        level=logging.INFO,
+        level=deployment_config.resolve_log_level(),
         format="%(asctime)s %(levelname)-8s %(message)s",
         datefmt="%H:%M:%S",
         force=True,
     )
     logging.getLogger("requests").setLevel(logging.WARNING)
+    deployment_config.install_secret_log_redaction()
     logging.info("🖥️  Starting display service…")
+    deployment_config.startup_check("display")
     initialise_runtime_probes()
 
     _start_config_ui()
