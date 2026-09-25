@@ -2,6 +2,34 @@ import pytest
 from PIL import Image, ImageDraw
 
 import screens.mlb_league_standings as mlb_league_standings
+from services.data_coordinator import DataCoordinator
+from services.data_provider import DataProvider
+
+
+def test_forced_coordinator_read_bypasses_module_standings_cache(monkeypatch):
+    stale = {mlb_league_standings.AL_LEAGUE_ID: {"East": [{"abbr": "OLD"}]}}
+    cache = {"timestamp": mlb_league_standings.time.time(), "data": stale}
+    monkeypatch.setattr(mlb_league_standings, "_STANDINGS_CACHE", cache)
+
+    class Response:
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            return {"records": []}
+
+    requests = []
+
+    def get(*args, **kwargs):
+        requests.append((args, kwargs))
+        return Response()
+
+    monkeypatch.setattr(mlb_league_standings._SESSION, "get", get)
+
+    result = DataCoordinator(DataProvider()).read_mlb_league_standings(force=True)
+
+    assert len(requests) == 1
+    assert result != stale
 
 
 def test_normalize_row_uses_scoreboard_logo_code_mapping():

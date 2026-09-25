@@ -378,9 +378,15 @@ def _streak_with_last10_width(draw: ImageDraw.ImageDraw, streak_text: str, last1
     return streak_w + scale_value(4) + last10_w
 
 
-def _fetch_league_standings() -> dict[int, dict[str, list[dict[str, Any]]]]:
+def _fetch_league_standings(
+    *, force: bool = False
+) -> dict[int, dict[str, list[dict[str, Any]]]]:
     now = time.time()
-    if _STANDINGS_CACHE.get("data") and now - float(_STANDINGS_CACHE.get("timestamp", 0.0)) < CACHE_TTL:
+    if (
+        not force
+        and _STANDINGS_CACHE.get("data")
+        and now - float(_STANDINGS_CACHE.get("timestamp", 0.0)) < CACHE_TTL
+    ):
         return _STANDINGS_CACHE["data"]
 
     url = "https://statsapi.mlb.com/api/v1/standings"

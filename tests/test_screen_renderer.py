@@ -62,7 +62,9 @@ def test_snapshot_renderer_preserves_mlb_standings_with_numeric_league_ids(monke
             "East": [{"abbr": "NYY", "team_name": "Yankees", "wins": 1, "losses": 0}]
         }
     }
-    monkeypatch.setattr(mlb_standings, "_fetch_league_standings", lambda: standings)
+    monkeypatch.setattr(
+        mlb_standings, "_fetch_league_standings", lambda **_kwargs: standings
+    )
 
     coordinator = DataCoordinator(DataProvider())
     coordinator.read_mlb_league_standings()
