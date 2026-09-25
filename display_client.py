@@ -27,6 +27,7 @@ from urllib.parse import urlsplit
 
 from PIL import Image, ImageDraw, ImageFont
 
+from display.rotation import RotationDecision, parse_rotation, resolve_rotation, to_logical
 from display_profiles import RenderProfile, resolve_display_profile_by_id
 from playback.client_player import ClientPlayer
 from protocol import CLIENT_SUPPORTED_RENDER_PACKAGE_SCHEMA_VERSIONS
@@ -39,7 +40,7 @@ from remote_display.client_sync import (
     PlaybackReport,
     RequestsTransport,
 )
-from remote_display.models import ClientCapabilities
+from remote_display.models import ClientCapabilities, HardwareDescription
 
 LOGGER = logging.getLogger("desk_display.client")
 _PROJECT_ROOT = Path(__file__).resolve().parent
@@ -50,14 +51,17 @@ POLL_SECONDS = 0.05
 
 def _rotation(value: Any) -> int:
     try:
-        number = int(value or 0)
-    except (TypeError, ValueError):
+        return parse_rotation(value)
+    except ValueError:
+        LOGGER.warning("Invalid DISPLAY_ROTATION %r; using 0", value)
         return 0
-    return {1: 90, 2: 180, 3: 270}.get(number, number if number in (0, 90, 180, 270) else 0)
 
 
 def capabilities_for(client_id: str, profile: RenderProfile, *, has_touch: bool = False,
-                     buttons: tuple[str, ...] = ()) -> ClientCapabilities:
+                     buttons: tuple[str, ...] = (),
+                     rotation: RotationDecision | None = None) -> ClientCapabilities:
+    """Capabilities in canonical logical orientation; rotation is diagnostic only."""
+
     return ClientCapabilities(
         protocol_version=NETWORK_PROTOCOL_VERSION,
         client_software_version=APPLICATION_VERSION,
@@ -70,6 +74,7 @@ def capabilities_for(client_id: str, profile: RenderProfile, *, has_touch: bool 
         render_package_versions=tuple(sorted(CLIENT_SUPPORTED_RENDER_PACKAGE_SCHEMA_VERSIONS)),
         has_touch=has_touch,
         buttons=buttons,
+        hardware=None if rotation is None else HardwareDescription(driver=rotation.describe()),
     )
 
 
@@ -254,6 +259,24 @@ class DisplayClient:
                 return
             self._stop.wait(POLL_SECONDS)
 
+    def on_touch(self, x: float, y: float) -> tuple[int, int]:
+        """Handle a tap in panel coordinates; left half goes back, right half skips.
+
+        The point is mapped into logical coordinates first, so the gesture is
+        the same however the panel is mounted.
+        """
+
+        mapper = getattr(self.presenter, "touch_to_logical", None)
+        if callable(mapper):
+            lx, ly = mapper(x, y)
+        else:
+            lx, ly = to_logical(x, y, self.profile.width, self.profile.height, self.physical_rotation)
+        if lx < self.profile.width // 2:
+            self.controls.back = True
+        else:
+            self.controls.skip = True
+        return lx, ly
+
     def on_button(self, name: str) -> None:
         if name in {"B", "Y", "right", "next"}:
             self.controls.skip = True
@@ -297,10 +320,21 @@ def build_client(settings: dict[str, Any], *, presenter: Any = None, transport: 
     cache_dir = Path(settings.get("DESK_DISPLAY_CLIENT_CACHE_DIR") or DEFAULT_CACHE_DIR).expanduser()
     cache = ClientCache(cache_dir)
     artifacts = ArtifactCache(cache_dir, max_bytes=int(settings.get("DESK_DISPLAY_CLIENT_CACHE_MAX_MB") or 256) << 20)
+    configured = _rotation(settings.get("DISPLAY_ROTATION"))
+    kernel_overlay = None
     if presenter is None:
         from display.hardware_presenter import HardwarePresenter
 
         presenter = HardwarePresenter(profile=profile)
+        import config
+
+        kernel_overlay = getattr(config, "_kernel_overlay_rotation", None)
+    strict = settings.get("DISPLAY_ROTATION_STRICT")
+    decision = resolve_rotation(configured, kernel_overlay=kernel_overlay,
+                                strict=bool(strict) if strict is not None else kernel_overlay is not None)
+    applied = getattr(presenter, "rotation", decision.applied)
+    if isinstance(applied, int) and applied != decision.applied:
+        decision = RotationDecision(configured, kernel_overlay, applied, "reported by the output driver")
     server_url = settings.get("DESK_DISPLAY_SERVER_URL")
     if transport is None:
         verify: bool | str = bool(settings.get("DESK_DISPLAY_TLS_VERIFY", True))
@@ -308,7 +342,7 @@ def build_client(settings: dict[str, Any], *, presenter: Any = None, transport: 
             verify = str(settings["DESK_DISPLAY_SERVER_CA_BUNDLE"])
         transport = RequestsTransport(server_url, verify=verify)
     sync = ClientSync(
-        capabilities_for(settings["DESK_DISPLAY_CLIENT_ID"], profile),
+        capabilities_for(settings["DESK_DISPLAY_CLIENT_ID"], profile, rotation=decision),
         transport,
         cache,
         artifacts,
@@ -318,7 +352,7 @@ def build_client(settings: dict[str, Any], *, presenter: Any = None, transport: 
     return DisplayClient(
         profile, presenter, sync, cache, artifacts,
         server_url=server_url,
-        physical_rotation=_rotation(settings.get("DISPLAY_ROTATION")),
+        physical_rotation=decision.applied,
         offline_max_age_seconds=float(settings.get("DESK_DISPLAY_OFFLINE_MAX_AGE_HOURS") or 0) * 3600,
     )
 
