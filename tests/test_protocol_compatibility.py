@@ -68,6 +68,17 @@ def test_cached_offline_operation_survives_server_upgrade():
     )
 
 
+@pytest.mark.parametrize("schema_version", [True, False, 1.0, [], {}])
+@pytest.mark.parametrize(
+    "field", ["manifest_schema_version", "render_package_schema_version"]
+)
+def test_manifest_support_rejects_non_integer_schema_versions(field, schema_version):
+    manifest = protocol.build_manifest()
+    manifest[field] = schema_version
+
+    assert not protocol.client_supports_manifest(manifest)
+
+
 @pytest.mark.parametrize("cache_complete", ["true", "false", 1, 0, None, [], {}])
 def test_cached_offline_operation_requires_literal_true(cache_complete):
     cached = protocol.build_manifest(cache_complete=cache_complete)

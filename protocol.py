@@ -116,9 +116,13 @@ def client_supports_manifest(
 ) -> bool:
     """Whether a client can consume both the manifest and referenced package."""
 
+    manifest_version = manifest.get("manifest_schema_version")
+    render_package_version = manifest.get("render_package_schema_version")
     return (
-        manifest.get("manifest_schema_version") in manifest_versions
-        and manifest.get("render_package_schema_version") in render_package_versions
+        type(manifest_version) is int
+        and manifest_version in manifest_versions
+        and type(render_package_version) is int
+        and render_package_version in render_package_versions
     )
 
 
