@@ -430,6 +430,9 @@ SETTINGS: tuple[Setting, ...] = (
        default="2", minimum=1, maximum=64),
     _s("DESK_DISPLAY_RENDER_TIMEOUT_SECONDS", "float", _SERVER_ONLY, "render",
        "Abandon a single artifact render after this long.", default="30", minimum=1),
+    _s("DESK_DISPLAY_RENDER_MIN_INTERVAL_SECONDS", "float", _SERVER_ONLY, "render",
+       "Minimum time between refreshes of one screen for one profile; failures back off from this.",
+       default="30", minimum=1),
     _s("DESK_DISPLAY_PLAYLIST_STORE_PATH", "path", _SERVER, "styles",
        "Server-managed playlist library and per-client assignments, written by the "
        "config UI; defaults to .runtime/server/playlists.json. Its contents hot-reload."),

@@ -147,6 +147,22 @@ only when that content changes. The manifest and artifacts both return an
 with `Cache-Control: immutable`, so a client downloads only artifacts it has
 not seen.
 
+The render server renders only what current demand needs: screens of
+connected clients, of static clients (from their assigned playlist), of
+administrator pre-render entries, and their touch dependencies. Equal
+requests from many clients render once. A screen is rerendered when its
+style, data or renderer revision changes or its output passes its refresh
+deadline, but never more often than `DESK_DISPLAY_RENDER_MIN_INTERVAL_SECONDS`;
+a failing screen backs off from that interval, doubling up to 15 minutes.
+Missing output renders before refreshes, and connected clients before
+static clients and pre-render entries. At most `DESK_DISPLAY_RENDER_WORKERS`
+renders run at once; one that exceeds `DESK_DISPLAY_RENDER_TIMEOUT_SECONDS`
+counts as failed. Work for a client whose lease lapses is cancelled.
+`GET /api/v1/admin/render-status` (admin token) shows clients, profiles,
+render keys, the queue and running renders, each screen's state, last
+success, failures and durations, data health, artifact disk use, and each
+client's playlist delivery and acknowledgment.
+
 Each screen keeps its current and three previous good artifacts. Artifacts
 listed in any client's current or previous manifest are never deleted;
 others are deleted `DESK_DISPLAY_ARTIFACT_RETENTION_HOURS` after they stop
@@ -306,6 +322,7 @@ installs only, never clients.
 | `HTTP_CLIENT_USE_SYSTEM_PROXIES` | server, client, standalone | restart |  |
 | `DESK_DISPLAY_RENDER_WORKERS` | server | restart |  |
 | `DESK_DISPLAY_RENDER_TIMEOUT_SECONDS` | server | restart |  |
+| `DESK_DISPLAY_RENDER_MIN_INTERVAL_SECONDS` | server | restart |  |
 | `DESK_DISPLAY_ARTIFACT_DIR` | server | restart |  |
 | `DESK_DISPLAY_ARTIFACT_RETENTION_HOURS` | server | restart |  |
 | `DESK_DISPLAY_ARTIFACT_MAX_MB` | server | restart |  |
@@ -452,5 +469,6 @@ installs only, never clients.
 | `RES_OPTIONS` | server, client, standalone | restart |  |
 | `LOCALDOMAIN` | server, client, standalone | restart |  |
 | `HOSTALIASES` | server, client, standalone | restart |  |
+<!-- END GENERATED SETTINGS REFERENCE -->
 <!-- END GENERATED SETTINGS REFERENCE -->
 <!-- END GENERATED SETTINGS REFERENCE -->

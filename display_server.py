@@ -26,6 +26,7 @@ Endpoints
     ``GET  /api/v1/admin/status``                  clients, leases and demand
     ``PUT|DELETE /api/v1/admin/prerender/<name>``  explicit pre-render demand
     ``POST /api/v1/admin/clients/<id>/disable|enable``
+    ``GET  /api/v1/admin/render-status``           queue, render and data health
 """
 from __future__ import annotations
 
@@ -54,6 +55,7 @@ from protocol import (
 from protocol_versions import CLIENT_CONFIG_SCHEMA_VERSION
 from remote_display.artifact_store import ArtifactStore
 from remote_display.manifest import build_client_manifest, referenced_hashes
+from remote_display.render_coordinator import RenderCoordinator, Renderer, RevisionSource
 from remote_display.models import (
     ClientCapabilities,
     ClientDemand,
@@ -91,6 +93,9 @@ class DisplayServerConfig:
     artifact_dir: Path = _PROJECT_ROOT / "cache" / "artifacts"
     artifact_retention_seconds: float = 24 * 3600
     artifact_max_bytes: int | None = None
+    render_workers: int = 2
+    render_timeout_seconds: float = 30
+    render_min_interval_seconds: float = 30
     public_url: str | None = None
     playlist_store_path: Path | None = None
     registry_snapshot_path: Path | None = None
@@ -107,6 +112,9 @@ class DisplayServerConfig:
             artifact_dir=Path(settings["DESK_DISPLAY_ARTIFACT_DIR"] or _PROJECT_ROOT / "cache" / "artifacts").expanduser(),
             artifact_retention_seconds=float(settings["DESK_DISPLAY_ARTIFACT_RETENTION_HOURS"]) * 3600,
             artifact_max_bytes=int(settings["DESK_DISPLAY_ARTIFACT_MAX_MB"]) * 1024 * 1024,
+            render_workers=settings["DESK_DISPLAY_RENDER_WORKERS"],
+            render_timeout_seconds=float(settings["DESK_DISPLAY_RENDER_TIMEOUT_SECONDS"]),
+            render_min_interval_seconds=float(settings["DESK_DISPLAY_RENDER_MIN_INTERVAL_SECONDS"]),
             public_url=settings["DESK_DISPLAY_SERVER_PUBLIC_URL"],
             playlist_store_path=store_path(env),
             registry_snapshot_path=registry_snapshot_path(env),
@@ -150,8 +158,18 @@ def create_app(
     *,
     assignments: AssignmentLookup | None = None,
     clock: Callable[[], float] = time.time,
+    renderer: Renderer | None = None,
+    revisions: RevisionSource | None = None,
+    data_health: Callable[[], Mapping[str, Any]] | None = None,
+    render_executor: Any = None,
 ) -> Flask:
-    """Build the API.  ``assignments`` looks up each client's assigned playlist."""
+    """Build the API.
+
+    ``assignments`` looks up each client's assigned playlist.  With a
+    ``renderer`` and ``revisions`` source the app also owns a
+    :class:`RenderCoordinator` (``app.extensions["desk_display_render_coordinator"]``)
+    that the caller ticks or starts.
+    """
 
     config = config or DisplayServerConfig.from_env()
     if assignments is None and config.playlist_store_path is not None:
@@ -181,6 +199,21 @@ def create_app(
     app.extensions["desk_display_registry"] = registry
     app.extensions["desk_display_config"] = config
     app.extensions["desk_display_artifacts"] = artifacts
+    coordinator = None
+    if renderer is not None and revisions is not None:
+        coordinator = RenderCoordinator(
+            registry,
+            artifacts,
+            renderer,
+            revisions,
+            workers=config.render_workers,
+            timeout_seconds=config.render_timeout_seconds,
+            min_interval_seconds=config.render_min_interval_seconds,
+            data_health=data_health,
+            executor=render_executor,
+            clock=clock,
+        )
+    app.extensions["desk_display_render_coordinator"] = coordinator
 
     def maintenance() -> list[str]:
         """Release references of clients that went away, then collect garbage."""
@@ -489,6 +522,14 @@ def create_app(
             "artifacts": artifacts.stats(),
         }))
 
+    @app.get("/api/v1/admin/render-status")
+    def admin_render_status():
+        if (denied := _require_admin()) is not None:
+            return denied
+        if coordinator is None:
+            return _error(404, "rendering_disabled", "this server has no render coordinator")
+        return jsonify(deployment_config.scrub_secrets(coordinator.status()))
+
     @app.put("/api/v1/admin/prerender/<name>")
     def admin_put_prerender(name: str):
         if (denied := _require_admin()) is not None:
@@ -538,8 +579,17 @@ def run_display_server() -> None:
         raise SystemExit("display_server.py requires DESK_DISPLAY_ROLE=server")
     deployment_config.startup_check("display server")
     settings = deployment_config.load_settings(Role.SERVER)
-    app = create_app(DisplayServerConfig.from_env())
+    from remote_display.server_rendering import ServerRendering
+
+    rendering = ServerRendering()
+    app = create_app(
+        DisplayServerConfig.from_env(),
+        renderer=rendering.render,
+        revisions=rendering.revisions,
+        data_health=rendering.health,
+    )
     _start_maintenance(app.extensions["desk_display_maintenance"])
+    app.extensions["desk_display_render_coordinator"].start()
     host, port = settings["DESK_DISPLAY_SERVER_HOST"], settings["DESK_DISPLAY_SERVER_PORT"]
     cert, key = settings["DESK_DISPLAY_SERVER_TLS_CERT"], settings["DESK_DISPLAY_SERVER_TLS_KEY"]
     WEB_LOGGER.info("Display server listening on %s:%s", host, port)
