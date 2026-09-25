@@ -170,6 +170,20 @@ class DataCoordinator:
         self.publish(team, value)
         return value
 
+    def read_mlb_league_standings(
+        self, *, ttl_seconds: int = 300, force: bool = False
+    ) -> dict[int, dict[str, list[dict[str, Any]]]]:
+        """Acquire MLB league standings before snapshot-based rendering."""
+
+        from screens.mlb_league_standings import _fetch_league_standings
+
+        value = self.provider.read(
+            "mlb_league_standings", _fetch_league_standings,
+            ttl_seconds=ttl_seconds, force=force,
+        )
+        self.publish("mlb_league_standings", value)
+        return value
+
     @staticmethod
     def weather_cache_timestamp() -> datetime | None:
         return data_fetch.get_weather_cache_timestamp()

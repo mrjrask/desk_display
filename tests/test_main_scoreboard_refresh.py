@@ -272,6 +272,21 @@ def test_feed_to_force_refresh_for_screen_skips_offline_and_non_live_screens():
     assert main._feed_to_force_refresh_for_screen("date", offline=False) is None
 
 
+def test_live_mlb_team_refresh_bypasses_coordinator_ttl(monkeypatch):
+    main = _load_main()
+    calls = []
+    monkeypatch.setattr(
+        main.data_coordinator,
+        "read_legacy_team",
+        lambda team, **kwargs: calls.append((team, kwargs)) or {},
+    )
+
+    main._refresh_cubs(force=True)
+    main._refresh_sox(force=True)
+
+    assert calls == [("cubs", {"force": True}), ("sox", {"force": True})]
+
+
 def test_requested_scoreboard_leagues_only_includes_enabled_scoreboard_screens():
     main = _load_main()
     original_requested = main._requested_screen_ids

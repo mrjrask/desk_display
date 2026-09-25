@@ -551,6 +551,7 @@ class ScreenContext:
     weather_fetched_at: Optional[_dt.datetime]
     skip_scoreboards: bool
     render_profile: RenderProfile
+    allow_upstream_requests: bool = True
 
     def __post_init__(self) -> None:
         """Give renderers a profile-sized, profile-colored display surface."""
@@ -1980,14 +1981,25 @@ def build_screen_registry(context: ScreenContext) -> tuple[dict[str, ScreenDefin
         available=scoreboards_available,
     )
 
-    register("NL Overview", lambda: draw_NL_Overview(context.display, transition=True))
-    register("AL Overview", lambda: draw_AL_Overview(context.display, transition=True))
-    register("NL Overview+WC", lambda: draw_NL_Overview_WC(context.display, transition=True))
-    register("AL Overview+WC", lambda: draw_AL_Overview_WC(context.display, transition=True))
-    register("MLB AL Standings", lambda: draw_mlb_al_standings(context.display, transition=True))
-    register("MLB ALWC Standings", lambda: draw_mlb_al_wc_standings(context.display, transition=True))
-    register("MLB NL Standings", lambda: draw_mlb_nl_standings(context.display, transition=True))
-    register("MLB NLWC Standings", lambda: draw_mlb_nl_wc_standings(context.display, transition=True))
+    mlb_league_standings = (
+        None
+        if context.allow_upstream_requests
+        else context.cache.get("mlb_league_standings", {})
+    )
+
+    def _mlb_renderer(renderer):
+        return lambda: renderer(
+            context.display, transition=True, standings=mlb_league_standings
+        )
+
+    register("NL Overview", _mlb_renderer(draw_NL_Overview))
+    register("AL Overview", _mlb_renderer(draw_AL_Overview))
+    register("NL Overview+WC", _mlb_renderer(draw_NL_Overview_WC))
+    register("AL Overview+WC", _mlb_renderer(draw_AL_Overview_WC))
+    register("MLB AL Standings", _mlb_renderer(draw_mlb_al_standings))
+    register("MLB ALWC Standings", _mlb_renderer(draw_mlb_al_wc_standings))
+    register("MLB NL Standings", _mlb_renderer(draw_mlb_nl_standings))
+    register("MLB NLWC Standings", _mlb_renderer(draw_mlb_nl_wc_standings))
 
     bulls = context.cache.get("bulls") or {}
     register_logo("bulls logo")

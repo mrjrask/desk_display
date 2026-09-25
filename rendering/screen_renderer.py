@@ -1,6 +1,7 @@
 """Hardware-free screen rendering."""
 from __future__ import annotations
 
+import copy
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
@@ -8,9 +9,27 @@ from typing import Any, Callable
 
 from PIL import Image
 
+from config import CENTRAL_TIME
 from display_profiles import RenderProfile
 from services.data_coordinator import DataSnapshot
 from utils import ScreenImage
+
+
+def _thaw_legacy_data(value: Any) -> Any:
+    """Return a mutable copy using the container types legacy screens expect."""
+
+    if isinstance(value, Mapping):
+        return {key: _thaw_legacy_data(item) for key, item in value.items()}
+    if isinstance(value, tuple):
+        return [_thaw_legacy_data(item) for item in value]
+    if isinstance(value, frozenset):
+        return {_thaw_legacy_data(item) for item in value}
+    # Keep the immutable snapshot isolated from mutations to any custom values
+    # performed by a legacy renderer.
+    try:
+        return copy.deepcopy(value)
+    except (TypeError, ValueError):
+        return value
 
 
 @dataclass(frozen=True)
@@ -84,17 +103,19 @@ class ScreenRenderer:
         if self._registry_factory is None:
             from screens.registry import ScreenContext, build_screen_registry
 
+            now = datetime.now(CENTRAL_TIME)
             context = ScreenContext(
                 display=capture,
-                cache=dict(data.values),
+                cache=_thaw_legacy_data(data.values),
                 logos=preferences.values.get("logos", {}),
                 image_dir=str(preferences.values.get("image_dir", "images")),
-                now=datetime.now().astimezone(),
-                now_utc=datetime.now(UTC),
+                now=now,
+                now_utc=now.astimezone(UTC),
                 offline=bool(preferences.values.get("offline", False)),
                 weather_fetched_at=preferences.values.get("weather_fetched_at"),
                 skip_scoreboards=bool(preferences.values.get("skip_scoreboards", False)),
                 render_profile=profile,
+                allow_upstream_requests=False,
             )
             registry, _ = build_screen_registry(context)
         else:

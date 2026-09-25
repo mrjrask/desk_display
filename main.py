@@ -2784,15 +2784,15 @@ def _refresh_bulls() -> None:
     cache["bulls"].update(data_coordinator.read_legacy_team("bulls"))
 
 
-def _refresh_cubs() -> None:
-    cache["cubs"].update(data_coordinator.read_legacy_team("cubs"))
+def _refresh_cubs(*, force: bool = False) -> None:
+    cache["cubs"].update(data_coordinator.read_legacy_team("cubs", force=force))
 
 
-def _refresh_sox() -> None:
-    cache["sox"].update(data_coordinator.read_legacy_team("sox"))
+def _refresh_sox(*, force: bool = False) -> None:
+    cache["sox"].update(data_coordinator.read_legacy_team("sox", force=force))
 
 
-_FEED_REFRESHERS: Dict[str, Callable[[], None]] = {
+_FEED_REFRESHERS: Dict[str, Callable[..., None]] = {
     "weather": _refresh_weather,
     "air_quality": _refresh_air_quality,
     "bears": _refresh_bears,
@@ -3173,7 +3173,10 @@ def main_loop():
                 refresher = _FEED_REFRESHERS.get(force_refresh_feed)
                 if refresher:
                     try:
-                        refresher()
+                        if force_refresh_feed in {"cubs", "sox"}:
+                            refresher(force=True)
+                        else:
+                            refresher()
                         _mark_feed_refreshed(force_refresh_feed)
                         _bump_registry_cache_nonce()
                     except Exception as exc:
