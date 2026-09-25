@@ -1319,10 +1319,17 @@ def build_screen_registry(context: ScreenContext) -> tuple[dict[str, ScreenDefin
         ),
         available=scoreboards_available,
     )
-    register("NFL Overview NFC", lambda: draw_nfl_overview_nfc(context.display, transition=True))
-    register("NFL Overview AFC", lambda: draw_nfl_overview_afc(context.display, transition=True))
-    register("NFL Standings NFC", lambda: draw_nfl_standings_nfc(context.display, transition=True))
-    register("NFL Standings AFC", lambda: draw_nfl_standings_afc(context.display, transition=True))
+    nfl_standings = (
+        None if context.allow_upstream_requests else context.cache.get("nfl_standings", {})
+    )
+
+    def _nfl_standings_renderer(renderer):
+        return lambda: renderer(context.display, transition=True, standings=nfl_standings)
+
+    register("NFL Overview NFC", _nfl_standings_renderer(draw_nfl_overview_nfc))
+    register("NFL Overview AFC", _nfl_standings_renderer(draw_nfl_overview_afc))
+    register("NFL Standings NFC", _nfl_standings_renderer(draw_nfl_standings_nfc))
+    register("NFL Standings AFC", _nfl_standings_renderer(draw_nfl_standings_afc))
 
     hawks = context.cache.get("hawks") or {}
     if any(hawks.values()):
@@ -1403,6 +1410,19 @@ def build_screen_registry(context: ScreenContext) -> tuple[dict[str, ScreenDefin
         )
 
     register_logo("nhl logo")
+    nhl_standings = (
+        None if context.allow_upstream_requests else context.cache.get("nhl_standings", {})
+    )
+    nhl_wildcard_order = (
+        None if context.allow_upstream_requests else context.cache.get("nhl_wildcard_order", {})
+    )
+
+    def _nhl_standings_renderer(renderer, *, v2=False):
+        kwargs = {"standings": nhl_standings}
+        if v2:
+            kwargs["wildcard_order"] = nhl_wildcard_order
+        return lambda: renderer(context.display, transition=True, **kwargs)
+
     register(
         "NHL Scoreboard",
         lambda: render_nhl_scoreboard(
@@ -1444,27 +1464,27 @@ def build_screen_registry(context: ScreenContext) -> tuple[dict[str, ScreenDefin
     )
     register(
         "NHL Standings Overview West",
-        lambda: draw_nhl_standings_overview_west(context.display, transition=True),
+        _nhl_standings_renderer(draw_nhl_standings_overview_west),
     )
     register(
         "NHL Standings Overview East",
-        lambda: draw_nhl_standings_overview_east(context.display, transition=True),
+        _nhl_standings_renderer(draw_nhl_standings_overview_east),
     )
     register(
         "NHL Standings West",
-        lambda: draw_nhl_standings_west(context.display, transition=True),
+        _nhl_standings_renderer(draw_nhl_standings_west),
     )
     register(
         "NHL Standings East",
-        lambda: draw_nhl_standings_east(context.display, transition=True),
+        _nhl_standings_renderer(draw_nhl_standings_east),
     )
     register(
         "NHL Standings West v2",
-        lambda: draw_nhl_standings_west_v2(context.display, transition=True),
+        _nhl_standings_renderer(draw_nhl_standings_west_v2, v2=True),
     )
     register(
         "NHL Standings East v2",
-        lambda: draw_nhl_standings_east_v2(context.display, transition=True),
+        _nhl_standings_renderer(draw_nhl_standings_east_v2, v2=True),
     )
 
     wolves = context.cache.get("wolves") or {}

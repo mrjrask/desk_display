@@ -129,7 +129,7 @@ class ScreenRenderer:
         result = definition.render()
         metadata: dict[str, Any] = dict(getattr(definition, "metadata", {}) or {})
         if isinstance(result, ScreenImage):
-            image = result.image
+            image = capture.current_image if result.displayed else result.image
             metadata["consumed_delay"] = bool(result.consumed_delay)
         elif isinstance(result, Image.Image):
             image = result

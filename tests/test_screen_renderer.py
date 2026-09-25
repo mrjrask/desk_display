@@ -10,6 +10,7 @@ from display_profiles import DISPLAY_PROFILE_DISPLAY_HAT_MINI, PROFILE_PRESETS
 from rendering.screen_renderer import ScreenRenderer, ServerPreferenceSnapshot
 from services.data_coordinator import DataCoordinator
 from services.data_provider import DataProvider
+from utils import ScreenImage
 
 
 def test_default_renderer_thaws_snapshot_for_legacy_screens(monkeypatch):
@@ -69,7 +70,7 @@ def test_snapshot_renderer_preserves_mlb_standings_with_numeric_league_ids(monke
     coordinator = DataCoordinator(DataProvider())
     coordinator.read_mlb_league_standings()
     snapshot = coordinator.snapshot()
-    assert str(mlb_standings.AL_LEAGUE_ID) in snapshot["mlb_league_standings"]
+    assert mlb_standings.AL_LEAGUE_ID in snapshot["mlb_league_standings"]
 
     captured_rows = []
     original_column_layout = mlb_standings._column_layout
@@ -91,3 +92,27 @@ def test_snapshot_renderer_preserves_mlb_standings_with_numeric_league_ids(monke
     )
 
     assert [row["abbr"] for row in captured_rows] == ["NYY"]
+
+
+def test_displayed_screen_image_uses_captured_viewport():
+    viewport = Image.new("RGB", (320, 240), "red")
+    tall_canvas = Image.new("RGB", (320, 480), "blue")
+
+    def registry_factory(capture, profile, preferences, data):
+        def render():
+            capture.image(viewport)
+            return ScreenImage(tall_canvas, displayed=True)
+
+        return {
+            "scrolling": SimpleNamespace(available=True, metadata={}, render=render)
+        }
+
+    snapshot = DataCoordinator().snapshot()
+    artifact = ScreenRenderer(registry_factory).render(
+        "scrolling",
+        PROFILE_PRESETS[DISPLAY_PROFILE_DISPLAY_HAT_MINI],
+        ServerPreferenceSnapshot(revision=1),
+        snapshot,
+    )
+
+    assert artifact.image.getpixel((0, 0)) == (255, 0, 0)
