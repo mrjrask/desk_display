@@ -94,6 +94,32 @@ contribute their assigned playlist's screens even when not connected, must
 register with their configured profile, and merge with dynamic clients and
 administrator pre-render demand into one de-duplicated render plan.
 
+## Display client
+
+`python3 display_client.py` runs a thin display client. It reads `.env.client`
+(or `.env`), initializes the display, and starts playing the last-known-good
+playlist and manifest from `DESK_DISPLAY_CLIENT_CACHE_DIR` before it contacts
+the server, so a client with a warm cache works while its server is down.
+Synchronization runs in the background and never delays a frame or a button
+press: it registers (keeping its per-client credential in the cache directory,
+readable only by its owner, so a restart renews the same lease), fetches its
+configuration and assigned playlist, reports status and demand in each
+heartbeat, fetches the manifest with `If-None-Match`, and downloads only
+artifacts it does not already have. Every download is checked for length,
+SHA-256, media type, dimensions, color mode and decoded size before it is
+published atomically, and a new playlist and manifest are activated together
+only when every required screen is usable locally. Failures retry with
+exponential backoff and jitter.
+
+The artifact cache is bounded by `DESK_DISPLAY_CLIENT_CACHE_MAX_MB`. Eviction
+removes the least recently used artifacts first and never removes anything
+the active manifest or the two previous (last-known-good) manifests use. With
+nothing cached, the client draws a local status screen showing its ID, the
+server host, and its sync state; it never shows a token or credential.
+`DISPLAY_ROTATION` is applied only when a frame is presented. A client holds
+no upstream provider credentials: all data is fetched and rendered by the
+server.
+
 ## Client playlists
 
 On a render server, the configuration UI's **Playlists** page (`/playlists`)
