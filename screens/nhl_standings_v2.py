@@ -347,10 +347,13 @@ def draw_nhl_overview_east_v3(display, transition: bool = False) -> ScreenImage:
 
 
 @log_call
-def draw_nhl_standings_west_v2(display, transition: bool = False) -> ScreenImage:
+def draw_nhl_standings_west_v2(
+    display, transition: bool = False, standings=None, wildcard_order=None
+) -> ScreenImage:
     with _wildcard_columns(), _cap_wildcard_column_spacing(_wildcard_column_max_step()):
-        standings_by_conf = _fetch_standings_data()
-        wildcard_order = nhl_standings._fetch_wildcard_order_api_web()
+        standings_by_conf = _fetch_standings_data() if standings is None else standings
+        if wildcard_order is None:
+            wildcard_order = nhl_standings._fetch_wildcard_order_api_web()
         wildcard_standings = _build_wildcard_standings(standings_by_conf, wildcard_order)
         _apply_style_overrides("NHL Standings West v2")
         _update_column_metrics()
@@ -384,10 +387,13 @@ def draw_nhl_standings_west_v2(display, transition: bool = False) -> ScreenImage
 
 
 @log_call
-def draw_nhl_standings_east_v2(display, transition: bool = False) -> ScreenImage:
+def draw_nhl_standings_east_v2(
+    display, transition: bool = False, standings=None, wildcard_order=None
+) -> ScreenImage:
     with _wildcard_columns(), _cap_wildcard_column_spacing(_wildcard_column_max_step()):
-        standings_by_conf = _fetch_standings_data()
-        wildcard_order = nhl_standings._fetch_wildcard_order_api_web()
+        standings_by_conf = _fetch_standings_data() if standings is None else standings
+        if wildcard_order is None:
+            wildcard_order = nhl_standings._fetch_wildcard_order_api_web()
         wildcard_standings = _build_wildcard_standings(standings_by_conf, wildcard_order)
         _apply_style_overrides("NHL Standings East v2")
         _update_column_metrics()
