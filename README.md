@@ -1,5 +1,8 @@
 # Desk Display
 
+**Current release:** `v0.1` — see the [changelog](CHANGELOG.md) for release
+contents and known limitations.
+
 Desk Display is a Python dashboard for always-on Raspberry Pi, Linux, macOS, and Windows displays. It renders a configurable rotation of weather, date/time, indoor sensor, finance, travel, sports schedule, scoreboard, standings, and playoff screens to small SPI TFTs, kernel/framebuffer displays, SDL windows, or a headless renderer.
 
 The project is optimized for desk-sized devices but also includes larger 800×480 and 1080p display profiles, a browser-based screen configuration UI, install scripts for common Raspberry Pi hardware, diagnostics for external feeds, and maintenance tools for screenshot/render validation.
@@ -11,6 +14,7 @@ For a short operator-focused walkthrough — how the display runs on the Pi, ins
 ## Table of contents
 
 - [Highlights](#highlights)
+- [Release and recovery](#release-and-recovery)
 - [Supported displays and output modes](#supported-displays-and-output-modes)
 - [Repository layout](#repository-layout)
 - [Requirements](#requirements)
@@ -25,6 +29,32 @@ For a short operator-focused walkthrough — how the display runs on the Pi, ins
 - [Developer workflow](#developer-workflow)
 - [Troubleshooting](#troubleshooting)
 - [External APIs](#external-apis)
+
+---
+
+## Release and recovery
+
+Fetch the canonical tags and check out the standalone `v0.1` baseline:
+
+```bash
+git fetch --tags
+git switch --detach v0.1
+```
+
+The tag checkout is detached. **Create a branch before making any changes** so
+new commits remain easy to find and publish:
+
+```bash
+git switch -c restore-v0.1 v0.1
+```
+
+To leave the release checkout and return to the development branch:
+
+```bash
+git switch main
+```
+
+See [CHANGELOG.md](CHANGELOG.md) for the release contents and limitations.
 
 ---
 
