@@ -191,6 +191,36 @@ changed. `--export FILE` writes one as a backup without changing anything,
 and `--rollback BUNDLE` undoes an applied run. Rerunning is safe: an
 already-migrated rotation is reused, never duplicated.
 
+### Converting an existing .env
+
+`scripts/convert_env.py` edits a standalone `.env` into a server or client
+configuration in place, so the values you already set carry over:
+
+```bash
+python3 scripts/convert_env.py --role server --dry-run   # show the change
+python3 scripts/convert_env.py --role server             # write it
+cp .env .env.client
+python3 scripts/convert_env.py --role client --env-file .env.client \
+    --credentials office.env.client                      # the file from "Add a display"
+```
+
+It removes every setting the role does not read, keeps the last line of a
+setting that appears twice, sets `DESK_DISPLAY_ROLE`, and appends the
+role's required and role-only settings under one marked block. Comments
+stay where they are. A client also loses names that are not Desk Display
+settings and commented-out credentials, because a client holds no provider
+keys; `--keep-unknown` / `--no-keep-unknown` overrides that default. Each
+removal and addition is listed, and the dry run shows a diff. Secret values
+are always printed as `[redacted]`.
+
+The result must pass the role's startup checks before it is written. A
+missing client value becomes a placeholder, and the file is left alone
+unless you pass `--allow-invalid`. The client credential comes from
+`--credentials` or `--token-file`, never the command line. Before writing,
+the original is copied to `.env.bak-<timestamp>` (mode 600). The new file
+replaces it atomically, so an interrupted run leaves the old file in
+place. Rerunning on a converted file changes nothing.
+
 ## Running, restarting, and logs
 
 The ordinary systemd commands work:

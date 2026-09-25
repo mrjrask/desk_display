@@ -944,8 +944,14 @@ def _format_number(value: float) -> str:
 def parse_env_file(path: str | os.PathLike[str]) -> dict[str, str]:
     """Parse a dotenv file the same way ``config._load_env_file`` does."""
 
+    return parse_env_text(Path(path).read_text(encoding="utf-8"))
+
+
+def parse_env_text(text: str) -> dict[str, str]:
+    """Parse dotenv *text*; see :func:`parse_env_file`."""
+
     values: dict[str, str] = {}
-    for raw_line in Path(path).read_text(encoding="utf-8").splitlines():
+    for raw_line in text.splitlines():
         line = raw_line.strip()
         if not line or line.startswith("#") or "=" not in line:
             continue
@@ -1259,7 +1265,8 @@ def _validate_client(report: ValidationReport, get, *, check_files: bool) -> Non
     if not get("DESK_DISPLAY_CLIENT_TOKEN"):
         report.error(
             "DESK_DISPLAY_CLIENT_TOKEN",
-            "required; copy the server's DESK_DISPLAY_SERVER_AUTH_TOKEN",
+            "required; the credential the server issued for this display (or, with shared "
+            "enrollment, the server's DESK_DISPLAY_SERVER_AUTH_TOKEN)",
         )
 
     allow_insecure = bool(get("DESK_DISPLAY_ALLOW_INSECURE_TRANSPORT"))

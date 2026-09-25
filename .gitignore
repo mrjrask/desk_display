@@ -82,6 +82,9 @@ celerybeat.pid
 
 # Environments
 .env
+.env.client
+# Backups written by scripts/convert_env.py hold secrets too.
+*.bak-[0-9]*
 .venv
 env/
 venv/
