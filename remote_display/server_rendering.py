@@ -6,8 +6,10 @@ upstream API.  Revisions:
 
 * ``style_revision`` hashes the style and layout documents, so editing them
   rerenders every screen.
-* ``data_revision`` is the data coordinator's snapshot revision.  Phase 14b
-  narrows this to the feeds each screen actually uses.
+* ``data_revision`` covers exactly the feeds a screen reads (from
+  :mod:`services.feeds`), so a weather update rerenders only weather screens.
+  A screen no catalogued feed serves falls back to the whole snapshot
+  revision, which is conservative but never stale.
 * ``renderer_revision`` is the application version, so an upgrade rerenders.
 """
 from __future__ import annotations
@@ -73,19 +75,33 @@ def _stat(path: Path) -> tuple[int, int]:
 class ServerRendering:
     """Revision source, renderer and data health for :class:`RenderCoordinator`."""
 
-    def __init__(self, data_coordinator: Any = None, style_revision: StyleRevision | None = None) -> None:
+    def __init__(
+        self,
+        data_coordinator: Any = None,
+        style_revision: StyleRevision | None = None,
+        feeds: Any = None,
+    ) -> None:
         if data_coordinator is None:
             from services.data_coordinator import coordinator as data_coordinator
         self.data = data_coordinator
         self.style_revision = style_revision or StyleRevision()
+        self.feeds = feeds
 
     def revisions(self, screens: Iterable[str]) -> Mapping[str, ScreenRevisions]:
-        revisions = ScreenRevisions(
-            style_revision=self.style_revision(),
-            data_revision=f"d{self.data.snapshot().revision}",
-            renderer_revision=f"v{APPLICATION_VERSION}",
-        )
-        return {screen: revisions for screen in screens}
+        snapshot = self.data.snapshot()
+        style = self.style_revision()
+        renderer = f"v{APPLICATION_VERSION}"
+        result = {}
+        for screen in screens:
+            data_revision = None
+            if self.feeds is not None:
+                data_revision = self.feeds.data_revision(screen, snapshot.source_revisions)
+            result[screen] = ScreenRevisions(
+                style_revision=style,
+                data_revision=data_revision or f"d{snapshot.revision}",
+                renderer_revision=renderer,
+            )
+        return result
 
     def render(self, key: RenderKey) -> RenderOutput:
         from display_profiles import PROFILE_PRESETS
@@ -108,6 +124,7 @@ class ServerRendering:
             "revision": snapshot.revision,
             "sources": dict(snapshot.source_revisions),
             "snapshot_at": snapshot.created_at.isoformat(timespec="seconds"),
+            "feeds": None if self.feeds is None else self.feeds.health(),
         }
 
 
