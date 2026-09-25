@@ -75,8 +75,9 @@ are unchanged.
   playlist and revision, manifest revision, lease expiry, recommended
   heartbeat and sync intervals, and a per-client `client_credential`.
 - `/api/v1/clients/<id>/heartbeat`, `/config`, `/manifest`, and
-  `/assets/<path>` need `Authorization: Bearer <client_credential>` for that
-  client ID, so one client cannot read another's configuration or status.
+  `/artifacts/<sha256>.<ext>` need `Authorization: Bearer <client_credential>`
+  for that client ID, so one client cannot read another's configuration or
+  status. A client can download only artifacts its own manifests listed.
 - `/api/v1/health` is public and only reports that the service is up.
 - `/api/v1/admin/status`, `/admin/prerender/<name>`, and
   `/admin/clients/<id>/disable|enable` need
@@ -123,6 +124,33 @@ or color that a client cannot show.
 When `SCREEN_UI_PASSWORD` is set these pages and their `/api/` endpoints
 require a login, and every change also needs the page's
 `X-Requested-With: desk-display` header.
+
+## Manifests and artifacts
+
+Rendered output lives in `DESK_DISPLAY_ARTIFACT_DIR`, stored by the SHA-256
+of its bytes, so an artifact URL never changes content. Output is written to
+a staging file, checked (PNG format, the profile's exact dimensions and
+color mode, checksum, and render-package schema) and only then renamed into
+place, so no client can download a partial file. Output that fails these
+checks, or a render that fails outright, never replaces the last good
+artifact: the manifest keeps listing it with `state: "fallback"` and the
+failure, or `state: "stale"` once its refresh deadline passes.
+
+A client's manifest (`GET /api/v1/clients/<id>/manifest`) lists its
+assigned playlist and revision, profile and dimensions, requested and
+touch-dependency screens, and for each artifact its immutable URL, SHA-256,
+length, media type, dimensions, generation time, refresh deadline, state,
+animation metadata and required capabilities. `manifest_revision` changes
+only when that content changes. The manifest and artifacts both return an
+`ETag`, answer `If-None-Match` with `304 Not Modified`, and artifacts support
+`Range` requests so an interrupted download can resume. Artifacts are served
+with `Cache-Control: immutable`, so a client downloads only artifacts it has
+not seen.
+
+Each screen keeps its current and three previous good artifacts. Artifacts
+listed in any client's current or previous manifest are never deleted;
+others are deleted `DESK_DISPLAY_ARTIFACT_RETENTION_HOURS` after they stop
+being referenced, by a background task every ten minutes.
 
 ## Secrets
 
