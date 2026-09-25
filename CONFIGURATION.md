@@ -183,6 +183,15 @@ catalogued feed serves rerenders on any data change. The render-status
 endpoint's `data_health.feeds` shows each feed's last success, failures and
 staleness.
 
+After each successful refresh the server saves the feed's last good data to
+`DESK_DISPLAY_SERVER_FEED_STATE_PATH` (never credentials) and reloads it at
+start-up, so a restarted server renders from saved data at once and refreshes
+each feed when its normal interval is due rather than all at once. Renders
+also depend on the content settings (location, weather, air quality, sports,
+news and other non-secret content settings): changing one and restarting the
+server rerenders every screen, and logo screens use logos sized for each
+display profile.
+
 The render server renders only what current demand needs: screens of
 connected clients, of static clients (from their assigned playlist), of
 administrator pre-render entries, and their touch dependencies. Equal
@@ -381,6 +390,7 @@ installs only, never clients.
 | `PRESSURE_HISTORY_PATH` | server, standalone | restart |  |
 | `WEATHER_METRIC_HISTORY_PATH` | server, standalone | restart |  |
 | `AIR_QUALITY_HISTORY_PATH` | server, standalone | restart |  |
+| `DESK_DISPLAY_SERVER_FEED_STATE_PATH` | server | restart |  |
 | `ON_THIS_DAY_CACHE_PATH` | server, standalone | restart |  |
 | `DESK_DISPLAY_PROFILE` | client, standalone | restart |  |
 | `DISPLAY_WIDTH` | client, standalone | restart |  |
@@ -505,6 +515,7 @@ installs only, never clients.
 | `RES_OPTIONS` | server, client, standalone | restart |  |
 | `LOCALDOMAIN` | server, client, standalone | restart |  |
 | `HOSTALIASES` | server, client, standalone | restart |  |
+<!-- END GENERATED SETTINGS REFERENCE -->
 <!-- END GENERATED SETTINGS REFERENCE -->
 <!-- END GENERATED SETTINGS REFERENCE -->
 <!-- END GENERATED SETTINGS REFERENCE -->

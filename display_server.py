@@ -614,7 +614,10 @@ def run_display_server() -> None:
     from remote_display.server_rendering import ServerRendering
     from services.server_feeds import ServerFeedService
 
-    feeds = ServerFeedService()
+    from paths import resolve_cache_file_path
+
+    feeds = ServerFeedService(state_path=str(
+        resolve_cache_file_path("DESK_DISPLAY_SERVER_FEED_STATE_PATH", "server_feed_state.json")))
     rendering = ServerRendering(feeds=feeds)
     app = create_app(
         DisplayServerConfig.from_env(),

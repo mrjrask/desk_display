@@ -491,6 +491,9 @@ SETTINGS: tuple[Setting, ...] = (
        "Weather chart history; defaults to cache/weather_metric_history.json."),
     _s("AIR_QUALITY_HISTORY_PATH", "path", _SERVER, "history",
        "Air-quality history; defaults to cache/air_quality_history.json."),
+    _s("DESK_DISPLAY_SERVER_FEED_STATE_PATH", "path", _SERVER_ONLY, "history",
+       "Where the render server saves each feed's last good data so a restart renders "
+       "immediately; defaults to cache/server_feed_state.json."),
     _s("ON_THIS_DAY_CACHE_PATH", "path", _SERVER, "history",
        "Daily On This Day cache; defaults to the application cache directory."),
 

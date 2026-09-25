@@ -22,6 +22,7 @@ from dataclasses import dataclass, replace
 from typing import Any
 
 from services import feeds
+from services.feed_state import FeedStateFile
 
 LOGGER = logging.getLogger("desk_display.server_feeds")
 
@@ -53,6 +54,7 @@ class ServerFeedService:
         fetch_air_quality: Callable[..., Any] | None = None,
         settings: Any = None,
         history_path: str | None = None,
+        state_path: str | None = None,
         clock: Callable[[], float] = time.monotonic,
         wall_clock: Callable[[], float] = time.time,
         seed: bool = True,
@@ -80,12 +82,52 @@ class ServerFeedService:
         self._health: dict[str, FeedHealth] = {feed: FeedHealth() for feed in feeds.FEED_DEPENDENCIES}
         self._scoreboard_dates: dict[str, Any] = {}
         self._stop = threading.Event()
+        self._state = FeedStateFile(state_path) if state_path else None
+        self._saved: dict[str, dict[str, Any]] = {}
         if seed:
             # Screens expect the standalone cache's shape before the first refresh.
             snapshot = self.data.snapshot()
             for key, value in feeds.default_cache().items():
                 if key not in snapshot.values:
                     self.data.publish(key, value)
+        if self._state is not None:
+            self._restore()
+
+    # ── Saved state ────────────────────────────────────────────────────────
+
+    def _restore(self) -> None:
+        """Reload last good data so a restarted server renders at once.
+
+        Each restored feed's last success is set to when it was saved, so
+        feeds refresh on their normal intervals rather than all at once.
+        """
+
+        saved = self._state.load()
+        if not saved:
+            return
+        self._saved = saved
+        self.data.restore({key: (entry["value"], entry["source_revision"]) for key, entry in saved.items()})
+        now, wall = self._clock(), self._wall_clock()
+        for feed in feeds.FEED_DEPENDENCIES:
+            keys = _FEED_KEYS.get(feed, (feed,))
+            if all(key in saved for key in keys):
+                age = max(0.0, wall - min(saved[key]["saved_at"] for key in keys))
+                self._health.setdefault(feed, FeedHealth()).last_success = now - age
+        LOGGER.info("Restored saved data for %s", ", ".join(sorted(saved)))
+
+    def _save(self, feed: str) -> None:
+        if self._state is None:
+            return
+        snapshot = self.data.snapshot()
+        wall = self._wall_clock()
+        for key in _FEED_KEYS.get(feed, (feed,)):
+            if key in snapshot.values:
+                self._saved[key] = {"value": snapshot.values[key],
+                                    "source_revision": snapshot.source_revisions.get(key, 0), "saved_at": wall}
+        try:
+            self._state.save(self._saved)
+        except OSError as exc:
+            LOGGER.warning("Could not save feed data: %s", exc)
 
     # ── Selection ──────────────────────────────────────────────────────────
 
@@ -155,6 +197,7 @@ class ServerFeedService:
             health.last_error = None
             health.consecutive_failures = 0
             results[feed] = True
+            self._save(feed)
         return results
 
     def _refresh_one(self, feed: str, screens: set[str], *, fresh: bool) -> None:
