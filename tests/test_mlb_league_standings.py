@@ -237,7 +237,7 @@ def test_render_screen_draws_combined_recent_column(monkeypatch):
     monkeypatch.setattr(
         mlb_league_standings,
         "_draw_league_screen",
-        lambda title, league_id, screen_id, *, wild_card_only=False: draw_calls.append(
+        lambda title, league_id, screen_id, *, wild_card_only=False, standings=None: draw_calls.append(
             (title, league_id, screen_id, wild_card_only)
         )
         or Image.new("RGB", (1, 1)),
@@ -255,7 +255,7 @@ def test_render_screen_passes_through_wild_card_only(monkeypatch):
     monkeypatch.setattr(
         mlb_league_standings,
         "_draw_league_screen",
-        lambda title, league_id, screen_id, *, wild_card_only=False: draw_calls.append(
+        lambda title, league_id, screen_id, *, wild_card_only=False, standings=None: draw_calls.append(
             (title, league_id, screen_id, wild_card_only)
         )
         or Image.new("RGB", (1, 1)),
@@ -635,10 +635,16 @@ def test_draw_mlb_wc_standings_route_to_wild_card_only_render(monkeypatch):
     mlb_league_standings.draw_mlb_nl_standings(object())
 
     assert calls == [
-        ("MLB ALWC Standings", mlb_league_standings.AL_LEAGUE_ID, "MLB ALWC Standings", {"wild_card_only": True}),
-        ("MLB NLWC Standings", mlb_league_standings.NL_LEAGUE_ID, "MLB NLWC Standings", {"wild_card_only": True}),
-        ("MLB AL Standings", mlb_league_standings.AL_LEAGUE_ID, "MLB AL Standings", {}),
-        ("MLB NL Standings", mlb_league_standings.NL_LEAGUE_ID, "MLB NL Standings", {}),
+        (
+            "MLB ALWC Standings", mlb_league_standings.AL_LEAGUE_ID, "MLB ALWC Standings",
+            {"wild_card_only": True, "standings": None},
+        ),
+        (
+            "MLB NLWC Standings", mlb_league_standings.NL_LEAGUE_ID, "MLB NLWC Standings",
+            {"wild_card_only": True, "standings": None},
+        ),
+        ("MLB AL Standings", mlb_league_standings.AL_LEAGUE_ID, "MLB AL Standings", {"standings": None}),
+        ("MLB NL Standings", mlb_league_standings.NL_LEAGUE_ID, "MLB NL Standings", {"standings": None}),
     ]
 
 

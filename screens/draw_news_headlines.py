@@ -970,6 +970,9 @@ def _run_ticker(
     last_frame: Optional[Image.Image] = None
     hit_rects: list[tuple[int, int, int, int, NewsHeadline]] = []
     end_time = time.monotonic() + float(NEWS_HEADLINES_DISPLAY_SECONDS)
+    if getattr(display, "render_only", False):
+        # Artifact composition wants one frame, not the on-screen interval.
+        end_time = time.monotonic()
 
     while time.monotonic() < end_time and not _should_stop():
         frame_start = time.monotonic()

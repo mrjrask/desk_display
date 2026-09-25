@@ -5,7 +5,12 @@ import time
 from dataclasses import dataclass
 from typing import Any
 
+from protocol import client_supports_manifest
 from schedule import ScreenScheduler
+
+
+class IncompatibleManifestError(ValueError):
+    """A cached manifest or render package uses an unsupported schema."""
 
 
 @dataclass(frozen=True)
@@ -36,6 +41,15 @@ class ClientPlayer:
         self._focus: tuple[str, float | None] | None = None
 
     def load_cache(self, manifest: dict[str, Any], playlist: dict[str, Any], packages: dict[str, Any]) -> None:
+        # Fail closed (see COMPATIBILITY.md): leave the active cache untouched
+        # rather than hand an unsupported package to playback.
+        if not isinstance(manifest, dict) or not client_supports_manifest(manifest):
+            versions = manifest if isinstance(manifest, dict) else {}
+            raise IncompatibleManifestError(
+                "Unsupported cached content: manifest schema "
+                f"{versions.get('manifest_schema_version')!r}, render package schema "
+                f"{versions.get('render_package_schema_version')!r}"
+            )
         self.manifest = dict(manifest)
         self.playlist = {str(k): dict(v) if isinstance(v, dict) else {} for k, v in playlist.items()}
         self.packages = dict(packages)
@@ -95,4 +109,10 @@ class ClientPlayer:
     def due(self, *, now: float | None = None) -> bool:
         if self.current_id is None or self.started_at is None:
             return True
-        return (now if now is not None else time.monotonic()) - self.started_at >= self._item(self.current_id).duration
+        current = now if now is not None else time.monotonic()
+        if self._focus is not None:
+            screen_id, deadline = self._focus
+            # A temporary focus may be shorter than the item's own duration.
+            if screen_id == self.current_id and deadline is not None and current >= deadline:
+                return True
+        return current - self.started_at >= self._item(self.current_id).duration

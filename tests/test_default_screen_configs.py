@@ -1087,6 +1087,12 @@ def test_large_config_ui_resolves_complete_order_and_scheduler_resolves_enabled_
         > 0
     ]
 
-    assert config_page_order == LARGE_RESOLVED_ORDER
-    assert screenshots_page_order == LARGE_RESOLVED_ORDER
+    # Catalog screens absent from the defaults (the scoreboard v2 IDs) are
+    # listed as "Ungrouped" ahead of every playlist; the configured screens
+    # keep the approved sequence after them.
+    unconfigured = [
+        screen_id for screen_id in ordered_ids if screen_id not in config["screens"]
+    ]
+    assert config_page_order == unconfigured + LARGE_RESOLVED_ORDER
+    assert screenshots_page_order == unconfigured + LARGE_RESOLVED_ORDER
     assert runtime_order == expected_runtime_order

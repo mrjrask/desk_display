@@ -882,6 +882,14 @@ def test_derive_playoff_matchups_from_recent_games_skips_espn_scan_outside_playo
     assert calls == []
 
 
+def _assert_scans_postseason_window(calls):
+    # On April 20 the scan looks back to April 1 (the postseason start) and
+    # ahead through the next week.
+    assert calls[0] == datetime.date(2026, 4, 1)
+    assert calls[-1] == datetime.date(2026, 4, 27)
+    assert len(calls) == 28
+
+
 def test_derive_playoff_matchups_from_recent_games_scans_during_playoff_season(monkeypatch):
     nba_playoffs._RECENT_GAMES_SCAN_COOLDOWN.reset()
     calls = []
@@ -895,7 +903,7 @@ def test_derive_playoff_matchups_from_recent_games_scans_during_playoff_season(m
     april_now = datetime.datetime(2026, 4, 20, 12, 0, tzinfo=CENTRAL_TIME)
     nba_playoffs._derive_playoff_matchups_from_recent_games(now=april_now)
 
-    assert len(calls) == 23
+    _assert_scans_postseason_window(calls)
 
 
 def test_derive_playoff_matchups_from_recent_games_cools_down_after_empty_scan(monkeypatch):
@@ -915,7 +923,7 @@ def test_derive_playoff_matchups_from_recent_games_cools_down_after_empty_scan(m
 
     april_now = datetime.datetime(2026, 4, 20, 12, 0, tzinfo=CENTRAL_TIME)
     nba_playoffs._derive_playoff_matchups_from_recent_games(now=april_now)
-    assert len(calls) == 23
+    _assert_scans_postseason_window(calls)
 
     calls.clear()
     result = nba_playoffs._derive_playoff_matchups_from_recent_games(now=april_now)
@@ -944,7 +952,7 @@ def test_derive_playoff_matchups_from_recent_games_cools_down_after_success(monk
     april_now = datetime.datetime(2026, 4, 20, 12, 0, tzinfo=CENTRAL_TIME)
     first = nba_playoffs._derive_playoff_matchups_from_recent_games(now=april_now)
     assert first
-    assert len(calls) == 23
+    _assert_scans_postseason_window(calls)
 
     calls.clear()
     second = nba_playoffs._derive_playoff_matchups_from_recent_games(now=april_now)

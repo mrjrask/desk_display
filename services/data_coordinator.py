@@ -9,7 +9,7 @@ from __future__ import annotations
 import copy
 import threading
 from collections.abc import Callable, Iterator, Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from types import MappingProxyType
 from typing import Any
@@ -40,8 +40,10 @@ class DataSnapshot(Mapping[str, Any]):
 
     revision: int
     created_at: datetime
-    values: Mapping[str, Any]
-    source_revisions: Mapping[str, int]
+    # ``field()`` keeps Python 3.11's dataclass from taking the inherited
+    # ``Mapping.values`` method as this field's default.
+    values: Mapping[str, Any] = field()
+    source_revisions: Mapping[str, int] = field()
 
     def __getitem__(self, key: str) -> Any:
         return self.values[key]
@@ -185,6 +187,58 @@ class DataCoordinator:
             ttl_seconds=ttl_seconds, force=force,
         )
         self.publish("mlb_league_standings", value)
+        return value
+
+    def read_nfl_league_standings(
+        self, *, ttl_seconds: int = 300, force: bool = False
+    ) -> dict[str, dict[str, list[dict[str, Any]]]]:
+        """Acquire NFL conference standings before snapshot-based rendering."""
+
+        from screens.nfl_standings import _fetch_standings_data
+
+        def fetch() -> dict[str, Any]:
+            standings, fallback_message, season_note = _fetch_standings_data(force=force)
+            return {
+                "standings": standings,
+                "meta": {
+                    "fallback_message": fallback_message,
+                    "season_note": season_note,
+                },
+            }
+
+        value = self.provider.read(
+            "nfl_standings", fetch,
+            ttl_seconds=ttl_seconds, force=force,
+        )
+        # Publish the fallback/season metadata beside the rows so snapshot
+        # renders can still label a previous season or show the offseason
+        # message instead of passing old standings off as current.
+        self.publish("nfl_standings_meta", value["meta"])
+        self.publish("nfl_standings", value["standings"])
+        return value["standings"]
+
+    def read_nhl_league_standings(
+        self, *, ttl_seconds: int = 300, force: bool = False,
+        include_wildcard_order: bool = False,
+    ) -> dict[str, dict[str, list[dict[str, Any]]]]:
+        """Acquire NHL standings, plus wildcard order when a v2 screen needs it."""
+
+        from screens.nhl_standings import (
+            _fetch_standings_data,
+            _fetch_wildcard_order_api_web,
+        )
+
+        value = self.provider.read(
+            "nhl_standings", lambda: _fetch_standings_data(force=force),
+            ttl_seconds=ttl_seconds, force=force,
+        )
+        self.publish("nhl_standings", value)
+        if include_wildcard_order:
+            wildcard_order = self.provider.read(
+                "nhl_wildcard_order", _fetch_wildcard_order_api_web,
+                ttl_seconds=ttl_seconds, force=force,
+            )
+            self.publish("nhl_wildcard_order", wildcard_order)
         return value
 
     @staticmethod

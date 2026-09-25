@@ -82,6 +82,16 @@ class _CaptureDisplay:
     def show(self) -> None:
         return None
 
+    # Composing an artifact captures frames, it does not play them back.
+    # Screens with loops bounded by wall-clock time (tickers, animated quads)
+    # check this flag and stop after their first complete frame.
+    render_only = True
+
+    def wait_for_skip(self, _duration: float) -> bool:
+        # Return at once without sleeping or skipping, so frame-bounded
+        # animations (drop-ins, scrolls) still run to their final frame.
+        return False
+
     def frame_id(self) -> int:
         return self._frame_id
 

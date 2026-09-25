@@ -131,3 +131,34 @@ def test_logo_loader_uses_string_filename_candidates(monkeypatch):
     assert nfl_standings._load_logo_for_height("buf", 24, cache) == "logo"
     assert requested_paths[0].endswith("/BUF.png")
     assert cache[("BUF", 24)] == "logo"
+
+
+def test_draw_with_snapshot_standings_keeps_season_note_and_fallback(monkeypatch):
+    captured = []
+    monkeypatch.setattr(
+        nfl_standings,
+        "_render_and_display",
+        lambda display, title, order, conference, transition, fallback_message: captured.append(
+            (title, fallback_message)
+        ),
+    )
+    monkeypatch.setattr(
+        nfl_standings,
+        "_fetch_standings_data",
+        lambda: (_ for _ in ()).throw(AssertionError("snapshot renders must not fetch")),
+    )
+
+    nfl_standings.draw_nfl_standings_nfc(
+        object(), transition=True, standings={"NFC": {}}, season_note="2025 season"
+    )
+    nfl_standings.draw_nfl_standings_afc(
+        object(),
+        transition=True,
+        standings={"AFC": {}},
+        fallback_message=nfl_standings.FALLBACK_MESSAGE_OFFSEASON,
+    )
+
+    assert captured == [
+        (f"{nfl_standings.TITLE_NFC} (2025 season)", None),
+        (nfl_standings.TITLE_AFC, nfl_standings.FALLBACK_MESSAGE_OFFSEASON),
+    ]

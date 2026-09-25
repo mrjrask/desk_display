@@ -495,12 +495,18 @@ def test_screenshot_and_feed_order_match_selected_default_profile(
     monkeypatch.setattr(config_ui, "FEED_SCREEN_STALE_SECONDS", float("inf"))
 
     playlists, assignments = config_ui._build_playlist_assignments(config)
-    expected = config_ui._apply_playlist_grouping(screen_ids, playlists, assignments)
+    # Catalog screens missing from the defaults (e.g. the scoreboard v2 IDs)
+    # are "Ungrouped" on the Config page too, so they lead both orders.
+    expected = config_ui._apply_playlist_grouping(
+        config_ui._ordered_screen_ids(config["screens"]), playlists, assignments
+    )
+    configured = config_ui._apply_playlist_grouping(screen_ids, playlists, assignments)
     screenshot_order = [entry["id"] for entry in config_ui._build_screenshot_entries()]
     feed_order = [entry["id"] for entry in config_ui._build_feed_screenshot_entries()]
 
     assert screenshot_order[: len(expected)] == expected
     assert feed_order[: len(expected)] == expected
+    assert [sid for sid in screenshot_order if sid in set(screen_ids)] == configured
 
 
 def test_build_screenshot_entries_includes_oled_when_present(monkeypatch, tmp_path):

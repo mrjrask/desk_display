@@ -1006,7 +1006,9 @@ def _title_with_season_note(title: str, season_note: Optional[str]) -> str:
     return f"{title} ({season_note})" if season_note else title
 
 
-def _fetch_standings_data() -> tuple[dict[str, dict[str, list[dict]]], Optional[str], Optional[str]]:
+def _fetch_standings_data(
+    *, force: bool = False
+) -> tuple[dict[str, dict[str, list[dict]]], Optional[str], Optional[str]]:
     """Return (standings, fallback_message, season_note).
 
     ``season_note`` is set whenever real standings data is being shown but
@@ -1020,7 +1022,7 @@ def _fetch_standings_data() -> tuple[dict[str, dict[str, list[dict]]], Optional[
     timestamp = float(_STANDINGS_CACHE.get("timestamp", 0.0))
     cached_message = _STANDINGS_CACHE.get("message")
     cached_season_note = _STANDINGS_CACHE.get("season_note")
-    if cached and now - timestamp < CACHE_TTL:
+    if not force and cached and now - timestamp < CACHE_TTL:
         return cached, cached_message, cached_season_note  # type: ignore[return-value]
 
     if _in_offseason():
@@ -1616,9 +1618,17 @@ def _render_and_display(
 
 # ─── Public API ───────────────────────────────────────────────────────────────
 @log_call
-def draw_nfl_overview_nfc(display, transition: bool = False, standings=None) -> ScreenImage:
+def draw_nfl_overview_nfc(
+    display,
+    transition: bool = False,
+    standings=None,
+    fallback_message: Optional[str] = None,
+    season_note: Optional[str] = None,
+) -> ScreenImage:
     standings_by_conf, fallback_message, season_note = (
-        _fetch_standings_data() if standings is None else (standings, None, None)
+        _fetch_standings_data()
+        if standings is None
+        else (standings, fallback_message, season_note)
     )
     _apply_style_overrides("NFL Overview NFC")
     conference = standings_by_conf.get(CONFERENCE_NFC_KEY, {})
@@ -1633,9 +1643,17 @@ def draw_nfl_overview_nfc(display, transition: bool = False, standings=None) -> 
 
 
 @log_call
-def draw_nfl_overview_afc(display, transition: bool = False, standings=None) -> ScreenImage:
+def draw_nfl_overview_afc(
+    display,
+    transition: bool = False,
+    standings=None,
+    fallback_message: Optional[str] = None,
+    season_note: Optional[str] = None,
+) -> ScreenImage:
     standings_by_conf, fallback_message, season_note = (
-        _fetch_standings_data() if standings is None else (standings, None, None)
+        _fetch_standings_data()
+        if standings is None
+        else (standings, fallback_message, season_note)
     )
     _apply_style_overrides("NFL Overview AFC")
     conference = standings_by_conf.get(CONFERENCE_AFC_KEY, {})
@@ -1650,9 +1668,17 @@ def draw_nfl_overview_afc(display, transition: bool = False, standings=None) -> 
 
 
 @log_call
-def draw_nfl_standings_nfc(display, transition: bool = False, standings=None) -> ScreenImage:
+def draw_nfl_standings_nfc(
+    display,
+    transition: bool = False,
+    standings=None,
+    fallback_message: Optional[str] = None,
+    season_note: Optional[str] = None,
+) -> ScreenImage:
     standings_by_conf, fallback_message, season_note = (
-        _fetch_standings_data() if standings is None else (standings, None, None)
+        _fetch_standings_data()
+        if standings is None
+        else (standings, fallback_message, season_note)
     )
     _apply_style_overrides("NFL Standings NFC")
     conference = standings_by_conf.get(CONFERENCE_NFC_KEY, {})
@@ -1667,9 +1693,17 @@ def draw_nfl_standings_nfc(display, transition: bool = False, standings=None) ->
 
 
 @log_call
-def draw_nfl_standings_afc(display, transition: bool = False, standings=None) -> ScreenImage:
+def draw_nfl_standings_afc(
+    display,
+    transition: bool = False,
+    standings=None,
+    fallback_message: Optional[str] = None,
+    season_note: Optional[str] = None,
+) -> ScreenImage:
     standings_by_conf, fallback_message, season_note = (
-        _fetch_standings_data() if standings is None else (standings, None, None)
+        _fetch_standings_data()
+        if standings is None
+        else (standings, fallback_message, season_note)
     )
     _apply_style_overrides("NFL Standings AFC")
     conference = standings_by_conf.get(CONFERENCE_AFC_KEY, {})

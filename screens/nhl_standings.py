@@ -946,11 +946,11 @@ def _walk_nodes(payload: object) -> Iterable[dict]:
             stack.extend(current)
 
 
-def _fetch_standings_data() -> dict[str, dict[str, list[dict]]]:
+def _fetch_standings_data(*, force: bool = False) -> dict[str, dict[str, list[dict]]]:
     now = time.time()
     cached = _STANDINGS_CACHE.get("data")
     timestamp = float(_STANDINGS_CACHE.get("timestamp", 0.0))
-    if cached and now - timestamp < CACHE_TTL:
+    if not force and cached and now - timestamp < CACHE_TTL:
         return cached  # type: ignore[return-value]
 
     standings: Optional[dict[str, dict[str, list[dict]]]] = None
