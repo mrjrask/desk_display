@@ -430,6 +430,12 @@ SETTINGS: tuple[Setting, ...] = (
        default="2", minimum=1, maximum=64),
     _s("DESK_DISPLAY_RENDER_TIMEOUT_SECONDS", "float", _SERVER_ONLY, "render",
        "Abandon a single artifact render after this long.", default="30", minimum=1),
+    _s("DESK_DISPLAY_PLAYLIST_STORE_PATH", "path", _SERVER, "styles",
+       "Server-managed playlist library and per-client assignments, written by the "
+       "config UI; defaults to .runtime/server/playlists.json. Its contents hot-reload."),
+    _s("DESK_DISPLAY_CLIENT_REGISTRY_PATH", "path", _SERVER, "leases",
+       "Client registry snapshot the render server writes for the config UI; defaults "
+       "to .runtime/server/clients.json. Contains no credentials."),
     _s("DESK_DISPLAY_ARTIFACT_DIR", "path", _SERVER_ONLY, "artifacts",
        "Directory for rendered artifacts and packages; defaults to cache/artifacts."),
     _s("DESK_DISPLAY_ARTIFACT_RETENTION_HOURS", "float", _SERVER_ONLY, "artifacts",
@@ -767,6 +773,7 @@ HOT_RELOAD_DOCUMENTS: dict[str, str] = {
     "SCREENS_LAYOUTS_PATH": "Quad layouts (screens/registry.py reloads on change).",
     "NEWS_FEEDS_CONFIG_PATH": "News topics and feeds (services/news_feeds.py reloads on change).",
     "NEWS_FEEDS_CONFIG_PATH_2": "Second news screen's feeds (reloaded on change).",
+    "DESK_DISPLAY_PLAYLIST_STORE_PATH": "Server-managed playlists and assignments (read on every request).",
 }
 
 

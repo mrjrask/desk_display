@@ -1,0 +1,316 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{ machine_hostname }} - Playlists</title>
+  {% include "_remote_style.html" %}
+</head>
+<body>
+  <h1>Client Playlists</h1>
+  <div class="subtitle">Server-managed playlists. Assign them to displays on the Clients page.</div>
+  <nav class="nav-links">
+    <a href="/">Rotation Config</a>
+    <a href="/screenshots">Screenshots</a>
+    <a href="/feed">Feed</a>
+    <a href="/playlists" aria-current="page">Playlists</a>
+    <a href="/clients">Clients</a>
+  </nav>
+
+  <div id="notice" class="panel notice hidden" role="status"></div>
+
+  <div class="panel">
+    <h2>New playlist</h2>
+    <div class="row">
+      <input id="new-name" placeholder="Playlist name" maxlength="80" aria-label="New playlist name">
+      <button id="create-btn" class="primary">Create from current rotation</button>
+      <label class="row muted">Import <input id="import-file" type="file" accept="application/json,.json"></label>
+    </div>
+  </div>
+
+  <div class="split">
+    <div class="panel">
+      <h2>Library</h2>
+      <ul id="playlist-list" class="plain"><li class="muted">Loading…</li></ul>
+    </div>
+
+    <div class="panel" id="editor-panel">
+      <p id="editor-empty" class="muted">Select a playlist to edit it.</p>
+      <div id="editor" class="hidden">
+        <div class="row">
+          <input id="edit-name" maxlength="80" aria-label="Playlist name">
+          <button id="rename-btn">Rename</button>
+          <button id="clone-btn">Clone</button>
+          <button id="export-btn">Export</button>
+          <button id="delete-btn" class="danger">Delete</button>
+        </div>
+        <p class="muted">
+          ID <span id="edit-id" class="mono"></span> ·
+          saved revision <span id="edit-revision" class="mono"></span> ·
+          used by <span id="edit-clients"></span>
+        </p>
+
+        <h2>Sequence</h2>
+        <ol id="sequence" class="sequence"></ol>
+
+        <h2>Document</h2>
+        <p class="muted">Same format as the rotation config: <span class="mono">screens</span> (frequency, extra seconds,
+          alternates), <span class="mono">playlists</span>, <span class="mono">sequence</span>, <span class="mono">scroll</span>.</p>
+        <textarea id="document" spellcheck="false" aria-label="Playlist document JSON"></textarea>
+        <div class="row">
+          <button id="validate-btn">Validate</button>
+          <button id="save-btn" class="primary">Save</button>
+        </div>
+
+        <h2 style="margin-top:1rem">Demand preview</h2>
+        <div id="preview" class="muted">No clients use this playlist yet.</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <h2>Recent changes</h2>
+    <div class="table-wrap"><table id="audit"><thead><tr><th>When</th><th>Who</th><th>Action</th><th>Target</th></tr></thead><tbody></tbody></table></div>
+  </div>
+
+<script>
+const CSRF = {{ {csrf_header: csrf_value} | tojson }};
+let selected = null;
+
+function notice(message, kind) {
+  const el = document.getElementById("notice");
+  el.textContent = message;
+  el.className = "panel notice " + (kind || "ok");
+}
+
+async function api(method, url, body) {
+  const options = { method, headers: { "Accept": "application/json" } };
+  if (method !== "GET") {
+    options.headers = { ...options.headers, ...CSRF, "Content-Type": "application/json" };
+    if (body !== undefined) options.body = JSON.stringify(body);
+  }
+  const response = await fetch(url, options);
+  if (response.status === 204) return null;
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    const error = new Error(data.message || data.error || response.statusText);
+    error.status = response.status;
+    error.data = data;
+    throw error;
+  }
+  return data;
+}
+
+function explain(error) {
+  if (error.status === 409 && error.data && error.data.error === "revision_conflict") {
+    return "Someone else changed this playlist. Reload it to see their version before saving again.";
+  }
+  if (error.status === 409 && error.data && error.data.error === "playlist_in_use") {
+    return "Still assigned to: " + (error.data.clients || []).join(", ") + ". Reassign those clients first.";
+  }
+  return error.message;
+}
+
+async function loadList() {
+  const data = await api("GET", "/api/playlists");
+  const list = document.getElementById("playlist-list");
+  list.innerHTML = "";
+  if (!data.playlists.length) {
+    list.innerHTML = '<li class="muted">No playlists yet.</li>';
+  }
+  for (const item of data.playlists) {
+    const li = document.createElement("li");
+    li.className = "list-item" + (selected && selected.id === item.id ? " selected" : "");
+    li.dataset.id = item.id;
+    const users = item.clients.length ? item.clients.join(", ") : "no clients";
+    li.innerHTML = "<strong></strong><div class='muted'></div>";
+    li.querySelector("strong").textContent = item.name;
+    li.querySelector("div").textContent = `${item.screen_count} screens · ${users}`;
+    li.addEventListener("click", () => select(item.id));
+    list.appendChild(li);
+  }
+  loadAudit();
+}
+
+async function loadAudit() {
+  const data = await api("GET", "/api/playlists/audit");
+  const body = document.querySelector("#audit tbody");
+  body.innerHTML = "";
+  for (const entry of data.entries.slice(0, 25)) {
+    const tr = document.createElement("tr");
+    for (const value of [entry.at, entry.actor, entry.action, entry.target]) {
+      const td = document.createElement("td");
+      td.textContent = value;
+      tr.appendChild(td);
+    }
+    body.appendChild(tr);
+  }
+}
+
+function renderSequence(doc) {
+  const list = document.getElementById("sequence");
+  list.innerHTML = "";
+  const sequence = doc.sequence || [];
+  const playlists = doc.playlists || {};
+  sequence.forEach((entry, index) => {
+    const li = document.createElement("li");
+    const label = entry.playlist ? ((playlists[entry.playlist] || {}).label || entry.playlist) : (entry.screen || JSON.stringify(entry));
+    const span = document.createElement("span");
+    span.textContent = label + " ";
+    li.appendChild(span);
+    for (const [text, delta] of [["↑", -1], ["↓", 1]]) {
+      const button = document.createElement("button");
+      button.textContent = text;
+      button.setAttribute("aria-label", `Move ${label} ${delta < 0 ? "up" : "down"}`);
+      button.disabled = index + delta < 0 || index + delta >= sequence.length;
+      button.addEventListener("click", () => move(index, delta, sequence.length));
+      li.appendChild(button);
+    }
+    list.appendChild(li);
+  });
+  if (!sequence.length) list.innerHTML = '<li class="muted">No sequence; screens play in document order.</li>';
+}
+
+async function move(index, delta, length) {
+  const order = [...Array(length).keys()];
+  [order[index], order[index + delta]] = [order[index + delta], order[index]];
+  try {
+    selected = await api("POST", `/api/playlists/${selected.id}/reorder`, { order, expected_revision: selected.revision });
+    show(selected);
+    notice("Sequence reordered.");
+    loadList();
+  } catch (error) { notice(explain(error), "error"); }
+}
+
+function show(playlist) {
+  document.getElementById("editor-empty").classList.add("hidden");
+  document.getElementById("editor").classList.remove("hidden");
+  document.getElementById("edit-name").value = playlist.name;
+  document.getElementById("edit-id").textContent = playlist.id;
+  document.getElementById("edit-revision").textContent = playlist.revision;
+  document.getElementById("edit-clients").textContent = (playlist.clients || []).join(", ") || "no clients";
+  document.getElementById("document").value = JSON.stringify(playlist.document, null, 2);
+  renderSequence(playlist.document);
+  loadPreview(playlist.id);
+}
+
+async function select(id) {
+  try {
+    selected = await api("GET", `/api/playlists/${id}`);
+    show(selected);
+    loadList();
+  } catch (error) { notice(explain(error), "error"); }
+}
+
+async function loadPreview(id) {
+  const box = document.getElementById("preview");
+  const data = await api("GET", `/api/playlists/${id}/preview`);
+  box.innerHTML = "";
+  const summary = document.createElement("p");
+  summary.textContent = `${data.required_screens.length} screens and ${data.alternate_screens.length} alternates are rendered for each profile below.`;
+  box.appendChild(summary);
+  if (!data.clients.length) {
+    box.appendChild(Object.assign(document.createElement("p"), { className: "muted", textContent: "No clients use this playlist yet." }));
+    return;
+  }
+  const list = document.createElement("ul");
+  for (const client of data.clients) {
+    const li = document.createElement("li");
+    li.textContent = `${client.client_id} (${client.display_profile || "unknown profile"}, ${client.state || "unknown"})`;
+    if (!client.warnings.length) {
+      li.appendChild(Object.assign(document.createElement("span"), { className: "badge in_sync", textContent: " compatible" }));
+    }
+    const inner = document.createElement("ul");
+    for (const warning of client.warnings) {
+      const item = document.createElement("li");
+      item.innerHTML = "<span class='badge'></span> <span></span>";
+      item.querySelector(".badge").textContent = warning.severity;
+      item.querySelector(".badge").classList.add(warning.severity);
+      item.querySelectorAll("span")[1].textContent = warning.message;
+      inner.appendChild(item);
+    }
+    li.appendChild(inner);
+    list.appendChild(li);
+  }
+  box.appendChild(list);
+}
+
+function parsedDocument() {
+  try { return JSON.parse(document.getElementById("document").value); }
+  catch (error) { throw new Error("Document is not valid JSON: " + error.message); }
+}
+
+document.getElementById("create-btn").addEventListener("click", async () => {
+  try {
+    const created = await api("POST", "/api/playlists", { name: document.getElementById("new-name").value });
+    document.getElementById("new-name").value = "";
+    notice(`Created ${created.name}.`);
+    await select(created.id);
+  } catch (error) { notice(explain(error), "error"); }
+});
+
+document.getElementById("import-file").addEventListener("change", async (event) => {
+  const file = event.target.files[0];
+  if (!file) return;
+  try {
+    const exported = JSON.parse(await file.text());
+    const created = await api("POST", "/api/playlists/import", { export: exported });
+    notice(`Imported ${created.name} as a new playlist.`);
+    await select(created.id);
+  } catch (error) { notice(explain(error), "error"); }
+  event.target.value = "";
+});
+
+document.getElementById("validate-btn").addEventListener("click", async () => {
+  try {
+    const result = await api("POST", "/api/playlists/validate", { document: parsedDocument() });
+    notice(result.valid ? `Valid: ${result.required_screens.length} screens, ${result.alternate_screens.length} alternates.` : `Invalid: ${result.error}`, result.valid ? "ok" : "error");
+  } catch (error) { notice(explain(error), "error"); }
+});
+
+document.getElementById("save-btn").addEventListener("click", async () => {
+  try {
+    selected = { ...(await api("PUT", `/api/playlists/${selected.id}`, { document: parsedDocument(), expected_revision: selected.revision })), clients: selected.clients };
+    show(selected);
+    notice(`Saved revision ${selected.revision}. Clients pick it up on their next sync.`);
+    loadList();
+  } catch (error) { notice(explain(error), "error"); }
+});
+
+document.getElementById("rename-btn").addEventListener("click", async () => {
+  try {
+    selected = { ...(await api("POST", `/api/playlists/${selected.id}/rename`, { name: document.getElementById("edit-name").value, expected_revision: selected.revision })), clients: selected.clients };
+    show(selected);
+    notice("Renamed.");
+    loadList();
+  } catch (error) { notice(explain(error), "error"); }
+});
+
+document.getElementById("clone-btn").addEventListener("click", async () => {
+  try {
+    const clone = await api("POST", `/api/playlists/${selected.id}/clone`, {});
+    notice(`Cloned as ${clone.name}.`);
+    await select(clone.id);
+  } catch (error) { notice(explain(error), "error"); }
+});
+
+document.getElementById("export-btn").addEventListener("click", () => {
+  window.location.href = `/api/playlists/${selected.id}/export`;
+});
+
+document.getElementById("delete-btn").addEventListener("click", async () => {
+  if (!confirm(`Delete ${selected.name}? This cannot be undone.`)) return;
+  try {
+    await api("DELETE", `/api/playlists/${selected.id}?expected_revision=${encodeURIComponent(selected.revision)}`);
+    notice(`Deleted ${selected.name}.`);
+    selected = null;
+    document.getElementById("editor").classList.add("hidden");
+    document.getElementById("editor-empty").classList.remove("hidden");
+    loadList();
+  } catch (error) { notice(explain(error), "error"); }
+});
+
+loadList().catch((error) => notice(explain(error), "error"));
+</script>
+</body>
+</html>

@@ -93,6 +93,37 @@ contribute their assigned playlist's screens even when not connected, must
 register with their configured profile, and merge with dynamic clients and
 administrator pre-render demand into one de-duplicated render plan.
 
+## Client playlists
+
+On a render server, the configuration UI's **Playlists** page (`/playlists`)
+is the source of truth for what each display plays; the `.env` files never
+hold playlists or assignments. Playlists use the same document format as the
+rotation config (frequency, extra seconds, alternate screens, playlists and
+sequence), are validated against `screens_catalog.py` and the scheduler, and
+are stored with stable `pl-…` IDs and content revisions in
+`DESK_DISPLAY_PLAYLIST_STORE_PATH`. Writes are atomic and locked, every
+change is recorded in an audit log, and every edit, rename, reorder, delete,
+and assignment must name the revision (or current playlist) it was based on,
+so a concurrent change is refused with `409 revision_conflict` instead of
+being overwritten. A playlist still assigned to a client cannot be deleted.
+Exports and imports carry only the playlist document, never credentials.
+
+The **Clients** page (`/clients`) lists static and registered displays from
+the snapshot the render server writes to `DESK_DISPLAY_CLIENT_REGISTRY_PATH`
+(it holds no credentials). Each client has exactly one assigned playlist;
+many clients may share one, and "Clone for this client" gives a client its
+own copy to edit. The page shows the client's state (online, stale, expired,
+disabled, or never connected), profile, dimensions, capabilities, rotation,
+software version, current screen, cache age, and three revisions: **saved**
+on the server, **delivered** to the client, and **acknowledged** by the
+client's heartbeat. The demand preview on the Playlists page lists what each
+assigned profile must render and warns when a playlist uses animation, touch,
+or color that a client cannot show.
+
+When `SCREEN_UI_PASSWORD` is set these pages and their `/api/` endpoints
+require a login, and every change also needs the page's
+`X-Requested-With: desk-display` header.
+
 ## Secrets
 
 Settings marked secret below (provider keys, the server and client tokens,
@@ -129,6 +160,7 @@ that points to them still needs one):
 | Quad layouts | `SCREENS_LAYOUTS_PATH` (`screens_layouts.json`) | `screens/registry.py` |
 | News topics and feeds | `NEWS_FEEDS_CONFIG_PATH` (`news_feeds.json`) | `services/news_feeds.py` |
 | Second news screen's feeds | `NEWS_FEEDS_CONFIG_PATH_2` (`news_feeds_2.json`) | `services/news_feeds.py` |
+| Client playlists, assignments, and friendly names | `DESK_DISPLAY_PLAYLIST_STORE_PATH` (`.runtime/server/playlists.json`) | `display_server.py` and the configuration UI on the next request |
 
 The configuration UI writes these documents, which is why its changes appear
 on the display without a restart.
@@ -138,6 +170,7 @@ on the display without a restart.
 "Provider" marks an upstream data provider setting: servers and standalone
 installs only, never clients.
 
+<!-- BEGIN GENERATED SETTINGS REFERENCE -->
 <!-- BEGIN GENERATED SETTINGS REFERENCE -->
 | Setting | Roles | Takes effect | Secret |
 | --- | --- | --- | --- |
@@ -238,6 +271,7 @@ installs only, never clients.
 | `DEFAULT_SCREENS_PATH` | server, standalone | restart |  |
 | `DEFAULT_SCREENS_LARGE_PATH` | server, standalone | restart |  |
 | `DEFAULT_SCREENS_SMALL_PATH` | server, standalone | restart |  |
+| `DESK_DISPLAY_PLAYLIST_STORE_PATH` | server, standalone | restart (file contents hot-reload) |  |
 | `WEATHER_REFRESH_SECONDS` | server, standalone | restart |  |
 | `STARTUP_CRITICAL_FEED_TIMEOUT_SECONDS` | server, standalone | restart |  |
 | `HTTP_CLIENT_FORBIDDEN_COOLDOWN_SECONDS` | server, standalone | restart |  |
@@ -247,6 +281,7 @@ installs only, never clients.
 | `DESK_DISPLAY_ARTIFACT_DIR` | server | restart |  |
 | `DESK_DISPLAY_ARTIFACT_RETENTION_HOURS` | server | restart |  |
 | `DESK_DISPLAY_ARTIFACT_MAX_MB` | server | restart |  |
+| `DESK_DISPLAY_CLIENT_REGISTRY_PATH` | server, standalone | restart |  |
 | `DESK_DISPLAY_CLIENT_LEASE_SECONDS` | server | restart |  |
 | `DESK_DISPLAY_STATIC_CLIENTS` | server | restart |  |
 | `SCREEN_CONFIG_HOST` | server, standalone | restart |  |
@@ -389,4 +424,5 @@ installs only, never clients.
 | `RES_OPTIONS` | server, client, standalone | restart |  |
 | `LOCALDOMAIN` | server, client, standalone | restart |  |
 | `HOSTALIASES` | server, client, standalone | restart |  |
+<!-- END GENERATED SETTINGS REFERENCE -->
 <!-- END GENERATED SETTINGS REFERENCE -->

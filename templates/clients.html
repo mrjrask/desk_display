@@ -1,0 +1,209 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{ machine_hostname }} - Clients</title>
+  {% include "_remote_style.html" %}
+</head>
+<body>
+  <h1>Display Clients</h1>
+  <div class="subtitle">Every display the render server knows about, and the playlist each one plays.</div>
+  <nav class="nav-links">
+    <a href="/">Rotation Config</a>
+    <a href="/screenshots">Screenshots</a>
+    <a href="/feed">Feed</a>
+    <a href="/playlists">Playlists</a>
+    <a href="/clients" aria-current="page">Clients</a>
+  </nav>
+
+  <div id="notice" class="panel notice hidden" role="status"></div>
+
+  <div class="panel">
+    <p class="muted">
+      <strong>Saved</strong> is the revision stored on the server, <strong>delivered</strong> is the one the server
+      last sent to the client, and <strong>acknowledged</strong> is the one the client reported playing.
+    </p>
+    <div class="table-wrap">
+      <table id="clients">
+        <thead>
+          <tr>
+            <th>Client</th><th>State</th><th>Display</th><th>Playback</th>
+            <th>Assignment</th><th>Revisions</th><th>Warnings</th>
+          </tr>
+        </thead>
+        <tbody><tr><td colspan="7" class="muted">Loading…</td></tr></tbody>
+      </table>
+    </div>
+  </div>
+
+<script>
+const CSRF = {{ {csrf_header: csrf_value} | tojson }};
+let playlists = [];
+
+function notice(message, kind) {
+  const el = document.getElementById("notice");
+  el.textContent = message;
+  el.className = "panel notice " + (kind || "ok");
+}
+
+async function api(method, url, body) {
+  const options = { method, headers: { "Accept": "application/json" } };
+  if (method !== "GET") {
+    options.headers = { ...options.headers, ...CSRF, "Content-Type": "application/json" };
+    if (body !== undefined) options.body = JSON.stringify(body);
+  }
+  const response = await fetch(url, options);
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    const error = new Error(data.message || data.error || response.statusText);
+    error.status = response.status;
+    error.data = data;
+    throw error;
+  }
+  return data;
+}
+
+function explain(error) {
+  if (error.status === 409 && error.data && error.data.error === "revision_conflict") {
+    return "Someone else changed this client's assignment. The table has been reloaded; try again.";
+  }
+  return error.message;
+}
+
+function cell(tr, build) {
+  const td = document.createElement("td");
+  build(td);
+  tr.appendChild(td);
+}
+
+function line(parent, text, className) {
+  const div = document.createElement("div");
+  if (className) div.className = className;
+  div.textContent = text;
+  parent.appendChild(div);
+  return div;
+}
+
+function badge(parent, text, kind) {
+  const span = document.createElement("span");
+  span.className = "badge " + (kind || text);
+  span.textContent = text.replaceAll("_", " ");
+  parent.appendChild(span);
+}
+
+function age(seconds) {
+  if (seconds === null || seconds === undefined) return "unknown";
+  if (seconds < 90) return `${Math.round(seconds)}s`;
+  if (seconds < 5400) return `${Math.round(seconds / 60)}m`;
+  return `${Math.round(seconds / 3600)}h`;
+}
+
+function render(data) {
+  playlists = data.playlists;
+  const body = document.querySelector("#clients tbody");
+  body.innerHTML = "";
+  if (!data.clients.length) {
+    body.innerHTML = '<tr><td colspan="7" class="muted">No clients yet. Static clients and registered displays appear here.</td></tr>';
+    return;
+  }
+  for (const client of data.clients) {
+    const tr = document.createElement("tr");
+    tr.dataset.clientId = client.client_id;
+    cell(tr, (td) => {
+      line(td, client.friendly_name || client.client_id).style.fontWeight = "600";
+      line(td, client.client_id, "mono muted");
+      line(td, `${client.kind}${client.software_version ? " · v" + client.software_version : ""}`, "muted");
+      const rename = document.createElement("button");
+      rename.textContent = "Rename";
+      rename.addEventListener("click", () => renameClient(client));
+      td.appendChild(rename);
+    });
+    cell(tr, (td) => {
+      badge(td, client.state);
+      line(td, `heartbeat ${client.last_heartbeat || "never"}`, "muted");
+    });
+    cell(tr, (td) => {
+      line(td, client.display_profile || "unknown profile");
+      line(td, `${client.dimensions || "?"} · rotation ${client.physical_rotation ?? "?"}°`, "muted");
+      const caps = client.capabilities || {};
+      const features = [caps.supports_animation ? "animation" : null, caps.has_touch ? "touch" : null,
+        (caps.buttons || []).length ? `buttons ${caps.buttons.join("")}` : null].filter(Boolean);
+      if (features.length) line(td, features.join(" · "), "muted");
+    });
+    cell(tr, (td) => {
+      line(td, client.current_screen || "—");
+      line(td, `${client.playback_state || "unknown"} · cache ${age(client.cache_age_seconds)}`, "muted");
+    });
+    cell(tr, (td) => {
+      const select = document.createElement("select");
+      select.setAttribute("aria-label", `Playlist for ${client.client_id}`);
+      select.appendChild(new Option("Unassigned", ""));
+      for (const playlist of playlists) select.appendChild(new Option(playlist.name, playlist.id));
+      const current = client.assignment ? client.assignment.playlist_id : "";
+      select.value = current;
+      select.addEventListener("change", () => assign(client, select.value || null, current || null));
+      td.appendChild(select);
+      if (client.assignment) {
+        const fork = document.createElement("button");
+        fork.textContent = "Clone for this client";
+        fork.title = "Copy the shared playlist so this client can be edited on its own";
+        fork.addEventListener("click", () => forkPlaylist(client));
+        td.appendChild(fork);
+      }
+    });
+    cell(tr, (td) => {
+      badge(td, client.revision_state);
+      line(td, `saved ${client.saved_revision || "—"}`, "mono");
+      line(td, `delivered ${client.delivered_revision || "—"}`, "mono");
+      line(td, `acknowledged ${client.acknowledged_revision || "—"}`, "mono");
+    });
+    cell(tr, (td) => {
+      if (!client.warnings.length && !client.recent_errors.length) line(td, "—", "muted");
+      for (const warning of client.warnings) {
+        const div = line(td, " " + warning.message);
+        const tag = document.createElement("span");
+        tag.className = "badge " + warning.severity;
+        tag.textContent = warning.severity;
+        div.prepend(tag);
+      }
+      for (const error of client.recent_errors) line(td, `${error.code} ×${error.count}: ${error.message}`, "muted");
+    });
+    body.appendChild(tr);
+  }
+}
+
+async function load() {
+  render(await api("GET", "/api/clients"));
+}
+
+async function assign(client, playlistId, expected) {
+  try {
+    await api("PUT", `/api/clients/${encodeURIComponent(client.client_id)}/assignment`, { playlist_id: playlistId, expected_playlist_id: expected });
+    notice(playlistId ? `Assigned ${client.client_id}. It picks up the playlist on its next sync.` : `Unassigned ${client.client_id}.`);
+  } catch (error) { notice(explain(error), "error"); }
+  load();
+}
+
+async function forkPlaylist(client) {
+  try {
+    const clone = await api("POST", `/api/clients/${encodeURIComponent(client.client_id)}/fork`, { expected_playlist_id: client.assignment.playlist_id });
+    notice(`${client.client_id} now plays its own copy, ${clone.name}. Edit it on the Playlists page.`);
+  } catch (error) { notice(explain(error), "error"); }
+  load();
+}
+
+async function renameClient(client) {
+  const name = prompt(`Friendly name for ${client.client_id}`, client.friendly_name || "");
+  if (name === null) return;
+  try {
+    await api("PUT", `/api/clients/${encodeURIComponent(client.client_id)}/name`, { friendly_name: name });
+  } catch (error) { notice(explain(error), "error"); }
+  load();
+}
+
+load().catch((error) => notice(explain(error), "error"));
+setInterval(() => load().catch(() => {}), 15000);
+</script>
+</body>
+</html>
