@@ -8,6 +8,12 @@ from playback.client_player import ClientPlayer
 from rendering.screen_renderer import ScreenRenderer, ServerPreferenceSnapshot
 from services.data_coordinator import DataCoordinator
 
+# The registry renders these from ``mlb_league_standings`` too, but their IDs
+# carry neither the "MLB " prefix nor "Standings".
+_MLB_OVERVIEW_IDS = frozenset(
+    {"NL Overview", "AL Overview", "NL Overview+WC", "AL Overview+WC"}
+)
+
 
 @dataclass
 class LegacyStandaloneRuntime:
@@ -30,7 +36,9 @@ class LegacyStandaloneRuntime:
             self.data.read_nhl_league_standings(
                 include_wildcard_order=screen_id.endswith(" v2")
             )
-        elif screen_id.startswith("MLB ") and "Standings" in screen_id:
+        elif screen_id in _MLB_OVERVIEW_IDS or (
+            screen_id.startswith("MLB ") and "Standings" in screen_id
+        ):
             self.data.read_mlb_league_standings()
 
     def step(self):

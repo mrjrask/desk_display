@@ -116,3 +116,79 @@ def test_displayed_screen_image_uses_captured_viewport():
     )
 
     assert artifact.image.getpixel((0, 0)) == (255, 0, 0)
+
+
+def _news_setup(monkeypatch):
+    import screens.draw_news_headlines as dnh
+    from services.news_feeds import NewsHeadline, NewsTopic
+
+    topics = [
+        NewsTopic(id=t, label=f"{t} News", name=t, url=f"https://example.com/{t}")
+        for t in ("local", "sports")
+    ]
+    headlines = {
+        topic.id: [
+            NewsHeadline(topic_id=topic.id, title=f"{topic.label} story", link="https://example.com/a")
+        ]
+        for topic in topics
+    }
+    monkeypatch.setattr(dnh, "NEWS_HEADLINES_DISPLAY_SECONDS", 30.0)
+    monkeypatch.setattr(dnh, "_pygame_module_for_display", lambda display: None)
+    monkeypatch.setattr(dnh, "_download_thumbnail", lambda *args, **kwargs: None)
+    monkeypatch.setattr(dnh, "fetch_stock_quotes", lambda *args, **kwargs: [])
+    monkeypatch.setattr(dnh, "load_news_feed_config", lambda: (topics, 5, 20))
+    monkeypatch.setattr(dnh, "fetch_all_headlines", lambda: headlines)
+    return dnh
+
+
+def test_render_only_capture_skips_news_ticker_playback_interval(monkeypatch):
+    import time
+
+    dnh = _news_setup(monkeypatch)
+
+    def registry_factory(capture, profile, preferences, data):
+        return {
+            "news headlines": SimpleNamespace(
+                available=True,
+                metadata={},
+                render=lambda: dnh.draw_news_headlines(capture, transition=True),
+            )
+        }
+
+    started = time.monotonic()
+    artifact = ScreenRenderer(registry_factory).render(
+        "news headlines",
+        PROFILE_PRESETS[DISPLAY_PROFILE_DISPLAY_HAT_MINI],
+        ServerPreferenceSnapshot(revision=1),
+        DataCoordinator().snapshot(),
+    )
+
+    assert time.monotonic() - started < 5.0
+    assert artifact.image.getbbox() is not None
+
+
+def test_render_only_capture_runs_frame_bounded_animation_to_final_frame():
+    import time
+
+    colors = ["black", "gray", "white"]
+
+    def registry_factory(capture, profile, preferences, data):
+        def render():
+            for color in colors:
+                capture.image(Image.new("RGB", (320, 240), color))
+                if capture.wait_for_skip(10.0):
+                    break
+            return ScreenImage(capture.current_image, displayed=True)
+
+        return {"drop": SimpleNamespace(available=True, metadata={}, render=render)}
+
+    started = time.monotonic()
+    artifact = ScreenRenderer(registry_factory).render(
+        "drop",
+        PROFILE_PRESETS[DISPLAY_PROFILE_DISPLAY_HAT_MINI],
+        ServerPreferenceSnapshot(revision=1),
+        DataCoordinator().snapshot(),
+    )
+
+    assert time.monotonic() - started < 5.0
+    assert artifact.image.convert("RGB").getpixel((0, 0)) == (255, 255, 255)

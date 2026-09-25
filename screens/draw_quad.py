@@ -113,7 +113,11 @@ def draw_quad_screen(
         max_frame_time,
         max(min_frame_time, float(SCREEN_DELAY) / float(max_frames)) / speed_factor,
     )
-    animated = transition and any(len(seq) > 1 for seq in tile_sequences)
+    animated = (
+        transition
+        and not getattr(display, "render_only", False)
+        and any(len(seq) > 1 for seq in tile_sequences)
+    )
     displayed_frame = _render_composite(0)
     display.image(displayed_frame)
     if transition:

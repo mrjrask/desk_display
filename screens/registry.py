@@ -1323,8 +1323,20 @@ def build_screen_registry(context: ScreenContext) -> tuple[dict[str, ScreenDefin
         None if context.allow_upstream_requests else context.cache.get("nfl_standings", {})
     )
 
+    nfl_standings_meta = (
+        {}
+        if context.allow_upstream_requests
+        else context.cache.get("nfl_standings_meta") or {}
+    )
+
     def _nfl_standings_renderer(renderer):
-        return lambda: renderer(context.display, transition=True, standings=nfl_standings)
+        return lambda: renderer(
+            context.display,
+            transition=True,
+            standings=nfl_standings,
+            fallback_message=nfl_standings_meta.get("fallback_message"),
+            season_note=nfl_standings_meta.get("season_note"),
+        )
 
     register("NFL Overview NFC", _nfl_standings_renderer(draw_nfl_overview_nfc))
     register("NFL Overview AFC", _nfl_standings_renderer(draw_nfl_overview_afc))

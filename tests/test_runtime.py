@@ -12,6 +12,10 @@ from runtime import LegacyStandaloneRuntime
         ("NHL Standings East", ("nhl", False)),
         ("NHL Standings West v2", ("nhl", True)),
         ("MLB AL Standings", ("mlb", None)),
+        ("NL Overview", ("mlb", None)),
+        ("AL Overview", ("mlb", None)),
+        ("NL Overview+WC", ("mlb", None)),
+        ("AL Overview+WC", ("mlb", None)),
     ],
 )
 def test_standalone_runtime_hydrates_standings_before_snapshot(screen_id, expected):

@@ -1986,3 +1986,28 @@ def test_disabled_scoreboard_screens_do_not_import_heavy_renderers(monkeypatch):
 
     assert registry["NBA Scoreboard"].available is False
     assert heavy_modules.isdisjoint(sys.modules)
+
+
+def test_snapshot_nfl_standings_pass_season_metadata(monkeypatch):
+    now = datetime.datetime(2026, 9, 25, tzinfo=CENTRAL_TIME)
+    standings = {"NFC": {"North": [{"abbr": "CHI"}]}}
+    meta = {"fallback_message": None, "season_note": "2025 season"}
+    context = _make_context(
+        {},
+        now,
+        {"nfl_standings": standings, "nfl_standings_meta": meta},
+        allow_upstream_requests=False,
+    )
+    received = []
+    monkeypatch.setattr(
+        registry_module,
+        "draw_nfl_standings_nfc",
+        lambda display, **kwargs: received.append(kwargs),
+    )
+
+    registry, _ = build_screen_registry(context)
+    registry["NFL Standings NFC"].render()
+
+    assert received[0]["standings"] == standings
+    assert received[0]["season_note"] == "2025 season"
+    assert received[0]["fallback_message"] is None
