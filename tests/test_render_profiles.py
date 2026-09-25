@@ -42,6 +42,10 @@ def test_all_supported_render_profiles_are_explicit_and_frozen():
         ((320, 240), DISPLAY_PROFILE_DISPLAY_HAT_MINI, "RGB", False),
         ((240, 135), DISPLAY_PROFILE_ADAFRUIT_MINIPITFT_114, "RGB", True),
         ((1920, 1080), DISPLAY_PROFILE_HDMI_1080P, "RGB", False),
+        ((240, 320), DISPLAY_PROFILE_DISPLAY_HAT_MINI, "RGB", False),
+        ((135, 240), DISPLAY_PROFILE_ADAFRUIT_MINIPITFT_114, "RGB", True),
+        ((480, 800), DISPLAY_PROFILE_HYPERPIXEL4, "RGB", True),
+        ((1080, 1920), DISPLAY_PROFILE_HDMI_1080P, "RGB", False),
     ],
 )
 def test_resolution_profiles(dimensions, profile_id, mode, compact):

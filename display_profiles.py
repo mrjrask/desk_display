@@ -6,7 +6,7 @@ to build registries for several displays in the same interpreter.
 """
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 DISPLAY_PROFILE_DISPLAY_HAT_MINI = "display_hat_mini"
 DISPLAY_PROFILE_ADAFRUIT_MINIPITFT_114 = "adafruit_minipitft_114"
@@ -127,18 +127,22 @@ def resolve_display_profile_by_id(profile_id: str) -> RenderProfile | None:
 def resolve_display_profile(width: int, height: int) -> RenderProfile:
     dimensions = (width, height)
     if dimensions in {(320, 240), (240, 320)}:
-        return PROFILE_PRESETS[DISPLAY_PROFILE_DISPLAY_HAT_MINI]
+        preset = PROFILE_PRESETS[DISPLAY_PROFILE_DISPLAY_HAT_MINI]
+        return replace(preset, width=width, height=height)
     if dimensions in {(240, 135), (135, 240)}:
-        return PROFILE_PRESETS[DISPLAY_PROFILE_ADAFRUIT_MINIPITFT_114]
+        preset = PROFILE_PRESETS[DISPLAY_PROFILE_ADAFRUIT_MINIPITFT_114]
+        return replace(preset, width=width, height=height)
     if dimensions == (720, 720):
         return PROFILE_PRESETS[DISPLAY_PROFILE_HYPERPIXEL4_SQUARE]
     if dimensions in {(800, 480), (480, 800)}:
-        return PROFILE_PRESETS[DISPLAY_PROFILE_HYPERPIXEL4]
+        preset = PROFILE_PRESETS[DISPLAY_PROFILE_HYPERPIXEL4]
+        return replace(preset, width=width, height=height)
     if sorted(dimensions) == [1080, 1920]:
-        return PROFILE_PRESETS[DISPLAY_PROFILE_HDMI_1080P]
+        preset = PROFILE_PRESETS[DISPLAY_PROFILE_HDMI_1080P]
+        return replace(preset, width=width, height=height)
     if _is_hd_widescreen_layout(width, height):
         preset = PROFILE_PRESETS[DISPLAY_PROFILE_FALLBACK_HD]
     else:
         preset = PROFILE_PRESETS[DISPLAY_PROFILE_FALLBACK_DEFAULT]
     # Fallbacks preserve the caller's actual logical canvas.
-    return RenderProfile(**{**preset.__dict__, "width": width, "height": height})
+    return replace(preset, width=width, height=height)
