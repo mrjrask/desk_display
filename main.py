@@ -66,7 +66,6 @@ gc = __import__('gc')
 from PIL import Image
 
 import config
-import data_fetch
 from config import (
     AHL_TEAM_TRICODE,
     CENTRAL_TIME,
@@ -90,6 +89,7 @@ from image_compat import LANCZOS
 from env_config import env_float
 from services.air_quality import fetch_air_quality
 from services.data_provider import provider as data_provider
+from services.data_coordinator import coordinator as data_coordinator
 from utils import (
     Display,
     ScreenImage,
@@ -2746,9 +2746,7 @@ def _feed_to_force_refresh_for_screen(screen_id: str, *, offline: bool) -> Optio
 
 
 def _refresh_bears() -> None:
-    cache["bears"].update({
-        "stand": data_fetch.fetch_bears_standings(),
-    })
+    cache["bears"].update(data_coordinator.read_legacy_team("bears"))
 
 
 def _fetch_hawks_live_feed(live_game: Optional[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
@@ -2773,72 +2771,28 @@ def _fetch_hawks_live_feed(live_game: Optional[Dict[str, Any]]) -> Optional[Dict
 
 
 def _refresh_hawks() -> None:
-    live_game = data_fetch.fetch_blackhawks_live_game()
-    cache["hawks"].update({
-        "stand": data_fetch.fetch_blackhawks_standings(),
-        "last": data_fetch.fetch_blackhawks_last_game(),
-        "live": live_game,
-        "live_feed": _fetch_hawks_live_feed(live_game),
-        "next": data_fetch.fetch_blackhawks_next_game(),
-        "next_home": data_fetch.fetch_blackhawks_next_home_game(),
-    })
+    payload = data_coordinator.read_legacy_team("hawks")
+    payload["live_feed"] = _fetch_hawks_live_feed(payload.get("live"))
+    cache["hawks"].update(payload)
 
 
 def _refresh_wolves() -> None:
-    wolves_games = data_fetch.fetch_wolves_games() or {}
-    cache["wolves"].update({
-        "last": wolves_games.get("last_game"),
-        "live": wolves_games.get("live_game"),
-        "next": wolves_games.get("next_game"),
-        "next_home": wolves_games.get("next_home_game"),
-    })
+    cache["wolves"].update(data_coordinator.read_legacy_team("wolves"))
 
 
 def _refresh_bulls() -> None:
-    cache["bulls"].update({
-        "stand": data_fetch.fetch_bulls_standings(),
-        "last": data_fetch.fetch_bulls_last_game(),
-        "live": data_fetch.fetch_bulls_live_game(),
-        "next": data_fetch.fetch_bulls_next_game(),
-        "next_home": data_fetch.fetch_bulls_next_home_game(),
-    })
+    cache["bulls"].update(data_coordinator.read_legacy_team("bulls"))
 
 
-def _refresh_cubs() -> None:
-    cubg = data_fetch.fetch_cubs_games() or {}
-    cache["cubs"].update({
-        "stand": data_fetch.fetch_cubs_standings(),
-        "last":  cubg.get("last_game"),
-        "last_alt": cubg.get("last_game_alt"),
-        "live":  cubg.get("live_game"),
-        "next":  cubg.get("next_game"),
-        "next_alt": cubg.get("next_game_alt"),
-        "current_series": cubg.get("current_series_games"),
-        "next_series": cubg.get("next_series_games"),
-        "next_home_series": cubg.get("next_home_series_games"),
-        "next_home": cubg.get("next_home_game"),
-        "schedule_covers_today": bool(cubg.get("schedule_covers_today")),
-    })
+def _refresh_cubs(*, force: bool = False) -> None:
+    cache["cubs"].update(data_coordinator.read_legacy_team("cubs", force=force))
 
 
-def _refresh_sox() -> None:
-    soxg = data_fetch.fetch_sox_games() or {}
-    cache["sox"].update({
-        "stand": data_fetch.fetch_sox_standings(),
-        "last":  soxg.get("last_game"),
-        "last_alt": soxg.get("last_game_alt"),
-        "live":  soxg.get("live_game"),
-        "next":  soxg.get("next_game"),
-        "next_alt": soxg.get("next_game_alt"),
-        "current_series": soxg.get("current_series_games"),
-        "next_series": soxg.get("next_series_games"),
-        "next_home_series": soxg.get("next_home_series_games"),
-        "next_home": soxg.get("next_home_game"),
-        "schedule_covers_today": bool(soxg.get("schedule_covers_today")),
-    })
+def _refresh_sox(*, force: bool = False) -> None:
+    cache["sox"].update(data_coordinator.read_legacy_team("sox", force=force))
 
 
-_FEED_REFRESHERS: Dict[str, Callable[[], None]] = {
+_FEED_REFRESHERS: Dict[str, Callable[..., None]] = {
     "weather": _refresh_weather,
     "air_quality": _refresh_air_quality,
     "bears": _refresh_bears,
@@ -3178,7 +3132,7 @@ def main_loop():
 
             offline = _wifi_outage_active if _wifi_monitor_enabled else False
             now_utc = datetime.datetime.now(datetime.timezone.utc)
-            weather_fetched_at = data_fetch.get_weather_cache_timestamp()
+            weather_fetched_at = data_coordinator.weather_cache_timestamp()
             context = ScreenContext(
                 display=display,
                 cache=cache,
@@ -3219,7 +3173,10 @@ def main_loop():
                 refresher = _FEED_REFRESHERS.get(force_refresh_feed)
                 if refresher:
                     try:
-                        refresher()
+                        if force_refresh_feed in {"cubs", "sox"}:
+                            refresher(force=True)
+                        else:
+                            refresher()
                         _mark_feed_refreshed(force_refresh_feed)
                         _bump_registry_cache_nonce()
                     except Exception as exc:

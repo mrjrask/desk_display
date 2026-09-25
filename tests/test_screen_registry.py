@@ -15,8 +15,7 @@ from screens.registry import (
     _logo_scroll_speed_for_layout,
     build_screen_registry,
 )
-from utils import ScreenImage
-from utils import log_call
+from utils import ScreenImage, log_call
 
 
 def _reset_quad_scroll_state():
@@ -45,6 +44,7 @@ def _make_context(
     *,
     offline: bool = False,
     weather_fetched_at: datetime.datetime | None = None,
+    allow_upstream_requests: bool = True,
 ) -> ScreenContext:
     cache = {"weather": weather}
     if cache_updates:
@@ -60,7 +60,84 @@ def _make_context(
         weather_fetched_at=weather_fetched_at,
         skip_scoreboards=False,
         render_profile=resolve_display_profile(320, 240),
+        allow_upstream_requests=allow_upstream_requests,
     )
+
+
+def test_snapshot_mlb_standings_screen_uses_context_data(monkeypatch):
+    now = datetime.datetime(2026, 9, 25, tzinfo=CENTRAL_TIME)
+    standings = {103: {"East": [{"abbr": "NYY"}]}}
+    received = []
+    context = _make_context(
+        {}, now, {"mlb_league_standings": standings},
+        allow_upstream_requests=False,
+    )
+    monkeypatch.setattr(
+        registry_module,
+        "draw_mlb_al_standings",
+        lambda display, **kwargs: received.append(kwargs["standings"]),
+    )
+
+    registry, _ = build_screen_registry(context)
+    registry["MLB AL Standings"].render()
+
+    assert received == [standings]
+
+
+@pytest.mark.parametrize(
+    ("screen_id", "renderer_name", "cache_key", "payload"),
+    [
+        ("NFL Overview NFC", "draw_nfl_overview_nfc", "nfl_standings", {"NFC": {}}),
+        (
+            "NHL Standings Overview West",
+            "draw_nhl_standings_overview_west",
+            "nhl_standings",
+            {"Western": {}},
+        ),
+    ],
+)
+def test_snapshot_standings_renderers_use_context_data(
+    monkeypatch, screen_id, renderer_name, cache_key, payload
+):
+    now = datetime.datetime(2026, 9, 25, tzinfo=CENTRAL_TIME)
+    received = []
+    context = _make_context(
+        {}, now, {cache_key: payload}, allow_upstream_requests=False
+    )
+    monkeypatch.setattr(
+        registry_module,
+        renderer_name,
+        lambda display, **kwargs: received.append(kwargs),
+    )
+
+    registry, _ = build_screen_registry(context)
+    registry[screen_id].render()
+
+    assert received[0]["standings"] == payload
+
+
+def test_snapshot_nhl_v2_standings_uses_cached_wildcard_order(monkeypatch):
+    now = datetime.datetime(2026, 9, 25, tzinfo=CENTRAL_TIME)
+    standings = {"Western": {}}
+    wildcard_order = {"Western": []}
+    context = _make_context(
+        {},
+        now,
+        {"nhl_standings": standings, "nhl_wildcard_order": wildcard_order},
+        allow_upstream_requests=False,
+    )
+    received = []
+    monkeypatch.setattr(
+        registry_module,
+        "draw_nhl_standings_west_v2",
+        lambda display, **kwargs: received.append(kwargs),
+    )
+
+    registry, _ = build_screen_registry(context)
+    registry["NHL Standings West v2"].render()
+
+    assert received[0]["standings"] == standings
+    assert received[0]["wildcard_order"] == wildcard_order
 
 
 def _ts(dt: datetime.datetime) -> int:

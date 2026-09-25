@@ -551,6 +551,7 @@ class ScreenContext:
     weather_fetched_at: Optional[_dt.datetime]
     skip_scoreboards: bool
     render_profile: RenderProfile
+    allow_upstream_requests: bool = True
 
     def __post_init__(self) -> None:
         """Give renderers a profile-sized, profile-colored display surface."""
@@ -1318,10 +1319,17 @@ def build_screen_registry(context: ScreenContext) -> tuple[dict[str, ScreenDefin
         ),
         available=scoreboards_available,
     )
-    register("NFL Overview NFC", lambda: draw_nfl_overview_nfc(context.display, transition=True))
-    register("NFL Overview AFC", lambda: draw_nfl_overview_afc(context.display, transition=True))
-    register("NFL Standings NFC", lambda: draw_nfl_standings_nfc(context.display, transition=True))
-    register("NFL Standings AFC", lambda: draw_nfl_standings_afc(context.display, transition=True))
+    nfl_standings = (
+        None if context.allow_upstream_requests else context.cache.get("nfl_standings", {})
+    )
+
+    def _nfl_standings_renderer(renderer):
+        return lambda: renderer(context.display, transition=True, standings=nfl_standings)
+
+    register("NFL Overview NFC", _nfl_standings_renderer(draw_nfl_overview_nfc))
+    register("NFL Overview AFC", _nfl_standings_renderer(draw_nfl_overview_afc))
+    register("NFL Standings NFC", _nfl_standings_renderer(draw_nfl_standings_nfc))
+    register("NFL Standings AFC", _nfl_standings_renderer(draw_nfl_standings_afc))
 
     hawks = context.cache.get("hawks") or {}
     if any(hawks.values()):
@@ -1402,6 +1410,19 @@ def build_screen_registry(context: ScreenContext) -> tuple[dict[str, ScreenDefin
         )
 
     register_logo("nhl logo")
+    nhl_standings = (
+        None if context.allow_upstream_requests else context.cache.get("nhl_standings", {})
+    )
+    nhl_wildcard_order = (
+        None if context.allow_upstream_requests else context.cache.get("nhl_wildcard_order", {})
+    )
+
+    def _nhl_standings_renderer(renderer, *, v2=False):
+        kwargs = {"standings": nhl_standings}
+        if v2:
+            kwargs["wildcard_order"] = nhl_wildcard_order
+        return lambda: renderer(context.display, transition=True, **kwargs)
+
     register(
         "NHL Scoreboard",
         lambda: render_nhl_scoreboard(
@@ -1443,27 +1464,27 @@ def build_screen_registry(context: ScreenContext) -> tuple[dict[str, ScreenDefin
     )
     register(
         "NHL Standings Overview West",
-        lambda: draw_nhl_standings_overview_west(context.display, transition=True),
+        _nhl_standings_renderer(draw_nhl_standings_overview_west),
     )
     register(
         "NHL Standings Overview East",
-        lambda: draw_nhl_standings_overview_east(context.display, transition=True),
+        _nhl_standings_renderer(draw_nhl_standings_overview_east),
     )
     register(
         "NHL Standings West",
-        lambda: draw_nhl_standings_west(context.display, transition=True),
+        _nhl_standings_renderer(draw_nhl_standings_west),
     )
     register(
         "NHL Standings East",
-        lambda: draw_nhl_standings_east(context.display, transition=True),
+        _nhl_standings_renderer(draw_nhl_standings_east),
     )
     register(
         "NHL Standings West v2",
-        lambda: draw_nhl_standings_west_v2(context.display, transition=True),
+        _nhl_standings_renderer(draw_nhl_standings_west_v2, v2=True),
     )
     register(
         "NHL Standings East v2",
-        lambda: draw_nhl_standings_east_v2(context.display, transition=True),
+        _nhl_standings_renderer(draw_nhl_standings_east_v2, v2=True),
     )
 
     wolves = context.cache.get("wolves") or {}
@@ -1980,14 +2001,25 @@ def build_screen_registry(context: ScreenContext) -> tuple[dict[str, ScreenDefin
         available=scoreboards_available,
     )
 
-    register("NL Overview", lambda: draw_NL_Overview(context.display, transition=True))
-    register("AL Overview", lambda: draw_AL_Overview(context.display, transition=True))
-    register("NL Overview+WC", lambda: draw_NL_Overview_WC(context.display, transition=True))
-    register("AL Overview+WC", lambda: draw_AL_Overview_WC(context.display, transition=True))
-    register("MLB AL Standings", lambda: draw_mlb_al_standings(context.display, transition=True))
-    register("MLB ALWC Standings", lambda: draw_mlb_al_wc_standings(context.display, transition=True))
-    register("MLB NL Standings", lambda: draw_mlb_nl_standings(context.display, transition=True))
-    register("MLB NLWC Standings", lambda: draw_mlb_nl_wc_standings(context.display, transition=True))
+    mlb_league_standings = (
+        None
+        if context.allow_upstream_requests
+        else context.cache.get("mlb_league_standings", {})
+    )
+
+    def _mlb_renderer(renderer):
+        return lambda: renderer(
+            context.display, transition=True, standings=mlb_league_standings
+        )
+
+    register("NL Overview", _mlb_renderer(draw_NL_Overview))
+    register("AL Overview", _mlb_renderer(draw_AL_Overview))
+    register("NL Overview+WC", _mlb_renderer(draw_NL_Overview_WC))
+    register("AL Overview+WC", _mlb_renderer(draw_AL_Overview_WC))
+    register("MLB AL Standings", _mlb_renderer(draw_mlb_al_standings))
+    register("MLB ALWC Standings", _mlb_renderer(draw_mlb_al_wc_standings))
+    register("MLB NL Standings", _mlb_renderer(draw_mlb_nl_standings))
+    register("MLB NLWC Standings", _mlb_renderer(draw_mlb_nl_wc_standings))
 
     bulls = context.cache.get("bulls") or {}
     register_logo("bulls logo")

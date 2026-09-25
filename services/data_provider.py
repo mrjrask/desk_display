@@ -61,6 +61,25 @@ class DataProvider:
         self._cache_lock = threading.RLock()
         self._flights: dict[str, _Flight] = {}
 
+    def read(
+        self,
+        key: str,
+        fetcher: Callable[[], Any],
+        *,
+        ttl_seconds: int = 300,
+        force: bool = False,
+    ) -> Any:
+        """Read an arbitrary named source through the shared single-flight cache.
+
+        This is the low-level extension point used by :class:`DataCoordinator`.
+        A source name must be stable and globally identify the request; callers
+        should include request-shaping parameters in it when necessary.
+        """
+
+        if not key or not isinstance(key, str):
+            raise ValueError("Data source key must be a non-empty string")
+        return self._read_cached(key, fetcher, 0 if force else max(0, ttl_seconds))
+
     def _read_cached(
         self,
         key: str,
