@@ -84,7 +84,9 @@ def _profile_composition_globals(func: Callable[..., Any], profile: RenderProfil
             "is_hyperpixel_4_square_layout": lambda *_args, **_kwargs: profile.is_hyperpixel_4_square_layout,
             "is_kernel_driven_display": lambda: profile.constraints.framebuffer,
         }
-        base_scale = max(float(config.ACTIVE_DISPLAY_PROFILE.font_scale), 0.01)
+        # Fonts in config were loaded with DISPLAY_SCALE, which can differ
+        # from the active profile's nominal font scale for custom resolutions.
+        base_scale = max(float(config.DISPLAY_SCALE), 0.01)
         scale = profile.font_scale / base_scale
         for name, value in module_globals.items():
             if name.startswith("FONT_"):
@@ -751,8 +753,25 @@ def build_screen_registry(context: ScreenContext) -> tuple[dict[str, ScreenDefin
 
     # Date/time screens intentionally run outside transition mode so their
     # color-cycle threads can keep animating while those screens are visible.
-    register("date", lambda: draw_date(context.display, transition=False))
-    register("nixie", lambda: draw_nixie(context.display, transition=False))
+    def invoke_for_context_profile(renderer, *args, **kwargs):
+        return _invoke_for_profile(renderer, profile, *args, **kwargs)
+
+    register(
+        "date",
+        lambda: draw_date(
+            context.display,
+            transition=False,
+            profile_invoker=invoke_for_context_profile,
+        ),
+    )
+    register(
+        "nixie",
+        lambda: draw_nixie(
+            context.display,
+            transition=False,
+            profile_invoker=invoke_for_context_profile,
+        ),
+    )
     register("on this day", lambda: draw_on_this_day(context.display, transition=True))
     register(
         "news headlines",

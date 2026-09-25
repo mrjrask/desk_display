@@ -113,10 +113,12 @@ def test_profile_globals_follow_wrapped_renderer_and_fonts_are_scaled_under_lock
     def assert_locked(font, scale):
         assert lock_state["held"] is True
         assert font is renderer_module.FONT_TEST
+        assert scale == pytest.approx(2 / 2.85)
         return scaled_font
 
     monkeypatch.setattr(registry_module, "_PROFILE_COMPOSITION_LOCK", TrackingLock())
     monkeypatch.setattr(registry_module, "_scaled_font", assert_locked)
+    monkeypatch.setattr(registry_module.config, "DISPLAY_SCALE", 2.85)
     result = _invoke_for_profile(
         renderer_module.render,
         resolve_display_profile(800, 480),
@@ -768,10 +770,10 @@ def test_date_nixie_screens_render_with_live_color_cycle_mode(monkeypatch):
 
     calls = []
 
-    def _fake_draw_date(_display, transition=False):
+    def _fake_draw_date(_display, transition=False, **_kwargs):
         calls.append(("date", transition))
 
-    def _fake_draw_nixie(_display, transition=False):
+    def _fake_draw_nixie(_display, transition=False, **_kwargs):
         calls.append(("nixie", transition))
 
     monkeypatch.setattr(registry_module, "draw_date", _fake_draw_date)
@@ -782,6 +784,24 @@ def test_date_nixie_screens_render_with_live_color_cycle_mode(monkeypatch):
     registry["nixie"].render()
 
     assert calls == [("date", False), ("nixie", False)]
+
+
+def test_date_background_composition_keeps_context_profile(monkeypatch):
+    now = datetime.datetime(2024, 1, 1, 12, 0, tzinfo=CENTRAL_TIME)
+    context = _make_context({"hourly": []}, now)
+    context.render_profile = resolve_display_profile(800, 480)
+    renderer_module = types.ModuleType("test_background_renderer")
+    exec("def compose():\n    return WIDTH, HEIGHT\n", renderer_module.__dict__)
+    deferred = []
+
+    def _fake_draw_date(_display, transition=False, profile_invoker=None):
+        deferred.append(lambda: profile_invoker(renderer_module.compose))
+
+    monkeypatch.setattr(registry_module, "draw_date", _fake_draw_date)
+    registry, _ = build_screen_registry(context)
+    registry["date"].render()
+
+    assert deferred[0]() == (800, 480)
 
 
 def test_quad_screen_is_registered(monkeypatch):
@@ -1463,7 +1483,7 @@ def test_quad_screen_advances_scrolling_tiles_between_renders(monkeypatch):
         lambda: (True, 1.0, ["date", "nixie", "inside", "weather1"]),
     )
 
-    def _animated_date(display, transition=False):
+    def _animated_date(display, transition=False, **_kwargs):
         frames = [(255, 0, 0), (0, 255, 0)]
         for color in frames:
             if hasattr(display, "skip_requested") and display.skip_requested():
@@ -1471,7 +1491,7 @@ def test_quad_screen_advances_scrolling_tiles_between_renders(monkeypatch):
             display.image(Image.new("RGB", (8, 8), color))
         return None
 
-    def _single_frame(_display, transition=False):
+    def _single_frame(_display, transition=False, **_kwargs):
         return Image.new("RGB", (8, 8), (0, 0, 0))
 
     sampled_colors = []
@@ -1508,7 +1528,7 @@ def test_quad_screen_prefers_captured_frames_over_screenimage_return(monkeypatch
         lambda: (True, 1.0, ["date", "nixie", "inside", "weather1"]),
     )
 
-    def _animated_date(display, transition=False):
+    def _animated_date(display, transition=False, **_kwargs):
         colors = [(255, 0, 0), (0, 255, 0)]
         last = None
         for color in colors:
@@ -1519,7 +1539,7 @@ def test_quad_screen_prefers_captured_frames_over_screenimage_return(monkeypatch
         assert last is not None
         return ScreenImage(last, displayed=True)
 
-    def _single_frame(_display, transition=False):
+    def _single_frame(_display, transition=False, **_kwargs):
         return Image.new("RGB", (8, 8), (0, 0, 0))
 
     sampled_colors = []
@@ -1556,14 +1576,14 @@ def test_quad_screen_samples_across_longer_animations(monkeypatch):
         lambda: (True, 1.0, ["date", "nixie", "inside", "weather1"]),
     )
 
-    def _long_animated_date(display, transition=False):
+    def _long_animated_date(display, transition=False, **_kwargs):
         for idx in range(40):
             if hasattr(display, "skip_requested") and display.skip_requested():
                 break
             display.image(Image.new("RGB", (8, 8), (idx, 0, 0)))
         return None
 
-    def _single_frame(_display, transition=False):
+    def _single_frame(_display, transition=False, **_kwargs):
         return Image.new("RGB", (8, 8), (0, 0, 0))
 
     sampled_red = []
@@ -1600,7 +1620,7 @@ def test_quad_screen_preserves_scrolling_cursor_across_registry_rebuilds(monkeyp
         lambda: (True, 1.0, ["date", "nixie", "inside", "weather1"]),
     )
 
-    def _animated_date(display, transition=False):
+    def _animated_date(display, transition=False, **_kwargs):
         frames = [(255, 0, 0), (0, 255, 0)]
         for color in frames:
             if hasattr(display, "skip_requested") and display.skip_requested():
@@ -1608,7 +1628,7 @@ def test_quad_screen_preserves_scrolling_cursor_across_registry_rebuilds(monkeyp
             display.image(Image.new("RGB", (8, 8), color))
         return None
 
-    def _single_frame(_display, transition=False):
+    def _single_frame(_display, transition=False, **_kwargs):
         return Image.new("RGB", (8, 8), (0, 0, 0))
 
     sampled_colors = []

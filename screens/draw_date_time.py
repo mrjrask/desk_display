@@ -221,6 +221,7 @@ def _cycle_colors_after_load(
     gh_state: Callable[[], bool],
     screen_id: str,
     frame_state: dict | None = None,
+    compose_frame: Callable[..., Image.Image] | None = None,
 ):
     """
     Optional subtle color-cycle that runs AFTER the first full static frame is already shown.
@@ -307,7 +308,8 @@ def _cycle_colors_after_load(
                     break
                 continue
             takeover_observations = 0
-        img = _compose_frame(base_order, bright_color(), bright_color(), gh_state(), screen_id)
+        compose = compose_frame or _compose_frame
+        img = compose(base_order, bright_color(), bright_color(), gh_state(), screen_id)
         if (
             enforce_takeover_tracking
             and expected_frame_id is not None
@@ -350,6 +352,7 @@ def _start_update_checks(
     screen_id: str,
     expected_frame_id: int | None = None,
     frame_state: dict | None = None,
+    compose_frame: Callable[..., Image.Image] | None = None,
 ):
     """Kick off apt/GitHub checks in the background, updating the screen when ready."""
 
@@ -377,7 +380,8 @@ def _start_update_checks(
                     )
                     return
 
-            refreshed = _compose_frame(order, colors[0], colors[1], gh_state["value"], screen_id)
+            compose = compose_frame or _compose_frame
+            refreshed = compose(order, colors[0], colors[1], gh_state["value"], screen_id)
             display.image(refreshed)
             if frame_state is not None and hasattr(display, "frame_id"):
                 with frame_state["lock"]:
@@ -397,6 +401,7 @@ def _start_color_cycle(
     gh_state: dict,
     screen_id: str,
     frame_state: dict,
+    compose_frame: Callable[..., Image.Image] | None = None,
 ):
     """Run the date/time color animation in a background worker."""
 
@@ -408,6 +413,7 @@ def _start_color_cycle(
                 lambda: gh_state["value"],
                 screen_id,
                 frame_state,
+                compose_frame,
             )
         except Exception:
             logging.exception("Date/time color cycle failed")
@@ -417,7 +423,11 @@ def _start_color_cycle(
 # -----------------------------------------------------------------------------
 # Public API
 
-def draw_date(display, transition: bool=False):
+def draw_date(
+    display,
+    transition: bool = False,
+    profile_invoker: Callable[..., Image.Image] | None = None,
+):
     """
     Screen A: DATE on top, TIME on bottom.
     When transition=True (used by main.py), returns a single static frame
@@ -429,10 +439,23 @@ def draw_date(display, transition: bool=False):
     col_bottom = bright_color()
     gh_state   = {"value": get_update_status().github}
 
-    img = _compose_frame("date_time", col_top, col_bottom, gh_state["value"], "date")
+    compose_frame = _compose_frame
+    if profile_invoker is not None:
+        compose_frame = lambda *args, **kwargs: profile_invoker(
+            _compose_frame, *args, **kwargs
+        )
+
+    img = compose_frame("date_time", col_top, col_bottom, gh_state["value"], "date")
 
     if transition:
-        _start_update_checks("date_time", (col_top, col_bottom), gh_state, None, "date")
+        _start_update_checks(
+            "date_time",
+            (col_top, col_bottom),
+            gh_state,
+            None,
+            "date",
+            compose_frame=compose_frame,
+        )
         return img
 
     clear_display(display)
@@ -450,6 +473,14 @@ def draw_date(display, transition: bool=False):
         "date",
         expected_frame_id=frame_id,
         frame_state=frame_state,
+        compose_frame=compose_frame,
     )
-    _start_color_cycle(display, "date_time", gh_state, "date", frame_state)
+    _start_color_cycle(
+        display,
+        "date_time",
+        gh_state,
+        "date",
+        frame_state,
+        compose_frame=compose_frame,
+    )
     return ScreenImage(img, displayed=True)
