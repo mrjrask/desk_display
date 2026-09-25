@@ -153,6 +153,26 @@ def _error(status: int, code: str, message: str, **details: Any):
     return jsonify({"error": code, "message": message, **details}), status
 
 
+def _with_interaction_targets(demand: ClientDemand, capabilities: ClientCapabilities) -> ClientDemand:
+    """Add the tiles a touch client can open from its interactive quads.
+
+    Tapping a quad tile shows that screen full screen, so a touch client
+    needs those artifacts ready: they become interaction-dependency demand
+    (``touch_targets``), rendered and listed in the manifest like any other.
+    """
+
+    if not capabilities.has_touch:
+        return demand
+    from rendering.screen_classes import interaction_targets
+
+    targets = interaction_targets(set(demand.required_screens) | set(demand.alternate_screens))
+    if targets <= set(demand.touch_targets):
+        return demand
+    wire = demand.to_wire()
+    wire["touch_targets"] = sorted(targets | set(demand.touch_targets))
+    return ClientDemand.from_wire(wire, path="demand")
+
+
 def create_app(
     config: DisplayServerConfig | None = None,
     *,
@@ -406,7 +426,8 @@ def create_app(
         capabilities = ClientCapabilities.from_wire(raw_caps, path="capabilities")
         demand = None
         if payload.get("demand") is not None:
-            demand = ClientDemand.from_wire(payload["demand"], path="demand")
+            demand = _with_interaction_targets(ClientDemand.from_wire(payload["demand"], path="demand"),
+                                               capabilities)
         credential = payload.get("client_credential")
         if credential is not None and not isinstance(credential, str):
             raise ModelValidationError("client_credential", "must be a string")
@@ -442,7 +463,8 @@ def create_app(
         status = ClientStatus.from_wire(payload.get("status"), path="status")
         demand = None
         if payload.get("demand") is not None:
-            demand = ClientDemand.from_wire(payload["demand"], path="demand")
+            demand = _with_interaction_targets(ClientDemand.from_wire(payload["demand"], path="demand"),
+                                               record.capabilities)
         record = registry.heartbeat(record.client_id, _bearer() or "", status, demand)
         return jsonify({
             "client_id": record.client_id,

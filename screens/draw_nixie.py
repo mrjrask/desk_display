@@ -356,11 +356,18 @@ def _colon_image(height: int) -> Image.Image:
     return combined
 
 
-def _compose_frame(now: dt.datetime | None = None, *, gh_on: bool = False) -> Image.Image:
+def _compose_frame(
+    now: dt.datetime | None = None,
+    *,
+    gh_on: bool = False,
+    time_format: str | None = None,
+    show_ip: bool | None = None,
+    ip_text: str | None = None,
+) -> Image.Image:
     now = display_datetime(now)
 
     # Format time according to user preference (12 or 24 hour)
-    time_format = _get_time_format()
+    time_format = time_format if time_format in ("12", "24") else _get_time_format()
     time_digits = now.strftime("%I%M%S") if time_format == "12" else now.strftime("%H%M%S")
 
     elements = [
@@ -430,8 +437,8 @@ def _compose_frame(now: dt.datetime | None = None, *, gh_on: bool = False) -> Im
             frame.paste(icon, (icon_x, icon_y), icon)
 
     # Assigned IPv4 indicator (bottom-left), matching date screen behavior.
-    if IP_WITH_TIME:
-        ip_text = _assigned_ip_overlay_text()
+    if IP_WITH_TIME if show_ip is None else show_ip:
+        ip_text = ip_text or _assigned_ip_overlay_text()
         ip_font = _ip_overlay_font()
         left, _top, _right, bottom = draw.textbbox((0, 0), ip_text, font=ip_font)
         ip_x = 2 - left

@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import hashlib
 import threading
+from datetime import datetime, timezone
 from collections.abc import Iterable, Mapping
 from pathlib import Path
 from typing import Any
@@ -144,22 +145,39 @@ class ServerRendering:
 
     def render(self, key: RenderKey) -> RenderOutput:
         from display_profiles import PROFILE_PRESETS
+        from rendering import screen_classes
+        from rendering.packaging import build_package, clock_package
         from rendering.screen_renderer import ScreenRenderer, ServerPreferenceSnapshot
+
+        profile = PROFILE_PRESETS[key.render_profile]
+        screen = screen_classes.CLASSIFICATIONS.get(key.screen_id)
+        refresh = DEFAULT_REFRESH_SECONDS
+        if screen is not None and screen.kind == screen_classes.CLIENT_TIMED:
+            # Clients draw the time; the still is a fallback for clients that
+            # cannot, drawn without the server's own IP or update state.
+            from rendering.clock_faces import clock_background, clock_layout, render_clock
+
+            layout = clock_layout(key.screen_id, profile)
+            image = render_clock(layout, profile, datetime.now(timezone.utc))
+            package = clock_package(key, profile, layout, clock_background(layout, profile))
+            return RenderOutput(image=image, refresh_seconds=CLOCK_REFRESH_SECONDS, package=package)
+        if screen is not None and screen.kind == screen_classes.PERIODIC:
+            refresh = screen_classes.PERIODIC_REFRESH_SECONDS
 
         from rendering.logos import IMAGES_DIR
 
         snapshot = self.data.snapshot()
-        profile = PROFILE_PRESETS[key.render_profile]
         timestamp = getattr(self.data, "weather_cache_timestamp", None)
         preferences = ServerPreferenceSnapshot(revision=0, values={
             "logos": self.logos.for_size(profile.width, profile.height),
             "image_dir": IMAGES_DIR,
             "weather_fetched_at": timestamp() if callable(timestamp) else None,
         })
-        artifact = ScreenRenderer().render(key.screen_id, profile, preferences, snapshot)
+        record = screen is not None and screen.kind == screen_classes.FINITE_ANIMATION
+        artifact = ScreenRenderer().render(key.screen_id, profile, preferences, snapshot, record_frames=record)
         metadata = {k: v for k, v in artifact.metadata.items() if k in {"animation", "required_capabilities"}}
-        refresh = CLOCK_REFRESH_SECONDS if key.screen_id in CLOCK_SCREENS else DEFAULT_REFRESH_SECONDS
-        return RenderOutput(image=artifact.image, refresh_seconds=refresh, metadata=metadata)
+        package = build_package(key, profile, artifact)
+        return RenderOutput(image=artifact.image, refresh_seconds=refresh, metadata=metadata, package=package)
 
     def health(self) -> Mapping[str, Any]:
         snapshot = self.data.snapshot()

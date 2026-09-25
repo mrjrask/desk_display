@@ -35,6 +35,27 @@ def manifest_revision(manifest: Mapping[str, Any]) -> str:
     return f"m-{digest[:20]}"
 
 
+def _remote_class(screen: str) -> str | None:
+    from rendering.screen_classes import CLASSIFICATIONS
+
+    entry = CLASSIFICATIONS.get(screen)
+    return None if entry is None else entry.kind
+
+
+def _package_entry(package: Any, artifact_url: Callable[[str], str]) -> dict[str, Any] | None:
+    """Where to download the render package that belongs to an artifact."""
+
+    if not isinstance(package, Mapping) or not package.get("sha256"):
+        return None
+    from remote_display.artifact_store import object_name
+
+    return {
+        "url": artifact_url(object_name(str(package["sha256"]), str(package["media_type"]))),
+        **{k: package.get(k) for k in ("sha256", "length", "media_type", "kind", "classification",
+                                       "render_package_schema_version")},
+    }
+
+
 def build_client_manifest(
     store: ArtifactStore,
     *,
@@ -100,6 +121,8 @@ def build_client_manifest(
                 "failure": None if resolved.failure is None else dict(resolved.failure),
                 "animation": metadata.get("animation"),
                 "required_capabilities": sorted(metadata.get("required_capabilities") or []),
+                "remote_class": _remote_class(screen),
+                "package": _package_entry(metadata.get("package"), artifact_url),
             })
     requested_missing = [s for s in missing if s in requested]
     if requested_missing:
@@ -131,7 +154,10 @@ def build_client_manifest(
 
 
 def referenced_hashes(manifest: Mapping[str, Any]) -> set[str]:
-    return {a["sha256"] for a in manifest.get("artifacts", []) if a.get("sha256")}
+    hashes = {a["sha256"] for a in manifest.get("artifacts", []) if a.get("sha256")}
+    hashes.update(a["package"]["sha256"] for a in manifest.get("artifacts", [])
+                  if isinstance(a.get("package"), Mapping) and a["package"].get("sha256"))
+    return hashes
 
 
 __all__ = ["MANIFEST_TYPE", "build_client_manifest", "manifest_revision", "referenced_hashes"]

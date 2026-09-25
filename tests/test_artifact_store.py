@@ -90,7 +90,17 @@ def test_lineages_are_separate_per_profile_and_client_scope(store):
 
 
 def test_render_package_media_type(store):
-    package = json.dumps({"render_package_schema_version": 1, "frames": []}).encode()
+    from remote_display.render_package import PackageBuilder, package_bytes
+
+    preset = PROFILE_PRESETS["hyperpixel4"]
+    builder = PackageBuilder()
+    background = builder.add(Image.new("RGB", (preset.width, preset.height)))
+    layout = {"face": "date", "time_zone": "UTC", "time_format": "12", "show_ip": False,
+              "background_color": [0, 0, 0]}
+    package = package_bytes(builder.build(
+        screen_id="date", render_profile="hyperpixel4", width=preset.width, height=preset.height,
+        color_mode=preset.color_mode, render_key_digest=key().digest, classification="client_timed",
+        kind="clock", body={"background": background, "layout": layout}))
     record = store.publish(key(), package, media_type="application/vnd.desk-display.render-package+json")
     assert record.name.endswith(".json") and record.artifact_type == "render_package"
     with pytest.raises(InvalidArtifactError) as info:
