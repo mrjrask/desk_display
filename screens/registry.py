@@ -1,6 +1,8 @@
 """Screen registry utilities for mapping screen IDs to render callables."""
 from __future__ import annotations
 
+import contextlib
+import contextvars
 import datetime as _dt
 import importlib
 import json
@@ -13,6 +15,7 @@ from dataclasses import dataclass, field
 from typing import Any, Optional
 
 from PIL import Image
+from PIL import ImageFont
 
 import config
 from config import CENTRAL_TIME, NBA_TEAM_TRICODE
@@ -25,6 +28,77 @@ from utils import ScreenImage, animate_scroll, timestamp_to_datetime
 RenderCallable = Callable[[], Optional[Image.Image | ScreenImage]]
 _LAZY_CALLABLE_CACHE: dict[str, Callable[..., Any]] = {}
 _LAZY_CALLABLE_LOCK = threading.Lock()
+_PROFILE_COMPOSITION_LOCK = threading.RLock()
+_ACTIVE_RENDER_PROFILE: contextvars.ContextVar[RenderProfile | None] = contextvars.ContextVar(
+    "screen_render_profile", default=None
+)
+
+
+def _scaled_font(font: Any, scale: float) -> Any:
+    """Return a profile-scaled copy of a Pillow font when possible."""
+    if scale == 1.0 or not hasattr(font, "size") or not hasattr(font, "path"):
+        return font
+    try:
+        return ImageFont.truetype(font.path, max(1, round(font.size * scale)))
+    except (OSError, TypeError, ValueError):
+        return font
+
+
+@contextlib.contextmanager
+def _profile_composition_globals(func: Callable[..., Any], profile: RenderProfile):
+    """Present legacy module-global render inputs for one profile composition.
+
+    Renderers historically imported dimensions, fonts, and layout predicates
+    directly from ``config``.  Updating those values only in the renderer's
+    module, under a lock, lets old renderers compose at the requested native
+    size without mutating process-wide configuration or leaking state between
+    concurrent contexts.
+    """
+    module_globals = getattr(func, "__globals__", None)
+    if not isinstance(module_globals, dict):
+        yield
+        return
+
+    replacements: dict[str, Any] = {
+        "WIDTH": profile.width,
+        "HEIGHT": profile.height,
+        "ACTIVE_DISPLAY_PROFILE": profile,
+        "DISPLAY_PROFILE_ID": profile.profile_id,
+        "DISPLAY_PROFILE_LOGO_SCALE_CAP": profile.logo_scale_cap,
+        "DISPLAY_PROFILE_ANIMATION_DELAY": profile.animation_delay,
+        "SCOREBOARD_SCROLL_STEP": profile.scoreboard_scroll_step,
+        "SCOREBOARD_SCROLL_DELAY": profile.scoreboard_scroll_delay,
+        "get_display_profile_id": lambda *_args, **_kwargs: profile.profile_id,
+        "get_display_profile": lambda *_args, **_kwargs: profile,
+        "is_display_profile": lambda profile_id, *_args, **_kwargs: profile.profile_id == profile_id,
+        "is_hyperpixel_next_layout": lambda *_args, **_kwargs: profile.is_hyperpixel_next_layout,
+        "is_hyperpixel_4_square_layout": lambda *_args, **_kwargs: profile.is_hyperpixel_4_square_layout,
+        "is_kernel_driven_display": lambda: profile.constraints.framebuffer,
+    }
+    base_scale = max(float(config.ACTIVE_DISPLAY_PROFILE.font_scale), 0.01)
+    scale = profile.font_scale / base_scale
+    for name, value in module_globals.items():
+        if name.startswith("FONT_"):
+            replacements[name] = _scaled_font(value, scale)
+
+    with _PROFILE_COMPOSITION_LOCK:
+        original = {name: module_globals[name] for name in replacements if name in module_globals}
+        config_original = {name: getattr(config, name) for name in replacements if hasattr(config, name)}
+        module_globals.update({name: value for name, value in replacements.items() if name in module_globals})
+        for name, value in replacements.items():
+            if hasattr(config, name):
+                setattr(config, name, value)
+        try:
+            yield
+        finally:
+            module_globals.update(original)
+            for name, value in config_original.items():
+                setattr(config, name, value)
+
+
+def _invoke_for_profile(func: Callable[..., Any], profile: RenderProfile, *args: Any, **kwargs: Any) -> Any:
+    with _profile_composition_globals(func, profile):
+        return func(*args, **kwargs)
 
 
 def _lazy_callable(import_path: str) -> Callable[..., Any]:
@@ -46,7 +120,11 @@ def _lazy_callable(import_path: str) -> Callable[..., Any]:
             return func
 
     def _call(*args: Any, **kwargs: Any) -> Any:
-        return _resolve()(*args, **kwargs)
+        func = _resolve()
+        profile = _ACTIVE_RENDER_PROFILE.get()
+        if profile is not None:
+            return _invoke_for_profile(func, profile, *args, **kwargs)
+        return func(*args, **kwargs)
 
     return _call
 
@@ -624,7 +702,7 @@ def build_screen_registry(context: ScreenContext) -> tuple[dict[str, ScreenDefin
     profile = context.render_profile
     width, height = profile.width, profile.height
     adafruit_minipitft_layout = profile.profile_id == "adafruit_minipitft_114"
-    waveshare_oled_lcd_hat = profile.profile_id.startswith("waveshare_")
+    waveshare_oled_lcd_hat = profile.profile_id.startswith("waveshare_") or _is_waveshare_oled_lcd_hat()
     hyperpixel4_layout = profile.profile_id == "hyperpixel4"
 
     def _mlb_series_title(team_name: str, short_title: str) -> str:
@@ -633,9 +711,16 @@ def build_screen_registry(context: ScreenContext) -> tuple[dict[str, ScreenDefin
         return short_title
 
     def register(screen_id: str, func: RenderCallable, available: bool = True, **extra):
+        def render_for_profile() -> Optional[Image.Image | ScreenImage]:
+            token = _ACTIVE_RENDER_PROFILE.set(profile)
+            try:
+                return func()
+            finally:
+                _ACTIVE_RENDER_PROFILE.reset(token)
+
         registry[screen_id] = ScreenDefinition(
             id=screen_id,
-            render=func,
+            render=render_for_profile,
             available=available,
             metadata=extra,
         )

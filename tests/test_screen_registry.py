@@ -9,6 +9,7 @@ from config import CENTRAL_TIME, MLB_CUBS_TEAM_ID, MLB_SOX_TEAM_ID
 from display_profiles import resolve_display_profile
 from screens.registry import (
     ScreenContext,
+    _invoke_for_profile,
     _is_1080p_or_higher,
     _logo_scroll_speed_for_layout,
     build_screen_registry,
@@ -62,6 +63,23 @@ def _make_context(
 
 def _ts(dt: datetime.datetime) -> int:
     return int(dt.timestamp())
+
+
+def test_profile_is_applied_while_composing_legacy_renderer_frames():
+    from screens.draw_date_time import _compose_frame
+
+    profile = resolve_display_profile(800, 480)
+    frame = _invoke_for_profile(
+        _compose_frame,
+        profile,
+        "date_time",
+        (255, 255, 255),
+        (255, 255, 255),
+        False,
+        "date",
+    )
+
+    assert frame.size == (800, 480)
 
 
 def test_weather_radar_available_with_precipitation():
