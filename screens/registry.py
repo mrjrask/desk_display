@@ -1,8 +1,11 @@
 """Screen registry utilities for mapping screen IDs to render callables."""
 from __future__ import annotations
 
+import contextlib
+import contextvars
 import datetime as _dt
 import importlib
+import inspect
 import json
 import logging
 import os
@@ -13,9 +16,11 @@ from dataclasses import dataclass, field
 from typing import Any, Optional
 
 from PIL import Image
+from PIL import ImageFont
 
 import config
-from config import CENTRAL_TIME, HEIGHT, NBA_TEAM_TRICODE, WIDTH, is_display_profile
+from config import CENTRAL_TIME, NBA_TEAM_TRICODE
+from display_profiles import RenderProfile
 from paths import resolve_layouts_config_path, resolve_screens_config_paths
 from screens.draw_quad import _TileSpec
 from screens.draw_weather import _pop_pct_from, _selected_alert
@@ -24,6 +29,128 @@ from utils import ScreenImage, animate_scroll, timestamp_to_datetime
 RenderCallable = Callable[[], Optional[Image.Image | ScreenImage]]
 _LAZY_CALLABLE_CACHE: dict[str, Callable[..., Any]] = {}
 _LAZY_CALLABLE_LOCK = threading.Lock()
+_PROFILE_COMPOSITION_LOCK = threading.RLock()
+_ACTIVE_RENDER_PROFILE: contextvars.ContextVar[RenderProfile | None] = contextvars.ContextVar(
+    "screen_render_profile", default=None
+)
+
+
+def _scaled_font(font: Any, scale: float) -> Any:
+    """Return a profile-scaled copy of a Pillow font when possible."""
+    if scale == 1.0 or not hasattr(font, "size") or not hasattr(font, "path"):
+        return font
+    try:
+        return ImageFont.truetype(font.path, max(1, round(font.size * scale)))
+    except (OSError, TypeError, ValueError):
+        return font
+
+
+@contextlib.contextmanager
+def _profile_composition_globals(func: Callable[..., Any], profile: RenderProfile):
+    """Present legacy module-global render inputs for one profile composition.
+
+    Renderers historically imported dimensions, fonts, and layout predicates
+    directly from ``config``.  Updating those values only in the renderer's
+    module, under a lock, lets old renderers compose at the requested native
+    size without mutating process-wide configuration or leaking state between
+    concurrent contexts.
+    """
+    # Decorators such as ``log_call`` use functools.wraps, so their public
+    # callable has the decorator module's globals rather than the renderer's.
+    # Patch the globals in which the renderer itself was defined while still
+    # invoking the decorated callable below.
+    module_globals = getattr(inspect.unwrap(func), "__globals__", None)
+    if not isinstance(module_globals, dict):
+        yield
+        return
+
+    with _PROFILE_COMPOSITION_LOCK:
+        # Both config and renderer globals are temporarily changed by other
+        # compositions.  Read them and derive fonts only after taking the lock
+        # so a waiting context cannot capture another context's profile state.
+        replacements: dict[str, Any] = {
+            "WIDTH": profile.width,
+            "HEIGHT": profile.height,
+            # A few older renderers cache config.WIDTH/config.HEIGHT under
+            # short names at import time rather than importing the canonical
+            # names directly.
+            "W": profile.width,
+            "H": profile.height,
+            "DISPLAY_SCALE": config._compute_display_scale(
+                config.BASE_WIDTH,
+                config.BASE_HEIGHT,
+                profile.width,
+                profile.height,
+            ),
+            "DISPLAY_SCALE_WIDTH": max(
+                0.1,
+                profile.width / config.BASE_WIDTH,
+            ) if config.BASE_WIDTH > 0 else 1.0,
+            "ACTIVE_DISPLAY_PROFILE": profile,
+            "DISPLAY_PROFILE_ID": profile.profile_id,
+            "DISPLAY_PROFILE_LOGO_SCALE_CAP": profile.logo_scale_cap,
+            "DISPLAY_PROFILE_ANIMATION_DELAY": profile.animation_delay,
+            "SCOREBOARD_SCROLL_STEP": profile.scoreboard_scroll_step,
+            "SCOREBOARD_SCROLL_DELAY": profile.scoreboard_scroll_delay,
+            "get_display_profile_id": lambda *_args, **_kwargs: profile.profile_id,
+            "get_display_profile": lambda *_args, **_kwargs: profile,
+            "is_display_profile": lambda profile_id, *_args, **_kwargs: profile.profile_id == profile_id,
+            "is_hyperpixel_next_layout": lambda *_args, **_kwargs: profile.is_hyperpixel_next_layout,
+            "is_hyperpixel_4_square_layout": lambda *_args, **_kwargs: profile.is_hyperpixel_4_square_layout,
+            "is_kernel_driven_display": lambda: profile.constraints.framebuffer,
+        }
+        # Fonts in config were loaded with DISPLAY_SCALE, which can differ
+        # from the active profile's nominal font scale for custom resolutions.
+        base_scale = max(float(config.DISPLAY_SCALE), 0.01)
+        scale = profile.font_scale / base_scale
+        for name, value in module_globals.items():
+            if name.startswith("FONT_"):
+                replacements[name] = _scaled_font(value, scale)
+
+        # Renderers which use ``import config`` dereference fonts on the
+        # config module at draw time and consequently have no FONT_* globals
+        # for the loop above to discover.  Install scaled copies there too.
+        config_font_replacements = {
+            name: _scaled_font(value, scale)
+            for name, value in vars(config).items()
+            if name.startswith("FONT_")
+        }
+
+        original = {name: module_globals[name] for name in replacements if name in module_globals}
+        config_replacements = {
+            name: value for name, value in replacements.items() if hasattr(config, name)
+        }
+        config_replacements.update(config_font_replacements)
+        config_original = {
+            name: getattr(config, name) for name in config_replacements
+        }
+        module_globals.update({name: value for name, value in replacements.items() if name in module_globals})
+        for name, value in config_replacements.items():
+            setattr(config, name, value)
+
+        # Modules with import-time layout constants can provide values derived
+        # from the now-installed profile globals.  Keep the hook explicit: it
+        # avoids reloading modules (and repeating their import side effects)
+        # while allowing all derived state to be restored after composition.
+        profile_globals_factory = module_globals.get("_render_profile_globals")
+        if callable(profile_globals_factory):
+            derived_replacements = profile_globals_factory(profile)
+            if isinstance(derived_replacements, dict):
+                for name, value in derived_replacements.items():
+                    if name in module_globals and name not in original:
+                        original[name] = module_globals[name]
+                    module_globals[name] = value
+        try:
+            yield
+        finally:
+            module_globals.update(original)
+            for name, value in config_original.items():
+                setattr(config, name, value)
+
+
+def _invoke_for_profile(func: Callable[..., Any], profile: RenderProfile, *args: Any, **kwargs: Any) -> Any:
+    with _profile_composition_globals(func, profile):
+        return func(*args, **kwargs)
 
 
 def _lazy_callable(import_path: str) -> Callable[..., Any]:
@@ -45,7 +172,11 @@ def _lazy_callable(import_path: str) -> Callable[..., Any]:
             return func
 
     def _call(*args: Any, **kwargs: Any) -> Any:
-        return _resolve()(*args, **kwargs)
+        func = _resolve()
+        profile = _ACTIVE_RENDER_PROFILE.get()
+        if profile is not None:
+            return _invoke_for_profile(func, profile, *args, **kwargs)
+        return func(*args, **kwargs)
 
     return _call
 
@@ -396,9 +527,6 @@ def _logo_scroll_speed_for_layout(width: int, height: int) -> float:
     return base_speed * (2.0 if _is_1080p_or_higher(width, height) else 1.0)
 
 
-_LOGO_SCROLL_SPEED = _logo_scroll_speed_for_layout(WIDTH, HEIGHT)
-
-
 @dataclass
 class ScreenDefinition:
     """Represents one renderable screen."""
@@ -422,10 +550,40 @@ class ScreenContext:
     offline: bool
     weather_fetched_at: Optional[_dt.datetime]
     skip_scoreboards: bool
+    render_profile: RenderProfile
+
+    def __post_init__(self) -> None:
+        """Give renderers a profile-sized, profile-colored display surface."""
+        if not isinstance(self.display, _ProfileDisplay):
+            self.display = _ProfileDisplay(self.display, self.render_profile)
 
 
-def _show_logo(display, image: Image.Image) -> Image.Image:
-    animate_scroll(display, image, speed=_LOGO_SCROLL_SPEED)
+class _ProfileDisplay:
+    """Context-local output adapter; it never changes process configuration."""
+
+    def __init__(self, display: Any, profile: RenderProfile):
+        self._display = display
+        self.profile = profile
+        self.width = profile.width
+        self.height = profile.height
+
+    def image(self, image: Image.Image) -> Any:
+        if image.size != (self.width, self.height):
+            image = image.resize((self.width, self.height), Image.Resampling.LANCZOS)
+        if image.mode != self.profile.color_mode:
+            image = image.convert(self.profile.color_mode)
+        return self._display.image(image)
+
+    def __getattr__(self, name: str) -> Any:
+        return getattr(self._display, name)
+
+
+def _show_logo(display, image: Image.Image, profile: RenderProfile) -> Image.Image:
+    animate_scroll(
+        display,
+        image,
+        speed=_logo_scroll_speed_for_layout(profile.width, profile.height),
+    )
     return image
 
 
@@ -593,9 +751,11 @@ def build_screen_registry(context: ScreenContext) -> tuple[dict[str, ScreenDefin
 
     registry: dict[str, ScreenDefinition] = {}
     metadata: dict[str, Any] = {}
-    adafruit_minipitft_layout = _is_adafruit_minipitft_layout(WIDTH, HEIGHT)
-    waveshare_oled_lcd_hat = _is_waveshare_oled_lcd_hat()
-    hyperpixel4_layout = is_display_profile("hyperpixel4", WIDTH, HEIGHT)
+    profile = context.render_profile
+    width, height = profile.width, profile.height
+    adafruit_minipitft_layout = profile.profile_id == "adafruit_minipitft_114"
+    waveshare_oled_lcd_hat = profile.profile_id.startswith("waveshare_") or _is_waveshare_oled_lcd_hat()
+    hyperpixel4_layout = profile.profile_id == "hyperpixel4"
 
     def _mlb_series_title(team_name: str, short_title: str) -> str:
         if hyperpixel4_layout:
@@ -603,9 +763,16 @@ def build_screen_registry(context: ScreenContext) -> tuple[dict[str, ScreenDefin
         return short_title
 
     def register(screen_id: str, func: RenderCallable, available: bool = True, **extra):
+        def render_for_profile() -> Optional[Image.Image | ScreenImage]:
+            token = _ACTIVE_RENDER_PROFILE.set(profile)
+            try:
+                return func()
+            finally:
+                _ACTIVE_RENDER_PROFILE.reset(token)
+
         registry[screen_id] = ScreenDefinition(
             id=screen_id,
-            render=func,
+            render=render_for_profile,
             available=available,
             metadata=extra,
         )
@@ -628,8 +795,25 @@ def build_screen_registry(context: ScreenContext) -> tuple[dict[str, ScreenDefin
 
     # Date/time screens intentionally run outside transition mode so their
     # color-cycle threads can keep animating while those screens are visible.
-    register("date", lambda: draw_date(context.display, transition=False))
-    register("nixie", lambda: draw_nixie(context.display, transition=False))
+    def invoke_for_context_profile(renderer, *args, **kwargs):
+        return _invoke_for_profile(renderer, profile, *args, **kwargs)
+
+    register(
+        "date",
+        lambda: draw_date(
+            context.display,
+            transition=False,
+            profile_invoker=invoke_for_context_profile,
+        ),
+    )
+    register(
+        "nixie",
+        lambda: draw_nixie(
+            context.display,
+            transition=False,
+            profile_invoker=invoke_for_context_profile,
+        ),
+    )
     register("on this day", lambda: draw_on_this_day(context.display, transition=True))
     register(
         "news headlines",
@@ -646,8 +830,8 @@ def build_screen_registry(context: ScreenContext) -> tuple[dict[str, ScreenDefin
 
     class _QuadCaptureDisplay:
         def __init__(self, *, frame_limit: Optional[int] = None):
-            self.width = WIDTH
-            self.height = HEIGHT
+            self.width = width
+            self.height = height
             self._last: Optional[Image.Image] = None
             self._frame_id = 0
             self._frame_limit = frame_limit
@@ -731,7 +915,7 @@ def build_screen_registry(context: ScreenContext) -> tuple[dict[str, ScreenDefin
         return capture.last_image
 
     def _render_black_quad_tile() -> Image.Image:
-        return Image.new("RGB", (WIDTH, HEIGHT), "black")
+        return Image.new(profile.color_mode, (width, height), "black")
 
     weather_logo = context.logos.get("weather logo")
     # Keep weather screens visible whenever cached forecast data exists.
@@ -751,7 +935,7 @@ def build_screen_registry(context: ScreenContext) -> tuple[dict[str, ScreenDefin
     if weather_logo is not None:
         register(
             "weather logo",
-            lambda img=weather_logo: _show_logo(context.display, img),
+            lambda img=weather_logo: _show_logo(context.display, img, profile),
             available=True,
         )
     register(
@@ -840,7 +1024,7 @@ def build_screen_registry(context: ScreenContext) -> tuple[dict[str, ScreenDefin
     if verano_logo is not None:
         register(
             "verano logo",
-            lambda img=verano_logo: _show_logo(context.display, img),
+            lambda img=verano_logo: _show_logo(context.display, img, profile),
             available=True,
         )
     register("vrnof", lambda: draw_vrnof_screen(context.display, transition=True))
@@ -1057,7 +1241,7 @@ def build_screen_registry(context: ScreenContext) -> tuple[dict[str, ScreenDefin
         image = context.logos.get(screen_id)
         if image is None:
             return
-        register(screen_id, lambda img=image: _show_logo(context.display, img), available=True)
+        register(screen_id, lambda img=image: _show_logo(context.display, img, profile), available=True)
 
     for base_logo in (
         "bears logo",

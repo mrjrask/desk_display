@@ -9,7 +9,7 @@ import random
 import re
 import subprocess
 import threading
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any, Optional
 
@@ -802,7 +802,10 @@ def _resolve_active_display_profile(width: int, height: int) -> DisplayProfilePr
     if _display_profile_override:
         profile = resolve_display_profile_by_id(_display_profile_override)
         if profile is not None:
-            return profile
+            # The override selects behaviour, not a process-global canvas.
+            # Legacy standalone composition still supplies its configured
+            # logical dimensions here.
+            return replace(profile, width=width, height=height)
         logging.warning(
             "Ignoring invalid DESK_DISPLAY_PROFILE value %r; using resolution-based profile.",
             _display_profile_override,

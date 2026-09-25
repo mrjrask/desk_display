@@ -637,6 +637,7 @@ def _render_all_screens_impl(
             offline=False,
             weather_fetched_at=weather_fetched_at,
             skip_scoreboards=False,
+            render_profile=config.get_display_profile(),
         )
 
         registry, _metadata = build_screen_registry(context)

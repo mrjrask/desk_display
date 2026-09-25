@@ -55,6 +55,36 @@ def test_color_cycle_profile_kernel_non_display_hat_is_capped_and_stable():
     assert steps > 0
 
 
+def test_color_cycle_uses_profile_invoker_for_worker_setup(monkeypatch):
+    captured = {}
+
+    def _profile_invoker(setup):
+        captured["setup"] = setup
+        return True, False, True, "hyperpixel4"
+
+    def _capture_profile(**kwargs):
+        captured["profile"] = kwargs
+        return 0.0, 0.0, 0
+
+    monkeypatch.setattr(draw_date_time, "_color_cycle_profile", _capture_profile)
+
+    draw_date_time._cycle_colors_after_load(
+        object(),
+        "date_time",
+        lambda: False,
+        "date",
+        profile_invoker=_profile_invoker,
+    )
+
+    assert callable(captured["setup"])
+    assert captured["profile"] == {
+        "kernel_driven": True,
+        "display_profile_id": "hyperpixel4",
+        "hyperpixel_layout": True,
+        "hyperpixel_square": False,
+    }
+
+
 def test_color_cycle_reconciles_startup_frame_race(monkeypatch):
     calls = {"compose": 0, "images": 0}
 

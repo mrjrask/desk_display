@@ -40,7 +40,7 @@ def test_draw_nixie_starts_live_updates(monkeypatch):
     monkeypatch.setattr(draw_nixie, "_play_flicker", lambda d, i: None)
     monkeypatch.setattr(draw_nixie, "_start_update_checks", lambda *args, **kwargs: None)
 
-    def _capture(display_obj, *, expected_frame_id=None):
+    def _capture(display_obj, *, expected_frame_id=None, compose_frame=None):
         seen["started"] = True
         seen["frame_id"] = expected_frame_id
 

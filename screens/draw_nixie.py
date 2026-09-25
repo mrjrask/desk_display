@@ -8,7 +8,7 @@ import logging
 import os
 import threading
 import time
-from collections.abc import Iterable, Sequence
+from collections.abc import Callable, Iterable, Sequence
 from functools import lru_cache
 from pathlib import Path
 from typing import Optional
@@ -460,7 +460,12 @@ def _play_flicker(display, base: Image.Image) -> None:
         time.sleep(0.08)
 
 
-def _start_live_updates(display, *, expected_frame_id: int | None = None) -> None:
+def _start_live_updates(
+    display,
+    *,
+    expected_frame_id: int | None = None,
+    compose_frame: Callable[..., Image.Image] | None = None,
+) -> None:
     """Refresh the Nixie display once per second while this screen is active."""
 
     def _worker() -> None:
@@ -480,7 +485,8 @@ def _start_live_updates(display, *, expected_frame_id: int | None = None) -> Non
             now = display_datetime()
             if now.second != last_second:
                 last_second = now.second
-                frame = _compose_frame(now, gh_on=gh_on)
+                compose = compose_frame or _compose_frame
+                frame = compose(now, gh_on=gh_on)
                 try:
                     display.image(frame)
                     if hasattr(display, "show"):
@@ -495,7 +501,12 @@ def _start_live_updates(display, *, expected_frame_id: int | None = None) -> Non
     threading.Thread(target=_worker, daemon=True).start()
 
 
-def _start_update_checks(display, *, expected_frame_id: int | None = None) -> None:
+def _start_update_checks(
+    display,
+    *,
+    expected_frame_id: int | None = None,
+    compose_frame: Callable[..., Image.Image] | None = None,
+) -> None:
     """Run GitHub/apt checks and refresh the frame when update status is known."""
 
     def _worker() -> None:
@@ -511,7 +522,8 @@ def _start_update_checks(display, *, expected_frame_id: int | None = None) -> No
                 except Exception:
                     return
 
-            refreshed = _compose_frame(gh_on=gh_on)
+            compose = compose_frame or _compose_frame
+            refreshed = compose(gh_on=gh_on)
             display.image(refreshed)
             if hasattr(display, "show"):
                 display.show()
@@ -522,10 +534,19 @@ def _start_update_checks(display, *, expected_frame_id: int | None = None) -> No
 
 
 @log_call
-def draw_nixie(display, transition: bool = False):
+def draw_nixie(
+    display,
+    transition: bool = False,
+    profile_invoker: Callable[..., Image.Image] | None = None,
+):
     global BACKGROUND_COLOR
     BACKGROUND_COLOR = get_screen_background_color("nixie", (0, 0, 0))
-    frame = _compose_frame(gh_on=bool(get_update_status().github))
+    compose_frame = _compose_frame
+    if profile_invoker is not None:
+        compose_frame = lambda *args, **kwargs: profile_invoker(
+            _compose_frame, *args, **kwargs
+        )
+    frame = compose_frame(gh_on=bool(get_update_status().github))
 
     if transition and not hasattr(display, "image"):
         return frame
@@ -549,7 +570,15 @@ def draw_nixie(display, transition: bool = False):
             frame_id = display.frame_id()
         except Exception:
             frame_id = None
-    _start_live_updates(display, expected_frame_id=frame_id)
-    _start_update_checks(display, expected_frame_id=frame_id)
+    _start_live_updates(
+        display,
+        expected_frame_id=frame_id,
+        compose_frame=compose_frame,
+    )
+    _start_update_checks(
+        display,
+        expected_frame_id=frame_id,
+        compose_frame=compose_frame,
+    )
 
     return ScreenImage(frame, displayed=True)

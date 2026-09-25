@@ -1,18 +1,22 @@
 import datetime
 import sys
+import types
 
 import pytest
 from PIL import Image
 
 import screens.registry as registry_module
 from config import CENTRAL_TIME, MLB_CUBS_TEAM_ID, MLB_SOX_TEAM_ID
+from display_profiles import resolve_display_profile
 from screens.registry import (
     ScreenContext,
+    _invoke_for_profile,
     _is_1080p_or_higher,
     _logo_scroll_speed_for_layout,
     build_screen_registry,
 )
 from utils import ScreenImage
+from utils import log_call
 
 
 def _reset_quad_scroll_state():
@@ -55,11 +59,73 @@ def _make_context(
         offline=offline,
         weather_fetched_at=weather_fetched_at,
         skip_scoreboards=False,
+        render_profile=resolve_display_profile(320, 240),
     )
 
 
 def _ts(dt: datetime.datetime) -> int:
     return int(dt.timestamp())
+
+
+def test_profile_is_applied_while_composing_legacy_renderer_frames():
+    from screens.draw_date_time import _compose_frame
+
+    profile = resolve_display_profile(800, 480)
+    frame = _invoke_for_profile(
+        _compose_frame,
+        profile,
+        "date_time",
+        (255, 255, 255),
+        (255, 255, 255),
+        False,
+        "date",
+    )
+
+    assert frame.size == (800, 480)
+
+
+def test_profile_globals_follow_wrapped_renderer_and_fonts_are_scaled_under_lock(
+    monkeypatch,
+):
+    renderer_module = types.ModuleType("test_profile_renderer")
+    renderer_module.__dict__.update(
+        WIDTH=320,
+        HEIGHT=240,
+        FONT_TEST=object(),
+        log_call=log_call,
+    )
+    exec(
+        "@log_call\n"
+        "def render():\n"
+        "    return WIDTH, HEIGHT, FONT_TEST\n",
+        renderer_module.__dict__,
+    )
+    scaled_font = object()
+    lock_state = {"held": False}
+
+    class TrackingLock:
+        def __enter__(self):
+            lock_state["held"] = True
+
+        def __exit__(self, exc_type, exc_value, traceback):
+            lock_state["held"] = False
+
+    def assert_locked(font, scale):
+        assert lock_state["held"] is True
+        assert font is renderer_module.FONT_TEST
+        assert scale == pytest.approx(2 / 2.85)
+        return scaled_font
+
+    monkeypatch.setattr(registry_module, "_PROFILE_COMPOSITION_LOCK", TrackingLock())
+    monkeypatch.setattr(registry_module, "_scaled_font", assert_locked)
+    monkeypatch.setattr(registry_module.config, "DISPLAY_SCALE", 2.85)
+    result = _invoke_for_profile(
+        renderer_module.render,
+        resolve_display_profile(800, 480),
+    )
+
+    assert result == (800, 480, scaled_font)
+    assert (renderer_module.WIDTH, renderer_module.HEIGHT) == (320, 240)
 
 
 def test_weather_radar_available_with_precipitation():
@@ -704,10 +770,10 @@ def test_date_nixie_screens_render_with_live_color_cycle_mode(monkeypatch):
 
     calls = []
 
-    def _fake_draw_date(_display, transition=False):
+    def _fake_draw_date(_display, transition=False, **_kwargs):
         calls.append(("date", transition))
 
-    def _fake_draw_nixie(_display, transition=False):
+    def _fake_draw_nixie(_display, transition=False, **_kwargs):
         calls.append(("nixie", transition))
 
     monkeypatch.setattr(registry_module, "draw_date", _fake_draw_date)
@@ -718,6 +784,70 @@ def test_date_nixie_screens_render_with_live_color_cycle_mode(monkeypatch):
     registry["nixie"].render()
 
     assert calls == [("date", False), ("nixie", False)]
+
+
+def test_date_background_composition_keeps_context_profile(monkeypatch):
+    now = datetime.datetime(2024, 1, 1, 12, 0, tzinfo=CENTRAL_TIME)
+    context = _make_context({"hourly": []}, now)
+    context.render_profile = resolve_display_profile(800, 480)
+    renderer_module = types.ModuleType("test_background_renderer")
+    exec("def compose():\n    return WIDTH, HEIGHT\n", renderer_module.__dict__)
+    deferred = []
+
+    def _fake_draw_date(_display, transition=False, profile_invoker=None):
+        deferred.append(lambda: profile_invoker(renderer_module.compose))
+
+    monkeypatch.setattr(registry_module, "draw_date", _fake_draw_date)
+    registry, _ = build_screen_registry(context)
+    registry["date"].render()
+
+    assert deferred[0]() == (800, 480)
+
+
+def test_profile_composition_updates_cached_dimensions_and_config_fonts(monkeypatch):
+    renderer_module = types.ModuleType("test_config_renderer")
+    renderer_module.__dict__["config"] = registry_module.config
+    exec(
+        "W, H = config.WIDTH, config.HEIGHT\n"
+        "def compose():\n"
+        "    return W, H, config.FONT_TITLE_SPORTS\n",
+        renderer_module.__dict__,
+    )
+    original_font = registry_module.config.FONT_TITLE_SPORTS
+    scaled_font = object()
+    monkeypatch.setattr(
+        registry_module,
+        "_scaled_font",
+        lambda font, scale: scaled_font if font is original_font else font,
+    )
+
+    result = _invoke_for_profile(
+        renderer_module.compose,
+        resolve_display_profile(800, 480),
+    )
+
+    assert result == (800, 480, scaled_font)
+    assert renderer_module.W == registry_module.config.WIDTH
+    assert renderer_module.H == registry_module.config.HEIGHT
+    assert registry_module.config.FONT_TITLE_SPORTS is original_font
+
+
+def test_nfl_scoreboard_recomputes_import_time_layout_for_profile():
+    from screens import nfl_scoreboard
+
+    original_row_height = nfl_scoreboard.SCORE_ROW_H
+    profile = resolve_display_profile(800, 480)
+    layout = _invoke_for_profile(
+        nfl_scoreboard._render_profile_globals,
+        profile,
+        profile,
+    )
+
+    assert layout["HYPERPIXEL_LAYOUT"] is True
+    assert layout["SCORE_ROW_H"] == 126
+    assert sum(layout["COL_WIDTHS"]) == 800
+    assert layout["COL_X"] == [0, 200, 350, 450, 600, 800]
+    assert nfl_scoreboard.SCORE_ROW_H == original_row_height
 
 
 def test_quad_screen_is_registered(monkeypatch):
@@ -1399,7 +1529,7 @@ def test_quad_screen_advances_scrolling_tiles_between_renders(monkeypatch):
         lambda: (True, 1.0, ["date", "nixie", "inside", "weather1"]),
     )
 
-    def _animated_date(display, transition=False):
+    def _animated_date(display, transition=False, **_kwargs):
         frames = [(255, 0, 0), (0, 255, 0)]
         for color in frames:
             if hasattr(display, "skip_requested") and display.skip_requested():
@@ -1407,7 +1537,7 @@ def test_quad_screen_advances_scrolling_tiles_between_renders(monkeypatch):
             display.image(Image.new("RGB", (8, 8), color))
         return None
 
-    def _single_frame(_display, transition=False):
+    def _single_frame(_display, transition=False, **_kwargs):
         return Image.new("RGB", (8, 8), (0, 0, 0))
 
     sampled_colors = []
@@ -1444,7 +1574,7 @@ def test_quad_screen_prefers_captured_frames_over_screenimage_return(monkeypatch
         lambda: (True, 1.0, ["date", "nixie", "inside", "weather1"]),
     )
 
-    def _animated_date(display, transition=False):
+    def _animated_date(display, transition=False, **_kwargs):
         colors = [(255, 0, 0), (0, 255, 0)]
         last = None
         for color in colors:
@@ -1455,7 +1585,7 @@ def test_quad_screen_prefers_captured_frames_over_screenimage_return(monkeypatch
         assert last is not None
         return ScreenImage(last, displayed=True)
 
-    def _single_frame(_display, transition=False):
+    def _single_frame(_display, transition=False, **_kwargs):
         return Image.new("RGB", (8, 8), (0, 0, 0))
 
     sampled_colors = []
@@ -1492,14 +1622,14 @@ def test_quad_screen_samples_across_longer_animations(monkeypatch):
         lambda: (True, 1.0, ["date", "nixie", "inside", "weather1"]),
     )
 
-    def _long_animated_date(display, transition=False):
+    def _long_animated_date(display, transition=False, **_kwargs):
         for idx in range(40):
             if hasattr(display, "skip_requested") and display.skip_requested():
                 break
             display.image(Image.new("RGB", (8, 8), (idx, 0, 0)))
         return None
 
-    def _single_frame(_display, transition=False):
+    def _single_frame(_display, transition=False, **_kwargs):
         return Image.new("RGB", (8, 8), (0, 0, 0))
 
     sampled_red = []
@@ -1536,7 +1666,7 @@ def test_quad_screen_preserves_scrolling_cursor_across_registry_rebuilds(monkeyp
         lambda: (True, 1.0, ["date", "nixie", "inside", "weather1"]),
     )
 
-    def _animated_date(display, transition=False):
+    def _animated_date(display, transition=False, **_kwargs):
         frames = [(255, 0, 0), (0, 255, 0)]
         for color in frames:
             if hasattr(display, "skip_requested") and display.skip_requested():
@@ -1544,7 +1674,7 @@ def test_quad_screen_preserves_scrolling_cursor_across_registry_rebuilds(monkeyp
             display.image(Image.new("RGB", (8, 8), color))
         return None
 
-    def _single_frame(_display, transition=False):
+    def _single_frame(_display, transition=False, **_kwargs):
         return Image.new("RGB", (8, 8), (0, 0, 0))
 
     sampled_colors = []
