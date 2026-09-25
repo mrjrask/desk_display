@@ -88,7 +88,7 @@ def env(tmp_path):
     store = PlaylistStore(store_path)
     playlist = store.create("Office", DOC, actor="test")
     store.assign("office", playlist["id"], expected_playlist_id=None, actor="test")
-    config = display_server.DisplayServerConfig(
+    config = display_server.DisplayServerConfig(enrollment="shared",
         auth_token=TOKEN, admin_token="admin-token-" + "a" * 32, lease_seconds=300,
         artifact_dir=tmp_path / "server-artifacts", playlist_store_path=store_path,
     )

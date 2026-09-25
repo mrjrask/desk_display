@@ -20,6 +20,24 @@
   <div id="notice" class="panel notice hidden" role="status"></div>
 
   <div class="panel">
+    <h2>Add a display</h2>
+    <p class="muted">Each display gets its own credential, so one can be rotated or revoked without touching the others.</p>
+    <form id="provision">
+      <label>Client ID <input name="client_id" required pattern="[A-Za-z0-9._-]{1,64}" placeholder="office-display"></label>
+      <label>Display profile <select name="display_profile" id="provision-profile" required></select></label>
+      <label>Playlist <select name="playlist_id" id="provision-playlist"><option value="">Unassigned</option></select></label>
+      <button type="submit">Create credential</button>
+    </form>
+    <div id="issued" class="hidden">
+      <p><strong>Copy this into <span class="mono">.env.client</span> on the display now.</strong> The credential is never shown again; if it is lost, rotate it.</p>
+      <div id="issued-warnings"></div>
+      <textarea id="issued-env" readonly rows="8" style="width:100%" class="mono"></textarea>
+      <button type="button" id="issued-copy">Copy</button>
+      <button type="button" id="issued-hide">Done</button>
+    </div>
+  </div>
+
+  <div class="panel">
     <p class="muted">
       <strong>Saved</strong> is the revision stored on the server, <strong>delivered</strong> is the one the server
       last sent to the client, and <strong>acknowledged</strong> is the one the client reported playing.
@@ -40,6 +58,7 @@
 <script>
 const CSRF = {{ {csrf_header: csrf_value} | tojson }};
 let playlists = [];
+const PROFILES = {{ profiles | tojson }};
 
 function notice(message, kind) {
   const el = document.getElementById("notice");
@@ -99,8 +118,36 @@ function age(seconds) {
   return `${Math.round(seconds / 3600)}h`;
 }
 
+function showIssued(result) {
+  document.getElementById("issued").className = "";
+  document.getElementById("issued-env").value = result.client_env;
+  const warnings = document.getElementById("issued-warnings");
+  warnings.innerHTML = "";
+  for (const warning of result.warnings) line(warnings, warning, "badge warning");
+}
+
+async function credentialAction(client, action) {
+  const questions = {
+    rotate: `Issue a new credential for ${client.client_id}? The old one stops working immediately.`,
+    revoke: `Revoke ${client.client_id}'s credential? It disconnects now and needs a new credential to return.`,
+    disable: `Disable ${client.client_id}? It keeps its playlist and history and can be enabled again.`,
+  };
+  if (questions[action] && !confirm(questions[action])) return;
+  try {
+    const result = await api("POST", `/api/clients/${encodeURIComponent(client.client_id)}/credential/${action}`, {});
+    if (result.client_env) showIssued(result);
+    notice(`${client.client_id}: ${action === "rotate" ? "new credential issued" : result.state}.`);
+  } catch (error) { notice(explain(error), "error"); }
+  load();
+}
+
 function render(data) {
   playlists = data.playlists;
+  const playlistSelect = document.getElementById("provision-playlist");
+  const chosen = playlistSelect.value;
+  playlistSelect.length = 1;
+  for (const playlist of playlists) playlistSelect.appendChild(new Option(playlist.name, playlist.id));
+  playlistSelect.value = chosen;
   const body = document.querySelector("#clients tbody");
   body.innerHTML = "";
   if (!data.clients.length) {
@@ -118,6 +165,17 @@ function render(data) {
       rename.textContent = "Rename";
       rename.addEventListener("click", () => renameClient(client));
       td.appendChild(rename);
+      if (client.credential) {
+        const state = client.credential.state;
+        const actions = state === "active" ? ["rotate", "disable", "revoke"]
+          : state === "disabled" ? ["enable", "revoke"] : ["rotate"];
+        for (const action of actions) {
+          const button = document.createElement("button");
+          button.textContent = { rotate: "Rotate credential", disable: "Disable", enable: "Enable", revoke: "Revoke" }[action];
+          button.addEventListener("click", () => credentialAction(client, action));
+          td.appendChild(button);
+        }
+      }
     });
     cell(tr, (td) => {
       badge(td, client.state);
@@ -201,6 +259,31 @@ async function renameClient(client) {
   } catch (error) { notice(explain(error), "error"); }
   load();
 }
+
+const profileSelect = document.getElementById("provision-profile");
+for (const profile of PROFILES) profileSelect.appendChild(new Option(profile, profile));
+document.getElementById("provision").addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const form = new FormData(event.target);
+  try {
+    const result = await api("POST", "/api/clients/provision", {
+      client_id: form.get("client_id"), display_profile: form.get("display_profile"),
+      playlist_id: form.get("playlist_id") || null,
+    });
+    showIssued(result);
+    event.target.reset();
+    notice(`Created ${result.client_id}.`);
+  } catch (error) { notice(explain(error), "error"); }
+  load();
+});
+document.getElementById("issued-copy").addEventListener("click", () => {
+  navigator.clipboard.writeText(document.getElementById("issued-env").value)
+    .then(() => notice("Copied."), () => document.getElementById("issued-env").select());
+});
+document.getElementById("issued-hide").addEventListener("click", () => {
+  document.getElementById("issued-env").value = "";
+  document.getElementById("issued").className = "hidden";
+});
 
 load().catch((error) => notice(explain(error), "error"));
 setInterval(() => load().catch(() => {}), 15000);

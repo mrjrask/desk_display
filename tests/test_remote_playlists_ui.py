@@ -36,13 +36,18 @@ def env(tmp_path, monkeypatch):
     monkeypatch.delenv("SCREEN_AUTH_ENABLED", raising=False)
     monkeypatch.setenv("DESK_DISPLAY_STATIC_CLIENTS", "lobby:hdmi_1080p")
     app = config_ui.app
-    old = (app.extensions["desk_display_playlist_store"], app.extensions["desk_display_registry_snapshot"])
+    from remote_display.provisioning import ProvisioningStore
+
+    keys = ("desk_display_playlist_store", "desk_display_registry_snapshot", "desk_display_provisioning")
+    old = tuple(app.extensions[key] for key in keys)
     store = PlaylistStore(tmp_path / "playlists.json")
     app.extensions["desk_display_playlist_store"] = store
     app.extensions["desk_display_registry_snapshot"] = tmp_path / "clients.json"
+    app.extensions["desk_display_provisioning"] = ProvisioningStore(tmp_path / "provisioned.json")
     app.config["TESTING"] = True
     yield {"app": app, "store": store, "snapshot": tmp_path / "clients.json", "tmp": tmp_path}
-    app.extensions["desk_display_playlist_store"], app.extensions["desk_display_registry_snapshot"] = old
+    for key, value in zip(keys, old):
+        app.extensions[key] = value
 
 
 @pytest.fixture
@@ -409,3 +414,36 @@ def test_browser_client_assignment(live_server, browser, env):
     assert "delivered " + playlist["revision"] in row_text
     assert "acknowledged —" in row_text
     assert "lobby" in page.inner_text("#clients")
+
+
+# ── Provisioning (Phase 16) ────────────────────────────────────────────────
+
+
+def test_provisioning_from_the_clients_page(env, web):
+    playlist = env["store"].create("Office", DOC, actor="test")
+    assert web.post("/api/clients/provision", json={"client_id": "den", "display_profile": "hyperpixel4"}).status_code == 403
+    created = web.post("/api/clients/provision", headers=CSRF, json={
+        "client_id": "den", "display_profile": "hyperpixel4", "playlist_id": playlist["id"]})
+    assert created.status_code == 201 and created.headers["Cache-Control"] == "no-store"
+    issued = created.get_json()
+    token = next(line.split("=", 1)[1] for line in issued["client_env"].splitlines()
+                 if line.startswith("DESK_DISPLAY_CLIENT_TOKEN="))
+    assert env["store"].assignment_for("den").playlist_id == playlist["id"]
+
+    listing = web.get("/api/clients").get_json()
+    assert token not in json.dumps(listing)
+    row = {r["client_id"]: r for r in listing["clients"]}["den"]
+    assert row["state"] == "never_connected" and row["credential"]["state"] == "active"
+
+    rotated = web.post("/api/clients/den/credential/rotate", headers=CSRF, json={}).get_json()
+    assert token not in rotated["client_env"]
+    assert web.post("/api/clients/den/credential/disable", headers=CSRF, json={}).get_json()["state"] == "disabled"
+    row = {r["client_id"]: r for r in web.get("/api/clients").get_json()["clients"]}["den"]
+    assert row["state"] == "disabled" and row["assignment"]["playlist_id"] == playlist["id"]
+    assert web.post("/api/clients/den/credential/revoke", headers=CSRF, json={}).get_json()["state"] == "revoked"
+    assert web.post("/api/clients/den/credential/nope", headers=CSRF, json={}).status_code == 404
+
+
+def test_clients_page_offers_provisioning(web):
+    page = web.get("/clients").get_data(as_text=True)
+    assert 'id="provision"' in page and "hyperpixel4" in page

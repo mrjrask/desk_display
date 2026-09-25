@@ -70,7 +70,10 @@ under `/api/v1`, separate from the screenshot Feed server, whose endpoints
 are unchanged.
 
 - `POST /api/v1/register` takes the client's capabilities (and optional
-  demand) with `Authorization: Bearer <DESK_DISPLAY_SERVER_AUTH_TOKEN>`. It
+  demand) with `Authorization: Bearer <enrollment credential>`: the client's
+  own provisioned credential by default, or the shared
+  `DESK_DISPLAY_SERVER_AUTH_TOKEN` when `DESK_DISPLAY_SERVER_ENROLLMENT=shared`
+  (see "Client provisioning and credentials" below). It
   returns the accepted versions, server version, assignment state, assigned
   playlist and revision, manifest revision, lease expiry, recommended
   heartbeat and sync intervals, and a per-client `client_credential`.
@@ -79,9 +82,15 @@ are unchanged.
   for that client ID, so one client cannot read another's configuration or
   status. A client can download only artifacts its own manifests listed.
 - `/api/v1/health` is public and only reports that the service is up.
-- `/api/v1/admin/status`, `/admin/prerender/<name>`, and
-  `/admin/clients/<id>/disable|enable` need
+- `/api/v1/admin/status`, `/admin/prerender/<name>`, `/admin/clients`
+  (list, or `POST` to provision) and
+  `/admin/clients/<id>/disable|enable|rotate|revoke` need
   `DESK_DISPLAY_SERVER_ADMIN_TOKEN`; the admin API is off when it is unset.
+- Requests are rate limited (`429` with `Retry-After`): registration and
+  failed authentication per address, so guessing credentials locks the
+  address out for a while, and heartbeats, configuration, manifests and
+  artifacts per client, so one runaway client never slows the others.
+  `DESK_DISPLAY_SERVER_RATE_LIMITS=0` turns this off.
 
 A lease lasts `DESK_DISPLAY_CLIENT_LEASE_SECONDS`; the server recommends a
 heartbeat every third of that. A client that misses its deadline expires:
@@ -93,6 +102,50 @@ for the lease to lapse. Clients listed in `DESK_DISPLAY_STATIC_CLIENTS`
 contribute their assigned playlist's screens even when not connected, must
 register with their configured profile, and merge with dynamic clients and
 administrator pre-render demand into one de-duplicated render plan.
+
+## Client provisioning and credentials
+
+By default (`DESK_DISPLAY_SERVER_ENROLLMENT=provisioned`) every display has
+its own credential, so revoking or rotating one never touches the others.
+Create one on the Clients page of the configuration UI ("Add a display"),
+with `python3 -m remote_display.provisioning provision <client-id> --profile
+<profile>` on the server, or with `POST /api/v1/admin/clients`. Each prints a
+ready-to-copy `.env.client` holding the client ID, profile, server URL and the
+new credential in `DESK_DISPLAY_CLIENT_TOKEN`, and can assign a playlist at
+the same time. The credential is shown once: the server stores only its
+SHA-256 in `DESK_DISPLAY_SERVER_CLIENTS_PATH` (mode 0600), and no page, list
+or status response returns it again. The `.env.client` never contains the
+server token, the admin token or any provider credential.
+
+- **Rotate** issues a new credential. The old credential and the lease issued
+  under it stop working at once; the client re-registers with the new one.
+- **Revoke** destroys the credential and ends the lease. Rotate to let the
+  client back in.
+- **Disable** refuses the client until it is enabled again, keeping its
+  credential.
+- Disabled and revoked clients keep their playlist assignment and history.
+
+`DESK_DISPLAY_SERVER_ENROLLMENT=shared` restores the older opt-in mode, in
+which every client presents the one `DESK_DISPLAY_SERVER_AUTH_TOKEN`; then
+the only way to cut off one client is to change the token for all of them.
+
+### Transport security
+
+Client credentials are bearer tokens: anyone who sees one can use it until it
+is rotated. Across any network you do not fully trust, serve the API over
+HTTPS, either directly (`DESK_DISPLAY_SERVER_TLS_CERT` and
+`DESK_DISPLAY_SERVER_TLS_KEY`) or behind a reverse proxy that terminates TLS
+and forwards to a loopback-bound server (`DESK_DISPLAY_SERVER_HOST=127.0.0.1`,
+with `DESK_DISPLAY_SERVER_PUBLIC_URL` set to the proxy's `https://` URL). For
+example, with Caddy: `desk-display.lan { reverse_proxy 127.0.0.1:8765 }`.
+Plain HTTP is fine only on loopback, as in a combined installation.
+
+The safeguards: the server warns at startup when it listens beyond loopback
+without TLS; a client refuses a non-loopback `http://` server URL, or TLS
+without verification, unless `DESK_DISPLAY_ALLOW_INSECURE_TRANSPORT=1`; and
+provisioning warns when the server URL it writes into `.env.client` is plain
+HTTP to another host. A private CA is supported with
+`DESK_DISPLAY_SERVER_CA_BUNDLE` on the client.
 
 ## Display client
 
@@ -313,6 +366,9 @@ installs only, never clients.
 | `DESK_DISPLAY_SERVER_HOST` | server | restart |  |
 | `DESK_DISPLAY_SERVER_PORT` | server | restart |  |
 | `DESK_DISPLAY_SERVER_PUBLIC_URL` | server | restart |  |
+| `DESK_DISPLAY_SERVER_ENROLLMENT` | server | restart |  |
+| `DESK_DISPLAY_SERVER_CLIENTS_PATH` | server | restart |  |
+| `DESK_DISPLAY_SERVER_RATE_LIMITS` | server | restart |  |
 | `DESK_DISPLAY_SERVER_AUTH_TOKEN` | server | restart | yes |
 | `DESK_DISPLAY_SERVER_ADMIN_TOKEN` | server | restart | yes |
 | `DESK_DISPLAY_SERVER_ALLOW_UNAUTHENTICATED` | server | restart |  |

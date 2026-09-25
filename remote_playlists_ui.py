@@ -8,7 +8,9 @@ from the rotation editor to keep both usable:
                 each playlist, and a demand preview with capability warnings.
 ``/clients``    client registry: identity, state, profile, capabilities,
                 rotation, version, current screen, cache age, heartbeat,
-                assignment, and saved / delivered / acknowledged revisions.
+                assignment, and saved / delivered / acknowledged revisions;
+                provisioning, credential rotation, revocation and
+                disable/enable (a new credential is shown once, never again).
 
 All state lives in :class:`remote_display.playlist_store.PlaylistStore`; the
 client registry comes from the snapshot the render server publishes.  Every
@@ -38,6 +40,12 @@ from remote_display.playlist_store import (
     registry_snapshot_path,
     store_path,
     validate_document,
+)
+from remote_display.provisioning import (
+    ProvisioningError,
+    ProvisioningStore,
+    client_env,
+    provisioning_path,
 )
 from remote_display.registry import read_snapshot
 
@@ -132,6 +140,7 @@ def register(
     now = clock or time.time
     app.extensions["desk_display_playlist_store"] = PlaylistStore(store_path(env))
     app.extensions["desk_display_registry_snapshot"] = registry_snapshot_path(env)
+    app.extensions["desk_display_provisioning"] = ProvisioningStore(provisioning_path(env))
     blueprint = Blueprint("remote_playlists", __name__)
 
     def _store() -> PlaylistStore:
@@ -140,6 +149,13 @@ def register(
 
     def _snapshot_file():
         return app.extensions["desk_display_registry_snapshot"]
+
+    def _provisioning() -> ProvisioningStore:
+        return app.extensions["desk_display_provisioning"]
+
+    def public_url() -> str | None:
+        source = os.environ if env is None else env
+        return (source.get("DESK_DISPLAY_SERVER_PUBLIC_URL") or "").strip() or None
 
     def static_clients() -> dict[str, str]:
         source = os.environ if env is None else env
@@ -157,6 +173,10 @@ def register(
 
     @blueprint.errorhandler(PlaylistStoreError)
     def _store_error(exc: PlaylistStoreError):
+        return jsonify(exc.as_response()), exc.status
+
+    @blueprint.errorhandler(ProvisioningError)
+    def _provisioning_error(exc: ProvisioningError):
         return jsonify(exc.as_response()), exc.status
 
     @blueprint.errorhandler(ModelValidationError)
@@ -201,6 +221,11 @@ def register(
                     "logical_height": preset.height if preset else None,
                 },
             })
+        provisioned = {record["client_id"]: record for record in _provisioning().records()}
+        for client_id, record in provisioned.items():
+            entries.setdefault(client_id, {"client_id": client_id, "static": False, "lease_expires_at": None,
+                                           "unknown": True,
+                                           "capabilities": {"display_profile": record["display_profile"]}})
         for client_id in list(data["assignments"]) + list(data["clients"]):
             entries.setdefault(client_id, {"client_id": client_id, "static": False, "lease_expires_at": None, "unknown": True})
         current = now()
@@ -214,6 +239,11 @@ def register(
             delivered = entry.get("delivered_playlist_revision")
             acknowledged = (status.get("accepted_revisions") or {}).get("playlist_revision")
             state = "unknown" if entry.get("unknown") else client_state(entry, heartbeat, current)
+            credential = provisioned.get(client_id)
+            if credential is not None and entry.get("unknown"):
+                state = "never_connected"
+            if credential is not None and credential["state"] != "active":
+                state = credential["state"]  # disabled or revoked wins over the last lease
             row = {
                 "client_id": client_id,
                 "friendly_name": (data["clients"].get(client_id) or {}).get("friendly_name"),
@@ -248,6 +278,11 @@ def register(
                 "acknowledged_revision": acknowledged,
                 "revision_state": revision_state(saved, delivered, acknowledged),
                 "recent_errors": status.get("recent_errors") or [],
+                "credential": None if credential is None else {
+                    "state": credential["state"],
+                    "created_at": credential.get("created_at"),
+                    "updated_at": credential.get("updated_at"),
+                },
             }
             row["warnings"] = capability_warnings(playlist["document"], {**entry, "state": state}) if playlist and caps.get("display_profile") else []
             rows.append(row)
@@ -264,7 +299,8 @@ def register(
 
     @blueprint.get("/clients")
     def clients_page():
-        return render_template("clients.html", csrf_header=CSRF_HEADER, csrf_value=CSRF_VALUE)
+        return render_template("clients.html", csrf_header=CSRF_HEADER, csrf_value=CSRF_VALUE,
+                               profiles=sorted(PROFILE_PRESETS))
 
     # ── Playlist library API ───────────────────────────────────────────────
 
@@ -409,6 +445,41 @@ def register(
         clone = _store().fork_for_client(client_id, expected_playlist_id=payload.get("expected_playlist_id"),
                                       actor=actor(), name=payload.get("name"))
         return respond(clone, 201)
+
+    def issued_payload(issued) -> dict[str, Any]:
+        text, warnings = client_env(issued, public_url())
+        return {"client_id": issued.client_id, "display_profile": issued.display_profile,
+                "client_env": text, "warnings": warnings,
+                "note": "Copy this now: the credential is never shown again."}
+
+    @blueprint.post("/api/clients/provision")
+    def provision_client():
+        payload = body()
+        playlist_id = payload.get("playlist_id") or None
+        if playlist_id is not None and playlist_id not in _store().snapshot()["playlists"]:
+            raise PlaylistValidationError("unknown playlist", field="playlist_id")
+        issued = _provisioning().provision(payload.get("client_id"), payload.get("display_profile"),
+                                           actor=actor())
+        if playlist_id is not None:
+            _store().assign(issued.client_id, playlist_id, expected_playlist_id=None, actor=actor())
+        response, status = respond(issued_payload(issued), 201)
+        response.headers["Cache-Control"] = "no-store"
+        return response, status
+
+    @blueprint.post("/api/clients/<client_id>/credential/<action>")
+    def credential_action(client_id: str, action: str):
+        store = _provisioning()
+        if action == "rotate":
+            response, status = respond(issued_payload(store.rotate(client_id, actor=actor())))
+            response.headers["Cache-Control"] = "no-store"
+            return response, status
+        if action == "revoke":
+            record = store.revoke(client_id, actor=actor())
+        elif action in {"disable", "enable"}:
+            record = store.set_disabled(client_id, action == "disable", actor=actor())
+        else:
+            return jsonify({"error": "not_found", "message": "unknown action"}), 404
+        return respond({"client_id": record["client_id"], "state": record["state"]})
 
     @blueprint.put("/api/clients/<client_id>/name")
     def name_client(client_id: str):

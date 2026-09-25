@@ -205,9 +205,21 @@ SETTINGS: tuple[Setting, ...] = (
     _s("DESK_DISPLAY_SERVER_PUBLIC_URL", "url", _SERVER_ONLY, "server",
        "Externally reachable base URL advertised to clients, when it differs "
        "from the bind address (for example behind a reverse proxy)."),
+    _s("DESK_DISPLAY_SERVER_ENROLLMENT", "choice", _SERVER_ONLY, "server",
+       "How clients register: 'provisioned' (each client has its own credential from "
+       "python3 -m remote_display.provisioning or the admin API, so one can be rotated or "
+       "revoked alone) or 'shared' (every client presents DESK_DISPLAY_SERVER_AUTH_TOKEN).",
+       default="provisioned", choices=("provisioned", "shared")),
+    _s("DESK_DISPLAY_SERVER_CLIENTS_PATH", "path", _SERVER_ONLY, "server",
+       "Provisioned client credentials (hashes only, mode 0600); defaults to "
+       ".runtime/server/provisioned_clients.json."),
+    _s("DESK_DISPLAY_SERVER_RATE_LIMITS", "bool", _SERVER_ONLY, "server",
+       "Rate-limit registration, failed authentication and per-client requests (429 with Retry-After).",
+       default="1"),
     _s("DESK_DISPLAY_SERVER_AUTH_TOKEN", "str", _SERVER_ONLY, "server",
-       f"Shared bearer token every client must present (at least {_MIN_SERVER_TOKEN_LENGTH} "
-       "characters). Generate one with: python3 -c 'import secrets; print(secrets.token_urlsafe(32))'",
+       f"Shared enrollment token for DESK_DISPLAY_SERVER_ENROLLMENT=shared (at least "
+       f"{_MIN_SERVER_TOKEN_LENGTH} characters). Generate one with: "
+       "python3 -c 'import secrets; print(secrets.token_urlsafe(32))'",
        secret=True),
     _s("DESK_DISPLAY_SERVER_ADMIN_TOKEN", "str", _SERVER_ONLY, "server",
        f"Bearer token for the /api/v1/admin endpoints (at least {_MIN_SERVER_TOKEN_LENGTH} "
@@ -231,7 +243,8 @@ SETTINGS: tuple[Setting, ...] = (
     _s("DESK_DISPLAY_SERVER_URL", "url", _CLIENT_ONLY, "client_server",
        "Base URL of the render server.", example="https://desk-display.lan:8765"),
     _s("DESK_DISPLAY_CLIENT_TOKEN", "str", _CLIENT_ONLY, "client_server",
-       "Bearer token matching the server's DESK_DISPLAY_SERVER_AUTH_TOKEN.", secret=True),
+       "This client's provisioned credential (or, with a shared-enrollment server, its "
+       "DESK_DISPLAY_SERVER_AUTH_TOKEN).", secret=True),
     _s("DESK_DISPLAY_SERVER_CA_BUNDLE", "path", _CLIENT_ONLY, "client_server",
        "CA bundle used to verify a server certificate from a private CA."),
     _s("DESK_DISPLAY_TLS_VERIFY", "bool", _CLIENT_ONLY, "client_server",
@@ -1142,8 +1155,22 @@ def _validate_server(report: ValidationReport, get, *, check_files: bool) -> Non
     token = get("DESK_DISPLAY_SERVER_AUTH_TOKEN")
     allow_unauthenticated = bool(get("DESK_DISPLAY_SERVER_ALLOW_UNAUTHENTICATED"))
     loopback = _is_loopback_host(host)
+    shared = (get("DESK_DISPLAY_SERVER_ENROLLMENT") or "provisioned") == "shared"
 
-    if not token:
+    if not shared:
+        if token:
+            report.warning(
+                "DESK_DISPLAY_SERVER_AUTH_TOKEN",
+                "ignored: clients register with their own provisioned credentials; set "
+                "DESK_DISPLAY_SERVER_ENROLLMENT=shared to keep accepting this shared token",
+            )
+        if allow_unauthenticated and not loopback:
+            report.error(
+                "DESK_DISPLAY_SERVER_ALLOW_UNAUTHENTICATED",
+                f"insecure: unauthenticated access is only allowed on loopback, but the "
+                f"server binds {host!r}",
+            )
+    elif not token:
         if not allow_unauthenticated:
             report.error(
                 "DESK_DISPLAY_SERVER_AUTH_TOKEN",
