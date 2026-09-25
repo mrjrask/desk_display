@@ -364,6 +364,15 @@ def test_server_authentication_rules():
     assert "insecure" in public_open["DESK_DISPLAY_SERVER_ALLOW_UNAUTHENTICATED"]
 
 
+def test_server_admin_token_rules():
+    short = _errors(dc.validate(Role.SERVER, {**SERVER_OK, "DESK_DISPLAY_SERVER_ADMIN_TOKEN": "short"}))
+    assert "insecure" in short["DESK_DISPLAY_SERVER_ADMIN_TOKEN"]
+    same = _errors(dc.validate(Role.SERVER, {**SERVER_OK, "DESK_DISPLAY_SERVER_ADMIN_TOKEN": SERVER_TOKEN}))
+    assert "must differ" in same["DESK_DISPLAY_SERVER_ADMIN_TOKEN"]
+    assert dc.validate(Role.SERVER, {**SERVER_OK, "DESK_DISPLAY_SERVER_ADMIN_TOKEN": "a" * 40}).ok
+    assert dc.SETTINGS_BY_NAME["DESK_DISPLAY_SERVER_ADMIN_TOKEN"].secret
+
+
 def test_server_tls_pairing_and_public_bind_warning(tmp_path):
     cert = tmp_path / "cert.pem"
     cert.write_text("cert", encoding="utf-8")

@@ -83,6 +83,7 @@ class ModelValidationError(ValueError):
 
     def __init__(self, path: str, message: str) -> None:
         self.path = path
+        self.message = message
         super().__init__(f"{path}: {message}" if path else message)
 
 
@@ -264,7 +265,12 @@ class WireModel:
         missing = sorted(expected - set(body) - cls._optional_fields())
         if missing:
             _fail(f"{prefix}{missing[0]}", "is required")
-        return cls(**cls._fields_from_wire(body, path))
+        try:
+            return cls(**cls._fields_from_wire(body, path))
+        except ModelValidationError as exc:
+            if not path or exc.path == path or exc.path.startswith((f"{path}.", f"{path}[")):
+                raise
+            raise type(exc)(f"{prefix}{exc.path}" if exc.path else path, exc.message) from None
 
     @classmethod
     def from_json(cls: type[M], text: str | bytes) -> M:
@@ -518,10 +524,10 @@ class ErrorSummary(WireModel):
     last_seen_age_seconds: float = 0.0
 
     def _normalize(self) -> None:
-        self._set("code", identifier(self.code, "recent_errors.code"))
-        self._set("message", _text(self.message, "recent_errors.message"))
-        self._set("count", _int(self.count, "recent_errors.count", minimum=1, maximum=1_000_000_000))
-        self._set("last_seen_age_seconds", _number(self.last_seen_age_seconds, "recent_errors.last_seen_age_seconds"))
+        self._set("code", identifier(self.code, "code"))
+        self._set("message", _text(self.message, "message"))
+        self._set("count", _int(self.count, "count", minimum=1, maximum=1_000_000_000))
+        self._set("last_seen_age_seconds", _number(self.last_seen_age_seconds, "last_seen_age_seconds"))
 
 
 @dataclass(frozen=True)

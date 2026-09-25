@@ -12,9 +12,10 @@ from a `.env` file. `DESK_DISPLAY_ROLE` selects which settings apply:
 A client needs no upstream API key or provider URL. The server fetches all
 upstream data and sends clients rendered artifacts only.
 
-> The server and client example files describe the split runtime's settings.
-> Those settings are declared, parsed, and validated today; the processes
-> that consume the split-runtime connection settings land separately.
+> The render server API runs as `display_server.py` (see
+> [Render server API](#render-server-api)). The display client process that
+> consumes `.env.client.example` lands separately; its settings are already
+> declared, parsed, and validated.
 
 ## Checking a configuration
 
@@ -61,6 +62,36 @@ python3 -m deployment_config reference   # paste between the markers below
 ```
 
 Tests fail when the committed files drift from the catalog.
+
+## Render server API
+
+`DESK_DISPLAY_ROLE=server python3 display_server.py` serves a versioned API
+under `/api/v1`, separate from the screenshot Feed server, whose endpoints
+are unchanged.
+
+- `POST /api/v1/register` takes the client's capabilities (and optional
+  demand) with `Authorization: Bearer <DESK_DISPLAY_SERVER_AUTH_TOKEN>`. It
+  returns the accepted versions, server version, assignment state, assigned
+  playlist and revision, manifest revision, lease expiry, recommended
+  heartbeat and sync intervals, and a per-client `client_credential`.
+- `/api/v1/clients/<id>/heartbeat`, `/config`, `/manifest`, and
+  `/assets/<path>` need `Authorization: Bearer <client_credential>` for that
+  client ID, so one client cannot read another's configuration or status.
+- `/api/v1/health` is public and only reports that the service is up.
+- `/api/v1/admin/status`, `/admin/prerender/<name>`, and
+  `/admin/clients/<id>/disable|enable` need
+  `DESK_DISPLAY_SERVER_ADMIN_TOKEN`; the admin API is off when it is unset.
+
+A lease lasts `DESK_DISPLAY_CLIENT_LEASE_SECONDS`; the server recommends a
+heartbeat every third of that. A client that misses its deadline expires:
+its demand is dropped, its credential stops working, and it must register
+again. While a lease is active, a second registration for the same client ID
+is refused with `409 client_id_in_use` unless it presents the current
+credential, so a client should keep its credential across restarts or wait
+for the lease to lapse. Clients listed in `DESK_DISPLAY_STATIC_CLIENTS`
+contribute their assigned playlist's screens even when not connected, must
+register with their configured profile, and merge with dynamic clients and
+administrator pre-render demand into one de-duplicated render plan.
 
 ## Secrets
 
@@ -117,6 +148,7 @@ installs only, never clients.
 | `DESK_DISPLAY_SERVER_PORT` | server | restart |  |
 | `DESK_DISPLAY_SERVER_PUBLIC_URL` | server | restart |  |
 | `DESK_DISPLAY_SERVER_AUTH_TOKEN` | server | restart | yes |
+| `DESK_DISPLAY_SERVER_ADMIN_TOKEN` | server | restart | yes |
 | `DESK_DISPLAY_SERVER_ALLOW_UNAUTHENTICATED` | server | restart |  |
 | `DESK_DISPLAY_SERVER_TLS_CERT` | server | restart |  |
 | `DESK_DISPLAY_SERVER_TLS_KEY` | server | restart |  |
