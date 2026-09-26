@@ -1,0 +1,4 @@
+# Display HAT Mini output.
+-r hw-gpio.txt
+displayhatmini
+pygame

@@ -94,6 +94,9 @@ pick_requirements_file() {
   normalized_output_mode=$(printf '%s' "$OUTPUT_MODE" | tr '[:upper:]' '[:lower:]')
 
   case "$normalized_output_mode" in
+    window)
+      echo "requirements/window.txt"
+      ;;
     kernel)
       echo "requirements/kernel.txt"
       ;;
@@ -153,7 +156,17 @@ configured_inside_sensor() {
     return 0
   fi
 
-  local env_path="$PROJECT_DIR/.env"
+  # Indoor sensors belong to the panel: .env on a standalone install,
+  # .env.client on a client, and nothing on a server ("none").
+  local panel_env="${DESK_DISPLAY_PANEL_ENV_FILE:-.env}"
+  if [[ "$panel_env" == "none" ]]; then
+    return 1
+  fi
+  local env_path="$PROJECT_DIR/$panel_env"
+  if [[ ! -f "$env_path" ]]; then
+    # A new client's .env.client is made from .env after dependencies install.
+    env_path="$PROJECT_DIR/.env"
+  fi
   local value
   value=$(read_env_file_value "$env_path" "INSIDE_SENSOR" || true)
   if [[ -n "$value" ]]; then

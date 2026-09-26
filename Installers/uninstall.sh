@@ -5,6 +5,8 @@ log() { printf '[INFO] %s\n' "$*"; }
 warn() { printf '[WARN] %s\n' "$*"; }
 
 SERVICE_NAME="desk_display.service"
+SERVER_SERVICE_NAME="desk_display_server.service"
+CLIENT_SERVICE_NAME="desk_display_client.service"
 # Pre-rename name of the per-user kernel-mode unit (see
 # disable_legacy_kernel_user_service in common.sh); still checked for so
 # installs from before the rename get cleaned up too.
@@ -21,6 +23,8 @@ SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 PROJECT_DIR="${PROJECT_DIR:-$(cd -- "$SCRIPT_DIR/.." && pwd)}"
 MANAGED_SYSTEM_SERVICES=(
   "$SERVICE_NAME"
+  "$CLIENT_SERVICE_NAME"
+  "$SERVER_SERVICE_NAME"
   "$CONFIG_UI_SERVICE_NAME"
   "$FEED_SERVER_SERVICE_NAME"
   "$SCREENSHOT_UPLOADER_SERVICE_NAME"
@@ -61,6 +65,14 @@ if [[ -f "$COMMON_SCRIPT" ]]; then
   source "$COMMON_SCRIPT"
 fi
 
+# The installed mode decides which data is backed up (python3
+# install_modes.py plan --mode <mode> lists it; OPERATIONS.md documents it).
+INSTALL_MODE="${DESK_DISPLAY_INSTALL_MODE:-}"
+if [[ -z "$INSTALL_MODE" && -f "$PROJECT_DIR/install_modes.py" ]]; then
+  INSTALL_MODE=$(python3 "$PROJECT_DIR/install_modes.py" detect --project-dir "$PROJECT_DIR" 2>/dev/null || true)
+fi
+INSTALL_MODE="${INSTALL_MODE:-standalone}"
+
 VENV_DIR="$PROJECT_DIR/venv"
 EXISTING_VENV=$(detect_existing_venv "$PROJECT_DIR" || true)
 if [[ -n "$EXISTING_VENV" ]]; then
@@ -77,11 +89,13 @@ cat >&2 <<EOF
 ################################################################################
  WARNING: this permanently uninstalls Desk Display.
 
- This script will:
+ This script will ($INSTALL_MODE install):
    - stop and disable the desk_display systemd services
    - remove the Python virtual environment
-   - copy .env and ~/keys/ (if present) into:
+   - copy the env files, ~/keys/ and any server playlists, assignments,
+     client credentials and migration/upgrade backups (if present) into:
        $BACKUP_DIR
+   - discard caches and rendered artifacts (the server re-renders them)
    - DELETE the entire project directory:
        $PROJECT_DIR
 
@@ -220,6 +234,8 @@ kill_project_relative_main_processes() {
 if command -v pkill >/dev/null 2>&1; then
   log "Killing any running Desk Display processes"
   kill_stray_processes "$PROJECT_DIR/main.py"
+  kill_stray_processes "$PROJECT_DIR/display_client.py"
+  kill_stray_processes "$PROJECT_DIR/display_server.py"
   kill_stray_processes "$PROJECT_DIR/scripts/launch_kernel_display.sh"
   kill_stray_processes "$PROJECT_DIR/scripts/launch_framebuffer.sh"
   for service_user in "${kernel_service_users[@]}"; do
@@ -316,23 +332,28 @@ copy_to_backup() {
   fi
 }
 
-ENV_FILE="$PROJECT_DIR/.env"
-if [[ -f "$ENV_FILE" ]]; then
-  # Backed up as "dot.env" rather than ".env" so it isn't a hidden file in
-  # the backup folder and is easy to spot when browsing there.
-  copy_to_backup "$ENV_FILE" "dot.env"
+$SUDO mkdir -p "$BACKUP_DIR"
+if [[ -f "$PROJECT_DIR/install_modes.py" ]] && command -v python3 >/dev/null 2>&1; then
+  # .env is saved as "dot.env" so it isn't hidden in the backup folder.
+  $SUDO python3 "$PROJECT_DIR/install_modes.py" backup --mode "$INSTALL_MODE" --project-dir "$PROJECT_DIR" \
+    --to "$BACKUP_DIR" --home "$REAL_HOME" | while read -r copied; do log "Backed up $copied"; done
+  if [[ -n "$REAL_USER" && "$REAL_USER" != "root" ]]; then
+    $SUDO chown -R "$REAL_USER" "$BACKUP_DIR" 2>/dev/null || true
+  fi
 else
-  warn "No .env file found at $ENV_FILE"
+  ENV_FILE="$PROJECT_DIR/.env"
+  if [[ -f "$ENV_FILE" ]]; then
+    copy_to_backup "$ENV_FILE" "dot.env"
+  else
+    warn "No .env file found at $ENV_FILE"
+  fi
+  KEYS_DIR="$REAL_HOME/keys"
+  if [[ -d "$KEYS_DIR" ]]; then
+    copy_to_backup "$KEYS_DIR"
+  fi
 fi
 
-KEYS_DIR="$REAL_HOME/keys"
-if [[ -d "$KEYS_DIR" ]]; then
-  copy_to_backup "$KEYS_DIR"
-else
-  warn "No keys folder found at $KEYS_DIR"
-fi
-
-log "Sensitive files (.env, keys) copied to $BACKUP_DIR if present"
+log "Configuration, credentials and server state copied to $BACKUP_DIR if present"
 
 # Belt-and-suspenders: everything above stopped and disabled every known
 # service and killed known process patterns once, near the start of the
@@ -344,6 +365,8 @@ log "Sensitive files (.env, keys) copied to $BACKUP_DIR if present"
 log "Verifying nothing has respawned before removing the project directory"
 if command -v pkill >/dev/null 2>&1; then
   kill_stray_processes "$PROJECT_DIR/main.py"
+  kill_stray_processes "$PROJECT_DIR/display_client.py"
+  kill_stray_processes "$PROJECT_DIR/display_server.py"
   for service_user in "${kernel_service_users[@]}"; do
     kill_project_relative_main_processes "$service_user"
   done

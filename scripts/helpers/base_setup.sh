@@ -10,6 +10,8 @@ REQUIREMENTS_FILE="${REQUIREMENTS_FILE:-requirements/displayhatmini.txt}"
 SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 PROJECT_DIR="${PROJECT_DIR:-$(cd -- "$SCRIPT_DIR/../.." && pwd)}"
 SERVICE_USER="${SUDO_USER:-$(whoami)}"
+# standalone (the default), server, client or combined; see install_modes.py.
+INSTALL_MODE="${DESK_DISPLAY_INSTALL_MODE:-standalone}"
 
 COMMON_SCRIPT="$SCRIPT_DIR/common.sh"
 if [[ ! -f "$COMMON_SCRIPT" ]]; then
@@ -26,7 +28,9 @@ else
   SUDO=""
 fi
 
-if [[ "${DISABLE_SPI_I2C:-}" == "1" ]]; then
+if [[ "$INSTALL_MODE" == "server" ]]; then
+  log "Server install: leaving SPI/I2C and panel hardware settings alone."
+elif [[ "${DISABLE_SPI_I2C:-}" == "1" ]]; then
   log "Disabling SPI/I2C when raspi-config is available (Hyperpixel panels require this)."
   if command -v raspi-config >/dev/null 2>&1; then
     $SUDO raspi-config nonint do_spi 1 || warn "Failed to disable SPI via raspi-config."
@@ -55,6 +59,14 @@ if [[ ! -d "$PROJECT_DIR/.git" ]]; then
   warn "No git repository detected in $PROJECT_DIR. Clone the project before running this installer."
 fi
 
+if [[ "$INSTALL_MODE" != "standalone" ]]; then
+  # Server and client installs take their own dependency sets: a client gets
+  # no upstream provider libraries, a server no panel driver.
+  REQUIREMENTS_FILE=$("$PYTHON_BIN" "$PROJECT_DIR/install_modes.py" requirements \
+    --mode "$INSTALL_MODE" --output "${DESK_DISPLAY_OUTPUT:-}")
+  export DESK_DISPLAY_PANEL_ENV_FILE="${DESK_DISPLAY_PANEL_ENV_FILE:-$([[ "$INSTALL_MODE" == "server" ]] && echo none || echo .env.client)}"
+fi
+
 VENV_DIR="$PROJECT_DIR/venv"
 "$PROJECT_DIR/scripts/update_dependencies.sh" \
   --python "$PYTHON_BIN" \
@@ -73,6 +85,76 @@ ensure_executable "$PROJECT_DIR/scripts/reset_screenshots.sh"
 ensure_executable "$PROJECT_DIR/scripts/framebuffer_service.sh"
 ensure_executable "$PROJECT_DIR/scripts/prepare_kernel_session_env.sh"
 ensure_executable "$PROJECT_DIR/scripts/wait_for_display_ready.sh"
+
+# Server, client and combined installs: the env files and units come from
+# install_modes.py, which also names the services to disable, so a mode switch
+# never leaves main.py and display_client.py fighting over the panel.
+install_mode_services() {
+  local venv_python="$VENV_DIR/bin/python"
+  local unit_dir
+  unit_dir=$(mktemp -d)
+  local -a env_args=()
+  local key
+  for key in DISPLAY_FB_DEVICE DISPLAY_FB_PIXEL_FORMAT DISPLAY_FB_PIXEL_ORDER DISPLAY_WIDTH DISPLAY_HEIGHT DISPLAY_ROTATION; do
+    if [[ -n "${!key:-}" ]]; then
+      env_args+=(--env "$key=${!key}")
+    fi
+  done
+
+  log "Preparing env files for the $INSTALL_MODE install."
+  local -a prepare_args=(--mode "$INSTALL_MODE" --project-dir "$PROJECT_DIR")
+  [[ -n "${DESK_DISPLAY_INSTALL_PROFILE:-}" ]] && prepare_args+=(--install-profile "$DESK_DISPLAY_INSTALL_PROFILE")
+  [[ -n "${DESK_DISPLAY_CLIENT_CREDENTIALS:-}" ]] && prepare_args+=(--credentials "$DESK_DISPLAY_CLIENT_CREDENTIALS")
+  (cd "$PROJECT_DIR" && "$venv_python" -m install_modes prepare-env "${prepare_args[@]}")
+
+  log "Writing systemd units for the $INSTALL_MODE install."
+  local -a unit_output=()
+  if [[ "$INSTALL_MODE" != "server" ]]; then
+    unit_output=(--output "${DESK_DISPLAY_OUTPUT:-}")
+  fi
+  "$PYTHON_BIN" "$PROJECT_DIR/install_modes.py" units --mode "$INSTALL_MODE" --dir "$unit_dir" \
+    --project-dir "$PROJECT_DIR" --python "$venv_python" --user "$SERVICE_USER" \
+    "${unit_output[@]}" "${env_args[@]}" >/dev/null
+
+  local unit
+  while read -r unit; do
+    [[ -n "$unit" ]] || continue
+    if [[ -e "/etc/systemd/system/$unit" ]]; then
+      log "Disabling $unit (not part of the $INSTALL_MODE install)"
+      $SUDO systemctl disable --now "$unit" 2>/dev/null || true
+    fi
+  done < <("$PYTHON_BIN" "$PROJECT_DIR/install_modes.py" disable --mode "$INSTALL_MODE")
+
+  local path
+  for path in "$unit_dir"/*.service; do
+    log "Installing $(basename "$path") to /etc/systemd/system"
+    $SUDO install -m 644 "$path" "/etc/systemd/system/$(basename "$path")"
+  done
+  rm -rf "$unit_dir"
+
+  # Recorded so scripts/upgrade.sh rewrites these exact units.
+  "$PYTHON_BIN" "$PROJECT_DIR/install_modes.py" mark --mode "$INSTALL_MODE" --project-dir "$PROJECT_DIR" \
+    --user "$SERVICE_USER" "${unit_output[@]}" "${env_args[@]}" >/dev/null
+  $SUDO systemctl daemon-reload
+  # Server first, then the panel: the client never waits for the server, so it
+  # draws from its cache immediately (see install_modes.start_order).
+  while read -r unit; do
+    [[ -n "$unit" ]] || continue
+    $SUDO systemctl enable "$unit"
+    $SUDO systemctl restart "$unit"
+  done < <("$PYTHON_BIN" "$PROJECT_DIR/install_modes.py" services --mode "$INSTALL_MODE")
+
+  log "Installation complete ($INSTALL_MODE). Service status:"
+  while read -r unit; do
+    [[ -n "$unit" ]] || continue
+    $SUDO systemctl status --no-pager "$unit" || true
+  done < <("$PYTHON_BIN" "$PROJECT_DIR/install_modes.py" services --mode "$INSTALL_MODE")
+}
+
+if [[ "$INSTALL_MODE" != "standalone" ]]; then
+  install_mode_services
+  exit 0
+fi
 
 SERVICE_PATH="/etc/systemd/system/$SERVICE_NAME"
 CONFIG_UI_SERVICE_PATH="/etc/systemd/system/$CONFIG_UI_SERVICE_NAME"

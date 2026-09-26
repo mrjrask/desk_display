@@ -1,0 +1,4 @@
+# Render server (display_server.py and the config UI). It fetches every
+# upstream feed and renders every screen, so it needs the full application
+# set, but no panel driver or GPIO stack.
+-r base.txt

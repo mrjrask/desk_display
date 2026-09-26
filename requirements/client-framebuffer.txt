@@ -1,0 +1,4 @@
+-r client.txt
+
+# Panel driver.
+-r hw-framebuffer.txt

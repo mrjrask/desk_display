@@ -1,0 +1,7 @@
+# Display client core (display_client.py). A client plays artifacts the
+# server rendered: no upstream provider libraries (yfinance, PyJWT), web
+# server (Flask, waitress) or SVG renderer. Add one hw-*.txt layer for the
+# panel; see the client-*.txt files.
+requests
+pytz
+Pillow

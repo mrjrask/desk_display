@@ -242,7 +242,8 @@ if ! validate_hyperpixel_env_overrides && ! detect_hyperpixel_panel; then
   exit 1
 fi
 
-ENV_PATH="$PROJECT_DIR/.env"
+# A client install that already has .env.client keeps its panel settings there.
+ENV_PATH="$PROJECT_DIR/${DESK_DISPLAY_PANEL_ENV_FILE:-.env}"
 ENV_LINES=()
 ENV_LINES+=("DESK_DISPLAY_OUTPUT=${DESK_DISPLAY_OUTPUT}")
 ENV_LINES+=("HYPERPIXEL_PANEL=${HYPERPIXEL_PANEL}")

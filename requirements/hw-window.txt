@@ -1,0 +1,2 @@
+# Desktop window output (Pi desktop, macOS, Windows).
+pygame

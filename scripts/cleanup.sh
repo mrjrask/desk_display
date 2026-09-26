@@ -18,6 +18,28 @@ cd "$PROJECT_ROOT"
 
 FALSEY_ENV_VALUES_REGEX='^(|0|false|no|off)$'
 
+# The installed mode decides which process owns the panel and which env file
+# holds its settings: main.py and .env when standalone, display_client.py and
+# .env.client on a client or combined install. A server has no panel.
+INSTALL_MODE="standalone"
+if [[ -f "$PROJECT_ROOT/install_modes.py" ]] && command -v python3 >/dev/null 2>&1; then
+  INSTALL_MODE="$(python3 "$PROJECT_ROOT/install_modes.py" detect --project-dir "$PROJECT_ROOT" 2>/dev/null || echo standalone)"
+fi
+case "$INSTALL_MODE" in
+  client|combined)
+    PANEL_SERVICE="desk_display_client.service"
+    PANEL_ENV_FILE="$PROJECT_ROOT/.env.client"
+    ;;
+  server)
+    PANEL_SERVICE=""
+    PANEL_ENV_FILE="$PROJECT_ROOT/.env"
+    ;;
+  *)
+    PANEL_SERVICE="desk_display.service"
+    PANEL_ENV_FILE="$PROJECT_ROOT/.env"
+    ;;
+esac
+
 lookup_config_value() {
   local name="$1"
   local value="${!name-}"
@@ -27,7 +49,7 @@ lookup_config_value() {
     return 0
   fi
 
-  if [[ -f "$PROJECT_ROOT/.env" ]]; then
+  if [[ -f "$PANEL_ENV_FILE" ]]; then
     value="$(awk -F= -v key="$name" '
       $0 ~ /^[[:space:]]*(#|$)/ { next }
       {
@@ -43,7 +65,7 @@ lookup_config_value() {
           exit
         }
       }
-    ' "$PROJECT_ROOT/.env")"
+    ' "$PANEL_ENV_FILE")"
     printf '%s' "$value"
   fi
 }
@@ -94,8 +116,8 @@ elif command -v python >/dev/null 2>&1; then
 fi
 
 # Ask the running service to stop scheduling new screens immediately.
-if command -v systemctl >/dev/null 2>&1; then
-  SERVICE_NAME="desk_display.service"
+if [[ -n "$PANEL_SERVICE" ]] && command -v systemctl >/dev/null 2>&1; then
+  SERVICE_NAME="$PANEL_SERVICE"
   main_pid="$(systemctl show -p MainPID --value "$SERVICE_NAME" 2>/dev/null || true)"
   if [[ -n "${main_pid}" && "${main_pid}" != "0" ]]; then
     echo "    → Requesting ${SERVICE_NAME} shutdown (SIGTERM to PID ${main_pid})…"
@@ -107,7 +129,12 @@ if command -v systemctl >/dev/null 2>&1; then
 fi
 
 # 1) Clear the display before touching the filesystem
-echo "    → Clearing display…"
+if [[ "$INSTALL_MODE" == "server" ]]; then
+  echo "    → Server install: no panel to clear."
+  SKIP_DISPLAY_CLEAR=1
+else
+  echo "    → Clearing display…"
+fi
 # Make the same .env-backed profile values used by the shell check available
 # to the embedded Python cleanup process.
 for config_name in \
@@ -118,6 +145,7 @@ for config_name in \
 done
 # Intentionally avoid forcing headless mode here: cleanup should blank the
 # physical Display HAT Mini panel when hardware output is available.
+if [[ -z "${SKIP_DISPLAY_CLEAR:-}" ]]; then
 "${python_bin}" - <<'PY'
 import logging
 import os
@@ -242,6 +270,7 @@ else:
         except Exception as exc:  # pragma: no cover - best effort during shutdown
             logging.warning("Waveshare OLED cleanup failed: %s", exc)
 PY
+fi
 
 # 2) Remove __pycache__ directories
 echo "    → Removing __pycache__ directories (excluding virtualenv)…"

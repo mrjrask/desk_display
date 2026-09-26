@@ -1,0 +1,3 @@
+# Framebuffer-backed Raspberry Pi display output (numpy packs RGB565 frames).
+-r hw-gpio.txt
+numpy

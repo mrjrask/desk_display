@@ -24,11 +24,8 @@ import time
 from collections import deque
 from typing import Any, Dict, List, Optional, Tuple
 
-import jwt
 import pytz
 import requests
-from cryptography.hazmat.backends import default_backend
-from cryptography.hazmat.primitives import serialization
 
 from config import (
     AHL_API_BASE_URL,
@@ -374,6 +371,9 @@ def load_weatherkit_private_key(key_path: str):
     # normalize line endings; ensure trailing newline
     pem_bytes = pem_bytes.replace(b"\r\n", b"\n").strip() + b"\n"
 
+    from cryptography.hazmat.backends import default_backend
+    from cryptography.hazmat.primitives import serialization
+
     return serialization.load_pem_private_key(
         pem_bytes,
         password=None,
@@ -436,6 +436,11 @@ def _load_weatherkit_private_key() -> Optional[Any]:
                 pem_bytes = normalized_key.replace("\r\n", "\n").strip().encode("utf-8")
                 if not pem_bytes.endswith(b"\n"):
                     pem_bytes += b"\n"
+
+                # WeatherKit's signing stack is imported on first use: display
+                # clients load this module but never fetch upstream data.
+                from cryptography.hazmat.backends import default_backend
+                from cryptography.hazmat.primitives import serialization
 
                 with _weatherkit_auth_lock:
                     _weatherkit_key_cache = serialization.load_pem_private_key(
@@ -518,6 +523,8 @@ def _build_weatherkit_token(now: datetime.datetime) -> Optional[str]:
     iat = int(now.timestamp())
     exp = int((now + datetime.timedelta(minutes=30)).timestamp())
     try:
+        import jwt
+
         token = jwt.encode(
             {
                 "iss": WEATHERKIT_TEAM_ID,

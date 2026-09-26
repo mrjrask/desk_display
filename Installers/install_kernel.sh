@@ -264,7 +264,8 @@ configure_resolution() {
 
 configure_resolution
 
-ENV_PATH="$PROJECT_DIR/.env"
+# A client install that already has .env.client keeps its panel settings there.
+ENV_PATH="$PROJECT_DIR/${DESK_DISPLAY_PANEL_ENV_FILE:-.env}"
 ENV_LINES=()
 
 add_env_line() {
