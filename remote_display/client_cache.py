@@ -285,33 +285,43 @@ class ClientCache:
         self,
         payload: Mapping[str, Any],
         *,
-        artifact_usable: Callable[[str], bool],
+        artifact_usable: Callable[[str], bool | None],
         manifest_revision: str | None = None,
     ) -> CachedPlaylist:
         """Validate and atomically activate a new server playlist.
 
-        ``artifact_usable(screen)`` reports whether a screen's artifacts are
-        downloaded and verified locally.  At least one required screen must
-        be usable before the playlist is activated: real rotations routinely
+        ``artifact_usable(screen)`` reports ``True`` when a screen's artifacts
+        are downloaded and verified locally, ``False`` when the manifest
+        advertises artifacts that are not usable locally, and ``None`` when
+        the manifest legitimately has no artifact for the screen. At least
+        one required screen must be usable before the playlist is activated:
+        real rotations routinely
         include screens that are legitimately unavailable much of the time
         (no active weather alert, no rain in radar range, an out-of-season
         team's "live"/"next" screen) rather than merely not yet rendered, and
         requiring every one of them to be usable would block activation
         forever. A screen still missing when the playlist activates is not a
         problem: :class:`~playback.client_player.ClientPlayer` already skips
-        any requested screen with no cached package, the same way the
+        any requested screen with no manifest entry, the same way the
         standalone renderer skips a screen whose ``available`` is false, and
-        later syncs pick it up as soon as the server renders it. Raises
-        :class:`PlaylistRejected` (nothing at all is usable yet) and leaves
-        the current playlist in place otherwise.
+        later syncs pick it up as soon as the server renders it. An advertised
+        artifact that fails local download or validation still prevents
+        activation. Raises
+        :class:`PlaylistRejected` when nothing is usable yet or an advertised
+        artifact is unusable, and leaves the current playlist in place.
         """
 
         playlist = validate_playlist(payload)
         if manifest_revision is not None:
             playlist = CachedPlaylist(**{**playlist.__dict__, "manifest_revision": manifest_revision})
         required = required_screens(playlist)
-        missing = sorted(s for s in required if not artifact_usable(s))
-        if required and len(missing) == len(required):
+        usability = {screen: artifact_usable(screen) for screen in required}
+        failed = sorted(screen for screen, usable in usability.items() if usable is False)
+        if failed:
+            shown = ", ".join(failed[:10]) + (", ..." if len(failed) > 10 else "")
+            raise PlaylistRejected("artifacts_unavailable", "advertised artifacts are not usable: " + shown)
+        if required and not any(usability.values()):
+            missing = sorted(required)
             shown = ", ".join(missing[:10]) + (", ..." if len(missing) > 10 else "")
             raise PlaylistRejected("artifacts_unavailable", "no screens have usable artifacts yet: " + shown)
         with self._lock:
@@ -442,4 +452,3 @@ __all__ = [
     "required_screens",
     "validate_playlist",
 ]
-

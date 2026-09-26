@@ -353,6 +353,26 @@ def test_corrupt_download_is_rejected(env):
     assert not list((env.tmp / "client").glob("artifacts/*"))
 
 
+def test_one_corrupt_download_does_not_activate_partial_manifest(env, monkeypatch):
+    env.publish("date")
+    env.publish("weather1")
+    client = env.make_client()
+    fetch = client.sync._fetch
+
+    def selectively_corrupt(entry, ref, what):
+        data = fetch(entry, ref, what)
+        if entry.get("screen_id") == "weather1" and data is not None:
+            return data[:-1] + bytes([data[-1] ^ 0xFF])
+        return data
+
+    monkeypatch.setattr(client.sync, "_fetch", selectively_corrupt)
+    synced(env, client)
+    assert client.sync.active().playlist is None
+    date = next(entry for entry in client.sync._fetched["artifacts"] if entry["screen_id"] == "date")
+    assert client.sync.artifacts.has(date)
+    assert "checksum_mismatch" in {e.code for e in client.sync.errors.summaries()}
+
+
 def test_interrupted_download_is_rejected_and_retried(env):
     env.publish("date")
     env.publish("weather1")

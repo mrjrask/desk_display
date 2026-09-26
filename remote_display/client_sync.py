@@ -941,7 +941,7 @@ class ClientSync:
                 self.errors.record(exc.code, f"{entry.get('screen_id')}: {exc.message}")
                 LOGGER.warning("Artifact for %s rejected: %s", entry.get("screen_id"), exc.message)
 
-    def _usable(self, manifest: Mapping[str, Any]) -> Callable[[str], bool]:
+    def _usable(self, manifest: Mapping[str, Any]) -> Callable[[str], bool | None]:
         """Whether everything a screen needs is cached.
 
         That is its still image, its render package when this client plays
@@ -959,8 +959,10 @@ class ClientSync:
             ref = self.artifacts.package_ref(entry)
             return not self.wants_package(ref) or self.artifacts.has(ref)
 
-        def usable(screen: str) -> bool:
+        def usable(screen: str) -> bool | None:
             entry = content.entry(screen)
+            if entry is None:
+                return None
             if not cached(entry):
                 return False
             if entry.get("remote_class") == "interactive_focus" and self.capabilities.has_touch:

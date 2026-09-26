@@ -115,9 +115,18 @@ def test_activation_does_not_wait_for_every_screen(cache):
     playback/client_player.py), the same way the standalone renderer skips a
     screen whose ``available`` is false."""
 
-    activated = cache.offer(payload(DOC_B), artifact_usable=lambda screen: screen != "news headlines")
+    activated = cache.offer(payload(DOC_B), artifact_usable=lambda screen: True if screen == "date" else None)
     assert activated.playlist_id == "default"
     assert cache.load() == activated
+
+
+def test_activation_rejects_an_advertised_artifact_that_failed_locally(cache):
+    first = cache.offer(payload(DOC_A), artifact_usable=everything)
+    with pytest.raises(PlaylistRejected) as excinfo:
+        cache.offer(payload(DOC_B), artifact_usable=lambda screen: screen == "date")
+    assert excinfo.value.code == "artifacts_unavailable"
+    assert "news headlines" in excinfo.value.message
+    assert cache.load() == first
 
 
 def test_rejected_update_keeps_current(cache):
