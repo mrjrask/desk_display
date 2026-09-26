@@ -8,8 +8,11 @@ Phase 20a, so it needs no changes on the devices.
 The automated end-to-end suite (`tests/test_end_to_end.py`) must pass on the
 release commit first. It checks, with fixture data and no network:
 
-- server renders match the standalone display pixel for pixel on every
-  profile, including every frame of scrolling and animated screens;
+- server renders match the standalone display pixel for pixel: a
+  scrolling standings screen on every profile, and a scrolling and an
+  animated screen on three profiles (HyperPixel 4 Square, Display HAT Mini
+  and the 1-bit Waveshare OLED), including every frame of the scroll and
+  every animation frame;
 - one server serving several clients with shared and different playlists
   and profiles, one render per screen and profile, and independent playback;
 - playlist edits reaching clients and being acknowledged;
@@ -48,6 +51,12 @@ nohup python3 soak.py sample --out soak/server.jsonl --hours 48 \
 nohup python3 soak.py sample --out soak/$(hostname).jsonl --hours 48 &
 ```
 
+The server's token comes from `DESK_DISPLAY_SERVER_ADMIN_TOKEN` in the
+environment, or else from the env file (`--env-file`, default `.env`); with
+`--server-url` and no token the sampler exits with an error. `--interval`
+changes the default of 60 seconds between samples, and `--once` records a
+single sample and exits.
+
 A sample is one JSON line a minute: each client's lease, playback state,
 current screen, sync and cache age and error count; render and failure
 counts; playlist delivery; and this device's process memory, CPU, open
@@ -60,7 +69,10 @@ While it runs, check by hand on each panel and note the result:
 - [ ] Touch: tapping a quad tile on a HyperPixel expands it, and a tap returns.
 - [ ] Buttons: skip and previous on the Display HAT Mini.
 - [ ] Scrolling screens scroll smoothly and hold at the end.
-- [ ] Dark hours dim or blank the backlight and restore it.
+- [ ] Dark hours: display clients do not apply `DARK_HOURS` or the
+      backlight settings yet (see the known limitations in
+      [CHANGELOG.md](../CHANGELOG.md)). Record what each panel does; this
+      is not a release gate.
 - [ ] Unplug the server's network for 30 minutes: clients keep playing and
       clocks keep time; they reconnect by themselves afterwards.
 - [ ] Reboot one client: it plays from its cache before it reconnects.
@@ -77,8 +89,9 @@ python3 soak.py gates soak/*.jsonl --clients server-panel,client-1,client-2,clie
 ```
 
 It prints `GO`, `NO-GO` or `ROLLBACK` with every gate and trigger, and exits
-0, 1 or 3. `--json` prints the same as JSON; `--gates file.json` overrides
-thresholds (for a shorter rehearsal, for example `{"min_hours": 2}`).
+0, 1 or 3 (2 when a log or gates file cannot be read). `--json` prints the
+same as JSON; `--gates file.json` overrides thresholds (for a shorter
+rehearsal, for example `{"min_hours": 2}`).
 
 ### Release gates
 

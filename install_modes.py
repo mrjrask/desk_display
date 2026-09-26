@@ -268,8 +268,8 @@ def snapshot(mode: Mode | str, project_dir: Path, *, home: Path | None = None,
              now: float | None = None) -> Path | None:
     """Copy a server's state into ``.runtime/server/backups/upgrade-<time>/``.
 
-    Returns ``None`` for modes without server state. The snapshot is a backup
-    an operator can restore by hand; the upgrade itself changes none of it.
+    Returns ``None`` for modes without server state. :func:`restore` puts a
+    snapshot back; the upgrade itself changes none of it.
     """
 
     mode = Mode(mode)

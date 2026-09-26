@@ -122,6 +122,10 @@ the credential. Response 201 (new lease) or 200 (renewal):
 | `lease_seconds`, `lease_expires_at`, `heartbeat_interval_seconds`, `sync_interval_seconds` | Lease |
 | `client_credential` | The new lease credential |
 
+The current client keeps only `client_credential` from this response. It
+does not use `heartbeat_interval_seconds` or `sync_interval_seconds`; see
+[Heartbeat](#heartbeat).
+
 Refusals:
 
 | Status and code | When |
@@ -153,17 +157,24 @@ its next sync, and keeps playing from its cache in the meantime.
 
 - `client_id`;
 - `playback_state`: `starting`, `playing`, `focus`, `paused`, `dark`,
-  `offline` or `error`;
+  `offline` or `error` (the current client sends only `starting`,
+  `playing`, `offline` and `error`);
 - `accepted_revisions {manifest_revision, playlist_revision, config_revision}`;
 - `current_screen` and `current_playlist`;
 - `last_sync_age_seconds` and `cache_age_seconds`;
 - `physical_rotation`, for diagnosis only;
 - `recent_errors`: up to 10 entries of
-  `{code, message, count, last_seen_age_seconds}`.
+  `{code, message, count, last_seen_age_seconds}` (the client keeps at
+  most 8).
 
 The response repeats the assignment, `manifest_revision` and lease fields.
 The client sends one heartbeat per sync pass, every
-`DESK_DISPLAY_SYNC_INTERVAL_SECONDS`.
+`DESK_DISPLAY_SYNC_INTERVAL_SECONDS` (default 30). It ignores the
+`heartbeat_interval_seconds` and `sync_interval_seconds` the server
+advertises (in the register, heartbeat and config responses and the
+manifest's `configuration`), and `DESK_DISPLAY_HEARTBEAT_INTERVAL_SECONDS`
+is not used. Keep the sync interval well under half the lease: the Clients
+page marks a client stale after 1.5 advertised heartbeat intervals.
 
 ### Config
 
@@ -250,7 +261,11 @@ token buckets:
 A limited request gets 429
 `{"error": "rate_limited", "retry_after_seconds": N}` and `Retry-After: N`.
 The client waits the larger of `retry_after_seconds` and its own backoff
-(exponential from 2 s to 300 s, full jitter).
+(a random wait between half and all of a limit that starts at 2 s and
+doubles after each failure, up to 300 s). It reads `retry_after_seconds`
+from the JSON body of any error (including 409 `client_id_in_use`), not the
+`Retry-After` header, so a 429 from a proxy that sends only the header gets
+the ordinary backoff.
 
 ## Admin client management
 
