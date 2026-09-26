@@ -99,11 +99,13 @@ class ClientPlayer:
         return self.next()
 
     def previous(self) -> PlaybackItem | None:
-        if not self.history:
-            return None
-        self.current_id = self.history.pop()
-        self.started_at = time.monotonic()
-        return self._item(self.current_id)
+        while self.history:
+            screen_id = self.history.pop()
+            if self._usable(screen_id):
+                self.current_id = screen_id
+                self.started_at = time.monotonic()
+                return self._item(screen_id)
+        return None
 
     def item_for(self, screen_id: str) -> PlaybackItem | None:
         """An item for a cached screen outside the rotation (a focused tile)."""

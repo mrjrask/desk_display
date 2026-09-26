@@ -69,3 +69,23 @@ def test_due_uses_item_duration_without_focus_deadline(monkeypatch):
 
     assert player.due(now=105.0) is False
     assert player.due(now=110.0) is True
+
+
+def test_previous_skips_history_that_is_no_longer_locally_usable():
+    player = _player()
+    player.load_cache(build_manifest(), {}, {"clock": b"a", "news": b"b", "date": b"c"})
+    player.history = ["clock", "news", "date"]
+    player.is_locally_usable = lambda package: package != b"b"
+
+    assert player.previous().screen_id == "date"
+    assert player.previous().screen_id == "clock"  # "news" is corrupt: skipped
+    assert player.previous() is None
+
+
+def test_rotation_and_tiles_skip_packages_that_are_not_locally_usable():
+    player = _player()
+    player.load_cache(build_manifest(), {}, {"clock": b"a", "news": b"b"})
+    player.is_locally_usable = lambda package: package != b"b"
+
+    assert player.item_for("clock").screen_id == "clock"
+    assert player.item_for("news") is None
