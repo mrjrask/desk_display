@@ -16,6 +16,7 @@ from typing import Any, Optional
 from PIL import Image, ImageDraw
 
 import config
+from display_time import content_today
 from config import (
     FONT_STATUS,
     FONT_TITLE_SPORTS,
@@ -470,7 +471,7 @@ def _extract_division_from_text(text: Any) -> str:
 
 
 def _target_season_year(today: Optional[datetime.date] = None) -> int:
-    today = today or datetime.datetime.now().date()
+    today = today or content_today()
     if today.month >= 8:
         return today.year
     return today.year - 1
@@ -993,7 +994,7 @@ def _parse_standings(data: Any) -> dict[str, dict[str, list[dict]]]:
 
 
 def _in_offseason(today: Optional[datetime.date] = None) -> bool:
-    today = today or datetime.datetime.now().date()
+    today = today or content_today()
     start = datetime.date(today.year, *OFFSEASON_START)
     end = datetime.date(today.year, *OFFSEASON_END)
     return start <= today < end

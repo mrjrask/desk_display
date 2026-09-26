@@ -22,6 +22,7 @@ from typing import Any
 from PIL import Image, ImageDraw, ImageFont
 
 import config
+from display_time import content_today
 from config import (
     BEARS_BOTTOM_MARGIN,
     NFL_TEAM_ABBREVIATIONS,
@@ -769,7 +770,7 @@ def _should_show_bears_schedule_game(game: dict, today: datetime.date | None = N
         if game_date is None:
             return False
         if today is None:
-            today = datetime.date.today()
+            today = content_today()
         return game_date.date() >= today
 
     return False

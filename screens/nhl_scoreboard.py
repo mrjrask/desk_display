@@ -23,6 +23,7 @@ from typing import Any, Optional
 
 from PIL import Image, ImageDraw
 
+from display_time import content_today
 from config import (
     CENTRAL_TIME,
     FONT_STATUS,
@@ -879,7 +880,7 @@ def dns_diagnostics() -> dict:
 
     urls = [
         (
-            f"https://{STATSAPI_HOST}/api/v1/schedule?date={datetime.date.today().isoformat()}",
+            f"https://{STATSAPI_HOST}/api/v1/schedule?date={content_today().isoformat()}",
             "statsapi_schedule",
             STATSAPI_HOST,
         ),

@@ -41,6 +41,7 @@ from typing import Optional
 from PIL import Image, ImageDraw, ImageFont
 
 import config
+from display_time import content_today
 from config import (
     CENTRAL_TIME,
     FONT_DATE_SPORTS,
@@ -263,7 +264,7 @@ def fetch_schedule_apiweb(days_back: int, days_fwd: int) -> Optional[dict]:
     return {"dates": [{"games": flat}]}
 
 def fetch_schedule_legacy(days_back: int, days_fwd: int) -> Optional[dict]:
-    today = dt.date.today()
+    today = content_today()
     start = (today - dt.timedelta(days=days_back)).strftime("%Y-%m-%d")
     end   = (today + dt.timedelta(days=days_fwd)).strftime("%Y-%m-%d")
     return _req_json(NHL_STATS_SCHEDULE, params={"teamId": TEAM_ID, "startDate": start, "endDate": end}, quiet=True)

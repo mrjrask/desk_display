@@ -91,3 +91,9 @@ class ContentZone(LocalizableZoneInfo):
 # Historical name: this was fixed to America/Chicago before the content
 # timezone became configurable.
 CENTRAL_TIME = CONTENT_TIME = ContentZone()
+
+
+def content_today() -> datetime.date:
+    """Today's date in the content timezone, not the host's."""
+
+    return datetime.datetime.now(CONTENT_TIME).date()

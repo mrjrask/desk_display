@@ -84,3 +84,29 @@ def test_zone_survives_pickling(zone):
 
     tz = zone("Europe/Paris")
     assert pickle.loads(pickle.dumps(tz)).key == "Europe/Paris"
+
+
+def test_content_today_uses_the_content_zone(zone):
+    from zoneinfo import ZoneInfo
+
+    from display_time import content_today
+
+    # UTC+14 and UTC-11 are always on different calendar days.
+    zone("Pacific/Kiritimati")
+    east = content_today()
+    zone("Pacific/Pago_Pago")
+    west = content_today()
+    assert east != west
+    assert west == dt.datetime.now(ZoneInfo("Pacific/Pago_Pago")).date()
+
+
+def test_schedule_helpers_default_to_the_content_date(zone, monkeypatch):
+    import utils
+
+    zone("Pacific/Kiritimati")
+    seen = []
+    monkeypatch.setattr(utils, "_parse_game_date", lambda text, default_year: seen.append(default_year))
+    utils.next_game_from_schedule([{"date": "x", "opponent": "A"}])
+    from display_time import content_today
+
+    assert seen == [content_today().year]
