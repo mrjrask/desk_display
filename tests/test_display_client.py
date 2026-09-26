@@ -204,6 +204,23 @@ def test_offline_start_off_waits_for_a_first_sync(env):
     assert client.step()[0] in {"date", "weather1"}
 
 
+def test_offline_start_off_waits_until_current_content_activates(env):
+    env.publish("date")
+    env.publish("weather1")
+    synced(env, env.make_client())
+    # The server moves on to a playlist whose artifacts are not rendered yet.
+    second = env.store.create("Den", {"screens": {"news headlines": 1}, "sequence": []}, actor="test")
+    env.store.assign("office", second["id"], expected_playlist_id=env.playlist["id"], actor="test")
+    client = env.make_client(DESK_DISPLAY_OFFLINE_START="0")
+    client.sync.step()
+    assert client.sync.last_sync_age() is not None and not client.sync.confirmed
+    assert client.step()[0] is None  # the stale cache stays off the panel
+    env.publish("news headlines")
+    client.sync.sync_once()
+    assert client.sync.confirmed
+    assert client.step()[0] == "news headlines"
+
+
 def test_reconnects_after_an_outage(env):
     env.publish("date")
     env.publish("weather1")

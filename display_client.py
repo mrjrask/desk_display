@@ -253,8 +253,9 @@ class DisplayClient:
         self._ip_text = ip_text
         self.dark_hours = dark_hours or DarkHours()
         self.light_state: str | None = None  # last applied: normal, dim or dark
-        # DESK_DISPLAY_OFFLINE_START=0: play nothing cached until this process
-        # has synced once, so a restarted client never shows stale content.
+        # DESK_DISPLAY_OFFLINE_START=0: play nothing cached until a sync in this
+        # process has activated the server's current content, so a restarted
+        # client never shows stale content.
         self.offline_start = offline_start
 
     # Playback
@@ -401,7 +402,7 @@ class DisplayClient:
         if light == "dark":
             return self._go_dark()
         self._apply_light(light)
-        if not self.offline_start and self.sync.last_sync_age() is None:
+        if not self.offline_start and not self.sync.confirmed:
             self.animation = None
             self._current = None
             self.report.playback_state = "starting"

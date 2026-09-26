@@ -571,6 +571,9 @@ class ClientSync:
         # no longer demand the server should render for.
         self.unassigned = False
         self._offered_revision: str | None = None
+        # True once a sync in this process activated the server's current
+        # content (or found nothing assigned): the cache is known current.
+        self.confirmed = False
         self._enrollment_token = enrollment_token
         self._credential_path = Path(credential_path) if credential_path else artifacts.root / "client_credential"
         self.report = report or PlaybackReport
@@ -860,8 +863,8 @@ class ClientSync:
         self._download(manifest)
         self._last_sync = self._clock()
         self.connected = True
-        if target is not None:
-            self._activate(target, manifest)
+        if target is None or self._activate(target, manifest):
+            self.confirmed = True
         self._fetched = manifest
         self.artifacts.evict()
         return self.active()
@@ -969,7 +972,7 @@ class ClientSync:
 
         return usable
 
-    def _activate(self, playlist: CachedPlaylist, manifest: Mapping[str, Any]) -> None:
+    def _activate(self, playlist: CachedPlaylist, manifest: Mapping[str, Any]) -> bool:
         payload = {**playlist.to_dict(), "playlist_schema_version": playlist.schema_version}
         try:
             activated = self.cache.offer(payload, artifact_usable=self._usable(manifest),
@@ -977,11 +980,12 @@ class ClientSync:
         except PlaylistRejected as exc:
             self.errors.record(exc.code, exc.message)
             LOGGER.info("Not activating yet: %s", exc.message)
-            return
+            return False
         self.artifacts.activate_manifest(manifest)
         with self._lock:
             override = self.cache.override()
             self._active = ActiveContent(override or activated, manifest)
+        return True
 
     # Background loop
 
