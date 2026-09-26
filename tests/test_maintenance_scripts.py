@@ -335,3 +335,77 @@ def test_restart_services_leaves_another_modes_disabled_units_stopped(tmp_path):
     assert f"start {su.SERVER_SERVICE}" in calls and f"start {su.CONFIG_UI_SERVICE}" in calls
     assert f"start {su.STANDALONE_SERVICE}" not in calls
     assert f"Skipping {su.STANDALONE_SERVICE}" in result.stdout
+
+
+# ── venv re-exec for scripts that need the project's Pillow/pytz/etc ───────
+
+# Every scripts/*.py that, at import time, reaches code needing a package
+# from requirements/ (not just the standard library) must re-exec itself
+# under the project venv when run directly, so `python3 scripts/foo.py`
+# works without the caller having activated venv/.venv first (see
+# scripts/_venv_bootstrap.py).
+VENV_DEPENDENT_SCRIPTS = (
+    "adjust_image_assets.py", "adsb_collector.py", "check_image_assets.py",
+    "export_screen_rotation_config.py", "migrate_standalone_config.py",
+    "render_bears_next_season_png.py", "render_screens.py", "screenshot_uploader.py",
+    "test_api_connections.py", "waveshare_oled_status.py",
+)
+
+
+@pytest.mark.parametrize("name", VENV_DEPENDENT_SCRIPTS)
+def test_venv_dependent_scripts_reexec_under_the_project_venv(name):
+    text = (SCRIPTS / name).read_text(encoding="utf-8")
+    assert "reexec_with_project_venv()" in text
+
+
+def test_migrate_standalone_config_reexecs_before_importing_the_renderer():
+    text = (SCRIPTS / "migrate_standalone_config.py").read_text(encoding="utf-8")
+    assert text.index("reexec_with_project_venv()") < text.index("from remote_display import migration")
+
+
+def test_render_bears_reexecs_before_module_body_runs():
+    text = (SCRIPTS / "render_bears_next_season_png.py").read_text(encoding="utf-8")
+    assert '__name__ == "__main__"' in text.split("reexec_with_project_venv()")[0]
+
+
+def test_venv_bootstrap_reexecs_into_the_projects_own_venv(tmp_path, monkeypatch):
+    """Jason's exact failure mode: a script run under an interpreter that
+    lacks a dependency (system python3, no venv activated) must re-exec into
+    the project's venv rather than failing on that interpreter's imports."""
+
+    sys.path.insert(0, str(SCRIPTS))
+    try:
+        import _venv_bootstrap
+    finally:
+        sys.path.remove(str(SCRIPTS))
+
+    venv_python = tmp_path / "venv" / "bin" / "python"
+    venv_python.parent.mkdir(parents=True)
+    venv_python.write_text("")  # only existence and path are checked before exec
+
+    monkeypatch.setattr(_venv_bootstrap, "PROJECT_ROOT", tmp_path)
+    monkeypatch.setattr(sys, "prefix", "/usr")  # not the project venv: must re-exec
+    calls = []
+    monkeypatch.setattr(_venv_bootstrap.os, "execv", lambda path, argv: calls.append((path, argv)))
+
+    _venv_bootstrap.reexec_with_project_venv()
+
+    assert calls == [(str(venv_python), [str(venv_python), *sys.argv])]
+
+
+def test_venv_bootstrap_is_a_noop_already_inside_the_projects_venv(tmp_path, monkeypatch):
+    sys.path.insert(0, str(SCRIPTS))
+    try:
+        import _venv_bootstrap
+    finally:
+        sys.path.remove(str(SCRIPTS))
+
+    venv_python = tmp_path / "venv" / "bin" / "python"
+    venv_python.parent.mkdir(parents=True)
+    venv_python.write_text("")
+
+    monkeypatch.setattr(_venv_bootstrap, "PROJECT_ROOT", tmp_path)
+    monkeypatch.setattr(sys, "prefix", str(tmp_path / "venv"))
+    monkeypatch.setattr(_venv_bootstrap.os, "execv", lambda *a: pytest.fail("should not re-exec"))
+
+    _venv_bootstrap.reexec_with_project_venv()  # returns instead of looping

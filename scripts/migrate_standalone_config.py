@@ -28,6 +28,17 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
+if __name__ == "__main__":
+    # remote_display.migration pulls in the renderer (rendering, data_fetch,
+    # ...), which needs Pillow/pytz/etc from the project venv, not the system
+    # Python a bare `python3 scripts/migrate_standalone_config.py` runs under.
+    try:
+        from scripts._venv_bootstrap import reexec_with_project_venv
+    except ImportError:
+        sys.path.insert(0, str(Path(__file__).resolve().parent))
+        from _venv_bootstrap import reexec_with_project_venv
+    reexec_with_project_venv()
+
 from remote_display import migration  # noqa: E402
 from remote_display.playlist_store import PlaylistStore, PlaylistStoreError, store_path  # noqa: E402
 
