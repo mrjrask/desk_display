@@ -623,15 +623,18 @@ class ClientSync:
         if override is not None:
             return ActiveContent(override, self.artifacts.manifest())
         current = self.cache.server_playlist()
-        for playlist in (current, self.cache.previous()):
-            if playlist is None:
-                continue
-            manifest = self.artifacts.manifest(playlist.manifest_revision)
-            if manifest is not None:
-                if playlist is not current:
-                    LOGGER.warning("Cached manifest %s is missing; playing the previous playlist",
-                                   current.manifest_revision)
-                return ActiveContent(playlist, manifest)
+        if current is None:
+            return ActiveContent(None, None)
+        manifest = self.artifacts.manifest(current.manifest_revision)
+        if manifest is not None:
+            return ActiveContent(current, manifest)
+        previous = self.cache.previous()
+        if previous is not None and self.artifacts.manifest(previous.manifest_revision) is not None:
+            LOGGER.warning("Cached manifest %s is missing; playing the previous playlist",
+                           current.manifest_revision)
+            # Roll the cache back too, so the heartbeat acknowledges what plays.
+            previous = self.cache.roll_back() or previous
+            return ActiveContent(previous, self.artifacts.manifest(previous.manifest_revision))
         return ActiveContent(current, None)
 
     def active(self) -> ActiveContent:

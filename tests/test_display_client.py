@@ -530,6 +530,14 @@ def test_boot_falls_back_to_the_previous_matched_pair(env):
     active = restarted.sync.active()
     assert active.playlist.playlist_id == env.playlist["id"]
     assert active.manifest["manifest_revision"] == first.manifest["manifest_revision"]
+    # What the heartbeat acknowledges is the pair that plays.
+    accepted = restarted.sync.status()["accepted_revisions"]
+    assert accepted["playlist_revision"] == first.playlist.playlist_revision
+    assert accepted["manifest_revision"] == first.manifest["manifest_revision"]
+    # Once the server is back, the newer playlist is offered and activated again.
+    env.transport.down = False
+    synced(env, restarted, 1)
+    assert restarted.sync.active().playlist.playlist_id == second["id"]
 
 
 def test_retry_after_header_is_honoured_without_a_json_body(tmp_path):

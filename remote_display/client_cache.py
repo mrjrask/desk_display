@@ -263,6 +263,24 @@ class ClientCache:
     def previous(self) -> CachedPlaylist | None:
         return self._load_file(self._previous)
 
+    def roll_back(self) -> CachedPlaylist | None:
+        """Make the previous playlist current again and return it.
+
+        Used when the current playlist cannot be played (its manifest is
+        gone), so what the client reports as accepted is what it plays.  The
+        next sync offers the newer playlist again.
+        """
+
+        with self._lock:
+            previous = self._load_file(self._previous)
+            if previous is None:
+                return None
+            self._write(self._current, previous.to_dict())
+            with contextlib.suppress(FileNotFoundError):
+                self._previous.unlink()
+        LOGGER.warning("Rolled back to playlist %s revision %s", previous.playlist_id, previous.playlist_revision)
+        return previous
+
     def offer(
         self,
         payload: Mapping[str, Any],
