@@ -14,6 +14,17 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
+if __name__ == "__main__":
+    # Rendering imports config/screens.draw_bears_schedule, which need
+    # Pillow from the project venv, not the system Python a bare
+    # `python3 scripts/render_bears_next_season_png.py` runs under.
+    try:
+        from scripts._venv_bootstrap import reexec_with_project_venv
+    except ImportError:
+        sys.path.insert(0, str(Path(__file__).resolve().parent))
+        from _venv_bootstrap import reexec_with_project_venv
+    reexec_with_project_venv()
+
 NFL_TEAMS = [
     ("Arizona Cardinals", "ari"), ("Atlanta Falcons", "atl"), ("Baltimore Ravens", "bal"),
     ("Buffalo Bills", "buf"), ("Carolina Panthers", "car"), ("Chicago Bears", "chi"),
