@@ -306,3 +306,32 @@ def test_uninstall_only_stops_services_this_device_has():
     uninstall = (ROOT / "Installers/uninstall.sh").read_text()
     loop = uninstall.split('for managed_service in "${MANAGED_SYSTEM_SERVICES[@]}"; do', 1)[1].split("done", 1)[0]
     assert loop.index("list-unit-files") < loop.index("systemctl stop")
+
+
+def test_restart_services_leaves_another_modes_disabled_units_stopped(tmp_path):
+    """upgrade.sh restarts everything after update_services.sh disabled the old mode's units."""
+
+    log = tmp_path / "systemctl.log"
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    installed = (su.STANDALONE_SERVICE, su.SERVER_SERVICE, su.CONFIG_UI_SERVICE)
+    (bin_dir / "systemctl").write_text(
+        "#!/usr/bin/env bash\n"
+        f'echo "$*" >> {log}\n'
+        'case "$1" in\n'
+        "  list-unit-files)\n"
+        f'    for u in {" ".join(installed)}; do [[ "$2" == "$u" ]] && echo "$u enabled"; done; exit 0 ;;\n'
+        f'  is-enabled) [[ "$2" == "{su.STANDALONE_SERVICE}" ]] && {{ echo disabled; exit 1; }}; echo enabled ;;\n'
+        '  is-active) exit 3 ;;\n'
+        "esac\n"
+        "exit 0\n"
+    )
+    (bin_dir / "systemctl").chmod(0o755)
+    env = {**os.environ, "PATH": f"{bin_dir}:{os.environ['PATH']}", "SUDO": " "}
+    result = subprocess.run(["bash", str(SCRIPTS / "restart_services.sh")], env=env,
+                            capture_output=True, text=True)
+    assert result.returncode == 0, result.stdout + result.stderr
+    calls = log.read_text()
+    assert f"start {su.SERVER_SERVICE}" in calls and f"start {su.CONFIG_UI_SERVICE}" in calls
+    assert f"start {su.STANDALONE_SERVICE}" not in calls
+    assert f"Skipping {su.STANDALONE_SERVICE}" in result.stdout
