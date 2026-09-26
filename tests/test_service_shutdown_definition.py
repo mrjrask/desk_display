@@ -23,7 +23,7 @@ def test_generated_service_uses_main_process_graceful_shutdown():
 def test_service_updater_migrates_existing_cleanup_execstop():
     updater = UPDATE_SERVICES.read_text(encoding="utf-8")
 
-    assert 'unit_name" == "desk_display.service' in updater
+    assert "patch_standalone_unit" in updater
     assert "ExecStop=.*cleanup\\.sh" in updater
     assert 'print "TimeoutStopSec=10"' in updater
     assert 'print "KillSignal=SIGTERM"' in updater

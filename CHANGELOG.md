@@ -39,6 +39,13 @@ See the README's [deployment modes](README.md#deployment-modes) and
   acknowledgment, rotations, restarts, a long outage, stale data, failed
   renders, a corrupt client cache, revocation, incompatible versions, that no
   provider credential reaches a client, and a server backup and restore.
+- The maintenance scripts follow the installed mode: `scripts/update_services.sh`
+  rewrites a server, client or combined install's units (keeping the recorded
+  user, output and overrides), adds missing ones, disables another mode's, and
+  lists every unit's state; `scripts/update_dependencies.sh` installs the mode's
+  requirements; `scripts/reset_screenshots.sh` follows `SCREENSHOT_DIR` and
+  `SCREENSHOT_ARCHIVE_BASE`; and the setup checks and LED test look at the
+  client's panel service. Every script in `scripts/` is executable.
 - `python3 install_modes.py restore <snapshot>` puts back an upgrade snapshot,
   after taking a snapshot of the current state so the restore can be undone.
 - `soak.py` records soak samples and judges them against release gates and

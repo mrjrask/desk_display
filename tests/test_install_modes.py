@@ -370,10 +370,11 @@ def fake_project(tmp_path: Path, mode: str) -> tuple[Path, Path, Path]:
 
     project = tmp_path / "dd"
     (project / "scripts" / "helpers").mkdir(parents=True)
-    for rel in ("install_modes.py", "service_units.py", "scripts/upgrade.sh", "scripts/helpers/common.sh"):
+    for rel in ("install_modes.py", "service_units.py", "scripts/upgrade.sh", "scripts/update_services.sh",
+                "scripts/helpers/common.sh"):
         shutil.copy2(ROOT / rel, project / rel)
     log = tmp_path / "calls.log"
-    for rel in ("scripts/update_dependencies.sh", "scripts/restart_services.sh", "scripts/update_services.sh"):
+    for rel in ("scripts/update_dependencies.sh", "scripts/restart_services.sh"):
         path = project / rel
         path.write_text(f'#!/usr/bin/env bash\necho "{rel} $* panel=${{DESK_DISPLAY_PANEL_ENV_FILE:-}}" >> {log}\n')
         path.chmod(0o755)

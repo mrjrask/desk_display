@@ -55,18 +55,9 @@ elif [[ "$mode" != "standalone" ]]; then
 fi
 "$PROJECT_DIR/scripts/update_dependencies.sh" --python "$PYTHON_BIN" --requirements "$requirements"
 
-if [[ "$mode" == "standalone" ]]; then
-  # The standalone installer writes its unit itself; patch it in place.
-  bash "$PROJECT_DIR/scripts/update_services.sh"
-else
-  unit_dir=$(mktemp -d)
-  trap 'rm -rf "$unit_dir"' EXIT
-  modes units --mode "$mode" --dir "$unit_dir" >/dev/null
-  for path in "$unit_dir"/*.service; do
-    $SUDO install -m 644 "$path" "$SYSTEMD_UNIT_DIR/$(basename "$path")"
-  done
-  $SUDO systemctl daemon-reload
-fi
+# Rewrites the mode's units (patches the standalone one in place); the restart
+# below brings every service back in dependency order.
+bash "$PROJECT_DIR/scripts/update_services.sh" --mode "$mode" --no-restart
 
 bash "$PROJECT_DIR/scripts/restart_services.sh"
 log "Upgrade complete ($mode)."

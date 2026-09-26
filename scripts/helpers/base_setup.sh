@@ -237,6 +237,7 @@ $SUDO tee "$SERVICE_PATH" >/dev/null <<SERVICE
 Description=Desk Display Service - main
 Wants=network-online.target
 After=network-online.target
+Conflicts=desk_display_client.service
 $(printf '%s\n' "${FRAMEBUFFER_UNIT_LINES[@]}")
 $(printf '%s\n' "${KERNEL_UNIT_LINES[@]}")
 

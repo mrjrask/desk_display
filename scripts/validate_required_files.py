@@ -2,9 +2,11 @@
 """Validate that tracked, non-image files are accounted for by the project.
 
 The script focuses on Python reachability: starting from known entry points
-(main, config UI, scripts/), it builds an import graph and flags any
-tracked Python modules that are not reachable from those roots. Images are
-explicitly excluded from the scan.
+(the standalone ``main.py``, ``display_server.py``, ``display_client.py``,
+the config UI, the installers' ``install_modes.py``, ``scripts/`` and
+``screens/``), it builds an import graph and flags any tracked Python modules
+that are not reachable from those roots. Images are explicitly excluded from
+the scan.
 """
 from __future__ import annotations
 
@@ -19,7 +21,11 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 IMAGE_EXTS = {".png", ".jpg", ".jpeg", ".webp", ".gif", ".bmp", ".tif", ".tiff"}
 PYTHON_EXT = ".py"
 EXEMPT_PATH_PREFIXES = ("tests/", "vendor/")
-OPTIONAL_MODULES: set[str] = set()
+# Tracked modules nothing imports yet, on purpose, with the reason.
+OPTIONAL_MODULES: dict[str, str] = {
+    "schema_migrations": "the schema migration contract (tests/test_protocol_compatibility.py); "
+    "used once a v2 playlist or config schema ships",
+}
 
 
 @dataclass
@@ -180,12 +186,14 @@ def main() -> int:
 
     print(f"Tracked non-image files: {len(non_image_files)}")
     print(f"Tracked Python modules: {len(python_files)}")
-    print(f"Entry modules (seeds): {', '.join(sorted(seeds)) or 'none'}")
+    entry = sorted(name for name in seeds if graph[name].path.parts[0] not in {"scripts", "screens"})
+    bundled = len(seeds) - len(entry)
+    print(f"Entry modules (seeds): {', '.join(entry) or 'none'}, plus {bundled} in scripts/ and screens/")
 
     if optional:
         print("ℹ️  Optional modules not linked from entry points:")
         for node in sorted(optional, key=lambda n: n.path):
-            print(f"  - {node.path}")
+            print(f"  - {node.path}: {OPTIONAL_MODULES[node.name]}")
 
     if unreachable:
         print(format_unreachable(unreachable))
