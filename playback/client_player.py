@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import time
+from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
 
@@ -39,6 +40,8 @@ class ClientPlayer:
         self.current_id: str | None = None
         self.started_at: float | None = None
         self._focus: tuple[str, float | None] | None = None
+        # Live "is this entry verified on disk" check; None trusts `packages`.
+        self.is_locally_usable: Callable[[Any], bool] | None = None
 
     def load_cache(self, manifest: dict[str, Any], playlist: dict[str, Any], packages: dict[str, Any]) -> None:
         # Fail closed (see COMPATIBILITY.md): leave the active cache untouched
@@ -69,11 +72,19 @@ class ClientPlayer:
             return None
         return screen_id
 
+    def _usable(self, sid: str) -> bool:
+        entry = self.packages.get(sid)
+        if entry is None:
+            return False
+        return self.is_locally_usable is None or self.is_locally_usable(entry)
+
     def next(self) -> PlaybackItem | None:
         screen_id = self._focused_id()
+        if screen_id is not None and not self._usable(screen_id):
+            screen_id = None  # fall back to the rotation until it is repaired
         if screen_id is None:
             registry = {
-                sid: _LocalDefinition(sid, sid in self.packages)
+                sid: _LocalDefinition(sid, self._usable(sid))
                 for sid in self.scheduler.requested_ids
             }
             definition = self.scheduler.next_available(registry)
@@ -90,16 +101,18 @@ class ClientPlayer:
         return self.next()
 
     def previous(self) -> PlaybackItem | None:
-        if not self.history:
-            return None
-        self.current_id = self.history.pop()
-        self.started_at = time.monotonic()
-        return self._item(self.current_id)
+        while self.history:
+            screen_id = self.history.pop()
+            if self._usable(screen_id):
+                self.current_id = screen_id
+                self.started_at = time.monotonic()
+                return self._item(screen_id)
+        return None
 
     def item_for(self, screen_id: str) -> PlaybackItem | None:
         """An item for a cached screen outside the rotation (a focused tile)."""
 
-        return self._item(screen_id) if screen_id in self.packages else None
+        return self._item(screen_id) if self._usable(screen_id) else None
 
     def _item(self, screen_id: str) -> PlaybackItem:
         spec = self.playlist.get(screen_id, {})
