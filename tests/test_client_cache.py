@@ -95,14 +95,29 @@ def test_update_keeps_previous_and_acknowledges(cache):
     )
 
 
-def test_activation_waits_for_required_artifacts(cache):
+def test_activation_waits_until_something_is_usable(cache):
+    """Nothing usable at all (a brand new server, nothing rendered yet) still waits."""
+
     first = cache.offer(payload(DOC_A), artifact_usable=everything)
     with pytest.raises(PlaylistRejected) as excinfo:
-        cache.offer(payload(DOC_B), artifact_usable=lambda screen: screen != "news headlines")
+        cache.offer(payload(DOC_B), artifact_usable=lambda screen: False)
     assert excinfo.value.code == "artifacts_unavailable"
-    assert "news headlines" in excinfo.value.message
+    assert "date" in excinfo.value.message and "news headlines" in excinfo.value.message
     assert cache.load() == first
     assert cache.accepted_revisions().playlist_revision == first.playlist_revision
+
+
+def test_activation_does_not_wait_for_every_screen(cache):
+    """A partly-usable playlist still activates: real rotations have screens that
+    are legitimately unavailable much of the time (no active weather alert, an
+    out-of-season team's "live" screen), not merely not yet rendered, and
+    ClientPlayer already skips whatever has no cached package (see
+    playback/client_player.py), the same way the standalone renderer skips a
+    screen whose ``available`` is false."""
+
+    activated = cache.offer(payload(DOC_B), artifact_usable=lambda screen: screen != "news headlines")
+    assert activated.playlist_id == "default"
+    assert cache.load() == activated
 
 
 def test_rejected_update_keeps_current(cache):

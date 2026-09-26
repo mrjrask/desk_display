@@ -291,18 +291,29 @@ class ClientCache:
         """Validate and atomically activate a new server playlist.
 
         ``artifact_usable(screen)`` reports whether a screen's artifacts are
-        downloaded and verified locally.  Every required screen must be
-        usable before the playlist is activated.  Raises
-        :class:`PlaylistRejected` and leaves the current playlist in place
-        otherwise.
+        downloaded and verified locally.  At least one required screen must
+        be usable before the playlist is activated: real rotations routinely
+        include screens that are legitimately unavailable much of the time
+        (no active weather alert, no rain in radar range, an out-of-season
+        team's "live"/"next" screen) rather than merely not yet rendered, and
+        requiring every one of them to be usable would block activation
+        forever. A screen still missing when the playlist activates is not a
+        problem: :class:`~playback.client_player.ClientPlayer` already skips
+        any requested screen with no cached package, the same way the
+        standalone renderer skips a screen whose ``available`` is false, and
+        later syncs pick it up as soon as the server renders it. Raises
+        :class:`PlaylistRejected` (nothing at all is usable yet) and leaves
+        the current playlist in place otherwise.
         """
 
         playlist = validate_playlist(payload)
         if manifest_revision is not None:
             playlist = CachedPlaylist(**{**playlist.__dict__, "manifest_revision": manifest_revision})
-        missing = sorted(s for s in required_screens(playlist) if not artifact_usable(s))
-        if missing:
-            raise PlaylistRejected("artifacts_unavailable", "artifacts not yet usable: " + ", ".join(missing))
+        required = required_screens(playlist)
+        missing = sorted(s for s in required if not artifact_usable(s))
+        if required and len(missing) == len(required):
+            shown = ", ".join(missing[:10]) + (", ..." if len(missing) > 10 else "")
+            raise PlaylistRejected("artifacts_unavailable", "no screens have usable artifacts yet: " + shown)
         with self._lock:
             current = self._load_file(self._current)
             same = current is not None and (current.playlist_id, current.playlist_revision) == (

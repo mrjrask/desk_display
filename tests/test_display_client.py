@@ -163,15 +163,34 @@ def test_cold_start_syncs_then_plays_artifacts(env):
     assert client.report.playback_state == "playing"
 
 
-def test_activation_waits_until_every_required_artifact_is_usable(env):
+def test_activation_waits_until_something_is_usable(env):
+    """Nothing rendered yet (a brand new server) still waits."""
+
+    client = env.make_client()
+    synced(env, client)
+    assert client.sync.active().playlist is None
+    assert client.sync.errors.summaries()[0].code == "artifacts_unavailable"
+    env.publish("date")
+    synced(env, client, 1)
+    assert client.sync.active().playlist.playlist_revision == env.playlist["revision"]
+
+
+def test_activation_does_not_wait_for_every_artifact(env):
+    """A partly-usable playlist activates: real rotations include screens that
+    are legitimately unavailable much of the time (no active weather alert,
+    an out-of-season team's "live" screen), not merely not-yet-rendered, and
+    ClientPlayer already skips whatever has no cached package."""
+
     env.publish("date")
     client = env.make_client()
     synced(env, client)
-    assert client.sync.active().playlist is None  # weather1 not rendered yet
-    assert client.sync.errors.summaries()[0].code == "artifacts_unavailable"
+    assert client.sync.active().playlist.playlist_revision == env.playlist["revision"]
+    screen, _seconds = client.step()
+    assert screen == "date"
     env.publish("weather1")
     synced(env, client, 1)
-    assert client.sync.active().playlist.playlist_revision == env.playlist["revision"]
+    screens = {client.step()[0] for _ in range(4)}
+    assert screens == {"date", "weather1"}
 
 
 def test_warm_client_starts_and_plays_without_its_server(env):
