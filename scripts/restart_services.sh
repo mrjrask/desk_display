@@ -79,7 +79,8 @@ services (listed below) - it never touches any other unit on the machine.
 
 With no arguments, restarts every one of this project's services that is
 installed here, one at a time, in dependency order (see the comment block
-at the top of this script).
+at the top of this script), skipping any that are disabled and not running
+(such as another install mode's units).
 
 With one or more service names, restarts only those (still one at a time,
 in the order below rather than the order given), skipping any that aren't
@@ -107,6 +108,13 @@ is_installed() {
   local unit_line
   unit_line="$(systemctl list-unit-files "$svc" --type=service --no-legend 2>/dev/null || true)"
   [[ "${unit_line%%[[:space:]]*}" == "$svc" ]]
+}
+
+is_turned_off() {
+  local svc="$1"
+  local state
+  state="$(systemctl is-enabled "$svc" 2>/dev/null || true)"
+  [[ "$state" == "disabled" || "$state" == masked* ]] && ! systemctl is-active --quiet "$svc" 2>/dev/null
 }
 
 restart_service() {
@@ -157,9 +165,17 @@ main() {
 
   if [[ ${#requested[@]} -eq 0 ]]; then
     for svc in "${ORDERED_SERVICES[@]}"; do
-      if is_installed "$svc"; then
-        targets+=("$svc")
+      if ! is_installed "$svc"; then
+        continue
       fi
+      if is_turned_off "$svc"; then
+        # Restarting would start it: a unit left over from another install
+        # mode that update_services.sh disabled (it would conflict with the
+        # mode's own units), or one the operator switched off.
+        log "Skipping $svc (disabled and not running)."
+        continue
+      fi
+      targets+=("$svc")
     done
   else
     for svc in "${requested[@]}"; do

@@ -247,8 +247,26 @@ def write_marker(project_dir: Path, mode: Mode | str, *, output: str | None = No
     return path
 
 
+def _env_role(path: Path) -> str:
+    if not path.is_file():
+        return ""
+    import deployment_config as dc
+
+    try:
+        return (dc.parse_env_file(path).get(dc.ROLE_ENV) or "").strip().lower()
+    except (OSError, UnicodeDecodeError):
+        return ""
+
+
 def detect_mode(project_dir: Path, systemd_dir: Path = SYSTEMD_DIR) -> Mode:
-    """The installed mode: the installer's marker, else the installed units."""
+    """The installed mode: the installer's marker, else the installed units,
+    else the role the env files ask for.
+
+    The env files count when only a standalone install's units are present:
+    ``scripts/convert_env.py`` sets ``DESK_DISPLAY_ROLE`` in ``.env`` without
+    touching systemd, and ``main.py`` then refuses to start, so the units have
+    to follow the converted role rather than the other way round.
+    """
 
     marked = read_marker(project_dir)
     if marked is not None:
@@ -260,6 +278,12 @@ def detect_mode(project_dir: Path, systemd_dir: Path = SYSTEMD_DIR) -> Mode:
     if server:
         return Mode.SERVER
     if client:
+        return Mode.CLIENT
+    env_role = _env_role(project_dir / ".env")
+    client_role = _env_role(project_dir / ".env.client")
+    if env_role == "server":
+        return Mode.COMBINED if client_role == "client" else Mode.SERVER
+    if env_role == "client" or (client_role == "client" and not (project_dir / ".env").exists()):
         return Mode.CLIENT
     return Mode.STANDALONE
 

@@ -551,17 +551,22 @@ It detects the installed mode and then does the equivalent of:
 ```bash
 git pull --ff-only
 ./scripts/update_dependencies.sh --requirements <the mode's file>
-./scripts/update_services.sh         # standalone: patch stale script paths in the unit
-                                     # other modes: rewrite the units as installed
+./scripts/update_services.sh --no-restart  # standalone: patch the unit in place
+                                           # other modes: rewrite the units as installed
 ./scripts/restart_services.sh
 ```
 
 An upgrade never changes the data the mode keeps (see "What each mode keeps"),
 and a server or combined install first snapshots its state.
 
-`update_services.sh` is the safe way to repair an installed unit: it rewrites
-script paths that moved in the repository and applies the current shutdown
-settings, but leaves the display profile and every `Environment=` override alone.
+`update_services.sh` is the safe way to repair installed units in any mode (add
+`--dry-run` to preview). On a server, client or combined install it rewrites the
+mode's units from `service_units.py` with the user, display output and
+`Environment=` overrides recorded at install, adds missing ones, and disables
+units that belong to another mode. On a standalone install it rewrites script
+paths that moved in the repository and applies the current shutdown settings,
+but leaves the display profile and every `Environment=` override alone. It ends
+by listing every project unit with whether it is enabled and running.
 Re-running a full hardware installer instead regenerates the unit from whatever
 environment the installer happens to run with, which is how a working profile
 gets lost.

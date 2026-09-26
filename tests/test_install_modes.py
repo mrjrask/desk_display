@@ -177,6 +177,27 @@ def test_mode_is_detected_from_installed_units(tmp_path, installed, expected):
     assert im.detect_mode(tmp_path, systemd) is Mode.CLIENT  # the installer's record wins
 
 
+@pytest.mark.parametrize("env, env_client, expected", [
+    ("OWM_API_KEY=x\n", None, Mode.STANDALONE),
+    ("DESK_DISPLAY_ROLE=standalone\n", None, Mode.STANDALONE),
+    ("DESK_DISPLAY_ROLE=server\n", None, Mode.SERVER),
+    ("DESK_DISPLAY_ROLE=server\n", "DESK_DISPLAY_ROLE=client\n", Mode.COMBINED),
+    ("DESK_DISPLAY_ROLE=client\n", None, Mode.CLIENT),
+    (None, "DESK_DISPLAY_ROLE=client\n", Mode.CLIENT),
+])
+def test_a_converted_env_decides_the_mode_of_a_standalone_install(tmp_path, env, env_client, expected):
+    """scripts/convert_env.py changes the role but leaves desk_display.service installed."""
+
+    systemd = tmp_path / "systemd"
+    systemd.mkdir()
+    (systemd / su.STANDALONE_SERVICE).write_text("")
+    if env is not None:
+        (tmp_path / ".env").write_text(env)
+    if env_client is not None:
+        (tmp_path / ".env.client").write_text(env_client)
+    assert im.detect_mode(tmp_path, systemd) is expected
+
+
 # ── Data: upgrades keep it, uninstall backs it up ──────────────────────────
 
 
@@ -370,10 +391,11 @@ def fake_project(tmp_path: Path, mode: str) -> tuple[Path, Path, Path]:
 
     project = tmp_path / "dd"
     (project / "scripts" / "helpers").mkdir(parents=True)
-    for rel in ("install_modes.py", "service_units.py", "scripts/upgrade.sh", "scripts/helpers/common.sh"):
+    for rel in ("install_modes.py", "service_units.py", "scripts/upgrade.sh", "scripts/update_services.sh",
+                "scripts/helpers/common.sh"):
         shutil.copy2(ROOT / rel, project / rel)
     log = tmp_path / "calls.log"
-    for rel in ("scripts/update_dependencies.sh", "scripts/restart_services.sh", "scripts/update_services.sh"):
+    for rel in ("scripts/update_dependencies.sh", "scripts/restart_services.sh"):
         path = project / rel
         path.write_text(f'#!/usr/bin/env bash\necho "{rel} $* panel=${{DESK_DISPLAY_PANEL_ENV_FILE:-}}" >> {log}\n')
         path.chmod(0o755)

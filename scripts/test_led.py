@@ -9,7 +9,8 @@ easy to miss. This script watches for that warning and reports a pass or fail
 instead of leaving it to be spotted in the log scroll.
 
 The LED sits on the same GPIO lines the running display service holds, so stop
-the service before running it::
+the service before running it (``desk_display_client.service`` on a client or
+combined install)::
 
     sudo systemctl stop desk_display.service
     python3 scripts/test_led.py
@@ -48,6 +49,9 @@ if str(PROJECT_ROOT) not in sys.path:
 import utils  # noqa: E402 -- the project root has to reach sys.path first.
 
 DISPLAY_SERVICE = "desk_display.service"
+#: The services that drive the panel: main.py when standalone, display_client.py
+#: on a client or combined install.
+PANEL_SERVICES = (DISPLAY_SERVICE, "desk_display_client.service")
 
 #: Substring of the warning ``Display.set_led()`` logs when the driver rejects
 #: an update. Kept in sync with ``utils.Display.set_led``.
@@ -239,11 +243,12 @@ def main(argv: Sequence[str] | None = None) -> int:
     if args.config_only:
         return 0
 
-    if display_service_is_active():
-        print(
-            f"WARNING: {DISPLAY_SERVICE} is still running and holds the same GPIO/SPI "
-            f"lines. Stop it first, or this test's results are unreliable."
-        )
+    for service in PANEL_SERVICES:
+        if display_service_is_active(service):
+            print(
+                f"WARNING: {service} is still running and holds the same GPIO/SPI "
+                f"lines. Stop it first, or this test's results are unreliable."
+            )
 
     display = utils.Display()
     print(f"Output strategy: {display._output_strategy} | driver: {display._display_driver}")
