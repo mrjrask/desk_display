@@ -571,7 +571,9 @@ class _ProfileDisplay:
     def image(self, image: Image.Image) -> Any:
         if image.size != (self.width, self.height):
             image = image.resize((self.width, self.height), Image.Resampling.LANCZOS)
-        if image.mode != self.profile.color_mode:
+        # A display that converts frames itself (the server's capture
+        # display) gets them before dithering, so it can keep the colour.
+        if image.mode != self.profile.color_mode and not getattr(self._display, "converts_frames", False):
             image = image.convert(self.profile.color_mode)
         return self._display.image(image)
 

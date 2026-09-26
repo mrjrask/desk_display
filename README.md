@@ -91,6 +91,8 @@ Details:
 - [CONFIGURATION.md](CONFIGURATION.md): every setting by role.
 - [OPERATIONS.md](OPERATIONS.md): installing, upgrading, migrating and
   troubleshooting each mode.
+- [docs/soak-and-release.md](docs/soak-and-release.md): the hardware soak
+  test, release gates and rollback triggers.
 
 To move an existing standalone display to a server, convert its settings
 with `scripts/convert_env.py` and its rotation with

@@ -403,15 +403,17 @@ python3 install_modes.py snapshot          # prints .runtime/server/backups/upgr
 
 A snapshot holds `.env`, `screens_config.local.json` and the files from
 `.runtime/server/`, with `/` replaced by `__` in their names. To restore
-one, stop the services, copy each file back to its path, and start them
-again:
+one, stop the services, restore it, and start them again. The restore
+snapshots the current state first, so it can be undone the same way:
 
 ```bash
 sudo systemctl stop desk_display_server.service config_ui_desk_display.service
-cp .runtime/server/backups/upgrade-<time>/.runtime__server__playlists.json .runtime/server/playlists.json
-# ...likewise for provisioned_clients.json, clients.json, .env
+python3 install_modes.py restore .runtime/server/backups/upgrade-<time>
 ./scripts/restart_services.sh
 ```
+
+Clients keep their credentials across a restore and enroll again on their
+own.
 
 For a client, the only thing to keep is `.env.client`. The uninstaller keeps
 everything listed in [What each mode keeps](#what-each-mode-keeps).

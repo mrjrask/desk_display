@@ -24,10 +24,23 @@ def _package(key: Any, profile: RenderProfile, screen: ScreenClass, builder: Pac
     return validate_package(package, key=key, verify_assets=False)
 
 
-def _frame(image: Image.Image, profile: RenderProfile) -> Image.Image:
+def _source_mode(profile: RenderProfile) -> str:
+    """The mode for images the client composes into frames.
+
+    A 1-bit display dithers each colour frame it shows, so the parts of a
+    moving frame (a scroll canvas, ticker strips, quad tiles) stay in colour
+    and the client dithers the composed frame. Dithering the whole canvas
+    once, or going through greyscale first, would give scrolled frames a
+    different pattern from the standalone display's.
+    """
+
+    return "RGB" if profile.color_mode == "1" else profile.color_mode
+
+
+def _frame(image: Image.Image, profile: RenderProfile, mode: str | None = None) -> Image.Image:
     if image.size != (profile.width, profile.height):
         image = image.resize((profile.width, profile.height))
-    return image.convert(profile.color_mode)
+    return image.convert(mode or profile.color_mode)
 
 
 def clock_package(key: Any, profile: RenderProfile, layout: Mapping[str, Any],
@@ -52,7 +65,7 @@ def build_package(key: Any, profile: RenderProfile, artifact: Any) -> dict[str, 
     kind = screen.package_kind
     if kind == "scroll" and capture.get("kind") == "scroll":
         body = {
-            "canvas": builder.add(capture["canvas"].convert(profile.color_mode)),
+            "canvas": builder.add(capture["canvas"].convert(_source_mode(profile))),
             "viewport": [profile.width, profile.height],
             **{k: capture[k] for k in ("step_px", "frame_seconds", "pause_start_seconds",
                                        "pause_end_seconds", "direction")},
@@ -60,14 +73,14 @@ def build_package(key: Any, profile: RenderProfile, artifact: Any) -> dict[str, 
     elif kind == "ticker" and capture.get("kind") == "ticker":
         lanes = [{
             "bounds": [int(v) for v in lane["bounds"]],
-            "strip": builder.add(lane["strip"].convert(profile.color_mode)),
+            "strip": builder.add(lane["strip"].convert(_source_mode(profile))),
             "speed_px_per_second": round(float(lane["speed_px_per_second"]), 3),
             "offset_px": round(float(lane["offset_px"]), 3),
             "background": [int(c) for c in lane["background"]],
         } for lane in capture["lanes"]]
         if not lanes:
             return None
-        body = {"base": builder.add(_frame(capture["base"], profile)), "lanes": lanes,
+        body = {"base": builder.add(_frame(capture["base"], profile, _source_mode(profile))), "lanes": lanes,
                 "duration_seconds": capture["duration_seconds"]}
     elif kind == "animation" and capture.get("kind") == "slide":
         body = {"slide": {
@@ -95,10 +108,10 @@ def build_package(key: Any, profile: RenderProfile, artifact: Any) -> dict[str, 
             focus = label if screen.interactive and label in CLASSIFICATIONS and label != key.screen_id else None
             tiles.append({
                 "bounds": [left, top, right, bottom],
-                "frames": [builder.add(f.resize(size).convert(profile.color_mode)) for f in tile["frames"]],
+                "frames": [builder.add(f.resize(size).convert(_source_mode(profile))) for f in tile["frames"]],
                 "focus_screen": focus,
             })
-        body = {"base": builder.add(_frame(artifact.image, profile)), "tiles": tiles,
+        body = {"base": builder.add(_frame(artifact.image, profile, _source_mode(profile))), "tiles": tiles,
                 "frame_seconds": capture["frame_seconds"], "duration_seconds": capture["duration_seconds"]}
     else:
         return None

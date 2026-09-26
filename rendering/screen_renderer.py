@@ -94,12 +94,15 @@ class _CaptureDisplay:
     kept (thinned to a bounded count) for finite animations.
     """
 
+    converts_frames = True
+
     def __init__(self, profile: RenderProfile, *, record_frames: bool = False) -> None:
         from remote_display.render_package import MAX_ANIMATION_FRAMES
 
         self.width, self.height = profile.width, profile.height
         self.mode = profile.color_mode
         self.current_image = Image.new(self.mode, (self.width, self.height), 0)
+        self._source = Image.new("RGB" if self.mode == "1" else self.mode, (self.width, self.height), 0)
         self._frame_id = 0
         self.capture: dict[str, Any] | None = None
         self._record = record_frames
@@ -108,7 +111,10 @@ class _CaptureDisplay:
         self._frames: list[list[Any]] = []
 
     def image(self, image: Image.Image) -> None:
-        self.current_image = image.resize((self.width, self.height)).convert(self.mode).copy()
+        # A 1-bit display dithers each colour frame, so scroll canvases are built
+        # from the colour frame and the client dithers what it shows.
+        self._source = image.resize((self.width, self.height)).convert("RGB" if self.mode == "1" else self.mode)
+        self.current_image = self._source.convert(self.mode) if self.mode == "1" else self._source.copy()
         self._frame_id += 1
         if self._record and self.capture is None:
             if self._frames and self._frames[-1][1] <= 0:
@@ -166,10 +172,10 @@ class _CaptureDisplay:
         max_offset = max(0, content_height - viewport_height)
         fits = (viewport_width, viewport_height) == (self.width, self.height)
         if max_offset and fits and self.width * content_height <= MAX_ASSET_PIXELS:
-            canvas = Image.new(self.mode, (self.width, content_height), 0)
+            canvas = Image.new(self._source.mode, (self.width, content_height), 0)
             for offset in [*range(0, max_offset, viewport_height), max_offset]:
                 render_at_offset(offset)
-                canvas.paste(self.current_image, (0, offset))
+                canvas.paste(self._source, (0, offset))
             self._set_capture({
                 "kind": "scroll", "canvas": canvas, "step_px": max(1, min(int(step_px), self.height)),
                 "frame_seconds": frame_seconds, "pause_start_seconds": pause_start_seconds,

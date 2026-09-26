@@ -298,6 +298,45 @@ def snapshot(mode: Mode | str, project_dir: Path, *, home: Path | None = None,
     return dest
 
 
+def restore(mode: Mode | str, project_dir: Path, snapshot_dir: Path, *,
+            home: Path | None = None) -> list[str]:
+    """Put a :func:`snapshot` back; return the paths it restored.
+
+    Only the files a snapshot takes are restored, and only to their own
+    paths, whatever else the directory holds. The current state is
+    snapshotted first, so a restore can itself be undone. Stop the services
+    before restoring and start them afterwards.
+    """
+
+    mode = Mode(mode)
+    snapshot_dir = Path(snapshot_dir)
+    if not snapshot_dir.is_dir():
+        raise ValueError(f"{snapshot_dir} is not a snapshot directory")
+    items = [item for item in uninstall_backups(mode)
+             if not item.path.startswith("~/") and not item.path.endswith(("backups", "migrations"))
+             and (snapshot_dir / item.path.replace("/", "__")).exists()]
+    if not items:
+        raise ValueError(f"{snapshot_dir} holds nothing to restore for a {mode.value} install")
+    snapshot(mode, project_dir, home=home)
+    restored = []
+    for item in items:
+        source = snapshot_dir / item.path.replace("/", "__")
+        target = resolve(item.path, project_dir, home or Path.home())
+        target.parent.mkdir(parents=True, exist_ok=True)
+        if source.is_dir():
+            if target.exists():
+                shutil.rmtree(target)
+            shutil.copytree(source, target)
+        else:
+            staging = target.with_name(f".{target.name}.restore")
+            shutil.copy2(source, staging)
+            if item.secret or target.name.endswith(".json"):
+                os.chmod(staging, 0o600)
+            os.replace(staging, target)
+        restored.append(item.path)
+    return restored
+
+
 def backup_for_uninstall(mode: Mode | str, project_dir: Path, backup_dir: Path, *,
                          home: Path | None = None) -> list[tuple[str, Path]]:
     """Copy the mode's documented data to *backup_dir*; return what was copied."""
@@ -484,8 +523,8 @@ def _cli(argv: Iterable[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="python3 -m install_modes", description=__doc__.splitlines()[0])
     sub = parser.add_subparsers(dest="command", required=True)
     commands = {}
-    for name in ("plan", "requirements", "services", "disable", "units", "mark", "snapshot", "backup",
-                 "prepare-env", "detect"):
+    for name in ("plan", "requirements", "services", "disable", "units", "mark", "snapshot", "restore",
+                 "backup", "prepare-env", "detect"):
         cmd = commands[name] = sub.add_parser(name)
         cmd.add_argument("--mode", choices=[m.value for m in Mode], help="default: the installed mode")
         cmd.add_argument("--project-dir", type=Path, default=PROJECT_DIR)
@@ -498,6 +537,7 @@ def _cli(argv: Iterable[str] | None = None) -> int:
                                     help="Environment= line for the panel unit")
     commands["units"].add_argument("--dir", type=Path, required=True, help="directory to write the unit files into")
     commands["units"].add_argument("--python", help="interpreter; default: the project's venv")
+    commands["restore"].add_argument("snapshot_dir", type=Path, help="a directory `snapshot` printed")
     commands["backup"].add_argument("--to", type=Path, required=True)
     commands["backup"].add_argument("--home", type=Path)
     commands["prepare-env"].add_argument("--install-profile", help="the Installers/install.sh panel profile")
@@ -535,6 +575,9 @@ def _cli(argv: Iterable[str] | None = None) -> int:
                     print(path)
         elif args.command == "snapshot":
             print(snapshot(mode, project) or "")
+        elif args.command == "restore":
+            for path in restore(mode, project, args.snapshot_dir):
+                print(f"restored {path}")
         elif args.command == "backup":
             for source, target in backup_for_uninstall(mode, project, args.to, home=args.home):
                 print(f"{source} -> {target}")
