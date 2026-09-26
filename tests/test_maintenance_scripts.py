@@ -275,3 +275,28 @@ def test_led_check_warns_about_either_panel_service():
     from scripts import test_led
 
     assert set(test_led.PANEL_SERVICES) == set(su.PANEL_SERVICES)
+
+
+def test_update_services_moves_a_converted_standalone_install_onto_the_server_units(tmp_path):
+    """After scripts/convert_env.py --role server, main.py refuses to start; the units must follow."""
+
+    project = project_copy(tmp_path)
+    (project / ".env").write_text("DESK_DISPLAY_ROLE=server\n")
+    systemd = tmp_path / "systemd"
+    systemd.mkdir()
+    (systemd / su.STANDALONE_SERVICE).write_text(STANDALONE_UNIT)
+    systemctl, log = fake_systemctl(tmp_path, enabled=(su.STANDALONE_SERVICE,))
+
+    result = run_update_services(project, systemd, systemctl)
+
+    assert "Installed mode: server" in result.stdout
+    assert (systemd / su.SERVER_SERVICE).exists() and (systemd / su.CONFIG_UI_SERVICE).exists()
+    server = su.parse_unit((systemd / su.SERVER_SERVICE).read_text())["Service"]
+    assert server["User"] == ["kiosk"]
+    assert server["ExecStart"] == [f"{project}/venv/bin/python {project}/display_server.py"]
+    calls = log.read_text()
+    assert f"disable --now {su.STANDALONE_SERVICE}" in calls
+    assert f"enable {su.SERVER_SERVICE}" in calls and f"restart {su.SERVER_SERVICE}" in calls
+    assert f"restart {su.STANDALONE_SERVICE}" not in calls
+    marker = im.read_marker(project)
+    assert marker is not None and marker.mode is im.Mode.SERVER and marker.user == "kiosk"

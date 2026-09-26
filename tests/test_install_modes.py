@@ -177,6 +177,27 @@ def test_mode_is_detected_from_installed_units(tmp_path, installed, expected):
     assert im.detect_mode(tmp_path, systemd) is Mode.CLIENT  # the installer's record wins
 
 
+@pytest.mark.parametrize("env, env_client, expected", [
+    ("OWM_API_KEY=x\n", None, Mode.STANDALONE),
+    ("DESK_DISPLAY_ROLE=standalone\n", None, Mode.STANDALONE),
+    ("DESK_DISPLAY_ROLE=server\n", None, Mode.SERVER),
+    ("DESK_DISPLAY_ROLE=server\n", "DESK_DISPLAY_ROLE=client\n", Mode.COMBINED),
+    ("DESK_DISPLAY_ROLE=client\n", None, Mode.CLIENT),
+    (None, "DESK_DISPLAY_ROLE=client\n", Mode.CLIENT),
+])
+def test_a_converted_env_decides_the_mode_of_a_standalone_install(tmp_path, env, env_client, expected):
+    """scripts/convert_env.py changes the role but leaves desk_display.service installed."""
+
+    systemd = tmp_path / "systemd"
+    systemd.mkdir()
+    (systemd / su.STANDALONE_SERVICE).write_text("")
+    if env is not None:
+        (tmp_path / ".env").write_text(env)
+    if env_client is not None:
+        (tmp_path / ".env.client").write_text(env_client)
+    assert im.detect_mode(tmp_path, systemd) is expected
+
+
 # ── Data: upgrades keep it, uninstall backs it up ──────────────────────────
 
 

@@ -10,7 +10,9 @@
 #
 # The mode is the one Installers/install.sh --mode recorded in
 # .runtime/install_mode, else whatever the installed units imply
-# (python3 install_modes.py detect). Per mode:
+# and DESK_DISPLAY_ROLE in .env and .env.client (python3 install_modes.py
+# detect), so a .env converted with scripts/convert_env.py switches the units
+# over. Per mode:
 #
 #   server, client, combined
 #     Rewrites the mode's units (python3 install_modes.py services) from
@@ -64,7 +66,7 @@ while [[ $# -gt 0 ]]; do
     --mode=*) mode="${1#*=}"; shift ;;
     --dry-run) dry_run=1; shift ;;
     --no-restart) restart=0; shift ;;
-    -h|--help) sed -n '2,32p' "$0"; exit 0 ;;
+    -h|--help) sed -n '2,34p' "$0"; exit 0 ;;
     *) warn "Unknown option: $1"; exit 2 ;;
   esac
 done
@@ -248,7 +250,7 @@ mapfile -t OTHER_MODE_UNITS < <(modes disable --mode "$mode")
 if [[ -f "$PROJECT_DIR/.runtime/install_mode" ]]; then
   log "Installed mode: $mode (recorded in .runtime/install_mode)"
 else
-  log "Installed mode: $mode (detected from the installed units; nothing recorded yet)"
+  log "Installed mode: $mode (detected from the installed units and DESK_DISPLAY_ROLE; nothing recorded yet)"
 fi
 log "Units for this mode: ${MODE_UNITS[*]}"
 
