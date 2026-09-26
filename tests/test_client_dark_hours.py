@@ -121,3 +121,16 @@ def test_from_settings_reads_the_client_settings():
     now.value = dt.datetime(2026, 7, 1, 12, 0, tzinfo=dt.timezone.utc)
     assert dark.state() == "normal"
     assert DarkHours.from_settings({}).state() == "normal"
+
+
+def test_a_dark_hours_boundary_ends_a_long_hold(env):
+    now = Now(None)
+    now.local(2026, 7, 1, 21, 59)
+    client = client_with(env, DarkHours("Mon-Sun 22:00-06:00", zone=CHICAGO, now=now))
+    ticks = iter(range(10_000))
+    client._monotonic = lambda: float(next(ticks))
+    client._stop.wait = lambda _seconds: now.local(2026, 7, 1, 22, 0)  # time passes during the hold
+    assert client.step()[0] in {"date", "weather1"}
+    client.wait(3600)
+    assert next(ticks) < 10  # returned at the boundary, not after an hour
+    assert client.step()[0] is None and client.report.playback_state == "dark"

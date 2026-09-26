@@ -190,6 +190,7 @@ class DarkHours:
 
 
 DARK_POLL_SECONDS = 30.0
+LIGHT_CHECK_SECONDS = 1.0
 
 
 @dataclass
@@ -487,10 +488,17 @@ class DisplayClient:
         """
 
         deadline = self._monotonic() + seconds
+        next_light_check = self._monotonic() + LIGHT_CHECK_SECONDS
         while not self._stop.is_set() and self._monotonic() < deadline:
             self._poll_taps()
             if self._controls_pending():
                 return
+            if self._monotonic() >= next_light_check:
+                # A dark-hours boundary ends the hold, so the panel blanks,
+                # dims or wakes promptly even during a long animation.
+                next_light_check = self._monotonic() + LIGHT_CHECK_SECONDS
+                if self.dark_hours.state() != self.light_state:
+                    return
             if self.sync.active().revision != self._content_revision and self._player is None:
                 return
             interval = POLL_SECONDS
