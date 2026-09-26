@@ -941,6 +941,18 @@ class ClientSync:
                 self.errors.record(exc.code, f"{entry.get('screen_id')}: {exc.message}")
                 LOGGER.warning("Artifact for %s rejected: %s", entry.get("screen_id"), exc.message)
 
+    def artifact_cached(self, entry: Mapping[str, Any] | None) -> bool:
+        """Whether ``entry``'s still image, and its render package when this
+        client plays one, are downloaded and verified locally (not merely
+        advertised, with a ``sha256``, in a manifest)."""
+
+        if entry is None or entry.get("artifact_type") not in SUPPORTED_ARTIFACT_TYPES:
+            return False
+        if not self.artifacts.has(entry):
+            return False
+        ref = self.artifacts.package_ref(entry)
+        return not self.wants_package(ref) or self.artifacts.has(ref)
+
     def _usable(self, manifest: Mapping[str, Any]) -> Callable[[str], bool]:
         """Whether everything a screen needs is cached.
 
@@ -951,23 +963,15 @@ class ClientSync:
 
         content = ActiveContent(None, manifest)
 
-        def cached(entry: Mapping[str, Any] | None) -> bool:
-            if entry is None or entry.get("artifact_type") not in SUPPORTED_ARTIFACT_TYPES:
-                return False
-            if not self.artifacts.has(entry):
-                return False
-            ref = self.artifacts.package_ref(entry)
-            return not self.wants_package(ref) or self.artifacts.has(ref)
-
         def usable(screen: str) -> bool:
             entry = content.entry(screen)
-            if not cached(entry):
+            if not self.artifact_cached(entry):
                 return False
             if entry.get("remote_class") == "interactive_focus" and self.capabilities.has_touch:
                 # A dependency the server has no output for cannot block
                 # the playlist; its tile simply does not open.
                 deps = [content.entry(dep) for dep in manifest.get("interactive_dependency_screens") or ()]
-                return all(cached(dep) for dep in deps if dep is not None)
+                return all(self.artifact_cached(dep) for dep in deps if dep is not None)
             return True
 
         return usable

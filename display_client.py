@@ -276,6 +276,9 @@ class DisplayClient:
             return
         player = ClientPlayer(scheduler, default_duration=self.screen_seconds)
         packages = {e["screen_id"]: e for e in content.manifest.get("artifacts") or () if e.get("sha256")}
+        # Checked live, not baked into `packages`: a failed download can be
+        # repaired by a later sync without the manifest revision changing.
+        player.is_locally_usable = self.sync.artifact_cached
         try:
             player.load_cache(dict(content.manifest), {}, packages)
         except ValueError as exc:

@@ -193,6 +193,30 @@ def test_activation_does_not_wait_for_every_artifact(env):
     assert screens == {"date", "weather1"}
 
 
+def test_a_manifest_entry_without_a_verified_local_copy_is_never_played(env):
+    """A manifest can advertise a screen with a sha256 while its local copy
+    failed to download, is still in flight, or was corrupted on disk. That
+    screen must never be selected for playback just because the playlist
+    activated on the strength of some other screen: it must be treated as
+    unavailable, the same as a screen absent from the manifest altogether,
+    rather than shown as a broken frame."""
+
+    env.publish("date", 10)
+    env.publish("weather1", 20)
+    client = synced(env, env.make_client())
+    entry = client.sync.active().entry("weather1")
+    artifact_path = client.sync.artifacts.path_for(entry)
+    artifact_path.write_bytes(b"garbage")
+    client._content_revision = None  # force _rebuild() to reconsider the manifest
+    client.step()  # rebuilds the player against the corrupted manifest
+    # weather1's slot is skipped like any other unavailable screen (it may
+    # show a transient "cached content unavailable" diagnostic rather than
+    # a frame), but it must never come back as a screen actually shown.
+    screens = {client.step()[0] for _ in range(6)}
+    assert "date" in screens
+    assert "weather1" not in screens
+
+
 def test_warm_client_starts_and_plays_without_its_server(env):
     env.publish("date")
     env.publish("weather1")
