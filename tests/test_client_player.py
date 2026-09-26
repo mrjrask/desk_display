@@ -5,7 +5,7 @@ import pytest
 from playback.client_player import ClientPlayer, IncompatibleManifestError
 from protocol import build_manifest
 from protocol_versions import MANIFEST_SCHEMA_VERSION, RENDER_PACKAGE_SCHEMA_VERSION
-from schedule import ScreenScheduler
+from schedule import ScreenScheduler, build_scheduler
 
 
 def _player() -> ClientPlayer:
@@ -89,3 +89,12 @@ def test_rotation_and_tiles_skip_packages_that_are_not_locally_usable():
 
     assert player.item_for("clock").screen_id == "clock"
     assert player.item_for("news") is None
+
+
+def test_focus_on_an_unusable_screen_falls_back_to_the_rotation():
+    player = ClientPlayer(build_scheduler({"screens": {"date": 1}, "sequence": []}))
+    player.load_cache(build_manifest(), {}, {"date": b"a", "weather1": b"b"})
+    player.is_locally_usable = lambda package: package != b"b"
+
+    player.focus("weather1")
+    assert player.next().screen_id == "date"

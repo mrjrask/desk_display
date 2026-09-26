@@ -80,6 +80,8 @@ class ClientPlayer:
 
     def next(self) -> PlaybackItem | None:
         screen_id = self._focused_id()
+        if screen_id is not None and not self._usable(screen_id):
+            screen_id = None  # fall back to the rotation until it is repaired
         if screen_id is None:
             registry = {
                 sid: _LocalDefinition(sid, self._usable(sid))
