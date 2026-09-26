@@ -18,7 +18,7 @@ client starts without waiting for the server. The standalone unit
 ``Conflicts`` with the client unit because both drive the same panel.
 
 ``python3 -m service_units --mode combined --output DIR`` writes the unit
-files; the installers (Phase 19) copy them into /etc/systemd/system.
+files; ``install_modes`` installs them for ``Installers/install.sh --mode``.
 """
 from __future__ import annotations
 
@@ -55,21 +55,70 @@ class Unit:
     unit: tuple[tuple[str, str], ...] = ()
     service: tuple[tuple[str, str], ...] = field(default=())
 
-    def render(self, *, project_dir: str, python: str, user: str) -> str:
+    def render(self, *, project_dir: str, python: str, user: str, hooks: PanelHooks | None = None) -> str:
+        hooks = hooks or PanelHooks()
         lines = ["[Unit]", f"Description={self.description}", "Wants=network-online.target",
                  "After=network-online.target"]
         lines += [f"{key}={value}" for key, value in self.unit]
+        lines += list(hooks.unit)
         lines += ["", "[Service]", f"WorkingDirectory={project_dir}",
                   f"EnvironmentFile=-{project_dir}/{self.env_file}"]
         if self.role is not None:
             # The process's role when its env file has none. systemd lets the env file
             # override this, and a conflicting role there fails the startup check.
             lines.append(f"Environment=DESK_DISPLAY_ROLE={self.role}")
+        lines += list(hooks.environment)
+        lines += list(hooks.pre)
         lines += [f"ExecStart={python} {project_dir}/{self.script}"]
+        lines += list(hooks.post)
         lines += [f"{key}={value}" for key, value in self.service]
         lines += ["TimeoutStopSec=10", "KillSignal=SIGTERM", "Restart=always", "RestartSec=5", f"User={user}",
                   "", "[Install]", "WantedBy=multi-user.target", ""]
         return "\n".join(lines)
+
+
+@dataclass(frozen=True)
+class PanelHooks:
+    """Extra unit lines for the process that drives the attached panel."""
+
+    unit: tuple[str, ...] = ()
+    environment: tuple[str, ...] = ()
+    pre: tuple[str, ...] = ()
+    post: tuple[str, ...] = ()
+
+
+def panel_hooks(output: str | None, *, project_dir: str, user: str,
+                environment: Mapping[str, str] | None = None) -> PanelHooks:
+    """The framebuffer and kernel-session hooks the standalone installer writes.
+
+    They belong to whichever unit drives the panel: ``main.py`` when
+    standalone, ``display_client.py`` in the client and combined modes.
+    """
+
+    env = tuple(f"Environment={key}={value}" for key, value in (environment or {}).items() if value)
+    output = (output or "").strip().lower()
+    if output:
+        env += (f"Environment=DESK_DISPLAY_OUTPUT={output}",)
+    if output == "framebuffer":
+        script = f"{project_dir}/scripts/framebuffer_service.sh"
+        return PanelHooks(
+            unit=("After=display-manager.service",),
+            environment=env,
+            pre=("PermissionsStartOnly=true", f"ExecStartPre=/bin/bash -lc 'bash {script} start'"),
+            post=(f"ExecStopPost=/bin/bash -lc 'bash {script} stop'",),
+        )
+    if output == "kernel":
+        session_env = f"{project_dir}/.runtime/kernel-session.env"
+        return PanelHooks(
+            # After=multi-user.target avoids the ordering cycle base_setup.sh explains.
+            unit=("After=graphical.target", "Wants=graphical.target", "After=multi-user.target"),
+            environment=env,
+            pre=(f"ExecStartPre=/bin/bash -lc '{project_dir}/scripts/wait_for_display_ready.sh'",
+                 f"ExecStartPre=/bin/bash -lc 'DESK_DISPLAY_SESSION_USER={user} "
+                 f"DESK_DISPLAY_SESSION_ENV_FILE={session_env} {project_dir}/scripts/prepare_kernel_session_env.sh'",
+                 f"EnvironmentFile=-{session_env}"),
+        )
+    return PanelHooks(environment=env)
 
 
 _STANDALONE = Unit(STANDALONE_SERVICE, "Desk Display Service - main", "main.py", ".env",
@@ -100,8 +149,15 @@ def disabled_for(mode: Mode | str) -> tuple[str, ...]:
     return tuple(name for name in ALL_SERVICES if name not in wanted)
 
 
-def render_units(mode: Mode | str, *, project_dir: str, python: str, user: str) -> dict[str, str]:
-    return {unit.name: unit.render(project_dir=project_dir, python=python, user=user)
+PANEL_SERVICES = (STANDALONE_SERVICE, CLIENT_SERVICE)
+
+
+def render_units(mode: Mode | str, *, project_dir: str, python: str, user: str,
+                 hooks: PanelHooks | None = None) -> dict[str, str]:
+    """Unit files for *mode*; *hooks* apply only to the unit that drives the panel."""
+
+    return {unit.name: unit.render(project_dir=project_dir, python=python, user=user,
+                                   hooks=hooks if unit.name in PANEL_SERVICES else None)
             for unit in UNITS[Mode(mode)]}
 
 
@@ -148,10 +204,13 @@ __all__ = [
     "CONFIG_UI_SERVICE",
     "COUPLING_KEYS",
     "Mode",
+    "PANEL_SERVICES",
+    "PanelHooks",
     "SERVER_SERVICE",
     "STANDALONE_SERVICE",
     "Unit",
     "disabled_for",
+    "panel_hooks",
     "parse_unit",
     "render_units",
     "services_for",

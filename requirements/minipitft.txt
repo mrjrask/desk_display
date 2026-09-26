@@ -1,4 +1,4 @@
--r framebuffer.txt
+-r base.txt
 
-# Adafruit miniPiTFT RGB display driver.
-adafruit-circuitpython-rgb-display
+# Adafruit miniPiTFT RGB display driver on the framebuffer stack.
+-r hw-minipitft.txt

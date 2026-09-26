@@ -73,8 +73,10 @@ point from the repository root:
 bash ./Installers/install.sh
 ```
 
-It asks three questions, each of which can be answered on the command line
-instead:
+It first asks for the installation mode (`standalone`, the default, or
+`server`, `client` or `combined`: see "Installation modes" below, or pass
+`--mode`). A standalone install then asks three questions, each of which
+can be answered on the command line instead:
 
 1. **Which hardware profile** — `display_hat_mini` (default),
    `adafruit_minipitft`, `hyperpixel`, `kernel`, `macos_window`, `pi_window`,
@@ -87,7 +89,7 @@ instead:
 So a fully unattended install is:
 
 ```bash
-bash ./Installers/install.sh display_hat_mini large n
+bash ./Installers/install.sh --mode standalone display_hat_mini large n
 ```
 
 Set `INSIDE_SENSOR` in the environment or `.env` before running, and the
@@ -130,7 +132,7 @@ run the installer with your normal login and let it call `sudo` itself.
 | `install_adsb_collector_service.sh` | Writes and starts `desk_display_adsb_collector.service`. Needs `ADSB_DEVICE_1_HOST` in `.env`. |
 | `install_feed_server.sh` | Installs only `feed_server.py` and its unit, with no rendering or GPIO stack — for a Pi that just aggregates screenshots from other Pis. |
 | `install_screenshot_uploader.sh` | Installs the uploader that pushes this Pi's screenshots to that feed server. Needs `FEED_UPLOAD_URL` and `FEED_UPLOAD_TOKEN`. |
-| `uninstall.sh` | Destructive. Stops and disables the units, removes the venv, moves `.env` and `~/keys/` into `~/desk_display_uninstalled`, then deletes the project directory. Requires typing `UNINSTALL`, or `CONFIRM_UNINSTALL=yes` non-interactively. |
+| `uninstall.sh` | Destructive, in every mode. Stops and disables every project unit, removes the venv, copies the mode's backed-up data (see "What each mode keeps") into `~/desk_display_uninstalled`, then deletes the project directory. Requires confirmation, or `CONFIRM_UNINSTALL=yes` non-interactively. |
 
 ---
 
@@ -158,14 +160,78 @@ leaves the panel playing. `main.py` refuses to start with a server or
 client role, and `desk_display.service` conflicts with the client service,
 so nothing draws to the panel outside the manifests.
 
-To write the unit files for a mode:
+Each mode has one installer command:
+
+| Mode | Command |
+| --- | --- |
+| standalone | `bash Installers/install.sh [profile]` (as before) |
+| server | `bash Installers/install.sh --mode server` |
+| client | `bash Installers/install.sh --mode client --credentials office.env.client <profile>` |
+| combined | `bash Installers/install.sh --mode combined <profile>` |
+
+`<profile>` is a panel profile from the list above; the desktop window
+profiles install no service, so they only run standalone.
+
+A server install sets up no panel hardware and installs
+`requirements/server.txt` (the full application, no GPIO or panel
+drivers). A client installs `requirements/client-<output>.txt`: the
+client core (`requests`, `pytz`, `Pillow`) plus its panel driver, and no
+upstream provider library, web server or SVG renderer.
+
+The installer prepares the env files before it starts anything:
+
+- A client's `.env.client` starts from the panel settings in `.env`
+  (profile, rotation, backlight, sensors), converted with
+  `scripts/convert_env.py` so no server or provider setting survives, plus
+  the identity and credential from `--credentials` (the file the server's
+  "Add a display" form gives you). Without `--credentials`, fill in the
+  placeholders it lists.
+- In a combined install the server provisions the panel itself as
+  `<hostname>-panel` on `http://127.0.0.1:8765`.
+- A server's `.env` is converted to the server role in place, with a
+  `.env.bak-<time>` copy of the original.
+- An existing `.env.client` is never replaced: it is the client's stable
+  identity. Edit it to change panel settings.
+
+The installer then writes the mode's units, disables the other project
+units, and enables and starts the mode's services, server first. It
+records the mode, output driver, service user and unit environment in
+`.runtime/install_mode`, so `scripts/upgrade.sh`, `uninstall.sh` and
+`cleanup.sh` act on the right services and files.
+`python3 install_modes.py plan --mode combined` prints everything a mode
+installs, starts, disables, keeps and backs up.
+
+### What each mode keeps
+
+Upgrades keep all of this exactly as it was. The uninstaller copies the
+items marked "backed up" to `~/desk_display_uninstalled` (env files with
+mode 600) and then deletes the rest with the project directory.
+
+| Data | Modes | Uninstall |
+| --- | --- | --- |
+| `.env` (configuration, provider credentials) | standalone, server, combined | backed up |
+| `.env.client` (client ID, credential, panel settings) | client, combined | backed up |
+| `~/keys` (WeatherKit key files) | standalone, server, combined | backed up |
+| `screens_config.local.json` | standalone, server, combined | backed up |
+| `.runtime/server/playlists.json` (playlists, assignments) | server, combined | backed up |
+| `.runtime/server/provisioned_clients.json` (credential hashes) | server, combined | backed up |
+| `.runtime/server/clients.json` (known clients) | server, combined | backed up |
+| `.runtime/server/migrations/`, `.runtime/server/backups/` | server, combined | backed up |
+| `cache/artifacts/` (rendered artifacts) | server, combined | removed; re-rendered |
+| `cache/client/` (offline cache) | client, combined | removed |
+| `cache/` (feed caches, weather history) | standalone, server, combined | removed |
+
+Before upgrading a server or combined install, `scripts/upgrade.sh`
+copies its env file, playlists, assignments, credentials and client list
+to `.runtime/server/backups/upgrade-<time>/` (mode 700). `cleanup.sh`
+stops and blanks whichever process drives the panel (`main.py` or
+`display_client.py`) and does nothing to the panel on a server.
+
+To write the unit files by hand:
 
 ```bash
-python3 -m service_units --mode combined --output /tmp/units --user "$USER"
+python3 install_modes.py units --mode combined --output kernel --dir /tmp/units --user "$USER"
 ```
-
-Copy them into `/etc/systemd/system`, then disable the services the
-command lists under `disable:`. The Phase 19 installers do this for you.
 
 ### Moving a standalone rotation onto the server
 
@@ -244,14 +310,24 @@ It only ever touches the eight units listed above, skips the ones that are not
 installed here, and restarts in its own dependency order regardless of the order
 you type.
 
-After pulling new code:
+To upgrade, in any mode:
 
 ```bash
-git pull
-./scripts/update_dependencies.sh     # refresh venv/ from the profile's requirements
-./scripts/update_services.sh         # patch stale script paths baked into the units
+bash scripts/upgrade.sh              # git pull, dependencies, units, restart
+```
+
+It detects the installed mode and then does the equivalent of:
+
+```bash
+git pull --ff-only
+./scripts/update_dependencies.sh --requirements <the mode's file>
+./scripts/update_services.sh         # standalone: patch stale script paths in the unit
+                                     # other modes: rewrite the units as installed
 ./scripts/restart_services.sh
 ```
+
+An upgrade never changes the data the mode keeps (see "What each mode keeps"),
+and a server or combined install first snapshots its state.
 
 `update_services.sh` is the safe way to repair an installed unit: it rewrites
 script paths that moved in the repository and applies the current shutdown

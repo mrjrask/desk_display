@@ -1,0 +1,9 @@
+# Raspberry Pi GPIO/SPI/I2C stack shared by the panel drivers. Hardware layers
+# (hw-*.txt) carry no application dependencies: combine one with base.txt
+# (standalone), or client.txt (display client).
+adafruit-blinka
+spidev
+smbus
+lgpio
+gpiozero
+rpi.gpio

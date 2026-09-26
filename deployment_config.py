@@ -524,8 +524,9 @@ SETTINGS: tuple[Setting, ...] = (
     _s("DISPLAY_RESOLUTION", "str", _STANDALONE_ONLY, "profile",
        "WIDTHxHEIGHT shorthand read by scripts/render_screens.py."),
     _s("HYPERPIXEL_PANEL", "choice", _CLIENT, "profile",
-       "HyperPixel panel hint; hyperpixel4 normalizes 480x800 to 800x480.",
-       choices=("hyperpixel4",)),
+       "HyperPixel panel hint; hyperpixel4 normalizes 480x800 to 800x480. The square "
+       "panel's installer writes hyperpixel4sq, which needs no adjustment.",
+       choices=("hyperpixel4", "hyperpixel4sq")),
     _s("DESK_DISPLAY_LOW_POWER", "bool", _CLIENT, "profile",
        "Low-power preset: fewer radar frames and no optional screenshot/video/Wi-Fi "
        "work. Auto-enabled on Pi Zero boards; set 0 to force off."),

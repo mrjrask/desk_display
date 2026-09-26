@@ -7,7 +7,16 @@ PROJECT_DIR="${PROJECT_DIR:-$(cd -- "$SCRIPT_DIR/.." && pwd)}"
 print_usage() {
   cat <<'USAGE'
 Usage:
-  bash ./Installers/install.sh [profile] [screen_defaults] [install_adsb]
+  bash ./Installers/install.sh [--mode MODE] [--credentials FILE] [profile] [screen_defaults] [install_adsb]
+
+Modes (see OPERATIONS.md, "Installation modes"):
+  standalone          (default) main.py draws to the panel, as before
+  server              render server and config UI; no panel, no profile needed
+  client              display client for a remote server; needs a panel profile
+  combined            server plus a local panel client; needs a panel profile
+
+--credentials FILE    client: the .env.client the server's "Add a display"
+                      form produced (identity and credential)
 
 Profiles:
   display_hat_mini   (default)
@@ -110,29 +119,123 @@ prompt_install_adsb() {
   esac
 }
 
+prompt_mode() {
+  cat <<'MENU'
+Select an installation mode:
+  1) standalone (default)
+  2) server
+  3) client
+  4) combined (server plus this panel)
+MENU
+  read -r -p "Enter choice [1-4]: " choice
+  case "$choice" in
+    ""|1) echo "standalone" ;;
+    2) echo "server" ;;
+    3) echo "client" ;;
+    4) echo "combined" ;;
+    *) return 1 ;;
+  esac
+}
+
+mode=""
+credentials=""
+positional=()
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --mode) mode="${2:-}"; shift 2 ;;
+    --mode=*) mode="${1#*=}"; shift ;;
+    --credentials) credentials="${2:-}"; shift 2 ;;
+    --credentials=*) credentials="${1#*=}"; shift ;;
+    -h|--help) print_usage; exit 0 ;;
+    *) positional+=("$1"); shift ;;
+  esac
+done
+set -- "${positional[@]+"${positional[@]}"}"
+
 profile="${1:-}"
 screen_defaults="${2:-}"
 install_adsb="${3:-}"
 
-if [[ -z "$profile" && -t 0 ]]; then
+if [[ -z "$mode" && -t 0 ]]; then
+  mode=$(prompt_mode) || {
+    echo "[ERROR] Invalid selection." >&2
+    exit 1
+  }
+fi
+mode="${mode:-standalone}"
+case "$mode" in
+  standalone|server|client|combined) ;;
+  *)
+    echo "[ERROR] Unknown mode: $mode" >&2
+    print_usage >&2
+    exit 1
+    ;;
+esac
+if [[ -n "$credentials" ]]; then
+  if [[ "$mode" != "client" && "$mode" != "combined" ]]; then
+    echo "[ERROR] --credentials applies only to client and combined installs." >&2
+    exit 1
+  fi
+  credentials=$(cd -- "$(dirname -- "$credentials")" && pwd)/$(basename -- "$credentials")
+fi
+export DESK_DISPLAY_INSTALL_MODE="$mode"
+if [[ -n "$credentials" ]]; then
+  export DESK_DISPLAY_CLIENT_CREDENTIALS="$credentials"
+fi
+
+if [[ "$mode" == "server" ]]; then
+  # A server drives no panel: no hardware installer, no display profile.
+  echo "[INFO] Running the server installer."
+  bash "$PROJECT_DIR/scripts/helpers/base_setup.sh"
+  echo "[INFO] Move an existing rotation onto the server with scripts/migrate_standalone_config.py."
+  profile="server"
+fi
+
+if [[ "$mode" != "server" && -z "$profile" && -t 0 ]]; then
   profile=$(prompt_profile) || {
     echo "[ERROR] Invalid selection." >&2
     exit 1
   }
 fi
 
-installer=$(resolve_installer "$profile") || {
-  echo "[ERROR] Unknown profile: ${profile:-<empty>}" >&2
-  print_usage >&2
-  exit 1
-}
+if [[ "$mode" != "server" ]]; then
+  installer=$(resolve_installer "$profile") || {
+    echo "[ERROR] Unknown profile: ${profile:-<empty>}" >&2
+    print_usage >&2
+    exit 1
+  }
+  if [[ "$mode" != "standalone" ]]; then
+    case "$(basename -- "$installer")" in
+      install_macos_window.sh|install_pi_window.sh|install_win_window.sh)
+        echo "[ERROR] The $profile profile runs by hand and has no $mode service; pick a panel profile." >&2
+        exit 1
+        ;;
+    esac
+    export DESK_DISPLAY_INSTALL_PROFILE="$(basename -- "$installer" .sh)"
+    DESK_DISPLAY_INSTALL_PROFILE="${DESK_DISPLAY_INSTALL_PROFILE#install_}"
+    DESK_DISPLAY_INSTALL_PROFILE="${DESK_DISPLAY_INSTALL_PROFILE%_114}"
+    if [[ -f "$PROJECT_DIR/.env.client" ]]; then
+      # Keep panel changes with the client's existing identity.
+      export DESK_DISPLAY_PANEL_ENV_FILE=".env.client"
+    fi
+  fi
 
-if [[ ! -x "$installer" ]]; then
-  chmod +x "$installer"
+  if [[ ! -x "$installer" ]]; then
+    chmod +x "$installer"
+  fi
+
+  echo "[INFO] Running installer ($mode): $installer"
+  "$installer"
 fi
 
-echo "[INFO] Running installer: $installer"
-"$installer"
+if [[ "$mode" != "standalone" ]]; then
+  # The rotation lives on the server (migrate it or edit playlists in the
+  # config UI), and the ADS-B collector feeds the server's screens.
+  screen_defaults="${screen_defaults:-skip}"
+fi
+if [[ "$mode" == "client" ]]; then
+  install_adsb="no"
+fi
 
 if [[ -z "$screen_defaults" && -t 0 ]]; then
   screen_defaults=$(prompt_screen_defaults) || {
@@ -141,7 +244,9 @@ if [[ -z "$screen_defaults" && -t 0 ]]; then
   }
 fi
 
-if [[ -n "$screen_defaults" ]]; then
+if [[ "$screen_defaults" == "skip" ]]; then
+  echo "[INFO] Skipping standalone screen rotation defaults for the $mode install."
+elif [[ -n "$screen_defaults" ]]; then
   echo "[INFO] Loading $screen_defaults screen rotation defaults."
   if ! python3 "$PROJECT_DIR/scripts/load_default_screen_config.py" "$screen_defaults"; then
     echo "[WARN] Failed to load $screen_defaults screen rotation defaults." >&2

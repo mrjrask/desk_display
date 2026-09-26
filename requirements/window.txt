@@ -1,0 +1,4 @@
+-r base.txt
+
+# Desktop window output.
+-r hw-window.txt
