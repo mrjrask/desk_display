@@ -239,7 +239,8 @@ SETTINGS: tuple[Setting, ...] = (
        "64 characters). Keep it across reinstalls so the server keeps its playlist.",
        example="office-display"),
     _s("DESK_DISPLAY_CLIENT_NAME", "str", _CLIENT_ONLY, "client_identity",
-       "Optional human-readable name shown in the server UI; defaults to the client ID."),
+       "Ignored; kept so existing files still validate. Name clients on the server's "
+       "Clients page, which identifies them by client ID."),
     _s("DESK_DISPLAY_SERVER_URL", "url", _CLIENT_ONLY, "client_server",
        "Base URL of the render server.", example="https://desk-display.lan:8765"),
     _s("DESK_DISPLAY_CLIENT_TOKEN", "str", _CLIENT_ONLY, "client_server",

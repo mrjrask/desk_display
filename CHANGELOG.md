@@ -76,12 +76,16 @@ See the README's [deployment modes](README.md#deployment-modes) and
 - Fix: `DESK_DISPLAY_CONTENT_TIMEZONE` is used. The server renders dates,
   schedules and clock packages in it, and the standalone display and clients
   read dark hours in it (default America/Chicago, as before).
+- Fix: `DESK_DISPLAY_OFFLINE_START=0` makes a client wait for its first sync
+  after start-up before playing its cache.
+- Fix: a feed refresh that returns unchanged data (for example from a TTL
+  cache) no longer bumps its data revision, so it no longer re-renders the
+  screens that read it.
 
 ### Known limitations
 
-- These client settings are validated but not used yet:
-  `DESK_DISPLAY_OFFLINE_START` (a client always starts from its
-  cache) and `DESK_DISPLAY_CLIENT_NAME`.
+- `DESK_DISPLAY_CLIENT_NAME` is ignored; the server identifies clients by
+  client ID.
 - The `inside` screen reads a sensor attached to the display and is not
   available on remote clients.
 - Physical display, touch, button and systemd behavior must still be checked

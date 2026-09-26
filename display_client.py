@@ -4,7 +4,7 @@
 Start-up order matters.  The client loads its settings, initializes the
 display, and starts playing the last-known-good playlist and manifest from
 its cache *before* it contacts the server, so a warm client works without
-one.  :class:`remote_display.client_sync.ClientSync` runs in a background
+one (unless ``DESK_DISPLAY_OFFLINE_START=0``, which waits for a first sync).  :class:`remote_display.client_sync.ClientSync` runs in a background
 thread; the display loop only reads the content it last activated, so
 network trouble never delays a frame or a button press.
 
@@ -221,6 +221,7 @@ class DisplayClient:
         clock: Callable[[], Any] | None = None,
         ip_text: Callable[[], str | None] | None = None,
         dark_hours: DarkHours | None = None,
+        offline_start: bool = True,
     ) -> None:
         self.profile = profile
         self.presenter = presenter
@@ -251,6 +252,9 @@ class DisplayClient:
         self._ip_text = ip_text
         self.dark_hours = dark_hours or DarkHours()
         self.light_state: str | None = None  # last applied: normal, dim or dark
+        # DESK_DISPLAY_OFFLINE_START=0: play nothing cached until this process
+        # has synced once, so a restarted client never shows stale content.
+        self.offline_start = offline_start
 
     # Playback
 
@@ -396,6 +400,14 @@ class DisplayClient:
         if light == "dark":
             return self._go_dark()
         self._apply_light(light)
+        if not self.offline_start and self.sync.last_sync_age() is None:
+            self.animation = None
+            self._current = None
+            self.report.playback_state = "starting"
+            self.report.current_screen = None
+            state = "waiting for first sync" if self.sync.connected else "server unreachable"
+            self.presenter.present(self._diagnostic(state))
+            return None, 5.0
         content = self.sync.active()
         if content.revision != self._content_revision:
             self._rebuild(content)
@@ -623,6 +635,7 @@ def build_client(settings: dict[str, Any], *, presenter: Any = None, transport: 
         physical_rotation=decision.applied,
         offline_max_age_seconds=float(settings.get("DESK_DISPLAY_OFFLINE_MAX_AGE_HOURS") or 0) * 3600,
         dark_hours=DarkHours.from_settings(settings),
+        offline_start=_truthy(settings.get("DESK_DISPLAY_OFFLINE_START", True)),
     )
 
 

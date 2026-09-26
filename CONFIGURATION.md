@@ -29,10 +29,12 @@ dates, schedules and clocks the server renders, and for dark hours on the
 standalone display and on each client. Give a client the same value as its
 server.
 
-Some client settings are accepted and validated but not used yet:
-`DESK_DISPLAY_OFFLINE_START` (a client always starts from its cache) and
-`DESK_DISPLAY_CLIENT_NAME`. See the known limitations in
-[CHANGELOG.md](CHANGELOG.md).
+A client starts playing its cache before it reaches the server; with
+`DESK_DISPLAY_OFFLINE_START=0` it shows its status screen instead until the
+first sync after start-up succeeds (a later outage still plays the cache).
+`DESK_DISPLAY_CLIENT_NAME` is ignored and kept only so existing files still
+validate: the server identifies clients by client ID, and the Clients page
+is where to name them.
 
 The render server runs as `display_server.py` (see
 [Render server API](#render-server-api)) and reads `.env`. The display client

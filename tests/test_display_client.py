@@ -188,6 +188,22 @@ def test_warm_client_starts_and_plays_without_its_server(env):
     assert client.sync.status()["recent_errors"][0]["code"] == "server_unreachable"
 
 
+def test_offline_start_off_waits_for_a_first_sync(env):
+    env.publish("date")
+    env.publish("weather1")
+    synced(env, env.make_client())
+    env.transport.down = True
+    client = env.make_client(DESK_DISPLAY_OFFLINE_START=False)  # restart without the server
+    assert client.step()[0] is None
+    assert client.report.playback_state == "starting"
+    env.transport.down = False
+    client.sync.step()
+    assert client.step()[0] in {"date", "weather1"}
+    env.transport.down = True  # a later outage keeps playing the cache
+    client.sync.step()
+    assert client.step()[0] in {"date", "weather1"}
+
+
 def test_reconnects_after_an_outage(env):
     env.publish("date")
     env.publish("weather1")

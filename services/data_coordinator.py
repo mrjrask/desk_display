@@ -34,6 +34,15 @@ def _freeze(value: Any) -> Any:
         return value
 
 
+def _same(frozen: Any, previous: Any) -> bool:
+    """Whether two frozen values are equal; any doubt counts as a change."""
+
+    try:
+        return bool(frozen == previous)
+    except Exception:  # noqa: BLE001 - an odd __eq__ must not stop a publish
+        return False
+
+
 @dataclass(frozen=True)
 class DataSnapshot(Mapping[str, Any]):
     """An immutable point-in-time view of coordinated data."""
@@ -70,6 +79,9 @@ class DataCoordinator:
         self._sources: dict[str, DataSource] = {}
         self._values: dict[str, Any] = {}
         self._source_revisions: dict[str, int] = {}
+        # A frozen copy of each value as last published, to tell a real change
+        # from a refresh that returned the same data (e.g. from a TTL cache).
+        self._frozen: dict[str, Any] = {}
         self._revision = 0
 
     def register_source(
@@ -99,21 +111,33 @@ class DataCoordinator:
             )
 
         with self._lock:
-            for name, value in refreshed.items():
-                self._values[name] = value
-                self._source_revisions[name] = self._source_revisions.get(name, 0) + 1
-            if refreshed:
+            changed = [self._store(name, value) for name, value in refreshed.items()]
+            if any(changed):
                 self._revision += 1
             return self.snapshot()
 
     def publish(self, name: str, value: Any) -> DataSnapshot:
-        """Publish already-acquired local data through the same revision model."""
+        """Publish already-acquired local data through the same revision model.
+
+        Publishing a value equal to the current one keeps the revisions, so
+        unchanged data never invalidates renders.
+        """
 
         with self._lock:
-            self._values[name] = value
-            self._source_revisions[name] = self._source_revisions.get(name, 0) + 1
-            self._revision += 1
+            if self._store(name, value):
+                self._revision += 1
             return self.snapshot()
+
+    def _store(self, name: str, value: Any) -> bool:
+        """Keep *value*; bump its source revision only when it changed."""
+
+        frozen = _freeze(value)
+        self._values[name] = value
+        if name in self._frozen and _same(frozen, self._frozen[name]):
+            return False
+        self._frozen[name] = frozen
+        self._source_revisions[name] = self._source_revisions.get(name, 0) + 1
+        return True
 
     def restore(self, saved: Mapping[str, tuple[Any, int]]) -> DataSnapshot:
         """Load saved ``{name: (value, source_revision)}`` at start-up.
@@ -125,6 +149,7 @@ class DataCoordinator:
         with self._lock:
             for name, (value, source_revision) in saved.items():
                 self._values[name] = value
+                self._frozen[name] = _freeze(value)
                 self._source_revisions[name] = max(int(source_revision), self._source_revisions.get(name, 0))
             if saved:
                 self._revision += 1
