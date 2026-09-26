@@ -13,9 +13,12 @@ selects which settings apply:
 A client needs no upstream API key or provider URL. The server fetches all
 upstream data and sends clients rendered artifacts only.
 
+`DESK_DISPLAY_SYNC_INTERVAL_SECONDS` and
+`DESK_DISPLAY_HEARTBEAT_INTERVAL_SECONDS` set how often a client syncs and
+renews its lease; the intervals the server advertises cap both, so a client
+always heartbeats at least every third of the server's lease.
+
 Some client settings are accepted and validated but not used yet:
-`DESK_DISPLAY_HEARTBEAT_INTERVAL_SECONDS` (the client sends one heartbeat
-per sync, every `DESK_DISPLAY_SYNC_INTERVAL_SECONDS`),
 `DESK_DISPLAY_OFFLINE_START` (a client always starts from its cache),
 `DESK_DISPLAY_CLIENT_NAME`, and the backlight and dark-hours settings
 (`DARK_HOURS`, `DESK_DISPLAY_BACKLIGHT_LEVEL`,
@@ -111,8 +114,8 @@ are unchanged.
   address out for a while, and heartbeats, configuration, manifests and
   artifacts per client, so one runaway client never slows the others.
   `DESK_DISPLAY_SERVER_RATE_LIMITS=0` turns this off. The body also carries
-  `retry_after_seconds`, which is what the client reads; it ignores the
-  header.
+  `retry_after_seconds`; the client waits for the larger of the two (at
+  most an hour), so a proxy that keeps only the header still works.
 
 A lease lasts `DESK_DISPLAY_CLIENT_LEASE_SECONDS`; the server recommends a
 heartbeat every third of that. A client that misses its deadline expires:

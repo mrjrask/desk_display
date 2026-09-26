@@ -506,6 +506,7 @@ def build_client(settings: dict[str, Any], *, presenter: Any = None, transport: 
         artifacts,
         enrollment_token=settings.get("DESK_DISPLAY_CLIENT_TOKEN"),
         sync_interval_seconds=int(settings.get("DESK_DISPLAY_SYNC_INTERVAL_SECONDS") or 30),
+        heartbeat_interval_seconds=int(settings.get("DESK_DISPLAY_HEARTBEAT_INTERVAL_SECONDS") or 60),
     )
     return DisplayClient(
         profile, presenter, sync, cache, artifacts,

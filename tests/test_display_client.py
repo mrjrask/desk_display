@@ -444,6 +444,145 @@ def test_unassigned_client_keeps_its_cached_playlist(env):
     synced(env, client, 1)
     assert client.sync.active().playlist.playlist_id == env.playlist["id"]
     assert ClientCache(env.tmp / "client").load().playlist_id == env.playlist["id"]
+    assert client.sync.unassigned
+    assert not [e for e in client.sync.errors.summaries() if e.code == "artifacts_unavailable"]
+
+
+def test_unassigned_client_stops_server_demand_and_new_artifacts(env):
+    env.publish("date")
+    env.publish("weather1")
+    client = synced(env, env.make_client())
+    registry = env.app.extensions["desk_display_registry"]
+    assert [entry.client_id for entry in registry.demand_entries()] == ["office"]
+    env.store.assign("office", None, expected_playlist_id=env.playlist["id"], actor="test")
+    active = client.sync.active()
+    synced(env, client, 1)
+    assert registry.demand_entries() == []
+    assert registry.render_plan({s: ScreenRevisions("s1", "d9", "r1") for s in ("date", "weather1")}) == {}
+    env.publish("date", 99)  # new server content is no longer delivered
+    synced(env, client, 1)
+    assert client.sync.active().manifest == active.manifest
+    # Reassigning resumes demand.
+    env.store.assign("office", env.playlist["id"], expected_playlist_id=None, actor="test")
+    synced(env, client, 1)
+    assert not client.sync.unassigned
+    assert [entry.client_id for entry in registry.demand_entries()] == ["office"]
+
+
+def test_same_length_corruption_is_repaired_by_the_next_sync(env):
+    env.publish("date")
+    env.publish("weather1")
+    client = synced(env, env.make_client())
+    client.sync.artifacts._verified.clear()  # as after a restart
+    entry = client.sync.active().entry("date")
+    path = client.sync.artifacts.path_for(entry)
+    path.write_bytes(bytes(len(path.read_bytes())))  # same length, wrong bytes
+    assert not client.sync.artifacts.has(entry)
+    synced(env, client, 1)
+    assert client.sync.artifacts.read(entry) is not None
+    assert client.step()[0] in {"date", "weather1"}
+
+
+def test_rewritten_artifact_is_verified_again(tmp_path):
+    cache = ArtifactCache(tmp_path, max_bytes=1 << 20)
+    data = b"x" * 10
+    entry = {"sha256": hashlib.sha256(data).hexdigest(), "media_type": "image/png", "length": len(data)}
+    path = cache.path_for(entry)
+    path.parent.mkdir(parents=True)
+    path.write_bytes(data)
+    assert cache.has(entry)
+    path.write_bytes(b"y" * 10)
+    import os
+
+    os.utime(path, ns=(1, 1))
+    assert not cache.has(entry) and not path.exists()
+
+
+def test_missing_manifest_revision_is_not_paired_with_another(tmp_path):
+    cache = ArtifactCache(tmp_path, max_bytes=1 << 20)
+    cache.activate_manifest({"manifest_revision": "m-1", "artifacts": []})
+    assert cache.manifest("m-1")["manifest_revision"] == "m-1"
+    assert cache.manifest("m-gone") is None
+    assert cache.manifest()["manifest_revision"] == "m-1"
+
+
+def test_boot_falls_back_to_the_previous_matched_pair(env):
+    env.publish("date", 1)
+    env.publish("weather1", 1)
+    client = synced(env, env.make_client())
+    first = client.sync.active()
+    # A second playlist activates with its own manifest.
+    second = env.store.create("Den", {"screens": {"date": 1}, "sequence": []}, actor="test")
+    env.store.assign("office", second["id"], expected_playlist_id=env.playlist["id"], actor="test")
+    env.publish("date", 2)
+    synced(env, client, 1)
+    current = client.sync.active()
+    assert current.playlist.playlist_id == second["id"]
+    # Crash window: the newest manifest never reached the disk.
+    manifests = client.sync.artifacts.manifests()
+    kept = [m for m in manifests if m["manifest_revision"] != current.manifest["manifest_revision"]]
+    for index, manifest in enumerate(kept):
+        (env.tmp / "client" / "manifests" / f"{index}.json").write_text(json.dumps(manifest))
+    for index in range(len(kept), len(manifests)):
+        (env.tmp / "client" / "manifests" / f"{index}.json").unlink()
+    env.transport.down = True
+    restarted = env.make_client()
+    active = restarted.sync.active()
+    assert active.playlist.playlist_id == env.playlist["id"]
+    assert active.manifest["manifest_revision"] == first.manifest["manifest_revision"]
+
+
+def test_retry_after_header_is_honoured_without_a_json_body(tmp_path):
+    clock = Clock()
+    sync = ClientSync(display_client.capabilities_for("office", PROFILE), None, ClientCache(tmp_path),
+                      ArtifactCache(tmp_path, max_bytes=0), clock=clock)
+    assert sync._fail(Response(429, b"", {"Retry-After": "120"}), "x").retry_after == 120
+    body = json.dumps({"error": "rate_limited", "retry_after_seconds": 5}).encode()
+    assert sync._fail(Response(429, body, {"retry-after": "30"}), "x").retry_after == 30
+    assert sync._fail(Response(429, body, {}), "x").retry_after == 5
+    from email.utils import formatdate
+
+    dated = sync._fail(Response(503, b"", {"Retry-After": formatdate(clock.now + 60, usegmt=True)}), "x")
+    assert 59 <= dated.retry_after <= 60
+    assert sync._fail(Response(429, b"", {"Retry-After": "99999999"}), "x").retry_after == 3600
+    assert sync._fail(Response(429, b"", {"Retry-After": "soon"}), "x").retry_after is None
+
+
+def test_rate_limited_sync_waits_for_the_header(env):
+    client = env.make_client()
+    client.sync.transport = lambda *a, **k: Response(429, b"", {"Retry-After": "90"})
+    assert client.sync.step() >= 90
+
+
+def test_client_follows_the_server_heartbeat_cadence(env):
+    env.publish("date")
+    env.publish("weather1")
+    client = env.make_client(DESK_DISPLAY_SYNC_INTERVAL_SECONDS=600, DESK_DISPLAY_HEARTBEAT_INTERVAL_SECONDS=600)
+    clock = Clock()
+    client.sync._clock = clock
+    # The server's lease is 300 s, so it advertises a 100 s heartbeat and a 30 s sync.
+    assert client.sync.step() == 30
+    assert client.sync.effective_heartbeat_interval() == 100
+    assert client.sync.effective_sync_interval() == 30
+
+
+def test_heartbeat_only_passes_renew_the_lease_between_syncs(env):
+    env.publish("date")
+    env.publish("weather1")
+    client = env.make_client(DESK_DISPLAY_SYNC_INTERVAL_SECONDS=30, DESK_DISPLAY_HEARTBEAT_INTERVAL_SECONDS=10)
+    clock = Clock()
+    client.sync._clock = clock
+    assert client.sync.step() == 10  # full sync, then a heartbeat is due first
+    env.transport.calls.clear()
+    clock.now += 10
+    assert client.sync.step() == 10
+    assert [path.rsplit("/", 1)[-1] for _, path in env.transport.calls] == ["heartbeat"]
+    # When the server's manifest moves on, the heartbeat pulls a full sync.
+    env.publish("date", 42)
+    env.transport.calls.clear()
+    clock.now += 10
+    client.sync.step()
+    assert any(path.endswith("/manifest") for _, path in env.transport.calls)
 
 
 def test_artifact_cache_rejects_invalid_hashes(tmp_path):

@@ -33,6 +33,7 @@ import time
 from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass, field
 from datetime import datetime
+from email.utils import parsedate_to_datetime
 from pathlib import Path
 from typing import Any
 from urllib.parse import urlsplit
@@ -65,6 +66,12 @@ MAX_ARTIFACT_BYTES = 16 * 1024 * 1024
 MAX_DECODED_BYTES = 64 * 1024 * 1024
 MAX_RECENT_ERRORS = 8
 REQUEST_TIMEOUT_SECONDS = 15
+# Bounds on the cadence the server advertises and on how long it may ask the
+# client to wait, so a bad value can neither flood the server nor park the
+# client for hours.
+MIN_INTERVAL_SECONDS = 5
+MAX_INTERVAL_SECONDS = 3600
+MAX_RETRY_AFTER_SECONDS = 3600
 
 
 # ── Transport ────────────────────────────────────────────────────────────────
@@ -278,6 +285,9 @@ class ArtifactCache:
         self._manifests = self.root / "manifests"
         self._staging = self.root / "staging"
         self._lock = threading.RLock()
+        # Objects whose digest was checked, keyed by name, with the file's
+        # (inode, size, mtime) at the time; any rewrite forces a new check.
+        self._verified: dict[str, tuple[int, int, int]] = {}
 
     # Objects
 
@@ -291,17 +301,39 @@ class ArtifactCache:
     def path_for(self, entry: Mapping[str, Any]) -> Path:
         return self._objects / self.object_name(entry)
 
+    @staticmethod
+    def _stamp(path: Path) -> tuple[int, int, int]:
+        stat = path.stat()
+        return stat.st_ino, stat.st_size, stat.st_mtime_ns
+
+    def _remember(self, path: Path) -> None:
+        with contextlib.suppress(OSError):
+            self._verified[path.name] = self._stamp(path)
+
     def has(self, entry: Mapping[str, Any]) -> bool:
+        """Whether a copy whose length and SHA-256 match *entry* is cached.
+
+        A corrupt copy is removed, so the next sync downloads it again.  The
+        digest is checked once per file version, not on every call.
+        """
+
         try:
-            return self.path_for(entry).stat().st_size == entry.get("length")
+            path = self.path_for(entry)
+            stamp = self._stamp(path)
         except (OSError, SyncError):
             return False
+        if stamp[1] != entry.get("length"):
+            return False
+        if self._verified.get(path.name) == stamp:
+            return True
+        return self.read(entry) is not None
 
     def store(self, entry: Mapping[str, Any], data: bytes, profile: Mapping[str, Any]) -> Path:
         validate_artifact(data, entry, profile)
         path = self.path_for(entry)
         with self._lock:
             _atomic_write(path, data, self._staging)
+            self._remember(path)
         return path
 
     def read(self, entry: Mapping[str, Any]) -> bytes | None:
@@ -314,11 +346,13 @@ class ArtifactCache:
             return None
         if hashlib.sha256(data).hexdigest() != entry.get("sha256"):
             LOGGER.warning("Dropping corrupt cached artifact %s", path.name)
+            self._verified.pop(path.name, None)
             with contextlib.suppress(OSError):
                 path.unlink()
             return None
         with contextlib.suppress(OSError):
             os.utime(path)
+        self._remember(path)
         return data
 
     # Render packages (Phase 10b): stored beside the images, by hash
@@ -350,6 +384,7 @@ class ArtifactCache:
         path = self.path_for(ref)
         with self._lock:
             _atomic_write(path, data, self._staging)
+            self._remember(path)
         return path
 
     def read_package(self, entry: Mapping[str, Any]) -> dict[str, Any] | None:
@@ -385,12 +420,20 @@ class ArtifactCache:
         return result
 
     def manifest(self, revision: str | None = None) -> dict[str, Any] | None:
+        """The cached manifest with *revision*, or the newest when it is ``None``.
+
+        A requested revision that is not cached gives ``None``, never another
+        manifest: a playlist is only playable with the manifest it was
+        activated with.
+        """
+
         manifests = self.manifests()
-        if revision is not None:
-            for manifest in manifests:
-                if manifest.get("manifest_revision") == revision:
-                    return manifest
-        return manifests[0] if manifests else None
+        if revision is None:
+            return manifests[0] if manifests else None
+        for manifest in manifests:
+            if manifest.get("manifest_revision") == revision:
+                return manifest
+        return None
 
     def activate_manifest(self, manifest: Mapping[str, Any]) -> None:
         with self._lock:
@@ -448,6 +491,7 @@ class ArtifactCache:
                     path.unlink()
                     total -= size
                     removed.append(path.name)
+                    self._verified.pop(path.name, None)
             if total > self.max_bytes:
                 LOGGER.warning("Artifact cache is %d bytes over its bound; everything left is in use",
                                total - self.max_bytes)
@@ -506,6 +550,7 @@ class ClientSync:
         *,
         enrollment_token: str | None = None,
         sync_interval_seconds: int = 30,
+        heartbeat_interval_seconds: int = 60,
         credential_path: str | os.PathLike[str] | None = None,
         report: Callable[[], PlaybackReport] | None = None,
         clock: Callable[[], float] = time.time,
@@ -516,6 +561,16 @@ class ClientSync:
         self.cache = cache
         self.artifacts = artifacts
         self.sync_interval_seconds = sync_interval_seconds
+        self.heartbeat_interval_seconds = heartbeat_interval_seconds
+        # Cadence the server advertised in its last register, config or
+        # heartbeat response; it caps the local settings.
+        self._advertised: dict[str, int] = {}
+        self._next_sync: float | None = None
+        self._next_heartbeat: float | None = None
+        # The server reported no assignment: keep playing the cache, but it is
+        # no longer demand the server should render for.
+        self.unassigned = False
+        self._offered_revision: str | None = None
         self._enrollment_token = enrollment_token
         self._credential_path = Path(credential_path) if credential_path else artifacts.root / "client_credential"
         self.report = report or PlaybackReport
@@ -555,9 +610,29 @@ class ClientSync:
     # Active content
 
     def _load_active(self) -> ActiveContent:
-        playlist = self.cache.load()
-        manifest = self.artifacts.manifest(None if playlist is None else playlist.manifest_revision)
-        return ActiveContent(playlist, manifest)
+        """The content to play at boot: a playlist with its own manifest.
+
+        An override plays against the newest manifest, as when it is set.  A
+        server playlist is only paired with the manifest it was activated
+        with; when that manifest is gone (a crash between the two writes, or
+        a lost file) the previous playlist and its manifest are used instead,
+        and failing both the playlist waits for the next sync to repair it.
+        """
+
+        override = self.cache.override()
+        if override is not None:
+            return ActiveContent(override, self.artifacts.manifest())
+        current = self.cache.server_playlist()
+        for playlist in (current, self.cache.previous()):
+            if playlist is None:
+                continue
+            manifest = self.artifacts.manifest(playlist.manifest_revision)
+            if manifest is not None:
+                if playlist is not current:
+                    LOGGER.warning("Cached manifest %s is missing; playing the previous playlist",
+                                   current.manifest_revision)
+                return ActiveContent(playlist, manifest)
+        return ActiveContent(current, None)
 
     def active(self) -> ActiveContent:
         with self._lock:
@@ -599,14 +674,70 @@ class ClientSync:
         return response
 
     @staticmethod
-    def _fail(response: Response, what: str) -> SyncError:
+    def _retry_after_header(response: Response, now: float) -> float | None:
+        """``Retry-After`` as seconds: delta-seconds or an HTTP date."""
+
+        value = (response.header("Retry-After") or "").strip()
+        if not value:
+            return None
+        if value.isdigit():
+            return float(value)
+        try:
+            when = parsedate_to_datetime(value)
+        except (TypeError, ValueError, IndexError):
+            return None
+        if when is None or when.tzinfo is None:
+            return None
+        return max(0.0, when.timestamp() - now)
+
+    def _fail(self, response: Response, what: str) -> SyncError:
         body = response.json() if isinstance(response.json(), dict) else {}
         retry = body.get("retry_after_seconds")
+        waits = [float(retry)] if isinstance(retry, int | float) and not isinstance(retry, bool) and retry >= 0 else []
+        header = self._retry_after_header(response, self._clock())
+        if header is not None:
+            waits.append(header)
         return SyncError(
             str(body.get("error") or f"http_{response.status}"),
             f"{what} failed with HTTP {response.status}",
-            retry_after=float(retry) if isinstance(retry, int | float) else None,
+            retry_after=min(max(waits), MAX_RETRY_AFTER_SECONDS) if waits else None,
         )
+
+    # Cadence
+
+    def _note_cadence(self, payload: Any) -> None:
+        """Remember the heartbeat and sync intervals a response advertises."""
+
+        if not isinstance(payload, Mapping):
+            return
+        for name in ("heartbeat_interval_seconds", "sync_interval_seconds"):
+            value = payload.get(name)
+            if isinstance(value, int | float) and not isinstance(value, bool) and value > 0:
+                self._advertised[name] = int(min(MAX_INTERVAL_SECONDS, max(MIN_INTERVAL_SECONDS, value)))
+
+    @staticmethod
+    def _interval(local: Any, advertised: int | None) -> float:
+        try:
+            value = int(local)
+        except (TypeError, ValueError):
+            value = 30
+        value = min(MAX_INTERVAL_SECONDS, max(MIN_INTERVAL_SECONDS, value))
+        return float(value if advertised is None else min(value, advertised))
+
+    def effective_sync_interval(self) -> float:
+        """Seconds between full sync passes: the local setting, capped by the server's."""
+
+        return self._interval(self.sync_interval_seconds, self._advertised.get("sync_interval_seconds"))
+
+    def effective_heartbeat_interval(self) -> float:
+        """Seconds between heartbeats: the local setting, capped by the server's.
+
+        The server advertises a third of its lease, so keeping to it renews
+        the lease however long the local setting is.
+        """
+
+        return self._interval(self.heartbeat_interval_seconds,
+                              self._advertised.get("heartbeat_interval_seconds"))
 
     # Protocol steps
 
@@ -625,12 +756,17 @@ class ClientSync:
                 image_formats=caps.image_formats,
                 supports_animation=caps.supports_animation,
             ),
-            sync_interval_seconds=max(5, int(self.sync_interval_seconds)),
+            sync_interval_seconds=int(self.effective_sync_interval()),
         ).to_wire()
+
+    def _reported_playlist(self) -> CachedPlaylist | None:
+        """The playlist whose screens the heartbeat reports as demand."""
+
+        return None if self.unassigned else self.active().playlist
 
     def _register(self) -> None:
         body: dict[str, Any] = {"capabilities": self.capabilities.to_wire()}
-        demand = self._demand(self.active().playlist)
+        demand = self._demand(self._reported_playlist())
         if demand is not None:
             body["demand"] = demand
         if self._credential:
@@ -643,6 +779,7 @@ class ClientSync:
         if not isinstance(credential, str) or not credential:
             raise SyncError("invalid_response", "registration returned no client credential")
         self._save_credential(credential)
+        self._note_cadence(payload)
         self.connected = True
 
     def cache_age(self) -> float | None:
@@ -683,21 +820,23 @@ class ClientSync:
         if response.status != 200:
             raise self._fail(response, "configuration")
         config = response.json() or {}
+        self._note_cadence(config)
         offered = None
         if config.get("playlist"):
             try:
                 offered = validate_playlist(config["playlist"])
             except PlaylistRejected as exc:
                 raise SyncError(exc.code, f"server playlist rejected: {exc.message}") from None
-        target = offered or self.active().playlist
+        unassigned = offered is None and config.get("assignment_state") == "unassigned"
+        if unassigned and not self.unassigned:
+            LOGGER.info("No playlist is assigned; keeping the cached playlist for playback only")
+        self.unassigned = unassigned
+        self._offered_revision = None if offered is None else offered.playlist_revision
+        # An unassigned client keeps its cache for offline playback, but it
+        # is no longer demand: the server must stop rendering for it.
+        target = None if unassigned else offered or self.active().playlist
 
-        heartbeat = {"status": self.status()}
-        demand = self._demand(target)
-        if demand is not None:
-            heartbeat["demand"] = demand
-        response = self._client_request("POST", f"{prefix}/heartbeat", json_body=heartbeat)
-        if response.status != 200:
-            raise self._fail(response, "heartbeat")
+        self._heartbeat(target)
 
         fetched = self._fetched
         headers = {"If-None-Match": f'"{fetched["manifest_revision"]}"'} if fetched else {}
@@ -718,13 +857,42 @@ class ClientSync:
         self._download(manifest)
         self._last_sync = self._clock()
         self.connected = True
-        if offered is None and config.get("assignment_state") == "unassigned":
-            LOGGER.info("No playlist is assigned; keeping the cached playlist")
         if target is not None:
             self._activate(target, manifest)
         self._fetched = manifest
         self.artifacts.evict()
         return self.active()
+
+    def _heartbeat(self, playlist: CachedPlaylist | None) -> dict[str, Any]:
+        heartbeat = {"status": self.status()}
+        demand = self._demand(playlist)
+        if demand is not None:
+            heartbeat["demand"] = demand
+        response = self._client_request("POST", f"/api/v1/clients/{self.client_id}/heartbeat",
+                                        json_body=heartbeat)
+        if response.status != 200:
+            raise self._fail(response, "heartbeat")
+        payload = response.json()
+        payload = payload if isinstance(payload, dict) else {}
+        self._note_cadence(payload)
+        return payload
+
+    def heartbeat_once(self) -> bool:
+        """Renew the lease between sync passes; ``True`` when a sync is due now.
+
+        A sync is due when the server's manifest or assignment has moved on
+        from what this client last fetched.
+        """
+
+        payload = self._heartbeat(self._reported_playlist())
+        self.connected = True
+        fetched = self._fetched
+        if fetched is not None and payload.get("manifest_revision") not in (None, fetched["manifest_revision"]):
+            return True
+        if (payload.get("assignment_state") == "unassigned") != self.unassigned:
+            return True
+        assigned = payload.get("assigned_playlist")
+        return isinstance(assigned, dict) and assigned.get("playlist_revision") != self._offered_revision
 
     def wants_package(self, ref: Mapping[str, Any] | None) -> bool:
         """Packages this client plays: all when it animates, clocks always."""
@@ -822,11 +990,22 @@ class ClientSync:
             self._stop.wait(delay)
 
     def step(self) -> float:
-        """One pass; return seconds until the next one."""
+        """One pass; return seconds until the next one.
 
+        A full sync runs every :meth:`effective_sync_interval`; when the
+        heartbeat interval is shorter, heartbeat-only passes renew the lease
+        in between.  A failure backs off and makes the next pass a full sync.
+        """
+
+        now = self._clock()
+        full = self._next_sync is None or now >= self._next_sync
         try:
-            self.sync_once()
+            if not full and self.heartbeat_once():
+                full = True
+            if full:
+                self.sync_once()
         except SyncError as exc:
+            self._next_sync = None
             self.errors.record(exc.code, exc.message)
             delay = self.backoff.failure()
             if exc.retry_after:
@@ -834,11 +1013,15 @@ class ClientSync:
             LOGGER.warning("Sync failed (%s); retrying in %.0fs", exc.message, delay)
             return delay
         except Exception as exc:
+            self._next_sync = None
             self.errors.record("sync_error", type(exc).__name__)
             LOGGER.exception("Unexpected sync failure")
             return self.backoff.failure()
         self.backoff.success()
-        return float(self.sync_interval_seconds)
+        if full:
+            self._next_sync = now + self.effective_sync_interval()
+        self._next_heartbeat = now + self.effective_heartbeat_interval()
+        return max(0.0, min(self._next_sync, self._next_heartbeat) - now)
 
     def start(self) -> threading.Thread:
         thread = threading.Thread(target=self.run, name="client-sync", daemon=True)

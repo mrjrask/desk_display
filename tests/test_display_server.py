@@ -87,6 +87,7 @@ def server(tmp_path, clock):
     assignments = {
         "lobby": Assignment("lobby-loop", "rev-3", ("date", "news headlines")),
         "office": Assignment("default", "rev-9", ("date",)),
+        "den": Assignment("default", "rev-9", ("date",)),
     }
     app = display_server.create_app(config, assignments=assignments.get, clock=clock)
     app.config["TESTING"] = True
@@ -325,6 +326,43 @@ def test_manifest_uses_assignment_when_client_reports_no_demand(api, server):
     credential = registered(api)
     manifest = api.get("/api/v1/clients/office/manifest", headers=bearer(credential)).get_json()
     assert manifest["requested_screens"] == ["date"] and manifest["state"] == "fresh"
+
+
+def test_unassigned_client_demand_is_not_rendered(api, server):
+    """An unassigned client's reported demand is only its offline cache."""
+
+    credential = registered(api, "kitchen", capabilities=caps("kitchen"),
+                            demand=demand("kitchen", ("date", "weather1")))
+    registry: ClientRegistry = server.extensions["desk_display_registry"]
+    assert all(entry.client_id != "kitchen" for entry in registry.demand_entries())
+    manifest = api.get("/api/v1/clients/kitchen/manifest", headers=bearer(credential)).get_json()
+    assert manifest["requested_screens"] == [] and manifest["artifacts"] == []
+
+
+def test_unassigning_a_client_stops_its_demand(tmp_path, clock):
+    assigned = {"office": Assignment("default", "rev-9", ("date",))}
+    config = display_server.DisplayServerConfig(enrollment="shared", auth_token=SERVER_TOKEN,
+                                                admin_token=ADMIN_TOKEN, artifact_dir=tmp_path / "a")
+    app = display_server.create_app(config, assignments=assigned.get, clock=clock)
+    api = app.test_client()
+    credential = registered(api, demand=demand(screens=("date", "weather1")))
+    registry: ClientRegistry = app.extensions["desk_display_registry"]
+    assert [entry.client_id for entry in registry.demand_entries()] == ["office"]
+    assigned.clear()
+    api.post("/api/v1/clients/office/heartbeat", json={"status": status(), "demand": demand()},
+             headers=bearer(credential))
+    assert registry.demand_entries() == []
+    manifest = api.get("/api/v1/clients/office/manifest", headers=bearer(credential)).get_json()
+    assert manifest["requested_screens"] == []
+
+
+def test_server_without_a_playlist_store_keeps_reported_demand(tmp_path, clock):
+    config = display_server.DisplayServerConfig(enrollment="shared", auth_token=SERVER_TOKEN,
+                                                artifact_dir=tmp_path / "a")
+    app = display_server.create_app(config, clock=clock)
+    registered(app.test_client(), demand=demand())
+    registry: ClientRegistry = app.extensions["desk_display_registry"]
+    assert [entry.client_id for entry in registry.demand_entries()] == ["office"]
 
 
 def test_artifact_download_is_immutable_conditional_and_resumable(api, server):

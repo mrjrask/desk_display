@@ -55,18 +55,26 @@ See the README's [deployment modes](README.md#deployment-modes) and
   dithered once as a whole, so scrolled frames differed from the standalone
   display. Packages now keep these images in colour and the client dithers
   each frame it shows.
+- Fix: unassigning a client now stops the server rendering for it. The client
+  keeps playing its cached playlist but no longer reports it as demand, and
+  the server ignores the demand an unassigned client last reported.
+- Fix: the client honours the `heartbeat_interval_seconds` and
+  `sync_interval_seconds` the server advertises as caps on its own settings,
+  and uses `DESK_DISPLAY_HEARTBEAT_INTERVAL_SECONDS` for heartbeat-only
+  passes between syncs, so its lease cannot lapse between syncs.
+- Fix: the client honours the `Retry-After` header as well as
+  `retry_after_seconds`, waiting for the larger (at most an hour).
+- Fix: a cached artifact is checked against its SHA-256, not only its length,
+  before a sync treats it as present, so a same-length corruption is
+  downloaded again in that sync.
+- Fix: at startup a cached playlist is only paired with the manifest it was
+  activated with. When that manifest is missing, the previous playlist and
+  its manifest play instead of an unrelated newer manifest.
 
 ### Known limitations
 
-- The client ignores the `heartbeat_interval_seconds` and
-  `sync_interval_seconds` the server advertises. It syncs, and sends one
-  heartbeat, every `DESK_DISPLAY_SYNC_INTERVAL_SECONDS` (default 30). Keep
-  that well under half of the server's `DESK_DISPLAY_CLIENT_LEASE_SECONDS`
-  (default 300): above half, the Clients page shows a healthy client as
-  stale, and above the full lease, the lease lapses between syncs.
 - These client settings are validated but not used yet:
-  `DESK_DISPLAY_HEARTBEAT_INTERVAL_SECONDS` (heartbeats follow the sync
-  interval), `DESK_DISPLAY_OFFLINE_START` (a client always starts from its
+  `DESK_DISPLAY_OFFLINE_START` (a client always starts from its
   cache), `DESK_DISPLAY_CLIENT_NAME`, and the backlight settings
   `DESK_DISPLAY_BACKLIGHT_LEVEL`, `DESK_DISPLAY_DARK_HOURS_MODE` and
   `DESK_DISPLAY_DARK_HOURS_BACKLIGHT_LEVEL`. A display client does not apply
@@ -74,10 +82,6 @@ See the README's [deployment modes](README.md#deployment-modes) and
 - `DESK_DISPLAY_CONTENT_TIMEZONE` is validated but not used. The server
   renders dates and schedules, and clock packages carry, the fixed
   America/Chicago zone that the standalone display also uses.
-- After a failed request the client honours the `retry_after_seconds`
-  field in the JSON error body. It does not read the `Retry-After` header, so
-  a proxy that sends only the header is not honoured; the client still backs
-  off exponentially, up to 5 minutes.
 - The `inside` screen reads a sensor attached to the display and is not
   available on remote clients.
 - Physical display, touch, button and systemd behavior must still be checked

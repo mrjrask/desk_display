@@ -122,9 +122,9 @@ the credential. Response 201 (new lease) or 200 (renewal):
 | `lease_seconds`, `lease_expires_at`, `heartbeat_interval_seconds`, `sync_interval_seconds` | Lease |
 | `client_credential` | The new lease credential |
 
-The current client keeps only `client_credential` from this response. It
-does not use `heartbeat_interval_seconds` or `sync_interval_seconds`; see
-[Heartbeat](#heartbeat).
+The current client keeps `client_credential` and the advertised
+`heartbeat_interval_seconds` and `sync_interval_seconds` (see
+[Heartbeat](#heartbeat)) from this response.
 
 Refusals:
 
@@ -168,13 +168,22 @@ its next sync, and keeps playing from its cache in the meantime.
   most 8).
 
 The response repeats the assignment, `manifest_revision` and lease fields.
-The client sends one heartbeat per sync pass, every
-`DESK_DISPLAY_SYNC_INTERVAL_SECONDS` (default 30). It ignores the
-`heartbeat_interval_seconds` and `sync_interval_seconds` the server
-advertises (in the register, heartbeat and config responses and the
-manifest's `configuration`), and `DESK_DISPLAY_HEARTBEAT_INTERVAL_SECONDS`
-is not used. Keep the sync interval well under half the lease: the Clients
-page marks a client stale after 1.5 advertised heartbeat intervals.
+The client runs a full sync (config, heartbeat, manifest) every
+`DESK_DISPLAY_SYNC_INTERVAL_SECONDS` (default 30) and, when
+`DESK_DISPLAY_HEARTBEAT_INTERVAL_SECONDS` (default 60) is shorter,
+heartbeat-only passes in between. The `heartbeat_interval_seconds` and
+`sync_interval_seconds` the server advertises (in the register, heartbeat
+and config responses, clamped to 5 to 3600 s) cap the local settings, so
+the lease is renewed at least every third of it whatever the client is
+configured with. A heartbeat response whose `manifest_revision` or
+assignment differs from what the client last fetched starts a full sync at
+once. After a failure the next pass is a full sync, after the backoff.
+
+An unassigned client (`assignment_state: unassigned` and no playlist) keeps
+playing its cached playlist but stops reporting it as demand. A server with
+a playlist store also ignores any demand an unassigned client last reported,
+so an operator's unassignment stops rendering and artifact delivery for it
+at once; the manifest for an unassigned client is empty.
 
 ### Config
 
@@ -260,12 +269,13 @@ token buckets:
 
 A limited request gets 429
 `{"error": "rate_limited", "retry_after_seconds": N}` and `Retry-After: N`.
-The client waits the larger of `retry_after_seconds` and its own backoff
-(a random wait between half and all of a limit that starts at 2 s and
-doubles after each failure, up to 300 s). It reads `retry_after_seconds`
-from the JSON body of any error (including 409 `client_id_in_use`), not the
-`Retry-After` header, so a 429 from a proxy that sends only the header gets
-the ordinary backoff.
+The client waits the larger of the server's requested delay and its own
+backoff (a random wait between half and all of a limit that starts at 2 s
+and doubles after each failure, up to 300 s). The requested delay is the
+larger of `retry_after_seconds` in the JSON body of any error (including
+409 `client_id_in_use`) and the `Retry-After` header (seconds or an HTTP
+date), capped at one hour, so a 429 from a proxy that keeps only the header
+is still honoured.
 
 ## Admin client management
 
