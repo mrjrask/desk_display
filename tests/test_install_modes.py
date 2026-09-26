@@ -225,6 +225,34 @@ def test_server_snapshot_copies_state_privately(tmp_path):
     assert im.snapshot("server", project, home=home, now=0) != dest  # never overwrites a snapshot
 
 
+def test_restore_puts_a_snapshot_back_and_can_be_undone(tmp_path):
+    project, home = tmp_path / "dd", tmp_path / "home"
+    populate(project, home)
+    playlists = project / ".runtime" / "server" / "playlists.json"
+    original = playlists.read_bytes()
+    dest = im.snapshot("server", project, home=home, now=0)
+    (dest / "..__..__escape.txt").write_text("never restored")
+    playlists.write_text('{"broken": true}')
+
+    restored = im.restore("server", project, dest, home=home)
+    assert ".runtime/server/playlists.json" in restored and ".env" in restored
+    assert playlists.read_bytes() == original
+    assert stat.S_IMODE(playlists.stat().st_mode) == 0o600
+    assert not (tmp_path / "escape.txt").exists()
+    # The state it replaced was snapshotted first.
+    undo = [d for d in (project / ".runtime" / "server" / "backups").iterdir() if d != dest and d.name != "upgrade-old"]
+    assert len(undo) == 1 and (undo[0] / ".runtime__server__playlists.json").read_text() == '{"broken": true}'
+
+
+def test_restore_refuses_a_directory_that_is_not_a_snapshot(tmp_path):
+    project, home = tmp_path / "dd", tmp_path / "home"
+    populate(project, home)
+    with pytest.raises(ValueError, match="nothing to restore"):
+        im.restore("server", project, tmp_path, home=home)
+    with pytest.raises(ValueError, match="not a snapshot"):
+        im.restore("server", project, tmp_path / "missing", home=home)
+
+
 @pytest.mark.parametrize("mode", ["client", "server", "combined"])
 def test_uninstall_backs_up_exactly_the_documented_data(tmp_path, mode):
     project, home = tmp_path / "dd", tmp_path / "home"
