@@ -385,3 +385,13 @@ def test_hardware_presenter_reads_sdl_taps():
 
     taps = HardwarePresenter(Display(), profile=PROFILE).poll_taps()
     assert taps == [(400.0, 120.0), (400.0, 200.0)]
+
+
+def test_a_bad_render_package_still_plays_the_screens_still(env):
+    publish_all(env)
+    client = synced(env.make_client())
+    entry = client.sync.active().entry("MLB Scoreboard")
+    client.artifacts.path_for(client.artifacts.package_ref(entry)).write_bytes(b"garbage")
+    client._content_revision = None
+    shown = {client.step()[0] for _ in range(4)}
+    assert "MLB Scoreboard" in shown
