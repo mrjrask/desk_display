@@ -1,8 +1,10 @@
 # Desk Display Operator Guide
 
-A short guide to running the display on a Raspberry Pi. The display is `main.py`
-running as `desk_display.service` under systemd, installed by
-`Installers/install.sh` and reconfigured through the web UI on port 5002.
+The operator's runbook. A standalone display is `main.py` running as
+`desk_display.service` under systemd, installed by `Installers/install.sh`
+and reconfigured through the web UI on port 5002. A render server and its
+display clients are covered in [Installation modes](#installation-modes-server-and-client)
+and [Server and client operations](#server-and-client-operations).
 
 `README.md` is the full reference; this file is the operator's path through it.
 
@@ -47,14 +49,16 @@ gets two `ExecStartPre` steps (`scripts/wait_for_display_ready.sh`, then
 `ExecStart` to read. If the desktop never comes up, `Restart=always` keeps
 retrying and the reason shows in the unit's journal.
 
-Up to eight project units can be installed. `scripts/restart_services.sh`
+Up to ten project units can be installed. `scripts/restart_services.sh`
 documents and enforces the dependency order between them:
 
 | Unit | Role |
 | --- | --- |
 | `desk_display_adsb_collector.service` | Writes the ADS-B cache the aircraft screens read. |
 | `feed_server_desk_display.service` | Hosts feed pages built from screenshots other Pis push. |
-| `desk_display.service` | The renderer itself. |
+| `desk_display_server.service` | The render server (server and combined installs). |
+| `desk_display.service` | The standalone renderer. |
+| `desk_display_client.service` | The display client (client and combined installs). |
 | `waveshare-fbcp.service` | Mirrors the framebuffer onto a Waveshare panel. |
 | `desk_display_waveshare_oled.service` | Side status OLED helper. |
 | `screenshot_uploader_desk_display.service` | POSTs new screenshots to a feed server. |
@@ -132,7 +136,7 @@ run the installer with your normal login and let it call `sudo` itself.
 | `install_adsb_collector_service.sh` | Writes and starts `desk_display_adsb_collector.service`. Needs `ADSB_DEVICE_1_HOST` in `.env`. |
 | `install_feed_server.sh` | Installs only `feed_server.py` and its unit, with no rendering or GPIO stack — for a Pi that just aggregates screenshots from other Pis. |
 | `install_screenshot_uploader.sh` | Installs the uploader that pushes this Pi's screenshots to that feed server. Needs `FEED_UPLOAD_URL` and `FEED_UPLOAD_TOKEN`. |
-| `uninstall.sh` | Destructive, in every mode. Stops and disables every project unit, removes the venv, copies the mode's backed-up data (see "What each mode keeps") into `~/desk_display_uninstalled`, then deletes the project directory. Requires confirmation, or `CONFIRM_UNINSTALL=yes` non-interactively. |
+| `uninstall.sh` | Destructive, in every mode. Stops and disables every project unit, removes the venv, copies the mode's backed-up data (see [What each mode keeps](#what-each-mode-keeps)) into `~/desk_display_uninstalled`, then deletes the project directory. Requires confirmation, or `CONFIRM_UNINSTALL=yes` non-interactively. |
 
 ---
 
@@ -287,6 +291,202 @@ the original is copied to `.env.bak-<timestamp>` (mode 600). The new file
 replaces it atomically, so an interrupted run leaves the old file in
 place. Rerunning on a converted file changes nothing.
 
+## Server and client operations
+
+Commands below run on the server host unless they say otherwise. The admin
+API needs `DESK_DISPLAY_SERVER_ADMIN_TOKEN` set in the server's `.env`.
+Export it in your shell as `ADMIN` for the `curl` examples.
+
+### Service lifecycle
+
+| Mode | Start, stop, restart | Logs |
+| --- | --- | --- |
+| server | `sudo systemctl restart desk_display_server.service` | `sudo journalctl -u desk_display_server.service -f` |
+| client | `sudo systemctl restart desk_display_client.service` | `sudo journalctl -u desk_display_client.service -f` |
+| combined | both of the above; `./scripts/restart_services.sh` does them in order | both |
+| any | `sudo systemctl restart config_ui_desk_display.service` | `sudo journalctl -u config_ui_desk_display.service -f` |
+
+Restarting the server never stops a client: clients keep playing from their
+cache and reconnect on their own.
+
+### Provisioning, rotation and revocation
+
+The easiest way is the configuration UI's `/clients` page. **Add a display**
+issues a credential and shows the client's `.env.client` once, and each
+client row has Rotate, Revoke, Disable and Enable. From the shell:
+
+```bash
+python3 -m remote_display.provisioning provision office --profile hyperpixel4_square \
+    --server-url https://render.lan:8765 > office.env.client      # shown once
+python3 -m remote_display.provisioning list
+python3 -m remote_display.provisioning rotate office > office.env.client
+python3 -m remote_display.provisioning disable office             # or enable
+python3 -m remote_display.provisioning revoke office
+```
+
+Copy the `.env.client` to the display and install it with
+`bash Installers/install.sh --mode client --credentials office.env.client <profile>`.
+For a display that is already installed, use
+`python3 scripts/convert_env.py --role client --env-file .env.client --credentials office.env.client`
+and restart `desk_display_client.service`. Rotating, revoking or disabling
+ends the client's lease at once. Rotation takes effect when the client has
+the new credential.
+
+### Assigning playlists
+
+Playlists are edited on `/playlists` and assigned on `/clients`. Each
+assignment is checked against what the client last saw, so two operators
+cannot overwrite each other. The row shows whether the new revision has been
+delivered and acknowledged, and warns about screens this client can show
+only as a still, or not at all.
+
+### Diagnosing a stale client
+
+On `/clients`, a client is *stale* when it has missed heartbeats for 1.5
+heartbeat intervals, and *expired* when its lease has lapsed. From the shell:
+
+```bash
+curl -s -H "Authorization: Bearer $ADMIN" http://127.0.0.1:8765/api/v1/admin/status | python3 -m json.tool
+```
+
+This shows each client's lease state, its last status (current screen,
+playback state, sync and cache age, recent errors) and its demand. On the
+client itself:
+
+```bash
+sudo journalctl -u desk_display_client.service -n 100
+```
+
+Look for `Sync failed (...); retrying in Ns` (network or authentication
+trouble) and `Not activating yet: artifacts not yet usable` (the server has
+not finished rendering something the new playlist needs). A 401 in the log
+usually means the credential was rotated or revoked: install the new
+`.env.client`. A 409 `incompatible_protocol_version` means the client and
+server need the same release: upgrade the older one.
+
+### Diagnosing stale renders
+
+```bash
+curl -s -H "Authorization: Bearer $ADMIN" http://127.0.0.1:8765/api/v1/admin/render-status | python3 -m json.tool
+```
+
+This shows the render queue with the reason and wait time for each job, jobs
+in flight, and per-artifact state: last success, last failure and error,
+and consecutive failures. It also shows `data_health`, which marks a feed
+stale when it has not updated for twice its interval. A failing render keeps
+serving its last good output (manifest state `fallback`) and backs off up to
+15 minutes. The server journal logs `Render of <screen> for <profile>
+failed (...)`. Check the provider credential, or the feed that
+`data_health` names.
+
+### Logs and caches
+
+| Where | What |
+| --- | --- |
+| `sudo journalctl -u <unit>` | All logs; secrets are redacted before they are written |
+| `.runtime/server/` | Playlists, assignments, known clients, credential hashes, migration bundles and upgrade snapshots |
+| `cache/artifacts/` | Rendered artifacts (`DESK_DISPLAY_ARTIFACT_MAX_MB`, default 512; safe to delete, the server re-renders) |
+| `cache/` | Feed caches and history |
+| `cache/client/` (client) | The offline cache: playlists, manifests, artifacts, lease credential (`DESK_DISPLAY_CLIENT_CACHE_MAX_MB`, default 256) |
+
+Deleting `cache/client/` makes a client start from its diagnostic screen and
+download everything again.
+
+### Backup and restore
+
+`scripts/upgrade.sh` snapshots a server before each upgrade. To take a
+snapshot now:
+
+```bash
+python3 install_modes.py snapshot          # prints .runtime/server/backups/upgrade-<time>/
+```
+
+A snapshot holds `.env`, `screens_config.local.json` and the files from
+`.runtime/server/`, with `/` replaced by `__` in their names. To restore
+one, stop the services, copy each file back to its path, and start them
+again:
+
+```bash
+sudo systemctl stop desk_display_server.service config_ui_desk_display.service
+cp .runtime/server/backups/upgrade-<time>/.runtime__server__playlists.json .runtime/server/playlists.json
+# ...likewise for provisioned_clients.json, clients.json, .env
+./scripts/restart_services.sh
+```
+
+For a client, the only thing to keep is `.env.client`. The uninstaller keeps
+everything listed in [What each mode keeps](#what-each-mode-keeps).
+
+### Operating through an outage
+
+- **Server down:** clients keep playing their cached rotation, and clocks
+  keep time. Clients reconnect with backoff (up to 5 minutes between
+  tries). Set `DESK_DISPLAY_OFFLINE_MAX_AGE_HOURS` on a client to make it
+  stop showing content older than that.
+- **Provider down:** the server keeps the last good data and artifacts, and
+  `render-status` shows the feed as stale in `data_health`.
+- **Client rebooted while the server is down:** it starts from its cache.
+  With an empty cache it shows its diagnostic screen until the server
+  returns.
+
+### Rolling back
+
+- **Configuration:** restore the `.env.bak-<time>` that
+  `scripts/convert_env.py` or the installer left, or a snapshot as described
+  above.
+- **Migrated rotation:** undo it with
+  `python3 scripts/migrate_standalone_config.py --rollback <bundle>`.
+- **Application:** check out the previous release and run
+  `bash scripts/upgrade.sh --no-pull`, which reinstalls its dependencies and
+  units and keeps all data:
+
+```bash
+git fetch --tags
+git switch --detach <previous-release>
+bash scripts/upgrade.sh --no-pull
+```
+
+### Restoring v0.1
+
+`v0.1` (commit `9e193dc`) is the standalone release before the server/client
+work. To return a device to it:
+
+1. Keep your data. On a server, run `python3 install_modes.py snapshot`. On
+   any device, copy `.env` or `.env.client` somewhere safe.
+2. Stop and disable the server/client units, so only the standalone unit
+   remains:
+
+   ```bash
+   sudo systemctl disable --now desk_display_server.service desk_display_client.service
+   ```
+
+3. Check out the release on a branch:
+
+   ```bash
+   git fetch --tags
+   git switch -c restore-v0.1 v0.1
+   ```
+
+4. Put back a standalone `.env`. A server's pre-conversion original is its
+   `.env.bak-<time>`. Otherwise start from `.env.example` and drop
+   `DESK_DISPLAY_ROLE`, which v0.1 does not read.
+5. Reinstall with v0.1's own installer, which has no `--mode` flag and
+   installs the standalone service:
+
+   ```bash
+   bash ./Installers/install.sh <profile>
+   ```
+
+To go back to standalone on the current release instead, skip step 3 and run
+`bash ./Installers/install.sh --mode standalone <profile>`.
+
+Server playlists do not exist in v0.1. The rotation it plays is
+`screens_config.json`, or `screens_config.local.json` when present. Neither
+is changed by the server/client work, so the v0.1 display plays what it
+played before. Test the rollback on a spare device first. `tests/test_docs.py`
+checks that these steps stay documented.
+
+---
+
 ## Running, restarting, and logs
 
 The ordinary systemd commands work:
@@ -306,7 +506,7 @@ each other, use the wrapper instead:
 ./scripts/restart_services.sh desk_display.service config_ui_desk_display.service
 ```
 
-It only ever touches the eight units listed above, skips the ones that are not
+It only ever touches the ten units listed above, skips the ones that are not
 installed here, and restarts in its own dependency order regardless of the order
 you type.
 

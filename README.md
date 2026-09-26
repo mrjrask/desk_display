@@ -7,14 +7,17 @@ Desk Display is a Python dashboard for always-on Raspberry Pi, Linux, macOS, and
 
 The project is optimized for desk-sized devices but also includes larger 800×480 and 1080p display profiles, a browser-based screen configuration UI, install scripts for common Raspberry Pi hardware, diagnostics for external feeds, and maintenance tools for screenshot/render validation.
 
-For a short operator-focused walkthrough — how the display runs on the Pi, installing it, restarting it, and adding a new screen — see [OPERATIONS.md](OPERATIONS.md). This README is the full reference.
+Desk Display runs as one standalone process per display, or as a render server that drives any number of thin display clients (see [Deployment modes](#deployment-modes)).
+
+For the operator runbook — installing each mode, restarting, provisioning clients, backups, rollback and restoring v0.1 — see [OPERATIONS.md](OPERATIONS.md). This README is the full reference.
 
 ---
 
 ## Table of contents
 
-- [Highlights](#highlights)
+- [Deployment modes](#deployment-modes)
 - [Release and recovery](#release-and-recovery)
+- [Highlights](#highlights)
 - [Supported displays and output modes](#supported-displays-and-output-modes)
 - [Repository layout](#repository-layout)
 - [Requirements](#requirements)
@@ -29,6 +32,70 @@ For a short operator-focused walkthrough — how the display runs on the Pi, ins
 - [Developer workflow](#developer-workflow)
 - [Troubleshooting](#troubleshooting)
 - [External APIs](#external-apis)
+
+---
+
+## Deployment modes
+
+| Mode | Processes | Env file | Install |
+| --- | --- | --- | --- |
+| standalone | `main.py` fetches, renders and draws; `config_ui.py` | `.env` ([`.env.example`](.env.example)) | `bash Installers/install.sh --mode standalone <profile>` |
+| server | `display_server.py` renders for clients; `config_ui.py` | `.env` ([`.env.server.example`](.env.server.example)) | `bash Installers/install.sh --mode server` |
+| client | `display_client.py` plays what a server renders | `.env.client` ([`.env.client.example`](.env.client.example)) | `bash Installers/install.sh --mode client --credentials <file> <profile>` |
+| combined | server, config UI, and a client for the attached panel | `.env` and `.env.client` | `bash Installers/install.sh --mode combined <profile>` |
+
+The standalone mode is the v0.1 behavior and stays fully supported. The
+other three split the work:
+
+```mermaid
+flowchart LR
+  P["Upstream providers"] --> S["Render server<br/>display_server.py"]
+  UI["Config UI<br/>playlists, clients"] -.- S
+  S -- "manifests + artifacts" --> C1["Client"]
+  S -- "HTTPS" --> C2["Client"]
+  S -- "loopback" --> L["Local panel client<br/>(combined)"]
+```
+
+- **The server owns content.** It holds every provider credential, fetches
+  upstream data, and renders each screen once per display profile for all
+  the clients that share it. A client holds no API key and never contacts a
+  provider.
+- **Registration and leases.** A client registers with its own credential,
+  issued by the server's "Add a display" form, and gets a lease it renews
+  with heartbeats. Operators can rotate, revoke or disable a client's
+  credential at any time.
+- **Per-client playlists.** Playlists live on the server and are assigned
+  per client in the configuration UI (`/playlists`, `/clients`). The UI
+  warns about screens a client cannot show fully.
+- **Manifests and artifacts.** Each client fetches a manifest that lists
+  content-addressed artifacts for its profile: still PNGs, plus render
+  packages for screens that move. The client verifies every hash and size.
+- **Local interaction.** Taps and buttons are handled on the client: skip,
+  back, and opening a quad tile. Nothing waits on the network.
+- **Offline behavior.** A client starts from its cache and keeps playing
+  while the server is down. Clocks keep ticking because the client draws
+  the time itself.
+- **Rotation ownership.** The server renders in the profile's canonical
+  orientation. Each client rotates to its own `DISPLAY_ROTATION` at the last
+  step.
+- **Profiles and capabilities.** A client reports its display profile, size,
+  colour mode, animation and touch. The server renders to match, and falls
+  back to stills where a client cannot animate.
+
+Details:
+
+- [docs/remote-display-protocol.md](docs/remote-display-protocol.md): the
+  wire protocol and diagrams.
+- [docs/render-packages.md](docs/render-packages.md): packages, playback,
+  cache and offline behavior.
+- [CONFIGURATION.md](CONFIGURATION.md): every setting by role.
+- [OPERATIONS.md](OPERATIONS.md): installing, upgrading, migrating and
+  troubleshooting each mode.
+
+To move an existing standalone display to a server, convert its settings
+with `scripts/convert_env.py` and its rotation with
+`scripts/migrate_standalone_config.py`. Both preview first and keep backups
+([OPERATIONS.md](OPERATIONS.md#moving-a-standalone-rotation-onto-the-server)).
 
 ---
 
@@ -54,7 +121,10 @@ To leave the release checkout and return to the development branch:
 git switch main
 ```
 
-See [CHANGELOG.md](CHANGELOG.md) for the release contents and limitations.
+`v0.1` is commit `9e193dc` (a lightweight tag). Rolling a device back to it,
+including its services and data, is covered in
+[Restoring v0.1](OPERATIONS.md#restoring-v01). See
+[CHANGELOG.md](CHANGELOG.md) for the release contents and limitations.
 
 ---
 
@@ -238,6 +308,12 @@ separate scripts:
 ```bash
 bash ./Installers/install.sh
 ```
+
+It first asks for the [deployment mode](#deployment-modes) (standalone by
+default; pass `--mode` to skip the question). The rest of this section
+describes the standalone install. `install.sh --mode server`, `--mode client`
+and `--mode combined` are described in
+[OPERATIONS.md](OPERATIONS.md#installation-modes-server-and-client).
 
 After the hardware installer finishes, it also prompts for which default
 screen rotation to load — `small` or `large` (via
@@ -455,7 +531,7 @@ Set `INSIDE_SENSOR` to `adafruit_bme280`, `adafruit_bme680`, or `adafruit_sht4x`
 | `ADSB_RETENTION_DAYS` | Days of raw sighting rows the collector keeps before pruning; defaults to `7`. |
 | `ADSB_DB_PATH` | Optional override for the SQLite database path; defaults to `cache/adsb_stats.db`. |
 
-See [ADS-B stats screen](#ads-b-stats-screen) below for how the collector, database, and display screen fit together.
+See [ADS-B stats screen](#ads-b-dashboards) below for how the collector, database, and display screen fit together.
 
 ### Sports and data variables
 
@@ -917,7 +993,9 @@ banner as that Pi's local Screenshots/Feed pages.
 
 ## Services and operations
 
-Common system service commands:
+Common system service commands (standalone; a server or client install runs
+`desk_display_server.service` and/or `desk_display_client.service` instead of
+`desk_display.service`, see [Deployment modes](#deployment-modes)):
 
 ```bash
 sudo systemctl status desk_display.service
@@ -946,10 +1024,11 @@ removal, and archival of leftover screenshots/videos; it is deliberately not
 an `ExecStop` handler because it signals the renderer and accesses display
 hardware independently of the renderer's own shutdown path.
 
-`./scripts/restart_services.sh` only ever acts on this project's own 8
+`./scripts/restart_services.sh` only ever acts on this project's own 10
 systemd services (never any other unit on the machine), restarting whichever
 of them are installed here one at a time, in dependency order (data
-collectors and the feed server first, the main renderer next, the Waveshare
+collectors and the feed server first, the render server and main renderer
+next, the display client after them, the Waveshare
 fbcp mirror and OLED helper after it, then the screenshot uploader, config
 UI, and AirPlay add-on last). Pass one or more service names to restart just those (still
 one at a time, in that same order), or `--list` to print the known
@@ -981,6 +1060,7 @@ already-installed `desk_display.service` (removing the historical
 `cleanup.sh` `ExecStop` and setting the 10-second graceful-stop window) and
 also patches any project-managed systemd unit
 (`desk_display.service`, `config_ui_desk_display.service`,
+`desk_display_server.service`, `desk_display_client.service`,
 `desk_display_waveshare_oled.service`, `desk_display_adsb_collector.service`)
 whose command still points at a script path from before a
 repo-side script move/rename, then
@@ -989,19 +1069,25 @@ other unit setting (display profile, `Environment=` overrides, etc.)
 untouched, unlike re-running a full hardware installer, which regenerates
 the unit from scratch using whatever environment it happens to run with.
 
-`./Installers/uninstall.sh` is a full uninstaller: it stops and disables the
-systemd services, removes the virtual environment, moves any `.env` file
-from the project directory and the `~/keys/` folder (if present) into
-`~/desk_display_uninstalled` so credentials are preserved rather than
-deleted, and finally deletes the project directory itself. Because this is
-destructive, it prints a warning banner on launch and requires confirmation
-before doing anything: in an interactive shell you must type `UNINSTALL`
-exactly, and in a non-interactive shell it aborts unless
-`CONFIRM_UNINSTALL=yes` is set. Set `UNINSTALL_BACKUP_DIR` to use a
-different backup location, `KEEP_VENV=1` to keep the virtual environment,
-and `KEEP_PROJECT_DIR=1` to keep the project directory instead of deleting
-it. When run interactively it also asks for confirmation before removing
-the virtual environment and again before deleting the project directory.
+`./scripts/upgrade.sh` upgrades an install in any mode: it pulls, updates
+dependencies for the installed mode, rewrites or patches its units, and
+restarts them, keeping every documented data path (see
+[OPERATIONS.md](OPERATIONS.md#what-each-mode-keeps)).
+
+`./Installers/uninstall.sh` is a full uninstaller for every mode. It stops
+and disables all project services, including the render server and display
+client, and removes the virtual environment. It copies the installed mode's
+configuration, credentials and server state into
+`~/desk_display_uninstalled`: `.env`, `.env.client`, `~/keys/`, playlists
+and assignments, credential hashes, and migration and upgrade backups. Then
+it deletes the project directory. Caches and rendered artifacts are
+discarded. Because this is destructive, it prints a warning banner and asks
+for confirmation first. In a non-interactive shell it aborts unless
+`CONFIRM_UNINSTALL=yes` is set. Other options:
+
+- `UNINSTALL_BACKUP_DIR` uses a different backup location.
+- `KEEP_VENV=1` keeps the virtual environment.
+- `KEEP_PROJECT_DIR=1` keeps the project directory instead of deleting it.
 
 ---
 

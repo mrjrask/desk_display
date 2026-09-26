@@ -58,6 +58,9 @@ def _load_env_file(path: str) -> None:
         os.environ.setdefault(key, value)
 
 
+DOTENV_FILE_ENV = "DESK_DISPLAY_DOTENV_FILE"
+
+
 def _initialise_env() -> None:
     """Load environment variables from `.env` if present."""
 
@@ -68,10 +71,14 @@ def _initialise_env() -> None:
 
     candidate_paths = []
 
+    # The display client names its own file (.env.client) so importing this
+    # module never pulls a combined install's server .env, with its provider
+    # credentials, into the client process.
+    env_name = os.environ.get(DOTENV_FILE_ENV, "").strip() or ".env"
     project_root = Path(SCRIPT_DIR)
-    candidate_paths.append(project_root / ".env")
+    candidate_paths.append(project_root / env_name)
 
-    cwd_path = Path.cwd() / ".env"
+    cwd_path = Path.cwd() / env_name
     if cwd_path != candidate_paths[0]:
         candidate_paths.append(cwd_path)
 

@@ -25,6 +25,12 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import urlsplit
 
+# Before any project import: config.py loads a dotenv file on import, and a
+# client must read .env.client, never the server's .env beside it. Only for
+# these imports, so a process that also imports other modules is unaffected.
+_DOTENV_FILE_SET = "DESK_DISPLAY_DOTENV_FILE" not in os.environ
+os.environ.setdefault("DESK_DISPLAY_DOTENV_FILE", ".env.client")
+
 from PIL import Image, ImageDraw, ImageFont
 
 from display.rotation import RotationDecision, parse_rotation, resolve_rotation, to_logical
@@ -42,6 +48,9 @@ from remote_display.client_sync import (
     RequestsTransport,
 )
 from remote_display.models import ClientCapabilities, HardwareDescription
+
+if _DOTENV_FILE_SET:
+    os.environ.pop("DESK_DISPLAY_DOTENV_FILE", None)
 
 LOGGER = logging.getLogger("desk_display.client")
 _PROJECT_ROOT = Path(__file__).resolve().parent
