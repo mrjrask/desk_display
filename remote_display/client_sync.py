@@ -1024,7 +1024,9 @@ class ClientSync:
         if full:
             self._next_sync = now + self.effective_sync_interval()
         self._next_heartbeat = now + self.effective_heartbeat_interval()
-        return max(0.0, min(self._next_sync, self._next_heartbeat) - now)
+        # Deadlines count from the start of the pass, so a slow request does
+        # not push the next heartbeat a full interval past its completion.
+        return max(0.0, min(self._next_sync, self._next_heartbeat) - self._clock())
 
     def start(self) -> threading.Thread:
         thread = threading.Thread(target=self.run, name="client-sync", daemon=True)

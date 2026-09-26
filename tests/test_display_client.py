@@ -197,7 +197,7 @@ def test_reconnects_after_an_outage(env):
     second = client.sync.step()
     assert client.sync.backoff.failures == 2 and second > 0 and first > 0
     env.transport.down = False
-    assert client.sync.step() == client.sync.sync_interval_seconds
+    assert client.sync.step() == pytest.approx(client.sync.sync_interval_seconds, abs=1)
     assert client.sync.backoff.failures == 0 and client.sync.connected
 
 
@@ -572,6 +572,24 @@ def test_client_follows_the_server_heartbeat_cadence(env):
     assert client.sync.step() == 30
     assert client.sync.effective_heartbeat_interval() == 100
     assert client.sync.effective_sync_interval() == 30
+
+
+def test_slow_passes_do_not_delay_the_next_heartbeat(env):
+    env.publish("date")
+    env.publish("weather1")
+    client = env.make_client(DESK_DISPLAY_SYNC_INTERVAL_SECONDS=30, DESK_DISPLAY_HEARTBEAT_INTERVAL_SECONDS=10)
+    clock = Clock()
+    client.sync._clock = clock
+    real = env.transport.__call__
+
+    def slow(*args, **kwargs):
+        clock.now += 2  # every request takes 2 s
+        return real(*args, **kwargs)
+
+    client.sync.transport = slow
+    started = clock.now
+    delay = client.sync.step()
+    assert clock.now + delay == started + 10
 
 
 def test_heartbeat_only_passes_renew_the_lease_between_syncs(env):
