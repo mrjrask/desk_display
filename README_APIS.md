@@ -338,7 +338,7 @@ endpoints.
 | `http://<host>/dump1090-fa/data/aircraft.json` | Current aircraft snapshot (hex, callsign, position, altitude) polled every `ADSB_POLL_INTERVAL_SECONDS`. |
 | `http://<host>/dump1090-fa/data/stats.json` | Best-effort cumulative message count, used for the optional "messages today" stat. Missing/unreachable stats.json does not fail the poll cycle. |
 
-See [ADS-B stats screen](README.md#ads-b-stats-screen) in the main README
+See [ADS-B stats screen](README.md#ads-b-dashboards) in the main README
 for the collector/database/display data flow, and [ADS-B receiver
 variables](README.md#ads-b-receiver-variables) for configuration.
 

@@ -1,26 +1,27 @@
 # Configuration by deployment role
 
 Desk Display reads its settings from environment variables, usually loaded
-from a `.env` file. `DESK_DISPLAY_ROLE` selects which settings apply:
+from a `.env` file (`.env.client` for a display client). `DESK_DISPLAY_ROLE`
+selects which settings apply:
 
 | Role | Example file | What it configures |
 | --- | --- | --- |
 | `standalone` (default) | [`.env.example`](.env.example) | The legacy single-process install: content, provider credentials, and display hardware in one `.env`. Still fully supported during the migration. |
 | `server` | [`.env.server.example`](.env.server.example) | The render server: bind address and client authentication, location and content timezone, provider credentials, sports, news, ADS-B, styles and layouts, refresh intervals, render workers, artifact storage, client leases, static clients, the configuration UI, logs, and diagnostics. |
-| `client` | [`.env.client.example`](.env.client.example) | One display: stable client ID, server URL and token, display profile, output driver, physical rotation, framebuffer and panel hardware, local cache, sync and heartbeat intervals, backlight and dark hours, buttons, touch, offline startup, logs, and diagnostics. |
+| `client` | [`.env.client.example`](.env.client.example), copied to `.env.client` | One display: stable client ID, server URL and credential, display profile, output driver, physical rotation, framebuffer and panel hardware, local cache, sync and heartbeat intervals, backlight and dark hours, buttons, touch, offline startup, logs, and diagnostics. |
 
 A client needs no upstream API key or provider URL. The server fetches all
 upstream data and sends clients rendered artifacts only.
 
-> The render server API runs as `display_server.py` (see
-> [Render server API](#render-server-api)). The display client process that
-> consumes `.env.client.example` lands separately; its settings are already
-> declared, parsed, and validated.
+The render server runs as `display_server.py` (see
+[Render server API](#render-server-api)) and reads `.env`. The display client
+runs as `display_client.py` and reads `.env.client`, never `.env`, so a
+combined install keeps the server's credentials out of the client process.
 
 ## Checking a configuration
 
 ```bash
-python3 -m deployment_config check --role client --env-file .env
+python3 -m deployment_config check --role client --env-file .env.client
 python3 -m deployment_config check --env-file .env   # role from DESK_DISPLAY_ROLE
 ```
 

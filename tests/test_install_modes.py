@@ -394,3 +394,15 @@ def test_combined_with_shared_enrollment_uses_the_shared_token(tmp_path):
     client = dc.parse_env_file(tmp_path / ".env.client")
     assert client["DESK_DISPLAY_CLIENT_TOKEN"] == token and not (tmp_path / "store.json").exists()
     assert token not in " ".join(notes)
+
+
+def test_the_client_process_never_loads_the_server_env_beside_it(tmp_path):
+    (tmp_path / ".env").write_text("OWM_API_KEY=server-only-" + "k" * 20 + "\n")
+    (tmp_path / ".env.client").write_text("DESK_DISPLAY_CLIENT_ID=office\n")
+    script = f"import sys, os; sys.path.insert(0, {str(ROOT)!r}); import display_client; " \
+             "print(os.environ.get('OWM_API_KEY'), os.environ.get('DESK_DISPLAY_CLIENT_ID'))"
+    env = {k: v for k, v in os.environ.items() if k not in ("CONFIG_LOAD_DOTENV", "OWM_API_KEY",
+                                                           "DESK_DISPLAY_CLIENT_ID", "DESK_DISPLAY_DOTENV_FILE")}
+    result = subprocess.run([sys.executable, "-c", script], cwd=tmp_path, env=env, capture_output=True, text=True)
+    assert result.returncode == 0, result.stderr[-2000:]
+    assert result.stdout.split()[-2:] == ["None", "office"]
