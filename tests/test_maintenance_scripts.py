@@ -300,3 +300,9 @@ def test_update_services_moves_a_converted_standalone_install_onto_the_server_un
     assert f"restart {su.STANDALONE_SERVICE}" not in calls
     marker = im.read_marker(project)
     assert marker is not None and marker.mode is im.Mode.SERVER and marker.user == "kiosk"
+
+
+def test_uninstall_only_stops_services_this_device_has():
+    uninstall = (ROOT / "Installers/uninstall.sh").read_text()
+    loop = uninstall.split('for managed_service in "${MANAGED_SYSTEM_SERVICES[@]}"; do', 1)[1].split("done", 1)[0]
+    assert loop.index("list-unit-files") < loop.index("systemctl stop")
