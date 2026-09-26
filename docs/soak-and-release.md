@@ -69,10 +69,10 @@ While it runs, check by hand on each panel and note the result:
 - [ ] Touch: tapping a quad tile on a HyperPixel expands it, and a tap returns.
 - [ ] Buttons: skip and previous on the Display HAT Mini.
 - [ ] Scrolling screens scroll smoothly and hold at the end.
-- [ ] Dark hours: display clients do not apply `DARK_HOURS` or the
-      backlight settings yet (see the known limitations in
-      [CHANGELOG.md](../CHANGELOG.md)). Record what each panel does; this
-      is not a release gate.
+- [ ] Dark hours: each client blanks (or dims, with
+      `DESK_DISPLAY_DARK_HOURS_MODE=dim`) during its `DARK_HOURS` and
+      restores `DESK_DISPLAY_BACKLIGHT_LEVEL` afterwards; the Clients page
+      shows `dark` while it is blanked.
 - [ ] Unplug the server's network for 30 minutes: clients keep playing and
       clocks keep time; they reconnect by themselves afterwards.
 - [ ] Reboot one client: it plays from its cache before it reconnects.

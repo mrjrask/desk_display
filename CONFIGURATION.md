@@ -18,14 +18,21 @@ upstream data and sends clients rendered artifacts only.
 renews its lease; the intervals the server advertises cap both, so a client
 always heartbeats at least every third of the server's lease.
 
+A client applies its own `DARK_HOURS` and backlight settings: outside dark
+hours the backlight is `DESK_DISPLAY_BACKLIGHT_LEVEL`; during them it either
+blanks the panel with the backlight off and reports `playback_state: dark`
+(`DESK_DISPLAY_DARK_HOURS_MODE=off`, the default) or keeps playing at
+`DESK_DISPLAY_DARK_HOURS_BACKLIGHT_LEVEL` (`dim`).
+
+`DESK_DISPLAY_CONTENT_TIMEZONE` (default America/Chicago) is the one zone for
+dates, schedules and clocks the server renders, and for dark hours on the
+standalone display and on each client. Give a client the same value as its
+server.
+
 Some client settings are accepted and validated but not used yet:
-`DESK_DISPLAY_OFFLINE_START` (a client always starts from its cache),
-`DESK_DISPLAY_CLIENT_NAME`, and the backlight and dark-hours settings
-(`DARK_HOURS`, `DESK_DISPLAY_BACKLIGHT_LEVEL`,
-`DESK_DISPLAY_DARK_HOURS_MODE`, `DESK_DISPLAY_DARK_HOURS_BACKLIGHT_LEVEL`),
-which only the standalone display applies. On the server,
-`DESK_DISPLAY_CONTENT_TIMEZONE` is not used yet; content is rendered in
-America/Chicago. See the known limitations in [CHANGELOG.md](CHANGELOG.md).
+`DESK_DISPLAY_OFFLINE_START` (a client always starts from its cache) and
+`DESK_DISPLAY_CLIENT_NAME`. See the known limitations in
+[CHANGELOG.md](CHANGELOG.md).
 
 The render server runs as `display_server.py` (see
 [Render server API](#render-server-api)) and reads `.env`. The display client
@@ -411,7 +418,7 @@ installs only, never clients.
 | `DESK_DISPLAY_ALLOW_INSECURE_TRANSPORT` | client | restart |  |
 | `WEATHER_LATITUDE` | server, standalone | restart |  |
 | `WEATHER_LONGITUDE` | server, standalone | restart |  |
-| `DESK_DISPLAY_CONTENT_TIMEZONE` | server | restart |  |
+| `DESK_DISPLAY_CONTENT_TIMEZONE` | server, client, standalone | restart |  |
 | `WEATHERKIT_TEAM_ID` | server, standalone | restart | provider |
 | `WEATHERKIT_KEY_ID` | server, standalone | restart | provider |
 | `WEATHERKIT_SERVICE_ID` | server, standalone | restart | provider |

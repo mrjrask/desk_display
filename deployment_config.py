@@ -258,8 +258,8 @@ SETTINGS: tuple[Setting, ...] = (
        "Latitude for weather, the radar map centre and default AQI/ADS-B location."),
     _s("WEATHER_LONGITUDE", "longitude", _SERVER, "location",
        "Longitude for weather, the radar map centre and default AQI/ADS-B location."),
-    _s("DESK_DISPLAY_CONTENT_TIMEZONE", "timezone", _SERVER_ONLY, "location",
-       "IANA timezone the server renders dates, schedules and dark hours in.",
+    _s("DESK_DISPLAY_CONTENT_TIMEZONE", "timezone", _ALL, "location",
+       "IANA timezone for dates, schedules, clocks and dark hours.",
        default="America/Chicago"),
 
     # ── Weather providers ────────────────────────────────────────────────────

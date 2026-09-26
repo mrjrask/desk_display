@@ -70,18 +70,18 @@ See the README's [deployment modes](README.md#deployment-modes) and
 - Fix: at startup a cached playlist is only paired with the manifest it was
   activated with. When that manifest is missing, the previous playlist and
   its manifest play instead of an unrelated newer manifest.
+- Fix: display clients apply `DARK_HOURS`, `DESK_DISPLAY_BACKLIGHT_LEVEL`,
+  `DESK_DISPLAY_DARK_HOURS_MODE` and `DESK_DISPLAY_DARK_HOURS_BACKLIGHT_LEVEL`,
+  and report `playback_state: dark` while blanked.
+- Fix: `DESK_DISPLAY_CONTENT_TIMEZONE` is used. The server renders dates,
+  schedules and clock packages in it, and the standalone display and clients
+  read dark hours in it (default America/Chicago, as before).
 
 ### Known limitations
 
 - These client settings are validated but not used yet:
   `DESK_DISPLAY_OFFLINE_START` (a client always starts from its
-  cache), `DESK_DISPLAY_CLIENT_NAME`, and the backlight settings
-  `DESK_DISPLAY_BACKLIGHT_LEVEL`, `DESK_DISPLAY_DARK_HOURS_MODE` and
-  `DESK_DISPLAY_DARK_HOURS_BACKLIGHT_LEVEL`. A display client does not apply
-  `DARK_HOURS`; only the standalone display does.
-- `DESK_DISPLAY_CONTENT_TIMEZONE` is validated but not used. The server
-  renders dates and schedules, and clock packages carry, the fixed
-  America/Chicago zone that the standalone display also uses.
+  cache) and `DESK_DISPLAY_CLIENT_NAME`.
 - The `inside` screen reads a sensor attached to the display and is not
   available on remote clients.
 - Physical display, touch, button and systemd behavior must still be checked

@@ -503,7 +503,7 @@ Settings are grouped by deployment role. `.env.example` documents the standalone
 | `TOUCH_DOUBLE_TAP_MAX_INTERVAL_SECONDS` | Double-tap timing for touch interactions. |
 | `ESC_DOUBLE_PRESS_ACTION` | Action for double-pressing Escape in SDL/window contexts. |
 | `ESC_DOUBLE_PRESS_MAX_INTERVAL_SECONDS` | Double-Escape timing window. |
-| `DARK_HOURS` | Time windows used to suppress/alter display behavior during dark hours. Applied by the standalone display only; display clients do not apply it yet. |
+| `DARK_HOURS` | Time windows used to suppress/alter display behavior during dark hours. Read as wall-clock time in `DESK_DISPLAY_CONTENT_TIMEZONE`. Applied by the standalone display and by each display client (see `DESK_DISPLAY_DARK_HOURS_MODE`). |
 | `DISPLAY_FADE_IN_ENABLED` | Enables fade-in behavior where supported. |
 | `DISPLAY_FADE_IN_DISPLAY_HAT_MINI_STEPS` | Fade-in step count for Display HAT Mini. |
 | `DISPLAY_FADE_IN_HYPERPIXEL_STEPS` | Fade-in step count for HyperPixel-style profiles. |
