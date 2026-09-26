@@ -12,7 +12,7 @@ and [Server and client operations](#server-and-client-operations).
 
 ## How it runs on the Pi
 
-One systemd unit does the work: `desk_display.service` runs
+In a standalone install one systemd unit does the work: `desk_display.service` runs
 `<project>/venv/bin/python <project>/main.py` with the checkout as its working
 directory. The installer writes that unit to `/etc/systemd/system/` and bakes in
 the display settings it was run with.
@@ -125,7 +125,7 @@ run the installer with your normal login and let it call `sudo` itself.
 
 | Script | What it does |
 | --- | --- |
-| `install.sh` | The menu. Resolves a profile to one of the scripts below, runs it, then loads the chosen default rotation and optionally the ADS-B collector. |
+| `install.sh` | The menu. Asks for the installation mode (or takes `--mode`), resolves a profile to one of the scripts below, runs it, then loads the chosen default rotation and optionally the ADS-B collector. |
 | `install_display_hat_mini.sh` | Sets `DESK_DISPLAY_OUTPUT=displayhatmini` and hands off to `base_setup.sh`. |
 | `install_adafruit_minipitft_114.sh` | Sets `minipitft` output, `requirements/minipitft.txt`, and 240×135 dimensions, then hands off. |
 | `install_kernel.sh` | Sets `kernel` output and `requirements/kernel.txt` for generic KMS/DRM panels; also clears out stale per-user units from older installs. |
@@ -226,8 +226,9 @@ mode 600) and then deletes the rest with the project directory.
 | `cache/` (feed caches, weather history) | standalone, server, combined | removed |
 
 Before upgrading a server or combined install, `scripts/upgrade.sh`
-copies its env file, playlists, assignments, credentials and client list
-to `.runtime/server/backups/upgrade-<time>/` (mode 700). `cleanup.sh`
+copies its env files (`.env`, plus `.env.client` when combined),
+`screens_config.local.json`, playlists, assignments, credential hashes and
+client list to `.runtime/server/backups/upgrade-<time>/` (mode 700). `cleanup.sh`
 stops and blanks whichever process drives the panel (`main.py` or
 `display_client.py`) and does nothing to the panel on a server.
 
@@ -342,8 +343,13 @@ only as a still, or not at all.
 
 ### Diagnosing a stale client
 
-On `/clients`, a client is *stale* when it has missed heartbeats for 1.5
-heartbeat intervals, and *expired* when its lease has lapsed. From the shell:
+On `/clients`, a client is *stale* when its last heartbeat is older than
+1.5 heartbeat intervals (the server's interval is a third of
+`DESK_DISPLAY_CLIENT_LEASE_SECONDS`, so 150 seconds by default), and
+*expired* when its lease has lapsed. A client sends one heartbeat per sync,
+every `DESK_DISPLAY_SYNC_INTERVAL_SECONDS` (30 by default); it does not use
+the intervals the server advertises, so a sync interval longer than half the
+lease makes a healthy client look stale. From the shell:
 
 ```bash
 curl -s -H "Authorization: Bearer $ADMIN" http://127.0.0.1:8765/api/v1/admin/status | python3 -m json.tool
@@ -401,22 +407,44 @@ snapshot now:
 python3 install_modes.py snapshot          # prints .runtime/server/backups/upgrade-<time>/
 ```
 
-A snapshot holds `.env`, `screens_config.local.json` and the files from
-`.runtime/server/`, with `/` replaced by `__` in their names. To restore
-one, stop the services, restore it, and start them again. The restore
-snapshots the current state first, so it can be undone the same way:
+A snapshot holds `.env` (and `.env.client` in a combined install),
+`screens_config.local.json`, and `playlists.json`,
+`provisioned_clients.json` and `clients.json` from `.runtime/server/`, with
+`/` replaced by `__` in their names. It does not include `~/keys`, the
+migration bundles or older snapshots. To restore one, stop the services,
+restore it, and start them again. The restore takes a snapshot of the
+current state first, so it can be undone the same way. It restores only the
+files the installed mode keeps (pass `--mode` to override the detected
+mode):
 
 ```bash
 sudo systemctl stop desk_display_server.service config_ui_desk_display.service
+# combined installs: also stop desk_display_client.service
 python3 install_modes.py restore .runtime/server/backups/upgrade-<time>
 ./scripts/restart_services.sh
 ```
 
 Clients keep their credentials across a restore and enroll again on their
-own.
+own. A client provisioned or rotated after the snapshot was taken is not in
+the restored credential list; rotate it again and install its new
+`.env.client`.
 
 For a client, the only thing to keep is `.env.client`. The uninstaller keeps
 everything listed in [What each mode keeps](#what-each-mode-keeps).
+
+### Release validation
+
+Before a release, `tests/test_end_to_end.py` runs a real render server and
+clients over the wire with fixture data and no network, and
+`soak.py` records a multi-day soak on the real devices and judges it
+against release gates and rollback triggers. The procedure is in
+[docs/soak-and-release.md](docs/soak-and-release.md):
+
+```bash
+python -m pytest -q tests/test_end_to_end.py
+python3 soak.py sample --out soak/$(hostname).jsonl --hours 48
+python3 soak.py gates soak/*.jsonl --clients office,den
+```
 
 ### Operating through an outage
 

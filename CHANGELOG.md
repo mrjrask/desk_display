@@ -23,7 +23,58 @@ See the README's [deployment modes](README.md#deployment-modes) and
 - Migration: `scripts/migrate_standalone_config.py` moves a standalone rotation
   onto the server, and `scripts/convert_env.py` converts an existing `.env`.
 - Installers for the server, client and combined modes, `scripts/upgrade.sh`,
-  and mode-aware uninstall and cleanup.
+  and mode-aware uninstall and cleanup. `install_modes.py` records the
+  installed mode and answers what each mode installs, keeps and backs up.
+- Operator documentation for every mode: the README's deployment modes,
+  the server and client runbook in [OPERATIONS.md](OPERATIONS.md), the
+  [wire protocol](docs/remote-display-protocol.md) and
+  [render packages](docs/render-packages.md). `tests/test_docs.py` checks that
+  links, named files and service names in these documents stay correct.
+- A display client loads `.env.client` (it falls back to `.env` only when
+  there is no `.env.client`), so in a combined install it never loads the
+  server's `.env` and its provider credentials.
+- End-to-end validation (`tests/test_end_to_end.py`): a real render server and
+  real clients over the wire, offline, checking pixel parity with the
+  standalone display, shared and different playlists and profiles, playlist
+  acknowledgment, rotations, restarts, a long outage, stale data, failed
+  renders, a corrupt client cache, revocation, incompatible versions, that no
+  provider credential reaches a client, and a server backup and restore.
+- `python3 install_modes.py restore <snapshot>` puts back an upgrade snapshot,
+  after taking a snapshot of the current state so the restore can be undone.
+- `soak.py` records soak samples and judges them against release gates and
+  rollback triggers; [docs/soak-and-release.md](docs/soak-and-release.md) is
+  the runbook for the hardware soak.
+- Fix: on 1-bit displays, scroll canvases, ticker strips and quad tiles were
+  dithered once as a whole, so scrolled frames differed from the standalone
+  display. Packages now keep these images in colour and the client dithers
+  each frame it shows.
+
+### Known limitations
+
+- The client ignores the `heartbeat_interval_seconds` and
+  `sync_interval_seconds` the server advertises. It syncs, and sends one
+  heartbeat, every `DESK_DISPLAY_SYNC_INTERVAL_SECONDS` (default 30). Keep
+  that well under half of the server's `DESK_DISPLAY_CLIENT_LEASE_SECONDS`
+  (default 300): above half, the Clients page shows a healthy client as
+  stale, and above the full lease, the lease lapses between syncs.
+- These client settings are validated but not used yet:
+  `DESK_DISPLAY_HEARTBEAT_INTERVAL_SECONDS` (heartbeats follow the sync
+  interval), `DESK_DISPLAY_OFFLINE_START` (a client always starts from its
+  cache), `DESK_DISPLAY_CLIENT_NAME`, and the backlight settings
+  `DESK_DISPLAY_BACKLIGHT_LEVEL`, `DESK_DISPLAY_DARK_HOURS_MODE` and
+  `DESK_DISPLAY_DARK_HOURS_BACKLIGHT_LEVEL`. A display client does not apply
+  `DARK_HOURS`; only the standalone display does.
+- `DESK_DISPLAY_CONTENT_TIMEZONE` is validated but not used. The server
+  renders dates and schedules, and clock packages carry, the fixed
+  America/Chicago zone that the standalone display also uses.
+- After a failed request the client honours the `retry_after_seconds`
+  field in the JSON error body. It does not read the `Retry-After` header, so
+  a proxy that sends only the header is not honoured; the client still backs
+  off exponentially, up to 5 minutes.
+- The `inside` screen reads a sensor attached to the display and is not
+  available on remote clients.
+- Physical display, touch, button and systemd behavior must still be checked
+  on the real hardware in the Phase 20b soak.
 
 ## v0.1 — 2026-09-25
 

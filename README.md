@@ -181,11 +181,22 @@ Supported workflow profiles include:
 
 | Path | Purpose |
 | --- | --- |
-| `OPERATIONS.md` | Short operator guide: running the display on the Pi, installing, restarting, and adding a new screen. |
+| `OPERATIONS.md` | Operator runbook: installing each mode, restarting, provisioning clients, backups, rollback, restoring v0.1, and adding a new screen. |
+| `CONFIGURATION.md` | Every setting by deployment role, startup validation, the render server API, and secret handling. |
+| `CHANGELOG.md`, `COMPATIBILITY.md` | Release notes and known limitations; protocol and schema versioning rules. |
+| `docs/` | The remote display wire protocol, render packages, and the soak test and release runbook. |
 | `main.py` | Runtime loop, refresh orchestration, transitions, capture, touch/button handling, and display writes. |
 | `config.py` | Environment parsing, defaults, display profile detection, style config, API credentials, and runtime constants. |
 | `config_ui.py` | Flask/Waitress screen configuration web app. |
-| `display_server.py` | Render server API (`/api/v1`) for remote display clients: registration, leases, heartbeats, and demand discovery. Separate from the Feed server; see [CONFIGURATION.md](CONFIGURATION.md#render-server-api). |
+| `display_server.py` | Render server API (`/api/v1`) for remote display clients: registration, leases, heartbeats, manifests, artifact downloads, rendering, and the admin API. Separate from the Feed server; see [CONFIGURATION.md](CONFIGURATION.md#render-server-api). |
+| `display_client.py` | Thin display client: plays server-rendered artifacts and render packages from its local cache. |
+| `remote_display/` | Server and client building blocks: wire models, client registry and leases, provisioning, rate limits, playlist store, artifact store, manifests, render coordinator, render packages, client sync and cache, and playback fallbacks. |
+| `rendering/` | Server-side rendering: screen classes, the screen renderer, package building, clock faces and logos. |
+| `playback/` | Client-side playback of playlists and render packages. |
+| `deployment_config.py` | The settings catalog for every role, startup validation, secret redaction, and the generated env examples. |
+| `install_modes.py`, `service_units.py` | What each installation mode installs, keeps and backs up (including upgrade snapshots and `restore`), and the systemd units it writes. |
+| `env_conversion.py` | Converts an existing `.env` to the server or client role (used by `scripts/convert_env.py` and the installer). |
+| `soak.py` | Soak sampler, release gates and rollback triggers (see [docs/soak-and-release.md](docs/soak-and-release.md)). |
 | `feed_server.py` | Standalone Flask/Waitress app that hosts `/feed/<source>` pages built from screenshots uploaded by other desk_display Pis. Install by itself with `Installers/install_feed_server.sh`. |
 | `screens/` | Screen renderer modules and registry integration. |
 | `screens/registry.py` | Screen registration, playlist config loading, layout config loading, aliases, and special display helpers. |
@@ -238,11 +249,17 @@ sudo apt-get install -y \
 | `requirements/displayhatmini.txt` | Display HAT Mini profile; includes `base.txt` plus Raspberry Pi GPIO/SPI/display packages. |
 | `requirements/kernel.txt` | Kernel/HyperPixel-focused profile; includes `base.txt` plus kernel display runtime packages. |
 | `requirements/framebuffer.txt` | Framebuffer-focused profile; includes `base.txt` plus framebuffer hardware packages. |
-| `requirements/minipitft.txt` | Adafruit miniPiTFT profile; includes `framebuffer.txt` plus the RGB display driver. |
+| `requirements/minipitft.txt` | Adafruit miniPiTFT profile; includes `base.txt` plus the framebuffer layer and the RGB display driver. |
 | `requirements/sensors-adafruit.txt` | Optional Adafruit/CircuitPython indoor sensor drivers. |
 | `requirements/sensors-pimoroni.txt` | Optional editable Pimoroni BME280/BME680/BME68x sensor drivers. |
-| `requirements/dev.txt` | Development profile layered on `base.txt` and optional sensor dependencies. |
+| `requirements/dev.txt` | Development profile layered on `test.txt` and the optional sensor dependencies. |
 | `requirements/feed_server.txt` | Standalone Feed server profile (`feed_server.py`). Deliberately excludes the rendering/GPIO stack in `base.txt`. |
+| `requirements/server.txt` | Render server (`display_server.py` and the config UI): `base.txt` with no panel driver or GPIO stack. |
+| `requirements/client.txt` | Display client core (`display_client.py`): no upstream provider libraries, web server or SVG renderer. |
+| `requirements/client-<output>.txt` | Display client plus one panel driver (`displayhatmini`, `minipitft`, `kernel`, `framebuffer`, `window`). |
+| `requirements/hw-*.txt` | Panel driver layers with no application dependencies, combined with `base.txt` or `client.txt` by the files above. |
+| `requirements/window.txt` | Desktop window profile; `base.txt` plus the SDL window driver. |
+| `requirements/test.txt` | CI tooling layered on `base.txt`. |
 
 Indoor sensor drivers are optional and are kept out of the default display profiles. The installer adds `requirements/sensors-adafruit.txt` automatically when `INSIDE_SENSOR` (or legacy `INDOOR_SENSOR`) is configured as `adafruit_bme280`, `adafruit_bme680`, or `adafruit_sht4x` in the environment or `.env` before running the installer. Pimoroni sensor drivers use editable installs from `vendor/`; the installer adds `requirements/sensors-pimoroni.txt` automatically for `pimoroni_bme280`, `pimoroni_bme680`, or `pimoroni_bme68x`:
 
@@ -458,7 +475,7 @@ Settings are grouped by deployment role. `.env.example` documents the standalone
 | `DESK_DISPLAY_LOW_POWER` | Low-power mode; defaults screenshots/video and Wi-Fi monitoring/recovery toward lower resource usage, and trims the weather radar's frame count/animation loops. Auto-detected as enabled on Raspberry Pi Zero / Zero 2 W boards (via `/proc/device-tree/model`); set to `0` to force it off there. |
 | `DISPLAY_WIDTH` / `DISPLAY_HEIGHT` | Render dimensions override. |
 | `DISPLAY_ROTATION` | App rotation. Accepts degrees (`0`, `90`, `180`, `270`) or quarter-turn values (`0`-`3`). |
-| `DISPLAY_ROTATION_STRICT` | When enabled, invalid rotation values are treated as configuration errors. |
+| `DISPLAY_ROTATION_STRICT` | When enabled, invalid rotation values are treated as configuration errors, and the app does not rotate again when a kernel overlay already rotates the panel. Defaults to enabled for HyperPixel and kernel/window outputs. |
 | `DISPLAY_FB_DEVICE` | Framebuffer device path. Defaults to `/dev/fb0` where applicable. |
 | `DISPLAY_FB_PIXEL_FORMAT` | Framebuffer pixel format override. |
 | `DISPLAY_FB_PIXEL_ORDER` | Framebuffer channel order, usually `rgb` or `bgr`. |
@@ -480,7 +497,7 @@ Settings are grouped by deployment role. `.env.example` documents the standalone
 | `TOUCH_DOUBLE_TAP_MAX_INTERVAL_SECONDS` | Double-tap timing for touch interactions. |
 | `ESC_DOUBLE_PRESS_ACTION` | Action for double-pressing Escape in SDL/window contexts. |
 | `ESC_DOUBLE_PRESS_MAX_INTERVAL_SECONDS` | Double-Escape timing window. |
-| `DARK_HOURS` | Time windows used to suppress/alter display behavior during dark hours. |
+| `DARK_HOURS` | Time windows used to suppress/alter display behavior during dark hours. Applied by the standalone display only; display clients do not apply it yet. |
 | `DISPLAY_FADE_IN_ENABLED` | Enables fade-in behavior where supported. |
 | `DISPLAY_FADE_IN_DISPLAY_HAT_MINI_STEPS` | Fade-in step count for Display HAT Mini. |
 | `DISPLAY_FADE_IN_HYPERPIXEL_STEPS` | Fade-in step count for HyperPixel-style profiles. |
@@ -611,7 +628,11 @@ For detailed third-party credentials and endpoint behavior, see [README_APIS.md]
 
 ## Screens, playlists, and scheduling
 
-Screen rotation is driven by `screens_config.json`.
+Screen rotation is driven by `screens_config.json` on a standalone display.
+On a render server, each client instead plays a playlist assigned on the
+configuration UI's `/playlists` and `/clients` pages; those playlists use the
+same frequency and sequence rules (see
+[CONFIGURATION.md](CONFIGURATION.md#client-playlists)).
 
 Top-level fields:
 
@@ -722,6 +743,10 @@ When `quad` or `weather quad` is shown on a touch-capable HyperPixel setup:
 - Touch-initiated fullscreen playback uses the normal screen display duration.
 - `extra_seconds` is ignored for that touch-initiated fullscreen play and for the immediate return-to-quad interval.
 - Normal rotation resumes afterward.
+
+On a display client, taps are handled locally from the cache: a tap on a
+tile opens it, and a second tap or the tile's time running out returns to
+the quad (see [docs/render-packages.md](docs/render-packages.md#local-interaction)).
 
 ### News headlines screens
 
@@ -1080,8 +1105,9 @@ restarts them, keeping every documented data path (see
 and disables all project services, including the render server and display
 client, and removes the virtual environment. It copies the installed mode's
 configuration, credentials and server state into
-`~/desk_display_uninstalled`: `.env`, `.env.client`, `~/keys/`, playlists
-and assignments, credential hashes, and migration and upgrade backups. Then
+`~/desk_display_uninstalled`: `.env`, `.env.client`, `~/keys/`,
+`screens_config.local.json`, playlists and assignments, credential hashes,
+the known-client list, and migration and upgrade backups. Then
 it deletes the project directory. Caches and rendered artifacts are
 discarded. Because this is destructive, it prints a warning banner and asks
 for confirmation first. In a non-interactive shell it aborts unless
@@ -1120,7 +1146,14 @@ python scripts/test_api_connections.py --json
 
 # Canonical render-validation command for visual/regression review
 python scripts/render_screens.py
+
+# Server/client end-to-end suite (offline, fixture data) and documentation checks
+python -m pytest -q tests/test_end_to_end.py tests/test_docs.py
 ```
+
+Before a server/client release, the hardware soak in
+[docs/soak-and-release.md](docs/soak-and-release.md) records every device
+with `python3 soak.py sample` and judges the run with `python3 soak.py gates`.
 
 ### Import/export helpers
 

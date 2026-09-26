@@ -13,10 +13,22 @@ selects which settings apply:
 A client needs no upstream API key or provider URL. The server fetches all
 upstream data and sends clients rendered artifacts only.
 
+Some client settings are accepted and validated but not used yet:
+`DESK_DISPLAY_HEARTBEAT_INTERVAL_SECONDS` (the client sends one heartbeat
+per sync, every `DESK_DISPLAY_SYNC_INTERVAL_SECONDS`),
+`DESK_DISPLAY_OFFLINE_START` (a client always starts from its cache),
+`DESK_DISPLAY_CLIENT_NAME`, and the backlight and dark-hours settings
+(`DARK_HOURS`, `DESK_DISPLAY_BACKLIGHT_LEVEL`,
+`DESK_DISPLAY_DARK_HOURS_MODE`, `DESK_DISPLAY_DARK_HOURS_BACKLIGHT_LEVEL`),
+which only the standalone display applies. On the server,
+`DESK_DISPLAY_CONTENT_TIMEZONE` is not used yet; content is rendered in
+America/Chicago. See the known limitations in [CHANGELOG.md](CHANGELOG.md).
+
 The render server runs as `display_server.py` (see
 [Render server API](#render-server-api)) and reads `.env`. The display client
-runs as `display_client.py` and reads `.env.client`, never `.env`, so a
-combined install keeps the server's credentials out of the client process.
+runs as `display_client.py` and reads `.env.client`. It falls back to
+`.env` only when there is no `.env.client`, so a combined install keeps the
+server's credentials out of the client process.
 
 ## Checking a configuration
 
@@ -26,7 +38,8 @@ python3 -m deployment_config check --env-file .env   # role from DESK_DISPLAY_RO
 ```
 
 The check exits non-zero on errors. The same validation runs at startup in
-`main.py`, `config_ui.py`, and `feed_server.py`. Server and client processes
+`main.py`, `display_server.py`, `display_client.py`, `config_ui.py`, and
+`feed_server.py`. Server and client processes
 refuse to start on errors; the standalone role logs them as warnings so
 existing installs keep running.
 
@@ -40,10 +53,14 @@ Startup validation reports:
   `DESK_DISPLAY_CLIENT_TOKEN`, and `DESK_DISPLAY_PROFILE`.
 - **Unknown profiles** and **invalid rotations** (0, 90, 180, 270 degrees, or
   0 to 3 quarter turns).
-- **Insecure authentication.** A server needs a
-  `DESK_DISPLAY_SERVER_AUTH_TOKEN` of at least 32 characters; running
-  without one is only allowed on a loopback bind with
-  `DESK_DISPLAY_SERVER_ALLOW_UNAUTHENTICATED=1`. A client using plain HTTP to
+- **Insecure authentication.** With the default provisioned enrollment a
+  server needs no shared token (a `DESK_DISPLAY_SERVER_AUTH_TOKEN` that is
+  set anyway is ignored, with a warning). With
+  `DESK_DISPLAY_SERVER_ENROLLMENT=shared` it needs a
+  `DESK_DISPLAY_SERVER_AUTH_TOKEN` of at least 32 characters. Either way,
+  `DESK_DISPLAY_SERVER_ALLOW_UNAUTHENTICATED=1` is only allowed on a loopback
+  bind. `DESK_DISPLAY_SERVER_ADMIN_TOKEN`, when set, must be at least 32
+  characters and differ from the shared token. A client using plain HTTP to
   another host, or with TLS verification off, fails unless
   `DESK_DISPLAY_ALLOW_INSECURE_TRANSPORT=1`. `SCREEN_AUTH_ENABLED=1` without
   `SCREEN_UI_PASSWORD` fails.
@@ -77,13 +94,15 @@ are unchanged.
   (see "Client provisioning and credentials" below). It
   returns the accepted versions, server version, assignment state, assigned
   playlist and revision, manifest revision, lease expiry, recommended
-  heartbeat and sync intervals, and a per-client `client_credential`.
+  heartbeat and sync intervals, and a per-client `client_credential`. The
+  current client does not use the recommended intervals; it syncs every
+  `DESK_DISPLAY_SYNC_INTERVAL_SECONDS`.
 - `/api/v1/clients/<id>/heartbeat`, `/config`, `/manifest`, and
   `/artifacts/<sha256>.<ext>` need `Authorization: Bearer <client_credential>`
   for that client ID, so one client cannot read another's configuration or
   status. A client can download only artifacts its own manifests listed.
 - `/api/v1/health` is public and only reports that the service is up.
-- `/api/v1/admin/status`, `/admin/prerender/<name>`, `/admin/clients`
+- `/api/v1/admin/status`, `/admin/render-status`, `/admin/prerender/<name>`, `/admin/clients`
   (list, or `POST` to provision) and
   `/admin/clients/<id>/disable|enable|rotate|revoke` need
   `DESK_DISPLAY_SERVER_ADMIN_TOKEN`; the admin API is off when it is unset.
@@ -91,7 +110,9 @@ are unchanged.
   failed authentication per address, so guessing credentials locks the
   address out for a while, and heartbeats, configuration, manifests and
   artifacts per client, so one runaway client never slows the others.
-  `DESK_DISPLAY_SERVER_RATE_LIMITS=0` turns this off.
+  `DESK_DISPLAY_SERVER_RATE_LIMITS=0` turns this off. The body also carries
+  `retry_after_seconds`, which is what the client reads; it ignores the
+  header.
 
 A lease lasts `DESK_DISPLAY_CLIENT_LEASE_SECONDS`; the server recommends a
 heartbeat every third of that. A client that misses its deadline expires:
@@ -163,7 +184,9 @@ artifacts it does not already have. Every download is checked for length,
 SHA-256, media type, dimensions, color mode and decoded size before it is
 published atomically, and a new playlist and manifest are activated together
 only when every required screen is usable locally. Failures retry with
-exponential backoff and jitter.
+exponential backoff and jitter (a limit that starts at 2 seconds and doubles
+up to 5 minutes), or later when
+an error body's `retry_after_seconds` asks for more.
 
 The artifact cache is bounded by `DESK_DISPLAY_CLIENT_CACHE_MAX_MB`. Eviction
 removes the least recently used artifacts first and never removes anything
@@ -322,8 +345,9 @@ sent to clients or browsers:
   setting and redact configured secret values.
 - The configuration UI and feed server redact configured secret values from
   every text and JSON response, and scrub stored client status payloads.
-- Log records in the display, config UI, and feed server processes have
-  configured secret values replaced with `[redacted]`.
+- Log records in the standalone display, render server, display client,
+  config UI, and feed server processes have configured secret values
+  replaced with `[redacted]`.
 
 Value redaction applies to secrets of at least 8 characters, so short
 placeholder values are not matched against unrelated text.

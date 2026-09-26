@@ -4,12 +4,14 @@ Desk Display pulls live data from third-party weather, finance, and sports provi
 
 Most credentials can be supplied in `.env` when `CONFIG_LOAD_DOTENV=1` or through the process/service environment. Optional providers should fail closed: missing credentials should skip the related diagnostic or fall back to another provider rather than preventing unrelated screens from rendering.
 
+In a server/client deployment only the render server calls these providers, so every credential here belongs in the server's `.env`. A display client (`.env.client`) holds none, and its startup check fails if one is set there. See [CONFIGURATION.md](CONFIGURATION.md).
+
 ---
 
 ## Table of contents
 
 - [Diagnostics](#diagnostics)
-- [Weather and radar](#weather-and-radar)
+- [Weather and radar](#weather-and-radar) (including AirNow air quality)
 - [Sports](#sports)
 - [News headlines (RSS/Atom)](#news-headlines-rssatom)
 - [Finance](#finance)
@@ -115,6 +117,18 @@ Fields used:
 - `radar.nowcast[]`
 - frame `path`
 - frame `time`
+
+### AirNow air quality
+
+| Item | Value |
+| --- | --- |
+| Role | Current AQI observations for the `air quality` screen (U.S. locations). |
+| Endpoint | `https://www.airnowapi.org/aq/observation/latLong/current/` (25-mile search distance) |
+| Credential | `AIRNOW_API_KEY` (free). Without it the screen is disabled. |
+| Location | `AIR_QUALITY_LATITUDE`/`AIR_QUALITY_LONGITUDE`, defaulting to `WEATHER_LATITUDE`/`WEATHER_LONGITUDE`. |
+| Gap fill | When nearby monitors do not report PM2.5, PM10 or ozone, the missing components come from Open-Meteo's modeled air-quality API (`https://air-quality-api.open-meteo.com/v1/air-quality`, no key). AirNow's AQI and category are never replaced. |
+
+AirNow does not provide pollen, so `AIR_QUALITY_ENABLE_POLLEN` has no effect with this provider.
 
 ### Additional weather map tiles
 
@@ -351,6 +365,7 @@ variables](README.md#ads-b-receiver-variables) for configuration.
 | WeatherKit | `WEATHERKIT_TEAM_ID`, `WEATHERKIT_KEY_ID`, `WEATHERKIT_SERVICE_ID`, `WEATHERKIT_PRIVATE_KEY` or `WEATHERKIT_KEY_PATH`. |
 | OpenWeatherMap | `OWM_API_KEY`. |
 | Weather/map location | `WEATHER_LATITUDE`, `WEATHER_LONGITUDE`. |
+| Air quality | `AIRNOW_API_KEY`; optional `AIR_QUALITY_LATITUDE`, `AIR_QUALITY_LONGITUDE`. |
 | AHL/Wolves | Optional `AHL_*` overrides; defaults are provided for the Chicago Wolves helper path. |
 | Wi-Fi probes | Optional `WIFI_TCP_PROBE_*`, `WIFI_HTTPS_PROBE_URL`, and `RPI_CONNECT_CONTROL_HOST` values. |
 | ADS-B receivers | `ADSB_DEVICE_1_HOST` (and optionally `ADSB_DEVICE_2_HOST`); no API key needed. |

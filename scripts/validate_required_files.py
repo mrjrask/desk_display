@@ -102,11 +102,19 @@ def build_module_graph(py_files: Iterable[Path]) -> dict[str, ModuleNode]:
     return graph
 
 
+ENTRY_POINTS = {
+    "main.py", "config_ui.py", "feed_server.py", "schedule_migrations.py", "display_server.py",
+    "display_client.py", "install_modes.py", "soak.py", "runtime.py",
+}
+
+
 def determine_seeds(graph: dict[str, ModuleNode]) -> set[str]:
     seeds: set[str] = set()
     for name, node in graph.items():
         top_level = node.path.parts[0]
-        if node.path.name in {"main.py", "config_ui.py", "feed_server.py", "schedule_migrations.py", "storage_overrides.py"} or top_level == "scripts":
+        # Entry points run by services, installers or operators, and screens,
+        # which screens/registry.py loads by name.
+        if node.path.name in ENTRY_POINTS or top_level in {"scripts", "screens"}:
             seeds.add(name)
     return seeds
 

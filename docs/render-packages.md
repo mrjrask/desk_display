@@ -13,9 +13,9 @@ what the server ships for it:
 
 | Class | Ships | Examples |
 | --- | --- | --- |
-| `static` | A still PNG | Most scoreboards and standings |
-| `periodic` | A still PNG re-rendered every 60 s | Screens whose content ages by the minute |
-| `scrolling_canvas` | Still + `scroll` package | Long lists that scroll |
+| `static` | A still PNG | Weather, next-game and standings cards |
+| `periodic` | A still PNG re-rendered every 60 s | Live games and `adsb live` |
+| `scrolling_canvas` | Still + `scroll` package | Scoreboards, standings tables, On This Day |
 | `ticker_overlay` | Still + `ticker` package | Screens with moving text lanes |
 | `finite_animation` | Still + `animation` package | Intro animations, slides |
 | `composite`, `interactive_focus` | Still + `composite` package | Quads; `interactive_focus` tiles open on tap |
@@ -43,6 +43,13 @@ version 1 (`RENDER_PACKAGE_SCHEMA_VERSION`). Defined in
 | `<kind>` | Exactly one body, named after the kind |
 
 All geometry is in logical coordinates. Physical rotation stays on the client.
+
+On a 1-bit profile (`color_mode` `1`), the images the client composes into
+moving frames stay in colour: the scroll canvas, the ticker base and strips,
+and the composite base and tile frames are `RGB` assets. The client builds
+each frame in colour and dithers it to 1-bit as it shows it, exactly as the
+standalone display dithers each frame. Dithering a whole canvas once would
+give scrolled frames a different pattern.
 
 ### Kinds
 
@@ -89,8 +96,10 @@ delay.
 - `scroll`, `slide` and `frames` play once, then hold on the last frame for
   the screen's hold time. `ticker`, `composite` and `clock` run for the
   longer of their motion and the hold time.
-- Frame cadence is 0.045 s for tickers, at least 0.03 s for composites, 1 s
-  for the nixie clock and 5 s for other clocks, and 1/30 s otherwise.
+- The picture is updated at the package's own pace: a scroll's
+  `frame_seconds` (at least 0.01 s), 0.045 s for tickers, the composite's
+  `frame_seconds` or an animation's shortest frame (at least 0.03 s), 1 s for
+  the nixie clock and 5 s for other clocks, and 1/30 s for a slide.
 - A slide picks left-to-right or right-to-left at random.
 
 ### Fallbacks
@@ -174,6 +183,6 @@ unreachable" and "cached content unavailable".
 
 `DESK_DISPLAY_OFFLINE_MAX_AGE_HOURS` (0 keeps content forever) makes a
 disconnected client stop showing content older than that and show "offline;
-cached content expired" instead. The client retries with exponential backoff
-from 2 s to 300 s. When a sync succeeds it resumes at the same place in the
+cached content expired" instead. The client retries with jittered exponential
+backoff, up to 300 s between tries. When a sync succeeds it resumes at the same place in the
 rotation, or just after the screen it last showed.
