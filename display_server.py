@@ -242,6 +242,7 @@ def create_app(
         sync_interval_seconds=config.sync_interval_seconds,
         static_clients=dict(config.static_clients),
         assignments=assignments or (lambda _client_id: None),
+        assignments_managed=assignments is not None,
         clock=clock,
     )
     artifacts = ArtifactStore(
@@ -427,13 +428,10 @@ def create_app(
     def _manifest(record: ClientRecord) -> dict[str, Any]:
         """Build *record*'s manifest and note which artifacts it references."""
 
-        demand = record.demand
-        assignment = _assignment(record.client_id)
+        demand = registry.effective_demand(record)
         if demand is not None:
             requested = set(demand.required_screens) | set(demand.alternate_screens)
             interactive = set(demand.touch_targets)
-        elif assignment is not None:
-            requested, interactive = set(assignment.screens) | set(assignment.alternates), set()
         else:
             requested, interactive = set(), set()
         client_id = record.client_id

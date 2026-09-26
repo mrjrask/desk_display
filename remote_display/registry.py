@@ -167,6 +167,10 @@ class ClientRegistry:
     static_clients: Mapping[str, str] = field(default_factory=dict)
     assignments: AssignmentLookup = _no_assignment
     clock: Callable[[], float] = time.time
+    # True when ``assignments`` is the server's playlist store, so "no
+    # assignment" means an operator unassigned the client rather than that
+    # this server does not manage playlists.
+    assignments_managed: bool = False
 
     def __post_init__(self) -> None:
         if self.lease_seconds < 30:
@@ -390,12 +394,34 @@ class ClientRegistry:
         with self._lock:
             return self._prerender.pop(identifier(name, "name"), None) is not None
 
-    def demand_entries(self) -> list[DemandEntry]:
-        """Merge active dynamic, static and pre-render demand.
+    def effective_demand(self, record: ClientRecord) -> ClientDemand | None:
+        """The demand the server plans for *record*.
 
         A client's own reported demand wins; otherwise the screens of its
-        assigned playlist are used.  Expired, disabled and unassigned clients
-        without reported demand contribute nothing.
+        assigned playlist are used.  When the server manages assignments, an
+        unassigned client contributes nothing, whatever it last reported:
+        that is only its offline cache, and an operator's unassignment must
+        stop rendering for it.
+        """
+
+        assignment = self.assignments(record.client_id)
+        if self.assignments_managed and assignment is None:
+            return None
+        if record.demand is not None:
+            return record.demand
+        if assignment is None or not assignment.screens:
+            return None
+        return _demand_for(
+            record.capabilities,
+            assignment.screens,
+            revision=assignment.playlist_revision,
+            alternates=assignment.alternates,
+        )
+
+    def demand_entries(self) -> list[DemandEntry]:
+        """Merge active dynamic, static and pre-render demand (see :meth:`effective_demand`).
+
+        Expired and disabled clients contribute nothing.
         """
 
         self.expire()
@@ -408,17 +434,9 @@ class ClientRegistry:
             state = record.lease_state(now)
             if state in {"disabled", "expired"}:
                 continue
-            demand = record.demand
+            demand = self.effective_demand(record)
             if demand is None:
-                assignment = self.assignments(record.client_id)
-                if assignment is None or not assignment.screens:
-                    continue
-                demand = _demand_for(
-                    record.capabilities,
-                    assignment.screens,
-                    revision=assignment.playlist_revision,
-                    alternates=assignment.alternates,
-                )
+                continue
             source = "dynamic" if state == "active" else "static"
             entries.append(DemandEntry(source, record.client_id, record.capabilities, demand))
         return entries + prerender
