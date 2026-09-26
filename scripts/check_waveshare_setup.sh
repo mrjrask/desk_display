@@ -2,7 +2,23 @@
 set -euo pipefail
 
 PROJECT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-ENV_PATH="${PROJECT_DIR}/.env"
+# The installed mode decides which process drives the panel and which env file
+# holds its settings: main.py and .env when standalone, display_client.py and
+# .env.client on a client or combined install. A server has no panel.
+INSTALL_MODE="standalone"
+if command -v python3 >/dev/null 2>&1 && [[ -f "$PROJECT_DIR/install_modes.py" ]]; then
+  INSTALL_MODE="$(python3 "$PROJECT_DIR/install_modes.py" detect --project-dir "$PROJECT_DIR" 2>/dev/null || echo standalone)"
+fi
+case "$INSTALL_MODE" in
+  client|combined)
+    PANEL_SERVICE="desk_display_client.service"
+    ENV_PATH="${PROJECT_DIR}/.env.client"
+    ;;
+  *)
+    PANEL_SERVICE="desk_display.service"
+    ENV_PATH="${PROJECT_DIR}/.env"
+    ;;
+esac
 WAVESHARE_OLED_SERVICE_NAME="${WAVESHARE_OLED_SERVICE_NAME:-desk_display_waveshare_oled.service}"
 WAVESHARE_FBCP_SERVICE_NAME="${WAVESHARE_FBCP_SERVICE_NAME:-waveshare-fbcp.service}"
 
@@ -86,13 +102,13 @@ section "Desk Display environment"
 if [[ -f "$ENV_PATH" ]]; then
   find_lines '^(DESK_DISPLAY_OUTPUT|DISPLAY_WIDTH|DISPLAY_HEIGHT|DISPLAY_ROTATION|DISPLAY_ROTATION_STRICT|DISPLAY_FB_DEVICE|WAVESHARE_OLED_[A-Z0-9_]+)=' "$ENV_PATH" || true
 else
-  echo "No .env found at $ENV_PATH"
+  echo "No panel env file found at $ENV_PATH"
 fi
 
-show_cmd "System service: desk_display" systemctl --no-pager --full status desk_display.service
+show_cmd "Install mode: $INSTALL_MODE; panel service: $PANEL_SERVICE" systemctl --no-pager --full status "$PANEL_SERVICE"
 show_cmd "System service: Waveshare OLED helper" systemctl --no-pager --full status "$WAVESHARE_OLED_SERVICE_NAME"
 show_cmd "System service: Waveshare fbcp bridge" systemctl --no-pager --full status "$WAVESHARE_FBCP_SERVICE_NAME"
-show_cmd "Recent desk_display journal" journalctl -u desk_display.service -n 80 --no-pager
+show_cmd "Recent $PANEL_SERVICE journal" journalctl -u "$PANEL_SERVICE" -n 80 --no-pager
 show_cmd "Recent Waveshare OLED journal" journalctl -u "$WAVESHARE_OLED_SERVICE_NAME" -n 80 --no-pager
 show_cmd "Recent Waveshare fbcp journal" journalctl -u "$WAVESHARE_FBCP_SERVICE_NAME" -n 80 --no-pager
 
@@ -102,4 +118,4 @@ echo "- For this HAT, DESK_DISPLAY_OUTPUT should usually be framebuffer and DISP
 echo "- On non-Pi5 systems using Bookworm, Waveshare's wiki expects fbcp running and DISPLAY_FB_DEVICE=/dev/fb0."
 echo "- If dtoverlay=vc4-kms-v3d is still enabled, fbcp/LCD rendering can stay black; comment it for this HAT workflow."
 echo "- OLED helper needs I2C bus 1 with addresses 0x3c and 0x3d visible."
-echo "- If /dev/fb1 no longer exists after kernel updates, set DISPLAY_FB_DEVICE=/dev/fb0 then restart desk_display.service."
+echo "- If /dev/fb1 no longer exists after kernel updates, set DISPLAY_FB_DEVICE=/dev/fb0 then restart $PANEL_SERVICE."

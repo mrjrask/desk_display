@@ -245,6 +245,11 @@ fi
 
 if command -v systemctl >/dev/null 2>&1; then
   for managed_service in "${MANAGED_SYSTEM_SERVICES[@]}"; do
+    # Only services this device has: the list covers every mode and add-on.
+    if [[ -z "$(systemctl list-unit-files "$managed_service" --no-legend 2>/dev/null)" ]] \
+      && ! systemctl is-active --quiet "$managed_service" 2>/dev/null; then
+      continue
+    fi
     log "Stopping $managed_service"
     $SUDO systemctl stop "$managed_service" || warn "Failed to stop $managed_service"
   done

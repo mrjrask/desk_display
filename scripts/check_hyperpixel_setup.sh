@@ -2,7 +2,23 @@
 set -euo pipefail
 
 PROJECT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-ENV_PATH="${PROJECT_DIR}/.env"
+# The installed mode decides which process drives the panel and which env file
+# holds its settings: main.py and .env when standalone, display_client.py and
+# .env.client on a client or combined install. A server has no panel.
+INSTALL_MODE="standalone"
+if command -v python3 >/dev/null 2>&1 && [[ -f "$PROJECT_DIR/install_modes.py" ]]; then
+  INSTALL_MODE="$(python3 "$PROJECT_DIR/install_modes.py" detect --project-dir "$PROJECT_DIR" 2>/dev/null || echo standalone)"
+fi
+case "$INSTALL_MODE" in
+  client|combined)
+    PANEL_SERVICE="desk_display_client.service"
+    ENV_PATH="${PROJECT_DIR}/.env.client"
+    ;;
+  *)
+    PANEL_SERVICE="desk_display.service"
+    ENV_PATH="${PROJECT_DIR}/.env"
+    ;;
+esac
 
 find_lines() {
   local pattern="$1"
@@ -69,11 +85,11 @@ section "Desk Display environment"
 if [[ -f "$ENV_PATH" ]]; then
   find_lines '^(DESK_DISPLAY_OUTPUT|DISPLAY_WIDTH|DISPLAY_HEIGHT|DISPLAY_ROTATION|DISPLAY_ROTATION_STRICT|DISPLAY_FB_DEVICE|HYPERPIXEL_PANEL)=' "$ENV_PATH" || true
 else
-  echo "No .env found at $ENV_PATH"
+  echo "No panel env file found at $ENV_PATH"
 fi
 
-show_cmd "System service (desk_display.service)" systemctl --no-pager --full status desk_display.service
-show_cmd "Recent desk_display journal" journalctl -u desk_display.service -n 80 --no-pager
+show_cmd "Install mode: $INSTALL_MODE; panel service ($PANEL_SERVICE)" systemctl --no-pager --full status "$PANEL_SERVICE"
+show_cmd "Recent $PANEL_SERVICE journal" journalctl -u "$PANEL_SERVICE" -n 80 --no-pager
 
 section "Session/display environment"
 echo "XDG_SESSION_TYPE=${XDG_SESSION_TYPE:-<unset>}"
@@ -90,5 +106,5 @@ echo
 section "Quick hints"
 echo "- If DESK_DISPLAY_OUTPUT=kernel and no active desktop session exists, use framebuffer mode instead."
 echo "- If you use dtoverlay rotate=..., keep DISPLAY_ROTATION=0 unless DISPLAY_ROTATION_STRICT=0 is intentional."
-echo "- Kernel-mode output needs an active X11/Wayland desktop session; if desk_display.service keeps restarting, check 'sudo journalctl -u desk_display.service -f' for 'No active X11/Wayland desktop session detected'."
-echo "- Manage it with 'sudo systemctl status/restart/stop desk_display.service' and 'sudo journalctl -u desk_display.service -f' like any other system service."
+echo "- Kernel-mode output needs an active X11/Wayland desktop session; if $PANEL_SERVICE keeps restarting, check 'sudo journalctl -u $PANEL_SERVICE -f' for 'No active X11/Wayland desktop session detected'."
+echo "- Manage it with 'sudo systemctl status/restart/stop $PANEL_SERVICE' and 'sudo journalctl -u $PANEL_SERVICE -f' like any other system service."

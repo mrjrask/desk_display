@@ -306,6 +306,12 @@ Update installed Python dependencies later with:
 ./scripts/update_dependencies.sh
 ```
 
+It installs the requirements file for the installed mode and display output
+(`python3 install_modes.py requirements`): a server gets `requirements/server.txt`
+and no panel driver, a client gets `requirements/client-<output>.txt`. Pass
+`--mode` or `--output` to override them, or `--print-requirements` to see which
+file it would install without changing anything.
+
 `update_dependencies.sh` also handles the maintenance tasks that used to be
 separate scripts:
 
@@ -1082,19 +1088,28 @@ Useful operations helpers:
 ./scripts/uninstall_airplay.sh
 ```
 
-`./scripts/update_services.sh` applies the current shutdown settings to an
-already-installed `desk_display.service` (removing the historical
-`cleanup.sh` `ExecStop` and setting the 10-second graceful-stop window) and
-also patches any project-managed systemd unit
-(`desk_display.service`, `config_ui_desk_display.service`,
-`desk_display_server.service`, `desk_display_client.service`,
-`desk_display_waveshare_oled.service`, `desk_display_adsb_collector.service`)
-whose command still points at a script path from before a
-repo-side script move/rename, then
-reloads systemd and restarts only the units it changed. It leaves every
-other unit setting (display profile, `Environment=` overrides, etc.)
-untouched, unlike re-running a full hardware installer, which regenerates
-the unit from scratch using whatever environment it happens to run with.
+`./scripts/update_services.sh` brings the installed systemd units up to date
+for the installed mode (`python3 install_modes.py detect`), without re-running
+a hardware installer:
+
+- **Server, client and combined:** rewrites the mode's units
+  (`desk_display_server.service`, `desk_display_client.service`,
+  `config_ui_desk_display.service`) from `service_units.py`, keeping the service
+  user, display output and panel `Environment=` overrides the installer
+  recorded, installs any that are missing, and enables them.
+- **Standalone:** patches `desk_display.service` in place (moved script paths,
+  the 10-second graceful stop instead of the historical `cleanup.sh`
+  `ExecStop`, and `Conflicts=desk_display_client.service`) and leaves the
+  display profile and `Environment=` overrides alone. A missing config UI unit
+  is added.
+- **Every mode:** stops and disables project units that belong to another mode,
+  rewrites moved script paths in the add-on units (feed server, screenshot
+  uploader, ADS-B collector, OLED helper, AirPlay), marks every script in
+  `scripts/` executable, reloads systemd, restarts only the units it changed,
+  and prints the state of every project unit installed.
+
+Add `--dry-run` to see what it would change, `--no-restart` to leave services
+running, or `--mode` to override the detected mode.
 
 `./scripts/upgrade.sh` upgrades an install in any mode: it pulls, updates
 dependencies for the installed mode, rewrites or patches its units, and

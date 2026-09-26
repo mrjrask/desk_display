@@ -7,6 +7,7 @@ COMMON_SCRIPT="$PROJECT_DIR/scripts/helpers/common.sh"
 PYTHON_BIN="${PYTHON:-python3}"
 REQUIREMENTS_FILE_OVERRIDE="${REQUIREMENTS_FILE:-}"
 OUTPUT_MODE="${DESK_DISPLAY_OUTPUT:-}"
+INSTALL_MODE="${DESK_DISPLAY_INSTALL_MODE:-}"
 INCLUDE_VENDOR_REQUIREMENTS="${INCLUDE_VENDOR_REQUIREMENTS:-0}"
 INCLUDE_PLATFORM_SPECIFIC_REQUIREMENTS="${INCLUDE_PLATFORM_SPECIFIC_REQUIREMENTS:-0}"
 ADAFRUIT_SENSOR_REQUIREMENTS_FILE="${ADAFRUIT_SENSOR_REQUIREMENTS_FILE:-requirements/sensors-adafruit.txt}"
@@ -14,6 +15,7 @@ PIMORONI_SENSOR_REQUIREMENTS_FILE="${PIMORONI_SENSOR_REQUIREMENTS_FILE:-requirem
 UPGRADE_OUTDATED=0
 CLEAN_CACHES=0
 DRY_RUN=0
+PRINT_REQUIREMENTS=0
 
 if [[ ! -f "$COMMON_SCRIPT" ]]; then
   echo "[ERROR] Missing helper script: $COMMON_SCRIPT" >&2
@@ -25,12 +27,16 @@ source "$COMMON_SCRIPT"
 
 usage() {
   cat >&2 <<USAGE
-Usage: $0 [--requirements <file>] [--output <displayhatmini|minipitft|kernel|framebuffer>]
+Usage: $0 [--requirements <file>] [--mode <standalone|server|client|combined>]
+          [--output <displayhatmini|minipitft|kernel|framebuffer|window|headless>]
           [--python <python-bin>] [--include-vendor] [--include-platform-specific]
-          [--upgrade-outdated] [--clean-caches] [--dry-run]
+          [--upgrade-outdated] [--clean-caches] [--dry-run] [--print-requirements]
 
-  --requirements <file>        Requirements file to install (overrides --output).
-  --output <mode>               Pick the requirements file for a display output mode.
+  --requirements <file>        Requirements file to install (overrides --mode and --output).
+  --mode <mode>                 Installation mode; defaults to the installed one
+                                (python3 install_modes.py detect).
+  --output <output>             Display output; defaults to the one recorded at install,
+                                else DESK_DISPLAY_OUTPUT in the panel's env file.
   --python <python-bin>         Interpreter used to create the virtual environment.
   --include-vendor              Also install local ./vendor editable requirements.
   --include-platform-specific   On macOS, also install Linux-only hardware requirements.
@@ -40,6 +46,8 @@ Usage: $0 [--requirements <file>] [--output <displayhatmini|minipitft|kernel|fra
                                  to reclaim disk space (Raspberry Pi/Debian hosts).
   --dry-run                      With --upgrade-outdated, report outdated packages
                                  without upgrading them.
+  --print-requirements           Print the mode and requirements file that would be
+                                 installed, then exit without changing anything.
 USAGE
   exit 1
 }
@@ -48,6 +56,10 @@ while [[ $# -gt 0 ]]; do
   case "$1" in
     --requirements)
       REQUIREMENTS_FILE_OVERRIDE="${2:-}"
+      shift 2
+      ;;
+    --mode)
+      INSTALL_MODE="${2:-}"
       shift 2
       ;;
     --output)
@@ -78,11 +90,43 @@ while [[ $# -gt 0 ]]; do
       DRY_RUN=1
       shift
       ;;
+    --print-requirements)
+      PRINT_REQUIREMENTS=1
+      shift
+      ;;
     *)
       usage
       ;;
   esac
 done
+
+install_modes() {
+  python3 "$PROJECT_DIR/install_modes.py" "$@" --project-dir "$PROJECT_DIR"
+}
+
+# The installation mode decides what gets installed: a server has no panel
+# driver, and a client has no upstream provider libraries.
+if [[ -z "$INSTALL_MODE" ]]; then
+  INSTALL_MODE=$(install_modes detect 2>/dev/null || echo standalone)
+fi
+case "$INSTALL_MODE" in
+  standalone|server|client|combined) ;;
+  *)
+    echo "[ERROR] Unknown mode: $INSTALL_MODE (expected standalone, server, client or combined)" >&2
+    exit 1
+    ;;
+esac
+
+# Indoor sensors belong to the panel, whose settings live in .env when
+# standalone, .env.client on a client or combined install, and nowhere on a
+# server.
+if [[ -z "${DESK_DISPLAY_PANEL_ENV_FILE:-}" ]]; then
+  case "$INSTALL_MODE" in
+    server) DESK_DISPLAY_PANEL_ENV_FILE="none" ;;
+    client|combined) DESK_DISPLAY_PANEL_ENV_FILE=".env.client" ;;
+    *) DESK_DISPLAY_PANEL_ENV_FILE=".env" ;;
+  esac
+fi
 
 pick_requirements_file() {
   if [[ -n "$REQUIREMENTS_FILE_OVERRIDE" ]]; then
@@ -90,29 +134,19 @@ pick_requirements_file() {
     return 0
   fi
 
-  local normalized_output_mode
-  normalized_output_mode=$(printf '%s' "$OUTPUT_MODE" | tr '[:upper:]' '[:lower:]')
-
-  case "$normalized_output_mode" in
-    window)
-      echo "requirements/window.txt"
-      ;;
-    kernel)
-      echo "requirements/kernel.txt"
-      ;;
-    framebuffer)
-      echo "requirements/framebuffer.txt"
-      ;;
-    minipitft)
-      echo "requirements/minipitft.txt"
-      ;;
-    *)
-      echo "requirements/displayhatmini.txt"
-      ;;
-  esac
+  local -a output_args=()
+  if [[ -n "$OUTPUT_MODE" ]]; then
+    output_args=(--output "$OUTPUT_MODE")
+  fi
+  install_modes requirements --mode "$INSTALL_MODE" "${output_args[@]}"
 }
 
 REQUIREMENTS_FILE=$(pick_requirements_file)
+log "Installation mode: $INSTALL_MODE; requirements: $REQUIREMENTS_FILE"
+if [[ "$PRINT_REQUIREMENTS" -eq 1 ]]; then
+  echo "$REQUIREMENTS_FILE"
+  exit 0
+fi
 
 normalize_sensor_name() {
   printf '%s' "$1" | tr '[:upper:]- ' '[:lower:]__'
