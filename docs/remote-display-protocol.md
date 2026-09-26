@@ -157,7 +157,7 @@ its next sync, and keeps playing from its cache in the meantime.
 
 - `client_id`;
 - `playback_state`: `starting`, `playing`, `focus`, `paused`, `dark`,
-  `offline` or `error` (the current client sends only `starting`,
+  `offline` or `error` (the current client sends only `starting`, `dark`,
   `playing`, `offline` and `error`);
 - `accepted_revisions {manifest_revision, playlist_revision, config_revision}`;
 - `current_screen` and `current_playlist`;

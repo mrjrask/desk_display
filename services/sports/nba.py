@@ -9,6 +9,7 @@ import time
 from collections.abc import Iterable
 from typing import Any, Optional
 
+from display_time import content_today
 from config import CENTRAL_TIME
 from services.http_client import get_session
 from services.sports.scoreboard_window import (
@@ -604,7 +605,7 @@ def _fetch_games_from_nba_cdn(day: datetime.date) -> list[dict]:
 
     data: Optional[dict[str, Any]] = None
     source_base: Optional[str] = None
-    today = datetime.date.today()
+    today = content_today()
     for base, respect_cache in _NBA_SCOREBOARD_BASES:
         date_url = f"{base}/scoreboard_{day.strftime('%Y%m%d')}.json"
         data = _load_json(date_url, respect_forbidden_cache=respect_cache)

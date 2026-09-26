@@ -75,3 +75,42 @@ def test_forced_nhl_read_bypasses_module_cache(monkeypatch):
 
     assert coordinator.read_nhl_league_standings() == stale
     assert coordinator.read_nhl_league_standings(force=True) == fresh
+
+
+def test_identical_publishes_keep_revisions():
+    coordinator = DataCoordinator(DataProvider())
+    first = coordinator.publish("weather", {"temp": 70, "hourly": [1, 2]})
+    again = coordinator.publish("weather", {"temp": 70, "hourly": [1, 2]})
+    assert again.revision == first.revision
+    assert again.source_revisions["weather"] == first.source_revisions["weather"]
+    changed = coordinator.publish("weather", {"temp": 71, "hourly": [1, 2]})
+    assert changed.revision == first.revision + 1
+    assert changed.source_revisions["weather"] == first.source_revisions["weather"] + 1
+
+
+def test_refresh_from_a_ttl_cache_keeps_revisions():
+    coordinator = DataCoordinator(DataProvider())
+    payload = {"games": [1]}
+    coordinator.register_source("cubs", lambda: payload, ttl_seconds=300)
+    first = coordinator.refresh()
+    assert coordinator.refresh().source_revisions == first.source_revisions
+    payload = {"games": [1, 2]}
+    assert coordinator.refresh(force=True).source_revisions["cubs"] == first.source_revisions["cubs"] + 1
+
+
+def test_values_without_equality_always_count_as_changed():
+    class Opaque:
+        def __eq__(self, other):
+            raise RuntimeError("no comparison")
+
+    coordinator = DataCoordinator(DataProvider())
+    value = Opaque()
+    first = coordinator.publish("x", value)
+    assert coordinator.publish("x", value).source_revisions["x"] == first.source_revisions["x"] + 1
+
+
+def test_restored_values_are_the_baseline_for_changes():
+    coordinator = DataCoordinator(DataProvider())
+    coordinator.restore({"weather": ({"temp": 70}, 7)})
+    assert coordinator.publish("weather", {"temp": 70}).source_revisions["weather"] == 7
+    assert coordinator.publish("weather", {"temp": 72}).source_revisions["weather"] == 8

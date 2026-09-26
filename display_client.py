@@ -4,7 +4,7 @@
 Start-up order matters.  The client loads its settings, initializes the
 display, and starts playing the last-known-good playlist and manifest from
 its cache *before* it contacts the server, so a warm client works without
-one.  :class:`remote_display.client_sync.ClientSync` runs in a background
+one (unless ``DESK_DISPLAY_OFFLINE_START=0``, which waits for a first sync).  :class:`remote_display.client_sync.ClientSync` runs in a background
 thread; the display loop only reads the content it last activated, so
 network trouble never delays a frame or a button press.
 
@@ -119,6 +119,80 @@ def diagnostic_image(profile: RenderProfile, lines: list[str]) -> Image.Image:
     return image.convert(profile.color_mode)
 
 
+class DarkHours:
+    """This client's own dark hours and backlight levels.
+
+    ``DARK_HOURS`` is read as wall-clock time in the content timezone.  During
+    dark hours the panel is either blanked with its backlight off (``off``)
+    or keeps playing at a lower backlight (``dim``).
+    """
+
+    def __init__(
+        self,
+        spec: str | None = None,
+        *,
+        mode: str = "off",
+        level: int = 100,
+        dark_level: int = 10,
+        zone: Any = None,
+        now: Callable[[], Any] | None = None,
+    ) -> None:
+        import datetime as dt
+        from zoneinfo import ZoneInfo
+
+        from dark_hours import _parse_dark_hours_spec
+        from display_time import DEFAULT_CONTENT_TIMEZONE
+
+        self.segments = _parse_dark_hours_spec(spec)
+        self.mode = mode if mode in {"off", "dim"} else "off"
+        self.level = max(0, min(100, int(level)))
+        self.dark_level = max(0, min(100, int(dark_level)))
+        self.zone = zone or ZoneInfo(DEFAULT_CONTENT_TIMEZONE)
+        self._now = now or (lambda: dt.datetime.now(dt.timezone.utc))
+
+    @classmethod
+    def from_settings(cls, settings: dict[str, Any], **kwargs: Any) -> DarkHours:
+        from zoneinfo import ZoneInfo
+
+        from display_time import content_timezone_name
+
+        def number(name: str, default: int) -> int:
+            value = settings.get(name)
+            return default if value in (None, "") else int(value)
+
+        return cls(
+            settings.get("DARK_HOURS"),
+            mode=str(settings.get("DESK_DISPLAY_DARK_HOURS_MODE") or "off").strip().lower(),
+            level=number("DESK_DISPLAY_BACKLIGHT_LEVEL", 100),
+            dark_level=number("DESK_DISPLAY_DARK_HOURS_BACKLIGHT_LEVEL", 10),
+            zone=ZoneInfo(content_timezone_name({k: str(v) for k, v in settings.items() if v is not None})),
+            **kwargs,
+        )
+
+    def active(self) -> bool:
+        from dark_hours import segments_contain
+
+        return bool(self.segments) and segments_contain(self.segments, self._now(), self.zone)
+
+    def state(self) -> str:
+        """``normal``, ``dim`` or ``dark`` for the current moment."""
+
+        if not self.active():
+            return "normal"
+        return "dim" if self.mode == "dim" else "dark"
+
+    def backlight(self, state: str) -> float:
+        """The backlight fraction (0 to 1) for *state*."""
+
+        if state == "dark":
+            return 0.0
+        return (self.dark_level if state == "dim" else self.level) / 100
+
+
+DARK_POLL_SECONDS = 30.0
+LIGHT_CHECK_SECONDS = 1.0
+
+
 @dataclass
 class Controls:
     """Button and touch requests, consumed by the display loop."""
@@ -147,6 +221,8 @@ class DisplayClient:
         monotonic: Callable[[], float] = time.monotonic,
         clock: Callable[[], Any] | None = None,
         ip_text: Callable[[], str | None] | None = None,
+        dark_hours: DarkHours | None = None,
+        offline_start: bool = True,
     ) -> None:
         self.profile = profile
         self.presenter = presenter
@@ -175,6 +251,12 @@ class DisplayClient:
         self._returning = False
         self._clock = clock
         self._ip_text = ip_text
+        self.dark_hours = dark_hours or DarkHours()
+        self.light_state: str | None = None  # last applied: normal, dim or dark
+        # DESK_DISPLAY_OFFLINE_START=0: play nothing cached until a sync in this
+        # process has activated the server's current content, so a restarted
+        # client never shows stale content.
+        self.offline_start = offline_start
 
     # Playback
 
@@ -284,9 +366,50 @@ class DisplayClient:
             LOGGER.warning("Render package for %s is not playable; showing its still: %s", item.screen_id, exc)
             return None
 
+    def _apply_light(self, state: str) -> None:
+        """Set the backlight for *state* once, when it changes."""
+
+        if state == self.light_state:
+            return
+        previous, self.light_state = self.light_state, state
+        if state == "dark":
+            LOGGER.info("Entering dark hours; blanking the display")
+        elif previous == "dark":
+            LOGGER.info("Leaving dark hours; resuming playback")
+        set_backlight = getattr(self.presenter, "set_backlight", None)
+        if callable(set_backlight):
+            try:
+                set_backlight(self.dark_hours.backlight(state))
+            except Exception:  # noqa: BLE001 - a panel without backlight control still plays
+                LOGGER.debug("Backlight control failed", exc_info=True)
+
+    def _go_dark(self) -> tuple[None, float]:
+        entering = self.light_state != "dark"
+        self._apply_light("dark")
+        self.animation = None
+        self._current = None
+        self.controls = Controls()  # buttons do nothing while the panel is dark
+        self.report.playback_state = "dark"
+        self.report.current_screen = None
+        if entering:
+            self.presenter.present(Image.new(self.profile.color_mode, (self.profile.width, self.profile.height)))
+        return None, DARK_POLL_SECONDS
+
     def step(self) -> tuple[str | None, float]:
         """Present a screen's first frame; return ``(screen_id, seconds to show it)``."""
 
+        light = self.dark_hours.state()
+        if light == "dark":
+            return self._go_dark()
+        self._apply_light(light)
+        if not self.offline_start and not self.sync.confirmed:
+            self.animation = None
+            self._current = None
+            self.report.playback_state = "starting"
+            self.report.current_screen = None
+            state = "waiting for first sync" if self.sync.connected else "server unreachable"
+            self.presenter.present(self._diagnostic(state))
+            return None, 5.0
         content = self.sync.active()
         if content.revision != self._content_revision:
             self._rebuild(content)
@@ -366,10 +489,17 @@ class DisplayClient:
         """
 
         deadline = self._monotonic() + seconds
+        next_light_check = self._monotonic() + LIGHT_CHECK_SECONDS
         while not self._stop.is_set() and self._monotonic() < deadline:
             self._poll_taps()
             if self._controls_pending():
                 return
+            if self._monotonic() >= next_light_check:
+                # A dark-hours boundary ends the hold, so the panel blanks,
+                # dims or wakes promptly even during a long animation.
+                next_light_check = self._monotonic() + LIGHT_CHECK_SECONDS
+                if self.dark_hours.state() != self.light_state:
+                    return
             if self.sync.active().revision != self._content_revision and self._player is None:
                 return
             interval = POLL_SECONDS
@@ -513,6 +643,8 @@ def build_client(settings: dict[str, Any], *, presenter: Any = None, transport: 
         server_url=server_url,
         physical_rotation=decision.applied,
         offline_max_age_seconds=float(settings.get("DESK_DISPLAY_OFFLINE_MAX_AGE_HOURS") or 0) * 3600,
+        dark_hours=DarkHours.from_settings(settings),
+        offline_start=_truthy(settings.get("DESK_DISPLAY_OFFLINE_START", True)),
     )
 
 

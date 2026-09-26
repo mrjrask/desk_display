@@ -150,6 +150,7 @@ def test_data_revisions_follow_only_the_screens_feeds(env):
     scoreboard = env.service.data_revision("MLB Scoreboard")
     assert env.service.data_revision("date") is None
     env.clock.advance(1800)
+    env.provider.weather = {"current": {"temp": 71}}
     env.service.refresh({"weather1"})
     assert env.service.data_revision("weather1") != weather
     assert env.service.data_revision("weather quad") != weather  # weather + air quality
@@ -212,10 +213,26 @@ def test_feed_update_rerenders_only_dependent_screens(env, tmp_path):
     rendered.clear()
     # Only weather changes now: only the weather screen rerenders.
     env.clock.advance(feeds.FEED_REFRESH_INTERVALS["weather"])
+    env.provider.weather = {"current": {"temp": 71}}
     env.service.refresh({"weather1"})
     now.now += 60
     coordinator.tick()
     assert rendered == ["weather1"]
+
+
+def test_unchanged_refreshes_keep_revisions(env):
+    env.service.refresh({"weather1", "cubs last", "MLB Scoreboard"})
+    before = dict(env.data.snapshot().source_revisions)
+    revision = env.data.snapshot().revision
+    env.clock.advance(1800)
+    assert env.service.refresh({"weather1", "cubs last", "MLB Scoreboard"}, force=True)
+    assert dict(env.data.snapshot().source_revisions) == before
+    assert env.data.snapshot().revision == revision
+    env.provider.scoreboards = {"scoreboards": {"mlb": [{"id": 2}]}, "scoreboard_metadata": {"mlb": {"stale": False}}}
+    env.service.refresh({"MLB Scoreboard"}, force=True)
+    after = env.data.snapshot().source_revisions
+    assert after["scoreboards"] == before["scoreboards"] + 1
+    assert after["scoreboard_metadata"] == before["scoreboard_metadata"]  # metadata did not change
 
 
 # ── Failures and health ─────────────────────────────────────────────────────

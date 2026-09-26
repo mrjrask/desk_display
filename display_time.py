@@ -2,8 +2,14 @@
 from __future__ import annotations
 
 import datetime
+import logging
+import os
+from collections.abc import Mapping
 from typing import Optional
-from zoneinfo import ZoneInfo
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
+
+CONTENT_TIMEZONE_ENV = "DESK_DISPLAY_CONTENT_TIMEZONE"
+DEFAULT_CONTENT_TIMEZONE = "America/Chicago"
 
 
 class LocalizableZoneInfo(datetime.tzinfo):
@@ -37,4 +43,57 @@ class LocalizableZoneInfo(datetime.tzinfo):
         return dt.replace(tzinfo=self)
 
 
-CENTRAL_TIME = LocalizableZoneInfo("America/Chicago")
+def content_timezone_name(env: Mapping[str, str] | None = None) -> str:
+    """The configured IANA content timezone, or the default when unset or unknown."""
+
+    source = os.environ if env is None else env
+    name = (source.get(CONTENT_TIMEZONE_ENV) or "").strip()
+    if not name:
+        return DEFAULT_CONTENT_TIMEZONE
+    try:
+        ZoneInfo(name)
+    except (ZoneInfoNotFoundError, ValueError):
+        logging.warning("Unknown %s %r; using %s", CONTENT_TIMEZONE_ENV, name, DEFAULT_CONTENT_TIMEZONE)
+        return DEFAULT_CONTENT_TIMEZONE
+    return name
+
+
+class ContentZone(LocalizableZoneInfo):
+    """The configured content timezone (``DESK_DISPLAY_CONTENT_TIMEZONE``).
+
+    Dates, schedules, clocks and dark hours all use this one zone.  It is
+    resolved on first use rather than at import, because ``config`` imports
+    this module before it loads the dotenv file that may set the zone.
+    """
+
+    def __init__(self) -> None:  # noqa: D107 - the zone is resolved lazily
+        self._resolved: ZoneInfo | None = None
+
+    @property
+    def _zone(self) -> ZoneInfo:  # type: ignore[override]
+        if self._resolved is None:
+            self._resolved = ZoneInfo(content_timezone_name())
+        return self._resolved
+
+    @property
+    def key(self) -> str:
+        return self._zone.key
+
+    def reset(self) -> None:
+        """Read the setting again on next use (tests and configuration reloads)."""
+
+        self._resolved = None
+
+    def __repr__(self) -> str:
+        return f"ContentZone({self.key!r})"
+
+
+# Historical name: this was fixed to America/Chicago before the content
+# timezone became configurable.
+CENTRAL_TIME = CONTENT_TIME = ContentZone()
+
+
+def content_today() -> datetime.date:
+    """Today's date in the content timezone, not the host's."""
+
+    return datetime.datetime.now(CONTENT_TIME).date()

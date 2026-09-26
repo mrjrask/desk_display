@@ -239,7 +239,8 @@ SETTINGS: tuple[Setting, ...] = (
        "64 characters). Keep it across reinstalls so the server keeps its playlist.",
        example="office-display"),
     _s("DESK_DISPLAY_CLIENT_NAME", "str", _CLIENT_ONLY, "client_identity",
-       "Optional human-readable name shown in the server UI; defaults to the client ID."),
+       "Ignored; kept so existing files still validate. Name clients on the server's "
+       "Clients page, which identifies them by client ID."),
     _s("DESK_DISPLAY_SERVER_URL", "url", _CLIENT_ONLY, "client_server",
        "Base URL of the render server.", example="https://desk-display.lan:8765"),
     _s("DESK_DISPLAY_CLIENT_TOKEN", "str", _CLIENT_ONLY, "client_server",
@@ -258,8 +259,8 @@ SETTINGS: tuple[Setting, ...] = (
        "Latitude for weather, the radar map centre and default AQI/ADS-B location."),
     _s("WEATHER_LONGITUDE", "longitude", _SERVER, "location",
        "Longitude for weather, the radar map centre and default AQI/ADS-B location."),
-    _s("DESK_DISPLAY_CONTENT_TIMEZONE", "timezone", _SERVER_ONLY, "location",
-       "IANA timezone the server renders dates, schedules and dark hours in.",
+    _s("DESK_DISPLAY_CONTENT_TIMEZONE", "timezone", _ALL, "location",
+       "IANA timezone for dates, schedules, clocks and dark hours.",
        default="America/Chicago"),
 
     # ── Weather providers ────────────────────────────────────────────────────

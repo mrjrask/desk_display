@@ -37,6 +37,7 @@ from typing import Any, Callable, Dict, Iterable, List, Optional, Tuple
 import PIL.ImageDraw as _ID
 from PIL import Image, ImageDraw, ImageEnhance, ImageFont, ImageOps
 
+from display_time import content_today
 from image_compat import LANCZOS
 from env_config import env_float, env_int
 from services.http_client import http_get
@@ -3638,7 +3639,7 @@ def _parse_game_date(
 def next_game_from_schedule(
     schedule: List[Dict[str, Any]], today: Optional[datetime.date] = None
 ) -> Optional[Dict[str, Any]]:
-    today = today or datetime.date.today()
+    today = today or content_today()
     year = today.year
 
     candidates: List[tuple[Optional[datetime.date], float, int, Dict[str, Any]]] = []
