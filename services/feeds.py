@@ -12,6 +12,7 @@ import json
 import logging
 import os
 import tempfile
+from collections.abc import Mapping
 from pathlib import Path
 from typing import Any, Optional
 
@@ -181,6 +182,40 @@ FEED_REFRESH_INTERVALS: dict[str, int] = {
     "scoreboards": 24 * 60 * 60,
 }
 
+# League-wide standings.  The standalone display loop fetches these while it
+# renders a standings screen, so only the render server refreshes them as feeds.
+LEAGUE_STANDINGS_DEPENDENCIES: dict[str, set[str]] = {
+    "nfl_standings": {
+        "NFL Overview NFC",
+        "NFL Overview AFC",
+        "NFL Standings NFC",
+        "NFL Standings AFC",
+    },
+    "nhl_standings": {
+        "NHL Standings Overview West",
+        "NHL Standings Overview East",
+        "NHL Standings West",
+        "NHL Standings West v2",
+        "NHL Standings East",
+        "NHL Standings East v2",
+    },
+    "mlb_league_standings": {
+        "NL Overview",
+        "AL Overview",
+        "NL Overview+WC",
+        "AL Overview+WC",
+        "MLB AL Standings",
+        "MLB ALWC Standings",
+        "MLB NL Standings",
+        "MLB NLWC Standings",
+    },
+}
+# NHL v2 standings screens also need the wildcard order.
+NHL_WILDCARD_SCREEN_IDS = {"NHL Standings West v2", "NHL Standings East v2"}
+LEAGUE_STANDINGS_REFRESH_INTERVALS: dict[str, int] = dict.fromkeys(LEAGUE_STANDINGS_DEPENDENCIES, 1800)
+SERVER_FEED_DEPENDENCIES: dict[str, set[str]] = {**FEED_DEPENDENCIES, **LEAGUE_STANDINGS_DEPENDENCIES}
+SERVER_FEED_REFRESH_INTERVALS: dict[str, int] = {**FEED_REFRESH_INTERVALS, **LEAGUE_STANDINGS_REFRESH_INTERVALS}
+
 SCOREBOARD_SCREEN_IDS = {
     "NFL Scoreboard",
     "NFL Scoreboard v2",
@@ -215,10 +250,12 @@ LIVE_TEAM_SCREEN_TO_FEED: dict[str, str] = {
 STARTUP_CRITICAL_FEEDS: tuple[str, ...] = ("weather", "scoreboards", "air_quality")
 
 
-def feeds_for_screen(screen_id: str) -> set[str]:
+def feeds_for_screen(screen_id: str, dependencies: Mapping[str, set[str]] | None = None) -> set[str]:
     """Feeds whose data *screen_id* renders."""
 
-    return {feed for feed, screens in FEED_DEPENDENCIES.items() if screen_id in screens}
+    if dependencies is None:
+        dependencies = FEED_DEPENDENCIES
+    return {feed for feed, screens in dependencies.items() if screen_id in screens}
 
 
 def scoreboard_leagues_for_screens(screen_ids: set[str]) -> set[str]:
