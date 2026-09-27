@@ -260,7 +260,15 @@ class ScreenRenderer:
         result = definition.render()
         metadata: dict[str, Any] = dict(getattr(definition, "metadata", {}) or {})
         if isinstance(result, ScreenImage):
-            image = capture.current_image if result.displayed else result.image
+            # A renderer can provide the intentional still independently of
+            # the frame used during playback.  Logo animations use their
+            # settled card here; scrolling screens retain their full canvas
+            # for standalone capture while their render package carries it to
+            # remote clients.
+            if result.screenshot_image is not None:
+                image = result.screenshot_image
+            else:
+                image = capture.current_image if result.displayed else result.image
             metadata["consumed_delay"] = bool(result.consumed_delay)
         elif isinstance(result, Image.Image):
             image = result

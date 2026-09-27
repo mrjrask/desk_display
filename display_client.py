@@ -460,7 +460,8 @@ class DisplayClient:
         self.report.current_screen = item.screen_id
         self.presenter.present(frame)
         if self.screenshots is not None:
-            self.screenshots.record(item.screen_id, frame)
+            screenshot = self.animation.screenshot_image() if self.animation is not None else frame
+            self.screenshots.record(item.screen_id, screenshot)
         self._shown_at = self._monotonic()
         self._current = item.screen_id
         self.playback.current_screen = item.screen_id

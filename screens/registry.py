@@ -615,13 +615,21 @@ class _ProfileDisplay:
         return getattr(self._display, name)
 
 
-def _show_logo(display, image: Image.Image, profile: RenderProfile) -> Image.Image:
+def _show_logo(display, image: Image.Image, profile: RenderProfile) -> ScreenImage:
     animate_scroll(
         display,
         image,
         speed=_logo_scroll_speed_for_layout(profile.width, profile.height),
     )
-    return image
+    # ``animate_scroll`` finishes on this same centred brand card.  Return it
+    # explicitly rather than the bare logo sprite so screenshot producers do
+    # not save either the sprite or the animation's first frame.
+    final = Image.new("RGB", (profile.width, profile.height), "black")
+    logo = image.convert("RGBA")
+    x = (profile.width - logo.width) // 2
+    y = (profile.height - logo.height) // 2
+    final.paste(logo, (x, y), logo)
+    return ScreenImage(final, displayed=True, screenshot_image=final)
 
 
 def _extract_team_id(blob):
