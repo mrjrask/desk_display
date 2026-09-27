@@ -41,6 +41,7 @@ from playback.package_player import PackagePlayback
 from protocol import CLIENT_SUPPORTED_RENDER_PACKAGE_SCHEMA_VERSIONS
 from protocol_versions import APPLICATION_VERSION, NETWORK_PROTOCOL_VERSION
 from remote_display.client_cache import ClientCache, reconcile_playback
+from remote_display.client_screenshots import ClientScreenshots
 from remote_display.client_sync import (
     ActiveContent,
     ArtifactCache,
@@ -224,6 +225,7 @@ class DisplayClient:
         ip_text: Callable[[], str | None] | None = None,
         dark_hours: DarkHours | None = None,
         offline_start: bool = True,
+        screenshots: ClientScreenshots | None = None,
     ) -> None:
         self.profile = profile
         self.presenter = presenter
@@ -258,6 +260,8 @@ class DisplayClient:
         # process has activated the server's current content, so a restarted
         # client never shows stale content.
         self.offline_start = offline_start
+        # Feeds the config UI's Screenshots/Feed pages and display heartbeat.
+        self.screenshots = screenshots
 
     # Playback
 
@@ -455,6 +459,8 @@ class DisplayClient:
         self.report.playback_state = "playing" if self.sync.connected else "offline"
         self.report.current_screen = item.screen_id
         self.presenter.present(frame)
+        if self.screenshots is not None:
+            self.screenshots.record(item.screen_id, frame)
         self._shown_at = self._monotonic()
         self._current = item.screen_id
         self.playback.current_screen = item.screen_id
@@ -603,7 +609,8 @@ def _truthy(value: Any) -> bool:
     return bool(value)
 
 
-def build_client(settings: dict[str, Any], *, presenter: Any = None, transport: Any = None) -> DisplayClient:
+def build_client(settings: dict[str, Any], *, presenter: Any = None, transport: Any = None,
+                 screenshots: ClientScreenshots | None = None) -> DisplayClient:
     profile = resolve_display_profile_by_id(settings["DESK_DISPLAY_PROFILE"])
     if profile is None:
         raise SystemExit(f"Unknown display profile {settings['DESK_DISPLAY_PROFILE']!r}")
@@ -616,6 +623,9 @@ def build_client(settings: dict[str, Any], *, presenter: Any = None, transport: 
         from display.hardware_presenter import HardwarePresenter
 
         presenter = HardwarePresenter(profile=profile)
+        if screenshots is None:
+            # Mirror the physical panel for the config UI's Screenshots page.
+            screenshots = ClientScreenshots.from_settings(settings, profile)
         import config
 
         kernel_overlay = getattr(config, "_kernel_overlay_rotation", None)
@@ -651,6 +661,7 @@ def build_client(settings: dict[str, Any], *, presenter: Any = None, transport: 
         offline_max_age_seconds=float(settings.get("DESK_DISPLAY_OFFLINE_MAX_AGE_HOURS") or 0) * 3600,
         dark_hours=DarkHours.from_settings(settings),
         offline_start=_truthy(settings.get("DESK_DISPLAY_OFFLINE_START", True)),
+        screenshots=screenshots,
     )
 
 

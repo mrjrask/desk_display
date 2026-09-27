@@ -163,6 +163,24 @@ def test_cold_start_syncs_then_plays_artifacts(env):
     assert client.report.playback_state == "playing"
 
 
+def test_played_screens_feed_the_config_ui_screenshots(env):
+    from remote_display.client_screenshots import ClientScreenshots
+
+    env.publish("date", 10)
+    env.publish("weather1", 20)
+    client = env.make_client()
+    client.screenshots = ClientScreenshots(env.tmp / "shots", profile_id=PROFILE.profile_id,
+                                           width=PROFILE.width, height=PROFILE.height)
+    client.step()  # diagnostic before the first sync: not a screen, so no screenshot
+    assert not (env.tmp / "shots" / "current").exists()
+    synced(env, client)
+    shown = {client.step()[0] for _ in range(4)}
+    current = env.tmp / "shots" / "current"
+    assert {p.stem for p in current.glob("*.png")} == shown == {"date", "weather1"}
+    status = json.loads((current / "display_status.json").read_text())
+    assert status["screen_id"] == client.report.current_screen
+
+
 def test_activation_waits_until_something_is_usable(env):
     """Nothing rendered yet (a brand new server) still waits."""
 

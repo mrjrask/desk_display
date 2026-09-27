@@ -1169,9 +1169,75 @@ def _query_service_status(unit_name: str) -> dict[str, Any]:
     return status
 
 
-def _load_service_status(unit_name: str = "desk_display.service") -> dict[str, Any]:
+def _installed_mode(project_dir: Path) -> Any:
+    """The install mode recorded by the installer, guessed for older installs."""
+
+    import install_modes
+    import service_units
+
+    installed = install_modes.read_marker(project_dir)
+    if installed is not None:
+        return installed.mode
+    # Older installs have no marker; a client env file means a client panel.
+    if (project_dir / ".env.client").is_file():
+        return service_units.Mode.CLIENT
+    return service_units.Mode.STANDALONE
+
+
+def _panel_service_unit() -> str:
+    """The unit that drives this device's panel, per the installed mode.
+
+    Standalone installs run ``main.py`` as desk_display.service; client and
+    combined installs draw with desk_display_client.service (the standalone
+    unit is disabled there), and a server-only install has no panel, so the
+    render server is the service worth reporting.
+    """
+
+    import service_units
+
+    mode = _installed_mode(Path(__file__).resolve().parent)
+    if mode in (service_units.Mode.CLIENT, service_units.Mode.COMBINED):
+        return service_units.CLIENT_SERVICE
+    if mode is service_units.Mode.SERVER:
+        return service_units.SERVER_SERVICE
+    return service_units.STANDALONE_SERVICE
+
+
+_PANEL_SCREENSHOT_SETTINGS = ("SCREENSHOT_DIR", "SCREENSHOT_ARCHIVE_BASE")
+
+
+def _adopt_panel_screenshot_paths(project_dir: Path) -> None:
+    """Read screenshots from where a combined install's local panel writes them.
+
+    The installer moves the client-only screenshot paths from ``.env`` into
+    ``.env.client``, so without this a custom ``SCREENSHOT_DIR`` would send
+    the panel's screenshots somewhere this UI never looks.
+    """
+
+    import service_units
+
+    if _installed_mode(project_dir) is not service_units.Mode.COMBINED:
+        return
+    panel_env = project_dir / ".env.client"
+    if not panel_env.is_file():
+        return
+    try:
+        values = deployment_config.parse_env_file(panel_env)
+    except (OSError, UnicodeDecodeError, ValueError) as exc:
+        logging.warning("Could not read screenshot paths from %s: %s", panel_env, exc)
+        return
+    for name in _PANEL_SCREENSHOT_SETTINGS:
+        if values.get(name) and not os.environ.get(name):
+            os.environ[name] = values[name]
+
+
+_adopt_panel_screenshot_paths(Path(__file__).resolve().parent)
+
+
+def _load_service_status(unit_name: str | None = None) -> dict[str, Any]:
     """Return a short-lived shared service status without subprocess stampedes."""
 
+    unit_name = unit_name or _panel_service_unit()
     with _SERVICE_STATUS_CACHE_LOCK:
         now = time.monotonic()
         cached = _SERVICE_STATUS_CACHE.get(unit_name)

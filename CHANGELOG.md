@@ -94,6 +94,11 @@ See the README's [deployment modes](README.md#deployment-modes) and
 - Fix: a feed refresh that returns unchanged data (for example from a TTL
   cache) no longer bumps its data revision, so it no longer re-renders the
   screens that read it.
+- Fix: the config UI's Screenshots and Feed pages work on client and combined
+  installs. The display client now saves each screen it shows (and the display
+  heartbeat) where the config UI reads them, honouring `ENABLE_SCREENSHOTS`,
+  and the service banner reports `desk_display_client.service` there instead
+  of the disabled standalone `desk_display.service`.
 
 ### Known limitations
 
