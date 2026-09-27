@@ -841,6 +841,27 @@ def test_logo_scroll_speed_is_doubled_for_1080p_layout():
     assert _logo_scroll_speed_for_layout(800, 480) == 2.2
 
 
+def test_show_logo_presents_the_same_settled_frame_used_for_screenshot(monkeypatch):
+    profile = resolve_display_profile_by_id("display_hat_mini")
+    presented = []
+
+    class Display:
+        def image(self, frame):
+            presented.append(frame.copy())
+
+    monkeypatch.setattr(registry_module, "animate_scroll", lambda *_args, **_kwargs: None)
+    logo = Image.new("RGBA", (20, 10), (255, 0, 0, 255))
+
+    result = registry_module._show_logo(Display(), logo, profile)
+
+    assert isinstance(result, ScreenImage)
+    assert result.displayed is True
+    assert len(presented) == 1
+    assert presented[0].tobytes() == result.image.tobytes()
+    assert result.screenshot_image is result.image
+    assert result.image.getpixel((profile.width // 2, profile.height // 2)) == (255, 0, 0)
+
+
 def test_date_nixie_screens_render_with_live_color_cycle_mode(monkeypatch):
     now = datetime.datetime(2024, 1, 1, 12, 0, tzinfo=CENTRAL_TIME)
     weather = {"hourly": []}
