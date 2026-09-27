@@ -32,7 +32,13 @@ LIVE_REFRESH_SECONDS = 120
 STALE_AFTER_INTERVALS = 2
 TEAM_FEEDS = ("bears", "hawks", "wolves", "bulls", "cubs", "sox")
 # Screens that read the scoreboard payload also read its metadata.
-_FEED_KEYS: Mapping[str, tuple[str, ...]] = {"scoreboards": ("scoreboards", "scoreboard_metadata")}
+_FEED_KEYS: Mapping[str, tuple[str, ...]] = {
+    "scoreboards": ("scoreboards", "scoreboard_metadata"),
+    "nfl_standings": ("nfl_standings", "nfl_standings_meta"),
+    "nhl_standings": ("nhl_standings", "nhl_wildcard_order"),
+}
+# A feed restores its health from saved state once these keys are saved.
+_RESTORE_KEYS: Mapping[str, tuple[str, ...]] = {**_FEED_KEYS, "nhl_standings": ("nhl_standings",)}
 
 
 @dataclass
@@ -52,6 +58,7 @@ class ServerFeedService:
         provider: Any = None,
         *,
         fetch_air_quality: Callable[..., Any] | None = None,
+        standings_fetchers: Mapping[str, Callable[..., Any]] | None = None,
         settings: Any = None,
         history_path: str | None = None,
         state_path: str | None = None,
@@ -74,13 +81,18 @@ class ServerFeedService:
         self.data = data
         self.provider = provider
         self.fetch_air_quality = fetch_air_quality
+        self.standings_fetchers = dict(standings_fetchers or _default_standings_fetchers())
         self.settings = settings
         self.history_path = history_path
         self._clock = clock
         self._wall_clock = wall_clock
         self._lock = threading.Lock()
-        self._health: dict[str, FeedHealth] = {feed: FeedHealth() for feed in feeds.FEED_DEPENDENCIES}
+        self._health: dict[str, FeedHealth] = {feed: FeedHealth() for feed in feeds.SERVER_FEED_DEPENDENCIES}
         self._scoreboard_dates: dict[str, Any] = {}
+        # The wildcard order is only fetched for v2 screens, so it ages apart
+        # from the NHL standings it is refreshed with.
+        self._wildcard_fetched_at: float | None = None
+        self._wildcard_unsaved = False
         self._stop = threading.Event()
         self._state = FeedStateFile(state_path) if state_path else None
         self._saved: dict[str, dict[str, Any]] = {}
@@ -108,11 +120,13 @@ class ServerFeedService:
         self._saved = saved
         self.data.restore({key: (entry["value"], entry["source_revision"]) for key, entry in saved.items()})
         now, wall = self._clock(), self._wall_clock()
-        for feed in feeds.FEED_DEPENDENCIES:
-            keys = _FEED_KEYS.get(feed, (feed,))
+        for feed in feeds.SERVER_FEED_DEPENDENCIES:
+            keys = _RESTORE_KEYS.get(feed, (feed,))
             if all(key in saved for key in keys):
                 age = max(0.0, wall - min(saved[key]["saved_at"] for key in keys))
                 self._health.setdefault(feed, FeedHealth()).last_success = now - age
+        if "nhl_wildcard_order" in saved:
+            self._wildcard_fetched_at = now - max(0.0, wall - saved["nhl_wildcard_order"]["saved_at"])
         LOGGER.info("Restored saved data for %s", ", ".join(sorted(saved)))
 
     def _save(self, feed: str) -> None:
@@ -121,6 +135,11 @@ class ServerFeedService:
         snapshot = self.data.snapshot()
         wall = self._wall_clock()
         for key in _FEED_KEYS.get(feed, (feed,)):
+            if key == "nhl_wildcard_order":
+                # Keep its saved time unless this refresh actually fetched it.
+                if not self._wildcard_unsaved:
+                    continue
+                self._wildcard_unsaved = False
             if key in snapshot.values:
                 self._saved[key] = {"value": snapshot.values[key],
                                     "source_revision": snapshot.source_revisions.get(key, 0), "saved_at": wall}
@@ -141,7 +160,7 @@ class ServerFeedService:
     def required_feeds(self, screens: Iterable[str]) -> set[str]:
         wanted = set(screens)
         return {
-            feed for feed, dependents in feeds.FEED_DEPENDENCIES.items()
+            feed for feed, dependents in feeds.SERVER_FEED_DEPENDENCIES.items()
             if wanted & dependents and self.enabled(feed)
         }
 
@@ -154,7 +173,7 @@ class ServerFeedService:
         due: dict[str, bool] = {}
         for feed in sorted(self.required_feeds(screens)):
             health = self._health.setdefault(feed, FeedHealth())
-            interval = feeds.FEED_REFRESH_INTERVALS.get(feed, feeds.SCHEDULE_UPDATE_INTERVAL)
+            interval = feeds.SERVER_FEED_REFRESH_INTERVALS.get(feed, feeds.SCHEDULE_UPDATE_INTERVAL)
             fresh = False
             if feed == "scoreboards":
                 if feeds.scoreboards_in_live_window(snapshot.values.get("scoreboards")):
@@ -163,6 +182,15 @@ class ServerFeedService:
                     interval = 0
             elif any(feeds.LIVE_TEAM_SCREEN_TO_FEED.get(s) == feed for s in screens):
                 interval, fresh = LIVE_REFRESH_SECONDS, True
+            elif (
+                feed == "nhl_standings"
+                and screens & feeds.NHL_WILDCARD_SCREEN_IDS
+                and health.consecutive_failures == 0
+                and (self._wildcard_fetched_at is None or now - self._wildcard_fetched_at >= interval)
+            ):
+                # A v2 screen joined demand and its wildcard order is missing
+                # or older than the feed interval; fetch it now.
+                interval = 0
             last = health.last_success if health.consecutive_failures == 0 else health.last_attempt
             if last is None or now - last >= interval:
                 due[feed] = fresh
@@ -214,6 +242,8 @@ class ServerFeedService:
             self.data.read_legacy_team(feed, force=fresh)
         elif feed == "scoreboards":
             self._refresh_scoreboards(screens, fresh=fresh)
+        elif feed in feeds.LEAGUE_STANDINGS_DEPENDENCIES:
+            self._refresh_standings(feed, screens, fresh=fresh)
         else:  # pragma: no cover - every catalogued feed is handled above
             raise KeyError(f"no server refresher for feed {feed!r}")
 
@@ -241,6 +271,20 @@ class ServerFeedService:
             feeds.save_air_quality_history(self.history_path, history)
             report = replace(report, component_history=tuple(history))
         self.data.publish("air_quality", report)
+
+    def _refresh_standings(self, feed: str, screens: set[str], *, fresh: bool) -> None:
+        wildcard = bool(screens & feeds.NHL_WILDCARD_SCREEN_IDS)
+        kwargs = {"include_wildcard_order": wildcard} if feed == "nhl_standings" else {}
+        values = self.standings_fetchers[feed](force=fresh, **kwargs)
+        for key, value in values.items():
+            self.data.publish(key, value)
+        if "nhl_wildcard_order" in values:
+            self._wildcard_fetched_at = self._clock()
+            self._wildcard_unsaved = True
+        if wildcard and feed == "nhl_standings" and "nhl_wildcard_order" not in values:
+            # The standings still publish, but the refresh counts as failed so
+            # the wildcard order is retried and the failure shows in health.
+            raise RuntimeError("NHL wildcard order returned no data")
 
     def _refresh_scoreboards(self, screens: set[str], *, fresh: bool) -> None:
         leagues = feeds.scoreboard_leagues_for_screens(screens)
@@ -271,7 +315,7 @@ class ServerFeedService:
         caller can fall back to a conservative whole-snapshot revision.
         """
 
-        screen_feeds = feeds.feeds_for_screen(screen)
+        screen_feeds = feeds.feeds_for_screen(screen, feeds.SERVER_FEED_DEPENDENCIES)
         if not screen_feeds:
             return None
         if source_revisions is None:
@@ -287,7 +331,7 @@ class ServerFeedService:
         snapshot = self.data.snapshot()
         report: dict[str, Any] = {}
         for feed, health in sorted(self._health.items()):
-            interval = feeds.FEED_REFRESH_INTERVALS.get(feed, feeds.SCHEDULE_UPDATE_INTERVAL)
+            interval = feeds.SERVER_FEED_REFRESH_INTERVALS.get(feed, feeds.SCHEDULE_UPDATE_INTERVAL)
             age = None if health.last_success is None else round(now - health.last_success, 1)
             report[feed] = {
                 "enabled": self.enabled(feed),
@@ -320,6 +364,68 @@ class ServerFeedService:
 
     def stop(self) -> None:
         self._stop.set()
+
+
+def _fetch_nfl_standings(*, force: bool = False) -> dict[str, Any]:
+    from screens import nfl_standings
+
+    standings, fallback_message, season_note = nfl_standings._fetch_standings_data(force=True)
+    if fallback_message == nfl_standings.FALLBACK_MESSAGE_UNAVAILABLE:
+        # The fetch failed, even when it hands back cached rows.
+        raise RuntimeError(fallback_message)
+    if not any((standings or {}).values()) and fallback_message != nfl_standings.FALLBACK_MESSAGE_OFFSEASON:
+        # Only the offseason legitimately has no rows.
+        raise RuntimeError(fallback_message or "NFL standings returned no data")
+    return {
+        "nfl_standings": standings,
+        "nfl_standings_meta": {"fallback_message": fallback_message, "season_note": season_note},
+    }
+
+
+def _fetched_since(cache: Mapping[str, Any], started: float) -> bool:
+    """Whether a standings module stored a successful fetch at or after *started*."""
+
+    return float(cache.get("timestamp", 0.0)) >= started
+
+
+def _fetch_nhl_standings(*, force: bool = False, include_wildcard_order: bool = False) -> dict[str, Any]:
+    from screens import nhl_standings
+
+    # Always fetch: the feed interval sets the cadence, and a fresh fetch
+    # lets a failure that falls back to the module's cached rows be seen.
+    started = time.time()
+    standings = nhl_standings._fetch_standings_data(force=True)
+    if not standings or not _fetched_since(nhl_standings._STANDINGS_CACHE, started):
+        raise RuntimeError("NHL standings fetch failed")
+    values: dict[str, Any] = {"nhl_standings": standings}
+    if include_wildcard_order:
+        wildcard_order = nhl_standings._fetch_wildcard_order_api_web()
+        if wildcard_order:
+            values["nhl_wildcard_order"] = wildcard_order
+    return values
+
+
+def _fetch_mlb_league_standings(*, force: bool = False) -> dict[str, Any]:
+    from screens import mlb_league_standings
+
+    started = time.time()
+    standings = mlb_league_standings._fetch_league_standings(force=True)
+    # A failed fetch returns cached rows, or every division empty.
+    if not _fetched_since(mlb_league_standings._STANDINGS_CACHE, started) or not any(
+        rows for league in (standings or {}).values() for rows in league.values()
+    ):
+        raise RuntimeError("MLB league standings fetch failed")
+    return {"mlb_league_standings": standings}
+
+
+def _default_standings_fetchers() -> dict[str, Callable[..., dict[str, Any]]]:
+    """Fetch league standings the way the standalone runtime does, keyed by feed."""
+
+    return {
+        "nfl_standings": _fetch_nfl_standings,
+        "nhl_standings": _fetch_nhl_standings,
+        "mlb_league_standings": _fetch_mlb_league_standings,
+    }
 
 
 __all__ = ["LIVE_REFRESH_SECONDS", "ServerFeedService"]

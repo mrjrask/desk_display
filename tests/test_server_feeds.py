@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import time
 from types import SimpleNamespace
 
 import pytest
@@ -48,6 +49,40 @@ class FakeProvider:
         return self.scoreboards
 
 
+class FakeStandings:
+    """Stands in for the league standings fetchers: records calls, can fail."""
+
+    def __init__(self):
+        self.calls = []
+        self.fail = set()
+
+    def fetchers(self):
+        def make(feed, values):
+            def fetch(*, force=False, **kwargs):
+                self.calls.append((feed, force, kwargs))
+                if feed in self.fail:
+                    raise RuntimeError(f"{feed} returned no data")
+                result = dict(values)
+                if not kwargs.get("include_wildcard_order", True):
+                    result.pop("nhl_wildcard_order", None)
+                return result
+            return fetch
+
+        return {
+            "nfl_standings": make("nfl_standings", {
+                "nfl_standings": {"NFC": {"NFC North": [{"abbr": "CHI"}]}, "AFC": {}},
+                "nfl_standings_meta": {"fallback_message": None, "season_note": None},
+            }),
+            "nhl_standings": make("nhl_standings", {
+                "nhl_standings": {"Western": {"Central": [{"abbr": "CHI"}]}},
+                "nhl_wildcard_order": {"Western": ["CHI"]},
+            }),
+            "mlb_league_standings": make("mlb_league_standings", {
+                "mlb_league_standings": {103: {"East": [{"abbr": "NYY"}]}},
+            }),
+        }
+
+
 def settings(**overrides):
     values = dict(
         ENABLE_WEATHER=True, ENABLE_AIR_QUALITY=True, AIR_QUALITY_LATITUDE=41.9, AIR_QUALITY_LONGITUDE=-87.6,
@@ -69,11 +104,14 @@ def env(tmp_path):
         return AirQualityReport(aqi_value=40, aqi_category="Good", primary_pollutant="O3",
                                 us_aqi_pm2_5=10 + len(reports), us_aqi_pm10=5, us_aqi_ozone=40)
 
+    standings = FakeStandings()
     service = ServerFeedService(
         data, provider, fetch_air_quality=fetch_air_quality, settings=settings(),
+        standings_fetchers=standings.fetchers(),
         history_path=str(tmp_path / "aq.json"), clock=clock, wall_clock=clock,
     )
-    return SimpleNamespace(clock=clock, provider=provider, data=data, service=service, reports=reports, tmp=tmp_path)
+    return SimpleNamespace(clock=clock, provider=provider, data=data, service=service, reports=reports,
+                           standings=standings, tmp=tmp_path)
 
 
 def feeds_called(provider):
@@ -138,6 +176,169 @@ def test_scoreboards_live_window_and_date_rollover(env, monkeypatch):
     env.clock.advance(LIVE_REFRESH_SECONDS)
     env.service.refresh(screens)
     assert env.provider.calls[-1] == ("sports", 0, ("mlb", "nfl"), ("nfl",))
+
+
+def test_league_standings_screens_refresh_and_publish_their_data(env):
+    screens = {"NFL Standings NFC", "NFL Overview AFC", "NHL Standings West", "MLB AL Standings"}
+    results = env.service.refresh(screens)
+    assert results == {"nfl_standings": True, "nhl_standings": True, "mlb_league_standings": True}
+    values = env.data.snapshot().values
+    assert values["nfl_standings"]["NFC"]["NFC North"][0]["abbr"] == "CHI"
+    assert values["nfl_standings_meta"] == {"fallback_message": None, "season_note": None}
+    assert "nhl_standings" in values and "nhl_wildcard_order" not in values
+    assert 103 in values["mlb_league_standings"]
+    assert ("nhl_standings", False, {"include_wildcard_order": False}) in env.standings.calls
+    env.clock.advance(feeds.SERVER_FEED_REFRESH_INTERVALS["nfl_standings"] - 1)
+    assert env.service.refresh(screens) == {}
+
+
+def test_nhl_v2_standings_also_fetch_the_wildcard_order(env):
+    env.service.refresh({"NHL Standings East v2"})
+    assert env.standings.calls == [("nhl_standings", False, {"include_wildcard_order": True})]
+    assert env.data.snapshot().values["nhl_wildcard_order"]["Western"] == ("CHI",)
+
+
+def test_v2_nhl_demand_fetches_the_wildcard_order_at_once(env):
+    env.service.refresh({"NHL Standings West"})
+    assert "nhl_wildcard_order" not in env.data.snapshot().values
+    assert env.service.refresh({"NHL Standings West", "NHL Standings West v2"}) == {"nhl_standings": True}
+    assert "nhl_wildcard_order" in env.data.snapshot().values
+
+
+def test_stale_wildcard_order_refreshes_when_v2_demand_returns(env):
+    env.service.refresh({"NHL Standings West v2"})
+    interval = feeds.SERVER_FEED_REFRESH_INTERVALS["nhl_standings"]
+    env.clock.advance(interval)
+    env.service.refresh({"NHL Standings West"})  # standings refresh without the wildcard
+    env.standings.calls.clear()
+    assert env.service.refresh({"NHL Standings West", "NHL Standings West v2"}) == {"nhl_standings": True}
+    assert env.standings.calls == [("nhl_standings", False, {"include_wildcard_order": True})]
+    assert env.service.refresh({"NHL Standings West", "NHL Standings West v2"}) == {}
+
+
+def test_missing_wildcard_order_fails_the_nhl_refresh_but_keeps_standings(env):
+    fetchers = env.service.standings_fetchers
+    original = fetchers["nhl_standings"]
+    fetchers["nhl_standings"] = lambda **kwargs: {"nhl_standings": original(**kwargs)["nhl_standings"]}
+    assert env.service.refresh({"NHL Standings East v2"}) == {"nhl_standings": False}
+    values = env.data.snapshot().values
+    assert "nhl_standings" in values and "nhl_wildcard_order" not in values
+    assert env.service.health()["nhl_standings"]["consecutive_failures"] == 1
+    assert env.service.refresh({"NHL Standings East v2"}) == {}  # retried on the normal interval
+
+
+def test_failed_standings_refresh_keeps_last_good_data(env):
+    env.service.refresh({"NFL Standings AFC"})
+    good = env.data.snapshot().values["nfl_standings"]
+    env.standings.fail.add("nfl_standings")
+    assert env.service.refresh({"NFL Standings AFC"}, force=True) == {"nfl_standings": False}
+    assert env.data.snapshot().values["nfl_standings"] == good
+    assert env.service.health()["nfl_standings"]["consecutive_failures"] == 1
+
+
+def test_standalone_loop_does_not_refresh_league_standings():
+    # main.py fetches league standings while rendering, not as a feed.
+    assert not set(feeds.FEED_DEPENDENCIES) & set(feeds.LEAGUE_STANDINGS_DEPENDENCIES)
+    assert feeds.feeds_for_screen("NFL Standings NFC") == set()
+    assert feeds.feeds_for_screen("NFL Standings NFC", feeds.SERVER_FEED_DEPENDENCIES) == {"nfl_standings"}
+
+
+def test_every_league_standings_screen_is_catalogued():
+    from screens_catalog import SCREEN_IDS
+
+    for screen_ids in feeds.LEAGUE_STANDINGS_DEPENDENCIES.values():
+        assert screen_ids <= set(SCREEN_IDS)
+
+
+def test_nfl_standings_fetch_failure_is_an_error_but_offseason_is_not(monkeypatch):
+    from screens import nfl_standings
+    from services import server_feeds
+
+    empty = {"NFC": {}, "AFC": {}}
+    monkeypatch.setattr(nfl_standings, "_fetch_standings_data",
+                        lambda force=False: (empty, nfl_standings.FALLBACK_MESSAGE_UNAVAILABLE, None))
+    with pytest.raises(RuntimeError):
+        server_feeds._fetch_nfl_standings()
+    monkeypatch.setattr(nfl_standings, "_fetch_standings_data",
+                        lambda force=False: (empty, nfl_standings.FALLBACK_MESSAGE_OFFSEASON, None))
+    values = server_feeds._fetch_nfl_standings()
+    assert values["nfl_standings_meta"]["fallback_message"] == nfl_standings.FALLBACK_MESSAGE_OFFSEASON
+
+
+def test_nfl_cached_rows_after_a_failed_fetch_are_an_error(monkeypatch):
+    from screens import nfl_standings
+    from services import server_feeds
+
+    cached = {"NFC": {"NFC North": [{"abbr": "CHI"}]}, "AFC": {}}
+    monkeypatch.setattr(nfl_standings, "_fetch_standings_data",
+                        lambda force=False: (cached, nfl_standings.FALLBACK_MESSAGE_UNAVAILABLE, None))
+    with pytest.raises(RuntimeError):
+        server_feeds._fetch_nfl_standings()
+
+
+def test_v1_nhl_saves_keep_the_wildcard_fetch_time(env, tmp_path):
+    state = tmp_path / "state.json"
+    service = ServerFeedService(
+        env.data, env.provider, settings=settings(), standings_fetchers=env.standings.fetchers(),
+        history_path=str(tmp_path / "aq.json"), state_path=str(state), clock=env.clock, wall_clock=env.clock,
+    )
+    service.refresh({"NHL Standings West v2"})
+    fetched_at = json.loads(state.read_text())
+    env.clock.advance(feeds.SERVER_FEED_REFRESH_INTERVALS["nhl_standings"])
+    service.refresh({"NHL Standings West"})
+    reloaded = ServerFeedService(
+        DataCoordinator(env.provider), env.provider, settings=settings(),
+        standings_fetchers=env.standings.fetchers(), history_path=str(tmp_path / "aq.json"),
+        state_path=str(state), clock=env.clock, wall_clock=env.clock,
+    )
+    assert reloaded._wildcard_fetched_at == env.clock() - feeds.SERVER_FEED_REFRESH_INTERVALS["nhl_standings"]
+    assert fetched_at  # the first save wrote the wildcard order
+    env.standings.calls.clear()
+    assert reloaded.refresh({"NHL Standings West v2"}) == {"nhl_standings": True}
+    assert env.standings.calls == [("nhl_standings", False, {"include_wildcard_order": True})]
+
+
+def test_mlb_standings_with_every_division_empty_is_an_error(monkeypatch):
+    from screens import mlb_league_standings
+    from services import server_feeds
+
+    def fetch(force=False):
+        mlb_league_standings._STANDINGS_CACHE["timestamp"] = time.time()
+        return {103: {"East": []}, 104: {"East": []}}
+
+    monkeypatch.setattr(mlb_league_standings, "_STANDINGS_CACHE", {})
+    monkeypatch.setattr(mlb_league_standings, "_fetch_league_standings", fetch)
+    with pytest.raises(RuntimeError):
+        server_feeds._fetch_mlb_league_standings()
+
+
+@pytest.mark.parametrize("module_name, fetch_name, wrapper", [
+    ("nhl_standings", "_fetch_standings_data", "_fetch_nhl_standings"),
+    ("mlb_league_standings", "_fetch_league_standings", "_fetch_mlb_league_standings"),
+])
+def test_cached_rows_after_a_failed_fetch_are_an_error(monkeypatch, module_name, fetch_name, wrapper):
+    import importlib
+
+    from services import server_feeds
+
+    module = importlib.import_module(f"screens.{module_name}")
+    rows = {103: {"East": [{"abbr": "NYY"}]}}
+    succeed = {"now": False}
+    forced = []
+
+    def fetch(force=False):
+        forced.append(force)
+        if succeed["now"]:
+            module._STANDINGS_CACHE["timestamp"] = time.time()
+        return rows  # a failure hands back the old cached rows
+
+    monkeypatch.setattr(module, "_STANDINGS_CACHE", {"data": rows, "timestamp": time.time() - 3600})
+    monkeypatch.setattr(module, fetch_name, fetch)
+    with pytest.raises(RuntimeError):
+        getattr(server_feeds, wrapper)()
+    succeed["now"] = True
+    assert getattr(server_feeds, wrapper)()
+    assert forced == [True, True]
 
 
 # ── Revisions ───────────────────────────────────────────────────────────────
@@ -307,3 +508,13 @@ def test_every_feed_has_a_server_refresher(env):
         env.clock.advance(100_000)
         screen = next(iter(feeds.FEED_DEPENDENCIES[feed]))
         assert env.service.refresh({screen}).get(feed) is True, feed
+
+
+def test_standings_screen_revision_follows_its_standings_feed(env):
+    env.service.refresh({"NFL Standings NFC", "MLB NL Standings"})
+    nfl = env.service.data_revision("NFL Standings NFC")
+    mlb = env.service.data_revision("MLB NL Standings")
+    assert nfl is not None and mlb is not None
+    env.data.publish("nfl_standings", {"NFC": {}, "AFC": {"AFC West": [{"abbr": "KC"}]}})
+    assert env.service.data_revision("NFL Standings NFC") != nfl
+    assert env.service.data_revision("MLB NL Standings") == mlb
