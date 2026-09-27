@@ -609,6 +609,15 @@ def _truthy(value: Any) -> bool:
     return bool(value)
 
 
+def _client_ip_text() -> str:
+    """Return the address label drawn by client-rendered clock screens."""
+
+    from services.wifi_utils import get_assigned_ipv4
+
+    address = get_assigned_ipv4()
+    return f"IP: {address}" if address else "IP: --"
+
+
 def build_client(settings: dict[str, Any], *, presenter: Any = None, transport: Any = None,
                  screenshots: ClientScreenshots | None = None) -> DisplayClient:
     profile = resolve_display_profile_by_id(settings["DESK_DISPLAY_PROFILE"])
@@ -662,6 +671,7 @@ def build_client(settings: dict[str, Any], *, presenter: Any = None, transport: 
         dark_hours=DarkHours.from_settings(settings),
         offline_start=_truthy(settings.get("DESK_DISPLAY_OFFLINE_START", True)),
         screenshots=screenshots,
+        ip_text=_client_ip_text,
     )
 
 

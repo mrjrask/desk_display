@@ -131,6 +131,24 @@ def synced(env, client, passes=2):
     return client
 
 
+def test_built_client_supplies_its_device_ip_to_clock_screens(env, monkeypatch):
+    from services import wifi_utils
+
+    monkeypatch.setattr(wifi_utils, "get_assigned_ipv4", lambda: "192.168.1.44")
+
+    client = env.make_client()
+
+    assert client._ip_text() == "IP: 192.168.1.44"
+
+
+def test_client_ip_text_has_a_visible_fallback(monkeypatch):
+    from services import wifi_utils
+
+    monkeypatch.setattr(wifi_utils, "get_assigned_ipv4", lambda: None)
+
+    assert display_client._client_ip_text() == "IP: --"
+
+
 # ── Cold start, warm start and outages ─────────────────────────────────────
 
 
