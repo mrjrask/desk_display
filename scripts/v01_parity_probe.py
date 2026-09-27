@@ -7,8 +7,9 @@ Run it in a process configured for one profile (see
 * ``constants.json``: every font size and upper-case numeric layout constant
   the screen modules and ``config`` hold after import;
 * PNG stills of the MLB AL standings (first frame), the AL overview (settled
-  frame) and the ``date`` and ``nixie`` clock faces at a fixed time and
-  colour, drawn from the standings fixture in ``FIXTURE``.
+  frame), the NHL scoreboard with two and six games, and the ``date`` and
+  ``nixie`` clock faces at a fixed time and colour, drawn from the standings
+  fixture in ``FIXTURE`` and the NHL games in ``nhl_games.json`` beside it.
 
 With ``--v01`` it runs against a checkout of the v0.1 tag (the standalone
 display, which drew everything in its own process); without it, against
@@ -82,6 +83,22 @@ class _Display:
         return False
 
 
+def _nhl_scoreboards(config, fixture: str, out: str) -> None:
+    """The NHL scoreboard, as the standalone display composed it, in this process."""
+
+    import screens.nhl_scoreboard as nhl
+
+    with open(os.path.join(os.path.dirname(fixture), "nhl_games.json"), encoding="utf-8") as handle:
+        raw = json.load(handle)
+    day = dt.date(2026, 10, 14)
+    for count in (2, 6):
+        games = nhl._hydrate_games([nhl._map_api_web_game(game, day) for game in raw[:count]])
+        display = _Display(config.WIDTH, config.HEIGHT, skip=False)
+        result = nhl.render_nhl_scoreboard(display, games, transition=True)
+        image = getattr(result, "image", result)
+        image.convert("RGB").save(os.path.join(out, f"nhl_scoreboard_{count}.png"))
+
+
 def _v01(config, standings: dict, out: str) -> None:
     import screens.draw_date_time as date_time
     import screens.draw_nixie as nixie
@@ -139,14 +156,18 @@ def main(argv: list[str]) -> None:
     os.makedirs(out, exist_ok=True)
     import config
 
+    # Before anything renders: some renderers update module globals as they draw.
+    constants = _constants(config)
     if v01:
         _v01(config, standings, out)
     else:
         _current(profile_id, standings, out)
+    # Both sides compose it in a process configured for the profile, which
+    # is what the render server's worker for that profile is.
+    _nhl_scoreboards(config, fixture, out)
     with open(os.path.join(out, "constants.json"), "w", encoding="utf-8") as handle:
-        json.dump(_constants(config), handle, indent=1, sort_keys=True)
+        json.dump(constants, handle, indent=1, sort_keys=True)
         handle.write("\n")
-
 
 if __name__ == "__main__":
     main(sys.argv[1:])

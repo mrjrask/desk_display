@@ -23,7 +23,7 @@ from rendering.profile_process import ProfileProcessPool, composition_env
 ROOT = Path(__file__).resolve().parents[1]
 REFERENCE = ROOT / "tests" / "fixtures" / "v01_reference"
 PROFILES = sorted(p.name for p in REFERENCE.iterdir() if p.is_dir())
-IMAGES = ("mlb_al_standings", "al_overview", "date", "nixie")
+IMAGES = ("mlb_al_standings", "al_overview", "nhl_scoreboard_2", "nhl_scoreboard_6", "date", "nixie")
 
 
 def _probe_env(profile_id):

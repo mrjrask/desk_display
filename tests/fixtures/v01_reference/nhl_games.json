@@ -1,0 +1,206 @@
+[
+ {
+  "id": 2026020000,
+  "gameState": "FINAL",
+  "startTimeUTC": "2026-10-14T23:00:00Z",
+  "awayTeam": {
+   "id": 10,
+   "abbrev": "CHI",
+   "placeName": {
+    "default": "Chicago"
+   },
+   "commonName": {
+    "default": "Blackhawks"
+   },
+   "score": 1
+  },
+  "homeTeam": {
+   "id": 30,
+   "abbrev": "DET",
+   "placeName": {
+    "default": "Detroit"
+   },
+   "commonName": {
+    "default": "Red Wings"
+   },
+   "score": 3
+  },
+  "periodDescriptor": {
+   "number": 2,
+   "periodType": "REG"
+  },
+  "clock": {
+   "timeRemaining": "12:34"
+  }
+ },
+ {
+  "id": 2026020001,
+  "gameState": "LIVE",
+  "startTimeUTC": "2026-10-14T23:00:00Z",
+  "awayTeam": {
+   "id": 11,
+   "abbrev": "TOR",
+   "placeName": {
+    "default": "Toronto"
+   },
+   "commonName": {
+    "default": "Maple Leafs"
+   },
+   "score": 2
+  },
+  "homeTeam": {
+   "id": 31,
+   "abbrev": "BOS",
+   "placeName": {
+    "default": "Boston"
+   },
+   "commonName": {
+    "default": "Bruins"
+   },
+   "score": 3
+  },
+  "periodDescriptor": {
+   "number": 2,
+   "periodType": "REG"
+  },
+  "clock": {
+   "timeRemaining": "12:34"
+  }
+ },
+ {
+  "id": 2026020002,
+  "gameState": "FUT",
+  "startTimeUTC": "2026-10-14T23:00:00Z",
+  "awayTeam": {
+   "id": 12,
+   "abbrev": "NYR",
+   "placeName": {
+    "default": "New York"
+   },
+   "commonName": {
+    "default": "Rangers"
+   },
+   "score": 3
+  },
+  "homeTeam": {
+   "id": 32,
+   "abbrev": "MTL",
+   "placeName": {
+    "default": "Montréal"
+   },
+   "commonName": {
+    "default": "Canadiens"
+   },
+   "score": 3
+  },
+  "periodDescriptor": {
+   "number": 2,
+   "periodType": "REG"
+  },
+  "clock": {
+   "timeRemaining": "12:34"
+  }
+ },
+ {
+  "id": 2026020003,
+  "gameState": "FINAL",
+  "startTimeUTC": "2026-10-14T23:00:00Z",
+  "awayTeam": {
+   "id": 13,
+   "abbrev": "VGK",
+   "placeName": {
+    "default": "Vegas"
+   },
+   "commonName": {
+    "default": "Golden Knights"
+   },
+   "score": 4
+  },
+  "homeTeam": {
+   "id": 33,
+   "abbrev": "EDM",
+   "placeName": {
+    "default": "Edmonton"
+   },
+   "commonName": {
+    "default": "Oilers"
+   },
+   "score": 3
+  },
+  "periodDescriptor": {
+   "number": 2,
+   "periodType": "REG"
+  },
+  "clock": {
+   "timeRemaining": "12:34"
+  }
+ },
+ {
+  "id": 2026020004,
+  "gameState": "LIVE",
+  "startTimeUTC": "2026-10-14T23:00:00Z",
+  "awayTeam": {
+   "id": 14,
+   "abbrev": "COL",
+   "placeName": {
+    "default": "Colorado"
+   },
+   "commonName": {
+    "default": "Avalanche"
+   },
+   "score": 5
+  },
+  "homeTeam": {
+   "id": 34,
+   "abbrev": "DAL",
+   "placeName": {
+    "default": "Dallas"
+   },
+   "commonName": {
+    "default": "Stars"
+   },
+   "score": 3
+  },
+  "periodDescriptor": {
+   "number": 2,
+   "periodType": "REG"
+  },
+  "clock": {
+   "timeRemaining": "12:34"
+  }
+ },
+ {
+  "id": 2026020005,
+  "gameState": "FUT",
+  "startTimeUTC": "2026-10-14T23:00:00Z",
+  "awayTeam": {
+   "id": 15,
+   "abbrev": "TBL",
+   "placeName": {
+    "default": "Tampa Bay"
+   },
+   "commonName": {
+    "default": "Lightning"
+   },
+   "score": 6
+  },
+  "homeTeam": {
+   "id": 35,
+   "abbrev": "FLA",
+   "placeName": {
+    "default": "Florida"
+   },
+   "commonName": {
+    "default": "Panthers"
+   },
+   "score": 3
+  },
+  "periodDescriptor": {
+   "number": 2,
+   "periodType": "REG"
+  },
+  "clock": {
+   "timeRemaining": "12:34"
+  }
+ }
+]
