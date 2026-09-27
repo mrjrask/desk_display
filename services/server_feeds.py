@@ -92,6 +92,7 @@ class ServerFeedService:
         # The wildcard order is only fetched for v2 screens, so it ages apart
         # from the NHL standings it is refreshed with.
         self._wildcard_fetched_at: float | None = None
+        self._wildcard_unsaved = False
         self._stop = threading.Event()
         self._state = FeedStateFile(state_path) if state_path else None
         self._saved: dict[str, dict[str, Any]] = {}
@@ -134,6 +135,11 @@ class ServerFeedService:
         snapshot = self.data.snapshot()
         wall = self._wall_clock()
         for key in _FEED_KEYS.get(feed, (feed,)):
+            if key == "nhl_wildcard_order":
+                # Keep its saved time unless this refresh actually fetched it.
+                if not self._wildcard_unsaved:
+                    continue
+                self._wildcard_unsaved = False
             if key in snapshot.values:
                 self._saved[key] = {"value": snapshot.values[key],
                                     "source_revision": snapshot.source_revisions.get(key, 0), "saved_at": wall}
@@ -274,6 +280,7 @@ class ServerFeedService:
             self.data.publish(key, value)
         if "nhl_wildcard_order" in values:
             self._wildcard_fetched_at = self._clock()
+            self._wildcard_unsaved = True
         if wildcard and feed == "nhl_standings" and "nhl_wildcard_order" not in values:
             # The standings still publish, but the refresh counts as failed so
             # the wildcard order is retried and the failure shows in health.
@@ -363,8 +370,11 @@ def _fetch_nfl_standings(*, force: bool = False) -> dict[str, Any]:
     from screens import nfl_standings
 
     standings, fallback_message, season_note = nfl_standings._fetch_standings_data(force=force)
+    if fallback_message == nfl_standings.FALLBACK_MESSAGE_UNAVAILABLE:
+        # The fetch failed, even when it hands back cached rows.
+        raise RuntimeError(fallback_message)
     if not any((standings or {}).values()) and fallback_message != nfl_standings.FALLBACK_MESSAGE_OFFSEASON:
-        # Only the offseason legitimately has no rows; anything else is a failed fetch.
+        # Only the offseason legitimately has no rows.
         raise RuntimeError(fallback_message or "NFL standings returned no data")
     return {
         "nfl_standings": standings,

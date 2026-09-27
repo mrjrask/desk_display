@@ -264,6 +264,39 @@ def test_nfl_standings_fetch_failure_is_an_error_but_offseason_is_not(monkeypatc
     assert values["nfl_standings_meta"]["fallback_message"] == nfl_standings.FALLBACK_MESSAGE_OFFSEASON
 
 
+def test_nfl_cached_rows_after_a_failed_fetch_are_an_error(monkeypatch):
+    from screens import nfl_standings
+    from services import server_feeds
+
+    cached = {"NFC": {"NFC North": [{"abbr": "CHI"}]}, "AFC": {}}
+    monkeypatch.setattr(nfl_standings, "_fetch_standings_data",
+                        lambda force=False: (cached, nfl_standings.FALLBACK_MESSAGE_UNAVAILABLE, None))
+    with pytest.raises(RuntimeError):
+        server_feeds._fetch_nfl_standings()
+
+
+def test_v1_nhl_saves_keep_the_wildcard_fetch_time(env, tmp_path):
+    state = tmp_path / "state.json"
+    service = ServerFeedService(
+        env.data, env.provider, settings=settings(), standings_fetchers=env.standings.fetchers(),
+        history_path=str(tmp_path / "aq.json"), state_path=str(state), clock=env.clock, wall_clock=env.clock,
+    )
+    service.refresh({"NHL Standings West v2"})
+    fetched_at = json.loads(state.read_text())
+    env.clock.advance(feeds.SERVER_FEED_REFRESH_INTERVALS["nhl_standings"])
+    service.refresh({"NHL Standings West"})
+    reloaded = ServerFeedService(
+        DataCoordinator(env.provider), env.provider, settings=settings(),
+        standings_fetchers=env.standings.fetchers(), history_path=str(tmp_path / "aq.json"),
+        state_path=str(state), clock=env.clock, wall_clock=env.clock,
+    )
+    assert reloaded._wildcard_fetched_at == env.clock() - feeds.SERVER_FEED_REFRESH_INTERVALS["nhl_standings"]
+    assert fetched_at  # the first save wrote the wildcard order
+    env.standings.calls.clear()
+    assert reloaded.refresh({"NHL Standings West v2"}) == {"nhl_standings": True}
+    assert env.standings.calls == [("nhl_standings", False, {"include_wildcard_order": True})]
+
+
 def test_mlb_standings_with_every_division_empty_is_an_error(monkeypatch):
     from screens import mlb_league_standings
     from services import server_feeds
