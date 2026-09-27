@@ -62,6 +62,9 @@ SCORE_ROW_H = scale_value(56)
 STATUS_ROW_H = scale_value(18)
 SEED_FONT = get_screen_font(SCREEN_ID, "seed", base_font=FONT_STATUS, default_size=13)
 RANK_FONT = get_screen_font(SCREEN_ID, "rank", base_font=FONT_STATUS, default_size=11)
+TEAM_ABBREVIATION_FONT = get_screen_font(
+    SCREEN_ID, "team_abbreviation", base_font=FONT_TEAM_SPORTS, default_size=18
+)
 SEED_GAP = max(2, scale_value_width(3))
 RANK_GAP = max(0, scale_value_width(1))
 
@@ -334,6 +337,12 @@ def _team_logo_filename(team: dict[str, Any]) -> str:
     return f"{team_id}.png"
 
 
+def _team_abbreviation(team: dict[str, Any]) -> str:
+    """Return the exact filename stem used for this team's missing-logo fallback."""
+
+    return os.path.splitext(_team_logo_filename(team))[0]
+
+
 def _load_team_logo(team: dict[str, Any], height: int) -> Optional[Image.Image]:
     filename = _team_logo_filename(team)
     path = os.path.join(LOGO_DIR, filename)
@@ -464,17 +473,37 @@ def _render_scoreboard(games: list[dict], *, mode: Optional[str] = None) -> Imag
         for col_idx, team in ((1, away), (3, home)):
             logo = _load_team_logo(team, logo_height)
             if not logo:
-                continue
-            x0 = COL_X[col_idx] + (COL_WIDTHS[col_idx] - logo.width) // 2
-            y0 = y + (SCORE_ROW_H - logo.height) // 2
-            canvas.paste(logo, (x0, y0), logo)
+                abbreviation = _team_abbreviation(team)
+                try:
+                    left, top, right, bottom = draw.textbbox(
+                        (0, 0), abbreviation, font=TEAM_ABBREVIATION_FONT
+                    )
+                    logo_width, logo_height_actual = right - left, bottom - top
+                except Exception:
+                    logo_width, logo_height_actual = draw.textsize(
+                        abbreviation, font=TEAM_ABBREVIATION_FONT
+                    )
+                    left = top = 0
+                x0 = COL_X[col_idx] + (COL_WIDTHS[col_idx] - logo_width) // 2
+                y0 = y + (SCORE_ROW_H - logo_height_actual) // 2
+                draw.text(
+                    (x0 - left, y0 - top),
+                    abbreviation,
+                    font=TEAM_ABBREVIATION_FONT,
+                    fill=(255, 255, 255),
+                )
+            else:
+                logo_width, logo_height_actual = logo.width, logo.height
+                x0 = COL_X[col_idx] + (COL_WIDTHS[col_idx] - logo_width) // 2
+                y0 = y + (SCORE_ROW_H - logo_height_actual) // 2
+                canvas.paste(logo, (x0, y0), logo)
             _draw_rank(
                 draw,
                 _rank_for_display(team, mode=selected_mode),
                 x0,
                 y0,
-                logo.width,
-                logo.height,
+                logo_width,
+                logo_height_actual,
                 position="left" if col_idx == 1 else "right",
             )
         status_fill = IN_PROGRESS_STATUS_COLOR if in_progress else (255, 255, 255)

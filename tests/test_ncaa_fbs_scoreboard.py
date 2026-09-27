@@ -35,3 +35,13 @@ def test_missing_team_logo_logs_expected_filename(monkeypatch, caplog):
 
     assert logo is None
     assert "expected filename: MINN.png" in caplog.text
+    assert ncaa_fbs_scoreboard._team_abbreviation(
+        {"team": {"abbreviation": "MINN"}}
+    ) == "MINN"
+
+
+def test_team_abbreviation_matches_id_based_expected_filename():
+    team = {"team": {"id": "123", "abbreviation": ""}}
+
+    assert ncaa_fbs_scoreboard._team_logo_filename(team) == "123.png"
+    assert ncaa_fbs_scoreboard._team_abbreviation(team) == "123"
