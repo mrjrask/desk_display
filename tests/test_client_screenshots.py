@@ -72,3 +72,22 @@ def test_from_settings_honours_enable_screenshots(tmp_path, monkeypatch):
     assert on.enabled and not off.enabled
     assert on.screenshot_dir == tmp_path / "shots"
     assert on.display["width"] == profile.width
+
+
+def test_heartbeat_counts_plays_per_screen(tmp_path):
+    shots = _writer(tmp_path)
+    for screen in ("date", "weather1", "date"):
+        shots.record(screen, Image.new("L", (4, 4)))
+    status = json.loads((tmp_path / "shots" / "current" / "display_status.json").read_text())
+    assert status["screen_play_counts"] == {"date": 2, "weather1": 1}
+    assert status["loop_iteration"] == 3
+
+
+def test_a_standalone_ticker_sidecar_is_cleared(tmp_path):
+    current = tmp_path / "shots" / "current"
+    current.mkdir(parents=True)
+    (current / "news.ticker.json").write_text('{"headlines": ["old"]}')
+    (current / "sports.ticker.json").write_text('{"headlines": ["other"]}')
+    _writer(tmp_path).record("news", Image.new("L", (4, 4)))
+    assert not (current / "news.ticker.json").exists()
+    assert (current / "sports.ticker.json").exists()

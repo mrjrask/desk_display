@@ -77,6 +77,7 @@ class ClientScreenshots:
         self.display = {"profile_id": profile_id, "width": width, "height": height}
         self._now = now or (lambda: datetime.datetime.now(datetime.timezone.utc))
         self.loop_iteration = 0
+        self.play_counts: dict[str, int] = {}
 
     @classmethod
     def from_settings(cls, settings: dict[str, Any], profile: Any) -> ClientScreenshots:
@@ -95,6 +96,7 @@ class ClientScreenshots:
         """
 
         self.loop_iteration += 1
+        self.play_counts[screen_id] = self.play_counts.get(screen_id, 0) + 1
         now = self._now()
         if self.enabled:
             try:
@@ -115,6 +117,9 @@ class ClientScreenshots:
         self._prune(folder)
         self.current_dir.mkdir(parents=True, exist_ok=True)
         _replace_atomically(self.current_dir / f"{prefix}.png", lambda fh: image.save(fh, format="PNG"))
+        # A client has no ticker payload; a sidecar left by main.py would make the
+        # Feed page keep animating old headlines instead of showing this frame.
+        (self.current_dir / f"{prefix}.ticker.json").unlink(missing_ok=True)
 
     def _prune(self, folder: Path) -> None:
         files = sorted(p for p in folder.iterdir() if p.is_file() and p.suffix.lower() in _IMAGE_EXTS)
@@ -132,6 +137,7 @@ class ClientScreenshots:
             "image_digest": hashlib.sha1(image.tobytes()).hexdigest()[:12],
             "frame_id": None,
             "display": dict(self.display),
+            "screen_play_counts": dict(self.play_counts),
         }
         self.current_dir.mkdir(parents=True, exist_ok=True)
         data = (json.dumps(payload, indent=2) + "\n").encode("utf-8")
