@@ -369,7 +369,7 @@ class ServerFeedService:
 def _fetch_nfl_standings(*, force: bool = False) -> dict[str, Any]:
     from screens import nfl_standings
 
-    standings, fallback_message, season_note = nfl_standings._fetch_standings_data(force=force)
+    standings, fallback_message, season_note = nfl_standings._fetch_standings_data(force=True)
     if fallback_message == nfl_standings.FALLBACK_MESSAGE_UNAVAILABLE:
         # The fetch failed, even when it hands back cached rows.
         raise RuntimeError(fallback_message)
@@ -382,12 +382,21 @@ def _fetch_nfl_standings(*, force: bool = False) -> dict[str, Any]:
     }
 
 
+def _fetched_since(cache: Mapping[str, Any], started: float) -> bool:
+    """Whether a standings module stored a successful fetch at or after *started*."""
+
+    return float(cache.get("timestamp", 0.0)) >= started
+
+
 def _fetch_nhl_standings(*, force: bool = False, include_wildcard_order: bool = False) -> dict[str, Any]:
     from screens import nhl_standings
 
-    standings = nhl_standings._fetch_standings_data(force=force)
-    if not standings:
-        raise RuntimeError("NHL standings returned no data")
+    # Always fetch: the feed interval sets the cadence, and a fresh fetch
+    # lets a failure that falls back to the module's cached rows be seen.
+    started = time.time()
+    standings = nhl_standings._fetch_standings_data(force=True)
+    if not standings or not _fetched_since(nhl_standings._STANDINGS_CACHE, started):
+        raise RuntimeError("NHL standings fetch failed")
     values: dict[str, Any] = {"nhl_standings": standings}
     if include_wildcard_order:
         wildcard_order = nhl_standings._fetch_wildcard_order_api_web()
@@ -399,10 +408,13 @@ def _fetch_nhl_standings(*, force: bool = False, include_wildcard_order: bool = 
 def _fetch_mlb_league_standings(*, force: bool = False) -> dict[str, Any]:
     from screens import mlb_league_standings
 
-    standings = mlb_league_standings._fetch_league_standings(force=force)
-    # A failed fetch returns every division empty rather than nothing.
-    if not any(rows for league in (standings or {}).values() for rows in league.values()):
-        raise RuntimeError("MLB league standings returned no data")
+    started = time.time()
+    standings = mlb_league_standings._fetch_league_standings(force=True)
+    # A failed fetch returns cached rows, or every division empty.
+    if not _fetched_since(mlb_league_standings._STANDINGS_CACHE, started) or not any(
+        rows for league in (standings or {}).values() for rows in league.values()
+    ):
+        raise RuntimeError("MLB league standings fetch failed")
     return {"mlb_league_standings": standings}
 
 

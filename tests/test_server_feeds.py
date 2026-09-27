@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import time
 from types import SimpleNamespace
 
 import pytest
@@ -301,10 +302,43 @@ def test_mlb_standings_with_every_division_empty_is_an_error(monkeypatch):
     from screens import mlb_league_standings
     from services import server_feeds
 
-    monkeypatch.setattr(mlb_league_standings, "_fetch_league_standings",
-                        lambda force=False: {103: {"East": []}, 104: {"East": []}})
+    def fetch(force=False):
+        mlb_league_standings._STANDINGS_CACHE["timestamp"] = time.time()
+        return {103: {"East": []}, 104: {"East": []}}
+
+    monkeypatch.setattr(mlb_league_standings, "_STANDINGS_CACHE", {})
+    monkeypatch.setattr(mlb_league_standings, "_fetch_league_standings", fetch)
     with pytest.raises(RuntimeError):
         server_feeds._fetch_mlb_league_standings()
+
+
+@pytest.mark.parametrize("module_name, fetch_name, wrapper", [
+    ("nhl_standings", "_fetch_standings_data", "_fetch_nhl_standings"),
+    ("mlb_league_standings", "_fetch_league_standings", "_fetch_mlb_league_standings"),
+])
+def test_cached_rows_after_a_failed_fetch_are_an_error(monkeypatch, module_name, fetch_name, wrapper):
+    import importlib
+
+    from services import server_feeds
+
+    module = importlib.import_module(f"screens.{module_name}")
+    rows = {103: {"East": [{"abbr": "NYY"}]}}
+    succeed = {"now": False}
+    forced = []
+
+    def fetch(force=False):
+        forced.append(force)
+        if succeed["now"]:
+            module._STANDINGS_CACHE["timestamp"] = time.time()
+        return rows  # a failure hands back the old cached rows
+
+    monkeypatch.setattr(module, "_STANDINGS_CACHE", {"data": rows, "timestamp": time.time() - 3600})
+    monkeypatch.setattr(module, fetch_name, fetch)
+    with pytest.raises(RuntimeError):
+        getattr(server_feeds, wrapper)()
+    succeed["now"] = True
+    assert getattr(server_feeds, wrapper)()
+    assert forced == [True, True]
 
 
 # ── Revisions ───────────────────────────────────────────────────────────────
