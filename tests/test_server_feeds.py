@@ -1,6 +1,7 @@
 """Tests for headless feed collection on the render server."""
 from __future__ import annotations
 
+import datetime
 import json
 import time
 from types import SimpleNamespace
@@ -13,6 +14,18 @@ from services import feeds
 from services.air_quality import AirQualityReport
 from services.data_coordinator import DataCoordinator
 from services.server_feeds import LIVE_REFRESH_SECONDS, ServerFeedService
+
+
+def test_ncaa_fbs_scoreboard_date_uses_provider_morning_cutoff():
+    before_cutoff = datetime.datetime(2026, 9, 27, 9, 0, tzinfo=feeds.CENTRAL_TIME)
+    after_cutoff = datetime.datetime(2026, 9, 27, 11, 0, tzinfo=feeds.CENTRAL_TIME)
+
+    assert feeds.scoreboard_date_for_league("ncaa_fbs", before_cutoff) == datetime.date(
+        2026, 9, 26
+    )
+    assert feeds.scoreboard_date_for_league("ncaa_fbs", after_cutoff) == datetime.date(
+        2026, 9, 27
+    )
 
 
 class Clock:

@@ -20,6 +20,7 @@ from config import CENTRAL_TIME
 from services.sports.mlb import fetch_scoreboard as fetch_mlb_scoreboard
 from services.sports.nba import fetch_scoreboard as fetch_nba_scoreboard
 from services.sports.ncaam import fetch_scoreboard as fetch_ncaam_scoreboard
+from services.sports.ncaa_fbs import fetch_scoreboard as fetch_ncaa_fbs_scoreboard
 from services.sports.nfl import (
     WeeklyResult,
     fetch_next_scoreboard as fetch_nfl_next_scoreboard,
@@ -180,7 +181,7 @@ class DataProvider:
         leagues: Optional[set[str]] = None,
         force_refresh_leagues: Optional[set[str]] = None,
     ) -> dict[str, Any]:
-        supported_leagues = {"nfl", "mlb", "nba", "ncaam", "nhl", "world_cup"}
+        supported_leagues = {"nfl", "mlb", "nba", "ncaam", "ncaa_fbs", "nhl", "world_cup"}
         selected_leagues = frozenset(
             league
             for league in (leagues or supported_leagues)
@@ -208,6 +209,7 @@ class DataProvider:
                 "mlb": lambda: fetch_mlb_scoreboard(now=now),
                 "nba": lambda: fetch_nba_scoreboard(now=now),
                 "ncaam": lambda: fetch_ncaam_scoreboard(now=now),
+                "ncaa_fbs": lambda: fetch_ncaa_fbs_scoreboard(now=now),
                 "nhl": lambda: fetch_nhl_scoreboard(now=now),
                 "world_cup": lambda: fetch_world_cup_scoreboard(now=now),
             }
@@ -245,6 +247,7 @@ class DataProvider:
                     "mlb": scoreboards["mlb"],
                     "nba": scoreboards["nba"],
                     "ncaam": scoreboards["ncaam"],
+                    "ncaa_fbs": scoreboards["ncaa_fbs"],
                     "nhl": scoreboards["nhl"],
                     "world_cup": scoreboards["world_cup"],
                 },

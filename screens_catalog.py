@@ -4,6 +4,7 @@
 LEGACY_SCOREBOARD_V2_SCREEN_MAP = {
     "NHL Standings Overview v2 West": "NHL Standings Overview West",
     "NHL Standings Overview v2 East": "NHL Standings Overview East",
+    "NCAAM Scoreboard v2": "NCAA Mens BB Scoreboard v2",
 }
 
 LEGACY_SCREEN_ID_MAP = {
@@ -12,6 +13,7 @@ LEGACY_SCREEN_ID_MAP = {
     "time": "nixie",
     "sensors": "inside",
     "adsb live airlines": "adsb live",
+    "NCAAM Scoreboard": "NCAA Mens BB Scoreboard",
 }
 
 # Compatibility-only IDs retained so historical persisted configurations can
@@ -71,7 +73,8 @@ RAW_SCREEN_IDS = [
     "NBA Scoreboard",
     "NBA Scoreboard v2",
     "NBA Playoffs",
-    "NCAAM Scoreboard",
+    "NCAA Mens BB Scoreboard",
+    "NCAA FBS Scoreboard",
     "World Cup Scoreboard",
     "bulls logo",
     "bulls stand1",

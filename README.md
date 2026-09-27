@@ -836,7 +836,8 @@ normal loading instead of silently dropping renamed screens.
 - `nba logo`
 - `NBA Scoreboard`
 - `NBA Playoffs`
-- `NCAAM Scoreboard`
+- `NCAA Mens BB Scoreboard`
+- `NCAA FBS Scoreboard`
 - `World Cup Scoreboard`
 - `bulls logo`
 - `bulls stand1`

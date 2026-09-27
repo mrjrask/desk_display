@@ -21,6 +21,10 @@ def test_removed_adsb_airlines_screen_maps_to_consolidated_live_screen():
     assert canonical_screen_id("adsb live airlines") == "adsb live"
 
 
+def test_legacy_ncaam_v2_screen_maps_to_renamed_screen():
+    assert canonical_screen_id("NCAAM Scoreboard v2") == "NCAA Mens BB Scoreboard v2"
+
+
 def test_registered_wolves_live_screen_is_listed():
     assert "wolves live" in RAW_SCREEN_IDS
 
