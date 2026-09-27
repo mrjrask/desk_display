@@ -108,3 +108,15 @@ def test_a_standalone_ticker_sidecar_is_cleared(tmp_path):
     _writer(tmp_path).record("news", Image.new("L", (4, 4)))
     assert not (current / "news.ticker.json").exists()
     assert (current / "sports.ticker.json").exists()
+
+
+def test_unusable_screenshot_paths_do_not_stop_the_client(tmp_path, monkeypatch):
+    from display_profiles import PROFILE_PRESETS
+
+    blocker = tmp_path / "a-file"
+    blocker.write_text("")
+    monkeypatch.setenv("SCREENSHOT_DIR", str(blocker / "shots"))
+    monkeypatch.setenv("SCREENSHOT_ARCHIVE_BASE", str(blocker / "archive"))
+    shots = ClientScreenshots.from_settings({"ENABLE_SCREENSHOTS": True}, PROFILE_PRESETS["hyperpixel4"])
+    shots.record("date", Image.new("L", (4, 4)))  # logged, not raised
+    assert not (tmp_path / "archive").exists()
