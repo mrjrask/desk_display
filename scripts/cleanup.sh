@@ -301,7 +301,7 @@ fi
 if (( ${#leftover_files[@]} > 0 )); then
   echo "    → Archiving leftover screenshots/videos to screenshot_archive/<screen>/"
   for src in "${leftover_files[@]}"; do
-    rel_path="${src#${SCREENSHOTS_DIR}/}"
+    rel_path="${src#"${SCREENSHOTS_DIR}"/}"
     screen_folder="${ARCHIVE_DEFAULT_FOLDER}"
     remainder="${rel_path}"
 

@@ -69,7 +69,7 @@ DEFAULT_SCREEN_PROFILE = "large"
 STYLE_CONFIG_PATH = str(resolve_style_config_path())
 LAYOUTS_CONFIG_PATH = str(resolve_layouts_config_path())
 
-SCREEN_CONFIG_HOST = os.environ.get("SCREEN_CONFIG_HOST", "0.0.0.0")
+SCREEN_CONFIG_HOST = os.environ.get("SCREEN_CONFIG_HOST", "0.0.0.0")  # noqa: S104 - intentional: LAN-facing service, see CONFIGURATION.md
 SCREEN_CONFIG_PORT = non_negative_env_int("SCREEN_CONFIG_PORT", 5002)
 SCREEN_UI_USERNAME = os.environ.get("SCREEN_UI_USERNAME", "")
 SCREEN_UI_PASSWORD = os.environ.get("SCREEN_UI_PASSWORD", "")

@@ -181,6 +181,17 @@ provisioning warns when the server URL it writes into `.env.client` is plain
 HTTP to another host. A private CA is supported with
 `DESK_DISPLAY_SERVER_CA_BUNDLE` on the client.
 
+### LAN-facing web services
+
+The config UI (`SCREEN_CONFIG_HOST`, port 5002) and the screenshot feed
+server (`FEED_SERVER_HOST`, port 5003) listen on all interfaces (`0.0.0.0`) by
+default on purpose: they are meant to be opened from a phone or laptop on the
+same home network as the Pi. Keep them on a trusted LAN, set
+`SCREEN_UI_PASSWORD` (and `FEED_UPLOAD_TOKEN`) when others share that network,
+or set the host to `127.0.0.1` to reach them only from the Pi itself. The
+render server API is different: it binds to loopback by default, as described
+above.
+
 ## Display client
 
 `python3 display_client.py` runs a thin display client. It reads `.env.client`

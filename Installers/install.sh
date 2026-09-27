@@ -211,7 +211,8 @@ if [[ "$mode" != "server" ]]; then
         exit 1
         ;;
     esac
-    export DESK_DISPLAY_INSTALL_PROFILE="$(basename -- "$installer" .sh)"
+    DESK_DISPLAY_INSTALL_PROFILE="$(basename -- "$installer" .sh)"
+    export DESK_DISPLAY_INSTALL_PROFILE
     DESK_DISPLAY_INSTALL_PROFILE="${DESK_DISPLAY_INSTALL_PROFILE#install_}"
     DESK_DISPLAY_INSTALL_PROFILE="${DESK_DISPLAY_INSTALL_PROFILE%_114}"
     if [[ -f "$PROJECT_DIR/.env.client" ]]; then

@@ -16,6 +16,8 @@ fi
 # shellcheck source=/dev/null
 source "$COMMON_SCRIPT"
 
+# SUDO is read by the helpers in common.sh.
+# shellcheck disable=SC2034
 if [[ $EUID -ne 0 ]]; then
   SUDO="sudo"
 else

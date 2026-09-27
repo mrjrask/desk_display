@@ -22,6 +22,9 @@ from html.parser import HTMLParser
 from typing import ClassVar, Optional
 from xml.etree import ElementTree
 
+from defusedxml import DefusedXmlException
+from defusedxml import ElementTree as SafeElementTree
+
 from paths import resolve_news_feeds_config_path, resolve_news_feeds_config_path_2
 from services.http_client import http_get
 
@@ -300,8 +303,9 @@ def parse_feed_headlines(xml_text: str, topic_id: str, limit: int) -> list[NewsH
     """
 
     try:
-        root = ElementTree.fromstring(xml_text)
-    except ElementTree.ParseError as exc:
+        # Feed bodies are untrusted network content, so parse with defusedxml.
+        root = SafeElementTree.fromstring(xml_text)
+    except (ElementTree.ParseError, DefusedXmlException) as exc:
         logging.debug("news_feeds: failed to parse feed for topic %s: %s", topic_id, exc)
         return []
 

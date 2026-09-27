@@ -441,7 +441,8 @@ prepend_env_vars() {
     keys+=("${line%%=*}")
   done
 
-  local regex="^($(IFS='|'; echo "${keys[*]}"))="
+  local regex
+  regex="^($(IFS='|'; echo "${keys[*]}"))="
 
   if [[ -f "$env_path" ]]; then
     grep -v -E "$regex" "$env_path" > "$filtered_file" || true

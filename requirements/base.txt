@@ -2,6 +2,7 @@
 # Keep hardware drivers and optional indoor-sensor packages in profile files.
 Flask
 requests
+defusedxml
 pytz
 Pillow
 PyJWT[crypto]>=2.8.0

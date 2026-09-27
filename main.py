@@ -1805,7 +1805,7 @@ def _write_display_status(
         "screen_id": sid,
         "loop_iteration": loop_iteration,
         "rendered_at": timestamp.isoformat(),
-        "image_digest": hashlib.sha1(img.tobytes()).hexdigest()[:12],
+        "image_digest": hashlib.sha256(img.tobytes()).hexdigest()[:12],
         "frame_id": frame_id,
         "display": {
             "profile_id": get_display_profile_id(),
