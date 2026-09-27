@@ -23,6 +23,7 @@ from rendering.profile_process import ProfileProcessPool, composition_env
 ROOT = Path(__file__).resolve().parents[1]
 REFERENCE = ROOT / "tests" / "fixtures" / "v01_reference"
 PROFILES = sorted(p.name for p in REFERENCE.iterdir() if p.is_dir())
+_MISSING = object()
 IMAGES = ("mlb_al_standings", "al_overview", "nhl_scoreboard_2", "nhl_scoreboard_6", "date", "nixie")
 
 
@@ -74,10 +75,17 @@ def test_every_v01_profile_has_references():
 def test_font_sizes_and_layout_constants_match_v01(probed, profile_id):
     expected = json.loads((REFERENCE / profile_id / "constants.json").read_text())
     actual = json.loads((probed / profile_id / "constants.json").read_text())
+    # A module that no longer imports, or a constant that was removed or
+    # renamed, loses coverage; it fails here rather than passing silently.
     changed = [
-        f"{module}.{name}: v0.1 {value!r}, now {actual[module][name]!r}"
-        for module, names in expected.items() if module in actual
-        for name, value in names.items() if name in actual[module] and actual[module][name] != value
+        f"{module}: {actual[module]['__error__']}" if "__error__" in actual.get(module, {})
+        else f"{module}: missing"
+        for module in expected if module not in actual or "__error__" in actual[module]
+    ]
+    changed += [
+        f"{module}.{name}: v0.1 {value!r}, now {actual[module].get(name, '<missing>')!r}"
+        for module, names in expected.items() if module in actual and "__error__" not in actual[module]
+        for name, value in names.items() if actual[module].get(name, _MISSING) != value
     ]
     assert not changed, "\n".join(changed)
 

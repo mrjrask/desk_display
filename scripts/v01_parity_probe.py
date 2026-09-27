@@ -57,7 +57,8 @@ def _constants(config) -> dict:
     for info in sorted(pkgutil.iter_modules(screens.__path__), key=lambda i: i.name):
         try:
             module = importlib.import_module(f"screens.{info.name}")
-        except Exception:  # noqa: BLE001 - a module that cannot import has no constants
+        except Exception as exc:  # noqa: BLE001 - recorded, so the comparison reports it
+            result[f"screens.{info.name}"] = {"__error__": f"{type(exc).__name__}: {exc}"}
             continue
         result[f"screens.{info.name}"] = snap(vars(module))
     return result
@@ -158,6 +159,15 @@ def main(argv: list[str]) -> None:
 
     # Before anything renders: some renderers update module globals as they draw.
     constants = _constants(config)
+    if not v01:
+        # The registry now derives these from the render profile it is built
+        # for instead of holding them as module constants; record what it derives.
+        from screens import registry
+
+        derived = constants.setdefault("screens.registry", {})
+        derived.setdefault("WIDTH", config.WIDTH)
+        derived.setdefault("HEIGHT", config.HEIGHT)
+        derived.setdefault("_LOGO_SCROLL_SPEED", registry._logo_scroll_speed_for_layout(config.WIDTH, config.HEIGHT))
     if v01:
         _v01(config, standings, out)
     else:
