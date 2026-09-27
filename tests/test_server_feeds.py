@@ -204,6 +204,17 @@ def test_v2_nhl_demand_fetches_the_wildcard_order_at_once(env):
     assert "nhl_wildcard_order" in env.data.snapshot().values
 
 
+def test_stale_wildcard_order_refreshes_when_v2_demand_returns(env):
+    env.service.refresh({"NHL Standings West v2"})
+    interval = feeds.SERVER_FEED_REFRESH_INTERVALS["nhl_standings"]
+    env.clock.advance(interval)
+    env.service.refresh({"NHL Standings West"})  # standings refresh without the wildcard
+    env.standings.calls.clear()
+    assert env.service.refresh({"NHL Standings West", "NHL Standings West v2"}) == {"nhl_standings": True}
+    assert env.standings.calls == [("nhl_standings", False, {"include_wildcard_order": True})]
+    assert env.service.refresh({"NHL Standings West", "NHL Standings West v2"}) == {}
+
+
 def test_missing_wildcard_order_fails_the_nhl_refresh_but_keeps_standings(env):
     fetchers = env.service.standings_fetchers
     original = fetchers["nhl_standings"]

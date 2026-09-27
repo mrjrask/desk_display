@@ -89,6 +89,9 @@ class ServerFeedService:
         self._lock = threading.Lock()
         self._health: dict[str, FeedHealth] = {feed: FeedHealth() for feed in feeds.SERVER_FEED_DEPENDENCIES}
         self._scoreboard_dates: dict[str, Any] = {}
+        # The wildcard order is only fetched for v2 screens, so it ages apart
+        # from the NHL standings it is refreshed with.
+        self._wildcard_fetched_at: float | None = None
         self._stop = threading.Event()
         self._state = FeedStateFile(state_path) if state_path else None
         self._saved: dict[str, dict[str, Any]] = {}
@@ -121,6 +124,8 @@ class ServerFeedService:
             if all(key in saved for key in keys):
                 age = max(0.0, wall - min(saved[key]["saved_at"] for key in keys))
                 self._health.setdefault(feed, FeedHealth()).last_success = now - age
+        if "nhl_wildcard_order" in saved:
+            self._wildcard_fetched_at = now - max(0.0, wall - saved["nhl_wildcard_order"]["saved_at"])
         LOGGER.info("Restored saved data for %s", ", ".join(sorted(saved)))
 
     def _save(self, feed: str) -> None:
@@ -174,10 +179,11 @@ class ServerFeedService:
             elif (
                 feed == "nhl_standings"
                 and screens & feeds.NHL_WILDCARD_SCREEN_IDS
-                and "nhl_wildcard_order" not in snapshot.values
                 and health.consecutive_failures == 0
+                and (self._wildcard_fetched_at is None or now - self._wildcard_fetched_at >= interval)
             ):
-                # A v2 screen just joined demand; fetch its wildcard order now.
+                # A v2 screen joined demand and its wildcard order is missing
+                # or older than the feed interval; fetch it now.
                 interval = 0
             last = health.last_success if health.consecutive_failures == 0 else health.last_attempt
             if last is None or now - last >= interval:
@@ -266,6 +272,8 @@ class ServerFeedService:
         values = self.standings_fetchers[feed](force=fresh, **kwargs)
         for key, value in values.items():
             self.data.publish(key, value)
+        if "nhl_wildcard_order" in values:
+            self._wildcard_fetched_at = self._clock()
         if wildcard and feed == "nhl_standings" and "nhl_wildcard_order" not in values:
             # The standings still publish, but the refresh counts as failed so
             # the wildcard order is retried and the failure shows in health.
