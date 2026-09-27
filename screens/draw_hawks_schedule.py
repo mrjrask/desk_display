@@ -683,6 +683,7 @@ def _draw_scoreboard(
     bottom_reserved_px: int = 0,
     hyperpixel_layout: bool = False,
     center_vertically: bool = False,
+    compact_fonts: bool = False,
 ) -> int:
     """Draw a compact 2×3 scoreboard. Returns bottom y."""
     # Column widths: first column dominates for logo + name, remaining space split
@@ -815,6 +816,12 @@ def _draw_scoreboard(
     else:
         name_font = _ts(int(round(_ABBR_FONT_SIZE * 0.85))) if hyperpixel_layout else FONT_ABBR
     score_font = _ts(int(round(_SCORE_FONT_SIZE * 0.85))) if hyperpixel_layout else FONT_SCORE
+    if compact_fonts:
+        compact_scale = 0.62 if hyperpixel_layout else 0.82
+        name_size = int(round(getattr(name_font, "size", _ABBR_FONT_SIZE) * compact_scale))
+        score_size = int(round(getattr(score_font, "size", _SCORE_FONT_SIZE) * compact_scale))
+        name_font = _ts(max(12, name_size))
+        score_font = _ts(max(16, score_size))
     if not _fits(name_font):
         size = getattr(name_font, "size", None) or int(round(_ABBR_FONT_SIZE * (0.85 if hyperpixel_layout else 1.0)))
         min_size = max(8, int(round(size * 0.5)))
@@ -1535,6 +1542,7 @@ def draw_live_hawks_game(display, game, transition: bool=False):
         bottom_reserved_px=reserve,
         hyperpixel_layout=hyperpixel_layout,
         center_vertically=_IS_HYPERPIXEL_4_SQUARE,
+        compact_fonts=True,
     )
 
     if dateline:

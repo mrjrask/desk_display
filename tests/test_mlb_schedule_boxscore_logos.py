@@ -160,6 +160,23 @@ def test_draw_box_score_reserves_flag_block_for_live_layout(monkeypatch):
     assert captured["center_ignores_reserved_flag_block"] is True
 
 
+def test_draw_box_score_skips_stale_terminal_live_payload(monkeypatch):
+    monkeypatch.setattr(
+        mlb_schedule,
+        "_draw_boxscore_table",
+        lambda *_args, **_kwargs: pytest.fail("terminal game was rendered"),
+    )
+    game = {
+        "status": {
+            "abstractGameState": "Live",
+            "detailedState": "Game Over",
+            "codedGameState": "I",
+        }
+    }
+
+    assert mlb_schedule.draw_box_score(None, game, screen_id="sox live") is None
+
+
 def test_draw_box_score_uses_warmup_status_over_inning_state(monkeypatch):
     captured = {}
 

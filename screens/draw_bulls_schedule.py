@@ -593,6 +593,7 @@ def _draw_scoreboard_table(
     bottom_reserved_px: int = 0,
     hyperpixel_layout: bool = False,
     center_vertically: bool = False,
+    compact_fonts: bool = False,
 ) -> int:
     """
     2-row compact table: team cell at left, score column at right.
@@ -608,6 +609,12 @@ def _draw_scoreboard_table(
     else:
         team_font = _ts(int(round(_FONT_ABBR_SIZE * 0.85))) if hyperpixel_layout else FONT_ABBR
     score_font = _ts(int(round(_FONT_SCORE_SIZE * 0.85))) if hyperpixel_layout else FONT_SCORE
+    if compact_fonts:
+        compact_scale = 0.62 if hyperpixel_layout else 0.82
+        team_size = int(round(getattr(team_font, "size", _FONT_ABBR_SIZE) * compact_scale))
+        score_size = int(round(getattr(score_font, "size", _FONT_SCORE_SIZE) * compact_scale))
+        team_font = _ts(max(12, team_size))
+        score_font = _ts(max(16, score_size))
 
     row_count = len(rows)
     col1_w = min(WIDTH - 24, max(84, int(WIDTH * 0.72)))
@@ -691,6 +698,7 @@ def _render_scoreboard(
     footer: Optional[str] = "",
     status_line: Optional[str] = "",
     hyperpixel_layout: bool = False,
+    compact_fonts: bool = False,
 ) -> Image.Image:
     img = Image.new("RGB", (WIDTH, HEIGHT), BACKGROUND_COLOR)
     draw = ImageDraw.Draw(img)
@@ -725,6 +733,7 @@ def _render_scoreboard(
         rows,
         bottom_reserved_px=bottom_reserved,
         hyperpixel_layout=hyperpixel_layout,
+        compact_fonts=compact_fonts,
         center_vertically=_IS_HYPERPIXEL_4_SQUARE and title in {"Last Bulls game:", "Bulls Live:"},
     )
 
@@ -918,6 +927,7 @@ def draw_live_bulls_game(display, game: Optional[dict], transition: bool = False
         title="Bulls Live:",
         footer=footer,
         hyperpixel_layout=hyperpixel_layout,
+        compact_fonts=True,
     )
     return _push(display, img, transition=transition)
 
