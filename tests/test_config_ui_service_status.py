@@ -1,6 +1,8 @@
 """The config UI's service banner reports the unit that drives this panel."""
 from __future__ import annotations
 
+import os
+
 import pytest
 
 pytest.importorskip("flask")
@@ -38,3 +40,23 @@ def test_service_status_queries_the_panel_unit(monkeypatch):
     monkeypatch.setattr(config_ui, "_SERVICE_STATUS_CACHE", {})
     assert config_ui._load_service_status()["unit"] == "desk_display_client.service"
     assert queried == ["desk_display_client.service"]
+
+
+def test_combined_install_reads_the_panels_screenshot_dir(tmp_path, monkeypatch):
+    install_modes.write_marker(tmp_path, "combined")
+    (tmp_path / ".env.client").write_text("SCREENSHOT_DIR=/srv/shots\nSCREENSHOT_ARCHIVE_BASE=/srv/archive\n")
+    monkeypatch.setenv("SCREENSHOT_DIR", "")  # registers a restore of the real value
+    monkeypatch.delenv("SCREENSHOT_DIR")
+    monkeypatch.setenv("SCREENSHOT_ARCHIVE_BASE", "/explicit/archive")
+    config_ui._adopt_panel_screenshot_paths(tmp_path)
+    assert os.environ["SCREENSHOT_DIR"] == "/srv/shots"
+    assert os.environ["SCREENSHOT_ARCHIVE_BASE"] == "/explicit/archive"  # the UI's own setting wins
+
+
+def test_other_modes_keep_their_own_screenshot_dir(tmp_path, monkeypatch):
+    install_modes.write_marker(tmp_path, "server")
+    (tmp_path / ".env.client").write_text("SCREENSHOT_DIR=/srv/shots\n")
+    monkeypatch.setenv("SCREENSHOT_DIR", "")  # registers a restore of the real value
+    monkeypatch.delenv("SCREENSHOT_DIR")
+    config_ui._adopt_panel_screenshot_paths(tmp_path)
+    assert "SCREENSHOT_DIR" not in os.environ
