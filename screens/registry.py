@@ -271,6 +271,7 @@ draw_nfl_standings_screen1 = _lazy_callable("screens.nfl_team_standings.draw_nfl
 draw_nfl_standings_screen2 = _lazy_callable("screens.nfl_team_standings.draw_nfl_standings_screen2")
 draw_nhl_standings_screen1 = _lazy_callable("screens.nhl_team_standings.draw_nhl_standings_screen1")
 render_ncaam_scoreboard = _lazy_callable("screens.ncaam_scoreboard.render_ncaam_scoreboard")
+render_ncaa_fbs_scoreboard = _lazy_callable("screens.ncaa_fbs_scoreboard.render_ncaa_fbs_scoreboard")
 render_world_cup_scoreboard = _lazy_callable("screens.world_cup_scoreboard.render_world_cup_scoreboard")
 render_nfl_scoreboard = _lazy_callable("screens.nfl_scoreboard.render_nfl_scoreboard")
 render_nfl_scoreboard_v2 = _lazy_callable("screens.nfl_scoreboard_v2.render_nfl_scoreboard_v2")
@@ -2031,10 +2032,19 @@ def build_screen_registry(context: ScreenContext) -> tuple[dict[str, ScreenDefin
         available=scoreboards_available,
     )
     register(
-        "NCAAM Scoreboard",
+        "NCAA Mens BB Scoreboard",
         lambda: render_ncaam_scoreboard(
             context.display,
             (context.cache.get("scoreboards") or {}).get("ncaam") or [],
+            transition=True,
+        ),
+        available=scoreboards_available,
+    )
+    register(
+        "NCAA FBS Scoreboard",
+        lambda: render_ncaa_fbs_scoreboard(
+            context.display,
+            (context.cache.get("scoreboards") or {}).get("ncaa_fbs") or [],
             transition=True,
         ),
         available=scoreboards_available,

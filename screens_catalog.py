@@ -12,6 +12,7 @@ LEGACY_SCREEN_ID_MAP = {
     "time": "nixie",
     "sensors": "inside",
     "adsb live airlines": "adsb live",
+    "NCAAM Scoreboard": "NCAA Mens BB Scoreboard",
 }
 
 # Compatibility-only IDs retained so historical persisted configurations can
@@ -71,7 +72,8 @@ RAW_SCREEN_IDS = [
     "NBA Scoreboard",
     "NBA Scoreboard v2",
     "NBA Playoffs",
-    "NCAAM Scoreboard",
+    "NCAA Mens BB Scoreboard",
+    "NCAA FBS Scoreboard",
     "World Cup Scoreboard",
     "bulls logo",
     "bulls stand1",
