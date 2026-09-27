@@ -45,6 +45,34 @@ def _scaled_font(font: Any, scale: float) -> Any:
         return font
 
 
+# The profile this process was configured for (see rendering.profile_process).
+_NATIVE_PROFILE_ID: str | None = None
+
+
+def set_native_profile(profile: RenderProfile | None) -> bool:
+    """Declare that ``config`` was imported for *profile*; return whether it was.
+
+    Screens composed for the native profile use the module state exactly as
+    it was loaded, like the v0.1 standalone display did, instead of the
+    per-composition substitutions below, which cannot reach every value a
+    renderer derives from the display size at import time.
+    """
+    global _NATIVE_PROFILE_ID
+    if profile is None or (config.WIDTH, config.HEIGHT) != (profile.width, profile.height):
+        _NATIVE_PROFILE_ID = None
+        return False
+    _NATIVE_PROFILE_ID = profile.profile_id
+    return True
+
+
+def _is_native_profile(profile: RenderProfile) -> bool:
+    if (config.WIDTH, config.HEIGHT) != (profile.width, profile.height):
+        return False
+    if profile.profile_id == _NATIVE_PROFILE_ID:
+        return True
+    return profile.profile_id == getattr(config.ACTIVE_DISPLAY_PROFILE, "profile_id", None)
+
+
 @contextlib.contextmanager
 def _profile_composition_globals(func: Callable[..., Any], profile: RenderProfile):
     """Present legacy module-global render inputs for one profile composition.
@@ -54,7 +82,13 @@ def _profile_composition_globals(func: Callable[..., Any], profile: RenderProfil
     module, under a lock, lets old renderers compose at the requested native
     size without mutating process-wide configuration or leaking state between
     concurrent contexts.
+
+    For the profile the process itself was configured for, nothing is
+    substituted: its module state is already exact.
     """
+    if _is_native_profile(profile):
+        yield
+        return
     # Decorators such as ``log_call`` use functools.wraps, so their public
     # callable has the decorator module's globals rather than the renderer's.
     # Patch the globals in which the renderer itself was defined while still

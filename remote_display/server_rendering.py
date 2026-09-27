@@ -111,6 +111,7 @@ class ServerRendering:
         *,
         preferences: str | None = None,
         logos: Any = None,
+        profile_processes: Any = None,
     ) -> None:
         if data_coordinator is None:
             from services.data_coordinator import coordinator as data_coordinator
@@ -126,6 +127,10 @@ class ServerRendering:
         # Settings are read once at start-up, like the config module does.
         self.preferences = preferences or preferences_revision()
         self.logos = logos
+        # A rendering.profile_process.ProfileProcessPool composes each profile
+        # in a process configured for it, as the v0.1 standalone display was.
+        # Without one, profiles are composed in this process by substitution.
+        self.profile_processes = profile_processes
 
     def revisions(self, screens: Iterable[str]) -> Mapping[str, ScreenRevisions]:
         snapshot = self.data.snapshot()
@@ -146,8 +151,7 @@ class ServerRendering:
     def render(self, key: RenderKey) -> RenderOutput:
         from display_profiles import PROFILE_PRESETS
         from rendering import screen_classes
-        from rendering.packaging import build_package, clock_package
-        from rendering.screen_renderer import ScreenRenderer, ServerPreferenceSnapshot
+        from rendering.packaging import clock_package
 
         profile = PROFILE_PRESETS[key.render_profile]
         screen = screen_classes.CLASSIFICATIONS.get(key.screen_id)
@@ -158,26 +162,29 @@ class ServerRendering:
             from rendering.clock_faces import clock_background, clock_layout, render_clock
 
             layout = clock_layout(key.screen_id, profile)
-            image = render_clock(layout, profile, datetime.now(timezone.utc))
+            now = datetime.now(timezone.utc)
+            if self.profile_processes is not None:
+                image = self.profile_processes.render_clock(layout, profile, now)
+            else:
+                image = render_clock(layout, profile, now)
             package = clock_package(key, profile, layout, clock_background(layout, profile))
             return RenderOutput(image=image, refresh_seconds=CLOCK_REFRESH_SECONDS, package=package)
         if screen is not None and screen.kind == screen_classes.PERIODIC:
             refresh = screen_classes.PERIODIC_REFRESH_SECONDS
 
-        from rendering.logos import IMAGES_DIR
-
         snapshot = self.data.snapshot()
         timestamp = getattr(self.data, "weather_cache_timestamp", None)
-        preferences = ServerPreferenceSnapshot(revision=0, values={
-            "logos": self.logos.for_size(profile.width, profile.height),
-            "image_dir": IMAGES_DIR,
-            "weather_fetched_at": timestamp() if callable(timestamp) else None,
-        })
-        record = screen is not None and screen.kind == screen_classes.FINITE_ANIMATION
-        artifact = ScreenRenderer().render(key.screen_id, profile, preferences, snapshot, record_frames=record)
-        metadata = {k: v for k, v in artifact.metadata.items() if k in {"animation", "required_capabilities"}}
-        package = build_package(key, profile, artifact)
-        return RenderOutput(image=artifact.image, refresh_seconds=refresh, metadata=metadata, package=package)
+        fetched_at = timestamp() if callable(timestamp) else None
+        if self.profile_processes is not None:
+            reply = self.profile_processes.render_screen(key, profile, snapshot, fetched_at)
+            image, metadata, package = reply["image"], reply["metadata"], reply["package"]
+        else:
+            image, metadata, package = compose_screen(key, profile, snapshot, self.logos, fetched_at)
+        return RenderOutput(image=image, refresh_seconds=refresh, metadata=metadata, package=package)
+
+    def close(self) -> None:
+        if self.profile_processes is not None:
+            self.profile_processes.close()
 
     def health(self) -> Mapping[str, Any]:
         snapshot = self.data.snapshot()
@@ -189,4 +196,25 @@ class ServerRendering:
         }
 
 
-__all__ = ["CLOCK_SCREENS", "ServerRendering", "StyleRevision", "preferences_revision"]
+def compose_screen(key: RenderKey, profile: Any, snapshot: Any, logos: Any,
+                   weather_fetched_at: Any = None) -> tuple[Any, dict[str, Any], Any]:
+    """Compose *key* in this process: ``(image, metadata, package)``."""
+
+    from rendering import screen_classes
+    from rendering.logos import IMAGES_DIR
+    from rendering.packaging import build_package
+    from rendering.screen_renderer import ScreenRenderer, ServerPreferenceSnapshot
+
+    screen = screen_classes.CLASSIFICATIONS.get(key.screen_id)
+    preferences = ServerPreferenceSnapshot(revision=0, values={
+        "logos": logos.for_size(profile.width, profile.height),
+        "image_dir": IMAGES_DIR,
+        "weather_fetched_at": weather_fetched_at,
+    })
+    record = screen is not None and screen.kind == screen_classes.FINITE_ANIMATION
+    artifact = ScreenRenderer().render(key.screen_id, profile, preferences, snapshot, record_frames=record)
+    metadata = {k: v for k, v in artifact.metadata.items() if k in {"animation", "required_capabilities"}}
+    return artifact.image, metadata, build_package(key, profile, artifact)
+
+
+__all__ = ["CLOCK_SCREENS", "ServerRendering", "StyleRevision", "compose_screen", "preferences_revision"]

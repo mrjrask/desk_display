@@ -78,6 +78,16 @@ See the README's [deployment modes](README.md#deployment-modes) and
   read dark hours in it (default America/Chicago, as before).
 - Fix: `DESK_DISPLAY_OFFLINE_START=0` makes a client wait for its first sync
   after start-up before playing its cache.
+- Fix: fonts and layouts match v0.1 again on every display. The server drew
+  every profile in one process and substituted each display's sizes at render
+  time, which missed most of the values screens derive from the display size
+  when they load, so text came out too big or too small. It now composes each
+  profile in its own worker process (`rendering/profile_process.py`),
+  configured the way the v0.1 installer configured that display, and a
+  display client configures itself for its panel before drawing its clock.
+  `tests/test_v01_parity.py` compares fonts, layout constants and renders for
+  every v0.1 display with references recorded from the `v0.1` tag
+  (`scripts/make_v01_references.py`).
 - Fix: a feed refresh that returns unchanged data (for example from a TTL
   cache) no longer bumps its data revision, so it no longer re-renders the
   screens that read it.

@@ -2,12 +2,14 @@
 from __future__ import annotations
 
 from collections.abc import Callable
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from PIL import Image
 
 from display_profiles import RenderProfile
-from rendering.screen_renderer import RenderArtifact
+
+if TYPE_CHECKING:  # importing it loads config, which a client configures first
+    from rendering.screen_renderer import RenderArtifact
 
 
 class HardwarePresenter:
@@ -31,7 +33,7 @@ class HardwarePresenter:
         return image.resize((profile.width, profile.height)).convert(profile.color_mode)
 
     def present(self, artifact: RenderArtifact | Image.Image) -> Image.Image:
-        image = artifact.image if isinstance(artifact, RenderArtifact) else artifact
+        image = artifact if isinstance(artifact, Image.Image) else artifact.image
         converted = self.convert(image)
         self.display.image(converted)
         show = getattr(self.display, "show", None)

@@ -385,6 +385,13 @@ serving its last good output (manifest state `fallback`) and backs off up to
 failed (...)`. Check the provider credential, or the feed that
 `data_health` names.
 
+The server draws each display profile in its own child process, started the
+first time a client with that profile needs a render and configured the way
+the v0.1 installer configured that display, so fonts and layouts match v0.1.
+Its log lines carry `[render <pid>]`. `ps -ef | grep rendering.profile_process`
+lists them (one per profile in use). A worker that dies is started again on
+the next render; restarting `desk_display_server.service` restarts them all.
+
 ### Logs and caches
 
 | Where | What |
