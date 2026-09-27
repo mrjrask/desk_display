@@ -170,6 +170,23 @@ def test_the_date_face_cycles_its_colours_then_holds_like_v01():
     assert playback.key_at(steps * interval) == playback.key_at(steps * interval + 30)  # then it holds
 
 
+def test_date_colour_cycle_timing_uses_the_package_profile(monkeypatch):
+    from rendering.clock_faces import color_cycle_timing
+    from screens import draw_date_time
+
+    # The server/host output can differ from the client package's output.  Its
+    # config helpers must not make every package inherit the host's cadence.
+    monkeypatch.setattr(draw_date_time, "is_kernel_driven_display", lambda: False)
+    monkeypatch.setattr(draw_date_time, "get_display_profile_id", lambda: "fallback_default")
+    monkeypatch.setattr(draw_date_time, "is_hyperpixel_next_layout", lambda: False)
+    monkeypatch.setattr(draw_date_time, "is_hyperpixel_4_square_layout", lambda: False)
+
+    interval, steps = color_cycle_timing(PROFILE_PRESETS["hyperpixel4"])
+
+    assert interval == pytest.approx(0.20)
+    assert steps > 1
+
+
 # ── Fallbacks ──────────────────────────────────────────────────────────────
 
 

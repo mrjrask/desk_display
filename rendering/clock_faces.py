@@ -58,11 +58,15 @@ def color_cycle_timing(profile: RenderProfile) -> tuple[float, int]:
     from screens import draw_date_time as date_time
 
     def timing() -> tuple[float, int]:
+        # This code runs on the display client, which may have several cached
+        # packages with profiles unlike the process's own configured output.
+        # Use the package profile directly; consulting draw_date_time's bound
+        # config helpers here incorrectly selected the host's cadence instead.
         _delay, interval, steps = date_time._color_cycle_profile(
-            kernel_driven=date_time.is_kernel_driven_display(),
-            display_profile_id=date_time.get_display_profile_id(),
-            hyperpixel_layout=date_time.is_hyperpixel_next_layout(),
-            hyperpixel_square=date_time.is_hyperpixel_4_square_layout(),
+            kernel_driven=profile.constraints.framebuffer,
+            display_profile_id=profile.profile_id,
+            hyperpixel_layout=profile.is_hyperpixel_next_layout,
+            hyperpixel_square=profile.is_hyperpixel_4_square_layout,
         )
         return float(interval), int(steps or 0)
 
