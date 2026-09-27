@@ -725,6 +725,8 @@ def _is_live_boxscore_game(game: object) -> bool:
     explicit_live = (
         "warmup" in normalized
         or "in progress" in detail
+        or "delay" in detail
+        or "suspend" in detail
         or str(status.get("codedGameState") or "").upper() == "I"
         or str(status.get("statusCode") or "").upper() == "I"
     )

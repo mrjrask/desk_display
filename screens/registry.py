@@ -1129,9 +1129,7 @@ def build_screen_registry(context: ScreenContext) -> tuple[dict[str, ScreenDefin
             "game over",
             "completed",
             "postponed",
-            "suspend",
             "cancel",
-            "delay",
             "preview",
             "schedule",
             "pregame",
@@ -1163,6 +1161,8 @@ def build_screen_registry(context: ScreenContext) -> tuple[dict[str, ScreenDefin
                 "top",
                 "bottom",
                 "warmup",
+                "delay",
+                "suspend",
             )
         ) or bool(re.search(r"\bot\b", status_text))
 
