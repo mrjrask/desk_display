@@ -95,6 +95,11 @@ See the README's [deployment modes](README.md#deployment-modes) and
 - Fix: a display client's `date` clock cycles its colours again as v0.1 did,
   drawing fresh colours at the display's own pace after the screen appears
   and then holding them, instead of keeping one pair of colours.
+- Fix: the render server's artifact store now honours
+  `DESK_DISPLAY_ARTIFACT_MAX_MB` (default 512). It used to only log a warning
+  when over budget, so `cache/artifacts/` grew to a full day of renders
+  (several GB on a busy server). Unreferenced artifacts are now deleted oldest
+  first until the store fits; anything a screen or client manifest uses stays.
 - Fix: a feed refresh that returns unchanged data (for example from a TTL
   cache) no longer bumps its data revision, so it no longer re-renders the
   screens that read it.

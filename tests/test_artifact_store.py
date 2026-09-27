@@ -319,6 +319,47 @@ def test_shared_objects_need_every_holder_to_release(store, clock):
     assert store.collect_garbage() == [shared.name]
 
 
+def test_over_budget_store_drops_oldest_unreferenced_objects_early(store, clock):
+    store.previous_revisions = 0
+    oldest = store.publish(key(data="d1"), png(color=1))
+    clock.advance(10)
+    middle = store.publish(key(data="d2"), png(color=2))  # releases d1
+    clock.advance(10)
+    held = store.publish(key(data="d3"), png(color=3))  # releases d2
+    store.reference("office", [middle.sha256])
+    clock.advance(10)
+    current = store.publish(key(data="d4"), png(color=4))  # releases d3
+    store.max_bytes = middle.length + current.length
+    # Nothing is past its grace period, yet the store is over budget: the
+    # unreferenced objects go, oldest first; lineage and manifest objects stay.
+    assert store.collect_garbage() == [oldest.name, held.name]
+    assert objects(store) == sorted([middle.name, current.name])
+
+
+def test_over_budget_collection_stops_once_within_budget(store, clock):
+    store.previous_revisions = 0
+    oldest = store.publish(key(data="d1"), png(color=1))
+    clock.advance(10)
+    newer = store.publish(key(data="d2"), png(color=2))
+    clock.advance(10)
+    current = store.publish(key(data="d3"), png(color=3))
+    store.max_bytes = newer.length + current.length
+    assert store.collect_garbage() == [oldest.name]
+    assert objects(store) == sorted([newer.name, current.name])
+
+
+def test_referenced_objects_survive_an_exhausted_budget(store, clock, caplog):
+    store.previous_revisions = 0
+    held = store.publish(key(data="d1"), png(color=1))
+    store.reference("office", [held.sha256])
+    current = store.publish(key(data="d2"), png(color=2))
+    store.max_bytes = 1
+    with caplog.at_level("WARNING"):
+        assert store.collect_garbage() == []
+    assert objects(store) == sorted([held.name, current.name])
+    assert "over its 1 byte budget" in caplog.text
+
+
 def test_lineage_output_is_never_collected(store, clock):
     current = store.publish(key(), png())
     clock.advance(GRACE * 100)
