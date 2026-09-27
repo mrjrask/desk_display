@@ -88,6 +88,9 @@ See the README's [deployment modes](README.md#deployment-modes) and
   `tests/test_v01_parity.py` compares fonts, layout constants and renders for
   every v0.1 display with references recorded from the `v0.1` tag
   (`scripts/make_v01_references.py`).
+- Fix: a display client's `date` clock cycles its colours again as v0.1 did,
+  drawing fresh colours at the display's own pace after the screen appears
+  and then holding them, instead of keeping one pair of colours.
 - Fix: a feed refresh that returns unchanged data (for example from a TTL
   cache) no longer bumps its data revision, so it no longer re-renders the
   screens that read it.
