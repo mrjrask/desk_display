@@ -4,6 +4,7 @@
 LEGACY_SCOREBOARD_V2_SCREEN_MAP = {
     "NHL Standings Overview v2 West": "NHL Standings Overview West",
     "NHL Standings Overview v2 East": "NHL Standings Overview East",
+    "NCAAM Scoreboard v2": "NCAA Mens BB Scoreboard v2",
 }
 
 LEGACY_SCREEN_ID_MAP = {

@@ -15,7 +15,11 @@ from typing import Any, Optional
 
 from display_time import CENTRAL_TIME
 from env_config import env_float, env_int, non_negative_env_float, non_negative_env_int
-from screens_catalog import LEGACY_SCREEN_ID_MAP, canonical_screen_id
+from screens_catalog import (
+    LEGACY_SCOREBOARD_V2_SCREEN_MAP,
+    LEGACY_SCREEN_ID_MAP,
+    canonical_screen_id,
+)
 
 # ─── Environment helpers ───────────────────────────────────────────────────────
 
@@ -1557,12 +1561,13 @@ def get_screen_style(screen_id: str) -> dict[str, Any]:
     # A caller using a renamed canonical ID cannot be canonicalized any further.
     # Fall back to an old persisted key so upgrades retain existing font and
     # image overrides without requiring users to rewrite screens_style.json.
-    for legacy_id, mapped_id in LEGACY_SCREEN_ID_MAP.items():
-        if mapped_id != screen_id:
-            continue
-        legacy_entry = screens.get(legacy_id)
-        if isinstance(legacy_entry, dict):
-            return legacy_entry
+    for legacy_map in (LEGACY_SCOREBOARD_V2_SCREEN_MAP, LEGACY_SCREEN_ID_MAP):
+        for legacy_id, mapped_id in legacy_map.items():
+            if mapped_id != screen_id:
+                continue
+            legacy_entry = screens.get(legacy_id)
+            if isinstance(legacy_entry, dict):
+                return legacy_entry
 
     return {}
 
