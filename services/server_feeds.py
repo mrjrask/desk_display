@@ -171,6 +171,14 @@ class ServerFeedService:
                     interval = 0
             elif any(feeds.LIVE_TEAM_SCREEN_TO_FEED.get(s) == feed for s in screens):
                 interval, fresh = LIVE_REFRESH_SECONDS, True
+            elif (
+                feed == "nhl_standings"
+                and screens & feeds.NHL_WILDCARD_SCREEN_IDS
+                and "nhl_wildcard_order" not in snapshot.values
+                and health.consecutive_failures == 0
+            ):
+                # A v2 screen just joined demand; fetch its wildcard order now.
+                interval = 0
             last = health.last_success if health.consecutive_failures == 0 else health.last_attempt
             if last is None or now - last >= interval:
                 due[feed] = fresh
@@ -258,6 +266,10 @@ class ServerFeedService:
         values = self.standings_fetchers[feed](force=fresh, **kwargs)
         for key, value in values.items():
             self.data.publish(key, value)
+        if wildcard and feed == "nhl_standings" and "nhl_wildcard_order" not in values:
+            # The standings still publish, but the refresh counts as failed so
+            # the wildcard order is retried and the failure shows in health.
+            raise RuntimeError("NHL wildcard order returned no data")
 
     def _refresh_scoreboards(self, screens: set[str], *, fresh: bool) -> None:
         leagues = feeds.scoreboard_leagues_for_screens(screens)

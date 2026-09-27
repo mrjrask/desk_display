@@ -197,6 +197,24 @@ def test_nhl_v2_standings_also_fetch_the_wildcard_order(env):
     assert env.data.snapshot().values["nhl_wildcard_order"]["Western"] == ("CHI",)
 
 
+def test_v2_nhl_demand_fetches_the_wildcard_order_at_once(env):
+    env.service.refresh({"NHL Standings West"})
+    assert "nhl_wildcard_order" not in env.data.snapshot().values
+    assert env.service.refresh({"NHL Standings West", "NHL Standings West v2"}) == {"nhl_standings": True}
+    assert "nhl_wildcard_order" in env.data.snapshot().values
+
+
+def test_missing_wildcard_order_fails_the_nhl_refresh_but_keeps_standings(env):
+    fetchers = env.service.standings_fetchers
+    original = fetchers["nhl_standings"]
+    fetchers["nhl_standings"] = lambda **kwargs: {"nhl_standings": original(**kwargs)["nhl_standings"]}
+    assert env.service.refresh({"NHL Standings East v2"}) == {"nhl_standings": False}
+    values = env.data.snapshot().values
+    assert "nhl_standings" in values and "nhl_wildcard_order" not in values
+    assert env.service.health()["nhl_standings"]["consecutive_failures"] == 1
+    assert env.service.refresh({"NHL Standings East v2"}) == {}  # retried on the normal interval
+
+
 def test_failed_standings_refresh_keeps_last_good_data(env):
     env.service.refresh({"NFL Standings AFC"})
     good = env.data.snapshot().values["nfl_standings"]
