@@ -1126,6 +1126,8 @@ def build_screen_registry(context: ScreenContext) -> tuple[dict[str, ScreenDefin
 
         negative_keywords = (
             "final",
+            "game over",
+            "completed",
             "postponed",
             "suspend",
             "cancel",

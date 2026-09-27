@@ -702,6 +702,40 @@ def _is_live_play_active(game: dict) -> bool:
     return "suspended" not in detailed
 
 
+def _is_live_boxscore_game(game: object) -> bool:
+    """Return whether an MLB payload still belongs on a live screen.
+
+    MLB can leave ``abstractGameState=Live`` in a cached payload briefly after
+    ``detailedState`` has advanced to Game Over.  Treat terminal detail as
+    authoritative so a stale payload cannot render another live card.
+    """
+    if not isinstance(game, dict):
+        return False
+    status = game.get("status") or {}
+    if not isinstance(status, dict):
+        return False
+    detail = " ".join(
+        str(status.get(key) or "").strip().lower()
+        for key in ("detailedState", "abstractGameState")
+    )
+    terminal_states = ("final", "game over", "completed", "postponed", "cancel")
+    if any(token in detail for token in terminal_states):
+        return False
+    normalized = detail.replace("-", "")
+    explicit_live = (
+        "warmup" in normalized
+        or "in progress" in detail
+        or str(status.get("codedGameState") or "").upper() == "I"
+        or str(status.get("statusCode") or "").upper() == "I"
+    )
+    if explicit_live:
+        return True
+    if detail:
+        return False
+    inning_state = str((game.get("linescore") or {}).get("inningState") or "").lower()
+    return any(token in inning_state for token in ("top", "bottom", "middle"))
+
+
 def _runner_on_base(base_value: object) -> bool:
     if isinstance(base_value, dict):
         return bool(base_value)
@@ -1060,6 +1094,19 @@ def _draw_boxscore_table(img: Image.Image, draw: ImageDraw.ImageDraw, title: str
             col_w    = [team_w, square, square, square][cidx]
             x_left   = xs[cidx]
             y_cell   = grid_top + ridx * row_h
+            if live:
+                # Live cards also carry the inning/outs and base-state footer,
+                # so oversized profile fonts are especially cramped here.
+                # Fit every cell instead of inheriting the deliberately large
+                # Last-game score font.
+                font_use = fit_font(
+                    draw,
+                    txt,
+                    font_use,
+                    max_width=max(1, col_w - config.scale_value(8)),
+                    max_height=max(1, row_h - config.scale_value(10)),
+                    min_pt=8,
+                )
             if cidx == 0 and show_team_logo and row_teams[ridx]:
                 team_id = row_teams[ridx].get("id") if isinstance(row_teams[ridx], dict) else None
                 _draw_left_team_cell_with_logo(
@@ -1214,7 +1261,7 @@ def draw_last_game(display, game, title="Last Game...", transition=False, screen
 @log_call
 def draw_box_score(display, game, title="Live Game...", transition=False, screen_id: Optional[str] = None):
     _set_background(screen_id)
-    if not game:
+    if not _is_live_boxscore_game(game):
         # no live game → let main loop advance immediately (no sleep)
         return None
 

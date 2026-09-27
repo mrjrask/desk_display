@@ -1502,6 +1502,8 @@ def test_bulls_stand1_uses_eastern_conference_label(monkeypatch):
     [
         ({"gameState": "CRIT"}, True),
         ({"detailedState": "Not Started"}, False),
+        ({"abstractGameState": "Live", "detailedState": "Game Over"}, False),
+        ({"abstractGameState": "Live", "detailedState": "Completed Early"}, False),
         ({"detailedState": "In Progress", "period": "3rd"}, True),
     ],
 )
