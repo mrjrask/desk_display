@@ -1169,9 +1169,37 @@ def _query_service_status(unit_name: str) -> dict[str, Any]:
     return status
 
 
-def _load_service_status(unit_name: str = "desk_display.service") -> dict[str, Any]:
+def _panel_service_unit() -> str:
+    """The unit that drives this device's panel, per the installed mode.
+
+    Standalone installs run ``main.py`` as desk_display.service; client and
+    combined installs draw with desk_display_client.service (the standalone
+    unit is disabled there), and a server-only install has no panel, so the
+    render server is the service worth reporting.
+    """
+
+    import install_modes
+    import service_units
+
+    project_dir = Path(__file__).resolve().parent
+    installed = install_modes.read_marker(project_dir)
+    if installed is not None:
+        mode = installed.mode
+    else:
+        # Older installs have no marker; a client env file means a client panel.
+        has_client_env = (project_dir / ".env.client").is_file()
+        mode = service_units.Mode.CLIENT if has_client_env else service_units.Mode.STANDALONE
+    if mode in (service_units.Mode.CLIENT, service_units.Mode.COMBINED):
+        return service_units.CLIENT_SERVICE
+    if mode is service_units.Mode.SERVER:
+        return service_units.SERVER_SERVICE
+    return service_units.STANDALONE_SERVICE
+
+
+def _load_service_status(unit_name: str | None = None) -> dict[str, Any]:
     """Return a short-lived shared service status without subprocess stampedes."""
 
+    unit_name = unit_name or _panel_service_unit()
     with _SERVICE_STATUS_CACHE_LOCK:
         now = time.monotonic()
         cached = _SERVICE_STATUS_CACHE.get(unit_name)
