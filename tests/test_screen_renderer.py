@@ -243,3 +243,24 @@ def test_render_only_capture_runs_frame_bounded_animation_to_final_frame():
 
     assert time.monotonic() - started < 5.0
     assert artifact.image.convert("RGB").getpixel((0, 0)) == (255, 255, 255)
+
+
+def test_screen_led_override_is_sent_at_full_scale(monkeypatch):
+    import utils
+
+    monkeypatch.setattr(utils, "LED_INDICATOR_LEVEL", 0.04)
+
+    def registry_factory(capture, profile, preferences, data):
+        image = Image.new("RGB", (320, 240))
+        return {
+            "alert": SimpleNamespace(available=True, metadata={},
+                                     render=lambda: ScreenImage(image, displayed=False, led_override=(0.04, 0.02, 0.0))),
+            "plain": SimpleNamespace(available=True, metadata={}, render=lambda: ScreenImage(image, displayed=False)),
+        }
+
+    renderer = ScreenRenderer(registry_factory)
+    args = (PROFILE_PRESETS[DISPLAY_PROFILE_DISPLAY_HAT_MINI], ServerPreferenceSnapshot(revision=1),
+            DataCoordinator().snapshot())
+
+    assert renderer.render("alert", *args).metadata["led"] == [1.0, 0.5, 0.0]
+    assert "led" not in renderer.render("plain", *args).metadata

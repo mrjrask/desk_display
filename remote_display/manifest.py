@@ -122,6 +122,9 @@ def build_client_manifest(
                 "animation": metadata.get("animation"),
                 "required_capabilities": sorted(metadata.get("required_capabilities") or []),
                 "remote_class": _remote_class(screen),
+                # Optional: the screen's notification LED/border color, full-scale 0-1
+                # RGB; the client applies its own DISPLAY_HAT_MINI_LED_LEVEL.
+                "led": metadata.get("led"),
                 "package": _package_entry(metadata.get("package"), artifact_url),
             })
     requested_missing = [s for s in missing if s in requested]

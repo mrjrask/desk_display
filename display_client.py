@@ -192,6 +192,7 @@ class DarkHours:
 
 
 DARK_POLL_SECONDS = 30.0
+UPDATE_CHECK_SECONDS = 60.0
 LIGHT_CHECK_SECONDS = 1.0
 
 
@@ -226,6 +227,7 @@ class DisplayClient:
         dark_hours: DarkHours | None = None,
         offline_start: bool = True,
         screenshots: ClientScreenshots | None = None,
+        update_check: Callable[[], Any] | None = None,
     ) -> None:
         self.profile = profile
         self.presenter = presenter
@@ -262,6 +264,10 @@ class DisplayClient:
         self.offline_start = offline_start
         # Feeds the config UI's Screenshots/Feed pages and display heartbeat.
         self.screenshots = screenshots
+        self._led: tuple[float, float, float] | None = None
+        self._update_check = update_check
+        self._update_check_at: float | None = None
+        self._update_check_thread: threading.Thread | None = None
 
     # Playback
 
@@ -393,9 +399,64 @@ class DisplayClient:
             except Exception:  # noqa: BLE001 - a panel without backlight control still plays
                 LOGGER.debug("Backlight control failed", exc_info=True)
 
+    def _set_led(self, color: Any) -> None:
+        """Show *color* (a screen's notification) on the LED and border, once.
+
+        ``None`` returns them to the update status, as v0.1's
+        ``temporary_display_led`` did when a screen ended.
+        """
+
+        led = None
+        if isinstance(color, (list, tuple)) and len(color) == 3:
+            try:
+                led = tuple(max(0.0, min(1.0, float(c))) for c in color)
+            except (TypeError, ValueError):
+                led = None
+            if led is not None and not any(led):
+                led = None
+        if led == self._led:
+            return
+        self._led = led
+        set_led = getattr(self.presenter, "set_led", None)
+        if callable(set_led):
+            try:
+                set_led(led)
+            except Exception:  # noqa: BLE001 - an LED fault must never stop playback
+                LOGGER.debug("LED update failed", exc_info=True)
+
+    def _maybe_check_updates(self, screen_id: str) -> None:
+        """Run v0.1's GitHub/apt update check when a clock face shows.
+
+        The standalone ``date`` and ``nixie`` screens started this check each
+        time they appeared; its result drives the update LED and border.  It
+        runs in the background and at most once per UPDATE_CHECK_SECONDS.
+        """
+
+        from remote_display.server_rendering import CLOCK_SCREENS
+
+        if self._update_check is None or screen_id not in CLOCK_SCREENS:
+            return
+        now = self._monotonic()
+        if self._update_check_at is not None and now - self._update_check_at < UPDATE_CHECK_SECONDS:
+            return
+        thread = self._update_check_thread
+        if thread is not None and thread.is_alive():
+            return
+        self._update_check_at = now
+
+        def run() -> None:
+            try:
+                self._update_check()
+            except Exception:  # noqa: BLE001 - a failed check leaves the indicator as it was
+                LOGGER.debug("Update check failed", exc_info=True)
+
+        self._update_check_thread = threading.Thread(target=run, name="update-check", daemon=True)
+        self._update_check_thread.start()
+
     def _go_dark(self) -> tuple[None, float]:
         entering = self.light_state != "dark"
         self._apply_light("dark")
+        self._set_led(None)
         self.animation = None
         self._current = None
         self.controls = Controls()  # buttons do nothing while the panel is dark
@@ -418,6 +479,7 @@ class DisplayClient:
             self.report.playback_state = "starting"
             self.report.current_screen = None
             state = "waiting for first sync" if self.sync.connected else "server unreachable"
+            self._set_led(None)
             self.presenter.present(self._diagnostic(state))
             return None, 5.0
         content = self.sync.active()
@@ -454,13 +516,21 @@ class DisplayClient:
                 state = "offline; cached content expired"
             self.report.playback_state = "error" if content.playlist else "starting"
             self.report.current_screen = None
+            self._set_led(None)
             self.presenter.present(self._diagnostic(state))
             return None, 5.0
         self.report.playback_state = "playing" if self.sync.connected else "offline"
         self.report.current_screen = item.screen_id
+        # Before presenting, as v0.1 lit it before the frame went out.
+        self._set_led(item.package.get("led") if isinstance(item.package, dict) else None)
         self.presenter.present(frame)
+        self._maybe_check_updates(item.screen_id)
         if self.screenshots is not None:
             screenshot = self.animation.screenshot_image() if self.animation is not None else frame
+            border = getattr(self.presenter, "apply_indicator_border", None)
+            if callable(border):
+                # Saved screenshots show the notification border, as in v0.1.
+                screenshot = border(screenshot)
             self.screenshots.record(item.screen_id, screenshot)
         self._shown_at = self._monotonic()
         self._current = item.screen_id
@@ -610,6 +680,15 @@ def _truthy(value: Any) -> bool:
     return bool(value)
 
 
+def _check_for_updates() -> None:
+    """v0.1's update check: sets the update status the LED and border show."""
+
+    from utils import check_apt_updates, check_github_updates
+
+    check_github_updates()
+    check_apt_updates()
+
+
 def _client_ip_text() -> str:
     """Return the address label drawn by client-rendered clock screens."""
 
@@ -629,6 +708,7 @@ def build_client(settings: dict[str, Any], *, presenter: Any = None, transport: 
     artifacts = ArtifactCache(cache_dir, max_bytes=int(settings.get("DESK_DISPLAY_CLIENT_CACHE_MAX_MB") or 256) << 20)
     configured = _rotation(settings.get("DISPLAY_ROTATION"))
     kernel_overlay = None
+    hardware = presenter is None
     if presenter is None:
         from display.hardware_presenter import HardwarePresenter
 
@@ -673,6 +753,7 @@ def build_client(settings: dict[str, Any], *, presenter: Any = None, transport: 
         offline_start=_truthy(settings.get("DESK_DISPLAY_OFFLINE_START", True)),
         screenshots=screenshots,
         ip_text=_client_ip_text,
+        update_check=_check_for_updates if hardware else None,
     )
 
 

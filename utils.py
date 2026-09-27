@@ -4184,6 +4184,36 @@ def temporary_display_led(r: float, g: float, b: float):
             except Exception as exc:
                 logging.debug("Failed to reset LED after override: %s", exc)
 
+def set_screen_led(color: Optional[Tuple[float, float, float]], display: Optional["Display"] = None) -> None:
+    """Show a screen's notification color, or restore the update indicator.
+
+    The non-scoped form of :func:`temporary_display_led` for callers that
+    cannot wrap a screen's display time in a ``with`` block (the display
+    client's step/wait loop): *color* lights the LED and indicator border
+    until the next call; ``None`` returns them to the update status.
+    """
+
+    global _LED_INDICATOR_ANIMATOR
+
+    display = display or get_active_display()
+    if display is None:
+        return
+    if color is None or not any(color):
+        _refresh_led_indicator(display)
+        return
+    if _LED_INDICATOR_ANIMATOR is not None:
+        try:  # pragma: no cover - hardware import
+            _LED_INDICATOR_ANIMATOR.stop()
+        except Exception as exc:
+            logging.debug("Failed to stop LED animator before screen color: %s", exc)
+        finally:
+            _LED_INDICATOR_ANIMATOR = None
+    try:
+        display.set_led(*color)
+    except Exception as exc:  # pragma: no cover - hardware import
+        logging.debug("Failed to set screen LED color: %s", exc)
+
+
 _GIT_COMMAND_TIMEOUT = 10
 _APT_COMMAND_TIMEOUT = 20
 
