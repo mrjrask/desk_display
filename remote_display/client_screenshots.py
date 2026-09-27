@@ -136,7 +136,7 @@ class ClientScreenshots:
             "screen_id": screen_id,
             "loop_iteration": self.loop_iteration,
             "rendered_at": now.isoformat(),
-            "image_digest": hashlib.sha1(image.tobytes()).hexdigest()[:12],
+            "image_digest": hashlib.sha256(image.tobytes()).hexdigest()[:12],
             "frame_id": None,
             "display": dict(self.display),
             "screen_play_counts": dict(self.play_counts),

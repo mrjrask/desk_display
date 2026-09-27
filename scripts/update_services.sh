@@ -231,8 +231,11 @@ for script in "$PROJECT_DIR"/scripts/*.sh "$PROJECT_DIR"/scripts/*.py "$PROJECT_
     if [[ $dry_run -eq 1 ]]; then
       log "[dry-run] would mark ${script#"$PROJECT_DIR"/} executable"
     else
-      chmod +x "$script" && log "Marked ${script#"$PROJECT_DIR"/} executable" \
-        || warn "Could not mark ${script#"$PROJECT_DIR"/} executable"
+      if chmod +x "$script"; then
+        log "Marked ${script#"$PROJECT_DIR"/} executable"
+      else
+        warn "Could not mark ${script#"$PROJECT_DIR"/} executable"
+      fi
     fi
   fi
 done
@@ -331,13 +334,13 @@ for name in "${OTHER_MODE_UNITS[@]}"; do
   installed "$name" || continue
   if [[ "$(unit_state is-enabled "$name")" == "enabled" || "$(unit_state is-active "$name")" == "active" ]]; then
     log "Stopping and disabling $name (not part of the $mode install)"
-    act $SUDO "$SYSTEMCTL" disable --now "$name"
+    act ${SUDO:+"$SUDO"} "$SYSTEMCTL" disable --now "$name"
   fi
 done
 
 if [[ ${#UPDATED_UNITS[@]} -gt 0 ]]; then
   log "Reloading systemd."
-  act $SUDO "$SYSTEMCTL" daemon-reload
+  act ${SUDO:+"$SUDO"} "$SYSTEMCTL" daemon-reload
 else
   log "Every installed unit is already current."
 fi
@@ -346,7 +349,7 @@ for name in "${MODE_UNITS[@]}"; do
   installed "$name" || contains "$name" "${UPDATED_UNITS[@]+"${UPDATED_UNITS[@]}"}" || continue
   if [[ "$(unit_state is-enabled "$name")" != "enabled" ]]; then
     log "Enabling $name"
-    act $SUDO "$SYSTEMCTL" enable "$name"
+    act ${SUDO:+"$SUDO"} "$SYSTEMCTL" enable "$name"
   fi
 done
 
@@ -355,7 +358,7 @@ if [[ $restart -eq 1 && ${#UPDATED_UNITS[@]} -gt 0 ]]; then
     contains "$name" "${UPDATED_UNITS[@]}" || continue
     contains "$name" "${OTHER_MODE_UNITS[@]+"${OTHER_MODE_UNITS[@]}"}" && continue
     log "Restarting $name"
-    act $SUDO "$SYSTEMCTL" restart "$name" || warn "Restart failed for $name; see: journalctl -u $name -n 80"
+    act ${SUDO:+"$SUDO"} "$SYSTEMCTL" restart "$name" || warn "Restart failed for $name; see: journalctl -u $name -n 80"
   done
 elif [[ ${#UPDATED_UNITS[@]} -gt 0 ]]; then
   log "Not restarting (--no-restart): ${UPDATED_UNITS[*]}"

@@ -470,7 +470,7 @@ SETTINGS: tuple[Setting, ...] = (
 
     # ── Config UI ────────────────────────────────────────────────────────────
     _s("SCREEN_CONFIG_HOST", "str", _SERVER, "config_ui",
-       "Config UI bind address.", default="0.0.0.0"),
+       "Config UI bind address.", default="0.0.0.0"),  # noqa: S104 - intentional: LAN-facing service, see CONFIGURATION.md
     _s("SCREEN_CONFIG_PORT", "int", _SERVER, "config_ui",
        "Config UI port.", default="5002", minimum=1, maximum=65535),
     _s("SCREEN_UI_USERNAME", "str", _SERVER, "config_ui", "Optional login username."),
@@ -484,7 +484,7 @@ SETTINGS: tuple[Setting, ...] = (
 
     # ── Screenshot feed server ───────────────────────────────────────────────
     _s("FEED_SERVER_HOST", "str", _SERVER, "feed_server",
-       "Screenshot feed server bind address.", default="0.0.0.0"),
+       "Screenshot feed server bind address.", default="0.0.0.0"),  # noqa: S104 - intentional: LAN-facing service, see CONFIGURATION.md
     _s("FEED_SERVER_PORT", "int", _SERVER, "feed_server",
        "Screenshot feed server port.", default="5003", minimum=1, maximum=65535),
     _s("FEED_STORAGE_DIR", "path", _SERVER, "feed_server",

@@ -40,7 +40,7 @@ import deployment_config
 from env_config import non_negative_env_int
 from feed_ids import sanitize_feed_id
 
-FEED_SERVER_HOST = os.environ.get("FEED_SERVER_HOST", "0.0.0.0")
+FEED_SERVER_HOST = os.environ.get("FEED_SERVER_HOST", "0.0.0.0")  # noqa: S104 - intentional: LAN-facing service, see CONFIGURATION.md
 FEED_SERVER_PORT = non_negative_env_int("FEED_SERVER_PORT", 5003)
 FEED_UPLOAD_TOKEN = os.environ.get("FEED_UPLOAD_TOKEN", "").strip()
 FEED_MAX_UPLOAD_BYTES = non_negative_env_int("FEED_MAX_UPLOAD_BYTES", 8 * 1024 * 1024)

@@ -29,3 +29,35 @@ jobs:
 
       - name: Run canonical quality checks
         run: python scripts/test_all.py
+
+  dependency-audit:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install pip-audit
+        run: python -m pip install pip-audit
+
+      - name: Audit server and client requirements for known vulnerabilities
+        run: >-
+          pip-audit
+          -r requirements/base.txt
+          -r requirements/server.txt
+          -r requirements/client.txt
+
+  shellcheck:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Lint installer and helper shell scripts
+        run: |
+          shellcheck --version
+          find scripts Installers -name '*.sh' -print0 | xargs -0 shellcheck

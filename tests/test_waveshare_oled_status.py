@@ -965,3 +965,22 @@ def test_save_oled_screenshot_swallows_errors(monkeypatch, tmp_path):
 
     # Should not raise.
     mod._save_oled_screenshot("oled_left", _Unsavable())
+
+
+def test_read_temperature_command_runs_without_a_shell(monkeypatch):
+    mod = _load_module()
+    calls = []
+
+    def fake_check_output(args, **kwargs):
+        calls.append((args, kwargs))
+        return "temp=45.5'C\n"
+
+    monkeypatch.setattr(mod, "TEMP_SOURCE", "command")
+    monkeypatch.setattr(mod, "TEMP_COMMAND", "vcgencmd measure_temp; echo 'x y'")
+    monkeypatch.setattr(mod, "TEMP_UNIT", "C")
+    monkeypatch.setattr(mod.subprocess, "check_output", fake_check_output)
+
+    assert mod.read_temperature() != ""
+    args, kwargs = calls[0]
+    assert args == ["vcgencmd", "measure_temp;", "echo", "x y"]
+    assert "shell" not in kwargs

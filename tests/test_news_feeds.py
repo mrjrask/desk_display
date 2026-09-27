@@ -521,3 +521,17 @@ def test_fetch_article_text_parses_and_caches_successful_fetch(monkeypatch):
     assert len(first.paragraphs) == 1
     assert second == first
     assert len(calls) == 1
+
+
+def test_parse_feed_headlines_rejects_entity_declarations():
+    # Untrusted feeds are parsed with defusedxml, so an entity-expansion
+    # ("billion laughs") payload yields no headlines instead of being expanded.
+    xml = (
+        '<?xml version="1.0"?>'
+        '<!DOCTYPE rss [<!ENTITY lol "lol"><!ENTITY lol2 "&lol;&lol;&lol;">]>'
+        '<rss version="2.0"><channel>'
+        "<item><title>&lol2;</title><link>https://example.com/a</link></item>"
+        "</channel></rss>"
+    )
+
+    assert parse_feed_headlines(xml, "world", limit=5) == []

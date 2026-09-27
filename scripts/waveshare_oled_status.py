@@ -29,6 +29,7 @@ import os
 import random
 import re
 import signal
+import shlex
 import subprocess
 import time
 from collections.abc import Callable
@@ -901,7 +902,9 @@ def read_temperature() -> str:
 
     if TEMP_SOURCE == "command" and TEMP_COMMAND:
         try:
-            output = subprocess.check_output(TEMP_COMMAND, shell=True, text=True, timeout=4)
+            # No shell: the command comes from configuration, so never let it
+            # expand pipes, substitutions or chained commands.
+            output = subprocess.check_output(shlex.split(TEMP_COMMAND), text=True, timeout=4)
             value_c = _parse_temperature_value(output)
         except Exception:
             value_c = None
