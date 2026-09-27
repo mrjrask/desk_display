@@ -143,6 +143,32 @@ def test_screen_image_explicit_screenshot_uses_animation_end_state():
     assert artifact.image.getpixel((0, 0)) == (0, 0, 255)
 
 
+def test_tall_explicit_screenshot_does_not_replace_fallback_viewport():
+    viewport = Image.new("RGB", (320, 240), "red")
+    full_scroll = Image.new("RGB", (320, 720), "blue")
+
+    def registry_factory(capture, profile, preferences, data):
+        def render():
+            capture.image(viewport)
+            return ScreenImage(
+                viewport,
+                displayed=True,
+                screenshot_image=full_scroll,
+            )
+
+        return {"scrolling": SimpleNamespace(available=True, metadata={}, render=render)}
+
+    artifact = ScreenRenderer(registry_factory).render(
+        "scrolling",
+        PROFILE_PRESETS[DISPLAY_PROFILE_DISPLAY_HAT_MINI],
+        ServerPreferenceSnapshot(revision=1),
+        DataCoordinator().snapshot(),
+    )
+
+    assert artifact.image.size == (320, 240)
+    assert artifact.image.getpixel((0, 0)) == (255, 0, 0)
+
+
 def _news_setup(monkeypatch):
     import screens.draw_news_headlines as dnh
     from services.news_feeds import NewsHeadline, NewsTopic

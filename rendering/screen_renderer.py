@@ -260,12 +260,15 @@ class ScreenRenderer:
         result = definition.render()
         metadata: dict[str, Any] = dict(getattr(definition, "metadata", {}) or {})
         if isinstance(result, ScreenImage):
-            # A renderer can provide the intentional still independently of
-            # the frame used during playback.  Logo animations use their
-            # settled card here; scrolling screens retain their full canvas
-            # for standalone capture while their render package carries it to
-            # remote clients.
-            if result.screenshot_image is not None:
+            # A display-sized explicit still can represent an animation's
+            # settled state (for example, a centred logo).  A taller explicit
+            # screenshot is a full scroll canvas, however, and must not replace
+            # this display-sized fallback image: resizing it below would squash
+            # the content for clients that cannot play the scroll package.
+            if (
+                result.screenshot_image is not None
+                and result.screenshot_image.size == (profile.width, profile.height)
+            ):
                 image = result.screenshot_image
             else:
                 image = capture.current_image if result.displayed else result.image
