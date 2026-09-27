@@ -228,6 +228,11 @@ def main(argv: list[str]) -> None:
     sys.path.insert(0, root)
     os.environ["CONFIG_LOAD_DOTENV"] = "0"
     os.environ["IP_WITH_TIME"] = "0"
+    # Content comes from the fixtures, not from whatever location or forecast
+    # timezone the calling environment carries (the sun & moon page prints
+    # the coordinates when they are set).
+    for name in ("WEATHER_LATITUDE", "WEATHER_LONGITUDE", "WEATHERKIT_TIMEZONE"):
+        os.environ.pop(name, None)
     logging.disable(logging.CRITICAL)
     time.sleep = lambda *_args: None  # frames, not pacing, are compared
     with open(fixture, encoding="utf-8") as handle:
