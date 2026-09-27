@@ -41,6 +41,27 @@ class HardwarePresenter:
             show()
         return converted
 
+    def set_led(self, color: tuple[float, float, float] | None) -> None:
+        """Light a screen's notification color, or ``None`` for the update status.
+
+        ``utils.Display`` honours LED_INDICATOR_ENABLED (the physical LED) and
+        LED_INDICATOR_BORDER_ENABLED/_WIDTH (the in-frame border) itself.
+        """
+
+        from utils import LED_INDICATOR_LEVEL, set_screen_led
+
+        if color is not None:
+            # Server colors are full scale; dim them like v0.1's screens did.
+            color = (color[0] * LED_INDICATOR_LEVEL, color[1] * LED_INDICATOR_LEVEL,
+                     color[2] * LED_INDICATOR_LEVEL)
+        set_screen_led(color, self.display)
+
+    def apply_indicator_border(self, image: Image.Image) -> Image.Image:
+        """*image* with the current indicator border, as saved screenshots show it."""
+
+        apply = getattr(self.display, "apply_indicator_border", None)
+        return apply(image) if callable(apply) else image
+
     def set_backlight(self, level: float) -> float:
         return float(self.display.set_backlight(level))
 

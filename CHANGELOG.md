@@ -20,6 +20,10 @@ See the README's [deployment modes](README.md#deployment-modes) and
 - `display_client.py`: offline-first playback from a local cache, render
   packages (static, animated and client-timed clocks), touch focus on quads,
   and physical rotation applied only at presentation.
+- Clients light the notification LED and indicator border as v0.1 did
+  (`LED_INDICATOR_ENABLED`, `LED_INDICATOR_BORDER_ENABLED`,
+  `LED_INDICATOR_BORDER_WIDTH`): the manifest carries each screen's alert or
+  game-result color, and clock screens run the GitHub/apt update check.
 - Migration: `scripts/migrate_standalone_config.py` moves a standalone rotation
   onto the server, and `scripts/convert_env.py` converts an existing `.env`.
 - Installers for the server, client and combined modes, `scripts/upgrade.sh`,

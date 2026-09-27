@@ -70,6 +70,27 @@ class RenderArtifact:
         }
 
 
+def _led_color(value: Any) -> list[float] | None:
+    """A screen's ``led_override`` at full scale (0-1 per channel), or None.
+
+    Screens scale their colors by this process's LED_INDICATOR_LEVEL
+    (DISPLAY_HAT_MINI_LED_LEVEL); that brightness is the display's own
+    setting, so the color is sent unscaled and each client applies its level.
+    """
+
+    from utils import LED_INDICATOR_LEVEL
+
+    try:
+        channels = [float(c) for c in value]
+    except (TypeError, ValueError):
+        return None
+    if len(channels) != 3:
+        return None
+    scale = LED_INDICATOR_LEVEL if LED_INDICATOR_LEVEL > 0 else 1.0
+    color = [round(max(0.0, min(1.0, c / scale)), 4) for c in channels]
+    return color if any(color) else None
+
+
 # Frames an animation capture holds before thinning (see _CaptureDisplay).
 _FRAME_BUFFER_PIXELS = 48_000_000
 
@@ -273,6 +294,12 @@ class ScreenRenderer:
             else:
                 image = capture.current_image if result.displayed else result.image
             metadata["consumed_delay"] = bool(result.consumed_delay)
+            led = _led_color(result.led_override)
+            if led is not None:
+                # The screen's notification color (a weather alert, a game
+                # result): the client lights its LED and indicator border
+                # with it while this screen shows, as v0.1's main loop did.
+                metadata["led"] = led
         elif isinstance(result, Image.Image):
             image = result
         elif result is None:

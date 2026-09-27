@@ -213,7 +213,7 @@ def compose_screen(key: RenderKey, profile: Any, snapshot: Any, logos: Any,
     })
     record = screen is not None and screen.kind == screen_classes.FINITE_ANIMATION
     artifact = ScreenRenderer().render(key.screen_id, profile, preferences, snapshot, record_frames=record)
-    metadata = {k: v for k, v in artifact.metadata.items() if k in {"animation", "required_capabilities"}}
+    metadata = {k: v for k, v in artifact.metadata.items() if k in {"animation", "required_capabilities", "led"}}
     return artifact.image, metadata, build_package(key, profile, artifact)
 
 

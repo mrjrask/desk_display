@@ -763,3 +763,85 @@ def test_offline_max_age_stops_showing_expired_content(env):
     assert client.step()[0] is not None
     client.sync._clock = lambda: env.server_clock.now + 7200
     assert client.step()[0] is None
+
+
+# ── Notification LED and border ─────────────────────────────────────────────
+
+
+class LedPresenter(Presenter):
+    def __init__(self):
+        super().__init__()
+        self.leds = []
+
+    def set_led(self, color):
+        self.leds.append(color)
+
+    def apply_indicator_border(self, image):
+        from PIL import ImageDraw
+
+        bordered = image.convert("RGB")
+        ImageDraw.Draw(bordered).rectangle([(0, 0), (bordered.width - 1, bordered.height - 1)],
+                                           outline=(255, 0, 0), width=2)
+        return bordered
+
+
+def test_screen_led_color_reaches_the_client_like_v01(env):
+    env.publish("date", 10)
+    key = RenderKey.for_screen("weather1", PROFILE.profile_id, ScreenRevisions("s1", "d20", "r1"))
+    from PIL import Image
+
+    env.app.extensions["desk_display_artifacts"].publish_image(
+        key, Image.new(PROFILE.color_mode, (PROFILE.width, PROFILE.height), 20), metadata={"led": [1.0, 0.0, 0.0]})
+    client = env.make_client()
+    client.presenter = LedPresenter()
+    synced(env, client)
+    seen = {}
+    for _ in range(4):
+        screen, _ = client.step()
+        seen[screen] = client._led
+    assert seen == {"date": None, "weather1": (1.0, 0.0, 0.0)}
+    # Lit once per change, and handed back to the update status after it.
+    assert client.presenter.leds[0] == (1.0, 0.0, 0.0)
+    assert None in client.presenter.leds
+    assert all(a != b for a, b in zip(client.presenter.leds, client.presenter.leds[1:]))
+
+
+def test_client_screenshots_carry_the_indicator_border(env):
+    from remote_display.client_screenshots import ClientScreenshots
+
+    env.publish("date", 10)
+    env.publish("weather1", 20)
+    client = env.make_client()
+    client.presenter = LedPresenter()
+    client.screenshots = ClientScreenshots(env.tmp / "shots", profile_id=PROFILE.profile_id,
+                                           width=PROFILE.width, height=PROFILE.height)
+    synced(env, client)
+    screen, _ = client.step()
+    from PIL import Image
+
+    with Image.open(env.tmp / "shots" / "current" / f"{screen}.png") as shot:
+        assert shot.convert("RGB").getpixel((0, 0)) == (255, 0, 0)
+
+
+def test_clock_screens_start_the_update_check_at_most_once_a_minute(env):
+    calls = []
+    done = threading.Event()
+    env.publish("date", 10)
+    env.publish("weather1", 20)
+    client = env.make_client()
+    client._update_check = lambda: (calls.append(1), done.set())
+    synced(env, client)
+    for _ in range(6):
+        client.step()
+    assert done.wait(2)
+    client._update_check_thread.join(2)
+    assert calls == [1]
+    client._monotonic = lambda: time.monotonic() + display_client.UPDATE_CHECK_SECONDS + 1
+    for _ in range(2):
+        client.step()
+    client._update_check_thread.join(2)
+    assert calls == [1, 1]
+
+
+def test_built_client_only_checks_updates_on_real_hardware(env):
+    assert env.make_client()._update_check is None
