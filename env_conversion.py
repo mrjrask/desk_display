@@ -44,6 +44,17 @@ REQUIRED: dict[dc.Role, tuple[str, ...]] = {
         "DESK_DISPLAY_PROFILE",
     ),
 }
+# What a client takes from a provisioned credentials file (the server's "Add a
+# display" download, plus any transport setting the operator added to it).
+CREDENTIALS_FILE_KEYS = (
+    "DESK_DISPLAY_SERVER_URL",
+    "DESK_DISPLAY_CLIENT_ID",
+    "DESK_DISPLAY_CLIENT_TOKEN",
+    "DESK_DISPLAY_PROFILE",
+    "DESK_DISPLAY_SERVER_CA_BUNDLE",
+    "DESK_DISPLAY_TLS_VERIFY",
+    "DESK_DISPLAY_ALLOW_INSECURE_TRANSPORT",
+)
 _REQUIRED_HINTS = {
     "DESK_DISPLAY_SERVER_URL": "the render server's base URL, e.g. https://render-server.lan:8765",
     "DESK_DISPLAY_CLIENT_ID": "a stable, unique ID for this display",

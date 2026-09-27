@@ -437,8 +437,7 @@ def prepare_env(mode: Mode | str, project_dir: Path, *, install_profile: str | N
             if credentials is not None:
                 provisioned = dc.parse_env_file(credentials)
                 supplied.update({k: v for k, v in provisioned.items()
-                                 if k in ("DESK_DISPLAY_SERVER_URL", "DESK_DISPLAY_CLIENT_ID",
-                                          "DESK_DISPLAY_CLIENT_TOKEN", "DESK_DISPLAY_PROFILE") and v})
+                                 if k in env_conversion.CREDENTIALS_FILE_KEYS and v})
             profile = supplied.get("DESK_DISPLAY_PROFILE") or panel_profile(standalone, install_profile)
             if mode is Mode.COMBINED and "DESK_DISPLAY_CLIENT_TOKEN" not in supplied:
                 if not profile:

@@ -188,7 +188,8 @@ The installer prepares the env files before it starts anything:
   (profile, rotation, backlight, sensors), converted with
   `scripts/convert_env.py` so no server or provider setting survives, plus
   the identity and credential from `--credentials` (the file the server's
-  "Add a display" form gives you). Without `--credentials`, fill in the
+  "Add a display" form gives you, plus any transport setting such as
+  `DESK_DISPLAY_ALLOW_INSECURE_TRANSPORT` you add to it). Without `--credentials`, fill in the
   placeholders it lists.
 - In a combined install the server provisions the panel itself as
   `<hostname>-panel` on `http://127.0.0.1:8765`.
@@ -258,7 +259,8 @@ already playing another playlist (those are only reassigned with
 sequence carry over unchanged. `--install-style` also installs the
 migrated style and quad layouts. Each run leaves a bundle in
 `.runtime/server/migrations/` that holds the original files and what was
-changed. `--export FILE` writes one as a backup without changing anything,
+changed. `--config FILE` migrates a rotation copied from another display instead of
+this one's. `--export FILE` writes one as a backup without changing anything,
 and `--rollback BUNDLE` undoes an applied run. Rerunning is safe: an
 already-migrated rotation is reused, never duplicated.
 
@@ -332,6 +334,24 @@ For a display that is already installed, use
 and restart `desk_display_client.service`. Rotating, revoking or disabling
 ends the client's lease at once. Rotation takes effect when the client has
 the new credential.
+
+### Letting other displays reach the server
+
+A server or combined install listens on `127.0.0.1:8765`, which only its own
+panel can reach. Before adding a display on another device, set these in the
+server's `.env` and restart with `./scripts/restart_services.sh`:
+
+```bash
+DESK_DISPLAY_SERVER_HOST=0.0.0.0
+DESK_DISPLAY_SERVER_PUBLIC_URL=http://square.local:8765   # the server's LAN name or IP
+```
+
+`DESK_DISPLAY_SERVER_PUBLIC_URL` is the address **Add a display** writes into
+each `.env.client`; without it the file gets a placeholder URL. Over plain
+HTTP the server warns at startup and each client needs
+`DESK_DISPLAY_ALLOW_INSECURE_TRANSPORT=1`, which is fine on a trusted home
+network. For HTTPS see "Transport security" in
+[CONFIGURATION.md](CONFIGURATION.md#transport-security).
 
 ### Assigning playlists
 
@@ -482,6 +502,63 @@ git fetch --tags
 git switch --detach <previous-release>
 bash scripts/upgrade.sh --no-pull
 ```
+
+### Upgrading a device from v0.1
+
+A device still on `v0.1` runs the standalone `desk_display.service`. After
+`git pull` it can stay standalone, or become a thin client of a server Pi.
+Run everything from the project directory with your normal login.
+
+**0. Pull cleanly.** If `git pull` fails with `Permission denied` or
+`insufficient permission for adding an object`, an earlier `sudo` left files
+owned by root. Give them back, then pull again:
+
+```bash
+sudo chown -R "$USER:$USER" ~/desk_display
+git pull
+```
+
+If it refuses because of local changes to a tracked file, `git stash` first.
+
+**To keep the device standalone**, reinstall its dependencies, rewrite its
+units and restart:
+
+```bash
+bash scripts/upgrade.sh --no-pull
+```
+
+`.env`, `screens_config.local.json` and `screens_style.json` are kept as they
+are.
+
+**To make it a client of the server**, first let other displays reach the
+server (once; see [Letting other displays reach the server](#letting-other-displays-reach-the-server)). Then:
+
+1. Keep copies of what this device has: `cp .env ~/env.v0.1.bak`. To bring
+   its own rotation to the server, copy `screens_config.local.json` there
+   (for example `scp screens_config.local.json <server>:~/den-rotation.json`).
+2. On the server's `/clients` page, **Add a display** with this device's
+   client ID and profile, and save the `.env.client` it shows onto this
+   device, for example as `~/den.env.client`. If the server URL in it is
+   plain `http://`, add `DESK_DISPLAY_ALLOW_INSECURE_TRANSPORT=1` to that
+   file (trusted home network only).
+3. Install the client. This installs the client requirements, writes
+   `.env.client` from the panel settings in `.env` plus the downloaded file,
+   and disables `desk_display.service` and `config_ui_desk_display.service`:
+
+   ```bash
+   bash Installers/install.sh --mode client --credentials ~/den.env.client <profile>
+   ```
+
+4. Give it something to play. Assign an existing playlist on `/clients`, or
+   move the device's old rotation onto the server by running this on the
+   server (preview first, then `--apply`):
+
+   ```bash
+   python3 scripts/migrate_standalone_config.py --config ~/den-rotation.json --name Den --assign den
+   ```
+
+5. Check it: `sudo journalctl -u desk_display_client.service -f` on the
+   device, and the device's row on `/clients`.
 
 ### Restoring v0.1
 
