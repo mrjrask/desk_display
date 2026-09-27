@@ -74,6 +74,23 @@ def test_from_settings_honours_enable_screenshots(tmp_path, monkeypatch):
     assert on.display["width"] == profile.width
 
 
+def test_from_settings_does_not_initialize_storage_paths(tmp_path, monkeypatch):
+    from display_profiles import PROFILE_PRESETS
+
+    screenshot_dir = tmp_path / "shots"
+    archive_blocker = tmp_path / "archive"
+    archive_blocker.write_text("not a directory")
+    monkeypatch.setenv("SCREENSHOT_DIR", str(screenshot_dir))
+    monkeypatch.setenv("SCREENSHOT_ARCHIVE_BASE", str(archive_blocker / "unavailable"))
+
+    writer = ClientScreenshots.from_settings(
+        {"ENABLE_SCREENSHOTS": "0"}, PROFILE_PRESETS["hyperpixel4"]
+    )
+
+    assert writer.screenshot_dir == screenshot_dir
+    assert not screenshot_dir.exists()
+
+
 def test_heartbeat_counts_plays_per_screen(tmp_path):
     shots = _writer(tmp_path)
     for screen in ("date", "weather1", "date"):

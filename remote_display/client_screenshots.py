@@ -81,12 +81,15 @@ class ClientScreenshots:
 
     @classmethod
     def from_settings(cls, settings: dict[str, Any], profile: Any) -> ClientScreenshots:
-        from paths import resolve_storage_paths
+        from paths import resolve_screenshot_dir
 
         enabled = settings.get("ENABLE_SCREENSHOTS", True)
         if isinstance(enabled, str):
             enabled = enabled.strip().lower() not in {"0", "false", "no", "off", ""}
-        return cls(resolve_storage_paths().screenshot_dir, profile_id=profile.profile_id,
+        # Do not create any directories during client construction. Screenshot
+        # storage is optional, and record() already contains filesystem errors
+        # so an unavailable path cannot prevent playback from starting.
+        return cls(resolve_screenshot_dir(), profile_id=profile.profile_id,
                    width=profile.width, height=profile.height, enabled=bool(enabled))
 
     def record(self, screen_id: str, image: Image.Image) -> None:
