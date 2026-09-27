@@ -717,7 +717,7 @@ def _is_live_boxscore_game(game: object) -> bool:
     detail = " ".join(
         str(status.get(key) or "").strip().lower()
         for key in ("detailedState", "abstractGameState")
-    )
+    ).strip()
     terminal_states = ("final", "game over", "completed", "postponed", "cancel")
     if any(token in detail for token in terminal_states):
         return False

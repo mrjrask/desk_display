@@ -58,6 +58,36 @@ def test_legacy_ids_are_canonicalized(store):
     assert set(saved["screens"]) == {"nixie", "inside"}
 
 
+def test_stored_document_with_renamed_screen_matches_client_revision(store):
+    """A playlist saved before a screen rename still validates on clients.
+
+    Regression: after "NCAAM Scoreboard" became "NCAA Mens BB Scoreboard" the
+    server kept serving the stored document and its old revision, while the
+    client canonicalized the ID first, so every sync failed with
+    "playlist content does not match its declared revision".
+    """
+    from protocol_versions import PLAYLIST_SCHEMA_VERSION
+    from remote_display.client_cache import validate_playlist
+
+    doc = {"screens": {"date": 1, "NCAAM Scoreboard": 1, "weather1": {"frequency": 1, "alt": {"screen": "NCAAM Scoreboard", "frequency": 2}}}}
+    saved = store.create("Legacy", {"screens": {"date": 1}}, actor="jason")
+    raw = json.loads(store.path.read_text(encoding="utf-8"))
+    raw["playlists"][saved["id"]]["document"] = doc  # as written by an older release
+    raw["playlists"][saved["id"]]["revision"] = ps.document_revision(doc)
+    store.path.write_text(json.dumps(raw), encoding="utf-8")
+
+    loaded = store.get(saved["id"])
+    assert list(loaded["document"]["screens"]) == ["date", "NCAA Mens BB Scoreboard", "weather1"]
+    assert loaded["document"]["screens"]["weather1"]["alt"]["screen"] == "NCAA Mens BB Scoreboard"
+    cached = validate_playlist({
+        "playlist_id": loaded["id"],
+        "playlist_revision": loaded["revision"],
+        "playlist_schema_version": PLAYLIST_SCHEMA_VERSION,
+        "document": loaded["document"],
+    })
+    assert cached.playlist_revision == loaded["revision"]
+
+
 @pytest.mark.parametrize(
     "document, field",
     [

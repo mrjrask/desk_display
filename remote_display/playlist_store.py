@@ -52,6 +52,7 @@ from typing import Any
 
 from deployment_config import scrub_secrets
 from remote_display.models import ModelValidationError, identifier, screen_id
+from screens_catalog import canonical_screen_id
 
 try:  # pragma: no cover - fcntl is unavailable on Windows
     import fcntl
@@ -137,6 +138,42 @@ def document_revision(document: Mapping[str, Any]) -> str:
     }
     basis = {"order": order, "document": document}
     return "r-" + hashlib.sha256(canonical_json(basis).encode("utf-8")).hexdigest()[:20]
+
+
+def canonicalize_screen_ids(document: Mapping[str, Any]) -> dict[str, Any]:
+    """Return a copy of *document* with renamed (legacy) screen IDs replaced.
+
+    Clients canonicalize every playlist they receive before checking its
+    revision, so a stored document that still names a renamed screen (for
+    example ``NCAAM Scoreboard``) must be canonicalized the same way before
+    its revision is computed, or every client rejects it.  Screen order is
+    kept; unknown IDs are left for :func:`validate_document` to report.
+    """
+
+    result = copy.deepcopy(dict(document))
+
+    def rename(value: Any) -> Any:
+        return canonical_screen_id(value) if isinstance(value, str) else value
+
+    screens = result.get("screens")
+    if isinstance(screens, Mapping):
+        renamed: dict[str, Any] = {}
+        for raw_id, spec in screens.items():
+            sid = rename(raw_id)
+            if isinstance(spec, dict) and isinstance(spec.get("alt"), dict):
+                alt = spec["alt"].get("screen")
+                spec["alt"]["screen"] = [rename(item) for item in alt] if isinstance(alt, list) else rename(alt)
+            # A document naming both the old and new ID keeps the first entry.
+            renamed.setdefault(sid, spec)
+        result["screens"] = renamed
+    playlists = result.get("playlists")
+    if isinstance(playlists, Mapping):
+        for playlist in playlists.values():
+            steps = playlist.get("steps") if isinstance(playlist, dict) else None
+            for step in steps if isinstance(steps, list) else []:
+                if isinstance(step, dict) and "screen" in step:
+                    step["screen"] = rename(step["screen"])
+    return result
 
 
 def _name(value: Any) -> str:
@@ -293,8 +330,11 @@ class PlaylistStore:
         for key, default in self._empty().items():
             data.setdefault(key, default)
         for playlist in data["playlists"].values():
-            # Revisions from before play order counted are recomputed.
+            # Screens renamed since the document was saved are canonicalized,
+            # as clients do, and revisions (including ones from before play
+            # order counted) are recomputed from the result.
             if isinstance(playlist, dict) and isinstance(playlist.get("document"), dict):
+                playlist["document"] = canonicalize_screen_ids(playlist["document"])
                 playlist["revision"] = document_revision(playlist["document"])
         self._cache = (stat.st_mtime, stat.st_size, data)
         return copy.deepcopy(data)
