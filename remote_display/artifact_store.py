@@ -24,9 +24,9 @@ Guarantees
       refresh deadline passes or a newer render is pending.
     * **Retention**: each lineage keeps its current object plus a few previous
       ones.  Objects referenced by a lineage or by any client's current or
-      previous manifest are never deleted; other objects are deleted only
-      after the grace period, measured from when they stopped being
-      referenced.
+      previous manifest are never deleted; other objects are deleted after
+      the grace period, measured from when they stopped being referenced,
+      or sooner (oldest first) whenever the store is over ``max_bytes``.
     * **Concurrent readers**: objects are never rewritten, and deleting one
       that a reader already opened does not disturb that reader.
 """
@@ -581,7 +581,12 @@ class ArtifactStore:
         return set(entry.get("current", [])) | set(entry.get("previous", []))
 
     def collect_garbage(self) -> list[str]:
-        """Delete unreferenced objects whose grace period has passed."""
+        """Delete unreferenced objects whose grace period has passed.
+
+        When the store is still over ``max_bytes`` afterwards, unreferenced
+        objects inside the grace period go too, oldest first, until it fits.
+        Objects a lineage or a client manifest references are never deleted.
+        """
 
         removed: list[str] = []
         with self._locked():
@@ -589,30 +594,49 @@ class ArtifactStore:
             protected = self._protected()
             refs = self._read_refs()
             released = refs["released"]
+            total = 0
+            candidates: list[tuple[float, Path, int]] = []
             for path in self._iter_objects():
                 sha = path.name.split(".", 1)[0]
-                if sha in protected:
-                    continue
                 try:
-                    since = float(released.get(sha) or path.stat().st_mtime)
+                    stat = path.stat()
                 except OSError:
                     continue
+                if sha in protected:
+                    total += stat.st_size
+                    continue
+                since = float(released.get(sha) or stat.st_mtime)
                 if now - since < self.grace_seconds:
+                    total += stat.st_size
+                    candidates.append((since, path, stat.st_size))
                     continue
                 with contextlib.suppress(FileNotFoundError):
                     path.unlink()
                     removed.append(path.name)
                 released.pop(sha, None)
+            if self.max_bytes is not None and total > self.max_bytes:
+                over_budget = 0
+                for _since, path, size in sorted(candidates, key=lambda item: item[0]):
+                    if total <= self.max_bytes:
+                        break
+                    with contextlib.suppress(FileNotFoundError):
+                        path.unlink()
+                        removed.append(path.name)
+                        over_budget += 1
+                    total -= size
+                    released.pop(path.name.split(".", 1)[0], None)
+                if over_budget:
+                    LOGGER.info("Artifact store was over its %d byte budget; removed %d unreferenced "
+                                "objects early", self.max_bytes, over_budget)
             for sha in list(released):
                 if not any(self._objects.glob(f"{sha[:2]}/{sha}.*")):
                     released.pop(sha, None)
             self._write_json(self._references, refs)
             self._clean_staging(now)
-            total = sum(p.stat().st_size for p in self._iter_objects())
         if self.max_bytes is not None and total > self.max_bytes:
             LOGGER.warning(
                 "Artifact store holds %d bytes, over its %d byte budget; everything left is "
-                "referenced or inside the %ds grace period", total, self.max_bytes, int(self.grace_seconds),
+                "referenced by a lineage or a client manifest", total, self.max_bytes,
             )
         if removed:
             LOGGER.info("Artifact store removed %d unreferenced objects", len(removed))

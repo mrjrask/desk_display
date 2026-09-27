@@ -356,7 +356,9 @@ uses for its warnings, so a warning always matches the display.
 Each screen keeps its current and three previous good artifacts. Artifacts
 listed in any client's current or previous manifest are never deleted;
 others are deleted `DESK_DISPLAY_ARTIFACT_RETENTION_HOURS` after they stop
-being referenced, by a background task every ten minutes.
+being referenced, by a background task every ten minutes. If the store is
+still larger than `DESK_DISPLAY_ARTIFACT_MAX_MB` after that, unreferenced
+artifacts are deleted sooner, oldest first, until it fits.
 
 ## Secrets
 
