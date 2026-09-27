@@ -32,19 +32,11 @@ if str(REPO_ROOT) not in sys.path:
 import deployment_config as dc  # noqa: E402
 import env_conversion  # noqa: E402
 
-_CREDENTIAL_KEYS = (
-    "DESK_DISPLAY_SERVER_URL",
-    "DESK_DISPLAY_CLIENT_ID",
-    "DESK_DISPLAY_CLIENT_TOKEN",
-    "DESK_DISPLAY_PROFILE",
-)
-
-
 def _supplied(args: argparse.Namespace) -> dict[str, str]:
     values: dict[str, str] = {}
     if args.credentials:
         provisioned = dc.parse_env_file(args.credentials)
-        values.update({k: provisioned[k] for k in _CREDENTIAL_KEYS if provisioned.get(k)})
+        values.update({k: provisioned[k] for k in env_conversion.CREDENTIALS_FILE_KEYS if provisioned.get(k)})
     if args.token_file:
         token = args.token_file.read_text(encoding="utf-8").strip()
         if not token:

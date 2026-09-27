@@ -10,6 +10,7 @@ Usage:
     python3 scripts/migrate_standalone_config.py                     # preview
     python3 scripts/migrate_standalone_config.py --assign office,den # preview with clients
     python3 scripts/migrate_standalone_config.py --assign office --apply
+    python3 scripts/migrate_standalone_config.py --config den.json --name Den --assign den --apply
     python3 scripts/migrate_standalone_config.py --export backup.json
     python3 scripts/migrate_standalone_config.py --rollback .runtime/server/migrations/standalone-....json
 
@@ -71,6 +72,8 @@ def _print_plan(plan: migration.Plan) -> None:
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[1])
     parser.add_argument("--store", type=Path, help="playlist store (default: DESK_DISPLAY_PLAYLIST_STORE_PATH)")
+    parser.add_argument("--config", type=Path,
+                        help="another display's screens_config (copied from it) instead of this one's")
     parser.add_argument("--defaults", choices=sorted(migration.DEFAULT_BUNDLES),
                         help="default bundle to migrate when no rotation config exists")
     parser.add_argument("--name", help="playlist name")
@@ -95,7 +98,7 @@ def main(argv: list[str] | None = None) -> int:
                   f"restored {len(result['files'])} file(s).")
             return 0
         clients = [c.strip() for c in args.assign.split(",") if c.strip()]
-        plan = migration.plan(migration.load_source(defaults=args.defaults), store, clients=clients,
+        plan = migration.plan(migration.load_source(defaults=args.defaults, config_path=args.config), store, clients=clients,
                               name=args.name, client_capabilities=_client_capabilities(clients))
         if args.json and not args.apply:
             print(json.dumps(plan.report(), indent=2))

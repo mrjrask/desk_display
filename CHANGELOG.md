@@ -26,6 +26,11 @@ See the README's [deployment modes](README.md#deployment-modes) and
   game-result color, and clock screens run the GitHub/apt update check.
 - Migration: `scripts/migrate_standalone_config.py` moves a standalone rotation
   onto the server, and `scripts/convert_env.py` converts an existing `.env`.
+  `--config FILE` migrates a rotation copied from another display, and a
+  client's credentials file may carry its transport settings
+  (`DESK_DISPLAY_ALLOW_INSECURE_TRANSPORT`, `DESK_DISPLAY_TLS_VERIFY`,
+  `DESK_DISPLAY_SERVER_CA_BUNDLE`). OPERATIONS.md walks a v0.1 device through
+  the upgrade.
 - Installers for the server, client and combined modes, `scripts/upgrade.sh`,
   and mode-aware uninstall and cleanup. `install_modes.py` records the
   installed mode and answers what each mode installs, keeps and backs up.

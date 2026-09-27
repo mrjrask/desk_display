@@ -237,3 +237,25 @@ def test_cli_previews_by_default(files, monkeypatch, capsys):
                      "--bundle-dir", str(files["bundles"])]) == 0
     assert "Applied." in capsys.readouterr().out
     assert PlaylistStore(store).assignment_for("office") is not None
+
+
+def test_cli_migrates_another_displays_config(files, monkeypatch, capsys):
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location("migrate_cli", ROOT / "scripts" / "migrate_standalone_config.py")
+    cli = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(cli)
+    monkeypatch.setenv("SCREENS_CONFIG_PATH", str(files["config"]))
+    monkeypatch.setenv("SCREENS_CONFIG_LOCAL_PATH", str(files["tmp"] / "none.json"))
+    monkeypatch.setenv("SCREENS_STYLE_PATH", str(files["style"]))
+    monkeypatch.setenv("SCREENS_LAYOUTS_PATH", str(files["layouts"]))
+    monkeypatch.setenv("DESK_DISPLAY_CLIENT_REGISTRY_PATH", str(files["tmp"] / "clients.json"))
+    den = write(files["tmp"] / "den.json", {"screens": {"date": 1}})
+    before = digest(den), digest(files["config"])
+    store = str(files["tmp"] / "pl.json")
+    assert cli.main(["--store", store, "--config", str(den), "--name", "Den", "--assign", "den", "--apply",
+                     "--bundle-dir", str(files["bundles"])]) == 0
+    out = capsys.readouterr().out
+    assert f"Source: {den} (local)" in out and "Playlist: Den" in out and "not a screen" not in out
+    assert PlaylistStore(store).assignment_for("den") is not None
+    assert (digest(den), digest(files["config"])) == before

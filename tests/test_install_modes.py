@@ -319,6 +319,21 @@ def test_client_env_starts_from_the_panel_settings_and_holds_no_credentials(tmp_
     assert not (tmp_path / ".runtime" / "install" / "env.client.tmp").exists()
 
 
+def test_client_env_takes_transport_settings_from_the_credentials_file(tmp_path):
+    # A plain-HTTP server on a trusted LAN: the operator adds the opt-in to the
+    # downloaded file before installing, and the client must keep it.
+    (tmp_path / ".env").write_text(STANDALONE_ENV.replace("{store}", str(tmp_path / "store.json")))
+    creds = tmp_path / "office.env.client"
+    creds.write_text("DESK_DISPLAY_SERVER_URL=http://square.local:8765\nDESK_DISPLAY_CLIENT_ID=office\n"
+                     "DESK_DISPLAY_CLIENT_TOKEN=ddc_" + "c" * 40 + "\n"
+                     "DESK_DISPLAY_ALLOW_INSECURE_TRANSPORT=1\n")
+    notes = im.prepare_env("client", tmp_path, install_profile="hyperpixel", credentials=creds)
+    env = dc.parse_env_file(tmp_path / ".env.client")
+    assert env["DESK_DISPLAY_ALLOW_INSECURE_TRANSPORT"] == "1"
+    assert dc.validate(dc.Role.CLIENT, env).ok
+    assert not any("still needs" in note for note in notes)
+
+
 def test_an_existing_client_identity_is_never_replaced(tmp_path):
     (tmp_path / ".env.client").write_text("DESK_DISPLAY_CLIENT_ID=office\n")
     before = (tmp_path / ".env.client").read_bytes()
