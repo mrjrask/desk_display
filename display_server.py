@@ -807,7 +807,10 @@ def run_display_server() -> None:
 
     # A worker that outlives several render timeouts is hung; it is replaced.
     render_timeout = float(settings["DESK_DISPLAY_RENDER_TIMEOUT_SECONDS"])
-    workers = ProfileProcessPool(timeout_seconds=max(60.0, 4 * render_timeout))
+    # One process per render worker for each profile, so renders for the same
+    # profile run as concurrently as the coordinator allows.
+    workers = ProfileProcessPool(timeout_seconds=max(60.0, 4 * render_timeout),
+                                 processes_per_profile=settings["DESK_DISPLAY_RENDER_WORKERS"])
     rendering = ServerRendering(feeds=feeds, profile_processes=workers)
     atexit.register(rendering.close)
     app = create_app(

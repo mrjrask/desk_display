@@ -21,6 +21,7 @@ parent closes the pipe.
 """
 from __future__ import annotations
 
+import contextlib
 import logging
 import os
 import pickle
@@ -28,7 +29,7 @@ import struct
 import subprocess
 import sys
 import threading
-from collections.abc import Mapping
+from collections.abc import Iterator, Mapping
 from pathlib import Path
 from types import MappingProxyType
 from typing import Any, BinaryIO
@@ -246,36 +247,60 @@ class _Worker:
 
 
 class ProfileProcessPool:
-    """One render worker per profile, started on first use."""
+    """Render workers per profile, started on first use.
 
-    def __init__(self, *, python: str | None = None, timeout_seconds: float = 120) -> None:
+    Up to *processes_per_profile* workers serve one profile, one render each
+    at a time.  Give it the render coordinator's worker count, so renders
+    for the same profile never queue behind each other and time out waiting.
+    """
+
+    def __init__(self, *, python: str | None = None, timeout_seconds: float = 120,
+                 processes_per_profile: int = 1) -> None:
         """*timeout_seconds* bounds a worker's start-up and each render in it."""
 
         self._python = python or sys.executable
         self._timeout = float(timeout_seconds)
-        self._workers: dict[str, _Worker] = {}
-        self._lock = threading.Lock()
+        self._per_profile = max(1, int(processes_per_profile))
+        self._workers: dict[str, list[_Worker]] = {}
+        self._busy: set[int] = set()
+        self._available = threading.Condition()
 
-    def _worker(self, profile: RenderProfile) -> _Worker:
-        with self._lock:
-            worker = self._workers.get(profile.profile_id)
-            if worker is None:
-                worker = self._workers[profile.profile_id] = _Worker(profile, self._python, self._timeout)
-            return worker
+    @contextlib.contextmanager
+    def _worker(self, profile: RenderProfile) -> Iterator[_Worker]:
+        with self._available:
+            workers = self._workers.setdefault(profile.profile_id, [])
+            while True:
+                worker = next((w for w in workers if id(w) not in self._busy), None)
+                if worker is None and len(workers) < self._per_profile:
+                    worker = _Worker(profile, self._python, self._timeout)
+                    workers.append(worker)
+                if worker is not None:
+                    break
+                self._available.wait()
+            self._busy.add(id(worker))
+        try:
+            yield worker
+        finally:
+            with self._available:
+                self._busy.discard(id(worker))
+                self._available.notify_all()
 
     def render_screen(self, key: Any, profile: RenderProfile, snapshot: Any,
                       weather_fetched_at: Any = None) -> dict[str, Any]:
         """``{"image", "metadata", "package"}`` for *key*, composed natively."""
 
-        return self._worker(profile).request(
-            {"op": "screen", "key": key, "weather_fetched_at": weather_fetched_at}, snapshot)
+        with self._worker(profile) as worker:
+            return worker.request(
+                {"op": "screen", "key": key, "weather_fetched_at": weather_fetched_at}, snapshot)
 
     def render_clock(self, layout: Mapping[str, Any], profile: RenderProfile, now: Any) -> Any:
-        return self._worker(profile).request({"op": "clock", "layout": dict(layout), "now": now})["image"]
+        with self._worker(profile) as worker:
+            return worker.request({"op": "clock", "layout": dict(layout), "now": now})["image"]
 
     def close(self) -> None:
-        with self._lock:
-            workers, self._workers = list(self._workers.values()), {}
+        with self._available:
+            workers = [w for group in self._workers.values() for w in group]
+            self._workers = {}
         for worker in workers:
             worker.close()
 

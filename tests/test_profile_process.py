@@ -54,3 +54,31 @@ def test_a_worker_that_hangs_is_killed_and_replaced(tmp_path):
         assert time.monotonic() - started < 30
     finally:
         workers.close()
+
+
+def test_renders_for_one_profile_run_side_by_side():
+    """Neither render waits for the other, so neither eats into its timeout."""
+
+    import threading
+
+    workers = ProfileProcessPool(processes_per_profile=2)
+    started = threading.Barrier(2, timeout=60)
+    snapshot = DataCoordinator().snapshot()
+    held = []
+
+    def render():
+        with workers._worker(PROFILE) as worker:
+            held.append(worker)
+            started.wait()  # both hold a worker at once, or this times out
+        workers.render_screen(key("AL Overview"), PROFILE, snapshot)
+
+    try:
+        threads = [threading.Thread(target=render) for _ in range(2)]
+        for thread in threads:
+            thread.start()
+        for thread in threads:
+            thread.join(120)
+        assert len({id(worker) for worker in held}) == 2
+        assert len(workers._workers[PROFILE.profile_id]) == 2
+    finally:
+        workers.close()
