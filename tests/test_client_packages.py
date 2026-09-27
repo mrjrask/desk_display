@@ -124,6 +124,25 @@ def test_logo_slides_across_and_settles_centred():
     assert settled.getpixel((0, 15)) == (0, 0, 0)
 
 
+def test_logo_screenshot_uses_settled_frame():
+    playback = play(slide_package())
+
+    screenshot = playback.screenshot_image()
+
+    assert screenshot.size == (W, H)
+    assert screenshot.getpixel((W // 2, 15)) == (0, 0, 255)
+    assert screenshot.getpixel((0, 15)) == (0, 0, 0)
+
+
+def test_scroll_screenshot_uses_entire_canvas():
+    playback = play(scroll_package())
+
+    screenshot = playback.screenshot_image()
+
+    assert screenshot.size == (W, H * 2)
+    assert screenshot.getpixel((0, H * 2 - 1)) == (255, 0, 0)
+
+
 def test_ticker_scrolls_its_lane_without_touching_the_rest():
     playback = play(ticker_package(), hold=10)
     assert playback.duration == 30  # its own window beats a shorter hold

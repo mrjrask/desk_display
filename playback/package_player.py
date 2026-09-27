@@ -152,6 +152,21 @@ class PackagePlayback:
         self._last = (key, image)
         return image
 
+    def screenshot_image(self) -> Image.Image:
+        """Return the representative still to persist for this playback.
+
+        Vertical scroll packages preserve their complete canvas.  Finite
+        animations use their settled final frame instead of the first frame
+        shown when playback starts.  Continuously moving package types retain
+        their initial frame.
+        """
+
+        if self.kind == "scroll":
+            return self._mode(self._image(self.body["canvas"])).copy()
+        if self.kind == "animation":
+            return self.frame_at(self.motion_seconds).copy()
+        return self.frame_at(0.0).copy()
+
     def _scroll_offset(self, t: float) -> int:
         body = self.body
         canvas = self.package["assets"][body["canvas"]]

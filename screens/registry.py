@@ -616,13 +616,22 @@ class _ProfileDisplay:
         return getattr(self._display, name)
 
 
-def _show_logo(display, image: Image.Image, profile: RenderProfile) -> Image.Image:
+def _show_logo(display, image: Image.Image, profile: RenderProfile) -> ScreenImage:
     animate_scroll(
         display,
         image,
         speed=_logo_scroll_speed_for_layout(profile.width, profile.height),
     )
-    return image
+    # Explicitly present and return the settled brand card.  This keeps the
+    # physical panel and its screenshot on the same end state even if the
+    # animation implementation exits on an off-screen frame.
+    final = Image.new("RGB", (profile.width, profile.height), "black")
+    logo = image.convert("RGBA")
+    x = (profile.width - logo.width) // 2
+    y = (profile.height - logo.height) // 2
+    final.paste(logo, (x, y), logo)
+    display.image(final)
+    return ScreenImage(final, displayed=True, screenshot_image=final)
 
 
 def _extract_team_id(blob):
