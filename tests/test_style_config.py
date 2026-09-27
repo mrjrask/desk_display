@@ -51,6 +51,28 @@ def test_get_screen_image_scale_uses_override(tmp_path, monkeypatch):
     assert scale == 1.5
 
 
+def test_renamed_screen_uses_legacy_style_override(tmp_path, monkeypatch):
+    style_path = tmp_path / "screens_style.json"
+    payload = {
+        "screens": {
+            "NCAAM Scoreboard": {
+                "fonts": {"score": {"family": "DejaVuSans.ttf", "size": 17}},
+                "images": {"team_logo": {"scale": 1.25}},
+            }
+        }
+    }
+    _write_style_config(style_path, payload)
+    monkeypatch.setenv("SCREENS_STYLE_PATH", str(style_path))
+
+    import config
+
+    module = importlib.reload(config)
+    style = module.get_screen_style("NCAA Mens BB Scoreboard")
+
+    assert style["fonts"]["score"]["size"] == 17
+    assert style["images"]["team_logo"]["scale"] == 1.25
+
+
 def test_reload_style_config_refreshes_cache(tmp_path, monkeypatch):
     style_path = tmp_path / "screens_style.json"
     _write_style_config(style_path, {"screens": {}})

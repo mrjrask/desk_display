@@ -279,14 +279,15 @@ def scoreboard_date_for_league(
 
     # These providers use league-specific morning cutoffs, rather than midnight,
     # to keep late games attached to the preceding scoreboard day.
-    if league in {"mlb", "nba", "nhl", "ncaam", "world_cup"}:
-        from services.sports import mlb, nba, ncaam, nhl, world_cup
+    if league in {"mlb", "nba", "nhl", "ncaam", "ncaa_fbs", "world_cup"}:
+        from services.sports import mlb, nba, ncaa_fbs, ncaam, nhl, world_cup
 
         providers = {
             "mlb": mlb,
             "nba": nba,
             "nhl": nhl,
             "ncaam": ncaam,
+            "ncaa_fbs": ncaa_fbs,
             "world_cup": world_cup,
         }
         return providers[league].scoreboard_date(current)
