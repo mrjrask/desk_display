@@ -122,7 +122,8 @@
     "nba logo": 0,
     "NBA Scoreboard": 0,
     "NBA Playoffs": 0,
-    "NCAAM Scoreboard": 0,
+    "NCAA Mens BB Scoreboard": 0,
+    "NCAA FBS Scoreboard": 3,
     "quad": 0,
     "World Cup Scoreboard": 0
   },
@@ -474,7 +475,10 @@
       "label": "quad",
       "steps": [
         {
-          "screen": "NCAAM Scoreboard"
+          "screen": "NCAA Mens BB Scoreboard"
+        },
+        {
+          "screen": "NCAA FBS Scoreboard"
         },
         {
           "screen": "quad"

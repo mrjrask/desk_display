@@ -163,7 +163,8 @@ FEED_DEPENDENCIES: dict[str, set[str]] = {
         "MLB Scoreboard v2",
         "NBA Scoreboard",
         "NBA Scoreboard v2",
-        "NCAAM Scoreboard",
+        "NCAA Mens BB Scoreboard",
+        "NCAA FBS Scoreboard",
         "World Cup Scoreboard",
     },
 }
@@ -225,7 +226,8 @@ SCOREBOARD_SCREEN_IDS = {
     "MLB Scoreboard v2",
     "NBA Scoreboard",
     "NBA Scoreboard v2",
-    "NCAAM Scoreboard",
+    "NCAA Mens BB Scoreboard",
+    "NCAA FBS Scoreboard",
     "World Cup Scoreboard",
 }
 
@@ -238,7 +240,8 @@ SCOREBOARD_SCREEN_TO_LEAGUES: dict[str, set[str]] = {
     "MLB Scoreboard v2": {"mlb"},
     "NBA Scoreboard": {"nba"},
     "NBA Scoreboard v2": {"nba"},
-    "NCAAM Scoreboard": {"ncaam"},
+    "NCAA Mens BB Scoreboard": {"ncaam"},
+    "NCAA FBS Scoreboard": {"ncaa_fbs"},
     "World Cup Scoreboard": {"world_cup"},
 }
 

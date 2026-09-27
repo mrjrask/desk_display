@@ -50,7 +50,7 @@ from screens.ncaam_scoreboard import (
 )
 from utils import ScreenImage, clear_display, scroll_vertical_content
 
-SCREEN_ID = "NCAAM Scoreboard v2"
+SCREEN_ID = "NCAA Mens BB Scoreboard v2"
 MIN_GAMES_FOR_V2_LAYOUT = 6
 V2_DISABLED_RESOLUTIONS = {(320, 240), (240, 320), (135, 240)}
 TITLE_GAP = scale_value(8)

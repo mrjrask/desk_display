@@ -51,6 +51,7 @@ def test_read_sports_payloads_excludes_wbc_scoreboard(monkeypatch):
     monkeypatch.setattr("services.data_provider.fetch_nba_scoreboard", lambda day=None, now=None: [{"league": "nba"}])
     monkeypatch.setattr("services.data_provider.fetch_nhl_scoreboard", lambda day=None, now=None: [{"league": "nhl"}])
     monkeypatch.setattr("services.data_provider.fetch_ncaam_scoreboard", lambda day=None, now=None, mode=None: [{"league": "ncaam"}])
+    monkeypatch.setattr("services.data_provider.fetch_ncaa_fbs_scoreboard", lambda day=None, now=None: [{"league": "ncaa_fbs"}])
     monkeypatch.setattr("services.data_provider.fetch_world_cup_scoreboard", lambda day=None, now=None: [{"league": "world_cup"}])
 
     payload = provider.read_sports_payloads(ttl_seconds=0)
@@ -60,7 +61,7 @@ def test_read_sports_payloads_excludes_wbc_scoreboard(monkeypatch):
 
 def test_read_sports_payloads_fetches_only_requested_leagues(monkeypatch):
     provider = DataProvider()
-    calls = {"nfl": 0, "mlb": 0, "nba": 0, "ncaam": 0, "nhl": 0, "world_cup": 0}
+    calls = {"nfl": 0, "mlb": 0, "nba": 0, "ncaam": 0, "ncaa_fbs": 0, "nhl": 0, "world_cup": 0}
 
     def _track(league):
         def _fetch(*args, **kwargs):
@@ -78,6 +79,7 @@ def test_read_sports_payloads_fetches_only_requested_leagues(monkeypatch):
     monkeypatch.setattr("services.data_provider.fetch_nba_scoreboard", _track("nba"))
     monkeypatch.setattr("services.data_provider.fetch_nhl_scoreboard", _track("nhl"))
     monkeypatch.setattr("services.data_provider.fetch_ncaam_scoreboard", _track("ncaam"))
+    monkeypatch.setattr("services.data_provider.fetch_ncaa_fbs_scoreboard", _track("ncaa_fbs"))
     monkeypatch.setattr("services.data_provider.fetch_world_cup_scoreboard", _track("world_cup"))
 
     payload = provider.read_sports_payloads(ttl_seconds=0, leagues={"mlb"})
@@ -88,6 +90,7 @@ def test_read_sports_payloads_fetches_only_requested_leagues(monkeypatch):
     assert calls["nfl"] == 0
     assert calls["nba"] == 0
     assert calls["ncaam"] == 0
+    assert calls["ncaa_fbs"] == 0
     assert calls["nhl"] == 0
     assert calls["world_cup"] == 0
 
@@ -154,6 +157,7 @@ def test_read_sports_payloads_is_safe_under_concurrent_access(monkeypatch):
     monkeypatch.setattr("services.data_provider.fetch_mlb_scoreboard", lambda day=None, now=None: [{"league": "mlb"}])
     monkeypatch.setattr("services.data_provider.fetch_nba_scoreboard", lambda day=None, now=None: [{"league": "nba"}])
     monkeypatch.setattr("services.data_provider.fetch_ncaam_scoreboard", lambda day=None, now=None, mode=None: [{"league": "ncaam"}])
+    monkeypatch.setattr("services.data_provider.fetch_ncaa_fbs_scoreboard", lambda day=None, now=None: [{"league": "ncaa_fbs"}])
     monkeypatch.setattr("services.data_provider.fetch_world_cup_scoreboard", lambda day=None, now=None: [{"league": "world_cup"}])
     monkeypatch.setattr("services.data_provider.fetch_nhl_scoreboard", lambda day=None, now=None: [{"league": "nhl"}])
 
@@ -161,7 +165,7 @@ def test_read_sports_payloads_is_safe_under_concurrent_access(monkeypatch):
         results = list(pool.map(lambda _: provider.read_sports_payloads(ttl_seconds=60), range(24)))
 
     for payload in results:
-        assert sorted(payload["scoreboards"].keys()) == ["mlb", "nba", "ncaam", "nfl", "nhl", "world_cup"]
+        assert sorted(payload["scoreboards"].keys()) == ["mlb", "nba", "ncaa_fbs", "ncaam", "nfl", "nhl", "world_cup"]
 
 
 def test_read_sports_payloads_carries_nfl_stale_metadata(monkeypatch):

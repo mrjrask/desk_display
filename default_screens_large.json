@@ -62,7 +62,8 @@
       "nba logo": 0,
       "NBA Scoreboard": 0,
       "NBA Playoffs": 0,
-      "NCAAM Scoreboard": 0,
+      "NCAA Mens BB Scoreboard": 0,
+      "NCAA FBS Scoreboard": 3,
       "World Cup Scoreboard": 0,
       "bulls logo": 0,
       "bulls stand1": 0,
@@ -542,7 +543,10 @@
             "screen": "on this day"
           },
           {
-            "screen": "NCAAM Scoreboard"
+            "screen": "NCAA Mens BB Scoreboard"
+          },
+          {
+            "screen": "NCAA FBS Scoreboard"
           },
           {
             "screen": "World Cup Scoreboard"
@@ -885,9 +889,6 @@
       "NBA Playoffs": {
         "background": "#000000"
       },
-      "NCAAM Scoreboard": {
-        "background": "#000000"
-      },
       "quad": {
         "background": "#000000"
       },
@@ -898,6 +899,12 @@
         "background": "#000000"
       },
       "AL Overview+WC": {
+        "background": "#000000"
+      },
+      "NCAA Mens BB Scoreboard": {
+        "background": "#000000"
+      },
+      "NCAA FBS Scoreboard": {
         "background": "#000000"
       }
     }

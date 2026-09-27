@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import datetime as dt
 
-from services.sports import mlb, nba, ncaam, nfl, nhl
+from services.sports import mlb, nba, ncaa_fbs, ncaam, nfl, nhl
 
 
 def test_mlb_fetch_scoreboard_contract(monkeypatch):
@@ -55,6 +55,20 @@ def test_ncaam_fetch_scoreboard_contract(monkeypatch):
 
     assert isinstance(payload, list)
     assert payload == [{"id": "ncaam-1", "date": "2026-03-30", "mode": "top25"}]
+
+
+def test_ncaa_fbs_fetch_scoreboard_contract(monkeypatch):
+    day = dt.date(2026, 9, 26)
+    monkeypatch.setattr(ncaa_fbs, "scoreboard_date", lambda current_now=None: day)
+    monkeypatch.setattr(
+        ncaa_fbs,
+        "_fetch_games_for_date",
+        lambda requested_day: [{"id": "fbs-1", "date": requested_day.isoformat()}],
+    )
+
+    payload = ncaa_fbs.fetch_scoreboard(now=dt.datetime(2026, 9, 26, 12, 0))
+
+    assert payload == [{"id": "fbs-1", "date": "2026-09-26"}]
 
 
 def test_nfl_fetch_scoreboard_contract(monkeypatch):

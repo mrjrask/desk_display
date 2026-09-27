@@ -1,10 +1,9 @@
 #!/usr/bin/env python3
-"""Render Men's NCAA basketball scoreboard (Top 25 or March Madness)."""
+"""Render NCAA FBS football Top 25 scoreboard."""
 
 from __future__ import annotations
 
 import datetime
-import io
 import logging
 import os
 import re
@@ -20,7 +19,6 @@ from config import (
     FONT_TITLE_SPORTS,
     HEIGHT,
     IMAGES_DIR,
-    NCAAM_SCOREBOARD_MODE,
     SCOREBOARD_BACKGROUND_COLOR,
     SCOREBOARD_FINAL_LOSING_SCORE_COLOR,
     SCOREBOARD_FINAL_WINNING_SCORE_COLOR,
@@ -53,12 +51,10 @@ def _scale_y(value: int) -> int:
 
 
 REQUEST_TIMEOUT = 10
-SCREEN_ID = "NCAA Mens BB Scoreboard"
+SCREEN_ID = "NCAA FBS Scoreboard"
 LOGO_DIR = os.path.join(IMAGES_DIR, "ncaa")
-ESPN_URL = "https://site.api.espn.com/apis/site/v2/sports/basketball/mens-college-basketball/scoreboard"
+ESPN_URL = "https://site.api.espn.com/apis/site/v2/sports/football/college-football/scoreboard"
 MODE_TOP25 = "top25"
-MODE_TOURNAMENT = "tournament"
-MIN_GAMES_FOR_V2_LAYOUT = 6
 
 TITLE_GAP = scale_value(8)
 BLOCK_SPACING = scale_value(10)
@@ -66,6 +62,9 @@ SCORE_ROW_H = scale_value(56)
 STATUS_ROW_H = scale_value(18)
 SEED_FONT = get_screen_font(SCREEN_ID, "seed", base_font=FONT_STATUS, default_size=13)
 RANK_FONT = get_screen_font(SCREEN_ID, "rank", base_font=FONT_STATUS, default_size=11)
+TEAM_ABBREVIATION_FONT = get_screen_font(
+    SCREEN_ID, "team_abbreviation", base_font=FONT_TEAM_SPORTS, default_size=18
+)
 SEED_GAP = max(2, scale_value_width(3))
 RANK_GAP = max(0, scale_value_width(1))
 
@@ -105,17 +104,11 @@ _TEAM_LOGO_URL_OVERRIDES: dict[str, str] = {
 
 
 def _scoreboard_mode() -> str:
-    mode = (NCAAM_SCOREBOARD_MODE or MODE_TOP25).strip().lower()
-    if mode not in {MODE_TOP25, MODE_TOURNAMENT}:
-        return MODE_TOP25
-    return mode
+    return MODE_TOP25
 
 
 def _mode_title_and_logo() -> tuple[str, str]:
-    if _scoreboard_mode() == MODE_TOURNAMENT:
-        return "March Madness Scores", "MM"
-    return "Top 25 - NCAAM", "NCAA"
-
+    return "Top 25 - FBS", "NCAA"
 
 def _team_logo_height() -> int:
     scale = get_screen_image_scale(SCREEN_ID, "team_logo", 1.0)
@@ -245,46 +238,21 @@ def _normalize_event(event: dict[str, Any]) -> dict[str, Any]:
 
 
 def _fetch_games_for_date(day: datetime.date, mode: Optional[str] = None) -> list[dict]:
-    selected_mode = (mode or _scoreboard_mode()).strip().lower()
     date_str = day.strftime("%Y%m%d")
-
-    def _pull(group: Optional[int]) -> list[dict]:
-        params: dict[str, Any] = {"dates": date_str, "limit": 300}
-        if group is not None:
-            params["groups"] = group
-        payload = _fetch_json(params)
-        events = payload.get("events") or []
-        return [event for event in events if isinstance(event, dict)]
-
-    raw_events: list[dict] = []
     try:
-        if selected_mode == MODE_TOP25:
-            raw_events = _pull(50)
-            if not raw_events:
-                raw_events = _pull(None)
-        else:
-            raw_events = _pull(100)
-            if not raw_events:
-                raw_events = _pull(None)
+        payload = _fetch_json({"dates": date_str, "limit": 300, "groups": 80})
+        raw_events = [event for event in (payload.get("events") or []) if isinstance(event, dict)]
     except Exception as exc:
-        logging.error("Failed to fetch NCAAM scoreboard for %s (%s): %s", day, selected_mode, exc)
+        logging.error("Failed to fetch NCAA FBS scoreboard for %s: %s", day, exc)
         return []
 
     filtered: list[dict] = []
     for event in raw_events:
         comp = (event.get("competitions") or [{}])[0] or {}
         competitors = comp.get("competitors") or []
-        if selected_mode == MODE_TOP25:
-            ranks = [_extract_rank(c) for c in competitors if isinstance(c, dict)]
-            if not any((rank is not None and 1 <= rank <= 25) for rank in ranks):
-                continue
-        else:
-            if not _is_tournament_game(event):
-                continue
-        filtered.append(_normalize_event(event))
-
+        if any(_extract_rank(team) is not None for team in competitors if isinstance(team, dict)):
+            filtered.append(_normalize_event(event))
     return filtered
-
 
 def _status_text(game: dict) -> str:
     status = (game or {}).get("status", {}) or {}
@@ -360,55 +328,44 @@ def _score_fill(team_key: str, *, in_progress: bool, final: bool, away: dict, ho
     return FINAL_WINNING_SCORE_COLOR if home_score > away_score else FINAL_LOSING_SCORE_COLOR
 
 
-def _load_remote_logo(url: str, height: int) -> Optional[Image.Image]:
-    cache_key = (url, height)
+def _team_logo_filename(team: dict[str, Any]) -> str:
+    team_blob = team.get("team") if isinstance(team.get("team"), dict) else team
+    abbreviation = str(team_blob.get("abbreviation") or "").strip().upper()
+    if abbreviation:
+        return f"{abbreviation}.png"
+    team_id = str(team_blob.get("id") or team.get("id") or "unknown").strip()
+    return f"{team_id}.png"
+
+
+def _team_abbreviation(team: dict[str, Any]) -> str:
+    """Return the exact filename stem used for this team's missing-logo fallback."""
+
+    return os.path.splitext(_team_logo_filename(team))[0]
+
+
+def _load_team_logo(team: dict[str, Any], height: int) -> Optional[Image.Image]:
+    filename = _team_logo_filename(team)
+    path = os.path.join(LOGO_DIR, filename)
+    cache_key = (path, height)
     if cache_key in _REMOTE_LOGO_CACHE:
         return _REMOTE_LOGO_CACHE[cache_key]
+    if not os.path.exists(path):
+        logging.warning("Missing NCAA FBS team logo; expected filename: %s", filename)
+        _REMOTE_LOGO_CACHE[cache_key] = None
+        return None
     try:
-        resp = _SESSION.get(url, timeout=REQUEST_TIMEOUT)
-        resp.raise_for_status()
-        img = Image.open(io.BytesIO(resp.content)).convert("RGBA")
+        img = Image.open(path).convert("RGBA")
         ratio = height / max(1, img.height)
         resized = img.resize((max(1, int(round(img.width * ratio))), height), LANCZOS)
         _REMOTE_LOGO_CACHE[cache_key] = resized
         return resized
     except Exception as exc:
-        logging.debug("Unable to load team logo %s: %s", url, exc)
+        logging.warning("Unable to load NCAA FBS team logo %s: %s", filename, exc)
         _REMOTE_LOGO_CACHE[cache_key] = None
         return None
 
-
-def _team_logo_url(team: dict) -> str:
-    team_blob = team.get("team") if isinstance(team.get("team"), dict) else team
-    if not isinstance(team_blob, dict):
-        return ""
-
-    for source in (team_blob, team):
-        if not isinstance(source, dict):
-            continue
-        for key in ("abbreviation", "shortDisplayName", "displayName", "name", "location"):
-            value = source.get(key)
-            if isinstance(value, str):
-                override = _TEAM_LOGO_URL_OVERRIDES.get(value.strip().lower())
-                if override:
-                    return override
-
-    for source in (team_blob, team):
-        logos = source.get("logos") if isinstance(source, dict) else None
-        if isinstance(logos, list):
-            for logo in logos:
-                if isinstance(logo, dict) and logo.get("href"):
-                    return str(logo["href"])
-        logo_url = source.get("logo") if isinstance(source, dict) else None
-        if isinstance(logo_url, str) and logo_url.strip():
-            return logo_url.strip()
-    return ""
-
-
 def _seed_text_for_display(team: dict[str, Any]) -> str:
     seed = _extract_seed(team)
-    if _scoreboard_mode() == MODE_TOURNAMENT:
-        return seed
     rank = _extract_rank(team)
     if seed and rank is not None and seed == str(rank):
         return ""
@@ -455,26 +412,20 @@ def _draw_rank(
 
 
 def _rank_for_display(team: dict[str, Any], *, mode: Optional[str] = None) -> Optional[int]:
-    selected_mode = (mode or _scoreboard_mode()).strip().lower()
-    if selected_mode == MODE_TOURNAMENT:
-        seed = _extract_seed(team)
-        if seed.isdigit():
-            return int(seed)
-        return None
     return _extract_rank(team)
-
 
 def _get_league_logo(mode: Optional[str] = None) -> Optional[Image.Image]:
     selected_mode = (mode or _scoreboard_mode()).strip().lower()
-    _, logo_key = _mode_title_and_logo() if selected_mode == _scoreboard_mode() else (
-        ("March Madness Scores", "MM") if selected_mode == MODE_TOURNAMENT else ("Top 25 - NCAAM", "NCAA")
-    )
+    _, logo_key = _mode_title_and_logo()
     h = _league_logo_height()
     cache_key = (logo_key, h)
     if cache_key in _LEAGUE_LOGO_CACHE:
         return _LEAGUE_LOGO_CACHE[cache_key]
     path = os.path.join(LOGO_DIR, f"{logo_key}.png")
     if not os.path.exists(path):
+        logging.warning(
+            "Missing NCAA FBS league logo; expected filename: %s.png", logo_key
+        )
         _LEAGUE_LOGO_CACHE[cache_key] = None
         return None
     try:
@@ -490,9 +441,7 @@ def _get_league_logo(mode: Optional[str] = None) -> Optional[Image.Image]:
 
 def _render_scoreboard(games: list[dict], *, mode: Optional[str] = None) -> Image.Image:
     selected_mode = mode or _scoreboard_mode()
-    title, _ = _mode_title_and_logo() if selected_mode == _scoreboard_mode() else (
-        ("March Madness Scores", "MM") if selected_mode == MODE_TOURNAMENT else ("Top 25 - NCAAM", "NCAA")
-    )
+    title, _ = _mode_title_and_logo()
     logo_height = _team_logo_height()
 
     block_h = SCORE_ROW_H + STATUS_ROW_H
@@ -522,25 +471,41 @@ def _render_scoreboard(games: list[dict], *, mode: Optional[str] = None) -> Imag
             _center_text(draw, text, font, COL_X[col_idx], COL_WIDTHS[col_idx], y, SCORE_ROW_H, fill=fill)
 
         for col_idx, team in ((1, away), (3, home)):
-            url = _team_logo_url(team)
-            logo = _load_remote_logo(url, logo_height) if url else None
+            logo = _load_team_logo(team, logo_height)
             if not logo:
-                continue
-            x0 = COL_X[col_idx] + (COL_WIDTHS[col_idx] - logo.width) // 2
-            y0 = y + (SCORE_ROW_H - logo.height) // 2
-            canvas.paste(logo, (x0, y0), logo)
+                abbreviation = _team_abbreviation(team)
+                try:
+                    left, top, right, bottom = draw.textbbox(
+                        (0, 0), abbreviation, font=TEAM_ABBREVIATION_FONT
+                    )
+                    logo_width, logo_height_actual = right - left, bottom - top
+                except Exception:
+                    logo_width, logo_height_actual = draw.textsize(
+                        abbreviation, font=TEAM_ABBREVIATION_FONT
+                    )
+                    left = top = 0
+                x0 = COL_X[col_idx] + (COL_WIDTHS[col_idx] - logo_width) // 2
+                y0 = y + (SCORE_ROW_H - logo_height_actual) // 2
+                draw.text(
+                    (x0 - left, y0 - top),
+                    abbreviation,
+                    font=TEAM_ABBREVIATION_FONT,
+                    fill=(255, 255, 255),
+                )
+            else:
+                logo_width, logo_height_actual = logo.width, logo.height
+                x0 = COL_X[col_idx] + (COL_WIDTHS[col_idx] - logo_width) // 2
+                y0 = y + (SCORE_ROW_H - logo_height_actual) // 2
+                canvas.paste(logo, (x0, y0), logo)
             _draw_rank(
                 draw,
                 _rank_for_display(team, mode=selected_mode),
                 x0,
                 y0,
-                logo.width,
-                logo.height,
+                logo_width,
+                logo_height_actual,
                 position="left" if col_idx == 1 else "right",
             )
-            if selected_mode == MODE_TOURNAMENT:
-                _draw_seed(draw, _seed_text_for_display(team), x0, y0, logo.height)
-
         status_fill = IN_PROGRESS_STATUS_COLOR if in_progress else (255, 255, 255)
         _center_text(draw, _status_text(game), STATUS_FONT, COL_X[0], sum(COL_WIDTHS), y + SCORE_ROW_H, STATUS_ROW_H, fill=status_fill)
 
@@ -638,22 +603,16 @@ def _render_ncaam_scoreboard_v1(display, games: list[dict] | None, transition: b
     return ScreenImage(full, displayed=True)
 
 
-def render_ncaam_scoreboard(display, games: list[dict] | None, transition: bool = False) -> ScreenImage:
-    from screens.ncaam_scoreboard_v2 import render_ncaam_scoreboard_v2
-
-    games = games or []
-    if len(games) >= MIN_GAMES_FOR_V2_LAYOUT:
-        return render_ncaam_scoreboard_v2(display, games, transition=transition)
+def render_ncaa_fbs_scoreboard(display, games: list[dict] | None, transition: bool = False) -> ScreenImage:
     return _render_ncaam_scoreboard_v1(display, games, transition=transition)
 
 
 @log_call
-def draw_ncaam_scoreboard(display, transition: bool = False) -> ScreenImage:
-    from services.sports.ncaam import fetch_scoreboard
+def draw_ncaa_fbs_scoreboard(display, transition: bool = False) -> ScreenImage:
+    from services.sports.ncaa_fbs import fetch_scoreboard
 
     games = fetch_scoreboard()
-    return render_ncaam_scoreboard(display, games, transition=transition)
-
+    return render_ncaa_fbs_scoreboard(display, games, transition=transition)
 
 def _scoreboard_date(now: Optional[datetime.datetime] = None) -> datetime.date:
     if now is None:
