@@ -39,6 +39,7 @@ Requests are rate limited per client and per address (``429`` with
 """
 from __future__ import annotations
 
+import atexit
 import hmac
 import logging
 import os
@@ -802,7 +803,16 @@ def run_display_server() -> None:
 
     feeds = ServerFeedService(state_path=str(
         resolve_cache_file_path("DESK_DISPLAY_SERVER_FEED_STATE_PATH", "server_feed_state.json")))
-    rendering = ServerRendering(feeds=feeds)
+    from rendering.profile_process import ProfileProcessPool
+
+    # A worker that outlives several render timeouts is hung; it is replaced.
+    render_timeout = float(settings["DESK_DISPLAY_RENDER_TIMEOUT_SECONDS"])
+    # One process per render worker for each profile, so renders for the same
+    # profile run as concurrently as the coordinator allows.
+    workers = ProfileProcessPool(timeout_seconds=max(60.0, 4 * render_timeout),
+                                 processes_per_profile=settings["DESK_DISPLAY_RENDER_WORKERS"])
+    rendering = ServerRendering(feeds=feeds, profile_processes=workers)
+    atexit.register(rendering.close)
     app = create_app(
         DisplayServerConfig.from_env(),
         renderer=rendering.render,

@@ -155,6 +155,21 @@ def test_clock_is_drawn_from_the_clients_own_time():
     assert playback.frame_at(0.5).tobytes() != first.tobytes()  # seconds tick with no server
 
 
+def test_the_date_face_cycles_its_colours_then_holds_like_v01():
+    from rendering.clock_faces import clock_background, clock_layout, color_cycle_timing
+    from rendering.packaging import clock_package
+
+    layout = clock_layout("date", PROFILE)
+    package = clock_package(key("date"), PROFILE, layout, clock_background(layout, PROFILE))
+    now = dt.datetime(2026, 9, 25, 12, 0, 0, tzinfo=dt.timezone.utc)
+    playback = play(package, clock=lambda: now)
+    interval, steps = color_cycle_timing(PROFILE)
+    assert steps > 1 and playback.frame_seconds == interval
+    frames = {playback.frame_at(i * interval).tobytes() for i in range(steps + 1)}
+    assert len(frames) > 1  # fresh colours while cycling
+    assert playback.key_at(steps * interval) == playback.key_at(steps * interval + 30)  # then it holds
+
+
 # ── Fallbacks ──────────────────────────────────────────────────────────────
 
 

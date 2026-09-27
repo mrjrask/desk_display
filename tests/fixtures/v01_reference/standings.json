@@ -1,0 +1,288 @@
+{
+ "103": {
+  "East": [
+   {
+    "abbr": "NYY",
+    "team_name": "Yankees",
+    "wins": 95,
+    "losses": 67,
+    "gb": "-",
+    "wc_gb": "-",
+    "pct": ".586"
+   },
+   {
+    "abbr": "BOS",
+    "team_name": "Red Sox",
+    "wins": 88,
+    "losses": 74,
+    "gb": "-",
+    "wc_gb": "-",
+    "pct": ".543"
+   },
+   {
+    "abbr": "TOR",
+    "team_name": "Blue Jays",
+    "wins": 80,
+    "losses": 82,
+    "gb": "-",
+    "wc_gb": "-",
+    "pct": ".493"
+   },
+   {
+    "abbr": "TB",
+    "team_name": "Rays",
+    "wins": 77,
+    "losses": 85,
+    "gb": "-",
+    "wc_gb": "-",
+    "pct": ".475"
+   },
+   {
+    "abbr": "BAL",
+    "team_name": "Orioles",
+    "wins": 70,
+    "losses": 92,
+    "gb": "-",
+    "wc_gb": "-",
+    "pct": ".432"
+   }
+  ],
+  "Central": [
+   {
+    "abbr": "CLE",
+    "team_name": "Guardians",
+    "wins": 90,
+    "losses": 72,
+    "gb": "-",
+    "wc_gb": "-",
+    "pct": ".555"
+   },
+   {
+    "abbr": "KC",
+    "team_name": "Royals",
+    "wins": 85,
+    "losses": 77,
+    "gb": "-",
+    "wc_gb": "-",
+    "pct": ".524"
+   },
+   {
+    "abbr": "DET",
+    "team_name": "Tigers",
+    "wins": 84,
+    "losses": 78,
+    "gb": "-",
+    "wc_gb": "-",
+    "pct": ".518"
+   },
+   {
+    "abbr": "MIN",
+    "team_name": "Twins",
+    "wins": 75,
+    "losses": 87,
+    "gb": "-",
+    "wc_gb": "-",
+    "pct": ".462"
+   },
+   {
+    "abbr": "CWS",
+    "team_name": "White Sox",
+    "wins": 60,
+    "losses": 102,
+    "gb": "-",
+    "wc_gb": "-",
+    "pct": ".370"
+   }
+  ],
+  "West": [
+   {
+    "abbr": "HOU",
+    "team_name": "Astros",
+    "wins": 89,
+    "losses": 73,
+    "gb": "-",
+    "wc_gb": "-",
+    "pct": ".549"
+   },
+   {
+    "abbr": "SEA",
+    "team_name": "Mariners",
+    "wins": 86,
+    "losses": 76,
+    "gb": "-",
+    "wc_gb": "-",
+    "pct": ".530"
+   },
+   {
+    "abbr": "TEX",
+    "team_name": "Rangers",
+    "wins": 78,
+    "losses": 84,
+    "gb": "-",
+    "wc_gb": "-",
+    "pct": ".481"
+   },
+   {
+    "abbr": "LAA",
+    "team_name": "Angels",
+    "wins": 70,
+    "losses": 92,
+    "gb": "-",
+    "wc_gb": "-",
+    "pct": ".432"
+   },
+   {
+    "abbr": "OAK",
+    "team_name": "Athletics",
+    "wins": 69,
+    "losses": 93,
+    "gb": "-",
+    "wc_gb": "-",
+    "pct": ".425"
+   }
+  ]
+ },
+ "104": {
+  "East": [
+   {
+    "abbr": "NYY",
+    "team_name": "Yankees",
+    "wins": 95,
+    "losses": 67,
+    "gb": "-",
+    "wc_gb": "-",
+    "pct": ".586"
+   },
+   {
+    "abbr": "BOS",
+    "team_name": "Red Sox",
+    "wins": 88,
+    "losses": 74,
+    "gb": "-",
+    "wc_gb": "-",
+    "pct": ".543"
+   },
+   {
+    "abbr": "TOR",
+    "team_name": "Blue Jays",
+    "wins": 80,
+    "losses": 82,
+    "gb": "-",
+    "wc_gb": "-",
+    "pct": ".493"
+   },
+   {
+    "abbr": "TB",
+    "team_name": "Rays",
+    "wins": 77,
+    "losses": 85,
+    "gb": "-",
+    "wc_gb": "-",
+    "pct": ".475"
+   },
+   {
+    "abbr": "BAL",
+    "team_name": "Orioles",
+    "wins": 70,
+    "losses": 92,
+    "gb": "-",
+    "wc_gb": "-",
+    "pct": ".432"
+   }
+  ],
+  "Central": [
+   {
+    "abbr": "CLE",
+    "team_name": "Guardians",
+    "wins": 90,
+    "losses": 72,
+    "gb": "-",
+    "wc_gb": "-",
+    "pct": ".555"
+   },
+   {
+    "abbr": "KC",
+    "team_name": "Royals",
+    "wins": 85,
+    "losses": 77,
+    "gb": "-",
+    "wc_gb": "-",
+    "pct": ".524"
+   },
+   {
+    "abbr": "DET",
+    "team_name": "Tigers",
+    "wins": 84,
+    "losses": 78,
+    "gb": "-",
+    "wc_gb": "-",
+    "pct": ".518"
+   },
+   {
+    "abbr": "MIN",
+    "team_name": "Twins",
+    "wins": 75,
+    "losses": 87,
+    "gb": "-",
+    "wc_gb": "-",
+    "pct": ".462"
+   },
+   {
+    "abbr": "CWS",
+    "team_name": "White Sox",
+    "wins": 60,
+    "losses": 102,
+    "gb": "-",
+    "wc_gb": "-",
+    "pct": ".370"
+   }
+  ],
+  "West": [
+   {
+    "abbr": "HOU",
+    "team_name": "Astros",
+    "wins": 89,
+    "losses": 73,
+    "gb": "-",
+    "wc_gb": "-",
+    "pct": ".549"
+   },
+   {
+    "abbr": "SEA",
+    "team_name": "Mariners",
+    "wins": 86,
+    "losses": 76,
+    "gb": "-",
+    "wc_gb": "-",
+    "pct": ".530"
+   },
+   {
+    "abbr": "TEX",
+    "team_name": "Rangers",
+    "wins": 78,
+    "losses": 84,
+    "gb": "-",
+    "wc_gb": "-",
+    "pct": ".481"
+   },
+   {
+    "abbr": "LAA",
+    "team_name": "Angels",
+    "wins": 70,
+    "losses": 92,
+    "gb": "-",
+    "wc_gb": "-",
+    "pct": ".432"
+   },
+   {
+    "abbr": "OAK",
+    "team_name": "Athletics",
+    "wins": 69,
+    "losses": 93,
+    "gb": "-",
+    "wc_gb": "-",
+    "pct": ".425"
+   }
+  ]
+ }
+}

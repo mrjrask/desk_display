@@ -47,6 +47,28 @@ def clock_layout(screen_id: str, profile: RenderProfile) -> dict[str, Any]:
     }
 
 
+def color_cycle_timing(profile: RenderProfile) -> tuple[float, int]:
+    """``(interval_seconds, steps)`` of the date face's colour cycle.
+
+    Like the v0.1 standalone ``date`` screen, the face redraws with fresh
+    colours every *interval* for *steps* redraws after it appears, paced for
+    the display it runs on.
+    """
+
+    from screens import draw_date_time as date_time
+
+    def timing() -> tuple[float, int]:
+        _delay, interval, steps = date_time._color_cycle_profile(
+            kernel_driven=date_time.is_kernel_driven_display(),
+            display_profile_id=date_time.get_display_profile_id(),
+            hyperpixel_layout=date_time.is_hyperpixel_next_layout(),
+            hyperpixel_square=date_time.is_hyperpixel_4_square_layout(),
+        )
+        return float(interval), int(steps or 0)
+
+    return _invoke(timing, profile)
+
+
 def _zone_name(tz: Any) -> str:
     zone = getattr(tz, "_zone", tz)
     return str(getattr(zone, "key", None) or "America/Chicago")
@@ -96,4 +118,4 @@ def render_clock(
     return image.convert(profile.color_mode)
 
 
-__all__ = ["CLOCK_FACES", "LAYOUT_KEYS", "clock_background", "clock_layout", "render_clock"]
+__all__ = ["CLOCK_FACES", "LAYOUT_KEYS", "clock_background", "clock_layout", "color_cycle_timing", "render_clock"]

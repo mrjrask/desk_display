@@ -57,7 +57,9 @@ class PackagePlayback:
         self._ip_text = ip_text
         self._images: dict[str, Image.Image] = {}
         self._last: tuple[Hashable, Image.Image] | None = None
-        self._colors: tuple[tuple[int, int, int], tuple[int, int, int]] | None = None
+        # The date face's colours per colour-cycle step (see _cycle_step).
+        self._colors: dict[int, tuple[tuple[int, int, int], tuple[int, int, int]]] = {}
+        self._cycle: tuple[float, int] | None = None
         self.direction = "ltr"
         if self.kind == "animation" and "slide" in self.body:
             self.direction = self._rng.choice(("ltr", "rtl"))
@@ -112,7 +114,10 @@ class PackagePlayback:
         if self.kind == "composite":
             return max(0.03, float(body["frame_seconds"]))
         if self.kind == "clock":
-            return 1.0 if body["layout"]["face"] == "nixie" else 5.0
+            if body["layout"]["face"] == "nixie":
+                return 1.0
+            interval, steps = self._cycle_timing()
+            return interval if steps else 5.0
         if "frames" in body:
             return max(0.03, min(f["duration_ms"] for f in body["frames"]) / 1000)
         return DEFAULT_FRAME_SECONDS
@@ -132,8 +137,9 @@ class PackagePlayback:
             return ("composite", int(t / self.frame_seconds))
         if self.kind == "clock":
             now = self._clock()
-            return ("clock", now.replace(microsecond=0) if body["layout"]["face"] == "nixie"
-                    else now.replace(second=0, microsecond=0))
+            if body["layout"]["face"] == "nixie":
+                return ("clock", now.replace(microsecond=0))
+            return ("clock", now.replace(second=0, microsecond=0), self._cycle_step(t))
         if "frames" in body:
             return ("frame", self._frame_index(t))
         return ("slide", self._slide_x(t))
@@ -153,6 +159,21 @@ class PackagePlayback:
         moving = t - body["pause_start_seconds"]
         travelled = 0 if moving <= 0 else min(max_offset, int(moving / body["frame_seconds"]) * body["step_px"])
         return max_offset - travelled if body["direction"] == "up" else travelled
+
+    def _cycle_timing(self) -> tuple[float, int]:
+        if self._cycle is None:
+            from rendering.clock_faces import color_cycle_timing
+
+            self._cycle = color_cycle_timing(self.profile)
+        return self._cycle
+
+    def _cycle_step(self, t: float) -> int:
+        """Which colour pair the date face shows at *t*: it cycles, then holds."""
+
+        interval, steps = self._cycle_timing()
+        if not steps or interval <= 0:
+            return 0
+        return min(int(t / interval), steps)
 
     def _frame_index(self, t: float) -> int:
         frames = self.body["frames"]
@@ -206,12 +227,14 @@ class PackagePlayback:
         if self.kind == "clock":
             from rendering.clock_faces import render_clock
 
-            if self._colors is None:
+            step = key[2] if len(key) > 2 else 0
+            colors = self._colors.get(step)
+            if colors is None:
                 from utils import bright_color
 
-                self._colors = (bright_color(), bright_color())
+                colors = self._colors[step] = (bright_color(), bright_color())
             ip = self._ip_text() if self._ip_text is not None else None
-            return render_clock(body["layout"], self.profile, self._clock(), ip_text=ip, colors=self._colors)
+            return render_clock(body["layout"], self.profile, self._clock(), ip_text=ip, colors=colors)
         if "frames" in body:
             return self._image(body["frames"][key[1]]["asset"])
         slide = body["slide"]

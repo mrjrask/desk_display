@@ -27,7 +27,8 @@ from urllib.parse import urlsplit
 
 # Before any project import: config.py loads a dotenv file on import, and a
 # client must read .env.client, never the server's .env beside it. Only for
-# these imports, so a process that also imports other modules is unaffected.
+# these imports, so a process that also imports other modules is unaffected;
+# the client process itself keeps it (prepare_environment).
 _DOTENV_FILE_SET = "DESK_DISPLAY_DOTENV_FILE" not in os.environ
 os.environ.setdefault("DESK_DISPLAY_DOTENV_FILE", ".env.client")
 
@@ -653,16 +654,37 @@ def build_client(settings: dict[str, Any], *, presenter: Any = None, transport: 
     )
 
 
+def prepare_environment() -> None:
+    """Load the client's settings; call before anything imports ``config``.
+
+    ``config`` loads a dotenv file when it is first imported, which in a
+    client process happens after start-up (see
+    rendering.profile_process.configure_native), so name .env.client for the
+    whole process: it must never load the server's .env beside it.
+    """
+
+    import deployment_config
+
+    os.environ.setdefault("DESK_DISPLAY_DOTENV_FILE", ".env.client")
+    _load_env_files()
+    os.environ.setdefault(deployment_config.ROLE_ENV, "client")
+
+
 def main() -> None:  # pragma: no cover - exercised on hardware
     import deployment_config
 
-    _load_env_files()
-    os.environ.setdefault(deployment_config.ROLE_ENV, "client")
+    prepare_environment()
     logging.basicConfig(level=deployment_config.resolve_log_level())
     deployment_config.install_secret_log_redaction()
     deployment_config.require_role("display_client.py", deployment_config.Role.CLIENT)
     deployment_config.startup_check("display client")
     settings = deployment_config.load_settings(deployment_config.Role.CLIENT)
+    profile = resolve_display_profile_by_id(settings["DESK_DISPLAY_PROFILE"])
+    if profile is not None:
+        # Clock faces are drawn here; size their fonts for this panel as v0.1 did.
+        from rendering.profile_process import configure_native
+
+        configure_native(profile)
     client = build_client(settings)
     try:
         client.run()

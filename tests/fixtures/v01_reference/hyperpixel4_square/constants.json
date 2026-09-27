@@ -1,0 +1,2680 @@
+{
+ "config": {
+  "ADSB_POLL_INTERVAL_SECONDS": 10.0,
+  "ADSB_REQUEST_TIMEOUT_SECONDS": 5.0,
+  "ADSB_RETENTION_DAYS": 7,
+  "ADSB_TYPE_DB_REFRESH_DAYS": 30,
+  "AHL_TEAM_ID": 624,
+  "BASE_HEIGHT": 240,
+  "BASE_WIDTH": 320,
+  "BEARS_BOTTOM_MARGIN": 6,
+  "DATE_TIME_GH_ICON_SIZE": 87,
+  "DISPLAY_FADE_IN_DEFAULT_STEPS": 0,
+  "DISPLAY_FADE_IN_DISPLAY_HAT_MINI_STEPS": 10,
+  "DISPLAY_FADE_IN_HDMI_1080P_STEPS": 0,
+  "DISPLAY_FADE_IN_HYPERPIXEL_STEPS": 0,
+  "DISPLAY_HAT_MINI_IO_TIMEOUT_SECONDS": 15.0,
+  "DISPLAY_HAT_MINI_MAX_REFRESH_FAILURES": 3,
+  "DISPLAY_HAT_MINI_REINIT_SECONDS": 0,
+  "DISPLAY_PROFILE_ANIMATION_DELAY": 0.05,
+  "DISPLAY_PROFILE_LOGO_SCALE_CAP": 3.0,
+  "DISPLAY_ROTATION": 0,
+  "DISPLAY_SCALE": 2.625,
+  "DISPLAY_SCALE_WIDTH": 2.25,
+  "FONT_AM_PM": [
+   "font",
+   "DejaVuSans.ttf",
+   52
+  ],
+  "FONT_CONDITION": [
+   "font",
+   "DejaVuSans-Bold.ttf",
+   52
+  ],
+  "FONT_DATE": [
+   "font",
+   "DejaVuSans.ttf",
+   58
+  ],
+  "FONT_DATE_SPORTS": [
+   "font",
+   "TimesSquare-m105.ttf",
+   79
+  ],
+  "FONT_DAY_DATE": [
+   "font",
+   "DejaVuSans-Bold.ttf",
+   102
+  ],
+  "FONT_DIV_GB": [
+   "font",
+   "DejaVuSans.ttf",
+   47
+  ],
+  "FONT_DIV_HEADER": [
+   "font",
+   "DejaVuSans-Bold.ttf",
+   52
+  ],
+  "FONT_DIV_RECORD": [
+   "font",
+   "DejaVuSans.ttf",
+   58
+  ],
+  "FONT_GB_LABEL": [
+   "font",
+   "DejaVuSans.ttf",
+   39
+  ],
+  "FONT_GB_VALUE": [
+   "font",
+   "DejaVuSans.ttf",
+   47
+  ],
+  "FONT_INSIDE_LABEL": [
+   "font",
+   "DejaVuSans-Bold.ttf",
+   47
+  ],
+  "FONT_INSIDE_VALUE": [
+   "font",
+   "DejaVuSans.ttf",
+   45
+  ],
+  "FONT_IP_LABEL": [
+   "font",
+   "DejaVuSans-Bold.ttf",
+   47
+  ],
+  "FONT_IP_VALUE": [
+   "font",
+   "DejaVuSans.ttf",
+   45
+  ],
+  "FONT_SCORE": [
+   "font",
+   "TimesSquare-m105.ttf",
+   108
+  ],
+  "FONT_STAND1_GB_LABEL": [
+   "font",
+   "DejaVuSans.ttf",
+   45
+  ],
+  "FONT_STAND1_GB_VALUE": [
+   "font",
+   "DejaVuSans.ttf",
+   45
+  ],
+  "FONT_STAND1_RANK": [
+   "font",
+   "DejaVuSans.ttf",
+   58
+  ],
+  "FONT_STAND1_WCGB_LABEL": [
+   "font",
+   "DejaVuSans.ttf",
+   45
+  ],
+  "FONT_STAND1_WCGB_VALUE": [
+   "font",
+   "DejaVuSans.ttf",
+   45
+  ],
+  "FONT_STAND1_WL": [
+   "font",
+   "DejaVuSans-Bold.ttf",
+   68
+  ],
+  "FONT_STAND1_WL_LARGE": [
+   "font",
+   "DejaVuSans-Bold.ttf",
+   171
+  ],
+  "FONT_STAND2_LABEL": [
+   "font",
+   "DejaVuSans.ttf",
+   58
+  ],
+  "FONT_STAND2_RECORD": [
+   "font",
+   "DejaVuSans.ttf",
+   68
+  ],
+  "FONT_STAND2_VALUE": [
+   "font",
+   "DejaVuSans.ttf",
+   58
+  ],
+  "FONT_STATUS": [
+   "font",
+   "TimesSquare-m105.ttf",
+   79
+  ],
+  "FONT_STOCK_CHANGE": [
+   "font",
+   "DejaVuSans.ttf",
+   58
+  ],
+  "FONT_STOCK_PRICE": [
+   "font",
+   "DejaVuSans-Bold.ttf",
+   116
+  ],
+  "FONT_STOCK_TEXT": [
+   "font",
+   "DejaVuSans.ttf",
+   45
+  ],
+  "FONT_STOCK_TITLE": [
+   "font",
+   "DejaVuSans-Bold.ttf",
+   47
+  ],
+  "FONT_TEAM_SPORTS": [
+   "font",
+   "TimesSquare-m105.ttf",
+   97
+  ],
+  "FONT_TEAM_SPORTS_SMALL": [
+   "font",
+   "TimesSquare-m105.ttf",
+   87
+  ],
+  "FONT_TEMP": [
+   "font",
+   "DejaVuSans-Bold.ttf",
+   116
+  ],
+  "FONT_TIME": [
+   "font",
+   "DejaVuSans-Bold.ttf",
+   155
+  ],
+  "FONT_TITLE_INSIDE": [
+   "font",
+   "DejaVuSans-Bold.ttf",
+   45
+  ],
+  "FONT_TITLE_SPORTS": [
+   "font",
+   "TimesSquare-m105.ttf",
+   79
+  ],
+  "FONT_WEATHER_DETAILS": [
+   "font",
+   "DejaVuSans.ttf",
+   58
+  ],
+  "FONT_WEATHER_DETAILS_BOLD": [
+   "font",
+   "DejaVuSans-Bold.ttf",
+   47
+  ],
+  "FONT_WEATHER_DETAILS_SMALL": [
+   "font",
+   "DejaVuSans.ttf",
+   37
+  ],
+  "FONT_WEATHER_DETAILS_SMALL_BOLD": [
+   "font",
+   "DejaVuSans-Bold.ttf",
+   37
+  ],
+  "FONT_WEATHER_DETAILS_TINY": [
+   "font",
+   "DejaVuSans.ttf",
+   32
+  ],
+  "FONT_WEATHER_DETAILS_TINY_LARGE": [
+   "font",
+   "DejaVuSans.ttf",
+   34
+  ],
+  "FONT_WEATHER_DETAILS_TINY_MICRO": [
+   "font",
+   "DejaVuSans.ttf",
+   26
+  ],
+  "FONT_WEATHER_LABEL": [
+   "font",
+   "DejaVuSans.ttf",
+   47
+  ],
+  "HEIGHT": 720,
+  "HOURLY_FORECAST_HOURS": 5,
+  "INSIDE_CHIP_AMBER": [
+   233,
+   165,
+   36
+  ],
+  "INSIDE_CHIP_BLUE": [
+   34,
+   124,
+   236
+  ],
+  "INSIDE_CHIP_PURPLE": [
+   150,
+   70,
+   200
+  ],
+  "INSIDE_COL_BG": [
+   0,
+   0,
+   0
+  ],
+  "INSIDE_COL_STROKE": [
+   230,
+   230,
+   230
+  ],
+  "INSIDE_COL_TEXT": [
+   255,
+   255,
+   255
+  ],
+  "INSIDE_COL_TITLE": [
+   240,
+   240,
+   240
+  ],
+  "LANCZOS": 1,
+  "LED_INDICATOR_BORDER_WIDTH": 2,
+  "MINUTES_PER_DAY": 1440,
+  "MLB_SCOREBOARD_SCROLL_DELAY": 0.03,
+  "NEWS_ARTICLE_FETCH_TIMEOUT_SECONDS": 6.0,
+  "NEWS_HEADLINES_DISPLAY_SECONDS": 30.0,
+  "NEWS_TICKER_BASE_SPEED": 2.3,
+  "NHL_TEAM_ID": 16,
+  "SCHEDULE_UPDATE_INTERVAL": 600,
+  "SCOREBOARD_BACKGROUND_COLOR": [
+   0,
+   0,
+   0
+  ],
+  "SCOREBOARD_FINAL_LOSING_SCORE_COLOR": [
+   200,
+   200,
+   200
+  ],
+  "SCOREBOARD_FINAL_WINNING_SCORE_COLOR": [
+   255,
+   255,
+   255
+  ],
+  "SCOREBOARD_IN_PROGRESS_SCORE_COLOR": [
+   255,
+   210,
+   66
+  ],
+  "SCOREBOARD_SCROLL_DELAY": 0.03,
+  "SCOREBOARD_SCROLL_PAUSE_BOTTOM": 0.5,
+  "SCOREBOARD_SCROLL_PAUSE_TOP": 0.75,
+  "SCOREBOARD_SCROLL_STEP": 1,
+  "SCOREBOARD_STANDINGS_BOTTOM_PADDING": 30,
+  "SCREEN_DELAY": 4,
+  "STOCK_TICKER_CACHE_TTL_SECONDS": 900,
+  "TEAM_STANDINGS_DISPLAY_SECONDS": 5,
+  "VIDEO_FPS": 30,
+  "VRNO_CACHE_TTL": 1800,
+  "VRNO_FRESHNESS_LIMIT": 600,
+  "WEATHER_DESC_GAP": 21,
+  "WEATHER_ICON_SIZE": 572,
+  "WEATHER_REFRESH_SECONDS": 1800,
+  "WIDTH": 720,
+  "WIFI_CHECK_INTERVAL": 60,
+  "WIFI_OFF_DURATION": 180,
+  "WIFI_RETRY_DURATION": 180
+ },
+ "screens.color_palettes": {},
+ "screens.data_sources": {},
+ "screens.draw_adsb_stats": {
+  "FONT_WEATHER_DETAILS_SMALL": [
+   "font",
+   "DejaVuSans.ttf",
+   37
+  ],
+  "FONT_WEATHER_DETAILS_SMALL_BOLD": [
+   "font",
+   "DejaVuSans-Bold.ttf",
+   37
+  ],
+  "FONT_WEATHER_DETAILS_TINY": [
+   "font",
+   "DejaVuSans.ttf",
+   32
+  ],
+  "HEIGHT": 720,
+  "LANCZOS": 1,
+  "WIDTH": 720,
+  "_ACCENT_ALL_TIME": [
+   230,
+   185,
+   70
+  ],
+  "_ACCENT_FURTHEST": [
+   90,
+   205,
+   225
+  ],
+  "_ACCENT_LIVE": [
+   95,
+   220,
+   150
+  ],
+  "_ACCENT_MESSAGES": [
+   230,
+   150,
+   95
+  ],
+  "_ACCENT_RECEIVER": [
+   110,
+   150,
+   230
+  ],
+  "_CARD_BG": [
+   12,
+   28,
+   42
+  ],
+  "_DOT_OFFLINE": [
+   225,
+   90,
+   90
+  ],
+  "_DOT_ONLINE": [
+   95,
+   220,
+   150
+  ],
+  "_LABEL_COLOR": [
+   165,
+   185,
+   205
+  ],
+  "_MIN_GRID_ROW_H": 16,
+  "_MIN_ICON_DIM": 16,
+  "_TEXT_COLOR": [
+   235,
+   242,
+   248
+  ]
+ },
+ "screens.draw_air_quality": {
+  "FONT_WEATHER_DETAILS_SMALL": [
+   "font",
+   "DejaVuSans.ttf",
+   37
+  ],
+  "FONT_WEATHER_DETAILS_SMALL_BOLD": [
+   "font",
+   "DejaVuSans-Bold.ttf",
+   37
+  ],
+  "FONT_WEATHER_DETAILS_TINY": [
+   "font",
+   "DejaVuSans.ttf",
+   32
+  ],
+  "HEIGHT": 720,
+  "WIDTH": 720
+ },
+ "screens.draw_bears_schedule": {
+  "BEARS_BOTTOM_MARGIN": 6,
+  "BEARS_NEXT_BOTTOM_RAISE_PX": 10,
+  "BEARS_SCOREBOARD_CACHE_TTL_SECONDS": 600,
+  "DROP_FRAME_DELAY": 0.01,
+  "DROP_STAGGER": 0.25,
+  "DROP_STEPS": 18,
+  "LANCZOS": 1,
+  "SCOREBOARD_SCROLL_DELAY": 0.03,
+  "SCOREBOARD_SCROLL_PAUSE_BOTTOM": 0.5,
+  "SCOREBOARD_SCROLL_PAUSE_TOP": 0.75,
+  "SCOREBOARD_SCROLL_STEP": 1
+ },
+ "screens.draw_bulls_schedule": {
+  "BACKGROUND_COLOR": [
+   0,
+   0,
+   0
+  ],
+  "BOTTOM_LINE_MARGIN": 6,
+  "FONT_ABBR": [
+   "font",
+   "TimesSquare-m105.ttf",
+   80
+  ],
+  "FONT_BOTTOM": [
+   "font",
+   "TimesSquare-m105.ttf",
+   79
+  ],
+  "FONT_DATE_SPORTS": [
+   "font",
+   "TimesSquare-m105.ttf",
+   79
+  ],
+  "FONT_NEXT_OPP": [
+   "font",
+   "TimesSquare-m105.ttf",
+   97
+  ],
+  "FONT_SCORE": [
+   "font",
+   "TimesSquare-m105.ttf",
+   180
+  ],
+  "FONT_SMALL": [
+   "font",
+   "TimesSquare-m105.ttf",
+   26
+  ],
+  "FONT_TEAM_SPORTS": [
+   "font",
+   "TimesSquare-m105.ttf",
+   97
+  ],
+  "FONT_TITLE": [
+   "font",
+   "TimesSquare-m105.ttf",
+   79
+  ],
+  "FONT_TITLE_SPORTS": [
+   "font",
+   "TimesSquare-m105.ttf",
+   79
+  ],
+  "HEIGHT": 720,
+  "LANCZOS": 1,
+  "LED_INDICATOR_LEVEL": 0.04,
+  "TEXT_COLOR": [
+   255,
+   255,
+   255
+  ],
+  "WIDTH": 720,
+  "_FONT_ABBR_SIZE": 80,
+  "_FONT_SCORE_SIZE": 180,
+  "_H4SQ_SCORE_FONT_SIZE": 180,
+  "_LOGO_SCALE_1080": 3.0,
+  "_MINIPITFT_FONT_SCALE": 1.0,
+  "_SCORE_X_SHIFT_PX": 10
+ },
+ "screens.draw_date_time": {
+  "DATE_TIME_GH_ICON_SIZE": 87,
+  "FONT_AM_PM": [
+   "font",
+   "DejaVuSans.ttf",
+   52
+  ],
+  "FONT_DATE": [
+   "font",
+   "DejaVuSans.ttf",
+   58
+  ],
+  "FONT_DAY_DATE": [
+   "font",
+   "DejaVuSans-Bold.ttf",
+   102
+  ],
+  "FONT_TIME": [
+   "font",
+   "DejaVuSans-Bold.ttf",
+   155
+  ],
+  "HEIGHT": 720,
+  "SCREEN_DELAY": 4,
+  "WIDTH": 720,
+  "_IP_OVERLAY_BOTTOM_PADDING": 6
+ },
+ "screens.draw_hawks_schedule": {
+  "BACKGROUND_COLOR": [
+   0,
+   0,
+   0
+  ],
+  "FONT_ABBR": [
+   "font",
+   "TimesSquare-m105.ttf",
+   104
+  ],
+  "FONT_BOTTOM": [
+   "font",
+   "TimesSquare-m105.ttf",
+   79
+  ],
+  "FONT_DATE_SPORTS": [
+   "font",
+   "TimesSquare-m105.ttf",
+   79
+  ],
+  "FONT_NEXT_OPP": [
+   "font",
+   "TimesSquare-m105.ttf",
+   97
+  ],
+  "FONT_SCORE": [
+   "font",
+   "TimesSquare-m105.ttf",
+   159
+  ],
+  "FONT_SMALL": [
+   "font",
+   "TimesSquare-m105.ttf",
+   26
+  ],
+  "FONT_SOG": [
+   "font",
+   "TimesSquare-m105.ttf",
+   40
+  ],
+  "FONT_TEAM_SPORTS": [
+   "font",
+   "TimesSquare-m105.ttf",
+   97
+  ],
+  "FONT_TITLE": [
+   "font",
+   "TimesSquare-m105.ttf",
+   79
+  ],
+  "FONT_TITLE_SPORTS": [
+   "font",
+   "TimesSquare-m105.ttf",
+   79
+  ],
+  "HEIGHT": 720,
+  "LANCZOS": 1,
+  "LED_INDICATOR_LEVEL": 0.04,
+  "NHL_TEAM_ID": 16,
+  "TEAM_ID": 16,
+  "WIDTH": 720,
+  "_ABBR_BASE": 40,
+  "_ABBR_FONT_SIZE": 104,
+  "_BOTTOM_TEXT_1080P_OFFSET": 30,
+  "_H4SQ_SCORE_FONT_SIZE": 159,
+  "_H4SQ_SOG_BASE": 34,
+  "_H4SQ_SOG_FONT_SIZE": 40,
+  "_LOGO_SCALE_1080": 3.0,
+  "_MINIPITFT_FONT_SCALE": 1.0,
+  "_SCORE_FONT_SIZE": 159,
+  "_SOG_BASE": 34,
+  "_SOG_FONT_SIZE": 40
+ },
+ "screens.draw_inside": {
+  "H": 720,
+  "W": 720,
+  "_HISTORY_LIMIT": 60,
+  "_HISTORY_MAX_AGE_SECONDS": 21600,
+  "_MAX_REASONABLE_I2C_HITS": 16
+ },
+ "screens.draw_news_headlines": {
+  "HEADLINE_FONT": [
+   "font",
+   "DejaVuSans.ttf",
+   24
+  ],
+  "HEIGHT": 720,
+  "LABEL_FONT": [
+   "font",
+   "DejaVuSans-Bold.ttf",
+   22
+  ],
+  "LANCZOS": 1,
+  "NEWS_HEADLINES_DISPLAY_SECONDS": 30.0,
+  "WIDTH": 720,
+  "_ENTRY_CACHE_MAX_LANE_MULTIPLIER": 4,
+  "_ENTRY_CACHE_SCREEN_MULTIPLIER": 2,
+  "_FRAME_INTERVAL_SECONDS": 0.045,
+  "_MAX_HEADLINE_AGE_DAYS": 10,
+  "_MIN_ROW_HEIGHT": 20,
+  "_MIN_ROW_SPEED_GAP": 0.15,
+  "_OVERLAY_FRAME_INTERVAL_SECONDS": 0.03,
+  "_OVERLAY_MAX_SECONDS": 45.0,
+  "_OVERLAY_SCROLL_STEP": 1,
+  "_STOCK_DOWN_COLOR": [
+   235,
+   70,
+   70
+  ],
+  "_STOCK_FLAT_COLOR": [
+   235,
+   235,
+   245
+  ],
+  "_STOCK_UP_COLOR": [
+   60,
+   220,
+   100
+  ]
+ },
+ "screens.draw_nixie": {
+  "BACKGROUND_COLOR": [
+   0,
+   0,
+   0
+  ],
+  "COLON_RATIO": 0.28,
+  "COLON_SIZE_RATIO": 0.35,
+  "DATE_TIME_GH_ICON_SIZE": 87,
+  "DIGIT_COLOR": [
+   255,
+   232,
+   179,
+   255
+  ],
+  "DIGIT_EDGE_COLOR": [
+   255,
+   180,
+   90,
+   255
+  ],
+  "FONT_AM_PM": [
+   "font",
+   "DejaVuSans.ttf",
+   52
+  ],
+  "GLOW_COLOR": [
+   255,
+   118,
+   44,
+   220
+  ],
+  "HEIGHT": 720,
+  "H_MARGIN": 28,
+  "LANCZOS": 1,
+  "SCREEN_DELAY": 4,
+  "SPACING_RATIO": 0.12,
+  "TUBE_HIGHLIGHT": [
+   255,
+   214,
+   170,
+   90
+  ],
+  "V_MARGIN": 24,
+  "WIDTH": 720,
+  "_IP_OVERLAY_BOTTOM_PADDING": 6,
+  "_IP_OVERLAY_ICON_GAP": 6,
+  "_IP_OVERLAY_RIGHT_PADDING": 4
+ },
+ "screens.draw_quad": {
+  "HEIGHT": 720,
+  "LANCZOS": 1,
+  "SCREEN_DELAY": 4,
+  "WIDTH": 720
+ },
+ "screens.draw_vrnof": {
+  "BOTTOM_ALL_TIME_OFFSET": 10,
+  "BOTTOM_TEXT_MARGIN": 18,
+  "FONT_STOCK_CHANGE": [
+   "font",
+   "DejaVuSans.ttf",
+   58
+  ],
+  "FONT_STOCK_PRICE": [
+   "font",
+   "DejaVuSans-Bold.ttf",
+   116
+  ],
+  "FONT_STOCK_TEXT": [
+   "font",
+   "DejaVuSans.ttf",
+   45
+  ],
+  "FONT_STOCK_TITLE": [
+   "font",
+   "DejaVuSans-Bold.ttf",
+   47
+  ],
+  "HEIGHT": 720,
+  "LANCZOS": 1,
+  "LED_INDICATOR_LEVEL": 0.04,
+  "LOGO_GAP": 4,
+  "LOGO_HEIGHT": 162.0,
+  "VRNO_FRESHNESS_LIMIT": 600,
+  "WIDTH": 720,
+  "_LOGO_SCALE_1080": 3.0
+ },
+ "screens.draw_weather": {
+  "BASE_MAP_CACHE_TTL_SECONDS": 43200,
+  "FONT_CONDITION": [
+   "font",
+   "DejaVuSans-Bold.ttf",
+   52
+  ],
+  "FONT_TEMP": [
+   "font",
+   "DejaVuSans-Bold.ttf",
+   116
+  ],
+  "FONT_WEATHER_DETAILS": [
+   "font",
+   "DejaVuSans.ttf",
+   58
+  ],
+  "FONT_WEATHER_DETAILS_BOLD": [
+   "font",
+   "DejaVuSans-Bold.ttf",
+   47
+  ],
+  "FONT_WEATHER_DETAILS_SMALL": [
+   "font",
+   "DejaVuSans.ttf",
+   37
+  ],
+  "FONT_WEATHER_DETAILS_SMALL_BOLD": [
+   "font",
+   "DejaVuSans-Bold.ttf",
+   37
+  ],
+  "FONT_WEATHER_DETAILS_TINY": [
+   "font",
+   "DejaVuSans.ttf",
+   32
+  ],
+  "FONT_WEATHER_DETAILS_TINY_LARGE": [
+   "font",
+   "DejaVuSans.ttf",
+   34
+  ],
+  "FONT_WEATHER_DETAILS_TINY_MICRO": [
+   "font",
+   "DejaVuSans.ttf",
+   26
+  ],
+  "FONT_WEATHER_LABEL": [
+   "font",
+   "DejaVuSans.ttf",
+   47
+  ],
+  "HEIGHT": 720,
+  "HOURLY_FORECAST_HOURS": 5,
+  "LANCZOS": 1,
+  "LED_INDICATOR_LEVEL": 0.04,
+  "RADAR_ANIMATION_FRAME_DELAY_SECONDS": 0.2,
+  "RADAR_ANIMATION_LOOPS": 3,
+  "RADAR_CENTER_LATITUDE": 41.8781,
+  "RADAR_CENTER_LONGITUDE": -87.6298,
+  "RADAR_FRAMES_CACHE_TTL_SECONDS": 300,
+  "RADAR_MAX_FRAMES": 6,
+  "RADAR_TILE_FETCH_WORKERS": 4,
+  "WEATHER_DESC_GAP": 21,
+  "WEATHER_ICON_SCALE": 0.9,
+  "WEATHER_ICON_SCALE_HYPERPIXEL_SQUARE": 0.8,
+  "WEATHER_ICON_SIZE": 572,
+  "WEATHER_LO_TEMP_COLOR": [
+   71,
+   159,
+   248
+  ],
+  "WIDTH": 720
+ },
+ "screens.draw_wolves_schedule": {
+  "AHL_TEAM_ID": 624,
+  "BACKGROUND_COLOR": [
+   0,
+   0,
+   0
+  ],
+  "FONT_ABBR": [
+   "font",
+   "TimesSquare-m105.ttf",
+   43
+  ],
+  "FONT_BOTTOM": [
+   "font",
+   "TimesSquare-m105.ttf",
+   79
+  ],
+  "FONT_DATE_SPORTS": [
+   "font",
+   "TimesSquare-m105.ttf",
+   79
+  ],
+  "FONT_NEXT_OPP": [
+   "font",
+   "TimesSquare-m105.ttf",
+   97
+  ],
+  "FONT_SCORE": [
+   "font",
+   "TimesSquare-m105.ttf",
+   44
+  ],
+  "FONT_SMALL": [
+   "font",
+   "TimesSquare-m105.ttf",
+   22
+  ],
+  "FONT_SOG": [
+   "font",
+   "TimesSquare-m105.ttf",
+   30
+  ],
+  "FONT_TEAM_SPORTS": [
+   "font",
+   "TimesSquare-m105.ttf",
+   97
+  ],
+  "FONT_TITLE": [
+   "font",
+   "TimesSquare-m105.ttf",
+   79
+  ],
+  "FONT_TITLE_SPORTS": [
+   "font",
+   "TimesSquare-m105.ttf",
+   79
+  ],
+  "HEIGHT": 720,
+  "LANCZOS": 1,
+  "LED_INDICATOR_LEVEL": 0.04,
+  "TEAM_ID": 624,
+  "WIDTH": 720,
+  "_ABBR_BASE": 33,
+  "_ABBR_FONT_SIZE": 43,
+  "_LOGO_SCALE_1080": 3.0,
+  "_SOG_BASE": 30,
+  "_SOG_FONT_SIZE": 30
+ },
+ "screens.mlb_league_standings": {
+  "AL_LEAGUE_ID": 103,
+  "CACHE_TTL": 900,
+  "DIVISION_CONTENT_GAP": 26,
+  "DIVISION_FONT": [
+   "font",
+   "TimesSquare-m105.ttf",
+   63
+  ],
+  "DIVISION_GAP_BOTTOM": 10,
+  "DIVISION_GAP_TOP": 16,
+  "DIVISION_SECTION_GAP": 21,
+  "FONT_STATUS": [
+   "font",
+   "TimesSquare-m105.ttf",
+   79
+  ],
+  "FONT_TITLE_SPORTS": [
+   "font",
+   "TimesSquare-m105.ttf",
+   79
+  ],
+  "GB_FRACTION_FONT": [
+   "font",
+   "TimesSquare-m105.ttf",
+   25
+  ],
+  "GB_SUFFIX_FONT": [
+   "font",
+   "TimesSquare-m105.ttf",
+   10
+  ],
+  "HEIGHT": 720,
+  "LANCZOS": 1,
+  "LEFT_MARGIN": 13,
+  "LOGO_SIZE": 63,
+  "NL_LEAGUE_ID": 104,
+  "OVERVIEW_DROP_FRAME_DELAY": 0.02,
+  "OVERVIEW_DROP_STAGGER": 0.4,
+  "OVERVIEW_DROP_STEPS": 30,
+  "OVERVIEW_PAUSE_END": 0.5,
+  "OV_COLS": 3,
+  "OV_COLS_WITH_WC": 4,
+  "OV_ROWS": 5,
+  "PCT_TO_GB_EXTRA_GAP": 26,
+  "RECORD_PCT_FONT": [
+   "font",
+   "TimesSquare-m105.ttf",
+   21
+  ],
+  "REQUEST_TIMEOUT": 10,
+  "RIGHT_MARGIN": 21,
+  "ROW_GAP": 16,
+  "SCOREBOARD_BACKGROUND_COLOR": [
+   0,
+   0,
+   0
+  ],
+  "SCOREBOARD_SCROLL_DELAY": 0.03,
+  "SCOREBOARD_SCROLL_PAUSE_BOTTOM": 0.5,
+  "SCOREBOARD_SCROLL_PAUSE_TOP": 0.75,
+  "SCOREBOARD_SCROLL_STEP": 1,
+  "SCOREBOARD_STANDINGS_BOTTOM_PADDING": 30,
+  "STATS_FONT": [
+   "font",
+   "TimesSquare-m105.ttf",
+   42
+  ],
+  "STAT_COLUMN_GAP": 79,
+  "STAT_HEADER_GAP": 10,
+  "TEAM_FONT": [
+   "font",
+   "TimesSquare-m105.ttf",
+   42
+  ],
+  "TEAM_GAP": 16,
+  "TITLE_FONT": [
+   "font",
+   "TimesSquare-m105.ttf",
+   79
+  ],
+  "TITLE_GAP": 8,
+  "TITLE_MARGIN_TOP": 5,
+  "WIDTH": 720,
+  "_COLUMN_GAP_MULTIPLIER": 0.55,
+  "_PCT_TO_GB_EXTRA_GAP": 14,
+  "_RECORD_TO_GB_EXTRA_GAP": 0,
+  "_STAT_COLUMN_GAP": 43,
+  "_TEAM_TO_RECORD_GAP_WIDE": 23,
+  "_WIDE_STAT_COLUMN_GAP": 32
+ },
+ "screens.mlb_schedule": {
+  "BACKGROUND_COLOR": [
+   0,
+   0,
+   0
+  ],
+  "BOTTOM_MARGIN": 18,
+  "DESIRED_SQUARE_FRACTION": 0.24,
+  "FLAG_BLOCK_H": 54,
+  "FLAG_BLOCK_PAD": 6,
+  "FONT_CONDITION": [
+   "font",
+   "DejaVuSans-Bold.ttf",
+   52
+  ],
+  "FONT_DATE_SPORTS": [
+   "font",
+   "TimesSquare-m105.ttf",
+   79
+  ],
+  "FONT_SCORE": [
+   "font",
+   "TimesSquare-m105.ttf",
+   108
+  ],
+  "FONT_TEAM_SPORTS": [
+   "font",
+   "TimesSquare-m105.ttf",
+   97
+  ],
+  "FONT_TITLE_SPORTS": [
+   "font",
+   "TimesSquare-m105.ttf",
+   79
+  ],
+  "GRID_BG": [
+   14,
+   36,
+   22
+  ],
+  "HEADER_GAP": 3,
+  "HEIGHT": 720,
+  "LANCZOS": 1,
+  "LED_INDICATOR_LEVEL": 0.04,
+  "MIN_TEAM_COL_WIDTH": 40,
+  "NEXT_GAME_LOGO_SCALE": 0.874,
+  "PITCHER_HEADSHOT_CACHE_TTL_SECONDS": 86400,
+  "SMALL_RESULT_FLAG_H": 48,
+  "TABLE_SIDE_MARGIN": 4,
+  "TITLE_TO_HEADER_GAP": 6,
+  "WIDTH": 720,
+  "_BOTTOM_TEXT_1080P_OFFSET": 30,
+  "_LOGO_SCALE_1080": 3.0
+ },
+ "screens.mlb_scoreboard": {
+  "BACKGROUND_COLOR": [
+   0,
+   0,
+   0
+  ],
+  "BLOCK_SPACING": 26,
+  "FETCH_CACHE_TTL_SECONDS": 60,
+  "FINAL_LOSING_SCORE_COLOR": [
+   200,
+   200,
+   200
+  ],
+  "FINAL_WINNING_SCORE_COLOR": [
+   255,
+   255,
+   255
+  ],
+  "FONT_STATUS": [
+   "font",
+   "TimesSquare-m105.ttf",
+   79
+  ],
+  "FONT_TEAM_SPORTS": [
+   "font",
+   "TimesSquare-m105.ttf",
+   97
+  ],
+  "FONT_TITLE_SPORTS": [
+   "font",
+   "TimesSquare-m105.ttf",
+   79
+  ],
+  "HEIGHT": 720,
+  "IN_PROGRESS_SCORE_COLOR": [
+   255,
+   210,
+   66
+  ],
+  "IN_PROGRESS_STATUS_COLOR": [
+   255,
+   210,
+   66
+  ],
+  "LEAGUE_LOGO_GAP": 10,
+  "REQUEST_TIMEOUT": 10,
+  "SCOREBOARD_BACKGROUND_COLOR": [
+   0,
+   0,
+   0
+  ],
+  "SCOREBOARD_FINAL_LOSING_SCORE_COLOR": [
+   200,
+   200,
+   200
+  ],
+  "SCOREBOARD_FINAL_WINNING_SCORE_COLOR": [
+   255,
+   255,
+   255
+  ],
+  "SCOREBOARD_IN_PROGRESS_SCORE_COLOR": [
+   255,
+   210,
+   66
+  ],
+  "SCOREBOARD_SCROLL_DELAY": 0.03,
+  "SCOREBOARD_SCROLL_PAUSE_BOTTOM": 0.5,
+  "SCOREBOARD_SCROLL_PAUSE_TOP": 0.75,
+  "SCOREBOARD_SCROLL_STEP": 1,
+  "SCOREBOARD_STANDINGS_BOTTOM_PADDING": 30,
+  "SCORE_ROW_H": 147,
+  "STATUS_ROW_H": 47,
+  "TEAM_LOGO_BASE_HEIGHT": 81,
+  "TITLE_FONT": [
+   "font",
+   "TimesSquare-m105.ttf",
+   79
+  ],
+  "TITLE_GAP": 21,
+  "WIDTH": 720,
+  "_COL_LEFT": 0,
+  "_TOTAL_COL_WIDTH": 720
+ },
+ "screens.mlb_scoreboard_v2": {
+  "BACKGROUND_COLOR": [
+   0,
+   0,
+   0
+  ],
+  "BLOCK_SPACING": 21,
+  "CENTER_FONT": [
+   "font",
+   "TimesSquare-m105.ttf",
+   47
+  ],
+  "FINAL_LOSING_SCORE_COLOR": [
+   200,
+   200,
+   200
+  ],
+  "FINAL_WINNING_SCORE_COLOR": [
+   255,
+   255,
+   255
+  ],
+  "FONT_STATUS": [
+   "font",
+   "TimesSquare-m105.ttf",
+   79
+  ],
+  "FONT_TEAM_SPORTS": [
+   "font",
+   "TimesSquare-m105.ttf",
+   97
+  ],
+  "FONT_TITLE_SPORTS": [
+   "font",
+   "TimesSquare-m105.ttf",
+   79
+  ],
+  "GAME_WIDTH": 360,
+  "HEIGHT": 720,
+  "IN_PROGRESS_SCORE_COLOR": [
+   255,
+   210,
+   66
+  ],
+  "IN_PROGRESS_STATUS_COLOR": [
+   255,
+   210,
+   66
+  ],
+  "LEAGUE_LOGO_BASE_HEIGHT": 56,
+  "LEAGUE_LOGO_GAP": 10,
+  "LEAGUE_LOGO_HEIGHT": 56,
+  "LOGO_HEIGHT": 45,
+  "MIN_GAMES_FOR_V2_LAYOUT": 6,
+  "PAIR_SPACING": 10,
+  "SCOREBOARD_BACKGROUND_COLOR": [
+   0,
+   0,
+   0
+  ],
+  "SCOREBOARD_FINAL_LOSING_SCORE_COLOR": [
+   200,
+   200,
+   200
+  ],
+  "SCOREBOARD_FINAL_WINNING_SCORE_COLOR": [
+   255,
+   255,
+   255
+  ],
+  "SCOREBOARD_IN_PROGRESS_SCORE_COLOR": [
+   255,
+   210,
+   66
+  ],
+  "SCOREBOARD_SCROLL_DELAY": 0.03,
+  "SCOREBOARD_SCROLL_PAUSE_BOTTOM": 0.5,
+  "SCOREBOARD_SCROLL_PAUSE_TOP": 0.75,
+  "SCOREBOARD_SCROLL_STEP": 1,
+  "SCOREBOARD_STANDINGS_BOTTOM_PADDING": 30,
+  "SCORE_FONT": [
+   "font",
+   "TimesSquare-m105.ttf",
+   66
+  ],
+  "SCORE_ROW_H": 79,
+  "STATUS_FONT": [
+   "font",
+   "TimesSquare-m105.ttf",
+   47
+  ],
+  "STATUS_ROW_H": 37,
+  "TEAM_LOGO_BASE_HEIGHT": 45,
+  "TITLE_FONT": [
+   "font",
+   "TimesSquare-m105.ttf",
+   79
+  ],
+  "TITLE_GAP": 21,
+  "WIDTH": 720,
+  "_HD_LAYOUT_TEXT_BOOST": 1.0
+ },
+ "screens.mlb_team_standings": {
+  "DISPLAY_SCALE": 2.625,
+  "FONT_STAND1_GB_VALUE": [
+   "font",
+   "DejaVuSans.ttf",
+   45
+  ],
+  "FONT_STAND1_GB_VALUE_RESTORED": [
+   "font",
+   "DejaVuSans.ttf",
+   17
+  ],
+  "FONT_STAND1_RANK": [
+   "font",
+   "DejaVuSans.ttf",
+   58
+  ],
+  "FONT_STAND1_RANK_RESTORED": [
+   "font",
+   "DejaVuSans.ttf",
+   22
+  ],
+  "FONT_STAND1_WCGB_VALUE": [
+   "font",
+   "DejaVuSans.ttf",
+   45
+  ],
+  "FONT_STAND1_WCGB_VALUE_RESTORED": [
+   "font",
+   "DejaVuSans.ttf",
+   17
+  ],
+  "FONT_STAND1_WL": [
+   "font",
+   "DejaVuSans-Bold.ttf",
+   68
+  ],
+  "FONT_STAND1_WL_RESTORED": [
+   "font",
+   "DejaVuSans-Bold.ttf",
+   26
+  ],
+  "FONT_STAND2_RECORD": [
+   "font",
+   "DejaVuSans.ttf",
+   68
+  ],
+  "FONT_STAND2_RECORD_RESTORED": [
+   "font",
+   "DejaVuSans.ttf",
+   26
+  ],
+  "FONT_STAND2_VALUE": [
+   "font",
+   "DejaVuSans.ttf",
+   58
+  ],
+  "FONT_STAND2_VALUE_RESTORED": [
+   "font",
+   "DejaVuSans.ttf",
+   22
+  ],
+  "FRACTION_FONT_SCALE": 0.6,
+  "HEIGHT": 720,
+  "LANCZOS": 1,
+  "LOGO_SZ": 180,
+  "LOGO_SZ_BASE": 180,
+  "MARGIN": 16,
+  "SCOREBOARD_BACKGROUND_COLOR": [
+   0,
+   0,
+   0
+  ],
+  "TEAM_STANDINGS_DISPLAY_SECONDS": 5,
+  "WIDTH": 720,
+  "_CUBS_STAND3_MARKER_SCALE": 1.8,
+  "_VRNOF_MATCH_LOGO_HEIGHT_1080": 270
+ },
+ "screens.nba_playoffs": {
+  "BACKGROUND_COLOR": [
+   0,
+   0,
+   0
+  ],
+  "BLOCK_SPACING": 26,
+  "CENTER_FONT": [
+   "font",
+   "TimesSquare-m105.ttf",
+   47
+  ],
+  "CONTENT_LEFT": 0,
+  "CONTENT_WIDTH": 772,
+  "EAST_X": 404,
+  "FONT_STATUS": [
+   "font",
+   "TimesSquare-m105.ttf",
+   79
+  ],
+  "FONT_TEAM_SPORTS": [
+   "font",
+   "TimesSquare-m105.ttf",
+   97
+  ],
+  "FONT_TITLE_SPORTS": [
+   "font",
+   "TimesSquare-m105.ttf",
+   79
+  ],
+  "HEIGHT": 720,
+  "LEAGUE_LOGO_BASE_HEIGHT": 58,
+  "LEAGUE_LOGO_GAP": 10,
+  "LOGO_HEIGHT": 58,
+  "PAIR_SPACING": 36,
+  "PAIR_SPACING_BASE": 36,
+  "PLAYOFF_LOGO_BASE_HEIGHT": 58,
+  "PLAYOFF_LOGO_SCALE": 0.9,
+  "REQUEST_TIMEOUT": 8,
+  "SCOREBOARD_IN_PROGRESS_SCORE_COLOR": [
+   255,
+   210,
+   66
+  ],
+  "SCOREBOARD_LOGO_BASE_HEIGHT": 81,
+  "SCOREBOARD_SCROLL_DELAY": 0.03,
+  "SCOREBOARD_SCROLL_PAUSE_BOTTOM": 0.5,
+  "SCOREBOARD_SCROLL_PAUSE_TOP": 0.75,
+  "SCOREBOARD_SCROLL_STEP": 1,
+  "SCOREBOARD_STANDINGS_BOTTOM_PADDING": 30,
+  "SCORE_FONT": [
+   "font",
+   "TimesSquare-m105.ttf",
+   63
+  ],
+  "SCORE_ROW_H": 147,
+  "SERIES_WIDTH": 368,
+  "STATUS_FONT": [
+   "font",
+   "TimesSquare-m105.ttf",
+   47
+  ],
+  "STATUS_ROW_H": 47,
+  "STATUS_SMALL_FONT": [
+   "font",
+   "TimesSquare-m105.ttf",
+   42
+  ],
+  "SUBTITLE_GAP": 10,
+  "TITLE_FONT": [
+   "font",
+   "TimesSquare-m105.ttf",
+   79
+  ],
+  "TITLE_GAP": 21,
+  "WEST_X": 0,
+  "WIDTH": 720
+ },
+ "screens.nba_scoreboard": {
+  "BACKGROUND_COLOR": [
+   0,
+   0,
+   0
+  ],
+  "BACKGROUND_COLOR_RGBA": [
+   0,
+   0,
+   0,
+   255
+  ],
+  "BLOCK_SPACING": 26,
+  "FINAL_LOSING_SCORE_COLOR": [
+   200,
+   200,
+   200
+  ],
+  "FINAL_WINNING_SCORE_COLOR": [
+   255,
+   255,
+   255
+  ],
+  "FONT_STATUS": [
+   "font",
+   "TimesSquare-m105.ttf",
+   79
+  ],
+  "FONT_TEAM_SPORTS": [
+   "font",
+   "TimesSquare-m105.ttf",
+   97
+  ],
+  "FONT_TITLE_SPORTS": [
+   "font",
+   "TimesSquare-m105.ttf",
+   79
+  ],
+  "HEIGHT": 720,
+  "INTRO_ANIM_DELAY": 0.06,
+  "INTRO_ANIM_HOLD": 0.4,
+  "INTRO_ANIM_SCALES": [
+   0.45,
+   0.6,
+   0.75,
+   0.9,
+   1.04,
+   0.98,
+   1.0
+  ],
+  "INTRO_MAX_BASE_HEIGHT": 262,
+  "IN_PROGRESS_SCORE_COLOR": [
+   255,
+   210,
+   66
+  ],
+  "IN_PROGRESS_STATUS_COLOR": [
+   255,
+   210,
+   66
+  ],
+  "LANCZOS": 1,
+  "LEAGUE_LOGO_BASE_HEIGHT": 32,
+  "LEAGUE_LOGO_GAP": 10,
+  "REQUEST_TIMEOUT": 10,
+  "SCOREBOARD_BACKGROUND_COLOR": [
+   0,
+   0,
+   0
+  ],
+  "SCOREBOARD_FINAL_LOSING_SCORE_COLOR": [
+   200,
+   200,
+   200
+  ],
+  "SCOREBOARD_FINAL_WINNING_SCORE_COLOR": [
+   255,
+   255,
+   255
+  ],
+  "SCOREBOARD_IN_PROGRESS_SCORE_COLOR": [
+   255,
+   210,
+   66
+  ],
+  "SCOREBOARD_SCROLL_DELAY": 0.03,
+  "SCOREBOARD_SCROLL_PAUSE_BOTTOM": 0.5,
+  "SCOREBOARD_SCROLL_PAUSE_TOP": 0.75,
+  "SCOREBOARD_SCROLL_STEP": 1,
+  "SCOREBOARD_STANDINGS_BOTTOM_PADDING": 30,
+  "SCORE_ROW_H": 147,
+  "STATUS_ROW_H": 47,
+  "TEAM_LOGO_BASE_HEIGHT": 81,
+  "TITLE_FONT": [
+   "font",
+   "TimesSquare-m105.ttf",
+   79
+  ],
+  "TITLE_GAP": 21,
+  "WIDTH": 720,
+  "_COL_LEFT": 0,
+  "_TOTAL_COL_WIDTH": 720
+ },
+ "screens.nba_scoreboard_v2": {
+  "BACKGROUND_COLOR": [
+   0,
+   0,
+   0
+  ],
+  "BLOCK_SPACING": 21,
+  "CENTER_FONT": [
+   "font",
+   "TimesSquare-m105.ttf",
+   47
+  ],
+  "FINAL_LOSING_SCORE_COLOR": [
+   200,
+   200,
+   200
+  ],
+  "FINAL_WINNING_SCORE_COLOR": [
+   255,
+   255,
+   255
+  ],
+  "FONT_STATUS": [
+   "font",
+   "TimesSquare-m105.ttf",
+   79
+  ],
+  "FONT_TEAM_SPORTS": [
+   "font",
+   "TimesSquare-m105.ttf",
+   97
+  ],
+  "FONT_TITLE_SPORTS": [
+   "font",
+   "TimesSquare-m105.ttf",
+   79
+  ],
+  "GAME_WIDTH": 361,
+  "HEIGHT": 720,
+  "IN_PROGRESS_SCORE_COLOR": [
+   255,
+   210,
+   66
+  ],
+  "IN_PROGRESS_STATUS_COLOR": [
+   255,
+   210,
+   66
+  ],
+  "LEAGUE_LOGO_BASE_HEIGHT": 58,
+  "LEAGUE_LOGO_GAP": 10,
+  "LEAGUE_LOGO_HEIGHT": 58,
+  "LOGO_HEIGHT": 58,
+  "MIN_GAMES_FOR_V2_LAYOUT": 6,
+  "PAIR_SPACING": 9,
+  "SCOREBOARD_BACKGROUND_COLOR": [
+   0,
+   0,
+   0
+  ],
+  "SCOREBOARD_FINAL_LOSING_SCORE_COLOR": [
+   200,
+   200,
+   200
+  ],
+  "SCOREBOARD_FINAL_WINNING_SCORE_COLOR": [
+   255,
+   255,
+   255
+  ],
+  "SCOREBOARD_IN_PROGRESS_SCORE_COLOR": [
+   255,
+   210,
+   66
+  ],
+  "SCOREBOARD_SCROLL_DELAY": 0.03,
+  "SCOREBOARD_SCROLL_PAUSE_BOTTOM": 0.5,
+  "SCOREBOARD_SCROLL_PAUSE_TOP": 0.75,
+  "SCOREBOARD_SCROLL_STEP": 1,
+  "SCOREBOARD_STANDINGS_BOTTOM_PADDING": 30,
+  "SCORE_FONT": [
+   "font",
+   "TimesSquare-m105.ttf",
+   55
+  ],
+  "SCORE_ROW_H": 79,
+  "STATUS_FONT": [
+   "font",
+   "TimesSquare-m105.ttf",
+   47
+  ],
+  "STATUS_ROW_H": 37,
+  "TEAM_LOGO_BASE_HEIGHT": 58,
+  "TITLE_FONT": [
+   "font",
+   "TimesSquare-m105.ttf",
+   79
+  ],
+  "TITLE_GAP": 21,
+  "WIDTH": 720,
+  "_HD_LAYOUT_TEXT_BOOST": 1.0
+ },
+ "screens.nba_team_standings": {
+  "LOGO_SZ": 180,
+  "NBA_LOGO_SZ": 90,
+  "NBA_STAND1_LOGO_SZ": 270
+ },
+ "screens.ncaam_scoreboard": {
+  "BACKGROUND_COLOR": [
+   0,
+   0,
+   0
+  ],
+  "BLOCK_SPACING": 26,
+  "CENTER_FONT": [
+   "font",
+   "TimesSquare-m105.ttf",
+   74
+  ],
+  "FINAL_LOSING_SCORE_COLOR": [
+   200,
+   200,
+   200
+  ],
+  "FINAL_WINNING_SCORE_COLOR": [
+   255,
+   255,
+   255
+  ],
+  "FONT_STATUS": [
+   "font",
+   "TimesSquare-m105.ttf",
+   79
+  ],
+  "FONT_TEAM_SPORTS": [
+   "font",
+   "TimesSquare-m105.ttf",
+   97
+  ],
+  "FONT_TITLE_SPORTS": [
+   "font",
+   "TimesSquare-m105.ttf",
+   79
+  ],
+  "HEIGHT": 720,
+  "IN_PROGRESS_SCORE_COLOR": [
+   255,
+   210,
+   66
+  ],
+  "IN_PROGRESS_STATUS_COLOR": [
+   255,
+   210,
+   66
+  ],
+  "LANCZOS": 1,
+  "LEAGUE_LOGO_BASE_HEIGHT": 81,
+  "LEAGUE_LOGO_GAP": 10,
+  "MIN_GAMES_FOR_V2_LAYOUT": 6,
+  "RANK_FONT": [
+   "font",
+   "TimesSquare-m105.ttf",
+   29
+  ],
+  "RANK_GAP": 2,
+  "REQUEST_TIMEOUT": 10,
+  "SCOREBOARD_BACKGROUND_COLOR": [
+   0,
+   0,
+   0
+  ],
+  "SCOREBOARD_FINAL_LOSING_SCORE_COLOR": [
+   200,
+   200,
+   200
+  ],
+  "SCOREBOARD_FINAL_WINNING_SCORE_COLOR": [
+   255,
+   255,
+   255
+  ],
+  "SCOREBOARD_IN_PROGRESS_SCORE_COLOR": [
+   255,
+   210,
+   66
+  ],
+  "SCOREBOARD_SCROLL_DELAY": 0.03,
+  "SCOREBOARD_SCROLL_PAUSE_BOTTOM": 0.5,
+  "SCOREBOARD_SCROLL_PAUSE_TOP": 0.75,
+  "SCOREBOARD_SCROLL_STEP": 1,
+  "SCOREBOARD_STANDINGS_BOTTOM_PADDING": 30,
+  "SCORE_FONT": [
+   "font",
+   "TimesSquare-m105.ttf",
+   102
+  ],
+  "SCORE_ROW_H": 147,
+  "SEED_FONT": [
+   "font",
+   "TimesSquare-m105.ttf",
+   34
+  ],
+  "SEED_GAP": 7,
+  "STATUS_FONT": [
+   "font",
+   "TimesSquare-m105.ttf",
+   74
+  ],
+  "STATUS_ROW_H": 47,
+  "TEAM_LOGO_BASE_HEIGHT": 81,
+  "TITLE_GAP": 21,
+  "WIDTH": 720,
+  "_COL_LEFT": 0,
+  "_TOTAL_COL_WIDTH": 720
+ },
+ "screens.ncaam_scoreboard_v2": {
+  "BACKGROUND_COLOR": [
+   0,
+   0,
+   0
+  ],
+  "BLOCK_SPACING": 21,
+  "CENTER_FONT": [
+   "font",
+   "TimesSquare-m105.ttf",
+   47
+  ],
+  "FINAL_LOSING_SCORE_COLOR": [
+   200,
+   200,
+   200
+  ],
+  "FINAL_WINNING_SCORE_COLOR": [
+   255,
+   255,
+   255
+  ],
+  "FONT_STATUS": [
+   "font",
+   "TimesSquare-m105.ttf",
+   79
+  ],
+  "FONT_TEAM_SPORTS": [
+   "font",
+   "TimesSquare-m105.ttf",
+   97
+  ],
+  "FONT_TITLE_SPORTS": [
+   "font",
+   "TimesSquare-m105.ttf",
+   79
+  ],
+  "GAME_WIDTH": 361,
+  "HEIGHT": 720,
+  "IN_PROGRESS_SCORE_COLOR": [
+   255,
+   210,
+   66
+  ],
+  "IN_PROGRESS_STATUS_COLOR": [
+   255,
+   210,
+   66
+  ],
+  "MIN_GAMES_FOR_V2_LAYOUT": 6,
+  "PAIR_SPACING": 9,
+  "SCOREBOARD_BACKGROUND_COLOR": [
+   0,
+   0,
+   0
+  ],
+  "SCOREBOARD_FINAL_LOSING_SCORE_COLOR": [
+   200,
+   200,
+   200
+  ],
+  "SCOREBOARD_FINAL_WINNING_SCORE_COLOR": [
+   255,
+   255,
+   255
+  ],
+  "SCOREBOARD_IN_PROGRESS_SCORE_COLOR": [
+   255,
+   210,
+   66
+  ],
+  "SCOREBOARD_SCROLL_DELAY": 0.03,
+  "SCOREBOARD_SCROLL_PAUSE_BOTTOM": 0.5,
+  "SCOREBOARD_SCROLL_PAUSE_TOP": 0.75,
+  "SCOREBOARD_SCROLL_STEP": 1,
+  "SCOREBOARD_STANDINGS_BOTTOM_PADDING": 30,
+  "SCORE_FONT": [
+   "font",
+   "TimesSquare-m105.ttf",
+   52
+  ],
+  "SCORE_ROW_H": 74,
+  "STATUS_FONT": [
+   "font",
+   "TimesSquare-m105.ttf",
+   47
+  ],
+  "STATUS_ROW_H": 32,
+  "TITLE_GAP": 21,
+  "WIDTH": 720
+ },
+ "screens.nfl_scoreboard": {
+  "BACKGROUND_COLOR": [
+   0,
+   0,
+   0
+  ],
+  "BLOCK_SPACING": 26,
+  "CENTER_FONT": [
+   "font",
+   "TimesSquare-m105.ttf",
+   74
+  ],
+  "FETCH_CACHE_TTL_SECONDS": 60,
+  "FINAL_LOSING_SCORE_COLOR": [
+   200,
+   200,
+   200
+  ],
+  "FINAL_WINNING_SCORE_COLOR": [
+   255,
+   255,
+   255
+  ],
+  "FONT_STATUS": [
+   "font",
+   "TimesSquare-m105.ttf",
+   79
+  ],
+  "FONT_TEAM_SPORTS": [
+   "font",
+   "TimesSquare-m105.ttf",
+   97
+  ],
+  "FONT_TITLE_SPORTS": [
+   "font",
+   "TimesSquare-m105.ttf",
+   79
+  ],
+  "HEIGHT": 720,
+  "IN_PROGRESS_SCORE_COLOR": [
+   255,
+   210,
+   66
+  ],
+  "IN_PROGRESS_STATUS_COLOR": [
+   255,
+   210,
+   66
+  ],
+  "LEAGUE_LOGO_BASE_HEIGHT": 68,
+  "LEAGUE_LOGO_GAP": 10,
+  "LEAGUE_LOGO_HEIGHT": 68,
+  "LOGO_HEIGHT": 68,
+  "NO_UPCOMING_GAMES_COOLDOWN_SECONDS": 1800,
+  "SCOREBOARD_BACKGROUND_COLOR": [
+   0,
+   0,
+   0
+  ],
+  "SCOREBOARD_FINAL_LOSING_SCORE_COLOR": [
+   200,
+   200,
+   200
+  ],
+  "SCOREBOARD_FINAL_WINNING_SCORE_COLOR": [
+   255,
+   255,
+   255
+  ],
+  "SCOREBOARD_IN_PROGRESS_SCORE_COLOR": [
+   255,
+   210,
+   66
+  ],
+  "SCOREBOARD_SCROLL_DELAY": 0.03,
+  "SCOREBOARD_SCROLL_PAUSE_BOTTOM": 0.5,
+  "SCOREBOARD_SCROLL_PAUSE_TOP": 0.75,
+  "SCOREBOARD_SCROLL_STEP": 1,
+  "SCOREBOARD_STANDINGS_BOTTOM_PADDING": 30,
+  "SCORE_FONT": [
+   "font",
+   "TimesSquare-m105.ttf",
+   102
+  ],
+  "SCORE_ROW_H": 147,
+  "STALE_FONT": [
+   "font",
+   "TimesSquare-m105.ttf",
+   18
+  ],
+  "STATUS_FONT": [
+   "font",
+   "TimesSquare-m105.ttf",
+   74
+  ],
+  "STATUS_ROW_H": 47,
+  "SUPER_BOWL_DATE": [
+   2,
+   8
+  ],
+  "SUPER_BOWL_LOGO_GAP": 16,
+  "TEAM_LOGO_BASE_HEIGHT": 68,
+  "TITLE_FONT": [
+   "font",
+   "TimesSquare-m105.ttf",
+   79
+  ],
+  "TITLE_GAP": 21,
+  "WEEK_FAILURE_RETRY_SECONDS": 300,
+  "WIDTH": 720,
+  "_COL_LEFT": 0,
+  "_TOTAL_COL_WIDTH": 720
+ },
+ "screens.nfl_scoreboard_v2": {
+  "BACKGROUND_COLOR": [
+   0,
+   0,
+   0
+  ],
+  "BLOCK_SPACING": 21,
+  "CENTER_FONT": [
+   "font",
+   "TimesSquare-m105.ttf",
+   47
+  ],
+  "FINAL_LOSING_SCORE_COLOR": [
+   200,
+   200,
+   200
+  ],
+  "FINAL_WINNING_SCORE_COLOR": [
+   255,
+   255,
+   255
+  ],
+  "FONT_STATUS": [
+   "font",
+   "TimesSquare-m105.ttf",
+   79
+  ],
+  "FONT_TEAM_SPORTS": [
+   "font",
+   "TimesSquare-m105.ttf",
+   97
+  ],
+  "FONT_TITLE_SPORTS": [
+   "font",
+   "TimesSquare-m105.ttf",
+   79
+  ],
+  "GAME_WIDTH": 360,
+  "HEIGHT": 720,
+  "IN_PROGRESS_SCORE_COLOR": [
+   255,
+   210,
+   66
+  ],
+  "IN_PROGRESS_STATUS_COLOR": [
+   255,
+   210,
+   66
+  ],
+  "LEAGUE_LOGO_BASE_HEIGHT": 56,
+  "LEAGUE_LOGO_GAP": 10,
+  "LEAGUE_LOGO_HEIGHT": 56,
+  "LOGO_HEIGHT": 45,
+  "MIN_GAMES_FOR_V2_LAYOUT": 6,
+  "PAIR_SPACING": 9,
+  "SCOREBOARD_BACKGROUND_COLOR": [
+   0,
+   0,
+   0
+  ],
+  "SCOREBOARD_FINAL_LOSING_SCORE_COLOR": [
+   200,
+   200,
+   200
+  ],
+  "SCOREBOARD_FINAL_WINNING_SCORE_COLOR": [
+   255,
+   255,
+   255
+  ],
+  "SCOREBOARD_IN_PROGRESS_SCORE_COLOR": [
+   255,
+   210,
+   66
+  ],
+  "SCOREBOARD_SCROLL_DELAY": 0.03,
+  "SCOREBOARD_SCROLL_PAUSE_BOTTOM": 0.5,
+  "SCOREBOARD_SCROLL_PAUSE_TOP": 0.75,
+  "SCOREBOARD_SCROLL_STEP": 1,
+  "SCOREBOARD_STANDINGS_BOTTOM_PADDING": 30,
+  "SCORE_FONT": [
+   "font",
+   "TimesSquare-m105.ttf",
+   55
+  ],
+  "SCORE_ROW_H": 79,
+  "STATUS_FONT": [
+   "font",
+   "TimesSquare-m105.ttf",
+   47
+  ],
+  "STATUS_ROW_H": 37,
+  "SUPER_BOWL_LOGO_GAP": 16,
+  "TEAM_LOGO_BASE_HEIGHT": 45,
+  "TITLE_FONT": [
+   "font",
+   "TimesSquare-m105.ttf",
+   79
+  ],
+  "TITLE_GAP": 21,
+  "WIDTH": 720,
+  "_HD_LAYOUT_TEXT_BOOST": 1.0
+ },
+ "screens.nfl_standings": {
+  "BACKGROUND_COLOR": [
+   0,
+   0,
+   0
+  ],
+  "CACHE_TTL": 900,
+  "COLUMN_FONT": [
+   "font",
+   "TimesSquare-m105.ttf",
+   68
+  ],
+  "COLUMN_GAP_BELOW": 8,
+  "COLUMN_ROW_HEIGHT": 39,
+  "COLUMN_TEXT_HEIGHT": 37,
+  "DIVISION_FONT": [
+   "font",
+   "TimesSquare-m105.ttf",
+   74
+  ],
+  "DIVISION_MARGIN_BOTTOM": 10,
+  "DIVISION_MARGIN_TOP": 5,
+  "DIVISION_TEXT_HEIGHT": 41,
+  "FONT_STATUS": [
+   "font",
+   "TimesSquare-m105.ttf",
+   79
+  ],
+  "FONT_TITLE_SPORTS": [
+   "font",
+   "TimesSquare-m105.ttf",
+   79
+  ],
+  "HEIGHT": 720,
+  "LANCZOS": 1,
+  "LEFT_MARGIN": 10,
+  "LOGO_HEIGHT": 61,
+  "OFFSEASON_END": [
+   8,
+   1
+  ],
+  "OFFSEASON_START": [
+   2,
+   15
+  ],
+  "OVERVIEW_COLUMN_MARGIN": 2,
+  "OVERVIEW_DROP_MARGIN": 6,
+  "OVERVIEW_DROP_STAGGER": 0.4,
+  "OVERVIEW_DROP_STEPS": 30,
+  "OVERVIEW_FRAME_DELAY": 0.02,
+  "OVERVIEW_LOGO_HEIGHT": 65,
+  "OVERVIEW_PAUSE_END": 0.5,
+  "OVERVIEW_VERTICAL_STEP": 45,
+  "RECORD_COLUMN_SPACING": 26,
+  "REQUEST_TIMEOUT": 10,
+  "RIGHT_MARGIN": 16,
+  "ROW_FONT": [
+   "font",
+   "TimesSquare-m105.ttf",
+   79
+  ],
+  "ROW_HEIGHT": 77,
+  "ROW_PADDING": 8,
+  "ROW_SPACING": 5,
+  "ROW_TEXT_HEIGHT": 56,
+  "SCOREBOARD_BACKGROUND_COLOR": [
+   0,
+   0,
+   0
+  ],
+  "SCOREBOARD_SCROLL_DELAY": 0.03,
+  "SCOREBOARD_SCROLL_PAUSE_BOTTOM": 0.5,
+  "SCOREBOARD_SCROLL_PAUSE_TOP": 0.75,
+  "SCOREBOARD_SCROLL_STEP": 1,
+  "SCOREBOARD_STANDINGS_BOTTOM_PADDING": 30,
+  "TEAM_COLUMN_PADDING": 16,
+  "TITLE_FONT": [
+   "font",
+   "TimesSquare-m105.ttf",
+   79
+  ],
+  "TITLE_MARGIN_BOTTOM": 16,
+  "TITLE_MARGIN_TOP": 10,
+  "TITLE_TEXT_HEIGHT": 56,
+  "WHITE": [
+   255,
+   255,
+   255
+  ],
+  "WIDTH": 720,
+  "_NFL_SQUARE_FONT_SCALE": 0.78
+ },
+ "screens.nfl_team_standings": {
+  "FONT_STAND1_WL_LARGE": [
+   "font",
+   "DejaVuSans-Bold.ttf",
+   171
+  ]
+ },
+ "screens.nhl_playoffs": {
+  "BACKGROUND_COLOR": [
+   0,
+   0,
+   0
+  ],
+  "BLOCK_SPACING": 26,
+  "CENTER_FONT": [
+   "font",
+   "TimesSquare-m105.ttf",
+   47
+  ],
+  "CONTENT_LEFT": 0,
+  "CONTENT_WIDTH": 772,
+  "EAST_X": 404,
+  "FONT_STATUS": [
+   "font",
+   "TimesSquare-m105.ttf",
+   79
+  ],
+  "FONT_TEAM_SPORTS": [
+   "font",
+   "TimesSquare-m105.ttf",
+   97
+  ],
+  "FONT_TITLE_SPORTS": [
+   "font",
+   "TimesSquare-m105.ttf",
+   79
+  ],
+  "HEIGHT": 720,
+  "LEAGUE_LOGO_BASE_HEIGHT": 58,
+  "LEAGUE_LOGO_GAP": 10,
+  "LOGO_HEIGHT": 58,
+  "PAIR_SPACING": 36,
+  "PAIR_SPACING_BASE": 36,
+  "PLAYOFF_LOGO_BASE_HEIGHT": 58,
+  "PLAYOFF_LOGO_SCALE": 0.9,
+  "REQUEST_TIMEOUT": 8,
+  "SCOREBOARD_IN_PROGRESS_SCORE_COLOR": [
+   255,
+   210,
+   66
+  ],
+  "SCOREBOARD_LOGO_BASE_HEIGHT": 81,
+  "SCOREBOARD_SCROLL_DELAY": 0.03,
+  "SCOREBOARD_SCROLL_PAUSE_BOTTOM": 0.5,
+  "SCOREBOARD_SCROLL_PAUSE_TOP": 0.75,
+  "SCOREBOARD_SCROLL_STEP": 1,
+  "SCOREBOARD_STANDINGS_BOTTOM_PADDING": 30,
+  "SCORE_FONT": [
+   "font",
+   "TimesSquare-m105.ttf",
+   63
+  ],
+  "SCORE_ROW_H": 147,
+  "SERIES_WIDTH": 368,
+  "STATUS_FONT": [
+   "font",
+   "TimesSquare-m105.ttf",
+   47
+  ],
+  "STATUS_ROW_H": 47,
+  "STATUS_SMALL_FONT": [
+   "font",
+   "TimesSquare-m105.ttf",
+   42
+  ],
+  "SUBTITLE_GAP": 21,
+  "TEAM_LOGO_BASE_HEIGHT": 81,
+  "TITLE_FONT": [
+   "font",
+   "TimesSquare-m105.ttf",
+   79
+  ],
+  "TITLE_GAP": 21,
+  "WEST_X": 0,
+  "WIDTH": 720
+ },
+ "screens.nhl_scoreboard": {
+  "BACKGROUND_COLOR": [
+   0,
+   0,
+   0
+  ],
+  "BLOCK_SPACING": 26,
+  "CENTER_FONT": [
+   "font",
+   "TimesSquare-m105.ttf",
+   74
+  ],
+  "FINAL_LOSING_SCORE_COLOR": [
+   200,
+   200,
+   200
+  ],
+  "FINAL_WINNING_SCORE_COLOR": [
+   255,
+   255,
+   255
+  ],
+  "FONT_STATUS": [
+   "font",
+   "TimesSquare-m105.ttf",
+   79
+  ],
+  "FONT_TEAM_SPORTS": [
+   "font",
+   "TimesSquare-m105.ttf",
+   97
+  ],
+  "FONT_TITLE_SPORTS": [
+   "font",
+   "TimesSquare-m105.ttf",
+   79
+  ],
+  "HEIGHT": 720,
+  "IN_PROGRESS_SCORE_COLOR": [
+   255,
+   210,
+   66
+  ],
+  "IN_PROGRESS_STATUS_COLOR": [
+   255,
+   210,
+   66
+  ],
+  "LEAGUE_LOGO_BASE_HEIGHT": 81,
+  "LEAGUE_LOGO_GAP": 10,
+  "LEAGUE_LOGO_HEIGHT": 81,
+  "LOGO_HEIGHT": 81,
+  "REQUEST_TIMEOUT": 10,
+  "SCOREBOARD_BACKGROUND_COLOR": [
+   0,
+   0,
+   0
+  ],
+  "SCOREBOARD_FINAL_LOSING_SCORE_COLOR": [
+   200,
+   200,
+   200
+  ],
+  "SCOREBOARD_FINAL_WINNING_SCORE_COLOR": [
+   255,
+   255,
+   255
+  ],
+  "SCOREBOARD_IN_PROGRESS_SCORE_COLOR": [
+   255,
+   210,
+   66
+  ],
+  "SCORE_FONT": [
+   "font",
+   "TimesSquare-m105.ttf",
+   113
+  ],
+  "SCORE_ROW_H": 147,
+  "STATUS_FONT": [
+   "font",
+   "TimesSquare-m105.ttf",
+   74
+  ],
+  "STATUS_ROW_H": 47,
+  "TEAM_LOGO_BASE_HEIGHT": 81,
+  "TITLE_FONT": [
+   "font",
+   "TimesSquare-m105.ttf",
+   79
+  ],
+  "TITLE_GAP": 21,
+  "WIDTH": 720,
+  "_COL_LEFT": 0,
+  "_DNS_RETRY_INTERVAL": 600,
+  "_TOTAL_COL_WIDTH": 720
+ },
+ "screens.nhl_scoreboard_v2": {
+  "BACKGROUND_COLOR": [
+   0,
+   0,
+   0
+  ],
+  "BLOCK_SPACING": 21,
+  "CENTER_FONT": [
+   "font",
+   "TimesSquare-m105.ttf",
+   47
+  ],
+  "FINAL_LOSING_SCORE_COLOR": [
+   200,
+   200,
+   200
+  ],
+  "FINAL_WINNING_SCORE_COLOR": [
+   255,
+   255,
+   255
+  ],
+  "FONT_STATUS": [
+   "font",
+   "TimesSquare-m105.ttf",
+   79
+  ],
+  "FONT_TEAM_SPORTS": [
+   "font",
+   "TimesSquare-m105.ttf",
+   97
+  ],
+  "FONT_TITLE_SPORTS": [
+   "font",
+   "TimesSquare-m105.ttf",
+   79
+  ],
+  "GAME_WIDTH": 361,
+  "HEIGHT": 720,
+  "IN_PROGRESS_SCORE_COLOR": [
+   255,
+   210,
+   66
+  ],
+  "IN_PROGRESS_STATUS_COLOR": [
+   255,
+   210,
+   66
+  ],
+  "LEAGUE_LOGO_BASE_HEIGHT": 58,
+  "LEAGUE_LOGO_GAP": 10,
+  "LEAGUE_LOGO_HEIGHT": 58,
+  "LOGO_HEIGHT": 58,
+  "MIN_GAMES_FOR_V2_LAYOUT": 6,
+  "PAIR_SPACING": 9,
+  "SCOREBOARD_BACKGROUND_COLOR": [
+   0,
+   0,
+   0
+  ],
+  "SCOREBOARD_FINAL_LOSING_SCORE_COLOR": [
+   200,
+   200,
+   200
+  ],
+  "SCOREBOARD_FINAL_WINNING_SCORE_COLOR": [
+   255,
+   255,
+   255
+  ],
+  "SCOREBOARD_IN_PROGRESS_SCORE_COLOR": [
+   255,
+   210,
+   66
+  ],
+  "SCORE_FONT": [
+   "font",
+   "TimesSquare-m105.ttf",
+   66
+  ],
+  "SCORE_ROW_H": 79,
+  "STATUS_FONT": [
+   "font",
+   "TimesSquare-m105.ttf",
+   47
+  ],
+  "STATUS_ROW_H": 37,
+  "TEAM_LOGO_BASE_HEIGHT": 58,
+  "TITLE_FONT": [
+   "font",
+   "TimesSquare-m105.ttf",
+   79
+  ],
+  "TITLE_GAP": 21,
+  "WIDTH": 720,
+  "_HD_LAYOUT_TEXT_BOOST": 1.0
+ },
+ "screens.nhl_standings": {
+  "BACKGROUND_COLOR": [
+   0,
+   0,
+   0
+  ],
+  "CACHE_TTL": 900,
+  "COLUMN_FONT": [
+   "font",
+   "TimesSquare-m105.ttf",
+   63
+  ],
+  "COLUMN_FONT_POINTS": [
+   "font",
+   "TimesSquare-m105.ttf",
+   47
+  ],
+  "COLUMN_GAP_BELOW": 8,
+  "COLUMN_ROW_HEIGHT": 36,
+  "COLUMN_TEXT_HEIGHT": 34,
+  "CONFERENCE_LOGO_GAP": 5,
+  "CONFERENCE_LOGO_HEIGHT": 29,
+  "DIVISION_FONT": [
+   "font",
+   "TimesSquare-m105.ttf",
+   68
+  ],
+  "DIVISION_HEADER_GAP": 16,
+  "DIVISION_MARGIN_BOTTOM": 10,
+  "DIVISION_MARGIN_TOP": 10,
+  "DIVISION_TEXT_HEIGHT": 48,
+  "DROP_FRAME_DELAY": 0.02,
+  "FONT_STATUS": [
+   "font",
+   "TimesSquare-m105.ttf",
+   79
+  ],
+  "FONT_TITLE_SPORTS": [
+   "font",
+   "TimesSquare-m105.ttf",
+   79
+  ],
+  "HEIGHT": 720,
+  "HYPERPIXEL_STATS_RIGHT_GUTTER": 21,
+  "LANCZOS": 1,
+  "LEFT_MARGIN": 10,
+  "LOGO_HEIGHT": 49,
+  "OVERVIEW_BOTTOM_MARGIN": 5,
+  "OVERVIEW_DROP_STAGGER": 0.4,
+  "OVERVIEW_DROP_STEPS": 30,
+  "OVERVIEW_LOGO_PADDING": 10,
+  "OVERVIEW_MARGIN_X": 10,
+  "OVERVIEW_MAX_LOGO_HEIGHT": 68,
+  "OVERVIEW_MIN_LOGO_HEIGHT": 30,
+  "OVERVIEW_TITLE_MARGIN_BOTTOM": 16,
+  "REQUEST_TIMEOUT": 10,
+  "RIGHT_MARGIN": 16,
+  "ROW_FONT": [
+   "font",
+   "TimesSquare-m105.ttf",
+   74
+  ],
+  "ROW_HEIGHT": 65,
+  "ROW_PADDING": 8,
+  "ROW_SPACING": 10,
+  "ROW_STATS_FONT": [
+   "font",
+   "TimesSquare-m105.ttf",
+   68
+  ],
+  "ROW_TEXT_HEIGHT": 40,
+  "SCOREBOARD_BACKGROUND_COLOR": [
+   0,
+   0,
+   0
+  ],
+  "SCOREBOARD_SCROLL_DELAY": 0.03,
+  "SCOREBOARD_SCROLL_PAUSE_BOTTOM": 0.5,
+  "SCOREBOARD_SCROLL_PAUSE_TOP": 0.75,
+  "SCOREBOARD_SCROLL_STEP": 1,
+  "SCOREBOARD_STANDINGS_BOTTOM_PADDING": 30,
+  "SECTION_GAP": 26,
+  "STATS_COLUMN_MIN_STEP": 75,
+  "STATS_FIRST_COLUMN_GAP": 68,
+  "TEAM_COLUMN_GAP": 16,
+  "TEAM_NAME_FONT": [
+   "font",
+   "TimesSquare-m105.ttf",
+   66
+  ],
+  "TITLE_FONT": [
+   "font",
+   "TimesSquare-m105.ttf",
+   79
+  ],
+  "TITLE_MARGIN_BOTTOM": 16,
+  "TITLE_MARGIN_TOP": 10,
+  "TITLE_SUBTITLE_GAP": 5,
+  "WHITE": [
+   255,
+   255,
+   255
+  ],
+  "WIDTH": 720,
+  "_ACTIVE_COLUMN_SEPARATION_GAP": 2.0,
+  "_ACTIVE_STATS_COLUMN_SPACING_SCALE": 1.0,
+  "_ACTIVE_TABLE_RIGHT_INSET": 0,
+  "_CONFERENCE_LOGO_BASE_HEIGHT": 72,
+  "_DNS_RETRY_INTERVAL": 600,
+  "_HYPERPIXEL_4_ROW_SPACING": 8,
+  "_HYPERPIXEL_4_TITLE_LOGO_TARGET": 90,
+  "_LOGO_BASE_HEIGHT": 72,
+  "_OVERVIEW_MAX_LOGO_BASE": 90,
+  "_OVERVIEW_MIN_LOGO_BASE": 40
+ },
+ "screens.nhl_standings_v2": {},
+ "screens.nhl_team_standings": {
+  "DISPLAY_SCALE": 2.625,
+  "FONT_STAND1_RANK": [
+   "font",
+   "DejaVuSans.ttf",
+   58
+  ],
+  "LOGO_SZ": 180,
+  "NHL_LOGO_SZ": 90,
+  "NHL_POINTS_FONT": [
+   "font",
+   "DejaVuSans.ttf",
+   22
+  ],
+  "NHL_STAND1_LOGO_SZ": 270
+ },
+ "screens.on_this_day": {
+  "BODY_FONT": [
+   "font",
+   "DejaVuSans.ttf",
+   28
+  ],
+  "H": 720,
+  "LANCZOS": 1,
+  "SECTION_FONT": [
+   "font",
+   "DejaVuSans-Bold.ttf",
+   34
+  ],
+  "TITLE_FONT": [
+   "font",
+   "DejaVuSans-Bold.ttf",
+   58
+  ],
+  "W": 720,
+  "YEAR_FONT": [
+   "font",
+   "DejaVuSans-Bold.ttf",
+   24
+  ],
+  "_BG": [
+   8,
+   10,
+   24
+  ],
+  "_CARD": [
+   22,
+   27,
+   50
+  ],
+  "_FEED_BUILD_TIMEOUT_SECONDS": 3.5,
+  "_INCOMPLETE_FEED_RETRY_SECONDS": 300.0,
+  "_JEWISH_HOLIDAY_LIMIT": 3,
+  "_MUTED": [
+   178,
+   190,
+   220
+  ],
+  "_OFFLINE_FALLBACK_RETRY_SECONDS": 900.0,
+  "_TEXT": [
+   245,
+   247,
+   255
+  ]
+ },
+ "screens.registry": {
+  "HEIGHT": 720,
+  "RADAR_LOOKAHEAD_HOURS": 8,
+  "WIDTH": 720,
+  "_LOGO_SCROLL_SPEED": 2.2,
+  "_QUAD_DEFAULT_SCROLL_SPEED": 1.0,
+  "_QUAD_TILE_CAPTURE_FRAME_LIMIT": 120,
+  "_QUAD_TILE_SAMPLE_FRAMES": 10
+ },
+ "screens.scoreboard_components": {
+  "HEIGHT": 720,
+  "SCOREBOARD_SCROLL_DELAY": 0.03,
+  "SCOREBOARD_SCROLL_PAUSE_BOTTOM": 0.5,
+  "SCOREBOARD_SCROLL_PAUSE_TOP": 0.75,
+  "SCOREBOARD_SCROLL_STEP": 1,
+  "SCOREBOARD_STANDINGS_BOTTOM_PADDING": 30,
+  "SCROLL_DELAY": 0.03,
+  "SCROLL_PAUSE_BOTTOM": 0.5,
+  "SCROLL_PAUSE_TOP": 0.75,
+  "SCROLL_STEP": 1,
+  "SEPARATOR_COLOR": [
+   45,
+   45,
+   45
+  ],
+  "WHITE": [
+   255,
+   255,
+   255
+  ],
+  "WIDTH": 720
+ },
+ "screens.team_abbreviation_mappings": {},
+ "screens.world_cup_scoreboard": {
+  "BACKGROUND_COLOR": [
+   0,
+   0,
+   0
+  ],
+  "BLOCK_SPACING": 26,
+  "CENTER_FONT": [
+   "font",
+   "TimesSquare-m105.ttf",
+   74
+  ],
+  "FINAL_LOSING_SCORE_COLOR": [
+   200,
+   200,
+   200
+  ],
+  "FINAL_WINNING_SCORE_COLOR": [
+   255,
+   255,
+   255
+  ],
+  "FONT_STATUS": [
+   "font",
+   "TimesSquare-m105.ttf",
+   79
+  ],
+  "FONT_TEAM_SPORTS": [
+   "font",
+   "TimesSquare-m105.ttf",
+   97
+  ],
+  "FONT_TITLE_SPORTS": [
+   "font",
+   "TimesSquare-m105.ttf",
+   79
+  ],
+  "HEIGHT": 720,
+  "IN_PROGRESS_SCORE_COLOR": [
+   255,
+   210,
+   66
+  ],
+  "IN_PROGRESS_STATUS_COLOR": [
+   255,
+   210,
+   66
+  ],
+  "LANCZOS": 1,
+  "LEAGUE_LOGO_BASE_HEIGHT": 81,
+  "LEAGUE_LOGO_GAP": 10,
+  "PK_SCORE_FONT": [
+   "font",
+   "TimesSquare-m105.ttf",
+   71
+  ],
+  "PK_SCORE_FONT_SCALE": 0.7,
+  "REQUEST_TIMEOUT": 10,
+  "SCOREBOARD_BACKGROUND_COLOR": [
+   0,
+   0,
+   0
+  ],
+  "SCOREBOARD_FINAL_LOSING_SCORE_COLOR": [
+   200,
+   200,
+   200
+  ],
+  "SCOREBOARD_FINAL_WINNING_SCORE_COLOR": [
+   255,
+   255,
+   255
+  ],
+  "SCOREBOARD_IN_PROGRESS_SCORE_COLOR": [
+   255,
+   210,
+   66
+  ],
+  "SCOREBOARD_SCROLL_DELAY": 0.03,
+  "SCOREBOARD_SCROLL_PAUSE_BOTTOM": 0.5,
+  "SCOREBOARD_SCROLL_PAUSE_TOP": 0.75,
+  "SCOREBOARD_SCROLL_STEP": 1,
+  "SCOREBOARD_STANDINGS_BOTTOM_PADDING": 30,
+  "SCORE_FONT": [
+   "font",
+   "TimesSquare-m105.ttf",
+   102
+  ],
+  "SCORE_ROW_H": 147,
+  "SCROLL_REPEAT_COUNT": 2,
+  "STATUS_FONT": [
+   "font",
+   "TimesSquare-m105.ttf",
+   74
+  ],
+  "STATUS_ROW_H": 47,
+  "TEAM_LOGO_BASE_HEIGHT": 81,
+  "TITLE_GAP": 21,
+  "WIDTH": 720,
+  "_COL_LEFT": 0,
+  "_TOTAL_COL_WIDTH": 720
+ }
+}
