@@ -534,8 +534,10 @@ are.
 server (once; see [Letting other displays reach the server](#letting-other-displays-reach-the-server)). Then:
 
 1. Keep copies of what this device has: `cp .env ~/env.v0.1.bak`. To bring
-   its own rotation to the server, copy `screens_config.local.json` there
-   (for example `scp screens_config.local.json <server>:~/den-rotation.json`).
+   its own rotation to the server, copy the active rotation file there:
+   `screens_config.local.json`, or `screens_config.json` when there is no
+   local file (for example
+   `scp screens_config.local.json <server>:~/den-rotation.json`).
 2. On the server's `/clients` page, **Add a display** with this device's
    client ID and profile, and save the `.env.client` it shows onto this
    device, for example as `~/den.env.client`. If the server URL in it is
