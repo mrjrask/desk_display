@@ -267,6 +267,13 @@ def cache_file_lock(cache_path: Path | str):
                 fcntl.flock(lock_file.fileno(), fcntl.LOCK_UN)
 
 
+def screenshot_dir_path() -> Path:
+    """Where screenshots go (``SCREENSHOT_DIR`` or the default), without creating it."""
+
+    base_dir = _project_root()
+    return _resolve_env_path("SCREENSHOT_DIR", base_dir) or (base_dir / "screenshots")
+
+
 def resolve_storage_paths(*, logger: Optional[object] = None) -> StoragePaths:
     """Return filesystem paths for screenshots and archives.
 
@@ -278,7 +285,7 @@ def resolve_storage_paths(*, logger: Optional[object] = None) -> StoragePaths:
     """
 
     base_dir = _project_root()
-    screenshot_dir = _resolve_env_path("SCREENSHOT_DIR", base_dir) or (base_dir / "screenshots")
+    screenshot_dir = screenshot_dir_path()
     archive_base = _resolve_env_path("SCREENSHOT_ARCHIVE_BASE", base_dir) or (
         base_dir / "screenshot_archive"
     )

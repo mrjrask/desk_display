@@ -81,12 +81,14 @@ class ClientScreenshots:
 
     @classmethod
     def from_settings(cls, settings: dict[str, Any], profile: Any) -> ClientScreenshots:
-        from paths import resolve_storage_paths
+        # Resolved without creating anything: an unusable screenshot or archive
+        # path must not stop the panel starting, so failures surface in record().
+        from paths import screenshot_dir_path
 
         enabled = settings.get("ENABLE_SCREENSHOTS", True)
         if isinstance(enabled, str):
             enabled = enabled.strip().lower() not in {"0", "false", "no", "off", ""}
-        return cls(resolve_storage_paths().screenshot_dir, profile_id=profile.profile_id,
+        return cls(screenshot_dir_path(), profile_id=profile.profile_id,
                    width=profile.width, height=profile.height, enabled=bool(enabled))
 
     def record(self, screen_id: str, image: Image.Image) -> None:
