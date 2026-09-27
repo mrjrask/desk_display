@@ -24,7 +24,9 @@ ROOT = Path(__file__).resolve().parents[1]
 REFERENCE = ROOT / "tests" / "fixtures" / "v01_reference"
 PROFILES = sorted(p.name for p in REFERENCE.iterdir() if p.is_dir())
 _MISSING = object()
-IMAGES = ("mlb_al_standings", "al_overview", "nhl_scoreboard_2", "nhl_scoreboard_6", "date", "nixie")
+IMAGES = ("mlb_al_standings", "al_overview", "nhl_scoreboard_2", "nhl_scoreboard_6", "date", "nixie",
+          "weather1", "weather2", "weather_hourly", "weather_daily", "weather_astronomical", "weather_alert",
+          "news_headlines")
 
 
 def _probe_env(profile_id):

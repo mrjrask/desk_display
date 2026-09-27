@@ -7,9 +7,11 @@ Run it in a process configured for one profile (see
 * ``constants.json``: every font size and upper-case numeric layout constant
   the screen modules and ``config`` hold after import;
 * PNG stills of the MLB AL standings (first frame), the AL overview (settled
-  frame), the NHL scoreboard with two and six games, and the ``date`` and
-  ``nixie`` clock faces at a fixed time and colour, drawn from the standings
-  fixture in ``FIXTURE`` and the NHL games in ``nhl_games.json`` beside it.
+  frame), the NHL scoreboard with two and six games, the ``date`` and
+  ``nixie`` clock faces at a fixed time and colour, the six weather pages
+  (current, details, hourly, daily, sun & moon, alert) and the news ticker
+  (first frame), drawn from the standings fixture in ``FIXTURE`` and the
+  ``nhl_games.json`` and ``weather.json`` fixtures beside it.
 
 With ``--v01`` it runs against a checkout of the v0.1 tag (the standalone
 display, which drew everything in its own process); without it, against
@@ -100,7 +102,67 @@ def _nhl_scoreboards(config, fixture: str, out: str) -> None:
         image.convert("RGB").save(os.path.join(out, f"nhl_scoreboard_{count}.png"))
 
 
-def _v01(config, standings: dict, out: str) -> None:
+# (reference name, v0.1 draw function in screens.draw_weather, screen id)
+WEATHER_SCREENS = (
+    ("weather1", "draw_weather_screen_1", "weather1"),
+    ("weather2", "draw_weather_screen_2", "weather2"),
+    ("weather_hourly", "draw_weather_hourly", "weather hourly"),
+    ("weather_daily", "draw_weather_daily", "weather daily"),
+    ("weather_astronomical", "draw_weather_astronomical", "astronomical"),
+    ("weather_alert", "draw_weather_alert_screen", "weather alert"),
+)
+NEWS_TOPICS = (("world", "World"), ("tech", "Tech"), ("sports", "Sports"))
+
+
+def _freeze_clock(module, name: str = "datetime") -> None:
+    """Make *module*'s ``datetime.datetime.now()`` return ``NOW``."""
+
+    import types
+
+    class _Frozen(dt.datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return NOW.astimezone(tz) if tz is not None else NOW.replace(tzinfo=None)
+
+    shim = types.ModuleType("datetime")
+    shim.__dict__.update(vars(dt))
+    shim.datetime = _Frozen
+    setattr(module, name, shim)
+
+
+def _weather_and_news_fixtures(config, fixture: str) -> dict:
+    """Pin the weather and news screens to fixture data and a fixed clock.
+
+    Returns the weather payload (``weather.json`` beside ``FIXTURE``).  The
+    news ticker gets fixed headlines and no thumbnails, so nothing depends
+    on the network or on when the probe runs.
+    """
+
+    import screens.draw_news_headlines as news
+    import screens.draw_weather as weather_screens
+    from services.news_feeds import NewsHeadline, NewsTopic
+
+    with open(os.path.join(os.path.dirname(fixture), "weather.json"), encoding="utf-8") as handle:
+        weather = json.load(handle)
+    _freeze_clock(weather_screens)
+    _freeze_clock(news, "dt")
+    topics = [NewsTopic(id=topic_id, label=label, name=f"{label} News", url=f"https://example.com/{topic_id}.xml")
+              for topic_id, label in NEWS_TOPICS]
+    headlines = {
+        topic.id: [NewsHeadline(topic_id=topic.id, title=f"{topic.label} headline {n}: parity fixture story",
+                                link=f"https://example.com/{topic.id}/{n}") for n in range(1, 5)]
+        for topic in topics
+    }
+    config.ENABLE_NEWS_HEADLINES = True
+    config.ENABLE_STOCK_TICKER = False
+    news.load_news_feed_config = lambda: (topics, 4, 20)
+    news.fetch_all_headlines = lambda **_kwargs: headlines
+    news._download_thumbnail = lambda *_args, **_kwargs: None
+    news._download_hero_image = lambda *_args, **_kwargs: None
+    return weather
+
+
+def _v01(config, standings: dict, fixture: str, out: str) -> None:
     import screens.draw_date_time as date_time
     import screens.draw_nixie as nixie
     import screens.mlb_league_standings as mlb
@@ -118,8 +180,20 @@ def _v01(config, standings: dict, out: str) -> None:
         os.path.join(out, "date.png"))
     nixie._compose_frame(NOW).convert("RGB").save(os.path.join(out, "nixie.png"))
 
+    import screens.draw_news_headlines as news
+    import screens.draw_weather as weather_screens
 
-def _current(profile_id: str, standings: dict, out: str) -> None:
+    weather = _weather_and_news_fixtures(config, fixture)
+    for name, function, _screen_id in WEATHER_SCREENS:
+        display = _Display(config.WIDTH, config.HEIGHT, skip=False)
+        result = getattr(weather_screens, function)(display, weather, transition=True)
+        getattr(result, "image", result).convert("RGB").save(os.path.join(out, f"{name}.png"))
+    display = _Display(config.WIDTH, config.HEIGHT, skip=True)
+    news.draw_news_headlines(display, transition=True)
+    display.frames[0].convert("RGB").save(os.path.join(out, "news_headlines.png"))
+
+
+def _current(config, profile_id: str, standings: dict, fixture: str, out: str) -> None:
     from display_profiles import resolve_display_profile_by_id
     from remote_display.models import RenderKey, ScreenRevisions
     from remote_display.server_rendering import compose_screen
@@ -133,8 +207,12 @@ def _current(profile_id: str, standings: dict, out: str) -> None:
         raise SystemExit(f"process is not configured for {profile_id}")
     data = DataCoordinator()
     data.publish("mlb_league_standings", standings)
+    data.publish("weather", _weather_and_news_fixtures(config, fixture))
     logos = ProfileLogos()
-    for screen_id, name in (("MLB AL Standings", "mlb_al_standings"), ("AL Overview", "al_overview")):
+    screens = [("MLB AL Standings", "mlb_al_standings"), ("AL Overview", "al_overview"),
+               *((screen_id, name) for name, _function, screen_id in WEATHER_SCREENS),
+               ("news headlines", "news_headlines")]
+    for screen_id, name in screens:
         key = RenderKey.for_screen(screen_id, profile_id, ScreenRevisions("s", "d", "r"))
         image, _metadata, _package = compose_screen(key, profile, data.snapshot(), logos)
         image.convert("RGB").save(os.path.join(out, f"{name}.png"))
@@ -150,6 +228,11 @@ def main(argv: list[str]) -> None:
     sys.path.insert(0, root)
     os.environ["CONFIG_LOAD_DOTENV"] = "0"
     os.environ["IP_WITH_TIME"] = "0"
+    # Content comes from the fixtures, not from whatever location or forecast
+    # timezone the calling environment carries (the sun & moon page prints
+    # the coordinates when they are set).
+    for name in ("WEATHER_LATITUDE", "WEATHER_LONGITUDE", "WEATHERKIT_TIMEZONE"):
+        os.environ.pop(name, None)
     logging.disable(logging.CRITICAL)
     time.sleep = lambda *_args: None  # frames, not pacing, are compared
     with open(fixture, encoding="utf-8") as handle:
@@ -169,9 +252,9 @@ def main(argv: list[str]) -> None:
         derived.setdefault("HEIGHT", config.HEIGHT)
         derived.setdefault("_LOGO_SCROLL_SPEED", registry._logo_scroll_speed_for_layout(config.WIDTH, config.HEIGHT))
     if v01:
-        _v01(config, standings, out)
+        _v01(config, standings, fixture, out)
     else:
-        _current(profile_id, standings, out)
+        _current(config, profile_id, standings, fixture, out)
     # Both sides compose it in a process configured for the profile, which
     # is what the render server's worker for that profile is.
     _nhl_scoreboards(config, fixture, out)
