@@ -143,6 +143,10 @@ See the README's [deployment modes](README.md#deployment-modes) and
   heartbeat) where the config UI reads them, honouring `ENABLE_SCREENSHOTS`,
   and the service banner reports `desk_display_client.service` there instead
   of the disabled standalone `desk_display.service`.
+- The NCAA FBS Scoreboard shows the whole Wednesday–Tuesday week of Top 25
+  games, like the NFL scoreboard, so on a Monday it still shows the weekend's
+  scores. Each ranked team's poll ranking is drawn as a small superscript
+  number before its logo (or abbreviation); unranked teams get none.
 
 ### Known limitations
 
