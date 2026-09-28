@@ -256,6 +256,7 @@ class DisplayClient:
         screenshots: ClientScreenshots | None = None,
         update_check: Callable[[], Any] | None = None,
         restart_service: Callable[[], Any] | None = None,
+        update_available: Callable[[], bool] | None = None,
     ) -> None:
         self.profile = profile
         self.presenter = presenter
@@ -294,6 +295,8 @@ class DisplayClient:
         self.screenshots = screenshots
         self._led: tuple[float, float, float] | None = None
         self._update_check = update_check
+        # The clock faces' GitHub update icon: this device's own update status.
+        self._update_available = update_available
         self._update_check_at: float | None = None
         self._update_check_thread: threading.Thread | None = None
         # v0.1's B button: the panel is blanked until B is pressed again.
@@ -428,6 +431,8 @@ class DisplayClient:
             kwargs["clock"] = self._clock
         if self._ip_text is not None:
             kwargs["ip_text"] = self._ip_text
+        if self._update_available is not None:
+            kwargs["update_available"] = self._update_available
         try:
             return PackagePlayback(package, self.profile, **kwargs)
         except (KeyError, TypeError, ValueError, OSError) as exc:
@@ -798,6 +803,14 @@ def _check_for_updates() -> None:
     check_apt_updates()
 
 
+def _github_update_available() -> bool:
+    """Whether the last update check found new commits (v0.1's clock-face icon)."""
+
+    from utils import get_update_status
+
+    return bool(get_update_status().github)
+
+
 def _restart_client_service() -> None:
     """v0.1's Y button: restart this device's display service (the client's here)."""
 
@@ -909,6 +922,7 @@ def build_client(settings: dict[str, Any], *, presenter: Any = None, transport: 
         ip_text=_client_ip_text,
         update_check=_check_for_updates if hardware else None,
         restart_service=_restart_client_service if hardware else None,
+        update_available=_github_update_available if hardware else None,
     )
 
 

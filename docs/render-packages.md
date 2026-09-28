@@ -85,7 +85,9 @@ A clock package carries a face, a time zone and a format. The client draws
 the time from its own clock, so the date and nixie screens keep ticking
 while the server is unreachable. The package never contains the server's IP
 address or its update state. `show_ip` is only a flag: the address, if any,
-comes from the client itself.
+comes from the client itself. Likewise the GitHub update icon in the
+bottom-right corner reflects the client's own update check, as it did in
+v0.1.
 
 ## Playback
 

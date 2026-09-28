@@ -100,22 +100,27 @@ def render_clock(
     *,
     ip_text: str | None = None,
     colors: tuple[tuple[int, int, int], tuple[int, int, int]] | None = None,
+    gh_on: bool = False,
 ) -> Image.Image:
-    """Draw the face for *now*; *ip_text* is the client's own address label."""
+    """Draw the face for *now*; *ip_text* is the client's own address label.
+
+    *gh_on* draws v0.1's GitHub update icon; it is the client's own update
+    status, never the server's.
+    """
 
     now = _local(now, str(layout.get("time_zone") or "UTC"))
     show_ip = bool(layout.get("show_ip")) and ip_text is not None
     if layout.get("face") == "nixie":
         from screens.draw_nixie import _compose_frame
 
-        image = _invoke(_compose_frame, profile, now, gh_on=False, time_format=layout.get("time_format"),
+        image = _invoke(_compose_frame, profile, now, gh_on=gh_on, time_format=layout.get("time_format"),
                         show_ip=show_ip, ip_text=ip_text)
     else:
         from screens.draw_date_time import _compose_frame
         from utils import bright_color
 
         top, bottom = colors or (bright_color(), bright_color())
-        image = _invoke(_compose_frame, profile, "date_time", top, bottom, False, "date",
+        image = _invoke(_compose_frame, profile, "date_time", top, bottom, gh_on, "date",
                         now=now, show_ip=show_ip, ip_text=ip_text)
     if image.size != (profile.width, profile.height):
         image = image.resize((profile.width, profile.height))

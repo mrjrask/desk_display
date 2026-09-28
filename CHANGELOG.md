@@ -23,7 +23,8 @@ See the README's [deployment modes](README.md#deployment-modes) and
 - Clients light the notification LED and indicator border as v0.1 did
   (`LED_INDICATOR_ENABLED`, `LED_INDICATOR_BORDER_ENABLED`,
   `LED_INDICATOR_BORDER_WIDTH`): the manifest carries each screen's alert or
-  game-result color, and clock screens run the GitHub/apt update check.
+  game-result color, and clock screens run the GitHub/apt update check and
+  draw v0.1's GitHub update icon when that check finds new commits.
 - Clients behave like v0.1 on the panel: each screen holds for 4 seconds plus
   its extra seconds, the A/B/X/Y buttons keep their v0.1 actions (next screen,
   display on/off, update indicator, restart), and the Wi-Fi monitor and
