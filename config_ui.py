@@ -1170,18 +1170,15 @@ def _query_service_status(unit_name: str) -> dict[str, Any]:
 
 
 def _installed_mode(project_dir: Path) -> Any:
-    """The install mode recorded by the installer, guessed for older installs."""
+    """The install mode recorded by the installer, detected for older installs.
+
+    Unmarked installs are classified by their installed units and then by the
+    roles their env files ask for, the same way the installers do.
+    """
 
     import install_modes
-    import service_units
 
-    installed = install_modes.read_marker(project_dir)
-    if installed is not None:
-        return installed.mode
-    # Older installs have no marker; a client env file means a client panel.
-    if (project_dir / ".env.client").is_file():
-        return service_units.Mode.CLIENT
-    return service_units.Mode.STANDALONE
+    return install_modes.detect_mode(project_dir)
 
 
 def _serves_displays() -> bool:
