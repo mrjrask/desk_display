@@ -66,7 +66,8 @@ def test_committed_examples_match_catalog(role):
 @pytest.mark.parametrize("role", [Role.SERVER, Role.CLIENT])
 def test_examples_are_thorough(role):
     values = dc.parse_env_file(ROOT / f".env.{role.value}.example")
-    assert set(values) == {s.name for s in dc.settings_for_role(role)}
+    # Everything the role reads; settings it accepts but ignores are left out.
+    assert set(values) == {s.name for s in dc.settings_for_role(role) if role not in s.ignored}
 
 
 def test_server_example_covers_requested_sections():
@@ -578,3 +579,15 @@ def test_feed_server_scrubs_uploaded_client_status(monkeypatch, tmp_path):
     stored = (tmp_path / "desk" / "display_status.json").read_text(encoding="utf-8")
     assert "owm-secret-value-123" not in stored and "owm_api_key" not in stored
     assert "weather" in stored
+
+
+def test_settings_a_role_ignores_warn_at_startup_instead_of_failing():
+    report = dc.validate(Role.CLIENT, {**CLIENT_OK, "ESC_DOUBLE_PRESS_ACTION": "restart",
+                                    "DESK_DISPLAY_TEST_SCREEN": "date"}, check_files=False)
+    assert not report.errors
+    warned = {issue.name for issue in report.warnings}
+    assert {"ESC_DOUBLE_PRESS_ACTION", "DESK_DISPLAY_TEST_SCREEN"} <= warned
+    standalone = dc.validate(Role.STANDALONE, {"ESC_DOUBLE_PRESS_ACTION": "toggle"})
+    assert "ESC_DOUBLE_PRESS_ACTION" not in {issue.name for issue in standalone.warnings + standalone.errors}
+    assert "ESC_DOUBLE_PRESS_ACTION" not in dc.render_example(Role.CLIENT)
+    assert "`ESC_DOUBLE_PRESS_ACTION` | client (no effect), standalone |" in dc.render_settings_reference()

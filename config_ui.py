@@ -1184,6 +1184,19 @@ def _installed_mode(project_dir: Path) -> Any:
     return service_units.Mode.STANDALONE
 
 
+def _serves_displays() -> bool:
+    """Whether this install is a render server, whose displays play playlists.
+
+    There the Screens page edits only the standalone rotation (which seeds new
+    playlists), and single-screen diagnostic playback has no player to drive.
+    """
+
+    import service_units
+
+    return _installed_mode(Path(__file__).resolve().parent) in (service_units.Mode.SERVER,
+                                                                 service_units.Mode.COMBINED)
+
+
 def _panel_service_unit() -> str:
     """The unit that drives this device's panel, per the installed mode.
 
@@ -1524,6 +1537,7 @@ def screen_config() -> str:
         playlist_assignments=playlist_assignments,
         service_status=_load_service_status(),
         diagnostic_screen=load_diagnostic_screen(),
+        server_mode=_serves_displays(),
     )
 
 
@@ -1613,6 +1627,8 @@ def get_screens() -> Any:
 
 @app.route("/api/diagnostic-playback", methods=["GET", "POST"])
 def diagnostic_playback() -> Any:
+    if request.method == "POST" and _serves_displays():
+        return jsonify({"error": "single-screen playback is standalone only; displays play their playlists"}), 409
     if request.method == "GET":
         return jsonify({"screen_id": load_diagnostic_screen()})
     payload = request.get_json(silent=True)

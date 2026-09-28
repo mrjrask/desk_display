@@ -16,6 +16,7 @@ upstream API.  Revisions:
 from __future__ import annotations
 
 import hashlib
+import json
 import threading
 from datetime import datetime, timezone
 from collections.abc import Iterable, Mapping
@@ -34,11 +35,39 @@ CLOCK_SCREENS = frozenset({"date", "nixie"})
 CLOCK_REFRESH_SECONDS = 60
 
 
-class StyleRevision:
-    """Content hash of the style and layout documents, cached on mtime."""
+def _scroll_settings(path: Path) -> bytes:
+    """The scroll settings in a rotation config, which every render reads.
 
-    def __init__(self, paths: Iterable[Path] | None = None) -> None:
+    ``utils`` takes global and per-screen scroll speed from the active
+    screens config (the config UI's Screens page) whatever the playlist, so
+    they belong in the style revision; the rest of that file does not.
+    """
+
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return b"<missing>"
+    if not isinstance(payload, dict):
+        return b"<invalid>"
+    screens = payload.get("screens") if isinstance(payload.get("screens"), dict) else {}
+    scroll = {
+        "global": payload.get("scroll"),
+        "screens": {sid: spec.get("scroll") for sid, spec in screens.items()
+                    if isinstance(spec, dict) and spec.get("scroll") is not None},
+    }
+    return json.dumps(scroll, sort_keys=True, default=str).encode("utf-8")
+
+
+class StyleRevision:
+    """Content hash of the style and layout documents, cached on mtime.
+
+    With the default paths it also covers the scroll settings in the active
+    screens config (see :func:`_scroll_settings`).
+    """
+
+    def __init__(self, paths: Iterable[Path] | None = None, scroll_path: Path | None = None) -> None:
         self._paths = None if paths is None else tuple(Path(p) for p in paths)
+        self._scroll_path = None if scroll_path is None else Path(scroll_path)
         self._lock = threading.Lock()
         self._signature: tuple | None = None
         self._revision = "s-none"
@@ -50,9 +79,17 @@ class StyleRevision:
 
         return (paths.resolve_style_config_path(), paths.resolve_layouts_config_path())
 
+    def _resolve_scroll(self) -> Path | None:
+        if self._scroll_path is not None or self._paths is not None:
+            return self._scroll_path
+        import paths
+
+        return paths.resolve_screens_config_paths().active_path
+
     def __call__(self) -> str:
         files = self._resolve()
-        signature = tuple((str(p), *_stat(p)) for p in files)
+        scroll = self._resolve_scroll()
+        signature = tuple((str(p), *_stat(p)) for p in (*files, *((scroll,) if scroll else ())))
         with self._lock:
             if signature != self._signature:
                 digest = hashlib.sha256()
@@ -63,6 +100,8 @@ class StyleRevision:
                     except OSError:
                         digest.update(b"<missing>")
                     digest.update(b"\0")
+                if scroll is not None:
+                    digest.update(b"scroll\0" + _scroll_settings(scroll))
                 self._signature = signature
                 self._revision = f"s-{digest.hexdigest()[:16]}"
             return self._revision

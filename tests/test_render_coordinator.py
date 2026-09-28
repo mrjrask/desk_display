@@ -466,3 +466,30 @@ def test_server_rendering_renders_through_screen_renderer(monkeypatch):
     seen.clear()
     clock = rendering.render(RenderKey.for_screen("date", "hyperpixel4", ScreenRevisions("s", "d0", "r")))
     assert seen == {} and clock.refresh_seconds == 60 and clock.package["kind"] == "clock"
+
+
+def test_style_revision_follows_scroll_settings_but_not_rotation_edits(tmp_path):
+    import json
+
+    from remote_display.server_rendering import StyleRevision
+
+    style = tmp_path / "style.json"
+    style.write_text("{}", encoding="utf-8")
+    rotation = tmp_path / "screens_config.json"
+
+    def write(order, scroll, date_scroll=None):
+        screens = {sid: {"frequency": 1} for sid in order}
+        if date_scroll is not None:
+            screens["date"]["scroll"] = date_scroll
+        rotation.write_text(json.dumps({"screens": screens, "scroll": scroll}), encoding="utf-8")
+
+    revision = StyleRevision([style], scroll_path=rotation)
+    write(["date", "weather1"], {"vertical_speed_adjustment": 0})
+    first = revision()
+    write(["weather1", "date"], {"vertical_speed_adjustment": 0})  # reordering renders nothing again
+    assert revision() == first
+    write(["weather1", "date"], {"vertical_speed_adjustment": 0.25})
+    second = revision()
+    assert second != first
+    write(["weather1", "date"], {"vertical_speed_adjustment": 0.25}, {"speed": 2})
+    assert revision() != second
