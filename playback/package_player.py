@@ -46,6 +46,7 @@ class PackagePlayback:
         clock: Callable[[], dt.datetime] = _utc_now,
         rng: random.Random | None = None,
         ip_text: Callable[[], str | None] | None = None,
+        update_available: Callable[[], bool] | None = None,
     ) -> None:
         self.package = package
         self.profile = profile
@@ -55,6 +56,7 @@ class PackagePlayback:
         self._clock = clock
         self._rng = rng or random.Random()
         self._ip_text = ip_text
+        self._update_available = update_available
         self._images: dict[str, Image.Image] = {}
         self._last: tuple[Hashable, Image.Image] | None = None
         # The date face's colours per colour-cycle step (see _cycle_step).
@@ -63,6 +65,16 @@ class PackagePlayback:
         self.direction = "ltr"
         if self.kind == "animation" and "slide" in self.body:
             self.direction = self._rng.choice(("ltr", "rtl"))
+
+    def _gh_on(self) -> bool:
+        """Whether the clock shows v0.1's GitHub update icon (this device's own status)."""
+
+        if self._update_available is None:
+            return False
+        try:
+            return bool(self._update_available())
+        except Exception:  # noqa: BLE001 - a broken status source hides the icon
+            return False
 
     # Assets
 
@@ -137,9 +149,10 @@ class PackagePlayback:
             return ("composite", int(t / self.frame_seconds))
         if self.kind == "clock":
             now = self._clock()
+            gh_on = self._gh_on()
             if body["layout"]["face"] == "nixie":
-                return ("clock", now.replace(microsecond=0))
-            return ("clock", now.replace(second=0, microsecond=0), self._cycle_step(t))
+                return ("clock", now.replace(microsecond=0), 0, gh_on)
+            return ("clock", now.replace(second=0, microsecond=0), self._cycle_step(t), gh_on)
         if "frames" in body:
             return ("frame", self._frame_index(t))
         return ("slide", self._slide_x(t))
@@ -242,14 +255,15 @@ class PackagePlayback:
         if self.kind == "clock":
             from rendering.clock_faces import render_clock
 
-            step = key[2] if len(key) > 2 else 0
+            step = key[2]
             colors = self._colors.get(step)
             if colors is None:
                 from utils import bright_color
 
                 colors = self._colors[step] = (bright_color(), bright_color())
             ip = self._ip_text() if self._ip_text is not None else None
-            return render_clock(body["layout"], self.profile, self._clock(), ip_text=ip, colors=colors)
+            return render_clock(body["layout"], self.profile, self._clock(), ip_text=ip, colors=colors,
+                                gh_on=key[3])
         if "frames" in body:
             return self._image(body["frames"][key[1]]["asset"])
         slide = body["slide"]

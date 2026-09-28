@@ -174,6 +174,41 @@ def test_clock_is_drawn_from_the_clients_own_time():
     assert playback.frame_at(0.5).tobytes() != first.tobytes()  # seconds tick with no server
 
 
+@pytest.mark.parametrize("face", ["date", "nixie"])
+def test_clock_faces_show_the_clients_update_icon_like_v01(face):
+    from rendering.clock_faces import clock_background, clock_layout
+    from rendering.packaging import clock_package
+
+    layout = clock_layout(face, PROFILE)
+    package = clock_package(key(face), PROFILE, layout, clock_background(layout, PROFILE))
+    now = dt.datetime(2026, 9, 25, 12, 0, 0, tzinfo=dt.timezone.utc)
+    update = [False]
+    playback = play(package, clock=lambda: now, update_available=lambda: update[0])
+    playback._colors[0] = ((255, 255, 255), (255, 255, 255))
+    plain = playback.frame_at(0)
+    update[0] = True
+    flagged = playback.frame_at(0)
+    corner = (W * 3 // 4, H * 3 // 4, W, H)
+    assert plain.crop(corner).tobytes() != flagged.crop(corner).tobytes()  # icon at bottom-right
+    top = (0, 0, W, H // 4)
+    assert plain.crop(top).tobytes() == flagged.crop(top).tobytes()
+
+
+def test_clock_hides_the_update_icon_without_a_status_source():
+    from rendering.clock_faces import clock_background, clock_layout
+    from rendering.packaging import clock_package
+
+    layout = clock_layout("nixie", PROFILE)
+    package = clock_package(key("nixie"), PROFILE, layout, clock_background(layout, PROFILE))
+    now = dt.datetime(2026, 9, 25, 12, 0, 0, tzinfo=dt.timezone.utc)
+
+    def broken():
+        raise RuntimeError("no status")
+
+    plain = play(package, clock=lambda: now).frame_at(0)
+    assert play(package, clock=lambda: now, update_available=broken).frame_at(0).tobytes() == plain.tobytes()
+
+
 def test_the_date_face_cycles_its_colours_then_holds_like_v01():
     from rendering.clock_faces import clock_background, clock_layout, color_cycle_timing
     from rendering.packaging import clock_package
