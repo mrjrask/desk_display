@@ -143,6 +143,7 @@
       },
       "mlb logo": 0,
       "MLB Scoreboard": 2,
+      "MLB Playoffs": 0,
       "NL Overview": 0,
       "AL Overview": 0,
       "NL Overview+WC": {
@@ -521,6 +522,9 @@
             "screen": "MLB Scoreboard"
           },
           {
+            "screen": "MLB Playoffs"
+          },
+          {
             "screen": "NL Overview"
           },
           {
@@ -824,6 +828,9 @@
         "background": "#000000"
       },
       "MLB Scoreboard": {
+        "background": "#000000"
+      },
+      "MLB Playoffs": {
         "background": "#000000"
       },
       "NL Overview": {

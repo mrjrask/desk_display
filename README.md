@@ -141,7 +141,7 @@ including its services and data, is covered in
 - Sports coverage for NFL, NHL, NBA, MLB, NCAAM, FIFA World Cup, and AHL/Wolves helpers.
 - Chicago-focused team screens for Bears, Blackhawks, Wolves, Bulls, Cubs, and White Sox.
 - MLB series screens for current, next, and next-home Cubs/Sox series.
-- NHL and NBA playoff bracket screens.
+- NHL, NBA and MLB playoff bracket screens.
 - Two ADS-B dashboards: a daily/best-results view and a live receiver view, backed by a standalone collector and local SQLite database for up to two dump1090-fa receivers.
 - Optional screenshot capture and rolling video capture.
 - Flask/Waitress configuration UI with optional password protection and import/export support.
@@ -901,6 +901,7 @@ normal loading instead of silently dropping renamed screens.
 - `sox schedule quad`
 - `mlb logo`
 - `MLB Scoreboard`
+- `MLB Playoffs` (bracket like mlb.com/postseason, with the current round's series scores under it; a projected bracket from the standings before the postseason starts)
 - `NL Overview`
 - `AL Overview`
 - `NL Overview+WC`

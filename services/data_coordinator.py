@@ -229,6 +229,21 @@ class DataCoordinator:
         self.publish("mlb_league_standings", value)
         return value
 
+    def read_mlb_postseason(self, *, ttl_seconds: int = 120, force: bool = False) -> dict[str, Any]:
+        """Acquire the MLB postseason bracket before snapshot-based rendering."""
+
+        from services.sports.mlb_postseason import fetch_postseason
+
+        def fetch() -> dict[str, Any]:
+            try:
+                return fetch_postseason(force=force)
+            except RuntimeError:
+                return {}
+
+        value = self.provider.read("mlb_postseason", fetch, ttl_seconds=ttl_seconds, force=force)
+        self.publish("mlb_postseason", value)
+        return value
+
     def read_nfl_league_standings(
         self, *, ttl_seconds: int = 300, force: bool = False
     ) -> dict[str, dict[str, list[dict[str, Any]]]]:

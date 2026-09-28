@@ -183,8 +183,8 @@ FEED_REFRESH_INTERVALS: dict[str, int] = {
     "scoreboards": 24 * 60 * 60,
 }
 
-# League-wide standings.  The standalone display loop fetches these while it
-# renders a standings screen, so only the render server refreshes them as feeds.
+# League-wide standings and brackets.  The standalone display loop fetches these
+# while it renders the screen, so only the render server refreshes them as feeds.
 LEAGUE_STANDINGS_DEPENDENCIES: dict[str, set[str]] = {
     "nfl_standings": {
         "NFL Overview NFC",
@@ -210,10 +210,15 @@ LEAGUE_STANDINGS_DEPENDENCIES: dict[str, set[str]] = {
         "MLB NL Standings",
         "MLB NLWC Standings",
     },
+    "mlb_postseason": {"MLB Playoffs"},
 }
 # NHL v2 standings screens also need the wildcard order.
 NHL_WILDCARD_SCREEN_IDS = {"NHL Standings West v2", "NHL Standings East v2"}
-LEAGUE_STANDINGS_REFRESH_INTERVALS: dict[str, int] = dict.fromkeys(LEAGUE_STANDINGS_DEPENDENCIES, 1800)
+LEAGUE_STANDINGS_REFRESH_INTERVALS: dict[str, int] = {
+    **dict.fromkeys(LEAGUE_STANDINGS_DEPENDENCIES, 1800),
+    # Series scores change with every final; a live game refreshes faster still.
+    "mlb_postseason": 600,
+}
 SERVER_FEED_DEPENDENCIES: dict[str, set[str]] = {**FEED_DEPENDENCIES, **LEAGUE_STANDINGS_DEPENDENCIES}
 SERVER_FEED_REFRESH_INTERVALS: dict[str, int] = {**FEED_REFRESH_INTERVALS, **LEAGUE_STANDINGS_REFRESH_INTERVALS}
 
