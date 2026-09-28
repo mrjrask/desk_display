@@ -339,3 +339,14 @@ def test_server_renders_the_screen_from_its_snapshot(monkeypatch):
     )
     assert artifact.image.size == (320, 240)
     assert mp.has_live_series(snapshot["mlb_postseason"])
+
+
+def test_series_list_uses_one_full_width_line_per_series(monkeypatch):
+    calls = []
+    monkeypatch.setattr(mlb_playoffs, "_draw_series_row",
+                        lambda canvas, draw, slot, data, seeds, x, width, y, now: calls.append((x, width, y)))
+    data = {"series": [], "seeds": SEEDS}
+    mlb_playoffs._compose_series_list(1280, data, mp.build_bracket(data), NOW)
+    assert len(calls) == 4
+    assert {(x, width) for x, width, _y in calls} == {(calls[0][0], 1280 - 2 * calls[0][0])}
+    assert [y for _x, _w, y in calls] == sorted({y for _x, _w, y in calls})
