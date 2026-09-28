@@ -10,6 +10,8 @@ declared capabilities:
 Condition              Result
 =====================  =================================================
 ``unsupported`` class  ``unavailable``: skipped on remote clients
+``client_sensor``      ``full``: the client draws it from its own sensor,
+                       and skips it when it has none (an ``info`` note)
 no animation support   ``still``: moving screens show their still image
                        (clocks are drawn locally either way)
 no touchscreen         interactive quads play (still or animated), but a
@@ -53,6 +55,9 @@ def playback_mode(screen_id: str, *, supports_animation: bool, has_touch: bool,
         return Fallback(screen_id, UNAVAILABLE, False, (("unsupported", "error", f"not available on remote clients ({reason})"),))
     notes: list[tuple[str, str, str]] = []
     mode = FULL
+    if entry.kind == screen_classes.CLIENT_SENSOR:
+        notes.append(("client_sensor", "info",
+                      "drawn by the display from its own sensor; skipped on displays without one"))
     if entry.kind in _MOVING and not supports_animation:
         mode = STILL
         notes.append(("no_animation", "warning", "shows its still image; the client does not animate"))

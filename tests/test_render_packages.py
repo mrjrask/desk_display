@@ -85,7 +85,7 @@ def test_expected_classes_for_representative_screens():
     assert kind["MLB Scoreboard"] == screen_classes.SCROLLING_CANVAS
     assert kind["cubs logo"] == kind["weather radar"] == screen_classes.FINITE_ANIMATION
     assert kind["cubs live"] == screen_classes.PERIODIC
-    assert kind["inside"] == screen_classes.UNSUPPORTED
+    assert kind["inside"] == screen_classes.CLIENT_SENSOR
     assert kind["weather1"] == screen_classes.STATIC
 
 

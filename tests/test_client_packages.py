@@ -253,8 +253,8 @@ def test_fallbacks_are_deterministic_and_explain_themselves():
     assert touch.expands and touch.notes == ()
     mono = fallbacks.playback_mode("weather radar", supports_animation=True, has_touch=False, color_mode="1")
     assert [n[0] for n in mono.notes] == ["monochrome"]
-    assert fallbacks.playback_mode("inside", supports_animation=True, has_touch=True,
-                                   color_mode="RGB").mode == fallbacks.UNAVAILABLE
+    inside = fallbacks.playback_mode("inside", supports_animation=True, has_touch=True, color_mode="RGB")
+    assert inside.mode == fallbacks.FULL and [n[:2] for n in inside.notes] == [("client_sensor", "info")]
     assert fallbacks.playback_mode("nope", supports_animation=True, has_touch=True,
                                    color_mode="RGB").mode == fallbacks.UNAVAILABLE
 

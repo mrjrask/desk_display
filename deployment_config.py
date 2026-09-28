@@ -700,6 +700,8 @@ SETTINGS: tuple[Setting, ...] = (
     _s("INDOOR_SENSOR", "str", _CLIENT, "sensors", "Backward-compatible alias for INSIDE_SENSOR."),
     _s("INSIDE_I2C_BUSES", "csv", _CLIENT, "sensors",
        "I2C buses probed for the indoor sensor.", default="1,2,10,11,13,14,15"),
+    _s("INSIDE_I2C_ADDRESS", "str", _CLIENT, "sensors",
+       "Indoor sensor I2C address (e.g. 0x76); probes only this address when set."),
     _s("INSIDE_HISTORY_PATH", "path", _CLIENT, "sensors",
        "Indoor sensor history; defaults to cache/inside_history.json."),
 

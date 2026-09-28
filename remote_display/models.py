@@ -754,13 +754,19 @@ def demand_render_keys(
     Validation happens first, so an incompatible client fails here, before
     any render work is scheduled.  ``revisions`` maps each canonical screen ID
     to its current revisions; a screen without an entry cannot be scheduled.
+    A screen each client draws itself (the ``inside`` sensor screen) needs no
+    render.
     """
+
+    from rendering.screen_classes import server_renders
 
     capabilities.require_supported()
     demand.matches(capabilities)
     scoped = {screen_id(s, "client_specific_screens") for s in client_specific_screens}
     keys = set()
     for screen in demand.all_screens:
+        if not server_renders(screen):
+            continue
         screen_revisions = revisions.get(screen)
         if screen_revisions is None:
             _fail("required_screens", f"no revisions are known for screen {screen!r}")

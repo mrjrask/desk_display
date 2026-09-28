@@ -199,10 +199,10 @@ def test_missing_output_before_refresh_and_connected_before_static(env):
     drain(env)
     env.registry.set_disabled("lobby", False)
     env.revisions.data["weather1"] = "d2"
-    env.registry.heartbeat(  # the client now also wants "inside"
+    env.registry.heartbeat(  # the client now also wants "astronomical"
         "office", registration.credential,
         ClientStatus(client_id="office", playback_state="playing", accepted_revisions=AcceptedRevisions()),
-        demand("office", ["weather1", "inside"]),
+        demand("office", ["weather1", "astronomical"]),
     )
     env.clock.advance(31)
     env.admin = env.registry.add_prerender("warm", "waveshare_oled_128x64", ["date"])
@@ -210,7 +210,7 @@ def test_missing_output_before_refresh_and_connected_before_static(env):
     env.coordinator.tick()
     queue = [(q["screen_id"], q["render_profile"], q["reason"]) for q in env.coordinator.status()["queue"]]
     running = env.coordinator.status()["in_flight"][0]
-    assert (running["screen_id"], running["render_profile"]) == ("inside", "hyperpixel4")
+    assert (running["screen_id"], running["render_profile"]) == ("astronomical", "hyperpixel4")
     assert queue == [
         ("date", "hdmi_1080p", "missing"),               # static client
         ("date", "waveshare_oled_128x64", "missing"),    # pre-render entry
@@ -219,7 +219,7 @@ def test_missing_output_before_refresh_and_connected_before_static(env):
 
 
 def test_worker_pool_is_bounded(env):
-    register(env, "office", ["date", "weather1", "inside", "quad", "nixie"])
+    register(env, "office", ["date", "weather1", "astronomical", "quad", "nixie"])
     env.coordinator.tick()
     assert len(env.executor.pending) == 2
     env.executor.run_one()
@@ -245,16 +245,16 @@ def test_real_thread_pool_never_exceeds_worker_limit(tmp_path):
         return RenderOutput(image=Image.new(preset.color_mode, (preset.width, preset.height)))
 
     coordinator = RenderCoordinator(registry, store, slow, Revisions(), workers=2)
-    registry.register(caps("office"), demand("office", ["date", "weather1", "inside", "quad", "nixie", "inside"]))
+    registry.register(caps("office"), demand("office", ["date", "weather1", "astronomical", "quad", "nixie", "astronomical"]))
     deadline = time.time() + 10
     while time.time() < deadline:
         coordinator.tick()
-        if all(store.resolve(s, "hyperpixel4").state == "fresh" for s in ("date", "weather1", "inside", "quad", "nixie")):
+        if all(store.resolve(s, "hyperpixel4").state == "fresh" for s in ("date", "weather1", "astronomical", "quad", "nixie")):
             break
         time.sleep(0.01)
     coordinator.stop()
     assert peak[0] <= 2
-    assert all(store.resolve(s, "hyperpixel4").record for s in ("date", "weather1", "inside", "quad", "nixie"))
+    assert all(store.resolve(s, "hyperpixel4").record for s in ("date", "weather1", "astronomical", "quad", "nixie"))
 
 
 # ── Lease expiry and cancellation ───────────────────────────────────────────
@@ -262,7 +262,7 @@ def test_real_thread_pool_never_exceeds_worker_limit(tmp_path):
 
 def test_lease_expiry_cancels_queued_and_discards_in_flight(env):
     env.coordinator.workers = 1
-    register(env, "office", ["weather1", "inside"])
+    register(env, "office", ["weather1", "astronomical"])
     env.registry.set_disabled("lobby", True)
     env.coordinator.tick()
     assert len(env.executor.pending) == 1 and len(env.coordinator.status()["queue"]) == 1
@@ -271,7 +271,7 @@ def test_lease_expiry_cancels_queued_and_discards_in_flight(env):
     assert env.coordinator.status()["queue"] == []
     assert env.coordinator.status()["in_flight"][0]["cancelled"] is True
     env.executor.run_all()
-    assert env.store.resolve("inside", "hyperpixel4").record is None
+    assert env.store.resolve("astronomical", "hyperpixel4").record is None
     assert env.store.resolve("weather1", "hyperpixel4").record is None
     env.coordinator.tick()
     assert env.executor.pending == []  # an inactive client consumes nothing

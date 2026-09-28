@@ -26,8 +26,13 @@ play motion locally instead of the server streaming frames:
 ``client_timed``
     A clock: background plus layout, and the client draws the time, so it
     stays right while offline.
+``client_sensor``
+    Reads a sensor attached to the display itself. The server renders
+    nothing; a client with the sensor reads it and draws the screen with the
+    same layout code as the standalone display, and a client without one
+    skips it.
 ``unsupported``
-    Needs hardware on the display itself; not served remotely yet.
+    Needs hardware on the display itself; not served remotely.
 """
 from __future__ import annotations
 
@@ -42,9 +47,10 @@ FINITE_ANIMATION = "finite_animation"
 COMPOSITE = "composite"
 INTERACTIVE_FOCUS = "interactive_focus"
 CLIENT_TIMED = "client_timed"
+CLIENT_SENSOR = "client_sensor"
 UNSUPPORTED = "unsupported"
 CLASSES = (STATIC, PERIODIC, SCROLLING_CANVAS, TICKER_OVERLAY, FINITE_ANIMATION, COMPOSITE,
-           INTERACTIVE_FOCUS, CLIENT_TIMED, UNSUPPORTED)
+           INTERACTIVE_FOCUS, CLIENT_TIMED, CLIENT_SENSOR, UNSUPPORTED)
 
 # Package kind each class produces (None: the still artifact is enough).
 PACKAGE_KINDS: Mapping[str, str | None] = {
@@ -56,6 +62,7 @@ PACKAGE_KINDS: Mapping[str, str | None] = {
     COMPOSITE: "composite",
     INTERACTIVE_FOCUS: "composite",
     CLIENT_TIMED: "clock",
+    CLIENT_SENSOR: None,
     UNSUPPORTED: None,
 }
 PERIODIC_REFRESH_SECONDS = 60
@@ -79,6 +86,12 @@ class ScreenClass:
     def remote_supported(self) -> bool:
         return self.kind != UNSUPPORTED
 
+    @property
+    def server_rendered(self) -> bool:
+        """Whether the server renders an artifact for this screen."""
+
+        return self.kind not in {CLIENT_SENSOR, UNSUPPORTED}
+
 
 _LOGOS = ("weather", "verano", "bears", "nfl", "nba", "bulls", "hawks", "nhl", "wolves", "cubs", "sox", "mlb")
 
@@ -98,7 +111,7 @@ _TABLE: dict[str, tuple[str, str]] = {
     "weather daily": (STATIC, ""),
     "astronomical": (STATIC, ""),
     "weather radar": (FINITE_ANIMATION, "radar frames loop"),
-    "inside": (UNSUPPORTED, "reads a sensor attached to the display itself"),
+    "inside": (CLIENT_SENSOR, "drawn by each display from its own sensor"),
     "vrnof": (STATIC, ""),
     "bears stand1": (STATIC, ""),
     "bears stand2": (STATIC, ""),
@@ -192,6 +205,13 @@ def classify(screen_id: str) -> ScreenClass:
     return CLASSIFICATIONS[screen_id]
 
 
+def server_renders(screen_id: str) -> bool:
+    """False for a screen each client draws itself (an unknown screen is rendered and fails there)."""
+
+    entry = CLASSIFICATIONS.get(screen_id)
+    return entry is None or entry.server_rendered
+
+
 def focus_targets(screen_id: str) -> tuple[str, ...]:
     """Screens a tap on *screen_id*'s tiles can open full screen."""
 
@@ -220,6 +240,7 @@ def interaction_targets(screens: Iterable[str]) -> set[str]:
 __all__ = [
     "CLASSES",
     "CLASSIFICATIONS",
+    "CLIENT_SENSOR",
     "COLOR_DEPENDENT",
     "PACKAGE_KINDS",
     "PERIODIC_REFRESH_SECONDS",
@@ -227,4 +248,5 @@ __all__ = [
     "classify",
     "focus_targets",
     "interaction_targets",
+    "server_renders",
 ]

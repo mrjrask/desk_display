@@ -25,7 +25,7 @@ from remote_display.models import (
 REVS = ScreenRevisions(style_revision="style-7", data_revision="data-42", renderer_revision="r1")
 REVISIONS = {
     screen: REVS
-    for screen in ("date", "weather1", "news headlines", "cubs next", "inside", "NL Overview")
+    for screen in ("date", "weather1", "news headlines", "cubs next", "astronomical", "NL Overview")
 }
 
 
@@ -327,23 +327,23 @@ def test_different_profiles_render_separately():
 
 def test_client_specific_output_is_scoped_intentionally():
     plan = m.plan_renders(
-        [(caps("a"), demand("a", screens=("date", "inside"))),
-         (caps("b"), demand("b", screens=("date", "inside")))],
+        [(caps("a"), demand("a", screens=("date", "astronomical"))),
+         (caps("b"), demand("b", screens=("date", "astronomical")))],
         REVISIONS,
-        client_specific_screens=("inside",),
+        client_specific_screens=("astronomical",),
     )
     shared = [k for k in plan if k.screen_id == "date"]
-    scoped = [k for k in plan if k.screen_id == "inside"]
+    scoped = [k for k in plan if k.screen_id == "astronomical"]
     assert len(shared) == 1 and plan[shared[0]] == {"a", "b"}
     assert {k.client_scope for k in scoped} == {"a", "b"}
 
 
 def test_touch_targets_and_alternates_are_rendered():
     keys = m.demand_render_keys(
-        caps(), demand(screens=("date",), alternate_screens=("inside",), touch_targets=("news headlines",)),
+        caps(), demand(screens=("date",), alternate_screens=("astronomical",), touch_targets=("news headlines",)),
         REVISIONS,
     )
-    assert {k.screen_id for k in keys} == {"date", "inside", "news headlines"}
+    assert {k.screen_id for k in keys} == {"date", "astronomical", "news headlines"}
 
 
 # ── Invalid capabilities fail before scheduling ─────────────────────────────

@@ -167,13 +167,16 @@ See the README's [deployment modes](README.md#deployment-modes) and
 - The NCAA FBS Scoreboard shows the whole Monday–Sunday week of Top 25
   games, matching ESPN's college football weeks. Each ranked team's poll ranking is drawn as a small superscript
   number before its logo (or abbreviation); unranked teams get none.
+- The `inside` screen works on display clients with an indoor sensor. The
+  client reads its own sensor, set by `INSIDE_SENSOR`, `INSIDE_I2C_BUSES` and
+  the new optional `INSIDE_I2C_ADDRESS` in its `.env.client`, and draws the
+  screen with the v0.1 layout; the server renders nothing for it. A client
+  without a sensor skips the screen, as the standalone display did.
 
 ### Known limitations
 
 - `DESK_DISPLAY_CLIENT_NAME` is ignored; the server identifies clients by
   client ID.
-- The `inside` screen reads a sensor attached to the display and is not
-  available on remote clients.
 - Physical display, touch, button and systemd behavior must still be checked
   on the real hardware in the Phase 20b soak.
 

@@ -330,7 +330,8 @@ as `remote_class` on its manifest entry:
 | `composite` | team schedule quads | tile bounds and up to 10 frames per tile |
 | `interactive_focus` | `quad`, `weather quad` | as `composite`, plus which screen each tile opens |
 | `client_timed` | `date`, `nixie` | a background and layout; the client draws the time |
-| `unsupported` | `inside` (reads a sensor on the display) | not served remotely yet |
+| `client_sensor` | `inside` (reads a sensor on the display) | nothing; a client with the sensor draws it locally, others skip it |
+| `unsupported` | none at present | not served remotely |
 
 A screen that moves also gets a render package
 (`application/vnd.desk-display.render-package+json`, schema version 1,
@@ -621,6 +622,7 @@ installs only, never clients.
 | `INSIDE_SENSOR` | client, standalone | restart |  |
 | `INDOOR_SENSOR` | client, standalone | restart |  |
 | `INSIDE_I2C_BUSES` | client, standalone | restart |  |
+| `INSIDE_I2C_ADDRESS` | client, standalone | restart |  |
 | `INSIDE_HISTORY_PATH` | client, standalone | restart |  |
 | `ENABLE_WIFI_MONITOR` | client, standalone | restart |  |
 | `ENABLE_WIFI_RECOVERY` | client, standalone | restart |  |

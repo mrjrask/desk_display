@@ -632,3 +632,52 @@ def test_is_inside_sensor_available_skips_explicit_sensor_when_not_detected(monk
     )
 
     assert draw_inside_module.is_inside_sensor_available() is False
+
+
+def test_inside_i2c_address_limits_the_probes_to_that_address(monkeypatch):
+    import screens.draw_inside as draw_inside_module
+
+    seen = []
+
+    def probe(_i2c, addresses):
+        seen.append(set(addresses))
+        return "Test sensor", lambda: {"temp_f": 70.0}
+
+    monkeypatch.setattr(draw_inside_module.platform, "system", lambda: "Linux")
+    monkeypatch.setattr(draw_inside_module, "board", None)
+    monkeypatch.setattr(draw_inside_module, "busio", None)
+    monkeypatch.setattr(draw_inside_module, "_get_probe_order", lambda _pref: (("test", probe),))
+    monkeypatch.delenv("INSIDE_SENSOR", raising=False)
+    monkeypatch.delenv("INDOOR_SENSOR", raising=False)
+    monkeypatch.setenv("INSIDE_I2C_ADDRESS", "0x77")
+
+    provider, _reader = draw_inside_module._probe_sensor()
+
+    assert provider == "Test sensor"
+    assert seen == [{0x77}]
+
+
+def test_inside_i2c_address_parsing(monkeypatch):
+    import screens.draw_inside as draw_inside_module
+
+    for raw, expected in (("0x76", 0x76), ("77", 0x77), ("0x44  # SHT41", 0x44), ("", None),
+                          ("banana", None), ("0x99", None)):
+        monkeypatch.setenv("INSIDE_I2C_ADDRESS", raw)
+        assert draw_inside_module._parse_i2c_address_override() == expected, raw
+
+
+def test_render_inside_screen_reads_the_sensor_and_draws_it(monkeypatch, tmp_path):
+    import screens.draw_inside as draw_inside_module
+
+    monkeypatch.setattr(draw_inside_module, "_inside_history", {})
+    monkeypatch.setattr(draw_inside_module, "_inside_history_loaded", True)
+    monkeypatch.setattr(draw_inside_module, "_HISTORY_PATH", str(tmp_path / "inside.json"))
+    monkeypatch.setattr(draw_inside_module, "_log_sensor_data", lambda *_args: None)
+    monkeypatch.setattr(draw_inside_module, "_probe_sensor_cached",
+                        lambda: ("Test sensor", lambda: {"temp_f": 71.5, "humidity": 40.0}))
+    drawn = []
+    monkeypatch.setattr(draw_inside_module, "_render_inside",
+                        lambda data, provider, error: drawn.append((data, provider, error)) or "image")
+
+    assert draw_inside_module.render_inside_screen() == "image"
+    assert drawn == [({"temp_f": 71.5, "humidity": 40.0}, "Test sensor", None)]

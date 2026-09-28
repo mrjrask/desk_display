@@ -38,6 +38,7 @@ from PIL import Image, ImageDraw, ImageFont
 from display.rotation import RotationDecision, parse_rotation, resolve_rotation, to_logical
 from display_profiles import RenderProfile, resolve_display_profile_by_id
 from playback.client_player import ClientPlayer
+from playback.local_screens import default_local_screens, is_local, local_entries
 from playback.package_player import PackagePlayback
 from protocol import CLIENT_SUPPORTED_RENDER_PACKAGE_SCHEMA_VERSIONS
 from protocol_versions import APPLICATION_VERSION, NETWORK_PROTOCOL_VERSION
@@ -257,6 +258,7 @@ class DisplayClient:
         update_check: Callable[[], Any] | None = None,
         restart_service: Callable[[], Any] | None = None,
         update_available: Callable[[], bool] | None = None,
+        local_screens: dict[str, Any] | None = None,
     ) -> None:
         self.profile = profile
         self.presenter = presenter
@@ -302,6 +304,8 @@ class DisplayClient:
         # v0.1's B button: the panel is blanked until B is pressed again.
         self.display_off = False
         self._restart_service = restart_service
+        # Screens this device draws from its own hardware (the inside sensor).
+        self.local_screens = dict(local_screens or {})
 
     # Playback
 
@@ -321,6 +325,7 @@ class DisplayClient:
             return
         player = ClientPlayer(scheduler, default_duration=self.screen_seconds)
         packages = {e["screen_id"]: e for e in content.manifest.get("artifacts") or () if e.get("sha256")}
+        packages.update(local_entries(scheduler.requested_ids, self.local_screens))
         # Checked live, not baked into `packages`: a failed download can be
         # repaired by a later sync without the manifest revision changing.
         # Only the still is required: step() falls back to it when a render
@@ -350,6 +355,9 @@ class DisplayClient:
         outage with games live.
         """
 
+        if is_local(entry):
+            drawer = self.local_screens.get(entry["screen_id"])
+            return drawer is not None and drawer.available
         if not self.artifacts.has(entry):
             return False
         if self.sync.connected or not isinstance(entry, dict) or entry.get("screen_id") not in LIVE_SCREENS:
@@ -595,7 +603,11 @@ class DisplayClient:
         frame = None
         self.animation = None
         too_old = self._too_old()
-        if item is not None and item.package is not None and not too_old:
+        if item is not None and is_local(item.package):
+            # Drawn here from this device's own sensor: never stale.
+            frame = self.local_screens[item.screen_id].render(
+                self.profile.width, self.profile.height, self.profile.color_mode)
+        elif item is not None and item.package is not None and not too_old:
             self.animation = self._animation_for(item)
             if self.animation is not None:
                 try:
@@ -923,6 +935,7 @@ def build_client(settings: dict[str, Any], *, presenter: Any = None, transport: 
         update_check=_check_for_updates if hardware else None,
         restart_service=_restart_client_service if hardware else None,
         update_available=_github_update_available if hardware else None,
+        local_screens=default_local_screens() if hardware else None,
     )
 
 

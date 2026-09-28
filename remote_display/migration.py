@@ -43,7 +43,7 @@ from remote_display.playlist_store import (
     document_revision,
     validate_document,
 )
-from rendering.screen_classes import CLASSIFICATIONS, UNSUPPORTED
+from rendering.screen_classes import CLASSIFICATIONS, CLIENT_SENSOR, UNSUPPORTED
 from screens_catalog import LEGACY_RETIRED_SCREEN_IDS, SCREEN_IDS, canonical_screen_id
 
 BUNDLE_FORMAT = "desk-display-standalone-migration"
@@ -258,6 +258,9 @@ def normalize(config: Mapping[str, Any]) -> tuple[dict[str, Any], list[Change]]:
         if entry is not None and entry.kind == UNSUPPORTED:
             changes.append(Change("remote_limit", "warning",
                                   f"{sid!r} {entry.note}; remote clients skip it", sid))
+        elif entry is not None and entry.kind == CLIENT_SENSOR:
+            changes.append(Change("remote_limit", "info",
+                                  f"{sid!r} is {entry.note}; displays without a sensor skip it", sid))
     try:
         document = validate_document(document)
     except PlaylistStoreError as exc:

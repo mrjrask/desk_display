@@ -96,6 +96,23 @@ def _parse_i2c_bus_candidates() -> tuple[int, ...]:
     return tuple(buses)
 
 
+def _parse_i2c_address_override() -> Optional[int]:
+    """Return the sensor address from ``INSIDE_I2C_ADDRESS`` (e.g. ``0x76``), if set."""
+
+    raw = (os.environ.get("INSIDE_I2C_ADDRESS") or "").split("#", 1)[0].strip()
+    if not raw:
+        return None
+    try:
+        # Hex, as i2cdetect prints it; "0x76" and "76" are the same address.
+        address = int(raw, 16)
+    except ValueError:
+        address = -1
+    if not 0x03 <= address <= 0x77:
+        logging.warning("draw_inside: ignoring invalid INSIDE_I2C_ADDRESS %r", raw)
+        return None
+    return address
+
+
 def _i2cdetect_bus_has_known_sensor(bus_num: int) -> bool:
     """Return True when `i2cdetect` output indicates a supported sensor address."""
 
@@ -1325,6 +1342,11 @@ def _probe_sensor() -> tuple[Optional[str], Optional[Callable[[], SensorReadings
             logging.debug("draw_inside: detected I2C addresses: %s", formatted)
         else:
             logging.debug("draw_inside: no I2C addresses detected during scan")
+    address_override = _parse_i2c_address_override()
+    if address_override is not None:
+        # The probes try only the addresses they are given.
+        logging.info("draw_inside: INSIDE_I2C_ADDRESS set to 0x%02X", address_override)
+        addresses = {address_override}
 
     # Prefer BME280 variants before BME680/BME68x. Some BME680 drivers can
     # incorrectly initialise against a BME280 at the same address and return
@@ -2133,7 +2155,9 @@ def _render_inside(data: dict[str, Optional[float]], provider: Optional[str], se
     return img
 
 
-def draw_inside(display, transition: bool=False):
+def read_inside_sensor() -> tuple[Optional[str], dict[str, Optional[float]], Optional[str]]:
+    """Read the sensor once: ``(provider, readings, error)``, logging and recording history."""
+
     provider, read_fn = _probe_sensor_cached()
     sensor_error: Optional[str] = None
     if not read_fn:
@@ -2165,8 +2189,18 @@ def draw_inside(display, transition: bool=False):
     if temp_f is None and sensor_error is None:
         logging.warning("draw_inside: temperature missing from sensor data")
         sensor_error = "No temperature"
+    return provider, cleaned, sensor_error
 
-    img = _render_inside(cleaned, provider, sensor_error)
+
+def render_inside_screen() -> Image.Image:
+    """Read the sensor and draw the inside screen (a display client draws it this way)."""
+
+    provider, readings, sensor_error = read_inside_sensor()
+    return _render_inside(readings, provider, sensor_error)
+
+
+def draw_inside(display, transition: bool=False):
+    img = render_inside_screen()
 
     if transition:
         return img

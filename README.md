@@ -531,7 +531,7 @@ Settings are grouped by deployment role. `.env.example` documents the standalone
 | `AIR_QUALITY_LATITUDE`, `AIR_QUALITY_LONGITUDE`, `AIRNOW_API_KEY` | AirNow AQI location and free AirNow API key. AirNow supplies U.S. EPA monitoring data for U.S. locations. |
 | `WEATHERKIT_*` | Apple WeatherKit team/key/service/private-key settings. |
 | `OWM_API_KEY`, `OWM_UNITS`, `OWM_LANGUAGE` | OpenWeatherMap fallback settings. |
-| `INSIDE_SENSOR`, `INSIDE_I2C_BUSES` | Indoor sensor selection and I2C bus probing. |
+| `INSIDE_SENSOR`, `INSIDE_I2C_BUSES`, `INSIDE_I2C_ADDRESS` | Indoor sensor selection, I2C bus probing and an optional fixed sensor address. |
 | `PRESSURE_HISTORY_PATH` | Pressure history cache path for trend display. Defaults to `cache/pressure_history.json`. |
 | `WEATHER_METRIC_HISTORY_PATH` | Weather metric chart history path. Defaults to `cache/weather_metric_history.json`. |
 
