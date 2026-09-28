@@ -1514,14 +1514,12 @@ def build_screen_registry(context: ScreenContext) -> tuple[dict[str, ScreenDefin
         ),
         available=nhl_scoreboards_available,
     )
+    # Standalone fetches the bracket while drawing; the render server hands
+    # the screen its ``nhl_playoffs`` feed.
+    nhl_playoffs = None if context.allow_upstream_requests else (context.cache.get("nhl_playoffs") or {})
     register(
         "NHL Playoffs",
-        lambda: render_nhl_playoffs(
-            context.display,
-            nhl_scoreboard_games,
-            transition=True,
-        ),
-        available=nhl_scoreboards_available,
+        lambda: render_nhl_playoffs(context.display, nhl_playoffs, transition=True),
     )
     register(
         "NHL Standings Overview West",
@@ -2041,14 +2039,10 @@ def build_screen_registry(context: ScreenContext) -> tuple[dict[str, ScreenDefin
         ),
         available=scoreboards_available,
     )
+    nba_playoffs = None if context.allow_upstream_requests else (context.cache.get("nba_playoffs") or {})
     register(
         "NBA Playoffs",
-        lambda: render_nba_playoffs(
-            context.display,
-            (context.cache.get("scoreboards") or {}).get("nba") or [],
-            transition=True,
-        ),
-        available=scoreboards_available,
+        lambda: render_nba_playoffs(context.display, nba_playoffs, transition=True),
     )
     register(
         "NCAA Mens BB Scoreboard",

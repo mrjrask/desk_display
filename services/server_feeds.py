@@ -14,6 +14,7 @@ only the screens that use a feed that changed.
 from __future__ import annotations
 
 import hashlib
+import importlib
 import logging
 import threading
 import time
@@ -189,7 +190,7 @@ class ServerFeedService:
                 team = snapshot.values.get(feed)
                 live = isinstance(team, Mapping) and bool(team.get("live"))
                 interval, fresh = (LIVE_REFRESH_SECONDS if live else LIVE_WATCH_SECONDS), True
-            elif feed == "mlb_postseason" and _has_live_postseason_game(snapshot.values.get(feed)):
+            elif feed in feeds.POSTSEASON_FEED_MODULES and _has_live_postseason_game(feed, snapshot.values.get(feed)):
                 interval, fresh = LIVE_REFRESH_SECONDS, True
             elif (
                 feed == "nhl_standings"
@@ -427,17 +428,17 @@ def _fetch_mlb_league_standings(*, force: bool = False) -> dict[str, Any]:
     return {"mlb_league_standings": standings}
 
 
-def _fetch_mlb_postseason(*, force: bool = False) -> dict[str, Any]:
-    from services.sports import mlb_postseason
+def _postseason_fetcher(feed: str) -> Callable[..., dict[str, Any]]:
+    def fetch(*, force: bool = False) -> dict[str, Any]:
+        module = importlib.import_module(feeds.POSTSEASON_FEED_MODULES[feed])
+        # Raises when none of the league's bracket sources answered.
+        return {feed: module.fetch_postseason(force=True)}
 
-    # Raises when neither the postseason schedule nor the standings answered.
-    return {"mlb_postseason": mlb_postseason.fetch_postseason(force=True)}
+    return fetch
 
 
-def _has_live_postseason_game(value: Any) -> bool:
-    from services.sports import mlb_postseason
-
-    return mlb_postseason.has_live_series(value)
+def _has_live_postseason_game(feed: str, value: Any) -> bool:
+    return importlib.import_module(feeds.POSTSEASON_FEED_MODULES[feed]).has_live_series(value)
 
 
 def _default_standings_fetchers() -> dict[str, Callable[..., dict[str, Any]]]:
@@ -447,7 +448,7 @@ def _default_standings_fetchers() -> dict[str, Callable[..., dict[str, Any]]]:
         "nfl_standings": _fetch_nfl_standings,
         "nhl_standings": _fetch_nhl_standings,
         "mlb_league_standings": _fetch_mlb_league_standings,
-        "mlb_postseason": _fetch_mlb_postseason,
+        **{feed: _postseason_fetcher(feed) for feed in feeds.POSTSEASON_FEED_MODULES},
     }
 
 
