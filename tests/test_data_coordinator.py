@@ -114,3 +114,18 @@ def test_restored_values_are_the_baseline_for_changes():
     coordinator.restore({"weather": ({"temp": 70}, 7)})
     assert coordinator.publish("weather", {"temp": 70}).source_revisions["weather"] == 7
     assert coordinator.publish("weather", {"temp": 72}).source_revisions["weather"] == 8
+
+
+def test_snapshot_reuses_the_values_frozen_at_publish(monkeypatch):
+    import services.data_coordinator as module
+
+    coordinator = DataCoordinator(DataProvider())
+    coordinator.publish("scores", {"games": [{"id": 1}]})
+
+    def refuse(_value):
+        raise AssertionError("snapshot() must not re-freeze published data")
+
+    monkeypatch.setattr(module, "_freeze", refuse)
+    snapshot = coordinator.snapshot()
+    assert snapshot.values["scores"]["games"] == ({"id": 1},)
+    assert snapshot.revision == coordinator.snapshot().revision

@@ -156,11 +156,14 @@ class DataCoordinator:
             return self.snapshot()
 
     def snapshot(self) -> DataSnapshot:
+        # The frozen copies taken when each value was published are the
+        # snapshot's values: re-freezing (and deep-copying) every feed on
+        # each call made snapshots cost as much as all the data they hold.
         with self._lock:
             return DataSnapshot(
                 revision=self._revision,
                 created_at=datetime.now(UTC),
-                values=_freeze(self._values),
+                values=MappingProxyType(dict(self._frozen)),
                 source_revisions=MappingProxyType(dict(self._source_revisions)),
             )
 

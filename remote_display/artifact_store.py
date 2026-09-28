@@ -199,6 +199,10 @@ class ArtifactStore:
         self.max_bytes = max_bytes
         self._clock = clock
         self._lock = threading.RLock()
+        # Parsed lineage files for read-only lookups, keyed by lineage with
+        # the file's (inode, size, mtime) when read: every write replaces the
+        # file, so a changed stamp means a changed lineage.
+        self._lineage_cache: dict[str, tuple[tuple[int, int, int], dict[str, Any]]] = {}
 
     # ── Paths and locking ──────────────────────────────────────────────────
 
@@ -247,6 +251,9 @@ class ArtifactStore:
             with contextlib.suppress(FileNotFoundError):
                 os.unlink(tmp)
             raise
+        finally:
+            if path.parent == self._lineages:
+                self._lineage_cache.pop(path.stem, None)
         _fsync_dir(path.parent)
 
     @staticmethod
@@ -265,6 +272,27 @@ class ArtifactStore:
             self._lineages / f"{lineage}.json",
             {"schema_version": STORE_SCHEMA_VERSION, "current": None, "previous": [], "failure": None, "pending": None},
         )
+
+    def _lineage_view(self, lineage: str) -> dict[str, Any]:
+        """A lineage for reading only (never change the result).
+
+        The render coordinator resolves every planned key every few seconds;
+        re-reading and parsing each lineage file each time is wasted work.
+        """
+
+        path = self._lineages / f"{lineage}.json"
+        try:
+            stat = path.stat()
+        except OSError:
+            self._lineage_cache.pop(lineage, None)
+            return self._lineage(lineage)
+        stamp = (stat.st_ino, stat.st_size, stat.st_mtime_ns)
+        cached = self._lineage_cache.get(lineage)
+        if cached is not None and cached[0] == stamp:
+            return cached[1]
+        slot = self._lineage(lineage)
+        self._lineage_cache[lineage] = (stamp, slot)
+        return slot
 
     # ── Publication ────────────────────────────────────────────────────────
 
@@ -486,7 +514,7 @@ class ArtifactStore:
     def resolve(self, screen: str, profile: str, client_scope: str | None = None) -> ResolvedArtifact:
         """Return the output a manifest should list for this lineage now."""
 
-        slot = self._lineage(lineage_id(screen, profile, client_scope))
+        slot = self._lineage_view(lineage_id(screen, profile, client_scope))
         current = slot.get("current")
         failure = slot.get("failure")
         record = ArtifactRecord.from_dict(current) if current else None
@@ -510,7 +538,7 @@ class ArtifactStore:
     def previous(self, screen: str, profile: str, client_scope: str | None = None) -> list[ArtifactRecord]:
         """Previous good revisions of a lineage, newest first."""
 
-        slot = self._lineage(lineage_id(screen, profile, client_scope))
+        slot = self._lineage_view(lineage_id(screen, profile, client_scope))
         return [ArtifactRecord.from_dict(p) for p in slot.get("previous", [])]
 
     def open_object(self, name: str) -> tuple[Path, str] | None:

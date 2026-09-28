@@ -302,7 +302,7 @@ class PlaylistStore:
         self.path = Path(path).expanduser()
         self._clock = clock
         self._lock = threading.RLock()
-        self._cache: tuple[float, int, dict[str, Any]] | None = None
+        self._cache: tuple[int, int, dict[str, Any]] | None = None
 
     # ── Persistence ────────────────────────────────────────────────────────
 
@@ -318,12 +318,19 @@ class PlaylistStore:
         }
 
     def _read(self) -> dict[str, Any]:
+        """A private copy of the store, for callers that change or return it."""
+
+        return copy.deepcopy(self._load())
+
+    def _load(self) -> dict[str, Any]:
+        """The cached store itself: read it, never change it."""
+
         try:
             stat = self.path.stat()
         except FileNotFoundError:
             return self._empty()
-        if self._cache and self._cache[:2] == (stat.st_mtime, stat.st_size):
-            return copy.deepcopy(self._cache[2])
+        if self._cache and self._cache[:2] == (stat.st_mtime_ns, stat.st_size):
+            return self._cache[2]
         data = json.loads(self.path.read_text(encoding="utf-8"))
         if not isinstance(data, dict) or data.get("schema_version") != STORE_SCHEMA_VERSION:
             raise PlaylistStoreError(f"unsupported playlist store schema in {self.path}")
@@ -336,8 +343,8 @@ class PlaylistStore:
             if isinstance(playlist, dict) and isinstance(playlist.get("document"), dict):
                 playlist["document"] = canonicalize_screen_ids(playlist["document"])
                 playlist["revision"] = document_revision(playlist["document"])
-        self._cache = (stat.st_mtime, stat.st_size, data)
-        return copy.deepcopy(data)
+        self._cache = (stat.st_mtime_ns, stat.st_size, data)
+        return data
 
     @contextlib.contextmanager
     def _transaction(self) -> Iterator[dict[str, Any]]:
@@ -407,9 +414,14 @@ class PlaylistStore:
         return sorted(cid for cid, a in data["assignments"].items() if a.get("playlist_id") == playlist_id)
 
     def assignment_for(self, client_id: str) -> StoredAssignment | None:
-        """Lookup used by the render server (``registry.AssignmentLookup``)."""
+        """Lookup used by the render server (``registry.AssignmentLookup``).
 
-        data = self.snapshot()
+        Runs several times per client request and per render tick, so it
+        reads the cached store without copying it (audit log and all).
+        """
+
+        with self._lock:
+            data = self._load()
         assignment = data["assignments"].get(client_id)
         playlist = data["playlists"].get(assignment["playlist_id"]) if assignment else None
         if playlist is None:
