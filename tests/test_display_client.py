@@ -937,3 +937,35 @@ def test_client_starts_the_wifi_monitor_like_v01(monkeypatch):
     assert not display_client.start_wifi_monitor(low, FakeWifi())
     monkeypatch.setenv("ENABLE_WIFI_MONITOR", "1")
     assert display_client.start_wifi_monitor(low, FakeWifi())
+
+
+def test_offline_client_skips_live_screens_past_their_refresh_deadline(env):
+    from datetime import datetime, timedelta, timezone
+
+    second = env.store.create("Scores", {"screens": {"date": 1, "NFL Scoreboard": 1}, "sequence": []}, actor="test")
+    env.store.assign("office", second["id"], expected_playlist_id=env.playlist["id"], actor="test")
+    env.publish("date", 10)
+    env.publish("NFL Scoreboard", 20)
+    assert "NFL Scoreboard" in display_client.LIVE_SCREENS and "date" not in display_client.LIVE_SCREENS
+    client = env.make_client()
+    synced(env, client)
+    now = [datetime.fromtimestamp(env.server_clock.now, timezone.utc)]  # when the server rendered
+    client._clock = lambda: now[0]
+
+    # Online: both play.
+    assert {client.step()[0] for _ in range(4)} == {"date", "NFL Scoreboard"}
+
+    # Offline but still before the refresh deadline: the score is recent enough.
+    env.transport.down = True
+    client.sync.step()
+    assert not client.sync.connected
+    assert {client.step()[0] for _ in range(4)} == {"date", "NFL Scoreboard"}
+
+    # Offline past the deadline: the frozen score is skipped, the date still plays.
+    now[0] += timedelta(hours=1)
+    assert [client.step()[0] for _ in range(4)] == ["date"] * 4
+
+    # Back online: the scoreboard returns.
+    env.transport.down = False
+    synced(env, client)
+    assert "NFL Scoreboard" in {client.step()[0] for _ in range(4)}

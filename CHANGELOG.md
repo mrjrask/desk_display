@@ -28,6 +28,11 @@ See the README's [deployment modes](README.md#deployment-modes) and
   its extra seconds, the A/B/X/Y buttons keep their v0.1 actions (next screen,
   display on/off, update indicator, restart), and the Wi-Fi monitor and
   recovery run (`ENABLE_WIFI_MONITOR`, `ENABLE_WIFI_RECOVERY`).
+- Live scores are fresher: during a live game the server refreshes that
+  team's feed every 30 seconds (every 2 minutes otherwise). While the server
+  is unreachable, a client skips scoreboards and live screens once their
+  refresh deadline passes, as v0.1 skipped them during an outage, so a frozen
+  score never looks current.
 - Helpers follow the install mode: the kernel and framebuffer desktop
   launchers drive `desk_display_client.service` and `display_client.py` on a
   client or combined install; the Waveshare OLED helper and the screenshot

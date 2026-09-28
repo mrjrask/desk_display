@@ -89,6 +89,11 @@ class ClientPlayer:
             }
             definition = self.scheduler.next_available(registry)
             if definition is None:
+                # The rest of this cycle was unavailable (for example live
+                # screens skipped offline): start the next cycle rather than
+                # showing a diagnostic between rounds.
+                definition = self.scheduler.next_available(registry)
+            if definition is None:
                 return None
             screen_id = definition.id
         if self.current_id is not None:

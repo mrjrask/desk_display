@@ -27,7 +27,12 @@ from services.feed_state import FeedStateFile
 LOGGER = logging.getLogger("desk_display.server_feeds")
 
 # While a game is live (or about to start), refresh its feed this often.
-LIVE_REFRESH_SECONDS = 120
+# v0.1 fetched these fresh before every showing; a client syncs every 30 s,
+# so this keeps a live score on screen within about a minute of the source.
+LIVE_REFRESH_SECONDS = 30
+# How often a team feed is checked for a game starting while its live
+# screen is in a playlist but no game is on.
+LIVE_WATCH_SECONDS = 120
 # A feed is reported stale when its last success is older than this many intervals.
 STALE_AFTER_INTERVALS = 2
 TEAM_FEEDS = ("bears", "hawks", "wolves", "bulls", "cubs", "sox")
@@ -181,7 +186,9 @@ class ServerFeedService:
                 elif self._scoreboard_dates_changed(screens):
                     interval = 0
             elif any(feeds.LIVE_TEAM_SCREEN_TO_FEED.get(s) == feed for s in screens):
-                interval, fresh = LIVE_REFRESH_SECONDS, True
+                team = snapshot.values.get(feed)
+                live = isinstance(team, Mapping) and bool(team.get("live"))
+                interval, fresh = (LIVE_REFRESH_SECONDS if live else LIVE_WATCH_SECONDS), True
             elif (
                 feed == "nhl_standings"
                 and screens & feeds.NHL_WILDCARD_SCREEN_IDS
@@ -428,4 +435,4 @@ def _default_standings_fetchers() -> dict[str, Callable[..., dict[str, Any]]]:
     }
 
 
-__all__ = ["LIVE_REFRESH_SECONDS", "ServerFeedService"]
+__all__ = ["LIVE_REFRESH_SECONDS", "LIVE_WATCH_SECONDS", "ServerFeedService"]
