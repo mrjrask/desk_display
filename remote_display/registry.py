@@ -351,15 +351,15 @@ class ClientRegistry:
             "clients": clients,
         }
 
-    def write_snapshot(self, path: str | os.PathLike[str]) -> None:
-        """Atomically publish :meth:`snapshot` to *path*."""
+    def write_snapshot(self, path: str | os.PathLike[str], snapshot: Mapping[str, Any] | None = None) -> None:
+        """Atomically publish :meth:`snapshot` (or a snapshot just taken) to *path*."""
 
         target = Path(path).expanduser()
         target.parent.mkdir(parents=True, exist_ok=True)
         fd, tmp = tempfile.mkstemp(prefix=f".{target.name}.", suffix=".tmp", dir=target.parent)
         try:
             with os.fdopen(fd, "w", encoding="utf-8") as handle:
-                json.dump(self.snapshot(), handle, indent=2, sort_keys=True)
+                json.dump(self.snapshot() if snapshot is None else snapshot, handle, indent=2, sort_keys=True)
                 handle.flush()
                 os.fsync(handle.fileno())
             os.replace(tmp, target)

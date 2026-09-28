@@ -102,6 +102,11 @@ from remote_display.registry import (
 MAX_REQUEST_BYTES = 64 * 1024
 IMMUTABLE_MAX_AGE_SECONDS = 365 * 24 * 3600
 MAINTENANCE_INTERVAL_SECONDS = 600
+# Routine status changes (last seen, current screen) reach the config UI's
+# registry snapshot at most this often; registrations, lease changes and
+# deliveries are written at once.  Clients sync every 30 s, so a throttled
+# change is written by a later request well within a sync interval.
+SNAPSHOT_MIN_INTERVAL_SECONDS = 20
 _PROJECT_ROOT = Path(__file__).resolve().parent
 
 WEB_LOGGER = logging.getLogger("desk_display.display_server")
@@ -184,6 +189,18 @@ def _json_body(name: str | None = None) -> Any:
 
 def _error(status: int, code: str, message: str, **details: Any):
     return jsonify({"error": code, "message": message, **details}), status
+
+
+_VOLATILE_SNAPSHOT_FIELDS = frozenset({"last_seen", "lease_expires_at", "status"})
+
+
+def _snapshot_signature(snapshot: Mapping[str, Any]) -> Any:
+    """The parts of a registry snapshot whose change is written at once."""
+
+    return sorted(
+        (client_id, sorted((k, repr(v)) for k, v in entry.items() if k not in _VOLATILE_SNAPSHOT_FIELDS))
+        for client_id, entry in (snapshot.get("clients") or {}).items()
+    )
 
 
 def _with_interaction_targets(demand: ClientDemand, capabilities: ClientCapabilities) -> ClientDemand:
@@ -307,13 +324,33 @@ def create_app(
         g.started = time.perf_counter()
         registry.expire()
 
+    published: dict[str, Any] = {"at": None, "signature": None}
+
     def _publish_snapshot() -> None:
+        """Write the registry snapshot, throttling writes of routine status alone.
+
+        Every heartbeat changes ``last_seen``; writing (and fsyncing) the file
+        for each one wears a Pi's SD card for no visible gain.
+        """
+
         if config.registry_snapshot_path is None:
             return
+        snapshot = registry.snapshot()
+        signature = _snapshot_signature(snapshot)
+        now = clock()
+        last = published["at"]
+        if (
+            signature == published["signature"]
+            and last is not None
+            and 0 <= now - last < SNAPSHOT_MIN_INTERVAL_SECONDS
+        ):
+            return
         try:
-            registry.write_snapshot(config.registry_snapshot_path)
+            registry.write_snapshot(config.registry_snapshot_path, snapshot)
         except OSError as exc:
             WEB_LOGGER.warning("Could not write client registry snapshot: %s", exc)
+            return
+        published["at"], published["signature"] = now, signature
 
     _publish_snapshot()
 

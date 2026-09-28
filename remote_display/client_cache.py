@@ -202,7 +202,7 @@ class ClientCache:
     def _override(self) -> Path:
         return self.root / "override.json"
 
-    def _write(self, path: Path, data: Mapping[str, Any]) -> None:
+    def _write(self, path: Path, data: Mapping[str, Any], *, durable: bool = True) -> None:
         staging = self.root / "staging"
         staging.mkdir(parents=True, exist_ok=True)
         path.parent.mkdir(parents=True, exist_ok=True)
@@ -211,12 +211,15 @@ class ClientCache:
             with open(tmp, "w", encoding="utf-8") as handle:
                 json.dump(data, handle)  # key order is play order
                 handle.flush()
-                os.fsync(handle.fileno())
+                if durable:
+                    os.fsync(handle.fileno())
             os.replace(tmp, path)
         except BaseException:
             with contextlib.suppress(FileNotFoundError):
                 os.unlink(tmp)
             raise
+        if not durable:
+            return
         with contextlib.suppress(OSError):
             fd = os.open(path.parent, os.O_RDONLY)
             try:
@@ -397,7 +400,9 @@ class ClientCache:
         data["hold"] = None if state.hold is None else dict(state.hold)
         data["scheduler"] = None if state.scheduler is None else dict(state.scheduler)
         data["cache_schema_version"] = CACHE_SCHEMA_VERSION
-        self._write(self._playback, data)
+        # Saved on every screen change, so not fsynced: it is only where to
+        # resume, and a copy lost to a power cut restarts the rotation.
+        self._write(self._playback, data, durable=False)
 
 
 def reconcile_playback(state: PlaybackState, playlist: CachedPlaylist) -> PlaybackState:
