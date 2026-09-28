@@ -259,6 +259,11 @@
       min-width: 220px;
       flex: 1 1 240px;
     }
+    .playlist-bulk-actions {
+      display: flex;
+      gap: 0.5rem;
+      flex-wrap: wrap;
+    }
     .playlist-controls .hint {
       color: #94a3b8;
       font-size: 0.85rem;
@@ -591,6 +596,10 @@
         <input type="text" id="newPlaylistName" placeholder="Create a new playlist">
         <button class="btn-secondary" id="addPlaylistBtn" type="button">Add playlist</button>
       </div>
+      <div class="playlist-bulk-actions">
+        <button class="btn-secondary" id="collapseAllPlaylistsBtn" type="button">Collapse all</button>
+        <button class="btn-secondary" id="expandAllPlaylistsBtn" type="button">Expand all</button>
+      </div>
       <div class="hint">Group screens into playlists, then move the playlists to reorder chunks of screens.</div>
     </div>
     <div class="table-header">
@@ -707,6 +716,8 @@
     const hideZeroFreqToggle = document.getElementById("hideZeroFreq");
     const newPlaylistNameInput = document.getElementById("newPlaylistName");
     const addPlaylistBtn = document.getElementById("addPlaylistBtn");
+    const collapseAllPlaylistsBtn = document.getElementById("collapseAllPlaylistsBtn");
+    const expandAllPlaylistsBtn = document.getElementById("expandAllPlaylistsBtn");
     const draftStorageKey = "screen-config-draft";
     const playlistStorageKey = "screen-config-playlists";
     const selectableScreenIds = {{ screen_ids|tojson }};
@@ -1712,6 +1723,26 @@
         addPlaylist(newPlaylistNameInput.value);
         newPlaylistNameInput.value = "";
       });
+    }
+
+    function setAllPlaylistsCollapsed(collapsed) {
+      const groupKeys = ["ungrouped", ...playlists.map((playlist) => playlist.id)];
+      collapsedPlaylists = {};
+      if (collapsed) {
+        groupKeys.forEach((groupKey) => {
+          collapsedPlaylists[groupKey] = true;
+        });
+      }
+      savePlaylistState();
+      renderScreens(getCurrentScreens());
+    }
+
+    if (collapseAllPlaylistsBtn) {
+      collapseAllPlaylistsBtn.addEventListener("click", () => setAllPlaylistsCollapsed(true));
+    }
+
+    if (expandAllPlaylistsBtn) {
+      expandAllPlaylistsBtn.addEventListener("click", () => setAllPlaylistsCollapsed(false));
     }
 
     if (newPlaylistNameInput) {
