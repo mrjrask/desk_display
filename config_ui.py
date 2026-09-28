@@ -1005,6 +1005,7 @@ def _build_screenshot_entries(*, search_history: bool = True) -> list[dict[str, 
     ordered_screen_ids = _ordered_screen_ids(screens_config)
     playlists, playlist_assignments = _build_playlist_assignments(config)
     ordered_screen_ids = _apply_playlist_grouping(ordered_screen_ids, playlists, playlist_assignments)
+    ordered_screen_ids = _in_panel_playback_order(ordered_screen_ids)
     entries = [
         _build_screenshot_entry(
             screen_id,
@@ -1284,6 +1285,64 @@ def _adopt_panel_screenshot_paths(project_dir: Path) -> None:
 
 
 _adopt_panel_screenshot_paths(Path(__file__).resolve().parent)
+
+
+# display_client.DEFAULT_CACHE_DIR, relative to the project (importing
+# display_client here would change this process's dotenv file).
+_PANEL_DEFAULT_CACHE_DIR = Path("cache") / "client"
+
+
+def _panel_cache_dir(project_dir: Path) -> Optional[Path]:
+    """The playlist cache of this device's display client, or None without one.
+
+    A client's UI runs with ``.env.client``; a combined install's runs with
+    the server's ``.env``, so the panel's setting is read from ``.env.client``
+    (without putting a client-only setting into this process's environment).
+    """
+
+    import service_units
+
+    mode = _installed_mode(project_dir)
+    if mode is service_units.Mode.CLIENT:
+        configured = os.environ.get("DESK_DISPLAY_CLIENT_CACHE_DIR", "")
+    elif mode is service_units.Mode.COMBINED:
+        try:
+            values = deployment_config.parse_env_file(project_dir / ".env.client")
+        except (OSError, UnicodeDecodeError, ValueError):
+            values = {}
+        configured = values.get("DESK_DISPLAY_CLIENT_CACHE_DIR") or ""
+    else:
+        return None
+    if not configured:
+        return project_dir / _PANEL_DEFAULT_CACHE_DIR
+    path = Path(configured).expanduser()
+    return path if path.is_absolute() else project_dir / path
+
+
+def _in_panel_playback_order(screen_ids: list[str]) -> list[str]:
+    """Put the screens the panel's playlist plays first, in the order it plays them.
+
+    Client and combined panels play the server's playlist, not the local
+    rotation, so their screenshots follow the cached playlist (or local
+    override) the client is playing. Other screens keep their order after it.
+    """
+
+    project_dir = Path(__file__).resolve().parent
+    cache_dir = _panel_cache_dir(project_dir)
+    if cache_dir is None:
+        return screen_ids
+    from remote_display.client_cache import ClientCache
+
+    try:
+        playlist = ClientCache(cache_dir).load()
+    except Exception as exc:  # the page still renders in the rotation's order
+        logging.warning("Could not read the panel playlist from %s: %s", cache_dir, exc)
+        return screen_ids
+    if playlist is None:
+        return screen_ids
+    played = list(dict.fromkeys(playlist.screens))
+    played_set = set(played)
+    return played + [screen_id for screen_id in screen_ids if screen_id not in played_set]
 
 
 def _load_service_status(unit_name: str | None = None) -> dict[str, Any]:

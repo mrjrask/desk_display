@@ -114,3 +114,45 @@ def test_other_modes_keep_the_full_config_ui(tmp_path, monkeypatch, mode):
     install_modes.write_marker(tmp_path, mode)
     monkeypatch.setattr(config_ui, "__file__", str(tmp_path / "config_ui.py"))
     assert config_ui._screenshots_only() is False
+
+
+def _cache_playlist(cache_dir, screens):
+    import copy
+
+    from remote_display.client_cache import ClientCache
+    from remote_display.playlist_store import document_revision
+
+    document = {"screens": {screen: 1 for screen in screens}, "sequence": []}
+    ClientCache(cache_dir).offer(
+        {
+            "playlist_id": "default",
+            "playlist_revision": document_revision(document),
+            "playlist_schema_version": 2,
+            "document": copy.deepcopy(document),
+        },
+        artifact_usable=lambda _screen: True,
+    )
+
+
+def test_client_screenshots_follow_the_playlist_it_plays(tmp_path, monkeypatch):
+    install_modes.write_marker(tmp_path, "client")
+    monkeypatch.setattr(config_ui, "__file__", str(tmp_path / "config_ui.py"))
+    monkeypatch.delenv("DESK_DISPLAY_CLIENT_CACHE_DIR", raising=False)
+    _cache_playlist(tmp_path / "cache" / "client", ["weather1", "cubs last", "date"])
+    ordered = config_ui._in_panel_playback_order(["date", "news headlines", "weather1", "cubs last"])
+    assert ordered == ["weather1", "cubs last", "date", "news headlines"]
+
+
+def test_combined_screenshots_follow_the_panels_configured_cache(tmp_path, monkeypatch):
+    install_modes.write_marker(tmp_path, "combined")
+    monkeypatch.setattr(config_ui, "__file__", str(tmp_path / "config_ui.py"))
+    (tmp_path / ".env.client").write_text("DESK_DISPLAY_CLIENT_CACHE_DIR=panel-cache\n")
+    _cache_playlist(tmp_path / "panel-cache", ["cubs last", "date"])
+    assert config_ui._in_panel_playback_order(["date", "weather1", "cubs last"]) == ["cubs last", "date", "weather1"]
+
+
+def test_screenshot_order_is_unchanged_without_a_cached_playlist(tmp_path, monkeypatch):
+    for mode in ("client", "standalone"):
+        install_modes.write_marker(tmp_path, mode)
+        monkeypatch.setattr(config_ui, "__file__", str(tmp_path / "config_ui.py"))
+        assert config_ui._in_panel_playback_order(["date", "weather1"]) == ["date", "weather1"]
