@@ -301,6 +301,22 @@ def _install_parts(client_env_text: str, client_id: str, display_profile: str) -
     return write, (prefix + " " if prefix else "") + installer, filename
 
 
+# A checkout from before the server/client work (v0.1) has an installer with
+# no --mode, which would install the old standalone display instead.
+_UPDATE_OLD_CHECKOUT = [
+    "if ! grep -q -- '--mode' ~/desk_display/Installers/install.sh; then",
+    '  echo "==> Updating the old Desk Display checkout in ~/desk_display"',
+    "  git -C ~/desk_display pull --ff-only || {",
+    '    echo "Could not update ~/desk_display. If git reported a permission problem, run:" >&2',
+    '    echo "  sudo chown -R $(id -un):$(id -gn) ~/desk_display" >&2',
+    '    echo "If it reported local changes, run: git -C ~/desk_display stash" >&2',
+    '    echo "Then make a new setup command on the Clients page and run it." >&2',
+    "    exit 1",
+    "  }",
+    "fi",
+]
+
+
 def install_command(client_env_text: str, client_id: str, display_profile: str,
                     repo_url: str | None = None) -> str:
     """One paste-able command that sets up a new client Pi.
@@ -333,7 +349,8 @@ def join_command(server_url: str, code: str) -> str:
 
 def join_script(client_env_text: str, client_id: str, display_profile: str,
                 repo_url: str | None = None) -> str:
-    """The setup script ``/api/v1/join`` returns: clone, write settings, install, clean up."""
+    """The setup script ``/api/v1/join`` returns: clone (or update a v0.1
+    checkout), write settings, install, clean up."""
 
     write, installer, filename = _install_parts(client_env_text, client_id, display_profile)
     lines = [
@@ -356,6 +373,7 @@ def join_script(client_env_text: str, client_id: str, display_profile: str,
             "  exit 1",
             "fi",
         ]
+    lines += _UPDATE_OLD_CHECKOUT
     lines += [
         "if [ -f ~/desk_display/.env.client ]; then",
         '  backup=~/desk_display/.env.client.before-join-$(date +%Y%m%d%H%M%S)',

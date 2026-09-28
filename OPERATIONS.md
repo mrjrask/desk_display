@@ -333,7 +333,8 @@ opens a guided setup (`/clients/add`):
 
    The code works once, for 30 minutes. The render server then issues the
    display's credential and returns a setup script that clones Desk Display
-   (from the server's own git remote) when `~/desk_display` is missing, moves
+   (from the server's own git remote) when `~/desk_display` is missing,
+   runs `git pull` in a checkout still on v0.1, moves
    any old `.env.client` aside, writes the settings with mode 600 and runs
    `Installers/install.sh --mode client` for that panel. The credential never
    appears on the web page. **Set it up by hand instead** shows the
@@ -559,37 +560,37 @@ bash scripts/upgrade.sh --no-pull
 `.env`, `screens_config.local.json` and `screens_style.json` are kept as they
 are.
 
-**To make it a client of the server**, first let other displays reach the
-server (once; see [Letting other displays reach the server](#letting-other-displays-reach-the-server)). Then:
+**To make it a client of the server**, use the server's **Add a display**
+setup (see [Provisioning, rotation and revocation](#provisioning-rotation-and-revocation)):
 
-1. Keep copies of what this device has: `cp .env ~/env.v0.1.bak`. To bring
-   its own rotation to the server, copy the active rotation file there:
-   `screens_config.local.json`, or `screens_config.json` when there is no
-   local file (for example
-   `scp screens_config.local.json <server>:~/den-rotation.json`).
-2. On the server's `/clients` page, **Add a display** with this device's
-   client ID and profile, and save the `.env.client` it shows onto this
-   device, for example as `~/den.env.client`. If the server URL in it is
-   plain `http://`, add `DESK_DISPLAY_ALLOW_INSECURE_TRANSPORT=1` to that
-   file (trusted home network only).
-3. Install the client. This installs the client requirements, writes
-   `.env.client` from the panel settings in `.env` plus the downloaded file,
-   and disables `desk_display.service` and `config_ui_desk_display.service`:
+1. Keep a copy of this device's settings: `cp .env ~/env.v0.1.bak`.
+2. Optional: to keep this device's own rotation, copy its active rotation
+   file (`screens_config.local.json`, or `screens_config.json` when there is
+   no local file) to the server and turn it into a playlist there, preview
+   first and then with `--apply`:
 
    ```bash
-   bash Installers/install.sh --mode client --credentials ~/den.env.client <profile>
+   scp screens_config.local.json <server>:~/den-rotation.json      # on this device
+   python3 scripts/migrate_standalone_config.py --config ~/den-rotation.json --name Den  # on the server
    ```
 
-4. Give it something to play. Assign an existing playlist on `/clients`, or
-   move the device's old rotation onto the server by running this on the
-   server (preview first, then `--apply`):
+3. On the server's `/clients` page, click **Add a display**. Its first step
+   shows the `.env` lines the server needs before other devices can reach it
+   (see [Letting other displays reach the server](#letting-other-displays-reach-the-server)).
+   Then pick this device's screen type, name and playlist.
+4. Paste the one-time command it shows on this device. If the checkout is
+   still v0.1, the setup script runs `git pull` first; if that fails it stops
+   with the fix (the `chown` above, or `git stash`), and the display's row
+   then offers a new **Setup command**. It then writes `.env.client` from the
+   panel settings in `.env` plus the new credential, installs the client
+   requirements, and disables `desk_display.service` and
+   `config_ui_desk_display.service`.
+5. The setup page says when the display comes online. If it does not, run
+   `sudo journalctl -u desk_display_client.service -f` on the device.
 
-   ```bash
-   python3 scripts/migrate_standalone_config.py --config ~/den-rotation.json --name Den --assign den
-   ```
-
-5. Check it: `sudo journalctl -u desk_display_client.service -f` on the
-   device, and the device's row on `/clients`.
+**Set it up by hand instead** on the setup page gives a `.env.client`; save it
+on the device as, say, `~/den.env.client` and run
+`bash Installers/install.sh --mode client --credentials ~/den.env.client <profile>`.
 
 ### Restoring v0.1
 
