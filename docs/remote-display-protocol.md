@@ -76,6 +76,7 @@ register again and retry once.
 | Method and path | Auth | Purpose |
 | --- | --- | --- |
 | `GET /api/v1/health` | none | `{"status": "ok"}` |
+| `POST /api/v1/join` | one-time join code | Form field `code` from the config UI's Add a display wizard; issues the client's credential and returns its setup script (`text/x-shellscript`, `no-store`). Unknown, used or expired codes get `401 invalid_join_code` and count as authentication failures |
 | `POST /api/v1/register` | enrollment | Negotiate versions, start or renew a lease |
 | `POST /api/v1/clients/<id>/heartbeat` | lease | Report status, extend the lease |
 | `GET /api/v1/clients/<id>/config` | lease | Assigned playlist document and lease settings |

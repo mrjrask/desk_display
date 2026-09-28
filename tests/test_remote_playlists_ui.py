@@ -446,4 +446,138 @@ def test_provisioning_from_the_clients_page(env, web):
 
 def test_clients_page_offers_provisioning(web):
     page = web.get("/clients").get_data(as_text=True)
-    assert 'id="provision"' in page and "hyperpixel4" in page
+    assert 'id="add-display"' in page and "/clients/add" in page
+    wizard = web.get("/clients/add").get_data(as_text=True)
+    assert 'id="step-1"' in wizard and 'id="install-command"' in wizard and ui.CSRF_VALUE in wizard
+
+
+# ── Guided registration wizard ─────────────────────────────────────────────
+
+
+def test_registration_checks_flag_a_loopback_server(web, monkeypatch):
+    monkeypatch.setenv("DESK_DISPLAY_SERVER_HOST", "127.0.0.1")
+    monkeypatch.delenv("DESK_DISPLAY_SERVER_PUBLIC_URL", raising=False)
+    monkeypatch.setenv("DESK_DISPLAY_SERVER_ADMIN_TOKEN", "admin-" + "x" * 40)
+    data = web.get("/api/clients/registration", headers={"Host": "square.local:5002"}).get_json()
+    checks = {c["code"]: c for c in data["checks"]}
+    assert data["ready"] is False
+    assert checks["bind"]["status"] == "error" and "DESK_DISPLAY_SERVER_HOST=0.0.0.0" in checks["bind"]["fix"]
+    assert checks["public_url"]["status"] == "warning"
+    assert data["server_url"] == "http://square.local:8765"
+    assert data["insecure_transport"] is True
+    assert "lobby" in data["client_ids"]
+    assert {p["id"] for p in data["profiles"]} == set(PROFILE_PRESETS)
+    assert "x" * 40 not in json.dumps(data)
+
+
+def test_registration_checks_pass_when_reachable(web, monkeypatch):
+    from remote_display import registration
+
+    probed = []
+    monkeypatch.setenv("DESK_DISPLAY_SERVER_HOST", "0.0.0.0")
+    monkeypatch.setenv("DESK_DISPLAY_SERVER_PUBLIC_URL", "http://square.local:8765")
+    monkeypatch.setattr(registration, "lan_address", lambda: "192.168.1.20")
+    monkeypatch.setattr(registration, "probe", lambda host, port: probed.append((host, port)) or True)
+    data = web.get("/api/clients/registration").get_json()
+    assert data["ready"] is True and probed == [("192.168.1.20", 8765)]
+    assert {c["code"]: c["status"] for c in data["checks"]} == {
+        "bind": "ok", "public_url": "ok", "reachable": "ok", "transport": "warning"}
+
+
+def test_wizard_provisioning_writes_a_complete_client_env(env, web):
+    playlist = env["store"].create("Office", DOC, actor="test")
+    created = web.post("/api/clients/provision", headers=CSRF, json={
+        "client_id": "office-mini", "display_profile": "display_hat_mini", "playlist_id": playlist["id"],
+        "friendly_name": "  Office   mini ", "server_url": "square.local:8765",
+        "allow_insecure_transport": True})
+    assert created.status_code == 201
+    issued = created.get_json()
+    lines = issued["client_env"].splitlines()
+    assert "DESK_DISPLAY_SERVER_URL=http://square.local:8765" in lines
+    assert "DESK_DISPLAY_ALLOW_INSECURE_TRANSPORT=1" in lines
+    token = next(line.split("=", 1)[1] for line in lines if line.startswith("DESK_DISPLAY_CLIENT_TOKEN="))
+    assert token in issued["install_command"]
+    assert "--mode client --credentials ~/office-mini.env.client display_hat_mini" in issued["install_command"]
+    assert issued["credentials_filename"] == "office-mini.env.client"
+    row = {r["client_id"]: r for r in web.get("/api/clients").get_json()["clients"]}["office-mini"]
+    assert row["friendly_name"] == "Office mini" and row["assignment"]["playlist_id"] == playlist["id"]
+
+
+def test_wizard_join_flow_never_shows_the_credential(env, web):
+    created = web.post("/api/clients/provision", headers=CSRF, json={
+        "client_id": "den", "display_profile": "display_hat_mini", "server_url": "http://square.local:8765",
+        "allow_insecure_transport": True, "join": True})
+    assert created.status_code == 201 and created.headers["Cache-Control"] == "no-store"
+    body = created.get_json()
+    assert "client_env" not in body and "ddc_" not in json.dumps(body)
+    assert body["join_command"].endswith('http://square.local:8765/api/v1/join)"')
+    assert body["join_expires_in_seconds"] == 1800 and body["allow_insecure_transport"] is True
+    provisioning = env["app"].extensions["desk_display_provisioning"]
+    assert provisioning.join_pending("den") is not None
+
+    again = web.post("/api/clients/den/join", headers=CSRF, json={"allow_insecure_transport": False,
+                                                                  "server_url": "http://square.local:8765"})
+    assert again.status_code == 200 and again.get_json()["join_command"] != body["join_command"]
+    assert "refuse" in again.get_json()["warnings"][0]
+    assert web.post("/api/clients/nobody/join", headers=CSRF, json={}).status_code == 404
+    assert web.post("/api/clients/den/join", json={}).status_code == 403
+
+
+def test_wizard_rejects_bad_input_before_issuing_a_credential(env, web):
+    for payload in ({"server_url": "ftp://square.local"}, {"server_url": "http://u:p@square.local:8765"},
+                    {"server_url": "http://square.local:8765/path"}, {"friendly_name": "x" * 81}):
+        response = web.post("/api/clients/provision", headers=CSRF, json={
+            "client_id": "den", "display_profile": "hyperpixel4", **payload})
+        assert response.status_code == 400, payload
+    assert env["app"].extensions["desk_display_provisioning"].get("den") is None
+
+
+def test_wizard_provisioning_without_choices_keeps_defaults(env, web, monkeypatch):
+    monkeypatch.setenv("DESK_DISPLAY_SERVER_PUBLIC_URL", "https://square.lan:8765")
+    issued = web.post("/api/clients/provision", headers=CSRF, json={
+        "client_id": "den", "display_profile": "hyperpixel4"}).get_json()
+    assert "DESK_DISPLAY_SERVER_URL=https://square.lan:8765" in issued["client_env"]
+    assert "ALLOW_INSECURE" not in issued["client_env"] and issued["warnings"] == []
+
+
+def test_browser_registration_wizard(live_server, browser, env, monkeypatch):
+    playlist = env["store"].create("Office", DOC, actor="test")
+    page = browser.new_page()
+    page.goto(f"{live_server}/clients/add")
+    page.wait_for_selector(".check[data-code='bind'] .badge.error")
+    page.click("#to-step-2")
+    page.check("input[name='display_profile'][value='hyperpixel4_square']")
+    page.fill("#friendly-name", "Kitchen Square")
+    assert page.input_value("#client-id") == "kitchen-square"
+    assert page.input_value("#playlist") == playlist["id"]
+    page.fill("#server-url", "http://square.local:8765")
+    assert page.is_visible("#insecure-row")
+    page.fill("#client-id", "lobby")
+    assert "already in use" in page.inner_text("#client-id-hint")
+    page.fill("#client-id", "kitchen-square")
+    page.click("#create")
+    page.wait_for_selector("#step-3:not(.hidden)")
+    join = page.inner_text("#join-command")
+    assert join.startswith('bash -c "$(curl -fsS -d code=') and "http://square.local:8765/api/v1/join" in join
+    assert "Works once" in page.inner_text("#join-expiry")
+    provisioning = env["app"].extensions["desk_display_provisioning"]
+    assert provisioning.get("kitchen-square")["display_profile"] == "hyperpixel4_square"
+    assert provisioning.join_pending("kitchen-square") is not None
+    assert "ddc_" not in page.content()  # no credential on the page until asked for
+
+    # By hand instead: the credential appears once and the join code stops working.
+    page.on("dialog", lambda dialog: dialog.accept())
+    page.click("#manual summary")
+    page.click("#show-manual")
+    page.wait_for_selector("#manual-body:not(.hidden)")
+    command = page.inner_text("#install-command")
+    assert "HYPERPIXEL_PANEL=hyperpixel4sq bash Installers/install.sh --mode client" in command
+    assert "DESK_DISPLAY_ALLOW_INSECURE_TRANSPORT=1" in command
+    assert provisioning.join_pending("kitchen-square") is None
+
+    # The display registers: the wizard notices on its own.
+    publish_registry(env, [caps("kitchen-square", "hyperpixel4_square")])
+    page.evaluate("poll()")
+    page.wait_for_selector("#step-4:not(.hidden)")
+    page.wait_for_function("document.querySelector('#connect-status').textContent === 'Connected'")
+    assert "Kitchen Square is connected" in page.inner_text("#notice")

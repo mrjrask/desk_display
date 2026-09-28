@@ -17,6 +17,11 @@ See the README's [deployment modes](README.md#deployment-modes) and
   every client that shares it.
 - Server-managed playlists and assignments in the configuration UI, with
   per-client capability warnings, provisioning, rotation and revocation.
+- A guided **Add a display** setup on the Clients page: it checks the render
+  server is reachable from the LAN (with the `.env` lines to fix it), names
+  the display and picks its screen type and playlist, gives one one-time
+  command (`POST /api/v1/join`) that installs and configures the new Pi, and
+  shows when the display comes online.
 - `display_client.py`: offline-first playback from a local cache, render
   packages (static, animated and client-timed clocks), touch focus on quads,
   and physical rotation applied only at presentation.

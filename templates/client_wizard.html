@@ -1,0 +1,537 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{ machine_hostname }} - Add a display</title>
+  {% include "_remote_style.html" %}
+  <style>
+    .wizard { max-width: 860px; }
+    .steps { display: flex; gap: 0.4rem; list-style: none; padding: 0; margin: 0 auto 1rem; max-width: 860px; flex-wrap: wrap; }
+    .steps li {
+      flex: 1 1 150px; padding: 0.5rem 0.7rem; border-radius: 10px; font-size: 0.85rem; color: #94a3b8;
+      border: 1px solid rgba(148, 163, 184, 0.25); background: rgba(15, 23, 42, 0.65);
+    }
+    .steps li .num { font-weight: 700; margin-right: 0.35rem; }
+    .steps li.current { border-color: #38bdf8; color: #e2e8f0; }
+    .steps li.done { border-color: rgba(34, 197, 94, 0.6); color: #bbf7d0; }
+    .check { display: grid; grid-template-columns: 5.5rem 1fr; gap: 0.6rem; padding: 0.6rem 0; border-bottom: 1px solid rgba(148, 163, 184, 0.15); }
+    .check:last-child { border-bottom: 0; }
+    .badge.ok { border-color: #22c55e; color: #bbf7d0; }
+    .fix { margin-top: 0.4rem; }
+    pre.code {
+      margin: 0.35rem 0; padding: 0.6rem 0.7rem; border-radius: 10px; overflow-x: auto; white-space: pre;
+      background: rgba(2, 6, 23, 0.8); border: 1px solid rgba(148, 163, 184, 0.25);
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.8rem;
+    }
+    .field { display: block; margin: 0 0 0.9rem; }
+    .field > span { display: block; font-weight: 600; margin-bottom: 0.3rem; }
+    .field input[type=text], .field select { width: 100%; }
+    .hint { color: #94a3b8; font-size: 0.82rem; margin-top: 0.25rem; }
+    .profiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 0.5rem; }
+    .profile { display: flex; gap: 0.5rem; align-items: flex-start; padding: 0.55rem 0.6rem; border-radius: 10px; cursor: pointer;
+      border: 1px solid rgba(148, 163, 184, 0.25); }
+    .profile:has(input:checked) { border-color: #38bdf8; background: rgba(56, 189, 248, 0.08); }
+    .profile input { margin-top: 0.2rem; }
+    .actions { display: flex; gap: 0.6rem; justify-content: space-between; flex-wrap: wrap; margin-top: 1rem; }
+    .status-big { font-size: 1.1rem; font-weight: 600; margin: 0.4rem 0; }
+    ol.howto { padding-left: 1.3rem; }
+    ol.howto li { margin-bottom: 0.7rem; }
+    details summary { cursor: pointer; color: #94a3b8; margin: 0.4rem 0; }
+    .wizard a { color: #38bdf8; }
+  </style>
+</head>
+<body>
+  <h1>Add a display</h1>
+  <div class="subtitle">Set up a new display that shows this server's screens.</div>
+  <nav class="nav-links">
+    <a href="/">Rotation Config</a>
+    <a href="/screenshots">Screenshots</a>
+    <a href="/feed">Feed</a>
+    <a href="/playlists">Playlists</a>
+    <a href="/clients" aria-current="page">Clients</a>
+  </nav>
+
+  <ol class="steps" id="steps">
+    <li data-step="1"><span class="num">1</span>Check the server</li>
+    <li data-step="2"><span class="num">2</span>Describe the display</li>
+    <li data-step="3"><span class="num">3</span>Install on the display</li>
+    <li data-step="4"><span class="num">4</span>Connect</li>
+  </ol>
+
+  <div id="notice" class="panel notice wizard hidden" role="status"></div>
+
+  <!-- Step 1: can a display on the LAN reach this server? -->
+  <section class="panel wizard" id="step-1" data-step-panel="1">
+    <h2>Can a new display reach this server?</h2>
+    <p class="muted">A display connects to this Pi's render server over your network. These checks run on the server now.</p>
+    <div id="checks"><p class="muted">Checking…</p></div>
+    <div class="actions">
+      <button type="button" id="recheck">Check again</button>
+      <button type="button" class="primary" id="to-step-2">Continue</button>
+    </div>
+  </section>
+
+  <!-- Step 2: profile, name, playlist, server address -->
+  <section class="panel wizard hidden" id="step-2" data-step-panel="2">
+    <h2>Describe the new display</h2>
+    <form id="details" novalidate>
+      <div class="field">
+        <span>What kind of screen is it?</span>
+        <div class="profiles" id="profiles" role="radiogroup" aria-label="Display type"></div>
+      </div>
+      <label class="field">
+        <span>Name</span>
+        <input type="text" name="friendly_name" id="friendly-name" maxlength="80" placeholder="Office" autocomplete="off">
+        <div class="hint">Shown on the Clients page. You can rename it later.</div>
+      </label>
+      <label class="field">
+        <span>Client ID</span>
+        <input type="text" name="client_id" id="client-id" required pattern="[A-Za-z0-9._-]{1,64}" maxlength="64" placeholder="office" autocomplete="off" class="mono">
+        <div class="hint" id="client-id-hint">Letters, numbers, dots, dashes and underscores. It never changes once the display is set up.</div>
+      </label>
+      <label class="field">
+        <span>Playlist</span>
+        <select name="playlist_id" id="playlist"><option value="">None yet (assign later)</option></select>
+        <div class="hint">What the display plays. Edit playlists on the <a href="/playlists">Playlists</a> page.</div>
+      </label>
+      <label class="field">
+        <span>Server address the display will use</span>
+        <input type="text" name="server_url" id="server-url" class="mono" autocomplete="off">
+        <div class="hint">Filled in from how you reached this page. Change it if the display knows this Pi by another name.</div>
+      </label>
+      <label class="field hidden" id="insecure-row">
+        <input type="checkbox" name="allow_insecure_transport" id="allow-insecure" checked>
+        Allow plain HTTP (a trusted home network). Without this the display refuses an http:// address.
+      </label>
+    </form>
+    <div class="actions">
+      <button type="button" id="back-to-1">Back</button>
+      <button type="button" class="primary" id="create">Create display</button>
+    </div>
+  </section>
+
+  <!-- Step 3: install command -->
+  <section class="panel wizard hidden" id="step-3" data-step-panel="3">
+    <h2>Install on <span id="install-name"></span></h2>
+    <div id="issued-warnings"></div>
+    <ol class="howto">
+      <li>Set up Raspberry Pi OS on the new Pi as usual and connect it to the same network as this server.</li>
+      <li>On the new Pi, open a terminal (or <span class="mono">ssh</span> into it), paste this command and press Enter.
+        <pre class="code" id="join-command"></pre>
+        <div class="row">
+          <button type="button" id="copy-join" class="primary">Copy command</button>
+          <span class="hint" id="join-expiry"></span>
+          <button type="button" id="new-code" class="hidden">Make a new command</button>
+        </div>
+        <div class="hint">It downloads Desk Display from this server's source, fetches this display's settings and
+          credential from the server, installs the panel driver and starts the display. The command works once.</div>
+      </li>
+      <li>If the installer asks to reboot, say yes. The display connects on its own afterwards.</li>
+    </ol>
+    <details id="manual">
+      <summary>Set it up by hand instead</summary>
+      <p class="muted">This shows the display's settings and credential here, once, and cancels the command above.</p>
+      <button type="button" id="show-manual">Show settings to copy by hand</button>
+      <div id="manual-body" class="hidden">
+        <div class="notice warn"><strong>Copy this now.</strong> The credential is shown only once.
+          If it is lost, use <em>Rotate credential</em> on the Clients page.</div>
+        <p class="muted">Paste this on the Pi. It writes <span class="mono" id="credentials-name"></span> and runs the installer:</p>
+        <pre class="code" id="install-command"></pre>
+        <button type="button" id="copy-command">Copy command</button>
+        <p class="muted">Or save just the settings file and run the installer yourself:</p>
+        <pre class="code" id="client-env"></pre>
+        <button type="button" id="copy-env">Copy settings</button>
+        <button type="button" id="download-env">Download file</button>
+      </div>
+    </details>
+    <div class="actions">
+      <span></span>
+      <button type="button" class="primary" id="to-step-4">I've run it</button>
+    </div>
+  </section>
+
+  <!-- Step 4: wait for the first connection -->
+  <section class="panel wizard hidden" id="step-4" data-step-panel="4">
+    <h2>Waiting for <span id="wait-name"></span></h2>
+    <div class="status-big" id="connect-status">Not connected yet</div>
+    <div id="connect-detail" class="muted">This page checks every few seconds. Installing the panel driver can take several minutes.</div>
+    <div id="troubleshoot" class="hidden">
+      <p><strong>Still waiting?</strong> On the display, watch its log:</p>
+      <pre class="code">sudo journalctl -u desk_display_client.service -f</pre>
+      <ul class="muted">
+        <li>"connection refused" or a timeout: go back to step 1 and fix the server checks.</li>
+        <li>"insecure transport": the display's <span class="mono">.env.client</span> needs <span class="mono">DESK_DISPLAY_ALLOW_INSECURE_TRANSPORT=1</span>.</li>
+        <li>"401" or "credential": rotate the credential on the Clients page and copy the new token into <span class="mono">.env.client</span>.</li>
+      </ul>
+    </div>
+    <div class="actions">
+      <button type="button" onclick="location.href='/clients'">Back to Clients</button>
+      <button type="button" id="add-another" onclick="location.href='/clients/add'">Add another display</button>
+    </div>
+  </section>
+
+<script>
+const CSRF = {{ {csrf_header: csrf_value} | tojson }};
+const ID_RE = /^[A-Za-z0-9._-]{1,64}$/;
+let info = null;
+let issued = null;
+let idEdited = false;
+let pollTimer = null;
+let waitStarted = null;
+
+function $(id) { return document.getElementById(id); }
+
+function notice(message, kind) {
+  const el = $("notice");
+  if (!message) { el.className = "panel notice wizard hidden"; return; }
+  el.textContent = message;
+  el.className = "panel notice wizard " + (kind || "ok");
+}
+
+async function api(method, url, body) {
+  const options = { method, headers: { "Accept": "application/json" } };
+  if (method !== "GET") {
+    options.headers = { ...options.headers, ...CSRF, "Content-Type": "application/json" };
+    if (body !== undefined) options.body = JSON.stringify(body);
+  }
+  const response = await fetch(url, options);
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    const error = new Error(data.message || data.error || response.statusText);
+    error.status = response.status;
+    error.data = data;
+    throw error;
+  }
+  return data;
+}
+
+function show(step) {
+  for (const panel of document.querySelectorAll("[data-step-panel]")) {
+    panel.classList.toggle("hidden", panel.dataset.stepPanel !== String(step));
+  }
+  for (const item of document.querySelectorAll("#steps li")) {
+    const n = Number(item.dataset.step);
+    item.className = n === step ? "current" : n < step ? "done" : "";
+    if (n === step) item.setAttribute("aria-current", "step"); else item.removeAttribute("aria-current");
+  }
+  notice("");
+  window.scrollTo(0, 0);
+}
+
+function el(tag, text, className) {
+  const node = document.createElement(tag);
+  if (text !== undefined) node.textContent = text;
+  if (className) node.className = className;
+  return node;
+}
+
+function copyText(text, button) {
+  const done = () => { const old = button.textContent; button.textContent = "Copied"; setTimeout(() => { button.textContent = old; }, 1500); };
+  if (navigator.clipboard && window.isSecureContext) {
+    navigator.clipboard.writeText(text).then(done, () => fallbackCopy(text, done));
+  } else {
+    fallbackCopy(text, done);
+  }
+}
+
+function fallbackCopy(text, done) {
+  // http:// pages have no async clipboard; a hidden textarea still copies.
+  const area = document.createElement("textarea");
+  area.value = text;
+  area.style.position = "fixed";
+  area.style.opacity = "0";
+  document.body.appendChild(area);
+  area.select();
+  let ok = false;
+  try { ok = document.execCommand("copy"); } catch (error) { ok = false; }
+  area.remove();
+  if (ok) done(); else notice("Select the text and copy it by hand.", "warn");
+}
+
+// ── Step 1 ────────────────────────────────────────────────────────────────
+
+function renderChecks(data) {
+  const box = $("checks");
+  box.innerHTML = "";
+  for (const check of data.checks) {
+    const row = el("div", undefined, "check");
+    row.dataset.code = check.code;
+    const label = { ok: "ok", warning: "warning", error: "needs fixing" }[check.status] || check.status;
+    const badgeCell = el("div");
+    badgeCell.appendChild(el("span", label, "badge " + check.status));
+    row.appendChild(badgeCell);
+    const body = el("div");
+    body.appendChild(el("div", check.title)).style.fontWeight = "600";
+    body.appendChild(el("div", check.detail, "muted"));
+    if (check.fix.length) {
+      const fix = el("div", undefined, "fix");
+      const envLines = check.fix.filter((line) => /^[A-Z0-9_]+=/.test(line));
+      const other = check.fix.filter((line) => !/^[A-Z0-9_]+=/.test(line));
+      if (envLines.length) {
+        fix.appendChild(el("div", "Add to this Pi's .env:", "hint"));
+        fix.appendChild(el("pre", envLines.join("\n"), "code"));
+      }
+      for (const line of other) {
+        if (line.startsWith("then ")) {
+          const [label, command] = line.split(": ");
+          fix.appendChild(el("div", label.replace(/^then /, "Then ") + ":", "hint"));
+          if (command) fix.appendChild(el("pre", command, "code"));
+        } else {
+          fix.appendChild(el("pre", line, "code"));
+        }
+      }
+      body.appendChild(fix);
+    }
+    row.appendChild(body);
+    box.appendChild(row);
+  }
+  $("to-step-2").textContent = data.ready ? "Continue" : "Continue anyway";
+  if (!data.ready) notice("A display cannot connect until the items marked \"needs fixing\" are fixed. You can still create it now and fix the server afterwards.", "warn");
+}
+
+async function loadInfo() {
+  $("checks").innerHTML = '<p class="muted">Checking…</p>';
+  try {
+    info = await api("GET", "/api/clients/registration");
+  } catch (error) {
+    $("checks").innerHTML = "";
+    notice(error.message, "error");
+    return;
+  }
+  renderChecks(info);
+  fillDetails();
+}
+
+// ── Step 2 ────────────────────────────────────────────────────────────────
+
+function slug(text) {
+  return text.toLowerCase().normalize("NFKD").replace(/[̀-ͯ]/g, "")
+    .replace(/[^a-z0-9._-]+/g, "-").replace(/^[-.]+|[-.]+$/g, "").slice(0, 64);
+}
+
+function fillDetails() {
+  const profiles = $("profiles");
+  const chosen = (profiles.querySelector("input:checked") || {}).value || info.profiles[0].id;
+  profiles.innerHTML = "";
+  for (const profile of info.profiles) {
+    const label = el("label", undefined, "profile");
+    const input = document.createElement("input");
+    input.type = "radio";
+    input.name = "display_profile";
+    input.value = profile.id;
+    input.checked = profile.id === chosen;
+    label.appendChild(input);
+    const text = el("div");
+    text.appendChild(el("div", profile.label));
+    text.appendChild(el("div", `${profile.size} · ${profile.id}`, "hint mono"));
+    label.appendChild(text);
+    profiles.appendChild(label);
+  }
+  const playlist = $("playlist");
+  const current = playlist.value;
+  playlist.length = 1;
+  for (const item of info.playlists) playlist.appendChild(new Option(item.name, item.id));
+  playlist.value = current || (info.playlists.length === 1 ? info.playlists[0].id : "");
+  if (!$("server-url").value) $("server-url").value = info.server_url;
+  updateInsecure();
+  checkId();
+}
+
+function updateInsecure() {
+  const value = $("server-url").value.trim();
+  const host = value.replace(/^[a-z]+:\/\//i, "").split(/[:/]/)[0].toLowerCase();
+  const loopback = host === "localhost" || host.startsWith("127.") || host === "[::1]";
+  const http = !/^https:\/\//i.test(value);
+  $("insecure-row").classList.toggle("hidden", !(http && !loopback));
+}
+
+function checkId() {
+  const id = $("client-id").value.trim();
+  const hint = $("client-id-hint");
+  let message = "Letters, numbers, dots, dashes and underscores. It never changes once the display is set up.";
+  let bad = false;
+  if (id && !ID_RE.test(id)) { message = "Use only letters, numbers, dots, dashes and underscores (up to 64)."; bad = true; }
+  else if (info && info.client_ids.includes(id)) { message = `${id} is already in use. Pick another ID.`; bad = true; }
+  hint.textContent = message;
+  hint.style.color = bad ? "#fecaca" : "";
+  return !bad && Boolean(id);
+}
+
+$("friendly-name").addEventListener("input", () => {
+  if (!idEdited) { $("client-id").value = slug($("friendly-name").value); checkId(); }
+});
+$("client-id").addEventListener("input", () => { idEdited = $("client-id").value.trim() !== ""; checkId(); });
+$("server-url").addEventListener("input", updateInsecure);
+
+async function create() {
+  if (!checkId()) { notice("Enter a name or a client ID first.", "error"); $("client-id").focus(); return; }
+  const form = new FormData($("details"));
+  const profile = form.get("display_profile");
+  if (!profile) { notice("Pick what kind of screen it is.", "error"); return; }
+  const payload = {
+    client_id: $("client-id").value.trim(),
+    display_profile: profile,
+    playlist_id: form.get("playlist_id") || null,
+    friendly_name: $("friendly-name").value.trim() || null,
+    server_url: $("server-url").value.trim(),
+    join: true,
+    allow_insecure_transport: !$("insecure-row").classList.contains("hidden") && $("allow-insecure").checked,
+  };
+  $("create").disabled = true;
+  try {
+    issued = await api("POST", "/api/clients/provision", payload);
+  } catch (error) {
+    notice(error.message, "error");
+    $("create").disabled = false;
+    if (error.status === 409 && info) { info.client_ids.push(payload.client_id); checkId(); }
+    return;
+  }
+  const name = payload.friendly_name || issued.client_id;
+  $("install-name").textContent = name;
+  $("wait-name").textContent = name;
+  joinPayload = { server_url: issued.server_url, allow_insecure_transport: payload.allow_insecure_transport };
+  showJoin(issued);
+  // Lock the steps behind us: the credential exists now.
+  for (const id of ["back-to-1", "create"]) $(id).disabled = true;
+  show(3);
+  startPolling();
+}
+
+// ── Steps 3 and 4 ─────────────────────────────────────────────────────────
+
+let joinPayload = null;
+let expiryTimer = null;
+
+function showJoin(result) {
+  $("join-command").textContent = result.join_command;
+  $("new-code").classList.add("hidden");
+  const warnings = $("issued-warnings");
+  warnings.innerHTML = "";
+  for (const warning of result.warnings || []) warnings.appendChild(el("div", warning, "notice warn"));
+  if (result.allow_insecure_transport) {
+    warnings.appendChild(el("p", "This display will talk to the server over plain HTTP, allowed for a trusted network.", "hint"));
+  }
+  const deadline = Date.now() + result.join_expires_in_seconds * 1000;
+  if (expiryTimer) clearInterval(expiryTimer);
+  const tick = () => {
+    const left = Math.round((deadline - Date.now()) / 1000);
+    if (left <= 0) {
+      $("join-expiry").textContent = "This command has expired.";
+      $("new-code").classList.remove("hidden");
+      clearInterval(expiryTimer);
+      return;
+    }
+    $("join-expiry").textContent = `Works once, for the next ${Math.floor(left / 60)}:${String(left % 60).padStart(2, "0")}.`;
+  };
+  tick();
+  expiryTimer = setInterval(tick, 1000);
+}
+
+async function newCode() {
+  try {
+    showJoin(await api("POST", `/api/clients/${encodeURIComponent(issued.client_id)}/join`, joinPayload));
+    notice("Made a new command. The old one no longer works.", "ok");
+  } catch (error) { notice(error.message, "error"); }
+}
+
+async function showManual() {
+  if (!confirm("Show the credential here instead? The command above stops working.")) return;
+  let result;
+  try {
+    result = await api("POST", `/api/clients/${encodeURIComponent(issued.client_id)}/credential/rotate`, {});
+  } catch (error) { notice(error.message, "error"); return; }
+  issued = { ...issued, ...result };
+  if (expiryTimer) clearInterval(expiryTimer);
+  $("join-command").textContent = "(cancelled: use the settings below)";
+  $("join-expiry").textContent = "";
+  $("copy-join").disabled = true;
+  $("new-code").classList.remove("hidden");
+  $("new-code").textContent = "Use a setup command again";
+  $("show-manual").classList.add("hidden");
+  $("manual-body").classList.remove("hidden");
+  $("install-command").textContent = result.install_command;
+  $("client-env").textContent = result.client_env;
+  $("credentials-name").textContent = "~/" + result.credentials_filename;
+}
+
+const STATE_TEXT = {
+  never_connected: ["Not connected yet", ""],
+  online: ["Connected", "ok"],
+  stale: ["Connected, but its last check-in is late", "warning"],
+  expired: ["Was connected, now offline", "warning"],
+  disabled: ["Disabled on the Clients page", "error"],
+  revoked: ["Credential revoked", "error"],
+};
+
+async function poll() {
+  if (!issued) return;
+  let data;
+  try { data = await api("GET", "/api/clients"); } catch (error) { return; }
+  const row = data.clients.find((c) => c.client_id === issued.client_id);
+  if (!row) return;
+  const [text, kind] = STATE_TEXT[row.state] || [row.state.replaceAll("_", " "), ""];
+  const status = $("connect-status");
+  status.textContent = text;
+  status.style.color = kind === "ok" ? "#bbf7d0" : kind === "error" ? "#fecaca" : "";
+  if (row.state === "online" || row.state === "stale") {
+    const bits = [];
+    if (row.software_version) bits.push(`software v${row.software_version}`);
+    if (row.dimensions) bits.push(row.dimensions);
+    bits.push(row.assignment ? `playlist ${row.assignment.playlist_name}` : "no playlist yet: assign one on the Clients page");
+    if (row.current_screen) bits.push(`showing ${row.current_screen}`);
+    $("connect-detail").textContent = bits.join(" · ");
+    $("troubleshoot").classList.add("hidden");
+    if (!$("step-4").classList.contains("hidden") || !$("step-3").classList.contains("hidden")) {
+      if ($("step-4").classList.contains("hidden")) show(4);
+      for (const item of document.querySelectorAll("#steps li")) item.className = "done";
+      notice(`${$("wait-name").textContent} is connected.`, "ok");
+    }
+    if (row.state === "online") stopPolling();
+    return;
+  }
+  if (waitStarted && Date.now() - waitStarted > 120000) $("troubleshoot").classList.remove("hidden");
+}
+
+function startPolling() {
+  stopPolling();
+  pollTimer = setInterval(poll, 4000);
+}
+
+function stopPolling() {
+  if (pollTimer) clearInterval(pollTimer);
+  pollTimer = null;
+}
+
+$("recheck").addEventListener("click", loadInfo);
+$("to-step-2").addEventListener("click", () => { show(2); ($("friendly-name").value ? $("client-id") : $("friendly-name")).focus(); });
+$("back-to-1").addEventListener("click", () => show(1));
+$("create").addEventListener("click", create);
+$("details").addEventListener("submit", (event) => { event.preventDefault(); create(); });
+$("copy-join").addEventListener("click", (event) => copyText($("join-command").textContent, event.target));
+$("new-code").addEventListener("click", () => {
+  $("copy-join").disabled = false;
+  $("new-code").textContent = "Make a new command";
+  newCode();
+});
+$("show-manual").addEventListener("click", showManual);
+$("copy-command").addEventListener("click", (event) => copyText($("install-command").textContent, event.target));
+$("copy-env").addEventListener("click", (event) => copyText($("client-env").textContent, event.target));
+$("download-env").addEventListener("click", () => {
+  const blob = new Blob([issued.client_env], { type: "text/plain" });
+  const link = document.createElement("a");
+  link.href = URL.createObjectURL(blob);
+  link.download = issued.credentials_filename;
+  link.click();
+  setTimeout(() => URL.revokeObjectURL(link.href), 1000);
+});
+$("to-step-4").addEventListener("click", () => { waitStarted = Date.now(); show(4); poll(); });
+window.addEventListener("beforeunload", (event) => {
+  if (issued && issued.client_env && !$("step-3").classList.contains("hidden")) { event.preventDefault(); event.returnValue = ""; }
+});
+
+show(1);
+loadInfo();
+</script>
+</body>
+</html>

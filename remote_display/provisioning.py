@@ -19,6 +19,12 @@ configuration UI can both use it::
                           "credential_id", "state", "created_at", "updated_at",
                           "history": [{"at", "action", "actor"}]}}}
 
+``join_tickets`` (optional) holds one-time join codes from the config UI's
+"Add a display" wizard, keyed by the code's SHA-256: ``{"client_id",
+"expires_at", "server_url", "allow_insecure_transport", "created_at"}``.
+Redeeming a code deletes it and issues the client's credential then, so the
+credential only ever exists on the display that redeemed the code.
+
 ``state`` is ``active``, ``disabled`` (credential kept, refused until
 enabled) or ``revoked`` (credential destroyed; rotate to issue a new one).
 Disabling or revoking never removes the client's playlist assignment or
@@ -53,6 +59,7 @@ except ImportError:  # pragma: no cover
 
 SCHEMA_VERSION = 1
 MAX_HISTORY = 50
+JOIN_TICKET_SECONDS = 30 * 60
 STATES = ("active", "disabled", "revoked")
 _PROJECT_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_PROVISIONING_PATH = _PROJECT_ROOT / ".runtime" / "server" / "provisioned_clients.json"
@@ -84,6 +91,11 @@ class AlreadyProvisionedError(ProvisioningError):
 class UnknownProvisionedClientError(ProvisioningError):
     status = 404
     code = "unknown_client"
+
+
+class InvalidJoinCodeError(ProvisioningError):
+    status = 401
+    code = "invalid_join_code"
 
 
 @dataclass(frozen=True)
@@ -186,6 +198,14 @@ class ProvisioningStore:
         record["credential_id"] = credential_id
         return secret, credential_id
 
+    @staticmethod
+    def _drop_tickets(data: dict[str, Any], client_id: str | None, now: float) -> None:
+        """Remove expired join tickets, and every ticket for *client_id*."""
+
+        tickets = data.get("join_tickets") or {}
+        data["join_tickets"] = {h: t for h, t in tickets.items()
+                                if t.get("client_id") != client_id and float(t.get("expires_at") or 0) > now}
+
     # ── Operations ─────────────────────────────────────────────────────────
 
     def provision(self, client_id: str, display_profile: str, *, actor: str = "admin") -> Issued:
@@ -215,6 +235,7 @@ class ProvisioningStore:
                 raise ProvisioningError("enable this client before rotating its credential", client_id=client_id)
             secret, credential_id = self._issue(record)
             record["state"] = "active"
+            self._drop_tickets(data, client_id, self._clock())
             self._event(record, "rotated", actor)
         return Issued(client_id, record["display_profile"], secret, credential_id)
 
@@ -229,6 +250,8 @@ class ProvisioningStore:
                 raise ProvisioningError("a revoked client is re-activated by rotating its credential",
                                         client_id=client_id)
             record["state"] = "disabled" if disabled else "active"
+            if disabled:
+                self._drop_tickets(data, client_id, self._clock())
             self._event(record, "disabled" if disabled else "enabled", actor)
             return _public(record)
 
@@ -240,8 +263,60 @@ class ProvisioningStore:
             if destroy:
                 record["credential_hash"] = None
                 record["credential_id"] = None
+                self._drop_tickets(data, client_id, self._clock())
             self._event(record, state, actor)
             return _public(record)
+
+    def create_join_ticket(self, client_id: str, *, server_url: str, allow_insecure_transport: bool = False,
+                           seconds: float = JOIN_TICKET_SECONDS, actor: str = "admin") -> tuple[str, float]:
+        """A one-time join code for *client_id* and when it expires; earlier codes stop working."""
+
+        client_id = identifier(client_id, "client_id")
+        with self._transaction() as data:
+            record = self._record(data, client_id)
+            if record["state"] != "active":
+                raise ProvisioningError(f"this client is {record['state']}", client_id=client_id)
+            now = self._clock()
+            self._drop_tickets(data, client_id, now)
+            code = secrets.token_urlsafe(12)
+            expires = now + seconds
+            data["join_tickets"][_hash(code)] = {
+                "client_id": client_id, "created_at": now, "expires_at": expires,
+                "server_url": server_url, "allow_insecure_transport": bool(allow_insecure_transport),
+            }
+            self._event(record, "join_code_created", actor)
+        return code, expires
+
+    def redeem_join_ticket(self, code: str | None, *, actor: str = "join") -> tuple[Issued, dict[str, Any]]:
+        """Use up a join code: issue the client's credential and return it with the ticket."""
+
+        if not code or not isinstance(code, str) or len(code) > 128:
+            raise InvalidJoinCodeError("unknown or expired join code")
+        with self._transaction() as data:
+            now = self._clock()
+            tickets = data.get("join_tickets") or {}
+            ticket = next((t for h, t in tickets.items() if hmac.compare_digest(h, _hash(code))), None)
+            if ticket is None or float(ticket.get("expires_at") or 0) <= now:
+                self._drop_tickets(data, None, now)
+                raise InvalidJoinCodeError("unknown or expired join code")
+            client_id = ticket["client_id"]
+            self._drop_tickets(data, client_id, now)
+            record = data["clients"].get(client_id)
+            if record is None or record["state"] != "active":
+                raise InvalidJoinCodeError("this display was removed or disabled after the code was made")
+            secret, credential_id = self._issue(record)
+            self._event(record, "joined", actor)
+        return Issued(client_id, record["display_profile"], secret, credential_id), dict(ticket)
+
+    def join_pending(self, client_id: str) -> float | None:
+        """When *client_id*'s unused join code expires, or None."""
+
+        now = self._clock()
+        with self._lock:
+            tickets = self._load().get("join_tickets") or {}
+        expiries = [float(t["expires_at"]) for t in tickets.values()
+                    if t.get("client_id") == client_id and float(t.get("expires_at") or 0) > now]
+        return max(expiries) if expiries else None
 
     # ── Queries ────────────────────────────────────────────────────────────
 
@@ -277,11 +352,14 @@ class ProvisioningStore:
         return record.get("credential_id")
 
 
-def client_env(issued: Issued, server_url: str | None) -> tuple[str, list[str]]:
+def client_env(issued: Issued, server_url: str | None, *,
+               allow_insecure_transport: bool = False) -> tuple[str, list[str]]:
     """The ``.env.client`` for a newly issued credential, and any transport warnings.
 
     It carries only the client's own settings: never the server token, the
-    admin token or any provider credential.
+    admin token or any provider credential. *allow_insecure_transport* adds
+    ``DESK_DISPLAY_ALLOW_INSECURE_TRANSPORT=1`` so a client on a trusted LAN
+    accepts a plain-HTTP server URL.
     """
 
     url = server_url or "https://render-server.example:8765"
@@ -293,8 +371,11 @@ def client_env(issued: Issued, server_url: str | None) -> tuple[str, list[str]]:
         f"DESK_DISPLAY_CLIENT_ID={issued.client_id}",
         f"DESK_DISPLAY_CLIENT_TOKEN={issued.credential}",
         f"DESK_DISPLAY_PROFILE={issued.display_profile}",
-        "",
     ]
+    if allow_insecure_transport:
+        lines += ["# Plain HTTP on a trusted network, chosen when this display was added.",
+                  "DESK_DISPLAY_ALLOW_INSECURE_TRANSPORT=1"]
+    lines.append("")
     return "\n".join(lines), transport_warnings(url)
 
 
@@ -347,7 +428,9 @@ def _cli(argv: Iterable[str] | None = None) -> int:
 
 
 __all__ = [
+    "JOIN_TICKET_SECONDS",
     "AlreadyProvisionedError",
+    "InvalidJoinCodeError",
     "Issued",
     "ProvisioningError",
     "ProvisioningStore",
