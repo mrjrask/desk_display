@@ -473,17 +473,17 @@ SETTINGS: tuple[Setting, ...] = (
        example=""),
 
     # ── Config UI ────────────────────────────────────────────────────────────
-    _s("SCREEN_CONFIG_HOST", "str", _SERVER, "config_ui",
+    _s("SCREEN_CONFIG_HOST", "str", _ALL, "config_ui",
        "Config UI bind address.", default="0.0.0.0"),  # noqa: S104 - intentional: LAN-facing service, see CONFIGURATION.md
-    _s("SCREEN_CONFIG_PORT", "int", _SERVER, "config_ui",
+    _s("SCREEN_CONFIG_PORT", "int", _ALL, "config_ui",
        "Config UI port.", default="5002", minimum=1, maximum=65535),
-    _s("SCREEN_UI_USERNAME", "str", _SERVER, "config_ui", "Optional login username."),
-    _s("SCREEN_UI_PASSWORD", "str", _SERVER, "config_ui",
+    _s("SCREEN_UI_USERNAME", "str", _ALL, "config_ui", "Optional login username."),
+    _s("SCREEN_UI_PASSWORD", "str", _ALL, "config_ui",
        "Password required for UI pages and APIs when set.", secret=True),
-    _s("SCREEN_SESSION_SECRET", "str", _SERVER, "config_ui",
+    _s("SCREEN_SESSION_SECRET", "str", _ALL, "config_ui",
        "Dedicated Flask session-signing secret; otherwise derived from the password "
        "or a per-process random value.", secret=True),
-    _s("SCREEN_AUTH_ENABLED", "bool", _SERVER, "config_ui",
+    _s("SCREEN_AUTH_ENABLED", "bool", _ALL, "config_ui",
        "Force authentication on; startup fails when SCREEN_UI_PASSWORD is empty.", default="0"),
 
     # ── Screenshot feed server ───────────────────────────────────────────────

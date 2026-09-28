@@ -79,3 +79,38 @@ def test_unmarked_install_follows_the_env_role(tmp_path, monkeypatch, env_role, 
         (tmp_path / ".env.client").write_text("DESK_DISPLAY_ROLE=client\n")
     assert config_ui._panel_service_unit() == unit
     assert config_ui._serves_displays() is serves
+
+
+@pytest.fixture
+def client_install(tmp_path, monkeypatch):
+    install_modes.write_marker(tmp_path, "client")
+    monkeypatch.setattr(config_ui, "__file__", str(tmp_path / "config_ui.py"))
+    monkeypatch.setattr(config_ui, "_is_auth_enabled", lambda: False)
+    monkeypatch.setattr(config_ui, "_load_service_status", lambda unit_name=None: {})
+    config_ui.app.config["TESTING"] = True
+    return config_ui.app.test_client()
+
+
+def test_client_install_serves_only_the_screenshot_pages(client_install):
+    assert client_install.get("/screenshots").status_code == 200
+    assert client_install.get("/feed").status_code == 200
+    assert client_install.get("/api/screenshots").status_code == 200
+    assert client_install.get("/api/feed/screenshots").status_code == 200
+    home = client_install.get("/")
+    assert home.status_code == 302 and home.headers["Location"].endswith("/screenshots")
+    for path in ("/playlists", "/clients", "/api/screens", "/api/screens/export"):
+        assert client_install.get(path).status_code == 404, path
+    assert client_install.post("/api/screens", json={}).status_code == 404
+
+
+def test_client_screenshots_page_links_only_to_local_pages(client_install):
+    page = client_install.get("/screenshots").get_data(as_text=True)
+    assert 'href="/feed"' in page
+    assert 'href="/playlists"' not in page and 'href="/clients"' not in page and 'href="/"' not in page
+
+
+@pytest.mark.parametrize("mode", ["standalone", "server", "combined"])
+def test_other_modes_keep_the_full_config_ui(tmp_path, monkeypatch, mode):
+    install_modes.write_marker(tmp_path, mode)
+    monkeypatch.setattr(config_ui, "__file__", str(tmp_path / "config_ui.py"))
+    assert config_ui._screenshots_only() is False

@@ -113,13 +113,18 @@ def test_client_example_covers_requested_sections():
         assert f"# {heading}" in text, heading
 
 
+# The enrollment token, the local feed-upload token, and the login for the
+# client's own Screenshots page.
+CLIENT_SECRETS = {"DESK_DISPLAY_CLIENT_TOKEN", "FEED_UPLOAD_TOKEN", "SCREEN_UI_PASSWORD", "SCREEN_SESSION_SECRET"}
+
+
 def test_client_needs_no_upstream_keys_or_provider_urls():
     values = dc.parse_env_file(ROOT / ".env.client.example")
     for name in values:
         setting = dc.SETTINGS_BY_NAME[name]
         assert not setting.provider, name
         if setting.secret:
-            assert name in {"DESK_DISPLAY_CLIENT_TOKEN", "FEED_UPLOAD_TOKEN"}, name
+            assert name in CLIENT_SECRETS, name
     client_settings = dc.settings_for_role(Role.CLIENT)
     assert not [s.name for s in client_settings if s.provider]
 
@@ -223,7 +228,7 @@ def test_defaults_apply_when_unset():
     assert client["DESK_DISPLAY_SYNC_INTERVAL_SECONDS"] == 30
     assert client["DESK_DISPLAY_HEARTBEAT_INTERVAL_SECONDS"] == 60
     assert "OWM_API_KEY" not in client
-    assert "SCREEN_UI_PASSWORD" not in client
+    assert client["SCREEN_CONFIG_PORT"] == 5002  # the client's Screenshots page
 
 
 @pytest.mark.parametrize(
@@ -277,7 +282,7 @@ def test_client_rejects_misplaced_server_variables():
     errors = _errors(dc.validate(Role.CLIENT, env))
     assert "provider credential does not belong on a client" in errors["OWM_API_KEY"]
     assert "server setting does not belong on a client" in errors["DESK_DISPLAY_RENDER_WORKERS"]
-    assert "SCREEN_UI_PASSWORD" in errors
+    assert "SCREEN_UI_PASSWORD" not in errors  # it guards the client's own Screenshots page
     # An empty misplaced value configures nothing, so it is not flagged.
     assert "WEATHER_LATITUDE" not in errors
 

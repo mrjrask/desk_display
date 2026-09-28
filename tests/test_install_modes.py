@@ -46,10 +46,11 @@ def digest_tree(root: Path, paths) -> dict[str, str]:
 
 
 @pytest.mark.parametrize("output", OUTPUTS)
-def test_clients_install_no_provider_or_web_libraries(output):
+def test_clients_install_no_provider_libraries(output):
     installed = names(im.requirements_file("client", output))
     assert {"requests", "pillow", "pytz"} <= installed
-    assert not installed & (PROVIDER_LIBS | WEB_LIBS)
+    assert WEB_LIBS <= installed  # the local Screenshots page
+    assert not installed & PROVIDER_LIBS
 
 
 def test_servers_install_the_application_but_no_panel_stack():

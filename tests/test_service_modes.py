@@ -23,7 +23,7 @@ def units(mode):
 @pytest.mark.parametrize("mode, expected", [
     ("standalone", {su.STANDALONE_SERVICE, su.CONFIG_UI_SERVICE}),
     ("server", {su.SERVER_SERVICE, su.CONFIG_UI_SERVICE}),
-    ("client", {su.CLIENT_SERVICE}),
+    ("client", {su.CLIENT_SERVICE, su.CONFIG_UI_SERVICE}),
     ("combined", {su.SERVER_SERVICE, su.CLIENT_SERVICE, su.CONFIG_UI_SERVICE}),
 ])
 def test_each_mode_installs_its_services_and_disables_the_rest(mode, expected):
@@ -35,6 +35,13 @@ def test_only_the_standalone_mode_runs_main_py():
     for mode in su.Mode:
         scripts = {section["Service"]["ExecStart"][0].split()[-1] for section in units(mode).values()}
         assert ("/opt/dd/main.py" in scripts) == (mode is su.Mode.STANDALONE)
+
+
+def test_client_screenshots_page_reads_the_panels_env_file():
+    ui = units("client")[su.CONFIG_UI_SERVICE]["Service"]
+    assert ui["ExecStart"] == ["/opt/dd/venv/bin/python /opt/dd/config_ui.py"]
+    assert ui["EnvironmentFile"] == ["-/opt/dd/.env.client"]
+    assert ui["Environment"] == ["DESK_DISPLAY_ROLE=client", "DESK_DISPLAY_DOTENV_FILE=.env.client"]
 
 
 def test_combined_panel_is_an_ordinary_client_of_its_own_server():

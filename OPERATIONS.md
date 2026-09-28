@@ -62,7 +62,7 @@ documents and enforces the dependency order between them:
 | `waveshare-fbcp.service` | Mirrors the framebuffer onto a Waveshare panel. |
 | `desk_display_waveshare_oled.service` | Side status OLED helper. |
 | `screenshot_uploader_desk_display.service` | POSTs new screenshots to a feed server. |
-| `config_ui_desk_display.service` | The web config UI on port 5002. |
+| `config_ui_desk_display.service` | The web config UI on port 5002 (only the Screenshots and Feed pages on a client). |
 | `airplay_desk_display.service` | Optional AirPlay receiver add-on. |
 
 ---
@@ -150,7 +150,7 @@ systemd services for each mode:
 | --- | --- | --- |
 | standalone | `desk_display.service` (main.py), config UI | `.env` |
 | server | `desk_display_server.service`, config UI | `.env` |
-| client | `desk_display_client.service` | `.env.client` |
+| client | `desk_display_client.service`, Screenshots page | `.env.client` |
 | combined | server, client and config UI | `.env` (server), `.env.client` (panel) |
 
 In a combined installation the attached panel is an ordinary client of

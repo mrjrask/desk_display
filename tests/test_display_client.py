@@ -394,8 +394,11 @@ def test_client_role_holds_no_upstream_provider_credentials():
     import deployment_config
 
     client_settings = deployment_config.settings_for_role(deployment_config.Role.CLIENT)
-    # Only the enrollment token and the local feed-upload token; no provider API keys.
-    assert {s.name for s in client_settings if s.secret} <= {"DESK_DISPLAY_CLIENT_TOKEN", "FEED_UPLOAD_TOKEN"}
+    # The enrollment token, the local feed-upload token and the Screenshots page login;
+    # no provider API keys.
+    assert {s.name for s in client_settings if s.secret} <= {
+        "DESK_DISPLAY_CLIENT_TOKEN", "FEED_UPLOAD_TOKEN", "SCREEN_UI_PASSWORD", "SCREEN_SESSION_SECRET",
+    }
     assert not [s.name for s in client_settings if "API_KEY" in s.name]
 
 
