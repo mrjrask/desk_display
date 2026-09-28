@@ -23,6 +23,9 @@ See the README's [deployment modes](README.md#deployment-modes) and
   command (`POST /api/v1/join`) that installs and configures the new Pi, and
   shows when the display comes online.
   On a Pi still on v0.1 the setup script updates the checkout first.
+- Every display (standalone, client or combined) starts at the top of the
+  playlist labelled "Starter" whenever it restarts, instead of resuming a
+  saved position.
 - Delivery telemetry: clients report heartbeat and manifest round trips,
   full-sync time, what the last sync downloaded (files, bytes, time), how
   old the screen on the panel is and failed passes in a row. It shows in a

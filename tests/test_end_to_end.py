@@ -518,18 +518,16 @@ def test_server_restart_is_invisible_to_clients(system):
     assert system.status("office")["lease_state"] == "active"
 
 
-def test_client_restart_resumes_where_it_was_without_the_server(system):
+def test_client_restart_starts_from_the_top_without_the_server(system):
     client = _ready(system)
     play(client, 2)
-    position = client.playback.current_screen
     system.stop()
 
     restarted = system.client("office", "hyperpixel4")
     (screen, frame), = play(restarted, 1)
-    order = list(PLAYLIST_A["screens"])
-    assert screen == order[(order.index(position) + 1) % len(order)]
-    if screen != "date":
-        assert same(frame, expected_still(system, screen, "hyperpixel4"))
+    # No Starter playlist in PLAYLIST_A, so a restart begins at its first screen.
+    assert screen == "MLB AL Standings"
+    assert same(frame, expected_still(system, screen, "hyperpixel4"))
 
 
 def test_long_outage_keeps_playing_then_expires_then_recovers(system):

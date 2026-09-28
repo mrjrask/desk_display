@@ -186,16 +186,38 @@ def test_different_rotations_share_renders_and_keep_own_position(world):
     assert shown(sideways, 1) == expected_order(SHARED, 1)
 
 
-def test_restart_resumes_the_clients_own_position(world):
+# "date" is ungrouped, so it plays before either playlist; the Starter
+# playlist is last in the sequence.
+WITH_STARTER = {
+    "screens": {"date": 1, "news headlines": 1, "weather1": 1},
+    "playlists": {
+        "p-other": {"label": "Other", "steps": [{"screen": "news headlines"}]},
+        "p-starter": {"label": "Starter", "steps": [{"screen": "weather1"}]},
+    },
+    "sequence": [{"playlist": "p-other"}, {"playlist": "p-starter"}],
+}
+
+
+def test_restart_starts_at_the_top_of_the_starter_playlist(world):
+    world.assign("office", WITH_STARTER)
+    office = world.client("office")
+    world.settle(office)
+    assert shown(office, 4) == ["weather1", "date", "news headlines", "weather1"]
+    world.transports["office"].down = True
+    restarted = world.client("office")  # offline restart from cache
+    assert shown(restarted, 2) == ["weather1", "date"]
+    assert restarted.playback.history[-6:] == ["weather1", "date", "news headlines", "weather1", "weather1", "date"]
+
+
+def test_restart_without_a_starter_playlist_starts_at_the_top(world):
     world.assign("office", SHARED)
     office = world.client("office")
     world.settle(office)
     order = expected_order(SHARED, 8)
     assert shown(office, 4) == order[:4]
     world.transports["office"].down = True
-    restarted = world.client("office")  # offline restart from cache
-    assert shown(restarted, 3) == order[4:7]
-    assert restarted.playback.history[-7:] == order[:7]
+    restarted = world.client("office")
+    assert shown(restarted, 3) == order[:3]
 
 
 def test_playlist_update_continues_after_the_current_screen(world):

@@ -138,6 +138,7 @@ from schedule import (
     build_scheduler,
     load_schedule_config,
     sanitize_schedule_config,
+    starter_screen_ids,
 )
 from screens.registry import ScreenContext, ScreenDefinition, build_screen_registry
 from screens_catalog import SCREEN_IDS
@@ -782,6 +783,9 @@ def _load_scheduler_from_config() -> Optional[ScreenScheduler]:
         logging.error(f"Invalid schedule configuration: {exc}")
         return None
 
+    # A fresh scheduler (restart or config reload) begins at the top of the
+    # Starter playlist.
+    scheduler.start_at(starter_screen_ids(config_data))
     return scheduler
 
 

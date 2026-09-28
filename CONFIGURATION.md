@@ -237,7 +237,8 @@ are stored with stable `pl-…` IDs and content revisions in
 `DESK_DISPLAY_PLAYLIST_STORE_PATH`. Screen order is play order, as on the
 config page, so it is kept exactly and reordering changes the revision. Each
 client plays its playlist independently: skip, previous and touch affect only
-that display, it resumes its own position after a restart, and a playlist
+that display, a restart begins at the top of the playlist labelled
+"Starter" (or at the top when there is none), and a playlist
 update continues after the screen it was showing instead of starting over. Writes are atomic and locked, every
 change is recorded in an audit log, and every edit, rename, reorder, delete,
 and assignment must name the revision (or current playlist) it was based on,

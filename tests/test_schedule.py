@@ -3,7 +3,7 @@ from datetime import UTC, datetime
 
 import pytest
 
-from schedule import KNOWN_SCREENS, build_scheduler, sanitize_schedule_config
+from schedule import KNOWN_SCREENS, build_scheduler, sanitize_schedule_config, starter_screen_ids
 from screens.registry import ScreenDefinition
 
 
@@ -787,3 +787,34 @@ def test_mlb_no_game_entries_do_not_add_standalone_schedule_slots():
         "cubs next",
         "sox next",
     ]
+
+
+STARTER_CONFIG = {
+    "screens": {"date": 1, "nixie": 1, "weather1": 1, "news headlines": 2},
+    "playlists": {
+        "p-news": {"label": "News", "steps": [{"screen": "news headlines"}]},
+        "p-start": {"label": " starter ", "steps": [{"screen": "nixie"}, {"screen": "weather1"}]},
+    },
+    "sequence": [{"playlist": "p-news"}, {"playlist": "p-start"}],
+}
+
+
+def test_starter_screen_ids_matches_label_case_insensitively():
+    assert starter_screen_ids(STARTER_CONFIG) == ["nixie", "weather1"]
+    assert starter_screen_ids({"screens": {"date": 1}}) == []
+
+
+def test_start_at_begins_cycle_one_at_the_starter_playlist():
+    scheduler = build_scheduler(STARTER_CONFIG)
+    assert scheduler.preview_scheduled_ids(4) == ["date", "news headlines", "nixie", "weather1"]
+    assert scheduler.start_at(starter_screen_ids(STARTER_CONFIG))
+    # Cycle 1 from the Starter playlist, then cycle 2 from the top.
+    assert scheduler.preview_scheduled_ids(5) == ["nixie", "weather1", "date", "nixie", "weather1"]
+
+
+def test_start_at_skips_starter_screens_without_a_slot():
+    config = {**STARTER_CONFIG, "screens": {**STARTER_CONFIG["screens"], "nixie": 0}}
+    scheduler = build_scheduler(config)
+    assert scheduler.start_at(["nixie", "weather1"])
+    assert scheduler.preview_scheduled_ids(1) == ["weather1"]
+    assert not build_scheduler(config).start_at([])
