@@ -69,7 +69,7 @@ def test_ncaa_fbs_fetch_scoreboard_contract(monkeypatch):
 
     payload = ncaa_fbs.fetch_scoreboard(now=dt.datetime(2026, 9, 26, 12, 0))
 
-    week = [dt.date(2026, 9, 23) + dt.timedelta(days=offset) for offset in range(7)]
+    week = [dt.date(2026, 9, 21) + dt.timedelta(days=offset) for offset in range(7)]
     assert requested == week
     assert [game["date"] for game in payload] == [day.isoformat() for day in week]
 
