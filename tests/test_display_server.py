@@ -452,6 +452,37 @@ def test_heartbeat_renews_lease_and_records_status(api, clock):
     assert office["demand"]["required_screens"] == ["inside"]
 
 
+def telemetry(**overrides):
+    return {"type": "client_telemetry", "version": 1, "heartbeat_rtt_ms": 42.0, "download_count": 1,
+            "download_bytes": 2048, "download_ms": 90.0, "displayed_content_age_seconds": 12.0, **overrides}
+
+
+def test_heartbeat_advertises_and_records_client_telemetry(api):
+    credential = registered(api)
+    body = api.post("/api/v1/clients/office/heartbeat", json={"status": status()},
+                    headers=bearer(credential)).get_json()
+    assert body["client_telemetry_versions"] == [1]
+    response = api.post("/api/v1/clients/office/heartbeat", json={"status": status(), "telemetry": telemetry()},
+                        headers=bearer(credential))
+    assert response.status_code == 200
+    office = next(c for c in admin_status(api)["clients"] if c["client_id"] == "office")
+    assert office["telemetry"]["heartbeat_rtt_ms"] == 42.0
+    assert office["telemetry"]["download_bytes"] == 2048
+    # A heartbeat without telemetry clears the old timings rather than keeping stale ones.
+    api.post("/api/v1/clients/office/heartbeat", json={"status": status()}, headers=bearer(credential))
+    office = next(c for c in admin_status(api)["clients"] if c["client_id"] == "office")
+    assert office["telemetry"] is None
+
+
+def test_malformed_telemetry_is_rejected(api):
+    credential = registered(api)
+    for bad in (telemetry(heartbeat_rtt_ms=-1), telemetry(download_count="2"), telemetry(extra=1),
+                telemetry(version=2)):
+        response = api.post("/api/v1/clients/office/heartbeat", json={"status": status(), "telemetry": bad},
+                            headers=bearer(credential))
+        assert response.status_code == 400, bad
+
+
 def test_malformed_heartbeat(api):
     credential = registered(api)
     for body in ({}, {"status": {"type": "client_status"}}, {"status": status(physical_rotation=45)},

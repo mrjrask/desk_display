@@ -12,7 +12,12 @@ pytest.importorskip("flask")
 import config_ui  # noqa: E402
 import remote_playlists_ui as ui  # noqa: E402
 from display_profiles import PROFILE_PRESETS  # noqa: E402
-from remote_display.models import AcceptedRevisions, ClientCapabilities, ClientStatus  # noqa: E402
+from remote_display.models import (  # noqa: E402
+    AcceptedRevisions,
+    ClientCapabilities,
+    ClientStatus,
+    ClientTelemetry,
+)
 from remote_display.playlist_store import PlaylistStore  # noqa: E402
 from remote_display.registry import ClientRegistry  # noqa: E402
 
@@ -64,7 +69,7 @@ def caps(client_id, profile="hyperpixel4", **extra):
     )
 
 
-def publish_registry(env, clients, *, delivered=None, acknowledged=None, clock=None):
+def publish_registry(env, clients, *, delivered=None, acknowledged=None, clock=None, telemetry=None):
     """Write the snapshot the render server would publish."""
 
     import time
@@ -76,9 +81,10 @@ def publish_registry(env, clients, *, delivered=None, acknowledged=None, clock=N
         status = ClientStatus(
             client_id=capabilities.client_id, playback_state="playing",
             accepted_revisions=AcceptedRevisions(playlist_revision=(acknowledged or {}).get(capabilities.client_id)),
-            current_screen="date", physical_rotation=180, cache_age_seconds=42,
+            current_screen="date", physical_rotation=180, cache_age_seconds=42, last_sync_age_seconds=12,
         )
-        registry.heartbeat(capabilities.client_id, registration.credential, status)
+        registry.heartbeat(capabilities.client_id, registration.credential, status,
+                           telemetry=(telemetry or {}).get(capabilities.client_id))
         registry.mark_delivered(capabilities.client_id, (delivered or {}).get(capabilities.client_id))
     registry.write_snapshot(env["snapshot"])
     return registry
@@ -249,6 +255,22 @@ def test_client_registry_and_acknowledgment_status(web, env):
     assert lobby["revision_state"] == "unassigned"
 
 
+def test_client_rows_carry_delivery_telemetry(web, env):
+    timings = ClientTelemetry(heartbeat_rtt_ms=84.5, manifest_fetch_ms=120.0, last_sync_duration_ms=900.0,
+                              download_count=2, download_bytes=40960, download_ms=610.0,
+                              displayed_content_age_seconds=35.0, consecutive_failures=1)
+    publish_registry(env, [caps("office"), caps("den")], telemetry={"office": timings})
+    rows = {row["client_id"]: row for row in web.get("/api/clients").get_json()["clients"]}
+    assert rows["office"]["telemetry"] == {
+        "heartbeat_rtt_ms": 84.5, "manifest_fetch_ms": 120.0, "last_sync_duration_ms": 900.0,
+        "download_count": 2, "download_bytes": 40960, "download_ms": 610.0,
+        "displayed_content_age_seconds": 35.0, "consecutive_failures": 1,
+    }
+    # A client that predates telemetry (or has not reported yet) has none.
+    assert rows["den"]["telemetry"] is None
+    assert "last_sync_age_seconds" in rows["den"]
+
+
 def test_client_states(env):
     heartbeat = 20
     now = 1_800_000_000.0
@@ -414,6 +436,22 @@ def test_browser_client_assignment(live_server, browser, env):
     assert "delivered " + playlist["revision"] in row_text
     assert "acknowledged —" in row_text
     assert "lobby" in page.inner_text("#clients")
+
+
+def test_browser_clients_page_shows_delivery_timings(live_server, browser, env):
+    timings = ClientTelemetry(heartbeat_rtt_ms=84.5, manifest_fetch_ms=1250.0, last_sync_duration_ms=2400.0,
+                              download_count=3, download_bytes=2 * 1048576, download_ms=1800.0,
+                              displayed_content_age_seconds=35.0, consecutive_failures=2)
+    publish_registry(env, [caps("office"), caps("den")], telemetry={"office": timings})
+    page = browser.new_page(viewport={"width": 1600, "height": 700})
+    page.goto(f"{live_server}/clients")
+    page.wait_for_selector("tr[data-client-id='office']")
+    office = page.inner_text("tr[data-client-id='office']")
+    assert "last sync 12s ago" in office and "on screen rendered 35s ago" in office
+    assert "heartbeat 85 ms · manifest 1.3 s · sync 2.4 s" in office
+    assert "last download 3 files, 2.0 MB in 1.8 s" in office
+    assert "2 failed syncs before the last success" in office
+    assert "no timings reported" in page.inner_text("tr[data-client-id='den']")
 
 
 # ── Provisioning (Phase 16) ────────────────────────────────────────────────

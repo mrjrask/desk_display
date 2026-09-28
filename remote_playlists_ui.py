@@ -80,6 +80,20 @@ def client_state(entry: Mapping[str, Any], heartbeat_interval: float, now: float
     return "online"
 
 
+TELEMETRY_FIELDS = (
+    "heartbeat_rtt_ms", "manifest_fetch_ms", "last_sync_duration_ms", "download_count",
+    "download_bytes", "download_ms", "displayed_content_age_seconds", "consecutive_failures",
+)
+
+
+def _telemetry_row(telemetry: Any) -> dict[str, Any] | None:
+    """The delivery timings a client last reported, without the wire envelope."""
+
+    if not isinstance(telemetry, Mapping):
+        return None
+    return {key: telemetry.get(key) for key in TELEMETRY_FIELDS}
+
+
 def revision_state(saved: str | None, delivered: str | None, acknowledged: str | None) -> str:
     if saved is None:
         return "unassigned"
@@ -282,6 +296,9 @@ def register(
                 "current_screen": status.get("current_screen"),
                 "playback_state": status.get("playback_state"),
                 "cache_age_seconds": status.get("cache_age_seconds"),
+                "last_sync_age_seconds": status.get("last_sync_age_seconds"),
+                # Client-measured delivery timings (None from clients that predate them).
+                "telemetry": _telemetry_row(entry.get("telemetry")),
                 "last_heartbeat": entry.get("last_seen"),
                 "lease_expires_at": entry.get("lease_expires_at"),
                 "assignment": None if playlist is None else {

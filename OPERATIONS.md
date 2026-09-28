@@ -396,10 +396,10 @@ only as a still, or not at all.
 On `/clients`, a client is *stale* when its last heartbeat is older than
 1.5 heartbeat intervals (the server's interval is a third of
 `DESK_DISPLAY_CLIENT_LEASE_SECONDS`, so 150 seconds by default), and
-*expired* when its lease has lapsed. A client sends one heartbeat per sync,
-every `DESK_DISPLAY_SYNC_INTERVAL_SECONDS` (30 by default); it does not use
-the intervals the server advertises, so a sync interval longer than half the
-lease makes a healthy client look stale. From the shell:
+*expired* when its lease has lapsed. A client runs a full sync every
+`DESK_DISPLAY_SYNC_INTERVAL_SECONDS` (30 by default) and heartbeats every
+`DESK_DISPLAY_HEARTBEAT_INTERVAL_SECONDS` (60 by default); the intervals the
+server advertises cap both. From the shell:
 
 ```bash
 curl -s -H "Authorization: Bearer $ADMIN" http://127.0.0.1:8765/api/v1/admin/status | python3 -m json.tool
@@ -419,6 +419,37 @@ not finished rendering something the new playlist needs). A 401 in the log
 usually means the credential was rotated or revoked: install the new
 `.env.client`. A 409 `incompatible_protocol_version` means the client and
 server need the same release: upgrade the older one.
+
+### Checking delivery speed
+
+Each heartbeat carries timings the client measured itself, so they include
+the network between it and the server (a VPN, Wi-Fi). The *Delivery* column
+on `/clients` shows them:
+
+- *last sync N ago*: time since the last full sync succeeded. It should stay
+  under the sync interval (30 s by default).
+- *on screen rendered N ago*: how long ago the server rendered the screen now
+  on the panel. This is the end-to-end freshness: render cadence plus
+  delivery.
+- *heartbeat*, *manifest*, *sync*: round trip of the last heartbeat, the
+  last manifest fetch, and the whole last full sync.
+- *last download*: files, bytes and time the last sync that fetched
+  anything took. Bytes divided by time is the client's effective throughput.
+- *failed syncs before the last success*: how many passes failed in a row
+  before the connection recovered.
+
+The same values are under `telemetry` in `/api/v1/admin/status`. The client
+journal logs each sync that downloads something:
+
+```bash
+sudo journalctl -u desk_display_client.service -f | grep -E "Downloaded|Sync failed"
+```
+
+The server journal logs every request with its time on the server (for
+example `GET /api/v1/clients/<id>/manifest -> 304 3ms`); that number
+excludes the network, so a gap between it and the client's figure is the
+link. Clients older than this release report no timings ("no timings
+reported").
 
 ### Diagnosing stale renders
 
