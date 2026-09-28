@@ -316,3 +316,18 @@ def test_server_config_carries_the_assigned_playlist(tmp_path):
     store.assign("office", None, expected_playlist_id=created["id"], actor="test")
     body = api.get("/api/v1/clients/office/config", headers={"Authorization": f"Bearer {credential}"}).get_json()
     assert body["playlist"] is None
+
+
+def test_playback_state_is_saved_without_fsync(tmp_path, monkeypatch):
+    """It is written on every screen change; an fsync each time wears SD cards."""
+
+    import os as _os
+
+    from remote_display.client_cache import ClientCache, PlaybackState
+
+    cache = ClientCache(tmp_path)
+    calls = []
+    monkeypatch.setattr(_os, "fsync", lambda fd: calls.append(fd))
+    cache.save_playback(PlaybackState(current_screen="date"))
+    assert calls == []
+    assert cache.load_playback().current_screen == "date"

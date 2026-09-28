@@ -539,3 +539,31 @@ def test_standings_screen_revision_follows_its_standings_feed(env):
     env.data.publish("nfl_standings", {"NFC": {}, "AFC": {"AFC West": [{"abbr": "KC"}]}})
     assert env.service.data_revision("NFL Standings NFC") != nfl
     assert env.service.data_revision("MLB NL Standings") == mlb
+
+
+def test_feed_state_is_saved_once_per_pass_and_only_when_data_changed(env, tmp_path, monkeypatch):
+    from services.feed_state import FeedStateFile
+
+    saves = []
+    original = FeedStateFile.save
+    monkeypatch.setattr(FeedStateFile, "save", lambda self, entries: (saves.append(set(entries)),
+                                                                      original(self, entries)))
+    service = ServerFeedService(
+        env.data, env.provider, settings=settings(), standings_fetchers=env.standings.fetchers(),
+        history_path=str(tmp_path / "aq.json"), state_path=str(tmp_path / "state.json"),
+        clock=env.clock, wall_clock=env.clock,
+    )
+    screens = {"NFL Standings NFC", "MLB AL Standings"}
+    assert service.refresh(screens, force=True) == {"nfl_standings": True, "mlb_league_standings": True}
+    assert len(saves) == 1  # both feeds in one write
+    assert {"nfl_standings", "mlb_league_standings"} <= saves[0]
+
+    service.refresh(screens, force=True)  # the same data again
+    assert len(saves) == 1
+
+    env.clock.advance(1)
+    service.data.publish("nfl_standings", {"NFC": {}, "AFC": {"AFC North": []}})
+    service._save(["nfl_standings"])
+    assert len(saves) == 2
+    saved = json.loads((tmp_path / "state.json").read_text())["feeds"]
+    assert saved["nfl_standings"]["value"] == {"NFC": {}, "AFC": {"AFC North": []}}

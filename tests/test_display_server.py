@@ -650,3 +650,38 @@ def test_heartbeat_without_a_feed_summary_is_unchanged(api):
     body = api.post("/api/v1/clients/office/heartbeat", json={"status": status()},
                     headers=bearer(credential)).get_json()
     assert "display_status" not in body
+
+
+def test_registry_snapshot_writes_routine_status_at_most_every_interval(tmp_path, clock, monkeypatch):
+    """Every heartbeat moves last_seen; writing the snapshot each time wears SD cards."""
+
+    import json
+
+    config = display_server.DisplayServerConfig(enrollment="shared", auth_token=SERVER_TOKEN,
+                                                artifact_dir=tmp_path / "artifacts",
+                                                registry_snapshot_path=tmp_path / "clients.json")
+    app = display_server.create_app(config, assignments={"office": Assignment("default", "rev-9", ("date",))}.get,
+                                    clock=clock)
+    writes = []
+    original = ClientRegistry.write_snapshot
+    monkeypatch.setattr(ClientRegistry, "write_snapshot",
+                        lambda self, path, snapshot=None: (writes.append(clock()),
+                                                           original(self, path, snapshot)))
+    api = app.test_client()
+    credential = registered(api, "office")
+    assert len(writes) == 1  # a registration is written at once
+
+    def beat(**overrides):
+        response = api.post("/api/v1/clients/office/heartbeat", json={"status": status(**overrides)},
+                            headers=bearer(credential))
+        assert response.status_code == 200
+
+    clock.advance(5)
+    beat()
+    beat(current_screen="weather1")
+    assert len(writes) == 1  # routine status waits
+    clock.advance(display_server.SNAPSHOT_MIN_INTERVAL_SECONDS)
+    beat(current_screen="nixie")
+    assert len(writes) == 2
+    saved = json.loads((tmp_path / "clients.json").read_text())
+    assert saved["clients"]["office"]["status"]["current_screen"] == "nixie"

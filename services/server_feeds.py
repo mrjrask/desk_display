@@ -134,20 +134,36 @@ class ServerFeedService:
             self._wildcard_fetched_at = now - max(0.0, wall - saved["nhl_wildcard_order"]["saved_at"])
         LOGGER.info("Restored saved data for %s", ", ".join(sorted(saved)))
 
-    def _save(self, feed: str) -> None:
+    def _save(self, feeds_refreshed: Iterable[str]) -> None:
+        """Save the refreshed feeds' data, once, when any of it changed.
+
+        One write per refresh pass rather than one per feed, and none when
+        every refresh returned the same data: the file holds every feed, so
+        each write is large, and during live games a pass runs every 30 s.
+        """
+
         if self._state is None:
             return
         snapshot = self.data.snapshot()
         wall = self._wall_clock()
-        for key in _FEED_KEYS.get(feed, (feed,)):
-            if key == "nhl_wildcard_order":
-                # Keep its saved time unless this refresh actually fetched it.
-                if not self._wildcard_unsaved:
+        changed = False
+        for feed in feeds_refreshed:
+            for key in _FEED_KEYS.get(feed, (feed,)):
+                if key == "nhl_wildcard_order":
+                    # Keep its saved time unless this refresh actually fetched it.
+                    if not self._wildcard_unsaved:
+                        continue
+                    self._wildcard_unsaved = False
+                if key not in snapshot.values:
                     continue
-                self._wildcard_unsaved = False
-            if key in snapshot.values:
-                self._saved[key] = {"value": snapshot.values[key],
-                                    "source_revision": snapshot.source_revisions.get(key, 0), "saved_at": wall}
+                revision = snapshot.source_revisions.get(key, 0)
+                saved = self._saved.get(key)
+                if saved is not None and saved["source_revision"] == revision:
+                    continue
+                self._saved[key] = {"value": snapshot.values[key], "source_revision": revision, "saved_at": wall}
+                changed = True
+        if not changed:
+            return
         try:
             self._state.save(self._saved)
         except OSError as exc:
@@ -234,7 +250,7 @@ class ServerFeedService:
             health.last_error = None
             health.consecutive_failures = 0
             results[feed] = True
-            self._save(feed)
+        self._save(feed for feed, ok in results.items() if ok)
         return results
 
     def _refresh_one(self, feed: str, screens: set[str], *, fresh: bool) -> None:
