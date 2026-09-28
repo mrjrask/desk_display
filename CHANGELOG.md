@@ -24,6 +24,10 @@ See the README's [deployment modes](README.md#deployment-modes) and
   (`LED_INDICATOR_ENABLED`, `LED_INDICATOR_BORDER_ENABLED`,
   `LED_INDICATOR_BORDER_WIDTH`): the manifest carries each screen's alert or
   game-result color, and clock screens run the GitHub/apt update check.
+- Clients behave like v0.1 on the panel: each screen holds for 4 seconds plus
+  its extra seconds, the A/B/X/Y buttons keep their v0.1 actions (next screen,
+  display on/off, update indicator, restart), and the Wi-Fi monitor and
+  recovery run (`ENABLE_WIFI_MONITOR`, `ENABLE_WIFI_RECOVERY`).
 - Migration: `scripts/migrate_standalone_config.py` moves a standalone rotation
   onto the server, and `scripts/convert_env.py` converts an existing `.env`.
   `--config FILE` migrates a rotation copied from another display, and a

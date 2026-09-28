@@ -67,7 +67,7 @@ files, cache sizes and free disk. Samples never contain a credential.
 While it runs, check by hand on each panel and note the result:
 
 - [ ] Touch: tapping a quad tile on a HyperPixel expands it, and a tap returns.
-- [ ] Buttons: skip and previous on the Display HAT Mini.
+- [ ] Buttons on the Display HAT Mini: A next screen, B display off and on, X update indicator, Y restart.
 - [ ] Scrolling screens scroll smoothly and hold at the end.
 - [ ] Dark hours: each client blanks (or dims, with
       `DESK_DISPLAY_DARK_HOURS_MODE=dim`) during its `DARK_HOURS` and

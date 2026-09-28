@@ -142,7 +142,7 @@ def test_clients_play_independently_and_share_renders(world):
     order = expected_order(SHARED, 6)
     assert shown(office, 2) == order[:2]
     assert shown(lobby, 1) == order[:1]
-    office.on_button("B")  # skip affects only the office display
+    office.on_button("A")  # skip affects only the office display
     assert shown(office, 1) == order[2:3]
     assert shown(lobby, 1) == order[1:2]
     assert office.playback.history != lobby.playback.history
