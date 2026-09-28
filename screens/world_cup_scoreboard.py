@@ -40,7 +40,7 @@ from config import (
 from image_compat import LANCZOS
 from screens.scoreboard_components import center_text as _center_text
 from services.http_client import get_session
-from utils import ScreenImage, clear_display, log_call, scroll_vertical_content
+from utils import ScreenImage, clear_display, scroll_vertical_content
 
 HYPERPIXEL_LAYOUT = is_hyperpixel_next_layout()
 HYPERPIXEL_4_SQUARE = is_hyperpixel_4_square_layout()
@@ -653,14 +653,6 @@ def _render_world_cup_scoreboard_v1(display, games: list[dict] | None, transitio
 
 def render_world_cup_scoreboard(display, games: list[dict] | None, transition: bool = False) -> ScreenImage:
     return _render_world_cup_scoreboard_v1(display, games or [], transition=transition)
-
-
-@log_call
-def draw_world_cup_scoreboard(display, transition: bool = False) -> ScreenImage:
-    from services.sports.world_cup import fetch_scoreboard
-
-    games = fetch_scoreboard()
-    return render_world_cup_scoreboard(display, games, transition=transition)
 
 
 def _scoreboard_date(now: Optional[datetime.datetime] = None) -> datetime.date:

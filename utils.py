@@ -30,7 +30,6 @@ import time
 import warnings
 from contextlib import contextmanager
 from dataclasses import dataclass
-from io import BytesIO
 from pathlib import Path
 from typing import Any, Callable, Dict, Iterable, List, Optional, Tuple
 
@@ -40,7 +39,6 @@ from PIL import Image, ImageDraw, ImageEnhance, ImageFont, ImageOps
 from display_time import content_today
 from image_compat import LANCZOS
 from env_config import env_float, env_int
-from services.http_client import http_get
 
 # ─── Pillow compatibility shim ─────────────────────────────────────────────
 # Re-add ImageDraw.textsize if missing (Pillow ≥10 compatibility)
@@ -1261,7 +1259,6 @@ LED_INDICATOR_LEVEL = _get_led_indicator_level()
 
 # Project config
 from config import (
-    CENTRAL_TIME,
     DISPLAY_FADE_IN_DISPLAY_HAT_MINI_STEPS,
     DISPLAY_FADE_IN_ENABLED,
     DISPLAY_FADE_IN_STEPS_BY_PROFILE,
@@ -1279,7 +1276,6 @@ from config import (
 )
 
 # Color utilities
-from screens.color_palettes import random_color
 
 
 # ─── Logging decorator ──────────────────────────────────────────────────────
@@ -2627,25 +2623,6 @@ def clear_display(display, *, force: bool = False):
             pass
 
 @log_call
-def draw_text_centered(
-    draw: ImageDraw.Draw,
-    text: str,
-    font: ImageFont.FreeTypeFont,
-    y_offset: int = 0,
-    width: int = WIDTH,
-    height: int = HEIGHT,
-    *,
-    fill=(255,255,255)
-):
-    """
-    Draw `text` centered horizontally at vertical center + y_offset.
-    """
-    w, h = draw.textsize(text, font=font)
-    x = (width - w) // 2
-    y = (height - h) // 2 + y_offset
-    draw.text((x, y), text, font=font, fill=fill)
-
-@log_call
 def wrap_text(text: str, font: ImageFont.FreeTypeFont, max_width: int):
     """
     Break `text` into lines so each line fits within max_width.
@@ -3504,32 +3481,6 @@ def scroll_vertical_content(
 
     _sleep(pause_end)
 
-# ─── Date & Time Helpers ─────────────────────────────────────────────────────
-def parse_game_date(iso_date_str: str, time_str: str = "TBD") -> str:
-    try:
-        d = datetime.datetime.strptime(iso_date_str, "%Y-%m-%d").date()
-    except Exception:
-        return time_str
-    today = datetime.datetime.now(CENTRAL_TIME).date()
-    if d == today:
-        day = "Today"
-    elif d == today + datetime.timedelta(days=1):
-        day = "Tomorrow"
-    else:
-        day = d.strftime("%a %-m/%-d")
-    return f"{day} {time_str}" if time_str.upper() != "TBD" else f"{day} TBD"
-
-def format_date_no_leading(dt_date: datetime.date) -> str:
-    return f"{dt_date.month}/{dt_date.day}"
-
-def format_time_no_leading(dt_time: datetime.time) -> str:
-    return dt_time.strftime("%I:%M %p").lstrip("0")
-
-def split_time_period(dt_time: datetime.time) -> tuple[str,str]:
-    full = dt_time.strftime("%I:%M %p").lstrip("0")
-    parts = full.rsplit(" ", 1)
-    return (parts[0], parts[1]) if len(parts)==2 else (full, "")
-
 # ─── Team & Standings Helpers ────────────────────────────────────────────────
 def get_team_display_name(team) -> str:
     if not isinstance(team, dict):
@@ -3541,21 +3492,6 @@ def get_team_display_name(team) -> str:
             return val
     return "UNK"
 
-def get_opponent_last_game(team) -> str:
-    if not isinstance(team, dict):
-        return str(team)
-    city = team.get("placeName", {}).get("default", "").strip()
-    return city or get_team_display_name(team)
-
-def extract_split_record(split_records: list, record_type: str) -> str:
-    for sp in split_records:
-        if sp.get("type", "").lower() == record_type.lower():
-            w = sp.get("wins", "N/A")
-            l = sp.get("losses", "N/A")
-            p = sp.get("pct", "N/A")
-            return f"{w}-{l} ({p})"
-    return "N/A"
-
 def wind_direction(degrees: float) -> str:
     dirs = ["N","NNE","NE","ENE","E","ESE","SE","SSE",
             "S","SSW","SW","WSW","W","WNW","NW","NNW"]
@@ -3566,15 +3502,6 @@ def wind_direction(degrees: float) -> str:
         return ""
 
 wind_deg_to_compass = wind_direction
-
-def center_coords(
-    img_size: tuple[int,int],
-    content_size: tuple[int,int],
-    y_offset: int = 0
-) -> tuple[int,int]:
-    w, h = img_size
-    cw, ch = content_size
-    return ((w - cw)//2, (h - ch)//2 + y_offset)
 
 def _week_sort_value(week_label: str) -> float:
     """Return a numeric sort key for week labels.
@@ -3910,39 +3837,6 @@ def log_missing_team_logo(screen_id: str, team_name: str, expected_abbr: str) ->
         cleaned_name,
         cleaned_abbr,
     )
-
-@log_call
-def colored_image(mono_img: Image.Image, screen_key: str) -> Image.Image:
-    rgb = Image.new("RGB", mono_img.size, (0,0,0))
-    pix = mono_img.load()
-    draw = ImageDraw.Draw(rgb)
-    col = random_color(screen_key)
-    for y in range(mono_img.height):
-        for x in range(mono_img.width):
-            if pix[x, y]:
-                draw.point((x, y), fill=col)
-    return rgb
-
-@log_call
-def load_svg(key, url) -> Image.Image | None:
-    cache_dir = os.path.join(os.path.dirname(__file__), "images", "nhl")
-    os.makedirs(cache_dir, exist_ok=True)
-    local = os.path.join(cache_dir, f"{key}.svg")
-    if not os.path.exists(local):
-        try:
-            r = http_get(url, timeout=5)
-            r.raise_for_status()
-            with open(local, "wb") as f:
-                f.write(r.content)
-        except Exception as e:
-            logging.warning(f"Failed to download NHL logo: {e}")
-            return None
-    try:
-        from cairosvg import svg2png
-        png = svg2png(url=local)
-        return Image.open(BytesIO(png))
-    except Exception:
-        return None
 
 # ─── Update Indicator LED ───────────────────────────────────────────────────
 class _LedAnimator:

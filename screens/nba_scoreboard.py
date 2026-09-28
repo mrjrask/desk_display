@@ -254,12 +254,6 @@ def _play_intro_animation(display, *, hold: float = INTRO_ANIM_HOLD) -> Optional
     return final_frame
 
 
-@log_call
-def play_nba_logo_animation(display, *, hold: float = INTRO_ANIM_HOLD) -> Optional[Image.Image]:
-    """Play the NBA intro logo animation and return the final frame."""
-    return _play_intro_animation(display, hold=hold)
-
-
 def _team_logo_abbr(team: dict[str, Any]) -> str:
     if not isinstance(team, dict):
         return ""

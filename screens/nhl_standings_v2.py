@@ -11,18 +11,12 @@ from screens.nhl_standings import (
     CONFERENCE_WEST_KEY,
     DIVISION_ORDER_EAST,
     DIVISION_ORDER_WEST,
-    OVERVIEW_TITLE_EAST,
-    OVERVIEW_TITLE_WEST,
     TITLE_EAST,
     TITLE_WEST,
-    _animate_overview_drop,
     _apply_style_overrides,
-    _compose_overview_image,
-    _conference_overview_rows,
     _division_sequence_sort_key,
     _fetch_standings_data,
     _normalize_int,
-    _prepare_overview_horizontal,
     _render_conference,
     _render_empty,
     _scroll_vertical,
@@ -208,142 +202,6 @@ def _build_wildcard_standings(
             )
 
     return wildcard
-
-
-@log_call
-def draw_nhl_standings_overview_v2_west(display, transition: bool = False) -> ScreenImage:
-    with _wildcard_columns():
-        standings_by_conf = _fetch_standings_data()
-        _apply_style_overrides("NHL Standings Overview v2 West")
-        _update_column_metrics()
-
-        conference = standings_by_conf.get(CONFERENCE_WEST_KEY, {})
-        rows = _conference_overview_rows(conference, DIVISION_ORDER_WEST, "West")
-
-        if not any(teams for _, teams in rows):
-            clear_display(display)
-            img = _render_empty(OVERVIEW_TITLE_WEST)
-            if transition:
-                return ScreenImage(img, displayed=False)
-            display.image(img)
-            return ScreenImage(img, displayed=True)
-
-        base, row_positions = _prepare_overview_horizontal(
-            rows,
-            title=OVERVIEW_TITLE_WEST,
-            conference_key=CONFERENCE_WEST_KEY,
-        )
-        final_img, _ = _compose_overview_image(base, row_positions)
-
-        clear_display(display)
-        _animate_overview_drop(display, base, row_positions)
-        display.image(final_img)
-        if hasattr(display, "show"):
-            display.show()
-
-    return ScreenImage(final_img, displayed=True)
-
-
-@log_call
-def draw_nhl_overview_west_v3(display, transition: bool = False) -> ScreenImage:
-    with _wildcard_columns():
-        standings_by_conf = _fetch_standings_data()
-        _apply_style_overrides("NHL Overview West v3")
-        _update_column_metrics()
-
-        conference = standings_by_conf.get(CONFERENCE_WEST_KEY, {})
-        rows = _conference_overview_rows(conference, DIVISION_ORDER_WEST, "West")
-
-        if not any(teams for _, teams in rows):
-            clear_display(display)
-            img = _render_empty(OVERVIEW_TITLE_WEST_V3)
-            if transition:
-                return ScreenImage(img, displayed=False)
-            display.image(img)
-            return ScreenImage(img, displayed=True)
-
-        base, row_positions = _prepare_overview_horizontal(
-            rows,
-            title=OVERVIEW_TITLE_WEST_V3,
-            conference_key=CONFERENCE_WEST_KEY,
-        )
-        final_img, _ = _compose_overview_image(base, row_positions)
-
-        clear_display(display)
-        _animate_overview_drop(display, base, row_positions)
-        display.image(final_img)
-        if hasattr(display, "show"):
-            display.show()
-
-    return ScreenImage(final_img, displayed=True)
-
-
-@log_call
-def draw_nhl_standings_overview_v2_east(display, transition: bool = False) -> ScreenImage:
-    with _wildcard_columns():
-        standings_by_conf = _fetch_standings_data()
-        _apply_style_overrides("NHL Standings Overview v2 East")
-        _update_column_metrics()
-
-        conference = standings_by_conf.get(CONFERENCE_EAST_KEY, {})
-        rows = _conference_overview_rows(conference, DIVISION_ORDER_EAST, "East")
-
-        if not any(teams for _, teams in rows):
-            clear_display(display)
-            img = _render_empty(OVERVIEW_TITLE_EAST)
-            if transition:
-                return ScreenImage(img, displayed=False)
-            display.image(img)
-            return ScreenImage(img, displayed=True)
-
-        base, row_positions = _prepare_overview_horizontal(
-            rows,
-            title=OVERVIEW_TITLE_EAST,
-            conference_key=CONFERENCE_EAST_KEY,
-        )
-        final_img, _ = _compose_overview_image(base, row_positions)
-
-        clear_display(display)
-        _animate_overview_drop(display, base, row_positions)
-        display.image(final_img)
-        if hasattr(display, "show"):
-            display.show()
-
-    return ScreenImage(final_img, displayed=True)
-
-
-@log_call
-def draw_nhl_overview_east_v3(display, transition: bool = False) -> ScreenImage:
-    with _wildcard_columns():
-        standings_by_conf = _fetch_standings_data()
-        _apply_style_overrides("NHL Overview East v3")
-        _update_column_metrics()
-
-        conference = standings_by_conf.get(CONFERENCE_EAST_KEY, {})
-        rows = _conference_overview_rows(conference, DIVISION_ORDER_EAST, "East")
-
-        if not any(teams for _, teams in rows):
-            clear_display(display)
-            img = _render_empty(OVERVIEW_TITLE_EAST_V3)
-            if transition:
-                return ScreenImage(img, displayed=False)
-            display.image(img)
-            return ScreenImage(img, displayed=True)
-
-        base, row_positions = _prepare_overview_horizontal(
-            rows,
-            title=OVERVIEW_TITLE_EAST_V3,
-            conference_key=CONFERENCE_EAST_KEY,
-        )
-        final_img, _ = _compose_overview_image(base, row_positions)
-
-        clear_display(display)
-        _animate_overview_drop(display, base, row_positions)
-        display.image(final_img)
-        if hasattr(display, "show"):
-            display.show()
-
-    return ScreenImage(final_img, displayed=True)
 
 
 @log_call

@@ -5,13 +5,9 @@ with both team logos on the Next Game screen, in AWAY @ HOME order,
 and a small W/L flag between the boxscore and date on Cubs 'Last Game'.
 """
 
-import contextlib
 import datetime
-import hashlib
-import io
 import logging
 import os
-import urllib.request
 from typing import Optional
 
 from PIL import Image, ImageDraw, ImageFont
@@ -396,47 +392,6 @@ def _extract_probable_pitcher(team_block: dict, game: dict | None = None, side: 
         image_url = f"https://img.mlbstatic.com/mlb-photos/image/upload/w_120,q_auto:best/v1/people/{int(pitcher_id)}/headshot/67/current"
     return name, stat_line, image_url
 
-
-def _font_variant_delta(font, delta: int):
-    if hasattr(font, "font_variant"):
-        try:
-            size = int(getattr(font, "size", 12) or 12) + delta
-            return font.font_variant(size=max(1, size))
-        except Exception:
-            return font
-    return font
-
-
-def _load_remote_image(url: str, box_size: int) -> Optional[Image.Image]:
-    if not url or box_size <= 0:
-        return None
-    try:
-        os.makedirs(PITCHER_HEADSHOT_CACHE_DIR, exist_ok=True)
-        cache_key = hashlib.sha256(url.encode("utf-8")).hexdigest()
-        cache_path = os.path.join(PITCHER_HEADSHOT_CACHE_DIR, f"{cache_key}.png")
-    except Exception:
-        cache_path = ""
-
-    if cache_path:
-        try:
-            now_ts = datetime.datetime.now(datetime.UTC).timestamp()
-            mtime = os.path.getmtime(cache_path)
-            if (now_ts - mtime) <= PITCHER_HEADSHOT_CACHE_TTL_SECONDS:
-                cached = Image.open(cache_path).convert("RGBA")
-                return _fit_image_within_box(cached, box_size)
-        except Exception:
-            pass
-
-    try:
-        with urllib.request.urlopen(url, timeout=4) as response:
-            content = response.read()
-        img = Image.open(io.BytesIO(content)).convert("RGBA")
-    except Exception:
-        return None
-    if cache_path:
-        with contextlib.suppress(Exception):
-            img.save(cache_path, format="PNG")
-    return _fit_image_within_box(img, box_size)
 
 def _rel_date_only(official_date: str) -> str:
     """'Today', 'Tomorrow', 'Yesterday', else 'Tue M/D' (no time)."""

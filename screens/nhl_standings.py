@@ -1984,34 +1984,6 @@ def _animate_overview_drop(
             return
 
 
-def _prepare_overview(
-    divisions: list[tuple[str, list[dict]]],
-    title: str = OVERVIEW_TITLE,
-    conference_key: str | None = None,
-) -> tuple[Image.Image, list[list[Placement]]]:
-    (
-        base,
-        col_centers,
-        logos_top,
-        cell_height,
-        logo_box_size,
-        max_rows,
-    ) = _overview_layout(
-        divisions,
-        title=title,
-        conference_key=conference_key,
-    )
-    row_positions = _build_overview_rows(
-        divisions,
-        col_centers,
-        logos_top,
-        cell_height,
-        logo_box_size,
-        max_rows,
-    )
-    return base, row_positions
-
-
 def _overview_layout_horizontal(
     rows: Sequence[tuple[str, list[dict]]],
     title: str,

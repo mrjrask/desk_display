@@ -160,18 +160,6 @@ def _is_truthy_env_marker(name: str) -> bool:
     return raw.strip().lower() not in {"", "0", "false", "no", "off"}
 
 
-def _get_required_env_var(*names: str) -> str:
-    value = _get_first_env_var(*names)
-    if value:
-        return value
-
-    joined = ", ".join(names)
-    raise RuntimeError(
-        "Missing required environment variable. Set one of: "
-        f"{joined}"
-    )
-
-
 def _read_pi_model() -> str:
     """Best-effort read of the Raspberry Pi board model string, if any."""
 
@@ -299,25 +287,6 @@ def get_current_ssid():
 
 
 CURRENT_SSID: Optional[str] = None
-
-def _parse_lat_lon(value: Optional[str]) -> Optional[tuple[float, float]]:
-    if not value:
-        return None
-    text = str(value).strip()
-    if text.lower().startswith("geo:"):
-        text = text[4:].strip()
-    parts = [part.strip() for part in text.split(",", 1)]
-    if len(parts) != 2:
-        return None
-    try:
-        lat = float(parts[0])
-        lon = float(parts[1])
-    except (TypeError, ValueError):
-        return None
-    if not (-90.0 <= lat <= 90.0 and -180.0 <= lon <= 180.0):
-        return None
-    return lat, lon
-
 
 def _resolve_weather_coordinates() -> tuple[Optional[float], Optional[float], list[str]]:
     """Resolve weather coordinates from WEATHER_LATITUDE / WEATHER_LONGITUDE."""
@@ -727,7 +696,6 @@ def _read_kernel_overlay_rotation() -> Optional[int]:
                 if parsed in (1, 2, 3):
                     return parsed * 90
                 return parsed
-                break
 
     return None
 
@@ -1107,7 +1075,7 @@ def initialise_runtime_probes() -> None:
 
 # ─── Dark hours configuration ─────────────────────────────────────────────────
 
-from dark_hours import (  # noqa: E402 - re-exported for existing callers
+from dark_hours import (  # noqa: E402, F401 - re-exported for existing callers
     _DAY_NAME_TO_INDEX,
     MINUTES_PER_DAY,
     DarkHoursSegment,
@@ -1437,16 +1405,6 @@ FONT_EMOJI = _load_emoji_font(30)
 FONT_EMOJI_SMALL = _load_emoji_font(18)
 
 _EMOJI_FONT_CACHE: dict[int, ImageFont.ImageFont] = {}
-
-
-def get_emoji_font(size: int) -> ImageFont.ImageFont:
-    size = max(8, int(size))
-    cached = _EMOJI_FONT_CACHE.get(size)
-    if cached is not None:
-        return cached
-    font = _load_emoji_font(size)
-    _EMOJI_FONT_CACHE[size] = font
-    return font
 
 
 def _normalise_style_config(payload: dict[str, Any]) -> dict[str, Any]:

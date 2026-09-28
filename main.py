@@ -51,7 +51,6 @@ import time
 from collections import deque
 from contextlib import nullcontext
 from dataclasses import replace
-from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Set, Tuple
 
 try:
@@ -284,24 +283,6 @@ def _request_next_screen() -> bool:
 
     logging.info("⏭️  Skip requested – advancing to next screen.")
     _skip_request_pending = True
-    _manual_skip_event.set()
-    return True
-
-
-def _request_previous_screen() -> bool:
-    """Request that the scheduler return to the previously shown screen."""
-
-    global _pending_previous_screen_id
-
-    with _screen_history_lock:
-        previous_id = _screen_history[-2] if len(_screen_history) >= 2 else None
-
-    if not previous_id:
-        logging.info("⏮️  Previous screen requested, but no history is available.")
-        return False
-
-    logging.info("⏮️  Returning to previous screen '%s'.", previous_id)
-    _pending_previous_screen_id = previous_id
     _manual_skip_event.set()
     return True
 
@@ -986,32 +967,6 @@ def _stop_desk_display_service() -> None:
             )
     except Exception as exc:
         logging.error("Failed to stop desk_display.service: %s", exc)
-
-
-def _git_pull_and_restart_desk_display_service() -> None:
-    """Pull latest code in this repo, then restart the desk_display service."""
-
-    request_shutdown("git pull + service restart")
-    try:
-        subprocess.run(
-            ["git", "-C", SCRIPT_DIR, "pull"],
-            check=False,
-        )
-    except Exception as exc:
-        logging.error("Failed to run git pull in %s: %s", SCRIPT_DIR, exc)
-
-    try:
-        result = subprocess.run(
-            ["sudo", "systemctl", "--no-block", "restart", "desk_display.service"],
-            check=False,
-        )
-        if result.returncode != 0:
-            logging.error(
-                "desk_display.service restart returned non-zero exit code: %s",
-                result.returncode,
-            )
-    except Exception as exc:
-        logging.error("Failed to restart desk_display.service: %s", exc)
 
 
 def _start_config_ui() -> None:

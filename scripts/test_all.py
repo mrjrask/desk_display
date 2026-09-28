@@ -46,8 +46,8 @@ def _build_commands(pytest_args: Sequence[str]) -> list[TestCommand]:
     return [
         TestCommand(
             name="Ruff static checks",
-            # Block new correctness errors while the repository's existing unused
-            # imports and assignments remain part of the staged lint cleanup.
+            # Pyflakes correctness checks, including unused imports and
+            # assignments (the staged cleanup of those finished in 2026-09).
             command=(
                 sys.executable,
                 "-m",
@@ -56,8 +56,6 @@ def _build_commands(pytest_args: Sequence[str]) -> list[TestCommand]:
                 ".",
                 "--select",
                 "F",
-                "--ignore",
-                "F401,F841",
             ),
         ),
         TestCommand(
