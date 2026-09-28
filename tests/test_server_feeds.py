@@ -13,7 +13,7 @@ from display_profiles import PROFILE_PRESETS
 from services import feeds
 from services.air_quality import AirQualityReport
 from services.data_coordinator import DataCoordinator
-from services.server_feeds import LIVE_REFRESH_SECONDS, ServerFeedService
+from services.server_feeds import LIVE_REFRESH_SECONDS, LIVE_WATCH_SECONDS, ServerFeedService
 
 
 def test_ncaa_fbs_scoreboard_date_uses_provider_morning_cutoff():
@@ -167,11 +167,19 @@ def test_force_refreshes_every_demanded_feed(env):
 
 
 def test_live_team_screen_refreshes_fresh_on_the_live_interval(env):
+    # No game on: the feed is watched for one starting.
     env.service.refresh({"cubs live"})
     assert env.provider.calls[-1] == ("team:cubs", 120, True)
-    env.provider.calls.clear()
+    env.clock.advance(LIVE_REFRESH_SECONDS)
+    assert env.service.refresh({"cubs live"}) == {}
+    env.clock.advance(LIVE_WATCH_SECONDS - LIVE_REFRESH_SECONDS)
+    env.provider.teams["cubs"] = {"stand": {"team": "cubs"}, "live": {"gamePk": 1}}
+    assert env.service.refresh({"cubs live"}) == {"cubs": True}
+    # A game is live: every LIVE_REFRESH_SECONDS, fresh, as v0.1 fetched before each showing.
+    assert LIVE_REFRESH_SECONDS <= 30
     env.clock.advance(LIVE_REFRESH_SECONDS)
     assert env.service.refresh({"cubs live"}) == {"cubs": True}
+    assert env.provider.calls[-1] == ("team:cubs", 120, True)
 
 
 def test_scoreboards_live_window_and_date_rollover(env, monkeypatch):

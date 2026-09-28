@@ -21,6 +21,7 @@ import threading
 import time
 from collections.abc import Callable
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 from urllib.parse import urlsplit
@@ -192,6 +193,27 @@ class DarkHours:
         return (self.dark_level if state == "dim" else self.level) / 100
 
 
+def _live_screens() -> frozenset[str]:
+    from rendering.screen_classes import CLASSIFICATIONS, PERIODIC
+
+    return frozenset(sid for sid, entry in CLASSIFICATIONS.items()
+                     if entry.kind == PERIODIC or "Scoreboard" in sid)
+
+
+# Screens whose content goes out of date within minutes (see DisplayClient._playable).
+LIVE_SCREENS = _live_screens()
+
+
+def _parse_time(value: Any) -> datetime | None:
+    if not isinstance(value, str) or not value:
+        return None
+    try:
+        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    return parsed if parsed.tzinfo is not None else parsed.replace(tzinfo=timezone.utc)
+
+
 DARK_POLL_SECONDS = 30.0
 UPDATE_CHECK_SECONDS = 60.0
 LIGHT_CHECK_SECONDS = 1.0
@@ -300,7 +322,7 @@ class DisplayClient:
         # repaired by a later sync without the manifest revision changing.
         # Only the still is required: step() falls back to it when a render
         # package is missing or bad.
-        player.is_locally_usable = self.artifacts.has
+        player.is_locally_usable = self._playable
         try:
             player.load_cache(dict(content.manifest), {}, packages)
         except ValueError as exc:
@@ -315,6 +337,27 @@ class DisplayClient:
             scheduler.seek_after(previous_screen)
         player.history = list(self.playback.history)
         self._player = player
+
+    def _playable(self, entry: Any) -> bool:
+        """A cached screen that can play now.
+
+        While the server is unreachable, a live screen (scoreboards and live
+        games) whose refresh deadline has passed is skipped, so a frozen score
+        never looks current. v0.1 likewise skipped scoreboards during an
+        outage with games live.
+        """
+
+        if not self.artifacts.has(entry):
+            return False
+        if self.sync.connected or not isinstance(entry, dict) or entry.get("screen_id") not in LIVE_SCREENS:
+            return True
+        deadline = _parse_time(entry.get("refresh_deadline"))
+        if deadline is None:
+            return True
+        now = self._clock() if self._clock is not None else datetime.now(timezone.utc)
+        if now.tzinfo is None:
+            now = now.replace(tzinfo=timezone.utc)
+        return now <= deadline
 
     def _too_old(self) -> bool:
         """Offline and the cache is older than DESK_DISPLAY_OFFLINE_MAX_AGE_HOURS."""
