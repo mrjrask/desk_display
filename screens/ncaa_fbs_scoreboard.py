@@ -66,7 +66,7 @@ TEAM_ABBREVIATION_FONT = get_screen_font(
     SCREEN_ID, "team_abbreviation", base_font=FONT_TEAM_SPORTS, default_size=18
 )
 SEED_GAP = max(2, scale_value_width(3))
-RANK_GAP = max(0, scale_value_width(1))
+RANK_GAP = max(1, scale_value_width(2))
 
 COL_WIDTHS = [
     scale_value_width(80),
@@ -394,20 +394,20 @@ def _draw_rank(
     y_logo: int,
     logo_w: int,
     logo_h: int,
-    *,
-    position: str = "right",
 ):
+    """Draw a poll ranking as a small superscript just before the team's logo."""
+
     if rank is None:
         return
-    text = f"#{rank}"
+    text = str(rank)
     try:
         l, t, r, b = draw.textbbox((0, 0), text, font=RANK_FONT)
-        tw, th = r - l, b - t
+        tw = r - l
     except Exception:
-        tw, th = draw.textsize(text, font=RANK_FONT)
+        tw, _ = draw.textsize(text, font=RANK_FONT)
         l = t = 0
-    x = x_logo - RANK_GAP - tw - l if position == "left" else x_logo + logo_w + RANK_GAP
-    y = y_logo + logo_h - th - t
+    x = x_logo - RANK_GAP - tw - l
+    y = y_logo - t
     draw.text((x, y), text, font=RANK_FONT, fill=(210, 210, 210))
 
 
@@ -504,7 +504,6 @@ def _render_scoreboard(games: list[dict], *, mode: Optional[str] = None) -> Imag
                 y0,
                 logo_width,
                 logo_height_actual,
-                position="left" if col_idx == 1 else "right",
             )
         status_fill = IN_PROGRESS_STATUS_COLOR if in_progress else (255, 255, 255)
         _center_text(draw, _status_text(game), STATUS_FONT, COL_X[0], sum(COL_WIDTHS), y + SCORE_ROW_H, STATUS_ROW_H, fill=status_fill)
@@ -583,7 +582,7 @@ def _render_ncaam_scoreboard_v1(display, games: list[dict] | None, transition: b
             draw.text(((WIDTH - tw) // 2, title_top), title, font=FONT_TITLE_SPORTS, fill=(255, 255, 255))
 
         no_games_top = max(title_top + title_height + LEAGUE_LOGO_GAP, HEIGHT // 2 - STATUS_ROW_H // 2)
-        _center_text(draw, "No games today", STATUS_FONT, 0, WIDTH, no_games_top, STATUS_ROW_H)
+        _center_text(draw, "No games this week", STATUS_FONT, 0, WIDTH, no_games_top, STATUS_ROW_H)
         if transition:
             return ScreenImage(img, displayed=False)
         display.image(img)
