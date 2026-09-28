@@ -63,9 +63,6 @@ LOSER_LOGO_ALPHA = 0.35
 # Below this width a seven-column bracket's logos are too small to read, so
 # the screen lists the series only.
 MIN_BRACKET_WIDTH = 200
-# At or above this width the series list uses two columns (AL | NL).
-TWO_COLUMN_MIN_WIDTH = 640
-
 _LOGO_CACHE: dict[tuple[str, int], Optional[Image.Image]] = {}
 
 
@@ -81,19 +78,19 @@ def _title_font():
 
 
 def _round_font():
-    return get_screen_font(SCREEN_ID, "round", base_font=FONT_STATUS, default_size=16)
+    return get_screen_font(SCREEN_ID, "round", base_font=FONT_STATUS, default_size=20)
 
 
 def _status_font():
-    return get_screen_font(SCREEN_ID, "status", base_font=FONT_STATUS, default_size=15)
+    return get_screen_font(SCREEN_ID, "status", base_font=FONT_STATUS, default_size=20)
 
 
 def _score_font():
-    return get_screen_font(SCREEN_ID, "score", base_font=FONT_TEAM_SPORTS, default_size=26)
+    return get_screen_font(SCREEN_ID, "score", base_font=FONT_TEAM_SPORTS, default_size=36)
 
 
 def _seed_font():
-    return get_screen_font(SCREEN_ID, "seed", base_font=FONT_STATUS, default_size=12)
+    return get_screen_font(SCREEN_ID, "seed", base_font=FONT_STATUS, default_size=16)
 
 
 def _text_size(draw: ImageDraw.ImageDraw, text: str, font) -> tuple[int, int, int, int]:
@@ -344,7 +341,7 @@ def _list_slots(bracket: dict, round_code: str) -> list[tuple[str, dict]]:
 
 
 def _series_row_height() -> tuple[int, int]:
-    return scale_value(34), scale_value(20)
+    return scale_value(48), scale_value(26)
 
 
 def _draw_series_row(canvas: Image.Image, draw: ImageDraw.ImageDraw, slot: dict, data: dict,
@@ -413,12 +410,8 @@ def _compose_series_list(width: int, data: dict, bracket: dict, now: datetime.da
     block_h = row_h + status_h
     spacing = scale_value(10)
     margin = max(2, width // 60)
-    two_columns = width >= TWO_COLUMN_MIN_WIDTH and round_code != "W"
-    if two_columns:
-        columns = [[slot for league, slot in slots if league == "AL"], [slot for league, slot in slots if league == "NL"]]
-    else:
-        columns = [[slot for _, slot in slots]]
-    rows = max(len(column) for column in columns)
+    # One series per line, full width, so each line can be large.
+    rows = len(slots)
 
     heading = _round_heading(data, round_code, projected)
     probe = ImageDraw.Draw(Image.new("RGB", (width, 10)))
@@ -429,18 +422,15 @@ def _compose_series_list(width: int, data: dict, bracket: dict, now: datetime.da
     draw = ImageDraw.Draw(canvas)
     center_text(draw, heading, heading_font, 0, width, 0, heading_h, fill=LABEL_TEXT)
 
-    gutter = scale_value(16) if len(columns) > 1 else 0
-    col_w = (width - 2 * margin - gutter * (len(columns) - 1)) // len(columns)
-    for col_index, column in enumerate(columns):
-        x = margin + col_index * (col_w + gutter)
-        y = heading_h
-        for row_index, slot in enumerate(column):
-            _draw_series_row(canvas, draw, slot, data, seeds, x, col_w, y, now)
-            y += block_h
-            if row_index < len(column) - 1:
-                sep = y + spacing // 2
-                draw.line((x + margin, sep, x + col_w - margin, sep), fill=SEPARATOR)
-                y += spacing
+    x, col_w = margin, width - 2 * margin
+    y = heading_h
+    for index, (_league, slot) in enumerate(slots):
+        _draw_series_row(canvas, draw, slot, data, seeds, x, col_w, y, now)
+        y += block_h
+        if index < rows - 1:
+            sep = y + spacing // 2
+            draw.line((x + margin, sep, x + col_w - margin, sep), fill=SEPARATOR)
+            y += spacing
     return canvas
 
 
