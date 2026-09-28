@@ -581,3 +581,42 @@ def test_browser_registration_wizard(live_server, browser, env, monkeypatch):
     page.wait_for_selector("#step-4:not(.hidden)")
     page.wait_for_function("document.querySelector('#connect-status').textContent === 'Connected'")
     assert "Kitchen Square is connected" in page.inner_text("#notice")
+
+
+def test_browser_screen_config_collapse_and_expand_all_playlists(live_server, browser, monkeypatch):
+    monkeypatch.setattr(
+        config_ui,
+        "_load_active_config",
+        lambda: {
+            "screens": {"date": 1, "inside": 1, "quad": 1},
+            "playlists": {
+                "morning": {"label": "Morning", "steps": [{"screen": "date"}]},
+                "evening": {"label": "Evening", "steps": [{"screen": "inside"}]},
+            },
+            "sequence": [{"playlist": "morning"}, {"playlist": "evening"}, {"screen": "quad"}],
+        },
+    )
+    monkeypatch.setattr(config_ui, "_load_active_style_config", lambda: {"screens": {}})
+    page = browser.new_page()
+    page.goto(f"{live_server}/")
+    page.wait_for_selector(".playlist-row")
+    visible_rows = "[...document.querySelectorAll('.screen-row')].filter((r) => r.style.display !== 'none').length"
+    total_rows = page.locator(".screen-row").count()
+    assert total_rows >= 3 and page.evaluate(visible_rows) == total_rows
+
+    page.click("#collapseAllPlaylistsBtn")
+    assert page.evaluate(visible_rows) == 0
+    assert page.locator(".playlist-row.is-collapsed").count() == page.locator(".playlist-row").count() == 3
+    assert page.locator(".screen-row").count() == total_rows  # hidden, not dropped
+
+    # Playlists can still be reordered while collapsed, and the state survives a reload.
+    page.click(".playlist-row:has-text('Evening') >> text=Move up")
+    names = page.locator(".playlist-row .name").all_inner_texts()
+    assert names == ["Ungrouped", "Evening", "Morning"]
+    page.reload()
+    page.wait_for_selector(".playlist-row")
+    assert page.evaluate(visible_rows) == 0
+
+    page.click("#expandAllPlaylistsBtn")
+    assert page.evaluate(visible_rows) == total_rows
+    assert page.locator(".playlist-row.is-collapsed").count() == 0

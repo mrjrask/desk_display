@@ -138,6 +138,9 @@ def test_screen_config_page_bootstraps_server_playlist_state(monkeypatch):
     assert '"date"' in html
     assert 'const serverPlaylists = [{"id": "default", "name": "Default"}]' in html
     assert 'const serverPlaylistAssignments = {"date": "default"}' in html
+    assert 'id="collapseAllPlaylistsBtn"' in html
+    assert 'id="expandAllPlaylistsBtn"' in html
+    assert "setAllPlaylistsCollapsed(true)" in html
     assert 'id="verticalSpeedAdjustment"' in html
     assert 'value="0.0"' in html
     expected_scroll_state = (
