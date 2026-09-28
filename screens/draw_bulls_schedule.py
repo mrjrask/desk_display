@@ -258,20 +258,6 @@ def _load_logo_png(abbr: str, height: int) -> Optional[Image.Image]:
 # ─────────────────────────────────────────────────────────────────────────────
 # Data helpers
 
-def _get_s(game: dict, path: Sequence[str], default="") -> str:
-    d: object = game
-    for key in path:
-        if not isinstance(d, dict):
-            return default
-        d = d.get(key)
-    if d is None:
-        return default
-    if isinstance(d, (int, float)):
-        return str(d)
-    if isinstance(d, str):
-        return d
-    return default
-
 def _str_or_blank(value: object) -> str:
     if value is None:
         return ""

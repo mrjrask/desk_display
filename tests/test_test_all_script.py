@@ -37,7 +37,7 @@ def test_build_commands_runs_only_hardware_independent_quality_checks():
         "pytest suite",
     ]
     assert commands[0].command[2:5] == ("ruff", "check", ".")
-    assert commands[0].command[-4:] == ("--select", "F", "--ignore", "F401,F841")
+    assert commands[0].command[-2:] == ("--select", "F")
     assert commands[1].command == (
         sys.executable,
         "scripts/check_lint_baseline.py",

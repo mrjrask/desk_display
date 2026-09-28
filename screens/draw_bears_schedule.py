@@ -197,66 +197,6 @@ def _ease_out_cubic(t: float) -> float:
     return 1.0 - inv * inv * inv
 
 
-def _animate_logo_drop(display, base: Image.Image, row_positions):
-    has_logos = any(row for row in row_positions)
-    if not has_logos:
-        return
-
-    steps = max(2, DROP_STEPS)
-    stagger = max(1, int(round(steps * DROP_STAGGER)))
-
-    schedule = []
-    start_step = 0
-    for row_idx in range(len(row_positions) - 1, -1, -1):
-        drops = row_positions[row_idx]
-        if not drops:
-            continue
-        schedule.append((start_step, drops))
-        start_step += stagger
-
-    if not schedule:
-        return
-
-    total_duration = schedule[-1][0] + steps + 1
-    placed = []
-    completed = [False] * len(schedule)
-
-    for current_step in range(total_duration):
-        frame_start = time.time()
-
-        for idx, (start, drops) in enumerate(schedule):
-            if current_step >= start + steps and not completed[idx]:
-                placed.extend(drops)
-                completed[idx] = True
-
-        frame = base.copy()
-        for logo, x0, y0 in placed:
-            frame.paste(logo, (x0, y0), logo)
-
-        for _idx, (start, drops) in enumerate(schedule):
-            progress = current_step - start
-            if progress < 0 or progress >= steps:
-                continue
-
-            frac = progress / (steps - 1) if steps > 1 else 1.0
-            eased = _ease_out_cubic(frac)
-            for logo, x0, y_target in drops:
-                start_y = -logo.height
-                y_pos = int(start_y + (y_target - start_y) * eased)
-                if y_pos > y_target:
-                    y_pos = y_target
-                frame.paste(logo, (x0, y_pos), logo)
-
-        display.image(frame)
-        if hasattr(display, "show"):
-            display.show()
-
-        elapsed = time.time() - frame_start
-        sleep_time = max(0, DROP_FRAME_DELAY - elapsed)
-        if sleep_time > 0:
-            time.sleep(sleep_time)
-
-
 def _bears_schedule_games() -> list[dict]:
     """Return the Bears schedule source shared by the next-game and schedule screens."""
     return list(config.BEARS_SCHEDULE)

@@ -119,7 +119,7 @@ import display_client  # noqa: E402
 import display_server  # noqa: E402
 from remote_display.client_sync import Backoff  # noqa: E402
 from remote_display.playlist_store import PlaylistStore  # noqa: E402
-from tests.test_display_client import PROFILE, TOKEN, Clock, FlaskTransport, Presenter  # noqa: E402
+from tests.test_display_client import PROFILE, Clock, FlaskTransport, Presenter  # noqa: E402
 
 
 class Loopback:

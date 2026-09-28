@@ -540,11 +540,6 @@ def _is_display_hat_mini_layout(width: int, height: int) -> bool:
     return sorted((int(width), int(height))) == [240, 320]
 
 
-def _is_adafruit_minipitft_layout(width: int, height: int) -> bool:
-    """Return True for Adafruit miniPiTFT 1.14" dimensions regardless of orientation."""
-    return sorted((int(width), int(height))) == [135, 240]
-
-
 def _is_waveshare_oled_lcd_hat() -> bool:
     """Return True when running on the Waveshare OLED/LCD HAT (A) install profile."""
     marker = os.environ.get("WAVESHARE_OLED_LCD_HAT_A_INSTALLED", "").strip().lower()
@@ -730,12 +725,6 @@ def _is_mlb_team_home_game(game: Any, team_id: Any) -> bool:
         return int(home_id) == int(team_id)
     except (TypeError, ValueError):
         return False
-
-
-def _format_time(value: Optional[_dt.time]) -> str:
-    if isinstance(value, _dt.time):
-        return value.strftime("%I:%M %p").lstrip("0").replace(" 0", " ")
-    return "all day"
 
 
 def _normalise_reference_time(now: Optional[_dt.datetime]) -> _dt.datetime:

@@ -110,23 +110,6 @@ def fetch_week_dates(
     )
 
 
-def fetch_espn_week(
-    start: dt.date, end: dt.date, *, session: Any = None
-) -> WeeklyResult:
-    """Fetch ESPN's explicit whole-week feed without accepting an invalid shape."""
-
-    session = session or _SESSION
-    try:
-        payload = _request_json(
-            session, ESPN_SITE_URL, limit=100, dates=f"{start:%Y%m%d}-{end:%Y%m%d}"
-        )
-        games = _games_in_range(normalize_espn_site(payload), start, end)
-    except Exception as exc:
-        logging.warning("NFL whole-week fallback failed: %s", exc)
-        return WeeklyResult(failed_dates=1)
-    return WeeklyResult(games=games, successful_dates=1)
-
-
 def _request_json(session: Any, url: str, **params: Any) -> dict[str, Any]:
     if params:
         url = f"{url}?{urllib.parse.urlencode(params)}"

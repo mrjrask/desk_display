@@ -40,7 +40,7 @@ from config import (
 from image_compat import LANCZOS
 from screens.scoreboard_components import center_text as _center_text
 from services.http_client import get_session
-from utils import ScreenImage, clear_display, log_call, scroll_vertical_content
+from utils import ScreenImage, clear_display, scroll_vertical_content
 
 HYPERPIXEL_LAYOUT = is_hyperpixel_next_layout()
 HYPERPIXEL_4_SQUARE = is_hyperpixel_4_square_layout()
@@ -415,7 +415,6 @@ def _rank_for_display(team: dict[str, Any], *, mode: Optional[str] = None) -> Op
     return _extract_rank(team)
 
 def _get_league_logo(mode: Optional[str] = None) -> Optional[Image.Image]:
-    selected_mode = (mode or _scoreboard_mode()).strip().lower()
     _, logo_key = _mode_title_and_logo()
     h = _league_logo_height()
     cache_key = (logo_key, h)
@@ -605,13 +604,6 @@ def _render_ncaam_scoreboard_v1(display, games: list[dict] | None, transition: b
 def render_ncaa_fbs_scoreboard(display, games: list[dict] | None, transition: bool = False) -> ScreenImage:
     return _render_ncaam_scoreboard_v1(display, games, transition=transition)
 
-
-@log_call
-def draw_ncaa_fbs_scoreboard(display, transition: bool = False) -> ScreenImage:
-    from services.sports.ncaa_fbs import fetch_scoreboard
-
-    games = fetch_scoreboard()
-    return render_ncaa_fbs_scoreboard(display, games, transition=transition)
 
 def _scoreboard_date(now: Optional[datetime.datetime] = None) -> datetime.date:
     if now is None:

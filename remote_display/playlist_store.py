@@ -597,12 +597,6 @@ def _client(value: Any) -> str:
         raise PlaylistValidationError(str(exc), field="client_id") from None
 
 
-def epoch_to_iso(value: float | None) -> str | None:
-    if value is None:
-        return None
-    return datetime.fromtimestamp(value, timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z")
-
-
 def age_seconds(iso: str | None, now: float | None = None) -> float | None:
     if not iso:
         return None
