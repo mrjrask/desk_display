@@ -178,3 +178,47 @@ def test_fetch_stock_quotes_returns_within_budget_when_fetch_blocks(monkeypatch)
     assert started.is_set()
     assert result == []
     assert elapsed < 0.25
+
+
+def test_fetch_quote_uses_history_when_live_price_is_missing(monkeypatch):
+    """Without regularMarketPrice the previous close is not a price: use history."""
+
+    class _FakeTicker:
+        def __init__(self, symbol):
+            self.symbol = symbol
+
+        @property
+        def info(self):
+            return {"previousClose": 10.0}
+
+        def history(self, period, interval):
+            return pd.DataFrame({"Close": [10.0, 11.0]})
+
+    monkeypatch.setattr(sq.yf, "Ticker", _FakeTicker)
+
+    quote = sq.fetch_quote("VRNOF")
+
+    assert quote.price == pytest.approx(11.0)
+    assert quote.change == pytest.approx(1.0)
+    assert quote.change_pct == pytest.approx(10.0)
+
+
+def test_fetch_quote_falls_back_to_previous_close_without_a_change(monkeypatch):
+    class _FakeTicker:
+        def __init__(self, symbol):
+            self.symbol = symbol
+
+        @property
+        def info(self):
+            return {"previousClose": 10.0}
+
+        def history(self, period, interval):
+            raise RuntimeError("no history")
+
+    monkeypatch.setattr(sq.yf, "Ticker", _FakeTicker)
+
+    quote = sq.fetch_quote("VRNOF")
+
+    assert quote.price == pytest.approx(10.0)
+    assert quote.change is None
+    assert quote.change_pct is None
