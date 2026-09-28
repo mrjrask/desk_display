@@ -144,6 +144,7 @@ _TABLE: dict[str, tuple[str, str]] = {
     "wolves next home": (STATIC, ""),
     "MLB Scoreboard": (SCROLLING_CANVAS, "scrolls when games overflow"),
     "MLB Scoreboard v2": (SCROLLING_CANVAS, "scrolls when games overflow"),
+    "MLB Playoffs": (SCROLLING_CANVAS, "bracket"),
     "NL Overview": (FINITE_ANIMATION, "logos drop into place"),
     "AL Overview": (FINITE_ANIMATION, "logos drop into place"),
     "NL Overview+WC": (FINITE_ANIMATION, "logos drop into place"),

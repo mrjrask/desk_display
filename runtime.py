@@ -40,6 +40,8 @@ class LegacyStandaloneRuntime:
             screen_id.startswith("MLB ") and "Standings" in screen_id
         ):
             self.data.read_mlb_league_standings()
+        elif screen_id == "MLB Playoffs":
+            self.data.read_mlb_postseason()
 
     def step(self):
         item = self.player.next()

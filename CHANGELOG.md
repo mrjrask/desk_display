@@ -23,6 +23,14 @@ See the README's [deployment modes](README.md#deployment-modes) and
   command (`POST /api/v1/join`) that installs and configures the new Pi, and
   shows when the display comes online.
   On a Pi still on v0.1 the setup script updates the checkout first.
+- New **MLB Playoffs** screen: the postseason bracket laid out like
+  mlb.com/postseason (AL left, NL right, World Series in the middle, seeds and
+  series scores), sized for every display profile, with the current round's
+  pairings, series scores and next game or result under it. Before the
+  postseason it shows the bracket projected from the standings. The render
+  server fetches it as the `mlb_postseason` feed (every 10 minutes, every
+  30 seconds during a live game). Off (frequency 0) in the default configs, in
+  the mlb playlist after MLB Scoreboard.
 - `display_client.py`: offline-first playback from a local cache, render
   packages (static, animated and client-timed clocks), touch focus on quads,
   and physical rotation applied only at presentation.

@@ -134,6 +134,7 @@ RAW_SCREEN_IDS = [
     "mlb logo",
     "MLB Scoreboard",
     "MLB Scoreboard v2",
+    "MLB Playoffs",
     "NL Overview",
     "AL Overview",
     "NL Overview+WC",

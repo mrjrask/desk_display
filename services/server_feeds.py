@@ -189,6 +189,8 @@ class ServerFeedService:
                 team = snapshot.values.get(feed)
                 live = isinstance(team, Mapping) and bool(team.get("live"))
                 interval, fresh = (LIVE_REFRESH_SECONDS if live else LIVE_WATCH_SECONDS), True
+            elif feed == "mlb_postseason" and _has_live_postseason_game(snapshot.values.get(feed)):
+                interval, fresh = LIVE_REFRESH_SECONDS, True
             elif (
                 feed == "nhl_standings"
                 and screens & feeds.NHL_WILDCARD_SCREEN_IDS
@@ -425,6 +427,19 @@ def _fetch_mlb_league_standings(*, force: bool = False) -> dict[str, Any]:
     return {"mlb_league_standings": standings}
 
 
+def _fetch_mlb_postseason(*, force: bool = False) -> dict[str, Any]:
+    from services.sports import mlb_postseason
+
+    # Raises when neither the postseason schedule nor the standings answered.
+    return {"mlb_postseason": mlb_postseason.fetch_postseason(force=True)}
+
+
+def _has_live_postseason_game(value: Any) -> bool:
+    from services.sports import mlb_postseason
+
+    return mlb_postseason.has_live_series(value)
+
+
 def _default_standings_fetchers() -> dict[str, Callable[..., dict[str, Any]]]:
     """Fetch league standings the way the standalone runtime does, keyed by feed."""
 
@@ -432,6 +447,7 @@ def _default_standings_fetchers() -> dict[str, Callable[..., dict[str, Any]]]:
         "nfl_standings": _fetch_nfl_standings,
         "nhl_standings": _fetch_nhl_standings,
         "mlb_league_standings": _fetch_mlb_league_standings,
+        "mlb_postseason": _fetch_mlb_postseason,
     }
 
 

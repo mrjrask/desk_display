@@ -187,6 +187,16 @@ Team IDs used by app helpers include `112` for the Chicago Cubs and `145` for th
 
 Fields used include game IDs, game dates, game status, team records, scores, venue, probable pitchers, linescore data, division standings, wins, losses, games back, wild-card games back, and streaks.
 
+### MLB playoffs
+
+| Use | Endpoint |
+| --- | --- |
+| Postseason games for the season | `https://statsapi.mlb.com/api/v1/schedule?sportId=1&season={season}&gameTypes=F,D,L,W&hydrate=team` |
+| Postseason series fallback | `https://statsapi.mlb.com/api/v1/schedule/postseason/series?sportId=1&season={season}&hydrate=team` |
+| Standings for seeds and the projected bracket | `https://statsapi.mlb.com/api/v1/standings?leagueId=103,104&season={season}&standingsType=regularSeason&hydrate=team` |
+
+Fields used include game type (round), game status, series game number, games in series, scores, winners, start times, and division, league and wild-card ranks. The render server fetches these as the `mlb_postseason` feed.
+
 ### NBA / Bulls / league
 
 | Use | Endpoint |
