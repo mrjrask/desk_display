@@ -723,6 +723,57 @@ def test_heartbeat_only_passes_renew_the_lease_between_syncs(env):
     assert any(path.endswith("/manifest") for _, path in env.transport.calls)
 
 
+def test_heartbeats_report_delivery_telemetry(env):
+    env.publish("date", 10)
+    env.publish("weather1", 20)
+    client = env.make_client()
+    ticks = iter(range(0, 10_000, 5))
+    client.sync._timer = lambda: next(ticks) / 1000  # every reading 5 ms after the last
+    synced(env, client, 1)
+    registry = env.app.extensions["desk_display_registry"]
+    # Registration advertised telemetry, so even the first heartbeat carries it
+    # (before any download has been timed).
+    assert registry.snapshot()["clients"]["office"]["telemetry"]["download_count"] == 0
+    timings = client.sync.telemetry()
+    assert timings["download_count"] == 2 and timings["download_bytes"] > 0
+    assert timings["download_ms"] > 0 and timings["manifest_fetch_ms"] == 5.0
+    assert timings["last_sync_duration_ms"] > timings["download_ms"]
+    client.step()  # plays a screen, so the content age is known
+    synced(env, client, 1)
+    reported = registry.snapshot()["clients"]["office"]["telemetry"]
+    assert reported["heartbeat_rtt_ms"] == 5.0
+    assert reported["download_count"] == 2
+    assert reported["displayed_content_age_seconds"] is not None
+    # Nothing new on the next pass: no downloads, and the report says so.
+    synced(env, client, 1)
+    assert client.sync.telemetry()["download_count"] == 0
+
+
+def test_no_telemetry_is_sent_to_a_server_that_does_not_advertise_it(env):
+    client = env.make_client()
+    client.sync._note_cadence({"heartbeat_interval_seconds": 20})
+    assert client.sync._telemetry_accepted is False
+    client.sync._note_cadence({"client_telemetry_versions": [2]})
+    assert client.sync._telemetry_accepted is False
+    client.sync._note_cadence({"client_telemetry_versions": [1]})
+    assert client.sync._telemetry_accepted is True
+
+
+def test_telemetry_counts_failed_passes_until_a_success(env):
+    env.publish("date")
+    client = env.make_client()
+    synced(env, client, 1)
+    env.transport.down = True
+    client.sync.step()
+    client.sync.step()
+    assert client.sync.telemetry()["consecutive_failures"] == 2
+    env.transport.down = False
+    client.sync.step()
+    assert client.sync.consecutive_failures == 0
+    reported = env.app.extensions["desk_display_registry"].snapshot()["clients"]["office"]["telemetry"]
+    assert reported["consecutive_failures"] == 2
+
+
 def test_artifact_cache_rejects_invalid_hashes(tmp_path):
     cache = ArtifactCache(tmp_path, max_bytes=0)
     assert not cache.has({"sha256": "../../etc/passwd", "media_type": "image/png", "length": 1})

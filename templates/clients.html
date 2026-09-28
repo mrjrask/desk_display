@@ -50,11 +50,11 @@
       <table id="clients">
         <thead>
           <tr>
-            <th>Client</th><th>State</th><th>Display</th><th>Playback</th>
+            <th>Client</th><th>State</th><th>Display</th><th>Playback</th><th>Delivery</th>
             <th>Assignment</th><th>Revisions</th><th>Warnings</th>
           </tr>
         </thead>
-        <tbody><tr><td colspan="7" class="muted">Loading…</td></tr></tbody>
+        <tbody><tr><td colspan="8" class="muted">Loading…</td></tr></tbody>
       </table>
     </div>
   </div>
@@ -121,6 +121,15 @@ function age(seconds) {
   return `${Math.round(seconds / 3600)}h`;
 }
 
+function ms(value) {
+  if (value === null || value === undefined) return "?";
+  return value < 1000 ? `${Math.round(value)} ms` : `${(value / 1000).toFixed(1)} s`;
+}
+
+function kb(bytes) {
+  return bytes < 1048576 ? `${Math.round(bytes / 1024)} KB` : `${(bytes / 1048576).toFixed(1)} MB`;
+}
+
 function showIssued(result) {
   document.getElementById("issued").className = "";
   document.getElementById("issued-intro").classList.toggle("hidden", Boolean(result.join_command));
@@ -158,7 +167,7 @@ function render(data) {
   const body = document.querySelector("#clients tbody");
   body.innerHTML = "";
   if (!data.clients.length) {
-    body.innerHTML = '<tr><td colspan="7" class="muted">No clients yet. Use Add a display to set one up.</td></tr>';
+    body.innerHTML = '<tr><td colspan="8" class="muted">No clients yet. Use Add a display to set one up.</td></tr>';
     return;
   }
   for (const client of data.clients) {
@@ -206,6 +215,18 @@ function render(data) {
     cell(tr, (td) => {
       line(td, client.current_screen || "—");
       line(td, `${client.playback_state || "unknown"} · cache ${age(client.cache_age_seconds)}`, "muted");
+    });
+    cell(tr, (td) => {
+      const t = client.telemetry;
+      const synced = client.last_sync_age_seconds;
+      line(td, synced === null || synced === undefined ? "no sync yet" : `last sync ${age(synced)} ago`);
+      if (!t) { line(td, "no timings reported", "muted"); return; }
+      line(td, `on screen rendered ${age(t.displayed_content_age_seconds)} ago`, "muted");
+      line(td, `heartbeat ${ms(t.heartbeat_rtt_ms)} · manifest ${ms(t.manifest_fetch_ms)} · sync ${ms(t.last_sync_duration_ms)}`, "muted");
+      if (t.download_count) {
+        line(td, `last download ${t.download_count} file${t.download_count === 1 ? "" : "s"}, ${kb(t.download_bytes)} in ${ms(t.download_ms)}`, "muted");
+      }
+      if (t.consecutive_failures) line(td, `${t.consecutive_failures} failed sync${t.consecutive_failures === 1 ? "" : "s"} before the last success`, "muted");
     });
     cell(tr, (td) => {
       const select = document.createElement("select");

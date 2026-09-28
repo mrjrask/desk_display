@@ -74,6 +74,7 @@ from remote_display.models import (
     ClientCapabilities,
     ClientDemand,
     ClientStatus,
+    ClientTelemetry,
     ModelValidationError,
     UnsupportedCapabilitiesError,
     identifier,
@@ -508,6 +509,8 @@ def create_app(
             "lease_expires_at": _iso(record.lease_expires_at),
             "heartbeat_interval_seconds": registry.heartbeat_interval_seconds,
             "sync_interval_seconds": registry.sync_interval_seconds,
+            # Heartbeats may carry a ``telemetry`` document of these versions.
+            "client_telemetry_versions": [ClientTelemetry.WIRE_VERSION],
         }
 
     def _assignment_payload(client_id: str, *, delivered: bool = False) -> dict[str, Any]:
@@ -623,7 +626,7 @@ def create_app(
     def heartbeat(client_id: str):
         record = _client()
         payload = _json_body()
-        unknown = sorted(set(payload) - {"status", "demand"})
+        unknown = sorted(set(payload) - {"status", "demand", "telemetry"})
         if unknown:
             raise ModelValidationError(unknown[0], "unknown field")
         status = ClientStatus.from_wire(payload.get("status"), path="status")
@@ -631,7 +634,10 @@ def create_app(
         if payload.get("demand") is not None:
             demand = _with_interaction_targets(ClientDemand.from_wire(payload["demand"], path="demand"),
                                                record.capabilities)
-        record = registry.heartbeat(record.client_id, _bearer() or "", status, demand)
+        telemetry = None
+        if payload.get("telemetry") is not None:
+            telemetry = ClientTelemetry.from_wire(payload["telemetry"], path="telemetry")
+        record = registry.heartbeat(record.client_id, _bearer() or "", status, demand, telemetry)
         body = {
             "client_id": record.client_id,
             **_assignment_payload(record.client_id, delivered=True),
@@ -734,6 +740,7 @@ def create_app(
                 "capabilities": record.capabilities.to_wire(),
                 "demand": None if record.demand is None else record.demand.to_wire(),
                 "status": None if record.status is None else record.status.to_wire(),
+                "telemetry": None if record.telemetry is None else record.telemetry.to_wire(),
                 **_assignment_payload(record.client_id),
             })
         demand = [

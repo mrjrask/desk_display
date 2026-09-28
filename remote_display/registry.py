@@ -47,6 +47,7 @@ from remote_display.models import (
     ClientCapabilities,
     ClientDemand,
     ClientStatus,
+    ClientTelemetry,
     ModelValidationError,
     PackageCapabilities,
     RenderKey,
@@ -128,6 +129,7 @@ class ClientRecord:
     lease_expires_at: float | None = None
     demand: ClientDemand | None = None
     status: ClientStatus | None = None
+    telemetry: ClientTelemetry | None = None
     disabled: bool = False
     delivered_playlist_revision: str | None = None
     # The provisioned credential this lease was issued under (None in shared mode).
@@ -235,6 +237,7 @@ class ClientRegistry:
                 lease_expires_at=now + self.lease_seconds,
                 demand=demand if demand is not None else (record.demand if renewed and record else None),
                 status=record.status if record else None,
+                telemetry=record.telemetry if record else None,
                 delivered_playlist_revision=record.delivered_playlist_revision if record else None,
                 enrollment_id=enrollment_id,
             )
@@ -259,6 +262,7 @@ class ClientRegistry:
         credential: str,
         status: ClientStatus,
         demand: ClientDemand | None = None,
+        telemetry: ClientTelemetry | None = None,
     ) -> ClientRecord:
         record = self.authenticate(client_id, credential)
         if status.client_id != client_id:
@@ -269,6 +273,7 @@ class ClientRegistry:
         with self._lock:
             current = self._clients[client_id]
             current.status = status
+            current.telemetry = telemetry
             current.last_seen = now
             current.lease_expires_at = now + self.lease_seconds
             if demand is not None:
@@ -341,6 +346,7 @@ class ClientRegistry:
                 "lease_expires_at": _iso(record.lease_expires_at),
                 "capabilities": record.capabilities.to_wire(),
                 "status": None if record.status is None else record.status.to_wire(),
+                "telemetry": None if record.telemetry is None else record.telemetry.to_wire(),
                 "delivered_playlist_revision": record.delivered_playlist_revision,
             }
         return {

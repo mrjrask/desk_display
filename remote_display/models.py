@@ -14,6 +14,11 @@ Four documents describe a remote display:
     What a client *is doing*: current screen and playlist, accepted
     revisions, sync/cache ages, playback state, diagnostic physical rotation
     and summarized recent errors.
+:class:`ClientTelemetry`
+    How quickly content reaches a client: request round trips, the last
+    sync's downloads, how old the screen on the panel is and how many sync
+    passes have failed in a row.  Sent beside the status in a heartbeat,
+    only to a server that advertises ``client_telemetry_versions``.
 :class:`RenderKey`
     The canonical identity of one rendered artifact.  It contains only the
     inputs that change pixels, so clients with equivalent demand share
@@ -608,6 +613,46 @@ class ClientStatus(WireModel):
         return body
 
 
+MAX_TELEMETRY_MS = 3_600_000.0
+MAX_TELEMETRY_BYTES = 1 << 40
+
+
+@dataclass(frozen=True)
+class ClientTelemetry(WireModel):
+    """How quickly content reaches a client, measured on the client.
+
+    Times are wall-clock milliseconds for the whole request as the client
+    saw it, so they include the network (a VPN, Wi-Fi) as well as the
+    server.  ``download_*`` describe the artifacts and render packages the
+    last successful full sync fetched; a sync with nothing new reports 0.
+    ``displayed_content_age_seconds`` is how long ago the server rendered
+    the screen now on the panel.
+    """
+
+    WIRE_TYPE: ClassVar[str] = "client_telemetry"
+
+    heartbeat_rtt_ms: float | None = None
+    manifest_fetch_ms: float | None = None
+    last_sync_duration_ms: float | None = None
+    download_count: int = 0
+    download_bytes: int = 0
+    download_ms: float = 0.0
+    displayed_content_age_seconds: float | None = None
+    consecutive_failures: int = 0
+
+    def _normalize(self) -> None:
+        for name in ("heartbeat_rtt_ms", "manifest_fetch_ms", "last_sync_duration_ms"):
+            self._set(name, _optional(getattr(self, name), name,
+                                      lambda v, p: _number(v, p, maximum=MAX_TELEMETRY_MS)))
+        self._set("download_ms", _number(self.download_ms, "download_ms", maximum=MAX_TELEMETRY_MS))
+        self._set("download_count", _int(self.download_count, "download_count", maximum=MAX_SCREENS * 4))
+        self._set("download_bytes", _int(self.download_bytes, "download_bytes", maximum=MAX_TELEMETRY_BYTES))
+        self._set("displayed_content_age_seconds", _optional(
+            self.displayed_content_age_seconds, "displayed_content_age_seconds", _number))
+        self._set("consecutive_failures", _int(self.consecutive_failures, "consecutive_failures",
+                                               maximum=1_000_000_000))
+
+
 # ─── Render identity ────────────────────────────────────────────────────────
 
 
@@ -751,7 +796,8 @@ def plan_renders(
 
 WIRE_MODELS: dict[str, type[WireModel]] = {
     model.WIRE_TYPE: model
-    for model in (ClientCapabilities, ClientDemand, ClientStatus, RenderKey, ScreenRevisions)
+    for model in (ClientCapabilities, ClientDemand, ClientStatus, ClientTelemetry, RenderKey,
+                  ScreenRevisions)
 }
 
 
@@ -771,6 +817,7 @@ __all__ = [
     "ClientCapabilities",
     "ClientDemand",
     "ClientStatus",
+    "ClientTelemetry",
     "ErrorSummary",
     "HardwareDescription",
     "ModelValidationError",

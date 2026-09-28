@@ -23,6 +23,11 @@ See the README's [deployment modes](README.md#deployment-modes) and
   command (`POST /api/v1/join`) that installs and configures the new Pi, and
   shows when the display comes online.
   On a Pi still on v0.1 the setup script updates the checkout first.
+- Delivery telemetry: clients report heartbeat and manifest round trips,
+  full-sync time, what the last sync downloaded (files, bytes, time), how
+  old the screen on the panel is and failed passes in a row. It shows in a
+  **Delivery** column on the Clients page and in `/api/v1/admin/status`
+  (see OPERATIONS.md, "Checking delivery speed").
 - New **MLB Playoffs** screen: the postseason bracket laid out like
   mlb.com/postseason (AL left, NL right, World Series in the middle, seeds and
   series scores), sized for every display profile, with the current round's

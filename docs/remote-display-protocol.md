@@ -121,6 +121,7 @@ the credential. Response 201 (new lease) or 200 (renewal):
 | `assignment_state` (`assigned`/`unassigned`), `assigned_playlist` (`{playlist_id, playlist_revision}` or null) | Playlist assignment |
 | `manifest_revision` | Current manifest ETag |
 | `lease_seconds`, `lease_expires_at`, `heartbeat_interval_seconds`, `sync_interval_seconds` | Lease |
+| `client_telemetry_versions` | Heartbeat `telemetry` versions the server accepts |
 | `client_credential` | The new lease credential |
 
 The current client keeps `client_credential` and the advertised
@@ -153,8 +154,8 @@ its next sync, and keeps playing from its cache in the meantime.
 
 ### Heartbeat
 
-`POST /api/v1/clients/<id>/heartbeat` with `{"status": {...}, "demand": {...}}`
-(`demand` optional). `status` is a `client_status` document:
+`POST /api/v1/clients/<id>/heartbeat` with `{"status": {...}, "demand": {...}, "telemetry": {...}}`
+(`demand` and `telemetry` optional). `status` is a `client_status` document:
 
 - `client_id`;
 - `playback_state`: `starting`, `playing`, `focus`, `paused`, `dark`,
@@ -167,6 +168,24 @@ its next sync, and keeps playing from its cache in the meantime.
 - `recent_errors`: up to 10 entries of
   `{code, message, count, last_seen_age_seconds}` (the client keeps at
   most 8).
+
+`telemetry` is a `client_telemetry` document of delivery timings measured
+on the client (so they include the network):
+
+- `heartbeat_rtt_ms`, `manifest_fetch_ms` and `last_sync_duration_ms`: the
+  last heartbeat, manifest fetch and full sync, or null before the first;
+- `download_count`, `download_bytes` and `download_ms`: what the last
+  successful full sync downloaded (0 when nothing was new);
+- `displayed_content_age_seconds`: how long ago the server rendered the
+  screen on the panel, or null;
+- `consecutive_failures`: sync passes that failed in a row before this one.
+
+The register, heartbeat and config responses list the accepted versions in
+`client_telemetry_versions` (currently `[1]`). A client sends `telemetry`
+only to a server that lists its version, because older servers reject
+unknown heartbeat fields. The server keeps the last report per client and
+shows it in `/api/v1/admin/status` and on `/clients`; a heartbeat without
+`telemetry` clears it.
 
 The response repeats the assignment, `manifest_revision` and lease fields.
 It may also carry `display_status`: the server's feed summary for side

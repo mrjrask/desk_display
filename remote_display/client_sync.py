@@ -49,6 +49,7 @@ from remote_display.models import (
     ClientCapabilities,
     ClientDemand,
     ClientStatus,
+    ClientTelemetry,
     ErrorSummary,
     ModelValidationError,
     PackageCapabilities,
@@ -561,6 +562,7 @@ class ClientSync:
         report: Callable[[], PlaybackReport] | None = None,
         clock: Callable[[], float] = time.time,
         rng: random.Random | None = None,
+        timer: Callable[[], float] = time.perf_counter,
     ) -> None:
         self.capabilities = capabilities
         self.transport = transport
@@ -599,6 +601,13 @@ class ClientSync:
         self._active = self._load_active()
         self._stop = threading.Event()
         self.connected = False
+        # Delivery timings for the heartbeat's telemetry; sent only once the
+        # server advertises a telemetry version this client speaks.
+        self._timer = timer
+        self._telemetry_accepted = False
+        self._timings: dict[str, Any] = {"download_count": 0, "download_bytes": 0, "download_ms": 0.0}
+        self._pass_downloads: dict[str, Any] = dict(self._timings)
+        self.consecutive_failures = 0
 
     # Credential (the per-client lease credential, never the enrollment token)
 
@@ -731,6 +740,9 @@ class ClientSync:
             value = payload.get(name)
             if isinstance(value, int | float) and not isinstance(value, bool) and value > 0:
                 self._advertised[name] = int(min(MAX_INTERVAL_SECONDS, max(MIN_INTERVAL_SECONDS, value)))
+        versions = payload.get("client_telemetry_versions")
+        if isinstance(versions, list):
+            self._telemetry_accepted = ClientTelemetry.WIRE_VERSION in versions
 
     @staticmethod
     def _interval(local: Any, advertised: int | None) -> float:
@@ -829,9 +841,36 @@ class ClientSync:
             recent_errors=self.errors.summaries(),
         ).to_wire()
 
+    def _elapsed_ms(self, started: float) -> float:
+        return round(max(0.0, (self._timer() - started) * 1000), 1)
+
+    def displayed_content_age(self) -> float | None:
+        """Seconds since the server rendered the screen now on the panel."""
+
+        screen = self.report().current_screen
+        entry = self.active().entry(screen) if screen else None
+        generated_at = entry.get("generated_at") if entry else None
+        if not isinstance(generated_at, str):
+            return None
+        try:
+            generated = datetime.fromisoformat(generated_at.replace("Z", "+00:00"))
+        except ValueError:
+            return None
+        return max(0.0, round(self._clock() - generated.timestamp(), 1))
+
+    def telemetry(self) -> dict[str, Any]:
+        """How quickly content reaches this client, for the heartbeat."""
+
+        return ClientTelemetry(
+            **self._timings,
+            displayed_content_age_seconds=self.displayed_content_age(),
+            consecutive_failures=self.consecutive_failures,
+        ).to_wire()
+
     def sync_once(self) -> ActiveContent:
         """Run one full sync pass; raise :class:`SyncError` on failure."""
 
+        sync_started = self._timer()
         prefix = f"/api/v1/clients/{self.client_id}"
         response = self._client_request("GET", f"{prefix}/config")
         if response.status != 200:
@@ -857,7 +896,9 @@ class ClientSync:
 
         fetched = self._fetched
         headers = {"If-None-Match": f'"{fetched["manifest_revision"]}"'} if fetched else {}
+        started = self._timer()
         response = self._client_request("GET", f"{prefix}/manifest", headers=headers)
+        self._timings["manifest_fetch_ms"] = self._elapsed_ms(started)
         if response.status == 304 and fetched is not None:
             manifest = dict(fetched)
         elif response.status == 200:
@@ -872,6 +913,7 @@ class ClientSync:
             raise SyncError("invalid_manifest", "manifest is for another client")
 
         self._download(manifest)
+        self._timings["last_sync_duration_ms"] = self._elapsed_ms(sync_started)
         self._last_sync = self._clock()
         self.connected = True
         if target is None or self._activate(target, manifest):
@@ -885,8 +927,12 @@ class ClientSync:
         demand = self._demand(playlist)
         if demand is not None:
             heartbeat["demand"] = demand
+        if self._telemetry_accepted:
+            heartbeat["telemetry"] = self.telemetry()
+        started = self._timer()
         response = self._client_request("POST", f"/api/v1/clients/{self.client_id}/heartbeat",
                                         json_body=heartbeat)
+        self._timings["heartbeat_rtt_ms"] = self._elapsed_ms(started)
         if response.status != 200:
             raise self._fail(response, "heartbeat")
         payload = response.json()
@@ -929,15 +975,20 @@ class ClientSync:
         if type(length) is not int or not 0 < length <= MAX_ARTIFACT_BYTES:
             self.errors.record("too_large", f"{what} for {entry.get('screen_id')} is too large")
             return None
+        started = self._timer()
         response = self._client_request("GET", url, max_bytes=length)
         if response.status != 200:
             raise self._fail(response, f"{what} download")
+        self._pass_downloads["download_count"] += 1
+        self._pass_downloads["download_bytes"] += len(response.body)
+        self._pass_downloads["download_ms"] += self._elapsed_ms(started)
         return response.body
 
     def _download(self, manifest: Mapping[str, Any]) -> None:
         profile = manifest
         entries = [e for e in manifest.get("artifacts") or ()
                    if e.get("sha256") and e.get("artifact_type") in SUPPORTED_ARTIFACT_TYPES]
+        self._pass_downloads = {"download_count": 0, "download_bytes": 0, "download_ms": 0.0}
         listed = {e["sha256"] for e in entries}
         listed |= {ref["sha256"] for e in entries if (ref := self.artifacts.package_ref(e)) is not None}
         self._rejected &= listed
@@ -961,6 +1012,12 @@ class ClientSync:
                     raise
                 self.errors.record(exc.code, f"{entry.get('screen_id')}: {exc.message}")
                 LOGGER.warning("Artifact for %s rejected: %s", entry.get("screen_id"), exc.message)
+        downloads = self._pass_downloads
+        downloads["download_ms"] = round(downloads["download_ms"], 1)
+        self._timings.update(downloads)
+        if downloads["download_count"]:
+            LOGGER.info("Downloaded %d file(s), %.1f KB in %.0f ms",
+                        downloads["download_count"], downloads["download_bytes"] / 1024, downloads["download_ms"])
 
     def _store_checked(self, sha: str, store: Callable[[], Any]) -> None:
         """Store a download; remember a permanent rejection so it is not fetched again."""
@@ -1048,6 +1105,7 @@ class ClientSync:
                 self.sync_once()
         except SyncError as exc:
             self._next_sync = None
+            self.consecutive_failures += 1
             self.errors.record(exc.code, exc.message)
             delay = self.backoff.failure()
             if exc.retry_after:
@@ -1056,10 +1114,12 @@ class ClientSync:
             return delay
         except Exception as exc:
             self._next_sync = None
+            self.consecutive_failures += 1
             self.errors.record("sync_error", type(exc).__name__)
             LOGGER.exception("Unexpected sync failure")
             return self.backoff.failure()
         self.backoff.success()
+        self.consecutive_failures = 0
         if full:
             self._next_sync = now + self.effective_sync_interval()
         self._next_heartbeat = now + self.effective_heartbeat_interval()
