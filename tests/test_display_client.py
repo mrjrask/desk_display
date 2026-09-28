@@ -969,3 +969,24 @@ def test_offline_client_skips_live_screens_past_their_refresh_deadline(env):
     env.transport.down = False
     synced(env, client)
     assert "NFL Scoreboard" in {client.step()[0] for _ in range(4)}
+
+
+def test_a_permanently_rejected_artifact_is_not_downloaded_again(env, monkeypatch):
+    from remote_display import client_sync
+
+    env.publish("date", color=1)
+    env.publish("weather1", color=2)
+    original = client_sync.ArtifactCache.store
+
+    def store(self, entry, data, profile):
+        if entry.get("screen_id") == "date":
+            raise client_sync.InvalidArtifact("wrong_dimensions", "not for this display")
+        return original(self, entry, data, profile)
+
+    monkeypatch.setattr(client_sync.ArtifactCache, "store", store)
+    client = synced(env, env.make_client())
+    downloads = [p for m, p in env.transport.calls if "/artifacts/" in p]
+    assert len(downloads) == 2  # each image once: the rejected one is not fetched on the second pass
+    synced(env, client, 1)
+    assert [p for m, p in env.transport.calls if "/artifacts/" in p] == downloads
+    assert "wrong_dimensions" in {e.code for e in client.sync.errors.summaries()}

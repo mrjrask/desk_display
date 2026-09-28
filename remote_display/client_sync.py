@@ -72,6 +72,12 @@ REQUEST_TIMEOUT_SECONDS = 15
 MIN_INTERVAL_SECONDS = 5
 MAX_INTERVAL_SECONDS = 3600
 MAX_RETRY_AFTER_SECONDS = 3600
+# Rejections that downloading the same bytes again cannot fix. A checksum or
+# length mismatch may be a damaged transfer, so those are retried.
+PERMANENT_REJECTIONS = frozenset({
+    "unsupported_artifact", "unsupported_media_type", "wrong_dimensions", "invalid_media",
+    "too_large", "invalid_package",
+})
 
 
 # ── Transport ────────────────────────────────────────────────────────────────
@@ -586,6 +592,9 @@ class ClientSync:
         self._credential: str | None = self._load_credential()
         # The last manifest fetched (activated or not), for If-None-Match.
         self._fetched: dict[str, Any] | None = None
+        # Content hashes this client rejected for good; not downloaded again
+        # while the manifest still lists them.
+        self._rejected: set[str] = set()
         self._last_sync: float | None = None
         self._active = self._load_active()
         self._stop = threading.Event()
@@ -927,25 +936,41 @@ class ClientSync:
 
     def _download(self, manifest: Mapping[str, Any]) -> None:
         profile = manifest
-        for entry in manifest.get("artifacts") or ():
-            if not entry.get("sha256") or entry.get("artifact_type") not in SUPPORTED_ARTIFACT_TYPES:
-                continue
+        entries = [e for e in manifest.get("artifacts") or ()
+                   if e.get("sha256") and e.get("artifact_type") in SUPPORTED_ARTIFACT_TYPES]
+        listed = {e["sha256"] for e in entries}
+        listed |= {ref["sha256"] for e in entries if (ref := self.artifacts.package_ref(e)) is not None}
+        self._rejected &= listed
+        for entry in entries:
+            sha = entry["sha256"]
             try:
+                if sha in self._rejected:
+                    continue
                 if not self.artifacts.has(entry):
                     data = self._fetch(entry, entry, "artifact")
                     if data is None:
                         continue
-                    self.artifacts.store(entry, data, profile)
+                    self._store_checked(sha, lambda: self.artifacts.store(entry, data, profile))
                 ref = self.artifacts.package_ref(entry)
-                if self.wants_package(ref) and not self.artifacts.has(ref):
+                if self.wants_package(ref) and ref["sha256"] not in self._rejected and not self.artifacts.has(ref):
                     data = self._fetch(entry, ref, "render package")
                     if data is not None:
-                        self.artifacts.store_package(entry, data, profile)
+                        self._store_checked(ref["sha256"], lambda: self.artifacts.store_package(entry, data, profile))
             except SyncError as exc:
                 if exc.code == "server_unreachable":
                     raise
                 self.errors.record(exc.code, f"{entry.get('screen_id')}: {exc.message}")
                 LOGGER.warning("Artifact for %s rejected: %s", entry.get("screen_id"), exc.message)
+
+    def _store_checked(self, sha: str, store: Callable[[], Any]) -> None:
+        """Store a download; remember a permanent rejection so it is not fetched again."""
+
+        try:
+            store()
+        except InvalidArtifact as exc:
+            if exc.code in PERMANENT_REJECTIONS:
+                self._rejected.add(sha)
+            raise
 
     def artifact_cached(self, entry: Mapping[str, Any] | None) -> bool:
         """Whether ``entry``'s still image, and its render package when this

@@ -56,6 +56,28 @@ def test_a_worker_that_hangs_is_killed_and_replaced(tmp_path):
         workers.close()
 
 
+def test_a_render_that_hangs_is_killed_at_the_render_timeout(tmp_path):
+    """Start-up keeps its long timeout; a hung render frees its slot sooner."""
+
+    hang = tmp_path / "python"
+    hang.write_text(
+        f"#!{sys.executable}\n"
+        "import sys, time\n"
+        "from rendering.profile_process import _write\n"
+        "_write(sys.stdout.buffer, {'ready': True})\n"
+        "time.sleep(60)\n"
+    )
+    hang.chmod(0o755)
+    workers = ProfileProcessPool(python=str(hang), timeout_seconds=60, render_timeout_seconds=1)
+    try:
+        started = time.monotonic()
+        with pytest.raises(ProfileProcessError, match="stopped"):
+            workers.render_screen(key("date"), PROFILE, DataCoordinator().snapshot())
+        assert time.monotonic() - started < 30
+    finally:
+        workers.close()
+
+
 def test_renders_for_one_profile_run_side_by_side():
     """Neither render waits for the other, so neither eats into its timeout."""
 

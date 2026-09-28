@@ -137,10 +137,12 @@ def _snapshot_from_message(message: tuple[Any, ...]) -> Any:
 
 
 class _Worker:
-    def __init__(self, profile: RenderProfile, python: str, timeout: float) -> None:
+    def __init__(self, profile: RenderProfile, python: str, timeout: float,
+                 render_timeout: float | None = None) -> None:
         self.profile = profile
         self._python = python
         self._timeout = timeout
+        self._render_timeout = timeout if render_timeout is None else render_timeout
         self._lock = threading.Lock()
         self._process: subprocess.Popen[bytes] | None = None
         self._snapshot_tag: Any = None
@@ -196,7 +198,7 @@ class _Worker:
                 return _read(process.stdout)
 
             try:
-                reply = self._guarded(exchange, process)
+                reply = self._guarded(exchange, process, self._render_timeout)
             except (EOFError, OSError, pickle.PickleError) as exc:
                 self._stop(process)
                 raise ProfileProcessError(
@@ -210,14 +212,14 @@ class _Worker:
             raise ProfileProcessError(error)
         return reply
 
-    def _guarded(self, call: Any, process: subprocess.Popen[bytes]) -> Any:
-        """Run *call*, killing the worker if it takes longer than the timeout.
+    def _guarded(self, call: Any, process: subprocess.Popen[bytes], timeout: float | None = None) -> Any:
+        """Run *call*, killing the worker if it takes longer than *timeout*.
 
         A hung render would otherwise hold this profile's lock for good; the
         kill turns it into an EOF, and the next request starts a new worker.
         """
 
-        timer = threading.Timer(self._timeout, process.kill)
+        timer = threading.Timer(self._timeout if timeout is None else timeout, process.kill)
         timer.daemon = True
         timer.start()
         try:
@@ -255,11 +257,13 @@ class ProfileProcessPool:
     """
 
     def __init__(self, *, python: str | None = None, timeout_seconds: float = 120,
-                 processes_per_profile: int = 1) -> None:
-        """*timeout_seconds* bounds a worker's start-up and each render in it."""
+                 processes_per_profile: int = 1, render_timeout_seconds: float | None = None) -> None:
+        """*timeout_seconds* bounds a worker's start-up, and each render in it
+        unless *render_timeout_seconds* sets a shorter bound for renders."""
 
         self._python = python or sys.executable
         self._timeout = float(timeout_seconds)
+        self._render_timeout = None if render_timeout_seconds is None else float(render_timeout_seconds)
         self._per_profile = max(1, int(processes_per_profile))
         self._workers: dict[str, list[_Worker]] = {}
         self._busy: set[int] = set()
@@ -272,7 +276,7 @@ class ProfileProcessPool:
             while True:
                 worker = next((w for w in workers if id(w) not in self._busy), None)
                 if worker is None and len(workers) < self._per_profile:
-                    worker = _Worker(profile, self._python, self._timeout)
+                    worker = _Worker(profile, self._python, self._timeout, self._render_timeout)
                     workers.append(worker)
                 if worker is not None:
                     break
