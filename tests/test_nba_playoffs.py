@@ -1,981 +1,148 @@
+"""Tests for the NBA Playoffs screen and its bracket feed."""
+from __future__ import annotations
+
 import datetime
 
 import pytest
 
-from config import CENTRAL_TIME
-from screens import nba_playoffs
+from config import CENTRAL_TIME, HEIGHT, WIDTH
+from screens import nba_playoffs, playoff_bracket
+from services.sports import nba_postseason as nb
+from services.sports import playoff_bracket16 as pb
+
+NOW = datetime.datetime(2024, 4, 22, 12, 0, tzinfo=CENTRAL_TIME)
+_TEAM_IDS: dict[str, int] = {}
+
+# The 2024 playoffs: (round, conference, high, high seed, low, low seed, high wins, low wins).
+SERIES_2024 = [
+    (1, "East", "BOS", 1, "MIA", 8, 4, 1), (1, "East", "CLE", 4, "ORL", 5, 4, 3),
+    (1, "East", "MIL", 3, "IND", 6, 2, 4), (1, "East", "NYK", 2, "PHI", 7, 4, 2),
+    (1, "West", "OKC", 1, "NOP", 8, 4, 0), (1, "West", "LAC", 4, "DAL", 5, 2, 4),
+    (1, "West", "MIN", 3, "PHX", 6, 4, 0), (1, "West", "DEN", 2, "LAL", 7, 4, 1),
+    (2, "East", "BOS", 1, "CLE", 4, 4, 1), (2, "East", "NYK", 2, "IND", 6, 3, 4),
+    (2, "West", "OKC", 1, "DAL", 5, 2, 4), (2, "West", "DEN", 2, "MIN", 3, 3, 4),
+    (3, "East", "BOS", 1, "IND", 6, 4, 0), (3, "West", "MIN", 3, "DAL", 5, 1, 4),
+    (4, "NBA Finals", "BOS", 1, "DAL", 5, 4, 1),
+]
 
 
-def test_normalize_series_item_supports_matchup_shape_and_next_game_time():
-    normalized = nba_playoffs._normalize_series_item(
-        {
-            "topSeed": {"team": {"teamTricode": "BOS"}, "wins": 3},
-            "bottomSeed": {"team": {"teamTricode": "MIA"}, "seriesWins": 1},
-            "seriesStatus": "BOS leads 3-1",
-            "nextGameDateTime": "2026-04-21T00:00:00Z",
+def _id(code):
+    return _TEAM_IDS.setdefault(code, 1610612700 + len(_TEAM_IDS))
+
+
+def bracket_payload(series=SERIES_2024, next_games=None):
+    """The live bracket JSON; *next_games* maps a high seed's tricode to ``(status, iso, number)``."""
+
+    items = []
+    for round_number, conference, high, high_rank, low, low_rank, high_wins, low_wins in series:
+        item = {
+            "roundNumber": round_number, "seriesConference": conference,
+            "highSeedId": _id(high), "highSeedTricode": high, "highSeedName": f"{high} name",
+            "highSeedRank": high_rank, "highSeedSeriesWins": high_wins,
+            "lowSeedId": _id(low), "lowSeedTricode": low, "lowSeedName": f"{low} name",
+            "lowSeedRank": low_rank, "lowSeedSeriesWins": low_wins,
+            "seriesWinner": _id(high) if high_wins == 4 else (_id(low) if low_wins == 4 else 0),
+            "nextGameStatus": 3,
         }
-    )
+        if next_games and high in next_games:
+            status, start, number = next_games[high]
+            item.update(nextGameStatus=status, nextGameDateTimeUTC=start, nextGameNumber=number)
+        items.append(item)
+    return {"meta": {}, "bracket": {"playoffBracketSeries": items}}
 
-    assert normalized is not None
-    assert normalized["teams"]["away"]["team"]["teamTricode"] == "BOS"
-    assert normalized["teams"]["home"]["team"]["teamTricode"] == "MIA"
-    assert normalized["teams"]["away"]["score"] == 3
-    assert normalized["teams"]["home"]["score"] == 1
-    assert normalized["next_text"]
 
+def first_round(next_games=None):
+    series = [(r, c, h, hr, lo, lr, 1, 1) for r, c, h, hr, lo, lr, _hw, _lw in SERIES_2024 if r == 1]
+    return bracket_payload(series, next_games)
 
-def test_extract_series_reads_matchups_key():
-    extracted = nba_playoffs._extract_series(
-        {
-            "matchups": [
-                {
-                    "awayTeam": {"teamTricode": "NYK"},
-                    "homeTeam": {"teamTricode": "DET"},
-                    "awayWins": 2,
-                    "homeWins": 2,
-                }
-            ]
-        }
-    )
 
-    assert len(extracted) == 1
-    assert extracted[0]["teams"]["away"]["team"]["teamTricode"] == "NYK"
-    assert extracted[0]["teams"]["home"]["team"]["teamTricode"] == "DET"
-    assert (
-        nba_playoffs._team_logo_abbr(extracted[0]["teams"]["away"]["team"])
-        == "NY"
-    )
+def data_from(payload):
+    series, names, seeds = nb.series_from_bracket(payload)
+    return {"series": series, "names": names, "seeds": seeds}
 
 
-def test_extract_series_ignores_non_series_matchups_without_playoff_shape():
-    extracted = nba_playoffs._extract_series(
-        {
-            "matchups": [
-                {
-                    "awayTeam": {"teamTricode": "BOS"},
-                    "homeTeam": {"teamTricode": "NYK"},
-                    "gameDate": "2026-04-21T00:00:00Z",
-                }
-            ]
-        }
-    )
+def test_first_round_follows_the_seed_order():
+    bracket = pb.build_bracket(data_from(bracket_payload()))
+    assert [slot["teams"] for slot in bracket["right"][0]] == [
+        ["BOS", "MIA"], ["CLE", "ORL"], ["MIL", "IND"], ["NY", "PHI"]]
+    assert [slot["teams"] for slot in bracket["left"][0]] == [
+        ["OKC", "NO"], ["LAC", "DAL"], ["MIN", "PHX"], ["DEN", "LAL"]]
+    assert bracket["left"][1][0]["teams"] == ["OKC", "DAL"] and bracket["left"][1][0]["winner"] == "DAL"
+    assert bracket["right"][1][1]["teams"] == ["IND", "NY"]  # upper feeder first
+    assert bracket["center"]["teams"] == ["DAL", "BOS"] and bracket["center"]["winner"] == "BOS"
+    assert bracket["seeds"]["NY"] == 2 and bracket["seeds"]["NO"] == 8
 
-    assert extracted == []
 
+def test_tricodes_use_the_logo_file_names():
+    assert [nb.team_code(code) for code in ("NYK", "GSW", "SAS", "BKN", "NOP", "WAS", "CHI")] == [
+        "NY", "GS", "SA", "BRK", "NO", "WSH", "CHI"]
 
-def test_extract_series_accepts_nested_team_wins_without_top_level_series_keys():
-    extracted = nba_playoffs._extract_series(
-        {
-            "matchups": [
-                {
-                    "awayTeam": {"teamTricode": "BOS", "wins": 2},
-                    "homeTeam": {"teamTricode": "NYK", "seriesWins": 1},
-                }
-            ]
-        }
-    )
 
-    assert len(extracted) == 1
-    assert extracted[0]["teams"]["away"]["score"] == 2
-    assert extracted[0]["teams"]["home"]["score"] == 1
+def test_play_in_games_are_left_out():
+    payload = bracket_payload([(0, "East", "PHI", 7, "MIA", 8, 1, 0), *SERIES_2024[:1]])
+    assert [s["teams"] for s in data_from(payload)["series"]] == [["BOS", "MIA"]]
 
 
-def test_normalize_next_text_strips_timezone_suffix():
-    assert nba_playoffs._normalize_next_text("Next: 04/09 8:00 PM ET") == "Thursday 8 PM"
+def test_live_and_next_games():
+    data = data_from(first_round({"BOS": (2, "2024-04-22T23:00:00Z", 3), "CLE": (1, "2024-04-23T00:00:00Z", 3)}))
+    by_high = {s["teams"][0]: s for s in data["series"]}
+    assert by_high["BOS"]["live"] and by_high["BOS"]["next_start"] is None
+    assert by_high["CLE"]["next_start"] == "2024-04-23T00:00:00Z" and by_high["CLE"]["next_game"] == 3
+    assert pb.has_live_series(data)
+    east = pb.build_bracket(data)["right"][0]
+    status = [playoff_bracket.series_status(slot, data["names"], NOW)[0] for slot in east[:3]]
+    assert status == ["Game 3 · LIVE", "Game 3 · Tonight 7 PM", "Series tied 1-1"]
 
 
-def test_format_next_text_uses_tonight_label(monkeypatch):
-    class _FixedNow(datetime.datetime):
-        @classmethod
-        def now(cls, tz=None):
-            return cls(2026, 4, 20, 10, 0, tzinfo=tz)
+def test_current_round_is_the_earliest_unfinished_one():
+    series = [s for s in SERIES_2024 if s[0] <= 2]
+    series[-1] = (2, "West", "DEN", 2, "MIN", 3, 3, 3)
+    data = data_from(bracket_payload(series))
+    assert pb.current_round(data) == 2
+    assert pb.current_round(data_from(bracket_payload())) == 4
 
-    monkeypatch.setattr(nba_playoffs.datetime, "datetime", _FixedNow)
-    text = nba_playoffs._format_next_text({"nextGameStartTimeUTC": "2026-04-21T02:30:00Z"})
-    assert text == "Tonight 9:30 PM"
 
-
-def test_format_next_text_supports_next_game_datetime_utc_key():
-    text = nba_playoffs._format_next_text({"nextGameDateTimeUTC": "2026-04-22T00:00:00Z"})
-    assert text == "Tuesday 7 PM"
-
-
-def test_format_next_text_supports_nested_next_game_payload(monkeypatch):
-    class _FixedNow(datetime.datetime):
-        @classmethod
-        def now(cls, tz=None):
-            return cls(2026, 4, 20, 10, 0, tzinfo=tz)
-
-    monkeypatch.setattr(nba_playoffs.datetime, "datetime", _FixedNow)
-    text = nba_playoffs._format_next_text({"nextGame": {"gameDateTimeUTC": "2026-04-23T00:30:00Z"}})
-    assert text == "Wednesday 7:30 PM"
-
-
-def test_derive_playoff_matchups_supports_scoreboard_games_shape():
-    games = [
-        {
-            "gamePk": "0042600001",
-            "teams": {
-                "away": {"team": {"abbreviation": "BOS"}},
-                "home": {"team": {"abbreviation": "NYK"}},
-            },
-        }
-    ]
-
-    derived = nba_playoffs._derive_playoff_matchups_from_games(games)
-
-    assert len(derived) == 1
-    assert derived[0]["teams"]["away"]["team"]["abbreviation"] == "BOS"
-    assert derived[0]["teams"]["home"]["team"]["abbreviation"] == "NYK"
-
-
-def test_derive_playoff_matchups_counts_wins_from_finals():
-    games = [
-        {
-            "gamePk": "0042600101",
-            "gameDate": "2026-04-18T00:00:00Z",
-            "status": {"statusCode": "3", "detailedState": "Final"},
-            "teams": {
-                "away": {"team": {"abbreviation": "BOS"}, "score": 100},
-                "home": {"team": {"abbreviation": "NYK"}, "score": 90},
-            },
-        },
-        {
-            "gamePk": "0042600102",
-            "gameDate": "2026-04-20T00:00:00Z",
-            "status": {"statusCode": "3", "detailedState": "Final"},
-            "teams": {
-                "away": {"team": {"abbreviation": "BOS"}, "score": 95},
-                "home": {"team": {"abbreviation": "NYK"}, "score": 101},
-            },
-        },
-    ]
-
-    derived = nba_playoffs._derive_playoff_matchups_from_games(games)
-
-    assert len(derived) == 1
-    assert derived[0]["teams"]["away"]["score"] == 1
-    assert derived[0]["teams"]["home"]["score"] == 1
-
-
-def test_derive_playoff_matchups_next_text_uses_earliest_future_game(monkeypatch):
-    # Regression: next_text was overwritten by every future game encountered,
-    # so a series listing Games 5, 6 and 7 as scheduled (common once a
-    # series clinches its format ahead of time) showed the *last* game's
-    # date/time instead of the very next one to be played.
-    class _FixedNow(datetime.datetime):
-        @classmethod
-        def now(cls, tz=None):
-            return cls(2026, 4, 20, 10, 0, tzinfo=tz)
-
-    monkeypatch.setattr(nba_playoffs.datetime, "datetime", _FixedNow)
-
-    games = [
-        {
-            "gamePk": "0042600105",
-            "gameDate": "2026-04-26T00:00:00Z",
-            "status": {"statusCode": "1", "detailedState": "Scheduled"},
-            "teams": {
-                "away": {"team": {"abbreviation": "BOS"}},
-                "home": {"team": {"abbreviation": "NYK"}},
-            },
-        },
-        {
-            "gamePk": "0042600104",
-            "gameDate": "2026-04-22T00:00:00Z",
-            "status": {"statusCode": "1", "detailedState": "Scheduled"},
-            "teams": {
-                "away": {"team": {"abbreviation": "BOS"}},
-                "home": {"team": {"abbreviation": "NYK"}},
-            },
-        },
-    ]
-
-    derived = nba_playoffs._derive_playoff_matchups_from_games(games)
-
-    assert len(derived) == 1
-    assert derived[0]["next_text"] == "Tomorrow 7:00 PM"
-
-
-def test_parse_series_record_ignores_non_series_score_text():
-    assert nba_playoffs._parse_series_record_from_text("Final 117-99") is None
-
-
-def test_derive_playoff_matchups_filters_non_playoff_games_when_playoff_game_present():
-    games = [
-        {
-            "gamePk": "0022500001",
-            "status": {"statusCode": "3", "detailedState": "Final"},
-            "teams": {
-                "away": {"team": {"abbreviation": "BOS"}, "score": 120},
-                "home": {"team": {"abbreviation": "NYK"}, "score": 100},
-            },
-        },
-        {
-            "gamePk": "0042500101",
-            "status": {"statusCode": "3", "detailedState": "Final"},
-            "teams": {
-                "away": {"team": {"abbreviation": "BOS"}, "score": 98},
-                "home": {"team": {"abbreviation": "NYK"}, "score": 95},
-            },
-        },
-    ]
-
-    derived = nba_playoffs._derive_playoff_matchups_from_games(games)
-
-    assert len(derived) == 1
-    assert derived[0]["teams"]["away"]["score"] == 1
-    assert derived[0]["teams"]["home"]["score"] == 0
-
-
-def test_is_current_series_filters_completed_series():
-    series = {
-        "teams": {
-            "away": {"score": 4},
-            "home": {"score": 2},
-        }
-    }
-
-    assert nba_playoffs._is_current_series(series) is False
-
-
-def test_looks_like_playoff_game_accepts_espn_postseason_type():
-    game = {
-        "gamePk": "401999999",
-        "seasonType": "3",
-        "status": {"detailedState": "Scheduled"},
-    }
-
-    assert nba_playoffs._looks_like_playoff_game(game) is True
-
-
-def test_looks_like_playoff_game_rejects_play_in_game_id_prefix():
-    game = {
-        "gamePk": "0052600101",
-        "status": {"detailedState": "Final"},
-    }
-
-    assert nba_playoffs._looks_like_playoff_game(game) is False
-
-
-def test_extract_series_dedupes_when_home_away_flipped():
-    extracted = nba_playoffs._extract_series(
-        {
-            "series": [
-                {
-                    "awayTeam": {"teamTricode": "GSW"},
-                    "homeTeam": {"teamTricode": "LAL"},
-                    "awayWins": 1,
-                    "homeWins": 1,
-                },
-                {
-                    "awayTeam": {"teamTricode": "LAL"},
-                    "homeTeam": {"teamTricode": "GSW"},
-                    "awayWins": 1,
-                    "homeWins": 1,
-                },
-            ]
-        }
-    )
-
-    assert len(extracted) == 1
-
-
-def test_select_current_round_series_prefers_lowest_round_rank():
-    series = [
-        {"teams": {"away": {"team": {"abbreviation": "BOS"}, "score": 1}, "home": {"team": {"abbreviation": "NYK"}, "score": 1}}, "round_rank": 1},
-        {"teams": {"away": {"team": {"abbreviation": "CLE"}, "score": 2}, "home": {"team": {"abbreviation": "IND"}, "score": 0}}, "round_rank": 1},
-        {"teams": {"away": {"team": {"abbreviation": "MIN"}, "score": 0}, "home": {"team": {"abbreviation": "OKC"}, "score": 0}}, "round_rank": 2},
-    ]
-
-    selected = nba_playoffs._select_current_round_series(series)
-
-    assert len(selected) == 2
-    assert all(item["round_rank"] == 1 for item in selected)
-
-
-def test_select_current_round_series_keeps_all_active_when_round_unknown():
-    series = [
-        {"teams": {"away": {"team": {"abbreviation": "BOS"}, "score": 1}, "home": {"team": {"abbreviation": "NYK"}, "score": 1}}},
-        {"teams": {"away": {"team": {"abbreviation": "CLE"}, "score": 2}, "home": {"team": {"abbreviation": "IND"}, "score": 0}}},
-    ]
-
-    selected = nba_playoffs._select_current_round_series(series)
-
-    assert selected == series
-
-
-
-
-def test_select_current_round_series_round_unknown_filters_completed_series():
-    series = [
-        {"teams": {"away": {"team": {"abbreviation": "BOS"}, "score": 4}, "home": {"team": {"abbreviation": "NYK"}, "score": 1}}},
-        {"teams": {"away": {"team": {"abbreviation": "CLE"}, "score": 2}, "home": {"team": {"abbreviation": "IND"}, "score": 2}}},
-        {"teams": {"away": {"team": {"abbreviation": "MIN"}, "score": 1}, "home": {"team": {"abbreviation": "OKC"}, "score": 3}}},
-    ]
-
-    selected = nba_playoffs._select_current_round_series(series)
-
-    assert selected == series[1:]
-
-
-def test_round_rank_from_text_supports_common_labels():
-    assert nba_playoffs._round_rank_from_text("Western Conference First Round") == 1
-    assert nba_playoffs._round_rank_from_text("Conference Semifinals") == 2
-    assert nba_playoffs._round_rank_from_text("Eastern Conference Finals") == 3
-    assert nba_playoffs._round_rank_from_text("NBA Finals") == 4
-
-
-def test_select_current_round_series_keeps_completed_first_round_visible():
-    series = [
-        {"teams": {"away": {"team": {"abbreviation": "BOS"}, "score": 4}, "home": {"team": {"abbreviation": "ORL"}, "score": 1}}, "round_rank": 1},
-        {"teams": {"away": {"team": {"abbreviation": "NYK"}, "score": 3}, "home": {"team": {"abbreviation": "DET"}, "score": 2}}, "round_rank": 1},
-        {"teams": {"away": {"team": {"abbreviation": "CLE"}, "score": 0}, "home": {"team": {"abbreviation": "MIA"}, "score": 0}}, "round_rank": 2},
-    ]
-
-    selected = nba_playoffs._select_current_round_series(series)
-
-    assert len(selected) == 2
-    assert all(item["round_rank"] == 1 for item in selected)
-
-
-def test_select_current_round_series_ignores_opponentless_next_round_series():
-    series = [
-        {"teams": {"away": {"team": {"abbreviation": "BOS"}, "score": 4}, "home": {"team": {"abbreviation": "ORL"}, "score": 1}}, "round_rank": 1},
-        {"teams": {"away": {"team": {"abbreviation": "NYK"}, "score": 2}, "home": {"team": {"abbreviation": "DET"}, "score": 2}}, "round_rank": 1},
-        {"teams": {"away": {"team": {"abbreviation": "BOS"}, "score": 0}, "home": {"team": {}, "score": 0}}, "round_rank": 2},
-    ]
-
-    selected = nba_playoffs._select_current_round_series(series)
-
-    assert len(selected) == 2
-    assert all(item["round_rank"] == 1 for item in selected)
-
-
-def test_select_current_round_series_advances_when_next_round_has_matchup():
-    series = [
-        {"teams": {"away": {"team": {"abbreviation": "BOS"}, "score": 4}, "home": {"team": {"abbreviation": "ORL"}, "score": 1}}, "round_rank": 1},
-        {"teams": {"away": {"team": {"abbreviation": "NYK"}, "score": 4}, "home": {"team": {"abbreviation": "DET"}, "score": 2}}, "round_rank": 1},
-        {"teams": {"away": {"team": {"abbreviation": "BOS"}, "score": 0}, "home": {"team": {"abbreviation": "NYK"}, "score": 0}, "next_text": "TBD"}, "round_rank": 2},
-    ]
-    selected = nba_playoffs._select_current_round_series(series)
-    assert len(selected) == 1
-    assert selected[0]["round_rank"] == 2
-
-
-def test_series_status_line_text_shows_winner_for_completed_series():
-    series = {
-        "teams": {
-            "away": {"score": 4, "team": {"teamName": "Celtics"}},
-            "home": {"score": 1, "team": {"teamName": "Knicks"}},
-        },
-        "next_text": "TBD",
-    }
-    assert nba_playoffs._series_status_line_text(series) == "Celtics win!"
-
-
-def test_series_status_line_text_omits_city_for_completed_series():
-    series = {
-        "teams": {
-            "away": {"score": 4, "team": {"abbreviation": "LAL", "name": "Los Angeles Lakers", "teamCity": "Los Angeles"}},
-            "home": {"score": 1, "team": {"abbreviation": "DEN", "name": "Denver Nuggets", "teamCity": "Denver"}},
-        },
-        "next_text": "TBD",
-    }
-    assert nba_playoffs._series_status_line_text(series) == "Lakers win!"
-
-
-def test_series_status_line_text_uses_live_and_yellow_fill_for_live_series():
-    series = {
-        "teams": {
-            "away": {"score": 2},
-            "home": {"score": 2},
-        },
-        "has_live_game": True,
-        "next_text": "Tonight 8:00 PM",
-    }
-
-    assert nba_playoffs._series_status_line_text(series) == "LIVE!"
-    assert nba_playoffs._series_status_line_fill(series) == nba_playoffs.SCOREBOARD_IN_PROGRESS_SCORE_COLOR
-
-
-def test_compose_canvas_uses_single_series_per_row_on_low_resolution(monkeypatch):
-    monkeypatch.setattr(nba_playoffs, "_use_single_series_per_row_layout", lambda: True)
-
-    draw_calls = []
-
-    def _record_draw(_canvas, _draw, _series, *, left, top):
-        draw_calls.append((left, top))
-
-    monkeypatch.setattr(nba_playoffs, "_draw_series_block", _record_draw)
-
-    series = [
-        {"conference": "west", "teams": {"away": {}, "home": {}}},
-        {"conference": "east", "teams": {"away": {}, "home": {}}},
-    ]
-
-    canvas = nba_playoffs._compose_canvas(series)
-
-    block_height = nba_playoffs.SCORE_ROW_H + nba_playoffs.STATUS_ROW_H
-    assert len(draw_calls) == 2
-    assert draw_calls[0] == (nba_playoffs.WEST_X, 0)
-    assert draw_calls[1] == (nba_playoffs.WEST_X, block_height + nba_playoffs.BLOCK_SPACING)
-    assert canvas.width == nba_playoffs.WIDTH
-
-
-def test_select_current_round_series_advances_when_prior_round_complete():
-    series = [
-        {"teams": {"away": {"team": {"abbreviation": "BOS"}, "score": 4}, "home": {"team": {"abbreviation": "NYK"}, "score": 1}}, "round_rank": 1},
-        {"teams": {"away": {"team": {"abbreviation": "CLE"}, "score": 4}, "home": {"team": {"abbreviation": "IND"}, "score": 3}}, "round_rank": 1},
-        {"teams": {"away": {"team": {"abbreviation": "MIN"}, "score": 0}, "home": {"team": {"abbreviation": "OKC"}, "score": 0}}, "round_rank": 2},
-        {"teams": {"away": {"team": {"abbreviation": "DEN"}, "score": 0}, "home": {"team": {"abbreviation": "LAL"}, "score": 0}}, "round_rank": 2},
-    ]
-
-    selected = nba_playoffs._select_current_round_series(series)
-
-    assert len(selected) == 2
-    assert all(item["round_rank"] == 2 for item in selected)
-
-
-def test_has_both_opponents_rejects_unset_slots():
-    series = {
-        "teams": {
-            "away": {"team": {"teamTricode": "TBD"}, "score": 0},
-            "home": {"team": {"teamTricode": "BOS"}, "score": 0},
-        }
-    }
-
-    assert nba_playoffs._has_both_opponents(series) is False
-
-
-def test_select_current_round_series_drops_unset_or_duplicate_matchups():
-    series = [
-        {
-            "teams": {
-                "away": {"team": {"abbreviation": "BOS"}, "score": 1},
-                "home": {"team": {"abbreviation": "NYK"}, "score": 1},
-            },
-            "round_rank": 2,
-        },
-        {
-            "teams": {
-                "away": {"team": {"abbreviation": "TBD"}, "score": 0},
-                "home": {"team": {"abbreviation": "IND"}, "score": 0},
-            },
-            "round_rank": 2,
-        },
-        {
-            "teams": {
-                "away": {"team": {"abbreviation": "OKC"}, "score": 0},
-                "home": {"team": {"abbreviation": "OKC"}, "score": 0},
-            },
-            "round_rank": 2,
-        },
-    ]
-
-    selected = nba_playoffs._select_current_round_series(series)
-
-    assert len(selected) == 1
-    assert selected[0]["teams"]["away"]["team"]["abbreviation"] == "BOS"
-
-
-@pytest.fixture
-def finals_2026_series():
-    return [
-        {
-            "teams": {
-                "away": {"team": {"abbreviation": "BOS"}, "score": 3},
-                "home": {"team": {"abbreviation": "NYK"}, "score": 3},
-            },
-            "round_rank": 3,
-        },
-        {
-            "teams": {
-                "away": {"team": {"abbreviation": "SAS"}, "score": 1},
-                "home": {"team": {"abbreviation": "NYK"}, "score": 1},
-            },
-            "status_text": "NBA Finals - Series tied 1-1",
-        },
-    ]
-
-
-@pytest.fixture
-def finals_2027_series():
-    return [
-        {
-            "teams": {
-                "away": {"team": {"abbreviation": "DEN"}, "score": 4},
-                "home": {"team": {"abbreviation": "DAL"}, "score": 2},
-            },
-            "round_rank": 3,
-        },
-        {
-            "teams": {
-                "away": {"team": {"abbreviation": "CLE"}, "score": 4},
-                "home": {"team": {"abbreviation": "MIA"}, "score": 3},
-            },
-            "round_rank": 3,
-        },
-        {
-            "teams": {
-                "away": {"team": {"abbreviation": "DEN"}, "score": 2},
-                "home": {"team": {"abbreviation": "CLE"}, "score": 1},
-            },
-            # Some upstream feeds omit round metadata from the new matchup.
-            "status_text": "Series",
-        },
-    ]
-
-
-def test_selects_2026_finals_from_status_and_excludes_stale_conference_final(
-    finals_2026_series,
-):
-    selected = nba_playoffs._select_current_round_series(finals_2026_series)
-
-    assert selected == [finals_2026_series[1]]
-
-
-def test_selects_different_2027_finals_from_conference_champions(finals_2027_series):
-    selected = nba_playoffs._select_current_round_series(finals_2027_series)
-
-    assert selected == [finals_2027_series[2]]
-
-
-def test_select_current_round_series_prefers_finals_over_stale_incomplete_prior_rounds():
-    stale_conference_finals = {
-        "teams": {
-            "away": {"team": {"abbreviation": "BOS"}, "score": 3},
-            "home": {"team": {"abbreviation": "NYK"}, "score": 3},
-        },
-        "round_rank": 3,
-    }
-    finals = {
-        "teams": {
-            "away": {"team": {"abbreviation": "SAS"}, "score": 1},
-            "home": {"team": {"abbreviation": "NYK"}, "score": 1},
-        },
-        "round_rank": 4,
-    }
-
-    selected = nba_playoffs._select_current_round_series([stale_conference_finals, finals])
-
-    assert len(selected) == 1
-    assert selected[0]["round_rank"] == 4
-
-
-def test_render_selects_current_round_from_fetched_series(monkeypatch):
-    conference_final = {
-        "teams": {
-            "away": {"team": {"abbreviation": "BOS"}, "score": 4},
-            "home": {"team": {"abbreviation": "NYK"}, "score": 2},
-        },
-        "round_rank": 3,
-    }
-    finals = {
-        "teams": {
-            "away": {"team": {"abbreviation": "SAS"}, "score": 1},
-            "home": {"team": {"abbreviation": "BOS"}, "score": 1},
-        },
-        "round_rank": 4,
-    }
-    rendered = []
-
-    monkeypatch.setattr(
-        nba_playoffs,
-        "_fetch_playoff_matchups",
-        lambda: [conference_final, finals],
-    )
-    monkeypatch.setattr(
-        nba_playoffs,
-        "_derive_playoff_matchups_from_recent_games",
-        lambda: pytest.fail("recent-games fallback should not be used"),
-    )
-    monkeypatch.setattr(
-        nba_playoffs,
-        "_render_playoff_screen",
-        lambda series: rendered.extend(series)
-        or nba_playoffs.Image.new("RGB", (1, 1)),
-    )
-    monkeypatch.setattr(nba_playoffs.time, "sleep", lambda _seconds: None)
-
-    class Display:
-        def image(self, _image):
-            pass
-
-    nba_playoffs.render_nba_playoffs(Display(), [])
-
-    assert rendered == [finals]
-
-
-@pytest.mark.parametrize("round_rank", [1, 2, 3])
-def test_render_preserves_complete_pre_finals_bracket_selection(monkeypatch, round_rank):
-    first_round = [
-        {
-            "teams": {
-                "away": {"team": {"abbreviation": away}, "score": 1},
-                "home": {"team": {"abbreviation": home}, "score": 1},
-            },
-            "round_rank": round_rank,
-        }
-        for away, home in (("BOS", "MIA"), ("NYK", "DET"))
-    ]
-    todays_game = {
-        "gamePk": "0042600101",
-        "teams": {
-            "away": {"team": {"abbreviation": "BOS"}},
-            "home": {"team": {"abbreviation": "MIA"}},
-        },
-    }
-    rendered = []
-
-    monkeypatch.setattr(nba_playoffs, "_fetch_playoff_matchups", lambda: first_round)
-    monkeypatch.setattr(
-        nba_playoffs,
-        "_derive_playoff_matchups_from_recent_games",
-        lambda: pytest.fail("valid pre-Finals brackets must not trigger the recent-games scan"),
-    )
-    monkeypatch.setattr(
-        nba_playoffs,
-        "_render_playoff_screen",
-        lambda series: rendered.extend(series) or nba_playoffs.Image.new("RGB", (1, 1)),
-    )
-    monkeypatch.setattr(nba_playoffs.time, "sleep", lambda _seconds: None)
-
-    class Display:
-        def image(self, _image):
-            pass
-
-    nba_playoffs.render_nba_playoffs(Display(), [todays_game])
-
-    assert rendered == first_round
-
-
-def test_render_uses_recent_finals_when_bracket_only_has_stale_conference_final(monkeypatch):
-    stale_conference_final = {
-        "teams": {
-            "away": {"team": {"abbreviation": "BOS"}, "score": 4},
-            "home": {"team": {"abbreviation": "NYK"}, "score": 3},
-        },
-        "round_rank": 3,
-    }
-    recent_finals = {
-        "teams": {
-            "away": {"team": {"abbreviation": "SAS"}, "score": 1},
-            "home": {"team": {"abbreviation": "NYK"}, "score": 1},
-        },
-        "status_text": "NBA Finals tied 1-1",
-    }
-    rendered = []
-
-    monkeypatch.setattr(nba_playoffs, "_fetch_playoff_matchups", lambda: [stale_conference_final])
-    monkeypatch.setattr(
-        nba_playoffs,
-        "_derive_playoff_matchups_from_recent_games",
-        lambda: [recent_finals],
-    )
-    monkeypatch.setattr(
-        nba_playoffs,
-        "_render_playoff_screen",
-        lambda series: rendered.extend(series) or nba_playoffs.Image.new("RGB", (1, 1)),
-    )
-    monkeypatch.setattr(nba_playoffs.time, "sleep", lambda _seconds: None)
-
-    class Display:
-        def image(self, _image):
-            pass
-
-    nba_playoffs.render_nba_playoffs(Display(), [])
-
-    assert rendered == [recent_finals]
-
-
-def test_render_narrows_unranked_completed_recent_series_to_latest_matchup(monkeypatch):
-    recent_games = [
-        {
-            "gamePk": "401999901",
-            "seasonType": "3",
-            "gameDate": "2026-06-01T00:00:00Z",
-            "status": {"statusCode": "3", "detailedState": "BOS wins series 4-2"},
-            "teams": {
-                "away": {"team": {"abbreviation": "BOS"}, "score": 110},
-                "home": {"team": {"abbreviation": "NYK"}, "score": 101},
-            },
-        },
-        {
-            "gamePk": "401999902",
-            "seasonType": "3",
-            "gameDate": "2026-06-02T00:00:00Z",
-            "status": {"statusCode": "3", "detailedState": "SAS wins series 4-1"},
-            "teams": {
-                "away": {"team": {"abbreviation": "SAS"}, "score": 108},
-                "home": {"team": {"abbreviation": "OKC"}, "score": 99},
-            },
-        },
-        {
-            "gamePk": "401999903",
-            "seasonType": "3",
-            "gameDate": "2026-06-18T00:00:00Z",
-            "status": {"statusCode": "3", "detailedState": "SAS wins series 4-2"},
-            "teams": {
-                "away": {"team": {"abbreviation": "SAS"}, "score": 112},
-                "home": {"team": {"abbreviation": "BOS"}, "score": 105},
-            },
-        },
-    ]
-    recent_series = nba_playoffs._derive_playoff_matchups_from_games(recent_games)
-    rendered = []
-
-    assert all(item.get("round_rank") is None for item in recent_series)
-
-    monkeypatch.setattr(nba_playoffs, "_fetch_playoff_matchups", list)
-    monkeypatch.setattr(
-        nba_playoffs,
-        "_derive_playoff_matchups_from_recent_games",
-        lambda: recent_series,
-    )
-    monkeypatch.setattr(
-        nba_playoffs,
-        "_render_playoff_screen",
-        lambda series: rendered.extend(series) or nba_playoffs.Image.new("RGB", (1, 1)),
-    )
-    monkeypatch.setattr(nba_playoffs.time, "sleep", lambda _seconds: None)
-
-    class Display:
-        def image(self, _image):
-            pass
-
-    nba_playoffs.render_nba_playoffs(Display(), [])
-
-    assert len(rendered) == 1
-    assert nba_playoffs._series_team_abbrs(rendered[0]) == {"BOS", "SA"}
-
-
-def test_render_recovers_completed_unranked_finals_without_precursor_series(monkeypatch):
-    finals = {
-        "teams": {
-            "away": {"team": {"abbreviation": "SAS"}, "score": 4},
-            "home": {"team": {"abbreviation": "BOS"}, "score": 2},
-        },
-        "status_text": "SAS wins series 4-2",
-        "latest_game_datetime": datetime.datetime(2026, 6, 18, tzinfo=CENTRAL_TIME),
-    }
-    rendered = []
-
-    monkeypatch.setattr(nba_playoffs, "_fetch_playoff_matchups", list)
-    monkeypatch.setattr(
-        nba_playoffs, "_derive_playoff_matchups_from_recent_games", lambda: [finals]
-    )
-    monkeypatch.setattr(
-        nba_playoffs,
-        "_render_playoff_screen",
-        lambda series: rendered.extend(series) or nba_playoffs.Image.new("RGB", (1, 1)),
-    )
-    monkeypatch.setattr(nba_playoffs.time, "sleep", lambda _seconds: None)
-
-    class Display:
-        def image(self, _image):
-            pass
-
-    nba_playoffs.render_nba_playoffs(Display(), [])
-
-    assert rendered == [finals]
-
-
-def test_unranked_completed_fallback_rejects_generic_playoff_ancestry():
-    def completed(away, home, day):
-        return {
-            "teams": {
-                "away": {"team": {"abbreviation": away}, "score": 4},
-                "home": {"team": {"abbreviation": home}, "score": 2},
-            },
-            "latest_game_datetime": datetime.datetime(2026, 5, day, tzinfo=CENTRAL_TIME),
-        }
-
-    history = [
-        completed("BOS", "CLE", 10),
-        completed("NYK", "IND", 11),
-        completed("BOS", "NYK", 20),
-    ]
-
-    assert nba_playoffs._find_latest_completed_series(history) == []
-
-
-@pytest.mark.parametrize(
-    ("east_abbr", "canonical_abbr"),
-    [("NYK", "NY"), ("BKN", "BRK"), ("WAS", "WSH")],
-)
-def test_unranked_completed_fallback_accepts_normalized_east_aliases(
-    east_abbr, canonical_abbr
-):
-    finals = {
-        "teams": {
-            "away": {"team": {"abbreviation": "SAS"}, "score": 4},
-            "home": {"team": {"abbreviation": east_abbr}, "score": 2},
-        },
-        "latest_game_datetime": datetime.datetime(2026, 6, 18, tzinfo=CENTRAL_TIME),
-    }
-
-    assert nba_playoffs._find_latest_completed_series([finals]) == [finals]
-    assert nba_playoffs._series_team_abbrs(finals) == {"SA", canonical_abbr}
-
-
-def test_render_checks_supplied_games_when_earlier_sources_only_have_stale_rounds(monkeypatch):
-    stale_conference_final = {
-        "teams": {
-            "away": {"team": {"abbreviation": "BOS"}, "score": 3},
-            "home": {"team": {"abbreviation": "NYK"}, "score": 3},
-        },
-        "round_rank": 3,
-    }
-    finals_game = {
-        "gamePk": "0042600401",
-        "teams": {
-            "away": {"team": {"abbreviation": "SAS"}},
-            "home": {"team": {"abbreviation": "NYK"}},
-        },
-    }
-    rendered = []
-
-    monkeypatch.setattr(nba_playoffs, "_fetch_playoff_matchups", lambda: [stale_conference_final])
-    monkeypatch.setattr(
-        nba_playoffs,
-        "_derive_playoff_matchups_from_recent_games",
-        lambda: [stale_conference_final],
-    )
-    monkeypatch.setattr(
-        nba_playoffs,
-        "_render_playoff_screen",
-        lambda series: rendered.extend(series) or nba_playoffs.Image.new("RGB", (1, 1)),
-    )
-    monkeypatch.setattr(nba_playoffs.time, "sleep", lambda _seconds: None)
-
-    class Display:
-        def image(self, _image):
-            pass
-
-    nba_playoffs.render_nba_playoffs(Display(), [finals_game])
-
-    assert len(rendered) == 1
-    assert nba_playoffs._series_team_abbrs(rendered[0]) == {"NY", "SA"}
-
-
-def test_derive_playoff_matchups_from_recent_games_skips_espn_scan_outside_playoff_season(monkeypatch):
-    """Regression test: outside the April-June playoff window this fallback
-    must not hit ESPN at all. Scanning the ~23-day window every rotation
-    cycle during the NBA offseason was enough to trip ESPN's rate limiter
-    and 403 the shared site.api.espn.com host, which then blocked every
-    other sport's requests -- including the NFL scoreboard -- via the
-    circuit breaker's cooldown window."""
-
+def test_fetch_tries_the_mirror_and_fails_when_neither_answers(monkeypatch):
     calls = []
 
-    def _fake_fetch(day):
-        calls.append(day)
-        return []
+    class _Response:
+        def raise_for_status(self):
+            pass
 
-    monkeypatch.setattr(nba_playoffs, "_fetch_games_for_date", _fake_fetch)
+        def json(self):
+            return bracket_payload()
 
-    august_now = datetime.datetime(2026, 8, 24, 12, 0, tzinfo=CENTRAL_TIME)
-    result = nba_playoffs._derive_playoff_matchups_from_recent_games(now=august_now)
+    def get(url, **_kwargs):
+        calls.append(url)
+        if url == nb.BRACKET_URLS[0]:
+            raise OSError("blocked")
+        return _Response()
 
-    assert result == []
-    assert calls == []
+    monkeypatch.setattr(nb._SESSION, "get", get)
+    assert len(nb.fetch_postseason(force=True)["series"]) == 15
+    assert calls == list(nb.BRACKET_URLS)
 
-
-def _assert_scans_postseason_window(calls):
-    # On April 20 the scan looks back to April 1 (the postseason start) and
-    # ahead through the next week.
-    assert calls[0] == datetime.date(2026, 4, 1)
-    assert calls[-1] == datetime.date(2026, 4, 27)
-    assert len(calls) == 28
-
-
-def test_derive_playoff_matchups_from_recent_games_scans_during_playoff_season(monkeypatch):
-    nba_playoffs._RECENT_GAMES_SCAN_COOLDOWN.reset()
-    calls = []
-
-    def _fake_fetch(day):
-        calls.append(day)
-        return []
-
-    monkeypatch.setattr(nba_playoffs, "_fetch_games_for_date", _fake_fetch)
-
-    april_now = datetime.datetime(2026, 4, 20, 12, 0, tzinfo=CENTRAL_TIME)
-    nba_playoffs._derive_playoff_matchups_from_recent_games(now=april_now)
-
-    _assert_scans_postseason_window(calls)
+    monkeypatch.setattr(nb._SESSION, "get", lambda url, **_k: (_ for _ in ()).throw(OSError("offline")))
+    with pytest.raises(RuntimeError):
+        nb.fetch_postseason(force=True)
 
 
-def test_derive_playoff_matchups_from_recent_games_cools_down_after_empty_scan(monkeypatch):
-    """Regression test: even inside the playoff window, an empty scan must
-    not re-burst every call -- it should cool down like the NFL scoreboard's
-    own next-games scan does, so a dry spell can't reproduce the same
-    repeated-burst problem the month gate exists to prevent."""
-
-    nba_playoffs._RECENT_GAMES_SCAN_COOLDOWN.reset()
-    calls = []
-
-    def _fake_fetch(day):
-        calls.append(day)
-        return []
-
-    monkeypatch.setattr(nba_playoffs, "_fetch_games_for_date", _fake_fetch)
-
-    april_now = datetime.datetime(2026, 4, 20, 12, 0, tzinfo=CENTRAL_TIME)
-    nba_playoffs._derive_playoff_matchups_from_recent_games(now=april_now)
-    _assert_scans_postseason_window(calls)
-
-    calls.clear()
-    result = nba_playoffs._derive_playoff_matchups_from_recent_games(now=april_now)
-
-    assert result == []
-    assert calls == []
-
-    nba_playoffs._RECENT_GAMES_SCAN_COOLDOWN.reset()
+@pytest.mark.parametrize("data", [{}, data_from(bracket_payload()), data_from(first_round())])
+def test_screen_image_fills_the_display_width(data):
+    image = nba_playoffs.compose_playoffs_image(data, now=NOW)
+    assert image.width == WIDTH and image.height >= HEIGHT
 
 
-def test_derive_playoff_matchups_from_recent_games_cools_down_after_success(monkeypatch):
-    nba_playoffs._RECENT_GAMES_SCAN_COOLDOWN.reset()
-    calls = []
+def test_render_fetches_in_standalone_mode(monkeypatch):
+    class _Display:
+        def __init__(self):
+            self.images = []
 
-    def _fake_fetch(day):
-        calls.append(day)
-        return [{"id": "game-1"}]
+        def image(self, img):
+            self.images.append(img)
 
-    monkeypatch.setattr(nba_playoffs, "_fetch_games_for_date", _fake_fetch)
-    monkeypatch.setattr(
-        nba_playoffs,
-        "_derive_playoff_matchups_from_games",
-        lambda games: [{"game_count": len(games)}],
-    )
-
-    april_now = datetime.datetime(2026, 4, 20, 12, 0, tzinfo=CENTRAL_TIME)
-    first = nba_playoffs._derive_playoff_matchups_from_recent_games(now=april_now)
-    assert first
-    _assert_scans_postseason_window(calls)
-
-    calls.clear()
-    second = nba_playoffs._derive_playoff_matchups_from_recent_games(now=april_now)
-
-    assert second == first
-    assert calls == []
-    nba_playoffs._RECENT_GAMES_SCAN_COOLDOWN.reset()
-
-
-def test_compose_canvas_centers_single_series_on_display(monkeypatch):
-    monkeypatch.setattr(nba_playoffs, "_use_single_series_per_row_layout", lambda: False)
-
-    draw_calls = []
-
-    def _record_draw(_canvas, _draw, _series, *, left, top):
-        draw_calls.append((left, top))
-
-    monkeypatch.setattr(nba_playoffs, "_draw_series_block", _record_draw)
-
-    series = [{"conference": "west", "teams": {"away": {}, "home": {}}}]
-
-    canvas = nba_playoffs._compose_canvas(series)
-
-    expected_left = max(0, (nba_playoffs.WIDTH - nba_playoffs.SERIES_WIDTH) // 2)
-    assert draw_calls == [(expected_left, 0)]
-    assert canvas.width == nba_playoffs.WIDTH
+    monkeypatch.setattr(nb, "fetch_postseason", lambda **_: data_from(bracket_payload()))
+    monkeypatch.setattr(playoff_bracket, "scroll_vertical_content", lambda **kwargs: kwargs["render_at_offset"](0))
+    monkeypatch.setattr(playoff_bracket.time, "sleep", lambda _s: None)
+    display = _Display()
+    assert nba_playoffs.render_nba_playoffs(display).displayed and display.images

@@ -1,577 +1,319 @@
+"""Tests for the NHL Playoffs screen, its bracket feed and the shared 16-team bracket."""
+from __future__ import annotations
+
 import datetime
+import importlib
+import json
+from types import SimpleNamespace
 
-from screens import nhl_playoffs
+import pytest
 
+from config import CENTRAL_TIME, HEIGHT, WIDTH
+from screens import nhl_playoffs, playoff_bracket
+from services import feeds
+from services.data_coordinator import DataCoordinator
+from services.server_feeds import LIVE_REFRESH_SECONDS, ServerFeedService
+from services.sports import nhl_postseason as np_
+from services.sports import playoff_bracket16 as pb
 
-def _row(team, conference, division, points):
-    return {
-        "teamAbbrev": {"default": team},
-        "teamName": {"default": team},
-        "conferenceAbbrev": conference,
-        "divisionAbbrev": division,
-        "points": points,
-    }
+NOW = datetime.datetime(2024, 4, 22, 12, 0, tzinfo=CENTRAL_TIME)
+_IDS = iter(range(1, 1000))
+_TEAM_IDS: dict[str, int] = {}
 
-
-def test_projected_matchups_from_standings_builds_first_round_bracket():
-    standings = [
-        _row("TOR", "E", "A", 110),
-        _row("TBL", "E", "A", 104),
-        _row("FLA", "E", "A", 101),
-        _row("MTL", "E", "A", 88),
-        _row("CAR", "E", "M", 111),
-        _row("NJD", "E", "M", 103),
-        _row("NYR", "E", "M", 100),
-        _row("CBJ", "E", "M", 86),
-        _row("DAL", "W", "C", 112),
-        _row("COL", "W", "C", 106),
-        _row("MIN", "W", "C", 102),
-        _row("STL", "W", "C", 84),
-        _row("VGK", "W", "P", 109),
-        _row("LAK", "W", "P", 105),
-        _row("EDM", "W", "P", 99),
-        _row("SEA", "W", "P", 82),
-        _row("OTT", "E", "A", 98),  # East WC1
-        _row("DET", "E", "M", 97),  # East WC2
-        _row("WPG", "W", "C", 101),  # West WC1
-        _row("VAN", "W", "P", 100),  # West WC2
-    ]
-
-    projected = nhl_playoffs._projected_matchups_from_standings(standings)
-
-    assert len(projected) == 8
-    assert all(item.get("status_text") == "" for item in projected)
-
-    # CAR (111 pts) has the better record of the two East division winners,
-    # so it gets the weaker wild card (WC2 = DET); TOR (110 pts) plays the
-    # stronger wild card (WC1 = OTT). See nhl_playoffs._projected_matchups_
-    # from_standings.
-    east_better_seed_vs_wc2 = projected[0]
-    assert east_better_seed_vs_wc2["teams"]["home"]["team"]["abbreviation"] == "CAR"
-    assert east_better_seed_vs_wc2["teams"]["away"]["team"]["abbreviation"] == "DET"
-
-    east_other_division_vs_wc1 = projected[1]
-    assert east_other_division_vs_wc1["teams"]["home"]["team"]["abbreviation"] == "TOR"
-    assert east_other_division_vs_wc1["teams"]["away"]["team"]["abbreviation"] == "OTT"
-
-    assert projected[0]["higher_seed"] == 1
-    assert projected[1]["higher_seed"] == 2
-    assert projected[2]["higher_seed"] == 3
-    assert projected[3]["higher_seed"] == 4
+# The 2024 playoffs: letter -> (top, top seed, bottom, bottom seed, top wins, bottom wins).
+SERIES_2024 = {
+    "A": ("FLA", "D1", "TBL", "WC1", 4, 1), "B": ("BOS", "D2", "TOR", "D3", 4, 3),
+    "C": ("NYR", "D1", "WSH", "WC2", 4, 0), "D": ("CAR", "D2", "NYI", "D3", 4, 1),
+    "E": ("DAL", "D1", "VGK", "WC1", 4, 3), "F": ("WPG", "D2", "COL", "D3", 1, 4),
+    "G": ("VAN", "D1", "NSH", "WC1", 4, 2), "H": ("EDM", "D2", "LAK", "D3", 4, 1),
+    "I": ("FLA", "", "BOS", "", 4, 2), "J": ("NYR", "", "CAR", "", 4, 2),
+    "K": ("DAL", "", "COL", "", 4, 2), "L": ("VAN", "", "EDM", "", 3, 4),
+    "M": ("NYR", "", "FLA", "", 2, 4), "N": ("DAL", "", "EDM", "", 2, 4),
+    "O": ("FLA", "", "EDM", "", 4, 3),
+}
 
 
-def test_format_next_text_omits_timezone():
-    text = nhl_playoffs._format_next_text({"nextGameStartTimeUTC": "2026-04-20T00:30:00Z"})
-    assert text == "Sunday 7:30 PM"
+def _team(abbr):
+    team_id = _TEAM_IDS.setdefault(abbr, next(_IDS))
+    return {"id": team_id, "abbrev": abbr, "commonName": {"default": f"{abbr} name"}}
 
 
-def test_format_next_text_supports_date_only_without_time(monkeypatch):
-    class _FixedNow(datetime.datetime):
-        @classmethod
-        def now(cls, tz=None):
-            return cls(2026, 4, 20, 12, 0, tzinfo=tz)
+def bracket_payload(letters=SERIES_2024, wins=None):
+    """``playoff-bracket`` JSON for *letters*, with optional ``{letter: (top, bottom)}`` wins."""
 
-    monkeypatch.setattr(nhl_playoffs.datetime, "datetime", _FixedNow)
-    text = nhl_playoffs._format_next_text({"nextGameDate": "2026-04-27"})
-    assert text == "Monday"
-
-
-def test_conference_buckets_order_by_seed():
-    series = [
-        {"conference": "west", "higher_seed": 3, "lower_seed": 6, "teams": {"away": {"team": {"abbreviation": "AAA"}}, "home": {"team": {"abbreviation": "BBB"}}}},
-        {"conference": "west", "higher_seed": 1, "lower_seed": 8, "teams": {"away": {"team": {"abbreviation": "CCC"}}, "home": {"team": {"abbreviation": "DDD"}}}},
-        {"conference": "east", "higher_seed": 2, "lower_seed": 7, "teams": {"away": {"team": {"abbreviation": "EEE"}}, "home": {"team": {"abbreviation": "FFF"}}}},
-        {"conference": "east", "higher_seed": 1, "lower_seed": 8, "teams": {"away": {"team": {"abbreviation": "GGG"}}, "home": {"team": {"abbreviation": "HHH"}}}},
-    ]
-    west, east = nhl_playoffs._conference_buckets(series)
-    assert [item["higher_seed"] for item in west] == [1, 3]
-    assert [item["higher_seed"] for item in east] == [1, 2]
-
-
-def test_render_uses_projected_standings_when_no_live_playoff_series(monkeypatch):
-    monkeypatch.setattr(nhl_playoffs, "_fetch_playoff_matchups", list)
-    monkeypatch.setattr(
-        nhl_playoffs,
-        "_fetch_projected_matchups_from_standings",
-        lambda: [
-            {
-                "teams": {
-                    "away": {"team": {"abbreviation": "AWY"}, "score": 90},
-                    "home": {"team": {"abbreviation": "HME"}, "score": 100},
-                },
-                "status_text": "Projected",
-            }
-        ],
-    )
-    monkeypatch.setattr(nhl_playoffs, "_derive_playoff_matchups_from_games", lambda games: [])
-
-    class _DisplayStub:
-        def image(self, _img):
-            return None
-
-    rendered = nhl_playoffs.render_nhl_playoffs(_DisplayStub(), games=[], transition=False)
-    assert rendered.displayed is True
-
-
-def test_recompute_series_layout_keeps_two_columns_on_screen(monkeypatch):
-    monkeypatch.setattr(nhl_playoffs, "WIDTH", 800)
-    monkeypatch.setattr(nhl_playoffs, "PAIR_SPACING_BASE", 40)
-    monkeypatch.setattr(nhl_playoffs, "SERIES_COL_WIDTHS_BASE", [105, 80, 40, 80, 105])
-
-    nhl_playoffs._recompute_series_layout()
-
-    assert nhl_playoffs.CONTENT_WIDTH <= nhl_playoffs.WIDTH
-    assert nhl_playoffs.EAST_X + nhl_playoffs.SERIES_WIDTH <= nhl_playoffs.WIDTH
-
-
-def test_fit_widths_to_total_preserves_total_and_min_width():
-    fitted = nhl_playoffs._fit_widths_to_total([105, 80, 40, 80, 105], 400)
-
-    assert sum(fitted) == 400
-    assert all(width >= 1 for width in fitted)
-
-
-def test_normalize_series_item_reads_nested_wins_and_hides_projected_status():
-    normalized = nhl_playoffs._normalize_series_item(
-        {
-            "topSeedTeam": {"abbreviation": "DAL", "wins": 3},
-            "bottomSeedTeam": {"abbreviation": "COL", "seriesWins": 2},
-            "seriesStatus": "Projected",
-            "nextGameDateTimeUTC": "2026-04-20T02:00:00Z",
+    series = []
+    for letter, (top, top_seed, bottom, bottom_seed, top_wins, bottom_wins) in letters.items():
+        top_wins, bottom_wins = (wins or {}).get(letter, (top_wins, bottom_wins))
+        item = {
+            "seriesLetter": letter, "playoffRound": np_.SERIES_LETTERS[letter][0],
+            "topSeedRankAbbrev": top_seed, "bottomSeedRankAbbrev": bottom_seed,
+            "topSeedWins": top_wins, "bottomSeedWins": bottom_wins,
+            "topSeedTeam": _team(top), "bottomSeedTeam": _team(bottom),
         }
+        if top_wins == 4 or bottom_wins == 4:
+            item["winningTeamId"] = _team(top if top_wins == 4 else bottom)["id"]
+        series.append(item)
+    return {"series": series}
+
+
+def first_round(wins=None):
+    return bracket_payload({k: v for k, v in SERIES_2024.items() if k <= "H"},
+                           wins or dict.fromkeys("ABCDEFGH", (1, 1)))
+
+
+def schedule_payload(games):
+    return {"gameWeek": [{"date": "2024-04-22", "games": [
+        {"gameType": 3, "awayTeam": {"abbrev": away}, "homeTeam": {"abbrev": home}, "gameState": state,
+         "startTimeUTC": start, "seriesStatus": {"gameNumberOfSeries": number}}
+        for away, home, state, start, number in games
+    ]}]}
+
+
+def data_from(payload, schedule=None):
+    series, names, seeds = np_.series_from_bracket(payload)
+    if schedule is not None:
+        np_.apply_schedule(series, schedule)
+    return {"season": 2024, "series": series, "names": names, "seeds": seeds}
+
+
+# ── Feed parsing ────────────────────────────────────────────────────────────
+
+
+def test_bracket_places_series_by_letter_west_left():
+    bracket = pb.build_bracket(data_from(bracket_payload()))
+    assert [slot["teams"] for slot in bracket["left"][0]] == [
+        ["DAL", "VGK"], ["WPG", "COL"], ["VAN", "NSH"], ["EDM", "LAK"]]
+    assert [slot["teams"] for slot in bracket["right"][0]][0] == ["FLA", "TBL"]
+    assert bracket["left"][2][0]["teams"] == ["DAL", "EDM"] and bracket["left"][2][0]["winner"] == "EDM"
+    # Each slot lists the team from its upper feeder first, so the West leads the final.
+    assert bracket["center"]["teams"] == ["EDM", "FLA"] and bracket["center"]["wins"] == [3, 4]
+    assert bracket["center"]["winner"] == "FLA"
+    assert bracket["seeds"]["VGK"] == "WC1" and bracket["seeds"]["FLA"] == "D1"
+
+
+def test_rounds_not_reached_show_the_winners_who_will_meet():
+    data = data_from(first_round({"A": (4, 0), "B": (4, 2), "C": (2, 2), "D": (0, 3),
+                                  "E": (1, 1), "F": (1, 1), "G": (1, 1), "H": (1, 1)}))
+    bracket = pb.build_bracket(data)
+    east_r2 = bracket["right"][1]
+    assert east_r2[0]["teams"] == ["FLA", "BOS"] and east_r2[0]["series"] is None
+    assert east_r2[1]["teams"] == [None, None]
+    assert pb.current_round(data) == 1
+
+
+def test_schedule_adds_live_games_and_the_next_game():
+    schedule = schedule_payload([
+        ("TBL", "FLA", "LIVE", "2024-04-22T23:00:00Z", 3),
+        ("TOR", "BOS", "FUT", "2024-04-24T23:30:00Z", 3),
+        ("TOR", "BOS", "FUT", "2024-04-23T00:00:00Z", 3),
+        ("VGK", "DAL", "OFF", "2024-04-21T00:00:00Z", 2),
+    ])
+    data = data_from(first_round(), schedule)
+    by_letter = {s["letter"]: s for s in data["series"]}
+    assert by_letter["A"]["live"] is True and by_letter["B"]["live"] is False
+    assert by_letter["B"]["next_start"] == "2024-04-23T00:00:00Z" and by_letter["B"]["next_game"] == 3
+    assert by_letter["E"]["next_start"] is None
+    assert pb.has_live_series(data)
+
+
+def test_status_lines_follow_the_mlb_screen():
+    data = data_from(first_round({**dict.fromkeys("ABCDEFGH", (1, 1)), "C": (4, 0), "D": (0, 2)}),
+                     schedule_payload([("TBL", "FLA", "LIVE", "2024-04-22T23:00:00Z", 3),
+                                       ("TOR", "BOS", "FUT", "2024-04-23T00:00:00Z", 3)]))
+    data["names"]["NYR"] = "Rangers"
+    east = pb.build_bracket(data)["right"][0]
+    status = [playoff_bracket.series_status(slot, data["names"], NOW)[0] for slot in east]
+    assert status == ["Game 3 · LIVE", "Game 3 · Tonight 7 PM", "Rangers win 4-0", "NYI leads 2-0"]
+
+
+def _standings_row(abbr, conference, division, points, games=10):
+    return {"teamAbbrev": {"default": abbr}, "teamCommonName": {"default": abbr.title()},
+            "conferenceAbbrev": conference, "divisionAbbrev": division, "points": points, "gamesPlayed": games}
+
+
+def test_projection_from_standings_uses_the_division_format():
+    rows = []
+    for conference, divisions in (("E", ("A", "M")), ("W", ("C", "P"))):
+        for d_index, division in enumerate(divisions):
+            for rank in range(8):
+                rows.append(_standings_row(f"{conference}{division}{rank}", conference, division,
+                                           100 - rank * 5 - d_index))
+    series, _names, seeds = np_.projected_from_standings({"standings": rows})
+    east = {s["letter"]: s["teams"] for s in series if s["conference"] == "east"}
+    # Atlantic's leader has more points, so it plays the second wild card.
+    assert east == {"A": ["EA0", "EM3"], "B": ["EA1", "EA2"], "C": ["EM0", "EA3"], "D": ["EM1", "EM2"]}
+    assert seeds["EM3"] == "WC2" and seeds["EA3"] == "WC1" and seeds["EA0"] == "D1"
+    data = {"series": series, "seeds": seeds, "names": {}}
+    assert pb.current_round(data) is None
+    slot = pb.build_bracket(data)["right"][0][0]
+    assert slot["teams"] == ["EA0", "EM3"] and slot["series"] is None
+    assert playoff_bracket.series_status(slot, {}, NOW)[0] == "Projected"
+
+
+def test_no_projection_before_games_are_played():
+    rows = [_standings_row("BOS", "E", "A", 0, games=0)]
+    assert np_.projected_from_standings({"standings": rows}) == ([], {}, {})
+
+
+def test_fetch_falls_back_to_last_seasons_bracket(monkeypatch):
+    requested = []
+
+    def fake(url):
+        requested.append(url)
+        if url == np_.BRACKET_URL.format(year=2026):
+            return bracket_payload()
+        raise OSError("not yet")
+
+    monkeypatch.setattr(np_, "_get_json", fake)
+    data = np_.fetch_postseason(force=True, now=datetime.datetime(2026, 9, 28, tzinfo=datetime.UTC))
+    assert data["season"] == 2026 and len(data["series"]) == 15
+    assert requested[0] == np_.BRACKET_URL.format(year=2027)
+
+
+def test_fetch_fails_when_nothing_answers(monkeypatch):
+    monkeypatch.setattr(np_, "_get_json", lambda url: (_ for _ in ()).throw(OSError("offline")))
+    with pytest.raises(RuntimeError):
+        np_.fetch_postseason(force=True, now=NOW)
+
+
+# ── Screen ──────────────────────────────────────────────────────────────────
+
+
+@pytest.mark.parametrize("data", [
+    {},
+    data_from(bracket_payload()),
+    data_from(first_round(), schedule_payload([("TBL", "FLA", "LIVE", "2024-04-22T23:00:00Z", 3)])),
+])
+def test_screen_image_fills_the_display_width(data):
+    image = nhl_playoffs.compose_playoffs_image(data, now=NOW)
+    assert image.width == WIDTH and image.height >= HEIGHT
+
+
+def test_series_list_shows_the_current_round(monkeypatch):
+    rows = []
+    monkeypatch.setattr(playoff_bracket, "draw_series_row",
+                        lambda canvas, draw, spec, slot, names, seeds, x, width, y, now: rows.append(slot["teams"]))
+    headings = []
+    real = playoff_bracket.compose_series_list
+
+    def spy(spec, width, heading, *args, **kwargs):
+        headings.append(heading)
+        return real(spec, width, heading, *args, **kwargs)
+
+    monkeypatch.setattr(playoff_bracket, "compose_series_list", spy)
+    nhl_playoffs.compose_playoffs_image(data_from(bracket_payload()), now=NOW)
+    assert headings == ["Stanley Cup Final · Best of 7"] and rows == [["EDM", "FLA"]]
+
+
+class _Display:
+    def __init__(self):
+        self.images = []
+
+    def image(self, img):
+        self.images.append(img)
+
+    def clear(self):
+        pass
+
+
+def test_render_uses_given_feed_data_without_fetching(monkeypatch):
+    monkeypatch.setattr(np_, "fetch_postseason", lambda **_: pytest.fail("fetched upstream"))
+    monkeypatch.setattr(playoff_bracket, "scroll_vertical_content", lambda **kwargs: kwargs["render_at_offset"](0))
+    monkeypatch.setattr(playoff_bracket.time, "sleep", lambda _s: None)
+    display = _Display()
+    result = nhl_playoffs.render_nhl_playoffs(display, data_from(bracket_payload()), transition=True)
+    assert result.displayed and display.images
+
+
+def test_render_fetches_in_standalone_mode(monkeypatch):
+    monkeypatch.setattr(np_, "fetch_postseason", lambda **_: data_from(bracket_payload()))
+    monkeypatch.setattr(playoff_bracket, "scroll_vertical_content", lambda **kwargs: kwargs["render_at_offset"](0))
+    monkeypatch.setattr(playoff_bracket.time, "sleep", lambda _s: None)
+    assert nhl_playoffs.render_nhl_playoffs(_Display()).image.height > HEIGHT
+
+
+@pytest.mark.parametrize("screen_id,feed,attr", [
+    ("NHL Playoffs", "nhl_playoffs", "render_nhl_playoffs"),
+    ("NBA Playoffs", "nba_playoffs", "render_nba_playoffs"),
+])
+def test_registry_hands_the_server_feed_to_the_screen(monkeypatch, screen_id, feed, attr):
+    from display_profiles import resolve_display_profile
+
+    # Other tests drop screens.registry from sys.modules; use the live module.
+    registry_module = importlib.import_module("screens.registry")
+    received = []
+    monkeypatch.setattr(registry_module, attr, lambda display, data, transition=False: received.append(data))
+    value = {"series": [{"round": 1}]}
+    context = registry_module.ScreenContext(
+        display=_Display(), cache={feed: value}, logos={}, image_dir="", now=NOW,
+        now_utc=NOW.astimezone(datetime.UTC), offline=False, weather_fetched_at=None, skip_scoreboards=False,
+        render_profile=resolve_display_profile(320, 240), allow_upstream_requests=False,
     )
-
-    assert normalized is not None
-    assert normalized["teams"]["away"]["score"] == 3
-    assert normalized["teams"]["home"]["score"] == 2
-    assert normalized["status_text"] == ""
-    assert normalized["next_text"] == "Sunday 9 PM"
+    registry, _ = registry_module.build_screen_registry(context)
+    registry[screen_id].render()
+    assert received == [value]
 
 
-def test_normalize_series_item_supports_rounds_series_topseed_bottomseed_shape():
-    normalized = nhl_playoffs._normalize_series_item(
-        {
-            "seriesLetter": "B",
-            "topSeed": {"abbrev": "TBL", "wins": 1},
-            "bottomSeed": {"abbrev": "MTL", "wins": 2},
-        }
+# ── Server feed ─────────────────────────────────────────────────────────────
+
+
+@pytest.mark.parametrize("screen_id,feed", [("NHL Playoffs", "nhl_playoffs"), ("NBA Playoffs", "nba_playoffs")])
+def test_playoff_screens_have_a_server_feed(screen_id, feed):
+    assert feeds.feeds_for_screen(screen_id, feeds.SERVER_FEED_DEPENDENCIES) == {feed}
+    assert feeds.SERVER_FEED_REFRESH_INTERVALS[feed] == 600
+
+
+class _Clock:
+    now = 1_000.0
+
+    def __call__(self):
+        return self.now
+
+
+@pytest.mark.parametrize("screen_id,feed", [("NHL Playoffs", "nhl_playoffs"), ("NBA Playoffs", "nba_playoffs")])
+def test_server_refreshes_the_bracket_faster_while_a_game_is_live(screen_id, feed):
+    clock = _Clock()
+    value = {"series": [{"round": 1, "live": False}]}
+
+    def fetch(*, force=False):
+        return {feed: json.loads(json.dumps(value))}
+
+    service = ServerFeedService(
+        DataCoordinator(SimpleNamespace()), SimpleNamespace(), fetch_air_quality=lambda *a, **k: None,
+        settings=SimpleNamespace(ENABLE_WEATHER=False, ENABLE_AIR_QUALITY=False),
+        standings_fetchers={feed: fetch}, history_path="/nonexistent/aq.json",
+        clock=clock, wall_clock=clock,
     )
-
-    assert normalized is not None
-    assert normalized["teams"]["away"]["team"]["abbrev"] == "TBL"
-    assert normalized["teams"]["home"]["team"]["abbrev"] == "MTL"
-    assert normalized["teams"]["away"]["score"] == 1
-    assert normalized["teams"]["home"]["score"] == 2
-    assert normalized["conference"] == "east"
-
-
-def test_series_next_text_from_games_uses_upcoming_matchup_time(monkeypatch):
-    series = {
-        "teams": {
-            "away": {"team": {"abbrev": "BUF"}, "score": 1},
-            "home": {"team": {"abbrev": "BOS"}, "score": 0},
-        },
-        "next_text": "TBD",
-    }
-    games = [
-        {
-            "gameDate": "2026-04-18T01:00:00Z",
-            "teams": {
-                "away": {"team": {"abbreviation": "BUF"}},
-                "home": {"team": {"abbreviation": "BOS"}},
-            },
-        },
-        {
-            "gameDate": "2026-04-21T01:00:00Z",
-            "teams": {
-                "away": {"team": {"abbreviation": "BOS"}},
-                "home": {"team": {"abbreviation": "BUF"}},
-            },
-        },
-    ]
-
-    class _FixedNow(datetime.datetime):
-        @classmethod
-        def now(cls, tz=None):
-            return cls(2026, 4, 20, 12, 0, tzinfo=tz)
-
-    monkeypatch.setattr(nhl_playoffs.datetime, "datetime", _FixedNow)
-    assert nhl_playoffs._series_next_text_from_games(series, games) == "Tonight 8 PM"
+    assert service.refresh({screen_id}) == {feed: True}
+    clock.now += LIVE_REFRESH_SECONDS
+    assert service.refresh({screen_id}) == {}
+    value["series"][0]["live"] = True
+    clock.now += feeds.SERVER_FEED_REFRESH_INTERVALS[feed]
+    assert service.refresh({screen_id}) == {feed: True}
+    clock.now += LIVE_REFRESH_SECONDS
+    assert service.refresh({screen_id}) == {feed: True}
 
 
-def test_series_next_text_from_games_uses_date_only_when_time_is_tbd(monkeypatch):
-    series = {
-        "teams": {
-            "away": {"team": {"abbrev": "BUF"}, "score": 1},
-            "home": {"team": {"abbrev": "BOS"}, "score": 0},
-        },
-        "next_text": "TBD",
-    }
-    games = [
-        {
-            "gameDate": "2026-04-27",
-            "teams": {
-                "away": {"team": {"abbreviation": "BUF"}},
-                "home": {"team": {"abbreviation": "BOS"}},
-            },
-        },
-    ]
+def test_default_fetchers_cover_every_bracket_feed(monkeypatch):
+    from services import server_feeds
 
-    class _FixedNow(datetime.datetime):
-        @classmethod
-        def now(cls, tz=None):
-            return cls(2026, 4, 20, 12, 0, tzinfo=tz)
-
-    monkeypatch.setattr(nhl_playoffs.datetime, "datetime", _FixedNow)
-    assert nhl_playoffs._series_next_text_from_games(series, games) == "Monday"
+    fetchers = server_feeds._default_standings_fetchers()
+    monkeypatch.setattr(np_, "fetch_postseason", lambda **_: {"series": [1]})
+    assert fetchers["nhl_playoffs"](force=False) == {"nhl_playoffs": {"series": [1]}}
+    assert set(feeds.POSTSEASON_FEED_MODULES) <= set(fetchers)
 
 
-def test_normalize_next_text_strips_known_timezone_and_leading_zeroes():
-    assert nhl_playoffs._normalize_next_text("Next: 04/09 8:00 PM ET") == "Thursday 8 PM"
+def test_server_renders_the_screen_from_its_snapshot(monkeypatch):
+    from display_profiles import DISPLAY_PROFILE_DISPLAY_HAT_MINI, PROFILE_PRESETS
+    from rendering.screen_renderer import ScreenRenderer, ServerPreferenceSnapshot
 
-
-def test_normalize_next_text_keeps_text_without_timezone_unchanged():
-    assert nhl_playoffs._normalize_next_text("Next: 4/9 8:00 PM") == "Thursday 8 PM"
-
-
-def test_normalize_next_text_keeps_meridiem_suffix():
-    assert nhl_playoffs._normalize_next_text("Next: 4/9 8:00 AM") == "Thursday 8 AM"
-
-
-def test_normalize_next_text_preserves_tbd():
-    assert nhl_playoffs._normalize_next_text("Next: TBD") == "TBD"
-
-
-def test_normalize_next_text_uses_tonight_when_date_matches_today(monkeypatch):
-    class _FixedNow(datetime.datetime):
-        @classmethod
-        def now(cls, tz=None):
-            return cls(2026, 4, 9, 10, 0, tzinfo=tz)
-
-    monkeypatch.setattr(nhl_playoffs.datetime, "datetime", _FixedNow)
-    assert nhl_playoffs._normalize_next_text("Next: 04/09 8:00 PM ET") == "Tonight 8 PM"
-
-
-def test_normalize_next_text_uses_tomorrow_when_date_matches_next_day(monkeypatch):
-    class _FixedNow(datetime.datetime):
-        @classmethod
-        def now(cls, tz=None):
-            return cls(2026, 4, 8, 10, 0, tzinfo=tz)
-
-    monkeypatch.setattr(nhl_playoffs.datetime, "datetime", _FixedNow)
-    assert nhl_playoffs._normalize_next_text("Next: 04/09 8:00 PM ET") == "Tomorrow 8 PM"
-
-
-def test_team_abbr_supports_localized_team_abbrev_shapes():
-    assert nhl_playoffs._team_abbr({"teamAbbrev": {"default": "WPG"}}) == "WPG"
-    assert nhl_playoffs._team_abbr({"abbrev": {"default": "TOR"}}) == "TOR"
-    assert nhl_playoffs._team_abbr({"team": {"triCode": "car"}}) == "CAR"
-
-
-def test_team_abbr_prefers_nested_canonical_abbreviation_over_localized_short_name():
-    team = {"shortName": {"default": "Rangers"}, "team": {"abbreviation": "NYR"}}
-
-    assert nhl_playoffs._team_abbr(team) == "NYR"
-
-
-def test_first_present_int_supports_record_text():
-    assert nhl_playoffs._first_present_int(["3-2", None]) == 3
-
-
-def test_apply_style_overrides_reduces_logo_height_by_ten_percent(monkeypatch):
-    monkeypatch.setattr(nhl_playoffs, "TEAM_LOGO_BASE_HEIGHT", 20)
-    monkeypatch.setattr(nhl_playoffs, "PLAYOFF_LOGO_SCALE", 0.9)
-    monkeypatch.setattr(nhl_playoffs, "SCORE_ROW_H", 56)
-    monkeypatch.setattr(nhl_playoffs, "get_screen_image_scale", lambda *args, **kwargs: 1.0)
-    monkeypatch.setattr(nhl_playoffs, "scale_value", lambda value: value)
-    monkeypatch.setattr(nhl_playoffs, "_scoreboard_fonts", lambda: (None, None, None, None))
-    monkeypatch.setattr(nhl_playoffs, "_recompute_series_layout", lambda: None)
-
-    nhl_playoffs._apply_style_overrides()
-
-    assert nhl_playoffs.LOGO_HEIGHT == 18
-
-
-def test_format_next_text_supports_nested_next_game_schedule(monkeypatch):
-    class _FixedNow(datetime.datetime):
-        @classmethod
-        def now(cls, tz=None):
-            return cls(2026, 4, 20, 12, 0, tzinfo=tz)
-
-    monkeypatch.setattr(nhl_playoffs.datetime, "datetime", _FixedNow)
-    text = nhl_playoffs._format_next_text(
-        {
-            "nextGameSchedule": {
-                "scheduledStartTimeUTC": "2026-04-22T01:00:00Z",
-            }
-        }
+    monkeypatch.setattr(np_, "fetch_postseason", lambda **_: pytest.fail("fetched upstream"))
+    monkeypatch.setattr(playoff_bracket.time, "sleep", lambda _s: None)
+    monkeypatch.setattr(playoff_bracket, "scroll_vertical_content", lambda **kwargs: kwargs["render_at_offset"](0))
+    data = data_from(first_round(), schedule_payload([("TBL", "FLA", "LIVE", "2024-04-22T23:00:00Z", 3)]))
+    snapshot = DataCoordinator().publish("nhl_playoffs", data)
+    artifact = ScreenRenderer().render(
+        "NHL Playoffs", PROFILE_PRESETS[DISPLAY_PROFILE_DISPLAY_HAT_MINI], ServerPreferenceSnapshot(revision=1), snapshot,
     )
-    assert text == "Tomorrow 8 PM"
-
-
-def test_fetch_remaining_playoff_schedule_games_includes_upcoming_through_june(monkeypatch):
-    class _FixedNow(datetime.datetime):
-        @classmethod
-        def now(cls, tz=None):
-            return cls(2026, 4, 20, 12, 0, tzinfo=tz)
-
-    class _Response:
-        def __init__(self, payload):
-            self._payload = payload
-
-        def raise_for_status(self):
-            return None
-
-        def json(self):
-            return self._payload
-
-    payload = {
-        "gameWeek": [
-            {
-                "games": [
-                    {
-                        "id": 1,
-                        "startTimeUTC": "2026-05-02T00:00:00Z",
-                        "gameType": 3,
-                        "awayTeam": {"abbrev": "WPG"},
-                        "homeTeam": {"abbrev": "DAL"},
-                    },
-                    {
-                        "id": 2,
-                        "gameDate": "2026-07-02T00:00:00Z",
-                        "gameType": 3,
-                        "awayTeam": {"abbrev": "NYR"},
-                        "homeTeam": {"abbrev": "CAR"},
-                    },
-                ]
-            }
-        ]
-    }
-
-    monkeypatch.setattr(nhl_playoffs.datetime, "datetime", _FixedNow)
-    monkeypatch.setattr(
-        nhl_playoffs._SESSION,
-        "get",
-        lambda *_args, **_kwargs: _Response(payload),
-    )
-
-    games = nhl_playoffs._fetch_remaining_playoff_schedule_games()
-    assert len(games) == 1
-    assert games[0]["gamePk"] == 1
-
-
-def test_fetch_remaining_playoff_schedule_games_excludes_non_playoff_game_types(monkeypatch):
-    class _FixedNow(datetime.datetime):
-        @classmethod
-        def now(cls, tz=None):
-            return cls(2026, 4, 20, 12, 0, tzinfo=tz)
-
-    class _Response:
-        def __init__(self, payload):
-            self._payload = payload
-
-        def raise_for_status(self):
-            return None
-
-        def json(self):
-            return self._payload
-
-    payload = {
-        "gameWeek": [
-            {
-                "games": [
-                    {
-                        "id": 10,
-                        "startTimeUTC": "2026-05-03T00:00:00Z",
-                        "gameType": 2,
-                        "awayTeam": {"abbrev": "WPG"},
-                        "homeTeam": {"abbrev": "DAL"},
-                    },
-                    {
-                        "id": 11,
-                        "startTimeUTC": "2026-05-04T00:00:00Z",
-                        "gameType": 3,
-                        "awayTeam": {"abbrev": "VGK"},
-                        "homeTeam": {"abbrev": "EDM"},
-                    },
-                ]
-            }
-        ]
-    }
-
-    monkeypatch.setattr(nhl_playoffs.datetime, "datetime", _FixedNow)
-    monkeypatch.setattr(
-        nhl_playoffs._SESSION,
-        "get",
-        lambda *_args, **_kwargs: _Response(payload),
-    )
-
-    games = nhl_playoffs._fetch_remaining_playoff_schedule_games()
-    assert len(games) == 1
-    assert games[0]["gamePk"] == 11
-
-
-def test_render_nhl_playoffs_enriches_next_text_with_official_schedule(monkeypatch):
-    class _DisplayStub:
-        def image(self, _img):
-            return None
-
-    monkeypatch.setattr(nhl_playoffs, "_apply_style_overrides", lambda: None)
-    monkeypatch.setattr(
-        nhl_playoffs,
-        "_fetch_playoff_matchups",
-        lambda: [
-            {
-                "teams": {
-                    "away": {"team": {"abbreviation": "WPG"}, "score": 1},
-                    "home": {"team": {"abbreviation": "DAL"}, "score": 1},
-                },
-                "next_text": "TBD",
-                "conference": "west",
-            }
-        ],
-    )
-    monkeypatch.setattr(nhl_playoffs, "_fetch_projected_matchups_from_standings", list)
-    monkeypatch.setattr(
-        nhl_playoffs,
-        "_fetch_remaining_playoff_schedule_games",
-        lambda: [{"gameDate": "2026-04-28", "teams": {"away": {"team": {"abbreviation": "WPG"}}, "home": {"team": {"abbreviation": "DAL"}}}}],
-    )
-    captured = {}
-
-    def _render(series):
-        captured["series"] = series
-        return __import__("PIL").Image.new("RGB", (10, 10))
-
-    monkeypatch.setattr(nhl_playoffs, "_render_playoff_screen", _render)
-    monkeypatch.setattr(nhl_playoffs.time, "sleep", lambda *_args, **_kwargs: None)
-    monkeypatch.setattr(nhl_playoffs, "HEIGHT", 100)
-    class _FixedNow(datetime.datetime):
-        @classmethod
-        def now(cls, tz=None):
-            return cls(2026, 4, 20, 12, 0, tzinfo=tz)
-    monkeypatch.setattr(nhl_playoffs.datetime, "datetime", _FixedNow)
-
-    rendered = nhl_playoffs.render_nhl_playoffs(_DisplayStub(), games=[], transition=False)
-    assert rendered.displayed is True
-    assert captured["series"][0]["next_text"] == "Tuesday"
-
-
-def test_select_current_round_series_keeps_completed_first_round_visible():
-    series = [
-        {"teams": {"away": {"team": {"abbreviation": "DAL"}, "score": 4}, "home": {"team": {"abbreviation": "COL"}, "score": 1}}, "round_rank": 1},
-        {"teams": {"away": {"team": {"abbreviation": "WPG"}, "score": 3}, "home": {"team": {"abbreviation": "STL"}, "score": 2}}, "round_rank": 1},
-        {"teams": {"away": {"team": {"abbreviation": "DAL"}, "score": 0}, "home": {"team": {"abbreviation": "WPG"}, "score": 0}, "next_text": "TBD"}, "round_rank": 2},
-    ]
-
-    selected = nhl_playoffs._select_current_round_series(series)
-
-    assert len(selected) == 2
-    assert all(item["round_rank"] == 1 for item in selected)
-
-
-def test_select_current_round_series_ignores_opponentless_next_round_series():
-    series = [
-        {"teams": {"away": {"team": {"abbreviation": "DAL"}, "score": 4}, "home": {"team": {"abbreviation": "COL"}, "score": 1}}, "round_rank": 1},
-        {"teams": {"away": {"team": {"abbreviation": "WPG"}, "score": 2}, "home": {"team": {"abbreviation": "STL"}, "score": 2}}, "round_rank": 1},
-        {"teams": {"away": {"team": {"abbreviation": "DAL"}, "score": 0}, "home": {"team": {}, "score": 0}, "next_text": "Tomorrow 7 PM"}, "round_rank": 2},
-    ]
-
-    selected = nhl_playoffs._select_current_round_series(series)
-
-    assert len(selected) == 2
-    assert all(item["round_rank"] == 1 for item in selected)
-
-
-def test_select_current_round_series_advances_only_when_next_round_started():
-    series = [
-        {"teams": {"away": {"team": {"abbreviation": "DAL"}, "score": 4}, "home": {"team": {"abbreviation": "COL"}, "score": 1}}, "round_rank": 1},
-        {"teams": {"away": {"team": {"abbreviation": "WPG"}, "score": 4}, "home": {"team": {"abbreviation": "STL"}, "score": 2}}, "round_rank": 1},
-        {"teams": {"away": {"team": {"abbreviation": "DAL"}, "score": 0}, "home": {"team": {"abbreviation": "WPG"}, "score": 0}, "next_text": "TBD"}, "round_rank": 2},
-    ]
-    assert all(item["round_rank"] == 1 for item in nhl_playoffs._select_current_round_series(series))
-
-    series[2]["next_text"] = "Tomorrow 7 PM"
-    selected = nhl_playoffs._select_current_round_series(series)
-    assert len(selected) == 1
-    assert selected[0]["round_rank"] == 2
-
-
-def test_series_status_line_text_shows_winner_for_completed_series():
-    series = {
-        "teams": {
-            "away": {"score": 4, "team": {"teamName": "Avalanche"}},
-            "home": {"score": 2, "team": {"teamName": "Stars"}},
-        },
-        "next_text": "TBD",
-    }
-    assert nhl_playoffs._series_status_line_text(series) == "Avalanche win!"
-
-
-def test_series_status_line_text_uses_team_name_map_instead_of_abbreviation():
-    series = {
-        "teams": {
-            "away": {"score": 4, "team": {"abbreviation": "COL"}},
-            "home": {"score": 2, "team": {"abbreviation": "DAL"}},
-        },
-        "next_text": "TBD",
-    }
-    assert nhl_playoffs._series_status_line_text(series) == "Avalanche win!"
-
-
-def test_series_status_line_text_uses_live_and_yellow_fill_for_live_series():
-    series = {
-        "teams": {
-            "away": {"score": 3},
-            "home": {"score": 2},
-        },
-        "has_live_game": True,
-        "next_text": "Tomorrow 7 PM",
-    }
-
-    assert nhl_playoffs._series_status_line_text(series) == "LIVE!"
-    assert nhl_playoffs._series_status_line_fill(series) == nhl_playoffs.SCOREBOARD_IN_PROGRESS_SCORE_COLOR
-
-
-def test_compose_canvas_centers_single_series_in_two_column_layout(monkeypatch):
-    monkeypatch.setattr(nhl_playoffs, "_use_single_series_per_row_layout", lambda: False)
-
-    draw_calls = []
-
-    def _record_draw(_canvas, _draw, _series, *, left, top):
-        draw_calls.append((left, top, _series))
-
-    monkeypatch.setattr(nhl_playoffs, "_draw_series_block", _record_draw)
-
-    series = [{"conference": "east", "teams": {"away": {}, "home": {}}}]
-
-    nhl_playoffs._compose_canvas(series)
-
-    expected_left = max(0, (nhl_playoffs.WIDTH - nhl_playoffs.SERIES_WIDTH) // 2)
-    assert len(draw_calls) == 1
-    assert draw_calls[0] == (expected_left, 0, series[0])
-
-
-def test_compose_canvas_uses_single_series_per_row_on_low_resolution(monkeypatch):
-    monkeypatch.setattr(nhl_playoffs, "_use_single_series_per_row_layout", lambda: True)
-
-    draw_calls = []
-
-    def _record_draw(_canvas, _draw, _series, *, left, top):
-        draw_calls.append((left, top))
-
-    monkeypatch.setattr(nhl_playoffs, "_draw_series_block", _record_draw)
-
-    series = [
-        {"conference": "west", "teams": {"away": {}, "home": {}}},
-        {"conference": "east", "teams": {"away": {}, "home": {}}},
-    ]
-
-    canvas = nhl_playoffs._compose_canvas(series)
-
-    block_height = nhl_playoffs.SCORE_ROW_H + nhl_playoffs.STATUS_ROW_H
-    assert len(draw_calls) == 2
-    assert draw_calls[0] == (nhl_playoffs.WEST_X, 0)
-    assert draw_calls[1] == (nhl_playoffs.WEST_X, block_height + nhl_playoffs.BLOCK_SPACING)
-    assert canvas.width == nhl_playoffs.WIDTH
-
+    assert artifact.image.size == (320, 240)
+    assert pb.has_live_series(snapshot["nhl_playoffs"])

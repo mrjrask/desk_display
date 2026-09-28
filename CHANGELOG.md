@@ -31,6 +31,14 @@ See the README's [deployment modes](README.md#deployment-modes) and
   server fetches it as the `mlb_postseason` feed (every 10 minutes, every
   30 seconds during a live game). Off (frequency 0) in the default configs, in
   the mlb playlist after MLB Scoreboard.
+- **NHL Playoffs** and **NBA Playoffs** now use the MLB Playoffs design: a
+  16-team bracket (West left, East right, the final in the middle, conference
+  logos for the NHL) with the current round's series, scores and next game or
+  result under it, sized for every display profile. The render server fetches
+  them as the `nhl_playoffs` and `nba_playoffs` feeds (every 10 minutes,
+  every 30 seconds during a live game), so they work on clients too. Before
+  the NHL playoffs the first round is projected from the standings; out of
+  season both show the last playoffs. Their default frequencies are unchanged.
 - `display_client.py`: offline-first playback from a local cache, render
   packages (static, animated and client-timed clocks), touch focus on quads,
   and physical rotation applied only at presentation.

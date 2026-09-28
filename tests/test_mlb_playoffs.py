@@ -8,7 +8,7 @@ from types import SimpleNamespace
 import pytest
 
 from config import CENTRAL_TIME, HEIGHT, WIDTH
-from screens import mlb_playoffs
+from screens import mlb_playoffs, playoff_bracket
 from services import feeds
 from services.data_coordinator import DataCoordinator
 from services.server_feeds import LIVE_REFRESH_SECONDS, ServerFeedService
@@ -198,7 +198,7 @@ def test_status_lines():
     assert mlb_playoffs.series_status(_slot(data, "AL", "F", 0), data, NOW)[0] == "Royals win 2-0"
     assert mlb_playoffs.series_status(_slot(data, "AL", "F", 1), data, NOW)[0] == "Game 2 · Tonight 7:08 PM"
     text, fill = mlb_playoffs.series_status(_slot(data, "NL", "F", 0), data, NOW)
-    assert text == "Game 1 · LIVE" and fill == mlb_playoffs.SCOREBOARD_IN_PROGRESS_SCORE_COLOR
+    assert text == "Game 1 · LIVE" and fill == playoff_bracket.SCOREBOARD_IN_PROGRESS_SCORE_COLOR
     assert mlb_playoffs.series_status(_slot(data, "NL", "F", 1), data, NOW)[0] == "Projected"
 
 
@@ -225,8 +225,8 @@ class _Display:
 
 def test_render_uses_given_feed_data_without_fetching(monkeypatch):
     monkeypatch.setattr(mp, "fetch_postseason", lambda **_: pytest.fail("fetched upstream"))
-    monkeypatch.setattr(mlb_playoffs, "_scroll_display", lambda display, img: display.image(img))
-    monkeypatch.setattr(mlb_playoffs.time, "sleep", lambda _s: None)
+    monkeypatch.setattr(playoff_bracket, "scroll_vertical_content", lambda **kwargs: kwargs["render_at_offset"](0))
+    monkeypatch.setattr(playoff_bracket.time, "sleep", lambda _s: None)
     display = _Display()
     result = mlb_playoffs.render_mlb_playoffs(display, {"series": [], "seeds": SEEDS}, transition=True)
     assert result.displayed and display.images
@@ -329,8 +329,8 @@ def test_server_renders_the_screen_from_its_snapshot(monkeypatch):
     from rendering.screen_renderer import ScreenRenderer, ServerPreferenceSnapshot
 
     monkeypatch.setattr(mp, "fetch_postseason", lambda **_: pytest.fail("fetched upstream"))
-    monkeypatch.setattr(mlb_playoffs.time, "sleep", lambda _s: None)
-    monkeypatch.setattr(mlb_playoffs, "scroll_vertical_content",
+    monkeypatch.setattr(playoff_bracket.time, "sleep", lambda _s: None)
+    monkeypatch.setattr(playoff_bracket, "scroll_vertical_content",
                         lambda **kwargs: kwargs["render_at_offset"](0))
     data = postseason([game("F", "KC", "BAL", 1, "final", 1, 0), game("F", "DET", "HOU", 1, "live")])
     snapshot = DataCoordinator().publish("mlb_postseason", data)
@@ -343,10 +343,10 @@ def test_server_renders_the_screen_from_its_snapshot(monkeypatch):
 
 def test_series_list_uses_one_full_width_line_per_series(monkeypatch):
     calls = []
-    monkeypatch.setattr(mlb_playoffs, "_draw_series_row",
-                        lambda canvas, draw, slot, data, seeds, x, width, y, now: calls.append((x, width, y)))
+    monkeypatch.setattr(playoff_bracket, "draw_series_row",
+                        lambda canvas, draw, spec, slot, names, seeds, x, width, y, now: calls.append((x, width, y)))
     data = {"series": [], "seeds": SEEDS}
-    mlb_playoffs._compose_series_list(1280, data, mp.build_bracket(data), NOW)
+    mlb_playoffs._compose_series_list(1280, data, mlb_playoffs._bracket(data), NOW)
     assert len(calls) == 4
     assert {(x, width) for x, width, _y in calls} == {(calls[0][0], 1280 - 2 * calls[0][0])}
     assert [y for _x, _w, y in calls] == sorted({y for _x, _w, y in calls})

@@ -211,13 +211,21 @@ LEAGUE_STANDINGS_DEPENDENCIES: dict[str, set[str]] = {
         "MLB NLWC Standings",
     },
     "mlb_postseason": {"MLB Playoffs"},
+    "nhl_playoffs": {"NHL Playoffs"},
+    "nba_playoffs": {"NBA Playoffs"},
+}
+# Playoff bracket feeds and the module that fetches each.
+POSTSEASON_FEED_MODULES = {
+    "mlb_postseason": "services.sports.mlb_postseason",
+    "nhl_playoffs": "services.sports.nhl_postseason",
+    "nba_playoffs": "services.sports.nba_postseason",
 }
 # NHL v2 standings screens also need the wildcard order.
 NHL_WILDCARD_SCREEN_IDS = {"NHL Standings West v2", "NHL Standings East v2"}
 LEAGUE_STANDINGS_REFRESH_INTERVALS: dict[str, int] = {
     **dict.fromkeys(LEAGUE_STANDINGS_DEPENDENCIES, 1800),
     # Series scores change with every final; a live game refreshes faster still.
-    "mlb_postseason": 600,
+    **dict.fromkeys(POSTSEASON_FEED_MODULES, 600),
 }
 SERVER_FEED_DEPENDENCIES: dict[str, set[str]] = {**FEED_DEPENDENCIES, **LEAGUE_STANDINGS_DEPENDENCIES}
 SERVER_FEED_REFRESH_INTERVALS: dict[str, int] = {**FEED_REFRESH_INTERVALS, **LEAGUE_STANDINGS_REFRESH_INTERVALS}

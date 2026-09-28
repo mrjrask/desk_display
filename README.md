@@ -835,7 +835,7 @@ normal loading instead of silently dropping renamed screens.
 
 - `nba logo`
 - `NBA Scoreboard`
-- `NBA Playoffs`
+- `NBA Playoffs` (same design as MLB Playoffs: bracket with West left and East right, the current round's series scores under it)
 - `NCAA Mens BB Scoreboard`
 - `NCAA FBS Scoreboard`
 - `World Cup Scoreboard`
@@ -858,7 +858,7 @@ normal loading instead of silently dropping renamed screens.
 - `hawks schedule quad`
 - `nhl logo`
 - `NHL Scoreboard`
-- `NHL Playoffs`
+- `NHL Playoffs` (same design as MLB Playoffs: bracket with West left and East right, the current round's series scores under it; a projected first round from the standings before the playoffs)
 - `NHL Standings Overview West`
 - `NHL Standings Overview East`
 - `NHL Standings West`

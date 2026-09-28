@@ -232,16 +232,25 @@ class DataCoordinator:
     def read_mlb_postseason(self, *, ttl_seconds: int = 120, force: bool = False) -> dict[str, Any]:
         """Acquire the MLB postseason bracket before snapshot-based rendering."""
 
-        from services.sports.mlb_postseason import fetch_postseason
+        return self.read_postseason("mlb_postseason", ttl_seconds=ttl_seconds, force=force)
+
+    def read_postseason(self, feed: str, *, ttl_seconds: int = 120, force: bool = False) -> dict[str, Any]:
+        """Acquire a league's playoff bracket (``feeds.POSTSEASON_FEED_MODULES``)."""
+
+        import importlib
+
+        from services.feeds import POSTSEASON_FEED_MODULES
+
+        module = importlib.import_module(POSTSEASON_FEED_MODULES[feed])
 
         def fetch() -> dict[str, Any]:
             try:
-                return fetch_postseason(force=force)
+                return module.fetch_postseason(force=force)
             except RuntimeError:
                 return {}
 
-        value = self.provider.read("mlb_postseason", fetch, ttl_seconds=ttl_seconds, force=force)
-        self.publish("mlb_postseason", value)
+        value = self.provider.read(feed, fetch, ttl_seconds=ttl_seconds, force=force)
+        self.publish(feed, value)
         return value
 
     def read_nfl_league_standings(

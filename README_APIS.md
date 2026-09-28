@@ -168,12 +168,11 @@ Fields used include game IDs, dates, game state/status, team records, team score
 
 | Use | Endpoint |
 | --- | --- |
-| Playoff series carousel by season | `https://api-web.nhle.com/v1/playoff-series/carousel/{season}` |
-| Playoff bracket by season | `https://api-web.nhle.com/v1/playoff-bracket/{season}` |
-| Current playoff series carousel | `https://api-web.nhle.com/v1/playoff-series/carousel/now` |
-| Current playoff bracket | `https://api-web.nhle.com/v1/playoff-bracket/now` |
-| Current schedule fallback | `https://api-web.nhle.com/v1/schedule/now` |
-| Schedule by date fallback | `https://api-web.nhle.com/v1/schedule/{date}` |
+| Playoff bracket (this season, else last season's) | `https://api-web.nhle.com/v1/playoff-bracket/{year}` |
+| Live games and the next game of each series | `https://api-web.nhle.com/v1/schedule/now` |
+| Standings for the projected first round | `https://api-web.nhle.com/v1/standings/now` |
+
+Fields used include series letters, rounds, seeds (`D1`, `WC1`), series wins, winners, game states and start times, and division and wild-card standings. The render server fetches these as the `nhl_playoffs` feed.
 
 ### MLB / Cubs / White Sox / league
 
@@ -215,8 +214,8 @@ Fields used include game status, clock/period, team IDs, team tricode values, sc
 | --- | --- |
 | NBA.com playoff bracket | `https://cdn.nba.com/static/json/liveData/playoffbracket/playoffbracket_00.json` |
 | NBA S3 playoff bracket fallback | `https://nba-prod-us-east-1-media.s3.amazonaws.com/json/liveData/playoffbracket/playoffbracket_00.json` |
-| NBA.com bracket fallback | `https://cdn.nba.com/static/json/liveData/bracket/bracket_00.json` |
-| NBA S3 bracket fallback | `https://nba-prod-us-east-1-media.s3.amazonaws.com/json/liveData/bracket/bracket_00.json` |
+
+Fields used include round, conference, seeds, series wins, series winner, and the next game's number, status and start time. The render server fetches these as the `nba_playoffs` feed.
 
 ### NFL / Bears / league
 
