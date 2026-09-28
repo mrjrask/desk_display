@@ -102,6 +102,8 @@ from remote_display.registry import (
 MAX_REQUEST_BYTES = 64 * 1024
 IMMUTABLE_MAX_AGE_SECONDS = 365 * 24 * 3600
 MAINTENANCE_INTERVAL_SECONDS = 600
+# A render worker still busy this long after the render timeout is replaced.
+RENDER_KILL_GRACE_SECONDS = 5
 # Routine status changes (last seen, current screen) reach the config UI's
 # registry snapshot at most this often; registrations, lease changes and
 # deliveries are written at once.  Clients sync every 30 s, so a throttled
@@ -881,11 +883,15 @@ def run_display_server() -> None:
         resolve_cache_file_path("DESK_DISPLAY_SERVER_FEED_STATE_PATH", "server_feed_state.json")))
     from rendering.profile_process import ProfileProcessPool
 
-    # A worker that outlives several render timeouts is hung; it is replaced.
     render_timeout = float(settings["DESK_DISPLAY_RENDER_TIMEOUT_SECONDS"])
+    # Start-up (imports, fonts) gets several render timeouts. A render still
+    # running shortly after the coordinator gives up on it is discarded
+    # anyway, so its worker is replaced then, freeing the render slot rather
+    # than holding it for minutes.
     # One process per render worker for each profile, so renders for the same
     # profile run as concurrently as the coordinator allows.
     workers = ProfileProcessPool(timeout_seconds=max(60.0, 4 * render_timeout),
+                                 render_timeout_seconds=render_timeout + RENDER_KILL_GRACE_SECONDS,
                                  processes_per_profile=settings["DESK_DISPLAY_RENDER_WORKERS"])
     rendering = ServerRendering(feeds=feeds, profile_processes=workers)
     atexit.register(rendering.close)

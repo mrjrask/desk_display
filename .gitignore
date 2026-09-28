@@ -4,7 +4,6 @@ screenshot_archive/
 screenshots/
 feed_uploads/
 .runtime/
-screens_style.json
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
