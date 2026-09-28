@@ -54,6 +54,12 @@ REQUEST_TIMEOUT = 10
 SCREEN_ID = "NCAA FBS Scoreboard"
 LOGO_DIR = os.path.join(IMAGES_DIR, "ncaa")
 ESPN_URL = "https://site.api.espn.com/apis/site/v2/sports/football/college-football/scoreboard"
+# Tried in order when a host refuses (ESPN answers 403 from some networks).
+# Each is a separate host, so a 403 cooldown on one does not skip the others.
+ESPN_FALLBACK_URLS = (
+    "https://site.web.api.espn.com/apis/site/v2/sports/football/college-football/scoreboard",
+    "https://cdn.espn.com/core/college-football/scoreboard",
+)
 MODE_TOP25 = "top25"
 
 TITLE_GAP = scale_value(8)
@@ -95,7 +101,7 @@ FINAL_WINNING_SCORE_COLOR = SCOREBOARD_FINAL_WINNING_SCORE_COLOR
 FINAL_LOSING_SCORE_COLOR = SCOREBOARD_FINAL_LOSING_SCORE_COLOR
 BACKGROUND_COLOR = get_screen_background_color(SCREEN_ID, SCOREBOARD_BACKGROUND_COLOR)
 
-_SESSION = get_session()
+_SESSION = get_session("ncaa_fbs")
 _REMOTE_LOGO_CACHE: dict[tuple[str, int], Optional[Image.Image]] = {}
 _LEAGUE_LOGO_CACHE: dict[tuple[str, int], Optional[Image.Image]] = {}
 _TEAM_LOGO_URL_OVERRIDES: dict[str, str] = {
@@ -125,11 +131,66 @@ def _league_logo_height() -> int:
 
 
 
-def _fetch_json(params: dict[str, Any]) -> dict[str, Any]:
-    resp = _SESSION.get(ESPN_URL, params=params, timeout=REQUEST_TIMEOUT)
+def _fetch_json(params: dict[str, Any], url: str = ESPN_URL) -> dict[str, Any]:
+    if url.startswith("https://cdn.espn.com/"):
+        params = {**params, "xhr": 1}
+    resp = _SESSION.get(url, params=params, timeout=REQUEST_TIMEOUT)
     resp.raise_for_status()
     payload = resp.json()
     return payload if isinstance(payload, dict) else {}
+
+
+def _events_from_payload(payload: Any) -> Optional[list[dict]]:
+    """Find the event list in a Site API payload or a CDN ``content.sbData`` wrapper."""
+
+    if not isinstance(payload, dict):
+        return None
+    events = payload.get("events")
+    if isinstance(events, list):
+        return [event for event in events if isinstance(event, dict)]
+    for key in ("content", "sbData"):
+        found = _events_from_payload(payload.get(key))
+        if found is not None:
+            return found
+    return None
+
+
+def _fetch_events(params: dict[str, Any]) -> list[dict]:
+    """Return ESPN events from the first host that answers; raise if none do."""
+
+    errors: list[str] = []
+    for url in (ESPN_URL, *ESPN_FALLBACK_URLS):
+        try:
+            events = _events_from_payload(_fetch_json(params, url))
+        except Exception as exc:
+            errors.append(f"{url}: {exc}")
+            continue
+        if events is None:
+            errors.append(f"{url}: response had no events")
+            continue
+        if errors:
+            logging.info("NCAA FBS scoreboard fetched from fallback %s", url)
+        return events
+    raise RuntimeError("; ".join(errors) or "no ESPN hosts configured")
+
+
+def _ranked_games(raw_events: list[dict]) -> list[dict]:
+    filtered: list[dict] = []
+    for event in raw_events:
+        comp = (event.get("competitions") or [{}])[0] or {}
+        competitors = comp.get("competitors") or []
+        if any(_extract_rank(team) is not None for team in competitors if isinstance(team, dict)):
+            filtered.append(_normalize_event(event))
+    return filtered
+
+
+def fetch_games_for_range(start: datetime.date, end: datetime.date) -> list[dict]:
+    """Return Top 25 games from *start* to *end* in one request; raise on failure."""
+
+    dates = start.strftime("%Y%m%d")
+    if end != start:
+        dates = f"{dates}-{end.strftime('%Y%m%d')}"
+    return _ranked_games(_fetch_events({"dates": dates, "limit": 300, "groups": 80}))
 
 
 def _extract_seed(competitor: dict[str, Any]) -> str:
@@ -238,21 +299,11 @@ def _normalize_event(event: dict[str, Any]) -> dict[str, Any]:
 
 
 def _fetch_games_for_date(day: datetime.date, mode: Optional[str] = None) -> list[dict]:
-    date_str = day.strftime("%Y%m%d")
     try:
-        payload = _fetch_json({"dates": date_str, "limit": 300, "groups": 80})
-        raw_events = [event for event in (payload.get("events") or []) if isinstance(event, dict)]
+        return fetch_games_for_range(day, day)
     except Exception as exc:
         logging.error("Failed to fetch NCAA FBS scoreboard for %s: %s", day, exc)
         return []
-
-    filtered: list[dict] = []
-    for event in raw_events:
-        comp = (event.get("competitions") or [{}])[0] or {}
-        competitors = comp.get("competitors") or []
-        if any(_extract_rank(team) is not None for team in competitors if isinstance(team, dict)):
-            filtered.append(_normalize_event(event))
-    return filtered
 
 def _status_text(game: dict) -> str:
     status = (game or {}).get("status", {}) or {}
