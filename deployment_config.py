@@ -108,6 +108,9 @@ class Setting:
     choices: tuple[str, ...] = ()
     minimum: float | None = None
     maximum: float | None = None
+    # Roles that accept the setting (so existing files still validate) but
+    # never read it: startup warns that it has no effect there.
+    ignored: frozenset[Role] = frozenset()
 
     @property
     def example_value(self) -> str:
@@ -432,7 +435,8 @@ SETTINGS: tuple[Setting, ...] = (
     _s("WEATHER_REFRESH_SECONDS", "int", _SERVER, "refresh",
        "Weather refresh interval.", default="1800", minimum=60),
     _s("STARTUP_CRITICAL_FEED_TIMEOUT_SECONDS", "float", _SERVER, "refresh",
-       "How long startup waits for critical feeds before rendering.", default="8", minimum=0),
+       "How long startup waits for critical feeds before rendering.", default="8", minimum=0,
+       ignored=_SERVER_ONLY),
     _s("HTTP_CLIENT_FORBIDDEN_COOLDOWN_SECONDS", "float", _SERVER, "refresh",
        "Back-off after an upstream answers 403 Forbidden.", default="300", minimum=0),
     _s("HTTP_CLIENT_USE_SYSTEM_PROXIES", "bool", _ALL, "refresh",
@@ -539,13 +543,14 @@ SETTINGS: tuple[Setting, ...] = (
     _s("DESK_DISPLAY_FORCE_HEADLESS", "bool", _CLIENT, "output",
        "Force headless output regardless of DESK_DISPLAY_OUTPUT.", default="0"),
     _s("DISPLAY_FADE_IN_ENABLED", "bool", _CLIENT, "output",
-       "Fade new frames in where supported.", default="1"),
+       "Fade new frames in where supported.", default="1", ignored=_CLIENT_ONLY),
     _s("DISPLAY_FADE_IN_DISPLAY_HAT_MINI_STEPS", "int", _CLIENT, "output",
-       "Fade-in steps on Display HAT Mini; 0 disables.", default="10", minimum=0),
+       "Fade-in steps on Display HAT Mini; 0 disables.", default="10", minimum=0,
+       ignored=_CLIENT_ONLY),
     _s("DISPLAY_FADE_IN_HYPERPIXEL_STEPS", "int", _CLIENT, "output",
-       "Fade-in steps on HyperPixel; 0 disables.", default="0", minimum=0),
+       "Fade-in steps on HyperPixel; 0 disables.", default="0", minimum=0, ignored=_CLIENT_ONLY),
     _s("DISPLAY_FADE_IN_HDMI_1080P_STEPS", "int", _CLIENT, "output",
-       "Fade-in steps on HDMI 1080p; 0 disables.", default="0", minimum=0),
+       "Fade-in steps on HDMI 1080p; 0 disables.", default="0", minimum=0, ignored=_CLIENT_ONLY),
 
     # ── Physical rotation ────────────────────────────────────────────────────
     _s("DISPLAY_ROTATION", "rotation", _CLIENT, "rotation",
@@ -657,18 +662,19 @@ SETTINGS: tuple[Setting, ...] = (
        "Play render packages (scrolling, tickers, logo slides) locally; 0 shows stills only.",
        default="1"),
     _s("TOUCH_DOUBLE_TAP_MAX_INTERVAL_SECONDS", "float", _CLIENT, "touch",
-       "Maximum gap between taps of a double tap.", default="0.45", minimum=0),
+       "Maximum gap between taps of a double tap.", default="0.45", minimum=0,
+       ignored=_CLIENT_ONLY),
     _s("ESC_DOUBLE_PRESS_ACTION", "choice", _CLIENT, "touch",
        "What a double Escape press does in window/SDL outputs.", default="stop",
-       choices=("stop", "exit", "none")),
+       choices=("stop", "restart", "toggle"), ignored=_CLIENT_ONLY),
     _s("ESC_DOUBLE_PRESS_MAX_INTERVAL_SECONDS", "float", _CLIENT, "touch",
-       "Maximum gap between Escape presses.", default="1.0", minimum=0),
+       "Maximum gap between Escape presses.", default="1.0", minimum=0, ignored=_CLIENT_ONLY),
 
     # ── Screenshots and feed upload ──────────────────────────────────────────
     _s("ENABLE_SCREENSHOTS", "bool", _CLIENT, "screenshots",
        "Save screenshots of presented frames.", default="1"),
     _s("ENABLE_VIDEO", "bool", _CLIENT, "screenshots",
-       "Record presented frames to video.", default="0"),
+       "Record presented frames to video.", default="0", ignored=_CLIENT_ONLY),
     _s("SCREENSHOT_DIR", "path", _CLIENT, "screenshots", "Screenshot directory."),
     _s("SCREENSHOT_ARCHIVE_BASE", "path", _CLIENT, "screenshots", "Screenshot archive directory."),
     _s("FEED_UPLOAD_URL", "url", _CLIENT, "screenshots",
@@ -777,13 +783,15 @@ SETTINGS: tuple[Setting, ...] = (
 
     # ── Diagnostics ──────────────────────────────────────────────────────────
     _s("DESK_DISPLAY_GC_INTERVAL_SECONDS", "float", _ALL, "diagnostics",
-       "Periodic garbage-collection interval.", default="30", minimum=0),
+       "Periodic garbage-collection interval.", default="30", minimum=0, ignored=_SERVER_ONLY),
     _s("DESK_DISPLAY_DIAGNOSTIC_CONTROL_PATH", "path", _ALL, "diagnostics",
-       "Control file for diagnostic single-screen playback from the config UI."),
+       "Control file for diagnostic single-screen playback from the config UI.",
+       ignored=frozenset({Role.SERVER, Role.CLIENT})),
     _s("DESK_DISPLAY_TEST_SCREEN", "str", _CLIENT, "diagnostics",
-       "Repeat just this screen ID instead of the normal rotation."),
+       "Repeat just this screen ID instead of the normal rotation.", ignored=_CLIENT_ONLY),
     _s("DESK_DISPLAY_TEST_SCREEN_DELAY", "float", _CLIENT, "diagnostics",
-       "Pause between repeats of DESK_DISPLAY_TEST_SCREEN.", default="0.5", minimum=0),
+       "Pause between repeats of DESK_DISPLAY_TEST_SCREEN.", default="0.5", minimum=0,
+       ignored=_CLIENT_ONLY),
     _s("RES_OPTIONS", "str", _ALL, "diagnostics", "Resolver options reported in NHL diagnostics."),
     _s("LOCALDOMAIN", "str", _ALL, "diagnostics", "Resolver search domain reported in diagnostics."),
     _s("HOSTALIASES", "path", _ALL, "diagnostics", "Resolver host aliases file reported in diagnostics."),
@@ -1110,6 +1118,9 @@ def validate(
             values[name] = parse_value(setting, str(raw))
         except ValueError as exc:
             report.error(name, f"invalid value {str(raw)!r}: {exc}")
+            continue
+        if role in setting.ignored and str(raw).strip():
+            report.warning(name, f"has no effect in the {role.value} role; only the standalone main.py reads it")
 
     def get(name: str) -> Any:
         if name in values and values[name] is not None:
@@ -1520,7 +1531,8 @@ def render_example(role: Role) -> str:
         "# process after changing them (see CONFIGURATION.md for what hot-reloads).",
     ]
     for section in SECTIONS:
-        settings = [s for s in SETTINGS if s.section == section.key and role in s.roles]
+        settings = [s for s in SETTINGS if s.section == section.key and role in s.roles
+                    and role not in s.ignored]
         if not settings and not (section.note and role is Role.SERVER):
             continue
         lines += ["", "# " + "-" * 77, f"# {section.title}", "# " + "-" * 77]
@@ -1563,7 +1575,8 @@ def render_settings_reference() -> str:
     ]
     for section in SECTIONS:
         for setting in (s for s in SETTINGS if s.section == section.key):
-            roles = ", ".join(role.value for role in order if role in setting.roles)
+            roles = ", ".join(role.value + (" (no effect)" if role in setting.ignored else "")
+                              for role in order if role in setting.roles)
             effect = "restart" if setting.reload is Reload.RESTART else "hot reload"
             if setting.name in HOT_RELOAD_DOCUMENTS:
                 effect = "restart (file contents hot-reload)"

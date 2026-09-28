@@ -60,3 +60,22 @@ def test_other_modes_keep_their_own_screenshot_dir(tmp_path, monkeypatch):
     monkeypatch.delenv("SCREENSHOT_DIR")
     config_ui._adopt_panel_screenshot_paths(tmp_path)
     assert "SCREENSHOT_DIR" not in os.environ
+
+
+@pytest.mark.parametrize(
+    ("env_role", "client_env", "unit", "serves"),
+    [
+        ("server", False, "desk_display_server.service", True),
+        ("server", True, "desk_display_client.service", True),  # combined
+        ("client", False, "desk_display_client.service", False),
+    ],
+)
+def test_unmarked_install_follows_the_env_role(tmp_path, monkeypatch, env_role, client_env, unit, serves):
+    monkeypatch.setattr(install_modes, "SYSTEMD_DIR", tmp_path / "systemd")
+    monkeypatch.setattr(install_modes.detect_mode, "__defaults__", (tmp_path / "systemd",))
+    monkeypatch.setattr(config_ui, "__file__", str(tmp_path / "config_ui.py"))
+    (tmp_path / ".env").write_text(f"DESK_DISPLAY_ROLE={env_role}\n")
+    if client_env:
+        (tmp_path / ".env.client").write_text("DESK_DISPLAY_ROLE=client\n")
+    assert config_ui._panel_service_unit() == unit
+    assert config_ui._serves_displays() is serves

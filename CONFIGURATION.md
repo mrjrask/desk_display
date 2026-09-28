@@ -512,7 +512,7 @@ installs only, never clients.
 | `DEFAULT_SCREENS_SMALL_PATH` | server, standalone | restart |  |
 | `DESK_DISPLAY_PLAYLIST_STORE_PATH` | server, standalone | restart (file contents hot-reload) |  |
 | `WEATHER_REFRESH_SECONDS` | server, standalone | restart |  |
-| `STARTUP_CRITICAL_FEED_TIMEOUT_SECONDS` | server, standalone | restart |  |
+| `STARTUP_CRITICAL_FEED_TIMEOUT_SECONDS` | server (no effect), standalone | restart |  |
 | `HTTP_CLIENT_FORBIDDEN_COOLDOWN_SECONDS` | server, standalone | restart |  |
 | `HTTP_CLIENT_USE_SYSTEM_PROXIES` | server, client, standalone | restart |  |
 | `DESK_DISPLAY_RENDER_WORKERS` | server | restart |  |
@@ -550,10 +550,10 @@ installs only, never clients.
 | `DESK_DISPLAY_LOW_POWER` | client, standalone | restart |  |
 | `DESK_DISPLAY_OUTPUT` | client, standalone | restart |  |
 | `DESK_DISPLAY_FORCE_HEADLESS` | client, standalone | restart |  |
-| `DISPLAY_FADE_IN_ENABLED` | client, standalone | restart |  |
-| `DISPLAY_FADE_IN_DISPLAY_HAT_MINI_STEPS` | client, standalone | restart |  |
-| `DISPLAY_FADE_IN_HYPERPIXEL_STEPS` | client, standalone | restart |  |
-| `DISPLAY_FADE_IN_HDMI_1080P_STEPS` | client, standalone | restart |  |
+| `DISPLAY_FADE_IN_ENABLED` | client (no effect), standalone | restart |  |
+| `DISPLAY_FADE_IN_DISPLAY_HAT_MINI_STEPS` | client (no effect), standalone | restart |  |
+| `DISPLAY_FADE_IN_HYPERPIXEL_STEPS` | client (no effect), standalone | restart |  |
+| `DISPLAY_FADE_IN_HDMI_1080P_STEPS` | client (no effect), standalone | restart |  |
 | `DISPLAY_ROTATION` | client, standalone | restart |  |
 | `DISPLAY_ROTATION_STRICT` | client, standalone | restart |  |
 | `DISPLAY_FB_DEVICE` | client, standalone | restart |  |
@@ -599,13 +599,13 @@ installs only, never clients.
 | `DESK_DISPLAY_RPI_GPIO_FALLBACK` | client, standalone | restart |  |
 | `DESK_DISPLAY_CLIENT_TOUCH` | client | restart |  |
 | `DESK_DISPLAY_CLIENT_ANIMATION` | client | restart |  |
-| `TOUCH_DOUBLE_TAP_MAX_INTERVAL_SECONDS` | client, standalone | restart |  |
-| `ESC_DOUBLE_PRESS_ACTION` | client, standalone | restart |  |
-| `ESC_DOUBLE_PRESS_MAX_INTERVAL_SECONDS` | client, standalone | restart |  |
+| `TOUCH_DOUBLE_TAP_MAX_INTERVAL_SECONDS` | client (no effect), standalone | restart |  |
+| `ESC_DOUBLE_PRESS_ACTION` | client (no effect), standalone | restart |  |
+| `ESC_DOUBLE_PRESS_MAX_INTERVAL_SECONDS` | client (no effect), standalone | restart |  |
 | `DESK_DISPLAY_OFFLINE_START` | client | restart |  |
 | `DESK_DISPLAY_OFFLINE_MAX_AGE_HOURS` | client | restart |  |
 | `ENABLE_SCREENSHOTS` | client, standalone | restart |  |
-| `ENABLE_VIDEO` | client, standalone | restart |  |
+| `ENABLE_VIDEO` | client (no effect), standalone | restart |  |
 | `SCREENSHOT_DIR` | client, standalone | restart |  |
 | `SCREENSHOT_ARCHIVE_BASE` | client, standalone | restart |  |
 | `FEED_UPLOAD_URL` | client, standalone | restart |  |
@@ -660,10 +660,10 @@ installs only, never clients.
 | `IP_WITH_TIME` | standalone | restart |  |
 | `DESK_DISPLAY_LOG_LEVEL` | server, client, standalone | restart |  |
 | `FEED_UPLOAD_LOG_LEVEL` | client, standalone | restart |  |
-| `DESK_DISPLAY_GC_INTERVAL_SECONDS` | server, client, standalone | restart |  |
-| `DESK_DISPLAY_DIAGNOSTIC_CONTROL_PATH` | server, client, standalone | restart |  |
-| `DESK_DISPLAY_TEST_SCREEN` | client, standalone | restart |  |
-| `DESK_DISPLAY_TEST_SCREEN_DELAY` | client, standalone | restart |  |
+| `DESK_DISPLAY_GC_INTERVAL_SECONDS` | server (no effect), client, standalone | restart |  |
+| `DESK_DISPLAY_DIAGNOSTIC_CONTROL_PATH` | server (no effect), client (no effect), standalone | restart |  |
+| `DESK_DISPLAY_TEST_SCREEN` | client (no effect), standalone | restart |  |
+| `DESK_DISPLAY_TEST_SCREEN_DELAY` | client (no effect), standalone | restart |  |
 | `RES_OPTIONS` | server, client, standalone | restart |  |
 | `LOCALDOMAIN` | server, client, standalone | restart |  |
 | `HOSTALIASES` | server, client, standalone | restart |  |

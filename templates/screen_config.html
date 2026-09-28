@@ -95,6 +95,7 @@
     }
     .diagnostic-controls h2 { margin: 0 0 0.35rem; font-size: 1.05rem; }
     .diagnostic-controls p { margin: 0 0 0.75rem; color: #cbd5e1; font-size: 0.88rem; }
+    .server-mode-note a { color: inherit; }
     .diagnostic-actions { display: flex; gap: 0.6rem; flex-wrap: wrap; }
     .diagnostic-actions select { flex: 1 1 280px; padding: var(--field-padding); border-radius: var(--field-radius); }
     .toolbar,
@@ -531,6 +532,12 @@
       {{ service_status.summary }}
     {% endif %}
   </div>
+  {% if server_mode %}
+  <section class="diagnostic-controls server-mode-note" aria-labelledby="serverModeHeading">
+    <h2 id="serverModeHeading">This page does not choose what displays play</h2>
+    <p>Displays play the playlists on the <a href="/playlists">Playlists</a> page, assigned on the <a href="/clients">Clients</a> page. The screen order, frequencies and alternates here are the standalone rotation: nothing plays them on this server, but "Create from current rotation" on the Playlists page starts a playlist from them. Scroll speeds, quad pages and screen styles saved here do apply to every display.</p>
+  </section>
+  {% else %}
   <section class="diagnostic-controls" aria-labelledby="diagnosticHeading">
     <h2 id="diagnosticHeading">Single-screen diagnostic playback</h2>
     <p id="diagnosticStatus">{% if diagnostic_screen %}Web playback request: <strong>{{ diagnostic_screen }}</strong>.{% else %}No web playback request; normal rotation is requested.{% endif %} Changes take effect after the current screen finishes. A fixed command-line or environment selection takes precedence.</p>
@@ -543,6 +550,7 @@
       <button class="btn-secondary" id="stopDiagnosticBtn" type="button">Resume rotation</button>
     </div>
   </section>
+  {% endif %}
 
   <div class="panel">
     <div class="toolbar">
@@ -1663,11 +1671,11 @@
       } catch (err) { showError(err.message); }
     }
 
-    startDiagnosticBtn.addEventListener("click", () => {
+    if (startDiagnosticBtn) startDiagnosticBtn.addEventListener("click", () => {
       if (!diagnosticScreen.value) return showError("Choose a screen to diagnose first.");
       setDiagnosticPlayback(diagnosticScreen.value);
     });
-    stopDiagnosticBtn.addEventListener("click", () => setDiagnosticPlayback(null));
+    if (stopDiagnosticBtn) stopDiagnosticBtn.addEventListener("click", () => setDiagnosticPlayback(null));
 
     saveBtn.addEventListener("click", saveConfiguration);
     saveBtnBottom.addEventListener("click", saveConfiguration);

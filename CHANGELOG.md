@@ -34,6 +34,14 @@ See the README's [deployment modes](README.md#deployment-modes) and
   uploader take the panel's settings from `.env.client`; and each heartbeat
   response carries the weather and Cubs/Blackhawks summary the OLED helper
   shows, so the side displays work on clients.
+- On a server or combined install, the config UI's Screens page says that
+  displays play playlists, and single-screen diagnostic playback (which only
+  `main.py` performs) is hidden and refused. Scroll-speed changes saved there
+  now re-render every display. Settings a role accepts but never reads (for
+  example `ESC_DOUBLE_PRESS_ACTION` or `DESK_DISPLAY_TEST_SCREEN` on a client)
+  log a startup warning, are marked "no effect" in CONFIGURATION.md and are
+  left out of the role's example file. `ESC_DOUBLE_PRESS_ACTION` now accepts
+  `main.py`'s actual choices (`stop`, `restart`, `toggle`).
 - Migration: `scripts/migrate_standalone_config.py` moves a standalone rotation
   onto the server, and `scripts/convert_env.py` converts an existing `.env`.
   `--config FILE` migrates a rotation copied from another display, and a

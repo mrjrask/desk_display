@@ -1170,18 +1170,28 @@ def _query_service_status(unit_name: str) -> dict[str, Any]:
 
 
 def _installed_mode(project_dir: Path) -> Any:
-    """The install mode recorded by the installer, guessed for older installs."""
+    """The install mode recorded by the installer, detected for older installs.
+
+    Unmarked installs are classified by their installed units and then by the
+    roles their env files ask for, the same way the installers do.
+    """
 
     import install_modes
+
+    return install_modes.detect_mode(project_dir)
+
+
+def _serves_displays() -> bool:
+    """Whether this install is a render server, whose displays play playlists.
+
+    There the Screens page edits only the standalone rotation (which seeds new
+    playlists), and single-screen diagnostic playback has no player to drive.
+    """
+
     import service_units
 
-    installed = install_modes.read_marker(project_dir)
-    if installed is not None:
-        return installed.mode
-    # Older installs have no marker; a client env file means a client panel.
-    if (project_dir / ".env.client").is_file():
-        return service_units.Mode.CLIENT
-    return service_units.Mode.STANDALONE
+    return _installed_mode(Path(__file__).resolve().parent) in (service_units.Mode.SERVER,
+                                                                 service_units.Mode.COMBINED)
 
 
 def _panel_service_unit() -> str:
@@ -1524,6 +1534,7 @@ def screen_config() -> str:
         playlist_assignments=playlist_assignments,
         service_status=_load_service_status(),
         diagnostic_screen=load_diagnostic_screen(),
+        server_mode=_serves_displays(),
     )
 
 
@@ -1613,6 +1624,8 @@ def get_screens() -> Any:
 
 @app.route("/api/diagnostic-playback", methods=["GET", "POST"])
 def diagnostic_playback() -> Any:
+    if request.method == "POST" and _serves_displays():
+        return jsonify({"error": "single-screen playback is standalone only; displays play their playlists"}), 409
     if request.method == "GET":
         return jsonify({"screen_id": load_diagnostic_screen()})
     payload = request.get_json(silent=True)
