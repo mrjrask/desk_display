@@ -20,7 +20,7 @@ def test_fetch_uses_fbs_group_and_keeps_only_top_25_games(monkeypatch):
 
     games = ncaa_fbs_scoreboard._fetch_games_for_date(dt.date(2026, 9, 26))
 
-    assert captured == {"dates": "20260926", "limit": 300, "groups": 80}
+    assert captured == {"dates": "20260926", "groups": 80}
     assert [game["id"] for game in games] == ["ranked"]
 
 
@@ -30,15 +30,13 @@ def test_forbidden_primary_host_falls_back_to_other_espn_hosts(monkeypatch):
 
     def fake_fetch(params, url=ncaa_fbs_scoreboard.ESPN_URL):
         requested.append(url)
-        if url == ncaa_fbs_scoreboard.ESPN_URL:
-            raise RuntimeError("403 Client Error: Forbidden")
-        if "site.web.api" in url:
+        if "cdn.espn.com" not in url:
             raise RuntimeError("403 Client Error: Forbidden")
         return {"content": {"sbData": {"events": [ranked]}}}
 
     monkeypatch.setattr(ncaa_fbs_scoreboard, "_fetch_json", fake_fetch)
 
-    games = ncaa_fbs_scoreboard.fetch_games_for_range(dt.date(2026, 9, 28), dt.date(2026, 10, 4))
+    games = ncaa_fbs_scoreboard.fetch_games_for_day(dt.date(2026, 9, 26))
 
     assert requested == [ncaa_fbs_scoreboard.ESPN_URL, *ncaa_fbs_scoreboard.ESPN_FALLBACK_URLS]
     assert [game["id"] for game in games] == ["ranked"]
@@ -72,7 +70,7 @@ def test_all_hosts_failing_raises(monkeypatch):
     monkeypatch.setattr(ncaa_fbs_scoreboard, "_fetch_json", fake_fetch)
 
     try:
-        ncaa_fbs_scoreboard.fetch_games_for_range(dt.date(2026, 9, 28), dt.date(2026, 10, 4))
+        ncaa_fbs_scoreboard.fetch_games_for_day(dt.date(2026, 9, 26))
     except RuntimeError as exc:
         assert "Forbidden" in str(exc)
     else:  # pragma: no cover - the fetch must not look like an empty week
@@ -117,26 +115,57 @@ def _game(game_id, date, *, state="post", away_rank=None, home_rank=None):
     }
 
 
-def test_sunday_shows_the_weekends_games_in_one_request(monkeypatch):
+def test_primary_host_is_site_web_api():
+    assert ncaa_fbs_scoreboard.ESPN_URL.startswith("https://site.web.api.espn.com/")
+
+
+def test_sunday_shows_the_weekends_games_one_day_per_request(monkeypatch):
     from services.sports import ncaa_fbs
 
+    days = {
+        dt.date(2026, 9, 26): [_game("sat-late", "2026-09-27T01:00Z"), _game("sat", "2026-09-26T16:00Z")],
+        dt.date(2026, 9, 25): [_game("fri", "2026-09-26T00:00Z")],
+    }
     requested = []
 
-    def fake_fetch(start, end):
-        requested.append((start, end))
-        return [
-            _game("sat-late", "2026-09-27T01:00Z"),
-            _game("sat", "2026-09-26T16:00Z"),
-            _game("fri", "2026-09-26T00:00Z"),
-        ]
+    def fake_fetch(day):
+        requested.append(day)
+        return days.get(day, [])
 
-    monkeypatch.setattr(ncaa_fbs, "fetch_games_for_range", fake_fetch)
+    monkeypatch.setattr(ncaa_fbs, "fetch_games_for_day", fake_fetch)
+    ncaa_fbs._FINAL_DAY_CACHE.clear()
 
     sunday = dt.datetime(2026, 9, 27, 12, 0, tzinfo=ncaa_fbs.CENTRAL_TIME)
     games = ncaa_fbs.fetch_scoreboard(now=sunday)
 
-    assert requested == [(dt.date(2026, 9, 21), dt.date(2026, 9, 27))]
+    assert requested == [dt.date(2026, 9, 21) + dt.timedelta(days=offset) for offset in range(7)]
     assert [game["id"] for game in games] == ["fri", "sat", "sat-late"]
+
+
+def test_finished_past_days_are_not_refetched(monkeypatch):
+    from services.sports import ncaa_fbs
+
+    calls = []
+
+    def fake_fetch(day):
+        calls.append(day)
+        if day == dt.date(2026, 10, 1):
+            return [_game("thu", "2026-10-01T23:00Z")]
+        if day == dt.date(2026, 10, 3):
+            return [_game("sat", "2026-10-03T16:00Z", state="pre")]
+        return []
+
+    monkeypatch.setattr(ncaa_fbs, "fetch_games_for_day", fake_fetch)
+    ncaa_fbs._FINAL_DAY_CACHE.clear()
+    friday = dt.datetime(2026, 10, 2, 12, 0, tzinfo=ncaa_fbs.CENTRAL_TIME)
+
+    ncaa_fbs.fetch_scoreboard(now=friday)
+    calls.clear()
+    games = ncaa_fbs.fetch_scoreboard(now=friday)
+
+    assert dt.date(2026, 10, 1) not in calls
+    assert dt.date(2026, 10, 3) in calls
+    assert [game["id"] for game in games] == ["thu", "sat"]
 
 
 def test_week_matches_espn_monday_to_sunday_calendar():
@@ -161,20 +190,22 @@ def test_week_rolls_over_on_monday_morning_cutoff():
 def test_failed_fetch_keeps_last_good_games_for_the_same_week(monkeypatch):
     from services.sports import ncaa_fbs
 
-    results = [[_game("thu", "2026-10-01T23:00Z")]]
+    fail = {"on": False}
 
-    def fake_fetch(start, end):
-        if results:
-            return results.pop()
-        raise RuntimeError("403 Client Error: Forbidden")
+    def fake_fetch(day):
+        if fail["on"]:
+            raise RuntimeError("403 Client Error: Forbidden")
+        return [_game("sat", "2026-10-03T16:00Z", state="pre")] if day == dt.date(2026, 10, 3) else []
 
-    monkeypatch.setattr(ncaa_fbs, "fetch_games_for_range", fake_fetch)
+    monkeypatch.setattr(ncaa_fbs, "fetch_games_for_day", fake_fetch)
     ncaa_fbs._LAST_GOOD.clear()
+    ncaa_fbs._FINAL_DAY_CACHE.clear()
     friday = dt.datetime(2026, 10, 2, 12, 0, tzinfo=ncaa_fbs.CENTRAL_TIME)
     next_week = dt.datetime(2026, 10, 6, 12, 0, tzinfo=ncaa_fbs.CENTRAL_TIME)
 
-    assert [game["id"] for game in ncaa_fbs.fetch_scoreboard(now=friday)] == ["thu"]
-    assert [game["id"] for game in ncaa_fbs.fetch_scoreboard(now=friday)] == ["thu"]
+    assert [game["id"] for game in ncaa_fbs.fetch_scoreboard(now=friday)] == ["sat"]
+    fail["on"] = True
+    assert [game["id"] for game in ncaa_fbs.fetch_scoreboard(now=friday)] == ["sat"]
     assert ncaa_fbs.fetch_scoreboard(now=next_week) == []
 
 

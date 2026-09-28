@@ -168,9 +168,10 @@ See the README's [deployment modes](README.md#deployment-modes) and
   and the service banner reports `desk_display_client.service` there instead
   of the disabled standalone `desk_display.service`.
 - The NCAA FBS Scoreboard shows the whole Monday–Sunday week of Top 25
-  games, matching ESPN's college football weeks. The week loads in one request,
-  falls back to ESPN's other scoreboard hosts when one refuses the Pi (403),
-  and keeps the last good games for the week if every host fails. Each ranked team's poll ranking is drawn as a small superscript
+  games, matching ESPN's college football weeks. It reads ESPN's
+  site.web.api host one day at a time (site.api.espn.com refuses the server
+  Pi with 403), falls back to ESPN's other hosts, and keeps the last good
+  games for the week if every host fails. Each ranked team's poll ranking is drawn as a small superscript
   number before its logo (or abbreviation); unranked teams get none.
 - The `inside` screen works on display clients with an indoor sensor. The
   client reads its own sensor, set by `INSIDE_SENSOR`, `INSIDE_I2C_BUSES` and

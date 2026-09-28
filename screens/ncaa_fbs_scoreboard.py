@@ -53,11 +53,15 @@ def _scale_y(value: int) -> int:
 REQUEST_TIMEOUT = 10
 SCREEN_ID = "NCAA FBS Scoreboard"
 LOGO_DIR = os.path.join(IMAGES_DIR, "ncaa")
-ESPN_URL = "https://site.api.espn.com/apis/site/v2/sports/football/college-football/scoreboard"
-# Tried in order when a host refuses (ESPN answers 403 from some networks).
-# Each is a separate host, so a 403 cooldown on one does not skip the others.
+# site.web.api.espn.com is primary: site.api.espn.com answers 403 to the
+# college football scoreboard from some networks (seen on the server Pi).
+# site.web.api rejects ranged dates and large limits (400), so every request
+# asks for a single day with ESPN's default limit.
+ESPN_URL = "https://site.web.api.espn.com/apis/site/v2/sports/football/college-football/scoreboard"
+# Tried in order when a host refuses. Each is a separate host, so a 403
+# cooldown on one does not skip the others.
 ESPN_FALLBACK_URLS = (
-    "https://site.web.api.espn.com/apis/site/v2/sports/football/college-football/scoreboard",
+    "https://site.api.espn.com/apis/site/v2/sports/football/college-football/scoreboard",
     "https://cdn.espn.com/core/college-football/scoreboard",
 )
 MODE_TOP25 = "top25"
@@ -184,13 +188,10 @@ def _ranked_games(raw_events: list[dict]) -> list[dict]:
     return filtered
 
 
-def fetch_games_for_range(start: datetime.date, end: datetime.date) -> list[dict]:
-    """Return Top 25 games from *start* to *end* in one request; raise on failure."""
+def fetch_games_for_day(day: datetime.date) -> list[dict]:
+    """Return one day's Top 25 games; raise when no ESPN host answers."""
 
-    dates = start.strftime("%Y%m%d")
-    if end != start:
-        dates = f"{dates}-{end.strftime('%Y%m%d')}"
-    return _ranked_games(_fetch_events({"dates": dates, "limit": 300, "groups": 80}))
+    return _ranked_games(_fetch_events({"dates": day.strftime("%Y%m%d"), "groups": 80}))
 
 
 def _extract_seed(competitor: dict[str, Any]) -> str:
@@ -300,7 +301,7 @@ def _normalize_event(event: dict[str, Any]) -> dict[str, Any]:
 
 def _fetch_games_for_date(day: datetime.date, mode: Optional[str] = None) -> list[dict]:
     try:
-        return fetch_games_for_range(day, day)
+        return fetch_games_for_day(day)
     except Exception as exc:
         logging.error("Failed to fetch NCAA FBS scoreboard for %s: %s", day, exc)
         return []

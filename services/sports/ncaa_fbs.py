@@ -7,12 +7,16 @@ import logging
 import threading
 
 from config import CENTRAL_TIME
-from screens.ncaa_fbs_scoreboard import _scoreboard_date, fetch_games_for_range
+from screens.ncaa_fbs_scoreboard import _scoreboard_date, fetch_games_for_day
 
 # The last week that loaded, reused when every ESPN host fails so a transient
 # block does not blank the board.
 _LAST_GOOD: dict[str, object] = {}
 _LAST_GOOD_LOCK = threading.Lock()
+
+# Days whose Top 25 games are all final never change again, so refreshes
+# reuse them instead of re-requesting every day of the week.
+_FINAL_DAY_CACHE: dict[dt.date, list[dict]] = {}
 
 
 def scoreboard_date(now: dt.datetime | None = None) -> dt.date:
@@ -35,6 +39,28 @@ def week_dates(day: dt.date) -> list[dt.date]:
     return [start + dt.timedelta(days=offset) for offset in range(7)]
 
 
+def _all_final(games: list[dict]) -> bool:
+    return bool(games) and all(
+        str(((game.get("status") or {}).get("type") or {}).get("state") or "").lower() == "post"
+        or bool(((game.get("status") or {}).get("type") or {}).get("completed"))
+        for game in games
+    )
+
+
+def _games_for_day(day: dt.date, today: dt.date) -> list[dict]:
+    with _LAST_GOOD_LOCK:
+        cached = _FINAL_DAY_CACHE.get(day)
+    if cached is not None:
+        return list(cached)
+    games = fetch_games_for_day(day)
+    if day < today and _all_final(games):
+        with _LAST_GOOD_LOCK:
+            _FINAL_DAY_CACHE[day] = list(games)
+            for stale_day in [d for d in _FINAL_DAY_CACHE if d < day - dt.timedelta(days=14)]:
+                del _FINAL_DAY_CACHE[stale_day]
+    return games
+
+
 def _game_sort_key(indexed: tuple[int, dict]) -> tuple[str, int]:
     index, game = indexed
     return (str(game.get("date") or ""), index)
@@ -45,15 +71,18 @@ def fetch_scoreboard(
 ) -> list[dict]:
     """Return every Top 25 game in the Monday-Sunday week, oldest first.
 
-    The whole week is one request (ESPN refuses clients that hammer it). If
-    every ESPN host fails, the last games loaded for the same week are kept.
+    ESPN is asked one day at a time (the working host rejects ranged
+    dates). If any day fails on every ESPN host, the last games loaded for
+    the same week are kept rather than showing a partial or empty week.
     """
 
     current_now = now or dt.datetime.now(CENTRAL_TIME)
     target_day = day or scoreboard_date(current_now)
     days = week_dates(target_day)
+    fetched: list[dict] = []
     try:
-        fetched = fetch_games_for_range(days[0], days[-1])
+        for week_day in days:
+            fetched.extend(_games_for_day(week_day, current_now.date()))
     except Exception as exc:
         with _LAST_GOOD_LOCK:
             stale = _LAST_GOOD.get("games") if _LAST_GOOD.get("week") == days[0] else None
