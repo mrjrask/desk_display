@@ -323,7 +323,7 @@ def test_sync_never_blocks_display_updates(env):
     try:
         started = time.monotonic()
         assert client.step()[0] in {"date", "weather1"}
-        client.on_button("B")
+        client.on_button("A")
         client.wait(10)  # a button press ends the hold at once
         assert client.step()[0] in {"date", "weather1"}
         assert time.monotonic() - started < 1
@@ -845,3 +845,95 @@ def test_clock_screens_start_the_update_check_at_most_once_a_minute(env):
 
 def test_built_client_only_checks_updates_on_real_hardware(env):
     assert env.make_client()._update_check is None
+
+
+class ButtonPresenter(Presenter):
+    def __init__(self):
+        super().__init__()
+        self.backlight = []
+        self.indicator = True
+
+    def set_backlight(self, level):
+        self.backlight.append(level)
+        return level
+
+    def toggle_update_indicator(self):
+        self.indicator = not self.indicator
+        return self.indicator
+
+
+def test_buttons_do_what_they_did_in_v01(env):
+    env.publish("date")
+    env.publish("weather1")
+    client = synced(env, env.make_client())
+    client.presenter = presenter = ButtonPresenter()
+    restarts = []
+    client._restart_service = lambda: restarts.append(True)
+
+    first = client.step()[0]
+    client.on_button("A")  # next screen
+    assert client._controls_pending()
+    second = client.step()[0]
+    assert {first, second} == {"date", "weather1"}
+
+    client.on_button("B")  # display off: blank, backlight off, held until B again
+    assert client.step() == (None, display_client.DARK_POLL_SECONDS)
+    assert presenter.backlight[-1] == 0.0
+    assert presenter.frames[-1].getbbox() is None
+    assert client.report.playback_state == "paused"
+    client.on_button("A")  # other buttons don't wake it
+    assert client.step()[0] is None
+    client.on_button("B")
+    assert client.step()[0] in {"date", "weather1"}
+    assert presenter.backlight[-1] == 1.0
+
+    client.on_button("X")  # update indicator toggle
+    client.step()
+    assert presenter.indicator is False
+
+    client.on_button("Y")  # restart the service
+    client.step()
+    assert restarts == [True]
+
+
+def test_screens_hold_for_v01s_screen_delay(env):
+    env.publish("date")
+    env.publish("weather1")
+    client = synced(env, env.make_client())
+    assert display_client.DEFAULT_SCREEN_SECONDS == 4.0
+    assert client.step()[1] == pytest.approx(4.0)
+
+
+class FakeWifi:
+    def __init__(self, eligible=True):
+        self.eligible = eligible
+        self.started = []
+
+    def should_monitor_wifi(self):
+        return self.eligible
+
+    def start_monitor(self, allow_recovery=True):
+        self.started.append(allow_recovery)
+
+
+def test_client_starts_the_wifi_monitor_like_v01(monkeypatch):
+    monkeypatch.delenv("ENABLE_WIFI_MONITOR", raising=False)
+    monkeypatch.delenv("ENABLE_WIFI_RECOVERY", raising=False)
+    wifi = FakeWifi()
+    assert display_client.start_wifi_monitor({"ENABLE_WIFI_MONITOR": True, "ENABLE_WIFI_RECOVERY": True}, wifi)
+    assert wifi.started == [True]
+
+    wifi = FakeWifi()
+    settings = {"ENABLE_WIFI_MONITOR": True, "ENABLE_WIFI_RECOVERY": False}
+    assert display_client.start_wifi_monitor(settings, wifi) and wifi.started == [False]
+
+    wifi = FakeWifi()
+    assert not display_client.start_wifi_monitor({"ENABLE_WIFI_MONITOR": False}, wifi)
+    assert not display_client.start_wifi_monitor({}, FakeWifi(eligible=False))
+    assert wifi.started == []
+
+    # Low-power panels leave it off unless it is asked for explicitly, as v0.1 did.
+    low = {"DESK_DISPLAY_LOW_POWER": True, "ENABLE_WIFI_MONITOR": True}
+    assert not display_client.start_wifi_monitor(low, FakeWifi())
+    monkeypatch.setenv("ENABLE_WIFI_MONITOR", "1")
+    assert display_client.start_wifi_monitor(low, FakeWifi())

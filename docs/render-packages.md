@@ -136,8 +136,10 @@ profiles):
   on the next tap.
 - Elsewhere, the left half of the screen goes back and the right half skips.
 
-Buttons skip (B, Y, right, next) or go back (A, X, left, previous). Taps
-and focus changes stay on the client. The server learns only the current
+Buttons work as they did in v0.1: A skips to the next screen, B switches the
+display off and on, X switches the update indicator (LED and border) off and
+on, and Y restarts `desk_display_client.service`. Keys named right or next
+skip, and left or previous go back. Taps and focus changes stay on the client. The server learns only the current
 screen and playback state from the heartbeat, and renders quad tiles in
 advance as interaction dependencies for touch clients.
 

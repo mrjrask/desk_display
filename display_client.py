@@ -57,7 +57,8 @@ if _DOTENV_FILE_SET:
 LOGGER = logging.getLogger("desk_display.client")
 _PROJECT_ROOT = Path(__file__).resolve().parent
 DEFAULT_CACHE_DIR = _PROJECT_ROOT / "cache" / "client"
-DEFAULT_SCREEN_SECONDS = 10.0
+# v0.1's hold for a screen before its extra seconds (config.SCREEN_DELAY).
+DEFAULT_SCREEN_SECONDS = 4.0
 POLL_SECONDS = 0.05
 
 
@@ -204,6 +205,10 @@ class Controls:
     back: bool = False
     focus: str | None = None  # a quad tile's screen to open full screen
     unfocus: bool = False  # leave a focused tile and return to its quad
+    # v0.1's B, X and Y buttons, applied on the display loop's thread.
+    toggle_display: bool = False
+    toggle_indicator: bool = False
+    restart: bool = False
 
 
 class DisplayClient:
@@ -228,6 +233,7 @@ class DisplayClient:
         offline_start: bool = True,
         screenshots: ClientScreenshots | None = None,
         update_check: Callable[[], Any] | None = None,
+        restart_service: Callable[[], Any] | None = None,
     ) -> None:
         self.profile = profile
         self.presenter = presenter
@@ -268,6 +274,9 @@ class DisplayClient:
         self._update_check = update_check
         self._update_check_at: float | None = None
         self._update_check_thread: threading.Thread | None = None
+        # v0.1's B button: the panel is blanked until B is pressed again.
+        self.display_off = False
+        self._restart_service = restart_service
 
     # Playback
 
@@ -453,22 +462,70 @@ class DisplayClient:
         self._update_check_thread = threading.Thread(target=run, name="update-check", daemon=True)
         self._update_check_thread.start()
 
-    def _go_dark(self) -> tuple[None, float]:
-        entering = self.light_state != "dark"
-        self._apply_light("dark")
+    def _apply_buttons(self) -> None:
+        """Run v0.1's B (display on/off), X (update indicator) and Y (restart) actions."""
+
+        controls = self.controls
+        toggle_display, toggle_indicator, restart = (
+            controls.toggle_display, controls.toggle_indicator, controls.restart)
+        controls.toggle_display = controls.toggle_indicator = controls.restart = False
+        if toggle_indicator:
+            toggle = getattr(self.presenter, "toggle_update_indicator", None)
+            if callable(toggle):
+                try:
+                    enabled = toggle()
+                    LOGGER.info("X button: update indicator %s", "enabled" if enabled else "disabled")
+                except Exception:  # noqa: BLE001 - an LED fault must never stop playback
+                    LOGGER.debug("Update indicator toggle failed", exc_info=True)
+        if toggle_display:
+            self.display_off = not self.display_off
+            LOGGER.info("B button: display toggled %s", "off" if self.display_off else "on")
+            if not self.display_off:
+                self.light_state = None  # restore the backlight for the current light state
+        if restart and self._restart_service is not None:
+            LOGGER.info("Y button: restarting the display client service")
+            try:
+                self._restart_service()
+            except Exception:  # noqa: BLE001
+                LOGGER.warning("Could not restart the display client service", exc_info=True)
+
+    def _go_off(self) -> tuple[None, float]:
+        """The B button's blank panel, held until B is pressed again."""
+
+        entering = self.light_state != "off"
+        if entering:
+            self.light_state = "off"
+            set_backlight = getattr(self.presenter, "set_backlight", None)
+            if callable(set_backlight):
+                try:
+                    set_backlight(0.0)
+                except Exception:  # noqa: BLE001
+                    LOGGER.debug("Backlight control failed", exc_info=True)
+        self._blank("paused", entering)  # the protocol's state for a panel switched off by hand
+        return None, DARK_POLL_SECONDS
+
+    def _blank(self, state: str, entering: bool) -> None:
         self._set_led(None)
         self.animation = None
         self._current = None
-        self.controls = Controls()  # buttons do nothing while the panel is dark
-        self.report.playback_state = "dark"
+        self.report.playback_state = state
         self.report.current_screen = None
         if entering:
             self.presenter.present(Image.new(self.profile.color_mode, (self.profile.width, self.profile.height)))
+
+    def _go_dark(self) -> tuple[None, float]:
+        entering = self.light_state != "dark"
+        self._apply_light("dark")
+        self.controls = Controls()  # skip and back do nothing while the panel is dark
+        self._blank("dark", entering)
         return None, DARK_POLL_SECONDS
 
     def step(self) -> tuple[str | None, float]:
         """Present a screen's first frame; return ``(screen_id, seconds to show it)``."""
 
+        self._apply_buttons()
+        if self.display_off:
+            return self._go_off()
         light = self.dark_hours.state()
         if light == "dark":
             return self._go_dark()
@@ -550,7 +607,8 @@ class DisplayClient:
 
     def _controls_pending(self) -> bool:
         c = self.controls
-        return c.skip or c.back or c.focus is not None or c.unfocus
+        return (c.skip or c.back or c.focus is not None or c.unfocus
+                or c.toggle_display or c.toggle_indicator or c.restart)
 
     def _poll_taps(self) -> None:
         poll = getattr(self.presenter, "poll_taps", None)
@@ -639,10 +697,18 @@ class DisplayClient:
         return target if target is not None and player.item_for(target) is not None else None
 
     def on_button(self, name: str) -> None:
-        if name in {"B", "Y", "right", "next"}:
+        """v0.1's buttons: A next screen, B display on/off, X update indicator, Y restart."""
+
+        if name in {"A", "right", "next"}:
             self.controls.skip = True
-        elif name in {"A", "X", "left", "previous"}:
+        elif name in {"left", "previous"}:
             self.controls.back = True
+        elif name == "B":
+            self.controls.toggle_display = True
+        elif name == "X":
+            self.controls.toggle_indicator = True
+        elif name == "Y":
+            self.controls.restart = True
 
     def run(self) -> None:
         with_buttons = getattr(self.presenter, "set_button_callback", None)
@@ -687,6 +753,49 @@ def _check_for_updates() -> None:
 
     check_github_updates()
     check_apt_updates()
+
+
+def _restart_client_service() -> None:
+    """v0.1's Y button: restart this device's display service (the client's here)."""
+
+    import subprocess
+
+    from service_units import CLIENT_SERVICE
+
+    result = subprocess.run(["sudo", "systemctl", "--no-block", "restart", CLIENT_SERVICE], check=False)
+    if result.returncode != 0:
+        LOGGER.error("%s restart returned exit code %s", CLIENT_SERVICE, result.returncode)
+
+
+def start_wifi_monitor(settings: dict[str, Any], wifi: Any = None) -> bool:
+    """Start v0.1's Wi-Fi monitor and recovery; return whether it started.
+
+    A client depends on the network to stay current, so it watches Wi-Fi the
+    way main.py does. The monitor skips wired-only hosts itself.
+    """
+
+    # Unset, both follow v0.1's default: on unless DESK_DISPLAY_LOW_POWER.
+    low_power = _truthy(settings.get("DESK_DISPLAY_LOW_POWER", False))
+
+    def enabled(name: str) -> bool:
+        if low_power and not (os.environ.get(name) or "").strip():
+            return False
+        return _truthy(settings.get(name, True))
+
+    if not enabled("ENABLE_WIFI_MONITOR"):
+        return False
+    if wifi is None:
+        from services import wifi_utils as wifi
+    try:
+        if not wifi.should_monitor_wifi():
+            LOGGER.info("Wi-Fi monitor skipped for the current network setup")
+            return False
+        wifi.start_monitor(allow_recovery=enabled("ENABLE_WIFI_RECOVERY"))
+    except Exception as exc:  # noqa: BLE001 - playback never depends on the monitor
+        LOGGER.warning("Wi-Fi monitor unavailable: %s", exc)
+        return False
+    LOGGER.info("Wi-Fi monitor started")
+    return True
 
 
 def _client_ip_text() -> str:
@@ -754,6 +863,7 @@ def build_client(settings: dict[str, Any], *, presenter: Any = None, transport: 
         screenshots=screenshots,
         ip_text=_client_ip_text,
         update_check=_check_for_updates if hardware else None,
+        restart_service=_restart_client_service if hardware else None,
     )
 
 
@@ -789,6 +899,7 @@ def main() -> None:  # pragma: no cover - exercised on hardware
 
         configure_native(profile)
     client = build_client(settings)
+    start_wifi_monitor(settings)
     try:
         client.run()
     except KeyboardInterrupt:

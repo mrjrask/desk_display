@@ -56,6 +56,13 @@ class HardwarePresenter:
                      color[2] * LED_INDICATOR_LEVEL)
         set_screen_led(color, self.display)
 
+    def toggle_update_indicator(self) -> bool:
+        """v0.1's X button: switch the update LED and border on or off."""
+
+        from utils import set_update_indicator_enabled, update_indicator_enabled
+
+        return set_update_indicator_enabled(not update_indicator_enabled(), self.display)
+
     def apply_indicator_border(self, image: Image.Image) -> Image.Image:
         """*image* with the current indicator border, as saved screenshots show it."""
 
