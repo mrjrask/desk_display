@@ -69,6 +69,7 @@ class ClientScreenshots:
         enabled: bool = True,
         max_per_screen: int = MAX_SCREENSHOTS_PER_SCREEN,
         now: Any = None,
+        feed_summary: Any = None,
     ) -> None:
         self.screenshot_dir = Path(screenshot_dir)
         self.current_dir = self.screenshot_dir / "current"
@@ -78,6 +79,8 @@ class ClientScreenshots:
         self._now = now or (lambda: datetime.datetime.now(datetime.timezone.utc))
         self.loop_iteration = 0
         self.play_counts: dict[str, int] = {}
+        # Returns the server's feed summary for the heartbeat (see remote_display.display_status).
+        self.feed_summary = feed_summary
 
     @classmethod
     def from_settings(cls, settings: dict[str, Any], profile: Any) -> ClientScreenshots:
@@ -141,6 +144,11 @@ class ClientScreenshots:
             "display": dict(self.display),
             "screen_play_counts": dict(self.play_counts),
         }
+        summary = self.feed_summary() if callable(self.feed_summary) else None
+        if isinstance(summary, dict):
+            for key in ("cubs", "hawks", "weather"):
+                if key in summary:
+                    payload[key] = summary[key]
         self.current_dir.mkdir(parents=True, exist_ok=True)
         data = (json.dumps(payload, indent=2) + "\n").encode("utf-8")
         _replace_atomically(self.current_dir / "display_status.json", lambda fh: fh.write(data))

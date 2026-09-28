@@ -103,3 +103,14 @@ def test_unusable_screenshot_paths_do_not_stop_the_client(tmp_path, monkeypatch)
     shots = ClientScreenshots.from_settings({"ENABLE_SCREENSHOTS": True}, PROFILE_PRESETS["hyperpixel4"])
     shots.record("date", Image.new("L", (4, 4)))  # logged, not raised
     assert not (tmp_path / "archive").exists()
+
+
+def test_heartbeat_carries_the_servers_feed_summary_for_the_oled_helper(tmp_path):
+    summary = {"weather": {"temp_f": 70, "condition": "Clear"}, "cubs": {"live_game": None, "last_game": None},
+               "unexpected": {"x": 1}}
+    shots = _writer(tmp_path, feed_summary=lambda: summary)
+    shots.record("date", Image.new("RGB", (720, 720)))
+    status = json.loads((tmp_path / "shots" / "current" / "display_status.json").read_text())
+    assert status["weather"] == {"temp_f": 70, "condition": "Clear"}
+    assert status["cubs"] == {"live_game": None, "last_game": None}
+    assert "unexpected" not in status and "hawks" not in status

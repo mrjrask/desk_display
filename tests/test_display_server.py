@@ -616,3 +616,37 @@ def test_feed_server_routes_are_unchanged():
              for rule in feed_server.app.url_map.iter_rules()}
     assert ("/api/feed/<source>/status", ("POST",)) in rules
     assert not any(rule.startswith("/api/v1") for rule, _ in rules)
+
+
+def test_heartbeat_carries_the_side_display_feed_summary(tmp_path, clock):
+    from types import MappingProxyType
+
+    from remote_display.display_status import feed_summary
+
+    feeds = MappingProxyType({
+        "weather": MappingProxyType({"current": MappingProxyType({
+            "temp": 71.5, "weather": (MappingProxyType({"description": "clear sky"}),)})}),
+        "cubs": MappingProxyType({"live": MappingProxyType({"gamePk": 7}), "last": None}),
+        "hawks": MappingProxyType({"live": None, "live_feed": None, "last": MappingProxyType({"id": 3})}),
+        "bears": MappingProxyType({"stand": ()}),
+    })
+    config = display_server.DisplayServerConfig(enrollment="shared", auth_token=SERVER_TOKEN,
+                                                admin_token=ADMIN_TOKEN, artifact_dir=tmp_path / "artifacts")
+    app = display_server.create_app(config, assignments=lambda _c: None, clock=clock,
+                                    display_status=lambda: feed_summary(feeds))
+    api = app.test_client()
+    credential = registered(api)
+    body = api.post("/api/v1/clients/office/heartbeat", json={"status": status()},
+                    headers=bearer(credential)).get_json()
+    assert body["display_status"] == {
+        "weather": {"temp_f": 71.5, "condition": "clear sky"},
+        "cubs": {"live_game": {"gamePk": 7}, "last_game": None},
+        "hawks": {"live_game": None, "live_feed": None, "last_game": {"id": 3}},
+    }
+
+
+def test_heartbeat_without_a_feed_summary_is_unchanged(api):
+    credential = registered(api)
+    body = api.post("/api/v1/clients/office/heartbeat", json={"status": status()},
+                    headers=bearer(credential)).get_json()
+    assert "display_status" not in body

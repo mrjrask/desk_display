@@ -4,7 +4,17 @@ set -euo pipefail
 log() { printf '[INFO] %s\n' "$*"; }
 warn() { printf '[WARN] %s\n' "$*"; }
 
-SERVICE_NAME="${SERVICE_NAME:-desk_display.service}"
+PROJECT_DIR="${PROJECT_DIR:-$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)}"
+# The service that drives the panel: desk_display_client.service on a client
+# or combined install, desk_display.service when standalone.
+if [[ -z "${SERVICE_NAME:-}" ]]; then
+  SERVICE_NAME="desk_display.service"
+  if command -v python3 >/dev/null 2>&1 && [[ -f "$PROJECT_DIR/install_modes.py" ]]; then
+    case "$(python3 "$PROJECT_DIR/install_modes.py" detect --project-dir "$PROJECT_DIR" 2>/dev/null || true)" in
+      client|combined) SERVICE_NAME="desk_display_client.service" ;;
+    esac
+  fi
+fi
 
 if [[ $EUID -ne 0 ]]; then
   SUDO="sudo"

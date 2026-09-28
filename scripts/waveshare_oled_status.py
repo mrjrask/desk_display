@@ -21,6 +21,12 @@ if __name__ == "__main__":
         sys.path.insert(0, str(Path(__file__).resolve().parent))
         from _venv_bootstrap import reexec_with_project_venv
     reexec_with_project_venv()
+    # On a client or combined install the panel's settings are in .env.client.
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+    import install_modes
+
+    install_modes.adopt_panel_env(Path(__file__).resolve().parents[1], names=("SCREENSHOT_DIR",),
+                                  prefixes=("WAVESHARE_OLED_",))
 
 import contextlib
 import json

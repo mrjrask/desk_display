@@ -567,6 +567,8 @@ class ClientSync:
         self._advertised: dict[str, int] = {}
         self._next_sync: float | None = None
         self._next_heartbeat: float | None = None
+        # The server's feed summary (weather, Cubs, Blackhawks) from the last heartbeat.
+        self.display_status: dict[str, Any] = {}
         # The server reported no assignment: keep playing the cache, but it is
         # no longer demand the server should render for.
         self.unassigned = False
@@ -881,6 +883,10 @@ class ClientSync:
         payload = response.json()
         payload = payload if isinstance(payload, dict) else {}
         self._note_cadence(payload)
+        summary = payload.get("display_status")
+        if isinstance(summary, dict):
+            # Written into display_status.json for the side OLED helper.
+            self.display_status = summary
         return payload
 
     def heartbeat_once(self) -> bool:

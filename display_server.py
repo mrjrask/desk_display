@@ -210,6 +210,7 @@ def create_app(
     data_health: Callable[[], Mapping[str, Any]] | None = None,
     render_executor: Any = None,
     playlist_documents: Callable[[str, str], Mapping[str, Any] | None] | None = None,
+    display_status: Callable[[], Mapping[str, Any]] | None = None,
 ) -> Flask:
     """Build the API.
 
@@ -218,7 +219,9 @@ def create_app(
     config response carries for the client's playlist cache.  With a
     ``renderer`` and ``revisions`` source the app also owns a
     :class:`RenderCoordinator` (``app.extensions["desk_display_render_coordinator"]``)
-    that the caller ticks or starts.
+    that the caller ticks or starts. ``display_status()`` returns the feed
+    summary (:func:`remote_display.display_status.feed_summary`) each
+    heartbeat response carries for the client's side displays.
     """
 
     config = config or DisplayServerConfig.from_env()
@@ -564,12 +567,21 @@ def create_app(
             demand = _with_interaction_targets(ClientDemand.from_wire(payload["demand"], path="demand"),
                                                record.capabilities)
         record = registry.heartbeat(record.client_id, _bearer() or "", status, demand)
-        return jsonify({
+        body = {
             "client_id": record.client_id,
             **_assignment_payload(record.client_id, delivered=True),
             "manifest_revision": _manifest(record)["manifest_revision"],
             **_lease(record),
-        })
+        }
+        if display_status is not None:
+            try:
+                summary = display_status()
+            except Exception:  # noqa: BLE001 - the heartbeat must not fail over a summary
+                WEB_LOGGER.debug("Display status summary failed", exc_info=True)
+            else:
+                if summary:
+                    body["display_status"] = deployment_config.scrub_secrets(dict(summary))
+        return jsonify(body)
 
     def _playlist_payload(assignment_payload: Mapping[str, Any]) -> dict[str, Any] | None:
         """The assigned playlist document, for the client's playlist cache."""
@@ -797,6 +809,7 @@ def run_display_server() -> None:
     deployment_config.startup_check("display server")
     settings = deployment_config.load_settings(Role.SERVER)
     from remote_display.server_rendering import ServerRendering
+    from remote_display.display_status import feed_summary
     from services.server_feeds import ServerFeedService
 
     from paths import resolve_cache_file_path
@@ -818,6 +831,7 @@ def run_display_server() -> None:
         renderer=rendering.render,
         revisions=rendering.revisions,
         data_health=rendering.health,
+        display_status=lambda: feed_summary(feeds.data.snapshot().values),
     )
     _start_maintenance(app.extensions["desk_display_maintenance"])
     registry = app.extensions["desk_display_registry"]

@@ -168,6 +168,11 @@ its next sync, and keeps playing from its cache in the meantime.
   most 8).
 
 The response repeats the assignment, `manifest_revision` and lease fields.
+It may also carry `display_status`: the server's feed summary for side
+displays (`weather {temp_f, condition}`, `cubs {live_game, last_game}` and
+`hawks {live_game, live_feed, last_game}`, as `main.py` writes them). The
+client copies it into its `display_status.json`, where the Waveshare OLED
+helper reads it. Older clients ignore the field.
 The client runs a full sync (config, heartbeat, manifest) every
 `DESK_DISPLAY_SYNC_INTERVAL_SECONDS` (default 30) and, when
 `DESK_DISPLAY_HEARTBEAT_INTERVAL_SECONDS` (default 60) is shorter,

@@ -132,6 +132,7 @@ except Exception as exc:
 
     wifi_utils = _WifiUtilsFallback()
 from diagnostic_playback import load_diagnostic_screen, normalize_screen_id
+from remote_display.display_status import feed_summary
 from paths import resolve_cache_file_path, resolve_screens_config_paths, resolve_storage_paths
 from schedule import (
     ScreenScheduler,
@@ -1813,34 +1814,7 @@ def _write_display_status(
             "height": HEIGHT,
         },
     }
-    cubs_cache = cache.get("cubs") if isinstance(cache, dict) else None
-    if isinstance(cubs_cache, dict):
-        payload["cubs"] = {
-            "live_game": cubs_cache.get("live"),
-            "last_game": cubs_cache.get("last"),
-        }
-    hawks_cache = cache.get("hawks") if isinstance(cache, dict) else None
-    if isinstance(hawks_cache, dict):
-        payload["hawks"] = {
-            "live_game": hawks_cache.get("live"),
-            "live_feed": hawks_cache.get("live_feed"),
-            "last_game": hawks_cache.get("last"),
-        }
-    weather_cache = cache.get("weather") if isinstance(cache, dict) else None
-    current_weather = weather_cache.get("current") if isinstance(weather_cache, dict) else None
-    if isinstance(current_weather, dict):
-        temp_f = (
-            current_weather.get("temp")
-            or current_weather.get("temp_f")
-            or current_weather.get("temperature")
-        )
-        condition = None
-        weather_list = current_weather.get("weather")
-        if isinstance(weather_list, list) and weather_list and isinstance(weather_list[0], dict):
-            description = weather_list[0].get("description")
-            if isinstance(description, str) and description.strip():
-                condition = description.strip()
-        payload["weather"] = {"temp_f": temp_f, "condition": condition}
+    payload.update(feed_summary(cache if isinstance(cache, dict) else None))
     if isinstance(screen_play_counts, dict):
         payload["screen_play_counts"] = {
             str(screen_name): int(count)
