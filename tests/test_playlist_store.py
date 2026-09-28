@@ -273,3 +273,21 @@ def test_store_is_not_env_and_path_is_configurable(tmp_path):
     assert path == tmp_path / "x.json"
     assert ps.store_path({}).name == "playlists.json"
     assert ps.store_path({}).suffix == ".json"
+
+
+def test_assignment_lookup_does_not_copy_the_store(store, monkeypatch):
+    """The render server looks assignments up on every request and tick."""
+
+    a = store.create("A", DOC, actor="jason")
+    store.assign("office", a["id"], expected_playlist_id=None, actor="jason")
+    store.assignment_for("office")  # loads (and canonicalizes) the file once
+    copies = []
+    original = ps.copy.deepcopy
+    monkeypatch.setattr(ps.copy, "deepcopy", lambda value, *args: (copies.append(1), original(value, *args))[1])
+    assert store.assignment_for("office").playlist_id == a["id"]
+    assert copies == []
+
+    other = PlaylistStore(store.path)  # e.g. the config UI's own instance
+    b = other.create("B", {"screens": {"date": 1}}, actor="jason")
+    other.assign("office", b["id"], expected_playlist_id=a["id"], actor="jason")
+    assert store.assignment_for("office").playlist_id == b["id"]

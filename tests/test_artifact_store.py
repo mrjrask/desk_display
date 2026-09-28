@@ -377,3 +377,20 @@ def test_open_object_rejects_bad_names(store):
     record = store.publish(key(), png())
     for name in ("../references.json", record.sha256, record.sha256 + ".txt", "x.png", "", record.name.upper()):
         assert store.open_object(name) is None, name
+
+
+def test_resolve_reuses_an_unchanged_lineage_and_sees_every_change(store, monkeypatch):
+    """The render coordinator resolves every key every tick; unchanged files are not re-read."""
+
+    first = store.publish(key(), png(color=1), refresh_seconds=60)
+    reads = []
+    original = ArtifactStore._read_json
+    monkeypatch.setattr(ArtifactStore, "_read_json",
+                        staticmethod(lambda path, default: (reads.append(path.name), original(path, default))[1]))
+    assert store.resolve("date", "hyperpixel4").record == first
+    assert store.resolve("date", "hyperpixel4").record == first
+    assert len(reads) == 1
+    second = store.publish(key(data="d2"), png(color=2), refresh_seconds=60)
+    assert store.resolve("date", "hyperpixel4").record == second
+    store.record_failure(key(data="d3"), "render_error", "boom")
+    assert store.resolve("date", "hyperpixel4").state == "fallback"
