@@ -62,7 +62,7 @@ def _game(game_id, date, *, state="post", away_rank=None, home_rank=None):
     }
 
 
-def test_monday_shows_last_weekends_games(monkeypatch):
+def test_sunday_shows_the_weekends_games(monkeypatch):
     from services.sports import ncaa_fbs
 
     days = {
@@ -78,22 +78,31 @@ def test_monday_shows_last_weekends_games(monkeypatch):
     monkeypatch.setattr(ncaa_fbs, "_fetch_games_for_date", fake_fetch)
     ncaa_fbs._FINAL_DAY_CACHE.clear()
 
-    monday = dt.datetime(2026, 9, 28, 12, 0, tzinfo=ncaa_fbs.CENTRAL_TIME)
-    games = ncaa_fbs.fetch_scoreboard(now=monday)
+    sunday = dt.datetime(2026, 9, 27, 12, 0, tzinfo=ncaa_fbs.CENTRAL_TIME)
+    games = ncaa_fbs.fetch_scoreboard(now=sunday)
 
-    assert requested[0] == dt.date(2026, 9, 23)
-    assert requested[-1] == dt.date(2026, 9, 29)
+    assert requested[0] == dt.date(2026, 9, 21)
+    assert requested[-1] == dt.date(2026, 9, 27)
     assert [game["id"] for game in games] == ["fri", "sat", "sat-late"]
 
 
-def test_week_rolls_over_on_wednesday_morning_cutoff():
+def test_week_matches_espn_monday_to_sunday_calendar():
     from services.sports import ncaa_fbs
 
-    before = dt.datetime(2026, 9, 30, 9, 0, tzinfo=ncaa_fbs.CENTRAL_TIME)
-    after = dt.datetime(2026, 9, 30, 11, 0, tzinfo=ncaa_fbs.CENTRAL_TIME)
+    assert ncaa_fbs.week_dates(dt.date(2026, 9, 28)) == [
+        dt.date(2026, 9, 28) + dt.timedelta(days=offset) for offset in range(7)
+    ]
+    assert ncaa_fbs.week_start_for_date(dt.date(2026, 10, 4)) == dt.date(2026, 9, 28)
 
-    assert ncaa_fbs.week_start_for_date(ncaa_fbs.scoreboard_date(before)) == dt.date(2026, 9, 23)
-    assert ncaa_fbs.week_start_for_date(ncaa_fbs.scoreboard_date(after)) == dt.date(2026, 9, 30)
+
+def test_week_rolls_over_on_monday_morning_cutoff():
+    from services.sports import ncaa_fbs
+
+    before = dt.datetime(2026, 9, 28, 9, 0, tzinfo=ncaa_fbs.CENTRAL_TIME)
+    after = dt.datetime(2026, 9, 28, 11, 0, tzinfo=ncaa_fbs.CENTRAL_TIME)
+
+    assert ncaa_fbs.week_start_for_date(ncaa_fbs.scoreboard_date(before)) == dt.date(2026, 9, 21)
+    assert ncaa_fbs.week_start_for_date(ncaa_fbs.scoreboard_date(after)) == dt.date(2026, 9, 28)
 
 
 def test_finished_past_days_are_not_refetched(monkeypatch):
@@ -103,23 +112,23 @@ def test_finished_past_days_are_not_refetched(monkeypatch):
 
     def fake_fetch(day):
         calls.append(day)
-        if day == dt.date(2026, 9, 26):
-            return [_game("sat", "2026-09-26T16:00Z")]
-        if day == dt.date(2026, 9, 29):
-            return [_game("tue", "2026-09-29T23:00Z", state="pre")]
+        if day == dt.date(2026, 10, 1):
+            return [_game("thu", "2026-10-01T23:00Z")]
+        if day == dt.date(2026, 10, 3):
+            return [_game("sat", "2026-10-03T16:00Z", state="pre")]
         return []
 
     monkeypatch.setattr(ncaa_fbs, "_fetch_games_for_date", fake_fetch)
     ncaa_fbs._FINAL_DAY_CACHE.clear()
-    monday = dt.datetime(2026, 9, 28, 12, 0, tzinfo=ncaa_fbs.CENTRAL_TIME)
+    friday = dt.datetime(2026, 10, 2, 12, 0, tzinfo=ncaa_fbs.CENTRAL_TIME)
 
-    ncaa_fbs.fetch_scoreboard(now=monday)
+    ncaa_fbs.fetch_scoreboard(now=friday)
     calls.clear()
-    games = ncaa_fbs.fetch_scoreboard(now=monday)
+    games = ncaa_fbs.fetch_scoreboard(now=friday)
 
-    assert dt.date(2026, 9, 26) not in calls
-    assert dt.date(2026, 9, 29) in calls
-    assert [game["id"] for game in games] == ["sat", "tue"]
+    assert dt.date(2026, 10, 1) not in calls
+    assert dt.date(2026, 10, 3) in calls
+    assert [game["id"] for game in games] == ["thu", "sat"]
 
 
 def test_rank_is_drawn_as_superscript_before_logo():

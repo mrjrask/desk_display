@@ -19,13 +19,14 @@ def scoreboard_date(now: dt.datetime | None = None) -> dt.date:
 
 
 def week_start_for_date(day: dt.date) -> dt.date:
-    """Return the Wednesday starting the display week that contains *day*.
+    """Return the Monday starting the display week that contains *day*.
 
-    Like the NFL scoreboard, a week runs Wednesday through Tuesday, so on a
-    Monday or Tuesday the board still shows the weekend just played.
+    Weeks run Monday through Sunday, matching ESPN's college football
+    calendar. The morning cutoff in ``scoreboard_date`` keeps the weekend's
+    scores up until Monday late morning.
     """
 
-    return day - dt.timedelta(days=(day.weekday() - 2) % 7)
+    return day - dt.timedelta(days=day.weekday())
 
 
 def week_dates(day: dt.date) -> list[dt.date]:
@@ -64,7 +65,7 @@ def _game_sort_key(indexed: tuple[int, dict]) -> tuple[str, int]:
 def fetch_scoreboard(
     *, day: dt.date | None = None, now: dt.datetime | None = None
 ) -> list[dict]:
-    """Return every Top 25 game in the Wednesday-Tuesday week, oldest first."""
+    """Return every Top 25 game in the Monday-Sunday week, oldest first."""
 
     current_now = now or dt.datetime.now(CENTRAL_TIME)
     target_day = day or scoreboard_date(current_now)
