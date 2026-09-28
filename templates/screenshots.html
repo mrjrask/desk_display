@@ -293,11 +293,13 @@
     <h1>Latest Screen Captures</h1>
     <p class="subtitle">Click any preview to view the full-resolution screenshot.</p>
     <nav class="nav-links">
-      <a href="/">Rotation Config</a>
+      {% if not screenshots_only %}<a href="/">Rotation Config</a>{% endif %}
       <a href="/screenshots">Screenshots</a>
       <a href="/feed">Feed</a>
-    <a href="/playlists">Playlists</a>
-    <a href="/clients">Clients</a>
+      {% if not screenshots_only %}
+      <a href="/playlists">Playlists</a>
+      <a href="/clients">Clients</a>
+      {% endif %}
     </nav>
     <div class="controls">
       <div class="play-counter" aria-live="polite">

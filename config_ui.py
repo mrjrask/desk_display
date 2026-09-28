@@ -406,6 +406,20 @@ def _require_authentication() -> Optional[Any]:
     return redirect(url_for("login", next=request.full_path if request.query_string else request.path))
 
 
+@app.before_request
+def _limit_client_install_to_screenshots() -> Optional[Any]:
+    if request.endpoint in _SCREENSHOTS_ONLY_ENDPOINTS or not _screenshots_only():
+        return None
+    if request.endpoint == "screen_config":
+        return redirect(url_for("screen_screenshots"))
+    abort(404)
+
+
+@app.context_processor
+def inject_screenshots_only() -> dict[str, bool]:
+    return {"screenshots_only": _screenshots_only()}
+
+
 def _load_config(path: str) -> dict[str, Any]:
     try:
         with open(path, encoding="utf-8") as fh:
@@ -1192,6 +1206,34 @@ def _serves_displays() -> bool:
 
     return _installed_mode(Path(__file__).resolve().parent) in (service_units.Mode.SERVER,
                                                                  service_units.Mode.COMBINED)
+
+
+def _screenshots_only() -> bool:
+    """Whether this is a client install, where only the screenshot pages exist.
+
+    A client plays what its server publishes, so its rotation, playlists and
+    displays are edited on the server's config UI; locally there is nothing
+    to configure, only the frames this panel has shown.
+    """
+
+    import service_units
+
+    return _installed_mode(Path(__file__).resolve().parent) is service_units.Mode.CLIENT
+
+
+# Endpoints a client install serves: the Screenshots and Feed pages, their data
+# and images, and sign-in.
+_SCREENSHOTS_ONLY_ENDPOINTS = frozenset({
+    "login",
+    "logout",
+    "static",
+    "screen_screenshots",
+    "screen_feed",
+    "get_screenshots",
+    "get_feed_screenshots",
+    "screenshot_current",
+    "screenshot_file",
+})
 
 
 def _panel_service_unit() -> str:

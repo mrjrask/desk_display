@@ -128,11 +128,16 @@ _SERVER = Unit(SERVER_SERVICE, "Desk Display - render server", "display_server.p
 _CLIENT = Unit(CLIENT_SERVICE, "Desk Display - display client", "display_client.py", ".env.client",
                role="client", unit=(("Conflicts", STANDALONE_SERVICE),))
 _CONFIG_UI = Unit(CONFIG_UI_SERVICE, "Desk Display Service - config UI", "config_ui.py", ".env")
+# A client has no rotation to edit, so config_ui.py serves only its Screenshots and
+# Feed pages there, reading the panel's screenshot paths from .env.client (never a
+# leftover .env from before the device became a client).
+_CLIENT_UI = Unit(CONFIG_UI_SERVICE, "Desk Display Service - screenshots page", "config_ui.py", ".env.client",
+                  role="client", service=(("Environment", "DESK_DISPLAY_DOTENV_FILE=.env.client"),))
 
 UNITS: Mapping[Mode, tuple[Unit, ...]] = {
     Mode.STANDALONE: (_STANDALONE, _CONFIG_UI),
     Mode.SERVER: (_SERVER, _CONFIG_UI),
-    Mode.CLIENT: (_CLIENT,),
+    Mode.CLIENT: (_CLIENT, _CLIENT_UI),
     Mode.COMBINED: (_SERVER, _CLIENT, _CONFIG_UI),
 }
 ALL_SERVICES = (STANDALONE_SERVICE, SERVER_SERVICE, CLIENT_SERVICE, CONFIG_UI_SERVICE)

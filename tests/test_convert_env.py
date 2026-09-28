@@ -112,7 +112,6 @@ def test_client_conversion_removes_every_credential(env_file):
     env = conversion.env
     for name in (
         "OWM_API_KEY",
-        "SCREEN_UI_PASSWORD",
         "DESK_DISPLAY_SERVER_ADMIN_TOKEN",
         "MY_OLD_API_KEY",
         "SOMETHING_ELSE",
@@ -120,6 +119,7 @@ def test_client_conversion_removes_every_credential(env_file):
     ):
         assert name not in env and name in names(conversion, "removed")
     assert "OWM_API_KEY_WIFFY" not in conversion.text  # even the commented-out credential
+    assert "SCREEN_UI_PASSWORD" not in names(conversion, "removed")  # guards the client's Screenshots page
     assert env["DESK_DISPLAY_PROFILE"] == "hyperpixel4_square" and env["DISPLAY_ROTATION"] == "180"
     assert env["DESK_DISPLAY_CLIENT_TOKEN"] == CLIENT_TOKEN and env[dc.ROLE_ENV] == "client"
     assert conversion.report.ok, conversion.render_report()

@@ -41,7 +41,7 @@ For the operator runbook — installing each mode, restarting, provisioning clie
 | --- | --- | --- | --- |
 | standalone | `main.py` fetches, renders and draws; `config_ui.py` | `.env` ([`.env.example`](.env.example)) | `bash Installers/install.sh --mode standalone <profile>` |
 | server | `display_server.py` renders for clients; `config_ui.py` | `.env` ([`.env.server.example`](.env.server.example)) | `bash Installers/install.sh --mode server` |
-| client | `display_client.py` plays what a server renders | `.env.client` ([`.env.client.example`](.env.client.example)) | `bash Installers/install.sh --mode client --credentials <file> <profile>` |
+| client | `display_client.py` plays what a server renders; `config_ui.py` serves only the Screenshots and Feed pages | `.env.client` ([`.env.client.example`](.env.client.example)) | `bash Installers/install.sh --mode client --credentials <file> <profile>` |
 | combined | server, config UI, and a client for the attached panel | `.env` and `.env.client` | `bash Installers/install.sh --mode combined <profile>` |
 
 The standalone mode is the v0.1 behavior and stays fully supported. The

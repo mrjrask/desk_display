@@ -129,12 +129,16 @@ def test_update_services_rewrites_a_recorded_client_install(tmp_path):
 
     run_update_services(project, systemd, systemctl, "--no-restart")
 
-    assert {p.name for p in systemd.iterdir()} == {su.CLIENT_SERVICE}
+    # An older client install gains the local Screenshots page.
+    assert {p.name for p in systemd.iterdir()} == {su.CLIENT_SERVICE, su.CONFIG_UI_SERVICE}
     client = su.parse_unit((systemd / su.CLIENT_SERVICE).read_text())["Service"]
     assert client["User"] == ["pi"] and "DISPLAY_ROTATION=90" in client["Environment"]
     assert any("prepare_kernel_session_env.sh" in line for line in client["ExecStartPre"])
+    ui = su.parse_unit((systemd / su.CONFIG_UI_SERVICE).read_text())["Service"]
+    assert ui["User"] == ["pi"] and ui["EnvironmentFile"] == [f"-{project}/.env.client"]
     calls = log.read_text()
-    assert f"enable {su.CLIENT_SERVICE}" in calls and "restart" not in calls
+    assert f"enable {su.CLIENT_SERVICE}" in calls and f"enable {su.CONFIG_UI_SERVICE}" in calls
+    assert "restart" not in calls
 
 
 STANDALONE_UNIT = """[Unit]

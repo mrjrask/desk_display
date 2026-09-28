@@ -59,7 +59,10 @@ Startup validation reports:
 
 - **Misplaced server settings on a client.** Any server-only or provider
   setting with a value in a client's environment is an error (for example
-  `OWM_API_KEY` or `SCREEN_UI_PASSWORD`). Remove it and set it on the server.
+  `OWM_API_KEY`). Remove it and set it on the server. The config UI settings
+  (`SCREEN_CONFIG_*`, `SCREEN_UI_*`, `SCREEN_SESSION_SECRET`,
+  `SCREEN_AUTH_ENABLED`) are allowed everywhere, because a client serves its
+  own Screenshots page.
 - **Missing identity or server settings.** A client needs
   `DESK_DISPLAY_CLIENT_ID`, `DESK_DISPLAY_SERVER_URL`,
   `DESK_DISPLAY_CLIENT_TOKEN`, and `DESK_DISPLAY_PROFILE`.
@@ -527,12 +530,12 @@ installs only, never clients.
 | `DESK_DISPLAY_CLIENT_REGISTRY_PATH` | server, standalone | restart |  |
 | `DESK_DISPLAY_CLIENT_LEASE_SECONDS` | server | restart |  |
 | `DESK_DISPLAY_STATIC_CLIENTS` | server | restart |  |
-| `SCREEN_CONFIG_HOST` | server, standalone | restart |  |
-| `SCREEN_CONFIG_PORT` | server, standalone | restart |  |
-| `SCREEN_UI_USERNAME` | server, standalone | restart |  |
-| `SCREEN_UI_PASSWORD` | server, standalone | restart | yes |
-| `SCREEN_SESSION_SECRET` | server, standalone | restart | yes |
-| `SCREEN_AUTH_ENABLED` | server, standalone | restart |  |
+| `SCREEN_CONFIG_HOST` | server, client, standalone | restart |  |
+| `SCREEN_CONFIG_PORT` | server, client, standalone | restart |  |
+| `SCREEN_UI_USERNAME` | server, client, standalone | restart |  |
+| `SCREEN_UI_PASSWORD` | server, client, standalone | restart | yes |
+| `SCREEN_SESSION_SECRET` | server, client, standalone | restart | yes |
+| `SCREEN_AUTH_ENABLED` | server, client, standalone | restart |  |
 | `FEED_SERVER_HOST` | server, standalone | restart |  |
 | `FEED_SERVER_PORT` | server, standalone | restart |  |
 | `FEED_STORAGE_DIR` | server, standalone | restart |  |
