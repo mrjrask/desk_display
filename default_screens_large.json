@@ -9,8 +9,6 @@
         }
       },
       "nixie": 0,
-      "quad": 0,
-      "on this day": 6,
       "news headlines": {
         "frequency": 1,
         "alt": {
@@ -19,6 +17,8 @@
         }
       },
       "news headlines 2": 0,
+      "verano logo": 0,
+      "vrnof": 3,
       "weather logo": 0,
       "weather1": 1,
       "weather2": 1,
@@ -33,8 +33,6 @@
       },
       "weather radar": 1,
       "inside": 1,
-      "verano logo": 0,
-      "vrnof": 3,
       "bears logo": 3,
       "bears stand1": 0,
       "bears stand2": 0,
@@ -59,12 +57,11 @@
       },
       "NFL Standings NFC": 0,
       "NFL Standings AFC": 0,
+      "NFL Scoreboard v2": 0,
       "nba logo": 0,
       "NBA Scoreboard": 0,
       "NBA Playoffs": 0,
-      "NCAA Mens BB Scoreboard": 0,
-      "NCAA FBS Scoreboard": 3,
-      "World Cup Scoreboard": 0,
+      "NBA Scoreboard v2": 0,
       "bulls logo": 0,
       "bulls stand1": 0,
       "bulls last": 0,
@@ -106,6 +103,7 @@
         }
       },
       "NHL Standings East v2": 0,
+      "NHL Scoreboard v2": 0,
       "wolves logo": 0,
       "wolves last": 0,
       "wolves live": 0,
@@ -148,7 +146,7 @@
       "NL Overview": 0,
       "AL Overview": 0,
       "NL Overview+WC": {
-        "frequency": 2,
+        "frequency": 0,
         "alt": {
           "screen": [
             "MLB NL Standings",
@@ -158,7 +156,7 @@
         }
       },
       "AL Overview+WC": {
-        "frequency": 2,
+        "frequency": 0,
         "alt": {
           "screen": [
             "MLB AL Standings",
@@ -171,8 +169,14 @@
       "MLB ALWC Standings": 0,
       "MLB NL Standings": 0,
       "MLB NLWC Standings": 0,
+      "MLB Scoreboard v2": 0,
+      "quad": 0,
+      "on this day": 6,
+      "NCAA Mens BB Scoreboard": 0,
+      "World Cup Scoreboard": 0,
       "adsb stats": 3,
-      "adsb live": 3
+      "adsb live": 3,
+      "NCAA FBS Scoreboard": 4
     },
     "playlists": {
       "playlist-1771301244817-427": {
@@ -183,6 +187,23 @@
           },
           {
             "screen": "nixie"
+          }
+        ]
+      },
+      "playlist-1771301274262-66": {
+        "label": "news & stocks",
+        "steps": [
+          {
+            "screen": "news headlines"
+          },
+          {
+            "screen": "news headlines 2"
+          },
+          {
+            "screen": "verano logo"
+          },
+          {
+            "screen": "vrnof"
           }
         ]
       },
@@ -229,20 +250,95 @@
           }
         ]
       },
-      "playlist-1771301274262-66": {
-        "label": "news & stocks",
+      "playlist-1771301277697-679": {
+        "label": "bears",
         "steps": [
           {
-            "screen": "news headlines"
+            "screen": "bears logo"
           },
           {
-            "screen": "news headlines 2"
+            "screen": "bears stand1"
           },
           {
-            "screen": "verano logo"
+            "screen": "bears stand2"
           },
           {
-            "screen": "vrnof"
+            "screen": "bears next"
+          },
+          {
+            "screen": "bears next season"
+          },
+          {
+            "screen": "bears next season sched"
+          }
+        ]
+      },
+      "playlist-1771301476392-441": {
+        "label": "nfl",
+        "steps": [
+          {
+            "screen": "nfl logo"
+          },
+          {
+            "screen": "NFL Scoreboard"
+          },
+          {
+            "screen": "NFL Overview NFC"
+          },
+          {
+            "screen": "NFL Overview AFC"
+          },
+          {
+            "screen": "NFL Standings NFC"
+          },
+          {
+            "screen": "NFL Standings AFC"
+          },
+          {
+            "screen": "NFL Scoreboard v2"
+          }
+        ]
+      },
+      "playlist-1771301509551-198": {
+        "label": "nba",
+        "steps": [
+          {
+            "screen": "nba logo"
+          },
+          {
+            "screen": "NBA Scoreboard"
+          },
+          {
+            "screen": "NBA Playoffs"
+          },
+          {
+            "screen": "NBA Scoreboard v2"
+          }
+        ]
+      },
+      "playlist-1771301321201-767": {
+        "label": "bulls",
+        "steps": [
+          {
+            "screen": "bulls logo"
+          },
+          {
+            "screen": "bulls stand1"
+          },
+          {
+            "screen": "bulls last"
+          },
+          {
+            "screen": "bulls live"
+          },
+          {
+            "screen": "bulls next"
+          },
+          {
+            "screen": "bulls next home"
+          },
+          {
+            "screen": "bulls schedule quad"
           }
         ]
       },
@@ -301,6 +397,9 @@
           },
           {
             "screen": "NHL Standings East v2"
+          },
+          {
+            "screen": "NHL Scoreboard v2"
           }
         ]
       },
@@ -444,92 +543,9 @@
           },
           {
             "screen": "MLB NLWC Standings"
-          }
-        ]
-      },
-      "playlist-1771301277697-679": {
-        "label": "bears",
-        "steps": [
-          {
-            "screen": "bears logo"
           },
           {
-            "screen": "bears stand1"
-          },
-          {
-            "screen": "bears stand2"
-          },
-          {
-            "screen": "bears next"
-          },
-          {
-            "screen": "bears next season"
-          },
-          {
-            "screen": "bears next season sched"
-          }
-        ]
-      },
-      "playlist-1771301476392-441": {
-        "label": "nfl",
-        "steps": [
-          {
-            "screen": "nfl logo"
-          },
-          {
-            "screen": "NFL Scoreboard"
-          },
-          {
-            "screen": "NFL Overview NFC"
-          },
-          {
-            "screen": "NFL Overview AFC"
-          },
-          {
-            "screen": "NFL Standings NFC"
-          },
-          {
-            "screen": "NFL Standings AFC"
-          }
-        ]
-      },
-      "playlist-1771301321201-767": {
-        "label": "bulls",
-        "steps": [
-          {
-            "screen": "bulls logo"
-          },
-          {
-            "screen": "bulls stand1"
-          },
-          {
-            "screen": "bulls last"
-          },
-          {
-            "screen": "bulls live"
-          },
-          {
-            "screen": "bulls next"
-          },
-          {
-            "screen": "bulls next home"
-          },
-          {
-            "screen": "bulls schedule quad"
-          }
-        ]
-      },
-      "playlist-1771301509551-198": {
-        "label": "nba",
-        "steps": [
-          {
-            "screen": "nba logo"
-          },
-          {
-            "screen": "NBA Scoreboard"
-          },
-          {
-            "screen": "NBA Playoffs"
+            "screen": "MLB Scoreboard v2"
           }
         ]
       },
@@ -546,9 +562,6 @@
             "screen": "NCAA Mens BB Scoreboard"
           },
           {
-            "screen": "NCAA FBS Scoreboard"
-          },
-          {
             "screen": "World Cup Scoreboard"
           },
           {
@@ -556,6 +569,9 @@
           },
           {
             "screen": "adsb live"
+          },
+          {
+            "screen": "NCAA FBS Scoreboard"
           }
         ]
       }
@@ -563,9 +579,6 @@
     "sequence": [
       {
         "playlist": "playlist-1771301244817-427"
-      },
-      {
-        "playlist": "playlist-1771301555724-243"
       },
       {
         "playlist": "playlist-1771301274262-66"
@@ -605,8 +618,16 @@
       },
       {
         "playlist": "playlist-1771301520113-753"
+      },
+      {
+        "playlist": "playlist-1771301555724-243"
       }
-    ]
+    ],
+    "scroll": {
+      "speed": 1,
+      "smoothness": 1,
+      "vertical_speed_adjustment": 0
+    }
   },
   "style": {
     "screens": {

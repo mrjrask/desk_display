@@ -76,14 +76,19 @@ def test_default_screen_configs_enable_hawks_screens_without_schedule_expiration
 
 
 def test_default_screen_configs_include_adsb_screens_at_end_of_other():
-    for filename in ("default_screens_large.json", "default_screens_small.json"):
+    # The large defaults follow the ADS-B screens with NCAA FBS Scoreboard.
+    expected_tails = {
+        "default_screens_large.json": ["adsb stats", "adsb live", "NCAA FBS Scoreboard"],
+        "default_screens_small.json": ["adsb stats", "adsb live"],
+    }
+    for filename, expected_tail in expected_tails.items():
         config = _load_default_config(filename)
 
         assert config["config"]["screens"].get("adsb stats") == 3
         assert config["config"]["screens"].get("adsb live") == 3
         assert "adsb live airlines" not in config["config"]["screens"]
         other_steps = _other_playlist_steps(config)
-        assert other_steps[-2:] == ["adsb stats", "adsb live"]
+        assert other_steps[-len(expected_tail):] == expected_tail
 
 
 def test_default_screen_configs_rotate_nfl_overviews_with_conference_standings():
@@ -114,13 +119,19 @@ def test_default_screen_configs_do_not_alternate_nfl_logo_or_scoreboard():
 
 
 def test_default_screen_configs_rotate_mlb_overviews_with_league_standings():
-    for filename in ("default_screens_large.json", "default_screens_small.json"):
+    # The large defaults keep the standings alternation but turn the
+    # Overview+WC screens off.
+    expected_frequencies = {
+        "default_screens_large.json": 0,
+        "default_screens_small.json": 2,
+    }
+    for filename, expected_frequency in expected_frequencies.items():
         config = _load_default_config(filename)
         screens = config["config"]["screens"]
 
         for league in ("NL", "AL"):
             assert screens[f"{league} Overview+WC"] == {
-                "frequency": 2,
+                "frequency": expected_frequency,
                 "alt": {
                     "screen": [
                         f"MLB {league} Standings",
@@ -147,10 +158,10 @@ def test_default_screen_configs_include_wolves_live_in_approved_position():
 
 LARGE_SPREADSHEET_SEQUENCE = ['date',
  'nixie',
- 'quad',
- 'on this day',
  'news headlines',
  'news headlines 2',
+ 'verano logo',
+ 'vrnof',
  'weather logo',
  'weather1',
  'weather2',
@@ -162,8 +173,6 @@ LARGE_SPREADSHEET_SEQUENCE = ['date',
  'weather quad',
  'weather radar',
  'inside',
- 'verano logo',
- 'vrnof',
  'bears logo',
  'bears stand1',
  'bears stand2',
@@ -176,12 +185,11 @@ LARGE_SPREADSHEET_SEQUENCE = ['date',
  'NFL Overview AFC',
  'NFL Standings NFC',
  'NFL Standings AFC',
+ 'NFL Scoreboard v2',
  'nba logo',
  'NBA Scoreboard',
  'NBA Playoffs',
- 'NCAA Mens BB Scoreboard',
- 'NCAA FBS Scoreboard',
- 'World Cup Scoreboard',
+ 'NBA Scoreboard v2',
  'bulls logo',
  'bulls stand1',
  'bulls last',
@@ -205,6 +213,7 @@ LARGE_SPREADSHEET_SEQUENCE = ['date',
  'NHL Standings West v2',
  'NHL Standings East',
  'NHL Standings East v2',
+ 'NHL Scoreboard v2',
  'wolves logo',
  'wolves last',
  'wolves live',
@@ -246,12 +255,17 @@ LARGE_SPREADSHEET_SEQUENCE = ['date',
  'MLB ALWC Standings',
  'MLB NL Standings',
  'MLB NLWC Standings',
+ 'MLB Scoreboard v2',
+ 'quad',
+ 'on this day',
+ 'NCAA Mens BB Scoreboard',
+ 'World Cup Scoreboard',
  'adsb stats',
- 'adsb live']
+ 'adsb live',
+ 'NCAA FBS Scoreboard']
 
 
 LARGE_PLAYLIST_SEQUENCE = ['starter',
- 'Other',
  'news & stocks',
  'weather',
  'sensors',
@@ -264,18 +278,12 @@ LARGE_PLAYLIST_SEQUENCE = ['starter',
  'wolves',
  'cubs',
  'sox',
- 'mlb']
+ 'mlb',
+ 'Other']
 
 
 LARGE_RESOLVED_ORDER = ['date',
  'nixie',
- 'quad',
- 'on this day',
- 'NCAA Mens BB Scoreboard',
- 'NCAA FBS Scoreboard',
- 'World Cup Scoreboard',
- 'adsb stats',
- 'adsb live',
  'news headlines',
  'news headlines 2',
  'verano logo',
@@ -303,9 +311,11 @@ LARGE_RESOLVED_ORDER = ['date',
  'NFL Overview AFC',
  'NFL Standings NFC',
  'NFL Standings AFC',
+ 'NFL Scoreboard v2',
  'nba logo',
  'NBA Scoreboard',
  'NBA Playoffs',
+ 'NBA Scoreboard v2',
  'bulls logo',
  'bulls stand1',
  'bulls last',
@@ -329,6 +339,7 @@ LARGE_RESOLVED_ORDER = ['date',
  'NHL Standings West v2',
  'NHL Standings East',
  'NHL Standings East v2',
+ 'NHL Scoreboard v2',
  'wolves logo',
  'wolves last',
  'wolves live',
@@ -369,7 +380,15 @@ LARGE_RESOLVED_ORDER = ['date',
  'MLB AL Standings',
  'MLB ALWC Standings',
  'MLB NL Standings',
- 'MLB NLWC Standings']
+ 'MLB NLWC Standings',
+ 'MLB Scoreboard v2',
+ 'quad',
+ 'on this day',
+ 'NCAA Mens BB Scoreboard',
+ 'World Cup Scoreboard',
+ 'adsb stats',
+ 'adsb live',
+ 'NCAA FBS Scoreboard']
 
 
 def test_default_screens_large_matches_complete_approved_sequence():
@@ -395,10 +414,6 @@ def test_default_screens_large_matches_complete_approved_sequence():
 # cycle (1 through 12). Keeping the literal matrices here makes cadence and
 # ordering failures directly reviewable.
 LARGE_12_PASS_EXPECTED_MATRIX = [['date',
-  'on this day',
-  'NCAA FBS Scoreboard',
-  'adsb stats',
-  'adsb live',
   'news headlines',
   'vrnof',
   'weather1',
@@ -444,8 +459,10 @@ LARGE_12_PASS_EXPECTED_MATRIX = [['date',
   'sox next home series',
   'sox schedule quad',
   'MLB Scoreboard',
-  'NL Overview+WC',
-  'AL Overview+WC'],
+  'on this day',
+  'adsb stats',
+  'adsb live',
+  'NCAA FBS Scoreboard'],
  ['date',
   'news headlines 2',
   'weather1',
@@ -482,13 +499,8 @@ LARGE_12_PASS_EXPECTED_MATRIX = [['date',
   'cubs live',
   'cubs schedule quad',
   'sox live',
-  'MLB Scoreboard',
-  'NL Overview+WC',
-  'AL Overview+WC'],
+  'MLB Scoreboard'],
  ['date',
-  'NCAA FBS Scoreboard',
-  'adsb stats',
-  'adsb live',
   'news headlines 2',
   'vrnof',
   'weather1',
@@ -507,7 +519,9 @@ LARGE_12_PASS_EXPECTED_MATRIX = [['date',
   'cubs current series',
   'cubs next series',
   'cubs next home series',
-  'sox live'],
+  'sox live',
+  'adsb stats',
+  'adsb live'],
  ['date',
   'news headlines',
   'weather1',
@@ -536,8 +550,7 @@ LARGE_12_PASS_EXPECTED_MATRIX = [['date',
   'cubs schedule quad',
   'sox live',
   'MLB Scoreboard',
-  'NL Overview+WC',
-  'AL Overview+WC'],
+  'NCAA FBS Scoreboard'],
  ['nixie',
   'news headlines 2',
   'weather1',
@@ -554,10 +567,6 @@ LARGE_12_PASS_EXPECTED_MATRIX = [['date',
   'sox live',
   'sox schedule quad'],
  ['date',
-  'on this day',
-  'NCAA FBS Scoreboard',
-  'adsb stats',
-  'adsb live',
   'news headlines',
   'vrnof',
   'weather1',
@@ -592,8 +601,9 @@ LARGE_12_PASS_EXPECTED_MATRIX = [['date',
   'cubs schedule quad',
   'sox live',
   'MLB Scoreboard',
-  'MLB NL Standings',
-  'MLB AL Standings'],
+  'on this day',
+  'adsb stats',
+  'adsb live'],
  ['date',
   'news headlines 2',
   'weather1',
@@ -638,12 +648,8 @@ LARGE_12_PASS_EXPECTED_MATRIX = [['date',
   'cubs schedule quad',
   'sox live',
   'MLB Scoreboard',
-  'NL Overview+WC',
-  'AL Overview+WC'],
+  'NCAA FBS Scoreboard'],
  ['date',
-  'NCAA FBS Scoreboard',
-  'adsb stats',
-  'adsb live',
   'news headlines 2',
   'vrnof',
   'weather1',
@@ -662,7 +668,9 @@ LARGE_12_PASS_EXPECTED_MATRIX = [['date',
   'cubs current series',
   'cubs next series',
   'cubs next home series',
-  'sox live'],
+  'sox live',
+  'adsb stats',
+  'adsb live'],
  ['date',
   'news headlines',
   'weather1',
@@ -692,9 +700,7 @@ LARGE_12_PASS_EXPECTED_MATRIX = [['date',
   'sox last',
   'sox live',
   'sox schedule quad',
-  'MLB Scoreboard',
-  'NL Overview+WC',
-  'AL Overview+WC'],
+  'MLB Scoreboard'],
  ['nixie',
   'news headlines 2',
   'weather1',
@@ -1097,9 +1103,9 @@ def test_large_config_ui_resolves_complete_order_and_scheduler_resolves_enabled_
         > 0
     ]
 
-    # Catalog screens absent from the defaults (the scoreboard v2 IDs) are
-    # listed as "Ungrouped" ahead of every playlist; the configured screens
-    # keep the approved sequence after them.
+    # Catalog screens absent from the defaults are listed as "Ungrouped" ahead
+    # of every playlist; the configured screens keep the approved sequence
+    # after them.
     unconfigured = [
         screen_id for screen_id in ordered_ids if screen_id not in config["screens"]
     ]
