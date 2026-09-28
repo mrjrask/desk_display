@@ -76,9 +76,13 @@ def build_client_manifest(
     configuration revisions (for example the playlist store revision).
     """
 
+    from rendering.screen_classes import server_renders
+
     profile = PROFILE_PRESETS[display_profile]
-    requested = sorted(set(requested_screens))
-    interactive = sorted(set(interactive_screens) - set(requested))
+    # A screen the client draws itself (its own sensor) has no artifact and
+    # is never missing; the client plays it from its playlist.
+    requested = sorted(s for s in set(requested_screens) if server_renders(s))
+    interactive = sorted(s for s in set(interactive_screens) - set(requested) if server_renders(s))
     scoped = set(client_specific_screens)
     artifacts: list[dict[str, Any]] = []
     missing: list[str] = []

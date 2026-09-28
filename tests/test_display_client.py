@@ -1044,3 +1044,77 @@ def test_a_permanently_rejected_artifact_is_not_downloaded_again(env, monkeypatc
     synced(env, client, 1)
     assert [p for m, p in env.transport.calls if "/artifacts/" in p] == downloads
     assert "wrong_dimensions" in {e.code for e in client.sync.errors.summaries()}
+
+
+# ── Screens drawn from the client's own sensor ─────────────────────────────
+
+
+def _with_inside(env):
+    doc = {"screens": {"date": 1, "inside": 1, "weather1": 1}, "sequence": []}
+    playlist = env.store.update(env.playlist["id"], doc, expected_revision=env.playlist["revision"], actor="test")
+    env.publish("date", 10)
+    env.publish("weather1", 20)
+    return playlist
+
+
+def _sensor(available=True, color=(1, 2, 3)):
+    from PIL import Image
+
+    from playback.local_screens import SensorScreen
+
+    return SensorScreen(probe=lambda: available,
+                        render=lambda: Image.new("RGB", (PROFILE.width, PROFILE.height), color))
+
+
+def test_client_draws_the_inside_screen_from_its_own_sensor(env):
+    _with_inside(env)
+    client = env.make_client()
+    sensor = _sensor()
+    client.local_screens = {"inside": sensor}
+    synced(env, client)
+    client.step()  # activates the playlist, which starts the sensor probe
+    assert sensor.wait(5)
+    shown = {}
+    for _ in range(6):
+        screen, _seconds = client.step()
+        shown[screen] = client.presenter.frames[-1]
+    assert set(shown) == {"date", "inside", "weather1"}
+    assert shown["inside"].getpixel((0, 0)) == (1, 2, 3)
+    assert client.report.playback_state == "playing"
+
+
+def test_client_without_a_sensor_skips_the_inside_screen(env):
+    _with_inside(env)
+    client = env.make_client()
+    sensor = _sensor(available=False)
+    client.local_screens = {"inside": sensor}
+    synced(env, client)
+    client.step()
+    assert sensor.wait(5)
+    assert {client.step()[0] for _ in range(6)} == {"date", "weather1"}
+
+
+def test_inside_screen_plays_while_the_server_is_away(env):
+    _with_inside(env)
+    client = env.make_client(DESK_DISPLAY_OFFLINE_MAX_AGE_HOURS=0.001)
+    sensor = _sensor()
+    client.local_screens = {"inside": sensor}
+    synced(env, client)
+    client.step()
+    assert sensor.wait(5)
+    env.transport.down = True
+    client.sync.step()
+    client.sync.cache_age = lambda: 3600.0
+    assert client._too_old()  # cached server content has expired; the sensor has not
+    assert "inside" in {client.step()[0] for _ in range(6)}
+
+
+def test_server_never_renders_or_misses_the_inside_screen(env):
+    _with_inside(env)
+    client = env.make_client()
+    synced(env, client)
+    manifest = client.sync.active().manifest
+    assert "inside" not in manifest["requested_screens"]
+    assert "inside" not in manifest["missing_screens"]
+    assert all(entry["screen_id"] != "inside" for entry in manifest["artifacts"])
+    assert manifest["cache_complete"] is True

@@ -391,6 +391,24 @@ cannot overwrite each other. The row shows whether the new revision has been
 delivered and acknowledged, and warns about screens this client can show
 only as a still, or not at all.
 
+### Indoor sensor on a client
+
+The `inside` screen is drawn by each display from its own sensor; the server
+renders nothing for it. On a client with a sensor, set the same keys a
+standalone display uses in `.env.client`: `INSIDE_SENSOR` (the sensor type,
+for example `pimoroni_bme280`), `INSIDE_I2C_BUSES` (the bus or buses to
+probe) and, optionally, `INSIDE_I2C_ADDRESS` (for example `0x76`; leave it
+empty to try the sensor's usual addresses). Install the sensor drivers with
+`bash scripts/update_dependencies.sh` after setting
+`INSIDE_SENSOR`, add `inside` to the display's playlist, and restart the
+client service. A client without a sensor skips the screen.
+
+To check it, run `i2cdetect -y <bus>` and look for the address, then watch
+the client log (`journalctl -u desk_display_client.service -f`) for
+`Indoor sensor found; this display draws the inside screen` or
+`No indoor sensor on this display`. The sensor is probed the first time the
+playlist includes `inside`.
+
 ### Diagnosing a stale client
 
 On `/clients`, a client is *stale* when its last heartbeat is older than

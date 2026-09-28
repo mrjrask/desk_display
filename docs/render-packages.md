@@ -20,7 +20,8 @@ what the server ships for it:
 | `finite_animation` | Still + `animation` package | Intro animations, slides |
 | `composite`, `interactive_focus` | Still + `composite` package | Quads; `interactive_focus` tiles open on tap |
 | `client_timed` | Still + `clock` package | `date`, `nixie`: the client draws the time |
-| `unsupported` | Nothing | `inside` (reads the standalone's local sensor) |
+| `client_sensor` | Nothing | `inside`: each client with an indoor sensor reads it and draws the screen itself |
+| `unsupported` | Nothing | None at present (hardware the server cannot stand in for) |
 
 Every screen always has a still. A client that cannot play a package, or
 has animation turned off, shows the still.
@@ -114,6 +115,9 @@ the configuration UI shows the same result as assignment warnings:
 | `full` | The client supports what the screen needs |
 | `still` | A moving screen on a client without animation. Clocks are exempt and always tick. |
 | `unavailable` | An `unsupported` or unknown screen; the client skips it |
+
+A `client_sensor` screen plays `full` with an `info` note: a client with the
+sensor draws it, and a client without one skips it.
 
 Also:
 
