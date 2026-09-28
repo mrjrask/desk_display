@@ -20,16 +20,20 @@
   <div id="notice" class="panel notice hidden" role="status"></div>
 
   <div class="panel">
-    <h2>Add a display</h2>
-    <p class="muted">Each display gets its own credential, so one can be rotated or revoked without touching the others.</p>
-    <form id="provision">
-      <label>Client ID <input name="client_id" required pattern="[A-Za-z0-9._-]{1,64}" placeholder="office-display"></label>
-      <label>Display profile <select name="display_profile" id="provision-profile" required></select></label>
-      <label>Playlist <select name="playlist_id" id="provision-playlist"><option value="">Unassigned</option></select></label>
-      <button type="submit">Create credential</button>
-    </form>
+    <div class="row" style="justify-content: space-between;">
+      <div>
+        <h2>Add a display</h2>
+        <p class="muted" style="margin:0">A guided setup checks this server can be reached, creates the display's own
+          credential and gives you one command to paste on the new Pi.</p>
+      </div>
+      <button type="button" class="primary" id="add-display" onclick="location.href='/clients/add'">Add a display…</button>
+    </div>
     <div id="issued" class="hidden">
-      <p><strong>Copy this into <span class="mono">.env.client</span> on the display now.</strong> The credential is never shown again; if it is lost, rotate it.</p>
+      <p id="join-intro" class="hidden"><strong>Run this on the display's Pi.</strong> It works once, for the next
+        30 minutes, and sets up the display with a fresh credential.</p>
+      <p id="issued-intro"><strong>Copy this into <span class="mono">.env.client</span> on the display now</strong> (replace its
+        <span class="mono">DESK_DISPLAY_CLIENT_TOKEN</span> line), then restart the display's client service.
+        The credential is never shown again; if it is lost, rotate it.</p>
       <div id="issued-warnings"></div>
       <textarea id="issued-env" readonly rows="8" style="width:100%" class="mono"></textarea>
       <button type="button" id="issued-copy">Copy</button>
@@ -58,7 +62,6 @@
 <script>
 const CSRF = {{ {csrf_header: csrf_value} | tojson }};
 let playlists = [];
-const PROFILES = {{ profiles | tojson }};
 
 function notice(message, kind) {
   const el = document.getElementById("notice");
@@ -120,10 +123,19 @@ function age(seconds) {
 
 function showIssued(result) {
   document.getElementById("issued").className = "";
-  document.getElementById("issued-env").value = result.client_env;
+  document.getElementById("issued-intro").classList.toggle("hidden", Boolean(result.join_command));
+  document.getElementById("join-intro").classList.toggle("hidden", !result.join_command);
+  document.getElementById("issued-env").value = result.join_command || result.client_env;
   const warnings = document.getElementById("issued-warnings");
   warnings.innerHTML = "";
   for (const warning of result.warnings) line(warnings, warning, "badge warning");
+}
+
+async function joinCommand(client) {
+  try {
+    showIssued(await api("POST", `/api/clients/${encodeURIComponent(client.client_id)}/join`, {}));
+    notice(`New setup command for ${client.client_id}. Any earlier one no longer works.`);
+  } catch (error) { notice(explain(error), "error"); }
 }
 
 async function credentialAction(client, action) {
@@ -143,15 +155,10 @@ async function credentialAction(client, action) {
 
 function render(data) {
   playlists = data.playlists;
-  const playlistSelect = document.getElementById("provision-playlist");
-  const chosen = playlistSelect.value;
-  playlistSelect.length = 1;
-  for (const playlist of playlists) playlistSelect.appendChild(new Option(playlist.name, playlist.id));
-  playlistSelect.value = chosen;
   const body = document.querySelector("#clients tbody");
   body.innerHTML = "";
   if (!data.clients.length) {
-    body.innerHTML = '<tr><td colspan="7" class="muted">No clients yet. Static clients and registered displays appear here.</td></tr>';
+    body.innerHTML = '<tr><td colspan="7" class="muted">No clients yet. Use Add a display to set one up.</td></tr>';
     return;
   }
   for (const client of data.clients) {
@@ -169,6 +176,13 @@ function render(data) {
         const state = client.credential.state;
         const actions = state === "active" ? ["rotate", "disable", "revoke"]
           : state === "disabled" ? ["enable", "revoke"] : ["rotate"];
+        if (state === "active" && client.state === "never_connected") {
+          const join = document.createElement("button");
+          join.textContent = "Setup command";
+          join.title = "A one-time command that installs and connects this display";
+          join.addEventListener("click", () => joinCommand(client));
+          td.appendChild(join);
+        }
         for (const action of actions) {
           const button = document.createElement("button");
           button.textContent = { rotate: "Rotate credential", disable: "Disable", enable: "Enable", revoke: "Revoke" }[action];
@@ -260,22 +274,6 @@ async function renameClient(client) {
   load();
 }
 
-const profileSelect = document.getElementById("provision-profile");
-for (const profile of PROFILES) profileSelect.appendChild(new Option(profile, profile));
-document.getElementById("provision").addEventListener("submit", async (event) => {
-  event.preventDefault();
-  const form = new FormData(event.target);
-  try {
-    const result = await api("POST", "/api/clients/provision", {
-      client_id: form.get("client_id"), display_profile: form.get("display_profile"),
-      playlist_id: form.get("playlist_id") || null,
-    });
-    showIssued(result);
-    event.target.reset();
-    notice(`Created ${result.client_id}.`);
-  } catch (error) { notice(explain(error), "error"); }
-  load();
-});
 document.getElementById("issued-copy").addEventListener("click", () => {
   navigator.clipboard.writeText(document.getElementById("issued-env").value)
     .then(() => notice("Copied."), () => document.getElementById("issued-env").select());

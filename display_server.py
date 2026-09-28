@@ -17,7 +17,9 @@ Authentication
     client ID, so one client can never read another's configuration, status
     or manifest.  ``/api/v1/admin/...`` needs ``DESK_DISPLAY_SERVER_ADMIN_TOKEN``
     and is disabled when it is unset.  ``/api/v1/health`` is public and says
-    only whether the service is up.
+    only whether the service is up.  ``/api/v1/join`` needs a one-time code
+    from the config UI's "Add a display" wizard; redeeming it issues that
+    display's credential inside the setup script it returns.
 
 Endpoints
     ``POST /api/v1/register``                      register or renew a lease
@@ -27,6 +29,8 @@ Endpoints
     ``GET  /api/v1/clients/<id>/artifacts/<sha256>.<ext>``
                                                    immutable artifact (ETag, Range)
     ``GET  /api/v1/health``                        liveness
+    ``POST /api/v1/join``                          redeem a one-time join code (form field
+                                                   ``code``) for a new display's setup script
     ``GET  /api/v1/admin/status``                  clients, leases and demand
     ``PUT|DELETE /api/v1/admin/prerender/<name>``  explicit pre-render demand
     ``POST /api/v1/admin/clients/<id>/disable|enable|rotate|revoke``
@@ -75,7 +79,9 @@ from remote_display.models import (
     identifier,
 )
 from remote_display.playlist_store import PlaylistStore, registry_snapshot_path, store_path
+from remote_display import registration
 from remote_display.provisioning import (
+    InvalidJoinCodeError,
     ProvisioningError,
     ProvisioningStore,
     client_env,
@@ -486,6 +492,26 @@ def create_app(
     @app.get("/api/v1/health")
     def health():
         return jsonify({"status": "ok"})
+
+    @app.post("/api/v1/join")
+    def join():
+        """Trade a one-time join code for the new display's setup script."""
+
+        _check_auth_lockout()
+        _limit("register", _remote())
+        try:
+            issued, ticket = _provisioning_store().redeem_join_ticket(request.form.get("code"))
+        except InvalidJoinCodeError:
+            _auth_failed()
+            raise
+        text, _warnings = client_env(issued, ticket.get("server_url") or config.public_url,
+                                     allow_insecure_transport=bool(ticket.get("allow_insecure_transport")))
+        registry.end_lease(issued.client_id)
+        script = registration.join_script(text, issued.client_id, issued.display_profile,
+                                          registration.repository_url())
+        WEB_LOGGER.info("Join code redeemed for client %s from %s", issued.client_id, _remote())
+        # Carries the client's credential: never cached.
+        return script, 200, {"Content-Type": "text/x-shellscript; charset=utf-8", "Cache-Control": "no-store"}
 
     # ── Registration and client endpoints ──────────────────────────────────
 

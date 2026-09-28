@@ -188,8 +188,8 @@ The installer prepares the env files before it starts anything:
   (profile, rotation, backlight, sensors), converted with
   `scripts/convert_env.py` so no server or provider setting survives, plus
   the identity and credential from `--credentials` (the file the server's
-  "Add a display" form gives you, plus any transport setting such as
-  `DESK_DISPLAY_ALLOW_INSECURE_TRANSPORT` you add to it). Without `--credentials`, fill in the
+  "Add a display" setup gives you, including
+  `DESK_DISPLAY_ALLOW_INSECURE_TRANSPORT` for a plain-HTTP server). Without `--credentials`, fill in the
   placeholders it lists.
 - In a combined install the server provisions the panel itself as
   `<hostname>-panel` on `http://127.0.0.1:8765`.
@@ -315,8 +315,35 @@ cache and reconnect on their own.
 ### Provisioning, rotation and revocation
 
 The easiest way is the configuration UI's `/clients` page. **Add a display**
-issues a credential and shows the client's `.env.client` once, and each
-client row has Rotate, Revoke, Disable and Enable. From the shell:
+opens a guided setup (`/clients/add`):
+
+1. **Check the server.** It shows whether another device can reach the
+   render server (bind address, advertised URL, enrollment mode, and a live
+   connection to this Pi's LAN address), with the exact `.env` lines to fix
+   anything that is not ready.
+2. **Describe the display.** Pick its screen type, give it a name (the client
+   ID is filled in from it), a playlist, and the server address it will use.
+   Over plain HTTP it adds `DESK_DISPLAY_ALLOW_INSECURE_TRANSPORT=1` to the
+   display's settings unless you untick it.
+3. **Install.** Paste one command on the new Pi:
+
+   ```bash
+   bash -c "$(curl -fsS -d code=<one-time code> http://square.local:8765/api/v1/join)"
+   ```
+
+   The code works once, for 30 minutes. The render server then issues the
+   display's credential and returns a setup script that clones Desk Display
+   (from the server's own git remote) when `~/desk_display` is missing, moves
+   any old `.env.client` aside, writes the settings with mode 600 and runs
+   `Installers/install.sh --mode client` for that panel. The credential never
+   appears on the web page. **Set it up by hand instead** shows the
+   `.env.client` and a longer paste-able command once, and cancels the code.
+4. **Connect.** The page watches for the display's first heartbeat and says
+   when it is online, with log commands if it is not.
+
+Each client row has Rotate, Revoke, Disable and Enable, and a display that
+has never connected also has **Setup command**, which makes a new one-time
+command (any earlier one stops working). From the shell:
 
 ```bash
 python3 -m remote_display.provisioning provision office --profile hyperpixel4_square \
@@ -346,8 +373,10 @@ DESK_DISPLAY_SERVER_HOST=0.0.0.0
 DESK_DISPLAY_SERVER_PUBLIC_URL=http://square.local:8765   # the server's LAN name or IP
 ```
 
-`DESK_DISPLAY_SERVER_PUBLIC_URL` is the address **Add a display** writes into
-each `.env.client`; without it the file gets a placeholder URL. Over plain
+The **Add a display** wizard's first step checks exactly this and shows these
+lines when they are missing. `DESK_DISPLAY_SERVER_PUBLIC_URL` is the address
+written into each `.env.client`; without it the wizard uses the name your
+browser used to reach the config UI. Over plain
 HTTP the server warns at startup and each client needs
 `DESK_DISPLAY_ALLOW_INSECURE_TRANSPORT=1`, which is fine on a trusted home
 network. For HTTPS see "Transport security" in

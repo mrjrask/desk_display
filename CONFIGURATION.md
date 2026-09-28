@@ -141,8 +141,11 @@ administrator pre-render demand into one de-duplicated render plan.
 
 By default (`DESK_DISPLAY_SERVER_ENROLLMENT=provisioned`) every display has
 its own credential, so revoking or rotating one never touches the others.
-Create one on the Clients page of the configuration UI ("Add a display"),
-with `python3 -m remote_display.provisioning provision <client-id> --profile
+Create one on the Clients page of the configuration UI ("Add a display",
+which by default hands the new Pi a one-time setup command instead of showing
+the credential; the credential is issued only when the Pi redeems the code at
+`POST /api/v1/join`, and the provisioning store keeps only the code's SHA-256
+until then), with `python3 -m remote_display.provisioning provision <client-id> --profile
 <profile>` on the server, or with `POST /api/v1/admin/clients`. Each prints a
 ready-to-copy `.env.client` holding the client ID, profile, server URL and the
 new credential in `DESK_DISPLAY_CLIENT_TOKEN`, and can assign a playlist at

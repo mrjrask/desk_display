@@ -11,6 +11,10 @@ from the rotation editor to keep both usable:
                 assignment, and saved / delivered / acknowledged revisions;
                 provisioning, credential rotation, revocation and
                 disable/enable (a new credential is shown once, never again).
+``/clients/add`` guided "Add a display" wizard: checks the server is
+                reachable on the LAN, names the display and picks its profile
+                and playlist, shows a one-paste install command, and watches
+                the new display come online.
 
 All state lives in :class:`remote_display.playlist_store.PlaylistStore`; the
 client registry comes from the snapshot the render server publishes.  Every
@@ -24,14 +28,17 @@ import os
 from collections.abc import Callable, Mapping
 from datetime import datetime, timezone
 from typing import Any
+from urllib.parse import urlsplit
 
 from flask import Blueprint, jsonify, render_template, request
 
 import deployment_config
 from deployment_config import Role
 from display_profiles import PROFILE_PRESETS
+from remote_display import registration
 from remote_display.models import ModelValidationError, identifier
 from remote_display.playlist_store import (
+    MAX_NAME_LENGTH,
     PlaylistStore,
     PlaylistStoreError,
     PlaylistValidationError,
@@ -153,9 +160,15 @@ def register(
     def _provisioning() -> ProvisioningStore:
         return app.extensions["desk_display_provisioning"]
 
-    def public_url() -> str | None:
+    def server_settings() -> dict[str, Any]:
         source = os.environ if env is None else env
-        return (source.get("DESK_DISPLAY_SERVER_PUBLIC_URL") or "").strip() or None
+        try:
+            return deployment_config.load_settings(Role.SERVER, source)
+        except ValueError:
+            return {"DESK_DISPLAY_SERVER_PUBLIC_URL": (source.get("DESK_DISPLAY_SERVER_PUBLIC_URL") or "").strip()}
+
+    def browser_host() -> str | None:
+        return urlsplit("//" + request.host).hostname if request.host else None
 
     def static_clients() -> dict[str, str]:
         source = os.environ if env is None else env
@@ -178,6 +191,10 @@ def register(
     @blueprint.errorhandler(ProvisioningError)
     def _provisioning_error(exc: ProvisioningError):
         return jsonify(exc.as_response()), exc.status
+
+    @blueprint.errorhandler(registration.ServerUrlError)
+    def _server_url_error(exc: registration.ServerUrlError):
+        return jsonify({"error": "invalid_request", "message": str(exc), "field": "server_url"}), 400
 
     @blueprint.errorhandler(ModelValidationError)
     def _model_error(exc: ModelValidationError):
@@ -299,8 +316,11 @@ def register(
 
     @blueprint.get("/clients")
     def clients_page():
-        return render_template("clients.html", csrf_header=CSRF_HEADER, csrf_value=CSRF_VALUE,
-                               profiles=sorted(PROFILE_PRESETS))
+        return render_template("clients.html", csrf_header=CSRF_HEADER, csrf_value=CSRF_VALUE)
+
+    @blueprint.get("/clients/add")
+    def add_client_page():
+        return render_template("client_wizard.html", csrf_header=CSRF_HEADER, csrf_value=CSRF_VALUE)
 
     # ── Playlist library API ───────────────────────────────────────────────
 
@@ -446,11 +466,59 @@ def register(
                                       actor=actor(), name=payload.get("name"))
         return respond(clone, 201)
 
-    def issued_payload(issued) -> dict[str, Any]:
-        text, warnings = client_env(issued, public_url())
+    def issued_payload(issued, server_url: str | None = None, *,
+                       allow_insecure_transport: bool | None = None) -> dict[str, Any]:
+        url = server_url or registration.suggested_server_url(server_settings(), browser_host())
+        if allow_insecure_transport is None:  # rotation: keep a plain-HTTP LAN client connecting
+            parts = urlsplit(url)
+            allow_insecure_transport = parts.scheme == "http" and not registration.is_loopback(parts.hostname or "")
+        text, warnings = client_env(issued, url, allow_insecure_transport=allow_insecure_transport)
         return {"client_id": issued.client_id, "display_profile": issued.display_profile,
                 "client_env": text, "warnings": warnings,
+                "credentials_filename": registration.credentials_filename(issued.client_id),
+                "install_command": registration.install_command(
+                    text, issued.client_id, issued.display_profile, registration.repository_url()),
                 "note": "Copy this now: the credential is never shown again."}
+
+    def join_payload(client_id: str, server_url: str | None, insecure: bool | None) -> dict[str, Any]:
+        url = server_url or registration.suggested_server_url(server_settings(), browser_host())
+        parts = urlsplit(url)
+        plain_http = parts.scheme == "http" and not registration.is_loopback(parts.hostname or "")
+        insecure = plain_http if insecure is None else insecure
+        code, expires = _provisioning().create_join_ticket(
+            client_id, server_url=url, allow_insecure_transport=insecure, actor=actor())
+        return {"client_id": client_id, "server_url": url,
+                "join_command": registration.join_command(url, code),
+                "join_expires_at": datetime.fromtimestamp(expires, timezone.utc).isoformat(timespec="seconds")
+                .replace("+00:00", "Z"),
+                "join_expires_in_seconds": max(0, round(expires - now())),
+                "allow_insecure_transport": insecure,
+                "warnings": [] if insecure or not plain_http else [
+                    f"{url} is plain HTTP and the display was not allowed to use it; it will refuse to connect."]}
+
+    @blueprint.post("/api/clients/<client_id>/join")
+    def new_join_code(client_id: str):
+        payload = body()
+        server_url = payload.get("server_url")
+        if server_url is not None:
+            server_url = registration.normalize_server_url(server_url)
+        insecure = payload.get("allow_insecure_transport")
+        response, status = respond(join_payload(identifier(client_id, "client_id"), server_url,
+                                                None if insecure is None else insecure is True))
+        response.headers["Cache-Control"] = "no-store"
+        return response, status
+
+    @blueprint.get("/api/clients/registration")
+    def registration_status():
+        data = _store().snapshot()
+        known = {row["client_id"] for row in client_rows()}
+        return respond({
+            **registration.readiness(server_settings(), browser_host=browser_host()),
+            "profiles": registration.profile_choices(),
+            "playlists": [{"id": p["id"], "name": p["name"]}
+                          for p in sorted(data["playlists"].values(), key=lambda p: p["name"].lower())],
+            "client_ids": sorted(known),
+        })
 
     @blueprint.post("/api/clients/provision")
     def provision_client():
@@ -458,11 +526,33 @@ def register(
         playlist_id = payload.get("playlist_id") or None
         if playlist_id is not None and playlist_id not in _store().snapshot()["playlists"]:
             raise PlaylistValidationError("unknown playlist", field="playlist_id")
+        server_url = payload.get("server_url")
+        if server_url is not None:
+            server_url = registration.normalize_server_url(server_url)
+        insecure = payload.get("allow_insecure_transport")
+        if insecure is not None:
+            insecure = insecure is True
+        friendly_name = payload.get("friendly_name")
+        if friendly_name is not None:
+            if not isinstance(friendly_name, str) or len(" ".join(friendly_name.split())) > MAX_NAME_LENGTH:
+                raise PlaylistValidationError(f"friendly_name must be at most {MAX_NAME_LENGTH} characters",
+                                              field="friendly_name")
+            friendly_name = " ".join(friendly_name.split()) or None
         issued = _provisioning().provision(payload.get("client_id"), payload.get("display_profile"),
                                            actor=actor())
         if playlist_id is not None:
             _store().assign(issued.client_id, playlist_id, expected_playlist_id=None, actor=actor())
-        response, status = respond(issued_payload(issued), 201)
+        if friendly_name:
+            _store().set_friendly_name(issued.client_id, friendly_name, actor=actor())
+        if payload.get("join") is True:
+            # The credential just issued is never shown: the display gets its
+            # own when it redeems the join code.
+            response, status = respond({**join_payload(issued.client_id, server_url, insecure),
+                                        "display_profile": issued.display_profile}, 201)
+            response.headers["Cache-Control"] = "no-store"
+            return response, status
+        response, status = respond(issued_payload(
+            issued, server_url, allow_insecure_transport=insecure), 201)
         response.headers["Cache-Control"] = "no-store"
         return response, status
 
