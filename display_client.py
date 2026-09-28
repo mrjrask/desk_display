@@ -42,7 +42,7 @@ from playback.local_screens import default_local_screens, is_local, local_entrie
 from playback.package_player import PackagePlayback
 from protocol import CLIENT_SUPPORTED_RENDER_PACKAGE_SCHEMA_VERSIONS
 from protocol_versions import APPLICATION_VERSION, NETWORK_PROTOCOL_VERSION
-from remote_display.client_cache import ClientCache, reconcile_playback
+from remote_display.client_cache import ClientCache, PlaybackState, reconcile_playback
 from remote_display.client_screenshots import ClientScreenshots
 from remote_display.client_sync import (
     ActiveContent,
@@ -273,7 +273,10 @@ class DisplayClient:
         self.controls = Controls()
         self._content_revision: tuple[str | None, str | None] | None = None
         self._player: ClientPlayer | None = None
-        self.playback = cache.load_playback()
+        # A restart always begins at the top of the Starter playlist: only the
+        # history (for the Back button) survives from the saved position.
+        self.playback = PlaybackState(history=cache.load_playback().history)
+        self._start_at_starter = True
         self.report = PlaybackReport(physical_rotation=physical_rotation)
         self._stop = threading.Event()
         sync.report = lambda: self.report
@@ -310,7 +313,7 @@ class DisplayClient:
     # Playback
 
     def _rebuild(self, content: ActiveContent) -> None:
-        from schedule import build_scheduler
+        from schedule import build_scheduler, starter_screen_ids
 
         self._content_revision = content.revision
         self._player = None
@@ -340,9 +343,13 @@ class DisplayClient:
         self.playback = reconcile_playback(self.playback, playlist)
         # A playlist update is configuration, not a command: resume this
         # client's own position, or continue after the screen it was showing.
-        resumed = bool(self.playback.scheduler) and scheduler.restore_state(self.playback.scheduler)
-        if not resumed and previous_screen in playlist.screens:
-            scheduler.seek_after(previous_screen)
+        if self._start_at_starter:
+            self._start_at_starter = False
+            scheduler.start_at(starter_screen_ids(document))
+        else:
+            resumed = bool(self.playback.scheduler) and scheduler.restore_state(self.playback.scheduler)
+            if not resumed and previous_screen in playlist.screens:
+                scheduler.seek_after(previous_screen)
         player.history = list(self.playback.history)
         self._player = player
 

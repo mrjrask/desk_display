@@ -6,7 +6,7 @@ alternate's frequency counts only the due presentations of its base entry.
 Frequency-zero entries have no independent slot, although their screen IDs may
 still be referenced as alternates. Entry order is preserved within every cycle.
 Constructing a new scheduler, including after a config reload, starts again at
-cycle 1.
+cycle 1; displays then seek to the top of the "Starter" playlist.
 """
 
 from __future__ import annotations
@@ -389,6 +389,27 @@ class ScreenScheduler:
                 return True
         return False
 
+    def start_at(self, screen_ids: Sequence[str]) -> bool:
+        """Begin cycle 1 at the first of *screen_ids* that has a slot in it.
+
+        Used when a display starts, so playback begins at the top of the
+        Starter playlist (see :func:`starter_screen_ids`). Screens queued
+        before it in cycle 1 are skipped until their next due cycle.
+        """
+
+        if not self._entries or not screen_ids:
+            return False
+        if self._pending_indices is None:
+            self._queue_current_cycle(datetime.now(UTC))
+        pending = self._pending_indices or []
+        for screen_id in screen_ids:
+            for position, index in enumerate(pending):
+                if self._entries[index].screen_id == screen_id:
+                    del pending[:position]
+                    self._cursor = index
+                    return True
+        return False
+
     def next_available(self, registry: dict[str, ScreenDefinition]) -> Optional[ScreenDefinition]:
         """Return the next available definition from one ordered queued cycle.
 
@@ -546,6 +567,34 @@ def sanitize_schedule_config(config: dict[str, Any]) -> tuple[dict[str, Any], li
         sanitized["playlists"] = cleaned_playlists
 
     return sanitized, removed
+
+
+STARTER_PLAYLIST_LABEL = "starter"
+
+
+def starter_screen_ids(config: Any) -> list[str]:
+    """Screen IDs of the playlist labelled "Starter", in step order.
+
+    Displays start here on every restart. Returns an empty list when the
+    configuration has no Starter playlist.
+    """
+
+    playlists = config.get("playlists") if isinstance(config, dict) else None
+    if not isinstance(playlists, dict):
+        return []
+    for playlist in playlists.values():
+        if not isinstance(playlist, dict):
+            continue
+        label = playlist.get("label")
+        if not isinstance(label, str) or label.strip().casefold() != STARTER_PLAYLIST_LABEL:
+            continue
+        ids: list[str] = []
+        for step in playlist.get("steps") or ():
+            screen_id = step.get("screen") if isinstance(step, dict) else None
+            if isinstance(screen_id, str):
+                ids.append(canonical_screen_id(screen_id))
+        return ids
+    return []
 
 
 def build_scheduler(config: dict[str, Any]) -> ScreenScheduler:
