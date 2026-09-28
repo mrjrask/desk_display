@@ -58,20 +58,18 @@ def test_ncaam_fetch_scoreboard_contract(monkeypatch):
 
 
 def test_ncaa_fbs_fetch_scoreboard_contract(monkeypatch):
-    requested: list[dt.date] = []
+    requested: list[tuple[dt.date, dt.date]] = []
 
-    def fake_fetch(requested_day):
-        requested.append(requested_day)
-        return [{"id": f"fbs-{requested_day.isoformat()}", "date": requested_day.isoformat()}]
+    def fake_fetch(start, end):
+        requested.append((start, end))
+        return [{"id": "fbs-1", "date": "2026-09-26T16:00Z"}]
 
-    monkeypatch.setattr(ncaa_fbs, "_fetch_games_for_date", fake_fetch)
-    ncaa_fbs._FINAL_DAY_CACHE.clear()
+    monkeypatch.setattr(ncaa_fbs, "fetch_games_for_range", fake_fetch)
 
     payload = ncaa_fbs.fetch_scoreboard(now=dt.datetime(2026, 9, 26, 12, 0))
 
-    week = [dt.date(2026, 9, 21) + dt.timedelta(days=offset) for offset in range(7)]
-    assert requested == week
-    assert [game["date"] for game in payload] == [day.isoformat() for day in week]
+    assert requested == [(dt.date(2026, 9, 21), dt.date(2026, 9, 27))]
+    assert payload == [{"id": "fbs-1", "date": "2026-09-26T16:00Z"}]
 
 
 def test_nfl_fetch_scoreboard_contract(monkeypatch):

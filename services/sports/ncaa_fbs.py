@@ -3,15 +3,16 @@
 from __future__ import annotations
 
 import datetime as dt
+import logging
 import threading
 
 from config import CENTRAL_TIME
-from screens.ncaa_fbs_scoreboard import _fetch_games_for_date, _scoreboard_date
+from screens.ncaa_fbs_scoreboard import _scoreboard_date, fetch_games_for_range
 
-# Days whose Top 25 games are all final never change again, so the weekly
-# fetch reuses them instead of re-requesting the whole week on every refresh.
-_FINAL_DAY_CACHE: dict[dt.date, list[dict]] = {}
-_FINAL_DAY_CACHE_LOCK = threading.Lock()
+# The last week that loaded, reused when every ESPN host fails so a transient
+# block does not blank the board.
+_LAST_GOOD: dict[str, object] = {}
+_LAST_GOOD_LOCK = threading.Lock()
 
 
 def scoreboard_date(now: dt.datetime | None = None) -> dt.date:
@@ -34,29 +35,6 @@ def week_dates(day: dt.date) -> list[dt.date]:
     return [start + dt.timedelta(days=offset) for offset in range(7)]
 
 
-def _all_final(games: list[dict]) -> bool:
-    return bool(games) and all(
-        str(((game.get("status") or {}).get("type") or {}).get("state") or "").lower() == "post"
-        or bool(((game.get("status") or {}).get("type") or {}).get("completed"))
-        for game in games
-    )
-
-
-def _games_for_day(day: dt.date, today: dt.date) -> list[dict]:
-    with _FINAL_DAY_CACHE_LOCK:
-        cached = _FINAL_DAY_CACHE.get(day)
-    if cached is not None:
-        return list(cached)
-    games = _fetch_games_for_date(day)
-    games = games if isinstance(games, list) else []
-    if day < today and _all_final(games):
-        with _FINAL_DAY_CACHE_LOCK:
-            _FINAL_DAY_CACHE[day] = list(games)
-            for stale_day in [d for d in _FINAL_DAY_CACHE if d < day - dt.timedelta(days=14)]:
-                del _FINAL_DAY_CACHE[stale_day]
-    return games
-
-
 def _game_sort_key(indexed: tuple[int, dict]) -> tuple[str, int]:
     index, game = indexed
     return (str(game.get("date") or ""), index)
@@ -65,18 +43,38 @@ def _game_sort_key(indexed: tuple[int, dict]) -> tuple[str, int]:
 def fetch_scoreboard(
     *, day: dt.date | None = None, now: dt.datetime | None = None
 ) -> list[dict]:
-    """Return every Top 25 game in the Monday-Sunday week, oldest first."""
+    """Return every Top 25 game in the Monday-Sunday week, oldest first.
+
+    The whole week is one request (ESPN refuses clients that hammer it). If
+    every ESPN host fails, the last games loaded for the same week are kept.
+    """
 
     current_now = now or dt.datetime.now(CENTRAL_TIME)
     target_day = day or scoreboard_date(current_now)
+    days = week_dates(target_day)
+    try:
+        fetched = fetch_games_for_range(days[0], days[-1])
+    except Exception as exc:
+        with _LAST_GOOD_LOCK:
+            stale = _LAST_GOOD.get("games") if _LAST_GOOD.get("week") == days[0] else None
+        logging.error(
+            "Failed to fetch NCAA FBS scoreboard for week of %s: %s%s",
+            days[0],
+            exc,
+            "; keeping last good games" if stale else "",
+        )
+        return list(stale) if isinstance(stale, list) else []
+
     games: list[dict] = []
     seen: set[object] = set()
-    for week_day in week_dates(target_day):
-        for game in _games_for_day(week_day, current_now.date()):
-            game_id = game.get("id")
-            if game_id is not None:
-                if game_id in seen:
-                    continue
-                seen.add(game_id)
-            games.append(game)
-    return [game for _, game in sorted(enumerate(games), key=_game_sort_key)]
+    for game in fetched:
+        game_id = game.get("id")
+        if game_id is not None:
+            if game_id in seen:
+                continue
+            seen.add(game_id)
+        games.append(game)
+    games = [game for _, game in sorted(enumerate(games), key=_game_sort_key)]
+    with _LAST_GOOD_LOCK:
+        _LAST_GOOD.update(week=days[0], games=list(games))
+    return games

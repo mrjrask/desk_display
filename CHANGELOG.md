@@ -165,7 +165,9 @@ See the README's [deployment modes](README.md#deployment-modes) and
   and the service banner reports `desk_display_client.service` there instead
   of the disabled standalone `desk_display.service`.
 - The NCAA FBS Scoreboard shows the whole Monday–Sunday week of Top 25
-  games, matching ESPN's college football weeks. Each ranked team's poll ranking is drawn as a small superscript
+  games, matching ESPN's college football weeks. The week loads in one request,
+  falls back to ESPN's other scoreboard hosts when one refuses the Pi (403),
+  and keeps the last good games for the week if every host fails. Each ranked team's poll ranking is drawn as a small superscript
   number before its logo (or abbreviation); unranked teams get none.
 
 ### Known limitations
