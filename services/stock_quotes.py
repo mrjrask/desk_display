@@ -14,7 +14,7 @@ import threading
 import time
 from concurrent.futures import ThreadPoolExecutor, wait
 from dataclasses import dataclass
-from typing import Optional
+from typing import Any, Optional
 
 import yfinance as yf
 
@@ -85,12 +85,13 @@ def fetch_quote(symbol: str) -> StockQuote:
     price: Optional[float] = None
     change: Optional[float] = None
     change_pct: Optional[float] = None
+    prev: Any = None
 
     try:
         ticker = yf.Ticker(symbol)
         info = ticker.info
         prev = info.get("previousClose")
-        candidate = info.get("regularMarketPrice") or prev
+        candidate = info.get("regularMarketPrice")
         if candidate is not None:
             price = float(candidate)
             change, change_pct = _derive_change(price, float(prev) if prev is not None else None)
@@ -109,6 +110,10 @@ def fetch_quote(symbol: str) -> StockQuote:
                     price, change, change_pct = hist_price, hist_change, hist_change_pct
         except Exception as exc:
             logging.debug("stock_quotes: history fetch failed for %s: %s", symbol, exc)
+
+    if price is None and prev is not None:
+        # Last resort: show the previous close, but never as a zero change.
+        price = float(prev)
 
     return StockQuote(
         symbol=symbol, label=_label_for(symbol), price=price, change=change, change_pct=change_pct
