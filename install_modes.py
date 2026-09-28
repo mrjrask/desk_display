@@ -288,6 +288,39 @@ def detect_mode(project_dir: Path, systemd_dir: Path = SYSTEMD_DIR) -> Mode:
     return Mode.STANDALONE
 
 
+def adopt_panel_env(project_dir: Path, names: Iterable[str] = (), prefixes: Iterable[str] = (), *,
+                    env: dict[str, str] | None = None, systemd_dir: Path = SYSTEMD_DIR) -> list[str]:
+    """Take the panel's settings from ``.env.client`` on a client or combined install.
+
+    Helper services (the Waveshare OLED status helper, the screenshot
+    uploader) are started with ``.env``. On these installs the panel's
+    settings live in ``.env.client`` instead: a combined install's ``.env``
+    is the server's, and a client's ``.env`` is left over from before the
+    upgrade. Returns the names set. Standalone and server installs are
+    unchanged.
+    """
+
+    env = os.environ if env is None else env
+    if detect_mode(project_dir, systemd_dir) not in _CLIENTS:
+        return []
+    panel_env = project_dir / ".env.client"
+    if not panel_env.is_file():
+        return []
+    import deployment_config as dc
+
+    try:
+        values = dc.parse_env_file(panel_env)
+    except (OSError, UnicodeDecodeError, ValueError):
+        return []
+    wanted, starts = set(names), tuple(prefixes)
+    adopted = []
+    for name, value in values.items():
+        if name in wanted or (starts and name.startswith(starts)):
+            env[name] = value
+            adopted.append(name)
+    return adopted
+
+
 def snapshot(mode: Mode | str, project_dir: Path, *, home: Path | None = None,
              now: float | None = None) -> Path | None:
     """Copy a server's state into ``.runtime/server/backups/upgrade-<time>/``.

@@ -28,6 +28,12 @@ See the README's [deployment modes](README.md#deployment-modes) and
   its extra seconds, the A/B/X/Y buttons keep their v0.1 actions (next screen,
   display on/off, update indicator, restart), and the Wi-Fi monitor and
   recovery run (`ENABLE_WIFI_MONITOR`, `ENABLE_WIFI_RECOVERY`).
+- Helpers follow the install mode: the kernel and framebuffer desktop
+  launchers drive `desk_display_client.service` and `display_client.py` on a
+  client or combined install; the Waveshare OLED helper and the screenshot
+  uploader take the panel's settings from `.env.client`; and each heartbeat
+  response carries the weather and Cubs/Blackhawks summary the OLED helper
+  shows, so the side displays work on clients.
 - Migration: `scripts/migrate_standalone_config.py` moves a standalone rotation
   onto the server, and `scripts/convert_env.py` converts an existing `.env`.
   `--config FILE` migrates a rotation copied from another display, and a

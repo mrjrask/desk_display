@@ -37,6 +37,14 @@ import requests
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
+if __name__ == "__main__":
+    # On a client or combined install the panel's settings are in .env.client.
+    import install_modes
+
+    install_modes.adopt_panel_env(Path(__file__).resolve().parents[1],
+                                  names=("SCREENSHOT_DIR", "SCREENSHOT_ARCHIVE_BASE", "FEED_SOURCE_NAME"),
+                                  prefixes=("FEED_UPLOAD_",))
+
 from paths import resolve_storage_paths
 from feed_ids import sanitize_feed_id
 

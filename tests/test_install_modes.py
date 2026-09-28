@@ -473,3 +473,23 @@ def test_the_client_process_never_loads_the_server_env_beside_it(tmp_path):
     result = subprocess.run([sys.executable, "-c", script], cwd=tmp_path, env=env, capture_output=True, text=True)
     assert result.returncode == 0, result.stderr[-2000:]
     assert result.stdout.split()[-2:] == ["None", "office"]
+
+
+@pytest.mark.parametrize("mode, adopted", [
+    ("client", True), ("combined", True), ("standalone", False), ("server", False),
+])
+def test_helper_services_adopt_the_panels_env_file(tmp_path, mode, adopted):
+    """The OLED helper and screenshot uploader start with .env; the panel's settings are in .env.client."""
+
+    (tmp_path / ".env").write_text("WAVESHARE_OLED_I2C_BUS=1\nSCREENSHOT_DIR=/old\n")
+    (tmp_path / ".env.client").write_text(
+        "WAVESHARE_OLED_I2C_BUS=3\nSCREENSHOT_DIR=/panel\nDESK_DISPLAY_CLIENT_TOKEN=secret\n")
+    im.write_marker(tmp_path, mode)
+    env = {"WAVESHARE_OLED_I2C_BUS": "1", "SCREENSHOT_DIR": "/old"}
+    names = im.adopt_panel_env(tmp_path, names=("SCREENSHOT_DIR",), prefixes=("WAVESHARE_OLED_",), env=env,
+                               systemd_dir=tmp_path / "systemd")
+    if adopted:
+        assert sorted(names) == ["SCREENSHOT_DIR", "WAVESHARE_OLED_I2C_BUS"]
+        assert env == {"WAVESHARE_OLED_I2C_BUS": "3", "SCREENSHOT_DIR": "/panel"}
+    else:
+        assert names == [] and env == {"WAVESHARE_OLED_I2C_BUS": "1", "SCREENSHOT_DIR": "/old"}

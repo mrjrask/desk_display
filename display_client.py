@@ -853,6 +853,8 @@ def build_client(settings: dict[str, Any], *, presenter: Any = None, transport: 
         sync_interval_seconds=int(settings.get("DESK_DISPLAY_SYNC_INTERVAL_SECONDS") or 30),
         heartbeat_interval_seconds=int(settings.get("DESK_DISPLAY_HEARTBEAT_INTERVAL_SECONDS") or 60),
     )
+    if screenshots is not None and screenshots.feed_summary is None:
+        screenshots.feed_summary = lambda: sync.display_status
     return DisplayClient(
         profile, presenter, sync, cache, artifacts,
         server_url=server_url,

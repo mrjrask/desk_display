@@ -3,7 +3,27 @@ set -euo pipefail
 
 SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 PROJECT_DIR="${PROJECT_DIR:-$(cd -- "$SCRIPT_DIR/.." && pwd)}"
-SERVICE_NAME="${SERVICE_NAME:-desk_display.service}"
+# The installed mode decides what drives the panel: main.py and
+# desk_display.service when standalone, display_client.py and
+# desk_display_client.service on a client or combined install.
+INSTALL_MODE="standalone"
+if command -v python3 >/dev/null 2>&1 && [[ -f "$PROJECT_DIR/install_modes.py" ]]; then
+  INSTALL_MODE="$(python3 "$PROJECT_DIR/install_modes.py" detect --project-dir "$PROJECT_DIR" 2>/dev/null || echo standalone)"
+fi
+case "$INSTALL_MODE" in
+  client|combined)
+    PANEL_ENTRY="display_client.py"
+    SERVICE_NAME="${SERVICE_NAME:-desk_display_client.service}"
+    ;;
+  server)
+    printf '[ERROR] A server install has no panel to launch.\n' >&2
+    exit 1
+    ;;
+  *)
+    PANEL_ENTRY="main.py"
+    SERVICE_NAME="${SERVICE_NAME:-desk_display.service}"
+    ;;
+esac
 
 COMMON_SCRIPT="$SCRIPT_DIR/helpers/common.sh"
 if [[ -f "$COMMON_SCRIPT" ]]; then
@@ -95,4 +115,4 @@ if [[ ! -x "$PYTHON_BIN" ]]; then
 fi
 
 log "Launching Desk Display with $PYTHON_BIN"
-exec "$PYTHON_BIN" "$PROJECT_DIR/main.py"
+exec "$PYTHON_BIN" "$PROJECT_DIR/$PANEL_ENTRY"
