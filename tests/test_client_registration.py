@@ -182,6 +182,7 @@ def fake_home(tmp_path, exit_code=0):
     installers.mkdir(parents=True)
     (installers / "install.sh").write_text(
         "#!/usr/bin/env bash\n"
+        "# usage: install.sh [--mode MODE] ...\n"
         'echo "$HYPERPIXEL_PANEL $*" > "$HOME/installer-args"\n'
         'cp "$4" "$HOME/installer-credentials"\n'
         f"exit {exit_code}\n")
@@ -225,6 +226,41 @@ def test_the_manual_install_command_runs_as_pasted(tmp_path):
     assert result.returncode == 0, result.stderr
     assert (home / "installer-args").read_text().split()[-1] == "display_hat_mini"
     assert not (home / "kitchen.env.client").exists()
+
+
+def _git(*args, cwd):
+    subprocess.run(["git", *args], cwd=cwd, check=True, capture_output=True,
+                   env={**os.environ, "GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@t",
+                        "GIT_COMMITTER_NAME": "t", "GIT_COMMITTER_EMAIL": "t@t"})
+
+
+@pytest.mark.skipif(shutil.which("git") is None, reason="needs git")
+def test_the_join_script_updates_a_v0_1_checkout_before_installing(tmp_path):
+    home = fake_home(tmp_path)
+    upstream = home / "desk_display"
+    new_installer = (upstream / "Installers" / "install.sh").read_text()
+    (upstream / "Installers" / "install.sh").write_text("#!/usr/bin/env bash\necho standalone > \"$HOME/installer-args\"\n")
+    _git("init", "-q", "-b", "main", cwd=upstream)
+    _git("add", "-A", cwd=upstream)
+    _git("commit", "-qm", "v0.1", cwd=upstream)
+    upstream.rename(tmp_path / "upstream")
+    _git("clone", "-q", str(tmp_path / "upstream"), str(upstream), cwd=tmp_path)
+    (tmp_path / "upstream" / "Installers" / "install.sh").write_text(new_installer)
+    _git("commit", "-qam", "server/client", cwd=tmp_path / "upstream")
+
+    result = run(registration.join_script(ENV_TEXT, "kitchen", "display_hat_mini"), home)
+    assert result.returncode == 0, result.stderr
+    assert "Updating the old Desk Display checkout" in result.stdout
+    assert (home / "installer-args").read_text().split()[:2] == ["--mode", "client"]
+
+
+@pytest.mark.skipif(shutil.which("git") is None, reason="needs git")
+def test_the_join_script_stops_when_an_old_checkout_cannot_update(tmp_path):
+    home = fake_home(tmp_path)
+    (home / "desk_display" / "Installers" / "install.sh").write_text("#!/usr/bin/env bash\ntouch \"$HOME/ran\"\n")
+    result = run(registration.join_script(ENV_TEXT, "kitchen", "display_hat_mini"), home)
+    assert result.returncode == 1
+    assert "sudo chown -R" in result.stderr and not (home / "ran").exists()
 
 
 def test_the_join_script_clones_when_the_project_is_missing(tmp_path):

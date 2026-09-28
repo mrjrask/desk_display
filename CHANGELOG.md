@@ -22,6 +22,7 @@ See the README's [deployment modes](README.md#deployment-modes) and
   the display and picks its screen type and playlist, gives one one-time
   command (`POST /api/v1/join`) that installs and configures the new Pi, and
   shows when the display comes online.
+  On a Pi still on v0.1 the setup script updates the checkout first.
 - `display_client.py`: offline-first playback from a local cache, render
   packages (static, animated and client-timed clocks), touch focus on quads,
   and physical rotation applied only at presentation.
