@@ -23,6 +23,9 @@ See the README's [deployment modes](README.md#deployment-modes) and
   command (`POST /api/v1/join`) that installs and configures the new Pi, and
   shows when the display comes online.
   On a Pi still on v0.1 the setup script updates the checkout first.
+  The Waveshare OLED/LCD HAT (A) is one choice there: its LCD plays the
+  playlist and its two side OLEDs run the status helper from the client's
+  heartbeat.
 - Every display (standalone, client or combined) starts at the top of the
   playlist labelled "Starter" whenever it restarts, instead of resuming a
   saved position.
