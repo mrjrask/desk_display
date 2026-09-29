@@ -43,12 +43,16 @@ def env(tmp_path, monkeypatch):
     app = config_ui.app
     from remote_display.provisioning import ProvisioningStore
 
-    keys = ("desk_display_playlist_store", "desk_display_registry_snapshot", "desk_display_provisioning")
+    from remote_display.client_commands import CommandStore
+
+    keys = ("desk_display_playlist_store", "desk_display_registry_snapshot", "desk_display_provisioning",
+            "desk_display_client_commands")
     old = tuple(app.extensions[key] for key in keys)
     store = PlaylistStore(tmp_path / "playlists.json")
     app.extensions["desk_display_playlist_store"] = store
     app.extensions["desk_display_registry_snapshot"] = tmp_path / "clients.json"
     app.extensions["desk_display_provisioning"] = ProvisioningStore(tmp_path / "provisioned.json")
+    app.extensions["desk_display_client_commands"] = CommandStore(tmp_path / "commands.json")
     app.config["TESTING"] = True
     yield {"app": app, "store": store, "snapshot": tmp_path / "clients.json", "tmp": tmp_path}
     for key, value in zip(keys, old):
@@ -271,6 +275,32 @@ def test_client_rows_carry_delivery_telemetry(web, env):
     assert "last_sync_age_seconds" in rows["den"]
 
 
+def test_update_and_restart_buttons_queue_commands(web, env):
+    publish_registry(env, [caps("office")])
+    url = "/api/clients/office/commands"
+    assert web.post(url, json={"action": "update"}).status_code == 403  # CSRF guard
+    response = web.post(url, json={"action": "update"}, headers=CSRF)
+    assert response.status_code == 202
+    command = response.get_json()["command"]
+    assert command["action"] == "update" and command["state"] == "pending"
+    assert web.post(url, json={"action": "update"}, headers=CSRF).status_code == 409
+    assert web.post(url, json={"action": "restart"}, headers=CSRF).status_code == 202
+    assert web.post(url, json={"action": "reboot"}, headers=CSRF).status_code == 400
+    assert web.post("/api/clients/ghost/commands", json={"action": "update"}, headers=CSRF).status_code == 404
+
+    store = env["app"].extensions["desk_display_client_commands"]
+    store.take_pending("office")
+    store.record_results("office", [{"id": command["id"], "status": "failed", "exit_code": 1,
+                                     "output": "fatal: Not possible to fast-forward"}])
+    rows = {row["client_id"]: row for row in web.get("/api/clients").get_json()["clients"]}
+    latest = {c["action"]: c for c in rows["office"]["commands"]}
+    assert latest["update"]["state"] == "failed" and "fast-forward" in latest["update"]["output"]
+    assert latest["update"]["label"] == "Update code (git pull)"
+    assert latest["update"]["finished_at"].endswith("Z")
+    assert latest["restart"]["state"] == "delivered"
+    assert rows["lobby"]["commands"] == []
+
+
 def test_client_states(env):
     heartbeat = 20
     now = 1_800_000_000.0
@@ -321,7 +351,8 @@ def test_mutations_require_csrf_header(web):
 def test_authentication_required_when_enabled(web, monkeypatch):
     monkeypatch.setenv("SCREEN_UI_PASSWORD", "correct horse battery")
     for method, url in (("get", "/api/playlists"), ("post", "/api/playlists"), ("get", "/api/clients"),
-                        ("put", "/api/clients/office/assignment"), ("get", "/api/playlists/audit")):
+                        ("put", "/api/clients/office/assignment"), ("get", "/api/playlists/audit"),
+                        ("post", "/api/clients/office/commands")):
         response = getattr(web, method)(url, json={}, headers=CSRF)
         assert response.status_code == 401, url
     page = web.get("/playlists")
@@ -658,3 +689,20 @@ def test_browser_screen_config_collapse_and_expand_all_playlists(live_server, br
     page.click("#expandAllPlaylistsBtn")
     assert page.evaluate(visible_rows) == total_rows
     assert page.locator(".playlist-row.is-collapsed").count() == 0
+
+
+def test_browser_update_and_restart_buttons(live_server, browser, env):
+    publish_registry(env, [caps("office")])
+    page = browser.new_page()
+    page.on("dialog", lambda dialog: dialog.accept())
+    page.goto(f"{live_server}/clients")
+    update = "tr[data-client-id='office'] button[data-command='update']"
+    page.wait_for_selector(update)
+    page.click(update)
+    page.wait_for_selector("#notice.ok")
+    assert "update queued" in page.inner_text("#notice")
+    page.wait_for_selector(f"{update}[disabled]")
+    assert "waiting for the display" in page.inner_text("tr[data-client-id='office']")
+    store = env["app"].extensions["desk_display_client_commands"]
+    [command] = store.for_client("office")
+    assert command["action"] == "update" and command["state"] == "pending"

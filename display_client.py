@@ -44,6 +44,7 @@ from playback.package_player import PackagePlayback
 from protocol import CLIENT_SUPPORTED_RENDER_PACKAGE_SCHEMA_VERSIONS
 from protocol_versions import APPLICATION_VERSION, NETWORK_PROTOCOL_VERSION
 from remote_display.client_cache import ClientCache, PlaybackState, reconcile_playback
+from remote_display.client_commands import CommandRunner
 from remote_display.client_screenshots import ClientScreenshots
 from remote_display.client_sync import (
     ActiveContent,
@@ -280,6 +281,7 @@ class DisplayClient:
         self._start_at_starter = True
         self.report = PlaybackReport(physical_rotation=physical_rotation)
         self._stop = threading.Event()
+        self.restart_requested = False
         sync.report = lambda: self.report
         caps = sync.capabilities
         self.has_touch = bool(caps.has_touch)
@@ -809,6 +811,13 @@ class DisplayClient:
         self._stop.set()
         self.sync.stop()
 
+    def request_restart(self) -> None:
+        """Stop so the service manager starts the client again (Restart=always)."""
+
+        LOGGER.info("Restarting the client as requested from the Display Clients page")
+        self.restart_requested = True
+        self.stop()
+
 
 def _load_env_files() -> None:
     if os.environ.get("CONFIG_LOAD_DOTENV", "1").strip().lower() in {"0", "false", "no", "off"}:
@@ -934,6 +943,8 @@ def build_client(settings: dict[str, Any], *, presenter: Any = None, transport: 
     touch = str(settings.get("DESK_DISPLAY_CLIENT_TOUCH") or "auto").strip().lower()
     has_touch = touch == "on" or (touch == "auto" and "hyperpixel" in profile.profile_id.lower())
     animation = settings.get("DESK_DISPLAY_CLIENT_ANIMATION", True)
+    # Update/restart requests from the Display Clients page; results wait here.
+    commands = CommandRunner(cache_dir / "command_results.json", project_dir=_PROJECT_ROOT)
     sync = ClientSync(
         capabilities_for(settings["DESK_DISPLAY_CLIENT_ID"], profile, rotation=decision, has_touch=has_touch,
                          supports_animation=_truthy(animation)),
@@ -943,10 +954,11 @@ def build_client(settings: dict[str, Any], *, presenter: Any = None, transport: 
         enrollment_token=settings.get("DESK_DISPLAY_CLIENT_TOKEN"),
         sync_interval_seconds=int(settings.get("DESK_DISPLAY_SYNC_INTERVAL_SECONDS") or 30),
         heartbeat_interval_seconds=int(settings.get("DESK_DISPLAY_HEARTBEAT_INTERVAL_SECONDS") or 60),
+        commands=commands,
     )
     if screenshots is not None and screenshots.feed_summary is None:
         screenshots.feed_summary = lambda: sync.display_status
-    return DisplayClient(
+    client = DisplayClient(
         profile, presenter, sync, cache, artifacts,
         server_url=server_url,
         physical_rotation=decision.applied,
@@ -960,6 +972,8 @@ def build_client(settings: dict[str, Any], *, presenter: Any = None, transport: 
         update_available=_github_update_available if hardware else None,
         local_screens=default_local_screens() if hardware else None,
     )
+    commands.restart = client.request_restart
+    return client
 
 
 def prepare_environment() -> None:
@@ -1004,6 +1018,11 @@ def main() -> None:  # pragma: no cover - exercised on hardware
         close = getattr(client.presenter, "close", None)
         if callable(close):
             close()
+    if client.restart_requested:
+        # Exit even if a helper thread lingers; systemd (Restart=always) starts
+        # the client again.
+        logging.shutdown()
+        os._exit(0)
 
 
 if __name__ == "__main__":  # pragma: no cover

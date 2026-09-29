@@ -391,6 +391,32 @@ cannot overwrite each other. The row shows whether the new revision has been
 delivered and acknowledged, and warns about screens this client can show
 only as a still, or not at all.
 
+### Updating or restarting a client from the Clients page
+
+Each row on `/clients` has **Update (git pull)** and **Restart client**
+buttons. The config UI queues the command; the client collects it with its
+next heartbeat (about once a minute), runs it, and reports back on a later
+heartbeat, so the result shows in the row a minute or two after pressing.
+
+- **Update (git pull)** runs `git pull --ff-only` in the display's own
+  desk_display folder as the service user. It only changes the code on disk:
+  press **Restart client** afterwards to run it. It does not install new
+  dependencies or rewrite service units; when a release needs those, run
+  `bash scripts/upgrade.sh` on the Pi. A pull that cannot fast-forward (local
+  edits, files owned by root) fails with git's own message.
+- **Restart client** makes `desk_display_client` exit; systemd starts it again
+  after 5 seconds (`Restart=always`), so no sudo is needed. The row shows
+  "done" only once the restarted client has reported in.
+
+A client only runs these two fixed actions, never a command line sent over
+the network, and only when the command reached it through its own
+authenticated heartbeat. Commands nobody answers expire after 15 minutes,
+which is also what a client running software older than this feature shows:
+run `bash scripts/upgrade.sh` on such a display once. Queued commands and
+their output are kept in `.runtime/server/client_commands.json`
+(`DESK_DISPLAY_CLIENT_COMMANDS_PATH`). If the config UI has a login, the
+buttons need it too.
+
 ### Indoor sensor on a client
 
 The `inside` screen is drawn by each display from its own sensor; the server

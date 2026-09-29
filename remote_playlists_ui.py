@@ -10,7 +10,9 @@ from the rotation editor to keep both usable:
                 rotation, version, current screen, cache age, heartbeat,
                 assignment, and saved / delivered / acknowledged revisions;
                 provisioning, credential rotation, revocation and
-                disable/enable (a new credential is shown once, never again).
+                disable/enable (a new credential is shown once, never again);
+                update (git pull) and restart buttons that queue a command
+                the client collects on its next heartbeat and reports back.
 ``/clients/add`` guided "Add a display" wizard: checks the server is
                 reachable on the LAN, names the display and picks its profile
                 and playlist, shows a one-paste install command, and watches
@@ -36,6 +38,7 @@ import deployment_config
 from deployment_config import Role
 from display_profiles import PROFILE_PRESETS
 from remote_display import registration
+from remote_display.client_commands import ACTIONS, CommandError, CommandStore, commands_path
 from remote_display.models import ModelValidationError, identifier
 from remote_display.playlist_store import (
     MAX_NAME_LENGTH,
@@ -59,6 +62,13 @@ from remote_display.registry import read_snapshot
 CSRF_HEADER = "X-Requested-With"
 CSRF_VALUE = "desk-display"
 AUDIT_LIMIT = 100
+
+
+def _iso(seconds: float | None) -> str | None:
+    if seconds is None:
+        return None
+    return datetime.fromtimestamp(seconds, timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z")
+
 
 def _iso_now() -> str:
     return datetime.now(timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z")
@@ -162,6 +172,7 @@ def register(
     app.extensions["desk_display_playlist_store"] = PlaylistStore(store_path(env))
     app.extensions["desk_display_registry_snapshot"] = registry_snapshot_path(env)
     app.extensions["desk_display_provisioning"] = ProvisioningStore(provisioning_path(env))
+    app.extensions["desk_display_client_commands"] = CommandStore(commands_path(env))
     blueprint = Blueprint("remote_playlists", __name__)
 
     def _store() -> PlaylistStore:
@@ -173,6 +184,9 @@ def register(
 
     def _provisioning() -> ProvisioningStore:
         return app.extensions["desk_display_provisioning"]
+
+    def _commands() -> CommandStore:
+        return app.extensions["desk_display_client_commands"]
 
     def server_settings() -> dict[str, Any]:
         source = os.environ if env is None else env
@@ -204,6 +218,10 @@ def register(
 
     @blueprint.errorhandler(ProvisioningError)
     def _provisioning_error(exc: ProvisioningError):
+        return jsonify(exc.as_response()), exc.status
+
+    @blueprint.errorhandler(CommandError)
+    def _command_error(exc: CommandError):
         return jsonify(exc.as_response()), exc.status
 
     @blueprint.errorhandler(registration.ServerUrlError)
@@ -312,6 +330,8 @@ def register(
                 "acknowledged_revision": acknowledged,
                 "revision_state": revision_state(saved, delivered, acknowledged),
                 "recent_errors": status.get("recent_errors") or [],
+                # The latest update and restart command of each kind, newest first.
+                "commands": _latest_commands(client_id),
                 "credential": None if credential is None else {
                     "state": credential["state"],
                     "created_at": credential.get("created_at"),
@@ -321,6 +341,17 @@ def register(
             row["warnings"] = capability_warnings(playlist["document"], {**entry, "state": state}) if playlist and caps.get("display_profile") else []
             rows.append(row)
         return rows
+
+    def _latest_commands(client_id: str) -> list[dict[str, Any]]:
+        latest: dict[str, dict[str, Any]] = {}
+        for command in _commands().for_client(client_id):
+            latest.setdefault(command["action"], command)
+        return [
+            {**command, "label": ACTIONS[command["action"]],
+             "requested_at": _iso(command.get("requested_at")),
+             "finished_at": _iso(command.get("finished_at"))}
+            for command in sorted(latest.values(), key=lambda c: c.get("requested_at") or 0, reverse=True)
+        ]
 
     def respond(payload: Any, status: int = 200):
         return jsonify(deployment_config.scrub_secrets(payload)), status
@@ -587,6 +618,16 @@ def register(
         else:
             return jsonify({"error": "not_found", "message": "unknown action"}), 404
         return respond({"client_id": record["client_id"], "state": record["state"]})
+
+    @blueprint.post("/api/clients/<client_id>/commands")
+    def queue_client_command(client_id: str):
+        payload = body()
+        known = {row["client_id"] for row in client_rows()}
+        client_id = identifier(client_id, "client_id")
+        if client_id not in known:
+            return jsonify({"error": "unknown_client", "message": "no client with this ID"}), 404
+        command = _commands().queue(client_id, payload.get("action"), actor=actor())
+        return respond({"client_id": client_id, "command": {**command, "label": ACTIONS[command["action"]]}}, 202)
 
     @blueprint.put("/api/clients/<client_id>/name")
     def name_client(client_id: str):

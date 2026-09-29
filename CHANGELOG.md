@@ -23,6 +23,12 @@ See the README's [deployment modes](README.md#deployment-modes) and
   command (`POST /api/v1/join`) that installs and configures the new Pi, and
   shows when the display comes online.
   On a Pi still on v0.1 the setup script updates the checkout first.
+- **Update (git pull)** and **Restart client** buttons on each row of the
+  Clients page. The client collects the command on its next authenticated
+  heartbeat, runs one of those two fixed actions (`git pull --ff-only` in its
+  checkout, or exiting so systemd restarts it) and reports the result, which
+  shows in the row (see OPERATIONS.md, "Updating or restarting a client from
+  the Clients page").
 - Every display (standalone, client or combined) starts at the top of the
   playlist labelled "Starter" whenever it restarts, instead of resuming a
   saved position.

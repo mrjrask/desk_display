@@ -474,6 +474,49 @@ def test_heartbeat_advertises_and_records_client_telemetry(api):
     assert office["telemetry"] is None
 
 
+def test_heartbeat_delivers_queued_commands_and_records_results(tmp_path, clock):
+    from remote_display.client_commands import CommandStore
+
+    config = display_server.DisplayServerConfig(enrollment="shared", auth_token=SERVER_TOKEN,
+                                                artifact_dir=tmp_path / "artifacts",
+                                                commands_path=tmp_path / "commands.json")
+    api = display_server.create_app(config, clock=clock).test_client()
+    store = CommandStore(tmp_path / "commands.json", clock=clock)
+    credential = registered(api)
+    queued = store.queue("office", "update", actor="jason")
+
+    # A heartbeat without the commands document (an older client) is never sent one.
+    body = api.post("/api/v1/clients/office/heartbeat", json={"status": status()},
+                    headers=bearer(credential)).get_json()
+    assert body["client_command_versions"] == [1] and "commands" not in body
+    assert store.for_client("office")[0]["state"] == "pending"
+
+    hello = {"version": 1, "results": []}
+    body = api.post("/api/v1/clients/office/heartbeat", json={"status": status(), "commands": hello},
+                    headers=bearer(credential)).get_json()
+    assert body["commands"] == [{"id": queued["id"], "action": "update"}]
+    body = api.post("/api/v1/clients/office/heartbeat", json={"status": status(), "commands": hello},
+                    headers=bearer(credential)).get_json()
+    assert body["commands"] == []
+
+    result = {"id": queued["id"], "status": "succeeded", "exit_code": 0, "output": "Already up to date."}
+    response = api.post("/api/v1/clients/office/heartbeat",
+                        json={"status": status(), "commands": {"version": 1, "results": [result]}},
+                        headers=bearer(credential))
+    assert response.status_code == 200
+    assert store.for_client("office")[0]["state"] == "succeeded"
+
+    # Another client cannot answer office's command.
+    den = registered(api, "den")
+    api.post("/api/v1/clients/den/heartbeat",
+             json={"status": status("den"), "commands": {"version": 1, "results": [{**result, "status": "failed"}]}},
+             headers=bearer(den))
+    assert store.for_client("office")[0]["state"] == "succeeded"
+    bad = api.post("/api/v1/clients/office/heartbeat", json={"status": status(), "commands": {"version": 9}},
+                   headers=bearer(credential))
+    assert bad.status_code == 400
+
+
 def test_malformed_telemetry_is_rejected(api):
     credential = registered(api)
     for bad in (telemetry(heartbeat_rtt_ms=-1), telemetry(download_count="2"), telemetry(extra=1),
