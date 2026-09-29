@@ -454,6 +454,9 @@ SETTINGS: tuple[Setting, ...] = (
     _s("DESK_DISPLAY_PLAYLIST_STORE_PATH", "path", _SERVER, "styles",
        "Server-managed playlist library and per-client assignments, written by the "
        "config UI; defaults to .runtime/server/playlists.json. Its contents hot-reload."),
+    _s("DESK_DISPLAY_CLIENT_COMMANDS_PATH", "path", _SERVER, "leases",
+       "Update and restart commands the config UI's Display Clients page queued for "
+       "clients; defaults to .runtime/server/client_commands.json. Contains no credentials."),
     _s("DESK_DISPLAY_CLIENT_REGISTRY_PATH", "path", _SERVER, "leases",
        "Client registry snapshot the render server writes for the config UI; defaults "
        "to .runtime/server/clients.json. Contains no credentials."),

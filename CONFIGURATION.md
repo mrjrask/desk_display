@@ -262,6 +262,10 @@ on the server, **delivered** to the client, and **acknowledged** by the
 client's heartbeat. The demand preview on the Playlists page lists what each
 assigned profile must render and warns when a playlist uses animation, touch,
 or color that a client cannot show.
+Each row also has **Update (git pull)** and **Restart client** buttons; the
+client collects the command on its next heartbeat and reports the result
+back (see OPERATIONS.md, "Updating or restarting a client from the Clients
+page").
 
 When `SCREEN_UI_PASSWORD` is set these pages and their `/api/` endpoints
 require a login, and every change also needs the page's
@@ -534,6 +538,7 @@ installs only, never clients.
 | `DESK_DISPLAY_ARTIFACT_DIR` | server | restart |  |
 | `DESK_DISPLAY_ARTIFACT_RETENTION_HOURS` | server | restart |  |
 | `DESK_DISPLAY_ARTIFACT_MAX_MB` | server | restart |  |
+| `DESK_DISPLAY_CLIENT_COMMANDS_PATH` | server, standalone | restart |  |
 | `DESK_DISPLAY_CLIENT_REGISTRY_PATH` | server, standalone | restart |  |
 | `DESK_DISPLAY_CLIENT_LEASE_SECONDS` | server | restart |  |
 | `DESK_DISPLAY_STATIC_CLIENTS` | server | restart |  |

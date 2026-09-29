@@ -147,6 +147,46 @@ async function joinCommand(client) {
   } catch (error) { notice(explain(error), "error"); }
 }
 
+const UNFINISHED = new Set(["pending", "delivered"]);
+const COMMAND_STATES = {
+  pending: "waiting for the display", delivered: "running on the display", succeeded: "done",
+  failed: "failed", expired: "expired",
+};
+
+function commandLine(parent, command) {
+  const div = line(parent, ` ${command.label}: ${COMMAND_STATES[command.state] || command.state}`
+    + ` · ${command.finished_at || command.requested_at || ""}`, "muted");
+  div.dataset.commandState = command.state;
+  const tag = document.createElement("span");
+  tag.className = "badge " + ({ succeeded: "online", failed: "error", expired: "warning" }[command.state] || "info");
+  tag.textContent = command.action;
+  div.prepend(tag);
+  if (command.output) {
+    const details = document.createElement("details");
+    const summary = document.createElement("summary");
+    summary.textContent = "Output";
+    const pre = document.createElement("pre");
+    pre.className = "mono";
+    pre.style.whiteSpace = "pre-wrap";
+    pre.textContent = command.output;
+    details.append(summary, pre);
+    div.appendChild(details);
+  }
+}
+
+async function clientCommand(client, action) {
+  const questions = {
+    update: `Update ${client.client_id}? It runs git pull in its desk_display folder on its next heartbeat. Restart it afterwards to run the new code.`,
+    restart: `Restart ${client.client_id}'s display client? The panel goes blank for a few seconds.`,
+  };
+  if (!confirm(questions[action])) return;
+  try {
+    await api("POST", `/api/clients/${encodeURIComponent(client.client_id)}/commands`, { action });
+    notice(`${client.client_id}: ${action === "update" ? "update" : "restart"} queued. It runs on the display's next heartbeat and the result shows here.`);
+  } catch (error) { notice(explain(error), "error"); }
+  load();
+}
+
 async function credentialAction(client, action) {
   const questions = {
     rotate: `Issue a new credential for ${client.client_id}? The old one stops working immediately.`,
@@ -203,6 +243,20 @@ function render(data) {
     cell(tr, (td) => {
       badge(td, client.state);
       line(td, `heartbeat ${client.last_heartbeat || "never"}`, "muted");
+      const busy = new Set((client.commands || []).filter((c) => UNFINISHED.has(c.state)).map((c) => c.action));
+      const reachable = !["never_connected", "unknown", "revoked", "disabled"].includes(client.state);
+      for (const [action, label] of reachable ? [["update", "Update (git pull)"], ["restart", "Restart client"]] : []) {
+        const button = document.createElement("button");
+        button.textContent = label;
+        button.dataset.command = action;
+        button.disabled = busy.has(action);
+        button.title = action === "update"
+          ? "Runs git pull --ff-only in the display's desk_display folder on its next heartbeat"
+          : "Restarts desk_display_client on the display on its next heartbeat";
+        button.addEventListener("click", () => clientCommand(client, action));
+        td.appendChild(button);
+      }
+      for (const command of client.commands || []) commandLine(td, command);
     });
     cell(tr, (td) => {
       line(td, client.display_profile || "unknown profile");

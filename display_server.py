@@ -23,7 +23,8 @@ Authentication
 
 Endpoints
     ``POST /api/v1/register``                      register or renew a lease
-    ``POST /api/v1/clients/<id>/heartbeat``        report status, renew lease
+    ``POST /api/v1/clients/<id>/heartbeat``        report status, renew lease, collect
+                                                   queued update/restart commands
     ``GET  /api/v1/clients/<id>/config``           client configuration
     ``GET  /api/v1/clients/<id>/manifest``         current manifest (ETag)
     ``GET  /api/v1/clients/<id>/artifacts/<sha256>.<ext>``
@@ -68,6 +69,12 @@ from protocol import (
 )
 from protocol_versions import CLIENT_CONFIG_SCHEMA_VERSION, PLAYLIST_SCHEMA_VERSION
 from remote_display.artifact_store import ArtifactStore
+from remote_display.client_commands import (
+    WIRE_VERSION as CLIENT_COMMAND_VERSION,
+    CommandStore,
+    commands_path,
+    parse_heartbeat_commands,
+)
 from remote_display.manifest import build_client_manifest, referenced_hashes
 from remote_display.render_coordinator import RenderCoordinator, Renderer, RevisionSource
 from remote_display.models import (
@@ -136,6 +143,8 @@ class DisplayServerConfig:
     # provisioning store. "shared": every client presents auth_token.
     enrollment: str = "provisioned"
     clients_path: Path | None = None
+    # Update/restart commands queued by the config UI's Display Clients page.
+    commands_path: Path | None = None
     rate_limits: bool = True
 
     @classmethod
@@ -158,6 +167,7 @@ class DisplayServerConfig:
             registry_snapshot_path=registry_snapshot_path(env),
             enrollment=settings["DESK_DISPLAY_SERVER_ENROLLMENT"],
             clients_path=provisioning_path(env),
+            commands_path=commands_path(env),
             rate_limits=bool(settings["DESK_DISPLAY_SERVER_RATE_LIMITS"]),
         )
 
@@ -290,6 +300,8 @@ def create_app(
     app.extensions["desk_display_artifacts"] = artifacts
     provisioning = None if config.clients_path is None else ProvisioningStore(config.clients_path, clock=clock)
     app.extensions["desk_display_provisioning"] = provisioning
+    commands = None if config.commands_path is None else CommandStore(config.commands_path, clock=clock)
+    app.extensions["desk_display_client_commands"] = commands
     limiter = RateLimiter() if config.rate_limits else None
     app.extensions["desk_display_rate_limiter"] = limiter
     provisioned = config.enrollment == "provisioned"
@@ -511,6 +523,8 @@ def create_app(
             "sync_interval_seconds": registry.sync_interval_seconds,
             # Heartbeats may carry a ``telemetry`` document of these versions.
             "client_telemetry_versions": [ClientTelemetry.WIRE_VERSION],
+            # Heartbeats may carry ``commands`` (results); see client_commands.
+            **({"client_command_versions": [CLIENT_COMMAND_VERSION]} if commands is not None else {}),
         }
 
     def _assignment_payload(client_id: str, *, delivered: bool = False) -> dict[str, Any]:
@@ -626,7 +640,7 @@ def create_app(
     def heartbeat(client_id: str):
         record = _client()
         payload = _json_body()
-        unknown = sorted(set(payload) - {"status", "demand", "telemetry"})
+        unknown = sorted(set(payload) - {"status", "demand", "telemetry", "commands"})
         if unknown:
             raise ModelValidationError(unknown[0], "unknown field")
         status = ClientStatus.from_wire(payload.get("status"), path="status")
@@ -637,6 +651,9 @@ def create_app(
         telemetry = None
         if payload.get("telemetry") is not None:
             telemetry = ClientTelemetry.from_wire(payload["telemetry"], path="telemetry")
+        command_results = None
+        if payload.get("commands") is not None:
+            command_results = parse_heartbeat_commands(payload["commands"])
         record = registry.heartbeat(record.client_id, _bearer() or "", status, demand, telemetry)
         body = {
             "client_id": record.client_id,
@@ -644,6 +661,13 @@ def create_app(
             "manifest_revision": _manifest(record)["manifest_revision"],
             **_lease(record),
         }
+        if command_results is not None and commands is not None:
+            # Only a client that speaks the command protocol is sent commands.
+            try:
+                commands.record_results(record.client_id, command_results)
+                body["commands"] = commands.take_pending(record.client_id)
+            except OSError as exc:
+                WEB_LOGGER.warning("Client command store unavailable: %s", exc)
         if display_status is not None:
             try:
                 summary = display_status()

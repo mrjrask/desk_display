@@ -752,6 +752,50 @@ def test_heartbeats_report_delivery_telemetry(env):
     assert client.sync.telemetry()["download_count"] == 0
 
 
+def test_client_runs_update_and_restart_from_the_clients_page(env, monkeypatch):
+    import subprocess
+
+    from remote_display import client_commands
+    from remote_display.client_commands import CommandStore
+
+    commands_file = env.tmp / "commands.json"
+    config = display_server.DisplayServerConfig(enrollment="shared", auth_token=TOKEN,
+                                                artifact_dir=env.tmp / "server-artifacts",
+                                                commands_path=commands_file)
+    app = display_server.create_app(config, clock=env.server_clock)
+    env.transport.api = app.test_client()
+    store = CommandStore(commands_file, clock=env.server_clock)
+    client = env.make_client()
+    runs = []
+
+    def git(argv, **kwargs):
+        runs.append(argv[3:])
+        output = "abc1234\n" if argv[3] == "rev-parse" else "Already up to date."
+        return subprocess.CompletedProcess(argv, 0, output, "")
+
+    runner = client.sync.commands
+    runner._run, runner._background = git, False
+    update = store.queue("office", "update", actor="jason")
+    synced(env, client, 1)  # registers, then the heartbeat collects the command and runs it
+    assert ["pull", "--ff-only"] in runs
+    assert store.for_client("office")[0]["state"] == "delivered"
+    client.sync.heartbeat_once()  # reports the result
+    assert store.for_client("office")[0]["state"] == "succeeded"
+    assert "Already up to date (abc1234)." in store.for_client("office")[0]["output"]
+
+    restart = store.queue("office", "restart", actor="jason")
+    client.sync.heartbeat_once()
+    assert client.restart_requested and client._stop.is_set()
+    client.sync.heartbeat_once()
+    assert {c["id"]: c["state"] for c in store.for_client("office")}[restart["id"]] == "delivered"
+    # The process systemd starts next reports that the restart happened.
+    monkeypatch.setattr(client_commands.os, "getpid", lambda: -1)
+    restarted = env.make_client()
+    synced(env, restarted, 1)
+    states = {c["id"]: c["state"] for c in store.for_client("office")}
+    assert states == {update["id"]: "succeeded", restart["id"]: "succeeded"}
+
+
 def test_no_telemetry_is_sent_to_a_server_that_does_not_advertise_it(env):
     client = env.make_client()
     client.sync._note_cadence({"heartbeat_interval_seconds": 20})

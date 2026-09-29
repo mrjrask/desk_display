@@ -30,6 +30,12 @@ See the README's [deployment modes](README.md#deployment-modes) and
   The Waveshare OLED/LCD HAT (A) is one choice there: its LCD plays the
   playlist and its two side OLEDs run the status helper from the client's
   heartbeat.
+- **Update (git pull)** and **Restart client** buttons on each row of the
+  Clients page. The client collects the command on its next authenticated
+  heartbeat, runs one of those two fixed actions (`git pull --ff-only` in its
+  checkout, or exiting so systemd restarts it) and reports the result, which
+  shows in the row (see OPERATIONS.md, "Updating or restarting a client from
+  the Clients page").
 - Every display (standalone, client or combined) starts at the top of the
   playlist labelled "Starter" whenever it restarts, instead of resuming a
   saved position.

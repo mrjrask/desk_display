@@ -45,6 +45,8 @@ from remote_display.client_cache import (
     PlaylistRejected,
     validate_playlist,
 )
+from remote_display.client_commands import WIRE_VERSION as COMMAND_WIRE_VERSION
+from remote_display.client_commands import CommandRunner
 from remote_display.models import (
     ClientCapabilities,
     ClientDemand,
@@ -563,6 +565,7 @@ class ClientSync:
         clock: Callable[[], float] = time.time,
         rng: random.Random | None = None,
         timer: Callable[[], float] = time.perf_counter,
+        commands: CommandRunner | None = None,
     ) -> None:
         self.capabilities = capabilities
         self.transport = transport
@@ -608,6 +611,10 @@ class ClientSync:
         self._timings: dict[str, Any] = {"download_count": 0, "download_bytes": 0, "download_ms": 0.0}
         self._pass_downloads: dict[str, Any] = dict(self._timings)
         self.consecutive_failures = 0
+        # Update/restart commands from the config UI; exchanged only once the
+        # server advertises a command version this client speaks.
+        self.commands = commands
+        self._commands_accepted = False
 
     # Credential (the per-client lease credential, never the enrollment token)
 
@@ -743,6 +750,9 @@ class ClientSync:
         versions = payload.get("client_telemetry_versions")
         if isinstance(versions, list):
             self._telemetry_accepted = ClientTelemetry.WIRE_VERSION in versions
+        versions = payload.get("client_command_versions")
+        if isinstance(versions, list):
+            self._commands_accepted = COMMAND_WIRE_VERSION in versions
 
     @staticmethod
     def _interval(local: Any, advertised: int | None) -> float:
@@ -929,6 +939,10 @@ class ClientSync:
             heartbeat["demand"] = demand
         if self._telemetry_accepted:
             heartbeat["telemetry"] = self.telemetry()
+        results = None
+        if self.commands is not None and self._commands_accepted:
+            results = self.commands.results()
+            heartbeat["commands"] = {"version": COMMAND_WIRE_VERSION, "results": results}
         started = self._timer()
         response = self._client_request("POST", f"/api/v1/clients/{self.client_id}/heartbeat",
                                         json_body=heartbeat)
@@ -938,6 +952,12 @@ class ClientSync:
         payload = response.json()
         payload = payload if isinstance(payload, dict) else {}
         self._note_cadence(payload)
+        if results is not None and self.commands is not None:
+            try:
+                self.commands.acknowledge(result["id"] for result in results)
+                self.commands.handle(payload.get("commands"))
+            except OSError as exc:  # a command problem must never fail the heartbeat
+                LOGGER.warning("Could not handle remote commands: %s", exc)
         summary = payload.get("display_status")
         if isinstance(summary, dict):
             # Written into display_status.json for the side OLED helper.
