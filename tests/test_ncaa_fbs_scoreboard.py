@@ -1,7 +1,22 @@
 import datetime as dt
+import io
 import logging
+import os
+
+import pytest
+from PIL import Image
 
 from screens import ncaa_fbs_scoreboard
+
+
+@pytest.fixture(autouse=True)
+def _isolated_logo_dirs(monkeypatch, tmp_path):
+    """Keep downloaded logos out of the checkout and start every test cold."""
+
+    monkeypatch.setattr(ncaa_fbs_scoreboard, "AUTO_LOGO_DIR", str(tmp_path / "auto"))
+    ncaa_fbs_scoreboard._DOWNLOAD_FAILURES.clear()
+    ncaa_fbs_scoreboard._REMOTE_LOGO_CACHE.clear()
+    ncaa_fbs_scoreboard._LOGO_MISSES.clear()
 
 
 def test_fetch_uses_fbs_group_and_keeps_only_top_25_games(monkeypatch):
@@ -318,3 +333,97 @@ def test_missing_local_logo_uses_espn_logo_from_payload(monkeypatch):
 
     assert requested == ["https://a.espncdn.com/i/teamlogos/ncaa/500/153.png"]
     assert logo is not None and logo.size == (50, 50)
+
+
+class _LogoResponse:
+    def __init__(self, img):
+        buf = io.BytesIO()
+        img.save(buf, format="PNG")
+        self.content = buf.getvalue()
+
+    def raise_for_status(self):
+        return None
+
+
+def _padded_logo(size, mark):
+    img = Image.new("RGBA", (size, size), (0, 0, 0, 0))
+    offset = (size - mark) // 2
+    img.paste(Image.new("RGBA", (mark, mark), (200, 0, 0, 255)), (offset, offset))
+    return img
+
+
+def _week_game(away_abbr, home_abbr, **away_extra):
+    away = {"team": {"abbreviation": away_abbr, "logo": f"https://espn.test/{away_abbr}.png", **away_extra}}
+    home = {"team": {"abbreviation": home_abbr, "logo": f"https://espn.test/{home_abbr}.png"}}
+    return {"id": f"{away_abbr}-{home_abbr}", "teams": {"away": away, "home": home}}
+
+
+def test_download_missing_team_logos_saves_only_missing_trimmed_and_capped(monkeypatch, tmp_path):
+    repo_dir = tmp_path / "repo"
+    repo_dir.mkdir()
+    Image.new("RGBA", (20, 20), (0, 0, 255, 255)).save(repo_dir / "OSU.png")
+    monkeypatch.setattr(ncaa_fbs_scoreboard, "LOGO_DIR", str(repo_dir))
+    requested = []
+
+    def fake_get(url, timeout=None):
+        requested.append(url)
+        return _LogoResponse(_padded_logo(500, 400))
+
+    monkeypatch.setattr(ncaa_fbs_scoreboard._SESSION, "get", fake_get)
+
+    saved = ncaa_fbs_scoreboard.download_missing_team_logos(
+        [_week_game("OSU", "MICH"), _week_game("MICH", "PSU")]
+    )
+
+    assert saved == ["MICH.png", "PSU.png"]
+    assert requested == ["https://espn.test/MICH.png", "https://espn.test/PSU.png"]
+    auto_dir = ncaa_fbs_scoreboard.AUTO_LOGO_DIR
+    assert sorted(os.listdir(auto_dir)) == ["MICH.png", "PSU.png"]
+    with Image.open(os.path.join(auto_dir, "MICH.png")) as img:
+        assert img.size == (128, 128)
+    # The committed logo is never replaced.
+    with Image.open(repo_dir / "OSU.png") as img:
+        assert img.size == (20, 20)
+
+    # A second refresh finds everything saved and asks ESPN for nothing.
+    requested.clear()
+    assert ncaa_fbs_scoreboard.download_missing_team_logos([_week_game("OSU", "MICH")]) == []
+    assert requested == []
+
+
+def test_download_missing_team_logos_backs_off_after_failure(monkeypatch, tmp_path):
+    monkeypatch.setattr(ncaa_fbs_scoreboard, "LOGO_DIR", str(tmp_path / "repo"))
+    calls = []
+
+    def failing_get(url, timeout=None):
+        calls.append(url)
+        raise RuntimeError("403 Client Error: Forbidden")
+
+    monkeypatch.setattr(ncaa_fbs_scoreboard._SESSION, "get", failing_get)
+
+    games = [_week_game("UNC", "DUKE")]
+    assert ncaa_fbs_scoreboard.download_missing_team_logos(games) == []
+    assert ncaa_fbs_scoreboard.download_missing_team_logos(games) == []
+    assert len(calls) == 2
+
+
+def test_board_reads_downloaded_logo_without_network(monkeypatch, tmp_path):
+    monkeypatch.setattr(ncaa_fbs_scoreboard, "LOGO_DIR", str(tmp_path / "repo"))
+    auto_dir = tmp_path / "auto"
+    auto_dir.mkdir()
+    Image.new("RGBA", (40, 40), (0, 200, 0, 255)).save(auto_dir / "UNC.png")
+
+    def no_network(url, timeout=None):  # pragma: no cover - must not be called
+        raise AssertionError("downloaded logo should be read from disk")
+
+    monkeypatch.setattr(ncaa_fbs_scoreboard._SESSION, "get", no_network)
+
+    logo = ncaa_fbs_scoreboard._load_team_logo({"team": {"abbreviation": "UNC"}}, 60, 90, 50 * 50)
+
+    assert logo is not None and logo.size == (50, 50)
+
+
+def test_logo_url_uses_team_override(monkeypatch):
+    team = {"team": {"abbreviation": "IOWA", "logo": "https://espn.test/IOWA.png"}}
+
+    assert ncaa_fbs_scoreboard._team_logo_url(team) == ncaa_fbs_scoreboard._TEAM_LOGO_URL_OVERRIDES["iowa"]

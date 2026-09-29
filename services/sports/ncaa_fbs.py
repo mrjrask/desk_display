@@ -7,7 +7,11 @@ import logging
 import threading
 
 from config import CENTRAL_TIME
-from screens.ncaa_fbs_scoreboard import _extract_rank, _scoreboard_date, fetch_games_for_day
+from screens.ncaa_fbs_scoreboard import (
+    _extract_rank,
+    _scoreboard_date,
+    fetch_games_for_day,
+)
 
 # The last week that loaded, reused when every ESPN host fails so a transient
 # block does not blank the board.
@@ -88,8 +92,7 @@ def fetch_scoreboard(
     """Return every Top 25 game in the Monday-Sunday week, best-ranked first.
 
     ESPN is asked one day at a time (the working host rejects ranged
-    dates). If any day fails on every ESPN host, the last games loaded for
-    the same week are kept rather than showing a partial or empty week.
+    dates). If any day fails on every ESPN host, the last games loaded for the same week are kept rather than showing a partial or empty week.
     """
 
     current_now = now or dt.datetime.now(CENTRAL_TIME)

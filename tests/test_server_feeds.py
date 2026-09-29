@@ -134,6 +134,53 @@ def feeds_called(provider):
     return names
 
 
+def _fbs_service(tmp_path, downloader):
+    provider = FakeProvider()
+    game = {"id": "1", "teams": {"away": {"team": {"abbreviation": "UNC"}}, "home": {"team": {"abbreviation": "DUKE"}}}}
+    provider.scoreboards = {"scoreboards": {"ncaa_fbs": [game]}, "scoreboard_metadata": {}}
+    service = ServerFeedService(
+        DataCoordinator(provider), provider, fetch_air_quality=lambda *a, **k: None, settings=settings(),
+        standings_fetchers=FakeStandings().fetchers(), history_path=str(tmp_path / "aq.json"),
+        download_ncaa_fbs_logos=downloader,
+    )
+    return service, game
+
+
+def test_server_downloads_ncaa_fbs_logos_after_scoreboard_refresh(tmp_path):
+    downloaded = []
+    service, game = _fbs_service(tmp_path, downloaded.append)
+
+    service.refresh({"NCAA FBS Scoreboard"}, force=True)
+
+    assert downloaded == [[game]]
+    assert [g["id"] for g in service.data.snapshot().values["scoreboards"]["ncaa_fbs"]] == ["1"]
+
+
+def test_logo_download_failure_keeps_the_scores(tmp_path):
+    def broken(games):
+        raise OSError("disk full")
+
+    service, game = _fbs_service(tmp_path, broken)
+
+    service.refresh({"NCAA FBS Scoreboard"}, force=True)
+
+    assert [g["id"] for g in service.data.snapshot().values["scoreboards"]["ncaa_fbs"]] == ["1"]
+
+
+def test_standalone_fetch_never_downloads_logos(monkeypatch):
+    from screens import ncaa_fbs_scoreboard
+    from services.sports import ncaa_fbs
+
+    def forbidden(games):  # pragma: no cover - must not be called
+        raise AssertionError("only the render server downloads logos")
+
+    monkeypatch.setattr(ncaa_fbs_scoreboard, "download_missing_team_logos", forbidden)
+    monkeypatch.setattr(ncaa_fbs, "_FINAL_DAY_CACHE", {})
+    monkeypatch.setattr(ncaa_fbs, "fetch_games_for_day", lambda day: [])
+
+    assert ncaa_fbs.fetch_scoreboard(day=datetime.date(2026, 9, 29)) == []
+
+
 # ── Selection and scheduling ────────────────────────────────────────────────
 
 

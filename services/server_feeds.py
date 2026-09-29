@@ -71,6 +71,7 @@ class ServerFeedService:
         clock: Callable[[], float] = time.monotonic,
         wall_clock: Callable[[], float] = time.time,
         seed: bool = True,
+        download_ncaa_fbs_logos: Callable[[list[dict]], Any] | None = None,
     ) -> None:
         if data is None:
             from services.data_coordinator import coordinator as data
@@ -90,6 +91,9 @@ class ServerFeedService:
         self.standings_fetchers = dict(standings_fetchers or _default_standings_fetchers())
         self.settings = settings
         self.history_path = history_path
+        # Only the render server passes this, so one machine downloads team
+        # logos rather than every display.
+        self.download_ncaa_fbs_logos = download_ncaa_fbs_logos
         self._clock = clock
         self._wall_clock = wall_clock
         self._lock = threading.Lock()
@@ -331,6 +335,12 @@ class ServerFeedService:
         self.data.publish("scoreboard_metadata", metadata)
         for league in leagues:
             self._scoreboard_dates[league] = feeds.scoreboard_date_for_league(league)
+        fbs_games = (payloads.get("scoreboards") or {}).get("ncaa_fbs")
+        if self.download_ncaa_fbs_logos is not None and fbs_games:
+            try:
+                self.download_ncaa_fbs_logos(list(fbs_games))
+            except Exception as exc:  # a logo problem must never cost the scores
+                logging.warning("NCAA FBS logo download failed: %s", exc)
 
     # ── Revisions and health ───────────────────────────────────────────────
 
