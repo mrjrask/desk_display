@@ -1109,11 +1109,19 @@ def validate(
             if raw is None or not str(raw).strip():
                 continue
             owner = ", ".join(sorted(r.value for r in setting.roles))
-            if role is Role.CLIENT:
-                what = "provider credential" if setting.provider or setting.secret else "server setting"
+            if role is Role.CLIENT and (setting.provider or setting.secret):
+                # A credential must never sit on a display: fail closed.
                 report.error(
                     name,
-                    f"{what} does not belong on a client (used by: {owner}); remove it "
+                    f"provider credential does not belong on a client (used by: {owner}); remove it "
+                    "and configure it on the server",
+                )
+            elif role is Role.CLIENT:
+                # A stray plain setting (say, copied over from a v0.1 .env) is
+                # harmless; it must not keep the display from starting.
+                report.warning(
+                    name,
+                    f"server setting is ignored on a client (used by: {owner}); remove it "
                     "and configure it on the server",
                 )
             else:

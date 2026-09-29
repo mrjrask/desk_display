@@ -57,9 +57,11 @@ existing installs keep running.
 
 Startup validation reports:
 
-- **Misplaced server settings on a client.** Any server-only or provider
-  setting with a value in a client's environment is an error (for example
-  `OWM_API_KEY`). Remove it and set it on the server. The config UI settings
+- **Misplaced server settings on a client.** A provider credential or other
+  secret with a value in a client's environment is an error (for example
+  `OWM_API_KEY`), so the client will not start. Any other server-only setting
+  (for example `WEATHER_LATITUDE`) is only a warning: the client ignores it.
+  Remove either kind and set it on the server. The config UI settings
   (`SCREEN_CONFIG_*`, `SCREEN_UI_*`, `SCREEN_SESSION_SECRET`,
   `SCREEN_AUTH_ENABLED`) are allowed everywhere, because a client serves its
   own Screenshots page.
