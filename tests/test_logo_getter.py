@@ -95,6 +95,10 @@ def test_filename_matches_the_fbs_board(team):
     assert lg.team_filename(team) == fbs._team_logo_filename(team)
 
 
+def test_downloaded_logo_size_matches_the_fbs_board():
+    assert lg.TEAM_LOGO_MAX_DIMENSION == fbs.AUTO_LOGO_MAX_DIMENSION
+
+
 def test_logo_overrides_match_both_boards():
     assert lg.LOGO_URL_OVERRIDES == fbs._TEAM_LOGO_URL_OVERRIDES
     assert lg.LOGO_URL_OVERRIDES == ncaam._TEAM_LOGO_URL_OVERRIDES

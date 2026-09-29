@@ -54,6 +54,13 @@ def _scale_y(value: int) -> int:
 REQUEST_TIMEOUT = 10
 SCREEN_ID = "NCAA FBS Scoreboard"
 LOGO_DIR = os.path.join(IMAGES_DIR, "ncaa")
+# Team logos the app downloads from ESPN for itself. Logos in LOGO_DIR (the
+# ones committed to the repo) always win. images/cache is untracked, so these
+# never block a git pull, even when the same logo is later committed.
+AUTO_LOGO_DIR = os.path.join(IMAGES_DIR, "cache", "ncaa")
+# Longest edge of a downloaded logo; the team-logo limit in images/README.md
+# and scripts/logo_getter.py.
+AUTO_LOGO_MAX_DIMENSION = 128
 # site.web.api.espn.com is primary: site.api.espn.com answers 403 to the
 # college football scoreboard from some networks (seen on the server Pi).
 # site.web.api rejects ranged dates and large limits (400), so every request
@@ -436,6 +443,10 @@ def _fit_logo(img: Image.Image, box_w: int, box_h: int, area: Optional[int] = No
 
 def _team_logo_url(team: dict[str, Any]) -> str:
     team_blob = team.get("team") if isinstance(team.get("team"), dict) else team
+    for key in ("abbreviation", "shortDisplayName", "displayName", "name", "location"):
+        override = _TEAM_LOGO_URL_OVERRIDES.get(str(team_blob.get(key) or "").strip().lower())
+        if override:
+            return override
     for source in (team_blob, team):
         if not isinstance(source, dict):
             continue
@@ -450,27 +461,113 @@ def _team_logo_url(team: dict[str, Any]) -> str:
     return ""
 
 
+def _saved_team_logo_path(filename: str) -> Optional[str]:
+    for folder in (LOGO_DIR, AUTO_LOGO_DIR):
+        path = os.path.join(folder, filename)
+        if os.path.exists(path):
+            return path
+    return None
+
+
+def _prepare_downloaded_logo(data: bytes) -> Image.Image:
+    """Trim transparent padding and cap the longest edge, like logo_getter.py."""
+
+    img = Image.open(io.BytesIO(data)).convert("RGBA")
+    bbox = img.getchannel("A").getbbox()
+    if bbox:
+        img = img.crop(bbox)
+    width, height = img.size
+    if max(width, height) > AUTO_LOGO_MAX_DIMENSION:
+        ratio = AUTO_LOGO_MAX_DIMENSION / float(max(width, height))
+        img = img.resize((max(1, round(width * ratio)), max(1, round(height * ratio))), LANCZOS)
+    return img
+
+
+def _save_downloaded_logo(filename: str, img: Image.Image) -> None:
+    os.makedirs(AUTO_LOGO_DIR, exist_ok=True)
+    path = os.path.join(AUTO_LOGO_DIR, filename)
+    tmp_path = f"{path}.{os.getpid()}.tmp"
+    try:
+        img.save(tmp_path, format="PNG", optimize=True)
+        os.replace(tmp_path, path)
+    finally:
+        if os.path.exists(tmp_path):
+            os.remove(tmp_path)
+
+
+def _download_team_logo(team: dict[str, Any], filename: str) -> Optional[Image.Image]:
+    """Fetch ESPN's logo for *team* and keep a copy in AUTO_LOGO_DIR."""
+
+    url = _team_logo_url(team)
+    if not url:
+        return None
+    try:
+        resp = _SESSION.get(url, timeout=REQUEST_TIMEOUT)
+        resp.raise_for_status()
+        img = _prepare_downloaded_logo(resp.content)
+    except Exception as exc:
+        logging.warning("Unable to download NCAA FBS team logo %s: %s", url, exc)
+        return None
+    try:
+        _save_downloaded_logo(filename, img)
+        logging.info("Saved ESPN logo for %s to %s", filename, AUTO_LOGO_DIR)
+    except Exception as exc:
+        logging.warning("Unable to save NCAA FBS team logo %s: %s", filename, exc)
+    return img
+
+
 def _open_team_logo(team: dict[str, Any]) -> Optional[Image.Image]:
-    """Open the local logo, or ESPN's logo from the game payload when none is saved."""
+    """Open the saved logo, or download ESPN's logo from the game payload."""
 
     filename = _team_logo_filename(team)
-    path = os.path.join(LOGO_DIR, filename)
-    if os.path.exists(path):
+    path = _saved_team_logo_path(filename)
+    if path:
         try:
             return Image.open(path).convert("RGBA")
         except Exception as exc:
-            logging.warning("Unable to load NCAA FBS team logo %s: %s", filename, exc)
-    url = _team_logo_url(team)
-    if url:
-        try:
-            resp = _SESSION.get(url, timeout=REQUEST_TIMEOUT)
-            resp.raise_for_status()
-            logging.info("Using ESPN logo for %s; save it as %s to keep it local", filename, filename)
-            return Image.open(io.BytesIO(resp.content)).convert("RGBA")
-        except Exception as exc:
-            logging.warning("Unable to download NCAA FBS team logo %s: %s", url, exc)
+            logging.warning("Unable to load NCAA FBS team logo %s: %s", path, exc)
+    img = _download_team_logo(team, filename)
+    if img is not None:
+        return img
     logging.warning("Missing NCAA FBS team logo; expected filename: %s", filename)
     return None
+
+
+# Filenames whose download failed, and when; retried after LOGO_MISS_RETRY_SECONDS.
+_DOWNLOAD_FAILURES: dict[str, float] = {}
+
+
+def download_missing_team_logos(games: list[dict]) -> list[str]:
+    """Save ESPN's logo for every team in *games* that has no saved logo.
+
+    Runs when the scoreboard feed refreshes, so each new week's teams are on
+    disk before the board draws them. Returns the filenames saved.
+    """
+
+    saved: list[str] = []
+    seen: set[str] = set()
+    for game in games or []:
+        teams = game.get("teams") if isinstance(game, dict) else None
+        if not isinstance(teams, dict):
+            continue
+        for team in (teams.get("away"), teams.get("home")):
+            if not isinstance(team, dict) or not team:
+                continue
+            filename = _team_logo_filename(team)
+            if filename in seen or _saved_team_logo_path(filename):
+                continue
+            seen.add(filename)
+            failed_at = _DOWNLOAD_FAILURES.get(filename)
+            if failed_at is not None and time.monotonic() - failed_at < LOGO_MISS_RETRY_SECONDS:
+                continue
+            if _download_team_logo(team, filename) is None or not _saved_team_logo_path(filename):
+                _DOWNLOAD_FAILURES[filename] = time.monotonic()
+                continue
+            _DOWNLOAD_FAILURES.pop(filename, None)
+            saved.append(filename)
+    if saved:
+        logging.info("Downloaded %d NCAA FBS team logo(s): %s", len(saved), ", ".join(saved))
+    return saved
 
 
 def _load_team_logo(

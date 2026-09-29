@@ -195,6 +195,13 @@ See the README's [deployment modes](README.md#deployment-modes) and
   same area inside wider logo columns, so wordmarks and round marks read at
   the same size. A team with no saved logo uses ESPN's logo from the game
   data before falling back to its abbreviation.
+- NCAA FBS Scoreboard downloads missing team logos itself. Whenever the week's
+  games load, the machine that renders the board (the render server, or a
+  standalone display) saves ESPN's logo, trimmed and capped at 128 px like
+  `scripts/logo_getter.py`, for each team with no saved logo, into the
+  untracked `images/cache/ncaa/`. Logos committed to `images/ncaa/` always win
+  and are never touched, so a new week needs no logo run, commit or client
+  `git pull`.
 - The `inside` screen works on display clients with an indoor sensor. The
   client reads its own sensor, set by `INSIDE_SENSOR`, `INSIDE_I2C_BUSES` and
   the new optional `INSIDE_I2C_ADDRESS` in its `.env.client`, and draws the
