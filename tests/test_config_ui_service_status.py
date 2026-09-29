@@ -116,13 +116,14 @@ def test_other_modes_keep_the_full_config_ui(tmp_path, monkeypatch, mode):
     assert config_ui._screenshots_only() is False
 
 
-def _cache_playlist(cache_dir, screens):
+def _cache_playlist(cache_dir, screens, document=None):
     import copy
 
     from remote_display.client_cache import ClientCache
     from remote_display.playlist_store import document_revision
 
-    document = {"screens": {screen: 1 for screen in screens}, "sequence": []}
+    if document is None:
+        document = {"screens": {screen: 1 for screen in screens}, "sequence": []}
     ClientCache(cache_dir).offer(
         {
             "playlist_id": "default",
@@ -141,6 +142,28 @@ def test_client_screenshots_follow_the_playlist_it_plays(tmp_path, monkeypatch):
     _cache_playlist(tmp_path / "cache" / "client", ["weather1", "cubs last", "date"])
     ordered = config_ui._in_panel_playback_order(["date", "news headlines", "weather1", "cubs last"])
     assert ordered == ["weather1", "cubs last", "date", "news headlines"]
+
+
+def test_client_screenshots_keep_alternates_and_disabled_rows_in_rotation_order(tmp_path, monkeypatch):
+    install_modes.write_marker(tmp_path, "client")
+    monkeypatch.setattr(config_ui, "__file__", str(tmp_path / "config_ui.py"))
+    monkeypatch.delenv("DESK_DISPLAY_CLIENT_CACHE_DIR", raising=False)
+    document = {
+        "screens": {
+            "hawks logo": 1,
+            "hawks stand1": 0,
+            "date": {"frequency": 1, "alt": {"screen": "nixie", "frequency": 3}},
+            "nixie": 0,
+            "weather1": 0,
+            "news headlines": 1,
+        },
+        "playlists": {"hawks": {"label": "Hawks", "steps": [{"screen": "hawks logo"}, {"screen": "hawks stand1"}]}},
+        "sequence": [{"playlist": "hawks"}],
+    }
+    _cache_playlist(tmp_path / "cache" / "client", None, document)
+    ordered = config_ui._in_panel_playback_order(["cubs last", "date", "hawks logo", "nixie"])
+    # The rotation editor lists Ungrouped rows first, then each playlist group.
+    assert ordered == ["date", "nixie", "weather1", "news headlines", "hawks logo", "hawks stand1", "cubs last"]
 
 
 def test_combined_screenshots_follow_the_panels_configured_cache(tmp_path, monkeypatch):
