@@ -614,7 +614,7 @@ def create_app(
         if credential is not None and not isinstance(credential, str):
             raise ModelValidationError("client_credential", "must be a string")
         registration = registry.register(capabilities, demand, credential=credential,
-                                         enrollment_id=enrollment_id)
+                                         enrollment_id=enrollment_id, address=request.remote_addr)
         record = registration.record
         WEB_LOGGER.info(
             "client %s %s (profile %s)",
@@ -654,7 +654,8 @@ def create_app(
         command_results = None
         if payload.get("commands") is not None:
             command_results = parse_heartbeat_commands(payload["commands"])
-        record = registry.heartbeat(record.client_id, _bearer() or "", status, demand, telemetry)
+        record = registry.heartbeat(record.client_id, _bearer() or "", status, demand, telemetry,
+                                    address=request.remote_addr)
         body = {
             "client_id": record.client_id,
             **_assignment_payload(record.client_id, delivered=True),
@@ -765,6 +766,7 @@ def create_app(
                 "demand": None if record.demand is None else record.demand.to_wire(),
                 "status": None if record.status is None else record.status.to_wire(),
                 "telemetry": None if record.telemetry is None else record.telemetry.to_wire(),
+                "address": record.address,
                 **_assignment_payload(record.client_id),
             })
         demand = [

@@ -134,6 +134,9 @@ class ClientRecord:
     delivered_playlist_revision: str | None = None
     # The provisioned credential this lease was issued under (None in shared mode).
     enrollment_id: str | None = None
+    # The network address the client last reached the server from (diagnostic;
+    # lets tools on the LAN find the display's own config UI).
+    address: str | None = None
 
     def lease_state(self, now: float) -> str:
         if self.disabled:
@@ -203,6 +206,7 @@ class ClientRegistry:
         *,
         credential: str | None = None,
         enrollment_id: str | None = None,
+        address: str | None = None,
     ) -> Registration:
         if demand is not None:
             demand.matches(capabilities)
@@ -240,6 +244,7 @@ class ClientRegistry:
                 telemetry=record.telemetry if record else None,
                 delivered_playlist_revision=record.delivered_playlist_revision if record else None,
                 enrollment_id=enrollment_id,
+                address=address or (record.address if record else None),
             )
             self._clients[record.client_id] = record
             return Registration(record=replace(record), credential=new_credential, renewed=renewed)
@@ -263,6 +268,8 @@ class ClientRegistry:
         status: ClientStatus,
         demand: ClientDemand | None = None,
         telemetry: ClientTelemetry | None = None,
+        *,
+        address: str | None = None,
     ) -> ClientRecord:
         record = self.authenticate(client_id, credential)
         if status.client_id != client_id:
@@ -276,6 +283,8 @@ class ClientRegistry:
             current.telemetry = telemetry
             current.last_seen = now
             current.lease_expires_at = now + self.lease_seconds
+            if address:
+                current.address = address
             if demand is not None:
                 current.demand = demand
             return replace(current)
@@ -348,6 +357,7 @@ class ClientRegistry:
                 "status": None if record.status is None else record.status.to_wire(),
                 "telemetry": None if record.telemetry is None else record.telemetry.to_wire(),
                 "delivered_playlist_revision": record.delivered_playlist_revision,
+                "address": record.address,
             }
         return {
             "schema_version": 1,

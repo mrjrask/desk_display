@@ -500,6 +500,33 @@ excludes the network, so a gap between it and the client's figure is the
 link. Clients older than this release report no timings ("no timings
 reported").
 
+### Comparing screens across displays
+
+To see every version of each screen side by side, run this from any
+computer on the LAN (only Python 3 is needed):
+
+```bash
+python3 scripts/collect_client_screenshots.py --server square.local
+```
+
+It asks the server's config UI (port 5002) for the display clients, then
+fetches the latest screenshots from each online client's own config UI
+(port 5002 on the client, which client-only installs run in screenshots-only
+mode). The page, saved to the Desktop as
+`desk_display_screenshots_<date-time>.html` with every image embedded, has
+one heading per screen and each display's screenshot under it, labelled
+with the display's name, profile and size. Displays that are offline or
+can't be reached are listed at the top as skipped.
+
+Clients are reached at the address they last connected to the server from
+(a combined server's own panel at the server's address). A client that has
+not sent a heartbeat since the server was upgraded has no recorded address,
+so the script tries `<client id>.local`; `--client-host ID=HOST` sets one by
+hand. If the config UI has a password (`SCREEN_UI_PASSWORD`), pass
+`--password` or type it when asked; the same password is tried on every
+display. `--output` picks the file, `--include-inactive` also tries offline
+clients.
+
 ### Checking scroll smoothness
 
 A client plays scrolling screens itself, one step per frame at the rate the
