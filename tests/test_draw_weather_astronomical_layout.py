@@ -25,16 +25,20 @@ def test_astronomical_layout_handles_supported_display_profiles():
     display_hat = _astronomical_layout_details(320, 240)
     assert display_hat["split_columns"] is True
     assert display_hat["compact"] is True
+    assert display_hat["group_rows"] is False
 
     # hyperpixel rectangular
     hyperpixel = _astronomical_layout_details(800, 480)
     assert hyperpixel["split_columns"] is True
     assert hyperpixel["compact"] is False
+    assert hyperpixel["group_rows"] is False
 
     # hyperpixel square
     hyperpixel_square = _astronomical_layout_details(720, 720)
     assert hyperpixel_square["split_columns"] is True
     assert hyperpixel_square["compact"] is False
+    # Rise/Set sit together instead of spreading down the tall columns.
+    assert hyperpixel_square["group_rows"] is True
 
     # miniTFT
     minipitft = _astronomical_layout_details(240, 135)

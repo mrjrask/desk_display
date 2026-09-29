@@ -1886,6 +1886,9 @@ def _astronomical_layout_details(width: int, height: int) -> dict[str, object]:
     ultra_compact = short_edge <= 135 or width <= 240 or height <= 135
     compact = ultra_compact or short_edge <= 240 or width <= 360
     split_columns = width >= 280 and not (height >= width and short_edge < 220)
+    # Square panels leave tall columns under the icons; spreading two rows
+    # across all of it strands "Rise" far above "Set", so keep them together.
+    group_rows = split_columns and not compact and height >= width
 
     sun_labels = (
         ("Rise", "sunrise_civil"),
@@ -1896,6 +1899,7 @@ def _astronomical_layout_details(width: int, height: int) -> dict[str, object]:
         "compact": compact,
         "ultra_compact": ultra_compact,
         "split_columns": split_columns,
+        "group_rows": group_rows,
         "title_font": FONT_WEATHER_DETAILS_SMALL_BOLD if compact else FONT_WEATHER_LABEL,
         "label_font": FONT_WEATHER_DETAILS_TINY_LARGE if compact else FONT_WEATHER_DETAILS_SMALL_BOLD,
         "value_font": FONT_WEATHER_DETAILS_TINY if compact else FONT_WEATHER_DETAILS_SMALL,
@@ -2133,6 +2137,13 @@ def draw_weather_astronomical(display, weather, transition: bool = False):
         min(ly1, ry1) - aligned_row_y - 4,
     ) // max(1, len(moon_rows))
     row_gap = max(13 if layout["compact"] else 22, row_gap)
+    if layout.get("group_rows") and len(moon_rows) > 1:
+        line_bbox = _safe_textbbox(draw, "Rise 12:00 PM", value_font)
+        tight_gap = (line_bbox[3] - line_bbox[1]) * 2
+        if tight_gap < row_gap:
+            # Centre the tightened rows in the space the spread-out rows used.
+            aligned_row_y += (row_gap - tight_gap) * (len(moon_rows) - 1) // 2
+            row_gap = tight_gap
     for idx, (label, value) in enumerate(sun_rows):
         y = aligned_row_y + idx * row_gap
         if y > ly1 - 11:
