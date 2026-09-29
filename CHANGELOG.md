@@ -215,6 +215,10 @@ See the README's [deployment modes](README.md#deployment-modes) and
   the new optional `INSIDE_I2C_ADDRESS` in its `.env.client`, and draws the
   screen with the v0.1 layout; the server renders nothing for it. A client
   without a sensor skips the screen, as the standalone display did.
+- `systemctl stop` (and restart) of `desk_display_client.service` now stops
+  the client within a second or two. SDL, which HyperPixel and window panels
+  use, had taken over SIGTERM and only queued a quit event nobody read, so
+  systemd waited out its 10 s timeout and SIGKILLed the client.
 
 ### Known limitations
 
