@@ -73,7 +73,8 @@ def caps(client_id, profile="hyperpixel4", **extra):
     )
 
 
-def publish_registry(env, clients, *, delivered=None, acknowledged=None, clock=None, telemetry=None):
+def publish_registry(env, clients, *, delivered=None, acknowledged=None, clock=None, telemetry=None,
+                     addresses=None):
     """Write the snapshot the render server would publish."""
 
     import time
@@ -81,7 +82,8 @@ def publish_registry(env, clients, *, delivered=None, acknowledged=None, clock=N
     clock = clock or time.time
     registry = ClientRegistry(lease_seconds=60, static_clients={"lobby": "hdmi_1080p"}, clock=clock)
     for capabilities in clients:
-        registration = registry.register(capabilities)
+        registration = registry.register(capabilities,
+                                         address=(addresses or {}).get(capabilities.client_id))
         status = ClientStatus(
             client_id=capabilities.client_id, playback_state="playing",
             accepted_revisions=AcceptedRevisions(playlist_revision=(acknowledged or {}).get(capabilities.client_id)),
@@ -384,6 +386,14 @@ def test_client_rows_carry_delivery_telemetry(web, env):
     # A client that predates telemetry (or has not reported yet) has none.
     assert rows["den"]["telemetry"] is None
     assert "last_sync_age_seconds" in rows["den"]
+
+
+def test_client_rows_carry_the_address_the_display_connected_from(web, env):
+    publish_registry(env, [caps("office"), caps("den")], addresses={"office": "10.0.0.7"})
+    rows = {row["client_id"]: row for row in web.get("/api/clients").get_json()["clients"]}
+    assert rows["office"]["address"] == "10.0.0.7"
+    assert rows["den"]["address"] is None
+    assert rows["lobby"]["address"] is None  # static, never connected
 
 
 def test_update_and_restart_buttons_queue_commands(web, env):

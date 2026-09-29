@@ -49,6 +49,12 @@ See the README's [deployment modes](README.md#deployment-modes) and
   old the screen on the panel is and failed passes in a row. It shows in a
   **Delivery** column on the Clients page and in `/api/v1/admin/status`
   (see OPERATIONS.md, "Checking delivery speed").
+- `scripts/collect_client_screenshots.py` gathers the latest screenshot of
+  every screen from every active display client into one self-contained HTML
+  page, grouped by screen, for comparing how each screen looks on each
+  display. The server now records the address each client last connected
+  from (Clients API and `/api/v1/admin/status`) so the script can find them
+  (see OPERATIONS.md, "Comparing screens across displays").
 - New **MLB Playoffs** screen: the postseason bracket laid out like
   mlb.com/postseason (AL left, NL right, World Series in the middle, seeds and
   series scores), sized for every display profile, with the current round's

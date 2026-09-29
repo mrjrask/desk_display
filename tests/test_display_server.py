@@ -452,6 +452,16 @@ def test_heartbeat_renews_lease_and_records_status(api, clock):
     assert office["demand"]["required_screens"] == ["inside"]
 
 
+def test_registry_records_the_address_each_client_connects_from(api):
+    credential = registered(api)
+    office = next(c for c in admin_status(api)["clients"] if c["client_id"] == "office")
+    assert office["address"] == "127.0.0.1"
+    api.post("/api/v1/clients/office/heartbeat", json={"status": status()}, headers=bearer(credential),
+             environ_base={"REMOTE_ADDR": "10.0.0.7"})
+    office = next(c for c in admin_status(api)["clients"] if c["client_id"] == "office")
+    assert office["address"] == "10.0.0.7"
+
+
 def telemetry(**overrides):
     return {"type": "client_telemetry", "version": 1, "heartbeat_rtt_ms": 42.0, "download_count": 1,
             "download_bytes": 2048, "download_ms": 90.0, "displayed_content_age_seconds": 12.0, **overrides}

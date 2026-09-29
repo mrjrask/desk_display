@@ -320,6 +320,8 @@ def register(
                 # Client-measured delivery timings (None from clients that predate them).
                 "telemetry": _telemetry_row(entry.get("telemetry")),
                 "last_heartbeat": entry.get("last_seen"),
+                # Where the display last reached the server from (127.0.0.1 for a combined panel).
+                "address": entry.get("address"),
                 "lease_expires_at": entry.get("lease_expires_at"),
                 "assignment": None if playlist is None else {
                     "playlist_id": playlist["id"],
