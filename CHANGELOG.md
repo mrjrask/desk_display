@@ -195,6 +195,8 @@ See the README's [deployment modes](README.md#deployment-modes) and
   same area inside wider logo columns, so wordmarks and round marks read at
   the same size. A team with no saved logo uses ESPN's logo from the game
   data before falling back to its abbreviation.
+- NCAA FBS Scoreboard games are listed by their best-ranked team (#1 first),
+  then by the other team's rank, then by kickoff time.
 - NCAA FBS Scoreboard downloads missing team logos itself. Whenever the week's
   games load, the machine that renders the board (the render server, or a
   standalone display) saves ESPN's logo, trimmed and capped at 128 px like
