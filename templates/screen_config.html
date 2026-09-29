@@ -200,114 +200,6 @@
       grid-template-columns: repeat(4, minmax(160px, 1fr));
       gap: 0.6rem;
     }
-    .screen-speed-field {
-      display: flex;
-      align-items: center;
-      gap: 0.4rem;
-      margin-top: 0.4rem;
-    }
-    .screen-speed-field .screen-speed-toggle {
-      display: flex;
-      align-items: center;
-      gap: 0.3rem;
-      font-size: 0.75rem;
-      font-weight: 600;
-      color: #cbd5f5;
-      white-space: nowrap;
-    }
-    .screen-speed-field .screen-speed-toggle input[type="checkbox"] {
-      margin: 0;
-      accent-color: #38bdf8;
-      width: auto;
-    }
-    .screen-speed-field input[type="range"] {
-      flex: 1;
-      min-width: 0;
-      accent-color: #38bdf8;
-    }
-    .screen-speed-field .screen-speed-value {
-      font-size: 0.75rem;
-      color: #94a3b8;
-      min-width: 3ch;
-      text-align: right;
-    }
-    .screen-speed-field input[type="range"]:disabled {
-      opacity: 0.4;
-    }
-    .playlist-controls {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 1rem;
-      margin-bottom: 1rem;
-      flex-wrap: wrap;
-    }
-    .playlist-controls .field {
-      display: flex;
-      align-items: center;
-      gap: 0.75rem;
-      flex-wrap: wrap;
-      flex: 1 1 320px;
-    }
-    .playlist-controls input {
-      padding: var(--field-padding);
-      border-radius: 999px;
-      border: 1px solid var(--field-border);
-      background: var(--field-bg);
-      color: #e2e8f0;
-      font-size: 0.95rem;
-      min-width: 220px;
-      flex: 1 1 240px;
-    }
-    .playlist-bulk-actions {
-      display: flex;
-      gap: 0.5rem;
-      flex-wrap: wrap;
-    }
-    .playlist-controls .hint {
-      color: #94a3b8;
-      font-size: 0.85rem;
-      flex: 1 1 260px;
-    }
-    .playlist-row {
-      grid-column: 1 / -1;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      padding: 0.6rem 0.85rem;
-      border-radius: 14px;
-      border: 1px dashed rgba(148, 163, 184, 0.35);
-      background: rgba(30, 41, 59, 0.7);
-    }
-    .playlist-row.is-collapsed {
-      border-style: solid;
-      opacity: 0.9;
-    }
-    .playlist-row .meta {
-      display: flex;
-      align-items: baseline;
-      gap: 0.6rem;
-    }
-    .playlist-row .label {
-      font-size: 0.7rem;
-      text-transform: uppercase;
-      letter-spacing: 0.12em;
-      color: #94a3b8;
-      font-weight: 700;
-    }
-    .playlist-row .name {
-      font-weight: 700;
-      font-size: 1rem;
-    }
-    .playlist-row .count {
-      font-size: 0.8rem;
-      color: #94a3b8;
-    }
-    .playlist-actions {
-      display: flex;
-      gap: 0.5rem;
-      flex-wrap: wrap;
-    }
     .btn-secondary {
       border: 1px solid rgba(148, 163, 184, 0.4);
       background: rgba(15, 23, 42, 0.8);
@@ -322,199 +214,9 @@
       background: rgba(56, 189, 248, 0.2);
       border-color: rgba(56, 189, 248, 0.6);
     }
-    .table-header {
-      display: grid;
-      grid-template-columns:
-        40px
-        minmax(165px, 1.25fr)
-        minmax(130px, 0.85fr)
-        minmax(120px, 0.7fr)
-        minmax(160px, 0.95fr)
-        minmax(200px, 1.3fr)
-        minmax(235px, 1.15fr)
-        minmax(140px, 0.9fr)
-        minmax(120px, 0.7fr);
-      gap: 0.55rem;
-      padding: 0 0.5rem 0.25rem;
-      text-transform: uppercase;
-      letter-spacing: 0.08em;
-      font-size: 0.75rem;
-      color: #94a3b8;
-      font-weight: 700;
-    }
-    .freq-header {
-      display: flex;
-      flex-direction: column;
-      align-items: flex-start;
-      gap: 0.25rem;
-    }
-    .zero-toggle {
-      display: flex;
-      align-items: center;
-      gap: 0.4rem;
-      font-size: 0.65rem;
-      font-weight: 600;
-      text-transform: none;
-      color: #cbd5f5;
-      letter-spacing: 0.02em;
-    }
-    .zero-toggle input {
-      margin: 0;
-      accent-color: #38bdf8;
-    }
-    .table {
-      display: grid;
-      gap: 0.75rem;
-    }
-    .row {
-      display: grid;
-      grid-template-columns:
-        40px
-        minmax(165px, 1.25fr)
-        minmax(130px, 0.85fr)
-        minmax(120px, 0.7fr)
-        minmax(160px, 0.95fr)
-        minmax(200px, 1.3fr)
-        minmax(235px, 1.15fr)
-        minmax(140px, 0.9fr)
-        minmax(120px, 0.7fr);
-      gap: 0.55rem;
-      align-items: center;
-      padding: 0.9rem 0.85rem;
-      border-radius: 14px;
-      border: 1px solid rgba(148, 163, 184, 0.2);
-      background: rgba(15, 23, 42, 0.8);
-    }
-    .row input {
-      width: 100%;
-      padding: var(--field-padding);
-      border-radius: var(--field-radius);
-      border: 1px solid var(--field-border);
-      background: var(--field-bg);
-      color: #e2e8f0;
-      font-size: 0.95rem;
-    }
-    .row select {
-      width: 100%;
-      padding: var(--field-padding);
-      border-radius: var(--field-radius);
-      border: 1px solid var(--field-border);
-      background: var(--field-bg);
-      color: #e2e8f0;
-      font-size: 0.95rem;
-    }
-    .alt-screen-field {
-      display: flex;
-      gap: 0.45rem;
-      align-items: center;
-    }
-    .alt-screen-field .alt-screen-input {
-      flex: 1;
-    }
-    .hide-after-field {
-      display: flex;
-      align-items: center;
-      gap: 0.4rem;
-    }
-    .hide-after-field input[type="checkbox"] {
-      margin: 0;
-      accent-color: #38bdf8;
-      width: auto;
-    }
-    .hide-after-field .hide-after-input {
-      flex: 1;
-      min-width: 0;
-    }
-    .compact-number-input {
-      width: 6ch !important;
-      min-width: 6ch;
-    }
-    .alt-screen-clear {
-      width: 30px;
-      height: 30px;
-      border-radius: 999px;
-      border: 1px solid rgba(148, 163, 184, 0.45);
-      background: rgba(15, 23, 42, 0.85);
-      color: #cbd5e1;
-      font-weight: 700;
-      line-height: 1;
-      cursor: pointer;
-      padding: 0;
-      flex: 0 0 auto;
-    }
-    .alt-screen-clear:hover {
-      background: rgba(239, 68, 68, 0.18);
-      border-color: rgba(239, 68, 68, 0.55);
-      color: #fecaca;
-    }
-    .handle {
-      cursor: grab;
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      font-size: 1.2rem;
-      color: #7dd3fc;
-      user-select: none;
-    }
-    .row.dragging {
-      opacity: 0.5;
-      border-style: dashed;
-    }
-    .row .screen-id {
-      font-weight: 700;
-      font-size: 1rem;
-    }
-    .row .hint {
-      font-size: 0.75rem;
-      color: #94a3b8;
-      margin-top: 0.25rem;
-    }
-    .row > div {
-      min-width: 0;
-    }
-    .row input:focus,
-    .row select:focus,
-    .playlist-controls input:focus {
-      outline: 2px solid rgba(56, 189, 248, 0.55);
-      outline-offset: 1px;
-    }
-    @media (max-width: 1100px) {
-      .table-header,
-      .row {
-        grid-template-columns:
-          32px
-          minmax(160px, 1.3fr)
-          minmax(130px, 0.9fr)
-          minmax(110px, 0.7fr)
-          minmax(150px, 0.9fr)
-          minmax(180px, 1.1fr)
-          minmax(170px, 1fr)
-          minmax(130px, 0.9fr)
-          minmax(110px, 0.7fr);
-      }
-    }
     @media (max-width: 900px) {
-      .table-header {
-        display: none;
-      }
-      .row {
-        grid-template-columns: 40px 1fr;
-        grid-auto-rows: auto;
-      }
-      .row > div {
-        grid-column: span 2;
-      }
-      .row .handle {
-        grid-column: span 2;
-        justify-content: flex-start;
-      }
       .global-scroll-controls {
         grid-template-columns: 1fr;
-      }
-      .playlist-row {
-        flex-direction: column;
-        align-items: flex-start;
-        gap: 0.6rem;
       }
     }
   </style>
@@ -591,94 +293,7 @@
         25% slower. Horizontal tickers and logo animations are unaffected.
       </div>
     </div>
-    <div class="playlist-controls">
-      <div class="field">
-        <input type="text" id="newPlaylistName" placeholder="Create a new playlist">
-        <button class="btn-secondary" id="addPlaylistBtn" type="button">Add playlist</button>
-      </div>
-      <div class="playlist-bulk-actions">
-        <button class="btn-secondary" id="collapseAllPlaylistsBtn" type="button">Collapse all</button>
-        <button class="btn-secondary" id="expandAllPlaylistsBtn" type="button">Expand all</button>
-      </div>
-      <div class="hint">Group screens into playlists, then move the playlists to reorder chunks of screens.</div>
-    </div>
-    <div class="table-header">
-      <div></div>
-      <div>Screen</div>
-      <div>Playlist</div>
-      <div class="freq-header">
-        <label class="zero-toggle">
-          <input type="checkbox" id="hideZeroFreq">
-          Hide 0
-        </label>
-        <div>Freq</div>
-      </div>
-      <div>Speed</div>
-      <div>Hide after</div>
-      <div>Alt screen</div>
-      <div>Extra sec</div>
-      <div>Alt freq</div>
-    </div>
-    <div class="table" id="screenTable">
-      {% for screen in screens %}
-      <div class="row screen-row" draggable="true" data-screen-id="{{ screen.id }}">
-        <div class="handle">☰</div>
-        <div>
-          <div class="screen-id">{{ screen.id }}</div>
-        </div>
-        <div>
-          <select class="playlist-select"></select>
-          <div class="hint">Assign to a playlist.</div>
-        </div>
-        <div>
-          <input type="number" min="0" step="1" value="{{ screen.frequency }}" class="freq-input compact-number-input">
-          <div class="hint">0 disables the base screen. All enabled screens play in cycle 1, subject to availability. 1 = every cycle; 2 = cycles 1, 3, 5; 3 = cycles 1, 4, 7.</div>
-        </div>
-        <div>
-          <div class="screen-speed-field">
-            <label class="screen-speed-toggle">
-              <input type="checkbox" class="screen-speed-enabled-input" {% if screen.scroll_speed_enabled %}checked{% endif %} aria-label="Override scroll speed for {{ screen.id }}">
-            </label>
-            <input type="range" min="0.25" max="3" step="0.1" value="{{ screen.scroll_speed|default(1.0) }}" class="screen-speed-input" {% if not screen.scroll_speed_enabled %}disabled{% endif %}>
-            <output class="screen-speed-value">{{ '%.1f'|format(screen.scroll_speed|default(1.0)) }}×</output>
-          </div>
-          <div class="hint">When checked, overrides this screen's scroll speed.</div>
-        </div>
-        <div>
-          <div class="hide-after-field">
-            <input type="checkbox" class="hide-after-enabled-input" {% if screen.hide_after_enabled %}checked{% endif %} aria-label="Enable hide-after date for {{ screen.id }}">
-            <input type="datetime-local" class="hide-after-input" value="{{ screen.hide_after_at }}" {% if not screen.hide_after_enabled %}hidden{% endif %}>
-          </div>
-          <div class="hint">When checked, hide after this date/time.</div>
-        </div>
-        <div>
-          <div class="alt-screen-field">
-            <select class="alt-screen-input">
-              <option value="">No alternate</option>
-              {% if ',' in screen.alt_screen %}
-              <option value="{{ screen.alt_screen }}" selected>Multiple</option>
-              {% endif %}
-              {% for screen_id in screen_ids %}
-              {% if screen_id != screen.id %}
-              <option value="{{ screen_id }}" {% if screen.alt_screen == screen_id %}selected{% endif %}>{{ screen_id }}</option>
-              {% endif %}
-              {% endfor %}
-            </select>
-            <button type="button" class="alt-screen-clear" aria-label="Clear alternate screens" title="Clear alternate screens">×</button>
-          </div>
-          <div class="hint">Select one alternate screen.</div>
-        </div>
-        <div>
-          <input type="number" min="0" step="1" value="{{ screen.extra_seconds }}" class="extra-seconds-input compact-number-input">
-          <div class="hint">Add seconds to this screen's display time.</div>
-        </div>
-        <div>
-          <input type="number" min="0" step="1" placeholder="1" value="{{ screen.alt_frequency }}" class="alt-frequency-input compact-number-input">
-          <div class="hint">Counts the base screen's scheduled appearances, including cycle 1.</div>
-        </div>
-      </div>
-      {% endfor %}
-    </div>
+    {% include "_rotation_editor.html" %}
     <div class="footer-actions">
       <div class="actions">
         <button class="btn" id="saveBtnBottom">Save changes</button>
@@ -696,7 +311,6 @@
   <input type="file" id="importFile" accept="application/json" hidden>
 
   <script>
-    const screenTable = document.getElementById("screenTable");
     const saveBtn = document.getElementById("saveBtn");
     const diagnosticScreen = document.getElementById("diagnosticScreen");
     const diagnosticStatus = document.getElementById("diagnosticStatus");
@@ -713,342 +327,59 @@
     const importBtnBottom = document.getElementById("importBtnBottom");
     const importFileInput = document.getElementById("importFile");
     const errorBox = document.getElementById("errorBox");
-    const hideZeroFreqToggle = document.getElementById("hideZeroFreq");
-    const newPlaylistNameInput = document.getElementById("newPlaylistName");
-    const addPlaylistBtn = document.getElementById("addPlaylistBtn");
-    const collapseAllPlaylistsBtn = document.getElementById("collapseAllPlaylistsBtn");
-    const expandAllPlaylistsBtn = document.getElementById("expandAllPlaylistsBtn");
     const draftStorageKey = "screen-config-draft";
     const playlistStorageKey = "screen-config-playlists";
     const selectableScreenIds = {{ screen_ids|tojson }};
+    const serverScreens = {{ screens|tojson }};
     const serverPlaylists = {{ playlists|tojson }};
     const serverPlaylistAssignments = {{ playlist_assignments|tojson }};
     let isDirty = false;
-    let playlists = [];
-    let playlistAssignments = {};
-    let collapsedPlaylists = {};
     let scrollSettings = {{ scroll_settings | tojson }};
-
-    function getDragAfterElement(container, y) {
-      const draggableElements = [...container.querySelectorAll(".screen-row:not(.dragging)")];
-      return draggableElements.reduce((closest, child) => {
-        const box = child.getBoundingClientRect();
-        const offset = y - box.top - box.height / 2;
-        if (offset < 0 && offset > closest.offset) {
-          return { offset, element: child };
-        }
-        return closest;
-      }, { offset: Number.NEGATIVE_INFINITY }).element;
-    }
-
-    screenTable.addEventListener("dragstart", (event) => {
-      const row = event.target.closest(".screen-row");
-      if (!row) return;
-      row.classList.add("dragging");
-    });
-
-    screenTable.addEventListener("dragend", (event) => {
-      const row = event.target.closest(".screen-row");
-      if (!row) return;
-      row.classList.remove("dragging");
-    });
-
-    screenTable.addEventListener("dragover", (event) => {
-      event.preventDefault();
-      const dragging = document.querySelector(".screen-row.dragging");
-      if (!dragging) return;
-      const afterElement = getDragAfterElement(screenTable, event.clientY);
-      if (!afterElement) {
-        screenTable.appendChild(dragging);
-      } else {
-        screenTable.insertBefore(dragging, afterElement);
-      }
-    });
-
-    function generatePlaylistId() {
-      if (typeof crypto !== "undefined" && crypto.randomUUID) {
-        return crypto.randomUUID();
-      }
-      return `playlist-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
-    }
 
     function loadPlaylistState() {
       const hasServerPlaylists = Array.isArray(serverPlaylists) && serverPlaylists.length > 0;
-      const normalizedServerPlaylists = Array.isArray(serverPlaylists)
-        ? serverPlaylists.filter((playlist) => playlist?.id && playlist?.name)
-        : [];
-      const normalizedServerAssignments =
-        serverPlaylistAssignments && typeof serverPlaylistAssignments === "object"
-          ? { ...serverPlaylistAssignments }
-          : {};
+      const state = {
+        playlists: Array.isArray(serverPlaylists) ? serverPlaylists : [],
+        assignments:
+          serverPlaylistAssignments && typeof serverPlaylistAssignments === "object"
+            ? serverPlaylistAssignments
+            : {},
+        collapsed: {},
+      };
       const raw = localStorage.getItem(playlistStorageKey);
-      if (!raw) {
-        playlists = normalizedServerPlaylists;
-        playlistAssignments = normalizedServerAssignments;
-        collapsedPlaylists = {};
-        return;
-      }
+      if (!raw) return state;
       try {
-        playlists = normalizedServerPlaylists;
-        playlistAssignments = normalizedServerAssignments;
-        collapsedPlaylists = {};
         const data = JSON.parse(raw);
         if (!hasServerPlaylists && Array.isArray(data?.playlists)) {
-          playlists = data.playlists.filter((playlist) => playlist?.id && playlist?.name);
+          state.playlists = data.playlists;
         }
         if (!hasServerPlaylists && data?.assignments && typeof data.assignments === "object") {
-          playlistAssignments = { ...data.assignments };
+          state.assignments = data.assignments;
         }
         if (data?.collapsed && typeof data.collapsed === "object") {
-          collapsedPlaylists = { ...data.collapsed };
+          state.collapsed = data.collapsed;
         }
+        return state;
       } catch (error) {
-        playlists = [];
-        playlistAssignments = {};
-        collapsedPlaylists = {};
+        return { playlists: [], assignments: {}, collapsed: {} };
       }
     }
 
-    function savePlaylistState() {
+    function savePlaylistState(state) {
       try {
-        localStorage.setItem(
-          playlistStorageKey,
-          JSON.stringify({
-            playlists,
-            assignments: playlistAssignments,
-            collapsed: collapsedPlaylists,
-          })
-        );
+        localStorage.setItem(playlistStorageKey, JSON.stringify(state));
       } catch (error) {
         console.warn("Unable to save playlist state.", error);
       }
     }
 
-    function syncPlaylistsToScreens(screens) {
-      const screenIds = new Set((screens || []).map((screen) => screen.id));
-      const playlistIds = new Set(playlists.map((playlist) => playlist.id));
-      Object.keys(playlistAssignments).forEach((screenId) => {
-        if (!screenIds.has(screenId)) {
-          delete playlistAssignments[screenId];
-          return;
-        }
-        const playlistId = playlistAssignments[screenId];
-        if (playlistId && !playlistIds.has(playlistId)) {
-          playlistAssignments[screenId] = "";
-        }
-      });
-      playlists = playlists.filter((playlist) => playlist?.id && playlist?.name);
-      const validGroups = new Set(["ungrouped", ...playlists.map((playlist) => playlist.id)]);
-      Object.keys(collapsedPlaylists).forEach((groupId) => {
-        if (!validGroups.has(groupId)) {
-          delete collapsedPlaylists[groupId];
-        }
-      });
-    }
-
-    function movePlaylistToIndex(playlistId, nextIndex) {
-      const index = playlists.findIndex((playlist) => playlist.id === playlistId);
-      if (index === -1) return;
-      const boundedIndex = Math.max(0, Math.min(nextIndex, playlists.length - 1));
-      if (boundedIndex === index) return;
-      const updated = [...playlists];
-      const [item] = updated.splice(index, 1);
-      updated.splice(boundedIndex, 0, item);
-      playlists = updated;
-      savePlaylistState();
-      renderScreens(getCurrentScreens());
-      markDirty();
-    }
-
-    function movePlaylist(playlistId, direction) {
-      const index = playlists.findIndex((playlist) => playlist.id === playlistId);
-      if (index === -1) return;
-      movePlaylistToIndex(playlistId, index + direction);
-    }
-
-    function renamePlaylist(playlistId) {
-      const playlist = playlists.find((item) => item.id === playlistId);
-      if (!playlist) return;
-      const nextName = window.prompt("Rename playlist:", playlist.name);
-      if (!nextName) return;
-      playlist.name = nextName.trim();
-      savePlaylistState();
-      renderScreens(getCurrentScreens());
-      markDirty();
-    }
-
-    function removePlaylist(playlistId) {
-      const playlist = playlists.find((item) => item.id === playlistId);
-      if (!playlist) return;
-      const confirmed = window.confirm(`Remove playlist "${playlist.name}"? Screens will be ungrouped.`);
-      if (!confirmed) return;
-      playlists = playlists.filter((item) => item.id !== playlistId);
-      Object.keys(playlistAssignments).forEach((screenId) => {
-        if (playlistAssignments[screenId] === playlistId) {
-          playlistAssignments[screenId] = "";
-        }
-      });
-      savePlaylistState();
-      renderScreens(getCurrentScreens());
-      markDirty();
-    }
-
-    function buildPlaylistHeader(playlist, screenCount) {
-      const row = document.createElement("div");
-      row.className = "playlist-row";
-      if (playlist.id) {
-        row.dataset.playlistId = playlist.id;
-      }
-
-      const meta = document.createElement("div");
-      meta.className = "meta";
-
-      const label = document.createElement("span");
-      label.className = "label";
-      label.textContent = playlist.id ? "Playlist" : "Group";
-
-      const name = document.createElement("span");
-      name.className = "name";
-      name.textContent = playlist.name;
-
-      const count = document.createElement("span");
-      count.className = "count";
-      count.textContent = `${screenCount} screen${screenCount === 1 ? "" : "s"}`;
-
-      meta.append(label, name, count);
-
-      const actions = document.createElement("div");
-      actions.className = "playlist-actions";
-
-      const groupKey = playlist.id || "ungrouped";
-      const isCollapsed = Boolean(collapsedPlaylists[groupKey]);
-      if (isCollapsed) {
-        row.classList.add("is-collapsed");
-      }
-      if (playlist.id) {
-        const moveUp = document.createElement("button");
-        moveUp.type = "button";
-        moveUp.className = "btn-secondary";
-        moveUp.textContent = "Move up";
-        moveUp.addEventListener("click", () => movePlaylist(playlist.id, -1));
-
-        const moveDown = document.createElement("button");
-        moveDown.type = "button";
-        moveDown.className = "btn-secondary";
-        moveDown.textContent = "Move down";
-        moveDown.addEventListener("click", () => movePlaylist(playlist.id, 1));
-
-        const moveTop = document.createElement("button");
-        moveTop.type = "button";
-        moveTop.className = "btn-secondary";
-        moveTop.textContent = "Move to top";
-        moveTop.addEventListener("click", () => movePlaylistToIndex(playlist.id, 0));
-
-        const moveBottom = document.createElement("button");
-        moveBottom.type = "button";
-        moveBottom.className = "btn-secondary";
-        moveBottom.textContent = "Move to bottom";
-        moveBottom.addEventListener("click", () => movePlaylistToIndex(playlist.id, playlists.length - 1));
-
-        const rename = document.createElement("button");
-        rename.type = "button";
-        rename.className = "btn-secondary";
-        rename.textContent = "Rename";
-        rename.addEventListener("click", () => renamePlaylist(playlist.id));
-
-        const remove = document.createElement("button");
-        remove.type = "button";
-        remove.className = "btn-secondary";
-        remove.textContent = "Remove";
-        remove.addEventListener("click", () => removePlaylist(playlist.id));
-
-        actions.append(moveUp, moveDown, moveTop, moveBottom, rename, remove);
-      }
-
-      const toggle = document.createElement("button");
-      toggle.type = "button";
-      toggle.className = "btn-secondary";
-      toggle.textContent = isCollapsed ? "Expand" : "Collapse";
-      toggle.setAttribute("aria-expanded", String(!isCollapsed));
-      toggle.addEventListener("click", () => {
-        collapsedPlaylists[groupKey] = !collapsedPlaylists[groupKey];
-        savePlaylistState();
-        renderScreens(getCurrentScreens());
-      });
-      actions.append(toggle);
-
-      row.append(meta, actions);
-      return row;
-    }
-
-    screenTable.addEventListener("input", (event) => {
-      if (event.target.matches(".freq-input")) {
-        updateZeroFrequencyVisibility();
-      }
-      if (event.target.matches(".screen-speed-input")) {
-        const row = event.target.closest(".screen-row");
-        const output = row?.querySelector(".screen-speed-value");
-        if (output) {
-          output.textContent = `${Number.parseFloat(event.target.value).toFixed(1)}×`;
-        }
-      }
+    const editor = createRotationEditor({
+      screenIds: selectableScreenIds,
+      ...loadPlaylistState(),
+      onChange: markDirty,
+      onStateChange: savePlaylistState,
+      onError: showError,
     });
-
-    screenTable.addEventListener("change", (event) => {
-      if (event.target.matches(".screen-speed-enabled-input")) {
-        const row = event.target.closest(".screen-row");
-        const speedInput = row?.querySelector(".screen-speed-input");
-        if (speedInput) {
-          speedInput.disabled = !event.target.checked;
-        }
-      }
-      if (event.target.matches(".hide-after-enabled-input")) {
-        const row = event.target.closest(".screen-row");
-        const dateInput = row?.querySelector(".hide-after-input");
-        if (dateInput) {
-          dateInput.hidden = !event.target.checked;
-        }
-      }
-      if (event.target.matches(".playlist-select")) {
-        const row = event.target.closest(".screen-row");
-        if (!row) return;
-        const screenId = row.dataset.screenId;
-        if (!screenId) return;
-        const selectedPlaylistId = event.target.value || "";
-        let screens = getCurrentScreens();
-        playlistAssignments[screenId] = selectedPlaylistId;
-        if (selectedPlaylistId) {
-          screens = moveScreenToPlaylistEnd(screens, screenId, selectedPlaylistId);
-        }
-        savePlaylistState();
-        window.requestAnimationFrame(() => {
-          try {
-            renderScreens(screens);
-          } catch (error) {
-            console.error("Failed to render screen rows after playlist update.", error);
-            showError("Unable to redraw playlist groups. Refresh the page and try again.");
-          }
-        });
-        markDirty();
-      }
-    });
-
-    screenTable.addEventListener("click", (event) => {
-      const clearButton = event.target.closest(".alt-screen-clear");
-      if (!clearButton) return;
-      const row = clearButton.closest(".screen-row");
-      if (!row) return;
-      const altInput = row.querySelector(".alt-screen-input");
-      if (!altInput) return;
-      if (altInput.value === "") return;
-      altInput.value = "";
-      altInput.dispatchEvent(new Event("input", { bubbles: true }));
-      altInput.dispatchEvent(new Event("change", { bubbles: true }));
-    });
-
-    if (hideZeroFreqToggle) {
-      hideZeroFreqToggle.addEventListener("change", updateZeroFrequencyVisibility);
-    }
 
     function clampNumber(value, fallback, min, max) {
       const parsed = Number.parseFloat(value);
@@ -1114,27 +445,6 @@
       });
     }
 
-    function getCurrentScreens() {
-      const rows = [...screenTable.querySelectorAll(".screen-row")];
-      return rows
-        .map((row) => {
-          const screenId = row.dataset.screenId;
-          if (!screenId) return null;
-          return {
-            id: screenId,
-            frequency: row.querySelector(".freq-input")?.value ?? "",
-            alt_screen: row.querySelector(".alt-screen-input")?.value ?? "",
-            hide_after_at: row.querySelector(".hide-after-input")?.value ?? "",
-            hide_after_enabled: row.querySelector(".hide-after-enabled-input")?.checked ?? false,
-            extra_seconds: row.querySelector(".extra-seconds-input")?.value ?? "",
-            alt_frequency: row.querySelector(".alt-frequency-input")?.value ?? "",
-            scroll_speed_enabled: row.querySelector(".screen-speed-enabled-input")?.checked ?? false,
-            scroll_speed: row.querySelector(".screen-speed-input")?.value ?? "",
-          };
-        })
-        .filter(Boolean);
-    }
-
     function parseAltScreen(value) {
       const trimmed = String(value ?? "").trim();
       if (!trimmed) return [];
@@ -1142,35 +452,6 @@
         .split(",")
         .map((item) => item.trim())
         .filter(Boolean);
-    }
-
-    function populateAltScreenOptions(select, screenId, selectedValue) {
-      select.appendChild(new Option("No alternate", ""));
-      if (parseAltScreen(selectedValue).length > 1) {
-        select.appendChild(new Option("Multiple", selectedValue, true, true));
-      }
-      selectableScreenIds
-        .filter((id) => id !== screenId)
-        .forEach((id) => {
-          select.appendChild(new Option(id, id, selectedValue === id, selectedValue === id));
-        });
-    }
-
-    function moveScreenToPlaylistEnd(screens, screenId, playlistId) {
-      const fromIndex = screens.findIndex((screen) => screen.id === screenId);
-      if (fromIndex < 0) return screens;
-      const screen = screens[fromIndex];
-      const remaining = [...screens.slice(0, fromIndex), ...screens.slice(fromIndex + 1)];
-      let insertAt = -1;
-      remaining.forEach((item, index) => {
-        if ((playlistAssignments[item.id] || "") === playlistId) {
-          insertAt = index;
-        }
-      });
-      if (insertAt < 0) {
-        return [...remaining, screen];
-      }
-      return [...remaining.slice(0, insertAt + 1), screen, ...remaining.slice(insertAt + 1)];
     }
 
     function buildConfigPayload(screens) {
@@ -1213,24 +494,10 @@
       });
       return {
         screens: screensPayload,
-        playlists: buildPlaylistsPayload(screens),
-        sequence: playlists.map((playlist) => ({ playlist: playlist.id })),
+        playlists: editor.playlistsPayload(screens),
+        sequence: editor.sequencePayload(),
         scroll: currentScrollSettings(),
       };
-    }
-
-    function buildPlaylistsPayload(screens) {
-      const playlistPayload = {};
-      playlists.forEach((playlist) => {
-        const steps = screens
-          .filter((screen) => (playlistAssignments[screen.id] || "") === playlist.id)
-          .map((screen) => ({ screen: screen.id }));
-        playlistPayload[playlist.id] = {
-          label: playlist.name,
-          steps,
-        };
-      });
-      return playlistPayload;
     }
 
     function normalizeImportPayload(payload) {
@@ -1255,12 +522,13 @@
     }
 
     function saveDraft() {
+      const state = editor.getState();
       const payload = {
         updatedAt: new Date().toISOString(),
-        screens: getCurrentScreens(),
-        playlists,
-        assignments: playlistAssignments,
-        collapsed: collapsedPlaylists,
+        screens: editor.getScreens(),
+        playlists: state.playlists,
+        assignments: state.assignments,
+        collapsed: state.collapsed,
         scroll: currentScrollSettings(),
       };
       try {
@@ -1327,239 +595,10 @@
       return merged;
     }
 
-    function applyImportedPlaylists(config) {
-      if (!config || typeof config !== "object") return false;
-      const configPlaylists = config.playlists;
-      if (!configPlaylists || typeof configPlaylists !== "object" || Array.isArray(configPlaylists)) {
-        return false;
-      }
-      const sequence = Array.isArray(config.sequence) ? config.sequence : [];
-      const orderedIds = sequence
-        .map((item) => (item && typeof item === "object" ? item.playlist : null))
-        .filter((id) => typeof id === "string");
-      const seen = new Set();
-      const nextPlaylists = [];
-      const nextAssignments = {};
-
-      function addPlaylistById(playlistId) {
-        if (!playlistId || seen.has(playlistId)) return;
-        const playlist = configPlaylists[playlistId];
-        if (!playlist || typeof playlist !== "object") return;
-        seen.add(playlistId);
-        const label =
-          typeof playlist.label === "string" && playlist.label.trim()
-            ? playlist.label.trim()
-            : playlistId;
-        nextPlaylists.push({ id: playlistId, name: label });
-        const steps = Array.isArray(playlist.steps) ? playlist.steps : [];
-        steps.forEach((step) => {
-          if (!step || typeof step !== "object") return;
-          const screenId = step.screen;
-          if (typeof screenId === "string") {
-            nextAssignments[screenId] = playlistId;
-          }
-        });
-      }
-
-      orderedIds.forEach(addPlaylistById);
-      Object.keys(configPlaylists).forEach(addPlaylistById);
-
-      playlists = nextPlaylists;
-      playlistAssignments = nextAssignments;
-      collapsedPlaylists = {};
-      savePlaylistState();
-      return true;
-    }
-
-    function addPlaylist(name) {
-      const trimmed = name.trim();
-      if (!trimmed) return;
-      const playlist = { id: generatePlaylistId(), name: trimmed };
-      playlists = [...playlists, playlist];
-      savePlaylistState();
-      renderScreens(getCurrentScreens());
-      markDirty();
-    }
-
-    function buildRow(screen) {
-      const row = document.createElement("div");
-      row.className = "row screen-row";
-      row.draggable = true;
-      row.dataset.screenId = screen.id;
-
-      const makeElement = (tag, className, text) => {
-        const element = document.createElement(tag);
-        if (className) element.className = className;
-        if (text !== undefined) element.textContent = text;
-        return element;
-      };
-      const makeInput = (type, className, value) => {
-        const input = makeElement("input", className);
-        input.type = type;
-        input.value = value ?? "";
-        return input;
-      };
-      const addHint = (cell, text) => cell.appendChild(makeElement("div", "hint", text));
-
-      row.appendChild(makeElement("div", "handle", "☰"));
-
-      const idCell = makeElement("div");
-      idCell.appendChild(makeElement("div", "screen-id", screen.id));
-      row.appendChild(idCell);
-
-      const playlistCell = makeElement("div");
-      const select = makeElement("select", "playlist-select");
-      playlistCell.appendChild(select);
-      addHint(playlistCell, "Assign to a playlist.");
-      row.appendChild(playlistCell);
-
-      const frequencyCell = makeElement("div");
-      const frequencyInput = makeInput(
-        "number",
-        "freq-input compact-number-input",
-        screen.frequency ?? 0
-      );
-      frequencyInput.min = "0";
-      frequencyInput.step = "1";
-      frequencyCell.appendChild(frequencyInput);
-      addHint(frequencyCell, "0 disables the base screen. All enabled screens play in cycle 1, subject to availability. 1 = every cycle; 2 = cycles 1, 3, 5; 3 = cycles 1, 4, 7.");
-      row.appendChild(frequencyCell);
-
-      const speedCell = makeElement("div");
-      const speedField = makeElement("div", "screen-speed-field");
-      const speedLabel = makeElement("label", "screen-speed-toggle");
-      const speedEnabled = makeInput("checkbox", "screen-speed-enabled-input");
-      speedEnabled.checked = Boolean(screen.scroll_speed_enabled);
-      speedEnabled.setAttribute("aria-label", `Override scroll speed for ${screen.id}`);
-      speedLabel.appendChild(speedEnabled);
-      const speedInput = makeInput("range", "screen-speed-input", screen.scroll_speed ?? 1);
-      speedInput.min = "0.25";
-      speedInput.max = "3";
-      speedInput.step = "0.1";
-      speedInput.disabled = !screen.scroll_speed_enabled;
-      const speedValue = makeElement(
-        "output",
-        "screen-speed-value",
-        `${Number(screen.scroll_speed ?? 1).toFixed(1)}×`
-      );
-      speedField.append(speedLabel, speedInput, speedValue);
-      speedCell.appendChild(speedField);
-      addHint(speedCell, "When checked, overrides this screen's scroll speed.");
-      row.appendChild(speedCell);
-
-      const hideCell = makeElement("div");
-      const hideField = makeElement("div", "hide-after-field");
-      const hideEnabled = makeInput("checkbox", "hide-after-enabled-input");
-      hideEnabled.checked = Boolean(screen.hide_after_enabled);
-      hideEnabled.setAttribute("aria-label", `Enable hide-after date for ${screen.id}`);
-      const hideInput = makeInput("datetime-local", "hide-after-input", screen.hide_after_at ?? "");
-      hideInput.hidden = !screen.hide_after_enabled;
-      hideField.append(hideEnabled, hideInput);
-      hideCell.appendChild(hideField);
-      addHint(hideCell, "When checked, hide after this date/time.");
-      row.appendChild(hideCell);
-
-      const alternateCell = makeElement("div");
-      const alternateField = makeElement("div", "alt-screen-field");
-      const alternateSelect = makeElement("select", "alt-screen-input");
-      populateAltScreenOptions(alternateSelect, screen.id, screen.alt_screen ?? "");
-      const clearAlternate = makeElement("button", "alt-screen-clear", "×");
-      clearAlternate.type = "button";
-      clearAlternate.setAttribute("aria-label", "Clear alternate screens");
-      clearAlternate.title = "Clear alternate screens";
-      alternateField.append(alternateSelect, clearAlternate);
-      alternateCell.appendChild(alternateField);
-      addHint(alternateCell, "Select one alternate screen.");
-      row.appendChild(alternateCell);
-
-      const extraCell = makeElement("div");
-      const extraInput = makeInput(
-        "number",
-        "extra-seconds-input compact-number-input",
-        screen.extra_seconds ?? 0
-      );
-      extraInput.min = "0";
-      extraInput.step = "1";
-      extraCell.appendChild(extraInput);
-      addHint(extraCell, "Add seconds to this screen's display time.");
-      row.appendChild(extraCell);
-
-      const alternateFrequencyCell = makeElement("div");
-      const alternateFrequencyInput = makeInput(
-        "number",
-        "alt-frequency-input compact-number-input",
-        screen.alt_frequency ?? ""
-      );
-      alternateFrequencyInput.min = "0";
-      alternateFrequencyInput.step = "1";
-      alternateFrequencyInput.placeholder = "1";
-      alternateFrequencyCell.appendChild(alternateFrequencyInput);
-      addHint(alternateFrequencyCell, "Counts the base screen's scheduled appearances, including cycle 1.");
-      row.appendChild(alternateFrequencyCell);
-
-      const ungrouped = new Option("Ungrouped", "");
-      select.appendChild(ungrouped);
-      playlists.forEach((playlist) => {
-        const option = new Option(playlist.name, playlist.id);
-        select.appendChild(option);
-      });
-      const assigned = playlistAssignments[screen.id] || "";
-      select.value = assigned;
-      return row;
-    }
-
-    function updateZeroFrequencyVisibility() {
-      if (!hideZeroFreqToggle) return;
-      const hideZero = hideZeroFreqToggle.checked;
-      const rows = [...screenTable.querySelectorAll(".screen-row")];
-      rows.forEach((row) => {
-        if (row.dataset.collapsed === "true") {
-          row.style.display = "none";
-          return;
-        }
-        if (!hideZero) {
-          row.style.display = "";
-          return;
-        }
-        const freqInput = row.querySelector(".freq-input");
-        const freqValue = Number(freqInput?.value ?? 0);
-        row.style.display = Number.isNaN(freqValue) || freqValue !== 0 ? "" : "none";
-      });
-    }
-
-    function renderScreens(screens) {
-      screenTable.innerHTML = "";
-      const safeScreens = normalizeScreens(screens);
-      syncPlaylistsToScreens(safeScreens);
-      savePlaylistState();
-      const groups = [
-        { id: "", name: "Ungrouped" },
-        ...playlists.map((playlist) => ({ id: playlist.id, name: playlist.name })),
-      ];
-      groups.forEach((group) => {
-        const groupScreens = safeScreens.filter(
-          (screen) => (playlistAssignments[screen.id] || "") === group.id
-        );
-        const header = buildPlaylistHeader(group, groupScreens.length);
-        screenTable.appendChild(header);
-        const groupKey = group.id || "ungrouped";
-        const isCollapsed = Boolean(collapsedPlaylists[groupKey]);
-        groupScreens.forEach((screen) => {
-          const row = buildRow(screen);
-          if (isCollapsed) {
-            row.dataset.collapsed = "true";
-            row.style.display = "none";
-          }
-          screenTable.appendChild(row);
-        });
-      });
-      updateZeroFrequencyVisibility();
-    }
-
     async function saveConfiguration() {
       clearError();
       setButtonsDisabled(true);
-      const screens = getCurrentScreens();
+      const screens = editor.getScreens();
 
       try {
         const response = await fetch("/api/screens", {
@@ -1567,8 +606,8 @@
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             screens,
-            playlists: buildPlaylistsPayload(screens),
-            sequence: playlists.map((playlist) => ({ playlist: playlist.id })),
+            playlists: editor.playlistsPayload(screens),
+            sequence: editor.sequencePayload(),
             scroll: currentScrollSettings(),
           }),
         });
@@ -1576,7 +615,7 @@
         if (!response.ok) {
           throw new Error(data.error || "Unable to save configuration");
         }
-        renderScreens(data.screens || screens);
+        editor.render(data.screens || screens);
         markClean();
       } catch (err) {
         showError(err.message);
@@ -1606,19 +645,18 @@
           throw new Error(data.error || "Unable to load defaults");
         }
         if (data.config) {
-          applyImportedPlaylists(data.config);
+          editor.applyDocumentPlaylists(data.config);
         } else if (Array.isArray(data.playlists)) {
-          playlists = data.playlists.filter((playlist) => playlist?.id && playlist?.name);
-          playlistAssignments =
-            data.playlist_assignments && typeof data.playlist_assignments === "object"
-              ? { ...data.playlist_assignments }
-              : {};
-          collapsedPlaylists = {};
+          editor.setState({
+            playlists: data.playlists,
+            assignments: data.playlist_assignments,
+            collapsed: {},
+          });
         }
         if (data.has_explicit_scroll) {
           applyScrollSettings(data.scroll || data.config?.scroll);
         }
-        renderScreens(data.screens || []);
+        editor.render(data.screens || []);
         markDirty();
       } catch (err) {
         showError(err.message);
@@ -1630,7 +668,7 @@
     async function exportConfiguration() {
       clearError();
       try {
-        const screens = getCurrentScreens();
+        const screens = editor.getScreens();
         const payload = {
           config: buildConfigPayload(screens),
         };
@@ -1654,9 +692,9 @@
         if (!response.ok) {
           throw new Error(data.error || "Unable to import configuration");
         }
-        applyImportedPlaylists(payload.config);
+        editor.applyDocumentPlaylists(payload.config);
         applyScrollSettings(data.scroll || payload.config?.scroll);
-        renderScreens(data.screens || []);
+        editor.render(data.screens || []);
         markClean();
       } catch (err) {
         showError(err.message);
@@ -1717,55 +755,7 @@
       });
     }
 
-    if (addPlaylistBtn) {
-      addPlaylistBtn.addEventListener("click", () => {
-        if (!newPlaylistNameInput) return;
-        addPlaylist(newPlaylistNameInput.value);
-        newPlaylistNameInput.value = "";
-      });
-    }
-
-    function setAllPlaylistsCollapsed(collapsed) {
-      const groupKeys = ["ungrouped", ...playlists.map((playlist) => playlist.id)];
-      collapsedPlaylists = {};
-      if (collapsed) {
-        groupKeys.forEach((groupKey) => {
-          collapsedPlaylists[groupKey] = true;
-        });
-      }
-      savePlaylistState();
-      renderScreens(getCurrentScreens());
-    }
-
-    if (collapseAllPlaylistsBtn) {
-      collapseAllPlaylistsBtn.addEventListener("click", () => setAllPlaylistsCollapsed(true));
-    }
-
-    if (expandAllPlaylistsBtn) {
-      expandAllPlaylistsBtn.addEventListener("click", () => setAllPlaylistsCollapsed(false));
-    }
-
-    if (newPlaylistNameInput) {
-      newPlaylistNameInput.addEventListener("keydown", (event) => {
-        if (event.key === "Enter") {
-          event.preventDefault();
-          addPlaylist(newPlaylistNameInput.value);
-          newPlaylistNameInput.value = "";
-        }
-      });
-    }
-
-    screenTable.addEventListener("input", (event) => {
-      if (event.target.matches("input")) {
-        markDirty();
-      }
-    });
     document.getElementById("verticalSpeedAdjustment")?.addEventListener("input", markDirty);
-
-    screenTable.addEventListener("dragend", () => {
-      markDirty();
-    });
-
 
     window.addEventListener("beforeunload", (event) => {
       if (!isDirty) return;
@@ -1773,8 +763,7 @@
       event.returnValue = "";
     });
 
-    loadPlaylistState();
-    let initialScreens = getCurrentScreens();
+    let initialScreens = serverScreens;
     const savedDraft = sessionStorage.getItem(draftStorageKey);
     if (savedDraft) {
       try {
@@ -1783,19 +772,16 @@
           const shouldRestore = window.confirm("Restore unsaved screen rotation edits from your last visit?");
           if (shouldRestore) {
             initialScreens = mergeScreensWithCatalog(initialScreens, draft.screens);
-            if (Array.isArray(draft.playlists)) {
-              playlists = draft.playlists.filter((playlist) => playlist?.id && playlist?.name);
-            }
-            if (draft.assignments && typeof draft.assignments === "object") {
-              playlistAssignments = { ...draft.assignments };
-            }
-            if (draft.collapsed && typeof draft.collapsed === "object") {
-              collapsedPlaylists = { ...draft.collapsed };
-            }
+            const state = editor.getState();
+            editor.setState({
+              playlists: Array.isArray(draft.playlists) ? draft.playlists : state.playlists,
+              assignments:
+                draft.assignments && typeof draft.assignments === "object" ? draft.assignments : state.assignments,
+              collapsed: draft.collapsed && typeof draft.collapsed === "object" ? draft.collapsed : state.collapsed,
+            });
             if (draft.scroll && typeof draft.scroll === "object") {
               applyScrollSettings(draft.scroll);
             }
-            savePlaylistState();
             isDirty = true;
           } else {
             clearDraft();
@@ -1805,7 +791,7 @@
         clearDraft();
       }
     }
-    renderScreens(initialScreens);
+    editor.render(initialScreens);
   </script>
 </body>
 </html>

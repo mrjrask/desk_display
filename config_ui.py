@@ -1890,7 +1890,72 @@ def _active_playlist_document() -> dict[str, Any]:
     return {key: config[key] for key in ("screens", "playlists", "sequence", "scroll") if key in config}
 
 
-remote_playlists_ui.register(app, actor=_playlist_actor, active_document=_active_playlist_document)
+def _playlist_editor_view(document: dict[str, Any]) -> dict[str, Any]:
+    """Rows and playlist groups the shared rotation editor shows for *document*.
+
+    The same shapes the Screen Rotation Config page renders from the active
+    config, so the Playlists page can reuse its editor unchanged.
+    """
+
+    entries = _build_screen_entries(document, {})
+    playlists, assignments = _build_playlist_assignments(document)
+    return {
+        "screens": entries,
+        "screen_ids": _build_selectable_screen_ids(entries),
+        "playlists": playlists,
+        "playlist_assignments": assignments,
+    }
+
+
+def _playlist_document_from_editor(payload: dict[str, Any], current: dict[str, Any]) -> dict[str, Any]:
+    """Build a playlist document from the rotation editor's rows.
+
+    Uses the same conversion as saving the Screen Rotation Config page.  The
+    editor lists every catalog screen; disabled screens the document did not
+    already name (and no playlist groups) are left out so opening and saving
+    a playlist does not pad it with the whole catalog.  The document's global
+    ``scroll`` settings are kept as they are.
+    """
+
+    entries = payload.get("screens")
+    if not isinstance(entries, list):
+        raise ValueError("Screens list required")
+    config = _build_config(entries)
+    for key, expected_type in (("playlists", dict), ("sequence", list)):
+        value = payload.get(key)
+        if value is None:
+            continue
+        if not isinstance(value, expected_type):
+            raise ValueError(f"{key} must be a{'n object' if expected_type is dict else ' list'}")
+        config[key] = value
+    config, _ = _normalize_legacy_scoreboard_ids(config)
+    config = _validate_config_screen_references(config)
+
+    keep: set[str] = set()
+    for screen_id in current.get("screens") or {}:
+        if isinstance(screen_id, str):
+            keep.add(canonical_screen_id(screen_id))
+    for playlist in (config.get("playlists") or {}).values():
+        for step in (playlist.get("steps") or []) if isinstance(playlist, dict) else []:
+            if isinstance(step, dict) and isinstance(step.get("screen"), str):
+                keep.add(step["screen"])
+    config["screens"] = {
+        screen_id: spec
+        for screen_id, spec in config["screens"].items()
+        if spec != 0 or screen_id in keep
+    }
+    if "scroll" in current:
+        config["scroll"] = current["scroll"]
+    return config
+
+
+remote_playlists_ui.register(
+    app,
+    actor=_playlist_actor,
+    active_document=_active_playlist_document,
+    editor_view=_playlist_editor_view,
+    editor_document=_playlist_document_from_editor,
+)
 
 
 if __name__ == "__main__":

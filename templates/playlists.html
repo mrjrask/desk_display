@@ -5,6 +5,18 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{{ machine_hostname }} - Playlists</title>
   {% include "_remote_style.html" %}
+  <style>
+    .panel.wide { max-width: 1500px; }
+    .library-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 0.4rem; }
+    .library-grid .list-item { border-color: rgba(148, 163, 184, 0.2); }
+    .editor-toolbar { margin: 0.75rem 0; }
+    .editor-toolbar h2 { margin: 0; }
+    .editor-toolbar .spacer { flex: 1; }
+    #dirty-state.dirty { color: #fde68a; }
+    .advanced { margin-top: 1.25rem; }
+    .advanced summary { cursor: pointer; font-weight: 600; margin-bottom: 0.5rem; }
+    #editor a { color: #7dd3fc; }
+  </style>
 </head>
 <body>
   <h1>Client Playlists</h1>
@@ -28,43 +40,57 @@
     </div>
   </div>
 
-  <div class="split">
-    <div class="panel">
-      <h2>Library</h2>
-      <ul id="playlist-list" class="plain"><li class="muted">Loading…</li></ul>
-    </div>
+  <div class="panel">
+    <h2>Library</h2>
+    <ul id="playlist-list" class="plain library-grid"><li class="muted">Loading…</li></ul>
+  </div>
 
-    <div class="panel" id="editor-panel">
-      <p id="editor-empty" class="muted">Select a playlist to edit it.</p>
-      <div id="editor" class="hidden">
-        <div class="row">
-          <input id="edit-name" maxlength="80" aria-label="Playlist name">
-          <button id="rename-btn">Rename</button>
-          <button id="clone-btn">Clone</button>
-          <button id="export-btn">Export</button>
-          <button id="delete-btn" class="danger">Delete</button>
-        </div>
-        <p class="muted">
-          ID <span id="edit-id" class="mono"></span> ·
-          saved revision <span id="edit-revision" class="mono"></span> ·
-          used by <span id="edit-clients"></span>
-        </p>
+  <div class="panel wide" id="editor-panel">
+    <p id="editor-empty" class="muted">Select a playlist to edit it.</p>
+    <div id="editor" class="hidden">
+      <div class="row">
+        <input id="edit-name" maxlength="80" aria-label="Playlist name">
+        <button id="rename-btn">Rename</button>
+        <button id="clone-btn">Clone</button>
+        <button id="export-btn">Export</button>
+        <button id="delete-btn" class="danger">Delete</button>
+      </div>
+      <p class="muted">
+        ID <span id="edit-id" class="mono"></span> ·
+        saved revision <span id="edit-revision" class="mono"></span> ·
+        used by <span id="edit-clients"></span>
+      </p>
 
-        <h2>Sequence</h2>
-        <ol id="sequence" class="sequence"></ol>
+      <div class="row editor-toolbar">
+        <h2>Screens</h2>
+        <span id="dirty-state" class="muted">No unsaved changes.</span>
+        <span class="spacer"></span>
+        <button id="discard-btn" type="button">Discard changes</button>
+        <button id="save-btn" class="primary" type="button">Save changes</button>
+      </div>
+      <p class="muted">Drag screens to reorder them, group them into playlists and move the playlists, then set
+        frequency, hide-after, alternates and extra seconds, exactly as on the Rotation Config page. Scroll speeds
+        come from the <a href="/">Rotation Config</a> page and apply to every display.</p>
+      {% include "_rotation_editor.html" %}
+      <div class="row editor-toolbar">
+        <span class="spacer"></span>
+        <button id="save-btn-bottom" class="primary" type="button">Save changes</button>
+      </div>
 
-        <h2>Document</h2>
-        <p class="muted">Same format as the rotation config: <span class="mono">screens</span> (frequency, extra seconds,
-          alternates), <span class="mono">playlists</span>, <span class="mono">sequence</span>, <span class="mono">scroll</span>.</p>
+      <h2 style="margin-top:1rem">Demand preview</h2>
+      <div id="preview" class="muted">No clients use this playlist yet.</div>
+
+      <details id="advanced" class="advanced">
+        <summary>Advanced: edit the document as JSON</summary>
+        <p class="muted">The saved document, in the same format as the rotation config: <span class="mono">screens</span>
+          (frequency, extra seconds, alternates), <span class="mono">playlists</span>, <span class="mono">sequence</span>,
+          <span class="mono">scroll</span>. Unsaved changes in the editor above are not shown here.</p>
         <textarea id="document" spellcheck="false" aria-label="Playlist document JSON"></textarea>
         <div class="row">
-          <button id="validate-btn">Validate</button>
-          <button id="save-btn" class="primary">Save</button>
+          <button id="validate-btn" type="button">Validate</button>
+          <button id="save-json-btn" type="button">Save JSON</button>
         </div>
-
-        <h2 style="margin-top:1rem">Demand preview</h2>
-        <div id="preview" class="muted">No clients use this playlist yet.</div>
-      </div>
+      </details>
     </div>
   </div>
 
@@ -75,13 +101,40 @@
 
 <script>
 const CSRF = {{ {csrf_header: csrf_value} | tojson }};
+const COLLAPSED_KEY = "client-playlist-editor-collapsed:";
 let selected = null;
+let isDirty = false;
 
 function notice(message, kind) {
   const el = document.getElementById("notice");
   el.textContent = message;
   el.className = "panel notice " + (kind || "ok");
 }
+
+function loadCollapsed(id) {
+  try { return JSON.parse(localStorage.getItem(COLLAPSED_KEY + id) || "{}") || {}; }
+  catch (error) { return {}; }
+}
+
+function saveCollapsed(state) {
+  if (!selected) return;
+  try { localStorage.setItem(COLLAPSED_KEY + selected.id, JSON.stringify(state.collapsed || {})); }
+  catch (error) { console.warn("Unable to remember collapsed playlists.", error); }
+}
+
+function setDirty(dirty) {
+  isDirty = dirty;
+  const el = document.getElementById("dirty-state");
+  el.textContent = dirty ? "Unsaved changes." : "No unsaved changes.";
+  el.classList.toggle("dirty", dirty);
+}
+
+const editor = createRotationEditor({
+  showSpeed: false,
+  onChange: () => setDirty(true),
+  onStateChange: saveCollapsed,
+  onError: (message) => notice(message, "error"),
+});
 
 async function api(method, url, body) {
   const options = { method, headers: { "Accept": "application/json" } };
@@ -111,6 +164,10 @@ function explain(error) {
   return error.message;
 }
 
+function confirmDiscard() {
+  return !isDirty || confirm("Discard your unsaved changes to this playlist?");
+}
+
 async function loadList() {
   const data = await api("GET", "/api/playlists");
   const list = document.getElementById("playlist-list");
@@ -126,7 +183,10 @@ async function loadList() {
     li.innerHTML = "<strong></strong><div class='muted'></div>";
     li.querySelector("strong").textContent = item.name;
     li.querySelector("div").textContent = `${item.screen_count} screens · ${users}`;
-    li.addEventListener("click", () => select(item.id));
+    li.addEventListener("click", () => {
+      if (!confirmDiscard()) return;
+      select(item.id);
+    });
     list.appendChild(li);
   }
   loadAudit();
@@ -147,42 +207,7 @@ async function loadAudit() {
   }
 }
 
-function renderSequence(doc) {
-  const list = document.getElementById("sequence");
-  list.innerHTML = "";
-  const sequence = doc.sequence || [];
-  const playlists = doc.playlists || {};
-  sequence.forEach((entry, index) => {
-    const li = document.createElement("li");
-    const label = entry.playlist ? ((playlists[entry.playlist] || {}).label || entry.playlist) : (entry.screen || JSON.stringify(entry));
-    const span = document.createElement("span");
-    span.textContent = label + " ";
-    li.appendChild(span);
-    for (const [text, delta] of [["↑", -1], ["↓", 1]]) {
-      const button = document.createElement("button");
-      button.textContent = text;
-      button.setAttribute("aria-label", `Move ${label} ${delta < 0 ? "up" : "down"}`);
-      button.disabled = index + delta < 0 || index + delta >= sequence.length;
-      button.addEventListener("click", () => move(index, delta, sequence.length));
-      li.appendChild(button);
-    }
-    list.appendChild(li);
-  });
-  if (!sequence.length) list.innerHTML = '<li class="muted">No sequence; screens play in document order.</li>';
-}
-
-async function move(index, delta, length) {
-  const order = [...Array(length).keys()];
-  [order[index], order[index + delta]] = [order[index + delta], order[index]];
-  try {
-    selected = await api("POST", `/api/playlists/${selected.id}/reorder`, { order, expected_revision: selected.revision });
-    show(selected);
-    notice("Sequence reordered.");
-    loadList();
-  } catch (error) { notice(explain(error), "error"); }
-}
-
-function show(playlist) {
+function showDetails(playlist) {
   document.getElementById("editor-empty").classList.add("hidden");
   document.getElementById("editor").classList.remove("hidden");
   document.getElementById("edit-name").value = playlist.name;
@@ -190,14 +215,24 @@ function show(playlist) {
   document.getElementById("edit-revision").textContent = playlist.revision;
   document.getElementById("edit-clients").textContent = (playlist.clients || []).join(", ") || "no clients";
   document.getElementById("document").value = JSON.stringify(playlist.document, null, 2);
-  renderSequence(playlist.document);
+}
+
+// Show a playlist fetched from an .../editor endpoint, replacing any edits.
+function show(playlist) {
+  showDetails(playlist);
+  const view = playlist.editor;
+  editor.setScreenIds(view.screen_ids);
+  editor.setState({ playlists: view.playlists, assignments: view.playlist_assignments, collapsed: loadCollapsed(playlist.id) });
+  editor.render(view.screens);
+  setDirty(false);
   loadPreview(playlist.id);
 }
 
 async function select(id) {
   try {
-    selected = await api("GET", `/api/playlists/${id}`);
-    show(selected);
+    const playlist = await api("GET", `/api/playlists/${id}/editor`);
+    selected = playlist;
+    show(playlist);
     loadList();
   } catch (error) { notice(explain(error), "error"); }
 }
@@ -240,7 +275,34 @@ function parsedDocument() {
   catch (error) { throw new Error("Document is not valid JSON: " + error.message); }
 }
 
+async function saveEditor() {
+  const buttons = [document.getElementById("save-btn"), document.getElementById("save-btn-bottom")];
+  buttons.forEach((button) => { button.disabled = true; });
+  try {
+    const screens = editor.getScreens();
+    selected = await api("PUT", `/api/playlists/${selected.id}/editor`, {
+      screens,
+      playlists: editor.playlistsPayload(screens),
+      sequence: editor.sequencePayload(),
+      expected_revision: selected.revision,
+    });
+    show(selected);
+    notice(`Saved revision ${selected.revision}. Clients pick it up on their next sync.`);
+    loadList();
+  } catch (error) { notice(explain(error), "error"); }
+  finally { buttons.forEach((button) => { button.disabled = false; }); }
+}
+
+document.getElementById("save-btn").addEventListener("click", saveEditor);
+document.getElementById("save-btn-bottom").addEventListener("click", saveEditor);
+
+document.getElementById("discard-btn").addEventListener("click", () => {
+  if (!selected || !confirmDiscard()) return;
+  select(selected.id);
+});
+
 document.getElementById("create-btn").addEventListener("click", async () => {
+  if (!confirmDiscard()) return;
   try {
     const created = await api("POST", "/api/playlists", { name: document.getElementById("new-name").value });
     document.getElementById("new-name").value = "";
@@ -252,6 +314,7 @@ document.getElementById("create-btn").addEventListener("click", async () => {
 document.getElementById("import-file").addEventListener("change", async (event) => {
   const file = event.target.files[0];
   if (!file) return;
+  if (!confirmDiscard()) { event.target.value = ""; return; }
   try {
     const exported = JSON.parse(await file.text());
     const created = await api("POST", "/api/playlists/import", { export: exported });
@@ -268,25 +331,28 @@ document.getElementById("validate-btn").addEventListener("click", async () => {
   } catch (error) { notice(explain(error), "error"); }
 });
 
-document.getElementById("save-btn").addEventListener("click", async () => {
+document.getElementById("save-json-btn").addEventListener("click", async () => {
+  if (isDirty && !confirm("Saving the JSON replaces your unsaved changes in the editor. Continue?")) return;
   try {
-    selected = { ...(await api("PUT", `/api/playlists/${selected.id}`, { document: parsedDocument(), expected_revision: selected.revision })), clients: selected.clients };
-    show(selected);
-    notice(`Saved revision ${selected.revision}. Clients pick it up on their next sync.`);
-    loadList();
+    const saved = await api("PUT", `/api/playlists/${selected.id}`, { document: parsedDocument(), expected_revision: selected.revision });
+    await select(saved.id);
+    notice(`Saved revision ${saved.revision}. Clients pick it up on their next sync.`);
   } catch (error) { notice(explain(error), "error"); }
 });
 
 document.getElementById("rename-btn").addEventListener("click", async () => {
   try {
-    selected = { ...(await api("POST", `/api/playlists/${selected.id}/rename`, { name: document.getElementById("edit-name").value, expected_revision: selected.revision })), clients: selected.clients };
-    show(selected);
+    // Renaming keeps any unsaved edits in the editor.
+    const renamed = await api("POST", `/api/playlists/${selected.id}/rename`, { name: document.getElementById("edit-name").value, expected_revision: selected.revision });
+    selected = { ...selected, ...renamed };
+    showDetails(selected);
     notice("Renamed.");
     loadList();
   } catch (error) { notice(explain(error), "error"); }
 });
 
 document.getElementById("clone-btn").addEventListener("click", async () => {
+  if (!confirmDiscard()) return;
   try {
     const clone = await api("POST", `/api/playlists/${selected.id}/clone`, {});
     notice(`Cloned as ${clone.name}.`);
@@ -304,10 +370,17 @@ document.getElementById("delete-btn").addEventListener("click", async () => {
     await api("DELETE", `/api/playlists/${selected.id}?expected_revision=${encodeURIComponent(selected.revision)}`);
     notice(`Deleted ${selected.name}.`);
     selected = null;
+    setDirty(false);
     document.getElementById("editor").classList.add("hidden");
     document.getElementById("editor-empty").classList.remove("hidden");
     loadList();
   } catch (error) { notice(explain(error), "error"); }
+});
+
+window.addEventListener("beforeunload", (event) => {
+  if (!isDirty) return;
+  event.preventDefault();
+  event.returnValue = "";
 });
 
 loadList().catch((error) => notice(explain(error), "error"));
