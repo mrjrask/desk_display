@@ -69,7 +69,14 @@ def competitor(abbr, team_id, rank=99, home_away="home"):
 def test_writes_to_the_folder_the_screens_read():
     assert Path(fbs.LOGO_DIR).resolve() == lg.PROJECT_LOGO_DIR
     assert Path(ncaam.LOGO_DIR).resolve() == lg.PROJECT_LOGO_DIR
-    assert Path(lg.parse_args([]).output_dir) == lg.PROJECT_LOGO_DIR
+
+
+def test_default_output_is_a_desktop_folder_per_mode():
+    assert lg.parse_args([]).output_dir is None
+    assert (
+        lg.default_output_dir("fbs_week")
+        == Path.home() / "Desktop" / "desk_display_logos" / "fbs_week"
+    )
 
 
 @pytest.mark.parametrize(
@@ -321,3 +328,43 @@ def test_main_fills_the_output_folder(tmp_path, monkeypatch, capsys):
     )
     assert sorted(os.listdir(tmp_path)) == ["BYU.png", "UTAH.png"]
     assert "Saved 2 new logo(s)" in capsys.readouterr().out
+
+
+# ── Dependencies ───────────────────────────────────────────────────────────
+
+
+def test_missing_packages_reports_pip_names(monkeypatch):
+    real = lg.importlib.util.find_spec
+    monkeypatch.setattr(
+        lg.importlib.util, "find_spec", lambda name: None if name == "PIL" else real(name)
+    )
+    assert lg.missing_packages() == ["Pillow"]
+
+
+def test_temp_venv_runs_the_script_and_is_deleted(tmp_path, monkeypatch):
+    venv_dir = tmp_path / "venv"
+    venv_dir.mkdir()
+    monkeypatch.setattr(lg.tempfile, "mkdtemp", lambda prefix: str(venv_dir))
+    monkeypatch.setattr(
+        lg.venv, "EnvBuilder", lambda with_pip: type("B", (), {"create": lambda self, d: None})()
+    )
+    calls = []
+
+    def fake_run(cmd, env=None, check=False):
+        calls.append((cmd, env))
+        return type("R", (), {"returncode": 0})()
+
+    monkeypatch.setattr(lg.subprocess, "run", fake_run)
+    assert lg.run_in_temp_venv(["--mode", "fbs_week"], ["Pillow"]) == 0
+    (install, _), (run, env) = calls
+    assert install[1:] == [
+        "-m",
+        "pip",
+        "install",
+        "--quiet",
+        "--disable-pip-version-check",
+        "Pillow",
+    ]
+    assert run[1:] == [str(Path(lg.__file__).resolve()), "--mode", "fbs_week"]
+    assert env[lg.TEMP_VENV_ENV] == "1"
+    assert not venv_dir.exists()

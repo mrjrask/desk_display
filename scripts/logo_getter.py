@@ -1,11 +1,13 @@
 #!/usr/bin/env python3
 """Download team logos for the NCAA scoreboard screens.
 
-Saves logos where, and under the names, the screens look for them:
+Saves the logos the screens look for, named the way they look them up:
 
-* Folder: ``images/ncaa/`` (``LOGO_DIR`` in ``screens/ncaa_fbs_scoreboard.py``
-  and ``screens/ncaam_scoreboard.py``). The folder is flat; there are no
-  per-sport subfolders.
+* Folder: ``~/Desktop/desk_display_logos/<mode>/`` by default, so you can
+  review them first. The screens read ``images/ncaa/`` (``LOGO_DIR`` in
+  ``screens/ncaa_fbs_scoreboard.py`` and ``screens/ncaam_scoreboard.py``), a
+  flat folder: copy the files you want straight into it, or pass
+  ``--output-dir images/ncaa`` to save there directly.
 * Filename: ``{ABBREVIATION}.png`` (ESPN abbreviation, uppercased), or
   ``{team_id}.png`` when ESPN gives a team no abbreviation. This is
   ``_team_logo_filename`` in ``screens/ncaa_fbs_scoreboard.py``, which is also
@@ -34,60 +36,144 @@ second, like ``services/sports/ncaa_fbs.py``: some networks get 403 from
 ``site.api``. ``site.web.api`` rejects date ranges, so games are fetched
 one day at a time.
 
-Logos that already exist are left alone unless ``--overwrite`` is given, so
-hand-tuned files stay put. Pass ``--output-dir`` to write somewhere else
-(for example a folder to review before copying into ``images/ncaa``).
+Logos that already exist in the output folder are left alone unless
+``--overwrite`` is given, so hand-tuned files stay put.
+
+No venv setup is needed. Inside the project the script re-runs itself under
+the project's ``venv``/``.venv``. Elsewhere, if ``requests`` or ``Pillow`` is
+missing, it builds a throwaway venv in a temp folder, installs the two
+packages there, runs, and deletes the venv when it finishes.
 
 Usage:
     python3 scripts/logo_getter.py                 # interactive prompt
     python3 scripts/logo_getter.py --mode fbs_week
     python3 scripts/logo_getter.py --mode fbs_top25 --dry-run
-    python3 scripts/logo_getter.py --mode ncaam_top25 --output-dir ~/Desktop/ncaa_logos
+    python3 scripts/logo_getter.py --mode fbs_week --output-dir images/ncaa
     python3 scripts/logo_getter.py --mode ncaam_tournament --season-year 2027
 
-Requires only ``requests`` and ``Pillow`` (already project dependencies).
+Requires only ``requests`` and ``Pillow`` (already project dependencies);
+it sets them up itself when they are missing (see above).
 """
 
 from __future__ import annotations
 
-import sys
-from pathlib import Path
-
-if __name__ == "__main__":
-    try:
-        from scripts._venv_bootstrap import reexec_with_project_venv
-    except ImportError:
-        sys.path.insert(0, str(Path(__file__).resolve().parent))
-        try:
-            from _venv_bootstrap import reexec_with_project_venv
-        except ImportError:  # pragma: no cover - standalone copy w/o the rest of the repo
-            reexec_with_project_venv = None
-    if reexec_with_project_venv is not None:
-        reexec_with_project_venv()
-
 import argparse
 import contextlib
 import datetime
+import importlib.util
 import io
 import json
+import os
+import shutil
+import subprocess
+import sys
+import tempfile
 import time
+import venv
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any, Optional
 from zoneinfo import ZoneInfo
 
-import requests
-from PIL import Image
-from requests.adapters import HTTPAdapter
-from urllib3.util.retry import Retry
-
+# requests and Pillow may be missing when the script runs outside the
+# project's venv; the __main__ block below sets up a temporary venv then.
 try:
-    RESAMPLE = Image.Resampling.LANCZOS  # Pillow >= 9.1
-except AttributeError:  # pragma: no cover - older Pillow
-    RESAMPLE = Image.LANCZOS  # type: ignore[attr-defined]
+    import requests
+    from PIL import Image
+    from requests.adapters import HTTPAdapter
+    from urllib3.util.retry import Retry
+except ImportError:  # pragma: no cover - exercised by running without the packages
+    requests = Image = HTTPAdapter = Retry = None  # type: ignore[assignment]
+
+if Image is None:  # pragma: no cover
+    RESAMPLE = None
+elif hasattr(Image, "Resampling"):  # Pillow >= 9.1
+    RESAMPLE = Image.Resampling.LANCZOS
+else:  # pragma: no cover - older Pillow
+    RESAMPLE = Image.LANCZOS
+
+
+REQUIRED_PACKAGES = {"requests": "requests", "PIL": "Pillow"}  # import name: pip name
+# Set in the child run inside the temporary venv so it does not build another.
+TEMP_VENV_ENV = "DESK_DISPLAY_LOGO_GETTER_TEMP_VENV"
+
+
+def missing_packages() -> list[str]:
+    """Return the pip names of required packages this Python cannot import."""
+
+    return [
+        pip for module, pip in REQUIRED_PACKAGES.items() if importlib.util.find_spec(module) is None
+    ]
+
+
+def run_in_temp_venv(argv: list[str], packages: list[str]) -> int:
+    """Run this script in a throwaway venv with *packages*, then delete the venv."""
+
+    venv_dir = Path(tempfile.mkdtemp(prefix="logo_getter_venv_"))
+    try:
+        print(f"Missing {', '.join(packages)}; setting up a temporary venv in {venv_dir}...")
+        try:
+            venv.EnvBuilder(with_pip=True).create(venv_dir)
+        except Exception as exc:
+            print(
+                f"Could not create a venv ({exc}). On Raspberry Pi OS/Debian, "
+                "install it with: sudo apt install python3-venv"
+            )
+            return 1
+        python = venv_dir / ("Scripts/python.exe" if os.name == "nt" else "bin/python")
+        install = subprocess.run(
+            [
+                str(python),
+                "-m",
+                "pip",
+                "install",
+                "--quiet",
+                "--disable-pip-version-check",
+                *packages,
+            ],
+            check=False,
+        )
+        if install.returncode != 0:
+            print("Could not install the packages into the temporary venv.")
+            return install.returncode or 1
+        env = {**os.environ, TEMP_VENV_ENV: "1"}
+        return subprocess.run(
+            [str(python), str(Path(__file__).resolve()), *argv], env=env, check=False
+        ).returncode
+    finally:
+        shutil.rmtree(venv_dir, ignore_errors=True)
+        print(f"Removed the temporary venv {venv_dir}.")
+
+
+def bootstrap_dependencies() -> None:
+    """Run under the project venv, or a temporary one when packages are missing."""
+
+    if os.environ.get(TEMP_VENV_ENV):
+        return
+    # Same as scripts/_venv_bootstrap.py, inlined so a copy of this file
+    # outside the repo still runs.
+    project_root = Path(__file__).resolve().parents[1]
+    for candidate in (project_root / ".venv", project_root / "venv"):
+        python = candidate / ("Scripts/python.exe" if os.name == "nt" else "bin/python")
+        if not python.exists():
+            continue
+        if Path(sys.prefix).resolve() != candidate.resolve():
+            os.execv(str(python), [str(python), *sys.argv])
+        break
+    # Still here: no project venv (or it is the one running). Fall back to a
+    # temporary venv when this Python lacks the packages.
+    _missing = missing_packages()
+    if _missing:
+        try:
+            raise SystemExit(run_in_temp_venv(sys.argv[1:], _missing))
+        except KeyboardInterrupt:
+            raise SystemExit(130) from None
+
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 # Where screens/ncaa_fbs_scoreboard.py and screens/ncaam_scoreboard.py read logos.
 PROJECT_LOGO_DIR = PROJECT_ROOT / "images" / "ncaa"
+DEFAULT_OUTPUT_BASE = Path.home() / "Desktop" / "desk_display_logos"
 
 USER_AGENT = (
     "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 "
@@ -642,7 +728,7 @@ def print_summary(summary: RunSummary) -> None:
         print("Skipped/failed:")
         for result in summary.failed:
             print(f"  - {result.label}: {result.reason}")
-    missing = missing_league_logos(summary.mode)
+    missing = missing_league_logos(summary.mode) if PROJECT_LOGO_DIR.is_dir() else []
     if missing:
         print(f"Missing league logo(s) in {PROJECT_LOGO_DIR}: {', '.join(missing)}")
     if MODE_SPORTS[summary.mode] == "basketball":
@@ -666,6 +752,12 @@ def _parse_date(value: str) -> datetime.date:
     return datetime.datetime.strptime(value, "%Y%m%d").date()
 
 
+def default_output_dir(mode: str) -> Path:
+    """Return ~/Desktop/desk_display_logos/<mode>, the default review folder."""
+
+    return DEFAULT_OUTPUT_BASE / mode
+
+
 def parse_args(argv: Optional[list[str]] = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
@@ -677,9 +769,9 @@ def parse_args(argv: Optional[list[str]] = None) -> argparse.Namespace:
     )
     parser.add_argument(
         "--output-dir",
-        default=str(PROJECT_LOGO_DIR),
-        help="Folder to save logos in. Defaults to the project's images/ncaa, "
-        "where the screens read them.",
+        help="Folder to save logos in, used as is (for example images/ncaa, where the "
+        "screens read them). Defaults to a folder per mode in "
+        f"{DEFAULT_OUTPUT_BASE.name} on the Desktop.",
     )
     parser.add_argument(
         "--overwrite",
@@ -696,8 +788,7 @@ def parse_args(argv: Optional[list[str]] = None) -> argparse.Namespace:
         "--season-year",
         type=int,
         default=datetime.date.today().year,
-        help="Calendar year for the default tournament date window "
-        "(ncaam_tournament mode only).",
+        help="Calendar year for the default tournament date window (ncaam_tournament mode only).",
     )
     parser.add_argument(
         "--start-date",
@@ -725,7 +816,9 @@ def parse_args(argv: Optional[list[str]] = None) -> argparse.Namespace:
 def main(argv: Optional[list[str]] = None) -> int:
     args = parse_args(argv)
     mode = args.mode or prompt_for_mode()
-    out_dir = Path(args.output_dir).expanduser()
+    out_dir = (
+        default_output_dir(mode) if args.output_dir is None else Path(args.output_dir).expanduser()
+    )
     session = build_session()
 
     try:
@@ -780,6 +873,7 @@ def main(argv: Optional[list[str]] = None) -> int:
 
 
 if __name__ == "__main__":
+    bootstrap_dependencies()
     try:
         raise SystemExit(main())
     except KeyboardInterrupt:
