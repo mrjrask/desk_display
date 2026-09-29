@@ -26,6 +26,11 @@ See the README's [deployment modes](README.md#deployment-modes) and
 - Every display (standalone, client or combined) starts at the top of the
   playlist labelled "Starter" whenever it restarts, instead of resuming a
   saved position.
+- Smooth scrolling on slow client panels (Pi Zero 2 W with a Display HAT
+  Mini): each frame is pushed to the panel once instead of twice, and motion
+  advances one step per frame drawn, as v0.1 did, instead of skipping pixels
+  to keep up with the clock. `scripts/measure_scroll_fps.py` measures it on
+  the device (see OPERATIONS.md, "Checking scroll smoothness").
 - Delivery telemetry: clients report heartbeat and manifest round trips,
   full-sync time, what the last sync downloaded (files, bytes, time), how
   old the screen on the panel is and failed passes in a row. It shows in a

@@ -481,3 +481,38 @@ def test_a_bad_render_package_still_plays_the_screens_still(env):
     client._content_revision = None
     shown = {client.step()[0] for _ in range(4)}
     assert "MLB Scoreboard" in shown
+
+
+def test_a_slow_panel_scrolls_every_step_instead_of_skipping(env):
+    # A panel whose push takes three frames (a Pi Zero over SPI) must still move
+    # one step per frame, as v0.1 did, and get the extra time to finish.
+    publish_all(env)
+    client = synced(env.make_client())
+    now = [0.0]
+    client._monotonic = lambda: now[0]
+    _show(client, "MLB Scoreboard")
+    animation = client.animation
+    frame_seconds = animation.frame_seconds
+    def present(image):
+        now[0] += 3 * frame_seconds
+        return image
+
+    presented = []
+    real_frame_at = animation.frame_at
+
+    def frame_at(t):
+        presented.append(animation.key_at(t)[1])
+        return real_frame_at(t)
+
+    animation.frame_at = frame_at
+    client.presenter.present = present
+
+    def wait(interval):
+        now[0] += interval
+        return False
+
+    client._stop.wait = wait
+    client.wait(animation.duration)
+    step_px = animation.body["step_px"]
+    assert presented == list(range(step_px, H + 1, step_px))
+    assert now[0] >= animation.duration  # the hold after the slowed scroll was kept

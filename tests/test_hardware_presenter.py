@@ -50,3 +50,42 @@ def test_presenter_led_none_restores_the_update_status(monkeypatch):
     HardwarePresenter(display=display).set_led(None)
 
     assert refreshed == [display] and display.leds == []
+
+
+class _PushDisplay:
+    def __init__(self, image_pushes_frame):
+        self.image_pushes_frame = image_pushes_frame
+        self.pushes = 0
+        self.images = []
+
+    def image(self, image):
+        self.images.append(image)
+        if self.image_pushes_frame:
+            self.pushes += 1
+
+    def show(self):
+        self.pushes += 1
+
+
+def test_presenter_pushes_each_frame_to_the_panel_once():
+    # utils.Display.image() already sends the frame over SPI; calling show()
+    # as well sent it twice, halving the frame rate on a Display HAT Mini.
+    import utils
+
+    assert utils.Display.image_pushes_frame
+    profile = PROFILE_PRESETS[DISPLAY_PROFILE_WAVESHARE_LCD_320X240]
+    for pushes_in_image in (True, False):
+        display = _PushDisplay(pushes_in_image)
+        HardwarePresenter(display=display, profile=profile).present(
+            Image.new("RGB", (profile.width, profile.height)))
+        assert display.pushes == 1
+
+
+def test_presenter_passes_matching_frames_through_without_copying():
+    profile = PROFILE_PRESETS[DISPLAY_PROFILE_WAVESHARE_LCD_320X240]
+    presenter = HardwarePresenter(display=object(), profile=profile)
+    frame = Image.new(profile.color_mode, (profile.width, profile.height))
+
+    assert presenter.convert(frame) is frame
+    assert presenter.convert(Image.new("L", (10, 10))).size == (profile.width, profile.height)
+    assert presenter.convert(Image.new("L", (10, 10))).mode == profile.color_mode

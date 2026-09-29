@@ -1396,6 +1396,8 @@ class Display:
     _KERNEL_BOTTOM_SAFE_BUFFER_PX = 25
     _INDICATOR_BOTTOM_SAFE_BUFFER_PX = 5
     _DISPLAY_REINIT_RETRY_SECONDS = 60
+    # ``image()`` sends the frame to the panel itself; ``show()`` only resends it.
+    image_pushes_frame = True
 
     def __init__(self):
         global _ACTIVE_DISPLAY
