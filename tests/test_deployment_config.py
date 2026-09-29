@@ -279,9 +279,13 @@ def test_valid_client_and_server():
 def test_client_rejects_misplaced_server_variables():
     env = {**CLIENT_OK, "OWM_API_KEY": "abc123456789", "DESK_DISPLAY_RENDER_WORKERS": "4",
            "SCREEN_UI_PASSWORD": "hunter22", "WEATHER_LATITUDE": ""}
-    errors = _errors(dc.validate(Role.CLIENT, env))
+    report = dc.validate(Role.CLIENT, env)
+    errors = _errors(report)
     assert "provider credential does not belong on a client" in errors["OWM_API_KEY"]
-    assert "server setting does not belong on a client" in errors["DESK_DISPLAY_RENDER_WORKERS"]
+    # A plain server setting is only a warning: it must not stop the display.
+    assert "DESK_DISPLAY_RENDER_WORKERS" not in errors
+    warnings = {issue.name: issue.message for issue in report.warnings}
+    assert "server setting is ignored on a client" in warnings["DESK_DISPLAY_RENDER_WORKERS"]
     assert "SCREEN_UI_PASSWORD" not in errors  # it guards the client's own Screenshots page
     # An empty misplaced value configures nothing, so it is not flagged.
     assert "WEATHER_LATITUDE" not in errors
@@ -596,3 +600,12 @@ def test_settings_a_role_ignores_warn_at_startup_instead_of_failing():
     assert "ESC_DOUBLE_PRESS_ACTION" not in {issue.name for issue in standalone.warnings + standalone.errors}
     assert "ESC_DOUBLE_PRESS_ACTION" not in dc.render_example(Role.CLIENT)
     assert "`ESC_DOUBLE_PRESS_ACTION` | client (no effect), standalone |" in dc.render_settings_reference()
+
+
+def test_client_starts_with_stray_server_settings(caplog):
+    env = {**CLIENT_OK, "WEATHER_LATITUDE": "41.9", "WEATHER_LONGITUDE": "-87.6",
+           "NCAAM_SCOREBOARD_MODE": "live"}
+    with caplog.at_level(logging.WARNING, logger="desk_display.config"):
+        report = dc.startup_check("display client", env)
+    assert report.ok
+    assert "WEATHER_LATITUDE: server setting is ignored on a client" in caplog.text
