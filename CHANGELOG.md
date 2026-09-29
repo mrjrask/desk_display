@@ -195,6 +195,8 @@ See the README's [deployment modes](README.md#deployment-modes) and
   same area inside wider logo columns, so wordmarks and round marks read at
   the same size. A team with no saved logo uses ESPN's logo from the game
   data before falling back to its abbreviation.
+- NCAA FBS Scoreboard games are listed by their best-ranked team (#1 first),
+  then by the other team's rank, then by kickoff time.
 - The `inside` screen works on display clients with an indoor sensor. The
   client reads its own sensor, set by `INSIDE_SENSOR`, `INSIDE_I2C_BUSES` and
   the new optional `INSIDE_I2C_ADDRESS` in its `.env.client`, and draws the

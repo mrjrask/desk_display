@@ -7,7 +7,7 @@ import logging
 import threading
 
 from config import CENTRAL_TIME
-from screens.ncaa_fbs_scoreboard import _scoreboard_date, fetch_games_for_day
+from screens.ncaa_fbs_scoreboard import _extract_rank, _scoreboard_date, fetch_games_for_day
 
 # The last week that loaded, reused when every ESPN host fails so a transient
 # block does not blank the board.
@@ -61,15 +61,31 @@ def _games_for_day(day: dt.date, today: dt.date) -> list[dict]:
     return games
 
 
-def _game_sort_key(indexed: tuple[int, dict]) -> tuple[str, int]:
+_UNRANKED = 999
+
+
+def _team_ranks(game: dict) -> list[int]:
+    teams = game.get("teams") if isinstance(game.get("teams"), dict) else {}
+    ranks = []
+    for side in ("away", "home"):
+        team = teams.get(side)
+        rank = _extract_rank(team) if isinstance(team, dict) else None
+        ranks.append(rank if rank is not None else _UNRANKED)
+    return sorted(ranks)
+
+
+def _game_sort_key(indexed: tuple[int, dict]) -> tuple[int, int, str, int]:
+    """Best-ranked team first, then the other team's rank, then kickoff."""
+
     index, game = indexed
-    return (str(game.get("date") or ""), index)
+    best, other = _team_ranks(game)
+    return (best, other, str(game.get("date") or ""), index)
 
 
 def fetch_scoreboard(
     *, day: dt.date | None = None, now: dt.datetime | None = None
 ) -> list[dict]:
-    """Return every Top 25 game in the Monday-Sunday week, oldest first.
+    """Return every Top 25 game in the Monday-Sunday week, best-ranked first.
 
     ESPN is asked one day at a time (the working host rejects ranged
     dates). If any day fails on every ESPN host, the last games loaded for
