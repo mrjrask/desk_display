@@ -1320,11 +1320,14 @@ def _panel_cache_dir(project_dir: Path) -> Optional[Path]:
 
 
 def _in_panel_playback_order(screen_ids: list[str]) -> list[str]:
-    """Put the screens the panel's playlist plays first, in the order it plays them.
+    """Put the panel playlist's screens first, in its rotation editor's order.
 
     Client and combined panels play the server's playlist, not the local
     rotation, so their screenshots follow the cached playlist (or local
-    override) the client is playing. Other screens keep their order after it.
+    override) the client is playing, row for row as its rotation editor
+    lists them: alternates and zero-frequency screens stay where they sit
+    instead of dropping to the end. Screens the playlist doesn't name keep
+    their order after it.
     """
 
     project_dir = Path(__file__).resolve().parent
@@ -1340,7 +1343,13 @@ def _in_panel_playback_order(screen_ids: list[str]) -> list[str]:
         return screen_ids
     if playlist is None:
         return screen_ids
-    played = list(dict.fromkeys(playlist.screens))
+    document = playlist.to_dict()["document"]
+    screens = document.get("screens") if isinstance(document, dict) else None
+    if not isinstance(screens, dict):
+        return screen_ids
+    listed = list(dict.fromkeys(canonical_screen_id(screen_id) for screen_id in screens))
+    groups, assignments = _build_playlist_assignments(document)
+    played = _apply_playlist_grouping(listed, groups, assignments)
     played_set = set(played)
     return played + [screen_id for screen_id in screen_ids if screen_id not in played_set]
 
