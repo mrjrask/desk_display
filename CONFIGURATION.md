@@ -234,7 +234,12 @@ hold playlists or assignments. Playlists use the same document format as the
 rotation config (frequency, extra seconds, alternate screens, playlists and
 sequence), are validated against `screens_catalog.py` and the scheduler, and
 are stored with stable `pl-…` IDs and content revisions in
-`DESK_DISPLAY_PLAYLIST_STORE_PATH`. Screen order is play order, as on the
+`DESK_DISPLAY_PLAYLIST_STORE_PATH`. Each playlist is edited with the same
+editor as the Screen Rotation Config page: drag screens to reorder them,
+group them into playlists and move those, and set frequency, hide-after,
+alternates, extra seconds and alternate frequency per screen (per-screen
+scroll speeds stay on the Rotation Config page, which every display reads).
+Editing the raw JSON document remains available under **Advanced**. Screen order is play order, as on the
 config page, so it is kept exactly and reordering changes the revision. Each
 client plays its playlist independently: skip, previous and touch affect only
 that display, a restart begins at the top of the playlist labelled

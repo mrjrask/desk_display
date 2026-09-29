@@ -40,6 +40,9 @@ class ProfileInfo:
     label: str
     installer: str | None  # Installers/install.sh profile; None when the installer should ask
     installer_env: tuple[tuple[str, str], ...] = ()
+    detail: str = ""  # a second line for the choice, e.g. the screens a multi-screen HAT has
+    in_wizard: bool = True  # False for a profile no device is set up as on its own
+    after_install: str = ""  # what to do once the installer finishes, shown by the join script
 
 
 PROFILE_INFO: dict[str, ProfileInfo] = {
@@ -49,8 +52,15 @@ PROFILE_INFO: dict[str, ProfileInfo] = {
                                (("HYPERPIXEL_PANEL", "hyperpixel4"),)),
     "hyperpixel4_square": ProfileInfo("Pimoroni HyperPixel 4.0 Square", "hyperpixel",
                                       (("HYPERPIXEL_PANEL", "hyperpixel4sq"),)),
-    "waveshare_lcd_320x240": ProfileInfo("Waveshare OLED/LCD HAT (A), LCD panel", "waveshare_oled_lcd_hat_a"),
-    "waveshare_oled_128x64": ProfileInfo("Waveshare 128x64 OLED", None),
+    # One HAT, three screens: the LCD plays the playlist and the installer adds
+    # desk_display_waveshare_oled.service, which drives both OLEDs from the
+    # client's heartbeat (scripts/waveshare_oled_status.py).
+    "waveshare_lcd_320x240": ProfileInfo(
+        "Waveshare OLED/LCD HAT (A)", "waveshare_oled_lcd_hat_a",
+        detail="320x240 LCD plus its two 128x64 status OLEDs",
+        after_install="Reboot now (sudo reboot) so the HAT's LCD and OLEDs turn on."),
+    # Only ever the HAT's side OLEDs, which the HAT choice above sets up.
+    "waveshare_oled_128x64": ProfileInfo("Waveshare 128x64 OLED", None, in_wizard=False),
     "hdmi_1080p": ProfileInfo("HDMI monitor, 1080p", "kernel"),
     "fallback_default": ProfileInfo("Generic 320x240 panel", None),
     "fallback_hd": ProfileInfo("Generic 720p panel", None),
@@ -58,16 +68,19 @@ PROFILE_INFO: dict[str, ProfileInfo] = {
 
 
 def profile_choices() -> list[dict[str, Any]]:
-    """Every display profile, most common first, with a readable label."""
+    """Every display profile a device can be set up as, most common first, with a readable label."""
 
     order = list(PROFILE_INFO)
     choices = []
     for profile_id in sorted(PROFILE_PRESETS, key=lambda p: (order.index(p) if p in order else len(order), p)):
         preset = PROFILE_PRESETS[profile_id]
         info = PROFILE_INFO.get(profile_id) or ProfileInfo(profile_id.replace("_", " "), None)
+        if not info.in_wizard:
+            continue
         choices.append({
             "id": profile_id,
             "label": info.label,
+            "detail": info.detail,
             "size": f"{preset.width}x{preset.height}",
             "installer": info.installer,
         })
@@ -384,8 +397,13 @@ def join_script(client_env_text: str, client_id: str, display_profile: str,
         "cd ~/desk_display",
         installer,
         f"rm -f {filename}",
-        f'echo "==> Done. {client_id} connects to the server on its own; if the installer asked for a reboot, reboot now."',
     ]
+    info = PROFILE_INFO.get(display_profile)
+    if info and info.after_install:
+        lines.append(f"echo {shlex.quote(f'==> Done. {info.after_install} {client_id} then connects to the server on its own.')}")
+    else:
+        lines.append(f'echo "==> Done. {client_id} connects to the server on its own; '
+                     'if the installer asked for a reboot, reboot now."')
     return "\n".join(lines) + "\n"
 
 

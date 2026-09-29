@@ -148,6 +148,117 @@ def test_reorder_sequence(web):
     assert bad.status_code == 400
 
 
+def _editor_payload(view, **changes):
+    """Rows, groups and sequence as the Playlists page editor would send them."""
+
+    rows = {row["id"]: dict(row) for row in view["screens"]}
+    for screen_id, fields in changes.items():
+        rows[screen_id].update(fields)
+    return list(rows.values())
+
+
+def test_editor_view_matches_the_rotation_editor(web):
+    doc = {**DOC, "scroll": {"speed": 1.5, "smoothness": 1.0, "vertical_speed_adjustment": 0.25},
+           "playlists": {"wx": {"label": "Weather", "steps": [{"screen": "weather1"}]}},
+           "sequence": [{"playlist": "wx"}]}
+    playlist = create(web, document=doc)
+    response = web.get(f"/api/playlists/{playlist['id']}/editor")
+    assert response.status_code == 200
+    data = response.get_json()
+    assert data["revision"] == playlist["revision"] and data["document"] == playlist["document"]
+    view = data["editor"]
+    rows = {row["id"]: row for row in view["screens"]}
+    assert rows["weather1"]["alt_screen"] == "weather2" and rows["weather1"]["alt_frequency"] == 2
+    assert rows["date"]["frequency"] == 1
+    # Every catalog screen is offered, disabled, so it can be switched on.
+    assert rows["nixie"]["frequency"] == 0
+    assert view["playlists"] == [{"id": "wx", "name": "Weather"}]
+    assert view["playlist_assignments"] == {"weather1": "wx"}
+    assert "weather2" in view["screen_ids"]
+
+
+def test_editor_save_round_trip(web):
+    from remote_display.playlist_store import canonicalize_screen_ids, document_revision
+
+    doc = {**DOC, "scroll": {"speed": 1.5, "smoothness": 1.0, "vertical_speed_adjustment": 0.25}}
+    playlist = create(web, document=doc)
+    view = web.get(f"/api/playlists/{playlist['id']}/editor").get_json()["editor"]
+    screens = _editor_payload(
+        view,
+        date={"frequency": 3, "extra_seconds": 5},
+        nixie={"frequency": 2, "hide_after_enabled": True, "hide_after_at": "2030-01-02T03:04"},
+        quad={"alt_screen": "date", "alt_frequency": "4"},
+    )
+    # The page sends rows in on-screen order: the "Late" group plays last.
+    order = ["nixie", "date", "weather radar", "quad", "weather1"]
+    screens.sort(key=lambda row: order.index(row["id"]) if row["id"] in order else len(order))
+    payload = {
+        "screens": screens,
+        "playlists": {"late": {"label": "Late", "steps": [{"screen": "weather1"}]},
+                      "early": {"label": "Early", "steps": [{"screen": "quad"}]}},
+        "sequence": [{"playlist": "early"}, {"playlist": "late"}],
+        "expected_revision": playlist["revision"],
+    }
+    response = web.put(f"/api/playlists/{playlist['id']}/editor", json=payload, headers=CSRF)
+    assert response.status_code == 200, response.get_json()
+    saved = response.get_json()
+    document = saved["document"]
+    assert list(document["screens"]) == order
+    assert document["screens"]["date"] == {"frequency": 3, "extra_seconds": 5}
+    assert document["screens"]["nixie"] == {"frequency": 2, "hide_after_enabled": True, "hide_after_at": "2030-01-02T03:04"}
+    assert document["screens"]["quad"] == {"frequency": 1, "alt": {"screen": "date", "frequency": 4}}
+    assert document["screens"]["weather1"] == {"frequency": 1, "alt": {"screen": "weather2", "frequency": 2}}
+    # Disabled catalog screens the playlist never named are not added to it.
+    assert "on this day" not in document["screens"]
+    assert document["playlists"]["early"]["steps"] == [{"screen": "quad"}]
+    assert document["sequence"] == [{"playlist": "early"}, {"playlist": "late"}]
+    assert document["scroll"] == doc["scroll"]
+    # Clients canonicalize before checking the revision, so it must match.
+    assert saved["revision"] == document_revision(canonicalize_screen_ids(document))
+    assert saved["editor"]["playlists"] == [{"id": "early", "name": "Early"}, {"id": "late", "name": "Late"}]
+    stored = web.get(f"/api/playlists/{playlist['id']}").get_json()
+    assert stored["revision"] == saved["revision"] and stored["document"] == document
+
+    # Saving the editor again unchanged keeps the same revision.
+    again = web.put(f"/api/playlists/{playlist['id']}/editor", json={
+        "screens": saved["editor"]["screens"],
+        "playlists": document["playlists"],
+        "sequence": document["sequence"],
+        "expected_revision": saved["revision"],
+    }, headers=CSRF)
+    assert again.status_code == 200 and again.get_json()["revision"] == saved["revision"]
+
+
+def test_editor_save_canonicalizes_renamed_screens(web):
+    playlist = create(web)
+    view = web.get(f"/api/playlists/{playlist['id']}/editor").get_json()["editor"]
+    screens = [row for row in view["screens"] if row["id"] != "NCAA Mens BB Scoreboard"]
+    screens.append({"id": "NCAAM Scoreboard", "frequency": 2})
+    payload = {"screens": screens, "playlists": {"p": {"label": "P", "steps": [{"screen": "NCAAM Scoreboard"}]}},
+               "sequence": [{"playlist": "p"}], "expected_revision": playlist["revision"]}
+    response = web.put(f"/api/playlists/{playlist['id']}/editor", json=payload, headers=CSRF)
+    assert response.status_code == 200, response.get_json()
+    document = response.get_json()["document"]
+    assert document["screens"]["NCAA Mens BB Scoreboard"] == 2 and "NCAAM Scoreboard" not in document["screens"]
+    assert document["playlists"]["p"]["steps"] == [{"screen": "NCAA Mens BB Scoreboard"}]
+
+
+def test_editor_save_rejects_conflicts_and_bad_rows(web):
+    playlist = create(web)
+    view = web.get(f"/api/playlists/{playlist['id']}/editor").get_json()["editor"]
+    url = f"/api/playlists/{playlist['id']}/editor"
+    stale = web.put(url, json={"screens": view["screens"], "expected_revision": "r-stale"}, headers=CSRF)
+    assert stale.status_code == 409 and stale.get_json()["error"] == "revision_conflict"
+    unknown = web.put(url, json={"screens": [{"id": "nope", "frequency": 1}], "expected_revision": playlist["revision"]}, headers=CSRF)
+    assert unknown.status_code == 400 and "Unknown screen id" in unknown.get_json()["message"]
+    bad_alt = web.put(url, json={"screens": [{"id": "date", "frequency": 1, "alt_screen": "nope"}],
+                                 "expected_revision": playlist["revision"]}, headers=CSRF)
+    assert bad_alt.status_code == 400
+    no_csrf = web.put(url, json={"screens": view["screens"], "expected_revision": playlist["revision"]})
+    assert no_csrf.status_code == 403
+    assert web.get(f"/api/playlists/{playlist['id']}").get_json()["revision"] == playlist["revision"]
+
+
 def test_validate_endpoint(web):
     ok = web.post("/api/playlists/validate", json={"document": DOC}, headers=CSRF).get_json()
     assert ok["valid"] and "weather2" in ok["alternate_screens"]
@@ -452,6 +563,99 @@ def test_browser_playlist_workflow(live_server, browser, env):
     assert "Saved revision" in page.inner_text("#notice")
 
 
+GROUPED_DOC = {
+    "screens": {"weather radar": 1, "nixie": 1, "date": 1, "weather1": {"frequency": 1, "alt": {"screen": "weather2", "frequency": 2}}},
+    "playlists": {"a": {"label": "Morning", "steps": [{"screen": "date"}]},
+                  "b": {"label": "Weather", "steps": [{"screen": "weather1"}]}},
+    "sequence": [{"playlist": "a"}, {"playlist": "b"}],
+}
+
+
+def _row(screen_id):
+    return f".screen-row[data-screen-id='{screen_id}']"
+
+
+def test_browser_playlist_rotation_editor(live_server, browser, env):
+    playlist = env["store"].create("Grouped", GROUPED_DOC, actor="test")
+    page = browser.new_page(viewport={"width": 1600, "height": 1000})
+    page.on("dialog", lambda dialog: dialog.accept())
+    page.goto(f"{live_server}/playlists")
+    page.click(f"li[data-id='{playlist['id']}']")
+    page.wait_for_selector(_row("date"))
+    assert page.inner_text(".playlist-row[data-playlist-id='a'] .name") == "Morning"
+    assert not page.is_visible(".table-header .speed-col")
+    assert page.inner_text("#dirty-state") == "No unsaved changes."
+
+    # Reorder playlists and screens, and set per-screen options.
+    page.click(".playlist-row[data-playlist-id='b'] >> text=Move up")
+    page.drag_and_drop(f"{_row('nixie')} .handle", f"{_row('weather radar')} .handle")
+    page.fill(f"{_row('date')} .freq-input", "4")
+    page.fill(f"{_row('date')} .extra-seconds-input", "6")
+    page.select_option(f"{_row('weather radar')} .alt-screen-input", "date")
+    page.fill(f"{_row('weather radar')} .alt-frequency-input", "3")
+    page.select_option(f"{_row('quad')} .playlist-select", "a")
+    page.wait_for_function("document.querySelector(\"" + _row("quad") + " .playlist-select\").value === 'a'")
+    assert page.inner_text("#dirty-state") == "Unsaved changes."
+
+    page.click("#collapseAllPlaylistsBtn")
+    assert not page.is_visible(_row("date")) and not page.is_visible(_row("weather1"))
+    page.click("#expandAllPlaylistsBtn")
+    assert page.is_visible(_row("date")) and page.is_visible(_row("weather1"))
+
+    page.click("#save-btn")
+    page.wait_for_selector("#notice.ok")
+    assert "Saved revision" in page.inner_text("#notice")
+    assert page.inner_text("#dirty-state") == "No unsaved changes."
+    saved = env["store"].get(playlist["id"])
+    document = saved["document"]
+    assert page.inner_text("#edit-revision") == saved["revision"]
+    assert document["sequence"] == [{"playlist": "b"}, {"playlist": "a"}]
+    assert list(document["screens"])[:2] == ["nixie", "weather radar"]
+    assert document["screens"]["date"] == {"frequency": 4, "extra_seconds": 6}
+    assert document["screens"]["weather radar"] == {"frequency": 1, "alt": {"screen": "date", "frequency": 3}}
+    assert document["screens"]["weather1"] == GROUPED_DOC["screens"]["weather1"]
+    assert document["playlists"]["a"]["steps"] == [{"screen": "date"}, {"screen": "quad"}]
+    assert page.inner_text(".playlist-row[data-playlist-id='a'] .count") == "2 screens"
+
+
+def test_browser_playlist_editor_keeps_json_editing(live_server, browser, env):
+    playlist = env["store"].create("Json", GROUPED_DOC, actor="test")
+    page = browser.new_page()
+    page.goto(f"{live_server}/playlists")
+    page.click(f"li[data-id='{playlist['id']}']")
+    page.wait_for_selector(_row("date"))
+    page.click("#advanced summary")
+    edited = json.loads(page.input_value("#document"))
+    edited["screens"]["date"] = 9
+    page.fill("#document", json.dumps(edited))
+    page.click("#save-json-btn")
+    page.wait_for_selector("#notice.ok")
+    page.wait_for_function("document.querySelector(\"" + _row("date") + " .freq-input\").value === '9'")
+    assert env["store"].get(playlist["id"])["document"]["screens"]["date"] == 9
+
+
+def test_browser_rotation_config_page_still_saves(live_server, browser, env, monkeypatch, tmp_path):
+    config_path = tmp_path / "screens_config.json"
+    config_path.write_text(json.dumps(GROUPED_DOC), encoding="utf-8")
+    monkeypatch.setattr(config_ui, "LOCAL_CONFIG_PATH", str(config_path))
+    monkeypatch.setattr(config_ui, "LAYOUTS_CONFIG_PATH", str(tmp_path / "screens_layouts.json"))
+    page = browser.new_page(viewport={"width": 1600, "height": 1000})
+    page.goto(f"{live_server}/")
+    page.wait_for_selector(_row("date"))
+    assert page.is_visible(".table-header .speed-col")
+    page.click(".playlist-row[data-playlist-id='b'] >> text=Move up")
+    page.fill(f"{_row('date')} .freq-input", "5")
+    page.click("#collapseAllPlaylistsBtn")
+    assert not page.is_visible(_row("date"))
+    page.click("#expandAllPlaylistsBtn")
+    page.click("#saveBtn")
+    page.wait_for_function("!document.getElementById('saveBtn').disabled && !sessionStorage.getItem('screen-config-draft')")
+    saved = json.loads(config_path.read_text(encoding="utf-8"))
+    assert saved["sequence"] == [{"playlist": "b"}, {"playlist": "a"}]
+    assert saved["screens"]["date"] == 5
+    assert saved["playlists"]["a"] == {"label": "Morning", "steps": [{"screen": "date"}]}
+
+
 def test_browser_client_assignment(live_server, browser, env):
     playlist = env["store"].create("Shared", DOC, actor="test")
     publish_registry(env, [caps("office")], delivered={"office": playlist["revision"]})
@@ -535,7 +739,7 @@ def test_registration_checks_flag_a_loopback_server(web, monkeypatch):
     assert data["server_url"] == "http://square.local:8765"
     assert data["insecure_transport"] is True
     assert "lobby" in data["client_ids"]
-    assert {p["id"] for p in data["profiles"]} == set(PROFILE_PRESETS)
+    assert {p["id"] for p in data["profiles"]} == set(PROFILE_PRESETS) - {"waveshare_oled_128x64"}
     assert "x" * 40 not in json.dumps(data)
 
 

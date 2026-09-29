@@ -157,9 +157,11 @@ def test_screen_config_page_bootstraps_server_playlist_state(monkeypatch):
     alternate_frequency_help = (
         "Counts the base screen's scheduled appearances, including cycle 1."
     )
-    # Each hint is rendered for initial rows and retained in the client-side row builder.
-    assert html.count(frequency_help) == 2
-    assert html.count(alternate_frequency_help) == 2
+    # Rows are built by the shared rotation editor from the bootstrapped entries.
+    assert "const serverScreens = [" in html
+    assert "editor.render(initialScreens)" in html
+    assert html.count(frequency_help) == 1
+    assert html.count(alternate_frequency_help) == 1
 
 
 def test_screen_config_draft_includes_and_restores_scroll_settings(monkeypatch):
@@ -227,7 +229,8 @@ def test_screen_config_page_renders_alt_screen_clear_control(monkeypatch):
 
     assert response.status_code == 200
     html = response.get_data(as_text=True)
-    assert 'class="alt-screen-clear"' in html
+    assert '"alt_screen": "inside"' in html
+    assert 'makeElement("button", "alt-screen-clear", "×")' in html
     assert "Clear alternate screens" in html
 
 
@@ -253,9 +256,10 @@ def test_screen_config_page_renders_alt_screen_dropdown(monkeypatch):
 
     assert response.status_code == 200
     html = response.get_data(as_text=True)
-    assert '<select class="alt-screen-input">' in html
-    assert '<option value="">No alternate</option>' in html
-    assert '<option value="inside" selected>inside</option>' in html
+    assert 'makeElement("select", "alt-screen-input")' in html
+    assert 'new Option("No alternate", "")' in html
+    assert "new Option(id, id, selectedValue === id, selectedValue === id)" in html
+    assert '"alt_screen": "inside"' in html
     assert '<input type="text" list="screenIds"' not in html
 
 
@@ -281,7 +285,7 @@ def test_screen_config_page_labels_multiple_alternate_screens(monkeypatch):
 
     assert response.status_code == 200
     html = response.get_data(as_text=True)
-    assert '<option value="inside, weather1" selected>Multiple</option>' in html
+    assert '"alt_screen": "inside, weather1"' in html
     assert 'new Option("Multiple", selectedValue, true, true)' in html
 
 

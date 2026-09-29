@@ -17,12 +17,19 @@ See the README's [deployment modes](README.md#deployment-modes) and
   every client that shares it.
 - Server-managed playlists and assignments in the configuration UI, with
   per-client capability warnings, provisioning, rotation and revocation.
+- The Playlists page edits each client playlist with the Screen Rotation
+  Config page's editor (screen and playlist order, frequency, hide-after,
+  alternates, extra seconds, Collapse all / Expand all); raw JSON editing
+  moved under **Advanced**.
 - A guided **Add a display** setup on the Clients page: it checks the render
   server is reachable from the LAN (with the `.env` lines to fix it), names
   the display and picks its screen type and playlist, gives one one-time
   command (`POST /api/v1/join`) that installs and configures the new Pi, and
   shows when the display comes online.
   On a Pi still on v0.1 the setup script updates the checkout first.
+  The Waveshare OLED/LCD HAT (A) is one choice there: its LCD plays the
+  playlist and its two side OLEDs run the status helper from the client's
+  heartbeat.
 - **Update (git pull)** and **Restart client** buttons on each row of the
   Clients page. The client collects the command on its next authenticated
   heartbeat, runs one of those two fixed actions (`git pull --ff-only` in its

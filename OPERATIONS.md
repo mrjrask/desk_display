@@ -325,6 +325,11 @@ opens a guided setup (`/clients/add`):
    ID is filled in from it), a playlist, and the server address it will use.
    Over plain HTTP it adds `DESK_DISPLAY_ALLOW_INSECURE_TRANSPORT=1` to the
    display's settings unless you untick it.
+   A Waveshare OLED/LCD HAT (A) is one choice: the installer sets up the
+   LCD as the client's panel and `desk_display_waveshare_oled.service` for
+   the two side OLEDs, which show the date, time and weather (and live
+   Cubs/Blackhawks scores) from the client's heartbeat. Reboot once it
+   finishes.
 3. **Install.** Paste one command on the new Pi:
 
    ```bash

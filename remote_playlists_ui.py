@@ -161,6 +161,8 @@ def register(
     *,
     actor: Callable[[], str],
     active_document: Callable[[], dict[str, Any]],
+    editor_view: Callable[[dict[str, Any]], dict[str, Any]] | None = None,
+    editor_document: Callable[[dict[str, Any], dict[str, Any]], dict[str, Any]] | None = None,
     env: Mapping[str, str] | None = None,
     clock: Callable[[], float] | None = None,
 ) -> Blueprint:
@@ -419,6 +421,32 @@ def register(
         playlist = _store().update(playlist_id, payload.get("document"),
                                 expected_revision=payload.get("expected_revision"), actor=actor())
         return respond(playlist)
+
+    @blueprint.get("/api/playlists/<playlist_id>/editor")
+    def get_playlist_editor(playlist_id: str):
+        if editor_view is None:
+            return respond({"error": "not_found", "message": "the playlist editor is not available"}, 404)
+        data = _store().snapshot()
+        playlist = _store().get(playlist_id)
+        return respond({**playlist, "clients": _store().clients_using(playlist_id, data),
+                        "editor": editor_view(playlist["document"])})
+
+    @blueprint.put("/api/playlists/<playlist_id>/editor")
+    def update_playlist_from_editor(playlist_id: str):
+        """Save the rotation editor's rows, groups and group order as the document."""
+
+        if editor_view is None or editor_document is None:
+            return respond({"error": "not_found", "message": "the playlist editor is not available"}, 404)
+        payload = body()
+        current = _store().get(playlist_id)["document"]
+        try:
+            document = editor_document(payload, current)
+        except (TypeError, ValueError) as exc:
+            raise PlaylistValidationError(str(exc), field="document") from None
+        playlist = _store().update(playlist_id, document,
+                                   expected_revision=payload.get("expected_revision"), actor=actor())
+        return respond({**playlist, "clients": _store().clients_using(playlist_id),
+                        "editor": editor_view(playlist["document"])})
 
     @blueprint.post("/api/playlists/<playlist_id>/rename")
     def rename_playlist(playlist_id: str):

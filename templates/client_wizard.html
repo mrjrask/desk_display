@@ -324,6 +324,7 @@ function fillDetails() {
     label.appendChild(input);
     const text = el("div");
     text.appendChild(el("div", profile.label));
+    if (profile.detail) text.appendChild(el("div", profile.detail, "hint"));
     text.appendChild(el("div", `${profile.size} · ${profile.id}`, "hint mono"));
     label.appendChild(text);
     profiles.appendChild(label);

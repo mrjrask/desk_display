@@ -109,7 +109,7 @@ def test_import_rejects_unknown_playlist_screen_without_persisting(monkeypatch):
 
 def test_dynamic_screen_rows_use_dom_apis_instead_of_html_interpolation():
     template = (
-        Path(config_ui.__file__).resolve().parent / "templates" / "screen_config.html"
+        Path(config_ui.__file__).resolve().parent / "templates" / "_rotation_editor.html"
     ).read_text(encoding="utf-8")
     build_row = template.split("function buildRow(screen) {", 1)[1].split(
         "function updateZeroFrequencyVisibility()", 1
