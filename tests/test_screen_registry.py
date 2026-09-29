@@ -1394,6 +1394,45 @@ def test_hawks_schedule_quad_uses_expected_tile_selection(monkeypatch):
     ]
 
 
+def test_hawks_schedule_quad_standings_tile_is_not_the_clear_frame(monkeypatch):
+    """Regression: the standings tile clears the panel before drawing, and the
+    quad capture kept that black clear frame as the tile, so the Hawks quad's
+    top-left tile was empty on the render server."""
+
+    now = datetime.datetime(2024, 1, 1, 12, 0, tzinfo=CENTRAL_TIME)
+    standings = {
+        "leagueRecord": {"wins": 3, "losses": 1, "ot": 1},
+        "points": 7,
+        "divisionRank": "2",
+        "conferenceRank": "5",
+        "divisionName": "Central",
+        "conferenceName": "Western",
+    }
+    context = _make_context(
+        {"hourly": []},
+        now,
+        cache_updates={
+            "hawks": {"stand": standings, "last": {"id": 10}, "next": {"id": 20}},
+        },
+    )
+    captured = {}
+
+    def _fake_draw_quad_screen(_display, tiles, transition=False, scroll_speed=1.0):
+        captured["tiles"] = tiles
+        return None
+
+    monkeypatch.setattr(registry_module, "draw_quad_screen", _fake_draw_quad_screen)
+
+    registry, _ = build_screen_registry(context)
+    registry["hawks schedule quad"].render()
+    stand_tile = captured["tiles"][0]
+    assert stand_tile.label == "hawks stand1"
+    rendered = stand_tile.render()
+    frames = rendered if isinstance(rendered, list) else [rendered]
+    assert frames and all(isinstance(frame, Image.Image) for frame in frames)
+    assert all(frame.convert("L").getbbox() is not None for frame in frames)
+
+
 def test_hawks_schedule_quad_uses_blank_tile_when_next_home_missing(monkeypatch):
     now = datetime.datetime(2024, 1, 1, 12, 0, tzinfo=CENTRAL_TIME)
     weather = {"hourly": []}

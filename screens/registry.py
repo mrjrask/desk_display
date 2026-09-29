@@ -881,6 +881,13 @@ def build_screen_registry(context: ScreenContext) -> tuple[dict[str, ScreenDefin
             if self._frame_limit is None or len(self._frames) < self._frame_limit:
                 self._frames.append(copied)
 
+        def clear(self):
+            # A screen clears the panel before drawing (utils.clear_display);
+            # the standalone loop defers that, so it is not a frame of the
+            # tile. Capturing it made a still tile (e.g. "hawks stand1")
+            # render as its black clear frame instead of the returned image.
+            return None
+
         def show(self):
             return None
 
