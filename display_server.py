@@ -910,8 +910,12 @@ def run_display_server() -> None:
 
     from paths import resolve_cache_file_path
 
-    feeds = ServerFeedService(state_path=str(
-        resolve_cache_file_path("DESK_DISPLAY_SERVER_FEED_STATE_PATH", "server_feed_state.json")))
+    from screens.ncaa_fbs_scoreboard import download_missing_team_logos
+
+    feeds = ServerFeedService(
+        state_path=str(resolve_cache_file_path("DESK_DISPLAY_SERVER_FEED_STATE_PATH", "server_feed_state.json")),
+        download_ncaa_fbs_logos=download_missing_team_logos,
+    )
     from rendering.profile_process import ProfileProcessPool
 
     render_timeout = float(settings["DESK_DISPLAY_RENDER_TIMEOUT_SECONDS"])

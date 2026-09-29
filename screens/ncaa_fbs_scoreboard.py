@@ -54,7 +54,7 @@ def _scale_y(value: int) -> int:
 REQUEST_TIMEOUT = 10
 SCREEN_ID = "NCAA FBS Scoreboard"
 LOGO_DIR = os.path.join(IMAGES_DIR, "ncaa")
-# Team logos the app downloads from ESPN for itself. Logos in LOGO_DIR (the
+# Team logos the render server downloads from ESPN for itself. Logos in LOGO_DIR (the
 # ones committed to the repo) always win. images/cache is untracked, so these
 # never block a git pull, even when the same logo is later committed.
 AUTO_LOGO_DIR = os.path.join(IMAGES_DIR, "cache", "ncaa")
@@ -495,8 +495,8 @@ def _save_downloaded_logo(filename: str, img: Image.Image) -> None:
             os.remove(tmp_path)
 
 
-def _download_team_logo(team: dict[str, Any], filename: str) -> Optional[Image.Image]:
-    """Fetch ESPN's logo for *team* and keep a copy in AUTO_LOGO_DIR."""
+def _download_team_logo(team: dict[str, Any], filename: str, *, save: bool) -> Optional[Image.Image]:
+    """Fetch ESPN's logo for *team*; with *save*, keep a copy in AUTO_LOGO_DIR."""
 
     url = _team_logo_url(team)
     if not url:
@@ -508,11 +508,14 @@ def _download_team_logo(team: dict[str, Any], filename: str) -> Optional[Image.I
     except Exception as exc:
         logging.warning("Unable to download NCAA FBS team logo %s: %s", url, exc)
         return None
-    try:
-        _save_downloaded_logo(filename, img)
-        logging.info("Saved ESPN logo for %s to %s", filename, AUTO_LOGO_DIR)
-    except Exception as exc:
-        logging.warning("Unable to save NCAA FBS team logo %s: %s", filename, exc)
+    if save:
+        try:
+            _save_downloaded_logo(filename, img)
+            logging.info("Saved ESPN logo for %s to %s", filename, AUTO_LOGO_DIR)
+        except Exception as exc:
+            logging.warning("Unable to save NCAA FBS team logo %s: %s", filename, exc)
+    else:
+        logging.info("Using ESPN logo for %s; save it as %s to keep it local", filename, filename)
     return img
 
 
@@ -526,7 +529,7 @@ def _open_team_logo(team: dict[str, Any]) -> Optional[Image.Image]:
             return Image.open(path).convert("RGBA")
         except Exception as exc:
             logging.warning("Unable to load NCAA FBS team logo %s: %s", path, exc)
-    img = _download_team_logo(team, filename)
+    img = _download_team_logo(team, filename, save=False)
     if img is not None:
         return img
     logging.warning("Missing NCAA FBS team logo; expected filename: %s", filename)
@@ -540,8 +543,9 @@ _DOWNLOAD_FAILURES: dict[str, float] = {}
 def download_missing_team_logos(games: list[dict]) -> list[str]:
     """Save ESPN's logo for every team in *games* that has no saved logo.
 
-    Runs when the scoreboard feed refreshes, so each new week's teams are on
-    disk before the board draws them. Returns the filenames saved.
+    Only the render server calls this, when its scoreboard feed refreshes, so
+    each new week's teams are on disk before the board draws them and no
+    other display downloads logos. Returns the filenames saved.
     """
 
     saved: list[str] = []
@@ -560,7 +564,7 @@ def download_missing_team_logos(games: list[dict]) -> list[str]:
             failed_at = _DOWNLOAD_FAILURES.get(filename)
             if failed_at is not None and time.monotonic() - failed_at < LOGO_MISS_RETRY_SECONDS:
                 continue
-            if _download_team_logo(team, filename) is None or not _saved_team_logo_path(filename):
+            if _download_team_logo(team, filename, save=True) is None or not _saved_team_logo_path(filename):
                 _DOWNLOAD_FAILURES[filename] = time.monotonic()
                 continue
             _DOWNLOAD_FAILURES.pop(filename, None)

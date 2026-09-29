@@ -10,7 +10,6 @@ from config import CENTRAL_TIME
 from screens.ncaa_fbs_scoreboard import (
     _extract_rank,
     _scoreboard_date,
-    download_missing_team_logos,
     fetch_games_for_day,
 )
 
@@ -93,9 +92,7 @@ def fetch_scoreboard(
     """Return every Top 25 game in the Monday-Sunday week, best-ranked first.
 
     ESPN is asked one day at a time (the working host rejects ranged
-    dates). Logos for teams with none saved are downloaded as the week's
-    games load, so a new week needs no manual logo run. If any day fails on
-    every ESPN host, the last games loaded for the same week are kept rather than showing a partial or empty week.
+    dates). If any day fails on every ESPN host, the last games loaded for the same week are kept rather than showing a partial or empty week.
     """
 
     current_now = now or dt.datetime.now(CENTRAL_TIME)
@@ -128,8 +125,4 @@ def fetch_scoreboard(
     games = [game for _, game in sorted(enumerate(games), key=_game_sort_key)]
     with _LAST_GOOD_LOCK:
         _LAST_GOOD.update(week=days[0], games=list(games))
-    try:
-        download_missing_team_logos(games)
-    except Exception as exc:  # a logo problem must never cost the scores
-        logging.warning("NCAA FBS logo download failed: %s", exc)
     return games

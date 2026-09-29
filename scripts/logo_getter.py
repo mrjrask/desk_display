@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Download team logos for the NCAA scoreboard screens.
 
-The FBS board now downloads any missing logo for the week on its own (into
+The render server now downloads any missing FBS logo for the week on its own (into
 the untracked ``images/cache/ncaa/``; see ``download_missing_team_logos`` in
 ``screens/ncaa_fbs_scoreboard.py``), so this script is only needed to review
 logos or to commit a replacement to ``images/ncaa/``, which always wins.

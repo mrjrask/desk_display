@@ -427,33 +427,3 @@ def test_logo_url_uses_team_override(monkeypatch):
     team = {"team": {"abbreviation": "IOWA", "logo": "https://espn.test/IOWA.png"}}
 
     assert ncaa_fbs_scoreboard._team_logo_url(team) == ncaa_fbs_scoreboard._TEAM_LOGO_URL_OVERRIDES["iowa"]
-
-
-def test_fetch_scoreboard_downloads_new_week_logos(monkeypatch):
-    from services.sports import ncaa_fbs
-
-    game = _week_game("UNC", "DUKE")
-    downloaded = []
-    monkeypatch.setattr(ncaa_fbs, "_FINAL_DAY_CACHE", {})
-    monkeypatch.setattr(ncaa_fbs, "fetch_games_for_day", lambda day: [game] if day.weekday() == 5 else [])
-    monkeypatch.setattr(ncaa_fbs, "download_missing_team_logos", lambda games: downloaded.append(games))
-
-    games = ncaa_fbs.fetch_scoreboard(day=dt.date(2026, 9, 29), now=dt.datetime(2026, 9, 29, 12, 0))
-
-    assert games == [game]
-    assert downloaded == [[game]]
-
-
-def test_fetch_scoreboard_keeps_games_when_logo_download_fails(monkeypatch):
-    from services.sports import ncaa_fbs
-
-    game = _week_game("UNC", "DUKE")
-    monkeypatch.setattr(ncaa_fbs, "_FINAL_DAY_CACHE", {})
-    monkeypatch.setattr(ncaa_fbs, "fetch_games_for_day", lambda day: [game] if day.weekday() == 5 else [])
-
-    def broken(games):
-        raise OSError("disk full")
-
-    monkeypatch.setattr(ncaa_fbs, "download_missing_team_logos", broken)
-
-    assert ncaa_fbs.fetch_scoreboard(day=dt.date(2026, 9, 29), now=dt.datetime(2026, 9, 29, 12, 0)) == [game]
