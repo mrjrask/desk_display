@@ -413,3 +413,34 @@ def test_venv_bootstrap_is_a_noop_already_inside_the_projects_venv(tmp_path, mon
     monkeypatch.setattr(_venv_bootstrap.os, "execv", lambda *a: pytest.fail("should not re-exec"))
 
     _venv_bootstrap.reexec_with_project_venv()  # returns instead of looping
+
+
+# ── install_hyperpixel.sh ──────────────────────────────────────────────────
+
+
+def _hyperpixel_bus_setting(tmp_path: Path, env_path: Path, environ: dict[str, str] | None = None) -> str:
+    """Run install_hyperpixel.sh's INSIDE_I2C_BUSES step; return the line it writes."""
+
+    text = (ROOT / "Installers/install_hyperpixel.sh").read_text()
+    start = text.index("# Keep a bus list the operator already set")
+    end = text.index("\n", text.index('ENV_LINES+=("INSIDE_I2C_BUSES='))
+    script = (f'source "{ROOT}/scripts/helpers/common.sh"\nENV_PATH="{env_path}"\nPROJECT_DIR="{tmp_path}"\n'
+              f'ENV_LINES=()\n{text[start:end]}\nprintf "%s" "${{ENV_LINES[0]}}"\n')
+    env = {k: v for k, v in os.environ.items() if k != "INSIDE_I2C_BUSES"}
+    result = subprocess.run(["bash", "-c", script], env={**env, **(environ or {})},
+                            capture_output=True, text=True)
+    assert result.returncode == 0, result.stderr
+    return result.stdout
+
+
+def test_hyperpixel_installer_keeps_the_configured_sensor_bus(tmp_path):
+    client_env = tmp_path / ".env.client"
+    assert _hyperpixel_bus_setting(tmp_path, client_env) == "INSIDE_I2C_BUSES=13"
+
+    # A new client's .env.client is made from .env afterwards.
+    (tmp_path / ".env").write_text("INSIDE_SENSOR=pimoroni_bme68x\nINSIDE_I2C_BUSES=15\n")
+    assert _hyperpixel_bus_setting(tmp_path, client_env) == "INSIDE_I2C_BUSES=15"
+
+    client_env.write_text("INSIDE_I2C_BUSES=14,15  # STEMMA QT\n")
+    assert _hyperpixel_bus_setting(tmp_path, client_env) == "INSIDE_I2C_BUSES=14,15"
+    assert _hyperpixel_bus_setting(tmp_path, client_env, {"INSIDE_I2C_BUSES": "11"}) == "INSIDE_I2C_BUSES=11"

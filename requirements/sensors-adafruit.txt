@@ -2,3 +2,6 @@
 adafruit-circuitpython-bme280
 adafruit-circuitpython-bme680
 adafruit-circuitpython-sht4x
+# ExtendedI2C: lets the Adafruit drivers open a numbered bus (INSIDE_I2C_BUSES)
+# when Blinka's default pins are unavailable, as on a HyperPixel.
+adafruit-extended-bus

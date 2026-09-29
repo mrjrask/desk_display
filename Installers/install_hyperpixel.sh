@@ -251,6 +251,15 @@ ENV_LINES+=("DESK_DISPLAY_OUTPUT=${DESK_DISPLAY_OUTPUT}")
 ENV_LINES+=("HYPERPIXEL_PANEL=${HYPERPIXEL_PANEL}")
 ENV_LINES+=("DISPLAY_WIDTH=${DISPLAY_WIDTH}")
 ENV_LINES+=("DISPLAY_HEIGHT=${DISPLAY_HEIGHT}")
+# Keep a bus list the operator already set (e.g. 15 for a sensor on the
+# STEMMA QT port); 13 is only the default for a new install. A new client's
+# .env.client is made from .env later, so look there too.
+if [[ -z "${INSIDE_I2C_BUSES:-}" ]]; then
+  for existing_env in "$ENV_PATH" "$PROJECT_DIR/.env"; do
+    INSIDE_I2C_BUSES=$(read_env_file_value "$existing_env" "INSIDE_I2C_BUSES" || true)
+    [[ -n "$INSIDE_I2C_BUSES" ]] && break
+  done
+fi
 ENV_LINES+=("INSIDE_I2C_BUSES=${INSIDE_I2C_BUSES:-13}")
 if [[ -n "${DISPLAY_ROTATION:-}" ]]; then
   ENV_LINES+=("DISPLAY_ROTATION=${DISPLAY_ROTATION}")
