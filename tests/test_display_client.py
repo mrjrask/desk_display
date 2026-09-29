@@ -1162,3 +1162,46 @@ def test_server_never_renders_or_misses_the_inside_screen(env):
     assert "inside" not in manifest["missing_screens"]
     assert all(entry["screen_id"] != "inside" for entry in manifest["artifacts"])
     assert manifest["cache_complete"] is True
+
+
+def test_sigterm_stops_a_running_client_promptly(env):
+    import os
+    import signal
+
+    client = env.make_client()
+    forced = []
+    stopper = display_client.StopOnSignal(grace_seconds=30, force_exit=forced.append)
+    previous = signal.getsignal(signal.SIGTERM)
+    try:
+        stopper.install()
+        stopper.target = client.stop
+        threading.Timer(0.3, os.kill, (os.getpid(), signal.SIGTERM)).start()
+        started = time.monotonic()
+        client.run()
+        elapsed = time.monotonic() - started
+    finally:
+        signal.signal(signal.SIGTERM, previous)
+        client.stop()
+    assert stopper.received and client._stop.is_set()
+    assert elapsed < 5
+    assert forced == []
+
+
+def test_sigterm_during_startup_exits():
+    stopper = display_client.StopOnSignal(grace_seconds=30, force_exit=lambda code: None)
+    import signal
+
+    with pytest.raises(SystemExit):
+        stopper.handle(signal.SIGTERM)
+    assert stopper.received
+    stopper.handle(signal.SIGTERM)  # a second signal is ignored
+
+
+def test_stalled_stop_after_sigterm_exits_by_force():
+    import signal
+
+    forced = threading.Event()
+    stopper = display_client.StopOnSignal(grace_seconds=0.05, force_exit=lambda code: forced.set())
+    stopper.target = lambda: None  # a stop that never ends the process
+    stopper.handle(signal.SIGTERM)
+    assert forced.wait(2)

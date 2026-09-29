@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import logging
 import os
+import signal
 import threading
 import time
 from collections.abc import Callable
@@ -976,6 +977,52 @@ def build_client(settings: dict[str, Any], *, presenter: Any = None, transport: 
     return client
 
 
+# systemd sends SIGTERM and SIGKILLs the client 10 s later (TimeoutStopSec);
+# a clean stop that stalls (a panel driver teardown, say) exits by force first.
+SHUTDOWN_GRACE_SECONDS = 5.0
+
+
+class StopOnSignal:
+    """Turn SIGTERM into a prompt, clean stop of the client.
+
+    SDL (pygame, used by the HyperPixel and window panels) replaces a default
+    SIGTERM action with a handler that only queues a quit event, which the
+    client never reads, so ``systemctl stop`` used to wait out its timeout and
+    SIGKILL the client. A Python handler installed before the panel opens
+    keeps SDL from taking the signal over.
+    """
+
+    def __init__(self, *, grace_seconds: float = SHUTDOWN_GRACE_SECONDS,
+                 force_exit: Callable[[int], Any] = os._exit) -> None:
+        self.grace_seconds = grace_seconds
+        self.force_exit = force_exit
+        self.target: Callable[[], None] | None = None
+        self.received = False
+
+    def install(self) -> None:
+        signal.signal(signal.SIGTERM, self.handle)
+
+    def handle(self, signum: int, _frame: Any = None) -> None:
+        if self.received:
+            return
+        self.received = True
+        LOGGER.info("Received %s; stopping the client", signal.Signals(signum).name)
+        watchdog = threading.Timer(self.grace_seconds, self._stalled)
+        watchdog.daemon = True
+        watchdog.start()
+        target = self.target
+        if target is None:
+            # Still starting up: nothing to stop cleanly yet.
+            raise SystemExit(0)
+        # Stop from another thread: the handler runs on the main thread, which
+        # may hold the locks stop() needs.
+        threading.Thread(target=target, name="client-stop", daemon=True).start()
+
+    def _stalled(self) -> None:
+        LOGGER.warning("Client still running %.0f s after SIGTERM; exiting now", self.grace_seconds)
+        self.force_exit(0)
+
+
 def prepare_environment() -> None:
     """Load the client's settings; call before anything imports ``config``.
 
@@ -996,6 +1043,10 @@ def main() -> None:  # pragma: no cover - exercised on hardware
     import deployment_config
 
     prepare_environment()
+    # Before the panel opens: SDL leaves SIGTERM alone once it has a handler.
+    os.environ.setdefault("SDL_NO_SIGNAL_HANDLERS", "1")
+    stopper = StopOnSignal()
+    stopper.install()
     logging.basicConfig(level=deployment_config.resolve_log_level())
     deployment_config.install_secret_log_redaction()
     deployment_config.require_role("display_client.py", deployment_config.Role.CLIENT)
@@ -1008,6 +1059,7 @@ def main() -> None:  # pragma: no cover - exercised on hardware
 
         configure_native(profile)
     client = build_client(settings)
+    stopper.target = client.stop
     start_wifi_monitor(settings)
     try:
         client.run()
@@ -1018,9 +1070,9 @@ def main() -> None:  # pragma: no cover - exercised on hardware
         close = getattr(client.presenter, "close", None)
         if callable(close):
             close()
-    if client.restart_requested:
-        # Exit even if a helper thread lingers; systemd (Restart=always) starts
-        # the client again.
+    if client.restart_requested or stopper.received:
+        # Exit even if a helper thread lingers; on a restart systemd
+        # (Restart=always) starts the client again.
         logging.shutdown()
         os._exit(0)
 
