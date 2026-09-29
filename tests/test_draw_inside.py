@@ -1,3 +1,4 @@
+import logging
 import math
 import sys
 import types
@@ -394,6 +395,36 @@ def test_probe_sensor_falls_back_to_auto_detect_when_preference_fails(monkeypatc
 
     assert provider == "Pimoroni BME280"
     assert probe_reader is reader
+
+def test_probe_sensor_says_why_the_preferred_sensor_failed(monkeypatch, caplog):
+    import screens.draw_inside as draw_inside_module
+
+    monkeypatch.setattr(draw_inside_module.platform, "system", lambda: "Linux")
+    monkeypatch.setenv("INSIDE_SENSOR", "pimoroni_bme68x")
+    monkeypatch.setenv("INSIDE_I2C_BUSES", "13")
+    monkeypatch.delenv("INSIDE_I2C_ADDRESS", raising=False)
+    monkeypatch.setattr(draw_inside_module, "board", None)
+    monkeypatch.setattr(draw_inside_module, "busio", None)
+
+    def missing_bus(_i2c, _addresses):
+        raise FileNotFoundError(2, "No such file or directory", "/dev/i2c-13")
+
+    monkeypatch.setattr(draw_inside_module, "_probe_pimoroni_bme68x", missing_bus)
+    monkeypatch.setattr(
+        draw_inside_module,
+        "_get_probe_order",
+        lambda preference: (("pimoroni_bme68x", missing_bus),) if preference else (),
+    )
+
+    with caplog.at_level(logging.DEBUG):
+        assert draw_inside_module._probe_sensor() == (None, None)
+
+    warnings = [r.getMessage() for r in caplog.records if r.levelno >= logging.WARNING]
+    failed = next(m for m in warnings if "preferred sensor probe" in m)
+    assert "bus(es) 13" in failed and "/dev/i2c-13" in failed and "i2cdetect" in failed
+    # Blinka is optional for the SMBus-based Pimoroni drivers.
+    assert not any("Blinka" in m for m in warnings)
+
 
 def test_probe_sensor_attempts_smbus_probes_without_blinka(monkeypatch):
     import screens.draw_inside as draw_inside_module

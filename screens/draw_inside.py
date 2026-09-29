@@ -1257,6 +1257,21 @@ def _try_init_blinka_i2c() -> Optional[Any]:
     return None
 
 
+def _describe_probe_error(exc: Optional[BaseException]) -> str:
+    """One line saying why a sensor probe found nothing."""
+
+    if exc is None:
+        return "no sensor answered at 0x76/0x77"
+    if isinstance(exc, FileNotFoundError):
+        return f"I2C bus device missing: {exc}"
+    if isinstance(exc, ModuleNotFoundError):
+        return f"driver not installed: {exc}"
+    text = str(exc).strip() or type(exc).__name__
+    if isinstance(exc, OSError) and getattr(exc, "errno", None) in {5, 121}:
+        return f"no sensor answered ({text})"
+    return text
+
+
 def _probe_sensor() -> tuple[Optional[str], Optional[Callable[[], SensorReadings]]]:
     """Try the available sensor drivers and return the first match."""
 
@@ -1280,14 +1295,17 @@ def _probe_sensor() -> tuple[Optional[str], Optional[Callable[[], SensorReadings
     # require Blinka/ExtendedI2C. When this driver is explicitly selected,
     # probe it first so missing Blinka dependencies do not generate misleading
     # warnings.
+    preferred_error: Optional[BaseException] = None
     if preference == "pimoroni_bme68x":
         try:
             result = _probe_pimoroni_bme68x(None, set())
         except ModuleNotFoundError as exc:
+            preferred_error = exc
             logging.debug(
                 "draw_inside: probe %s skipped (module missing): %s", preference, exc
             )
         except Exception as exc:  # pragma: no cover - relies on hardware
+            preferred_error = exc
             logging.debug("draw_inside: probe %s failed: %s", preference, exc, exc_info=True)
         else:
             if result:
@@ -1295,22 +1313,27 @@ def _probe_sensor() -> tuple[Optional[str], Optional[Callable[[], SensorReadings
                 logging.info("draw_inside: detected %s", provider)
                 return provider, reader
 
+    # The Pimoroni drivers read the bus through SMBus, so Blinka is optional
+    # for them and its absence is not worth a warning.
+    blinka_log = (
+        logging.debug if preference and preference.startswith("pimoroni_") else logging.warning
+    )
     i2c = None
     if board is None or busio is None:
-        logging.warning(
+        blinka_log(
             "draw_inside: Blinka I2C libs unavailable; trying SMBus-capable sensor probes only"
         )
     else:
         i2c = _try_init_blinka_i2c()
         if i2c is None:
-            logging.warning("draw_inside: failed to initialise Blinka I2C on known pin mappings")
+            blinka_log("draw_inside: failed to initialise Blinka I2C on known pin mappings")
 
         if i2c is None:
             bus_candidates = _rank_i2c_buses(_parse_i2c_bus_candidates())
             try:
                 from adafruit_extended_bus import ExtendedI2C  # type: ignore
             except Exception as exc:
-                logging.warning(
+                blinka_log(
                     "draw_inside: adafruit_extended_bus unavailable; continuing without Blinka I2C on fallback buses %s: %s",
                     bus_candidates,
                     exc,
@@ -1330,7 +1353,7 @@ def _probe_sensor() -> tuple[Optional[str], Optional[Callable[[], SensorReadings
                         )
 
     if i2c is None:
-        logging.warning(
+        blinka_log(
             "draw_inside: no usable Blinka I2C bus available; continuing with SMBus-only probes"
         )
 
@@ -1365,11 +1388,15 @@ def _probe_sensor() -> tuple[Optional[str], Optional[Callable[[], SensorReadings
             try:
                 result = probe(i2c, addresses)
             except ModuleNotFoundError as exc:
+                if pass_name == "preferred":
+                    preferred_error = exc
                 logging.debug(
                     "draw_inside: probe %s skipped (module missing): %s", probe_name, exc
                 )
                 continue
             except Exception as exc:  # pragma: no cover - relies on hardware
+                if pass_name == "preferred":
+                    preferred_error = exc
                 logging.debug("draw_inside: probe %s failed: %s", probe_name, exc, exc_info=True)
                 continue
             if result:
@@ -1379,8 +1406,12 @@ def _probe_sensor() -> tuple[Optional[str], Optional[Callable[[], SensorReadings
 
         if pass_name == "preferred" and preference:
             logging.warning(
-                "draw_inside: preferred sensor probe %r failed; falling back to auto-detect",
+                "draw_inside: preferred sensor probe %r failed on I2C bus(es) %s%s (%s); "
+                "check INSIDE_I2C_BUSES and run `i2cdetect -y <bus>`; falling back to auto-detect",
                 preference,
+                ",".join(str(bus) for bus in _parse_i2c_bus_candidates()),
+                f" at 0x{address_override:02X}" if address_override is not None else "",
+                _describe_probe_error(preferred_error),
             )
 
     logging.warning("No supported indoor environmental sensor detected.")

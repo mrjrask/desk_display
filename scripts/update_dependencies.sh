@@ -152,34 +152,6 @@ normalize_sensor_name() {
   printf '%s' "$1" | tr '[:upper:]- ' '[:lower:]__'
 }
 
-read_env_file_value() {
-  local env_path="$1"
-  local key="$2"
-
-  if [[ ! -f "$env_path" ]]; then
-    return 1
-  fi
-
-  awk -v key="$key" '
-    /^[[:space:]]*(#|$)/ { next }
-    {
-      line=$0
-      sub(/^[[:space:]]*export[[:space:]]+/, "", line)
-      if (line !~ "^[[:space:]]*" key "[[:space:]]*=") {
-        next
-      }
-      sub("^[[:space:]]*" key "[[:space:]]*=[[:space:]]*", "", line)
-      sub(/[[:space:]]+#.*$/, "", line)
-      sub(/^[[:space:]]+|[[:space:]]+$/, "", line)
-      if ((line ~ /^".*"$/) || (line ~ /^\047.*\047$/)) {
-        line=substr(line, 2, length(line)-2)
-      }
-      print line
-      exit 0
-    }
-  ' "$env_path"
-}
-
 configured_inside_sensor() {
   if [[ -n "${INSIDE_SENSOR:-}" ]]; then
     printf '%s' "$INSIDE_SENSOR"
