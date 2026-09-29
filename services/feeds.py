@@ -308,12 +308,12 @@ def scoreboard_date_for_league(
 
 
 def is_live_scoreboard_game(game: object) -> bool:
-    if not isinstance(game, dict):
+    if not isinstance(game, Mapping):
         return False
 
     status_fields: list[str] = []
     status_blob = game.get("status")
-    if isinstance(status_blob, dict):
+    if isinstance(status_blob, Mapping):
         for key in (
             "detailedState",
             "abstractGameState",
@@ -327,7 +327,7 @@ def is_live_scoreboard_game(game: object) -> bool:
             if value:
                 status_fields.append(str(value))
         type_blob = status_blob.get("type")
-        if isinstance(type_blob, dict):
+        if isinstance(type_blob, Mapping):
             for key in ("state", "description", "detail", "shortDetail"):
                 value = type_blob.get(key)
                 if value:
@@ -376,7 +376,7 @@ def is_live_scoreboard_game(game: object) -> bool:
     ):
         return True
 
-    if isinstance(status_blob, dict) and isinstance(status_blob.get("type"), dict):
+    if isinstance(status_blob, Mapping) and isinstance(status_blob.get("type"), Mapping):
         if str(status_blob["type"].get("state") or "").lower() == "in":
             return True
 
@@ -384,11 +384,11 @@ def is_live_scoreboard_game(game: object) -> bool:
 
 
 def scoreboards_have_live_games(scoreboards: object) -> bool:
-    if not isinstance(scoreboards, dict):
+    if not isinstance(scoreboards, Mapping):
         return False
 
     for games in scoreboards.values():
-        if not isinstance(games, list):
+        if not isinstance(games, list | tuple):
             continue
         for game in games:
             if is_live_scoreboard_game(game):
@@ -405,12 +405,12 @@ def is_terminal_scoreboard_game(
 ) -> bool:
     """Return whether a game no longer needs score updates."""
 
-    if not isinstance(game, dict):
+    if not isinstance(game, Mapping):
         return False
 
     values: list[str] = []
     status = game.get("status")
-    if isinstance(status, dict):
+    if isinstance(status, Mapping):
         if status.get("completed") is True:
             return True
         for key in (
@@ -426,7 +426,7 @@ def is_terminal_scoreboard_game(
             if status.get(key) is not None:
                 values.append(str(status[key]))
         status_type = status.get("type")
-        if isinstance(status_type, dict):
+        if isinstance(status_type, Mapping):
             if status_type.get("completed") is True:
                 return True
             for key in ("state", "description", "detail", "shortDetail"):
@@ -482,7 +482,7 @@ def is_terminal_scoreboard_game(
 def scoreboard_game_start(game: object) -> Optional[datetime.datetime]:
     """Return a scoreboard game's timezone-aware start time when available."""
 
-    if not isinstance(game, dict):
+    if not isinstance(game, Mapping):
         return None
     raw_start = (
         game.get("_start_local")
@@ -515,13 +515,13 @@ def scoreboards_in_live_window(
     terminal state), regardless of which day of the week it is played.
     """
 
-    if not isinstance(scoreboards, dict):
+    if not isinstance(scoreboards, Mapping):
         return False
     current = now or datetime.datetime.now(datetime.UTC)
     if current.tzinfo is None:
         current = current.replace(tzinfo=datetime.UTC)
     for league, games in scoreboards.items():
-        if not isinstance(games, list):
+        if not isinstance(games, list | tuple):
             continue
         for game in games:
             if is_terminal_scoreboard_game(game, league=str(league)):

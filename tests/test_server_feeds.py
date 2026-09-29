@@ -246,6 +246,28 @@ def test_scoreboards_live_window_and_date_rollover(env, monkeypatch):
     assert env.provider.calls[-1] == ("sports", 0, ("mlb", "nfl"), ("nfl",))
 
 
+def test_live_mlb_game_in_the_snapshot_refreshes_until_final(env):
+    """The live check reads the coordinator's frozen snapshot (mappingproxy/tuple)."""
+
+    def game(state, coded):
+        return {"gamePk": 1, "status": {"abstractGameState": state, "codedGameState": coded}}
+
+    screens = {"MLB Scoreboard"}
+    env.provider.scoreboards = {"scoreboards": {"mlb": [game("Live", "I")]}, "scoreboard_metadata": {}}
+    env.service.refresh(screens)
+    assert feeds.scoreboards_in_live_window(env.data.snapshot().values["scoreboards"])
+    env.provider.calls.clear()
+    env.clock.advance(LIVE_REFRESH_SECONDS)
+    assert env.service.refresh(screens) == {"scoreboards": True}
+    assert env.provider.calls[-1] == ("sports", 0, ("mlb",), ())
+    env.provider.scoreboards = {"scoreboards": {"mlb": [game("Final", "F")]}, "scoreboard_metadata": {}}
+    env.clock.advance(LIVE_REFRESH_SECONDS)
+    assert env.service.refresh(screens) == {"scoreboards": True}
+    # Every game is final: back to the daily interval.
+    env.clock.advance(LIVE_REFRESH_SECONDS)
+    assert env.service.refresh(screens) == {}
+
+
 def test_league_standings_screens_refresh_and_publish_their_data(env):
     screens = {"NFL Standings NFC", "NFL Overview AFC", "NHL Standings West", "MLB AL Standings"}
     results = env.service.refresh(screens)
