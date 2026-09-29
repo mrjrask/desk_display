@@ -173,6 +173,10 @@ See the README's [deployment modes](README.md#deployment-modes) and
   Pi with 403), falls back to ESPN's other hosts, and keeps the last good
   games for the week if every host fails. Each ranked team's poll ranking is drawn as a small superscript
   number before its logo (or abbreviation); unranked teams get none.
+- NCAA FBS Scoreboard team logos are trimmed of padding and scaled to the
+  same area inside wider logo columns, so wordmarks and round marks read at
+  the same size. A team with no saved logo uses ESPN's logo from the game
+  data before falling back to its abbreviation.
 - The `inside` screen works on display clients with an indoor sensor. The
   client reads its own sensor, set by `INSIDE_SENSOR`, `INSIDE_I2C_BUSES` and
   the new optional `INSIDE_I2C_ADDRESS` in its `.env.client`, and draws the

@@ -233,3 +233,57 @@ def test_unranked_team_gets_no_rank():
     ncaa_fbs_scoreboard._draw_rank(ImageDraw.Draw(img), None, 120, 30, 40, 40)
 
     assert img.getbbox() is None
+
+
+def _solid_logo(width, height, *, pad=0):
+    from PIL import Image
+
+    img = Image.new("RGBA", (width + 2 * pad, height + 2 * pad), (0, 0, 0, 0))
+    img.paste(Image.new("RGBA", (width, height), (200, 0, 0, 255)), (pad, pad))
+    return img
+
+
+def test_fit_logo_trims_padding_and_matches_area_across_shapes():
+    area = 80 * 80
+    square = ncaa_fbs_scoreboard._fit_logo(_solid_logo(50, 50, pad=40), 200, 120, area)
+    wide = ncaa_fbs_scoreboard._fit_logo(_solid_logo(300, 100), 200, 120, area)
+
+    assert square.size == (80, 80)
+    assert abs(wide.width * wide.height - area) / area < 0.05
+    assert wide.height < square.height
+
+
+def test_fit_logo_never_exceeds_the_box():
+    fitted = ncaa_fbs_scoreboard._fit_logo(_solid_logo(600, 100), 150, 120, 120 * 120)
+
+    assert fitted.width <= 150 and fitted.height <= 120
+
+
+def test_missing_local_logo_uses_espn_logo_from_payload(monkeypatch):
+    import io
+
+    buf = io.BytesIO()
+    _solid_logo(40, 40).save(buf, format="PNG")
+
+    class Response:
+        content = buf.getvalue()
+
+        def raise_for_status(self):
+            return None
+
+    requested = []
+
+    def fake_get(url, timeout=None):
+        requested.append(url)
+        return Response()
+
+    monkeypatch.setattr(ncaa_fbs_scoreboard.os.path, "exists", lambda path: False)
+    monkeypatch.setattr(ncaa_fbs_scoreboard._SESSION, "get", fake_get)
+    ncaa_fbs_scoreboard._REMOTE_LOGO_CACHE.clear()
+    ncaa_fbs_scoreboard._LOGO_MISSES.clear()
+    team = {"team": {"abbreviation": "UNC", "logo": "https://a.espncdn.com/i/teamlogos/ncaa/500/153.png"}}
+
+    logo = ncaa_fbs_scoreboard._load_team_logo(team, 60, 90, 50 * 50)
+
+    assert requested == ["https://a.espncdn.com/i/teamlogos/ncaa/500/153.png"]
+    assert logo is not None and logo.size == (50, 50)
