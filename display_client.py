@@ -39,6 +39,7 @@ from display.rotation import RotationDecision, parse_rotation, resolve_rotation,
 from display_profiles import RenderProfile, resolve_display_profile_by_id
 from playback.client_player import ClientPlayer
 from playback.local_screens import default_local_screens, is_local, local_entries
+from playback.motion_clock import MotionClock
 from playback.package_player import PackagePlayback
 from protocol import CLIENT_SUPPORTED_RENDER_PACKAGE_SCHEMA_VERSIONS
 from protocol_versions import APPLICATION_VERSION, NETWORK_PROTOCOL_VERSION
@@ -696,9 +697,17 @@ class DisplayClient:
         waits on the network.
         """
 
-        deadline = self._monotonic() + seconds
-        next_light_check = self._monotonic() + LIGHT_CHECK_SECONDS
-        while not self._stop.is_set() and self._monotonic() < deadline:
+        started = self._monotonic()
+        deadline = started + seconds
+        next_light_check = started + LIGHT_CHECK_SECONDS
+        # Motion runs on a MotionClock: a panel slower than the package's
+        # frame rate moves one step per frame, as v0.1 did, and the screen's
+        # time grows by however far it fell behind.
+        animation = self.animation
+        motion = MotionClock(started - self._shown_at, started,
+                             max_lag=animation.motion_seconds if animation is not None else 0.0)
+        presented_key = animation.key_at(motion.t) if animation is not None else None
+        while not self._stop.is_set() and self._monotonic() < deadline + motion.lag:
             self._poll_taps()
             if self._controls_pending():
                 return
@@ -713,16 +722,23 @@ class DisplayClient:
             interval = POLL_SECONDS
             animation = self.animation
             if animation is not None:
-                elapsed = self._monotonic() - self._shown_at
-                key = animation.key_at(elapsed)
-                if key != getattr(self, "_presented_key", None):
+                frame_seconds = animation.frame_seconds
+                now = self._monotonic()
+                t = motion.tick(now, frame_seconds)
+                key = animation.key_at(t)
+                drawn = key != presented_key
+                motion.drew(drawn)
+                interval = min(POLL_SECONDS, frame_seconds)
+                if drawn:
                     try:
-                        self.presenter.present(animation.frame_at(elapsed))
+                        self.presenter.present(animation.frame_at(t))
                     except (KeyError, TypeError, ValueError, OSError) as exc:
                         LOGGER.warning("Animation stopped; holding the last frame: %s", exc)
                         self.animation = None
-                    self._presented_key = key
-                interval = min(POLL_SECONDS, animation.frame_seconds)
+                    presented_key = key
+                    # The next frame is due one frame after this one started,
+                    # not one frame after the (slow) push finished.
+                    interval = min(POLL_SECONDS, max(0.0, now + frame_seconds - self._monotonic()))
             self._stop.wait(interval)
 
     def on_touch(self, x: float, y: float) -> tuple[int, int]:

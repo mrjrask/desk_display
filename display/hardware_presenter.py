@@ -30,15 +30,25 @@ class HardwarePresenter:
         # ``utils.Display`` owns the physical output transform. Frames passed
         # here must remain at logical dimensions to avoid resize and rotation
         # being applied a second time by the selected output driver.
-        return image.resize((profile.width, profile.height)).convert(profile.color_mode)
+        # Playback frames already match; skip the per-frame copies, which cost
+        # a Pi Zero measurable time at scroll frame rates.
+        size = (profile.width, profile.height)
+        if image.size != size:
+            image = image.resize(size)
+        if image.mode != profile.color_mode:
+            image = image.convert(profile.color_mode)
+        return image
 
     def present(self, artifact: RenderArtifact | Image.Image) -> Image.Image:
         image = artifact if isinstance(artifact, Image.Image) else artifact.image
         converted = self.convert(image)
         self.display.image(converted)
-        show = getattr(self.display, "show", None)
-        if callable(show):
-            show()
+        # ``utils.Display.image`` already pushed the frame; its ``show`` would
+        # send the same frame over SPI a second time, halving the frame rate.
+        if not getattr(self.display, "image_pushes_frame", False):
+            show = getattr(self.display, "show", None)
+            if callable(show):
+                show()
         return converted
 
     def set_led(self, color: tuple[float, float, float] | None) -> None:

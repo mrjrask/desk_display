@@ -469,6 +469,24 @@ excludes the network, so a gap between it and the client's figure is the
 link. Clients older than this release report no timings ("no timings
 reported").
 
+### Checking scroll smoothness
+
+A client plays scrolling screens itself, one step per frame at the rate the
+panel can take, as v0.1 did; a slow panel (a Pi Zero 2 W pushing 320x240
+over SPI) scrolls a little slower but never skips pixels. To measure it,
+stop the client and play a test scroll through the real display driver:
+
+```bash
+sudo systemctl stop desk_display_client.service
+python3 scripts/measure_scroll_fps.py            # current playback
+python3 scripts/measure_scroll_fps.py --legacy   # the older, choppier loop
+bash scripts/restart_services.sh
+```
+
+It prints frames per second, frame intervals and *px per frame*. Smooth
+playback shows a single value there (1px on a Display HAT Mini); several
+values mean the picture jumped unevenly.
+
 ### Diagnosing stale renders
 
 ```bash
