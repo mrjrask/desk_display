@@ -142,6 +142,37 @@ def test_sunday_shows_the_weekends_games_one_day_per_request(monkeypatch):
     assert [game["id"] for game in games] == ["fri", "sat", "sat-late"]
 
 
+def test_games_are_ordered_by_best_ranked_team(monkeypatch):
+    from services.sports import ncaa_fbs
+
+    games_by_day = {
+        dt.date(2026, 10, 1): [_game("thu-12v20", "2026-10-01T23:00Z", away_rank=20, home_rank=12)],
+        dt.date(2026, 10, 3): [
+            _game("sat-3", "2026-10-03T16:00Z", home_rank=3),
+            _game("sat-1", "2026-10-03T20:00Z", away_rank=1),
+            _game("sat-12v7", "2026-10-03T19:00Z", away_rank=7, home_rank=12),
+            _game("sat-3-late", "2026-10-03T23:00Z", away_rank=3),
+            _game("sat-none", "2026-10-03T15:00Z"),
+            _game("sat-12", "2026-10-03T17:00Z", away_rank=12),
+        ],
+    }
+    monkeypatch.setattr(ncaa_fbs, "fetch_games_for_day", lambda day: games_by_day.get(day, []))
+    ncaa_fbs._FINAL_DAY_CACHE.clear()
+    friday = dt.datetime(2026, 10, 2, 12, 0, tzinfo=ncaa_fbs.CENTRAL_TIME)
+
+    games = ncaa_fbs.fetch_scoreboard(now=friday)
+
+    assert [game["id"] for game in games] == [
+        "sat-1",
+        "sat-3",
+        "sat-3-late",
+        "sat-12v7",
+        "thu-12v20",
+        "sat-12",
+        "sat-none",
+    ]
+
+
 def test_finished_past_days_are_not_refetched(monkeypatch):
     from services.sports import ncaa_fbs
 
