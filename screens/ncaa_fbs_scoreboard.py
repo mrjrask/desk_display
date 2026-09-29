@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import datetime
+import io
 import logging
 import os
 import re
@@ -78,12 +79,15 @@ TEAM_ABBREVIATION_FONT = get_screen_font(
 SEED_GAP = max(2, scale_value_width(3))
 RANK_GAP = max(1, scale_value_width(2))
 
+# Score, logo, "@", logo, score. The logo columns are wide enough for a
+# wordmark (LSU) at the same visual weight as a round mark; the score columns
+# still fit a three-digit score.
 COL_WIDTHS = [
+    scale_value_width(64),
     scale_value_width(80),
-    scale_value_width(60),
-    scale_value_width(40),
-    scale_value_width(60),
+    scale_value_width(32),
     scale_value_width(80),
+    scale_value_width(64),
 ]
 _TOTAL_COL_WIDTH = sum(COL_WIDTHS)
 _COL_LEFT = max(0, (WIDTH - _TOTAL_COL_WIDTH) // 2)
@@ -106,7 +110,13 @@ FINAL_LOSING_SCORE_COLOR = SCOREBOARD_FINAL_LOSING_SCORE_COLOR
 BACKGROUND_COLOR = get_screen_background_color(SCREEN_ID, SCOREBOARD_BACKGROUND_COLOR)
 
 _SESSION = get_session("ncaa_fbs")
-_REMOTE_LOGO_CACHE: dict[tuple[str, int], Optional[Image.Image]] = {}
+_REMOTE_LOGO_CACHE: dict[tuple[str, int, int, int], Optional[Image.Image]] = {}
+# Every team logo is scaled to the area of a square this fraction of the logo
+# box's shorter side, so wide wordmarks do not dwarf round or square marks.
+TEAM_LOGO_AREA_FACTOR = 0.75
+# A logo that could not be found or downloaded is retried after this long.
+LOGO_MISS_RETRY_SECONDS = 30 * 60
+_LOGO_MISSES: dict[tuple[str, int, int, int], float] = {}
 _LEAGUE_LOGO_CACHE: dict[tuple[str, int], Optional[Image.Image]] = {}
 _TEAM_LOGO_URL_OVERRIDES: dict[str, str] = {
     "iowa": "https://brand.uiowa.edu/sites/brand.uiowa.edu/files/styles/widescreen__1920_x_1080/public/2020-05/Tigerhawk-gold%20on%20black%402x.png?h=e39f7b2b&itok=TdYKif5p",
@@ -395,26 +405,96 @@ def _team_abbreviation(team: dict[str, Any]) -> str:
     return os.path.splitext(_team_logo_filename(team))[0]
 
 
-def _load_team_logo(team: dict[str, Any], height: int) -> Optional[Image.Image]:
+def _team_logo_box(height: int, column_width: int) -> tuple[int, int, int]:
+    """Return (max width, max height, target area) for every team logo in a column.
+
+    Logos are scaled to the same area, so a wide wordmark (LSU, Mississippi
+    State) and a round mark (Georgia, BYU) carry the same visual weight, and
+    never past the column (so they do not run into the "@" or the scores).
+    """
+
+    margin = max(2, scale_value_width(4))
+    max_width = max(1, column_width - 2 * margin)
+    area = int(round((min(height, max_width) * TEAM_LOGO_AREA_FACTOR) ** 2))
+    return max_width, height, area
+
+
+def _fit_logo(img: Image.Image, box_w: int, box_h: int, area: Optional[int] = None) -> Image.Image:
+    """Trim transparent padding, then scale to *area* within the box."""
+
+    img = img.convert("RGBA")
+    bbox = img.getchannel("A").getbbox()
+    if bbox:
+        img = img.crop(bbox)
+    w, h = max(1, img.width), max(1, img.height)
+    scale = min(box_w / w, box_h / h)
+    if area:
+        scale = min(scale, (area / (w * h)) ** 0.5)
+    size = (max(1, int(round(w * scale))), max(1, int(round(h * scale))))
+    return img.resize(size, LANCZOS)
+
+
+def _team_logo_url(team: dict[str, Any]) -> str:
+    team_blob = team.get("team") if isinstance(team.get("team"), dict) else team
+    for source in (team_blob, team):
+        if not isinstance(source, dict):
+            continue
+        logos = source.get("logos")
+        if isinstance(logos, list):
+            for logo in logos:
+                if isinstance(logo, dict) and logo.get("href"):
+                    return str(logo["href"])
+        logo_url = source.get("logo")
+        if isinstance(logo_url, str) and logo_url.strip():
+            return logo_url.strip()
+    return ""
+
+
+def _open_team_logo(team: dict[str, Any]) -> Optional[Image.Image]:
+    """Open the local logo, or ESPN's logo from the game payload when none is saved."""
+
     filename = _team_logo_filename(team)
     path = os.path.join(LOGO_DIR, filename)
-    cache_key = (path, height)
+    if os.path.exists(path):
+        try:
+            return Image.open(path).convert("RGBA")
+        except Exception as exc:
+            logging.warning("Unable to load NCAA FBS team logo %s: %s", filename, exc)
+    url = _team_logo_url(team)
+    if url:
+        try:
+            resp = _SESSION.get(url, timeout=REQUEST_TIMEOUT)
+            resp.raise_for_status()
+            logging.info("Using ESPN logo for %s; save it as %s to keep it local", filename, filename)
+            return Image.open(io.BytesIO(resp.content)).convert("RGBA")
+        except Exception as exc:
+            logging.warning("Unable to download NCAA FBS team logo %s: %s", url, exc)
+    logging.warning("Missing NCAA FBS team logo; expected filename: %s", filename)
+    return None
+
+
+def _load_team_logo(
+    team: dict[str, Any],
+    height: int,
+    max_width: Optional[int] = None,
+    area: Optional[int] = None,
+) -> Optional[Image.Image]:
+    box_w = max_width if max_width is not None else max(1, height * 2)
+    cache_key = (_team_logo_filename(team), box_w, height, area or 0)
     if cache_key in _REMOTE_LOGO_CACHE:
         return _REMOTE_LOGO_CACHE[cache_key]
-    if not os.path.exists(path):
-        logging.warning("Missing NCAA FBS team logo; expected filename: %s", filename)
-        _REMOTE_LOGO_CACHE[cache_key] = None
+    missed_at = _LOGO_MISSES.get(cache_key)
+    if missed_at is not None and time.monotonic() - missed_at < LOGO_MISS_RETRY_SECONDS:
         return None
-    try:
-        img = Image.open(path).convert("RGBA")
-        ratio = height / max(1, img.height)
-        resized = img.resize((max(1, int(round(img.width * ratio))), height), LANCZOS)
-        _REMOTE_LOGO_CACHE[cache_key] = resized
-        return resized
-    except Exception as exc:
-        logging.warning("Unable to load NCAA FBS team logo %s: %s", filename, exc)
-        _REMOTE_LOGO_CACHE[cache_key] = None
+    img = _open_team_logo(team)
+    if img is None:
+        _LOGO_MISSES[cache_key] = time.monotonic()
         return None
+    _LOGO_MISSES.pop(cache_key, None)
+    fitted = _fit_logo(img, box_w, height, area)
+    _REMOTE_LOGO_CACHE[cache_key] = fitted
+    return fitted
+
 
 def _seed_text_for_display(team: dict[str, Any]) -> str:
     seed = _extract_seed(team)
@@ -522,7 +602,8 @@ def _render_scoreboard(games: list[dict], *, mode: Optional[str] = None) -> Imag
             _center_text(draw, text, font, COL_X[col_idx], COL_WIDTHS[col_idx], y, SCORE_ROW_H, fill=fill)
 
         for col_idx, team in ((1, away), (3, home)):
-            logo = _load_team_logo(team, logo_height)
+            box_w, box_h, box_area = _team_logo_box(logo_height, COL_WIDTHS[col_idx])
+            logo = _load_team_logo(team, box_h, box_w, box_area)
             if not logo:
                 abbreviation = _team_abbreviation(team)
                 try:
