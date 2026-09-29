@@ -102,9 +102,27 @@ def test_https_needs_no_transport_warning():
 
 def test_every_profile_has_a_readable_choice():
     choices = registration.profile_choices()
-    assert {c["id"] for c in choices} == set(PROFILE_PRESETS)
+    hidden = {pid for pid, info in registration.PROFILE_INFO.items() if not info.in_wizard}
+    assert {c["id"] for c in choices} == set(PROFILE_PRESETS) - hidden
     assert choices[0]["id"] == "display_hat_mini"
     assert all(c["label"] and c["size"] for c in choices)
+
+
+def test_waveshare_hat_is_one_choice_with_its_lcd_and_both_oleds():
+    choices = {c["id"]: c for c in registration.profile_choices()}
+    assert "waveshare_oled_128x64" not in choices  # the side OLEDs come with the HAT
+    hat = choices["waveshare_lcd_320x240"]
+    assert hat["label"] == "Waveshare OLED/LCD HAT (A)"
+    assert "LCD" in hat["detail"] and "OLED" in hat["detail"]
+    assert hat["installer"] == "waveshare_oled_lcd_hat_a"
+
+
+def test_waveshare_hat_join_script_installs_the_hat_and_says_to_reboot():
+    script = registration.join_script("DESK_DISPLAY_CLIENT_ID=zero\n", "zero", "waveshare_lcd_320x240",
+                                      repo_url="https://github.com/mrjrask/desk_display.git")
+    assert "bash Installers/install.sh --mode client --credentials ~/zero.env.client waveshare_oled_lcd_hat_a" in script
+    assert "sudo reboot" in script.splitlines()[-1]
+    assert subprocess.run(["bash", "-n"], input=script, text=True, check=False).returncode == 0
 
 
 def test_repository_url_drops_embedded_credentials(tmp_path):

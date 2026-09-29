@@ -708,7 +708,7 @@ def test_registration_checks_flag_a_loopback_server(web, monkeypatch):
     assert data["server_url"] == "http://square.local:8765"
     assert data["insecure_transport"] is True
     assert "lobby" in data["client_ids"]
-    assert {p["id"] for p in data["profiles"]} == set(PROFILE_PRESETS)
+    assert {p["id"] for p in data["profiles"]} == set(PROFILE_PRESETS) - {"waveshare_oled_128x64"}
     assert "x" * 40 not in json.dumps(data)
 
 
