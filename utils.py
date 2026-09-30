@@ -27,6 +27,7 @@ import subprocess
 import sys
 import threading
 import time
+import unicodedata
 import warnings
 from contextlib import contextmanager
 from dataclasses import dataclass
@@ -2657,6 +2658,60 @@ def wrap_text(text: str, font: ImageFont.FreeTypeFont, max_width: int):
         else:
             lines.append(w)
     return lines
+
+
+_MISSING_GLYPH_PROBE = "\U0010FFFD"  # Plane 16 private use: no font draws it.
+_GLYPH_SUPPORT_CACHE: Dict[Tuple[Any, ...], bool] = {}
+
+
+def _glyph_signature(font: ImageFont.ImageFont, char: str) -> Tuple[Tuple[int, int], bytes]:
+    mask = font.getmask(char)
+    return mask.size, bytes(mask)
+
+
+def _font_draws_char(font: ImageFont.ImageFont, char: str) -> bool:
+    path = getattr(font, "path", None)
+    key = (path, getattr(font, "size", None), getattr(font, "index", 0), char) if path else None
+    if key is not None and key in _GLYPH_SUPPORT_CACHE:
+        return _GLYPH_SUPPORT_CACHE[key]
+    try:
+        supported = _glyph_signature(font, char) != _glyph_signature(font, _MISSING_GLYPH_PROBE)
+    except Exception:
+        supported = True
+    if key is not None:
+        _GLYPH_SUPPORT_CACHE[key] = supported
+    return supported
+
+
+def strip_unrenderable(text: str, font: ImageFont.ImageFont) -> str:
+    """Drop characters ``font`` would draw as missing-glyph boxes.
+
+    Feed text (e.g. Hebcal's holiday emoji) can carry emoji the bundled
+    DejaVu fonts lack, which PIL renders as empty "tofu" boxes. Invisible
+    joiners and variation selectors are removed too, then the spaces left
+    behind are collapsed.
+    """
+
+    if not text or text.isascii():
+        return text
+    kept = []
+    for char in text:
+        if char.isascii():
+            kept.append(char)
+            continue
+        code = ord(char)
+        if (
+            0xFE00 <= code <= 0xFE0F
+            or 0xE0000 <= code <= 0xE01EF
+            or unicodedata.category(char) == "Cf"
+        ):
+            continue
+        if char.isspace() or _font_draws_char(font, char):
+            kept.append(char)
+    cleaned = "".join(kept)
+    if cleaned == text:
+        return text
+    return " ".join(cleaned.split())
 
 
 def measure_text(draw: ImageDraw.ImageDraw, text: str, font: ImageFont.FreeTypeFont) -> tuple[int, int]:
