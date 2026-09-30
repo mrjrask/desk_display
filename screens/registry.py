@@ -1086,10 +1086,39 @@ def build_screen_registry(context: ScreenContext) -> tuple[dict[str, ScreenDefin
     nhl_scoreboards_available = scoreboards_available and not _is_nhl_break_day(today)
 
     def _is_live_game_today(game: Any) -> bool:
-        """Return True when *game* appears to be in progress today."""
+        """Return True when *game* appears to be in progress today.
+
+        The AHL/Wolves payload uses a normalized ``status.state`` field, while
+        NHL/ESPN payloads use several different status fields. Handle the AHL
+        shape explicitly before applying the league-generic detector below.
+        """
 
         if not isinstance(game, dict):
             return False
+
+        ahl_status = game.get("status")
+        if isinstance(ahl_status, dict):
+            ahl_state = str(ahl_status.get("state") or "").strip().upper()
+            if ahl_state in {"LIVE", "CRIT", "IN PROGRESS", "INPROGRESS"}:
+                for key in ("official_date", "officialDate", "game_date", "date"):
+                    value = game.get(key)
+                    if isinstance(value, str) and value.strip():
+                        try:
+                            return _dt.date.fromisoformat(value.strip()[:10]) == today
+                        except ValueError:
+                            pass
+                start = game.get("start_utc") or game.get("start")
+                if isinstance(start, _dt.datetime):
+                    return start.astimezone(CENTRAL_TIME).date() == today
+                if isinstance(start, str) and start.strip():
+                    try:
+                        parsed = _dt.datetime.fromisoformat(start.replace("Z", "+00:00"))
+                        if parsed.tzinfo is None:
+                            parsed = parsed.replace(tzinfo=CENTRAL_TIME)
+                        return parsed.astimezone(CENTRAL_TIME).date() == today
+                    except ValueError:
+                        pass
+                return True
 
         status_parts: list[str] = []
         status_blob = game.get("status")
