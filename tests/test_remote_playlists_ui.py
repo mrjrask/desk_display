@@ -716,6 +716,27 @@ def test_browser_clients_page_sets_vertical_scroll(live_server, browser, env):
     assert env["store"].vertical_speed_adjustment("office") is None
 
 
+def test_browser_clients_page_sets_a_weather_location(live_server, browser, env, monkeypatch):
+    monkeypatch.setenv("WEATHER_LATITUDE", "41.8781")
+    monkeypatch.setenv("WEATHER_LONGITUDE", "-87.6298")
+    publish_registry(env, [caps("office"), caps("den")])
+    page = browser.new_page(viewport={"width": 1600, "height": 700})
+    page.goto(f"{live_server}/clients")
+    row = "tr[data-client-id='office']"
+    page.wait_for_selector(f"{row} input[data-location='latitude']")
+    assert page.get_attribute(f"{row} input[data-location='latitude']", "placeholder") == "41.8781"
+    page.fill(f"{row} input[data-location='latitude']", "40.7128")
+    page.fill(f"{row} input[data-location='longitude']", "-74.006")
+    page.click(f"{row} .weather-location button:text('Save')")
+    page.wait_for_selector("#notice.ok")
+    assert env["store"].location("office").scope == "loc-40.7128_-74.0060"
+    page.wait_for_function(f"document.querySelector(\"{row}\").textContent.includes('weather at 40.7128, -74.0060')")
+    assert "weather at server location 41.8781, -87.6298" in page.inner_text("tr[data-client-id='den']")
+    page.click(f"{row} button:text(\"Use server's\")")
+    page.wait_for_function(f"!document.querySelector(\"{row}\").textContent.includes('weather at 40.7128')")
+    assert env["store"].location("office") is None
+
+
 # ── Provisioning (Phase 16) ────────────────────────────────────────────────
 
 
@@ -824,6 +845,32 @@ def test_clients_page_sets_a_displays_own_vertical_scroll(env, web, monkeypatch)
     cleared = web.put("/api/clients/office/scroll", json={"vertical_speed_adjustment": None}, headers=CSRF)
     assert cleared.get_json()["vertical_speed_adjustment"] is None
     assert env["store"].vertical_speed_adjustment("office") is None
+
+
+def test_clients_page_sets_a_displays_own_weather_location(env, web, monkeypatch):
+    monkeypatch.setenv("WEATHER_LATITUDE", "41.8781")
+    monkeypatch.setenv("WEATHER_LONGITUDE", "-87.6298")
+    publish_registry(env, [caps("hyper")])
+    listing = web.get("/api/clients").get_json()
+    assert {r["client_id"]: r for r in listing["clients"]}["hyper"]["location"] is None
+    assert listing["global_location"] == {"latitude": 41.8781, "longitude": -87.6298}
+
+    saved = web.put("/api/clients/hyper/location", json={"latitude": "40.7128", "longitude": -74.006},
+                    headers=CSRF)
+    assert saved.status_code == 200
+    assert saved.get_json()["location"] == {"latitude": 40.7128, "longitude": -74.006}
+    rows = {r["client_id"]: r for r in web.get("/api/clients").get_json()["clients"]}
+    assert rows["hyper"]["location"] == {"latitude": 40.7128, "longitude": -74.006}
+
+    bad = web.put("/api/clients/hyper/location", json={"latitude": 95, "longitude": 0}, headers=CSRF)
+    assert bad.status_code == 400
+    half = web.put("/api/clients/hyper/location", json={"latitude": 40, "longitude": None}, headers=CSRF)
+    assert half.status_code == 400
+    unknown = web.put("/api/clients/nobody/location", json={"latitude": 1, "longitude": 1}, headers=CSRF)
+    assert unknown.status_code == 404
+    cleared = web.put("/api/clients/hyper/location", json={"latitude": None, "longitude": None}, headers=CSRF)
+    assert cleared.get_json()["location"] is None
+    assert env["store"].location("hyper") is None
 
 
 def test_wizard_join_flow_never_shows_the_credential(env, web):

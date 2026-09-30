@@ -415,6 +415,30 @@ a scroll's screenshot is its whole canvas. A display running software older
 than this feature ignores the setting until it is updated. A standalone
 install has only the Rotation Config value, which is already per device.
 
+### Weather location per display
+
+Every display shows the weather for the server's `WEATHER_LATITUDE` /
+`WEATHER_LONGITUDE`. A display somewhere else can have its own: type the
+**Lat** and **Lon** (decimal degrees, west and south negative) in its row on
+`/clients` and press **Save**. Clear both fields or press **Use server's** to
+follow the server again. Nothing on the Pi needs editing, and the display
+does not need an update.
+
+The server fetches weather (and air quality, when enabled) once per distinct
+location, on the same interval as its own, and renders that location's
+screens once for every display there. It covers the weather screens, the
+weather quad, weather radar (centred on the location), air quality and Sun &
+Moon (which also prints the location's coordinates). The display's
+side-display (OLED) temperature follows it too. Right after saving, that
+display's weather screens are skipped until the first fetch for the new
+location arrives, usually within a minute. Each location keeps its own
+pressure trend, weather history and AQI history files beside the server's
+(`pressure_history.<lat>_<lon>.json` and so on).
+
+Times on these screens (sunrise, hourly forecast) are still shown in the
+server's time zone. A generic **quad** page with weather tiles uses the
+server's location.
+
 ### Updating or restarting a client from the Clients page
 
 Each row on `/clients` has **Update (git pull)** and **Restart client**

@@ -63,6 +63,7 @@
 const CSRF = {{ {csrf_header: csrf_value} | tojson }};
 let playlists = [];
 let globalVerticalAdjustment = 0;
+let globalLocation = null;
 
 function notice(message, kind) {
   const el = document.getElementById("notice");
@@ -254,9 +255,68 @@ async function setVerticalScroll(client, value) {
   load();
 }
 
+function coords(location) {
+  return location ? `${Number(location.latitude).toFixed(4)}, ${Number(location.longitude).toFixed(4)}` : "not set";
+}
+
+function locationControl(td, client) {
+  const own = client.location;
+  const wrap = document.createElement("div");
+  wrap.className = "weather-location";
+  const fields = {};
+  for (const [key, label, min, max] of [["latitude", "Lat", -90, 90], ["longitude", "Lon", -180, 180]]) {
+    const field = document.createElement("label");
+    field.textContent = `${label} `;
+    const input = document.createElement("input");
+    input.type = "number";
+    input.min = String(min);
+    input.max = String(max);
+    input.step = "any";
+    input.style.width = "7.5em";
+    input.value = own ? own[key] : "";
+    input.placeholder = globalLocation ? String(globalLocation[key]) : "";
+    input.dataset.location = key;
+    input.setAttribute("aria-label", `Weather ${key} for ${client.client_id}`);
+    input.title = "This display's own location for weather, radar, air quality and Sun & Moon. Leave both empty to use the server's WEATHER_LATITUDE / WEATHER_LONGITUDE.";
+    field.appendChild(input);
+    wrap.appendChild(field);
+    fields[key] = input;
+  }
+  const save = document.createElement("button");
+  save.textContent = "Save";
+  save.addEventListener("click", () => setLocation(client, fields.latitude.value, fields.longitude.value));
+  for (const input of Object.values(fields)) {
+    input.addEventListener("keydown", (event) => { if (event.key === "Enter") save.click(); });
+  }
+  wrap.appendChild(save);
+  if (own) {
+    const reset = document.createElement("button");
+    reset.textContent = "Use server's";
+    reset.title = `Use the server's weather location (${coords(globalLocation)})`;
+    reset.addEventListener("click", () => setLocation(client, "", ""));
+    wrap.appendChild(reset);
+  }
+  td.appendChild(wrap);
+  line(td, own ? `weather at ${coords(own)} (server ${coords(globalLocation)})`
+    : `weather at server location ${coords(globalLocation)}`, "muted");
+}
+
+async function setLocation(client, latitude, longitude) {
+  const blank = latitude === "" && longitude === "";
+  try {
+    await api("PUT", `/api/clients/${encodeURIComponent(client.client_id)}/location`,
+      { latitude: blank ? null : latitude, longitude: blank ? null : longitude });
+    notice(blank
+      ? `${client.client_id} shows the weather for the server's location again. It applies on the display's next sync.`
+      : `${client.client_id} shows the weather for ${latitude}, ${longitude}. Its weather screens appear once the server has fetched that location.`);
+  } catch (error) { notice(explain(error), "error"); }
+  load();
+}
+
 function render(data) {
   playlists = data.playlists;
   globalVerticalAdjustment = Number(data.global_vertical_speed_adjustment || 0);
+  globalLocation = data.global_location || null;
   const body = document.querySelector("#clients tbody");
   body.innerHTML = "";
   if (!data.clients.length) {
@@ -319,6 +379,7 @@ function render(data) {
         (caps.buttons || []).length ? `buttons ${caps.buttons.join("")}` : null].filter(Boolean);
       if (features.length) line(td, features.join(" · "), "muted");
       scrollControl(td, client);
+      locationControl(td, client);
     });
     cell(tr, (td) => {
       line(td, client.current_screen || "—");

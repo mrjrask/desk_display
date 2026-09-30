@@ -167,7 +167,15 @@ class DataProvider:
             flight.generation += 1
             return result
 
-    def read_weather(self, *, ttl_seconds: int = 300) -> Any:
+    def read_weather(self, *, ttl_seconds: int = 300, location: Optional[tuple[float, float]] = None) -> Any:
+        """Weather for WEATHER_LATITUDE/LONGITUDE, or for *location* ``(lat, lon)``."""
+
+        if location is not None:
+            return self._read_cached(
+                f"weather@{location[0]:.4f}_{location[1]:.4f}",
+                lambda: data_fetch.fetch_weather(force_refresh=True, location=location),
+                ttl_seconds,
+            )
         return self._read_cached(
             "weather",
             lambda: data_fetch.fetch_weather(force_refresh=True),

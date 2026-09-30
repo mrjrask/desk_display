@@ -757,6 +757,8 @@ def demand_render_keys(
     revisions: Mapping[str, ScreenRevisions],
     *,
     client_specific_screens: Iterable[str] = (),
+    screen_scopes: Mapping[str, str] | None = None,
+    scoped_revisions: Mapping[tuple[str, str], ScreenRevisions] | None = None,
 ) -> frozenset[RenderKey]:
     """Return the render keys needed to satisfy *demand*.
 
@@ -764,7 +766,9 @@ def demand_render_keys(
     any render work is scheduled.  ``revisions`` maps each canonical screen ID
     to its current revisions; a screen without an entry cannot be scheduled.
     A screen each client draws itself (the ``inside`` sensor screen) needs no
-    render.
+    render.  ``screen_scopes`` maps screens this client shares with a group
+    of clients (a location's weather screens) to that group's scope, whose
+    revisions ``scoped_revisions`` holds under ``(screen, scope)``.
     """
 
     from rendering.screen_classes import server_renders
@@ -773,8 +777,17 @@ def demand_render_keys(
     demand.matches(capabilities)
     scoped = {screen_id(s, "client_specific_screens") for s in client_specific_screens}
     keys = set()
+    screen_scopes = screen_scopes or {}
     for screen in demand.all_screens:
         if not server_renders(screen):
+            continue
+        group = screen_scopes.get(screen) if screen not in scoped else None
+        if group is not None:
+            screen_revisions = (scoped_revisions or {}).get((screen, group))
+            if screen_revisions is None:
+                _fail("required_screens", f"no revisions are known for screen {screen!r} in {group!r}")
+            keys.add(RenderKey.for_screen(screen, capabilities.render_profile, screen_revisions,
+                                          client_id=group))
             continue
         screen_revisions = revisions.get(screen)
         if screen_revisions is None:

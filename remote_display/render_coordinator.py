@@ -79,6 +79,10 @@ class RenderOutput:
 
 Renderer = Callable[[RenderKey], RenderOutput]
 RevisionSource = Callable[[Iterable[str]], Mapping[str, ScreenRevisions]]
+# Revisions of screens rendered for a group of clients: {(screen, scope): revisions}.
+ScopedRevisionSource = Callable[[Iterable[tuple[str, str]]], Mapping[tuple[str, str], ScreenRevisions]]
+# A client's grouped screens (its location's weather screens): {screen: scope}.
+ScreenScopes = Callable[[str, Iterable[str]], Mapping[str, str]]
 
 
 class Executor(Protocol):
@@ -140,6 +144,8 @@ class RenderCoordinator:
         data_health: Callable[[], Mapping[str, Any]] | None = None,
         executor: Executor | None = None,
         clock: Callable[[], float] = time.time,
+        screen_scopes: ScreenScopes | None = None,
+        scoped_revisions: ScopedRevisionSource | None = None,
     ) -> None:
         if workers < 1:
             raise ValueError("workers must be at least 1")
@@ -153,6 +159,8 @@ class RenderCoordinator:
         self.screen_min_intervals = dict(screen_min_intervals or {})
         self.client_specific_screens = tuple(client_specific_screens)
         self.data_health = data_health
+        self.screen_scopes = screen_scopes
+        self.scoped_revisions = scoped_revisions
         self._executor = executor or ThreadPoolExecutor(max_workers=self.workers, thread_name_prefix="render")
         self._clock = clock
         self._lock = threading.RLock()
@@ -173,8 +181,15 @@ class RenderCoordinator:
         """Return ``{key digest: (key, client IDs, best source rank)}`` for current demand."""
 
         entries = self.registry.demand_entries()
-        screens = sorted({s for entry in entries for s in entry.demand.all_screens})
+        scopes: dict[str, Mapping[str, str]] = {}
+        if self.screen_scopes is not None and self.scoped_revisions is not None:
+            for entry in entries:
+                scopes[entry.client_id] = dict(self.screen_scopes(entry.client_id, entry.demand.all_screens))
+        screens = sorted({s for entry in entries for s in entry.demand.all_screens
+                          if s not in scopes.get(entry.client_id, {})})
         revisions = dict(self.revisions(screens)) if screens else {}
+        pairs = sorted({pair for mapping in scopes.values() for pair in mapping.items()})
+        scoped = dict(self.scoped_revisions(pairs)) if pairs and self.scoped_revisions else {}
         plan: dict[str, tuple[RenderKey, set[str], int]] = {}
         invalid: list[dict[str, Any]] = []
         for entry in entries:
@@ -182,6 +197,8 @@ class RenderCoordinator:
                 keys = demand_render_keys(
                     entry.capabilities, entry.demand, revisions,
                     client_specific_screens=self.client_specific_screens,
+                    screen_scopes=scopes.get(entry.client_id),
+                    scoped_revisions=scoped,
                 )
             except ModelValidationError as exc:
                 # One bad client must not stop everyone else's renders.
@@ -476,4 +493,5 @@ class RenderCoordinator:
         return rows
 
 
-__all__ = ["RenderCoordinator", "RenderOutput", "Renderer", "RevisionSource"]
+__all__ = ["RenderCoordinator", "RenderOutput", "Renderer", "RevisionSource", "ScopedRevisionSource",
+           "ScreenScopes"]

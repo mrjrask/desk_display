@@ -9,7 +9,8 @@ display plays.  This module stores that state in one versioned JSON document
       "store_revision": 12,
       "playlists": {"pl-…": {"id", "name", "revision", "document", ...}},
       "assignments": {"<client id>": {"playlist_id", "assigned_at", "assigned_by"}},
-      "clients": {"<client id>": {"friendly_name", "vertical_speed_adjustment"}},
+      "clients": {"<client id>": {"friendly_name", "vertical_speed_adjustment",
+                                   "location": {"latitude", "longitude"}}},
       "audit": [{"at", "actor", "action", "target", "detail"}, ...]
     }
 
@@ -51,6 +52,7 @@ from pathlib import Path
 from typing import Any
 
 from deployment_config import scrub_secrets
+from remote_display.locations import Location, LocationError
 from remote_display.models import ModelValidationError, identifier, screen_id
 from screens_catalog import canonical_screen_id
 
@@ -599,6 +601,39 @@ class PlaylistStore:
                         vertical_speed_adjustment=adjustment)
         return adjustment
 
+    def location(self, client_id: str) -> Location | None:
+        """The client's own weather location, or None to use the server's."""
+
+        with self._lock:
+            entry = self._load()["clients"].get(client_id) or {}
+        return _stored_location(entry.get("location"))
+
+    def client_locations(self) -> dict[str, Location]:
+        """Every client that has its own weather location."""
+
+        with self._lock:
+            clients = self._load()["clients"]
+            stored = {cid: _stored_location(entry.get("location"))
+                      for cid, entry in clients.items() if isinstance(entry, dict)}
+        return {cid: location for cid, location in stored.items() if location is not None}
+
+    def set_location(self, client_id: str, latitude: Any, longitude: Any, *, actor: str) -> Location | None:
+        """Set (or, with both blank, clear) the client's own weather location."""
+
+        client_id = _client(client_id)
+        try:
+            location = Location.parse(latitude, longitude)
+        except LocationError as exc:
+            raise PlaylistValidationError(str(exc), field=exc.field) from None
+        with self._transaction() as data:
+            if location is None:
+                _clear_client_setting(data, client_id, "location")
+            else:
+                data["clients"].setdefault(client_id, {})["location"] = location.as_dict()
+            self._audit(data, actor, "set_location", client_id,
+                        location=None if location is None else location.as_dict())
+        return location
+
     # ── Import and export ──────────────────────────────────────────────────
 
     def export(self, playlist_id: str) -> dict[str, Any]:
@@ -641,6 +676,15 @@ def vertical_speed_adjustment_value(value: Any) -> float | None:
         raise PlaylistValidationError(f"vertical_speed_adjustment must be a number from {low} to {high}",
                                       field="vertical_speed_adjustment")
     return round(parsed, 2)
+
+
+def _stored_location(value: Any) -> Location | None:
+    if not isinstance(value, Mapping):
+        return None
+    try:
+        return Location.parse(value.get("latitude"), value.get("longitude"))
+    except LocationError:
+        return None
 
 
 def _clear_client_setting(data: dict[str, Any], client_id: str, key: str) -> None:

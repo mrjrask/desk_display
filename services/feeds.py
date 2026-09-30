@@ -122,6 +122,7 @@ FEED_DEPENDENCIES: dict[str, set[str]] = {
         "weather alert",
         "weather logo",
         "weather quad",
+        "astronomical",
     },
     "air_quality": {"air quality", "weather quad"},
     "bears": {"bears stand1", "bears stand2"},
