@@ -29,7 +29,8 @@ class _MockResponse:
 
 
 @pytest.fixture(autouse=True)
-def _clear_caches_between_tests():
+def _clear_caches_between_tests(monkeypatch, tmp_path):
+    monkeypatch.setattr("screens.draw_weather.BASE_MAP_TILE_DIR", str(tmp_path / "radar_basemap"))
     _clear_radar_map_caches()
     yield
     _clear_radar_map_caches()
@@ -57,7 +58,7 @@ def test_fetch_base_map_uses_basic_free_osm(monkeypatch):
     assert seen
     assert seen[0][0].startswith("https://tile.openstreetmap.org/")
     assert seen[0][1] == 6
-    assert seen[0][2] == "desk-display/weather-radar"
+    assert seen[0][2].startswith("desk-display/weather-radar (+https://")
 
 
 def test_fetch_base_map_falls_back_when_osm_unavailable(monkeypatch):
@@ -74,9 +75,9 @@ def test_fetch_base_map_falls_back_when_osm_unavailable(monkeypatch):
     result = _fetch_base_map(zoom=7)
 
     assert result is not None
-    assert len(seen_urls) == 2
-    assert "openstreetmap" in seen_urls[0]
-    assert "cartocdn.com/light_all" in seen_urls[1]
+    assert result.info["attribution"] == "\u00a9 OpenStreetMap \u00a9 CARTO"
+    assert any("openstreetmap" in url for url in seen_urls)
+    assert any("cartocdn.com/light_all" in url for url in seen_urls)
 
 
 def test_fetch_base_map_uses_cache_within_ttl(monkeypatch):
@@ -91,11 +92,12 @@ def test_fetch_base_map_uses_cache_within_ttl(monkeypatch):
     monkeypatch.setattr("screens.draw_weather.http_get", _mock_get)
 
     first = _fetch_base_map(zoom=7)
+    fetched = len(calls)
     second = _fetch_base_map(zoom=7)
 
     assert first is not None
     assert second is not None
-    assert len(calls) == 1
+    assert fetched and len(calls) == fetched
     assert first is not second
 
 
@@ -111,10 +113,12 @@ def test_fetch_base_map_refreshes_after_ttl(monkeypatch):
     monkeypatch.setattr("screens.draw_weather.http_get", _mock_get)
 
     assert _fetch_base_map(zoom=7) is not None
+    fetched = len(calls)
     now += BASE_MAP_CACHE_TTL_SECONDS + 1
+    monkeypatch.setattr("screens.draw_weather.BASE_MAP_TILE_MAX_AGE_SECONDS", -1)
     assert _fetch_base_map(zoom=7) is not None
 
-    assert len(calls) == 2
+    assert len(calls) == 2 * fetched
 
 
 def test_fetch_base_map_uses_chicago_center_coordinates(monkeypatch):
@@ -163,11 +167,12 @@ def test_fetch_radar_frames_uses_cache_within_ttl(monkeypatch):
     monkeypatch.setattr("screens.draw_weather.http_get", _mock_get)
 
     first = _fetch_radar_frames(zoom=7, max_frames=6)
+    fetched = len(urls_requested)
     second = _fetch_radar_frames(zoom=7, max_frames=6)
 
     assert len(first) == 1
     assert len(second) == 1
-    assert len(urls_requested) == 2
+    assert fetched >= 2 and len(urls_requested) == fetched
     assert first[0].image is not second[0].image
 
 
@@ -274,7 +279,7 @@ def test_fetch_rainviewer_frames_sorts_to_include_latest(monkeypatch):
     # The two most recent frames ("c" then "b") should be fetched and
     # returned in chronological order, even though the concurrent fetch
     # may complete the underlying requests in either order.
-    assert sorted(timestamps_requested) == ["b", "c"]
+    assert sorted(set(timestamps_requested)) == ["b", "c"]
     assert [frame.timestamp for frame in frames] == [now_ts - 300, now_ts - 60]
 
 
@@ -335,3 +340,115 @@ def test_fetch_radar_frames_uses_iem_when_rainviewer_unavailable(monkeypatch):
     frames = _fetch_radar_frames(zoom=7, max_frames=6)
 
     assert len(frames) == 1
+
+
+def _tile_png(size=256, color=(200, 200, 200)):
+    img = Image.new("RGB", (size, size), color)
+    buf = BytesIO()
+    img.save(buf, format="PNG")
+    return buf.getvalue()
+
+
+def _set_display(monkeypatch, width, height):
+    monkeypatch.setattr("screens.draw_weather.WIDTH", width)
+    monkeypatch.setattr("screens.draw_weather.HEIGHT", height)
+
+
+def test_base_map_at_1080p_stitches_detailed_tiles_without_stretching(monkeypatch):
+    _set_display(monkeypatch, 1920, 1080)
+    urls = []
+
+    def _mock_get(url, timeout, headers):
+        urls.append(url)
+        return _MockResponse(_tile_png())
+
+    monkeypatch.setattr("screens.draw_weather.http_get", _mock_get)
+
+    result = _fetch_base_map(zoom=7)
+
+    assert result is not None
+    assert result.size == (1920, 1080)
+    assert result.info["attribution"] == "© OpenStreetMap"
+    zooms = {url.split("/")[3] for url in urls}
+    assert zooms == {"9"}
+    # 1080 display rows cover one zoom-7 tile: 1024 zoom-9 pixels, so the
+    # map is shown near its native size instead of a 256px tile blown up 4x.
+    assert 20 <= len(urls) <= 40
+
+
+def test_base_map_on_small_display_keeps_single_zoom7_tile(monkeypatch):
+    _set_display(monkeypatch, 240, 240)
+    urls = []
+
+    def _mock_get(url, timeout, headers):
+        urls.append(url)
+        return _MockResponse(_tile_png())
+
+    monkeypatch.setattr("screens.draw_weather.http_get", _mock_get)
+
+    result = _fetch_base_map(zoom=7)
+
+    assert result is not None and result.size == (240, 240)
+    assert len(urls) == 1 and "/7/" in urls[0]
+
+
+def test_base_map_tiles_are_reused_from_disk(monkeypatch):
+    _set_display(monkeypatch, 800, 480)
+    urls = []
+
+    def _mock_get(url, timeout, headers):
+        urls.append(url)
+        return _MockResponse(_tile_png())
+
+    monkeypatch.setattr("screens.draw_weather.http_get", _mock_get)
+
+    assert _fetch_base_map(zoom=7) is not None
+    fetched = len(urls)
+    _clear_radar_map_caches()  # e.g. a restarted render process
+    assert _fetch_base_map(zoom=7) is not None
+
+    assert fetched and len(urls) == fetched
+
+
+def test_base_map_falls_back_when_any_osm_tile_fails(monkeypatch):
+    _set_display(monkeypatch, 800, 480)
+
+    failed = []
+
+    def _mock_get(url, timeout, headers):
+        if "openstreetmap" in url and not failed:
+            failed.append(url)
+            raise RuntimeError("one tile missing")
+        return _MockResponse(_tile_png())
+
+    monkeypatch.setattr("screens.draw_weather.http_get", _mock_get)
+
+    result = _fetch_base_map(zoom=7)
+
+    assert result is not None
+    assert "CARTO" in result.info["attribution"]
+
+
+def test_rainviewer_frames_use_512px_tiles_sized_to_large_display(monkeypatch):
+    _set_display(monkeypatch, 1920, 1080)
+    now_ts = int(datetime.datetime.now(datetime.UTC).timestamp())
+    metadata = {"host": "https://tilecache.rainviewer.com", "radar": {"past": [{"path": "/p", "time": now_ts}]}}
+    tile_urls = []
+
+    class _JsonResponse(_MockResponse):
+        def json(self):
+            return metadata
+
+    def _mock_get(url, timeout):
+        if "maps.json" in url:
+            return _JsonResponse(b"")
+        tile_urls.append(url)
+        return _MockResponse(_tile_png(512, (0, 0, 255)))
+
+    monkeypatch.setattr("screens.draw_weather.http_get", _mock_get)
+
+    frames = _fetch_radar_frames(zoom=7, max_frames=1)
+
+    assert len(frames) == 1
+    assert frames[0].image.size == (1920, 1080)
+    assert tile_urls and all("/512/7/" in url for url in tile_urls)

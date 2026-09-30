@@ -18,6 +18,7 @@ import contextlib
 import datetime
 import logging
 import math
+import os
 import re
 import textwrap
 import time
@@ -45,6 +46,7 @@ from config import (
     FONT_WEATHER_LABEL,
     HEIGHT,
     HOURLY_FORECAST_HOURS,
+    IMAGES_DIR,
     LATITUDE,
     LONGITUDE,
     WEATHER_DESC_GAP,
@@ -143,8 +145,28 @@ RAINVIEWER_METADATA_URLS = (
 )
 BASE_MAP_CACHE_TTL_SECONDS = 12 * 60 * 60
 RADAR_FRAMES_CACHE_TTL_SECONDS = 5 * 60
-_BASE_MAP_CACHE: dict[int, tuple[float, Image.Image]] = {}
-_RADAR_FRAMES_CACHE: dict[tuple[int, int], tuple[float, list["RadarFrame"]]] = {}
+# The radar view always covers one tile of the requested zoom (7) across the
+# display's short side. Base map tiles are fetched at a deeper zoom so a big
+# display (1080p) gets native map pixels instead of one 256px tile stretched
+# 4x. RainViewer's free API stops at zoom 7, so radar uses its 512px tiles.
+RADAR_BASE_MAP_MAX_ZOOM = 10
+RADAR_TILE_SIZE_LARGE = 512
+# Tiles on disk under images/cache (untracked). The OSM tile policy asks for
+# at least 7 days of caching; map tiles rarely change, so keep them 30.
+BASE_MAP_TILE_DIR = os.path.join(IMAGES_DIR, "cache", "radar_basemap")
+BASE_MAP_TILE_MAX_AGE_SECONDS = 30 * 24 * 60 * 60
+# tile.openstreetmap.org is a donated service; keep parallel requests low.
+BASE_MAP_TILE_FETCH_WORKERS = 2
+RADAR_HTTP_HEADERS = {
+    # OSM blocks anonymous clients; name the app and where to reach it.
+    "User-Agent": "desk-display/weather-radar (+https://github.com/mrjrask/desk_display)",
+}
+BASE_MAP_PROVIDERS = (
+    ("osm", "https://tile.openstreetmap.org/{z}/{x}/{y}.png", "\u00a9 OpenStreetMap"),
+    ("carto", "https://basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png", "\u00a9 OpenStreetMap \u00a9 CARTO"),
+)
+_BASE_MAP_CACHE: dict[tuple[int, int, int], tuple[float, Image.Image]] = {}
+_RADAR_FRAMES_CACHE: dict[tuple[int, int, int, int], tuple[float, list["RadarFrame"]]] = {}
 
 
 def _copy_radar_frames(frames: list["RadarFrame"]) -> list["RadarFrame"]:
@@ -2340,6 +2362,91 @@ class RadarFrame(NamedTuple):
     timestamp: Optional[int]
 
 
+class _RadarView(NamedTuple):
+    """The map area the radar screen shows, sized for the current display."""
+
+    zoom: int  # one tile of this zoom spans the display's short side
+    center_x: float  # centre in 256px-tile world pixels at ``zoom``
+    center_y: float
+    width: int
+    height: int
+
+    @property
+    def scale(self) -> float:
+        """Display pixels per 256px-tile pixel at ``zoom``."""
+        return min(self.width, self.height) / 256.0
+
+
+def _radar_view(zoom: int) -> _RadarView:
+    # Centre on the zoom tile that holds Chicago (not Chicago itself): that is
+    # the area the screen has always shown, with the weather coming from the
+    # west. Wide displays see more to either side instead of a stretched tile.
+    x_tile, y_tile, _, _ = _latlon_to_tile(RADAR_CENTER_LATITUDE, RADAR_CENTER_LONGITUDE, zoom)
+    return _RadarView(zoom, (x_tile + 0.5) * 256.0, (y_tile + 0.5) * 256.0, WIDTH, HEIGHT)
+
+
+def _base_map_detail_zoom(view: _RadarView) -> int:
+    """Smallest zoom that needs at most ~1.4x upscaling to fill the display.
+
+    Allowing a little upscaling keeps map labels readable on small, dense
+    panels (720px square: zoom 8 at 1.4x rather than zoom 9 shrunk to 0.7x).
+    """
+    extra = 0
+    while view.zoom + extra < RADAR_BASE_MAP_MAX_ZOOM and 2 ** extra < view.scale * 0.7:
+        extra += 1
+    return view.zoom + extra
+
+
+def _stitch_view(
+    view: _RadarView,
+    zoom: int,
+    tile_px: int,
+    fetch_tile,
+    *,
+    workers: int,
+    require_all: bool,
+) -> Optional[Image.Image]:
+    """Fetch the tiles covering *view* at *zoom* and return them cropped and sized to the display."""
+    factor = (tile_px / 256.0) * 2 ** (zoom - view.zoom)
+    half_w = view.width / view.scale / 2.0 * factor
+    half_h = view.height / view.scale / 2.0 * factor
+    cx = view.center_x * factor
+    cy = view.center_y * factor
+    left, top, right, bottom = cx - half_w, cy - half_h, cx + half_w, cy + half_h
+    n = 2 ** zoom
+    tx0, tx1 = math.floor(left / tile_px), math.ceil(right / tile_px) - 1
+    ty0 = max(0, math.floor(top / tile_px))
+    ty1 = min(n - 1, math.ceil(bottom / tile_px) - 1)
+    coords = [(tx, ty) for ty in range(ty0, ty1 + 1) for tx in range(tx0, tx1 + 1)]
+    if not coords:
+        return None
+
+    with ThreadPoolExecutor(max_workers=max(1, min(workers, len(coords)))) as executor:
+        tiles = list(executor.map(lambda c: fetch_tile(c[0] % n, c[1]), coords))
+    if all(tile is None for tile in tiles) or (require_all and any(tile is None for tile in tiles)):
+        return None
+
+    canvas = Image.new("RGBA", ((tx1 - tx0 + 1) * tile_px, (ty1 - ty0 + 1) * tile_px), (0, 0, 0, 0))
+    for (tx, ty), tile in zip(coords, tiles):
+        if tile is None:
+            continue
+        tile = tile.convert("RGBA")
+        if tile.size != (tile_px, tile_px):
+            tile = tile.resize((tile_px, tile_px), LANCZOS)
+        canvas.paste(tile, ((tx - tx0) * tile_px, (ty - ty0) * tile_px))
+
+    box = (
+        round(left - tx0 * tile_px),
+        round(top - ty0 * tile_px),
+        round(right - tx0 * tile_px),
+        round(bottom - ty0 * tile_px),
+    )
+    region = canvas.crop(box)
+    if region.size != (view.width, view.height):
+        region = region.resize((view.width, view.height), LANCZOS)
+    return region
+
+
 def _normalise_radar_timestamp(value: object) -> Optional[int]:
     try:
         ts_int = int(value)  # type: ignore[arg-type]
@@ -2359,7 +2466,7 @@ def _format_radar_timestamp(timestamp: Optional[int]) -> str:
 
 
 def _fetch_radar_frames(zoom: int = 7, max_frames: int = RADAR_MAX_FRAMES) -> list[RadarFrame]:
-    cache_key = (zoom, max_frames)
+    cache_key = (zoom, max_frames, WIDTH, HEIGHT)
     now = time.monotonic()
     cached = _RADAR_FRAMES_CACHE.get(cache_key)
     if cached is not None:
@@ -2413,34 +2520,33 @@ def _fetch_rainviewer_frames(zoom: int = 7, max_frames: int = RADAR_MAX_FRAMES) 
     if not frames:
         return []
 
-    x_tile, y_tile, x_offset, y_offset = _latlon_to_tile(
-        RADAR_CENTER_LATITUDE,
-        RADAR_CENTER_LONGITUDE,
-        zoom,
-    )
+    view = _radar_view(zoom)
+    tile_px = RADAR_TILE_SIZE_LARGE if view.scale > 1.0 else 256
 
     def _fetch_one(frame: Any) -> Optional[RadarFrame]:
         path = frame.get("path") if isinstance(frame, dict) else None
         if not path:
             return None
         timestamp = _normalise_radar_timestamp(frame.get("time") if isinstance(frame, dict) else None)
-        url = (
-            f"{host.rstrip('/')}/{path.strip('/')}/256/{zoom}/{x_tile}/{y_tile}/2/1_1.png"
-        )
-        try:
-            tile_resp = http_get(url, timeout=6)
-            tile_resp.raise_for_status()
-            tile = Image.open(BytesIO(tile_resp.content)).convert("RGBA")
-        except Exception as exc:  # pragma: no cover - network failures are non-fatal
-            logging.warning("Radar tile fetch failed: %s", exc)
+
+        def _fetch_tile(x: int, y: int) -> Optional[Image.Image]:
+            url = f"{host.rstrip('/')}/{path.strip('/')}/{tile_px}/{zoom}/{x}/{y}/2/1_1.png"
+            try:
+                tile_resp = http_get(url, timeout=6)
+                tile_resp.raise_for_status()
+                return Image.open(BytesIO(tile_resp.content)).convert("RGBA")
+            except Exception as exc:  # pragma: no cover - network failures are non-fatal
+                logging.warning("Radar tile fetch failed: %s", exc)
+                return None
+
+        radar = _stitch_view(view, zoom, tile_px, _fetch_tile, workers=1, require_all=False)
+        if radar is None:
             return None
+        frame_img = Image.new("RGBA", radar.size, (0, 0, 0, 255))
+        frame_img.alpha_composite(radar)
+        return RadarFrame(frame_img, timestamp)
 
-        frame_img = Image.new("RGBA", tile.size, (0, 0, 0, 255))
-        frame_img.alpha_composite(tile)
-        final_frame = frame_img.resize((WIDTH, HEIGHT), LANCZOS).convert("RGBA")
-        return RadarFrame(final_frame, timestamp)
-
-    # Each tile is an independent network fetch; on flaky/weak Wi-Fi hardware
+    # Each frame is an independent network fetch; on flaky/weak Wi-Fi hardware
     # (e.g. Pi Zero 2 W) a handful of slow requests otherwise serialize into a
     # multi-tile wait before the radar screen can render at all.
     with ThreadPoolExecutor(max_workers=min(RADAR_TILE_FETCH_WORKERS, len(frames))) as executor:
@@ -2450,55 +2556,87 @@ def _fetch_rainviewer_frames(zoom: int = 7, max_frames: int = RADAR_MAX_FRAMES) 
 
 
 def _fetch_iem_radar_fallback_frames(zoom: int = 7) -> list[RadarFrame]:
-    """Fetch a free, no-key radar tile from Iowa State Mesonet as a fallback."""
-    x_tile, y_tile, _, _ = _latlon_to_tile(
-        RADAR_CENTER_LATITUDE,
-        RADAR_CENTER_LONGITUDE,
-        zoom,
-    )
-    url = f"https://mesonet.agron.iastate.edu/cache/tile.py/1.0.0/q2-hsr-900913/{zoom}/{x_tile}/{y_tile}.png"
-    try:
-        resp = http_get(url, timeout=6, headers={"User-Agent": "desk-display/weather-radar"})
-        resp.raise_for_status()
-        tile = Image.open(BytesIO(resp.content)).convert("RGBA")
-    except Exception as exc:  # pragma: no cover - network failures are non-fatal
-        logging.warning("IEM radar fallback fetch failed: %s", exc)
-        return []
+    """Fetch free, no-key radar tiles from Iowa State Mesonet as a fallback."""
+    view = _radar_view(zoom)
 
-    final_frame = tile.resize((WIDTH, HEIGHT), LANCZOS).convert("RGBA")
-    return [RadarFrame(final_frame, int(datetime.datetime.now(datetime.UTC).timestamp()))]
+    def _fetch_tile(x: int, y: int) -> Optional[Image.Image]:
+        url = f"https://mesonet.agron.iastate.edu/cache/tile.py/1.0.0/q2-hsr-900913/{zoom}/{x}/{y}.png"
+        try:
+            resp = http_get(url, timeout=6, headers=RADAR_HTTP_HEADERS)
+            resp.raise_for_status()
+            return Image.open(BytesIO(resp.content)).convert("RGBA")
+        except Exception as exc:  # pragma: no cover - network failures are non-fatal
+            logging.warning("IEM radar fallback fetch failed: %s", exc)
+            return None
+
+    radar = _stitch_view(view, zoom, 256, _fetch_tile, workers=RADAR_TILE_FETCH_WORKERS, require_all=False)
+    if radar is None:
+        return []
+    return [RadarFrame(radar, int(datetime.datetime.now(datetime.UTC).timestamp()))]
+
+
+def _base_map_tile(provider: str, url_template: str, zoom: int, x: int, y: int) -> Optional[Image.Image]:
+    """Return one base map tile, from the disk cache while it is fresh."""
+    path = os.path.join(BASE_MAP_TILE_DIR, provider, str(zoom), str(x), f"{y}.png")
+    stale: Optional[Image.Image] = None
+    try:
+        age = time.time() - os.path.getmtime(path)
+        with Image.open(path) as cached:
+            cached_tile = cached.convert("RGB")
+        if age < BASE_MAP_TILE_MAX_AGE_SECONDS:
+            return cached_tile
+        stale = cached_tile
+    except (OSError, ValueError):
+        pass
+
+    url = url_template.format(z=zoom, x=x, y=y)
+    try:
+        resp = http_get(url, timeout=6, headers=RADAR_HTTP_HEADERS)
+        resp.raise_for_status()
+        tile = Image.open(BytesIO(resp.content)).convert("RGB")
+    except Exception as exc:  # pragma: no cover - network failures are non-fatal
+        logging.warning("Radar base map fetch failed from %s: %s", url, exc)
+        return stale
+
+    try:
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        tile.save(path, format="PNG")
+    except OSError as exc:
+        logging.debug("Could not cache radar base map tile %s: %s", path, exc)
+    return tile
 
 
 def _fetch_base_map(zoom: int = 7) -> Optional[Image.Image]:
+    """Return the base map for the radar view, sized to the display.
+
+    ``image.info["attribution"]`` names the map source, which its terms
+    require on screen.
+    """
+    cache_key = (zoom, WIDTH, HEIGHT)
     now = time.monotonic()
-    cached = _BASE_MAP_CACHE.get(zoom)
+    cached = _BASE_MAP_CACHE.get(cache_key)
     if cached is not None:
         fetched_at, cached_image = cached
         if now - fetched_at < BASE_MAP_CACHE_TTL_SECONDS:
             return cached_image.copy()
 
-    x_tile, y_tile, _, _ = _latlon_to_tile(
-        RADAR_CENTER_LATITUDE,
-        RADAR_CENTER_LONGITUDE,
-        zoom,
-    )
-    headers = {
-        "User-Agent": "desk-display/weather-radar",
-    }
-    urls = [
-        f"https://tile.openstreetmap.org/{zoom}/{x_tile}/{y_tile}.png",
-        f"https://basemaps.cartocdn.com/light_all/{zoom}/{x_tile}/{y_tile}.png",
-    ]
-
-    for url in urls:
-        try:
-            resp = http_get(url, timeout=6, headers=headers)
-            resp.raise_for_status()
-            image = Image.open(BytesIO(resp.content)).convert("RGB")
-            _BASE_MAP_CACHE[zoom] = (now, image.copy())
-            return image
-        except Exception as exc:  # pragma: no cover - network failures are non-fatal
-            logging.warning("Radar base map fetch failed from %s: %s", url, exc)
+    view = _radar_view(zoom)
+    detail_zoom = _base_map_detail_zoom(view)
+    for provider, url_template, attribution in BASE_MAP_PROVIDERS:
+        image = _stitch_view(
+            view,
+            detail_zoom,
+            256,
+            lambda x, y, p=provider, u=url_template: _base_map_tile(p, u, detail_zoom, x, y),
+            workers=BASE_MAP_TILE_FETCH_WORKERS,
+            require_all=True,
+        )
+        if image is None:
+            continue
+        image = image.convert("RGB")
+        image.info["attribution"] = attribution
+        _BASE_MAP_CACHE[cache_key] = (now, image.copy())
+        return image
 
     return None
 
@@ -2518,10 +2656,20 @@ def draw_weather_radar(display, weather=None, transition: bool = False):
         return ScreenImage(img, displayed=False)
 
     map_section = None
+    attribution = ""
     if base_map:
-        map_section = base_map.copy().resize((WIDTH, HEIGHT), LANCZOS).convert("RGBA")
+        attribution = str(base_map.info.get("attribution") or "")
+        map_section = base_map.copy()
+        if map_section.size != (WIDTH, HEIGHT):
+            map_section = map_section.resize((WIDTH, HEIGHT), LANCZOS)
+        map_section = map_section.convert("RGBA")
     else:
         map_section = Image.new("RGBA", (WIDTH, HEIGHT), background + (255,))
+
+    attribution_font = FONT_WEATHER_DETAILS_TINY_MICRO
+    with contextlib.suppress(AttributeError, OSError):
+        # A small credit line; the shared tiny fonts scale up to ~40px at 1080p.
+        attribution_font = attribution_font.font_variant(size=max(8, min(WIDTH, HEIGHT) // 60))
 
     def _compose_frame(frame: RadarFrame) -> Image.Image:
         radar_image = frame.image
@@ -2553,6 +2701,17 @@ def draw_weather_radar(display, weather=None, transition: bool = False):
                 fill=(255, 255, 255),
                 stroke_width=1,
                 stroke_fill=(0, 0, 0),
+            )
+
+        if attribution:
+            # The OSM and CARTO tile terms require visible map credit.
+            draw = ImageDraw.Draw(result)
+            bbox = draw.textbbox((0, 0), attribution, font=attribution_font)
+            draw.text(
+                (WIDTH - (bbox[2] - bbox[0]) - 4 - bbox[0], HEIGHT - (bbox[3] - bbox[1]) - 3 - bbox[1]),
+                attribution,
+                font=attribution_font,
+                fill=(220, 220, 220),
             )
 
         return result
