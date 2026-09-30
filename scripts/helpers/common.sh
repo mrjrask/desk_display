@@ -4,6 +4,57 @@ set -euo pipefail
 log() { printf '[INFO] %s\n' "$*"; }
 warn() { printf '[WARN] %s\n' "$*"; }
 
+# Run a command that can be quiet for a long time (pip, apt) and, every
+# DESK_DISPLAY_HEARTBEAT_SECONDS (60) it keeps running, say how long it has
+# taken and which processes it is waiting on, so a stalled step names itself.
+run_with_heartbeat() {
+  local label="$1"
+  shift
+  local interval="${DESK_DISPLAY_HEARTBEAT_SECONDS:-60}"
+  local shell_pid=$BASHPID
+  local started=$SECONDS
+
+  (
+    local watcher_pid=$BASHPID next=$interval
+    while true; do
+      sleep 1
+      if (( SECONDS - started < next )); then
+        continue
+      fi
+      next=$((next + interval))
+      log "Still $label after $((SECONDS - started))s; running:"
+      # Every descendant of the calling shell except this watcher.
+      ps -eo pid=,ppid=,etime=,stat=,wchan:24=,args= 2>/dev/null | awk \
+        -v root="$shell_pid" -v skip="$watcher_pid" '
+          { pid[NR] = $1; ppid[NR] = $2; line[NR] = $0 }
+          END {
+            keep[root] = 1
+            do {
+              changed = 0
+              for (i = 1; i <= NR; i++) {
+                if (!(pid[i] in keep) && (ppid[i] in keep) && pid[i] != skip) {
+                  keep[pid[i]] = 1
+                  changed = 1
+                }
+              }
+            } while (changed)
+            for (i = 1; i <= NR; i++) {
+              if (pid[i] != root && pid[i] in keep) {
+                print "    " line[i]
+              }
+            }
+          }' || true
+    done
+  ) &
+  local watcher=$!
+
+  local status=0
+  "$@" || status=$?
+  kill "$watcher" 2>/dev/null || true
+  wait "$watcher" 2>/dev/null || true
+  return "$status"
+}
+
 ensure_executable() {
   local file_path="$1"
 
