@@ -91,6 +91,10 @@ def build_client_manifest(
     for role, screens in (("requested", requested), ("interactive_dependency", interactive)):
         for screen in screens:
             resolved = store.resolve(screen, profile.profile_id, client_id if screen in scoped else None)
+            if resolved.state == "unavailable":
+                # Nothing to show right now (no live game): not listed, so
+                # the client skips it, and not missing, since nothing is due.
+                continue
             states.add(resolved.state)
             if resolved.record is None:
                 missing.append(screen)

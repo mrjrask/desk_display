@@ -7,7 +7,7 @@ import time
 import pytest
 
 from display_profiles import PROFILE_PRESETS
-from remote_display.models import RenderKey, ScreenRevisions
+from remote_display.models import RenderKey, ScreenRevisions, ScreenUnavailable
 from rendering.profile_process import ProfileProcessError, ProfileProcessPool
 from services.data_coordinator import DataCoordinator
 
@@ -26,8 +26,9 @@ def pool():
 
 
 def test_a_render_error_in_a_worker_reaches_the_caller(pool):
-    # No indoor sensor here, so the screen is unavailable and the render raises.
-    with pytest.raises(KeyError):
+    # No indoor sensor here, so the screen is unavailable and the render
+    # raises the distinct error the coordinator withdraws the screen on.
+    with pytest.raises(ScreenUnavailable):
         pool.render_screen(key("inside"), PROFILE, DataCoordinator().snapshot())
 
 
