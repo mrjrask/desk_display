@@ -107,6 +107,12 @@ _FRAMEBUFFER_CONSOLE_GRAPHICS = os.environ.get(
 _PYGAME_MODULE = None
 _PYGAME_ERROR: Optional[Exception] = None
 _CURSOR_WIGGLE_DELAY_SECONDS = 30.0
+# Window title and app id of the SDL output window. Only a desktop window
+# (DESK_DISPLAY_OUTPUT=window) is titled: desktop panels such as the Raspberry
+# Pi taskbar show a window's title as a tooltip, and that tooltip can float
+# over the fullscreen kernel output, so the kernel output stays untitled.
+_WINDOW_CAPTION = "Desk Display"
+_WINDOW_APP_ID = "desk-display"
 
 
 class _RPiGPIOButton:
@@ -836,6 +842,12 @@ class _KernelDisplay:
             "1",
         ).strip().lower() not in {"0", "false", "no", "off"}
 
+        self._caption = _WINDOW_CAPTION if self.window_mode else ""
+        # A stable app id (instead of "python3") lets a compositor window rule
+        # target the output window, e.g. to keep it off the taskbar.
+        for name in ("SDL_APP_ID", "SDL_VIDEO_WAYLAND_WMCLASS", "SDL_VIDEO_X11_WMCLASS"):
+            os.environ.setdefault(name, _WINDOW_APP_ID)
+
         self._sdl_driver: Optional[str] = None
         self._screen = self._init_display_surface()
         self.screen_width, self.screen_height = self._screen.get_size()
@@ -844,7 +856,7 @@ class _KernelDisplay:
             self.render_width,
             self.render_height,
         )
-        self._pygame.display.set_caption("Desk Display")
+        self._pygame.display.set_caption(self._caption)
         if self.window_mode:
             _raise_window_to_front(self._pygame)
         try:
@@ -1013,6 +1025,9 @@ class _KernelDisplay:
                 pass
             try:
                 self._pygame.display.init()
+                # Title the window before it is mapped so a panel never picks
+                # up pygame's default "pygame window" title.
+                self._pygame.display.set_caption(self._caption)
                 try:
                     screen = self._pygame.display.set_mode(requested_size, flags)
                 except Exception as exc:
