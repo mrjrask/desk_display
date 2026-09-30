@@ -671,12 +671,13 @@ def test_browser_client_assignment(live_server, browser, env):
     publish_registry(env, [caps("office")], delivered={"office": playlist["revision"]})
     page = browser.new_page()
     page.goto(f"{live_server}/clients")
-    page.wait_for_selector("tr[data-client-id='office']")
-    page.select_option("tr[data-client-id='office'] select", playlist["id"])
+    page.wait_for_selector("[data-client-id='office']")
+    page.select_option("[data-client-id='office'] select", playlist["id"])
     page.wait_for_selector("#notice.ok")
     assert env["store"].snapshot()["assignments"]["office"]["playlist_id"] == playlist["id"]
-    page.wait_for_function("document.querySelector(\"tr[data-client-id='office']\").textContent.includes('pending acknowledgment')")
-    row_text = page.inner_text("tr[data-client-id='office']")
+    page.wait_for_function("document.querySelector(\"[data-client-id='office']\").textContent.includes('pending acknowledgment')")
+    page.click("[data-client-id='office'] button[data-panel='delivery']")
+    row_text = page.inner_text("[data-client-id='office']")
     assert "saved " + playlist["revision"] in row_text
     assert "delivered " + playlist["revision"] in row_text
     assert "acknowledged —" in row_text
@@ -690,29 +691,34 @@ def test_browser_clients_page_shows_delivery_timings(live_server, browser, env):
     publish_registry(env, [caps("office"), caps("den")], telemetry={"office": timings})
     page = browser.new_page(viewport={"width": 1600, "height": 700})
     page.goto(f"{live_server}/clients")
-    page.wait_for_selector("tr[data-client-id='office']")
-    office = page.inner_text("tr[data-client-id='office']")
+    page.wait_for_selector("[data-client-id='office']")
+    for client_id in ("office", "den"):
+        page.click(f"[data-client-id='{client_id}'] button[data-panel='delivery']")
+    office = page.inner_text("[data-client-id='office']")
     assert "last sync 12s ago" in office and "on screen rendered 35s ago" in office
     assert "heartbeat 85 ms · manifest 1.3 s · sync 2.4 s" in office
     assert "last download 3 files, 2.0 MB in 1.8 s" in office
     assert "2 failed syncs before the last success" in office
-    assert "no timings reported" in page.inner_text("tr[data-client-id='den']")
+    assert "no timings reported" in page.inner_text("[data-client-id='den']")
 
 
 def test_browser_clients_page_sets_vertical_scroll(live_server, browser, env):
     publish_registry(env, [caps("office"), caps("den")])
     page = browser.new_page(viewport={"width": 1600, "height": 700})
     page.goto(f"{live_server}/clients")
-    field = "tr[data-client-id='office'] input[data-vertical-scroll]"
+    field = "[data-client-id='office'] input[data-vertical-scroll]"
+    page.wait_for_selector("[data-client-id='den']")
+    for client_id in ("office", "den"):
+        page.click(f"[data-client-id='{client_id}'] button[data-panel='settings']")
     page.wait_for_selector(field)
     page.fill(field, "0.5")
-    page.click("tr[data-client-id='office'] .vertical-scroll button:text('Save')")
+    page.click("[data-client-id='office'] .vertical-scroll button:text('Save')")
     page.wait_for_selector("#notice.ok")
     assert env["store"].vertical_speed_adjustment("office") == 0.5
-    page.wait_for_function("document.querySelector(\"tr[data-client-id='office']\").textContent.includes('own +0.50')")
-    assert "global +0.00" in page.inner_text("tr[data-client-id='den']")
-    page.click("tr[data-client-id='office'] button:text('Use global')")
-    page.wait_for_function("!document.querySelector(\"tr[data-client-id='office']\").textContent.includes('own +0.50')")
+    page.wait_for_function("document.querySelector(\"[data-client-id='office']\").textContent.includes('own +0.50')")
+    assert "global +0.00" in page.inner_text("[data-client-id='den']")
+    page.click("[data-client-id='office'] button:text('Use global')")
+    page.wait_for_function("!document.querySelector(\"[data-client-id='office']\").textContent.includes('own +0.50')")
     assert env["store"].vertical_speed_adjustment("office") is None
 
 
@@ -722,7 +728,10 @@ def test_browser_clients_page_sets_a_weather_location(live_server, browser, env,
     publish_registry(env, [caps("office"), caps("den")])
     page = browser.new_page(viewport={"width": 1600, "height": 700})
     page.goto(f"{live_server}/clients")
-    row = "tr[data-client-id='office']"
+    row = "[data-client-id='office']"
+    page.wait_for_selector("[data-client-id='den']")
+    for client_id in ("office", "den"):
+        page.click(f"[data-client-id='{client_id}'] button[data-panel='settings']")
     page.wait_for_selector(f"{row} input[data-location='latitude']")
     assert page.get_attribute(f"{row} input[data-location='latitude']", "placeholder") == "41.8781"
     page.fill(f"{row} input[data-location='latitude']", "40.7128")
@@ -731,7 +740,7 @@ def test_browser_clients_page_sets_a_weather_location(live_server, browser, env,
     page.wait_for_selector("#notice.ok")
     assert env["store"].location("office").scope == "loc-40.7128_-74.0060"
     page.wait_for_function(f"document.querySelector(\"{row}\").textContent.includes('weather at 40.7128, -74.0060')")
-    assert "weather at server location 41.8781, -87.6298" in page.inner_text("tr[data-client-id='den']")
+    assert "weather at server location 41.8781, -87.6298" in page.inner_text("[data-client-id='den']")
     page.click(f"{row} button:text(\"Use server's\")")
     page.wait_for_function(f"!document.querySelector(\"{row}\").textContent.includes('weather at 40.7128')")
     assert env["store"].location("office") is None
@@ -997,13 +1006,14 @@ def test_browser_update_and_restart_buttons(live_server, browser, env):
     page = browser.new_page()
     page.on("dialog", lambda dialog: dialog.accept())
     page.goto(f"{live_server}/clients")
-    update = "tr[data-client-id='office'] button[data-command='update']"
+    update = "[data-client-id='office'] button[data-command='update']"
+    page.click("[data-client-id='office'] button[data-panel='maintenance']")
     page.wait_for_selector(update)
     page.click(update)
     page.wait_for_selector("#notice.ok")
     assert "update queued" in page.inner_text("#notice")
     page.wait_for_selector(f"{update}[disabled]")
-    assert "waiting for the display" in page.inner_text("tr[data-client-id='office']")
+    assert "waiting for the display" in page.inner_text("[data-client-id='office']")
     store = env["app"].extensions["desk_display_client_commands"]
     [command] = store.for_client("office")
     assert command["action"] == "update" and command["state"] == "pending"

@@ -32,21 +32,21 @@
     }
     h1 {
       text-align: center;
-      margin: 0 0 0.5rem;
-      font-size: clamp(1.8rem, 3vw, 2.6rem);
+      margin: 0 0 0.35rem;
+      font-size: clamp(1.4rem, 2.6vw, 1.9rem);
     }
     .subtitle {
       text-align: center;
       color: #94a3b8;
-      margin-bottom: 1.5rem;
-      font-size: 0.95rem;
+      margin-bottom: 0.9rem;
+      font-size: 0.9rem;
     }
     .nav-links {
       display: flex;
       justify-content: center;
-      gap: 0.75rem;
+      gap: 0.6rem;
       flex-wrap: wrap;
-      margin: 0 auto 1.5rem;
+      margin: 0 auto 1.1rem;
     }
     .nav-links a {
       color: #e2e8f0;
@@ -57,15 +57,16 @@
       background: rgba(15, 23, 42, 0.65);
       font-size: 0.85rem;
     }
+    .nav-links a[aria-current="page"] { border-color: #38bdf8; }
     .service-indicator {
-      max-width: 1100px;
-      margin: 0 auto 1rem;
-      padding: 0.65rem 0.9rem;
-      border-radius: 12px;
-      border: 1px solid rgba(148, 163, 184, 0.35);
+      max-width: 1400px;
+      margin: 0 auto 0.75rem;
+      padding: 0.45rem 0.8rem;
+      border-radius: 10px;
+      border: 1px solid rgba(148, 163, 184, 0.3);
       background: rgba(15, 23, 42, 0.65);
       color: #cbd5f5;
-      font-size: 0.88rem;
+      font-size: 0.82rem;
     }
     .service-indicator.is-inactive {
       border-color: rgba(245, 158, 11, 0.7);
@@ -76,64 +77,62 @@
       color: #fecaca;
     }
     .panel {
-      max-width: 1100px;
-      margin: 0 auto;
+      max-width: 1400px;
+      margin: 0 auto 0.75rem;
       background: var(--panel-bg);
-      border-radius: 20px;
+      border-radius: 16px;
       border: 1px solid var(--panel-border);
       box-shadow: var(--panel-shadow);
-      padding: clamp(1.25rem, 2.5vw, 2rem);
-      backdrop-filter: blur(12px);
+      padding: 0 clamp(0.8rem, 2vw, 1.4rem) clamp(0.8rem, 2vw, 1.4rem);
     }
     .diagnostic-controls {
-      max-width: 1100px;
-      margin: 0 auto 1rem;
-      padding: 1rem;
-      border: 1px solid rgba(56, 189, 248, 0.45);
-      border-radius: 14px;
-      background: rgba(14, 116, 144, 0.14);
+      max-width: 1400px;
+      margin: 0 auto 0.75rem;
+      padding: 0.55rem 0.9rem;
+      border: 1px solid rgba(56, 189, 248, 0.35);
+      border-radius: 12px;
+      background: rgba(14, 116, 144, 0.12);
+      font-size: 0.88rem;
     }
-    .diagnostic-controls h2 { margin: 0 0 0.35rem; font-size: 1.05rem; }
-    .diagnostic-controls p { margin: 0 0 0.75rem; color: #cbd5e1; font-size: 0.88rem; }
+    .diagnostic-controls summary { cursor: pointer; font-weight: 700; }
+    .diagnostic-controls summary .summary-note { font-weight: 400; color: #94a3b8; margin-left: 0.4rem; }
+    .diagnostic-controls p { margin: 0.5rem 0 0.6rem; color: #cbd5e1; font-size: 0.85rem; }
+    .diagnostic-controls h2 { margin: 0 0 0.25rem; font-size: 0.95rem; }
+    .server-mode-note p { margin: 0; }
     .server-mode-note a { color: inherit; }
     .diagnostic-actions { display: flex; gap: 0.6rem; flex-wrap: wrap; }
     .diagnostic-actions select { flex: 1 1 280px; padding: var(--field-padding); border-radius: var(--field-radius); }
-    .toolbar,
-    .footer-actions {
+    .toolbar {
+      position: sticky;
+      top: 0;
+      z-index: 20;
       display: flex;
-      justify-content: space-between;
       align-items: center;
-      gap: 1rem;
+      gap: 0.6rem;
       flex-wrap: wrap;
-      margin-bottom: 1rem;
+      padding: 0.7rem 0;
+      background: #0f172a;
+      border-bottom: 1px solid rgba(148, 163, 184, 0.15);
+      margin-bottom: 0.8rem;
     }
-    .actions {
-      display: flex;
-      gap: 0.75rem;
-      flex-wrap: wrap;
-    }
+    .toolbar .spacer { flex: 1; }
     .toolbar .status {
       color: #94a3b8;
-      font-size: 0.9rem;
+      font-size: 0.85rem;
     }
+    .toolbar .status.dirty { color: #fde68a; }
     .btn {
       border: none;
       border-radius: 999px;
-      padding: 0.6rem 1.4rem;
+      padding: 0.5rem 1.2rem;
       font-weight: 700;
       cursor: pointer;
       background: #38bdf8;
       color: #0f172a;
-      transition: transform 0.2s ease, box-shadow 0.2s ease;
-      box-shadow: 0 12px 30px rgba(56, 189, 248, 0.3);
-    }
-    .btn:hover {
-      transform: translateY(-1px);
     }
     .btn:disabled {
       cursor: not-allowed;
       opacity: 0.6;
-      box-shadow: none;
     }
     .error {
       display: none;
@@ -146,86 +145,71 @@
       font-weight: 600;
       font-size: 0.9rem;
     }
-    .quad-controls {
-      display: grid;
-      gap: 0.75rem;
-      margin-bottom: 1rem;
-    }
-    .quad-controls .field label {
-      display: block;
-      font-size: 0.75rem;
-      color: #94a3b8;
-      margin-bottom: 0.3rem;
-      text-transform: uppercase;
-      letter-spacing: 0.08em;
-      font-weight: 700;
-    }
-    .quad-controls select {
-      width: 100%;
-      padding: var(--field-padding);
-      border-radius: var(--field-radius);
-      border: 1px solid var(--field-border);
-      background: var(--field-bg);
-      color: #e2e8f0;
-      font-size: 0.95rem;
-    }
-    .quad-pages-actions {
-      display: flex;
-      align-items: center;
-      gap: 0.75rem;
-      flex-wrap: wrap;
-    }
-    .quad-pages {
-      display: grid;
-      gap: 0.75rem;
-    }
-    .quad-page {
-      border: 1px solid rgba(148, 163, 184, 0.2);
-      background: rgba(15, 23, 42, 0.6);
-      border-radius: 14px;
-      padding: 0.75rem;
-      display: grid;
-      gap: 0.6rem;
-    }
-    .quad-page-header {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      color: #cbd5e1;
-      font-size: 0.85rem;
-      font-weight: 700;
-    }
-    .quad-page-grid {
-      display: grid;
-      grid-template-columns: repeat(4, minmax(160px, 1fr));
-      gap: 0.6rem;
-    }
     .btn-secondary {
       border: 1px solid rgba(148, 163, 184, 0.4);
       background: rgba(15, 23, 42, 0.8);
       color: #e2e8f0;
-      padding: 0.35rem 0.9rem;
+      padding: 0.4rem 0.9rem;
       border-radius: 999px;
-      font-size: 0.8rem;
+      font-size: 0.82rem;
       font-weight: 600;
       cursor: pointer;
+      text-decoration: none;
     }
     .btn-secondary:hover {
       background: rgba(56, 189, 248, 0.2);
       border-color: rgba(56, 189, 248, 0.6);
     }
-    @media (max-width: 900px) {
-      .global-scroll-controls {
-        grid-template-columns: 1fr;
-      }
+    .btn-secondary:disabled { opacity: 0.6; cursor: not-allowed; }
+    .file-actions { position: relative; }
+    .file-actions > summary { list-style: none; }
+    .file-actions > summary::-webkit-details-marker { display: none; }
+    .file-actions-menu {
+      position: absolute;
+      right: 0;
+      top: calc(100% + 6px);
+      z-index: 25;
+      display: grid;
+      gap: 0.45rem;
+      padding: 0.7rem;
+      min-width: 15rem;
+      border-radius: 12px;
+      border: 1px solid rgba(148, 163, 184, 0.35);
+      background: #0f172a;
+      box-shadow: 0 16px 40px rgba(2, 6, 23, 0.7);
     }
+    .file-actions-menu .menu-row { display: flex; gap: 0.4rem; }
+    .file-actions-menu select { flex: 1; }
+    .file-actions-menu .menu-note { color: #94a3b8; font-size: 0.75rem; margin: 0; }
+    .global-scroll-controls {
+      display: flex;
+      align-items: center;
+      gap: 0.4rem 0.8rem;
+      flex-wrap: wrap;
+      margin-bottom: 0.8rem;
+      padding: 0.55rem 0.75rem;
+      border-radius: 10px;
+      background: rgba(30, 41, 59, 0.5);
+      font-size: 0.85rem;
+    }
+    .global-scroll-controls label { font-weight: 600; }
+    .global-scroll-controls input {
+      width: 6rem;
+      padding: 0.3rem 0.5rem;
+      border-radius: 8px;
+      border: 1px solid var(--field-border);
+      background: var(--field-bg);
+      color: #e2e8f0;
+    }
+    .global-scroll-controls .hint { color: #94a3b8; font-size: 0.8rem; flex: 1 1 320px; }
+    .config-path { color: #64748b; font-size: 0.75rem; margin: 0.8rem 0 0; }
   </style>
 </head>
 <body>
   <h1>Screen Rotation Configuration</h1>
   <div class="subtitle">Drag to reorder screens, then set frequency and alternates.</div>
   <nav class="nav-links">
-    <a href="/">Rotation Config</a>
+    <a href="/" aria-current="page">Rotation Config</a>
     <a href="/screenshots">Screenshots</a>
     <a href="/feed">Feed</a>
     <a href="/playlists">Playlists</a>
@@ -245,8 +229,8 @@
     <p>Displays play the playlists on the <a href="/playlists">Playlists</a> page, assigned on the <a href="/clients">Clients</a> page. The screen order, frequencies and alternates here are the standalone rotation: nothing plays them on this server, but "Create from current rotation" on the Playlists page starts a playlist from them. Scroll speeds, quad pages and screen styles saved here do apply to every display.</p>
   </section>
   {% else %}
-  <section class="diagnostic-controls" aria-labelledby="diagnosticHeading">
-    <h2 id="diagnosticHeading">Single-screen diagnostic playback</h2>
+  <details class="diagnostic-controls" aria-labelledby="diagnosticHeading"{% if diagnostic_screen %} open{% endif %}>
+    <summary id="diagnosticHeading">Single-screen diagnostic playback<span class="summary-note">{% if diagnostic_screen %}looping {{ diagnostic_screen }}{% else %}off{% endif %}</span></summary>
     <p id="diagnosticStatus">{% if diagnostic_screen %}Web playback request: <strong>{{ diagnostic_screen }}</strong>.{% else %}No web playback request; normal rotation is requested.{% endif %} Changes take effect after the current screen finishes. A fixed command-line or environment selection takes precedence.</p>
     <div class="diagnostic-actions">
       <select id="diagnosticScreen" aria-label="Screen to diagnose">
@@ -256,58 +240,49 @@
       <button class="btn" id="startDiagnosticBtn" type="button">Loop selected screen</button>
       <button class="btn-secondary" id="stopDiagnosticBtn" type="button">Resume rotation</button>
     </div>
-  </section>
+  </details>
   {% endif %}
 
   <div class="panel">
-    <div class="toolbar">
-      <div class="status">Editing: {{ config_path }}</div>
-      <div class="actions">
-        <button class="btn" id="saveBtn">Save changes</button>
-        <select id="defaultConfigSelect" class="btn-secondary" aria-label="Default configuration size">
-          <option value="large">Large defaults</option>
-          <option value="small">Small defaults</option>
-        </select>
-        <button class="btn" id="loadDefaultsBtn" type="button">Load selected defaults</button>
-        <button class="btn" id="exportBtn" type="button">Export configuration</button>
-        <button class="btn" id="importBtn" type="button">Import configuration</button>
-        <a class="btn-secondary" href="{{ url_for('screen_screenshots') }}">View screenshots</a>
-      </div>
+    <div class="toolbar" id="configToolbar">
+      <button class="btn" id="saveBtn">Save changes</button>
+      <span class="status" id="dirtyState">No unsaved changes.</span>
+      <span class="spacer"></span>
+      <a class="btn-secondary" href="{{ url_for('screen_screenshots') }}">View screenshots</a>
+      <details class="file-actions" id="fileActions">
+        <summary class="btn-secondary">Defaults, import &amp; export ▾</summary>
+        <div class="file-actions-menu">
+          <div class="menu-row">
+            <select id="defaultConfigSelect" class="btn-secondary" aria-label="Default configuration size">
+              <option value="large">Large defaults</option>
+              <option value="small">Small defaults</option>
+            </select>
+            <button class="btn-secondary" id="loadDefaultsBtn" type="button">Load</button>
+          </div>
+          <p class="menu-note">Loading defaults replaces the editor contents; nothing is saved until you press Save changes.</p>
+          <button class="btn-secondary" id="exportBtn" type="button">Export configuration</button>
+          <button class="btn-secondary" id="importBtn" type="button">Import configuration</button>
+        </div>
+      </details>
     </div>
     <div class="error" id="errorBox"></div>
     <div class="global-scroll-controls">
-      <div class="field">
-        <label for="verticalSpeedAdjustment">Synchronized vertical scroll adjustment</label>
-        <input
-          type="number"
-          id="verticalSpeedAdjustment"
-          min="-0.9"
-          max="3"
-          step="0.05"
-          value="{{ scroll_settings.vertical_speed_adjustment }}"
-        >
-      </div>
-      <div class="hint">
-        Device-wide fractional adjustment for standings, scoreboards, On This Day,
-        schedules, and playoffs. 0 is unchanged, 0.25 is 25% faster, and -0.25 is
-        25% slower. Horizontal tickers and logo animations are unaffected.
-        On a render server this is the default for every display; give one display
-        its own value on the Clients page.
+      <label for="verticalSpeedAdjustment">Synchronized vertical scroll adjustment</label>
+      <input
+        type="number"
+        id="verticalSpeedAdjustment"
+        min="-0.9"
+        max="3"
+        step="0.05"
+        value="{{ scroll_settings.vertical_speed_adjustment }}"
+      >
+      <div class="hint" title="Horizontal tickers and logo animations are unaffected. On a render server this is the default for every display; give one display its own value on the Clients page.">
+        Speeds up or slows standings, scoreboards, On This Day, schedules and playoffs: 0.25 is 25% faster,
+        -0.25 is 25% slower. On a render server each display can override it on the Clients page.
       </div>
     </div>
     {% include "_rotation_editor.html" %}
-    <div class="footer-actions">
-      <div class="actions">
-        <button class="btn" id="saveBtnBottom">Save changes</button>
-        <select id="defaultConfigSelectBottom" class="btn-secondary" aria-label="Default configuration size">
-          <option value="large">Large defaults</option>
-          <option value="small">Small defaults</option>
-        </select>
-        <button class="btn" id="loadDefaultsBtnBottom" type="button">Load selected defaults</button>
-        <button class="btn" id="exportBtnBottom" type="button">Export configuration</button>
-        <button class="btn" id="importBtnBottom" type="button">Import configuration</button>
-      </div>
-    </div>
+    <p class="config-path">Editing: {{ config_path }}</p>
   </div>
 
   <input type="file" id="importFile" accept="application/json" hidden>
@@ -322,13 +297,10 @@
     const defaultConfigSelect = document.getElementById("defaultConfigSelect");
     const exportBtn = document.getElementById("exportBtn");
     const importBtn = document.getElementById("importBtn");
-    const saveBtnBottom = document.getElementById("saveBtnBottom");
-    const loadDefaultsBtnBottom = document.getElementById("loadDefaultsBtnBottom");
-    const defaultConfigSelectBottom = document.getElementById("defaultConfigSelectBottom");
-    const exportBtnBottom = document.getElementById("exportBtnBottom");
-    const importBtnBottom = document.getElementById("importBtnBottom");
     const importFileInput = document.getElementById("importFile");
     const errorBox = document.getElementById("errorBox");
+    const dirtyState = document.getElementById("dirtyState");
+    const fileActions = document.getElementById("fileActions");
     const draftStorageKey = "screen-config-draft";
     const playlistStorageKey = "screen-config-playlists";
     const selectableScreenIds = {{ screen_ids|tojson }};
@@ -381,6 +353,7 @@
       onChange: markDirty,
       onStateChange: savePlaylistState,
       onError: showError,
+      stickyOffsetElement: document.getElementById("configToolbar"),
     });
 
     function clampNumber(value, fallback, min, max) {
@@ -437,11 +410,6 @@
         defaultConfigSelect,
         exportBtn,
         importBtn,
-        saveBtnBottom,
-        loadDefaultsBtnBottom,
-        defaultConfigSelectBottom,
-        exportBtnBottom,
-        importBtnBottom,
       ].forEach((btn) => {
         if (btn) btn.disabled = disabled;
       });
@@ -544,15 +512,22 @@
       sessionStorage.removeItem(draftStorageKey);
     }
 
+    function showDirtyState() {
+      dirtyState.textContent = isDirty ? "Unsaved changes." : "No unsaved changes.";
+      dirtyState.classList.toggle("dirty", isDirty);
+    }
+
     function markDirty() {
       if (!isDirty) {
         isDirty = true;
+        showDirtyState();
       }
       saveDraft();
     }
 
     function markClean() {
       isDirty = false;
+      showDirtyState();
       clearDraft();
     }
 
@@ -627,19 +602,14 @@
     }
 
     function selectedDefaultProfile() {
-      return defaultConfigSelect?.value || defaultConfigSelectBottom?.value || "large";
-    }
-
-    function syncDefaultProfileSelects(value) {
-      if (defaultConfigSelect) defaultConfigSelect.value = value;
-      if (defaultConfigSelectBottom) defaultConfigSelectBottom.value = value;
+      return defaultConfigSelect?.value || "large";
     }
 
     async function loadDefaults() {
       clearError();
       setButtonsDisabled(true);
       const profile = selectedDefaultProfile();
-      syncDefaultProfileSelects(profile);
+      fileActions.open = false;
       try {
         const response = await fetch(`/api/screens/defaults?profile=${encodeURIComponent(profile)}`);
         const data = await response.json();
@@ -729,19 +699,20 @@
     if (stopDiagnosticBtn) stopDiagnosticBtn.addEventListener("click", () => setDiagnosticPlayback(null));
 
     saveBtn.addEventListener("click", saveConfiguration);
-    saveBtnBottom.addEventListener("click", saveConfiguration);
-    defaultConfigSelect?.addEventListener("change", () => syncDefaultProfileSelects(defaultConfigSelect.value));
-    defaultConfigSelectBottom?.addEventListener("change", () => syncDefaultProfileSelects(defaultConfigSelectBottom.value));
     loadDefaultsBtn.addEventListener("click", loadDefaults);
-    loadDefaultsBtnBottom.addEventListener("click", loadDefaults);
-    exportBtn.addEventListener("click", exportConfiguration);
-    exportBtnBottom.addEventListener("click", exportConfiguration);
+    exportBtn.addEventListener("click", () => {
+      fileActions.open = false;
+      exportConfiguration();
+    });
     if (importBtn && importFileInput) {
-      importBtn.addEventListener("click", () => importFileInput.click());
+      importBtn.addEventListener("click", () => {
+        fileActions.open = false;
+        importFileInput.click();
+      });
     }
-    if (importBtnBottom && importFileInput) {
-      importBtnBottom.addEventListener("click", () => importFileInput.click());
-    }
+    document.addEventListener("click", (event) => {
+      if (fileActions.open && !fileActions.contains(event.target)) fileActions.open = false;
+    });
     if (importFileInput) {
       importFileInput.addEventListener("change", async (event) => {
         const file = event.target.files?.[0];
@@ -785,6 +756,7 @@
               applyScrollSettings(draft.scroll);
             }
             isDirty = true;
+            showDirtyState();
           } else {
             clearDraft();
           }
