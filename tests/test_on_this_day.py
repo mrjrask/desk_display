@@ -623,3 +623,32 @@ def test_on_this_day_build_sections_persists_to_disk(tmp_path, monkeypatch):
     payload = json.loads(cache_path.read_text())
     assert payload["date"] == today.isoformat()
     assert otd._sections_from_jsonable(payload["sections"]) == sections
+
+
+def test_on_this_day_strips_emoji_the_body_font_cannot_draw():
+    item = otd.DayItem(
+        None,
+        "Jewish holiday: \U0001F33F\U0001F34B Sukkot IV (CH’’M): Feast of Booths.",
+    )
+
+    lines = otd._item_lines(item, 10_000)
+
+    assert lines == ["Jewish holiday: Sukkot IV (CH’’M): Feast of Booths."]
+
+
+def test_on_this_day_renders_hebcal_emoji_without_tofu_boxes(monkeypatch):
+    otd._clear_caches_for_tests()
+    plain = [otd.DayItem(None, "Jewish holiday: Sukkot IV (CH’’M).")]
+    emoji = [
+        otd.DayItem(
+            None, "Jewish holiday: \U0001F33F\U0001F34B Sukkot IV (CH’’M)."
+        )
+    ]
+
+    def render(items):
+        monkeypatch.setattr(
+            otd, "_build_sections", lambda today: {"🎉 Holidays & Culture": items}
+        )
+        return otd._render_full_image_uncached(dt.date(2026, 9, 29)).tobytes()
+
+    assert render(emoji) == render(plain)

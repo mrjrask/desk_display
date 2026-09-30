@@ -35,6 +35,7 @@ from utils import (
     clone_font,
     measure_text,
     scroll_vertical_content,
+    strip_unrenderable,
     wrap_text,
 )
 
@@ -143,7 +144,7 @@ def _display_label(label: str) -> str:
     """Return text that is safe for non-emoji fonts on small displays."""
 
     cleaned = _EMOJI_PREFIX_RE.sub("", label).strip()
-    return _SECTION_LABELS.get(cleaned, cleaned or label)
+    return strip_unrenderable(_SECTION_LABELS.get(cleaned, cleaned or label), SECTION_FONT)
 
 
 @dataclass(frozen=True)
@@ -883,6 +884,12 @@ def _item_text_layout(
     return text_x, max(20, card_right - 8 - text_x)
 
 
+def _item_lines(item: DayItem, text_width: int) -> list[str]:
+    """Wrap an item's body, dropping glyphs the body font can't draw (emoji)."""
+
+    return wrap_text(strip_unrenderable(item.text, BODY_FONT), BODY_FONT, text_width)
+
+
 def _estimate_height(
     draw: ImageDraw.ImageDraw,
     sections: dict[str, list[DayItem]],
@@ -906,7 +913,7 @@ def _estimate_height(
             _, text_width = _item_text_layout(
                 draw, item, card_left, card_right, thumb_size
             )
-            lines = wrap_text(item.text, BODY_FONT, text_width)
+            lines = _item_lines(item, text_width)
             card_h = max(42, len(lines) * line_h + 18)
             y += card_h + 7
         y += 6
@@ -953,7 +960,7 @@ def _render_full_image_uncached(today: dt.date) -> Image.Image:
         for item in items:
             card_top = y
             text_x, text_width = _item_text_layout(draw, item, pad, W - pad, thumb_size)
-            lines = wrap_text(item.text, BODY_FONT, text_width)
+            lines = _item_lines(item, text_width)
             line_h = measure_text(draw, "Ag", BODY_FONT)[1] + 3
             card_h = max(42, len(lines) * line_h + 18)
             _rounded(
