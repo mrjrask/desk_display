@@ -1,5 +1,11 @@
 import datetime
+import json
+import os
+import subprocess
+import sys
+from pathlib import Path
 
+import pytest
 from PIL import Image, ImageDraw
 
 from config import CENTRAL_TIME
@@ -39,6 +45,8 @@ def test_astronomical_layout_handles_supported_display_profiles():
     assert hyperpixel_square["compact"] is False
     # Rise/Set sit together instead of spreading down the tall columns.
     assert hyperpixel_square["group_rows"] is True
+    assert hyperpixel_square["coords_below"] is True
+    assert hyperpixel["coords_below"] is False
 
     # miniTFT
     minipitft = _astronomical_layout_details(240, 135)
@@ -196,3 +204,46 @@ def test_astronomical_layout_groups_rows_on_1080p_hdmi():
     # Jason: on 1920x1080 Rise and Set sat far apart; keep them together there.
     assert _astronomical_layout_details(1920, 1080)["group_rows"] is True
     assert _astronomical_layout_details(800, 480)["group_rows"] is False
+
+
+_COORDS_PROBE = """
+import json, os, sys
+os.environ["CONFIG_LOAD_DOTENV"] = "0"
+for name in ("WEATHER_LATITUDE", "WEATHER_LONGITUDE"):
+    os.environ.pop(name, None)
+from screens.draw_weather import draw_weather_astronomical
+weather = {
+    "daily": [{"sunrise": "2026-09-30T06:50:00-05:00", "sunset": "2026-09-30T18:40:00-05:00",
+               "moonPhase": 0.1}],
+    "location": {"latitude": 41.9037, "longitude": -87.6357},
+}
+img = draw_weather_astronomical(None, weather).image
+coord = (132, 149, 180)
+rows = [y for y in range(img.height) if any(img.getpixel((x, y)) == coord for x in range(img.width))]
+print(json.dumps({"size": img.size, "rows": [min(rows), max(rows)] if rows else None}))
+"""
+
+
+@pytest.mark.parametrize("profile_id", ["hyperpixel4_square", "hyperpixel4"])
+def test_sun_and_moon_shows_the_coordinates_on_hyperpixel_panels(profile_id):
+    from display_profiles import PROFILE_PRESETS
+    from rendering.profile_process import composition_env
+
+    root = Path(__file__).resolve().parents[1]
+    env = dict(os.environ)
+    for name, value in composition_env(PROFILE_PRESETS[profile_id]).items():
+        if value is None:
+            env.pop(name, None)
+        else:
+            env[name] = value
+    result = subprocess.run([sys.executable, "-c", _COORDS_PROBE], cwd=root, env=env, check=True,
+                            capture_output=True, text=True, timeout=120)
+    drawn = json.loads(result.stdout.strip().splitlines()[-1])
+    width, height = drawn["size"]
+    assert drawn["rows"], f"{profile_id}: coordinates not drawn"
+    top, bottom = drawn["rows"]
+    if height >= width:
+        # The square panel's title leaves no room beside it: a line under the cards.
+        assert top > height - 40
+    else:
+        assert bottom < 60
