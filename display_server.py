@@ -50,7 +50,7 @@ import logging
 import os
 import threading
 import time
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
@@ -76,7 +76,7 @@ from remote_display.client_commands import (
     parse_heartbeat_commands,
 )
 from remote_display.manifest import build_client_manifest, referenced_hashes
-from remote_display.render_coordinator import RenderCoordinator, Renderer, RevisionSource
+from remote_display.render_coordinator import RenderCoordinator, Renderer, RevisionSource, ScopedRevisionSource
 from remote_display.models import (
     ClientCapabilities,
     ClientDemand,
@@ -86,7 +86,8 @@ from remote_display.models import (
     UnsupportedCapabilitiesError,
     identifier,
 )
-from remote_display.playlist_store import PlaylistStore, registry_snapshot_path, store_path
+from remote_display.locations import Location, location_screens, scoped_values, screen_scopes
+from remote_display.playlist_store import PlaylistStore, PlaylistStoreError, registry_snapshot_path, store_path
 from remote_display import registration
 from remote_display.provisioning import (
     InvalidJoinCodeError,
@@ -248,6 +249,9 @@ def create_app(
     playlist_documents: Callable[[str, str], Mapping[str, Any] | None] | None = None,
     display_status: Callable[[], Mapping[str, Any]] | None = None,
     vertical_speed_adjustments: Callable[[str], float | None] | None = None,
+    client_locations: Callable[[], Mapping[str, Location]] | None = None,
+    scoped_revisions: ScopedRevisionSource | None = None,
+    located_display_status: Callable[[Location], Mapping[str, Any]] | None = None,
 ) -> Flask:
     """Build the API.
 
@@ -261,12 +265,31 @@ def create_app(
     heartbeat response carries for the client's side displays.
     ``vertical_speed_adjustments(client_id)`` returns a display's own
     vertical scroll adjustment (set on the Clients page), which its manifest
-    carries, or None to keep the global one.
+    carries, or None to keep the global one.  ``client_locations()`` returns
+    the displays that have their own weather location (also set on the
+    Clients page); their weather and astronomy screens are rendered once per
+    location with revisions from ``scoped_revisions``, and their heartbeat
+    feed summary comes from ``located_display_status(location)``.
     """
 
     config = config or DisplayServerConfig.from_env()
     if vertical_speed_adjustments is None and config.playlist_store_path is not None:
         vertical_speed_adjustments = PlaylistStore(config.playlist_store_path).vertical_speed_adjustment
+    if client_locations is None and config.playlist_store_path is not None:
+        client_locations = PlaylistStore(config.playlist_store_path).client_locations
+
+    def location_of(client_id: str) -> Location | None:
+        if client_locations is None:
+            return None
+        try:
+            return client_locations().get(client_id)
+        except (OSError, ValueError, PlaylistStoreError):
+            WEB_LOGGER.warning("Could not read display locations", exc_info=True)
+            return None
+
+    def client_screen_scopes(client_id: str, screens: Iterable[str]) -> Mapping[str, str]:
+        return screen_scopes(location_of(client_id), screens)
+
     if assignments is None and config.playlist_store_path is not None:
         store = PlaylistStore(config.playlist_store_path)
 
@@ -324,8 +347,11 @@ def create_app(
             data_health=data_health,
             executor=render_executor,
             clock=clock,
+            screen_scopes=client_screen_scopes if scoped_revisions is not None else None,
+            scoped_revisions=scoped_revisions,
         )
     app.extensions["desk_display_render_coordinator"] = coordinator
+    app.extensions["desk_display_location_of"] = location_of
 
     def maintenance() -> list[str]:
         """Release references of clients that went away, then collect garbage."""
@@ -519,6 +545,8 @@ def create_app(
             display_profile=record.capabilities.display_profile,
             requested_screens=requested,
             interactive_screens=interactive,
+            screen_scopes=client_screen_scopes(client_id, requested | interactive)
+            if scoped_revisions is not None else None,
             assignment=_assignment_payload(client_id, delivered=True),
             configuration=configuration,
             artifact_url=lambda name: f"/api/v1/clients/{client_id}/artifacts/{name}",
@@ -681,9 +709,10 @@ def create_app(
                 body["commands"] = commands.take_pending(record.client_id)
             except OSError as exc:
                 WEB_LOGGER.warning("Client command store unavailable: %s", exc)
-        if display_status is not None:
+        location = location_of(record.client_id) if located_display_status is not None else None
+        if display_status is not None or location is not None:
             try:
-                summary = display_status()
+                summary = located_display_status(location) if location is not None else display_status()
             except Exception:  # noqa: BLE001 - the heartbeat must not fail over a summary
                 WEB_LOGGER.debug("Display status summary failed", exc_info=True)
             else:
@@ -948,12 +977,16 @@ def run_display_server() -> None:
         DisplayServerConfig.from_env(),
         renderer=rendering.render,
         revisions=rendering.revisions,
+        scoped_revisions=rendering.scoped_revisions,
         data_health=rendering.health,
         display_status=lambda: feed_summary(feeds.data.snapshot().values),
+        located_display_status=lambda location: feed_summary(
+            scoped_values(feeds.data.snapshot().values, location.scope)),
     )
     _start_maintenance(app.extensions["desk_display_maintenance"])
     registry = app.extensions["desk_display_registry"]
-    feeds.start(lambda: {s for entry in registry.demand_entries() for s in entry.demand.all_screens})
+    global_screens, located_screens = demand_by_location(registry, app.extensions["desk_display_location_of"])
+    feeds.start(global_screens, demanded_locations=located_screens)
     app.extensions["desk_display_render_coordinator"].start()
     host, port = settings["DESK_DISPLAY_SERVER_HOST"], settings["DESK_DISPLAY_SERVER_PORT"]
     cert, key = settings["DESK_DISPLAY_SERVER_TLS_CERT"], settings["DESK_DISPLAY_SERVER_TLS_KEY"]
@@ -966,6 +999,32 @@ def run_display_server() -> None:
     from waitress import serve
 
     serve(app, host=host, port=port, threads=8)
+
+
+def demand_by_location(
+    registry: ClientRegistry, location_of: Callable[[str], Location | None]
+) -> tuple[Callable[[], set[str]], Callable[[], dict[Location, set[str]]]]:
+    """Feed demand split by place: the server's own location, and each display's.
+
+    A display with its own location demands its weather screens for that
+    location only, so the server's weather is not fetched for it alone.
+    """
+
+    def split() -> tuple[set[str], dict[Location, set[str]]]:
+        located = location_screens()
+        own: set[str] = set()
+        places: dict[Location, set[str]] = {}
+        for entry in registry.demand_entries():
+            screens = set(entry.demand.all_screens)
+            location = location_of(entry.client_id)
+            if location is None:
+                own |= screens
+                continue
+            own |= screens - located
+            places.setdefault(location, set()).update(screens & located)
+        return own, places
+
+    return (lambda: split()[0]), (lambda: split()[1])
 
 
 def _start_maintenance(maintenance: Callable[[], list[str]]) -> threading.Thread:

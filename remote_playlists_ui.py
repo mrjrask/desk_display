@@ -39,6 +39,7 @@ from deployment_config import Role
 from display_profiles import PROFILE_PRESETS
 from remote_display import registration
 from remote_display.client_commands import ACTIONS, CommandError, CommandStore, commands_path
+from remote_display.locations import Location, LocationError
 from remote_display.models import ModelValidationError, identifier
 from remote_display.playlist_store import (
     MAX_NAME_LENGTH,
@@ -155,6 +156,26 @@ def capability_warnings(document: Mapping[str, Any], client: Mapping[str, Any]) 
     if versions and 1 not in versions:
         warn("package_version", "client supports no render package version this server produces", "error")
     return warnings
+
+
+def _location_payload(value: Any) -> dict[str, float] | None:
+    if not isinstance(value, dict):
+        return None
+    try:
+        location = Location.parse(value.get("latitude"), value.get("longitude"))
+    except LocationError:
+        return None
+    return None if location is None else location.as_dict()
+
+
+def _global_location() -> dict[str, float] | None:
+    """The server's WEATHER_LATITUDE / WEATHER_LONGITUDE, when set and valid."""
+
+    try:
+        location = Location.parse(os.environ.get("WEATHER_LATITUDE"), os.environ.get("WEATHER_LONGITUDE"))
+    except LocationError:
+        return None
+    return None if location is None else location.as_dict()
 
 
 def register(
@@ -301,6 +322,8 @@ def register(
                 "friendly_name": (data["clients"].get(client_id) or {}).get("friendly_name"),
                 # This display's own vertical scroll adjustment; None uses the global one.
                 "vertical_speed_adjustment": (data["clients"].get(client_id) or {}).get("vertical_speed_adjustment"),
+                # This display's own weather location; None uses the server's.
+                "location": _location_payload((data["clients"].get(client_id) or {}).get("location")),
                 "kind": "static" if entry.get("static") else "dynamic",
                 "state": state,
                 "display_profile": caps.get("display_profile"),
@@ -526,6 +549,7 @@ def register(
             "generated_at": _iso_now(),
             "clients": client_rows(),
             "global_vertical_speed_adjustment": _global_vertical_speed_adjustment(),
+            "global_location": _global_location(),
             "playlists": [{"id": p["id"], "name": p["name"], "revision": p["revision"]}
                           for p in sorted(data["playlists"].values(), key=lambda p: p["name"].lower())],
         })
@@ -684,6 +708,21 @@ def register(
             client_id, payload.get("vertical_speed_adjustment"), actor=actor())
         return respond({"client_id": client_id, "vertical_speed_adjustment": adjustment,
                         "global_vertical_speed_adjustment": _global_vertical_speed_adjustment()})
+
+    @blueprint.put("/api/clients/<client_id>/location")
+    def client_location(client_id: str):
+        """Set or clear (both blank) one display's own weather location."""
+
+        payload = body()
+        known = {row["client_id"] for row in client_rows()}
+        client_id = identifier(client_id, "client_id")
+        if client_id not in known:
+            return jsonify({"error": "unknown_client", "message": "no client with this ID"}), 404
+        location = _store().set_location(client_id, payload.get("latitude"), payload.get("longitude"),
+                                         actor=actor())
+        return respond({"client_id": client_id,
+                        "location": None if location is None else location.as_dict(),
+                        "global_location": _global_location()})
 
     @blueprint.put("/api/clients/<client_id>/name")
     def name_client(client_id: str):

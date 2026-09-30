@@ -165,8 +165,9 @@ BASE_MAP_PROVIDERS = (
     ("osm", "https://tile.openstreetmap.org/{z}/{x}/{y}.png", "\u00a9 OpenStreetMap"),
     ("carto", "https://basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png", "\u00a9 OpenStreetMap \u00a9 CARTO"),
 )
-_BASE_MAP_CACHE: dict[tuple[int, int, int], tuple[float, Image.Image]] = {}
-_RADAR_FRAMES_CACHE: dict[tuple[int, int, int, int], tuple[float, list["RadarFrame"]]] = {}
+_BASE_MAP_CACHE: dict[tuple, tuple[float, Image.Image]] = {}
+_RADAR_FRAMES_CACHE: dict[tuple, tuple[float, list["RadarFrame"]]] = {}
+RadarCenter = Optional[tuple[float, float]]
 
 
 def _copy_radar_frames(frames: list["RadarFrame"]) -> list["RadarFrame"]:
@@ -2059,8 +2060,9 @@ def draw_weather_astronomical(display, weather, transition: bool = False):
     draw.text((title_x, title_y), title, font=title_font, fill=(236, 236, 255))
 
     coord_text = ""
-    if LATITUDE is not None and LONGITUDE is not None and not layout["ultra_compact"]:
-        coord_text = f"{LATITUDE:.2f}, {LONGITUDE:.2f}"
+    latitude, longitude = _weather_location(weather) or (LATITUDE, LONGITUDE)
+    if latitude is not None and longitude is not None and not layout["ultra_compact"]:
+        coord_text = f"{latitude:.2f}, {longitude:.2f}"
         coord_bbox = _safe_textbbox(draw, coord_text, caption_font)
         coord_w = coord_bbox[2] - coord_bbox[0]
         coord_h = coord_bbox[3] - coord_bbox[1]
@@ -2350,6 +2352,21 @@ def draw_weather_screen_2(display, weather, transition=False):
     return ScreenImage(img, displayed=False, led_override=led_color)
 
 
+def _weather_location(weather: Any) -> Optional[tuple[float, float]]:
+    """The place weather was fetched for when it is a display's own location.
+
+    The render server adds ``location`` to such weather (see
+    ``remote_display.locations``); weather for WEATHER_LATITUDE/LONGITUDE has none.
+    """
+    location = weather.get("location") if isinstance(weather, dict) else None
+    if not isinstance(location, dict):
+        return None
+    try:
+        return float(location["latitude"]), float(location["longitude"])
+    except (KeyError, TypeError, ValueError):
+        return None
+
+
 def _latlon_to_tile(lat: float, lon: float, zoom: int) -> tuple[int, int, float, float]:
     lat_rad = math.radians(lat)
     n = 2 ** zoom
@@ -2380,7 +2397,11 @@ class _RadarView(NamedTuple):
         return min(self.width, self.height) / 256.0
 
 
-def _radar_view(zoom: int) -> _RadarView:
+def _radar_view(zoom: int, center: RadarCenter = None) -> _RadarView:
+    if center is not None:
+        # A display with its own location: centre on that place.
+        x_tile, y_tile, x_frac, y_frac = _latlon_to_tile(center[0], center[1], zoom)
+        return _RadarView(zoom, (x_tile + x_frac) * 256.0, (y_tile + y_frac) * 256.0, WIDTH, HEIGHT)
     # Centre on the zoom tile that holds Chicago (not Chicago itself): that is
     # the area the screen has always shown, with the weather coming from the
     # west. Wide displays see more to either side instead of a stretched tile.
@@ -2463,8 +2484,10 @@ def _format_radar_timestamp(timestamp: Optional[int]) -> str:
     return f"{dt.hour % 12 or 12}:{dt:%M %p}"
 
 
-def _fetch_radar_frames(zoom: int = 7, max_frames: int = RADAR_MAX_FRAMES) -> list[RadarFrame]:
-    cache_key = (zoom, max_frames, WIDTH, HEIGHT)
+def _fetch_radar_frames(
+    zoom: int = 7, max_frames: int = RADAR_MAX_FRAMES, center: RadarCenter = None
+) -> list[RadarFrame]:
+    cache_key = (zoom, max_frames, WIDTH, HEIGHT) + ((center,) if center is not None else ())
     now = time.monotonic()
     cached = _RADAR_FRAMES_CACHE.get(cache_key)
     if cached is not None:
@@ -2472,9 +2495,10 @@ def _fetch_radar_frames(zoom: int = 7, max_frames: int = RADAR_MAX_FRAMES) -> li
         if now - fetched_at < RADAR_FRAMES_CACHE_TTL_SECONDS:
             return _copy_radar_frames(cached_frames)
 
-    frames = _fetch_rainviewer_frames(zoom=zoom, max_frames=max_frames)
+    where = {} if center is None else {"center": center}
+    frames = _fetch_rainviewer_frames(zoom=zoom, max_frames=max_frames, **where)
     if not frames:
-        frames = _fetch_iem_radar_fallback_frames(zoom=zoom)
+        frames = _fetch_iem_radar_fallback_frames(zoom=zoom, **where)
     if not frames:
         return []
 
@@ -2489,7 +2513,9 @@ def _fetch_radar_frames(zoom: int = 7, max_frames: int = RADAR_MAX_FRAMES) -> li
     return _copy_radar_frames(result)
 
 
-def _fetch_rainviewer_frames(zoom: int = 7, max_frames: int = RADAR_MAX_FRAMES) -> list[RadarFrame]:
+def _fetch_rainviewer_frames(
+    zoom: int = 7, max_frames: int = RADAR_MAX_FRAMES, center: RadarCenter = None
+) -> list[RadarFrame]:
     metadata = None
     for metadata_url in RAINVIEWER_METADATA_URLS:
         try:
@@ -2518,7 +2544,7 @@ def _fetch_rainviewer_frames(zoom: int = 7, max_frames: int = RADAR_MAX_FRAMES) 
     if not frames:
         return []
 
-    view = _radar_view(zoom)
+    view = _radar_view(zoom, center)
     tile_px = RADAR_TILE_SIZE_LARGE if view.scale > 1.0 else 256
 
     def _fetch_one(frame: Any) -> Optional[RadarFrame]:
@@ -2553,9 +2579,9 @@ def _fetch_rainviewer_frames(zoom: int = 7, max_frames: int = RADAR_MAX_FRAMES) 
     return [frame for frame in results if frame is not None]
 
 
-def _fetch_iem_radar_fallback_frames(zoom: int = 7) -> list[RadarFrame]:
+def _fetch_iem_radar_fallback_frames(zoom: int = 7, center: RadarCenter = None) -> list[RadarFrame]:
     """Fetch free, no-key radar tiles from Iowa State Mesonet as a fallback."""
-    view = _radar_view(zoom)
+    view = _radar_view(zoom, center)
 
     def _fetch_tile(x: int, y: int) -> Optional[Image.Image]:
         url = f"https://mesonet.agron.iastate.edu/cache/tile.py/1.0.0/q2-hsr-900913/{zoom}/{x}/{y}.png"
@@ -2604,13 +2630,13 @@ def _base_map_tile(provider: str, url_template: str, zoom: int, x: int, y: int) 
     return tile
 
 
-def _fetch_base_map(zoom: int = 7) -> Optional[Image.Image]:
+def _fetch_base_map(zoom: int = 7, center: RadarCenter = None) -> Optional[Image.Image]:
     """Return the base map for the radar view, sized to the display.
 
     ``image.info["attribution"]`` names the map source, which its terms
     require on screen.
     """
-    cache_key = (zoom, WIDTH, HEIGHT)
+    cache_key = (zoom, WIDTH, HEIGHT) + ((center,) if center is not None else ())
     now = time.monotonic()
     cached = _BASE_MAP_CACHE.get(cache_key)
     if cached is not None:
@@ -2618,7 +2644,7 @@ def _fetch_base_map(zoom: int = 7) -> Optional[Image.Image]:
         if now - fetched_at < BASE_MAP_CACHE_TTL_SECONDS:
             return cached_image.copy()
 
-    view = _radar_view(zoom)
+    view = _radar_view(zoom, center)
     detail_zoom = _base_map_detail_zoom(view)
     for provider, url_template, attribution in BASE_MAP_PROVIDERS:
         image = _stitch_view(
@@ -2643,8 +2669,11 @@ def _fetch_base_map(zoom: int = 7) -> Optional[Image.Image]:
 def draw_weather_radar(display, weather=None, transition: bool = False):
     background = get_screen_background_color("weather radar", (0, 0, 0))
     zoom_level = 7
-    frames = _fetch_radar_frames(zoom=zoom_level)
-    base_map = _fetch_base_map(zoom=zoom_level)
+    # Weather fetched for a display's own location carries it; centre there.
+    center = _weather_location(weather)
+    where = {} if center is None else {"center": center}
+    frames = _fetch_radar_frames(zoom=zoom_level, **where)
+    base_map = _fetch_base_map(zoom=zoom_level, **where)
     if not frames:
         img = Image.new("RGB", (WIDTH, HEIGHT), background)
         draw = ImageDraw.Draw(img)

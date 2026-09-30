@@ -309,8 +309,8 @@ class DataCoordinator:
         return value
 
     @staticmethod
-    def weather_cache_timestamp() -> datetime | None:
-        return data_fetch.get_weather_cache_timestamp()
+    def weather_cache_timestamp(location: tuple[float, float] | None = None) -> datetime | None:
+        return data_fetch.get_weather_cache_timestamp(location)
 
 
 coordinator = DataCoordinator()

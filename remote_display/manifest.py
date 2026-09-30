@@ -64,6 +64,7 @@ def build_client_manifest(
     requested_screens: Iterable[str],
     interactive_screens: Iterable[str] = (),
     client_specific_screens: Iterable[str] = (),
+    screen_scopes: Mapping[str, str] | None = None,
     assignment: Mapping[str, Any],
     configuration: Mapping[str, Any],
     artifact_url: Callable[[str], str],
@@ -74,6 +75,8 @@ def build_client_manifest(
     ``assignment`` holds ``assignment_state`` and ``assigned_playlist`` as the
     registration response reports them; ``configuration`` holds server-side
     configuration revisions (for example the playlist store revision).
+    ``screen_scopes`` maps screens the client shares with a group (its
+    location's weather screens) to the group's scope.
     """
 
     from rendering.screen_classes import server_renders
@@ -90,7 +93,8 @@ def build_client_manifest(
     states: set[str] = set()
     for role, screens in (("requested", requested), ("interactive_dependency", interactive)):
         for screen in screens:
-            resolved = store.resolve(screen, profile.profile_id, client_id if screen in scoped else None)
+            scope = client_id if screen in scoped else (screen_scopes or {}).get(screen)
+            resolved = store.resolve(screen, profile.profile_id, scope)
             if resolved.state == "unavailable":
                 # Nothing to show right now (no live game): not listed, so
                 # the client skips it, and not missing, since nothing is due.

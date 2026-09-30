@@ -36,6 +36,13 @@ See the README's [deployment modes](README.md#deployment-modes) and
   checkout, or exiting so systemd restarts it) and reports the result, which
   shows in the row (see OPERATIONS.md, "Updating or restarting a client from
   the Clients page").
+- Per-display **weather location** on each row of the Clients page: a display
+  in another place can have its own latitude and longitude instead of the
+  server's `WEATHER_LATITUDE` / `WEATHER_LONGITUDE` (both empty, or **Use
+  server's**, follows the server). The server fetches weather and air quality
+  once per location and renders that location's weather, radar, air quality
+  and Sun & Moon screens once for all displays there (see OPERATIONS.md,
+  "Weather location per display").
 - Per-display **Vertical scroll** adjustment on each row of the Clients page:
   a display can have its own "Synchronized vertical scroll adjustment"
   instead of the Rotation Config page's global value (empty or **Use

@@ -22,6 +22,7 @@ from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass, replace
 from typing import Any
 
+from remote_display.locations import LOCATION_FEEDS, Location, data_key
 from services import feeds
 from services.feed_state import FeedStateFile
 
@@ -45,6 +46,14 @@ _FEED_KEYS: Mapping[str, tuple[str, ...]] = {
 }
 # A feed restores its health from saved state once these keys are saved.
 _RESTORE_KEYS: Mapping[str, tuple[str, ...]] = {**_FEED_KEYS, "nhl_standings": ("nhl_standings",)}
+# Displays with their own location: {location: screens those displays play}.
+LocationDemand = Mapping[Location, Iterable[str]]
+
+
+def _base_feed(feed: str) -> str:
+    """``weather`` for ``weather@loc-…`` (a location's copy of a feed)."""
+
+    return feed.split("@", 1)[0]
 
 
 @dataclass
@@ -130,7 +139,8 @@ class ServerFeedService:
         self._saved = saved
         self.data.restore({key: (entry["value"], entry["source_revision"]) for key, entry in saved.items()})
         now, wall = self._clock(), self._wall_clock()
-        for feed in feeds.SERVER_FEED_DEPENDENCIES:
+        located = [key for key in saved if "@" in key and _base_feed(key) in LOCATION_FEEDS]
+        for feed in [*feeds.SERVER_FEED_DEPENDENCIES, *located]:
             keys = _RESTORE_KEYS.get(feed, (feed,))
             if all(key in saved for key in keys):
                 age = max(0.0, wall - min(saved[key]["saved_at"] for key in keys))
@@ -177,6 +187,7 @@ class ServerFeedService:
     # ── Selection ──────────────────────────────────────────────────────────
 
     def enabled(self, feed: str) -> bool:
+        feed = _base_feed(feed)
         if feed == "weather":
             return bool(getattr(self.settings, "ENABLE_WEATHER", False))
         if feed == "air_quality":
@@ -190,9 +201,34 @@ class ServerFeedService:
             if wanted & dependents and self.enabled(feed)
         }
 
-    def due_feeds(self, screens: Iterable[str]) -> dict[str, bool]:
-        """Return ``{feed: fresh}`` for every required feed that should refresh now."""
+    def location_feeds(self, locations: LocationDemand | None) -> dict[str, tuple[str, Location]]:
+        """``{"weather@loc-…": ("weather", location)}`` for each location's demanded feeds."""
 
+        result: dict[str, tuple[str, Location]] = {}
+        for location, screens in (locations or {}).items():
+            wanted = set(screens)
+            for feed in LOCATION_FEEDS:
+                if wanted & feeds.SERVER_FEED_DEPENDENCIES.get(feed, set()) and self.enabled(feed):
+                    result[data_key(feed, location.scope)] = (feed, location)
+        return result
+
+    def due_feeds(self, screens: Iterable[str], locations: LocationDemand | None = None) -> dict[str, bool]:
+        """Return ``{feed: fresh}`` for every required feed that should refresh now.
+
+        A location's feeds (``weather@loc-…``) refresh on their feed's interval.
+        """
+
+        due = self._due_global_feeds(screens)
+        now = self._clock()
+        for name, (feed, _location) in sorted(self.location_feeds(locations).items()):
+            health = self._health.setdefault(name, FeedHealth())
+            interval = feeds.SERVER_FEED_REFRESH_INTERVALS.get(feed, feeds.SCHEDULE_UPDATE_INTERVAL)
+            last = health.last_success if health.consecutive_failures == 0 else health.last_attempt
+            if last is None or now - last >= interval:
+                due[name] = False
+        return due
+
+    def _due_global_feeds(self, screens: Iterable[str]) -> dict[str, bool]:
         screens = set(screens)
         now = self._clock()
         snapshot = self.data.snapshot()
@@ -234,17 +270,29 @@ class ServerFeedService:
 
     # ── Refresh ────────────────────────────────────────────────────────────
 
-    def refresh(self, screens: Iterable[str], *, force: bool = False) -> dict[str, bool]:
-        """Refresh the demanded feeds that are due; return ``{feed: succeeded}``."""
+    def refresh(self, screens: Iterable[str], *, force: bool = False,
+                locations: LocationDemand | None = None) -> dict[str, bool]:
+        """Refresh the demanded feeds that are due; return ``{feed: succeeded}``.
+
+        ``locations`` names the displays' own locations and the screens they
+        play; each location's weather feeds are fetched once for all of them.
+        """
 
         screens = set(screens)
-        due = {f: True for f in self.required_feeds(screens)} if force else self.due_feeds(screens)
+        located = self.location_feeds(locations)
+        if force:
+            due = {f: True for f in [*self.required_feeds(screens), *located]}
+        else:
+            due = self.due_feeds(screens, locations)
         results: dict[str, bool] = {}
         for feed, fresh in due.items():
             health = self._health.setdefault(feed, FeedHealth())
             health.last_attempt = self._clock()
             try:
-                self._refresh_one(feed, screens, fresh=fresh)
+                if feed in located:
+                    self._refresh_location(feed, *located[feed], fresh=fresh)
+                else:
+                    self._refresh_one(feed, screens, fresh=fresh)
             except Exception as exc:  # noqa: BLE001 - one feed must not stop the others
                 health.last_error = f"{type(exc).__name__}: {exc}"[:300]
                 health.consecutive_failures += 1
@@ -277,10 +325,27 @@ class ServerFeedService:
         else:  # pragma: no cover - every catalogued feed is handled above
             raise KeyError(f"no server refresher for feed {feed!r}")
 
-    def _refresh_air_quality(self) -> None:
+    def _refresh_location(self, name: str, feed: str, location: Location, *, fresh: bool) -> None:
+        coordinates = (location.latitude, location.longitude)
+        if feed == "weather":
+            ttl = int(getattr(self.settings, "WEATHER_REFRESH_SECONDS", 1800))
+            value = self.provider.read_weather(ttl_seconds=0 if fresh else ttl, location=coordinates)
+            if not value:
+                raise RuntimeError(f"weather provider returned no data for {location.scope}")
+            self.data.publish(name, value)
+        elif feed == "air_quality":
+            self._refresh_air_quality(location)
+        else:  # pragma: no cover - LOCATION_FEEDS are handled above
+            raise KeyError(f"no location refresher for feed {feed!r}")
+
+    def _refresh_air_quality(self, location: Location | None = None) -> None:
         settings = self.settings
-        latitude = getattr(settings, "AIR_QUALITY_LATITUDE", None)
-        longitude = getattr(settings, "AIR_QUALITY_LONGITUDE", None)
+        if location is None:
+            latitude = getattr(settings, "AIR_QUALITY_LATITUDE", None)
+            longitude = getattr(settings, "AIR_QUALITY_LONGITUDE", None)
+        else:
+            latitude, longitude = location.latitude, location.longitude
+        key = data_key("air_quality", None if location is None else location.scope)
         if latitude is None or longitude is None:
             raise RuntimeError("air quality coordinates are not configured")
         report = self.fetch_air_quality(
@@ -293,14 +358,15 @@ class ServerFeedService:
             raise RuntimeError("air quality provider returned no data")
         if all(hasattr(report, f) for f in ("us_aqi_pm2_5", "us_aqi_pm10", "us_aqi_ozone")):
             now = self._wall_clock()
-            previous = self.data.snapshot().values.get("air_quality")
+            previous = self.data.snapshot().values.get(key)
+            history_path = self.history_path if location is None else _location_path(self.history_path, location)
             history = list(getattr(previous, "component_history", ()))
             if not history:
-                history = feeds.load_air_quality_history(self.history_path, now)
+                history = feeds.load_air_quality_history(history_path, now)
             history = feeds.append_air_quality_sample(history, report, now)
-            feeds.save_air_quality_history(self.history_path, history)
+            feeds.save_air_quality_history(history_path, history)
             report = replace(report, component_history=tuple(history))
-        self.data.publish("air_quality", report)
+        self.data.publish(key, report)
 
     def _refresh_standings(self, feed: str, screens: set[str], *, fresh: bool) -> None:
         wildcard = bool(screens & feeds.NHL_WILDCARD_SCREEN_IDS)
@@ -344,11 +410,13 @@ class ServerFeedService:
 
     # ── Revisions and health ───────────────────────────────────────────────
 
-    def data_revision(self, screen: str, source_revisions: Mapping[str, int] | None = None) -> str | None:
+    def data_revision(self, screen: str, source_revisions: Mapping[str, int] | None = None,
+                      scope: str | None = None) -> str | None:
         """A data revision covering exactly the feeds *screen* reads.
 
         Returns ``None`` for a screen that no catalogued feed serves, so the
-        caller can fall back to a conservative whole-snapshot revision.
+        caller can fall back to a conservative whole-snapshot revision.  With a
+        location ``scope`` the location feeds are that location's copies.
         """
 
         screen_feeds = feeds.feeds_for_screen(screen, feeds.SERVER_FEED_DEPENDENCIES)
@@ -359,6 +427,8 @@ class ServerFeedService:
         parts = []
         for feed in sorted(screen_feeds):
             for key in _FEED_KEYS.get(feed, (feed,)):
+                if scope and feed in LOCATION_FEEDS:
+                    key = data_key(key, scope)
                 parts.append(f"{key}:{source_revisions.get(key, 0)}")
         return "f-" + hashlib.sha256("|".join(parts).encode("utf-8")).hexdigest()[:16]
 
@@ -367,7 +437,7 @@ class ServerFeedService:
         snapshot = self.data.snapshot()
         report: dict[str, Any] = {}
         for feed, health in sorted(self._health.items()):
-            interval = feeds.SERVER_FEED_REFRESH_INTERVALS.get(feed, feeds.SCHEDULE_UPDATE_INTERVAL)
+            interval = feeds.SERVER_FEED_REFRESH_INTERVALS.get(_base_feed(feed), feeds.SCHEDULE_UPDATE_INTERVAL)
             age = None if health.last_success is None else round(now - health.last_success, 1)
             report[feed] = {
                 "enabled": self.enabled(feed),
@@ -383,13 +453,19 @@ class ServerFeedService:
 
     # ── Background loop ────────────────────────────────────────────────────
 
-    def start(self, demanded_screens: Callable[[], Iterable[str]], interval_seconds: float = 30) -> threading.Thread:
+    def start(
+        self,
+        demanded_screens: Callable[[], Iterable[str]],
+        interval_seconds: float = 30,
+        demanded_locations: Callable[[], LocationDemand] | None = None,
+    ) -> threading.Thread:
         """Refresh feeds for the current demand every *interval_seconds*."""
 
         def loop() -> None:
             while not self._stop.is_set():
                 try:
-                    self.refresh(demanded_screens())
+                    self.refresh(demanded_screens(),
+                                 locations=None if demanded_locations is None else demanded_locations())
                 except Exception:  # pragma: no cover - logged and retried
                     LOGGER.exception("Feed refresh pass failed")
                 self._stop.wait(interval_seconds)
@@ -400,6 +476,13 @@ class ServerFeedService:
 
     def stop(self) -> None:
         self._stop.set()
+
+
+def _location_path(path: str, location: Location) -> str:
+    """*path* with the location's scope before its extension."""
+
+    root, dot, ext = path.rpartition(".")
+    return f"{root}.{location.scope}.{ext}" if dot and "/" not in ext else f"{path}.{location.scope}"
 
 
 def _fetch_nfl_standings(*, force: bool = False) -> dict[str, Any]:

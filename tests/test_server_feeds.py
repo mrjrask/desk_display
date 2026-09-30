@@ -53,7 +53,10 @@ class FakeProvider:
         team = key.split(":", 1)[1]
         return dict(self.teams.get(team, {"stand": {"team": team}}))
 
-    def read_weather(self, *, ttl_seconds=300):
+    def read_weather(self, *, ttl_seconds=300, location=None):
+        if location is not None:
+            self.calls.append((f"weather@{location[0]}_{location[1]}", ttl_seconds, False))
+            return {**self.weather, "place": list(location)}
         self.calls.append(("weather", ttl_seconds, False))
         return self.weather
 
@@ -636,3 +639,63 @@ def test_feed_state_is_saved_once_per_pass_and_only_when_data_changed(env, tmp_p
     assert len(saves) == 2
     saved = json.loads((tmp_path / "state.json").read_text())["feeds"]
     assert saved["nfl_standings"]["value"] == {"NFC": {}, "AFC": {"AFC North": []}}
+
+
+# ── Displays with their own location ────────────────────────────────────────
+
+
+def test_a_displays_own_location_is_fetched_once_and_kept_apart(env):
+    from remote_display.locations import Location
+
+    hyper = Location(40.7128, -74.006)
+    results = env.service.refresh({"weather1", "cubs last"},
+                                  locations={hyper: {"weather1", "astronomical", "air quality"}})
+    scope = hyper.scope
+    assert results == {"weather": True, "cubs": True,
+                       f"weather@{scope}": True, f"air_quality@{scope}": True}
+    values = env.data.snapshot().values
+    assert values[f"weather@{scope}"]["place"] == (40.7128, -74.006)
+    assert "place" not in values["weather"]
+    assert env.reports == [(40.7128, -74.006)]  # the server's own AQI was not demanded
+    assert (env.tmp / f"aq.{scope}.json").exists() and not (env.tmp / "aq.json").exists()
+
+    # Location feeds keep their feed's interval, like the server's own.
+    assert env.service.refresh({"weather1"}, locations={hyper: {"weather1"}}) == {}
+    env.clock.advance(feeds.FEED_REFRESH_INTERVALS["weather"])
+    assert env.service.refresh({"weather1"}, locations={hyper: {"weather1"}}) == {
+        "weather": True, f"weather@{scope}": True}
+    assert f"weather@{scope}" in env.service.health()
+
+
+def test_location_data_revisions_follow_the_locations_feeds(env):
+    from remote_display.locations import Location
+
+    hyper = Location(40.7128, -74.006)
+    env.service.refresh({"weather1"}, locations={hyper: {"weather1"}})
+    own = env.service.data_revision("weather1")
+    located = env.service.data_revision("weather1", scope=hyper.scope)
+    assert own != located
+    env.clock.advance(feeds.FEED_REFRESH_INTERVALS["weather"])
+    env.provider.weather = {"current": {"temp": 50}}
+    env.service.refresh(set(), locations={hyper: {"weather1"}})  # only the location refreshes
+    assert env.service.data_revision("weather1") == own
+    assert env.service.data_revision("weather1", scope=hyper.scope) != located
+    # Screens that read no location feed ignore the scope.
+    assert env.service.data_revision("cubs last", scope=hyper.scope) == env.service.data_revision("cubs last")
+
+
+def test_location_feed_health_is_restored_from_saved_state(env, tmp_path):
+    from remote_display.locations import Location
+
+    hyper = Location(40.7128, -74.006)
+    state = str(tmp_path / "state.json")
+    first = ServerFeedService(env.data, env.provider, settings=settings(), history_path=str(tmp_path / "aq.json"),
+                              state_path=state, clock=env.clock, wall_clock=env.clock,
+                              standings_fetchers=env.standings.fetchers())
+    first.refresh(set(), locations={hyper: {"weather1"}})
+    restarted = ServerFeedService(DataCoordinator(env.provider), env.provider, settings=settings(),
+                                  history_path=str(tmp_path / "aq.json"), state_path=state,
+                                  clock=env.clock, wall_clock=env.clock,
+                                  standings_fetchers=env.standings.fetchers())
+    assert restarted.data.snapshot().values[f"weather@{hyper.scope}"]["place"] == (40.7128, -74.006)
+    assert restarted.due_feeds(set(), {hyper: {"weather1"}}) == {}

@@ -10,6 +10,7 @@ concurrently. Global mutable caches are protected with per-cache locks so
 read/refresh paths are safe under concurrent access.
 """
 
+import contextlib
 import csv
 import datetime
 import io
@@ -78,6 +79,9 @@ _weather_cache_source: Optional[str] = None
 _weather_cache_lock = threading.Lock()
 _weather_fetch_lock = threading.Lock()
 _weather_last_attempt_at: Optional[datetime.datetime] = None
+# Weather for other places (a display with its own location, on a render
+# server), keyed by rounded "lat_lon": {"weather", "fetched_at", "source"}.
+_location_weather: dict[str, dict[str, Any]] = {}
 _weatherkit_token: Optional[str] = None
 _weatherkit_token_exp: Optional[datetime.datetime] = None
 _weatherkit_key_cache: Optional[Any] = None
@@ -1157,15 +1161,18 @@ def _normalise_openweathermap_response(data: dict[str, Any]) -> Optional[dict[st
     return _apply_nighttime_icons(mapped)
 
 
-def _fetch_weatherkit(now: datetime.datetime) -> Optional[dict[str, Any]]:
+def _fetch_weatherkit(
+    now: datetime.datetime, location: Optional[tuple[float, float]] = None
+) -> Optional[dict[str, Any]]:
     token = _build_weatherkit_token(now)
     if not token:
         return None
 
+    lat, lon = location if location is not None else (LATITUDE, LONGITUDE)
     url = WEATHERKIT_URL_TEMPLATE.format(
         language=WEATHERKIT_LANGUAGE,
-        lat=LATITUDE,
-        lon=LONGITUDE,
+        lat=lat,
+        lon=lon,
     )
 
     headers = {
@@ -1201,7 +1208,9 @@ def _fetch_weatherkit(now: datetime.datetime) -> Optional[dict[str, Any]]:
     return None
 
 
-def _fetch_openweathermap(now: datetime.datetime) -> Optional[dict[str, Any]]:
+def _fetch_openweathermap(
+    now: datetime.datetime, location: Optional[tuple[float, float]] = None
+) -> Optional[dict[str, Any]]:
     global _owm_backoff_until
 
     if not OWM_API_KEY:
@@ -1218,9 +1227,10 @@ def _fetch_openweathermap(now: datetime.datetime) -> Optional[dict[str, Any]]:
         )
         return None
 
+    lat, lon = location if location is not None else (LATITUDE, LONGITUDE)
     params = {
-        "lat": LATITUDE,
-        "lon": LONGITUDE,
+        "lat": lat,
+        "lon": lon,
         "appid": OWM_API_KEY,
         "units": OWM_UNITS,
         "lang": OWM_LANGUAGE,
@@ -1259,15 +1269,88 @@ def _weather_source_label(weather: Any) -> str:
     return "unknown source"
 
 
-def fetch_weather(force_refresh: bool = False):
+def fetch_weather(force_refresh: bool = False, *, location: Optional[tuple[float, float]] = None):
     """Fetch weather from WeatherKit with OpenWeatherMap as a fallback.
 
     Args:
         force_refresh: If True, bypass the local cache TTL and fetch new data.
+        location: ``(latitude, longitude)`` of another place than
+            WEATHER_LATITUDE / WEATHER_LONGITUDE (a display with its own
+            location). It has its own cache and trend histories.
     """
 
     with _weather_fetch_lock:
-        return _fetch_weather_locked(force_refresh)
+        if location is None:
+            return _fetch_weather_locked(force_refresh)
+        return _fetch_location_weather_locked(location, force_refresh)
+
+
+def _location_key(location: tuple[float, float]) -> str:
+    return f"{float(location[0]):.4f}_{float(location[1]):.4f}"
+
+
+def _history_path_for(path: str, key: str) -> str:
+    root, ext = os.path.splitext(path)
+    return f"{root}.{key}{ext or '.json'}"
+
+
+@contextlib.contextmanager
+def _location_histories(key: str):
+    """Point the pressure and metric histories at *key*'s own for one fetch.
+
+    The trend and history charts compare readings from one place; another
+    place's readings must never mix into them.  Callers hold the fetch lock,
+    the only path that updates these histories.
+    """
+
+    global _PRESSURE_HISTORY, _PRESSURE_HISTORY_LOADED, _PRESSURE_HISTORY_PATH, _PRESSURE_HISTORY_LAST_SAVE
+    global _WEATHER_METRIC_HISTORY, _WEATHER_METRIC_HISTORY_LOADED, _WEATHER_METRIC_HISTORY_PATH
+    with _pressure_history_lock, _weather_metric_history_lock:
+        saved = (_PRESSURE_HISTORY, _PRESSURE_HISTORY_LOADED, _PRESSURE_HISTORY_PATH, _PRESSURE_HISTORY_LAST_SAVE,
+                 _WEATHER_METRIC_HISTORY, _WEATHER_METRIC_HISTORY_LOADED, _WEATHER_METRIC_HISTORY_PATH)
+        state = _location_weather.setdefault(key, {}).setdefault("histories", {
+            "pressure": deque(), "pressure_loaded": False, "pressure_last_save": 0.0,
+            "metric": deque(), "metric_loaded": False,
+        })
+        _PRESSURE_HISTORY = state["pressure"]
+        _PRESSURE_HISTORY_LOADED = state["pressure_loaded"]
+        _PRESSURE_HISTORY_LAST_SAVE = state["pressure_last_save"]
+        _PRESSURE_HISTORY_PATH = _history_path_for(saved[2], key)
+        _WEATHER_METRIC_HISTORY = state["metric"]
+        _WEATHER_METRIC_HISTORY_LOADED = state["metric_loaded"]
+        _WEATHER_METRIC_HISTORY_PATH = _history_path_for(saved[6], key)
+        try:
+            yield
+        finally:
+            state["pressure_loaded"] = _PRESSURE_HISTORY_LOADED
+            state["pressure_last_save"] = _PRESSURE_HISTORY_LAST_SAVE
+            state["metric_loaded"] = _WEATHER_METRIC_HISTORY_LOADED
+            (_PRESSURE_HISTORY, _PRESSURE_HISTORY_LOADED, _PRESSURE_HISTORY_PATH, _PRESSURE_HISTORY_LAST_SAVE,
+             _WEATHER_METRIC_HISTORY, _WEATHER_METRIC_HISTORY_LOADED, _WEATHER_METRIC_HISTORY_PATH) = saved
+
+
+def _fetch_location_weather_locked(location: tuple[float, float], force_refresh: bool = False):
+    key = _location_key(location)
+    now = datetime.datetime.now(datetime.timezone.utc)
+    entry = _location_weather.setdefault(key, {})
+    cached, cached_at = entry.get("weather"), entry.get("fetched_at")
+    if cached and cached_at and not force_refresh and (now - cached_at).total_seconds() < WEATHER_REFRESH_SECONDS:
+        return cached
+
+    coordinates = (float(location[0]), float(location[1]))
+    normalized = None
+    with _location_histories(key):
+        if _weatherkit_configured():
+            normalized = _fetch_weatherkit(now, location=coordinates)
+        if normalized is None:
+            normalized = _fetch_openweathermap(now, location=coordinates)
+    if normalized is not None:
+        entry.update(weather=normalized, fetched_at=now, source=_weather_source_label(normalized))
+        logging.info("Fetched weather for %s from %s at %s", key, entry["source"], now.isoformat())
+        return normalized
+    if cached:
+        logging.warning("Using stale cached weather for %s after fetch errors", key)
+    return cached
 
 
 def _fetch_weather_locked(force_refresh: bool = False):
@@ -1336,9 +1419,13 @@ def _fetch_weather_locked(force_refresh: bool = False):
     return None
 
 
-def get_weather_cache_timestamp() -> Optional[datetime.datetime]:
+def get_weather_cache_timestamp(
+    location: Optional[tuple[float, float]] = None,
+) -> Optional[datetime.datetime]:
     """Return the UTC timestamp for the most recent successful weather fetch."""
 
+    if location is not None:
+        return (_location_weather.get(_location_key(location)) or {}).get("fetched_at")
     with _weather_cache_lock:
         return _weather_cache_fetched_at
 

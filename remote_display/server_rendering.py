@@ -18,12 +18,14 @@ from __future__ import annotations
 import hashlib
 import json
 import threading
+from dataclasses import replace
 from datetime import datetime, timezone
 from collections.abc import Iterable, Mapping
 from pathlib import Path
 from typing import Any
 
 from protocol_versions import APPLICATION_VERSION
+from remote_display.locations import Location, scoped_values
 from remote_display.models import RenderKey, ScreenRevisions
 from remote_display.render_coordinator import RenderOutput
 
@@ -187,6 +189,24 @@ class ServerRendering:
             )
         return result
 
+    def scoped_revisions(self, pairs: Iterable[tuple[str, str]]) -> Mapping[tuple[str, str], ScreenRevisions]:
+        """Revisions of screens rendered for a location scope (``loc-…``)."""
+
+        snapshot = self.data.snapshot()
+        style = f"{self.style_revision()}+{self.preferences}"
+        renderer = f"v{APPLICATION_VERSION}"
+        result = {}
+        for screen, scope in pairs:
+            data_revision = None
+            if self.feeds is not None:
+                data_revision = self.feeds.data_revision(screen, snapshot.source_revisions, scope=scope)
+            result[(screen, scope)] = ScreenRevisions(
+                style_revision=style,
+                data_revision=data_revision or f"d{snapshot.revision}",
+                renderer_revision=renderer,
+            )
+        return result
+
     def render(self, key: RenderKey) -> RenderOutput:
         from display_profiles import PROFILE_PRESETS
         from rendering import screen_classes
@@ -213,7 +233,13 @@ class ServerRendering:
 
         snapshot = self.data.snapshot()
         timestamp = getattr(self.data, "weather_cache_timestamp", None)
-        fetched_at = timestamp() if callable(timestamp) else None
+        location = Location.from_scope(key.client_scope)
+        if not callable(timestamp):
+            fetched_at = None
+        elif location is None:
+            fetched_at = timestamp()
+        else:
+            fetched_at = timestamp((location.latitude, location.longitude))
         if self.profile_processes is not None:
             reply = self.profile_processes.render_screen(key, profile, snapshot, fetched_at)
             image, metadata, package = reply["image"], reply["metadata"], reply["package"]
@@ -245,6 +271,10 @@ def compose_screen(key: RenderKey, profile: Any, snapshot: Any, logos: Any,
     from rendering.screen_renderer import ScreenRenderer, ServerPreferenceSnapshot
 
     screen = screen_classes.CLASSIFICATIONS.get(key.screen_id)
+    if Location.from_scope(key.client_scope) is not None:
+        # A display with its own location: its place's weather under the
+        # keys the screens read.
+        snapshot = replace(snapshot, values=scoped_values(snapshot.values, key.client_scope))
     preferences = ServerPreferenceSnapshot(revision=0, values={
         "logos": logos.for_size(profile.width, profile.height),
         "image_dir": IMAGES_DIR,
