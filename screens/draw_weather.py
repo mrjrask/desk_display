@@ -131,6 +131,8 @@ TEMPERATURE_COLOR_STOPS_F: tuple[tuple[float, tuple[int, int, int]], ...] = (
 
 # Keep weather radar tiles centered on downtown Chicago regardless of the
 # weather location used for forecast details.
+# Space between the square panels' cards and the coordinates line below them.
+ASTRONOMY_COORDS_BELOW_GAP = 6
 RADAR_CENTER_LATITUDE = 41.8781
 RADAR_CENTER_LONGITUDE = -87.6298
 RADAR_MAX_FRAME_AGE = datetime.timedelta(hours=2)
@@ -1926,6 +1928,9 @@ def _astronomical_layout_details(width: int, height: int) -> dict[str, object]:
         "ultra_compact": ultra_compact,
         "split_columns": split_columns,
         "group_rows": group_rows,
+        # Where the coordinates do not fit beside the title, square panels
+        # (not v0.1's landscape ones) put them on a line below the cards.
+        "coords_below": split_columns and not compact and height >= width,
         "title_font": FONT_WEATHER_DETAILS_SMALL_BOLD if compact else FONT_WEATHER_LABEL,
         "label_font": FONT_WEATHER_DETAILS_TINY_LARGE if compact else FONT_WEATHER_DETAILS_SMALL_BOLD,
         "value_font": FONT_WEATHER_DETAILS_TINY if compact else FONT_WEATHER_DETAILS_SMALL,
@@ -2060,6 +2065,7 @@ def draw_weather_astronomical(display, weather, transition: bool = False):
     draw.text((title_x, title_y), title, font=title_font, fill=(236, 236, 255))
 
     coord_text = ""
+    content_bottom = HEIGHT - edge
     latitude, longitude = _weather_location(weather) or (LATITUDE, LONGITUDE)
     if latitude is not None and longitude is not None and not layout["ultra_compact"]:
         coord_text = f"{latitude:.2f}, {longitude:.2f}"
@@ -2079,9 +2085,19 @@ def draw_weather_astronomical(display, weather, transition: bool = False):
                 font=caption_font,
                 fill=(132, 149, 180),
             )
+        elif layout["coords_below"]:
+            # Square panels have no room beside their larger title but plenty
+            # of empty card below the Rise/Set rows, so the coordinates take a
+            # line under the cards instead of disappearing.
+            content_bottom -= coord_h + ASTRONOMY_COORDS_BELOW_GAP
+            draw.text(
+                (WIDTH // 2 - coord_w // 2, HEIGHT - edge - coord_h - coord_bbox[1]),
+                coord_text,
+                font=caption_font,
+                fill=(132, 149, 180),
+            )
 
     content_top = title_y + title_h + (10 if layout["compact"] else 14)
-    content_bottom = HEIGHT - edge
     split_columns = bool(layout["split_columns"])
     gutter = 6 if layout["compact"] else 10
 
