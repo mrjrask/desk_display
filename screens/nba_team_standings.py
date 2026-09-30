@@ -6,6 +6,8 @@ from screens.mlb_team_standings import (
     draw_standings_screen1 as _base_screen1,
     draw_standings_screen2 as _base_screen2,
 )
+# 1080p HDMI: Bulls Stand 1 uses the Hawks Stand 1 sizing.
+from screens.nhl_team_standings import NHL_STAND1_FONT_OFFSET_1080P, NHL_STAND1_LOGO_SZ_1080P
 from utils import log_call
 
 _IS_HYPERPIXEL_4_SQUARE = is_hyperpixel_4_square_layout()
@@ -96,8 +98,14 @@ def draw_nba_standings_screen1(
         ),
         show_pct=False,
         show_streak=True,
-        logo_size=max(1, int(round(NBA_STAND1_LOGO_SZ * max(0.1, logo_scale)))),
-        font_size_offset=(30 if _IS_1080P_LAYOUT else (12 if _IS_HYPERPIXEL_4 else (8 if _IS_HYPERPIXEL_4_SQUARE else 0))),
+        logo_size=max(
+            1,
+            int(round((NHL_STAND1_LOGO_SZ_1080P if _IS_1080P_LAYOUT else NBA_STAND1_LOGO_SZ) * max(0.1, logo_scale))),
+        ),
+        font_size_offset=(
+            NHL_STAND1_FONT_OFFSET_1080P if _IS_1080P_LAYOUT
+            else (12 if _IS_HYPERPIXEL_4 else (8 if _IS_HYPERPIXEL_4_SQUARE else 0))
+        ),
         screen_id=screen_id,
         transition=transition,
     )
