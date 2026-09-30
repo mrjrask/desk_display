@@ -86,7 +86,7 @@ from remote_display.models import (
     UnsupportedCapabilitiesError,
     identifier,
 )
-from remote_display.locations import Location, location_screens, scoped_values, screen_scopes
+from remote_display.locations import Location, LocationError, location_screens, scoped_values, screen_scopes
 from remote_display.playlist_store import PlaylistStore, PlaylistStoreError, registry_snapshot_path, store_path
 from remote_display import registration
 from remote_display.provisioning import (
@@ -278,14 +278,21 @@ def create_app(
     if client_locations is None and config.playlist_store_path is not None:
         client_locations = PlaylistStore(config.playlist_store_path).client_locations
 
+    try:
+        server_location = Location.parse(os.environ.get("WEATHER_LATITUDE"), os.environ.get("WEATHER_LONGITUDE"))
+    except LocationError:
+        server_location = None
+
     def location_of(client_id: str) -> Location | None:
         if client_locations is None:
             return None
         try:
-            return client_locations().get(client_id)
+            location = client_locations().get(client_id)
         except (OSError, ValueError, PlaylistStoreError):
             WEB_LOGGER.warning("Could not read display locations", exc_info=True)
             return None
+        # A display set to the server's own location shares the server's renders.
+        return None if location == server_location else location
 
     def client_screen_scopes(client_id: str, screens: Iterable[str]) -> Mapping[str, str]:
         return screen_scopes(location_of(client_id), screens)
@@ -973,8 +980,11 @@ def run_display_server() -> None:
                                  processes_per_profile=settings["DESK_DISPLAY_RENDER_WORKERS"])
     rendering = ServerRendering(feeds=feeds, profile_processes=workers)
     atexit.register(rendering.close)
+    server_config = DisplayServerConfig.from_env()
+    # Before create_app, which rewrites the registry snapshot the seed reads.
+    _apply_location_seed(server_config)
     app = create_app(
-        DisplayServerConfig.from_env(),
+        server_config,
         renderer=rendering.render,
         revisions=rendering.revisions,
         scoped_revisions=rendering.scoped_revisions,
@@ -999,6 +1009,31 @@ def run_display_server() -> None:
     from waitress import serve
 
     serve(app, host=host, port=port, threads=8)
+
+
+def _apply_location_seed(config: DisplayServerConfig) -> None:
+    """Give the known displays their locations once (remote_display/location_seed.py)."""
+
+    from remote_display import location_seed
+    from remote_display.registry import read_snapshot
+
+    if config.playlist_store_path is None:
+        return
+    try:
+        store = PlaylistStore(config.playlist_store_path)
+        provisioning = None if config.clients_path is None else ProvisioningStore(config.clients_path)
+        snapshot = read_snapshot(config.registry_snapshot_path) if config.registry_snapshot_path else {}
+        clients = location_seed.known_clients(
+            store, snapshot,
+            provisioned=[r["client_id"] for r in provisioning.records()] if provisioning is not None else (),
+            static=config.static_clients,
+        )
+        changed = location_seed.apply(store, clients)
+    except (OSError, ValueError, PlaylistStoreError, ModelValidationError):
+        WEB_LOGGER.warning("Could not apply the display locations", exc_info=True)
+        return
+    if changed:
+        WEB_LOGGER.info("Set weather locations for %s", ", ".join(changed))
 
 
 def demand_by_location(

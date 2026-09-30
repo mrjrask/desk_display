@@ -42,7 +42,9 @@ See the README's [deployment modes](README.md#deployment-modes) and
   server's**, follows the server). The server fetches weather and air quality
   once per location and renders that location's weather, radar, air quality
   and Sun & Moon screens once for all displays there (see OPERATIONS.md,
-  "Weather location per display").
+  "Weather location per display"). On its first start after the update the
+  server fills in each known display's location once: hyper 41.9037,
+  -87.6357, every other display 42.1373, -87.8446.
 - Per-display **Vertical scroll** adjustment on each row of the Clients page:
   a display can have its own "Synchronized vertical scroll adjustment"
   instead of the Rotation Config page's global value (empty or **Use

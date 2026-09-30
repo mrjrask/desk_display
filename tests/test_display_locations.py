@@ -292,3 +292,67 @@ def test_radar_centres_on_a_displays_own_location(monkeypatch):
     x_tile, y_tile, x_frac, y_frac = draw_weather._latlon_to_tile(40.7128, -74.006, 7)
     assert (view.center_x, view.center_y) == ((x_tile + x_frac) * 256, (y_tile + y_frac) * 256)
     assert draw_weather._radar_view(7) != view  # the server's view stays on Chicago's tile
+
+
+# ── The one-time location seed ──────────────────────────────────────────────
+
+
+def test_location_seed_sets_hyper_and_every_other_display_once(tmp_path):
+    from remote_display import location_seed
+    from remote_display.playlist_store import PlaylistStore
+
+    store = PlaylistStore(tmp_path / "playlists.json")
+    store.set_friendly_name("den", "Den", actor="jason")
+    store.set_location("office", 1, 2, actor="jason")  # already set: kept
+    clients = location_seed.known_clients(store, {"clients": {"hyper": {}, "square-panel": {}}},
+                                          provisioned=["mini"], static=["lobby"])
+    assert clients == {"hyper", "square-panel", "mini", "lobby", "den", "office"}
+    changed = location_seed.apply(store, clients)
+    assert sorted(changed) == ["den", "hyper", "lobby", "mini", "square-panel"]
+    places = store.client_locations()
+    assert places["hyper"] == Location(41.9037, -87.6357)
+    assert places["square-panel"] == places["den"] == Location(42.1373, -87.8446)
+    assert places["office"] == Location(1, 2)
+    assert store.snapshot()["clients"]["den"]["friendly_name"] == "Den"
+    assert location_seed.location_for("hyper-panel") == location_seed.HYPER_LOCATION
+    assert location_seed.location_for("hyperpixel") == location_seed.DEFAULT_LOCATION
+
+    # Never again: later Clients page edits stick.
+    store.set_location("hyper", None, None, actor="jason")
+    revision = store.snapshot()["store_revision"]
+    assert location_seed.apply(store, clients | {"new"}) == []
+    assert store.location("hyper") is None and store.location("new") is None
+    assert store.snapshot()["store_revision"] == revision
+
+
+def test_a_display_at_the_servers_location_shares_the_servers_renders(tmp_path, monkeypatch):
+    pytest.importorskip("flask")
+    import display_server
+
+    monkeypatch.setenv("WEATHER_LATITUDE", "42.1373")
+    monkeypatch.setenv("WEATHER_LONGITUDE", "-87.8446")
+    config = display_server.DisplayServerConfig(enrollment="shared", auth_token="t" * 40,
+                                                admin_token="a" * 40, artifact_dir=tmp_path / "a")
+    places = {"square-panel": Location(42.1373, -87.8446), "hyper": Location(41.9037, -87.6357)}
+    app = display_server.create_app(config, assignments=lambda _c: None, client_locations=lambda: places)
+    location_of = app.extensions["desk_display_location_of"]
+    assert location_of("square-panel") is None
+    assert location_of("hyper") == places["hyper"]
+
+
+def test_server_start_applies_the_seed_to_registered_displays(tmp_path):
+    pytest.importorskip("flask")
+    import json
+
+    import display_server
+    from remote_display.playlist_store import PlaylistStore
+
+    snapshot = tmp_path / "clients.json"
+    snapshot.write_text(json.dumps({"schema_version": 1, "clients": {"hyper": {}, "square-panel": {}}}))
+    config = display_server.DisplayServerConfig(enrollment="shared", auth_token="t" * 40, admin_token="a" * 40,
+                                                artifact_dir=tmp_path / "a",
+                                                playlist_store_path=tmp_path / "playlists.json",
+                                                registry_snapshot_path=snapshot)
+    display_server._apply_location_seed(config)
+    places = PlaylistStore(tmp_path / "playlists.json").client_locations()
+    assert places == {"hyper": Location(41.9037, -87.6357), "square-panel": Location(42.1373, -87.8446)}

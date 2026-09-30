@@ -634,6 +634,31 @@ class PlaylistStore:
                         location=None if location is None else location.as_dict())
         return location
 
+    def apply_location_seed(self, seed_id: str, locations: Mapping[str, Location], *, actor: str) -> list[str]:
+        """Give each listed client its location, once per *seed_id*.
+
+        A client that already has a location keeps it, and a seed that was
+        applied before is never applied again, so later edits on the
+        Clients page stick.  Returns the clients that were changed.
+        """
+
+        with self._lock:
+            if seed_id in (self._load().get("applied_seeds") or []):
+                return []
+        changed: list[str] = []
+        with self._transaction() as data:
+            seeds = data.setdefault("applied_seeds", [])
+            if seed_id in seeds:
+                return []
+            seeds.append(seed_id)
+            for client_id, location in sorted(locations.items()):
+                entry = data["clients"].setdefault(_client(client_id), {})
+                if _stored_location(entry.get("location")) is None:
+                    entry["location"] = location.as_dict()
+                    changed.append(client_id)
+            self._audit(data, actor, "apply_location_seed", seed_id, clients=changed)
+        return changed
+
     # ── Import and export ──────────────────────────────────────────────────
 
     def export(self, playlist_id: str) -> dict[str, Any]:
