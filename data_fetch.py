@@ -2651,6 +2651,17 @@ def _fetch_mlb_schedule(team_id):
                     or "game over" in detailed
                 )
                 is_scheduled = code == "S" or abstract in ("preview", "scheduled")
+                # Warmup (statusCode "PW") and a delayed start report
+                # abstractGameState "Live" before the first pitch. Today's game
+                # is still the next game until it actually starts, so the Next
+                # screen must not roll forward to tomorrow's game yet.
+                is_before_first_pitch = not is_game_over and (
+                    is_scheduled
+                    or code.startswith("P")
+                    or "warmup" in detailed.replace("-", "")
+                    or "pregame" in detailed.replace("-", "")
+                    or "delayed start" in detailed
+                )
                 is_live = (
                     not is_game_over
                     and (code == "I" or abstract == "live" or "progress" in detailed)
@@ -2688,7 +2699,7 @@ def _fetch_mlb_schedule(team_id):
                 # and resolved to the earliest one below (see "Split-squad /
                 # doubleheader support"); a doubleheader's Game 2 must not
                 # overwrite Game 1 just because it's later in iteration order.
-                if day == today and is_scheduled:
+                if day == today and is_before_first_pitch:
                     if local_dt:
                         scheduled_today.append((local_dt, g))
                     elif not result["next_game"]:
@@ -2707,21 +2718,9 @@ def _fetch_mlb_schedule(team_id):
                     }
                 )
 
-        # Fallback next future
-        if not result["next_game"]:
-            for di in data.get("dates", []):
-                day = datetime.datetime.strptime(di["date"], "%Y-%m-%d").date()
-                if day > today:
-                    for g in di.get("games", []):
-                        status   = g.get("status", {})
-                        code2    = status.get("statusCode", "").upper()
-                        abs2     = status.get("abstractGameState", "").lower()
-                        if code2 == "S" or abs2 in ("preview","scheduled"):
-                            result["next_game"] = g
-                            break
-                    if result["next_game"]:
-                        break
-
+        # Resolve today's games before falling back to a later day, or the
+        # fallback below would pick tomorrow's game while today's is still
+        # to come.
         # Split-squad / doubleheader support: if there are two scheduled games today
         # against different opponents, expose the second as an alternate next game.
         if scheduled_today:
@@ -2737,6 +2736,21 @@ def _fetch_mlb_schedule(team_id):
                     continue
                 result["next_game_alt"] = game
                 break
+
+        # Fallback next future
+        if not result["next_game"]:
+            for di in data.get("dates", []):
+                day = datetime.datetime.strptime(di["date"], "%Y-%m-%d").date()
+                if day > today:
+                    for g in di.get("games", []):
+                        status   = g.get("status", {})
+                        code2    = status.get("statusCode", "").upper()
+                        abs2     = status.get("abstractGameState", "").lower()
+                        if code2 == "S" or abs2 in ("preview","scheduled"):
+                            result["next_game"] = g
+                            break
+                    if result["next_game"]:
+                        break
 
         # Pick earliest upcoming home game
         if home_candidates:
