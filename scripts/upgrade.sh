@@ -59,5 +59,5 @@ fi
 # below brings every service back in dependency order.
 bash "$PROJECT_DIR/scripts/update_services.sh" --mode "$mode" --no-restart
 
-bash "$PROJECT_DIR/scripts/restart_services.sh"
+run_with_heartbeat "restarting services" bash "$PROJECT_DIR/scripts/restart_services.sh"
 log "Upgrade complete ($mode)."

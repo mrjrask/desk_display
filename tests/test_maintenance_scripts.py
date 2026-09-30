@@ -207,6 +207,48 @@ def test_update_dependencies_installs_the_recorded_modes_requirements(tmp_path, 
     assert not (project / "venv").exists()
 
 
+def test_update_dependencies_runs_pip_non_interactively_and_says_what_it_waits_on(tmp_path):
+    project = tmp_path / "dd"
+    (project / "scripts" / "helpers").mkdir(parents=True)
+    for rel in ("install_modes.py", "service_units.py", "deployment_config.py",
+                "scripts/update_dependencies.sh", "scripts/helpers/common.sh"):
+        shutil.copy2(ROOT / rel, project / rel)
+    (project / "requirements").mkdir()
+    (project / "requirements" / "base.txt").write_text("requests\n")
+    im.write_marker(project, "combined", output="window")
+    bin_dir = project / "venv" / "bin"
+    bin_dir.mkdir(parents=True)
+    (project / "venv" / "pyvenv.cfg").write_text("home = /usr/bin\n")
+    (bin_dir / "activate").write_text(f'PATH="{bin_dir}:$PATH"\ndeactivate() {{ :; }}\n')
+    calls = tmp_path / "pip.log"
+    pip = bin_dir / "pip"
+    # Stands in for a pip that goes quiet after "Requirement already satisfied".
+    pip.write_text(f'#!/usr/bin/env bash\necho "$* input=$PIP_NO_INPUT check=$PIP_DISABLE_PIP_VERSION_CHECK" >> "{calls}"\n'
+                   'if [[ "$*" == "install --upgrade pip" ]]; then sleep 3; fi\n')
+    pip.chmod(0o755)
+    env = {k: v for k, v in os.environ.items()
+           if k not in ("DESK_DISPLAY_OUTPUT", "DESK_DISPLAY_INSTALL_MODE", "PIP_NO_INPUT",
+                        "PIP_DISABLE_PIP_VERSION_CHECK", "INSIDE_SENSOR", "INDOOR_SENSOR")}
+    result = subprocess.run(["bash", str(project / "scripts/update_dependencies.sh"),
+                             "--requirements", "requirements/base.txt"],
+                            env={**env, "PROJECT_DIR": str(project), "DESK_DISPLAY_HEARTBEAT_SECONDS": "1"},
+                            capture_output=True, text=True, timeout=60)
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "Still upgrading pip after" in result.stdout
+    assert "install --upgrade pip" in result.stdout.split("Still upgrading pip after", 1)[1]
+    assert "Dependency update complete." in result.stdout
+    logged = calls.read_text().splitlines()
+    assert logged[0] == "install --upgrade pip input=1 check=1"
+    assert logged[1].startswith("install -r ") and logged[1].endswith("input=1 check=1")
+
+
+def test_heartbeat_passes_the_commands_exit_status_through():
+    script = f'source "{ROOT}/scripts/helpers/common.sh"\nrun_with_heartbeat "failing" bash -c "exit 3"\n'
+    result = subprocess.run(["bash", "-c", script], capture_output=True, text=True, timeout=30)
+    assert result.returncode == 3
+    assert "Still" not in result.stdout
+
+
 # ── reset_screenshots.sh ───────────────────────────────────────────────────
 
 

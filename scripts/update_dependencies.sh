@@ -294,8 +294,15 @@ check_venv_permissions() {
 
 check_venv_permissions
 
+# Never wait for input nobody will type (a credential prompt, a keyring
+# unlock), and skip pip's own "new version available" lookup at exit.
+export PIP_NO_INPUT="${PIP_NO_INPUT:-1}"
+export PIP_DISABLE_PIP_VERSION_CHECK="${PIP_DISABLE_PIP_VERSION_CHECK:-1}"
+export PYTHON_KEYRING_BACKEND="${PYTHON_KEYRING_BACKEND:-keyring.backends.null.Keyring}"
+
 log "Upgrading pip"
-pip install --upgrade pip
+run_with_heartbeat "upgrading pip" pip install --upgrade pip
+log "pip is up to date"
 
 build_install_requirements_file() {
   local source_requirements="$1"
@@ -383,7 +390,7 @@ if [[ -f "$PROJECT_DIR/$REQUIREMENTS_FILE" ]]; then
   trap 'rm -f "$INSTALL_REQUIREMENTS_FILE"' EXIT
   build_install_requirements_file "$PROJECT_DIR/$REQUIREMENTS_FILE" "$INSTALL_REQUIREMENTS_FILE"
   pushd "$PROJECT_DIR" >/dev/null
-  pip install -r "$INSTALL_REQUIREMENTS_FILE"
+  run_with_heartbeat "installing Python dependencies" pip install -r "$INSTALL_REQUIREMENTS_FILE"
   popd >/dev/null
 else
   warn "$REQUIREMENTS_FILE not found; skipping pip install."
@@ -393,7 +400,7 @@ if should_install_adafruit_sensor_requirements; then
   if [[ -f "$PROJECT_DIR/$ADAFRUIT_SENSOR_REQUIREMENTS_FILE" ]]; then
     log "Installing optional Adafruit sensor dependencies from $ADAFRUIT_SENSOR_REQUIREMENTS_FILE"
     pushd "$PROJECT_DIR" >/dev/null
-    pip install -r "$ADAFRUIT_SENSOR_REQUIREMENTS_FILE"
+    run_with_heartbeat "installing Python dependencies" pip install -r "$ADAFRUIT_SENSOR_REQUIREMENTS_FILE"
     popd >/dev/null
   else
     warn "$ADAFRUIT_SENSOR_REQUIREMENTS_FILE not found; skipping optional Adafruit sensor dependencies."
@@ -407,7 +414,7 @@ if should_install_pimoroni_sensor_requirements; then
     log "Installing optional Pimoroni sensor dependencies from $PIMORONI_SENSOR_REQUIREMENTS_FILE"
     cleanup_stale_egg_info
     pushd "$PROJECT_DIR" >/dev/null
-    pip install -r "$PIMORONI_SENSOR_REQUIREMENTS_FILE"
+    run_with_heartbeat "installing Python dependencies" pip install -r "$PIMORONI_SENSOR_REQUIREMENTS_FILE"
     popd >/dev/null
   else
     warn "$PIMORONI_SENSOR_REQUIREMENTS_FILE not found; skipping optional Pimoroni sensor dependencies."
@@ -448,7 +455,7 @@ PY
     else
       log "Upgrading all outdated packages together"
       mapfile -t PACKAGES_TO_UPGRADE <<< "$OUTDATED_PACKAGES"
-      pip install --upgrade "${PACKAGES_TO_UPGRADE[@]}"
+      run_with_heartbeat "installing Python dependencies" pip install --upgrade "${PACKAGES_TO_UPGRADE[@]}"
     fi
   fi
 fi
