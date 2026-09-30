@@ -85,6 +85,9 @@ HEADER_LABEL_FONT = (
     else FONT_DATE_SPORTS
 )
 
+# 1080p HDMI: the Cubs Last Game W/L flag is drawn this many times its base height.
+RESULT_FLAG_SCALE_1080P = 2.5
+
 # 1080p HDMI: logo height on the Cubs/Sox series screens.
 SERIES_LOGO_H_1080P = 260
 
@@ -1207,7 +1210,10 @@ def draw_last_game(display, game, title="Last Game...", transition=False, screen
         hyperpixel_layout=hyperpixel_layout,
         center_content_vertically=(screen_id == "sox last"),
         center_ignores_reserved_flag_block=(screen_id == "sox last"),
-        flag_scale=(2.0 if screen_id == "cubs last" and is_hyperpixel_4_square_layout() else 1.0),
+        flag_scale=(
+            RESULT_FLAG_SCALE_1080P if screen_id == "cubs last" and _IS_1080P_LAYOUT
+            else (2.0 if screen_id == "cubs last" and is_hyperpixel_4_square_layout() else 1.0)
+        ),
         row_height_matches_reserved_flag_block=(True if screen_id == "cubs last" else None),
     )
 
