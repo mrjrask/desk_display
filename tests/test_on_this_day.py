@@ -1,9 +1,12 @@
 import datetime as dt
 import json
 
+import pytest
+
 from PIL import Image, ImageDraw
 
 import screens.on_this_day as otd
+import utils
 from screens.on_this_day import _build_sections, draw_on_this_day
 
 
@@ -116,7 +119,7 @@ def test_on_this_day_year_items_wrap_within_remaining_card_width(monkeypatch):
             _, text_width = otd._item_text_layout(
                 draw, item, pad, otd.W - pad, thumb_size
             )
-            lines = otd.wrap_text(item.text, otd.BODY_FONT, text_width)
+            lines = otd._item_lines(item, text_width)
 
             assert lines
             assert all(
@@ -625,23 +628,27 @@ def test_on_this_day_build_sections_persists_to_disk(tmp_path, monkeypatch):
     assert otd._sections_from_jsonable(payload["sections"]) == sections
 
 
-def test_on_this_day_strips_emoji_the_body_font_cannot_draw():
+def test_on_this_day_strips_emoji_when_no_emoji_font(monkeypatch):
+    monkeypatch.setattr(utils, "_COLOR_EMOJI_FONT_CACHE", {"font": None})
+    monkeypatch.setattr(utils, "_EMOJI_SUPPORT_CACHE", {})
     item = otd.DayItem(
         None,
-        "Jewish holiday: \U0001F33F\U0001F34B Sukkot IV (CH’’M): Feast of Booths.",
+        "Jewish holiday: \U0001F33F\U0001F34B Sukkot IV (CH\u2019\u2019M): Feast of Booths.",
     )
 
     lines = otd._item_lines(item, 10_000)
 
-    assert lines == ["Jewish holiday: Sukkot IV (CH’’M): Feast of Booths."]
+    assert lines == ["Jewish holiday: Sukkot IV (CH\u2019\u2019M): Feast of Booths."]
 
 
 def test_on_this_day_renders_hebcal_emoji_without_tofu_boxes(monkeypatch):
+    monkeypatch.setattr(utils, "_COLOR_EMOJI_FONT_CACHE", {"font": None})
+    monkeypatch.setattr(utils, "_EMOJI_SUPPORT_CACHE", {})
     otd._clear_caches_for_tests()
-    plain = [otd.DayItem(None, "Jewish holiday: Sukkot IV (CH’’M).")]
+    plain = [otd.DayItem(None, "Jewish holiday: Sukkot IV (CH\u2019\u2019M).")]
     emoji = [
         otd.DayItem(
-            None, "Jewish holiday: \U0001F33F\U0001F34B Sukkot IV (CH’’M)."
+            None, "Jewish holiday: \U0001F33F\U0001F34B Sukkot IV (CH\u2019\u2019M)."
         )
     ]
 
@@ -652,3 +659,19 @@ def test_on_this_day_renders_hebcal_emoji_without_tofu_boxes(monkeypatch):
         return otd._render_full_image_uncached(dt.date(2026, 9, 29)).tobytes()
 
     assert render(emoji) == render(plain)
+
+
+@pytest.mark.skipif(utils.color_emoji_font() is None, reason="Noto Color Emoji not installed")
+def test_on_this_day_draws_hebcal_emoji_in_color(monkeypatch):
+    otd._clear_caches_for_tests()
+    items = [otd.DayItem(None, "\U0001F33F\U0001F34B Sukkot IV")]
+    monkeypatch.setattr(
+        otd, "_build_sections", lambda today: {"🎉 Holidays & Culture": items}
+    )
+
+    lines = otd._item_lines(items[0], 10_000)
+    img = otd._render_full_image_uncached(dt.date(2026, 9, 29))
+
+    assert lines == ["\U0001F33F\U0001F34B Sukkot IV"]
+    # The lemon is drawn in yellow, which no other element on the screen uses.
+    assert any(r > 200 and g > 180 and b < 90 for r, g, b in zip(*[iter(img.tobytes())] * 3))

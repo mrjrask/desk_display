@@ -33,10 +33,11 @@ from utils import (
     ScreenImage,
     clear_display,
     clone_font,
+    draw_emoji_text,
     measure_text,
     scroll_vertical_content,
     strip_unrenderable,
-    wrap_text,
+    wrap_emoji_text,
 )
 
 W, H = config.WIDTH, config.HEIGHT
@@ -885,9 +886,9 @@ def _item_text_layout(
 
 
 def _item_lines(item: DayItem, text_width: int) -> list[str]:
-    """Wrap an item's body, dropping glyphs the body font can't draw (emoji)."""
+    """Wrap an item's body; emoji the body font lacks are measured as color emoji."""
 
-    return wrap_text(strip_unrenderable(item.text, BODY_FONT), BODY_FONT, text_width)
+    return wrap_emoji_text(item.text, BODY_FONT, text_width)
 
 
 def _estimate_height(
@@ -993,7 +994,7 @@ def _render_full_image_uncached(today: dt.date) -> Image.Image:
                 )
             text_y = card_top + 7
             for line in lines:
-                draw.text((text_x, text_y), line, font=BODY_FONT, fill=_TEXT)
+                draw_emoji_text(img, (text_x, text_y), line, BODY_FONT, _TEXT)
                 text_y += line_h
             y += card_h + 7
         y += 6

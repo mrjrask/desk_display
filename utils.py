@@ -2714,6 +2714,211 @@ def strip_unrenderable(text: str, font: ImageFont.ImageFont) -> str:
     return " ".join(cleaned.split())
 
 
+# Noto Color Emoji is a bitmap (CBDT) font that only loads at its native size;
+# glyphs are rendered there and scaled to the surrounding text.
+_COLOR_EMOJI_NATIVE_SIZE = 109
+_COLOR_EMOJI_FILENAMES = ("NotoColorEmoji.ttf", "Noto Color Emoji.ttf")
+_COLOR_EMOJI_FONT_CACHE: Dict[str, Optional[ImageFont.FreeTypeFont]] = {}
+_EMOJI_SUPPORT_CACHE: Dict[str, bool] = {}
+_EMOJI_IMAGE_CACHE: Dict[Tuple[str, int], Optional[Image.Image]] = {}
+
+
+def _color_emoji_font_paths() -> List[str]:
+    fonts_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "fonts")
+    paths = [os.path.join(fonts_dir, name) for name in _COLOR_EMOJI_FILENAMES]
+    for name in _COLOR_EMOJI_FILENAMES:
+        paths.extend(sorted(Path("/usr/share/fonts").rglob(name)) if os.path.isdir("/usr/share/fonts") else [])
+    return [str(path) for path in paths]
+
+
+def color_emoji_font() -> Optional[ImageFont.FreeTypeFont]:
+    """Return Noto Color Emoji at its native size, or ``None`` if not installed."""
+
+    if "font" in _COLOR_EMOJI_FONT_CACHE:
+        return _COLOR_EMOJI_FONT_CACHE["font"]
+    font = None
+    for path in _color_emoji_font_paths():
+        if not os.path.isfile(path):
+            continue
+        try:
+            font = ImageFont.truetype(path, _COLOR_EMOJI_NATIVE_SIZE)
+            break
+        except OSError as exc:
+            logging.debug("Unable to load color emoji font %s: %s", path, exc)
+    _COLOR_EMOJI_FONT_CACHE["font"] = font
+    return font
+
+
+def _is_emoji_modifier(char: str) -> bool:
+    """Characters that only make sense inside an emoji sequence."""
+
+    code = ord(char)
+    return (
+        code == 0x200D  # zero-width joiner
+        or code == 0x20E3  # combining keycap
+        or 0xFE00 <= code <= 0xFE0F  # variation selectors
+        or 0x1F3FB <= code <= 0x1F3FF  # skin tones
+        or 0xE0020 <= code <= 0xE007F  # tag characters (subdivision flags)
+    )
+
+
+def _emoji_font_draws(char: str) -> bool:
+    cached = _EMOJI_SUPPORT_CACHE.get(char)
+    if cached is not None:
+        return cached
+    font = color_emoji_font()
+    supported = False
+    if font is not None:
+        try:
+            left, top, right, bottom = font.getbbox(char)
+            supported = bottom > top
+        except Exception:
+            supported = False
+    _EMOJI_SUPPORT_CACHE[char] = supported
+    return supported
+
+
+def emoji_text_runs(text: str, font: ImageFont.ImageFont) -> List[Tuple[str, bool]]:
+    """Split ``text`` into ``(segment, is_emoji)`` runs for ``font``.
+
+    Characters ``font`` can draw stay text. Characters it lacks become emoji
+    runs when Noto Color Emoji has them, and are dropped otherwise (so they
+    never show as missing-glyph boxes). Spaces left by dropped characters are
+    collapsed.
+    """
+
+    runs: List[List[Any]] = []
+
+    def _add(char: str, is_emoji: bool) -> None:
+        if runs and runs[-1][1] == is_emoji:
+            runs[-1][0] += char
+        else:
+            runs.append([char, is_emoji])
+
+    for char in str(text or ""):
+        if char.isascii():
+            _add(char, False)
+        elif _is_emoji_modifier(char):
+            if runs and runs[-1][1]:
+                _add(char, True)
+        elif unicodedata.category(char) == "Cf":
+            continue
+        elif char.isspace() or _font_draws_char(font, char):
+            _add(char, False)
+        elif _emoji_font_draws(char):
+            _add(char, True)
+
+    # Collapse whitespace around dropped characters without touching emoji runs.
+    cleaned: List[Tuple[str, bool]] = []
+    for segment, is_emoji in runs:
+        if not is_emoji:
+            prev_space = not cleaned or cleaned[-1][0].endswith(" ")
+            segment = re.sub(r"\s+", " ", segment)
+            if prev_space:
+                segment = segment.lstrip(" ")
+            if not segment:
+                continue
+        cleaned.append((segment, is_emoji))
+    if cleaned and not cleaned[-1][1]:
+        cleaned[-1] = (cleaned[-1][0].rstrip(" "), False)
+        if not cleaned[-1][0]:
+            cleaned.pop()
+    return cleaned
+
+
+def _font_line_metrics(font: ImageFont.ImageFont) -> Tuple[int, int]:
+    try:
+        ascent, descent = font.getmetrics()
+    except Exception:
+        size = int(getattr(font, "size", 12) or 12)
+        ascent, descent = size, max(1, size // 4)
+    return ascent, descent
+
+
+def _emoji_height(font: ImageFont.ImageFont) -> int:
+    ascent, descent = _font_line_metrics(font)
+    return max(1, int(round((ascent + descent) * 0.85)))
+
+
+def _emoji_image(cluster: str, height: int) -> Optional[Image.Image]:
+    key = (cluster, height)
+    if key in _EMOJI_IMAGE_CACHE:
+        return _EMOJI_IMAGE_CACHE[key]
+    font = color_emoji_font()
+    image = None
+    if font is not None:
+        try:
+            left, top, right, bottom = font.getbbox(cluster)
+            if right > left and bottom > top:
+                native = Image.new("RGBA", (right - left, bottom - top), (0, 0, 0, 0))
+                ImageDraw.Draw(native).text(
+                    (-left, -top), cluster, font=font, embedded_color=True
+                )
+                scale = height / native.height
+                width = max(1, int(round(native.width * scale)))
+                image = native.resize((width, height), resample=LANCZOS)
+        except Exception as exc:
+            logging.debug("Unable to render emoji %r: %s", cluster, exc)
+    _EMOJI_IMAGE_CACHE[key] = image
+    return image
+
+
+def _run_width(segment: str, is_emoji: bool, font: ImageFont.ImageFont) -> int:
+    if is_emoji:
+        image = _emoji_image(segment, _emoji_height(font))
+        return image.width if image is not None else 0
+    return int(round(font.getlength(segment)))
+
+
+def emoji_text_width(text: str, font: ImageFont.ImageFont) -> int:
+    """Width of ``text`` drawn with :func:`draw_emoji_text`."""
+
+    return sum(_run_width(seg, is_emoji, font) for seg, is_emoji in emoji_text_runs(text, font))
+
+
+def wrap_emoji_text(text: str, font: ImageFont.ImageFont, max_width: int) -> List[str]:
+    """Like :func:`wrap_text`, but measures emoji as :func:`draw_emoji_text` draws them."""
+
+    plain = "".join(segment for segment, _ in emoji_text_runs(text, font))
+    words = plain.split()
+    if not words:
+        return []
+    lines = [words[0]]
+    for word in words[1:]:
+        candidate = f"{lines[-1]} {word}"
+        if emoji_text_width(candidate, font) <= max_width:
+            lines[-1] = candidate
+        else:
+            lines.append(word)
+    return lines
+
+
+def draw_emoji_text(
+    image: Image.Image,
+    xy: Tuple[int, int],
+    text: str,
+    font: ImageFont.ImageFont,
+    fill: Any,
+) -> None:
+    """Draw ``text`` with ``font``, pasting color emoji for glyphs it lacks."""
+
+    draw = ImageDraw.Draw(image)
+    x, y = xy
+    ascent, descent = _font_line_metrics(font)
+    height = _emoji_height(font)
+    for segment, is_emoji in emoji_text_runs(text, font):
+        if not is_emoji:
+            draw.text((x, y), segment, font=font, fill=fill)
+            x += int(round(font.getlength(segment)))
+            continue
+        emoji = _emoji_image(segment, height)
+        if emoji is None:
+            continue
+        top = int(round(y + (ascent + descent - height) / 2))
+        image.paste(emoji, (int(x), top), emoji)
+        x += emoji.width
+
+
 def measure_text(draw: ImageDraw.ImageDraw, text: str, font: ImageFont.FreeTypeFont) -> tuple[int, int]:
     try:
         return draw.textsize(text, font=font)
