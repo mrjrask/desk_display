@@ -65,6 +65,7 @@ from utils import (
     ScreenImage,
     fit_font,
     fit_logo_to_box,
+    hdmi_1080p_next_game_logo_height,
     standard_next_game_logo_frame_width,
     standard_next_game_logo_height,
     standard_next_game_logo_height_for_space,
@@ -159,6 +160,15 @@ _font_small_size = 26 if _IS_HYPERPIXEL_4_SQUARE else (22 if HEIGHT > 64 else 19
 if _IS_ADAFRUIT_MINIPITFT:
     _font_small_size = max(12, int(round(_font_small_size * _MINIPITFT_FONT_SCALE)))
 FONT_SMALL = _ts(_font_small_size)    # for SOG label / live clock
+
+# 1080p HDMI: the Last/Live scoreboard fills the space between the title and
+# the dateline, with names, scores and logos sized like the Cubs/Sox boxscores.
+_SCOREBOARD_1080P_NAME_FONT_SIZE = 150
+_SCOREBOARD_1080P_SCORE_FONT_SIZE = 215
+_SCOREBOARD_1080P_SOG_FONT_SIZE = 150
+_SCOREBOARD_1080P_LABEL_FONT_SIZE = 80
+_SCOREBOARD_1080P_LOGO_FILL = 0.8
+_SCOREBOARD_1080P_PAD = 24
 
 # NHL endpoints (prefer api-web; quiet legacy fallback)
 NHL_WEB_TEAM_MONTH_NOW   = NHL_API_ENDPOINTS["team_month_now"]
@@ -699,9 +709,15 @@ def _draw_scoreboard(
 
     y = top_y
 
-    header_pad = config.scale_value(4) if hyperpixel_layout else 4
-    header_gap = config.scale_value(1) if hyperpixel_layout else 1
-    header_h = _text_h(d, FONT_SMALL) + header_pad if put_sog_label else 0
+    hdmi_1080p = _IS_1080P_LAYOUT
+    label_font = _ts(_SCOREBOARD_1080P_LABEL_FONT_SIZE) if hdmi_1080p else FONT_SMALL
+    sog_font = _ts(_SCOREBOARD_1080P_SOG_FONT_SIZE) if hdmi_1080p else FONT_SOG
+    if hdmi_1080p:
+        header_pad, header_gap = 16, 8
+    else:
+        header_pad = config.scale_value(4) if hyperpixel_layout else 4
+        header_gap = config.scale_value(1) if hyperpixel_layout else 1
+    header_h = _text_h(d, label_font) + header_pad if put_sog_label else 0
     table_top = y
 
     # Row heights — compact
@@ -712,6 +728,8 @@ def _draw_scoreboard(
     if _IS_HYPERPIXEL_4_SQUARE and hyperpixel_layout:
         # Match the Bulls Last/Live row separation by allowing Hawks rows to
         # expand into the full available area instead of capping at 48px.
+        max_row_h = max(max_row_h, available_for_rows // 2)
+    if hdmi_1080p:
         max_row_h = max(max_row_h, available_for_rows // 2)
     min_row_compact = config.scale_value(24) if hyperpixel_layout else 24
     row_h = max(available_for_rows // 2, min_row_h)
@@ -748,17 +766,17 @@ def _draw_scoreboard(
     if header_h:
         score_lbl = ""
         sog_lbl = "SOG"
-        sog_w = _text_w(d, sog_lbl, FONT_SMALL)
-        sog_h = _text_h(d, FONT_SMALL)
+        sog_w = _text_w(d, sog_lbl, label_font)
+        sog_h = _text_h(d, label_font)
         sog_x = x2 + (col3_w - sog_w) // 2
-        first_sog_value_h = _text_h(d, FONT_SOG)
+        first_sog_value_h = _text_h(d, sog_font)
         first_sog_value_top = row1_top + max(0, (row1_h - first_sog_value_h) // 2)
         sog_y = max(table_top, first_sog_value_top - sog_h - max(1, header_gap))
         sog_y = min(row1_top - 1, sog_y)
         if score_lbl:
-            d.text((x1 + (col2_w - _text_w(d, score_lbl, FONT_SMALL)) // 2, sog_y), score_lbl, font=FONT_SMALL, fill="white")
-        d.text((sog_x, sog_y), sog_lbl, font=FONT_SMALL, fill="white")
-        d.line([(sog_x, sog_y + sog_h - 1), (sog_x + sog_w, sog_y + sog_h - 1)], fill="white", width=1)
+            d.text((x1 + (col2_w - _text_w(d, score_lbl, label_font)) // 2, sog_y), score_lbl, font=label_font, fill="white")
+        d.text((sog_x, sog_y), sog_lbl, font=label_font, fill="white")
+        d.line([(sog_x, sog_y + sog_h - 1), (sog_x + sog_w, sog_y + sog_h - 1)], fill="white", width=4 if hdmi_1080p else 1)
 
     def _prepare_row(
         row_top: int,
@@ -779,11 +797,15 @@ def _draw_scoreboard(
         if row_height >= row_threshold:
             logo_height = min(logo_mid, max(logo_height, min(row_height - 2, logo_floor)))
         logo_height = max(1, min(int(round(logo_height * 1.3 * _LOGO_SCALE_1080)), row_height - 2, logo_max))
+        if hdmi_1080p:
+            logo_height = max(1, int(round(row_height * _SCOREBOARD_1080P_LOGO_FILL)))
         logo = _load_logo_png(tri, height=logo_height)
         logo_w = logo.size[0] if logo else 0
         text = (label or "").strip() or (tri or "").upper() or "—"
         pad_outer = config.scale_value(6) if hyperpixel_layout else 6
         pad_inner = config.scale_value(4) if hyperpixel_layout else 4
+        if hdmi_1080p:
+            pad_outer = pad_inner = _SCOREBOARD_1080P_PAD
         text_start = x0 + pad_outer + (logo_w + pad_outer if logo else 0)
         max_width = max(1, x1 - text_start - pad_inner)
         return {
@@ -816,6 +838,9 @@ def _draw_scoreboard(
     else:
         name_font = _ts(int(round(_ABBR_FONT_SIZE * 0.85))) if hyperpixel_layout else FONT_ABBR
     score_font = _ts(int(round(_SCORE_FONT_SIZE * 0.85))) if hyperpixel_layout else FONT_SCORE
+    if hdmi_1080p:
+        name_font = _ts(_SCOREBOARD_1080P_NAME_FONT_SIZE)
+        score_font = _ts(_SCOREBOARD_1080P_SCORE_FONT_SIZE)
     if compact_fonts:
         compact_scale = 0.62 if hyperpixel_layout else 0.82
         name_size = int(round(getattr(name_font, "size", _ABBR_FONT_SIZE) * compact_scale))
@@ -844,6 +869,8 @@ def _draw_scoreboard(
         cy = y_top + row_height // 2
         pad_outer = config.scale_value(6) if hyperpixel_layout else 6
         pad_inner = config.scale_value(4) if hyperpixel_layout else 4
+        if hdmi_1080p:
+            pad_outer = pad_inner = _SCOREBOARD_1080P_PAD
         lx = x0 + pad_outer
         tx = lx
         if logo:
@@ -877,11 +904,11 @@ def _draw_scoreboard(
         d.text((sx, sy), sc, font=score_font, fill="white")
 
         sog_txt = "-" if sog is None else str(sog)
-        gw = _text_w(d, sog_txt, FONT_SOG)
-        gh = _text_h(d, FONT_SOG)
+        gw = _text_w(d, sog_txt, sog_font)
+        gh = _text_h(d, sog_font)
         gx = x2 + (col3_w - gw)//2
         gy = cy - gh//2
-        d.text((gx, gy), sog_txt, font=FONT_SOG, fill="white")
+        d.text((gx, gy), sog_txt, font=sog_font, fill="white")
 
     for spec in row_specs:
         _draw_row(spec)
@@ -1241,6 +1268,8 @@ def _draw_next_card(
             int(round(standard_next_game_logo_height(HEIGHT) * config.DISPLAY_SCALE * clamped_scale)),
         )
         logo_h = min(desired_logo_h, available_h)
+    elif _IS_1080P_LAYOUT:
+        logo_h = hdmi_1080p_next_game_logo_height(available_h)
     else:
         logo_h = standard_next_game_logo_height_for_space(
             HEIGHT,

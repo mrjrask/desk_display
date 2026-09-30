@@ -6,6 +6,10 @@ drew and the font sizes and layout constants it loaded (recorded by
 scripts/make_v01_references.py from the v0.1 tag).  Each profile is probed
 here in a process configured by rendering.profile_process, as the render
 server's workers and the display clients are.
+
+Deliberate departures from v0.1, recorded from the current tree instead:
+hdmi_1080p/weather_astronomical.png (Rise/Set grouped together, Jason's
+2026-09-30 1080p layout request).
 """
 from __future__ import annotations
 
