@@ -699,6 +699,23 @@ def test_browser_clients_page_shows_delivery_timings(live_server, browser, env):
     assert "no timings reported" in page.inner_text("tr[data-client-id='den']")
 
 
+def test_browser_clients_page_sets_vertical_scroll(live_server, browser, env):
+    publish_registry(env, [caps("office"), caps("den")])
+    page = browser.new_page(viewport={"width": 1600, "height": 700})
+    page.goto(f"{live_server}/clients")
+    field = "tr[data-client-id='office'] input[data-vertical-scroll]"
+    page.wait_for_selector(field)
+    page.fill(field, "0.5")
+    page.click("tr[data-client-id='office'] .vertical-scroll button:text('Save')")
+    page.wait_for_selector("#notice.ok")
+    assert env["store"].vertical_speed_adjustment("office") == 0.5
+    page.wait_for_function("document.querySelector(\"tr[data-client-id='office']\").textContent.includes('own +0.50')")
+    assert "global +0.00" in page.inner_text("tr[data-client-id='den']")
+    page.click("tr[data-client-id='office'] button:text('Use global')")
+    page.wait_for_function("!document.querySelector(\"tr[data-client-id='office']\").textContent.includes('own +0.50')")
+    assert env["store"].vertical_speed_adjustment("office") is None
+
+
 # ── Provisioning (Phase 16) ────────────────────────────────────────────────
 
 
@@ -784,6 +801,29 @@ def test_wizard_provisioning_writes_a_complete_client_env(env, web):
     assert issued["credentials_filename"] == "office-mini.env.client"
     row = {r["client_id"]: r for r in web.get("/api/clients").get_json()["clients"]}["office-mini"]
     assert row["friendly_name"] == "Office mini" and row["assignment"]["playlist_id"] == playlist["id"]
+
+
+def test_clients_page_sets_a_displays_own_vertical_scroll(env, web, monkeypatch):
+    playlist = env["store"].create("Office", DOC, actor="test")
+    env["store"].assign("office", playlist["id"], expected_playlist_id=None, actor="test")
+    publish_registry(env, [caps("office")])
+    listing = web.get("/api/clients").get_json()
+    assert {r["client_id"]: r for r in listing["clients"]}["office"]["vertical_speed_adjustment"] is None
+    assert isinstance(listing["global_vertical_speed_adjustment"], float)
+
+    saved = web.put("/api/clients/office/scroll", json={"vertical_speed_adjustment": 0.3}, headers=CSRF)
+    assert saved.status_code == 200 and saved.get_json()["vertical_speed_adjustment"] == 0.3
+    rows = {r["client_id"]: r for r in web.get("/api/clients").get_json()["clients"]}
+    assert rows["office"]["vertical_speed_adjustment"] == 0.3
+    assert env["store"].vertical_speed_adjustment("office") == 0.3
+
+    bad = web.put("/api/clients/office/scroll", json={"vertical_speed_adjustment": 9}, headers=CSRF)
+    assert bad.status_code == 400
+    unknown = web.put("/api/clients/nobody/scroll", json={"vertical_speed_adjustment": 0.1}, headers=CSRF)
+    assert unknown.status_code == 404
+    cleared = web.put("/api/clients/office/scroll", json={"vertical_speed_adjustment": None}, headers=CSRF)
+    assert cleared.get_json()["vertical_speed_adjustment"] is None
+    assert env["store"].vertical_speed_adjustment("office") is None
 
 
 def test_wizard_join_flow_never_shows_the_credential(env, web):

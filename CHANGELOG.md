@@ -36,6 +36,13 @@ See the README's [deployment modes](README.md#deployment-modes) and
   checkout, or exiting so systemd restarts it) and reports the result, which
   shows in the row (see OPERATIONS.md, "Updating or restarting a client from
   the Clients page").
+- Per-display **Vertical scroll** adjustment on each row of the Clients page:
+  a display can have its own "Synchronized vertical scroll adjustment"
+  instead of the Rotation Config page's global value (empty or **Use
+  global** follows the global one). It is stored on the server and reaches
+  the display in its manifest on the next sync, so no SSH is needed; the
+  display re-paces the server's scroll packages to it (see OPERATIONS.md,
+  "Scroll speed per display").
 - Every display (standalone, client or combined) starts at the top of the
   playlist labelled "Starter" whenever it restarts, instead of resuming a
   saved position.

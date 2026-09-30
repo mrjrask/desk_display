@@ -268,6 +268,22 @@ def test_friendly_names(store):
     assert "office" not in store.snapshot()["clients"]
 
 
+def test_client_vertical_speed_adjustment(store):
+    assert store.vertical_speed_adjustment("office") is None
+    assert store.set_vertical_speed_adjustment("office", "0.254", actor="jason") == 0.25
+    store.set_friendly_name("office", "Office", actor="jason")
+    assert store.vertical_speed_adjustment("office") == 0.25
+    # Clearing the name keeps the display's own adjustment, and vice versa.
+    store.set_friendly_name("office", None, actor="jason")
+    assert store.snapshot()["clients"]["office"] == {"vertical_speed_adjustment": 0.25}
+    store.set_vertical_speed_adjustment("office", None, actor="jason")
+    assert "office" not in store.snapshot()["clients"]
+    for bad in (-1, 3.5, "fast", True, float("nan")):
+        with pytest.raises(ps.PlaylistValidationError):
+            store.set_vertical_speed_adjustment("office", bad, actor="jason")
+    assert store.snapshot()["audit"][-1]["action"] == "set_vertical_speed_adjustment"
+
+
 def test_store_is_not_env_and_path_is_configurable(tmp_path):
     path = ps.store_path({"DESK_DISPLAY_PLAYLIST_STORE_PATH": str(tmp_path / "x.json")})
     assert path == tmp_path / "x.json"

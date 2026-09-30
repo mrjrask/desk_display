@@ -128,6 +128,21 @@ def test_scroll_capture_rebuilds_the_whole_canvas():
     assert asset_image(package, package["scroll"]["canvas"]).size == (W, tall.height)
 
 
+def test_scroll_package_records_the_vertical_adjustment_it_was_paced_with(monkeypatch):
+    # Patched through the function's own globals: other tests may reload utils.
+    monkeypatch.setitem(scroll_vertical_content.__globals__, "get_global_scroll_settings",
+                        lambda: {"speed": 1.0, "smoothness": 1.0, "vertical_speed_adjustment": 0.25})
+    display = _CaptureDisplay(PROFILE)
+    tall = gradient(W, H * 3)
+    scroll_vertical_content(display=display, content_height=tall.height, viewport_width=W, viewport_height=H,
+                            render_at_offset=lambda o: display.image(tall.crop((0, o, W, o + H))),
+                            base_step=3, pause_start=0, pause_end=0, min_frame_time=0.05)
+    package = build_package(key("MLB Scoreboard"), PROFILE, Artifact(display.capture))
+    assert package["scroll"]["vertical_speed_adjustment"] == 0.25
+    assert package["scroll"]["frame_seconds"] == pytest.approx(0.05 / 1.25)
+    validate_package(package, key=key("MLB Scoreboard"))
+
+
 def test_content_that_fits_needs_no_package():
     display = _CaptureDisplay(PROFILE)
     scroll_vertical_content(display=display, content_height=H, viewport_width=W, viewport_height=H,
@@ -298,6 +313,7 @@ def _valid_scroll():
     (lambda p: p.update(kind="hologram"), "invalid_schema"),
     (lambda p: p["scroll"].update(canvas="nope"), "missing_asset"),
     (lambda p: p["scroll"].update(viewport=[1, 1]), "invalid_field"),
+    (lambda p: p["scroll"].update(vertical_speed_adjustment=9), "invalid_field"),
     (lambda p: p["assets"]["a0"].update(sha256="0" * 64), "invalid_asset"),
     (lambda p: p["assets"]["a0"].update(data="!!"), "invalid_asset"),
     (lambda p: p.update(width=1), "invalid_field"),

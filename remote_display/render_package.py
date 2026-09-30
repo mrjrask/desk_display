@@ -22,7 +22,9 @@ Kind bodies:
 
 ``scroll``     ``canvas`` (full-height image), ``viewport`` [w, h], ``step_px``,
                ``frame_seconds``, ``pause_start_seconds``,
-               ``pause_end_seconds``, ``direction`` ("down" or "up").
+               ``pause_end_seconds``, ``direction`` ("down" or "up") and,
+               optionally, the ``vertical_speed_adjustment`` the frame time
+               was paced with (a client re-paces to its own adjustment).
 ``ticker``     ``base`` image, ``duration_seconds`` and ``lanes``: each lane
                has logical ``bounds`` [l, t, r, b], a looping ``strip``
                image, ``speed_px_per_second``, ``offset_px`` and
@@ -308,6 +310,8 @@ def validate_package(
         _number(body.get("pause_end_seconds"), "scroll.pause_end_seconds", maximum=600)
         if body.get("direction") not in ("down", "up"):
             _fail("invalid_field", "scroll.direction must be down or up")
+        if body.get("vertical_speed_adjustment") is not None:
+            _number(body["vertical_speed_adjustment"], "scroll.vertical_speed_adjustment", minimum=-0.9, maximum=3)
     elif kind == "ticker":
         full_frame(body.get("base"), "ticker.base")
         _number(body.get("duration_seconds"), "ticker.duration_seconds", maximum=3600)

@@ -328,6 +328,26 @@ def test_manifest_uses_assignment_when_client_reports_no_demand(api, server):
     assert manifest["requested_screens"] == ["date"] and manifest["state"] == "fresh"
 
 
+def test_manifest_carries_a_displays_own_vertical_scroll_adjustment(tmp_path, clock):
+    own = {"office": 0.5}
+    config = display_server.DisplayServerConfig(enrollment="shared", auth_token=SERVER_TOKEN,
+                                                admin_token=ADMIN_TOKEN, artifact_dir=tmp_path / "a")
+    app = display_server.create_app(config, assignments={"office": Assignment("default", "rev-9", ("date",)),
+                                                         "den": Assignment("default", "rev-9", ("date",))}.get,
+                                    clock=clock, vertical_speed_adjustments=own.get)
+    api = app.test_client()
+    office = registered(api)
+    den = registered(api, "den", capabilities=caps("den"))
+    manifest = api.get("/api/v1/clients/office/manifest", headers=bearer(office)).get_json()
+    assert manifest["configuration"]["vertical_speed_adjustment"] == 0.5
+    # A display without its own keeps the global pacing: the key is absent.
+    other = api.get("/api/v1/clients/den/manifest", headers=bearer(den)).get_json()
+    assert "vertical_speed_adjustment" not in other["configuration"]
+    own["office"] = 0.25
+    changed = api.get("/api/v1/clients/office/manifest", headers=bearer(office)).get_json()
+    assert changed["manifest_revision"] != manifest["manifest_revision"]
+
+
 def test_unassigned_client_demand_is_not_rendered(api, server):
     """An unassigned client's reported demand is only its offline cache."""
 

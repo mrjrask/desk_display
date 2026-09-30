@@ -396,6 +396,25 @@ cannot overwrite each other. The row shows whether the new revision has been
 delivered and acknowledged, and warns about screens this client can show
 only as a still, or not at all.
 
+### Scroll speed per display
+
+The Rotation Config page's **Synchronized vertical scroll adjustment** is the
+default for every display. To give one display its own, type a value in the
+**Vertical scroll** field in its row on `/clients` and press **Save** (0.25 is
+25% faster than normal, -0.25 is 25% slower, from -0.9 to 3). Leave it empty
+or press **Use global** to follow the Rotation Config value again. The
+setting is stored in the server's playlist store and reaches the display in
+its manifest on its next sync, so nothing on the Pi needs editing. It changes
+standings, scoreboards, On This Day, schedules and playoff screens, not
+tickers or logo animations.
+
+The server still renders each screen once per screen type, paced with the
+global value, and records that value in the scroll package; a display with
+its own value re-paces playback from it. Screenshots are unaffected, since
+a scroll's screenshot is its whole canvas. A display running software older
+than this feature ignores the setting until it is updated. A standalone
+install has only the Rotation Config value, which is already per device.
+
 ### Updating or restarting a client from the Clients page
 
 Each row on `/clients` has **Update (git pull)** and **Restart client**

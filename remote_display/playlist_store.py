@@ -9,7 +9,7 @@ display plays.  This module stores that state in one versioned JSON document
       "store_revision": 12,
       "playlists": {"pl-…": {"id", "name", "revision", "document", ...}},
       "assignments": {"<client id>": {"playlist_id", "assigned_at", "assigned_by"}},
-      "clients": {"<client id>": {"friendly_name"}},
+      "clients": {"<client id>": {"friendly_name", "vertical_speed_adjustment"}},
       "audit": [{"at", "actor", "action", "target", "detail"}, ...]
     }
 
@@ -65,6 +65,9 @@ EXPORT_SCHEMA_VERSION = 1
 MAX_DOCUMENT_BYTES = 256 * 1024
 MAX_NAME_LENGTH = 80
 MAX_AUDIT_ENTRIES = 500
+# The range of the Rotation Config page's "Synchronized vertical scroll
+# adjustment" (utils clamps the global setting to the same range).
+VERTICAL_SPEED_ADJUSTMENT_RANGE = (-0.9, 3.0)
 _DOCUMENT_KEYS = {"screens", "playlists", "sequence", "scroll"}
 _PROJECT_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_STORE_PATH = _PROJECT_ROOT / ".runtime" / "server" / "playlists.json"
@@ -573,8 +576,28 @@ class PlaylistStore:
             if name:
                 data["clients"].setdefault(client_id, {})["friendly_name"] = _name(name)
             else:
-                data["clients"].pop(client_id, None)
+                _clear_client_setting(data, client_id, "friendly_name")
             self._audit(data, actor, "rename_client", client_id, friendly_name=name or None)
+
+    def vertical_speed_adjustment(self, client_id: str) -> float | None:
+        """The client's own vertical scroll adjustment, or None to use the global one."""
+
+        value = (self.snapshot()["clients"].get(client_id) or {}).get("vertical_speed_adjustment")
+        return None if value is None else float(value)
+
+    def set_vertical_speed_adjustment(self, client_id: str, value: Any, *, actor: str) -> float | None:
+        """Set (or, with None, clear) the client's own vertical scroll adjustment."""
+
+        client_id = _client(client_id)
+        adjustment = vertical_speed_adjustment_value(value)
+        with self._transaction() as data:
+            if adjustment is None:
+                _clear_client_setting(data, client_id, "vertical_speed_adjustment")
+            else:
+                data["clients"].setdefault(client_id, {})["vertical_speed_adjustment"] = adjustment
+            self._audit(data, actor, "set_vertical_speed_adjustment", client_id,
+                        vertical_speed_adjustment=adjustment)
+        return adjustment
 
     # ── Import and export ──────────────────────────────────────────────────
 
@@ -600,6 +623,33 @@ class PlaylistStore:
             raise PlaylistValidationError(f"unknown export key {unknown[0]!r}", field=unknown[0])
         return self.create(name or payload.get("name") or "Imported playlist", scrub_secrets(payload.get("document")),
                            actor=actor, action="import")
+
+
+def vertical_speed_adjustment_value(value: Any) -> float | None:
+    """Validate a per-client vertical scroll adjustment (None or "" clears it)."""
+
+    if value is None or value == "":
+        return None
+    low, high = VERTICAL_SPEED_ADJUSTMENT_RANGE
+    try:
+        if isinstance(value, bool):
+            raise TypeError
+        parsed = float(value)
+    except (TypeError, ValueError):
+        parsed = float("nan")
+    if not low <= parsed <= high:
+        raise PlaylistValidationError(f"vertical_speed_adjustment must be a number from {low} to {high}",
+                                      field="vertical_speed_adjustment")
+    return round(parsed, 2)
+
+
+def _clear_client_setting(data: dict[str, Any], client_id: str, key: str) -> None:
+    entry = data["clients"].get(client_id)
+    if entry is None:
+        return
+    entry.pop(key, None)
+    if not entry:
+        data["clients"].pop(client_id, None)
 
 
 def _client(value: Any) -> str:

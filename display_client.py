@@ -20,7 +20,7 @@ import os
 import signal
 import threading
 import time
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -208,6 +208,16 @@ def _live_screens() -> frozenset[str]:
 LIVE_SCREENS = _live_screens()
 
 
+def _vertical_speed_adjustment(manifest: Any) -> float | None:
+    """This display's own vertical scroll adjustment from its manifest, if set."""
+
+    configuration = manifest.get("configuration") if isinstance(manifest, Mapping) else None
+    value = configuration.get("vertical_speed_adjustment") if isinstance(configuration, Mapping) else None
+    if isinstance(value, bool) or not isinstance(value, int | float):
+        return None
+    return min(3.0, max(-0.9, float(value)))
+
+
 def _parse_time(value: Any) -> datetime | None:
     if not isinstance(value, str) or not value:
         return None
@@ -275,6 +285,9 @@ class DisplayClient:
         self._monotonic = monotonic
         self.controls = Controls()
         self._content_revision: tuple[str | None, str | None] | None = None
+        # This display's own vertical scroll adjustment (Clients page), or
+        # None to play scrolls as the server paced them.
+        self._vertical_speed_adjustment: float | None = None
         self._player: ClientPlayer | None = None
         # A restart always begins at the top of the Starter playlist: only the
         # history (for the Back button) survives from the saved position.
@@ -321,6 +334,7 @@ class DisplayClient:
 
         self._content_revision = content.revision
         self._player = None
+        self._vertical_speed_adjustment = _vertical_speed_adjustment(content.manifest)
         playlist = content.playlist
         if playlist is None or content.manifest is None:
             return
@@ -452,6 +466,8 @@ class DisplayClient:
             kwargs["ip_text"] = self._ip_text
         if self._update_available is not None:
             kwargs["update_available"] = self._update_available
+        if self._vertical_speed_adjustment is not None:
+            kwargs["vertical_speed_adjustment"] = self._vertical_speed_adjustment
         try:
             return PackagePlayback(package, self.profile, **kwargs)
         except (KeyError, TypeError, ValueError, OSError) as exc:

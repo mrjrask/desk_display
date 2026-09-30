@@ -247,6 +247,7 @@ def create_app(
     render_executor: Any = None,
     playlist_documents: Callable[[str, str], Mapping[str, Any] | None] | None = None,
     display_status: Callable[[], Mapping[str, Any]] | None = None,
+    vertical_speed_adjustments: Callable[[str], float | None] | None = None,
 ) -> Flask:
     """Build the API.
 
@@ -258,9 +259,14 @@ def create_app(
     that the caller ticks or starts. ``display_status()`` returns the feed
     summary (:func:`remote_display.display_status.feed_summary`) each
     heartbeat response carries for the client's side displays.
+    ``vertical_speed_adjustments(client_id)`` returns a display's own
+    vertical scroll adjustment (set on the Clients page), which its manifest
+    carries, or None to keep the global one.
     """
 
     config = config or DisplayServerConfig.from_env()
+    if vertical_speed_adjustments is None and config.playlist_store_path is not None:
+        vertical_speed_adjustments = PlaylistStore(config.playlist_store_path).vertical_speed_adjustment
     if assignments is None and config.playlist_store_path is not None:
         store = PlaylistStore(config.playlist_store_path)
 
@@ -497,6 +503,16 @@ def create_app(
         else:
             requested, interactive = set(), set()
         client_id = record.client_id
+        configuration: dict[str, Any] = {
+            "lease_seconds": registry.lease_seconds,
+            "heartbeat_interval_seconds": registry.heartbeat_interval_seconds,
+            "sync_interval_seconds": registry.sync_interval_seconds,
+        }
+        # Only when set, so displays without their own adjustment keep the
+        # manifest revision they had.
+        adjustment = None if vertical_speed_adjustments is None else vertical_speed_adjustments(client_id)
+        if adjustment is not None:
+            configuration["vertical_speed_adjustment"] = adjustment
         manifest = build_client_manifest(
             artifacts,
             client_id=client_id,
@@ -504,11 +520,7 @@ def create_app(
             requested_screens=requested,
             interactive_screens=interactive,
             assignment=_assignment_payload(client_id, delivered=True),
-            configuration={
-                "lease_seconds": registry.lease_seconds,
-                "heartbeat_interval_seconds": registry.heartbeat_interval_seconds,
-                "sync_interval_seconds": registry.sync_interval_seconds,
-            },
+            configuration=configuration,
             artifact_url=lambda name: f"/api/v1/clients/{client_id}/artifacts/{name}",
             now=clock(),
         )
