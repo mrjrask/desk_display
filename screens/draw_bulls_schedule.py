@@ -47,6 +47,7 @@ from utils import (
     standard_next_game_logo_frame_width,
     standard_next_game_logo_height,
     standard_next_game_logo_height_for_space,
+    hdmi_1080p_next_game_logo_height,
 )
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -156,6 +157,11 @@ FONT_NEXT_OPP = FONT_TEAM_SPORTS                 # opponent line in "next" cards
 BOTTOM_LINE_MARGIN = 6
 _IS_1080P_LAYOUT = config.is_hdmi_1080p_layout()
 _LOGO_SCALE_1080 = config.DISPLAY_PROFILE_LOGO_SCALE_CAP
+# 1080p HDMI Last/Live scoreboard (matches Hawks Last at 1080p).
+_SCOREBOARD_1080P_TEAM_FONT_SIZE = 150
+_SCOREBOARD_1080P_SCORE_FONT_SIZE = 215
+_SCOREBOARD_1080P_LOGO_FILL = 0.8
+_SCOREBOARD_1080P_PAD = 24
 
 
 def _bottom_line_margin(*, hyperpixel_layout: bool = False, extra: int = 0) -> int:
@@ -601,6 +607,9 @@ def _draw_scoreboard_table(
         score_size = int(round(getattr(score_font, "size", _FONT_SCORE_SIZE) * compact_scale))
         team_font = _ts(max(12, team_size))
         score_font = _ts(max(16, score_size))
+    if _IS_1080P_LAYOUT:
+        team_font = _ts(_SCOREBOARD_1080P_TEAM_FONT_SIZE)
+        score_font = _ts(_SCOREBOARD_1080P_SCORE_FONT_SIZE)
 
     row_count = len(rows)
     col1_w = min(WIDTH - 24, max(84, int(WIDTH * 0.72)))
@@ -635,12 +644,16 @@ def _draw_scoreboard_table(
         logo_max = config.scale_value(64) if hyperpixel_layout else 64
         base_h = max(1, h - pad_logo)
         logo_h = min(logo_max, max(logo_min, int(round(base_h * _LOGO_SCALE_1080))))
-        logo   = _load_logo_png(tri, logo_h)
         px = config.scale_value(6) if hyperpixel_layout else 6
+        logo_gap = px
+        if _IS_1080P_LAYOUT:
+            logo_h = max(1, int(round(h * _SCOREBOARD_1080P_LOGO_FILL)))
+            px = logo_gap = _SCOREBOARD_1080P_PAD
+        logo   = _load_logo_png(tri, logo_h)
         if logo:
             ly = top + (h - logo.height) // 2
             img.paste(logo, (px, ly), logo)
-            px += logo.width + (config.scale_value(6) if hyperpixel_layout else 6)
+            px += logo.width + logo_gap
 
         # Team label
         max_text_w = max(1, x1 - (config.scale_value(6) if hyperpixel_layout else 6) - px)
@@ -775,6 +788,8 @@ def _render_next_game(game: dict, *, title: str, logo_scale: float = 1.0) -> Ima
             int(round(standard_next_game_logo_height(HEIGHT) * config.DISPLAY_SCALE)),
         )
         logo_h = min(int(round(desired_logo_h * logo_scale)), available_h)
+    elif _IS_1080P_LAYOUT:
+        logo_h = hdmi_1080p_next_game_logo_height(available_h)
     else:
         logo_h = standard_next_game_logo_height_for_space(HEIGHT, available_h, scale=logo_scale)
     logo_left  = _load_logo_png(away["tri"], logo_h) if away else None

@@ -8,6 +8,8 @@ from config import (
 )
 from screens.mlb_team_standings import (
     LOGO_SZ,
+    TEAM_STAND2_FONT_OFFSET_1080P,
+    TEAM_STAND_LOGO_SZ_1080P,
     _format_int,
     draw_standings_screen1 as _base_screen1,
     draw_standings_screen2 as _base_screen2,
@@ -210,7 +212,8 @@ def draw_nhl_standings_screen2(display, rec, logo_path, *, screen_id=None, trans
         split_order=("division", "conference", "home", "away"),
         show_streak=False,
         show_points=False,
-        logo_size=NHL_LOGO_SZ,
+        logo_size=(TEAM_STAND_LOGO_SZ_1080P if _IS_1080P_LAYOUT else NHL_LOGO_SZ),
+        font_size_offset=(TEAM_STAND2_FONT_OFFSET_1080P if _IS_1080P_LAYOUT else 0),
         screen_id=screen_id,
         transition=transition,
     )

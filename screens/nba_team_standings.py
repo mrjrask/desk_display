@@ -3,6 +3,8 @@ import config
 from config import is_hyperpixel_4_square_layout, is_hyperpixel_next_layout
 from screens.mlb_team_standings import (
     LOGO_SZ,
+    TEAM_STAND2_FONT_OFFSET_1080P,
+    TEAM_STAND_LOGO_SZ_1080P,
     draw_standings_screen1 as _base_screen1,
     draw_standings_screen2 as _base_screen2,
 )
@@ -119,7 +121,8 @@ def draw_nba_standings_screen2(display, rec, logo_path, *, screen_id=None, trans
         display,
         _strip_pct_leading_zero(rec),
         logo_path,
-        logo_size=NBA_LOGO_SZ,
+        logo_size=(TEAM_STAND_LOGO_SZ_1080P if _IS_1080P_LAYOUT else NBA_LOGO_SZ),
+        font_size_offset=(TEAM_STAND2_FONT_OFFSET_1080P if _IS_1080P_LAYOUT else 0),
         pct_precision=3,
         screen_id=screen_id,
         transition=transition,
