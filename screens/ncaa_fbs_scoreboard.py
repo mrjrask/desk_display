@@ -81,7 +81,7 @@ BLOCK_SPACING = scale_value(10)
 SCORE_ROW_H = scale_value(56)
 STATUS_ROW_H = scale_value(18)
 SEED_FONT = get_screen_font(SCREEN_ID, "seed", base_font=FONT_STATUS, default_size=13)
-RANK_FONT = get_screen_font(SCREEN_ID, "rank", base_font=FONT_STATUS, default_size=11)
+RANK_FONT = get_screen_font(SCREEN_ID, "rank", base_font=FONT_STATUS, default_size=13)
 TEAM_ABBREVIATION_FONT = get_screen_font(
     SCREEN_ID, "team_abbreviation", base_font=FONT_TEAM_SPORTS, default_size=18
 )

@@ -203,6 +203,8 @@ See the README's [deployment modes](README.md#deployment-modes) and
   data before falling back to its abbreviation.
 - NCAA FBS Scoreboard games are listed by their best-ranked team (#1 first),
   then by the other team's rank, then by kickoff time.
+- NCAA FBS Scoreboard rank superscripts are a little larger (rank font 11 → 13
+  before profile scaling) on every display profile.
 - The render server downloads missing NCAA FBS team logos itself. Whenever
   its scoreboard feed loads the week's games, it saves ESPN's logo, trimmed
   and capped at 128 px like `scripts/logo_getter.py`, for each team with no
