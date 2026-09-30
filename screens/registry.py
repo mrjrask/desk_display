@@ -1574,42 +1574,41 @@ def build_screen_registry(context: ScreenContext) -> tuple[dict[str, ScreenDefin
     wolves = context.cache.get("wolves") or {}
     # Register the Wolves screens independently. A transient feed failure or
     # an empty current-season response must not remove the whole Wolves group
-    # from the registry; individual screens already advertise availability
-    # from the data they actually have.
+    # from the registry; individual screens advertise availability from the
+    # data they actually have.
     register_logo("wolves logo")
-        wolves_next = wolves.get("next")
-        wolves_next_home = wolves.get("next_home")
-        if _games_match(wolves_next_home, wolves_next):
-            wolves_next_home = None
-        register(
-            "wolves last",
-            lambda data=wolves.get("last"): draw_last_wolves_game(
-                context.display, data, transition=True
-            ),
-            available=bool(wolves.get("last")),
-        )
-        register(
-            "wolves live",
-            lambda data=wolves.get("live"): draw_live_wolves_game(
-                context.display, data, transition=True
-            ),
-            available=_is_live_game_today(wolves.get("live")),
-        )
-        register(
-            "wolves next",
-            lambda data=wolves_next: draw_sports_screen_wolves(
-                context.display, data, transition=True
-            ),
-            available=bool(wolves_next),
-        )
-        if wolves_next_home:
-            register(
-                "wolves next home",
-                lambda data=wolves_next_home: draw_wolves_next_home_game(
-                    context.display, data, transition=True
-                ),
-                available=True,
-            )
+    wolves_next = wolves.get("next")
+    wolves_next_home = wolves.get("next_home")
+    if _games_match(wolves_next_home, wolves_next):
+        wolves_next_home = None
+    register(
+        "wolves last",
+        lambda data=wolves.get("last"): draw_last_wolves_game(
+            context.display, data, transition=True
+        ),
+        available=bool(wolves.get("last")),
+    )
+    register(
+        "wolves live",
+        lambda data=wolves.get("live"): draw_live_wolves_game(
+            context.display, data, transition=True
+        ),
+        available=_is_live_game_today(wolves.get("live")),
+    )
+    register(
+        "wolves next",
+        lambda data=wolves_next: draw_sports_screen_wolves(
+            context.display, data, transition=True
+        ),
+        available=bool(wolves_next),
+    )
+    register(
+        "wolves next home",
+        lambda data=wolves_next_home: draw_wolves_next_home_game(
+            context.display, data, transition=True
+        ),
+        available=bool(wolves_next_home),
+    )
 
     cubs_current_series_vs_sox = False
 
