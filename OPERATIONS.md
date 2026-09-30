@@ -435,6 +435,17 @@ location arrives, usually within a minute. Each location keeps its own
 pressure trend, weather history and AQI history files beside the server's
 (`pressure_history.<lat>_<lon>.json` and so on).
 
+A display set to exactly the server's own location shares the server's
+renders, so it costs no extra fetches.
+
+The first time the render server starts after this was added, it filled in
+the locations once for every display it knew (hyper at 41.9037, -87.6357,
+every other display at 42.1373, -87.8446; see
+`remote_display/location_seed.py`). A display that already had a location
+kept it, and it never runs again, so later edits on the Clients page stick.
+A display added later uses the server's `WEATHER_LATITUDE` /
+`WEATHER_LONGITUDE` until you set its own.
+
 Times on these screens (sunrise, hourly forecast) are still shown in the
 server's time zone. A generic **quad** page with weather tiles uses the
 server's location.
