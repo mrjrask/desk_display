@@ -1572,8 +1572,11 @@ def build_screen_registry(context: ScreenContext) -> tuple[dict[str, ScreenDefin
     )
 
     wolves = context.cache.get("wolves") or {}
-    if any(wolves.values()):
-        register_logo("wolves logo")
+    # Register the Wolves screens independently. A transient feed failure or
+    # an empty current-season response must not remove the whole Wolves group
+    # from the registry; individual screens already advertise availability
+    # from the data they actually have.
+    register_logo("wolves logo")
         wolves_next = wolves.get("next")
         wolves_next_home = wolves.get("next_home")
         if _games_match(wolves_next_home, wolves_next):
