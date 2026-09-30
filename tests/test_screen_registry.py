@@ -750,6 +750,53 @@ def test_waveshare_routes_scoreboard_v2_ids_to_v1_renderers_except_mlb(monkeypat
     assert calls == ["nfl_v1", "nhl_v1", "mlb_v2", "nba_v1"]
 
 
+def test_wolves_screens_are_registered_even_when_cache_is_empty():
+    now = datetime.datetime(2024, 7, 1, 12, 0, tzinfo=CENTRAL_TIME)
+    registry, _ = build_screen_registry(
+        _make_context({"hourly": []}, now, cache_updates={"wolves": {}})
+    )
+
+    assert "wolves last" in registry
+    assert "wolves live" in registry
+    assert "wolves next" in registry
+    assert "wolves next home" in registry
+    assert registry["wolves last"].available is False
+    assert registry["wolves live"].available is False
+    assert registry["wolves next"].available is False
+    assert registry["wolves next home"].available is False
+
+
+def test_wolves_live_is_available_for_normalized_ahl_payload():
+    now = datetime.datetime(2024, 7, 1, 12, 0, tzinfo=CENTRAL_TIME)
+    live_game = {
+        "official_date": "2024-07-01",
+        "start_utc": now.astimezone(datetime.UTC),
+        "status": {"state": "LIVE", "period": "2", "clock": "08:32"},
+        "away": {"id": 999, "abbr": "RFD", "name": "Rockford IceHogs", "score": 1},
+        "home": {"id": 624, "abbr": "CHI", "name": "Chicago Wolves", "score": 2},
+    }
+
+    registry, _ = build_screen_registry(
+        _make_context(
+            {"hourly": []},
+            now,
+            cache_updates={"wolves": {"live": live_game}},
+        )
+    )
+
+    assert registry["wolves live"].available is True
+
+
+def test_wolves_next_home_remains_registered_as_unavailable_without_data():
+    now = datetime.datetime(2024, 7, 1, 12, 0, tzinfo=CENTRAL_TIME)
+    registry, _ = build_screen_registry(
+        _make_context({"hourly": []}, now, cache_updates={"wolves": {"last": {"id": 1}}})
+    )
+
+    assert "wolves next home" in registry
+    assert registry["wolves next home"].available is False
+
+
 def test_cubs_live_is_available_when_status_is_warmup():
     now = datetime.datetime(2024, 7, 1, 12, 0, tzinfo=CENTRAL_TIME)
     weather = {"hourly": []}
