@@ -188,7 +188,8 @@ class _CaptureDisplay:
 
     def capture_scroll(self, *, content_height: int, viewport_width: int, viewport_height: int,
                        render_at_offset: Callable[[int], None], step_px: int, frame_seconds: float,
-                       pause_start_seconds: float, pause_end_seconds: float, reverse: bool) -> None:
+                       pause_start_seconds: float, pause_end_seconds: float, reverse: bool,
+                       vertical_speed_adjustment: float = 0.0) -> None:
         from remote_display.render_package import MAX_ASSET_PIXELS
 
         max_offset = max(0, content_height - viewport_height)
@@ -202,6 +203,7 @@ class _CaptureDisplay:
                 "kind": "scroll", "canvas": canvas, "step_px": max(1, min(int(step_px), self.height)),
                 "frame_seconds": frame_seconds, "pause_start_seconds": pause_start_seconds,
                 "pause_end_seconds": pause_end_seconds, "direction": "up" if reverse else "down",
+                "vertical_speed_adjustment": float(vertical_speed_adjustment),
             })
         render_at_offset(max_offset if reverse else 0)
 

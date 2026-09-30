@@ -62,6 +62,7 @@
 <script>
 const CSRF = {{ {csrf_header: csrf_value} | tojson }};
 let playlists = [];
+let globalVerticalAdjustment = 0;
 
 function notice(message, kind) {
   const el = document.getElementById("notice");
@@ -202,8 +203,60 @@ async function credentialAction(client, action) {
   load();
 }
 
+function signed(value) {
+  return `${value >= 0 ? "+" : ""}${Number(value).toFixed(2)}`;
+}
+
+function scrollControl(td, client) {
+  const own = client.vertical_speed_adjustment;
+  const hasOwn = own !== null && own !== undefined;
+  const wrap = document.createElement("div");
+  wrap.className = "vertical-scroll";
+  const label = document.createElement("label");
+  label.textContent = "Vertical scroll ";
+  const input = document.createElement("input");
+  input.type = "number";
+  input.min = "-0.9";
+  input.max = "3";
+  input.step = "0.05";
+  input.style.width = "6.5em";
+  input.value = hasOwn ? own : "";
+  input.placeholder = signed(globalVerticalAdjustment);
+  input.dataset.verticalScroll = client.client_id;
+  input.setAttribute("aria-label", `Vertical scroll adjustment for ${client.client_id}`);
+  input.title = "This display's own synchronized vertical scroll adjustment: 0.25 is 25% faster, -0.25 is 25% slower. Leave empty to use the Rotation Config value.";
+  label.appendChild(input);
+  wrap.appendChild(label);
+  const save = document.createElement("button");
+  save.textContent = "Save";
+  save.addEventListener("click", () => setVerticalScroll(client, input.value === "" ? null : Number(input.value)));
+  input.addEventListener("keydown", (event) => { if (event.key === "Enter") save.click(); });
+  wrap.appendChild(save);
+  if (hasOwn) {
+    const reset = document.createElement("button");
+    reset.textContent = "Use global";
+    reset.title = `Follow the Rotation Config value (${signed(globalVerticalAdjustment)})`;
+    reset.addEventListener("click", () => setVerticalScroll(client, null));
+    wrap.appendChild(reset);
+  }
+  td.appendChild(wrap);
+  line(td, hasOwn ? `own ${signed(own)} (global ${signed(globalVerticalAdjustment)})`
+    : `global ${signed(globalVerticalAdjustment)}`, "muted");
+}
+
+async function setVerticalScroll(client, value) {
+  try {
+    await api("PUT", `/api/clients/${encodeURIComponent(client.client_id)}/scroll`, { vertical_speed_adjustment: value });
+    notice(value === null
+      ? `${client.client_id} follows the global vertical scroll adjustment again. It applies on the display's next sync.`
+      : `${client.client_id} scrolls at its own adjustment, ${signed(value)}. It applies on the display's next sync.`);
+  } catch (error) { notice(explain(error), "error"); }
+  load();
+}
+
 function render(data) {
   playlists = data.playlists;
+  globalVerticalAdjustment = Number(data.global_vertical_speed_adjustment || 0);
   const body = document.querySelector("#clients tbody");
   body.innerHTML = "";
   if (!data.clients.length) {
@@ -265,6 +318,7 @@ function render(data) {
       const features = [caps.supports_animation ? "animation" : null, caps.has_touch ? "touch" : null,
         (caps.buttons || []).length ? `buttons ${caps.buttons.join("")}` : null].filter(Boolean);
       if (features.length) line(td, features.join(" · "), "muted");
+      scrollControl(td, client);
     });
     cell(tr, (td) => {
       line(td, client.current_screen || "—");
@@ -359,7 +413,11 @@ document.getElementById("issued-hide").addEventListener("click", () => {
 });
 
 load().catch((error) => notice(explain(error), "error"));
-setInterval(() => load().catch(() => {}), 15000);
+// The periodic refresh rebuilds the table, so it waits while a field in it is being edited.
+setInterval(() => {
+  if (document.activeElement && document.activeElement.closest("#clients input")) return;
+  load().catch(() => {});
+}, 15000);
 </script>
 </body>
 </html>

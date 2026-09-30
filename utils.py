@@ -3498,6 +3498,9 @@ def scroll_vertical_content(
             render_at_offset=render_at_offset,
             step_px=int(stride),
             frame_seconds=float(params.target_frame_time),
+            vertical_speed_adjustment=float(
+                _effective_scroll_settings().get("vertical_speed_adjustment", 0.0)
+            ),
             pause_start_seconds=float(pause_start),
             pause_end_seconds=float(pause_end),
             reverse=bool(reverse),

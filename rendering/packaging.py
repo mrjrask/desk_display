@@ -69,6 +69,9 @@ def build_package(key: Any, profile: RenderProfile, artifact: Any) -> dict[str, 
             "viewport": [profile.width, profile.height],
             **{k: capture[k] for k in ("step_px", "frame_seconds", "pause_start_seconds",
                                        "pause_end_seconds", "direction")},
+            # The adjustment frame_seconds was paced with, so a client with
+            # its own adjustment can re-pace playback (PackagePlayback).
+            "vertical_speed_adjustment": round(float(capture.get("vertical_speed_adjustment", 0.0)), 4),
         }
     elif kind == "ticker" and capture.get("kind") == "ticker":
         lanes = [{

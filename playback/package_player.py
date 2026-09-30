@@ -47,6 +47,7 @@ class PackagePlayback:
         rng: random.Random | None = None,
         ip_text: Callable[[], str | None] | None = None,
         update_available: Callable[[], bool] | None = None,
+        vertical_speed_adjustment: float | None = None,
     ) -> None:
         self.package = package
         self.profile = profile
@@ -63,8 +64,29 @@ class PackagePlayback:
         self._colors: dict[int, tuple[tuple[int, int, int], tuple[int, int, int]]] = {}
         self._cycle: tuple[float, int] | None = None
         self.direction = "ltr"
+        self._scroll_frame_seconds = (
+            self._repaced_scroll_frame_seconds(vertical_speed_adjustment) if self.kind == "scroll" else 0.0
+        )
         if self.kind == "animation" and "slide" in self.body:
             self.direction = self._rng.choice(("ltr", "rtl"))
+
+    def _repaced_scroll_frame_seconds(self, adjustment: float | None) -> float:
+        """The scroll frame time, re-paced to this display's own adjustment.
+
+        The server paces a scroll with the global "Synchronized vertical
+        scroll adjustment" and records it in the package. A display with its
+        own adjustment (set per display on the Clients page) scales the
+        frame time by the ratio of the two speed multipliers; without one,
+        or for a package that does not record what it was paced with, the
+        server's pacing stands.
+        """
+
+        frame_seconds = float(self.body["frame_seconds"])
+        baked = self.body.get("vertical_speed_adjustment")
+        if adjustment is None or baked is None:
+            return frame_seconds
+        target = min(3.0, max(-0.9, float(adjustment)))
+        return max(0.001, frame_seconds * (1.0 + float(baked)) / (1.0 + target))
 
     def _gh_on(self) -> bool:
         """Whether the clock shows v0.1's GitHub update icon (this device's own status)."""
@@ -98,7 +120,7 @@ class PackagePlayback:
         if self.kind == "scroll":
             canvas = self.package["assets"][body["canvas"]]
             steps = math.ceil((canvas["height"] - self.profile.height) / body["step_px"])
-            return body["pause_start_seconds"] + steps * body["frame_seconds"] + body["pause_end_seconds"]
+            return body["pause_start_seconds"] + steps * self._scroll_frame_seconds + body["pause_end_seconds"]
         if self.kind == "animation" and "frames" in body:
             return sum(f["duration_ms"] for f in body["frames"]) / 1000 * body["loops"]
         if self.kind == "animation":
@@ -120,7 +142,7 @@ class PackagePlayback:
 
         body = self.body
         if self.kind == "scroll":
-            return max(0.01, float(body["frame_seconds"]))
+            return max(0.01, self._scroll_frame_seconds)
         if self.kind == "ticker":
             return TICKER_FRAME_SECONDS
         if self.kind == "composite":
@@ -185,7 +207,7 @@ class PackagePlayback:
         canvas = self.package["assets"][body["canvas"]]
         max_offset = canvas["height"] - self.profile.height
         moving = t - body["pause_start_seconds"]
-        travelled = 0 if moving <= 0 else min(max_offset, int(moving / body["frame_seconds"]) * body["step_px"])
+        travelled = 0 if moving <= 0 else min(max_offset, int(moving / self._scroll_frame_seconds) * body["step_px"])
         return max_offset - travelled if body["direction"] == "up" else travelled
 
     def _cycle_timing(self) -> tuple[float, int]:

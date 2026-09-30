@@ -109,6 +109,28 @@ def test_scroll_plays_once_then_holds_the_bottom():
     assert playback.frame_at(10).getpixel((0, 0)) == (255, 0, 0)  # bottom of the canvas
 
 
+def test_scroll_repaces_to_the_displays_own_vertical_adjustment():
+    def paced(adjustment):
+        def body(b):
+            base = scroll_package()["scroll"]
+            canvas = Image.new("RGB", (W, H * 2))
+            return {**{k: v for k, v in base.items() if k != "canvas"}, "canvas": b.add(canvas),
+                    "vertical_speed_adjustment": adjustment}
+        return build("MLB Scoreboard", "scrolling_canvas", "scroll", body)
+
+    # Server paced at the global +0.25; this display wants 50% faster than normal.
+    playback = play(paced(0.25), vertical_speed_adjustment=0.5)
+    assert playback.frame_seconds == pytest.approx(0.5 * 1.25 / 1.5)
+    assert playback.motion_seconds == pytest.approx(1 + 4 * 0.5 * 1.25 / 1.5 + 2)
+    # Without its own adjustment, or for a package that does not say how it
+    # was paced, the server's pacing stands.
+    assert play(paced(0.25)).frame_seconds == pytest.approx(0.5)
+    assert play(scroll_package(), vertical_speed_adjustment=0.5).frame_seconds == pytest.approx(0.5)
+    slower = play(paced(0.0), vertical_speed_adjustment=-0.5)
+    assert slower.motion_seconds == pytest.approx(1 + 4 * 1.0 + 2)
+    assert slower.key_at(1.9) == slower.key_at(0) and slower.key_at(2.1) != slower.key_at(0)
+
+
 def test_recorded_frames_loop_then_hold_the_last():
     playback = play(frames_package())
     assert playback.motion_seconds == pytest.approx(0.75 * 2)
@@ -310,7 +332,7 @@ def env(tmp_path):
         pass
 
     result = Env()
-    result.__dict__.update(publish=publish, make_client=make_client, transport=transport)
+    result.__dict__.update(publish=publish, make_client=make_client, transport=transport, store=store)
     return result
 
 
@@ -343,6 +365,35 @@ def test_client_plays_packages_with_their_own_timing(env):
     assert screens["MLB Scoreboard"][1].kind == "scroll"
     assert screens["MLB Scoreboard"][0] == pytest.approx(screens["MLB Scoreboard"][1].duration)
     assert screens["weather quad"][1].kind == "composite"
+
+
+def test_client_plays_scrolls_at_its_own_vertical_adjustment(env):
+    def paced(b):
+        body = scroll_package()["scroll"]
+        canvas = Image.new("RGB", (W, H * 2))
+        return {**{k: v for k, v in body.items() if k != "canvas"}, "canvas": b.add(canvas),
+                "vertical_speed_adjustment": 0.0}
+
+    env.publish("weather quad", 10, quad_package())
+    env.publish("MLB Scoreboard", 20, build("MLB Scoreboard", "scrolling_canvas", "scroll", paced))
+    for index, tile in enumerate(TILES):
+        env.publish(tile, 100 + index)
+
+    def scroll_frame_seconds(client):
+        for _ in range(2):
+            screen, _seconds = client.step()
+            if screen == "MLB Scoreboard":
+                return client.animation.frame_seconds
+        raise AssertionError("the scroll screen never played")
+
+    client = synced(env.make_client())
+    assert scroll_frame_seconds(client) == pytest.approx(0.5)
+    env.store.set_vertical_speed_adjustment("office", 1.0, actor="test")
+    synced(client)
+    assert scroll_frame_seconds(client) == pytest.approx(0.25)
+    env.store.set_vertical_speed_adjustment("office", None, actor="test")
+    synced(client)
+    assert scroll_frame_seconds(client) == pytest.approx(0.5)
 
 
 def test_stills_only_client_skips_package_downloads(env):

@@ -42,6 +42,7 @@ from remote_display.client_commands import ACTIONS, CommandError, CommandStore, 
 from remote_display.models import ModelValidationError, identifier
 from remote_display.playlist_store import (
     MAX_NAME_LENGTH,
+    VERTICAL_SPEED_ADJUSTMENT_RANGE,
     PlaylistStore,
     PlaylistStoreError,
     PlaylistValidationError,
@@ -298,6 +299,8 @@ def register(
             row = {
                 "client_id": client_id,
                 "friendly_name": (data["clients"].get(client_id) or {}).get("friendly_name"),
+                # This display's own vertical scroll adjustment; None uses the global one.
+                "vertical_speed_adjustment": (data["clients"].get(client_id) or {}).get("vertical_speed_adjustment"),
                 "kind": "static" if entry.get("static") else "dynamic",
                 "state": state,
                 "display_profile": caps.get("display_profile"),
@@ -522,6 +525,7 @@ def register(
         return respond({
             "generated_at": _iso_now(),
             "clients": client_rows(),
+            "global_vertical_speed_adjustment": _global_vertical_speed_adjustment(),
             "playlists": [{"id": p["id"], "name": p["name"], "revision": p["revision"]}
                           for p in sorted(data["playlists"].values(), key=lambda p: p["name"].lower())],
         })
@@ -658,6 +662,28 @@ def register(
             return jsonify({"error": "unknown_client", "message": "no client with this ID"}), 404
         command = _commands().queue(client_id, payload.get("action"), actor=actor())
         return respond({"client_id": client_id, "command": {**command, "label": ACTIONS[command["action"]]}}, 202)
+
+    def _global_vertical_speed_adjustment() -> float:
+        scroll = active_document().get("scroll")
+        value = scroll.get("vertical_speed_adjustment") if isinstance(scroll, dict) else None
+        try:
+            return min(VERTICAL_SPEED_ADJUSTMENT_RANGE[1], max(VERTICAL_SPEED_ADJUSTMENT_RANGE[0], float(value or 0)))
+        except (TypeError, ValueError):
+            return 0.0
+
+    @blueprint.put("/api/clients/<client_id>/scroll")
+    def client_scroll(client_id: str):
+        """Set or clear (null) one display's own vertical scroll adjustment."""
+
+        payload = body()
+        known = {row["client_id"] for row in client_rows()}
+        client_id = identifier(client_id, "client_id")
+        if client_id not in known:
+            return jsonify({"error": "unknown_client", "message": "no client with this ID"}), 404
+        adjustment = _store().set_vertical_speed_adjustment(
+            client_id, payload.get("vertical_speed_adjustment"), actor=actor())
+        return respond({"client_id": client_id, "vertical_speed_adjustment": adjustment,
+                        "global_vertical_speed_adjustment": _global_vertical_speed_adjustment()})
 
     @blueprint.put("/api/clients/<client_id>/name")
     def name_client(client_id: str):
