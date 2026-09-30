@@ -54,6 +54,11 @@ _IS_1080P_LAYOUT = config.is_hdmi_1080p_layout()
 _VRNOF_MATCH_LOGO_HEIGHT_1080 = 54 * 5
 if _IS_1080P_LAYOUT:
     LOGO_SZ = min(LOGO_SZ, _VRNOF_MATCH_LOGO_HEIGHT_1080)
+# 1080p HDMI Stand 1/2/3: v0.1 drew these for a much smaller panel, so the
+# logo takes the largest standings size and the text grows to match.
+TEAM_STAND_LOGO_SZ_1080P = _VRNOF_MATCH_LOGO_HEIGHT_1080
+TEAM_STAND1_FONT_OFFSET_1080P = 80
+TEAM_STAND2_FONT_OFFSET_1080P = 40
 MARGIN  = scale_value(6)
 FRACTION_FONT_SCALE = 0.6
 _CUBS_STAND3_MARKER_SCALE = 1.8
@@ -179,6 +184,10 @@ def _hawks_stand1_match_metrics(screen_id: str | None) -> tuple[int | None, int]
 
     if not screen_id or str(screen_id).lower() not in _HAWKS_STAND1_MATCH_SCREEN_IDS:
         return None, 0
+    if _IS_1080P_LAYOUT:
+        if str(screen_id).lower().endswith("stand1"):
+            return TEAM_STAND_LOGO_SZ_1080P, TEAM_STAND1_FONT_OFFSET_1080P
+        return TEAM_STAND_LOGO_SZ_1080P, TEAM_STAND2_FONT_OFFSET_1080P
 
     if is_hyperpixel_4_square_layout():
         return max(1, int(round(LOGO_SZ * 1.5))), 8
@@ -467,6 +476,7 @@ def draw_standings_screen2(
     split_overrides=None,
     show_streak=True,
     show_points=True,
+    font_size_offset=0,
     screen_id=None,
     transition=False,
 ):
@@ -561,9 +571,10 @@ def draw_standings_screen2(
 
     record_font = FONT_STAND2_RECORD_RESTORED
     value_font = FONT_STAND2_VALUE_RESTORED
-    if hawks_font_offset:
-        record_font = clone_font(record_font, max(1, getattr(record_font, "size", 24) + hawks_font_offset))
-        value_font = clone_font(value_font, max(1, getattr(value_font, "size", 20) + hawks_font_offset))
+    total_font_offset = int(round(font_size_offset)) + hawks_font_offset
+    if total_font_offset:
+        record_font = clone_font(record_font, max(1, getattr(record_font, "size", 24) + total_font_offset))
+        value_font = clone_font(value_font, max(1, getattr(value_font, "size", 20) + total_font_offset))
 
     lines2 = [(rec_txt, record_font)] + [(it, value_font) for it in items]
     heights2 = [draw.textsize(txt,font)[1] for txt,font in lines2]

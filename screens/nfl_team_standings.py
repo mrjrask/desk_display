@@ -2,6 +2,8 @@
 import config
 from config import FONT_STAND1_WL_LARGE
 from screens.mlb_team_standings import (
+    TEAM_STAND2_FONT_OFFSET_1080P,
+    TEAM_STAND_LOGO_SZ_1080P,
     draw_standings_screen1 as _base_screen1,
     draw_standings_screen2 as _base_screen2,
 )
@@ -70,6 +72,7 @@ def draw_nfl_standings_screen1(
         show_games_back=False,
         show_wild_card=False,
         division_last_rank=4,
+        logo_size=(TEAM_STAND_LOGO_SZ_1080P if _IS_1080P_LAYOUT else None),
         font_size_offset=(30 if _IS_1080P_LAYOUT else 0),
         screen_id=screen_id,
         transition=transition,
@@ -87,6 +90,8 @@ def draw_nfl_standings_screen2(display, rec, logo_path, *, screen_id=None, trans
         split_order=("home", "away", "division", "conference"),
         show_streak=True,
         show_points=True,
+        logo_size=(TEAM_STAND_LOGO_SZ_1080P if _IS_1080P_LAYOUT else None),
+        font_size_offset=(TEAM_STAND2_FONT_OFFSET_1080P if _IS_1080P_LAYOUT else 0),
         screen_id=screen_id,
         transition=transition,
     )
