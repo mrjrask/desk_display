@@ -169,7 +169,9 @@ class ResolvedArtifact:
     ``state`` is ``fresh`` (the latest render succeeded and is within its
     refresh deadline), ``stale`` (the output is past its deadline or a newer
     render is pending), ``fallback`` (the latest render failed; the last
-    known good output is served) or ``missing`` (nothing good exists yet).
+    known good output is served), ``unavailable`` (the screen has nothing to
+    show right now, so nothing is served) or ``missing`` (nothing good exists
+    yet).
     """
 
     state: str
@@ -416,6 +418,7 @@ class ArtifactStore:
                     "previous": previous[: self.previous_revisions],
                     "failure": None,
                     "pending": None,
+                    "unavailable": None,
                 })
                 self._write_json(self._lineages / f"{lineage}.json", slot)
                 if evicted:
@@ -492,6 +495,41 @@ class ArtifactStore:
             self._write_json(self._lineages / f"{lineage}.json", slot)
         LOGGER.warning("Render of %s for %s failed (%s): %s", key.screen_id, key.render_profile, code, message)
 
+    def record_unavailable(self, key: RenderKey) -> None:
+        """Withdraw a lineage's output: the screen has nothing to show now.
+
+        Unlike a failure, this is the screen's real state (a live game went
+        final, an alert expired), so the last output must not stay current as
+        a fallback; clients would keep showing it.  It moves to the previous
+        revisions and :meth:`resolve` reports the lineage as ``unavailable``.
+        """
+
+        lineage = lineage_id(key.screen_id, key.render_profile, key.client_scope)
+        now = self._clock()
+        with self._locked():
+            slot = self._lineage(lineage)
+            current = slot.get("current")
+            previous = list(slot.get("previous", []))
+            if current:
+                previous = [current] + [p for p in previous if p.get("sha256") != current.get("sha256")]
+            evicted = previous[self.previous_revisions:]
+            slot.update({
+                "screen_id": key.screen_id,
+                "render_profile": key.render_profile,
+                "client_scope": key.client_scope,
+                "current": None,
+                "previous": previous[: self.previous_revisions],
+                "failure": None,
+                "pending": None,
+                "unavailable": {"render_key_digest": key.digest, "at": now},
+            })
+            self._write_json(self._lineages / f"{lineage}.json", slot)
+            if evicted:
+                self._release_hashes({h for e in evicted for h in record_hashes(e)}, now)
+        if current:
+            LOGGER.info("%s for %s has nothing to show; withdrew its last render",
+                        key.screen_id, key.render_profile)
+
     def mark_pending(self, key: RenderKey) -> None:
         """Note that a newer render for this lineage has started."""
 
@@ -528,6 +566,8 @@ class ArtifactStore:
             "consecutive": failure.get("consecutive", 1),
         }
         if record is None:
+            if not failure and slot.get("unavailable"):
+                return ResolvedArtifact("unavailable", None, None)
             return ResolvedArtifact("missing", None, public_failure)
         if failure:
             return ResolvedArtifact("fallback", record, public_failure)

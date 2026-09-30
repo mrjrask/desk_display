@@ -223,6 +223,11 @@ See the README's [deployment modes](README.md#deployment-modes) and
   its `.env.client` (for example `WEATHER_LATITUDE` copied over from a v0.1
   `.env`); it logs a warning and ignores it. Provider credentials and other
   secrets on a client still stop it.
+- A screen that runs out of things to show on the render server (Sox or Cubs
+  Live once the game goes final, an expired alert) now drops out of client
+  rotations. The server had treated "nothing to show" as a render failure and
+  kept serving the last render as a fallback, so the live box score stayed
+  on screen, frozen, until the server restarted.
 
 ### Known limitations
 

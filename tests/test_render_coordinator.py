@@ -17,9 +17,11 @@ from remote_display.models import (
     ClientStatus,
     PackageCapabilities,
     ScreenRevisions,
+    ScreenUnavailable,
 )
+from remote_display.manifest import build_client_manifest
 from remote_display.registry import Assignment, ClientRegistry
-from remote_display.render_coordinator import RenderCoordinator, RenderOutput
+from remote_display.render_coordinator import UNAVAILABLE_RECHECK_SECONDS, RenderCoordinator, RenderOutput
 
 
 class Clock:
@@ -61,11 +63,14 @@ class FakeRenderer:
         self.calls = []
         self.fail = set()
         self.bad = set()
+        self.unavailable = set()
 
     def __call__(self, key):
         self.calls.append((key.screen_id, key.render_profile))
         if key.screen_id in self.fail:
             raise RuntimeError(f"{key.screen_id} exploded")
+        if key.screen_id in self.unavailable:
+            raise ScreenUnavailable(f"Screen is not available: {key.screen_id}")
         preset = PROFILE_PRESETS[key.render_profile]
         size = (10, 10) if key.screen_id in self.bad else (preset.width, preset.height)
         color = len(self.calls) % 250
@@ -320,6 +325,54 @@ def test_failure_keeps_last_good_output_and_backs_off(env):
     assert env.store.resolve("weather1", "hyperpixel4").state == "fresh"
     lineage = next(l for l in env.coordinator.status()["lineages"] if l["screen_id"] == "weather1")
     assert lineage["failures"] == 2 and lineage["consecutive_failures"] == 0 and lineage["renders"] == 2
+
+
+def test_screen_with_nothing_to_show_is_withdrawn_not_served_as_fallback(env):
+    # Sox Live kept showing the 9th inning after the game went final: the
+    # final data made the screen unavailable, that was recorded as a render
+    # failure, and the store kept serving the live render as a fallback.
+    register(env, "office", ["sox live", "date"])
+    drain(env)
+    assert env.store.resolve("sox live", "hyperpixel4").state == "fresh"
+
+    def manifest():
+        return build_client_manifest(
+            env.store, client_id="office", display_profile="hyperpixel4",
+            requested_screens=["sox live", "date"], assignment={}, configuration={},
+            artifact_url=lambda n: f"/a/{n}", now=env.clock())
+
+    assert "sox live" in {a["screen_id"] for a in manifest()["artifacts"]}
+
+    env.renderer.unavailable.add("sox live")
+    env.revisions.data["sox live"] = "d2"  # the feed now says Final
+    env.clock.advance(31)
+    env.renderer.calls.clear()
+    drain(env)
+    assert env.renderer.calls == [("sox live", "hyperpixel4")]
+    resolved = env.store.resolve("sox live", "hyperpixel4")
+    assert resolved.state == "unavailable" and resolved.record is None and resolved.failure is None
+    listed = manifest()
+    assert [a["screen_id"] for a in listed["artifacts"]] == ["date"]
+    assert listed["missing_screens"] == [] and listed["cache_complete"] is True
+    lineage = next(l for l in env.coordinator.status()["lineages"] if l["screen_id"] == "sox live")
+    assert lineage["failures"] == 0 and lineage["last_error"] is None
+
+    # Checked again only when the data changes or the recheck interval passes.
+    env.renderer.calls.clear()
+    env.clock.advance(UNAVAILABLE_RECHECK_SECONDS - 1)
+    drain(env)
+    assert ("sox live", "hyperpixel4") not in env.renderer.calls
+    env.clock.advance(1)
+    drain(env)
+    assert env.renderer.calls.count(("sox live", "hyperpixel4")) == 1
+
+    # The next game goes live: the screen is rendered and listed again.
+    env.renderer.unavailable.clear()
+    env.revisions.data["sox live"] = "d3"
+    env.clock.advance(31)
+    drain(env)
+    assert env.store.resolve("sox live", "hyperpixel4").state == "fresh"
+    assert "sox live" in {a["screen_id"] for a in manifest()["artifacts"]}
 
 
 def test_invalid_output_is_rejected_and_counted(env):

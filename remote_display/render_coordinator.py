@@ -22,6 +22,10 @@ current for exactly those keys:
   cancelled, and in-flight work for it is discarded when it finishes.
 * **Last known good**: failures are recorded in the store, which keeps
   serving the previous good output as ``fallback``.
+* **Nothing to show**: a screen with nothing to show right now (a live game
+  that went final) is not a failure; its last output is withdrawn so clients
+  skip it, and it is checked again when its data changes or after
+  ``UNAVAILABLE_RECHECK_SECONDS``.
 """
 from __future__ import annotations
 
@@ -42,6 +46,7 @@ from remote_display.models import (
     ModelValidationError,
     RenderKey,
     ScreenRevisions,
+    ScreenUnavailable,
     demand_render_keys,
 )
 from remote_display.registry import ClientRegistry
@@ -53,6 +58,8 @@ PRIORITY_REFRESH = 1
 PRIORITY_NAMES = {PRIORITY_MISSING: "missing", PRIORITY_REFRESH: "refresh"}
 SOURCE_RANK = {"dynamic": 0, "static": 1, "prerender": 2}
 MAX_FAILURE_BACKOFF_SECONDS = 900
+# Availability can depend on the clock as well as the data (a game "today").
+UNAVAILABLE_RECHECK_SECONDS = 300
 DURATION_SAMPLES = 20
 
 
@@ -102,6 +109,8 @@ class _LineageStats:
     last_error: str | None = None
     consecutive_failures: int = 0
     failed_digest: str | None = None
+    unavailable_digest: str | None = None
+    unavailable_at: float | None = None
     renders: int = 0
     failures: int = 0
     durations: deque = field(default_factory=lambda: deque(maxlen=DURATION_SAMPLES))
@@ -229,7 +238,16 @@ class RenderCoordinator:
                 return None
         resolved = self.store.resolve(key.screen_id, key.render_profile, key.client_scope)
         if resolved.record is None:
-            return PRIORITY_MISSING
+            if resolved.state != "unavailable":
+                return PRIORITY_MISSING
+            if (
+                stats
+                and stats.unavailable_digest == key.digest
+                and stats.unavailable_at is not None
+                and now - stats.unavailable_at < UNAVAILABLE_RECHECK_SECONDS
+            ):
+                return None
+            return PRIORITY_REFRESH
         changed = resolved.record.render_key_digest != key.digest
         expired = now >= resolved.record.refresh_deadline
         if not changed and not expired:
@@ -301,6 +319,17 @@ class RenderCoordinator:
                     stats.failed_digest = None
                     stats.last_error = None
                     stats.durations.append(now - (job.started_at or now))
+            elif isinstance(error, ScreenUnavailable):
+                if not job.cancelled:
+                    try:
+                        self.store.record_unavailable(job.key)
+                    except OSError as exc:  # pragma: no cover - reported, not fatal
+                        LOGGER.warning("Could not withdraw %s: %s", job.key.screen_id, exc)
+                stats.consecutive_failures = 0
+                stats.failed_digest = None
+                stats.last_error = None
+                stats.unavailable_digest = job.key.digest
+                stats.unavailable_at = now
             elif isinstance(error, InvalidArtifactError):
                 # The store already recorded the failure against the lineage.
                 self._count_failure(stats, job, error.code, now)

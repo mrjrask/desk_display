@@ -96,6 +96,15 @@ class UnsupportedCapabilitiesError(ModelValidationError):
     """Well-formed capabilities that this server cannot serve."""
 
 
+class ScreenUnavailable(KeyError):
+    """The screen has nothing to show right now (no live game, no alert).
+
+    Not a render failure: the render coordinator withdraws the screen's last
+    output instead of serving it as a fallback, so clients skip the screen
+    the way the standalone display skips an unavailable one.
+    """
+
+
 # ─── Field validators ───────────────────────────────────────────────────────
 
 
@@ -830,6 +839,7 @@ __all__ = [
     "PackageCapabilities",
     "RenderKey",
     "ScreenRevisions",
+    "ScreenUnavailable",
     "UnsupportedCapabilitiesError",
     "WIRE_MODELS",
     "demand_render_keys",

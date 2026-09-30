@@ -47,6 +47,7 @@ from display_profiles import (
     RenderProfile,
     resolve_display_profile_by_id,
 )
+from remote_display.models import ScreenUnavailable
 
 LOGGER = logging.getLogger("desk_display.profile_process")
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
@@ -207,6 +208,8 @@ class _Worker:
                 self._snapshot_tag = tag
         if not reply.get("ok"):
             error = reply.get("error", "render failed")
+            if reply.get("type") == "ScreenUnavailable":
+                raise ScreenUnavailable(error)
             if reply.get("type") == "KeyError":
                 raise KeyError(error)
             raise ProfileProcessError(error)
@@ -353,6 +356,9 @@ def _serve(profile: RenderProfile, requests: BinaryIO, replies: BinaryIO) -> Non
                 image, metadata, package = compose_screen(
                     message["key"], profile, snapshot, logos, message.get("weather_fetched_at"))
                 reply = {"ok": True, "image": image, "metadata": metadata, "package": package}
+        except ScreenUnavailable as exc:
+            # Nothing to show right now (no live game): expected, not an error.
+            reply = {"ok": False, "type": "ScreenUnavailable", "error": str(exc.args[0] if exc.args else exc)}
         except Exception as exc:  # noqa: BLE001 - reported to the parent, which records it
             LOGGER.exception("Render failed in worker for %s", profile.profile_id)
             reply = {"ok": False, "type": type(exc).__name__, "error": f"{type(exc).__name__}: {exc}"}

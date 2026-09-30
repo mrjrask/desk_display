@@ -11,6 +11,7 @@ from PIL import Image
 
 from config import CENTRAL_TIME
 from display_profiles import RenderProfile
+from remote_display.models import ScreenUnavailable
 from services.data_coordinator import DataSnapshot
 from utils import ScreenImage
 
@@ -277,7 +278,7 @@ class ScreenRenderer:
 
         definition = registry.get(screen_id)
         if definition is None or not definition.available:
-            raise KeyError(f"Screen is not available: {screen_id}")
+            raise ScreenUnavailable(f"Screen is not available: {screen_id}")
         result = definition.render()
         metadata: dict[str, Any] = dict(getattr(definition, "metadata", {}) or {})
         if isinstance(result, ScreenImage):
