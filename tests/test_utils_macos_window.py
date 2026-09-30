@@ -140,6 +140,7 @@ class _FakeSurface:
 class _FakePygameDisplay:
     def __init__(self):
         self.last_set_mode = None
+        self.captions = []
 
     def quit(self):
         return None
@@ -151,7 +152,8 @@ class _FakePygameDisplay:
         self.last_set_mode = (size, flags)
         return _FakeSurface(size)
 
-    def set_caption(self, _caption):
+    def set_caption(self, caption):
+        self.captions.append(caption)
         return None
 
     def get_driver(self):
@@ -191,6 +193,40 @@ def test_window_mode_defaults_to_unscaled_render_size(monkeypatch):
     utils._KernelDisplay(800, 480, window_mode=True)
 
     assert fake_pygame.display.last_set_mode[0] == (800, 480)
+
+
+def _captioned_display(monkeypatch, *, window_mode):
+    fake_pygame = _FakePygame()
+    monkeypatch.setattr(utils, "_load_pygame", lambda: fake_pygame)
+    monkeypatch.setattr(utils, "_sdl_driver_candidates", lambda: [None])
+    monkeypatch.setattr(utils, "_maybe_configure_desktop_env", lambda: None)
+    monkeypatch.setattr(utils, "_park_mouse_cursor", lambda _pygame: None)
+    monkeypatch.setattr(utils, "_wiggle_mouse_cursor", lambda _pygame: None)
+    monkeypatch.setattr(utils, "_schedule_mouse_cursor_wiggle", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(utils, "_raise_window_to_front", lambda _pygame: None)
+    for name in ("SDL_APP_ID", "SDL_VIDEO_WAYLAND_WMCLASS", "SDL_VIDEO_X11_WMCLASS"):
+        # setenv first so monkeypatch restores the variable the display sets.
+        monkeypatch.setenv(name, "")
+        monkeypatch.delenv(name)
+    utils._KernelDisplay(1920, 1080, window_mode=window_mode)
+    return fake_pygame
+
+
+def test_kernel_output_window_is_untitled(monkeypatch):
+    # A desktop taskbar shows the window title as a tooltip that can float
+    # over the fullscreen output, so the kernel output never has one.
+    fake_pygame = _captioned_display(monkeypatch, window_mode=False)
+
+    assert fake_pygame.display.captions
+    assert set(fake_pygame.display.captions) == {""}
+    assert utils.os.environ["SDL_VIDEO_WAYLAND_WMCLASS"] == "desk-display"
+    assert utils.os.environ["SDL_VIDEO_X11_WMCLASS"] == "desk-display"
+
+
+def test_desktop_window_keeps_its_title(monkeypatch):
+    fake_pygame = _captioned_display(monkeypatch, window_mode=True)
+
+    assert set(fake_pygame.display.captions) == {"Desk Display"}
 
 
 def test_window_mode_scales_to_resized_display_surface(monkeypatch):
