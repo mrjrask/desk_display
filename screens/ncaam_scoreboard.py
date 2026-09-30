@@ -34,6 +34,7 @@ from config import (
     get_screen_background_color,
     get_screen_font,
     get_screen_image_scale,
+    is_hdmi_1080p_layout,
     is_hyperpixel_4_square_layout,
     is_hyperpixel_next_layout,
     scale_value,
@@ -46,6 +47,7 @@ from utils import ScreenImage, clear_display, scroll_vertical_content
 
 HYPERPIXEL_LAYOUT = is_hyperpixel_next_layout()
 HYPERPIXEL_4_SQUARE = is_hyperpixel_4_square_layout()
+HDMI_1080P_LAYOUT = is_hdmi_1080p_layout()
 
 
 def _scale_y(value: int) -> int:
@@ -128,6 +130,10 @@ def _team_logo_height() -> int:
 def _league_logo_height() -> int:
     team_scale = get_screen_image_scale(SCREEN_ID, "team_logo", 1.0)
     scale = get_screen_image_scale(SCREEN_ID, "league_logo", team_scale)
+    if HDMI_1080P_LAYOUT:
+        # As on the NCAA FBS scoreboard: the display scale is applied twice
+        # at 1080p, so match the team logos instead of filling the screen.
+        return _team_logo_height()
     return max(1, int(round(LEAGUE_LOGO_BASE_HEIGHT * scale)))
 
 

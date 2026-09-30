@@ -427,3 +427,11 @@ def test_logo_url_uses_team_override(monkeypatch):
     team = {"team": {"abbreviation": "IOWA", "logo": "https://espn.test/IOWA.png"}}
 
     assert ncaa_fbs_scoreboard._team_logo_url(team) == ncaa_fbs_scoreboard._TEAM_LOGO_URL_OVERRIDES["iowa"]
+
+
+def test_league_logo_matches_team_logo_height_on_1080p(monkeypatch):
+    # The league logo used to multiply in the display scale twice at 1080p,
+    # drawing an NCAA logo thousands of pixels tall over the whole screen.
+    monkeypatch.setattr(ncaa_fbs_scoreboard, "HDMI_1080P_LAYOUT", True)
+    monkeypatch.setattr(ncaa_fbs_scoreboard, "_team_logo_height", lambda: 246)
+    assert ncaa_fbs_scoreboard._league_logo_height() == 246

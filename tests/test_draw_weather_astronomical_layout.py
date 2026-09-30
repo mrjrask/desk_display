@@ -190,3 +190,9 @@ def test_weather_detail_chart_layout_keeps_a_shared_minimum_chart_on_narrow_disp
 
     assert charts_enabled is True
     assert (chart_x, chart_width) == (140, 40)
+
+
+def test_astronomical_layout_groups_rows_on_1080p_hdmi():
+    # Jason: on 1920x1080 Rise and Set sat far apart; keep them together there.
+    assert _astronomical_layout_details(1920, 1080)["group_rows"] is True
+    assert _astronomical_layout_details(800, 480)["group_rows"] is False

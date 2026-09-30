@@ -3679,6 +3679,17 @@ def standard_next_game_logo_height_for_space(
     return max(1, min(desired, max(1, available_height)))
 
 
+# On the 1080p HDMI profile the fixed next-game logo height (150px) leaves the
+# row nearly empty; there the logos fill most of the space between the
+# opponent line and the dateline instead, like the Cubs/Sox next-game screens.
+HDMI_1080P_NEXT_GAME_LOGO_FILL = 0.85
+
+
+def hdmi_1080p_next_game_logo_height(available_height: int) -> int:
+    """Return the next-game logo height for the 1080p HDMI profile."""
+    return max(1, int(round(max(1, available_height) * HDMI_1080P_NEXT_GAME_LOGO_FILL)))
+
+
 def standard_scoreboard_team_logo_height(panel_height: int, *, compact: bool = False) -> int:
     """Return the shared scoreboard team logo height for the given panel size."""
     from config import scale_value, scale_value_width

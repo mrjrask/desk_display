@@ -28,6 +28,11 @@ if _IS_WAVESHARE_DISPLAY:
     NHL_LOGO_SZ = max(1, int(round(NHL_LOGO_SZ * 2.0)))
     NHL_STAND1_LOGO_SZ = max(1, int(round(NHL_STAND1_LOGO_SZ * 2.0)))
 
+# 1080p HDMI: v0.1's Stand 1 logo and text were drawn for a much smaller
+# panel; there they use the largest standings logo and larger text.
+NHL_STAND1_LOGO_SZ_1080P = 270
+NHL_STAND1_FONT_OFFSET_1080P = 80
+
 NHL_POINTS_FONT = clone_font(
     FONT_STAND1_RANK,
     max(1, int(round(getattr(FONT_STAND1_RANK, "size", 22) / max(1.0, DISPLAY_SCALE)))),
@@ -158,8 +163,14 @@ def draw_nhl_standings_screen1(
         division_last_rank=8,
         conference_last_rank=16,
         record_details_fn=_format_nhl_record,
-        logo_size=max(1, int(round(NHL_STAND1_LOGO_SZ * max(0.1, logo_scale)))),
-        font_size_offset=(30 if _IS_1080P_LAYOUT else (12 if _IS_HYPERPIXEL_4 else (8 if _IS_HYPERPIXEL_4_SQUARE else 0))),
+        logo_size=max(
+            1,
+            int(round((NHL_STAND1_LOGO_SZ_1080P if _IS_1080P_LAYOUT else NHL_STAND1_LOGO_SZ) * max(0.1, logo_scale))),
+        ),
+        font_size_offset=(
+            NHL_STAND1_FONT_OFFSET_1080P if _IS_1080P_LAYOUT
+            else (12 if _IS_HYPERPIXEL_4 else (8 if _IS_HYPERPIXEL_4_SQUARE else 0))
+        ),
         screen_id=screen_id,
         transition=transition,
     )

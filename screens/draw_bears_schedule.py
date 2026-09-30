@@ -35,6 +35,7 @@ from config import (
 from image_compat import LANCZOS
 from utils import (
     ScreenImage,
+    hdmi_1080p_next_game_logo_height,
     load_team_logo,
     scroll_vertical_content,
     standard_next_game_logo_frame_width,
@@ -116,6 +117,9 @@ DROP_FRAME_DELAY = 0.01
 BEARS_TEAM_ABBR = "CHI"
 BEARS_SCOREBOARD_CACHE_TTL_SECONDS = 10 * 60
 BEARS_NEXT_BOTTOM_RAISE_PX = 10
+# 1080p HDMI: the week/date block sits this far above the bottom edge, matching
+# the dateline margin of the Hawks and Cubs next-game screens there.
+BEARS_NEXT_BOTTOM_MARGIN_1080P = 36
 _BEAR_SCORE_CACHE: dict[datetime.date, tuple[float, list[dict[str, Any]]]] = {}
 
 DEFAULT_BEARS_NEXT_SEASON_HOME_OPPONENTS = ("det", "gb", "jax", "min", "ne", "no", "nyj", "phi", "tb")
@@ -204,6 +208,8 @@ def _bears_schedule_games() -> list[dict]:
 
 def _bears_next_bottom_y(bottom_h: int, hyperpixel_layout: bool) -> int:
     """Position the week/date block with extra clearance from the bottom edge."""
+    if config.is_hdmi_1080p_layout():
+        return config.HEIGHT - bottom_h - BEARS_NEXT_BOTTOM_MARGIN_1080P
     bottom_margin = (
         config.scale_value(BEARS_BOTTOM_MARGIN) if hyperpixel_layout else BEARS_BOTTOM_MARGIN
     )
@@ -218,8 +224,11 @@ def show_bears_next_game(display, transition=False):
     draw  = ImageDraw.Draw(img)
 
     hyperpixel_layout = config.is_hyperpixel_next_layout()
+    hdmi_1080p_layout = config.is_hdmi_1080p_layout()
     edge_pad = max(2, config.scale_value(2)) if hyperpixel_layout else 2
     line_gap = max(2, config.scale_value(2)) if hyperpixel_layout else 2
+    if hdmi_1080p_layout:
+        line_gap = 12
 
     # Title
     tw, th = draw.textsize(title, font=config.FONT_TITLE_SPORTS)
@@ -242,6 +251,11 @@ def show_bears_next_game(display, transition=False):
             w_ln, h_ln = draw.textsize(ln, font=config.FONT_TEAM_SPORTS)
             draw.text(((config.WIDTH - w_ln)//2, y_txt),
                       ln, font=config.FONT_TEAM_SPORTS, fill=(255,255,255))
+            if hdmi_1080p_layout:
+                # Start the logo row below the line's ink, descenders included.
+                ink_bottom = draw.textbbox((0, y_txt), ln, font=config.FONT_TEAM_SPORTS)[3]
+                y_txt = max(y_txt + h_ln, ink_bottom) + line_gap
+                continue
             y_txt += h_ln + line_gap
 
         # Logos row: AWAY @ HOME
@@ -287,6 +301,8 @@ def show_bears_next_game(display, transition=False):
                 int(round(standard_next_game_logo_height(config.HEIGHT) * config.DISPLAY_SCALE)),
             )
             logo_h = min(desired_logo_h, available_h)
+        elif hdmi_1080p_layout:
+            logo_h = hdmi_1080p_next_game_logo_height(available_h)
         else:
             logo_h = standard_next_game_logo_height_for_space(config.HEIGHT, available_h)
 
@@ -360,8 +376,16 @@ def show_bears_next_game(display, transition=False):
             y_bottom_text = bottom_y
             for line in bottom_lines:
                 w_line, h_line = _text_size(draw, line, font=config.FONT_DATE_SPORTS)
+                x_line = (config.WIDTH - w_line) // 2
+                y_line = y_bottom_text
+                if hdmi_1080p_layout:
+                    # The lines were measured by their ink box; draw them by it
+                    # too, or the font's top bearing pushes the date off-screen.
+                    left, top, _, _ = draw.textbbox((0, 0), line, font=config.FONT_DATE_SPORTS)
+                    x_line -= left
+                    y_line -= top
                 draw.text(
-                    ((config.WIDTH - w_line) // 2, y_bottom_text),
+                    (x_line, y_line),
                     line,
                     font=config.FONT_DATE_SPORTS,
                     fill=(255, 255, 255),

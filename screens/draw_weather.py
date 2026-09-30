@@ -1888,7 +1888,10 @@ def _astronomical_layout_details(width: int, height: int) -> dict[str, object]:
     split_columns = width >= 280 and not (height >= width and short_edge < 220)
     # Square panels leave tall columns under the icons; spreading two rows
     # across all of it strands "Rise" far above "Set", so keep them together.
-    group_rows = split_columns and not compact and height >= width
+    # The 1080p HDMI panel has the same problem at its size.
+    group_rows = split_columns and not compact and (
+        height >= width or config.is_hdmi_1080p_layout(width, height)
+    )
 
     sun_labels = (
         ("Rise", "sunrise_civil"),

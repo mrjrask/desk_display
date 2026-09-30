@@ -76,6 +76,21 @@ DESIRED_SQUARE_FRACTION = 0.24       # starting point for square width vs total_
 GRID_BG                 = (14, 36, 22)  # dark forest green
 NEXT_GAME_LOGO_SCALE    = 0.874      # reduce Cubs/Sox next-game logos an additional 5%
 
+# 1080p HDMI: the R/H/E column labels are drawn this much smaller than the
+# dateline font they otherwise use, so they stay clear of the title.
+HEADER_LABEL_SCALE_1080P = 0.7
+HEADER_LABEL_FONT = (
+    FONT_DATE_SPORTS.font_variant(size=max(1, int(round(FONT_DATE_SPORTS.size * HEADER_LABEL_SCALE_1080P))))
+    if _IS_1080P_LAYOUT and hasattr(FONT_DATE_SPORTS, "font_variant")
+    else FONT_DATE_SPORTS
+)
+
+# 1080p HDMI: the Cubs Last Game W/L flag is drawn this many times its base height.
+RESULT_FLAG_SCALE_1080P = 2.5
+
+# 1080p HDMI: logo height on the Cubs/Sox series screens.
+SERIES_LOGO_H_1080P = 260
+
 # Cubs mini-flag sizing/reservation
 SMALL_RESULT_FLAG_H     = non_negative_env_int("SMALL_RESULT_FLAG_H", 48)
 FLAG_BLOCK_PAD          = 6
@@ -855,7 +870,7 @@ def _compute_table_geometry(
     grid_bottom_limit = bottom_y - reserve_flag_height if reserve_flag_block else bottom_y
 
     # Header row height = label text height + small padding
-    hdr_h = draw.textsize("R", font=FONT_DATE_SPORTS)[1] + 2
+    hdr_h = draw.textsize("R", font=HEADER_LABEL_FONT)[1] + 2
 
     # Horizontal extents
     total_w = WIDTH - 2*table_side_margin
@@ -935,6 +950,9 @@ def _draw_boxscore_table(img: Image.Image, draw: ImageDraw.ImageDraw, title: str
 
     # Title
     _, th = _draw_title_with_bold_result(draw, title, y_offset=edge_pad)
+    if _IS_1080P_LAYOUT:
+        # Keep the R/H/E labels below the title's descenders ("game").
+        th = max(th, draw.textbbox((0, 0), title, font=FONT_TITLE_SPORTS)[3])
 
     # Bottom line position (reserve space using accurate text metrics)
     if bottom_text:
@@ -1009,7 +1027,7 @@ def _draw_boxscore_table(img: Image.Image, draw: ImageDraw.ImageDraw, title: str
                      w=col_w,
                      h=hdr_h,
                      text=lbl,
-                     font=FONT_DATE_SPORTS,
+                     font=HEADER_LABEL_FONT,
                      fill=(255,255,255))
 
     # Grid background (forest green) – exactly behind the 2×2 rows area
@@ -1192,7 +1210,10 @@ def draw_last_game(display, game, title="Last Game...", transition=False, screen
         hyperpixel_layout=hyperpixel_layout,
         center_content_vertically=(screen_id == "sox last"),
         center_ignores_reserved_flag_block=(screen_id == "sox last"),
-        flag_scale=(2.0 if screen_id == "cubs last" and is_hyperpixel_4_square_layout() else 1.0),
+        flag_scale=(
+            RESULT_FLAG_SCALE_1080P if screen_id == "cubs last" and _IS_1080P_LAYOUT
+            else (2.0 if screen_id == "cubs last" and is_hyperpixel_4_square_layout() else 1.0)
+        ),
         row_height_matches_reserved_flag_block=(True if screen_id == "cubs last" else None),
     )
 
@@ -1630,6 +1651,7 @@ def draw_series_screen(display, games, title, transition=False, screen_id: Optio
         config.get_display_profile_id() == DISPLAY_PROFILE_DISPLAY_HAT_MINI
         and normalized_screen_id in series_screen_ids
     )
+    hdmi_1080p_series_layout = _IS_1080P_LAYOUT and normalized_screen_id in series_screen_ids
     content_drop_px = 25 if (hyperpixel_layout and normalized_screen_id in series_screen_ids) else 0
     edge_pad = max(2, config.scale_value(2)) if hyperpixel_layout else 0
     line_gap = max(1, config.scale_value(1)) if hyperpixel_layout else 1
@@ -1680,7 +1702,12 @@ def draw_series_screen(display, games, title, transition=False, screen_id: Optio
         normalized_screen_id=normalized_screen_id,
         fallback_height=th,
     )
-    opponent_line_heights = [draw.textsize(ln, font=opponent_font)[1] for ln in lines]
+    if hdmi_1080p_series_layout:
+        # Measure to the bottom of the ink (descenders included) so the logos
+        # never run into the opponent line at this size.
+        opponent_line_heights = [draw.textbbox((0, 0), ln, font=opponent_font)[3] for ln in lines]
+    else:
+        opponent_line_heights = [draw.textsize(ln, font=opponent_font)[1] for ln in lines]
     opponent_lines_h = sum(opponent_line_heights) + (line_gap * max(0, len(lines) - 1))
     y_text = edge_pad + title_line_h + title_to_opponent_gap
 
@@ -1693,6 +1720,8 @@ def draw_series_screen(display, games, title, transition=False, screen_id: Optio
                 max(16, int(round(standard_next_game_logo_height(HEIGHT) * 1.35))),
             ),
         )
+    if hdmi_1080p_series_layout:
+        logo_h = SERIES_LOGO_H_1080P
     logo_away = load_team_logo(MLB_LOGOS_DIR, get_mlb_tricode(away_tm) or get_mlb_abbreviation(get_team_display_name(away_tm)), box_size=logo_h)
     logo_home = load_team_logo(MLB_LOGOS_DIR, get_mlb_tricode(home_tm) or get_mlb_abbreviation(get_team_display_name(home_tm)), box_size=logo_h)
     gap = config.scale_value(10) if hyperpixel_layout else 10
@@ -1739,7 +1768,7 @@ def draw_series_screen(display, games, title, transition=False, screen_id: Optio
         remaining_space = max(0, rows_bottom - rows_top - content_height)
         extra_row_gap = remaining_space // (display_rows - 1)
 
-    if hyperpixel_square_series_layout or display_hat_mini_series_layout:
+    if hyperpixel_square_series_layout or display_hat_mini_series_layout or hdmi_1080p_series_layout:
         block_h_title = title_line_h + title_to_opponent_gap + opponent_lines_h
         block_h_logos = logo_h
         block_h_games = display_rows * row_h

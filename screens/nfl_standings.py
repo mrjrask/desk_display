@@ -1156,7 +1156,9 @@ def _prepare_overview_columns(
     standings: dict[str, list[dict]],
     content_top: int,
 ) -> tuple[list[dict[int, Optional[dict[str, Any]]]], int]:
-    hyperpixel_layout = is_hyperpixel_next_layout()
+    # 1080p HDMI fills each column like the HyperPixel layouts; the fixed
+    # 65px logos looked like a thin strip in the middle of the screen.
+    hyperpixel_layout = is_hyperpixel_next_layout() or config.is_hdmi_1080p_layout()
     column_count = max(1, len(division_order))
     column_width = WIDTH / column_count
     available_height = max(0, HEIGHT - content_top)
