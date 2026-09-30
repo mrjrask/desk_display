@@ -13,10 +13,10 @@
     box-sizing: border-box;
   }
   *, *::before, *::after { box-sizing: inherit; }
-  h1 { text-align: center; margin: 0 0 0.5rem; font-size: clamp(1.6rem, 3vw, 2.3rem); }
+  h1 { text-align: center; margin: 0 0 0.35rem; font-size: clamp(1.4rem, 2.6vw, 1.9rem); }
   h2 { font-size: 1.1rem; margin: 0 0 0.75rem; }
-  .subtitle { text-align: center; color: #94a3b8; margin-bottom: 1.25rem; font-size: 0.95rem; }
-  .nav-links { display: flex; justify-content: center; gap: 0.75rem; flex-wrap: wrap; margin: 0 auto 1.5rem; }
+  .subtitle { text-align: center; color: #94a3b8; margin-bottom: 0.9rem; font-size: 0.9rem; }
+  .nav-links { display: flex; justify-content: center; gap: 0.6rem; flex-wrap: wrap; margin: 0 auto 1.1rem; }
   .nav-links a {
     color: #e2e8f0; text-decoration: none; padding: 0.35rem 0.85rem; border-radius: 999px;
     border: 1px solid rgba(148, 163, 184, 0.4); background: rgba(15, 23, 42, 0.65); font-size: 0.85rem;
@@ -57,5 +57,14 @@
   ul.plain { list-style: none; margin: 0; padding: 0; }
   ol.sequence { margin: 0; padding-left: 1.4rem; }
   ol.sequence li { padding: 0.2rem 0; }
+  .spacer { flex: 1; }
+  .sticky-bar {
+    position: sticky; top: 0; z-index: 20; display: flex; gap: 0.6rem; flex-wrap: wrap; align-items: center;
+    padding: 0.6rem 0; background: #0f172a; border-bottom: 1px solid rgba(148, 163, 184, 0.15);
+  }
+  .sticky-bar h2 { margin: 0; }
+  details.section > summary { cursor: pointer; font-weight: 600; }
+  details.section[open] > summary { margin-bottom: 0.6rem; }
+  .small { font-size: 0.8rem; }
   @media (max-width: 800px) { .split { grid-template-columns: 1fr; } body { padding: 1rem; } }
 </style>

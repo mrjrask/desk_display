@@ -6,15 +6,22 @@
   <title>{{ machine_hostname }} - Playlists</title>
   {% include "_remote_style.html" %}
   <style>
-    .panel.wide { max-width: 1500px; }
+    .panel { max-width: 1500px; }
+    .library-head { display: flex; gap: 0.6rem; align-items: center; flex-wrap: wrap; margin-bottom: 0.7rem; }
+    .library-head h2 { margin: 0; }
+    .library-head input[type="text"], .library-head #new-name { width: 13rem; }
+    .import-label { cursor: pointer; font-size: 0.85rem; padding: 0.45rem 0.7rem; border-radius: 10px;
+      border: 1px solid rgba(148, 163, 184, 0.3); }
+    .import-label input { display: none; }
     .library-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 0.4rem; }
     .library-grid .list-item { border-color: rgba(148, 163, 184, 0.2); }
-    .editor-toolbar { margin: 0.75rem 0; }
-    .editor-toolbar h2 { margin: 0; }
-    .editor-toolbar .spacer { flex: 1; }
+    .editor-head { display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap; padding-top: 0.2rem; }
+    .editor-head #edit-name { font-weight: 700; font-size: 1.05rem; min-width: 14rem; }
+    .editor-meta { margin: 0.4rem 0 0; font-size: 0.8rem; }
     #dirty-state.dirty { color: #fde68a; }
-    .advanced { margin-top: 1.25rem; }
-    .advanced summary { cursor: pointer; font-weight: 600; margin-bottom: 0.5rem; }
+    .editor-note { font-size: 0.82rem; margin: 0.6rem 0; }
+    .below-editor { margin-top: 1rem; display: grid; gap: 0.6rem; }
+    .below-editor details { padding: 0.55rem 0.75rem; border-radius: 10px; border: 1px solid rgba(148, 163, 184, 0.18); }
     #editor a { color: #7dd3fc; }
   </style>
 </head>
@@ -32,71 +39,70 @@
   <div id="notice" class="panel notice hidden" role="status"></div>
 
   <div class="panel">
-    <h2>New playlist</h2>
-    <div class="row">
-      <input id="new-name" placeholder="Playlist name" maxlength="80" aria-label="New playlist name">
-      <button id="create-btn" class="primary">Create from current rotation</button>
-      <label class="row muted">Import <input id="import-file" type="file" accept="application/json,.json"></label>
+    <div class="library-head">
+      <h2>Library</h2>
+      <span class="spacer"></span>
+      <input id="new-name" placeholder="New playlist name" maxlength="80" aria-label="New playlist name">
+      <button id="create-btn" class="primary" title="Starts from the screens on the Rotation Config page">Create from current rotation</button>
+      <label class="import-label" title="Import a playlist exported from this or another server">Import… <input id="import-file" type="file" accept="application/json,.json"></label>
     </div>
-  </div>
-
-  <div class="panel">
-    <h2>Library</h2>
     <ul id="playlist-list" class="plain library-grid"><li class="muted">Loading…</li></ul>
   </div>
 
   <div class="panel wide" id="editor-panel">
-    <p id="editor-empty" class="muted">Select a playlist to edit it.</p>
+    <p id="editor-empty" class="muted">Select a playlist above to edit it.</p>
     <div id="editor" class="hidden">
-      <div class="row">
+      <div class="editor-head">
         <input id="edit-name" maxlength="80" aria-label="Playlist name">
         <button id="rename-btn">Rename</button>
+        <span class="spacer"></span>
         <button id="clone-btn">Clone</button>
         <button id="export-btn">Export</button>
         <button id="delete-btn" class="danger">Delete</button>
       </div>
-      <p class="muted">
+      <p class="muted editor-meta">
+        Used by <span id="edit-clients"></span> ·
         ID <span id="edit-id" class="mono"></span> ·
-        saved revision <span id="edit-revision" class="mono"></span> ·
-        used by <span id="edit-clients"></span>
+        revision <span id="edit-revision" class="mono"></span>
       </p>
 
-      <div class="row editor-toolbar">
+      <div class="sticky-bar" id="editor-toolbar">
         <h2>Screens</h2>
         <span id="dirty-state" class="muted">No unsaved changes.</span>
         <span class="spacer"></span>
         <button id="discard-btn" type="button">Discard changes</button>
         <button id="save-btn" class="primary" type="button">Save changes</button>
       </div>
-      <p class="muted">Drag screens to reorder them, group them into playlists and move the playlists, then set
-        frequency, hide-after, alternates and extra seconds, exactly as on the Rotation Config page. Scroll speeds
-        come from the <a href="/">Rotation Config</a> page and apply to every display.</p>
+      <p class="muted editor-note">Works like the Rotation Config page. Scroll speeds come from the
+        <a href="/">Rotation Config</a> page and apply to every display.</p>
       {% include "_rotation_editor.html" %}
-      <div class="row editor-toolbar">
-        <span class="spacer"></span>
-        <button id="save-btn-bottom" class="primary" type="button">Save changes</button>
+
+      <div class="below-editor">
+        <details id="preview-details" class="section" open>
+          <summary>Displays using this playlist</summary>
+          <div id="preview" class="muted">No clients use this playlist yet.</div>
+        </details>
+
+        <details id="advanced" class="section">
+          <summary>Advanced: edit the document as JSON</summary>
+          <p class="muted">The saved document, in the same format as the rotation config: <span class="mono">screens</span>
+            (frequency, extra seconds, alternates), <span class="mono">playlists</span>, <span class="mono">sequence</span>,
+            <span class="mono">scroll</span>. Unsaved changes in the editor above are not shown here.</p>
+          <textarea id="document" spellcheck="false" aria-label="Playlist document JSON"></textarea>
+          <div class="row">
+            <button id="validate-btn" type="button">Validate</button>
+            <button id="save-json-btn" type="button">Save JSON</button>
+          </div>
+        </details>
       </div>
-
-      <h2 style="margin-top:1rem">Demand preview</h2>
-      <div id="preview" class="muted">No clients use this playlist yet.</div>
-
-      <details id="advanced" class="advanced">
-        <summary>Advanced: edit the document as JSON</summary>
-        <p class="muted">The saved document, in the same format as the rotation config: <span class="mono">screens</span>
-          (frequency, extra seconds, alternates), <span class="mono">playlists</span>, <span class="mono">sequence</span>,
-          <span class="mono">scroll</span>. Unsaved changes in the editor above are not shown here.</p>
-        <textarea id="document" spellcheck="false" aria-label="Playlist document JSON"></textarea>
-        <div class="row">
-          <button id="validate-btn" type="button">Validate</button>
-          <button id="save-json-btn" type="button">Save JSON</button>
-        </div>
-      </details>
     </div>
   </div>
 
   <div class="panel">
-    <h2>Recent changes</h2>
-    <div class="table-wrap"><table id="audit"><thead><tr><th>When</th><th>Who</th><th>Action</th><th>Target</th></tr></thead><tbody></tbody></table></div>
+    <details class="section">
+      <summary>Recent changes</summary>
+      <div class="table-wrap"><table id="audit"><thead><tr><th>When</th><th>Who</th><th>Action</th><th>Target</th></tr></thead><tbody></tbody></table></div>
+    </details>
   </div>
 
 <script>
@@ -134,6 +140,7 @@ const editor = createRotationEditor({
   onChange: () => setDirty(true),
   onStateChange: saveCollapsed,
   onError: (message) => notice(message, "error"),
+  stickyOffsetElement: document.getElementById("editor-toolbar"),
 });
 
 async function api(method, url, body) {
@@ -276,7 +283,7 @@ function parsedDocument() {
 }
 
 async function saveEditor() {
-  const buttons = [document.getElementById("save-btn"), document.getElementById("save-btn-bottom")];
+  const buttons = [document.getElementById("save-btn")];
   buttons.forEach((button) => { button.disabled = true; });
   try {
     const screens = editor.getScreens();
@@ -294,7 +301,6 @@ async function saveEditor() {
 }
 
 document.getElementById("save-btn").addEventListener("click", saveEditor);
-document.getElementById("save-btn-bottom").addEventListener("click", saveEditor);
 
 document.getElementById("discard-btn").addEventListener("click", () => {
   if (!selected || !confirmDiscard()) return;

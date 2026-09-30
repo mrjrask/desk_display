@@ -5,6 +5,38 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{{ machine_hostname }} - Clients</title>
   {% include "_remote_style.html" %}
+  <style>
+    .clients-toolbar { display: flex; gap: 0.75rem; align-items: center; flex-wrap: wrap; }
+    .clients-toolbar h2 { margin: 0; }
+    .client-list { display: grid; gap: 0.75rem; }
+    .client-card {
+      border: 1px solid rgba(148, 163, 184, 0.2); border-radius: 12px; padding: 0.75rem 0.9rem;
+      background: rgba(30, 41, 59, 0.45);
+    }
+    .client-head { display: flex; gap: 0.6rem 1rem; align-items: center; flex-wrap: wrap; }
+    .client-title { display: flex; gap: 0.5rem; align-items: baseline; flex-wrap: wrap; min-width: 0; }
+    .client-title .name { font-weight: 700; font-size: 1.02rem; }
+    .client-playlist { display: flex; gap: 0.4rem; align-items: center; }
+    .client-playlist select { min-width: 12rem; }
+    .client-summary { margin-top: 0.35rem; font-size: 0.85rem; }
+    .client-summary strong { color: #e2e8f0; font-weight: 600; }
+    .client-warnings { margin-top: 0.45rem; display: grid; gap: 0.2rem; font-size: 0.85rem; }
+    .client-warnings .clamped { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; cursor: pointer; }
+    .client-tabs { display: flex; gap: 0.4rem; flex-wrap: wrap; margin-top: 0.6rem; }
+    .client-tabs button { font-size: 0.8rem; padding: 0.25rem 0.7rem; border-radius: 999px; }
+    .client-tabs button[aria-expanded="true"] { border-color: #38bdf8; background: rgba(56, 189, 248, 0.12); }
+    .client-panel {
+      margin-top: 0.6rem; padding: 0.7rem 0.8rem; border-radius: 10px;
+      border: 1px solid rgba(148, 163, 184, 0.15); background: rgba(15, 23, 42, 0.6); font-size: 0.86rem;
+    }
+    .client-panel .group + .group { margin-top: 0.8rem; }
+    .client-panel h3 { font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.06em; color: #94a3b8; margin: 0 0 0.35rem; }
+    .client-panel .row { gap: 0.4rem; }
+    .client-panel .row + .muted { margin-top: 0.2rem; }
+    .panel-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 0.8rem 1.5rem; }
+    .panel-grid .group + .group { margin-top: 0; }
+    .client-panel button { font-size: 0.82rem; padding: 0.3rem 0.65rem; }
+  </style>
 </head>
 <body>
   <h1>Display Clients</h1>
@@ -20,15 +52,14 @@
   <div id="notice" class="panel notice hidden" role="status"></div>
 
   <div class="panel">
-    <div class="row" style="justify-content: space-between;">
-      <div>
-        <h2>Add a display</h2>
-        <p class="muted" style="margin:0">A guided setup checks this server can be reached, creates the display's own
-          credential and gives you one command to paste on the new Pi.</p>
-      </div>
-      <button type="button" class="primary" id="add-display" onclick="location.href='/clients/add'">Add a display…</button>
+    <div class="clients-toolbar">
+      <h2>Displays</h2>
+      <span id="client-count" class="muted"></span>
+      <span class="spacer"></span>
+      <button type="button" class="primary" id="add-display" onclick="location.href='/clients/add'"
+        title="A guided setup checks this server can be reached, creates the display's own credential and gives you one command to paste on the new Pi.">Add a display…</button>
     </div>
-    <div id="issued" class="hidden">
+    <div id="issued" class="hidden" style="margin-top:0.8rem">
       <p id="join-intro" class="hidden"><strong>Run this on the display's Pi.</strong> It works once, for the next
         30 minutes, and sets up the display with a fresh credential.</p>
       <p id="issued-intro"><strong>Copy this into <span class="mono">.env.client</span> on the display now</strong> (replace its
@@ -39,24 +70,7 @@
       <button type="button" id="issued-copy">Copy</button>
       <button type="button" id="issued-hide">Done</button>
     </div>
-  </div>
-
-  <div class="panel">
-    <p class="muted">
-      <strong>Saved</strong> is the revision stored on the server, <strong>delivered</strong> is the one the server
-      last sent to the client, and <strong>acknowledged</strong> is the one the client reported playing.
-    </p>
-    <div class="table-wrap">
-      <table id="clients">
-        <thead>
-          <tr>
-            <th>Client</th><th>State</th><th>Display</th><th>Playback</th><th>Delivery</th>
-            <th>Assignment</th><th>Revisions</th><th>Warnings</th>
-          </tr>
-        </thead>
-        <tbody><tr><td colspan="8" class="muted">Loading…</td></tr></tbody>
-      </table>
-    </div>
+    <div id="clients" class="client-list" style="margin-top:0.8rem"><p class="muted">Loading…</p></div>
   </div>
 
 <script>
@@ -93,12 +107,6 @@ function explain(error) {
     return "Someone else changed this client's assignment. The table has been reloaded; try again.";
   }
   return error.message;
-}
-
-function cell(tr, build) {
-  const td = document.createElement("td");
-  build(td);
-  tr.appendChild(td);
 }
 
 function line(parent, text, className) {
@@ -213,8 +221,9 @@ function scrollControl(td, client) {
   const hasOwn = own !== null && own !== undefined;
   const wrap = document.createElement("div");
   wrap.className = "vertical-scroll";
+  wrap.classList.add("row");
   const label = document.createElement("label");
-  label.textContent = "Vertical scroll ";
+  label.textContent = "Adjustment ";
   const input = document.createElement("input");
   input.type = "number";
   input.min = "-0.9";
@@ -262,7 +271,7 @@ function coords(location) {
 function locationControl(td, client) {
   const own = client.location;
   const wrap = document.createElement("div");
-  wrap.className = "weather-location";
+  wrap.className = "weather-location row";
   const fields = {};
   for (const [key, label, min, max] of [["latitude", "Lat", -90, 90], ["longitude", "Lon", -180, 180]]) {
     const field = document.createElement("label");
@@ -313,125 +322,202 @@ async function setLocation(client, latitude, longitude) {
   load();
 }
 
+const PANELS = [["settings", "Settings"], ["delivery", "Delivery"], ["maintenance", "Maintenance"]];
+const PANEL_KEY = "clients-open-panels";
+let openPanels = {};
+try { openPanels = JSON.parse(localStorage.getItem(PANEL_KEY) || "{}") || {}; } catch (error) { openPanels = {}; }
+
+function togglePanel(clientId, panel) {
+  openPanels[clientId] = openPanels[clientId] === panel ? null : panel;
+  try { localStorage.setItem(PANEL_KEY, JSON.stringify(openPanels)); } catch (error) { /* per-browser convenience only */ }
+  const card = document.querySelector(`.client-card[data-client-id="${CSS.escape(clientId)}"]`);
+  if (!card) return;
+  for (const [name] of PANELS) {
+    const open = openPanels[clientId] === name;
+    card.querySelector(`[data-panel-body="${name}"]`).classList.toggle("hidden", !open);
+    card.querySelector(`button[data-panel="${name}"]`).setAttribute("aria-expanded", String(open));
+  }
+}
+
+function element(parent, tag, className, text) {
+  const el = document.createElement(tag);
+  if (className) el.className = className;
+  if (text !== undefined) el.textContent = text;
+  parent.appendChild(el);
+  return el;
+}
+
+function group(parent, title) {
+  const div = element(parent, "div", "group");
+  element(div, "h3", "", title);
+  return div;
+}
+
+function button(parent, text, handler, title) {
+  const el = element(parent, "button", "", text);
+  el.type = "button";
+  if (title) el.title = title;
+  el.addEventListener("click", handler);
+  return el;
+}
+
+function settingsPanel(body, client) {
+  const grid = element(body, "div", "panel-grid");
+  scrollControl(group(grid, "Vertical scroll"), client);
+  locationControl(group(grid, "Weather location"), client);
+  if (client.assignment) {
+    const own = group(grid, "Playlist");
+    button(own, "Clone for this client", () => forkPlaylist(client),
+      "Copy the shared playlist so this client can be edited on its own");
+    line(own, "Gives this display its own copy of the playlist to edit on the Playlists page.", "muted small");
+  }
+}
+
+function deliveryPanel(body, client) {
+  const grid = element(body, "div", "panel-grid");
+  const timing = group(grid, "Timings");
+  const t = client.telemetry;
+  const synced = client.last_sync_age_seconds;
+  line(timing, synced === null || synced === undefined ? "no sync yet" : `last sync ${age(synced)} ago`);
+  line(timing, `heartbeat ${client.last_heartbeat || "never"}`, "muted");
+  if (!t) {
+    line(timing, "no timings reported", "muted");
+  } else {
+    line(timing, `on screen rendered ${age(t.displayed_content_age_seconds)} ago`, "muted");
+    line(timing, `heartbeat ${ms(t.heartbeat_rtt_ms)} · manifest ${ms(t.manifest_fetch_ms)} · sync ${ms(t.last_sync_duration_ms)}`, "muted");
+    if (t.download_count) {
+      line(timing, `last download ${t.download_count} file${t.download_count === 1 ? "" : "s"}, ${kb(t.download_bytes)} in ${ms(t.download_ms)}`, "muted");
+    }
+    if (t.consecutive_failures) line(timing, `${t.consecutive_failures} failed sync${t.consecutive_failures === 1 ? "" : "s"} before the last success`, "muted");
+  }
+  const revisions = group(grid, "Playlist revisions");
+  line(revisions, `saved ${client.saved_revision || "—"}`, "mono");
+  line(revisions, `delivered ${client.delivered_revision || "—"}`, "mono");
+  line(revisions, `acknowledged ${client.acknowledged_revision || "—"}`, "mono");
+  line(revisions, "Saved is stored on the server, delivered was last sent to the display, acknowledged is what the display reported playing.", "muted small");
+  const hardware = group(grid, "Hardware");
+  line(hardware, `${client.display_profile || "unknown profile"} · ${client.dimensions || "?"} · rotation ${client.physical_rotation ?? "?"}°`);
+  const caps = client.capabilities || {};
+  const features = [caps.supports_animation ? "animation" : null, caps.has_touch ? "touch" : null,
+    (caps.buttons || []).length ? `buttons ${caps.buttons.join("")}` : null].filter(Boolean);
+  if (features.length) line(hardware, features.join(" · "), "muted");
+  line(hardware, `${client.kind}${client.software_version ? " · v" + client.software_version : ""} · cache ${age(client.cache_age_seconds)}`, "muted");
+  if (client.recent_errors.length) {
+    const errors = group(grid, "Recent errors");
+    for (const error of client.recent_errors) line(errors, `${error.code} ×${error.count}: ${error.message}`, "muted");
+  }
+}
+
+function maintenancePanel(body, client) {
+  const grid = element(body, "div", "panel-grid");
+  const software = group(grid, "Software");
+  const buttons = element(software, "div", "row");
+  const busy = new Set((client.commands || []).filter((c) => UNFINISHED.has(c.state)).map((c) => c.action));
+  const reachable = !["never_connected", "unknown", "revoked", "disabled"].includes(client.state);
+  for (const [action, label] of reachable ? [["update", "Update (git pull)"], ["restart", "Restart client"]] : []) {
+    const el = button(buttons, label, () => clientCommand(client, action), action === "update"
+      ? "Runs git pull --ff-only in the display's desk_display folder on its next heartbeat"
+      : "Restarts desk_display_client on the display on its next heartbeat");
+    el.dataset.command = action;
+    el.disabled = busy.has(action);
+  }
+  if (!reachable) line(software, "Update and restart appear once the display is connected.", "muted small");
+  for (const command of client.commands || []) commandLine(software, command);
+
+  const access = group(grid, "Name and credential");
+  const row = element(access, "div", "row");
+  button(row, "Rename", () => renameClient(client));
+  if (client.credential) {
+    const state = client.credential.state;
+    const actions = state === "active" ? ["rotate", "disable", "revoke"]
+      : state === "disabled" ? ["enable", "revoke"] : ["rotate"];
+    if (state === "active" && client.state === "never_connected") {
+      button(row, "Setup command", () => joinCommand(client), "A one-time command that installs and connects this display");
+    }
+    for (const action of actions) {
+      const el = button(row, { rotate: "Rotate credential", disable: "Disable", enable: "Enable", revoke: "Revoke" }[action],
+        () => credentialAction(client, action));
+      if (action === "revoke") el.className = "danger";
+    }
+    line(access, `credential ${state}`, "muted small");
+  }
+}
+
 function render(data) {
   playlists = data.playlists;
   globalVerticalAdjustment = Number(data.global_vertical_speed_adjustment || 0);
   globalLocation = data.global_location || null;
-  const body = document.querySelector("#clients tbody");
-  body.innerHTML = "";
+  const list = document.getElementById("clients");
+  list.innerHTML = "";
+  const online = data.clients.filter((client) => client.state === "online").length;
+  document.getElementById("client-count").textContent = data.clients.length
+    ? `${data.clients.length} display${data.clients.length === 1 ? "" : "s"} · ${online} online` : "";
   if (!data.clients.length) {
-    body.innerHTML = '<tr><td colspan="8" class="muted">No clients yet. Use Add a display to set one up.</td></tr>';
+    line(list, "No clients yet. Use Add a display to set one up.", "muted");
     return;
   }
   for (const client of data.clients) {
-    const tr = document.createElement("tr");
-    tr.dataset.clientId = client.client_id;
-    cell(tr, (td) => {
-      line(td, client.friendly_name || client.client_id).style.fontWeight = "600";
-      line(td, client.client_id, "mono muted");
-      line(td, `${client.kind}${client.software_version ? " · v" + client.software_version : ""}`, "muted");
-      const rename = document.createElement("button");
-      rename.textContent = "Rename";
-      rename.addEventListener("click", () => renameClient(client));
-      td.appendChild(rename);
-      if (client.credential) {
-        const state = client.credential.state;
-        const actions = state === "active" ? ["rotate", "disable", "revoke"]
-          : state === "disabled" ? ["enable", "revoke"] : ["rotate"];
-        if (state === "active" && client.state === "never_connected") {
-          const join = document.createElement("button");
-          join.textContent = "Setup command";
-          join.title = "A one-time command that installs and connects this display";
-          join.addEventListener("click", () => joinCommand(client));
-          td.appendChild(join);
-        }
-        for (const action of actions) {
-          const button = document.createElement("button");
-          button.textContent = { rotate: "Rotate credential", disable: "Disable", enable: "Enable", revoke: "Revoke" }[action];
-          button.addEventListener("click", () => credentialAction(client, action));
-          td.appendChild(button);
-        }
-      }
+    const card = element(list, "article", "client-card");
+    card.dataset.clientId = client.client_id;
+
+    const head = element(card, "div", "client-head");
+    const title = element(head, "div", "client-title");
+    element(title, "span", "name", client.friendly_name || client.client_id);
+    if (client.friendly_name && client.friendly_name !== client.client_id) element(title, "span", "mono muted", client.client_id);
+    badge(title, client.state);
+    element(head, "span", "spacer");
+    const pick = element(head, "label", "client-playlist muted", "Playlist");
+    const select = element(pick, "select");
+    select.setAttribute("aria-label", `Playlist for ${client.client_id}`);
+    select.appendChild(new Option("Unassigned", ""));
+    for (const playlist of playlists) select.appendChild(new Option(playlist.name, playlist.id));
+    const current = client.assignment ? client.assignment.playlist_id : "";
+    select.value = current;
+    select.addEventListener("change", () => assign(client, select.value || null, current || null));
+    badge(head, client.revision_state);
+
+    const summary = element(card, "div", "client-summary muted");
+    const synced = client.last_sync_age_seconds;
+    const parts = [
+      ["Showing ", client.current_screen || "—"],
+      ["", client.playback_state || "unknown"],
+      ["", synced === null || synced === undefined ? "no sync yet" : `synced ${age(synced)} ago`],
+      ["", `${client.display_profile || "unknown profile"} ${client.dimensions || ""}`.trim()],
+    ];
+    parts.forEach(([prefix, value], index) => {
+      if (index) summary.appendChild(document.createTextNode(" · "));
+      if (prefix) summary.appendChild(document.createTextNode(prefix));
+      element(summary, index === 0 ? "strong" : "span", "", value);
     });
-    cell(tr, (td) => {
-      badge(td, client.state);
-      line(td, `heartbeat ${client.last_heartbeat || "never"}`, "muted");
-      const busy = new Set((client.commands || []).filter((c) => UNFINISHED.has(c.state)).map((c) => c.action));
-      const reachable = !["never_connected", "unknown", "revoked", "disabled"].includes(client.state);
-      for (const [action, label] of reachable ? [["update", "Update (git pull)"], ["restart", "Restart client"]] : []) {
-        const button = document.createElement("button");
-        button.textContent = label;
-        button.dataset.command = action;
-        button.disabled = busy.has(action);
-        button.title = action === "update"
-          ? "Runs git pull --ff-only in the display's desk_display folder on its next heartbeat"
-          : "Restarts desk_display_client on the display on its next heartbeat";
-        button.addEventListener("click", () => clientCommand(client, action));
-        td.appendChild(button);
-      }
-      for (const command of client.commands || []) commandLine(td, command);
-    });
-    cell(tr, (td) => {
-      line(td, client.display_profile || "unknown profile");
-      line(td, `${client.dimensions || "?"} · rotation ${client.physical_rotation ?? "?"}°`, "muted");
-      const caps = client.capabilities || {};
-      const features = [caps.supports_animation ? "animation" : null, caps.has_touch ? "touch" : null,
-        (caps.buttons || []).length ? `buttons ${caps.buttons.join("")}` : null].filter(Boolean);
-      if (features.length) line(td, features.join(" · "), "muted");
-      scrollControl(td, client);
-      locationControl(td, client);
-    });
-    cell(tr, (td) => {
-      line(td, client.current_screen || "—");
-      line(td, `${client.playback_state || "unknown"} · cache ${age(client.cache_age_seconds)}`, "muted");
-    });
-    cell(tr, (td) => {
-      const t = client.telemetry;
-      const synced = client.last_sync_age_seconds;
-      line(td, synced === null || synced === undefined ? "no sync yet" : `last sync ${age(synced)} ago`);
-      if (!t) { line(td, "no timings reported", "muted"); return; }
-      line(td, `on screen rendered ${age(t.displayed_content_age_seconds)} ago`, "muted");
-      line(td, `heartbeat ${ms(t.heartbeat_rtt_ms)} · manifest ${ms(t.manifest_fetch_ms)} · sync ${ms(t.last_sync_duration_ms)}`, "muted");
-      if (t.download_count) {
-        line(td, `last download ${t.download_count} file${t.download_count === 1 ? "" : "s"}, ${kb(t.download_bytes)} in ${ms(t.download_ms)}`, "muted");
-      }
-      if (t.consecutive_failures) line(td, `${t.consecutive_failures} failed sync${t.consecutive_failures === 1 ? "" : "s"} before the last success`, "muted");
-    });
-    cell(tr, (td) => {
-      const select = document.createElement("select");
-      select.setAttribute("aria-label", `Playlist for ${client.client_id}`);
-      select.appendChild(new Option("Unassigned", ""));
-      for (const playlist of playlists) select.appendChild(new Option(playlist.name, playlist.id));
-      const current = client.assignment ? client.assignment.playlist_id : "";
-      select.value = current;
-      select.addEventListener("change", () => assign(client, select.value || null, current || null));
-      td.appendChild(select);
-      if (client.assignment) {
-        const fork = document.createElement("button");
-        fork.textContent = "Clone for this client";
-        fork.title = "Copy the shared playlist so this client can be edited on its own";
-        fork.addEventListener("click", () => forkPlaylist(client));
-        td.appendChild(fork);
-      }
-    });
-    cell(tr, (td) => {
-      badge(td, client.revision_state);
-      line(td, `saved ${client.saved_revision || "—"}`, "mono");
-      line(td, `delivered ${client.delivered_revision || "—"}`, "mono");
-      line(td, `acknowledged ${client.acknowledged_revision || "—"}`, "mono");
-    });
-    cell(tr, (td) => {
-      if (!client.warnings.length && !client.recent_errors.length) line(td, "—", "muted");
+
+    if (client.warnings.length) {
+      const warnings = element(card, "div", "client-warnings");
       for (const warning of client.warnings) {
-        const div = line(td, " " + warning.message);
+        const div = line(warnings, " " + warning.message);
+        if (warning.message.length > 160) {
+          div.className = "clamped";
+          div.title = "Click to show all";
+          div.addEventListener("click", () => div.classList.toggle("clamped"));
+        }
         const tag = document.createElement("span");
         tag.className = "badge " + warning.severity;
         tag.textContent = warning.severity;
         div.prepend(tag);
       }
-      for (const error of client.recent_errors) line(td, `${error.code} ×${error.count}: ${error.message}`, "muted");
-    });
-    body.appendChild(tr);
+    }
+
+    const tabs = element(card, "div", "client-tabs");
+    for (const [name, label] of PANELS) {
+      const open = openPanels[client.client_id] === name;
+      const tab = button(tabs, label, () => togglePanel(client.client_id, name));
+      tab.dataset.panel = name;
+      tab.setAttribute("aria-expanded", String(open));
+      const pending = name === "maintenance" && (client.commands || []).some((c) => UNFINISHED.has(c.state));
+      if (pending) tab.textContent = `${label} •`;
+      const body = element(card, "div", "client-panel" + (open ? "" : " hidden"));
+      body.dataset.panelBody = name;
+      ({ settings: settingsPanel, delivery: deliveryPanel, maintenance: maintenancePanel })[name](body, client);
+    }
   }
 }
 
