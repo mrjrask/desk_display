@@ -2438,16 +2438,11 @@ def _stitch_view(
             tile = tile.resize((tile_px, tile_px), LANCZOS)
         canvas.paste(tile, ((tx - tx0) * tile_px, (ty - ty0) * tile_px))
 
-    box = (
-        round(left - tx0 * tile_px),
-        round(top - ty0 * tile_px),
-        round(right - tx0 * tile_px),
-        round(bottom - ty0 * tile_px),
-    )
-    region = canvas.crop(box)
-    if region.size != (view.width, view.height):
-        region = region.resize((view.width, view.height), LANCZOS)
-    return region
+    # Resample from the exact (fractional) box rather than a rounded crop, so
+    # the map and the radar, fetched at different zooms and tile sizes, land
+    # on the same display pixels.
+    box = (left - tx0 * tile_px, top - ty0 * tile_px, right - tx0 * tile_px, bottom - ty0 * tile_px)
+    return canvas.resize((view.width, view.height), LANCZOS, box=box)
 
 
 def _normalise_radar_timestamp(value: object) -> Optional[int]:

@@ -452,3 +452,74 @@ def test_rainviewer_frames_use_512px_tiles_sized_to_large_display(monkeypatch):
     assert len(frames) == 1
     assert frames[0].image.size == (1920, 1080)
     assert tile_urls and all("/512/7/" in url for url in tile_urls)
+
+
+def _mercator_px(lat, lon, zoom):
+    import math
+
+    n = 256 * 2**zoom
+    lat_rad = math.radians(lat)
+    return (lon + 180) / 360 * n, (1 - math.log(math.tan(lat_rad) + 1 / math.cos(lat_rad)) / math.pi) / 2 * n
+
+
+def _marker_tile_png(zoom, x, y, size, lat, lon):
+    from PIL import ImageDraw
+
+    img = Image.new("RGB", (size, size), (0, 0, 0))
+    scale = size / 256
+    wx, wy = _mercator_px(lat, lon, zoom)
+    cx, cy = (wx - x * 256) * scale, (wy - y * 256) * scale
+    ImageDraw.Draw(img).ellipse((cx - 3 * scale, cy - 3 * scale, cx + 3 * scale, cy + 3 * scale), fill=(255, 255, 255))
+    buf = BytesIO()
+    img.save(buf, format="PNG")
+    return buf.getvalue()
+
+
+def _bright_centroid(image):
+    gray = image.convert("L")
+    pixels = gray.load()
+    xs = ys = count = 0
+    for py in range(gray.height):
+        for px in range(gray.width):
+            if pixels[px, py] > 100:
+                xs += px
+                ys += py
+                count += 1
+    assert count, "marker not visible"
+    return xs / count, ys / count
+
+
+@pytest.mark.parametrize("size", [(1920, 1080), (720, 720), (320, 240)])
+def test_radar_overlay_lines_up_with_base_map(monkeypatch, size):
+    import re
+
+    _set_display(monkeypatch, *size)
+    lat, lon = RADAR_CENTER_LATITUDE, RADAR_CENTER_LONGITUDE  # Chicago
+    now_ts = int(datetime.datetime.now(datetime.UTC).timestamp())
+    metadata = {"host": "https://tilecache.rainviewer.com", "radar": {"past": [{"path": "/p", "time": now_ts}]}}
+
+    class _JsonResponse(_MockResponse):
+        def json(self):
+            return metadata
+
+    def _mock_get(url, timeout, headers=None):
+        if "maps.json" in url:
+            return _JsonResponse(b"")
+        radar = re.search(r"/(\d+)/(\d+)/(\d+)/(\d+)/2/1_1\.png$", url)
+        if radar:
+            tile_px, zoom, x, y = map(int, radar.groups())
+            return _MockResponse(_marker_tile_png(zoom, x, y, tile_px, lat, lon))
+        zoom, x, y = map(int, re.search(r"/(\d+)/(\d+)/(\d+)\.png$", url).groups())
+        return _MockResponse(_marker_tile_png(zoom, x, y, 256, lat, lon))
+
+    monkeypatch.setattr("screens.draw_weather.http_get", _mock_get)
+
+    base = _fetch_base_map(zoom=7)
+    radar = _fetch_radar_frames(zoom=7, max_frames=1)[0].image
+    map_x, map_y = _bright_centroid(base)
+    radar_x, radar_y = _bright_centroid(radar)
+
+    # Map (zoom 7-9, 256px) and radar (zoom 7, 512px) tiles must put the same
+    # place on the same display pixel.
+    assert abs(map_x - radar_x) <= 1.5
+    assert abs(map_y - radar_y) <= 1.5
