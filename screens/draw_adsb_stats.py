@@ -64,6 +64,25 @@ _MIN_GRID_ROW_H = 16
 # tile falls back to plain "CODE: count" text instead of icon + count.
 _MIN_ICON_DIM = 16
 
+# 1080p HDMI: the tile label and caption top out at the full detail font
+# size, which left the Live Now lists about a third of each tile and drew
+# their rows on top of one another. There the label and caption take a
+# smaller share, rows keep a gap between them, and receiver lines are
+# spaced apart.
+_IS_1080P_LAYOUT = config.is_hdmi_1080p_layout()
+_LABEL_HEIGHT_SHARE_1080P = 0.15
+_CAPTION_HEIGHT_SHARE_1080P = 0.13
+_GRID_ROW_FILL_1080P = 0.8
+_LINE_GAP_SHARE_1080P = 0.2
+
+
+def _label_height_share() -> float:
+    return _LABEL_HEIGHT_SHARE_1080P if _IS_1080P_LAYOUT else 0.22
+
+
+def _caption_height_share() -> float:
+    return _CAPTION_HEIGHT_SHARE_1080P if _IS_1080P_LAYOUT else 0.2
+
 # The ADS-B dashboard is two separate registered screens (see
 # screens/registry.py), each with a fixed four-tile layout.
 _VARIANT_BEST = "best"
@@ -386,9 +405,10 @@ def _draw_grid_lines(
     col_gap = max(6, max_width // 20) if columns > 1 else 0
     col_width = max(1, (max_width - col_gap * (columns - 1)) // columns)
     row_h = max(1, max_height // rows)
+    fit_h = max(1, int(row_h * _GRID_ROW_FILL_1080P)) if _IS_1080P_LAYOUT else row_h
 
     font = _fit_font_for_lines(
-        draw, lines, base_font, col_width, row_h, min_pt=min_pt, max_pt=max_pt
+        draw, lines, base_font, col_width, fit_h, min_pt=min_pt, max_pt=max_pt
     )
 
     for index, text in enumerate(lines):
@@ -466,7 +486,7 @@ def _draw_stat_tile(
         label_text,
         FONT_WEATHER_DETAILS_TINY,
         max_width=max_text_width,
-        max_height=max(9, int(height * 0.22)),
+        max_height=max(9, int(height * _label_height_share())),
         min_pt=7,
         max_pt=FONT_WEATHER_DETAILS_TINY.size,
     )
@@ -481,7 +501,7 @@ def _draw_stat_tile(
             caption,
             FONT_WEATHER_DETAILS_TINY,
             max_width=max_text_width,
-            max_height=max(9, int(height * 0.2)) * caption_lines,
+            max_height=max(9, int(height * _caption_height_share())) * caption_lines,
             min_pt=6,
             max_pt=FONT_WEATHER_DETAILS_TINY.size,
         )
@@ -537,12 +557,13 @@ def _draw_stat_tile(
             )
         return
 
+    spaced_lines = _IS_1080P_LAYOUT and bool(line_online) and "\n" in value
     value_font = fit_font(
         draw,
         value,
         FONT_WEATHER_DETAILS_SMALL_BOLD,
         max_width=value_max_width,
-        max_height=value_max_h,
+        max_height=int(value_max_h * (1 - _LINE_GAP_SHARE_1080P)) if spaced_lines else value_max_h,
         min_pt=9,
         max_pt=max(FONT_WEATHER_DETAILS_SMALL_BOLD.size, int(height * 0.4)),
     )
@@ -567,6 +588,16 @@ def _draw_stat_tile(
         value = _fit_text(draw, value, value_font, value_max_width)
         _, value_h = _text_extent(draw, value, value_font)
 
+    line_gap = 2
+    if spaced_lines:
+        line_count = value.count("\n") + 1
+        line_gap = max(2, int(value_max_h * _LINE_GAP_SHARE_1080P / max(1, line_count - 1)))
+        ink_h = sum(_text_extent(draw, line, value_font)[1] for line in value.split("\n"))
+        value_h = ink_h + line_gap * (line_count - 1)
+        if value_h > value_max_h:
+            line_gap = max(2, (value_max_h - ink_h) // max(1, line_count - 1))
+            value_h = ink_h + line_gap * (line_count - 1)
+
     value_draw_top = value_top + max(0, (value_max_h - value_h) // 2)
 
     if line_online:
@@ -589,7 +620,7 @@ def _draw_stat_tile(
                 fill=dot_color,
             )
             draw.text((text_x, y - top_offset), line_text, font=value_font, fill=_TEXT_COLOR)
-            y += line_h + 2
+            y += line_h + line_gap
     else:
         _draw_line(draw, x0 + pad_x, value_draw_top, value, value_font, _TEXT_COLOR)
 
@@ -650,7 +681,7 @@ def _draw_airline_tile(
         label_text,
         FONT_WEATHER_DETAILS_TINY,
         max_width=max_text_width,
-        max_height=max(9, int(height * 0.22)),
+        max_height=max(9, int(height * _label_height_share())),
         min_pt=7,
         max_pt=FONT_WEATHER_DETAILS_TINY.size,
     )
@@ -664,7 +695,7 @@ def _draw_airline_tile(
             caption,
             FONT_WEATHER_DETAILS_TINY,
             max_width=max_text_width,
-            max_height=max(9, int(height * 0.2)),
+            max_height=max(9, int(height * _caption_height_share())),
             min_pt=6,
             max_pt=FONT_WEATHER_DETAILS_TINY.size,
         )
@@ -695,6 +726,8 @@ def _draw_airline_tile(
     col_gap = max(6, max_text_width // 20) if columns > 1 else 0
     col_width = max(1, (max_text_width - col_gap * (columns - 1)) // columns)
     icon_dim = max(10, min(row_h - 4, col_width // 5))
+    if _IS_1080P_LAYOUT:
+        icon_dim = max(10, min(int(row_h * _GRID_ROW_FILL_1080P), col_width // 5))
 
     if icon_dim < _MIN_ICON_DIM:
         # Too little room left for a legible icon or code abbreviation --
@@ -730,7 +763,7 @@ def _draw_airline_tile(
         [str(count) for _, count in rows],
         FONT_WEATHER_DETAILS_SMALL_BOLD,
         max(1, col_width - icon_col),
-        row_h - 2,
+        int(row_h * _GRID_ROW_FILL_1080P) if _IS_1080P_LAYOUT else row_h - 2,
         min_pt=8,
         max_pt=max(FONT_WEATHER_DETAILS_SMALL_BOLD.size, int(height * 0.24)),
     )

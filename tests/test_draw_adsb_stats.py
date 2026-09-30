@@ -517,3 +517,27 @@ def test_draw_live_variant_pastes_logo_when_file_present(tmp_path, monkeypatch):
     result = draw_adsb_stats_screen(None, stats=stats, variant="live")
     assert isinstance(result, ScreenImage)
     assert result.image.size == (config.WIDTH, config.HEIGHT)
+
+
+def test_grid_rows_keep_a_gap_between_them_at_1080p(monkeypatch):
+    # At 1080p the Live Now "by aircraft" rows used to fill their whole row
+    # height and visibly overlap one another.
+    monkeypatch.setattr(draw_adsb_stats_module, "_IS_1080P_LAYOUT", True)
+    img = Image.new("RGB", (800, 300), (0, 0, 0))
+    draw = ImageDraw.Draw(img)
+    boxes = []
+    original_text = draw.text
+
+    def spy_text(xy, text, *, font, **kwargs):
+        boxes.append(draw.textbbox(xy, text, font=font))
+        return original_text(xy, text, font=font, **kwargs)
+
+    monkeypatch.setattr(draw, "text", spy_text)
+    lines = ["Unknown: 14", "B738: 8", "A21N: 7", "B739: 7", "C172: 6", "Other: 57"]
+    _draw_grid_lines(
+        draw, 0, 0, 800, 150, lines, config.FONT_WEATHER_DETAILS_SMALL_BOLD, (255, 255, 255),
+        columns=2, max_pt=200,
+    )
+    left_column = sorted(boxes[0::2], key=lambda box: box[1])
+    for upper, lower in zip(left_column, left_column[1:]):
+        assert upper[3] < lower[1]
