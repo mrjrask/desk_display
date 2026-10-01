@@ -1104,22 +1104,25 @@ def build_screen_registry(context: ScreenContext) -> tuple[dict[str, ScreenDefin
                 # function, so reading it here raised UnboundLocalError and
                 # a live Wolves game broke the whole registry.
                 ahl_today = context.now.date()
+                # A late game is still live after midnight, so its start date
+                # may be yesterday.
+                ahl_days = {ahl_today, ahl_today - _dt.timedelta(days=1)}
                 for key in ("official_date", "officialDate", "game_date", "date"):
                     value = game.get(key)
                     if isinstance(value, str) and value.strip():
                         try:
-                            return _dt.date.fromisoformat(value.strip()[:10]) == ahl_today
+                            return _dt.date.fromisoformat(value.strip()[:10]) in ahl_days
                         except ValueError:
                             pass
                 start = game.get("start_utc") or game.get("start")
                 if isinstance(start, _dt.datetime):
-                    return start.astimezone(CENTRAL_TIME).date() == ahl_today
+                    return start.astimezone(CENTRAL_TIME).date() in ahl_days
                 if isinstance(start, str) and start.strip():
                     try:
                         parsed = _dt.datetime.fromisoformat(start.replace("Z", "+00:00"))
                         if parsed.tzinfo is None:
                             parsed = parsed.replace(tzinfo=CENTRAL_TIME)
-                        return parsed.astimezone(CENTRAL_TIME).date() == ahl_today
+                        return parsed.astimezone(CENTRAL_TIME).date() in ahl_days
                     except ValueError:
                         pass
                 return True
