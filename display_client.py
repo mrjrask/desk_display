@@ -931,7 +931,7 @@ def build_client(settings: dict[str, Any], *, presenter: Any = None, transport: 
         raise SystemExit(f"Unknown display profile {settings['DESK_DISPLAY_PROFILE']!r}")
     cache_dir = Path(settings.get("DESK_DISPLAY_CLIENT_CACHE_DIR") or DEFAULT_CACHE_DIR).expanduser()
     cache = ClientCache(cache_dir)
-    artifacts = ArtifactCache(cache_dir, max_bytes=int(settings.get("DESK_DISPLAY_CLIENT_CACHE_MAX_MB") or 256) << 20)
+    artifacts = ArtifactCache(cache_dir, max_bytes=int(settings.get("DESK_DISPLAY_CLIENT_CACHE_MAX_MB") or 512) << 20)
     configured = _rotation(settings.get("DISPLAY_ROTATION"))
     kernel_overlay = None
     hardware = presenter is None
