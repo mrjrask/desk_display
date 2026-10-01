@@ -1105,8 +1105,11 @@ def build_screen_registry(context: ScreenContext) -> tuple[dict[str, ScreenDefin
                 # a live Wolves game broke the whole registry.
                 ahl_today = context.now.date()
                 # A late game is still live after midnight, so its start date
-                # may be yesterday.
-                ahl_days = {ahl_today, ahl_today - _dt.timedelta(days=1)}
+                # may be yesterday -- but only in the small hours, so a stale
+                # cached LIVE payload can't linger through the next day.
+                ahl_days = {ahl_today}
+                if context.now.hour < 4:
+                    ahl_days.add(ahl_today - _dt.timedelta(days=1))
                 for key in ("official_date", "officialDate", "game_date", "date"):
                     value = game.get(key)
                     if isinstance(value, str) and value.strip():
