@@ -19,6 +19,10 @@ Four documents describe a remote display:
     sync's downloads, how old the screen on the panel is and how many sync
     passes have failed in a row.  Sent beside the status in a heartbeat,
     only to a server that advertises ``client_telemetry_versions``.
+:class:`ClientResources`
+    The client's own CPU, memory, storage and data counters for the Stats
+    page; sent beside the status only to a server that advertises
+    ``client_resource_versions``.
 :class:`RenderKey`
     The canonical identity of one rendered artifact.  It contains only the
     inputs that change pixels, so clients with equivalent demand share
@@ -662,6 +666,55 @@ class ClientTelemetry(WireModel):
                                                maximum=1_000_000_000))
 
 
+MAX_RESOURCE_BYTES = 1 << 50
+
+
+@dataclass(frozen=True)
+class ClientResources(WireModel):
+    """A client's own CPU, memory, storage and data counters, for the Stats page.
+
+    CPU percentages are of one core (the client process) or of the whole
+    machine (``system_cpu_percent``).  ``bytes_received`` / ``bytes_sent``
+    count this client process's traffic with the server since it started;
+    ``net_*_bytes`` are the device's network interfaces since boot.  Every
+    field is optional, and the document is sent only to a server that lists
+    ``client_resource_versions``.
+    """
+
+    WIRE_TYPE: ClassVar[str] = "client_resources"
+
+    process_cpu_percent: float | None = None
+    process_rss_bytes: int | None = None
+    uptime_seconds: float | None = None
+    system_cpu_percent: float | None = None
+    cpu_count: int | None = None
+    load_1m: float | None = None
+    memory_total_bytes: int | None = None
+    memory_available_bytes: int | None = None
+    temperature_c: float | None = None
+    disk_total_bytes: int | None = None
+    disk_free_bytes: int | None = None
+    cache_bytes: int | None = None
+    cache_limit_bytes: int | None = None
+    bytes_received: int | None = None
+    bytes_sent: int | None = None
+    net_rx_bytes: int | None = None
+    net_tx_bytes: int | None = None
+
+    def _normalize(self) -> None:
+        for name in ("process_cpu_percent", "system_cpu_percent", "load_1m"):
+            self._set(name, _optional(getattr(self, name), name, lambda v, p: _number(v, p, maximum=100_000)))
+        self._set("uptime_seconds", _optional(self.uptime_seconds, "uptime_seconds", _number))
+        self._set("temperature_c", _optional(self.temperature_c, "temperature_c",
+                                             lambda v, p: _number(v, p, minimum=-100, maximum=200)))
+        self._set("cpu_count", _optional(self.cpu_count, "cpu_count", lambda v, p: _int(v, p, maximum=4096)))
+        for name in ("process_rss_bytes", "memory_total_bytes", "memory_available_bytes", "disk_total_bytes",
+                     "disk_free_bytes", "cache_bytes", "cache_limit_bytes", "bytes_received", "bytes_sent",
+                     "net_rx_bytes", "net_tx_bytes"):
+            self._set(name, _optional(getattr(self, name), name,
+                                      lambda v, p: _int(v, p, maximum=MAX_RESOURCE_BYTES)))
+
+
 # ─── Render identity ────────────────────────────────────────────────────────
 
 
@@ -824,8 +877,8 @@ def plan_renders(
 
 WIRE_MODELS: dict[str, type[WireModel]] = {
     model.WIRE_TYPE: model
-    for model in (ClientCapabilities, ClientDemand, ClientStatus, ClientTelemetry, RenderKey,
-                  ScreenRevisions)
+    for model in (ClientCapabilities, ClientDemand, ClientResources, ClientStatus, ClientTelemetry,
+                  RenderKey, ScreenRevisions)
 }
 
 
@@ -844,6 +897,7 @@ __all__ = [
     "AcceptedRevisions",
     "ClientCapabilities",
     "ClientDemand",
+    "ClientResources",
     "ClientStatus",
     "ClientTelemetry",
     "ErrorSummary",

@@ -515,6 +515,16 @@ SETTINGS: tuple[Setting, ...] = (
     _s("DESK_DISPLAY_SERVER_FEED_STATE_PATH", "path", _SERVER_ONLY, "history",
        "Where the render server saves each feed's last good data so a restart renders "
        "immediately; defaults to cache/server_feed_state.json."),
+    _s("DESK_DISPLAY_STATS_ENABLED", "bool", _SERVER_ONLY, "history",
+       "Sample CPU by purpose, display traffic and storage for the config UI's Stats page "
+       "(a few small /proc reads every 10 seconds).", default="1"),
+    _s("DESK_DISPLAY_SERVER_STATS_PATH", "path", _SERVER, "history",
+       "Live stats the render server publishes for the Stats page; defaults to a file "
+       "under /dev/shm (memory, so frequent writes skip the SD card), else "
+       ".runtime/server/stats.json."),
+    _s("DESK_DISPLAY_SERVER_STATS_HISTORY_PATH", "path", _SERVER_ONLY, "history",
+       "All-time traffic totals and the 24-hour Stats history, saved every 10 minutes; "
+       "defaults to .runtime/server/stats_history.json."),
     _s("ON_THIS_DAY_CACHE_PATH", "path", _SERVER, "history",
        "Daily On This Day cache; defaults to the application cache directory."),
 

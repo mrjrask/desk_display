@@ -554,6 +554,43 @@ excludes the network, so a gap between it and the client's figure is the
 link. Clients older than this release report no timings ("no timings
 reported").
 
+### Checking CPU, data and storage
+
+The **Stats** page (`/stats` on the config UI, port 5002) refreshes every
+10 seconds:
+
+- *CPU by purpose*: a stacked chart (last hour, or 5-minute averages over
+  24 hours) of what the project's CPU goes to. *Rendering screens* is the
+  render worker processes, one set per display profile (each listed in the
+  process table as "Render worker · <profile>"). Inside the render server
+  each thread is attributed by name: *Serving displays* (the HTTP API),
+  *Render scheduling*, *Feed refresh*, *Artifact cleanup*; *Short-lived
+  threads* is work in threads that started and ended between two samples,
+  mostly feed downloads. The config UI, the local panel client (combined
+  installs), a standalone `main.py` and the feed server appear as their own
+  processes. Percentages are of one core, like `top`: 100% is a full core,
+  and a Pi 4 or 5 has four. The *Project CPU* tile also gives the share of
+  the whole machine.
+- *Data transferred*: bytes the display API sent to and received from each
+  display (now, since the server started, and all time; the all-time totals
+  are saved every 10 minutes in `.runtime/server/stats_history.json`), what
+  it was mostly for (artifacts, manifests, heartbeats), and the machine's
+  network interfaces. The per-display figures count request and response
+  bodies, not HTTP headers or TLS.
+- *Storage*: free space on the project's filesystem and the sizes of the
+  artifact store (against `DESK_DISPLAY_ARTIFACT_MAX_MB`) and caches.
+- *Displays*: each display's own client CPU, machine CPU, free memory,
+  temperature, free disk, cache use against `DESK_DISPLAY_CLIENT_CACHE_MAX_MB`
+  and traffic since the client started, from its heartbeat. Displays need
+  this release to report them.
+
+The render server samples every 10 seconds (a few small `/proc` reads) and
+writes the page's data to `/dev/shm`, so it adds no SD card writes beyond the
+10-minute history file. Set `DESK_DISPLAY_STATS_ENABLED=0` in `.env` to turn
+it off. When no render server is publishing (standalone and client installs,
+or a stopped server) the page samples the machine itself while it is open:
+processes and storage, without per-thread and per-display figures.
+
 ### Comparing screens across displays
 
 To see every version of each screen side by side, run this from any

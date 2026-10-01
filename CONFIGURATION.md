@@ -561,6 +561,9 @@ installs only, never clients.
 | `WEATHER_METRIC_HISTORY_PATH` | server, standalone | restart |  |
 | `AIR_QUALITY_HISTORY_PATH` | server, standalone | restart |  |
 | `DESK_DISPLAY_SERVER_FEED_STATE_PATH` | server | restart |  |
+| `DESK_DISPLAY_STATS_ENABLED` | server | restart |  |
+| `DESK_DISPLAY_SERVER_STATS_PATH` | server, standalone | restart |  |
+| `DESK_DISPLAY_SERVER_STATS_HISTORY_PATH` | server | restart |  |
 | `ON_THIS_DAY_CACHE_PATH` | server, standalone | restart |  |
 | `DESK_DISPLAY_PROFILE` | client, standalone | restart |  |
 | `DISPLAY_WIDTH` | client, standalone | restart |  |

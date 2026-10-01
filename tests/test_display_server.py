@@ -556,6 +556,42 @@ def test_malformed_telemetry_is_rejected(api):
         assert response.status_code == 400, bad
 
 
+def test_heartbeat_advertises_and_records_client_resources(api, server):
+    credential = registered(api)
+    body = api.post("/api/v1/clients/office/heartbeat", json={"status": status()},
+                    headers=bearer(credential)).get_json()
+    assert body["client_resource_versions"] == [1]
+    resources = {"type": "client_resources", "version": 1, "process_cpu_percent": 3.5, "cache_bytes": 4096,
+                 "cache_limit_bytes": 256 << 20, "bytes_received": 123456, "temperature_c": 51.2}
+    response = api.post("/api/v1/clients/office/heartbeat", json={"status": status(), "resources": resources},
+                        headers=bearer(credential))
+    assert response.status_code == 200
+    office = next(c for c in admin_status(api)["clients"] if c["client_id"] == "office")
+    assert office["resources"]["process_cpu_percent"] == 3.5
+    assert office["resources"]["cache_bytes"] == 4096
+    assert server.extensions["desk_display_registry"].snapshot()["clients"]["office"]["resources"]["bytes_received"] == 123456
+    for bad in ({**resources, "cache_bytes": -1}, {**resources, "extra": 1}, {**resources, "version": 2}):
+        response = api.post("/api/v1/clients/office/heartbeat", json={"status": status(), "resources": bad},
+                            headers=bearer(credential))
+        assert response.status_code == 400, bad
+
+
+def test_display_api_traffic_is_counted_per_client(api, server):
+    credential = registered(api)
+    api.post("/api/v1/clients/office/heartbeat", json={"status": status()}, headers=bearer(credential))
+    manifest = api.get("/api/v1/clients/office/manifest", headers=bearer(credential))
+    api.get("/api/v1/health")
+    traffic = server.extensions["desk_display_traffic"].snapshot()
+    office = traffic["office"]
+    assert office["requests"] == 2
+    assert office["kinds"]["heartbeat"]["requests"] == 1
+    assert office["kinds"]["manifest"]["bytes_out"] == len(manifest.data)
+    assert office["bytes_in"] > 0
+    # Registration happens before the client has a credential.
+    assert traffic["_unauthenticated"]["kinds"]["register"]["requests"] == 1
+    assert sum(entry["requests"] for entry in traffic.values()) == 3
+
+
 def test_malformed_heartbeat(api):
     credential = registered(api)
     for body in ({}, {"status": {"type": "client_status"}}, {"status": status(physical_rotation=45)},

@@ -46,6 +46,7 @@ from protocol_versions import RENDER_PACKAGE_SCHEMA_VERSION
 from remote_display.models import (
     ClientCapabilities,
     ClientDemand,
+    ClientResources,
     ClientStatus,
     ClientTelemetry,
     ModelValidationError,
@@ -130,6 +131,7 @@ class ClientRecord:
     demand: ClientDemand | None = None
     status: ClientStatus | None = None
     telemetry: ClientTelemetry | None = None
+    resources: ClientResources | None = None
     disabled: bool = False
     delivered_playlist_revision: str | None = None
     # The provisioned credential this lease was issued under (None in shared mode).
@@ -242,6 +244,7 @@ class ClientRegistry:
                 demand=demand if demand is not None else (record.demand if renewed and record else None),
                 status=record.status if record else None,
                 telemetry=record.telemetry if record else None,
+                resources=record.resources if record else None,
                 delivered_playlist_revision=record.delivered_playlist_revision if record else None,
                 enrollment_id=enrollment_id,
                 address=address or (record.address if record else None),
@@ -270,6 +273,7 @@ class ClientRegistry:
         telemetry: ClientTelemetry | None = None,
         *,
         address: str | None = None,
+        resources: ClientResources | None = None,
     ) -> ClientRecord:
         record = self.authenticate(client_id, credential)
         if status.client_id != client_id:
@@ -281,6 +285,7 @@ class ClientRegistry:
             current = self._clients[client_id]
             current.status = status
             current.telemetry = telemetry
+            current.resources = resources
             current.last_seen = now
             current.lease_expires_at = now + self.lease_seconds
             if address:
@@ -356,6 +361,7 @@ class ClientRegistry:
                 "capabilities": record.capabilities.to_wire(),
                 "status": None if record.status is None else record.status.to_wire(),
                 "telemetry": None if record.telemetry is None else record.telemetry.to_wire(),
+                "resources": None if record.resources is None else record.resources.to_wire(),
                 "delivered_playlist_revision": record.delivered_playlist_revision,
                 "address": record.address,
             }

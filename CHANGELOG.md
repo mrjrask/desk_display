@@ -65,6 +65,15 @@ See the README's [deployment modes](README.md#deployment-modes) and
   old the screen on the panel is and failed passes in a row. It shows in a
   **Delivery** column on the Clients page and in `/api/v1/admin/status`
   (see OPERATIONS.md, "Checking delivery speed").
+- A **Stats** page in the configuration UI (`/stats`): the project's CPU use
+  broken down by purpose (rendering per display profile, feed refresh,
+  serving displays, render scheduling, config UI, local panel client) with
+  per-process and per-thread figures and a 1-hour / 24-hour history; data
+  sent to and received from each display (now, since start, all time) and
+  the machine's network throughput; free disk space and the artifact store
+  and caches against their limits; and each display's own CPU, memory,
+  temperature, disk and cache, reported in a new optional heartbeat
+  `resources` document (see OPERATIONS.md, "Checking CPU, data and storage").
 - `scripts/collect_client_screenshots.py` gathers the latest screenshot of
   every screen from every active display client into one self-contained HTML
   page, grouped by screen, for comparing how each screen looks on each

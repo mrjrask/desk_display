@@ -80,6 +80,7 @@ from remote_display.render_coordinator import RenderCoordinator, Renderer, Revis
 from remote_display.models import (
     ClientCapabilities,
     ClientDemand,
+    ClientResources,
     ClientStatus,
     ClientTelemetry,
     ModelValidationError,
@@ -97,6 +98,7 @@ from remote_display.provisioning import (
     provisioning_path,
 )
 from remote_display.rate_limit import RateLimiter
+from remote_display.resource_stats import TrafficCounter, traffic_kind
 from remote_display.registry import (
     Assignment,
     AssignmentLookup,
@@ -205,7 +207,7 @@ def _error(status: int, code: str, message: str, **details: Any):
     return jsonify({"error": code, "message": message, **details}), status
 
 
-_VOLATILE_SNAPSHOT_FIELDS = frozenset({"last_seen", "lease_expires_at", "status"})
+_VOLATILE_SNAPSHOT_FIELDS = frozenset({"last_seen", "lease_expires_at", "status", "resources"})
 
 
 def _snapshot_signature(snapshot: Mapping[str, Any]) -> Any:
@@ -340,6 +342,9 @@ def create_app(
     app.extensions["desk_display_client_commands"] = commands
     limiter = RateLimiter() if config.rate_limits else None
     app.extensions["desk_display_rate_limiter"] = limiter
+    # Bytes each display sent and received, for the config UI's Stats page.
+    traffic = TrafficCounter()
+    app.extensions["desk_display_traffic"] = traffic
     provisioned = config.enrollment == "provisioned"
     coordinator = None
     if renderer is not None and revisions is not None:
@@ -410,6 +415,9 @@ def create_app(
 
     @app.after_request
     def _finish(response):
+        if request.path.startswith("/api/v1/") and request.path != "/api/v1/health":
+            traffic.record(g.get("client_id"), traffic_kind(request.endpoint),
+                           request.content_length or 0, response.content_length or 0)
         # Registrations, heartbeats, deliveries and admin changes alter what the
         # config UI shows; health checks and asset downloads do not.
         if (
@@ -512,6 +520,7 @@ def create_app(
                 registry.end_lease(client_id)
                 raise UnknownLeaseError("this client's credential was rotated, revoked or disabled")
         _limit(_LIMIT_KIND.get(request.endpoint or "", "manifest"), client_id)
+        g.client_id = record.client_id
         return record
 
     def _require_admin():
@@ -570,6 +579,8 @@ def create_app(
             "sync_interval_seconds": registry.sync_interval_seconds,
             # Heartbeats may carry a ``telemetry`` document of these versions.
             "client_telemetry_versions": [ClientTelemetry.WIRE_VERSION],
+            # ... and a ``resources`` document (CPU, storage, data) for the Stats page.
+            "client_resource_versions": [ClientResources.WIRE_VERSION],
             # Heartbeats may carry ``commands`` (results); see client_commands.
             **({"client_command_versions": [CLIENT_COMMAND_VERSION]} if commands is not None else {}),
         }
@@ -687,7 +698,7 @@ def create_app(
     def heartbeat(client_id: str):
         record = _client()
         payload = _json_body()
-        unknown = sorted(set(payload) - {"status", "demand", "telemetry", "commands"})
+        unknown = sorted(set(payload) - {"status", "demand", "telemetry", "resources", "commands"})
         if unknown:
             raise ModelValidationError(unknown[0], "unknown field")
         status = ClientStatus.from_wire(payload.get("status"), path="status")
@@ -698,11 +709,14 @@ def create_app(
         telemetry = None
         if payload.get("telemetry") is not None:
             telemetry = ClientTelemetry.from_wire(payload["telemetry"], path="telemetry")
+        resources = None
+        if payload.get("resources") is not None:
+            resources = ClientResources.from_wire(payload["resources"], path="resources")
         command_results = None
         if payload.get("commands") is not None:
             command_results = parse_heartbeat_commands(payload["commands"])
         record = registry.heartbeat(record.client_id, _bearer() or "", status, demand, telemetry,
-                                    address=request.remote_addr)
+                                    address=request.remote_addr, resources=resources)
         body = {
             "client_id": record.client_id,
             **_assignment_payload(record.client_id, delivered=True),
@@ -814,6 +828,7 @@ def create_app(
                 "demand": None if record.demand is None else record.demand.to_wire(),
                 "status": None if record.status is None else record.status.to_wire(),
                 "telemetry": None if record.telemetry is None else record.telemetry.to_wire(),
+                "resources": None if record.resources is None else record.resources.to_wire(),
                 "address": record.address,
                 **_assignment_payload(record.client_id),
             })
@@ -994,6 +1009,7 @@ def run_display_server() -> None:
             scoped_values(feeds.data.snapshot().values, location.scope)),
     )
     _start_maintenance(app.extensions["desk_display_maintenance"])
+    _start_stats(app, server_config)
     registry = app.extensions["desk_display_registry"]
     global_screens, located_screens = demand_by_location(registry, app.extensions["desk_display_location_of"])
     feeds.start(global_screens, demanded_locations=located_screens)
@@ -1009,6 +1025,31 @@ def run_display_server() -> None:
     from waitress import serve
 
     serve(app, host=host, port=port, threads=8)
+
+
+def _start_stats(app: Flask, config: DisplayServerConfig) -> None:
+    """Sample CPU by purpose, traffic and storage for the config UI's Stats page."""
+
+    from remote_display import resource_stats
+
+    if not resource_stats.stats_enabled():
+        return
+    registry = app.extensions["desk_display_registry"]
+    persist = resource_stats.history_path()
+    sampler = resource_stats.StatsSampler(
+        role="server",
+        traffic=app.extensions["desk_display_traffic"],
+        clients=lambda: registry.snapshot()["clients"],
+        storage={
+            "Artifact store": (config.artifact_dir, config.artifact_max_bytes),
+            "Server caches (cache/)": (_PROJECT_ROOT / "cache", None),
+            "Image caches (images/cache/)": (_PROJECT_ROOT / "images" / "cache", None),
+        },
+        persisted=resource_stats.load_persisted(persist),
+    )
+    publisher = resource_stats.StatsPublisher(sampler, live_path=resource_stats.stats_path(), persist_path=persist)
+    publisher.start()
+    atexit.register(publisher.stop)
 
 
 def _apply_location_seed(config: DisplayServerConfig) -> None:
