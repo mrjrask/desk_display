@@ -46,6 +46,8 @@ class LegacyStandaloneRuntime:
             self.data.read_postseason("nhl_playoffs")
         elif screen_id == "NBA Playoffs":
             self.data.read_postseason("nba_playoffs")
+        elif screen_id == "traffic":
+            self.data.read_traffic()
 
     def step(self):
         item = self.player.next()

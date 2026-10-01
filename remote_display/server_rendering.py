@@ -26,6 +26,7 @@ from typing import Any
 
 from protocol_versions import APPLICATION_VERSION
 from remote_display.locations import Location, scoped_values
+from services import traffic
 from remote_display.models import RenderKey, ScreenRevisions
 from remote_display.render_coordinator import RenderOutput
 
@@ -275,6 +276,10 @@ def compose_screen(key: RenderKey, profile: Any, snapshot: Any, logos: Any,
         # A display with its own location: its place's weather under the
         # keys the screens read.
         snapshot = replace(snapshot, values=scoped_values(snapshot.values, key.client_scope))
+    if key.screen_id == traffic.SCREEN_ID:
+        # Inbound unless the key is an outbound display's (hyper's) scope.
+        snapshot = replace(snapshot, values={**snapshot.values,
+                                             "traffic_direction": traffic.direction_for_scope(key.client_scope)})
     preferences = ServerPreferenceSnapshot(revision=0, values={
         "logos": logos.for_size(profile.width, profile.height),
         "image_dir": IMAGES_DIR,

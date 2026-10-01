@@ -101,6 +101,18 @@ See the README's [deployment modes](README.md#deployment-modes) and
   server fetches it as the `mlb_postseason` feed (every 10 minutes, every
   30 seconds during a live game). Off (frequency 0) in the default configs, in
   the mlb playlist after MLB Scoreboard.
+- New **traffic** screen: Edens and Kennedy travel times and speeds from
+  Travel Midwest's Chicago Quick Traffic report (no key). Every display shows
+  the four inbound segments except hyper, which shows the four outbound ones
+  (`TRAFFIC_OUTBOUND_DISPLAYS` on the server, `TRAFFIC_DIRECTION` on a
+  standalone display). Rows are grouped by road, with travel time large,
+  speed beside it, a red bar when Travel Midwest flags a segment as over its
+  normal time, and N/A (row kept) for a closed reversible lane. The render
+  server fetches the report once every 5 minutes as the `traffic` feed for
+  all displays; a failed refresh keeps the last good report and the footer
+  says it is cached and how old it is. Laid out for every display profile,
+  including 1080p. Off (frequency 0) in the default configs, at the end of
+  the weather playlist.
 - **NHL Playoffs** and **NBA Playoffs** now use the MLB Playoffs design: a
   16-team bracket (West left, East right, the final in the middle, conference
   logos for the NHL) with the current round's series, scores and next game or

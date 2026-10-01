@@ -34,6 +34,7 @@
         "extra_seconds": 5
       },
       "weather radar": 1,
+      "traffic": 0,
       "inside": 1,
       "bears logo": 3,
       "bears stand1": 0,
@@ -246,6 +247,9 @@
           },
           {
             "screen": "weather radar"
+          },
+          {
+            "screen": "traffic"
           }
         ]
       },
@@ -941,6 +945,9 @@
         "background": "#000000"
       },
       "NCAA FBS Scoreboard": {
+        "background": "#000000"
+      },
+      "traffic": {
         "background": "#000000"
       }
     }

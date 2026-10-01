@@ -134,8 +134,9 @@ SECTIONS: tuple[Section, ...] = (
         note=(
             "The weather radar map is centred on WEATHER_LATITUDE and "
             "WEATHER_LONGITUDE, and its tile and radar endpoints are built in. "
-            "No map or travel-route provider credential is read by this release, "
-            "so there is nothing else to set here."
+            "The traffic screen reads Travel Midwest's public Chicago report, "
+            "which needs no key. No map or travel-route provider credential is "
+            "read by this release."
         ),
     ),
     Section("styles", "Screen configuration, styles, and layouts"),
@@ -394,6 +395,15 @@ SETTINGS: tuple[Setting, ...] = (
        "Receiver site latitude for distances; defaults to WEATHER_LATITUDE."),
     _s("ADSB_HOME_LONGITUDE", "longitude", _SERVER, "adsb",
        "Receiver site longitude; defaults to WEATHER_LONGITUDE."),
+    _s("TRAFFIC_OUTBOUND_DISPLAYS", "str", _SERVER_ONLY, "maps",
+       "Comma-separated display IDs whose traffic screen shows the outbound "
+       "(evening) segments; every other display shows inbound. A name also matches "
+       "IDs that start with it and a dash (hyper matches hyper-panel).",
+       default="hyper"),
+    _s("TRAFFIC_DIRECTION", "choice", _STANDALONE_ONLY, "maps",
+       "Which segments a standalone display's traffic screen shows. auto picks "
+       "outbound when the host name is hyper (or hyper-...), else inbound.",
+       default="auto", choices=("auto", "inbound", "outbound")),
     _s("ADSB_DISTANCE_UNIT", "choice", _SERVER, "adsb",
        "Distance unit shown on screen.", default="nm", choices=("nm", "mi")),
     _s("ADSB_POLL_INTERVAL_SECONDS", "int", _SERVER, "adsb",

@@ -287,6 +287,9 @@
     },
     "adsb stats": {
       "background": "#000000"
+    },
+    "traffic": {
+      "background": "#000000"
     }
   }
 }

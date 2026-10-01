@@ -22,6 +22,7 @@
         }
       },
       "news headlines 2": 0,
+      "traffic": 0,
       "verano logo": 0,
       "vrnof": 3,
       "hawks logo": 1,
@@ -202,6 +203,9 @@
           },
           {
             "screen": "astronomical"
+          },
+          {
+            "screen": "traffic"
           }
         ]
       },
@@ -895,6 +899,9 @@
         "background": "#000000"
       },
       "NCAA FBS Scoreboard": {
+        "background": "#000000"
+      },
+      "traffic": {
         "background": "#000000"
       }
     }

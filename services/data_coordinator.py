@@ -237,6 +237,16 @@ class DataCoordinator:
 
         return self.read_postseason("mlb_postseason", ttl_seconds=ttl_seconds, force=force)
 
+    def read_traffic(self) -> Any:
+        """Publish the traffic report from its shared cache (the last good one if a refresh fails)."""
+
+        from services import traffic
+
+        value = traffic.get_report()
+        if value is not None:
+            self.publish("traffic", value)
+        return value
+
     def read_postseason(self, feed: str, *, ttl_seconds: int = 120, force: bool = False) -> dict[str, Any]:
         """Acquire a league's playoff bracket (``feeds.POSTSEASON_FEED_MODULES``)."""
 

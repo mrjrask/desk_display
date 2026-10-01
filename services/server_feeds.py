@@ -81,6 +81,7 @@ class ServerFeedService:
         wall_clock: Callable[[], float] = time.time,
         seed: bool = True,
         download_ncaa_fbs_logos: Callable[[list[dict]], Any] | None = None,
+        fetch_traffic: Callable[..., Any] | None = None,
     ) -> None:
         if data is None:
             from services.data_coordinator import coordinator as data
@@ -97,6 +98,9 @@ class ServerFeedService:
         self.data = data
         self.provider = provider
         self.fetch_air_quality = fetch_air_quality
+        if fetch_traffic is None:
+            from services.traffic import fetch_report as fetch_traffic
+        self.fetch_traffic = fetch_traffic
         self.standings_fetchers = dict(standings_fetchers or _default_standings_fetchers())
         self.settings = settings
         self.history_path = history_path
@@ -322,6 +326,10 @@ class ServerFeedService:
             self._refresh_scoreboards(screens, fresh=fresh)
         elif feed in feeds.LEAGUE_STANDINGS_DEPENDENCIES:
             self._refresh_standings(feed, screens, fresh=fresh)
+        elif feed == "traffic":
+            # Raises on a failed or malformed report, so the last good
+            # report stays published and the screen shows its age.
+            self.data.publish("traffic", self.fetch_traffic(force=True))
         else:  # pragma: no cover - every catalogued feed is handled above
             raise KeyError(f"no server refresher for feed {feed!r}")
 

@@ -89,6 +89,7 @@ from remote_display.models import (
     identifier,
 )
 from remote_display.locations import Location, LocationError, location_screens, scoped_values, screen_scopes
+from services import traffic as road_traffic
 from remote_display.playlist_store import PlaylistStore, PlaylistStoreError, registry_snapshot_path, store_path
 from remote_display import registration
 from remote_display.provisioning import (
@@ -314,7 +315,9 @@ def create_app(
         return None if location == server_location else location
 
     def client_screen_scopes(client_id: str, screens: Iterable[str]) -> Mapping[str, str]:
-        return screen_scopes(location_of(client_id), screens)
+        screens = list(screens)
+        # Hyper's traffic screen shows the outbound segments (services/traffic.py).
+        return {**screen_scopes(location_of(client_id), screens), **road_traffic.screen_scopes(client_id, screens)}
 
     if assignments is None and config.playlist_store_path is not None:
         store = PlaylistStore(config.playlist_store_path)

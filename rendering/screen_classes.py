@@ -168,6 +168,7 @@ _TABLE: dict[str, tuple[str, str]] = {
     "MLB NLWC Standings": (SCROLLING_CANVAS, "league table"),
     "adsb stats": (STATIC, ""),
     "adsb live": (PERIODIC, "aircraft overhead now"),
+    "traffic": (PERIODIC, "traffic report; its age line stays current"),
 }
 for _team in ("cubs", "sox"):
     _TABLE.update({
