@@ -171,3 +171,127 @@ def test_restart_without_a_service_fails_cleanly(tmp_path):
     commands = runner(tmp_path, FakeGit())
     commands.handle([{"id": "0123456789abcdef", "action": "restart"}])
     assert commands.results()[0]["status"] == "failed"
+
+
+def test_unanswered_upgrades_wait_for_upgrade_sh(store):
+    upgrade = store.queue("office", "upgrade")
+    store.take_pending("office")
+    store._clock.now += COMMAND_TIMEOUT_SECONDS + 1
+    assert store.for_client("office")[0]["state"] == "delivered"  # pip on a Pi can take a while
+    store._clock.now += client_commands.UPGRADE_TIMEOUT_SECONDS
+    assert store.for_client("office")[0]["state"] == "expired"
+    assert upgrade["action"] == "upgrade"
+
+
+class FakeScripts:
+    def __init__(self, code=0, stdout="", stderr=""):
+        self.code, self.stdout, self.stderr = code, stdout, stderr
+        self.calls = []
+
+    def __call__(self, argv, **kwargs):
+        self.calls.append((argv, kwargs))
+        return subprocess.CompletedProcess(argv, self.code, self.stdout, self.stderr)
+
+
+def project(tmp_path, *scripts):
+    root = tmp_path / "project"
+    for script in scripts:
+        (root / script).parent.mkdir(parents=True, exist_ok=True)
+        (root / script).write_text("#!/usr/bin/env bash\n")
+    return root
+
+
+@pytest.mark.parametrize("action, script", sorted(client_commands.SCRIPTS.items()))
+def test_maintenance_scripts_run_and_report_output(tmp_path, action, script):
+    run = FakeScripts(stdout="Total freed: 12 MiB\n")
+    root = project(tmp_path, script)
+    commands = CommandRunner(tmp_path / "outbox.json", project_dir=root, run=run, background=False)
+    commands.handle([{"id": "0123456789abcdef", "action": action}])
+    [(argv, kwargs)] = run.calls
+    assert argv == ["bash", str(root / script)]
+    assert kwargs["cwd"] == str(root) and kwargs["stdin"] is subprocess.DEVNULL and kwargs["timeout"]
+    assert commands.results() == [{"id": "0123456789abcdef", "status": "succeeded", "exit_code": 0,
+                                   "output": "Total freed: 12 MiB"}]
+
+
+def test_maintenance_script_failures_and_missing_scripts(tmp_path):
+    run = FakeScripts(code=1, stderr="Permission denied")
+    root = project(tmp_path, "scripts/reset_screenshots.sh")
+    commands = CommandRunner(tmp_path / "outbox.json", project_dir=root, run=run, background=False)
+    commands.handle([{"id": "0123456789abcdef", "action": "reset_screenshots"},
+                     {"id": "1123456789abcdef", "action": "clear_caches"}])
+    assert len(run.calls) == 1  # clear-caches.sh is missing in this checkout
+    failed, missing = commands.results()
+    assert failed["status"] == "failed" and failed["exit_code"] == 1 and failed["output"] == "Permission denied"
+    assert missing["status"] == "failed" and "clear-caches.sh is missing" in missing["output"]
+
+
+def upgrade_runner(tmp_path, run, clock=None):
+    root = project(tmp_path, client_commands.UPGRADE_SCRIPT, client_commands.RUN_LOGGED_SCRIPT)
+    return CommandRunner(tmp_path / "cache" / "outbox.json", project_dir=root, run=run, background=False,
+                         clock=clock or Clock()), root
+
+
+def test_upgrade_runs_outside_the_service_and_reports_from_its_log(tmp_path, monkeypatch):
+    run = FakeScripts()
+    commands, root = upgrade_runner(tmp_path, run)
+    commands.handle([{"id": "0123456789abcdef", "action": "upgrade"}])
+    [(argv, kwargs)] = run.calls
+    assert argv[:3] == ["sudo", "-n", "systemd-run"] and "--collect" in argv
+    assert "--unit=desk-display-upgrade-0123456789abcdef" in argv
+    split = argv.index("--")
+    log, status = tmp_path / "cache" / "command_jobs" / "upgrade-0123456789abcdef.log", \
+        tmp_path / "cache" / "command_jobs" / "upgrade-0123456789abcdef.status"
+    assert argv[split + 1:] == ["bash", str(root / client_commands.RUN_LOGGED_SCRIPT), str(log), str(status),
+                                "bash", str(root / client_commands.UPGRADE_SCRIPT)]
+    assert kwargs["stdin"] is subprocess.DEVNULL
+    assert commands.results() == []  # still running
+
+    # upgrade.sh restarts the client; the new process finds the exit code.
+    log.write_text("Upgrading the client install\nUpgrade complete (client).\n")
+    status.write_text("0\n")
+    monkeypatch.setattr(client_commands.os, "getpid", lambda: -1)
+    restarted = CommandRunner(tmp_path / "cache" / "outbox.json", project_dir=root, run=run, background=False)
+    assert restarted.results() == [{"id": "0123456789abcdef", "status": "succeeded", "exit_code": 0,
+                                    "output": "Upgrading the client install\nUpgrade complete (client)."}]
+    assert not log.exists() and not status.exists()
+    restarted.acknowledge(["0123456789abcdef"])
+    assert restarted.results() == []
+
+
+def test_upgrade_failures(tmp_path):
+    clock = Clock()
+    commands, _root = upgrade_runner(tmp_path, FakeScripts(code=1, stderr="sudo: a password is required"), clock)
+    commands.handle([{"id": "0123456789abcdef", "action": "upgrade"}])
+    [result] = commands.results()
+    assert result["status"] == "failed" and "passwordless sudo" in result["output"]
+    assert "a password is required" in result["output"]
+
+    started, _root = upgrade_runner(tmp_path / "second", FakeScripts(), clock)
+    started.handle([{"id": "1123456789abcdef", "action": "upgrade"}])
+    jobs = tmp_path / "second" / "cache" / "command_jobs"
+    (jobs / "upgrade-1123456789abcdef.log").write_text("pip install ...\n")
+    assert started.results() == []
+    clock.now += client_commands.UPGRADE_TIMEOUT_SECONDS + 1
+    [overdue] = started.results()
+    assert overdue["status"] == "failed" and overdue["exit_code"] is None
+    assert overdue["output"].startswith("No result after 2 h") and "pip install" in overdue["output"]
+
+    failed, _root = upgrade_runner(tmp_path / "third", FakeScripts(), clock)
+    failed.handle([{"id": "2123456789abcdef", "action": "upgrade"}])
+    jobs = tmp_path / "third" / "cache" / "command_jobs"
+    (jobs / "upgrade-2123456789abcdef.log").write_text("error: externally-managed-environment\n")
+    (jobs / "upgrade-2123456789abcdef.status").write_text("1\n")
+    [result] = failed.results()
+    assert result["status"] == "failed" and result["exit_code"] == 1
+
+
+def test_run_logged_writes_output_and_exit_code(tmp_path):
+    from pathlib import Path
+
+    helper = Path(__file__).resolve().parents[1] / client_commands.RUN_LOGGED_SCRIPT
+    log, status = tmp_path / "out.log", tmp_path / "out.status"
+    result = subprocess.run(["bash", str(helper), str(log), str(status), "bash", "-c", "echo hi; echo err >&2; exit 3"],
+                            check=False)
+    assert result.returncode == 3
+    assert log.read_text() == "hi\nerr\n" and status.read_text() == "3\n"

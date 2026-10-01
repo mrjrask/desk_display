@@ -452,22 +452,38 @@ server's location.
 
 ### Updating or restarting a client from the Clients page
 
-Each row on `/clients` has **Update (git pull)** and **Restart client**
-buttons. The config UI queues the command; the client collects it with its
-next heartbeat (about once a minute), runs it, and reports back on a later
-heartbeat, so the result shows in the row a minute or two after pressing.
+Each display's **Maintenance** tab on `/clients` has **Update (git pull)**,
+**Upgrade**, **Restart client**, **Reset Screenshots** and **Clear caches**
+buttons. Each asks for confirmation. The config UI queues the command; the
+client collects it with its next heartbeat (about once a minute), runs it,
+and reports back on a later heartbeat, so the result and the command's output
+show in the tab a minute or two after pressing.
 
 - **Update (git pull)** runs `git pull --ff-only` in the display's own
   desk_display folder as the service user. It only changes the code on disk:
   press **Restart client** afterwards to run it. It does not install new
-  dependencies or rewrite service units; when a release needs those, run
-  `bash scripts/upgrade.sh` on the Pi. A pull that cannot fast-forward (local
-  edits, files owned by root) fails with git's own message.
+  dependencies or rewrite service units; **Upgrade** does. A pull that cannot
+  fast-forward (local edits, files owned by root) fails with git's own message.
+- **Upgrade** runs `scripts/upgrade.sh` on the display, exactly as you would
+  by hand: pull, dependencies, service units, then a restart of every Desk
+  Display service on it (the server too on a combined install). It runs in a
+  transient systemd unit (`sudo -n systemd-run`, as the service user) so the
+  restart it ends with cannot kill it, and its log is kept in the client
+  cache's `command_jobs/` folder until the client reports it. It needs the
+  passwordless sudo `upgrade.sh` already relies on; without it the row shows
+  "Could not start the upgrade". Upgrades are given two hours to report.
 - **Restart client** makes `desk_display_client` exit; systemd starts it again
   after 5 seconds (`Restart=always`), so no sudo is needed. The row shows
   "done" only once the restarted client has reported in.
+- **Reset Screenshots** runs `scripts/reset_screenshots.sh`, which empties the
+  display's screenshots and screenshot archive folders.
+- **Clear caches** runs `scripts/clear-caches.sh` on the display.
 
-A client only runs these two fixed actions, never a command line sent over
+Both scripts run as the service user with no terminal, so a step that falls
+back to `sudo` works only where sudo needs no password; anything they could
+not do shows in their output.
+
+A client only runs these fixed actions, never a command line sent over
 the network, and only when the command reached it through its own
 authenticated heartbeat. Commands nobody answers expire after 15 minutes,
 which is also what a client running software older than this feature shows:

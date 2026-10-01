@@ -407,6 +407,8 @@ def test_update_and_restart_buttons_queue_commands(web, env):
     assert command["action"] == "update" and command["state"] == "pending"
     assert web.post(url, json={"action": "update"}, headers=CSRF).status_code == 409
     assert web.post(url, json={"action": "restart"}, headers=CSRF).status_code == 202
+    for action in ("upgrade", "reset_screenshots", "clear_caches"):
+        assert web.post(url, json={"action": action}, headers=CSRF).status_code == 202
     assert web.post(url, json={"action": "reboot"}, headers=CSRF).status_code == 400
     assert web.post("/api/clients/ghost/commands", json={"action": "update"}, headers=CSRF).status_code == 404
 
@@ -420,6 +422,7 @@ def test_update_and_restart_buttons_queue_commands(web, env):
     assert latest["update"]["label"] == "Update code (git pull)"
     assert latest["update"]["finished_at"].endswith("Z")
     assert latest["restart"]["state"] == "delivered"
+    assert latest["clear_caches"]["label"] == "Clear caches"
     assert rows["lobby"]["commands"] == []
 
 
@@ -1018,3 +1021,9 @@ def test_browser_update_and_restart_buttons(live_server, browser, env):
     store = env["app"].extensions["desk_display_client_commands"]
     [command] = store.for_client("office")
     assert command["action"] == "update" and command["state"] == "pending"
+    buttons = page.locator("[data-client-id='office'] button[data-command]")
+    assert buttons.evaluate_all("els => els.map((el) => el.dataset.command)") == [
+        "update", "upgrade", "restart", "reset_screenshots", "clear_caches"]
+    page.click("[data-client-id='office'] button[data-command='clear_caches']")
+    page.wait_for_selector("[data-client-id='office'] button[data-command='clear_caches'][disabled]")
+    assert {c["action"] for c in store.for_client("office")} == {"update", "clear_caches"}

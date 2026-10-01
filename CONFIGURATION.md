@@ -264,7 +264,8 @@ on the server, **delivered** to the client, and **acknowledged** by the
 client's heartbeat. The demand preview on the Playlists page lists what each
 assigned profile must render and warns when a playlist uses animation, touch,
 or color that a client cannot show.
-Each row also has **Update (git pull)** and **Restart client** buttons; the
+Each display's Maintenance tab also has **Update (git pull)**, **Upgrade**,
+**Restart client**, **Reset Screenshots** and **Clear caches** buttons; the
 client collects the command on its next heartbeat and reports the result
 back (see OPERATIONS.md, "Updating or restarting a client from the Clients
 page").

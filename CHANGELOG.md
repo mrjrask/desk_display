@@ -30,6 +30,11 @@ See the README's [deployment modes](README.md#deployment-modes) and
   The Waveshare OLED/LCD HAT (A) is one choice there: its LCD plays the
   playlist and its two side OLEDs run the status helper from the client's
   heartbeat.
+- **Upgrade**, **Reset Screenshots** and **Clear caches** buttons in each
+  display's Maintenance tab on the Clients page. They run `scripts/upgrade.sh`
+  (in a transient systemd unit, so it survives the restart it ends with),
+  `scripts/reset_screenshots.sh` and `scripts/clear-caches.sh` on that display
+  and show the output like Update and Restart.
 - **Update (git pull)** and **Restart client** buttons on each row of the
   Clients page. The client collects the command on its next authenticated
   heartbeat, runs one of those two fixed actions (`git pull --ff-only` in its
