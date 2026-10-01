@@ -315,6 +315,7 @@ def _apply_style_overrides(screen_id: str) -> None:
     global CONFERENCE_LOGO_HEIGHT, BACKGROUND_COLOR
     global ROW_PADDING, ROW_SPACING, _ACTIVE_STATS_COLUMN_SPACING_SCALE
     global _ACTIVE_COLUMN_SEPARATION_GAP, _ACTIVE_TABLE_RIGHT_INSET, _ACTIVE_SCREEN_ID
+    global _ACTIVE_OVERVIEW_LOGO_PADDING
 
     (
         DIVISION_FONT,
@@ -362,6 +363,13 @@ def _apply_style_overrides(screen_id: str) -> None:
         OVERVIEW_MIN_LOGO_HEIGHT = min(OVERVIEW_MIN_LOGO_HEIGHT, min_logo_cap)
         OVERVIEW_MAX_LOGO_HEIGHT = min(OVERVIEW_MAX_LOGO_HEIGHT, max_logo_cap)
         OVERVIEW_MIN_LOGO_HEIGHT = min(OVERVIEW_MIN_LOGO_HEIGHT, OVERVIEW_MAX_LOGO_HEIGHT)
+    _ACTIVE_OVERVIEW_LOGO_PADDING = OVERVIEW_LOGO_PADDING
+    if _IS_1080P_LAYOUT and screen_id in _NHL_OVERVIEW_CONFERENCE_IDS:
+        # 1080p: let the West/East logos fill their row/column cells instead of
+        # the ~100px cap, which left most of the screen empty.
+        OVERVIEW_MAX_LOGO_HEIGHT = OVERVIEW_MAX_LOGO_HEIGHT_1080P
+        OVERVIEW_MIN_LOGO_HEIGHT = min(OVERVIEW_MIN_LOGO_HEIGHT, OVERVIEW_MAX_LOGO_HEIGHT)
+        _ACTIVE_OVERVIEW_LOGO_PADDING = OVERVIEW_LOGO_PADDING_1080P
     if is_kernel_driven_display():
         CONFERENCE_LOGO_HEIGHT = LOGO_HEIGHT
     else:
@@ -432,6 +440,10 @@ if is_hyperpixel_4_square_layout():
     OVERVIEW_MIN_LOGO_HEIGHT = max(1, int(round(OVERVIEW_MIN_LOGO_HEIGHT * 0.75)))
     OVERVIEW_MAX_LOGO_HEIGHT = max(1, int(round(OVERVIEW_MAX_LOGO_HEIGHT * 0.75)))
 OVERVIEW_LOGO_PADDING = scale_value(4)
+_ACTIVE_OVERVIEW_LOGO_PADDING = OVERVIEW_LOGO_PADDING
+_NHL_OVERVIEW_CONFERENCE_IDS = {"NHL Standings Overview West", "NHL Standings Overview East"}
+OVERVIEW_MAX_LOGO_HEIGHT_1080P = 240
+OVERVIEW_LOGO_PADDING_1080P = 14
 BACKGROUND_COLOR = get_screen_background_color(_DEFAULT_STYLE_ID, SCOREBOARD_BACKGROUND_COLOR)
 OVERVIEW_DROP_STEPS = 30
 OVERVIEW_DROP_STAGGER = 0.4  # fraction of steps before next team starts
@@ -2008,8 +2020,8 @@ def _row_logo_box(row_height: float, team_count: int) -> int:
         return OVERVIEW_MIN_LOGO_HEIGHT
     available_width = max(1.0, WIDTH - 2 * OVERVIEW_MARGIN_X)
     col_width = available_width / team_count
-    logo_width_limit = max(6, int(col_width - OVERVIEW_LOGO_PADDING * 2))
-    logo_base_height = max(6, int(row_height - OVERVIEW_LOGO_PADDING * 2))
+    logo_width_limit = max(6, int(col_width - _ACTIVE_OVERVIEW_LOGO_PADDING * 2))
+    logo_base_height = max(6, int(row_height - _ACTIVE_OVERVIEW_LOGO_PADDING * 2))
     logo_target_height = int(
         min(
             OVERVIEW_MAX_LOGO_HEIGHT,
