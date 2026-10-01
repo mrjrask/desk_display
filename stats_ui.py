@@ -21,7 +21,7 @@ from collections.abc import Callable, Mapping
 from pathlib import Path
 from typing import Any
 
-from flask import Blueprint, jsonify, render_template
+from flask import Blueprint, jsonify, render_template, request
 
 from remote_display.playlist_store import PlaylistStore, age_seconds, registry_snapshot_path, store_path
 from remote_display.registry import read_snapshot
@@ -30,8 +30,14 @@ from remote_display.resource_stats import (
     STALE_AFTER_SECONDS,
     StatsSampler,
     read_stats,
+    request_reset,
     stats_path,
 )
+
+# The same CSRF guard as the Playlists and Clients pages: browsers never add
+# this header to a cross-site request.
+CSRF_HEADER = "X-Requested-With"
+CSRF_VALUE = "desk-display"
 
 # The page polls every 10 s; a local sample is reused for this long.
 LOCAL_SAMPLE_MIN_INTERVAL_SECONDS = 5.0
@@ -127,7 +133,25 @@ def register(app, *, env: Mapping[str, str] | None = None, clock: Callable[[], f
 
     @blueprint.get("/stats")
     def stats_page():
-        return render_template("stats.html")
+        return render_template("stats.html", csrf_header=CSRF_HEADER, csrf_value=CSRF_VALUE)
+
+    @blueprint.post("/api/stats/reset")
+    def stats_reset():
+        """Clear the history and all-time totals; the render server applies it at its next sample."""
+
+        if request.headers.get(CSRF_HEADER) != CSRF_VALUE:
+            return jsonify({"error": "csrf", "message": f"missing {CSRF_HEADER} header"}), 403
+        try:
+            request_reset(source_env, now=now())
+        except OSError as exc:
+            return jsonify({"error": "reset_failed", "message": f"could not request a reset: {exc}"}), 500
+        with lock:
+            if local["sampler"] is not None:
+                local["sampler"].reset()
+            local["document"] = None
+        published = read_stats(stats_path(source_env))
+        running = published is not None and 0 <= now() - float(published.get("generated_at") or 0) <= STALE_AFTER_SECONDS
+        return jsonify({"reset_requested": True, "server_running": running})
 
     @blueprint.get("/api/stats")
     def stats_api():

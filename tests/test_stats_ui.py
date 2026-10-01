@@ -122,3 +122,32 @@ def test_client_rows_mark_stale_and_disabled_displays():
     rows = {row["client_id"]: row for row in stats_ui.client_stats_rows(snapshot, {"a": {"friendly_name": "Den"}}, {}, now)}
     assert rows["a"]["state"] == "stale" and rows["a"]["friendly_name"] == "Den"
     assert rows["b"]["state"] == "disabled"
+
+
+def test_reset_button_requests_a_server_reset_and_clears_the_local_sample(env, tmp_path):
+    env["DESK_DISPLAY_SERVER_STATS_HISTORY_PATH"] = str(tmp_path / "runtime" / "history.json")
+
+    class ResettableSampler(StubSampler):
+        resets = 0
+
+        def reset(self):
+            self.resets += 1
+
+    sampler = ResettableSampler()
+    client = make_app(env, sampler)
+    client.get("/api/stats")  # builds a local sample
+    assert client.post("/api/stats/reset").status_code == 403  # the CSRF header is required
+    assert not rs.reset_request_path(env).exists()
+    response = client.post("/api/stats/reset", headers={"X-Requested-With": "desk-display"})
+    assert response.status_code == 200
+    assert response.get_json() == {"reset_requested": True, "server_running": False}
+    assert json.loads(rs.reset_request_path(env).read_text())["requested_at"] == NOW
+    assert sampler.resets == 1
+    client.get("/api/stats")
+    assert sampler.calls == 2  # the cached local sample was dropped
+
+
+def test_stats_page_has_the_reset_button(env):
+    html = make_app(env).get("/stats").get_data(as_text=True)
+    assert 'id="reset-stats"' in html and "/api/stats/reset" in html
+    assert '"X-Requested-With": "desk-display"' in html

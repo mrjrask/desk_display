@@ -79,6 +79,8 @@ See the README's [deployment modes](README.md#deployment-modes) and
   and caches against their limits; and each display's own CPU, memory,
   temperature, disk and cache, reported in a new optional heartbeat
   `resources` document (see OPERATIONS.md, "Checking CPU, data and storage").
+  Its history and totals survive restarts (saved every 5 minutes and on
+  shutdown), and a **Reset stats…** button starts them over.
 - `scripts/collect_client_screenshots.py` gathers the latest screenshot of
   every screen from every active display client into one self-contained HTML
   page, grouped by screen, for comparing how each screen looks on each

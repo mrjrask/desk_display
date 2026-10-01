@@ -48,6 +48,7 @@ import atexit
 import hmac
 import logging
 import os
+import sys
 import threading
 import time
 from collections.abc import Callable, Iterable, Mapping
@@ -1117,9 +1118,27 @@ def _start_stats(app: Flask, config: DisplayServerConfig) -> None:
         },
         persisted=resource_stats.load_persisted(persist),
     )
-    publisher = resource_stats.StatsPublisher(sampler, live_path=resource_stats.stats_path(), persist_path=persist)
+    publisher = resource_stats.StatsPublisher(sampler, live_path=resource_stats.stats_path(), persist_path=persist,
+                                              reset_path=resource_stats.reset_request_path())
     publisher.start()
     atexit.register(publisher.stop)
+    _exit_cleanly_on_sigterm()
+
+
+def _exit_cleanly_on_sigterm() -> None:
+    """Turn systemd's SIGTERM into a normal exit, so atexit handlers run.
+
+    Python's default SIGTERM action ends the process at once, skipping atexit:
+    the Stats history saved on exit (and the render workers' shutdown) would
+    never happen on ``systemctl restart``.
+    """
+
+    import signal
+
+    if threading.current_thread() is not threading.main_thread():
+        return
+    if signal.getsignal(signal.SIGTERM) is signal.SIG_DFL:
+        signal.signal(signal.SIGTERM, lambda signum, frame: sys.exit(0))
 
 
 def _apply_location_seed(config: DisplayServerConfig) -> None:

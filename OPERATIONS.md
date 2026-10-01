@@ -588,8 +588,7 @@ The **Stats** page (`/stats` on the config UI, port 5002) refreshes every
   and a Pi 4 or 5 has four. The *Project CPU* tile also gives the share of
   the whole machine.
 - *Data transferred*: bytes the display API sent to and received from each
-  display (now, since the server started, and all time; the all-time totals
-  are saved every 10 minutes in `.runtime/server/stats_history.json`), what
+  display (now, since the server started, and all time), what
   it was mostly for (artifacts, manifests, heartbeats), and the machine's
   network interfaces. The per-display figures count request and response
   bodies, not HTTP headers or TLS.
@@ -601,8 +600,13 @@ The **Stats** page (`/stats` on the config UI, port 5002) refreshes every
   this release to report them.
 
 The render server samples every 10 seconds (a few small `/proc` reads) and
-writes the page's data to `/dev/shm`, so it adds no SD card writes beyond the
-10-minute history file. Set `DESK_DISPLAY_STATS_ENABLED=0` in `.env` to turn
+writes the page's data to `/dev/shm`. The charts' history (last hour and
+24 hours) and the all-time data totals are saved to
+`.runtime/server/stats_history.json` every 5 minutes and when the server
+stops, so they survive restarts and reboots; a power cut loses at most the
+last 5 minutes, and the chart shows the time the server was down as a gap.
+**Reset stats…** (next to the tiles) clears that history and the totals and
+starts counting again; the server applies it at its next sample. Set `DESK_DISPLAY_STATS_ENABLED=0` in `.env` to turn
 it off. When no render server is publishing (standalone and client installs,
 or a stopped server) the page samples the machine itself while it is open:
 processes and storage, without per-thread and per-display figures.
