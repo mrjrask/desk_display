@@ -1212,7 +1212,6 @@ def build_screen_registry(context: ScreenContext) -> tuple[dict[str, ScreenDefin
         if not positive:
             return False
 
-        today = context.now.date()
         date_candidates: list[str] = []
         for key in (
             "officialDate",

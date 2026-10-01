@@ -59,6 +59,7 @@ def test_fetch_blackhawks_next_game_prefers_ics_schedule(monkeypatch):
         }
     ]
     monkeypatch.setattr(data_fetch, "_fetch_blackhawks_ics_schedule", lambda: games)
+    monkeypatch.setattr(data_fetch.datetime, "datetime", _FixedDatetime(now))
 
     result = data_fetch.fetch_blackhawks_next_game()
 
