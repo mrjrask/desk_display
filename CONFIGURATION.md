@@ -393,6 +393,14 @@ being referenced, by a background task every ten minutes. If the store is
 still larger than `DESK_DISPLAY_ARTIFACT_MAX_MB` after that, unreferenced
 artifacts are deleted sooner, oldest first, until it fits.
 
+The same background task keeps `images/cache/` (radar map tiles, downloaded
+logos and pitcher headshots) under `DESK_DISPLAY_IMAGE_CACHE_MAX_MB` by
+deleting its least recently used files, which are downloaded again when a
+screen needs them. Files used in the last hour are never deleted. All of
+`cache/` is checked against `DESK_DISPLAY_SERVER_CACHE_MAX_MB`; its parts
+(artifacts, the local panel's client cache) enforce their own limits, and its
+history files cannot be rebuilt, so going over that limit only logs a warning.
+
 ## Secrets
 
 Settings marked secret below (provider keys, the server and client tokens,
@@ -575,6 +583,8 @@ installs only, never clients.
 | `WEATHER_METRIC_HISTORY_PATH` | server, standalone | restart |  |
 | `AIR_QUALITY_HISTORY_PATH` | server, standalone | restart |  |
 | `DESK_DISPLAY_SERVER_FEED_STATE_PATH` | server | restart |  |
+| `DESK_DISPLAY_SERVER_CACHE_MAX_MB` | server | restart |  |
+| `DESK_DISPLAY_IMAGE_CACHE_MAX_MB` | server | restart |  |
 | `DESK_DISPLAY_STATS_ENABLED` | server | restart |  |
 | `DESK_DISPLAY_SERVER_STATS_PATH` | server, standalone | restart |  |
 | `DESK_DISPLAY_SERVER_STATS_HISTORY_PATH` | server | restart |  |

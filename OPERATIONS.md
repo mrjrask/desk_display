@@ -724,8 +724,9 @@ the next render; restarting `desk_display_server.service` restarts them all.
 | `sudo journalctl -u <unit>` | All logs; secrets are redacted before they are written |
 | `.runtime/server/` | Playlists, assignments, known clients, credential hashes, migration bundles and upgrade snapshots |
 | `.runtime/server/client_screenshots/` | Screenshots displays on another network uploaded (`DESK_DISPLAY_SCREENSHOT_UPLOAD_MAX_MB`, default 64; safe to delete, not backed up) |
-| `cache/artifacts/` | Rendered artifacts (`DESK_DISPLAY_ARTIFACT_MAX_MB`, default 512; safe to delete, the server re-renders) |
-| `cache/` | Feed caches and history |
+| `cache/artifacts/` | Rendered artifacts (`DESK_DISPLAY_ARTIFACT_MAX_MB`, default 1024; safe to delete, the server re-renders) |
+| `cache/` | Feed caches and history (`DESK_DISPLAY_SERVER_CACHE_MAX_MB`, default 1536; going over only logs a warning) |
+| `images/cache/` (server) | Radar map tiles, downloaded logos and headshots (`DESK_DISPLAY_IMAGE_CACHE_MAX_MB`, default 256; least recently used files are deleted and downloaded again when needed) |
 | `cache/client/` (client) | The offline cache: playlists, manifests, artifacts, lease credential (`DESK_DISPLAY_CLIENT_CACHE_MAX_MB`, default 512) |
 
 Deleting `cache/client/` makes a client start from its diagnostic screen and
