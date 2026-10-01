@@ -67,6 +67,11 @@ flowchart LR
 - **Per-client playlists.** Playlists live on the server and are assigned
   per client in the configuration UI (`/playlists`, `/clients`). The UI
   warns about screens a client cannot show fully.
+- **Stats.** The configuration UI's `/stats` page shows what the project's
+  CPU goes to (rendering per display profile, feed refresh, serving
+  displays), the data sent to each display, network throughput, free storage,
+  and each display's own CPU, memory and cache (see OPERATIONS.md,
+  "Checking CPU, data and storage").
 - **Manifests and artifacts.** Each client fetches a manifest that lists
   content-addressed artifacts for its profile: still PNGs, plus render
   packages for screens that move. The client verifies every hash and size.

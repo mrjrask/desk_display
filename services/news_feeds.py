@@ -393,7 +393,7 @@ def _fetch_topics_parallel(
     """
 
     results: dict[str, list[NewsHeadline]] = {}
-    executor = ThreadPoolExecutor(max_workers=max(1, len(topics)))
+    executor = ThreadPoolExecutor(max_workers=max(1, len(topics)), thread_name_prefix="feed-fetch")
     try:
         future_to_topic = {
             executor.submit(fetch_topic_headlines, topic, headline_count): topic

@@ -122,6 +122,7 @@ the credential. Response 201 (new lease) or 200 (renewal):
 | `manifest_revision` | Current manifest ETag |
 | `lease_seconds`, `lease_expires_at`, `heartbeat_interval_seconds`, `sync_interval_seconds` | Lease |
 | `client_telemetry_versions` | Heartbeat `telemetry` versions the server accepts |
+| `client_resource_versions` | Heartbeat `resources` versions the server accepts |
 | `client_credential` | The new lease credential |
 
 The current client keeps `client_credential` and the advertised
@@ -154,8 +155,8 @@ its next sync, and keeps playing from its cache in the meantime.
 
 ### Heartbeat
 
-`POST /api/v1/clients/<id>/heartbeat` with `{"status": {...}, "demand": {...}, "telemetry": {...}}`
-(`demand` and `telemetry` optional). `status` is a `client_status` document:
+`POST /api/v1/clients/<id>/heartbeat` with `{"status": {...}, "demand": {...}, "telemetry": {...}, "resources": {...}}`
+(`demand`, `telemetry` and `resources` optional). `status` is a `client_status` document:
 
 - `client_id`;
 - `playback_state`: `starting`, `playing`, `focus`, `paused`, `dark`,
@@ -186,6 +187,18 @@ only to a server that lists its version, because older servers reject
 unknown heartbeat fields. The server keeps the last report per client and
 shows it in `/api/v1/admin/status` and on `/clients`; a heartbeat without
 `telemetry` clears it.
+
+`resources` is an optional `client_resources` document for the config UI's
+Stats page. Every field is optional: `process_cpu_percent` (the client
+process, percent of one core), `process_rss_bytes`, `uptime_seconds`,
+`system_cpu_percent` (whole machine), `cpu_count`, `load_1m`,
+`memory_total_bytes`, `memory_available_bytes`, `temperature_c`,
+`disk_total_bytes`, `disk_free_bytes`, `cache_bytes`, `cache_limit_bytes`,
+`bytes_received` / `bytes_sent` (this client process's traffic with the
+server since it started) and `net_rx_bytes` / `net_tx_bytes` (the device's
+network interfaces since boot). As with `telemetry`, a client sends it only
+to a server listing its version in `client_resource_versions` (currently
+`[1]`), and a heartbeat without it clears the last report.
 
 The response repeats the assignment, `manifest_revision` and lease fields.
 It may also carry `display_status`: the server's feed summary for side

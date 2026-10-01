@@ -232,7 +232,7 @@ class DataProvider:
                     "scoreboard_metadata": scoreboard_metadata,
                 }
 
-            with ThreadPoolExecutor(max_workers=len(tasks)) as pool:
+            with ThreadPoolExecutor(max_workers=len(tasks), thread_name_prefix="feed-fetch") as pool:
                 futures = {
                     league: pool.submit(fetcher)
                     for league, fetcher in tasks.items()

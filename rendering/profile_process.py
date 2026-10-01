@@ -162,7 +162,9 @@ class _Worker:
         env["PYTHONPATH"] = str(PROJECT_ROOT) + (os.pathsep + existing if existing else "")
         LOGGER.info("Starting render worker for %s", self.profile.profile_id)
         process = subprocess.Popen(  # noqa: S603 - our own interpreter and module
-            [self._python, "-m", "rendering.profile_process"],
+            # The profile ID on the command line only labels the process (the
+            # Stats page attributes its CPU); the worker reads PROFILE_ENV.
+            [self._python, "-m", "rendering.profile_process", self.profile.profile_id],
             stdin=subprocess.PIPE, stdout=subprocess.PIPE, cwd=str(PROJECT_ROOT), env=env,
         )
         self._snapshot_tag = None

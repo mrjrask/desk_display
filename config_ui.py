@@ -33,6 +33,7 @@ from flask import (
 import config
 import deployment_config
 import remote_playlists_ui
+import stats_ui
 from config import CENTRAL_TIME
 from diagnostic_playback import load_diagnostic_screen, save_diagnostic_screen
 from env_config import non_negative_env_int
@@ -1234,6 +1235,9 @@ _SCREENSHOTS_ONLY_ENDPOINTS = frozenset({
     "get_feed_screenshots",
     "screenshot_current",
     "screenshot_file",
+    # A display's own machine: CPU, data and storage.
+    "stats.stats_page",
+    "stats.stats_api",
 })
 
 
@@ -1965,6 +1969,7 @@ remote_playlists_ui.register(
     editor_view=_playlist_editor_view,
     editor_document=_playlist_document_from_editor,
 )
+stats_ui.register(app, panel_cache_dir=lambda: _panel_cache_dir(Path(__file__).resolve().parent))
 
 
 if __name__ == "__main__":

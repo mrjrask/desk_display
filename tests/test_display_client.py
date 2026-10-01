@@ -796,6 +796,30 @@ def test_client_runs_update_and_restart_from_the_clients_page(env, monkeypatch):
     assert states == {update["id"]: "succeeded", restart["id"]: "succeeded"}
 
 
+def test_heartbeats_report_client_resources_for_the_stats_page(env):
+    env.publish("date", 10)
+    client = env.make_client()
+    synced(env, client, 1)
+    synced(env, client, 1)
+    reported = env.app.extensions["desk_display_registry"].snapshot()["clients"]["office"]["resources"]
+    assert reported["type"] == "client_resources"
+    # Everything the client exchanged with the server before this heartbeat.
+    assert 0 < reported["bytes_received"] <= client.sync.bytes_received
+    assert 0 < reported["bytes_sent"] <= client.sync.bytes_sent
+    assert reported["cache_limit_bytes"] == client.sync.artifacts.max_bytes
+    assert reported["uptime_seconds"] >= 0
+
+
+def test_no_resources_are_sent_to_a_server_that_does_not_advertise_them(env):
+    client = env.make_client()
+    client.sync._note_cadence({"client_telemetry_versions": [1]})
+    assert client.sync._resources_accepted is False
+    client.sync._note_cadence({"client_resource_versions": [2]})
+    assert client.sync._resources_accepted is False
+    client.sync._note_cadence({"client_resource_versions": [1]})
+    assert client.sync._resources_accepted is True
+
+
 def test_no_telemetry_is_sent_to_a_server_that_does_not_advertise_it(env):
     client = env.make_client()
     client.sync._note_cadence({"heartbeat_interval_seconds": 20})

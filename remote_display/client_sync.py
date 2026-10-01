@@ -50,6 +50,7 @@ from remote_display.client_commands import CommandRunner
 from remote_display.models import (
     ClientCapabilities,
     ClientDemand,
+    ClientResources,
     ClientStatus,
     ClientTelemetry,
     ErrorSummary,
@@ -57,6 +58,7 @@ from remote_display.models import (
     PackageCapabilities,
 )
 from remote_display.playlist_store import document_screens
+from remote_display.resource_stats import ClientResourceSampler
 
 LOGGER = logging.getLogger("desk_display.client_sync")
 
@@ -566,6 +568,7 @@ class ClientSync:
         rng: random.Random | None = None,
         timer: Callable[[], float] = time.perf_counter,
         commands: CommandRunner | None = None,
+        resources: ClientResourceSampler | None = None,
     ) -> None:
         self.capabilities = capabilities
         self.transport = transport
@@ -615,6 +618,13 @@ class ClientSync:
         # server advertises a command version this client speaks.
         self.commands = commands
         self._commands_accepted = False
+        # CPU, storage and data counters for the server's Stats page; sent
+        # only once the server advertises a resources version.
+        self.resources = resources or ClientResourceSampler(
+            cache_root=artifacts.root, cache_limit_bytes=artifacts.max_bytes)
+        self._resources_accepted = False
+        self.bytes_received = 0
+        self.bytes_sent = 0
 
     # Credential (the per-client lease credential, never the enrollment token)
 
@@ -685,8 +695,13 @@ class ClientSync:
         request_headers = dict(headers or {})
         if auth:
             request_headers["Authorization"] = f"Bearer {auth}"
+        if json_body is not None:
+            self.bytes_sent += len(json.dumps(json_body, separators=(",", ":")))
         try:
-            return self.transport(method, path, headers=request_headers, json_body=json_body, max_bytes=max_bytes)
+            response = self.transport(method, path, headers=request_headers, json_body=json_body,
+                                      max_bytes=max_bytes)
+            self.bytes_received += len(response.body or b"")
+            return response
         except TooLargeError as exc:
             raise SyncError("too_large", str(exc)) from None
         except TransportError as exc:
@@ -753,6 +768,9 @@ class ClientSync:
         versions = payload.get("client_command_versions")
         if isinstance(versions, list):
             self._commands_accepted = COMMAND_WIRE_VERSION in versions
+        versions = payload.get("client_resource_versions")
+        if isinstance(versions, list):
+            self._resources_accepted = ClientResources.WIRE_VERSION in versions
 
     @staticmethod
     def _interval(local: Any, advertised: int | None) -> float:
@@ -939,6 +957,13 @@ class ClientSync:
             heartbeat["demand"] = demand
         if self._telemetry_accepted:
             heartbeat["telemetry"] = self.telemetry()
+        if self._resources_accepted:
+            try:
+                heartbeat["resources"] = ClientResources(
+                    **self.resources.sample(bytes_received=self.bytes_received, bytes_sent=self.bytes_sent),
+                ).to_wire()
+            except (ModelValidationError, OSError, TypeError) as exc:  # never fail the heartbeat
+                LOGGER.debug("Could not collect resource stats: %s", exc)
         results = None
         if self.commands is not None and self._commands_accepted:
             results = self.commands.results()

@@ -1,0 +1,464 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{ machine_hostname }} - Stats</title>
+  {% include "_remote_style.html" %}
+  <style>
+    :root {
+      --series-1: #3987e5; --series-2: #d95926; --series-3: #199e70; --series-4: #c98500;
+      --series-5: #d55181; --series-6: #2fa52f; --series-7: #9085e9; --series-other: #8a8a85;
+      --grid: rgba(148, 163, 184, 0.14); --axis: #94a3b8;
+    }
+    .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 0.75rem; }
+    .tile {
+      border: 1px solid rgba(148, 163, 184, 0.2); border-radius: 12px; padding: 0.7rem 0.85rem;
+      background: rgba(30, 41, 59, 0.45);
+    }
+    .tile .label { color: #94a3b8; font-size: 0.78rem; }
+    .tile .value { font-size: 1.45rem; font-weight: 700; margin-top: 0.15rem; font-variant-numeric: tabular-nums; }
+    .tile .detail { color: #94a3b8; font-size: 0.78rem; margin-top: 0.15rem; }
+    .panel-head { display: flex; gap: 0.6rem; align-items: center; flex-wrap: wrap; margin-bottom: 0.6rem; }
+    .panel-head h2 { margin: 0; }
+    .ranges button { font-size: 0.8rem; padding: 0.25rem 0.7rem; border-radius: 999px; }
+    .ranges button[aria-pressed="true"] { border-color: #38bdf8; background: rgba(56, 189, 248, 0.12); }
+    .chart { position: relative; }
+    .chart svg { display: block; width: 100%; height: 220px; overflow: visible; }
+    .chart .empty { color: #94a3b8; font-size: 0.85rem; padding: 2rem 0; text-align: center; }
+    .tooltip {
+      position: absolute; pointer-events: none; z-index: 5; min-width: 11rem; font-size: 0.78rem;
+      background: #0b1220; border: 1px solid rgba(148, 163, 184, 0.35); border-radius: 8px; padding: 0.45rem 0.55rem;
+      box-shadow: 0 6px 18px rgba(0, 0, 0, 0.35);
+    }
+    .tooltip .t { color: #94a3b8; margin-bottom: 0.25rem; }
+    .tooltip .r { display: flex; gap: 0.45rem; align-items: center; }
+    .tooltip .r span:last-child { margin-left: auto; font-variant-numeric: tabular-nums; }
+    .legend { display: flex; gap: 0.35rem 1rem; flex-wrap: wrap; font-size: 0.8rem; color: #cbd5e1; margin-top: 0.5rem; }
+    .swatch { display: inline-block; width: 10px; height: 10px; border-radius: 3px; vertical-align: -1px; margin-right: 0.35rem; }
+    td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+    .bar { position: relative; height: 8px; border-radius: 4px; background: rgba(148, 163, 184, 0.18); overflow: hidden; min-width: 80px; }
+    .bar > span { position: absolute; inset: 0 auto 0 0; border-radius: 4px; background: var(--series-1); }
+    .bar.warn > span { background: #fab219; }
+    .bar.over > span { background: #d03b3b; }
+    .grid-2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(340px, 100%), 1fr)); gap: 1rem 1.5rem; }
+    .grid-2 > * { min-width: 0; }
+    .note { color: #94a3b8; font-size: 0.8rem; margin: 0.5rem 0 0; }
+    h3 { font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.06em; color: #94a3b8; margin: 0.9rem 0 0.35rem; }
+    @media (max-width: 600px) { .chart svg { height: 180px; } .grid-2 { grid-template-columns: 1fr; } .desc { display: none; } }
+  </style>
+</head>
+<body>
+  <h1>Stats</h1>
+  <div class="subtitle">CPU by purpose, data sent to the displays, and storage. Refreshes every 10 seconds.</div>
+  <nav class="nav-links">
+    {% if not screenshots_only %}<a href="/">Rotation Config</a>{% endif %}
+    <a href="/screenshots">Screenshots</a>
+    <a href="/feed">Feed</a>
+    {% if not screenshots_only %}
+    <a href="/playlists">Playlists</a>
+    <a href="/clients">Clients</a>
+    {% endif %}
+    <a href="/stats" aria-current="page">Stats</a>
+  </nav>
+
+  <div id="notice" class="panel notice hidden" role="status"></div>
+
+  <div class="panel">
+    <div class="tiles" id="tiles"></div>
+    <p class="note" id="source-note"></p>
+  </div>
+
+  <div class="panel">
+    <div class="panel-head">
+      <h2>CPU by purpose</h2>
+      <span class="spacer"></span>
+      <div class="ranges row" role="group" aria-label="Time range">
+        <button type="button" data-range="recent" aria-pressed="true">Last hour</button>
+        <button type="button" data-range="long" aria-pressed="false">Last 24 hours</button>
+      </div>
+    </div>
+    <div class="chart" id="cpu-chart"></div>
+    <div class="legend" id="cpu-legend"></div>
+    <p class="note">Percent of one CPU core, like <span class="mono">top</span>: 100% is one core fully busy; this Pi has <span id="core-count">?</span> cores.</p>
+    <div class="table-wrap">
+      <table id="purpose-table">
+        <thead><tr><th>Purpose</th><th class="num">Now</th><th class="num">Avg (range)</th><th class="num">Peak (range)</th><th class="desc">What it is</th></tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+    <div class="grid-2">
+      <div>
+        <h3>Processes</h3>
+        <div class="table-wrap">
+          <table id="process-table">
+            <thead><tr><th>Process</th><th class="num">PID</th><th class="num">CPU</th><th class="num">CPU time</th><th class="num">Memory</th></tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </div>
+      <div id="threads-block">
+        <h3>Render server threads</h3>
+        <div class="table-wrap">
+          <table id="thread-table">
+            <thead><tr><th>Thread</th><th>Purpose</th><th class="num">CPU</th></tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="panel-head"><h2>Data transferred</h2></div>
+    <div class="chart" id="net-chart"></div>
+    <div class="legend" id="net-legend"></div>
+    <h3>Per display (measured by the server)</h3>
+    <div class="table-wrap">
+      <table id="traffic-table">
+        <thead><tr>
+          <th>Display</th><th class="num">Sent now</th><th class="num">Sent since start</th><th class="num">Sent all time</th>
+          <th class="num">Received all time</th><th class="num">Requests</th><th>Mostly</th>
+        </tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+    <p class="note" id="traffic-note"></p>
+    <h3>Network interfaces (whole machine, since boot)</h3>
+    <div class="table-wrap">
+      <table id="iface-table">
+        <thead><tr><th>Interface</th><th class="num">Received</th><th class="num">Sent</th></tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="panel-head"><h2>Storage</h2></div>
+    <div class="table-wrap">
+      <table id="storage-table">
+        <thead><tr><th>What</th><th class="num">Used</th><th class="num">Limit / size</th><th style="width:30%">Usage</th><th class="num">Files</th></tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+    <p class="note">Directory sizes refresh every 5 minutes.</p>
+  </div>
+
+  <div class="panel" id="clients-panel">
+    <div class="panel-head"><h2>Displays</h2><span class="muted small">What each display reports about itself in its heartbeat.</span></div>
+    <div class="table-wrap">
+      <table id="client-table">
+        <thead><tr>
+          <th>Display</th><th class="num">Client CPU</th><th class="num">Machine CPU</th><th class="num">Memory free</th>
+          <th class="num">Temp</th><th class="num">Disk free</th><th>Cache</th><th class="num">Downloaded</th><th class="num">Uploaded</th><th class="num">Up</th>
+        </tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+    <p class="note">Downloaded and uploaded count the display client's traffic with the server since the client started. Displays running older software show no figures until they are updated.</p>
+  </div>
+
+  <script>
+  (() => {
+    const PURPOSE_ORDER = ["rendering", "feeds", "http", "render_coordination", "config_ui", "client", "standalone"];
+    const PURPOSE_COLOR = {
+      rendering: "var(--series-1)", feeds: "var(--series-2)", http: "var(--series-3)",
+      render_coordination: "var(--series-4)", config_ui: "var(--series-5)", client: "var(--series-6)",
+      standalone: "var(--series-7)", other: "var(--series-other)",
+    };
+    const NET_SERIES = [
+      { key: "served_bps", label: "Sent to displays", color: "var(--series-1)" },
+      { key: "net_rx_bps", label: "Machine network in", color: "var(--series-2)" },
+      { key: "net_tx_bps", label: "Machine network out", color: "var(--series-3)" },
+    ];
+    let range = "recent";
+    let latest = null;
+    try { range = localStorage.getItem("stats-range") || "recent"; } catch (e) { /* storage blocked */ }
+
+    const $ = (sel) => document.querySelector(sel);
+    const esc = (value) => String(value ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+
+    function bytes(value, digits = 1) {
+      if (value === null || value === undefined) return "–";
+      const units = ["B", "KB", "MB", "GB", "TB"];
+      let v = Number(value), i = 0;
+      while (Math.abs(v) >= 1024 && i < units.length - 1) { v /= 1024; i++; }
+      return `${v.toFixed(i === 0 ? 0 : digits)} ${units[i]}`;
+    }
+    const rate = (value) => value === null || value === undefined ? "–" : `${bytes(value)}/s`;
+    const pct = (value, digits = 1) => value === null || value === undefined ? "–" : `${Number(value).toFixed(digits)}%`;
+    function duration(seconds) {
+      if (seconds === null || seconds === undefined) return "–";
+      const s = Math.round(seconds);
+      if (s < 120) return `${s}s`;
+      if (s < 7200) return `${Math.round(s / 60)}m`;
+      if (s < 172800) return `${(s / 3600).toFixed(1)}h`;
+      return `${(s / 86400).toFixed(1)}d`;
+    }
+    const clock = (t) => new Date(t * 1000).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+
+    function foldPurposes(cpu) {
+      const out = {};
+      for (const [key, value] of Object.entries(cpu || {})) {
+        const k = PURPOSE_ORDER.includes(key) ? key : "other";
+        out[k] = (out[k] || 0) + Number(value || 0);
+      }
+      return out;
+    }
+    function purposeLabel(key, purposes) {
+      if (key === "other") return "Other";
+      return (purposes[key] || {}).label || key;
+    }
+
+    // ── Charts (inline SVG, crosshair tooltip) ──────────────────────────────
+    function niceMax(value) {
+      if (!(value > 0)) return 1;
+      const exp = Math.pow(10, Math.floor(Math.log10(value)));
+      for (const m of [1, 2, 2.5, 5, 10]) if (value <= m * exp) return m * exp;
+      return 10 * exp;
+    }
+
+    function drawChart(host, points, series, { stacked, format, axisFormat, legendHost }) {
+      host.innerHTML = "";
+      if (legendHost) {
+        legendHost.innerHTML = series.map((s) => `<span><span class="swatch" style="background:${s.color}"></span>${esc(s.label)}</span>`).join("");
+      }
+      if (points.length < 2) {
+        host.innerHTML = '<div class="empty">Collecting samples. The chart fills in over the next minute.</div>';
+        return;
+      }
+      const width = Math.max(320, host.clientWidth || 800), height = host.clientWidth < 600 ? 180 : 220;
+      const pad = { l: 64, r: 12, t: 10, b: 24 };
+      const W = width - pad.l - pad.r, H = height - pad.t - pad.b;
+      const t0 = points[0].t, t1 = points[points.length - 1].t;
+      const x = (t) => pad.l + (t1 === t0 ? 0 : (t - t0) / (t1 - t0) * W);
+      const totals = points.map((p) => stacked ? series.reduce((sum, s) => sum + (p.v[s.key] || 0), 0)
+                                               : Math.max(0, ...series.map((s) => p.v[s.key] || 0)));
+      const top = niceMax(Math.max(...totals));
+      const y = (v) => pad.t + H - v / top * H;
+      const ns = "http://www.w3.org/2000/svg";
+      const svg = document.createElementNS(ns, "svg");
+      svg.setAttribute("viewBox", `0 0 ${width} ${height}`);
+      svg.setAttribute("role", "img");
+      let markup = "";
+      for (let i = 0; i <= 4; i++) {
+        const v = top * i / 4, yy = y(v);
+        markup += `<line x1="${pad.l}" x2="${width - pad.r}" y1="${yy}" y2="${yy}" stroke="var(--grid)"/>`;
+        markup += `<text x="${pad.l - 8}" y="${yy + 4}" text-anchor="end" fill="var(--axis)" font-size="11">${esc((axisFormat || format)(v))}</text>`;
+      }
+      const ticks = width < 600 ? 2 : 5;
+      for (let i = 0; i <= ticks; i++) {
+        const t = t0 + (t1 - t0) * i / ticks;
+        markup += `<text x="${x(t)}" y="${height - 6}" text-anchor="${i === 0 ? "start" : i === ticks ? "end" : "middle"}" fill="var(--axis)" font-size="11">${esc(clock(t))}</text>`;
+      }
+      if (stacked) {
+        const base = points.map(() => 0);
+        for (const s of series) {
+          const upper = points.map((p, i) => base[i] + (p.v[s.key] || 0));
+          const path = points.map((p, i) => `${i ? "L" : "M"}${x(p.t).toFixed(1)},${y(upper[i]).toFixed(1)}`).join("")
+            + points.slice().reverse().map((p, j) => { const i = points.length - 1 - j; return `L${x(p.t).toFixed(1)},${y(base[i]).toFixed(1)}`; }).join("") + "Z";
+          markup += `<path d="${path}" fill="${s.color}" fill-opacity="0.85" stroke="#0f172a" stroke-width="1"/>`;
+          upper.forEach((v, i) => { base[i] = v; });
+        }
+      } else {
+        for (const s of series) {
+          let d = "", pen = false;
+          points.forEach((p) => {
+            const v = p.v[s.key];
+            if (v === null || v === undefined) { pen = false; return; }
+            d += `${pen ? "L" : "M"}${x(p.t).toFixed(1)},${y(v).toFixed(1)}`; pen = true;
+          });
+          markup += `<path d="${d}" fill="none" stroke="${s.color}" stroke-width="2" stroke-linejoin="round"/>`;
+        }
+      }
+      markup += `<line class="cross" x1="0" x2="0" y1="${pad.t}" y2="${pad.t + H}" stroke="#e2e8f0" stroke-opacity="0.5" visibility="hidden"/>`;
+      markup += `<rect x="${pad.l}" y="${pad.t}" width="${W}" height="${H}" fill="transparent"/>`;
+      svg.innerHTML = markup;
+      host.appendChild(svg);
+      const tip = document.createElement("div");
+      tip.className = "tooltip hidden";
+      host.appendChild(tip);
+      const cross = svg.querySelector(".cross");
+      function show(evt) {
+        const box = svg.getBoundingClientRect();
+        const sx = (evt.clientX - box.left) / box.width * width;
+        const t = t0 + Math.min(1, Math.max(0, (sx - pad.l) / W)) * (t1 - t0);
+        let best = 0;
+        points.forEach((p, i) => { if (Math.abs(p.t - t) < Math.abs(points[best].t - t)) best = i; });
+        const p = points[best];
+        cross.setAttribute("x1", x(p.t)); cross.setAttribute("x2", x(p.t)); cross.setAttribute("visibility", "visible");
+        const rows = series.slice().reverse().map((s) => `<div class="r"><span class="swatch" style="background:${s.color}"></span><span>${esc(s.label)}</span><span>${esc(format(p.v[s.key]))}</span></div>`).join("");
+        const total = stacked ? `<div class="r"><span></span><span><strong>Total</strong></span><span><strong>${esc(format(totals[best]))}</strong></span></div>` : "";
+        tip.innerHTML = `<div class="t">${esc(new Date(p.t * 1000).toLocaleString())}</div>${rows}${total}`;
+        tip.classList.remove("hidden");
+        const px = x(p.t) / width * box.width;
+        tip.style.left = `${Math.min(Math.max(0, px + 12), box.width - tip.offsetWidth)}px`;
+        tip.style.top = "8px";
+      }
+      svg.addEventListener("pointermove", show);
+      svg.addEventListener("pointerleave", () => { tip.classList.add("hidden"); cross.setAttribute("visibility", "hidden"); });
+    }
+
+    // ── Sections ────────────────────────────────────────────────────────────
+    function renderTiles(data) {
+      const s = data.stats, sys = s.system || {}, cpu = s.cpu || {}, disk = (s.storage || {}).disk || {};
+      const cores = sys.cpu_count || 1;
+      const totalSent = Object.entries((s.traffic || {}).totals || {}).reduce((sum, [, v]) => sum + (v.bytes_out || 0), 0);
+      const tiles = [
+        ["Project CPU", pct(cpu.project_percent), `${pct(cpu.project_percent === null || cpu.project_percent === undefined ? null : cpu.project_percent / cores)} of the whole machine`],
+        ["Machine CPU", pct(sys.cpu_percent), `${cores} cores · load ${sys.load_1m ?? "–"}`],
+        ["Sending to displays", rate((s.traffic || {}).served_bps), `${bytes(totalSent)} in total`],
+        ["Network in / out", `${rate((s.network || {}).rx_bps)}`, `out ${rate((s.network || {}).tx_bps)}`],
+        ["Disk free", bytes(disk.free_bytes), disk.total_bytes ? `of ${bytes(disk.total_bytes)} (${pct((disk.total_bytes - disk.free_bytes) / disk.total_bytes * 100, 0)} used)` : ""],
+        ["Memory available", bytes(sys.memory_available_bytes), sys.memory_total_bytes ? `of ${bytes(sys.memory_total_bytes)}` : ""],
+      ];
+      if (sys.temperature_c !== null && sys.temperature_c !== undefined) tiles.push(["CPU temperature", `${sys.temperature_c.toFixed(1)}°C`, sys.uptime_seconds ? `up ${duration(sys.uptime_seconds)}` : ""]);
+      $("#tiles").innerHTML = tiles.map(([label, value, detail]) => `<div class="tile"><div class="label">${esc(label)}</div><div class="value">${esc(value)}</div><div class="detail">${esc(detail)}</div></div>`).join("");
+      $("#core-count").textContent = cores;
+      const since = s.totals_since ? new Date(s.totals_since * 1000).toLocaleString() : "?";
+      $("#source-note").textContent = data.source === "server"
+        ? `Measured by the render server every ${s.sample_interval_seconds}s. All-time totals since ${since}.`
+        : "No render server is publishing stats here, so this page samples this machine itself while it is open: processes and storage, without the server's per-thread and per-display figures.";
+      const notice = $("#notice");
+      if (data.server_stale_seconds !== null && data.server_stale_seconds !== undefined) {
+        notice.textContent = `The render server last published stats ${duration(data.server_stale_seconds)} ago; it may be stopped or restarting. Showing this machine's own sample instead.`;
+        notice.className = "panel notice warn";
+      } else {
+        notice.className = "panel notice hidden";
+      }
+    }
+
+    function renderCpu(data) {
+      const s = data.stats, purposes = s.purposes || {};
+      const history = (s.history || {})[range] || [];
+      const keys = new Set();
+      history.forEach((p) => Object.keys(foldPurposes(p.cpu)).forEach((k) => keys.add(k)));
+      Object.keys(foldPurposes((s.cpu || {}).by_purpose)).forEach((k) => keys.add(k));
+      const order = [...PURPOSE_ORDER, "other"].filter((k) => keys.has(k));
+      const series = order.map((k) => ({ key: k, label: purposeLabel(k, purposes), color: PURPOSE_COLOR[k] }));
+      const points = history.map((p) => ({ t: p.t, v: foldPurposes(p.cpu) }));
+      drawChart($("#cpu-chart"), points, series, { stacked: true, format: (v) => pct(v), axisFormat: (v) => pct(v, 0), legendHost: $("#cpu-legend") });
+
+      // The table lists every purpose unfolded, so "Other" is explained.
+      const now = (s.cpu || {}).by_purpose || {};
+      const all = new Set([...Object.keys(now)]);
+      history.forEach((p) => Object.keys(p.cpu || {}).forEach((k) => all.add(k)));
+      const rows = [...all].map((key) => {
+        const values = history.map((p) => Number((p.cpu || {})[key] || 0));
+        const avg = values.length ? values.reduce((a, b) => a + b, 0) / values.length : null;
+        return { key, now: now[key] ?? 0, avg, peak: values.length ? Math.max(...values) : null };
+      }).sort((a, b) => (b.avg ?? b.now) - (a.avg ?? a.now));
+      $("#purpose-table tbody").innerHTML = rows.map((r) => {
+        const folded = PURPOSE_ORDER.includes(r.key) ? r.key : "other";
+        const info = purposes[r.key] || {};
+        return `<tr><td><span class="swatch" style="background:${PURPOSE_COLOR[folded]}"></span>${esc(info.label || r.key)}</td>
+          <td class="num">${pct(r.now)}</td><td class="num">${pct(r.avg)}</td><td class="num">${pct(r.peak)}</td>
+          <td class="muted desc">${esc(info.description || "")}</td></tr>`;
+      }).join("") || '<tr><td colspan="5" class="muted">No samples yet.</td></tr>';
+
+      const processes = (s.cpu || {}).processes || [];
+      $("#process-table tbody").innerHTML = processes.map((p) => `<tr>
+          <td>${esc(p.label)}${p.is_self && data.source !== "server" ? ' <span class="muted small">(these pages)</span>' : ""}</td>
+          <td class="num mono">${esc(p.pid)}</td><td class="num">${pct(p.cpu_percent)}</td>
+          <td class="num">${duration(p.cpu_seconds)}</td><td class="num">${bytes(p.rss_bytes)}</td></tr>`).join("")
+        || '<tr><td colspan="5" class="muted">No desk_display processes found (process details need Linux).</td></tr>';
+
+      const threads = (s.cpu || {}).threads || [];
+      $("#threads-block").classList.toggle("hidden", !threads.length);
+      $("#thread-table tbody").innerHTML = threads.slice(0, 15).map((t) => `<tr><td class="mono">${esc(t.name)}</td>
+          <td>${esc((purposes[t.purpose] || {}).label || t.purpose)}</td><td class="num">${pct(t.cpu_percent, 2)}</td></tr>`).join("");
+    }
+
+    function nameFor(clients, id) {
+      if (id === "_unauthenticated") return "Before sign-in (registration, join)";
+      const row = clients.find((c) => c.client_id === id);
+      return row && row.friendly_name ? `${row.friendly_name} (${id})` : id;
+    }
+
+    function renderTraffic(data) {
+      const s = data.stats, traffic = s.traffic || {};
+      const history = ((s.history || {})[range] || []).map((p) => ({ t: p.t, v: p }));
+      const series = NET_SERIES.filter((ser) => history.some((p) => p.v[ser.key] !== null && p.v[ser.key] !== undefined));
+      drawChart($("#net-chart"), history, series, { stacked: false, format: rate, legendHost: $("#net-legend") });
+      const totals = traffic.totals || {}, session = traffic.session || {}, rates = traffic.rates || {};
+      const ids = Object.keys(totals).sort((a, b) => (totals[b].bytes_out || 0) - (totals[a].bytes_out || 0));
+      $("#traffic-table tbody").innerHTML = ids.map((id) => {
+        const kinds = Object.entries(totals[id].kinds || {}).sort((a, b) => b[1].bytes_out - a[1].bytes_out);
+        const top = kinds.slice(0, 2).map(([k, v]) => `${k} ${bytes(v.bytes_out, 0)}`).join(", ");
+        return `<tr><td>${esc(nameFor(data.clients, id))}</td><td class="num">${rate((rates[id] || {}).out_bps)}</td>
+          <td class="num">${bytes((session[id] || {}).bytes_out)}</td><td class="num">${bytes(totals[id].bytes_out)}</td>
+          <td class="num">${bytes(totals[id].bytes_in)}</td><td class="num">${esc((totals[id].requests || 0).toLocaleString())}</td>
+          <td class="muted small">${esc(top)}</td></tr>`;
+      }).join("") || `<tr><td colspan="7" class="muted">${data.source === "server" ? "No display has contacted the server since it started." : "Per-display traffic is measured by the render server."}</td></tr>`;
+      $("#traffic-note").textContent = "Response and request bodies of the display API (artifacts, manifests, heartbeats); HTTP headers and TLS overhead are not included.";
+      const ifaces = Object.entries((s.network || {}).interfaces || {});
+      $("#iface-table tbody").innerHTML = ifaces.map(([name, v]) => `<tr><td class="mono">${esc(name)}</td><td class="num">${bytes(v.rx_bytes)}</td><td class="num">${bytes(v.tx_bytes)}</td></tr>`).join("")
+        || '<tr><td colspan="3" class="muted">Not available on this system.</td></tr>';
+    }
+
+    function usageBar(used, limit) {
+      if (!limit || used === null || used === undefined) return "";
+      const ratio = used / limit;
+      const cls = ratio > 1 ? "over" : ratio > 0.85 ? "warn" : "";
+      return `<div class="bar ${cls}" title="${pct(ratio * 100, 0)}"><span style="width:${Math.min(100, ratio * 100).toFixed(1)}%"></span></div>`;
+    }
+
+    function renderStorage(data) {
+      const storage = data.stats.storage || {}, disk = storage.disk;
+      const rows = [];
+      if (disk) rows.push(`<tr><td>Disk (project filesystem)</td><td class="num">${bytes(disk.used_bytes)}</td><td class="num">${bytes(disk.total_bytes)}</td><td>${usageBar(disk.total_bytes - disk.free_bytes, disk.total_bytes)}</td><td class="num">${bytes(disk.free_bytes)} free</td></tr>`);
+      for (const [label, d] of Object.entries(storage.directories || {})) {
+        rows.push(`<tr><td>${esc(label)}<div class="muted small mono">${esc(d.path)}</div></td><td class="num">${d.bytes === null ? "not present" : bytes(d.bytes)}</td>
+          <td class="num">${d.limit_bytes ? bytes(d.limit_bytes) : "no limit"}</td><td>${usageBar(d.bytes, d.limit_bytes)}</td>
+          <td class="num">${d.files === null ? "–" : esc(d.files.toLocaleString())}</td></tr>`);
+      }
+      $("#storage-table tbody").innerHTML = rows.join("");
+    }
+
+    function renderClients(data) {
+      const rows = data.clients || [];
+      $("#clients-panel").classList.toggle("hidden", !rows.length);
+      $("#client-table tbody").innerHTML = rows.map((c) => {
+        const r = c.resources;
+        const name = `${esc(c.friendly_name || c.client_id)} <span class="badge ${esc(c.state)}">${esc(c.state)}</span><div class="muted small mono">${esc(c.client_id)}${c.display_profile ? " · " + esc(c.display_profile) : ""}</div>`;
+        if (!r) return `<tr><td>${name}</td><td colspan="9" class="muted">No resource report yet (update this display to see its figures).</td></tr>`;
+        const cache = r.cache_limit_bytes ? `${bytes(r.cache_bytes)} / ${bytes(r.cache_limit_bytes)}${usageBar(r.cache_bytes, r.cache_limit_bytes)}` : bytes(r.cache_bytes);
+        return `<tr><td>${name}</td><td class="num">${pct(r.process_cpu_percent)}</td><td class="num">${pct(r.system_cpu_percent)}</td>
+          <td class="num">${bytes(r.memory_available_bytes)}</td><td class="num">${r.temperature_c === null || r.temperature_c === undefined ? "–" : r.temperature_c.toFixed(1) + "°C"}</td>
+          <td class="num">${bytes(r.disk_free_bytes)}</td><td>${cache}</td><td class="num">${bytes(r.bytes_received)}</td>
+          <td class="num">${bytes(r.bytes_sent)}</td><td class="num">${duration(r.uptime_seconds)}</td></tr>`;
+      }).join("");
+    }
+
+    function render() {
+      if (!latest) return;
+      renderTiles(latest); renderCpu(latest); renderTraffic(latest); renderStorage(latest); renderClients(latest);
+      document.querySelectorAll(".ranges button").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.range === range)));
+    }
+
+    async function refresh() {
+      try {
+        const response = await fetch("/api/stats", { headers: { Accept: "application/json" } });
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        latest = await response.json();
+        render();
+      } catch (error) {
+        const notice = $("#notice");
+        notice.textContent = `Could not load stats: ${error.message}`;
+        notice.className = "panel notice error";
+      }
+    }
+
+    document.querySelectorAll(".ranges button").forEach((button) => button.addEventListener("click", () => {
+      range = button.dataset.range;
+      try { localStorage.setItem("stats-range", range); } catch (e) { /* storage blocked */ }
+      render();
+    }));
+    let resizeTimer;
+    window.addEventListener("resize", () => { clearTimeout(resizeTimer); resizeTimer = setTimeout(render, 150); });
+    refresh();
+    setInterval(refresh, 10000);
+  })();
+  </script>
+</body>
+</html>
