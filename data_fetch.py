@@ -3736,8 +3736,20 @@ def _parse_ics_events(text: str) -> List[Dict[str, Any]]:
                 param_map[p_key.upper()] = p_val
         if param_map:
             params[key] = param_map
+        if key in _ICS_TEXT_PROPERTIES:
+            value = _unescape_ics_text(value)
         current[key] = value
     return events
+
+
+# RFC 5545 TEXT properties escape newlines, commas, semicolons and backslashes;
+# StanzaCal sends e.g. "Allstate Arena\, Rosemont" and "...\n\n---".
+_ICS_TEXT_PROPERTIES = frozenset({"SUMMARY", "DESCRIPTION", "LOCATION", "X-ALT-DESC"})
+_ICS_ESCAPE_RE = re.compile(r"\\([\\;,nN])")
+
+
+def _unescape_ics_text(value: str) -> str:
+    return _ICS_ESCAPE_RE.sub(lambda m: "\n" if m.group(1) in "nN" else m.group(1), value)
 
 
 def _parse_ics_datetime(value: Optional[str], meta: Dict[str, str]) -> Optional[datetime.datetime]:
@@ -3846,8 +3858,11 @@ def _ics_team_payload(name: str, is_wolves: bool) -> Dict[str, Any]:
         abbr = (AHL_TEAM_TRICODE or _derive_team_abbr(name)).upper()
         team_id: Optional[int] = AHL_TEAM_ID
     else:
-        key = re.sub(r"[^a-z0-9]+", " ", name or "").strip()
-        abbr = _AHL_TEAM_ABBR_OVERRIDES.get(key.lower()) or _derive_team_abbr(name)
+        # Lowercase before stripping punctuation: the calendar's names are
+        # title case, and stripping first turned "Milwaukee Admirals" into
+        # "ilwaukee dmirals", so no opponent ever matched its logo.
+        key = re.sub(r"[^a-z0-9]+", " ", (name or "").lower()).strip()
+        abbr = _AHL_TEAM_ABBR_OVERRIDES.get(key) or _derive_team_abbr(name)
         team_id = None
     return {
         "id": team_id,
@@ -4085,9 +4100,12 @@ def _classify_wolves_ics_games(games: List[Dict[str, Any]]) -> Dict[str, Optiona
             break
 
     if live_game is not None:
+        # The calendar has no live state, so a started game without a result
+        # is in progress.  Its status still says "FUT" from parsing, which
+        # kept the Wolves Live screen from ever being offered.
         status = live_game.setdefault("status", {})
-        status.setdefault("state", "LIVE")
-        status.setdefault("detail", "In Progress")
+        status["state"] = "LIVE"
+        status["detail"] = "In Progress"
 
     return {
         "last_game": last_final,

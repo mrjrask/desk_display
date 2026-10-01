@@ -48,12 +48,14 @@ def test_normalize_blackhawks_ics_game_maps_schedule_payload():
 
 
 def test_fetch_blackhawks_next_game_prefers_ics_schedule(monkeypatch):
-    now = datetime.datetime(2026, 7, 20, tzinfo=pytz.UTC)
+    # Far enough ahead that the game stays in the future; 2026-10-01 went
+    # stale and failed once that date arrived.
+    now = datetime.datetime(2099, 7, 20, tzinfo=pytz.UTC)
     games = [
         {
-            "gameDate": "2026-10-01T00:00:00Z",
+            "gameDate": "2099-10-01T00:00:00Z",
             "gameState": "FUT",
-            "startTimeUTC": "2026-10-01T00:00:00Z",
+            "startTimeUTC": "2099-10-01T00:00:00Z",
             "homeTeam": {"abbrev": "STL"},
             "awayTeam": {"abbrev": "CHI"},
         }
