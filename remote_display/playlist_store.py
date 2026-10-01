@@ -291,6 +291,27 @@ def document_screens(document: Mapping[str, Any]) -> tuple[tuple[str, ...], tupl
     return tuple(sorted(required)), tuple(sorted(alternates - required))
 
 
+def document_active_screens(document: Mapping[str, Any]) -> tuple[str, ...]:
+    """Return the screen IDs a document actually plays.
+
+    A screen is active when its own frequency is above zero, or when it is
+    the alternate of an active screen whose alternate frequency is above
+    zero.  Screens that only appear in playlist groups (frequency 0 or not
+    listed) are not active.
+    """
+
+    active: set[str] = set()
+    for sid, spec in (document.get("screens") or {}).items():
+        if not _is_enabled(spec):
+            continue
+        active.add(sid)
+        alt = spec.get("alt") if isinstance(spec, dict) else None
+        if isinstance(alt, dict) and _is_enabled({"frequency": alt.get("frequency", 1)}):
+            screen = alt.get("screen")
+            active.update([screen] if isinstance(screen, str) else [s for s in screen or [] if isinstance(s, str)])
+    return tuple(sorted(active))
+
+
 @dataclass(frozen=True)
 class StoredAssignment:
     client_id: str
