@@ -20,7 +20,13 @@ How it finds the screenshots:
    Servers from before client addresses were recorded give none; then the
    script tries ``<client id>.local`` (``-panel`` suffix dropped), and
    ``--client-host ID=HOST`` sets an address by hand.
-3. Every image is embedded in the page, so the single ``.html`` file can be
+3. A display on another network (one the server can reach only because the
+   display connects to it) cannot be fetched directly. Turn on
+   DESK_DISPLAY_CLIENT_UPLOAD_SCREENSHOTS in that display's ``.env.client`` and
+   it uploads its latest screenshots to the server. The script then asks the
+   server for them (``/api/clients/<id>/uploaded-screenshots``) and uses them
+   when the display cannot be reached, or for screens it did not return.
+4. Every image is embedded in the page, so the single ``.html`` file can be
    opened, moved or shared on its own.
 
 If the config UI asks for a password (SCREEN_UI_PASSWORD), give it with
@@ -77,6 +83,7 @@ class Screenshot:
     timestamp: Optional[str] = None
     elapsed: Optional[str] = None
     is_stale: bool = False
+    uploaded: bool = False
 
 
 @dataclass
@@ -90,6 +97,7 @@ class ClientResult:
     screen_order: list[str] = field(default_factory=list)
     screenshots: dict[str, Screenshot] = field(default_factory=dict)
     error: Optional[str] = None
+    note: Optional[str] = None
 
     @property
     def label(self) -> str:
@@ -252,6 +260,69 @@ def _reason(exc: BaseException) -> str:
     return str(exc) or exc.__class__.__name__
 
 
+def _elapsed(seconds: float) -> str:
+    seconds = max(0, int(seconds))
+    days, rest = divmod(seconds, 86400)
+    hours, rest = divmod(rest, 3600)
+    minutes, secs = divmod(rest, 60)
+    return f"{days}d {hours}h {minutes}m {secs}s ago"
+
+
+def _parse_time(value: Any) -> Optional[datetime.datetime]:
+    if not isinstance(value, str) or not value.strip():
+        return None
+    try:
+        parsed = datetime.datetime.fromisoformat(value.strip().replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    return parsed if parsed.tzinfo else parsed.replace(tzinfo=datetime.timezone.utc)
+
+
+def add_uploaded(result: ClientResult, server: ConfigUI,
+                 now: Optional[datetime.datetime] = None) -> int:
+    """Add the screenshots *result*'s display uploaded to the server.
+
+    Used for a display the script could not reach (it is on another network)
+    and for screens its own config UI did not return. Returns how many were
+    added; a server without uploads (or from before them) adds none.
+    """
+
+    now = now or datetime.datetime.now(datetime.timezone.utc)
+    quoted = urllib.parse.quote(result.client_id, safe="")
+    try:
+        payload = server.get_json(f"/api/clients/{quoted}/uploaded-screenshots")
+    except (urllib.error.URLError, OSError, ValueError, AuthRequired):
+        return 0
+    added = 0
+    for entry in payload.get("screens") or []:
+        screen_id = entry.get("screen")
+        name = entry.get("file")
+        if not screen_id or not name or screen_id in result.screenshots:
+            continue
+        try:
+            image, content_type = server.get(f"/api/clients/{quoted}/uploaded-screenshots/"
+                                             + urllib.parse.quote(name))
+        except (urllib.error.URLError, OSError, AuthRequired) as exc:
+            print(f"  {result.label}: skipped uploaded {screen_id} ({_reason(exc)})", file=sys.stderr)
+            continue
+        captured = _parse_time(entry.get("captured_at"))
+        if screen_id not in result.screen_order:
+            result.screen_order.append(screen_id)
+        result.screenshots[screen_id] = Screenshot(
+            screen_id=screen_id,
+            image=image,
+            content_type=content_type.split(";", 1)[0] if content_type.startswith("image/") else "image/png",
+            timestamp=captured.astimezone().strftime("%Y-%m-%d %H:%M:%S") if captured else None,
+            elapsed=_elapsed((now - captured).total_seconds()) if captured else None,
+            uploaded=True,
+        )
+        added += 1
+    if added and result.error is not None:
+        result.note = f"{result.error}; showing the screenshots it uploaded to the server"
+        result.error = None
+    return added
+
+
 def screen_order(results: list[ClientResult]) -> list[str]:
     """Screens in playback order, merged across clients (first seen wins)."""
 
@@ -303,6 +374,9 @@ def render_html(results: list[ClientResult], skipped: list[ClientResult], server
         parts.append(f'<p class="note warn">Skipped {esc(result.label)}: {esc(result.error or "")}</p>')
     for result in skipped:
         parts.append(f'<p class="note">Skipped {esc(result.label)}: not active ({esc(result.state or "unknown")}).</p>')
+    for result in collected:
+        if result.note:
+            parts.append(f'<p class="note">{esc(result.label)}: {esc(result.note)}.</p>')
     if screens:
         parts.append("<nav>")
         parts.extend(f'<a href="#{_anchor(s)}">{esc(s)}</a>' for s in screens)
@@ -323,6 +397,8 @@ def render_html(results: list[ClientResult], skipped: list[ClientResult], server
             if shot.elapsed:
                 when = f"{when} ({shot.elapsed})" if when else shot.elapsed  # "0d 0h 1m 5s ago"
             stale = ' <span class="warn">stale</span>' if shot.is_stale else ""
+            if shot.uploaded:
+                stale += " · uploaded to server"
             parts.append(
                 f'<figure><img src="data:{esc(shot.content_type)};base64,{data}" '
                 f'alt="{esc(screen_id)} on {esc(result.label)}" loading="lazy" '
@@ -440,11 +516,16 @@ def main(argv: Optional[list[str]] = None) -> int:
     with ThreadPoolExecutor(max_workers=max(1, min(8, len(targets)))) as pool:
         results = list(pool.map(lambda t: collect_client(t[0], t[1], make_ui), targets))
 
+    # Displays on another network upload their screenshots to the server.
+    server_ui = make_ui(server_url)
+    uploaded = {result.client_id: add_uploaded(result, server_ui) for result in results}
+
     for result in results:
         if result.error:
             print(f"  {result.label}: {result.error}", file=sys.stderr)
         else:
-            print(f"  {result.label}: {len(result.screenshots)} screenshots", file=sys.stderr)
+            extra = f" ({uploaded[result.client_id]} uploaded to the server)" if uploaded[result.client_id] else ""
+            print(f"  {result.label}: {len(result.screenshots)} screenshots{extra}", file=sys.stderr)
 
     now = datetime.datetime.now()
     output = (args.output.expanduser() if args.output else _default_output(now))

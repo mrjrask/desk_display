@@ -80,6 +80,12 @@ See the README's [deployment modes](README.md#deployment-modes) and
   display. The server now records the address each client last connected
   from (Clients API and `/api/v1/admin/status`) so the script can find them
   (see OPERATIONS.md, "Comparing screens across displays").
+- A display on another network can upload its latest screenshots to the
+  server (`DESK_DISPLAY_CLIENT_UPLOAD_SCREENSHOTS=1` in `.env.client`) over its
+  existing authenticated connection, and the collector uses them when it
+  can't reach that display. The server keeps one image per screen per
+  display under `.runtime/server/client_screenshots/`, with size and age
+  limits (see OPERATIONS.md, "Displays on another network").
 - New **MLB Playoffs** screen: the postseason bracket laid out like
   mlb.com/postseason (AL left, NL right, World Series in the middle, seeds and
   series scores), sized for every display profile, with the current round's

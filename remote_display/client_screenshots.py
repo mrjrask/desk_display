@@ -81,6 +81,9 @@ class ClientScreenshots:
         self.play_counts: dict[str, int] = {}
         # Returns the server's feed summary for the heartbeat (see remote_display.display_status).
         self.feed_summary = feed_summary
+        # Set when DESK_DISPLAY_CLIENT_UPLOAD_SCREENSHOTS is on: each saved
+        # frame is offered for upload to the server (remote_display.screenshot_uploads).
+        self.uploads: Any = None
 
     @classmethod
     def from_settings(cls, settings: dict[str, Any], profile: Any) -> ClientScreenshots:
@@ -121,7 +124,10 @@ class ClientScreenshots:
         image.save(folder / f"{prefix}_{now.astimezone(datetime.timezone.utc):%Y%m%d_%H%M%S}.png")
         self._prune(folder)
         self.current_dir.mkdir(parents=True, exist_ok=True)
-        _replace_atomically(self.current_dir / f"{prefix}.png", lambda fh: image.save(fh, format="PNG"))
+        current = self.current_dir / f"{prefix}.png"
+        _replace_atomically(current, lambda fh: image.save(fh, format="PNG"))
+        if self.uploads is not None:
+            self.uploads.offer(screen_id, current, now.timestamp())
         # A client has no ticker payload; a sidecar left by main.py would make the
         # Feed page keep animating old headlines instead of showing this frame.
         (self.current_dir / f"{prefix}.ticker.json").unlink(missing_ok=True)

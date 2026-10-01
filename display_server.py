@@ -99,6 +99,8 @@ from remote_display.provisioning import (
 )
 from remote_display.rate_limit import RateLimiter
 from remote_display.resource_stats import TrafficCounter, traffic_kind
+from remote_display.screenshot_uploads import WIRE_VERSION as SCREENSHOT_UPLOAD_VERSION
+from remote_display.screenshot_uploads import ScreenshotInbox, UploadRejected, parse_time, upload_dir
 from remote_display.registry import (
     Assignment,
     AssignmentLookup,
@@ -149,6 +151,12 @@ class DisplayServerConfig:
     # Update/restart commands queued by the config UI's Display Clients page.
     commands_path: Path | None = None
     rate_limits: bool = True
+    # Screenshots that clients on other networks upload for the collector;
+    # None turns uploads off.
+    screenshot_upload_dir: Path | None = None
+    screenshot_upload_max_bytes: int = 2 * 1024 * 1024
+    screenshot_upload_max_total_bytes: int = 64 * 1024 * 1024
+    screenshot_upload_retention_seconds: float = 7 * 24 * 3600
 
     @classmethod
     def from_env(cls, env: Mapping[str, str] | None = None) -> DisplayServerConfig:
@@ -172,6 +180,10 @@ class DisplayServerConfig:
             clients_path=provisioning_path(env),
             commands_path=commands_path(env),
             rate_limits=bool(settings["DESK_DISPLAY_SERVER_RATE_LIMITS"]),
+            screenshot_upload_dir=upload_dir(env) if settings["DESK_DISPLAY_SCREENSHOT_UPLOADS"] else None,
+            screenshot_upload_max_bytes=int(settings["DESK_DISPLAY_SCREENSHOT_UPLOAD_MAX_KB"]) * 1024,
+            screenshot_upload_max_total_bytes=int(settings["DESK_DISPLAY_SCREENSHOT_UPLOAD_MAX_MB"]) * 1024 * 1024,
+            screenshot_upload_retention_seconds=float(settings["DESK_DISPLAY_SCREENSHOT_UPLOAD_RETENTION_DAYS"]) * 86400,
         )
 
 
@@ -341,6 +353,14 @@ def create_app(
     commands = None if config.commands_path is None else CommandStore(config.commands_path, clock=clock)
     app.extensions["desk_display_client_commands"] = commands
     limiter = RateLimiter() if config.rate_limits else None
+    inbox = None if config.screenshot_upload_dir is None else ScreenshotInbox(
+        config.screenshot_upload_dir,
+        max_image_bytes=config.screenshot_upload_max_bytes,
+        max_total_bytes=config.screenshot_upload_max_total_bytes,
+        retention_seconds=config.screenshot_upload_retention_seconds,
+        clock=clock,
+    )
+    app.extensions["desk_display_screenshot_inbox"] = inbox
     app.extensions["desk_display_rate_limiter"] = limiter
     # Bytes each display sent and received, for the config UI's Stats page.
     traffic = TrafficCounter()
@@ -372,6 +392,11 @@ def create_app(
         now = clock()
         keep = {r.client_id for r in registry.records() if r.lease_state(now) in {"active", "static"}}
         artifacts.prune_holders(keep)
+        if inbox is not None:
+            try:
+                inbox.prune()
+            except OSError as exc:
+                WEB_LOGGER.warning("Could not prune uploaded client screenshots: %s", exc)
         return artifacts.collect_garbage()
 
     app.extensions["desk_display_maintenance"] = maintenance
@@ -425,6 +450,7 @@ def create_app(
             and request.path.startswith("/api/v1/")
             and request.path != "/api/v1/health"
             and "/artifacts/" not in request.path
+            and not request.path.endswith("/screenshots")
             and request.path != "/api/v1/admin/status"
         ):
             _publish_snapshot()
@@ -499,7 +525,7 @@ def create_app(
             raise UnknownLeaseError("unknown client or credential") from None
 
     _LIMIT_KIND = {"heartbeat": "heartbeat", "client_config": "manifest", "client_manifest": "manifest",
-                   "client_artifact": "artifact"}
+                   "client_artifact": "artifact", "client_screenshot": "screenshot"}
 
     def _client() -> ClientRecord:
         """Authenticate the per-client credential for the client ID in the URL.
@@ -583,6 +609,9 @@ def create_app(
             "client_resource_versions": [ClientResources.WIRE_VERSION],
             # Heartbeats may carry ``commands`` (results); see client_commands.
             **({"client_command_versions": [CLIENT_COMMAND_VERSION]} if commands is not None else {}),
+            # Clients may PUT their latest screenshots (see client_screenshot).
+            **({"client_screenshot_upload_versions": [SCREENSHOT_UPLOAD_VERSION],
+                "screenshot_upload_max_bytes": inbox.max_image_bytes} if inbox is not None else {}),
         }
 
     def _assignment_payload(client_id: str, *, delivered: bool = False) -> dict[str, Any]:
@@ -809,6 +838,40 @@ def create_app(
         return response
 
     # ── Admin ──────────────────────────────────────────────────────────────
+
+    @app.put("/api/v1/clients/<client_id>/screenshots")
+    def client_screenshot(client_id: str):
+        """Keep a client's latest screenshot of one screen for the collector.
+
+        ``?screen=<screen id>&captured_at=<ISO time>`` with an ``image/png``
+        body.  Displays on another network upload here because
+        ``scripts/collect_client_screenshots.py`` cannot reach them.
+        """
+
+        record = _client()
+        if inbox is None:
+            return _error(404, "not_found", "screenshot uploads are turned off on this server")
+        if request.mimetype != "image/png":
+            return _error(415, "unsupported_media_type", "expected an image/png body")
+        length = request.content_length
+        if length is None:
+            return _error(411, "length_required", "Content-Length is required")
+        if length > inbox.max_image_bytes:
+            return _error(413, "too_large", f"screenshot exceeds {inbox.max_image_bytes} bytes")
+        # Read directly: the app-wide request limit (MAX_REQUEST_BYTES) is
+        # for JSON bodies and is far below a screenshot.
+        data = request.environ["wsgi.input"].read(length)
+        if len(data) != length:
+            return _error(400, "invalid_payload", "the body ended early")
+        try:
+            entry = inbox.save(record.client_id, request.args.get("screen", ""), data,
+                               captured_at=parse_time(request.args.get("captured_at")))
+        except UploadRejected as exc:
+            return jsonify(exc.as_response()), exc.status
+        except OSError as exc:
+            WEB_LOGGER.warning("Could not store a screenshot from %s: %s", record.client_id, exc)
+            return _error(507, "storage_unavailable", "the server could not store the screenshot")
+        return jsonify(entry), 201
 
     @app.get("/api/v1/admin/status")
     def admin_status():
@@ -1044,6 +1107,9 @@ def _start_stats(app: Flask, config: DisplayServerConfig) -> None:
             "Artifact store": (config.artifact_dir, config.artifact_max_bytes),
             "Server caches (cache/)": (_PROJECT_ROOT / "cache", None),
             "Image caches (images/cache/)": (_PROJECT_ROOT / "images" / "cache", None),
+            **({"Uploaded client screenshots": (config.screenshot_upload_dir,
+                                                config.screenshot_upload_max_total_bytes)}
+               if config.screenshot_upload_dir is not None else {}),
         },
         persisted=resource_stats.load_persisted(persist),
     )

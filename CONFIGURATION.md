@@ -118,6 +118,19 @@ are unchanged.
   `/artifacts/<sha256>.<ext>` need `Authorization: Bearer <client_credential>`
   for that client ID, so one client cannot read another's configuration or
   status. A client can download only artifacts its own manifests listed.
+- `PUT /api/v1/clients/<id>/screenshots?screen=<screen id>&captured_at=<ISO time>`
+  (same client credential, `image/png` body) stores that client's latest
+  screenshot of one screen, for a display the screenshot collector cannot
+  reach. The server advertises `client_screenshot_upload_versions` and
+  `screenshot_upload_max_bytes` in its register, config and heartbeat
+  responses; a client with `DESK_DISPLAY_CLIENT_UPLOAD_SCREENSHOTS=1` uploads
+  only to a server that does. Only the latest image per screen is kept, under
+  `DESK_DISPLAY_SCREENSHOT_UPLOAD_DIR` (default
+  `.runtime/server/client_screenshots/<client id>/`), bounded by
+  `DESK_DISPLAY_SCREENSHOT_UPLOAD_MAX_KB` per image,
+  `DESK_DISPLAY_SCREENSHOT_UPLOAD_MAX_MB` in total and
+  `DESK_DISPLAY_SCREENSHOT_UPLOAD_RETENTION_DAYS`.
+  `DESK_DISPLAY_SCREENSHOT_UPLOADS=0` turns uploads off.
 - `/api/v1/health` is public and only reports that the service is up.
 - `/api/v1/admin/status`, `/admin/render-status`, `/admin/prerender/<name>`, `/admin/clients`
   (list, or `POST` to provision) and
@@ -631,6 +644,13 @@ installs only, never clients.
 | `ENABLE_VIDEO` | client (no effect), standalone | restart |  |
 | `SCREENSHOT_DIR` | client, standalone | restart |  |
 | `SCREENSHOT_ARCHIVE_BASE` | client, standalone | restart |  |
+| `DESK_DISPLAY_CLIENT_UPLOAD_SCREENSHOTS` | client | restart |  |
+| `DESK_DISPLAY_CLIENT_SCREENSHOT_UPLOAD_MINUTES` | client | restart |  |
+| `DESK_DISPLAY_SCREENSHOT_UPLOADS` | server | restart |  |
+| `DESK_DISPLAY_SCREENSHOT_UPLOAD_DIR` | server, standalone | restart |  |
+| `DESK_DISPLAY_SCREENSHOT_UPLOAD_MAX_KB` | server | restart |  |
+| `DESK_DISPLAY_SCREENSHOT_UPLOAD_MAX_MB` | server | restart |  |
+| `DESK_DISPLAY_SCREENSHOT_UPLOAD_RETENTION_DAYS` | server | restart |  |
 | `FEED_UPLOAD_URL` | client, standalone | restart |  |
 | `FEED_UPLOAD_TOKEN` | server, client, standalone | restart | yes |
 | `FEED_SOURCE_NAME` | client, standalone | restart |  |

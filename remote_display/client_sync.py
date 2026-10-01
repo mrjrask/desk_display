@@ -36,7 +36,7 @@ from datetime import datetime
 from email.utils import parsedate_to_datetime
 from pathlib import Path
 from typing import Any
-from urllib.parse import urlsplit
+from urllib.parse import urlencode, urlsplit
 
 from protocol import client_supports_manifest
 from remote_display.client_cache import (
@@ -59,6 +59,8 @@ from remote_display.models import (
 )
 from remote_display.playlist_store import document_screens
 from remote_display.resource_stats import ClientResourceSampler
+from remote_display.screenshot_uploads import WIRE_VERSION as SCREENSHOT_UPLOAD_VERSION
+from remote_display.screenshot_uploads import UploadQueue
 
 LOGGER = logging.getLogger("desk_display.client_sync")
 
@@ -136,6 +138,7 @@ class RequestsTransport:
         headers: Mapping[str, str] | None = None,
         json_body: Any = None,
         max_bytes: int = MAX_ARTIFACT_BYTES,
+        data: bytes | None = None,
     ) -> Response:
         try:
             with self._session.request(
@@ -143,6 +146,7 @@ class RequestsTransport:
                 self.base_url + path,
                 headers=dict(headers or {}),
                 json=json_body,
+                data=data,
                 timeout=self.timeout,
                 verify=self.verify,
                 stream=True,
@@ -569,6 +573,7 @@ class ClientSync:
         timer: Callable[[], float] = time.perf_counter,
         commands: CommandRunner | None = None,
         resources: ClientResourceSampler | None = None,
+        screenshot_uploads: UploadQueue | None = None,
     ) -> None:
         self.capabilities = capabilities
         self.transport = transport
@@ -625,6 +630,12 @@ class ClientSync:
         self._resources_accepted = False
         self.bytes_received = 0
         self.bytes_sent = 0
+        # Screenshots this display uploads for the server's collector (when
+        # DESK_DISPLAY_CLIENT_UPLOAD_SCREENSHOTS is on); sent only once the
+        # server advertises an upload version.
+        self.screenshot_uploads = screenshot_uploads
+        self._screenshot_uploads_accepted = False
+        self._screenshot_upload_max_bytes: int | None = None
 
     # Credential (the per-client lease credential, never the enrollment token)
 
@@ -691,15 +702,20 @@ class ClientSync:
     # HTTP helpers
 
     def _request(self, method: str, path: str, *, auth: str | None, json_body: Any = None,
-                 headers: Mapping[str, str] | None = None, max_bytes: int = 1024 * 1024) -> Response:
+                 headers: Mapping[str, str] | None = None, max_bytes: int = 1024 * 1024,
+                 data: bytes | None = None) -> Response:
         request_headers = dict(headers or {})
         if auth:
             request_headers["Authorization"] = f"Bearer {auth}"
         if json_body is not None:
             self.bytes_sent += len(json.dumps(json_body, separators=(",", ":")))
+        extra: dict[str, Any] = {}
+        if data is not None:
+            self.bytes_sent += len(data)
+            extra["data"] = data
         try:
             response = self.transport(method, path, headers=request_headers, json_body=json_body,
-                                      max_bytes=max_bytes)
+                                      max_bytes=max_bytes, **extra)
             self.bytes_received += len(response.body or b"")
             return response
         except TooLargeError as exc:
@@ -771,6 +787,12 @@ class ClientSync:
         versions = payload.get("client_resource_versions")
         if isinstance(versions, list):
             self._resources_accepted = ClientResources.WIRE_VERSION in versions
+        # Absent from a server that cannot take screenshots (or turned them off).
+        versions = payload.get("client_screenshot_upload_versions")
+        self._screenshot_uploads_accepted = isinstance(versions, list) and SCREENSHOT_UPLOAD_VERSION in versions
+        limit = payload.get("screenshot_upload_max_bytes")
+        self._screenshot_upload_max_bytes = (
+            int(limit) if isinstance(limit, int) and not isinstance(limit, bool) and limit > 0 else None)
 
     @staticmethod
     def _interval(local: Any, advertised: int | None) -> float:
@@ -1006,6 +1028,54 @@ class ClientSync:
         assigned = payload.get("assigned_playlist")
         return isinstance(assigned, dict) and assigned.get("playlist_revision") != self._offered_revision
 
+    def upload_screenshots(self) -> int:
+        """Upload the screenshots that are due; return how many went up.
+
+        Runs after a successful heartbeat or sync. A failure here never fails
+        the sync pass: the screenshot stays due and goes up on a later pass.
+        """
+
+        queue = self.screenshot_uploads
+        if queue is None or not self._screenshot_uploads_accepted:
+            return 0
+        connected = self.connected
+        sent = 0
+        try:
+            for item in queue.due():
+                try:
+                    data = item.path.read_bytes()
+                except OSError:
+                    queue.postpone(item)
+                    continue
+                if self._screenshot_upload_max_bytes is not None and len(data) > self._screenshot_upload_max_bytes:
+                    LOGGER.info("Screenshot of %s is too large to upload (%d bytes)", item.screen, len(data))
+                    queue.postpone(item)
+                    continue
+                query = urlencode({
+                    "screen": item.screen,
+                    "captured_at": datetime.fromtimestamp(item.captured_at).astimezone().isoformat(),
+                })
+                response = self._client_request(
+                    "PUT", f"/api/v1/clients/{self.client_id}/screenshots?{query}",
+                    data=data, headers={"Content-Type": "image/png"})
+                if response.status in (200, 201):
+                    queue.mark_uploaded(item)
+                    sent += 1
+                elif response.status == 429 or response.status >= 500:
+                    LOGGER.debug("Screenshot upload deferred (HTTP %s)", response.status)
+                    break
+                else:
+                    LOGGER.warning("Server rejected the screenshot of %s (HTTP %s)", item.screen, response.status)
+                    queue.postpone(item)
+        except SyncError as exc:
+            LOGGER.debug("Screenshot upload failed: %s", exc.message)
+        finally:
+            # An upload problem is not a lost server: the next heartbeat decides.
+            self.connected = connected
+        if sent:
+            LOGGER.debug("Uploaded %d screenshot(s)", sent)
+        return sent
+
     def wants_package(self, ref: Mapping[str, Any] | None) -> bool:
         """Packages this client plays: all when it animates, clocks always."""
 
@@ -1165,6 +1235,10 @@ class ClientSync:
             return self.backoff.failure()
         self.backoff.success()
         self.consecutive_failures = 0
+        try:
+            self.upload_screenshots()
+        except Exception:  # noqa: BLE001 - uploads must never stop syncing
+            LOGGER.warning("Screenshot upload failed", exc_info=True)
         if full:
             self._next_sync = now + self.effective_sync_interval()
         self._next_heartbeat = now + self.effective_heartbeat_interval()

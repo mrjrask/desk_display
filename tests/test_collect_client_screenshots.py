@@ -176,3 +176,42 @@ def test_normalize_base_url():
     assert ccs.normalize_base_url("square.local") == "http://square.local:5002"
     assert ccs.normalize_base_url("https://square.local:8443/") == "https://square.local:8443"
     assert ccs.normalize_base_url("10.0.0.5:5003") == "http://10.0.0.5:5003"
+
+
+def test_unreachable_display_uses_the_screenshots_it_uploaded_to_the_server(hosts, tmp_path):
+    panel = hosts({"/api/screenshots": screenshots_payload(("date", "d.png")), "/screenshots/file/d.png": PNG})
+    server = hosts({
+        "/api/clients": {"clients": [client("square-panel", None), client("hyper", "203.0.113.7")]},
+        "/api/clients/hyper/uploaded-screenshots": {"client_id": "hyper", "screens": [
+            {"screen": "date", "file": "date-0123456789.png", "captured_at": "2026-09-29T12:00:00Z"},
+            {"screen": "NCAA Mens BB Scoreboard", "file": "NCAA_Mens_BB_Scoreboard-0123456789.png",
+             "captured_at": "2026-09-29T12:01:00Z"},
+        ]},
+        "/api/clients/hyper/uploaded-screenshots/date-0123456789.png": PNG,
+        "/api/clients/hyper/uploaded-screenshots/NCAA_Mens_BB_Scoreboard-0123456789.png": PNG,
+    })
+    out = tmp_path / "shots.html"
+    rc = ccs.main(["--server", server.url, "--output", str(out), "--timeout", "2",
+                   "--client-host", f"square-panel={panel.url}", "--client-host", "hyper=127.0.0.1:9"])
+    assert rc == 0
+    page = out.read_text()
+    date_section = page[page.index("<h2>date</h2>"):page.index("<h2>NCAA Mens BB Scoreboard</h2>")]
+    assert date_section.count("<figure>") == 2 and "uploaded to server" in date_section
+    assert "<h2>NCAA Mens BB Scoreboard</h2>" in page
+    assert "Skipped hyper" not in page
+    assert "showing the screenshots it uploaded to the server" in page
+
+
+def test_reachable_display_keeps_its_own_screenshots_and_old_servers_add_none(hosts):
+    panel = hosts({"/api/screenshots": screenshots_payload(("date", "d.png")), "/screenshots/file/d.png": PNG})
+    server = hosts({"/api/clients/a/uploaded-screenshots": {"screens": [
+        {"screen": "date", "file": "date-0123456789.png"},
+        {"screen": "weather1", "file": "weather1-0123456789.png"}]},
+        "/api/clients/a/uploaded-screenshots/weather1-0123456789.png": PNG})
+    make_ui = lambda url: ccs.ConfigUI(url, lambda: None)  # noqa: E731
+    result = ccs.collect_client(client("a", None), panel.url, make_ui)
+    assert ccs.add_uploaded(result, make_ui(server.url)) == 1
+    assert not result.screenshots["date"].uploaded and result.screenshots["weather1"].uploaded
+    old = hosts({})
+    other = ccs.collect_client(client("b", None), panel.url, make_ui)
+    assert ccs.add_uploaded(other, make_ui(old.url)) == 0
