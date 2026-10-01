@@ -208,6 +208,12 @@ See the README's [deployment modes](README.md#deployment-modes) and
   when over budget, so `cache/artifacts/` grew to a full day of renders
   (several GB on a busy server). Unreferenced artifacts are now deleted oldest
   first until the store fits; anything a screen or client manifest uses stays.
+- Storage limits shown on the Stats page: the artifact store defaults to 1 GB
+  (`DESK_DISPLAY_ARTIFACT_MAX_MB=1024`, was 512). `images/cache/` now has an
+  enforced 256 MB limit (`DESK_DISPLAY_IMAGE_CACHE_MAX_MB`; least recently
+  used tiles, logos and headshots are deleted and downloaded again when
+  needed). `cache/` as a whole has a 1.5 GB limit
+  (`DESK_DISPLAY_SERVER_CACHE_MAX_MB=1536`) that logs a warning when exceeded.
 - Fix: a feed refresh that returns unchanged data (for example from a TTL
   cache) no longer bumps its data revision, so it no longer re-renders the
   screens that read it.

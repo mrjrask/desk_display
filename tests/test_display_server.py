@@ -741,6 +741,10 @@ def test_config_from_env_and_role_check(monkeypatch):
     })
     assert config.static_clients == {"lobby": "hdmi_1080p"} and config.lease_seconds == 120
     assert config.admin_token is None
+    # Storage limits shown on the Stats page.
+    assert config.artifact_max_bytes == 1024 << 20
+    assert config.server_cache_max_bytes == 1536 << 20
+    assert config.image_cache_max_bytes == 256 << 20
     monkeypatch.setenv("DESK_DISPLAY_ROLE", "standalone")
     with pytest.raises(SystemExit, match="DESK_DISPLAY_ROLE=server"):
         display_server.run_display_server()

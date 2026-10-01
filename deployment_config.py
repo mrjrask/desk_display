@@ -466,7 +466,7 @@ SETTINGS: tuple[Setting, ...] = (
        "Delete artifacts no manifest has referenced for this long.", default="24", minimum=1),
     _s("DESK_DISPLAY_ARTIFACT_MAX_MB", "int", _SERVER_ONLY, "artifacts",
        "Upper bound for the artifact store; the oldest unreferenced artifacts go first.",
-       default="512", minimum=16),
+       default="1024", minimum=16),
     _s("DESK_DISPLAY_CLIENT_LEASE_SECONDS", "int", _SERVER_ONLY, "leases",
        "How long a client registration stays active without a heartbeat.",
        default="300", minimum=30),
@@ -515,6 +515,14 @@ SETTINGS: tuple[Setting, ...] = (
     _s("DESK_DISPLAY_SERVER_FEED_STATE_PATH", "path", _SERVER_ONLY, "history",
        "Where the render server saves each feed's last good data so a restart renders "
        "immediately; defaults to cache/server_feed_state.json."),
+    _s("DESK_DISPLAY_SERVER_CACHE_MAX_MB", "int", _SERVER_ONLY, "history",
+       "Limit for everything under cache/ (artifact store, local panel cache, histories). "
+       "Its parts enforce their own limits; going over this one only logs a warning.",
+       default="1536", minimum=64),
+    _s("DESK_DISPLAY_IMAGE_CACHE_MAX_MB", "int", _SERVER_ONLY, "history",
+       "Limit for images/cache/ (radar map tiles, downloaded logos and headshots); the "
+       "least recently used files are deleted, and downloaded again when needed.",
+       default="256", minimum=16),
     _s("DESK_DISPLAY_STATS_ENABLED", "bool", _SERVER_ONLY, "history",
        "Sample CPU by purpose, display traffic and storage for the config UI's Stats page "
        "(a few small /proc reads every 10 seconds).", default="1"),

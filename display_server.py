@@ -136,6 +136,8 @@ class DisplayServerConfig:
     artifact_dir: Path = _PROJECT_ROOT / "cache" / "artifacts"
     artifact_retention_seconds: float = 24 * 3600
     artifact_max_bytes: int | None = None
+    server_cache_max_bytes: int = 1536 << 20
+    image_cache_max_bytes: int = 256 << 20
     render_workers: int = 2
     render_timeout_seconds: float = 30
     render_min_interval_seconds: float = 30
@@ -162,6 +164,8 @@ class DisplayServerConfig:
             artifact_dir=Path(settings["DESK_DISPLAY_ARTIFACT_DIR"] or _PROJECT_ROOT / "cache" / "artifacts").expanduser(),
             artifact_retention_seconds=float(settings["DESK_DISPLAY_ARTIFACT_RETENTION_HOURS"]) * 3600,
             artifact_max_bytes=int(settings["DESK_DISPLAY_ARTIFACT_MAX_MB"]) * 1024 * 1024,
+            server_cache_max_bytes=int(settings["DESK_DISPLAY_SERVER_CACHE_MAX_MB"]) << 20,
+            image_cache_max_bytes=int(settings["DESK_DISPLAY_IMAGE_CACHE_MAX_MB"]) << 20,
             render_workers=settings["DESK_DISPLAY_RENDER_WORKERS"],
             render_timeout_seconds=float(settings["DESK_DISPLAY_RENDER_TIMEOUT_SECONDS"]),
             render_min_interval_seconds=float(settings["DESK_DISPLAY_RENDER_MIN_INTERVAL_SECONDS"]),
@@ -1008,7 +1012,7 @@ def run_display_server() -> None:
         located_display_status=lambda location: feed_summary(
             scoped_values(feeds.data.snapshot().values, location.scope)),
     )
-    _start_maintenance(app.extensions["desk_display_maintenance"])
+    _start_maintenance(_with_cache_budgets(app.extensions["desk_display_maintenance"], server_config))
     _start_stats(app, server_config)
     registry = app.extensions["desk_display_registry"]
     global_screens, located_screens = demand_by_location(registry, app.extensions["desk_display_location_of"])
@@ -1042,8 +1046,8 @@ def _start_stats(app: Flask, config: DisplayServerConfig) -> None:
         clients=lambda: registry.snapshot()["clients"],
         storage={
             "Artifact store": (config.artifact_dir, config.artifact_max_bytes),
-            "Server caches (cache/)": (_PROJECT_ROOT / "cache", None),
-            "Image caches (images/cache/)": (_PROJECT_ROOT / "images" / "cache", None),
+            "Server caches (cache/)": (_PROJECT_ROOT / "cache", config.server_cache_max_bytes),
+            "Image caches (images/cache/)": (_PROJECT_ROOT / "images" / "cache", config.image_cache_max_bytes),
         },
         persisted=resource_stats.load_persisted(persist),
     )
@@ -1101,6 +1105,27 @@ def demand_by_location(
         return own, places
 
     return (lambda: split()[0]), (lambda: split()[1])
+
+
+def _with_cache_budgets(maintenance: Callable[[], list[str]],
+                        config: DisplayServerConfig) -> Callable[[], list[str]]:
+    """Also keep images/cache/ within its limit, and warn when cache/ is over its own."""
+
+    from remote_display.cache_budget import BudgetWarning, prune_to_budget
+
+    server_caches = BudgetWarning(_PROJECT_ROOT / "cache", config.server_cache_max_bytes,
+                                  what="Server caches")
+
+    def run() -> list[str]:
+        removed = maintenance()
+        try:
+            prune_to_budget(_PROJECT_ROOT / "images" / "cache", config.image_cache_max_bytes)
+            server_caches.check()
+        except Exception:  # pragma: no cover - logged and retried
+            WEB_LOGGER.exception("Cache budget check failed")
+        return removed
+
+    return run
 
 
 def _start_maintenance(maintenance: Callable[[], list[str]]) -> threading.Thread:
