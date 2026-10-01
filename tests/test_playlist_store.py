@@ -70,6 +70,12 @@ def test_active_screens_count_only_what_plays():
     # Frequencies are coerced like the scheduler does.
     document["screens"]["date"] = {"frequency": "1", "alt": {"screen": "nixie", "frequency": "2"}}
     assert ps.document_active_screens(document) == ("date", "nixie")
+    # Screens past their hide-after time no longer play.
+    document["screens"]["weather1"] = {"frequency": 1, "hide_after_enabled": True,
+                                       "hide_after_at": "2000-01-01T00:00:00+00:00"}
+    document["screens"]["weather2"] = {"frequency": 1, "hide_after_enabled": True,
+                                       "hide_after_at": "2999-01-01T00:00:00+00:00"}
+    assert ps.document_active_screens(document) == ("date", "nixie", "weather2")
 
 
 def test_legacy_ids_are_canonicalized(store):
