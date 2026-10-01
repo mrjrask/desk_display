@@ -2128,3 +2128,35 @@ def test_snapshot_nfl_standings_pass_season_metadata(monkeypatch):
     assert received[0]["standings"] == standings
     assert received[0]["season_note"] == "2025 season"
     assert received[0]["fallback_message"] is None
+
+
+def test_wolves_live_stays_available_after_midnight_for_late_game():
+    now = datetime.datetime(2024, 7, 2, 0, 30, tzinfo=CENTRAL_TIME)
+    live_game = {
+        "official_date": "2024-07-01",
+        "status": {"state": "LIVE", "detail": "In Progress"},
+        "away": {"abbr": "CHI", "name": "Chicago Wolves"},
+        "home": {"abbr": "SJ", "name": "San Jose Barracuda"},
+    }
+
+    registry, _ = build_screen_registry(
+        _make_context({"hourly": []}, now, cache_updates={"wolves": {"live": live_game}})
+    )
+
+    assert registry["wolves live"].available is True
+
+
+def test_wolves_live_from_yesterday_expires_in_the_morning():
+    now = datetime.datetime(2024, 7, 2, 9, 0, tzinfo=CENTRAL_TIME)
+    stale_live = {
+        "official_date": "2024-07-01",
+        "status": {"state": "LIVE", "detail": "In Progress"},
+        "away": {"abbr": "CHI", "name": "Chicago Wolves"},
+        "home": {"abbr": "SJ", "name": "San Jose Barracuda"},
+    }
+
+    registry, _ = build_screen_registry(
+        _make_context({"hourly": []}, now, cache_updates={"wolves": {"live": stale_live}})
+    )
+
+    assert registry["wolves live"].available is False
