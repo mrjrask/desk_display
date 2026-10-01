@@ -226,9 +226,7 @@ See the README's [deployment modes](README.md#deployment-modes) and
   needed). `cache/` as a whole has a 1.5 GB limit
   (`DESK_DISPLAY_SERVER_CACHE_MAX_MB=1536`) that logs a warning when exceeded.
 - The display client's local cache (`DESK_DISPLAY_CLIENT_CACHE_MAX_MB`) now
-  defaults to 512 MB instead of 256 MB, and `scripts/clear-caches.sh` also
-  clears it (keeping the client's lease credential and any local override),
-  stopping and restarting `desk_display_client.service` around it.
+  defaults to 512 MB instead of 256 MB.
 - Fix: a feed refresh that returns unchanged data (for example from a TTL
   cache) no longer bumps its data revision, so it no longer re-renders the
   screens that read it.
