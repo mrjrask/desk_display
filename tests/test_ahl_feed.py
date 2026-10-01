@@ -187,6 +187,46 @@ def test_current_ahl_season_does_not_cache_stale_rollover_flag(monkeypatch):
     assert data_fetch._AHL_SEASON_CACHE_YEAR == 2026
 
 
+
+def test_wolves_schedule_url_converts_webcal_to_https_preserving_query(monkeypatch):
+    monkeypatch.setattr(
+        data_fetch,
+        "AHL_SCHEDULE_ICS_URL",
+        "webcal://app.stanzacal.com/api/calendar/webcal/ahl-chicagowolves/"
+        "calendar-token.ics?updated=2026-10-01T00%3A04%3A53.713Z",
+    )
+
+    assert data_fetch._wolves_schedule_url() == (
+        "https://app.stanzacal.com/api/calendar/webcal/ahl-chicagowolves/"
+        "calendar-token.ics?updated=2026-10-01T00%3A04%3A53.713Z"
+    )
+
+
+def test_normalize_wolves_ics_game_supports_stanzacal_summary(monkeypatch):
+    monkeypatch.setattr(data_fetch, "AHL_TEAM_NAME", "Chicago Wolves")
+    monkeypatch.setattr(data_fetch, "AHL_TEAM_TRICODE", "CHI")
+    monkeypatch.setattr(data_fetch, "AHL_TEAM_ID", 624)
+
+    game = data_fetch._normalize_wolves_ics_game(
+        {
+            "UID": "wolves-example",
+            "DTSTART": "20261003T193000",
+            "__params__": {"DTSTART": {"TZID": "America/Chicago"}},
+            "SUMMARY": "Chicago Wolves at Rockford IceHogs",
+            "LOCATION": "Allstate Arena",
+        }
+    )
+
+    assert game is not None
+    assert game["away"]["name"] == "Chicago Wolves"
+    assert game["away"]["abbr"] == "CHI"
+    assert game["home"]["name"] == "Rockford IceHogs"
+    assert game["is_home"] is False
+    assert game["status"]["state"] == "FUT"
+    assert game["start_time_central"] == "7:30 PM"
+
+
+
 def test_fetch_ahl_schedule_discovers_season_then_falls_back_when_empty(monkeypatch):
     monkeypatch.setattr(data_fetch, "AHL_SEASON_ID", "")
     monkeypatch.setattr(data_fetch, "_current_ahl_season_id", lambda: "discovered")
