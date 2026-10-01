@@ -814,6 +814,7 @@ normal loading instead of silently dropping renamed screens.
 - `on this day`
 - `news headlines`
 - `news headlines 2`
+- `traffic` (Edens and Kennedy travel times from Travel Midwest: inbound on every display except hyper, which shows outbound; off by default)
 - `weather logo`
 - `weather1`
 - `weather2`

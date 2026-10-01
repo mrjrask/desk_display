@@ -12,6 +12,7 @@ In a server/client deployment only the render server calls these providers, so e
 
 - [Diagnostics](#diagnostics)
 - [Weather and radar](#weather-and-radar) (including AirNow air quality)
+- [Chicago traffic (Travel Midwest)](#chicago-traffic-travel-midwest)
 - [Sports](#sports)
 - [News headlines (RSS/Atom)](#news-headlines-rssatom)
 - [Finance](#finance)
@@ -139,6 +140,21 @@ Weather radar/map rendering may also use:
 | Iowa State Mesonet | `https://mesonet.agron.iastate.edu/cache/tile.py/1.0.0/q2-hsr-900913/{zoom}/{x}/{y}.png` | Radar tile fallback when RainViewer fails. |
 | OpenStreetMap | `https://tile.openstreetmap.org/{zoom}/{x}/{y}.png` | Base map, tried first. Tiles are stitched at zoom 9 on 1080p, 8 on 720 px square and 800×480 panels, and 7 on small panels, and cached on disk for 30 days in `images/cache/radar_basemap/` (the OSM tile policy asks for at least 7). Requests name the project in their User-Agent, and the screen draws an "© OpenStreetMap" credit. |
 | CARTO | `https://basemaps.cartocdn.com/light_all/{zoom}/{x}/{y}.png` | Base map fallback. CARTO's basemaps now ask for an API key, so this keyless fallback may fail. |
+
+---
+
+## Chicago traffic (Travel Midwest)
+
+| Item | Value |
+| --- | --- |
+| Role | Travel times and speeds for the `traffic` screen. |
+| Endpoint | `https://travelmidwest.com/lmiga/chicagoQuickTraffic.json` (the structured Chicago Quick Traffic report; the HTML report page is never scraped). |
+| Credential | None. |
+| Refresh | Every 5 minutes. The render server fetches it once as the `traffic` feed for every display; a standalone display shares one 5-minute cache. A failed or malformed refresh keeps the last good report, and the screen says it is cached and how old it is (after 10 minutes without a good refresh). |
+| Shape | `[{"ageInMinutes", "oldest"}, [{"caption", "path", "rows": [segment, ...]}, ...]]`; each segment has `description`, `shortDescription`, `ids`, `id`, `travelTime` (minutes), `speed` (mph) and `over` (more than 50% above the normal time for this day and time). |
+| Segments | Matched by exact `description`. Inbound (every display except hyper): Edens Lake Cook to I-290/Jane Byrne (via Kennedy), Edens Lake Cook to Montrose, Kennedy Montrose to I-290/Jane Byrne, Kennedy Reversibles Montrose to Ohio. Outbound (hyper, `TRAFFIC_OUTBOUND_DISPLAYS`): the four opposite segments. |
+
+A reversible segment that is closed in its direction reports a travel time of zero or less (for example `-16`); it is shown as N/A and keeps its row. A speed of 0 means no reading, so only the travel time is shown. `over` drives the heavy (red) state. Travel Midwest's per-segment detail data (average time, congestion level) is not fetched in this release; the screen's elevated (amber) state is used only when a congestion level is present.
 
 ---
 
@@ -382,6 +398,7 @@ variables](README.md#ads-b-receiver-variables) for configuration.
 | AHL/Wolves | Optional `AHL_*` overrides; defaults are provided for the Chicago Wolves helper path. |
 | Wi-Fi probes | Optional `WIFI_TCP_PROBE_*`, `WIFI_HTTPS_PROBE_URL`, and `RPI_CONNECT_CONTROL_HOST` values. |
 | ADS-B receivers | `ADSB_DEVICE_1_HOST` (and optionally `ADSB_DEVICE_2_HOST`); no API key needed. |
+| Traffic | None. Optional `TRAFFIC_OUTBOUND_DISPLAYS` (server, default `hyper`) or `TRAFFIC_DIRECTION` (standalone). |
 
 ---
 

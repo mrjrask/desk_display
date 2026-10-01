@@ -228,8 +228,17 @@ LEAGUE_STANDINGS_REFRESH_INTERVALS: dict[str, int] = {
     # Series scores change with every final; a live game refreshes faster still.
     **dict.fromkeys(POSTSEASON_FEED_MODULES, 600),
 }
-SERVER_FEED_DEPENDENCIES: dict[str, set[str]] = {**FEED_DEPENDENCIES, **LEAGUE_STANDINGS_DEPENDENCIES}
-SERVER_FEED_REFRESH_INTERVALS: dict[str, int] = {**FEED_REFRESH_INTERVALS, **LEAGUE_STANDINGS_REFRESH_INTERVALS}
+# Travel Midwest's Chicago traffic report: one fetch serves inbound and
+# outbound displays alike (services.traffic).  Like the standings, the
+# standalone display reads it while it renders the screen.
+TRAFFIC_DEPENDENCIES: dict[str, set[str]] = {"traffic": {"traffic"}}
+TRAFFIC_REFRESH_INTERVALS: dict[str, int] = {"traffic": 300}
+SERVER_FEED_DEPENDENCIES: dict[str, set[str]] = {
+    **FEED_DEPENDENCIES, **LEAGUE_STANDINGS_DEPENDENCIES, **TRAFFIC_DEPENDENCIES,
+}
+SERVER_FEED_REFRESH_INTERVALS: dict[str, int] = {
+    **FEED_REFRESH_INTERVALS, **LEAGUE_STANDINGS_REFRESH_INTERVALS, **TRAFFIC_REFRESH_INTERVALS,
+}
 
 SCOREBOARD_SCREEN_IDS = {
     "NFL Scoreboard",

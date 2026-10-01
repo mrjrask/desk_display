@@ -4,6 +4,7 @@
     "nixie": 0,
     "news headlines": 1,
     "news headlines 2": 1,
+    "traffic": 0,
     "on this day": 1,
     "weather logo": 0,
     "weather1": 1,
@@ -169,6 +170,9 @@
         },
         {
           "screen": "weather quad"
+        },
+        {
+          "screen": "traffic"
         }
       ]
     },

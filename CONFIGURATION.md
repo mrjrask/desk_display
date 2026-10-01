@@ -563,6 +563,8 @@ installs only, never clients.
 | `ADSB_TYPE_DB_URL` | server, standalone | restart | provider |
 | `ADSB_TYPE_DB_PATH` | server, standalone | restart |  |
 | `ADSB_TYPE_DB_REFRESH_DAYS` | server, standalone | restart |  |
+| `TRAFFIC_OUTBOUND_DISPLAYS` | server | restart |  |
+| `TRAFFIC_DIRECTION` | standalone | restart |  |
 | `SCREENS_CONFIG_PATH` | server, standalone | restart (file contents hot-reload) |  |
 | `SCREENS_CONFIG_LOCAL_PATH` | server, standalone | restart |  |
 | `SCREENS_STYLE_PATH` | server, standalone | restart (file contents hot-reload) |  |

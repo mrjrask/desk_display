@@ -279,6 +279,7 @@ render_nhl_playoffs = _lazy_callable("screens.nhl_playoffs.render_nhl_playoffs")
 render_nba_playoffs = _lazy_callable("screens.nba_playoffs.render_nba_playoffs")
 render_mlb_playoffs = _lazy_callable("screens.mlb_playoffs.render_mlb_playoffs")
 draw_air_quality_screen = _lazy_callable("screens.draw_air_quality.draw_air_quality_screen")
+draw_traffic = _lazy_callable("screens.draw_traffic.draw_traffic")
 draw_adsb_stats_screen = _lazy_callable("screens.draw_adsb_stats.draw_adsb_stats_screen")
 draw_inside = _lazy_callable("screens.draw_inside.draw_inside")
 is_inside_sensor_available = _lazy_callable("screens.draw_inside.is_inside_sensor_available")
@@ -1045,6 +1046,18 @@ def build_screen_registry(context: ScreenContext) -> tuple[dict[str, ScreenDefin
         "weather radar",
         lambda: draw_weather_radar(context.display, weather_data, transition=True),
         available=radar_available,
+    )
+    # Standalone reads the shared five-minute cache while drawing; the render
+    # server hands the screen its ``traffic`` feed and the display's direction.
+    traffic_payload = None if context.allow_upstream_requests else context.cache.get("traffic")
+    register(
+        "traffic",
+        lambda: draw_traffic(
+            context.display,
+            traffic_payload,
+            context.cache.get("traffic_direction"),
+            transition=True,
+        ),
     )
     register(
         "inside",
