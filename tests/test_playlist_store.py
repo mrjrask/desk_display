@@ -56,7 +56,7 @@ def test_active_screens_count_only_what_plays():
     assert ps.document_active_screens(DOC) == ("date", "inside", "weather1", "weather2")
     document = {
         "screens": {
-            "date": {"frequency": 1, "alt": {"screen": "nixie", "frequency": 0}},
+            "date": 1,
             "nixie": 0,
             "weather1": 0,
             "weather2": False,
@@ -67,6 +67,9 @@ def test_active_screens_count_only_what_plays():
     }
     assert ps.document_active_screens(document) == ("date",)
     assert ps.document_screens(document)[0] == ("date", "news", "nixie", "weather1")
+    # Frequencies are coerced like the scheduler does.
+    document["screens"]["date"] = {"frequency": "1", "alt": {"screen": "nixie", "frequency": "2"}}
+    assert ps.document_active_screens(document) == ("date", "nixie")
 
 
 def test_legacy_ids_are_canonicalized(store):

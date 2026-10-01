@@ -294,21 +294,26 @@ def document_screens(document: Mapping[str, Any]) -> tuple[tuple[str, ...], tupl
 def document_active_screens(document: Mapping[str, Any]) -> tuple[str, ...]:
     """Return the screen IDs a document actually plays.
 
-    A screen is active when its own frequency is above zero, or when it is
-    the alternate of an active screen whose alternate frequency is above
-    zero.  Screens that only appear in playlist groups (frequency 0 or not
-    listed) are not active.
+    A screen is active when the scheduler gives it a positive frequency, or
+    when it is the alternate of such a screen with a positive alternate
+    frequency.  Frequencies are read the way :func:`schedule.build_scheduler`
+    reads them, so ``"2"`` counts like ``2``.  Screens that only appear in
+    playlist groups (frequency 0 or not listed) are not active.
     """
 
+    from schedule import build_scheduler
+
+    try:
+        scheduler = build_scheduler(copy.deepcopy(dict(document)))
+    except ValueError:
+        return ()
     active: set[str] = set()
-    for sid, spec in (document.get("screens") or {}).items():
-        if not _is_enabled(spec):
+    for entry in scheduler._entries:
+        if entry.frequency <= 0:
             continue
-        active.add(sid)
-        alt = spec.get("alt") if isinstance(spec, dict) else None
-        if isinstance(alt, dict) and _is_enabled({"frequency": alt.get("frequency", 1)}):
-            screen = alt.get("screen")
-            active.update([screen] if isinstance(screen, str) else [s for s in screen or [] if isinstance(s, str)])
+        active.add(entry.screen_id)
+        if entry.alternate is not None and entry.alternate.frequency > 0:
+            active.update(entry.alternate.screen_ids)
     return tuple(sorted(active))
 
 
