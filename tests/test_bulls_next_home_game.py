@@ -68,3 +68,80 @@ def test_bulls_lookahead_fetches_schedule_once_instead_of_scanning_days(monkeypa
 
     # One schedule fetch per call site above -- never one request per day.
     assert call_count == 3
+
+
+class _FakeResponse:
+    def __init__(self, payload):
+        self._payload = payload
+
+    def raise_for_status(self):
+        return None
+
+    def json(self):
+        return self._payload
+
+
+def _espn_event(event_id, date, home_abbr, away_abbr, home_id, away_id):
+    return {
+        "id": event_id,
+        "date": date,
+        "competitions": [
+            {
+                "id": event_id,
+                "date": date,
+                "status": {"type": {"state": "pre", "shortDetail": "Scheduled"}},
+                "competitors": [
+                    {"homeAway": "home", "team": {"id": home_id, "abbreviation": home_abbr}},
+                    {"homeAway": "away", "team": {"id": away_id, "abbreviation": away_abbr}},
+                ],
+            }
+        ],
+    }
+
+
+def test_bulls_next_and_next_home_use_espn_id_and_all_season_types(monkeypatch):
+    """Regression: the schedule was requested with NBA.com's team id
+    (1610612741), which ESPN does not know, and without ``seasontype``, so
+    before opening night Bulls Next and Next Home both said "no games"."""
+
+    from services.sports import nba
+
+    today = datetime.datetime.now(CENTRAL_TIME).date()
+    preseason_away = _espn_event(
+        "pre-1", f"{today + datetime.timedelta(days=3)}T00:00Z", "DEN", "CHI", "7", "4"
+    )
+    regular_home = _espn_event(
+        "reg-1", f"{today + datetime.timedelta(days=20)}T00:00Z", "CHI", "DET", "4", "8"
+    )
+    regular_away = _espn_event(
+        "reg-2", f"{today + datetime.timedelta(days=22)}T00:00Z", "MIL", "CHI", "15", "4"
+    )
+    payloads = {
+        "1": {"events": [preseason_away]},
+        "2": {"events": [regular_home, regular_away]},
+        "3": {"events": []},
+    }
+    requested = []
+
+    def fake_get(url, timeout=None, **_kwargs):
+        requested.append(url)
+        assert "/teams/4/schedule" in url
+        season_type = url.rsplit("seasontype=", 1)[1]
+        return _FakeResponse(payloads[season_type])
+
+    monkeypatch.setattr(nba._SESSION, "get", fake_get)
+    monkeypatch.setattr(nba, "_team_schedule_cache", {})
+
+    next_game = data_fetch.fetch_bulls_next_game()
+    next_home = data_fetch.fetch_bulls_next_home_game()
+
+    assert next_game["gamePk"] == "pre-1"
+    assert next_home["gamePk"] == "reg-1"
+    assert sorted(url.rsplit("seasontype=", 1)[1] for url in requested) == ["1", "2", "3"]
+
+
+def test_espn_team_id_maps_nba_com_ids():
+    from services.sports import nba
+
+    assert nba.espn_team_id("1610612741") == "4"
+    assert nba.espn_team_id("4") == "4"
