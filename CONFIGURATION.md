@@ -112,8 +112,9 @@ are unchanged.
   returns the accepted versions, server version, assignment state, assigned
   playlist and revision, manifest revision, lease expiry, recommended
   heartbeat and sync intervals, and a per-client `client_credential`. The
-  current client does not use the recommended intervals; it syncs every
-  `DESK_DISPLAY_SYNC_INTERVAL_SECONDS`.
+  client uses the recommended intervals as caps on its own
+  `DESK_DISPLAY_SYNC_INTERVAL_SECONDS` and
+  `DESK_DISPLAY_HEARTBEAT_INTERVAL_SECONDS`.
 - `/api/v1/clients/<id>/heartbeat`, `/config`, `/manifest`, and
   `/artifacts/<sha256>.<ext>` need `Authorization: Bearer <client_credential>`
   for that client ID, so one client cannot read another's configuration or
@@ -227,7 +228,8 @@ heartbeat, fetches the manifest with `If-None-Match`, and downloads only
 artifacts it does not already have. Every download is checked for length,
 SHA-256, media type, dimensions, color mode and decoded size before it is
 published atomically, and a new playlist and manifest are activated together
-only when every required screen is usable locally. Failures retry with
+once at least one of its screens is usable locally; screens still
+downloading are skipped until they arrive. Failures retry with
 exponential backoff and jitter (a limit that starts at 2 seconds and doubles
 up to 5 minutes), or later when
 an error body's `retry_after_seconds` asks for more.
@@ -266,15 +268,30 @@ so a concurrent change is refused with `409 revision_conflict` instead of
 being overwritten. A playlist still assigned to a client cannot be deleted.
 Exports and imports carry only the playlist document, never credentials.
 
+Each playlist card in the Playlists library reads "N active of M screens":
+the screens the scheduler would actually play (a frequency above zero, or an
+alternate with an alternate frequency above zero, and not past its
+hide-after time) out of all the screens the playlist lists.
+
 The **Clients** page (`/clients`) lists static and registered displays from
 the snapshot the render server writes to `DESK_DISPLAY_CLIENT_REGISTRY_PATH`
-(it holds no credentials). Each client has exactly one assigned playlist;
+(it holds no credentials), one card per display with its state (online,
+stale, expired, disabled, or never connected), playlist, current screen and
+any capability warnings. Each client has exactly one assigned playlist;
 many clients may share one, and "Clone for this client" gives a client its
-own copy to edit. The page shows the client's state (online, stale, expired,
-disabled, or never connected), profile, dimensions, capabilities, rotation,
-software version, current screen, cache age, and three revisions: **saved**
-on the server, **delivered** to the client, and **acknowledged** by the
-client's heartbeat. The demand preview on the Playlists page lists what each
+own copy to edit. Each card has three tabs:
+
+- **Settings**: the display's own vertical scroll adjustment and weather
+  location (both stored in `DESK_DISPLAY_PLAYLIST_STORE_PATH`; empty follows
+  the Rotation Config value or the server's `WEATHER_LATITUDE` /
+  `WEATHER_LONGITUDE`), and "Clone for this client".
+- **Delivery**: last sync, heartbeat and delivery timings, three playlist
+  revisions (**saved** on the server, **delivered** to the client, and
+  **acknowledged** by the client's heartbeat), profile, dimensions,
+  capabilities, rotation, software version, cache age and recent errors.
+- **Maintenance**: the commands below, rename, and the credential actions.
+
+The demand preview on the Playlists page lists what each
 assigned profile must render and warns when a playlist uses animation, touch,
 or color that a client cannot show.
 Each display's Maintenance tab also has **Update (git pull)**, **Upgrade**,
@@ -311,9 +328,11 @@ not seen.
 
 The render server also collects upstream data itself; it does not need
 `main.py` running. Every 30 seconds it refreshes the feeds that demanded
-screens use (weather, air quality, team feeds, and scoreboards), on the same
-intervals and live-game rules as the standalone display loop, and keeps the
-last good data when a refresh fails. Each feed has its own revision, so a
+screens use (weather, air quality, team feeds, scoreboards, league standings
+and playoff brackets), on the same intervals and live-game rules as the
+standalone display loop, and keeps the last good data when a refresh fails.
+Weather and air quality are fetched once per distinct display location (see
+OPERATIONS.md, "Weather location per display"). Each feed has its own revision, so a
 weather update rerenders only screens that show weather; a screen that no
 catalogued feed serves rerenders on any data change. The render-status
 endpoint's `data_health.feeds` shows each feed's last success, failures and

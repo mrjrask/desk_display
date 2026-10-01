@@ -4,9 +4,9 @@
 # deleting the folders themselves. They are screenshots/ and screenshot_archive/
 # in the project root unless SCREENSHOT_DIR or SCREENSHOT_ARCHIVE_BASE moves
 # them (in the environment or .env, relative paths from the project root, as
-# main.py resolves them). Only main.py (the standalone renderer) writes
-# screenshots; a server or client install has none of its own, so on those
-# this only empties the folders if an earlier standalone install left any.
+# main.py resolves them). main.py (standalone) and display_client.py (client
+# and combined installs) write screenshots there; a server-only install has
+# no panel, so on it this only empties what an earlier install left.
 #
 # Files under these folders are often written by the desk_display systemd
 # service, which may run as a different user (or root) than whoever runs

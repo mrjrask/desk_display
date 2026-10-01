@@ -166,7 +166,7 @@ The cache lives in `cache/client/` (`DESK_DISPLAY_CLIENT_CACHE_DIR`):
 | Path | Holds |
 | --- | --- |
 | `playlist/current.json`, `playlist/previous.json`, `override.json` | The assigned playlist, the last one, and any local override |
-| `playback.json` | Where playback was, to resume after a restart |
+| `playback.json` | Recent playback history, for going back. A restart always starts at the top of the playlist labelled "Starter" |
 | `manifests/0.json` to `2.json` | The active manifest and two before it |
 | `artifacts/<sha256>.png\|json` | Stills and packages |
 | `client_credential` | The lease credential (mode 600) |
@@ -176,10 +176,11 @@ It stays within `DESK_DISPLAY_CLIENT_CACHE_MAX_MB` (default 512) by evicting
 least-recently-used artifacts. Nothing the three kept manifests reference is
 evicted.
 
-A new playlist and manifest become active together, and only when every
-required screen is usable: its still, its package when the client plays
-packages, and the quad tiles a touch client can open. Until then the client
-keeps playing the previous content and logs `Not activating yet: ...`.
+A new playlist and manifest become active together once at least one of
+its screens is usable: its still, its package when the client plays
+packages, and the quad tiles a touch client can open. Screens still
+downloading are skipped until they arrive. Until any screen is usable the
+client keeps playing the previous content and logs `Not activating yet: ...`.
 
 ## Offline behavior
 
