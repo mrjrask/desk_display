@@ -486,41 +486,103 @@ def _fetch_games_from_espn(day: datetime.date) -> Optional[list[dict]]:
 _TEAM_SCHEDULE_CACHE_TTL_SECONDS = 30 * 60
 _team_schedule_cache: dict[str, tuple[float, list[dict]]] = {}
 
+# ESPN's team endpoints use their own numeric ids, not NBA.com's 1610612xxx
+# ids that config.NBA_TEAM_ID carries.  Asking ESPN for the NBA.com id returns
+# no events, so every Bulls Next/Last/Home lookup came back empty.
+_NBA_COM_TO_ESPN_TEAM_ID: dict[str, str] = {
+    "1610612737": "1",  # ATL
+    "1610612738": "2",  # BOS
+    "1610612740": "3",  # NOP
+    "1610612741": "4",  # CHI
+    "1610612739": "5",  # CLE
+    "1610612742": "6",  # DAL
+    "1610612743": "7",  # DEN
+    "1610612765": "8",  # DET
+    "1610612744": "9",  # GSW
+    "1610612745": "10",  # HOU
+    "1610612754": "11",  # IND
+    "1610612746": "12",  # LAC
+    "1610612747": "13",  # LAL
+    "1610612748": "14",  # MIA
+    "1610612749": "15",  # MIL
+    "1610612750": "16",  # MIN
+    "1610612751": "17",  # BKN
+    "1610612752": "18",  # NYK
+    "1610612753": "19",  # ORL
+    "1610612755": "20",  # PHI
+    "1610612756": "21",  # PHX
+    "1610612757": "22",  # POR
+    "1610612758": "23",  # SAC
+    "1610612759": "24",  # SAS
+    "1610612760": "25",  # OKC
+    "1610612762": "26",  # UTA
+    "1610612764": "27",  # WAS
+    "1610612761": "28",  # TOR
+    "1610612763": "29",  # MEM
+    "1610612766": "30",  # CHA
+}
+
+# Without ``seasontype`` ESPN returns only its current season type, so before
+# opening night the regular season is missing (and after the last preseason
+# game nothing is left).  Ask for preseason, regular season and postseason.
+_ESPN_SCHEDULE_SEASON_TYPES = (1, 2, 3)
+
+
+def espn_team_id(team_id: str) -> str:
+    """Return ESPN's team id for an NBA.com (or already-ESPN) team id."""
+
+    text = str(team_id or "").strip()
+    return _NBA_COM_TO_ESPN_TEAM_ID.get(text, text)
+
 
 def _fetch_team_schedule_from_espn(
     team_id: str, now: Optional[datetime.datetime] = None
 ) -> list[dict]:
-    """Fetch a team's full schedule in one request instead of scanning day by day.
+    """Fetch a team's full schedule in one request per season type.
 
     Bulls next/last/home-game lookups used to scan up to 120 individual
     scoreboard days one HTTP request at a time, which was enough to trip
     ESPN's rate limiter and 403 the shared site.api.espn.com host -- that
     then blocked every other sport's requests (NFL included) for the
     circuit breaker's cooldown window. The team schedule endpoint returns
-    the whole season in a single request, so callers can filter it in
+    a whole season type in a single request, so callers can filter it in
     memory instead of hammering the scoreboard endpoint.
     """
 
     now = now or datetime.datetime.now(CENTRAL_TIME)
     season = nba_season_year(now)
-    url = (
-        f"https://site.api.espn.com/apis/site/v2/sports/basketball/nba/teams/{team_id}/schedule"
-        f"?season={season}"
-    )
-    try:
-        response = _SESSION.get(url, timeout=REQUEST_TIMEOUT)
-        response.raise_for_status()
-        data = response.json()
-    except Exception as exc:
-        logging.error("Failed to fetch NBA team schedule for %s: %s", team_id, exc)
-        return []
-
+    espn_id = espn_team_id(team_id)
     raw_games: list[dict] = []
-    for event in data.get("events") or []:
-        competitions = event.get("competitions") or []
-        competition = competitions[0] if competitions else event
-        mapped = _map_espn_game(event, competition, day=None)
-        if mapped:
+    seen_ids: set[str] = set()
+    for season_type in _ESPN_SCHEDULE_SEASON_TYPES:
+        url = (
+            f"https://site.api.espn.com/apis/site/v2/sports/basketball/nba/teams/{espn_id}/schedule"
+            f"?season={season}&seasontype={season_type}"
+        )
+        try:
+            response = _SESSION.get(url, timeout=REQUEST_TIMEOUT)
+            response.raise_for_status()
+            data = response.json()
+        except Exception as exc:
+            logging.error(
+                "Failed to fetch NBA team schedule for %s (season type %s): %s",
+                team_id,
+                season_type,
+                exc,
+            )
+            continue
+
+        for event in data.get("events") or []:
+            competitions = event.get("competitions") or []
+            competition = competitions[0] if competitions else event
+            mapped = _map_espn_game(event, competition, day=None)
+            if not mapped:
+                continue
+            game_id = str(mapped.get("gameId") or "")
+            if game_id and game_id in seen_ids:
+                continue
+            if game_id:
+                seen_ids.add(game_id)
             raw_games.append(mapped)
 
     mapped_games = [_map_game(game) for game in raw_games]
