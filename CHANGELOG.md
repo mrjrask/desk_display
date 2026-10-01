@@ -208,6 +208,10 @@ See the README's [deployment modes](README.md#deployment-modes) and
   when over budget, so `cache/artifacts/` grew to a full day of renders
   (several GB on a busy server). Unreferenced artifacts are now deleted oldest
   first until the store fits; anything a screen or client manifest uses stays.
+- The display client's local cache (`DESK_DISPLAY_CLIENT_CACHE_MAX_MB`) now
+  defaults to 512 MB instead of 256 MB, and `scripts/clear-caches.sh` also
+  clears it (keeping the client's lease credential and any local override),
+  stopping and restarting `desk_display_client.service` around it.
 - Fix: a feed refresh that returns unchanged data (for example from a TTL
   cache) no longer bumps its data revision, so it no longer re-renders the
   screens that read it.

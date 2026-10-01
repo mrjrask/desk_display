@@ -667,7 +667,7 @@ the next render; restarting `desk_display_server.service` restarts them all.
 | `.runtime/server/` | Playlists, assignments, known clients, credential hashes, migration bundles and upgrade snapshots |
 | `cache/artifacts/` | Rendered artifacts (`DESK_DISPLAY_ARTIFACT_MAX_MB`, default 512; safe to delete, the server re-renders) |
 | `cache/` | Feed caches and history |
-| `cache/client/` (client) | The offline cache: playlists, manifests, artifacts, lease credential (`DESK_DISPLAY_CLIENT_CACHE_MAX_MB`, default 256) |
+| `cache/client/` (client) | The offline cache: playlists, manifests, artifacts, lease credential (`DESK_DISPLAY_CLIENT_CACHE_MAX_MB`, default 512) |
 
 Deleting `cache/client/` makes a client start from its diagnostic screen and
 download everything again.

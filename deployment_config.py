@@ -636,7 +636,7 @@ SETTINGS: tuple[Setting, ...] = (
     _s("DESK_DISPLAY_CLIENT_CACHE_DIR", "path", _CLIENT_ONLY, "cache",
        "Where the client keeps its manifest, playlist and packages; defaults to cache/client."),
     _s("DESK_DISPLAY_CLIENT_CACHE_MAX_MB", "int", _CLIENT_ONLY, "cache",
-       "Upper bound for cached packages.", default="256", minimum=16),
+       "Upper bound for cached packages.", default="512", minimum=16),
     _s("DESK_DISPLAY_SYNC_INTERVAL_SECONDS", "int", _CLIENT_ONLY, "sync",
        "How often the client checks the server for a new manifest.", default="30", minimum=5),
     _s("DESK_DISPLAY_HEARTBEAT_INTERVAL_SECONDS", "int", _CLIENT_ONLY, "sync",

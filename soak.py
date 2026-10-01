@@ -194,7 +194,7 @@ class Gates:
     render_failure_percent: float = 1.0
     rss_growth_mb: float = 64.0
     min_free_disk_percent: float = 10.0
-    cache_limits_mb: dict[str, float] = field(default_factory=lambda: {"cache/client": 256.0})
+    cache_limits_mb: dict[str, float] = field(default_factory=lambda: {"cache/client": 512.0})
     unplanned_restarts: int = 0
     # Rollback triggers: any one of these is an immediate no-go.
     trigger_client_down_minutes: float = 10.0

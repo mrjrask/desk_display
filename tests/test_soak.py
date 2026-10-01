@@ -217,7 +217,7 @@ def test_memory_growth_restarts_and_disk_are_judged_per_host():
 
     def full(i, sample):
         sample["disk"]["free_percent"] = 4.0 if i > 2000 else 60.0
-        sample["disk"]["cache/client"] = 300.0
+        sample["disk"]["cache/client"] = 600.0  # over the 512 MB client cache cap
     results = soak.evaluate(run(full=full), soak.Gates())
     assert failed(results) == {"server-pi free disk", "server-pi disk exhaustion", "server-pi cache/client size"}
 
