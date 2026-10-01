@@ -1,19 +1,10 @@
 #!/usr/bin/env bash
 #
-# clear-caches.sh — clear the display client's local project cache and the
-# pip and apt download caches on a Raspberry Pi, and report how much space
-# each freed.
+# clear-caches.sh — clear the pip and apt download caches on a Raspberry Pi,
+# and report how much space each freed.
 #
 # Usage:
 #   ./clear-caches.sh
-#
-# The local project cache is the display client's offline cache
-# (DESK_DISPLAY_CLIENT_CACHE_DIR, from the environment or .env.client;
-# cache/client in the project by default). Its playlists, manifests and
-# artifacts are removed and the client downloads them again on its next sync.
-# Its lease credential (client_credential) and any local override.json are
-# kept. desk_display_client.service is stopped while the cache is cleared
-# and started again afterwards if it was running.
 #
 # The apt portion runs `apt-get clean` via sudo (you will be prompted
 # if you are not already root).
@@ -52,79 +43,7 @@ dir_bytes() {
   fi
 }
 
-SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &>/dev/null && pwd -P)"
-PROJECT_ROOT="$(cd -- "$SCRIPT_DIR/.." &>/dev/null && pwd -P)"
-CLIENT_SERVICE="desk_display_client.service"
-
-# A KEY=value from .env.client, the file the display client loads.
-env_client_value() {
-  local key="$1"
-  local env_path="$PROJECT_ROOT/.env.client"
-  [[ -f "$env_path" ]] || return 0
-  awk -v key="$key" '
-    /^[[:space:]]*(#|$)/ { next }
-    {
-      line=$0
-      sub(/^[[:space:]]*export[[:space:]]+/, "", line)
-      if (line !~ "^[[:space:]]*" key "[[:space:]]*=") next
-      sub("^[[:space:]]*" key "[[:space:]]*=[[:space:]]*", "", line)
-      sub(/[[:space:]]+#.*$/, "", line)
-      sub(/^[[:space:]]+|[[:space:]]+$/, "", line)
-      if ((line ~ /^".*"$/) || (line ~ /^\047.*\047$/)) line=substr(line, 2, length(line)-2)
-      print line
-      exit 0
-    }
-  ' "$env_path"
-}
-
 freed=0
-
-# ------------------------------------------------ local project cache -----
-echo "local project cache"
-cache_dir=${DESK_DISPLAY_CLIENT_CACHE_DIR:-$(env_client_value DESK_DISPLAY_CLIENT_CACHE_DIR)}
-cache_dir=${cache_dir:-cache/client}
-cache_dir=${cache_dir/#\~/$HOME}
-[[ $cache_dir == /* ]] || cache_dir="$PROJECT_ROOT/$cache_dir"
-
-cache_real=$(realpath -m -- "$cache_dir" 2>/dev/null || echo "$cache_dir")
-if [[ $cache_real == / || $cache_real == "$PROJECT_ROOT" || $cache_real == "$(realpath -m -- "$HOME" 2>/dev/null)" ]]; then
-  echo "  REFUSING to clear $cache_dir (not a cache folder)" >&2
-elif [[ ! -d $cache_dir ]]; then
-  echo "  no cache at $cache_dir — nothing to do"
-else
-  cache_before=$(dir_bytes "$cache_dir")
-  restart_client=0
-  if command -v systemctl >/dev/null 2>&1 && systemctl is-active --quiet "$CLIENT_SERVICE" 2>/dev/null; then
-    echo "  stopping $CLIENT_SERVICE"
-    if $SUDO systemctl stop "$CLIENT_SERVICE"; then
-      restart_client=1
-    else
-      echo "  could not stop $CLIENT_SERVICE; clearing anyway" >&2
-    fi
-  fi
-  # Keep the lease credential (re-registering needs a fresh enrollment) and
-  # any local override; everything else is re-downloaded on the next sync.
-  if ! find "$cache_dir" -mindepth 1 -maxdepth 1 ! -name client_credential ! -name override.json \
-      -exec rm -rf -- {} + 2>/dev/null && [[ -n $SUDO ]]; then
-    $SUDO find "$cache_dir" -mindepth 1 -maxdepth 1 ! -name client_credential ! -name override.json \
-      -exec rm -rf -- {} + || true
-  fi
-  cache_after=$(dir_bytes "$cache_dir")
-  cache_freed=$(( cache_before - cache_after ))
-  (( cache_freed < 0 )) && cache_freed=0
-  if find "$cache_dir" -mindepth 1 -maxdepth 1 ! -name client_credential ! -name override.json \
-      -print -quit 2>/dev/null | grep -q .; then
-    echo "  FAILED to clear everything in $cache_dir ($(hr "$cache_freed") freed)" >&2
-  else
-    echo "  cleared $cache_dir ($(hr "$cache_freed"))"
-  fi
-  freed=$(( freed + cache_freed ))
-  if (( restart_client )); then
-    echo "  starting $CLIENT_SERVICE"
-    $SUDO systemctl start "$CLIENT_SERVICE" || echo "  FAILED to start $CLIENT_SERVICE" >&2
-  fi
-fi
-echo
 
 # ------------------------------------------------------------ pip cache -----
 echo "pip cache"
