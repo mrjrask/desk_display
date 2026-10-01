@@ -634,6 +634,48 @@ hand. If the config UI has a password (`SCREEN_UI_PASSWORD`), pass
 display. `--output` picks the file, `--include-inactive` also tries offline
 clients.
 
+#### Displays on another network
+
+A display that is not on the server's network (it reaches the server over a
+VPN or through a forwarded port) can't be fetched from directly. Have it
+upload its screenshots to the server instead, over the connection it already
+uses:
+
+1. On the display, add to `.env.client` and restart the client:
+
+   ```bash
+   DESK_DISPLAY_CLIENT_UPLOAD_SCREENSHOTS=1
+   # Optional: upload each screen at most every N minutes (default 10).
+   DESK_DISPLAY_CLIENT_SCREENSHOT_UPLOAD_MINUTES=10
+   ```
+
+   ```bash
+   sudo systemctl restart desk_display_client.service
+   ```
+
+   It needs `ENABLE_SCREENSHOTS=1` (the default). After each heartbeat the
+   client sends up to 10 screenshots that are due, authenticated with its own
+   client credential, so no extra password, port or SSH key is needed.
+2. On the server nothing needs setting: uploads are on by default and land in
+   `.runtime/server/client_screenshots/<client id>/`, one PNG per screen
+   (the latest only) plus an `index.json`. The total is capped at 64 MB, and a
+   screen not re-uploaded for 7 days is deleted (see the
+   `DESK_DISPLAY_SCREENSHOT_UPLOAD_*` settings in `.env.server.example`).
+   The server must be running this release or later; restart it after
+   upgrading so it advertises uploads.
+3. Run the collector as usual. When a display can't be reached it uses the
+   screenshots that display uploaded (listed on the server's config UI at
+   `/api/clients/<id>/uploaded-screenshots`), and it also fills in any
+   screen a reachable display did not return. Uploaded screenshots are
+   captioned "uploaded to server".
+
+To check uploads are arriving, look on the server:
+
+```bash
+ls -l ~/desk_display/.runtime/server/client_screenshots/<client id>/
+sudo journalctl -u desk_display_server.service | grep screenshots
+```
+
 ### Checking scroll smoothness
 
 A client plays scrolling screens itself, one step per frame at the rate the
@@ -681,6 +723,7 @@ the next render; restarting `desk_display_server.service` restarts them all.
 | --- | --- |
 | `sudo journalctl -u <unit>` | All logs; secrets are redacted before they are written |
 | `.runtime/server/` | Playlists, assignments, known clients, credential hashes, migration bundles and upgrade snapshots |
+| `.runtime/server/client_screenshots/` | Screenshots displays on another network uploaded (`DESK_DISPLAY_SCREENSHOT_UPLOAD_MAX_MB`, default 64; safe to delete, not backed up) |
 | `cache/artifacts/` | Rendered artifacts (`DESK_DISPLAY_ARTIFACT_MAX_MB`, default 512; safe to delete, the server re-renders) |
 | `cache/` | Feed caches and history |
 | `cache/client/` (client) | The offline cache: playlists, manifests, artifacts, lease credential (`DESK_DISPLAY_CLIENT_CACHE_MAX_MB`, default 512) |
