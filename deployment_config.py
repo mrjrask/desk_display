@@ -531,8 +531,8 @@ SETTINGS: tuple[Setting, ...] = (
        "under /dev/shm (memory, so frequent writes skip the SD card), else "
        ".runtime/server/stats.json."),
     _s("DESK_DISPLAY_SERVER_STATS_HISTORY_PATH", "path", _SERVER_ONLY, "history",
-       "All-time traffic totals and the 24-hour Stats history, saved every 10 minutes; "
-       "defaults to .runtime/server/stats_history.json."),
+       "All-time traffic totals and the Stats history, saved every 5 minutes and when the "
+       "server stops so they survive restarts; defaults to .runtime/server/stats_history.json."),
     _s("ON_THIS_DAY_CACHE_PATH", "path", _SERVER, "history",
        "Daily On This Day cache; defaults to the application cache directory."),
 

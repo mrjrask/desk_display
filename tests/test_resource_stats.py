@@ -282,6 +282,43 @@ def test_history_averages_into_five_minute_buckets_and_persists(tmp_path):
     state = sampler.persisted_state()
     restored = build(tmp_path, times, reader, persisted=json.loads(json.dumps(state)))
     assert list(restored.long) == list(sampler.long)
+    # The last hour and the 5-minute bucket in progress survive a restart too.
+    assert list(restored.recent) == list(sampler.recent) and len(restored.recent) == 31
+    assert restored._bucket == sampler._bucket and restored._bucket_start == sampler._bucket_start
+
+
+def test_history_too_old_to_show_is_dropped_on_restart(tmp_path):
+    times, reader = Times(), FakeReader()
+    old, fresh = {"t": times.wall - 2 * 3600, "cpu": {}}, {"t": times.wall - 600, "cpu": {}}
+    ancient = {"t": times.wall - 3 * 86400, "cpu": {}}
+    restored = build(tmp_path, times, reader, persisted={
+        "recent": [old, fresh, "junk"], "long": [ancient, old, fresh], "since": 1.0})
+    assert list(restored.recent) == [fresh]          # the last-hour chart keeps only the last hour
+    assert list(restored.long) == [old, fresh]       # the 24-hour chart keeps 24 hours
+
+
+def test_reset_clears_history_and_totals(tmp_path):
+    times, reader = Times(), FakeReader()
+    reader.add(100, ["python3", str(ROOT / "display_server.py")], 0.0)
+    traffic = rs.TrafficCounter()
+    sampler = build(tmp_path, times, reader, traffic=traffic, persisted={
+        "since": 1.0, "long": [{"t": times.wall - 600, "cpu": {}}],
+        "traffic": {"office": {"bytes_in": 1, "bytes_out": 9, "requests": 1, "kinds": {}}}})
+    traffic.record("office", "artifact", 0, 100)
+    sampler.sample()
+    times.advance(10)
+    reader.set_cpu(100, 1.0)
+    sampler.sample()
+    assert sampler.recent and sampler.long
+    sampler.reset()
+    times.advance(10)
+    reader.set_cpu(100, 2.0)
+    traffic.record("office", "artifact", 0, 5)
+    document = sampler.sample()
+    assert document["traffic"]["totals"]["office"]["bytes_out"] == 5
+    assert document["totals_since"] == document["reset_at"] == times.wall - 10
+    assert document["history"]["long"] == [] and len(document["history"]["recent"]) == 1
+    assert sampler.persisted_state()["reset_at"] == times.wall - 10
 
 
 def test_publisher_writes_live_and_persisted_files(tmp_path):
@@ -301,6 +338,29 @@ def test_publisher_writes_live_and_persisted_files(tmp_path):
     (tmp_path / "bad.json").write_text("{not json")
     assert rs.read_stats(tmp_path / "bad.json") is None
     assert rs.load_persisted(tmp_path / "bad.json") == {}
+
+
+def test_publisher_applies_a_reset_request_once(tmp_path):
+    times, reader = Times(), FakeReader()
+    reader.add(100, ["python3", str(ROOT / "display_server.py")], 0.0)
+    traffic = rs.TrafficCounter()
+    sampler = build(tmp_path, times, reader, traffic=traffic)
+    env = {"DESK_DISPLAY_SERVER_STATS_HISTORY_PATH": str(tmp_path / "runtime" / "history.json")}
+    live, persisted = tmp_path / "shm" / "stats.json", rs.history_path(env)
+    publisher = rs.StatsPublisher(sampler, live_path=live, persist_path=persisted,
+                                  reset_path=rs.reset_request_path(env))
+    traffic.record("office", "artifact", 0, 42)
+    publisher.step()
+    assert rs.read_stats(live)["traffic"]["totals"]["office"]["bytes_out"] == 42
+    request = rs.request_reset(env, now=times.wall)
+    assert request.parent == persisted.parent
+    for _ in range(3):  # past the first two samples, which always publish
+        publisher.step()
+    publisher.step()  # the reset itself publishes at once
+    assert not request.exists()
+    assert rs.read_stats(live)["traffic"]["totals"] == {}
+    assert rs.read_stats(live)["reset_at"] == times.wall
+    assert rs.load_persisted(persisted)["traffic"] == {}  # saved at once, not 5 minutes later
 
 
 def test_stats_paths_and_switch():

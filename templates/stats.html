@@ -43,6 +43,9 @@
     .bar.over > span { background: #d03b3b; }
     .grid-2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(340px, 100%), 1fr)); gap: 1rem 1.5rem; }
     .grid-2 > * { min-width: 0; }
+    .source-row { margin-top: 0.5rem; align-items: flex-start; }
+    .source-row .note { margin: 0; flex: 1 1 20rem; }
+    .source-row button { font-size: 0.82rem; padding: 0.3rem 0.7rem; }
     .note { color: #94a3b8; font-size: 0.8rem; margin: 0.5rem 0 0; }
     h3 { font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.06em; color: #94a3b8; margin: 0.9rem 0 0.35rem; }
     @media (max-width: 600px) { .chart svg { height: 180px; } .grid-2 { grid-template-columns: 1fr; } .desc { display: none; } }
@@ -63,10 +66,16 @@
   </nav>
 
   <div id="notice" class="panel notice hidden" role="status"></div>
+  <div id="reset-notice" class="panel notice hidden" role="status"></div>
 
   <div class="panel">
     <div class="tiles" id="tiles"></div>
-    <p class="note" id="source-note"></p>
+    <div class="row source-row">
+      <p class="note" id="source-note"></p>
+      <span class="spacer"></span>
+      <button type="button" class="danger" id="reset-stats"
+        title="Clears the CPU and data history and the all-time data totals, then starts counting again.">Reset stats…</button>
+    </div>
   </div>
 
   <div class="panel">
@@ -171,6 +180,7 @@
       { key: "net_rx_bps", label: "Machine network in", color: "var(--series-2)" },
       { key: "net_tx_bps", label: "Machine network out", color: "var(--series-3)" },
     ];
+    const CSRF = {{ {csrf_header: csrf_value} | tojson }};
     let range = "recent";
     let latest = null;
     try { range = localStorage.getItem("stats-range") || "recent"; } catch (e) { /* storage blocked */ }
@@ -236,6 +246,15 @@
                                                : Math.max(0, ...series.map((s) => p.v[s.key] || 0)));
       const top = niceMax(Math.max(...totals));
       const y = (v) => pad.t + H - v / top * H;
+      // A gap (the server was stopped) breaks the chart instead of drawing a
+      // line across it.
+      const steps = points.slice(1).map((p, i) => p.t - points[i].t).sort((a, b) => a - b);
+      const step = steps[Math.floor(steps.length / 2)] || 1;
+      const segments = [];
+      points.forEach((p, i) => {
+        if (!i || p.t - points[i - 1].t > step * 3) segments.push([]);
+        segments[segments.length - 1].push(i);
+      });
       const ns = "http://www.w3.org/2000/svg";
       const svg = document.createElementNS(ns, "svg");
       svg.setAttribute("viewBox", `0 0 ${width} ${height}`);
@@ -255,16 +274,17 @@
         const base = points.map(() => 0);
         for (const s of series) {
           const upper = points.map((p, i) => base[i] + (p.v[s.key] || 0));
-          const path = points.map((p, i) => `${i ? "L" : "M"}${x(p.t).toFixed(1)},${y(upper[i]).toFixed(1)}`).join("")
-            + points.slice().reverse().map((p, j) => { const i = points.length - 1 - j; return `L${x(p.t).toFixed(1)},${y(base[i]).toFixed(1)}`; }).join("") + "Z";
+          const path = segments.map((seg) => seg.map((i, k) => `${k ? "L" : "M"}${x(points[i].t).toFixed(1)},${y(upper[i]).toFixed(1)}`).join("")
+            + seg.slice().reverse().map((i) => `L${x(points[i].t).toFixed(1)},${y(base[i]).toFixed(1)}`).join("") + "Z").join("");
           markup += `<path d="${path}" fill="${s.color}" fill-opacity="0.85" stroke="#0f172a" stroke-width="1"/>`;
           upper.forEach((v, i) => { base[i] = v; });
         }
       } else {
         for (const s of series) {
           let d = "", pen = false;
-          points.forEach((p) => {
+          points.forEach((p, i) => {
             const v = p.v[s.key];
+            if (i && p.t - points[i - 1].t > step * 3) pen = false;
             if (v === null || v === undefined) { pen = false; return; }
             d += `${pen ? "L" : "M"}${x(p.t).toFixed(1)},${y(v).toFixed(1)}`; pen = true;
           });
@@ -316,8 +336,9 @@
       $("#tiles").innerHTML = tiles.map(([label, value, detail]) => `<div class="tile"><div class="label">${esc(label)}</div><div class="value">${esc(value)}</div><div class="detail">${esc(detail)}</div></div>`).join("");
       $("#core-count").textContent = cores;
       const since = s.totals_since ? new Date(s.totals_since * 1000).toLocaleString() : "?";
+      const totalsSince = s.reset_at ? `Totals since the last reset, ${new Date(s.reset_at * 1000).toLocaleString()}.` : `All-time totals since ${since}.`;
       $("#source-note").textContent = data.source === "server"
-        ? `Measured by the render server every ${s.sample_interval_seconds}s. All-time totals since ${since}.`
+        ? `Measured by the render server every ${s.sample_interval_seconds}s; history and totals are kept across restarts. ${totalsSince}`
         : "No render server is publishing stats here, so this page samples this machine itself while it is open: processes and storage, without the server's per-thread and per-display figures.";
       const notice = $("#notice");
       if (data.server_stale_seconds !== null && data.server_stale_seconds !== undefined) {
@@ -448,6 +469,28 @@
         notice.className = "panel notice error";
       }
     }
+
+    $("#reset-stats").addEventListener("click", async () => {
+      if (!confirm("Reset stats? This clears the CPU and data history and the all-time data totals. Counting starts again from now.")) return;
+      const notice = $("#reset-notice");
+      const button = $("#reset-stats");
+      button.disabled = true;
+      try {
+        const response = await fetch("/api/stats/reset", { method: "POST", headers: { ...CSRF, Accept: "application/json" } });
+        const body = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(body.message || `HTTP ${response.status}`);
+        notice.textContent = body.server_running
+          ? "Stats reset. The render server starts over at its next sample, within about 10 seconds."
+          : "Stats reset. The render server isn't publishing right now; it will start over when it next runs.";
+        notice.className = "panel notice ok";
+        setTimeout(refresh, 12000);
+      } catch (error) {
+        notice.textContent = `Could not reset stats: ${error.message}`;
+        notice.className = "panel notice error";
+      } finally {
+        button.disabled = false;
+      }
+    });
 
     document.querySelectorAll(".ranges button").forEach((button) => button.addEventListener("click", () => {
       range = button.dataset.range;

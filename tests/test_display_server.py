@@ -829,3 +829,15 @@ def test_registry_snapshot_writes_routine_status_at_most_every_interval(tmp_path
     assert len(writes) == 2
     saved = json.loads((tmp_path / "clients.json").read_text())
     assert saved["clients"]["office"]["status"]["current_screen"] == "nixie"
+
+
+def test_sigterm_exits_through_atexit_so_stats_are_saved(monkeypatch):
+    import signal
+
+    installed = {}
+    monkeypatch.setattr(signal, "getsignal", lambda signum: signal.SIG_DFL)
+    monkeypatch.setattr(signal, "signal", lambda signum, handler: installed.setdefault(signum, handler))
+    display_server._exit_cleanly_on_sigterm()
+    with pytest.raises(SystemExit) as raised:
+        installed[signal.SIGTERM](signal.SIGTERM, None)
+    assert raised.value.code == 0

@@ -22,8 +22,10 @@ The render server runs a :class:`StatsSampler` thread.  Each sample records:
 
 The live document is written to :func:`stats_path` (tmpfs when available, so
 frequent writes never touch the SD card) for the config UI to read.  Running
-totals and a 24-hour history are written to :func:`history_path` every few
-minutes, so they survive restarts.
+totals and the hour and 24-hour histories are written to :func:`history_path`
+every 5 minutes and on exit, so they survive restarts; the config UI's Reset
+stats button leaves a request (:func:`request_reset`) the publisher applies at
+its next sample.
 
 Clients report their own figures in a heartbeat ``resources`` document
 (:class:`remote_display.models.ClientResources`), built by
@@ -58,7 +60,8 @@ STORAGE_INTERVAL_SECONDS = 300.0
 RECENT_POINTS = 360          # 1 hour at 10 s
 LONG_BUCKET_SECONDS = 300.0  # 5-minute averages ...
 LONG_POINTS = 288            # ... for 24 hours
-PERSIST_INTERVAL_SECONDS = 600.0
+# History is saved this often, and when the server stops, so a restart loses at most this much.
+PERSIST_INTERVAL_SECONDS = 300.0
 STALE_AFTER_SECONDS = 120.0
 SCHEMA_VERSION = 1
 
@@ -90,11 +93,25 @@ def stats_path(env: Mapping[str, str] | None = None) -> Path:
 
 
 def history_path(env: Mapping[str, str] | None = None) -> Path:
-    """Persisted running totals and the 24-hour history (written every 10 minutes)."""
+    """Persisted running totals and history (written every 5 minutes and on exit)."""
 
     source = os.environ if env is None else env
     raw = (source.get("DESK_DISPLAY_SERVER_STATS_HISTORY_PATH") or "").strip()
     return Path(raw).expanduser() if raw else PROJECT_ROOT / ".runtime" / "server" / "stats_history.json"
+
+
+def reset_request_path(env: Mapping[str, str] | None = None) -> Path:
+    """Where the config UI's Reset stats button asks the render server to start over."""
+
+    return history_path(env).with_name("stats_reset_request.json")
+
+
+def request_reset(env: Mapping[str, str] | None = None, *, now: float | None = None) -> Path:
+    """Ask the render server to clear its history and totals at its next sample."""
+
+    path = reset_request_path(env)
+    write_json_atomic(path, {"requested_at": time.time() if now is None else now}, durable=True)
+    return path
 
 
 def stats_enabled(env: Mapping[str, str] | None = None) -> bool:
@@ -465,6 +482,10 @@ class TrafficCounter:
         self._lock = threading.Lock()
         self._clients: dict[str, dict[str, Any]] = {}
 
+    def reset(self) -> None:
+        with self._lock:
+            self._clients = {}
+
     def record(self, client_id: str | None, kind: str, bytes_in: int, bytes_out: int) -> None:
         key = client_id or "_unauthenticated"
         with self._lock:
@@ -575,12 +596,39 @@ class StatsSampler:
         self._storage_cache: dict[str, Any] = {}
         self._storage_at: float | None = None
         self._latest: dict[str, Any] | None = None
-        persisted = persisted or {}
+        self._restore(persisted or {})
+
+    def _restore(self, persisted: Mapping[str, Any]) -> None:
+        """Carry totals and history over from the last run, dropping points too old to show."""
+
+        now = self.clock()
         self._traffic_base: dict[str, Any] = dict(persisted.get("traffic") or {})
-        self._totals_since: str | None = persisted.get("since")
-        for point in persisted.get("long") or []:
-            if isinstance(point, dict):
-                self.long.append(point)
+        self._totals_since: float | None = persisted.get("since")
+        self.reset_at: float | None = persisted.get("reset_at")
+
+        def points(name: str, window: float) -> list[dict[str, Any]]:
+            return [p for p in persisted.get(name) or []
+                    if isinstance(p, dict) and isinstance(p.get("t"), int | float) and now - p["t"] <= window]
+
+        self.long.extend(points("long", LONG_POINTS * LONG_BUCKET_SECONDS))
+        self.recent.extend(points("recent", RECENT_POINTS * SAMPLE_INTERVAL_SECONDS))
+        bucket_start = persisted.get("bucket_start")
+        bucket = points("bucket", 2 * LONG_BUCKET_SECONDS)
+        if isinstance(bucket_start, int | float) and bucket:
+            self._bucket_start, self._bucket = float(bucket_start), bucket
+
+    def reset(self) -> None:
+        """Forget all history and totals; counting starts again now."""
+
+        with self._lock:
+            if self.traffic is not None:
+                self.traffic.reset()
+            self._traffic_rates = _Rates()
+            self._traffic_base = {}
+            self.recent.clear()
+            self.long.clear()
+            self._bucket, self._bucket_start = [], None
+            self._totals_since = self.reset_at = self.clock()
 
     # Processes and threads
 
@@ -766,6 +814,7 @@ class StatsSampler:
             "generated_at": wall,
             "started_at": self.started_at,
             "totals_since": self._totals_since or self.started_at,
+            "reset_at": self.reset_at,
             "sample_interval_seconds": SAMPLE_INTERVAL_SECONDS,
             "purposes": {key: {"label": p.label, "description": p.description} for key, p in PURPOSES.items()},
             "system": {
@@ -815,8 +864,12 @@ class StatsSampler:
             return {
                 "schema_version": SCHEMA_VERSION,
                 "since": self._totals_since or self.started_at,
+                "reset_at": self.reset_at,
                 "traffic": _add_traffic(self._traffic_base, traffic_now),
                 "long": list(self.long),
+                "recent": list(self.recent),
+                "bucket_start": self._bucket_start,
+                "bucket": list(self._bucket),
             }
 
 
@@ -872,21 +925,41 @@ class StatsPublisher:
     """Runs a :class:`StatsSampler` in a thread and publishes its documents."""
 
     def __init__(self, sampler: StatsSampler, *, live_path: Path, persist_path: Path | None,
-                 interval: float = SAMPLE_INTERVAL_SECONDS) -> None:
+                 interval: float = SAMPLE_INTERVAL_SECONDS, reset_path: Path | None = None) -> None:
         self.sampler = sampler
         self.live_path = live_path
         self.persist_path = persist_path
+        self.reset_path = reset_path
         self.interval = interval
         self._stop = threading.Event()
         self._thread: threading.Thread | None = None
         self._samples = 0
         self._persisted_at = time.monotonic()
 
+    def _reset_requested(self) -> bool:
+        """Apply a Reset stats request from the config UI, once."""
+
+        if self.reset_path is None:
+            return False
+        try:
+            requested = json.loads(self.reset_path.read_text(encoding="utf-8")).get("requested_at")
+        except (OSError, ValueError, AttributeError):
+            return False
+        with contextlib.suppress(OSError):
+            self.reset_path.unlink()
+        if not isinstance(requested, int | float):
+            return False
+        LOGGER.info("Stats reset from the config UI")
+        self.sampler.reset()
+        self.persist()
+        return True
+
     def step(self) -> dict[str, Any]:
+        reset = self._reset_requested()
         document = self.sampler.sample()
         self._samples += 1
-        # The first two samples (the first has no rates yet) go out at once.
-        if self._samples <= 2 or self._samples % PUBLISH_EVERY_SAMPLES == 0:
+        # The first two samples (the first has no rates yet) and a reset go out at once.
+        if reset or self._samples <= 2 or self._samples % PUBLISH_EVERY_SAMPLES == 0:
             try:
                 write_json_atomic(self.live_path, document)
             except OSError as exc:
