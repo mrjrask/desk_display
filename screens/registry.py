@@ -1100,22 +1100,26 @@ def build_screen_registry(context: ScreenContext) -> tuple[dict[str, ScreenDefin
         if isinstance(ahl_status, dict):
             ahl_state = str(ahl_status.get("state") or "").strip().upper()
             if ahl_state in {"LIVE", "CRIT", "IN PROGRESS", "INPROGRESS"}:
+                # Not ``today``: that name is assigned later in this
+                # function, so reading it here raised UnboundLocalError and
+                # a live Wolves game broke the whole registry.
+                ahl_today = context.now.date()
                 for key in ("official_date", "officialDate", "game_date", "date"):
                     value = game.get(key)
                     if isinstance(value, str) and value.strip():
                         try:
-                            return _dt.date.fromisoformat(value.strip()[:10]) == today
+                            return _dt.date.fromisoformat(value.strip()[:10]) == ahl_today
                         except ValueError:
                             pass
                 start = game.get("start_utc") or game.get("start")
                 if isinstance(start, _dt.datetime):
-                    return start.astimezone(CENTRAL_TIME).date() == today
+                    return start.astimezone(CENTRAL_TIME).date() == ahl_today
                 if isinstance(start, str) and start.strip():
                     try:
                         parsed = _dt.datetime.fromisoformat(start.replace("Z", "+00:00"))
                         if parsed.tzinfo is None:
                             parsed = parsed.replace(tzinfo=CENTRAL_TIME)
-                        return parsed.astimezone(CENTRAL_TIME).date() == today
+                        return parsed.astimezone(CENTRAL_TIME).date() == ahl_today
                     except ValueError:
                         pass
                 return True

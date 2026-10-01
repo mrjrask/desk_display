@@ -397,3 +397,133 @@ def test_fetch_wolves_games_preserves_cached_live_game_when_refresh_fails(monkey
 
     assert data_fetch.fetch_wolves_games() is cached
     assert data_fetch._wolves_cache["data"] is cached
+
+
+def _stanzacal_event(start, summary, description, location):
+    # Mirrors a real StanzaCal event: escaped TEXT values and a VALARM.
+    return (
+        "BEGIN:VEVENT\r\n"
+        f"DTSTART:{start}\r\n"
+        f"UID:ahl-chicagowolves-{start}@stanzacal.com\r\n"
+        f"SUMMARY:{summary}\r\n"
+        f"DESCRIPTION:{description}\\n\\n---\\n\\nCheck out the full calendar here: "
+        "https://stanzacal.com/ahl-chicagowolves\r\n"
+        f"LOCATION:{location}\r\n"
+        "STATUS:CONFIRMED\r\n"
+        "BEGIN:VALARM\r\nTRIGGER;VALUE=DURATION:-PT30M\r\nACTION:DISPLAY\r\nEND:VALARM\r\n"
+        "END:VEVENT\r\n"
+    )
+
+
+def _stanzacal_calendar(*events):
+    return (
+        "BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:-//Stanza //Stanza Calendar v1.0//EN\r\n"
+        + "".join(events)
+        + "END:VCALENDAR\r\n"
+    )
+
+
+def _serve_calendar(monkeypatch, text):
+    class Response:
+        def __init__(self):
+            self.text = text
+
+        def raise_for_status(self):
+            return None
+
+    requested = []
+
+    def get(url, **_kwargs):
+        requested.append(url)
+        return Response()
+
+    monkeypatch.setattr(data_fetch, "AHL_SCHEDULE_ICS_URL", "webcal://calendar.example/wolves.ics")
+    monkeypatch.setattr(data_fetch, "AHL_API_KEY", "")
+    monkeypatch.setattr(data_fetch, "AHL_TEAM_NAME", "Chicago Wolves")
+    monkeypatch.setattr(data_fetch, "AHL_TEAM_TRICODE", "CHI")
+    monkeypatch.setattr(data_fetch, "_wolves_cache", {"expires": 0.0, "data": None})
+    monkeypatch.setattr(data_fetch._session, "get", get)
+    return requested
+
+
+def test_fetch_wolves_games_from_stanzacal_calendar(monkeypatch):
+    import datetime
+
+    import pytz
+
+    now = datetime.datetime.now(pytz.UTC)
+    fmt = "%Y%m%dT%H%M%SZ"
+    calendar = _stanzacal_calendar(
+        _stanzacal_event(
+            (now - datetime.timedelta(days=3)).strftime(fmt),
+            "Milwaukee Admirals (L) at Chicago Wolves (W)",
+            "✔ Chicago Wolves(5) - Milwaukee Admirals(2)",
+            "Allstate Arena\\, Rosemont\\, Illinois",
+        ),
+        _stanzacal_event(
+            (now + datetime.timedelta(days=2)).strftime(fmt),
+            "Chicago Wolves at Rockford IceHogs",
+            "✔ Chicago Wolves at Rockford IceHogs",
+            "BMO Center\\, Rockford\\, IL",
+        ),
+        _stanzacal_event(
+            (now + datetime.timedelta(days=5)).strftime(fmt),
+            "Iowa Wild at Chicago Wolves",
+            "✔ Iowa Wild at Chicago Wolves",
+            "Allstate Arena\\, Rosemont\\, Illinois",
+        ),
+    )
+    requested = _serve_calendar(monkeypatch, calendar)
+
+    games = data_fetch.fetch_wolves_games(force_refresh=True)
+
+    assert requested == ["https://calendar.example/wolves.ics"]
+    last = games["last_game"]
+    assert (last["away"]["abbr"], last["away"]["score"]) == ("MIL", 2)
+    assert (last["home"]["abbr"], last["home"]["score"]) == ("CHI", 5)
+    assert last["status"]["state"] == "FINAL"
+    assert last["status"]["note"] == "Chicago Wolves(5) - Milwaukee Admirals(2)"
+    assert last["venue"] == "Allstate Arena, Rosemont, Illinois"
+    assert games["next_game"]["home"]["abbr"] == "RFD"
+    assert games["next_home_game"]["away"]["abbr"] == "IA"
+    assert games["live_game"] is None
+
+
+def test_started_calendar_game_without_result_is_live(monkeypatch):
+    import datetime
+
+    import pytz
+
+    start = datetime.datetime.now(pytz.UTC) - datetime.timedelta(hours=1)
+    calendar = _stanzacal_calendar(
+        _stanzacal_event(
+            start.strftime("%Y%m%dT%H%M%SZ"),
+            "Texas Stars at Chicago Wolves",
+            "✔ Texas Stars at Chicago Wolves",
+            "Allstate Arena\\, Rosemont\\, Illinois",
+        ),
+    )
+    _serve_calendar(monkeypatch, calendar)
+
+    live = data_fetch.fetch_wolves_games(force_refresh=True)["live_game"]
+
+    assert live["away"]["abbr"] == "TEX"
+    assert live["status"]["state"] == "LIVE"
+    assert live["status"]["detail"] == "In Progress"
+
+
+def test_ics_team_payload_maps_title_case_opponent_names():
+    assert data_fetch._ics_team_payload("Milwaukee Admirals", False)["abbr"] == "MIL"
+    assert data_fetch._ics_team_payload("Rockford Icehogs", False)["abbr"] == "RFD"
+    assert data_fetch._ics_team_payload("Wilkes-Barre/Scranton Penguins", False)["abbr"] == "WBS"
+
+
+def test_parse_ics_events_unescapes_text_values():
+    events = data_fetch._parse_ics_events(
+        "BEGIN:VEVENT\r\nSUMMARY:A\\; B\r\nLOCATION:Arena\\, City\r\n"
+        "DESCRIPTION:one\\ntwo \\\\ three\r\nUID:a\\,b\r\nEND:VEVENT\r\n"
+    )
+
+    assert events == [
+        {"SUMMARY": "A; B", "LOCATION": "Arena, City", "DESCRIPTION": "one\ntwo \\ three", "UID": "a\\,b"}
+    ]
