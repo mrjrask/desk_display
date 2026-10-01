@@ -32,7 +32,7 @@ from datetime import datetime, timezone
 from typing import Any
 from urllib.parse import urlsplit
 
-from flask import Blueprint, jsonify, render_template, request
+from flask import Blueprint, jsonify, render_template, request, send_file
 
 import deployment_config
 from deployment_config import Role
@@ -61,6 +61,7 @@ from remote_display.provisioning import (
     provisioning_path,
 )
 from remote_display.registry import read_snapshot
+from remote_display.screenshot_uploads import ScreenshotInbox, UploadRejected, upload_dir
 
 CSRF_HEADER = "X-Requested-With"
 CSRF_VALUE = "desk-display"
@@ -198,6 +199,8 @@ def register(
     app.extensions["desk_display_registry_snapshot"] = registry_snapshot_path(env)
     app.extensions["desk_display_provisioning"] = ProvisioningStore(provisioning_path(env))
     app.extensions["desk_display_client_commands"] = CommandStore(commands_path(env))
+    # Read-only here: the render server receives and prunes the uploads.
+    app.extensions["desk_display_uploaded_screenshots"] = ScreenshotInbox(upload_dir(env))
     blueprint = Blueprint("remote_playlists", __name__)
 
     def _store() -> PlaylistStore:
@@ -725,6 +728,34 @@ def register(
         return respond({"client_id": client_id,
                         "location": None if location is None else location.as_dict(),
                         "global_location": _global_location()})
+
+    def _uploaded() -> ScreenshotInbox:
+        return app.extensions["desk_display_uploaded_screenshots"]
+
+    @blueprint.get("/api/clients/<client_id>/uploaded-screenshots")
+    def uploaded_screenshots(client_id: str):
+        """Screenshots a display uploaded to the server (for one on another network)."""
+
+        try:
+            screens = _uploaded().screens(client_id)
+        except UploadRejected as exc:
+            return jsonify(exc.as_response()), 404
+        return respond({"client_id": client_id, "screens": [
+            {**entry, "url": f"/api/clients/{client_id}/uploaded-screenshots/{entry['file']}"}
+            for entry in screens
+        ]})
+
+    @blueprint.get("/api/clients/<client_id>/uploaded-screenshots/<name>")
+    def uploaded_screenshot_file(client_id: str, name: str):
+        try:
+            path = _uploaded().image_path(client_id, name)
+        except UploadRejected:
+            path = None
+        if path is None:
+            return jsonify({"error": "not_found", "message": "no such screenshot"}), 404
+        response = send_file(path, mimetype="image/png", max_age=0)
+        response.headers["Cache-Control"] = "no-store"
+        return response
 
     @blueprint.put("/api/clients/<client_id>/name")
     def name_client(client_id: str):

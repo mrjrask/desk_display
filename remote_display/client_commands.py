@@ -1,7 +1,7 @@
 """Maintenance commands the config UI sends to a display client.
 
-The Display Clients page can ask a client to update its checkout or restart
-its service. Nothing reaches the client directly: the config UI queues the
+The Display Clients page can ask a client to update its checkout, upgrade,
+restart its service, reset its screenshots or clear its caches. Nothing reaches the client directly: the config UI queues the
 command in a small store the render server shares, the server hands it to the
 client in the response to the client's next authenticated heartbeat, and the
 client reports the outcome in a later heartbeat. A client only ever runs one
@@ -11,7 +11,17 @@ of :data:`ACTIONS`, never a command line sent over the network:
     ``git pull --ff-only`` in the client's own checkout, as the service user.
     ``scripts/upgrade.sh`` is deliberately not run: it restarts every Desk
     Display service with sudo, which would kill the client running it
-    mid-upgrade. Dependency or unit changes still need ``upgrade.sh`` on the Pi.
+    mid-upgrade. Use ``upgrade`` for dependency or unit changes.
+``upgrade``
+    ``scripts/upgrade.sh`` in a transient systemd unit (``sudo -n systemd-run``
+    as the service user), so it outlives the client restart it ends with. Its
+    output goes to a log beside the results file; whichever client process
+    finds the exit code there (usually the restarted one) reports it. Needs
+    the passwordless sudo ``upgrade.sh`` already relies on.
+``reset_screenshots`` / ``clear_caches``
+    ``scripts/reset_screenshots.sh`` or ``scripts/clear-caches.sh``, run by
+    the client and reported with their output. Their ``sudo`` steps work only
+    where sudo needs no password (a service has no terminal to ask on).
 ``restart``
     The client stops playback and exits; ``desk_display_client.service`` runs
     under ``Restart=always``, so systemd starts it again a few seconds later.
@@ -64,7 +74,17 @@ LOGGER = logging.getLogger("desk_display.client_commands")
 
 WIRE_VERSION = 1
 SCHEMA_VERSION = 1
-ACTIONS = {"update": "Update code (git pull)", "restart": "Restart client"}
+ACTIONS = {
+    "update": "Update code (git pull)",
+    "upgrade": "Upgrade",
+    "restart": "Restart client",
+    "reset_screenshots": "Reset Screenshots",
+    "clear_caches": "Clear caches",
+}
+# Actions that run one of the project's scripts and report its output.
+SCRIPTS = {"reset_screenshots": "scripts/reset_screenshots.sh", "clear_caches": "scripts/clear-caches.sh"}
+UPGRADE_SCRIPT = "scripts/upgrade.sh"
+RUN_LOGGED_SCRIPT = "scripts/helpers/run_logged.sh"
 STATES = ("pending", "delivered", "succeeded", "failed", "expired")
 UNFINISHED = frozenset({"pending", "delivered"})
 # A command the client has not picked up, or not answered, by then is expired.
@@ -73,6 +93,9 @@ MAX_PER_CLIENT = 10
 MAX_OUTPUT_CHARS = 4000
 MAX_RESULTS = 20
 GIT_TIMEOUT_SECONDS = 300
+SCRIPT_TIMEOUT_SECONDS = 600
+# An upgrade with no exit code by then is reported failed with its log so far.
+UPGRADE_TIMEOUT_SECONDS = 2 * 60 * 60
 _ID_RE = re.compile(r"^[0-9a-f]{16}$")
 _URL_USERINFO_RE = re.compile(r"(?P<scheme>[a-zA-Z][a-zA-Z0-9+.-]*://)[^/\s@]+@")
 _PROJECT_ROOT = Path(__file__).resolve().parents[1]
@@ -191,7 +214,10 @@ class CommandStore:
         if command.get("state") not in UNFINISHED:
             return
         since = command.get("delivered_at") or command.get("requested_at") or 0
-        if now - since < COMMAND_TIMEOUT_SECONDS:
+        timeout = COMMAND_TIMEOUT_SECONDS
+        if command.get("action") == "upgrade" and command["state"] == "delivered":
+            timeout += UPGRADE_TIMEOUT_SECONDS  # the display reports it when upgrade.sh ends
+        if now - since < timeout:
             return
         picked_up = command["state"] == "delivered"
         command["state"] = "expired"
@@ -314,8 +340,11 @@ class CommandRunner:
         restart: Callable[[], None] | None = None,
         run: Callable[..., subprocess.CompletedProcess] = subprocess.run,
         background: bool = True,
+        clock: Callable[[], float] = time.time,
     ) -> None:
         self.outbox_path = Path(outbox_path)
+        self.jobs_dir = self.outbox_path.parent / "command_jobs"
+        self._clock = clock
         self.project_dir = Path(project_dir)
         self.restart = restart
         self._run = run
@@ -327,8 +356,9 @@ class CommandRunner:
         with contextlib.suppress(OSError, ValueError):
             data = json.loads(self.outbox_path.read_text(encoding="utf-8"))
             if isinstance(data, dict):
-                return {"results": list(data.get("results") or []), "seen": list(data.get("seen") or [])}
-        return {"results": [], "seen": []}
+                return {"results": list(data.get("results") or []), "seen": list(data.get("seen") or []),
+                        "jobs": list(data.get("jobs") or [])}
+        return {"results": [], "seen": [], "jobs": []}
 
     def _save(self, data: Mapping[str, Any]) -> None:
         self.outbox_path.parent.mkdir(parents=True, exist_ok=True)
@@ -341,6 +371,7 @@ class CommandRunner:
 
         pid = os.getpid()
         with self._lock:
+            self._collect_jobs()
             ready = [r for r in self._read()["results"] if r.get("hold_pid") != pid]
         return [{k: v for k, v in r.items() if k != "hold_pid"} for r in ready[:MAX_RESULTS]]
 
@@ -402,6 +433,10 @@ class CommandRunner:
                 try:
                     if action == "update":
                         self._update(command_id)
+                    elif action == "upgrade":
+                        self._upgrade(command_id)
+                    elif action in SCRIPTS:
+                        self._script(command_id, SCRIPTS[action])
                     else:
                         self._restart(command_id)
                 except Exception as exc:  # noqa: BLE001 - report every failure to the page
@@ -434,6 +469,92 @@ class CommandRunner:
         else:
             summary = f"Already up to date ({after or before or 'unknown commit'})."
         self._finish(command_id, "succeeded", 0, f"{summary}\n{output}".strip())
+
+    def _script(self, command_id: str, script: str) -> None:
+        path = self.project_dir / script
+        if not path.is_file():
+            self._finish(command_id, "failed", None, f"{script} is missing on this display. Update it first.")
+            return
+        try:
+            result = self._run(["bash", str(path)], cwd=str(self.project_dir), stdin=subprocess.DEVNULL,
+                               capture_output=True, text=True, timeout=SCRIPT_TIMEOUT_SECONDS, check=False,
+                               env={**os.environ, "LC_ALL": "C.UTF-8"})
+        except subprocess.TimeoutExpired:
+            self._finish(command_id, "failed", None, f"{script} did not finish in {SCRIPT_TIMEOUT_SECONDS} s.")
+            return
+        output = "\n".join(part.strip() for part in (result.stdout, result.stderr) if part and part.strip())
+        status = "succeeded" if result.returncode == 0 else "failed"
+        self._finish(command_id, status, result.returncode, output or f"{script} exited with {result.returncode}.")
+
+    def _upgrade(self, command_id: str) -> None:
+        """Start upgrade.sh outside this service; :meth:`_collect_jobs` reports it."""
+
+        for script in (UPGRADE_SCRIPT, RUN_LOGGED_SCRIPT):
+            if not (self.project_dir / script).is_file():
+                self._finish(command_id, "failed", None, f"{script} is missing on this display. Update it first.")
+                return
+        self.jobs_dir.mkdir(parents=True, exist_ok=True)
+        log, status = self.jobs_dir / f"upgrade-{command_id}.log", self.jobs_dir / f"upgrade-{command_id}.status"
+        for stale in (log, status):
+            with contextlib.suppress(FileNotFoundError):
+                stale.unlink()
+        # A transient system unit is outside this service's cgroup, so the
+        # restart upgrade.sh ends with does not kill it. It runs as this user,
+        # like a manual upgrade, and upgrade.sh uses sudo where it needs to.
+        argv = [
+            "sudo", "-n", "systemd-run", f"--unit=desk-display-upgrade-{command_id}", "--collect", "--quiet",
+            f"--uid={os.getuid()}", f"--gid={os.getgid()}", f"--working-directory={self.project_dir}",
+            f"--setenv=HOME={Path.home()}", f"--setenv=PATH={os.environ.get('PATH') or os.defpath}",
+            "--", "bash", str(self.project_dir / RUN_LOGGED_SCRIPT), str(log), str(status),
+            "bash", str(self.project_dir / UPGRADE_SCRIPT),
+        ]
+        try:
+            result = self._run(argv, stdin=subprocess.DEVNULL, capture_output=True, text=True, timeout=60,
+                               check=False)
+        except (OSError, subprocess.TimeoutExpired) as exc:
+            result = subprocess.CompletedProcess(argv, None, "", f"{type(exc).__name__}: {exc}")
+        if result.returncode != 0:
+            output = "\n".join(part.strip() for part in (result.stdout, result.stderr) if part and part.strip())
+            self._finish(command_id, "failed", result.returncode,
+                         "Could not start the upgrade. It needs systemd-run and passwordless sudo on the "
+                         "display; otherwise run bash scripts/upgrade.sh there.\n" + output)
+            return
+        LOGGER.info("Upgrade %s started; log in %s", command_id, log)
+        with self._lock:
+            data = self._read()
+            data["jobs"].append({"id": command_id, "log": str(log), "status": str(status),
+                                 "started_at": self._clock()})
+            self._save(data)
+
+    def _collect_jobs(self) -> None:
+        """Turn finished (or overdue) upgrades into results. Caller holds the lock."""
+
+        data = self._read()
+        if not data["jobs"]:
+            return
+        keep = []
+        for job in data["jobs"]:
+            log, status = Path(job["log"]), Path(job["status"])
+            code: int | None = None
+            try:
+                code = int(status.read_text(encoding="utf-8").strip())
+            except (OSError, ValueError):
+                if self._clock() - float(job.get("started_at") or 0) < UPGRADE_TIMEOUT_SECONDS:
+                    keep.append(job)
+                    continue
+            try:
+                output = log.read_text(encoding="utf-8", errors="replace").strip()
+            except OSError:
+                output = ""
+            if code is None:
+                output = f"No result after {UPGRADE_TIMEOUT_SECONDS // 3600} h. Log so far:\n{output}"
+            data["results"].append({"id": job["id"], "status": "succeeded" if code == 0 else "failed",
+                                    "exit_code": code, "output": clean_output(output or "upgrade.sh printed nothing.")})
+            for path in (log, status):
+                with contextlib.suppress(OSError):
+                    path.unlink()
+        data["jobs"] = keep
+        self._save(data)
 
     def _restart(self, command_id: str) -> None:
         if self.restart is None:

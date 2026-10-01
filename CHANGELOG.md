@@ -30,6 +30,11 @@ See the README's [deployment modes](README.md#deployment-modes) and
   The Waveshare OLED/LCD HAT (A) is one choice there: its LCD plays the
   playlist and its two side OLEDs run the status helper from the client's
   heartbeat.
+- **Upgrade**, **Reset Screenshots** and **Clear caches** buttons in each
+  display's Maintenance tab on the Clients page. They run `scripts/upgrade.sh`
+  (in a transient systemd unit, so it survives the restart it ends with),
+  `scripts/reset_screenshots.sh` and `scripts/clear-caches.sh` on that display
+  and show the output like Update and Restart.
 - **Update (git pull)** and **Restart client** buttons on each row of the
   Clients page. The client collects the command on its next authenticated
   heartbeat, runs one of those two fixed actions (`git pull --ff-only` in its
@@ -80,6 +85,12 @@ See the README's [deployment modes](README.md#deployment-modes) and
   display. The server now records the address each client last connected
   from (Clients API and `/api/v1/admin/status`) so the script can find them
   (see OPERATIONS.md, "Comparing screens across displays").
+- A display on another network can upload its latest screenshots to the
+  server (`DESK_DISPLAY_CLIENT_UPLOAD_SCREENSHOTS=1` in `.env.client`) over its
+  existing authenticated connection, and the collector uses them when it
+  can't reach that display. The server keeps one image per screen per
+  display under `.runtime/server/client_screenshots/`, with size and age
+  limits (see OPERATIONS.md, "Displays on another network").
 - New **MLB Playoffs** screen: the postseason bracket laid out like
   mlb.com/postseason (AL left, NL right, World Series in the middle, seeds and
   series scores), sized for every display profile, with the current round's
@@ -214,6 +225,10 @@ See the README's [deployment modes](README.md#deployment-modes) and
   used tiles, logos and headshots are deleted and downloaded again when
   needed). `cache/` as a whole has a 1.5 GB limit
   (`DESK_DISPLAY_SERVER_CACHE_MAX_MB=1536`) that logs a warning when exceeded.
+- The display client's local cache (`DESK_DISPLAY_CLIENT_CACHE_MAX_MB`) now
+  defaults to 512 MB instead of 256 MB, and `scripts/clear-caches.sh` also
+  clears it (keeping the client's lease credential and any local override),
+  stopping and restarting `desk_display_client.service` around it.
 - Fix: a feed refresh that returns unchanged data (for example from a TTL
   cache) no longer bumps its data revision, so it no longer re-renders the
   screens that read it.

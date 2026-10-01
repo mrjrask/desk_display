@@ -172,7 +172,7 @@ The cache lives in `cache/client/` (`DESK_DISPLAY_CLIENT_CACHE_DIR`):
 | `client_credential` | The lease credential (mode 600) |
 | `staging/` | Downloads in progress |
 
-It stays within `DESK_DISPLAY_CLIENT_CACHE_MAX_MB` (default 256) by evicting
+It stays within `DESK_DISPLAY_CLIENT_CACHE_MAX_MB` (default 512) by evicting
 least-recently-used artifacts. Nothing the three kept manifests reference is
 evicted.
 

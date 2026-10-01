@@ -159,6 +159,15 @@ async function joinCommand(client) {
 }
 
 const UNFINISHED = new Set(["pending", "delivered"]);
+const MAINTENANCE_BUTTONS = [
+  ["update", "Update (git pull)", "Runs git pull --ff-only in the display's desk_display folder on its next heartbeat"],
+  ["upgrade", "Upgrade", "Runs scripts/upgrade.sh on the display on its next heartbeat (pull, dependencies, services, restart)"],
+  ["restart", "Restart client", "Restarts desk_display_client on the display on its next heartbeat"],
+  ["reset_screenshots", "Reset Screenshots", "Runs scripts/reset_screenshots.sh on the display on its next heartbeat"],
+  ["clear_caches", "Clear caches", "Runs scripts/clear-caches.sh on the display on its next heartbeat"],
+];
+const COMMAND_NAMES = { update: "update", upgrade: "upgrade", restart: "restart",
+  reset_screenshots: "screenshot reset", clear_caches: "cache clearing" };
 const COMMAND_STATES = {
   pending: "waiting for the display", delivered: "running on the display", succeeded: "done",
   failed: "failed", expired: "expired",
@@ -188,12 +197,15 @@ function commandLine(parent, command) {
 async function clientCommand(client, action) {
   const questions = {
     update: `Update ${client.client_id}? It runs git pull in its desk_display folder on its next heartbeat. Restart it afterwards to run the new code.`,
+    upgrade: `Upgrade ${client.client_id}? It runs scripts/upgrade.sh on its next heartbeat: git pull, dependencies, service files, then a restart of its services. The panel goes blank while they restart.`,
     restart: `Restart ${client.client_id}'s display client? The panel goes blank for a few seconds.`,
+    reset_screenshots: `Reset screenshots on ${client.client_id}? It runs scripts/reset_screenshots.sh, which deletes everything in its screenshots and screenshot archive folders.`,
+    clear_caches: `Clear caches on ${client.client_id}? It runs scripts/clear-caches.sh on the display.`,
   };
   if (!confirm(questions[action])) return;
   try {
     await api("POST", `/api/clients/${encodeURIComponent(client.client_id)}/commands`, { action });
-    notice(`${client.client_id}: ${action === "update" ? "update" : "restart"} queued. It runs on the display's next heartbeat and the result shows here.`);
+    notice(`${client.client_id}: ${COMMAND_NAMES[action] || action} queued. It runs on the display's next heartbeat and the result shows here.`);
   } catch (error) { notice(explain(error), "error"); }
   load();
 }
@@ -415,14 +427,12 @@ function maintenancePanel(body, client) {
   const buttons = element(software, "div", "row");
   const busy = new Set((client.commands || []).filter((c) => UNFINISHED.has(c.state)).map((c) => c.action));
   const reachable = !["never_connected", "unknown", "revoked", "disabled"].includes(client.state);
-  for (const [action, label] of reachable ? [["update", "Update (git pull)"], ["restart", "Restart client"]] : []) {
-    const el = button(buttons, label, () => clientCommand(client, action), action === "update"
-      ? "Runs git pull --ff-only in the display's desk_display folder on its next heartbeat"
-      : "Restarts desk_display_client on the display on its next heartbeat");
+  for (const [action, label, help] of reachable ? MAINTENANCE_BUTTONS : []) {
+    const el = button(buttons, label, () => clientCommand(client, action), help);
     el.dataset.command = action;
     el.disabled = busy.has(action);
   }
-  if (!reachable) line(software, "Update and restart appear once the display is connected.", "muted small");
+  if (!reachable) line(software, "Maintenance buttons appear once the display is connected.", "muted small");
   for (const command of client.commands || []) commandLine(software, command);
 
   const access = group(grid, "Name and credential");

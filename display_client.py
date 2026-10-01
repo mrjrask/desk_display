@@ -47,6 +47,7 @@ from protocol_versions import APPLICATION_VERSION, NETWORK_PROTOCOL_VERSION
 from remote_display.client_cache import ClientCache, PlaybackState, reconcile_playback
 from remote_display.client_commands import CommandRunner
 from remote_display.client_screenshots import ClientScreenshots
+from remote_display.screenshot_uploads import UploadQueue
 from remote_display.client_sync import (
     ActiveContent,
     ArtifactCache,
@@ -931,7 +932,7 @@ def build_client(settings: dict[str, Any], *, presenter: Any = None, transport: 
         raise SystemExit(f"Unknown display profile {settings['DESK_DISPLAY_PROFILE']!r}")
     cache_dir = Path(settings.get("DESK_DISPLAY_CLIENT_CACHE_DIR") or DEFAULT_CACHE_DIR).expanduser()
     cache = ClientCache(cache_dir)
-    artifacts = ArtifactCache(cache_dir, max_bytes=int(settings.get("DESK_DISPLAY_CLIENT_CACHE_MAX_MB") or 256) << 20)
+    artifacts = ArtifactCache(cache_dir, max_bytes=int(settings.get("DESK_DISPLAY_CLIENT_CACHE_MAX_MB") or 512) << 20)
     configured = _rotation(settings.get("DISPLAY_ROTATION"))
     kernel_overlay = None
     hardware = presenter is None
@@ -975,6 +976,14 @@ def build_client(settings: dict[str, Any], *, presenter: Any = None, transport: 
     )
     if screenshots is not None and screenshots.feed_summary is None:
         screenshots.feed_summary = lambda: sync.display_status
+    if screenshots is not None and _truthy(settings.get("DESK_DISPLAY_CLIENT_UPLOAD_SCREENSHOTS", False)):
+        # For a display on another network, which the collector cannot reach.
+        minutes = float(settings.get("DESK_DISPLAY_CLIENT_SCREENSHOT_UPLOAD_MINUTES") or 10)
+        uploads = UploadQueue(minutes * 60)
+        screenshots.uploads = uploads
+        sync.screenshot_uploads = uploads
+        if not screenshots.enabled:
+            LOGGER.warning("DESK_DISPLAY_CLIENT_UPLOAD_SCREENSHOTS needs ENABLE_SCREENSHOTS=1; nothing will upload")
     client = DisplayClient(
         profile, presenter, sync, cache, artifacts,
         server_url=server_url,

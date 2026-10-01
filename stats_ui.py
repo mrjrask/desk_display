@@ -50,9 +50,9 @@ def _local_storage(env: Mapping[str, str], panel_cache: Path | None) -> dict[str
     }
     if panel_cache is not None:
         try:
-            limit = int(env.get("DESK_DISPLAY_CLIENT_CACHE_MAX_MB") or 256) << 20
+            limit = int(env.get("DESK_DISPLAY_CLIENT_CACHE_MAX_MB") or 512) << 20
         except ValueError:
-            limit = 256 << 20
+            limit = 512 << 20
         storage["Display client cache"] = (panel_cache, limit)
     return storage
 
