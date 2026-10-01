@@ -108,7 +108,7 @@ OpenWeatherMap data is normalized toward the same internal shape as WeatherKit d
 | Role | Radar frame metadata and radar tiles. |
 | Metadata endpoint, primary | `https://api.rainviewer.com/public/weather-maps.json` |
 | Metadata endpoint, fallback | `https://api.rainviewer.com/public/maps.json` |
-| Tile endpoint pattern | `https://{host}/{path}/256/{zoom}/{x}/{y}/2/1_1.png` |
+| Tile endpoint pattern | `https://{host}/{path}/{size}/{zoom}/{x}/{y}/2/1_1.png`: `size` is 256 on small panels and 512 on displays larger than 256 px; `zoom` is 7, the highest the free API serves. |
 
 Fields used:
 
@@ -136,9 +136,9 @@ Weather radar/map rendering may also use:
 
 | Provider | Endpoint pattern | Purpose |
 | --- | --- | --- |
-| Iowa State Mesonet | `https://mesonet.agron.iastate.edu/cache/tile.py/1.0.0/q2-hsr-900913/{zoom}/{x}/{y}.png` | Radar tile fallback/source used by weather map rendering. |
-| OpenStreetMap | `https://tile.openstreetmap.org/{zoom}/{x}/{y}.png` | Basemap tile fallback. |
-| CARTO | `https://basemaps.cartocdn.com/light_all/{zoom}/{x}/{y}.png` | Basemap tile fallback. |
+| Iowa State Mesonet | `https://mesonet.agron.iastate.edu/cache/tile.py/1.0.0/q2-hsr-900913/{zoom}/{x}/{y}.png` | Radar tile fallback when RainViewer fails. |
+| OpenStreetMap | `https://tile.openstreetmap.org/{zoom}/{x}/{y}.png` | Base map, tried first. Tiles are stitched at zoom 9 on 1080p, 8 on 720 px square and 800×480 panels, and 7 on small panels, and cached on disk for 30 days in `images/cache/radar_basemap/` (the OSM tile policy asks for at least 7). Requests name the project in their User-Agent, and the screen draws an "© OpenStreetMap" credit. |
+| CARTO | `https://basemaps.cartocdn.com/light_all/{zoom}/{x}/{y}.png` | Base map fallback. CARTO's basemaps now ask for an API key, so this keyless fallback may fail. |
 
 ---
 
@@ -323,7 +323,11 @@ Fields used include game dates, opponent, home/away flags, final scores, recent 
 
 `AHL_API_KEY` and `AHL_SCHEDULE_ICS_URL` are optional, secret environment
 configuration and intentionally default to empty. Put local values in `.env`
-(which must not be committed) or export them in the service environment. When
+(which must not be committed) or export them in the service environment. On
+a server or combined install the render server fetches the Wolves data, so
+they go in the server's `.env` (never `.env.client`), followed by
+`sudo systemctl restart desk_display_server.service`; clients only receive
+the rendered screens. When
 the API key is absent, HockeyTech requests are skipped rather than attempted
 without authentication. When the calendar URL is absent, the ICS fetch returns
 an empty schedule safely. Configure either source to populate upcoming Wolves

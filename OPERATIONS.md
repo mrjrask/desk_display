@@ -62,7 +62,7 @@ documents and enforces the dependency order between them:
 | `waveshare-fbcp.service` | Mirrors the framebuffer onto a Waveshare panel. |
 | `desk_display_waveshare_oled.service` | Side status OLED helper. |
 | `screenshot_uploader_desk_display.service` | POSTs new screenshots to a feed server. |
-| `config_ui_desk_display.service` | The web config UI on port 5002 (only the Screenshots and Feed pages on a client). |
+| `config_ui_desk_display.service` | The web config UI on port 5002 (only the Screenshots, Feed and Stats pages on a client). |
 | `airplay_desk_display.service` | Optional AirPlay receiver add-on. |
 
 ---
@@ -138,6 +138,34 @@ run the installer with your normal login and let it call `sudo` itself.
 | `install_screenshot_uploader.sh` | Installs the uploader that pushes this Pi's screenshots to that feed server. Needs `FEED_UPLOAD_URL` and `FEED_UPLOAD_TOKEN`. |
 | `uninstall.sh` | Destructive, in every mode. Stops and disables every project unit, removes the venv, copies the mode's backed-up data (see [What each mode keeps](#what-each-mode-keeps)) into `~/desk_display_uninstalled`, then deletes the project directory. Requires confirmation, or `CONFIRM_UNINSTALL=yes` non-interactively. |
 
+## What each script in scripts/ does
+
+| Script | What it does |
+| --- | --- |
+| `upgrade.sh` | Upgrades an install in any mode: `git pull`, dependencies, units, restart (see [Running, restarting, and logs](#running-restarting-and-logs)). `--no-pull` skips the pull. |
+| `update_dependencies.sh` | Installs the requirements file for the installed mode and output; `--upgrade-outdated`, `--clean-caches`, `--print-requirements`. |
+| `update_services.sh` | Rewrites or patches the installed units for the installed mode; `--dry-run`, `--no-restart`, `--mode`. |
+| `restart_services.sh` | Restarts the installed project units in dependency order; `--list` prints them. |
+| `clear-caches.sh` | Empties the pip download cache and runs `apt-get clean`, and reports the space freed. |
+| `reset_screenshots.sh` | Empties the screenshot and screenshot archive folders (`SCREENSHOT_DIR`, `SCREENSHOT_ARCHIVE_BASE`). |
+| `cleanup.sh` | Manual maintenance: stops and blanks the panel, removes `__pycache__`, archives leftover screenshots and video. |
+| `convert_env.py` | Converts a `.env` to the server or client role (see [Converting an existing .env](#converting-an-existing-env)). |
+| `migrate_standalone_config.py` | Moves a standalone rotation onto the server as a playlist (see [Moving a standalone rotation onto the server](#moving-a-standalone-rotation-onto-the-server)). |
+| `collect_client_screenshots.py` | Gathers every display's latest screenshots into one HTML page (see [Comparing screens across displays](#comparing-screens-across-displays)). |
+| `measure_scroll_fps.py` | Measures scroll smoothness on a client's panel (see [Checking scroll smoothness](#checking-scroll-smoothness)). |
+| `test_led.py` | Cycles the Display HAT Mini's RGB LED and reports whether it responded; stop the display service first. |
+| `test_api_connections.py` | Probes every external API family; `--json` for machine-readable output. |
+| `load_default_screen_config.py`, `update_screen_config.py` | Load the small or large default rotation, by argument or by prompt. |
+| `export_screen_rotation_config.py`, `import_screen_rotation_config.py`, `show_screen_rotation_config.sh` | Export, import and print the rotation configuration. |
+| `logo_getter.py` | Downloads NCAA team logos for review or for committing to `images/ncaa/`. The render server already downloads missing FBS logos each week into `images/cache/ncaa/`. |
+| `render_screens.py` | Renders screens to PNG and archives them in a dated ZIP for visual review. |
+| `adsb_collector.py`, `screenshot_uploader.py`, `waveshare_oled_status.py` | The ADS-B collector, the Feed uploader and the Waveshare side-OLED helper, each run by its own unit. |
+| `check_hyperpixel_setup.sh`, `check_waveshare_setup.sh`, `restore_desktop.sh` | Panel setup checks, and putting the Pi desktop back after a kernel or framebuffer install. |
+| `launch_kernel_display.sh`, `launch_framebuffer.sh`, `framebuffer_service.sh`, `prepare_kernel_session_env.sh`, `wait_for_display_ready.sh`, `launch_macos_window_perf.sh` | Launchers and unit helpers for the kernel, framebuffer and macOS window outputs. |
+| `test_all.py`, `validate_required_files.py`, `check_image_assets.py`, `check_lint_baseline.py`, `lint_cleanup_report.py`, `font_audit.py` | Development checks; `test_all.py` is what CI runs. |
+| `make_v01_references.py`, `v01_parity_probe.py` | Record the v0.1 reference renders `tests/test_v01_parity.py` compares against. |
+| `adjust_image_assets.py`, `render_bears_next_season_png.py`, `uninstall_airplay.sh` | One-off asset tools and the AirPlay add-on's uninstaller. |
+
 ---
 
 ## Installation modes (server and client)
@@ -150,7 +178,7 @@ systemd services for each mode:
 | --- | --- | --- |
 | standalone | `desk_display.service` (main.py), config UI | `.env` |
 | server | `desk_display_server.service`, config UI | `.env` |
-| client | `desk_display_client.service`, Screenshots page | `.env.client` |
+| client | `desk_display_client.service`, config UI (Screenshots, Feed and Stats pages) | `.env.client` |
 | combined | server, client and config UI | `.env` (server), `.env.client` (panel) |
 
 In a combined installation the attached panel is an ordinary client of
@@ -179,8 +207,9 @@ profiles install no service, so they only run standalone.
 A server install sets up no panel hardware and installs
 `requirements/server.txt` (the full application, no GPIO or panel
 drivers). A client installs `requirements/client-<output>.txt`: the
-client core (`requests`, `pytz`, `Pillow`) plus its panel driver, and no
-upstream provider library, web server or SVG renderer.
+client core (`requests`, `pytz`, `Pillow`), Flask and Waitress for its
+local config UI pages, and its panel driver, with no upstream provider
+library or SVG renderer.
 
 The installer prepares the env files before it starts anything:
 
@@ -347,8 +376,9 @@ opens a guided setup (`/clients/add`):
 4. **Connect.** The page watches for the display's first heartbeat and says
    when it is online, with log commands if it is not.
 
-Each client row has Rotate, Revoke, Disable and Enable, and a display that
-has never connected also has **Setup command**, which makes a new one-time
+Each display's **Maintenance** tab on `/clients` has Rename, Rotate
+credential, Revoke, Disable and Enable, and a display that has never
+connected also has **Setup command**, which makes a new one-time
 command (any earlier one stops working). From the shell:
 
 ```bash
@@ -391,16 +421,24 @@ network. For HTTPS see "Transport security" in
 ### Assigning playlists
 
 Playlists are edited on `/playlists` and assigned on `/clients`. Each
-assignment is checked against what the client last saw, so two operators
-cannot overwrite each other. The row shows whether the new revision has been
-delivered and acknowledged, and warns about screens this client can show
-only as a still, or not at all.
+playlist card in the library reads "N active of M screens": the screens the
+playlist actually plays (a frequency above zero, or an alternate with an
+alternate frequency above zero, and not past its hide-after time) out of all
+the screens it lists. Each assignment is checked against what the client
+last saw, so two operators cannot overwrite each other. The display's
+**Delivery** tab shows whether the new revision has been delivered and
+acknowledged, and the display's card warns about screens it can show only
+as a still, or not at all.
+
+The Clients page shows one card per display with its state, playlist and a
+one-line summary. Its **Settings**, **Delivery** and **Maintenance** tabs
+hold the rest; which tab is open is remembered per browser.
 
 ### Scroll speed per display
 
 The Rotation Config page's **Synchronized vertical scroll adjustment** is the
 default for every display. To give one display its own, type a value in the
-**Vertical scroll** field in its row on `/clients` and press **Save** (0.25 is
+**Vertical scroll** field in the display's **Settings** tab on `/clients` and press **Save** (0.25 is
 25% faster than normal, -0.25 is 25% slower, from -0.9 to 3). Leave it empty
 or press **Use global** to follow the Rotation Config value again. The
 setting is stored in the server's playlist store and reaches the display in
@@ -419,8 +457,8 @@ install has only the Rotation Config value, which is already per device.
 
 Every display shows the weather for the server's `WEATHER_LATITUDE` /
 `WEATHER_LONGITUDE`. A display somewhere else can have its own: type the
-**Lat** and **Lon** (decimal degrees, west and south negative) in its row on
-`/clients` and press **Save**. Clear both fields or press **Use server's** to
+**Lat** and **Lon** (decimal degrees, west and south negative) in the
+display's **Settings** tab on `/clients` and press **Save**. Clear both fields or press **Use server's** to
 follow the server again. Nothing on the Pi needs editing, and the display
 does not need an update.
 
@@ -470,14 +508,16 @@ show in the tab a minute or two after pressing.
   transient systemd unit (`sudo -n systemd-run`, as the service user) so the
   restart it ends with cannot kill it, and its log is kept in the client
   cache's `command_jobs/` folder until the client reports it. It needs the
-  passwordless sudo `upgrade.sh` already relies on; without it the row shows
+  passwordless sudo `upgrade.sh` already relies on; without it the tab shows
   "Could not start the upgrade". Upgrades are given two hours to report.
 - **Restart client** makes `desk_display_client` exit; systemd starts it again
-  after 5 seconds (`Restart=always`), so no sudo is needed. The row shows
+  after 5 seconds (`Restart=always`), so no sudo is needed. The tab shows
   "done" only once the restarted client has reported in.
 - **Reset Screenshots** runs `scripts/reset_screenshots.sh`, which empties the
   display's screenshots and screenshot archive folders.
-- **Clear caches** runs `scripts/clear-caches.sh` on the display.
+- **Clear caches** runs `scripts/clear-caches.sh` on the display, which
+  empties the pip download cache and runs `apt-get clean`. It does not touch
+  the display's own content cache (`cache/client/`).
 
 Both scripts run as the service user with no terminal, so a step that falls
 back to `sudo` works only where sudo needs no password; anything they could
@@ -996,6 +1036,11 @@ the port). The page enables and disables screens, edits frequencies and hold
 times, manages playlists and sequence order, and imports and exports rotation
 payloads.
 
+On a server or combined install, displays play the playlists on the
+**Playlists** page (`/playlists`) instead, edited with the same editor and
+assigned on `/clients` (see [Assigning playlists](#assigning-playlists)).
+The Rotation Config page still sets the scroll speeds every display uses.
+
 The file has three top-level pieces: `screens` (per-screen frequency),
 `playlists` (named groups of steps), and `sequence` (the order those playlists
 rotate in).
@@ -1035,7 +1080,7 @@ def draw_my_screen(display, transition: bool = False):
 ```
 
 Take `WIDTH`, `HEIGHT`, fonts and colors from `config` rather than hard-coding
-them, so the screen works across the 240×135 through 800×480 profiles. Fetching
+them, so the screen works across the 240×135 through 1920×1080 profiles. Fetching
 belongs in `services/` or `data_fetch.py`, not in the renderer.
 
 **2. Add the ID to `screens_catalog.py`**, appended to the end of its section in
@@ -1069,7 +1114,11 @@ Wi-Fi outage state in `context`.
 step) if it should be on by default for new installs.
 
 **5. If it needs a toggle or credentials**, add the `ENABLE_*` flag and any keys
-to `config.py` and document them in `.env.example`.
+to `config.py`, document them in `.env.example`, and add them to the settings
+catalog in `deployment_config.py` (role, and whether they are secret), then
+regenerate `.env.server.example`, `.env.client.example` and the
+CONFIGURATION.md reference table as
+[CONFIGURATION.md](CONFIGURATION.md#checking-a-configuration) describes.
 
 Then run the checks before pushing:
 
@@ -1078,6 +1127,19 @@ python scripts/test_all.py                    # the canonical CI check: Ruff, th
 python scripts/validate_required_files.py     # catches a module nothing imports
 python scripts/render_screens.py              # renders screens for a visual look
 ```
+
+**6. For the render server**, give the screen a class in `_TABLE` in
+`rendering/screen_classes.py` (`static`, `scrolling_canvas` and so on; see
+[CONFIGURATION.md](CONFIGURATION.md#screen-classes-and-render-packages)), or
+`tests/test_render_packages.py` fails. If it shows data from a feed the
+server already refreshes, add it to that feed's set in `services/feeds.py`
+(`FEED_DEPENDENCIES`, or `LEAGUE_STANDINGS_DEPENDENCIES` for league tables
+and brackets) so a refresh re-renders it.
+
+Sizes for the 1080p HDMI profile go behind `config.is_hdmi_1080p_layout()`
+as their own constants; the v0.1 profiles' fonts and layout constants are
+checked against recorded references by `tests/test_v01_parity.py`, so leave
+them alone.
 
 `tests/test_screens_catalog.py`, `tests/test_screen_registry.py` and
 `tests/test_default_screen_configs.py` are where screen-level tests go. CI runs

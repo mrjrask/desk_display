@@ -41,7 +41,7 @@ For the operator runbook — installing each mode, restarting, provisioning clie
 | --- | --- | --- | --- |
 | standalone | `main.py` fetches, renders and draws; `config_ui.py` | `.env` ([`.env.example`](.env.example)) | `bash Installers/install.sh --mode standalone <profile>` |
 | server | `display_server.py` renders for clients; `config_ui.py` | `.env` ([`.env.server.example`](.env.server.example)) | `bash Installers/install.sh --mode server` |
-| client | `display_client.py` plays what a server renders; `config_ui.py` serves only the Screenshots and Feed pages | `.env.client` ([`.env.client.example`](.env.client.example)) | `bash Installers/install.sh --mode client --credentials <file> <profile>` |
+| client | `display_client.py` plays what a server renders; `config_ui.py` serves only the Screenshots, Feed and Stats pages | `.env.client` ([`.env.client.example`](.env.client.example)) | `bash Installers/install.sh --mode client --credentials <file> <profile>` |
 | combined | server, config UI, and a client for the attached panel | `.env` and `.env.client` | `bash Installers/install.sh --mode combined <profile>` |
 
 The standalone mode is the v0.1 behavior and stays fully supported. The
@@ -192,7 +192,8 @@ Supported workflow profiles include:
 | `docs/` | The remote display wire protocol, render packages, and the soak test and release runbook. |
 | `main.py` | Runtime loop, refresh orchestration, transitions, capture, touch/button handling, and display writes. |
 | `config.py` | Environment parsing, defaults, display profile detection, style config, API credentials, and runtime constants. |
-| `config_ui.py` | Flask/Waitress screen configuration web app. |
+| `config_ui.py` | Flask/Waitress configuration web app: Rotation Config, Screenshots and Feed pages. |
+| `remote_playlists_ui.py`, `stats_ui.py` | The config UI's Playlists, Clients and Add a display pages, and its Stats page. |
 | `display_server.py` | Render server API (`/api/v1`) for remote display clients: registration, leases, heartbeats, manifests, artifact downloads, rendering, and the admin API. Separate from the Feed server; see [CONFIGURATION.md](CONFIGURATION.md#render-server-api). |
 | `display_client.py` | Thin display client: plays server-rendered artifacts and render packages from its local cache. |
 | `remote_display/` | Server and client building blocks: wire models, client registry and leases, provisioning, rate limits, playlist store, artifact store, manifests, render coordinator, render packages, client sync and cache, and playback fallbacks. |
@@ -260,7 +261,7 @@ sudo apt-get install -y \
 | `requirements/dev.txt` | Development profile layered on `test.txt` and the optional sensor dependencies. |
 | `requirements/feed_server.txt` | Standalone Feed server profile (`feed_server.py`). Deliberately excludes the rendering/GPIO stack in `base.txt`. |
 | `requirements/server.txt` | Render server (`display_server.py` and the config UI): `base.txt` with no panel driver or GPIO stack. |
-| `requirements/client.txt` | Display client core (`display_client.py`): no upstream provider libraries, web server or SVG renderer. |
+| `requirements/client.txt` | Display client core (`display_client.py`), plus Flask and Waitress for its local config UI pages (Screenshots, Feed, Stats); no upstream provider libraries or SVG renderer. |
 | `requirements/client-<output>.txt` | Display client plus one panel driver (`displayhatmini`, `minipitft`, `kernel`, `framebuffer`, `window`). |
 | `requirements/hw-*.txt` | Panel driver layers with no application dependencies, combined with `base.txt` or `client.txt` by the files above. |
 | `requirements/window.txt` | Desktop window profile; `base.txt` plus the SDL window driver. |
@@ -575,7 +576,7 @@ See [ADS-B stats screen](#ads-b-dashboards) below for how the collector, databas
 | `ON_THIS_DAY_OFFLINE_FALLBACK_RETRY_SECONDS` | Retry interval after all On This Day feeds fail; defaults to 900 seconds. |
 | `ON_THIS_DAY_CACHE_PATH` | Optional path for the daily On This Day disk cache; defaults to the application cache directory. Wikimedia categories are fetched together once and successful results survive restarts. |
 | `WIKIMEDIA_USER_AGENT` | Descriptive user agent sent to Wikimedia; defaults to the DeskDisplay project URL. Set this to include your own contact URL or email when redistributing the application. |
-| `AHL_API_BASE_URL`, `AHL_API_KEY`, `AHL_CLIENT_CODE`, `AHL_LEAGUE_ID`, `AHL_SITE_ID`, `AHL_SEASON_ID`, `AHL_TEAM_ID`, `AHL_TEAM_TRICODE`, `AHL_TEAM_NAME`, `AHL_SCHEDULE_ICS_URL` | AHL/Wolves feed configuration. `AHL_API_KEY` and `AHL_SCHEDULE_ICS_URL` have empty defaults and should be supplied only through the environment or an uncommitted `.env`; missing values skip their respective requests safely and log setup guidance. |
+| `AHL_API_BASE_URL`, `AHL_API_KEY`, `AHL_CLIENT_CODE`, `AHL_LEAGUE_ID`, `AHL_SITE_ID`, `AHL_SEASON_ID`, `AHL_TEAM_ID`, `AHL_TEAM_TRICODE`, `AHL_TEAM_NAME`, `AHL_SCHEDULE_ICS_URL` | AHL/Wolves feed configuration. `AHL_API_KEY` and `AHL_SCHEDULE_ICS_URL` have empty defaults and should be supplied only through the environment or an uncommitted `.env` (on a server or combined install, the server's `.env`, never `.env.client`); missing values skip their respective requests safely and log setup guidance. |
 
 ### News headlines variables
 
@@ -733,6 +734,10 @@ Example:
 
 The default playlists include starter, weather, sensors, stocks, Hawks, NHL, Wolves, Cubs, Sox, MLB, Bears, NFL, Bulls, NBA, NCAAM, World Cup, and quad groups.
 
+Whenever a display restarts (standalone, client or combined), it starts at the
+top of the playlist labelled "Starter", or at the top of the rotation when no
+playlist has that label; it does not resume where it left off.
+
 ### MLB series screens
 
 Cubs and Sox series screens display all games in an upcoming or in-progress series:
@@ -794,8 +799,9 @@ decoupled from the display process:
 
 The authoritative list is `RAW_SCREEN_IDS` in `screens_catalog.py`. Legacy IDs
 are canonicalized automatically, including `time` → `nixie`, `sensors` →
-`inside`, `adsb live airlines` → `adsb live`, and old `* v2` scoreboard
-aliases → current scoreboard IDs. Canonicalization applies to both the
+`inside`, `adsb live airlines` → `adsb live`, `NCAAM Scoreboard` →
+`NCAA Mens BB Scoreboard`, and `NHL Standings Overview v2 West`/`East` →
+`NHL Standings Overview West`/`East`. Canonicalization applies to both the
 top-level screen map and playlist steps, so persisted rotations migrate during
 normal loading instead of silently dropping renamed screens.
 
@@ -831,6 +837,7 @@ normal loading instead of silently dropping renamed screens.
 - `bears next season sched`
 - `nfl logo`
 - `NFL Scoreboard`
+- `NFL Scoreboard v2`
 - `NFL Overview NFC`
 - `NFL Overview AFC`
 - `NFL Standings NFC`
@@ -840,6 +847,7 @@ normal loading instead of silently dropping renamed screens.
 
 - `nba logo`
 - `NBA Scoreboard`
+- `NBA Scoreboard v2`
 - `NBA Playoffs` (same design as MLB Playoffs: bracket with West left and East right, the current round's series scores under it)
 - `NCAA Mens BB Scoreboard`
 - `NCAA FBS Scoreboard`
@@ -863,9 +871,10 @@ normal loading instead of silently dropping renamed screens.
 - `hawks schedule quad`
 - `nhl logo`
 - `NHL Scoreboard`
+- `NHL Scoreboard v2`
 - `NHL Playoffs` (same design as MLB Playoffs: bracket with West left and East right, the current round's series scores under it; a projected first round from the standings before the playoffs)
-- `NHL Standings Overview West`
-- `NHL Standings Overview East`
+- `NHL Standings Overview West` (titled "NHL West" on every display)
+- `NHL Standings Overview East` (titled "NHL East")
 - `NHL Standings West`
 - `NHL Standings West v2`
 - `NHL Standings East`
@@ -906,6 +915,7 @@ normal loading instead of silently dropping renamed screens.
 - `sox schedule quad`
 - `mlb logo`
 - `MLB Scoreboard`
+- `MLB Scoreboard v2`
 - `MLB Playoffs` (bracket like mlb.com/postseason, with the current round's series scores under it; a projected bracket from the standings before the postseason starts)
 - `NL Overview`
 - `AL Overview`
@@ -937,18 +947,19 @@ Default URL:
 http://localhost:5002
 ```
 
-The UI supports:
+Its pages:
 
-- enabling and disabling screens,
-- editing screen frequencies,
-- editing per-screen `extra_seconds`,
-- setting global speed, smoothness, and vertical-speed adjustment plus optional
-  per-screen scroll-speed overrides,
-- setting optional hide-after date/times for temporary screens,
-- managing playlists and sequence order,
-- importing/exporting screen rotation payloads,
-- optional login protection with `SCREEN_UI_PASSWORD` and `SCREEN_UI_USERNAME`,
-- screenshot browsing via the included screenshots template where capture is enabled.
+| Page | Installs | What it does |
+| --- | --- | --- |
+| Rotation Config (`/`) | standalone, server, combined | Enable and disable screens; edit frequencies, per-screen `extra_seconds`, alternates and hide-after date/times; reorder playlists and sequence; set global speed, smoothness and vertical-speed adjustment plus per-screen scroll-speed overrides; load the small or large defaults; import and export rotation payloads. A standalone display also has single-screen diagnostic playback here. |
+| Playlists (`/playlists`) | server, combined | Each display playlist, edited with the same editor as Rotation Config. Each library card reads "N active of M screens": screens with a frequency above zero (and alternates with an alternate frequency above zero) that are not past their hide-after time. |
+| Clients (`/clients`) | server, combined | One card per display with its state, playlist and a one-line summary, and three tabs: **Settings** (vertical scroll adjustment, weather location, clone the playlist), **Delivery** (sync timings, playlist revisions, hardware) and **Maintenance** (Update, Upgrade, Restart client, Reset Screenshots, Clear caches, rename, credential actions). **Add a display** (`/clients/add`) sets up a new display with a one-time command. |
+| Stats (`/stats`) | every install | CPU by purpose, data sent to each display, storage against its limits, and each display's own CPU, memory and cache. |
+| Screenshots (`/screenshots`), Feed (`/feed`) | every install with a panel | The latest screenshot of each screen this machine's panel showed. |
+
+`SCREEN_UI_PASSWORD` and `SCREEN_UI_USERNAME` put every page behind a login.
+See [OPERATIONS.md](OPERATIONS.md#server-and-client-operations) for the
+Playlists, Clients and Stats pages in use.
 
 Install only the config UI service for an existing deployment with:
 
@@ -1206,7 +1217,7 @@ cleanup rules, or `python -m pytest` to execute only the unit tests.
 | Symptom | Things to check |
 | --- | --- |
 | Weather screens are empty | Verify `WEATHERKIT_*` signing values or `OWM_API_KEY`; run `python scripts/test_api_connections.py`. |
-| Radar/map is blank | Verify network access and RainViewer reachability. |
+| Radar/map is blank | Verify network access and that RainViewer and the OpenStreetMap tile servers are reachable. Map tiles are cached for 30 days in `images/cache/radar_basemap/`. |
 | Indoor sensor is blank | Verify I2C is enabled, sensor wiring, `INSIDE_SENSOR`, `INSIDE_I2C_BUSES`, optional sensor requirements (`pip install -r requirements/sensors-adafruit.txt` or `pip install -r requirements/sensors-pimoroni.txt`), and run `i2cdetect`. |
 | ADS-B stats screen shows "No aircraft tracked yet today" indefinitely | Verify `ADSB_DEVICE_1_HOST`/`ADSB_DEVICE_2_HOST` are set and reachable (`curl http://<host>/dump1090-fa/data/aircraft.json`), and that the collector service is running: `sudo systemctl status desk_display_adsb_collector.service` and `sudo journalctl -u desk_display_adsb_collector.service -f`. |
 | Wrong rotation/orientation | Avoid double rotation between kernel overlays and `DISPLAY_ROTATION`; check `HYPERPIXEL_PANEL` and display dimensions. |

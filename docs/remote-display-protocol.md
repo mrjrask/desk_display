@@ -82,6 +82,7 @@ register again and retry once.
 | `GET /api/v1/clients/<id>/config` | lease | Assigned playlist document and lease settings |
 | `GET /api/v1/clients/<id>/manifest` | lease | The artifacts this client should hold |
 | `GET /api/v1/clients/<id>/artifacts/<sha256>.<ext>` | lease | One artifact or render package |
+| `PUT /api/v1/clients/<id>/screenshots?screen=<id>&captured_at=<time>` | lease | Store this client's latest screenshot of one screen (`image/png` body), see [Screenshot uploads](#screenshot-uploads) |
 | `GET /api/v1/admin/status` | admin | Clients, leases, demand, artifact store |
 | `GET /api/v1/admin/render-status` | admin | Render coordinator state |
 | `PUT`/`DELETE /api/v1/admin/prerender/<name>` | admin | Pre-render a screen set for a profile |
@@ -123,6 +124,8 @@ the credential. Response 201 (new lease) or 200 (renewal):
 | `lease_seconds`, `lease_expires_at`, `heartbeat_interval_seconds`, `sync_interval_seconds` | Lease |
 | `client_telemetry_versions` | Heartbeat `telemetry` versions the server accepts |
 | `client_resource_versions` | Heartbeat `resources` versions the server accepts |
+| `client_command_versions` | Heartbeat `commands` versions the server accepts (absent when the server keeps no command store) |
+| `client_screenshot_upload_versions`, `screenshot_upload_max_bytes` | Screenshot upload versions and the largest image accepted (absent when uploads are off) |
 | `client_credential` | The new lease credential |
 
 The current client keeps `client_credential` and the advertised
@@ -155,8 +158,8 @@ its next sync, and keeps playing from its cache in the meantime.
 
 ### Heartbeat
 
-`POST /api/v1/clients/<id>/heartbeat` with `{"status": {...}, "demand": {...}, "telemetry": {...}, "resources": {...}}`
-(`demand`, `telemetry` and `resources` optional). `status` is a `client_status` document:
+`POST /api/v1/clients/<id>/heartbeat` with `{"status": {...}, "demand": {...}, "telemetry": {...}, "resources": {...}, "commands": {...}}`
+(all but `status` optional). `status` is a `client_status` document:
 
 - `client_id`;
 - `playback_state`: `starting`, `playing`, `focus`, `paused`, `dark`,
@@ -200,6 +203,17 @@ network interfaces since boot). As with `telemetry`, a client sends it only
 to a server listing its version in `client_resource_versions` (currently
 `[1]`), and a heartbeat without it clears the last report.
 
+`commands` is `{"version": 1, "results": [...]}`, sent only to a server
+listing that version in `client_command_versions`. Each result is
+`{id, status, exit_code, output}` for a maintenance command the client ran
+(`status` is `succeeded` or `failed`; at most 20 results). In reply, the
+heartbeat response carries `commands`: the queued commands for this client,
+each `{id, action}` with `action` one of `update`, `upgrade`, `restart`,
+`reset_screenshots` or `clear_caches`. A client only ever runs those fixed
+actions; the server never sends a command line. Commands nobody collects or
+answers expire after 15 minutes (an `upgrade` gets two hours more). See
+`remote_display/client_commands.py`.
+
 The response repeats the assignment, `manifest_revision` and lease fields.
 It may also carry `display_status`: the server's feed summary for side
 displays (`weather {temp_f, condition}`, `cubs {live_game, last_game}` and
@@ -242,7 +256,7 @@ SHA-256 of the canonical manifest (without `generated_at`).
 | `type` | `client_manifest` |
 | `client_id`, `display_profile`, `logical_width`, `logical_height`, `color_mode` | Who and what size |
 | `assignment_state`, `assigned_playlist` | As in register |
-| `configuration` | `{lease_seconds, heartbeat_interval_seconds, sync_interval_seconds}` |
+| `configuration` | `{lease_seconds, heartbeat_interval_seconds, sync_interval_seconds}`, plus `vertical_speed_adjustment` when the display has its own (set on the Clients page); the client re-paces scroll packages to it |
 | `requested_screens`, `interactive_dependency_screens` | Screens the playlist needs, and quad tiles a tap can open |
 | `artifacts` | One entry per screen (below) |
 | `missing_screens` | Screens with no usable artifact yet |
@@ -261,6 +275,9 @@ Each artifact entry has:
 - `state` (`fresh`, `stale` or `fallback`), `stale`, and `failure`
   (`{code, message, at, consecutive}`) when the last render failed;
 - `animation`, `required_capabilities` and `remote_class`;
+- `led`: the screen's notification LED and border colour as full-scale 0 to
+  1 RGB, or null; the client scales it by its own
+  `DISPLAY_HAT_MINI_LED_LEVEL`;
 - `package`: `{url, sha256, length, media_type, kind, classification,
   render_package_schema_version}`, for screens that ship a render package.
 
@@ -288,6 +305,19 @@ declared `length`. Before it uses anything it checks:
 
 It fetches packages only when it supports animation, or for clock packages.
 It re-hashes cached files on read and drops corrupt ones.
+
+### Screenshot uploads
+
+`PUT /api/v1/clients/<id>/screenshots?screen=<screen id>&captured_at=<ISO time>`
+with an `image/png` body and the client's lease credential stores the
+client's latest screenshot of that screen, replacing the previous one, for
+`scripts/collect_client_screenshots.py` to use when it cannot reach the
+display. It answers 201 with the stored entry, 404 when uploads are off
+(`DESK_DISPLAY_SCREENSHOT_UPLOADS=0`), 411 without `Content-Length`, 413 for
+an image over `screenshot_upload_max_bytes`, 415 for anything but PNG, and
+507 when the server cannot store it. A client uploads only with
+`DESK_DISPLAY_CLIENT_UPLOAD_SCREENSHOTS=1` and only to a server that lists
+version 1 in `client_screenshot_upload_versions`.
 
 A client may play offline from its cache only when that cache holds a
 manifest with `cache_complete: true` and schema versions it still supports.

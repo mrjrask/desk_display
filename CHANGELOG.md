@@ -215,18 +215,20 @@ See the README's [deployment modes](README.md#deployment-modes) and
   drawing fresh colours at the display's own pace after the screen appears
   and then holding them, instead of keeping one pair of colours.
 - Fix: the render server's artifact store now honours
-  `DESK_DISPLAY_ARTIFACT_MAX_MB` (default 512). It used to only log a warning
-  when over budget, so `cache/artifacts/` grew to a full day of renders
-  (several GB on a busy server). Unreferenced artifacts are now deleted oldest
-  first until the store fits; anything a screen or client manifest uses stays.
+  `DESK_DISPLAY_ARTIFACT_MAX_MB`. It used to only log a warning when over
+  budget, so `cache/artifacts/` grew to a full day of renders (several GB on
+  a busy server). Unreferenced artifacts are now deleted oldest first until
+  the store fits; anything a screen or client manifest uses stays.
 - Storage limits shown on the Stats page: the artifact store defaults to 1 GB
-  (`DESK_DISPLAY_ARTIFACT_MAX_MB=1024`, was 512). `images/cache/` now has an
+  (`DESK_DISPLAY_ARTIFACT_MAX_MB=1024`). `images/cache/` now has an
   enforced 256 MB limit (`DESK_DISPLAY_IMAGE_CACHE_MAX_MB`; least recently
   used tiles, logos and headshots are deleted and downloaded again when
   needed). `cache/` as a whole has a 1.5 GB limit
   (`DESK_DISPLAY_SERVER_CACHE_MAX_MB=1536`) that logs a warning when exceeded.
 - The display client's local cache (`DESK_DISPLAY_CLIENT_CACHE_MAX_MB`) now
-  defaults to 512 MB instead of 256 MB.
+  defaults to 512 MB instead of 256 MB. `scripts/clear-caches.sh` (and the
+  Clients page's **Clear caches**) clears only the pip and apt download
+  caches, never this cache.
 - Fix: a feed refresh that returns unchanged data (for example from a TTL
   cache) no longer bumps its data revision, so it no longer re-renders the
   screens that read it.
@@ -274,6 +276,63 @@ See the README's [deployment modes](README.md#deployment-modes) and
   rotations. The server had treated "nothing to show" as a render failure and
   kept serving the last render as a fallback, so the live box score stayed
   on screen, frozen, until the server restarted.
+- Each playlist card on the Playlists page reads "N active of M screens",
+  counting only screens the playlist actually plays (a frequency above zero,
+  or an alternate with an alternate frequency above zero, and not past its
+  hide-after time).
+- The Rotation Config, Playlists and Clients pages are less cluttered: the
+  shared screen editor has compact rows, a sticky column header, a "Find a
+  screen" search and a More menu for rare playlist actions; the Clients page
+  shows one card per display with **Settings**, **Delivery** and
+  **Maintenance** tabs.
+- On a client or combined install, the Screenshots and Feed pages list
+  screens in the order the display's playlist editor shows them, alternates
+  and frequency-0 rows included.
+- The NHL standings overview screens are titled "NHL West" and "NHL East" on
+  every display (they read "NHL Western/Eastern Conference" everywhere but
+  the HyperPixel 4 Square).
+- Wolves screens: the StanzaCal schedule calendar (`AHL_SCHEDULE_ICS_URL`, in
+  the server's `.env` on a server or combined install) is parsed correctly
+  (escaped commas and semicolons, opponent abbreviations and logos such as
+  Milwaukee), a started game with no result shows as live, a live game stays
+  live past midnight (until 4 AM), and a live Wolves game no longer breaks the
+  screen registry.
+- Radar is sharp on large displays: the base map is stitched from
+  OpenStreetMap tiles at zoom 9 (1080p), 8 (720 px square and 800×480) or 7
+  (small panels) and cached for 30 days in `images/cache/radar_basemap/`,
+  radar uses RainViewer's 512 px tiles on displays larger than 256 px, the
+  map widens on wide displays instead of stretching, both layers line up to
+  the pixel, and the map carries an "© OpenStreetMap" credit.
+- 1080p HDMI layouts fill the screen on Bears Next, Hawks Next/Next Home,
+  Hawks and Bulls Last, Bulls Next, every team's Stand 1/2/3, Cubs/Sox series,
+  the NFC/AFC overviews and ADS-B Live; the NCAA FBS league logo is no longer
+  scaled twice, and the Cubs/Sox R/H/E labels clear the title. Other profiles
+  are unchanged.
+- Sun & Moon keeps its Rise and Set rows together on square displays, and
+  shows the latitude and longitude centred under the cards on HyperPixel 4
+  Square, where the title always crowded them out.
+- On This Day draws the emoji in Hebcal holiday titles in colour with Noto
+  Color Emoji (`fonts-noto-color-emoji`), and drops them, instead of drawing
+  empty boxes, where that font is missing.
+- Cubs/Sox Next keep today's game until first pitch (they showed tomorrow's
+  game whenever there was one), and count warmup and a delayed start as not
+  yet started.
+- Fix: the render server refreshed live scoreboards only once a day, so a
+  finished game could stay on screen mid-inning; its live-game check works
+  again.
+- Fix: the Hawks schedule quad's standings tile was black on the render
+  server.
+- `scripts/upgrade.sh` runs pip without prompts or a version check, and
+  every pip step and the service restart print the elapsed time and the
+  processes still running every 60 seconds
+  (`DESK_DISPLAY_HEARTBEAT_SECONDS`), so a stalled step names itself.
+- `Installers/install_hyperpixel.sh` keeps an existing `INSIDE_I2C_BUSES`
+  instead of resetting it to 13, and a failed sensor probe says which buses
+  it tried and why.
+- The fullscreen kernel output window has no title, so the Pi taskbar's
+  "Desk Display" tooltip no longer floats over the picture.
+- `scripts/logo_getter.py` downloads NCAA team logos named the way the
+  scoreboards look them up, for review or for committing to `images/ncaa/`.
 
 ### Known limitations
 
