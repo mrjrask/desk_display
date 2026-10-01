@@ -52,6 +52,32 @@ def test_document_semantics_are_preserved(store):
     assert ps.document_screens(saved) == (("date", "inside", "weather1"), ("weather2",))
 
 
+def test_active_screens_count_only_what_plays():
+    assert ps.document_active_screens(DOC) == ("date", "inside", "weather1", "weather2")
+    document = {
+        "screens": {
+            "date": 1,
+            "nixie": 0,
+            "weather1": 0,
+            "weather2": False,
+            "inside": {"frequency": 0, "alt": {"screen": "travel", "frequency": 2}},
+        },
+        "playlists": {"p": {"label": "all", "steps": [{"screen": s} for s in ("date", "nixie", "weather1", "news")]}},
+        "sequence": [{"playlist": "p"}],
+    }
+    assert ps.document_active_screens(document) == ("date",)
+    assert ps.document_screens(document)[0] == ("date", "news", "nixie", "weather1")
+    # Frequencies are coerced like the scheduler does.
+    document["screens"]["date"] = {"frequency": "1", "alt": {"screen": "nixie", "frequency": "2"}}
+    assert ps.document_active_screens(document) == ("date", "nixie")
+    # Screens past their hide-after time no longer play.
+    document["screens"]["weather1"] = {"frequency": 1, "hide_after_enabled": True,
+                                       "hide_after_at": "2000-01-01T00:00:00+00:00"}
+    document["screens"]["weather2"] = {"frequency": 1, "hide_after_enabled": True,
+                                       "hide_after_at": "2999-01-01T00:00:00+00:00"}
+    assert ps.document_active_screens(document) == ("date", "nixie", "weather2")
+
+
 def test_legacy_ids_are_canonicalized(store):
     doc = {"screens": {"time": 1, "sensors": 1}}
     saved = store.create("Legacy", doc, actor="jason")["document"]

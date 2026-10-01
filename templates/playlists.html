@@ -190,7 +190,8 @@ async function loadList() {
     const users = item.clients.length ? item.clients.join(", ") : "no clients";
     li.innerHTML = "<strong></strong><div class='muted'></div>";
     li.querySelector("strong").textContent = item.name;
-    li.querySelector("div").textContent = `${item.screen_count} screens · ${users}`;
+    const total = item.screen_count + (item.alternate_count || 0);
+    li.querySelector("div").textContent = `${item.active_count} active of ${total} screen${total === 1 ? "" : "s"} · ${users}`;
     li.addEventListener("click", () => {
       if (!confirmDiscard()) return;
       select(item.id);

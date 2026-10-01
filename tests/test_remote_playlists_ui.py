@@ -110,6 +110,7 @@ def test_playlist_crud(web):
     listing = web.get("/api/playlists").get_json()
     assert [p["name"] for p in listing["playlists"]] == ["Kitchen"]
     assert listing["playlists"][0]["screen_count"] == 4
+    assert listing["playlists"][0]["active_count"] == 5  # weather2 plays as weather1's alternate
 
     fetched = web.get(f"/api/playlists/{playlist['id']}").get_json()
     assert fetched["document"]["screens"]["weather1"]["alt"] == {"screen": "weather2", "frequency": 2}

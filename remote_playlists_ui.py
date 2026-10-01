@@ -48,6 +48,7 @@ from remote_display.playlist_store import (
     PlaylistStoreError,
     PlaylistValidationError,
     age_seconds,
+    document_active_screens,
     document_screens,
     registry_snapshot_path,
     store_path,
@@ -274,6 +275,7 @@ def register(
             "clients": _store().clients_using(playlist["id"], data),
             "screen_count": len(required),
             "alternate_count": len(alternates),
+            "active_count": len(document_active_screens(playlist["document"])),
             "sequence_length": len(playlist["document"].get("sequence") or []),
         }
 

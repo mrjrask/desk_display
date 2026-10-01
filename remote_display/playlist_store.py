@@ -291,6 +291,34 @@ def document_screens(document: Mapping[str, Any]) -> tuple[tuple[str, ...], tupl
     return tuple(sorted(required)), tuple(sorted(alternates - required))
 
 
+def document_active_screens(document: Mapping[str, Any]) -> tuple[str, ...]:
+    """Return the screen IDs a document actually plays.
+
+    A screen is active when the scheduler gives it a positive frequency, or
+    when it is the alternate of such a screen with a positive alternate
+    frequency.  Frequencies are read the way :func:`schedule.build_scheduler`
+    reads them, so ``"2"`` counts like ``2``.  Screens past their hide-after
+    time, and screens that only appear in playlist groups (frequency 0 or not
+    listed), are not active.
+    """
+
+    from schedule import build_scheduler
+
+    try:
+        scheduler = build_scheduler(copy.deepcopy(dict(document)))
+    except ValueError:
+        return ()
+    now = datetime.now(timezone.utc)
+    active: set[str] = set()
+    for entry in scheduler._entries:
+        if entry.frequency <= 0 or (entry.hide_after is not None and now >= entry.hide_after):
+            continue
+        active.add(entry.screen_id)
+        if entry.alternate is not None and entry.alternate.frequency > 0:
+            active.update(entry.alternate.screen_ids)
+    return tuple(sorted(active))
+
+
 @dataclass(frozen=True)
 class StoredAssignment:
     client_id: str
