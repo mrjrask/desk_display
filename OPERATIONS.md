@@ -767,6 +767,7 @@ the next render; restarting `desk_display_server.service` restarts them all.
 | --- | --- |
 | `sudo journalctl -u <unit>` | All logs; secrets are redacted before they are written |
 | `.runtime/server/` | Playlists, assignments, known clients, credential hashes, migration bundles and upgrade snapshots |
+| `.runtime/server/stats_history.json` | The Stats page's 1-hour and 24-hour history and all-time data totals (`DESK_DISPLAY_SERVER_STATS_HISTORY_PATH`; saved every 5 minutes and on stop; **Reset stats…** clears it) |
 | `.runtime/server/client_screenshots/` | Screenshots displays on another network uploaded (`DESK_DISPLAY_SCREENSHOT_UPLOAD_MAX_MB`, default 64; safe to delete, not backed up) |
 | `cache/artifacts/` | Rendered artifacts (`DESK_DISPLAY_ARTIFACT_MAX_MB`, default 1024; safe to delete, the server re-renders) |
 | `cache/` | Feed caches and history (`DESK_DISPLAY_SERVER_CACHE_MAX_MB`, default 1536; going over only logs a warning) |

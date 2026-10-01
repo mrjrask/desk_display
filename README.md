@@ -70,7 +70,8 @@ flowchart LR
 - **Stats.** The configuration UI's `/stats` page shows what the project's
   CPU goes to (rendering per display profile, feed refresh, serving
   displays), the data sent to each display, network throughput, free storage,
-  and each display's own CPU, memory and cache (see OPERATIONS.md,
+  and each display's own CPU, memory and cache. Its history survives
+  restarts, and **Reset stats…** starts it over (see OPERATIONS.md,
   "Checking CPU, data and storage").
 - **Manifests and artifacts.** Each client fetches a manifest that lists
   content-addressed artifacts for its profile: still PNGs, plus render
@@ -954,7 +955,7 @@ Its pages:
 | Rotation Config (`/`) | standalone, server, combined | Enable and disable screens; edit frequencies, per-screen `extra_seconds`, alternates and hide-after date/times; reorder playlists and sequence; set global speed, smoothness and vertical-speed adjustment plus per-screen scroll-speed overrides; load the small or large defaults; import and export rotation payloads. A standalone display also has single-screen diagnostic playback here. |
 | Playlists (`/playlists`) | server, combined | Each display playlist, edited with the same editor as Rotation Config. Each library card reads "N active of M screens": screens with a frequency above zero (and alternates with an alternate frequency above zero) that are not past their hide-after time. |
 | Clients (`/clients`) | server, combined | One card per display with its state, playlist and a one-line summary, and three tabs: **Settings** (vertical scroll adjustment, weather location, clone the playlist), **Delivery** (sync timings, playlist revisions, hardware) and **Maintenance** (Update, Upgrade, Restart client, Reset Screenshots, Clear caches, rename, credential actions). **Add a display** (`/clients/add`) sets up a new display with a one-time command. |
-| Stats (`/stats`) | every install | CPU by purpose, data sent to each display, storage against its limits, and each display's own CPU, memory and cache. |
+| Stats (`/stats`) | every install | CPU by purpose, data sent to each display, storage against its limits, and each display's own CPU, memory and cache. On a server its history and all-time totals survive restarts (`.runtime/server/stats_history.json`), and **Reset stats…** starts them over. |
 | Screenshots (`/screenshots`), Feed (`/feed`) | every install with a panel | The latest screenshot of each screen this machine's panel showed. |
 
 `SCREEN_UI_PASSWORD` and `SCREEN_UI_USERNAME` put every page behind a login.
