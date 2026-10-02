@@ -2,9 +2,10 @@
 from __future__ import annotations
 
 import io
+from datetime import datetime, timezone
 
 import pytest
-from PIL import Image
+from PIL import Image, ImageChops
 
 pytest.importorskip("flask")
 
@@ -85,6 +86,7 @@ def test_live_clock_refusals(tmp_path):
     credential = register(api)["client_credential"]
     assert clock_get(api, credential, "weather1.png").status_code == 404
     assert clock_get(api, credential, "date.png?colors=-1").status_code == 400
+    assert clock_get(api, credential, "date.png?layers=2").status_code == 400
     assert clock_get(api, "not-a-lease", "date.png").status_code == 401
     response = clock_get(api, credential, "date.png")
     assert response.status_code == 503
@@ -96,3 +98,53 @@ def test_without_a_live_clock_the_server_neither_offers_nor_serves_one(tmp_path)
     lease = register(api)
     assert "live_clock_faces" not in lease
     assert clock_get(api, lease["client_credential"], "date.png").status_code == 404
+
+
+def test_date_layers_are_asked_for_with_layers_1(tmp_path):
+    calls = []
+
+    def live_clock(screen_id, profile_id, seed, **kwargs):
+        calls.append((screen_id, seed, kwargs))
+        return Image.new("RGB", (320, 240 * (3 if kwargs.get("layers") else 1)))
+
+    api = make_api(tmp_path, live_clock)
+    credential = register(api)["client_credential"]
+    response = clock_get(api, credential, "date.png?layers=1")
+    assert response.status_code == 200
+    assert Image.open(io.BytesIO(response.data)).size == (320, 720)
+    assert calls == [("date", None, {"layers": True})]
+    # Nixie has no colours to cycle: layers=1 is just the face.
+    assert clock_get(api, credential, "nixie.png?layers=1").status_code == 200
+    assert calls[-1] == ("nixie", None, {})
+
+
+def test_date_layers_rebuild_the_face_in_any_colours(monkeypatch):
+    import remote_display.server_rendering as server_rendering
+    from rendering.clock_faces import clock_layout, render_clock
+
+    instant = datetime(2026, 10, 2, 18, 30, tzinfo=timezone.utc)
+
+    class Frozen(datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return instant
+
+    monkeypatch.setattr(server_rendering, "datetime", Frozen)
+    profile = PROFILE_PRESETS["display_hat_mini"]
+    sheet = LiveClock().render("date", "display_hat_mini", layers=True)
+    assert sheet.size == (320, 720)
+    h = profile.height
+    base, top, bottom = (sheet.crop((0, i * h, 320, (i + 1) * h)) for i in range(3))
+    assert top.getbbox() is not None and bottom.getbbox() is not None
+    assert top.getbbox()[1] < bottom.getbbox()[1]  # the date above the time
+
+    colours = ((250, 120, 90), (100, 200, 255))
+    expected = render_clock(clock_layout("date", profile), profile, instant, colors=colours).convert("RGB")
+    rebuilt = Image.new("RGB", base.size)
+    px, b, t, m = rebuilt.load(), base.load(), top.load(), bottom.load()
+    for y in range(h):
+        for x in range(320):
+            px[x, y] = tuple(min(255, round(b[x, y][i] + t[x, y][i] * colours[0][i] / 255
+                                            + m[x, y][i] * colours[1][i] / 255)) for i in range(3))
+    diff = ImageChops.difference(rebuilt, expected)
+    assert max(hi for _lo, hi in diff.getextrema()) <= 3

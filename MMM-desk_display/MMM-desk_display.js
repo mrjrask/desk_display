@@ -1,7 +1,7 @@
 /* MagicMirror² module: MMM-desk_display
  * Plays screens rendered by a desk_display render server (display_server.py),
  * acting as one of its remote display clients. */
-/* global Module, Log, DeskDisplaySchedule */
+/* global Module, Log, DeskDisplaySchedule, DeskDisplayMotion */
 const DD_RETRY_MS = 5000;
 const DD_CLOCK_WAIT_MS = 1500;  // show a clock's still if the live face is slower than this
 
@@ -23,7 +23,7 @@ Module.register("MMM-desk_display", {
   },
 
   getScripts () {
-    return [this.file("lib/schedule.js")];
+    return [this.file("lib/schedule.js"), this.file("lib/motion.js")];
   },
 
   getStyles () {
@@ -39,6 +39,7 @@ Module.register("MMM-desk_display", {
     this.statusMessage = "Connecting to desk_display…";
     this.timer = null;
     this.clockTimer = null;
+    this.motionStop = null;
     this.current = null;
     this.sendSocketNotification("DD_START", {
       serverUrl: this.config.serverUrl,
@@ -98,7 +99,13 @@ Module.register("MMM-desk_display", {
       return;
     }
     this.show(screenId);
-    const seconds = Math.max(1, Number(this.config.screenSeconds) + this.scheduler.extraSecondsFor(screenId));
+    // As on a desk_display client, a scroll or logo slide holds after its motion.
+    const image = this.images[screenId];
+    const [width, height] = this.profileSize || [0, 0];
+    let motion = 0;
+    if (image.scroll) motion = DeskDisplayMotion.scrollSeconds(image.scroll, height);
+    else if (image.slide) motion = DeskDisplayMotion.slideSeconds(image.slide, width);
+    const seconds = Math.max(1, Number(this.config.screenSeconds) + this.scheduler.extraSecondsFor(screenId) + motion);
     this.timer = setTimeout(() => this.advance(), seconds * 1000);
   },
 
@@ -112,18 +119,7 @@ Module.register("MMM-desk_display", {
     img.alt = alt;
     if (instant) img.classList.add("dd-instant");
     img.onload = () => {
-      if (showing !== this.showing) {
-        img.remove(); // loaded after the next screen took over
-        return;
-      }
-      this.loadedShowing = showing;
-      const swap = () => {
-        img.classList.add("dd-visible");
-        const old = [...this.frame.querySelectorAll("img")].filter((i) => i !== img);
-        setTimeout(() => old.forEach((i) => i.remove()), instant ? 0 : this.config.fadeMs + 50);
-      };
-      if (instant) swap();
-      else requestAnimationFrame(swap);
+      if (!this.present(img, showing, instant)) return;
       if (done) done(true);
     };
     img.onerror = () => {
@@ -140,12 +136,193 @@ Module.register("MMM-desk_display", {
     this.frame.appendChild(img);
   },
 
+  /* Fade *el* (in the frame) in over what is there, unless the next screen
+   * has taken over since *showing*; returns whether it was shown. */
+  present (el, showing, instant = false) {
+    if (showing !== this.showing || !this.frame) {
+      el.remove();
+      return false;
+    }
+    if (!el.parentNode) this.frame.appendChild(el);
+    if (instant) el.classList.add("dd-instant");
+    this.loadedShowing = showing;
+    const swap = () => {
+      el.classList.add("dd-visible");
+      const old = [...this.frame.children].filter((i) => i !== el);
+      setTimeout(() => old.forEach((i) => i.remove()), instant ? 0 : this.config.fadeMs + 50);
+    };
+    if (instant) swap();
+    else requestAnimationFrame(swap);
+    return true;
+  },
+
+  /* A canvas the size of the screen's logical pixels, styled like an image. */
+  canvas () {
+    const [width, height] = this.profileSize;
+    const canvas = document.createElement("canvas");
+    canvas.width = width;
+    canvas.height = height;
+    return canvas;
+  },
+
+  /* Run *draw(seconds since start)* every animation frame until it returns
+   * true, the next screen takes over, or the motion is stopped. */
+  animate (showing, draw) {
+    let frame = null;
+    const started = performance.now();
+    const step = () => {
+      frame = null;
+      if (showing !== this.showing) return;
+      if (!draw((performance.now() - started) / 1000)) frame = requestAnimationFrame(step);
+    };
+    step();
+    this.motionStop = () => { if (frame !== null) cancelAnimationFrame(frame); };
+  },
+
+  /* Load *src* as an image, then call *ready(img)*; on failure show the still. */
+  withImage (src, screenId, showing, ready) {
+    const img = new Image();
+    img.onload = () => { if (showing === this.showing) ready(img); };
+    img.onerror = () => { if (showing === this.showing) this.place(this.images[screenId].url, screenId); };
+    img.src = src;
+  },
+
+  /* A tall screen: hold, step down its full-height canvas, hold. */
+  playScroll (screenId, scroll, showing) {
+    const [width, height] = this.profileSize;
+    this.withImage(scroll.url, screenId, showing, (img) => {
+      const canvas = this.canvas();
+      const ctx = canvas.getContext("2d");
+      let last = null;
+      this.animate(showing, (t) => {
+        const offset = DeskDisplayMotion.scrollOffset(scroll, height, t);
+        if (offset !== last) ctx.drawImage(img, 0, offset, width, height, 0, 0, width, height);
+        last = offset;
+        return DeskDisplayMotion.scrollDone(scroll, height, t);
+      });
+      this.present(canvas, showing);
+    });
+  },
+
+  /* A logo screen: the logo crosses from a random side and rests centred. */
+  playSlide (screenId, slide, showing) {
+    const [width, height] = this.profileSize;
+    const direction = Math.random() < 0.5 ? "ltr" : "rtl";
+    this.withImage(slide.url, screenId, showing, (img) => {
+      const canvas = this.canvas();
+      const ctx = canvas.getContext("2d");
+      const [r, g, b] = slide.background;
+      let last;
+      this.animate(showing, (t) => {
+        const x = DeskDisplayMotion.slideX(slide, width, t, direction);
+        if (x !== last) {
+          ctx.fillStyle = `rgb(${r}, ${g}, ${b})`;
+          ctx.fillRect(0, 0, width, height);
+          ctx.drawImage(img, x === null ? Math.trunc((width - img.width) / 2) : x, slide.y);
+        }
+        last = x;
+        return x === null;
+      });
+      this.present(canvas, showing);
+    });
+  },
+
+  /* The date face from layers the server draws each minute, recoloured
+   * here: fresh colours every interval for a few seconds, as on a desk_display
+   * client. A server without layers sends the plain face. */
+  playDate (screenId, image, showing) {
+    const [width, height] = this.profileSize;
+    const { interval, steps } = DeskDisplayMotion.colorCycle(this.config.displayProfile, this.config.screenSeconds);
+    const current = () => showing === this.showing && this.timer !== null;
+    const canvas = this.canvas();
+    const ctx = canvas.getContext("2d");
+    const tint = document.createElement("canvas");
+    tint.width = width;
+    tint.height = height;
+    const tintCtx = tint.getContext("2d");
+    let sheet = null;
+    let step = 0;
+    let colours = [DeskDisplayMotion.brightColor(), DeskDisplayMotion.brightColor()];
+    let cycleTimer = null;
+    let minuteTimer = null;
+
+    const compose = () => {
+      ctx.globalCompositeOperation = "source-over";
+      ctx.drawImage(sheet, 0, 0, width, height, 0, 0, width, height);
+      if (sheet.height < height * 3) return; // a plain face
+      colours.forEach(([r, g, b], layer) => {
+        // colour × coverage, added onto the face drawn without text colour
+        tintCtx.globalCompositeOperation = "source-over";
+        tintCtx.fillStyle = `rgb(${r}, ${g}, ${b})`;
+        tintCtx.fillRect(0, 0, width, height);
+        tintCtx.globalCompositeOperation = "multiply";
+        tintCtx.drawImage(sheet, 0, height * (layer + 1), width, height, 0, 0, width, height);
+        ctx.globalCompositeOperation = "lighter";
+        ctx.drawImage(tint, 0, 0);
+      });
+      ctx.globalCompositeOperation = "source-over";
+    };
+    const load = async () => {
+      const response = await fetch(`${image.liveUrl}?layers=1&t=${Date.now()}`, { cache: "no-store" });
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      const bitmap = await createImageBitmap(await response.blob());
+      if (bitmap.width !== width || (bitmap.height !== height && bitmap.height !== height * 3)) {
+        throw new Error("unexpected clock size");
+      }
+      return bitmap;
+    };
+    const cycle = () => {
+      cycleTimer = null;
+      if (!current()) return;
+      step += 1;
+      colours = [DeskDisplayMotion.brightColor(), DeskDisplayMotion.brightColor()];
+      compose();
+      if (step < steps) cycleTimer = setTimeout(cycle, interval * 1000);
+    };
+    const nextMinute = () => {
+      minuteTimer = setTimeout(async () => {
+        if (!current()) return;
+        try {
+          sheet = await load();
+          if (current()) compose();
+        } catch {
+          // keep the face already on show
+        }
+        if (current()) nextMinute();
+      }, 60000 - (Date.now() % 60000) + 20);
+    };
+    this.motionStop = () => {
+      clearTimeout(cycleTimer);
+      clearTimeout(minuteTimer);
+    };
+    load().then((bitmap) => {
+      if (!current()) return;
+      sheet = bitmap;
+      compose();
+      this.present(canvas, showing);
+      if (bitmap.height === height * 3) cycleTimer = setTimeout(cycle, interval * 1000);
+      nextMinute();
+    }, () => {
+      if (showing === this.showing && this.loadedShowing !== showing) this.place(image.url, screenId);
+    });
+  },
+
   show (screenId) {
     const image = this.images[screenId];
     this.current = screenId;
     this.showing = (this.showing || 0) + 1;
     this.sendSocketNotification("DD_SHOWING", { clientId: this.config.clientId, screenId });
-    if (image.liveUrl) {
+    if (image.scroll) {
+      this.playScroll(screenId, image.scroll, this.showing);
+    } else if (image.slide) {
+      this.playSlide(screenId, image.slide, this.showing);
+    } else if (image.liveUrl && screenId === "date" && this.profileSize) {
+      const showing = this.showing;
+      this.playDate(screenId, image, showing);
+      setTimeout(() => {
+        if (this.showing === showing && this.loadedShowing !== showing) this.place(image.url, screenId);
+      }, DD_CLOCK_WAIT_MS);
+    } else if (image.liveUrl) {
       // A clock: show it drawn now, keep it ticking, and fall back to the still.
       this.clockSeed = Math.floor(Math.random() * 1e9);
       const showing = this.showing;
@@ -185,6 +362,8 @@ Module.register("MMM-desk_display", {
   stopClock () {
     clearTimeout(this.clockTimer);
     this.clockTimer = null;
+    if (this.motionStop) this.motionStop();
+    this.motionStop = null;
   },
 
   getDom () {

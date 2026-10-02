@@ -5,9 +5,12 @@
  * manifest, heartbeat with demand, and download static PNG artifacts into a local
  * cache, verifying length and SHA-256 before use.
  *
- * Render packages (animations) are not played: the client registers with
- * supports_animation=false, so the server ships a static image per screen.
- * The date and nixie clocks are fetched live from a server that offers them
+ * Of the render packages, vertical scrolls and logo slides are played: the
+ * module keeps each one's image (the full-height canvas, or the logo) and
+ * timing, and the browser moves it as a desk_display client would. Other
+ * moving screens show their still (the client registers with
+ * supports_animation=false, so the Clients page still warns about them). The date and
+ * nixie clocks are fetched live from a server that offers them
  * (`live_clock_faces`), since a still would show the time it was rendered.
  */
 "use strict";
@@ -24,6 +27,10 @@ const MAX_ARTIFACT_BYTES = 16 * 1024 * 1024;
 const MIN_INTERVAL = 5;
 const MAX_INTERVAL = 3600;
 const PNG_SIGNATURE = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+const RENDER_PACKAGE_MEDIA_TYPE = "application/vnd.desk-display.render-package+json";
+const MOTION_KINDS = new Set(["scroll", "animation"]);
+const MIN_ADJUSTMENT = -0.9;
+const MAX_ADJUSTMENT = 3;
 
 // Canonical logical sizes and colour modes, mirroring display_profiles.PROFILE_PRESETS.
 const PROFILES = {
@@ -37,6 +44,88 @@ const PROFILES = {
   fallback_hd: [1280, 720, "RGB"],
   fallback_default: [320, 240, "RGB"]
 };
+
+/* This display's own "Synchronized vertical scroll adjustment", from its manifest. */
+function verticalSpeedAdjustment (manifest) {
+  const value = manifest && manifest.configuration && manifest.configuration.vertical_speed_adjustment;
+  if (typeof value !== "number" || !Number.isFinite(value)) return null;
+  return Math.min(MAX_ADJUSTMENT, Math.max(MIN_ADJUSTMENT, value));
+}
+
+/* A scroll package's frame time re-paced to this display's own adjustment,
+ * as playback/package_player.py does: the server paced it with the global
+ * adjustment it records in the package. */
+function repacedFrameSeconds (scroll, adjustment) {
+  const baked = scroll.vertical_speed_adjustment;
+  if (adjustment === null || typeof baked !== "number") return scroll.frame_seconds;
+  return Math.max(0.001, scroll.frame_seconds * (1 + baked) / (1 + adjustment));
+}
+
+function decodeAsset (pkg, id) {
+  const asset = (pkg.assets || {})[id];
+  if (!asset || asset.media_type !== "image/png" || typeof asset.data !== "string") return null;
+  const data = Buffer.from(asset.data, "base64");
+  const digest = crypto.createHash("sha256").update(data).digest("hex");
+  if (data.length !== asset.length || digest !== asset.sha256 || !data.subarray(0, 8).equals(PNG_SIGNATURE)) return null;
+  return { asset, data, sha256: digest };
+}
+
+const finite = (v) => typeof v === "number" && Number.isFinite(v);
+
+/* What the browser needs from a parsed render package: {motion, image}
+ * (image: the PNG to keep), {motion: null} for a kind the module does not
+ * play, or {error}. */
+function motionFromPackage (pkg, width, height) {
+  if (!pkg || pkg.type !== "render_package") return { error: "not a render package" };
+  if (pkg.width !== width || pkg.height !== height) return { error: "package is for another size" };
+  if (pkg.kind === "scroll") {
+    const body = pkg.scroll || {};
+    const numbers = ["step_px", "frame_seconds", "pause_start_seconds", "pause_end_seconds"];
+    if (numbers.some((k) => !finite(body[k]) || body[k] < 0) || !(body.step_px >= 1 && body.frame_seconds > 0) ||
+        !["down", "up"].includes(body.direction)) {
+      return { error: "bad scroll timing" };
+    }
+    const canvas = decodeAsset(pkg, body.canvas);
+    if (!canvas) return { error: "canvas length or hash mismatch" };
+    if (canvas.asset.width !== width || !(canvas.asset.height > height)) {
+      return { error: "canvas must be the screen's width and taller" };
+    }
+    const motion = {
+      kind: "scroll",
+      image: canvas.sha256,
+      canvas_height: canvas.asset.height,
+      step_px: Math.floor(body.step_px),
+      frame_seconds: body.frame_seconds,
+      pause_start_seconds: body.pause_start_seconds,
+      pause_end_seconds: body.pause_end_seconds,
+      direction: body.direction
+    };
+    if (finite(body.vertical_speed_adjustment)) motion.vertical_speed_adjustment = body.vertical_speed_adjustment;
+    return { motion, image: canvas.data };
+  }
+  if (pkg.kind === "animation" && pkg.animation && pkg.animation.slide) {
+    const slide = pkg.animation.slide;
+    const bg = slide.background;
+    if (!finite(slide.speed_px_per_second) || !(slide.speed_px_per_second > 0) || !Number.isInteger(slide.y) ||
+        !Array.isArray(bg) || bg.length < 3 || bg.slice(0, 3).some((c) => !Number.isInteger(c) || c < 0 || c > 255)) {
+      return { error: "bad logo slide" };
+    }
+    const sprite = decodeAsset(pkg, slide.sprite);
+    if (!sprite) return { error: "logo length or hash mismatch" };
+    return {
+      motion: {
+        kind: "slide",
+        image: sprite.sha256,
+        sprite_width: sprite.asset.width,
+        y: slide.y,
+        speed_px_per_second: slide.speed_px_per_second,
+        background: bg.slice(0, 3)
+      },
+      image: sprite.data
+    };
+  }
+  return { motion: null };
+}
 
 class SyncError extends Error {
   constructor (code, message, { status = null, retryAfter = null } = {}) {
@@ -363,6 +452,7 @@ class DeskDisplayClient {
     if (response.status === 304) {
       // Unchanged, but retry any image an earlier pass failed to download.
       await this._downloadArtifacts(current, { onlyMissing: true });
+      await this._downloadMotions(current);
       return false;
     }
     if (response.status !== 200) throw this._fail(response, "manifest");
@@ -370,6 +460,7 @@ class DeskDisplayClient {
     if (manifest.type !== "client_manifest") throw new SyncError("invalid_response", "manifest has the wrong type");
     this._absorb(manifest);
     await this._downloadArtifacts(manifest);
+    await this._downloadMotions(manifest);
     this.state.manifest = manifest;
     this._pruneArtifacts();
     return true;
@@ -381,6 +472,71 @@ class DeskDisplayClient {
       a && a.artifact_type === "static_image" && a.media_type === "image/png" &&
       typeof a.url === "string" && a.url.startsWith(prefix) && /^[0-9a-f]{64}$/.test(a.sha256 || "") &&
       Number.isInteger(a.length) && a.length > 0 && a.length <= MAX_ARTIFACT_BYTES);
+  }
+
+  /* Requested screens with a render package the module may play. */
+  _motionEntries (manifest) {
+    const prefix = `/api/v1/clients/${encodeURIComponent(this.clientId)}/artifacts/`;
+    return this._imageEntries(manifest).filter((a) => {
+      const pkg = a.package;
+      return a.role === "requested" && pkg && typeof pkg === "object" && MOTION_KINDS.has(pkg.kind) &&
+        pkg.media_type === RENDER_PACKAGE_MEDIA_TYPE && typeof pkg.url === "string" && pkg.url.startsWith(prefix) &&
+        /^[0-9a-f]{64}$/.test(pkg.sha256 || "") && Number.isInteger(pkg.length) && pkg.length > 0 &&
+        pkg.length <= MAX_ARTIFACT_BYTES;
+    });
+  }
+
+  /* What is kept of a render package: its motion, beside its image. */
+  motionFile (packageSha256) {
+    return path.join(this.artifactDir, `${packageSha256}.motion.json`);
+  }
+
+  /* The kept motion, {motion: null} for a package the module does not play,
+   * or null when it is not (or no longer fully) on disk. */
+  _readMotion (packageSha256) {
+    try {
+      const kept = JSON.parse(fs.readFileSync(this.motionFile(packageSha256), "utf8"));
+      return kept.motion === null || fs.existsSync(this.artifactFile(kept.motion.image)) ? kept : null;
+    } catch { return null; }
+  }
+
+  /* Download each new scroll or logo-slide package and keep its image and
+   * timing. A package that fails leaves its screen on the still. */
+  async _downloadMotions (manifest) {
+    for (const entry of this._motionEntries(manifest)) {
+      const pkg = entry.package;
+      if (this._readMotion(pkg.sha256)) continue;
+      const suffix = pkg.url.slice(`/api/v1/clients/${encodeURIComponent(this.clientId)}`.length);
+      let data;
+      try {
+        const response = await this._clientRequest("GET", suffix, { raw: true, headers: { Accept: RENDER_PACKAGE_MEDIA_TYPE } });
+        if (response.status !== 200) {
+          this.noteError(new SyncError("package_download_failed", `${entry.screen_id} package: HTTP ${response.status}`));
+          continue;
+        }
+        data = Buffer.from(await response.res.arrayBuffer());
+      } catch (err) {
+        this.noteError(err instanceof SyncError ? err : new SyncError("network_error", `${entry.screen_id} package: ${err.message}`));
+        continue;
+      }
+      if (data.length !== pkg.length || crypto.createHash("sha256").update(data).digest("hex") !== pkg.sha256) {
+        this.noteError(new SyncError("package_invalid", `${entry.screen_id} package: length or hash mismatch`));
+        continue;
+      }
+      let parsed;
+      try { parsed = JSON.parse(data.toString("utf8")); } catch { parsed = null; }
+      const { motion, image, error } = motionFromPackage(parsed, this.width, this.height);
+      if (error) {
+        this.noteError(new SyncError("package_invalid", `${entry.screen_id} package: ${error}`));
+        continue;
+      }
+      if (motion) {
+        const target = this.artifactFile(motion.image);
+        fs.writeFileSync(`${target}.tmp`, image, { mode: 0o644 });
+        fs.renameSync(`${target}.tmp`, target);
+      }
+      this._writeAtomic(path.join("artifacts", `${pkg.sha256}.motion.json`), JSON.stringify({ motion }), 0o644);
+    }
   }
 
   artifactFile (sha256) {
@@ -431,6 +587,12 @@ class DeskDisplayClient {
 
   _pruneArtifacts () {
     const keep = new Set(this._imageEntries(this.state.manifest).map((a) => `${a.sha256}.png`));
+    for (const entry of this._motionEntries(this.state.manifest)) {
+      const kept = this._readMotion(entry.package.sha256);
+      if (!kept) continue;
+      keep.add(`${entry.package.sha256}.motion.json`);
+      if (kept.motion) keep.add(`${kept.motion.image}.png`);
+    }
     for (const name of fs.readdirSync(this.artifactDir)) {
       if (!keep.has(name)) fs.rmSync(path.join(this.artifactDir, name), { force: true });
     }
@@ -464,10 +626,14 @@ class DeskDisplayClient {
   }
 
   /* The date or nixie face at the current time, drawn by the server. A seed
-   * keeps the date face's colours for one showing. Throws a SyncError. */
-  async fetchClock (screenId, colorsSeed = null) {
+   * keeps the date face's colours for one showing; *layers* asks for the
+   * date face as layers the browser colours itself. Throws a SyncError. */
+  async fetchClock (screenId, colorsSeed = null, { layers = false } = {}) {
     if (!this.liveClocks.includes(screenId)) throw new SyncError("no_live_clock", `the server draws no live ${screenId}`);
-    const query = Number.isInteger(colorsSeed) && colorsSeed >= 0 ? `?colors=${colorsSeed}` : "";
+    const params = new URLSearchParams();
+    if (Number.isInteger(colorsSeed) && colorsSeed >= 0) params.set("colors", String(colorsSeed));
+    if (layers) params.set("layers", "1");
+    const query = params.toString() ? `?${params}` : "";
     const response = await this._clientRequest("GET", `/clock/${encodeURIComponent(screenId)}.png${query}`,
       { raw: true, headers: { Accept: "image/png" } });
     if (response.status !== 200) throw new SyncError("live_clock_failed", `${screenId} clock: HTTP ${response.status}`, { status: response.status });
@@ -481,11 +647,35 @@ class DeskDisplayClient {
   /* Verified images on disk for the screens this client requested, by screen ID. */
   images () {
     const manifest = this.state.manifest;
+    const adjustment = verticalSpeedAdjustment(manifest);
+    const motions = new Map(this._motionEntries(manifest).map((e) => [e.screen_id, e.package.sha256]));
     const images = {};
     for (const entry of this._imageEntries(manifest)) {
       if (entry.role === "requested" && fs.existsSync(this.artifactFile(entry.sha256))) {
-        images[entry.screen_id] = { sha256: entry.sha256, width: entry.width, height: entry.height,
+        const image = { sha256: entry.sha256, width: entry.width, height: entry.height,
           state: entry.state, generatedAt: entry.generated_at };
+        const kept = motions.has(entry.screen_id) ? this._readMotion(motions.get(entry.screen_id)) : null;
+        const motion = kept && kept.motion;
+        if (motion && motion.kind === "scroll") {
+          image.scroll = {
+            sha256: motion.image,
+            canvasHeight: motion.canvas_height,
+            stepPx: motion.step_px,
+            frameSeconds: repacedFrameSeconds(motion, adjustment),
+            pauseStartSeconds: motion.pause_start_seconds,
+            pauseEndSeconds: motion.pause_end_seconds,
+            direction: motion.direction
+          };
+        } else if (motion && motion.kind === "slide") {
+          image.slide = {
+            sha256: motion.image,
+            spriteWidth: motion.sprite_width,
+            y: motion.y,
+            speedPxPerSecond: motion.speed_px_per_second,
+            background: motion.background
+          };
+        }
+        images[entry.screen_id] = image;
       }
     }
     return images;
@@ -506,4 +696,4 @@ class DeskDisplayClient {
   }
 }
 
-module.exports = { DeskDisplayClient, SyncError, PROFILES, documentScreens };
+module.exports = { DeskDisplayClient, SyncError, PROFILES, documentScreens, repacedFrameSeconds };

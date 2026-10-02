@@ -62,7 +62,7 @@ module.exports = NodeHelper.create({
       if (!match || !client.liveClocks.includes(match[1])) return res.sendStatus(404);
       const seed = /^\d{1,9}$/.test(req.query.colors || "") ? Number(req.query.colors) : null;
       try {
-        res.type("png").send(await client.fetchClock(match[1], seed));
+        res.type("png").send(await client.fetchClock(match[1], seed, { layers: req.query.layers === "1" }));
       } catch (err) {
         client.noteError(err);
         if (!res.headersSent) res.sendStatus(502);
@@ -116,6 +116,8 @@ module.exports = NodeHelper.create({
     const playback = client.playback();
     for (const [screenId, image] of Object.entries(playback.images)) {
       image.url = `${base}/images/${image.sha256}.png`;
+      if (image.scroll) image.scroll.url = `${base}/images/${image.scroll.sha256}.png`;
+      if (image.slide) image.slide.url = `${base}/images/${image.slide.sha256}.png`;
       if (playback.liveClocks.includes(screenId)) image.liveUrl = `${base}/clock/${encodeURIComponent(screenId)}.png`;
     }
     const key = JSON.stringify(playback);

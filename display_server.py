@@ -274,7 +274,7 @@ def create_app(
     client_locations: Callable[[], Mapping[str, Location]] | None = None,
     scoped_revisions: ScopedRevisionSource | None = None,
     located_display_status: Callable[[Location], Mapping[str, Any]] | None = None,
-    live_clock: Callable[[str, str, int | None], Any] | None = None,
+    live_clock: Callable[..., Any] | None = None,
 ) -> Flask:
     """Build the API.
 
@@ -862,7 +862,8 @@ def create_app(
 
         For clients that show images but cannot draw the time from a clock
         package. ``colors`` (an integer seed) keeps the date face's colours
-        steady across one showing. Never cached.
+        steady across one showing; ``layers=1`` returns the date face as
+        layers the client colours itself (see LiveClock.render). Never cached.
         """
 
         record = _client()
@@ -874,8 +875,14 @@ def create_app(
             if not raw.isdigit() or len(raw) > 10:
                 raise ModelValidationError("colors", "must be a non-negative integer")
             seed = int(raw)
+        layers = request.args.get("layers")
+        if layers not in (None, "0", "1"):
+            raise ModelValidationError("layers", "must be 0 or 1")
         try:
-            image = live_clock(screen_id, record.capabilities.display_profile, seed)
+            if layers == "1" and screen_id == "date":
+                image = live_clock(screen_id, record.capabilities.display_profile, None, layers=True)
+            else:
+                image = live_clock(screen_id, record.capabilities.display_profile, seed)
         except Exception:  # noqa: BLE001 - the client falls back to the cached still
             WEB_LOGGER.warning("Live %s clock for %s failed", screen_id, record.client_id, exc_info=True)
             return _error(503, "clock_unavailable", "the clock face could not be drawn")

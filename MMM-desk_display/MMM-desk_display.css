@@ -4,7 +4,8 @@
   margin: 0 auto;
   background: #000;
 }
-.MMM-desk_display .dd-frame img {
+.MMM-desk_display .dd-frame img,
+.MMM-desk_display .dd-frame canvas {
   position: absolute;
   inset: 0;
   width: 100%;
@@ -13,8 +14,8 @@
   opacity: 0;
   transition: opacity var(--dd-fade, 400ms) ease-in-out;
 }
-.MMM-desk_display .dd-frame img.dd-visible { opacity: 1; }
-.MMM-desk_display .dd-frame img.dd-instant { transition: none; }
+.MMM-desk_display .dd-frame .dd-visible { opacity: 1; }
+.MMM-desk_display .dd-frame .dd-instant { transition: none; }
 .MMM-desk_display .dd-status {
   font-size: 0.6em;
   color: #888;

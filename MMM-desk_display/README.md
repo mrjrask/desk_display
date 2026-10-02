@@ -35,15 +35,26 @@ client (`lib/schedule.js`, a port of `schedule.py`):
   without an image yet (or withdrawn by the server, such as a live game that
   ended) is skipped.
 
-The module registers with `supports_animation: false`, so the server sends a
-static image for every screen; scrolling and animated render packages play as
-their still frame.
+Motion plays as on a desk_display client:
 
-The `date` and `nixie` clocks are the exception. A still would show the time
-it was rendered, so while a clock is on show the module asks the server for
-the face drawn now (`GET /api/v1/clients/<id>/clock/<screen>.png`): nixie
-every second, the date face each minute. If the server is unreachable, or is
-older than this feature, the clock shows its cached still.
+- Tall screens (standings, scoreboards, On This Day) scroll: they hold, step
+  down the full-height canvas from the screen's render package, then hold.
+  The pace is the server's per-screen scroll speed, re-paced by this
+  display's own **Synchronized vertical scroll adjustment** from the Clients
+  page when one is set. The screen's time grows by the length of the scroll.
+- Logo screens slide the logo across the screen from a random side, then rest.
+- Other animations (frame animations, tickers, quads) show their still. The
+  module registers with `supports_animation: false`, so the Clients page
+  still lists those screens as stills.
+
+A still would show the time it was rendered, so while a clock is on show the
+module asks the server for the face drawn now
+(`GET /api/v1/clients/<id>/clock/<screen>.png`): nixie every second, the date
+face each minute. The date face comes as layers (`?layers=1`) that the module
+colours itself, so its text cycles through fresh colours for a few seconds as
+on the Pi. If the server is unreachable, or is older than this feature, the
+clock shows its cached still (and an older server's date face does not
+cycle colours).
 
 ## Install
 
