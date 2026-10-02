@@ -49,7 +49,7 @@ gets two `ExecStartPre` steps (`scripts/wait_for_display_ready.sh`, then
 `ExecStart` to read. If the desktop never comes up, `Restart=always` keeps
 retrying and the reason shows in the unit's journal.
 
-### Raspberry Pi 5 (kernel output over HDMI)
+### Raspberry Pi 5 (kernel output)
 
 Kernel output works the same on a Pi 5, with these differences:
 
@@ -57,24 +57,28 @@ Kernel output works the same on a Pi 5, with these differences:
   draws into the labwc/Wayland session, so Pi OS Lite never gets past
   `prepare_kernel_session_env.sh`. Turn on desktop autologin with
   `sudo raspi-config` → System Options → Boot / Auto Login → Desktop Autologin.
-- `/boot/firmware/config.txt` must load KMS for every board, not only the Pi 4:
-  `dtoverlay=vc4-kms-v3d` belongs in the `[all]` section (a card moved from a
-  Pi 4 sometimes has it only under `[pi4]`). Leave out `hdmi_force_hotplug`,
-  `hdmi_group`, `hdmi_mode` and `dtoverlay=vc4-kms-v3d-pi4`; the Pi 5 ignores
-  the first three and the last is Pi 4 only. To force a mode on a screen with
-  no EDID, add `video=HDMI-A-1:1920x1080@60D` to `/boot/firmware/cmdline.txt`.
-- Remove any HyperPixel `dtoverlay=vc4-kms-dpi-hyperpixel4*` line if the card
-  used to drive a HyperPixel and now drives HDMI.
-- The Pi 5 puts HDMI on DRM `card1` or `card2` (`card0` is the render-only GPU),
-  so connectors are named like `card1-HDMI-A-1`. Use the HDMI port next to the
-  USB-C power jack (HDMI0).
+- `/boot/firmware/config.txt` must load KMS and the panel overlay for every
+  board, not only the Pi 4. A card moved from a Pi 4 often has them under
+  `[pi4]`, which the Pi 5 skips. Put them under `[all]`:
+  - HyperPixel 4 Square: `dtoverlay=vc4-kms-v3d` and
+    `dtoverlay=vc4-kms-dpi-hyperpixel4sq` (add `,rotate=…` as before).
+    Pimoroni's legacy `hyperpixel4` driver and its init service do not work on
+    a Pi 5. The panel appears as a `DPI-1` connector on `card1` or `card2`.
+  - HDMI: `dtoverlay=vc4-kms-v3d`. `hdmi_force_hotplug`, `hdmi_group` and
+    `hdmi_mode` are ignored; force a mode on a screen with no EDID with
+    `video=HDMI-A-1:1920x1080@60D` in `/boot/firmware/cmdline.txt`.
+- The Pi 5 renumbers DRM cards (`card0` is the render-only GPU) and I2C buses.
+  If the indoor sensor stops reading, run `i2cdetect -l` and set
+  `INSIDE_I2C_BUSES` in the panel's env file to the new bus.
 - RPi.GPIO does not run on the Pi 5. Buttons and LEDs go through gpiozero
   and lgpio (`requirements/hw-gpio.txt`).
 
-When `wait_for_display_ready.sh` times out it now logs the board model and every
-DRM connector's status and mode count. `no DRM connectors` means KMS is not
-loaded (config.txt above); `status=disconnected` means the screen's EDID was
-not read (cable, port, or force a mode with `video=`).
+A backlight that comes on at boot but shows nothing usually means the panel
+overlay loaded its backlight pin but no DPI/HDMI connector came up. When
+`wait_for_display_ready.sh` times out it logs the board model and every DRM
+connector's status and mode count; `scripts/check_hyperpixel_setup.sh` prints
+the same plus the config.txt section headers. `No DRM connectors` means the
+overlay did not load; `status=disconnected` on HDMI means the EDID was not read.
 
 Up to ten project units can be installed. `scripts/restart_services.sh`
 documents and enforces the dependency order between them:

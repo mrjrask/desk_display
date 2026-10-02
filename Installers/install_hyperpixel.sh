@@ -267,10 +267,22 @@ fi
 
 prepend_env_vars "$ENV_PATH" "${ENV_LINES[@]}"
 
-if [[ -e /dev/dri/card0 ]]; then
-  log "DRM device detected at /dev/dri/card0"
+# The Pi 4 drives DPI from card0/card1; the Pi 5 drives it from the RP1 card
+# (card0 is the render-only v3d GPU there), so look for the DPI connector on
+# any card instead of a fixed device.
+dpi_connector=""
+for dpi_status in /sys/class/drm/card*-DPI-*/status; do
+  [[ -r "$dpi_status" ]] || continue
+  dpi_connector="${dpi_status%/status}"
+  dpi_connector="${dpi_connector##*/}"
+  break
+done
+if [[ -n "$dpi_connector" ]]; then
+  log "HyperPixel DPI connector detected: $dpi_connector"
+elif compgen -G "/dev/dri/card*" >/dev/null; then
+  warn "No DPI connector under /sys/class/drm. Ensure /boot/firmware/config.txt has dtoverlay=vc4-kms-v3d and dtoverlay=vc4-kms-dpi-hyperpixel4sq (or vc4-kms-dpi-hyperpixel4) outside any [pi4] section, then reboot."
 else
-  warn "DRM device /dev/dri/card0 not found. Ensure your HyperPixel dtoverlay is configured correctly."
+  warn "No DRM device under /dev/dri. Ensure your HyperPixel dtoverlay is configured correctly."
 fi
 
 if [[ "${DESK_DISPLAY_OUTPUT}" == "kernel" ]]; then

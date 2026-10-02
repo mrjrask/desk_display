@@ -54,16 +54,36 @@ show_cmd() {
   fi
 }
 
+section "Board"
+if [[ -r /proc/device-tree/model ]]; then
+  tr -d '\0' </proc/device-tree/model
+  echo
+else
+  echo "Unknown (no /proc/device-tree/model)"
+fi
+
 section "HyperPixel dtoverlay (cmdline + boot config)"
 tr ' ' '\n' </proc/cmdline | find_stream '^dtoverlay=' || echo "No dtoverlay in /proc/cmdline"
 for cfg in /boot/firmware/config.txt /boot/config.txt; do
   if [[ -f "$cfg" ]]; then
     echo "-- $cfg"
-    find_lines '^(dtoverlay=|dtparam=)' "$cfg" || echo "(no dtoverlay/dtparam lines found)"
+    # Section headers too: an overlay under [pi4] is skipped on a Pi 5.
+    find_lines '^(\[|dtoverlay=|dtparam=)' "$cfg" || echo "(no dtoverlay/dtparam lines found)"
   fi
 done
 
 show_cmd "DRM/KMS devices" ls -l /dev/dri
+section "DRM connectors"
+connector_found=0
+for status_path in /sys/class/drm/card*-*/status; do
+  [[ -r "$status_path" ]] || continue
+  connector_found=1
+  connector_dir="${status_path%/status}"
+  printf '%s: %s, first mode %s\n' "${connector_dir##*/}" "$(cat "$status_path")" \
+    "$(head -n 1 "$connector_dir/modes" 2>/dev/null || true)"
+done
+(( connector_found )) || echo "No DRM connectors; the panel overlay did not load."
+
 section "Framebuffer devices"
 fb_devices=(/dev/fb*)
 if [[ -e "${fb_devices[0]}" ]]; then
@@ -105,6 +125,7 @@ fi
 echo
 section "Quick hints"
 echo "- If DESK_DISPLAY_OUTPUT=kernel and no active desktop session exists, use framebuffer mode instead."
+echo "- Raspberry Pi 5: use dtoverlay=vc4-kms-dpi-hyperpixel4sq (not Pimoroni's legacy hyperpixel4 driver) outside any [pi4] section; the panel shows up as a DPI-1 connector on card1 or card2."
 echo "- If you use dtoverlay rotate=..., keep DISPLAY_ROTATION=0 unless DISPLAY_ROTATION_STRICT=0 is intentional."
 echo "- Kernel-mode output needs an active X11/Wayland desktop session; if $PANEL_SERVICE keeps restarting, check 'sudo journalctl -u $PANEL_SERVICE -f' for 'No active X11/Wayland desktop session detected'."
 echo "- Manage it with 'sudo systemctl status/restart/stop $PANEL_SERVICE' and 'sudo journalctl -u $PANEL_SERVICE -f' like any other system service."

@@ -129,7 +129,7 @@ describe_drm_connectors() {
     echo "[WARN] DRM connector ${connector##*/}: status=${status} modes=${mode_count// /}" >&2
   done
   if (( found == 0 )); then
-    echo "[WARN] No DRM connectors under ${drm_root}; the KMS driver is not loaded (check dtoverlay=vc4-kms-v3d in the [all] section of /boot/firmware/config.txt)." >&2
+    echo "[WARN] No DRM connectors under ${drm_root}; no panel driver is bound. Check that /boot/firmware/config.txt loads dtoverlay=vc4-kms-v3d plus the panel overlay (vc4-kms-dpi-hyperpixel4sq for a HyperPixel square) outside any [pi4] section." >&2
   fi
 }
 

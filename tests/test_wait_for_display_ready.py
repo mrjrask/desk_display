@@ -56,7 +56,7 @@ def test_missing_drm_connectors_names_kms_overlay(tmp_path):
 
     assert result.returncode == 0
     assert "unbound variable" not in result.stderr
-    assert "vc4-kms-v3d" in result.stderr
+    assert "vc4-kms-dpi-hyperpixel4sq" in result.stderr
 
 
 def test_pi5_hdmi_connector_on_card1_is_detected(tmp_path):
