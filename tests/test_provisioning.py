@@ -80,8 +80,10 @@ def test_removing_a_client_forgets_its_credential_until_it_is_provisioned_again(
     assert store.removed() == {"office": clock()}
     assert store.remove("never-provisioned") is False
 
+    clock.advance(5)
     again = store.provision("office", "hyperpixel4")
-    assert "office" not in store.removed() and store.verify("office", again.credential)
+    # Kept, so the server still drops the removed display's old registration.
+    assert store.removed()["office"] == clock() - 5 and store.verify("office", again.credential)
     assert store.verify("office", issued.credential) is None
 
 
@@ -93,6 +95,8 @@ def test_the_cli_removes_a_client_like_the_clients_page(tmp_path, monkeypatch):
 
     monkeypatch.setenv("DESK_DISPLAY_PLAYLIST_STORE_PATH", str(tmp_path / "playlists.json"))
     monkeypatch.setenv("DESK_DISPLAY_CLIENT_COMMANDS_PATH", str(tmp_path / "commands.json"))
+    monkeypatch.setenv("DESK_DISPLAY_SCREENSHOT_UPLOAD_DIR", str(tmp_path / "uploads"))
+    (tmp_path / "uploads" / "office").mkdir(parents=True)
     store = ProvisioningStore(tmp_path / "clients.json")
     store.provision("office", "hyperpixel4")
     playlists = PlaylistStore(tmp_path / "playlists.json")
@@ -105,6 +109,7 @@ def test_the_cli_removes_a_client_like_the_clients_page(tmp_path, monkeypatch):
     assert store.get("office") is None
     assert "office" not in playlists.snapshot()["assignments"] and "office" not in playlists.snapshot()["clients"]
     assert CommandStore(tmp_path / "commands.json").for_client("office") == []
+    assert not (tmp_path / "uploads" / "office").exists()
 
 
 def test_a_second_process_sees_changes(tmp_path):
@@ -161,19 +166,22 @@ def env(tmp_path, clock):
         admin_token=ADMIN_TOKEN, auth_token=SERVER_TOKEN, lease_seconds=60,
         artifact_dir=tmp_path / "artifacts", clients_path=tmp_path / "clients.json",
         playlist_store_path=tmp_path / "playlists.json", commands_path=tmp_path / "commands.json",
+        screenshot_upload_dir=tmp_path / "uploads",
     )
     app = display_server.create_app(config, clock=clock)
     app.config["TESTING"] = True
     return app, app.test_client()
 
 
-def test_admin_remove_drops_queued_commands(env):
+def test_admin_remove_drops_queued_commands_and_screenshots(env):
     app, api = env
     provision(api)
     app.extensions["desk_display_client_commands"].queue("office", "restart")
+    (app.extensions["desk_display_screenshot_inbox"].root / "office").mkdir(parents=True)
     response = api.post("/api/v1/admin/clients/office/remove", headers=bearer(ADMIN_TOKEN))
     assert response.status_code == 200 and response.get_json() == {"client_id": "office", "removed": True}
     assert app.extensions["desk_display_client_commands"].for_client("office") == []
+    assert not (app.extensions["desk_display_screenshot_inbox"].root / "office").exists()
     assert app.extensions["desk_display_provisioning"].get("office") is None
 
 

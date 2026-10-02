@@ -416,7 +416,7 @@ connected also has **Setup command**, which makes a new one-time
 command (any earlier one stops working). **Remove display** takes a
 display off the page for good: it revokes the credential (the display
 cannot reconnect) and deletes its playlist assignment, name, per-display
-settings, queued commands and status. Revoke alone keeps the card. To bring
+settings, queued commands, uploaded screenshots and status. Revoke alone keeps the card. To bring
 a removed display back, add it again with **Add a display**. Static clients
 (`DESK_DISPLAY_STATIC_CLIENTS`) are removed from that setting instead. From
 the shell:

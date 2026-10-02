@@ -1081,6 +1081,8 @@ def create_app(
                 PlaylistStore(config.playlist_store_path).forget_client(client_id, actor="admin-api")
             if commands is not None:
                 commands.forget(client_id)
+            if inbox is not None:
+                inbox.forget(client_id)
             return jsonify({"client_id": client_id, "removed": True})
         known = provisioning is not None and provisioning.get(client_id) is not None
         if action == "rotate":

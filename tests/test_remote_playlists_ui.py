@@ -794,7 +794,12 @@ def test_provisioning_from_the_clients_page(env, web):
     assert web.post("/api/clients/den/credential/nope", headers=CSRF, json={}).status_code == 404
 
 
-def test_removing_a_display_takes_it_off_the_clients_page(env, web):
+def test_removing_a_display_takes_it_off_the_clients_page(env, web, monkeypatch):
+    from remote_display.screenshot_uploads import ScreenshotInbox
+
+    inbox = ScreenshotInbox(env["tmp"] / "uploads")
+    monkeypatch.setitem(env["app"].extensions, "desk_display_uploaded_screenshots", inbox)
+    (inbox.root / "den").mkdir(parents=True)
     playlist = env["store"].create("Office", DOC, actor="test")
     web.post("/api/clients/provision", headers=CSRF, json={
         "client_id": "den", "display_profile": "hyperpixel4", "playlist_id": playlist["id"],
@@ -817,7 +822,14 @@ def test_removing_a_display_takes_it_off_the_clients_page(env, web):
     data = env["store"].snapshot()
     assert "den" not in data["assignments"] and "den" not in data["clients"]
     assert env["app"].extensions["desk_display_client_commands"].for_client("den") == []
+    assert not (inbox.root / "den").exists()
     assert web.delete("/api/clients/den", headers=CSRF).status_code == 404
+
+    # Added again before the server notices: a fresh card, not the old display's status.
+    web.post("/api/clients/provision", headers=CSRF, json={"client_id": "den", "display_profile": "hyperpixel4"})
+    row = {r["client_id"]: r for r in web.get("/api/clients").get_json()["clients"]}["den"]
+    assert row["state"] == "never_connected" and row["current_screen"] is None
+    web.delete("/api/clients/den", headers=CSRF)
 
     # A display that registers again afterwards (shared token) shows up again.
     provisioning._clock = lambda: 1_000_000_000.0

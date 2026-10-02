@@ -224,7 +224,6 @@ class ProvisioningStore:
             secret, credential_id = self._issue(record)
             self._event(record, "provisioned", actor)
             data["clients"][client_id] = record
-            (data.get("removed") or {}).pop(client_id, None)
         return Issued(client_id, display_profile, secret, credential_id)
 
     def rotate(self, client_id: str, *, actor: str = "admin") -> Issued:
@@ -248,8 +247,9 @@ class ProvisioningStore:
         """Forget *client_id*: its record, credential and join codes; whether it was provisioned.
 
         The removal is remembered (see :meth:`removed`) so the render server
-        drops the display's lease and status too. Provisioning the ID again
-        starts afresh.
+        drops the display's lease and status too, even when the ID is
+        provisioned again before the server notices: only registrations from
+        before the removal are dropped.
         """
 
         client_id = identifier(client_id, "client_id")
@@ -264,7 +264,7 @@ class ProvisioningStore:
         return existed
 
     def removed(self) -> dict[str, float]:
-        """When each removed (and not since re-provisioned) client ID was removed."""
+        """When each removed client ID was last removed (kept if it is provisioned again)."""
 
         with self._lock:
             removed = self._load().get("removed") or {}
@@ -448,10 +448,12 @@ def _cli(argv: Iterable[str] | None = None) -> int:
             # As the Clients page does: the assignment, settings and queued commands go too.
             from remote_display.client_commands import CommandStore, commands_path
             from remote_display.playlist_store import PlaylistStore, store_path
+            from remote_display.screenshot_uploads import ScreenshotInbox, upload_dir
 
             store.remove(args.client_id, actor="cli")
             PlaylistStore(store_path()).forget_client(args.client_id, actor="cli")
             CommandStore(commands_path()).forget(args.client_id)
+            ScreenshotInbox(upload_dir()).forget(args.client_id)
         elif args.command in {"disable", "enable"}:
             store.set_disabled(args.client_id, args.command == "disable", actor="cli")
         else:

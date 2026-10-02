@@ -714,6 +714,7 @@ def register(
         _provisioning().remove(client_id, actor=actor())
         _store().forget_client(client_id, actor=actor())
         _commands().forget(client_id)
+        _uploaded().forget(client_id)
         return respond({"client_id": client_id, "removed": True})
 
     @blueprint.post("/api/clients/<client_id>/commands")
