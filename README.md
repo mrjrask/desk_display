@@ -197,6 +197,7 @@ Supported workflow profiles include:
 | `remote_playlists_ui.py`, `stats_ui.py` | The config UI's Playlists, Clients and Add a display pages, and its Stats page. |
 | `display_server.py` | Render server API (`/api/v1`) for remote display clients: registration, leases, heartbeats, manifests, artifact downloads, rendering, and the admin API. Separate from the Feed server; see [CONFIGURATION.md](CONFIGURATION.md#render-server-api). |
 | `display_client.py` | Thin display client: plays server-rendered artifacts and render packages from its local cache. |
+| `MMM-desk_display/` | MagicMirror² module that plays server-rendered screens as a remote display client; see its [README](MMM-desk_display/README.md). |
 | `remote_display/` | Server and client building blocks: wire models, client registry and leases, provisioning, rate limits, playlist store, artifact store, manifests, render coordinator, render packages, client sync and cache, and playback fallbacks. |
 | `rendering/` | Server-side rendering: screen classes, the screen renderer, package building, clock faces and logos. |
 | `playback/` | Client-side playback of playlists and render packages. |
