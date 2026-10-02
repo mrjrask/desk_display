@@ -64,6 +64,9 @@ Kernel output works the same on a Pi 5, with these differences:
     `dtoverlay=vc4-kms-dpi-hyperpixel4sq` (add `,rotate=…` as before).
     Pimoroni's legacy `hyperpixel4` driver and its init service do not work on
     a Pi 5. The panel appears as a `DPI-1` connector on `card1` or `card2`.
+    Remove `enable_uart=1`: the serial port claims GPIO 14, which the panel
+    needs, and dmesg shows `pin gpio14 already requested … cannot claim for
+    …dpi` while the panel stays black.
   - HDMI: `dtoverlay=vc4-kms-v3d`. `hdmi_force_hotplug`, `hdmi_group` and
     `hdmi_mode` are ignored; force a mode on a screen with no EDID with
     `video=HDMI-A-1:1920x1080@60D` in `/boot/firmware/cmdline.txt`.
