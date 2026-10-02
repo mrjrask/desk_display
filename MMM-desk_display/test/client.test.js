@@ -21,7 +21,7 @@ function reply (status, body, headers = {}) {
   };
 }
 
-function fakeServer ({ image = PNG, liveClocks = undefined } = {}) {
+function fakeServer ({ image = PNG, liveClocks = undefined, failArtifacts = 0 } = {}) {
   const calls = [];
   let lease = 0;
   const fetchImpl = async (url, init) => {
@@ -47,11 +47,17 @@ function fakeServer ({ image = PNG, liveClocks = undefined } = {}) {
         artifacts: [{ screen_id: "date", role: "requested", artifact_type: "static_image", media_type: "image/png", url: `/api/v1/clients/mm/artifacts/${SHA}.png`, sha256: SHA, length: PNG.length }]
       });
     }
-    if (p.includes("/artifacts/")) return reply(200, image);
+    if (p.includes("/artifacts/")) {
+      if (failArtifacts > 0) {
+        failArtifacts -= 1;
+        throw new TypeError("fetch failed");
+      }
+      return reply(200, image);
+    }
     if (p.endsWith("/clock/date.png")) return reply(200, PNG);
     return reply(404, { error: "not_found" });
   };
-  return { fetchImpl, calls, expire: () => { lease += 100; } };
+  return { fetchImpl, calls, expire: () => { lease += 100; }, lease: () => `lease-${lease}` };
 }
 
 function client (server) {
@@ -127,4 +133,14 @@ test("playback carries the schedule, the Starter playlist and the images", async
   assert.deepStrictEqual(playback.starter, []);
   assert.deepStrictEqual(Object.keys(playback.images), ["date"]);
   assert.strictEqual(playback.images.date.sha256, SHA);
+});
+
+test("a failed download keeps the new manifest and is retried while it is unchanged", async () => {
+  const c = client(fakeServer({ failArtifacts: 1 }));
+  await c.fullSync();
+  assert.strictEqual(c.state.manifest.manifest_revision, "m-1", "the manifest is kept despite the failure");
+  assert.deepStrictEqual(c.images(), {});
+  assert.ok(c.recentErrors.has("network_error"));
+  await c.fullSync(); // 304: nothing changed on the server
+  assert.deepStrictEqual(Object.keys(c.images()), ["date"]);
 });

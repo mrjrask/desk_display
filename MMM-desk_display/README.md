@@ -103,6 +103,7 @@ takes the shared `DESK_DISPLAY_SERVER_AUTH_TOKEN` instead.
 | `syncInterval`, `heartbeatInterval` | `30`, `60` | Seconds; capped by what the server advertises. |
 | `requestTimeoutMs` | `15000` | Per-request timeout. |
 | `showStatus` | `true` | Show connection status text until the first screens arrive. |
+| `contentTimeZone` | `America/Chicago` | The server's `DESK_DISPLAY_CONTENT_TIMEZONE`, for playlist hide-after times written without an offset. |
 
 For a server with a private CA, start MagicMirror with
 `NODE_EXTRA_CA_CERTS=/path/to/ca.pem`.
