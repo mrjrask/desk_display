@@ -78,6 +78,16 @@ def _iso_now() -> str:
     return datetime.now(timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z")
 
 
+def _registered_since(entry: Mapping[str, Any], removed_at: float) -> bool:
+    """Whether a registry snapshot entry registered after *removed_at* (it came back since)."""
+
+    try:
+        then = datetime.fromisoformat(str(entry.get("registered_at")).replace("Z", "+00:00")).timestamp()
+    except ValueError:
+        return False
+    return then > removed_at
+
+
 def client_state(entry: Mapping[str, Any], heartbeat_interval: float, now: float) -> str:
     """online, stale, expired, disabled, or never_connected."""
 
@@ -286,7 +296,13 @@ def register(
         data = _store().snapshot()
         snapshot = read_snapshot(_snapshot_file())
         heartbeat = float(snapshot.get("heartbeat_interval_seconds") or 100)
-        entries: dict[str, dict[str, Any]] = {k: dict(v) for k, v in snapshot["clients"].items()}
+        removed = _provisioning().removed()
+        entries: dict[str, dict[str, Any]] = {
+            k: dict(v) for k, v in snapshot["clients"].items()
+            # A removed display stays in the server's snapshot until the server
+            # notices; only one that registered again since is shown.
+            if k not in removed or v.get("static") or _registered_since(v, removed[k])
+        }
         for client_id, profile in static_clients().items():
             preset = PROFILE_PRESETS.get(profile)
             entries.setdefault(client_id, {
@@ -681,6 +697,24 @@ def register(
         else:
             return jsonify({"error": "not_found", "message": "unknown action"}), 404
         return respond({"client_id": record["client_id"], "state": record["state"]})
+
+    @blueprint.delete("/api/clients/<client_id>")
+    def remove_client(client_id: str):
+        """Remove a display: its credential, playlist assignment, settings and status."""
+
+        client_id = identifier(client_id, "client_id")
+        row = next((r for r in client_rows() if r["client_id"] == client_id), None)
+        if row is None:
+            return jsonify({"error": "unknown_client", "message": "no client with this ID"}), 404
+        if row["kind"] == "static":
+            return jsonify({"error": "static_client",
+                            "message": f"{client_id} is set in DESK_DISPLAY_STATIC_CLIENTS; remove it there "
+                                       "and restart the server"}), 409
+        # The credential goes first, so the display cannot reconnect.
+        _provisioning().remove(client_id, actor=actor())
+        _store().forget_client(client_id, actor=actor())
+        _commands().forget(client_id)
+        return respond({"client_id": client_id, "removed": True})
 
     @blueprint.post("/api/clients/<client_id>/commands")
     def queue_client_command(client_id: str):

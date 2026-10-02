@@ -88,7 +88,7 @@ register again and retry once.
 | `GET /api/v1/admin/render-status` | admin | Render coordinator state |
 | `PUT`/`DELETE /api/v1/admin/prerender/<name>` | admin | Pre-render a screen set for a profile |
 | `GET`/`POST /api/v1/admin/clients` | admin | List or provision clients |
-| `POST /api/v1/admin/clients/<id>/rotate\|revoke\|disable\|enable` | admin | Manage one client's credential |
+| `POST /api/v1/admin/clients/<id>/rotate\|revoke\|disable\|enable\|remove` | admin | Manage one client's credential, or remove the client |
 
 ### Register
 
@@ -374,6 +374,7 @@ is still honoured.
 | `POST .../<id>/rotate` | 200 with a new credential and `client_env`; ends the lease. Re-activates a revoked client. |
 | `POST .../<id>/revoke` | `{client_id, state: "revoked"}`; ends the lease |
 | `POST .../<id>/disable`, `.../enable` | `{client_id, disabled}` |
+| `POST .../<id>/remove` | `{client_id, removed: true}`; deletes the credential, assignment and the server's record (409 for a static client) |
 | `GET /api/v1/admin/clients` | `{enrollment, clients}`, never with credentials or hashes |
 
 `python3 -m remote_display.provisioning provision|rotate|revoke|disable|enable|list`

@@ -135,7 +135,7 @@ are unchanged.
 - `/api/v1/health` is public and only reports that the service is up.
 - `/api/v1/admin/status`, `/admin/render-status`, `/admin/prerender/<name>`, `/admin/clients`
   (list, or `POST` to provision) and
-  `/admin/clients/<id>/disable|enable|rotate|revoke` need
+  `/admin/clients/<id>/disable|enable|rotate|revoke|remove` need
   `DESK_DISPLAY_SERVER_ADMIN_TOKEN`; the admin API is off when it is unset.
 - Requests are rate limited (`429` with `Retry-After`): registration and
   failed authentication per address, so guessing credentials locks the
@@ -180,6 +180,9 @@ server token, the admin token or any provider credential.
 - **Disable** refuses the client until it is enabled again, keeping its
   credential.
 - Disabled and revoked clients keep their playlist assignment and history.
+- **Remove** (Clients page, Maintenance tab) deletes the client: its credential,
+  playlist assignment, name, per-display settings and the server's record of
+  it. Provisioning the same ID again starts afresh.
 
 `DESK_DISPLAY_SERVER_ENROLLMENT=shared` restores the older opt-in mode, in
 which every client presents the one `DESK_DISPLAY_SERVER_AUTH_TOKEN`; then

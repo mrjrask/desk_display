@@ -413,7 +413,13 @@ opens a guided setup (`/clients/add`):
 Each display's **Maintenance** tab on `/clients` has Rename, Rotate
 credential, Revoke, Disable and Enable, and a display that has never
 connected also has **Setup command**, which makes a new one-time
-command (any earlier one stops working). From the shell:
+command (any earlier one stops working). **Remove display** takes a
+display off the page for good: it revokes the credential (the display
+cannot reconnect) and deletes its playlist assignment, name, per-display
+settings, queued commands and status. Revoke alone keeps the card. To bring
+a removed display back, add it again with **Add a display**. Static clients
+(`DESK_DISPLAY_STATIC_CLIENTS`) are removed from that setting instead. From
+the shell:
 
 ```bash
 python3 -m remote_display.provisioning provision office --profile hyperpixel4_square \
@@ -422,6 +428,7 @@ python3 -m remote_display.provisioning list
 python3 -m remote_display.provisioning rotate office > office.env.client
 python3 -m remote_display.provisioning disable office             # or enable
 python3 -m remote_display.provisioning revoke office
+python3 -m remote_display.provisioning remove office              # forget it entirely
 ```
 
 Copy the `.env.client` to the display and install it with

@@ -245,6 +245,12 @@ class CommandStore:
         LOGGER.info("Queued %s for client %s (by %s)", action, client_id, actor)
         return dict(command)
 
+    def forget(self, client_id: str) -> None:
+        """Drop every command for *client_id* (it was removed)."""
+
+        with self._transaction() as data:
+            data["clients"].pop(client_id, None)
+
     def for_client(self, client_id: str) -> list[dict[str, Any]]:
         """This client's commands, newest first, with timeouts applied."""
 

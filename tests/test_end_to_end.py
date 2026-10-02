@@ -33,6 +33,7 @@ from playback.package_player import PackagePlayback  # noqa: E402
 from remote_display.client_sync import Response, TransportError  # noqa: E402
 from remote_display.models import RenderKey, ScreenRevisions  # noqa: E402
 from remote_display.playlist_store import PlaylistStore  # noqa: E402
+from remote_display.provisioning import ProvisioningStore  # noqa: E402
 from remote_display.render_package import validate_package  # noqa: E402
 from remote_display.server_rendering import ServerRendering  # noqa: E402
 from rendering.logos import IMAGES_DIR  # noqa: E402
@@ -621,6 +622,30 @@ def test_a_revoked_client_is_cut_off_but_its_panel_stays_up(system):
                         headers={"Authorization": f"Bearer {system.credentials['office']}"})
     assert response.status_code == 401
     assert system.credentials["office"] not in response.get_data(as_text=True)
+
+
+def test_a_removed_client_is_forgotten_and_cannot_return(system):
+    client = _ready(system)
+    status, body = system.admin("POST", "clients/office/remove")
+    assert status == 200 and body == {"client_id": "office", "removed": True}
+    assert "office" not in json.loads((system.root / ".runtime" / "server" / "clients.json").read_text())["clients"]
+    assert system.store.assignment_for("office") is None
+
+    with pytest.raises(Exception):
+        client.sync.sync_once()
+    wire = display_client.capabilities_for("office", PROFILE_PRESETS["hyperpixel4"]).to_wire()
+    response = system.app.test_client().post(
+        "/api/v1/register", json={"capabilities": wire},
+        headers={"Authorization": f"Bearer {system.credentials['office']}"})
+    assert response.status_code == 401
+
+
+def test_the_server_forgets_a_client_removed_from_the_clients_page(system):
+    _ready(system)
+    ProvisioningStore(system.root / ".runtime" / "server" / "provisioned_clients.json",
+                      clock=system.clock).remove("office")
+    system.app.test_client().get("/api/v1/health")
+    assert "office" not in json.loads((system.root / ".runtime" / "server" / "clients.json").read_text())["clients"]
 
 
 def test_an_incompatible_client_is_refused_with_a_clear_error(system):

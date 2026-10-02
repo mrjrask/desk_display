@@ -34,7 +34,7 @@ Endpoints
                                                    ``code``) for a new display's setup script
     ``GET  /api/v1/admin/status``                  clients, leases and demand
     ``PUT|DELETE /api/v1/admin/prerender/<name>``  explicit pre-render demand
-    ``POST /api/v1/admin/clients/<id>/disable|enable|rotate|revoke``
+    ``POST /api/v1/admin/clients/<id>/disable|enable|rotate|revoke|remove``
     ``POST /api/v1/admin/clients``                 provision a client (credential shown once)
     ``GET  /api/v1/admin/clients``                 provisioned clients, never their credentials
 
@@ -416,10 +416,34 @@ def create_app(
 
     # ── Plumbing ───────────────────────────────────────────────────────────
 
+    def _forget_removed() -> None:
+        """Drop displays removed from the Clients page (or the admin API).
+
+        A display that registered again after its removal (possible only with
+        a shared server token) is a new registration and stays.
+        """
+
+        if provisioning is None:
+            return
+        try:
+            removed = provisioning.removed()
+        except (OSError, ValueError, ProvisioningError) as exc:
+            WEB_LOGGER.warning("Could not read removed clients: %s", exc)
+            return
+        forgotten = False
+        for client_id, removed_at in removed.items():
+            record = registry.get(client_id)
+            if record is not None and (record.registered_at or 0) <= removed_at and registry.forget(client_id):
+                WEB_LOGGER.info("client %s was removed; dropped its lease and status", client_id)
+                forgotten = True
+        if forgotten:
+            _publish_snapshot()
+
     @app.before_request
     def _start() -> None:
         g.started = time.perf_counter()
         registry.expire()
+        _forget_removed()
 
     published: dict[str, Any] = {"at": None, "signature": None}
 
@@ -1043,9 +1067,19 @@ def create_app(
     def admin_client_action(client_id: str, action: str):
         if (denied := _require_admin()) is not None:
             return denied
-        if action not in {"disable", "enable", "rotate", "revoke"}:
+        if action not in {"disable", "enable", "rotate", "revoke", "remove"}:
             return _error(404, "not_found", "unknown action")
         client_id = _client_id(client_id)
+        if action == "remove":
+            record = registry.get(client_id)
+            if record is not None and record.static:
+                return _error(409, "static_client", "remove this client from DESK_DISPLAY_STATIC_CLIENTS instead")
+            _provisioning_store().remove(client_id, actor="admin-api")
+            registry.end_lease(client_id)
+            registry.forget(client_id)
+            if config.playlist_store_path is not None:
+                PlaylistStore(config.playlist_store_path).forget_client(client_id, actor="admin-api")
+            return jsonify({"client_id": client_id, "removed": True})
         known = provisioning is not None and provisioning.get(client_id) is not None
         if action == "rotate":
             issued = _provisioning_store().rotate(client_id, actor="admin-api")

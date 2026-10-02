@@ -68,6 +68,23 @@ def test_rotation_revocation_and_disabling_keep_history(tmp_path):
     assert actions == ["provisioned", "rotated", "disabled", "enabled", "revoked", "rotated"]
 
 
+def test_removing_a_client_forgets_its_credential_until_it_is_provisioned_again(tmp_path):
+    clock = Clock()
+    store = ProvisioningStore(tmp_path / "clients.json", clock=clock)
+    issued = store.provision("office", "hyperpixel4")
+    store.create_join_ticket("office", server_url="http://square.local:8765")
+    assert store.remove("office", actor="test") is True
+    assert store.get("office") is None and store.join_pending("office") is None
+    assert store.verify("office", issued.credential) is None
+    assert store.current_credential_id("office") is None
+    assert store.removed() == {"office": clock()}
+    assert store.remove("never-provisioned") is False
+
+    again = store.provision("office", "hyperpixel4")
+    assert "office" not in store.removed() and store.verify("office", again.credential)
+    assert store.verify("office", issued.credential) is None
+
+
 def test_a_second_process_sees_changes(tmp_path):
     ui = ProvisioningStore(tmp_path / "clients.json")
     server = ProvisioningStore(tmp_path / "clients.json")
