@@ -291,4 +291,46 @@ def compose_screen(key: RenderKey, profile: Any, snapshot: Any, logos: Any,
     return artifact.image, metadata, build_package(key, profile, artifact)
 
 
-__all__ = ["CLOCK_SCREENS", "ServerRendering", "StyleRevision", "compose_screen", "preferences_revision"]
+class LiveClock:
+    """Clock faces drawn on request, for clients that cannot draw the time.
+
+    A client that plays clock packages draws the time itself. One that only
+    shows images (the MagicMirror module) asks for the face at the current
+    time instead. These renders run in their own profile processes, so a
+    long screen render never holds up the clock.
+    """
+
+    def __init__(self, profile_processes: Any = None) -> None:
+        self.profile_processes = profile_processes
+
+    def render(self, screen_id: str, profile_id: str, colors_seed: int | None = None) -> Any:
+        """The *screen_id* face for *profile_id*, now, without the IP or update icon.
+
+        *colors_seed* picks the date face's colour pair, so repeated requests
+        during one showing keep the same colours.
+        """
+
+        import random
+
+        from display_profiles import PROFILE_PRESETS
+        from rendering.clock_faces import clock_layout, render_clock
+        from utils import bright_color
+
+        profile = PROFILE_PRESETS[profile_id]
+        layout = clock_layout(screen_id, profile)
+        colors = None
+        if colors_seed is not None:
+            rng = random.Random(colors_seed)
+            colors = (bright_color(rng=rng), bright_color(rng=rng))
+        now = datetime.now(timezone.utc)
+        if self.profile_processes is not None:
+            return self.profile_processes.render_clock(layout, profile, now, colors=colors)
+        return render_clock(layout, profile, now, colors=colors)
+
+    def close(self) -> None:
+        if self.profile_processes is not None:
+            self.profile_processes.close()
+
+
+__all__ = ["CLOCK_SCREENS", "LiveClock", "ServerRendering", "StyleRevision", "compose_screen",
+           "preferences_revision"]

@@ -22,13 +22,28 @@ The node helper speaks protocol v1 from
    playlist. A 401 drops the lease and registers again; failures back off
    (honouring `Retry-After`) while the mirror keeps playing its cache.
 
-The browser cycles the cached images in the playlist's own order and
-frequencies (a screen with frequency *N* plays on cycles 1, 1+*N*, 1+2*N*, …),
-holding each for `screenSeconds` plus the screen's `extra_seconds`.
+The browser plays the cached images with the same scheduler as a desk_display
+client (`lib/schedule.js`, a port of `schedule.py`):
+
+- Screens play in the playlist's own order and frequencies: a screen with
+  frequency *N* plays on cycles 1, 1+*N*, 1+2*N*, …
+- Alternates replace every *N*th showing of their base screen (never in the
+  first cycle), and screens with a hide-after time stop at that time.
+- Playback starts at the top of the playlist labelled **Starter**. A changed
+  playlist continues after the screen on show.
+- Each screen holds for `screenSeconds` plus its `extra_seconds`. A screen
+  without an image yet (or withdrawn by the server, such as a live game that
+  ended) is skipped.
 
 The module registers with `supports_animation: false`, so the server sends a
 static image for every screen; scrolling and animated render packages play as
 their still frame.
+
+The `date` and `nixie` clocks are the exception. A still would show the time
+it was rendered, so while a clock is on show the module asks the server for
+the face drawn now (`GET /api/v1/clients/<id>/clock/<screen>.png`): nixie
+every second, the date face each minute. If the server is unreachable, or is
+older than this feature, the clock shows its cached still.
 
 ## Install
 
@@ -50,6 +65,10 @@ profile whose size suits the space it will fill on the mirror:
 python3 -m remote_display.provisioning provision magicmirror --profile hyperpixel4_square \
     --server-url https://render.lan:8765
 ```
+
+The render server listens only on 127.0.0.1 by default. For a mirror on
+another machine, set `DESK_DISPLAY_SERVER_HOST=0.0.0.0` in the server's `.env`
+(or put it behind a reverse proxy) and restart it.
 
 Copy the `DESK_DISPLAY_CLIENT_TOKEN` value it prints (shown once) into
 `enrollmentToken` below, then assign the client a playlist on the config UI's

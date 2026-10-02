@@ -5096,11 +5096,12 @@ def timestamp_to_datetime(value, tz) -> datetime.datetime | None:
         return None
 
 
-def bright_color(min_luma: int = 160) -> tuple[int, int, int]:
+def bright_color(min_luma: int = 160, rng: random.Random | None = None) -> tuple[int, int, int]:
+    source = rng or random
     for _ in range(20):
-        r = random.randint(80, 255)
-        g = random.randint(80, 255)
-        b = random.randint(80, 255)
+        r = source.randint(80, 255)
+        g = source.randint(80, 255)
+        b = source.randint(80, 255)
         luma = 0.2126 * r + 0.7152 * g + 0.0722 * b
         if luma >= min_luma:
             return (r, g, b)

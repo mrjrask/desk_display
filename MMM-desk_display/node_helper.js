@@ -1,5 +1,6 @@
-/* Node helper for MMM-desk_display: runs the desk_display sync loop and serves
- * verified artifacts to the browser from the local cache. */
+/* Node helper for MMM-desk_display: runs the desk_display sync loop, serves
+ * verified artifacts to the browser from the local cache, and relays live
+ * clock faces from the server. */
 "use strict";
 
 const path = require("node:path");
@@ -52,8 +53,22 @@ module.exports = NodeHelper.create({
   },
 
   _registerRoute (client) {
-    const route = `/${this.name}/${encodeURIComponent(client.clientId)}/:file`;
-    this.expressApp.get(route, (req, res) => {
+    const base = `/${this.name}/${encodeURIComponent(client.clientId)}`;
+    // The date or nixie face now; the browser falls back to the cached still on any error.
+    this.expressApp.get(`${base}/clock/:file`, async (req, res) => {
+      res.set("Cache-Control", "no-store");
+      const match = /^(date|nixie)\.png$/.exec(req.params.file);
+      if (!match || !client.liveClocks.includes(match[1])) return res.sendStatus(404);
+      const seed = /^\d{1,9}$/.test(req.query.colors || "") ? Number(req.query.colors) : null;
+      try {
+        res.type("png").send(await client.fetchClock(match[1], seed));
+      } catch (err) {
+        client.noteError(err);
+        if (!res.headersSent) res.sendStatus(502);
+      }
+      return undefined;
+    });
+    this.expressApp.get(`${base}/:file`, (req, res) => {
       const match = /^([0-9a-f]{64})\.png$/.exec(req.params.file);
       if (!match) return res.sendStatus(404);
       res.set("Cache-Control", "private, max-age=31536000, immutable");
@@ -93,15 +108,19 @@ module.exports = NodeHelper.create({
   _publish (entry) {
     const { client } = entry;
     const base = `/${this.name}/${encodeURIComponent(client.clientId)}`;
-    const screens = client.playableEntries().map((e) => ({ ...e, url: `${base}/${e.sha256}.png` }));
-    const key = JSON.stringify(screens);
+    const playback = client.playback();
+    for (const [screenId, image] of Object.entries(playback.images)) {
+      image.url = `${base}/${image.sha256}.png`;
+      if (playback.liveClocks.includes(screenId)) image.liveUrl = `${base}/clock/${encodeURIComponent(screenId)}.png`;
+    }
+    const key = JSON.stringify(playback);
     if (entry.lastPublished === key) return;
     entry.lastPublished = key;
     this.sendSocketNotification("DD_SCREENS", {
       clientId: client.clientId,
       width: client.width,
       height: client.height,
-      screens
+      ...playback
     });
   }
 });

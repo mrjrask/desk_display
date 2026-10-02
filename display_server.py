@@ -46,6 +46,7 @@ from __future__ import annotations
 
 import atexit
 import hmac
+import io
 import logging
 import os
 import sys
@@ -102,6 +103,7 @@ from remote_display.provisioning import (
 from remote_display.rate_limit import RateLimiter
 from remote_display.resource_stats import TrafficCounter, traffic_kind
 from remote_display.screenshot_uploads import WIRE_VERSION as SCREENSHOT_UPLOAD_VERSION
+from remote_display.server_rendering import CLOCK_SCREENS
 from remote_display.screenshot_uploads import ScreenshotInbox, UploadRejected, parse_time, upload_dir
 from remote_display.registry import (
     Assignment,
@@ -272,6 +274,7 @@ def create_app(
     client_locations: Callable[[], Mapping[str, Location]] | None = None,
     scoped_revisions: ScopedRevisionSource | None = None,
     located_display_status: Callable[[Location], Mapping[str, Any]] | None = None,
+    live_clock: Callable[[str, str, int | None], Any] | None = None,
 ) -> Flask:
     """Build the API.
 
@@ -290,6 +293,8 @@ def create_app(
     Clients page); their weather and astronomy screens are rendered once per
     location with revisions from ``scoped_revisions``, and their heartbeat
     feed summary comes from ``located_display_status(location)``.
+    ``live_clock(screen_id, profile_id, colors_seed)`` draws a clock face at
+    the current time for clients that cannot draw it themselves.
     """
 
     config = config or DisplayServerConfig.from_env()
@@ -459,13 +464,17 @@ def create_app(
             and request.path != "/api/v1/health"
             and "/artifacts/" not in request.path
             and not request.path.endswith("/screenshots")
+            and "/clock/" not in request.path
             and request.path != "/api/v1/admin/status"
         ):
             _publish_snapshot()
         response.headers.setdefault("Cache-Control", "no-store")
         response.headers["X-Content-Type-Options"] = "nosniff"
         deployment_config.redact_response(response)
-        WEB_LOGGER.info(
+        # A client showing the nixie clock asks for it every second.
+        quiet = "/clock/" in request.path and response.status_code < 400
+        WEB_LOGGER.log(
+            logging.DEBUG if quiet else logging.INFO,
             "%s %s -> %s %dms",
             request.method,
             request.path,
@@ -533,7 +542,7 @@ def create_app(
             raise UnknownLeaseError("unknown client or credential") from None
 
     _LIMIT_KIND = {"heartbeat": "heartbeat", "client_config": "manifest", "client_manifest": "manifest",
-                   "client_artifact": "artifact", "client_screenshot": "screenshot"}
+                   "client_artifact": "artifact", "client_screenshot": "screenshot", "client_clock": "clock"}
 
     def _client() -> ClientRecord:
         """Authenticate the per-client credential for the client ID in the URL.
@@ -617,6 +626,8 @@ def create_app(
             "client_resource_versions": [ClientResources.WIRE_VERSION],
             # Heartbeats may carry ``commands`` (results); see client_commands.
             **({"client_command_versions": [CLIENT_COMMAND_VERSION]} if commands is not None else {}),
+            # Clock faces drawn at the current time (see client_clock).
+            **({"live_clock_faces": sorted(CLOCK_SCREENS)} if live_clock is not None else {}),
             # Clients may PUT their latest screenshots (see client_screenshot).
             **({"client_screenshot_upload_versions": [SCREENSHOT_UPLOAD_VERSION],
                 "screenshot_upload_max_bytes": inbox.max_image_bytes} if inbox is not None else {}),
@@ -845,6 +856,35 @@ def create_app(
         response.headers["Cache-Control"] = f"private, max-age={IMMUTABLE_MAX_AGE_SECONDS}, immutable"
         return response
 
+    @app.get("/api/v1/clients/<client_id>/clock/<screen_id>.png")
+    def client_clock(client_id: str, screen_id: str):
+        """The date or nixie face at the current time, for this client's profile.
+
+        For clients that show images but cannot draw the time from a clock
+        package. ``colors`` (an integer seed) keeps the date face's colours
+        steady across one showing. Never cached.
+        """
+
+        record = _client()
+        if live_clock is None or screen_id not in CLOCK_SCREENS:
+            return _error(404, "not_found", "no such clock face")
+        seed = None
+        raw = request.args.get("colors")
+        if raw is not None:
+            if not raw.isdigit() or len(raw) > 10:
+                raise ModelValidationError("colors", "must be a non-negative integer")
+            seed = int(raw)
+        try:
+            image = live_clock(screen_id, record.capabilities.display_profile, seed)
+        except Exception:  # noqa: BLE001 - the client falls back to the cached still
+            WEB_LOGGER.warning("Live %s clock for %s failed", screen_id, record.client_id, exc_info=True)
+            return _error(503, "clock_unavailable", "the clock face could not be drawn")
+        buffer = io.BytesIO()
+        image.save(buffer, format="PNG")
+        response = app.response_class(buffer.getvalue(), mimetype="image/png")
+        response.headers["Cache-Control"] = "no-store"
+        return response
+
     # ── Admin ──────────────────────────────────────────────────────────────
 
     @app.put("/api/v1/clients/<client_id>/screenshots")
@@ -1040,7 +1080,7 @@ def run_display_server() -> None:
         raise SystemExit("display_server.py requires DESK_DISPLAY_ROLE=server")
     deployment_config.startup_check("display server")
     settings = deployment_config.load_settings(Role.SERVER)
-    from remote_display.server_rendering import ServerRendering
+    from remote_display.server_rendering import LiveClock, ServerRendering
     from remote_display.display_status import feed_summary
     from services.server_feeds import ServerFeedService
 
@@ -1066,6 +1106,11 @@ def run_display_server() -> None:
                                  processes_per_profile=settings["DESK_DISPLAY_RENDER_WORKERS"])
     rendering = ServerRendering(feeds=feeds, profile_processes=workers)
     atexit.register(rendering.close)
+    # Started on first use: only clients that cannot draw the time ask.
+    live_clock = LiveClock(ProfileProcessPool(timeout_seconds=max(60.0, 4 * render_timeout),
+                                              render_timeout_seconds=render_timeout + RENDER_KILL_GRACE_SECONDS,
+                                              processes_per_profile=1))
+    atexit.register(live_clock.close)
     server_config = DisplayServerConfig.from_env()
     # Before create_app, which rewrites the registry snapshot the seed reads.
     _apply_location_seed(server_config)
@@ -1078,6 +1123,7 @@ def run_display_server() -> None:
         display_status=lambda: feed_summary(feeds.data.snapshot().values),
         located_display_status=lambda location: feed_summary(
             scoped_values(feeds.data.snapshot().values, location.scope)),
+        live_clock=live_clock.render,
     )
     _start_maintenance(_with_cache_budgets(app.extensions["desk_display_maintenance"], server_config))
     _start_stats(app, server_config)

@@ -27,6 +27,7 @@ LIMITS: dict[str, Limit] = {
     "heartbeat": Limit(burst=30, per_second=1),  # per client
     "manifest": Limit(burst=60, per_second=2),  # per client: config and manifest
     "artifact": Limit(burst=600, per_second=50),  # per client
+    "clock": Limit(burst=30, per_second=2),  # per client: live clock faces
     "screenshot": Limit(burst=30, per_second=1 / 5),  # per client: uploaded screenshots
 }
 MAX_BUCKETS = 4096

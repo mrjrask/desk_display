@@ -467,6 +467,7 @@ TRAFFIC_KINDS = ("artifact", "manifest", "config", "heartbeat", "register", "oth
 def traffic_kind(endpoint: str | None) -> str:
     return {
         "client_artifact": "artifact",
+        "client_clock": "artifact",
         "client_manifest": "manifest",
         "client_config": "config",
         "heartbeat": "heartbeat",

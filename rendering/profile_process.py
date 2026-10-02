@@ -302,9 +302,13 @@ class ProfileProcessPool:
             return worker.request(
                 {"op": "screen", "key": key, "weather_fetched_at": weather_fetched_at}, snapshot)
 
-    def render_clock(self, layout: Mapping[str, Any], profile: RenderProfile, now: Any) -> Any:
+    def render_clock(self, layout: Mapping[str, Any], profile: RenderProfile, now: Any,
+                     colors: Any = None) -> Any:
+        message = {"op": "clock", "layout": dict(layout), "now": now}
+        if colors is not None:
+            message["colors"] = colors
         with self._worker(profile) as worker:
-            return worker.request({"op": "clock", "layout": dict(layout), "now": now})["image"]
+            return worker.request(message)["image"]
 
     def close(self) -> None:
         with self._available:
@@ -351,7 +355,11 @@ def _serve(profile: RenderProfile, requests: BinaryIO, replies: BinaryIO) -> Non
             if "snapshot" in message:
                 snapshot = _snapshot_from_message(message["snapshot"])
             if message["op"] == "clock":
-                reply = {"ok": True, "image": render_clock(message["layout"], profile, message["now"])}
+                colors = message.get("colors")
+                if colors is not None:
+                    colors = tuple(tuple(int(c) for c in color) for color in colors)
+                reply = {"ok": True, "image": render_clock(message["layout"], profile, message["now"],
+                                                           colors=colors)}
             else:
                 if snapshot is None:
                     raise ProfileProcessError("render worker has no data snapshot")

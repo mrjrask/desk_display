@@ -14,6 +14,7 @@
   transition: opacity var(--dd-fade, 400ms) ease-in-out;
 }
 .MMM-desk_display .dd-frame img.dd-visible { opacity: 1; }
+.MMM-desk_display .dd-frame img.dd-instant { transition: none; }
 .MMM-desk_display .dd-status {
   font-size: 0.6em;
   color: #888;

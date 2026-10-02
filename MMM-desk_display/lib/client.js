@@ -7,12 +7,15 @@
  *
  * Render packages (animations) are not played: the client registers with
  * supports_animation=false, so the server ships a static image per screen.
+ * The date and nixie clocks are fetched live from a server that offers them
+ * (`live_clock_faces`), since a still would show the time it was rendered.
  */
 "use strict";
 
 const crypto = require("node:crypto");
 const fs = require("node:fs");
 const path = require("node:path");
+const { buildEntries, starterScreenIds } = require("./schedule");
 
 const NETWORK_PROTOCOL_VERSION = 1;
 const CLIENT_SOFTWARE_VERSION = "0.1";
@@ -20,6 +23,7 @@ const RENDER_PACKAGE_VERSIONS = [1];
 const MAX_ARTIFACT_BYTES = 16 * 1024 * 1024;
 const MIN_INTERVAL = 5;
 const MAX_INTERVAL = 3600;
+const PNG_SIGNATURE = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
 
 // Canonical logical sizes and colour modes, mirroring display_profiles.PROFILE_PRESETS.
 const PROFILES = {
@@ -88,38 +92,6 @@ function documentScreens (document) {
   return [[...required].sort(), [...alternates].filter((a) => !required.has(a)).sort()];
 }
 
-/* Screens in Config-page order (ungrouped first, then playlists in sequence order),
- * as schedule.build_scheduler orders them, with frequency and extra seconds. */
-function scheduleEntries (document) {
-  const screens = (document && document.screens) || {};
-  const playlists = (document && document.playlists) || {};
-  const order = [];
-  for (const item of (Array.isArray(document && document.sequence) ? document.sequence : [])) {
-    const id = item && item.playlist;
-    if (typeof id === "string" && id in playlists && !order.includes(id)) order.push(id);
-  }
-  for (const id of Object.keys(playlists)) if (!order.includes(id)) order.push(id);
-  const assignment = {};
-  for (const id of order) {
-    const steps = playlists[id] && Array.isArray(playlists[id].steps) ? playlists[id].steps : [];
-    for (const step of steps) {
-      const sid = step && step.screen;
-      if (typeof sid === "string" && sid in screens && !(sid in assignment)) assignment[sid] = id;
-    }
-  }
-  const ordered = [];
-  for (const group of ["", ...order]) {
-    for (const sid of Object.keys(screens)) {
-      if ((assignment[sid] || "") === group && !ordered.includes(sid)) ordered.push(sid);
-    }
-  }
-  return ordered.map((sid) => {
-    const spec = screens[sid];
-    const extra = spec && typeof spec === "object" ? Number(spec.extra_seconds) || 0 : 0;
-    return { screenId: sid, frequency: frequencyOf(spec), extraSeconds: Math.max(0, extra) };
-  }).filter((e) => e.frequency > 0);
-}
-
 class DeskDisplayClient {
   constructor (options, { fetchImpl = globalThis.fetch, log = console } = {}) {
     const profile = PROFILES[options.displayProfile];
@@ -140,6 +112,7 @@ class DeskDisplayClient {
     this.credential = this._readFile("client_credential");
     this.state = this._readJson("state.json") || { playlist: null, manifest: null, lastSyncAt: null };
     this.advertised = {};
+    this.liveClocks = [];
     this.unassigned = false;
     this.offeredRevision = undefined;
     this.currentScreen = null;
@@ -226,7 +199,7 @@ class DeskDisplayClient {
       type: "client_status",
       version: 1,
       client_id: this.clientId,
-      playback_state: this.playableEntries().length ? "playing" : "starting",
+      playback_state: Object.keys(this.images()).length ? "playing" : "starting",
       accepted_revisions: {
         manifest_revision: (manifest && manifest.manifest_revision) || null,
         playlist_revision: (playlist && playlist.playlist_revision) || null,
@@ -272,6 +245,12 @@ class DeskDisplayClient {
     if (!payload || typeof payload !== "object") return;
     for (const key of ["heartbeat_interval_seconds", "sync_interval_seconds"]) {
       if (typeof payload[key] === "number") this.advertised[key] = payload[key];
+    }
+    // Register, config and heartbeat responses carry the lease, and live
+    // clocks with it (a manifest's configuration has no lease_expires_at).
+    if ("lease_expires_at" in payload) {
+      const faces = Array.isArray(payload.live_clock_faces) ? payload.live_clock_faces : [];
+      this.liveClocks = faces.filter((f) => f === "date" || f === "nixie");
     }
     if (payload.assignment_state === "unassigned") this.unassigned = true;
     else if (payload.assignment_state === "assigned") this.unassigned = false;
@@ -420,7 +399,7 @@ class DeskDisplayClient {
       }
       const data = Buffer.from(await response.res.arrayBuffer());
       const digest = crypto.createHash("sha256").update(data).digest("hex");
-      const isPng = data.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]));
+      const isPng = data.subarray(0, 8).equals(PNG_SIGNATURE);
       if (data.length !== entry.length || digest !== entry.sha256 || !isPng) {
         this.noteError(new SyncError("artifact_invalid", `${entry.screen_id}: length or hash mismatch`));
         continue;
@@ -465,24 +444,47 @@ class DeskDisplayClient {
     return Boolean(assigned && typeof assigned === "object" && assigned.playlist_revision !== this.offeredRevision);
   }
 
-  /* Screens to play, in schedule order, with a verified image on disk. */
-  playableEntries () {
+  /* The date or nixie face at the current time, drawn by the server. A seed
+   * keeps the date face's colours for one showing. Throws a SyncError. */
+  async fetchClock (screenId, colorsSeed = null) {
+    if (!this.liveClocks.includes(screenId)) throw new SyncError("no_live_clock", `the server draws no live ${screenId}`);
+    const query = Number.isInteger(colorsSeed) && colorsSeed >= 0 ? `?colors=${colorsSeed}` : "";
+    const response = await this._clientRequest("GET", `/clock/${encodeURIComponent(screenId)}.png${query}`,
+      { raw: true, headers: { Accept: "image/png" } });
+    if (response.status !== 200) throw new SyncError("live_clock_failed", `${screenId} clock: HTTP ${response.status}`, { status: response.status });
+    const data = Buffer.from(await response.res.arrayBuffer());
+    if (data.length > MAX_ARTIFACT_BYTES || !data.subarray(0, 8).equals(PNG_SIGNATURE)) {
+      throw new SyncError("live_clock_invalid", `${screenId} clock is not a PNG`);
+    }
+    return data;
+  }
+
+  /* Verified images on disk for the screens this client requested, by screen ID. */
+  images () {
     const manifest = this.state.manifest;
-    if (!manifest) return [];
-    const images = new Map();
+    const images = {};
     for (const entry of this._imageEntries(manifest)) {
-      if (entry.role === "requested" && fs.existsSync(this.artifactFile(entry.sha256))) images.set(entry.screen_id, entry);
+      if (entry.role === "requested" && fs.existsSync(this.artifactFile(entry.sha256))) {
+        images[entry.screen_id] = { sha256: entry.sha256, width: entry.width, height: entry.height,
+          state: entry.state, generatedAt: entry.generated_at };
+      }
     }
+    return images;
+  }
+
+  /* What the browser needs to play: the schedule entries, the Starter
+   * playlist and the images. Without a playlist document the manifest's
+   * screens play once each per cycle. */
+  playback () {
+    const images = this.images();
     const doc = this.state.playlist && this.state.playlist.document;
-    let entries = doc ? scheduleEntries(doc) : [];
-    if (!entries.length) {
-      entries = (manifest.requested_screens || [...images.keys()]).map((sid) => ({ screenId: sid, frequency: 1, extraSeconds: 0 }));
+    let entries = doc ? buildEntries(doc) : [];
+    if (!entries.length && this.state.manifest) {
+      entries = (this.state.manifest.requested_screens || Object.keys(images)).map((screenId) => (
+        { screenId, frequency: 1, extraSeconds: 0, hideAfter: null, alternate: null }));
     }
-    return entries.filter((e) => images.has(e.screenId)).map((e) => {
-      const image = images.get(e.screenId);
-      return { ...e, sha256: image.sha256, width: image.width, height: image.height, state: image.state, generatedAt: image.generated_at };
-    });
+    return { entries, starter: doc ? starterScreenIds(doc) : [], images, liveClocks: [...this.liveClocks] };
   }
 }
 
-module.exports = { DeskDisplayClient, SyncError, PROFILES, documentScreens, scheduleEntries };
+module.exports = { DeskDisplayClient, SyncError, PROFILES, documentScreens };
