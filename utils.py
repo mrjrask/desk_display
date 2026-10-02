@@ -146,6 +146,27 @@ def _load_rpi_gpio():
     return RPiGPIO
 
 
+def _find_wayland_socket(runtime_dir: str) -> Optional[str]:
+    """Return the first Wayland socket name in *runtime_dir*.
+
+    labwc/wayfire usually listen on ``wayland-0`` but take ``wayland-1`` when
+    that name is already held, so match any ``wayland-N`` socket.
+    """
+    try:
+        candidates = sorted(Path(runtime_dir).glob("wayland-[0-9]*"))
+    except OSError:
+        return None
+    for candidate in candidates:
+        if candidate.suffix == ".lock":
+            continue
+        try:
+            if candidate.is_socket():
+                return candidate.name
+        except OSError:
+            continue
+    return None
+
+
 def _maybe_configure_desktop_env() -> None:
     if os.environ.get("DISPLAY") or os.environ.get("WAYLAND_DISPLAY"):
         return
@@ -200,17 +221,17 @@ def _maybe_configure_desktop_env() -> None:
                 display = display_result.stdout.strip() if display_result else ""
                 if session_type == "x11" and display and not os.environ.get("DISPLAY"):
                     os.environ["DISPLAY"] = display
-                if session_type == "wayland":
-                    wayland_socket = Path(runtime_dir) / "wayland-0"
-                    if wayland_socket.is_socket() and not os.environ.get("WAYLAND_DISPLAY"):
-                        os.environ["WAYLAND_DISPLAY"] = "wayland-0"
+                if session_type == "wayland" and not os.environ.get("WAYLAND_DISPLAY"):
+                    wayland_socket = _find_wayland_socket(runtime_dir)
+                    if wayland_socket:
+                        os.environ["WAYLAND_DISPLAY"] = wayland_socket
                 if os.environ.get("DISPLAY") or os.environ.get("WAYLAND_DISPLAY"):
                     break
 
     if not os.environ.get("WAYLAND_DISPLAY"):
-        wayland_socket = Path(runtime_dir) / "wayland-0"
-        if wayland_socket.is_socket():
-            os.environ["WAYLAND_DISPLAY"] = "wayland-0"
+        wayland_socket = _find_wayland_socket(runtime_dir)
+        if wayland_socket:
+            os.environ["WAYLAND_DISPLAY"] = wayland_socket
 
     if not os.environ.get("DISPLAY"):
         if Path("/tmp/.X11-unix/X0").is_socket():

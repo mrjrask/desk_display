@@ -340,8 +340,25 @@ detect_existing_venv() {
   return 1
 }
 
+# Print the name of the first Wayland socket in a runtime dir. labwc and
+# wayfire usually take wayland-0, but they move to wayland-1 when another
+# compositor (or a stale socket) already holds it.
+find_wayland_socket() {
+  local runtime_dir="$1" socket
+  [[ -n "$runtime_dir" && -d "$runtime_dir" ]] || return 1
+  for socket in "$runtime_dir"/wayland-[0-9]*; do
+    [[ "$socket" == *.lock ]] && continue
+    if [[ -S "$socket" ]]; then
+      printf '%s\n' "${socket##*/}"
+      return 0
+    fi
+  done
+  return 1
+}
+
 detect_desktop_session() {
   local service_user="$1"
+  local wayland_socket=""
 
   if [[ -n "${DISPLAY:-}" || -n "${WAYLAND_DISPLAY:-}" ]]; then
     return 0
@@ -368,16 +385,17 @@ detect_desktop_session() {
         if [[ -z "${DISPLAY:-}" && "$type" == "x11" && -n "$display" ]]; then
           export DISPLAY="$display"
         fi
-        if [[ -z "${WAYLAND_DISPLAY:-}" && "$type" == "wayland" && -n "$runtime_dir" && -S "$runtime_dir/wayland-0" ]]; then
-          export WAYLAND_DISPLAY="wayland-0"
+        if [[ -z "${WAYLAND_DISPLAY:-}" && "$type" == "wayland" ]] \
+          && wayland_socket="$(find_wayland_socket "$runtime_dir")"; then
+          export WAYLAND_DISPLAY="$wayland_socket"
         fi
         return 0
       fi
     done
   fi
 
-  if [[ -z "${WAYLAND_DISPLAY:-}" && -n "$runtime_dir" && -S "$runtime_dir/wayland-0" ]]; then
-    export WAYLAND_DISPLAY="wayland-0"
+  if [[ -z "${WAYLAND_DISPLAY:-}" ]] && wayland_socket="$(find_wayland_socket "$runtime_dir")"; then
+    export WAYLAND_DISPLAY="$wayland_socket"
     return 0
   fi
 
