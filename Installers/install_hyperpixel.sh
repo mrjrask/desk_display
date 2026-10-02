@@ -270,6 +270,15 @@ prepend_env_vars "$ENV_PATH" "${ENV_LINES[@]}"
 # The Pi 4 drives DPI from card0/card1; the Pi 5 drives it from the RP1 card
 # (card0 is the render-only v3d GPU there), so look for the DPI connector on
 # any card instead of a fixed device.
+# The HyperPixel's DPI bus uses GPIO 0-27, including the serial port's TX
+# pin (GPIO 14). With enable_uart=1 the serial driver claims it first and
+# the panel driver gives up, so the backlight comes on but nothing draws.
+for boot_cfg in /boot/firmware/config.txt /boot/config.txt; do
+  if [[ -f "$boot_cfg" ]] && grep -qE '^[[:space:]]*enable_uart=1' "$boot_cfg"; then
+    warn "$boot_cfg has enable_uart=1; the serial port takes GPIO 14 and the HyperPixel stays black. Comment it out (or raspi-config -> Interface Options -> Serial Port -> No) and reboot."
+  fi
+done
+
 dpi_connector=""
 for dpi_status in /sys/class/drm/card*-DPI-*/status; do
   [[ -r "$dpi_status" ]] || continue

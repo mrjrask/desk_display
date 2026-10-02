@@ -125,6 +125,11 @@ fi
 echo
 section "Quick hints"
 echo "- If DESK_DISPLAY_OUTPUT=kernel and no active desktop session exists, use framebuffer mode instead."
+for cfg in /boot/firmware/config.txt /boot/config.txt; do
+  if [[ -f "$cfg" ]] && grep -qE '^[[:space:]]*enable_uart=1' "$cfg"; then
+    echo "- PROBLEM: $cfg has enable_uart=1. The serial port takes GPIO 14, which the HyperPixel needs, so the panel stays black (dmesg: 'pin gpio14 already requested ... cannot claim for ...dpi'). Comment it out and reboot."
+  fi
+done
 echo "- Raspberry Pi 5: use dtoverlay=vc4-kms-dpi-hyperpixel4sq (not Pimoroni's legacy hyperpixel4 driver) outside any [pi4] section; the panel shows up as a DPI-1 connector on card1 or card2."
 echo "- If you use dtoverlay rotate=..., keep DISPLAY_ROTATION=0 unless DISPLAY_ROTATION_STRICT=0 is intentional."
 echo "- Kernel-mode output needs an active X11/Wayland desktop session; if $PANEL_SERVICE keeps restarting, check 'sudo journalctl -u $PANEL_SERVICE -f' for 'No active X11/Wayland desktop session detected'."
