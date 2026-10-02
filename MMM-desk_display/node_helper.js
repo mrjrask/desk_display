@@ -57,7 +57,8 @@ module.exports = NodeHelper.create({
       const match = /^([0-9a-f]{64})\.png$/.exec(req.params.file);
       if (!match) return res.sendStatus(404);
       res.set("Cache-Control", "private, max-age=31536000, immutable");
-      return res.sendFile(client.artifactFile(match[1]), (err) => { if (err && !res.headersSent) res.sendStatus(404); });
+      // The cache lives under .cache/, which sendFile refuses unless dotfiles are allowed.
+      return res.sendFile(client.artifactFile(match[1]), { dotfiles: "allow" }, (err) => { if (err && !res.headersSent) res.sendStatus(404); });
     });
   },
 
