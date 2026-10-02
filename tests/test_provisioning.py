@@ -85,6 +85,28 @@ def test_removing_a_client_forgets_its_credential_until_it_is_provisioned_again(
     assert store.verify("office", issued.credential) is None
 
 
+def test_the_cli_removes_a_client_like_the_clients_page(tmp_path, monkeypatch):
+    from remote_display.client_commands import CommandStore
+    from remote_display.playlist_store import PlaylistStore
+    from remote_display.provisioning import _cli
+    from tests.test_playlist_store import DOC
+
+    monkeypatch.setenv("DESK_DISPLAY_PLAYLIST_STORE_PATH", str(tmp_path / "playlists.json"))
+    monkeypatch.setenv("DESK_DISPLAY_CLIENT_COMMANDS_PATH", str(tmp_path / "commands.json"))
+    store = ProvisioningStore(tmp_path / "clients.json")
+    store.provision("office", "hyperpixel4")
+    playlists = PlaylistStore(tmp_path / "playlists.json")
+    playlist = playlists.create("Office", DOC, actor="test")
+    playlists.assign("office", playlist["id"], expected_playlist_id=None, actor="test")
+    playlists.set_friendly_name("office", "Office", actor="test")
+    CommandStore(tmp_path / "commands.json").queue("office", "restart")
+
+    assert _cli(["--store", str(tmp_path / "clients.json"), "remove", "office"]) == 0
+    assert store.get("office") is None
+    assert "office" not in playlists.snapshot()["assignments"] and "office" not in playlists.snapshot()["clients"]
+    assert CommandStore(tmp_path / "commands.json").for_client("office") == []
+
+
 def test_a_second_process_sees_changes(tmp_path):
     ui = ProvisioningStore(tmp_path / "clients.json")
     server = ProvisioningStore(tmp_path / "clients.json")
@@ -138,11 +160,21 @@ def env(tmp_path, clock):
     config = display_server.DisplayServerConfig(
         admin_token=ADMIN_TOKEN, auth_token=SERVER_TOKEN, lease_seconds=60,
         artifact_dir=tmp_path / "artifacts", clients_path=tmp_path / "clients.json",
-        playlist_store_path=tmp_path / "playlists.json",
+        playlist_store_path=tmp_path / "playlists.json", commands_path=tmp_path / "commands.json",
     )
     app = display_server.create_app(config, clock=clock)
     app.config["TESTING"] = True
     return app, app.test_client()
+
+
+def test_admin_remove_drops_queued_commands(env):
+    app, api = env
+    provision(api)
+    app.extensions["desk_display_client_commands"].queue("office", "restart")
+    response = api.post("/api/v1/admin/clients/office/remove", headers=bearer(ADMIN_TOKEN))
+    assert response.status_code == 200 and response.get_json() == {"client_id": "office", "removed": True}
+    assert app.extensions["desk_display_client_commands"].for_client("office") == []
+    assert app.extensions["desk_display_provisioning"].get("office") is None
 
 
 def provision(api, client_id="office", **extra):

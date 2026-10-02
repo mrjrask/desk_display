@@ -445,7 +445,13 @@ def _cli(argv: Iterable[str] | None = None) -> int:
         elif args.command == "revoke":
             store.revoke(args.client_id, actor="cli")
         elif args.command == "remove":
+            # As the Clients page does: the assignment, settings and queued commands go too.
+            from remote_display.client_commands import CommandStore, commands_path
+            from remote_display.playlist_store import PlaylistStore, store_path
+
             store.remove(args.client_id, actor="cli")
+            PlaylistStore(store_path()).forget_client(args.client_id, actor="cli")
+            CommandStore(commands_path()).forget(args.client_id)
         elif args.command in {"disable", "enable"}:
             store.set_disabled(args.client_id, args.command == "disable", actor="cli")
         else:
