@@ -303,29 +303,54 @@ class LiveClock:
     def __init__(self, profile_processes: Any = None) -> None:
         self.profile_processes = profile_processes
 
-    def render(self, screen_id: str, profile_id: str, colors_seed: int | None = None) -> Any:
+    def render(self, screen_id: str, profile_id: str, colors_seed: int | None = None, *,
+               layers: bool = False) -> Any:
         """The *screen_id* face for *profile_id*, now, without the IP or update icon.
 
         *colors_seed* picks the date face's colour pair, so repeated requests
-        during one showing keep the same colours.
+        during one showing keep the same colours. With *layers*, the date
+        face comes as a sheet three faces tall, so the client can cycle its
+        colours itself: the face with no text colour, then the top text's
+        and the bottom text's coverage (0-255 grey). Any colour pair is then
+        ``face + top/255 * colour1 + bottom/255 * colour2``.
         """
 
         import random
 
         from display_profiles import PROFILE_PRESETS
-        from rendering.clock_faces import clock_layout, render_clock
+        from rendering.clock_faces import clock_layout
         from utils import bright_color
 
         profile = PROFILE_PRESETS[profile_id]
         layout = clock_layout(screen_id, profile)
+        now = datetime.now(timezone.utc)
+        if layers and layout["face"] == "date":
+            return self._layers(layout, profile, now)
         colors = None
         if colors_seed is not None:
             rng = random.Random(colors_seed)
             colors = (bright_color(rng=rng), bright_color(rng=rng))
-        now = datetime.now(timezone.utc)
+        return self._draw(layout, profile, now, colors)
+
+    def _draw(self, layout: Mapping[str, Any], profile: Any, now: datetime, colors: Any) -> Any:
+        from rendering.clock_faces import render_clock
+
         if self.profile_processes is not None:
             return self.profile_processes.render_clock(layout, profile, now, colors=colors)
         return render_clock(layout, profile, now, colors=colors)
+
+    def _layers(self, layout: Mapping[str, Any], profile: Any, now: datetime) -> Any:
+        from PIL import Image, ImageChops
+
+        black, white = (0, 0, 0), (255, 255, 255)
+        base = self._draw(layout, profile, now, (black, black)).convert("RGB")
+        top = self._draw(layout, profile, now, (white, black)).convert("RGB")
+        bottom = self._draw(layout, profile, now, (black, white)).convert("RGB")
+        sheet = Image.new("RGB", (base.width, base.height * 3))
+        sheet.paste(base, (0, 0))
+        sheet.paste(ImageChops.subtract(top, base), (0, base.height))
+        sheet.paste(ImageChops.subtract(bottom, base), (0, base.height * 2))
+        return sheet
 
     def close(self) -> None:
         if self.profile_processes is not None:
