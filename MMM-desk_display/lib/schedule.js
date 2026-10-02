@@ -11,7 +11,7 @@
  *   presentation of its base screen, round-robin over its screen list,
  *   except in cycle 1, which always shows the bases.
  * - `hide_after_enabled` / `hide_after_at` retire a screen at that time
- *   (Central time when the value has no offset).
+ *   (in the content time zone when the value has no offset).
  * - Playback starts at the top of the playlist labelled "Starter".
  */
 (function (root, factory) {
@@ -32,6 +32,9 @@
   }
 
   /* Milliseconds since the epoch for a wall-clock time in *timeZone*. */
+  /* Like Python's datetime(..., tzinfo=ZoneInfo(zone)) with fold=0: an
+   * ambiguous time is its first occurrence, and a time skipped by a
+   * spring-forward gap uses the offset from before the change. */
   function zonedTime (year, month, day, hour, minute, second, timeZone) {
     const format = new Intl.DateTimeFormat("en-US", {
       timeZone, hourCycle: "h23", year: "numeric", month: "2-digit", day: "2-digit",
@@ -42,11 +45,14 @@
       for (const p of format.formatToParts(new Date(at))) parts[p.type] = Number(p.value);
       return Date.UTC(parts.year, parts.month - 1, parts.day, parts.hour, parts.minute, parts.second);
     };
+    const offsetAt = (at) => shown(at) - at;
     const wall = Date.UTC(year, month - 1, day, hour, minute, second);
-    let at = wall;
-    // Two passes settle the zone's offset at that instant, across DST changes too.
-    for (let i = 0; i < 2; i += 1) at = wall - (shown(at) - at);
-    return at;
+    const DAY = 86400000;
+    const before = offsetAt(wall - DAY);
+    const after = offsetAt(wall + DAY);
+    if (shown(wall - before) === wall) return wall - before;
+    if (shown(wall - after) === wall) return wall - after;
+    return wall - before; // in the gap
   }
 
   /* `hide_after_at` as epoch milliseconds, or null. */
@@ -97,7 +103,7 @@
    * play order, each with its frequency, extra seconds, hide time and
    * alternates. Malformed entries are skipped rather than failing the whole
    * playlist (the server validates documents when they are saved). */
-  function buildEntries (document) {
+  function buildEntries (document, { timeZone = CONTENT_TIME_ZONE } = {}) {
     const screens = (document && document.screens) || {};
     const entries = [];
     for (const screenId of orderedScreenIds(document)) {
@@ -111,7 +117,7 @@
       let alternate = null;
       if (isObject) {
         extraSeconds = Math.max(0, toInt(spec.extra_seconds || 0) || 0);
-        if (spec.hide_after_enabled) hideAfter = parseHideAfter(spec.hide_after_at);
+        if (spec.hide_after_enabled) hideAfter = parseHideAfter(spec.hide_after_at, timeZone);
         const alt = spec.alt;
         if (alt && typeof alt === "object") {
           const ids = (typeof alt.screen === "string" ? [alt.screen] : Array.isArray(alt.screen) ? alt.screen : [])

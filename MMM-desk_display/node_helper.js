@@ -16,6 +16,7 @@ module.exports = NodeHelper.create({
   },
 
   stop () {
+    this.stopped = true; // a sync still in flight must not schedule another
     for (const entry of this.clients.values()) clearTimeout(entry.timer);
   },
 
@@ -68,12 +69,17 @@ module.exports = NodeHelper.create({
       }
       return undefined;
     });
-    this.expressApp.get(`${base}/:file`, (req, res) => {
+    // Images live under images/: before this route allowed dotfiles, the old
+    // /<sha>.png route answered every image with a 404 marked cacheable for a
+    // year, and browsers still hold those. Only a found image may be cached.
+    this.expressApp.get(`${base}/images/:file`, (req, res) => {
       const match = /^([0-9a-f]{64})\.png$/.exec(req.params.file);
-      if (!match) return res.sendStatus(404);
-      res.set("Cache-Control", "private, max-age=31536000, immutable");
+      if (!match) return res.set("Cache-Control", "no-store").sendStatus(404);
       // The cache lives under .cache/, which sendFile refuses unless dotfiles are allowed.
-      return res.sendFile(client.artifactFile(match[1]), { dotfiles: "allow" }, (err) => { if (err && !res.headersSent) res.sendStatus(404); });
+      return res.sendFile(client.artifactFile(match[1]), {
+        dotfiles: "allow",
+        headers: { "Cache-Control": "private, max-age=31536000, immutable" }
+      }, (err) => { if (err && !res.headersSent) res.set("Cache-Control", "no-store").sendStatus(404); });
     });
   },
 
@@ -81,16 +87,15 @@ module.exports = NodeHelper.create({
     const { client, config } = entry;
     let delay;
     try {
-      let changed = false;
-      if (Date.now() >= entry.nextFullAt) {
-        changed = await client.fullSync();
-        entry.nextFullAt = Date.now() + client.syncInterval(config.syncInterval) * 1000;
-      } else if (await client.heartbeatOnly()) {
-        changed = await client.fullSync();
+      if (Date.now() >= entry.nextFullAt || await client.heartbeatOnly()) {
+        await client.fullSync();
         entry.nextFullAt = Date.now() + client.syncInterval(config.syncInterval) * 1000;
       }
       entry.failures = 0;
-      if (changed || !entry.lastPublished) this._publish(entry);
+      // Offered after every pass: _publish sends only when something the
+      // browser uses changed, such as a newly downloaded image or the live
+      // clocks the lease advertises.
+      this._publish(entry);
       delay = Math.min(client.heartbeatInterval(config.heartbeatInterval), client.syncInterval(config.syncInterval));
     } catch (err) {
       entry.failures += 1;
@@ -102,7 +107,7 @@ module.exports = NodeHelper.create({
       this.sendSocketNotification("DD_STATUS", { clientId: client.clientId, message: err.message, error: true });
       if (!entry.lastPublished) this._publish(entry);
     }
-    entry.timer = setTimeout(() => this._tick(entry), delay * 1000);
+    if (!this.stopped) entry.timer = setTimeout(() => this._tick(entry), delay * 1000);
   },
 
   _publish (entry) {
@@ -110,7 +115,7 @@ module.exports = NodeHelper.create({
     const base = `/${this.name}/${encodeURIComponent(client.clientId)}`;
     const playback = client.playback();
     for (const [screenId, image] of Object.entries(playback.images)) {
-      image.url = `${base}/${image.sha256}.png`;
+      image.url = `${base}/images/${image.sha256}.png`;
       if (playback.liveClocks.includes(screenId)) image.liveUrl = `${base}/clock/${encodeURIComponent(screenId)}.png`;
     }
     const key = JSON.stringify(playback);

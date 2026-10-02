@@ -56,6 +56,11 @@ test("hide_after retires a screen, reading times without an offset as Central ti
   assert.strictEqual(new Date(parseHideAfter("2026-01-15 08:00:00")).toISOString(), "2026-01-15T14:00:00.000Z");
   assert.strictEqual(parseHideAfter("2026-10-02T18:30:00-04:00"), Date.parse("2026-10-02T22:30:00Z"));
   assert.strictEqual(parseHideAfter("soon"), null);
+  // As Python's fold=0: a skipped time takes the offset from before the
+  // change, and a repeated one is its first occurrence.
+  assert.strictEqual(new Date(parseHideAfter("2026-03-08T02:30")).toISOString(), "2026-03-08T08:30:00.000Z");
+  assert.strictEqual(new Date(parseHideAfter("2026-11-01T01:30")).toISOString(), "2026-11-01T06:30:00.000Z");
+  assert.strictEqual(new Date(parseHideAfter("2026-10-02T18:30", "America/New_York")).toISOString(), "2026-10-02T22:30:00.000Z");
   const doc = { screens: { a: 1, b: { frequency: 1, hide_after_enabled: true, hide_after_at: "2026-10-02T18:30" } } };
   assert.deepStrictEqual(play(doc, [], 3, Date.parse("2026-10-02T23:00:00Z")), ["a", "b", "a"]);
   assert.deepStrictEqual(play(doc, [], 3, Date.parse("2026-10-02T23:31:00Z")), ["a", "a", "a"]);

@@ -104,6 +104,8 @@ class DeskDisplayClient {
     [this.width, this.height, this.colorMode] = profile;
     this.enrollmentToken = options.enrollmentToken || "";
     this.timeoutMs = options.requestTimeoutMs || 15000;
+    // DESK_DISPLAY_CONTENT_TIMEZONE on a desk_display client: hide-after times without an offset.
+    this.contentTimeZone = options.contentTimeZone || "America/Chicago";
     this.cacheDir = path.join(options.cacheDir, this.clientId);
     this.artifactDir = path.join(this.cacheDir, "artifacts");
     fs.mkdirSync(this.artifactDir, { recursive: true });
@@ -358,7 +360,11 @@ class DeskDisplayClient {
     const current = this.state.manifest;
     const headers = current && current.manifest_revision ? { "If-None-Match": `"${current.manifest_revision}"` } : {};
     const response = await this._clientRequest("GET", "/manifest", { headers });
-    if (response.status === 304) return false;
+    if (response.status === 304) {
+      // Unchanged, but retry any image an earlier pass failed to download.
+      await this._downloadArtifacts(current, { onlyMissing: true });
+      return false;
+    }
     if (response.status !== 200) throw this._fail(response, "manifest");
     const manifest = response.json || {};
     if (manifest.type !== "client_manifest") throw new SyncError("invalid_response", "manifest has the wrong type");
@@ -388,16 +394,29 @@ class DeskDisplayClient {
     } catch { return false; }
   }
 
-  async _downloadArtifacts (manifest) {
+  async _downloadArtifacts (manifest, { onlyMissing = false } = {}) {
     for (const entry of this._imageEntries(manifest)) {
-      if (this._hasValid(entry)) continue;
+      if (onlyMissing ? fs.existsSync(this.artifactFile(entry.sha256)) : this._hasValid(entry)) continue;
       const suffix = entry.url.slice(`/api/v1/clients/${encodeURIComponent(this.clientId)}`.length);
-      const response = await this._clientRequest("GET", suffix, { raw: true, headers: { Accept: "image/png" } });
+      let response;
+      try {
+        response = await this._clientRequest("GET", suffix, { raw: true, headers: { Accept: "image/png" } });
+      } catch (err) {
+        // One failed download must not cost the rest of the manifest.
+        this.noteError(err);
+        continue;
+      }
       if (response.status !== 200) {
         this.noteError(new SyncError("artifact_download_failed", `${entry.screen_id}: HTTP ${response.status}`));
         continue;
       }
-      const data = Buffer.from(await response.res.arrayBuffer());
+      let data;
+      try {
+        data = Buffer.from(await response.res.arrayBuffer());
+      } catch (err) {
+        this.noteError(new SyncError("network_error", `${entry.screen_id}: ${err.message}`));
+        continue;
+      }
       const digest = crypto.createHash("sha256").update(data).digest("hex");
       const isPng = data.subarray(0, 8).equals(PNG_SIGNATURE);
       if (data.length !== entry.length || digest !== entry.sha256 || !isPng) {
@@ -478,7 +497,7 @@ class DeskDisplayClient {
   playback () {
     const images = this.images();
     const doc = this.state.playlist && this.state.playlist.document;
-    let entries = doc ? buildEntries(doc) : [];
+    let entries = doc ? buildEntries(doc, { timeZone: this.contentTimeZone }) : [];
     if (!entries.length && this.state.manifest) {
       entries = (this.state.manifest.requested_screens || Object.keys(images)).map((screenId) => (
         { screenId, frequency: 1, extraSeconds: 0, hideAfter: null, alternate: null }));

@@ -18,6 +18,7 @@ Module.register("MMM-desk_display", {
     syncInterval: 30,             // capped by what the server advertises
     heartbeatInterval: 60,
     requestTimeoutMs: 15000,
+    contentTimeZone: "America/Chicago", // the server's DESK_DISPLAY_CONTENT_TIMEZONE
     showStatus: true
   },
 
@@ -46,7 +47,8 @@ Module.register("MMM-desk_display", {
       displayProfile: this.config.displayProfile,
       syncInterval: this.config.syncInterval,
       heartbeatInterval: this.config.heartbeatInterval,
-      requestTimeoutMs: this.config.requestTimeoutMs
+      requestTimeoutMs: this.config.requestTimeoutMs,
+      contentTimeZone: this.config.contentTimeZone
     });
   },
 
