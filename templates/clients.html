@@ -452,6 +452,25 @@ function maintenancePanel(body, client) {
     }
     line(access, `credential ${state}`, "muted small");
   }
+
+  if (client.kind !== "static") {
+    const removal = group(grid, "Remove");
+    const el = button(element(removal, "div", "row"), "Remove display", () => removeClient(client),
+      "Delete this display from the server: its credential, playlist assignment and settings");
+    el.className = "danger";
+    el.dataset.remove = client.client_id;
+    line(removal, "Revokes its credential and takes it off this page. Add it again to bring it back.", "muted small");
+  }
+}
+
+async function removeClient(client) {
+  const name = client.friendly_name || client.client_id;
+  if (!confirm(`Remove ${name}? Its credential is revoked so it cannot reconnect, and its playlist assignment, settings and status are deleted. To bring it back, add it again with Add a display.`)) return;
+  try {
+    await api("DELETE", `/api/clients/${encodeURIComponent(client.client_id)}`);
+    notice(`Removed ${name}.`);
+  } catch (error) { notice(explain(error), "error"); }
+  load();
 }
 
 function render(data) {

@@ -323,6 +323,16 @@ class ClientRegistry:
                 if not record.static:
                     record.demand = None
 
+    def forget(self, client_id: str) -> bool:
+        """Drop a dynamic client's record (it was removed); static clients stay."""
+
+        with self._lock:
+            record = self._clients.get(client_id)
+            if record is None or record.static:
+                return False
+            del self._clients[client_id]
+            return True
+
     def set_disabled(self, client_id: str, disabled: bool) -> ClientRecord:
         client_id = identifier(client_id)
         with self._lock:

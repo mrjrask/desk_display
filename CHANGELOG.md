@@ -17,6 +17,8 @@ See the README's [deployment modes](README.md#deployment-modes) and
   every client that shares it.
 - Server-managed playlists and assignments in the configuration UI, with
   per-client capability warnings, provisioning, rotation and revocation.
+- The Clients page's Maintenance tab can remove a display: its credential,
+  assignment, settings and the server's record go, and its card leaves the page.
 - The Playlists page edits each client playlist with the Screen Rotation
   Config page's editor (screen and playlist order, frequency, hide-after,
   alternates, extra seconds, Collapse all / Expand all); raw JSON editing

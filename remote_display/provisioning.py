@@ -59,6 +59,7 @@ except ImportError:  # pragma: no cover
 
 SCHEMA_VERSION = 1
 MAX_HISTORY = 50
+MAX_REMOVED = 200
 JOIN_TICKET_SECONDS = 30 * 60
 STATES = ("active", "disabled", "revoked")
 _PROJECT_ROOT = Path(__file__).resolve().parents[1]
@@ -242,6 +243,33 @@ class ProvisioningStore:
     def revoke(self, client_id: str, *, actor: str = "admin") -> dict[str, Any]:
         return self._set_state(client_id, "revoked", actor, destroy=True)
 
+    def remove(self, client_id: str, *, actor: str = "admin") -> bool:
+        """Forget *client_id*: its record, credential and join codes; whether it was provisioned.
+
+        The removal is remembered (see :meth:`removed`) so the render server
+        drops the display's lease and status too, even when the ID is
+        provisioned again before the server notices: only registrations from
+        before the removal are dropped.
+        """
+
+        client_id = identifier(client_id, "client_id")
+        with self._transaction() as data:
+            now = self._clock()
+            existed = data["clients"].pop(client_id, None) is not None
+            self._drop_tickets(data, client_id, now)
+            removed = dict(data.get("removed") or {})
+            removed.pop(client_id, None)
+            removed[client_id] = {"at": now, "actor": actor}
+            data["removed"] = dict(sorted(removed.items(), key=lambda item: item[1]["at"])[-MAX_REMOVED:])
+        return existed
+
+    def removed(self) -> dict[str, float]:
+        """When each removed client ID was last removed (kept if it is provisioned again)."""
+
+        with self._lock:
+            removed = self._load().get("removed") or {}
+        return {client_id: float(entry.get("at") or 0) for client_id, entry in removed.items()}
+
     def set_disabled(self, client_id: str, disabled: bool, *, actor: str = "admin") -> dict[str, Any]:
         client_id = identifier(client_id, "client_id")
         with self._transaction() as data:
@@ -401,7 +429,7 @@ def _cli(argv: Iterable[str] | None = None) -> int:
     rotate = sub.add_parser("rotate", help="issue a new credential and print its .env.client once")
     rotate.add_argument("client_id")
     rotate.add_argument("--server-url", default=os.environ.get("DESK_DISPLAY_SERVER_PUBLIC_URL"))
-    for name in ("revoke", "disable", "enable"):
+    for name in ("revoke", "disable", "enable", "remove"):
         sub.add_parser(name).add_argument("client_id")
     sub.add_parser("list", help="list provisioned clients (never their credentials)")
     args = parser.parse_args(list(argv) if argv is not None else None)
@@ -416,6 +444,16 @@ def _cli(argv: Iterable[str] | None = None) -> int:
             sys.stdout.write(text)
         elif args.command == "revoke":
             store.revoke(args.client_id, actor="cli")
+        elif args.command == "remove":
+            # As the Clients page does: the assignment, settings and queued commands go too.
+            from remote_display.client_commands import CommandStore, commands_path
+            from remote_display.playlist_store import PlaylistStore, store_path
+            from remote_display.screenshot_uploads import ScreenshotInbox, upload_dir
+
+            store.remove(args.client_id, actor="cli")
+            PlaylistStore(store_path()).forget_client(args.client_id, actor="cli")
+            CommandStore(commands_path()).forget(args.client_id)
+            ScreenshotInbox(upload_dir()).forget(args.client_id)
         elif args.command in {"disable", "enable"}:
             store.set_disabled(args.client_id, args.command == "disable", actor="cli")
         else:

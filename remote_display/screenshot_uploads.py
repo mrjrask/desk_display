@@ -242,6 +242,13 @@ class ScreenshotInbox:
         path = self._client_dir(client_id) / name
         return path if path.is_file() else None
 
+    def forget(self, client_id: str) -> None:
+        """Delete every screenshot *client_id* uploaded (it was removed)."""
+
+        folder = self._client_dir(client_id)
+        with self._lock:
+            shutil.rmtree(folder, ignore_errors=True)
+
     def prune(self) -> list[str]:
         """Drop expired screenshots, stray files and anything over the size cap."""
 

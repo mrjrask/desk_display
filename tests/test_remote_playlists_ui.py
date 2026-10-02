@@ -688,6 +688,22 @@ def test_browser_client_assignment(live_server, browser, env):
     assert "lobby" in page.inner_text("#clients")
 
 
+def test_browser_remove_display(live_server, browser, env):
+    env["app"].extensions["desk_display_provisioning"].provision("office", "hyperpixel4")
+    publish_registry(env, [caps("office")])
+    page = browser.new_page()
+    page.goto(f"{live_server}/clients")
+    page.wait_for_selector("[data-client-id='office']")
+    page.click("[data-client-id='lobby'] button[data-panel='maintenance']")
+    assert page.query_selector("[data-client-id='lobby'] button[data-remove]") is None  # static
+    page.click("[data-client-id='office'] button[data-panel='maintenance']")
+    page.once("dialog", lambda dialog: dialog.accept())
+    page.click("[data-client-id='office'] button[data-remove='office']")
+    page.wait_for_selector("#notice.ok")
+    page.wait_for_selector("[data-client-id='office']", state="detached")
+    assert env["app"].extensions["desk_display_provisioning"].get("office") is None
+
+
 def test_browser_clients_page_shows_delivery_timings(live_server, browser, env):
     timings = ClientTelemetry(heartbeat_rtt_ms=84.5, manifest_fetch_ms=1250.0, last_sync_duration_ms=2400.0,
                               download_count=3, download_bytes=2 * 1048576, download_ms=1800.0,
@@ -776,6 +792,56 @@ def test_provisioning_from_the_clients_page(env, web):
     assert row["state"] == "disabled" and row["assignment"]["playlist_id"] == playlist["id"]
     assert web.post("/api/clients/den/credential/revoke", headers=CSRF, json={}).get_json()["state"] == "revoked"
     assert web.post("/api/clients/den/credential/nope", headers=CSRF, json={}).status_code == 404
+
+
+def test_removing_a_display_takes_it_off_the_clients_page(env, web, monkeypatch):
+    from remote_display.screenshot_uploads import ScreenshotInbox
+
+    inbox = ScreenshotInbox(env["tmp"] / "uploads")
+    monkeypatch.setitem(env["app"].extensions, "desk_display_uploaded_screenshots", inbox)
+    (inbox.root / "den").mkdir(parents=True)
+    playlist = env["store"].create("Office", DOC, actor="test")
+    web.post("/api/clients/provision", headers=CSRF, json={
+        "client_id": "den", "display_profile": "hyperpixel4", "playlist_id": playlist["id"],
+        "friendly_name": "Den"})
+    web.put("/api/clients/den/scroll", headers=CSRF, json={"vertical_speed_adjustment": 0.5})
+    publish_registry(env, [caps("den")])
+    web.post("/api/clients/den/commands", headers=CSRF, json={"action": "restart"})
+    # Revoking alone keeps the card.
+    web.post("/api/clients/den/credential/revoke", headers=CSRF, json={})
+    assert "den" in {r["client_id"] for r in web.get("/api/clients").get_json()["clients"]}
+
+    assert web.delete("/api/clients/den").status_code == 403  # CSRF
+    removed = web.delete("/api/clients/den", headers=CSRF)
+    assert removed.status_code == 200 and removed.get_json() == {"client_id": "den", "removed": True}
+    # The server's snapshot still lists it until the server notices; the page does not.
+    assert "den" in json.loads(env["snapshot"].read_text())["clients"]
+    assert "den" not in {r["client_id"] for r in web.get("/api/clients").get_json()["clients"]}
+    provisioning = env["app"].extensions["desk_display_provisioning"]
+    assert provisioning.get("den") is None and "den" in provisioning.removed()
+    data = env["store"].snapshot()
+    assert "den" not in data["assignments"] and "den" not in data["clients"]
+    assert env["app"].extensions["desk_display_client_commands"].for_client("den") == []
+    assert not (inbox.root / "den").exists()
+    assert web.delete("/api/clients/den", headers=CSRF).status_code == 404
+
+    # Added again before the server notices: a fresh card, not the old display's status.
+    web.post("/api/clients/provision", headers=CSRF, json={"client_id": "den", "display_profile": "hyperpixel4"})
+    row = {r["client_id"]: r for r in web.get("/api/clients").get_json()["clients"]}["den"]
+    assert row["state"] == "never_connected" and row["current_screen"] is None
+    web.delete("/api/clients/den", headers=CSRF)
+
+    # A display that registers again afterwards (shared token) shows up again.
+    provisioning._clock = lambda: 1_000_000_000.0
+    provisioning.remove("den")
+    publish_registry(env, [caps("den")])
+    assert "den" in {r["client_id"] for r in web.get("/api/clients").get_json()["clients"]}
+
+
+def test_static_displays_cannot_be_removed_from_the_page(web):
+    response = web.delete("/api/clients/lobby", headers=CSRF)
+    assert response.status_code == 409 and "DESK_DISPLAY_STATIC_CLIENTS" in response.get_json()["message"]
+    assert "lobby" in {r["client_id"] for r in web.get("/api/clients").get_json()["clients"]}
 
 
 def test_clients_page_offers_provisioning(web):

@@ -600,6 +600,16 @@ class PlaylistStore:
             raise
         return clone
 
+    def forget_client(self, client_id: str, *, actor: str) -> None:
+        """Drop the client's assignment, name and per-display settings (it was removed)."""
+
+        client_id = _client(client_id)
+        with self._transaction() as data:
+            assignment = data["assignments"].pop(client_id, None)
+            data["clients"].pop(client_id, None)
+            self._audit(data, actor, "remove_client", client_id,
+                        playlist_id=assignment["playlist_id"] if assignment else None)
+
     def set_friendly_name(self, client_id: str, name: str | None, *, actor: str) -> None:
         client_id = _client(client_id)
         with self._transaction() as data:
