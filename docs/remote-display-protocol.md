@@ -82,6 +82,7 @@ register again and retry once.
 | `GET /api/v1/clients/<id>/config` | lease | Assigned playlist document and lease settings |
 | `GET /api/v1/clients/<id>/manifest` | lease | The artifacts this client should hold |
 | `GET /api/v1/clients/<id>/artifacts/<sha256>.<ext>` | lease | One artifact or render package |
+| `GET /api/v1/clients/<id>/clock/<date\|nixie>.png?colors=<seed>` | lease | The clock face at the current time, see [Live clock faces](#live-clock-faces) |
 | `PUT /api/v1/clients/<id>/screenshots?screen=<id>&captured_at=<time>` | lease | Store this client's latest screenshot of one screen (`image/png` body), see [Screenshot uploads](#screenshot-uploads) |
 | `GET /api/v1/admin/status` | admin | Clients, leases, demand, artifact store |
 | `GET /api/v1/admin/render-status` | admin | Render coordinator state |
@@ -126,6 +127,7 @@ the credential. Response 201 (new lease) or 200 (renewal):
 | `client_resource_versions` | Heartbeat `resources` versions the server accepts |
 | `client_command_versions` | Heartbeat `commands` versions the server accepts (absent when the server keeps no command store) |
 | `client_screenshot_upload_versions`, `screenshot_upload_max_bytes` | Screenshot upload versions and the largest image accepted (absent when uploads are off) |
+| `live_clock_faces` | Clock screens the server draws on request (`["date", "nixie"]`; absent when it does not) |
 | `client_credential` | The new lease credential |
 
 The current client keeps `client_credential` and the advertised
@@ -306,6 +308,24 @@ declared `length`. Before it uses anything it checks:
 It fetches packages only when it supports animation, or for clock packages.
 It re-hashes cached files on read and drops corrupt ones.
 
+### Live clock faces
+
+`GET /api/v1/clients/<id>/clock/<date|nixie>.png` returns that clock face
+drawn now for the client's display profile, as `image/png` with
+`Cache-Control: no-store`. It is for clients that show images but cannot
+draw the time from a `clock` render package, such as the MagicMirror module
+(`MMM-desk_display/`); the Pi client draws the time itself and never calls
+it. The optional `colors` query parameter (a non-negative integer seed)
+picks the date face's colour pair, so a client that refreshes the face
+during one showing keeps its colours. Like a clock package, the face never
+shows the server's IP address or update state.
+
+The server lists the faces it offers in `live_clock_faces`. It answers 404
+for any other screen, 400 for a bad `colors` value and 503
+`clock_unavailable` when the face could not be drawn; the client then shows
+the screen's cached still. Faces are drawn in their own profile processes,
+started on first use, so a slow screen render never holds up a clock.
+
 ### Screenshot uploads
 
 `PUT /api/v1/clients/<id>/screenshots?screen=<screen id>&captured_at=<ISO time>`
@@ -334,6 +354,7 @@ token buckets:
 | `heartbeat` | 30 | 1 per s | client ID |
 | `manifest` (config and manifest) | 60 | 2 per s | client ID |
 | `artifact` | 600 | 50 per s | client ID |
+| `clock` (live clock faces) | 30 | 2 per s | client ID |
 
 A limited request gets 429
 `{"error": "rate_limited", "retry_after_seconds": N}` and `Retry-After: N`.

@@ -1,0 +1,308 @@
+[
+ {
+  "doc": {
+   "screens": {
+    "weather2": {
+     "frequency": 2,
+     "alt": {
+      "screen": "date",
+      "frequency": 1
+     },
+     "extra_seconds": 3
+    },
+    "sox next": {
+     "frequency": 1,
+     "alt": {
+      "screen": "bears stand1",
+      "frequency": 2
+     },
+     "extra_seconds": 0
+    },
+    "date": {
+     "frequency": 2,
+     "alt": {
+      "screen": "AL Overview",
+      "frequency": 3
+     },
+     "extra_seconds": 0
+    },
+    "weather1": 2,
+    "astronomical": 0,
+    "AL Overview": 0
+   },
+   "playlists": {
+    "p0": {
+     "label": "Starter",
+     "steps": [
+      {
+       "screen": "AL Overview"
+      },
+      {
+       "screen": "weather1"
+      }
+     ]
+    },
+    "p1": {
+     "label": "L1",
+     "steps": [
+      {
+       "screen": "astronomical"
+      },
+      {
+       "screen": "date"
+      }
+     ]
+    }
+   },
+   "sequence": [
+    {
+     "playlist": "p0"
+    },
+    {
+     "playlist": "p1"
+    }
+   ]
+  },
+  "unavailable": [
+   "weather1"
+  ],
+  "seq": [
+   "date",
+   "sox next",
+   "date",
+   "bears stand1",
+   "date",
+   "sox next",
+   "date",
+   "bears stand1",
+   "AL Overview",
+   "sox next",
+   "date",
+   "bears stand1",
+   "date",
+   "sox next",
+   "date",
+   "bears stand1",
+   "date",
+   "sox next",
+   "date",
+   "bears stand1",
+   "AL Overview",
+   "sox next",
+   "date",
+   "bears stand1"
+  ]
+ },
+ {
+  "doc": {
+   "screens": {
+    "astronomical": {
+     "frequency": 0,
+     "alt": {
+      "screen": "weather1",
+      "frequency": 1
+     },
+     "extra_seconds": 2
+    },
+    "AL Overview": 3,
+    "weather1": 2,
+    "weather2": 3,
+    "sox next": {
+     "frequency": 1,
+     "alt": {
+      "screen": [
+       "inside",
+       "weather2"
+      ],
+      "frequency": 1
+     },
+     "extra_seconds": 0
+    },
+    "bears stand1": {
+     "frequency": 2,
+     "alt": {
+      "screen": [
+       "weather1",
+       "bears next"
+      ],
+      "frequency": 1
+     },
+     "extra_seconds": 2
+    },
+    "inside": {
+     "frequency": 1,
+     "alt": {
+      "screen": [
+       "news headlines",
+       "AL Overview"
+      ],
+      "frequency": 1
+     },
+     "extra_seconds": 2
+    }
+   },
+   "playlists": {
+    "p0": {
+     "label": "Starter",
+     "steps": [
+      {
+       "screen": "weather2"
+      },
+      {
+       "screen": "sox next"
+      },
+      {
+       "screen": "bears stand1"
+      }
+     ]
+    },
+    "p1": {
+     "label": "L1",
+     "steps": [
+      {
+       "screen": "inside"
+      },
+      {
+       "screen": "astronomical"
+      }
+     ]
+    }
+   },
+   "sequence": [
+    {
+     "playlist": "p0"
+    },
+    {
+     "playlist": "p1"
+    }
+   ]
+  },
+  "unavailable": [
+   "cubs next",
+   "nixie"
+  ],
+  "seq": [
+   "weather2",
+   "sox next",
+   "bears stand1",
+   "inside",
+   "inside",
+   "news headlines",
+   "weather1",
+   "weather2",
+   "weather1",
+   "AL Overview",
+   "AL Overview",
+   "weather2",
+   "inside",
+   "news headlines",
+   "weather1",
+   "weather2",
+   "bears next",
+   "AL Overview",
+   "inside",
+   "news headlines",
+   "AL Overview",
+   "weather1",
+   "weather2",
+   "weather2"
+  ]
+ },
+ {
+  "doc": {
+   "screens": {
+    "sox next": {
+     "frequency": 0,
+     "alt": {
+      "screen": [
+       "bears stand1",
+       "AL Overview"
+      ],
+      "frequency": 1
+     },
+     "extra_seconds": 3
+    },
+    "news headlines": 1,
+    "bears stand1": 2,
+    "weather2": 1,
+    "inside": {
+     "frequency": 3,
+     "alt": {
+      "screen": [
+       "AL Overview",
+       "weather2"
+      ],
+      "frequency": 3
+     },
+     "extra_seconds": 2
+    },
+    "weather1": 0,
+    "AL Overview": 2
+   },
+   "playlists": {
+    "p0": {
+     "label": "Starter",
+     "steps": [
+      {
+       "screen": "inside"
+      },
+      {
+       "screen": "weather1"
+      },
+      {
+       "screen": "sox next"
+      }
+     ]
+    },
+    "p1": {
+     "label": "L1",
+     "steps": [
+      {
+       "screen": "news headlines"
+      },
+      {
+       "screen": "bears stand1"
+      }
+     ]
+    }
+   },
+   "sequence": [
+    {
+     "playlist": "p0"
+    },
+    {
+     "playlist": "p1"
+    }
+   ]
+  },
+  "unavailable": [
+   "cubs next"
+  ],
+  "seq": [
+   "inside",
+   "news headlines",
+   "bears stand1",
+   "weather2",
+   "news headlines",
+   "weather2",
+   "AL Overview",
+   "news headlines",
+   "bears stand1",
+   "weather2",
+   "inside",
+   "news headlines",
+   "weather2",
+   "AL Overview",
+   "news headlines",
+   "bears stand1",
+   "weather2",
+   "news headlines",
+   "weather2",
+   "AL Overview",
+   "AL Overview",
+   "news headlines",
+   "bears stand1",
+   "weather2"
+  ]
+ }
+]

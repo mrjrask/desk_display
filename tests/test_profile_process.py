@@ -105,3 +105,15 @@ def test_renders_for_one_profile_run_side_by_side():
         assert len(workers._workers[PROFILE.profile_id]) == 2
     finally:
         workers.close()
+
+
+def test_a_clock_drawn_in_a_worker_keeps_the_colours_it_was_given(pool):
+    import datetime as dt
+
+    from rendering.clock_faces import clock_layout, render_clock
+
+    layout = clock_layout("date", PROFILE)
+    now = dt.datetime(2026, 10, 2, 17, 0, tzinfo=dt.timezone.utc)
+    colors = ((250, 120, 90), (90, 250, 120))
+    image = pool.render_clock(layout, PROFILE, now, colors=[list(c) for c in colors])
+    assert image.tobytes() == render_clock(layout, PROFILE, now, colors=colors).tobytes()
