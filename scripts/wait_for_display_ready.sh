@@ -7,6 +7,7 @@ set -euo pipefail
 timeout_seconds="${DESK_DISPLAY_STARTUP_TIMEOUT_SECONDS:-30}"
 interval_seconds="${DESK_DISPLAY_STARTUP_POLL_INTERVAL_SECONDS:-1}"
 stable_polls_required="${DESK_DISPLAY_STARTUP_STABLE_POLLS:-3}"
+drm_root="${DESK_DISPLAY_DRM_SYSFS_ROOT:-/sys/class/drm}"
 
 if (( stable_polls_required < 2 )); then
   stable_polls_required=2
@@ -51,10 +52,16 @@ get_rotation_state() {
 
 get_display_state() {
   local status_path modes_path connector mode rotation_state
-  local -a connectors
+  # Initialised empty: with `set -u`, bash treats a declared-but-unassigned
+  # array as unbound, so `${#connectors[@]}` aborted the poll whenever no
+  # connector was connected yet.
+  local -a connectors=()
 
-  # DRM/KMS path (preferred for HyperPixel kernel output)
-  for status_path in /sys/class/drm/card*-*/status; do
+  # DRM/KMS path (preferred for HyperPixel kernel output). Pi 4 exposes the
+  # display controller as card0/card1; Pi 5 puts HDMI on card1 or card2
+  # (card0 is the render-only v3d GPU) and DPI/DSI panels on the RP1 card,
+  # so match every card rather than a fixed one.
+  for status_path in "$drm_root"/card*-*/status; do
     [[ -r "$status_path" ]] || continue
     if grep -qx "connected" "$status_path"; then
       modes_path="${status_path%/status}/modes"
@@ -105,10 +112,32 @@ while (( elapsed < timeout_seconds )); do
   elapsed=$((elapsed + interval_seconds))
 done
 
+# Describe what DRM reported so a timeout in the journal says why.
+describe_drm_connectors() {
+  local status_path connector status mode_count model=""
+  if [[ -r /proc/device-tree/model ]]; then
+    model="$(tr -d '\0' </proc/device-tree/model)"
+  fi
+  echo "[WARN] Board: ${model:-unknown}" >&2
+  local found=0
+  for status_path in "$drm_root"/card*-*/status; do
+    [[ -r "$status_path" ]] || continue
+    found=1
+    connector="${status_path%/status}"
+    status="$(cat "$status_path" 2>/dev/null || echo unreadable)"
+    mode_count="$(wc -l <"${connector}/modes" 2>/dev/null || echo 0)"
+    echo "[WARN] DRM connector ${connector##*/}: status=${status} modes=${mode_count// /}" >&2
+  done
+  if (( found == 0 )); then
+    echo "[WARN] No DRM connectors under ${drm_root}; the KMS driver is not loaded (check dtoverlay=vc4-kms-v3d in the [all] section of /boot/firmware/config.txt)." >&2
+  fi
+}
+
 # Don't fail the service start permanently; allow normal retries/restarts.
 if [[ -n "$last_state" ]]; then
   echo "[WARN] Display readiness wait timed out after ${timeout_seconds}s; last detected state: ${last_state}. Continuing startup." >&2
 else
   echo "[WARN] Display readiness wait timed out after ${timeout_seconds}s; no connected mode detected. Continuing startup." >&2
+  describe_drm_connectors
 fi
 exit 0
