@@ -82,12 +82,13 @@ SEGMENTS: tuple[Segment, ...] = (
 )
 SEGMENTS_BY_KEY = {segment.key: segment for segment in SEGMENTS}
 SEGMENTS_BY_DESCRIPTION = {segment.description: segment for segment in SEGMENTS}
-# Rows each direction shows, in screen order: Edens first, then Kennedy.
+# Rows each direction shows, in screen order: inbound is Edens then Kennedy,
+# outbound is Kennedy then Edens (reversible lane first within each road).
 DIRECTION_KEYS: Mapping[str, tuple[str, ...]] = {
-    INBOUND: ("edens_lakecook_jane_byrne", "edens_lakecook_montrose",
-              "kennedy_montrose_jane_byrne", "kennedy_reversible_inbound"),
-    OUTBOUND: ("edens_jane_byrne_lakecook", "edens_montrose_lakecook",
-               "kennedy_jane_byrne_montrose", "kennedy_reversible_outbound"),
+    INBOUND: ("edens_lakecook_montrose", "edens_lakecook_jane_byrne",
+              "kennedy_reversible_inbound", "kennedy_montrose_jane_byrne"),
+    OUTBOUND: ("kennedy_reversible_outbound", "kennedy_jane_byrne_montrose",
+               "edens_jane_byrne_lakecook", "edens_montrose_lakecook"),
 }
 ROAD_ROUTES = {"Edens": "I-94", "Kennedy": "I-90/94"}
 # Detail data's congestion levels (optional; the Quick Traffic report has none).
