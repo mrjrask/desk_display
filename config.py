@@ -1724,5 +1724,4 @@ AHL_SCHEDULE_ICS_URL = os.environ.get(
 )
 AHL_TEAM_ID = non_negative_env_int("AHL_TEAM_ID", 624)
 AHL_TEAM_TRICODE   = os.environ.get("AHL_TEAM_TRICODE", "CHI")
-AHL_FALLBACK_LOGO  = os.path.join(AHL_IMAGES_DIR, "AHL.png")
 AHL_TEAM_NAME      = os.environ.get("AHL_TEAM_NAME", "Chicago Wolves")
