@@ -1,7 +1,8 @@
 """Draw the Chicagoland traffic report (the ``traffic`` screen).
 
-A title with the direction under it, then the Edens and Kennedy segments as
-rounded rows: travel time large, speed beside it, and a coloured bar for
+A title with the direction under it, then the four segments as rounded rows,
+grouped by road (inbound: Edens then Kennedy, outbound: Kennedy then Edens):
+travel time large, speed beside it, and a coloured bar for
 Travel Midwest's status (normal, heavy when ``over``, N/A when there is no
 reading).  A small footer gives the source and the report's age, and says
 when cached data is being shown.
