@@ -40,7 +40,6 @@ from PIL import Image, ImageDraw, ImageFont
 
 import config
 from config import (
-    AHL_FALLBACK_LOGO,
     AHL_IMAGES_DIR,
     AHL_TEAM_ID,
     AHL_TEAM_NAME,
@@ -196,8 +195,6 @@ def _push(
 # ─────────────────────────────────────────────────────────────────────────────
 # Team + logo helpers (local PNGs)
 
-FALLBACK_LOGO = AHL_FALLBACK_LOGO
-
 def _team_obj_from_any(t: dict) -> dict:
     """Return team dict with {'abbrev','id','name','nickname'} from AHL structure."""
     if not isinstance(t, dict):
@@ -226,7 +223,7 @@ def _extract_tris_from_game(game: dict) -> tuple[str, str]:
     return a, h
 
 def _load_logo_png(abbr: str, height: int) -> Optional[Image.Image]:
-    """Load team logo from local repo PNG: images/ahl/{ABBR}.png; fallback AHL.png."""
+    """Load team logo from local repo PNG: images/ahl/{ABBR}.png; None when missing."""
     if not abbr:
         abbr = "AHL"
 
@@ -241,16 +238,6 @@ def _load_logo_png(abbr: str, height: int) -> Optional[Image.Image]:
                 return img.resize((max(1, int(w0*r)), height), LANCZOS)
         except Exception:
             pass
-
-    # Generic fallback
-    try:
-        if os.path.exists(FALLBACK_LOGO):
-            img = Image.open(FALLBACK_LOGO).convert("RGBA")
-            w0, h0 = img.size
-            r = height / float(h0) if h0 else 1.0
-            return img.resize((max(1, int(w0*r)), height), LANCZOS)
-    except Exception:
-        pass
     return None
 
 # ─────────────────────────────────────────────────────────────────────────────
