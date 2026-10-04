@@ -17,6 +17,8 @@ See the README's [deployment modes](README.md#deployment-modes) and
   every client that shares it.
 - Server-managed playlists and assignments in the configuration UI, with
   per-client capability warnings, provisioning, rotation and revocation.
+- `scripts/upgrade.sh` restarts `desk_display_client.service` only if it was
+  running before the upgrade (`restart_services.sh --skip <unit>`).
 - The Clients page's Maintenance tab can remove a display: its credential,
   assignment, settings and the server's record go, and its card leaves the page.
 - The Playlists page edits each client playlist with the Screen Rotation

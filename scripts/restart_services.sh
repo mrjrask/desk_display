@@ -38,7 +38,9 @@
 # the rest are skipped. By default every installed one of these project
 # services is restarted in the order above. Pass one or more service names
 # to restart just those (still one at a time, in the order given below
-# rather than the order typed).
+# rather than the order typed). Pass --skip <service> (repeatable) to leave
+# that service alone; upgrade.sh uses it to keep a client that was stopped
+# before the upgrade stopped.
 set -euo pipefail
 
 SUDO="${SUDO:-}"
@@ -71,6 +73,7 @@ print_usage() {
   cat <<USAGE
 Usage:
   $(basename "$0") [service ...]
+  $(basename "$0") --skip <service> [--skip <service> ...]
   $(basename "$0") --list
   $(basename "$0") --help
 
@@ -86,6 +89,8 @@ With one or more service names, restarts only those (still one at a time,
 in the order below rather than the order given), skipping any that aren't
 installed on this machine. Names outside this project's own list below are
 rejected.
+
+--skip <service> leaves that service untouched (repeatable).
 
 This project's services, in restart order:
 $(printf '  %s\n' "${ORDERED_SERVICES[@]}")
@@ -145,11 +150,23 @@ restart_service() {
   log "$service is running."
 }
 
-main() {
-  local -a requested=("$@")
+is_skipped() {
+  local svc="$1"
+  local candidate
+  for candidate in "${skipped[@]+"${skipped[@]}"}"; do
+    if [[ "$candidate" == "$svc" ]]; then
+      return 0
+    fi
+  done
+  return 1
+}
 
-  for arg in "${requested[@]}"; do
-    case "$arg" in
+main() {
+  local -a requested=()
+  skipped=()
+
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
       -h|--help)
         print_usage
         exit 0
@@ -157,6 +174,18 @@ main() {
       --list)
         printf '%s\n' "${ORDERED_SERVICES[@]}"
         exit 0
+        ;;
+      --skip)
+        if [[ $# -lt 2 ]]; then
+          warn "--skip needs a service name."
+          exit 2
+        fi
+        skipped+=("$2")
+        shift 2
+        ;;
+      *)
+        requested+=("$1")
+        shift
         ;;
     esac
   done
@@ -166,6 +195,10 @@ main() {
   if [[ ${#requested[@]} -eq 0 ]]; then
     for svc in "${ORDERED_SERVICES[@]}"; do
       if ! is_installed "$svc"; then
+        continue
+      fi
+      if is_skipped "$svc"; then
+        log "Skipping $svc (--skip)."
         continue
       fi
       if is_turned_off "$svc"; then
@@ -187,6 +220,10 @@ main() {
         warn "$svc is not installed on this system; skipping."
         continue
       fi
+      if is_skipped "$svc"; then
+        log "Skipping $svc (--skip)."
+        continue
+      fi
       targets+=("$svc")
     done
     # Restart in dependency order regardless of the order the caller typed.
@@ -199,7 +236,7 @@ main() {
         fi
       done
     done
-    targets=("${ordered_targets[@]}")
+    targets=("${ordered_targets[@]+"${ordered_targets[@]}"}")
   fi
 
   if [[ ${#targets[@]} -eq 0 ]]; then

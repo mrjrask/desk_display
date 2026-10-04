@@ -1134,7 +1134,8 @@ running, or `--mode` to override the detected mode.
 
 `./scripts/upgrade.sh` upgrades an install in any mode: it pulls, updates
 dependencies for the installed mode, rewrites or patches its units, and
-restarts them, keeping every documented data path (see
+restarts them (the display client only if it was running before the upgrade),
+keeping every documented data path (see
 [OPERATIONS.md](OPERATIONS.md#what-each-mode-keeps)).
 
 `./Installers/uninstall.sh` is a full uninstaller for every mode. It stops

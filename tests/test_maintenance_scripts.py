@@ -383,6 +383,43 @@ def test_restart_services_leaves_another_modes_disabled_units_stopped(tmp_path):
     assert f"Skipping {su.STANDALONE_SERVICE}" in result.stdout
 
 
+def test_restart_services_skip_leaves_that_service_alone(tmp_path):
+    """upgrade.sh passes --skip for a client that was stopped before it ran."""
+
+    log = tmp_path / "systemctl.log"
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    installed = (su.SERVER_SERVICE, su.CLIENT_SERVICE, su.CONFIG_UI_SERVICE)
+    (bin_dir / "systemctl").write_text(
+        "#!/usr/bin/env bash\n"
+        f'echo "$*" >> {log}\n'
+        'case "$1" in\n'
+        "  list-unit-files)\n"
+        f'    for u in {" ".join(installed)}; do [[ "$2" == "$u" ]] && echo "$u enabled"; done; exit 0 ;;\n'
+        "  is-enabled) echo enabled ;;\n"
+        "  is-active) exit 3 ;;\n"
+        "esac\n"
+        "exit 0\n"
+    )
+    (bin_dir / "systemctl").chmod(0o755)
+    env = {**os.environ, "PATH": f"{bin_dir}:{os.environ['PATH']}", "SUDO": " "}
+    script = str(SCRIPTS / "restart_services.sh")
+
+    result = subprocess.run(["bash", script, "--skip", su.CLIENT_SERVICE], env=env,
+                            capture_output=True, text=True)
+    assert result.returncode == 0, result.stdout + result.stderr
+    calls = log.read_text()
+    assert f"start {su.SERVER_SERVICE}" in calls and f"start {su.CONFIG_UI_SERVICE}" in calls
+    assert su.CLIENT_SERVICE not in calls.replace(f"list-unit-files {su.CLIENT_SERVICE}", "")
+    assert f"Skipping {su.CLIENT_SERVICE} (--skip)" in result.stdout
+
+    log.write_text("")
+    result = subprocess.run(["bash", script, su.CLIENT_SERVICE, "--skip", su.CLIENT_SERVICE], env=env,
+                            capture_output=True, text=True)
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert f"start {su.CLIENT_SERVICE}" not in log.read_text()
+
+
 # ── venv re-exec for scripts that need the project's Pillow/pytz/etc ───────
 
 # Every scripts/*.py that, at import time, reaches code needing a package

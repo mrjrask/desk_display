@@ -9,6 +9,9 @@
 # server playlists and assignments, credentials, artifacts and backups. A
 # server or combined install also snapshots its state first, into
 # .runtime/server/backups/upgrade-<time>/.
+#
+# desk_display_client.service is restarted at the end only if it was running
+# when the upgrade started; a client stopped beforehand stays stopped.
 set -euo pipefail
 
 SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
@@ -28,10 +31,17 @@ pull=1
 for arg in "$@"; do
   case "$arg" in
     --no-pull) pull=0 ;;
-    -h|--help) sed -n '2,11p' "$0"; exit 0 ;;
+    -h|--help) sed -n '2,14p' "$0"; exit 0 ;;
     *) warn "Unknown option: $arg"; exit 2 ;;
   esac
 done
+
+CLIENT_SERVICE="desk_display_client.service"
+# Recorded before anything else runs, so the restart below can respect it.
+client_was_active=0
+if systemctl is-active --quiet "$CLIENT_SERVICE" 2>/dev/null; then
+  client_was_active=1
+fi
 
 modes() { "$PYTHON_BIN" "$PROJECT_DIR/install_modes.py" "$@" --project-dir "$PROJECT_DIR" --systemd-dir "$SYSTEMD_UNIT_DIR"; }
 
@@ -59,5 +69,11 @@ fi
 # below brings every service back in dependency order.
 bash "$PROJECT_DIR/scripts/update_services.sh" --mode "$mode" --no-restart
 
-run_with_heartbeat "restarting services" bash "$PROJECT_DIR/scripts/restart_services.sh"
+restart_args=()
+if [[ $client_was_active -eq 0 ]]; then
+  log "$CLIENT_SERVICE was not running before the upgrade; leaving it stopped."
+  restart_args+=(--skip "$CLIENT_SERVICE")
+fi
+run_with_heartbeat "restarting services" bash "$PROJECT_DIR/scripts/restart_services.sh" \
+  "${restart_args[@]+"${restart_args[@]}"}"
 log "Upgrade complete ($mode)."
