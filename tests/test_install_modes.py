@@ -452,6 +452,29 @@ def test_upgrade_preserves_the_documented_data(tmp_path, mode):
         assert client["User"] == ["kiosk"] and "DISPLAY_ROTATION=90" in client["Environment"]
 
 
+@pytest.mark.parametrize("client_active", [True, False])
+def test_upgrade_restarts_the_client_only_if_it_was_running(tmp_path, client_active):
+    project, log, bin_dir = fake_project(tmp_path, "combined")
+    state = 0 if client_active else 3
+    (bin_dir / "systemctl").write_text(
+        f'#!/usr/bin/env bash\necho "systemctl $*" >> {log}\n'
+        f'[[ "$1 $2" == "is-active --quiet" && "$3" == "{su.CLIENT_SERVICE}" ]] && exit {state}\nexit 0\n'
+    )
+    systemd = tmp_path / "systemd"
+    systemd.mkdir()
+    env = {**os.environ, "PATH": f"{bin_dir}:{os.environ['PATH']}", "SUDO": "", "PYTHON": sys.executable,
+           "SYSTEMD_UNIT_DIR": str(systemd), "PROJECT_DIR": str(project), "HOME": str(tmp_path / "home")}
+    result = subprocess.run(["bash", str(project / "scripts/upgrade.sh"), "--no-pull"], env=env,
+                            capture_output=True, text=True)
+    assert result.returncode == 0, result.stdout + result.stderr
+    calls = log.read_text().splitlines()
+    # The client's state is read before anything else touches the install.
+    assert calls[0] == f"systemctl is-active --quiet {su.CLIENT_SERVICE}"
+    restart = next(line for line in calls if line.startswith("scripts/restart_services.sh"))
+    assert (f"--skip {su.CLIENT_SERVICE}" in restart) == (not client_active)
+    assert ("leaving it stopped" in result.stdout) == (not client_active)
+
+
 def test_combined_with_shared_enrollment_uses_the_shared_token(tmp_path):
     token = "shared-" + "t" * 40
     (tmp_path / ".env").write_text(STANDALONE_ENV.replace("{store}", str(tmp_path / "store.json"))
