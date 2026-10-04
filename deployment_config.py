@@ -621,6 +621,8 @@ SETTINGS: tuple[Setting, ...] = (
        "Draw the notification colour as a frame border on any display.", default="1"),
     _s("LED_INDICATOR_BORDER_WIDTH", "int", _CLIENT, "hardware",
        "Notification border width in pixels.", default="2", minimum=0),
+    _s("LED_INDICATOR_PULSE", "bool", _CLIENT, "hardware",
+       "Gently pulse the notification border instead of drawing it static.", default="0"),
     _s("MINIPITFT_BAUDRATE", "int", _CLIENT, "hardware",
        "miniPiTFT SPI baud rate.", default="64000000", minimum=1),
     _s("MINIPITFT_DRIVER_ROTATION", "int", _CLIENT, "hardware",

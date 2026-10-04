@@ -9,6 +9,9 @@ clients, or both on one machine, alongside the unchanged standalone install.
 See the README's [deployment modes](README.md#deployment-modes) and
 [OPERATIONS.md](OPERATIONS.md) for installing, upgrading and rolling back.
 
+- `LED_INDICATOR_PULSE` (`.env` / `.env.client`, default `0`): the notification
+  border pulses gently instead of staying static, on standalone, client and
+  combined installs. Saved screenshots keep the full-brightness border.
 - Role-specific configuration (`.env.server.example`, `.env.client.example`)
   validated at startup, with secrets excluded from every client-facing payload.
 - `display_server.py`: registration and leases, per-client credentials

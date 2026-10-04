@@ -523,6 +523,7 @@ Settings are grouped by deployment role. `.env.example` documents the standalone
 | `DISPLAY_HAT_MINI_LED_LEVEL` | Display HAT Mini LED level. |
 | `LED_INDICATOR_BORDER_ENABLED` | Enables drawing the notification color as a border around the rendered frame. Works on any display type, independently of `LED_INDICATOR_ENABLED`. Defaults to `1`. |
 | `LED_INDICATOR_BORDER_WIDTH` | Indicator border width in pixels. When a notification color is active, the same border is also drawn onto saved screenshots so the Screenshots/Feed pages reflect what's actually on the panel. |
+| `LED_INDICATOR_PULSE` | When `1`, the indicator border pulses gently (its brightness eases down to about a third and back every 3 seconds) instead of staying static. Needs `LED_INDICATOR_BORDER_ENABLED`; saved screenshots keep the full-brightness border. Defaults to `0` (static border). |
 | `IP_WITH_TIME` | Include IP/status text with the time display where supported. |
 | `NIXIE_TIME_FORMAT` | Nixie/time screen clock format; defaults to 12-hour mode. |
 | `DESK_DISPLAY_TEST_SCREEN` | Testing mode: set to a [canonical screen ID](#canonical-screen-ids) (e.g. `news headlines`) to repeatedly present just that screen instead of rotating through the normal schedule. Handy for tuning a screen's scroll speed slider in the config UI and watching the effect immediately on the next pass. Leave unset for normal rotation. |

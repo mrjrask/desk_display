@@ -726,6 +726,11 @@ LED_INDICATOR_ENABLED = _get_bool_env("LED_INDICATOR_ENABLED", True)
 # LED_INDICATOR_ENABLED.
 LED_INDICATOR_BORDER_ENABLED = _get_bool_env("LED_INDICATOR_BORDER_ENABLED", True)
 
+# LED_INDICATOR_PULSE makes that border breathe gently (its brightness eases
+# down and back up every few seconds) instead of staying static. Off by
+# default; it only matters while LED_INDICATOR_BORDER_ENABLED is on.
+LED_INDICATOR_PULSE = _get_bool_env("LED_INDICATOR_PULSE", False)
+
 DISPLAY_HAT_MINI_REINIT_SECONDS = max(
     # Reconstructing the driver tears down and reclaims the same GPIO/SPI
     # resources while the process is live. On some driver/kernel versions
