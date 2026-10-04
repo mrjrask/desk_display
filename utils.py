@@ -1294,6 +1294,21 @@ def _get_led_indicator_level() -> float:
 
 LED_INDICATOR_LEVEL = _get_led_indicator_level()
 
+# LED_INDICATOR_PULSE: the border eases from full brightness down to
+# _INDICATOR_PULSE_MIN_LEVEL and back once per period. About 7 frames a second
+# keeps the fade smooth while only re-sending the frame when nothing else is.
+_INDICATOR_PULSE_PERIOD_SECONDS = 3.0
+_INDICATOR_PULSE_MIN_LEVEL = 0.35
+_INDICATOR_PULSE_FRAME_SECONDS = 0.15
+
+
+def indicator_pulse_level(elapsed: float) -> float:
+    """Border brightness *elapsed* seconds into a pulse (1.0 at the start)."""
+
+    phase = (elapsed % _INDICATOR_PULSE_PERIOD_SECONDS) / _INDICATOR_PULSE_PERIOD_SECONDS
+    wave = 0.5 + 0.5 * math.cos(2.0 * math.pi * phase)
+    return _INDICATOR_PULSE_MIN_LEVEL + (1.0 - _INDICATOR_PULSE_MIN_LEVEL) * wave
+
 # Project config
 from config import (
     DISPLAY_FADE_IN_DISPLAY_HAT_MINI_STEPS,
@@ -1307,6 +1322,7 @@ from config import (
     LED_INDICATOR_BORDER_ENABLED,
     LED_INDICATOR_BORDER_WIDTH,
     LED_INDICATOR_ENABLED,
+    LED_INDICATOR_PULSE,
     WIDTH,
     get_display_profile_id,
     is_hyperpixel_next_layout,
@@ -1465,6 +1481,15 @@ class Display:
         # display type; only the physical LED (Display HAT Mini only) has
         # its own separate enable flag, handled in set_led().
         self._indicator_border_enabled = LED_INDICATOR_BORDER_ENABLED
+        self._indicator_pulse_enabled = LED_INDICATOR_PULSE
+        self._indicator_pulse_lock = threading.Lock()
+        self._indicator_pulse_stop = threading.Event()
+        self._indicator_pulse_thread: Optional[threading.Thread] = None
+        self._indicator_pulse_started_at = 0.0
+        # Composing and writing a frame is serialized so the pulse thread can
+        # never push an older buffer after a newer screen has gone out.
+        self._present_lock = threading.RLock()
+        self._last_present_at = 0.0
         self._uses_kernel_output = False
         self._display_reinit_seconds = DISPLAY_HAT_MINI_REINIT_SECONDS
         self._last_display_reinit = time.monotonic()
@@ -1780,8 +1805,10 @@ class Display:
             return
         if self._output_strategy == "headless" and self._display is not None:
             self._configure_output_strategy()
-        buffer_to_display = self._frame_transform(self._indicator_buffer())
-        self._frame_writer(buffer_to_display)
+        with self._present_lock:
+            buffer_to_display = self._frame_transform(self._indicator_buffer())
+            self._frame_writer(buffer_to_display)
+            self._last_present_at = time.monotonic()
 
     def _write_display_hat_mini_frame(self, buffer_to_display: Image.Image) -> None:
         """Push a frame to Display HAT Mini, including hot reinitialization logic."""
@@ -2345,6 +2372,7 @@ class Display:
         self._led_color = (r, g, b)
         if self._indicator_border_enabled:
             self._update_display()
+            self._sync_indicator_pulse()
 
         if self._display is None or not LED_INDICATOR_ENABLED:  # pragma: no cover - hardware import
             return
@@ -2365,9 +2393,9 @@ class Display:
         # calls cannot mutate a buffer while a previous frame is still being
         # transferred to the panel. Reusing a shared work buffer can surface as
         # partial-frame flicker/tearing near the top edge.
-        return self.apply_indicator_border(self._buffer)
+        return self.apply_indicator_border(self._buffer, level=self._indicator_pulse_level())
 
-    def apply_indicator_border(self, img: Image.Image) -> Image.Image:
+    def apply_indicator_border(self, img: Image.Image, level: float = 1.0) -> Image.Image:
         """Return *img* with the LED notification border overlay, when enabled.
 
         Mirrors the overlay ``_indicator_buffer()`` composites onto the frame
@@ -2375,6 +2403,9 @@ class Display:
         render (see ``main.py``'s ``_save_screenshot``), so callers that want
         saved screenshots to reflect the same on-screen notification border
         should route the image through here before writing it to disk.
+
+        *level* (0.0-1.0) scales the border brightness; the panel passes the
+        current LED_INDICATOR_PULSE level, while screenshots keep it full.
         """
 
         if not self._indicator_border_enabled:
@@ -2383,6 +2414,9 @@ class Display:
         color = tuple(self._indicator_channel_to_pixel(value) for value in self._led_color)
         if not any(color):
             return img
+        if level < 1.0:
+            level = max(0.0, level)
+            color = tuple(round(channel * level) if channel else 0 for channel in color)
 
         bordered = img.copy()
         if bordered.mode != "RGB":
@@ -2394,6 +2428,62 @@ class Display:
             width=LED_INDICATOR_BORDER_WIDTH,
         )
         return bordered
+
+    def _indicator_pulse_active(self) -> bool:
+        return (
+            self._indicator_pulse_enabled
+            and self._indicator_border_enabled
+            and any(self._led_color)
+            and not self._closed
+        )
+
+    def _indicator_pulse_level(self) -> float:
+        """Border brightness (0.0-1.0) for the frame going out now."""
+
+        if not getattr(self, "_indicator_pulse_enabled", False):
+            return 1.0
+        elapsed = time.monotonic() - self._indicator_pulse_started_at
+        return indicator_pulse_level(elapsed)
+
+    def _sync_indicator_pulse(self) -> None:
+        """Start the pulse thread while a pulsing border is lit.
+
+        The thread stops on its own once the border goes dark, so a static
+        border (or LED_INDICATOR_PULSE=0) costs nothing.
+        """
+
+        if not getattr(self, "_indicator_pulse_enabled", False):
+            return
+        with self._indicator_pulse_lock:
+            if not self._indicator_pulse_active() or self._indicator_pulse_thread is not None:
+                return
+            # Start at full brightness, so a new notification appears at once.
+            self._indicator_pulse_started_at = time.monotonic()
+            thread = threading.Thread(
+                target=self._run_indicator_pulse,
+                name="led-border-pulse",
+                daemon=True,
+            )
+            self._indicator_pulse_thread = thread
+            thread.start()
+
+    def _run_indicator_pulse(self) -> None:
+        interval = _INDICATOR_PULSE_FRAME_SECONDS
+        while not self._indicator_pulse_stop.wait(interval):
+            with self._indicator_pulse_lock:
+                if not self._indicator_pulse_active():
+                    self._indicator_pulse_thread = None
+                    return
+            # Screens that animate already carry the current pulse level in
+            # every frame; only re-send the frame when the panel has been idle.
+            if time.monotonic() - self._last_present_at < interval:
+                continue
+            try:
+                self._update_display()
+            except Exception as exc:  # pragma: no cover - hardware import
+                logging.debug("LED border pulse frame failed: %s", exc)
+        with self._indicator_pulse_lock:
+            self._indicator_pulse_thread = None
 
     @staticmethod
     def _indicator_channel_to_pixel(value: float) -> int:
@@ -2518,6 +2608,12 @@ class Display:
             return
         self._closed = True
         self._button_callback = None
+        pulse_stop = getattr(self, "_indicator_pulse_stop", None)
+        if pulse_stop is not None:
+            pulse_stop.set()
+            pulse = self._indicator_pulse_thread
+            if pulse is not None and pulse.is_alive() and pulse is not threading.current_thread():
+                pulse.join(timeout=1.0)
         self._display_io_watchdog_stop.set()
         watchdog = self._display_io_watchdog_thread
         if watchdog is not None and watchdog.is_alive() and watchdog is not threading.current_thread():

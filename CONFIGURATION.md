@@ -639,6 +639,7 @@ installs only, never clients.
 | `LED_INDICATOR_ENABLED` | client, standalone | restart |  |
 | `LED_INDICATOR_BORDER_ENABLED` | client, standalone | restart |  |
 | `LED_INDICATOR_BORDER_WIDTH` | client, standalone | restart |  |
+| `LED_INDICATOR_PULSE` | client, standalone | restart |  |
 | `MINIPITFT_BAUDRATE` | client, standalone | restart |  |
 | `MINIPITFT_DRIVER_ROTATION` | client, standalone | restart |  |
 | `MINIPITFT_DRIVER_WIDTH` | client, standalone | restart |  |
