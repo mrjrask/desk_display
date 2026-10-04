@@ -273,6 +273,7 @@ class DisplayClient:
         restart_service: Callable[[], Any] | None = None,
         update_available: Callable[[], bool] | None = None,
         local_screens: dict[str, Any] | None = None,
+        max_fps: float = 0.0,
     ) -> None:
         self.profile = profile
         self.presenter = presenter
@@ -327,6 +328,10 @@ class DisplayClient:
         self._restart_service = restart_service
         # Screens this device draws from its own hardware (the inside sensor).
         self.local_screens = dict(local_screens or {})
+        # DESK_DISPLAY_CLIENT_MAX_FPS: the fewest seconds between animation
+        # frames (0 = as fast as each package asks). Motion keeps its speed
+        # and moves further per frame instead.
+        self.min_frame_seconds = 1.0 / max_fps if max_fps and max_fps > 0 else 0.0
 
     # Playback
 
@@ -727,6 +732,7 @@ class DisplayClient:
         motion = MotionClock(started - self._shown_at, started,
                              max_lag=animation.motion_seconds if animation is not None else 0.0)
         presented_key = animation.key_at(motion.t) if animation is not None else None
+        next_frame_at = started  # the earliest the next animation frame may go out
         while not self._stop.is_set() and self._monotonic() < deadline + motion.lag:
             self._poll_taps()
             if self._controls_pending():
@@ -741,9 +747,12 @@ class DisplayClient:
                 return
             interval = POLL_SECONDS
             animation = self.animation
-            if animation is not None:
-                frame_seconds = animation.frame_seconds
-                now = self._monotonic()
+            now = self._monotonic()
+            if animation is not None and now < next_frame_at:
+                # DESK_DISPLAY_CLIENT_MAX_FPS: not time for another frame yet.
+                interval = min(POLL_SECONDS, next_frame_at - now)
+            elif animation is not None:
+                frame_seconds = max(animation.frame_seconds, self.min_frame_seconds)
                 t = motion.tick(now, frame_seconds)
                 key = animation.key_at(t)
                 drawn = key != presented_key
@@ -756,6 +765,7 @@ class DisplayClient:
                         LOGGER.warning("Animation stopped; holding the last frame: %s", exc)
                         self.animation = None
                     presented_key = key
+                    next_frame_at = now + self.min_frame_seconds
                     # The next frame is due one frame after this one started,
                     # not one frame after the (slow) push finished.
                     interval = min(POLL_SECONDS, max(0.0, now + frame_seconds - self._monotonic()))
@@ -916,6 +926,20 @@ def start_wifi_monitor(settings: dict[str, Any], wifi: Any = None) -> bool:
     return True
 
 
+def client_max_fps(settings: dict[str, Any]) -> float:
+    """DESK_DISPLAY_CLIENT_MAX_FPS; 0 (the default) leaves animations uncapped."""
+
+    value = settings.get("DESK_DISPLAY_CLIENT_MAX_FPS")
+    if value is None or (isinstance(value, str) and not value.strip()):
+        return 0.0
+    try:
+        fps = float(value)
+    except (TypeError, ValueError):
+        LOGGER.warning("Invalid DESK_DISPLAY_CLIENT_MAX_FPS %r; animations run uncapped", value)
+        return 0.0
+    return max(0.0, fps)
+
+
 def _client_ip_text() -> str:
     """Return the address label drawn by client-rendered clock screens."""
 
@@ -997,6 +1021,7 @@ def build_client(settings: dict[str, Any], *, presenter: Any = None, transport: 
         restart_service=_restart_client_service if hardware else None,
         update_available=_github_update_available if hardware else None,
         local_screens=default_local_screens() if hardware else None,
+        max_fps=client_max_fps(settings),
     )
     commands.restart = client.request_restart
     return client

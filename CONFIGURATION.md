@@ -404,7 +404,9 @@ full screen from the cache, and a second tap, or the tile's time running
 out, returns to the quad without moving the rotation. A quad is not
 accepted until every tile the server has rendered is cached, so this works
 offline. `DESK_DISPLAY_CLIENT_ANIMATION=0` shows stills only and skips
-package downloads (clocks still tick). What each client will actually do is
+package downloads (clocks still tick); `DESK_DISPLAY_CLIENT_MAX_FPS` (for
+example `15`) keeps animation but caps its frame rate to save CPU (see
+OPERATIONS.md, "Reducing a client's CPU use"). What each client will actually do is
 decided by `remote_display/fallbacks.py`, which the playlist assignment page
 uses for its warnings, so a warning always matches the display.
 
@@ -671,6 +673,7 @@ installs only, never clients.
 | `DESK_DISPLAY_RPI_GPIO_FALLBACK` | client, standalone | restart |  |
 | `DESK_DISPLAY_CLIENT_TOUCH` | client | restart |  |
 | `DESK_DISPLAY_CLIENT_ANIMATION` | client | restart |  |
+| `DESK_DISPLAY_CLIENT_MAX_FPS` | client | restart |  |
 | `TOUCH_DOUBLE_TAP_MAX_INTERVAL_SECONDS` | client (no effect), standalone | restart |  |
 | `ESC_DOUBLE_PRESS_ACTION` | client (no effect), standalone | restart |  |
 | `ESC_DOUBLE_PRESS_MAX_INTERVAL_SECONDS` | client (no effect), standalone | restart |  |

@@ -1229,3 +1229,10 @@ def test_stalled_stop_after_sigterm_exits_by_force():
     stopper.target = lambda: None  # a stop that never ends the process
     stopper.handle(signal.SIGTERM)
     assert forced.wait(2)
+
+
+@pytest.mark.parametrize("value, fps", [(None, 0.0), ("", 0.0), ("0", 0.0), ("15", 15.0), (12.5, 12.5),
+                                        ("fast", 0.0), ("-3", 0.0)])
+def test_max_fps_setting(value, fps):
+    settings = {} if value is None else {"DESK_DISPLAY_CLIENT_MAX_FPS": value}
+    assert display_client.client_max_fps(settings) == fps

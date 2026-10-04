@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import datetime
 import hashlib
+import io
 import json
 import logging
 import os
@@ -23,6 +24,9 @@ from PIL import Image
 LOGGER = logging.getLogger("desk_display.client.screenshots")
 
 MAX_SCREENSHOTS_PER_SCREEN = 5
+# Fast zlib: about a third less CPU than Pillow's default for ~25% larger
+# files, paid on every screen change (a 1080p scroll canvas is several MB raw).
+PNG_COMPRESS_LEVEL = 1
 _IMAGE_EXTS = (".png", ".jpg", ".jpeg")
 
 
@@ -40,6 +44,12 @@ def sanitize_filename_prefix(name: str) -> str:
     safe = name.strip().replace("/", "-").replace("\\", "-").replace(" ", "_")
     safe = "".join(ch for ch in safe if ch.isalnum() or ch in ("_", "-"))
     return safe or "screen"
+
+
+def _encode_png(image: Image.Image) -> bytes:
+    buffer = io.BytesIO()
+    image.save(buffer, format="PNG", compress_level=PNG_COMPRESS_LEVEL)
+    return buffer.getvalue()
 
 
 def _replace_atomically(target: Path, write: Any) -> None:
@@ -106,26 +116,29 @@ class ClientScreenshots:
         self.loop_iteration += 1
         self.play_counts[screen_id] = self.play_counts.get(screen_id, 0) + 1
         now = self._now()
+        png: bytes | None = None
         if self.enabled:
             try:
-                self._save(screen_id, image, now)
+                png = _encode_png(image)
+                self._save(screen_id, png, now)
             except Exception as exc:  # noqa: BLE001 - playback must continue
                 LOGGER.warning("Could not save screenshot for %s: %s", screen_id, exc)
         try:
-            self._write_status(screen_id, image, now)
+            self._write_status(screen_id, image, now, png)
         except Exception as exc:  # noqa: BLE001
             LOGGER.debug("Could not update display heartbeat: %s", exc)
 
-    def _save(self, screen_id: str, image: Image.Image, now: datetime.datetime) -> None:
+    def _save(self, screen_id: str, png: bytes, now: datetime.datetime) -> None:
         prefix = sanitize_filename_prefix(screen_id)
         folder = self.screenshot_dir / sanitize_directory_name(screen_id)
         folder.mkdir(parents=True, exist_ok=True)
         # Filenames are operational artifacts and use UTC, as main.py does.
-        image.save(folder / f"{prefix}_{now.astimezone(datetime.timezone.utc):%Y%m%d_%H%M%S}.png")
+        # Encoded once for both files: the history copy and current/.
+        (folder / f"{prefix}_{now.astimezone(datetime.timezone.utc):%Y%m%d_%H%M%S}.png").write_bytes(png)
         self._prune(folder)
         self.current_dir.mkdir(parents=True, exist_ok=True)
         current = self.current_dir / f"{prefix}.png"
-        _replace_atomically(current, lambda fh: image.save(fh, format="PNG"))
+        _replace_atomically(current, lambda fh: fh.write(png))
         if self.uploads is not None:
             self.uploads.offer(screen_id, current, now.timestamp())
         # A client has no ticker payload; a sidecar left by main.py would make the
@@ -140,12 +153,16 @@ class ClientScreenshots:
             except OSError as exc:
                 LOGGER.warning("Failed to prune screenshot %s: %s", path, exc)
 
-    def _write_status(self, screen_id: str, image: Image.Image, now: datetime.datetime) -> None:
+    def _write_status(self, screen_id: str, image: Image.Image, now: datetime.datetime,
+                      png: bytes | None = None) -> None:
+        # Any digest that changes with the picture will do; the encoded PNG is
+        # far smaller to hash than the raw pixels when it is already at hand.
+        digest_source = png if png is not None else image.tobytes()
         payload = {
             "screen_id": screen_id,
             "loop_iteration": self.loop_iteration,
             "rendered_at": now.isoformat(),
-            "image_digest": hashlib.sha256(image.tobytes()).hexdigest()[:12],
+            "image_digest": hashlib.sha256(digest_source).hexdigest()[:12],
             "frame_id": None,
             "display": dict(self.display),
             "screen_play_counts": dict(self.play_counts),

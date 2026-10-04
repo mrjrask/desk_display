@@ -9,6 +9,12 @@ clients, or both on one machine, alongside the unchanged standalone install.
 See the README's [deployment modes](README.md#deployment-modes) and
 [OPERATIONS.md](OPERATIONS.md) for installing, upgrading and rolling back.
 
+- Display clients use less CPU: a quad whose tiles do not change is drawn
+  once instead of 10 times a second, each panel frame is copied once instead
+  of up to three times, and a screenshot is encoded once (fast PNG) instead
+  of twice. New `DESK_DISPLAY_CLIENT_MAX_FPS` (`.env.client`, default `0`,
+  no cap) caps animation frames per second; see OPERATIONS.md "Reducing a
+  client's CPU use".
 - `LED_INDICATOR_PULSE` (`.env` / `.env.client`, default `0`): the notification
   border pulses gently instead of staying static, on standalone, client and
   combined installs. Saved screenshots keep the full-brightness border.

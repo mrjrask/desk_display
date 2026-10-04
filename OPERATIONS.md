@@ -779,6 +779,50 @@ It prints frames per second, frame intervals and *px per frame*. Smooth
 playback shows a single value there (1px on a Display HAT Mini); several
 values mean the picture jumped unevenly.
 
+### Reducing a client's CPU use
+
+A client spends almost all of its CPU drawing animated screens: every frame
+of a scroll, ticker, logo slide or cycling quad is composed and pushed to
+the panel in Python. Still screens and the time between screens cost next to
+nothing. A 1080p scroll asks for about 60 frames a second, more than one Pi 4
+core can draw; a 720x720 HyperPixel scroll needs about a tenth of that.
+On a Pi that also runs something else (MagicMirror, a browser), trim it in
+`.env.client`, then restart the client
+(`sudo systemctl restart desk_display_client.service`):
+
+| Setting | Effect |
+|---|---|
+| `DESK_DISPLAY_CLIENT_MAX_FPS=15` | Caps animation at 15 frames a second (try 10 to 20). Scrolls and tickers keep their speed and move in bigger steps, so they look a little less smooth. The biggest saving on 1080p. `0` (the default) plays every package at its own rate. |
+| `DESK_DISPLAY_CLIENT_ANIMATION=0` | Stills only: no scrolling, tickers or slides, and no package downloads. The lowest CPU; clocks still tick. |
+| `ENABLE_SCREENSHOTS=0` | Skips saving a PNG for the Screenshots page every time the screen changes (a scroll saves its whole canvas). |
+| `LED_INDICATOR_PULSE=0` | A pulsing notification border re-sends the whole frame about 7 times a second while it is lit; a static border costs nothing. |
+
+Also check the client's start-up log for *Kernel display size differs from
+render size ... frames will be scaled*: every frame is then rescaled on the
+CPU. Pick the display profile that matches the screen's resolution instead.
+
+To let the other program win when both are busy, lower the client's
+priority; this changes no picture:
+
+```bash
+sudo systemctl edit desk_display_client.service   # add the two lines below
+#   [Service]
+#   Nice=10
+sudo systemctl restart desk_display_client.service
+```
+
+If it is still busy, profile it where it runs (no restart needed):
+
+```bash
+venv/bin/pip install py-spy
+PID=$(systemctl show -p MainPID --value desk_display_client.service)
+sudo venv/bin/py-spy top --pid "$PID"                          # live view
+sudo venv/bin/py-spy record --pid "$PID" -d 60 -o client.svg   # flame graph
+```
+
+The **Stats** page's *Displays* table shows each client's own CPU from its
+heartbeat, so you can compare before and after.
+
 ### Diagnosing stale renders
 
 ```bash
