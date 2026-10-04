@@ -2255,62 +2255,36 @@ class Display:
         self._update_display()
 
     def image(self, pil_img: Image.Image):
-        pil_img = self._apply_bottom_safe_buffer(pil_img)
-        pil_img = self._apply_indicator_bottom_safe_buffer(pil_img)
-        if pil_img.size != (self.width, self.height):
-            pil_img = pil_img.resize((self.width, self.height), LANCZOS)
+        # One private full-frame copy per frame: a client pushes a frame per
+        # scroll step, and every extra copy costs measurable CPU at 1080p.
+        source = pil_img
         if pil_img.mode != "RGB":
             pil_img = pil_img.convert("RGB")
-        self._buffer = pil_img.copy()
+        if pil_img.size != (self.width, self.height):
+            pil_img = pil_img.resize((self.width, self.height), LANCZOS)
+        if pil_img is source:
+            pil_img = pil_img.copy()
+        bottom_buffer = self._bottom_safe_rows()
+        if bottom_buffer > 0:
+            # Always clear the bottom safety strip so content never touches the
+            # edge (or, with the indicator border on, the border).
+            ImageDraw.Draw(pil_img).rectangle(
+                [(0, self.height - bottom_buffer), (self.width - 1, self.height - 1)],
+                fill="black",
+            )
+        self._buffer = pil_img
         self._bump_frame_id()
         self._update_display()
 
-    def _apply_bottom_safe_buffer(self, pil_img: Image.Image) -> Image.Image:
-        """Always clear the bottom safety strip so content never touches the edge."""
+    def _bottom_safe_rows(self) -> int:
+        """Rows cleared at the bottom of every frame."""
 
         bottom_buffer = self._BOTTOM_SAFE_BUFFER_PX
         if self._uses_kernel_output and not self._indicator_border_enabled:
             bottom_buffer = self._KERNEL_BOTTOM_SAFE_BUFFER_PX
-
-        bottom_buffer = max(0, bottom_buffer)
-        if bottom_buffer <= 0:
-            return pil_img
-
-        source = pil_img
-        if source.mode != "RGB":
-            source = source.convert("RGB")
-        if source.size != (self.width, self.height):
-            source = source.resize((self.width, self.height), LANCZOS)
-
-        buffered_img = source.copy()
-        ImageDraw.Draw(buffered_img).rectangle(
-            [(0, self.height - bottom_buffer), (self.width - 1, self.height - 1)],
-            fill="black",
-        )
-        return buffered_img
-
-    def _apply_indicator_bottom_safe_buffer(self, pil_img: Image.Image) -> Image.Image:
-        """Clear a bottom buffer to avoid indicator border overlap, when enabled."""
-
-        if not self._indicator_border_enabled:
-            return pil_img
-
-        bottom_buffer = max(0, self._INDICATOR_BOTTOM_SAFE_BUFFER_PX)
-        if bottom_buffer <= 0:
-            return pil_img
-
-        source = pil_img
-        if source.mode != "RGB":
-            source = source.convert("RGB")
-        if source.size != (self.width, self.height):
-            source = source.resize((self.width, self.height), LANCZOS)
-
-        buffered_img = source.copy()
-        ImageDraw.Draw(buffered_img).rectangle(
-            [(0, self.height - bottom_buffer), (self.width - 1, self.height - 1)],
-            fill="black",
-        )
-        return buffered_img
+        if self._indicator_border_enabled:
+            bottom_buffer = max(bottom_buffer, self._INDICATOR_BOTTOM_SAFE_BUFFER_PX)
+        return max(0, bottom_buffer)
 
     def show(self):
         # No additional action required; display() is triggered during image()

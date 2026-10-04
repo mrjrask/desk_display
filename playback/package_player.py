@@ -168,7 +168,10 @@ class PackagePlayback:
         if self.kind == "ticker":
             return ("ticker", int(t / TICKER_FRAME_SECONDS))
         if self.kind == "composite":
-            return ("composite", int(t / self.frame_seconds))
+            # Each tile's own frame: a quad of still tiles never redraws, and
+            # one whose tiles cycle redraws only when a tile changes.
+            step = int(t / self.frame_seconds)
+            return ("composite", tuple(step % len(tile["frames"]) for tile in body["tiles"]))
         if self.kind == "clock":
             now = self._clock()
             gh_on = self._gh_on()
@@ -268,11 +271,9 @@ class PackagePlayback:
             return frame
         if self.kind == "composite":
             frame = self._image(body["base"]).copy()
-            step = key[1]
-            for tile in body["tiles"]:
-                frames = tile["frames"]
+            for tile, index in zip(body["tiles"], key[1]):
                 left, top, _right, _bottom = tile["bounds"]
-                frame.paste(self._image(frames[step % len(frames)]), (left, top))
+                frame.paste(self._image(tile["frames"][index]), (left, top))
             return frame
         if self.kind == "clock":
             from rendering.clock_faces import render_clock

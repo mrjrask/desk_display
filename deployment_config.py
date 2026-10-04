@@ -694,6 +694,10 @@ SETTINGS: tuple[Setting, ...] = (
     _s("DESK_DISPLAY_CLIENT_ANIMATION", "bool", _CLIENT_ONLY, "touch",
        "Play render packages (scrolling, tickers, logo slides) locally; 0 shows stills only.",
        default="1"),
+    _s("DESK_DISPLAY_CLIENT_MAX_FPS", "float", _CLIENT_ONLY, "touch",
+       "Cap animation frames per second to save CPU, e.g. 15 on a busy or 1080p Pi "
+       "(motion keeps its speed, in bigger steps); 0 plays each package at its own rate.",
+       default="0", minimum=0),
     _s("TOUCH_DOUBLE_TAP_MAX_INTERVAL_SECONDS", "float", _CLIENT, "touch",
        "Maximum gap between taps of a double tap.", default="0.45", minimum=0,
        ignored=_CLIENT_ONLY),

@@ -182,6 +182,24 @@ def test_composite_cycles_tile_frames_and_reports_focus_targets():
     assert set(targets) == set(TILES) and targets["weather1"] == (0, 0, W // 2, H // 2)
 
 
+def test_a_quad_of_still_tiles_never_redraws():
+    def body(b):
+        half_w, half_h = W // 2, H // 2
+        tiles = [{"bounds": [0, 0, half_w, half_h], "frames": [b.add(solid((9, 9, 9), (half_w, half_h)))]},
+                 {"bounds": [half_w, 0, W, half_h],
+                  "frames": [b.add(solid((c, 0, 0), (W - half_w, half_h))) for c in (50, 100, 150)]}]
+        return {"base": b.add(solid((0, 0, 0))), "tiles": tiles, "frame_seconds": 0.1, "duration_seconds": 12}
+
+    still = play(build("weather quad", "interactive_focus", "composite",
+                       lambda b: {**body(b), "tiles": body(b)["tiles"][:1]}))
+    assert {still.key_at(i * 0.1) for i in range(50)} == {still.key_at(0)}
+    # A tile with three frames: the picture changes only when that tile does.
+    cycling = play(build("weather quad", "interactive_focus", "composite", body))
+    keys = [cycling.key_at(i * 0.1 + 0.05) for i in range(6)]
+    assert len(set(keys)) == 3 and keys[0] == keys[3]
+    assert cycling.frame_at(0.15).getpixel((W - 1, 0)) == (100, 0, 0)
+
+
 def test_clock_is_drawn_from_the_clients_own_time():
     from rendering.clock_faces import clock_background, clock_layout
     from rendering.packaging import clock_package
@@ -532,6 +550,38 @@ def test_a_bad_render_package_still_plays_the_screens_still(env):
     client._content_revision = None
     shown = {client.step()[0] for _ in range(4)}
     assert "MLB Scoreboard" in shown
+
+
+def test_max_fps_draws_fewer_frames_without_slowing_the_scroll(env):
+    publish_all(env)
+    client = synced(env.make_client(DESK_DISPLAY_CLIENT_MAX_FPS="1"))
+    assert client.min_frame_seconds == 1.0
+    now = [0.0]
+    client._monotonic = lambda: now[0]
+    _show(client, "MLB Scoreboard")
+    animation = client.animation
+    assert animation.frame_seconds == 0.5  # the package asks for two frames a second
+    drawn_at = []
+    real_frame_at = animation.frame_at
+
+    def frame_at(t):
+        drawn_at.append((now[0], animation.key_at(t)[1]))
+        return real_frame_at(t)
+
+    animation.frame_at = frame_at
+
+    def wait(interval):
+        now[0] += interval
+        return False
+
+    client._stop.wait = wait
+    client.wait(animation.duration)
+    times = [at for at, _offset in drawn_at]
+    assert all(later - earlier >= 1.0 - 1e-9 for earlier, later in zip(times, times[1:]))
+    assert len(drawn_at) < 4  # uncapped, it draws all four steps
+    assert drawn_at[-1][1] == H  # still reaches the bottom...
+    assert times[-1] <= animation.motion_seconds + 1.0  # ...at about its own speed
+    assert now[0] == pytest.approx(animation.duration, abs=0.1)
 
 
 def test_a_slow_panel_scrolls_every_step_instead_of_skipping(env):
