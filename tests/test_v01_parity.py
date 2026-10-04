@@ -8,8 +8,8 @@ here in a process configured by rendering.profile_process, as the render
 server's workers and the display clients are.
 
 Deliberate departures from v0.1, recorded from the current tree instead:
-hdmi_1080p/weather_astronomical.png (Rise/Set grouped together, Jason's
-2026-09-30 1080p layout request).
+weather_astronomical.png on every profile (icons and text sized to fill each
+card, Jason's 2026-10-04 request; before that, Rise/Set grouped on 1080p).
 """
 from __future__ import annotations
 
