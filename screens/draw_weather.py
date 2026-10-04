@@ -1911,12 +1911,6 @@ def _astronomical_layout_details(width: int, height: int) -> dict[str, object]:
     ultra_compact = short_edge <= 135 or width <= 240 or height <= 135
     compact = ultra_compact or short_edge <= 240 or width <= 360
     split_columns = width >= 280 and not (height >= width and short_edge < 220)
-    # Square panels leave tall columns under the icons; spreading two rows
-    # across all of it strands "Rise" far above "Set", so keep them together.
-    # The 1080p HDMI panel has the same problem at its size.
-    group_rows = split_columns and not compact and (
-        height >= width or config.is_hdmi_1080p_layout(width, height)
-    )
 
     sun_labels = (
         ("Rise", "sunrise_civil"),
@@ -1927,14 +1921,11 @@ def _astronomical_layout_details(width: int, height: int) -> dict[str, object]:
         "compact": compact,
         "ultra_compact": ultra_compact,
         "split_columns": split_columns,
-        "group_rows": group_rows,
         # Where the coordinates do not fit beside the title, square panels
         # (not v0.1's landscape ones) put them on a line below the cards.
         "coords_below": split_columns and not compact and height >= width,
         "title_font": FONT_WEATHER_DETAILS_SMALL_BOLD if compact else FONT_WEATHER_LABEL,
         "label_font": FONT_WEATHER_DETAILS_TINY_LARGE if compact else FONT_WEATHER_DETAILS_SMALL_BOLD,
-        "value_font": FONT_WEATHER_DETAILS_TINY if compact else FONT_WEATHER_DETAILS_SMALL,
-        "phase_font": FONT_WEATHER_DETAILS_TINY_LARGE if compact else FONT_WEATHER_DETAILS_SMALL_BOLD,
         "caption_font": FONT_WEATHER_DETAILS_TINY_MICRO if compact else FONT_WEATHER_DETAILS_TINY,
         "sun_labels": sun_labels,
         "title_y": 1 if compact else 4,
@@ -1988,21 +1979,6 @@ def _fit_text_to_width(
     return ellipsis
 
 
-def _fit_text_and_font_to_width(
-    draw: ImageDraw.ImageDraw,
-    text: str,
-    fonts: tuple[ImageFont.ImageFont, ...],
-    max_width: int,
-) -> tuple[str, ImageFont.ImageFont]:
-    for font in fonts:
-        bbox = _safe_textbbox(draw, text, font)
-        if max_width <= 0 or bbox[2] - bbox[0] <= max_width:
-            return text, font
-
-    fallback_font = fonts[-1]
-    return _fit_text_to_width(draw, text, fallback_font, max_width), fallback_font
-
-
 def _draw_astronomy_card(draw: ImageDraw.ImageDraw, box: tuple[int, int, int, int]) -> None:
     draw.rounded_rectangle(
         box,
@@ -2013,20 +1989,173 @@ def _draw_astronomy_card(draw: ImageDraw.ImageDraw, box: tuple[int, int, int, in
     )
 
 
-def _astronomy_row_x_positions(
-    box: tuple[int, int, int, int],
-    label_width: int,
-    value_width: int,
-    compact: bool,
-) -> tuple[int, int]:
-    """Center an astronomy label/value pair with a small, consistent gap."""
+# Sizing to the longest phase name keeps the fonts steady through the month.
+_ASTRONOMY_PHASE_SAMPLE = "Waxing Crescent"
+_ASTRONOMY_TIME_SAMPLE = "12:00 AM"
+_ASTRONOMY_INK_SAMPLE = "RSWg0:"
+# Share of a column's height the phase name and Rise/Set rows may take; the
+# icon gets the rest.
+_ASTRONOMY_TEXT_SHARE = 0.46
+_ASTRONOMY_FONTS: dict[tuple[int, bool], ImageFont.ImageFont] = {}
 
-    x0, _, x1, _ = box
-    gap = 8 if compact else 14
-    pair_width = label_width + gap + value_width
-    label_x = x0 + max(10, (x1 - x0 - pair_width) // 2)
-    value_x = min(label_x + label_width + gap, x1 - 10 - value_width)
-    return label_x, value_x
+
+def _astronomy_font(size: int, bold: bool = False) -> ImageFont.ImageFont:
+    """DejaVu at an exact pixel size; the shared FONT_* sizes are too coarse to fill a column."""
+
+    size = max(6, int(size))
+    font = _ASTRONOMY_FONTS.get((size, bold))
+    if font is None:
+        name = "DejaVuSans-Bold.ttf" if bold else "DejaVuSans.ttf"
+        try:
+            font = ImageFont.truetype(os.path.join(config.FONTS_DIR, name), size)
+        except OSError:
+            font = FONT_WEATHER_DETAILS_SMALL_BOLD if bold else FONT_WEATHER_DETAILS_SMALL
+        _ASTRONOMY_FONTS[(size, bold)] = font
+    return font
+
+
+def _astronomy_text_width(draw: ImageDraw.ImageDraw, text: str, font: ImageFont.ImageFont) -> int:
+    bbox = _safe_textbbox(draw, text, font)
+    return bbox[2] - bbox[0]
+
+
+def _astronomy_ink(draw: ImageDraw.ImageDraw, font: ImageFont.ImageFont) -> tuple[int, int]:
+    """Offset from the draw origin to the top of the ink, and the ink height, for a line."""
+
+    bbox = _safe_textbbox(draw, _ASTRONOMY_INK_SAMPLE, font)
+    return bbox[1], bbox[3] - bbox[1]
+
+
+def _largest_fitting_size(low: int, high: int, fits) -> int:
+    """The largest size in [low, high] for which ``fits`` holds (``low`` if none)."""
+
+    best = low
+    while low <= high:
+        mid = (low + high) // 2
+        if fits(mid):
+            best, low = mid, mid + 1
+        else:
+            high = mid - 1
+    return best
+
+
+class _AstronomyText(NamedTuple):
+    label_font: ImageFont.ImageFont
+    value_font: ImageFont.ImageFont
+    phase_font: ImageFont.ImageFont
+    phase_text: str
+    label_w: int
+    value_w: int
+    gap: int
+    row_h: int
+    row_pitch: int
+    phase_h: int
+    phase_gap: int
+
+    @property
+    def row_w(self) -> int:
+        return self.label_w + self.gap + self.value_w
+
+    def rows_h(self, count: int) -> int:
+        return count * self.row_h + max(0, count - 1) * (self.row_pitch - self.row_h)
+
+    def block_h(self, count: int) -> int:
+        """Phase name over ``count`` Rise/Set rows."""
+        return self.phase_h + self.phase_gap + self.rows_h(count)
+
+
+def _astronomy_text(
+    draw: ImageDraw.ImageDraw,
+    size: int,
+    rows: list[tuple[str, str]],
+    phase_text: str,
+    max_width: int,
+) -> _AstronomyText:
+    label_font = _astronomy_font(size, bold=True)
+    value_font = _astronomy_font(size)
+    label_w = max(_astronomy_text_width(draw, label, label_font) for label, _ in rows)
+    value_w = max(
+        _astronomy_text_width(draw, value, value_font)
+        for value in [value for _, value in rows] + [_ASTRONOMY_TIME_SAMPLE]
+    )
+    _, row_h = _astronomy_ink(draw, value_font)
+
+    def phase_fits(candidate: int) -> bool:
+        font = _astronomy_font(candidate, bold=True)
+        return all(
+            _astronomy_text_width(draw, text, font) <= max_width
+            for text in (phase_text, _ASTRONOMY_PHASE_SAMPLE)
+        )
+
+    phase_font = _astronomy_font(_largest_fitting_size(6, size, phase_fits), bold=True)
+    fitted_phase = _fit_text_to_width(draw, phase_text, phase_font, max_width)
+    _, phase_h = _astronomy_ink(draw, phase_font)
+    return _AstronomyText(
+        label_font=label_font,
+        value_font=value_font,
+        phase_font=phase_font,
+        phase_text=fitted_phase,
+        label_w=label_w,
+        value_w=value_w,
+        gap=max(4, size * 2 // 5),
+        row_h=row_h,
+        row_pitch=row_h + max(3, size // 2),
+        phase_h=phase_h,
+        phase_gap=max(4, size * 3 // 5),
+    )
+
+
+def _astronomy_sun_extent(diameter: int) -> int:
+    """Width of the sun icon including its rays (see ``_draw_astronomy_sun_icon``)."""
+
+    radius = max(7, diameter // 2)
+    return 2 * (radius + max(7, radius // 2))
+
+
+def _astronomy_moon_diameter(sun_diameter: int) -> int:
+    """The moon has no rays, so it takes most of the room the sun's rays use."""
+
+    return min(_astronomy_sun_extent(sun_diameter) - 10, sun_diameter * 5 // 4)
+
+
+def _astronomy_icon_diameter(max_extent: int) -> int:
+    """The largest icon diameter whose sun, rays included, fits ``max_extent``."""
+
+    return _largest_fitting_size(14, max(14, max_extent), lambda d: _astronomy_sun_extent(d) <= max_extent)
+
+
+def _draw_astronomy_text(
+    draw: ImageDraw.ImageDraw,
+    text: _AstronomyText,
+    x_center: int,
+    top: int,
+    rows: list[tuple[str, str]],
+    label_color: tuple[int, int, int],
+    phase: bool,
+) -> None:
+    """Draw the phase name (when ``phase``) and Rise/Set rows centred on ``x_center``."""
+
+    if phase:
+        phase_w = _astronomy_text_width(draw, text.phase_text, text.phase_font)
+        phase_top, _ = _astronomy_ink(draw, text.phase_font)
+        draw.text(
+            (x_center - phase_w // 2, top - phase_top),
+            text.phase_text,
+            font=text.phase_font,
+            fill=(218, 226, 255),
+        )
+        top += text.phase_h + text.phase_gap
+
+    # Labels right-aligned and times left-aligned so Rise and Set line up.
+    label_right = x_center - text.row_w // 2 + text.label_w
+    value_x = label_right + text.gap
+    label_top, _ = _astronomy_ink(draw, text.label_font)
+    value_top, _ = _astronomy_ink(draw, text.value_font)
+    for idx, (label, value) in enumerate(rows):
+        y = top + idx * text.row_pitch
+        label_w = _astronomy_text_width(draw, label, text.label_font)
+        draw.text((label_right - label_w, y - label_top), label, font=text.label_font, fill=label_color)
+        draw.text((value_x, y - value_top), value, font=text.value_font, fill=(238, 242, 250))
 
 
 def draw_weather_astronomical(display, weather, transition: bool = False):
@@ -2050,9 +2179,6 @@ def draw_weather_astronomical(display, weather, transition: bool = False):
 
     layout = _astronomical_layout_details(WIDTH, HEIGHT)
     title_font = layout["title_font"]
-    label_font = layout["label_font"]
-    value_font = layout["value_font"]
-    phase_font = layout["phase_font"]
     caption_font = layout["caption_font"]
     edge = int(layout["edge"])
 
@@ -2086,9 +2212,8 @@ def draw_weather_astronomical(display, weather, transition: bool = False):
                 fill=(132, 149, 180),
             )
         elif layout["coords_below"]:
-            # Square panels have no room beside their larger title but plenty
-            # of empty card below the Rise/Set rows, so the coordinates take a
-            # line under the cards instead of disappearing.
+            # Square panels have no room beside their larger title, so the
+            # coordinates take a line under the cards instead of disappearing.
             content_bottom -= coord_h + ASTRONOMY_COORDS_BELOW_GAP
             draw.text(
                 (WIDTH // 2 - coord_w // 2, HEIGHT - edge - coord_h - coord_bbox[1]),
@@ -2112,122 +2237,139 @@ def draw_weather_astronomical(display, weather, transition: bool = False):
     for box in (left_box, right_box):
         _draw_astronomy_card(draw, box)
 
-    def draw_section_title(box: tuple[int, int, int, int], text: str, color: tuple[int, int, int]) -> int:
-        x0, y0, x1, _ = box
-        bbox = _safe_textbbox(draw, text, label_font)
-        draw.text((x0 + 8, y0 + 6), text, font=label_font, fill=color)
-        return y0 + 8 + (bbox[3] - bbox[1])
-
-    sun_title_bottom = draw_section_title(left_box, "Sun", (255, 215, 154))
-    lx0, ly0, lx1, ly1 = left_box
-    moon_title_bottom = draw_section_title(right_box, "Moon", (209, 220, 255))
-    rx0, ry0, rx1, ry1 = right_box
-    sun_icon_limit = min(lx1 - lx0 - 34, max(1, ly1 - sun_title_bottom - 118))
-    moon_icon_limit = min(rx1 - rx0 - 34, max(1, ry1 - moon_title_bottom - 118))
-    icon_d = max(
-        28 if layout["compact"] else 54,
-        min(
-            70 if layout["compact"] else 118,
-            min(sun_icon_limit, moon_icon_limit) // (1 if split_columns else 2),
-        ),
-    )
-    icon_center_y = max(sun_title_bottom, moon_title_bottom) + icon_d // 2 + (3 if layout["compact"] else 7)
-    sun_icon_d = moon_icon_d = icon_d
-    sun_center = ((lx0 + lx1) // 2, icon_center_y)
-    moon_center = ((rx0 + rx1) // 2, icon_center_y)
-    _draw_astronomy_sun_icon(img, sun_center, sun_icon_d)
-    _draw_moon_phase_icon(img, moon_center, moon_icon_d, phase_fraction, moon_phase_raw, phase_label)
-
-    phase_text = phase_label
-    phase_y = moon_center[1] + moon_icon_d // 2 + (5 if layout["compact"] else 9)
-    phase_font_options = (
-        phase_font,
-        value_font,
-        FONT_WEATHER_DETAILS_TINY_LARGE,
-        FONT_WEATHER_DETAILS_TINY,
-        FONT_WEATHER_DETAILS_TINY_MICRO,
-    )
-    phase_text, phase_font = _fit_text_and_font_to_width(
-        draw,
-        phase_text,
-        phase_font_options,
-        rx1 - rx0 - 16,
-    )
-    phase_bbox = _safe_textbbox(draw, phase_text, phase_font)
-    draw.text(
-        (rx0 + (rx1 - rx0 - (phase_bbox[2] - phase_bbox[0])) // 2, phase_y),
-        phase_text,
-        font=phase_font,
-        fill=(218, 226, 255),
-    )
-
-    sun_values = {
-        "sunrise_civil": _astronomy_time_text(sunrise_civil),
-        "sunset_civil": _astronomy_time_text(sunset_civil),
-    }
-    sun_rows = [(label, sun_values[key]) for label, key in layout["sun_labels"]]
+    sun_rows = [
+        (label, _astronomy_time_text(sunrise_civil if key == "sunrise_civil" else sunset_civil))
+        for label, key in layout["sun_labels"]
+    ]
     moon_rows = [("Rise", _astronomy_time_text(moonrise)), ("Set", _astronomy_time_text(moonset))]
-    if layout["ultra_compact"]:
-        moon_rows = [
-            ("Rise/Set", f"{_astronomy_time_text(moonrise)} / {_astronomy_time_text(moonset)}")
-        ]
-    phase_h = phase_bbox[3] - phase_bbox[1]
-    moon_row_y = phase_y + phase_h + (12 if layout["compact"] else 22)
-    sun_row_y = sun_center[1] + sun_icon_d // 2 + (13 if layout["compact"] else 24)
-    aligned_row_y = max(sun_row_y, moon_row_y)
-    row_gap = max(
-        13 if layout["compact"] else 22,
-        min(ly1, ry1) - aligned_row_y - 4,
-    ) // max(1, len(moon_rows))
-    row_gap = max(13 if layout["compact"] else 22, row_gap)
-    if layout.get("group_rows") and len(moon_rows) > 1:
-        line_bbox = _safe_textbbox(draw, "Rise 12:00 PM", value_font)
-        tight_gap = (line_bbox[3] - line_bbox[1]) * 2
-        if tight_gap < row_gap:
-            # Centre the tightened rows in the space the spread-out rows used.
-            aligned_row_y += (row_gap - tight_gap) * (len(moon_rows) - 1) // 2
-            row_gap = tight_gap
-    for idx, (label, value) in enumerate(sun_rows):
-        y = aligned_row_y + idx * row_gap
-        if y > ly1 - 11:
-            break
-        label_bbox = _safe_textbbox(draw, label, label_font)
-        value_bbox = _safe_textbbox(draw, value, value_font)
-        label_x, value_x = _astronomy_row_x_positions(
-            left_box,
-            label_bbox[2] - label_bbox[0],
-            value_bbox[2] - value_bbox[0],
-            bool(layout["compact"]),
-        )
-        draw.text((label_x, y), label, font=label_font, fill=(255, 223, 178))
-        draw.text(
-            (value_x, y),
-            value,
-            font=value_font,
-            fill=(238, 242, 250),
-        )
+    all_rows = sun_rows + moon_rows
+    sun_label_color = (255, 223, 178)
+    moon_label_color = (198, 210, 255)
 
-    for idx, (label, value) in enumerate(moon_rows):
-        y = aligned_row_y + idx * row_gap
-        if y > ry1 - 11:
-            break
-        label_bbox = _safe_textbbox(draw, label, label_font)
-        value_bbox = _safe_textbbox(draw, value, value_font)
-        label_x, value_x = _astronomy_row_x_positions(
-            right_box,
-            label_bbox[2] - label_bbox[0],
-            value_bbox[2] - value_bbox[0],
-            bool(layout["compact"]),
+    if split_columns:
+        _draw_astronomy_columns(
+            img, draw, layout, left_box, right_box, all_rows, sun_rows, moon_rows,
+            phase_fraction, moon_phase_raw, phase_label, sun_label_color, moon_label_color,
         )
-        draw.text((label_x, y), label, font=label_font, fill=(198, 210, 255))
-        draw.text(
-            (value_x, y),
-            value,
-            font=value_font,
-            fill=(238, 242, 250),
+    else:
+        _draw_astronomy_stacked(
+            img, draw, left_box, right_box, all_rows, sun_rows, moon_rows,
+            phase_fraction, moon_phase_raw, phase_label, sun_label_color, moon_label_color,
         )
 
     return ScreenImage(img.convert("RGB"), displayed=False)
+
+
+def _draw_astronomy_columns(
+    img, draw, layout, left_box, right_box, all_rows, sun_rows, moon_rows,
+    phase_fraction, moon_phase_raw, phase_label, sun_label_color, moon_label_color,
+) -> None:
+    """Side-by-side Sun and Moon cards: icon, phase name, then Rise/Set, filling each column."""
+
+    lx0, ly0, lx1, ly1 = left_box
+    rx0, ry0, rx1, ry1 = right_box
+    card_w = min(lx1 - lx0, rx1 - rx0)
+    card_h = min(ly1 - ly0, ry1 - ry0)
+    pad = max(6, card_w // 22)
+    inner_w = card_w - 2 * pad
+    min_gap = max(3, card_h // 60)
+
+    def plan(header_h: int) -> tuple[int, _AstronomyText]:
+        body_h = card_h - header_h - pad // 2
+
+        def fits(size: int) -> bool:
+            text = _astronomy_text(draw, size, all_rows, phase_label, inner_w)
+            return text.row_w <= inner_w and text.block_h(len(moon_rows)) <= body_h * _ASTRONOMY_TEXT_SHARE
+
+        size = _largest_fitting_size(6, max(6, body_h // 3), fits)
+        return body_h, _astronomy_text(draw, size, all_rows, phase_label, inner_w)
+
+    # The card headings ("Sun", "Moon") grow with the rows, never below v0.1's size.
+    base_heading = layout["label_font"]
+    heading_font = base_heading
+    heading_offset = 6
+    for _ in range(2):
+        heading_top, heading_h = _astronomy_ink(draw, heading_font)
+        header_h = heading_offset + heading_h + min_gap
+        body_h, text = plan(header_h)
+        heading_size = max(getattr(base_heading, "size", 0), text.value_font.size * 9 // 10)
+        heading_font = _astronomy_font(heading_size, bold=True) if heading_size != getattr(
+            base_heading, "size", 0) else base_heading
+        heading_offset = max(6, pad // 2)
+    heading_top, heading_h = _astronomy_ink(draw, heading_font)
+    header_h = heading_offset + heading_h + min_gap
+    body_h, text = plan(header_h)
+    # Keep the last row off the card's bottom edge.
+    body_h -= pad // 2
+
+    for box, heading, color in (
+        (left_box, "Sun", (255, 215, 154)),
+        (right_box, "Moon", (209, 220, 255)),
+    ):
+        draw.text((box[0] + pad, box[1] + heading_offset - heading_top), heading, font=heading_font, fill=color)
+
+    block_h = text.block_h(len(moon_rows))
+    max_extent = min(inner_w, body_h - block_h - 3 * min_gap)
+    icon_d = _astronomy_icon_diameter(max_extent)
+    extent = _astronomy_sun_extent(icon_d)
+    # Share what is left evenly above the icon, between icon and text, and below.
+    gap = max(min_gap, (body_h - extent - block_h) // 3)
+    body_top = max(ly0, ry0) + header_h
+    icon_center_y = body_top + gap + extent // 2
+    text_top = body_top + gap + extent + gap
+
+    _draw_astronomy_sun_icon(img, ((lx0 + lx1) // 2, icon_center_y), icon_d)
+    _draw_moon_phase_icon(
+        img, ((rx0 + rx1) // 2, icon_center_y), _astronomy_moon_diameter(icon_d),
+        phase_fraction, moon_phase_raw, phase_label,
+    )
+
+    rows_top = text_top + text.phase_h + text.phase_gap
+    _draw_astronomy_text(draw, text, (lx0 + lx1) // 2, rows_top, sun_rows, sun_label_color, phase=False)
+    _draw_astronomy_text(draw, text, (rx0 + rx1) // 2, text_top, moon_rows, moon_label_color, phase=True)
+
+
+def _draw_astronomy_stacked(
+    img, draw, top_box, bottom_box, all_rows, sun_rows, moon_rows,
+    phase_fraction, moon_phase_raw, phase_label, sun_label_color, moon_label_color,
+) -> None:
+    """Sun card over Moon card on short panels: the icon on the left, text beside it."""
+
+    x0, y0, x1, y1 = top_box
+    card_h = min(y1 - y0, bottom_box[3] - bottom_box[1])
+    card_w = x1 - x0
+    pad = max(3, card_h // 12)
+    icon_d = _astronomy_icon_diameter(card_h - 2 * pad)
+    extent = _astronomy_sun_extent(icon_d)
+    text_w = card_w - extent - 3 * pad
+
+    def fits(size: int) -> bool:
+        text = _astronomy_text(draw, size, all_rows, phase_label, text_w)
+        return text.row_w <= text_w and text.block_h(len(moon_rows)) <= card_h - 2 * pad
+
+    text = _astronomy_text(
+        draw, _largest_fitting_size(6, max(6, card_h), fits), all_rows, phase_label, text_w
+    )
+    text_center_x = x0 + pad + extent + pad + text_w // 2
+
+    for box, rows, color, is_moon in (
+        (top_box, sun_rows, sun_label_color, False),
+        (bottom_box, moon_rows, moon_label_color, True),
+    ):
+        bx0, by0, _, by1 = box
+        center = (bx0 + pad + extent // 2, (by0 + by1) // 2)
+        phase = False
+        if is_moon:
+            _draw_moon_phase_icon(
+                img, center, _astronomy_moon_diameter(icon_d), phase_fraction, moon_phase_raw, phase_label
+            )
+            # The smallest panels have no room for the phase name over the rows.
+            phase = text.block_h(len(rows)) <= card_h - 2 * pad
+            block_h = text.block_h(len(rows)) if phase else text.rows_h(len(rows))
+        else:
+            _draw_astronomy_sun_icon(img, center, icon_d)
+            block_h = text.rows_h(len(rows))
+        _draw_astronomy_text(draw, text, text_center_x, (by0 + by1 - block_h) // 2, rows, color, phase)
 
 
 # ─── Screen 2: Detailed (with UV index) ───────────────────────────────────────

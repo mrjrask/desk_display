@@ -10,17 +10,16 @@ from PIL import Image, ImageDraw
 
 from config import CENTRAL_TIME
 from screens.draw_weather import (
-    FONT_WEATHER_DETAILS_SMALL_BOLD,
-    FONT_WEATHER_DETAILS_TINY_LARGE,
     _astronomical_layout_details,
-    _astronomy_row_x_positions,
+    _astronomy_icon_diameter,
+    _astronomy_moon_diameter,
+    _astronomy_sun_extent,
+    _astronomy_text,
     _astronomy_time_text,
     _draw_weather_history_chart,
-    _fit_text_and_font_to_width,
     _moon_illumination_mask,
     _moon_phase_is_waxing,
     _normalise_moon_phase,
-    _safe_textbbox,
     _weather_detail_chart_layout,
     _weather_history_points,
 )
@@ -31,20 +30,16 @@ def test_astronomical_layout_handles_supported_display_profiles():
     display_hat = _astronomical_layout_details(320, 240)
     assert display_hat["split_columns"] is True
     assert display_hat["compact"] is True
-    assert display_hat["group_rows"] is False
 
     # hyperpixel rectangular
     hyperpixel = _astronomical_layout_details(800, 480)
     assert hyperpixel["split_columns"] is True
     assert hyperpixel["compact"] is False
-    assert hyperpixel["group_rows"] is False
 
     # hyperpixel square
     hyperpixel_square = _astronomical_layout_details(720, 720)
     assert hyperpixel_square["split_columns"] is True
     assert hyperpixel_square["compact"] is False
-    # Rise/Set sit together instead of spreading down the tall columns.
-    assert hyperpixel_square["group_rows"] is True
     assert hyperpixel_square["coords_below"] is True
     assert hyperpixel["coords_below"] is False
 
@@ -82,11 +77,25 @@ def test_astronomical_sun_rows_use_civil_times_without_civil_label():
     assert layout["sun_labels"] == (("Rise", "sunrise_civil"), ("Set", "sunset_civil"))
 
 
-def test_astronomical_row_centers_label_and_time_with_compact_gap():
-    label_x, value_x = _astronomy_row_x_positions((10, 20, 210, 220), 30, 60, compact=True)
+def test_astronomy_text_grows_to_the_column_width_with_the_longest_phase_name():
+    draw = ImageDraw.Draw(Image.new("RGB", (10, 10)))
+    rows = [("Rise", "6:50 AM"), ("Set", "6:40 PM")]
+    small = _astronomy_text(draw, 14, rows, "Waning Gibbous", 150)
+    large = _astronomy_text(draw, 40, rows, "Waning Gibbous", 150)
+    assert large.value_font.size == 40 and large.row_w > small.row_w
+    # The phase name shrinks on its own so "Waxing Crescent" still fits.
+    phase_bbox = draw.textbbox((0, 0), "Waxing Crescent", font=large.phase_font)
+    assert phase_bbox[2] - phase_bbox[0] <= 150
+    assert large.phase_font.size < 40
+    assert large.phase_text == "Waning Gibbous"
 
-    assert (label_x, value_x) == (61, 99)
-    assert value_x - (label_x + 30) == 8
+
+def test_astronomy_icon_fills_the_room_without_the_rays_overflowing():
+    for room in (40, 97, 220, 530):
+        diameter = _astronomy_icon_diameter(room)
+        assert _astronomy_sun_extent(diameter) <= room
+        assert _astronomy_sun_extent(diameter + 2) > room
+        assert _astronomy_moon_diameter(diameter) + 6 <= room
 
 
 def test_moon_phase_direction_controls_illuminated_side():
@@ -110,24 +119,6 @@ def test_moon_phase_label_splits_camel_case_names():
 
     assert fraction == 0.75
     assert label == "Waxing Gibbous"
-
-
-def test_moon_phase_label_uses_smaller_font_before_truncating():
-    image = Image.new("RGB", (240, 80))
-    draw = ImageDraw.Draw(image)
-    phase = "Waxing Gibbous"
-    tiny_bbox = _safe_textbbox(draw, phase, FONT_WEATHER_DETAILS_TINY_LARGE)
-    max_width = tiny_bbox[2] - tiny_bbox[0]
-
-    fitted_text, fitted_font = _fit_text_and_font_to_width(
-        draw,
-        phase,
-        (FONT_WEATHER_DETAILS_SMALL_BOLD, FONT_WEATHER_DETAILS_TINY_LARGE),
-        max_width,
-    )
-
-    assert fitted_text == phase
-    assert fitted_font == FONT_WEATHER_DETAILS_TINY_LARGE
 
 
 def test_weather_history_points_filters_and_sorts_metric_values():
@@ -200,12 +191,6 @@ def test_weather_detail_chart_layout_keeps_a_shared_minimum_chart_on_narrow_disp
     assert (chart_x, chart_width) == (140, 40)
 
 
-def test_astronomical_layout_groups_rows_on_1080p_hdmi():
-    # Jason: on 1920x1080 Rise and Set sat far apart; keep them together there.
-    assert _astronomical_layout_details(1920, 1080)["group_rows"] is True
-    assert _astronomical_layout_details(800, 480)["group_rows"] is False
-
-
 _COORDS_PROBE = """
 import json, os, sys
 os.environ["CONFIG_LOAD_DOTENV"] = "0"
@@ -247,3 +232,87 @@ def test_sun_and_moon_shows_the_coordinates_on_hyperpixel_panels(profile_id):
         assert top > height - 40
     else:
         assert bottom < 60
+
+
+_FIT_PROBE = """
+import json, os, sys
+from PIL import ImageDraw
+os.environ["CONFIG_LOAD_DOTENV"] = "0"
+import screens.draw_weather as dw
+
+cards, drawn, icons = [], [], []
+real_card, real_text = dw._draw_astronomy_card, ImageDraw.ImageDraw.text
+real_sun, real_moon = dw._draw_astronomy_sun_icon, dw._draw_moon_phase_icon
+
+def card(draw, box):
+    cards.append(box)
+    real_card(draw, box)
+
+def text(self, xy, value, *args, **kwargs):
+    if cards:
+        drawn.append((value, self.textbbox(xy, value, font=kwargs.get("font"))))
+    return real_text(self, xy, value, *args, **kwargs)
+
+def sun(image, center, diameter):
+    icons.append(("sun", center, dw._astronomy_sun_extent(diameter)))
+    real_sun(image, center, diameter)
+
+def moon(image, center, diameter, *args):
+    icons.append(("moon", center, max(6, diameter // 2) * 2 + 6))
+    real_moon(image, center, diameter, *args)
+
+dw._draw_astronomy_card, dw._draw_astronomy_sun_icon, dw._draw_moon_phase_icon = card, sun, moon
+ImageDraw.ImageDraw.text = text
+out = []
+for phase in ("WaningGibbous", "ThirdQuarter", "WaxingCrescent"):
+    cards.clear(); drawn.clear(); icons.clear()
+    weather = {"daily": [{"sunrise": "2026-09-30T06:50:00-05:00", "sunset": "2026-09-30T18:40:00-05:00",
+                          "moonrise": "2026-09-30T23:45:00-05:00", "moonset": "2026-09-30T12:49:00-05:00",
+                          "moonPhase": phase}]}
+    dw.draw_weather_astronomical(None, weather)
+    out.append({"cards": list(cards), "text": list(drawn), "icons": list(icons)})
+print(json.dumps(out))
+"""
+
+
+def _inside(box, cards):
+    x0, y0, x1, y1 = box
+    return any(cx0 <= x0 and cy0 <= y0 and x1 <= cx1 and y1 <= cy1 for cx0, cy0, cx1, cy1 in cards)
+
+
+@pytest.mark.parametrize(
+    "profile_id",
+    ["display_hat_mini", "adafruit_minipitft_114", "hyperpixel4", "hyperpixel4_square", "hdmi_1080p", "fallback_hd"],
+)
+def test_sun_and_moon_text_and_icons_stay_inside_their_cards(profile_id):
+    from display_profiles import PROFILE_PRESETS
+    from rendering.profile_process import composition_env
+
+    root = Path(__file__).resolve().parents[1]
+    env = dict(os.environ)
+    for name, value in composition_env(PROFILE_PRESETS[profile_id]).items():
+        if value is None:
+            env.pop(name, None)
+        else:
+            env[name] = value
+    result = subprocess.run([sys.executable, "-c", _FIT_PROBE], cwd=root, env=env, check=True,
+                            capture_output=True, text=True, timeout=120)
+    for render in json.loads(result.stdout.strip().splitlines()[-1]):
+        cards = render["cards"]
+        texts = [value for value, _ in render["text"]]
+        assert any(value.startswith("Wa") or value.startswith("Third") for value in texts)
+        assert "…" not in "".join(texts)
+        for value, box in render["text"]:
+            assert _inside(box, cards), f"{profile_id}: {value!r} at {box} outside {cards}"
+        for name, (cx, cy), extent in render["icons"]:
+            half = extent // 2
+            assert _inside((cx - half, cy - half, cx + half, cy + half), cards), f"{profile_id}: {name}"
+        if cards[0][1] != cards[1][1]:
+            continue  # stacked cards are limited by their height
+        # The rows fill a good share of the column instead of v0.1's small fixed fonts.
+        rise = [box for value, box in render["text"] if value == "Rise"]
+        card_w = cards[0][2] - cards[0][0]
+        times = [box for value, box in render["text"] if value.endswith(("AM", "PM"))]
+        assert rise and times
+        row_span = max(box[2] for box in times[:1]) - min(box[0] for box in rise[:1])
+        assert row_span >= card_w * (0.35 if card_w > 400 else 0.55), f"{profile_id}: rows {row_span}/{card_w}"

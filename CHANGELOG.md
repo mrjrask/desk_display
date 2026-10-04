@@ -329,6 +329,10 @@ See the README's [deployment modes](README.md#deployment-modes) and
 - Sun & Moon keeps its Rise and Set rows together on square displays, and
   shows the latitude and longitude centred under the cards on HyperPixel 4
   Square, where the title always crowded them out.
+- Sun & Moon sizes its sun and moon icons and its text to fill each card on
+  every display (it used v0.1's fixed sizes and left the lower part of the
+  cards empty). The moon phase name shrinks on its own to fit, and the
+  Mini PiTFT draws the icons beside the text instead of on top of it.
 - On This Day draws the emoji in Hebcal holiday titles in colour with Noto
   Color Emoji (`fonts-noto-color-emoji`), and drops them, instead of drawing
   empty boxes, where that font is missing.
