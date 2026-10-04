@@ -176,7 +176,7 @@ run the installer with your normal login and let it call `sudo` itself.
 
 | Script | What it does |
 | --- | --- |
-| `upgrade.sh` | Upgrades an install in any mode: `git pull`, dependencies, units, restart (see [Running, restarting, and logs](#running-restarting-and-logs)). The display client is restarted only if it was running before the upgrade. `--no-pull` skips the pull. |
+| `upgrade.sh` | Upgrades an install in any mode: `git pull`, dependencies, units, restart (see [Running, restarting, and logs](#running-restarting-and-logs)). On a client or combined install it asks at the end whether to start the display client. `--no-pull` skips the pull. |
 | `update_dependencies.sh` | Installs the requirements file for the installed mode and output; `--upgrade-outdated`, `--clean-caches`, `--print-requirements`. |
 | `update_services.sh` | Rewrites or patches the installed units for the installed mode; `--dry-run`, `--no-restart`, `--mode`. |
 | `restart_services.sh` | Restarts the installed project units in dependency order; `--list` prints them, `--skip <unit>` leaves one alone. |
@@ -1076,13 +1076,16 @@ git pull --ff-only
 ./scripts/update_dependencies.sh --requirements <the mode's file>
 ./scripts/update_services.sh --no-restart  # standalone: patch the unit in place
                                            # other modes: rewrite the units as installed
-./scripts/restart_services.sh             # --skip desk_display_client.service
-                                          # if the client was stopped
+./scripts/restart_services.sh --skip desk_display_client.service
+# then, on a client or combined install, asks about the client
 ```
 
-`desk_display_client.service` is restarted only if it was running when the
-upgrade started; a client you stopped beforehand stays stopped. The other units
-restart as usual.
+On a client or combined install the upgrade ends by asking
+`desk_display_client.service was running before the upgrade. Start it now? [Y/n]`
+(or `was not running ... [y/N]`). Yes starts it fresh; no leaves it stopped,
+stopping it if it was running. Pressing Enter keeps the state it was in before
+the upgrade, and so does an upgrade with no terminal attached (the Clients
+page's **Upgrade** button, cron). The other units restart as usual.
 
 An upgrade never changes the data the mode keeps (see "What each mode keeps"),
 and a server or combined install first snapshots its state.

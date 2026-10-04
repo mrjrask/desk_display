@@ -1135,7 +1135,8 @@ running, or `--mode` to override the detected mode.
 
 `./scripts/upgrade.sh` upgrades an install in any mode: it pulls, updates
 dependencies for the installed mode, rewrites or patches its units, and
-restarts them (the display client only if it was running before the upgrade),
+restarts them (on a client or combined install it asks whether to start the
+display client),
 keeping every documented data path (see
 [OPERATIONS.md](OPERATIONS.md#what-each-mode-keeps)).
 
