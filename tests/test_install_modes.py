@@ -452,8 +452,7 @@ def test_upgrade_preserves_the_documented_data(tmp_path, mode):
         assert client["User"] == ["kiosk"] and "DISPLAY_ROTATION=90" in client["Environment"]
 
 
-@pytest.mark.parametrize("client_active", [True, False])
-def test_upgrade_restarts_the_client_only_if_it_was_running(tmp_path, client_active):
+def run_upgrade_with_client(tmp_path, client_active, answer=None):
     project, log, bin_dir = fake_project(tmp_path, "combined")
     state = 0 if client_active else 3
     (bin_dir / "systemctl").write_text(
@@ -463,16 +462,48 @@ def test_upgrade_restarts_the_client_only_if_it_was_running(tmp_path, client_act
     systemd = tmp_path / "systemd"
     systemd.mkdir()
     env = {**os.environ, "PATH": f"{bin_dir}:{os.environ['PATH']}", "SUDO": "", "PYTHON": sys.executable,
-           "SYSTEMD_UNIT_DIR": str(systemd), "PROJECT_DIR": str(project), "HOME": str(tmp_path / "home")}
+           "SYSTEMD_UNIT_DIR": str(systemd), "PROJECT_DIR": str(project), "HOME": str(tmp_path / "home"),
+           "DESK_DISPLAY_UPGRADE_INTERACTIVE": "0" if answer is None else "1"}
     result = subprocess.run(["bash", str(project / "scripts/upgrade.sh"), "--no-pull"], env=env,
-                            capture_output=True, text=True)
+                            input=answer, capture_output=True, text=True)
     assert result.returncode == 0, result.stdout + result.stderr
-    calls = log.read_text().splitlines()
+    return result, log.read_text().splitlines()
+
+
+def client_restarts(calls):
+    return [line for line in calls if line.startswith(f"scripts/restart_services.sh {su.CLIENT_SERVICE}")]
+
+
+@pytest.mark.parametrize("client_active", [True, False])
+def test_upgrade_without_a_terminal_keeps_the_clients_previous_state(tmp_path, client_active):
+    result, calls = run_upgrade_with_client(tmp_path, client_active)
     # The client's state is read before anything else touches the install.
     assert calls[0] == f"systemctl is-active --quiet {su.CLIENT_SERVICE}"
-    restart = next(line for line in calls if line.startswith("scripts/restart_services.sh"))
-    assert (f"--skip {su.CLIENT_SERVICE}" in restart) == (not client_active)
-    assert ("leaving it stopped" in result.stdout) == (not client_active)
+    everything = next(line for line in calls if line.startswith("scripts/restart_services.sh --skip"))
+    assert f"--skip {su.CLIENT_SERVICE}" in everything
+    assert "Start it now?" not in result.stdout  # the Clients page Upgrade button has no terminal
+    assert bool(client_restarts(calls)) == client_active
+    assert f"systemctl stop {su.CLIENT_SERVICE}" not in calls
+
+
+@pytest.mark.parametrize("client_active", [True, False])
+@pytest.mark.parametrize(("answer", "yes"), [("y\n", True), ("YES\n", True), ("n\n", False), ("no\n", False)])
+def test_upgrade_asks_whether_to_start_the_client_whatever_its_state(tmp_path, client_active, answer, yes):
+    result, calls = run_upgrade_with_client(tmp_path, client_active, answer)
+    expected = "running" if client_active else "not running"
+    assert f"{su.CLIENT_SERVICE} was {expected} before the upgrade. Start it now?" in result.stdout
+    assert bool(client_restarts(calls)) == yes
+    assert (f"systemctl stop {su.CLIENT_SERVICE}" in calls) == (client_active and not yes)
+    if yes:  # asked and started after every other service is back
+        everything = next(i for i, line in enumerate(calls) if line.startswith("scripts/restart_services.sh --skip"))
+        assert calls.index(client_restarts(calls)[0]) > everything
+
+
+@pytest.mark.parametrize(("client_active", "choices"), [(True, "[Y/n]"), (False, "[y/N]")])
+def test_upgrade_client_question_defaults_to_the_previous_state(tmp_path, client_active, choices):
+    result, calls = run_upgrade_with_client(tmp_path, client_active, "\n")
+    assert choices in result.stdout
+    assert bool(client_restarts(calls)) == client_active
 
 
 def test_combined_with_shared_enrollment_uses_the_shared_token(tmp_path):
