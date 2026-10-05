@@ -9,6 +9,11 @@ clients, or both on one machine, alongside the unchanged standalone install.
 See the README's [deployment modes](README.md#deployment-modes) and
 [OPERATIONS.md](OPERATIONS.md) for installing, upgrading and rolling back.
 
+- Upgrades keep a display client you switched off off:
+  `update_services.sh` (run by `upgrade.sh` and the Clients page's Upgrade)
+  no longer re-enables a disabled `desk_display_client.service` (or any other
+  disabled mode unit) on a recorded install, never restarts it, and leaves a
+  masked one alone. Use `sudo systemctl disable --now desk_display_client.service`.
 - Display clients use less CPU: a quad whose tiles do not change is drawn
   once instead of 10 times a second, each panel frame is copied once instead
   of up to three times, and a screenshot is encoded once (fast PNG) instead

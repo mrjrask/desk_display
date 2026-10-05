@@ -125,7 +125,7 @@ def test_update_services_rewrites_a_recorded_client_install(tmp_path):
     systemd = tmp_path / "systemd"
     systemd.mkdir()
     (systemd / su.CLIENT_SERVICE).write_text(OLD_CLIENT_UNIT)
-    systemctl, log = fake_systemctl(tmp_path)
+    systemctl, log = fake_systemctl(tmp_path, enabled=(su.CLIENT_SERVICE,))
 
     run_update_services(project, systemd, systemctl, "--no-restart")
 
@@ -137,8 +137,59 @@ def test_update_services_rewrites_a_recorded_client_install(tmp_path):
     ui = su.parse_unit((systemd / su.CONFIG_UI_SERVICE).read_text())["Service"]
     assert ui["User"] == ["pi"] and ui["EnvironmentFile"] == [f"-{project}/.env.client"]
     calls = log.read_text()
-    assert f"enable {su.CLIENT_SERVICE}" in calls and f"enable {su.CONFIG_UI_SERVICE}" in calls
+    assert f"enable {su.CONFIG_UI_SERVICE}" in calls and f"enable {su.CLIENT_SERVICE}" not in calls
     assert "restart" not in calls
+
+
+def test_update_services_keeps_a_switched_off_client_off(tmp_path):
+    """A client disabled by hand (its panel now runs MagicMirror) is not re-enabled or started."""
+    project = project_copy(tmp_path)
+    im.write_marker(project, "client", output="kernel", user="pi")
+    systemd = tmp_path / "systemd"
+    systemd.mkdir()
+    (systemd / su.CLIENT_SERVICE).write_text(OLD_CLIENT_UNIT)
+    systemctl, log = fake_systemctl(tmp_path)
+
+    result = run_update_services(project, systemd, systemctl)
+
+    calls = log.read_text()
+    # The unit is still brought up to date; the newly added config UI is enabled.
+    assert any("prepare_kernel_session_env.sh" in line
+               for line in su.parse_unit((systemd / su.CLIENT_SERVICE).read_text())["Service"]["ExecStartPre"])
+    assert f"enable {su.CONFIG_UI_SERVICE}" in calls
+    assert f"enable {su.CLIENT_SERVICE}" not in calls
+    assert f"restart {su.CLIENT_SERVICE}" not in calls
+    assert f"Leaving {su.CLIENT_SERVICE} disabled" in result.stdout
+
+
+def test_update_services_leaves_a_masked_client_alone(tmp_path):
+    project = project_copy(tmp_path)
+    im.write_marker(project, "client", output="kernel", user="pi")
+    systemd = tmp_path / "systemd"
+    systemd.mkdir()
+    (systemd / su.CLIENT_SERVICE).symlink_to("/dev/null")
+    systemctl, log = fake_systemctl(tmp_path)
+
+    result = run_update_services(project, systemd, systemctl)
+
+    assert (systemd / su.CLIENT_SERVICE).is_symlink()
+    assert os.readlink(systemd / su.CLIENT_SERVICE) == "/dev/null"
+    calls = log.read_text()
+    assert su.CLIENT_SERVICE not in calls
+    assert f"{su.CLIENT_SERVICE}" in result.stdout and "masked" in result.stdout
+
+
+def test_update_services_enables_a_disabled_unit_when_the_mode_changes(tmp_path):
+    """Without a matching record (an older install), mode units are enabled as before."""
+    project = project_copy(tmp_path)
+    systemd = tmp_path / "systemd"
+    systemd.mkdir()
+    (systemd / su.CLIENT_SERVICE).write_text(OLD_CLIENT_UNIT)
+    systemctl, log = fake_systemctl(tmp_path)
+
+    run_update_services(project, systemd, systemctl, "--no-restart")
+
+    assert f"enable {su.CLIENT_SERVICE}" in log.read_text()
 
 
 STANDALONE_UNIT = """[Unit]
