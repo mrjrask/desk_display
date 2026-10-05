@@ -32,6 +32,13 @@
 # screenshot uploader, ADS-B collector, OLED helper, AirPlay), reloads
 # systemd, restarts only the units it changed, and prints the state of every
 # project unit installed here. Nothing else in a unit is touched.
+#
+# A mode unit the operator switched off stays off: on a recorded install, a
+# unit that was already installed but is disabled is rewritten but neither
+# enabled nor restarted, and a masked unit is left alone entirely. (For
+# example a client device whose panel now runs MagicMirror:
+# sudo systemctl disable --now desk_display_client.service.) Units installed
+# by this run, and every unit when the mode changes, are still enabled.
 set -euo pipefail
 
 SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
@@ -66,7 +73,7 @@ while [[ $# -gt 0 ]]; do
     --mode=*) mode="${1#*=}"; shift ;;
     --dry-run) dry_run=1; shift ;;
     --no-restart) restart=0; shift ;;
-    -h|--help) sed -n '2,34p' "$0"; exit 0 ;;
+    -h|--help) sed -n '2,42p' "$0"; exit 0 ;;
     *) warn "Unknown option: $1"; exit 2 ;;
   esac
 done
@@ -143,6 +150,9 @@ contains() {
 
 installed() { [[ -f "$SYSTEMD_UNIT_DIR/$1" ]]; }
 
+# `systemctl mask` replaces the unit with a link to /dev/null.
+masked() { [[ -L "$SYSTEMD_UNIT_DIR/$1" && "$(readlink "$SYSTEMD_UNIT_DIR/$1")" == /dev/null ]]; }
+
 unit_state() { $SYSTEMCTL "$1" "$2" 2>/dev/null | head -n1 || true; }
 
 escape_sed_replacement() {
@@ -200,6 +210,8 @@ patch_standalone_unit() {
 }
 
 UPDATED_UNITS=()
+NEW_UNITS=()
+LEFT_OFF=()
 
 # Install *text* as unit *name* when it differs from what is installed.
 install_unit_text() {
@@ -247,6 +259,13 @@ case "$mode" in
   standalone|server|client|combined) ;;
   *) warn "Unknown mode: $mode (expected standalone, server, client or combined)"; exit 2 ;;
 esac
+
+# The mode the installer recorded before this run, if any. Only on that same
+# recorded install does a disabled mode unit mean the operator switched it off.
+recorded_mode=""
+if [[ -f "$PROJECT_DIR/.runtime/install_mode" ]]; then
+  recorded_mode=$(modes detect)
+fi
 
 mapfile -t MODE_UNITS < <(modes services --mode "$mode")
 mapfile -t OTHER_MODE_UNITS < <(modes disable --mode "$mode")
@@ -309,10 +328,15 @@ else
   fi
   modes units --mode "$mode" --dir "$unit_dir" --python "$VENV_PYTHON" "${units_args[@]}" >/dev/null
   for name in "${MODE_UNITS[@]}"; do
+    if masked "$name"; then
+      log "Leaving $name masked (switched off on this device)."
+      continue
+    fi
     if installed "$name"; then
       reason="Rewriting from service_units.py"
     else
       reason="Installing missing"
+      NEW_UNITS+=("$name")
     fi
     install_unit_text "$name" "$(cat "$unit_dir/$name")" "$reason"
   done
@@ -347,16 +371,28 @@ fi
 
 for name in "${MODE_UNITS[@]}"; do
   installed "$name" || contains "$name" "${UPDATED_UNITS[@]+"${UPDATED_UNITS[@]}"}" || continue
-  if [[ "$(unit_state is-enabled "$name")" != "enabled" ]]; then
-    log "Enabling $name"
-    act ${SUDO:+"$SUDO"} "$SYSTEMCTL" enable "$name"
+  if [[ "$(unit_state is-enabled "$name")" == "enabled" ]]; then
+    continue
   fi
+  if [[ -n "$recorded_mode" && "$recorded_mode" == "$mode" ]] \
+      && ! contains "$name" "${NEW_UNITS[@]+"${NEW_UNITS[@]}"}"; then
+    log "Leaving $name disabled (switched off on this device). Turn it back on with: sudo systemctl enable --now $name"
+    LEFT_OFF+=("$name")
+    continue
+  fi
+  log "Enabling $name"
+  act ${SUDO:+"$SUDO"} "$SYSTEMCTL" enable "$name"
 done
 
 if [[ $restart -eq 1 && ${#UPDATED_UNITS[@]} -gt 0 ]]; then
   for name in "${PROJECT_UNITS[@]}"; do
     contains "$name" "${UPDATED_UNITS[@]}" || continue
     contains "$name" "${OTHER_MODE_UNITS[@]+"${OTHER_MODE_UNITS[@]}"}" && continue
+    # Restarting a stopped unit would start it.
+    if contains "$name" "${LEFT_OFF[@]+"${LEFT_OFF[@]}"}" && [[ "$(unit_state is-active "$name")" != "active" ]]; then
+      log "Not restarting $name (switched off on this device)."
+      continue
+    fi
     log "Restarting $name"
     act ${SUDO:+"$SUDO"} "$SYSTEMCTL" restart "$name" || warn "Restart failed for $name; see: journalctl -u $name -n 80"
   done
@@ -366,6 +402,10 @@ fi
 
 log "Project units on this device:"
 for name in "${PROJECT_UNITS[@]}"; do
+  if masked "$name"; then
+    printf '  %-42s %s\n' "$name" "masked (switched off on this device)"
+    continue
+  fi
   if ! installed "$name"; then
     if contains "$name" "${MODE_UNITS[@]}"; then
       printf '  %-42s %s\n' "$name" "not installed (part of the $mode install)"

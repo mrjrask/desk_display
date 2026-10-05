@@ -375,6 +375,20 @@ Export it in your shell as `ADMIN` for the `curl` examples.
 Restarting the server never stops a client: clients keep playing from their
 cache and reconnect on their own.
 
+To keep a client's panel off for good (for example a Pi whose screen now runs
+MagicMirror with the MMM-desk_display module), disable and stop it in one
+step. A plain `disable` leaves it running, and `Restart=always` brings the
+process back if it is killed:
+
+```bash
+sudo systemctl disable --now desk_display_client.service
+```
+
+Upgrades (`upgrade.sh`, the Clients page's **Upgrade** button,
+`update_services.sh`) keep a disabled client disabled and stopped; they only
+re-enable it when the install's mode changes. To turn it back on:
+`sudo systemctl enable --now desk_display_client.service`.
+
 ### Provisioning, rotation and revocation
 
 The easiest way is the configuration UI's `/clients` page. **Add a display**
@@ -1094,7 +1108,8 @@ and a server or combined install first snapshots its state.
 `--dry-run` to preview). On a server, client or combined install it rewrites the
 mode's units from `service_units.py` with the user, display output and
 `Environment=` overrides recorded at install, adds missing ones, and disables
-units that belong to another mode. On a standalone install it rewrites script
+units that belong to another mode. A mode unit you disabled stays disabled
+(and is not restarted), and a masked one is left alone. On a standalone install it rewrites script
 paths that moved in the repository and applies the current shutdown settings,
 but leaves the display profile and every `Environment=` override alone. It ends
 by listing every project unit with whether it is enabled and running.
