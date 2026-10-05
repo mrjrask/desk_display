@@ -73,6 +73,7 @@
     }
   </style>
   {% include "_feed_ticker.html" %}
+  {% include "_feed_width.html" %}
 </head>
 <body>
   <section class="status-banner{% if display_status.is_stale %} is-stale{% endif %}" id="displayStatusBanner">
@@ -275,6 +276,7 @@
     }
 
     setTimeout(refreshFeed, 5000);
+    FeedWidth.watch(feed);
 
     function toPngBlob(blob) {
       if (blob.type === "image/png") {

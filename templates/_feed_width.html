@@ -1,0 +1,56 @@
+<style>
+  /* The page column is as wide as the screenshots (their native pixel
+     width, set by FeedWidth below) and centered, so the feed never
+     stretches images past their real size. A narrower window still
+     shrinks everything to fit. */
+  body {
+    box-sizing: border-box;
+    width: var(--feed-width, auto);
+    max-width: 100%;
+    margin: 0 auto;
+  }
+</style>
+<script>
+  // Shared by feed.html and feed_source.html: sizes the page to the
+  // widest screenshot, and asks the browser to resize the window to
+  // match. Browsers only honour resizeBy() for windows a script opened,
+  // so in a normal tab only the centered column changes.
+  window.FeedWidth = (function () {
+    let appliedWidth = 0;
+
+    function imageWidth(feed) {
+      let width = 0;
+      feed.querySelectorAll('img[data-kind="image"]').forEach((img) => {
+        if (img.complete && img.naturalWidth > width) {
+          width = img.naturalWidth;
+        }
+      });
+      return width;
+    }
+
+    function fit(feed) {
+      const width = imageWidth(feed);
+      if (!width || width === appliedWidth) {
+        return;
+      }
+      appliedWidth = width;
+      document.documentElement.style.setProperty("--feed-width", `${width}px`);
+      const delta = width - document.documentElement.clientWidth;
+      if (delta !== 0) {
+        try {
+          window.resizeBy(delta, 0);
+        } catch (e) {
+          // Not a script-opened window; the centered column is enough.
+        }
+      }
+    }
+
+    function watch(feed) {
+      // Image load events don't bubble, so listen in the capture phase.
+      feed.addEventListener("load", () => fit(feed), true);
+      fit(feed);
+    }
+
+    return { fit, watch };
+  })();
+</script>
