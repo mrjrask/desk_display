@@ -920,7 +920,7 @@ normal loading instead of silently dropping renamed screens.
 - `mlb logo`
 - `MLB Scoreboard`
 - `MLB Scoreboard v2`
-- `MLB Playoffs` (bracket like mlb.com/postseason, with the current round's series scores under it; a projected bracket from the standings before the postseason starts)
+- `MLB Playoffs` (bracket like mlb.com/postseason, with the current round's series scores under it; a projected bracket from the standings before the postseason starts. On the Display HAT Mini the bracket is omitted — its seven columns are too small to read on the 320×240 panel — leaving the header and the series list)
 - `NL Overview`
 - `AL Overview`
 - `NL Overview+WC`

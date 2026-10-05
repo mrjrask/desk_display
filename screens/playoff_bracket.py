@@ -529,12 +529,17 @@ def _header(spec: PlayoffScreen, width: int) -> Image.Image:
     return header
 
 
-def compose_screen(spec: PlayoffScreen, bracket: Optional[dict], series_list: Optional[Image.Image]) -> Image.Image:
-    """Stack the header, bracket (when the display is wide enough) and series list."""
+def compose_screen(spec: PlayoffScreen, bracket: Optional[dict], series_list: Optional[Image.Image],
+                   *, include_bracket: bool = True) -> Image.Image:
+    """Stack the header, bracket (when the display is wide enough) and series list.
+
+    *include_bracket* lets a screen drop the bracket on a display where it
+    would not read, whatever the width; the series list still shows.
+    """
 
     parts: list[Image.Image] = [_header(spec, WIDTH)]
     if bracket is not None:
-        if WIDTH >= MIN_BRACKET_WIDTH:
+        if include_bracket and WIDTH >= MIN_BRACKET_WIDTH:
             layout = BracketLayout(WIDTH, HEIGHT, bracket.get("mode", "pairs"))
             bracket_img = Image.new("RGB", (WIDTH, layout.height), BACKGROUND_COLOR)
             draw_bracket(bracket_img, 0, bracket, spec)
