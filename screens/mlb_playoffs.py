@@ -7,6 +7,10 @@ running Wild Card → Division Series → LCS toward the centre.  Under it, each
 series of the round being played shows both teams, the series score and the
 next game (or who won).  The drawing is shared with the NHL and NBA playoff
 screens (:mod:`screens.playoff_bracket`).
+
+On the Display HAT Mini the bracket is omitted: its seven columns would be
+too small to read on the 320x240 panel, so that screen shows the header and
+the series list only.
 """
 
 from __future__ import annotations
@@ -17,6 +21,7 @@ from typing import Any, Optional
 
 from PIL import Image
 
+import config
 from config import CENTRAL_TIME, WIDTH
 from screens import playoff_bracket
 from screens.playoff_bracket import PlayoffScreen
@@ -38,6 +43,16 @@ def series_status(slot: dict, data: dict, now: Optional[datetime.datetime] = Non
     """The line under a series: who won, a live game, or the next game."""
 
     return playoff_bracket.series_status(slot, (data or {}).get("names") or {}, now)
+
+
+def _include_bracket() -> bool:
+    """Whether this display's screen shows the bracket.
+
+    The Display HAT Mini is a 320x240 panel; a seven-column bracket drawn on
+    it is too small to read, so its screen keeps the header and series list.
+    """
+
+    return not config.is_display_profile(config.DISPLAY_PROFILE_DISPLAY_HAT_MINI)
 
 
 def _bracket(data: dict) -> dict:
@@ -94,7 +109,10 @@ def compose_playoffs_image(data: Any, *, now: Optional[datetime.datetime] = None
     if not (data.get("series") or data.get("seeds")):
         return playoff_bracket.compose_screen(SPEC, None, None)
     bracket = _bracket(data)
-    return playoff_bracket.compose_screen(SPEC, bracket, _compose_series_list(WIDTH, data, bracket, now))
+    return playoff_bracket.compose_screen(
+        SPEC, bracket, _compose_series_list(WIDTH, data, bracket, now),
+        include_bracket=_include_bracket(),
+    )
 
 
 def render_mlb_playoffs(display, data: Any = None, transition: bool = False) -> ScreenImage:

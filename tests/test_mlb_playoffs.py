@@ -212,6 +212,47 @@ def test_screen_image_fills_the_display_width(data):
     assert image.width == WIDTH and image.height >= HEIGHT
 
 
+def test_screen_leaves_out_the_bracket_on_the_display_hat_mini(monkeypatch):
+    # Patch through the screen's own config reference: some earlier test
+    # re-imports config fresh, and the screen module still holds the original.
+    config_module = mlb_playoffs.config
+
+    # The deterministic test environment is a 320x240 Display HAT Mini, where
+    # a seven-column bracket is too small to read.
+    assert config_module.get_display_profile_id() == "display_hat_mini"
+    calls = []
+    monkeypatch.setattr(playoff_bracket, "draw_bracket", lambda *args, **kwargs: calls.append(1))
+    data = postseason([game("F", "KC", "BAL", 1, "final", 1, 0),
+                       game("W", "NYY", "LAD", 1, "live")])
+    image = mlb_playoffs.compose_playoffs_image(data, now=NOW)
+    assert calls == []
+    assert image.width == WIDTH and image.height >= HEIGHT
+
+
+def test_screen_draws_the_bracket_on_every_other_display(monkeypatch):
+    # As above: patch the config module the screen actually calls.
+    config_module = mlb_playoffs.config
+    from display_profiles import (
+        DISPLAY_PROFILE_DISPLAY_HAT_MINI,
+        DISPLAY_PROFILE_HYPERPIXEL4,
+        PROFILE_PRESETS,
+    )
+
+    monkeypatch.setattr(playoff_bracket, "draw_bracket", lambda *args, **kwargs: None)
+    data = postseason([game("F", "KC", "BAL", 1, "final", 1, 0),
+                       game("W", "NYY", "LAD", 1, "live")])
+    monkeypatch.setattr(
+        config_module, "ACTIVE_DISPLAY_PROFILE", PROFILE_PRESETS[DISPLAY_PROFILE_HYPERPIXEL4],
+    )
+    with_bracket = mlb_playoffs.compose_playoffs_image(data, now=NOW)
+    monkeypatch.setattr(config_module, "ACTIVE_DISPLAY_PROFILE",
+                        PROFILE_PRESETS[DISPLAY_PROFILE_DISPLAY_HAT_MINI])
+    without_bracket = mlb_playoffs.compose_playoffs_image(data, now=NOW)
+    # The bracket block is the only thing that differs between the two.
+    assert with_bracket.width == without_bracket.width == WIDTH
+    assert without_bracket.height < with_bracket.height
+
+
 class _Display:
     def __init__(self):
         self.images = []

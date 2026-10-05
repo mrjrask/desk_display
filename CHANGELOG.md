@@ -114,6 +114,10 @@ See the README's [deployment modes](README.md#deployment-modes) and
   server fetches it as the `mlb_postseason` feed (every 10 minutes, every
   30 seconds during a live game). Off (frequency 0) in the default configs, in
   the mlb playlist after MLB Scoreboard.
+- On a **Display HAT Mini**, the **MLB Playoffs** screen leaves out the
+  bracket: its seven columns are too small to read on the 320×240 panel. The
+  screen keeps the header and the series list, which stays readable at that
+  size; every other display still shows the bracket.
 - New **traffic** screen: Edens and Kennedy travel times and speeds from
   Travel Midwest's Chicago Quick Traffic report (no key). Every display shows
   the four inbound segments except hyper, which shows the four outbound ones
