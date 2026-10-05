@@ -174,6 +174,8 @@ def test_feed_page_renders_only_screens_with_screenshots(monkeypatch):
     assert 'role="button"' in html
     assert 'tabindex="0"' in html
     assert "Display heartbeat" in html
+    assert "width: var(--feed-width, auto);" in html
+    assert "FeedWidth.watch(feed);" in html
 
 
 def test_feed_page_greyscales_screenshots_when_heartbeat_is_stale(monkeypatch):

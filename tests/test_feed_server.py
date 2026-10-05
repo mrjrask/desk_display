@@ -4,6 +4,7 @@ import os
 import threading
 import time
 
+import pytest
 from PIL import Image
 
 
@@ -271,3 +272,63 @@ def test_screenshots_dedup_to_one_entry_per_screen_id(monkeypatch, tmp_path):
     entries = feed_server._build_source_screen_entries("hyper")
     assert len(entries) == 1
     assert entries[0]["filename"] == "date.png"
+
+
+def test_feed_source_page_sizes_column_to_screenshot_width(monkeypatch, tmp_path):
+    feed_server = _reload_feed_server(monkeypatch, tmp_path)
+    current_dir = tmp_path / "hyper" / "current"
+    current_dir.mkdir(parents=True)
+    (current_dir / "date.png").write_bytes(_png_bytes())
+
+    html = feed_server.app.test_client().get("/feed/hyper").get_data(as_text=True)
+
+    assert "width: var(--feed-width, auto);" in html
+    assert "FeedWidth.watch(feed);" in html
+    assert "window.resizeBy(delta, 0);" in html
+
+
+@pytest.fixture
+def chromium():
+    sync_api = pytest.importorskip("playwright.sync_api")
+    with sync_api.sync_playwright() as playwright:
+        kwargs = {}
+        executable = os.environ.get("PLAYWRIGHT_CHROMIUM_EXECUTABLE")
+        bundled = os.path.join(os.environ.get("PLAYWRIGHT_BROWSERS_PATH", ""), "chromium")
+        if not executable and os.environ.get("PLAYWRIGHT_BROWSERS_PATH") and os.path.isfile(bundled):
+            executable = bundled
+        if executable:
+            kwargs["executable_path"] = executable
+        try:
+            instance = playwright.chromium.launch(**kwargs)
+        except Exception as exc:  # pragma: no cover - environment dependent
+            pytest.skip(f"Chromium is not available: {exc}")
+        yield instance
+        instance.close()
+
+
+def test_browser_feed_column_matches_screenshot_width(monkeypatch, tmp_path, chromium):
+    from werkzeug.serving import make_server
+
+    feed_server = _reload_feed_server(monkeypatch, tmp_path)
+    current_dir = tmp_path / "hyper" / "current"
+    current_dir.mkdir(parents=True)
+    Image.new("RGB", (320, 240), (0, 0, 255)).save(current_dir / "date.png")
+
+    server = make_server("127.0.0.1", 0, feed_server.app, threaded=True)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        page = chromium.new_page(viewport={"width": 1200, "height": 800})
+        page.goto(f"http://127.0.0.1:{server.server_port}/feed/hyper")
+        page.wait_for_function("document.querySelector('#feed img').complete")
+        page.wait_for_function("document.body.getBoundingClientRect().width === 320")
+        box = page.locator("#feed img").bounding_box()
+        assert box["width"] == 320
+        # Centered in the wider window.
+        assert box["x"] == (1200 - 320) / 2
+
+        # A narrower window still shrinks the screenshot to fit.
+        page.set_viewport_size({"width": 200, "height": 800})
+        assert page.locator("#feed img").bounding_box()["width"] == 200
+    finally:
+        server.shutdown()
