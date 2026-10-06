@@ -118,6 +118,16 @@ module.exports = NodeHelper.create({
       image.url = `${base}/images/${image.sha256}.png`;
       if (image.scroll) image.scroll.url = `${base}/images/${image.scroll.sha256}.png`;
       if (image.slide) image.slide.url = `${base}/images/${image.slide.sha256}.png`;
+      const url = (sha) => `${base}/images/${sha}.png`;
+      if (image.frames) image.frames.urls = image.frames.sha256s.map(url);
+      if (image.ticker) {
+        image.ticker.baseUrl = url(image.ticker.base);
+        for (const lane of image.ticker.lanes) lane.url = url(lane.strip);
+      }
+      if (image.composite) {
+        image.composite.baseUrl = url(image.composite.base);
+        for (const tile of image.composite.tiles) tile.urls = tile.frames.map(url);
+      }
       if (playback.liveClocks.includes(screenId)) image.liveUrl = `${base}/clock/${encodeURIComponent(screenId)}.png`;
     }
     const key = JSON.stringify(playback);

@@ -99,13 +99,11 @@ Module.register("MMM-desk_display", {
       return;
     }
     this.show(screenId);
-    // As on a desk_display client, a scroll or logo slide holds after its motion.
-    const image = this.images[screenId];
+    // As on a desk_display client, a finite motion holds after it ends and a
+    // ticker or quad runs for its own window or the hold, whichever is longer.
     const [width, height] = this.profileSize || [0, 0];
-    let motion = 0;
-    if (image.scroll) motion = DeskDisplayMotion.scrollSeconds(image.scroll, height);
-    else if (image.slide) motion = DeskDisplayMotion.slideSeconds(image.slide, width);
-    const seconds = Math.max(1, Number(this.config.screenSeconds) + this.scheduler.extraSecondsFor(screenId) + motion);
+    const hold = Number(this.config.screenSeconds) + this.scheduler.extraSecondsFor(screenId);
+    const seconds = Math.max(1, DeskDisplayMotion.showSeconds(this.images[screenId], width, height, hold));
     this.timer = setTimeout(() => this.advance(), seconds * 1000);
   },
 
@@ -185,6 +183,104 @@ Module.register("MMM-desk_display", {
     img.onload = () => { if (showing === this.showing) ready(img); };
     img.onerror = () => { if (showing === this.showing) this.place(this.images[screenId].url, screenId); };
     img.src = src;
+  },
+
+  /* Load every one of *urls* as an image, then call *ready(imgs)* in the
+   * same order; if any fails, show the still. */
+  withImages (urls, screenId, showing, ready) {
+    const loaded = new Map();
+    let failed = false;
+    const unique = [...new Set(urls)];
+    unique.forEach((src) => {
+      const img = new Image();
+      img.onload = () => {
+        loaded.set(src, img);
+        if (!failed && loaded.size === unique.length && showing === this.showing) ready(urls.map((u) => loaded.get(u)));
+      };
+      img.onerror = () => {
+        if (failed) return;
+        failed = true;
+        if (showing === this.showing) this.place(this.images[screenId].url, screenId);
+      };
+      img.src = src;
+    });
+  },
+
+  /* A frame animation (radar, standings overviews): it loops, then holds its last frame. */
+  playFrames (screenId, frames, showing) {
+    const [width, height] = this.profileSize;
+    this.withImages(frames.urls, screenId, showing, (imgs) => {
+      const canvas = this.canvas();
+      const ctx = canvas.getContext("2d");
+      const last = frames.durationsMs.length - 1;
+      let shown = null;
+      this.animate(showing, (t) => {
+        const index = DeskDisplayMotion.frameIndex(frames, t);
+        if (index !== shown) ctx.drawImage(imgs[index], 0, 0, width, height);
+        shown = index;
+        return t >= DeskDisplayMotion.framesSeconds(frames) && index === last;
+      });
+      this.present(canvas, showing);
+    });
+  },
+
+  /* A news ticker: the still base, with each lane's strip looping across it. */
+  playTicker (screenId, ticker, showing) {
+    const [width, height] = this.profileSize;
+    const urls = [ticker.baseUrl, ...ticker.lanes.map((lane) => lane.url)];
+    this.withImages(urls, screenId, showing, ([base, ...strips]) => {
+      const canvas = this.canvas();
+      const ctx = canvas.getContext("2d");
+      ctx.drawImage(base, 0, 0, width, height);
+      const shown = ticker.lanes.map(() => null);
+      this.animate(showing, (t) => {
+        ticker.lanes.forEach((lane, i) => {
+          const offset = DeskDisplayMotion.tickerOffset(lane, t);
+          if (offset === shown[i]) return;
+          shown[i] = offset;
+          const [left, top, right, bottom] = lane.bounds;
+          ctx.save();
+          ctx.beginPath();
+          ctx.rect(left, top, right - left, bottom - top);
+          ctx.clip();
+          ctx.fillStyle = "#000";
+          ctx.fillRect(left, top, right - left, bottom - top);
+          for (let x = -offset; x < right - left; x += lane.stripWidth) ctx.drawImage(strips[i], left + x, top);
+          ctx.restore();
+        });
+        return false; // runs until the next screen
+      });
+      this.present(canvas, showing);
+    });
+  },
+
+  /* A quad: the still base, with each tile stepping through its own frames. */
+  playComposite (screenId, composite, showing) {
+    const [width, height] = this.profileSize;
+    const urls = [composite.baseUrl, ...composite.tiles.flatMap((tile) => tile.urls)];
+    this.withImages(urls, screenId, showing, ([base, ...tileImgs]) => {
+      const canvas = this.canvas();
+      const ctx = canvas.getContext("2d");
+      ctx.drawImage(base, 0, 0, width, height);
+      let at = 0;
+      const frames = composite.tiles.map((tile) => {
+        const imgs = tileImgs.slice(at, at + tile.urls.length);
+        at += tile.urls.length;
+        return imgs;
+      });
+      const shown = composite.tiles.map(() => null);
+      const still = composite.tiles.every((tile) => tile.urls.length === 1);
+      this.animate(showing, (t) => {
+        DeskDisplayMotion.compositeFrames(composite, t).forEach((index, i) => {
+          if (index === shown[i]) return;
+          shown[i] = index;
+          const [left, top] = composite.tiles[i].bounds;
+          ctx.drawImage(frames[i][index], left, top);
+        });
+        return still; // a quad of still tiles never redraws
+      });
+      this.present(canvas, showing);
+    });
   },
 
   /* A tall screen: hold, step down its full-height canvas, hold. */
@@ -316,6 +412,12 @@ Module.register("MMM-desk_display", {
       this.playScroll(screenId, image.scroll, this.showing);
     } else if (image.slide) {
       this.playSlide(screenId, image.slide, this.showing);
+    } else if (image.frames) {
+      this.playFrames(screenId, image.frames, this.showing);
+    } else if (image.ticker) {
+      this.playTicker(screenId, image.ticker, this.showing);
+    } else if (image.composite) {
+      this.playComposite(screenId, image.composite, this.showing);
     } else if (image.liveUrl && screenId === "date" && this.profileSize) {
       const showing = this.showing;
       this.playDate(screenId, image, showing);

@@ -43,9 +43,14 @@ Motion plays as on a desk_display client:
   display's own **Synchronized vertical scroll adjustment** from the Clients
   page when one is set. The screen's time grows by the length of the scroll.
 - Logo screens slide the logo across the screen from a random side, then rest.
-- Other animations (frame animations, tickers, quads) show their still. The
-  module registers with `supports_animation: false`, so the Clients page
-  still lists those screens as stills.
+- Frame animations (weather radar, the league overviews) loop their frames,
+  then hold the last one.
+- News tickers loop each lane's strip over the still base, and quads step
+  each tile through its own frames. Both run for their own window or the
+  screen's time, whichever is longer. Tiles cannot be tapped open.
+- The module registers with `supports_animation: true`, so the Clients page
+  does not list moving screens as stills. A screen whose package fails to
+  download shows its still.
 
 A still would show the time it was rendered, so while a clock is on show the
 module asks the server for the face drawn now
