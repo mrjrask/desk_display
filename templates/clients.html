@@ -194,6 +194,16 @@ function commandLine(parent, command) {
   }
 }
 
+// The sync age is frozen at the display's last heartbeat; once the display has gone quiet
+// it would read as current, so say how long ago the server last heard from it instead.
+function syncSummary(client, synced) {
+  const heard = Date.parse(client.last_heartbeat || "");
+  if (["expired", "stale"].includes(client.state) && !Number.isNaN(heard)) {
+    return `last heard from ${age(Math.max(0, (Date.now() - heard) / 1000))} ago`;
+  }
+  return synced === null || synced === undefined ? "no sync yet" : `synced ${age(synced)} ago`;
+}
+
 async function clientCommand(client, action) {
   const questions = {
     update: `Update ${client.client_id}? It runs git pull in its desk_display folder on its next heartbeat. Restart it afterwards to run the new code.`,
@@ -511,7 +521,7 @@ function render(data) {
     const parts = [
       ["Showing ", client.current_screen || "—"],
       ["", client.playback_state || "unknown"],
-      ["", synced === null || synced === undefined ? "no sync yet" : `synced ${age(synced)} ago`],
+      ["", syncSummary(client, synced)],
       ["", `${client.display_profile || "unknown profile"} ${client.dimensions || ""}`.trim()],
     ];
     parts.forEach(([prefix, value], index) => {
