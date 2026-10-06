@@ -162,3 +162,77 @@ def test_draw_with_snapshot_standings_keeps_season_note_and_fallback(monkeypatch
         (f"{nfl_standings.TITLE_NFC} (2025 season)", None),
         (nfl_standings.TITLE_AFC, nfl_standings.FALLBACK_MESSAGE_OFFSEASON),
     ]
+
+
+CSV_IN_SEASON = textwrap.dedent(
+    """\
+    season,conf,division,team,wins,losses,ties,pct,div_rank,scored,allowed,net,sov,sos,seed,playoff
+    2026,NFC,NFC North,MIN,4,0,0,1.0,1,120,60,60,0.5,0.5,1,
+    2026,NFC,NFC North,CHI,3,1,0,0.75,2,100,80,20,0.5,0.5,5,
+    2026,NFC,NFC North,DET,2,2,0,0.5,3,90,90,0,0.5,0.5,,
+    2026,AFC,AFC West,KC,4,0,0,1.0,1,120,60,60,0.5,0.5,1,
+    2026,AFC,AFC West,LV,3,1,0,0.75,2,100,80,20,0.5,0.5,6,
+    """
+)
+
+
+def _indicators(standings, conference, division):
+    return {team["abbr"]: team["indicator"] for team in standings[conference][division]}
+
+
+def test_in_season_projected_seeds_are_not_clinch_indicators():
+    # nflverse fills ``seed`` with the "if the season ended today" seed
+    # during the season; that is not a clinched berth.
+    standings, used_season = _parse_csv_standings(CSV_IN_SEASON, 2026)
+
+    assert used_season == 2026
+    assert set(_indicators(standings, CONFERENCE_NFC_KEY, "NFC North").values()) == {""}
+    assert set(_indicators(standings, CONFERENCE_AFC_KEY, "AFC West").values()) == {""}
+
+
+CSV_FINAL_WEEK_PENDING = textwrap.dedent(
+    """\
+    season,conf,division,team,wins,losses,ties,pct,div_rank,scored,allowed,net,sov,sos,seed,playoff
+    2025,NFC,NFC North,CHI,11,6,0,0.647,1,441,415,26,0.4,0.5,2,
+    2025,NFC,NFC North,GB,10,6,0,0.625,2,400,380,20,0.4,0.5,6,
+    """
+)
+
+
+def test_indicators_wait_for_every_team_to_finish_regular_season():
+    standings, _ = _parse_csv_standings(CSV_FINAL_WEEK_PENDING, 2025)
+
+    assert set(_indicators(standings, CONFERENCE_NFC_KEY, "NFC North").values()) == {""}
+
+
+CSV_SEASON_COMPLETE = textwrap.dedent(
+    """\
+    season,conf,division,team,wins,losses,ties,pct,div_rank,scored,allowed,net,sov,sos,seed,playoff
+    2025,NFC,NFC North,CHI,11,6,0,0.647,1,441,415,26,0.4,0.5,2,
+    2025,NFC,NFC North,GB,10,7,0,0.588,2,400,380,20,0.4,0.5,6,
+    2025,NFC,NFC North,MIN,9,8,0,0.529,3,344,333,11,0.4,0.5,,
+    """
+)
+
+
+def test_indicators_shown_once_regular_season_is_complete():
+    standings, _ = _parse_csv_standings(CSV_SEASON_COMPLETE, 2025)
+
+    assert _indicators(standings, CONFERENCE_NFC_KEY, "NFC North") == {
+        "CHI": "Z",
+        "GB": "Y",
+        "MIN": "",
+    }
+
+
+def test_postseason_result_marks_team_even_before_all_rows_complete():
+    csv_text = textwrap.dedent(
+        """\
+        season,conf,division,team,wins,losses,ties,pct,div_rank,scored,allowed,net,sov,sos,seed,playoff
+        2025,NFC,NFC North,CHI,11,6,0,0.647,1,441,415,26,0.4,0.5,2,LostDV
+        2025,NFC,NFC North,GB,10,6,0,0.625,2,400,380,20,0.4,0.5,6,
+        """
+    )
+    standings, _ = _parse_csv_standings(csv_text, 2025)
+
+    assert _indicators(standings, CONFERENCE_NFC_KEY, "NFC North") == {"CHI": "Z", "GB": ""}

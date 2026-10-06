@@ -341,10 +341,37 @@ def _build_column_layout(team_names: Iterable[str] | None = None) -> dict[str, i
     return layout
 
 
-def _playoff_indicator(row: dict) -> str:
+def _regular_season_games(season: int) -> int:
+    """Games each team plays in *season*'s regular season (17 since 2021)."""
+
+    return 17 if season >= 2021 else 16
+
+
+def _regular_season_complete(rows: Iterable[dict], season: int) -> bool:
+    """True once every team in *rows* has played its full regular season."""
+
+    expected = _regular_season_games(season)
+    played = [
+        _normalize_int(row.get("wins"))
+        + _normalize_int(row.get("losses"))
+        + _normalize_int(row.get("ties"))
+        for row in rows
+    ]
+    return bool(played) and min(played) >= expected
+
+
+def _playoff_indicator(row: dict, *, season_complete: bool = False) -> str:
+    """Clinch prefix for *row*, or "" when no berth is known to be clinched.
+
+    The nflverse CSV has no clinch field: in season, ``seed`` is the seed a
+    team would get if the season ended today and ``playoff`` stays empty
+    until the postseason. So ``seed`` only means a berth once the regular
+    season is over (or ``playoff`` shows the team reached the postseason).
+    """
+
     seed = _normalize_int(row.get("seed"))
     playoff_text = str(row.get("playoff") or "").strip()
-    made_playoffs = bool(playoff_text) or seed > 0
+    made_playoffs = bool(playoff_text) or (season_complete and seed > 0)
     if not made_playoffs:
         return ""
 
@@ -477,7 +504,9 @@ def _target_season_year(today: Optional[datetime.date] = None) -> int:
     return today.year - 1
 
 
-def _build_standings_from_rows(rows: Iterable[dict], *, conference_key: str) -> dict[str, list[dict]]:
+def _build_standings_from_rows(
+    rows: Iterable[dict], *, conference_key: str, season_complete: bool = False
+) -> dict[str, list[dict]]:
     divisions: dict[str, list[dict]] = {}
     for row in rows:
         division = _normalize_division(row.get("division"), conference_key)
@@ -502,7 +531,7 @@ def _build_standings_from_rows(rows: Iterable[dict], *, conference_key: str) -> 
             "losses": losses,
             "ties": ties,
             "order": order if order > 0 else len(bucket) + 1,
-            "indicator": _playoff_indicator(row),
+            "indicator": _playoff_indicator(row, season_complete=season_complete),
         }
         bucket.append(entry)
 
@@ -536,6 +565,7 @@ def _parse_csv_standings(text: str, season: int) -> tuple[dict[str, dict[str, li
             continue
 
         used_season = candidate
+        season_complete = _regular_season_complete(filtered, candidate)
         grouped: dict[str, list[dict]] = {CONFERENCE_NFC_KEY: [], CONFERENCE_AFC_KEY: []}
         for row in filtered:
             conference = (row.get("conf") or "").strip().upper()
@@ -547,6 +577,7 @@ def _parse_csv_standings(text: str, season: int) -> tuple[dict[str, dict[str, li
             standings[conference] = _build_standings_from_rows(
                 conference_rows,
                 conference_key=conference,
+                season_complete=season_complete,
             )
         break
 
